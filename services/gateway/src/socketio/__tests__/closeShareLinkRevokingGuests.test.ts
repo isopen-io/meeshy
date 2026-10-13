@@ -200,18 +200,8 @@ describe('closeShareLinkRevokingGuests — le geste de l’hôte ne porte plus l
     expect(prisma.conversationShareLink.updateMany).not.toHaveBeenCalled();
   });
 
-  // #10492 — l'ordre par date affamait les liens récents derrière une fournée
-  // en échec permanent : l'ordre est celui des identifiants, par fournées
-  // tournantes (`ExpiredShareLinksCleanupService.pending-rotation.test.ts`).
-  it('R6 — le balayage reprend les révocations en attente dans l’ordre des identifiants', async () => {
-    const prisma = makePrisma(0);
-
-    await new ExpiredShareLinksCleanupService(prisma as never, { now: () => NOW }).cleanup();
-
-    const pendingRead = prisma.conversationShareLink.findMany.mock.calls.find(([args]: any) => args.where.guestRevocationPendingAt) as any;
-    expect(pendingRead[0].orderBy).toEqual({ id: 'asc' });
-  });
-
+  // R6 — l'ordre de la reprise et sa rotation se lisent par leur EFFET dans
+  // `ExpiredShareLinksCleanupService.pending-rotation.test.ts` (#10492).
   it('le balayage horaire reprend chaque lien dont la révocation est restée en attente', async () => {
     const prisma = makePrisma(0);
     prisma.conversationShareLink.findMany.mockImplementation(async ({ where }: any) =>

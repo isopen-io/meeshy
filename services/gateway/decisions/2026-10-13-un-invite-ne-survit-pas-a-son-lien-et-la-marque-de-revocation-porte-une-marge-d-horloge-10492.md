@@ -10,9 +10,9 @@
 ### Décision
 
 1. **Une marge de dix secondes** (`GUEST_ADMISSION_CLOCK_MARGIN_MS`, `services/guestAccessEnd.ts`). Sous une marque posée, tout invité daté jusqu'à dix secondes après elle est tenu pour entré avant. `pendingRevocationAdmissionCutoff()` est le site unique : la garde commune et `runPendingGuestRevocation` (`admittedUntil`) retirent les mêmes invités.
-2. **Un invité dont le lien n'existe plus est refusé** à ses six portes : par la garde commune (`linkMissing`) au REST, à la connexion socket, à la relecture du minuteur et au téléversement ; l'envoi par lien et le rafraîchissement de session le refusaient déjà. Les lectures par route d'un INSCRIT entré par lien ne changent pas : il reste membre.
+2. **Un invité dont le lien n'existe plus est refusé** à ses six portes : par la garde commune (`linkMissing`) au REST, à la connexion socket, à la relecture du minuteur et au téléversement ; l'envoi par lien et le rafraîchissement de session le refusaient déjà. Un accès FINI se refuse partout en 410 `GUEST_ACCESS_REVOKED` — l'envoi par lien et le téléversement rendaient un 401, que le client rejoue ; le 401 reste celui d'un jeton que personne ne porte. Les lectures par route d'un INSCRIT entré par lien ne changent pas : il reste membre.
 3. **Une suppression de liens révoque d'abord** (`socketio/deleteShareLinksRevokingGuests.ts`) : fermer et marquer, révoquer par `revokeShareLinkGuests`, supprimer les seuls liens révoqués. Un échec propage et laisse le lien fermé et marqué. La purge de compte passe par elle.
-4. **Le balayage horaire relève les invités actifs d'un lien disparu**, chaque lien absent étant relu seul avant toute révocation.
+4. **Le balayage horaire relève les invités anonymes actifs d'un lien disparu**, lu par la colonne puis par la session embarquée, chaque lien absent étant relu seul avant toute révocation. Un **disjoncteur** (`MISSING_SHARE_LINKS_BREAKER`) arrête la passe sans rien révoquer quand la collection des liens est vide, quand plus de 20 liens manquent, ou quand plus de 3 liens manquent et qu'ils font plus de la moitié des liens tenus : une révocation ne se défait pas, et une base vide ou partielle rend chaque lien introuvable sans erreur. Le relevé tourne par identifiant.
 5. **La reprise des marques tourne** : par identifiant, avec un curseur quand la fournée sature, pour qu'une fournée de liens en échec permanent n'affame pas les suivants.
 
 ### Alternatives écartées
@@ -27,4 +27,5 @@
 - Fail-closed assumé : un invité entré dans les dix secondes qui suivent la fermeture d'un lien rouvert aussitôt est retiré, et rentre par le lien.
 - Un invité resté actif après la purge du compte qui avait créé son lien perd l'accès à la mise en service (410 `GUEST_ACCESS_REVOKED`). À mesurer avant la promotion : le nombre d'invités anonymes actifs dont `shareLinkId` ne désigne plus aucune ligne.
 - Un lien dont la révocation échoue pendant une purge de compte reste en base, fermé et marqué, jusqu'au rejeu de la purge (#10021).
+- Le disjoncteur laisse passer jusqu'à trois liens absents : une base partielle où trois liens au plus manquent révoque encore leurs invités.
 - Restent bornés par la révocation différée et ses relances, non fermés ici : les gestes d'un invité déjà connecté qui ne repassent pas par la résolution de session (lectures par `messageReadAccess`, gestes socket).

@@ -32,8 +32,12 @@ jest.mock('../../../utils/logger', () => ({
 import { guestAccessEnd, GUEST_ADMISSION_CLOCK_MARGIN_MS } from '../../../services/guestAccessEnd';
 import { runPendingGuestRevocation } from '../../../socketio/closeShareLinkRevokingGuests';
 import { deleteShareLinksRevokingGuests } from '../../../socketio/deleteShareLinksRevokingGuests';
-import { ExpiredShareLinksCleanupService } from '../../../services/ExpiredShareLinksCleanupService';
-import { resolveAnonymousUploadIdentity, type AnonymousUploadIdentityPrisma } from '../../../services/attachments/AnonymousUploadIdentity';
+import { ExpiredShareLinksCleanupService, MISSING_SHARE_LINKS_BREAKER } from '../../../services/ExpiredShareLinksCleanupService';
+import {
+  resolveAnonymousUploadIdentity,
+  GuestUploadAccessRevokedError,
+  type AnonymousUploadIdentityPrisma,
+} from '../../../services/attachments/AnonymousUploadIdentity';
 import { createUnifiedAuthMiddleware } from '../../../middleware/auth';
 import { AuthHandler } from '../../../socketio/handlers/AuthHandler';
 import type { StatusService } from '../../../services/StatusService';
@@ -119,6 +123,7 @@ function prismaOf(world: World, faults: { participantWrites?: Error; linkReads?:
         if (faults.linkReads) throw faults.linkReads;
         return matching(world.links, args.where);
       }),
+      count: jest.fn(async (args?: Args) => matching(world.links, args?.where).length),
       update: jest.fn(async (args: Args) => write(world.links, args)),
       updateMany: jest.fn(async (args: Args) => write(world.links, args)),
       deleteMany: jest.fn(async (args: Args) => {
@@ -213,12 +218,20 @@ describe('R5 — un invité dont le lien n’existe plus est refusé à chaque p
     expect(res.statusCode).toBe(200);
   });
 
-  it('téléversement : aucune identité servie', async () => {
+  it('téléversement : aucune identité servie, et la cause est l’accès retiré', async () => {
     const world: World = { participants: [tokenGuest({ shareLinkId: GONE_LINK_ID })], links: [] };
 
-    const identity = await resolveAnonymousUploadIdentity(prismaOf(world) as unknown as AnonymousUploadIdentityPrisma, TOKEN);
+    await expect(
+      resolveAnonymousUploadIdentity(prismaOf(world) as unknown as AnonymousUploadIdentityPrisma, TOKEN)
+    ).rejects.toBeInstanceOf(GuestUploadAccessRevokedError);
+  });
 
-    expect(identity).toBeNull();
+  it('téléversement : un invité désactivé lit la même cause, un jeton inconnu aucune identité', async () => {
+    const world: World = { participants: [tokenGuest({ isActive: false })], links: [link()] };
+    const double = prismaOf(world) as unknown as AnonymousUploadIdentityPrisma;
+
+    await expect(resolveAnonymousUploadIdentity(double, TOKEN)).rejects.toBeInstanceOf(GuestUploadAccessRevokedError);
+    await expect(resolveAnonymousUploadIdentity(double, 'jeton-inconnu')).resolves.toBeNull();
   });
 
   describe('socket', () => {
@@ -369,6 +382,90 @@ describe('R5 — le balayage horaire relève les invités actifs dont le lien n�
 
     expect(orphan['isActive']).toBe(false);
     expect(member['isActive']).toBe(true);
+  });
+
+  it('relève aussi l’invité dont SEULE la session embarquée désigne le lien disparu', async () => {
+    const embeddedOnly = guest({ shareLinkId: null, anonymousSession: { shareLinkId: GONE_LINK_ID } });
+    const embeddedLive = guest({ shareLinkId: null, anonymousSession: { shareLinkId: LINK_ID } });
+    const world: World = { participants: [embeddedOnly, embeddedLive], links: [link()] };
+
+    await sweep(prismaOf(world));
+
+    expect(embeddedOnly['isActive']).toBe(false);
+    expect(embeddedLive['isActive']).toBe(true);
+  });
+
+  it('ne relève jamais un INSCRIT entré par un lien disparu', async () => {
+    const member = guest({ type: 'user', userId: OWNER_ID, shareLinkId: GONE_LINK_ID, anonymousSession: null });
+    const world: World = { participants: [member, guest()], links: [link()] };
+
+    await sweep(prismaOf(world));
+
+    expect(member['isActive']).toBe(true);
+  });
+
+  describe('le disjoncteur — une absence massive ne révoque personne', () => {
+    const goneLinkId = (n: number) => `507f1f77bcf86cd7994392${String(n).padStart(2, '0')}`;
+    const orphansOf = (count: number) =>
+      Array.from({ length: count }, (_unused, n) => guest({ shareLinkId: goneLinkId(n), anonymousSession: { shareLinkId: goneLinkId(n) } }));
+    const stillActive = (rows: MongoDocument[]) => rows.filter((row) => row['isActive'] === true).length;
+
+    it('la collection des liens est vide alors que des invités en portent', async () => {
+      const orphans = orphansOf(1);
+
+      await sweep(prismaOf({ participants: orphans, links: [] }));
+
+      expect(stillActive(orphans)).toBe(1);
+    });
+
+    it('plus de liens absents que le plafond absolu', async () => {
+      const orphans = orphansOf(MISSING_SHARE_LINKS_BREAKER.maxMissing + 1);
+      const members = Array.from({ length: 60 }, (_unused, n) => guest({ shareLinkId: goneLinkId(n + 40) }));
+      const links = members.map((member) => link({ id: member['shareLinkId'] }));
+
+      await sweep(prismaOf({ participants: [...orphans, ...members], links }));
+
+      expect(stillActive(orphans)).toBe(orphans.length);
+    });
+
+    it('plus de la moitié des liens tenus sont absents', async () => {
+      const orphans = orphansOf(6);
+      const world: World = { participants: [...orphans, guest()], links: [link()] };
+
+      await sweep(prismaOf(world));
+
+      expect(stillActive(orphans)).toBe(6);
+    });
+
+    it('une poignée de liens absents reste relevée, même s’ils sont tous ceux que des invités tiennent', async () => {
+      const orphans = orphansOf(MISSING_SHARE_LINKS_BREAKER.alwaysAllowed);
+      const world: World = { participants: orphans, links: [link({ id: OTHER_LINK_ID })] };
+
+      await sweep(prismaOf(world));
+
+      expect(stillActive(orphans)).toBe(0);
+    });
+  });
+
+  it('tourne : des liens disparus dont la révocation échoue n’affament pas les suivants', async () => {
+    const [stuckA, stuckB, reachable] = [1, 2, 3].map((n) => {
+      const id = `507f1f77bcf86cd7994393${String(n).padStart(2, '0')}`;
+      return guest({ shareLinkId: id, anonymousSession: { shareLinkId: id } });
+    });
+    const world: World = { participants: [stuckA, stuckB, reachable], links: [link({ id: OTHER_LINK_ID })] };
+    const double = prismaOf(world);
+    const write = double.participant.updateMany.getMockImplementation()!;
+    double.participant.updateMany.mockImplementation(async (args: Args) => {
+      if (args.where?.['id'] !== reachable['id']) throw new Error('mongo down');
+      return write(args);
+    });
+    const service = new ExpiredShareLinksCleanupService(asPrisma(double), { now: () => NOW, batchSize: 2 });
+
+    await service.cleanup();
+    expect(reachable['isActive']).toBe(true);
+
+    await service.cleanup();
+    expect(reachable['isActive']).toBe(false);
   });
 
   it('ne révoque personne quand la lecture des liens échoue', async () => {

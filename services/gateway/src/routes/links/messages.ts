@@ -276,6 +276,19 @@ export async function registerMessageRoutes(fastify: FastifyInstance) {
           })
         : null;
 
+      // #10492 — un accès FINI ne se lit pas comme une session inconnue : la
+      // participation désactivée, ou celle dont le lien n'existe plus, reçoit
+      // le 410 `GUEST_ACCESS_REVOKED` des autres portes. Un 401 se rejoue.
+      const guestAccessEnded = anonymousParticipant
+        ? participantShareLinkId !== null && !participantShareLink
+        : (await fastify.prisma.participant.findFirst({
+            where: { sessionTokenHash: tokenHash, type: 'anonymous' },
+            select: { id: true },
+          })) !== null;
+      if (guestAccessEnded) {
+        return sendError(reply, 410, 'GUEST_ACCESS_REVOKED', { message: "L'accès de cet invité a été retiré" });
+      }
+
       if (!anonymousParticipant || !participantShareLink) {
         return sendUnauthorized(reply, 'Session invalide ou non autorisée pour ce lien', { code: AUTH_ERROR_CODES.SESSION_INVALID });
       }

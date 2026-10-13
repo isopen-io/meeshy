@@ -176,7 +176,7 @@ describe('POST /links/:identifier/messages — anonymous', () => {
 
   it('returns 401 when anonymous participant not found', async () => {
     (app as any).prisma.conversationShareLink.findUnique.mockResolvedValueOnce(mockShareLink);
-    (app as any).prisma.participant.findFirst.mockResolvedValueOnce(null);
+    (app as any).prisma.participant.findFirst.mockResolvedValueOnce(null).mockResolvedValueOnce(null);
     const res = await app.inject({
       method: 'POST', url: '/links/' + IDENTIFIER + '/messages',
       headers: { 'x-session-token': SESSION_TOKEN },
@@ -235,6 +235,43 @@ describe('POST /links/:identifier/messages — anonymous', () => {
 
     // Le code du corps n'est pas observable ici : ce harnais double les
     // schémas partagés (`api-schemas`), ce qui vide le corps d'erreur.
+    expect(res.statusCode).toBe(410);
+    expect((app as any).prisma.message.create).not.toHaveBeenCalled();
+  });
+
+  // #10492 — un accès FINI ne se lit pas comme une session inconnue (401, que
+  // le client rejoue) : 410, le statut des autres portes.
+  it('returns 410 pour un invité dont la participation est désactivée, sans rien écrire', async () => {
+    const lookups: Array<Record<string, unknown>> = [];
+    (app as any).prisma.conversationShareLink.findUnique.mockResolvedValueOnce(mockShareLink);
+    (app as any).prisma.participant.findFirst
+      .mockImplementationOnce(async (opts: any) => { lookups.push(opts.where); return null; })
+      .mockImplementationOnce(async (opts: any) => { lookups.push(opts.where); return { id: PART_ID }; });
+    (app as any).prisma.message.create.mockClear();
+
+    const res = await app.inject({
+      method: 'POST', url: '/links/' + IDENTIFIER + '/messages',
+      headers: { 'x-session-token': SESSION_TOKEN },
+      payload: VALID_BODY,
+    });
+
+    expect(res.statusCode).toBe(410);
+    expect(lookups.map((where) => 'isActive' in where)).toEqual([true, false]);
+    expect((app as any).prisma.message.create).not.toHaveBeenCalled();
+  });
+
+  it('returns 410 pour un invité dont le lien n’existe plus, sans rien écrire', async () => {
+    (app as any).prisma.conversationShareLink.findUnique.mockImplementationOnce(async () => mockShareLink)
+      .mockImplementationOnce(async () => null);
+    (app as any).prisma.participant.findFirst.mockResolvedValueOnce(mockAnonParticipant);
+    (app as any).prisma.message.create.mockClear();
+
+    const res = await app.inject({
+      method: 'POST', url: '/links/' + IDENTIFIER + '/messages',
+      headers: { 'x-session-token': SESSION_TOKEN },
+      payload: VALID_BODY,
+    });
+
     expect(res.statusCode).toBe(410);
     expect((app as any).prisma.message.create).not.toHaveBeenCalled();
   });

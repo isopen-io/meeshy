@@ -71,6 +71,37 @@ interface ExpiredShareLinkRow {
 type PendingRevocationRow = { id: string; guestRevocationPendingAt: Date | null };
 
 const OBJECT_ID = /^[0-9a-f]{24}$/i;
+const isObjectId = (id: unknown): id is string => typeof id === 'string' && OBJECT_ID.test(id);
+
+/** Les invités dont seule la session embarquée porte le lien se lisent par pages. */
+const EMBEDDED_LINK_SCAN_PAGE = 500;
+
+/**
+ * Le disjoncteur du relevé des invités d'un lien disparu (#10492). Jusqu'à
+ * `alwaysAllowed` liens absents, la passe relève : c'est le cas nominal, un
+ * lien purgé qui laisse quelques invités. Au-delà, elle s'arrête dès que les
+ * absents dépassent `maxMissing`, ou `maxShare` des liens que des invités
+ * tiennent. Une collection de liens VIDE arrête toujours.
+ */
+export const MISSING_SHARE_LINKS_BREAKER = { alwaysAllowed: 3, maxMissing: 20, maxShare: 0.5 } as const;
+
+export function missingShareLinksBreakerTrips(counts: {
+  readonly totalLinks: number;
+  readonly held: number;
+  readonly missing: number;
+}): boolean {
+  if (counts.totalLinks === 0) return true;
+  if (counts.missing <= MISSING_SHARE_LINKS_BREAKER.alwaysAllowed) return false;
+  if (counts.missing > MISSING_SHARE_LINKS_BREAKER.maxMissing) return true;
+  return counts.missing > counts.held * MISSING_SHARE_LINKS_BREAKER.maxShare;
+}
+
+/** `size` identifiants triés à partir de celui qui suit `cursor`, en repartant du début. */
+function rotatingBatch(sortedIds: readonly string[], cursor: string | null, size: number): string[] {
+  if (!cursor) return sortedIds.slice(0, size);
+  const after = sortedIds.filter((id) => id > cursor);
+  return [...after, ...sortedIds.filter((id) => id <= cursor)].slice(0, size);
+}
 
 export interface ExpiredShareLinksCleanupOptions {
   /** Liens balayés par passe. */
@@ -92,6 +123,7 @@ export class ExpiredShareLinksCleanupService {
   private interval: ReturnType<typeof setInterval> | null = null;
   private running = false;
   private pendingCursor: string | null = null;
+  private missingCursor: string | null = null;
   private readonly batchSize: number;
   private readonly now: () => Date;
   private readonly resolveIO: () => GuestSocketRegistry | null | undefined;
@@ -195,33 +227,47 @@ export class ExpiredShareLinksCleanupService {
    * d'avant cette règle, purge interrompue, admission en vol) sont déjà
    * refusés par la garde commune, et relevés ici pour sortir de la room.
    *
-   * Un lien n'est tenu pour disparu qu'après avoir été relu SEUL : une liste
-   * incomplète ne révoque personne. Une lecture qui échoue passe son tour.
+   * Le lien d'un invité se lit comme la garde et la révocation le lisent : la
+   * colonne de la participation, et la session embarquée en repli. Seuls les
+   * invités ANONYMES sont lus : un inscrit entré par lien reste membre.
+   *
+   * Une révocation ne se défait pas, et une ABSENCE n'est pas une preuve :
+   * une collection de liens vide ou partielle (restauration en cours,
+   * mauvaise base) rend chaque lien « introuvable » sans aucune erreur. Le
+   * disjoncteur (`MISSING_SHARE_LINKS_BREAKER`) ne laisse donc passer qu'une
+   * absence marginale ; au-delà, la passe journalise en erreur et ne révoque
+   * personne. Chaque lien retenu est encore relu SEUL avant sa révocation.
    */
   private async revokeGuestsOfMissingLinks(): Promise<void> {
     let missing: string[];
     try {
-      const held = await this.prisma.participant.groupBy({
-        by: ['shareLinkId'],
-        where: { type: 'anonymous', isActive: true, shareLinkId: { not: null } },
-      });
-      const heldIds = held
-        .map((group) => group.shareLinkId)
-        .filter((id): id is string => typeof id === 'string' && OBJECT_ID.test(id));
+      const heldIds = await this.shareLinkIdsHeldByActiveGuests();
       if (heldIds.length === 0) return;
-      const found = await this.prisma.conversationShareLink.findMany({
-        where: { id: { in: heldIds } },
-        select: { id: true },
-      });
+      const [totalLinks, found] = await Promise.all([
+        this.prisma.conversationShareLink.count(),
+        this.prisma.conversationShareLink.findMany({ where: { id: { in: heldIds } }, select: { id: true } }),
+      ]);
       const foundIds = new Set(found.map((link) => link.id));
-      missing = heldIds.filter((id) => !foundIds.has(id)).slice(0, this.batchSize);
+      missing = heldIds.filter((id) => !foundIds.has(id)).sort();
+      if (missing.length === 0) return;
+      if (missingShareLinksBreakerTrips({ totalLinks, held: heldIds.length, missing: missing.length })) {
+        log.error('guests of missing share links NOT revoked: too many links are missing to trust the read', undefined, {
+          totalLinks,
+          heldLinks: heldIds.length,
+          missingLinks: missing.length,
+        });
+        return;
+      }
     } catch (err) {
       log.warn('guests of missing share links query failed', { err });
       return;
     }
 
+    const batch = rotatingBatch(missing, this.missingCursor, this.batchSize);
+    this.missingCursor = missing.length > this.batchSize ? batch[batch.length - 1] : null;
+
     const now = this.now();
-    for (const shareLinkId of missing) {
+    for (const shareLinkId of batch) {
       try {
         const reread = await this.prisma.conversationShareLink.findUnique({
           where: { id: shareLinkId },
@@ -240,6 +286,35 @@ export class ExpiredShareLinksCleanupService {
         log.warn('revocation of the guests of a missing share link failed', { shareLinkId, err });
       }
     }
+  }
+
+  private async shareLinkIdsHeldByActiveGuests(): Promise<string[]> {
+    const byColumn = await this.prisma.participant.groupBy({
+      by: ['shareLinkId'],
+      where: { type: 'anonymous', isActive: true, shareLinkId: { not: null } },
+    });
+    const held = new Set(byColumn.map((group) => group.shareLinkId).filter(isObjectId));
+
+    let cursor: string | undefined;
+    for (;;) {
+      const page: Array<{ id: string; anonymousSession: { shareLinkId: string } | null }> =
+        await this.prisma.participant.findMany({
+          where: {
+            type: 'anonymous',
+            isActive: true,
+            anonymousSession: { isSet: true },
+            OR: [{ shareLinkId: null }, { shareLinkId: { isSet: false } }],
+            ...(cursor ? { id: { gt: cursor } } : {}),
+          },
+          select: { id: true, anonymousSession: { select: { shareLinkId: true } } },
+          orderBy: { id: 'asc' },
+          take: EMBEDDED_LINK_SCAN_PAGE,
+        });
+      page.map((row) => row.anonymousSession?.shareLinkId).filter(isObjectId).forEach((id) => held.add(id));
+      if (page.length < EMBEDDED_LINK_SCAN_PAGE) break;
+      cursor = page[page.length - 1].id;
+    }
+    return [...held];
   }
 
   private async revokeExpiredLinks(): Promise<{ revokedLinks: number; revokedGuests: number }> {

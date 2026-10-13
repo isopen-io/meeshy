@@ -559,7 +559,7 @@ describe('registerTusRoutes — onUploadCreate / onUploadFinish', () => {
       ).rejects.toMatchObject({ status_code: 401 });
     });
 
-    // #10492 — un invité qui survit à son lien n'a plus d'identité : refusé dès la création.
+    // #10492 — un invité qui survit à son lien : 410 dès la création, jamais un 401 qui se rejoue.
     it('refuse quand le participant existe mais son lien de partage a disparu', async () => {
       const prisma = buildFakePrisma({
         participant: { id: 'participant-1', anonymousSession: { shareLinkId: 'deleted-link' } },
@@ -572,7 +572,7 @@ describe('registerTusRoutes — onUploadCreate / onUploadFinish', () => {
         filename: 'document.pdf',
         filetype: 'application/pdf',
         bytes: PDF_BYTES,
-      })).rejects.toMatchObject({ status_code: 401 });
+      })).rejects.toMatchObject({ status_code: 410, body: expect.stringContaining('GUEST_ACCESS_REVOKED') });
       expect(prisma.messageAttachment.create).not.toHaveBeenCalled();
     });
   });
