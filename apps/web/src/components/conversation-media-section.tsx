@@ -3,6 +3,7 @@ import { lazy, Suspense, useId, useRef, useState } from 'react';
 import type { ConversationsDeps } from '@/lib/api/conversations';
 import { translate } from '@/lib/i18n-catalog';
 import { currentInterfaceLanguage } from '@/lib/interface-language';
+import { useOnline } from '@/lib/net/online';
 import { useMediaHubIndex } from '@/lib/view/use-media-hub-index';
 import { useReaderLanguages } from '@/lib/view/use-reader';
 
@@ -29,6 +30,11 @@ export const PREVIEW_TILES = 4;
  *
  * Toucher une vignette ouvre la visionneuse conversation-entière (#6303),
  * posée DANS le `<dialog>` de la feuille (couche supérieure).
+ *
+ * ÉTATS DESSINÉS (#7834) : le squelette sur un cache VIDE en ligne ; hors
+ * ligne sans cache, on le dit au lieu d'attendre ; un refus se dit avec
+ * « Réessayer » ; aucun média, une phrase — l'entrée vers l'écran complet
+ * reste, il porte aussi l'audio, les documents et les liens.
  */
 export function ConversationMediaSection({
   conversationId,
@@ -47,6 +53,7 @@ export function ConversationMediaSection({
 }) {
   const language = currentInterfaceLanguage();
   const { languages } = useReaderLanguages();
+  const online = useOnline();
   const headingId = useId();
   const sectionRef = useRef<HTMLElement | null>(null);
   const { query, items } = useMediaHubIndex({ deps, conversationId, kind: 'visual', term: null });
@@ -60,7 +67,20 @@ export function ConversationMediaSection({
         {translate(language, 'conversation.details.media.section')}
       </h4>
 
-      {items === undefined && query.isPending ? (
+      {items === undefined && !online ? (
+        <p role="status" className="px-4 pb-2 text-caption" style={{ color: 'var(--color-ios-ink-2)' }} data-conversation-details-media-offline-empty>
+          {translate(language, 'media_hub.offline_empty')}
+        </p>
+      ) : items === undefined && query.isError ? (
+        <div role="alert" className="flex items-center gap-3 px-4 pb-2" data-conversation-details-media-error>
+          <p className="flex-1 text-caption" style={{ color: 'var(--color-ios-ink-2)' }}>
+            {translate(language, 'media_hub.error')}
+          </p>
+          <button type="button" onClick={() => void query.refetch()} className="rounded-chip px-4 font-semibold" style={{ minHeight: 44, color: 'var(--accent)' }}>
+            {translate(language, 'media_hub.retry')}
+          </button>
+        </div>
+      ) : items === undefined ? (
         <div aria-busy className="grid px-4" style={{ gridTemplateColumns: `repeat(${PREVIEW_TILES}, minmax(0, 1fr))`, gap: 2 }} data-conversation-details-media-loading>
           <span className="offscreen">{translate(language, 'media_hub.loading')}</span>
           {Array.from({ length: PREVIEW_TILES }, (_, index) => (
@@ -71,11 +91,11 @@ export function ConversationMediaSection({
         <ul className="grid px-4" style={{ gridTemplateColumns: `repeat(${PREVIEW_TILES}, minmax(0, ${TILE_MIN_SIDE}px))`, gap: 2 }} data-conversation-details-media-strip>
           {preview.map((item) => (item.kind === 'visual' ? <MediaTile key={item.key} item={item} language={language} onOpen={setOpenedKey} /> : null))}
         </ul>
-      ) : query.isError && items === undefined ? (
-        <p role="alert" className="px-4 pb-2 text-caption" style={{ color: 'var(--color-ios-ink-2)' }} data-conversation-details-media-error>
-          {translate(language, 'media_hub.error')}
+      ) : (
+        <p className="px-4 pb-2 text-caption" style={{ color: 'var(--color-ios-ink-2)' }} data-conversation-details-media-empty>
+          {translate(language, 'media_hub.empty', { segment: translate(language, 'media_hub.kind.visual') })}
         </p>
-      ) : null}
+      )}
 
       <button
         type="button"

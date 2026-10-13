@@ -1,5 +1,6 @@
 import { useInfiniteQuery } from '@tanstack/react-query';
-import { useId, useState } from 'react';
+import { lazy, Suspense, useId, useState } from 'react';
+import { useStore } from 'zustand/react';
 
 import {
   conversationMembersQueryOptions,
@@ -8,6 +9,7 @@ import {
   type ConversationMember,
 } from '@/lib/api/conversation-members';
 import type { ConversationsDeps } from '@/lib/api/conversations';
+import { sessionStore } from '@/lib/api/session';
 import type { Conversation } from '@/lib/api/types';
 import { departureKindsOf, type DepartureKind } from '@/lib/conversation-departure';
 import { translate, type InterfaceCatalogKey } from '@/lib/i18n-catalog';
@@ -30,12 +32,20 @@ import { SETTINGS_GLYPHS } from './glyphs-settings';
 import { Sheet } from './sheet';
 
 /**
+ * LA SECTION « STATISTIQUES », À LA DEMANDE (#7835) — ni ses calculs ni son
+ * catalogue ne voyagent avec la feuille tant qu'elle n'est pas montrée.
+ */
+const ConversationStatsSection = lazy(() => import('./conversation-stats-section').then((m) => ({ default: m.ConversationStatsSection })));
+
+/**
  * **LES DÉTAILS D'UNE CONVERSATION** (#7829) — premier incrément de
  * `ConversationInfoSheet.swift` : l'EN-TÊTE (photo, nom, description, type,
  * nombre de membres), l'action « Partager un lien », la section « Médias »
  * (#7834, #8103 — l'aperçu et l'entrée vers l'écran « Médias, liens et
- * documents ») et l'onglet « Membres ». Statistiques (#7835), options (#7836)
- * ne sont pas encore portés ; « Quitter » et « Supprimer pour moi » le sont
+ * documents »), la section « Statistiques » (#7835, réservée à un membre
+ * inscrit : la passerelle la refuse à un visiteur sans compte, la feuille ne
+ * la demande donc pas) et l'onglet « Membres ». Les options (#7836) ne sont
+ * pas encore portées ; « Quitter » et « Supprimer pour moi » le sont
  * (#7837, #7285).
  *
  * Une FEUILLE du fil, pas une adresse (D-118) : comme sur iOS, elle se pose
@@ -129,6 +139,13 @@ export function ConversationDetailsSheet({
   const photo = avatarOf(conversation, viewerId);
   const description = conversation.description?.trim() ?? '';
 
+  /**
+   * LES STATISTIQUES (#7835) — un compte INSCRIT seulement : `GET
+   * /conversations/:id/stats` refuse un invité ou un visiteur (`requiredAuth`,
+   * `allowAnonymous: false`). Pour eux, rien n'est demandé ni montré.
+   */
+  const canViewStats = useStore(sessionStore, (state) => state.session.status === 'authenticated') || deps.source === 'fixtures';
+
   const departures = onRequestDeparture === undefined ? [] : departureKindsOf(conversation);
   const canLeave = departures.includes('leave');
   const canShare = canCreateShareLink(conversation);
@@ -197,6 +214,12 @@ export function ConversationDetailsSheet({
           {...(onJumpToMessage === undefined ? {} : { onJumpToMessage })}
           {...(canJumpTo === undefined ? {} : { canJumpTo })}
         />
+
+        {canViewStats ? (
+          <Suspense fallback={null}>
+            <ConversationStatsSection conversationId={conversation.id} deps={deps} />
+          </Suspense>
+        ) : null}
 
         <section aria-labelledby={membersHeadingId} className="pb-6">
           <h4 id={membersHeadingId} className="px-4 pb-2 text-caption font-semibold uppercase" style={{ color: 'var(--color-ios-ink-2)' }}>
