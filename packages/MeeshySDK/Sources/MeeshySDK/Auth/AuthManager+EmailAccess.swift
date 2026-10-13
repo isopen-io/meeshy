@@ -29,7 +29,8 @@ extension AuthManager {
         defer { isLoading = false }
 
         do {
-            try installSession(try await verifyMagicLink(token: token))
+            // #10463 — par `openSession` : une session refusée y est refermée.
+            openSession(try await verifyMagicLink(token: token))
         } catch let error as MeeshyError {
             errorMessage = error.errorDescription
         } catch {
@@ -57,7 +58,12 @@ extension AuthManager {
     @discardableResult
     public func confirmEmail(_ request: EmailVerificationRequest) async throws -> Bool {
         guard let proven = try await verifyEmail(request) else { return false }
-        try installSession(proven)
+        do {
+            try installOutsideAccountSwitch(proven)
+        } catch {
+            closeRefusedProvenSession(proven)
+            throw error
+        }
         return true
     }
 
@@ -112,19 +118,36 @@ extension AuthManager {
     /// d'un AUTRE utilisateur que celui de la session ouverte est REFUSÉE
     /// (#10446) — rien n'est posé, `errorMessage` le dit, et l'appelant
     /// n'annonce aucun succès ; y passer se fait par `switchToProvenAccount`.
+    ///
+    /// #10463 — refusée aussi pendant un changement de compte, et toute session
+    /// refusée est REFERMÉE côté passerelle, ici, pour tous les appelants : la
+    /// preuve a ouvert une session serveur que rien d'autre ne fermerait.
     @discardableResult
     public func openSession(_ proven: EmailProvenSession) -> Bool {
         do {
-            try installSession(proven)
+            try installOutsideAccountSwitch(proven)
             return true
         } catch {
             errorMessage = (error as? LocalizedError)?.errorDescription ?? error.localizedDescription
+            closeRefusedProvenSession(proven)
             return false
         }
     }
 
+    /// #10463 — hors d'un changement de compte. Pendant sa pause, la session
+    /// sortante est démontée : une session posée là passerait la garde de
+    /// `applySession` comme une première connexion, sans question, et le
+    /// changement poserait ensuite la sienne par-dessus.
+    func installOutsideAccountSwitch(_ proven: EmailProvenSession) throws {
+        guard !isSwitchingAccount else {
+            throw SessionReplacementRefused(activeUserId: activeUserId, incomingUserId: proven.user.id)
+        }
+        try installSession(proven)
+    }
+
     /// La porte LEVANTE de `openSession` : rend `SessionReplacementRefused` à
-    /// l'appelant qui sait le traiter.
+    /// l'appelant qui sait le traiter. Le seul appelant direct est le
+    /// changement de compte, qui tient `isSwitchingAccount`.
     func installSession(_ proven: EmailProvenSession) throws {
         try applySession(token: proven.token, sessionToken: proven.sessionToken, user: proven.user,
                          origin: proven.origin)
@@ -144,10 +167,14 @@ extension AuthManager {
     /// cours, ou si une session s'est rouverte pendant la pause, rien n'est
     /// posé et la session prouvée est refermée côté passerelle. Rend `true`
     /// si la session prouvée est posée.
+    ///
+    /// #10463 — la session refusée se referme dans une tâche à part : sous
+    /// `isSwitchingAccount`, ses réessais (jusqu'à quelques secondes hors
+    /// ligne) tenaient toute autre bascule refusée.
     @discardableResult
     public func switchToProvenAccount(_ proven: EmailProvenSession) async -> Bool {
         guard !isSwitchingAccount else {
-            await discardProvenSession(proven)
+            closeRefusedProvenSession(proven)
             return false
         }
         guard isAuthenticated, proven.user.id != activeUserId else {
@@ -157,14 +184,14 @@ extension AuthManager {
         defer { isSwitchingAccount = false }
         await suspendActiveSession()
         guard !isAuthenticated else {
-            await discardProvenSession(proven)
+            closeRefusedProvenSession(proven)
             return false
         }
         // Même image à l'état « sorti » que `switchAccount(to:)` : sans elle,
         // `false` puis `true` dans le même tour échappent aux observateurs.
         try? await Task.sleep(for: .milliseconds(150))
         guard !isAuthenticated else {
-            await discardProvenSession(proven)
+            closeRefusedProvenSession(proven)
             return false
         }
         await CacheAccountBinder.shared.bind(accountKey(for: proven.user.id)).value
@@ -176,7 +203,7 @@ extension AuthManager {
             // Une session s'est posée pendant la liaison du cache : il revient
             // au compte qui est ouvert, jamais à celui qu'on a refusé.
             await CacheAccountBinder.shared.bind(accountKey(for: activeUserId)).value
-            await discardProvenSession(proven)
+            closeRefusedProvenSession(proven)
             return false
         }
     }
@@ -188,6 +215,27 @@ extension AuthManager {
     public func discardProvenSession(_ proven: EmailProvenSession) async {
         await performServerLogoutWithRetries(token: proven.token)
     }
+
+    /// `discardProvenSession` sans faire attendre l'appelant (#10463).
+    func closeRefusedProvenSession(_ proven: EmailProvenSession) {
+        let closure = Task { [weak self] in
+            await self?.discardProvenSession(proven)
+        }
+        #if DEBUG
+        refusedSessionClosuresForTesting.append(closure)
+        #else
+        _ = closure
+        #endif
+    }
+
+    #if DEBUG
+    /// Attend les fermetures lancées par `closeRefusedProvenSession`.
+    func awaitRefusedSessionClosuresForTesting() async {
+        let pending = refusedSessionClosuresForTesting
+        refusedSessionClosuresForTesting = []
+        for closure in pending { await closure.value }
+    }
+    #endif
 }
 
 /// #10446 — `applySession` refuse d'installer un autre utilisateur par-dessus
@@ -255,7 +303,9 @@ public struct EmailProvenSession: Sendable {
 @MainActor
 public protocol EmailVerificationConfirming: AnyObject {
     func verifyEmail(_ request: EmailVerificationRequest) async throws -> EmailProvenSession?
-    /// `true` si la session est posée (#10450) : un refus n'annonce rien.
+    /// `true` si la session est posée (#10450) : un refus n'annonce rien, et
+    /// la session refusée est refermée côté passerelle par l'implémentation
+    /// (#10463) — l'appelant n'a rien à fermer.
     @discardableResult
     func openSession(_ proven: EmailProvenSession) -> Bool
 }
