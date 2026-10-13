@@ -30,6 +30,7 @@ export type SessionAdmissionRefusal =
   | 'session-unknown'
   | 'session-revoked'
   | 'session-expired'
+  | 'not-a-session-token'
   | LegacyTokenRefusal;
 
 export class SessionLookupUnavailableError extends Error {
@@ -41,19 +42,31 @@ export class SessionLookupUnavailableError extends Error {
 
 const OBJECT_ID = /^[0-9a-f]{24}$/i;
 
-type SessionClaims = { readonly [SESSION_CLAIM]?: unknown; readonly iat?: unknown };
+type SessionClaims = {
+  readonly [SESSION_CLAIM]?: unknown;
+  readonly iat?: unknown;
+  readonly action?: unknown;
+  readonly aud?: unknown;
+};
 
 /**
  * Le motif du refus, ou `null` quand le jeton peut ouvrir la requête.
  *
- * Jeton SANS `sid` : le butoir daté de #4264 (`legacyTokenRefusal`), fermé
- * depuis le 2026-09-30 — aucune lecture. Jeton AVEC `sid` : la ligne nommée,
- * lue par identité ET par propriétaire, doit être valide et non échue.
+ * Charge qui porte `action` ou une audience : un jeton d'USAGE (le lien
+ * « ce n'était pas moi », #10493), jamais un jeton de session — refusé avant
+ * toute lecture, quel que soit son `sid`. Jeton SANS `sid` : le butoir daté de
+ * #4264 (`legacyTokenRefusal`), fermé depuis le 2026-09-30 — aucune lecture.
+ * Jeton AVEC `sid` : la ligne nommée, lue par identité ET par propriétaire,
+ * doit être valide et non échue.
  */
 export async function sessionAdmissionRefusal(
   prisma: Pick<PrismaClient, 'userSession'>,
   params: { readonly claims: SessionClaims; readonly userId: string; readonly now: Date }
 ): Promise<SessionAdmissionRefusal | null> {
+  if (params.claims.action !== undefined || params.claims.aud !== undefined) {
+    return 'not-a-session-token';
+  }
+
   const sid = params.claims[SESSION_CLAIM];
 
   if (sid === undefined) {

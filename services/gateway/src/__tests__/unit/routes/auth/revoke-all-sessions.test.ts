@@ -82,7 +82,7 @@ describe('GET /auth/revoke-all-sessions — wrong action in payload', () => {
     const app = await buildApp();
     const res = await app.inject({ method: 'GET', url: '/revoke-all-sessions?token=valid-token' });
     expect(res.statusCode).toBe(400);
-    expect(res.body).toContain('Invalid link');
+    expect(res.body).toContain('expired or invalid');
     await app.close();
   });
 });

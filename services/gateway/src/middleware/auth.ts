@@ -15,7 +15,7 @@ import { enhancedLogger } from '../utils/logger-enhanced';
 import { SESSION_CLAIM } from '../services/auth/session-jwt';
 import { SessionLookupUnavailableError, sessionAdmissionRefusal } from '../services/auth/session-admission';
 import { ActivationBlockedError, resolveAccountActivation } from '../services/auth/account-activation';
-import { AccountDeletedError, inactiveAccountRefusal, sendAccountDeleted, type DeletedAccountReader } from '../services/auth/account-deleted';
+import { AccountDeletedError, accountIsDeleted, inactiveAccountRefusal, sendAccountDeleted, type DeletedAccountReader } from '../services/auth/account-deleted';
 import type { AccountActivation } from '@meeshy/shared/types/account-activation';
 import { SessionActivitySampler, sharedSessionActivity } from '../services/auth/session-activity';
 
@@ -258,6 +258,12 @@ export class AuthMiddleware {
         userId: jwtUserId,
         now: this.now(),
       });
+      // #10493 — la purge d'un compte SUPPRIME ses sessions : son jeton nomme
+      // une session absente. La signature étant vérifiée, le refus garde le
+      // code de #10264, qui fait purger ce compte à l'appareil.
+      if (refus && (await accountIsDeleted(this.prisma as unknown as DeletedAccountReader, jwtUserId))) {
+        throw new AccountDeletedError(jwtUserId);
+      }
       if (refus) {
         authLogger.warn('[AUTH] Requête REST refusée : la session nommée par le jeton ne vit plus', {
           userId: jwtUserId,

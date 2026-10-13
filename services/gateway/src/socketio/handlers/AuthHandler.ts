@@ -12,6 +12,7 @@ import jwt from 'jsonwebtoken';
 import { validateSocketEvent } from '../../middleware/validation.js';
 import { SocketAuthenticateSchema } from '../../validation/socket-event-schemas.js';
 import type { SessionBoundTokenPayload } from '../../services/auth/session-jwt';
+import { sessionAdmissionRefusal } from '../../services/auth/session-admission';
 import { getSocketRateLimiter, SOCKET_RATE_LIMITS } from '../../utils/socket-rate-limiter.js';
 import { resolveUserLanguagesOrdered } from '@meeshy/shared/utils/conversation-helpers';
 import { enhancedLogger } from '../../utils/logger-enhanced.js';
@@ -231,6 +232,40 @@ export class AuthHandler {
     const decoded = jwt.verify(token, jwtSecret) as Pick<SessionBoundTokenPayload, 'userId' | 'exp' | 'sid'>;
     const userId = decoded.userId;
 
+    // #10493 — la loi du REST (#10328) : la session NOMMÉE par le jeton doit
+    // vivre. Inconnue, révoquée, échue ⇒ refus ; jeton sans `sid` ⇒ butoir
+    // daté de #4264, fermé ; charge d'usage (`action`, `aud`) ⇒ refus. Posée
+    // avant la lecture du profil. Une lecture qui lève remonte au `catch` de
+    // l'appelant : socket fermé, sans annoncer une révocation non prouvée.
+    //
+    // La purge d'un compte SUPPRIME ses sessions : son jeton nomme donc une
+    // session absente. La signature étant vérifiée, le refus garde alors le
+    // code de #10264, qui fait purger ce compte à l'appareil.
+    const refus = await sessionAdmissionRefusal(this.prisma, {
+      claims: decoded,
+      userId,
+      now: this.now(),
+    });
+    if (refus && (await accountIsDeleted(this.prisma as unknown as DeletedAccountReader, userId))) {
+      socket.emit(SERVER_EVENTS.ERROR, { message: 'Account disabled', code: AUTH_ERROR_CODES.ACCOUNT_DELETED, accountId: userId });
+      socket.disconnect(true);
+      return;
+    }
+    if (refus) {
+      logger.info('socket refusé — la session nommée par le jeton ne vit plus', {
+        socketId: socket.id,
+        userId,
+        motif: refus,
+      });
+      socket.emit(SERVER_EVENTS.AUTH_SESSION_REVOKED, {
+        code: 'session_revoked',
+        message: 'Session expired — please sign in again.',
+        reason: 'session_expired',
+      });
+      socket.disconnect(true);
+      return;
+    }
+
     const user = await this.prisma.user.findUnique({
       where: { id: userId },
       select: {
@@ -285,53 +320,13 @@ export class AuthHandler {
       return;
     }
 
-    // #5712 — un JWT authentique reste utilisable jusqu'à SA PROPRE expiration
-    // (24h, `TOKEN_TTL`) même quand la `UserSession` qui l'a émis est, elle,
-    // périmée depuis des mois : `POST /auth/refresh` continue de le renouveler
-    // (son filtre s'arrête à `isValid`, décision assumée et documentée sur
-    // place dans `routes/auth/magic-link.ts` — un durcissement qu'elle diffère
-    // explicitement), et jusqu'ici rien côté socket ne relisait jamais la
-    // session nommée. Mesuré en production : 34 comptes actifs sur des
-    // sessions expirées depuis jusqu'à six mois.
-    //
-    // Le claim `sid` (`services/auth/session-jwt.ts`) NOMME la session ; on la
-    // relit ici et on refuse la reconnexion si elle n'est plus `isValid` OU si
-    // son `expiresAt` est dépassé. Contrairement à `/refresh`, cette porte est
-    // NEUVE : durcir dès sa création n'est pas le « durcissement mesuré à
-    // part » que `/refresh` diffère, c'est la garde que #5712 demande.
-    //
-    // Un jeton SANS `sid` (émis avant #4264) n'est PAS bloqué : refuser
-    // d'emblée déconnecterait tout le parc installé pour fermer un cas
-    // étroit, exactement le compromis que #4213 avait déjà écarté pour
-    // `/refresh`.
-    if (decoded.sid) {
-      const namedSession = await this.prisma.userSession.findFirst({
-        where: { id: decoded.sid, userId: user.id, isValid: true, expiresAt: { gt: new Date() } },
-        select: { id: true },
-      });
-
-      if (!namedSession) {
-        logger.info('socket refusé — la session nommée par le JWT n\'est plus valide ou a expiré', {
-          socketId: socket.id,
-          userId: user.id,
-        });
-        socket.emit(SERVER_EVENTS.AUTH_SESSION_REVOKED, {
-          code: 'session_revoked',
-          message: 'Session expired — please sign in again.',
-          reason: 'session_expired',
-        });
-        socket.disconnect(true);
-        return;
-      }
-
-      // #9610 — la socket remet sous `auth.client` ce qu'une requête porte en
-      // en-têtes ; la session nommée le retient. Détaché, ne lève jamais.
-      void recordSessionClientInfo(this.prisma, {
-        sessionId: namedSession.id,
-        userId: user.id,
-        declared: readClientSessionAuth(socket.handshake.auth),
-      }).catch(() => undefined);
-    }
+    // #9610 — la socket remet sous `auth.client` ce qu'une requête porte en
+    // en-têtes ; la session nommée le retient. Détaché, ne lève jamais.
+    void recordSessionClientInfo(this.prisma, {
+      sessionId: decoded.sid,
+      userId: user.id,
+      declared: readClientSessionAuth(socket.handshake.auth),
+    }).catch(() => undefined);
 
     const resolvedLanguages = resolveUserLanguagesOrdered(user, {
       deviceLocale: user.deviceLocale ?? undefined,
