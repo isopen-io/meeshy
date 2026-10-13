@@ -68,9 +68,9 @@ function opsDirs() {
   return { requests, state };
 }
 
-type Options = { role?: string | null; relayDirs?: { requests: string; state: string } | null; backupDir?: string };
+type Options = { role?: string | null; relayDirs?: { requests: string; state: string } | null; backupDir?: string; backupSchedule?: { hour: number; minute: number } };
 
-async function buildApp({ role = 'BIGBOSS', relayDirs, backupDir }: Options = {}) {
+async function buildApp({ role = 'BIGBOSS', relayDirs, backupDir, backupSchedule }: Options = {}) {
   const dirs = relayDirs === undefined ? opsDirs() : relayDirs;
   const audit = jest.fn<(args: unknown) => Promise<unknown>>(async () => ({}));
   const snapshot = jest.fn<(since?: Date) => Promise<HostMetricsSnapshot>>(async () => SNAPSHOT);
@@ -102,7 +102,7 @@ async function buildApp({ role = 'BIGBOSS', relayDirs, backupDir }: Options = {}
       registeredUser: { id: ACTOR_ID, role, username: 'acteur' },
     } });
   });
-  await app.register(buildAdminOpsRoutes({ probe, relay, now: () => NOW, backupStatusFile: path.join(backupDir ?? '/nonexistent', 'etat.json') }));
+  await app.register(buildAdminOpsRoutes({ probe, relay, now: () => NOW, backupStatusFile: path.join(backupDir ?? '/nonexistent', 'etat.json'), ...(backupSchedule ? { backupSchedule } : {}) }));
   await app.ready();
   return { app, audit, snapshot, dirs };
 }
@@ -247,7 +247,7 @@ describe('GET /status', () => {
         lastSuccess: { documents: 10, collections: 2, mismatches: 0, indexes: 4, archiveBytes: 100, durationSeconds: 12, volumes: [] },
       }),
     );
-    const { app } = await buildApp({ role: 'ADMIN', relayDirs: dirs, backupDir });
+    const { app } = await buildApp({ role: 'ADMIN', relayDirs: dirs, backupDir, backupSchedule: { hour: 2, minute: 30 } });
     const res = await app.inject({ method: 'GET', url: '/status' });
     expect(res.statusCode).toBe(200);
     const data = res.json().data;
@@ -257,7 +257,7 @@ describe('GET /status', () => {
       runs: { backup: null, 'image-prune': null },
       availableAt: { backup: null, 'image-prune': null },
     });
-    expect(data.backup).toMatchObject({ status: 'ok', lastSuccess: { documents: 10, mismatches: 0 } });
+    expect(data.backup).toMatchObject({ status: 'ok', lastSuccess: { documents: 10, mismatches: 0 }, nextRunAt: '2026-10-13T00:30:00.000Z' });
     await app.close();
   });
 

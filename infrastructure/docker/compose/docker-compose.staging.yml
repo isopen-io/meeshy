@@ -336,6 +336,9 @@ services:
       # BACKUP_STATUS_ALERTS_ENABLED=true dans le .env de l'hôte.
       - BACKUP_STATUS_FILE=/backup-status/etat.json
       - BACKUP_STATUS_ALERTS_ENABLED=${BACKUP_STATUS_ALERTS_ENABLED:-false}
+      # #10460 — l'heure du timer de staging : la carte « Sauvegardes » annonce la
+      # prochaine sauvegarde à 2 h 30, pas à minuit (l'heure de la production).
+      - BACKUP_RUN_TIME=02:30
       # #10384–#10386 — les opérations serveur de l'administration : métriques de l'hôte
       # (/proc et statfs sur HOST_DISK_PROBE_PATH), et demandes de sauvegarde / purge des
       # images DÉPOSÉES dans OPS_REQUESTS_DIR pour le runner de l'hôte

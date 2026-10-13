@@ -23,7 +23,7 @@ import {
 import { errorResponseSchema, validationErrorResponseSchema } from '@meeshy/shared/types/api-schemas';
 import { requireAdminRank, requirePermission, requireSovereign } from '../../middleware/authorize';
 import type { UnifiedAuthRequest } from '../../middleware/auth';
-import { backupCardOf, backupStatusFile, readBackupVerdict } from '../../services/admin/backup-status';
+import { backupCardOf, backupScheduleFromEnv, backupStatusFile, readBackupVerdict, type BackupSchedule } from '../../services/admin/backup-status';
 import { hostMetricsProbe, type HostMetricsProbe } from '../../services/admin/host-metrics-probe';
 import { createOpsRelay, type OpsRelay } from '../../services/admin/ops-relay';
 import { enhancedLogger } from '../../utils/logger-enhanced.js';
@@ -43,6 +43,8 @@ export type AdminOpsDeps = {
   readonly relay: OpsRelay;
   readonly now: () => Date;
   readonly backupStatusFile: string;
+  /** L'heure de sauvegarde de cet environnement (#10460) ; absente ⇒ minuit, celle de la production. */
+  readonly backupSchedule?: BackupSchedule;
 };
 
 type Violation = { readonly path: string; readonly message: string };
@@ -125,7 +127,7 @@ export function buildAdminOpsRoutes(deps: AdminOpsDeps) {
       },
       async (_request: FastifyRequest, reply: FastifyReply) => {
         const [status, verdict] = await Promise.all([deps.relay.status(), readBackupVerdict(deps.backupStatusFile)]);
-        return sendSuccess(reply, { ...status, backup: backupCardOf(verdict, deps.now()) });
+        return sendSuccess(reply, { ...status, backup: backupCardOf(verdict, deps.now(), deps.backupSchedule) });
       },
     );
 
@@ -205,5 +207,6 @@ export async function adminOpsRoutes(fastify: FastifyInstance): Promise<void> {
     relay: createOpsRelay({ env: process.env, now: () => new Date() }),
     now: () => new Date(),
     backupStatusFile: backupStatusFile(),
+    backupSchedule: backupScheduleFromEnv(),
   })(fastify);
 }
