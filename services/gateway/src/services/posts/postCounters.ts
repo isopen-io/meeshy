@@ -34,6 +34,8 @@ export const POST_COUNTERS = [
   'playCount',
   'anonymousViewCount',
   'anonymousImpressionCount',
+  'uniqueViewCount',
+  'anonymousUniqueViewCount',
 ] as const;
 
 export type PostCounter = (typeof POST_COUNTERS)[number];

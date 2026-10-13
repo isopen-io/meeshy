@@ -128,6 +128,15 @@ export type ViewerInteractionsPage = {
   readonly engagement?: PostViewersPage['engagement'];
   /** Les vues de lecteurs SANS compte (#10483) — un agrégat, jamais une ligne nommée. */
   readonly anonymousViewCount?: number;
+} & ViewerListUniques;
+
+/**
+ * Les vues UNIQUES par jeton (#10483, règle du porteur 2026-10-13) —
+ * enregistrées et servies, pas encore affichées par les clients.
+ */
+export type ViewerListUniques = {
+  readonly uniqueViewCount?: number;
+  readonly anonymousUniqueViewCount?: number;
 };
 
 /**
@@ -135,10 +144,33 @@ export type ViewerInteractionsPage = {
  * visiteurs sans compte que la liste annonce (« et N visiteurs », #10483) :
  * il ne sort qu'à qui la porte ouvre la liste.
  */
-const VIEWER_LIST_POST_SELECT = { id: true, authorId: true, type: true, anonymousViewCount: true } as const;
+const VIEWER_LIST_POST_SELECT = {
+  id: true, authorId: true, type: true, anonymousViewCount: true, uniqueViewCount: true, anonymousUniqueViewCount: true,
+} as const;
+
+/**
+ * Les agrégats d'une liste de vues tels qu'ils partent sur le fil — les champs
+ * absents restent absents (un ancien serveur n'en sert aucun).
+ */
+export const viewerListCounts = (
+  result: { readonly anonymousViewCount?: number } & ViewerListUniques,
+): { readonly anonymousViewCount?: number } & ViewerListUniques =>
+  Object.fromEntries(
+    (['anonymousViewCount', 'uniqueViewCount', 'anonymousUniqueViewCount'] as const)
+      .filter((key) => result[key] !== undefined)
+      .map((key) => [key, result[key]]),
+  );
 
 const anonymousViewsOf = (post: { readonly anonymousViewCount?: number | null }): number =>
   post.anonymousViewCount ?? 0;
+
+const uniquesOf = (post: {
+  readonly uniqueViewCount?: number | null;
+  readonly anonymousUniqueViewCount?: number | null;
+}): Required<ViewerListUniques> => ({
+  uniqueViewCount: post.uniqueViewCount ?? 0,
+  anonymousUniqueViewCount: post.anonymousUniqueViewCount ?? 0,
+});
 
 /**
  * Comment la liste s'ouvre à ce lecteur :
@@ -504,7 +536,7 @@ export async function readViewerInteractions(
   if (!post) return null;
   await openViewerList(prisma, post, reader, 'interactions', { limit, offset });
   const page = await readViewerEngagementPage(prisma, post, limit, offset, gates, disclosedSince);
-  return { ...page, anonymousViewCount: anonymousViewsOf(post) };
+  return { ...page, anonymousViewCount: anonymousViewsOf(post), ...uniquesOf(post) };
 }
 
 /**
@@ -540,5 +572,5 @@ export async function readPostViews(
     }),
     prisma.postView.count({ where }),
   ]);
-  return { items, total, hasMore: offset + limit < total, anonymousViewCount: anonymousViewsOf(post) };
+  return { items, total, hasMore: offset + limit < total, anonymousViewCount: anonymousViewsOf(post), ...uniquesOf(post) };
 }

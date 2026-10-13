@@ -33,6 +33,8 @@ import { FastifyInstance, FastifyRequest, FastifyReply } from 'fastify';
 import rateLimit from '@fastify/rate-limit';
 import { UnifiedAuthRequest } from './auth';
 import { getCacheStore } from '../services/CacheStore';
+import { addressFingerprintOf } from '../utils/address-fingerprint';
+import { anonymousReaderKeyOf } from '../routes/social/anonymousReader';
 
 /**
  * Chemins exemptés du débit — sondes de disponibilité (#4219). Nommée et
@@ -279,6 +281,17 @@ export function createDirectoryRouteRateLimitConfig(
 }
 
 /**
+ * Le seau d'un appelant SANS compte sur une route de posts (#10483) : sa clé de
+ * lecteur quand il porte un X-Session-Token (un bureau de trente personnes
+ * derrière une même IP = trente seaux), sinon l'EMPREINTE HMAC tournante de son
+ * adresse — jamais l'adresse en clair dans une clé Redis.
+ */
+function anonymousPostRouteKey(request: FastifyRequest): string {
+  const readerKey = anonymousReaderKeyOf(request);
+  return readerKey ? `reader:${readerKey}` : `addr:${addressFingerprintOf({ ip: request.ip })}`;
+}
+
+/**
  * `view` et `impressionUnit` sont à la mesure d'un DÉFILEMENT de réels (#10403) :
  * une vue et une impression par réel affiché, et la passerelle dédoublonne
  * déjà la vue par (post, compte). Un plafond de 60 vues par compte, et
@@ -309,7 +322,7 @@ export function createPostRouteRateLimitConfig(
       // `userId: 'anonymous'` : le lire versait tous les visiteurs dans UN seau
       // (#10483, alias d'impression ouverts aux lecteurs sans compte).
       const userId = authContext?.isAuthenticated === false ? undefined : authContext?.userId;
-      return `posts:${cfg.label}:${userId ?? `ip:${request.ip}`}`;
+      return `posts:${cfg.label}:${userId ?? anonymousPostRouteKey(request)}`;
     },
     errorResponseBuilder: () => ({
       success: false,

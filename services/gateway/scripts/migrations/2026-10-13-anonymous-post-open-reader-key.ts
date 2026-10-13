@@ -25,13 +25,14 @@
  */
 import { MongoClient, MongoServerError, ObjectId } from 'mongodb';
 import {
+  ANONYMOUS_POST_OPEN_TTL_INDEX,
   migrateAnonymousPostOpens,
   type AnonymousPostOpenMigrationStore,
 } from '../../src/services/posts/anonymousPostOpenMigration';
 
 const DRY_RUN = process.env.DRY_RUN === '1';
 const COLLECTION = 'AnonymousPostOpen';
-const TTL_INDEX_NAME = 'AnonymousPostOpen_expiresAt_idx';
+const TTL_INDEX_NAME = ANONYMOUS_POST_OPEN_TTL_INDEX;
 
 type Row = { _id: ObjectId; postId: ObjectId | string; sessionKey: string; createdAt: Date; expiresAt?: Date | null };
 

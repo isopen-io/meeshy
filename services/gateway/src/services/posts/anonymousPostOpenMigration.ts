@@ -34,6 +34,14 @@ export type StoredOpen = {
 
 export type TtlIndexOutcome = 'created' | 'converted' | 'present';
 
+/**
+ * Le nom de l'index TTL — CELUI que `schema.prisma` déclare
+ * (`@@index([expiresAt], map: "AnonymousPostOpen_expiresAt_idx")`). Le moteur
+ * Prisma MongoDB reconnaît un index par nom et clés, pas par ses options : sous
+ * ce nom, un `db push` le voit présent et ne touche pas son TTL.
+ */
+export const ANONYMOUS_POST_OPEN_TTL_INDEX = 'AnonymousPostOpen_expiresAt_idx';
+
 export type AnonymousPostOpenMigrationStore = {
   /** Les lignes sans `expiresAt` ou dont la clé n'est pas une clé de lecteur. */
   legacyRows(): Promise<readonly StoredOpen[]>;

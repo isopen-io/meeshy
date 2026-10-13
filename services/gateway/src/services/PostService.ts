@@ -1730,12 +1730,12 @@ export class PostService {
   }
 
   /** Enregistre une vue d'un compte — corps : `posts/postReach.ts`. */
-  async recordView(postId: string, userId: string, duration?: number): Promise<boolean> {
+  async recordView(postId: string, userId: string, duration?: number, surface?: string): Promise<boolean> {
     return recordView(
       { prisma: this.prisma, visibilityFilter: (viewer) => this.buildVisibilityFilter(viewer) },
       postId,
       userId,
-      duration,
+      duration, surface,
     );
   }
 

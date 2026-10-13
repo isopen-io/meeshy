@@ -328,6 +328,18 @@ describe('« et N visiteurs » — les deux listes servent la part anonyme des v
     expect(res.json().meta).toEqual({ anonymousViewCount: 4 });
     await app.close();
   });
+
+  it('les vues uniques par jeton voyagent à côté, additives (meta de /views, data de /interactions)', async () => {
+    const uniques = { anonymousViewCount: 4, uniqueViewCount: 6, anonymousUniqueViewCount: 2 };
+    mockGetPostViews.mockResolvedValueOnce({ items: [], total: 0, hasMore: false, ...uniques });
+    mockGetPostInteractions.mockResolvedValueOnce({ viewers: [], total: 0, hasMore: false, ...uniques });
+    const app = await buildApp();
+    const views = await app.inject({ method: 'GET', url: `/posts/${POST_ID}/views` });
+    const interactions = await app.inject({ method: 'GET', url: `/posts/${POST_ID}/interactions` });
+    expect(views.json().meta).toEqual(uniques);
+    expect(interactions.json().data).toEqual({ viewers: [], ...uniques });
+    await app.close();
+  });
 });
 
 describe('GET /posts/:id/interactions — post not found', () => {

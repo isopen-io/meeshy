@@ -2,8 +2,8 @@ import type { FastifyInstance, FastifyRequest } from 'fastify';
 import type { UnifiedAuthRequest } from '../../middleware/auth';
 import { hashSessionToken } from '../../utils/session-token';
 import { readerKeyOf } from '../../services/posts/readerKey';
-import { anonymousVisitorFingerprint } from '../links/utils/link-visitor';
-import { checkSharedRateLimit, type IncrementableRedis } from '../posts/socialRateLimit';
+import { addressFingerprintOf } from '../../utils/address-fingerprint';
+import { recordAddressActivity } from './addressActivity';
 
 /**
  * Le LECTEUR ANONYME d'une requête de portée (#10483) — qui il est, et combien
@@ -87,9 +87,14 @@ async function guestParticipantIdByToken(prisma: GuestLookupPrisma, sessionToken
   }
 }
 
-/** Les deux plafonds du débit anonyme, par minute. */
+/**
+ * Les deux plafonds du débit anonyme, en ÉVÉNEMENTS par minute (règle du
+ * porteur 2026-10-13) : un jeton revoit autant qu'il veut sous 60/min ; une
+ * ADRESSE n'a qu'un plafond ÉLEVÉ anti-abus (600/min) — une famille, une
+ * entreprise ou un incubateur partagent une IP et ne doivent jamais buter.
+ */
 export const ANONYMOUS_READER_BUDGET = 60;
-export const ANONYMOUS_ADDRESS_BUDGET = 120;
+export const ANONYMOUS_ADDRESS_BUDGET = 600;
 const WINDOW_MS = 60_000;
 const MEMORY_COUNTERS_MAX = 50_000;
 
@@ -97,54 +102,74 @@ type Counter = { count: number; resetAt: number };
 
 const memoryCounters = new WeakMap<object, Map<string, Counter>>();
 
-const countInMemory = (owner: object, key: string, max: number, now: number): boolean => {
+/** Ajoute `weight` au compteur ; rend sa valeur AVANT l'ajout. */
+const addInMemory = (owner: object, key: string, weight: number, now: number): number => {
   const counters = memoryCounters.get(owner) ?? new Map<string, Counter>();
   memoryCounters.set(owner, counters);
   const current = counters.get(key);
-  const next = current && current.resetAt > now
-    ? { count: current.count + 1, resetAt: current.resetAt }
-    : { count: 1, resetAt: now + WINDOW_MS };
+  const before = current && current.resetAt > now ? current.count : 0;
+  const resetAt = current && current.resetAt > now ? current.resetAt : now + WINDOW_MS;
   counters.delete(key);
-  counters.set(key, next);
+  counters.set(key, { count: before + weight, resetAt });
   if (counters.size > MEMORY_COUNTERS_MAX) {
     const oldest = counters.keys().next().value;
     if (oldest !== undefined) counters.delete(oldest);
   }
-  return next.count <= max;
+  return before;
 };
 
-const userAgentOf = (request: FastifyRequest): string => {
-  const value = request.headers['user-agent'];
-  return Array.isArray(value) ? value.join(' ') : value ?? '';
+type WeightedRedis = {
+  incrby(key: string, increment: number): Promise<number>;
+  pexpire(key: string, milliseconds: number): Promise<number>;
+};
+
+/** Rend la valeur AVANT l'ajout ; une panne de Redis refuse tout (fail-closed). */
+const addInRedis = async (redis: WeightedRedis, key: string, weight: number): Promise<number> => {
+  try {
+    const after = await redis.incrby(key, weight);
+    if (after === weight) await redis.pexpire(key, WINDOW_MS).catch(() => 0);
+    return after - weight;
+  } catch {
+    return Number.POSITIVE_INFINITY;
+  }
 };
 
 /**
- * Le débit d'un lecteur anonyme : 60 lots par minute par clé de lecteur, 120
- * par minute par EMPREINTE d'adresse (`anonymousVisitorFingerprint`, HMAC à
- * période tournante). L'empreinte n'est qu'une CLÉ de compteur — Redis ou
- * mémoire —, jamais une écriture en base.
- *
- * Avec Redis, une panne REFUSE (`checkSharedRateLimit`, fail-closed) : la
- * panne du gardien ne devient pas l'absence de garde. Sans Redis (dev, tests),
- * un compteur en mémoire bornée.
+ * Le débit d'un lecteur anonyme, compté en ÉVÉNEMENTS : rend combien des
+ * `events` demandés sont admis (0 ⇒ refus). Un lot qui déborde est admis
+ * jusqu'au plafond, le reste écarté. Deux compteurs : la clé de lecteur, et
+ * l'empreinte d'ADRESSE (`addressFingerprintOf`, HMAC tournant chaque jour,
+ * sans agent utilisateur) — une CLÉ de compteur, jamais une écriture en base.
+ * Les événements admis alimentent l'agrégat quotidien par empreinte
+ * (`recordAddressActivity`), seule trace qui permet un bannissement manuel.
  */
-export async function admitAnonymousReader(
+export async function admitAnonymousEvents(
   fastify: FastifyInstance,
   request: FastifyRequest,
   reader: AnonymousReader,
-): Promise<boolean> {
-  const fingerprint = anonymousVisitorFingerprint({ ip: request.ip, userAgent: userAgentOf(request) });
+  events: number,
+): Promise<number> {
+  if (events <= 0) return 0;
+  const now = Date.now();
+  const fingerprint = addressFingerprintOf({ ip: request.ip, now });
   const limits = [
     { key: `social:events:anon:reader:${reader.readerKey}`, max: ANONYMOUS_READER_BUDGET },
     { key: `social:events:anon:address:${fingerprint}`, max: ANONYMOUS_ADDRESS_BUDGET },
   ] as const;
 
-  const redis = (fastify as { redis?: IncrementableRedis | null }).redis ?? null;
-  if (!redis) {
-    const now = Date.now();
-    return limits.map(({ key, max }) => countInMemory(fastify, key, max, now)).every(Boolean);
-  }
-  const verdicts = await Promise.all(limits.map(({ key, max }) =>
-    checkSharedRateLimit({ redis, key, max, windowMs: WINDOW_MS })));
-  return verdicts.every((verdict) => verdict.allowed);
+  const redis = (fastify as { redis?: WeightedRedis | null }).redis ?? null;
+  const befores = await Promise.all(limits.map(({ key }) =>
+    redis ? addInRedis(redis, key, events) : addInMemory(fastify, key, events, now)));
+  const admitted = Math.max(0, Math.min(events, ...limits.map(({ max }, i) => max - befores[i])));
+  await recordAddressActivity(fastify, { fingerprint, events: admitted, now });
+  return admitted;
+}
+
+/** Le débit d'UN événement — les alias unitaires. */
+export async function admitAnonymousReader(
+  fastify: FastifyInstance,
+  request: FastifyRequest,
+  reader: AnonymousReader,
+): Promise<boolean> {
+  return (await admitAnonymousEvents(fastify, request, reader, 1)) > 0;
 }

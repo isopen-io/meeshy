@@ -169,17 +169,32 @@ describe('createPostRouteRateLimitConfig', () => {
     expect(cfg.keyGenerator(req)).toBe('posts:create:u-42');
   });
 
-  it('keyGenerator falls back to IP when authContext is absent', () => {
+  it('keyGenerator sans compte compte par EMPREINTE d’adresse, jamais l’adresse en clair (#10483)', () => {
     const cfg = createPostRouteRateLimitConfig('like') as any;
-    const req = { ip: '9.9.9.9' };
-    expect(cfg.keyGenerator(req)).toBe('posts:like:ip:9.9.9.9');
+    const key = cfg.keyGenerator({ ip: '9.9.9.9', headers: {} });
+    expect(key).toMatch(/^posts:like:addr:[0-9a-f]{64}$/);
+    expect(key).not.toContain('9.9.9.9');
+    expect(cfg.keyGenerator({ ip: '9.9.9.9', headers: {} })).toBe(key);
   });
 
   it('keyGenerator ne verse pas tous les visiteurs dans UN seau — le contexte non authentifié (userId « anonymous ») compte par adresse (#10483)', () => {
     const cfg = createPostRouteRateLimitConfig('impression') as any;
-    const visiteur = (ip: string) => ({ authContext: { isAuthenticated: false, isAnonymous: true, userId: 'anonymous' }, ip });
-    expect(cfg.keyGenerator(visiteur('9.9.9.9'))).toBe('posts:impression:ip:9.9.9.9');
+    const visiteur = (ip: string) => ({ authContext: { isAuthenticated: false, isAnonymous: true, userId: 'anonymous' }, ip, headers: {} });
+    expect(cfg.keyGenerator(visiteur('9.9.9.9'))).not.toContain('9.9.9.9');
     expect(cfg.keyGenerator(visiteur('8.8.8.8'))).not.toBe(cfg.keyGenerator(visiteur('9.9.9.9')));
+  });
+
+  it('keyGenerator d’un lecteur à X-Session-Token : un seau par lecteur, même derrière une IP partagée (#10483)', () => {
+    const cfg = createPostRouteRateLimitConfig('impression') as any;
+    const lecteur = (token: string) => ({
+      authContext: { isAuthenticated: false, isAnonymous: true, userId: 'anonymous' },
+      ip: '203.0.113.5',
+      headers: { 'x-session-token': token },
+    });
+    const a = cfg.keyGenerator(lecteur('visitor_a'));
+    expect(a).toMatch(/^posts:impression:reader:[0-9a-f]{64}$/);
+    expect(a).not.toContain('visitor_a');
+    expect(cfg.keyGenerator(lecteur('visitor_b'))).not.toBe(a);
   });
 
   it('errorResponseBuilder returns 429 shape', () => {

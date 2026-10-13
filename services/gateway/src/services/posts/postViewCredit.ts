@@ -8,46 +8,69 @@ const log = enhancedLogger.child({ module: 'postViewCredit' });
 type PostViewCreditPrisma = Pick<PrismaClient, 'postView' | '$runCommandRaw'>;
 
 /**
- * Dédup + incrément d'UN post : singleton `PostView` (postId,userId) + `viewCount`
- * au premier insert, `duration` promue au max sur ré-ouverture. Sorti de
- * `PostService` pour être appliqué IDENTIQUEMENT au post affiché, à la racine
- * d'un repost, et à l'engagement d'un lecteur (#10404) — même mécanique de
- * dédup, aucune règle nouvelle inventée pour l'un des trois.
+ * La vue d'UN compte sur UN post (#10483, règle du porteur 2026-10-13) :
+ *
+ *  - `viewCount` compte CHAQUE vue — un même lecteur peut revoir autant qu'il
+ *    le veut, chaque fois compte (`repeat`, vrai par défaut) ;
+ *  - la PREMIÈRE vue crée le singleton `PostView` (postId,userId) — la liste
+ *    « vu par » — et monte `uniqueViewCount` ;
+ *  - une ré-ouverture promeut `duration` au maximum, jamais en dessous.
+ *
+ * Appliquée IDENTIQUEMENT au post affiché et à la racine d'un repost.
+ * `repeat: false` (l'engagement d'un lecteur, #10404) ne crédite que la
+ * première vue : réagir n'est pas rouvrir.
  *
  * Retourne `true` UNIQUEMENT à la création du `PostView` (première vue).
  */
 export async function creditPostView(
   prisma: PostViewCreditPrisma,
-  { postId, userId, durationMs }: { readonly postId: string; readonly userId: string; readonly durationMs?: number },
+  { postId, userId, durationMs, surface, repeat = true }: {
+    readonly postId: string;
+    readonly userId: string;
+    readonly durationMs?: number;
+    readonly surface?: string;
+    readonly repeat?: boolean;
+  },
 ): Promise<boolean> {
   const existing = await prisma.postView.findUnique({
     where: { postId_userId: { postId, userId } },
   });
 
   if (existing) {
-    if (durationMs !== undefined) {
-      // Le PostView est un singleton (postId,userId) : `duration` est le
-      // signal watch-time du moteur reco/monétisation (cf. PostFeedService).
-      // Une ré-ouverture plus courte (retap + swipe immédiat) ne doit JAMAIS
-      // rétrograder la plus longue durée déjà observée — on conserve le max.
-      const nextDuration = Math.max(existing.duration ?? 0, durationMs);
-      if (nextDuration !== existing.duration) {
-        await prisma.postView.update({
-          where: { id: existing.id },
-          data: { duration: nextDuration },
-        });
-      }
-    }
+    await promoteDuration(prisma, existing, durationMs);
+    if (repeat) await incrementPostCounters(prisma, [postId], { viewCount: { increment: 1 } });
     return false;
   }
 
-  await prisma.postView.create({
-    data: { postId, userId, duration: durationMs },
-  });
+  try {
+    await prisma.postView.create({
+      data: { postId, userId, duration: durationMs, ...(surface ? { surface } : {}) },
+    });
+  } catch (error) {
+    if (!isUniqueRace(error)) throw error;
+    if (repeat) await incrementPostCounters(prisma, [postId], { viewCount: { increment: 1 } });
+    return false;
+  }
 
-  await incrementPostCounters(prisma, [postId], { viewCount: { increment: 1 } });
+  await incrementPostCounters(prisma, [postId], { viewCount: { increment: 1 }, uniqueViewCount: { increment: 1 } });
 
   return true;
+}
+
+/**
+ * Le `PostView` est un singleton (postId,userId) : `duration` est le signal
+ * watch-time du moteur reco/monétisation (cf. PostFeedService). Une
+ * ré-ouverture plus courte ne rétrograde JAMAIS la plus longue durée observée.
+ */
+async function promoteDuration(
+  prisma: PostViewCreditPrisma,
+  existing: { readonly id: string; readonly duration: number | null },
+  durationMs: number | undefined,
+): Promise<void> {
+  if (durationMs === undefined) return;
+  const nextDuration = Math.max(existing.duration ?? 0, durationMs);
+  if (nextDuration === existing.duration) return;
+  await prisma.postView.update({ where: { id: existing.id }, data: { duration: nextDuration } });
 }
 
 const isUniqueRace = (error: unknown): boolean =>
@@ -74,7 +97,7 @@ export async function creditEngagedReaderView(
       select: { authorId: true },
     }))?.authorId;
     if (!author || author === userId) return;
-    await creditPostView(prisma, { postId, userId });
+    await creditPostView(prisma, { postId, userId, repeat: false });
   } catch (error) {
     if (isUniqueRace(error)) return;
     log.warn('creditEngagedReaderView failed — gesture kept', {

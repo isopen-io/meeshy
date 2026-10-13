@@ -36,7 +36,8 @@ export type EngagementSessionInput = {
 };
 
 /**
- * Enregistre une vue. Retourne `true` UNIQUEMENT lors de la première vue
+ * Enregistre une vue — CHAQUE vue monte `viewCount`, la première monte aussi
+ * `uniqueViewCount` (#10483, `creditPostView`). Retourne `true` UNIQUEMENT lors de la première vue
  * réelle du post AFFICHÉ (création du PostView) — permet à l'appelant de ne
  * déclencher les effets de bord coûteux « une fois » (ex : marquer les
  * notifications du post comme lues) sans les rejouer à chaque impression
@@ -67,7 +68,13 @@ export type EngagementSessionInput = {
  * Le crédit de la RACINE, lui, garde le filtre d'audience : une référence
  * posée sur un repost n'ouvre pas l'original.
  */
-export async function recordView(deps: PostReachDeps, postId: string, userId: string, duration?: number): Promise<boolean> {
+export async function recordView(
+  deps: PostReachDeps,
+  postId: string,
+  userId: string,
+  duration?: number,
+  surface?: string,
+): Promise<boolean> {
   try {
     // Enforce visibility before recording — without this, any authenticated
     // user could increment viewCount on any private story by ID, and have
@@ -129,7 +136,7 @@ export async function recordView(deps: PostReachDeps, postId: string, userId: st
     // legitimate viewer of the ORIGINAL (see root credit below).
     const isNewView = target.authorId === userId
       ? false
-      : await creditPostView(deps.prisma, { postId, userId, durationMs: safeDuration });
+      : await creditPostView(deps.prisma, { postId, userId, durationMs: safeDuration, surface });
     creditStoryViewed(deps.prisma, { viewerId: userId, story: target, isNewView, durationMs: safeDuration });
 
     const rootId = target.originalRepostOfId ?? target.repostOfId;

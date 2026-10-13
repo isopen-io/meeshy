@@ -30,12 +30,14 @@ describe('PostService.recordAnonymousView', () => {
     expect(h.prisma.$runCommandRaw).toHaveBeenCalledTimes(1);
   });
 
-  it('une vue répétée du même lecteur ne recompte rien', async () => {
+  it('une vue répétée du même lecteur compte au total, pas dans les uniques', async () => {
     const h = service([{ id: POST_A }]);
     await h.svc.recordAnonymousView(POST_A, LECTEUR);
 
-    expect(await h.svc.recordAnonymousView(POST_A, LECTEUR)).toBe(false);
-    expect(h.store.read(POST_A)).toMatchObject({ viewCount: 1, anonymousViewCount: 1, postOpenCount: 1 });
+    expect(await h.svc.recordAnonymousView(POST_A, LECTEUR)).toBe(true);
+    expect(h.store.read(POST_A)).toMatchObject({
+      viewCount: 2, anonymousViewCount: 2, postOpenCount: 2, uniqueViewCount: 1, anonymousUniqueViewCount: 1,
+    });
   });
 
   it('deux lecteurs ⇒ +2', async () => {

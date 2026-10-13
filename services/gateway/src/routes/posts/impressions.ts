@@ -4,7 +4,7 @@ import { AUTH_REGIME, createUnifiedAuthMiddleware, UnifiedAuthRequest } from '..
 import { PostParams } from './types';
 import { enhancedLogger } from '../../utils/logger-enhanced';
 import { sendSuccess, sendUnauthorized, sendNotFound, sendInternalError } from '../../utils/response';
-import { CONTENT_SURFACES, isContentSurface, type ContentSurface } from '@meeshy/shared/types/content-surfaces';
+import { isContentSurface, type ContentSurface } from '@meeshy/shared/types/content-surfaces';
 import { createPostRouteRateLimitConfig } from '../../middleware/rate-limiter';
 import { depreciee } from '../../utils/deprecation';
 import { socialEventsDeprecation } from '../social/deprecation';
@@ -15,7 +15,7 @@ import {
   type SocialEventsActor,
   type SocialEventsDeps,
 } from '../social/events';
-import { admitAnonymousReader, resolveAnonymousReader, sessionTokenOf } from '../social/anonymousReader';
+import { admitAnonymousEvents, resolveAnonymousReader, sessionTokenOf } from '../social/anonymousReader';
 
 type Hook = (this: unknown, request: FastifyRequest, reply: FastifyReply) => Promise<unknown>;
 type AnyHook = (this: unknown, request: FastifyRequest, reply: FastifyReply, done: (err?: Error) => void) => unknown;
@@ -57,19 +57,26 @@ export function reachAuth(requiredAuth: Hook, optionalAuth: Hook): Hook {
 
 /**
  * L'acteur d'un alias d'impression : un compte, ou — sans `Authorization` — un
- * lecteur anonyme dans son débit. `null` ⇒ 401 historique ; `'throttled'` ⇒ 429.
+ * lecteur anonyme dans son débit, compté en ÉVÉNEMENTS (`events`). `null` ⇒
+ * 401 historique ; `'throttled'` ⇒ 429 ; sinon l'acteur et le nombre
+ * d'événements admis.
  */
 async function acteurDImpression(
   fastify: FastifyInstance,
   prisma: PrismaClient,
   request: FastifyRequest,
-): Promise<SocialEventsActor | null | 'throttled'> {
+  events: number,
+): Promise<{ readonly acteur: SocialEventsActor; readonly admis: number } | null | 'throttled'> {
   const registeredUser = (request as UnifiedAuthRequest).authContext?.registeredUser;
-  if (registeredUser) return { kind: 'user', userId: registeredUser.id, username: registeredUser.username ?? '' };
+  if (registeredUser) {
+    return { acteur: { kind: 'user', userId: registeredUser.id, username: registeredUser.username ?? '' }, admis: events };
+  }
   if (request.headers.authorization) return null;
   const lecteur = await resolveAnonymousReader(prisma as never, request);
   if (!lecteur) return null;
-  return (await admitAnonymousReader(fastify, request, lecteur)) ? lecteur : 'throttled';
+  if (events === 0) return { acteur: lecteur, admis: 0 };
+  const admis = await admitAnonymousEvents(fastify, request, lecteur, events);
+  return admis > 0 ? { acteur: lecteur, admis } : 'throttled';
 }
 
 const surfaceOf = (body: unknown): ContentSurface | undefined => {
@@ -133,7 +140,9 @@ export function registerImpressionRoutes(
         type: 'object',
         properties: {
           source: { type: 'string', enum: [...IMPRESSION_SOURCES] },
-          surface: { type: 'string', enum: [...CONTENT_SURFACES] },
+          // Pas d'`enum` : une surface inconnue est IGNORÉE (`surfaceOf`), le
+          // corps passe — un client plus neuf que le serveur garde ses comptes.
+          surface: { type: 'string', maxLength: 32 },
         }
       }
     },
@@ -142,11 +151,12 @@ export function registerImpressionRoutes(
     config: { rateLimit: createPostRouteRateLimitConfig('impressionUnit') },
   }, async (request: FastifyRequest<{ Params: PostParams }>, reply: FastifyReply) => {
     try {
-      const acteur = await acteurDImpression(fastify, prisma, request);
-      if (acteur === 'throttled') return refuseAnonymousBudget(reply);
-      if (!acteur) {
+      const admission = await acteurDImpression(fastify, prisma, request, 1);
+      if (admission === 'throttled') return refuseAnonymousBudget(reply);
+      if (!admission) {
         return sendUnauthorized(reply, 'Authentication required', { code: 'UNAUTHORIZED' });
       }
+      const { acteur } = admission;
 
       const { postId } = request.params;
       const source = (request.body as { source?: string } | undefined)?.source ?? 'feed';
@@ -159,8 +169,7 @@ export function registerImpressionRoutes(
 
       // Le 404 historique est conservé — et il ne distingue toujours rien :
       // inconnu, supprimé, hors audience et malformé y sortent tous ensemble.
-      // Il se lit sur `rejected` : une impression ANONYME admise mais déjà
-      // comptée dans sa fenêtre de 30 minutes n'est pas « introuvable ».
+      // Il se lit sur `rejected` : ce qui a été admis n'est pas « introuvable ».
       if (rejected > 0) {
         return sendNotFound(reply, 'Post not found', { code: 'POST_NOT_FOUND' });
       }
@@ -195,7 +204,9 @@ export function registerImpressionRoutes(
           // répondre « rien à faire », pas l'appelant qui doit le deviner.
           postIds: { type: 'array', items: { type: 'string' }, maxItems: IMPRESSION_BATCH_CAP },
           source: { type: 'string', enum: [...IMPRESSION_SOURCES] },
-          surface: { type: 'string', enum: [...CONTENT_SURFACES] },
+          // Pas d'`enum` : une surface inconnue est IGNORÉE (`surfaceOf`), le
+          // corps passe — un client plus neuf que le serveur garde ses comptes.
+          surface: { type: 'string', maxLength: 32 },
         }
       }
     },
@@ -204,23 +215,23 @@ export function registerImpressionRoutes(
     config: { rateLimit: createPostRouteRateLimitConfig('impression') },
   }, async (request: FastifyRequest, reply: FastifyReply) => {
     try {
-      const acteur = await acteurDImpression(fastify, prisma, request);
-      if (acteur === 'throttled') return refuseAnonymousBudget(reply);
-      if (!acteur) {
+      const { postIds, source = 'feed' } = request.body as { postIds?: unknown; source?: string };
+      const lot = Array.isArray(postIds) ? (postIds as string[]).slice(0, IMPRESSION_BATCH_CAP) : [];
+      const admission = await acteurDImpression(fastify, prisma, request, lot.length);
+      if (admission === 'throttled') return refuseAnonymousBudget(reply);
+      if (!admission) {
         return sendUnauthorized(reply, 'Authentication required', { code: 'UNAUTHORIZED' });
       }
-
-      const { postIds, source = 'feed' } = request.body as { postIds?: unknown; source?: string };
-      if (!Array.isArray(postIds) || postIds.length === 0) {
+      if (lot.length === 0) {
         return sendSuccess(reply, { recorded: 0 });
       }
 
       const { recorded } = await ingestSocialEvents(
         deps,
-        (postIds as string[]).slice(0, IMPRESSION_BATCH_CAP).map((id) => ({
+        lot.slice(0, admission.admis).map((id) => ({
           type: 'impression' as const, postId: id, source: source as never, surface: surfaceOf(request.body),
         })),
-        acteur,
+        admission.acteur,
       );
 
       // `recorded` compte ce qui a RÉELLEMENT été écrit, pas ce qui a été

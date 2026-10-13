@@ -728,7 +728,7 @@ describe('recordView', () => {
     expect(prisma.postView.create).toHaveBeenCalledWith(
       expect.objectContaining({ data: expect.objectContaining({ postId: 'post-1', userId: 'viewer-1' }) }),
     );
-    expect(postCounterWritesOf(prisma.$runCommandRaw)).toEqual([counterWrite(['post-1'], { viewCount: { increment: 1 } })]);
+    expect(postCounterWritesOf(prisma.$runCommandRaw)).toEqual([counterWrite(['post-1'], { viewCount: { increment: 1 }, uniqueViewCount: { increment: 1 } })]);
   });
 
   it('returns false and updates duration for repeat view', async () => {
@@ -746,6 +746,7 @@ describe('recordView', () => {
     expect(prisma.postView.update).toHaveBeenCalledWith(
       expect.objectContaining({ data: { duration: 5000 } }),
     );
+    expect(postCounterWritesOf(prisma.$runCommandRaw)).toEqual([counterWrite(['post-1'], { viewCount: { increment: 1 } })]);
   });
 
   it('caps duration at 300_000 ms', async () => {

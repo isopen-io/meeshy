@@ -236,6 +236,14 @@ export interface Post {
    */
   readonly anonymousViewCount?: number | null;
   readonly anonymousImpressionCount?: number | null;
+  /**
+   * Vues UNIQUES par jeton (#10483) : `viewCount` compte CHAQUE ouverture, ce
+   * champ une fois par lecteur (compte ou anonyme), `anonymousUniqueViewCount`
+   * en est la part anonyme. Servis, pas encore affichés. Absents d'un ancien
+   * serveur, `null` sur un post antérieur : à lire comme 0.
+   */
+  readonly uniqueViewCount?: number | null;
+  readonly anonymousUniqueViewCount?: number | null;
   readonly bookmarkCount: number;
   readonly shareCount: number;
   readonly isPinned: boolean;

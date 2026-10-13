@@ -86,7 +86,7 @@ describe('G3 — un anonyme est désigné par sa clé de lecteur, jamais par son
     await send(h.app, [view(POST)], { 'x-session-token': 'guest-token-web' });
 
     expect(h.opens).toHaveLength(1);
-    expect(h.store.read(POST)?.viewCount).toBe(1);
+    expect(h.store.read(POST)).toMatchObject({ viewCount: 2, uniqueViewCount: 1, anonymousUniqueViewCount: 1 });
     await h.app.close();
   });
 });
@@ -125,13 +125,15 @@ describe('G4 — on ne compte que ce qu’un anonyme peut lire (isServableToAnon
   });
 });
 
-describe('G5 — la vue anonyme entre dans viewCount, une fois par lecteur', () => {
-  it('deux vues de la même clé ⇒ +1 ; la part anonyme et l’ouverture suivent', async () => {
+describe('G5 — la vue anonyme entre dans viewCount à chaque ouverture, une fois dans les uniques', () => {
+  it('deux vues de la même clé ⇒ +2 au total, +1 unique ; la part anonyme et l’ouverture suivent', async () => {
     const h = await harness([{ id: POST }]);
     await send(h.app, [view(POST)], visitor(1));
     await send(h.app, [view(POST)], visitor(1));
 
-    expect(h.store.read(POST)).toMatchObject({ viewCount: 1, anonymousViewCount: 1, postOpenCount: 1 });
+    expect(h.store.read(POST)).toMatchObject({
+      viewCount: 2, anonymousViewCount: 2, postOpenCount: 2, uniqueViewCount: 1, anonymousUniqueViewCount: 1,
+    });
     await h.app.close();
   });
 
@@ -163,7 +165,7 @@ describe('G5 — la vue anonyme entre dans viewCount, une fois par lecteur', () 
     expect(h.opens[0].durationMs).toBe(9000);
     const jours = ((h.opens[0].expiresAt as Date).getTime() - Date.now()) / 86_400_000;
     expect(Math.round(jours)).toBe(90);
-    expect(h.store.read(POST)?.viewCount).toBe(1);
+    expect(h.store.read(POST)).toMatchObject({ viewCount: 3, uniqueViewCount: 1 });
     await h.app.close();
   });
 
@@ -190,13 +192,13 @@ describe('G6 — l’impression anonyme compte, sans ligne ni identité', () => 
     await h.app.close();
   });
 
-  it('la même clé dans les 30 minutes ⇒ 0', async () => {
+  it('la même clé qui liste à nouveau ⇒ chaque listage compte, sans fenêtre', async () => {
     const h = await harness([{ id: POST }]);
     await send(h.app, [impression(POST)], visitor(1));
     const res = await send(h.app, [impression(POST), impression(POST)], visitor(1));
 
-    expect(JSON.parse(res.payload).data.recorded).toBe(0);
-    expect(h.store.read(POST)).toMatchObject({ impressionCount: 1, anonymousImpressionCount: 1 });
+    expect(JSON.parse(res.payload).data.recorded).toBe(2);
+    expect(h.store.read(POST)).toMatchObject({ impressionCount: 3, anonymousImpressionCount: 3 });
     await h.app.close();
   });
 
@@ -221,16 +223,16 @@ describe('G6 — l’impression anonyme compte, sans ligne ni identité', () => 
   });
 });
 
-describe('G7 — le débit anonyme est borné par lecteur ET par adresse', () => {
-  it('121 lots d’une même adresse sous 121 clés visiteur ⇒ 429, et l’adresse n’est jamais écrite', async () => {
+describe('G7 — le débit anonyme est borné par lecteur, et seulement HAUT par adresse', () => {
+  it('121 lots d’une même adresse sous 121 clés visiteur ⇒ tous comptés (une IP partagée n’est pas un abus), l’adresse jamais écrite', async () => {
     const h = await harness([{ id: POST }]);
     const statuts: number[] = [];
     for (let i = 0; i < 121; i += 1) {
       statuts.push((await send(h.app, [impression(POST)], visitor(i), '198.51.100.23')).statusCode);
     }
 
-    expect(statuts.slice(0, 120).every((s) => s === 200)).toBe(true);
-    expect(statuts[120]).toBe(429);
+    expect(statuts.every((s) => s === 200)).toBe(true);
+    expect(h.store.read(POST)?.impressionCount).toBe(121);
     expect(JSON.stringify(h.writes)).not.toContain('198.51.100.23');
     await h.app.close();
   });
@@ -258,12 +260,15 @@ describe('G8 — le champ surface', () => {
     await h.app.close();
   });
 
-  it('une surface inconnue ⇒ 400, comme une source inconnue', async () => {
+  it('une surface inconnue est ignorée, le lot passe (une source inconnue reste 400)', async () => {
     const h = await harness([{ id: POST }]);
     const res = await send(h.app, [impression(POST, { surface: 'ailleurs' })], { authorization: `Bearer ${READER}` });
+    const source = await send(h.app, [impression(POST, { source: 'ailleurs' })], { authorization: `Bearer ${READER}` });
 
-    expect(res.statusCode).toBe(400);
-    expect(h.writes).toEqual([]);
+    expect(res.statusCode).toBe(200);
+    expect(h.impressions).toEqual([expect.objectContaining({ postId: POST, source: 'feed' })]);
+    expect(h.impressions[0].surface ?? null).toBeNull();
+    expect(source.statusCode).toBe(400);
     await h.app.close();
   });
 

@@ -72,7 +72,9 @@ describe('#10404 — une réaction de lecteur crédite sa vue', () => {
     await likingService(prisma).likePost(POST_ID, READER, '❤️');
 
     expect(prisma.postView.create).toHaveBeenCalledWith({ data: { postId: POST_ID, userId: READER, duration: undefined } });
-    expect(postCounterWritesOf(prisma.$runCommandRaw)).toEqual([counterWrite([POST_ID], { viewCount: { increment: 1 } })]);
+    expect(postCounterWritesOf(prisma.$runCommandRaw)).toEqual([
+      counterWrite([POST_ID], { viewCount: { increment: 1 }, uniqueViewCount: { increment: 1 } }),
+    ]);
   });
 
   it('le like de l\'auteur sur son propre post ne compte aucune vue', async () => {

@@ -661,6 +661,19 @@ describe('« et N visiteurs » — la part anonyme des vues (#10483)', () => {
     }));
   });
 
+  it('les vues UNIQUES par jeton sont servies sur les deux listes (null ⇒ 0), lues avec la porte', async () => {
+    const post = { ...story(9), uniqueViewCount: 5, anonymousUniqueViewCount: null };
+    const prisma = makePrisma({ post });
+    const enrichie = await read(prisma, { id: AUTHOR, role: 'USER' });
+    const ancienne = await readPostViews(prisma as unknown as ViewerEngagementPrisma, POST, { id: AUTHOR, role: 'USER' }, 50, 0, SINCE);
+
+    expect(enrichie).toMatchObject({ anonymousViewCount: 9, uniqueViewCount: 5, anonymousUniqueViewCount: 0 });
+    expect(ancienne).toMatchObject({ anonymousViewCount: 9, uniqueViewCount: 5, anonymousUniqueViewCount: 0 });
+    expect(prisma.post.findFirst).toHaveBeenCalledWith(expect.objectContaining({
+      select: expect.objectContaining({ uniqueViewCount: true, anonymousUniqueViewCount: true }),
+    }));
+  });
+
   it("un tiers ne lit ni la liste ni le nombre : la porte n'a pas bougé", async () => {
     const prisma = makePrisma({ post: story(7) });
     await expect(read(prisma, { id: ANNA, role: 'USER' })).rejects.toThrow('FORBIDDEN');

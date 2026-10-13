@@ -43,6 +43,7 @@ import {
 } from '../social/events';
 import { registerShareRoutes } from './share';
 import { viewerListRequest, viewerListRefused } from './viewerListRequest';
+import { viewerListCounts } from '../../services/posts/viewerEngagement';
 
 export function registerInteractionRoutes(
   fastify: FastifyInstance,
@@ -661,7 +662,7 @@ export function registerInteractionRoutes(
 
       return sendSuccess(reply, result.items, {
         pagination: { total: result.total, offset, limit, hasMore: result.hasMore },
-        meta: { anonymousViewCount: result.anonymousViewCount },
+        meta: viewerListCounts(result),
       });
     } catch (error) {
       if (viewerListRefused(reply, error)) return;
@@ -699,7 +700,7 @@ export function registerInteractionRoutes(
       return sendSuccess(
         reply,
         { viewers: result.viewers, ...(result.engagement !== undefined ? { engagement: result.engagement } : {}),
-          ...(result.anonymousViewCount !== undefined ? { anonymousViewCount: result.anonymousViewCount } : {}) },
+          ...viewerListCounts(result) },
         { pagination: { total: result.total, offset, limit, hasMore: result.hasMore } },
       );
     } catch (error) {

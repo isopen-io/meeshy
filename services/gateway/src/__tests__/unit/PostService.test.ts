@@ -692,7 +692,7 @@ describe('PostService', () => {
         items: viewItems,
         total: 10,
         hasMore: true,
-        anonymousViewCount: 0,
+        anonymousViewCount: 0, uniqueViewCount: 0, anonymousUniqueViewCount: 0,
       });
     });
 
@@ -709,7 +709,7 @@ describe('PostService', () => {
         items: expect.any(Array),
         total: 1,
         hasMore: false,
-        anonymousViewCount: 0,
+        anonymousViewCount: 0, uniqueViewCount: 0, anonymousUniqueViewCount: 0,
       });
     });
 

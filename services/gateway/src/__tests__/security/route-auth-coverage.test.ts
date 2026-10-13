@@ -428,8 +428,8 @@ const PUBLIC_ROUTES: Array<{ method: string; url: string; why: string }> = [
       "ne laissent que sa clé de lecteur HMAC et des compteurs ; téléchargement et session " +
       "d'engagement écrivent une ligne PORTANT une identité, et sortent en 403. Le 400 que " +
       "voit ce balayage est le refus d'un appelant sans jeton de session : sans lui, il n'a " +
-      "aucune identité de seau. Débit : 60/min par clé de lecteur et 120/min par empreinte " +
-      "d'adresse pour un visiteur, 30/min par compte sinon.",
+      "aucune identité de seau. Débit, en événements : 60/min par clé de lecteur et 600/min par " +
+      "empreinte d'adresse HMAC tournante pour un visiteur, 30 lots/min par compte sinon.",
   },
 
   // --- Attachments : fichiers statiques servis par nom de fichier UUIDv4

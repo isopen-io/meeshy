@@ -3844,6 +3844,13 @@ model Post {
   /// antérieur à la colonne vaut `null`, que `incrementPostCounters` traite en 0.
   anonymousViewCount       Int? @default(0)
   anonymousImpressionCount Int? @default(0)
+  /// Vues UNIQUES par jeton (#10483, règle du porteur 2026-10-13) : `viewCount`
+  /// compte CHAQUE ouverture ; `uniqueViewCount` ne monte qu'à la PREMIÈRE vue
+  /// d'un lecteur (ligne `PostView` d'un compte, ligne `AnonymousPostOpen` d'un
+  /// anonyme), `anonymousUniqueViewCount` en est la part anonyme. Enregistrés,
+  /// servis, pas encore affichés. `null` sur un post antérieur ⇒ lire 0.
+  uniqueViewCount          Int? @default(0)
+  anonymousUniqueViewCount Int? @default(0)
   /// Nombre d'actions « Enregistrer » sur ce poste : +1 par action, quel que
   /// soit le nombre de médias téléchargés. NE VAUT PAS la somme des
   /// `PostMedia.downloadCount` de ce poste — l'un compte des actions, l'autre
@@ -3914,9 +3921,10 @@ model Post {
 
 /// Déduplication des VUES ANONYMES d'un post (#10483, ex « comptage bête »).
 /// `sessionKey` = clé de lecteur HMAC dérivée de X-Session-Token par la
-/// passerelle (`readerKeyOf`) — la valeur brute n'est jamais écrite. Le 1ᵉʳ
-/// insert d'un (postId, sessionKey) incrémente viewCount, anonymousViewCount
-/// et postOpenCount ; une vue répétée ne monte que `durationMs`.
+/// passerelle (`readerKeyOf`) — la valeur brute n'est jamais écrite. CHAQUE vue
+/// incrémente viewCount, anonymousViewCount et postOpenCount ; le 1ᵉʳ insert
+/// d'un (postId, sessionKey) incrémente en plus uniqueViewCount et
+/// anonymousUniqueViewCount ; une vue répétée monte `durationMs` au maximum.
 model AnonymousPostOpen {
   id         String    @id @default(auto()) @map("_id") @db.ObjectId
   postId     String    @db.ObjectId
@@ -3926,14 +3934,20 @@ model AnonymousPostOpen {
   createdAt  DateTime  @default(now())
   /// Durée de lecture la plus longue déclarée par ce lecteur (ms, plafond 5 min).
   durationMs Int?
-  /// Fin de vie de la ligne (création + 90 jours) — index TTL Mongo posé par la
-  /// migration d'index idempotente, jamais par `prisma db push`.
+  /// Fin de vie de la ligne (création + 90 jours). L'index ci-dessous PORTE LE
+  /// NOM que Prisma lui donne (`AnonymousPostOpen_expiresAt_idx`) et la
+  /// migration #10483 le rend TTL (`expireAfterSeconds: 0`, création ou
+  /// `collMod`) sous CE nom : le moteur Prisma MongoDB compare un index par nom
+  /// et par clés, jamais par ses options, donc il le reconnaît et ne le recrée
+  /// pas. Ne jamais le renommer ni le retirer d'ici (un `db push` le
+  /// supprimerait avec son TTL) ; en staging et production, les index se
+  /// posent par migration, jamais par `prisma db push`.
   expiresAt  DateTime?
   post       Post      @relation(fields: [postId], references: [id], onDelete: Cascade)
 
   @@unique([postId, sessionKey])
   @@index([postId])
-  @@index([expiresAt])
+  @@index([expiresAt], map: "AnonymousPostOpen_expiresAt_idx")
 }
 
 /// Bibliothèque de sons — entité de première classe, réutilisable et créditée.
@@ -4214,6 +4228,10 @@ model PostView {
   viewedAt DateTime @default(now())
   /// Durée de vue en ms (temps passé sur le post)
   duration Int?
+  /// Écran de la PREMIÈRE vue déclaré par le client (`CONTENT_SURFACES`,
+  /// #10483) — facultatif : un ancien client ne l'envoie pas, une valeur
+  /// inconnue n'est pas rangée.
+  surface  String?
 
   post Post @relation(fields: [postId], references: [id], onDelete: Cascade)
   user User @relation("UserPostViews", fields: [userId], references: [id])

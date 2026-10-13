@@ -72,14 +72,14 @@ describe('G9 — les alias d’impression comptent un lecteur anonyme', () => {
     await h.app.close();
   });
 
-  it('/posts/:id/impression sans JWT, avec X-Session-Token ⇒ { recorded: true }, et une seconde fois dans la fenêtre aussi', async () => {
+  it('/posts/:id/impression sans JWT, avec X-Session-Token ⇒ { recorded: true }, et la seconde compte aussi (aucune fenêtre)', async () => {
     const h = await harness();
     const premier = await h.app.inject({ method: 'POST', url: `/posts/${POST}/impression`, headers: visiteur, payload: {} });
     const second = await h.app.inject({ method: 'POST', url: `/posts/${POST}/impression`, headers: visiteur, payload: {} });
 
     expect(premier.json().data).toEqual({ recorded: true });
     expect(second.json().data).toEqual({ recorded: true });
-    expect(h.store.read(POST)).toMatchObject({ impressionCount: 1, anonymousImpressionCount: 1 });
+    expect(h.store.read(POST)).toMatchObject({ impressionCount: 2, anonymousImpressionCount: 2 });
     await h.app.close();
   });
 

@@ -10,13 +10,11 @@ import { readServableToAnonymous } from '../posts/anonymousPostGate';
 import {
   creditAnonymousImpressions,
   creditAnonymousViews,
-  createImpressionDedup,
-  type ImpressionDedup,
   type ServableMap,
 } from '../../services/posts/anonymousReach';
 import { CONTENT_SURFACES } from '@meeshy/shared/types/content-surfaces';
 import {
-  admitAnonymousReader,
+  admitAnonymousEvents,
   anonymousReaderKeyOf,
   resolveAnonymousReader,
   ANONYMOUS_READER_BUDGET,
@@ -179,9 +177,11 @@ const postId = z.string().regex(OBJECT_ID_REGEX);
  * L'écran d'affichage (#10483) — FACULTATIF : un ancien client ne l'envoie pas,
  * un ancien serveur le retire (objet non strict). Source unique :
  * `CONTENT_SURFACES` (`@meeshy/shared/types/content-surfaces`). Une valeur
- * inconnue refuse le lot, comme une `source` inconnue.
+ * INCONNUE est ignorée (rangée absente) et le lot passe : un client plus neuf
+ * que le serveur, qui déclare un écran que celui-ci ne connaît pas encore, ne
+ * doit jamais perdre ses comptes.
  */
-const surface = z.enum(CONTENT_SURFACES).optional();
+const surface = z.enum(CONTENT_SURFACES).optional().catch(undefined);
 
 const ViewEventSchema = z.object({
   type: z.literal('view'),
@@ -275,19 +275,6 @@ export type SocialEventsDeps = {
     PostService,
     'recordView' | 'getPostById' | 'recordMediaDownloads' | 'recordEngagementBatch'
   >;
-  /** Dédoublonnage des impressions anonymes — par défaut Redis de l'instance, repli en mémoire bornée. */
-  readonly impressionDedup?: ImpressionDedup;
-};
-
-const dedupParInstance = new WeakMap<object, ImpressionDedup>();
-
-const impressionDedupOf = (deps: SocialEventsDeps): ImpressionDedup => {
-  if (deps.impressionDedup) return deps.impressionDedup;
-  const existant = dedupParInstance.get(deps.fastify);
-  if (existant) return existant;
-  const cree = createImpressionDedup(() => deps.fastify.redis ?? null);
-  dedupParInstance.set(deps.fastify, cree);
-  return cree;
 };
 
 /**
@@ -306,7 +293,7 @@ async function applyViews(
 
   let recorded = 0;
   for (const event of events) {
-    const isNewView = await deps.postService.recordView(event.postId, actor.userId, event.durationMs);
+    const isNewView = await deps.postService.recordView(event.postId, actor.userId, event.durationMs, event.surface);
     recorded += 1;
 
     // Contenu consommé (première vue réelle) → les notifications liées à ce
@@ -394,12 +381,7 @@ async function applyImpressions(
   });
 
   const impressions = compterParId(events.map((event) => event.postId));
-  // Ouvrir le Détail d'un post est à la fois une impression ET une ouverture
-  // comptée immédiatement — chaque ouverture compte, sans seuil. Les autres
-  // surfaces ne comptent qu'une impression.
-  const ouvertures = compterParId(
-    events.filter((event) => event.source === 'detail').map((event) => event.postId),
-  );
+  const ouvertures = compterParId(events.filter(isDetailOpen).map((event) => event.postId));
 
   const racines = await resoudreRacinesDeRepost(deps.prisma, [...impressions.keys()]);
   const creditsRacine = compterParId(
@@ -417,6 +399,23 @@ async function applyImpressions(
 
   return events.length;
 }
+
+/**
+ * Les sources qui OUVRENT le détail d'un post : l'ouvrir depuis le fil
+ * (`detail`), depuis une notification ou depuis un lien partagé est la même
+ * ouverture — le client dit seulement d'où il venait (#10483).
+ */
+const DETAIL_OPEN_SOURCES: ReadonlySet<string> = new Set(['detail', 'notification', 'shared_link']);
+
+/**
+ * Ouvrir le Détail d'un post est à la fois une impression ET une ouverture,
+ * comptée immédiatement — chaque ouverture compte, sans seuil. Une source de
+ * détail rendue dans un AUTRE écran n'ouvre rien : une citation dans une bulle
+ * (`shared_link` + `citation`) est un listage. Sans écran déclaré (ancien
+ * client), la source fait foi.
+ */
+const isDetailOpen = (event: Extract<SocialEvent, { type: 'impression' }>): boolean =>
+  DETAIL_OPEN_SOURCES.has(event.source) && (event.surface === undefined || event.surface === 'detail');
 
 /**
  * La RACINE de chaque repost du lot, en UNE requête — jamais une par post.
@@ -505,12 +504,11 @@ export async function ingestSocialEvents(
  *  1. l'AUDIENCE : `readServableToAnonymous`, la garde de LECTURE anonyme, en
  *     une passe ; elle rend aussi la racine de chaque repost ;
  *  2. la PARTITION, comme pour un compte ;
- *  3. les EFFETS : la vue entre dans `viewCount` une fois par lecteur, une
- *     impression compte une fois par fenêtre de 30 minutes — sans aucune ligne
- *     portant une identité (`anonymousReach.ts`).
+ *  3. les EFFETS : chaque vue et chaque impression comptent (règle du porteur
+ *     2026-10-13), la première vue d'un lecteur monte en plus les vues
+ *     uniques — sans aucune ligne portant une identité (`anonymousReach.ts`).
  *
- * `recorded` dit ce qui a été ÉCRIT : les PREMIÈRES vues (comme avant ce lot)
- * et les impressions comptées.
+ * `recorded` dit ce qui a été ÉCRIT : les vues et les impressions comptées.
  */
 async function ingestAnonymous(
   deps: SocialEventsDeps,
@@ -531,16 +529,15 @@ async function ingestAnonymous(
     views: admis.flatMap((event) => event.type === 'view' ? [{ postId: event.postId, durationMs: event.durationMs }] : []),
     servable,
   });
-  const impressions = await creditAnonymousImpressions(deps.prisma, impressionDedupOf(deps), {
-    readerKey: actor.readerKey,
+  const impressions = await creditAnonymousImpressions(deps.prisma, {
     postIds: admis.flatMap((event) => event.type === 'impression' ? [event.postId] : []),
     servable,
   });
 
   return {
-    recorded: vues.size + impressions,
+    recorded: vues + impressions,
     rejected,
-    legacy: { mediaRecorded: 0, anonymousCounted: vues.size > 0 },
+    legacy: { mediaRecorded: 0, anonymousCounted: vues > 0 },
   };
 }
 
@@ -598,9 +595,9 @@ async function applyDwell(
  * - Un COMPTE : son id. 30/min couvre le lot entier — une clé par `(compte,
  *   post)` rendrait le plafond proportionnel au nombre de posts observés.
  * - Un ANONYME (#10483) : sa CLÉ DE LECTEUR (`readerKeyOf`), jamais la valeur
- *   brute du jeton ni l'adresse. Le seau par adresse existe aussi, mais à part
- *   ({@link admitAnonymousReader}) : une adresse partagée (NAT) ne doit pas
- *   épuiser le seau d'un lecteur, ni un lecteur celui de son adresse.
+ *   brute du jeton ni l'adresse. Les budgets en ÉVÉNEMENTS (par lecteur, et
+ *   un plafond élevé par empreinte d'adresse) sont à part
+ *   ({@link admitAnonymousEvents}).
  *
  * La clé se lit sur `registeredUser`, jamais sur `authContext.userId` : le
  * contexte NON authentifié du middleware porte `userId: 'anonymous'`, et tous
@@ -689,11 +686,15 @@ export function registerSocialEventRoutes(
         if (parsed.data.events.some((event) => !TYPES_ANONYMES.has(event.type))) {
           return sendForbidden(reply, 'Authentication required for this event type', { code: 'FORBIDDEN' });
         }
-        if (!(await admitAnonymousReader(fastify, request, acteur))) return refuseAnonymousBudget(reply);
       }
 
-      const { recorded, rejected } = await ingestSocialEvents(deps, parsed.data.events, acteur);
-      return sendSuccess(reply, { recorded, rejected });
+      const admis = acteur.kind === 'anonymous'
+        ? await admitAnonymousEvents(fastify, request, acteur, parsed.data.events.length)
+        : parsed.data.events.length;
+      if (admis === 0 && parsed.data.events.length > 0) return refuseAnonymousBudget(reply);
+
+      const { recorded, rejected } = await ingestSocialEvents(deps, parsed.data.events.slice(0, admis), acteur);
+      return sendSuccess(reply, { recorded, rejected: rejected + parsed.data.events.length - admis });
     } catch (error) {
       enhancedLogger.error('[POST /social/events]', error);
       return sendInternalError(reply, 'Internal server error', { code: 'INTERNAL_ERROR' });
