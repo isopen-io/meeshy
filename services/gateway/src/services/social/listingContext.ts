@@ -36,3 +36,18 @@ export type RankedScope = keyof typeof RANKING_SOURCE_OF_SCOPE;
 export const withRankingSource = (items: readonly unknown[], source: RankingSource): unknown[] =>
   items.map((item) =>
     typeof item === 'object' && item !== null && !Array.isArray(item) ? { ...item, rankingSource: source } : item);
+
+/**
+ * Une page de listing hors keyset (hashtag, son, lieu — #4346) et ses routes
+ * historiques : mêmes données et même pagination qu'avant, chaque élément
+ * avec sa source, la page avec son identifiant. UNE seule forme pour les six
+ * adresses, pour que la parité scope ↔ route historique tienne clé à clé.
+ */
+export const rankedListingPage = <P>(
+  page: { readonly data: readonly unknown[]; readonly pagination: P },
+  scope: RankedScope,
+): { data: unknown[]; pagination: P; meta: { feedRequestId: string } } => ({
+  data: withRankingSource(page.data, RANKING_SOURCE_OF_SCOPE[scope]),
+  pagination: page.pagination,
+  meta: { feedRequestId: newFeedRequestId() },
+});

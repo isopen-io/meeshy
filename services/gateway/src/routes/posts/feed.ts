@@ -9,7 +9,7 @@ import { PostFeedService } from '../../services/PostFeedService';
 import { FeedQuerySchema, UserParams, CommunityParams } from './types';
 import { sendSuccess, sendUnauthorized, sendBadRequest, sendInternalError, sendError } from '../../utils/response';
 import { validatePagination } from '../../utils/pagination';
-import { RANKING_SOURCE_OF_SCOPE, newFeedRequestId, withRankingSource, type RankedScope } from '../../services/social/listingContext';
+import { RANKING_SOURCE_OF_SCOPE, newFeedRequestId, rankedListingPage, withRankingSource, type RankedScope } from '../../services/social/listingContext';
 import { getCacheStore } from '../../services/CacheStore';
 import { wireReaderFromRequest, type WireReader } from '../../services/posts/storyEffectsV3';
 import { viewerFromRequest } from '../users/presence-gate';
@@ -850,10 +850,13 @@ export function registerFeedRoutes(
         // #4346 — les trois scopes ci-dessous NE PASSENT PAS par
         // `envoyerFeedUnifie` : leur réponse doit rester IDENTIQUE, clé à
         // clé, à celle de leur route historique (témoin de parité, § tête de
-        // fichier) — l'enveloppe `form`/`meta` casserait cette parité.
+        // fichier) — l'enveloppe `form`/tombstones casserait cette parité.
+        // Le contexte de listing (#10501) passe par `rankedListingPage`, que
+        // les routes historiques appellent aussi.
         case 'hashtag': {
           const resultat = await chargerPostsParHashtag(prisma, q.tag, viewerId, { cursor: q.cursor, limit: q.limit }, reader);
-          return sendSuccess(reply, resultat.data, { pagination: resultat.pagination });
+          const page = rankedListingPage(resultat, 'hashtag');
+          return sendSuccess(reply, page.data, { pagination: page.pagination, meta: page.meta });
         }
         case 'sound': {
           // Même garde de forme que l'alias historique (`OBJECT_ID.test`,
@@ -862,7 +865,8 @@ export function registerFeedRoutes(
             return sendBadRequest(reply, 'Invalid sound id', { code: 'VALIDATION_ERROR' });
           }
           const resultat = await chargerPostsParSon(prisma, q.soundId, { cursor: q.cursor, limit: q.limit });
-          return sendSuccess(reply, resultat.data, { pagination: resultat.pagination });
+          const page = rankedListingPage(resultat, 'sound');
+          return sendSuccess(reply, page.data, { pagination: page.pagination, meta: page.meta });
         }
         case 'nearby': {
           // Plafond de débit INDÉPENDANT de celui de `GET /posts/nearby`
@@ -884,7 +888,8 @@ export function registerFeedRoutes(
             { lat: q.lat, lng: q.lng, radiusKm: q.radiusKm, cursor: q.cursor, limit: q.limit },
             reader,
           );
-          return sendSuccess(reply, resultat.data, { pagination: resultat.pagination });
+          const page = rankedListingPage(resultat, 'nearby');
+          return sendSuccess(reply, page.data, { pagination: page.pagination, meta: page.meta });
         }
       }
     } catch (error) {
