@@ -77,7 +77,11 @@ class StatusViewModel: ObservableObject {
         isOffline: @escaping @Sendable () -> Bool = { NetworkMonitor.shared.isOffline },
         moodImpressions: ReachImpressionRecording? = nil
     ) {
-        self.impressions = moodImpressions ?? SharedImpressionBatchers.moodAvatar
+        if let moodImpressions {
+            self.impressions = moodImpressions
+        } else {
+            self.impressions = SharedImpressionBatchers.moodAvatar
+        }
         self.mode = mode
         self.statusService = statusService
         self.socialSocket = socialSocket

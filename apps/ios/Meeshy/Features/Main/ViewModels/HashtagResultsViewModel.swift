@@ -27,7 +27,11 @@ final class HashtagResultsViewModel: ObservableObject {
         self.tag = tag
         self.service = service
         self.languageProvider = languageProvider
-        self.impressions = impressions ?? ImpressionBatcher(source: "search", surface: .hashtag, postService: service)
+        if let impressions {
+            self.impressions = impressions
+        } else {
+            self.impressions = ImpressionBatcher(source: "search", surface: .hashtag, postService: service)
+        }
     }
 
     /// #10483 — un résultat qui apparaît à l'écran est une impression, à
