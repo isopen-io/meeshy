@@ -41,9 +41,14 @@ nonisolated enum ComposerPanelHeightLaw {
         return min(endFrame.height, windowHeight - endFrame.minY)
     }
 
-    /// Gabarit du témoin rouge (#10544) : la règle arrive au commit suivant.
+    /// Hauteur qui SOULÈVE ce qui est posé sur le clavier (#10544).
+    ///
+    /// Une trame dégénérée n'annonce rien : la hauteur en cours est gardée —
+    /// la lire comme « plus de clavier » reposait le composeur sous un clavier
+    /// encore levé. Un clavier flottant ou sous la fenêtre ne soulève rien.
     static func liftHeight(endFrame: CGRect, windowHeight: CGFloat, current: CGFloat) -> CGFloat {
-        keyboardHeight(endFrame: endFrame, windowHeight: windowHeight) ?? 0
+        guard endFrame.width > 0, endFrame.height > 0 else { return current }
+        return keyboardHeight(endFrame: endFrame, windowHeight: windowHeight) ?? 0
     }
 
     /// Plafond du panneau pour une fenêtre donnée.
