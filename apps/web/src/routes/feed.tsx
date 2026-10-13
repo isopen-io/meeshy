@@ -1,3 +1,5 @@
+import { noteListingRefresh } from '@/lib/telemetry/listing-registry';
+import { useListingScrollTelemetry } from '@/lib/telemetry/listing-scroll';
 import { useListingSessionId } from '@/lib/telemetry/listing-session';
 import { listingAt } from '@/lib/telemetry/served-listing';
 import { useCallback, useMemo, useRef } from 'react';
@@ -295,9 +297,14 @@ export default function FeedScreen() {
 
   const loading = feed.data === undefined && !feed.isError;
   const paginationState = paginationStateOf(feed);
-  const pull = usePullToRefresh({ root: frame, onRefresh: refreshFeedAction, threshold: PULL_THRESHOLD });
-  const posts = feed.data ?? EMPTY_POSTS;
   const listingSessionId = useListingSessionId();
+  const onPullRefresh = useCallback(() => {
+    noteListingRefresh(listingSessionId);
+    return refreshFeedAction();
+  }, [listingSessionId]);
+  const pull = usePullToRefresh({ root: frame, onRefresh: onPullRefresh, threshold: PULL_THRESHOLD });
+  const posts = feed.data ?? EMPTY_POSTS;
+  useListingScrollTelemetry({ frame, surface: 'feed', listingSessionId, loaded: posts.length });
   /**
    * CE QUI EST ARRIVÉ PENDANT QU'ON LISAIT (#7182) — le compte que
    * `applyPostCreated` tient sur l'écoute de `post:created`. Il vit dans le

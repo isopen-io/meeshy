@@ -21,6 +21,8 @@ import { safeLocalStorage } from '@/lib/storage';
 import type { OpenOrigin } from '@meeshy/shared/types/content-reach';
 
 import { openLinkSearch, viewFieldsOf, viewProvenanceOf, type ViewAttribution } from './content-open';
+import { noteListingItem } from '@/lib/telemetry/listing-registry';
+
 import { liveSocialEventsContext } from './telemetry-context';
 import {
   MRC_DISPLAY_MS,
@@ -271,6 +273,7 @@ export function useImpressionRef(
       (visibility) => {
         impressionEventId = newEngagementSessionId();
         readingTelemetry.record({ type: 'impression', postId, source, ...placed, eventId: impressionEventId, visibility });
+        noteListingItem(listed, visibility.viewable);
       },
       {
         ...(kind === undefined ? {} : { kind }),

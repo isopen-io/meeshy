@@ -1,3 +1,4 @@
+import { useListingScrollTelemetry } from '@/lib/telemetry/listing-scroll';
 import { useListingSessionId } from '@/lib/telemetry/listing-session';
 import { listingAt } from '@/lib/telemetry/served-listing';
 import { useMemo, useRef, useState } from 'react';
@@ -232,6 +233,7 @@ export default function BookmarksScreen() {
 
   const posts = corpus.data ?? [];
   const listingSessionId = useListingSessionId();
+  useListingScrollTelemetry({ frame, surface: 'bookmarks', listingSessionId, loaded: posts.length });
   /** CACHE D'ABORD (§ Instant App Principles) : le squelette n'existe que pour
    * un cache VIDE. `corpus.data` servi, même périmé, se peint sur-le-champ et
    * la revalidation reste silencieuse. */
