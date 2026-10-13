@@ -194,7 +194,7 @@ struct StoryViewerContainer: View {
         .feedbackToastOverlay()
         // Une conversation qui s'ouvre referme le lecteur (#10539) — et, avec
         // lui, ce qu'il a présenté : commentaires, profil, partage.
-        .closesForConversationOpening(.storyViewer) { isPresented = false }
+        .closesForConversationOpening(.storyViewer, close: { isPresented = false })
         // **La porte COMMUNE** (#6085) : la même que le message reçu et que les
         // deux pleins écrans du fil. Trois surfaces, un montage — l'envoi, la
         // reprise hors-ligne et la sortie n'ont qu'une écriture.

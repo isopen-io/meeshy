@@ -181,7 +181,7 @@ final class ConversationOpeningClearsSurfacesTests: XCTestCase {
 
     func test_everySurfaceFamily_declaresItselfAtItsMountPoint() throws {
         let mounts: [(String, String)] = [
-            ("Features/Main/Views/StoryViewerContainer.swift", ".closesForConversationOpening(.storyViewer)"),
+            ("Features/Main/Views/StoryViewerContainer.swift", ".closesForConversationOpening(.storyViewer"),
             ("Features/Main/Views/ReelsPresenter.swift", "surfaces.declare(.reels"),
             ("Features/Main/Views/SocialMediaGalleryPresentation.swift", ".closesForConversationOpening(.mediaGallery)"),
             ("Features/Main/Composer/MeeshyComposerHost+Autosave.swift", ".closesForConversationOpening(.composer"),
