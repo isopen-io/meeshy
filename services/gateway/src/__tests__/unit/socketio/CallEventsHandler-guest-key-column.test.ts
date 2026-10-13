@@ -9,6 +9,10 @@
  * Le double de Prisma TIENT des lignes et ÉVALUE le `where` : un filtre qui
  * lit la mauvaise colonne rend une liste vide ici comme en base.
  *
+ * Mais l'invité de lien ne sonne pas au premier appel (`ringableCallees`) :
+ * `call:check-active` ne lui rejoue que l'appel qui l'INVITE (`invitedUserIds`),
+ * jamais un autre — ni bannière, ni TURN neufs.
+ *
  * Ce que la suite garde aussi : `call:initiate` et `call:join` par socket
  * REFUSENT un invité, explicitement (`PERMISSION_DENIED`, CVE-004) — jamais
  * par un `NOT_A_PARTICIPANT` muet.
@@ -84,7 +88,7 @@ function makePrisma() {
   } as unknown as PrismaClient;
 }
 
-function makeCallService() {
+function makeCallService(invitedUserIds: string[] = []) {
   return {
     getCallSession: jest.fn<any>().mockResolvedValue({
       id: CALL_ID,
@@ -93,7 +97,7 @@ function makeCallService() {
       metadata: { type: 'audio' },
       initiator: { id: 'someone-else', username: 'other', displayName: 'Other', avatar: null },
       participants: [],
-      invitedUserIds: [],
+      invitedUserIds,
     }),
     generateIceServers: jest.fn<any>().mockReturnValue([]),
     initiateCall: jest.fn<any>(),
@@ -116,9 +120,9 @@ function makeSocket() {
   return { socket, io, handlers };
 }
 
-function setup(key: string, isAnonymous: boolean) {
+function setup(key: string, isAnonymous: boolean, invitedUserIds: string[] = []) {
   const prisma = makePrisma();
-  const callService = makeCallService();
+  const callService = makeCallService(invitedUserIds);
   const { socket, io, handlers } = makeSocket();
   new CallEventsHandler(prisma, callService).setupCallEvents(
     socket as any,
@@ -135,8 +139,17 @@ const replays = (socket: { emit: jest.Mock }) =>
 describe('#10473 — les requêtes d\'appel choisissent la colonne de la clé', () => {
   beforeEach(() => jest.clearAllMocks());
 
-  it('call:check-active rejoue l\'appel qui sonne à un INVITÉ de lien qui se reconnecte', async () => {
-    const { socket, handlers } = setup(GUEST_KEY, true);
+  it('call:check-active ne rejoue RIEN à un invité de lien que l\'appel n\'invite pas — ni bannière, ni TURN', async () => {
+    const { socket, handlers, callService } = setup(GUEST_KEY, true);
+
+    await handlers[CALL_EVENTS.CHECK_ACTIVE ?? 'call:check-active']();
+
+    expect(replays(socket)).toHaveLength(0);
+    expect(callService.generateIceServers).not.toHaveBeenCalled();
+  });
+
+  it('call:check-active rejoue l\'appel qui sonne à un invité de lien INVITÉ à cet appel', async () => {
+    const { socket, handlers } = setup(GUEST_KEY, true, [GUEST_KEY]);
 
     await handlers[CALL_EVENTS.CHECK_ACTIVE ?? 'call:check-active']();
 

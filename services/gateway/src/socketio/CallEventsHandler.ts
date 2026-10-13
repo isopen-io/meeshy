@@ -67,6 +67,7 @@ import { callErrorMessageOf, parseCallHandlerError } from './utils/call-error-pa
 import { buildTranslatedSegment } from './utils/call-translated-segment';
 import { buildCallSilentPush, shouldMirrorAnsweredElsewhere } from '../services/call-push-mirroring';
 import { ringableCallees } from '../services/calls/callRingPolicy';
+import { isInvitedToCall } from '../services/calls/callInvitation';
 import { sendMissedCallNotifications, sendNeverJoinedCancellationPushes } from './call-missed-notifications';
 import { createCallInvitationLifecycle, type CallInvitationLifecycle } from './call-invite-lifecycle';
 import { resolveParticipantAvatar } from '@meeshy/shared/utils/participant-helpers';
@@ -1822,6 +1823,7 @@ export class CallEventsHandler {
           if (leftAllRowsByCall.get(c.id)) continue;
 
           const full = await this.callService.getCallSession(c.id);
+          if (getUserInfo?.(socket.id)?.isAnonymous && !isInvitedToCall(full, userId)) continue;
           const callType: 'audio' | 'video' = (full.metadata as { type?: string } | null)?.type === 'video' ? 'video' : 'audio';
           const event: CallInitiatedEvent = {
             callId: full.id,
