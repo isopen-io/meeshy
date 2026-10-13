@@ -364,15 +364,22 @@ public final class SharedAVPlayerManager: ObservableObject {
     }
 
     /// **Ce que `preroll(atRate:)` exige avant d'être appelé (#10554).**
+    ///
+    /// AVFoundation lève une exception — donc arrête l'application — quand le
+    /// statut du LECTEUR n'est pas « prêt » (`AVPlayer.h` : « This method
+    /// throws an exception if the status is not AVPlayerStatusReadyToPlay »).
+    /// Les deux sites ne lisaient que le statut de l'ÉLÉMENT : un lecteur en
+    /// échec (services média redémarrés) avec un élément encore prêt passait.
     public nonisolated static func isReadyForPreroll(
         playerStatus: AVPlayer.Status, itemStatus: AVPlayerItem.Status?
     ) -> Bool {
-        itemStatus == .readyToPlay
+        playerStatus == .readyToPlay && itemStatus == .readyToPlay
     }
 
     private static func prerollIfIdle(_ player: AVPlayer) {
         guard mayPrerollRecycledPlayer(
-            rate: player.rate, isReadyToPlay: player.currentItem?.status == .readyToPlay
+            rate: player.rate,
+            isReadyToPlay: isReadyForPreroll(playerStatus: player.status, itemStatus: player.currentItem?.status)
         ) else { return }
         player.preroll(atRate: 1.0) { _ in }
     }
