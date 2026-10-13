@@ -99,6 +99,15 @@ export async function cleanupExpiredData(prisma: PrismaClient, live: ShareLinkRe
     let revokedGuests = 0;
     for (const shareLinkId of expiredLinkIds) {
       try {
+        // #10443 — la RÉVOCATION relit l'échéance, comme la suppression : un
+        // lien prolongé entre la lecture ci-dessus et ce tour garde ses
+        // invités (et reste, faute d'entrer dans `revokedLinkIds`). Une
+        // relecture qui échoue tombe dans le `catch` : lien conservé.
+        const stillExpired = await prisma.conversationShareLink.findFirst({
+          where: { id: shareLinkId, expiresAt: { lt: now } },
+          select: { id: true },
+        });
+        if (!stillExpired) continue;
         const revoked = await revokeShareLinkGuests({ prisma, io, manager, shareLinkId, revokedAt: now });
         revokedGuests += revoked.length;
         revokedLinkIds.push(shareLinkId);

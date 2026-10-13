@@ -100,6 +100,7 @@ function makePrisma(overrides: {
     },
     conversationShareLink: {
       findMany: jest.fn<any>().mockResolvedValue([]),
+      findFirst: jest.fn<any>(async ({ where }: { where: { id: string } }) => ({ id: where.id })),
       deleteMany: jest.fn<any>().mockResolvedValue({ count: 0 }),
     },
     userSession: {

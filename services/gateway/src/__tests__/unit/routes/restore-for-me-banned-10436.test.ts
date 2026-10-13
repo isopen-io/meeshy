@@ -78,7 +78,7 @@ type Store = { participants: Doc[] };
  * `banAfterRead` rejoue la course : le bannissement tombe ENTRE la lecture de
  * la route et son écriture.
  */
-async function buildApp(store: Store, options: { banAfterRead?: boolean } = {}): Promise<FastifyInstance> {
+async function buildApp(store: Store, options: { banAfterRead?: boolean; deleteAfterRead?: boolean } = {}): Promise<FastifyInstance> {
   const app = Fastify({ logger: false, ajv: { customOptions: { strict: false } } });
   const findRow = (where: Doc) => store.participants.find((row) => matches(row, where));
 
@@ -88,6 +88,7 @@ async function buildApp(store: Store, options: { banAfterRead?: boolean } = {}):
         const row = findRow(where);
         const snapshot = row ? { ...row, conversation: { isActive: true } } : null;
         if (row && options.banAfterRead) row.bannedAt = new Date('2026-10-13T09:00:00Z');
+        if (row && options.deleteAfterRead) store.participants.splice(store.participants.indexOf(row), 1);
         return snapshot;
       }),
       update: jest.fn(async ({ where, data }: { where: Doc; data: Doc }) => {
@@ -170,6 +171,36 @@ describe('POST /conversations/:id/restore-for-me ne rallume jamais un banni (#10
 
     expect(res.statusCode).toBe(200);
     expect(row.isActive).toBe(true);
+    await app.close();
+  });
+});
+
+/**
+ * #10443 — l'audit adversarial de #10440 : un `P2025` à l'écriture était
+ * toujours rendu en 403 `BANNED`. Il dit seulement que la ligne ne s'apparie
+ * plus : bannie entre la lecture et l'écriture, OU disparue. La route relit la
+ * ligne : bannie ⇒ `BANNED`, introuvable ⇒ 404 `NOT_FOUND`.
+ */
+describe('POST /conversations/:id/restore-for-me ne dit « banni » que d’un banni (#10443)', () => {
+  it('une ligne DISPARUE entre la lecture et l’écriture rend 404 NOT_FOUND, pas BANNED', async () => {
+    const app = await buildApp({ participants: [deletedForMe()] }, { deleteAfterRead: true });
+
+    const res = await restore(app);
+
+    expect(res.statusCode).toBe(404);
+    expect(JSON.parse(res.body)).toMatchObject({ success: false, code: 'NOT_FOUND' });
+    await app.close();
+  });
+
+  it('un bannissement tombé entre la lecture et l’écriture rend toujours 403 BANNED', async () => {
+    const row = deletedForMe();
+    const app = await buildApp({ participants: [row] }, { banAfterRead: true });
+
+    const res = await restore(app);
+
+    expect(res.statusCode).toBe(403);
+    expect(JSON.parse(res.body)).toMatchObject({ success: false, code: 'BANNED' });
+    expect(row.isActive).toBe(false);
     await app.close();
   });
 });

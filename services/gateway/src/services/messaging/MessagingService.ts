@@ -805,6 +805,17 @@ export class MessagingService {
       });
       if (!user) return null;
 
+      // #10443 — le pont ne sert qu'un utilisateur SANS ligne `Participant`
+      // dans cette conversation. Le repli par userId qui l'appelle exige une
+      // participation VIVANTE : un banni, ou un membre parti, y échoue, et un
+      // `ConversationMember` hérité encore actif lui recréait une
+      // participation active — seul l'index unique la refusait, s'il est posé.
+      const existing = await this.prisma.participant.findFirst({
+        where: { userId, conversationId },
+        select: { id: true }
+      });
+      if (existing) return null;
+
       // Check legacy ConversationMember collection via raw query
       const members = await (this.prisma as any).$runCommandRaw({
         find: 'ConversationMember',

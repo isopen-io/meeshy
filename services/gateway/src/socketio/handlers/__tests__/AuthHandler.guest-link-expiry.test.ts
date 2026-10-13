@@ -32,7 +32,7 @@ const GUEST_ID = '507f1f77bcf86cd799439011';
 const NOW = new Date('2026-10-13T10:00:00Z');
 const HOUR = 60 * 60 * 1000;
 
-type World = { participants: MongoDocument[]; links: MongoDocument[]; linkReadFails: boolean };
+type World = { participants: MongoDocument[]; links: MongoDocument[]; linkReadFails: boolean; participantReadFails?: boolean };
 
 function guestRow(): MongoDocument {
   return {
@@ -51,9 +51,10 @@ function guestRow(): MongoDocument {
 function buildHandler(world: World) {
   const prisma = {
     participant: {
-      findFirst: jest.fn(async ({ where }: { where: MongoDocument }) =>
-        world.participants.find((row) => matchesMongoWhere(row, where)) ?? null
-      ),
+      findFirst: jest.fn(async ({ where }: { where: MongoDocument }) => {
+        if (world.participantReadFails) throw new Error('mongo down');
+        return world.participants.find((row) => matchesMongoWhere(row, where)) ?? null;
+      }),
       findMany: jest.fn(async () => []),
     },
     conversationShareLink: {
@@ -240,7 +241,7 @@ describe('AuthHandler — le minuteur du lien d’un invité relit le lien et ne
     await handler.handleTokenAuthentication(socket as never);
     world.links[0] = { id: LINK_ID, expiresAt: new Date(NOW.getTime() - MINUTE) };
 
-    await jest.advanceTimersByTimeAsync(5 * MINUTE + 1000);
+    await jest.advanceTimersByTimeAsync(6 * MINUTE + 1000);
     expect(expiredError(socket)).toHaveLength(1);
     expect(socket.disconnect).toHaveBeenCalledWith(true);
   });
@@ -266,7 +267,7 @@ describe('AuthHandler — le minuteur du lien d’un invité relit le lien et ne
     await handler.handleTokenAuthentication(socket as never);
     world.linkReadFails = true;
 
-    await jest.advanceTimersByTimeAsync(5 * MINUTE + 1000);
+    await jest.advanceTimersByTimeAsync(6 * MINUTE + 1000);
     expect(expiredError(socket)).toHaveLength(0);
     expect(socket.disconnect).toHaveBeenCalledWith(true);
   });
@@ -280,5 +281,155 @@ describe('AuthHandler — le minuteur du lien d’un invité relit le lien et ne
     await handler.handleTokenAuthentication(socket as never);
 
     expect(jest.getTimerCount()).toBe(0);
+  });
+});
+
+/**
+ * #10443 — l'audit adversarial de #10440 : la relecture ne lisait que le LIEN.
+ * La route admin `/maintenance/cleanup` désactive les invités d'un lien expiré
+ * sans couper leurs sockets (pas de vivant câblé), puis SUPPRIME le lien ; la
+ * relecture lisait alors un lien introuvable comme « ouvert » et réarmait sans
+ * fin. Même trou quand `fetchSockets` n'atteint pas l'instance qui tient le
+ * socket. La relecture lit désormais AUSSI la participation : désactivée ou
+ * bannie (`PARTICIPATION_VIVANTE`), elle coupe le socket avec le code de
+ * l'accès retiré (`GUEST_ACCESS_REVOKED`), celui du 410 REST. Une base
+ * illisible coupe toujours SANS code de fin. Et la cadence porte une gigue de
+ * ±20 % : des sockets reconnectés ensemble ne relisent plus ensemble.
+ */
+describe('AuthHandler — la relecture d’un invité vérifie aussi sa participation (#10443)', () => {
+  const MINUTE = 60 * 1000;
+
+  const revokedError = (socket: ReturnType<typeof guestSocket>) =>
+    socket.emit.mock.calls.filter(([event, data]) => event === 'error' && (data as { code?: string })?.code === 'GUEST_ACCESS_REVOKED');
+
+  beforeEach(() => {
+    jest.useFakeTimers({ now: NOW });
+  });
+
+  afterEach(() => {
+    jest.restoreAllMocks();
+    jest.useRealTimers();
+  });
+
+  it('une participation DÉSACTIVÉE après la connexion coupe le socket avec GUEST_ACCESS_REVOKED', async () => {
+    const world: World = { participants: [guestRow()], links: [{ id: LINK_ID }], linkReadFails: false };
+    const { handler } = buildHandler(world);
+    const socket = guestSocket();
+
+    await handler.handleTokenAuthentication(socket as never);
+    world.participants[0] = { ...guestRow(), isActive: false };
+
+    await jest.advanceTimersByTimeAsync(6 * MINUTE + 1000);
+    expect(revokedError(socket)).toHaveLength(1);
+    expect(expiredError(socket)).toHaveLength(0);
+    expect(socket.disconnect).toHaveBeenCalledWith(true);
+  });
+
+  it('une participation BANNIE (encore active) coupe le socket avec GUEST_ACCESS_REVOKED', async () => {
+    const world: World = { participants: [guestRow()], links: [{ id: LINK_ID }], linkReadFails: false };
+    const { handler } = buildHandler(world);
+    const socket = guestSocket();
+
+    await handler.handleTokenAuthentication(socket as never);
+    world.participants[0] = { ...guestRow(), bannedAt: new Date(NOW.getTime() + MINUTE) };
+
+    await jest.advanceTimersByTimeAsync(6 * MINUTE + 1000);
+    expect(revokedError(socket)).toHaveLength(1);
+    expect(socket.disconnect).toHaveBeenCalledWith(true);
+  });
+
+  it('un lien SUPPRIMÉ dont l’invité a été désactivé (nettoyage admin) n’est plus lu comme ouvert', async () => {
+    const world: World = { participants: [guestRow()], links: [{ id: LINK_ID, expiresAt: new Date(NOW.getTime() + HOUR) }], linkReadFails: false };
+    const { handler } = buildHandler(world);
+    const socket = guestSocket();
+
+    await handler.handleTokenAuthentication(socket as never);
+    world.participants[0] = { ...guestRow(), isActive: false };
+    world.links = [];
+
+    await jest.advanceTimersByTimeAsync(6 * MINUTE + 1000);
+    expect(revokedError(socket)).toHaveLength(1);
+    expect(socket.disconnect).toHaveBeenCalledWith(true);
+  });
+
+  it('un lien échu ET une participation désactivée disent « lien expiré », la cause première', async () => {
+    const world: World = { participants: [guestRow()], links: [{ id: LINK_ID }], linkReadFails: false };
+    const { handler } = buildHandler(world);
+    const socket = guestSocket();
+
+    await handler.handleTokenAuthentication(socket as never);
+    world.participants[0] = { ...guestRow(), isActive: false };
+    world.links[0] = { id: LINK_ID, expiresAt: new Date(NOW.getTime() - MINUTE) };
+
+    await jest.advanceTimersByTimeAsync(6 * MINUTE + 1000);
+    expect(expiredError(socket)).toHaveLength(1);
+    expect(revokedError(socket)).toHaveLength(0);
+  });
+
+  it('une participation ILLISIBLE à la relecture coupe le socket SANS code de fin d’accès', async () => {
+    const world: World = { participants: [guestRow()], links: [{ id: LINK_ID }], linkReadFails: false };
+    const { handler } = buildHandler(world);
+    const socket = guestSocket();
+
+    await handler.handleTokenAuthentication(socket as never);
+    world.participantReadFails = true;
+
+    await jest.advanceTimersByTimeAsync(6 * MINUTE + 1000);
+    expect(revokedError(socket)).toHaveLength(0);
+    expect(expiredError(socket)).toHaveLength(0);
+    expect(socket.disconnect).toHaveBeenCalledWith(true);
+  });
+
+  it('une participation vivante et un lien ouvert réarment sans couper', async () => {
+    const world: World = { participants: [guestRow()], links: [{ id: LINK_ID }], linkReadFails: false };
+    const { handler } = buildHandler(world);
+    const socket = guestSocket();
+
+    await handler.handleTokenAuthentication(socket as never);
+    await jest.advanceTimersByTimeAsync(60 * MINUTE);
+
+    expect(socket.disconnect).not.toHaveBeenCalled();
+  });
+
+  it('refuse à la (re)connexion la session d’un invité BANNI encore actif', async () => {
+    const world: World = { participants: [{ ...guestRow(), bannedAt: new Date(NOW.getTime() - HOUR) }], links: [{ id: LINK_ID }], linkReadFails: false };
+    const { handler, connectedUsers } = buildHandler(world);
+    const socket = guestSocket();
+
+    await handler.handleTokenAuthentication(socket as never);
+
+    expect(socket.disconnect).toHaveBeenCalledWith(true);
+    expect(joinedConversationRoom(socket)).toBe(false);
+    expect(connectedUsers.size).toBe(0);
+  });
+
+  it('la cadence de relecture porte une gigue de ±20 % : au plus tôt à 4 minutes', async () => {
+    jest.spyOn(Math, 'random').mockReturnValue(0);
+    const world: World = { participants: [guestRow()], links: [{ id: LINK_ID }], linkReadFails: false };
+    const { handler } = buildHandler(world);
+    const socket = guestSocket();
+
+    await handler.handleTokenAuthentication(socket as never);
+    world.participants[0] = { ...guestRow(), isActive: false };
+
+    await jest.advanceTimersByTimeAsync(4 * MINUTE - 1000);
+    expect(socket.disconnect).not.toHaveBeenCalled();
+    await jest.advanceTimersByTimeAsync(2000);
+    expect(socket.disconnect).toHaveBeenCalledWith(true);
+  });
+
+  it('la cadence de relecture porte une gigue de ±20 % : au plus tard à 6 minutes', async () => {
+    jest.spyOn(Math, 'random').mockReturnValue(0.999999);
+    const world: World = { participants: [guestRow()], links: [{ id: LINK_ID }], linkReadFails: false };
+    const { handler } = buildHandler(world);
+    const socket = guestSocket();
+
+    await handler.handleTokenAuthentication(socket as never);
+    world.participants[0] = { ...guestRow(), isActive: false };
+
+    await jest.advanceTimersByTimeAsync(5 * MINUTE + 30 * 1000);
+    expect(socket.disconnect).not.toHaveBeenCalled();
+    await jest.advanceTimersByTimeAsync(31 * 1000);
+    expect(socket.disconnect).toHaveBeenCalledWith(true);
   });
 });

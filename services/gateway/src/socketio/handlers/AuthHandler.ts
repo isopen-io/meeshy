@@ -24,7 +24,8 @@ import { guardedTimeout } from '../../utils/guarded-timer.js';
 import { attestedSocketAddress } from '../utils/attested-address';
 import { resolveTrustProxy } from '../../config/trust-proxy';
 import { PARTICIPATION_VIVANTE } from '../../routes/conversations/utils/access-control';
-import { loadGuestShareLinkExpiry, shareLinkHasExpired, SHARE_LINK_EXPIRED_CODE, type GuestShareLinkRow } from '../../services/shareLinkReadGate';
+import { loadGuestShareLinkExpiry, shareLinkHasExpired } from '../../services/shareLinkReadGate';
+import { GuestLinkWatch, refuseExpiredGuestLink } from './guestLinkWatch';
 
 const logger = enhancedLogger.child({ module: 'AuthHandler' });
 
@@ -105,8 +106,12 @@ export class AuthHandler {
   private absorbAlreadyEndedCallLeave?: AuthHandlerDependencies['absorbAlreadyEndedCallLeave'];
   private readonly now: () => Date;
 
+  /** #10437, #10440, #10443 — la relecture du lien et de la participation de chaque socket invité. */
+  private readonly guestLinkWatch: GuestLinkWatch;
+
   constructor(deps: AuthHandlerDependencies) {
     this.prisma = deps.prisma;
+    this.guestLinkWatch = new GuestLinkWatch(deps.prisma);
     this.statusService = deps.statusService;
     this.maintenanceService = deps.maintenanceService;
     this.callService = deps.callService;
@@ -370,7 +375,7 @@ export class AuthHandler {
     this._scheduleTokenExpiry(socket, decoded.exp);
     // #10440 — le socket n'est plus celui d'un invité : le minuteur de lien
     // d'une session invitée antérieure sur ce socket ne le coupera pas.
-    this._disposeGuestLinkExpiry(socket);
+    this.guestLinkWatch.dispose(socket);
 
     this.statusService.markConnected(user.id, false);
     // Le write DB + broadcast « en ligne » n'appartiennent qu'à la transition
@@ -483,10 +488,13 @@ export class AuthHandler {
     const tokenHash = hashSessionToken(sessionToken);
 
     const participant = await this.prisma.participant.findFirst({
+      // #10443 — `PARTICIPATION_VIVANTE` et non `isActive` seul : la même
+      // règle que la relecture du minuteur ci-dessous, un banni encore actif
+      // ne rejoint pas la room.
       where: {
         sessionTokenHash: tokenHash,
         type: 'anonymous',
-        isActive: true
+        ...PARTICIPATION_VIVANTE
       },
       select: {
         id: true,
@@ -510,7 +518,7 @@ export class AuthHandler {
     // `handleTokenAuthentication` coupe le socket (fail-closed).
     const linkExpiresAt = await loadGuestShareLinkExpiry(this.prisma, participant);
     if (shareLinkHasExpired({ expiresAt: linkExpiresAt }, new Date())) {
-      this._refuseExpiredGuestLink(socket);
+      refuseExpiredGuestLink(socket);
       return;
     }
 
@@ -567,7 +575,7 @@ export class AuthHandler {
     }
 
     const isFirstSocket = this._registerUser(participant.id, socketUser, socket);
-    this._scheduleGuestLinkExpiry(socket, participant, linkExpiresAt);
+    this.guestLinkWatch.schedule(socket, participant, linkExpiresAt);
 
     // Même garde 0→1 que la porte inscrite — voir `_authenticateJWTUser`.
     if (isFirstSocket) {
@@ -636,102 +644,6 @@ export class AuthHandler {
     arm();
   }
 
-  private _refuseExpiredGuestLink(socket: Socket): void {
-    socket.emit(SERVER_EVENTS.ERROR, { message: 'This share link has expired', code: SHARE_LINK_EXPIRED_CODE });
-    socket.disconnect(true);
-  }
-
-  /**
-   * #10440 — le minuteur du lien relit le lien au plus tard à cette cadence,
-   * échéance ou non. Une échéance se MODIFIE après la connexion (l'hôte
-   * l'écourte, en pose une sur un lien qui n'en avait pas) et le geste peut
-   * avoir lieu sur une AUTRE instance de la passerelle que celle qui tient le
-   * socket : un réarmement poussé depuis la route n'atteindrait que les
-   * sockets locaux, et aucun minuteur distant. La relecture locale borne
-   * l'écart partout, pour une lecture par socket invité toutes les cinq
-   * minutes. Le REST, lui, relit le lien à chaque requête
-   * (`middleware/auth.ts`), et une échéance déjà passée révoque sur-le-champ
-   * (`applyShareLinkUpdate`).
-   */
-  static readonly GUEST_LINK_RECHECK_MS = 5 * 60 * 1000;
-
-  /** Le désarmement du minuteur de lien de chaque socket invité — un seul par socket. */
-  private readonly guestLinkTimers = new WeakMap<Socket, () => void>();
-
-  private _disposeGuestLinkExpiry(socket: Socket): void {
-    this.guestLinkTimers.get(socket)?.();
-  }
-
-  /**
-   * #10437 — une session invitée DÉJÀ connectée sort à l'échéance de son lien.
-   * Même patron que `_scheduleTokenExpiry` (plafond du minuteur, désarmement
-   * au `disconnect`), à une différence près : l'échéance d'un lien se MODIFIE
-   * (l'hôte peut le prolonger ou l'écourter). Le minuteur ne coupe donc pas
-   * sur la date lue à la connexion : il RELIT le lien quand il sonne — à
-   * l'échéance connue, et au plus tard toutes les `GUEST_LINK_RECHECK_MS`
-   * (#10440) —, coupe s'il est échu, et réarme sinon. Un lien ILLISIBLE
-   * (base indisponible) coupe aussi, mais SANS le code `SHARE_LINK_EXPIRED` :
-   * le web et iOS lisent ce code comme la fin définitive de la session
-   * d'invité (#10442) — un accroc de la base ne doit pas la leur coûter, et la
-   * reconnexion repasse par la garde de connexion, fermée tant que le lien
-   * reste illisible (audit adversarial de #10440). Couper suffit : la reconnexion repasse par la garde ci-dessus, et
-   * le REST par `middleware/auth.ts`. La ligne n'est PAS désactivée — un lien
-   * prolongé rend l'accès, comme aux portes de lecture.
-   *
-   * #10440 — un socket parti pendant l'authentification n'arme rien (son
-   * `disconnect` ne sonnera plus, le minuteur fuirait), et une
-   * ré-authentification du même socket REMPLACE le minuteur au lieu d'en
-   * empiler un second.
-   */
-  private _scheduleGuestLinkExpiry(socket: Socket, guest: GuestShareLinkRow, initialExpiresAt: Date | null): void {
-    this._disposeGuestLinkExpiry(socket);
-    if (socket.disconnected) return;
-
-    let timer: ReturnType<typeof setTimeout> | undefined;
-    let disposed = false;
-    const dispose = () => {
-      disposed = true;
-      if (timer) clearTimeout(timer);
-      socket.off?.('disconnect', dispose);
-      if (this.guestLinkTimers.get(socket) === dispose) this.guestLinkTimers.delete(socket);
-    };
-    socket.on('disconnect', dispose);
-    this.guestLinkTimers.set(socket, dispose);
-
-    const arm = (expiresAt: Date | null) => {
-      if (disposed) return;
-      // +1 ms : `shareLinkHasExpired` est strict (`expiresAt < now`) — sonner
-      // pile à l'échéance rendrait « pas encore », et réarmerait à 0 ms.
-      const untilExpiry = expiresAt ? Math.max(expiresAt.getTime() - Date.now() + 1, 1) : Infinity;
-      timer = guardedTimeout({
-        name: 'socket-guest-link-expiry',
-        afterMs: Math.min(untilExpiry, AuthHandler.GUEST_LINK_RECHECK_MS),
-        logger,
-        run: () => recheck(),
-      });
-    };
-
-    const recheck = async () => {
-      if (disposed) return;
-      const current = await loadGuestShareLinkExpiry(this.prisma, guest).catch((error: unknown) => {
-        logger.warn('guest share link unreadable at expiry — disconnecting (fail-closed)', { socketId: socket.id, error });
-        return 'unreadable' as const;
-      });
-      if (disposed) return;
-      if (current === 'unreadable') {
-        socket.disconnect(true);
-        return;
-      }
-      if (shareLinkHasExpired({ expiresAt: current }, new Date())) {
-        logger.info('guest share link expired while connected — disconnecting', { socketId: socket.id });
-        this._refuseExpiredGuestLink(socket);
-        return;
-      }
-      arm(current);
-    };
-
-    arm(initialExpiresAt);
-  }
 
   /**
    * Rend `true` UNIQUEMENT sur la transition 0→1 du compteur de sockets — le

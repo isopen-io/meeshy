@@ -44,6 +44,7 @@ type WorldOptions = {
   readonly guestEndFails?: boolean;
   readonly failingLink?: string;
   readonly extendedDuringRevocation?: string;
+  readonly extendedAfterSweepRead?: string;
 };
 
 function world(options: WorldOptions = {}) {
@@ -81,7 +82,13 @@ function world(options: WorldOptions = {}) {
       }),
     },
     conversationShareLink: {
-      findMany: jest.fn(async ({ where }: { where: MongoDocument }) => links.filter((row) => matchesMongoWhere(row, where))),
+      findMany: jest.fn(async ({ where }: { where: MongoDocument }) => {
+        const read = links.filter((row) => matchesMongoWhere(row, where)).map((row) => ({ ...row }));
+        const extended = links.find((row) => row.id === options.extendedAfterSweepRead);
+        if (extended) extended.expiresAt = FUTURE;
+        return read;
+      }),
+      findFirst: jest.fn(async ({ where }: { where: MongoDocument }) => links.find((row) => matchesMongoWhere(row, where)) ?? null),
       deleteMany: jest.fn(async ({ where }: { where: MongoDocument }) => {
         const doomed = links.filter((row) => matchesMongoWhere(row, where));
         doomed.forEach((row) => links.splice(links.indexOf(row), 1));
@@ -161,6 +168,25 @@ describe('cleanupExpiredData révoque par revokeShareLinkGuests (#10440)', () =>
 
     await cleanupExpiredData(prisma as never);
 
+    expect(links.map((link) => link.id)).toEqual([EXPIRED, LIVE]);
+  });
+});
+
+/**
+ * #10443 — l'audit adversarial de #10440 : la suppression relisait l'échéance,
+ * la RÉVOCATION non. Un lien prolongé entre la lecture du balayage et la
+ * révocation voyait ses invités révoqués alors que le lien survivait. Le
+ * balayage relit désormais l'échéance juste avant de révoquer chaque lien.
+ */
+describe('cleanupExpiredData ne révoque pas les invités d’un lien prolongé après sa lecture (#10443)', () => {
+  it('un lien PROLONGÉ entre la lecture du balayage et sa révocation garde ses invités et reste', async () => {
+    const { prisma, links, participants } = world({ extendedAfterSweepRead: EXPIRED });
+
+    await cleanupExpiredData(prisma as never);
+
+    expect(byId(participants, 'g-col')?.isActive).toBe(true);
+    expect(byId(participants, 'g-emb')?.isActive).toBe(true);
+    expect(byId(participants, 'g-two')?.isActive).toBe(false);
     expect(links.map((link) => link.id)).toEqual([EXPIRED, LIVE]);
   });
 });
