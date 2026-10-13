@@ -33,6 +33,14 @@ const logger = enhancedLogger.child({ module: 'CloseShareLinkRevokingGuests' });
 /** Au-delà, la révocation part hors de la requête (~1 s d'éviction en série). */
 export const ASYNC_GUEST_REVOCATION_THRESHOLD = 200;
 
+/**
+ * Audit de #10470 — une révocation différée qui échoue (registre de sockets
+ * muet, pool saturé) est relancée après ces délais, sans attendre le balayage
+ * horaire : les invités déjà écrits inactifs restaient sinon dans la room une
+ * heure. Au-delà, la marque reste et le balayage la reprend.
+ */
+export const DEFERRED_REVOCATION_RETRY_MS: readonly number[] = [60_000, 5 * 60_000];
+
 /** Ce que la fermeture écrit en plus quand la révocation est différée. */
 export type ShareLinkClosureMark = { readonly guestRevocationPendingAt?: Date };
 
@@ -67,10 +75,19 @@ export async function closeShareLinkRevokingGuests<T>(
 
   const pendingSince = (closure.now ?? (() => new Date()))();
   const result = await close({ guestRevocationPendingAt: pendingSince });
-  (closure.detach ?? detachTask)(async () => {
-    await runPendingGuestRevocation({ ...closure, pendingSince });
-  });
+  (closure.detach ?? detachTask)(() => runWithRetries({ ...closure, pendingSince }, 0));
   return { result, revocation: 'deferred' };
+}
+
+async function runWithRetries(
+  params: RevocationLive & { readonly pendingSince: Date },
+  attempt: number
+): Promise<void> {
+  if (await runPendingGuestRevocation(params)) return;
+  const delay = DEFERRED_REVOCATION_RETRY_MS[attempt];
+  if (delay === undefined) return;
+  const timer = setTimeout(() => detachTask(() => runWithRetries(params, attempt + 1)), delay);
+  timer.unref?.();
 }
 
 /**
@@ -84,7 +101,16 @@ export async function runPendingGuestRevocation(
 ): Promise<boolean> {
   const { prisma, shareLinkId, pendingSince } = params;
   try {
-    await revokeShareLinkGuests({ ...params, revokedAt: pendingSince, admittedUntil: pendingSince });
+    // Audit de #10470 — tant que le lien reste FERMÉ, tous ses invités actifs
+    // partent, y compris celui dont la réservation a précédé la fermeture et la
+    // création a suivi la marque. Bornée par la marque seulement si le lien a
+    // été ROUVERT : ses nouveaux venus restent.
+    const link = await prisma.conversationShareLink.findUnique({
+      where: { id: shareLinkId },
+      select: { isActive: true },
+    });
+    const admittedUntil = link?.isActive === true ? pendingSince : undefined;
+    await revokeShareLinkGuests({ ...params, revokedAt: pendingSince, admittedUntil });
     await prisma.conversationShareLink.updateMany({
       where: { id: shareLinkId, guestRevocationPendingAt: pendingSince },
       data: { guestRevocationPendingAt: null },

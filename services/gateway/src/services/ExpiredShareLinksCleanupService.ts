@@ -86,6 +86,7 @@ export const EXPIRED_SHARE_LINKS_SWEEP_INTERVAL_MS = 60 * 60 * 1000;
 
 export class ExpiredShareLinksCleanupService {
   private interval: ReturnType<typeof setInterval> | null = null;
+  private running = false;
   private readonly batchSize: number;
   private readonly now: () => Date;
   private readonly resolveIO: () => GuestSocketRegistry | null | undefined;
@@ -118,9 +119,21 @@ export class ExpiredShareLinksCleanupService {
   }
 
   async cleanup(): Promise<{ revokedLinks: number; revokedGuests: number }> {
-    const swept = await this.revokeExpiredLinks();
-    await this.resumePendingRevocations();
-    return swept;
+    // #10470 (R3) — un balayage lent (registre de sockets muet) ne se fait
+    // pas doubler par le suivant : deux passes sur les mêmes liens doubleraient
+    // le coût sans rien évincer de plus.
+    if (this.running) {
+      log.info('expired-share-links sweep already running, this pass is skipped');
+      return { revokedLinks: 0, revokedGuests: 0 };
+    }
+    this.running = true;
+    try {
+      const swept = await this.revokeExpiredLinks();
+      await this.resumePendingRevocations();
+      return swept;
+    } finally {
+      this.running = false;
+    }
   }
 
   /**
@@ -133,6 +146,7 @@ export class ExpiredShareLinksCleanupService {
       pending = await this.prisma.conversationShareLink.findMany({
         where: { guestRevocationPendingAt: { not: null } },
         select: { id: true, guestRevocationPendingAt: true },
+        orderBy: { guestRevocationPendingAt: 'asc' },
         take: this.batchSize,
       });
     } catch (err) {

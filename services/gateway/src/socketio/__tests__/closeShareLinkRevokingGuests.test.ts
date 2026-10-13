@@ -19,12 +19,14 @@ jest.mock('../emitConversationMemberCount', () => ({
 
 import {
   ASYNC_GUEST_REVOCATION_THRESHOLD,
+  DEFERRED_REVOCATION_RETRY_MS,
   closeShareLinkRevokingGuests,
   runPendingGuestRevocation,
 } from '../closeShareLinkRevokingGuests';
 import { FETCH_SOCKETS_DEADLINE_MS, revokeShareLinkGuests } from '../revokeShareLinkGuests';
 import { ExpiredShareLinksCleanupService } from '../../services/ExpiredShareLinksCleanupService';
 import { resetParticipantLookupCache } from '../../utils/participant-lookup-cache';
+import { matchesMongoWhere } from '../../__tests__/helpers/mongo-where';
 
 const LINK_ID = '507f1f77bcf86cd799439099';
 const CONV_ID = '507f1f77bcf86cd799439011';
@@ -48,6 +50,7 @@ function makePrisma(activeGuests: number, order: string[] = []) {
     conversationShareLink: {
       updateMany: jest.fn<any>(async () => ({ count: 1 })),
       findMany: jest.fn<any>(async () => []),
+      findUnique: jest.fn<any>(async () => ({ isActive: true })),
     },
   };
 }
@@ -117,13 +120,73 @@ describe('closeShareLinkRevokingGuests — le geste de l’hôte ne porte plus l
     });
   });
 
-  it('la révocation différée ne touche que les invités entrés AVANT la fermeture — un lien rouvert garde ses nouveaux venus', async () => {
+  it('audit 1 — tant que le lien reste FERMÉ, la révocation différée retire aussi l’invité créé après la marque', async () => {
+    const world = [
+      { id: 'guest-old', conversationId: CONV_ID, displayName: 'Ancien', type: 'anonymous', isActive: true, shareLinkId: LINK_ID, joinedAt: new Date(NOW.getTime() - 60_000) },
+      { id: 'guest-late', conversationId: CONV_ID, displayName: 'Tardif', type: 'anonymous', isActive: true, shareLinkId: LINK_ID, joinedAt: new Date(NOW.getTime() + 60_000) },
+    ];
     const prisma = makePrisma(0);
+    prisma.conversationShareLink.findUnique.mockResolvedValue({ isActive: false });
+    prisma.participant.findMany.mockImplementation(async ({ where }: any) =>
+      world.filter((row) => matchesMongoWhere(row as never, where)).map(({ id, conversationId, displayName }) => ({ id, conversationId, displayName }))
+    );
 
     await runPendingGuestRevocation({ prisma: prisma as never, io: makeIo(), manager: null, shareLinkId: LINK_ID, pendingSince: NOW });
 
-    const activeRead = prisma.participant.findMany.mock.calls.find(([args]: any) => args.where.isActive === true) as any;
-    expect(activeRead[0].where.joinedAt).toEqual({ lte: NOW });
+    const written = prisma.participant.updateMany.mock.calls.map(([args]: any) => args.where.id);
+    expect(written).toEqual(['guest-old', 'guest-late']);
+  });
+
+  it('audit 3 — une révocation différée qui échoue est relancée sans attendre le balayage horaire', async () => {
+    jest.useFakeTimers();
+    try {
+      const prisma = makePrisma(ASYNC_GUEST_REVOCATION_THRESHOLD + 1);
+      prisma.participant.updateMany.mockRejectedValueOnce(new Error('pool saturé'));
+
+      await closeShareLinkRevokingGuests({
+        prisma: prisma as never, io: makeIo(), manager: null, shareLinkId: LINK_ID, close: closeRecorder([]), now: () => NOW,
+      });
+      await jest.advanceTimersByTimeAsync(0);
+      expect(prisma.conversationShareLink.updateMany).not.toHaveBeenCalled();
+
+      await jest.advanceTimersByTimeAsync(DEFERRED_REVOCATION_RETRY_MS[0]);
+      expect(prisma.conversationShareLink.updateMany).toHaveBeenCalledWith({
+        where: { id: LINK_ID, guestRevocationPendingAt: NOW },
+        data: { guestRevocationPendingAt: null },
+      });
+    } finally {
+      jest.useRealTimers();
+    }
+  });
+
+  it('R7 — la révocation différée épargne le nouveau venu entré après la fermeture (lien rouvert)', async () => {
+    const world = [
+      { id: 'guest-old', conversationId: CONV_ID, displayName: 'Ancien', type: 'anonymous', isActive: true, shareLinkId: LINK_ID, joinedAt: new Date(NOW.getTime() - 60_000) },
+      { id: 'guest-new', conversationId: CONV_ID, displayName: 'Nouveau', type: 'anonymous', isActive: true, shareLinkId: LINK_ID, joinedAt: new Date(NOW.getTime() + 60_000) },
+    ];
+    const prisma = makePrisma(0);
+    prisma.participant.findMany.mockImplementation(async ({ where }: any) =>
+      world.filter((row) => matchesMongoWhere(row as never, where)).map(({ id, conversationId, displayName }) => ({ id, conversationId, displayName }))
+    );
+
+    await runPendingGuestRevocation({ prisma: prisma as never, io: makeIo(), manager: null, shareLinkId: LINK_ID, pendingSince: NOW });
+
+    const written = prisma.participant.updateMany.mock.calls.map(([args]: any) => args.where.id);
+    expect(written).toEqual(['guest-old']);
+  });
+
+  it('R7 — une passe plus ancienne ne lève pas une marque plus récente', async () => {
+    const link = { id: LINK_ID, guestRevocationPendingAt: new Date(NOW.getTime() + 60_000) };
+    const prisma = makePrisma(0);
+    prisma.conversationShareLink.updateMany.mockImplementation(async ({ where, data }: any) => {
+      if (!matchesMongoWhere(link as never, where)) return { count: 0 };
+      Object.assign(link, data);
+      return { count: 1 };
+    });
+
+    await runPendingGuestRevocation({ prisma: prisma as never, io: makeIo(), manager: null, shareLinkId: LINK_ID, pendingSince: NOW });
+
+    expect(link.guestRevocationPendingAt).toEqual(new Date(NOW.getTime() + 60_000));
   });
 
   it('une révocation différée qui échoue garde sa marque pour le balayage, sans rejet détaché', async () => {
@@ -135,6 +198,15 @@ describe('closeShareLinkRevokingGuests — le geste de l’hôte ne porte plus l
     ).resolves.toBe(false);
 
     expect(prisma.conversationShareLink.updateMany).not.toHaveBeenCalled();
+  });
+
+  it('R6 — le balayage reprend les révocations en attente de la plus ancienne à la plus récente', async () => {
+    const prisma = makePrisma(0);
+
+    await new ExpiredShareLinksCleanupService(prisma as never, { now: () => NOW }).cleanup();
+
+    const pendingRead = prisma.conversationShareLink.findMany.mock.calls.find(([args]: any) => args.where.guestRevocationPendingAt) as any;
+    expect(pendingRead[0].orderBy).toEqual({ guestRevocationPendingAt: 'asc' });
   });
 
   it('le balayage horaire reprend chaque lien dont la révocation est restée en attente', async () => {
@@ -175,5 +247,38 @@ describe('revokeShareLinkGuests — un fetchSockets qui ne répond plus ne bloqu
 
     await expect(settled).resolves.toBe('rejected');
     expect(prisma.participant.updateMany).toHaveBeenCalled();
+  });
+
+  it('R3 — une passe de N invités ne coûte qu’UN délai : après le premier dépassement, les fetchSockets restants sont sautés', async () => {
+    jest.useFakeTimers();
+    const guests = Array.from({ length: 5 }, (_unused, index) => ({ id: `guest-${index}`, conversationId: CONV_ID, displayName: `Invité ${index}` }));
+    const prisma = makePrisma(guests.length);
+    prisma.participant.findMany.mockImplementation(async ({ where }: any) => (where?.isActive === true ? guests : []));
+    const fetchSockets = jest.fn<any>(() => new Promise<never>(() => {}));
+    const io = { to: makeIo().to, in: jest.fn<any>(() => ({ fetchSockets })) };
+
+    const settled = revokeShareLinkGuests({ prisma: prisma as never, io, manager: null, shareLinkId: LINK_ID })
+      .then(() => 'resolved', () => 'rejected');
+    await jest.advanceTimersByTimeAsync(FETCH_SOCKETS_DEADLINE_MS + 100);
+
+    await expect(settled).resolves.toBe('rejected');
+    expect(fetchSockets).toHaveBeenCalledTimes(1);
+  });
+});
+
+describe('ExpiredShareLinksCleanupService — deux balayages ne se chevauchent pas (#10470, R3)', () => {
+  it('un balayage lancé pendant qu’un autre tourne ne relit rien et rend une passe vide', async () => {
+    const prisma = makePrisma(0);
+    let release: (rows: unknown[]) => void = () => {};
+    prisma.conversationShareLink.findMany.mockImplementationOnce(() => new Promise((resolve) => { release = resolve; }));
+    const service = new ExpiredShareLinksCleanupService(prisma as never, { now: () => NOW });
+
+    const first = service.cleanup();
+    const second = await service.cleanup();
+    release([]);
+    await first;
+
+    expect(second).toEqual({ revokedLinks: 0, revokedGuests: 0 });
+    expect(prisma.conversationShareLink.findMany).toHaveBeenCalledTimes(2);
   });
 });

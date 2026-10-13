@@ -7,7 +7,7 @@ import jwt from 'jsonwebtoken';
 import crypto from 'crypto';
 import { StatusService } from '../services/StatusService';
 import { hashSessionToken } from '../utils/session-token';
-import { loadGuestShareLinkExpiry, refuseExpiredShareLink, ShareLinkExpiredError } from '../services/shareLinkReadGate';
+import { loadGuestShareLinkGate, refuseExpiredShareLink, ShareLinkExpiredError } from '../services/shareLinkReadGate';
 import { guestAccessEnd } from '../services/guestAccessEnd';
 import { sendUnauthorized, sendForbidden } from '../utils/response';
 import { getCacheStore } from '../services/CacheStore';
@@ -587,6 +587,7 @@ export class AuthMiddleware {
           permissions: true,
           isActive: true,
           bannedAt: true,
+          joinedAt: true,
           isOnline: true,
           lastActiveAt: true,
           nickname: true,
@@ -604,8 +605,13 @@ export class AuthMiddleware {
       // bannie ne reçoit pas le 401 nu d'un jeton inventé, qui l'enverrait
       // retenter. Ordre unique des portes (#10457) : `guestAccessEnd`. Lien
       // illisible ⇒ l'erreur propage, le `catch` ci-dessous refuse sans code.
+      // #10470 — la révocation DIFFÉRÉE d'un gros lien fermé retire l'accès
+      // dès la fermeture à tout invité entré avant elle.
+      const linkGate = await loadGuestShareLinkGate(this.prisma, participant);
       const end = guestAccessEnd({
-        linkExpiresAt: await loadGuestShareLinkExpiry(this.prisma, participant),
+        linkExpiresAt: linkGate.expiresAt,
+        linkRevocationPendingAt: linkGate.revocationPendingAt,
+        linkIsActive: linkGate.isActive,
         participation: participant,
         now: new Date(),
       });

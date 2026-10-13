@@ -23,6 +23,7 @@
 
 import { promises as fs } from 'fs';
 import { hashSessionToken } from '../../utils/session-token.js';
+import { guestAccessEnd } from '../guestAccessEnd';
 import { GUEST_ATTACHMENT_MAX_BYTES, GUEST_ATTACHMENT_REFUSAL_CODES } from '@meeshy/shared/types/guest-attachment-kinds';
 import {
   guestShareLinkId,
@@ -41,8 +42,14 @@ export interface AnonymousUploadIdentityPrisma {
   participant: {
     findFirst(args: {
       where: { sessionTokenHash: string; type: 'anonymous'; isActive: true };
-      select: { id: true; shareLinkId: true; anonymousSession: true };
-    }): Promise<{ id: string; shareLinkId: string | null; anonymousSession: { shareLinkId: string } | null } | null>;
+      select: { id: true; shareLinkId: true; anonymousSession: true; joinedAt: true; bannedAt: true };
+    }): Promise<{
+      id: string;
+      shareLinkId: string | null;
+      anonymousSession: { shareLinkId: string } | null;
+      joinedAt?: Date | null;
+      bannedAt?: Date | null;
+    } | null>;
   };
   conversationShareLink: {
     findUnique(args: {
@@ -63,9 +70,15 @@ const GUEST_SHARE_LINK_SELECT = {
   allowedAttachmentKinds: true,
   conversation: { select: { identifier: true } },
   expiresAt: true,
+  isActive: true,
+  guestRevocationPendingAt: true,
 } as const;
 
-type GuestShareLinkRow = ShareLinkAnonymousFlags & { readonly expiresAt?: Date | null };
+type GuestShareLinkRow = ShareLinkAnonymousFlags & {
+  readonly expiresAt?: Date | null;
+  readonly isActive?: boolean | null;
+  readonly guestRevocationPendingAt?: Date | null;
+};
 
 export type AnonymousUploadIdentity = {
   readonly participantId: string;
@@ -95,7 +108,7 @@ export async function resolveAnonymousUploadIdentity(
       type: 'anonymous',
       isActive: true,
     },
-    select: { id: true, shareLinkId: true, anonymousSession: true },
+    select: { id: true, shareLinkId: true, anonymousSession: true, joinedAt: true, bannedAt: true },
   });
 
   if (!participant) return null;
@@ -112,6 +125,16 @@ export async function resolveAnonymousUploadIdentity(
       select: GUEST_SHARE_LINK_SELECT,
     });
     if (shareLinkHasExpired(link)) throw new ShareLinkExpiredError();
+    // #10470 — la garde commune des autres portes : lien fermé, révocation
+    // différée en attente pour un invité entré avant elle, ou invité banni.
+    const end = guestAccessEnd({
+      linkExpiresAt: null,
+      linkIsActive: typeof link?.isActive === 'boolean' ? link.isActive : null,
+      linkRevocationPendingAt: link?.guestRevocationPendingAt ?? null,
+      participation: { isActive: true, bannedAt: participant.bannedAt ?? null, joinedAt: participant.joinedAt ?? null },
+      now: new Date(),
+    });
+    if (end) return null;
   }
 
   return { participantId: participant.id, shareLinkId };

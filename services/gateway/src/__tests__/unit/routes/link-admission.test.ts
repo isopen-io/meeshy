@@ -29,6 +29,7 @@ jest.mock('../../../utils/sanitize', () => ({
 }));
 
 import { registerLinkAdmissionRoutes } from '../../../routes/conversations/link-admission';
+import { matchesMongoWhere } from '../../helpers/mongo-where';
 import {
   subscribeConversationLanguageChanges,
   type ConversationLanguageChange,
@@ -175,7 +176,14 @@ describe('POST /links/:key/members — invité (S1)', () => {
 
     expect(res.statusCode).toBe(201);
     expect((app as any).prisma.conversationShareLink.updateMany).toHaveBeenCalledWith({
-      where: { id: SHARE_LINK_DB_ID, OR: [{ maxUses: null }, { currentUses: { lt: 5 } }] },
+      where: {
+        id: SHARE_LINK_DB_ID,
+        isActive: true,
+        AND: [
+          { OR: [{ expiresAt: null }, { expiresAt: { isSet: false } }, { expiresAt: { gt: expect.any(Date) } }] },
+          { OR: [{ maxUses: null }, { currentUses: { lt: 5 } }] },
+        ],
+      },
       data: { currentUses: { increment: 1 }, currentConcurrentUsers: { increment: 1 }, currentUniqueSessions: { increment: 1 } },
     });
   });
@@ -197,6 +205,45 @@ describe('POST /links/:key/members — invité (S1)', () => {
     expect(res.statusCode).toBe(409);
     expect(res.json().error).toBe('LINK_EXHAUSTED');
     expect((app as any).prisma.participant.create).not.toHaveBeenCalled();
+  });
+
+  // #10470 (R2) — une fermeture (ou une échéance) qui tombe ENTRE la lecture
+  // d'admission et la réservation : la réservation revérifie l'état du lien
+  // dans son `where`, sinon l'invité entre APRÈS la fermeture et sa ligne
+  // échappe à la révocation déjà partie.
+  it.each([
+    ['sans échéance (champ absent)', (link: Record<string, unknown>) => { const { expiresAt: _drop, ...rest } = link; return rest; }],
+    ['sans échéance (null)', (link: Record<string, unknown>) => ({ ...link, expiresAt: null })],
+    ['à échéance future', (link: Record<string, unknown>) => ({ ...link, expiresAt: new Date('2099-01-01T00:00:00Z') })],
+  ])('un lien ouvert %s est toujours réservé', async (_label, shape) => {
+    const prisma = (app as any).prisma;
+    prisma.conversationShareLink.findFirst.mockResolvedValueOnce({ ...mockShareLink });
+    const linkNow = shape({ ...mockShareLink });
+    prisma.conversationShareLink.updateMany.mockImplementationOnce(async ({ where }: any) => ({
+      count: matchesMongoWhere(linkNow as never, where) ? 1 : 0,
+    }));
+
+    const res = await postMembers(app, { nickname: 'Ana' });
+
+    expect(res.statusCode).toBe(201);
+  });
+
+  it.each([
+    ['fermé', { isActive: false }],
+    ['échu', { expiresAt: new Date('2026-01-01T00:00:00Z') }],
+  ])('un lien %s entre la lecture d\'admission et la réservation ⇒ refus, aucun invité créé', async (_label, closure) => {
+    const prisma = (app as any).prisma;
+    prisma.conversationShareLink.findFirst.mockResolvedValueOnce({ ...mockShareLink });
+    const closedNow = { ...mockShareLink, ...closure };
+    prisma.conversationShareLink.updateMany.mockImplementationOnce(async ({ where }: any) => ({
+      count: matchesMongoWhere(closedNow as never, where) ? 1 : 0,
+    }));
+    prisma.participant.create.mockClear();
+
+    const res = await postMembers(app, { nickname: 'Ana' });
+
+    expect([409, 410]).toContain(res.statusCode);
+    expect(prisma.participant.create).not.toHaveBeenCalled();
   });
 });
 
@@ -541,6 +588,27 @@ describe('PATCH /guest-sessions/me — participation morte (#10457)', () => {
     expect(res.statusCode).toBe(410);
     expect(res.json()).toMatchObject({ success: false, error: 'GUEST_ACCESS_REVOKED' });
     expect((app as any).prisma.participant.update).not.toHaveBeenCalled();
+  });
+
+  // #10470 — la révocation DIFFÉRÉE d'un gros lien, rouvert depuis.
+  it('marque posée, entré avant ⇒ 410 GUEST_ACCESS_REVOKED ; entré après ⇒ rafraîchi', async () => {
+    const pendingSince = new Date('2026-10-13T09:30:00Z');
+    const before = await buildApp();
+    (before as any).prisma.participant.findFirst.mockResolvedValueOnce(guestRow({ joinedAt: new Date('2026-10-13T09:00:00Z') }));
+    (before as any).prisma.conversationShareLink.findUnique.mockResolvedValueOnce({ ...mockShareLink, guestRevocationPendingAt: pendingSince });
+    const refused = await patch(before);
+    await before.close();
+
+    const after = await buildApp();
+    (after as any).prisma.participant.findFirst.mockResolvedValueOnce(guestRow({ joinedAt: new Date('2026-10-13T09:45:00Z') }));
+    (after as any).prisma.conversationShareLink.findUnique.mockResolvedValueOnce({ ...mockShareLink, guestRevocationPendingAt: pendingSince });
+    const refreshed = await patch(after);
+    await after.close();
+
+    expect(refused.statusCode).toBe(410);
+    expect(refused.json()).toMatchObject({ error: 'GUEST_ACCESS_REVOKED' });
+    expect((before as any).prisma.participant.update).not.toHaveBeenCalled();
+    expect(refreshed.statusCode).toBe(200);
   });
 
   it('banni ET lien échu ⇒ 410 LINK_EXPIRED, la cause première', async () => {

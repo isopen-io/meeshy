@@ -24,7 +24,7 @@ import { guardedTimeout } from '../../utils/guarded-timer.js';
 import { attestedSocketAddress } from '../utils/attested-address';
 import { resolveTrustProxy } from '../../config/trust-proxy';
 import { PARTICIPATION_VIVANTE } from '../../routes/conversations/utils/access-control';
-import { loadGuestShareLinkExpiry } from '../../services/shareLinkReadGate';
+import { loadGuestShareLinkGate } from '../../services/shareLinkReadGate';
 import { guestAccessEnd } from '../../services/guestAccessEnd';
 import { GuestLinkWatch, refuseExpiredGuestLink, refuseRevokedGuest } from './guestLinkWatch';
 import { accountIsDeleted, type DeletedAccountReader } from '../../services/auth/account-deleted';
@@ -513,7 +513,8 @@ export class AuthHandler {
         shareLinkId: true,
         anonymousSession: true,
         isActive: true,
-        bannedAt: true
+        bannedAt: true,
+        joinedAt: true
       }
     });
 
@@ -527,8 +528,16 @@ export class AuthHandler {
     // porte (et non `_joinUserConversations`) qui joint la room d'un invité, à
     // la connexion comme à chaque reconnexion. Un lien illisible lève, et
     // `handleTokenAuthentication` coupe le socket SANS code (fail-closed).
-    const linkExpiresAt = await loadGuestShareLinkExpiry(this.prisma, participant);
-    const end = guestAccessEnd({ linkExpiresAt, participation: participant, now: new Date() });
+    // #10470 — et la révocation DIFFÉRÉE d'un gros lien fermé.
+    const linkGate = await loadGuestShareLinkGate(this.prisma, participant);
+    const linkExpiresAt = linkGate.expiresAt;
+    const end = guestAccessEnd({
+      linkExpiresAt,
+      linkRevocationPendingAt: linkGate.revocationPendingAt,
+      linkIsActive: linkGate.isActive,
+      participation: participant,
+      now: new Date(),
+    });
     if (end === 'link-expired') {
       refuseExpiredGuestLink(socket);
       return;

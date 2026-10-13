@@ -267,18 +267,31 @@ function withFetchSocketsDeadline(
   io: GuestSocketRegistry | null | undefined
 ): GuestSocketRegistry | null | undefined {
   if (!io) return io;
+  // R3 — le délai borne la PASSE, pas chaque appel : après un premier
+  // dépassement, le registre est tenu pour muet et les appels suivants
+  // échouent sur-le-champ. Sans quoi N invités coûtaient N fois le délai.
+  let unresponsive = false;
+  const fetchWithin = async (rooms: string | string[]) => {
+    if (unresponsive) throw new Error('fetchSockets skipped: the socket registry already timed out in this pass');
+    try {
+      return await withDeadline(io.in(rooms).fetchSockets(), FETCH_SOCKETS_DEADLINE_MS);
+    } catch (error) {
+      if (error instanceof FetchSocketsTimeout) unresponsive = true;
+      throw error;
+    }
+  };
   return {
     to: (room: string) => io.to(room),
-    in: (rooms: string | string[]) => ({
-      fetchSockets: () => withDeadline(io.in(rooms).fetchSockets(), FETCH_SOCKETS_DEADLINE_MS),
-    }),
+    in: (rooms: string | string[]) => ({ fetchSockets: () => fetchWithin(rooms) }),
   };
 }
+
+class FetchSocketsTimeout extends Error {}
 
 function withDeadline<T>(work: Promise<T>, afterMs: number): Promise<T> {
   let timer: ReturnType<typeof setTimeout> | undefined;
   const deadline = new Promise<never>((_resolve, reject) => {
-    timer = setTimeout(() => reject(new Error(`fetchSockets did not answer within ${afterMs} ms`)), afterMs);
+    timer = setTimeout(() => reject(new FetchSocketsTimeout(`fetchSockets did not answer within ${afterMs} ms`)), afterMs);
     timer.unref?.();
   });
   return Promise.race([work, deadline]).finally(() => clearTimeout(timer));
