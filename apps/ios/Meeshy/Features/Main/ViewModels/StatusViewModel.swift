@@ -47,8 +47,10 @@ class StatusViewModel: ObservableObject {
     private let isOffline: @Sendable () -> Bool
 
     /// Groupement, persistance et flush (arrière-plan / relance) portés par
-    /// `ImpressionBatcher`.
-    private lazy var impressions = ImpressionBatcher(source: "status", postService: postService)
+    /// `ImpressionBatcher` — la file PARTAGÉE de l'humeur sur un avatar
+    /// (`SharedImpressionBatchers.moodAvatar`), que les hôtes sans ce modèle
+    /// alimentent aussi : une seule file, une seule clé de persistance.
+    private let impressions: ReachImpressionRecording
 
     /// A mood is "stuck offline" (recoverable as a draft) once it has been
     /// unsent for longer than this — the "pas envoyé dans la minute → offline"
@@ -72,8 +74,10 @@ class StatusViewModel: ObservableObject {
         authManager: AuthManaging = AuthManager.shared,
         offlineQueue: OfflineQueueing = OfflineQueue.shared,
         postService: PostServiceProviding = PostService.shared,
-        isOffline: @escaping @Sendable () -> Bool = { NetworkMonitor.shared.isOffline }
+        isOffline: @escaping @Sendable () -> Bool = { NetworkMonitor.shared.isOffline },
+        moodImpressions: ReachImpressionRecording? = nil
     ) {
+        self.impressions = moodImpressions ?? SharedImpressionBatchers.moodAvatar
         self.mode = mode
         self.statusService = statusService
         self.socialSocket = socialSocket
@@ -89,9 +93,10 @@ class StatusViewModel: ObservableObject {
     // `viewCount` comme les autres. Aucune surface ne les alimentait — la barre
     // de moods était le seul contenu du produit dont la portée restait à zéro.
     //
-    // Même contrat que le feed : une impression par APPARITION du pill, groupée
-    // sur 3 s ; la vue UNIQUE part à l'ouverture du popover (dédupliquée côté
-    // serveur par `PostView`, donc rejouable sans risque).
+    // Même contrat que le feed : une impression par APPARITION de l'humeur sur
+    // un avatar (`countsImpression`), groupée sur 3 s, sans dédoublonnage ; la
+    // vue part à CHAQUE ouverture de la bulle, depuis son site unique
+    // (`StatusBubbleController.show`).
 
     /// Le mood `statusId` est apparu à l'écran.
     func trackImpression(_ statusId: String) {
@@ -102,11 +107,6 @@ class StatusViewModel: ObservableObject {
     /// groupement est perdu.
     func flushImpressions() async {
         await impressions.flushNow()
-    }
-
-    /// Le mood `statusId` a été ouvert (popover) — vue unique par utilisateur.
-    func markStatusViewed(_ statusId: String) {
-        Task { [postService] in try? await postService.viewPost(postId: statusId, duration: nil) }
     }
 
     // MARK: - Load Statuses

@@ -29,6 +29,7 @@ struct HashtagResultsView: View {
                                 Task { await viewModel.loadMore() }
                             }
                         }
+                        .countsImpression(of: post.id) { viewModel.recordImpression($0) }
                 }
                 if viewModel.isLoading {
                     ProgressView()
@@ -44,5 +45,6 @@ struct HashtagResultsView: View {
         }
         .navigationTitle("#\(viewModel.tag)")
         .task { await viewModel.load() }
+        .onDisappear { Task { await viewModel.flushImpressions() } }
     }
 }

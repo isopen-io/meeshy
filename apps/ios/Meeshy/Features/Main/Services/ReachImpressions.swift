@@ -1,42 +1,53 @@
 import Foundation
+import SwiftUI
 import MeeshySDK
+import MeeshyUI
 
-// MARK: - Les surfaces qui comptent UNE fois par montage (#10483)
+// MARK: - Une apparition à l'écran = une impression (#10483)
 
-/// Une surface dont chaque élément se compte AU PLUS une fois tant qu'elle
-/// reste montée — le rail des stories (un anneau qui ressort de l'écran au
-/// défilement n'est pas un nouvel affichage) et la citation d'une story ou
-/// d'une humeur dans une bulle.
+/// Règle de comptage du porteur (2026-10-13) : un contenu se compte CHAQUE fois
+/// qu'il est listé, mécaniquement ou réellement — aucun dédoublonnage, ni dans
+/// le temps ni par montage. Ce qui ne compte pas, c'est un re-rendu : SwiftUI
+/// réévalue un `body` sans que rien n'apparaisse, et seul `onAppear` dit
+/// qu'une vue est entrée à l'écran.
 ///
-/// La file elle-même est un `ImpressionBatcher` PARTAGÉ par la surface
-/// (`SharedImpressionBatchers`) : deux hôtes de la même surface (la grande
-/// trail et la mini-trail épinglée) écriraient sinon la même clé de
-/// persistance et s'écraseraient. Seul l'ensemble « déjà compté » appartient
-/// au montage.
-@MainActor
-final class OncePerMountImpressions: ObservableObject {
-    // iOS 26.1 : deinit synthétisée ISOLÉE → double-free au démontage hors
-    // d'une tâche. Garde : MainActorDeinitSourceGuardTests.
-    nonisolated deinit {}
+/// `recountsOnChange` : la vue reste à l'écran mais montre un AUTRE contenu
+/// (l'humeur d'un avatar remplacée par une nouvelle) — c'est un nouvel
+/// affichage. Le rail ne le demande pas : l'anneau change de story quand on
+/// la regarde, derrière le lecteur qui la couvre.
+struct ReachImpressionModifier: ViewModifier {
+    let postId: String?
+    let recountsOnChange: Bool
+    let record: @MainActor (String) -> Void
 
-    private let batcher: ImpressionBatcher
-    private var counted: Set<String> = []
-
-    init(batcher: ImpressionBatcher) {
-        self.batcher = batcher
+    func body(content: Content) -> some View {
+        content
+            .onAppear { count(postId) }
+            .adaptiveOnChange(of: postId) { _, newValue in
+                guard recountsOnChange else { return }
+                count(newValue)
+            }
     }
 
-    /// Les contenus `postIds` sont apparus ; seuls les nouveaux du montage entrent en file.
-    func record(_ postIds: [String]) {
-        postIds
-            .filter { !$0.isEmpty && counted.insert($0).inserted }
-            .forEach(batcher.record)
-    }
-
-    func flushNow() async {
-        await batcher.flushNow()
+    private func count(_ id: String?) {
+        guard let id, !id.isEmpty else { return }
+        record(id)
     }
 }
+
+extension View {
+    /// Compte une impression de `postId` à chaque apparition de la vue.
+    /// `nil` (aucun contenu à compter) ne compte rien.
+    func countsImpression(
+        of postId: String?,
+        recountsOnChange: Bool = true,
+        _ record: @escaping @MainActor (String) -> Void
+    ) -> some View {
+        modifier(ReachImpressionModifier(postId: postId, recountsOnChange: recountsOnChange, record: record))
+    }
+}
+
+extension ImpressionBatcher: ReachImpressionRecording {}
 
 /// Les files partagées des surfaces montées en plusieurs endroits.
 @MainActor
@@ -46,12 +57,28 @@ enum SharedImpressionBatchers {
     static let storyRail = ImpressionBatcher(source: "story", surface: .storyRail)
     /// Une story ou une humeur CITÉE dans une bulle de conversation.
     static let citation = ImpressionBatcher(source: "shared_link", surface: .citation)
+    /// L'humeur peinte sur un avatar (liste de conversations, membres,
+    /// contacts, partage) — une file pour tous ses hôtes.
+    static let moodAvatar = ImpressionBatcher(source: "status", surface: .moodAvatar)
+    /// L'humeur peinte sur un anneau du rail des stories.
+    static let moodRail = ImpressionBatcher(source: "status", surface: .storyRail)
+
+    /// Le rail quitte l'écran : ses deux files partent.
+    static func flushRail() async {
+        await storyRail.flushNow()
+        await moodRail.flushNow()
+    }
 }
 
-/// Ce qu'un anneau du rail affiche : les stories encore actives de son groupe.
+/// Ce qu'un anneau du rail MONTRE : UNE story, celle que son toucher ouvre —
+/// la première encore active que le lecteur n'a pas vue, ou la première
+/// active quand il les a toutes vues. Les autres stories du groupe ne sont
+/// pas listées : elles n'apparaissent qu'une fois le lecteur ouvert, qui les
+/// compte lui-même.
 enum StoryRailReach {
-    static func displayedStoryIds(of group: StoryGroup, at now: Date = Date()) -> [String] {
-        group.stories.filter { !$0.isExpired(at: now) }.map(\.id)
+    static func displayedStoryId(of group: StoryGroup, at now: Date = Date()) -> String? {
+        let active = group.stories.filter { !$0.isExpired(at: now) }
+        return (active.first { !$0.isViewed } ?? active.first)?.id
     }
 }
 

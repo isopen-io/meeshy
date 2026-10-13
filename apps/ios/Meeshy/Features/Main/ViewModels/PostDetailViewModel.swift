@@ -142,8 +142,7 @@ class PostDetailViewModel: ObservableObject {
     /// lecture). Le gateway incrémente `postOpenCount` + `impressionCount` via
     /// `POST /posts/:id/impression?source=detail`. On bump les compteurs affichés
     /// de façon optimiste pour un feedback instantané, puis on enregistre (fire-
-    /// and-forget). La vue UNIQUE (`viewCount`, dédupliquée, non affichée) reste
-    /// portée par `viewPost` appelé séparément à l'ouverture.
+    /// and-forget), impression puis vue.
     ///
     /// Une ouverture se compte à la PREMIÈRE apparition de l'instance, pas à
     /// chaque relance du `.task` (#10483) ; ouverte depuis une notification,
@@ -155,6 +154,11 @@ class PostDetailViewModel: ObservableObject {
             post?.postOpenCount += 1
         }
         try? await postService.recordImpression(postId: postId, source: openSources.consumeSource(for: postId))
+        // #10483 — `viewCount` est le TOTAL des vues : chaque ouverture en
+        // compte une, sous la même garde que l'impression (une relance du
+        // `.task` n'est pas une ouverture). Les vues uniques sont comptées
+        // côté serveur.
+        try? await postService.viewPost(postId: postId, duration: nil)
     }
 
     private func refreshPost(_ postId: String) async {

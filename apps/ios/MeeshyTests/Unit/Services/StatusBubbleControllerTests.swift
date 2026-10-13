@@ -87,6 +87,43 @@ final class StatusBubbleControllerTests: XCTestCase {
 
     // MARK: - Factory
 
+    // MARK: - #10483 — chaque ouverture de la bulle est une vue
+
+    private func waitUntil(_ condition: @escaping @MainActor () -> Bool) async -> Bool {
+        let deadline = Date().addingTimeInterval(3)
+        while Date() < deadline {
+            if condition() { return true }
+            try? await Task.sleep(nanoseconds: 20_000_000)
+        }
+        return condition()
+    }
+
+    func test_show_eachOpening_countsAView() async {
+        let service = MockPostService()
+        let sut = StatusBubbleController(postService: service, currentUserId: { "reader" })
+        let entry = makeStatusEntry()
+
+        sut.show(entry: entry, anchor: .zero)
+        sut.dismiss()
+        sut.show(entry: entry, anchor: .zero)
+
+        let counted = await waitUntil { service.viewPostCallCount == 2 }
+        XCTAssertTrue(counted, "Rouvrir la bulle recompte : viewCount est le total des ouvertures.")
+        XCTAssertEqual(service.lastViewPostId, entry.id)
+        sut.dismiss()
+    }
+
+    func test_show_ownMood_countsNoView() async {
+        let service = MockPostService()
+        let sut = StatusBubbleController(postService: service, currentUserId: { "user1" })
+
+        sut.show(entry: makeStatusEntry(), anchor: .zero)
+        try? await Task.sleep(nanoseconds: 200_000_000)
+
+        XCTAssertEqual(service.viewPostCallCount, 0)
+        sut.dismiss()
+    }
+
     private func makeStatusEntry() -> StatusEntry {
         StatusEntry(
             id: UUID().uuidString,

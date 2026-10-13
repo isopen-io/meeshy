@@ -249,17 +249,11 @@ struct FocalQuotedReplyView: View, Equatable {
     /// sécurisée, même dans un message ordinaire.
     var body: some View {
         quotedBody.captureShield(reference.quotedCapture(quotedMessage: nil).shieldsCapture(surfaceAnnounces: announcesCapture))
-            .onAppear(perform: recordCitationImpression)
-    }
-
-    /// #10483 — une story ou une humeur citée est un affichage du contenu
-    /// cité : au plus une impression par bulle et par montage.
-    @State private var citationCounted = false
-
-    private func recordCitationImpression() {
-        guard !citationCounted, let contentId = CitationReach.citedContentId(of: reference) else { return }
-        citationCounted = true
-        SharedImpressionBatchers.citation.record(contentId)
+            // #10483 — une story ou une humeur citée est un affichage du
+            // contenu cité : une impression à chaque apparition de la bulle.
+            .countsImpression(of: CitationReach.citedContentId(of: reference)) {
+                SharedImpressionBatchers.citation.record($0)
+            }
     }
 
     private var quotedBody: some View {

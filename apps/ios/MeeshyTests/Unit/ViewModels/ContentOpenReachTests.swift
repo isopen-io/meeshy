@@ -35,6 +35,24 @@ final class ContentOpenReachTests: XCTestCase {
                        "Le `.task` du détail se relance au retour d'un écran poussé : ce n'est pas une nouvelle ouverture.")
     }
 
+    /// `viewCount` est le total : chaque OUVERTURE compte une vue — une
+    /// relance du `.task` du même écran n'en est pas une.
+    func test_registerDetailOpen_countsOneViewPerOpening() async {
+        let service = MockPostService()
+        let sut = makeDetail(postService: service)
+
+        await sut.registerDetailOpen("p1")
+        await sut.registerDetailOpen("p1")
+
+        XCTAssertEqual(service.viewPostCallCount, 1)
+        XCTAssertEqual(service.lastViewPostId, "p1")
+
+        let reopened = makeDetail(postService: service)
+        await reopened.registerDetailOpen("p1")
+
+        XCTAssertEqual(service.viewPostCallCount, 2, "Rouvrir le détail recompte une vue.")
+    }
+
     func test_registerDetailOpen_anotherPost_isCounted() async {
         let service = MockPostService()
         let sut = makeDetail(postService: service)

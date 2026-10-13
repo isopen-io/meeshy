@@ -123,6 +123,9 @@ struct ThemedFeedOverlay: View {
     /// besoin. Le chemin iPad (`FeedView`) portait déjà ce montage : c'est le
     /// même correctif, qui n'avait jamais traversé.
     @State private var reelAutoplay = ReelFeedAutoplayCoordinator()
+    /// #10483 — le fil iPhone compte ce qu'il liste, réels compris, comme
+    /// l'hôte iPad (`FeedView`) : une impression par apparition d'une carte.
+    @StateObject private var impressions = ImpressionBatcher(source: "feed", surface: .feed)
     @EnvironmentObject var router: Router
     @EnvironmentObject var storyViewModel: StoryViewModel
     @EnvironmentObject var statusViewModel: StatusViewModel
@@ -760,6 +763,7 @@ struct ThemedFeedOverlay: View {
                             viewModel.prefetchMediaForPost(post.id)
                             viewModel.prefetchComments(post.id)
                         }
+                        .countsImpression(of: post.id) { impressions.record($0) }
                     }
 
                     // La page suivante arrive : des cartes fantômes, jamais un indicateur sur du fond nu (#6987)
@@ -878,6 +882,7 @@ struct ThemedFeedOverlay: View {
         }
         .onDisappear {
             viewModel.unsubscribeFromSocketEvents()
+            Task { await impressions.flushNow() }
         }
         .sheet(item: $shareableLink) { link in
             // Same TrackingLink share sheet as FeedView — every external

@@ -14,17 +14,31 @@ final class HashtagResultsViewModel: ObservableObject {
 
     private let service: PostServiceProviding
     private let languageProvider: LanguageProviding
+    private let impressions: ReachImpressionRecording
     private var nextCursor: String?
     private var hasMore = true
 
     init(
         tag: String,
         service: PostServiceProviding = PostService.shared,
-        languageProvider: LanguageProviding = AuthManagerLanguageProvider()
+        languageProvider: LanguageProviding = AuthManagerLanguageProvider(),
+        impressions: ReachImpressionRecording? = nil
     ) {
         self.tag = tag
         self.service = service
         self.languageProvider = languageProvider
+        self.impressions = impressions ?? ImpressionBatcher(source: "search", surface: .hashtag, postService: service)
+    }
+
+    /// #10483 — un résultat qui apparaît à l'écran est une impression, à
+    /// chaque apparition.
+    func recordImpression(_ postId: String) {
+        impressions.record(postId)
+    }
+
+    /// L'écran se ferme : le lot en cours de groupement part.
+    func flushImpressions() async {
+        await impressions.flushNow()
     }
 
     /// `apiPost.toFeedPost(preferredLanguages:)` — même conversion que

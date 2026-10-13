@@ -87,7 +87,7 @@ struct FeedView: View {
     // Impression tracking — une impression par APPARITION à l'écran. Le
     // groupement, la persistance et le flush (sortie d'écran / arrière-plan /
     // relance) sont portés par `ImpressionBatcher`.
-    @StateObject private var impressions = ImpressionBatcher(source: "feed")
+    @StateObject private var impressions = ImpressionBatcher(source: "feed", surface: .feed)
 
     // Attachment states
     @State var pendingAttachments: [MessageAttachment] = []

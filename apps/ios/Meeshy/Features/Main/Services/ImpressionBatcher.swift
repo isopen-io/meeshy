@@ -49,9 +49,14 @@ final class ImpressionBatcher: ObservableObject {
     private let postService: PostServiceProviding
     private let flushDelay: TimeInterval
     private let defaults: UserDefaults
-    private let storageKey: String
+    /// Le compte sous lequel une impression est VUE. La file appartient à ce
+    /// compte, sur le disque comme en mémoire : une impression du compte A ne
+    /// part jamais sous le JWT du compte B, même pour les files partagées
+    /// (`SharedImpressionBatchers`) qui survivent à la déconnexion.
+    private let accountId: @MainActor () -> String?
 
     private var pending: [String] = []
+    private var pendingAccount: String?
     private var flushTask: Task<Void, Never>?
     /// Combine plutôt que des tokens `NotificationCenter` : ceux-ci exigeraient
     /// un `deinit` qui touche l'état isolé, ce que Swift 6 refuse (et qu'un
@@ -64,15 +69,20 @@ final class ImpressionBatcher: ObservableObject {
         surface: ReachSurface? = nil,
         postService: PostServiceProviding = PostService.shared,
         flushDelay: TimeInterval = 3,
-        defaults: UserDefaults = .standard
+        defaults: UserDefaults = .standard,
+        accountId: @escaping @MainActor () -> String? = { AuthManager.shared.currentUser?.id }
     ) {
         self.source = source
         self.surface = surface
         self.postService = postService
         self.flushDelay = flushDelay
         self.defaults = defaults
-        self.storageKey = Self.storageKey(source: source, surface: surface)
-        self.pending = defaults.stringArray(forKey: storageKey) ?? []
+        self.accountId = accountId
+        let account = accountId()
+        self.pendingAccount = account
+        self.pending = defaults.stringArray(
+            forKey: Self.storageKey(source: source, surface: surface, accountId: account)
+        ) ?? []
         subscribeToAppLifecycle()
         // Rejeu de ce qu'une session tuée a laissé en attente. Sans ce
         // déclenchement, le lot ne repartait qu'à la faveur d'une NOUVELLE
@@ -83,6 +93,7 @@ final class ImpressionBatcher: ObservableObject {
     /// Le post `postId` vient d'apparaître à l'écran.
     func record(_ postId: String) {
         guard !postId.isEmpty else { return }
+        adoptCurrentAccount()
         pending.append(postId)
         persist()
         scheduleFlush()
@@ -109,29 +120,60 @@ final class ImpressionBatcher: ObservableObject {
     }
 
     private func flush() async {
+        adoptCurrentAccount()
         let batch = pending
         guard !batch.isEmpty else { return }
         // Vidé AVANT l'appel pour qu'une apparition concurrente ne reparte pas
         // dans le lot suivant en double ; réinséré en tête si l'envoi échoue.
         pending.removeAll()
         persist()
+        let owner = pendingAccount
         do {
             try await send(batch)
         } catch let unsent as UnsentImpressions {
-            pending.insert(contentsOf: unsent.postIds, at: 0)
-            persist()
+            keepForRetry(unsent.postIds, owner: owner)
             Self.logger.debug("impression flush partially failed (rest kept for retry): \(unsent.cause.localizedDescription, privacy: .public)")
         } catch {
-            pending.insert(contentsOf: batch, at: 0)
-            persist()
+            keepForRetry(batch, owner: owner)
             Self.logger.debug("impression flush failed (kept for retry): \(error.localizedDescription, privacy: .public)")
         }
+    }
+
+    /// Un échec revient dans la file de SON compte — si le compte a changé
+    /// pendant l'envoi, sur le disque de celui-ci, pas dans la file courante.
+    private func keepForRetry(_ postIds: [String], owner: String?) {
+        guard owner == pendingAccount else {
+            let key = Self.storageKey(source: source, surface: surface, accountId: owner)
+            defaults.set(postIds + (defaults.stringArray(forKey: key) ?? []), forKey: key)
+            return
+        }
+        pending.insert(contentsOf: postIds, at: 0)
+        persist()
     }
 
     /// La clé d'une surface prolonge celle de sa source : une file sans
     /// surface garde la clé qu'elle avait avant #10483.
     static func storageKey(source: String, surface: ReachSurface?) -> String {
         storageKeyPrefix + source + (surface.map { ".\($0.rawValue)" } ?? "")
+    }
+
+    /// La clé d'une file appartient à un compte ; sans compte, la clé historique.
+    static func storageKey(source: String, surface: ReachSurface?, accountId: String?) -> String {
+        storageKey(source: source, surface: surface) + (accountId.map { "@\($0)" } ?? "")
+    }
+
+    /// Le compte a changé depuis la dernière écriture : la file en mémoire
+    /// appartient à l'autre compte (elle reste sur SON disque, ou a été purgée
+    /// à sa déconnexion) et cède la place à celle du compte courant.
+    private func adoptCurrentAccount() {
+        let account = accountId()
+        guard account != pendingAccount else { return }
+        pendingAccount = account
+        pending = defaults.stringArray(forKey: currentStorageKey) ?? []
+    }
+
+    private var currentStorageKey: String {
+        Self.storageKey(source: source, surface: surface, accountId: pendingAccount)
     }
 
     /// Le plafond d'un lot de `POST /social/events`.
@@ -162,7 +204,7 @@ final class ImpressionBatcher: ObservableObject {
     }
 
     private func persist() {
-        defaults.set(pending, forKey: storageKey)
+        defaults.set(pending, forKey: currentStorageKey)
     }
 
     // MARK: - Logout purge (outbox-11)
