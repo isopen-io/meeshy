@@ -35,29 +35,16 @@ struct SocialEventsV2Identity: Equatable {
     }
 }
 
-/// Le consentement d'analyse tel que le CLIENT le connaît (#10499). Un réglage
-/// jamais touché n'est PAS un refus : `allowAnalytics` vaut `false` par défaut,
-/// et l'envoyer comme `denied` faisait taire tout compte neuf. `granted` quand
-/// l'utilisateur l'a accordé (ou que la passerelle l'a confirmé), `denied`
-/// seulement après un geste explicite sur la bascule, `unknown` sinon. La
-/// passerelle seule ACCORDE ; ce que le client dit ne sert qu'à REFUSER.
+/// Le consentement d'analyse tel que le CLIENT le connaît (#10499) — vie
+/// privée d'abord, la qualification juridique (#10511) n'étant pas tranchée :
+/// bascule « Analytique » coupée (valeur par défaut comprise) ⇒ `denied`,
+/// toujours, même si la passerelle garde un accord plus ancien ; bascule active
+/// ⇒ `granted` seulement si la passerelle l'a confirmé, `unknown` sinon. La
+/// passerelle seule ACCORDE. Le comptage (#10483) ne lit pas ce champ.
 enum AnalyticsConsentStanding {
-    private static let decisionKeyPrefix = "socialEvents.analyticsConsentDecided."
-
-    static func consent(allowAnalytics: Bool, serverGranted: Bool, decided: Bool) -> SocialEventContext.Consent {
-        if allowAnalytics || serverGranted { return .granted }
-        return decided ? .denied : .unknown
-    }
-
-    /// Le geste explicite de l'utilisateur sur la bascule « Analytique », par compte.
-    static func recordDecision(userId: String?, in defaults: UserDefaults = .standard) {
-        guard let userId, !userId.isEmpty else { return }
-        defaults.set(true, forKey: decisionKeyPrefix + userId)
-    }
-
-    static func hasDecided(userId: String?, in defaults: UserDefaults = .standard) -> Bool {
-        guard let userId, !userId.isEmpty else { return false }
-        return defaults.bool(forKey: decisionKeyPrefix + userId)
+    static func consent(allowAnalytics: Bool, serverGranted: Bool) -> SocialEventContext.Consent {
+        guard allowAnalytics else { return .denied }
+        return serverGranted ? .granted : .unknown
     }
 }
 
@@ -101,8 +88,7 @@ final class LiveSocialEventContextProvider: SocialEventContextProviding {
             deviceLocale: Locale.current.language.languageCode?.identifier,
             consent: AnalyticsConsentStanding.consent(
                 allowAnalytics: UserPreferencesManager.shared.privacy.allowAnalytics,
-                serverGranted: UserPreferencesManager.shared.grantedConsents.contains(.analytics),
-                decided: AnalyticsConsentStanding.hasDecided(userId: AuthManager.shared.currentUser?.id)
+                serverGranted: UserPreferencesManager.shared.grantedConsents.contains(.analytics)
             ),
             capabilities: SocialEventContext.Capability.allCases,
             sampling: rates.isEmpty ? nil : rates

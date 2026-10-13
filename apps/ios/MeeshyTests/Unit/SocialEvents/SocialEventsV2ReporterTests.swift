@@ -121,41 +121,18 @@ final class SocialEventsV2ReporterTests: XCTestCase {
         XCTAssertEqual(service.recordedSocialEventsV2Types, ["interaction", "interaction"])
     }
 
-    // MARK: - Consentement déclaré (#10499) : un réglage jamais touché n'est pas un refus
+    // MARK: - Consentement déclaré (#10499) : vie privée d'abord, seul le serveur accorde
 
-    private func isolatedDefaults(_ name: String = #function) -> UserDefaults {
-        let suite = "AnalyticsConsentStandingTests.\(name)"
-        let defaults = UserDefaults(suiteName: suite)!
-        defaults.removePersistentDomain(forName: suite)
-        return defaults
+    func test_consent_toggleOff_isDenied_evenWithAServerGrant() {
+        XCTAssertEqual(AnalyticsConsentStanding.consent(allowAnalytics: false, serverGranted: false), .denied)
+        XCTAssertEqual(AnalyticsConsentStanding.consent(allowAnalytics: false, serverGranted: true), .denied)
     }
 
-    func test_consent_settingNeverTouched_isUnknown() {
-        let defaults = isolatedDefaults()
-        let decided = AnalyticsConsentStanding.hasDecided(userId: "u1", in: defaults)
-
-        XCTAssertFalse(decided)
-        XCTAssertEqual(AnalyticsConsentStanding.consent(allowAnalytics: false, serverGranted: false, decided: decided), .unknown)
+    func test_consent_toggleOn_withoutServerConfirmation_isUnknown() {
+        XCTAssertEqual(AnalyticsConsentStanding.consent(allowAnalytics: true, serverGranted: false), .unknown)
     }
 
-    func test_consent_explicitRefusal_isDenied() {
-        let defaults = isolatedDefaults()
-        AnalyticsConsentStanding.recordDecision(userId: "u1", in: defaults)
-
-        let decided = AnalyticsConsentStanding.hasDecided(userId: "u1", in: defaults)
-        XCTAssertEqual(AnalyticsConsentStanding.consent(allowAnalytics: false, serverGranted: false, decided: decided), .denied)
-    }
-
-    func test_consent_allowed_orConfirmedByTheServer_isGranted() {
-        XCTAssertEqual(AnalyticsConsentStanding.consent(allowAnalytics: true, serverGranted: false, decided: true), .granted)
-        XCTAssertEqual(AnalyticsConsentStanding.consent(allowAnalytics: false, serverGranted: true, decided: false), .granted)
-    }
-
-    func test_consent_decisionIsPerAccount_anotherAccountStaysUnknown() {
-        let defaults = isolatedDefaults()
-        AnalyticsConsentStanding.recordDecision(userId: "u1", in: defaults)
-
-        XCTAssertFalse(AnalyticsConsentStanding.hasDecided(userId: "u2", in: defaults))
-        XCTAssertFalse(AnalyticsConsentStanding.hasDecided(userId: nil, in: defaults))
+    func test_consent_toggleOn_withServerConfirmation_isGranted() {
+        XCTAssertEqual(AnalyticsConsentStanding.consent(allowAnalytics: true, serverGranted: true), .granted)
     }
 }

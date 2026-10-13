@@ -51,7 +51,7 @@ Ce qui existe AILLEURS et que la télémétrie ne remplace pas : réagir, commen
 | `network` | `{ type: wifi·cellular·ethernet·offline·unknown, subtype?: 2g·3g·4g·5g }` | `NWPathMonitor` (iOS), `navigator.connection.effectiveType` quand il existe (web) |
 | `uiLanguage` | BCP-47 court | langue de l'application (`systemLanguage`) |
 | `deviceLocale` | BCP-47 court | rang 4 du Prisme |
-| `consent` | `granted` · `denied` · `unknown` | consentement d'analyse tel que le client le connaît ; la passerelle fait foi (point 6) |
+| `consent` | `granted` · `denied` · `unknown` | consentement d'analyse tel que le client le connaît ; la passerelle fait foi (point 6). Règle client (2026-10-13, vie privée d'abord tant que #10511 n'est pas tranchée) : bascule « Analytique » coupée, valeur par défaut comprise ⇒ `denied`, toujours, même si la passerelle garde un accord plus ancien ; bascule active ⇒ `granted` seulement si la passerelle l'a confirmé (`GET /me/consents`), `unknown` sinon. Le comptage #10483 ne lit pas ce champ |
 | `capabilities` | sous-ensemble de `screenshot` · `screen_recording` · `scroll` · `playback_qoe` | ce que CE client sait détecter : l'absence d'un type ne se lit pas comme zéro (un navigateur ne voit aucune capture) |
 | `sampling` | `{ [type]: 0..1 }` | taux appliqué par le client (point 7) |
 
