@@ -404,11 +404,23 @@ export class MagicLinkService {
         return { success: false, error: 'This link is no longer valid. Please request a new one.' };
       }
 
-      // 7. Mark token as used
-      await this.prisma.magicLinkToken.update({
-        where: { id: magicLinkToken.id },
+      // 7. Mark token as used — par une écriture CONDITIONNELLE (#10475) : la
+      // lecture de `usedAt` (étape 4) ne suffit pas, deux validations
+      // concurrentes la passaient toutes deux et ouvraient chacune une session.
+      // Seule celle dont l'écriture gagne continue ; la condition relit aussi
+      // la révocation. `usedAt` d'un lien frais est ABSENT du document
+      // (`create` ne l'écrit pas) : `unsetOrNull`, jamais `usedAt: null` seul.
+      const consumed = await this.prisma.magicLinkToken.updateMany({
+        where: { id: magicLinkToken.id, isRevoked: false, ...unsetOrNull('usedAt') },
         data: { usedAt: new Date() }
       });
+      if (consumed.count !== 1) {
+        logger.warn('Token consumed concurrently');
+        await this.logSecurityEvent(magicLinkToken.userId, 'MAGIC_LINK_REUSE_ATTEMPT', 'MEDIUM', {
+          ipAddress: requestContext.ip
+        });
+        return { success: false, error: 'This link has already been used. Please request a new one.' };
+      }
 
       // 7 bis. Le lien a été ouvert depuis la boîte : l'adresse est PROUVÉE
       // (#8238, absorbe #8236) — lien interactif ET lien du résumé, avant le
