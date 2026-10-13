@@ -29,6 +29,10 @@ import {
   getCachedParticipant,
   resetParticipantLookupCache,
 } from '../../utils/participant-lookup-cache';
+import {
+  subscribeConversationLanguageChanges,
+  type ConversationLanguageChange,
+} from '../../services/message-translation/conversationLanguageChanges';
 
 const LINK_ID = '507f1f77bcf86cd799439099';
 const CONV_ID = '507f1f77bcf86cd799439011';
@@ -37,16 +41,20 @@ const GUEST_B = 'participant-guest-b';
 
 type Guest = { id: string; conversationId: string; displayName: string };
 
-function makePrisma(guests: Guest[], remaining: unknown[] = []) {
+function makePrisma(guests: Guest[], remaining: unknown[] = [], inactive: Guest[] = []) {
   const calls: string[] = [];
   return {
     calls,
     participant: {
       findMany: jest.fn<any>(async (args: any) => {
-        // Le second `findMany` est celui de l'effectif restant.
         if (args?.where?.isActive === true && args?.where?.OR) {
           calls.push('find-guests');
           return guests;
+        }
+        // #10472 — les invités du lien DÉJÀ inactifs, que chaque passe évince.
+        if (args?.where?.isActive === false && args?.where?.OR) {
+          calls.push('find-inactive');
+          return inactive;
         }
         calls.push('find-remaining');
         return remaining;
@@ -159,7 +167,7 @@ describe('revokeShareLinkGuests', () => {
     });
     // L'écriture précède la lecture de l'effectif restant : l'annonce porte
     // l'effectif d'APRÈS, jamais celui d'avant.
-    expect(prisma.calls).toEqual(['find-guests', 'update', 'find-remaining']);
+    expect(prisma.calls).toEqual(['find-guests', 'update', 'find-inactive', 'find-remaining']);
   });
 
   it("éteint position et appel, sort de la room, PUIS coupe la socket de l'invité", async () => {
@@ -180,6 +188,9 @@ describe('revokeShareLinkGuests', () => {
       `leave:${ROOMS.user(GUEST_A)}:${ROOMS.conversation(CONV_ID)}`,
       `invalidate:${GUEST_A}:${CONV_ID}`,
       `disconnect:${ROOMS.user(GUEST_A)}`,
+      // #10472 — et retombe APRÈS l'éviction : une lecture concurrente l'avait
+      // peut-être remise en cache pendant qu'on évinçait.
+      `invalidate:${GUEST_A}:${CONV_ID}`,
     ]);
   });
 
@@ -270,7 +281,7 @@ describe('revokeShareLinkGuests', () => {
    * actifs et annonçaient chacun leur départ : deux `participant-left` par
    * invité. Seule l'écriture qui a fait passer la ligne à inactif l'annonce.
    */
-  it("deux révocations concurrentes n'annoncent, n'évincent et ne rendent chaque invité qu'UNE fois", async () => {
+  it("deux révocations concurrentes n'annoncent et ne rendent chaque invité qu'UNE fois, et chacun est évincé", async () => {
     const rows = [
       { id: GUEST_A, conversationId: CONV_ID, displayName: 'Invité A', isActive: true },
       { id: GUEST_B, conversationId: CONV_ID, displayName: 'Invité B', isActive: true },
@@ -279,7 +290,7 @@ describe('revokeShareLinkGuests', () => {
       participant: {
         findMany: jest.fn<any>(async (args: any) =>
           args?.where?.OR
-            ? rows.filter(row => row.isActive).map(({ id, conversationId, displayName }) => ({ id, conversationId, displayName }))
+            ? rows.filter(row => row.isActive === args.where.isActive).map(({ id, conversationId, displayName }) => ({ id, conversationId, displayName }))
             : []
         ),
         updateMany: jest.fn<any>(async ({ where, data }: any) => {
@@ -302,15 +313,26 @@ describe('revokeShareLinkGuests', () => {
     expect(emitConversationMemberCountEvent).toHaveBeenCalledTimes(2);
     const announced = (emitConversationMemberCountEvent as jest.Mock).mock.calls.map(([arg]: any) => arg.payload.participantId);
     expect(announced.sort()).toEqual([GUEST_A, GUEST_B].sort());
-    expect(order.filter(step => step.startsWith('disconnect:'))).toHaveLength(2);
-    expect(order.filter(step => step.startsWith('end-call:'))).toHaveLength(2);
+    // #10472 — l'éviction est IDEMPOTENTE et chaque passe la rejoue sur les
+    // invités déjà inactifs : la seconde passe peut évincer à son tour.
+    for (const guest of [GUEST_A, GUEST_B]) {
+      expect(order).toContain(`disconnect:${ROOMS.user(guest)}`);
+      expect(order).toContain(`end-call:${CONV_ID}:${guest}`);
+    }
   });
 
-  it("un invité qu'une autre écriture a déjà désactivé n'est ni annoncé, ni évincé, ni rendu", async () => {
-    const prisma = makePrisma([
-      { id: GUEST_A, conversationId: CONV_ID, displayName: 'Invité A' },
-      { id: GUEST_B, conversationId: CONV_ID, displayName: 'Invité B' },
-    ]);
+  it("un invité qu'une autre écriture a déjà désactivé n'est ni annoncé ni rendu, mais il est évincé", async () => {
+    const prisma = makePrisma(
+      [
+        { id: GUEST_A, conversationId: CONV_ID, displayName: 'Invité A' },
+        { id: GUEST_B, conversationId: CONV_ID, displayName: 'Invité B' },
+      ],
+      [],
+      [
+        { id: GUEST_A, conversationId: CONV_ID, displayName: 'Invité A' },
+        { id: GUEST_B, conversationId: CONV_ID, displayName: 'Invité B' },
+      ]
+    );
     prisma.participant.updateMany.mockImplementation(async ({ where }: any) => ({ count: where.id === GUEST_A ? 1 : 0 }));
     const order: string[] = [];
     const { io } = makeIo(order);
@@ -319,7 +341,7 @@ describe('revokeShareLinkGuests', () => {
 
     expect(revoked).toEqual([GUEST_A]);
     expect(emitConversationMemberCountEvent).toHaveBeenCalledTimes(1);
-    expect(order).not.toContain(`disconnect:${ROOMS.user(GUEST_B)}`);
+    expect(order).toContain(`disconnect:${ROOMS.user(GUEST_B)}`);
     expect(order).toContain(`disconnect:${ROOMS.user(GUEST_A)}`);
   });
 
@@ -351,7 +373,7 @@ describe('revokeShareLinkGuests', () => {
       participant: {
         findMany: jest.fn<any>(async (args: any) =>
           args?.where?.OR
-            ? rows.filter(row => row.isActive).map(({ id, conversationId, displayName }) => ({ id, conversationId, displayName }))
+            ? rows.filter(row => row.isActive === args.where.isActive).map(({ id, conversationId, displayName }) => ({ id, conversationId, displayName }))
             : []
         ),
         updateMany: jest.fn<any>(async ({ where, data }: any) => {
@@ -446,12 +468,15 @@ describe('revokeShareLinkGuests', () => {
    */
   type Row = { id: string; conversationId: string; displayName: string; isActive: boolean; leftAt: Date | null };
 
-  function makeRowsPrisma(rows: Row[], faults: { commitThenThrow?: string; failWrite?: string; failRemaining?: boolean } = {}) {
+  function makeRowsPrisma(rows: Row[], faults: { commitThenThrow?: string; failWrite?: string; failRemaining?: boolean; failInactive?: boolean } = {}) {
     const pick = ({ id, conversationId, displayName }: Row) => ({ id, conversationId, displayName });
     return {
       participant: {
         findMany: jest.fn<any>(async ({ where }: any) => {
-          if (where?.OR) return rows.filter(row => row.isActive).map(pick);
+          if (where?.OR) {
+            if (where.isActive === false && faults.failInactive) throw new Error('inactive read failed');
+            return rows.filter(row => row.isActive === where.isActive).map(pick);
+          }
           if (where?.id?.in) {
             return rows
               .filter(row => where.id.in.includes(row.id) && row.isActive === where.isActive && row.leftAt?.getTime() === where.leftAt?.getTime())
@@ -532,7 +557,7 @@ describe('revokeShareLinkGuests', () => {
     }
   });
 
-  it("une écriture validée en base dont la réponse s'est perdue est rattrapée : l'invité est évincé sans être annoncé, puis l'erreur relancée", async () => {
+  it("une écriture validée en base dont la réponse s'est perdue est rattrapée : l'invité est évincé ET annoncé, puis l'erreur relancée", async () => {
     const revokedAt = new Date('2026-10-13T09:00:00.000Z');
     const rows = [guestRow(GUEST_A)];
     const prisma = makeRowsPrisma(rows, { commitThenThrow: GUEST_A });
@@ -547,7 +572,12 @@ describe('revokeShareLinkGuests', () => {
     expect(prisma.participant.findMany).toHaveBeenCalledWith(expect.objectContaining({
       where: { id: { in: [GUEST_A] }, isActive: false, leftAt: revokedAt },
     }));
-    expect(emitConversationMemberCountEvent).not.toHaveBeenCalled();
+    // #10472 — le rattrapé est annoncé comme les autres partants.
+    expect(emitConversationMemberCountEvent).toHaveBeenCalledTimes(1);
+    expect(emitConversationMemberCountEvent).toHaveBeenCalledWith(expect.objectContaining({
+      event: SERVER_EVENTS.CONVERSATION_PARTICIPANT_LEFT,
+      payload: expect.objectContaining({ participantId: GUEST_A, userId: null, leftAt: revokedAt.toISOString() }),
+    }));
     expect(order).toContain(`end-call:${CONV_ID}:${GUEST_A}`);
     expect(order).toContain(`disconnect:${ROOMS.user(GUEST_A)}`);
     expect(getCachedParticipant(GUEST_A, CONV_ID)).toBeUndefined();
@@ -570,14 +600,14 @@ describe('revokeShareLinkGuests', () => {
     expect(rows[0].isActive).toBe(true);
   });
 
-  it("une écriture rejetée sur un invité qu'une AUTRE révocation a désactivé (autre `leftAt`) ne l'évince pas une seconde fois", async () => {
+  it("une écriture rejetée sur un invité qu'une AUTRE révocation a désactivé (autre `leftAt`) n'est pas annoncée, mais l'invité est évincé", async () => {
     const rows = [{ ...guestRow(GUEST_A), isActive: false, leftAt: new Date('2026-10-13T08:00:00.000Z') }];
     const prisma = makeRowsPrisma([]);
-    prisma.participant.findMany.mockImplementation(async ({ where }: any) =>
-      where?.OR
-        ? [{ id: GUEST_A, conversationId: CONV_ID, displayName: GUEST_A }]
-        : rows.filter(row => where?.id?.in?.includes(row.id) && row.leftAt?.getTime() === where.leftAt?.getTime())
-    );
+    prisma.participant.findMany.mockImplementation(async ({ where }: any) => {
+      if (where?.OR && where.isActive === true) return [{ id: GUEST_A, conversationId: CONV_ID, displayName: GUEST_A }];
+      if (where?.OR) return rows.filter(row => !row.isActive).map(({ id, conversationId, displayName }) => ({ id, conversationId, displayName }));
+      return rows.filter(row => where?.id?.in?.includes(row.id) && row.leftAt?.getTime() === where.leftAt?.getTime());
+    });
     prisma.participant.updateMany.mockRejectedValue(new Error('socket closed'));
     const order: string[] = [];
     const { io } = makeIo(order);
@@ -589,6 +619,103 @@ describe('revokeShareLinkGuests', () => {
       })
     ).rejects.toThrow('socket closed');
 
-    expect(order).toEqual([]);
+    expect(emitConversationMemberCountEvent).not.toHaveBeenCalled();
+    expect(order).toContain(`disconnect:${ROOMS.user(GUEST_A)}`);
+  });
+
+  /**
+   * #10472 (R1) — un `updateMany` abandonné par le client peut s'appliquer
+   * APRÈS la relecture de rattrapage, et un `fetchSockets` peut lever après
+   * des écritures validées : dans les deux cas l'invité est inactif, encore
+   * connecté, et la reprise — qui ne lisait que les invités ACTIFS — ne le
+   * retrouvait plus. Chaque passe évince donc TOUS les invités inactifs du lien.
+   */
+  it("la reprise évince l'invité devenu inactif hors de toute écriture qu'elle a faite : sorti, déconnecté, caches invalidés, sans annonce", async () => {
+    const rows = [{ ...guestRow(GUEST_A), isActive: false, leftAt: new Date('2026-10-13T09:00:00.000Z') }];
+    const prisma = makeRowsPrisma(rows);
+    cacheParticipant(GUEST_A, CONV_ID, { id: GUEST_A, conversationId: CONV_ID, isActive: true });
+    const order: string[] = [];
+    const { io } = makeIo(order);
+    const manager = makeManager(order);
+
+    const revoked = await revokeShareLinkGuests({ prisma: prisma as never, io, manager, shareLinkId: LINK_ID });
+
+    expect(revoked).toEqual([]);
+    expect(prisma.participant.findMany).toHaveBeenCalledWith(expect.objectContaining({
+      where: {
+        type: 'anonymous',
+        isActive: false,
+        OR: [{ shareLinkId: LINK_ID }, { anonymousSession: { is: { shareLinkId: LINK_ID } } }],
+      },
+    }));
+    expect(order).toContain(`end-call:${CONV_ID}:${GUEST_A}`);
+    expect(order).toContain(`leave:${ROOMS.user(GUEST_A)}:${ROOMS.conversation(CONV_ID)}`);
+    expect(order).toContain(`disconnect:${ROOMS.user(GUEST_A)}`);
+    expect(getCachedParticipant(GUEST_A, CONV_ID)).toBeUndefined();
+    expect(manager.invalidateParticipantCache).toHaveBeenCalledWith(GUEST_A, CONV_ID);
+    expect(emitConversationMemberCountEvent).not.toHaveBeenCalled();
+  });
+
+  it("un `fetchSockets` qui lève après une écriture validée : la reprise évince l'invité resté connecté", async () => {
+    const rows = [guestRow(GUEST_A)];
+    const prisma = makeRowsPrisma(rows);
+    const order: string[] = [];
+
+    await expect(
+      revokeShareLinkGuests({ prisma: prisma as never, io: makeFailingIo(order, GUEST_A), manager: makeManager(order), shareLinkId: LINK_ID })
+    ).rejects.toThrow('fetchSockets');
+    expect(order).not.toContain(`disconnect:${ROOMS.user(GUEST_A)}`);
+
+    const { io } = makeIo(order);
+    const retried = await revokeShareLinkGuests({ prisma: prisma as never, io, manager: makeManager(order), shareLinkId: LINK_ID });
+
+    expect(retried).toEqual([]);
+    expect(order).toContain(`disconnect:${ROOMS.user(GUEST_A)}`);
+    expect(emitConversationMemberCountEvent).toHaveBeenCalledTimes(1);
+  });
+
+  // #10472 (R2) — le rattrapé change la composition linguistique du fil comme
+  // tout autre partant.
+  it("un invité rattrapé est annoncé à la composition linguistique du fil", async () => {
+    const changes: ConversationLanguageChange[] = [];
+    const unsubscribe = subscribeConversationLanguageChanges(change => { changes.push(change); });
+    const prisma = makeRowsPrisma([guestRow(GUEST_A)], { commitThenThrow: GUEST_A });
+
+    await expect(
+      revokeShareLinkGuests({ prisma: prisma as never, io: null, manager: null, shareLinkId: LINK_ID })
+    ).rejects.toThrow('socket closed after commit');
+    unsubscribe();
+
+    expect(changes).toEqual([{ kind: 'departure', conversationId: CONV_ID }]);
+  });
+
+  // #10472 (R3) — une lecture concurrente pendant l'éviction remettait la
+  // ligne ACTIVE dans le cache de recherche REST pour 30 s.
+  it("le cache de recherche REST retombe APRÈS l'éviction, même si une lecture concurrente l'a rempli entre-temps", async () => {
+    const prisma = makePrisma([{ id: GUEST_A, conversationId: CONV_ID, displayName: 'Invité A' }]);
+    const order: string[] = [];
+    const { io } = makeIo(order);
+    const manager = makeManager(order);
+    manager.endCallParticipationForDepartedMember.mockImplementation(async () => {
+      cacheParticipant(GUEST_A, CONV_ID, { id: GUEST_A, conversationId: CONV_ID, isActive: true });
+    });
+
+    await revokeShareLinkGuests({ prisma: prisma as never, io, manager, shareLinkId: LINK_ID });
+
+    expect(getCachedParticipant(GUEST_A, CONV_ID)).toBeUndefined();
+  });
+
+  it("une lecture des invités inactifs qui lève n'empêche pas d'évincer ceux que la passe a écrits, puis l'erreur est relancée", async () => {
+    const rows = [guestRow(GUEST_A)];
+    const prisma = makeRowsPrisma(rows, { failInactive: true });
+    const order: string[] = [];
+    const { io } = makeIo(order);
+
+    await expect(
+      revokeShareLinkGuests({ prisma: prisma as never, io, manager: makeManager(order), shareLinkId: LINK_ID })
+    ).rejects.toThrow('inactive read failed');
+
+    expect(order).toContain(`disconnect:${ROOMS.user(GUEST_A)}`);
+    expect(emitConversationMemberCountEvent).toHaveBeenCalledTimes(1);
   });
 });

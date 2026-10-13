@@ -91,6 +91,7 @@ async function buildApp(): Promise<FastifyInstance> {
       findFirst: jest.fn().mockResolvedValue(null),
       create: jest.fn().mockResolvedValue(mockParticipant),
       update: jest.fn().mockResolvedValue(mockParticipant),
+      updateMany: jest.fn().mockResolvedValue({ count: 1 }),
       count: jest.fn().mockResolvedValue(0),
       findMany: jest.fn().mockResolvedValue([]),
     },

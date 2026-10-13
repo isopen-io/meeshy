@@ -144,51 +144,55 @@ export async function revokeShareLinkGuests(
   // la participation, et la session embarquée en repli (#10440) — les deux
   // sont posées à l'entrée par lien, et une ligne qui ne porterait que la
   // seconde échapperait sinon à la révocation.
+  const ofThisLink = { OR: [{ shareLinkId }, { anonymousSession: { is: { shareLinkId } } }] };
   const candidates = await prisma.participant.findMany({
-    where: {
-      type: 'anonymous',
-      isActive: true,
-      OR: [{ shareLinkId }, { anonymousSession: { is: { shareLinkId } } }],
-    },
+    where: { type: 'anonymous', isActive: true, ...ofThisLink },
     select: { id: true, conversationId: true, displayName: true },
   });
 
-  if (candidates.length === 0) return [];
-
   // #10457 — une écriture CONDITIONNELLE par ligne (`isActive: true` dans le
   // `where`) : seul l'invité que CETTE révocation a fait passer à inactif est
-  // annoncé, évincé et compté. Deux balayages concurrents (nettoyage admin et
-  // journalier, ou un geste de l'hôte pendant un balayage) lisaient les mêmes
-  // invités actifs et émettaient chacun leur départ.
+  // annoncé et rendu.
   //
   // #10464 — par paquets bornés, et chaque issue est lue : une écriture qui
   // lève ne prive plus de leur annonce et de leur éviction les invités DÉJÀ
-  // passés à inactif (la reprise ne les retrouverait plus), et un lien sans
-  // limite d'usage ne sature plus le pool de connexions.
+  // passés à inactif, et un lien sans limite d'usage ne sature plus le pool
+  // de connexions.
   const { written: guests, rejected, failure } = await deactivateGuests(prisma, candidates, revokedAt);
   const failures: unknown[] = failure ? [failure.reason] : [];
 
   // #10468 — une écriture REJETÉE peut avoir été validée en base (réponse
-  // perdue après le commit) : l'invité est inactif, la reprise ne le retrouve
-  // plus, et rien ne l'aurait évincé. Celui que la relecture trouve inactif
-  // avec CE `leftAt` est évincé — sans annonce, l'auteur de l'écriture
-  // n'étant pas établi avec certitude.
+  // perdue après le commit). Celle que la relecture trouve inactive avec CE
+  // `leftAt` est un départ de CETTE passe : #10472 l'annonce comme les autres.
   const recovered = await settle(failures, () => readCommittedRejections(prisma, rejected, revokedAt));
-  const evicted = [...guests, ...(recovered ?? [])];
+  const departed = [...guests, ...(recovered ?? [])];
+
+  // #10472 — l'éviction ne dépend plus de l'issue de l'écriture. Un
+  // `updateMany` abandonné par le client peut s'appliquer APRÈS la relecture
+  // ci-dessus, un `fetchSockets` peut lever après des écritures validées :
+  // l'invité est alors inactif et encore connecté, et la reprise, qui ne lit
+  // que les invités ACTIFS, ne le retrouverait plus. Chaque passe évince donc
+  // TOUS les invités inactifs du lien — un geste idempotent, sans annonce
+  // (leur départ a été annoncé par la passe qui l'a écrit, ou n'est pas
+  // établi).
+  const inactive = await settle(failures, () =>
+    prisma.participant.findMany({
+      where: { type: 'anonymous', isActive: false, ...ofThisLink },
+      select: { id: true, conversationId: true, displayName: true },
+    })
+  );
+  const evicted = uniqueById([...departed, ...(inactive ?? [])]);
 
   // Les caches tombent AVANT tout `await` sur le vivant : une annonce ou une
   // éviction qui échoue plus loin ne laisse plus l'invité écrire dans le fil
   // pendant 30 s (recherche REST) ou 5 min (appartenance).
-  for (const guest of evicted) {
-    invalidateParticipantLookup(guest.id, guest.conversationId);
-    manager?.invalidateParticipantCache?.(guest.id, guest.conversationId);
-  }
+  invalidateCaches(manager, evicted);
 
   // Un lien n'a qu'une conversation, mais l'effectif se lit sur la ligne de
   // CHAQUE invité plutôt que sur un paramètre : une ligne pendante ne peut
   // alors pas faire annoncer un départ dans le fil d'à côté.
-  for (const conversationId of [...new Set(guests.map(guest => guest.conversationId))]) {
-    await settle(failures, () => announceDepartures({ prisma, io, conversationId, guests, revokedAt }));
+  for (const conversationId of [...new Set(departed.map(guest => guest.conversationId))]) {
+    await settle(failures, () => announceDepartures({ prisma, io, conversationId, guests: departed, revokedAt }));
   }
 
   // #10468 — invité par invité : l'échec de l'un (délai inter-nœuds de
@@ -208,11 +212,29 @@ export async function revokeShareLinkGuests(
     await settle(failures, () => disconnectGuest(io, guest.id));
   }
 
+  // #10472 (R3) — et retombent APRÈS l'éviction : une lecture concurrente a pu
+  // remettre la ligne ACTIVE en cache pendant les `await` ci-dessus.
+  invalidateCaches(manager, evicted);
+
   // L'appelant garde le lien ouvert sur un échec : la reprise retrouve les
-  // invités restés actifs, et eux seuls.
+  // invités restés actifs, et évince à nouveau tous les inactifs.
   if (failures.length > 0) throw failures[0];
 
   return guests.map(guest => guest.id);
+}
+
+function uniqueById(guests: ReadonlyArray<RevocationCandidate>): ReadonlyArray<RevocationCandidate> {
+  return [...new Map(guests.map(guest => [guest.id, guest] as const)).values()];
+}
+
+function invalidateCaches(
+  manager: DepartedMemberEphemeralState | null | undefined,
+  guests: ReadonlyArray<RevocationCandidate>
+): void {
+  for (const guest of guests) {
+    invalidateParticipantLookup(guest.id, guest.conversationId);
+    manager?.invalidateParticipantCache?.(guest.id, guest.conversationId);
+  }
 }
 
 async function settle<T>(failures: unknown[], step: () => Promise<T>): Promise<T | undefined> {
@@ -290,6 +312,7 @@ async function deactivateGuests(
   rejected: ReadonlyArray<RevocationCandidate>;
   failure: PromiseRejectedResult | undefined;
 }> {
+  if (candidates.length === 0) return { written: [], rejected: [], failure: undefined };
   const batches = Array.from(
     { length: Math.ceil(candidates.length / REVOCATION_WRITE_BATCH) },
     (_unused, index) => candidates.slice(index * REVOCATION_WRITE_BATCH, (index + 1) * REVOCATION_WRITE_BATCH)

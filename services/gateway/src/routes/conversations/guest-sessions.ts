@@ -75,10 +75,15 @@ export type EndGuestSessionOutcome = { readonly kind: 'not-found' } | { readonly
 
 /**
  * Cœur de `DELETE /guest-sessions/me`, partagé avec l'adaptateur `POST
- * /anonymous/leave`. IDEMPOTENT — critère de fin #4 de #4167 : `wasActive`
- * gèle l'état LU avant toute écriture, donc un second appel sur la MÊME
- * session ne marque rien inactif une seconde fois et ne décrémente jamais
- * deux fois `currentConcurrentUsers` (qui pouvait passer sous zéro).
+ * /anonymous/leave`. IDEMPOTENT — critère de fin #4 de #4167.
+ *
+ * #10472 — la désactivation est CONDITIONNELLE (`isActive: true` dans le
+ * `where`) : seule l'écriture qui fait passer la ligne à inactif annonce le
+ * départ et libère la place. Une sortie concurrente d'une révocation de lien
+ * (ou d'une autre sortie) ne réécrit plus son `leftAt` et ne décrémente plus
+ * deux fois. Le décrément est BORNÉ à un compteur positif, et un lien supprimé
+ * entre-temps ne fait plus lever P2025 (`updateMany` rend 0, la sortie
+ * réussit).
  */
 export async function endGuestSession(params: GuestSessionParams): Promise<EndGuestSessionOutcome> {
   const { prisma, sessionToken } = params;
@@ -88,22 +93,22 @@ export async function endGuestSession(params: GuestSessionParams): Promise<EndGu
     where: { sessionTokenHash: tokenHash, type: 'anonymous' },
   });
   if (!participant) return { kind: 'not-found' };
+  if (!participant.isActive) return { kind: 'ended' };
 
-  const wasActive = participant.isActive;
-  if (!wasActive) return { kind: 'ended' };
-
-  await prisma.participant.update({
-    where: { id: participant.id },
+  const ended = await prisma.participant.updateMany({
+    where: { id: participant.id, isActive: true },
     data: { isActive: false, isOnline: false, leftAt: new Date() },
   });
+  if (ended.count === 0) return { kind: 'ended' };
+
   announceConversationLanguageChange({ kind: 'departure', conversationId: participant.conversationId });
 
   // #10468 — la place se libère sur le lien qui l'a comptée, lu comme aux
   // autres portes : la colonne d'abord, la session embarquée en repli.
   const shareLinkId = guestShareLinkId(participant);
   if (shareLinkId) {
-    await prisma.conversationShareLink.update({
-      where: { id: shareLinkId },
+    await prisma.conversationShareLink.updateMany({
+      where: { id: shareLinkId, currentConcurrentUsers: { gt: 0 } },
       data: { currentConcurrentUsers: { decrement: 1 } },
     });
   }

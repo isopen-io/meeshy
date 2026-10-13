@@ -85,6 +85,7 @@ async function buildApp(prismaOverrides: Record<string, any> = {}): Promise<Fast
       findFirst: jest.fn().mockResolvedValue(null),
       create: jest.fn().mockResolvedValue(mockParticipant),
       update: jest.fn().mockResolvedValue(mockParticipant),
+      updateMany: jest.fn().mockResolvedValue({ count: 1 }),
       count: jest.fn().mockResolvedValue(0),
       findMany: jest.fn().mockResolvedValue([]),
     },
@@ -254,7 +255,7 @@ describe('POST /anonymous/leave — with shareLinkId', () => {
       payload: { sessionToken: SESSION_TOKEN },
     });
     expect(res.statusCode).toBe(200);
-    expect((app as any).prisma.conversationShareLink.update).toHaveBeenCalledWith(
+    expect((app as any).prisma.conversationShareLink.updateMany).toHaveBeenCalledWith(
       expect.objectContaining({ data: { currentConcurrentUsers: { decrement: 1 } } })
     );
   });
