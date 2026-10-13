@@ -462,7 +462,7 @@ export const callersIn = (contents, nsNames) => {
 // web télécharge le champ `yaml` de la réponse JSON (`admin.gameSeasonsAppEvents`). Les sept autres entrées
 // `admin.gameSeasons*` et `me.gameSeasonsCalendar` ont leur appelant (`apps/web/src/lib/api/admin-game-seasons.ts`,
 // `game-season-calendar.ts`). Valeur MESURÉE le 2026-10-12 en local.
-const BASELINE_DEAD_ENTRIES = 278;
+const BASELINE_DEAD_ENTRIES = 276;
 
 export const readWorld = (root) => {
   const groupFiles = readdirSync(join(root, GROUPS_DIR)).filter((name) => name.endsWith('.ts')).sort();
