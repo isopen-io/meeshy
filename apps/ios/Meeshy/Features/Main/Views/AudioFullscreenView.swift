@@ -538,6 +538,7 @@ struct AudioFullscreenView: View {
 /// `@State` de valeur : l'écrire ne réévalue rien.
 @MainActor
 final class AudioFullscreenTurnMemory {
+    nonisolated deinit {}
     var requested: String?
 }
 
