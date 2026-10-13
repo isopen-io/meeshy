@@ -71,6 +71,34 @@ describe('un comptage qui échoue après le reçu laisse le renvoi compter', () 
   });
 });
 
+describe('seul ce qui n’a PAS compté est rendu — un échec partiel ne recompte pas le reste', () => {
+  it('deux vues, la seconde échoue : au renvoi la première ne recompte pas, la seconde compte', async () => {
+    const OTHER = '507f1f77bcf86cd799439012';
+    const EVENT_B = '0192a3b4-c5d6-7e8f-9a0b-1c2d3e4f5a6c';
+    const h = await reachHarness([{ id: POST }, { id: OTHER }]);
+    const create = h.prisma.postView.create;
+    const real = create.getMockImplementation() as (args: { data: { postId: string; userId: string } }) => Promise<unknown>;
+    let failed = false;
+    create.mockImplementation(async (args) => {
+      if (!failed && args.data.postId === OTHER) {
+        failed = true;
+        throw new Error('base indisponible');
+      }
+      return real(args);
+    });
+    const lot = [viewEvent(POST, { eventId: EVENT_A }), viewEvent(OTHER, { eventId: EVENT_B })];
+
+    const first = await sendReach(h.app, lot, account);
+    const replay = await sendReach(h.app, lot, account);
+
+    expect(first.statusCode).toBeGreaterThanOrEqual(500);
+    expect(replay.statusCode).toBe(200);
+    expect(h.store.read(POST)).toMatchObject({ viewCount: 1 });
+    expect(h.store.read(OTHER)).toMatchObject({ viewCount: 1 });
+    await h.app.close();
+  });
+});
+
 describe('une impression dont le compteur échoue après sa ligne laisse le renvoi compter', () => {
   it('la ligne est retirée avec l’échec : le renvoi du même eventId monte impressionCount, une seule ligne reste', async () => {
     const h = await reachHarness([{ id: POST }]);

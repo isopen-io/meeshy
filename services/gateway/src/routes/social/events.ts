@@ -162,6 +162,7 @@ async function applyViews(
   deps: SocialEventsDeps,
   events: readonly Extract<SocialEvent, { type: 'view' }>[],
   actor: Extract<SocialEventsActor, { kind: 'user' }>,
+  counted: (events: readonly SocialEvent[]) => void = () => undefined,
 ): Promise<number> {
   if (events.length === 0) return 0;
 
@@ -173,6 +174,7 @@ async function applyViews(
       origin: event.origin,
     });
     recorded += 1;
+    counted([event]);
 
     // Contenu consommé (première vue réelle) → les notifications liées à ce
     // post ne doivent plus apparaître comme non lues. Borné à la PREMIÈRE vue
@@ -406,11 +408,11 @@ export async function ingestSocialEvents(
   const parType = <T extends SocialEvent['type']>(type: T) =>
     admis.filter((event): event is Extract<SocialEvent, { type: T }> => event.type === type);
 
-  return orReleaseReceipts(deps, recus, async () => {
-    const vues = await applyViews(deps, parType('view'), actor);
+  return orReleaseReceipts(deps, recus, async (counted) => {
+    const vues = await applyViews(deps, parType('view'), actor, counted);
 
     const [ouvertures, impressions, telechargements, sessions] = await Promise.all([
-      applyOpens(deps, parType('open'), actor.userId),
+      applyOpens(deps, parType('open'), actor.userId).then((n) => { counted(parType('open')); return n; }),
       applyImpressions(deps, parType('impression'), actor.userId, options),
       applyDownloads(deps, parType('download'), actor.userId),
       applyDwell(deps, parType('dwell'), actor.userId),
@@ -427,18 +429,20 @@ export async function ingestSocialEvents(
 /**
  * Le comptage ne perd rien (#10553) : si un effet échoue après l'écriture des
  * reçus, ils sont RENDUS avant que l'erreur ne remonte — le renvoi du client,
- * au même `eventId`, comptera. Un effet déjà parti peut alors compter deux
- * fois : c'est le sens voulu de l'erreur (règle du porteur, 2026-10-13).
+ * au même `eventId`, comptera. Seuls les reçus des événements dont l'effet
+ * n'est PAS parti sont rendus : ce qui a compté ne recompte pas.
  */
 async function orReleaseReceipts<T>(
   deps: SocialEventsDeps,
   recus: CountingReceipts<SocialEvent>,
-  effects: () => Promise<T>,
+  effects: (counted: (events: readonly SocialEvent[]) => void) => Promise<T>,
 ): Promise<T> {
+  const settled = new Set<SocialEvent>();
   try {
-    return await effects();
+    return await effects((events) => events.forEach((event) => settled.add(event)));
   } catch (error) {
-    await releaseCountingReceipts(deps.prisma, recus.claimed);
+    const lost = [...recus.claimed].flatMap(([event, key]) => (settled.has(event) ? [] : [key]));
+    await releaseCountingReceipts(deps.prisma, lost);
     throw error;
   }
 }
@@ -492,7 +496,9 @@ async function ingestAnonymous(
   const rejoues = recus.replays;
   const admis = audiences.filter((event) => !rejoues.has(event));
 
-  return orReleaseReceipts(deps, recus, async () => {
+  const ofType = (type: SocialEvent['type']) => admis.filter((event) => event.type === type);
+
+  return orReleaseReceipts(deps, recus, async (counted) => {
   const vues = await creditAnonymousViews(deps.prisma, {
     readerKey: actor.readerKey,
     views: admis.flatMap((event) => event.type === 'view'
@@ -506,14 +512,17 @@ async function ingestAnonymous(
       : []),
     servable,
   });
+  counted(ofType('view'));
   const ouvertures = await creditAnonymousOpens(deps.prisma, {
     opens: admis.flatMap((event) => event.type === 'open' ? [{ postId: event.postId, origin: event.origin }] : []),
     servable,
   });
+  counted(ofType('open'));
   const impressions = await creditAnonymousImpressions(deps.prisma, {
     postIds: admis.flatMap((event) => event.type === 'impression' ? [event.postId] : []),
     servable,
   });
+  counted(ofType('impression'));
 
   return {
     recorded: vues + ouvertures + impressions + rejoues.size,

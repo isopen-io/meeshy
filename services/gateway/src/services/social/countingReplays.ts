@@ -16,7 +16,7 @@ import { enhancedLogger } from '../../utils/logger-enhanced';
  * Une vue ou une ouverture n'écrivent pas de ligne qui porterait leur
  * identifiant : leur déduplication passe par un REÇU dans `ContentEvent`
  * (`action = receipt`), sans acteur, sans cible, sans contexte, conservé
- * quatre jours. Le reçu s'écrit AVANT l'effet : un reçu en doublon (E11000)
+ * trente jours. Le reçu s'écrit AVANT l'effet : un reçu en doublon (E11000)
  * est un rejeu, et son effet ne part pas ; si l'effet échoue, le reçu est
  * RENDU (`releaseCountingReceipts`) pour que le renvoi compte. Un même identifiant deux fois dans un lot : le second est un rejeu.
  *
@@ -33,8 +33,8 @@ export type ReceiptCandidate<T> = {
 export type CountingReceipts<T> = {
   /** Les éléments dont l'identifiant a déjà été reçu : ils ne recomptent rien. */
   readonly replays: ReadonlySet<T>;
-  /** Les clés des reçus écrits par CET appel — à rendre si l'effet échoue. */
-  readonly claimed: readonly string[];
+  /** Les reçus écrits par CET appel, par élément — à rendre pour ceux dont l'effet n'est pas parti. */
+  readonly claimed: ReadonlyMap<T, string>;
 };
 
 /**
@@ -52,7 +52,7 @@ export async function claimCountingReceipts<T>(
   candidates: readonly ReceiptCandidate<T>[],
   receivedAt: Date,
 ): Promise<CountingReceipts<T>> {
-  if (candidates.length === 0) return { replays: new Set(), claimed: [] };
+  if (candidates.length === 0) return { replays: new Set(), claimed: new Map() };
   const keys = candidates.map((candidate) => eventKeyOf(candidate.eventId));
   const documents = candidates.map((candidate, index) => ({
     eventKey: keys[index],
@@ -69,11 +69,11 @@ export async function claimCountingReceipts<T>(
     const { inserted, duplicates } = await insertDocuments(prisma, CONTENT_EVENT_COLLECTION, documents);
     return {
       replays: new Set([...duplicates].map((index) => candidates[index].item)),
-      claimed: [...inserted].map((index) => keys[index]),
+      claimed: new Map([...inserted].map((index) => [candidates[index].item, keys[index]] as const)),
     };
   } catch (error) {
     enhancedLogger.warn('[countingReplays] reçus non écrits — le lot est compté sans déduplication', { error });
-    return { replays: new Set(), claimed: [] };
+    return { replays: new Set(), claimed: new Map() };
   }
 }
 

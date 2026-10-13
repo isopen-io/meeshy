@@ -21,8 +21,12 @@ const DAY_MS = 24 * 60 * 60 * 1000;
 /** Conservation du brut : 30 j pour le défilement, la lecture et la visibilité ; 90 j pour le reste. */
 export const CONTENT_EVENT_SHORT_RETENTION_MS = 30 * DAY_MS;
 export const CONTENT_EVENT_RETENTION_MS = 90 * DAY_MS;
-/** Un reçu de déduplication n'a à vivre que la fenêtre d'acceptation (72 h) et un jour de marge. */
-export const CONTENT_EVENT_RECEIPT_RETENTION_MS = 4 * DAY_MS;
+/**
+ * Un reçu de déduplication vit 30 jours (#10553) : le comptage n'a plus d'âge
+ * limite, et une file hors ligne peut renvoyer un événement déjà compté bien
+ * après les 72 h d'autrefois. Passé ce délai, un renvoi recompte.
+ */
+export const CONTENT_EVENT_RECEIPT_RETENTION_MS = 30 * DAY_MS;
 /** Les lignes `PostImpression` neuves vivent 90 j (#10510, O7). */
 export const POST_IMPRESSION_RETENTION_MS = 90 * DAY_MS;
 /** Les sessions de lecture `PostEngagement` (dwell) vivent 90 j (O7) : leurs agrégats sont déjà sur le post. */
