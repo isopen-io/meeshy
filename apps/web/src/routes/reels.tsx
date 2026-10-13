@@ -252,8 +252,9 @@ export default function ReelsScreen() {
         heldIds: held.current.ids,
         activeId: held.current.activeId,
         composed: composeReelThread({ entryIds, known, served: reels.data ?? EMPTY_POSTS }),
+        ...(seed !== undefined ? { entryId: seed } : {}),
       }),
-    [entryIds, known, reels.data],
+    [entryIds, known, reels.data, seed],
   );
   /* UN MODÈLE PAR PUBLICATION, GARDÉ tant que la publication, la langue et la
      minute ne changent pas (#9277) : une page de réels de plus ne recompose
