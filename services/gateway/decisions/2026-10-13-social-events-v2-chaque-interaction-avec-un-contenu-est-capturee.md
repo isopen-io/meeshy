@@ -245,7 +245,7 @@ Milestone #175 « Chaque interaction avec un contenu est capturée, exploitable 
 | #10511 | qualification juridique (`décision-produit`) | 6 |
 | #10512 | agrégats quotidiens | 10 |
 
-## Le comptage ne perd rien (porteur, 2026-10-13 — #10553)
+### Le comptage ne perd rien (porteur, 2026-10-13 — #10553)
 
 Règle du porteur : « tant que l'information arrive, on compte ; on améliorera quand on constatera des cas de triche. »
 
