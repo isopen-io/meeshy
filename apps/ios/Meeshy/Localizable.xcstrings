@@ -179377,49 +179377,143 @@
         }
       }
     },
-    "story.publish.queue.mediaError": {
+    "story.publish.queue.mediaError.audio": {
       "extractionState": "manual",
       "localizations": {
         "ar": {
           "stringUnit": {
             "state": "translated",
-            "value": "تعذّر حفظ وسائط القصة — أعد المحاولة"
+            "value": "تعذّر حفظ صوت — تم الاحتفاظ بمنشورك في المسودات"
           }
         },
         "de": {
           "stringUnit": {
             "state": "translated",
-            "value": "Medien der Story konnten nicht gespeichert werden – bitte erneut versuchen"
+            "value": "Ein Ton konnte nicht gespeichert werden – dein Beitrag bleibt in deinen Entwürfen"
           }
         },
         "en": {
           "stringUnit": {
             "state": "translated",
-            "value": "Couldn't save the story's media — please try again"
+            "value": "A sound couldn't be saved — your post is kept in your drafts"
           }
         },
         "es": {
           "stringUnit": {
             "state": "translated",
-            "value": "No se pudieron guardar los archivos de la historia: inténtalo de nuevo"
+            "value": "No se pudo guardar un sonido: tu publicación se guarda en tus borradores"
           }
         },
         "fr": {
           "stringUnit": {
             "state": "translated",
-            "value": "Impossible d'enregistrer les médias de la story — réessayez"
+            "value": "Un son n'a pas pu être enregistré — votre publication est gardée dans vos brouillons"
           }
         },
         "it": {
           "stringUnit": {
             "state": "translated",
-            "value": "Impossibile salvare i media della storia: riprova"
+            "value": "Impossibile salvare un suono: la tua pubblicazione è conservata nelle bozze"
           }
         },
         "pt-BR": {
           "stringUnit": {
             "state": "translated",
-            "value": "Não foi possível salvar as mídias do story — tente novamente"
+            "value": "Não foi possível salvar um som — sua publicação fica guardada nos rascunhos"
+          }
+        }
+      }
+    },
+    "story.publish.queue.mediaError.image": {
+      "extractionState": "manual",
+      "localizations": {
+        "ar": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "تعذّر حفظ صورة — تم الاحتفاظ بمنشورك في المسودات"
+          }
+        },
+        "de": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Ein Foto konnte nicht gespeichert werden – dein Beitrag bleibt in deinen Entwürfen"
+          }
+        },
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "A photo couldn't be saved — your post is kept in your drafts"
+          }
+        },
+        "es": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "No se pudo guardar una foto: tu publicación se guarda en tus borradores"
+          }
+        },
+        "fr": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Une photo n'a pas pu être enregistrée — votre publication est gardée dans vos brouillons"
+          }
+        },
+        "it": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Impossibile salvare una foto: la tua pubblicazione è conservata nelle bozze"
+          }
+        },
+        "pt-BR": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Não foi possível salvar uma foto — sua publicação fica guardada nos rascunhos"
+          }
+        }
+      }
+    },
+    "story.publish.queue.mediaError.video": {
+      "extractionState": "manual",
+      "localizations": {
+        "ar": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "تعذّر حفظ فيديو — تم الاحتفاظ بمنشورك في المسودات"
+          }
+        },
+        "de": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Ein Video konnte nicht gespeichert werden – dein Beitrag bleibt in deinen Entwürfen"
+          }
+        },
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "A video couldn't be saved — your post is kept in your drafts"
+          }
+        },
+        "es": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "No se pudo guardar un video: tu publicación se guarda en tus borradores"
+          }
+        },
+        "fr": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Une vidéo n'a pas pu être enregistrée — votre publication est gardée dans vos brouillons"
+          }
+        },
+        "it": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Impossibile salvare un video: la tua pubblicazione è conservata nelle bozze"
+          }
+        },
+        "pt-BR": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Não foi possível salvar um vídeo — sua publicação fica guardada nos rascunhos"
           }
         }
       }
