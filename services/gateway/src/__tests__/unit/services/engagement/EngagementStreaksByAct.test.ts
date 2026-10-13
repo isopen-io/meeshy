@@ -13,6 +13,7 @@ import type { PrismaClient } from '@meeshy/shared/prisma/client';
 import { DEFAULT_ENGAGEMENT_SCALE, type EngagementScale } from '@meeshy/shared/types/engagement-scale';
 import { emptyActTiers, type EngagementStreakAct, type EngagementStreakTier } from '@meeshy/shared/types/engagement-act-streaks';
 import { EngagementService } from '../../../../services/engagement/EngagementService';
+import { routeCounterWrites, type CounterWrite } from '../../../../services/engagement/__tests__/mongoLikeCounters';
 import { getSharedNotificationService } from '../../../../services/notifications/notification-service-registry';
 
 jest.mock('../../../../services/notifications/notification-service-registry');
@@ -86,10 +87,10 @@ function makePrisma(options: {
 } = {}) {
   const quotas = quotaStore();
   const actStreaks = actStreakStore(options.actRows);
-  const counterUpsert = jest.fn().mockResolvedValue({ count: 1 });
+  const counterWrite = jest.fn().mockResolvedValue({ count: 1 });
   const runCommandRaw = jest.fn().mockResolvedValue({ ok: 1, value: { engagementScore: 0 } });
   const prisma = {
-    engagementCounter: { upsert: counterUpsert, findMany: jest.fn().mockResolvedValue([]) },
+    engagementCounter: { findMany: jest.fn().mockResolvedValue([]) },
     engagementMilestone: { create: jest.fn().mockResolvedValue({}), findMany: jest.fn().mockResolvedValue([]) },
     engagementQuota: quotas,
     engagementActStreak: actStreaks,
@@ -109,9 +110,9 @@ function makePrisma(options: {
       update: jest.fn().mockResolvedValue({}),
       updateMany: jest.fn().mockResolvedValue({ count: 1 }),
     },
-    $runCommandRaw: runCommandRaw,
+    $runCommandRaw: routeCounterWrites(counterWrite, runCommandRaw),
   } as unknown as PrismaClient;
-  return { prisma, quotas, actStreaks, counterUpsert };
+  return { prisma, quotas, actStreaks, counterWrite };
 }
 
 const scaleWith = (patch: {
@@ -130,11 +131,11 @@ const scaleWith = (patch: {
   return { scale: { current: async () => scale } };
 };
 
-const bonuses = (counterUpsert: jest.Mock): number[] =>
-  counterUpsert.mock.calls
-    .map((call) => call[0] as { create: { axisKey: string; points: number } })
-    .filter((args) => args.create.axisKey === 'streak.bonus')
-    .map((args) => args.create.points);
+const bonuses = (counterWrite: jest.Mock): number[] =>
+  counterWrite.mock.calls
+    .map((call) => call[0] as CounterWrite)
+    .filter((write) => write.axisKey === 'streak.bonus')
+    .map((write) => write.points);
 
 const row = (act: EngagementStreakAct, currentDays: number, lastDay: string): ActRow => ({
   userId: 'u1',
@@ -146,12 +147,12 @@ const row = (act: EngagementStreakAct, currentDays: number, lastDay: string): Ac
 
 describe('la série globale', () => {
   it('paie un palier de 100 000 points, sans le ramener à 1000', async () => {
-    const { prisma, counterUpsert } = makePrisma({ globalStreak: { current: 364, lastDay: utcMidnight(-1) } });
+    const { prisma, counterWrite } = makePrisma({ globalStreak: { current: 364, lastDay: utcMidnight(-1) } });
     const service = new EngagementService(prisma, scaleWith({ global: [{ days: 365, points: 100_000 }] }));
 
     await service.recordActivity('u1', 'tool.sticker');
 
-    expect(bonuses(counterUpsert)).toEqual([100_000]);
+    expect(bonuses(counterWrite)).toEqual([100_000]);
   });
 });
 
@@ -166,25 +167,25 @@ describe('la série d’un acte', () => {
   });
 
   it('avance le lendemain et paie le palier de l’acte, une seule fois', async () => {
-    const { prisma, actStreaks, counterUpsert, quotas } = makePrisma({ actRows: [row('story', 6, todayKey(-1))] });
+    const { prisma, actStreaks, counterWrite, quotas } = makePrisma({ actRows: [row('story', 6, todayKey(-1))] });
     const service = new EngagementService(prisma, scaleWith({ acts: { story: [{ days: 7, points: 50 }] } }));
 
     await service.recordActivity('u1', 'content.story', { targetId: 's1' });
     await service.recordActivity('u1', 'content.story', { targetId: 's2' });
 
     expect(actStreaks.rows.get('u1|story')).toMatchObject({ currentDays: 7, lastDay: todayKey() });
-    expect(bonuses(counterUpsert)).toEqual([50]);
+    expect(bonuses(counterWrite)).toEqual([50]);
     expect(quotas.rows.get('u1|streak.bonus|streak:story:7')).toBe(1);
   });
 
   it('ne paie jamais deux fois le même palier, même après une série reprise', async () => {
-    const { prisma, counterUpsert, quotas } = makePrisma({ actRows: [row('reel', 6, todayKey(-1))] });
+    const { prisma, counterWrite, quotas } = makePrisma({ actRows: [row('reel', 6, todayKey(-1))] });
     quotas.rows.set('u1|streak.bonus|streak:reel:7', 1);
     const service = new EngagementService(prisma, scaleWith({ acts: { reel: [{ days: 7, points: 50 }] } }));
 
     await service.recordActivity('u1', 'content.reel', { targetId: 'r1' });
 
-    expect(bonuses(counterUpsert)).toEqual([]);
+    expect(bonuses(counterWrite)).toEqual([]);
   });
 
   it('range une réaction sur un réel sous reaction_reel, jamais sous reaction_post', async () => {
@@ -208,18 +209,18 @@ describe('la série d’un acte', () => {
   });
 
   it('ne fait pas échouer le crédit quand la série ne peut pas s’écrire', async () => {
-    const { prisma, actStreaks, counterUpsert } = makePrisma();
+    const { prisma, actStreaks, counterWrite } = makePrisma();
     actStreaks.findUnique.mockRejectedValueOnce(new Error('panne'));
     const service = new EngagementService(prisma, scaleWith({}));
 
     await expect(service.recordActivity('u1', 'content.story', { targetId: 's1' })).resolves.toBe(true);
-    expect(counterUpsert).toHaveBeenCalled();
+    expect(counterWrite).toHaveBeenCalled();
   });
 });
 
 describe('la fidélité', () => {
   it('paie chaque palier que l’ancienneté atteint, une fois', async () => {
-    const { prisma, counterUpsert, quotas } = makePrisma({
+    const { prisma, counterWrite, quotas } = makePrisma({
       globalStreak: { current: 1, lastDay: utcMidnight(-1) },
       createdAt: utcMidnight(-400),
     });
@@ -228,7 +229,7 @@ describe('la fidélité', () => {
     await service.recordActivity('u1', 'tool.sticker');
     await service.recordActivity('u1', 'tool.sticker');
 
-    expect(bonuses(counterUpsert)).toEqual([7, 100_000]);
+    expect(bonuses(counterWrite)).toEqual([7, 100_000]);
     expect(quotas.rows.get('u1|streak.bonus|loyalty:365')).toBe(2);
   });
 });
