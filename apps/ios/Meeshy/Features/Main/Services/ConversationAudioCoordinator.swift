@@ -271,6 +271,9 @@ public final class ConversationAudioCoordinator: ObservableObject {
     /// suite ; il rend celle de la conversation en se refermant. La tête joue
     /// sans interruption : ni relance, ni changement de carte système.
     public func replaceUpcoming(_ tail: [QueuedAudio]) {
+        guard activeContext != nil, let head = queue.first else { return }
+        queue = [head] + tail.filter { $0.attachmentId != head.attachmentId }
+        queueCount = queue.count
     }
 
     public func togglePlayPause() {

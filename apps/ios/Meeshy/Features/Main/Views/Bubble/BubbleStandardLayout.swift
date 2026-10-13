@@ -1254,9 +1254,8 @@ struct BubbleStandardLayout: View {
         // When `replyReference` is non-nil, the citation is also hosted inside
         // the audio widget (topSlot) — no chat bubble around the player.
         // `includesTranslationControls: true` because audio IS translatable
-        // (Whisper transcription + NLLB+TTS audio translation) — without it
-        // an audio-only inbound bubble would render without the translate
-        // globe and language flags, breaking the Prisme Linguistique UX.
+        // (transcription + audio translation): without it an inbound audio-only
+        // bubble would lose its translate globe and flags (Prisme Linguistique).
         let footer = injectFooter ? resolvedFooter(includesTranslationControls: true) : nil
         switch attachment.type {
         case .audio:
@@ -1302,7 +1301,8 @@ struct BubbleStandardLayout: View {
                 audioQueueTailProvider: audioQueueTailProvider,
                 embedsCaptionInWidget: embedsCaption,
                 voiceConsentMissing: voiceConsentMissing,
-                onTapConsentNotice: onTapConsentNotice
+                onTapConsentNotice: onTapConsentNotice,
+                onOpenFullscreen: onMediaTap.map { open in { open(attachment) } }
             )
             .equatable()
 
