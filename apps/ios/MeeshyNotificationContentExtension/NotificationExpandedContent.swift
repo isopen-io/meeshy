@@ -29,11 +29,15 @@ nonisolated enum NotificationExpandedContent: Equatable, Sendable {
     case audio(NotificationAudioDetail)
     case location(NotificationLocationDetail)
     case contact(NotificationContactCard)
+    /// #7455 — un message éphémère : son décompte VIVANT jusqu'à l'échéance
+    /// locale que la NSE a gravée, et rien de son contenu.
+    case ephemeral(deadline: Date)
 
     /// Les catégories que l'extension DÉCLARE dans son `Info.plist`
     /// (`UNNotificationExtensionCategory`) — une par cas ci-dessus.
     static let categoryIdentifiers: [String] = [
         NotificationDetailPolicy.audioCategory, "MEESHY_LOCATION", "MEESHY_CONTACT",
+        NotificationDetailPolicy.ephemeralCategory,
     ]
 
     /// `resolveURL` résout l'adresse de la piste contre l'origine API de
@@ -43,6 +47,11 @@ nonisolated enum NotificationExpandedContent: Equatable, Sendable {
         userInfo: [AnyHashable: Any],
         resolveURL: (String) -> URL?
     ) -> NotificationExpandedContent? {
+        // #7455 — l'échéance passe AVANT le détail : un éphémère est protégé,
+        // et seule l'heure de sa disparition a le droit de se déployer.
+        if let deadline = EphemeralBannerDeadline.deadline(in: userInfo) {
+            return .ephemeral(deadline: deadline)
+        }
         switch NotificationDetailPolicy.detail(userInfo: userInfo) {
         case .location(let place): return .location(place)
         case .contact(let card): return .contact(card)
@@ -57,6 +66,13 @@ nonisolated enum NotificationExpandedContent: Equatable, Sendable {
             durationMs: NSEAttachmentPolicy.declaredDurationMs(userInfo["attachmentDurationMs"])
                 .flatMap { $0 > 0 ? $0 : nil }
         ))
+    }
+
+    /// L'intervalle du décompte : de maintenant à l'échéance. `Text(timerInterval:)`
+    /// prend un intervalle FERMÉ, qui PIÈGE si sa borne basse dépasse la haute :
+    /// une échéance déjà passée rend un intervalle nul, à l'échéance.
+    static func countdownRange(deadline: Date, now: Date) -> ClosedRange<Date> {
+        min(now, deadline)...deadline
     }
 
     /// Le fichier à jouer : celui que l'extension de service a déjà ATTACHÉ
