@@ -755,7 +755,7 @@
 		3DD005FD84DD6F7518E6DB23 /* LinkPreviewCard.swift in Sources */ = {isa = PBXBuildFile; fileRef = 669F87494476EFA1E50C4C0E /* LinkPreviewCard.swift */; };
 		3DE6F0293074A035315E2EEF /* ComposerCaptureMotionTests.swift in Sources */ = {isa = PBXBuildFile; fileRef = 0189A26BE98042B7E6D8B0AB /* ComposerCaptureMotionTests.swift */; };
 		3DF0365D9BFAD115D39FE6AD /* StuckPublicationRetryTests.swift in Sources */ = {isa = PBXBuildFile; fileRef = FC261CE398BDE99B757D2509 /* StuckPublicationRetryTests.swift */; };
-		3DFEB2087BF8908F2D5A722B /* AudioFullscreenWaveform.swift in Sources */ = {isa = PBXBuildFile; fileRef = 8AA84DEE74574E9B8F1A40F0 /* AudioFullscreenWaveform.swift */; };
+		3DFEB2087BF8908F2D5A722B /* AudioFullscreenDial.swift in Sources */ = {isa = PBXBuildFile; fileRef = 8AA84DEE74574E9B8F1A40F0 /* AudioFullscreenDial.swift */; };
 		3E21988ED31302A3760FF8FA /* GameRarityViews.swift in Sources */ = {isa = PBXBuildFile; fileRef = 7618AC5CD936F63FEC54A477 /* GameRarityViews.swift */; };
 		3E69053F5A181A6F9CAE4DC5 /* VisitorReachReporter.swift in Sources */ = {isa = PBXBuildFile; fileRef = 3C98872E038CCD91889E33BB /* VisitorReachReporter.swift */; };
 		3E691115A0869A06EA08813B /* TopChromeTint.swift in Sources */ = {isa = PBXBuildFile; fileRef = ED097F1B3A15F8279F2638B0 /* TopChromeTint.swift */; };
@@ -5091,7 +5091,7 @@
 		8A7A55214D8C731371D3034F /* LentilleMetricsTests.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = LentilleMetricsTests.swift; sourceTree = "<group>"; };
 		8A7CFCAF014ABB3CE3F3EBED /* StoryUploadReferencesTests.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = StoryUploadReferencesTests.swift; sourceTree = "<group>"; };
 		8A7E03CF0905080B1731EA1B /* VoIPDedupRingTests.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = VoIPDedupRingTests.swift; sourceTree = "<group>"; };
-		8AA84DEE74574E9B8F1A40F0 /* AudioFullscreenWaveform.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = AudioFullscreenWaveform.swift; sourceTree = "<group>"; };
+		8AA84DEE74574E9B8F1A40F0 /* AudioFullscreenDial.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = AudioFullscreenDial.swift; sourceTree = "<group>"; };
 		8ACD57CF654939126C93D497 /* PostDetailView+CommentComposer.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = "PostDetailView+CommentComposer.swift"; sourceTree = "<group>"; };
 		8ADEB42F50C98212C5891322 /* NotificationService+Detail.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = "NotificationService+Detail.swift"; sourceTree = "<group>"; };
 		8B189D735D7AE40E9E314319 /* CallModeRulesTests.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = CallModeRulesTests.swift; sourceTree = "<group>"; };
@@ -9111,7 +9111,7 @@
 				7BA83A4DF5DF437E8C8D5BC1 /* AudioFullscreenPlayback.swift */,
 				4AEC08629D01FB81DBBD15AA /* AudioFullscreenRules.swift */,
 				D3B21AD4D56D5322C647D94F /* AudioFullscreenView.swift */,
-				8AA84DEE74574E9B8F1A40F0 /* AudioFullscreenWaveform.swift */,
+				8AA84DEE74574E9B8F1A40F0 /* AudioFullscreenDial.swift */,
 				48014B9FB4901752507A45FB /* AudioPostComposerView.swift */,
 				E82595363484729878AC5E46 /* AudioPostComposerView+Deletion.swift */,
 				BD1BA25AA9E9537E2A0050E5 /* AudioPostComposerView+Transcription.swift */,
@@ -11168,7 +11168,7 @@
 				6096EDF593DEEA4534DA2D7F /* AudioFullscreenPlayback.swift in Sources */,
 				B0ABF73DF4307286007FB554 /* AudioFullscreenRules.swift in Sources */,
 				937A1246CFD975FEC2047FB4 /* AudioFullscreenView.swift in Sources */,
-				3DFEB2087BF8908F2D5A722B /* AudioFullscreenWaveform.swift in Sources */,
+				3DFEB2087BF8908F2D5A722B /* AudioFullscreenDial.swift in Sources */,
 				F5C2A0396EC550334CEF04F8 /* AudioPlaybackEngineDriving.swift in Sources */,
 				A17D61E8D84178724A11A130 /* AudioPostComposerView+Deletion.swift in Sources */,
 				AFE87A7E03829EEA0F88E49E /* AudioPostComposerView+Transcription.swift in Sources */,

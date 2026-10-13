@@ -237,32 +237,39 @@ struct AudioFullscreenPage: View, Equatable {
 
     // MARK: - Dispositions
 
-    /// **Tout tient dans la hauteur** (#10568) : les blocs fixes gardent leur
-    /// taille, la transcription prend ce qui reste, et le rail d'actions
-    /// partage sa rangée avec elle au lieu de s'empiler dessous — c'est lui qui
-    /// poussait la barre du haut sous l'encoche.
+    /// **Le cadran en haut, les paroles sur tout le bas** (directive porteur du
+    /// 2026-10-13). L'onde horizontale a quitté l'écran : le spectre fait le
+    /// tour du portrait, et les paroles commencent juste sous la date, en grand,
+    /// jusqu'à la rangée des langues. Le transport et le rail d'actions FLOTTENT
+    /// sur elles — aucun ne leur prend de hauteur ; le rail et les langues
+    /// restent à l'écran pendant l'écoute, seuls la barre du haut et le
+    /// transport s'effacent.
     private func stackedContent(_ layout: AudioFullscreenLayout) -> some View {
         VStack(spacing: AudioFullscreenLayout.stackSpacing) {
             hero(diameter: layout.heroDiameter)
             identity
-            listeningBlock
-                .padding(.horizontal, MeeshySpacing.xl)
-            transport
-                .fullscreenChromeVisibility(chromeVisible)
-            HStack(alignment: .bottom, spacing: MeeshySpacing.md) {
-                VStack(alignment: .leading, spacing: MeeshySpacing.sm) {
-                    transcriptBlock(maxHeight: .infinity)
-                        .frame(minHeight: AudioFullscreenLayout.minTranscript, maxHeight: .infinity, alignment: .top)
-                        .layoutPriority(-1)
-                    captionAndLanguages
-                }
-                .frame(maxWidth: .infinity, alignment: .leading)
-                if !offer.isEmpty { actionRail }
-            }
-            .padding(.horizontal, MeeshySpacing.lg)
-            .padding(.bottom, MeeshySpacing.sm)
+            transcriptBlock(maxHeight: .infinity, fontSize: layout.lyricSize, asLyrics: true)
+                .frame(minHeight: AudioFullscreenLayout.minLyrics, maxHeight: .infinity, alignment: .top)
+                .layoutPriority(-1)
+                .overlay(alignment: .bottom) { floatingControls }
+            captionAndLanguages
         }
-        .padding(.top, AudioFullscreenLayout.stackSpacing)
+        .padding(.horizontal, MeeshySpacing.lg)
+        .padding(.bottom, MeeshySpacing.sm)
+    }
+
+    /// Le transport sur son verre, le rail à droite : posés au pied des
+    /// paroles, qui défilent dessous.
+    private var floatingControls: some View {
+        HStack(alignment: .bottom, spacing: MeeshySpacing.sm) {
+            transport
+                .padding(.horizontal, MeeshySpacing.sm)
+                .padding(.vertical, MeeshySpacing.xs)
+                .adaptiveGlass(in: Capsule(), tint: MeeshyColors.controlFill(isDark: isDark))
+                .fullscreenChromeVisibility(chromeVisible)
+                .frame(maxWidth: .infinity)
+            if !offer.isEmpty { actionRail }
+        }
     }
 
     private func sideBySideContent(_ layout: AudioFullscreenLayout) -> some View {
@@ -270,13 +277,12 @@ struct AudioFullscreenPage: View, Equatable {
             VStack(spacing: MeeshySpacing.sm) {
                 hero(diameter: layout.heroDiameter)
                 identity
-                listeningBlock
                 transport
                     .fullscreenChromeVisibility(chromeVisible)
             }
             .frame(maxWidth: .infinity)
             VStack(spacing: MeeshySpacing.md) {
-                transcriptBlock(maxHeight: layout.transcriptMaxHeight)
+                transcriptBlock(maxHeight: layout.transcriptMaxHeight, fontSize: layout.lyricSize, asLyrics: false)
                 bottomBar
             }
             .frame(maxWidth: .infinity)
@@ -304,34 +310,19 @@ struct AudioFullscreenPage: View, Equatable {
         }
     }
 
-    // MARK: - Hero : l'auteur, cerclé de la progression
+    // MARK: - Hero : l'auteur, au centre du cadran
 
-    /// **Le portrait de l'auteur, cerclé de l'écoute.** Un vocal n'a pas
-    /// d'image : la voix, c'est quelqu'un. L'anneau trace la progression — il
-    /// n'anime rien qui ne soit de la lecture (aucune boucle infinie).
+    /// **Le portrait de l'auteur, au centre du spectre de sa voix.** Un vocal
+    /// n'a pas d'image : la voix, c'est quelqu'un. Le cadran (`AudioFullscreenDial`)
+    /// porte le spectre, la progression et le curseur ; le portrait, dessous,
+    /// ouvre le profil.
     private func hero(diameter: CGFloat) -> some View {
         let authorColor = item.author.accentColor.isEmpty ? contactColor : item.author.accentColor
-        let ring: CGFloat = 4
-        return Button {
-            selectedProfileUser = item.author
-            HapticFeedback.light()
-        } label: {
-            ZStack {
-                playback { snapshot, _ in
-                    ZStack {
-                        Circle()
-                            .stroke(MeeshyColors.hairline(isDark: isDark), lineWidth: ring)
-                        Circle()
-                            .trim(from: 0, to: snapshot.progress)
-                            .stroke(accent, style: StrokeStyle(lineWidth: ring, lineCap: .round))
-                            .opacity(snapshot.progress > 0 ? 1 : 0)
-                            .rotationEffect(.degrees(-90))
-                            .animation(.linear(duration: 0.2), value: snapshot.progress)
-                    }
-                    .shadow(color: accent.opacity(snapshot.isPlaying ? (isDark ? 0.45 : 0.25) : 0),
-                            radius: snapshot.isPlaying ? 24 : 0)
-                    .animation(.easeInOut(duration: 0.4), value: snapshot.isPlaying)
-                }
+        return ZStack {
+            Button {
+                selectedProfileUser = item.author
+                HapticFeedback.light()
+            } label: {
                 MeeshyAvatar(
                     name: item.authorName,
                     context: .custom(diameter),
@@ -341,66 +332,57 @@ struct AudioFullscreenPage: View, Equatable {
                     isDark: isDark,
                     onMoodTap: item.authorUserId.isEmpty ? nil : moodTapProvider.flatMap { $0(item.authorUserId) }
                 )
-                .padding(ring * 2.5)
             }
-            .frame(width: diameter + ring * 5, height: diameter + ring * 5)
-        }
-        .buttonStyle(.plain)
-        .accessibilityLabel(item.authorName)
-        .accessibilityAction(named: Text(String(localized: "feed.carousel.next", defaultValue: "Média suivant", bundle: .main))) {
-            onNext?()
-        }
-        .accessibilityAction(named: Text(String(localized: "feed.carousel.previous", defaultValue: "Média précédent", bundle: .main))) {
-            onPrevious?()
-        }
-    }
-
-    private var identity: some View {
-        Button {
-            selectedProfileUser = item.author
-            HapticFeedback.light()
-        } label: {
-            VStack(spacing: MeeshySpacing.xxs) {
-                Text(item.authorName)
-                    .font(MeeshyFont.relative(MeeshyFont.headlineSize, weight: .semibold))
-                    .foregroundStyle(MeeshyColors.textPrimary(isDark: isDark))
-                    .lineLimit(1)
-                Text(item.createdAt, format: .dateTime.day().month(.abbreviated).hour().minute())
-                    .font(MeeshyFont.relative(MeeshyFont.footnoteSize, weight: .medium))
-                    .foregroundStyle(MeeshyColors.textMuted(isDark: isDark))
+            .buttonStyle(.plain)
+            .accessibilityLabel(item.authorName)
+            .accessibilityAction(named: Text(String(localized: "feed.carousel.next", defaultValue: "Média suivant", bundle: .main))) {
+                onNext?()
             }
-        }
-        .buttonStyle(.plain)
-        .accessibilityElement(children: .combine)
-    }
-
-    // MARK: - Écoute : l'onde et le temps
-
-    private var listeningBlock: some View {
-        playback { snapshot, _ in
-            let total = metadataDuration > 0 ? metadataDuration : snapshot.duration
-            VStack(spacing: MeeshySpacing.xs) {
-                // La bande d'onde vit dans `AudioFullscreenWaveform` (2026-09-13) ;
-                // elle reçoit ici ses encres, pour se lire en clair comme en sombre.
-                AudioFullscreenWaveform(
+            .accessibilityAction(named: Text(String(localized: "feed.carousel.previous", defaultValue: "Média précédent", bundle: .main))) {
+                onPrevious?()
+            }
+            playback { snapshot, _ in
+                AudioFullscreenDial(
                     samples: waveformAnalyzer.samples,
                     progress: snapshot.progress,
+                    isPlaying: snapshot.isPlaying,
+                    portraitDiameter: diameter,
                     accent: accent,
-                    trackColor: MeeshyColors.textPrimary(isDark: isDark).opacity(isDark ? 0.18 : 0.14),
-                    playheadColor: MeeshyColors.textPrimary(isDark: isDark),
+                    trackColor: MeeshyColors.textPrimary(isDark: isDark).opacity(isDark ? 0.22 : 0.18),
+                    cursorColor: MeeshyColors.textPrimary(isDark: isDark),
                     onSeek: { fraction in
                         onChromeInteraction()
                         player.seek(to: fraction)
                     }
                 )
-                HStack {
-                    Text(formatMediaDuration(snapshot.progress * total))
-                    Spacer()
-                    Text(formatMediaDuration(total))
+            }
+        }
+    }
+
+    /// Le nom, la date, et — sous la date — où l'on en est dans le vocal.
+    private var identity: some View {
+        VStack(spacing: MeeshySpacing.xxs) {
+            Button {
+                selectedProfileUser = item.author
+                HapticFeedback.light()
+            } label: {
+                VStack(spacing: MeeshySpacing.xxs) {
+                    Text(item.authorName)
+                        .font(MeeshyFont.relative(MeeshyFont.headlineSize, weight: .semibold))
+                        .foregroundStyle(MeeshyColors.textPrimary(isDark: isDark))
+                        .lineLimit(1)
+                    Text(item.createdAt, format: .dateTime.day().month(.abbreviated).hour().minute())
+                        .font(MeeshyFont.relative(MeeshyFont.footnoteSize, weight: .medium))
+                        .foregroundStyle(MeeshyColors.textMuted(isDark: isDark))
                 }
-                .font(MeeshyFont.relative(MeeshyFont.smallSize, weight: .semibold, design: .monospaced))
-                .foregroundStyle(MeeshyColors.textMuted(isDark: isDark))
-                .accessibilityElement(children: .combine)
+            }
+            .buttonStyle(.plain)
+            .accessibilityElement(children: .combine)
+            playback { snapshot, _ in
+                let total = metadataDuration > 0 ? metadataDuration : snapshot.duration
+                Text("\(formatMediaDuration(snapshot.progress * total)) / \(formatMediaDuration(total))")
+                    .font(MeeshyFont.relative(MeeshyFont.smallSize, weight: .semibold, design: .monospaced))
+                    .foregroundStyle(MeeshyColors.textMuted(isDark: isDark))
             }
         }
     }
@@ -412,7 +394,7 @@ struct AudioFullscreenPage: View, Equatable {
         // par une police figée : le cercle de lecture ne grandit pas avec
         // Dynamic Type, son glyphe non plus — les libellés VoiceOver portent
         // le sens des boutons icône-seule.
-        HStack(spacing: MeeshySpacing.lg) {
+        HStack(spacing: MeeshySpacing.sm) {
             playback { _, speed in speedChip(speed) }
             transportButton(systemImage: "gobackward.10",
                             label: String(localized: "media.skipBack10s", defaultValue: "Reculer de 10 secondes", bundle: .main)) {
@@ -452,7 +434,7 @@ struct AudioFullscreenPage: View, Equatable {
                         .offset(x: playback.isPlaying ? 0 : 2)
                 }
             }
-            .frame(width: 64, height: 64)
+            .frame(width: 56, height: 56)
         }
         .buttonStyle(.plain)
         .accessibilityLabel(playback.isPlaying
@@ -564,7 +546,7 @@ struct AudioFullscreenPage: View, Equatable {
                 mentionDisplayNames: mentionDisplayNames.isEmpty ? nil : mentionDisplayNames
             )
             .multilineTextAlignment(.leading)
-            .lineLimit(3)
+            .lineLimit(2)
             .fixedSize(horizontal: false, vertical: true)
             .tint(accent)
         }

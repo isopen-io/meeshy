@@ -89,12 +89,18 @@ struct AudioFullscreenTranscript: View, Equatable {
     let activeIndex: Int?
     let accentColor: String
     let maxHeight: CGFloat
+    let fontSize: CGFloat
+    /// Des paroles posées à même le fond, sur toute la hauteur offerte — ou la
+    /// carte qui épouse son texte (paysage).
+    let asLyrics: Bool
     let onSeek: (Double) -> Void
 
     init(segments: [TranscriptionDisplaySegment],
          playback: AudioFullscreenPlaybackSnapshot,
          accentColor: String,
          maxHeight: CGFloat,
+         fontSize: CGFloat,
+         asLyrics: Bool,
          onSeek: @escaping (Double) -> Void) {
         self.segments = segments
         self.activeIndex = AudioPlayerView.activeSegmentIndex(segments: segments,
@@ -103,6 +109,8 @@ struct AudioFullscreenTranscript: View, Equatable {
                                                               isPlaying: playback.isPlaying)
         self.accentColor = accentColor
         self.maxHeight = maxHeight
+        self.fontSize = fontSize
+        self.asLyrics = asLyrics
         self.onSeek = onSeek
     }
 
@@ -110,6 +118,8 @@ struct AudioFullscreenTranscript: View, Equatable {
         lhs.activeIndex == rhs.activeIndex
             && lhs.accentColor == rhs.accentColor
             && lhs.maxHeight == rhs.maxHeight
+            && lhs.fontSize == rhs.fontSize
+            && lhs.asLyrics == rhs.asLyrics
             && lhs.segments.count == rhs.segments.count
             && lhs.segments.first?.id == rhs.segments.first?.id
     }
@@ -120,9 +130,11 @@ struct AudioFullscreenTranscript: View, Equatable {
                                           accentColor: accentColor,
                                           maxHeight: maxHeight,
                                           isPlaying: activeIndex != nil,
-                                          fitsContent: true,
+                                          fontSize: fontSize,
+                                          fitsContent: !asLyrics,
                                           onSeek: onSeek)
         view.resolvedActiveIndex = .some(activeIndex)
+        view.showsBackground = !asLyrics
         return view
     }
 }

@@ -87,7 +87,7 @@ extension AudioFullscreenPage {
     // MARK: - La transcription
 
     @ViewBuilder
-    func transcriptBlock(maxHeight: CGFloat) -> some View {
+    func transcriptBlock(maxHeight: CGFloat, fontSize: CGFloat, asLyrics: Bool) -> some View {
         // Les segments se bâtissent une fois par rendu de la PAGE, pas à chaque
         // tick de lecture (#10568) : seule la portée relit le moteur.
         let segments = displaySegments
@@ -99,6 +99,8 @@ extension AudioFullscreenPage {
                     playback: snapshot,
                     accentColor: languageColor,
                     maxHeight: maxHeight,
+                    fontSize: fontSize,
+                    asLyrics: asLyrics,
                     onSeek: { time in
                         onChromeInteraction()
                         player.seekToTime(time)

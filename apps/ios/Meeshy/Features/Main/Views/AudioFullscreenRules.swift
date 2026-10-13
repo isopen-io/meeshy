@@ -146,6 +146,8 @@ nonisolated struct AudioFullscreenLayout: Equatable, Sendable {
     let transcriptMaxHeight: CGFloat
     /// La largeur au-delà de laquelle le contenu ne s'étire plus (iPad).
     let contentMaxWidth: CGFloat
+    /// Le corps des paroles.
+    let lyricSize: CGFloat
 
     static let minHero: CGFloat = 72
     static let maxHero: CGFloat = 168
@@ -154,19 +156,28 @@ nonisolated struct AudioFullscreenLayout: Equatable, Sendable {
     static let readableWidth: CGFloat = 600
     /// L'écart entre deux blocs de la page empilée.
     static let stackSpacing: CGFloat = 12
-    /// L'anneau de progression qui cercle le portrait, de part et d'autre.
-    static let heroRing: CGFloat = 20
+    /// Le plancher des paroles : deux lignes en grand corps.
+    static let minLyrics: CGFloat = 140
+    /// Le corps de la transcription avant le 2026-10-13.
+    static let baseTranscriptSize: CGFloat = 14
 
-    /// **Ce que la page empilée occupe SANS le portrait**, à la taille de texte
-    /// par défaut : barre du haut, identité, onde et temps, transport, et le
-    /// plancher du bas — le rail d'actions (trois disques) ou la transcription
-    /// à son minimum, le plus haut des deux, puisqu'ils se partagent la même
-    /// rangée — plus les écarts.
-    static let stackedChrome: CGFloat = 52 + 44 + 102 + 64 + 156 + stackSpacing * 5
+    /// **Ce que la page empilée occupe SANS le cadran**, à la taille de texte
+    /// par défaut : barre du haut, identité et temps, les paroles à leur
+    /// plancher, la rangée des langues, plus les écarts. Le transport et le
+    /// rail d'actions flottent sur les paroles : ils ne prennent aucune hauteur.
+    static let stackedChrome: CGFloat = 52 + 60 + minLyrics + 44 + stackSpacing * 4
 
-    /// La hauteur minimale d'une page empilée pour ce portrait.
+    /// La hauteur minimale d'une page empilée pour ce portrait, cadran compris.
     static func stackedMinimumHeight(heroDiameter: CGFloat) -> CGFloat {
-        stackedChrome + heroDiameter + heroRing
+        stackedChrome + heroDiameter + AudioFullscreenDialRule.band * 2
+    }
+
+    /// **Les paroles se lisent de loin** (directive porteur du 2026-10-13 :
+    /// « quatre fois plus grand ») : quatre fois le corps d'avant sur un grand
+    /// téléphone, ramené à la largeur sur un petit pour qu'un mot long tienne
+    /// sur sa ligne.
+    static func lyricSize(forWidth width: CGFloat) -> CGFloat {
+        clamp((width * 0.13).rounded(), baseTranscriptSize * 2, baseTranscriptSize * 4)
     }
 
     /// **Le portrait prend ce qui reste, jamais ce qui manque** (#10568).
@@ -175,18 +186,22 @@ nonisolated struct AudioFullscreenLayout: Equatable, Sendable {
     /// pourcentage elle aussi et à des blocs fixes : la somme dépassait la
     /// hauteur utile, et la barre du haut comme le rail sortaient de l'écran.
     /// Le portrait se mesure désormais sur ce que les blocs fixes laissent, et
-    /// la transcription remplit le reste.
+    /// les paroles remplissent le reste.
     static func resolve(for size: CGSize) -> AudioFullscreenLayout {
         let sideBySide = size.width > size.height && size.height < 560
+        let room = size.height - stackedChrome - AudioFullscreenDialRule.band * 2
         let hero = sideBySide
             ? clamp(size.height * 0.30, minHero, maxHero)
-            : clamp((size.height - stackedChrome - heroRing) * 0.45, minHero, maxHero)
+            : clamp(room * 0.42, minHero, maxHero)
         let transcript = clamp(size.height * (sideBySide ? 0.42 : 0.20), minTranscript, maxTranscript)
         return AudioFullscreenLayout(
             arrangement: sideBySide ? .sideBySide : .stacked,
             heroDiameter: hero.rounded(),
             transcriptMaxHeight: transcript.rounded(),
-            contentMaxWidth: readableWidth
+            contentMaxWidth: readableWidth,
+            lyricSize: sideBySide
+                ? baseTranscriptSize * 2
+                : lyricSize(forWidth: min(size.width, readableWidth))
         )
     }
 
