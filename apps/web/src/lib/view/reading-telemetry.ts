@@ -34,10 +34,12 @@ function visitorKey(): string {
 
 /**
  * **LA FILE D'UNE PAGE QUI S'EN VA** (#10519) — une requête émise pendant le
- * déchargement n'arrive pas (mesuré sur staging : Chrome 155, page tenue par
- * le service worker, `fetch` keepalive préflighté émis au `pagehide` ⇒ aucune
- * ligne écrite). La file d'un COMPTE est donc GARDÉE en local au `pagehide`
- * et reprise au chargement suivant du même compte ; l'invité et le visiteur
+ * déchargement n'est pas garantie (mesuré sur staging, Chrome 155 : le même
+ * `fetch` keepalive émis au `pagehide` d'un rechargement est arrivé une fois
+ * sur deux), et une page hors ligne n'envoie rien. La file d'un COMPTE est
+ * donc GARDÉE en local au `pagehide` — sauf le lot déjà en vol, parti en
+ * keepalive, qu'on ne compte pas deux fois — et reprise au chargement suivant
+ * du même compte ; l'invité et le visiteur
  * n'ont pas de file (leur vue part seule, à l'ouverture). Chaque page garde
  * SA part : deux onglets fermés l'un après l'autre ne s'écrasent pas.
  */
