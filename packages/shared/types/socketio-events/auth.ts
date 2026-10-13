@@ -86,6 +86,14 @@ export interface AuthSessionRevokedEventData {
     | 'logout'
     | 'session_expired'
     | 'activation_required';
+  /**
+   * #10264 — présent SEULEMENT quand la fermeture vient de la SUPPRESSION du
+   * compte (fin de grâce, purge immédiate) : l'identifiant du compte supprimé.
+   * Un appareil y purge les données locales de CE compte, jamais celles du
+   * compte actif au moment de la réception. `reason` reste `logout_all_devices`
+   * pour les clients qui ne lisent pas ce champ.
+   */
+  readonly deletedAccountId?: string;
 }
 
 /**

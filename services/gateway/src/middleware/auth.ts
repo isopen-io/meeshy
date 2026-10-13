@@ -14,6 +14,8 @@ import { getCacheStore } from '../services/CacheStore';
 import { enhancedLogger } from '../utils/logger-enhanced';
 import { SESSION_CLAIM, legacyTokenRefusal } from '../services/auth/session-jwt';
 import { ActivationBlockedError, resolveAccountActivation } from '../services/auth/account-activation';
+import { AccountDeletedError, accountIsDeleted, type DeletedAccountReader } from '../services/auth/account-deleted';
+import { AUTH_ERROR_CODES } from '../utils/auth-error-codes';
 import type { AccountActivation } from '@meeshy/shared/types/account-activation';
 import { SessionActivitySampler, sharedSessionActivity } from '../services/auth/session-activity';
 
@@ -197,7 +199,7 @@ export type AuthMiddlewareOptions = {
   readonly sessionActivity?: SessionActivitySampler;
 };
 
-export { ActivationBlockedError };
+export { ActivationBlockedError, AccountDeletedError };
 
 // ===== SERVICE =====
 
@@ -262,6 +264,18 @@ export class AuthMiddleware {
       );
       return 'unknown';
     }
+  }
+
+  /**
+   * #10264 — atteint seulement APRÈS `jwt.verify` : la signature prouve que le
+   * porteur détenait un jeton de CE compte, seul destinataire légitime de
+   * « supprimé ». Tout autre compte inactif garde le refus générique.
+   */
+  private async inactiveAccountRefusal(userId: string): Promise<Error> {
+    if (await accountIsDeleted(this.prisma as unknown as DeletedAccountReader, userId)) {
+      return new AccountDeletedError(userId);
+    }
+    return new Error('User not found or inactive');
   }
 
   private async createRegisteredUserContext(
@@ -412,7 +426,7 @@ export class AuthMiddleware {
 
       if (cachedRow) {
         if (!cachedRow.isActive) {
-          throw new Error('User not found or inactive');
+          throw await this.inactiveAccountRefusal(jwtUserId);
         }
         user = deserializeCachedUser(cachedRow);
       }
@@ -484,7 +498,7 @@ export class AuthMiddleware {
       }
 
       if (!user || !user.isActive) {
-        throw new Error('User not found or inactive');
+        throw await this.inactiveAccountRefusal(jwtUserId);
       }
 
       // #8238 — lu sur la ligne, fraîche ou en cache : le délai dépend de
@@ -534,6 +548,7 @@ export class AuthMiddleware {
 
     } catch (error) {
       if (error instanceof ActivationBlockedError) throw error;
+      if (error instanceof AccountDeletedError) throw error;
       if (error instanceof jwt.TokenExpiredError) {
         const tokenPrefix = jwtToken.slice(-8);
         const now = Date.now();
@@ -833,6 +848,12 @@ export function createUnifiedAuthMiddleware(
 
       if (options.requireAuth && error instanceof ActivationBlockedError) {
         return sendUnauthorized(reply, 'Confirmez votre adresse e-mail pour continuer', { code: 'ACCOUNT_ACTIVATION_REQUIRED' });
+      }
+
+      // #10264 — même statut que le 401 générique (un ancien client ne lit que
+      // lui) ; le code permet à l'appareil de purger les données de CE compte.
+      if (options.requireAuth && error instanceof AccountDeletedError) {
+        return sendUnauthorized(reply, 'Ce compte a été supprimé', { code: AUTH_ERROR_CODES.ACCOUNT_DELETED });
       }
 
       if (options.requireAuth) {

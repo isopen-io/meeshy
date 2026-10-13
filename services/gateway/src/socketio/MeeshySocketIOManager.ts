@@ -18,7 +18,7 @@ import { transformTranslationsToArray } from '../utils/translation-transformer';
 import { filterMessagePayloadForLanguages, groupSocketsByLanguage } from './utils/message-payload-filter';
 import { applyResolvedLanguagesRefresh } from './utils/resolved-languages-refresh';
 import { MaintenanceService } from '../services/MaintenanceService';
-import { disconnectRevokedSessions } from './disconnectRevokedSessions';
+import { revokeDeletedAccountSessions } from './revokeDeletedAccountSessions';
 import { StatusService } from '../services/StatusService';
 import { MessagingService } from '../services/MessagingService';
 import { CallEventsHandler } from './CallEventsHandler';
@@ -384,11 +384,9 @@ export class MeeshySocketIOManager {
     // l'appel (`this.io` naît quelques lignes plus bas). Même mécanisme que
     // `revoke-all-sessions` et que la désactivation par un admin (`routes/admin`).
     this.maintenanceService.setSessionRevoker((userId: string) =>
-      disconnectRevokedSessions({
+      revokeDeletedAccountSessions({
         io: this.io,
         userId,
-        reason: 'logout_all_devices',
-        message: 'Your account was deleted — every session was signed out.',
         onError: (err: unknown) => logger.warn('[MAINTENANCE] socket fanout failed on grace-period expiry', { err, userId }),
       })
     );

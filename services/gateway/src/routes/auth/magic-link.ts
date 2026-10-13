@@ -20,6 +20,7 @@ import { sendSuccess, sendBadRequest, sendUnauthorized, sendNotFound, sendIntern
 import { accountIsBelowMinimumAge } from '../../services/auth/minimum-age-gate';
 import { scheduleContactJoinedAnnouncement } from '../../services/notifications/contact-joined';
 import { AUTH_ERROR_CODES } from '../../utils/auth-error-codes';
+import { accountIsDeleted } from '../../services/auth/account-deleted';
 import { disconnectSession } from '../../socketio/disconnectSession';
 import {
   legacyTokenRefusal,
@@ -169,6 +170,16 @@ export function registerMagicLinkRoutes(context: AuthRouteContext) {
         return sendUnauthorized(reply, 'Token invalide ou expiré', { code: AUTH_ERROR_CODES.MAGIC_LINK_INVALID });
       }
 
+      // #10264 — « supprimé » ne se dit qu'ici, APRÈS la vérification de la
+      // signature : seul le porteur d'un jeton de CE compte l'apprend. C'est le
+      // chemin nominal d'un appareil resté hors ligne (jeton expiré).
+      const refuseDeletedAccount = () =>
+        sendUnauthorized(reply, 'Ce compte a été supprimé', { code: AUTH_ERROR_CODES.ACCOUNT_DELETED });
+      const refuseSession = async (userId: string) =>
+        (await accountIsDeleted(context.prisma, userId))
+          ? refuseDeletedAccount()
+          : sendUnauthorized(reply, 'Session révoquée — veuillez vous reconnecter', { code: AUTH_ERROR_CODES.SESSION_REVOKED });
+
       // À partir d'ici, la signature est AUTHENTIQUE — éventuellement
       // expirée, ce qui est la raison d'être de cette route
       // (`ignoreExpiration` ci-dessus). C'est la SEULE forme acceptée :
@@ -229,7 +240,7 @@ export function registerMagicLinkRoutes(context: AuthRouteContext) {
             userId: decoded.userId,
             sid,
           });
-          return sendUnauthorized(reply, 'Session révoquée — veuillez vous reconnecter', { code: AUTH_ERROR_CODES.SESSION_REVOKED });
+          return refuseSession(decoded.userId);
         }
       } else {
         // Régime de TRANSITION — un jeton émis avant #4264 ne nomme rien.
@@ -251,7 +262,7 @@ export function registerMagicLinkRoutes(context: AuthRouteContext) {
             userId: decoded.userId,
             motif: refus,
           });
-          return sendUnauthorized(reply, 'Session révoquée — veuillez vous reconnecter', { code: AUTH_ERROR_CODES.SESSION_REVOKED });
+          return refuseSession(decoded.userId);
         }
 
         // Dans la fenêtre, la règle de #4213 s'applique telle quelle.
@@ -263,13 +274,14 @@ export function registerMagicLinkRoutes(context: AuthRouteContext) {
           logger.warn('Refus de refresh : aucune session valide — toutes révoquées', {
             userId: decoded.userId,
           });
-          return sendUnauthorized(reply, 'Session révoquée — veuillez vous reconnecter', { code: AUTH_ERROR_CODES.SESSION_REVOKED });
+          return refuseSession(decoded.userId);
         }
       }
 
       const user = await authService.getUserById(decoded.userId);
 
       if (!user) {
+        if (await accountIsDeleted(context.prisma, decoded.userId)) return refuseDeletedAccount();
         return sendNotFound(reply, 'Utilisateur non trouvé');
       }
 
