@@ -1,6 +1,5 @@
 import { useCallback, useEffect, useRef } from 'react';
 
-import { newEngagementSessionId } from '@/lib/api/social-events';
 import type { SearchResultKind, TargetKind } from '@/lib/api/social-events-v2-types';
 import { readingTelemetry } from '@/lib/view/reading-telemetry';
 
@@ -11,12 +10,19 @@ import { readingTelemetry } from '@/lib/view/reading-telemetry';
  * `search_abandoned` quand on quitte sans en avoir touché. Le texte saisi ne
  * part JAMAIS : sa longueur seule ; l'empreinte, si elle existe, est
  * l'affaire de la passerelle sur la requête de recherche elle-même.
+ *
+ * `searchId` est celui que la passerelle SERT avec les résultats
+ * (`meta.searchId`, scellé) : elle n'ouvre que son propre scellé, donc le
+ * client le recopie et n'en invente jamais. Absent (ancien serveur) ⇒ les
+ * événements partent sans lui.
  */
-type Submitted = { readonly searchId: string; readonly queryLength: number; readonly resultCount: number; clicked: boolean };
+type Submitted = { readonly searchId?: string; readonly queryLength: number; readonly resultCount: number; clicked: boolean };
 
 export function useSearchTelemetry(params: {
   readonly query: string;
   readonly results: readonly { readonly id: string }[] | undefined;
+  /** L'identifiant servi avec CES résultats (`meta.searchId`). */
+  readonly searchId?: string | undefined;
   /** `false` tant que les résultats affichés sont ceux de la requête précédente. */
   readonly settled: boolean;
   readonly minLength: number;
@@ -26,6 +32,8 @@ export function useSearchTelemetry(params: {
   readonly rowAttribute: string;
 }): { readonly onResultsClick: (event: { readonly target: EventTarget | null }) => void } {
   const { query, results, settled, minLength, resultKind, targetKind, rowAttribute } = params;
+  const servedSearchId = useRef(params.searchId);
+  servedSearchId.current = params.searchId;
   const current = useRef<Submitted | null>(null);
   const lastQuery = useRef('');
 
@@ -37,7 +45,7 @@ export function useSearchTelemetry(params: {
       type: 'discovery',
       action: 'search_abandoned',
       surface: 'search',
-      searchId: submitted.searchId,
+      ...(submitted.searchId === undefined ? {} : { searchId: submitted.searchId }),
       queryLength: submitted.queryLength,
       resultCount: submitted.resultCount,
       resultKind,
@@ -54,9 +62,10 @@ export function useSearchTelemetry(params: {
     if (!settled || resultCount === undefined || query === lastQuery.current) return;
     if (current.current !== null && !current.current.clicked) abandon();
     lastQuery.current = query;
-    const searchId = newEngagementSessionId();
-    current.current = { searchId, queryLength: query.length, resultCount, clicked: false };
-    readingTelemetry.recordV2({ type: 'discovery', action: 'search_submitted', surface: 'search', searchId, queryLength: query.length, resultCount, resultKind });
+    const searchId = servedSearchId.current;
+    const served = searchId === undefined ? {} : { searchId };
+    current.current = { ...served, queryLength: query.length, resultCount, clicked: false };
+    readingTelemetry.recordV2({ type: 'discovery', action: 'search_submitted', surface: 'search', ...served, queryLength: query.length, resultCount, resultKind });
   }, [query, settled, resultCount, minLength, resultKind, abandon]);
 
   useEffect(() => abandon, [abandon]);
@@ -76,7 +85,7 @@ export function useSearchTelemetry(params: {
         target: { kind: targetKind, id },
         surface: 'search',
         listing: { position: Math.max(0, position), rankingSource: 'search' },
-        searchId: submitted.searchId,
+        ...(submitted.searchId === undefined ? {} : { searchId: submitted.searchId }),
         queryLength: submitted.queryLength,
         resultCount: submitted.resultCount,
         resultKind,
@@ -86,4 +95,23 @@ export function useSearchTelemetry(params: {
   );
 
   return { onResultsClick };
+}
+
+const REMEMBERED_SEARCHES = 20;
+
+/**
+ * Retient l'identifiant servi avec les résultats d'une requête — les résultats
+ * rendus depuis le cache retrouvent ainsi le leur. Borné : les plus anciennes
+ * requêtes sortent.
+ */
+export function rememberSearchId(
+  known: Map<string, string>,
+  query: string,
+  served: { readonly ok: boolean; readonly meta?: Readonly<Record<string, unknown>> },
+): void {
+  const searchId = served.ok ? served.meta?.searchId : undefined;
+  if (typeof searchId !== 'string' || searchId.length === 0) return;
+  known.delete(query);
+  known.set(query, searchId);
+  [...known.keys()].slice(0, Math.max(0, known.size - REMEMBERED_SEARCHES)).forEach((old) => known.delete(old));
 }
