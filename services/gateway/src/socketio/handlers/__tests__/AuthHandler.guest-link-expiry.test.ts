@@ -114,13 +114,13 @@ function guestSocket() {
     id: 'socket-guest',
     handshake: { auth: { sessionToken: TOKEN }, headers: {} },
     emit: jest.fn(),
-    join: jest.fn(async () => undefined),
+    join: jest.fn(async (_room: string) => undefined),
     leave: jest.fn(),
     on: jest.fn((event: string, listener: () => void) => {
       if (event === 'disconnect') disconnectListeners.push(listener);
     }),
     disconnected: false,
-    disconnect: jest.fn(() => {
+    disconnect: jest.fn((_close?: boolean) => {
       socket.disconnected = true;
       disconnectListeners.forEach((listener) => listener());
     }),

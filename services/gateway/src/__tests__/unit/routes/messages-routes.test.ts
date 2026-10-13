@@ -440,8 +440,7 @@ const makeMessage = (overrides: any = {}) => ({
   ...overrides,
 });
 
-// #10429 — la recherche lit la loi de sortie (fermée sur toute colonne non
-// lue) : un résultat de recherche porte les colonnes qu'elle sélectionne.
+// #10429 — un résultat de recherche porte les colonnes que lit la loi de sortie.
 const ORDINARY_EXIT_COLUMNS = {
   isViewOnce: false,
   isBlurred: false,

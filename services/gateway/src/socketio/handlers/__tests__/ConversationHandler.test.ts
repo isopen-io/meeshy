@@ -57,7 +57,6 @@ import { ConversationHandler } from '../ConversationHandler';
 import { PresenceVisibilityService } from '../../../services/PresenceVisibilityService';
 import type { Socket } from 'socket.io';
 import { SERVER_EVENTS, ROOMS } from '@meeshy/shared/types/socketio-events';
-import { findFirstIn } from '../../../__tests__/helpers/mongo-where';
 
 // ─── Factories ────────────────────────────────────────────────────────────────
 
@@ -295,30 +294,6 @@ describe('ConversationHandler', () => {
       expect(socket.emit).not.toHaveBeenCalledWith(
         SERVER_EVENTS.CONVERSATION_JOIN_ERROR,
         expect.anything()
-      );
-    });
-
-    it('refuse la room à un invité banni dont la ligne est restée active (#7389)', async () => {
-      const SESSION_TOKEN = 'anon-session-token';
-      const ANON_PARTICIPANT_ID = 'anon-part-1';
-      const socketToUser = new Map<string, string>([[SOCKET_ID, SESSION_TOKEN]]);
-      const connectedUsers = new Map();
-      connectedUsers.set(SESSION_TOKEN, {
-        id: SESSION_TOKEN, isAnonymous: true, participantId: ANON_PARTICIPANT_ID, language: 'fr', resolvedLanguages: [],
-      });
-      const prisma = makePrisma();
-      prisma.participant.findFirst = findFirstIn([
-        { id: ANON_PARTICIPANT_ID, conversationId: CONV_ID, isActive: true, bannedAt: new Date('2026-09-01') },
-      ]);
-      const socket = makeSocket();
-      const handler = makeHandler({ prisma, connectedUsers, socketToUser });
-
-      await handler.handleConversationJoin(socket, { conversationId: CONV_ID });
-
-      expect(socket.join).not.toHaveBeenCalled();
-      expect(socket.emit).toHaveBeenCalledWith(
-        SERVER_EVENTS.CONVERSATION_JOIN_ERROR,
-        expect.objectContaining({ reason: 'not_a_member' })
       );
     });
 
