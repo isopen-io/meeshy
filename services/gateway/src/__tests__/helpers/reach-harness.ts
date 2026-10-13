@@ -4,7 +4,7 @@
  * (#10483). La vue d'un compte passe par `creditPostView`, le crédit réel.
  */
 import Fastify, { FastifyInstance, FastifyRequest } from 'fastify';
-import { makeReachPrisma, type ReachGuest, type ReachPost } from './reach-prisma';
+import { makeReachPrisma, type ReachGuest, type ReachPost, type ReachWorld } from './reach-prisma';
 import { registerSocialEventRoutes, type SocialEventsDeps } from '../../routes/social/events';
 import { creditPostView } from '../../services/posts/postViewCredit';
 import type { ViewContext } from '../../services/posts/viewProvenance';
@@ -20,11 +20,12 @@ export type ReachHarness = ReturnType<typeof makeReachPrisma> & { app: FastifyIn
 export async function reachHarness(
   posts: readonly ReachPost[],
   guests: readonly ReachGuest[] = [REACH_GUEST],
+  world: ReachWorld = {},
 ): Promise<ReachHarness> {
   // Le registre des ouvertures (`viewOpenLedger`) vit dans le CacheStore : un
   // banc neuf repart d'un registre vide.
   resetCacheStore();
-  const fake = makeReachPrisma(posts, guests);
+  const fake = makeReachPrisma(posts, guests, world);
   const app = Fastify({ logger: false });
   app.decorate('prisma', fake.prisma as never);
 
@@ -57,6 +58,14 @@ export async function reachHarness(
 
 export const sendReach = (app: FastifyInstance, events: unknown[], headers: Record<string, string>, ip = '203.0.113.7') =>
   app.inject({ method: 'POST', url: '/social/events', headers, payload: { events }, remoteAddress: ip });
+
+/** Un lot v2 : événements ET contexte de lot (#10499). */
+export const sendReachV2 = (
+  app: FastifyInstance,
+  events: unknown[],
+  headers: Record<string, string>,
+  context?: Record<string, unknown>,
+) => app.inject({ method: 'POST', url: '/social/events', headers, payload: { events, ...(context ? { context } : {}) } });
 
 export const visitorHeader = (n: number | string) =>
   ({ 'x-session-token': `visitor_00000000-0000-4000-8000-${String(n).padStart(12, '0')}` });

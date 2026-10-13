@@ -1,7 +1,5 @@
-import { FastifyInstance, FastifyReply, FastifyRequest, FastifySchema } from 'fastify';
-import { z } from 'zod';
+import { FastifyInstance, FastifyReply, FastifyRequest } from 'fastify';
 import type { PrismaClient } from '@meeshy/shared/prisma/client';
-import { OBJECT_ID_REGEX } from '@meeshy/shared/utils/object-id';
 import { createUnifiedAuthMiddleware, UnifiedAuthRequest } from '../../middleware/auth';
 import { PostService } from '../../services/PostService';
 import { MediaService } from '../../services/MediaService';
@@ -13,8 +11,6 @@ import {
   creditAnonymousViews,
   type ServableMap,
 } from '../../services/posts/anonymousReach';
-import { CONTENT_SURFACES } from '@meeshy/shared/types/content-surfaces';
-import { OPEN_ORIGINS, VIEW_PROVENANCES } from '@meeshy/shared/types/content-reach';
 import { creditOpens } from '../../services/posts/contentOpens';
 import {
   admitAnonymousEvents,
@@ -23,12 +19,34 @@ import {
   ANONYMOUS_READER_BUDGET,
 } from './anonymousReader';
 import { incrementPostCounters } from '../../services/posts/postCounters';
-import { EngagementSessionSchema, DOWNLOAD_SURFACES } from '../posts/types';
 import { enhancedLogger } from '../../utils/logger-enhanced';
 import { safeBroadcast } from '../../socketio/serverEmit';
 import { sendSuccess, sendBadRequest, sendForbidden, sendInternalError, sendError } from '../../utils/response';
-import { errorResponseSchema } from '@meeshy/shared/types/api-schemas';
+import {
+  SOCIAL_EVENTS_SCHEMA_VERSION,
+  SOCIAL_EVENTS_VERSION_HEADER,
+} from '@meeshy/shared/types/social-events-v2';
+import { readSocialEventsBody, type EventClock } from './eventsEnvelope';
+import type { ParsedSocialEventsContext } from './eventsV2Schemas';
+import { acceptedEventTypes, socialEventsV2Settings } from '../../services/social/contentEvents';
+import { claimCountingReceipts } from '../../services/social/countingReplays';
+import { readAnalyticsStanding, type AnalyticsStanding } from '../../services/social/eventPrivacy';
+import { impressionRowOf, insertKeyedImpressions } from '../../services/social/impressionRows';
+import { ingestSocialEventsV2 } from '../../services/social/socialEventsV2';
 export { SOCIAL_EVENTS_SUCCESSEUR, socialEventsDeprecation } from './deprecation';
+import {
+  SOCIAL_EVENTS_BATCH_CAP,
+  type SocialEvent,
+} from './eventsSchemas';
+export {
+  VIEW_ALIAS_SCHEMA,
+  SOCIAL_EVENTS_BATCH_CAP,
+  IMPRESSION_SOURCES,
+  SocialEventSchema,
+  SocialEventsBatchSchema,
+  type SocialEvent,
+  type SocialEventsBatch,
+} from './eventsSchemas';
 
 /**
  * `POST /social/events` — le point d'ingestion UNIQUE de la télémétrie de
@@ -82,190 +100,6 @@ export { SOCIAL_EVENTS_SUCCESSEUR, socialEventsDeprecation } from './deprecation
  * (`utils/deprecation.ts`).
  */
 
-/**
- * Le contrat de fil de l'alias `POST /posts/:postId/view`.
- *
- * Il vit ICI, avec la branche `view` du point d'ingestion dont il est la
- * PROJECTION historique, plutôt qu'au site de montage : c'est le même
- * événement, dit dans l'ancienne langue (`duration` au lieu de `durationMs`),
- * et les deux formes doivent bouger ensemble ou pas du tout.
- *
- * Annoté `FastifySchema` — et pas laissé à l'inférence. Un littéral exporté est
- * inféré au plus étroit, et le fournisseur de types de Fastify en dérive alors
- * les génériques de la route : `params` devient `{}` (le schéma JSON décrit des
- * propriétés, pas un type TypeScript), ce qui contredit le `Params: PostParams`
- * que le gestionnaire déclare. L'annotation dit ce que la valeur EST — un
- * schéma — plutôt que la forme exacte de son littéral.
- */
-export const VIEW_ALIAS_SCHEMA: FastifySchema = {
-    params: { type: 'object', required: ['postId'], properties: { postId: { type: 'string' } } },
-    // `['object', 'null']` et non `'object'` : les clients appellent cette
-    // route SANS corps (une vue n'a rien à dire de plus que son existence),
-    // et Fastify remet alors `null`. Un schéma `object` nu refuserait ces
-    // appels — la rigueur fermerait une porte qu'elle n'a pas à fermer.
-    body: {
-      oneOf: [
-        { type: 'null' },
-        {
-          type: 'object',
-          additionalProperties: false,
-          properties: {
-            duration: {
-              type: 'integer',
-              minimum: 0,
-              maximum: 300_000,
-              description: 'Durée de consultation en millisecondes (plafond : 5 minutes)',
-            },
-          },
-        },
-      ],
-    },
-    // Le succès est DÉCLARÉ (#4531) : sans clé `response`, rien n'oblige la
-    // charge servie à rester celle qu'on annonce, et le contrat de la route
-    // n'existe que dans son handler. Une vue n'a qu'une chose à dire — elle
-    // a été enregistrée.
-    response: {
-      200: {
-        type: 'object',
-        properties: {
-          success: { type: 'boolean', example: true },
-          data: {
-            type: 'object',
-            properties: {
-              viewed: { type: 'boolean', description: 'La vue a été enregistrée' },
-            },
-          },
-        },
-      },
-      401: errorResponseSchema,
-      500: errorResponseSchema,
-    },
-  };
-
-/** Le plafond du lot — le critère 1 le pose à 200. */
-export const SOCIAL_EVENTS_BATCH_CAP = 200;
-
-/**
- * Plafond de `durationMs`, en millisecondes.
- *
- * Cinq minutes : la même borne que `PostService.recordView` applique déjà en
- * aval. Elle est REDITE ici parce qu'une borne d'aval n'est pas une borne — le
- * jour où un second consommateur lit ce champ, il hérite d'un entier libre.
- */
-const DUREE_MAX_MS = 300_000;
-
-/**
- * Surfaces qui peuvent produire une impression — le SITE UNIQUE de cette
- * énumération depuis que l'impression a rejoint ce point d'ingestion.
- *
- * Elle a déjà divergé une fois entre la route unitaire et son lot : iOS envoyait
- * `story` à chaque slide révélé, valeur absente des deux listes, donc 400
- * systématique et `impressionCount` figé à 0 sur toutes les stories malgré des
- * vues réelles. Toute nouvelle surface cliente s'ajoute ICI.
- */
-export const IMPRESSION_SOURCES = [
-  'feed',
-  'profile',
-  'search',
-  'shared_link',
-  'notification',
-  'detail',
-  'story',
-  'status',
-] as const;
-
-const postId = z.string().regex(OBJECT_ID_REGEX);
-
-/**
- * L'écran d'affichage (#10483) — FACULTATIF : un ancien client ne l'envoie pas,
- * un ancien serveur le retire (objet non strict). Source unique :
- * `CONTENT_SURFACES` (`@meeshy/shared/types/content-surfaces`). Une valeur
- * INCONNUE est ignorée (rangée absente) et le lot passe : un client plus neuf
- * que le serveur, qui déclare un écran que celui-ci ne connaît pas encore, ne
- * doit jamais perdre ses comptes.
- */
-const surface = z.enum(CONTENT_SURFACES).optional().catch(undefined);
-
-/**
- * L'ORIGINE d'une ouverture (le listing tapé) et la PROVENANCE d'une vue
- * (#10483, `@meeshy/shared/types/content-reach`) — facultatives, et une valeur
- * INCONNUE est ignorée, jamais un refus du lot, pour la même raison que
- * `surface`.
- */
-const origin = z.enum(OPEN_ORIGINS).optional().catch(undefined);
-const provenance = z.enum(VIEW_PROVENANCES).optional().catch(undefined);
-
-const ViewEventSchema = z.object({
-  type: z.literal('view'),
-  postId,
-  /**
-   * `durationMs` et non `duration` : le nom dit son unité. L'ancienne route
-   * lisait `duration` en `(request.body as any) ?? {}` — sans schéma, sans
-   * borne, et sans que rien ne dise s'il s'agissait de secondes.
-   */
-  durationMs: z.number().int().min(0).max(DUREE_MAX_MS).optional(),
-  surface,
-  provenance,
-  origin,
-});
-
-/**
- * L'ENGAGEMENT D'OUVERTURE (#10483) — le tap sur un contenu d'un listing, avec
- * son origine. Il ne compte AUCUNE vue : la vue est comptée par l'écran ouvert.
- * Type ADDITIF : un ancien serveur refuse un lot qui le porte (union
- * discriminée), c'est pourquoi les clients l'envoient dans une requête à part.
- */
-const OpenEventSchema = z.object({
-  type: z.literal('open'),
-  postId,
-  origin,
-});
-
-const ImpressionEventSchema = z.object({
-  type: z.literal('impression'),
-  postId,
-  source: z.enum(IMPRESSION_SOURCES).default('feed'),
-  surface,
-});
-
-const DownloadEventSchema = z.object({
-  type: z.literal('download'),
-  postId,
-  /// Bornes alignées sur `RecordDownloadsSchema` : un poste ne porte jamais 50
-  /// médias, la borne est un garde-fou anti-abus, pas une limite produit.
-  mediaIds: z.array(z.string()).min(1).max(50),
-  surface: z.enum(DOWNLOAD_SURFACES).default('detail'),
-});
-
-/**
- * `dwell` REPREND `EngagementSessionSchema` au lieu de le redécrire.
- *
- * `POST /posts/engagement/batch` est la plus mûre des six portes — débit par
- * COMPTE, corps typé riche (dwell, watch, actions, échantillons) — et le
- * critère 1 demande de s'en inspirer, pas de la dégrader. L'extension n'ajoute
- * que le discriminant.
- */
-const DwellEventSchema = EngagementSessionSchema.extend({ type: z.literal('dwell') });
-
-export const SocialEventSchema = z.discriminatedUnion('type', [
-  ViewEventSchema,
-  OpenEventSchema,
-  ImpressionEventSchema,
-  DownloadEventSchema,
-  DwellEventSchema,
-]);
-
-export const SocialEventsBatchSchema = z.object({
-  /**
-   * PAS de `min(1)` : un lot VIDE est un succès à zéro enregistrement. Un
-   * client qui n'a rien observé ne doit pas avoir à le vérifier avant
-   * d'appeler — c'est le serveur qui sait répondre « rien à faire ».
-   */
-  events: z.array(SocialEventSchema).max(SOCIAL_EVENTS_BATCH_CAP).default([]),
-});
-
-export type SocialEvent = z.infer<typeof SocialEventSchema>;
-export type SocialEventsBatch = z.infer<typeof SocialEventsBatchSchema>;
 
 /**
  * QUI ingère. Les deux formes sont mutuellement exclusives et portent des
@@ -293,6 +127,19 @@ export type SocialEventsOutcome = {
     readonly mediaRecorded: number;
     readonly anonymousCounted: boolean;
   };
+};
+
+/**
+ * Ce que la porte v2 sait du lot en plus des événements (#10500) : le
+ * contexte, la situation de consentement, l'heure corrigée de chaque
+ * événement. Les six alias n'en passent aucun — un ancien chemin compte
+ * exactement comme avant.
+ */
+export type SocialEventsIngestOptions = {
+  readonly context?: ParsedSocialEventsContext;
+  readonly standing?: AnalyticsStanding;
+  readonly clocks?: ReadonlyMap<SocialEvent, EventClock>;
+  readonly receivedAt?: Date;
 };
 
 export type SocialEventsDeps = {
@@ -397,19 +244,29 @@ async function broadcastStoryViewed(
  */
 async function applyImpressions(
   deps: SocialEventsDeps,
-  events: readonly Extract<SocialEvent, { type: 'impression' }>[],
+  all: readonly Extract<SocialEvent, { type: 'impression' }>[],
   userId: string,
+  options: SocialEventsIngestOptions,
 ): Promise<number> {
-  if (events.length === 0) return 0;
+  if (all.length === 0) return 0;
 
-  await deps.prisma.postImpression.createMany({
-    data: events.map((event) => ({
-      postId: event.postId,
-      userId,
-      source: event.source,
-      ...(event.surface ? { surface: event.surface } : {}),
-    })),
+  const receivedAt = options.receivedAt ?? new Date();
+  const rowOf = (event: Extract<SocialEvent, { type: 'impression' }>) => impressionRowOf({
+    event,
+    userId,
+    standing: options.standing ?? 'not_granted',
+    context: options.context ?? {},
+    derivedAt: event.occurredAt ? options.clocks?.get(event)?.derivedAt : undefined,
+    receivedAt,
   });
+
+  // Une impression qui porte un `eventId` s'écrit par l'`insert` brut : sa
+  // ligne porte la clé, et un doublon (rejeu) ne crédite aucun compteur.
+  const plain = all.filter((event) => !event.eventId);
+  const keyed = all.filter((event) => event.eventId);
+  if (plain.length > 0) await deps.prisma.postImpression.createMany({ data: plain.map(rowOf) });
+  const { inserted } = await insertKeyedImpressions(deps.prisma, keyed.map(rowOf));
+  const events = [...plain, ...keyed.filter((_, index) => inserted.has(index))];
 
   const impressions = compterParId(events.map((event) => event.postId));
   const ouvertures = compterParId(events.filter(isDetailOpen).map((event) => event.postId));
@@ -428,7 +285,7 @@ async function applyImpressions(
       incrementPostCounters(deps.prisma, ids, { impressionCount: { increment } }, { liveOnly: true })),
   ]);
 
-  return events.length;
+  return all.length;
 }
 
 /**
@@ -522,17 +379,21 @@ export async function ingestSocialEvents(
   deps: SocialEventsDeps,
   events: readonly SocialEvent[],
   actor: SocialEventsActor,
+  options: SocialEventsIngestOptions = {},
 ): Promise<SocialEventsOutcome> {
   const vide: SocialEventsOutcome['legacy'] = { mediaRecorded: 0, anonymousCounted: false };
   if (events.length === 0) return { recorded: 0, rejected: 0, legacy: vide };
 
-  if (actor.kind === 'anonymous') return ingestAnonymous(deps, events, actor);
+  if (actor.kind === 'anonymous') return ingestAnonymous(deps, events, actor, options);
 
   const allowed = await filterConsumablePostIds(deps.prisma, events.map((e) => e.postId), actor.userId);
 
-  const admis = events.filter((event) => allowed.has(event.postId));
-  const rejected = events.length - admis.length;
-  if (admis.length === 0) return { recorded: 0, rejected, legacy: vide };
+  const audiences = events.filter((event) => allowed.has(event.postId));
+  const rejected = events.length - audiences.length;
+  if (audiences.length === 0) return { recorded: 0, rejected, legacy: vide };
+
+  const rejoues = await rejeuxDe(deps, audiences, ['view', 'open'], options);
+  const admis = audiences.filter((event) => !rejoues.has(event));
 
   const parType = <T extends SocialEvent['type']>(type: T) =>
     admis.filter((event): event is Extract<SocialEvent, { type: T }> => event.type === type);
@@ -541,16 +402,40 @@ export async function ingestSocialEvents(
 
   const [ouvertures, impressions, telechargements, sessions] = await Promise.all([
     applyOpens(deps, parType('open'), actor.userId),
-    applyImpressions(deps, parType('impression'), actor.userId),
+    applyImpressions(deps, parType('impression'), actor.userId, options),
     applyDownloads(deps, parType('download'), actor.userId),
     applyDwell(deps, parType('dwell'), actor.userId),
   ]);
 
   return {
-    recorded: vues + ouvertures + impressions + telechargements.events + sessions,
+    recorded: vues + ouvertures + impressions + telechargements.events + sessions + rejoues.size,
     rejected,
     legacy: { mediaRecorded: telechargements.media, anonymousCounted: false },
   };
+}
+
+/**
+ * Les REJEUX d'un lot (#10500) : les événements des `types` donnés qui portent
+ * un `eventId` déjà reçu. Leurs reçus s'écrivent en UNE commande, AVANT tout
+ * effet ; un rejeu est compté `recorded` sans rien recompter.
+ */
+async function rejeuxDe(
+  deps: SocialEventsDeps,
+  events: readonly SocialEvent[],
+  types: readonly SocialEvent['type'][],
+  options: SocialEventsIngestOptions,
+): Promise<ReadonlySet<SocialEvent>> {
+  const receivedAt = options.receivedAt ?? new Date();
+  const candidats = events.flatMap((event) => types.includes(event.type) && event.eventId
+    ? [{
+      item: event,
+      eventId: event.eventId,
+      type: event.type,
+      postId: event.postId,
+      derivedAt: options.clocks?.get(event)?.derivedAt ?? receivedAt,
+    }]
+    : []);
+  return claimCountingReceipts(deps.prisma, candidats, receivedAt);
 }
 
 /**
@@ -569,15 +454,19 @@ async function ingestAnonymous(
   deps: SocialEventsDeps,
   events: readonly SocialEvent[],
   actor: Extract<SocialEventsActor, { kind: 'anonymous' }>,
+  options: SocialEventsIngestOptions,
 ): Promise<SocialEventsOutcome> {
   const servable: ServableMap = await readServableToAnonymous(
     deps.prisma as never,
     events.map((event) => event.postId),
   );
-  const admis = events.filter((event) => servable.has(event.postId));
-  const rejected = events.length - admis.length;
+  const audiences = events.filter((event) => servable.has(event.postId));
+  const rejected = events.length - audiences.length;
   const vide: SocialEventsOutcome['legacy'] = { mediaRecorded: 0, anonymousCounted: false };
-  if (admis.length === 0) return { recorded: 0, rejected, legacy: vide };
+  if (audiences.length === 0) return { recorded: 0, rejected, legacy: vide };
+
+  const rejoues = await rejeuxDe(deps, audiences, ['view', 'open', 'impression'], options);
+  const admis = audiences.filter((event) => !rejoues.has(event));
 
   const vues = await creditAnonymousViews(deps.prisma, {
     readerKey: actor.readerKey,
@@ -602,7 +491,7 @@ async function ingestAnonymous(
   });
 
   return {
-    recorded: vues + ouvertures + impressions,
+    recorded: vues + ouvertures + impressions + rejoues.size,
     rejected,
     legacy: { mediaRecorded: 0, anonymousCounted: vues > 0 },
   };
@@ -748,8 +637,9 @@ export function registerSocialEventRoutes(
     config: { rateLimit: socialEventsRateLimit },
   }, async (request: FastifyRequest, reply: FastifyReply) => {
     try {
-      const parsed = SocialEventsBatchSchema.safeParse(request.body ?? {});
-      if (!parsed.success) {
+      const receivedAt = new Date();
+      const lot = readSocialEventsBody(request.body, receivedAt);
+      if (!lot.ok) {
         return sendBadRequest(reply, 'Invalid social events batch', { code: 'VALIDATION_ERROR' });
       }
 
@@ -758,19 +648,48 @@ export function registerSocialEventRoutes(
         return sendBadRequest(reply, 'Missing or invalid session key', { code: 'VALIDATION_ERROR' });
       }
 
-      if (acteur.kind === 'anonymous') {
-        if (parsed.data.events.some((event) => !TYPES_ANONYMES.has(event.type))) {
-          return sendForbidden(reply, 'Authentication required for this event type', { code: 'FORBIDDEN' });
-        }
+      if (acteur.kind === 'anonymous' && lot.counting.some(({ event }) => !TYPES_ANONYMES.has(event.type))) {
+        return sendForbidden(reply, 'Authentication required for this event type', { code: 'FORBIDDEN' });
       }
 
-      const admis = acteur.kind === 'anonymous'
-        ? await admitAnonymousEvents(fastify, request, acteur, parsed.data.events.length)
-        : parsed.data.events.length;
-      if (admis === 0 && parsed.data.events.length > 0) return refuseAnonymousBudget(reply);
+      // L'interrupteur d'urgence : tous les types v2 deviennent `ignored`, sans écriture.
+      const settings = socialEventsV2Settings();
+      const v2 = settings.enabled ? lot.v2 : [];
+      const ignored = lot.ignored + lot.v2.length - v2.length;
+      const total = lot.counting.length + v2.length;
 
-      const { recorded, rejected } = await ingestSocialEvents(deps, parsed.data.events.slice(0, admis), acteur);
-      return sendSuccess(reply, { recorded, rejected: rejected + parsed.data.events.length - admis });
+      const admis = acteur.kind === 'anonymous'
+        ? await admitAnonymousEvents(fastify, request, acteur, total)
+        : total;
+      if (admis === 0 && total > 0) return refuseAnonymousBudget(reply);
+
+      const comptage = lot.counting.slice(0, admis);
+      const v2Admis = v2.slice(0, Math.max(0, admis - comptage.length));
+      const standing: AnalyticsStanding = acteur.kind === 'user'
+        ? await readAnalyticsStanding(prisma as never, acteur.userId, lot.context.consent)
+        : 'anonymous';
+
+      const comptes = await ingestSocialEvents(deps, comptage.map(({ event }) => event), acteur, {
+        context: lot.context,
+        standing,
+        receivedAt,
+        clocks: new Map(comptage.map(({ event, clock }) => [event, clock])),
+      });
+      const v2Comptes = await ingestSocialEventsV2(prisma as never, v2Admis, {
+        actor: acteur.kind === 'user' ? { kind: 'user', userId: acteur.userId } : { kind: 'anonymous' },
+        standing,
+        context: lot.context,
+        receivedAt,
+      });
+
+      reply.header(SOCIAL_EVENTS_VERSION_HEADER, String(SOCIAL_EVENTS_SCHEMA_VERSION));
+      return sendSuccess(reply, {
+        recorded: comptes.recorded + v2Comptes.recorded,
+        rejected: comptes.rejected + v2Comptes.rejected + total - admis,
+        ignored,
+        accepts: acceptedEventTypes(settings),
+        sampling: settings.sampling,
+      });
     } catch (error) {
       enhancedLogger.error('[POST /social/events]', error);
       return sendInternalError(reply, 'Internal server error', { code: 'INTERNAL_ERROR' });

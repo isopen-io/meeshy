@@ -67,7 +67,20 @@ export const matchesWhere = (row: Row, where: Row): boolean =>
     return matchesField(row[key], condition);
   });
 
-export function makeReachPrisma(posts: readonly ReachPost[], guests: readonly ReachGuest[] = []) {
+/**
+ * Ce que la v2 lit en plus (#10499) : le consentement d'analyse des comptes,
+ * les commentaires (leur post), les notifications (leur destinataire).
+ */
+export type ReachWorld = {
+  readonly consentedUserIds?: readonly string[];
+  readonly comments?: readonly { readonly id: string; readonly postId: string }[];
+  readonly notifications?: readonly { readonly id: string; readonly userId: string }[];
+};
+
+/** Les collections dont l'`insert` brut tient l'index unique PARTIEL de `eventKey`. */
+const KEYED_COLLECTIONS = new Set(['ContentEvent', 'PostImpression']);
+
+export function makeReachPrisma(posts: readonly ReachPost[], guests: readonly ReachGuest[] = [], world: ReachWorld = {}) {
   // `deletedAt` ABSENT, comme un post vivant en base : `NOT_DELETED` vaut
   // `{ isSet: false }`, et un `null` explicite ne le satisferait pas.
   const store = makeMongoPostCounterStore(posts.map((post) => ({
@@ -84,6 +97,24 @@ export function makeReachPrisma(posts: readonly ReachPost[], guests: readonly Re
   const postViews: { id: string; postId: string; userId: string; duration?: number; surface?: string }[] = [];
   const ids = () => posts.map((post) => post.id);
   const impressions: Record<string, unknown>[] = [];
+  const contentEvents: Record<string, unknown>[] = [];
+  const rawInserts: { collection: string; count: number }[] = [];
+  const collections: Record<string, Record<string, unknown>[]> = { ContentEvent: contentEvents, PostImpression: impressions };
+
+  /** `insert` non ordonné : un doublon de `eventKey` (chaîne) lève E11000 pour CETTE ligne, les autres passent. */
+  const rawInsert = (collection: string, documents: Record<string, unknown>[]) => {
+    rawInserts.push({ collection, count: documents.length });
+    const rows = collections[collection];
+    const writeErrors = documents.flatMap((document, index) => {
+      const key = document.eventKey;
+      if (typeof key === 'string' && rows.some((existing) => existing.eventKey === key)) {
+        return [{ index, code: 11000, errmsg: 'E11000 duplicate key error' }];
+      }
+      rows.push({ ...document });
+      return [];
+    });
+    return { ok: 1, n: documents.length - writeErrors.length, ...(writeErrors.length > 0 ? { writeErrors } : {}) };
+  };
 
   const record = (model: string, op: string, args: unknown) => writes.push({ model, op, args });
   const row = (id: string) => store.read(id) as (Record<string, unknown> & { id: string }) | undefined;
@@ -168,11 +199,28 @@ export function makeReachPrisma(posts: readonly ReachPost[], guests: readonly Re
     },
     friendRequest: { findFirst: jest.fn(async () => null) },
     postMention: { findFirst: jest.fn(async () => null) },
+    user: {
+      findUnique: jest.fn(async ({ where }: { where: { id: string } }) =>
+        ({ analyticsConsentAt: (world.consentedUserIds ?? []).includes(where.id) ? new Date('2026-01-01') : null })),
+    },
+    postComment: {
+      findMany: jest.fn(async ({ where }: { where: Row }) =>
+        (world.comments ?? []).filter((comment) => matchesWhere(comment as Row, where))),
+    },
+    notification: {
+      findMany: jest.fn(async ({ where }: { where: Row }) =>
+        (world.notifications ?? []).filter((notification) => matchesWhere(notification as Row, where))
+          .map((notification) => ({ id: notification.id }))),
+    },
     $runCommandRaw: jest.fn(async (command: Record<string, unknown>) => {
+      if (typeof command.insert === 'string' && KEYED_COLLECTIONS.has(command.insert)) {
+        record(command.insert, 'insert', command);
+        return rawInsert(command.insert, command.documents as Record<string, unknown>[]);
+      }
       record('post', 'runCommandRaw', command);
       return store.runCommandRaw(command);
     }),
   };
 
-  return { prisma, store, writes, opens, postViews, impressions };
+  return { prisma, store, writes, opens, postViews, impressions, contentEvents, rawInserts };
 }

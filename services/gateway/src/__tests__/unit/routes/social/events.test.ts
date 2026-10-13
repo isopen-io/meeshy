@@ -209,7 +209,7 @@ describe('critère 7.1 — un lot mêlé compte juste ET n’écrit rien pour le
     });
 
     expect(res.statusCode).toBe(200);
-    expect(JSON.parse(res.payload).data).toEqual({ recorded: 1, rejected: 2 });
+    expect(JSON.parse(res.payload).data).toMatchObject({ recorded: 1, rejected: 2 });
     await app.close();
   });
 
@@ -259,7 +259,7 @@ describe('critère 7.1 — un lot mêlé compte juste ET n’écrit rien pour le
     });
 
     expect(res.statusCode).toBe(200);
-    expect(JSON.parse(res.payload).data).toEqual({ recorded: 0, rejected: 2 });
+    expect(JSON.parse(res.payload).data).toMatchObject({ recorded: 0, rejected: 2 });
     expect(prisma.ecritures).toEqual([]);
     // L'effet de la vue ne part pas non plus : `recordView` n'est jamais
     // appelé sur un id que l'audience vient d'écarter.
@@ -327,7 +327,7 @@ describe('critère 7.2 — un post inexistant et un post hors audience sont indi
     expect(horsAudience.payload).toBe(inexistant.payload);
     // Et ce corps commun ne dit rien de plus que le décompte : pas de 404
     // « utile », pas de code d'erreur qui nommerait l'un des deux cas.
-    expect(JSON.parse(inexistant.payload).data).toEqual({ recorded: 0, rejected: 1 });
+    expect(JSON.parse(inexistant.payload).data).toMatchObject({ recorded: 0, rejected: 1 });
   });
 
   it('ne sort JAMAIS en 500 sur un id inconnu — l’ancien P2025 est le même oracle', async () => {
@@ -343,10 +343,12 @@ describe('critère 7.2 — un post inexistant et un post hors audience sont indi
       headers: { authorization: 'Bearer jeton' },
       payload: { events: [{ type: 'impression', postId: 'pas-un-objectid', source: 'feed' }] },
     });
-    // Un identifiant qui n'est pas un ObjectId est refusé par le SCHÉMA, avant
+    // Un identifiant qui n'est pas un ObjectId est écarté par le SCHÉMA, avant
     // toute lecture : il ne peut désigner aucun document, et le laisser
     // atteindre Mongo ferait lever P2023 — un 500 qui, lui aussi, distingue.
-    expect(res.statusCode).toBe(400);
+    // Depuis la v2 (#10500), il compte en `ignored` au lieu de refuser le lot.
+    expect(res.statusCode).toBe(200);
+    expect(JSON.parse(res.payload).data).toMatchObject({ recorded: 0, rejected: 0, ignored: 1 });
     await app.close();
   });
 });
@@ -422,19 +424,22 @@ describe('critère 7.3 — la clé anonyme est la clé de LECTEUR (#10483), jama
 // ─────────────────────────────────────────────────────────────────────────────
 
 describe('critère 1 — le lot est typé, borné, et sans `any`', () => {
-  it('refuse un `type` inconnu — l’union discriminée n’a pas de branche « autre »', async () => {
-    const app = await buildApp();
+  it('ignore un `type` inconnu sans refuser le lot (#10500) — et n’écrit rien pour lui', async () => {
+    const prisma = makePrisma();
+    const app = await buildApp({ prisma });
     const res = await app.inject({
       method: 'POST',
       url: '/social/events',
       headers: { authorization: 'Bearer jeton' },
-      payload: { events: [{ type: 'scroll', postId: VISIBLE_ID }] },
+      payload: { events: [{ type: 'teleportation', postId: VISIBLE_ID }] },
     });
-    expect(res.statusCode).toBe(400);
+    expect(res.statusCode).toBe(200);
+    expect(JSON.parse(res.payload).data).toMatchObject({ recorded: 0, rejected: 0, ignored: 1 });
+    expect(prisma.ecritures).toEqual([]);
     await app.close();
   });
 
-  it('refuse un `durationMs` hors borne — la borne est à la FRONTIÈRE', async () => {
+  it('ignore un `durationMs` hors borne — la borne est à la FRONTIÈRE, la vue ne part pas', async () => {
     const app = await buildApp();
     const res = await app.inject({
       method: 'POST',
@@ -442,7 +447,8 @@ describe('critère 1 — le lot est typé, borné, et sans `any`', () => {
       headers: { authorization: 'Bearer jeton' },
       payload: { events: [{ type: 'view', postId: VISIBLE_ID, durationMs: 999_999_999 }] },
     });
-    expect(res.statusCode).toBe(400);
+    expect(res.statusCode).toBe(200);
+    expect(JSON.parse(res.payload).data).toMatchObject({ recorded: 0, ignored: 1 });
     expect(mockRecordView).not.toHaveBeenCalled();
     await app.close();
   });
@@ -474,7 +480,7 @@ describe('critère 1 — le lot est typé, borné, et sans `any`', () => {
       payload: { events: [] },
     });
     expect(res.statusCode).toBe(200);
-    expect(JSON.parse(res.payload).data).toEqual({ recorded: 0, rejected: 0 });
+    expect(JSON.parse(res.payload).data).toMatchObject({ recorded: 0, rejected: 0 });
     await app.close();
   });
 });
@@ -564,7 +570,7 @@ describe('critère 3 — un `view` garde ses deux effets de bord', () => {
     });
 
     expect(res.statusCode).toBe(200);
-    expect(JSON.parse(res.payload).data).toEqual({ recorded: 1, rejected: 0 });
+    expect(JSON.parse(res.payload).data).toMatchObject({ recorded: 1, rejected: 0 });
     await app.close();
   });
 });
@@ -653,7 +659,7 @@ describe('critère 4 — la variante anonyme est la MÊME route', () => {
       headers: { 'x-session-token': 'jeton-visiteur' },
       payload: { events: [{ type: 'view', postId: HIDDEN_ID }] },
     });
-    expect(JSON.parse(res.payload).data).toEqual({ recorded: 0, rejected: 1 });
+    expect(JSON.parse(res.payload).data).toMatchObject({ recorded: 0, rejected: 1 });
     expect((app.prisma as unknown as ReturnType<typeof makePrisma>).ecritures).toEqual([]);
     await app.close();
   });

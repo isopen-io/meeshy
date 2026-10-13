@@ -65,7 +65,7 @@ describe('G9 — les alias d’impression comptent un lecteur anonyme', () => {
     });
 
     expect(res.statusCode).toBe(200);
-    expect(res.json().data).toEqual({ recorded: 2 });
+    expect(res.json().data).toMatchObject({ recorded: 2 });
     expect(h.store.read(POST)).toMatchObject({ impressionCount: 1, anonymousImpressionCount: 1 });
     expect(h.impressions).toEqual([]);
     expect(JSON.stringify(h.writes)).not.toContain(visiteur['x-session-token']);
@@ -77,8 +77,8 @@ describe('G9 — les alias d’impression comptent un lecteur anonyme', () => {
     const premier = await h.app.inject({ method: 'POST', url: `/posts/${POST}/impression`, headers: visiteur, payload: {} });
     const second = await h.app.inject({ method: 'POST', url: `/posts/${POST}/impression`, headers: visiteur, payload: {} });
 
-    expect(premier.json().data).toEqual({ recorded: true });
-    expect(second.json().data).toEqual({ recorded: true });
+    expect(premier.json().data).toMatchObject({ recorded: true });
+    expect(second.json().data).toMatchObject({ recorded: true });
     expect(h.store.read(POST)).toMatchObject({ impressionCount: 2, anonymousImpressionCount: 2 });
     await h.app.close();
   });
@@ -102,8 +102,8 @@ describe('G9 — un compte et un appelant sans rien reçoivent ce qu’ils recev
     const lot = await h.app.inject({ method: 'POST', url: '/posts/impressions/batch', headers: auth, payload: { postIds: [POST], source: 'feed' } });
     const vue = await h.app.inject({ method: 'POST', url: `/posts/${POST}/view`, headers: auth, payload: { duration: 1200 } });
 
-    expect(unitaire.json().data).toEqual({ recorded: true });
-    expect(lot.json().data).toEqual({ recorded: 1 });
+    expect(unitaire.json().data).toMatchObject({ recorded: true });
+    expect(lot.json().data).toMatchObject({ recorded: 1 });
     expect(vue.json().data).toEqual({ viewed: true });
     expect(h.impressions).toHaveLength(2);
     expect(h.store.read(POST)?.anonymousImpressionCount ?? 0).toBe(0);
