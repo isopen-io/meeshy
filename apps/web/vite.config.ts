@@ -1108,6 +1108,16 @@ export default defineConfig({
            * statiques — légitimes, ce sont des fonctions pures — faisaient
            * rougir `dynamic_only`. Un nom qui ne commence pas par ce préfixe.
            */
+          /**
+           * L'IDENTITÉ DE WORLD WIDE ET LES FAMILLES D'UN INVITÉ (#10038) —
+           * `world-identity` et `guest-attachment-kind-rules` (`@meeshy/shared`),
+           * des constantes et deux fonctions pures, sans Zod. Elles remplacent
+           * les jumelles que le web en tenait ; laissées à Rolldown, elles
+           * faisaient deux morceaux là où la jumelle n'en faisait qu'un, soit
+           * un nom de plus dans la table de préchargement de l'entrée. Un nom
+           * pour les deux : lues par les mêmes écrans (liste, fil, jonction).
+           */
+          if (/\/types\/(world-identity|guest-attachment-kind-rules)\.[jt]s$/.test(id)) return 'guest-world-law';
           if (id.endsWith('/src/lib/view/media-transport.ts')) return 'media-time';
           if (/\/utils\/game\/(levels|level-steps|level-wire|mint|rarity|boosts|personal-mission|photo-moments)\.[jt]s$/.test(id)) return 'game-law';
           return undefined;

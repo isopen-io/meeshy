@@ -3,7 +3,7 @@ import type { ConversationType } from '@meeshy/shared/types/conversation';
 import * as anonymousEndpoints from '@meeshy/shared/api/endpoints/anonymous';
 import * as linksEndpoints from '@meeshy/shared/api/endpoints/links';
 
-import { isGuestKind, type GuestKind } from '../send/guest-attachment-kinds';
+import { isGuestAttachmentKind, type GuestAttachmentKind } from '@meeshy/shared/types/guest-attachment-kind-rules';
 
 import type { DataSource } from './config';
 import type { ApiFailure, ApiResult, HttpTransport } from './http';
@@ -112,7 +112,7 @@ export type GuestTerms = {
   /** `allowedAttachmentKinds` (#10001, #10121) — les familles que le lien ouvre
    * à l'invité : un tableau décide SEUL, `null` ne restreint rien, ABSENT d'un
    * serveur d'avant le champ. Une famille inconnue est écartée. */
-  readonly attachmentKinds?: readonly GuestKind[] | null;
+  readonly attachmentKinds?: readonly GuestAttachmentKind[] | null;
 };
 
 export type LinkInvitation = {
@@ -467,7 +467,7 @@ export type LinkGuestJoined = {
    * à l'invité, `null` quand il ne restreint rien, ABSENT d'un serveur
    * d'avant le champ. Une famille inconnue est écartée : une liste qui n'en
    * porte que d'inconnues n'ouvre rien. */
-  readonly attachmentKinds?: readonly GuestKind[] | null;
+  readonly attachmentKinds?: readonly GuestAttachmentKind[] | null;
 };
 
 const WireGuestJoined = z.object({
@@ -485,9 +485,9 @@ const WireGuestJoined = z.object({
   ),
 });
 
-function servedAttachmentKinds(served: readonly string[] | null | undefined): { readonly attachmentKinds?: readonly GuestKind[] | null } {
+function servedAttachmentKinds(served: readonly string[] | null | undefined): { readonly attachmentKinds?: readonly GuestAttachmentKind[] | null } {
   if (served === undefined) return {};
-  return { attachmentKinds: served === null ? null : served.filter(isGuestKind) };
+  return { attachmentKinds: served === null ? null : served.filter(isGuestAttachmentKind) };
 }
 
 const UNREADABLE_GUEST_JOIN = 'UNREADABLE_GUEST_JOIN';
