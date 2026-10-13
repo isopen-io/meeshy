@@ -163,6 +163,9 @@ struct FocalAudioBlock: View, Equatable {
     var audioQueueTailProvider: ((String) -> [QueuedAudio])? = nil
     var onTapConsentNotice: (() -> Void)? = nil
     var onScrollToMessage: ((String) -> Void)? = nil
+    /// #10383 — l'ouvreur du plein écran de la conversation : le vocal s'y
+    /// ouvre, comme dans les Bulles, avec réagir, répondre et créer.
+    var onMediaTap: ((MessageAttachment) -> Void)? = nil
 
     static func == (lhs: FocalAudioBlock, rhs: FocalAudioBlock) -> Bool {
         lhs.content == rhs.content
@@ -288,7 +291,8 @@ struct FocalAudioBlock: View, Equatable {
                     audioQueueTailProvider: audioQueueTailProvider,
                     embedsCaptionInWidget: mode == .hostsCaption,
                     voiceConsentMissing: voiceConsentMissing,
-                    onTapConsentNotice: onTapConsentNotice
+                    onTapConsentNotice: onTapConsentNotice,
+                    onOpenFullscreen: onMediaTap.map { open in { open(attachment) } }
                 )
                 .equatable()
             }

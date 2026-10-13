@@ -24,18 +24,26 @@ import MeeshyUI
 nonisolated enum AudioFullscreenSequence {
 
     static func ordered<Item>(_ items: [Item], receivedAt: (Item) -> Date) -> [Item] {
-        items
+        items.enumerated()
+            .sorted { lhs, rhs in
+                let left = receivedAt(lhs.element)
+                let right = receivedAt(rhs.element)
+                return left == right ? lhs.offset < rhs.offset : left < right
+            }
+            .map(\.element)
     }
 
     /// Le vocal reçu juste APRÈS `id` — `nil` au dernier, ou pour une pièce
     /// absente de la suite.
     static func next(after id: String, in ids: [String]) -> String? {
-        nil
+        guard let index = ids.firstIndex(of: id), index + 1 < ids.count else { return nil }
+        return ids[index + 1]
     }
 
     /// Le vocal reçu juste AVANT `id` — `nil` au premier.
     static func previous(before id: String, in ids: [String]) -> String? {
-        nil
+        guard let index = ids.firstIndex(of: id), index > 0 else { return nil }
+        return ids[index - 1]
     }
 
     /// **Ce que le lecteur partagé doit jouer APRÈS `id`, tant que le plein
@@ -43,7 +51,8 @@ nonisolated enum AudioFullscreenSequence {
     /// compris. C'est ce qui fait que la fin d'un vocal enchaîne sur la page
     /// voisine, et non sur le prochain vocal NON ÉCOUTÉ de la conversation.
     static func upcoming(after id: String, in ids: [String]) -> [String] {
-        []
+        guard let index = ids.firstIndex(of: id) else { return [] }
+        return Array(ids[(index + 1)...])
     }
 
     /// **La page que l'écran doit rejoindre quand la piste ACTIVE change sans
@@ -53,7 +62,10 @@ nonisolated enum AudioFullscreenSequence {
     /// une page de ce plein écran : un vocal d'une autre conversation ne fait
     /// pas tourner les pages de celle-ci.
     static func pageToFollow(activeAttachmentId: String?, currentPageId: String?, ids: [String]) -> String? {
-        nil
+        guard let active = activeAttachmentId,
+              active != currentPageId,
+              ids.contains(active) else { return nil }
+        return active
     }
 }
 
@@ -69,7 +81,8 @@ nonisolated enum AudioFullscreenChromeTiming {
     static func autoHideDelay(state: FullscreenChromeState,
                               isPlaying: Bool,
                               voiceOverRunning: Bool) -> Double? {
-        nil
+        guard !voiceOverRunning else { return nil }
+        return state.autoHideDelay(isPlaying: isPlaying)
     }
 }
 
@@ -100,7 +113,15 @@ nonisolated struct AudioFullscreenLayout: Equatable, Sendable {
     static let readableWidth: CGFloat = 600
 
     static func resolve(for size: CGSize) -> AudioFullscreenLayout {
-        AudioFullscreenLayout(arrangement: .stacked, heroDiameter: 0, transcriptMaxHeight: 0, contentMaxWidth: readableWidth)
+        let sideBySide = size.width > size.height && size.height < 560
+        let hero = clamp(size.height * (sideBySide ? 0.30 : 0.17), minHero, maxHero)
+        let transcript = clamp(size.height * (sideBySide ? 0.42 : 0.20), minTranscript, maxTranscript)
+        return AudioFullscreenLayout(
+            arrangement: sideBySide ? .sideBySide : .stacked,
+            heroDiameter: hero.rounded(),
+            transcriptMaxHeight: transcript.rounded(),
+            contentMaxWidth: readableWidth
+        )
     }
 
     private static func clamp(_ value: CGFloat, _ lower: CGFloat, _ upper: CGFloat) -> CGFloat {
@@ -124,12 +145,14 @@ enum AudioFullscreenSpeed {
     /// Le palier suivant ; après le dernier, on revient à la vitesse normale.
     /// Une vitesse hors des paliers (posée ailleurs) repart de la normale.
     static func next(after speed: PlaybackSpeed) -> PlaybackSpeed {
-        speed
+        guard let index = steps.firstIndex(of: speed) else { return .x1_0 }
+        return steps[(index + 1) % steps.count]
     }
 
     /// Le palier précédent, pour l'action « diminuer » de VoiceOver.
     static func previous(before speed: PlaybackSpeed) -> PlaybackSpeed {
-        speed
+        guard let index = steps.firstIndex(of: speed), index > 0 else { return .x1_0 }
+        return steps[index - 1]
     }
 }
 
@@ -175,7 +198,10 @@ nonisolated struct AudioFullscreenOffer: Equatable, Sendable {
     ///   - hasCarrier: l'hôte connaît le message qui la porte ;
     ///   - composable: la loi de sortie du porteur offre la publication.
     static func resolve(isProtected: Bool, hasCarrier: Bool, composable: Bool) -> AudioFullscreenOffer {
-        .none
+        guard hasCarrier else { return .none }
+        return AudioFullscreenOffer(react: !isProtected,
+                                    reply: !isProtected,
+                                    compose: composable && !isProtected)
     }
 
     var isEmpty: Bool { !react && !reply && !compose }

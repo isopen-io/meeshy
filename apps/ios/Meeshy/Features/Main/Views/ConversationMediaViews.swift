@@ -472,6 +472,10 @@ struct AudioMediaView: View, Equatable {
     var embedsCaptionInWidget: Bool = false
     var voiceConsentMissing: Bool = false
     var onTapConsentNotice: (() -> Void)? = nil
+    /// #10383 — l'ouvreur du plein écran de la CONVERSATION (celui des images,
+    /// qui sait réagir, répondre et créer avec ce son). `nil` ⇒ le plein écran
+    /// local, sans actions (galeries, aperçus). Exclu d'Equatable.
+    var onOpenFullscreen: (() -> Void)? = nil
 
     nonisolated static func shouldShowConsentNotice(isMe: Bool, voiceConsentMissing: Bool) -> Bool {
         isMe && voiceConsentMissing
@@ -571,6 +575,10 @@ struct AudioMediaView: View, Equatable {
             fileExists: fileExists
         )
         return onDevice ? .ready : .needsDownload
+    }
+
+    private func openFullscreen() {
+        if let onOpenFullscreen { onOpenFullscreen() } else { showAudioFullscreen = true }
     }
 
     /// URL de la langue actuellement sélectionnée (orig ou traduite).
@@ -938,7 +946,7 @@ struct AudioMediaView: View, Equatable {
                 translatedAudios: translatedAudios,
                 initialTranscriptionLanguage: resolvedPreferredTranscriptionLanguage,
                 autoRevealTranscription: autoRevealTranscription,
-                onFullscreen: { showAudioFullscreen = true },
+                onFullscreen: openFullscreen,
                 onRequestTranscription: {
                     Task {
                         try? await AttachmentService.shared.requestTranscription(
@@ -973,7 +981,7 @@ struct AudioMediaView: View, Equatable {
                 translatedAudios: translatedAudios,
                 initialTranscriptionLanguage: resolvedPreferredTranscriptionLanguage,
                 autoRevealTranscription: autoRevealTranscription,
-                onFullscreen: { showAudioFullscreen = true },
+                onFullscreen: openFullscreen,
                 onRequestTranscription: {
                     Task {
                         try? await AttachmentService.shared.requestTranscription(
@@ -1007,7 +1015,7 @@ struct AudioMediaView: View, Equatable {
                 translatedAudios: translatedAudios,
                 initialTranscriptionLanguage: resolvedPreferredTranscriptionLanguage,
                 autoRevealTranscription: autoRevealTranscription,
-                onFullscreen: { showAudioFullscreen = true },
+                onFullscreen: openFullscreen,
                 onRequestTranscription: {
                     Task {
                         try? await AttachmentService.shared.requestTranscription(

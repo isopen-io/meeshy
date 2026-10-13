@@ -183,6 +183,10 @@ final class LocalizationConsistencyTests: XCTestCase {
         "apps/ios/Meeshy/Features/Main/Views/WelcomeView.swift",
         "apps/ios/Meeshy/Features/Main/Lentille/Row/LentilleConversationRow.swift",  // 14
         "apps/ios/Meeshy/Features/Main/Views/AudioFullscreenView.swift",  // 14
+        // #10383 — la page du plein écran audio a quitté le fichier épinglé :
+        // ses clés la suivent, et le cliquet avec elles.
+        "apps/ios/Meeshy/Features/Main/Views/AudioFullscreenPage.swift",
+        "apps/ios/Meeshy/Features/Main/Views/AudioFullscreenPage+Transcription.swift",
         "apps/ios/Meeshy/Features/Main/Views/CallBubbleView.swift",  // 14
         "apps/ios/Meeshy/Features/Main/Focal/Lens/ReadingModeLensSheet.swift",  // 13
         "apps/ios/Meeshy/Features/Main/Views/ActiveSessionsView.swift",  // 12
