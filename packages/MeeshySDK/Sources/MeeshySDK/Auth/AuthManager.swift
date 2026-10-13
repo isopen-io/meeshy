@@ -177,6 +177,20 @@ public final class AuthManager: ObservableObject, AuthManaging {
     /// Prevents concurrent refresh loops when APIClient fires multiple 401s.
     private var tokenRefreshTask: Task<String, Error>?
 
+    /// #10463 — la génération de la session ouverte. `leaveActiveSession` la
+    /// change EN ENTRANT : un rafraîchissement lancé sous une autre génération
+    /// ne pose rien, même si le compte qu'il rafraîchit est encore actif
+    /// pendant les attentes de la sortie.
+    var sessionGeneration: UInt64 = 0
+    /// #10463 — une sortie de session est en cours : aucun rafraîchissement
+    /// ne commence avant qu'elle ait retiré le compte actif.
+    var isLeavingActiveSession = false
+    #if DEBUG
+    /// Les fermetures de sessions prouvées refusées, lancées sans être
+    /// attendues (#10463) : retenues pour que les témoins les attendent.
+    var refusedSessionClosuresForTesting: [Task<Void, Never>] = []
+    #endif
+
     /// Throttle gate for `refreshCurrentUserProfile()` — foreground transitions
     /// can fire in quick succession (Control Center, app-switcher peek); this
     /// keeps each one from re-hitting `/auth/me`.
@@ -545,6 +559,9 @@ public final class AuthManager: ObservableObject, AuthManaging {
         // état neuf doit être porté par TOUTES les portes du type. Le `defer`
         // les couvre par construction — on ne peut pas en oublier une.
         defer { hasResolvedStoredSession = true }
+        // #10463 — un changement de compte en cours tient la session : la
+        // reprise ci-dessous effacerait l'état qu'il est en train de poser.
+        guard !isSwitchingAccount else { return }
         loadSavedAccounts()
         migrateFromLegacyKeysIfNeeded()
 
@@ -922,6 +939,11 @@ public final class AuthManager: ObservableObject, AuthManaging {
             return token
         }
 
+        // #10463 — pendant la sortie, le compte quitté est encore actif : un
+        // rafraîchissement lancé maintenant rouvrirait ses sockets.
+        guard !isLeavingActiveSession else { throw CancellationError() }
+        let generation = sessionGeneration
+
         let task = Task<String, Error> { [weak self] in
             guard let self = self else { throw CancellationError() }
             do {
@@ -933,13 +955,19 @@ public final class AuthManager: ObservableObject, AuthManaging {
                 // (changement de compte, déconnexion) : sa session rafraîchie
                 // est abandonnée, jamais réinstallée. Pas une `MeeshyError` :
                 // les jetons d'un compte gardé au sélecteur restent intacts.
-                guard Self.appliesRefreshedSession(refreshedUserId: userId, currentActiveUserId: self.activeUserId) else {
+                // #10463 — ni quand une sortie a COMMENCÉ pendant l'appel : le
+                // compte y est encore actif tant qu'elle attend.
+                guard Self.appliesRefreshedSession(refreshedUserId: userId, currentActiveUserId: self.activeUserId),
+                      self.sessionGeneration == generation else {
                     Logger.auth.info("Refreshed session abandoned: its account is no longer the active one")
                     throw CancellationError()
                 }
                 try self.applySession(token: newToken, sessionToken: data.sessionToken, user: newUser)
                 return newToken
             } catch let error as MeeshyError {
+                // #10463 — le refus d'une session qu'on a quittée ne ferme pas
+                // celle qui l'a remplacée.
+                guard self.sessionGeneration == generation else { throw error }
                 // Un compte de moins de 13 ans (#9929) ne se rafraîchit plus :
                 // ses jetons partent, sans quoi chaque requête rejouerait le refus.
                 if case .auth = error {

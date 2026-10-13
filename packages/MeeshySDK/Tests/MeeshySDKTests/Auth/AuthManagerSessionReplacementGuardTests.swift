@@ -42,7 +42,12 @@ final class AuthManagerSessionReplacementGuardTests: XCTestCase {
         // Pas de `logout()` : sa cascade atteint `UNUserNotificationCenter`,
         // indisponible dans un binaire de test SPM sans app hôte.
         authService.releaseRefresh()
+        authService.releaseLogout()
+        // AVANT de rendre le vrai service : une fermeture encore en vol
+        // l'appellerait, donc irait sur le réseau.
+        await AuthManager.shared.awaitRefusedSessionClosuresForTesting()
         await AuthManager.shared.cancelPendingTokenRefreshForTesting()
+        AuthManager.shared.isLeavingActiveSession = false
         AuthManager.shared.authService = originalAuthService
         AuthManager.shared.isSwitchingAccount = false
         AuthManager.shared.keychain = originalKeychain
@@ -119,6 +124,9 @@ final class AuthManagerSessionReplacementGuardTests: XCTestCase {
         XCTAssertEqual(auth.activeAccountId, "user-a")
         XCTAssertEqual(APIClient.shared.authToken, "tok-a")
         XCTAssertNotNil(auth.errorMessage)
+        await auth.awaitRefusedSessionClosuresForTesting()
+        XCTAssertEqual(authService.loggedOutTokens, ["tok-b"],
+                       "#10463 F2 — la session refusée est refermée côté passerelle, quel que soit l'appelant")
     }
 
     func test_openSession_withoutAnOpenSession_postsIt_andSaysSo() {
@@ -128,6 +136,8 @@ final class AuthManagerSessionReplacementGuardTests: XCTestCase {
 
         XCTAssertTrue(opened)
         XCTAssertEqual(auth.activeAccountId, "user-b")
+        await auth.awaitRefusedSessionClosuresForTesting()
+        XCTAssertEqual(authService.loggedOutTokens, [], "une session posée ne se referme pas")
     }
 
     /// Plus de dérogation (#10450) : même pendant un changement de compte,
@@ -173,6 +183,7 @@ final class AuthManagerSessionReplacementGuardTests: XCTestCase {
         let proven = EmailProvenSession(token: "tok-b", sessionToken: "sess-b", user: makeUser("user-b"))
 
         let switched = await auth.switchToProvenAccount(proven)
+        await auth.awaitRefusedSessionClosuresForTesting()
 
         XCTAssertFalse(switched)
         XCTAssertTrue(auth.isAuthenticated)
@@ -193,6 +204,7 @@ final class AuthManagerSessionReplacementGuardTests: XCTestCase {
         let proven = EmailProvenSession(token: "tok-c", sessionToken: "sess-c", user: makeUser("user-c"))
 
         let switched = await auth.switchToProvenAccount(proven)
+        await auth.awaitRefusedSessionClosuresForTesting()
 
         XCTAssertFalse(switched)
         XCTAssertEqual(auth.activeAccountId, "user-a")
@@ -243,6 +255,150 @@ final class AuthManagerSessionReplacementGuardTests: XCTestCase {
         XCTAssertEqual(auth.keychain.load(forKey: auth.tokenKey(for: "user-a"), account: nil), "tok-a",
                        "le compte gardé au sélecteur garde sa session")
     }
+
+    // MARK: - #10463 F3 — un rafraîchissement ne traverse pas une sortie de session
+
+    /// La fenêtre de l'audit : la sortie a COMMENCÉ, mais le compte quitté est
+    /// encore actif pendant ses attentes. L'ancien chemin posait la session
+    /// rafraîchie (sockets du compte quitté rouvertes) ; elle est abandonnée.
+    func test_refreshSession_returningWhileTheSessionIsBeingLeft_isAbandoned() async throws {
+        let auth = AuthManager.shared
+        try auth.applySession(token: "tok-a", sessionToken: "sess-a", user: makeUser("user-a"))
+        authService.refreshedUser = makeUser("user-a")
+        authService.holdsRefresh = true
+
+        let refresh = Task { try await auth.refreshSession(force: true) }
+        while authService.refreshCallCount == 0 { await Task.yield() }
+        // Ce que fait `leaveActiveSession` en entrant ; `activeUserId` vaut encore A.
+        auth.sessionGeneration &+= 1
+        auth.isLeavingActiveSession = true
+        authService.releaseRefresh()
+
+        do {
+            _ = try await refresh.value
+            XCTFail("la session rafraîchie d'un compte qu'on quitte n'est pas posée")
+        } catch {
+            XCTAssertFalse(error is MeeshyError, "un abandon n'efface pas les jetons du compte gardé")
+        }
+
+        XCTAssertEqual(APIClient.shared.authToken, "tok-a", "rien de rafraîchi n'est posé")
+        XCTAssertEqual(auth.keychain.load(forKey: auth.tokenKey(for: "user-a"), account: nil), "tok-a")
+    }
+
+    /// Pendant la sortie, aucun rafraîchissement ne commence.
+    func test_refreshSession_duringASessionExit_doesNotStart() async throws {
+        let auth = AuthManager.shared
+        try auth.applySession(token: "tok-a", sessionToken: "sess-a", user: makeUser("user-a"))
+        authService.refreshedUser = makeUser("user-a")
+        auth.isLeavingActiveSession = true
+
+        do {
+            _ = try await auth.refreshSession(force: true)
+            XCTFail("aucun rafraîchissement ne commence pendant la sortie")
+        } catch {
+            XCTAssertFalse(error is MeeshyError)
+        }
+
+        XCTAssertEqual(authService.refreshCallCount, 0)
+        XCTAssertEqual(APIClient.shared.authToken, "tok-a")
+    }
+
+    /// Le REFUS d'un rafraîchissement lancé sous la session quittée ne ferme
+    /// pas celle qui l'a remplacée : l'ancien chemin appelait
+    /// `requireReauthentication`, qui remet le compte actif à nil.
+    func test_refreshRefusal_ofALeftSession_doesNotCloseTheSessionThatReplacedIt() async throws {
+        let auth = AuthManager.shared
+        try auth.applySession(token: "tok-a", sessionToken: "sess-a", user: makeUser("user-a"))
+        authService.refreshError = MeeshyError.auth(.sessionExpired)
+        authService.holdsRefresh = true
+
+        let refresh = Task { try await auth.refreshSession(force: true) }
+        while authService.refreshCallCount == 0 { await Task.yield() }
+        auth.sessionGeneration &+= 1
+        auth.activeUserId = nil
+        auth.isAuthenticated = false
+        try auth.applySession(token: "tok-b", sessionToken: "sess-b", user: makeUser("user-b"), origin: .login)
+        authService.releaseRefresh()
+        _ = try? await refresh.value
+
+        XCTAssertEqual(auth.activeAccountId, "user-b")
+        XCTAssertTrue(auth.isAuthenticated)
+        XCTAssertEqual(APIClient.shared.authToken, "tok-b")
+    }
+
+    // MARK: - #10463 F4 — rien ne se pose pendant un changement de compte
+
+    /// Pendant la pause d'une bascule, la session sortante est démontée : un
+    /// second lien passait la garde comme une première connexion, sans question.
+    func test_openSession_duringAnAccountSwitch_isRefused_andClosed() async {
+        let auth = AuthManager.shared
+        auth.isSwitchingAccount = true
+
+        let opened = auth.openSession(EmailProvenSession(token: "tok-c", sessionToken: "sess-c", user: makeUser("user-c")))
+        await auth.awaitRefusedSessionClosuresForTesting()
+
+        XCTAssertFalse(opened)
+        XCTAssertFalse(auth.isAuthenticated)
+        XCTAssertNil(auth.activeAccountId)
+        XCTAssertFalse(auth.hasPreservedSession(for: "user-c"))
+        XCTAssertEqual(authService.loggedOutTokens, ["tok-c"])
+    }
+
+    func test_switchAccount_duringAnotherSwitch_isRefused() async throws {
+        let auth = AuthManager.shared
+        try auth.applySession(token: "tok-a", sessionToken: "sess-a", user: makeUser("user-a"))
+        try auth.keychain.save("tok-c", forKey: auth.tokenKey(for: "user-c"), account: nil)
+        auth.isSwitchingAccount = true
+
+        let switched = await auth.switchAccount(to: "user-c")
+
+        XCTAssertFalse(switched)
+        XCTAssertEqual(auth.activeAccountId, "user-a")
+        XCTAssertEqual(APIClient.shared.authToken, "tok-a")
+        XCTAssertTrue(auth.isSwitchingAccount, "le changement en cours garde la main")
+    }
+
+    func test_restoreStoredSession_duringAnAccountSwitch_isRefused() throws {
+        let auth = AuthManager.shared
+        try auth.keychain.save("tok-c", forKey: auth.tokenKey(for: "user-c"), account: nil)
+        auth.isSwitchingAccount = true
+
+        XCTAssertFalse(auth.restoreStoredSession(for: "user-c"))
+        XCTAssertFalse(auth.isAuthenticated)
+        XCTAssertNil(auth.activeAccountId)
+    }
+
+    func test_restoreStoredSession_overAnotherOpenSession_isRefused() throws {
+        let auth = AuthManager.shared
+        try auth.applySession(token: "tok-a", sessionToken: "sess-a", user: makeUser("user-a"))
+        try auth.keychain.save("tok-c", forKey: auth.tokenKey(for: "user-c"), account: nil)
+
+        XCTAssertFalse(auth.restoreStoredSession(for: "user-c"))
+        XCTAssertEqual(auth.activeAccountId, "user-a")
+        XCTAssertEqual(APIClient.shared.authToken, "tok-a")
+    }
+
+    // MARK: - #10463 F5 — refermer ne tient pas la bascule
+
+    /// La fermeture d'une session refusée (réessais jusqu'à quelques secondes
+    /// hors ligne) ne tient plus `isSwitchingAccount` : la bascule rend la main
+    /// pendant qu'elle est encore en vol. L'ancien chemin restait suspendu ici.
+    func test_switchToProvenAccount_refused_releasesTheSwitchBeforeTheServerCloses() async {
+        let auth = AuthManager.shared
+        auth.isAuthenticated = true
+        auth.currentUser = makeUser("ghost")
+        APIClient.shared.authToken = "tok-ghost"
+        authService.holdsLogout = true
+
+        let switched = await auth.switchToProvenAccount(
+            EmailProvenSession(token: "tok-b", sessionToken: "sess-b", user: makeUser("user-b")))
+
+        XCTAssertFalse(switched)
+        XCTAssertFalse(auth.isSwitchingAccount, "la bascule est rendue avant la fin de la fermeture")
+        authService.releaseLogout()
+        await auth.awaitRefusedSessionClosuresForTesting()
+        XCTAssertEqual(authService.loggedOutTokens, ["tok-b"])
+    }
 }
 
 /// Un double de la passerelle : un rafraîchissement qu'on peut RETENIR, et une
@@ -253,7 +409,9 @@ private final class ReplacementGuardAuthService: AuthServiceProviding, @unchecke
     private var _logoutFailuresBeforeSuccess = 0
     private var _refreshCallCount = 0
     private var _holdsRefresh = false
+    private var _holdsLogout = false
     private var _refreshedUser: MeeshyUser?
+    private var _refreshError: MeeshyError?
 
     private func locked<T>(_ body: () -> T) -> T {
         lock.lock()
@@ -275,8 +433,17 @@ private final class ReplacementGuardAuthService: AuthServiceProviding, @unchecke
         get { locked { _refreshedUser } }
         set { locked { _refreshedUser = newValue } }
     }
+    var holdsLogout: Bool {
+        get { locked { _holdsLogout } }
+        set { locked { _holdsLogout = newValue } }
+    }
+    var refreshError: MeeshyError? {
+        get { locked { _refreshError } }
+        set { locked { _refreshError = newValue } }
+    }
 
     func releaseRefresh() { holdsRefresh = false }
+    func releaseLogout() { holdsLogout = false }
 
     func logoutThrowing(token: String) async throws {
         let fails: Bool = locked {
@@ -285,12 +452,14 @@ private final class ReplacementGuardAuthService: AuthServiceProviding, @unchecke
             _logoutFailuresBeforeSuccess -= 1
             return true
         }
+        while holdsLogout { try await Task.sleep(nanoseconds: 5_000_000) }
         if fails { throw MeeshyError.network(.noConnection) }
     }
 
     func refreshToken(_ currentToken: String, sessionToken: String?) async throws -> LoginResponseData {
         locked { _refreshCallCount += 1 }
         while holdsRefresh { try await Task.sleep(nanoseconds: 5_000_000) }
+        if let refreshError { throw refreshError }
         guard let user = refreshedUser else { throw MeeshyError.network(.noConnection) }
         return LoginResponseData(user: user, token: "tok-refreshed", sessionToken: sessionToken,
                                  expiresIn: 3600, requires2FA: nil, twoFactorToken: nil)

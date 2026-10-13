@@ -132,16 +132,21 @@ enum SignInLinkOpener {
         toasts: FeedbackToastSurfacing,
         confirmation: AccountReplacementConfirming
     ) async {
-        let accepted = await confirmation.confirmReplacing(signedIn: auth.currentUser, with: proven.user)
-        guard accepted else {
+        switch await confirmation.confirmReplacing(signedIn: auth.currentUser, with: proven.user) {
+        case .accepted:
+            guard await auth.switchToProvenAccount(proven) else {
+                toasts.showError(EmailProofErrorText.sessionNotOpened())
+                return
+            }
+            toasts.showSuccess(signedInMessage)
+        case .declined:
             await auth.discardProvenSession(proven)
-            return
-        }
-        guard await auth.switchToProvenAccount(proven) else {
+        case .unavailable:
+            // #10463 — la question n'a pas pu s'afficher : l'utilisateur n'a
+            // rien refusé, il doit apprendre que le lien n'a rien ouvert.
             toasts.showError(EmailProofErrorText.sessionNotOpened())
-            return
+            await auth.discardProvenSession(proven)
         }
-        toasts.showSuccess(signedInMessage)
     }
 
     /// `nil` ⇒ adresse vérifiée sans session (passerelle antérieure à #8035).
@@ -164,18 +169,29 @@ enum SignInLinkOpener {
 /// comptes par leur nom affiché et leur @, et met « Annuler » en avant.
 @MainActor
 protocol AccountReplacementConfirming: AnyObject {
-    func confirmReplacing(signedIn current: MeeshyUser?, with incoming: MeeshyUser) async -> Bool
+    func confirmReplacing(signedIn current: MeeshyUser?, with incoming: MeeshyUser) async -> AccountReplacementDecision
+}
+
+/// Ce que rend la question (#10463) : la réponse de l'utilisateur, ou le
+/// constat qu'elle n'a pas pu se poser — qui n'est pas un refus, et se dit.
+nonisolated enum AccountReplacementDecision: Equatable, Sendable {
+    case accepted
+    case declined
+    /// L'alerte ne s'est pas présentée : l'utilisateur n'a rien vu.
+    case unavailable
 }
 
 /// Posée par UIKit, depuis le contrôleur le plus haut : une alerte SwiftUI
 /// accrochée à la racine ne se présente pas quand une feuille l'est déjà, et la
 /// question attendrait pour toujours (même raison que `EmailVerificationGateScreen`).
 ///
-/// #10450 — la question rend UNE réponse, toujours : « non » si l'alerte n'a
-/// pas pu se présenter (contrôleur déjà en présentation, hors fenêtre), si elle
-/// a été retirée sans qu'un bouton soit touché (sa feuille refermée sous
-/// elle), ou si elle disparaît de la mémoire sans réponse. Une question restée
-/// sans réponse gardait la session prouvée en mémoire et ouverte au serveur.
+/// #10450 — la question rend UNE réponse, toujours : « non » si elle a été
+/// retirée sans qu'un bouton soit touché (sa feuille refermée sous elle), et
+/// `.unavailable` (#10463) si l'alerte n'a pas pu se présenter (contrôleur
+/// déjà en présentation, hors fenêtre) ou si elle disparaît de la mémoire sans
+/// réponse — l'appelant le dit alors à l'utilisateur, qui n'a rien refusé.
+/// Une question restée sans réponse gardait la session prouvée en mémoire et
+/// ouverte au serveur.
 @MainActor
 final class AccountReplacementAlert: AccountReplacementConfirming {
     nonisolated deinit {}
@@ -185,8 +201,8 @@ final class AccountReplacementAlert: AccountReplacementConfirming {
     /// l'alerte : le « non » d'une sortie sans bouton les attend.
     private static let unansweredDismissalGrace: Duration = .milliseconds(500)
 
-    func confirmReplacing(signedIn current: MeeshyUser?, with incoming: MeeshyUser) async -> Bool {
-        guard let top = Self.topMostController() else { return false }
+    func confirmReplacing(signedIn current: MeeshyUser?, with incoming: MeeshyUser) async -> AccountReplacementDecision {
+        guard let top = Self.topMostController() else { return .unavailable }
         let alert = AccountReplacementAlertController(
             title: String(localized: "signInLink.switchAccount.title", defaultValue: "Ouvrir un autre compte ?", bundle: .main),
             message: Self.message(signedIn: current, incoming: incoming),
@@ -197,26 +213,26 @@ final class AccountReplacementAlert: AccountReplacementConfirming {
             let cancel = UIAlertAction(
                 title: String(localized: "common.cancel", defaultValue: "Annuler", bundle: .main),
                 style: .cancel
-            ) { _ in answer.give(false) }
+            ) { _ in answer.give(.declined) }
             alert.addAction(cancel)
             alert.addAction(UIAlertAction(
                 title: String(localized: "signInLink.switchAccount.confirm", defaultValue: "Ouvrir ce compte", bundle: .main),
                 style: .default
-            ) { _ in answer.give(true) })
+            ) { _ in answer.give(.accepted) })
             alert.preferredAction = cancel
             alert.onDisappear = { [weak alert] in
                 Task { @MainActor [weak alert] in
                     try? await Task.sleep(for: Self.unansweredDismissalGrace)
                     guard alert?.presentingViewController == nil else { return }
-                    answer.give(false)
+                    answer.give(.declined)
                 }
             }
             top.present(alert, animated: true) { [weak alert] in
-                if alert?.presentingViewController == nil { answer.give(false) }
+                if alert?.presentingViewController == nil { answer.give(.unavailable) }
             }
             // Une présentation refusée par UIKit ne rappelle jamais sa
             // complétion : elle se lit tout de suite, l'alerte n'a pas de parent.
-            if alert.presentingViewController == nil { answer.give(false) }
+            if alert.presentingViewController == nil { answer.give(.unavailable) }
         }
     }
 
@@ -258,16 +274,17 @@ final class AccountReplacementAlertController: UIAlertController {
 }
 
 /// La réponse UNIQUE à la question : la première donnée l'emporte, les
-/// suivantes sont ignorées, et une question libérée sans réponse dit « non ».
+/// suivantes sont ignorées, et une question libérée sans réponse rend
+/// `.unavailable` — personne n'a répondu, l'écran le dit (#10463).
 nonisolated final class AccountReplacementAnswer: @unchecked Sendable {
     private let lock = NSLock()
-    private var continuation: CheckedContinuation<Bool, Never>?
+    private var continuation: CheckedContinuation<AccountReplacementDecision, Never>?
 
-    init(_ continuation: CheckedContinuation<Bool, Never>) {
+    init(_ continuation: CheckedContinuation<AccountReplacementDecision, Never>) {
         self.continuation = continuation
     }
 
-    func give(_ answer: Bool) {
+    func give(_ answer: AccountReplacementDecision) {
         lock.lock()
         let pending = continuation
         continuation = nil
@@ -276,6 +293,6 @@ nonisolated final class AccountReplacementAnswer: @unchecked Sendable {
     }
 
     deinit {
-        continuation?.resume(returning: false)
+        continuation?.resume(returning: .unavailable)
     }
 }
