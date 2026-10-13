@@ -2,8 +2,8 @@ import type { GameCoreCatalog } from '@/lib/i18n-game-catalog';
 
 /** Le catalogue du jeu, de (#9379) — mêmes clés et mêmes paramètres que le français ; textes de l'app iOS quand elle les porte. */
 const de = {
-  'game.points.convertible.one': '{count} umwandelbarer Punkt',
-  'game.points.convertible.other': '{count} umwandelbare Punkte',
+  'game.points.convertible.one': '{count} Punkt zum Tauschen',
+  'game.points.convertible.other': '{count} Punkte zum Tauschen',
   'game.actions.one': '{count} Aktion',
   'game.actions.other': '{count} Aktionen',
   'game.levels.one': '{count} Level',
@@ -84,7 +84,7 @@ const de = {
   'game.mission.invite_joined.one': 'Eine eingeladene Person zu Meeshy bringen',
   'game.mission.invite_joined.other': '{count} eingeladene Personen zu Meeshy bringen',
   'game.mission.generic': 'Mission des Tages',
-  'game.error.insufficient_points': 'Nicht genug umwandelbare Punkte, um eine Meesh zu prägen.',
+  'game.error.insufficient_points': 'Nicht genug Punkte zum Tauschen, um eine Meesh zu prägen.',
   'game.error.insufficient_meeshes': 'Dafür brauchst du eine Meesh mehr.',
   'game.error.freeze_at_maximum': 'Du hast schon zwei Eis in Reserve: das ist das Maximum.',
   'game.error.relight_not_allowed': 'Die Flamme kann jetzt nicht neu entzündet werden.',
@@ -391,7 +391,7 @@ const de = {
   'game.family.tool': 'Werkzeuge',
   'game.family.social': 'Bindungen',
   'game.hero.earn_title': 'So sammelst du Punkte',
-  'game.hero.earn_chip': '{family} bis zu +{points}',
+  'game.hero.earn_chip': '{family} bis zu {points}',
   'game.hero.earn_chip_a11y': '{family}: bis zu {points} pro Aktion. Regeln ansehen.',
   'game.hero.mint_title': 'So prägst du',
   'game.hero.mint_price': '{price} → eine Meesh',

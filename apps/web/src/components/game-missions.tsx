@@ -413,7 +413,7 @@ export function GameMissions(props: GameMissionsProps) {
           <p className="text-caption font-semibold" style={{ color: GAME_INK_2 }}>
             {gameText('game.mission.reroll', { price: meeshCount(MISSION_REROLL_PRICE) })}
           </p>
-          <GameSpendLine concept="missions" held={held} cost={MISSION_REROLL_PRICE} format={meeshCount} />
+          <GameSpendLine concept="missions" held={held} cost={MISSION_REROLL_PRICE} format={meeshCount} missing={{ fact: 'spend_missing', line: (missing) => gameText('game.spend.missing.reroll', { missing }) }} />
         </div>
       ) : null}
       {errors?.reroll === undefined ? null : (

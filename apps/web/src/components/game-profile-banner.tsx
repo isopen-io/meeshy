@@ -43,15 +43,16 @@ const GROUP = 'glass flex min-w-0 rounded-card px-2 py-1';
 const pointsLine = (points: number, language: InterfaceLanguage): string =>
   translateGame(language, 'game.banner.points', { points: formatCount(points, language) });
 
-const missingLine = (points: number, language: InterfaceLanguage): string =>
-  translateGame(language, 'game.banner.missing', { points: formatCount(points, language) });
+/** Ce qu'il reste nomme le niveau visé (#10540) : « encore 1 301 vers le 28 », jamais « encore 1 301 » à côté d'un total de points. */
+const missingLine = (points: number, nextLevel: number, language: InterfaceLanguage): string =>
+  translateGame(language, 'game.banner.missing', { points: formatCount(points, language), level: formatCount(nextLevel, language) });
 
 function levelLabel(standing: BannerStanding, language: InterfaceLanguage): string {
   const { level, tier, prestige, points, pointsToNext } = standing;
   const parts: readonly (string | null)[] = [
     levelRingLabelWithPrestige(level, tier, prestige, language),
     points === null ? null : pointsLine(points, language),
-    pointsToNext === null ? null : missingLine(pointsToNext, language),
+    pointsToNext === null ? null : missingLine(pointsToNext, level + 1, language),
   ];
   return parts.filter((part): part is string => part !== null).join(translateGame(language, 'game.banner.separator'));
 }
@@ -82,7 +83,7 @@ export function GameProfileBanner({ standing }: { readonly standing: BannerStand
             )}
             {pointsToNext === null ? null : (
               <span data-profile-banner-missing={pointsToNext} className="truncate text-caption font-medium">
-                {missingLine(pointsToNext, language)}
+                {missingLine(pointsToNext, level + 1, language)}
               </span>
             )}
           </span>

@@ -208,11 +208,12 @@ describe('un ancien serveur, sans bloc `game`', () => {
 
 describe('la fiche d’un concept : même gabarit partout', () => {
   for (const concept of PROGRESSION_CONCEPTS) {
-    test(`${concept} : héros, « C’est quoi ? », « Où j’en suis » s’il reste une donnée, « Comment en gagner », dans cet ordre`, () => {
+    test(`${concept} : héros, « C’est quoi ? », « Où j’en suis » (la phrase d’état, puis les données), « Comment en gagner », « Comment m’en servir », dans cet ordre`, () => {
       const page = fiche(concept, playing);
       const shown = ficheView(concept, playing, NOW);
       const sections = [...page.querySelectorAll('[data-fiche-section]')].map((section) => section.getAttribute('data-fiche-section'));
-      expect(sections.slice(0, shown.facts.length === 0 ? 3 : 4)).toEqual(shown.facts.length === 0 ? ['hero', 'what', 'earn'] : ['hero', 'what', 'where', 'earn']);
+      const where = shown.state !== null || shown.facts.length > 0;
+      expect(sections.slice(0, where ? 5 : 4)).toEqual(where ? ['hero', 'what', 'where', 'earn', 'use'] : ['hero', 'what', 'earn', 'use']);
       if (shown.hero === 'generic') expect(page.querySelector('[data-fiche-section="hero"]')?.textContent).toContain(conceptView(concept, playing, NOW).value);
       expect(page.querySelectorAll('[data-fiche-section="where"] li').length).toBe(shown.facts.length);
       expect(page.querySelectorAll('[data-fiche-section="earn"] li').length).toBeGreaterThanOrEqual(1);
@@ -484,7 +485,9 @@ describe('règle 3 — dans la fiche, une pièce de jeu remplace le héros', () 
     for (const key of where('meesh')) expect(['element:coin', 'element:treasury', 'minted']).toContain(key);
     for (const key of where('league')) expect(['league_zone', 'league_missing', 'league_friends']).toContain(key);
     for (const key of where('elans')) expect(['tailwind']).toContain(key);
-    expect(fiche('level', playing).querySelector('[data-fiche-section="where"]')).toBeNull();
+    const levelWhere = fiche('level', playing).querySelector('[data-fiche-section="where"]');
+    expect(levelWhere?.querySelectorAll('li')).toHaveLength(0);
+    expect(levelWhere?.querySelector('[data-fiche-state]')?.textContent).toBe(ficheView('level', playing, NOW).state);
   });
 
   test('un héros générique ne redit pas ses données dans « Où j’en suis »', () => {

@@ -72,7 +72,7 @@ describe('la carte : la valeur est suivie de sa phrase d’état', () => {
     const page = hub(jcnm);
     for (const concept of PROGRESSION_CONCEPTS) {
       const line = page.querySelector(`[data-concept-card="${concept}"] [data-concept-state]`);
-      expect({ concept, line: plain(line?.textContent) }).toEqual({ concept, line: plain(conceptState(concept, jcnm, NOW)) });
+      expect({ concept, line: plain(line?.textContent) }).toEqual({ concept, line: plain(conceptState(concept, jcnm)) });
     }
   });
 
@@ -87,7 +87,7 @@ describe('la carte : la valeur est suivie de sa phrase d’état', () => {
     const page = hub(before);
     for (const concept of progressionConcepts(before)) {
       const line = page.querySelector(`[data-concept-card="${concept}"] [data-concept-state]`);
-      if (conceptState(concept, before, NOW) === null) expect({ concept, rendered: line !== null }).toEqual({ concept, rendered: false });
+      if (conceptState(concept, before) === null) expect({ concept, rendered: line !== null }).toEqual({ concept, rendered: false });
       else expect({ concept, empty: plain(line?.textContent) === '' }).toEqual({ concept, empty: false });
     }
   });
@@ -113,7 +113,7 @@ describe('la fiche : quatre questions, et l’état avant les données', () => {
 
     test(`${concept} : « Où j’en suis » commence par la phrase d’état`, () => {
       const where = fiche(concept, jcnm).querySelector('[data-fiche-section="where"]');
-      expect(plain(where?.querySelector('[data-fiche-state]')?.textContent)).toBe(plain(conceptState(concept, jcnm, NOW)));
+      expect(plain(where?.querySelector('[data-fiche-state]')?.textContent)).toBe(plain(conceptState(concept, jcnm)));
     });
   }
 

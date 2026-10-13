@@ -143,7 +143,9 @@ describe('les données d’un concept : chaque manque est une ligne qui nomme sa
 
   test('Gloire : ce qu’il manque nomme le rang suivant', () => {
     const labels = facts('glory', jcnm).map(([label]) => label);
-    expect(labels.filter((label) => label.startsWith('Il manque'))).toEqual([expect.stringMatching(/^Il manque pour \p{Lu}/u)]);
+    const missing = labels.filter((label) => label.startsWith('Il manque'));
+    expect(missing).toHaveLength(1);
+    expect(/^Il manque pour \p{Lu}/u.test(missing[0] ?? '')).toBe(true);
   });
 
   test('aucune ligne, aucune pastille ne dit « Il manque » ou « encore » sans cible', () => {

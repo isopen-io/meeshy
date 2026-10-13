@@ -51,7 +51,7 @@ const jcnm: EngagementWithGame = {
 };
 
 const plain = (text: string | null): string => (text ?? '').replace(/\s+/g, ' ');
-const state = (concept: ProgressionConcept, view: EngagementWithGame = jcnm): string => plain(conceptState(concept, view, NOW));
+const state = (concept: ProgressionConcept, view: EngagementWithGame = jcnm): string => plain(conceptState(concept, view));
 const withFacts = (facts: Facts, extras: Extras = {}): EngagementWithGame => ({ ...before, game: gameBlockWithExtrasFixture(facts, extras) });
 
 const inLanguage = (language: InterfaceLanguage): void => {
@@ -160,7 +160,7 @@ describe('chaque concept servi a sa phrase d’état, dans les sept langues', ()
       inLanguage(language);
       for (const view of [playing, jcnm]) {
         for (const concept of PROGRESSION_CONCEPTS) {
-          const line = conceptState(concept, view, NOW);
+          const line = conceptState(concept, view);
           expect({ language, concept, present: line !== null && line.trim() !== '' }).toEqual({ language, concept, present: true });
           expect({ language, concept, line, naked: /\{[a-z]+\}|game\.[a-z]/i.test(line ?? '') }).toEqual({ language, concept, line, naked: false });
         }
@@ -169,25 +169,25 @@ describe('chaque concept servi a sa phrase d’état, dans les sept langues', ()
   }
 
   test('les phrases sont traduites, pas recopiées du français', () => {
-    const french = PROGRESSION_CONCEPTS.map((concept) => conceptState(concept, jcnm, NOW));
+    const french = PROGRESSION_CONCEPTS.map((concept) => conceptState(concept, jcnm));
     for (const language of (SUPPORTED_INTERFACE_LANGUAGES as readonly InterfaceLanguage[]).filter((code) => code !== 'fr')) {
       inLanguage(language);
-      const copied = PROGRESSION_CONCEPTS.filter((concept, index) => conceptState(concept, jcnm, NOW) === french[index]);
+      const copied = PROGRESSION_CONCEPTS.filter((concept, index) => conceptState(concept, jcnm) === french[index]);
       expect({ language, copied }).toEqual({ language, copied: [] });
     }
   });
 
   test('devant un ancien serveur, un concept sans donnée ne promet rien : pas de phrase inventée', () => {
     for (const concept of progressionConcepts(before)) {
-      const line = conceptState(concept, before, NOW);
+      const line = conceptState(concept, before);
       expect({ concept, naked: /\{[a-z]+\}|game\.[a-z]/i.test(line ?? '') }).toEqual({ concept, naked: false });
     }
-    expect(conceptState('glory', before, NOW)).toBeNull();
+    expect(conceptState('glory', before)).toBeNull();
   });
 });
 
 describe('la vue du concept porte la phrase : la carte et la fiche lisent la même', () => {
   test('conceptView rend la phrase d’état de conceptState', () => {
-    for (const concept of PROGRESSION_CONCEPTS) expect(conceptView(concept, jcnm, NOW).state).toBe(conceptState(concept, jcnm, NOW));
+    for (const concept of PROGRESSION_CONCEPTS) expect(conceptView(concept, jcnm, NOW).state).toBe(conceptState(concept, jcnm));
   });
 });

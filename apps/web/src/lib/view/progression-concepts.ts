@@ -12,6 +12,7 @@ import { SUBPAGE_CONCEPT, subpageOf } from '@/lib/game/progression-nav';
 import { translateGamePlural } from '@/lib/i18n-game-catalog';
 import { currentInterfaceLanguage } from '@/lib/interface-language';
 import {
+  convertiblePointsLabel,
   daysLabel,
   editionName,
   familyName,
@@ -29,6 +30,7 @@ import {
   shownRank,
 } from '@/lib/view/game-copy';
 import { leagueName, remainingLabel, timerLabel, visibilityLabel, zoneLabel } from '@/lib/view/game-copy-v2';
+import { conceptState, convertiblePointsOf } from '@/lib/view/progression-state';
 
 /**
  * CE QUE CHAQUE CONCEPT DE « PROGRESSION » DIT (#9563) — écrit UNE fois, lu par
@@ -62,6 +64,12 @@ import { leagueName, remainingLabel, timerLabel, visibilityLabel, zoneLabel } fr
  *
  * UNE SEULE SOURCE DE TEXTE par concept : `why` et `how` sont la phrase de la
  * carte ET le « C'est quoi ? » de la fiche — jamais deux formulations.
+ *
+ * QUATRE QUESTIONS PAR CONCEPT (#10540) : ce que c'est (`what`), à quoi ça sert
+ * (`why`), comment ça marche et se gagne (`how`, `tips`), comment s'en servir
+ * (`use`). Et la valeur en cours est suivie de SA phrase d'état (`state`,
+ * `progression-state.ts`), qui dit l'étape où l'on est et ce que le chiffre vise.
+ * Tout « il manque » nomme sa cible : le niveau, la Meesh, le rang, la zone.
  */
 
 /**
@@ -111,8 +119,12 @@ export type ConceptView = {
   readonly gauge: number | null;
   /** Ce que la valeur ouvre quand on touche l'emblème du héros de la fiche. */
   readonly primary: DetailRef;
+  /** La phrase d'état : l'étape où l'on est, et ce que la valeur vise. `null` : rien n'est servi pour la dire. */
+  readonly state: string | null;
+  readonly what: string;
   readonly why: string;
   readonly how: string;
+  readonly use: string;
   readonly tips: readonly string[];
   /** Les données du concept qui ne redisent pas la valeur (règle 2). */
   readonly facts: readonly ConceptFact[];
@@ -134,7 +146,13 @@ const ratio = (done: number, total: number): number | null => (total <= 0 ? null
 
 const levelValue = (level: number): string => gameText('game.banner.level', { level: formatCount(level) });
 
-const stillMissing = (points: number): string => gameText('game.banner.missing', { points: pointsLabel(points) });
+const toLevel = (points: number, target: number): string => gameText('game.concept.chip.to_level', { level: formatCount(target), points: pointsLabel(points) });
+
+const toMeesh = (missing: number, number: number): string => gameText('game.concept.chip.to_meesh', { number: formatCount(number), missing: formatCount(missing) });
+
+const missingForLevel = (target: number): string => gameText('game.fact.missing_for.level', { level: formatCount(target) });
+
+const missingForMeesh = (number: number): string => gameText('game.fact.missing_for.meesh', { number: formatCount(number) });
 
 const factor = (value: number): string => `×${formatCount(value)}`;
 
@@ -156,12 +174,12 @@ function level(view: EngagementWithGame): Body {
     const missing = nextThreshold === null ? null : nextThreshold - value;
     return {
       value: levelValue(current),
-      chips: present([chip(pointsLabel(value), about('score')), missing === null ? null : chip(stillMissing(missing), about('level_next'))]),
+      chips: present([chip(pointsLabel(value), about('score')), missing === null ? null : chip(toLevel(missing, current + 1), about('level_next'))]),
       gauge: missing === null ? null : progress,
       primary: about('score'),
       facts: present([
         fact(gameText('game.concept.points.name'), pointsLabel(value), about('score')),
-        missing === null ? null : fact(gameText('game.fact.to_next'), pointsLabel(missing), about('level_next')),
+        missing === null ? null : fact(missingForLevel(current + 1), pointsLabel(missing), about('level_next')),
       ]),
     };
   }
@@ -172,14 +190,14 @@ function level(view: EngagementWithGame): Body {
     value: levelValue(served.level),
     chips: present([
       chip(levelTierName(served.tier), about('tier')),
-      atTop ? chip(bannerTopLine(served), element('ring')) : chip(stillMissing(served.pointsToNext), about('level_next')),
+      atTop ? chip(bannerTopLine(served), element('ring')) : chip(toLevel(served.pointsToNext, served.level + 1), about('level_next')),
       record === null ? null : chip(gameText('game.concept.chip.record', { value: record }), about('level_record')),
     ]),
     gauge: atTop ? null : served.progress,
     primary: element('ring'),
     facts: present([
       fact(gameText('game.fact.tier'), levelTierName(served.tier), about('tier')),
-      atTop ? null : fact(gameText('game.fact.to_next'), pointsLabel(served.pointsToNext), about('level_next')),
+      atTop ? null : fact(missingForLevel(served.level + 1), pointsLabel(served.pointsToNext), about('level_next')),
       record === null ? null : fact(gameText('game.fact.record'), record, about('level_record')),
     ]),
   };
@@ -189,14 +207,18 @@ function points(view: EngagementWithGame): Body {
   const game = view.game;
   if (game === undefined) return { ...EMPTY, value: pointsLabel(view.level.value) };
   const { level: served, mint } = game;
+  const convertible = convertiblePointsOf(view);
   return {
     value: pointsLabel(served.score),
-    chips: [mint.canMint ? chip(gameText('game.concept.chip.mint_covered'), about('score')) : chip(stillMissing(mint.missingPoints), about('mint_missing'))],
+    chips: present([
+      convertible === null ? null : chip(convertiblePointsLabel(convertible), about('convertible')),
+      mint.canMint ? chip(gameText('game.concept.chip.mint_covered'), about('score')) : chip(toMeesh(mint.missingPoints, mint.number), about('mint_missing')),
+    ]),
     gauge: mint.canMint ? 1 : ratio(mint.price - mint.missingPoints, mint.price),
     primary: about('score'),
     facts: present([
-      fact(gameText('game.fact.balance'), pointsLabel(served.score), about('score')),
-      mint.canMint ? null : fact(gameText('game.fact.missing'), pointsLabel(mint.missingPoints), about('mint_missing')),
+      convertible === null ? null : fact(gameText('game.concept.fact.convertible'), pointsLabel(convertible), about('convertible')),
+      mint.canMint ? null : fact(missingForMeesh(mint.number), convertiblePointsLabel(mint.missingPoints), about('mint_missing')),
     ]),
   };
 }
@@ -212,14 +234,14 @@ function meesh(view: EngagementWithGame): Body {
       urgent: wallet.canMint ? chip(gameText('game.concept.chip.can_mint'), about('can_mint')) : null,
       chips: present([
         chip(gameText('game.concept.chip.next_price', { price: pointsLabel(wallet.mintCost) }), about('mint_price')),
-        wallet.canMint ? null : chip(stillMissing(wallet.missingPoints), about('mint_missing')),
+        wallet.canMint ? null : chip(toMeesh(wallet.missingPoints, wallet.mintedLifetime + 1), about('mint_missing')),
       ]),
       gauge: wallet.progress,
       primary: about('minted'),
       facts: present([
         fact(gameText('game.fact.balance'), meeshCount(wallet.balance), about('minted')),
         fact(gameText('game.mint.row.price'), pointsLabel(wallet.mintCost), about('mint_price')),
-        wallet.canMint ? null : fact(gameText('game.fact.missing'), pointsLabel(wallet.missingPoints), about('mint_missing')),
+        wallet.canMint ? null : fact(missingForMeesh(wallet.mintedLifetime + 1), convertiblePointsLabel(wallet.missingPoints), about('mint_missing')),
         minted,
       ]),
     };
@@ -249,7 +271,7 @@ function meesh(view: EngagementWithGame): Body {
         about('mint_next'),
       ),
       fact(gameText('game.mint.row.price'), pointsLabel(mint.price), about('mint_price')),
-      fact(gameText('game.mint.row.glory'), gameText('game.fmt.signed', { value: formatCount(mint.gloryGained) }), about('mint_glory')),
+      mint.canMint ? fact(gameText('game.mint.row.glory'), gameText('game.fmt.signed', { value: formatCount(mint.gloryGained) }), about('mint_glory')) : null,
       minted,
     ]),
   };
@@ -272,7 +294,9 @@ function glory(view: EngagementWithGame): Body {
       fact(gameText('game.mint.row.glory'), formatCount(served.glory), about('glory')),
       fact(gameText('game.gauge.rank'), rank, element('rank')),
       next === null ? null : fact(gameText('game.fact.next_rank'), next, element('rank')),
-      served.gloryMissing === null ? null : fact(gameText('game.fact.missing'), formatCount(served.gloryMissing), about('glory_missing')),
+      served.gloryMissing === null || next === null
+        ? null
+        : fact(gameText('game.fact.missing_for.rank', { rank: next }), gameText('game.rank.glory', { glory: formatCount(served.gloryMissing) }), about('glory_missing')),
     ]),
   };
 }
@@ -421,7 +445,7 @@ function league(view: EngagementWithGame, now: Date): Body {
       fact(gameText('game.fact.state'), zoneLabel(current.zone), about('league_zone')),
       current.pointsToPromotion === null || current.pointsToPromotion === 0
         ? null
-        : fact(gameText('game.fact.missing'), pointsLabel(current.pointsToPromotion), about('league_missing')),
+        : fact(gameText('game.fact.missing_for.promotion'), pointsLabel(current.pointsToPromotion), about('league_missing')),
       fact(gameText('game.fact.closes'), remaining, about('league_closes')),
       friendsFact,
     ]),
@@ -585,8 +609,11 @@ export function conceptView(concept: ProgressionConcept, view: EngagementWithGam
     urgent: urgent !== null,
     gauge: body.gauge,
     primary: body.primary,
+    state: conceptState(concept, view),
+    what: gameText(`game.concept.${concept}.what`),
     why: gameText(`game.concept.${concept}.why`),
     how: gameText(`game.concept.${concept}.how`),
+    use: gameText(`game.concept.${concept}.use`),
     tips: [gameText(`game.concept.${concept}.tip.1`), gameText(`game.concept.${concept}.tip.2`)],
     facts: body.facts.filter((one) => one.value !== body.value),
     more: moreOf(concept),
@@ -636,16 +663,19 @@ function pieceOf(concept: ProgressionConcept, view: EngagementWithGame): Piece |
 export type FicheView = {
   /** `piece` : la pièce de jeu du concept tient lieu de héros ; `generic` : emblème, valeur, jauge. */
   readonly hero: 'generic' | 'piece';
-  /** « Où j'en suis » : ce que le héros ne montre pas déjà. Vide : la section n'est pas rendue. */
+  /** « Où j'en suis » : ce que le héros ne montre pas déjà. */
   readonly facts: readonly ConceptFact[];
+  /** La phrase d'état, en tête de « Où j'en suis ». Sans elle ni donnée, la section n'est pas rendue. */
+  readonly state: string | null;
 };
 
 export function ficheView(concept: ProgressionConcept, view: EngagementWithGame, now: Date = new Date()): FicheView {
   const piece = pieceOf(concept, view);
-  if (piece === null) return { hero: 'generic', facts: conceptView(concept, view, now).facts };
+  const state = conceptState(concept, view);
+  if (piece === null) return { hero: 'generic', facts: conceptView(concept, view, now).facts, state };
   const { shows } = piece;
-  if (shows === 'all') return { hero: 'piece', facts: [] };
-  return { hero: 'piece', facts: BODIES[concept](view, now).facts.filter((one) => !shows.has(refKeyOf(one.ref))) };
+  if (shows === 'all') return { hero: 'piece', facts: [], state };
+  return { hero: 'piece', facts: BODIES[concept](view, now).facts.filter((one) => !shows.has(refKeyOf(one.ref))), state };
 }
 
 /**

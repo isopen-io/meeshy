@@ -92,14 +92,21 @@ describe('dans les sept langues', () => {
         if (language !== 'fr') expect({ language, key: entry.key, copied: entry.body === french[index]?.body }).toEqual({ language, key: entry.key, copied: false });
       }
     });
+  }
+});
 
-    test(`${language} : la page se rend avec la seule partie « règles » du catalogue`, async () => {
+describe('le carnet se rend sans les fiches', () => {
+  afterAll(async () => {
+    await Promise.all(LANGUAGES.map((language) => loadGameCatalog(language)));
+  });
+
+  for (const language of LANGUAGES) {
+    test(`${language} : « Chaque concept, en clair » se lit avec la seule partie « règles » du catalogue`, async () => {
       unloadGameCatalog();
       document.documentElement.lang = language;
       document.documentElement.dir = interfaceDirection(language);
       await loadGameScreenCatalog(language, 'rules');
       expect(page().querySelectorAll('[data-rules-concept]')).toHaveLength(RULES_GLOSSARY.length);
-      await loadGameCatalog(language);
     });
   }
 });

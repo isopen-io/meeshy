@@ -2,8 +2,8 @@ import type { GameCoreCatalog } from '@/lib/i18n-game-catalog';
 
 /** Le catalogue du jeu, it (#9379) — mêmes clés et mêmes paramètres que le français ; textes de l'app iOS quand elle les porte. */
 const it = {
-  'game.points.convertible.one': '{count} punto convertibile',
-  'game.points.convertible.other': '{count} punti convertibili',
+  'game.points.convertible.one': '{count} punto da convertire',
+  'game.points.convertible.other': '{count} punti da convertire',
   'game.actions.one': '{count} azione',
   'game.actions.other': '{count} azioni',
   'game.levels.one': '{count} livello',
@@ -84,7 +84,7 @@ const it = {
   'game.mission.invite_joined.one': 'Far entrare in Meeshy una persona invitata',
   'game.mission.invite_joined.other': 'Far entrare in Meeshy {count} persone invitate',
   'game.mission.generic': 'Missione del giorno',
-  'game.error.insufficient_points': 'Non hai abbastanza punti convertibili per coniare una Meesh.',
+  'game.error.insufficient_points': 'Non hai abbastanza punti da convertire per coniare una Meesh.',
   'game.error.insufficient_meeshes': 'Per questo ti serve una Meesh in più.',
   'game.error.freeze_at_maximum': 'Hai già due congelamenti di riserva: è il massimo.',
   'game.error.relight_not_allowed': 'La Fiamma non può essere riaccesa adesso.',
@@ -391,7 +391,7 @@ const it = {
   'game.family.tool': 'Strumenti',
   'game.family.social': 'Legami',
   'game.hero.earn_title': 'Come guadagnare punti',
-  'game.hero.earn_chip': '{family} fino a +{points}',
+  'game.hero.earn_chip': '{family} fino a {points}',
   'game.hero.earn_chip_a11y': '{family}: fino a {points} per gesto. Vedi le regole.',
   'game.hero.mint_title': 'Come coniare',
   'game.hero.mint_price': '{price} → una Meesh',
