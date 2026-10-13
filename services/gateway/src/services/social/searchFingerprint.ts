@@ -31,7 +31,13 @@ const isProductionOrStaging = (env: Env): boolean => {
   return normalized === 'production' || normalized === 'staging';
 };
 
-/** Le secret, fail-closed en production comme `READER_KEY_HMAC_SECRET`. */
+/**
+ * Le secret, fail-closed en production comme `READER_KEY_HMAC_SECRET` : absent
+ * ou trop court ⇒ erreur. Les deux fonctions publiques ci-dessous la
+ * convertissent en ABSENCE d'empreinte — une recherche ne casse jamais faute de
+ * secret, elle part simplement sans `searchId`, et aucune empreinte n'est
+ * calculée avec un secret de processus.
+ */
 export function searchFingerprintSecret(env: Env = process.env): string {
   const value = env[ENV_VAR];
   if (!isProductionOrStaging(env)) return value && value.length > 0 ? value : PROCESS_SECRET;
@@ -53,8 +59,17 @@ const hmac = (secret: string, value: string): string => createHmac('sha256', sec
 const signatureOf = (secret: string, nonce: string, fingerprint: string): string =>
   hmac(secret, `search-id:${nonce}.${fingerprint}`).slice(0, 16);
 
-/** Émet le `searchId` d'une recherche — le texte n'en sort pas. */
-export function issueSearchId(query: string, secret: string = searchFingerprintSecret()): string {
+const secretOrUndefined = (): string | undefined => {
+  try {
+    return searchFingerprintSecret();
+  } catch {
+    return undefined;
+  }
+};
+
+/** Émet le `searchId` d'une recherche — le texte n'en sort pas. `undefined` sans secret valable. */
+export function issueSearchId(query: string, secret: string | undefined = secretOrUndefined()): string | undefined {
+  if (secret === undefined) return undefined;
   const nonce = randomBytes(8).toString('hex');
   const fingerprint = hmac(secret, `search-query:${normalizeSearchQuery(query)}`).slice(0, 32);
   return `${nonce}.${fingerprint}.${signatureOf(secret, nonce, fingerprint)}`;
@@ -63,7 +78,8 @@ export function issueSearchId(query: string, secret: string = searchFingerprintS
 export type ReadSearchId = { readonly nonce: string; readonly fingerprint: string };
 
 /** Relit un `searchId` ; `undefined` s'il est forgé, altéré ou signé d'une autre clé. */
-export function readSearchId(searchId: string, secret: string = searchFingerprintSecret()): ReadSearchId | undefined {
+export function readSearchId(searchId: string, secret: string | undefined = secretOrUndefined()): ReadSearchId | undefined {
+  if (secret === undefined) return undefined;
   const match = SEARCH_ID.exec(searchId);
   if (!match) return undefined;
   const [, nonce, fingerprint, signature] = match;
