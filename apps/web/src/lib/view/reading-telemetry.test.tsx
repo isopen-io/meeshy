@@ -57,7 +57,9 @@ const show = (ratio = 1) => act(() => live().forEach((o) => o.callback([{ isInte
 const wait = (ms: number) => new Promise((resolve) => setTimeout(resolve, ms));
 
 let recorded: SocialEvent[] = [];
+let exitFlushes = 0;
 const originalRecord = readingTelemetry.record;
+const originalFlushOnExit = readingTelemetry.flushOnExit;
 let container: HTMLDivElement;
 let root: Root | null = null;
 
@@ -80,6 +82,10 @@ beforeEach(() => {
   readingTelemetry.record = (event: SocialEvent) => {
     recorded.push(event);
   };
+  exitFlushes = 0;
+  readingTelemetry.flushOnExit = () => {
+    exitFlushes += 1;
+  };
   container = document.createElement('div');
   document.body.appendChild(container);
 });
@@ -89,6 +95,8 @@ afterEach(() => {
   root = null;
   container.remove();
   readingTelemetry.record = originalRecord;
+  readingTelemetry.flushOnExit = originalFlushOnExit;
+  setVisibility('visible');
   (globalThis as { IntersectionObserver?: unknown }).IntersectionObserver = native;
 });
 
@@ -96,6 +104,21 @@ const mount = (node: React.ReactNode) => {
   root = createRoot(container);
   act(() => root?.render(node));
 };
+
+function setVisibility(state: 'visible' | 'hidden') {
+  Object.defineProperty(document, 'visibilityState', { configurable: true, get: () => state });
+}
+const hideTab = () => act(() => {
+  setVisibility('hidden');
+  document.dispatchEvent(new Event('visibilitychange'));
+});
+const showTab = () => act(() => {
+  setVisibility('visible');
+  document.dispatchEvent(new Event('visibilitychange'));
+});
+const leavePage = () => act(() => {
+  window.dispatchEvent(new Event('pagehide'));
+});
 
 const POST: FeedPost = { id: '6512bd43d9caa6e02c990b0a', type: 'POST', createdAt: '2026-09-13T11:55:00.000Z', content: 'Bonjour', originalLanguage: 'fr' };
 const cardModel = (post: FeedPost = POST) => resolveFeedCardModel(post, { preferredLanguages: ['fr'], now: NOW });
@@ -259,6 +282,49 @@ describe('useReadingSession — le détail, le réel actif et la story', () => {
     const types = calls().slice(2).map((e) => e.type);
     expect(types).toEqual(['view', 'dwell']);
     expect(calls()[3]).toMatchObject({ type: 'dwell', contentType: 'REEL', surface: 'reels' });
+  });
+
+  test('fermer l’onglet ou recharger (`pagehide`) ferme la séance AVANT le vidage de sortie — le démontage ne la rejoue pas (#10519)', () => {
+    let t = 1_000;
+    mount(<SessionProbe postId={POST.id} active clock={() => t} openView />);
+    t = 21_000;
+    leavePage();
+    const closing = calls().slice(2);
+    expect(closing[0]).toEqual({ type: 'view', postId: POST.id, durationMs: 20_000 });
+    expect(closing[1]).toMatchObject({ type: 'dwell', postId: POST.id, dwellMs: 20_000 });
+    expect(closing).toHaveLength(2);
+    expect(exitFlushes).toBeGreaterThan(0);
+    act(() => root?.unmount());
+    root = null;
+    expect(calls()).toHaveLength(4);
+  });
+
+  test('passer en arrière-plan ferme la séance ; revenir en ouvre une NOUVELLE, sans recompter l’impression ni l’ouverture (#10519)', () => {
+    let t = 0;
+    mount(<SessionProbe postId={POST.id} active clock={() => t} openView />);
+    t = 5_000;
+    hideTab();
+    expect(exitFlushes).toBeGreaterThan(0);
+    t = 65_000;
+    showTab();
+    t = 68_000;
+    act(() => root?.unmount());
+    root = null;
+    const after = calls().slice(2);
+    expect(after.map((e) => e.type)).toEqual(['view', 'dwell', 'view', 'dwell']);
+    expect(after[0]).toEqual({ type: 'view', postId: POST.id, durationMs: 5_000 });
+    expect(after[1]).toMatchObject({ dwellMs: 5_000, startedAt: new Date(0).toISOString() });
+    expect(after[3]).toMatchObject({ dwellMs: 3_000, startedAt: new Date(65_000).toISOString() });
+    expect((after[1] as { sessionId: string }).sessionId).not.toBe((after[3] as { sessionId: string }).sessionId);
+  });
+
+  test('masqué deux fois de suite (onglet masqué puis fermé) : une seule fermeture', () => {
+    let t = 0;
+    mount(<SessionProbe postId={POST.id} active clock={() => t} openView />);
+    t = 2_000;
+    hideTab();
+    leavePage();
+    expect(calls().slice(2).map((e) => e.type)).toEqual(['view', 'dwell']);
   });
 
   test('le type de séance suit le `Post.type` servi', () => {

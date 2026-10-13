@@ -3,6 +3,7 @@ import { describe, expect, test } from 'bun:test';
 import type { ApiResult, Credential, HttpRequest, HttpTransport } from './http';
 import {
   SOCIAL_EVENTS_BATCH_CAP,
+  SOCIAL_EVENTS_KEEPALIVE_BATCH_CAP,
   SOCIAL_EVENTS_PENDING_CAP,
   createSocialEventsEmitter,
   createSocialEventsRecorder,
@@ -188,5 +189,42 @@ describe('createSocialEventsRecorder — un compte, un visiteur', () => {
     expect(requests).toHaveLength(1);
     expect(requests[0]?.headers).toBeUndefined();
     expect(requests[0]?.credential).toBeUndefined();
+  });
+});
+
+describe('le vidage de SORTIE survit au déchargement de la page (#10519)', () => {
+  test('`flush({ keepalive })` part en keepalive, coupé sous le plafond qu’un navigateur accepte au déchargement', async () => {
+    const { recorder, requests } = recorderWith({ kind: 'registered', token: 't' });
+    for (let n = 0; n < SOCIAL_EVENTS_KEEPALIVE_BATCH_CAP + 5; n += 1) recorder.record(impression(n));
+    await recorder.flush({ keepalive: true });
+    expect(requests.map((r) => r.keepalive)).toEqual([true, true]);
+    expect(requests.map((r) => (r.body as { events: unknown[] }).events.length)).toEqual([SOCIAL_EVENTS_KEEPALIVE_BATCH_CAP, 5]);
+  });
+
+  test('le vidage ordinaire ne demande pas keepalive', async () => {
+    const { recorder, requests } = recorderWith({ kind: 'registered', token: 't' });
+    recorder.record(impression(1));
+    await recorder.flush();
+    expect(requests[0]?.keepalive).toBeUndefined();
+  });
+
+  test('une sortie demandée PENDANT un lot en vol : ce qui reste part en keepalive dans la même boucle', async () => {
+    const options: Array<{ readonly keepalive: boolean }> = [];
+    let release: (verdict: SendVerdict) => void = () => undefined;
+    const emitter = createSocialEventsEmitter({
+      send: (_events, opts) => {
+        options.push(opts);
+        return options.length === 1 ? new Promise<SendVerdict>((resolve) => { release = resolve; }) : Promise.resolve('sent');
+      },
+      schedule: () => undefined,
+    });
+    emitter.record(impression(1));
+    const first = emitter.flush();
+    emitter.record({ type: 'view', postId: OID(1), durationMs: 4000 });
+    void emitter.flush({ keepalive: true });
+    release('sent');
+    await first;
+    expect(options).toEqual([{ keepalive: false }, { keepalive: true }]);
+    expect(emitter.pending()).toBe(0);
   });
 });
