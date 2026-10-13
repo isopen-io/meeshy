@@ -329,3 +329,82 @@ describe('la fermeture de la page ne perd plus rien (W3)', () => {
     expect((requests[0]?.body as { events: SocialEvent[] }).events).toHaveLength(KEEPALIVE_BATCH_CAP);
   });
 });
+
+describe('l’engagement d’ouverture `open` voyage à part (#10483)', () => {
+  const opening: SocialEvent = { type: 'open', postId: OID(9), origin: 'feed' };
+  const statusBy = (open: number) => {
+    const requests: HttpRequest[] = [];
+    const transport = {
+      request: async <T>(request: HttpRequest): Promise<ApiResult<T>> => {
+        requests.push(request);
+        const kinds = (request.body as { events: SocialEvent[] }).events.map((e) => e.type);
+        const status = kinds.includes('open') ? open : 200;
+        return (status === 200 ? { ok: true, data: { recorded: 1, rejected: 0 } } : { ok: false, status, error: 'x' }) as ApiResult<T>;
+      },
+    } as unknown as HttpTransport;
+    return { transport, requests };
+  };
+  const bodies = (requests: readonly HttpRequest[]) =>
+    requests.map((r) => (r.body as { events: SocialEvent[] }).events.map((e) => e.type).join(','));
+
+  for (const [who, credential] of [['un compte', { kind: 'registered', token: 't' } as Credential], ['un visiteur', null]] as const) {
+    test(`${who} : les \`open\` partent dans une requête SÉPARÉE de celle des vues et impressions`, async () => {
+      const { transport, requests } = statusBy(200);
+      const recorder = createSocialEventsRecorder({ transport, credential: () => credential, visitorKey: () => 'visitor_abc', schedule: () => undefined });
+      recorder.record(impression(9));
+      recorder.record(opening);
+      recorder.record({ type: 'view', postId: OID(9) });
+      await recorder.flush();
+      expect(bodies(requests).filter((b) => b.includes('open'))).toEqual(['open']);
+      expect(recorder.pending()).toBe(0);
+    });
+
+    for (const refusal of [400, 403]) {
+      test(`${who} : un ${refusal} d’un ancien serveur sur les \`open\` les retire sans rejeu ; la vue et l’impression passent`, async () => {
+        const { transport, requests } = statusBy(refusal);
+        const recorder = createSocialEventsRecorder({ transport, credential: () => credential, visitorKey: () => 'visitor_abc', schedule: () => undefined });
+        recorder.record(impression(9));
+        recorder.record(opening);
+        recorder.record({ type: 'view', postId: OID(9) });
+        await recorder.flush();
+        expect(recorder.pending()).toBe(0);
+        await recorder.flush();
+        const sent = requests.flatMap((r) => (r.body as { events: SocialEvent[] }).events);
+        expect(sent.filter((e) => e.type === 'open')).toHaveLength(1);
+        expect(sent.filter((e) => e.type === 'view')).toHaveLength(1);
+        expect(sent.filter((e) => e.type === 'impression')).toHaveLength(1);
+      });
+    }
+
+    test(`${who} : un \`open\` en panne (503) repart seul, la vue écrite n’est pas recomptée`, async () => {
+      let open = 503;
+      const requests: HttpRequest[] = [];
+      const transport = {
+        request: async <T>(request: HttpRequest): Promise<ApiResult<T>> => {
+          requests.push(request);
+          const kinds = (request.body as { events: SocialEvent[] }).events.map((e) => e.type);
+          const status = kinds.includes('open') ? open : 200;
+          return (status === 200 ? { ok: true, data: { recorded: 1, rejected: 0 } } : { ok: false, status, error: 'x' }) as ApiResult<T>;
+        },
+      } as unknown as HttpTransport;
+      const recorder = createSocialEventsRecorder({ transport, credential: () => credential, visitorKey: () => 'visitor_abc', schedule: () => undefined });
+      recorder.record(opening);
+      recorder.record({ type: 'view', postId: OID(9) });
+      await recorder.flush();
+      expect(recorder.pending()).toBe(1);
+      open = 200;
+      await recorder.flush();
+      const sent = requests.flatMap((r) => (r.body as { events: SocialEvent[] }).events);
+      expect(sent.filter((e) => e.type === 'view')).toHaveLength(1);
+      expect(sent.filter((e) => e.type === 'open')).toHaveLength(2);
+      expect(recorder.pending()).toBe(0);
+    });
+  }
+
+  test('la vue porte sa provenance et le listing d’origine, tels quels', async () => {
+    const { recorder, requests } = recorderWith({ kind: 'registered', token: 't' });
+    recorder.record({ type: 'view', postId: OID(2), provenance: 'listing', origin: 'profile' });
+    await recorder.flush();
+    expect(requests[0]?.body).toEqual({ events: [{ type: 'view', postId: OID(2), provenance: 'listing', origin: 'profile' }] });
+  });
+});

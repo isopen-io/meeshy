@@ -1,5 +1,6 @@
 import * as socialEndpoints from '@meeshy/shared/api/endpoints/social';
 import type { ContentSurface } from '@meeshy/shared/types/content-surfaces';
+import type { OpenOrigin, ViewProvenance } from '@meeshy/shared/types/content-reach';
 
 import type { ApiResult, Credential, HttpRequest, HttpTransport } from './http';
 
@@ -31,6 +32,12 @@ import type { ApiResult, Credential, HttpRequest, HttpTransport } from './http';
  *   une impression, chaque ouverture une vue — aucun dédoublonnage côté
  *   client, ni par fenêtre de temps ni par onglet. Les vues UNIQUES sont
  *   l'affaire de la passerelle (par compte ou par clé de lecteur).
+ * - L'ENGAGEMENT D'OUVERTURE `open` (#10483) — le tap sur un contenu d'un
+ *   listing, avec le listing d'origine ; il ne compte aucune vue. Un serveur
+ *   antérieur ne le connaît pas et refuserait en 400 le lot ENTIER (union
+ *   discriminée) : les `open` partent donc TOUJOURS dans leur propre requête,
+ *   pour un compte comme pour un visiteur, et leur refus (400, 403) les
+ *   retire sans rejeu, sans jamais emporter une vue ou une impression.
  */
 export const SOCIAL_EVENTS_BATCH_CAP = 200;
 
@@ -57,12 +64,20 @@ export type ImpressionSource =
  * antérieur l'ignore (`z.object` n'est pas strict) : rien côté client n'en
  * dépend.
  */
-export type { ContentSurface };
+export type { ContentSurface, OpenOrigin, ViewProvenance };
 
 export type DwellContentType = 'POST' | 'REEL' | 'STORY' | 'STATUS';
 
 export type SocialEvent =
-  | { readonly type: 'view'; readonly postId: string; readonly durationMs?: number; readonly surface?: ContentSurface }
+  | {
+      readonly type: 'view';
+      readonly postId: string;
+      readonly durationMs?: number;
+      readonly surface?: ContentSurface;
+      readonly provenance?: ViewProvenance;
+      readonly origin?: OpenOrigin;
+    }
+  | { readonly type: 'open'; readonly postId: string; readonly origin?: OpenOrigin }
   | { readonly type: 'impression'; readonly postId: string; readonly source: ImpressionSource; readonly surface?: ContentSurface }
   | {
       readonly type: 'dwell';
@@ -217,28 +232,48 @@ function postEvents(
   );
 }
 
-/** Un lot d'un COMPTE — le transport y pose son crédential. */
+/**
+ * Des PARTS d'un même lot, chacune dans sa requête. Seule la part en PANNE
+ * repart : la part écrite ne se recompte pas, la part refusée ne se fait pas
+ * refuser encore.
+ */
+async function sendParts(
+  deps: SocialEventsTransportDeps,
+  parts: readonly (readonly SocialEvent[])[],
+  options: FlushOptions,
+  identity: CallIdentity,
+): Promise<SendOutcome> {
+  const filled = parts.filter((part) => part.length > 0);
+  const verdicts = await Promise.all(filled.map((part) => postEvents(deps, part, options, identity)));
+  return { retain: filled.filter((_, index) => verdicts[index] === 'retry').flat() };
+}
+
+const isOpen = (event: SocialEvent): boolean => event.type === 'open';
+
+/** Un lot d'un COMPTE — le transport y pose son crédential ; ses `open` à part. */
 export function sendAccountBatch(deps: SocialEventsTransportDeps) {
-  return (events: readonly SocialEvent[], options: FlushOptions = {}): Promise<SendVerdict> =>
-    postEvents(deps, events, options, {});
+  return (events: readonly SocialEvent[], options: FlushOptions = {}): Promise<SendOutcome> =>
+    sendParts(deps, [events.filter((event) => !isOpen(event)), events.filter(isOpen)], options, {});
 }
 
 /**
- * Un lot d'un VISITEUR, sous l'identité figée à l'enregistrement. Les vues et
- * les impressions partent séparément : un serveur antérieur à #10483 refuse
- * en 403 l'impression d'un anonyme, et ce refus ne doit pas emporter la vue.
- * Seule la part en PANNE repart : la part écrite ne se recompte pas, la
- * part refusée ne se fait pas refuser encore.
+ * Un lot d'un VISITEUR, sous l'identité figée à l'enregistrement. Vues,
+ * impressions et `open` partent séparément : un serveur antérieur à #10483
+ * refuse en 403 l'impression d'un anonyme, et ce refus ne doit pas emporter
+ * la vue.
  */
 export function sendVisitorBatch(deps: SocialEventsTransportDeps, identity: CallIdentity) {
-  return async (events: readonly SocialEvent[], options: FlushOptions = {}): Promise<SendOutcome> => {
-    const parts = [
-      events.filter((event) => event.type === 'view'),
-      events.filter((event) => event.type === 'impression'),
-    ].filter((part) => part.length > 0);
-    const verdicts = await Promise.all(parts.map((part) => postEvents(deps, part, options, identity)));
-    return { retain: parts.filter((_, index) => verdicts[index] === 'retry').flat() };
-  };
+  return (events: readonly SocialEvent[], options: FlushOptions = {}): Promise<SendOutcome> =>
+    sendParts(
+      deps,
+      [
+        events.filter((event) => event.type === 'view'),
+        events.filter((event) => event.type === 'impression'),
+        events.filter(isOpen),
+      ],
+      options,
+      identity,
+    );
 }
 
 type VisitorLane = { readonly key: string; readonly identity: () => CallIdentity };
@@ -276,9 +311,9 @@ export function createSocialEventsRecorder(deps: SocialEventsTransportDeps & {
   }
 
   /* Ce qu'un visiteur envoie : chaque vue (ouverture, puis sortie avec sa
-     durée) et chaque impression. La séance `dwell` et le téléchargement
-     restent réservés aux comptes. */
-  const admitsVisitor = (event: SocialEvent): boolean => event.type === 'view' || event.type === 'impression';
+     durée), chaque impression et chaque engagement d'ouverture. La séance
+     `dwell` et le téléchargement restent réservés aux comptes. */
+  const admitsVisitor = (event: SocialEvent): boolean => event.type === 'view' || event.type === 'impression' || event.type === 'open';
 
   function record(event: SocialEvent): void {
     const credential = deps.credential();
