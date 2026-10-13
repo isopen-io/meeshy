@@ -175,6 +175,13 @@ describe('createPostRouteRateLimitConfig', () => {
     expect(cfg.keyGenerator(req)).toBe('posts:like:ip:9.9.9.9');
   });
 
+  it('keyGenerator ne verse pas tous les visiteurs dans UN seau — le contexte non authentifié (userId « anonymous ») compte par adresse (#10483)', () => {
+    const cfg = createPostRouteRateLimitConfig('impression') as any;
+    const visiteur = (ip: string) => ({ authContext: { isAuthenticated: false, isAnonymous: true, userId: 'anonymous' }, ip });
+    expect(cfg.keyGenerator(visiteur('9.9.9.9'))).toBe('posts:impression:ip:9.9.9.9');
+    expect(cfg.keyGenerator(visiteur('8.8.8.8'))).not.toBe(cfg.keyGenerator(visiteur('9.9.9.9')));
+  });
+
   it('errorResponseBuilder returns 429 shape', () => {
     const cfg = createPostRouteRateLimitConfig('comment') as any;
     const body = cfg.errorResponseBuilder();

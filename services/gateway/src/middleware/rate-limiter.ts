@@ -305,8 +305,11 @@ export function createPostRouteRateLimitConfig(
     ...GARDES_DE_CLE,
     keyGenerator: (request: FastifyRequest) => {
       const authContext = (request as UnifiedAuthRequest).authContext;
-      const id = authContext?.userId ?? `ip:${request.ip}`;
-      return `posts:${cfg.label}:${id}`;
+      // Le contexte NON authentifié du middleware facultatif porte
+      // `userId: 'anonymous'` : le lire versait tous les visiteurs dans UN seau
+      // (#10483, alias d'impression ouverts aux lecteurs sans compte).
+      const userId = authContext?.isAuthenticated === false ? undefined : authContext?.userId;
+      return `posts:${cfg.label}:${userId ?? `ip:${request.ip}`}`;
     },
     errorResponseBuilder: () => ({
       success: false,
