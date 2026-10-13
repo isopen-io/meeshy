@@ -29,51 +29,77 @@ public enum ReachSurface: String, Codable, Sendable, CaseIterable {
 
 /// Un événement de lecture. `surface` (et `durationMs`) ne s'écrivent que s'ils
 /// sont présents : une clé `null` serait refusée par le schéma de la porte.
+///
+/// - `view` porte, depuis la demande du porteur du 2026-10-13, l'ENTRÉE qui a
+///   amené l'écran détail (`provenance`, et `origin` pour un listing) ;
+/// - `open` est l'engagement d'ouverture envoyé AU TAP sur un contenu d'un
+///   listing. Il ne compte AUCUNE vue, et un serveur antérieur ne le connaît
+///   pas : il part toujours dans une requête à lui
+///   (`SocialEventsDispatch.requests(for:)`).
 public enum SocialEvent: Codable, Sendable, Equatable {
-    case view(postId: String, durationMs: Int?, surface: ReachSurface?)
+    case view(postId: String, durationMs: Int?, surface: ReachSurface?, entry: ContentEntry? = nil)
     case impression(postId: String, source: String, surface: ReachSurface?)
+    case open(postId: String, origin: OpenOrigin?)
 
     public var postId: String {
         switch self {
-        case .view(let postId, _, _), .impression(let postId, _, _):
+        case .view(let postId, _, _, _), .impression(let postId, _, _), .open(let postId, _):
             return postId
         }
     }
 
+    /// Un engagement d'ouverture — jamais dans la même requête qu'une vue ou
+    /// une impression.
+    public var isOpen: Bool {
+        if case .open = self { return true }
+        return false
+    }
+
     private enum CodingKeys: String, CodingKey {
-        case type, postId, durationMs, source, surface
+        case type, postId, durationMs, source, surface, provenance, origin
     }
 
     private enum Kind: String, Codable {
-        case view, impression
+        case view, impression, open
     }
 
     public func encode(to encoder: Encoder) throws {
         var container = encoder.container(keyedBy: CodingKeys.self)
         switch self {
-        case .view(let postId, let durationMs, let surface):
+        case .view(let postId, let durationMs, let surface, let entry):
             try container.encode(Kind.view, forKey: .type)
             try container.encode(postId, forKey: .postId)
             try container.encodeIfPresent(durationMs, forKey: .durationMs)
             try container.encodeIfPresent(surface, forKey: .surface)
+            try container.encodeIfPresent(entry?.provenance, forKey: .provenance)
+            try container.encodeIfPresent(entry?.origin, forKey: .origin)
         case .impression(let postId, let source, let surface):
             try container.encode(Kind.impression, forKey: .type)
             try container.encode(postId, forKey: .postId)
             try container.encode(source, forKey: .source)
             try container.encodeIfPresent(surface, forKey: .surface)
+        case .open(let postId, let origin):
+            try container.encode(Kind.open, forKey: .type)
+            try container.encode(postId, forKey: .postId)
+            try container.encodeIfPresent(origin, forKey: .origin)
         }
     }
 
+    /// Une valeur d'énumération inconnue (file écrite par une version plus
+    /// récente) se lit comme absente, jamais comme une erreur de décodage.
     public init(from decoder: Decoder) throws {
         let container = try decoder.container(keyedBy: CodingKeys.self)
         let postId = try container.decode(String.self, forKey: .postId)
-        let surface = try container.decodeIfPresent(ReachSurface.self, forKey: .surface)
+        let surface = (try? container.decodeIfPresent(ReachSurface.self, forKey: .surface)) ?? nil
+        let origin = (try? container.decodeIfPresent(OpenOrigin.self, forKey: .origin)) ?? nil
         switch try container.decode(Kind.self, forKey: .type) {
         case .view:
+            let provenance = (try? container.decodeIfPresent(ViewProvenance.self, forKey: .provenance)) ?? nil
             self = .view(
                 postId: postId,
                 durationMs: try container.decodeIfPresent(Int.self, forKey: .durationMs),
-                surface: surface
+                surface: surface,
+                entry: provenance.map { ContentEntry(provenance: $0, origin: origin) }
             )
         case .impression:
             self = .impression(
@@ -81,6 +107,8 @@ public enum SocialEvent: Codable, Sendable, Equatable {
                 source: try container.decodeIfPresent(String.self, forKey: .source) ?? "feed",
                 surface: surface
             )
+        case .open:
+            self = .open(postId: postId, origin: origin)
         }
     }
 }
