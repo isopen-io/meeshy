@@ -296,9 +296,9 @@ struct AudioFullscreenPage: View, Equatable {
     /// ne capte aucun toucher — on fait défiler le texte à travers lui.
     private func frost(fadingToward edge: VerticalEdge) -> some View {
         Rectangle()
-            .fill(.regularMaterial)
+            .fill(.thinMaterial)
             .mask(LinearGradient(
-                stops: [.init(color: .black, location: 0), .init(color: .black, location: 0.9), .init(color: .clear, location: 1)],
+                stops: [.init(color: .black, location: 0), .init(color: .black, location: 0.7), .init(color: .clear, location: 1)],
                 startPoint: edge == .bottom ? .top : .bottom,
                 endPoint: edge == .bottom ? .bottom : .top
             ))
