@@ -363,6 +363,13 @@ public final class SharedAVPlayerManager: ObservableObject {
         rate == 0 && isReadyToPlay
     }
 
+    /// **Ce que `preroll(atRate:)` exige avant d'être appelé (#10554).**
+    public nonisolated static func isReadyForPreroll(
+        playerStatus: AVPlayer.Status, itemStatus: AVPlayerItem.Status?
+    ) -> Bool {
+        itemStatus == .readyToPlay
+    }
+
     private static func prerollIfIdle(_ player: AVPlayer) {
         guard mayPrerollRecycledPlayer(
             rate: player.rate, isReadyToPlay: player.currentItem?.status == .readyToPlay
