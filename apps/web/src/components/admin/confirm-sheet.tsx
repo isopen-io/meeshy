@@ -39,9 +39,9 @@ const BIG = 52;
  *
  * **L'ADMIN NON PLUS NE SE JUSTIFIE PAS** (demande porteur 2026-10-13, #10562) : pour
  * le rang d'administration, le motif est PROPOSÉ (`useAdminMotive().fallback`, « Contrôle
- * aléatoire, test de fonctionnalité et suivi client »), replié en une ligne ; « Confirmer »
- * l'envoie tel quel, « Modifier le motif » ouvre le champ déjà rempli. La passerelle
- * n'exemptant que BIGBOSS, le motif part ÉCRIT.
+ * aléatoire, test de fonctionnalité et suivi client ») : le champ s'ouvre DÉJÀ REMPLI, la
+ * confirmation est offerte d'emblée, et le motif se réécrit sans geste de plus ; vidé, c'est
+ * encore le motif proposé qui part. La passerelle n'exemptant que BIGBOSS, il part ÉCRIT.
  *
  * Une NOTE n'est pas un motif (`motive.kind === 'note'`) : les notes d'un
  * dossier de signalement sont son CONTENU, pas une justification du geste —
@@ -84,20 +84,18 @@ export function AdminConfirmSheet({
   const isNote = requested?.kind === 'note';
   const motive = rank.sovereign && !isNote ? undefined : requested;
   const fallback = motive === undefined || isNote ? undefined : rank.fallback;
-  const [text, setText] = useState('');
-  const [editing, setEditing] = useState(false);
+  const [text, setText] = useState(fallback ?? '');
   const field = useRef<HTMLTextAreaElement>(null);
   const cancel = useRef<HTMLButtonElement>(null);
   const motiveId = useId();
-  const folded = motive !== undefined && fallback !== undefined && !editing;
 
   /* `<dialog>.showModal()` (la feuille) place le focus sur le premier élément
      focalisable APRÈS les effets des enfants : on attend un tour pour le
      reprendre, sans quoi il resterait sur la croix de fermeture. */
   useEffect(() => {
-    const timer = setTimeout(() => (motive === undefined || folded ? cancel.current : field.current)?.focus(), 0);
+    const timer = setTimeout(() => (motive === undefined ? cancel.current : field.current)?.focus(), 0);
     return () => clearTimeout(timer);
-  }, [motive, folded]);
+  }, [motive]);
 
   /* La règle du motif est celle du kit (`motiveState`, #9463) ; le rang souverain est déjà
      tranché plus haut (`motive` absent), d'où `sovereign: false` ici. */
@@ -113,11 +111,6 @@ export function AdminConfirmSheet({
   const tooShort = motive !== undefined && state.tooShort;
   const blocked = busy || tooShort;
   const sent = motive === undefined ? null : fallback === undefined ? trimmed : state.sent;
-
-  const openEditor = () => {
-    setText(fallback ?? '');
-    setEditing(true);
-  };
 
   return (
     <Sheet title={title} presentation="centered" bodyAs="div" closeLabel={translateAdmin(language, 'admin.kit.close')} onClose={onCancel}>
@@ -141,40 +134,16 @@ export function AdminConfirmSheet({
           </p>
         </div>
 
-        {motive === undefined ? null : folded ? (
-          <div
-            data-admin-motive-proposed
-            className="flex flex-wrap items-center gap-3 rounded-card px-4 py-3"
-            style={{ backgroundColor: 'color-mix(in srgb, var(--color-ios-brand) 8%, transparent)', border: `1px solid ${EDGE}` }}
-          >
-            <div className="min-w-0 flex-1">
-              <p className="text-caption font-medium" style={{ color: INK2 }}>
-                {translateAdmin(language, 'admin.kit.motiveProposed')}
-              </p>
-              <p className="text-body" style={{ color: INK }}>
-                {fallback}
-              </p>
-            </div>
-            <button
-              type="button"
-              data-admin-motive-edit
-              onClick={openEditor}
-              className={`inline-flex items-center gap-1 rounded-chip px-3 text-caption font-semibold ${FOCUS}`}
-              style={{ minHeight: 44, color: BRAND, outlineColor: BRAND }}
-            >
-              <AdminGlyph name="pencilSimple" size={14} />
-              {translateAdmin(language, 'admin.kit.motiveEdit')}
-            </button>
-          </div>
-        ) : (
+        {motive === undefined ? null : (
           <label htmlFor={motiveId} className="grid gap-1">
             <span className="text-caption font-medium" style={{ color: INK2 }}>
-              {fallback === undefined ? motive.label : translateAdmin(language, 'admin.kit.motiveOptional')}
+              {fallback === undefined ? motive.label : translateAdmin(language, 'admin.kit.motiveProposed')}
             </span>
             <textarea
               id={motiveId}
               ref={field}
               data-admin-motive
+              {...(fallback === undefined ? {} : { 'data-admin-motive-proposed': text.trim() === fallback.trim() ? 'intact' : 'rewritten' })}
               rows={3}
               value={text}
               {...(fallback === undefined ? {} : { placeholder: fallback })}
@@ -187,7 +156,9 @@ export function AdminConfirmSheet({
             <span id={`${motiveId}-count`} data-admin-motive-count className="text-caption tabular-nums" style={{ color: tooShort ? 'var(--color-danger)' : INK2 }}>
               {state.defaulted
                 ? translateAdmin(language, 'admin.kit.motiveDefaultNote')
-                : translateAdmin(language, 'admin.kit.confirm.motiveCount', { count: String(trimmed.length), min: String(motive.minLength) })}
+                : fallback !== undefined && trimmed === fallback.trim()
+                  ? translateAdmin(language, 'admin.kit.motiveProposedNote')
+                  : translateAdmin(language, 'admin.kit.confirm.motiveCount', { count: String(trimmed.length), min: String(motive.minLength) })}
             </span>
           </label>
         )}

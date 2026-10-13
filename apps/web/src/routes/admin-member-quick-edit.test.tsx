@@ -194,7 +194,7 @@ describe('ce qui retire un droit se confirme — sans se justifier', () => {
     await commit(host, 'role', 'MODERATOR');
     expect(calls().some((request) => request.method === 'PATCH')).toBe(false);
     expect(textOf(document.querySelector('dialog h2'))).toBe('Passer ce membre en « Modérateur » ?');
-    expect(textOf(document.querySelector('[data-admin-motive-proposed]'))).toContain(PROPOSE);
+    expect(document.querySelector<HTMLTextAreaElement>('[data-admin-motive]')?.value).toBe(PROPOSE);
     await mounter.click(confirmButton());
     await mounter.settle();
     expect(calls().find((request) => request.method === 'PATCH')?.body).toEqual({ role: 'MODERATOR', reason: PROPOSE });
@@ -204,7 +204,7 @@ describe('ce qui retire un droit se confirme — sans se justifier', () => {
   test('désactiver se confirme ; BIGBOSS confirme sans motif', async () => {
     const { host, calls } = await open(member(), { identity: BIGBOSS, replies: [patch('', () => ({ ok: true, data: served({ isActive: false }) }))] });
     await commit(host, 'active', 'inactive');
-    expect(document.querySelector('[data-admin-motive], [data-admin-motive-proposed]')).toBeNull();
+    expect(document.querySelector('[data-admin-motive]')).toBeNull();
     await mounter.click(confirmButton());
     await mounter.settle();
     expect(calls().find((request) => request.method === 'PATCH')?.body).toEqual({ isActive: false });

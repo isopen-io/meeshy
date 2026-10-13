@@ -395,7 +395,8 @@ describe('AdminFormActions — un geste à la fois, jamais hors ligne', () => {
     await click(host.querySelector('[data-admin-test-remove]'));
     await click(cancel);
     expect([removed, cancelled]).toEqual([1, 1]);
-    for (const button of host.querySelectorAll('button')) expect((button as HTMLButtonElement).style.minHeight).toBe('44px');
+    /* Les gestes d’un formulaire sont de GROS boutons (#10562). */
+    for (const button of host.querySelectorAll('button')) expect((button as HTMLButtonElement).style.minHeight).toBe('52px');
   });
 
   test('armer un secondaire qui change de libellé GARDE le focus sur le même bouton (#9463)', async () => {

@@ -32,7 +32,7 @@ const f = {
   'admin.kit.motiveDefault': 'Contrôle aléatoire, test de fonctionnalité et suivi client',
   'admin.kit.motiveDefaultNote': 'Laissé vide, le motif proposé part tel quel.',
   'admin.kit.motiveProposed': 'Motif proposé',
-  'admin.kit.motiveEdit': 'Modifier le motif',
+  'admin.kit.motiveProposedNote': 'Proposé par défaut — modifiable à votre guise.',
   'admin.kit.inline.edit': 'Modifier {label} : {value}',
   'admin.kit.inline.empty': 'Non renseigné',
   'admin.kit.inline.saving': 'Enregistrement…',

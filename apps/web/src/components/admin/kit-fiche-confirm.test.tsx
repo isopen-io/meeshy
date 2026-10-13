@@ -302,34 +302,31 @@ describe('AdminConfirmSheet — le rang souverain n’écrit pas de motif (spec 
     expect(confirmations).toEqual([null]);
   });
 
-  test('ADMIN : le motif est PROPOSÉ, replié, et la confirmation l’envoie tel quel (#10562)', async () => {
+  test('ADMIN : le champ s’ouvre DÉJÀ REMPLI du motif proposé, et la confirmation l’envoie tel quel (#10562)', async () => {
     const { host, confirmations } = await ouvrirEnTantQue(ADMIN, true);
-    expect(host.querySelector('[data-admin-motive]')).toBeNull();
-    expect(host.querySelector('[data-admin-motive-proposed]')?.textContent).toContain('Contrôle aléatoire, test de fonctionnalité et suivi client');
-    expect(document.activeElement).toBe(host.querySelector('[data-admin-action="cancel"]'));
+    const champ = host.querySelector<HTMLTextAreaElement>('[data-admin-motive]');
+    expect(champ?.value).toBe('Contrôle aléatoire, test de fonctionnalité et suivi client');
+    expect(champ?.getAttribute('data-admin-motive-proposed')).toBe('intact');
+    expect(host.querySelector('label span')?.textContent).toBe('Motif proposé');
+    expect(host.querySelector('[data-admin-motive-count]')?.textContent).toBe('Proposé par défaut — modifiable à votre guise.');
     const bouton = host.querySelector<HTMLButtonElement>('[data-admin-action="confirm"]');
     expect(bouton?.disabled).toBe(false);
     await act(async () => bouton?.click());
     expect(confirmations).toEqual(['Contrôle aléatoire, test de fonctionnalité et suivi client']);
   });
 
-  test('ADMIN : « Modifier le motif » ouvre le champ déjà rempli ; le motif réécrit part à sa place', async () => {
+  test('ADMIN : le motif réécrit part à sa place, et suit la règle ordinaire', async () => {
     const { host, confirmations } = await ouvrirEnTantQue(ADMIN, true);
-    await act(async () => host.querySelector<HTMLButtonElement>('[data-admin-motive-edit]')?.click());
-    await act(async () => {
-      await new Promise((resolve) => setTimeout(resolve, 5));
-    });
-    const champ = host.querySelector<HTMLTextAreaElement>('[data-admin-motive]');
-    expect(champ?.value).toBe('Contrôle aléatoire, test de fonctionnalité et suivi client');
-    expect(document.activeElement).toBe(champ);
+    mounter.type(host, '[data-admin-motive]', 'court');
+    expect(host.querySelector<HTMLButtonElement>('[data-admin-action="confirm"]')?.disabled).toBe(true);
     mounter.type(host, '[data-admin-motive]', 'compte compromis signalé');
+    expect(host.querySelector('[data-admin-motive]')?.getAttribute('data-admin-motive-proposed')).toBe('rewritten');
     await act(async () => host.querySelector<HTMLButtonElement>('[data-admin-action="confirm"]')?.click());
     expect(confirmations).toEqual(['compte compromis signalé']);
   });
 
   test('ADMIN : un champ vidé renvoie au motif proposé, jamais à un blocage', async () => {
     const { host, confirmations } = await ouvrirEnTantQue(ADMIN, true);
-    await act(async () => host.querySelector<HTMLButtonElement>('[data-admin-motive-edit]')?.click());
     mounter.type(host, '[data-admin-motive]', '');
     expect(host.querySelector('[data-admin-motive-count]')?.textContent).toBe('Laissé vide, le motif proposé part tel quel.');
     await act(async () => host.querySelector<HTMLButtonElement>('[data-admin-action="confirm"]')?.click());
@@ -338,8 +335,8 @@ describe('AdminConfirmSheet — le rang souverain n’écrit pas de motif (spec 
 
   test('MODERATOR : rien n’est proposé — le champ obligatoire reste, la confirmation bloquée sous le minimum', async () => {
     const { host } = await ouvrirEnTantQue(adminIdentityFixture({ role: 'MODERATOR' }), true);
-    expect(host.querySelector('[data-admin-motive-proposed]')).toBeNull();
-    expect(host.querySelector('[data-admin-motive]')).not.toBeNull();
+    expect(host.querySelector('[data-admin-motive]')?.value).toBe('');
+    expect(host.querySelector('[data-admin-motive]')?.hasAttribute('data-admin-motive-proposed')).toBe(false);
     expect(host.querySelector<HTMLButtonElement>('[data-admin-action="confirm"]')?.disabled).toBe(true);
   });
 });

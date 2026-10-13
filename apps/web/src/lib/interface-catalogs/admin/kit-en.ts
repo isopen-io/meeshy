@@ -29,7 +29,7 @@ const f = {
   'admin.kit.motiveDefault': 'Random check, feature test and customer follow-up',
   'admin.kit.motiveDefaultNote': 'Left empty, the suggested reason is sent as is.',
   'admin.kit.motiveProposed': 'Suggested reason',
-  'admin.kit.motiveEdit': 'Edit the reason',
+  'admin.kit.motiveProposedNote': 'Suggested by default — edit it as you wish.',
   'admin.kit.inline.edit': 'Edit {label}: {value}',
   'admin.kit.inline.empty': 'Not provided',
   'admin.kit.inline.saving': 'Saving…',

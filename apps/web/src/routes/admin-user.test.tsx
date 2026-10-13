@@ -470,10 +470,8 @@ describe('supprimer et restaurer un compte (audit 2026-10-04)', () => {
     const { host, calls } = await open({ identity: adminIdentityFixture({ role: 'ADMIN' }), replies });
     await act(async () => host.querySelector<HTMLButtonElement>('[data-admin-action="delete-user"]')?.click());
     await mounter.settle();
-    /* Le motif est PROPOSÉ, replié (#10562) : l'administrateur l'ouvre pour écrire le sien. */
+    /* Le motif est PROPOSÉ, déjà écrit (#10562) : l'administrateur peut confirmer, ou écrire le sien. */
     expect(confirmButton()?.disabled).toBe(false);
-    await act(async () => document.querySelector<HTMLButtonElement>('[data-admin-motive-edit]')?.click());
-    await mounter.settle();
     const field = document.querySelector<HTMLTextAreaElement>('[data-admin-confirm] textarea');
     await act(async () => {
       if (field === null) return;

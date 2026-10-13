@@ -130,8 +130,6 @@ async function ask(host: ParentNode, name: string) {
 
 async function confirm(written?: string) {
   if (written !== undefined) {
-    /* Un ADMIN voit le motif PROPOSÉ, replié (#10562) : « Modifier le motif » ouvre le champ. */
-    if (motive() === null) await mounter.click(document.querySelector<HTMLButtonElement>('[data-admin-motive-edit]'));
     const field = motive();
     if (field === null) throw new Error('motif absent');
     mounter.type(document.body, '[data-admin-motive]', written);
@@ -230,7 +228,6 @@ describe('retirer la double authentification', () => {
 
     await ask(host, 'remove-two-factor');
     expect(confirmButton()?.disabled).toBe(false);
-    await mounter.click(document.querySelector<HTMLButtonElement>('[data-admin-motive-edit]'));
     mounter.type(document.body, '[data-admin-motive]', 'trop bref');
     expect(confirmButton()?.disabled).toBe(true);
 
@@ -245,7 +242,7 @@ describe('un ADMIN ne se justifie pas : le motif proposé part tel quel (#10562)
   test('retirer la double authentification sans rien écrire envoie le motif proposé', async () => {
     const { host, calls } = await open(member({ twoFactorEnabledAt: '2026-05-01T00:00:00.000Z' }), { identity: ADMIN, replies: [patch('security', () => ({ ok: true, data: served({ twoFactorEnabledAt: null }) }))] });
     await ask(host, 'remove-two-factor');
-    expect(textOf(document.querySelector('[data-admin-motive-proposed]'))).toContain('Contrôle aléatoire, test de fonctionnalité et suivi client');
+    expect(motive()?.value).toBe('Contrôle aléatoire, test de fonctionnalité et suivi client');
     await confirm();
     expect(calls().find((request) => request.method === 'PATCH')?.body).toEqual({ twoFactorEnabled: false, reason: 'Contrôle aléatoire, test de fonctionnalité et suivi client' });
   });

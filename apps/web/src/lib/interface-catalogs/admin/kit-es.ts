@@ -29,7 +29,7 @@ const f = {
   'admin.kit.motiveDefault': 'Control aleatorio, prueba de funcionalidad y seguimiento del cliente',
   'admin.kit.motiveDefaultNote': 'Si se deja vacío, se envía el motivo propuesto.',
   'admin.kit.motiveProposed': 'Motivo propuesto',
-  'admin.kit.motiveEdit': 'Editar el motivo',
+  'admin.kit.motiveProposedNote': 'Propuesto por defecto: puedes modificarlo.',
   'admin.kit.inline.edit': 'Editar {label}: {value}',
   'admin.kit.inline.empty': 'Sin indicar',
   'admin.kit.inline.saving': 'Guardando…',

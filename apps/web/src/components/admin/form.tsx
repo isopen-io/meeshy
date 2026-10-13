@@ -588,8 +588,8 @@ export type AdminFormSecondary = {
 };
 
 /**
- * **LES GESTES D'UN FORMULAIRE** — la disposition d'`AdminConfirmSheet` (alignés à
- * droite, jamais étirés). Un geste à la fois : pendant l'envoi, le principal se dit
+ * **LES GESTES D'UN FORMULAIRE** — la disposition d'`AdminConfirmSheet` : de GROS boutons
+ * (52 px, #10562), empilés sur toute la largeur d'un téléphone, alignés à droite dès 640 px. Un geste à la fois : pendant l'envoi, le principal se dit
  * occupé et les autres gestes qui ÉCRIVENT attendent. Annuler reste offert, en vol
  * comme hors ligne, puisqu'il n'écrit rien : on peut toujours renoncer à attendre.
  * Hors ligne, les gestes qui écrivent sont désactivés (ce que l'avis
@@ -615,15 +615,16 @@ export function AdminFormActions({
   const busy = primary?.busy === true;
   const writeBlocked = busy || !online;
   return (
-    <div data-admin-form-actions data-admin-form-offline={online ? 'false' : 'true'} className="flex flex-wrap justify-end gap-3">
+    <div data-admin-form-actions data-admin-form-offline={online ? 'false' : 'true'} className="grid grid-cols-1 gap-3 sm:flex sm:flex-wrap sm:justify-end">
       {onCancel === undefined ? null : (
-        <AdminButton onClick={onCancel} data={{ 'data-admin-form-cancel': '' }}>
+        <AdminButton size="lg" onClick={onCancel} data={{ 'data-admin-form-cancel': '' }}>
           {cancelLabel ?? translateAdmin(language, 'admin.kit.cancel')}
         </AdminButton>
       )}
       {secondary.map((action) => (
         <AdminButton
           key={action.id}
+          size="lg"
           tone={action.tone ?? 'secondary'}
           disabled={writeBlocked || action.disabled === true}
           onClick={action.onClick}
@@ -634,6 +635,7 @@ export function AdminFormActions({
       ))}
       {primary === undefined ? null : (
         <AdminButton
+          size="lg"
           type={primary.type ?? 'button'}
           tone={primary.tone ?? 'primary'}
           busy={busy}
