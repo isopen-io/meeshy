@@ -271,12 +271,12 @@ extension ImpressionBatcherTests {
     func test_retryAcrossALaunch_sendsTheSameEventIds() async throws {
         let failing = MockPostService()
         failing.recordSocialEventsResult = .failure(NSError(domain: "net", code: -1009))
-        let first = ImpressionBatcher(source: "feed", postService: failing, flushDelay: 60, defaults: defaults)
+        let first = ImpressionBatcher(source: "feed", postService: failing, flushDelay: 60, defaults: defaults, accountId: { nil })
         first.record("p1")
         await first.flushNow()
 
         let online = MockPostService()
-        let revived = ImpressionBatcher(source: "feed", postService: online, flushDelay: 60, defaults: defaults)
+        let revived = ImpressionBatcher(source: "feed", postService: online, flushDelay: 60, defaults: defaults, accountId: { nil })
         await revived.flushNow()
 
         XCTAssertEqual(stamps(online).flatMap { $0 }.map(\.eventId), stamps(failing).flatMap { $0 }.map(\.eventId))
@@ -318,11 +318,11 @@ extension ImpressionBatcherTests {
         defaults.set(["p1"], forKey: key)
         let failing = MockPostService()
         failing.recordSocialEventsResult = .failure(NSError(domain: "net", code: -1009))
-        let first = ImpressionBatcher(source: "feed", postService: failing, flushDelay: 60, defaults: defaults)
+        let first = ImpressionBatcher(source: "feed", postService: failing, flushDelay: 60, defaults: defaults, accountId: { nil })
         await first.flushNow()
 
         let online = MockPostService()
-        let revived = ImpressionBatcher(source: "feed", postService: online, flushDelay: 60, defaults: defaults)
+        let revived = ImpressionBatcher(source: "feed", postService: online, flushDelay: 60, defaults: defaults, accountId: { nil })
         await revived.flushNow()
 
         XCTAssertEqual(online.recordedImpressionPostIds, ["p1"])

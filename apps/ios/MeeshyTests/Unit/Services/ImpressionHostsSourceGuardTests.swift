@@ -41,15 +41,15 @@ final class ImpressionHostsSourceGuardTests: XCTestCase {
     private let hosts: [Host] = [
         Host(file: "RootViewComponents.swift",
              construction: "ImpressionBatcher(source: \"feed\", surface: .feed)",
-             records: ".countsImpression(of: post.id) { impressions.record($0) }",
+             records: ".countsListedImpression(of: post.id, isVideo: post.isReel, in: impressions)",
              flushes: "await impressions.flushNow()"),
         Host(file: "HashtagResultsView.swift",
              construction: "HashtagResultsViewModel(tag: tag)",
-             records: ".countsImpression(of: post.id) { viewModel.recordImpression($0) }",
+             records: ".countsListedImpression(of: post.id, isVideo: post.isReel, in: viewModel.impressions)",
              flushes: "await viewModel.flushImpressions()"),
         Host(file: "BookmarksView.swift",
              construction: "ImpressionBatcher(source: \"profile\", surface: .bookmarks)",
-             records: "trackImpression(postId: post.id)",
+             records: ".countsListedImpression(of: post.id, isVideo: post.isReel, in: impressions)",
              flushes: "await impressions.flushNow()"),
     ]
 
@@ -74,7 +74,7 @@ final class ImpressionHostsSourceGuardTests: XCTestCase {
     func test_theIPhoneFeed_recordsInsideItsPostLoop() throws {
         let code = try source("RootViewComponents.swift")
         let loop = try XCTUnwrap(section(of: code, from: "ForEach(viewModel.posts)", to: "viewModel.isLoadingMore"))
-        XCTAssertTrue(loop.contains(".countsImpression(of: post.id) { impressions.record($0) }"),
+        XCTAssertTrue(loop.contains(".countsListedImpression(of: post.id, isVideo: post.isReel, in: impressions)"),
                       "le fil de l'iPhone compte l'impression dans la boucle des cartes, réels compris")
     }
 }
