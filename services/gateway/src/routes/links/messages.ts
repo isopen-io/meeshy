@@ -1,4 +1,5 @@
 import type { FastifyInstance, FastifyRequest, FastifyReply } from 'fastify';
+import { guestAccessEnd } from '../../services/guestAccessEnd';
 import { z } from 'zod';
 import { logError } from '../../utils/logger';
 import { sendSuccess, sendUnauthorized, sendForbidden, sendNotFound, sendBadRequest, sendInternalError, sendError } from '../../utils/response.js';
@@ -252,6 +253,7 @@ export async function registerMessageRoutes(fastify: FastifyInstance) {
               isActive: true,
               allowAnonymousMessages: true,
               expiresAt: true,
+              guestRevocationPendingAt: true,
               // L'état TERMINAL du conteneur ET sa police d'écriture. Le lien
               // de partage est le SEUL transport d'envoi d'un invité anonyme :
               // sans cette lecture, fermer une conversation ne fermait rien
@@ -280,6 +282,19 @@ export async function registerMessageRoutes(fastify: FastifyInstance) {
 
       if (participantShareLink.expiresAt && new Date() > participantShareLink.expiresAt) {
         return sendError(reply, 410, 'Ce lien a expiré');
+      }
+
+      // #10470 — la garde commune d'un invité (`guestAccessEnd`) : révocation
+      // DIFFÉRÉE d'un gros lien en attente pour un invité entré avant elle, ou
+      // invité banni. Même refus que la résolution de session REST.
+      if (guestAccessEnd({
+        linkExpiresAt: null,
+        linkIsActive: participantShareLink.isActive,
+        linkRevocationPendingAt: participantShareLink.guestRevocationPendingAt,
+        participation: anonymousParticipant,
+        now: new Date(),
+      }) === 'revoked') {
+        return sendError(reply, 410, 'GUEST_ACCESS_REVOKED', { message: "L'accès de cet invité a été retiré" });
       }
 
       if (!participantShareLink.allowAnonymousMessages) {

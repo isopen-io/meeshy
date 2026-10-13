@@ -199,24 +199,27 @@ final class GamePhotoNotebook: GamePhotoNotebooking {
         self.write = write
     }
 
+    /// `Application Support/MeeshyGame` — un dossier par compte de l'appareil.
+    nonisolated static func accountsRoot(base: URL? = nil) -> URL {
+        (base ?? FileManager.default.urls(for: .applicationSupportDirectory, in: .userDomainMask).first
+            ?? FileManager.default.temporaryDirectory).appendingPathComponent("MeeshyGame", isDirectory: true)
+    }
+
+    /// Le dossier du jeu d'un compte : tout ce qu'il a gardé sur l'appareil (#10482).
+    nonisolated static func accountFolder(userId: String, base: URL? = nil) -> URL {
+        accountsRoot(base: base).appendingPathComponent(userId.isEmpty ? "anonymous" : sanitized(userId), isDirectory: true)
+    }
+
     /// Le carnet d'un compte : `Application Support/MeeshyGame/<userId>/Notebook`.
     static func standard(userId: String) -> GamePhotoNotebook {
-        let base = FileManager.default.urls(for: .applicationSupportDirectory, in: .userDomainMask).first
-            ?? FileManager.default.temporaryDirectory
-        let safeUser = userId.isEmpty ? "anonymous" : sanitized(userId)
-        return GamePhotoNotebook(
-            directory: base.appendingPathComponent("MeeshyGame", isDirectory: true)
-                .appendingPathComponent(safeUser, isDirectory: true)
-                .appendingPathComponent("Notebook", isDirectory: true)
-        )
+        GamePhotoNotebook(directory: accountFolder(userId: userId).appendingPathComponent("Notebook", isDirectory: true))
     }
 
     /// **Les cadres que les carnets de TOUS les comptes de l'appareil gardent dans
     /// une recette** — l'élagage des packs ne touche pas à leurs fichiers
     /// (§ 5.10.6). `nil` si un index ne se relit pas : dans le doute, on garde.
     nonisolated static func referencedFrameIdsOfEveryAccount(base: URL? = nil) async -> Set<String>? {
-        let root = (base ?? FileManager.default.urls(for: .applicationSupportDirectory, in: .userDomainMask).first
-            ?? FileManager.default.temporaryDirectory).appendingPathComponent("MeeshyGame", isDirectory: true)
+        let root = accountsRoot(base: base)
         let accounts = (try? FileManager.default.contentsOfDirectory(atPath: root.path)) ?? []
         var frames: Set<String> = []
         for account in accounts {

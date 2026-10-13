@@ -1,4 +1,4 @@
-import { useEffect, useRef, useState, type CSSProperties } from 'react';
+import { useEffect, useRef, useState, type CSSProperties, type ReactElement } from 'react';
 
 import '@/styles/avatar.css';
 
@@ -9,6 +9,7 @@ import type { UserPresenceStatus } from '@/lib/api/types';
 import { mediaImageCrossOrigin } from '@/lib/net/api-runtime-cache';
 import type { AuthorStoryRing } from '@/lib/view/author-story-ring';
 import { identityTarget } from '@/lib/view/identity-target';
+import { peekMood, useMoodPeekHosted } from '@/lib/view/mood-peek';
 import { peekProfileOnClick } from '@/lib/view/profile-peek';
 import { railRingBox, railStroke } from '@/components/rail-tile';
 import { translate } from '@/lib/i18n-catalog';
@@ -52,6 +53,8 @@ export function Avatar({
   profileUsername,
   storyRing,
   mood,
+  moodStill = false,
+  moodAuthorId,
   redundant,
 }: {
   initials: string;
@@ -139,6 +142,22 @@ export function Avatar({
    */
   mood?: string;
   /**
+   * **DANS UNE LISTE, L'HUMEUR NE BOUGE PAS** (#10528, directive porteur du
+   * 2026-10-13) — la rangée d'une conversation et l'avatar d'un auteur dans le
+   * fil la posent immobile : ni respiration, ni arrivée, ni départ. Des
+   * dizaines de pastilles qui respirent ensemble pendant un défilement
+   * n'informent de rien. Miroir de `AvatarContext.animatesMoodBadge` (iOS).
+   */
+  moodStill?: boolean;
+  /**
+   * **À QUI EST CETTE HUMEUR — ET DONC : ELLE SE TOUCHE** (#10528). Avec lui,
+   * la pastille reçoit un bouton d'au moins 44 px qui ouvre l'humeur et le
+   * texte qui l'accompagne (`lib/view/mood-peek.ts`). Le bouton est le FRÈRE
+   * du lien de profil, jamais son enfant : un contrôle dans un lien n'est pas
+   * du HTML valide. Sans lui — ou sans hôte monté — la pastille reste un dessin.
+   */
+  moodAuthorId?: string;
+  /**
    * **L'ANNEAU DE STORY, QUAND SON AUTEUR EN A UNE** (#7185, directive porteur
    * du 2026-09-20).
    *
@@ -216,6 +235,12 @@ export function Avatar({
   const humeur = mood !== undefined && mood !== '' ? mood : undefined;
   const motion: HereMotion = !here ? 'rest' : hereFocused ? 'focused' : hereActive ? 'active' : 'rest';
   const moodOutline: MoodOutline | undefined = here ? 'here' : presence === 'online' ? 'online' : undefined;
+  /* LE LECTEUR D'ÉCRAN ENTEND L'HUMEUR AVEC LE NOM (#10528) — la pastille est
+     un dessin `aria-hidden` : sans cela, l'humeur n'existait que pour l'œil. */
+  const spoken =
+    name === undefined || humeur === undefined
+      ? name
+      : translate(currentInterfaceLanguage(), 'a11y.avatar.mood', { name, mood: humeur });
 
   const corps = (
     /* `block` — et ce n'est pas décoratif : un `<span>` reste INLINE, et un
@@ -237,7 +262,7 @@ export function Avatar({
           fontSize: size * 0.38,
         }}
         aria-hidden={name === undefined || showsImage}
-        aria-label={showsImage ? undefined : name}
+        aria-label={showsImage ? undefined : spoken}
         role={name === undefined || showsImage ? undefined : 'img'}
       >
         {initials}
@@ -259,7 +284,7 @@ export function Avatar({
            l'avatar serait retombé sur ses initiales en silence. */
         <img
           src={resolvedSrc}
-          alt={name ?? ''}
+          alt={spoken ?? ''}
           loading="lazy"
           decoding="async"
           crossOrigin={mediaImageCrossOrigin(resolvedSrc)}
@@ -286,7 +311,7 @@ export function Avatar({
         /* `data-mood` porte l'ÉTAT servi, comme `data-presence` et
            `data-story-ring` portent les leurs — un gate qui compterait les
            enfants de `.avatar-root` mentirait sur la cause (revue #5935). */
-        <MoodBadge mood={humeur} here={here} motion={motion} outline={moodOutline} size={size} />
+        <MoodBadge mood={humeur} here={here} motion={motion} outline={moodOutline} size={size} still={moodStill} />
       )}
       {storyRing === undefined ? null : (
         /* `data-story-ring` porte l'ÉTAT servi (`unseen`/`seen`), comme
@@ -321,7 +346,20 @@ export function Avatar({
     ...(profileUsername === undefined ? {} : { username: profileUsername }),
     ...(storyRing === undefined ? {} : { storyRing }),
   });
-  if (cible === null) return corps;
+  /* LE BOUTON D'HUMEUR SE POSE À CÔTÉ DE CE QUE L'AVATAR REND (#10528) — lien
+     de profil, lien de story ou simple dessin : l'enveloppe garde la cote de
+     l'avatar (le lien compense déjà sa cible de 44 par une marge négative). */
+  const peekAuthor = humeur !== undefined && moodAuthorId !== undefined && moodAuthorId !== '' ? moodAuthorId : undefined;
+  const withMoodPeek = (rendu: ReactElement): ReactElement =>
+    humeur === undefined || peekAuthor === undefined ? (
+      rendu
+    ) : (
+      <span className="relative grid shrink-0 place-items-center" style={{ width: size, height: size }}>
+        {rendu}
+        <MoodPeekTarget authorId={peekAuthor} emoji={humeur} name={name ?? profileUsername} size={size} />
+      </span>
+    );
+  if (cible === null) return withMoodPeek(corps);
 
   const sizeVar = { '--avatar-size': `${size}px` } as CSSProperties;
   const focus = redundant === true ? { tabIndex: -1 } : {};
@@ -329,7 +367,7 @@ export function Avatar({
     translate(currentInterfaceLanguage(), cle, { name: name ?? profileUsername ?? '' });
 
   if (cible.kind === 'story') {
-    return (
+    return withMoodPeek(
       <Link
         to="story"
         params={{ post: cible.post }}
@@ -339,7 +377,7 @@ export function Avatar({
         {...focus}
       >
         {corps}
-      </Link>
+      </Link>,
     );
   }
 
@@ -347,7 +385,7 @@ export function Avatar({
      est une image décorative est annoncé « lien » et rien d'autre —
      l'utilisateur entend une destination sans savoir laquelle. Et « voir le
      profil » sur un avatar qui ouvre une story serait pire que muet : faux. */
-  return (
+  return withMoodPeek(
     <Link
       to="userProfile"
       params={{ username: cible.username }}
@@ -358,7 +396,60 @@ export function Avatar({
       {...focus}
     >
       {corps}
-    </Link>
+    </Link>,
+  );
+}
+
+/** La cible tactile minimale (Apple, WCAG 2.5.5). */
+const MOOD_PEEK_TARGET = 44;
+
+/** La géométrie de la pastille d'humeur — UN site, lu par le dessin et par sa cible. */
+const moodBadgeBox = (size: number): { readonly side: number; readonly overhang: number } => ({
+  side: Math.round(size * 0.42),
+  overhang: Math.round(size * 0.06),
+});
+
+/**
+ * **LA CIBLE DE L'HUMEUR** (#10528) — un bouton transparent d'au moins 44 px,
+ * centré sur la pastille qu'il recouvre ; le dessin reste dans l'avatar. Il
+ * arrête son clic : la rangée ou le message autour ne s'ouvre pas avec lui.
+ * Exportée pour l'hôte dont l'avatar vit DÉJÀ dans un bouton (la photo du
+ * profil) : il la pose à côté de ce bouton.
+ */
+export function MoodPeekTarget({
+  authorId,
+  emoji,
+  name,
+  size,
+  inset = 0,
+}: {
+  readonly authorId: string;
+  readonly emoji: string;
+  readonly name: string | undefined;
+  readonly size: number;
+  /** L'écart entre l'avatar et la boîte qui porte la cible, quand un hôte la
+   * pose lui-même (le liseré du profil). */
+  readonly inset?: number;
+}) {
+  const hosted = useMoodPeekHosted();
+  if (!hosted) return null;
+  const { side, overhang } = moodBadgeBox(size);
+  const target = Math.max(MOOD_PEEK_TARGET, side);
+  const edge = inset - overhang - (target - side) / 2;
+  return (
+    <button
+      type="button"
+      data-mood-peek={authorId}
+      aria-haspopup="dialog"
+      aria-label={translate(currentInterfaceLanguage(), 'mood.peek.title', { name: name ?? '' })}
+      className="absolute cursor-pointer rounded-chip border-0 bg-transparent p-0 focus-visible:outline-2 focus-visible:outline-offset-[-10px]"
+      style={{ width: target, height: target, right: edge, bottom: edge, outlineColor: 'var(--color-ios-brand)' }}
+      onClick={(event) => {
+        event.preventDefault();
+        event.stopPropagation();
+        peekMood({ authorId, emoji, ...(name === undefined ? {} : { name }) });
+      }}
+    />
   );
 }
 
@@ -479,12 +570,14 @@ function MoodBadge({
   motion,
   outline,
   size,
+  still,
 }: {
   readonly mood: string;
   readonly here: boolean;
   readonly motion: HereMotion;
   readonly outline: MoodOutline | undefined;
   readonly size: number;
+  readonly still: boolean;
 }) {
   const wasHere = useRef(here);
   const settled = useRef(false);
@@ -503,19 +596,14 @@ function MoodBadge({
       settled.current = true;
       return undefined;
     }
-    if (!before || here) return undefined;
+    if (!before || here || still) return undefined;
     setLeaving(true);
     const timer = setTimeout(() => setLeaving(false), PRESENCE_LEAVE_MS);
     return () => clearTimeout(timer);
-  }, [here]);
+  }, [here, still]);
 
-  const side = Math.round(size * 0.42);
-  const box: CSSProperties = {
-    width: side,
-    height: side,
-    right: -Math.round(size * 0.06),
-    bottom: -Math.round(size * 0.06),
-  };
+  const { side, overhang } = moodBadgeBox(size);
+  const box: CSSProperties = { width: side, height: side, right: -overhang, bottom: -overhang };
   const face = (motionClass: string, glyphOutline: MoodOutline | undefined) => (
     <span
       className={`grid size-full place-items-center rounded-chip ${motionClass}`}
@@ -530,7 +618,7 @@ function MoodBadge({
       </span>
     </span>
   );
-  const enters = changed.current ? (here ? ' mood-enter mood-arrive' : ' mood-enter') : '';
+  const enters = still || !changed.current ? '' : here ? ' mood-enter mood-arrive' : ' mood-enter';
   return (
     <>
       {leaving ? (
@@ -546,7 +634,7 @@ function MoodBadge({
         style={{ ...box, '--mood-arrive': PRESENCE_HERE_HEX } as CSSProperties}
         aria-hidden
       >
-        {face(MOOD_MOTION_CLASS[motion], outline)}
+        {face(still ? '' : MOOD_MOTION_CLASS[motion], outline)}
       </span>
     </>
   );

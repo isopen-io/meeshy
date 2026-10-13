@@ -326,7 +326,14 @@ export const ROUTES = {
      (`Post.type = 'STATUS'`, corpus distinct côté passerelle,
      `?scope=statuses`), elle n'a ni scène ni durée, et le bouton système
      « retour » doit refermer la composition d'humeur seule. */
-  statusCompose: { pattern: '/status/new', screen: () => import('@/routes/status-compose') },
+  statusCompose: {
+    pattern: '/status/new',
+    screen: () =>
+      Promise.all([
+        import('@/routes/status-compose'),
+        import('@/lib/i18n-mood-compose-catalog').then((m) => m.loadMoodComposeCatalog(currentInterfaceLanguage())),
+      ]).then(([screen]) => screen),
+  },
   /* PUBLIER DANS LE FIL (#7449, composer unique depuis #7497) — la porte de
      création de l'en-tête du Flux : `/posts/new` ouvre le studio au format
      post, `/posts/new?type=reel` au format réel. PLURIEL, comme

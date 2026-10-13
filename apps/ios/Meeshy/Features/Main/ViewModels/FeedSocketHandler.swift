@@ -351,7 +351,13 @@ extension PostRecord {
             // Même hissage que `locationJson` : sans lui, l'audience nommée
             // d'un post EXCEPT/ONLY ne survit pas au démarrage à froid.
             visibilityUserIdsJson: Self.encode(post.visibilityUserIds)
-                .flatMap { String(data: $0, encoding: .utf8) }
+                .flatMap { String(data: $0, encoding: .utf8) },
+            // #10400 — la portée suit le post dans le cache, sinon le repli
+            // hors ligne la remet à zéro sous des likes intacts.
+            impressionCount: post.impressionCount,
+            postOpenCount: post.postOpenCount,
+            playCount: post.playCount,
+            qualifiedViewCount: post.qualifiedViewCount
         )
     }
 

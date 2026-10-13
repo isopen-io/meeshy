@@ -1871,23 +1871,6 @@ public final class MessageSocketManager: ObservableObject, MessageSocketProvidin
     /// retry loop. A `.notArmed` outcome there means the app is left with no
     /// transport and nothing retrying — so the caller has to arm the backoff
     /// ladder. See `forceReconnect()`.
-    /// Les en-têtes du handshake — le JWT, et le jeton de session s'il existe.
-    ///
-    /// Extrait pour être testable : la construction du `SocketManager` ne l'est
-    /// pas, et c'est la PRÉSENCE de la seconde clé qui décide si la révocation
-    /// d'une session peut atteindre cet appareil.
-    /// Le jeton est passé en PARAMÈTRE, jamais lu depuis le singleton ici :
-    /// `AuthManager` est isolé `@MainActor`, et cette fonction est appelée
-    /// depuis le contexte de transport. La lire ici forcerait un saut d'acteur
-    /// dans une construction synchrone — et rendrait la fonction intestable.
-    static func handshakeHeaders(token: String, sessionToken: String?) -> [String: String] {
-        var headers = ["Authorization": "Bearer \(token)"]
-        if let sessionToken, !sessionToken.isEmpty {
-            headers["x-session-token"] = sessionToken
-        }
-        return headers
-    }
-
     @discardableResult
     func establishTransport() -> SocketConnectOutcome {
         // Ne JAMAIS reconstruire le socket tant qu'une connexion existe ou est
@@ -2828,15 +2811,15 @@ public final class MessageSocketManager: ObservableObject, MessageSocketProvidin
             Logger.socket.info("MessageSocket reconnect attempt \(attempt)")
         }
 
-        socket.on(clientEvent: .error) { data, _ in
-            // Log but NEVER force a logout from a socket error. Loose string
+        socket.on(clientEvent: .error) { [weak self] data, _ in
+            // Never force a logout from a socket error (#10442: a guest's ended session stops the transport). Loose string
             // matching on error payloads produced false positives that kicked
             // the user out on transient failures. Socket.IO's built-in
             // reconnect loop will retry; the APIClient 401 path (which calls
             // `AuthManager.handleUnauthorized`) is the only place that can
             // trigger a silent token refresh, and even that preserves the
             // session on failure.
-            Logger.socket.error("MessageSocket error: \(data)")
+            self?.handleSocketError(data)
         }
 
         // --- Heartbeat ACK — measure RTT ---
@@ -3082,8 +3065,9 @@ public final class MessageSocketManager: ObservableObject, MessageSocketProvidin
         // `refreshSession(force:)` obtiendrait un JWT neuf — `/auth/refresh` ne
         // verifie pas que la session existe encore — et re-armerait pour 24 h
         // la session qu'on vient de revoquer. Le `reason` sert l'avis d'avant la reconnexion (#9612).
-        socket.on("auth:session-revoked") { data, _ in
+        socket.on("auth:session-revoked") { [weak self] data, _ in
             let reason = SessionRevocationReason.fromSocketPayload(data)
+            if self?.signalAccountDeleted(sessionRevokedPayload: data) != nil { return } // #10482 — retrait, pas « session fermée »
             Logger.socket.warning("MessageSocket: session revoked — forcing re-authentication")
             Task { @MainActor in
                 AuthManager.shared.handleSessionRevoked(reason: reason)

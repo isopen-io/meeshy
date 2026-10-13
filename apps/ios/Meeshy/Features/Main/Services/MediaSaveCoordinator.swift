@@ -69,9 +69,27 @@ protocol PhotoLibrarySaving: Sendable {
     /// chargé ni décodé en mémoire. `moveFile` seulement pour un temporaire possédé.
     func saveImageFile(at url: URL, moveFile: Bool) async throws
     func saveVideo(at url: URL, moveFile: Bool) async throws
+    /// L'album Meeshy contient-il déjà ce média (#10370) ? Sans rien écrire.
+    func albumContains(_ signature: PhotoLibraryMediaSignature, alias: String?) async -> Bool
+    /// Écriture dédoublonnée (#10370) : `signature` est l'empreinte de la SOURCE
+    /// (avant marquage), `alias` l'identifiant de la pièce jointe.
+    func addToAlbum(_ file: URL, kind: AttachmentKind, moveFile: Bool,
+                    signature: PhotoLibraryMediaSignature?, alias: String?) async throws -> PhotoLibrarySaveOutcome
 }
 
 extension PhotoLibrarySaving {
+    func albumContains(_ signature: PhotoLibraryMediaSignature, alias: String?) async -> Bool { false }
+
+    func addToAlbum(_ file: URL, kind: AttachmentKind, moveFile: Bool,
+                    signature: PhotoLibraryMediaSignature?, alias: String?) async throws -> PhotoLibrarySaveOutcome {
+        if kind == .image {
+            try await saveImageFile(at: file, moveFile: moveFile)
+        } else {
+            try await saveVideo(at: file, moveFile: moveFile)
+        }
+        return .saved
+    }
+
     func saveImageFile(at url: URL, moveFile: Bool) async throws {
         try await saveImage(Data(contentsOf: url))
     }
@@ -119,6 +137,8 @@ final class MediaSaveCoordinator: ObservableObject {
     nonisolated deinit {}
     enum Outcome: Equatable {
         case saved(MediaSaveDestination)
+        /// Le média est déjà dans l'album Meeshy : rien n'a été écrit (#10370).
+        case alreadyInPhotoLibrary
         case failed(String)
     }
 
@@ -218,6 +238,15 @@ final class MediaSaveCoordinator: ObservableObject {
         defer { isProcessing = false }
         do {
             let localFile = try await resolver.resolveLocalFile(for: request)
+            // L'empreinte de la SOURCE, avant toute marque : enregistrer deux fois
+            // la même story produit deux copies marquées différentes, mais c'est
+            // le même média (#10370). Déjà dans l'album ⇒ rien à préparer.
+            let signature = await Self.sourceSignature(of: localFile, for: destination)
+            if let signature, await photoSaver.albumContains(signature, alias: request.attachmentId) {
+                lastOutcome = .alreadyInPhotoLibrary
+                activeRequest = nil
+                return
+            }
             // On marque ce que Meeshy a COMPOSÉ — story, scène de post, scène
             // de réel —, jamais ce que l'utilisateur a seulement TRANSMIS
             // (directive porteur 2026-09-12, cf. `MeeshyMediaSaveBranding`).
@@ -233,10 +262,13 @@ final class MediaSaveCoordinator: ObservableObject {
             case .photoLibrary:
                 // Par fichier, jamais par `UIImage` (#9685). La copie marquée nous
                 // appartient : Photos la DÉPLACE. Le fichier du cache, jamais.
-                if request.kind == .image {
-                    try await photoSaver.saveImageFile(at: branded.url, moveFile: branded.isStamped)
-                } else {
-                    try await photoSaver.saveVideo(at: branded.url, moveFile: branded.isStamped)
+                let written = try await photoSaver.addToAlbum(branded.url, kind: request.kind,
+                                                              moveFile: branded.isStamped,
+                                                              signature: signature, alias: request.attachmentId)
+                guard written == .saved else {
+                    lastOutcome = .alreadyInPhotoLibrary
+                    activeRequest = nil
+                    return
                 }
                 lastOutcome = .saved(.photoLibrary)
                 await reportDownloadedOnce()
@@ -276,6 +308,18 @@ final class MediaSaveCoordinator: ObservableObject {
     }
 
     // MARK: - Pure helpers (testables sans I/O réseau)
+
+    /// L'empreinte du fichier résolu, seulement quand il part vers l'album.
+    nonisolated static func sourceSignature(of file: URL,
+                                            for destination: MediaSaveDestination) async -> PhotoLibraryMediaSignature? {
+        guard destination == .photoLibrary else { return nil }
+        do {
+            return try await PhotoLibraryMediaSignature.of(fileAt: file)
+        } catch {
+            Logger(subsystem: "me.meeshy.app", category: "media-save").error("media-save signature unreadable: \(error.localizedDescription, privacy: .public)")
+            return nil
+        }
+    }
 
     /// Copie le fichier résolu vers un dossier temporaire UNIQUE sous son
     /// nom lisible (les fichiers du cache sont nommés par hash SHA256 —
@@ -453,5 +497,18 @@ struct PhotoLibraryManagerAdapter: PhotoLibrarySaving {
         guard await PhotoLibraryManager.shared.saveVideo(at: url, moveFile: moveFile) else {
             throw MediaSaveError.photoLibraryDenied
         }
+    }
+
+    func albumContains(_ signature: PhotoLibraryMediaSignature, alias: String?) async -> Bool {
+        await PhotoLibraryManager.shared.contains(signature, alias: alias)
+    }
+
+    func addToAlbum(_ file: URL, kind: AttachmentKind, moveFile: Bool,
+                    signature: PhotoLibraryMediaSignature?, alias: String?) async throws -> PhotoLibrarySaveOutcome {
+        let outcome = kind == .image
+            ? await PhotoLibraryManager.shared.addImageFile(at: file, moveFile: moveFile, signature: signature, alias: alias)
+            : await PhotoLibraryManager.shared.addVideo(at: file, moveFile: moveFile, signature: signature, alias: alias)
+        guard outcome.isInAlbum else { throw MediaSaveError.photoLibraryDenied }
+        return outcome
     }
 }

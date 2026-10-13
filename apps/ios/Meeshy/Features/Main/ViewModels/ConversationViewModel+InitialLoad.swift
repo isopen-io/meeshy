@@ -267,7 +267,8 @@ extension ConversationViewModel {
             lastReadAt: lastReadAt,
             lastReadMessageCreatedAt: lastReadMessageCreatedAt,
             joinedAt: memberJoinedAt,
-            viewerId: currentUserId
+            viewerId: currentUserId,
+            unreadCountHint: initialUnreadCount
         ) {
             firstUnreadMessageId = boundary.firstUnreadId
             unreadSeparatorCount = initialUnreadCount

@@ -23,7 +23,10 @@ import {
   classifyGuestFileOnDisk,
   guestRefusalResponse,
   guestUploadSizeRefusal,
+  shareLinkExpiredTusRefusal,
 } from '../../services/attachments/AnonymousUploadIdentity';
+import { ShareLinkExpiredError } from '../../services/shareLinkReadGate';
+import { SessionLookupUnavailableError, sessionAdmissionRefusal } from '../../services/auth/session-admission';
 import {
   classifyAnonymousAttachment,
   guestAttachmentNeedsFullContent,
@@ -202,8 +205,10 @@ export async function registerTusRoutes(fastify: FastifyInstance, opts: TusRoute
    * échoue désormais, là où il était rattrapé jusqu'ici. Une signature
    * invalide (jeton forgé) reste, comme avant, refusée sans aucun recours.
    *
-   * Retourne `null` sur tout échec d'authentification — ne lève jamais
-   * elle-même : chaque appelant choisit son propre code HTTP.
+   * Retourne `null` sur tout échec d'authentification — chaque appelant
+   * choisit son propre code HTTP. Une seule exception, levée sous la forme
+   * que `@tus/server` rend telle quelle : l'invité dont le lien a expiré
+   * (403 `SHARE_LINK_EXPIRED`, #10440).
    */
   async function resolveUploadCallerIdentity(headers: unknown): Promise<UploadCallerIdentity | null> {
     const h = headers as any;
@@ -212,9 +217,9 @@ export async function registerTusRoutes(fastify: FastifyInstance, opts: TusRoute
 
     if (authHeader) {
       const token = String(authHeader).replace(/^Bearer\s+/i, '');
-      let jwtPayload: { userId?: string; sub?: string };
+      let jwtPayload: { userId?: string; sub?: string; sid?: unknown; iat?: unknown; action?: unknown; aud?: unknown };
       try {
-        jwtPayload = jwt.verify(token, process.env.JWT_SECRET!) as { userId?: string; sub?: string };
+        jwtPayload = jwt.verify(token, process.env.JWT_SECRET!) as typeof jwtPayload;
       } catch (err) {
         logger.warn('[TUS] JWT verification failed — rejecting', {
           reason: err instanceof Error ? err.message : 'unknown',
@@ -223,6 +228,24 @@ export async function registerTusRoutes(fastify: FastifyInstance, opts: TusRoute
       }
       const userId = jwtPayload.userId || jwtPayload.sub || null;
       if (!userId) return null;
+
+      // #10493 — la loi du REST (#10328) : la session NOMMÉE par le jeton doit
+      // vivre, à la création comme à chaque reprise. Une lecture qui lève ne
+      // prouve rien : 503, que le client rejoue, jamais 401.
+      const refus = await sessionAdmissionRefusal(prisma, {
+        claims: jwtPayload,
+        userId,
+        now: new Date(),
+      }).catch((error: unknown) => {
+        if (error instanceof SessionLookupUnavailableError) {
+          throw { status_code: 503, body: 'Authentication temporarily unavailable\n' };
+        }
+        throw error;
+      });
+      if (refus) {
+        logger.warn('[TUS] Session named by the JWT is not alive — rejecting', { motif: refus });
+        return null;
+      }
       return { userId, isAnonymous: false, anonymousShareLinkId: null };
     }
 
@@ -232,7 +255,13 @@ export async function registerTusRoutes(fastify: FastifyInstance, opts: TusRoute
       // correspondait à un `Participant` actif ni consulter son lien de
       // partage. Même résolution que `AuthMiddleware.createAnonymousUserContext`
       // (`middleware/auth.ts`) — via `resolveAnonymousUploadIdentity`.
-      const identity = await resolveAnonymousUploadIdentity(prisma, String(sessionToken));
+      // #10440 — un lien échu se refuse en 403 `SHARE_LINK_EXPIRED`, le code
+      // des autres portes, jamais en 401 : le client doit savoir que rejouer
+      // la session ne servira à rien. Toute autre levée remonte (500).
+      const identity = await resolveAnonymousUploadIdentity(prisma, String(sessionToken)).catch((error: unknown) => {
+        if (error instanceof ShareLinkExpiredError) throw shareLinkExpiredTusRefusal();
+        throw error;
+      });
       if (!identity) return null;
       return { userId: identity.participantId, isAnonymous: true, anonymousShareLinkId: identity.shareLinkId };
     }

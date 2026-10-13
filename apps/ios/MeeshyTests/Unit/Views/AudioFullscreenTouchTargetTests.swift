@@ -23,8 +23,12 @@ final class AudioFullscreenTouchTargetTests: XCTestCase {
             .deletingLastPathComponent()   // …/Unit
             .deletingLastPathComponent()   // …/MeeshyTests
             .deletingLastPathComponent()   // …/apps/ios
-            .appendingPathComponent("Meeshy/Features/Main/Views/AudioFullscreenView.swift")
-        return try String(contentsOf: url, encoding: .utf8)
+            .appendingPathComponent("Meeshy/Features/Main/Views")
+        // #10383 — la page a quitté `AudioFullscreenView.swift` (plafond de
+        // taille) : ses contrôles vivent dans la page et son extension.
+        return try ["AudioFullscreenPage.swift", "AudioFullscreenPage+Transcription.swift"]
+            .map { try String(contentsOf: url.appendingPathComponent($0), encoding: .utf8) }
+            .joined(separator: "\n")
     }
 
     /// Comments are stripped before matching: an explanatory comment naming
@@ -63,7 +67,7 @@ final class AudioFullscreenTouchTargetTests: XCTestCase {
         // the 36 pt disc, its 44 pt frame and its full-rectangle content shape live in
         // `FullscreenChromeDisc`, pinned by the SDK's `FullscreenChromeMetricsTests`.
         let source = try strippedSource()
-        let near = try window(after: "FullscreenCloseButton", in: source, span: 60)
+        let near = try window(after: "FullscreenTopBar(", in: source, span: 60)
         XCTAssertTrue(
             near.contains("onDismiss()"),
             "The fullscreen player's close control is the shared chrome close wired to onDismiss — " +
@@ -82,7 +86,7 @@ final class AudioFullscreenTouchTargetTests: XCTestCase {
     func test_saveControl_reachesTheFortyFourPointFloor() throws {
         let source = try strippedSource()
         XCTAssertTrue(
-            source.contains("FullscreenChromeDisc(systemImage: FullscreenChromeSymbol.save)"),
+            source.contains("FullscreenChromeDisc(systemImage: FullscreenChromeSymbol.save"),
             "The save control is the shared chrome disc (36 pt visible, 44 pt target)."
         )
         XCTAssertTrue(
@@ -93,7 +97,7 @@ final class AudioFullscreenTouchTargetTests: XCTestCase {
 
     func test_translateControl_reachesTheFortyFourPointFloor() throws {
         let source = try strippedSource()
-        let near = try window(after: "Image(systemName: \"translate\")", in: source)
+        let near = try window(after: "Image(systemName: \"translate\")", in: source, span: 560)
         XCTAssertTrue(
             near.contains(".frame(width: 44, height: 44)") && near.contains(".contentShape(Circle())"),
             "The translate control must expose a 44 pt hit region."

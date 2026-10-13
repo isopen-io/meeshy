@@ -9,7 +9,7 @@ const f = {
   'admin.group.moderation': 'Moderação',
   'admin.group.growth': 'Crescimento',
   'admin.group.scales': 'Tabelas',
-  'admin.group.operations': 'Operações',
+  'admin.group.operations': 'Sistema',
 
   'admin.kit.breadcrumb': 'Caminho de navegação',
   'admin.kit.retry': 'Tentar novamente',
@@ -201,6 +201,10 @@ const f = {
   'admin.enum.postVisibility.ONLY.explain': 'Visível somente para uma lista escolhida de amigos.',
 
   'admin.enum.postState.published': 'Publicada',
+  'admin.enum.postState.offline': 'Fora do ar',
+  'admin.enum.postState.offline.explain': 'Retirada pela moderação: só o autor a vê e não pode reabri-la.',
+  'admin.enum.postState.private': 'Privada',
+  'admin.enum.postState.private.explain': 'Só o autor a vê.',
   'admin.enum.postState.deleted': 'Removida',
   'admin.enum.postState.deleted.explain': 'Removida pelo autor ou pela moderação.',
   'admin.enum.postState.expired': 'Expirada',

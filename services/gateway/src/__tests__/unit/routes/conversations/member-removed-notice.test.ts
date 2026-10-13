@@ -117,7 +117,7 @@ describe('#7593 — bannir un membre', () => {
         update: jest.fn<any>().mockResolvedValue({}),
         findMany: jest.fn<any>().mockResolvedValue([]),
       },
-      conversationShareLink: { update: jest.fn<any>().mockResolvedValue({}) },
+      conversationShareLink: { updateMany: jest.fn<any>().mockResolvedValue({ count: 1 }) },
     };
   }
 

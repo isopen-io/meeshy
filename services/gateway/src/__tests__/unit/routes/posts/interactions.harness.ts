@@ -209,6 +209,11 @@ export async function buildApp(opts: {
     },
   };
 
+  // #10402 — les compteurs de lecture s'écrivent par `$runCommandRaw`
+  // (`services/posts/postCounters.ts`). Un double qui ne le porte pas le reçoit
+  // ici, pour que chaque témoin puisse relire ce qui a été écrit.
+  prisma.$runCommandRaw ??= jest.fn<any>().mockResolvedValue({ ok: 1 });
+
   const app = Fastify({ logger: false });
   app.decorate('prisma', prisma);
 

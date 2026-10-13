@@ -143,7 +143,8 @@ services:
     networks:
       - meeshy-staging-network
     healthcheck:
-      test: ["CMD-SHELL", "netstat -an | grep :7843 || exit 1"]
+      # `netstat` n'est pas dans l'image (#10425) : `node` y est, il ouvre le port.
+      test: ["CMD", "node", "-e", "require('net').connect(7843, '127.0.0.1').on('connect', () => process.exit(0)).on('error', () => process.exit(1))"]
       interval: 30s
       timeout: 10s
       retries: 3
@@ -199,16 +200,19 @@ services:
     # interne. Sonde : `docker exec meeshy-translator-staging … /health`.
     labels:
       - "traefik.enable=false"
-      # unhealthy déclenche un restart (#5610) — voir le service `autoheal`.
-      - "autoheal=true"
+      # unhealthy déclenche un restart (#5610) — voir le service `autoheal-staging`.
+      # Étiquette PROPRE au staging (#10425) : l'autoheal de production lit `autoheal`.
+      - "autoheal-staging=true"
 
-  # Autoheal — restaure un conteneur `unhealthy` (#5610).
+  # Autoheal — restaure un conteneur `unhealthy` (#5610). Le démon Docker est
+  # PARTAGÉ avec la production (#9232) : il ne lit que l'étiquette du staging,
+  # jamais `autoheal`, celle de la production (#10425).
   autoheal-staging:
     image: willfarrell/autoheal:latest
     container_name: meeshy-autoheal-staging
     restart: unless-stopped
     environment:
-      - AUTOHEAL_CONTAINER_LABEL=autoheal
+      - AUTOHEAL_CONTAINER_LABEL=autoheal-staging
       - AUTOHEAL_INTERVAL=30
       - AUTOHEAL_START_PERIOD=60
       - AUTOHEAL_DEFAULT_STOP_TIMEOUT=10
@@ -331,10 +335,25 @@ services:
       # « Sauvegardes » de la supervision et contrôlé chaque jour à 5 h, heure de Paris :
       # un échec, une sauvegarde de plus de 26 h ou un verdict absent notifient les
       # ADMIN et BIGBOSS et écrivent au BIGBOSS. Seule la valeur exacte true arme le contrôle.
-      # Staging : aucune sauvegarde n'y tourne ; la recette y POSE un etat.json à la main
-      # et arme le contrôle par BACKUP_STATUS_ALERTS_ENABLED=true dans le .env de l'hôte.
+      # Staging : la sauvegarde tourne chaque nuit à 2 h 30 (meeshy-staging-backup.timer,
+      # #10385) et sur demande d'un BIGBOSS ; le contrôle s'arme par
+      # BACKUP_STATUS_ALERTS_ENABLED=true dans le .env de l'hôte.
       - BACKUP_STATUS_FILE=/backup-status/etat.json
       - BACKUP_STATUS_ALERTS_ENABLED=${BACKUP_STATUS_ALERTS_ENABLED:-false}
+      # #10460 — l'heure du timer de staging : la carte « Sauvegardes » annonce la
+      # prochaine sauvegarde à 2 h 30, pas à minuit (l'heure de la production).
+      - BACKUP_RUN_TIME=02:30
+      # #10384–#10386 — les opérations serveur de l'administration : métriques de l'hôte
+      # (/proc et statfs sur HOST_DISK_PROBE_PATH), et demandes de sauvegarde / purge des
+      # images DÉPOSÉES dans OPS_REQUESTS_DIR pour le runner de l'hôte
+      # (infrastructure/scripts/ops-runner/, installé par son install.sh), qui publie son
+      # état dans OPS_STATE_DIR, monté en lecture seule. La passerelle n'a ni socket Docker
+      # ni systemd. Hôte partagé avec la production : OPS_SHARED_HOST=true.
+      - OPS_ENVIRONMENT=staging
+      - OPS_SHARED_HOST=true
+      - OPS_REQUESTS_DIR=/ops-requests
+      - OPS_STATE_DIR=/ops-state
+      - HOST_DISK_PROBE_PATH=/
       - EMAIL_FROM=${EMAIL_FROM:-noreply@meeshy.me}
       - EMAIL_FROM_NAME=${EMAIL_FROM_NAME:-Meeshy Staging}
       - BREVO_API_KEY=${BREVO_API_KEY:-}
@@ -348,6 +367,10 @@ services:
       # #9668 — le SEUL dossier du verdict de sauvegarde, en lecture seule : la passerelle
       # ne voit jamais les sauvegardes elles-mêmes (/opt/meeshy/backups/nightly).
       - ${BACKUP_STATUS_HOST_DIR:-/opt/meeshy/staging/backup-status}:/backup-status:ro
+      # #10385, #10386 — les demandes d'opérations (écrites par la passerelle, uid 1001)
+      # et l'état publié par le runner de l'hôte (lecture seule).
+      - /opt/meeshy/staging/ops/requests:/ops-requests
+      - /opt/meeshy/staging/ops/state:/ops-state:ro
     depends_on:
       mongo-init-staging:
         condition: service_completed_successfully

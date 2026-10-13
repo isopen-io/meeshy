@@ -23,7 +23,14 @@
 
 import { promises as fs } from 'fs';
 import { hashSessionToken } from '../../utils/session-token.js';
+import { guestAccessEnd } from '../guestAccessEnd';
 import { GUEST_ATTACHMENT_MAX_BYTES, GUEST_ATTACHMENT_REFUSAL_CODES } from '@meeshy/shared/types/guest-attachment-kinds';
+import {
+  guestShareLinkId,
+  shareLinkHasExpired,
+  ShareLinkExpiredError,
+  SHARE_LINK_EXPIRED_CODE,
+} from '../shareLinkReadGate.js';
 import {
   classifyAnonymousAttachment,
   guestAttachmentNeedsFullContent,
@@ -35,21 +42,43 @@ export interface AnonymousUploadIdentityPrisma {
   participant: {
     findFirst(args: {
       where: { sessionTokenHash: string; type: 'anonymous'; isActive: true };
-      select: { id: true; anonymousSession: true };
-    }): Promise<{ id: string; anonymousSession: { shareLinkId: string } | null } | null>;
+      select: { id: true; shareLinkId: true; anonymousSession: true; joinedAt: true; bannedAt: true };
+    }): Promise<{
+      id: string;
+      shareLinkId: string | null;
+      anonymousSession: { shareLinkId: string } | null;
+      joinedAt?: Date | null;
+      bannedAt?: Date | null;
+    } | null>;
   };
   conversationShareLink: {
     findUnique(args: {
       where: { id: string };
-      select: {
-        allowAnonymousFiles: true;
-        allowAnonymousImages: true;
-        allowedAttachmentKinds: true;
-        conversation: { select: { identifier: true } };
-      };
-    }): Promise<ShareLinkAnonymousFlags | null>;
+      select: typeof GUEST_SHARE_LINK_SELECT;
+    }): Promise<GuestShareLinkRow | null>;
   };
 }
+
+/**
+ * La lecture UNIQUE du lien d'un invité sur ce chemin : ses drapeaux
+ * d'autorisation, et son échéance (#10440) — un seul `select`, pour que la
+ * forme structurelle ci-dessus reste satisfaite par le vrai client Prisma.
+ */
+const GUEST_SHARE_LINK_SELECT = {
+  allowAnonymousFiles: true,
+  allowAnonymousImages: true,
+  allowedAttachmentKinds: true,
+  conversation: { select: { identifier: true } },
+  expiresAt: true,
+  isActive: true,
+  guestRevocationPendingAt: true,
+} as const;
+
+type GuestShareLinkRow = ShareLinkAnonymousFlags & {
+  readonly expiresAt?: Date | null;
+  readonly isActive?: boolean | null;
+  readonly guestRevocationPendingAt?: Date | null;
+};
 
 export type AnonymousUploadIdentity = {
   readonly participantId: string;
@@ -79,15 +108,47 @@ export async function resolveAnonymousUploadIdentity(
       type: 'anonymous',
       isActive: true,
     },
-    select: { id: true, anonymousSession: true },
+    select: { id: true, shareLinkId: true, anonymousSession: true, joinedAt: true, bannedAt: true },
   });
 
   if (!participant) return null;
 
-  return {
-    participantId: participant.id,
-    shareLinkId: participant.anonymousSession?.shareLinkId ?? '',
-  };
+  // #10440 — la garde du lien échu que `middleware/auth.ts` pose sur toute
+  // requête REST d'un invité (#10437) : ce chemin ne la traverse pas. Même
+  // lecture du lien (colonne, puis session embarquée), même règle (seule
+  // l'échéance ferme, un lien introuvable ne ferme rien), même cause typée.
+  // Une lecture qui échoue PROPAGE — fail-closed, jamais une identité servie.
+  const shareLinkId = guestShareLinkId(participant) ?? '';
+  if (shareLinkId) {
+    const link = await prisma.conversationShareLink.findUnique({
+      where: { id: shareLinkId },
+      select: GUEST_SHARE_LINK_SELECT,
+    });
+    if (shareLinkHasExpired(link)) throw new ShareLinkExpiredError();
+    // #10470 — la garde commune des autres portes : lien fermé, révocation
+    // différée en attente pour un invité entré avant elle, ou invité banni.
+    const end = guestAccessEnd({
+      linkExpiresAt: null,
+      linkIsActive: typeof link?.isActive === 'boolean' ? link.isActive : null,
+      linkRevocationPendingAt: link?.guestRevocationPendingAt ?? null,
+      participation: { isActive: true, bannedAt: participant.bannedAt ?? null, joinedAt: participant.joinedAt ?? null },
+      now: new Date(),
+    });
+    if (end) return null;
+  }
+
+  return { participantId: participant.id, shareLinkId };
+}
+
+/**
+ * Le refus d'un invité au lien échu tel que `@tus/server` le renvoie : le 403
+ * `SHARE_LINK_EXPIRED` des autres portes, dans l'enveloppe d'erreur de l'API
+ * (`sendError`), pour que les clients branchent le même code.
+ */
+export function shareLinkExpiredTusRefusal(): { readonly status_code: number; readonly body: string } {
+  const reason = new ShareLinkExpiredError().message;
+  const envelope = { success: false, error: reason, message: reason, code: SHARE_LINK_EXPIRED_CODE };
+  return { status_code: 403, body: `${JSON.stringify(envelope)}\n` };
 }
 
 /**
@@ -103,7 +164,7 @@ export async function fetchShareLinkAnonymousFlags(
   if (!shareLinkId) return null;
   return prisma.conversationShareLink.findUnique({
     where: { id: shareLinkId },
-    select: { allowAnonymousFiles: true, allowAnonymousImages: true, allowedAttachmentKinds: true, conversation: { select: { identifier: true } } },
+    select: GUEST_SHARE_LINK_SELECT,
   });
 }
 

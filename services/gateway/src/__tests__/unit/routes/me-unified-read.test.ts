@@ -153,8 +153,10 @@ function buildPrisma() {
   return {
     user: { findUnique: jest.fn<any>().mockResolvedValue(registeredUserRow()) },
     participant: { findFirst: jest.fn<any>().mockResolvedValue(anonymousParticipantRow()) },
+    // #10437 — la résolution d'un invité relit son lien (échéance) : un lien vivant, sans échéance.
+    conversationShareLink: { findUnique: jest.fn<any>().mockResolvedValue({ expiresAt: null }) },
     userSession: {
-      findFirst: jest.fn<any>().mockResolvedValue(null),
+      findFirst: jest.fn<any>().mockResolvedValue({ isValid: true, expiresAt: new Date(Date.now() + 24 * 60 * 60 * 1000) }),
       update: jest.fn<any>().mockResolvedValue({}),
     },
     signalPreKeyBundle: {
@@ -172,7 +174,7 @@ function buildPrisma() {
 }
 
 function signJwt(userId: string = USER_ID): string {
-  return jwt.sign({ userId, sid: 'test-session' }, JWT_SECRET, { expiresIn: '1h' });
+  return jwt.sign({ userId, sid: '507f1f77bcf86cd799439031' }, JWT_SECRET, { expiresIn: '1h' });
 }
 
 let app: FastifyInstance;

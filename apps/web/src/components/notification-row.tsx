@@ -136,7 +136,6 @@ export const CONTENT_GLYPHS: Readonly<Record<Extract<RowFooter, { kind: 'content
   story: NOTIFICATIONS_GLYPHS.circleDashed,
   reel: PROGRESSION_GLYPHS.filmStrip,
   mood: GLYPHS.smiley,
-  status: GLYPHS.smiley,
   post: PROGRESSION_GLYPHS.article,
 };
 

@@ -16,7 +16,7 @@ final class ReceivedMediaAutoSaverTests: XCTestCase {
             .deletingLastPathComponent().deletingLastPathComponent()
             .appendingPathComponent("Meeshy/Features/Main/Services/ReceivedMediaAutoSaver.swift")
         let code = AppSourceGuard.stripComments(try String(contentsOf: url, encoding: .utf8))
-        XCTAssertTrue(code.contains("PhotoLibraryManager.shared.saveImageFile(at: file)"))
+        XCTAssertTrue(code.contains("PhotoLibraryManager.shared.addImageFile(at: file"))
         XCTAssertFalse(code.contains("Data(contentsOf: file)"))
     }
 
@@ -53,7 +53,8 @@ final class ReceivedMediaAutoSaverTests: XCTestCase {
         let sut = ReceivedMediaAutoSaver(isActive: active,
                                          setting: StubAutoSaveSetting(isEnabled: enabled),
                                          registry: registry, writer: writer,
-                                         downloadAllowed: { _ in allowed })
+                                         downloadAllowed: { _ in allowed },
+                                         installation: FixedInstallationDate(.distantPast))
         return (sut, writer, registry)
     }
 

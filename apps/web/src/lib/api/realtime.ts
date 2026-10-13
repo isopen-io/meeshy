@@ -3,15 +3,18 @@ import { setCallEngineWake } from '@/lib/calls/call-transport';
 import { conversationStore } from '@/lib/conversation-store';
 import { createSocketIOClient } from '@/lib/net/socket-io-factory';
 import { bridgeBannerRevocations } from '@/lib/notifications/banner-revocation';
+import { navigate } from '@/lib/router';
 import { outboxStore } from '@/lib/send/outbox-store';
 
 import { endRevokedSession } from './account-caches';
+import { retireDeletedAccountLater } from './account-deleted';
 import { bindAppStatePresence, documentVisibility } from './app-state-presence';
 import { apiConfig } from './config';
 import { bindConversationViewing, viewingStore } from './conversation-viewing';
 import { bindConversationEngagement, engagementStore } from './conversation-engagement';
 import { bindPostEngagement } from './publication-engagement';
 import { apiDeps } from './deps';
+import { endGuestAccess } from './guest-access-end';
 import { appQueryClient } from './query-client';
 import { setAttachmentReactionEmitter } from './attachment-reaction-emit';
 import { watchIdentityScopedStores } from './identity-scoped-stores';
@@ -123,7 +126,7 @@ function currentViewerId(): string {
 
 /** La connexion de la passerelle réelle, une par identité (`keepRealtimeConnection`). */
 const liveConnection = keepRealtimeConnection<RealtimeConnection>({
-  open: (auth) =>
+  open: (auth, account) =>
     createRealtimeConnection(auth, {
       base: apiConfig.base,
       socketFactory: createSocketIOClient,
@@ -133,6 +136,9 @@ const liveConnection = keepRealtimeConnection<RealtimeConnection>({
       outbox: outboxStore,
       viewerId: currentViewerId,
       onClearSession: endWithReason,
+      onAccountDeleted: retireDeletedAccountLater,
+      account,
+      onGuestAccessEnded: (reason) => endGuestAccess({ reason, store: sessionStore, end: endRevokedSession, navigate }),
     }),
   onChange: (next) => {
     connection = next;

@@ -703,7 +703,8 @@ internal struct _FullscreenRenderer: View {
                     onShare: player.onShare,
                     saveState: saveState,
                     infoSegments: infoSegments,
-                    declaredDuration: declaredDuration
+                    declaredDuration: declaredDuration,
+                    isInAlbum: PhotoAlbumSaveFeedback.isInAlbum(attachmentId: player.attachment.id)
                 )
                 .transition(.opacity)
                 authorAndCaptionOverlay

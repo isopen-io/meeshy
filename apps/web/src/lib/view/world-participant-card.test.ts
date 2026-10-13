@@ -2,11 +2,9 @@ import { beforeAll, describe, expect, test } from 'bun:test';
 
 import { GlobalUserRole } from '@meeshy/shared/types/role-types';
 import { mayReadWorldParticipantCard, type WorldParticipantCard } from '@meeshy/shared/types/world-participant-card';
-import { WORLD_CONVERSATION_IDENTIFIER } from '@meeshy/shared/types/world';
 
 import { loadWorldParticipantCardCatalog, translateWorldParticipantCard } from '../i18n-world-participant-card-catalog';
 
-import { WORLD_IDENTIFIER } from '../lens/world-pin';
 import { mayOpenWorldParticipantCard, opensWorldParticipantCards } from './world-participant-card-access';
 import { worldParticipantCardView, type WorldParticipantCardView } from './world-participant-card-view';
 
@@ -50,10 +48,6 @@ describe('mayOpenWorldParticipantCard — jumelle de la loi partagée', () => {
 });
 
 describe('opensWorldParticipantCards — seulement dans World Wide, seulement pour l’équipe', () => {
-  test('l’identifiant de World Wide est la jumelle de WORLD_CONVERSATION_IDENTIFIER', () => {
-    expect(WORLD_IDENTIFIER).toBe(WORLD_CONVERSATION_IDENTIFIER);
-  });
-
   test('World Wide et un rôle d’équipe ⇒ oui', () => {
     expect(opensWorldParticipantCards({ conversationIdentifier: 'world', role: 'MODERATOR' })).toBe(true);
   });

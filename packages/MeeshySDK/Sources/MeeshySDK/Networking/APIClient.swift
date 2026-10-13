@@ -279,49 +279,6 @@ public enum APIError: Error, LocalizedError {
 public final class APIClient: APIClientProviding, @unchecked Sendable {
     public static let shared = APIClient()
 
-    // MARK: - 401 Mapping (pure)
-
-    /// How a 401 response on `endpoint` should be surfaced. Extracted as a
-    /// pure decision so the credential-vs-session distinction is unit
-    /// testable without driving a real `URLSession` — see
-    /// `APIClientAuthMappingTests`.
-    enum UnauthorizedMapping: Equatable {
-        /// Wrong password / 2FA code / stale magic link — NOT a session
-        /// problem, so callers must NOT tear down or refresh anything.
-        case invalidCredentials(message: String)
-        /// A real session-expiry: refresh-token rejected, or a regular
-        /// endpoint whose retried-refresh attempt also 401'd.
-        case sessionExpired
-    }
-
-    /// P1 — a 401 on `/auth/login` or `/auth/login/2fa` means "these
-    /// credentials are wrong", never "your session expired" (there is no
-    /// session yet on these endpoints).
-    /// `/auth/refresh` is deliberately EXCLUDED: a 401 there means the
-    /// refresh token itself is dead, which is genuinely `.sessionExpired`.
-    /// `/auth/register` and `/auth/magic-link/*` are also deliberately
-    /// EXCLUDED — the gateway never returns 401 on either (both surface
-    /// every error as 400 via `sendBadRequest`; verified against
-    /// `services/gateway/src/routes/auth/register.ts` and
-    /// `services/gateway/src/routes/magic-link.ts`, zero `sendUnauthorized`
-    /// call sites in either file). Including them here would be scope creep
-    /// beyond the audited root cause (wrong password / 2FA code).
-    nonisolated static func mapUnauthorized(endpoint: String, serverMessage: String?) -> UnauthorizedMapping {
-        mapUnauthorized(authKind: MeeshyEndpointPolicy.authKind(forLegacyPath: endpoint),
-                        serverMessage: serverMessage)
-    }
-
-    /// La même règle, lue sur la politique DÉCLARÉE plutôt que déduite du
-    /// chemin. C'est cette forme que le pipeline consomme : une adresse typée
-    /// n'a pas à repasser par une comparaison de préfixe pour dire ce qu'elle
-    /// sait déjà d'elle-même.
-    nonisolated static func mapUnauthorized(
-        authKind: MeeshyEndpointAuthKind, serverMessage: String?
-    ) -> UnauthorizedMapping {
-        guard authKind == .credentials else { return .sessionExpired }
-        return .invalidCredentials(message: serverMessage ?? "Identifiants invalides")
-    }
-
     // MARK: - Ce que le pipeline a besoin de savoir d'une adresse (#4282)
 
     /// L'adresse RÉSOLUE : l'URL absolue, l'étiquette de journal, et les deux
@@ -498,7 +455,7 @@ public final class APIClient: APIClientProviding, @unchecked Sendable {
         tokenLock.withLock { $0 }
     }
 
-    private init() {
+    private convenience init() {
         let config = URLSessionConfiguration.default
         config.timeoutIntervalForRequest = 60
         config.timeoutIntervalForResource = 120
@@ -515,12 +472,17 @@ public final class APIClient: APIClientProviding, @unchecked Sendable {
         // SOTA P11: HTTP/3 is enabled by default on iOS 15+. The optimistic HTTP/3 flag lives on
         // URLRequest (assumesHTTP3Capable), not on URLSessionConfiguration. Apply per-request
         // via makeRequest() to skip the HTTP/2 → HTTP/3 upgrade negotiation on first upload.
-        self.urlSession = URLSession(
+        self.init(urlSession: URLSession(
             configuration: config,
             delegate: CertificatePinningDelegate(),
             delegateQueue: nil
-        )
+        ))
+    }
 
+    /// Un client sur une session FOURNIE : les témoins y posent leur
+    /// `URLProtocol` et observent ce qui part sur le fil (#10463).
+    init(urlSession: URLSession) {
+        self.urlSession = urlSession
         self.decoder = Self.makeAPIPayloadDecoder()
     }
 
@@ -661,10 +623,14 @@ public final class APIClient: APIClientProviding, @unchecked Sendable {
             let message = errBody?.message ?? errBody?.error
             switch statusCode {
             case 401:
+                AccountDeletedSignal.signal(statusCode: 401, body: data, presentedOwner: AccountDeletedSignal.owner(ofJWT: bearerToken))
                 throw MeeshyError.auth(.sessionExpired)
             case 403:
                 throw MeeshyError.forbidden(reason: message, body: data)
             case 429:
+                if let slowMode = NewcomerSlowMode.fromResponse(response, body: data) {
+                    throw MeeshyError.rejected(slowMode.rejection(message: message))
+                }
                 if let limit = DailyGestureLimit.fromBody(data) {
                     throw MeeshyError.rejected(APIRejection(
                         statusCode: 429, code: limit.gesture.rawValue, message: message ?? "Limite du jour atteinte",
@@ -748,6 +714,11 @@ public final class APIClient: APIClientProviding, @unchecked Sendable {
             do {
                 let freshToken = try await AuthManager.shared.refreshSession()
                 urlRequest.setValue("Bearer \(freshToken)", forHTTPHeaderField: "Authorization")
+            } catch let abandoned as CancellationError {
+                // #10463 — rafraîchissement ABANDONNÉ (sortie de session en
+                // cours, session remplacée) : rien n'a été refusé, et une
+                // session expirée ferait démonter le compte qu'on quitte.
+                throw abandoned
             } catch {
                 throw MeeshyError.auth(.sessionExpired)
             }
@@ -802,7 +773,9 @@ public final class APIClient: APIClientProviding, @unchecked Sendable {
                 // Une limite QUOTIDIENNE de gestes (429 `DAILY_*`, #9571) ne se
                 // rejoue pas : elle tient jusqu'à `resetAt`, des heures plus tard.
                 let dailyLimit = statusCode == 429 ? DailyGestureLimit.fromBody(data) : nil
-                if endpointAllowsRetry && dailyLimit == nil && Self.retryableStatusCodes.contains(statusCode) && attempt < Self.maxRetryAttempts {
+                // Le mode lent des nouveaux comptes (#7759) se DIT à l'auteur, jamais attendu en silence.
+                let slowMode = NewcomerSlowMode.fromResponse(httpResponse, body: data)
+                if endpointAllowsRetry && dailyLimit == nil && slowMode == nil && Self.retryableStatusCodes.contains(statusCode) && attempt < Self.maxRetryAttempts {
                     continue
                 }
 
@@ -811,6 +784,10 @@ public final class APIClient: APIClientProviding, @unchecked Sendable {
                 guard (200...299).contains(statusCode) else {
                     let errBody = try? decoder.decode(ErrorBody.self, from: data)
                     let errorMsg = errBody?.message ?? errBody?.error
+                    // #10442 — un invité de lien échu ou révoqué : la session se termine, elle ne se retente pas.
+                    if let guestToken = urlRequest.value(forHTTPHeaderField: "X-Session-Token") { GuestSessionEnd.signal(statusCode: statusCode, body: data, refusedSessionToken: guestToken) }
+                    // #10482 — « ce compte est supprimé », seulement s'il est le propriétaire du jeton présenté.
+                    AccountDeletedSignal.signal(statusCode: statusCode, body: data, presentedOwner: AccountDeletedSignal.presentedOwner(authorization: urlRequest.value(forHTTPHeaderField: "Authorization"), body: urlRequest.httpBody))
 
                     // Rupture cliente (C4b) : le gateway refuse ce BINAIRE, pas
                     // cette requête. Le signal part AVANT que l'erreur ne soit
@@ -879,6 +856,10 @@ public final class APIClient: APIClientProviding, @unchecked Sendable {
                                     UpgradeGateSignal.signal(statusCode: retryStatusCode, body: retryData)
                                     throw MeeshyError.server(statusCode: retryStatusCode, message: retryErrorMsg ?? "Erreur après rafraichissement")
                                 }
+                            } catch let abandoned as CancellationError {
+                                // #10463 — même règle que le rafraîchissement
+                                // préventif : un abandon n'est pas un refus.
+                                throw abandoned
                             } catch {
                                 await AuthManager.shared.handleUnauthorized()
                                 throw MeeshyError.auth(.sessionExpired)
@@ -901,6 +882,10 @@ public final class APIClient: APIClientProviding, @unchecked Sendable {
                         // errors) can decode them without a second request.
                         AgeGateSignal.signal(statusCode: statusCode, body: data)
                         throw MeeshyError.forbidden(reason: errorMsg, body: data)
+                    }
+
+                    if let slowMode {
+                        throw MeeshyError.rejected(slowMode.rejection(message: errorMsg))
                     }
 
                     if let dailyLimit {
@@ -937,6 +922,8 @@ public final class APIClient: APIClientProviding, @unchecked Sendable {
 
             throw MeeshyError.server(statusCode: lastStatusCode, message: "Requete echouee apres \(Self.maxRetryAttempts) tentatives (status \(lastStatusCode))")
         } catch let error as MeeshyError {
+            throw error
+        } catch let error as CancellationError {
             throw error
         } catch let error as DecodingError {
             var debugInfo = "Erreur de decodage: "

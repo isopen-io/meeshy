@@ -112,7 +112,9 @@ final class QuotedMediaFaceMountGuardTests: XCTestCase {
         let layer = try source("Meeshy/Features/Main/Views/ConversationView+MediaGallery.swift")
         XCTAssertTrue(layer.contains("if startAttachment.type == .audio {"),
                       "le plein écran de la conversation doit distinguer l'audio : la galerie ne sait pas le rendre")
-        XCTAssertTrue(layer.contains("audioFullscreen(start: startAttachment)"))
+        // #8916 — le plein écran audio reçoit les actions de l'hôte (réagir,
+        // répondre, créer avec ce son).
+        XCTAssertTrue(layer.contains("audioFullscreen(start: startAttachment, actions: audioFullscreenActions)"))
 
         let audio = try source("Meeshy/Features/Main/Views/ConversationView+AudioFullscreen.swift")
         XCTAssertTrue(audio.contains("AudioFullscreenView("),

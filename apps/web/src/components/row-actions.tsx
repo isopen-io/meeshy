@@ -98,6 +98,7 @@ export function RowActions({
   magnified,
   language,
   canCall = false,
+  canDelete = false,
   onAction,
 }: {
   readonly flags: ConversationFlags;
@@ -106,12 +107,14 @@ export function RowActions({
   readonly language: InterfaceLanguage;
   /** Vrai quand l'appel est permis : le menu ouvre alors sur « Appel vocal » et « Appel vidéo » (#8109). */
   readonly canCall?: boolean;
+  /** Vrai pour un compte : le menu se ferme sur « Supprimer », en rouge (#7285). */
+  readonly canDelete?: boolean;
   /** Élue par la bande de focus — seule rangée où le bouton reste visible
    * SANS survol ni focus (`status.magnified` de `LensRow`). */
   readonly magnified: boolean;
   readonly onAction: (id: RowActionId) => void;
 }) {
-  const items = rowMenuItems({ flags, unread, language, canCall });
+  const items = rowMenuItems({ flags, unread, language, canCall, canDelete });
   const menuLabel = translate(language, 'rowActions.menu');
   const [box, setBox] = useState<{ top: number; right: number; width: number }>({ top: 0, right: 0, width: MENU_WIDTH });
 
@@ -295,12 +298,17 @@ export function RowActions({
                     event.stopPropagation();
                     choose(item.id);
                   }}
+                  {...(item.destructive === true ? { 'data-destructive': 'true' } : {})}
                   className="flex w-full items-center gap-2.5 px-3 py-2 text-start text-title font-medium"
-                  style={{ color: 'var(--color-ios-ink)', minHeight: 44 }}
+                  style={
+                    item.destructive === true
+                      ? { color: 'var(--color-error)', minHeight: 44, borderTop: '1px solid var(--color-edge)' }
+                      : { color: 'var(--color-ios-ink)', minHeight: 44 }
+                  }
                 >
-                  {item.glyph === 'videoCamera' ? (
-                    <span className="grid place-items-center" style={{ color: 'var(--color-ios-ink-2)' }}>
-                      <GlyphSvg glyph={CALLS_GLYPHS.videoCamera} size={16} />
+                  {item.glyph === 'videoCamera' || item.glyph === 'trash' ? (
+                    <span className="grid place-items-center" style={{ color: item.destructive === true ? 'currentColor' : 'var(--color-ios-ink-2)' }}>
+                      <GlyphSvg glyph={CALLS_GLYPHS[item.glyph]} size={16} />
                     </span>
                   ) : (
                     <Glyph name={item.glyph} size={16} style={{ color: 'var(--color-ios-ink-2)' }} />

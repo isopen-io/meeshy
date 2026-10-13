@@ -1371,7 +1371,7 @@ export class MessageHandler {
       // `visible ⇔ auteur ET lecteur`, fail-CLOSED si la liste des lecteurs est
       // inconnue — composée avec le scellement de la citation d'un éphémère
       // déjà échu pour un lecteur (#8562) dans `resolvePeerBroadcastSplit`.
-      const { peerPayload, hiddenKeys, payloadForKey } =
+      const { peerPayload, hiddenKeys, payloadForKey, quotedDeathOf } =
         await resolvePeerBroadcastSplit(this.prisma, {
           senderUserId,
           sharedParticipants,
@@ -1539,7 +1539,7 @@ export class MessageHandler {
         for (const { room, participant } of targets) {
           this.io.to(room).emit(SERVER_EVENTS.CONVERSATION_UPDATED, {
             ...updatePayload,
-            ...resolveLastMessagePreviewGroup(participant, message)
+            ...resolveLastMessagePreviewGroup(participant, message, new Date(), { quotedDeathAt: quotedDeathOf(participant) })
           });
         }
         handlerLogger.debug('conversation:updated emitted', { conversationId: normalizedId, recipients: targets.length });

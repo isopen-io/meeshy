@@ -11,6 +11,8 @@ import auditReglagesEs from './admin/audit-reglages-es';
 import personnesEs from './admin/personnes-es';
 import conversationsAgentEs from './admin/conversations-agent-es';
 import engagementScaleEs from './admin/engagement-scale-es';
+import gestesEs from './admin/gestes-es';
+import operationsEs from './admin/operations-es';
 import gameSeasonsEs from './admin/game-seasons-es';
 
 const es = {
@@ -380,6 +382,8 @@ const es = {
   ...personnesEs,
   ...conversationsAgentEs,
   ...engagementScaleEs,
+  ...gestesEs,
+  ...operationsEs,
   ...gameSeasonsEs,
 } satisfies AdminInterfaceCatalog;
 

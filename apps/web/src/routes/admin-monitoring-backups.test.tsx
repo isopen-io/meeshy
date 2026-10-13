@@ -51,6 +51,14 @@ const section = (host: ParentNode) => host.querySelector('[data-admin-monitoring
 const stat = (host: ParentNode, anchor: string) => normalized(host.querySelector(`[data-admin-stat="${anchor}"]`)?.textContent);
 
 describe('le bloc des sauvegardes', () => {
+  test('l’aide ne nomme pas la production : le staging lit la même carte avec SON heure (#10460)', async () => {
+    const host = await open();
+    const text = normalized(section(host)?.textContent);
+    expect(text).not.toContain('production');
+    expect(text).not.toContain('minuit');
+    expect(text).toContain('Prochaine sauvegarde');
+  });
+
   test('une nuit réussie : « Réussie », l’âge, la prochaine échéance et le contenu, en mots', async () => {
     const host = await open();
 

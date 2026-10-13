@@ -50,6 +50,7 @@ class AppDelegate: NSObject, UIApplicationDelegate {
             CrashDiagnosticsManager.shared.install(crashReporter: crashReporter)
             ProtectedContentSnapshotVeil.shared.install()
             ContentCaptureReporter.shared.install() // #9617 — une capture d'un contenu qui disparaît s'annonce
+            DeletedAccountRetirement.shared.install() // #10482 — un compte supprimé quitte l'appareil, avec son jeu
             MeeshyMetricsSubscriber.shared.register()
             AnalyticsManager.shared.syncCollectionState()
             // P1.5 — surface DependencyContainer boot diagnostics now that
@@ -616,6 +617,9 @@ enum MeeshyNotificationCategory: String {
     /// #8859 — un vocal dont la piste voyage : la notification DÉPLOYÉE le
     /// fait écouter (`MeeshyNotificationContentExtension`).
     case audio = "MEESHY_AUDIO"
+    /// #7455 — un message éphémère : la notification DÉPLOYÉE montre son
+    /// décompte vivant (`MeeshyNotificationContentExtension`).
+    case ephemeral = "MEESHY_EPHEMERAL"
 }
 
 enum MeeshyNotificationAction: String {

@@ -92,7 +92,7 @@ struct AchievementRevealView: View {
                 return String(localized: "reveal.badge.tier",
                               defaultValue: "Palier \(seuil)", bundle: .main)
             }
-            return "\(seuil) \(ProgressionCopy.title(for: clé).lowercased())"
+            return ProgressionCopy.badgeTierTitle(threshold: seuil, axis: clé)
         case .streak(let jours): return ProgressionCopy.streak(jours)
         case .level(let rang): return ProgressionCopy.levelTitle(rang)
         }

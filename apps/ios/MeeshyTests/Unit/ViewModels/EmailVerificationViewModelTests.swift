@@ -13,14 +13,18 @@ private final class MockEmailVerificationConfirmer: EmailVerificationConfirming 
     var result: Result<EmailProvenSession?, Error> = .success(MockEmailVerificationConfirmer.proven)
     private(set) var requests: [EmailVerificationRequest] = []
     private(set) var openedSessions: [String] = []
+    /// Faux ⇒ l'appareil refuse de poser la session (un autre compte y est
+    /// ouvert, #10450).
+    var opens = true
 
     func verifyEmail(_ request: EmailVerificationRequest) async throws -> EmailProvenSession? {
         requests.append(request)
         return try result.get()
     }
 
-    func openSession(_ proven: EmailProvenSession) {
+    func openSession(_ proven: EmailProvenSession) -> Bool {
         openedSessions.append(proven.token)
+        return opens
     }
 }
 
@@ -137,6 +141,22 @@ final class EmailVerificationViewModelTests: XCTestCase {
         sut.openProvenSession()
 
         XCTAssertEqual(celebration.celebratedUserIds, ["proven-user"])
+    }
+
+    /// #10450 — une session que l'appareil refuse de poser n'est ni annoncée
+    /// ouverte, ni célébrée : l'écran dit pourquoi.
+    func test_openProvenSession_refusedByTheDevice_announcesNothing() async {
+        let celebration = MockArrivalCelebration()
+        let (sut, _, confirmer) = makeSUT(celebration: celebration)
+        confirmer.opens = false
+        await sut.verifyCode("123456")
+
+        sut.openProvenSession()
+
+        XCTAssertEqual(confirmer.openedSessions, ["jwt-proven"])
+        XCTAssertFalse(sut.sessionOpened)
+        XCTAssertEqual(celebration.celebratedUserIds, [])
+        XCTAssertEqual(sut.error, EmailProofErrorText.sessionNotOpened())
     }
 
     func test_openProvenSession_withoutVerification_celebratesNothing() {

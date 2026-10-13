@@ -28,6 +28,7 @@
  * @jest-environment node
  */
 
+import { postCounterWritesOf } from '../../../helpers/posts-counter-writes';
 import { describe, it, expect, jest, beforeEach } from '@jest/globals';
 import Fastify, { FastifyInstance, FastifyRequest } from 'fastify';
 
@@ -126,6 +127,7 @@ function makePrisma(opts: {
     return Promise.resolve(ids.map((id) => universe[id]).filter(Boolean));
   });
   return {
+    $runCommandRaw: jest.fn<any>().mockResolvedValue({ ok: 1 }),
     post: {
       findFirst: jest.fn<any>().mockImplementation(({ where }: any) =>
         Promise.resolve(universe[where.id] ?? null)),
@@ -339,8 +341,7 @@ describe('POST /posts/impressions/batch — le LOT réduit ses ids par audience 
     expect(prisma.postImpression.createMany).toHaveBeenCalledWith({
       data: [{ postId: PUBLIC_ID, userId: VIEWER_ID, source: 'feed' }],
     });
-    const touchedIds = prisma.post.updateMany.mock.calls
-      .flatMap(([args]: any[]) => args.where?.id?.in ?? []);
+    const touchedIds = postCounterWritesOf(prisma.$runCommandRaw).flatMap((write) => write.ids);
     expect(touchedIds).toEqual([PUBLIC_ID]);
     await app.close();
   });
@@ -357,7 +358,7 @@ describe('POST /posts/impressions/batch — le LOT réduit ses ids par audience 
     expect(res.statusCode).toBe(200);
     expect(res.json().data.recorded).toBe(0);
     expect(prisma.postImpression.createMany).not.toHaveBeenCalled();
-    expect(prisma.post.updateMany).not.toHaveBeenCalled();
+    expect(prisma.$runCommandRaw).not.toHaveBeenCalled();
     await app.close();
   });
 
@@ -402,8 +403,8 @@ describe('POST /posts/impressions/batch — le LOT réduit ses ids par audience 
     });
 
     expect(res.json().data.recorded).toBe(2);
-    const increments = prisma.post.updateMany.mock.calls
-      .map(([args]: any[]) => args.data.impressionCount.increment);
+    const increments = postCounterWritesOf(prisma.$runCommandRaw)
+      .map((write) => write.data.impressionCount.increment);
     expect(increments).toEqual([2]);
     await app.close();
   });

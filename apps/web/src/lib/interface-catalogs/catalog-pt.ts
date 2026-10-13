@@ -884,6 +884,8 @@ const pt = {
   'story.action.reply': 'Responder',
   'story.action.forward': 'Enviar',
   'story.action.repost': 'Republicar',
+  'story.viewer.repost': 'Republicação',
+  'story.viewer.repostOf': 'Republicado de @{handle}',
   'story.action.views': 'Visualizações',
   'story.action.share': 'Partilhar',
   'story.action.save': 'Guardar',

@@ -132,7 +132,7 @@ const prismaDe = (monde: Monde) => {
   });
   const participantMembre = { id: '507f1f77bcf86cd7994390ee', role: 'member', userId: USER_ID };
   return {
-    userSession: { findFirst: jest.fn(async () => ({ isValid: true })) },
+    userSession: { findFirst: jest.fn(async () => ({ isValid: true, expiresAt: new Date(Date.now() + 24 * 60 * 60 * 1000) })) },
     user: { findUnique: jest.fn(async () => utilisateur()) },
     conversationShareLink: { findFirst: trouveLien, findUnique: trouveLien },
     conversation: {
