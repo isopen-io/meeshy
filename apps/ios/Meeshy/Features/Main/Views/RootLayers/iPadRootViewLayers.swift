@@ -342,7 +342,9 @@ struct iPadCoversAndChromeLayer: ViewModifier {
             // iPhone, au même rang : APRÈS la pastille et la présentation
             // d'appel, qu'un `.overlay` posé plus tôt laisserait flotter sur la
             // carte. Garde : `OnboardingAboveGlobalChromeGuardTests`.
-            .onboardingHost(storyViewModel: storyViewModel, router: router)
+            // Sur iPad, la conversation ou le panneau qu'un push a ouvert vit hors de `Router.path` (#7780).
+            .onboardingHost(storyViewModel: storyViewModel, router: router,
+                            tabletDestinationIsOpen: activeConversationId != nil || rightPanelRoute != nil)
             // « Validez votre compte » (#8239) : une FEUILLE, qui passe après
             // l'onboarding (`OnboardingPresenceSignal`).
             .activationInviteHost()
