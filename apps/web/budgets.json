@@ -1007,6 +1007,15 @@
         "source": "Mesure du 2026-10-11 (`bun run build` puis `node scripts/measure-weight.mjs`, gzip -9) : 1,74 Ko pour les SEPT catalogues du libelle d usage d un cadre (les dix cles `frame.usage.*` de la loi partagee `FRAME_USAGE_LABEL_KEYS` : « Utilisable : appels video et captures », « Capture photo et video uniquement », rang, prestige, succes, moment), charges avec le mode Montage (`loadMontageModeText`) et demain la photo du jeu, jamais au demarrage. La premiere peinture ne bouge pas : 89,35 Ko avant, 89,33 Ko apres (meme arbre, sans puis avec le lot). Le meme lot fait passer `call_montage_mode` de 4,65 a 5,10 Ko, `call_mode_carousel` de 5,71 a 5,81 Ko et `call_frame_studio` de 31,01 a 31,88 Ko (la loi partagee `frame-usage.ts` et son schema), tous sous leur plafond. Arrondi au Ko SUPERIEUR (2) + 1 Ko de marge."
       }
     },
+    "interface_catalogs_mood_compose": {
+      "pattern": "^assets/catalog-mood-compose-(fr|en|es|pt|de|it|ar)-[A-Za-z0-9_-]+\\.js$",
+      "dynamic_only": true,
+      "kb": {
+        "value": 2,
+        "status": "CIBLE -- MESUREE PAR #10527, NON ARBITREE",
+        "source": "Mesure du 2026-10-13 (`bun run build` puis `node scripts/measure-weight.mjs`, gzip -9, sur un export `git archive`) : 1,15 Ko pour les SEPT catalogues de la creation d une humeur (quatre cles `status.compose.more` et `status.compose.bare.*` : la porte vers les autres emojis et la question « sans un petit mot ? »), charges avec l ecran `/status/new` (`routes/route-table.tsx`) et jamais au demarrage -- les catalogues d interface sont a 189,85 Ko pour un plafond de 190. Arrondi au Ko SUPERIEUR (2)."
+      }
+    },
     "interface_catalogs_sounds_mine": {
       "pattern": "^assets/catalog-sounds-mine-(fr|en|es|pt|de|it|ar)-[A-Za-z0-9_-]+\\.js$",
       "dynamic_only": true,
