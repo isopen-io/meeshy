@@ -92,9 +92,7 @@ final class DeletedAccountRetirement {
         inFlight.insert(userId)
         defer { inFlight.remove(userId) }
         note(pending + [userId])
-        let accountRetired = await accounts.retireDeletedAccount(userId: userId)
-        let gameErased = eraseGameFolder(of: userId)
-        guard accountRetired, gameErased else {
+        guard await accounts.retireDeletedAccount(userId: userId), eraseGameFolder(of: userId) else {
             Logger.auth.warning("Deleted account retirement incomplete — kept for the next launch")
             return false
         }
