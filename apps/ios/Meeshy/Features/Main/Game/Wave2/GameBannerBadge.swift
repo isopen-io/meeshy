@@ -47,7 +47,9 @@ struct GameBannerBadgeModel: Equatable {
     }
 
     var pointsText: String? { points.map { GameText.bannerPoints(points: GameCopy.formatCount($0)) } }
-    var missingText: String? { pointsToNext.map { GameText.bannerMissing(points: GameCopy.formatCount($0)) } }
+    var missingText: String? {
+        pointsToNext.map { GameText.bannerMissing(points: GameCopy.formatCount($0), level: GameCopy.formatCount(level + 1)) }
+    }
 
     /// « Niveau 3, palier Étincelle, premier palier, 976 points, Encore 624 points avant le niveau 4 ».
     var levelAccessibilityLabel: String {

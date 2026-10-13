@@ -10,6 +10,10 @@ import MeeshySDK
 ///  1. une donnée appartient à UN concept (`owner(of:)`) — elle ne se redit pas ailleurs tant que son concept est servi ;
 ///  2. une ligne ne redit jamais la valeur de tête ;
 ///  3. dans la fiche, « Où j'en suis » ne liste pas ce que la pièce de jeu montre déjà.
+///
+/// QUATRE QUESTIONS PAR CONCEPT (#10540) : ce que c'est (`what`), à quoi ça sert (`why`), comment ça marche et se
+/// gagne (`how`, les conseils), comment s'en servir (`use`). La valeur en cours est suivie de SA phrase d'état
+/// (`state(_:progress:game:)`), et tout « il manque » nomme sa cible : le niveau, la Meesh, le rang, la zone.
 
 /// Une ligne « libellé → valeur » de « Où j'en suis ».
 struct ProgressionConceptFact: Equatable, Identifiable {
@@ -36,11 +40,17 @@ struct ProgressionConceptCard: Equatable, Identifiable {
     let gauge: Double?
     let why: String
     let how: String
+    /// La phrase d'état (#10540) : l'étape où l'on est, et ce que la valeur vise. `nil` : rien n'est servi pour la dire.
+    var state: String?
 
     var id: String { concept.rawValue }
 
-    /// Un seul élément pour VoiceOver : concept, valeur, pourquoi — le trait « bouton » est posé par la vue.
-    var accessibilityLabel: String { ConceptText.cardA11y(name, value, why) }
+    /// Un seul élément pour VoiceOver : concept, valeur, pourquoi, puis la phrase d'état quand elle existe — le trait
+    /// « bouton » est posé par la vue.
+    var accessibilityLabel: String {
+        let head = ConceptText.cardA11y(name, value, why)
+        return state.map { head + " " + $0 } ?? head
+    }
 }
 
 /// La sous-page d'une fiche (« Aller plus loin ») : le troisième niveau du jeu (`GameNavigationMap`).
@@ -171,7 +181,8 @@ enum ProgressionConceptModel {
             urgent: action != nil && important.first == action,
             gauge: gauge(concept, progress: progress, game: game),
             why: ConceptText.why(concept),
-            how: ConceptText.how(concept)
+            how: ConceptText.how(concept),
+            state: state(concept, progress: progress, game: game)
         )
     }
 
@@ -284,34 +295,42 @@ enum ProgressionConceptModel {
             if let level = game?.level.shown {
                 items = [
                     GameCopy.tierName(level.tier),
-                    level.nextThreshold == nil ? GameCopy.levelTopShort(cap: level.cap) : ConceptText.chipMissing(GameCopy.points(level.pointsToNext)),
+                    level.nextThreshold == nil
+                        ? GameCopy.levelTopShort(cap: level.cap)
+                        : ConceptText.chipToLevel(level: count(level.level + 1), points: GameCopy.points(level.pointsToNext)),
                     level.record > level.level ? ConceptText.chipRecordLevel(count(level.record)) : nil,
                 ]
             } else {
                 items = [
                     says(.score, in: .level, served: served) ? GameCopy.points(progress.level.scale.value) : nil,
-                    progress.level.scale.remainingToNext.map { ConceptText.chipMissing(GameCopy.points($0)) },
+                    progress.level.scale.remainingToNext.map {
+                        ConceptText.chipToLevel(level: count(progress.level.level + 1), points: GameCopy.points($0))
+                    },
                 ]
             }
         case .points:
             guard let game else { return [] }
-            // Ce qui manque pour frapper est aux Points ; tout multiplicateur est aux Élans (règle n° 1).
+            // Le solde à convertir et ce qui manque pour frapper sont aux Points ; tout multiplicateur est aux Élans
+            // (règle n° 1). Le manque nomme la pièce qu'il vise.
             items = [
-                game.mint.canMint ? nil : ConceptText.chipMissing(GameCopy.points(game.mint.missingPoints)),
-                progress.meesh.map { ConceptText.chipConvertible(GameCopy.points($0.debitablePoints)) },
+                convertiblePoints(progress: progress, game: game).map { GameCopy.convertiblePoints($0) },
+                game.mint.canMint
+                    ? ConceptText.chipMintCovered
+                    : ConceptText.chipToMeesh(number: count(game.mint.number), missing: count(game.mint.missingPoints)),
             ]
         case .meesh:
             let missingHere = says(.mintMissing, in: .meesh, served: served)
             if let mint = game?.mint {
                 items = [
                     ConceptText.chipNextPrice(GameCopy.points(mint.price)),
-                    !mint.canMint && missingHere ? ConceptText.chipMissing(GameCopy.points(mint.missingPoints)) : nil,
+                    !mint.canMint && missingHere ? ConceptText.chipToMeesh(number: count(mint.number), missing: count(mint.missingPoints)) : nil,
                     progress.meesh.map { ConceptText.chipMinted(count($0.mintedLifetime)) },
                 ]
             } else if let meesh = progress.meesh {
                 items = [
                     ConceptText.chipNextPrice(GameCopy.points(meesh.mintCost)),
-                    !meesh.canMint && missingHere ? ConceptText.chipMissing(GameCopy.points(meesh.missingPoints)) : nil,
+                    !meesh.canMint && missingHere
+                        ? ConceptText.chipToMeesh(number: count(meesh.mintedLifetime + 1), missing: count(meesh.missingPoints)) : nil,
                     ConceptText.chipMinted(count(meesh.mintedLifetime)),
                 ]
             } else {
@@ -320,8 +339,8 @@ enum ProgressionConceptModel {
         case .glory:
             guard let glory = game?.glory else { return [] }
             items = [
-                String(localized: "game.rank.glory", defaultValue: "Gloire \(count(glory.glory))", bundle: .main),
-                glory.gloryMissing.map { ConceptText.chipGloryMissing(count($0)) } ?? ConceptText.chipTopRank,
+                GameCopy.gloryAmount(count(glory.glory)),
+                glory.next.map { ConceptText.chipNext(name: GameCopy.rankLabel($0.rank, division5: $0.shownDivision)) } ?? ConceptText.chipTopRank,
             ]
         case .flame:
             let record = ProgressionCopy.streakRecord(progress.streak.longestDays)
@@ -355,7 +374,6 @@ enum ProgressionConceptModel {
             items = [
                 GameText.seasonStars(count: season.stars),
                 ConceptText.chipWeekOf(count(season.week), count(GameSeason.weeks)),
-                season.completed ? nil : ConceptText.chipMissing(GameText.seasonStars(count: season.starsToNext)),
             ]
         case .prestige:
             guard let prestige = game?.prestige else { return [] }
@@ -397,7 +415,7 @@ enum ProgressionConceptModel {
         }
     }
 
-    private static func families(_ active: Int) -> String {
+    static func families(_ active: Int) -> String {
         GameCopy.isSingular(active) ? ConceptText.chipFamiliesOne(count(active)) : ConceptText.chipFamiliesOther(count(active))
     }
 
@@ -465,8 +483,9 @@ enum ProgressionConceptModel {
                 rows = [
                     piece ? nil : fact(ConceptText.factTier, GameCopy.tierName(level.tier), .tier),
                     says(.score, in: .level, served: served) ? fact(ConceptText.name(.points), GameCopy.points(block.score), .score) : nil,
-                    piece ? nil : fact(ConceptText.factNextLevel, level.nextThreshold == nil
-                        ? GameCopy.levelTopShort(cap: level.cap) : ConceptText.chipMissing(GameCopy.points(level.pointsToNext)), .levelNext),
+                    piece ? nil : (level.nextThreshold == nil
+                        ? fact(ConceptText.factNextLevel, GameCopy.levelTopShort(cap: level.cap), .levelNext)
+                        : fact(ConceptText.missingForLevel(level: count(level.level + 1)), GameCopy.points(level.pointsToNext), .levelNext)),
                     piece || level.record <= level.level
                         ? nil : fact(ConceptText.factRecord, GameText.bannerLevel(level: count(level.record)), .levelRecord),
                     block.prestige > 0 && says(.prestigeStars, in: .level, served: served)
@@ -476,16 +495,18 @@ enum ProgressionConceptModel {
                 rows = piece ? [] : [
                     fact(ConceptText.name(.points), GameCopy.points(progress.level.scale.value), .score),
                     progress.level.scale.remainingToNext.map {
-                        fact(ConceptText.factNextLevel, ConceptText.chipMissing(GameCopy.points($0)), .levelNext)
+                        fact(ConceptText.missingForLevel(level: count(progress.level.level + 1)), GameCopy.points($0), .levelNext)
                     },
                 ]
             }
         case .points:
-            // La tête dit le score ; ce qui manque pour frapper est ici, le prix aux Meeshes, les multiplicateurs aux Élans.
+            // La tête dit les points en poche ; le solde à convertir et ce qui manque pour frapper sont ici, le prix aux
+            // Meeshes, les multiplicateurs aux Élans. Le manque nomme la pièce qu'il vise (#10540).
             guard let game else { return [] }
             rows = [
-                game.mint.canMint ? nil : fact(ConceptText.factMissing, GameCopy.points(game.mint.missingPoints), .mintMissing),
-                progress.meesh.map { fact(ConceptText.factConvertible, GameCopy.points($0.debitablePoints)) },
+                convertiblePoints(progress: progress, game: game).map { fact(ConceptText.factConvertible, GameCopy.points($0), .convertible) },
+                game.mint.canMint ? nil : fact(ConceptText.missingForMeesh(number: count(game.mint.number)),
+                                               GameCopy.convertiblePoints(game.mint.missingPoints), .mintMissing),
             ]
         case .meesh:
             // La tête dit le solde ; la pièce (la frappe et le palier du trésor) dit la prochaine pièce, son prix, ce
@@ -495,7 +516,7 @@ enum ProgressionConceptModel {
                 rows = [
                     minted,
                     game.treasury.next.map {
-                        fact(ConceptText.factNextTreasury, GameCopy.treasuryName($0.key) + " · " + ConceptText.chipMissing(count($0.missing)))
+                        fact(ConceptText.factNextTreasury, GameCopy.treasuryNext(missing: count($0.missing), tier: GameCopy.treasuryName($0.key)))
                     },
                 ]
             } else {
@@ -507,10 +528,13 @@ enum ProgressionConceptModel {
         case .glory:
             // La tête dit le rang.
             guard let glory = game?.glory else { return [] }
-            let missing: String = glory.gloryMissing.map { " · " + ConceptText.chipMissing(count($0)) } ?? ""
+            let next: String? = glory.next.map { GameCopy.rankLabel($0.rank, division5: $0.shownDivision) }
             rows = [
                 fact(ConceptText.name(.glory), count(glory.glory), .glory),
-                glory.next.map { fact(ConceptText.factNextRank, GameCopy.rankLabel($0.rank, division5: $0.shownDivision) + missing, .gloryMissing) },
+                next.map { fact(ConceptText.factNextRank, $0) },
+                next.flatMap { name in
+                    glory.gloryMissing.map { fact(ConceptText.missingForRank(rank: name), GameCopy.gloryAmount(count($0)), .gloryMissing) }
+                },
             ]
         case .flame:
             // La tête dit la série ; les tuiles de la fiche disent la forme et les gels.
@@ -538,7 +562,7 @@ enum ProgressionConceptModel {
                     piece ? nil : fact(ConceptText.factWeekPoints, GameCopy.points(current.weekPoints), .weekPoints),
                     fact(ConceptText.factZone, GameText.zoneLabel(current.zone), .leagueZone),
                     current.pointsToPromotion.flatMap {
-                        $0 > 0 ? fact(ConceptText.factToPromotion, ConceptText.chipMissing(GameCopy.points($0)), .leagueMissing) : nil
+                        $0 > 0 ? fact(ConceptText.missingForPromotion, GameCopy.points($0), .leagueMissing) : nil
                     },
                     piece ? nil : fact(ConceptText.factCloses, GameWave2Format.remaining(closes: league.closes, now: now), .leagueCloses),
                     friends,
@@ -553,7 +577,6 @@ enum ProgressionConceptModel {
                 fact(ConceptText.name(.season), count(season.number), .season),
                 fact(ConceptText.factWeek, ratio(season.week, GameSeason.weeks), .seasonWeek),
                 fact(ConceptText.factStars, count(season.stars), .seasonStars),
-                season.completed ? nil : fact(ConceptText.factNextStep, ConceptText.chipMissing(GameText.seasonStars(count: season.starsToNext))),
                 fact(ConceptText.factSeal, yesNo(season.sealOwned)),
             ]
         case .prestige:
@@ -641,5 +664,207 @@ enum ProgressionConceptModel {
         case .season: .season
         case .prestige: .prestige
         }
+    }
+}
+
+// MARK: - La phrase d'état d'un concept (#10540)
+
+/// LA PHRASE D'ÉTAT — retour du porteur : « j'ai 77 099 points, il te manque 1 839 points, points à convertir 5 823,
+/// niveau 27 ». Trois chiffres justes qui mesurent trois choses, et l'écran ne disait pas lesquelles. Chaque valeur en
+/// cours est suivie d'UNE phrase qui dit l'étape où l'on est et ce que le chiffre vise : le niveau suivant, la
+/// prochaine Meesh, le rang, la zone de montée. MIROIR de `conceptState` (`apps/web/src/lib/view/progression-state.ts`).
+///
+/// Pure : le bloc `game` et la progression sont lus tels que servis (le plancher du niveau, son seuil, le prix, le
+/// manque viennent de la loi, rejouée par le serveur), puis habillés par le catalogue. Ce que le serveur ne sert pas
+/// n'a pas de phrase (`nil`) : rien n'est inventé.
+///
+/// LES DEUX SOLDES DE POINTS ont deux noms stables : les points EN POCHE (`level.score`), qui font le niveau, et les
+/// points À CONVERTIR (`meesh.debitablePoints`), seuls à payer une Meesh. La phrase les dit tous les deux ; elle ne
+/// promet pas qu'ils soient proches.
+extension ProgressionConceptModel {
+
+    /// Le solde à convertir : celui du porte-monnaie servi ; sans lui, une frappe impossible le DIT (le prix moins le
+    /// manque) ; possible, il reste inconnu — jamais déduit du score.
+    static func convertiblePoints(progress: EngagementProgress, game: GameBlock?) -> Int? {
+        if let meesh = progress.meesh { return meesh.debitablePoints }
+        guard let mint = game?.mint, !mint.canMint else { return nil }
+        return max(0, mint.price - mint.missingPoints)
+    }
+
+    /// TÉMOIN ROUGE (#10540) : la loi n'est pas encore écrite — aucune phrase. Les témoins de la phrase d'état tombent.
+    static func state(_ concept: ProgressionConcept, progress: EngagementProgress, game: GameBlock?) -> String? {
+        nil
+    }
+
+    private static func levelState(_ progress: EngagementProgress, _ game: GameBlock?) -> String? {
+        guard let block = game?.level else {
+            let scale = progress.level.scale
+            guard let next = scale.nextThreshold else { return GameCopy.levelTop(cap: nil) }
+            return ConceptText.stateLevelSimple(level: count(progress.level.level), left: GameCopy.points(max(0, next - scale.value)),
+                                                next: count(progress.level.level + 1))
+        }
+        let level = block.shown
+        // Retenu par une étape (#9706) : la phrase dit l'étape, jamais « il en reste 0 ».
+        if level.held, let step = level.step { return GameCopy.levelHeld(step) }
+        guard let next = level.nextThreshold else { return GameCopy.levelTop(cap: level.cap) }
+        return ConceptText.stateLevelProgress(
+            level: count(level.level), done: GameCopy.points(max(0, block.score - level.floorScore)),
+            span: count(next - level.floorScore), left: count(level.pointsToNext), next: count(level.level + 1)
+        )
+    }
+
+    private static func pointsState(_ progress: EngagementProgress, _ game: GameBlock?) -> String? {
+        guard let game else { return nil }
+        let mint = game.mint
+        let held = GameCopy.points(game.level.score)
+        let number = count(mint.number)
+        let price = GameCopy.points(mint.price)
+        guard let convertible = convertiblePoints(progress: progress, game: game) else {
+            return ConceptText.statePointsReadyPlain(held: held, number: number, price: price)
+        }
+        let toConvert = GameCopy.convertiblePoints(convertible)
+        guard !mint.canMint else {
+            return ConceptText.statePointsReady(held: held, convertible: toConvert, number: number, price: price)
+        }
+        return ConceptText.statePointsMissing(held: held, convertible: toConvert, number: number, price: price,
+                                              missing: GameCopy.convertiblePoints(mint.missingPoints))
+    }
+
+    private static func meeshState(_ progress: EngagementProgress, _ game: GameBlock?) -> String? {
+        guard let game else { return nil }
+        let mint = game.mint
+        let balance = progress.meesh?.balance ?? game.treasury.held
+        let minted = count(progress.meesh?.mintedLifetime ?? max(0, mint.number - 1))
+        let kept = balance <= 0
+            ? ConceptText.stateMeeshKeptNone(minted: minted)
+            : ConceptText.stateMeeshKept(balance: GameCopy.meeshes(balance), minted: minted)
+        let number = count(mint.number)
+        let price = GameCopy.points(mint.price)
+        let next = mint.canMint
+            ? ConceptText.stateMeeshNextReady(number: number, price: price)
+            : ConceptText.stateMeeshNextMissing(number: number, price: price, missing: GameCopy.convertiblePoints(mint.missingPoints))
+        return kept + " " + next
+    }
+
+    private static func gloryState(_ game: GameBlock?) -> String? {
+        guard let glory = game?.glory else { return nil }
+        let rank = GameCopy.rankLabel(glory)
+        let held = count(glory.glory)
+        guard let next = glory.next else { return ConceptText.stateGloryTop(rank: rank, glory: held) }
+        return ConceptText.stateGloryNext(
+            rank: rank, glory: held, missing: count(glory.gloryMissing ?? max(0, next.minGlory - glory.glory)),
+            next: GameCopy.rankLabel(next.rank, division5: next.shownDivision)
+        )
+    }
+
+    private static func flameState(_ progress: EngagementProgress, _ game: GameBlock?) -> String? {
+        guard let flame = game?.flame else {
+            let streak = progress.streak
+            guard streak.currentDays > 0 else { return ConceptText.stateFlameNone }
+            return ConceptText.stateFlameStreak(days: GameCopy.days(streak.currentDays), record: GameCopy.days(streak.longestDays))
+        }
+        let days = GameCopy.days(flame.days)
+        switch flame.status {
+        case .none: return ConceptText.stateFlameNone
+        case .out: return ConceptText.stateFlameOut
+        case .atRisk: return ConceptText.stateFlameAtRisk(days: days)
+        case .covered: return ConceptText.stateFlameCovered(days: days)
+        case .lit:
+            return ConceptText.stateFlameLit(days: days, bonus: count(min(100, max(0, flame.bonusPercent))),
+                                             freezes: ratio(flame.freezes, flame.maxFreezes))
+        }
+    }
+
+    private static func missionsState(_ game: GameBlock?) -> String? {
+        guard let game else { return nil }
+        let missions = game.missions
+        guard missions.unlocked else { return GameCopy.missionsLocked(level: count(game.level.shown.level)) }
+        let total = missions.items.count
+        let done = missions.items.filter(\.isCompleted).count
+        switch game.chest.status {
+        case .claimed: return ConceptText.stateMissionsClaimed(done: count(done), total: count(total))
+        case .ready: return ConceptText.stateMissionsReady(done: count(done), total: count(total))
+        case .locked: return ConceptText.stateMissionsProgress(done: count(done), total: count(total), left: count(max(0, total - done)))
+        }
+    }
+
+    private static func leagueState(_ game: GameBlock?) -> String? {
+        guard let game, let league = game.league else { return nil }
+        if league.access == .locked {
+            return GameText.leagueLocked(level: count(GameLeague.minLevel), current: count(game.level.shown.level))
+        }
+        guard let current = GameLeagueDetail.current(of: league) else { return ConceptText.stateLeagueUnplaced }
+        let place = ConceptText.stateLeaguePlace(league: GameText.leagueName(current.league), rank: count(current.rank),
+                                                 size: count(current.groupSize), points: GameCopy.points(current.weekPoints))
+        guard let zone = leagueZoneState(current) else { return place }
+        return place + " " + zone
+    }
+
+    /// La zone, avec ce qu'il manque pour la zone de MONTÉE — la cible est dans la phrase.
+    private static func leagueZoneState(_ current: GameLeagueBlock.Current) -> String? {
+        if current.zone == .promotion { return ConceptText.stateLeagueZonePromotion }
+        guard let missing = current.pointsToPromotion, missing > 0 else { return nil }
+        switch current.zone {
+        case .promotion: return ConceptText.stateLeagueZonePromotion
+        case .safe: return ConceptText.stateLeagueZoneSafe(missing: GameCopy.points(missing))
+        case .relegation: return ConceptText.stateLeagueZoneRelegation(missing: GameCopy.points(missing))
+        }
+    }
+
+    private static func seasonState(_ game: GameBlock?) -> String? {
+        guard let game else { return nil }
+        guard let season = game.season else { return GameText.seasonNone }
+        let number = count(season.number)
+        let week = count(season.week)
+        let weeks = count(GameSeason.weeks)
+        let total = count(season.stepsTotal)
+        guard season.steps < season.stepsTotal else {
+            return ConceptText.stateSeasonDone(number: number, week: week, weeks: weeks, total: total)
+        }
+        return ConceptText.stateSeasonProgress(number: number, week: week, weeks: weeks, steps: count(season.steps), total: total,
+                                               stars: GameText.seasonStars(count: season.starsToNext))
+    }
+
+    private static func prestigeState(_ game: GameBlock?) -> String? {
+        guard let game, let prestige = game.prestige else { return nil }
+        if prestige.canPrestige { return GameText.prestigeMee }
+        if prestige.stars >= prestige.max { return GameText.prestigeMax }
+        return GameText.prestigeLocked(level: count(game.level.shown.level))
+    }
+
+    private static func elansState(_ progress: EngagementProgress) -> String? {
+        guard let elan = progress.elan else { return nil }
+        let active = families(elan.activeFamilyCount)
+        return elan.isAccelerated
+            ? ConceptText.stateElansActive(factor: GameCopy.factor(elan.factor), families: active)
+            : ConceptText.stateElansIdle(families: active)
+    }
+
+    private enum Counted { case badges, defis, succes }
+
+    private static func countedState(_ kind: Counted, done: Int, total: Int) -> String? {
+        guard total > 0 else { return nil }
+        guard done < total else { return ConceptText.stateCountComplete(done: count(done), total: count(total)) }
+        let left = count(total - done)
+        switch kind {
+        case .badges: return ConceptText.stateCountBadges(done: count(done), total: count(total), left: left)
+        case .defis: return ConceptText.stateCountDefis(done: count(done), total: count(total), left: left)
+        case .succes: return ConceptText.stateCountSucces(done: count(done), total: count(total), left: left)
+        }
+    }
+
+    private static func showcaseState(_ game: GameBlock?) -> String? {
+        guard let game, let trophies = game.trophies else { return nil }
+        guard !trophies.items.isEmpty else { return GameText.showcaseEmpty }
+        return ConceptText.stateShowcaseCount(
+            trophies: GameText.doorShowcaseCount(count: trophies.items.count),
+            who: GameText.visibilityLabel(game.visibility?.showcase ?? GameTrophies.defaultVisibility)
+        )
+    }
+
+    private static func atlasState(_ game: GameBlock?) -> String? {
+        guard let atlas = game?.atlas else { return nil }
+        guard atlas.stamped > 0 || !atlas.pending.isEmpty else { return GameText.atlasEmpty }
+        return ConceptText.stateAtlasProgress(stamped: count(atlas.stamped), total: count(atlas.total), pending: count(atlas.pending.count))
     }
 }
