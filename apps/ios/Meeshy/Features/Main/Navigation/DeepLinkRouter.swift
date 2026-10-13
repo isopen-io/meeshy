@@ -529,6 +529,15 @@ final class DeepLinkRouter: ObservableObject {
             // n'attend son issue.
             Task { await resolver.recordClick(token: token) }
             let resolved = try? await resolver.resolve(token: token)
+            // Un lien court d'INVITATION (#10560) : son adresse d'origine est un
+            // `/signup/affiliate/<code>`, qui n'est pas une destination mais un
+            // code à retenir — exactement ce que fait le lien direct. Sans cette
+            // voie, il tombait dans « Ce lien n'a pas pu être ouvert ».
+            if let code = Self.trackedReferralCode(for: resolved) {
+                self.trackedLinkOrigin = nil
+                _ = self.captureReferral(code)
+                return
+            }
             let destination = Self.trackedDestination(for: resolved, token: token)
             if let contentId = Self.contentId(of: destination) {
                 self.entries.mark(contentId, entry: .trackingLink)
@@ -536,6 +545,23 @@ final class DeepLinkRouter: ObservableObject {
             self.trackedLinkOrigin = TrackedLinkOrigin(token: token, link: destination)
             self.pendingDeepLink = destination
         }
+    }
+
+    /// Le code d'invitation qu'un lien de suivi transporte, quand son adresse
+    /// d'origine est un lien d'invitation Meeshy (`/signup/affiliate/<code>`,
+    /// `/signup?ref=<code>`). `nil` pour tout autre lien. Une cible typée
+    /// (story, réel, post, profil, conversation) prime : elle n'est jamais une
+    /// invitation, quelle que soit son adresse.
+    static func trackedReferralCode(for resolved: ResolvedTrackedLink?) -> String? {
+        guard let resolved else { return nil }
+        let kind = (resolved.kind ?? "").lowercased()
+        let type = (resolved.targetType ?? "").uppercased()
+        guard kind != "conversation", type != "CONVERSATION" else { return nil }
+        if let targetId = resolved.targetId, !targetId.isEmpty,
+           ["STORY", "PROFILE", "REEL", "POST", "STATUS"].contains(type) { return nil }
+        guard let url = resolved.originalUrl.flatMap(URL.init(string:)),
+              case .referral(let code) = DeepLinkParser.parse(url) else { return nil }
+        return code
     }
 
     /// Maps a resolved tracked link to a `DeepLink`.

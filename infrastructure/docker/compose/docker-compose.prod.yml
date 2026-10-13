@@ -438,6 +438,17 @@ services:
       - "traefik.http.routers.frontend-track-unfurl.service=gateway"
       - "traefik.http.middlewares.track-unfurl-path.replacepathregex.regex=^/l/([A-Za-z0-9_-]{2,50})/?$$"
       - "traefik.http.middlewares.track-unfurl-path.replacepathregex.replacement=/api/v1/tracking-links/$$1/og"
+      # #10559 — les mêmes robots qui déplient un lien d'AFFILIATION /signup/affiliate/<jeton>
+      # reçoivent l'aperçu de celui qui invite (GET /api/v1/affiliate/<jeton>/og) : son nom,
+      # son pseudo, sa bannière sinon son avatar ; un jeton fermé rend l'aperçu générique.
+      - "traefik.http.routers.frontend-affiliate-unfurl.rule=(Host(`${DOMAIN:-localhost}`) || Host(`www.${DOMAIN:-localhost}`)) && PathRegexp(`^/signup/affiliate/[A-Za-z0-9_-]{2,100}/?$$`) && !Query(`open`, `1`) && HeaderRegexp(`User-Agent`, `(?i)(facebookexternalhit|facebot|whatsapp|twitterbot|slackbot|telegrambot|discordbot|linkedinbot|skypeuripreview|embedly|iframely|redditbot|pinterestbot|vkshare|mastodon|bluesky|cardyb|google-pagerenderer|kakaotalk-scrap|bitlybot|mattermost|synapse)`)"
+      - "traefik.http.routers.frontend-affiliate-unfurl.priority=100"
+      - "traefik.http.routers.frontend-affiliate-unfurl.entrypoints=websecure"
+      - "traefik.http.routers.frontend-affiliate-unfurl.tls.certresolver=letsencrypt"
+      - "traefik.http.routers.frontend-affiliate-unfurl.middlewares=affiliate-unfurl-path,rate-limit@file,compress@file"
+      - "traefik.http.routers.frontend-affiliate-unfurl.service=gateway"
+      - "traefik.http.middlewares.affiliate-unfurl-path.replacepathregex.regex=^/signup/affiliate/([A-Za-z0-9_-]{2,100})/?$$"
+      - "traefik.http.middlewares.affiliate-unfurl-path.replacepathregex.replacement=/api/v1/affiliate/$$1/og"
       - "traefik.http.services.gateway.loadbalancer.server.port=3000"
 
   # Static Files Service - Nginx pour servir les fichiers uploadés sur static.${DOMAIN}

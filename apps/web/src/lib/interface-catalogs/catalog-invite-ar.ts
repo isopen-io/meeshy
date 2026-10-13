@@ -4,6 +4,7 @@ const ar = {
   'invite.brand': 'Meeshy',
   'invite.loading': 'جارٍ فتح الدعوة…',
   'invite.inviter.named': 'يدعوك {name}',
+  'invite.inviter.onMeeshy': '{name} يدعوك إلى Meeshy',
   'invite.inviter.unnamed': 'أنت مدعو للانضمام',
   'invite.inviter.message': 'رسالة من {name}',
   'invite.group.fallbackTitle': 'محادثة على Meeshy',

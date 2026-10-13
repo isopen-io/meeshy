@@ -499,7 +499,12 @@ const EXCLUDED_DIR_NAMES = new Set(['Tests', 'MeeshyTests', 'MeeshyUIDeviceTests
 // un ancien chemin ne se retire qu'à zéro usage mesuré), et le catalogue est généré depuis son manifeste. Ce ne sont
 // pas des faux morts (#5427) : iOS ne les appelle vraiment plus. Valeur MESURÉE le 2026-10-13 en CI
 // (run 38371153599 rouge sur 313) et en local (diff des entrées mortes origin/dev ↔ feat/social-events-v2).
-const BASELINE_DEAD_ENTRIES = 313;
+// 313 -> 314 (#10559, 2026-10-13) : `AffiliateEndpoint.byTokenOg` (`GET /api/v1/affiliate/:token/og`) — la page
+// d'aperçu Open Graph d'un lien d'affiliation, servie par la passerelle aux ROBOTS que Traefik trie par
+// User-Agent (jumelle des aperçus `/chat/<lien>` et `/l/<jeton>`). Aucun client ne l'appelle jamais, iOS pas plus
+// que le web : l'entrée existe parce que le catalogue est généré depuis le manifeste. Valeur MESURÉE le 2026-10-13
+// en CI (run 38458186282 rouge sur 314).
+const BASELINE_DEAD_ENTRIES = 314;
 
 const CATALOG_ENUM_RE = /public enum ([A-Za-z0-9_]+)\s*:\s*MeeshyEndpoint\b/;
 // Une déclaration de cas n'a jamais de point après `case` ; une branche de
