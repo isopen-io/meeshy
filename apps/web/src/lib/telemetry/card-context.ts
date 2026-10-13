@@ -74,11 +74,21 @@ export function interactionOf(
 
 /** Un geste ABOUTI dans un COMMENTAIRE — la cible est le commentaire, la publication son parent. */
 export function commentInteractionOf(postId: string, commentId: string, action: InteractionAction, now: number = Date.now()): SocialEventV2Input {
+  return { type: 'interaction', action, ...commentTarget(postId, commentId, now) };
+}
+
+function commentTarget(postId: string, commentId: string, now: number) {
   const { target, ...where } = located(postId, now);
-  return { type: 'interaction', action, target: { kind: 'comment', id: commentId, parent: target }, ...where };
+  return { target: { kind: 'comment' as const, id: commentId, parent: target }, ...where };
 }
 
 export function negativeOf(postId: string, action: NegativeAction, extra: { readonly reasonCode?: string; readonly visibleMs?: number } = {}, now: number = Date.now()): SocialEventV2Input {
   const { dwellBeforeMs: _dwell, ...where } = located(postId, now);
+  return { type: 'negative', action, ...where, ...extra };
+}
+
+/** Un signal négatif posé sur un COMMENTAIRE — sans durée de lecture, comme `negativeOf`. */
+export function commentNegativeOf(postId: string, commentId: string, action: NegativeAction, extra: { readonly reasonCode?: string } = {}, now: number = Date.now()): SocialEventV2Input {
+  const { dwellBeforeMs: _dwell, ...where } = commentTarget(postId, commentId, now);
   return { type: 'negative', action, ...where, ...extra };
 }

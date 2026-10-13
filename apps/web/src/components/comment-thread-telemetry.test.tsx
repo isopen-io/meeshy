@@ -118,4 +118,21 @@ describe('CommentThread — comment_submit', () => {
     });
     expect(JSON.stringify(v2)).not.toContain('ines');
   });
+
+  test('signaler un commentaire émet negative/report_submit sur CE commentaire, avec le code du motif', async () => {
+    const host = await mountThread();
+    await until(() => host.querySelector('[data-comment-row="cm-r2-1"]') !== null);
+    await act(async () => host.querySelector<HTMLButtonElement>('[data-comment-row="cm-r2-1"] [data-comment-gesture="more"]')?.click());
+    await act(async () => document.querySelector<HTMLButtonElement>('[data-comment-menu] [data-comment-gesture="report"]')?.click());
+    await act(async () => document.querySelector<HTMLButtonElement>('[data-report-reason="spam"]')?.click());
+    await until(() => v2.length > 0);
+    expect(v2).toHaveLength(1);
+    expect(v2[0]).toMatchObject({
+      type: 'negative',
+      action: 'report_submit',
+      reasonCode: 'spam',
+      target: { kind: 'comment', id: 'cm-r2-1', parent: { kind: 'post', id: POST } },
+      surface: 'feed',
+    });
+  });
 });

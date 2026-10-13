@@ -18,7 +18,7 @@ import { commentDrafts, type CommentDraft } from '@/lib/comments/comment-draft';
 import { browserCommentUploadFor, forgetUploadedCommentMedia, uploadCommentMedia, type CommentMediaUpload } from '@/lib/comments/comment-media';
 import { unsentComments, unsentOf } from '@/lib/comments/unsent-comments';
 import { composingPostOf, postCommentImageable } from '@/lib/export/composed-comment-card';
-import { commentInteractionOf, interactionOf } from '@/lib/telemetry/card-context';
+import { commentInteractionOf, commentNegativeOf, interactionOf } from '@/lib/telemetry/card-context';
 import { commentTapOf } from '@/lib/telemetry/content-taps';
 import { readingTelemetry } from '@/lib/view/reading-telemetry';
 import { resolveFeedText } from '@/lib/feed/text';
@@ -396,9 +396,10 @@ export function CommentThread({
             postImageableOf,
             onCopy: (text) => void copyPlainText(text).then((outcome) => say(outcome === 'copied' ? 'feed.post.copied' : 'feed.post.copy_failed')),
             onReport: (commentId, reason) =>
-              void reportCommentAction(commentId, reason).then((outcome) =>
-                say(outcome === 'done' ? 'report.done' : outcome === 'throttled' ? 'report.throttled' : 'report.failed'),
-              ),
+              void reportCommentAction(commentId, reason).then((outcome) => {
+                say(outcome === 'done' ? 'report.done' : outcome === 'throttled' ? 'report.throttled' : 'report.failed');
+                if (outcome === 'done') readingTelemetry.recordV2(commentNegativeOf(postId, commentId, 'report_submit', { reasonCode: reason }));
+              }),
             failureOf: (commentId) => failures.get(commentId)?.failure,
             onRetryGesture: (commentId) => {
               const failed = failures.get(commentId);
