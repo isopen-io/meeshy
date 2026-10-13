@@ -74,17 +74,17 @@ struct ShareableLink: Identifiable {
 /// **Ce qu'une feuille de partage peut emporter en FICHIER** (#9682).
 enum ShareFileSource {
     case post(FeedPost)
-    case story(StoryItem, authorUsername: String?)
+    case story(StoryItem, author: StoryExportAuthor?)
 
     /// `nil` quand rien ne s'emporte : la règle de « Sauvegarder » (`PostSaveRoute`)
     /// décide pour un post — une publication est ouverte à la sortie, comme ses
     /// hôtes le déclarent (`MediaSaveCoordinator(exitGate: .open)`).
     func makeProvider(link: URL) -> LazyShareFileProvider? {
         switch self {
-        case .story(let story, let authorUsername):
+        case .story(let story, let author):
             return ShareFilePlaceholder.video(named: "Meeshy-\(story.id).mp4").map { placeholder in
                 LazyShareFileProvider(placeholder: placeholder, typeIdentifier: UTType.mpeg4Movie.identifier, link: link) {
-                    await StoryPhotoSaveService.shared.renderStoryFile(of: story, authorUsername: authorUsername)
+                    await StoryPhotoSaveService.shared.renderStoryFile(of: story, author: author)
                 }
             }
         case .post(let post):
