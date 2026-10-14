@@ -40,6 +40,9 @@ let package = Package(
         .package(url: "https://github.com/groue/GRDB.swift.git", exact: "6.29.3"),
         .package(url: "https://github.com/stasel/WebRTC", exact: "146.0.0"),
         .package(url: "https://github.com/pointfreeco/swift-snapshot-testing", exact: "1.17.6"),
+        // Le moteur Lottie des stickers, fonds, contours et bannières (#10638) :
+        // un XCFramework précompilé, lié à MeeshyUI seul — jamais aux extensions.
+        .package(url: "https://github.com/airbnb/lottie-spm.git", exact: "4.6.1"),
     ],
     targets: [
         .target(
@@ -53,7 +56,10 @@ let package = Package(
         ),
         .target(
             name: "MeeshyUI",
-            dependencies: ["MeeshySDK"],
+            dependencies: [
+                "MeeshySDK",
+                .product(name: "Lottie", package: "lottie-spm"),
+            ],
             resources: [
                 .process("Resources"),
             ],

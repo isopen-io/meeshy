@@ -169,6 +169,11 @@ nonisolated public enum MeeStickerCatalog {
 
     // MARK: - Les films (bundle ⇒ `MainActor`)
 
+    /// Le film d'un sticker : un fichier `.lottie` (#10639), vectoriel, généré
+    /// depuis le dessin du web par `apps/web/scripts/mee-ios-stickers.ts`. Les
+    /// PIXELS dont ont besoin le PNG joint, la vignette, le canevas d'une story
+    /// ou l'image publiée sont rasterisés à la demande (`LottieFilm`) ; la
+    /// feuille et la bulle jouent le fichier lui-même (`MeeStickerFilmView`).
     @MainActor
     public static func fileURL(for sticker: MeeSticker) -> URL? {
         fileURL(id: sticker.id)
@@ -178,12 +183,19 @@ nonisolated public enum MeeStickerCatalog {
     @MainActor
     public static func fileURL(id: String) -> URL? {
         let name = "mee.\(id)"
-        return Bundle.module.url(forResource: name, withExtension: "webp")
-            ?? Bundle.module.url(forResource: name, withExtension: "webp", subdirectory: "MeeStickers")
+        return Bundle.module.url(forResource: name, withExtension: filmExtension)
+            ?? Bundle.module.url(forResource: name, withExtension: filmExtension, subdirectory: "MeeStickers")
     }
 
-    /// La première image, pleine définition — le PNG joint à l'envoi et la
-    /// vignette d'un sticker FIXE, que le décodeur d'animation rend `nil`.
+    public static let filmExtension = "lottie"
+
+    /// La définition à laquelle les films étaient tournés, et à laquelle le
+    /// PNG joint à l'envoi reste rendu : les clients qui le reçoivent n'ont
+    /// rien vu changer.
+    public static let filmPixelSize = 360
+
+    /// La première image, à `filmPixelSize` — le PNG joint à l'envoi et
+    /// l'image d'un sticker FIXE.
     @MainActor
     public static func stillImage(_ sticker: MeeSticker) -> UIImage? {
         stillImage(id: sticker.id)
@@ -191,66 +203,90 @@ nonisolated public enum MeeStickerCatalog {
 
     @MainActor
     public static func stillImage(id: String) -> UIImage? {
-        guard let url = fileURL(id: id),
-              let data = try? Data(contentsOf: url, options: .mappedIfSafe) else { return nil }
-        return UIImage(data: data)
-    }
-
-    /// **La première image, réduite à la case et décodée HORS du fil
-    /// principal** — la vignette d'une case pendant que son film se prépare.
-    /// Lire le WebP plein (`stillImage`) sur le rendu de chaque case qui
-    /// entre pendant un lancer coûtait une image par case.
-    @concurrent
-    public static func still(at url: URL, maxPixelSize: Int) async -> UIImage? {
-        let key = "\(url.lastPathComponent)|\(maxPixelSize)" as NSString
+        let key = "\(id)|\(filmPixelSize)" as NSString
         if let hit = stills.object(forKey: key) { return hit }
-        guard let source = CGImageSourceCreateWithURL(url as CFURL, nil),
-              let image = CGImageSourceCreateThumbnailAtIndex(source, 0, [
-                  kCGImageSourceCreateThumbnailFromImageAlways: true,
-                  kCGImageSourceThumbnailMaxPixelSize: maxPixelSize,
-                  kCGImageSourceShouldCacheImmediately: true,
-              ] as CFDictionary) else { return nil }
+        guard let url = fileURL(id: id),
+              let source = LottieFilm.loadNow(url: url),
+              let image = LottieFilm.still(source, pixelSize: filmPixelSize) else { return nil }
         let still = UIImage(cgImage: image)
         stills.setObject(still, forKey: key, cost: image.bytesPerRow * image.height)
         return still
     }
 
-    /// Le film décodé, lu dans le cache ou décodé sur place.
+    /// **La première image, réduite à la case** — la vignette d'une case
+    /// pendant que son film se prépare. Le fichier est lu hors du fil
+    /// principal ; seul le rendu d'UNE image y passe.
+    @concurrent
+    public static func still(at url: URL, maxPixelSize: Int) async -> UIImage? {
+        let key = "\(url.lastPathComponent)|\(maxPixelSize)" as NSString
+        if let hit = stills.object(forKey: key) { return hit }
+        guard let source = await LottieFilm.load(url: url), !Task.isCancelled else { return nil }
+        guard let image = await renderStill(source, pixelSize: maxPixelSize) else { return nil }
+        let still = UIImage(cgImage: image)
+        stills.setObject(still, forKey: key, cost: image.bytesPerRow * image.height)
+        return still
+    }
+
+    @MainActor
+    private static func renderStill(_ source: LottieFilmSource, pixelSize: Int) -> CGImage? {
+        LottieFilm.still(source, pixelSize: pixelSize)
+    }
+
+    /// Le film rasterisé, lu dans le cache ou rendu sur place (appel synchrone).
     @MainActor
     public static func decoded(_ sticker: MeeSticker, maxPixelSize: Int) -> AnimatedImageDecoder.Decoded? {
         guard let url = fileURL(for: sticker) else { return nil }
-        return decode(url: url, maxPixelSize: maxPixelSize)
+        let key = cacheKey(url, maxPixelSize)
+        if let hit = films.object(forKey: key) { return hit.decoded }
+        guard let source = LottieFilm.loadNow(url: url),
+              let decoded = LottieFilm.decodedNow(source, pixelSize: maxPixelSize) else { return nil }
+        return store(decoded, for: key).decoded
     }
 
-    /// **Le film décodé HORS du fil principal, et RENDU à l'appelant.** Le
-    /// relire ensuite dans le cache pouvait le trouver déjà évincé par les
-    /// voisins préparés pendant un défilement — et le redécoder alors SUR LE
-    /// FIL PRINCIPAL, 48 images d'un coup (2026-10-02). `FilmEntry` est une
-    /// valeur immuable : elle traverse les acteurs.
+    /// **Le film rasterisé, et RENDU à l'appelant.** La lecture se fait hors du
+    /// fil principal, le rendu par lots qui lui rendent la main ; le relire
+    /// ensuite dans le cache pouvait le trouver déjà évincé (2026-10-02).
+    /// `FilmEntry` est une valeur immuable : elle traverse les acteurs.
     @concurrent
     public static func film(at url: URL, maxPixelSize: Int) async -> FilmEntry? {
         guard !Task.isCancelled else { return nil }
-        return decodeEntry(url: url, maxPixelSize: maxPixelSize)
-    }
-
-    private static func decode(url: URL, maxPixelSize: Int) -> AnimatedImageDecoder.Decoded? {
-        decodeEntry(url: url, maxPixelSize: maxPixelSize)?.decoded
-    }
-
-    private static func decodeEntry(url: URL, maxPixelSize: Int) -> FilmEntry? {
-        let key = "\(url.lastPathComponent)|\(maxPixelSize)" as NSString
+        let key = cacheKey(url, maxPixelSize)
         if let hit = films.object(forKey: key) { return hit }
-        guard let bytes = try? Data(contentsOf: url, options: .mappedIfSafe),
-              let decoded = AnimatedImageDecoder.decode(bytes, maxPixelSize: maxPixelSize) else { return nil }
-        let cost = decoded.frames.reduce(0) { $0 + $1.bytesPerRow * $1.height }
+        guard let source = await LottieFilm.load(url: url), !Task.isCancelled,
+              let entry = await rasterize(source, pixelSize: maxPixelSize, key: key) else { return nil }
+        return entry
+    }
+
+    @MainActor
+    private static func rasterize(_ source: LottieFilmSource, pixelSize: Int, key: NSString) async -> FilmEntry? {
+        guard let decoded = await LottieFilm.decoded(source, pixelSize: pixelSize) else { return nil }
+        return store(decoded, for: key)
+    }
+
+    /// **Le sticker sous une forme que TOUS les clients lisent** : un PNG
+    /// animé (APNG), à `filmPixelSize`. C'est ce qui part quand un Mee animé
+    /// est posé dans une story — téléversé et publié tel quel
+    /// (`StoryViewModel+PublicationUpload`) : un `.lottie` n'y serait lu par
+    /// personne.
+    @MainActor
+    public static func animatedImageData(for sticker: MeeSticker) -> Data? {
+        guard sticker.animated, let decoded = decoded(sticker, maxPixelSize: filmPixelSize) else { return nil }
+        return AnimatedImageEncoder.apng(decoded)
+    }
+
+    private static func cacheKey(_ url: URL, _ maxPixelSize: Int) -> NSString {
+        "\(url.lastPathComponent)|\(maxPixelSize)" as NSString
+    }
+
+    private static func store(_ decoded: AnimatedImageDecoder.Decoded, for key: NSString) -> FilmEntry {
         let entry = FilmEntry(decoded)
-        films.setObject(entry, forKey: key, cost: cost)
+        films.setObject(entry, forKey: key, cost: decoded.frames.reduce(0) { $0 + $1.bytesPerRow * $1.height })
         return entry
     }
 
     /// `NSCache` est sûr entre fils (même choix que `StoryFilterProcessor`).
-    /// La borne est en OCTETS, pas en nombre : un film de 48 images à 360 px
-    /// pèse 25 Mo décodé, et vingt-quatre d'entre eux rempliraient la mémoire
+    /// La borne est en OCTETS, pas en nombre : un film de 60 images à 360 px
+    /// pèse 31 Mo rasterisé, et vingt d'entre eux rempliraient la mémoire
     /// d'un iPhone.
     nonisolated(unsafe) private static let films: NSCache<NSString, FilmEntry> = {
         let cache = NSCache<NSString, FilmEntry>()
