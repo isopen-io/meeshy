@@ -7,7 +7,7 @@
  * trop long, l'extension toujours visible.
  */
 const GENERATED_STEM =
-  /^(?:vocal|voice|voix|audio|aud|ptt|rec|record|recording|enregistrement|message|memo|note)(?:[\s._-]*[a-z]{0,3}\d+)*$|^[\d\s._-]+$|^[0-9a-f]{8}(?:-?[0-9a-f]{4}){3}-?[0-9a-f]{12}$/i;
+  /^(?:vocal|voice|voix|audio|aud|ptt|rec|record|recording|enregistrement|message|memo|note)(?:[\s._-]*[a-z]{0,3}\d+(?!\d))*$|^[\d\s._-]+$|^[0-9a-f]{8}(?:-?[0-9a-f]{4}){3}-?[0-9a-f]{12}$/i;
 
 const splitName = (name: string): { readonly stem: string; readonly extension: string } => {
   const dot = name.lastIndexOf('.');

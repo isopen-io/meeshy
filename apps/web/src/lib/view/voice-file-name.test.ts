@@ -24,4 +24,11 @@ describe('le nom affiché d’un vocal', () => {
   test('un nom court n’est pas touché', () => {
     expect(voiceFileLabel('interview-maire.mp3', 24)).toBe('interview-maire.mp3');
   });
+
+  test('un nom hostile ne fige pas le fil (aucun retour arrière exponentiel)', () => {
+    const hostile = `vocal${'1'.repeat(5000)}x.m4a`;
+    const started = performance.now();
+    voiceFileLabel(hostile);
+    expect(performance.now() - started).toBeLessThan(50);
+  });
 });
