@@ -28,6 +28,7 @@ import {
 } from '@/lib/view/transcript-karaoke';
 import { ThreadMediaContext } from '@/lib/view/thread-media-context';
 import { useKaraokeIndex } from '@/lib/view/use-karaoke';
+import { useAudioOnDemand } from '@/lib/view/use-audio-on-demand';
 import { translate } from '@/lib/i18n-catalog';
 import { currentInterfaceLanguage } from '@/lib/interface-language';
 import { TRANSCRIPT_TEXT_OPACITY } from '@/lib/reading-mode/metrics';
@@ -36,6 +37,7 @@ import { Glyph, GlyphSvg } from './glyph';
 import { MEDIA_GLYPHS } from './glyphs-media';
 import { MaskedAttachment } from './masked-attachment';
 import { MediaGrid } from './media-grid';
+import { VoiceFileName, VoiceTranscribeZone } from './voice-bubble-parts';
 import { VeilRevealContext, revealedAttachment, useAttachmentMasked } from './view-once-opened';
 
 /**
@@ -103,7 +105,7 @@ const KARAOKE_STYLE: Readonly<Record<KaraokeTone, Readonly<Record<string, string
 };
 
 function VoiceAttachment({
-  attachment,
+  attachment: received,
   languages,
   displayLanguage,
   fallbackLanguage,
@@ -116,6 +118,8 @@ function VoiceAttachment({
   /** Le lecteur plein écran (#8333, miroir de la pastille de pourcentage iOS) — la lecture en cours y reprend à la même seconde. */
   readonly onExpand: () => void;
 }) {
+  const onDemand = useAudioOnDemand({ attachment: received, fallbackLanguage, readerLanguages: languages });
+  const attachment = onDemand.served;
   const { described: transcript, track } = electAudio({
     attachment,
     readerLanguages: languages,
@@ -378,7 +382,12 @@ function VoiceAttachment({
         </button>
       </div>
 
-      {transcript.text !== '' ? (
+      <VoiceFileName originalName={attachment.originalName ?? ''} />
+      {attachment.transcription == null ? (
+        <VoiceTranscribeZone language={uiLanguage} busy={onDemand.transcribing} notice={onDemand.notice} onTranscribe={onDemand.transcribe} />
+      ) : null}
+
+      {transcript.text !== '' && transcript.text !== attachment.originalName ? (
         <p
           data-transcript
           className="text-title"
