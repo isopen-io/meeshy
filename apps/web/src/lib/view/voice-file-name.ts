@@ -6,8 +6,28 @@
  * masqué. Un fichier importé garde son nom, tronqué AU MILIEU quand il est
  * trop long, l'extension toujours visible.
  */
-const GENERATED_STEM =
-  /^(?:vocal|voice|voix|audio|aud|ptt|rec|record|recording|enregistrement|message|memo|note)(?:[\s._-]*[a-z]{0,3}\d+(?!\d))*$|^[\d\s._-]+$|^[0-9a-f]{8}(?:-?[0-9a-f]{4}){3}-?[0-9a-f]{12}$/i;
+/**
+ * Les mots que posent les ENREGISTREURS (web `use-recorder` : « Message
+ * vocal », découpe `-coupe` ; iOS `voice_<ts>`, `edited_audio_<uuid>`,
+ * `v_<uuid>`, `meeshy-trim-<uuid>` ; messageries tierces `PTT-…-WA0001`,
+ * `AUD-…`, « Recording 3 », « New Recording »). Un nom fait UNIQUEMENT de ces
+ * mots, de nombres et d'identifiants n'apprend rien.
+ */
+const RECORDER_WORDS: ReadonlySet<string> = new Set([
+  'vocal', 'vocale', 'voice', 'voix', 'audio', 'aud', 'ptt', 'rec', 'record', 'recording', 'enregistrement',
+  'message', 'memo', 'note', 'edited', 'meeshy', 'trim', 'coupe', 'branded', 'v', 'new', 'nouveau', 'nouvel', 'nouvelle',
+]);
+
+const UUID = /[0-9a-f]{8}-?[0-9a-f]{4}-?[0-9a-f]{4}-?[0-9a-f]{4}-?[0-9a-f]{12}/gi;
+const COUNTER = /^[a-z]{0,3}\d+$/;
+
+const isGeneratedStem = (stem: string): boolean =>
+  stem
+    .replace(UUID, ' ')
+    .toLowerCase()
+    .split(/[\s._-]+/)
+    .filter((token) => token !== '')
+    .every((token) => RECORDER_WORDS.has(token) || COUNTER.test(token));
 
 const splitName = (name: string): { readonly stem: string; readonly extension: string } => {
   const dot = name.lastIndexOf('.');
@@ -27,6 +47,6 @@ export const voiceFileLabel = (originalName: string, max = 28): string | null =>
   const name = originalName.trim();
   if (name === '') return null;
   const { stem } = splitName(name);
-  if (GENERATED_STEM.test(stem.trim())) return null;
+  if (isGeneratedStem(stem)) return null;
   return truncateMiddle(name, max);
 };

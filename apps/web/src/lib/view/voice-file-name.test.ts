@@ -9,6 +9,26 @@ describe('le nom affiché d’un vocal', () => {
     }
   });
 
+  test('les noms que fabriquent les enregistreurs de l’app (web, iOS) sont masqués', () => {
+    for (const name of [
+      'Message vocal.webm',
+      'Message vocal.ogg',
+      'Message vocal-coupe.wav',
+      'voice_1760436900.m4a',
+      'edited_audio_3F2A9C1E-77AA-4B1D-9C0E-0A1B2C3D4E5F.m4a',
+      'v_3F2A9C1E-77AA-4B1D-9C0E-0A1B2C3D4E5F.m4a',
+      'meeshy-trim-3F2A9C1E-77AA-4B1D-9C0E-0A1B2C3D4E5F.m4a',
+      'New Recording 3.m4a',
+    ]) {
+      expect(voiceFileLabel(name)).toBeNull();
+    }
+  });
+
+  test('un mot lisible à côté d’un horodatage garde le nom', () => {
+    expect(voiceFileLabel('interview-2026-10-14.m4a')).toBe('interview-2026-10-14.m4a');
+    expect(voiceFileLabel('Message pour Amina.m4a')).toBe('Message pour Amina.m4a');
+  });
+
   test('un fichier nommé par son auteur garde son nom', () => {
     expect(voiceFileLabel('reunion.m4a')).toBe('reunion.m4a');
   });
