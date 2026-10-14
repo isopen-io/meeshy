@@ -582,7 +582,13 @@ final class NotificationListViewModel: ObservableObject {
             loadDidFail = false
             isLoading = false
             if category == .all {
-                try await CacheCoordinator.shared.notifications.save(response.data, for: Self.persistedCacheKey)
+                // La liste est déjà affichée : un cache non écrit ne la fait pas passer pour un échec de
+                // chargement, et ne prive pas la pastille de non-lus de son recalage.
+                do {
+                    try await CacheCoordinator.shared.notifications.save(response.data, for: Self.persistedCacheKey)
+                } catch {
+                    Logger.notifications.error("Notifications cache not written: \(error.localizedDescription)")
+                }
             }
             await NotificationToastManager.shared.refreshUnreadCount()
         } catch {
