@@ -320,3 +320,34 @@ final class iPadRightColumnAndHandoffTests: XCTestCase {
         XCTAssertEqual(handoff.routes, [.profile, .links])
     }
 }
+
+/// Le ménage de `tmp` ne touche que les copies connues, et seulement au-delà d'une semaine.
+final class TemporaryMediaSweeperTests: XCTestCase {
+
+    func test_onlyKnownPrefixes_olderThanAWeek_areSwept() {
+        let now = Date(timeIntervalSince1970: 1_800_000_000)
+        let old = now.addingTimeInterval(-8 * 24 * 3600)
+        let fresh = now.addingTimeInterval(-3600)
+        let swept = TemporaryMediaSweeper.expired([
+            (name: "composer_photo_A.jpg", modified: old),
+            (name: "composer_photo_B.jpg", modified: fresh),
+            (name: "recent_C.mov", modified: old),
+            (name: "composer-autosave-sessions", modified: old),
+            (name: "media-save-1234", modified: old),
+        ], now: now)
+        XCTAssertEqual(swept, ["composer_photo_A.jpg", "recent_C.mov"])
+    }
+
+    func test_sweep_removesOnlyTheExpiredFiles() throws {
+        let dir = FileManager.default.temporaryDirectory.appendingPathComponent("sweep-\(UUID().uuidString)")
+        try FileManager.default.createDirectory(at: dir, withIntermediateDirectories: true)
+        defer { try? FileManager.default.removeItem(at: dir) }
+        let oldFile = dir.appendingPathComponent("composer_file_old.pdf")
+        let keepFile = dir.appendingPathComponent("unrelated.txt")
+        try Data("a".utf8).write(to: oldFile)
+        try Data("b".utf8).write(to: keepFile)
+        TemporaryMediaSweeper.sweep(in: dir, now: Date().addingTimeInterval(8 * 24 * 3600))
+        XCTAssertFalse(FileManager.default.fileExists(atPath: oldFile.path))
+        XCTAssertTrue(FileManager.default.fileExists(atPath: keepFile.path))
+    }
+}

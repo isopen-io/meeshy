@@ -749,6 +749,13 @@ final class CallManager: ObservableObject {
     /// or it resurrects the `missed` mislabel (arc reject 2026-07-12).
     var pendingEndReconciliations: [(callId: String, reason: String?)] = []
 
+    /// Combien de fois la fin de chaque appel a été armée pour un rejeu. Sans plafond, une fin que la passerelle
+    /// refuse (appel déjà clos, `NOT_A_PARTICIPANT`) se réarmait à CHAQUE reconnexion pour toute la vie du
+    /// processus : deux émissions par reconnexion, jusqu'à vider le quota de fins d'appel — et refuser le
+    /// raccroché d'un vrai appel.
+    var endReconciliationArmings: [String: Int] = [:]
+    static let maxEndReconciliationArmings = 4
+
     #if canImport(WebRTC)
     /// Paresseux (#7955) : `PiPCallController` monte une vue AVKit à sa naissance.
     lazy var pip: PiPCallProviding = PiPCallController.shared

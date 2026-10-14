@@ -32,6 +32,10 @@ class AppDelegate: NSObject, UIApplicationDelegate {
         // delivered at next launch from the OS).
         let crashReporter = Self.bootCrashReporting()
 
+        // Les copies brutes que le composeur, la bande récente et les retouches posent dans `tmp` ne sont
+        // retirées par personne quand la publication n'aboutit pas : une semaine plus tard, elles partent.
+        Task.detached(priority: .background) { TemporaryMediaSweeper.sweep() }
+
         // Install the crash & hang observer first so any crash that happens
         // during the rest of `didFinishLaunching` (or at any later point in
         // this session) is captured. MetricKit also delivers diagnostics
@@ -765,3 +769,33 @@ extension AppDelegate: @preconcurrency UNUserNotificationCenterDelegate {
 }
 
 
+
+/// Le ménage de `tmp` au lancement : les copies d'ingestion du composeur, de la bande des médias récents et des
+/// retouches, plus vieilles qu'une semaine. Aucun composeur n'est ouvert au lancement, et la file de publication
+/// des stories ne retient pas une copie une semaine — au-delà, le brouillon durable vit ailleurs (autosave,
+/// outbox), et une copie de `tmp` n'est plus que du poids.
+nonisolated enum TemporaryMediaSweeper {
+    static let prefixes = ["composer_camera_", "composer_file_", "composer_photo_", "composer_sound_",
+                           "recent_", "retouche-", "video_look_", "meeshy-imagine-"]
+    static let maximumAge: TimeInterval = 7 * 24 * 3600
+
+    /// Les noms à retirer parmi `entries` (nom, date de modification) à l'instant `now`.
+    static func expired(_ entries: [(name: String, modified: Date)], now: Date) -> [String] {
+        entries.filter { entry in
+            prefixes.contains { entry.name.hasPrefix($0) } && now.timeIntervalSince(entry.modified) > maximumAge
+        }.map(\.name)
+    }
+
+    static func sweep(in directory: URL = FileManager.default.temporaryDirectory, now: Date = Date()) {
+        let fm = FileManager.default
+        let keys: [URLResourceKey] = [.contentModificationDateKey]
+        guard let urls = try? fm.contentsOfDirectory(at: directory, includingPropertiesForKeys: keys) else { return }
+        let entries = urls.map { url in
+            (name: url.lastPathComponent,
+             modified: (try? url.resourceValues(forKeys: Set(keys)).contentModificationDate) ?? now)
+        }
+        for name in expired(entries, now: now) {
+            fm.removeItemLogging(at: directory.appendingPathComponent(name), context: "tmp media sweep")
+        }
+    }
+}
