@@ -1,5 +1,5 @@
 import { useCallback, useMemo, useRef, useState } from 'react';
-import { useQueryClient } from '@tanstack/react-query';
+import { useInfiniteQuery, useQueryClient } from '@tanstack/react-query';
 import { useStore } from 'zustand/react';
 
 import { ListHeader } from '@/components/list-header';
@@ -8,6 +8,8 @@ import { Glyph } from '@/components/glyph';
 import { useDismissRowSwipeOnViewChange } from '@/components/conversation-row-swipe';
 import { LensRow, ROW_HEIGHT } from '@/components/lens-row';
 import { ConversationDetailsPortal } from '@/components/conversation-details-sheet-lazy';
+import { ConfirmDialog } from '@/components/confirm-dialog';
+import { ConversationRenameDialog } from '@/components/conversation-rename-dialog';
 import { accentOf } from '@/lib/accent';
 import { titleOf } from '@/lib/view/conversation';
 import { useSpeaksAsGuest } from '@/lib/view/guest-focus';
@@ -32,7 +34,14 @@ import { peerHereIn, peerKeyIn, useActiveHerePeers, useFocusedHerePeers, useHere
 import { effectiveEngagementOf } from '@/lib/api/conversation-engagement';
 import { useLiveEngagements } from '@/lib/view/use-conversation-engagement';
 import { resolveViewer } from '@/lib/api/viewer';
-import { conversationStore, effectiveFlagsOf, effectiveUnreadOf } from '@/lib/conversation-store';
+import { conversationStore, effectiveFlagsOf, effectiveUnreadOf, withPreferenceOverrides } from '@/lib/conversation-store';
+import { blockedUsersQueryOptions, flattenBlockedUsers } from '@/lib/api/blocks';
+import { blockTargetOf } from '@/lib/api/conversation-block';
+import { customNameOf } from '@/lib/api/preferences';
+import { appQueryClient } from '@/lib/api/query-client';
+import { rowBlockAction, rowPreferenceAction } from '@/lib/api/row-intents';
+import { translate } from '@/lib/i18n-catalog';
+import type { RowIntent } from '@/lib/view/row-actions';
 import { applyFilter, emptinessOf, filterLabel, LIST_FILTERS, orderConversations, type ListFilter } from '@/lib/lens/filters';
 import { memoriserLienParLecteur, partagerInvitationParrainee, retourInvitationParrainee } from '@/lib/view/invitation';
 import { useStoryRailProps } from '@/lib/view/use-story-rail';
@@ -363,7 +372,11 @@ export default function ConversationsScreen() {
   const session = useStore(sessionStore, (s) => s.session);
   const viewer = useMemo(() => resolveViewer({ source: apiDeps.source, session }), [session]);
   const { languages: readerLanguages } = useReaderLanguages();
-  const conversations = list.data ?? EMPTY_CONVERSATIONS;
+  const overrides = useStore(conversationStore, (s) => s.overrides);
+  /* LA CONVERSATION EFFECTIVE (#10593) — le favori, la catégorie et le nom
+     personnel corrigés à l'instant du geste : filtres, sections, rangées et
+     fiche lisent la même valeur. */
+  const conversations = useMemo(() => withPreferenceOverrides(list.data ?? EMPTY_CONVERSATIONS, overrides), [list.data, overrides]);
   /* LA FICHE D'UNE CONVERSATION NON DIRECTE, OUVERTE DEPUIS SON AVATAR
      (#10300) — miroir de `ThemedConversationRow` (`onTap: onViewConversationInfo`).
      `setDetailsId` est stable : les rangées mémoïsées ne se re-rendent pas. Un
@@ -371,7 +384,42 @@ export default function ConversationsScreen() {
   const [detailsId, setDetailsId] = useState<string | null>(null);
   const openDetails = useSpeaksAsGuest() ? undefined : setDetailsId;
   const detailsConversation = detailsId === null ? undefined : conversations.find((c) => c.id === detailsId);
-  const overrides = useStore(conversationStore, (s) => s.overrides);
+  /**
+   * LES ENTRÉES D'iOS DU MENU D'UNE LIGNE (#10593) — Renommer ouvre la
+   * fenêtre, Bloquer la confirmation, Débloquer agit tout de suite (iOS ne
+   * confirme pas), Favori et Déplacer vers… écrivent la préférence. Un compte
+   * seulement : un visiteur n'a ni préférences ni blocages. Les refs gardent
+   * le rappel STABLE — `sameRowProps` ne repeint aucune rangée pour lui.
+   */
+  const account = apiDeps.source === 'fixtures' || session.status === 'authenticated';
+  const [renameId, setRenameId] = useState<string | null>(null);
+  const [blockId, setBlockId] = useState<string | null>(null);
+  const latest = useRef({ conversations, viewerId: viewer.id ?? '' });
+  latest.current = { conversations, viewerId: viewer.id ?? '' };
+  const handleRowIntent = useCallback((conversationId: string, intent: RowIntent) => {
+    if (intent.kind === 'rename') return setRenameId(conversationId);
+    if (intent.kind === 'favorite') return rowPreferenceAction(conversationId, { reaction: intent.emoji });
+    if (intent.kind === 'moveTo') return rowPreferenceAction(conversationId, { categoryId: intent.categoryId });
+    if (intent.intent === 'block') return setBlockId(conversationId);
+    const conversation = latest.current.conversations.find((c) => c.id === conversationId);
+    if (conversation !== undefined) void rowBlockAction({ conversation, viewerId: latest.current.viewerId, intent: 'unblock' });
+    return undefined;
+  }, []);
+  const onRowIntent = account && openDetails !== undefined ? handleRowIntent : undefined;
+  /* QUI LE LECTEUR A BLOQUÉ — le panier de « Découvrir », la MÊME source que
+     `performBlock` écrit : la ligne dit « Débloquer » à l'instant du geste.
+     Tant qu'il n'est pas lu, la ligne ne propose ni l'un ni l'autre. */
+  const blocked = useInfiniteQuery({ ...blockedUsersQueryOptions(apiDeps), enabled: onRowIntent !== undefined }, appQueryClient);
+  const blockedIds = useMemo(
+    () => (blocked.data === undefined ? undefined : new Set(flattenBlockedUsers(blocked.data).map((person) => person.id))),
+    [blocked.data],
+  );
+  const peerBlockedOf = (c: Conversation): boolean | undefined => {
+    const peer = blockedIds === undefined ? undefined : blockTargetOf(c, viewer.id ?? '');
+    return peer === undefined || blockedIds === undefined ? undefined : blockedIds.has(peer.id);
+  };
+  const renameConversation = renameId === null ? undefined : conversations.find((c) => c.id === renameId);
+  const blockConversation = blockId === null ? undefined : conversations.find((c) => c.id === blockId);
   /**
    * LES CATÉGORIES DU LECTEUR (#10103) — un COMPTE seulement : un invité ou un
    * visiteur anonyme n'a pas de tiroirs, ses conversations tombent par date.
@@ -513,6 +561,9 @@ export default function ConversationsScreen() {
       unreadCount={effectiveUnreadOf(c, overrides)}
       onRowAction={rowAction}
       onOpenDetails={openDetails}
+      onRowIntent={onRowIntent}
+      peerBlocked={peerBlockedOf(c)}
+      categories={categories}
       typists={typists[c.id]}
       peerHere={peerHereIn(herePeers, c, viewer.id ?? '')}
       peerActive={peerHereIn(activePeers, c, viewer.id ?? '')}
@@ -883,6 +934,33 @@ export default function ConversationsScreen() {
           ) : null}
         </div>
       </div>
+      {renameConversation === undefined ? null : (
+        <ConversationRenameDialog
+          language={interfaceLanguage}
+          customName={customNameOf(renameConversation)}
+          originalName={titleOf({ ...renameConversation, userPreferences: [] }, viewer.id ?? '')}
+          onSave={(name) => {
+            setRenameId(null);
+            rowPreferenceAction(renameConversation.id, { customName: name });
+          }}
+          onCancel={() => setRenameId(null)}
+        />
+      )}
+      {blockConversation === undefined ? null : (
+        <ConfirmDialog
+          name="conversation-block"
+          title={rowMenuText(interfaceLanguage, 'rowMenu.block.title')}
+          body={rowMenuText(interfaceLanguage, 'rowMenu.block.message')}
+          cancelLabel={translate(interfaceLanguage, 'common.cancel')}
+          confirmLabel={rowMenuText(interfaceLanguage, 'rowMenu.block')}
+          tone="destructive"
+          onConfirm={() => {
+            setBlockId(null);
+            void rowBlockAction({ conversation: blockConversation, viewerId: viewer.id ?? '', intent: 'block' });
+          }}
+          onCancel={() => setBlockId(null)}
+        />
+      )}
       {detailsConversation === undefined ? null : (
         <ConversationDetailsPortal
           open
