@@ -31,6 +31,7 @@ import { PROTECTED_ATTACHMENT_KEY, kindOf } from '@/lib/view/message';
 import { safeAreaInsets } from '@/lib/view/safe-area';
 import { prefersReducedMotion } from '@/lib/view/reduced-motion';
 import { yieldingChrome } from '@/lib/view/chrome-yields';
+import { useIdleChrome } from '@/lib/view/use-idle-chrome';
 import { SCENE_OPENING_EASING, SCENE_OPENING_MS, takeSceneOpening } from '@/lib/view/scene-opening';
 import { useBackDismiss } from '@/lib/view/use-back-dismiss';
 import { useConversationViewingFocus } from '@/lib/view/use-conversation-viewing';
@@ -578,6 +579,7 @@ export default function MediaViewer({
   };
 
   const audioPage = current !== undefined && kindOf(current) === 'audio';
+  const [audioPlaying, setAudioPlaying] = useState(false);
   const longPress = useLongPress({
     onOpen: () => {
       if (!audioPage) setPresentation(() => stageAfter(CARDED_STAGE, 'longPress'));
@@ -613,7 +615,8 @@ export default function MediaViewer({
      se lit pas sous « Fermer », sa légende et la pellicule. Au navigateur, un
      double tap est aussi deux taps (la bascule plein cadre s'annule) : c'est
      l'état zoomé de la page COURANTE qui compte. */
-  const chromeHidden = presentation.kind === 'full' || (zoomedId !== null && zoomedId === current?.id);
+  const chromeIdle = useIdleChrome({ active: audioPage && audioPlaying });
+  const chromeHidden = presentation.kind === 'full' || (zoomedId !== null && zoomedId === current?.id) || chromeIdle;
   if (current === undefined) return null;
 
   const identity = carrierIdentity(currentCarrier);
@@ -784,6 +787,9 @@ export default function MediaViewer({
                       }}
                       onCarryRef={(carry) => {
                         if (i === index) registerCarry(attachment.id, carry);
+                      }}
+                      onPlayingChange={(playing) => {
+                        if (i === index) setAudioPlaying(playing);
                       }}
                       {...(displayLanguage !== undefined ? { displayLanguage } : {})}
                       {...(deps !== undefined ? { deps } : {})}
