@@ -68,6 +68,11 @@ nonisolated enum ReceivedSticker {
 /// (au plus une fois par fenêtre) et après chaque ajout.
 @MainActor
 final class ReceivedStickerLedger {
+    // iOS 26.1 : sous SWIFT_DEFAULT_ACTOR_ISOLATION = MainActor, la `deinit`
+    // synthétisée est ISOLÉE et double-libère (abrt).
+    // Garde : `MainActorDeinitSourceGuardTests`.
+    nonisolated deinit {}
+
     static let shared = ReceivedStickerLedger()
 
     private(set) var ids: Set<String> = []

@@ -1,6 +1,6 @@
 import { useQuery, useQueryClient } from '@tanstack/react-query';
 import type { QueryClient } from '@tanstack/react-query';
-import { useMemo, useState } from 'react';
+import { Suspense, lazy, useMemo, useState } from 'react';
 
 import { PACK_DOMAINS, type PackDomain } from '@meeshy/shared/types/content-pack';
 
@@ -13,7 +13,10 @@ import { translateStickerPacks } from '@/lib/i18n-sticker-packs-catalog';
 import type { PlainStickerPacksKey } from '@/lib/i18n-sticker-packs-catalog';
 import type { InterfaceLanguage } from '@/lib/interface-language';
 
-import { PackShop, type PackShopAdapter } from './pack-shop';
+import type { PackShopAdapter } from './pack-shop';
+
+/** Chargée à la demande, comme dans `frame-pack-shop.tsx` : `pack_shop` est `dynamic_only` (budgets.json). */
+const PackShop = lazy(() => import('./pack-shop').then((m) => ({ default: m.PackShop })));
 
 /**
  * **LA VITRINE UNIQUE** (#10632, spec § 9) — stickers, cadres, fonds,
@@ -160,13 +163,15 @@ export function UnifiedShop({
           </button>
         ))}
       </div>
-      <PackShop
-        key={filter}
-        adapter={adapter}
-        language={language}
-        hint={translateStickerPacks(language, 'packs.shop.hint')}
-        empty={translateStickerPacks(language, 'packs.shop.empty')}
-      />
+      <Suspense fallback={null}>
+        <PackShop
+          key={filter}
+          adapter={adapter}
+          language={language}
+          hint={translateStickerPacks(language, 'packs.shop.hint')}
+          empty={translateStickerPacks(language, 'packs.shop.empty')}
+        />
+      </Suspense>
     </div>
   );
 }

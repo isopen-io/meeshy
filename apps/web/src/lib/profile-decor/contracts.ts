@@ -1,4 +1,4 @@
-import { packAssetUrl } from '../packs/pack-asset-store';
+import { packAssetUrl } from '../packs/pack-asset-url';
 
 /**
  * **LES CONTRATS DES PACKS OFFICIELS** (#10632, § 8) — un profil d'autrui ne

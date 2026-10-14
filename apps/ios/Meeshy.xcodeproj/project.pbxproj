@@ -7,6 +7,9 @@
 	objects = {
 
 /* Begin PBXBuildFile section */
+		3E4A75D234526115E87086E9 /* StickerSheetView.swift in Sources */ = {isa = PBXBuildFile; fileRef = 83D6B389091A464AAEC2F7C4 /* StickerSheetView.swift */; };
+		A89CEB9AC8EEABB6A5574E75 /* BubbleStickerFloat.swift in Sources */ = {isa = PBXBuildFile; fileRef = 645AFE9ED48BCB8776046DE4 /* BubbleStickerFloat.swift */; };
+		49A2CA4678EDBDC25DA6136E /* ReceivedSticker.swift in Sources */ = {isa = PBXBuildFile; fileRef = DB9343C56BCF2F81212A5587 /* ReceivedSticker.swift */; };
 		0008D7D5B479D759E7DBC760 /* MediaSaveDeduplicationTests.swift in Sources */ = {isa = PBXBuildFile; fileRef = 2624CEAC671EFD3549C7B59C /* MediaSaveDeduplicationTests.swift */; };
 		000948901E548E0CAC33E529 /* StatusBubbleControllerReplyTests.swift in Sources */ = {isa = PBXBuildFile; fileRef = 1ABF76B8551B950BB417F705 /* StatusBubbleControllerReplyTests.swift */; };
 		000DFCA6AC3E9CFFAC1E6305 /* CameraZoomPolicyTests.swift in Sources */ = {isa = PBXBuildFile; fileRef = 49F4D0129AD7BD10774B4315 /* CameraZoomPolicyTests.swift */; };
@@ -3308,6 +3311,9 @@
 /* End PBXCopyFilesBuildPhase section */
 
 /* Begin PBXFileReference section */
+		83D6B389091A464AAEC2F7C4 /* StickerSheetView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = StickerSheetView.swift; sourceTree = "<group>"; };
+		645AFE9ED48BCB8776046DE4 /* BubbleStickerFloat.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = BubbleStickerFloat.swift; sourceTree = "<group>"; };
+		DB9343C56BCF2F81212A5587 /* ReceivedSticker.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = ReceivedSticker.swift; sourceTree = "<group>"; };
 		000DC6B58B09C752A55AB41D /* RiverStreamHostSourceGuardTests.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = RiverStreamHostSourceGuardTests.swift; sourceTree = "<group>"; };
 		000EBA9963DBF574F94AE01B /* ConversationAudioCoordinator+NowPlaying.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = "ConversationAudioCoordinator+NowPlaying.swift"; sourceTree = "<group>"; };
 		005826130DD0EA048C6BDD71 /* LentilleSkeletonRow.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = LentilleSkeletonRow.swift; sourceTree = "<group>"; };
@@ -7660,6 +7666,7 @@
 				36E4C06C07AFF91B0F63F545 /* MessageMoreSheet.swift */,
 				1B4A9879B402A27F89DC2E68 /* MessageOverlayDragLaw.swift */,
 				8925239EF7490BAF428580E7 /* MessageOverlayMenu.swift */,
+				DB9343C56BCF2F81212A5587 /* ReceivedSticker.swift */,
 				E5006E19FCA8C4E97F37DD8F /* MessageOverlayPreviewMedia.swift */,
 				D86FB74C282FC4C2B21CD9D3 /* MessageOverlayPreviewVideoPlayer.swift */,
 				B5BA5AEAAC8344DFED91F781 /* MessageOverlayRevealLaw.swift */,
@@ -9224,6 +9231,7 @@
 				18B4BFCF50C0306BB134D6C2 /* ConversationHelperViews.swift */,
 				EA4B03CB18D21236DB983E22 /* ConversationBackgroundResolution.swift */,
 				D11A4747173DE3D8B5882D30 /* ConversationBackgroundView.swift */,
+				83D6B389091A464AAEC2F7C4 /* StickerSheetView.swift */,
 				0BC69353EDF3F8147F467AC3 /* ConversationImageRetouche.swift */,
 				386FD50AF115663916D468DB /* ConversationListHelpers.swift */,
 				6B239C1DBE94E83C01574B08 /* ConversationListQuickActions.swift */,
@@ -10607,6 +10615,7 @@
 				A10628E0000000000000F001 /* BubbleStandardLayout+EmojiReply.swift */,
 				2F4937F432D49B989DB5F1DA /* BubbleStandardLayout+Media.swift */,
 				5B6ADF42360F752DF843F756 /* BubbleSticker.swift */,
+				645AFE9ED48BCB8776046DE4 /* BubbleStickerFloat.swift */,
 				75040D52EB0EABBA43794A49 /* BubbleStoryCitationCard.swift */,
 				FED7DB1863271ED8DD5E7F80 /* BubbleSystemViews.swift */,
 				8D1C54A03EADE481BF219F22 /* BubbleViewOnceViews.swift */,
@@ -11254,6 +11263,7 @@
 				1FD88C667076A5F2CF7815E8 /* BubbleStandardLayout+Media.swift in Sources */,
 				523219510BBAFB6B2E3927F4 /* BubbleStandardLayout.swift in Sources */,
 				2852E32CB57CB3C721A3A2DF /* BubbleSticker.swift in Sources */,
+				A89CEB9AC8EEABB6A5574E75 /* BubbleStickerFloat.swift in Sources */,
 				A2094BA746C7BE8D0750C273 /* BubbleStoryCitationCard.swift in Sources */,
 				33926A034B7580D789EC357C /* BubbleSwipeResistance.swift in Sources */,
 				CEF2D19144F83D020B73344F /* BubbleSystemViews.swift in Sources */,
@@ -11718,6 +11728,7 @@
 				AF797C674979B22CE8B147E1 /* ConversationEngagementPill.swift in Sources */,
 				2CDE9FC577CABE1485622D30 /* ConversationBackgroundResolution.swift in Sources */,
 				A07A17ED209A083AE5866838 /* ConversationBackgroundView.swift in Sources */,
+				3E4A75D234526115E87086E9 /* StickerSheetView.swift in Sources */,
 				6B1E38257D4F0D98D2F2BF2B /* ConversationEngagementStore.swift in Sources */,
 				999444CF52B0D5C2C9753398 /* ConversationExpandedHeaderBand.swift in Sources */,
 				FCD9B076D52038C848074924 /* ConversationFilterComposition.swift in Sources */,
@@ -12251,6 +12262,7 @@
 				114D32751F5375921EA98115 /* MessageMoreSheet.swift in Sources */,
 				3ED5D52B042533D0F398ED97 /* MessageOverlayDragLaw.swift in Sources */,
 				1A3D4C6AB4DD85B4D43CB4EC /* MessageOverlayMenu.swift in Sources */,
+				49A2CA4678EDBDC25DA6136E /* ReceivedSticker.swift in Sources */,
 				80E5D61C965BD47C3C87BF67 /* MessageOverlayPreviewMedia.swift in Sources */,
 				41679F63766FFCA9390E44F1 /* MessageOverlayPreviewVideoPlayer.swift in Sources */,
 				BC4D1B81F205C97E59C32195 /* MessageOverlayRevealLaw.swift in Sources */,
