@@ -849,7 +849,7 @@ export default function ThreadScreen({ preview, focus }: ThreadScreenProps = {})
             swipeActionsOf={messageMenu.swipeActionsOf}
             onSwipeAction={messageMenu.onMenuAction}
             onPickLanguage={messageMenu.onPickLanguage}
-            onReact={messageMenu.onMenuReact}
+            onReact={messageMenu.onMenuReact} onExpandReactions={messageMenu.setReactionSheetFor}
             onOpenDetail={messageMenu.setDetailFor}
             typists={typing.typists}
             typistAvatarOf={typistAvatarOf}

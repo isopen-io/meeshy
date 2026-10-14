@@ -32,6 +32,7 @@ const it = {
   'message.delete.failedMany': 'Impossibile eliminare i messaggi',
   'message.delete.partial': 'Impossibile eliminare {failed} messaggi su {count}',
   'message.delete.partialOne': 'Impossibile eliminare 1 messaggio su {count}',
+  'message.reactors.empty': 'Nessuna reazione',
 } satisfies MessagePiecesCatalog;
 
 export default it;

@@ -1,5 +1,6 @@
 
-import { lazy, Suspense } from 'react';
+import { lazy, Suspense, useEffect } from 'react';
+import { useStore } from 'zustand';
 
 import { discussionCardSubjectOf } from '@/lib/export/discussion-card-subject';
 import { messageCardLanguagesOf, messageCardSubjectOf } from '@/lib/export/message-card-subject';
@@ -9,6 +10,8 @@ import { reactionEntries } from '@/components/message-blocks';
 import type { Attachment, Message } from '@/lib/api/types';
 import { translate } from '@/lib/i18n-catalog';
 import { offerStudioSeed } from '@/lib/stories/studio-seed';
+import { loadMessagePiecesCatalog } from '@/lib/i18n-message-pieces-catalog';
+import { closeReactorsSheet, reactorsSheetStore } from '@/lib/view/reactors-sheet-store';
 import { imageableOf, messageDetailExposureOf, messageMenuContextOf, translationChoices } from '@/lib/view/message-actions';
 import { deliveryOf as deliveryStatusOf, isMineOf } from '@/lib/view/message';
 import type { MessageMenuController } from '@/lib/view/use-message-menu';
@@ -25,6 +28,14 @@ import { MessageExportSheet } from './thread-export-sheet';
  * « thread », et n'arrivent qu'au premier « ＋ » du rail. */
 const ReactionSheet = lazy(() =>
   import('@/components/reaction-sheet').then((m) => m.prepareEmojiPickerSheet().then(() => ({ default: m.ReactionSheet }))),
+);
+
+/** « QUI A RÉAGI » se charge au geste (#10583), avec le catalogue du fil qui
+ * porte son état vide — la feuille ne se rend jamais avant lui. */
+const MessageReactorsSheet = lazy(() =>
+  Promise.all([import('@/components/message-reactors'), loadMessagePiecesCatalog(currentInterfaceLanguage())]).then(([m]) => ({
+    default: m.MessageReactorsSheet,
+  })),
 );
 
 const MessageDeleteDialog = lazy(() => import('@/components/message-delete-dialog').then((m) => ({ default: m.MessageDeleteDialog })));
@@ -102,8 +113,22 @@ export function ThreadMessageSheets({
   readonly conversationTitle: string | null;
   readonly announce: (message: string) => void;
 }) {
+  /* « QUI A RÉAGI » (#10583) — la demande d'une pilule maintenue. Elle ne
+     survit pas au fil qui l'a posée. */
+  const reactorsFor = useStore(reactorsSheetStore, (state) => state.messageId);
+  useEffect(() => closeReactorsSheet, []);
+  const reactorsMessage = reactorsFor === null ? undefined : messages.find((m) => m.id === reactorsFor);
   return (
     <>
+      {reactorsMessage === undefined ? null : (
+        <Suspense fallback={null}>
+          <MessageReactorsSheet
+            messageId={reactorsMessage.id}
+            reactions={reactionEntries(reactorsMessage.reactionSummary)}
+            onClose={closeReactorsSheet}
+          />
+        </Suspense>
+      )}
       {/* LE MENU DU MESSAGE (#5814) — portail conditionnel : monté SEULEMENT
           quand `useLongPress`/le clic droit/`ContextMenu` ont ciblé un
           message ET que ce message existe encore dans le fil. */}
