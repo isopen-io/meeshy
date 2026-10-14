@@ -67,6 +67,23 @@ const frStickerPacks = {
   'packs.frames.failed': 'Les cadres de ce pack n’ont pas pu être chargés — réessayez',
   'packs.frames.count': '{count} cadres',
   'packs.frames.weight': '{size} à télécharger',
+  'packs.segment.shop': "Boutique",
+  'packs.shop.all': "Tout",
+  'packs.domain.sticker': "Stickers",
+  'packs.domain.glory-frame': "Cadres du jeu",
+  'packs.domain.wallpaper': "Fonds de conversation",
+  'packs.domain.avatar-ring': "Contours d’avatar",
+  'packs.domain.banner': "Bannières",
+  'packs.domain.capture-frame': "Cadres de capture",
+  'packs.price': "{price} Meeshes",
+  'packs.owned': "Possédé",
+  'packs.buy': "Acheter · {price} Meeshes",
+  'packs.error.insufficient': "Vous n’avez pas assez de Meeshes pour ce pack",
+  'packs.error.purchase': "L’achat n’a pas abouti — réessayez, vous ne serez débité qu’une fois",
+  'packs.balance': "Solde : {balance} Meeshes",
+  'packs.shop.empty': "Aucun pack ici pour le moment.",
+  'packs.shop.domains': "Domaine de la boutique",
+  'packs.shop.hint': "Tous les packs : stickers, cadres, fonds, contours et bannières. Ce que vous possédez apparaît dans les écrans concernés.",
 } as const;
 
 export default frStickerPacks;

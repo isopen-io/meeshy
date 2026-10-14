@@ -64,6 +64,23 @@ const enStickerPacks = {
   'packs.frames.failed': 'This pack’s frames could not be loaded — try again',
   'packs.frames.count': '{count} frames',
   'packs.frames.weight': '{size} to download',
+  'packs.segment.shop': "Shop",
+  'packs.shop.all': "All",
+  'packs.domain.sticker': "Stickers",
+  'packs.domain.glory-frame': "Game frames",
+  'packs.domain.wallpaper': "Conversation backgrounds",
+  'packs.domain.avatar-ring': "Avatar rings",
+  'packs.domain.banner': "Banners",
+  'packs.domain.capture-frame': "Capture frames",
+  'packs.price': "{price} Meeshes",
+  'packs.owned': "Owned",
+  'packs.buy': "Buy · {price} Meeshes",
+  'packs.error.insufficient': "You don’t have enough Meeshes for this pack",
+  'packs.error.purchase': "The purchase did not go through — try again, you will only be charged once",
+  'packs.balance': "Balance: {balance} Meeshes",
+  'packs.shop.empty': "No packs here yet.",
+  'packs.shop.domains': "Shop category",
+  'packs.shop.hint': "Every pack: stickers, frames, backgrounds, rings and banners. What you own shows up in the screens that use it.",
 } satisfies StickerPacksCatalog;
 
 export default enStickerPacks;

@@ -64,6 +64,23 @@ const itStickerPacks = {
   'packs.frames.failed': 'Impossibile caricare le cornici di questo pacchetto — riprova',
   'packs.frames.count': '{count} cornici',
   'packs.frames.weight': '{size} da scaricare',
+  'packs.segment.shop': "Negozio",
+  'packs.shop.all': "Tutto",
+  'packs.domain.sticker': "Sticker",
+  'packs.domain.glory-frame': "Cornici del gioco",
+  'packs.domain.wallpaper': "Sfondi delle conversazioni",
+  'packs.domain.avatar-ring': "Contorni avatar",
+  'packs.domain.banner': "Banner",
+  'packs.domain.capture-frame': "Cornici di cattura",
+  'packs.price': "{price} Meeshes",
+  'packs.owned': "Posseduto",
+  'packs.buy': "Acquista · {price} Meeshes",
+  'packs.error.insufficient': "Non hai abbastanza Meeshes per questo pacchetto",
+  'packs.error.purchase': "L’acquisto non è andato a buon fine — riprova, ti verrà addebitato una sola volta",
+  'packs.balance': "Saldo: {balance} Meeshes",
+  'packs.shop.empty': "Nessun pacchetto qui per ora.",
+  'packs.shop.domains': "Categoria del negozio",
+  'packs.shop.hint': "Tutti i pacchetti: sticker, cornici, sfondi, contorni e banner. Ciò che possiedi appare nelle schermate che lo usano.",
 } satisfies StickerPacksCatalog;
 
 export default itStickerPacks;

@@ -41,6 +41,12 @@ const until = async (ready: () => boolean) => {
   expect(ready()).toBe(true);
 };
 
+const at = (path: string): void => {
+  const happyDom: unknown = Reflect.get(window, 'happyDOM');
+  const setUrl: unknown = typeof happyDom === 'object' && happyDom !== null ? Reflect.get(happyDom, 'setURL') : undefined;
+  if (typeof setUrl === 'function') Reflect.apply(setUrl, happyDom, [`http://localhost${path}`]);
+};
+
 describe('SettingsPacksScreen', () => {
   test('« Stickers » montre la Boutique des stickers ; « Cadres du jeu » celle des cadres', async () => {
     const host = await mounter.mount(
@@ -55,5 +61,26 @@ describe('SettingsPacksScreen', () => {
     await mounter.click(host.querySelector<HTMLElement>('[data-packs-segment="frames"]'));
     await until(() => host.querySelector('[data-pack-shop="glory-frame"] [data-pack-shop-empty]') !== null);
     expect(host.querySelector('[data-sticker-shop]')).toBe(null);
+  });
+
+  test('?domaine=<d> ouvre la vitrine filtrée sur ce domaine ; type=cadres reste lu', async () => {
+    at('/settings?volet=packs&domaine=banner');
+    const host = await mounter.mount(
+      <QueryClientProvider client={appQueryClient}>
+        <SettingsPacksScreen language="fr" />
+      </QueryClientProvider>,
+    );
+    expect(host.querySelector('[data-packs-segment="shop"]')?.getAttribute('aria-checked')).toBe('true');
+    expect(host.querySelector('[data-unified-shop="banner"]')).not.toBe(null);
+    mounter.unmountAll();
+
+    at('/settings?volet=packs&type=cadres');
+    const frames = await mounter.mount(
+      <QueryClientProvider client={appQueryClient}>
+        <SettingsPacksScreen language="fr" />
+      </QueryClientProvider>,
+    );
+    expect(frames.querySelector('[data-packs-segment="frames"]')?.getAttribute('aria-checked')).toBe('true');
+    at('/');
   });
 });
