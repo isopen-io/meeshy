@@ -533,6 +533,11 @@ struct DetachedWindowView: View {
 
     private func closeWindow() {
         guard let session = scene?.session else { return }
+        // La fenêtre principale revient d'abord : hors Stage Manager elle était passée en arrière-plan, et
+        // fermer seule la fenêtre détachée renvoyait à l'écran d'accueil (recette iPad du 2026-10-14).
+        if let primary = MainWindowRegistry.shared.primarySession {
+            UIApplication.shared.requestSceneSessionActivation(primary, userActivity: nil, options: nil)
+        }
         UIApplication.shared.requestSceneSessionDestruction(session, options: nil)
     }
 }
