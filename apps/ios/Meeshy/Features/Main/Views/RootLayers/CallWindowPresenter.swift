@@ -123,7 +123,7 @@ final class CallOverlayWindowHost: CallWindowHosting {
         guard window == nil else { return true }
         // TOUJOURS la fenêtre principale (décision du porteur, 2026-10-14) : un appel lancé ou reçu pendant qu'une
         // conversation ou les réels ont leur propre fenêtre s'affiche là où vit sa présentation — et son PiP.
-        guard let scene = CallWindowScene.target() else { return false }
+        guard let scene = CallWindowScene.target(activating: true) else { return false }
         let main = scene.keyWindow ?? scene.windows.first
         previousKeyWindow = main
         // Un clavier ouvert dans l'écran d'en dessous (réponse à une story,
@@ -447,12 +447,18 @@ final class CallReturnPointWindowHost: CallReturnPointHosting {
 /// l'occupait ; à défaut (un seul écran, registre pas encore servi), la scène active.
 @MainActor
 enum CallWindowScene {
-    static func target() -> UIWindowScene? {
+    /// `activating` : l'écran d'appel lui-même ramène la fenêtre principale ; le point de retour, réaffiché à chaque
+    /// réduction, ne vole jamais le focus. Ni l'un ni l'autre sur un appareil à fenêtre unique, ni app inactive
+    /// (bannière CallKit, Centre de contrôle).
+    static func target(activating: Bool = false) -> UIWindowScene? {
         guard let primary = MainWindowRegistry.shared.primaryWindowScene,
               primary.activationState != .unattached else {
             return DeviceLayout.activeWindowScene
         }
-        if primary.activationState != .foregroundActive {
+        if activating,
+           UIApplication.shared.supportsMultipleScenes,
+           UIApplication.shared.applicationState == .active,
+           primary.activationState != .foregroundActive {
             UIApplication.shared.requestSceneSessionActivation(primary.session, userActivity: nil, options: nil)
         }
         return primary

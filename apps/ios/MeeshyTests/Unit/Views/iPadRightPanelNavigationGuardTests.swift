@@ -432,9 +432,11 @@ final class DetachedWindowsTests: XCTestCase {
     }
 
     func test_theEndOfADragSession_isAnnounced() {
-        let ended = expectation(forNotification: .conversationDragDidEnd, object: nil)
         var provider: ConversationDragItemProvider? = ConversationDragItemProvider(conversationId: "c1", title: "x", opensWindow: false)
-        XCTAssertNotNil(provider)
+        let token = provider?.token
+        let ended = expectation(forNotification: .conversationDragDidEnd, object: nil) { note in
+            (note.object as? NSUUID).map { $0 as UUID } == token
+        }
         provider = nil
         wait(for: [ended], timeout: 2)
     }
@@ -443,16 +445,21 @@ final class DetachedWindowsTests: XCTestCase {
         let list = try appSource("Features/Main/Views/ConversationListView.swift")
         XCTAssertTrue(list.contains("sectionsBeforeDrag = expandedSections"), "les catégories dépliées sont retenues")
         XCTAssertTrue(list.contains("expandedSections = []"), "toutes se replient pendant le glisser")
-        XCTAssertTrue(list.contains("expandedSections = before"), "elles se redéplient au dépôt ou à l'annulation")
-        XCTAssertTrue(list.contains("defer { endConversationDrag() }"), "le dépôt sur une catégorie redéplie aussi")
+        XCTAssertTrue(list.contains("var restored = before.union(expandedSections)"), "elles se redéplient au dépôt ou à l'annulation")
+        XCTAssertTrue(list.contains("defer { endConversationDrag(expanding: sectionId) }"), "le dépôt redéplie, et ouvre la catégorie qui reçoit")
         XCTAssertTrue(list.contains("dragOriginSectionId == group.section.id"), "la catégorie d'origine se marque")
         XCTAssertTrue(list.contains("publisher(for: .conversationDragDidEnd)"), "l'annulation redéplie")
+        XCTAssertTrue(list.contains("if let token, token != pendingDrag?.token { return }"), "la fin d'un AUTRE glisser est ignorée")
+        XCTAssertTrue(list.contains("delegate: ConversationListDragWatch(onEnter: collapseForConversationDrag)"),
+                      "le repli attend que le doigt bouge : un appui long qui finit en menu ne replie rien")
     }
 
     func test_callsAlwaysShowInTheMainWindow() throws {
         let presenter = try appSource("Features/Main/Views/RootLayers/CallWindowPresenter.swift")
-        XCTAssertEqual(presenter.components(separatedBy: "CallWindowScene.target()").count - 1, 2,
-                       "l'écran d'appel et son point de retour visent la fenêtre principale")
+        XCTAssertTrue(presenter.contains("guard let scene = CallWindowScene.target(activating: true)"),
+                      "l'écran d'appel vise la fenêtre principale et la ramène au premier plan")
+        XCTAssertTrue(presenter.contains("guard let scene = CallWindowScene.target() else"),
+                      "le point de retour vise la fenêtre principale sans voler le focus")
         XCTAssertFalse(presenter.contains("guard let scene = DeviceLayout.activeWindowScene"))
     }
 

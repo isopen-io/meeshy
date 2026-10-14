@@ -161,6 +161,10 @@ extension Notification.Name {
 /// qu'ils aient été déposés ou non. SwiftUI ne signale pas l'annulation d'un `.onDrag` — c'est ce signal qui permet
 /// de redéplier les catégories quand on lâche ailleurs que sur une catégorie.
 nonisolated final class ConversationDragItemProvider: NSItemProvider, @unchecked Sendable {
+    /// Le jeton de CETTE session : la fin annoncée porte le sien, et la liste ignore celle d'un glisser précédent
+    /// que le système aurait relâché en retard.
+    let token = UUID()
+
     init(conversationId: String, title: String, opensWindow: Bool) {
         super.init()
         registerObject(conversationId as NSString, visibility: .all)
@@ -174,8 +178,9 @@ nonisolated final class ConversationDragItemProvider: NSItemProvider, @unchecked
     }
 
     deinit {
+        let ended = token as NSUUID
         DispatchQueue.main.async {
-            NotificationCenter.default.post(name: .conversationDragDidEnd, object: nil)
+            NotificationCenter.default.post(name: .conversationDragDidEnd, object: ended)
         }
     }
 }
@@ -253,7 +258,11 @@ struct WindowSceneReader: UIViewRepresentable {
         var onScene: ((UIWindowScene) -> Void)?
         override func didMoveToWindow() {
             super.didMoveToWindow()
-            if let scene = window?.windowScene { onScene?(scene) }
+            // Appelé pendant que SwiftUI insère la vue : publier ici modifierait un état en pleine mise à jour.
+            DispatchQueue.main.async { [weak self] in
+                guard let self, let scene = self.window?.windowScene else { return }
+                self.onScene?(scene)
+            }
         }
     }
 }
@@ -339,6 +348,10 @@ struct DetachedWindowView: View {
     @State private var conversationUnavailable = false
     /// La conversation d'une fenêtre née d'un glisser au bord de l'écran : elle arrive par activité, pas par valeur.
     @State private var draggedContent: DetachedWindowContent?
+    /// Ce que la valeur de scène ne restaure pas : l'id de la conversation déposée au bord. Sans lui, la fenêtre
+    /// revenait vide à la relance.
+    @SceneStorage("meeshy.detached.conversationId") private var storedConversationId: String?
+    @ObservedObject private var mainWindows = MainWindowRegistry.shared
 
     var body: some View {
         ZStack {
@@ -352,7 +365,8 @@ struct DetachedWindowView: View {
                 case .reels(let startId)?:
                     reelsWindow(startId)
                 case nil:
-                    note(String(localized: "window.detached.signed_out", defaultValue: "Connectez-vous dans la fenêtre principale de Meeshy.", bundle: .main))
+                    // L'activité d'un glisser arrive juste après la création de la scène.
+                    ProgressView()
                 }
             }
         }
@@ -360,6 +374,29 @@ struct DetachedWindowView: View {
         .onContinueUserActivity(DetachedWindowOpener.conversationActivityType) { activity in
             if let id = activity.userInfo?["conversationId"] as? String, !id.isEmpty {
                 draggedContent = .conversation(id: id)
+                storedConversationId = id
+            }
+        }
+        .onAppear {
+            if content == nil, draggedContent == nil, let id = storedConversationId, !id.isEmpty {
+                draggedContent = .conversation(id: id)
+            }
+        }
+        // 6. La fenêtre principale tient sockets et synchronisation : fermée (par l'utilisateur ou par le système),
+        // la fenêtre détachée propose de la rouvrir plutôt que de rester muette.
+        .overlay(alignment: .top) {
+            if mainWindows.primary == nil, authManager.isAuthenticated {
+                Button {
+                    UIApplication.shared.requestSceneSessionActivation(nil, userActivity: nil, options: nil)
+                } label: {
+                    Label(String(localized: "window.detached.open_main", defaultValue: "Ouvrir la fenêtre principale", bundle: .main),
+                          systemImage: "macwindow")
+                        .font(MeeshyFont.relative(MeeshyFont.bodySize, weight: .semibold))
+                        .padding(.horizontal, MeeshySpacing.md)
+                        .padding(.vertical, MeeshySpacing.sm)
+                }
+                .buttonStyle(.borderedProminent)
+                .padding(.top, MeeshySpacing.sm)
             }
         }
         // Les liens vont à la fenêtre principale ; seule une conversation glissée au bord vient ici.
@@ -408,6 +445,7 @@ struct DetachedWindowView: View {
             // Le retour du premier écran ferme la fenêtre : il n'y a rien dessous.
             router.onPopRequested = { closeWindow() }
         }
+        .onDisappear { router.onPopRequested = nil }
     }
 
     // MARK: - Conversation
@@ -474,8 +512,10 @@ struct DetachedWindowView: View {
                                      notificationManager: notifications.manager, onNotificationTap: { _ in })
             }
         }
-        .task {
+        .adaptiveOnChange(of: scene.map(ObjectIdentifier.init), initial: true) { _, _ in
             scene?.title = String(localized: "window.detached.reels_title", defaultValue: "Réels", bundle: .main)
+        }
+        .task {
             // Les anneaux de story des auteurs de réels.
             await storyViewModel.loadStories()
         }

@@ -33,6 +33,26 @@ final class SectionFrameRegistry {
     var frames: [String: CGRect] = [:]
 }
 
+// MARK: - Glisser d'une conversation
+
+/// Le glisser d'une conversation en cours : son jeton et la catégorie d'où il part.
+struct PendingConversationDrag {
+    let token: UUID
+    let originSectionId: String?
+}
+
+/// Posé sur toute la liste : le premier passage d'un glisser au-dessus d'elle déclenche le repli des catégories.
+/// Il n'accepte jamais de dépôt — les en-têtes de catégorie, plus profonds, le reçoivent ; lâché ailleurs, le
+/// glisser s'annule.
+struct ConversationListDragWatch: DropDelegate {
+    let onEnter: () -> Void
+
+    func validateDrop(info: DropInfo) -> Bool { info.hasItemsConforming(to: [.text]) }
+    func dropEntered(info: DropInfo) { onEnter() }
+    func dropUpdated(info: DropInfo) -> DropProposal? { DropProposal(operation: .cancel) }
+    func performDrop(info: DropInfo) -> Bool { false }
+}
+
 // MARK: - Section Drop Delegate
 
 /// Cible de drop d'un header de section pour le drag NATIF des lignes
@@ -174,6 +194,9 @@ struct ConversationListView: View {
     @State private var expandedSections: Set<String> = ["pinned", "other"]
     /// Pendant le glisser d'une conversation : les catégories dépliées AVANT, rendues au dépôt ou à l'annulation.
     @State private var sectionsBeforeDrag: Set<String>?
+    /// Le glisser en cours : son jeton et la catégorie d'où il part. Posé dès le soulèvement — qui précède aussi
+    /// le menu d'appui long —, il ne replie rien tant que le doigt n'a pas bougé au-dessus de la liste.
+    @State private var pendingDrag: PendingConversationDrag?
     /// La catégorie d'où part la conversation glissée — son en-tête prend la couleur primaire.
     @State private var dragOriginSectionId: String?
 
@@ -442,8 +465,10 @@ struct ConversationListView: View {
         // bord du drag de chip (+Overlays). Aucune interaction, frame nulle.
         .background(ChipAutoScrollGrabber(driver: chipAutoScrollDriver))
         // Le glisser se termine sans dépôt sur une catégorie (lâché ailleurs, ou en fenêtre) : on redéplie.
-        .onReceive(NotificationCenter.default.publisher(for: .conversationDragDidEnd)) { _ in
-            endConversationDrag()
+        // Le glisser se déplace au-dessus de la liste : c'est un glisser, pas un appui long qui finira en menu.
+        .onDrop(of: [.text], delegate: ConversationListDragWatch(onEnter: collapseForConversationDrag))
+        .onReceive(NotificationCenter.default.publisher(for: .conversationDragDidEnd)) { note in
+            endConversationDrag(token: (note.object as? NSUUID).map { $0 as UUID })
         }
     }
 
@@ -860,7 +885,7 @@ struct ConversationListView: View {
                 }
             )
         )
-        row.onDragBegan = { beginConversationDrag(conversation.id) }
+        row.onDragBegan = { token in beginConversationDrag(conversation.id, token: token) }
         return row
         .equatable()
     }
@@ -1953,32 +1978,48 @@ struct ConversationListView: View {
     /// section.
     /// Le glisser d'une conversation commence : toutes les catégories se replient — la cible se vise d'un coup
     /// d'œil —, et celle d'origine se marque.
-    private func beginConversationDrag(_ conversationId: String) {
+    private func beginConversationDrag(_ conversationId: String, token: UUID) {
         DispatchQueue.main.async {
-            guard sectionsBeforeDrag == nil else { return }
-            sectionsBeforeDrag = expandedSections
-            dragOriginSectionId = conversationViewModel.groupedConversations
-                .first { $0.conversations.contains { $0.id == conversationId } }?.section.id
-            withAnimation(.spring(response: 0.3, dampingFraction: 0.85)) {
-                expandedSections = []
-            }
+            pendingDrag = PendingConversationDrag(
+                token: token,
+                originSectionId: conversationViewModel.groupedConversations
+                    .first { $0.conversations.contains { $0.id == conversationId } }?.section.id
+            )
         }
     }
 
-    /// Dépôt ou annulation : les catégories dépliées avant le glisser le redeviennent. Sans persistance — le
-    /// repli du glisser n'est pas un choix de l'utilisateur.
-    private func endConversationDrag() {
-        guard let before = sectionsBeforeDrag else { return }
+    /// Le doigt bouge au-dessus de la liste : on replie tout et on marque l'origine.
+    private func collapseForConversationDrag() {
+        guard let pendingDrag, sectionsBeforeDrag == nil else { return }
+        sectionsBeforeDrag = expandedSections
+        dragOriginSectionId = pendingDrag.originSectionId
+        withAnimation(.spring(response: 0.3, dampingFraction: 0.85)) {
+            expandedSections = []
+        }
+    }
+
+    /// Dépôt ou annulation : les catégories dépliées avant le glisser le redeviennent, plus celles qu'on aurait
+    /// dépliées pendant, plus la catégorie qui vient de recevoir la conversation. Sans persistance — le repli du
+    /// glisser n'est pas un choix de l'utilisateur. Une fin portant le jeton d'un AUTRE glisser est ignorée.
+    private func endConversationDrag(token: UUID? = nil, expanding target: String? = nil) {
+        if let token, token != pendingDrag?.token { return }
+        pendingDrag = nil
+        guard let before = sectionsBeforeDrag else {
+            dragOriginSectionId = nil
+            return
+        }
         sectionsBeforeDrag = nil
         withAnimation(.spring(response: 0.3, dampingFraction: 0.85)) {
-            expandedSections = before
+            var restored = before.union(expandedSections)
+            if let target, !target.isEmpty { restored.insert(target) }
+            expandedSections = restored
             dragOriginSectionId = nil
             dropTargetSection = nil
         }
     }
 
     private func handleDrop(to sectionId: String, providers: [NSItemProvider]) -> Bool {
-        defer { endConversationDrag() }
+        defer { endConversationDrag(expanding: sectionId) }
         guard let provider = providers.first else { return false }
         _ = provider.loadObject(ofClass: NSString.self) { object, _ in
             guard let conversationId = object as? String else { return }
