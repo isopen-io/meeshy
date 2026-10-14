@@ -27,6 +27,7 @@ const ReactionSheet = lazy(() =>
   import('@/components/reaction-sheet').then((m) => m.prepareEmojiPickerSheet().then(() => ({ default: m.ReactionSheet }))),
 );
 
+const MessageDeleteDialog = lazy(() => import('@/components/message-delete-dialog').then((m) => ({ default: m.MessageDeleteDialog })));
 const MessageDetailSheet = lazy(() => import('@/components/message-detail-sheet').then((m) => ({ default: m.MessageDetailSheet })));
 
 /** LA PART du contrôleur de `useMessageMenu` que les feuilles LISENT — un
@@ -50,6 +51,11 @@ export type ThreadSheetsMenu = Pick<
   | 'setExportFor'
   | 'servedOf'
   | 'starOf'
+  | 'editOf'
+  | 'deleteOf'
+  | 'deleteRequest'
+  | 'onDismissDelete'
+  | 'onConfirmDelete'
 >;
 
 /**
@@ -178,6 +184,7 @@ export function ThreadMessageSheets({
               messageId={detailMessage.id}
               attachments={exposed ? (detailMessage.attachments ?? []) : []}
               star={messageMenu.starOf(detailFor)}
+              act={{ onEdit: messageMenu.editOf(detailFor), onDelete: messageMenu.deleteOf(detailFor) }}
               create={{
                 onCompose: composable === undefined || composable === null ? null : () => void composeWithAttachment(composable, announce),
                 onImage: imageable ? () => messageMenu.setExportFor({ messageId: detailFor, quick: false }) : null,
@@ -191,6 +198,19 @@ export function ThreadMessageSheets({
           </Suspense>
         );
       })(messageMenu.detailFor)}
+      {/* LE DIALOGUE DE SUPPRESSION (#10582) — ouvert par « Plus… » pour un
+          message, par la corbeille de la barre pour la sélection. */}
+      {((request) =>
+        request === null ? null : (
+          <Suspense fallback={null}>
+            <MessageDeleteDialog
+              count={request.messageIds.length}
+              offer={request.offer}
+              onConfirm={messageMenu.onConfirmDelete}
+              onDismiss={messageMenu.onDismissDelete}
+            />
+          </Suspense>
+        ))(messageMenu.deleteRequest)}
       {((request) => {
         if (request === null) return null;
         const exportFor = request.messageId;

@@ -3,6 +3,7 @@ import { MESSAGE_EFFECT_FLAGS } from '@meeshy/shared/types/message-effect-flags'
 import { contentExitOf, exitOffers, messageExitOffers, pieceIsOpen, type ExitMessage } from '@/lib/view/content-exit';
 import type { Message, MessageTranslation } from '@/lib/api/types';
 import type { InterfaceCatalogKey } from '@/lib/i18n-catalog';
+import type { PlainMessagePiecesKey } from '@/lib/i18n-message-pieces-catalog';
 import { kindOf, translationsOf } from '@/lib/view/message';
 import { protectionOf } from '@/lib/reading-mode/protection';
 
@@ -12,8 +13,9 @@ import { protectionOf } from '@/lib/reading-mode/protection';
  * `MessageActionResolver.primaryActions` (`apps/ios/Meeshy/Features/Main/
  * Components/MessageActionResolver.swift:253-274`) — réduit au sous-ensemble
  * que la v3.1 peut RÉELLEMENT servir (§ 1.2 de la spécification #5814) :
- * `edit`, `saveMedia` et `callDetail` n'ont aucun port web, la loi 4 du
- * dépôt (« un contrôle existe s'il a un effet ») interdit de les lister.
+ * `saveMedia` et `callDetail` n'ont aucun port web, la loi 4 du dépôt (« un
+ * contrôle existe s'il a un effet ») interdit de les lister. `edit` a le sien
+ * depuis #10581.
  *
  * Ce fichier ne rend RIEN — c'est `message-menu.tsx` qui consomme cette loi.
  * Il ne porte donc AUCUN libellé : une loi PURE ne connaît pas la langue de
@@ -39,10 +41,10 @@ import { protectionOf } from '@/lib/reading-mode/protection';
  * serveur est dite ICI, avant l'aller-retour, pour qu'un refus ne se découvre
  * pas après coup.
  */
-export type MessageActionId = 'select' | 'translate' | 'copy' | 'forward' | 'reply' | 'export' | 'exportQuick' | 'exportDiscussion' | 'more';
+export type MessageActionId = 'edit' | 'select' | 'translate' | 'copy' | 'forward' | 'reply' | 'export' | 'exportQuick' | 'exportDiscussion' | 'more';
 
 /** Les six glyphes du menu — miroir `MessageActionsMenu.swift:96-111`. */
-export type MessageMenuGlyph = 'checkCircle' | 'globe' | 'copy' | 'arrowBendUpRight' | 'magicWand' | 'imageSquare' | 'lightning' | 'dotsThree';
+export type MessageMenuGlyph = 'pencilSimple' | 'checkCircle' | 'globe' | 'copy' | 'arrowBendUpRight' | 'magicWand' | 'imageSquare' | 'lightning' | 'dotsThree';
 
 /**
  * UNE CLÉ, JAMAIS UN LIBELLÉ (#7555). `as const satisfies` plutôt qu'une
@@ -61,15 +63,26 @@ const MENU_LABEL_KEYS = {
   exportQuick: 'message.menu.exportQuick',
   exportDiscussion: 'message.menu.exportDiscussion',
   more: 'message.menu.more',
-} as const satisfies Readonly<Record<MessageActionId, InterfaceCatalogKey>>;
+} as const satisfies Readonly<Record<Exclude<MessageActionId, 'edit'>, InterfaceCatalogKey>>;
 
-export type MessageMenuLabelKey = (typeof MENU_LABEL_KEYS)[MessageActionId];
+export type MessageMenuLabelKey = (typeof MENU_LABEL_KEYS)[keyof typeof MENU_LABEL_KEYS];
 
-export type MessageMenuItem = {
-  readonly id: MessageActionId;
-  readonly labelKey: MessageMenuLabelKey;
-  readonly glyph: MessageMenuGlyph;
-};
+/**
+ * « MODIFIER » LIT SON LIBELLÉ DANS LE CATALOGUE DU FIL (#10581) — celui
+ * d'interface a atteint son plafond (`budgets.json` › `interface_catalogs`) ;
+ * le catalogue des pièces, chargé avec le fil, porte aussi ce que le menu
+ * fait du message entier. L'union nomme l'écart : le rendu sait par
+ * l'identifiant dans quel catalogue lire.
+ */
+export const EDIT_LABEL_KEY = 'message.edit.action' as const satisfies PlainMessagePiecesKey;
+
+export type MessageMenuItem =
+  | {
+      readonly id: Exclude<MessageActionId, 'edit'>;
+      readonly labelKey: MessageMenuLabelKey;
+      readonly glyph: MessageMenuGlyph;
+    }
+  | { readonly id: 'edit'; readonly labelKey: typeof EDIT_LABEL_KEY; readonly glyph: 'pencilSimple' };
 
 export type MessageMenuContext = {
   readonly hasText: boolean;
@@ -112,8 +125,8 @@ export type MessageMenuContext = {
   /**
    * UNE VUE UNIQUE N'OFFRE RIEN QUI TOUCHE À SON CONTENU (#7580) — ouverte ou
    * non : ni aperçu, ni copie, ni transfert, ni traduction, ni réponse qui la
-   * citerait. Le menu se réduit à « Plus… » (Infos) ; la suppression n'a pas
-   * encore de port web (`message-detail-sheet.tsx`, D-29).
+   * citerait. Le menu se réduit à « Plus… » : Infos, et Supprimer depuis
+   * #10582 (`message-detail-sheet.tsx`), comme `viewOnceSections` sur iOS.
    */
   readonly isViewOnce?: boolean;
   /** Un format d'export par défaut est enregistré sur l'appareil : « Export rapide » l'applique sans options. */
@@ -127,6 +140,12 @@ export type MessageMenuContext = {
   readonly hasImageableMedia?: boolean;
   /** Le rang de la première photo ou vidéo que « Composer » peut poser dans le studio — `null` : rien à composer. */
   readonly composableIndex?: number | null;
+  /**
+   * LE LECTEUR PEUT MODIFIER CE MESSAGE (#10581) — `editOffered`
+   * (`message-edit.ts`), la règle du serveur lue avant le geste. Posé par
+   * l'hôte, qui connaît le lecteur ; absent ⇒ rien n'est offert.
+   */
+  readonly canEdit?: boolean;
 };
 
 type MenuPiece = { readonly mimeType: string; readonly isBlurred?: boolean; readonly isViewOnce?: boolean; readonly isEncrypted?: boolean; readonly effectFlags?: number | null };
@@ -184,7 +203,8 @@ export function messageDetailExposureOf(
 }
 
 /**
- * `MessageActionResolver.primaryActions` réduit : `select` et `more`
+ * `MessageActionResolver.primaryActions` réduit : `edit` en tête quand le
+ * lecteur peut modifier (`canEdit`, #10581), `select` et `more`
  * inconditionnels, `translate`/`copy` gardés par `hasText` ET `!isProtected`
  * (`translate` de plus par `languageCount > 1`, `copy` par `leaves` — un
  * contenu qui disparaît ne se copie pas, #9573), `forward` gardé par
@@ -194,7 +214,9 @@ export function messageDetailExposureOf(
  */
 export function messageMenuItems(ctx: MessageMenuContext): readonly MessageMenuItem[] {
   if (ctx.isViewOnce === true) return [{ id: 'more', labelKey: MENU_LABEL_KEYS.more, glyph: 'dotsThree' }];
-  const items: MessageMenuItem[] = [{ id: 'select', labelKey: MENU_LABEL_KEYS.select, glyph: 'checkCircle' }];
+  const items: MessageMenuItem[] = [];
+  if (ctx.canEdit === true && ctx.hasText) items.push({ id: 'edit', labelKey: EDIT_LABEL_KEY, glyph: 'pencilSimple' });
+  items.push({ id: 'select', labelKey: MENU_LABEL_KEYS.select, glyph: 'checkCircle' });
   if (ctx.hasText && !ctx.isProtected && ctx.languageCount > 1) {
     items.push({ id: 'translate', labelKey: MENU_LABEL_KEYS.translate, glyph: 'globe' });
   }

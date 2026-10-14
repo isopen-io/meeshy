@@ -11,6 +11,7 @@ import { translate } from '@/lib/i18n-catalog';
 import type { ConversationFlags } from '@/lib/api/preferences';
 import { accentOf, withAccent } from '@/lib/accent';
 import { MUTED_OPACITY } from '@/lib/lens/law';
+import { conversationRowSwipeSides } from '@/lib/view/conversation-row-swipe';
 import { isRowCallAction, type RowActionId, type RowFlagActionId } from '@/lib/view/row-actions';
 import { requestDeparture } from '@/lib/conversation-departure';
 import { useSpeaksAsGuest } from '@/lib/view/guest-focus';
@@ -28,6 +29,7 @@ import { LensJoinCallButton, LensPreviewLine } from './lens-preview-line';
 import { LensTime } from './lens-time';
 import { UnreadBadge } from './unread-badge';
 import { ConversationStreakMark } from './conversation-streak-mark';
+import { ConversationRowSwipeActions, useConversationRowSwipe } from './conversation-row-swipe';
 import { RowActions } from './row-actions';
 
 import '@/styles/lens-row-meta.css';
@@ -235,6 +237,12 @@ function LensRowImpl({
     callActions.start({ conversationId: conversation.id, media: id === 'callVideo' ? 'video' : 'audio', title, avatar: photo ?? null, isGroup: group });
   };
 
+  /* LE BALAYAGE DE LA LIGNE (#10580) — les actions du menu, rangées par bord.
+     Elles ne se calculent qu'au toucher et tant qu'un bord est montré. */
+  const swipeSides = () =>
+    conversationRowSwipeSides({ flags, unread, language: currentInterfaceLanguage(), canDelete: canCall });
+  const swipe = useConversationRowSwipe(swipeSides);
+
   /**
    * LA CLASSE DE TRONCATURE DE L'APERÇU — `truncate` au repos (une ligne,
    * point de suspension), `line-clamp-2` magnifié (deux lignes, point de
@@ -281,6 +289,8 @@ function LensRowImpl({
        * visible SANS survol que sur la rangée magnifiée.
        */
       className="group"
+      {...swipe.rowProps}
+      {...(swipe.shown === null ? {} : { 'data-row-swipe': swipe.shown.phase })}
       /**
        * `flexShrink: 0` n'est pas une précaution : la liste est un conteneur
        * flex, et un élément flex de hauteur fixe est COMPRIMÉ dès que la somme
@@ -296,7 +306,7 @@ function LensRowImpl({
        * PETITS-ENFANTS du `<li>`, jamais son premier enfant direct, donc rien
        * n'entre en conflit avec la passe de perspective).
        */
-      style={{ height: ROW_HEIGHT, flexShrink: 0, position: 'relative' }}
+      style={{ height: ROW_HEIGHT, flexShrink: 0, position: 'relative', touchAction: 'pan-y' }}
     >
       {/*
         **L'ENVELOPPE N'EST PLUS UN LIEN** (#7241, directive porteur du
@@ -635,6 +645,20 @@ function LensRowImpl({
           />
         )}
       </div>
+
+      {/* LES ACTIONS BALAYÉES (#10580) — APRÈS le conteneur visuel, qui doit
+          rester le premier enfant (la scène n'anime que lui), et montées
+          seulement pendant le balayage ou l'ouverture. */}
+      {swipe.shown === null ? null : (
+        <ConversationRowSwipeActions
+          shown={swipe.shown}
+          held={swipe.held}
+          sides={swipeSides()}
+          label={translate(currentInterfaceLanguage(), 'rowActions.menu')}
+          onAction={onAction}
+          onClose={swipe.close}
+        />
+      )}
 
       <RowActions
         flags={flags}

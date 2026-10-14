@@ -74,7 +74,7 @@ describe('messageMenuItems — miroir MessageActionResolver.primaryActions, réd
    */
   test('ces clés se SERVENT — anglais puis arabe, jamais une recopie du français', async () => {
     await Promise.all([loadInterfaceCatalog('en'), loadInterfaceCatalog('ar')]);
-    expect(messageMenuItems(ctx()).map((i) => translate('en', i.labelKey))).toEqual([
+    expect(messageMenuItems(ctx()).flatMap((i) => (i.id === 'edit' ? [] : [translate('en', i.labelKey)]))).toEqual([
       'Select',
       'Translate',
       'Copy',
@@ -83,7 +83,7 @@ describe('messageMenuItems — miroir MessageActionResolver.primaryActions, réd
       'Make an image',
       'More…',
     ]);
-    expect(messageMenuItems(ctx()).map((i) => translate('ar', i.labelKey))).toEqual([
+    expect(messageMenuItems(ctx()).flatMap((i) => (i.id === 'edit' ? [] : [translate('ar', i.labelKey)]))).toEqual([
       'تحديد',
       'ترجمة',
       'نسخ',
@@ -364,5 +364,28 @@ describe('forwardMenuItems — le sous-menu de « Transférer » (#9039)', () =>
       expect(translate(language, 'message.menu.exportDiscussion')).not.toBe('message.menu.exportDiscussion');
     }
     expect(translate('fr', 'message.menu.exportDiscussion')).toBe('Imager la discussion');
+  });
+});
+
+describe('« Modifier » — en tête du menu, comme sur iOS (#10581)', () => {
+  test('offert ⇒ « Modifier » précède « Sélectionner »', () => {
+    expect(messageMenuItems(ctx({ canEdit: true })).map((i) => i.id)).toEqual(['edit', 'select', 'translate', 'copy', 'forward', 'reply', 'export', 'more']);
+  });
+
+  test('non offert (défaut) ⇒ absent', () => {
+    expect(messageMenuItems(ctx()).map((i) => i.id)).not.toContain('edit');
+    expect(messageMenuItems(ctx({ canEdit: false })).map((i) => i.id)).not.toContain('edit');
+  });
+
+  test('sans texte, rien à modifier — même offert', () => {
+    expect(messageMenuItems(ctx({ canEdit: true, hasText: false })).map((i) => i.id)).not.toContain('edit');
+  });
+
+  test('une vue unique reste réduite à « Plus… »', () => {
+    expect(messageMenuItems(ctx({ canEdit: true, isViewOnce: true })).map((i) => i.id)).toEqual(['more']);
+  });
+
+  test('son libellé est une clé du catalogue du fil, son glyphe le crayon', () => {
+    expect(messageMenuItems(ctx({ canEdit: true }))[0]).toEqual({ id: 'edit', labelKey: 'message.edit.action', glyph: 'pencilSimple' });
   });
 });

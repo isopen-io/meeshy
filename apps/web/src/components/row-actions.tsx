@@ -3,7 +3,7 @@ import { createPortal } from 'react-dom';
 
 import { placePopover, placePopoverVertical } from '@/lib/view/popover';
 import { useRovingMenu } from '@/lib/view/roving-menu';
-import { rowMenuItems, type RowActionId } from '@/lib/view/row-actions';
+import { rowMenuItems, type RowActionGlyph as RowActionGlyphName, type RowActionId } from '@/lib/view/row-actions';
 import { useBackDismiss } from '@/lib/view/use-back-dismiss';
 import type { ConversationFlags } from '@/lib/api/preferences';
 import { translate } from '@/lib/i18n-catalog';
@@ -17,9 +17,9 @@ import { CALLS_GLYPHS } from './glyphs-calls';
  * couple swipe leading/trailing d'iOS (`ConversationListView.swift:945-1040`,
  * §1.5 de la spécification) : iOS sert déjà ces actions par MENU CONTEXTUEL
  * (`ConversationListView+Rows.swift:113-216`), un véhicule aussi conforme
- * que le swipe — celui-ci prend le geste primaire côté web, qui n'a pas de
- * vocabulaire swipe établi sans conflit avec le défilement de liste ni le
- * retour-geste Capacitor.
+ * que le swipe. Depuis #10580 la ligne se balaie AUSSI au doigt
+ * (`conversation-row-swipe.tsx`, mêmes actions) ; ce menu reste le véhicule
+ * de la souris, du clavier et du lecteur d'écran.
  *
  * Loi de PLACEMENT reprise de `ReadingModeChip` (`popover.ts`, le site
  * unique, y compris VERTICALEMENT — `placePopoverVertical`, #5559 défaut 7) ;
@@ -76,6 +76,15 @@ const MENU_PADDING = 8;
  * sinon le clic (même défaut que le débord de `tap-target-22` corrigé en #5566).
  */
 const BUTTON_SIZE = 34;
+
+/**
+ * LE GLYPHE D'UNE ACTION DE LIGNE — un site pour le menu et pour les actions
+ * balayées (`conversation-row-swipe.tsx`, #10580) : la caméra et la corbeille
+ * vivent dans la planche des appels, les autres dans la planche commune.
+ */
+export function RowActionGlyph({ glyph, size }: { readonly glyph: RowActionGlyphName; readonly size: number }) {
+  return glyph === 'videoCamera' || glyph === 'trash' ? <GlyphSvg glyph={CALLS_GLYPHS[glyph]} size={size} /> : <Glyph name={glyph} size={size} />;
+}
 
 /**
  * LE RETOUR MATÉRIEL FERME LE MENU, PAS LA LISTE (#6357) — même loi que
@@ -306,13 +315,9 @@ export function RowActions({
                       : { color: 'var(--color-ios-ink)', minHeight: 44 }
                   }
                 >
-                  {item.glyph === 'videoCamera' || item.glyph === 'trash' ? (
-                    <span className="grid place-items-center" style={{ color: item.destructive === true ? 'currentColor' : 'var(--color-ios-ink-2)' }}>
-                      <GlyphSvg glyph={CALLS_GLYPHS[item.glyph]} size={16} />
-                    </span>
-                  ) : (
-                    <Glyph name={item.glyph} size={16} style={{ color: 'var(--color-ios-ink-2)' }} />
-                  )}
+                  <span className="grid place-items-center" style={{ color: item.destructive === true ? 'currentColor' : 'var(--color-ios-ink-2)' }}>
+                    <RowActionGlyph glyph={item.glyph} size={16} />
+                  </span>
                   {item.label}
                 </button>
               ))}
