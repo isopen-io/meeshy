@@ -192,9 +192,6 @@ struct BubbleSticker: View, Equatable {
     /// la consommation et confirme aussitôt, la destruction partant de la sortie
     /// de la conversation (#7500).
     var onConsumeViewOnce: ((String, @escaping (Bool) -> Void) -> Void)? = nil
-    /// Le `stickerId` de bibliothèque du message (#10630) : mon sticker renvoyé y
-    /// est déjà, la fiche n'offre pas de l'y ajouter.
-    var libraryStickerId: String? = nil
 
     /// Rappels — hors de l'égalité : ils ne changent pas le rendu.
     var onRetry: (() -> Void)? = nil
@@ -222,7 +219,6 @@ struct BubbleSticker: View, Equatable {
             && lhs.isLastInGroup == rhs.isLastInGroup
             && lhs.standalone == rhs.standalone
             && lhs.protection == rhs.protection
-            && lhs.libraryStickerId == rhs.libraryStickerId
     }
 
     /// L'état de révélation vit ICI, comme `ThemedMessageBubble` le possède
@@ -266,9 +262,7 @@ struct BubbleSticker: View, Equatable {
                         // Reduce Motion), puis le toucher ouvre la fiche : le
                         // sticker n'a ni plein écran ni « Enregistrer l'image ».
                         .stickerFloat()
-                        .stickerSheetOnTap(sticker: sticker, isMine: isMe,
-                                           libraryStickerId: libraryStickerId,
-                                           isEnabled: !isVeiled)
+                        .stickerSheetOnTap(sticker: sticker, isMine: isMe, isEnabled: !isVeiled)
                         .blur(radius: isVeiled ? 18 : 0)
                         .allowsHitTesting(!isVeiled)
 

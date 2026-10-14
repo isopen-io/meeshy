@@ -179,6 +179,13 @@ extension ConversationView {
                     systemImage: "info.circle"
                 )
             }
+        case .addSticker:
+            Button {
+                ReceivedStickerLedger.shared.addSticker(of: msg)
+            } label: {
+                Label(String(localized: "message.sticker.add", defaultValue: "Ajouter à mes stickers", bundle: .main),
+                      systemImage: "plus.rectangle.on.rectangle")
+            }
         case .wholeMessage, .replyToPiece, .deletePiece:
             // Le menu d'une PIÈCE seulement (#9907, #9908) — jamais servi ici.
             EmptyView()

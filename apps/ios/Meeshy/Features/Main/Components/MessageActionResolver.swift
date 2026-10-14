@@ -39,6 +39,10 @@ enum PrimaryAction: String, Equatable {
     case replyToPiece
     /// **Supprimer CETTE pièce** (#9908) — après confirmation, jamais une voisine.
     case deletePiece
+    /// **Ajouter le sticker REÇU à « Mes stickers »** (#10630) — à la place
+    /// qu'« Enregistrer » tient pour une photo, comme le menu du web : offert
+    /// seulement quand il n'y est pas déjà (loi 4 : un contrôle existe s'il a un effet).
+    case addSticker
 }
 
 /// Item d'une section de la feuille « Plus… ».
@@ -60,9 +64,6 @@ enum MoreItem: String, Equatable {
     /// DÉCORATION dans la palette, où elle devient réutilisable partout
     /// ailleurs. Deux objets, deux magasins, deux verbes que le libellé sépare.
     case pinSticker, unpinSticker
-    /// **Ajouter le sticker REÇU à « Mes stickers »** (#10630) — offert seulement
-    /// quand il n'y est pas déjà (loi 4 : un contrôle existe s'il a un effet).
-    case addSticker
     /// Actions « faire » ajoutées au menu « Plus… » (exécutent + ferment) :
     /// éditer, copier, partager. `language`/`transcription` = explorables.
     case edit, copy, share
@@ -314,6 +315,7 @@ enum MessageActionResolver {
             if ctx.hasDefaultExportFormat { out.append(.exportQuick) }
         }
         if ctx.saveableAttachmentCount == 1 && !ctx.isSticker && showsContent && ctx.exits.offers(.save) { out.append(.saveMedia) }
+        if ctx.stickerAddable && showsContent && ctx.exits.offers(.save) { out.append(.addSticker) }
         // « Composer » suit immédiatement « Enregistrer » : ce sont les deux
         // gestes qui EMPORTENT le média hors de la conversation, et le second se
         // cherche à côté du premier. La CONDITION, elle, n'est pas ici : elle
@@ -353,7 +355,6 @@ enum MessageActionResolver {
         if let epinglee = ctx.stickerFavorite {
             actions.append(epinglee ? .unpinSticker : .pinSticker)
         }
-        if ctx.stickerAddable && showsContent && ctx.exits.offers(.save) { actions.append(.addSticker) }
         if ctx.canDelete && ctx.hasMedia { actions.append(.media) }
         if ctx.canDelete { actions.append(.delete) }
         sections.append(.actions(actions))

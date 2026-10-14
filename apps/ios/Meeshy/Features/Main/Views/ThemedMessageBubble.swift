@@ -464,7 +464,6 @@ struct ThemedMessageBubble: View {
             // cette branche rendait un message à vue unique en clair.
             protection: content.protection,
             onConsumeViewOnce: onConsumeViewOnce,
-            libraryStickerId: message.sticker?.stickerId,
             onRetry: onRetry == nil ? nil : { onRetry?(message.id) },
             onShowReadStatus: onShowReadStatus == nil ? nil : { onShowReadStatus?(message.id) },
             onAddReaction: onAddReaction,

@@ -85,4 +85,11 @@ final class ReceivedStickerLedger {
         await StickerLibraryReceive.saveAndAnnounce([savable])
         await refresh(force: true)
     }
+
+    /// Le geste du menu : sans image à déposer, rien ne part (le menu ne l'offre pas).
+    func addSticker(of message: MeeshyMessage) {
+        guard let savable = ReceivedSticker.savable(in: message) else { return }
+        HapticFeedback.light()
+        Task { @MainActor in await self.add(savable) }
+    }
 }

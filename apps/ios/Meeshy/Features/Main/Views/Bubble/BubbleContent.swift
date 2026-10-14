@@ -300,6 +300,9 @@ nonisolated struct BubbleContent: Equatable {
         let emoji: String?
         /// Le PNG rendu par l'expéditeur, s'il est arrivé.
         let picture: Picture?
+        /// Le sticker de « Mes stickers » d'où vient l'image (#10630) : la fiche et
+        /// le menu le lisent ici, dans les quatre modes de lecture.
+        var libraryStickerId: String? = nil
     }
 
     let messageId: String

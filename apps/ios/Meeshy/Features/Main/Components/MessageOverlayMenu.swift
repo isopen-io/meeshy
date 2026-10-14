@@ -229,6 +229,8 @@ struct MessageOverlayMenu: View {
             onShowMore?()
         case .callDetail:
             onShowCallDetail?()
+        case .addSticker:
+            ReceivedStickerLedger.shared.addSticker(of: message)
         case .exportImage, .exportQuick:
             onExportImage?(action == .exportQuick)
         case .wholeMessage, .replyToPiece, .deletePiece:

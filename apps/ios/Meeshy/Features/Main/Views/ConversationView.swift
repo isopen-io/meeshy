@@ -815,7 +815,6 @@ struct ConversationView: View {
                         MessageStickerFavorite.toggle(for: msg.sticker)
                         HapticFeedback.light()
                     },
-                    onAddSticker: { if let savable = ReceivedSticker.savable(in: msg) { Task { await ReceivedStickerLedger.shared.add(savable) } } },
                     onDeleteMessage: { requestDeleteMessage(msg.id) },
                     onEdit: { beginEdit(msg) },
                     onCopy: {

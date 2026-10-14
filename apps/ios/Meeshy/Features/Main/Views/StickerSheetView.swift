@@ -10,9 +10,7 @@ struct StickerSheetView: View {
     let sticker: BubbleContent.Sticker
     let savable: StoryStickerLibrary.Savable?
     let isMine: Bool
-    let libraryStickerId: String?
 
-    @Environment(\.dismiss) private var dismiss
     @State private var inLibrary = false
     @State private var isAdding = false
 
@@ -39,11 +37,19 @@ struct StickerSheetView: View {
     @ViewBuilder
     private var libraryRow: some View {
         if inLibrary {
-            Label(String(localized: "message.sticker.inLibrary",
-                         defaultValue: "Dans mes stickers", bundle: .main),
-                  systemImage: "checkmark.circle.fill")
-                .font(.system(size: 16, weight: .semibold))
-                .foregroundStyle(MeeshyColors.success)
+            // Le texte reste à l'encre du thème : le vert sémantique (#34D399) sur
+            // une feuille claire n'atteint pas le contraste d'un libellé — seule
+            // l'icône le porte.
+            Label {
+                Text(String(localized: "message.sticker.inLibrary",
+                            defaultValue: "Dans mes stickers", bundle: .main))
+            } icon: {
+                Image(systemName: "checkmark.circle.fill")
+                    .foregroundStyle(MeeshyColors.success)
+            }
+            .font(.headline)
+            .foregroundStyle(.primary)
+            .frame(minHeight: 44)
         } else {
             Button {
                 add()
@@ -51,7 +57,7 @@ struct StickerSheetView: View {
                 Label(String(localized: "message.sticker.add",
                              defaultValue: "Ajouter à mes stickers", bundle: .main),
                       systemImage: "plus.circle.fill")
-                    .font(.system(size: 16, weight: .semibold))
+                    .font(.headline)
                     .frame(maxWidth: .infinity)
                     .padding(.vertical, 14)
                     .background(Capsule().fill(MeeshyColors.brandGradient))
@@ -66,7 +72,7 @@ struct StickerSheetView: View {
         guard let savable else { return }
         await ReceivedStickerLedger.shared.refresh()
         inLibrary = ReceivedSticker.isInLibrary(
-            savable, isMine: isMine, libraryStickerId: libraryStickerId,
+            savable, isMine: isMine, libraryStickerId: sticker.libraryStickerId,
             known: ReceivedStickerLedger.shared.ids)
     }
 
@@ -85,7 +91,9 @@ struct StickerSheetView: View {
 private struct StickerSheetDetents: ViewModifier {
     func body(content: Content) -> some View {
         if #available(iOS 16.0, *) {
-            content.presentationDetents([.medium])
+            content
+                .presentationDetents([.medium])
+                .presentationDragIndicator(.visible)
         } else {
             content
         }
@@ -99,7 +107,6 @@ private struct StickerSheetDetents: ViewModifier {
 struct StickerSheetOnTap: ViewModifier {
     let sticker: BubbleContent.Sticker
     let isMine: Bool
-    let libraryStickerId: String?
     var isEnabled: Bool = true
 
     @State private var isPresented = false
@@ -117,8 +124,7 @@ struct StickerSheetOnTap: ViewModifier {
             .accessibilityAddTraits(.isButton)
             .accessibilityAction { if isEnabled { isPresented = true } }
             .sheet(isPresented: $isPresented) {
-                StickerSheetView(sticker: sticker, savable: savable,
-                                 isMine: isMine, libraryStickerId: libraryStickerId)
+                StickerSheetView(sticker: sticker, savable: savable, isMine: isMine)
             }
             .onDisappear { pendingOpen?.cancel(); pendingOpen = nil }
     }
@@ -140,9 +146,7 @@ struct StickerSheetOnTap: ViewModifier {
 }
 
 extension View {
-    func stickerSheetOnTap(sticker: BubbleContent.Sticker, isMine: Bool,
-                           libraryStickerId: String? = nil, isEnabled: Bool = true) -> some View {
-        modifier(StickerSheetOnTap(sticker: sticker, isMine: isMine,
-                                   libraryStickerId: libraryStickerId, isEnabled: isEnabled))
+    func stickerSheetOnTap(sticker: BubbleContent.Sticker, isMine: Bool, isEnabled: Bool = true) -> some View {
+        modifier(StickerSheetOnTap(sticker: sticker, isMine: isMine, isEnabled: isEnabled))
     }
 }

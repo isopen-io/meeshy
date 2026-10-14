@@ -404,7 +404,8 @@ extension BubbleContent {
             slots: sticker.slots,
             animation: sticker.animation,
             emoji: sticker.emoji,
-            picture: picture
+            picture: picture,
+            libraryStickerId: sticker.stickerId
         )
     }
 

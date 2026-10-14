@@ -30,19 +30,14 @@ final class ReceivedStickerTests: XCTestCase {
         return message
     }
 
-    private func menu(isSticker: Bool, addable: Bool, attachments: Int = 1) -> MessageMenuContext {
+    private func menu(isSticker: Bool, addable: Bool, attachments: Int = 1,
+                      exits: MessageExitOffer = .unrestricted, isBlurred: Bool = false) -> MessageMenuContext {
         MessageMenuContext(isMine: false, canEdit: false, canDelete: false,
                            hasText: false, hasMedia: true, hasTimebasedMedia: false,
                            isPinned: false, isStarred: false, isEdited: false,
                            hasEditRevisions: false, saveableAttachmentCount: attachments,
-                           isSticker: isSticker, stickerAddable: addable)
-    }
-
-    private func moreActions(_ ctx: MessageMenuContext) -> [MoreItem] {
-        MessageActionResolver.moreSections(ctx).flatMap { section -> [MoreItem] in
-            if case .actions(let items) = section { return items }
-            return []
-        }
+                           isSticker: isSticker, stickerAddable: addable,
+                           exits: exits, isBlurred: isBlurred)
     }
 
     // MARK: - Ce qui s'ajoute
@@ -82,12 +77,48 @@ final class ReceivedStickerTests: XCTestCase {
         XCTAssertTrue(ReceivedSticker.offersAdd(for: theirs, known: []))
     }
 
+    /// Les QUATRE modes de lecture lisent l'identifiant de bibliothèque sur le même
+    /// `BubbleContent.Sticker` : Focal, Script et Rivière ne disent plus « Ajouter » pour
+    /// un sticker que la bulle sait déjà rangé.
+    func test_resolveSticker_carriesTheLibraryIdentifier() {
+        let sticker = BubbleContent.resolveSticker(
+            MessageSticker(emoji: "🎉", stickerId: "6a0ad86a6e21a483b4443d12"), attachments: [makeImage()])
+        XCTAssertEqual(sticker?.libraryStickerId, "6a0ad86a6e21a483b4443d12")
+    }
+
     // MARK: - Le menu
 
-    func test_menu_offersAddSticker_onlyWhenAddable() {
-        XCTAssertTrue(moreActions(menu(isSticker: true, addable: true)).contains(.addSticker))
-        XCTAssertFalse(moreActions(menu(isSticker: true, addable: false)).contains(.addSticker))
-        XCTAssertFalse(moreActions(menu(isSticker: false, addable: false)).contains(.addSticker))
+    /// Le menu RAPIDE de l'appui long l'offre, à la place qu'« Enregistrer » occupe pour une
+    /// photo — comme le menu du web (`messageMenuItems`) : deux gestes, jamais trois.
+    func test_menu_offersAddSticker_inTheQuickMenu_onlyWhenAddable() {
+        XCTAssertTrue(MessageActionResolver.primaryActions(menu(isSticker: true, addable: true)).contains(.addSticker))
+        XCTAssertFalse(MessageActionResolver.primaryActions(menu(isSticker: true, addable: false)).contains(.addSticker))
+        XCTAssertFalse(MessageActionResolver.primaryActions(menu(isSticker: false, addable: false)).contains(.addSticker))
+    }
+
+    func test_menu_addSticker_takesTheSlotOfSave() throws {
+        let actions = MessageActionResolver.primaryActions(menu(isSticker: true, addable: true))
+        let add = try XCTUnwrap(actions.firstIndex(of: .addSticker))
+        let select = try XCTUnwrap(actions.firstIndex(of: .select))
+        XCTAssertGreaterThan(add, select)
+        XCTAssertEqual(actions.last, .more)
+    }
+
+    func test_menu_aBlurredOrRetainedSticker_neverOffersTheAdd() {
+        XCTAssertFalse(MessageActionResolver.primaryActions(
+            menu(isSticker: true, addable: true, isBlurred: true)).contains(.addSticker))
+        let blurredExit = MessageExitOffer(law: .ordinary, holdsBlur: true, isEncrypted: false)
+        XCTAssertFalse(MessageActionResolver.primaryActions(
+            menu(isSticker: true, addable: true, exits: blurredExit)).contains(.addSticker))
+    }
+
+    /// Une SEULE porte vers « Mes stickers » dans le menu : la feuille « Plus… » ne la double pas.
+    func test_moreSheet_doesNotDoubleTheQuickMenuEntry() {
+        let sections = MessageActionResolver.moreSections(menu(isSticker: true, addable: true))
+        XCTAssertFalse(sections.contains { section in
+            if case .actions(let items) = section { return items.map(\.rawValue).contains("addSticker") }
+            return false
+        })
     }
 
     func test_menu_aStickerNeverOffersSaveToPhotos() {

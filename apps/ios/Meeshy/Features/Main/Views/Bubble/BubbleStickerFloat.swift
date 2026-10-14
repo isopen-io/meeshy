@@ -40,9 +40,7 @@ struct StickerFloat: ViewModifier {
                 }
             }
             .onDisappear {
-                var transaction = Transaction(animation: nil)
-                transaction.disablesAnimations = true
-                withTransaction(transaction) { isLifted = false }
+                withTransaction(Transaction(animation: nil)) { isLifted = false }
             }
     }
 }
