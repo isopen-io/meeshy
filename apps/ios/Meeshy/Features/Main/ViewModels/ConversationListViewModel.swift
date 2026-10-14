@@ -1965,7 +1965,12 @@ class ConversationListViewModel: ObservableObject {
         NotificationCoordinator.shared.markConversationRead(conversationId)
         guard Self.shouldDispatchListMarkAsRead(
             conversationId: conversationId,
-            activeConversationId: messageSocket.activeConversationId
+            // iPad multi-fenêtre : ouverte dans une fenêtre détachée, la
+            // conversation a déjà son marquage précis, même si elle n'est pas
+            // la plus récente.
+            activeConversationId: NotificationToastManager.shared.isConversationOpen(conversationId)
+                ? conversationId
+                : messageSocket.activeConversationId
         ) else {
             clearUnreadLocally(conversationId)
             return
