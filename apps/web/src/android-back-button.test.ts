@@ -54,7 +54,7 @@ describe('le retour système de la coque Android (#7988, #10585)', () => {
   });
 
   test("chaque entrée d'historique le resynchronise, pushState et fermeture de panneau compris", () => {
-    expect(code).toContain('getBridge().setWebViewClient(');
+    expect(code).toMatch(/getBridge\(\)\s*\.setWebViewClient\(\s*new BridgeWebViewClient\(/);
     expect(corpsDe(code, 'public void doUpdateVisitedHistory(')).toContain('syncBack()');
   });
 
