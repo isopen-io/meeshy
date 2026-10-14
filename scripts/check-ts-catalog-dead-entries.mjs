@@ -472,7 +472,7 @@ export const callersIn = (contents, nsNames) => {
 // 271 -> 270 (#7558, 2026-10-14) : `conversations.byIdMessagesByMessageIdPin` (`PUT`/`DELETE
 // …/messages/:messageId/pin`) a son appelant web — `apps/web/src/lib/api/pin-message.ts`, le geste « Épingler /
 // Désépingler » de la feuille « Plus… » du fil. Valeur MESURÉE le 2026-10-14 en local.
-const BASELINE_DEAD_ENTRIES = 270;
+const BASELINE_DEAD_ENTRIES = 267;
 
 export const readWorld = (root) => {
   const groupFiles = readdirSync(join(root, GROUPS_DIR)).filter((name) => name.endsWith('.ts')).sort();

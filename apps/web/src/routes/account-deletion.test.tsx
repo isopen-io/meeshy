@@ -5,6 +5,7 @@ import type { ApiFailure, ApiResult } from '@/lib/api/http';
 import { buttonNamed, createActMounter } from '@/test-support/act-mount';
 import { ensureHappyDomRegistered, releaseHappyDomIfRegistered } from '@/test-support/happy-dom-environment';
 
+import { loadInterfaceCatalog } from '@/lib/i18n-catalog';
 import { ACCOUNT_DELETION_GUIDE_KEYS, translateAccountDeletionGuide } from '@/lib/i18n-account-deletion-guide';
 
 import { AccountDeletionPage, type AccountDeletionDeps } from './account-deletion';
@@ -22,7 +23,8 @@ import { AccountDeletionPage, type AccountDeletionDeps } from './account-deletio
 const globals = globalThis as typeof globalThis & { IS_REACT_ACT_ENVIRONMENT?: boolean };
 const { mount, unmountAll, click, type, submit } = createActMounter();
 
-beforeAll(() => {
+beforeAll(async () => {
+  await loadInterfaceCatalog('en');
   ensureHappyDomRegistered();
   globals.IS_REACT_ACT_ENVIRONMENT = true;
 });
