@@ -772,7 +772,8 @@ struct AddChannelSheet: View {
 
         do {
             let response = try await ConversationService.shared.list(offset: currentOffset, limit: pageSize)
-            let newItems = response.data.filter { $0.communityId != communityId }
+            let known = Set(conversations.map(\.id))
+            let newItems = response.data.filter { $0.communityId != communityId && !known.contains($0.id) }
             conversations.append(contentsOf: newItems)
             titles.merge(conversationListTitles(newItems), uniquingKeysWith: { _, latest in latest })
             currentOffset += response.data.count

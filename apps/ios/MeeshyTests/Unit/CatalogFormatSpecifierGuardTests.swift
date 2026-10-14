@@ -65,18 +65,18 @@ final class CatalogFormatSpecifierGuardTests: XCTestCase {
         return table
     }
 
-    /// `String(localized: "<clé>", defaultValue: "…\(symbole)…")` → (clé, symbole).
+    /// `String(localized: "<clé>", defaultValue: "…\(symbole)…")` → (clé, symbole, position).
     /// Une seule interpolation suffit à établir le cas : les clés à deux
     /// arguments numériques n'existent pas encore dans ce catalogue, et le jour
     /// où elles existeront ce témoin dira qu'il ne les couvre pas plutôt que de
     /// prétendre le contraire.
-    private func interpolations(dans source: String) -> [(cle: String, symbole: String)] {
+    private func interpolations(dans source: String) -> [(cle: String, symbole: String, position: Int)] {
         let motif = #"localized:\s*"([^"]+)"\s*,\s*\n?\s*defaultValue:\s*"([^"]*)""#
         guard let regex = try? NSRegularExpression(pattern: motif, options: [.dotMatchesLineSeparators])
         else { return [] }
         let ns = source as NSString
         return regex.matches(in: source, range: NSRange(location: 0, length: ns.length))
-            .compactMap { m -> (String, String)? in
+            .compactMap { m -> (String, String, Int)? in
                 let cle = ns.substring(with: m.range(at: 1))
                 let defaut = ns.substring(with: m.range(at: 2))
                 guard let ouverture = defaut.range(of: #"\("#),
@@ -85,19 +85,41 @@ final class CatalogFormatSpecifierGuardTests: XCTestCase {
                 let symbole = String(defaut[ouverture.upperBound..<fermeture])
                     .trimmingCharacters(in: .whitespaces)
                 guard !symbole.isEmpty, !symbole.contains("(") else { return nil }
-                return (cle, symbole)
+                return (cle, symbole, m.range.location)
             }
     }
 
-    /// Le symbole est-il déclaré ENTIER dans ce fichier ? On cherche les trois
-    /// formes qui portent un type explicite — paramètre, propriété, liaison —
-    /// et rien d'autre : pas d'inférence, donc pas de faux positif.
-    private func estEntier(_ symbole: String, dans source: String) -> Bool {
-        let formes = [
-            "\(symbole): Int", "\(symbole):Int",
-            "let \(symbole): Int", "var \(symbole): Int",
-        ]
-        return formes.contains { source.contains($0) }
+    /// Le symbole est-il déclaré ENTIER, là où il est interpolé ? On lit la déclaration typée LA PLUS PROCHE
+    /// avant le site — paramètre, propriété ou liaison — et rien d'autre : pas d'inférence.
+    ///
+    /// « N'importe où dans le fichier » ne suffisait pas : deux fonctions d'un même fichier nomment `level` l'une
+    /// un `Int`, l'autre un `String` déjà formaté. La garde accusait la seconde, et le catalogue « corrigé » en
+    /// `%lld` affichait un pointeur à la place du niveau (2026-10-14).
+    static func estEntier(_ symbole: String, dans source: String, avant position: Int) -> Bool {
+        let motif = #"\b"# + NSRegularExpression.escapedPattern(for: symbole) + #"\s*:\s*([A-Za-z_][A-Za-z0-9_.]*)"#
+        guard let regex = try? NSRegularExpression(pattern: motif) else { return false }
+        let ns = source as NSString
+        let avant = NSRange(location: 0, length: min(max(0, position), ns.length))
+        guard let derniere = regex.matches(in: source, range: avant).last else { return false }
+        return ns.substring(with: derniere.range(at: 1)) == "Int"
+    }
+
+    func test_laDeclarationLaPlusProcheDecide_pasUnHomonymeDuFichier() {
+        let source = """
+        static func rank(level: Int) -> String { "" }
+        static func locked(level: String) -> String {
+            String(localized: "k", defaultValue: "niveau \\(level)")
+        }
+        """
+        let site = (source as NSString).range(of: "String(localized").location
+        XCTAssertFalse(Self.estEntier("level", dans: source, avant: site))
+        let inverse = """
+        static func locked(level: String) -> String { "" }
+        static func rank(level: Int) -> String {
+            String(localized: "k", defaultValue: "niveau \\(level)")
+        }
+        """
+        XCTAssertTrue(Self.estEntier("level", dans: inverse, avant: (inverse as NSString).range(of: "String(localized").location))
     }
 
     func test_uneCleQuiInterpoleUnEntier_nePorteJamaisUnSpecificateurDObjet() throws {
@@ -107,7 +129,8 @@ final class CatalogFormatSpecifierGuardTests: XCTestCase {
         var fautes: [String] = []
         for url in try sources() {
             guard let source = try? String(contentsOf: url, encoding: .utf8) else { continue }
-            for (cle, symbole) in interpolations(dans: source) where estEntier(symbole, dans: source) {
+            for (cle, symbole, position) in interpolations(dans: source)
+            where Self.estEntier(symbole, dans: source, avant: position) {
                 guard let traductions = table[cle] else { continue }
                 for (langue, texte) in traductions.sorted(by: { $0.key < $1.key }) {
                     guard texte.contains("%@") else { continue }
@@ -221,7 +244,8 @@ final class CatalogFormatSpecifierGuardTests: XCTestCase {
         XCTAssertEqual(trouvees.count, 1, "l'extraction doit voir la paire clé/interpolation")
         XCTAssertEqual(trouvees.first?.cle, "k.body")
         XCTAssertEqual(trouvees.first?.symbole, "joursTenus")
-        XCTAssertTrue(estEntier("joursTenus", dans: source), "un paramètre `: Int` est un entier")
-        XCTAssertFalse(estEntier("autreChose", dans: source), "un symbole non déclaré n'est pas deviné")
+        let site = trouvees.first?.position ?? 0
+        XCTAssertTrue(Self.estEntier("joursTenus", dans: source, avant: site), "un paramètre `: Int` est un entier")
+        XCTAssertFalse(Self.estEntier("autreChose", dans: source, avant: site), "un symbole non déclaré n'est pas deviné")
     }
 }
