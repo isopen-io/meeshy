@@ -249,7 +249,7 @@ struct iPadCoversAndChromeLayer: ViewModifier {
     let activeConversationIdForBanner: () -> String?
     let onMiniPlayerTap: () -> Void
     /// Rouvre un réel qui n'a pas pu se charger (« Réessayer » de `ReelOpenFailureView`).
-    var onRetryReel: (_ postId: String, _ commentId: String?, _ parentCommentId: String?) async -> Void = { _, _, _ in }
+    var onRetryReel: @MainActor (_ postId: String, _ commentId: String?, _ parentCommentId: String?) async -> Void = { _, _, _ in }
 
     func body(content: Content) -> some View {
         content
