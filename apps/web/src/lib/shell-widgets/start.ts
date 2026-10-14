@@ -26,6 +26,8 @@ import { widgetSnapshotOf } from './snapshot';
  * à sa construction, donc le premier) : un instantané composé après un
  * changement de compte ne peut pas porter la liste du compte quitté.
  */
+const COMPOSE_DELAY_MS = 400;
+
 type Identity = { readonly kind: 'account'; readonly id: string } | { readonly kind: 'nobody' } | { readonly kind: 'held' };
 
 /** Un compte qui parle le temps d'une conversation sous une identité anonyme
@@ -89,6 +91,17 @@ export function startShellWidgets(): boolean {
     timers: { set: (run, ms) => window.setTimeout(run, ms), clear: (id) => window.clearTimeout(id) },
   });
   const refresh = (): void => offerCurrent(channel);
+  /* Le cache de liste notifie à chaque observateur et chaque patch : la
+     composition attend que la rafale retombe. Seule la SESSION passe tout
+     de suite — une déconnexion vide les widgets sans délai. */
+  let pending: number | undefined;
+  const soon = (): void => {
+    if (pending !== undefined) return;
+    pending = window.setTimeout(() => {
+      pending = undefined;
+      refresh();
+    }, COMPOSE_DELAY_MS);
+  };
   let drained = false;
   const drain = (): void => {
     if (cachedConversations() === undefined) return;
@@ -97,12 +110,12 @@ export function startShellWidgets(): boolean {
   };
 
   sessionStore.subscribe(refresh);
-  conversationStore.subscribe(refresh);
-  subscribeInterfaceLanguage(refresh);
+  conversationStore.subscribe(soon);
+  subscribeInterfaceLanguage(soon);
   appQueryClient.getQueryCache().subscribe((event) => {
     const key = event.query.queryKey;
     if (key.length !== 1 || key[0] !== CONVERSATIONS_QUERY_KEY[0]) return;
-    refresh();
+    soon();
     if (!drained) drain();
   });
   document.addEventListener('visibilitychange', () => {
