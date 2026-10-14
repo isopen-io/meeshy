@@ -112,8 +112,10 @@ public class MeeshyPlaybackPlugin extends Plugin {
             });
     }
 
+    /** #10641 — la page reprend la lecture : le vocal lu depuis une notification se tait, jamais deux sons. */
     @PluginMethod
     public void holdPlayback(PluginCall call) {
+        NotificationVoiceService.yieldToPage();
         PlaybackForegroundService.start(getContext());
         call.resolve();
     }

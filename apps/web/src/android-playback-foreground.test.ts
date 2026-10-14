@@ -139,6 +139,13 @@ describe('la lecture d’un vocal tenue au premier plan dans la coque Android (#
     }
   });
 
+  test('la page qui reprend la lecture fait taire le vocal lu depuis une notification : jamais deux sons (#10641)', () => {
+    const plugin = sansCommentaires(lire(...JAVA, 'MeeshyPlaybackPlugin.java'));
+    const tenir = corpsDe(plugin, 'public void holdPlayback(');
+    expect(tenir).toContain('NotificationVoiceService.yieldToPage()');
+    expect(tenir.indexOf('NotificationVoiceService.yieldToPage()')).toBeLessThan(tenir.indexOf('PlaybackForegroundService.start('));
+  });
+
   test('la carte dit le vocal décrit par la page et renvoie la barre glissée à la page, en sept langues (#10624)', () => {
     const plugin = sansCommentaires(lire(...JAVA, 'MeeshyPlaybackPlugin.java'));
     expect(corpsDe(plugin, 'public void nowPlaying(')).toContain('PlaybackForegroundService.describe(');
