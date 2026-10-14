@@ -56,7 +56,7 @@ public struct AppearanceCatalog: Sendable {
 
     /// Les modèles à présenter d'emblée : packs installés par défaut.
     public var defaultWallpapers: [(pack: AppearanceDesignPack, design: AppearanceDesign)] {
-        wallpaperPacks.filter(\.installedByDefault).flatMap { pack in pack.designs.map { (pack, $0) } }
+        wallpaperPacks.filter(\.installedByDefault).flatMap { pack in pack.designs.map { (pack: pack, design: $0) } }
     }
 
     // MARK: Noms (7 langues)
