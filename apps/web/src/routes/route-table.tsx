@@ -718,7 +718,7 @@ export function DeferredSplitFrame(props: FrameProps): ReactNode {
 
 /* LE CATALOGUE D'INTERFACE (#6206) — chaque écran l'attend, en parallèle de
    son chunk : ce qui s'y rend lit ses libellés de façon synchrone. */
-export const { Router, Link, href, navigate } = createRouter(ROUTES, NotFound, {
+export const { Router, Link, href, navigate, preload } = createRouter(ROUTES, NotFound, {
   screenPrerequisite: () => loadInterfaceCatalog(currentInterfaceLanguage()),
   /* SUR GRAND ÉCRAN, LA LISTE ET LE FIL CÔTE À CÔTE (#10073, D-185) — sous
      1024 px, le cadre rend l'écran routé tel quel. */
