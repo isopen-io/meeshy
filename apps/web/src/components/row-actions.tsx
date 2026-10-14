@@ -72,6 +72,9 @@ const MENU_GAP = 4;
  */
 const MENU_ITEM_HEIGHT = 44;
 const MENU_PADDING = 8;
+/** Le filet de 1 px en haut et en bas (`border`) : sans lui, la hauteur
+ * plafonnée (#10593) laissait 2 px à défiler dans un panneau qui tient. */
+const MENU_BORDER = 2;
 
 /**
  * LA TAILLE DESSINÉE, et pourquoi c'est 34 et non 32 : `tap-target-34`
@@ -232,7 +235,7 @@ export function RowActions({
       anchorTop: anchor.top,
       anchorBottom: anchor.bottom,
       viewportHeight: window.innerHeight,
-      estimatedHeight: count * MENU_ITEM_HEIGHT + MENU_PADDING,
+      estimatedHeight: count * MENU_ITEM_HEIGHT + MENU_PADDING + MENU_BORDER,
       gap: MENU_GAP,
       margin: MENU_MARGIN,
     });
@@ -469,14 +472,17 @@ export function RowActions({
                       <RowActionGlyph glyph={entry.glyph} size={16} />
                     </span>
                   )}
-                  <span className="min-w-0 flex-1 truncate">{entry.label}</span>
+                  {/* Le libellé reste un nœud de texte DIRECT du bouton : son nom
+                      accessible et les sélecteurs de texte des gates le lisent
+                      sur la ligne elle-même, jamais sur un enfant. */}
+                  {entry.label}
                   {entry.submenu === undefined ? null : (
-                    <span className="grid place-items-center rtl:-scale-x-100" style={{ color: 'var(--color-ios-ink-3)' }}>
+                    <span className="ms-auto grid place-items-center rtl:-scale-x-100" style={{ color: 'var(--color-ios-ink-3)' }}>
                       <GlyphSvg glyph={ROW_MENU_GLYPHS.caretRight} size={14} />
                     </span>
                   )}
                   {entry.checked === true ? (
-                    <span className="grid place-items-center" style={{ color: 'var(--color-ios-brand)' }}>
+                    <span className="ms-auto grid place-items-center" style={{ color: 'var(--color-ios-brand)' }}>
                       <Glyph name="check" size={16} />
                     </span>
                   ) : null}
