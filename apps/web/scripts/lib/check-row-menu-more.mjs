@@ -19,6 +19,8 @@
  * Extrait dès sa naissance : l'hôte (`check-list-actions.mjs`) est au seuil
  * de découpage de 1000 lignes. `check` est REMIS par l'hôte.
  */
+import { awaitCondition } from './await-fact.mjs';
+
 const GROUP = 'c-deploiement';
 const DIRECT = 'c-amina';
 const BUTTON = 'button[aria-label="Actions de conversation"]';
@@ -40,16 +42,16 @@ export async function checkRowMenuMore({ browser, base, check }) {
   const page = await context.newPage();
   await page.goto(`${base}/chats`, { waitUntil: 'load' });
   await page.waitForSelector(`[data-row="${GROUP}"] [data-name]`);
-  await page.waitForTimeout(300);
 
   // a. le favori
   await openMenuOf(page, GROUP);
   await pick(page, 'Favori');
   await pick(page, '🔥');
+  await awaitCondition(page, (row) => document.querySelector(`[data-row="${row}"] [data-favorite]`) !== null, GROUP);
   const favorite = await page.$eval(`[data-row="${GROUP}"]`, (row) => row.querySelector('[data-favorite]')?.textContent ?? null);
   check(favorite === '🔥', `« Favori › 🔥 » pose l'emoji à côté du nom (${JSON.stringify(favorite)})`);
   await page.click('button:text-is("Favoris")');
-  await page.waitForTimeout(120);
+  await awaitCondition(page, () => document.querySelectorAll('[data-row]').length === 1);
   const favorites = await rowIds(page);
   check(JSON.stringify(favorites) === JSON.stringify([GROUP]), `la puce « Favoris » ne rend que la conversation au favori (${JSON.stringify(favorites)})`);
   await page.click('button:text-is("Tous")');
@@ -59,7 +61,7 @@ export async function checkRowMenuMore({ browser, base, check }) {
   await openMenuOf(page, GROUP);
   await pick(page, 'Déplacer vers…');
   await pick(page, 'Proches');
-  await page.waitForTimeout(120);
+  await awaitCondition(page, (row) => document.querySelector(`[data-row="${row}"]`)?.closest('[data-section]')?.getAttribute('data-section') === 'category:cat-proches', GROUP);
   const section = await page.$eval(`[data-row="${GROUP}"]`, (row) => row.closest('[data-section]')?.getAttribute('data-section') ?? null);
   check(section === 'category:cat-proches', `« Déplacer vers… › Proches » range la ligne dans la section de la catégorie (${section})`);
 
@@ -75,7 +77,7 @@ export async function checkRowMenuMore({ browser, base, check }) {
     await page.waitForSelector('dialog[data-rename-dialog] input');
     await page.fill('dialog[data-rename-dialog] input', typed);
     await page.click('[data-rename="save"]');
-    await page.waitForTimeout(120);
+    await awaitCondition(page, ({ row, name }) => document.querySelector(`[data-row="${row}"] [data-name]`)?.textContent === name, { row: GROUP, name: expected });
     const name = await nameOf();
     check(name === expected, `« Renommer » avec ${JSON.stringify(typed)} : la ligne lit « ${expected} » (${JSON.stringify(name)})`);
   }
@@ -86,7 +88,7 @@ export async function checkRowMenuMore({ browser, base, check }) {
   const asked = await page.waitForSelector('dialog[data-confirm-dialog="conversation-block"]', { timeout: 2000 }).then(() => true, () => false);
   check(asked, '« Bloquer » passe par la confirmation');
   await page.click('dialog[data-confirm-dialog="conversation-block"] [data-confirm="confirm"]');
-  await page.waitForTimeout(200);
+  await awaitCondition(page, (row) => document.querySelector(`[data-row="${row}"]`) === null, DIRECT);
   const afterBlock = await rowIds(page);
   check(!afterBlock.includes(DIRECT), `bloqué, le direct quitte la liste pour les archives (${JSON.stringify(afterBlock)})`);
   await page.click('button:text-is("Archivées")');
@@ -99,20 +101,20 @@ export async function checkRowMenuMore({ browser, base, check }) {
 
   // e. le clavier entre et sort d'un sous-menu
   await openMenuOf(page, GROUP);
-  await page.waitForTimeout(60);
+  await awaitCondition(page, () => document.querySelector('[role="menu"]')?.contains(document.activeElement) === true);
   for (let i = 0; i < 15; i += 1) {
     if ((await page.evaluate(() => document.activeElement?.textContent)) === 'Favori') break;
     await page.keyboard.press('ArrowDown');
   }
   await page.keyboard.press('ArrowRight');
-  await page.waitForTimeout(60);
+  await awaitCondition(page, () => document.activeElement?.getAttribute('aria-label') === 'Retour, Favori');
   const entered = await page.evaluate(() => ({
     menu: document.querySelector('[role="menu"]')?.getAttribute('aria-label'),
     focus: document.activeElement?.getAttribute('aria-label'),
   }));
   check(entered.menu === 'Favori' && entered.focus === 'Retour, Favori', `Flèche droite entre dans « Favori », le focus sur le retour (${JSON.stringify(entered)})`);
   await page.keyboard.press('ArrowLeft');
-  await page.waitForTimeout(60);
+  await awaitCondition(page, () => document.activeElement?.textContent === 'Favori');
   const left = await page.evaluate(() => ({
     menu: document.querySelector('[role="menu"]')?.getAttribute('aria-label'),
     focus: document.activeElement?.textContent,
