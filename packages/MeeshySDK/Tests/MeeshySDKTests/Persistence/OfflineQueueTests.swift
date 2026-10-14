@@ -707,15 +707,17 @@ final class OfflineQueueTests: XCTestCase {
         try await enqueueCreatePost(cmid: "cmid_post", content: "a post", type: "POST")
         try await enqueueCreatePost(cmid: "cmid_status", content: "a mood", type: "STATUS", moodEmoji: "🎉")
 
+        // `olderThan: -60` et non 0 : une ligne écrite à l'instant porte une date arrondie à la milliseconde par
+        // la base, qui peut tomber APRÈS « maintenant » — le seuil 0 la manquait une fois sur vingt.
         // A status composer recovers only STATUS rows.
-        let status = await queue.recoverLastUnsentPost(matchingTypes: ["STATUS"], olderThan: 0)
+        let status = await queue.recoverLastUnsentPost(matchingTypes: ["STATUS"], olderThan: -60)
         XCTAssertEqual(status?.type, "STATUS")
         XCTAssertEqual(status?.content, "a mood")
         XCTAssertEqual(status?.moodEmoji, "🎉")
         XCTAssertEqual(status?.clientMutationId, "cmid_status")
 
         // A post composer recovers POST/REEL but never a STATUS row.
-        let post = await queue.recoverLastUnsentPost(matchingTypes: ["POST", "REEL"], olderThan: 0)
+        let post = await queue.recoverLastUnsentPost(matchingTypes: ["POST", "REEL"], olderThan: -60)
         XCTAssertEqual(post?.type, "POST")
         XCTAssertEqual(post?.content, "a post")
     }
