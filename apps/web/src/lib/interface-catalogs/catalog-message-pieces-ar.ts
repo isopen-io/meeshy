@@ -33,6 +33,13 @@ const ar = {
   'message.delete.partial': 'تعذّر حذف {failed} من {count} رسائل',
   'message.delete.partialOne': 'تعذّر حذف رسالة واحدة من {count}',
   'message.reactors.empty': 'لا توجد تفاعلات',
+  'message.pin.action': 'تثبيت',
+  'message.unpin.action': 'إلغاء التثبيت',
+  'message.pin.done': 'تم تثبيت الرسالة',
+  'message.unpin.done': 'تم إلغاء تثبيت الرسالة',
+  'message.pin.failed': 'تعذّر تثبيت الرسالة',
+  'message.unpin.failed': 'تعذّر إلغاء تثبيت الرسالة',
+  'message.report.title': 'الإبلاغ عن هذه الرسالة',
 } satisfies MessagePiecesCatalog;
 
 export default ar;

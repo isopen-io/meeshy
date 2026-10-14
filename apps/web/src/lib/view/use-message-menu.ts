@@ -7,6 +7,7 @@ import { prismFor, served, type Served } from '@/lib/api/prism';
 import { reactAction } from '@/lib/api/query';
 import { appQueryClient } from '@/lib/api/query-client';
 import { apiDeps } from '@/lib/api/deps';
+import type { DataSource } from '@/lib/api/config';
 import type { ApiResult, HttpRequest } from '@/lib/api/http';
 import { reactionStore } from '@/lib/api/reaction-store';
 import type { Message } from '@/lib/api/types';
@@ -38,6 +39,8 @@ import { isMineOf } from './message';
 import { editOffered } from './message-edit';
 import { SELECTION_CAP, copyTextOf, orderedIds, selectionReducer, type SelectionState } from './selection';
 import { useMessageDelete } from './use-message-delete';
+import { useMessagePin, type MessagePinEntry } from './use-message-pin';
+import { useMessageReport } from './use-message-report';
 import { useMessageStar, type MessageStarEntry } from './use-message-star';
 
 /**
@@ -108,6 +111,8 @@ export function useMessageMenu(params: {
   /** INJECTABLES pour les témoins — le cache et le transport de l'application par défaut. */
   readonly queryClient?: QueryClient;
   readonly transport?: PieceMenuTransport;
+  /** La source servie au signalement (`reports.ts` se tait sur les fixtures) — celle de l'application par défaut. */
+  readonly source?: DataSource;
 }) {
   const { conversationId, messages, readerLanguages, viewerId, announce } = params;
 
@@ -198,6 +203,19 @@ export function useMessageMenu(params: {
     (messageId: string): (() => void) | null => (deleteOfferFor([messageId]) === null ? null : () => askDelete([messageId])),
     [deleteOfferFor, askDelete],
   );
+  /**
+   * « ÉPINGLER » ET « SIGNALER » (#7558) — offerts par « Plus… » selon la règle
+   * du serveur (`messagePinAction`, `reportOffered`) ; l'épingle est optimiste
+   * (`use-message-pin.ts`), le signalement passe par la feuille des motifs
+   * (`use-message-report.ts`).
+   */
+  const transport = params.transport ?? apiDeps.transport;
+  const pinEntryOf = useMessagePin({ conversationId, viewer: deleteViewer, announce, queryClient: params.queryClient ?? appQueryClient, transport });
+  const pinOf = useCallback((messageId: string): MessagePinEntry | null => pinEntryOf(messageOf(messageId)), [pinEntryOf, messageOf]);
+  const source = params.source ?? apiDeps.source;
+  const reportDeps = useMemo(() => ({ source, transport }), [source, transport]);
+  const reporting = useMessageReport({ messageOf, viewer: deleteViewer, announce, deps: reportDeps });
+
   /** L'ordre est celui du FIL (`orderedIds`), comme pour le transfert : la boucle « pour tous » supprime dans l'ordre où on lit. */
   const onDeleteSelection = useCallback(
     (placed: readonly { readonly message: { readonly id: string } }[]) => {
@@ -605,6 +623,11 @@ export function useMessageMenu(params: {
     servedOf,
     starOf,
     editOf,
+    pinOf,
+    reportOf: reporting.reportOf,
+    reportFor: reporting.reportFor,
+    onPickReportReason: reporting.onPickReportReason,
+    onDismissReport: reporting.onDismissReport,
     swipeActionsOf,
   };
 }

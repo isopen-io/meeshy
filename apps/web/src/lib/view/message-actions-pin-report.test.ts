@@ -24,6 +24,7 @@ const row = (overrides: Partial<Message> = {}): Message =>
     senderId: 'u-other',
     content: 'bonjour',
     originalLanguage: 'fr',
+    translations: [],
     createdAt: minutesAgo(5),
     ...overrides,
   });
@@ -39,7 +40,7 @@ describe('messagePinAction — l’épingle offerte est celle que le serveur adm
   });
 
   test('sans compte ⇒ rien (la route refuse la session anonyme)', () => {
-    expect(messagePinAction(row(), { id: 'u-me', hasAccount: false }, { now: NOW })).toBeNull();
+    expect(messagePinAction(row(), { hasAccount: false }, { now: NOW })).toBeNull();
   });
 
   test('un message encore optimiste, supprimé, échu, à vue unique ou système ⇒ rien', () => {

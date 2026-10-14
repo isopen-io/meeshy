@@ -22,8 +22,10 @@ import { useMessageMenu } from './use-message-menu';
 
 const globals = globalThis as typeof globalThis & { IS_REACT_ACT_ENVIRONMENT?: boolean };
 
+/* « Pour tous » charge son puits en `import()` (morceau `realtime`) : chargé
+   d'avance, l'import froid ne court plus contre les deux tours de `settle`. */
 beforeAll(async () => {
-  await Promise.all([loadInterfaceCatalog('fr'), loadMessagePiecesCatalog('fr')]);
+  await Promise.all([loadInterfaceCatalog('fr'), loadMessagePiecesCatalog('fr'), import('@/lib/api/realtime-message-mutations')]);
   ensureHappyDomRegistered();
   globals.IS_REACT_ACT_ENVIRONMENT = true;
 });
