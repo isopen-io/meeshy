@@ -40,6 +40,7 @@ import arPhonePrompt from './catalog-ar-phone-prompt';
 import arUserProfile from './catalog-ar-user-profile';
 import arContentRefused from './catalog-ar-content-refused';
 import arPublicEntry from './catalog-ar-public-entry';
+import arThreadSearch from './catalog-ar-thread-search';
 
 const ar = {
   'announce.messageSent': 'تم إرسال الرسالة',
@@ -1067,6 +1068,7 @@ const ar = {
   ...arUserProfile,
   ...arContentRefused,
   ...arPublicEntry,
+  ...arThreadSearch,
 } satisfies InterfaceCatalog;
 
 export default ar;

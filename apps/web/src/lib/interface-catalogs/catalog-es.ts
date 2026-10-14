@@ -40,6 +40,7 @@ import esPhonePrompt from './catalog-es-phone-prompt';
 import esUserProfile from './catalog-es-user-profile';
 import esContentRefused from './catalog-es-content-refused';
 import esPublicEntry from './catalog-es-public-entry';
+import esThreadSearch from './catalog-es-thread-search';
 
 const es = {
   'announce.messageSent': 'Mensaje enviado',
@@ -1070,6 +1071,7 @@ const es = {
   ...esUserProfile,
   ...esContentRefused,
   ...esPublicEntry,
+  ...esThreadSearch,
 } satisfies InterfaceCatalog;
 
 export default es;
