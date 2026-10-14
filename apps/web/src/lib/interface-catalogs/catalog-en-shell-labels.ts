@@ -9,7 +9,6 @@ const enShellLabels = {
   'thread.header.collapse': 'Collapse header',
   'thread.header.back.unread.one': 'Back — {count} unread message elsewhere',
   'thread.header.back.unread.other': 'Back — {count} unread messages elsewhere',
-  'thread.header.search': 'Search in conversation',
   'thread.header.details': 'Conversation details',
   'thread.scrollToBottom': 'Scroll to bottom',
   'thread.scrollToBottom.unread.one': '{count} unread message, Scroll to bottom',

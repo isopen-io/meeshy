@@ -14,7 +14,6 @@ const frShellLabels = {
   'thread.header.collapse': 'Replier l’en-tête',
   'thread.header.back.unread.one': 'Retour — {count} message non lu ailleurs',
   'thread.header.back.unread.other': 'Retour — {count} messages non lus ailleurs',
-  'thread.header.search': 'Rechercher dans la conversation',
   'thread.header.details': 'Détails de la conversation',
   'thread.scrollToBottom': 'Défiler vers le bas',
   'thread.scrollToBottom.unread.one': '{count} message non lu, Défiler vers le bas',

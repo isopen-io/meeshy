@@ -9,7 +9,6 @@ const ptShellLabels = {
   'thread.header.collapse': 'Recolher o cabeçalho',
   'thread.header.back.unread.one': 'Voltar — {count} mensagem não lida em outro lugar',
   'thread.header.back.unread.other': 'Voltar — {count} mensagens não lidas em outro lugar',
-  'thread.header.search': 'Pesquisar na conversa',
   'thread.header.details': 'Detalhes da conversa',
   'thread.scrollToBottom': 'Rolar até o fim',
   'thread.scrollToBottom.unread.one': '{count} mensagem não lida, Rolar até o fim',

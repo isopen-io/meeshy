@@ -742,7 +742,7 @@ struct BubbleStandardLayout: View {
                 let perPageTranslatedAudios = perAttachmentAudios.allSatisfy({ $0.value.isEmpty })
                     ? Dictionary(grouping: translatedAudios, by: { $0.attachmentId })
                     : perAttachmentAudios
-                AudioCarouselView(
+                AudioStackView(
                     items: auds,
                     message: message,
                     contactColor: content.isMe ? MeeshyColors.brandPrimaryHex : otherBubbleColor,

@@ -1,7 +1,6 @@
 import {
   Suspense,
   createContext,
-  lazy,
   useCallback,
   useContext,
   useEffect,
@@ -282,23 +281,81 @@ export type FrameProps = {
   readonly screenOf: (key: string) => ComponentType | undefined;
 };
 
+/**
+ * UN ÉCRAN, UNE PROMESSE (#10636) — le registre que partagent le rendu, le
+ * préchargement à l'intention et le préchargement de fond.
+ *
+ * `lazy` gardait sa propre promesse : précharger relançait un `import()` à
+ * côté de la sienne, et même un module déjà en mémoire faisait SUSPENDRE
+ * l'écran le temps d'un `then` — l'attente paraissait, une image, sur un écran
+ * déjà là. Ici, un module chargé se rend dans le rendu même de la navigation.
+ *
+ * Un préchargement raté s'oublie : l'ouverture suivante réessaie. Un
+ * chargement raté PENDANT le rendu remonte, une fois, à la limite d'erreur —
+ * le comportement de `lazy`, sans boucle de réessais.
+ */
+type ScreenModule = { readonly default: ComponentType };
+
+function screenRegistryEntry(load: () => Promise<ScreenModule>) {
+  let pending: Promise<ScreenModule> | null = null;
+  let loaded: ComponentType | null = null;
+  let renderFailure: { readonly error: unknown } | null = null;
+
+  const ensure = (fromRender = false): Promise<ScreenModule> => {
+    if (pending !== null) return pending;
+    const request = load().then(
+      (module) => {
+        loaded = module.default;
+        return module;
+      },
+      (error: unknown) => {
+        pending = null;
+        if (fromRender) renderFailure = { error };
+        throw error;
+      },
+    );
+    pending = request;
+    return request;
+  };
+
+  function Screen() {
+    if (loaded !== null) {
+      const Loaded = loaded;
+      return <Loaded />;
+    }
+    if (renderFailure !== null) {
+      const { error } = renderFailure;
+      renderFailure = null;
+      throw error;
+    }
+    throw ensure(true);
+  }
+
+  return { load: (): Promise<ScreenModule> => ensure(), Screen: Screen as ComponentType };
+}
+
 export function createRouter<T extends RouteTable>(table: T, notFound: ComponentType, options: RouterOptions = {}) {
   const { screenPrerequisite, frame: Frame } = options;
   const entries = Object.entries(table).map(([key, route]) => {
-    const load =
+    const registry = screenRegistryEntry(
       screenPrerequisite === undefined
         ? route.screen
-        : () => Promise.all([route.screen(), screenPrerequisite()]).then(([screen]) => screen);
+        : () => Promise.all([route.screen(), screenPrerequisite()]).then(([screen]) => screen),
+    );
     return {
       key,
       pattern: route.pattern,
       compile: compile(route.pattern),
-      // `lazy` est appele UNE fois par route : le module se memorise tout seul,
-      // donc precharger revient a declencher l'import, et le rendu le retrouve.
-      Screen: lazy(load),
-      load,
+      Screen: registry.Screen,
+      load: registry.load,
     };
   });
+
+  /** Charge l'écran d'une route sans l'ouvrir — la même promesse que son rendu. */
+  const preload = (key: keyof T & string): Promise<unknown> => {
+    const entry = entries.find((e) => e.key === key);
+    return entry === undefined ? Promise.resolve() : entry.load();
+  };
 
   const screenOf = (key: string): ComponentType | undefined => entries.find((e) => e.key === key)?.Screen;
 
@@ -401,6 +458,7 @@ export function createRouter<T extends RouteTable>(table: T, notFound: Component
     replace = false,
     children,
     onClick: onClickProp,
+    onPointerDown: onPointerDownProp,
     anchorRef,
     ...rest
   }: {
@@ -448,7 +506,13 @@ export function createRouter<T extends RouteTable>(table: T, notFound: Component
     const armPrefetch = () => {
       const entry = entries.find((e) => e.key === to);
       if (!entry || timer.current) return;
-      timer.current = setTimeout(() => void entry.load(), 300);
+      timer.current = setTimeout(() => void entry.load().catch(() => undefined), 300);
+    };
+    /* LE TOUCHER EST UNE INTENTION DÉCLARÉE (#10636) : le doigt posé, l'écran
+       part sans attendre le relâcher ni les 300 ms du survol — le clic qui
+       suit retrouve la même promesse, souvent déjà tenue. */
+    const loadNow = () => {
+      void entries.find((e) => e.key === to)?.load().catch(() => undefined);
     };
     const disarm = () => {
       if (timer.current) clearTimeout(timer.current);
@@ -461,6 +525,10 @@ export function createRouter<T extends RouteTable>(table: T, notFound: Component
         {...rest}
         ref={anchorRef}
         href={url}
+        onPointerDown={(e) => {
+          onPointerDownProp?.(e);
+          loadNow();
+        }}
         onPointerEnter={armPrefetch}
         onPointerLeave={disarm}
         onFocus={armPrefetch}
@@ -483,5 +551,5 @@ export function createRouter<T extends RouteTable>(table: T, notFound: Component
     );
   }
 
-  return { Router, Link, href, navigate };
+  return { Router, Link, href, navigate, preload };
 }

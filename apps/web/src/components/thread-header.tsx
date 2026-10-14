@@ -40,6 +40,10 @@ import { EngagementPill } from './engagement-pill';
 import { GlyphSvg } from './glyph';
 import { MEDIA_GLYPHS } from './glyphs-media';
 import { HeaderFlame } from './header-flame';
+import { ThreadSearchPanel } from './thread-search-panel';
+import { apiDeps } from '@/lib/api/deps';
+import { useThreadSearch } from '@/lib/view/use-thread-search';
+import { searchLandingMode } from '@/lib/view/thread-search';
 
 /**
  * L'EN-TÊTE DU FIL — extrait de `routes/thread.tsx` (revue #5814, défaut
@@ -73,7 +77,16 @@ export function ThreadHeader({
   flameDismissed = false,
   onDismissFlame,
   flameReplay = 0,
+  onJumpToMessage,
 }: {
+  /**
+   * LE SAUT AU MESSAGE TROUVÉ PAR LA RECHERCHE — `jump.requestJump` du fil
+   * (`useThreadJump`), le même que celui des détails : le message est amené au
+   * centre et surligné, fenêtre `?around=` comprise s'il n'est pas chargé.
+   * Absent (un hôte qui ne sait pas sauter), toucher un résultat ferme
+   * seulement la recherche.
+   */
+  readonly onJumpToMessage?: ((messageId: string) => void) | undefined;
   /**
    * L'EN-TÊTE DE L'APERÇU TIRÉ DEPUIS LA BANNIÈRE (#8821, directive porteur
    * 2026-09-30 : « afficher tout le header de la conversation dans son bloc de
@@ -214,6 +227,18 @@ export function ThreadHeader({
     : { presence: peerPresence, here: peerHere, hereActive: peerActive, hereFocused: peerFocused, hereDotRatio: HEADER_HERE_DOT_RATIO, ...(peerMood === undefined ? {} : { mood: peerMood, ...(peerMoodPostId === undefined ? {} : { moodPostId: peerMoodPostId }) }) };
   const interfaceLanguage = currentInterfaceLanguage();
   const toggleLabel = translate(interfaceLanguage, expanded ? 'thread.header.collapse' : 'thread.header.expand');
+  /* LA RECHERCHE DANS LA CONVERSATION — la loupe était un bouton SANS
+     gestionnaire depuis septembre : elle ouvre maintenant le panneau
+     (`ThreadSearchPanel`), qui interroge `GET …/messages/search`. Son état
+     vit ICI parce que la loupe et le panneau sont tous deux dans cette bande ;
+     le fil n'en reçoit que le saut final. */
+  const search = useThreadSearch({ conversationId: conversation.id, deps: apiDeps });
+  const pickSearchHit = (messageId: string) => {
+    search.close();
+    const landing = searchLandingMode(readingMenuRows.find((row) => row.isCurrent)?.mode);
+    if (landing !== null) onSelectReadingMode(landing);
+    onJumpToMessage?.(messageId);
+  };
 
   return (
     /*
@@ -414,9 +439,12 @@ export function ThreadHeader({
             ) : (
               <button
                 type="button"
+                onClick={search.open ? search.close : search.openSearch}
+                aria-expanded={search.open}
+                data-thread-search-toggle=""
                 className={CHROME_ACTION_HIT_CLASS}
                 style={{ color: 'var(--accent)' }}
-                aria-label={translate(interfaceLanguage, 'thread.header.search')}
+                aria-label={translate(interfaceLanguage, 'thread.search.open')}
               >
                 <ChromeActionDisc>
                   <Glyph name="magnifyingGlass" size={13} />
@@ -496,6 +524,7 @@ export function ThreadHeader({
         ) : null}
         </div>
       </div>
+      {search.open && !preview ? <ThreadSearchPanel search={search} onPick={pickSearchHit} /> : null}
       {/*
         LE BANDEAU DE COUPURE A QUITTÉ CET EN-TÊTE (#6080) — remplacé par la
         PASTILLE de synchronisation, montée une fois pour toute l'application

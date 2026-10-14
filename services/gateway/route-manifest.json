@@ -22,7 +22,7 @@
       "authenticated-only": "Authentifié (onRequest/preHandler référence fastify.authenticate) sans requirePermission/requireHierarchy/requireSovereign détecté, donc S2 ou S3. Les deux ne se distinguent pas mécaniquement : l'appartenance à la ressource (S3) peut être vérifiée à l'intérieur du corps du handler, invisible depuis le serveur assemblé."
     }
   },
-  "routeCount": 688,
+  "routeCount": 708,
   "routes": [
     {
       "method": "DELETE",
@@ -783,9 +783,51 @@
     },
     {
       "method": "DELETE",
+      "path": "/api/v1/packs/avatar-ring/:slug/install",
+      "module": "appearancePacksRoutes~2",
+      "mountPrefix": "/api/v1/packs/avatar-ring",
+      "securityLevel": "inconnu",
+      "securityLevelCandidates": [
+        "S2",
+        "S3"
+      ],
+      "securityBasisKey": "authenticated-only",
+      "hierarchyGated": false,
+      "adminPrefixed": false
+    },
+    {
+      "method": "DELETE",
+      "path": "/api/v1/packs/banner/:slug/install",
+      "module": "appearancePacksRoutes~3",
+      "mountPrefix": "/api/v1/packs/banner",
+      "securityLevel": "inconnu",
+      "securityLevelCandidates": [
+        "S2",
+        "S3"
+      ],
+      "securityBasisKey": "authenticated-only",
+      "hierarchyGated": false,
+      "adminPrefixed": false
+    },
+    {
+      "method": "DELETE",
       "path": "/api/v1/packs/glory-frame/:slug/install",
       "module": "gloryFramePacksRoutes",
       "mountPrefix": "/api/v1/packs/glory-frame",
+      "securityLevel": "inconnu",
+      "securityLevelCandidates": [
+        "S2",
+        "S3"
+      ],
+      "securityBasisKey": "authenticated-only",
+      "hierarchyGated": false,
+      "adminPrefixed": false
+    },
+    {
+      "method": "DELETE",
+      "path": "/api/v1/packs/wallpaper/:slug/install",
+      "module": "appearancePacksRoutes",
+      "mountPrefix": "/api/v1/packs/wallpaper",
       "securityLevel": "inconnu",
       "securityLevelCandidates": [
         "S2",
@@ -4166,6 +4208,90 @@
     },
     {
       "method": "GET",
+      "path": "/api/v1/packs/avatar-ring",
+      "module": "appearancePacksRoutes~2",
+      "mountPrefix": "/api/v1/packs/avatar-ring",
+      "securityLevel": "inconnu",
+      "securityLevelCandidates": [
+        "S2",
+        "S3"
+      ],
+      "securityBasisKey": "authenticated-only",
+      "hierarchyGated": false,
+      "adminPrefixed": false
+    },
+    {
+      "method": "GET",
+      "path": "/api/v1/packs/avatar-ring/:slug",
+      "module": "appearancePacksRoutes~2",
+      "mountPrefix": "/api/v1/packs/avatar-ring",
+      "securityLevel": "inconnu",
+      "securityLevelCandidates": [
+        "S2",
+        "S3"
+      ],
+      "securityBasisKey": "authenticated-only",
+      "hierarchyGated": false,
+      "adminPrefixed": false
+    },
+    {
+      "method": "GET",
+      "path": "/api/v1/packs/avatar-ring/installed",
+      "module": "appearancePacksRoutes~2",
+      "mountPrefix": "/api/v1/packs/avatar-ring",
+      "securityLevel": "inconnu",
+      "securityLevelCandidates": [
+        "S2",
+        "S3"
+      ],
+      "securityBasisKey": "authenticated-only",
+      "hierarchyGated": false,
+      "adminPrefixed": false
+    },
+    {
+      "method": "GET",
+      "path": "/api/v1/packs/banner",
+      "module": "appearancePacksRoutes~3",
+      "mountPrefix": "/api/v1/packs/banner",
+      "securityLevel": "inconnu",
+      "securityLevelCandidates": [
+        "S2",
+        "S3"
+      ],
+      "securityBasisKey": "authenticated-only",
+      "hierarchyGated": false,
+      "adminPrefixed": false
+    },
+    {
+      "method": "GET",
+      "path": "/api/v1/packs/banner/:slug",
+      "module": "appearancePacksRoutes~3",
+      "mountPrefix": "/api/v1/packs/banner",
+      "securityLevel": "inconnu",
+      "securityLevelCandidates": [
+        "S2",
+        "S3"
+      ],
+      "securityBasisKey": "authenticated-only",
+      "hierarchyGated": false,
+      "adminPrefixed": false
+    },
+    {
+      "method": "GET",
+      "path": "/api/v1/packs/banner/installed",
+      "module": "appearancePacksRoutes~3",
+      "mountPrefix": "/api/v1/packs/banner",
+      "securityLevel": "inconnu",
+      "securityLevelCandidates": [
+        "S2",
+        "S3"
+      ],
+      "securityBasisKey": "authenticated-only",
+      "hierarchyGated": false,
+      "adminPrefixed": false
+    },
+    {
+      "method": "GET",
       "path": "/api/v1/packs/glory-frame",
       "module": "gloryFramePacksRoutes",
       "mountPrefix": "/api/v1/packs/glory-frame",
@@ -4197,6 +4323,62 @@
       "path": "/api/v1/packs/glory-frame/installed",
       "module": "gloryFramePacksRoutes",
       "mountPrefix": "/api/v1/packs/glory-frame",
+      "securityLevel": "inconnu",
+      "securityLevelCandidates": [
+        "S2",
+        "S3"
+      ],
+      "securityBasisKey": "authenticated-only",
+      "hierarchyGated": false,
+      "adminPrefixed": false
+    },
+    {
+      "method": "GET",
+      "path": "/api/v1/packs/shop",
+      "module": "packsShopRoutes",
+      "mountPrefix": "/api/v1/packs/shop",
+      "securityLevel": "inconnu",
+      "securityLevelCandidates": [
+        "S2",
+        "S3"
+      ],
+      "securityBasisKey": "authenticated-only",
+      "hierarchyGated": false,
+      "adminPrefixed": false
+    },
+    {
+      "method": "GET",
+      "path": "/api/v1/packs/wallpaper",
+      "module": "appearancePacksRoutes",
+      "mountPrefix": "/api/v1/packs/wallpaper",
+      "securityLevel": "inconnu",
+      "securityLevelCandidates": [
+        "S2",
+        "S3"
+      ],
+      "securityBasisKey": "authenticated-only",
+      "hierarchyGated": false,
+      "adminPrefixed": false
+    },
+    {
+      "method": "GET",
+      "path": "/api/v1/packs/wallpaper/:slug",
+      "module": "appearancePacksRoutes",
+      "mountPrefix": "/api/v1/packs/wallpaper",
+      "securityLevel": "inconnu",
+      "securityLevelCandidates": [
+        "S2",
+        "S3"
+      ],
+      "securityBasisKey": "authenticated-only",
+      "hierarchyGated": false,
+      "adminPrefixed": false
+    },
+    {
+      "method": "GET",
+      "path": "/api/v1/packs/wallpaper/installed",
+      "module": "appearancePacksRoutes",
+      "mountPrefix": "/api/v1/packs/wallpaper",
       "securityLevel": "inconnu",
       "securityLevelCandidates": [
         "S2",
@@ -8326,6 +8508,48 @@
     },
     {
       "method": "POST",
+      "path": "/api/v1/packs/avatar-ring/:slug/purchase",
+      "module": "appearancePacksRoutes~2",
+      "mountPrefix": "/api/v1/packs/avatar-ring",
+      "securityLevel": "inconnu",
+      "securityLevelCandidates": [
+        "S2",
+        "S3"
+      ],
+      "securityBasisKey": "authenticated-only",
+      "hierarchyGated": false,
+      "adminPrefixed": false
+    },
+    {
+      "method": "POST",
+      "path": "/api/v1/packs/banner/:slug/purchase",
+      "module": "appearancePacksRoutes~3",
+      "mountPrefix": "/api/v1/packs/banner",
+      "securityLevel": "inconnu",
+      "securityLevelCandidates": [
+        "S2",
+        "S3"
+      ],
+      "securityBasisKey": "authenticated-only",
+      "hierarchyGated": false,
+      "adminPrefixed": false
+    },
+    {
+      "method": "POST",
+      "path": "/api/v1/packs/wallpaper/:slug/purchase",
+      "module": "appearancePacksRoutes",
+      "mountPrefix": "/api/v1/packs/wallpaper",
+      "securityLevel": "inconnu",
+      "securityLevelCandidates": [
+        "S2",
+        "S3"
+      ],
+      "securityBasisKey": "authenticated-only",
+      "hierarchyGated": false,
+      "adminPrefixed": false
+    },
+    {
+      "method": "POST",
       "path": "/api/v1/posts",
       "module": "anonyme~10",
       "mountPrefix": "/api/v1",
@@ -9610,6 +9834,20 @@
     },
     {
       "method": "PUT",
+      "path": "/api/v1/me/profile-decor",
+      "module": "profileDecorRoutes",
+      "mountPrefix": "/api/v1/me",
+      "securityLevel": "inconnu",
+      "securityLevelCandidates": [
+        "S2",
+        "S3"
+      ],
+      "securityBasisKey": "authenticated-only",
+      "hierarchyGated": false,
+      "adminPrefixed": false
+    },
+    {
+      "method": "PUT",
       "path": "/api/v1/me/starred-messages/:messageId",
       "module": "meStarredMessagesRoutes",
       "mountPrefix": "/api/v1/me",
@@ -9652,9 +9890,51 @@
     },
     {
       "method": "PUT",
+      "path": "/api/v1/packs/avatar-ring/:slug/install",
+      "module": "appearancePacksRoutes~2",
+      "mountPrefix": "/api/v1/packs/avatar-ring",
+      "securityLevel": "inconnu",
+      "securityLevelCandidates": [
+        "S2",
+        "S3"
+      ],
+      "securityBasisKey": "authenticated-only",
+      "hierarchyGated": false,
+      "adminPrefixed": false
+    },
+    {
+      "method": "PUT",
+      "path": "/api/v1/packs/banner/:slug/install",
+      "module": "appearancePacksRoutes~3",
+      "mountPrefix": "/api/v1/packs/banner",
+      "securityLevel": "inconnu",
+      "securityLevelCandidates": [
+        "S2",
+        "S3"
+      ],
+      "securityBasisKey": "authenticated-only",
+      "hierarchyGated": false,
+      "adminPrefixed": false
+    },
+    {
+      "method": "PUT",
       "path": "/api/v1/packs/glory-frame/:slug/install",
       "module": "gloryFramePacksRoutes",
       "mountPrefix": "/api/v1/packs/glory-frame",
+      "securityLevel": "inconnu",
+      "securityLevelCandidates": [
+        "S2",
+        "S3"
+      ],
+      "securityBasisKey": "authenticated-only",
+      "hierarchyGated": false,
+      "adminPrefixed": false
+    },
+    {
+      "method": "PUT",
+      "path": "/api/v1/packs/wallpaper/:slug/install",
+      "module": "appearancePacksRoutes",
+      "mountPrefix": "/api/v1/packs/wallpaper",
       "securityLevel": "inconnu",
       "securityLevelCandidates": [
         "S2",

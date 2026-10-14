@@ -391,6 +391,7 @@ public actor ConversationStore {
                 version: event.version,
                 lastSyncedAt: Date()
             )
+            ConversationAppearanceChange.post(conversationId: event.conversationId, appearance: .default)
         } else {
             if let prefs = event.preferences {
                 conv.userState.isPinned = prefs.isPinned
@@ -404,6 +405,8 @@ public actor ConversationStore {
                 conv.userState.reaction = prefs.reaction
                 conv.userState.deletedForUserAt = prefs.deletedForUserAt
                 conv.userState.clearHistoryBefore = prefs.clearHistoryBefore
+                conv.userState.appearance = prefs.appearance
+                ConversationAppearanceChange.post(conversationId: event.conversationId, appearance: prefs.appearance ?? .default)
             }
             conv.userState.version = event.version
             conv.userState.lastSyncedAt = Date()
@@ -1045,6 +1048,7 @@ public struct RemotePreferencesPayload: Sendable, Hashable {
     public let reaction: String?
     public let deletedForUserAt: Date?
     public let clearHistoryBefore: Date?
+    public let appearance: ConversationAppearance?
 
     public init(
         isPinned: Bool,
@@ -1057,8 +1061,10 @@ public struct RemotePreferencesPayload: Sendable, Hashable {
         customName: String?,
         reaction: String?,
         deletedForUserAt: Date?,
-        clearHistoryBefore: Date?
+        clearHistoryBefore: Date?,
+        appearance: ConversationAppearance? = nil
     ) {
+        self.appearance = appearance
         self.isPinned = isPinned
         self.isMuted = isMuted
         self.mentionsOnly = mentionsOnly

@@ -203,17 +203,17 @@ try {
       await capture(page, `reglages-${suffix}`);
 
       // ------------------------------------------------ 2. atteignabilité
-      const corridor = await page.evaluate(() => {
-        const discs = [...document.querySelectorAll('.floating-menus button, .floating-menus a')]
-          .map((el) => el.getBoundingClientRect())
-          .filter((r) => r.width > 0 && r.height > 0);
+      /* #10634 — la carte de profil commence sous l'en-tête, comme
+         `SettingsView` d'iOS : les disques flottent par-dessus, et la mesure
+         « au repos » ci-dessous garde qu'ils ne volent ni contrôle ni texte. */
+      const top = await page.evaluate(() => {
+        const header = document.querySelector('header')?.getBoundingClientRect() ?? null;
         const card = document.querySelector('[data-settings-profile]')?.getBoundingClientRect() ?? null;
-        const discBottom = Math.max(0, ...discs.map((r) => r.bottom));
-        return { discs: discs.length, discBottom, cardTop: card?.top ?? null };
+        return { headerBottom: header?.bottom ?? null, cardTop: card?.top ?? null };
       });
       check(
-        corridor.discs >= 2 && corridor.cardTop !== null && corridor.cardTop >= corridor.discBottom,
-        `${label} : au repos, la carte de profil commence sous les disques flottants — ${JSON.stringify(corridor)}`,
+        top.headerBottom !== null && top.cardTop !== null && top.cardTop - top.headerBottom <= 16,
+        `${label} : la carte de profil commence sous l'en-tête, sans vide (#10634) — ${JSON.stringify(top)}`,
       );
       const rest = await reachAtRest(page, REACH);
       const blocked = rest.controls.filter((c) => !c.ok);

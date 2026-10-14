@@ -9,7 +9,6 @@ const arShellLabels = {
   'thread.header.collapse': 'طي الرأس',
   'thread.header.back.unread.one': 'رجوع — {count} رسالة غير مقروءة في مكان آخر',
   'thread.header.back.unread.other': 'رجوع — {count} رسائل غير مقروءة في أماكن أخرى',
-  'thread.header.search': 'البحث في المحادثة',
   'thread.header.details': 'تفاصيل المحادثة',
   'thread.scrollToBottom': 'التمرير إلى الأسفل',
   'thread.scrollToBottom.unread.one': '{count} رسالة غير مقروءة، التمرير إلى الأسفل',

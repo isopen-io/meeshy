@@ -9,7 +9,6 @@ const deShellLabels = {
   'thread.header.collapse': 'Kopfzeile zuklappen',
   'thread.header.back.unread.one': 'Zurück — {count} ungelesene Nachricht anderswo',
   'thread.header.back.unread.other': 'Zurück — {count} ungelesene Nachrichten anderswo',
-  'thread.header.search': 'In der Unterhaltung suchen',
   'thread.header.details': 'Details der Unterhaltung',
   'thread.scrollToBottom': 'Nach unten scrollen',
   'thread.scrollToBottom.unread.one': '{count} ungelesene Nachricht, Nach unten scrollen',

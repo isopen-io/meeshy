@@ -9,7 +9,6 @@ const esShellLabels = {
   'thread.header.collapse': 'Plegar la cabecera',
   'thread.header.back.unread.one': 'Atrás — {count} mensaje sin leer en otra parte',
   'thread.header.back.unread.other': 'Atrás — {count} mensajes sin leer en otra parte',
-  'thread.header.search': 'Buscar en la conversación',
   'thread.header.details': 'Detalles de la conversación',
   'thread.scrollToBottom': 'Desplazarse hasta abajo',
   'thread.scrollToBottom.unread.one': '{count} mensaje sin leer, Desplazarse hasta abajo',

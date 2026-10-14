@@ -776,11 +776,9 @@ struct ConversationView: View {
                     isStarred: viewModel.isStarred(messageId: msg.id),
                     isEdited: msg.isEdited,
                     hasEditRevisions: !viewModel.editRevisions(for: msg.id).isEmpty,
-                    // **La décoration du message, et son état d'épinglage**
-                    // (2026-09-05). `nil` ⇒ ce n'est pas un sticker, et
-                    // l'entrée n'existe pas — la loi 4 tenue par la RÈGLE, pas
-                    // par un grisé.
+                    // Décoration (épinglage, 2026-09-05) ; `nil` ⇒ pas un sticker (loi 4). #10630 : sticker + ajout.
                     stickerFavorite: MessageStickerFavorite.state(for: msg.sticker),
+                    isSticker: msg.sticker != nil, stickerAddable: ReceivedSticker.offersAdd(for: msg, known: ReceivedStickerLedger.shared.ids),
                     showReadReceipts: GuestViewerAccess.offersWhoSaw(prefersReadReceipts: UserPreferencesManager.shared.privacy.showReadReceipts, isGuest: anonymousSession != nil),
                     exits: msg.exitOffer, isViewOnce: msg.holdsViewOnce, isBlurred: msg.holdsBlur, hasPaintableMedia: !MessageCardSubject.paintableMedia(of: msg).isEmpty
                 )

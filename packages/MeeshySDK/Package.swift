@@ -49,6 +49,9 @@ let package = Package(
                 .product(name: "GRDB", package: "GRDB.swift"),
                 .product(name: "WebRTC", package: "WebRTC"),
             ],
+            resources: [
+                .copy("Resources/appearance-catalog.json"),
+            ],
             swiftSettings: coreSwiftSettings
         ),
         .target(

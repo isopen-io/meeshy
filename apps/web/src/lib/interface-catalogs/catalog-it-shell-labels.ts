@@ -9,7 +9,6 @@ const itShellLabels = {
   'thread.header.collapse': 'Comprimi l’intestazione',
   'thread.header.back.unread.one': 'Indietro — {count} messaggio non letto altrove',
   'thread.header.back.unread.other': 'Indietro — {count} messaggi non letti altrove',
-  'thread.header.search': 'Cerca nella conversazione',
   'thread.header.details': 'Dettagli della conversazione',
   'thread.scrollToBottom': 'Scorri in fondo',
   'thread.scrollToBottom.unread.one': '{count} messaggio non letto, Scorri in fondo',

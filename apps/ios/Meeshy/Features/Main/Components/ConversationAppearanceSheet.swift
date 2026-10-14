@@ -1,0 +1,272 @@
+import SwiftUI
+import MeeshySDK
+import MeeshyUI
+
+// MARK: - Fond et accent de la conversation (#10631, spec §§ 5.4, 9, 13)
+//
+// Le sélecteur PERSONNEL : Signature, les modèles du catalogue embarqué, une
+// couleur unie de la gamme, une photo envoyée dans la conversation (voile et
+// flou), et l'accent. Chaque choix s'applique au toucher ; un refus du serveur
+// le rétablit (`ConversationAppearanceViewModel`). Cibles ≥ 44 pt, nom localisé
+// et état « sélectionné » portés à VoiceOver.
+
+struct ConversationAppearanceSheet: View {
+    let accentColor: String
+
+    @StateObject private var viewModel: ConversationAppearanceViewModel
+    @StateObject private var media: ConversationMediaHubViewModel
+    @State private var veilDraft: Double = 0.3
+    @State private var blurDraft: Double = 0
+    @Environment(\.dismiss) private var dismiss
+    @Environment(\.colorScheme) private var colorScheme
+
+    private let catalog = AppearanceCatalog.shared
+    private let language = Locale.preferredLanguages.first ?? "fr"
+    private var isDark: Bool { colorScheme == .dark }
+    private var scheme: AppearanceScheme { isDark ? .dark : .light }
+    private var theme: ThemeManager { ThemeManager.shared }
+    private let columns = [GridItem(.adaptive(minimum: 72), spacing: MeeshySpacing.md)]
+
+    init(conversationId: String, initial: ConversationAppearance?, accentColor: String) {
+        self.accentColor = accentColor
+        _viewModel = StateObject(wrappedValue: ConversationAppearanceViewModel(conversationId: conversationId, initial: initial))
+        _media = StateObject(wrappedValue: ConversationMediaHubViewModel(conversationId: conversationId))
+    }
+
+    private var appearance: ConversationAppearance { viewModel.appearance }
+    private var effectiveAccent: String {
+        ConversationBackgroundResolution.effectiveAccentHex(appearance, computedHex: accentColor, isDark: isDark)
+    }
+
+    var body: some View {
+        NavigationStack {
+            ScrollView {
+                VStack(alignment: .leading, spacing: MeeshySpacing.xl) {
+                    modelsSection
+                    solidSection
+                    photoSection
+                    accentSection
+                    resetButton
+                    if let message = viewModel.errorMessage {
+                        Text(message)
+                            .font(MeeshyFont.relative(MeeshyFont.subheadSize))
+                            .foregroundColor(MeeshyColors.error)
+                    }
+                }
+                .padding(MeeshySpacing.xl)
+            }
+            .navigationTitle(String(localized: "conversation.appearance.sheet.title", defaultValue: "Fond et accent", bundle: .main))
+            .navigationBarTitleDisplayMode(.inline)
+            .toolbar {
+                ToolbarItem(placement: .confirmationAction) {
+                    Button(String(localized: "common.done", defaultValue: "Terminé", bundle: .main)) { dismiss() }
+                }
+            }
+        }
+        .task { media.select(.visual) }
+        .onReceive(NotificationCenter.default.publisher(for: ConversationAppearanceChange.notification)) { note in
+            if let remote = ConversationAppearanceChange.appearance(in: note, for: viewModel.conversationId) { viewModel.adopt(remote) }
+        }
+        .onAppear { syncDrafts() }
+    }
+
+    private func syncDrafts() {
+        guard let settings = viewModel.currentPhotoSettings else { return }
+        veilDraft = settings.veil
+        blurDraft = Double(settings.blur)
+    }
+
+    // MARK: Modèles
+
+    private var modelsSection: some View {
+        section(String(localized: "conversation.appearance.section.models", defaultValue: "Modèles", bundle: .main)) {
+            LazyVGrid(columns: columns, spacing: MeeshySpacing.md) {
+                tile(
+                    label: String(localized: "conversation.appearance.signature", defaultValue: "Signature", bundle: .main),
+                    selected: appearance.background == .signature
+                ) {
+                    LinearGradient(colors: [Color(hex: effectiveAccent).opacity(0.25), MeeshyColors.backgroundPrimary(isDark: isDark)], startPoint: .top, endPoint: .bottom)
+                } action: { viewModel.selectSignature() }
+
+                ForEach(catalog.wallpaperPacks) { pack in
+                    ForEach(pack.designs) { design in
+                        tile(
+                            label: catalog.designName(design.key, language: language) ?? design.key,
+                            selected: appearance.background == .design(pack: pack.slug, design: design.key)
+                        ) {
+                            AppearanceDesignView(design: design, isDark: isDark, accentHex: effectiveAccent).equatable()
+                        } action: { viewModel.selectDesign(pack: pack.slug, design: design.key) }
+                    }
+                }
+            }
+        }
+    }
+
+    // MARK: Couleur unie
+
+    private var solidSection: some View {
+        section(String(localized: "conversation.appearance.section.solid", defaultValue: "Couleur unie", bundle: .main)) {
+            LazyVGrid(columns: columns, spacing: MeeshySpacing.md) {
+                ForEach(catalog.gamut.entries) { entry in
+                    tile(
+                        label: catalog.gamutName(entry.key, language: language) ?? entry.name,
+                        selected: appearance.background == .solid(color: entry.key)
+                    ) {
+                        Color(hex: entry.shade(scheme).surface)
+                    } action: { viewModel.selectSolid(color: entry.key) }
+                }
+            }
+        }
+    }
+
+    // MARK: Photo
+
+    private var photoCandidates: [MessageAttachment] {
+        media.listing.items.compactMap { item -> MessageAttachment? in
+            guard case .attachment(let attachment) = item.payload,
+                  attachment.type == .image, !attachment.isViewOnce, !attachment.isBlurred else { return nil }
+            return attachment
+        }
+    }
+
+    private var photoSection: some View {
+        section(String(localized: "conversation.appearance.section.photo", defaultValue: "Photo de la conversation", bundle: .main)) {
+            if photoCandidates.isEmpty {
+                Text(String(localized: "conversation.appearance.photo.empty", defaultValue: "Aucune photo envoyée dans cette conversation", bundle: .main))
+                    .font(MeeshyFont.relative(MeeshyFont.subheadSize))
+                    .foregroundColor(theme.textMuted)
+            } else {
+                LazyVGrid(columns: columns, spacing: MeeshySpacing.md) {
+                    ForEach(photoCandidates, id: \.id) { attachment in
+                        tile(
+                            label: attachment.originalName,
+                            selected: isSelectedPhoto(attachment.id)
+                        ) {
+                            CachedAsyncImage(url: attachment.thumbnailUrl ?? attachment.fileUrl, targetSize: CGSize(width: 72, height: 96), thumbHash: attachment.thumbHash)
+                                .scaledToFill()
+                        } action: {
+                            viewModel.selectPhoto(
+                                attachmentId: attachment.id,
+                                photo: ConversationBackgroundPhoto(thumbnailUrl: attachment.thumbnailUrl, fullUrl: attachment.fileUrl, thumbHash: attachment.thumbHash)
+                            )
+                            syncDrafts()
+                        }
+                    }
+                }
+            }
+            if viewModel.currentPhotoSettings != nil {
+                photoSliders
+            }
+        }
+    }
+
+    private func isSelectedPhoto(_ id: String) -> Bool {
+        if case .photo(let selected, _, _) = appearance.background { return selected == id }
+        return false
+    }
+
+    private var photoSliders: some View {
+        VStack(alignment: .leading, spacing: MeeshySpacing.sm) {
+            Text(String(localized: "conversation.appearance.photo.veil", defaultValue: "Voile", bundle: .main))
+                .font(MeeshyFont.relative(MeeshyFont.subheadSize, weight: .semibold))
+            Slider(value: $veilDraft, in: 0...ConversationBackground.photoVeilMax, step: ConversationBackground.photoVeilStep) { editing in
+                if !editing { viewModel.setPhotoVeil(veilDraft) }
+            }
+            .accessibilityLabel(String(localized: "conversation.appearance.photo.veil", defaultValue: "Voile", bundle: .main))
+            Text(String(localized: "conversation.appearance.photo.blur", defaultValue: "Flou", bundle: .main))
+                .font(MeeshyFont.relative(MeeshyFont.subheadSize, weight: .semibold))
+            Slider(value: $blurDraft, in: 0...Double(ConversationBackground.photoBlurMax), step: 1) { editing in
+                if !editing { viewModel.setPhotoBlur(Int(blurDraft.rounded())) }
+            }
+            .accessibilityLabel(String(localized: "conversation.appearance.photo.blur", defaultValue: "Flou", bundle: .main))
+        }
+    }
+
+    // MARK: Accent
+
+    private var accentSection: some View {
+        section(String(localized: "conversation.appearance.section.accent", defaultValue: "Mon accent", bundle: .main)) {
+            LazyVGrid(columns: [GridItem(.adaptive(minimum: 48), spacing: MeeshySpacing.md)], spacing: MeeshySpacing.md) {
+                swatch(
+                    label: String(localized: "conversation.appearance.accent.auto", defaultValue: "Automatique", bundle: .main),
+                    selected: appearance.accent == nil
+                ) {
+                    ZStack {
+                        Circle().fill(Color(hex: accentColor))
+                        Image(systemName: "wand.and.stars").foregroundColor(.white).accessibilityHidden(true)
+                    }
+                } action: { viewModel.setAccent(nil) }
+
+                ForEach(catalog.gamut.entries) { entry in
+                    swatch(
+                        label: catalog.gamutName(entry.key, language: language) ?? entry.name,
+                        selected: appearance.accent == entry.key
+                    ) {
+                        Circle().fill(Color(hex: entry.shade(scheme).accent))
+                    } action: { viewModel.setAccent(entry.key) }
+                }
+            }
+        }
+    }
+
+    private var resetButton: some View {
+        Button(role: .destructive) {
+            viewModel.reset()
+            syncDrafts()
+        } label: {
+            Text(String(localized: "conversation.appearance.reset", defaultValue: "Rétablir Signature", bundle: .main))
+                .frame(maxWidth: .infinity, minHeight: 44)
+        }
+        .buttonStyle(.bordered)
+        .disabled(appearance.isDefault)
+    }
+
+    // MARK: Briques
+
+    private func section<Content: View>(_ title: String, @ViewBuilder content: () -> Content) -> some View {
+        VStack(alignment: .leading, spacing: MeeshySpacing.md) {
+            Text(title)
+                .font(MeeshyFont.relative(MeeshyFont.footnoteSize, weight: .bold, design: .rounded))
+                .foregroundColor(theme.textSecondary)
+                .accessibilityAddTraits(.isHeader)
+            content()
+        }
+    }
+
+    private func tile<Preview: View>(label: String, selected: Bool, @ViewBuilder preview: () -> Preview, action: @escaping () -> Void) -> some View {
+        Button(action: action) {
+            preview()
+                .frame(width: 72, height: 96)
+                .clipShape(RoundedRectangle(cornerRadius: MeeshyRadius.sm))
+                .overlay(
+                    RoundedRectangle(cornerRadius: MeeshyRadius.sm)
+                        .strokeBorder(selected ? Color(hex: effectiveAccent) : theme.textMuted.opacity(0.3), lineWidth: selected ? 3 : 1)
+                )
+                .overlay(alignment: .bottomTrailing) {
+                    if selected {
+                        Image(systemName: "checkmark.circle.fill")
+                            .foregroundColor(Color(hex: effectiveAccent))
+                            .background(Circle().fill(.white))
+                            .padding(4)
+                            .accessibilityHidden(true)
+                    }
+                }
+                .frame(minWidth: 44, minHeight: 44)
+        }
+        .buttonStyle(.plain)
+        .accessibilityLabel(label)
+        .accessibilityAddTraits(selected ? [.isButton, .isSelected] : .isButton)
+    }
+
+    private func swatch<Preview: View>(label: String, selected: Bool, @ViewBuilder preview: () -> Preview, action: @escaping () -> Void) -> some View {
+        Button(action: action) {
+            preview()
+                .frame(width: 40, height: 40)
+                .overlay(Circle().strokeBorder(selected ? theme.textPrimary : Color.clear, lineWidth: 3))
+                .frame(minWidth: 44, minHeight: 44)
+        }
+        .buttonStyle(.plain)
+        .accessibilityLabel(label)
+        .accessibilityAddTraits(selected ? [.isButton, .isSelected] : .isButton)
+    }
+}

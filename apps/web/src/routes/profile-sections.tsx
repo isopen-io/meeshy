@@ -3,11 +3,13 @@ import { useMemo, useState, type ReactNode } from 'react';
 import { getLanguageInfo } from '@meeshy/shared/utils/languages';
 
 import { Avatar, MoodPeekTarget } from '@/components/avatar';
+import { AvatarRing, ringBoxSize } from '@/components/avatar-ring';
 import { CHROME_ACTION_HIT_CLASS, ChromeActionDisc } from '@/components/chrome-action';
 import { Field } from '@/components/field';
 import { Glyph, GlyphSvg } from '@/components/glyph';
 import type { GlyphName } from '@/components/glyphs';
 import { PROFILE_GLYPHS, type ProfileGlyphName } from '@/components/glyphs-profile';
+import { ProfileBannerDesign, useScheme } from '@/components/profile-banner-design';
 import { ProfileImageButton, useProfileImageViewer } from '@/components/profile-image-viewer';
 import {
   GroupedSection,
@@ -21,6 +23,8 @@ import type { PendingRequests } from '@/lib/api/friend-requests';
 import { attachmentSrc } from '@/lib/api/media-url';
 import type { MaskedContact, MyProfile, MyStats, ProfileImageKind } from '@/lib/api/profile';
 import { translate, type InterfaceCatalogKey } from '@/lib/i18n-catalog';
+import { translateProfileDecor } from '@/lib/i18n-profile-decor-catalog';
+import { NO_DESIGNS, type DecorDesigns } from '@/lib/profile-decor/use-decor-designs';
 import type { InterfaceLanguage } from '@/lib/interface-language';
 import type { ProfileDraft } from '@/lib/view/profile-draft';
 import { Link } from '@/routes/route-table';
@@ -270,9 +274,12 @@ export function ProfileHero({
   game,
   mood,
   moodAuthorId,
+  decor = NO_DESIGNS,
 }: {
   readonly language: InterfaceLanguage;
   readonly profile: Pick<MyProfile, 'username' | 'displayName' | 'avatar' | 'banner'>;
+  /** Le contour et la bannière de design équipés (#10632) : une bannière de design prime sur l'image, le contour entoure l'avatar. */
+  readonly decor?: DecorDesigns;
   readonly editing: boolean;
   readonly pending: PendingImages;
   readonly onPick: (kind: ProfileImageKind) => void;
@@ -285,6 +292,9 @@ export function ProfileHero({
   readonly moodAuthorId?: string | undefined;
 }) {
   const name = profile.displayName ?? profile.username;
+  const scheme = useScheme();
+  const designedBanner = pending.banner === undefined ? decor.banner : null;
+  const ringExtra = decor.ring === null ? 0 : (ringBoxSize(90) - 90) / 2;
   const banner = pending.banner ?? profile.banner;
   const avatar = pending.avatar ?? profile.avatar;
   /* EN PLEIN ÉCRAN AU TOUCHER (#10092) — hors édition seulement : en édition,
@@ -313,7 +323,9 @@ export function ProfileHero({
         style={{ height: 120 }}
         aria-busy={pending.banner === undefined ? undefined : true}
       >
-        {banner === null ? (
+        {designedBanner !== null ? (
+          <ProfileBannerDesign design={designedBanner} accent={DECOR_ACCENT} scheme={scheme} />
+        ) : banner === null ? (
           <span
             aria-hidden="true"
             className="block size-full"
@@ -345,20 +357,22 @@ export function ProfileHero({
         ) : null}
         {pending.banner === undefined ? null : <UploadVeil language={language} kind="banner" round={false} onCancel={onCancelUpload} />}
       </div>
-      <div className="relative" style={{ marginTop: -45 }} aria-busy={pending.avatar === undefined ? undefined : true}>
+      <div className="relative" style={{ marginTop: -45 - ringExtra }} aria-busy={pending.avatar === undefined ? undefined : true}>
         <span className="block rounded-chip" style={{ padding: 4, backgroundColor: 'var(--color-ios-surface)' }}>
-          {viewable('avatar') ? (
-            <ProfileImageButton kind="avatar" onOpen={open} className="rounded-chip">
-              {avatarImage}
-            </ProfileImageButton>
-          ) : (
-            avatarImage
-          )}
+          <AvatarRing ring={decor.ring} size={90}>
+            {viewable('avatar') ? (
+              <ProfileImageButton kind="avatar" onOpen={open} className="rounded-chip">
+                {avatarImage}
+              </ProfileImageButton>
+            ) : (
+              avatarImage
+            )}
+          </AvatarRing>
         </span>
         {/* Sa cible est posée ICI, à côté du bouton de la photo : un bouton dans
             un bouton n'est pas du HTML valide. `inset` = le liseré de 4 px. */}
         {shownMood === undefined || moodAuthorId === undefined ? null : (
-          <MoodPeekTarget authorId={moodAuthorId} emoji={shownMood} name={name} size={90} inset={4} />
+          <MoodPeekTarget authorId={moodAuthorId} emoji={shownMood} name={name} size={90} inset={4 + ringExtra} />
         )}
         {editing && pending.avatar === undefined ? (
           <PickButton
@@ -662,6 +676,9 @@ export function StatsSection({ language, stats }: { readonly language: Interface
   );
 }
 
+/** L'accent des bannières de design sur MON profil : l'indigo de la marque, la couleur que mon profil porte déjà. */
+export const DECOR_ACCENT = '#6366F1';
+
 const ENTRY_CLASS = 'flex items-center gap-3 px-3.5 focus-visible:outline-2';
 
 export function ProgressionEntry({ language }: { readonly language: InterfaceLanguage }) {
@@ -685,6 +702,62 @@ export function ProgressionEntry({ language }: { readonly language: InterfaceLan
         <GlyphSvg glyph={PROFILE_GLYPHS.caretRight} size={12} className="rtl:-scale-x-100" />
       </span>
     </Link>
+  );
+}
+
+export type DecorEntrySide = 'banner' | 'avatarRing';
+
+const DECOR_ENTRIES = [
+  { side: 'banner', label: 'profileDecor.banner.entry', icon: 'image' },
+  { side: 'avatarRing', label: 'profileDecor.ring.entry', icon: 'user' },
+] as const satisfies readonly { readonly side: DecorEntrySide; readonly label: Parameters<typeof translateProfileDecor>[1]; readonly icon: GlyphName }[];
+
+/**
+ * **« BANNIÈRE » ET « CONTOUR »** (#10632, § 9) — deux entrées du profil qui
+ * ouvrent la feuille de choix (`profile-decor-sheet.tsx`). Absentes quand le
+ * serveur ne sert pas `profileDecor` (ancien serveur) : un contrôle sans effet
+ * n'existe pas. Hors ligne, elles restent lisibles mais ne s'ouvrent pas —
+ * jamais un choix qui ne partirait pas.
+ */
+export function DecorEntries({
+  language,
+  names,
+  disabled,
+  onOpen,
+}: {
+  readonly language: InterfaceLanguage;
+  /** Ce qui est équipé, dit en une ligne par côté : le nom du choix, ou rien. */
+  readonly names: Readonly<Record<DecorEntrySide, string | null>>;
+  readonly disabled: boolean;
+  readonly onOpen: (side: DecorEntrySide) => void;
+}) {
+  return (
+    <div data-profile-decor-entries className="grid gap-2">
+      {DECOR_ENTRIES.map(({ side, label, icon }) => (
+        <button
+          key={side}
+          type="button"
+          data-profile-decor-entry={side}
+          disabled={disabled}
+          onClick={() => onOpen(side)}
+          className={`${ENTRY_CLASS} rounded-card py-2.5 text-start disabled:opacity-45`}
+          style={{ ...CARD_STYLE, minHeight: 56, outlineColor: 'var(--color-ios-brand)' }}
+        >
+          <FieldIcon spec={{ set: 'socle', name: icon }} />
+          <span className="flex min-w-0 flex-1 flex-col gap-0.5">
+            <span className="text-body font-medium" style={{ color: INK }}>
+              {translateProfileDecor(language, label)}
+            </span>
+            <span className="truncate text-caption" style={{ color: INK_2 }}>
+              {names[side] ?? translateProfileDecor(language, side === 'banner' ? 'profileDecor.photo' : 'profileDecor.none')}
+            </span>
+          </span>
+          <span aria-hidden="true" style={{ color: INK_2 }}>
+            <GlyphSvg glyph={PROFILE_GLYPHS.caretRight} size={12} className="rtl:-scale-x-100" />
+          </span>
+        </button>
+      ))}
+    </div>
   );
 }
 

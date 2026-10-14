@@ -292,7 +292,7 @@ extension BubbleContent {
         // mixing two-or-more categories falls into `.mixed` which carries audio
         // alongside visual/nonMedia so legacy "image + audio + file" rendering
         // is preserved. `audio` carries ALL audio tracks of the message: one
-        // renders as the existing widget, several as `AudioCarouselView`.
+        // renders as the existing widget, several as `AudioStackView`.
         switch (visual.isEmpty, audio.isEmpty, nonMedia.isEmpty) {
         case (true, true, true):
             self.attachments = .none
@@ -404,7 +404,8 @@ extension BubbleContent {
             slots: sticker.slots,
             animation: sticker.animation,
             emoji: sticker.emoji,
-            picture: picture
+            picture: picture,
+            libraryStickerId: sticker.stickerId
         )
     }
 
