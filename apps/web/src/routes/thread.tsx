@@ -81,7 +81,7 @@ import { useThreadOpenScroll } from '@/lib/view/use-thread-open-scroll';
 import { threadAnchorOf } from '@/lib/view/thread-anchor';
 import { useThreadJump } from '@/lib/view/use-thread-jump';
 import { summaryExits } from '@/lib/view/summary-exits';
-import { ThreadMediaContext } from '@/lib/view/thread-media-context';
+import { ThreadMediaContext, useThreadMediaValue } from '@/lib/view/thread-media-context';
 import { ThreadMessageSheets } from './thread-sheets';
 import { ThreadModes } from './thread-modes';
 
@@ -502,10 +502,7 @@ export default function ThreadScreen({ preview, focus }: ThreadScreenProps = {})
    * visionneuse de TOUTE la conversation, et « Répondre » y arme la citation de
    * la PIÈCE ; valeur STABLE, lue par chaque grille de médias (`Attachments`).
    */
-  const threadMedia = useMemo(
-    () => ({ viewerId: viewer.id ?? '', onReplyToMedia: compose.setReplyToMedia }),
-    [viewer.id, compose.setReplyToMedia],
-  );
+  const threadMedia = useThreadMediaValue({ viewerId: viewer.id ?? '', onReplyToMedia: compose.setReplyToMedia, conversation });
 
   const messageMenu = useMessageMenu({
     conversationId,

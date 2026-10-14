@@ -255,6 +255,7 @@ export default function ViewerAudioPage({
         key={track.url}
         ref={bindAudio}
         preload="metadata"
+        data-np-attachment={attachment.id}
         data-viewer-audio-track={track.language}
         className="hidden"
         {...(track.url === '' ? {} : { src: attachmentSrc(track.url) })}
