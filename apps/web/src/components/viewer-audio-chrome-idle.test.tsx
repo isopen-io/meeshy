@@ -6,6 +6,7 @@ import { attachmentDefaults } from '@/lib/api/fixtures-base';
 import type { Attachment } from '@/lib/api/types';
 import { loadInterfaceCatalog } from '@/lib/i18n-catalog';
 import { dropCarriedAudio } from '@/lib/view/audio-carry';
+import { NO_MEDIA_OFFERS, type MediaViewerPage } from '@/lib/view/viewer-page-offers';
 import { ensureHappyDomRegistered, releaseHappyDomIfRegistered } from '@/test-support/happy-dom-environment';
 
 import MediaViewer from './media-viewer';
@@ -88,7 +89,7 @@ describe('MediaViewer — le chrome s’efface pendant l’écoute (#10629)', ()
       track?.dispatchEvent(new Event('play'));
     });
     await act(async () => {
-      await new Promise((resolve) => setTimeout(resolve, 4200));
+      await new Promise((resolve) => setTimeout(resolve, 3200));
     });
     expect(topBar()).toBe('hidden');
     await act(async () => {
@@ -96,12 +97,61 @@ describe('MediaViewer — le chrome s’efface pendant l’écoute (#10629)', ()
     });
     expect(topBar()).toBe('shown');
     await act(async () => {
-      await new Promise((resolve) => setTimeout(resolve, 4200));
+      await new Promise((resolve) => setTimeout(resolve, 3200));
     });
     expect(topBar()).toBe('hidden');
     act(() => {
       track?.dispatchEvent(new Event('pause'));
     });
     expect(topBar()).toBe('shown');
+  }, 12000);
+
+  const dialog = (): HTMLElement => document.body.querySelector<HTMLElement>('[data-media-viewer]')!;
+  const play = (): void => {
+    act(() => {
+      page()?.querySelector<HTMLAudioElement>('audio[data-viewer-audio-track]')?.dispatchEvent(new Event('play'));
+    });
+  };
+  const idleFor = () =>
+    act(async () => {
+      await new Promise((resolve) => setTimeout(resolve, 3200));
+    });
+  /** Un clic de SOURIS (`detail: 1`) — `button.click()` vaut une activation au clavier (`detail: 0`). */
+  const mouseClick = (element: Element | null): void => {
+    act(() => {
+      element?.dispatchEvent(new MouseEvent('click', { bubbles: true, detail: 1 }));
+    });
+  };
+
+  test('le focus tenu par la croix ne tombe pas dans le chrome inerte : il revient à la visionneuse, et Échap ferme toujours', async () => {
+    const closed: number[] = [];
+    mount(<MediaViewer items={[voice()]} startIndex={0} onClose={() => closed.push(1)} languages={['fr']} fallbackLanguage="en" />);
+    await until(() => page() !== null);
+    document.body.querySelector<HTMLButtonElement>('[data-viewer-top-bar] button')?.focus();
+    play();
+    await idleFor();
+    expect(topBar()).toBe('hidden');
+    expect(document.activeElement).toBe(dialog());
+    act(() => {
+      dialog().dispatchEvent(new KeyboardEvent('keydown', { key: 'Escape', bubbles: true }));
+    });
+    expect(closed).toEqual([1]);
+  }, 8000);
+
+  test('la rangée d’émojis ouverte tient le chrome à l’écran ; refermée, il s’efface de nouveau', async () => {
+    const item = voice();
+    const pageOf = (): MediaViewerPage => ({ attachment: item, messageId: '65f0a1b2c3d4e5f6a7b8c9d0', conversationId: 'c-a', offers: { ...NO_MEDIA_OFFERS, react: true } });
+    mount(<MediaViewer items={[item]} startIndex={0} onClose={() => {}} languages={['fr']} fallbackLanguage="en" actionsAt={pageOf} />);
+    await until(() => page() !== null && dialog().querySelector('[data-viewer-action="react"]') !== null);
+    mouseClick(dialog().querySelector('[data-viewer-action="react"]'));
+    expect(dialog().querySelector('[data-viewer-reactions]')).not.toBeNull();
+    play();
+    await idleFor();
+    expect(topBar()).toBe('shown');
+    expect(dialog().querySelector('[data-viewer-reactions]')).not.toBeNull();
+    mouseClick(dialog().querySelector('[data-viewer-action="react"]'));
+    expect(dialog().querySelector('[data-viewer-reactions]')).toBeNull();
+    await idleFor();
+    expect(topBar()).toBe('hidden');
   }, 12000);
 });

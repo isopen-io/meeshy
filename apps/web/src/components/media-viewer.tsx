@@ -615,8 +615,27 @@ export default function MediaViewer({
      se lit pas sous « Fermer », sa légende et la pellicule. Au navigateur, un
      double tap est aussi deux taps (la bascule plein cadre s'annule) : c'est
      l'état zoomé de la page COURANTE qui compte. */
-  const chromeIdle = useIdleChrome({ active: audioPage && audioPlaying });
+  /* UNE OUVERTURE GAGNE SUR L'EFFACEMENT (#10629, `FullscreenChromeState.autoHiding`
+     iOS) : la rangée d'émojis ou le menu « … » ouvert tient le chrome. L'état
+     est daté par la pièce : changer de page oublie ce qui visait la précédente. */
+  const [overlay, setOverlay] = useState<{ readonly attachmentId: string; readonly rail: boolean; readonly menu: boolean }>({ attachmentId: '', rail: false, menu: false });
+  const overlayChange =
+    (slot: 'rail' | 'menu', attachmentId: string) =>
+    (open: boolean): void =>
+      setOverlay((now) => ({ ...(now.attachmentId === attachmentId ? now : { attachmentId, rail: false, menu: false }), [slot]: open }));
+  const overlayHeld = overlay.attachmentId === current?.id && (overlay.rail || overlay.menu);
+  const chromeIdle = useIdleChrome({ active: audioPage && audioPlaying, held: overlayHeld });
   const chromeHidden = presentation.kind === 'full' || (zoomedId !== null && zoomedId === current?.id) || chromeIdle;
+  /* Un chrome effacé est INERTE : le focus qu'il tenait (la croix, posée à
+     l'ouverture) tomberait au `<body>`, hors de la visionneuse — Échap n'y
+     fermerait plus rien. Il revient à la visionneuse. */
+  useEffect(() => {
+    if (!chromeIdle) return;
+    const dialog = dialogRef.current;
+    const focused = document.activeElement;
+    const lost = focused === null || focused === document.body || (focused instanceof HTMLElement && focused.closest('[inert]') !== null);
+    if (dialog !== null && lost) dialog.focus({ preventScroll: true });
+  }, [chromeIdle]);
   if (current === undefined) return null;
 
   const identity = carrierIdentity(currentCarrier);
@@ -633,7 +652,16 @@ export default function MediaViewer({
       <div className="flex flex-col items-center gap-2">
         {page !== null && railOffered ? (
           <Suspense fallback={null}>
-            <ViewerMediaActions key={`rail:${current.id}`} slot="rail" page={page} language={language} onClose={onClose} announce={announce} hidden={chromeHidden} />
+            <ViewerMediaActions
+              key={`rail:${current.id}`}
+              slot="rail"
+              page={page}
+              language={language}
+              onClose={onClose}
+              announce={announce}
+              hidden={chromeHidden}
+              onOverlayChange={overlayChange('rail', current.id)}
+            />
           </Suspense>
         ) : null}
         {playsVideo ? <div ref={setRailSlot} data-viewer-video-controls="" className="flex flex-col items-center gap-2" /> : null}
@@ -680,7 +708,15 @@ export default function MediaViewer({
           ? {
               trailing: (
                 <Suspense fallback={null}>
-                  <ViewerMediaActions key={`menu:${current.id}`} slot="menu" page={page} language={language} onClose={onClose} announce={announce} />
+                  <ViewerMediaActions
+                    key={`menu:${current.id}`}
+                    slot="menu"
+                    page={page}
+                    language={language}
+                    onClose={onClose}
+                    announce={announce}
+                    onOverlayChange={overlayChange('menu', current.id)}
+                  />
                 </Suspense>
               ),
             }

@@ -4,7 +4,7 @@ import { afterAll, beforeAll, describe, expect, test } from 'bun:test';
 
 import { ensureHappyDomRegistered, releaseHappyDomIfRegistered } from '@/test-support/happy-dom-environment';
 
-import { useIdleChrome } from './use-idle-chrome';
+import { IDLE_CHROME_DELAY_MS, useIdleChrome } from './use-idle-chrome';
 
 const globals = globalThis as typeof globalThis & { IS_REACT_ACT_ENVIRONMENT?: boolean };
 
@@ -21,17 +21,22 @@ afterAll(async () => {
 
 const wait = (ms: number) => act(async () => new Promise<void>((resolve) => setTimeout(resolve, ms)));
 
-function Probe({ active }: { readonly active: boolean }) {
-  const idle = useIdleChrome({ active, delayMs: 30 });
+function Probe({ active, held = false }: { readonly active: boolean; readonly held?: boolean }) {
+  const idle = useIdleChrome({ active, held, delayMs: 30 });
   return <span data-idle={String(idle)} />;
 }
 
-const mount = (active: boolean) => {
+const mount = (active: boolean, held = false) => {
   const container = document.createElement('div');
   document.body.appendChild(container);
   const root = createRoot(container);
-  act(() => root.render(<Probe active={active} />));
-  return { idle: () => container.querySelector('[data-idle]')?.getAttribute('data-idle'), root, container, rerender: (next: boolean) => act(() => root.render(<Probe active={next} />)) };
+  act(() => root.render(<Probe active={active} held={held} />));
+  return {
+    idle: () => container.querySelector('[data-idle]')?.getAttribute('data-idle'),
+    root,
+    container,
+    rerender: (next: boolean, nextHeld = false) => act(() => root.render(<Probe active={next} held={nextHeld} />)),
+  };
 };
 
 describe('le chrome s’efface pendant l’écoute', () => {
@@ -65,13 +70,50 @@ describe('le chrome s’efface pendant l’écoute', () => {
     act(() => view.root.unmount());
   });
 
-  test('une touche du clavier le fait revenir', async () => {
+  test('une touche du clavier le fait revenir, et il ne s’efface plus : on pilote au clavier', async () => {
     const view = mount(true);
     await wait(60);
     await act(async () => {
       window.dispatchEvent(new Event('keydown'));
     });
     expect(view.idle()).toBe('false');
+    await wait(60);
+    expect(view.idle()).toBe('false');
     act(() => view.root.unmount());
+  });
+
+  test('une activation sans pointeur (lecteur d’écran, clavier : click.detail === 0) le garde à l’écran', async () => {
+    const view = mount(true);
+    await act(async () => {
+      window.dispatchEvent(new MouseEvent('click', { detail: 0 }));
+    });
+    await wait(60);
+    expect(view.idle()).toBe('false');
+    act(() => view.root.unmount());
+  });
+
+  test('un clic de souris ou un toucher ne le retient pas', async () => {
+    const view = mount(true);
+    await act(async () => {
+      window.dispatchEvent(new MouseEvent('click', { detail: 1 }));
+    });
+    await wait(60);
+    expect(view.idle()).toBe('true');
+    act(() => view.root.unmount());
+  });
+
+  test('une ouverture (rangée d’émojis, menu) le tient à l’écran, et sa fermeture relance le délai', async () => {
+    const view = mount(true, true);
+    await wait(60);
+    expect(view.idle()).toBe('false');
+    view.rerender(true, false);
+    expect(view.idle()).toBe('false');
+    await wait(60);
+    expect(view.idle()).toBe('true');
+    act(() => view.root.unmount());
+  });
+
+  test('le délai est celui d’iOS (FullscreenChromeMetrics.autoHideDelay = 3 s)', () => {
+    expect(IDLE_CHROME_DELAY_MS).toBe(3000);
   });
 });
