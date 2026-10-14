@@ -12,6 +12,7 @@ import { describe, it, expect, beforeEach, afterEach, jest } from '@jest/globals
 import conversationPreferencesRoutes from '../../../routes/conversation-preferences';
 import { conversationListResponseSchema } from '@meeshy/shared/types/api-schemas';
 import { buildPackIndex } from '../../../services/packs/PackIndex';
+import { MESSAGE_EFFECT_FLAGS } from '@meeshy/shared/types/message-effect-flags';
 
 const USER = '507f1f77bcf86cd799439011';
 const CONVERSATION = '507f1f77bcf86cd799439abc';
@@ -32,10 +33,10 @@ const INDEX = buildPackIndex({
 });
 
 type Row = Record<string, unknown>;
-type Attachment = { mimeType: string; isViewOnce: boolean; isBlurred: boolean; viewOnceBurnedAt: Date | null; message: Row };
+type Attachment = { mimeType: string; isViewOnce: boolean; isBlurred: boolean; effectFlags: number; viewOnceBurnedAt: Date | null; message: Row };
 const photo = (over: Partial<Attachment> = {}, message: Row = {}): Attachment => ({
-  mimeType: 'image/jpeg', isViewOnce: false, isBlurred: false, viewOnceBurnedAt: null,
-  message: { conversationId: CONVERSATION, deletedAt: null, expiresAt: null, isViewOnce: false, isBlurred: false, ...message },
+  mimeType: 'image/jpeg', isViewOnce: false, isBlurred: false, effectFlags: 0, viewOnceBurnedAt: null,
+  message: { conversationId: CONVERSATION, deletedAt: null, expiresAt: null, ephemeralDuration: null, isViewOnce: false, isBlurred: false, effectFlags: 0, ...message },
   ...over,
 });
 const PHOTO_OK = '507f1f77bcf86cd799439f01';
@@ -44,6 +45,11 @@ const PHOTO_VIEW_ONCE = '507f1f77bcf86cd799439f03';
 const PHOTO_EPHEMERAL = '507f1f77bcf86cd799439f04';
 const PHOTO_BLURRED = '507f1f77bcf86cd799439f05';
 const PHOTO_VIDEO = '507f1f77bcf86cd799439f06';
+const PHOTO_FLAGGED_VIEW_ONCE = '507f1f77bcf86cd799439f07';
+const PHOTO_IN_FLAGGED_EPHEMERAL = '507f1f77bcf86cd799439f08';
+const PHOTO_IN_TIMED_MESSAGE = '507f1f77bcf86cd799439f09';
+const PHOTO_IN_FLAGGED_BLURRED = '507f1f77bcf86cd799439f0a';
+const PHOTO_NOT_MINE = '507f1f77bcf86cd799439f0b';
 
 const attachments: Record<string, Attachment> = {
   [PHOTO_OK]: photo(),
@@ -52,6 +58,11 @@ const attachments: Record<string, Attachment> = {
   [PHOTO_EPHEMERAL]: photo({}, { expiresAt: new Date('2030-01-01') }),
   [PHOTO_BLURRED]: photo({ isBlurred: true }),
   [PHOTO_VIDEO]: photo({ mimeType: 'video/mp4' }),
+  [PHOTO_FLAGGED_VIEW_ONCE]: photo({ effectFlags: MESSAGE_EFFECT_FLAGS.VIEW_ONCE }),
+  [PHOTO_IN_FLAGGED_EPHEMERAL]: photo({}, { effectFlags: MESSAGE_EFFECT_FLAGS.EPHEMERAL | MESSAGE_EFFECT_FLAGS.EPHEMERAL_AFTER_READ }),
+  [PHOTO_IN_TIMED_MESSAGE]: photo({}, { ephemeralDuration: 30 }),
+  [PHOTO_IN_FLAGGED_BLURRED]: photo({}, { effectFlags: MESSAGE_EFFECT_FLAGS.BLURRED }),
+  [PHOTO_NOT_MINE]: photo({}, { conversationId: NOT_MINE }),
 };
 
 function build(options: { owns?: readonly string[] } = {}) {
@@ -188,6 +199,10 @@ describe('PUT /user-preferences/conversations/:id — appearance', () => {
       ['floutée', PHOTO_BLURRED],
       ['qui n’est pas une image', PHOTO_VIDEO],
       ['inexistante', '507f1f77bcf86cd799439fff'],
+      ['à vue unique par son seul bitfield', PHOTO_FLAGGED_VIEW_ONCE],
+      ['d’un message éphémère par son seul bitfield', PHOTO_IN_FLAGGED_EPHEMERAL],
+      ['d’un message à durée éphémère pas encore lu', PHOTO_IN_TIMED_MESSAGE],
+      ['d’un message flouté par son seul bitfield', PHOTO_IN_FLAGGED_BLURRED],
     ])('refuse une pièce %s : 404 ATTACHMENT_NOT_AVAILABLE, sans distinguer les causes', async (_label, id) => {
       const response = await put(photoBackground(id));
 
@@ -195,6 +210,17 @@ describe('PUT /user-preferences/conversations/:id — appearance', () => {
       expect(response.json().code).toBe('ATTACHMENT_NOT_AVAILABLE');
       expect(env.rows.size).toBe(0);
     });
+  });
+
+  it.each([
+    ['une image de cette conversation', PHOTO_NOT_MINE],
+    ['une pièce inexistante', '507f1f77bcf86cd799439fff'],
+  ])('un non-membre reçoit 403 pour %s : la photo ne s’examine qu’après l’appartenance (aucun oracle)', async (_label, id) => {
+    const response = await put(appearance({ kind: 'photo', attachmentId: id, veil: 0.3, blur: 8 }), NOT_MINE);
+
+    expect(response.statusCode).toBe(403);
+    expect(env.prisma.messageAttachment.findUnique).not.toHaveBeenCalled();
+    expect(env.rows.size).toBe(0);
   });
 
   it('refuse un non-membre (403) sans rien écrire', async () => {

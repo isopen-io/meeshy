@@ -368,6 +368,7 @@ export default async function conversationPreferencesRoutes(fastify: FastifyInst
     if (outcome.kind === 'ok') return { kind: 'write', value: outcome.appearance };
     if (outcome.kind === 'invalid') return { kind: 'refused', send: (reply) => sendError(reply, 400, 'Invalid appearance', { code: 'INVALID_APPEARANCE' }) };
     if (outcome.kind === 'not-owned') return { kind: 'refused', send: (reply) => sendForbidden(reply, 'Pack not owned', { code: PACK_NOT_OWNED_CODE }) };
+    if (outcome.kind === 'not-a-participant') return { kind: 'refused', send: (reply) => sendForbidden(reply, 'Not a member of this conversation') };
     return { kind: 'refused', send: (reply) => sendNotFound(reply, 'Attachment not available', { code: 'ATTACHMENT_NOT_AVAILABLE' }) };
   };
 

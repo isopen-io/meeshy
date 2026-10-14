@@ -88,9 +88,8 @@ import type { FastifyReply, FastifyRequest } from 'fastify';
 import type { PrismaClient } from '@meeshy/shared/prisma/client';
 import { userSchema, errorResponseSchema } from '@meeshy/shared/types/api-schemas';
 import { servedUserPermissions } from '../../services/admin/served-permissions';
-import { servedProfileDecor } from '../../services/appearance/profileDecor';
+import { servedProfileDecor, servedProfileDecorItemJsonSchema } from '../../services/appearance/profileDecor';
 import { startupPackIndex } from '../../services/packs/PackIndex';
-import { servedProfileDecorItemJsonSchema } from './profile-decor';
 import { EMPTY_PROFILE_DECOR } from '@meeshy/shared/types/profile-decor';
 import {
   loadAutoTranslateEnabled,

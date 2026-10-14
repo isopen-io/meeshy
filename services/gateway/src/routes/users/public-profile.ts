@@ -3,7 +3,7 @@ import { isValidObjectId } from '@meeshy/shared/utils/object-id';
 import { sendNotFound } from '../../utils/response';
 import { selectForFields, type ColumnPlan, type FieldSet } from '../../utils/sparse-fieldset';
 import { gateProfilePresence } from './presence-gate';
-import { servedProfileDecor } from '../../services/appearance/profileDecor';
+import { servedProfileDecor, servedProfileDecorItemJsonSchema } from '../../services/appearance/profileDecor';
 import { startupPackIndex } from '../../services/packs/PackIndex';
 import { targetHasBlockedViewer } from './profile-block-gate';
 import { isGuestViewer, sendAccountRequired, type GuestViewerContext } from '../../services/guests/guestMemberVisibility';
@@ -89,17 +89,6 @@ export function withVoiceFields<T extends { voiceModel?: VoiceModelFields | null
  * l'un sans l'autre est soit chargé et supprimé (inutile), soit déclaré et
  * absent (menteur).
  */
-const decorItemSchema = {
-  type: 'object',
-  nullable: true,
-  properties: {
-    pack: { type: 'string' },
-    item: { type: 'string' },
-    origin: { type: 'string' },
-    contract: { type: 'string', nullable: true },
-  },
-} as const;
-
 export const publicProfileSchema = {
   type: 'object',
   properties: {
@@ -125,8 +114,8 @@ export const publicProfileSchema = {
     profileDecor: {
       type: 'object',
       properties: {
-        avatarRing: decorItemSchema,
-        banner: decorItemSchema,
+        avatarRing: servedProfileDecorItemJsonSchema,
+        banner: servedProfileDecorItemJsonSchema,
       },
     },
   },

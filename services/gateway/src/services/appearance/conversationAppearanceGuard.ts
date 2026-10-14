@@ -7,17 +7,21 @@
  *      est dans son contrat, et le lecteur le POSSÈDE (`isPackOwned`) — sinon
  *      403 `PACK_NOT_OWNED`, un pack inconnu compris (on ne confirme pas son
  *      existence) ;
- *   3. `photo` : la pièce jointe existe, appartient à un message de CETTE
- *      conversation, ni supprimé, ni éphémère, ni à vue unique, ni flouté, et
- *      c'est une image non purgée — sinon 404 `ATTACHMENT_NOT_AVAILABLE`, sans
+ *   3. `photo` : le lecteur est d'abord MEMBRE de la conversation (sinon 403
+ *      `not-a-participant`, avant toute lecture de la pièce — un non-membre ne
+ *      doit pas pouvoir sonder quelles pièces vivent où) ; puis la pièce jointe
+ *      existe, appartient à un message de CETTE conversation, ni supprimé, ni
+ *      éphémère, ni à vue unique, ni flouté (colonnes ET bitfield), et c'est
+ *      une image non purgée — sinon 404 `ATTACHMENT_NOT_AVAILABLE`, sans
  *      distinguer les causes. Le serveur ne stocke QUE l'identifiant (E2EE
  *      compris : la pièce peut être chiffrée).
  *
- * L'appartenance du lecteur à la conversation reste vérifiée par l'écrivain
- * unique (`not-a-participant`).
+ * L'appartenance reste AUSSI vérifiée par l'écrivain unique, pour tout fond.
  */
 import type { PrismaClient } from '@meeshy/shared/prisma/client';
 import { isPackOwned } from '@meeshy/shared/types/content-pack';
+import { maskedAttachment } from '@meeshy/shared/utils/attachment-protection';
+import { messageProtection } from '@meeshy/shared/utils/message-protection';
 import { parseConversationAppearance, type ConversationAppearance } from '@meeshy/shared/types/conversation-appearance';
 import type { PackIndex } from '../packs/PackIndex';
 
@@ -25,7 +29,8 @@ export type AppearanceGuardOutcome =
   | { readonly kind: 'ok'; readonly appearance: ConversationAppearance }
   | { readonly kind: 'invalid' }
   | { readonly kind: 'not-owned' }
-  | { readonly kind: 'attachment-unavailable' };
+  | { readonly kind: 'attachment-unavailable' }
+  | { readonly kind: 'not-a-participant' };
 
 export type AppearanceGuardParams = {
   readonly prisma: PrismaClient;
@@ -45,6 +50,16 @@ async function designOwned({ prisma, index, userId }: AppearanceGuardParams, pac
   return isPackOwned({ domain: 'wallpaper', slug: pack, price: entry.price }, new Set(rows.map((row) => row.packKey)));
 }
 
+async function isMember({ prisma, userId, conversationId }: AppearanceGuardParams): Promise<boolean> {
+  return (await prisma.participant.findFirst({ where: { userId, conversationId, isActive: true }, select: { id: true } })) !== null;
+}
+
+/**
+ * La protection se lit par les DEUX lois partagées, jamais par une liste de
+ * colonnes recopiée : `messageProtection` (colonnes ET bitfield, durée
+ * éphémère comprise) au niveau du message, `maskedAttachment` à celui de la
+ * pièce. Le chiffrement n'est pas un refus : le serveur ne garde que l'id.
+ */
 async function photoAvailable({ prisma, conversationId }: AppearanceGuardParams, attachmentId: string): Promise<boolean> {
   const attachment = await prisma.messageAttachment.findUnique({
     where: { id: attachmentId },
@@ -52,21 +67,22 @@ async function photoAvailable({ prisma, conversationId }: AppearanceGuardParams,
       mimeType: true,
       isViewOnce: true,
       isBlurred: true,
+      effectFlags: true,
       viewOnceBurnedAt: true,
-      message: { select: { conversationId: true, deletedAt: true, expiresAt: true, isViewOnce: true, isBlurred: true } },
+      message: { select: { conversationId: true, deletedAt: true, expiresAt: true, ephemeralDuration: true, isViewOnce: true, isBlurred: true, effectFlags: true } },
     },
   });
   const message = attachment?.message;
   if (!attachment || !message) return false;
+  const protection = messageProtection(message);
   return (
     message.conversationId === conversationId &&
     message.deletedAt == null &&
-    message.expiresAt == null &&
-    !message.isViewOnce &&
-    !message.isBlurred &&
+    !protection.ephemeral &&
+    !protection.viewOnce &&
+    !protection.blurred &&
     attachment.mimeType.startsWith('image/') &&
-    !attachment.isViewOnce &&
-    !attachment.isBlurred &&
+    !maskedAttachment(attachment) &&
     attachment.viewOnceBurnedAt == null
   );
 }
@@ -76,6 +92,8 @@ export async function validateConversationAppearance(params: AppearanceGuardPara
   if (appearance === null) return { kind: 'invalid' };
   const { background } = appearance;
   if (background.kind === 'design') return (await designOwned(params, background.pack, background.design)) ? ok(appearance) : { kind: 'not-owned' };
-  if (background.kind === 'photo') return (await photoAvailable(params, background.attachmentId)) ? ok(appearance) : { kind: 'attachment-unavailable' };
+  if (background.kind !== 'photo') return ok(appearance);
+  if (!(await isMember(params))) return { kind: 'not-a-participant' };
+  return (await photoAvailable(params, background.attachmentId)) ? ok(appearance) : { kind: 'attachment-unavailable' };
   return ok(appearance);
 }

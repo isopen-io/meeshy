@@ -12,7 +12,7 @@ import { SERVER_EVENTS } from '@meeshy/shared/types/socketio-events';
 
 import type { UnifiedAuthRequest } from '../../middleware/auth';
 import { PACK_NOT_OWNED_CODE } from '../pack-routes';
-import { servedProfileDecor, validateProfileDecorWrite } from '../../services/appearance/profileDecor';
+import { servedProfileDecor, servedProfileDecorItemJsonSchema, validateProfileDecorWrite } from '../../services/appearance/profileDecor';
 import { startupPackIndex, type PackIndex } from '../../services/packs/PackIndex';
 import { AUTH_ERROR_CODES } from '../../utils/auth-error-codes';
 import { logError } from '../../utils/logger';
@@ -29,11 +29,6 @@ const refJsonSchema = {
   properties: { pack: { type: 'string', maxLength: 24 }, item: { type: 'string', maxLength: 24 } },
 } as const;
 
-export const servedProfileDecorItemJsonSchema = {
-  type: 'object',
-  nullable: true,
-  properties: { pack: { type: 'string' }, item: { type: 'string' }, origin: { type: 'string' }, contract: { type: 'string', nullable: true } },
-} as const;
 
 export const servedProfileDecorJsonSchema = {
   type: 'object',

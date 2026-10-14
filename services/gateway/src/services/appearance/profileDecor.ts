@@ -23,6 +23,13 @@ import {
 } from '@meeshy/shared/types/profile-decor';
 import type { PackIndex } from '../packs/PackIndex';
 
+/** La forme SERVIE d'un élément de décor, déclarée UNE fois pour `/me`, `PUT /me/profile-decor` et le profil public. */
+export const servedProfileDecorItemJsonSchema = {
+  type: 'object',
+  nullable: true,
+  properties: { pack: { type: 'string' }, item: { type: 'string' }, origin: { type: 'string' }, contract: { type: 'string', nullable: true } },
+} as const;
+
 export type StoredProfileDecor = { readonly equippedAvatarRing?: string | null; readonly equippedBanner?: string | null };
 
 const resolveEntry = (index: PackIndex, domain: PackDomain, ref: ProfileDecorRef): PackIndexEntry | undefined => {
