@@ -21,10 +21,14 @@ const en = {
   'listFilter.all': 'All',
   'listFilter.unread': 'Unread',
   'listFilter.favorites': 'Favorites',
-  'listFilter.groups': 'Groups',
-  'listFilter.directs': 'Direct',
+  'listFilter.personal': 'Personal',
+  'listFilter.private': 'Private',
+  'listFilter.open': 'Open',
+  'listFilter.global': 'Global',
+  'listFilter.channels': 'Channels',
   'listFilter.pinned': 'Pinned',
   'listFilter.archived': 'Archived',
+  'listRow.muted': 'Muted',
 } as const satisfies RowMenuCatalog;
 
 export default en;

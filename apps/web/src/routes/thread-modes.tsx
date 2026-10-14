@@ -24,7 +24,7 @@ import type { Viewer } from '@/lib/api/viewer';
 import { dayLabel, type PlacedMessage } from '@/lib/grouping';
 import type { ConversationEpisode, FaceRampEntry } from '@/lib/summary/types';
 import { currentInterfaceLanguage } from '@/lib/interface-language';
-import type { useLongPress } from '@/lib/view/long-press';
+import type { MessageMenuController } from '@/lib/view/use-message-menu';
 import { checkStatusOf, isMineOf } from '@/lib/view/message';
 import type { LocalDelivery } from '@/lib/view/message';
 import { unreadSeparatorLabel } from '@/lib/view/unread-separator';
@@ -264,7 +264,8 @@ export function ThreadModes({
   readonly rowNoteOf?: (messageId: string) => ReactNode;
   readonly selection?: SelectionState | null;
   readonly onRowTap?: (messageId: string) => void;
-  readonly longPress?: ReturnType<typeof useLongPress>;
+  /** Les gestes d'une rangée : l'appui long (menu) et le double toucher (réaction, #10599). */
+  readonly longPress?: MessageMenuController['longPress'];
   /** Glisser → répondre, ← transférer, et l'icône « Répondre » du pointeur
    * fin (#7559, #8899) — l'offre et l'effet du MENU (`useMessageMenu`). */
   readonly swipeActionsOf?: (message: Message) => { readonly canReply: boolean; readonly canForward: boolean } | undefined;

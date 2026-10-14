@@ -16,6 +16,7 @@ import { conversationRowSwipeSides } from '@/lib/view/conversation-row-swipe';
 import { isRowCallAction, isRowFlagAction, type RowActionId, type RowFlagActionId, type RowIntent, type RowMenuMore } from '@/lib/view/row-actions';
 import { requestDeparture } from '@/lib/conversation-departure';
 import { useSpeaksAsGuest } from '@/lib/view/guest-focus';
+import type { AuthorStoryRing } from '@/lib/view/author-story-ring';
 import { conversationAvatarDoor } from '@/lib/view/thread-header-offer';
 import { currentInterfaceLanguage } from '@/lib/interface-language';
 import { avatarOf, initialsOf, isGroup, peerOf, titleOf } from '@/lib/view/conversation';
@@ -159,6 +160,13 @@ export type LensRowProps = {
   /** Le post de ce mood — ce que l'avatar compte quand il le montre (#10483). */
   peerMoodPostId?: string | undefined;
   /**
+   * L'ANNEAU DES STORIES DU PAIR D'UN DIRECT (#10598) — lu par l'écran dans le
+   * corpus du rail (`authorStoryRing`, aucune requête de plus), miroir de
+   * `LentilleConversationRow.storyRingState`. Non vue, l'avatar ouvre la story
+   * (`identityTarget`) ; vue, il garde le profil. Un groupe l'ignore.
+   */
+  peerStoryRing?: AuthorStoryRing | undefined;
+  /**
    * « N (M) 🔥 » (#8906) — l'état d'engagement EFFECTIF de la conversation pour
    * le lecteur (servi + direct, `effectiveEngagementOf`), distribué par
    * l'écran. Rendu à côté de l'heure, hors de la rangée ÉLUE, et comme elle
@@ -189,6 +197,7 @@ function LensRowImpl({
   peerFocused = false,
   peerMood,
   peerMoodPostId,
+  peerStoryRing,
   engagement,
   interfaceLanguage,
   now,
@@ -458,6 +467,7 @@ function LensRowImpl({
             profileUsername={peerHandle}
             {...(photo === undefined ? {} : { src: photo })}
             {...peerSignals}
+            {...(group || peerStoryRing === undefined ? {} : { storyRing: peerStoryRing })}
             {...(peerMoodAuthor === undefined ? {} : { moodAuthorId: peerMoodAuthor })}
           />
         )}
@@ -557,13 +567,15 @@ function LensRowImpl({
             {flags.isPinned ? (
               <Glyph name="pushPin" size={12} title="Épinglée" style={{ color: 'var(--color-ios-ink-3)', opacity: chromeFade }} />
             ) : null}
-            {/* La sourdine, elle, ne prend PAS de glyphe : la peau Lentille la
-                rend par le seul fondu du CHROME (`chromeFade`, ci-dessus —
-                « pas de glyphe cloche sur le rang plat »). Une opacité n'est
-                lisible que par l'œil — le lecteur d'écran, lui, a besoin du
-                mot, et le texte hors écran est le seul porteur qui n'ajoute
-                aucun pixel ; il n'a donc, lui, aucune raison de se fondre. */}
-            {flags.isMuted ? <span className="sr-only">En sourdine</span> : null}
+            {/* LA SOURDINE SE VOIT (#10598) — la cloche barrée après le nom,
+                miroir du 🔕 d'iOS (`LentilleConversationRow.swift:262`) : le
+                fondu du chrome seul ne se lisait pas. Le glyphe porte le mot,
+                pour le lecteur d'écran. */}
+            {flags.isMuted ? (
+              <span data-muted className="flex shrink-0" style={{ opacity: chromeFade }}>
+                <Glyph name="bellSlash" size={12} title={rowMenuText(currentInterfaceLanguage(), 'listRow.muted')} style={{ color: 'var(--color-ios-ink-3)' }} />
+              </span>
+            ) : null}
             {/*
               LA PILE DE NON-LUS FINIT LA LIGNE DU NOM (#6080) — et l'HEURE a
               quitté cette ligne.
@@ -763,6 +775,7 @@ export function sameRowProps(prev: LensRowProps, next: LensRowProps): boolean {
   if ((prev.peerFocused ?? false) !== (next.peerFocused ?? false)) return false;
   if (prev.peerMood !== next.peerMood) return false;
   if (prev.peerMoodPostId !== next.peerMoodPostId) return false;
+  if (prev.peerStoryRing?.entryStoryId !== next.peerStoryRing?.entryStoryId || prev.peerStoryRing?.unseen !== next.peerStoryRing?.unseen) return false;
   /* L'instantané d'engagement (#8906) — comparé par RÉFÉRENCE : il vient du
      magasin ou de la charge, stables tant qu'aucun geste n'est crédité. */
   if (prev.engagement !== next.engagement) return false;
