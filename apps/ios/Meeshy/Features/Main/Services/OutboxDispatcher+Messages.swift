@@ -182,6 +182,7 @@ extension OutboxDispatcher {
                 let uploader = TusUploadManager(baseURL: baseURL)
                 var uploadedIds: [String] = []
                 var uploadedPaths: [String] = []
+                var firstUploadErrorAudio: Error?
 
                 for stored in pendingAudioPaths {
                     let absolutePath = OfflineQueue.absoluteAudioPath(forStored: stored)
@@ -199,10 +200,15 @@ extension OutboxDispatcher {
                         uploadedPaths.append(absolutePath)
                     } catch {
                         logger.error("Audio track TUS upload failed (best-effort skip): \(error.localizedDescription, privacy: .public)")
+                        if firstUploadErrorAudio == nil { firstUploadErrorAudio = error }
                     }
                 }
 
                 guard !uploadedIds.isEmpty else {
+                    // Rien n'est monté : l'erreur d'ORIGINE remonte. Remplacée par un 503 maison, le flusher
+                    // n'y reconnaissait ni coupure ni refus d'authentification, épuisait la ligne en trente
+                    // secondes et supprimait les fichiers — un vocal n'existe nulle part ailleurs.
+                    if let firstUploadErrorAudio { throw firstUploadErrorAudio }
                     throw NSError(
                         domain: "OutboxDispatcher",
                         code: 503,
@@ -254,6 +260,7 @@ extension OutboxDispatcher {
                 let uploader = TusUploadManager(baseURL: baseURL)
                 var uploadedIds: [String] = []
                 var uploadedPaths: [String] = []
+                var firstUploadErrorMedia: Error?
 
                 for stored in pendingMediaPaths {
                     let absolutePath = OfflineQueue.absoluteMediaPath(forStored: stored)
@@ -273,10 +280,15 @@ extension OutboxDispatcher {
                         uploadedPaths.append(absolutePath)
                     } catch {
                         logger.error("Media TUS upload failed (best-effort skip): \(error.localizedDescription, privacy: .public)")
+                        if firstUploadErrorMedia == nil { firstUploadErrorMedia = error }
                     }
                 }
 
                 guard !uploadedIds.isEmpty else {
+                    // Rien n'est monté : l'erreur d'ORIGINE remonte. Remplacée par un 503 maison, le flusher
+                    // n'y reconnaissait ni coupure ni refus d'authentification, épuisait la ligne en trente
+                    // secondes et supprimait les fichiers — un vocal n'existe nulle part ailleurs.
+                    if let firstUploadErrorMedia { throw firstUploadErrorMedia }
                     throw NSError(
                         domain: "OutboxDispatcher",
                         code: 503,
