@@ -54,7 +54,7 @@ const REGISTRY = [
   entry('avatar-ring', 'contours', { origin: 'builtin', installedByDefault: true, removable: false, usage: { kind: 'free', surfaces: ['avatar'] } }),
 ];
 
-async function shopApp() {
+async function shopApp(extra: readonly ReturnType<typeof entry>[] = []) {
   const db = appearancePrisma();
   const emitted: Emitted[] = [];
   const io = { to: (room: string) => ({ emit: (event: string, payload: unknown) => void emitted.push({ room, event, payload }) }) };
@@ -65,7 +65,7 @@ async function shopApp() {
     const userId = typeof request.headers['x-user'] === 'string' ? request.headers['x-user'] : ALICE;
     (request as unknown as Record<string, unknown>).authContext = { type: 'user', isAuthenticated: true, isAnonymous: false, userId, registeredUser: { id: userId, role: 'USER' } };
   });
-  const index = buildPackIndex({ registries: [REGISTRY], retained: [] });
+  const index = buildPackIndex({ registries: [[...REGISTRY, ...extra]], retained: [] });
   await app.register(wallpaperPacksRoutes, { prefix: '/packs/wallpaper', index });
   await app.register(avatarRingPacksRoutes, { prefix: '/packs/avatar-ring', index });
   await app.register(bannerPacksRoutes, { prefix: '/packs/banner', index });
@@ -143,6 +143,48 @@ describe('achat en Meeshes', () => {
     expect((await purchase(app, 'prestige', 'geste-0007')).json().code).toBe('PACK_ALREADY_OWNED');
     expect((await purchase(app, 'inconnu', 'geste-0008')).statusCode).toBe(404);
     expect(db.ledger.filter((line) => line.reason === 'spend')).toHaveLength(1);
+  });
+
+  it('refuse 409 REQUEST_ID_CONFLICT un requestId déjà dépensé pour un AUTRE pack, sans le déclarer possédé', async () => {
+    const { app, db } = await shopApp([entry('wallpaper', 'luxe', { order: 3, price: 20 })]);
+    db.grant(ALICE, 200);
+    await purchase(app, 'prestige', 'geste-0011');
+
+    const reused = await purchase(app, 'luxe', 'geste-0011');
+    const shop = (await app.inject({ method: 'GET', url: '/packs/wallpaper' })).json().data;
+
+    expect(reused.statusCode).toBe(409);
+    expect(reused.json().code).toBe('REQUEST_ID_CONFLICT');
+    expect(shop.find((pack: { slug: string }) => pack.slug === 'luxe')).toMatchObject({ owned: false });
+    expect(db.ledger.filter((line) => line.reason === 'spend')).toHaveLength(1);
+  });
+
+  it('refuse 409 REQUEST_ID_CONFLICT un requestId déjà porté par une autre dépense du registre, jamais un 500', async () => {
+    const { app, db } = await shopApp();
+    db.grant(ALICE, 200);
+    db.ledger.push({ id: 'gel', userId: ALICE, delta: -5, reason: 'spend', requestId: 'geste-0012', meta: { kind: 'flame-freeze', price: 5 } });
+
+    const response = await purchase(app, 'prestige', 'geste-0012');
+
+    expect(response.statusCode).toBe(409);
+    expect(response.json().code).toBe('REQUEST_ID_CONFLICT');
+    expect(db.ownerships).toHaveLength(0);
+  });
+
+  it('deux achats concurrents du même pack sous deux requestId : un seul débit, le second répond PACK_ALREADY_OWNED', async () => {
+    const { app, db } = await shopApp();
+    db.grant(ALICE, 200);
+    const ownership = (db.prisma as unknown as { userPackOwnership: { findUnique: (args: unknown) => Promise<unknown> } }).userPackOwnership;
+    const read = ownership.findUnique;
+    ownership.findUnique = async () => null;
+
+    const [first, second] = await Promise.all([purchase(app, 'prestige', 'geste-0013'), purchase(app, 'prestige', 'geste-0014')]);
+    ownership.findUnique = read;
+
+    expect([first.statusCode, second.statusCode].sort()).toEqual([200, 409]);
+    expect([first, second].find((response) => response.statusCode === 409)?.json().code).toBe('PACK_ALREADY_OWNED');
+    expect(db.ledger.filter((line) => line.reason === 'spend')).toHaveLength(1);
+    expect(db.ownerships).toHaveLength(1);
   });
 
   it('diffuse pack:installation-updated sur user:<id> avec owned: true', async () => {

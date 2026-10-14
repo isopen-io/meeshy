@@ -39,6 +39,7 @@ import {
   type PackRegistries,
 } from '@meeshy/shared/types/content-pack';
 import type { PackInstallationUpdatedEventData } from '@meeshy/shared/types/socketio-events';
+import { GameRefusal } from '../game/GameRefusal';
 import { MeeshSpend, type SpendTx } from '../game/MeeshSpend';
 
 export type PackViewer = { readonly userId: string; readonly canModerate: boolean };
@@ -104,7 +105,12 @@ export type PurchaseOutcome<S> =
   | { readonly kind: 'not-found' }
   | { readonly kind: 'free' }
   | { readonly kind: 'already-owned' }
-  | { readonly kind: 'insufficient'; readonly balance: number };
+  | { readonly kind: 'insufficient'; readonly balance: number }
+  | { readonly kind: 'request-id-conflict' };
+
+/** La ligne de registre rejouée est-elle l'achat de CE pack ? `null` : une autre écriture a gagné la course. */
+const purchasedPack = (meta: unknown): { readonly domain?: unknown; readonly slug?: unknown } | null =>
+  typeof meta === 'object' && meta !== null ? (meta as { domain?: unknown; slug?: unknown }) : null;
 
 class PurchaseRefusal extends Error {
   constructor(readonly reason: 'already-owned') {
@@ -242,10 +248,16 @@ export class PackCatalog<S, D extends S> {
         this.broadcast?.(userId, { domain: this.domain, slug, installed: true, owned: true, at: outcome.result.toISOString() });
         return { kind: 'done', pack: this.spec.toSummary(pack.project(true, true)), balance: outcome.balance };
       }
+      if (outcome.status === 'already-spent') {
+        const replayed = purchasedPack(outcome.meta);
+        if (replayed === null) return { kind: 'already-owned' };
+        if (replayed.domain !== this.domain || replayed.slug !== slug) return { kind: 'request-id-conflict' };
+      }
       const installed = this.installedOf(await this.choices(userId))(slug);
       return { kind: 'done', pack: this.spec.toSummary(pack.project(installed, true)), balance: outcome.balance };
     } catch (error) {
       if (error instanceof PurchaseRefusal) return { kind: 'already-owned' };
+      if (error instanceof GameRefusal && error.code === 'REQUEST_ID_CONFLICT') return { kind: 'request-id-conflict' };
       throw error;
     }
   }

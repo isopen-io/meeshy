@@ -201,7 +201,8 @@ export type PackPurchaseRouteSpec<S, D extends S> = {
  * Corps `{ requestId }` généré par le client AU GESTE ; la dépense est
  * idempotente par `(compte, requestId)` — un rejeu rend le même pack, sans
  * second débit. Le prix est lu au registre. 409 : `PACK_IS_FREE`,
- * `PACK_ALREADY_OWNED`, `INSUFFICIENT_MEESHES` (avec `balance`). Seau de débit
+ * `PACK_ALREADY_OWNED`, `INSUFFICIENT_MEESHES` (avec `balance`), `REQUEST_ID_CONFLICT`
+ * (un `requestId` déjà dépensé pour autre chose). Seau de débit
  * propre (10 par minute et par compte), FERMÉ en cas de panne du magasin.
  */
 export function registerPackPurchaseRoute<S, D extends S>(fastify: FastifyInstance, spec: PackPurchaseRouteSpec<S, D>): void {
@@ -234,6 +235,8 @@ export function registerPackPurchaseRoute<S, D extends S>(fastify: FastifyInstan
           return sendConflict(reply, 'Pack is free', { code: 'PACK_IS_FREE' });
         case 'already-owned':
           return sendConflict(reply, 'Pack already owned', { code: 'PACK_ALREADY_OWNED' });
+        case 'request-id-conflict':
+          return sendConflict(reply, 'Request id already used by another spend', { code: 'REQUEST_ID_CONFLICT' });
         case 'insufficient':
           return sendError(reply, 409, 'INSUFFICIENT_MEESHES', { code: 'INSUFFICIENT_MEESHES', details: { balance: outcome.balance } });
       }
