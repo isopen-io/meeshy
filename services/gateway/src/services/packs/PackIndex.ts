@@ -44,6 +44,8 @@ export type PackIndex = {
   readonly isServedAsset: (src: string) => boolean;
   /** Le nombre de cadres que le contrat lu et vérifié d'un pack déclare (0 s'il n'a pas été lu). */
   readonly itemCount: (entry: PackIndexEntry) => number;
+  /** Les clés des modèles que le contrat lu et vérifié d'un pack de fonds, de bannières ou de contours déclare (vide sinon). */
+  readonly itemKeys: (entry: PackIndexEntry) => readonly string[];
   /** Ce qui n'a pas été lu : entrées refusées et fichiers illisibles — à journaliser au démarrage. */
   readonly rejected: number;
 };
@@ -57,6 +59,8 @@ export type PackIndexSources = {
   readonly contractRefs?: (entry: PackIndexEntry) => readonly PackAssetRef[];
   /** Le nombre de cadres du contrat d'un pack, lu et vérifié par l'appelant. */
   readonly contractItemCount?: (entry: PackIndexEntry) => number;
+  /** Les clés des modèles du contrat d'un pack d'apparence, lues et vérifiées par l'appelant. */
+  readonly contractItemKeys?: (entry: PackIndexEntry) => readonly string[];
 };
 
 const ASSET_SRC = /^[0-9a-f]{16}\.(?:webp|png|json|woff2)$/;
@@ -90,10 +94,13 @@ export function buildPackIndex(sources: PackIndexSources): PackIndex {
   const byDomain = (domain: PackDomain) => entries.filter((entry) => entry.domain === domain).sort((a, b) => a.order - b.order);
   const countOf = sources.contractItemCount ?? (() => 0);
   const counts = new Map(entries.map((entry) => [`${entry.domain}.${entry.slug}`, countOf(entry)]));
+  const keysOf = sources.contractItemKeys ?? (() => []);
+  const keys = new Map(entries.map((entry) => [`${entry.domain}.${entry.slug}`, keysOf(entry)]));
   return {
     entries: byDomain,
     isServedAsset: (src) => ASSET_SRC.test(src) && served.has(src),
     itemCount: (entry) => counts.get(`${entry.domain}.${entry.slug}`) ?? 0,
+    itemKeys: (entry) => keys.get(`${entry.domain}.${entry.slug}`) ?? [],
     rejected: parsed.reduce((sum, { rejected }) => sum + rejected, 0) + (all.length - entries.length),
   };
 }
@@ -141,14 +148,14 @@ function readJson(path: string): ReadResult {
   }
 }
 
-type ContractFiles = { readonly refs: readonly PackAssetRef[]; readonly frames: number };
-const NO_CONTRACT: ContractFiles = { refs: [], frames: 0 };
+type ContractFiles = { readonly refs: readonly PackAssetRef[]; readonly frames: number; readonly keys: readonly string[] };
+const NO_CONTRACT: ContractFiles = { refs: [], frames: 0, keys: [] };
 
 /** Le contrat d'un pack de fonds, de bannières ou de contours : le nombre de modèles qu'il déclare, aucun fichier référencé (les dessins sont des DONNÉES). */
-function appearanceContractItems(domain: PackDomain, input: unknown): number {
-  if (domain === 'avatar-ring') return parseAvatarRingPackContract(input)?.rings.length ?? 0;
+function appearanceContractKeys(domain: PackDomain, input: unknown): readonly string[] {
+  if (domain === 'avatar-ring') return parseAvatarRingPackContract(input)?.rings.map((ring) => ring.key) ?? [];
   const contract = parseAppearancePackContract(input);
-  return contract !== null && contract.domain === domain ? contract.designs.length : 0;
+  return contract !== null && contract.domain === domain ? contract.designs.map((design) => design.key) : [];
 }
 
 const APPEARANCE_DOMAINS: readonly PackDomain[] = ['wallpaper', 'banner', 'avatar-ring'];
@@ -168,10 +175,13 @@ function contractFiles(assetsDir: string, entry: PackIndexEntry): ContractFiles 
     const bytes = readFileSync(path);
     if (createHash('sha256').update(bytes).digest('hex') !== entry.contract.sha256) return NO_CONTRACT;
     const input = JSON.parse(bytes.toString('utf8')) as unknown;
-    if (appearance) return { refs: [], frames: appearanceContractItems(entry.domain, input) };
+    if (appearance) {
+      const keys = appearanceContractKeys(entry.domain, input);
+      return { refs: [], frames: keys.length, keys };
+    }
     const thumbs = parseGloryFramePackContract(input)?.contract.frames.map((frame) => frame.thumb) ?? [];
     const layers = parseGloryFrameContract(input)?.contract.frames.flatMap(gloryFrameAssets) ?? [];
-    return { refs: [...thumbs, ...layers], frames: thumbs.length };
+    return { refs: [...thumbs, ...layers], frames: thumbs.length, keys: [] };
   } catch {
     return NO_CONTRACT;
   }
@@ -203,6 +213,7 @@ export function loadPackIndex(
     retained: retained.value,
     contractRefs: (entry) => filesOf(entry).refs,
     contractItemCount: (entry) => filesOf(entry).frames,
+    contractItemKeys: (entry) => filesOf(entry).keys,
   });
   const unreadable = [...registries, retained].filter((result) => result.unreadable).length;
   return { ...index, rejected: index.rejected + unreadable };
