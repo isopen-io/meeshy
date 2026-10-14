@@ -1,4 +1,5 @@
 import XCTest
+import MeeshySDK
 @testable import Meeshy
 
 /// Gardes de source sur le panneau droit iPad.
@@ -184,5 +185,114 @@ final class iPadRightPanelNavigationGuardTests: XCTestCase {
             code.contains("postActionPresentations("),
             "Les présentations d'action de post doivent passer par postActionPresentations(_:) ancré au body."
         )
+    }
+}
+
+/// La colonne droite de l'iPad et le relais de navigation entre les deux racines.
+///
+/// Deux défauts vécus à la lecture du code (2026-10-14) :
+///   1. fil ouvert, toute route posée dans le panneau restait INVISIBLE — la colonne montrait le fil d'abord — et
+///      le premier « retour » se dépensait à la retirer ;
+///   2. une fenêtre d'iPad passée en largeur compacte démontait `iPadRootView` pour `RootView` : le fil ouvert
+///      était perdu, dans les deux sens.
+@MainActor
+final class iPadRightColumnAndHandoffTests: XCTestCase {
+
+    private func makeConversation(_ id: String) -> Conversation {
+        MeeshyConversation(id: id, identifier: "ident-\(id)", type: .group, title: "Titre")
+    }
+
+    // MARK: - Colonne droite
+
+    func test_rightColumn_panelRoute_coversOpenConversation() {
+        let conversation = makeConversation("c1")
+        XCTAssertEqual(
+            iPadRightColumn.resolve(conversation: conversation, panelRoute: .settings),
+            .panel(.settings))
+    }
+
+    func test_rightColumn_conversationAlone_showsConversation() {
+        let conversation = makeConversation("c1")
+        XCTAssertEqual(
+            iPadRightColumn.resolve(conversation: conversation, panelRoute: nil),
+            .conversation(conversation))
+    }
+
+    func test_rightColumn_nothingOpen_showsConversationList() {
+        XCTAssertEqual(iPadRightColumn.resolve(conversation: nil, panelRoute: nil), .conversationList)
+    }
+
+    func test_visibleConversationId_isNilWhileARouteCoversTheConversation() {
+        let conversation = makeConversation("c1")
+        XCTAssertEqual(iPadRightColumn.visibleConversationId(conversation: conversation, panelRoute: nil), "c1")
+        XCTAssertNil(iPadRightColumn.visibleConversationId(conversation: conversation, panelRoute: .notifications))
+        XCTAssertNil(iPadRightColumn.visibleConversationId(conversation: nil, panelRoute: nil))
+    }
+
+    // MARK: - Relais
+
+    func test_stack_putsThePanelRouteAboveTheConversation() {
+        let conversation = makeConversation("c1")
+        XCTAssertEqual(
+            RootNavigationHandoff.stack(conversation: conversation, panelRoute: .settings),
+            [.conversation(conversation), .settings])
+        XCTAssertEqual(RootNavigationHandoff.stack(conversation: nil, panelRoute: .profile), [.profile])
+        XCTAssertEqual(RootNavigationHandoff.stack(conversation: nil, panelRoute: nil), [])
+    }
+
+    func test_tabletPlacement_keepsTheLastConversationAndWhatCoversIt() {
+        let first = makeConversation("c1")
+        let second = makeConversation("c2")
+        let placement = RootNavigationHandoff.tabletPlacement(
+            of: [.settings, .conversation(first), .profile, .conversation(second), .progression, .userStats])
+        XCTAssertEqual(placement.conversation, second)
+        XCTAssertEqual(placement.panelRoutes, [.progression, .userStats])
+    }
+
+    func test_tabletPlacement_withoutConversation_keepsEveryRoute() {
+        let placement = RootNavigationHandoff.tabletPlacement(of: [.settings, .links])
+        XCTAssertNil(placement.conversation)
+        XCTAssertEqual(placement.panelRoutes, [.settings, .links])
+    }
+
+    func test_tabletPlacement_ofAnEmptyStack_isEmpty() {
+        XCTAssertEqual(
+            RootNavigationHandoff.tabletPlacement(of: []),
+            RootNavigationHandoff.TabletPlacement(conversation: nil, panelRoutes: []))
+    }
+
+    func test_stackThenPlacement_roundTrips() {
+        let conversation = makeConversation("c1")
+        let placement = RootNavigationHandoff.tabletPlacement(
+            of: RootNavigationHandoff.stack(conversation: conversation, panelRoute: .notifications))
+        XCTAssertEqual(placement.conversation, conversation)
+        XCTAssertEqual(placement.panelRoutes, [.notifications])
+    }
+
+    // MARK: - Poignée des colonnes
+
+    func test_columnRatio_followsTheFingerFromTheDragStart() {
+        // 100 pt sur 1000 pt de large : dix points de pourcentage, quel que soit le nombre d'événements du geste.
+        XCTAssertEqual(iPadColumnRatio.dragged(from: 0.38, translation: 100, width: 1000), 0.48, accuracy: 0.0001)
+        XCTAssertEqual(iPadColumnRatio.dragged(from: 0.38, translation: 100, width: 1000), 0.48, accuracy: 0.0001)
+    }
+
+    func test_columnRatio_staysWithinItsBounds() {
+        XCTAssertEqual(iPadColumnRatio.dragged(from: 0.38, translation: 900, width: 1000), iPadColumnRatio.maximum)
+        XCTAssertEqual(iPadColumnRatio.dragged(from: 0.38, translation: -900, width: 1000), iPadColumnRatio.minimum)
+    }
+
+    func test_columnRatio_ignoresAZeroWidthWindow() {
+        XCTAssertEqual(iPadColumnRatio.dragged(from: 0.38, translation: 40, width: 0), 0.38)
+        XCTAssertEqual(iPadColumnRatio.dragged(from: 0.38, translation: .nan, width: 1000), 0.38)
+        XCTAssertEqual(iPadColumnRatio.clamped(.nan), iPadColumnRatio.minimum)
+    }
+
+    func test_handoff_recordsTheLatestStack() {
+        let handoff = RootNavigationHandoff()
+        XCTAssertEqual(handoff.routes, [])
+        handoff.record([.settings])
+        handoff.record([.profile, .links])
+        XCTAssertEqual(handoff.routes, [.profile, .links])
     }
 }

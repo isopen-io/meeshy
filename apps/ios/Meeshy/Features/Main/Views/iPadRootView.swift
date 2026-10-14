@@ -118,6 +118,10 @@ struct iPadRootView: View {
         activeConversation != nil
     }
 
+    private var visibleConversationId: String? {
+        iPadRightColumn.visibleConversationId(conversation: activeConversation, panelRoute: rightPanelRoute)
+    }
+
     var body: some View {
         ZStack {
             RootThemedBackground(theme: theme)
@@ -177,7 +181,9 @@ struct iPadRootView: View {
             onRevealFeed: closePanels,
             onAppear: installRouterCallbacks,
             onDisappear: uninstallRouterCallbacks,
-            onStart: startRootServices
+            onStart: startRootServices,
+            navigationStack: RootNavigationHandoff.stack(conversation: activeConversation, panelRoute: rightPanelRoute),
+            onRestoreNavigation: restoreNavigation
         ))
         .modifier(RootIntentRoutingLayer(
             router: router,
@@ -220,10 +226,11 @@ struct iPadRootView: View {
             showStoryViewerFromConv: $showStoryViewerFromConv,
             selectedStoryUserIdFromConv: selectedStoryUserIdFromConv,
             activeConversationId: activeConversation?.id,
+            visibleConversationId: visibleConversationId,
             rightPanelRoute: rightPanelRoute,
             onStoryReply: handleStoryReply,
             onSyncPillTap: handleSyncPillTap,
-            activeConversationIdForBanner: { activeConversation?.id ?? sheetTargets.notificationPreview?.id },
+            activeConversationIdForBanner: { visibleConversationId ?? sheetTargets.notificationPreview?.id },
             onMiniPlayerTap: {
                 guard let target = MiniPlayerTapPolicy.target(
                     context: ConversationAudioCoordinator.shared.activeContext) else { return }
@@ -274,6 +281,14 @@ struct iPadRootView: View {
                 }
             }
         }
+    }
+
+    /// Reprend la pile de la racine iPhone : son dernier fil dans la colonne, puis les routes qui le recouvraient,
+    /// rejouées par le même chemin qu'une ouverture — une page du jeu s'empile sur Progression, comme toujours.
+    private func restoreNavigation(_ routes: [Route]) {
+        let placement = RootNavigationHandoff.tabletPlacement(of: routes)
+        activeConversation = placement.conversation
+        placement.panelRoutes.forEach { _ = router.onRouteRequested?($0) }
     }
 
     private func uninstallRouterCallbacks() {
@@ -369,7 +384,8 @@ struct iPadRootView: View {
 
     @ViewBuilder
     private var rightColumn: some View {
-        if let conversation = activeConversation {
+        switch iPadRightColumn.resolve(conversation: activeConversation, panelRoute: rightPanelRoute) {
+        case .conversation(let conversation):
             ConversationView(
                 conversation: conversation,
                 replyContext: router.pendingReplyContext,
@@ -386,7 +402,7 @@ struct iPadRootView: View {
                 router.pendingReplyContext = nil
                 router.pendingForcedReadingMode = nil
             }
-        } else if let route = rightPanelRoute {
+        case .panel(let route):
             // Vue NOMINALE (#5837) : `NavigationStack` + toolbar + destination
             // entraient sinon dans le type de ce `body` — la branche la plus
             // profonde de la colonne droite.
@@ -401,7 +417,7 @@ struct iPadRootView: View {
                 onOpenConversation: openConversation,
                 onNotificationTap: handleNotificationTap
             )
-        } else {
+        case .conversationList:
             iPadConversationList(showFeedButton: false)
         }
     }

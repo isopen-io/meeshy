@@ -56,6 +56,11 @@ struct iPadStoryAndLifecycleLayer: ViewModifier {
     let onAppear: () -> Void
     let onDisappear: () -> Void
     let onStart: @MainActor () async -> Void
+    /// Le fil et la route ouverts, tels que l'iPhone les empilerait (`RootNavigationHandoff.stack`).
+    let navigationStack: [Route]
+    /// Reprend la pile laissée par la racine iPhone — appelé APRÈS `onAppear`, qui installe les callbacks du routeur.
+    let onRestoreNavigation: ([Route]) -> Void
+    @Environment(\.rootNavigationHandoff) private var navigationHandoff
 
     func body(content: Content) -> some View {
         content
@@ -104,7 +109,16 @@ struct iPadStoryAndLifecycleLayer: ViewModifier {
                 guard pending, isConversationOpen else { return }
                 onRevealFeed()
             }
-            .onAppear(perform: onAppear)
+            .onAppear {
+                onAppear()
+                // La fenêtre vient de retrouver sa largeur : le fil ouvert en largeur compacte revient dans sa colonne.
+                if navigationStack.isEmpty, let routes = navigationHandoff?.routes, !routes.isEmpty {
+                    onRestoreNavigation(routes)
+                }
+            }
+            .adaptiveOnChange(of: navigationStack) { _, stack in
+                navigationHandoff?.record(stack)
+            }
             .onDisappear(perform: onDisappear)
             .task { await onStart() }
     }
@@ -223,6 +237,8 @@ struct iPadCoversAndChromeLayer: ViewModifier {
     @Binding var showStoryViewerFromConv: Bool
     let selectedStoryUserIdFromConv: String?
     let activeConversationId: String?
+    /// Le fil sous les yeux — `nil` quand une route du panneau le recouvre (`iPadRightColumn`).
+    let visibleConversationId: String?
     /// La route ouverte dans le panneau de droite : un écran profond y cache la bannière du joueur (#9494).
     var rightPanelRoute: Route? = nil
     let onStoryReply: (ReplyContext) -> Void
@@ -336,7 +352,7 @@ struct iPadCoversAndChromeLayer: ViewModifier {
             }
             .modifier(CallPresentationLayer(
                 miniPlayerOnTapBody: onMiniPlayerTap,
-                miniPlayerCurrentConversationId: { activeConversationId },
+                miniPlayerCurrentConversationId: { visibleConversationId },
                 // La BANNIÈRE DU JOUEUR (#9494), comme sur iPhone : la colonne des conversations reste là, mais un fil
                 // ouvert a besoin de toute sa hauteur, et le lecteur de réels est plein cadre.
                 playerBannerHosted: PlayerBannerPlacement.hostsOnTablet(
