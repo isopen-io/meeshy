@@ -23,8 +23,8 @@
 import * as z from 'zod/mini';
 import { ACHIEVEMENT_RARITIES, GLORY_DIVISIONS, GLORY_RANKS, type AchievementRarity, type GloryDivision5, type GloryRankOrMythic } from '../utils/game/glory.js';
 
-/** Les surfaces d'un cadre LIBRE : l'appel vidéo en direct, la photo, la vidéo. */
-export const FREE_FRAME_SURFACES = ['call', 'photo', 'video'] as const;
+/** Les surfaces d'un cadre LIBRE : l'appel vidéo en direct, la photo, la vidéo, et l'avatar (contours de profil, #10632). */
+export const FREE_FRAME_SURFACES = ['call', 'photo', 'video', 'avatar'] as const;
 export type FreeFrameSurface = (typeof FREE_FRAME_SURFACES)[number];
 
 /** Les familles de moments du jeu qu'un cadre de moment peut servir. */
@@ -53,6 +53,7 @@ export type FrameUsage =
 
 export type FrameUseContext =
   | { readonly kind: 'call' }
+  | { readonly kind: 'avatar' }
   | { readonly kind: 'capture'; readonly media: 'photo' | 'video' }
   | { readonly kind: 'rank'; readonly rank: GloryRankOrMythic; readonly division: GloryDivision5 | null }
   | { readonly kind: 'prestige' }
@@ -78,6 +79,7 @@ export const FrameUsageSchema = z.discriminatedUnion('kind', [
 
 export const FrameUseContextSchema = z.discriminatedUnion('kind', [
   z.object({ kind: z.literal('call') }),
+  z.object({ kind: z.literal('avatar') }),
   z.object({ kind: z.literal('capture'), media: z.enum(['photo', 'video']) }),
   z
     .object({ kind: z.literal('rank'), rank: rankSchema, division: z.nullable(divisionSchema) })
@@ -97,6 +99,7 @@ export const parseFrameUsage = (input: unknown): FrameUsage | null => {
  * un cadre de capture seule ne sert JAMAIS l'appel (ressources du direct).
  */
 const freeServes = (surfaces: readonly FreeFrameSurface[], context: FrameUseContext): boolean => {
+  if (context.kind === 'avatar') return surfaces.includes('avatar');
   if (context.kind === 'call') return surfaces.includes('call');
   if (context.kind === 'capture') return surfaces.includes('call') || surfaces.includes(context.media);
   return false;
@@ -122,6 +125,7 @@ export function canUseFrame(usage: FrameUsage, context: FrameUseContext): boolea
 export const FRAME_USAGE_LABEL_KEYS = {
   callAndCapture: 'frame.usage.callAndCapture',
   captureOnly: 'frame.usage.captureOnly',
+  avatarOnly: 'frame.usage.avatarOnly',
   photoOnly: 'frame.usage.photoOnly',
   videoOnly: 'frame.usage.videoOnly',
   rankOnly: 'frame.usage.rankOnly',
@@ -143,6 +147,7 @@ export type FrameUsageLabel = { readonly key: FrameUsageLabelKey; readonly param
 const ROMAN: Readonly<Record<GloryDivision5, string>> = { 1: 'I', 2: 'II', 3: 'III', 4: 'IV', 5: 'V' };
 
 const freeLabel = (surfaces: readonly FreeFrameSurface[]): FrameUsageLabelKey => {
+  if (surfaces.includes('avatar') && !surfaces.some((surface) => surface !== 'avatar')) return FRAME_USAGE_LABEL_KEYS.avatarOnly;
   if (surfaces.includes('call')) return FRAME_USAGE_LABEL_KEYS.callAndCapture;
   if (surfaces.includes('photo') && surfaces.includes('video')) return FRAME_USAGE_LABEL_KEYS.captureOnly;
   return surfaces.includes('photo') ? FRAME_USAGE_LABEL_KEYS.photoOnly : FRAME_USAGE_LABEL_KEYS.videoOnly;
