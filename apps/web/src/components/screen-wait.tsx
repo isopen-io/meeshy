@@ -73,7 +73,7 @@ export function ScreenWait() {
       aria-label={labelled ? translate(language, 'pending.screen') : undefined}
       data-screen-wait=""
     >
-      {shown && drawing !== null ? <div className="screen-wait-art size-32" dangerouslySetInnerHTML={{ __html: drawing }} /> : null}
+      {shown && drawing !== null ? <div data-screen-wait-art="" className="size-32" dangerouslySetInnerHTML={{ __html: drawing }} /> : null}
     </div>
   );
 }
