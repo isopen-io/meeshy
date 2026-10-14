@@ -1,6 +1,6 @@
 import { describe, expect, test } from 'bun:test';
 
-import { downloadTextFile } from '@/lib/admin/download-text';
+import { copyText, downloadTextFile } from '@/lib/admin/download-text';
 import type { FileDeliveryHost } from '@/lib/media/file-delivery-host';
 
 /**
@@ -57,5 +57,26 @@ describe('le YAML de l’export des saisons se livre par le portail (#10563)', (
     expect(outcome).toBe('delivered');
     expect(clicked).toEqual(['app-events.yaml']);
     expect(shared).toEqual([]);
+  });
+});
+
+describe('le YAML de l’export se copie avec le repli des autres copies (#10591)', () => {
+  const refused = async () => {
+    throw Object.assign(new Error('refusé'), { name: 'NotAllowedError' });
+  };
+
+  test('un writeText refusé par la WebView retombe sur la copie historique', async () => {
+    const copied: string[] = [];
+    const ok = await copyText('app_events: []\n', { writeText: refused, legacyCopy: (text) => copied.push(text) > 0 });
+    expect(ok).toBe(true);
+    expect(copied).toEqual(['app_events: []\n']);
+  });
+
+  test('sans presse-papiers asynchrone, la copie historique suffit', async () => {
+    expect(await copyText('x', { writeText: undefined, legacyCopy: () => true })).toBe(true);
+  });
+
+  test('seul l’échec des deux chemins se dit', async () => {
+    expect(await copyText('x', { writeText: refused, legacyCopy: () => false })).toBe(false);
   });
 });
