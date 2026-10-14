@@ -7,6 +7,7 @@
   border: 0;
   padding: 0;
   cursor: pointer;
+  max-width: 100%;
   -webkit-tap-highlight-color: transparent;
   filter: drop-shadow(0 6px 10px rgb(0 0 0 / 0.18));
 }

@@ -37,7 +37,7 @@ export function StickerSheet({
 }) {
   const language = currentInterfaceLanguage();
   const [ready, setReady] = useState(false);
-  const [notice, setNotice] = useState('');
+  const [outcome, setOutcome] = useState<'idle' | 'added' | 'failed'>('idle');
   const [busy, setBusy] = useState(false);
   const library = useStickerLibrary();
   useEffect(() => {
@@ -55,9 +55,10 @@ export function StickerSheet({
 
   const add = async () => {
     setBusy(true);
+    setOutcome('idle');
     const ok = await library.add(sticker, picture);
     setBusy(false);
-    setNotice(t(ok ? 'message.sticker.added' : 'message.sticker.addFailed'));
+    setOutcome(ok ? 'added' : 'failed');
   };
   const openPack = () => {
     onClose();
@@ -91,8 +92,10 @@ export function StickerSheet({
             {t('message.sticker.viewPack')}
           </button>
         ) : null}
-        <p className="sr-only" role="status" aria-live="polite">
-          {notice}
+        {/* L'ÉCHEC SE VOIT (un réseau coupé, une image qui ne se relit plus) ;
+            la réussite se lit déjà dans « Dans mes stickers ✓ ». */}
+        <p data-sticker-notice role="status" aria-live="polite" className={outcome === 'failed' ? 'text-center text-caption' : 'sr-only'} style={{ color: 'var(--color-ios-ink-2)' }}>
+          {outcome === 'failed' ? t('message.sticker.addFailed') : outcome === 'added' ? t('message.sticker.added') : ''}
         </p>
       </div>
     </Sheet>

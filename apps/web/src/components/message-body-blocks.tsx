@@ -93,19 +93,30 @@ function StickerTouch({
   readonly children: ReactNode;
 }) {
   const [open, setOpen] = useState(false);
+  /* La durée se tranche au RELÂCHER, jamais au clic : le double toucher
+     (#10599) RETIENT le clic d'une tuile puis le rejoue, et le clavier n'a
+     aucun appui — l'un ou l'autre, jugé à l'heure du clic, était refusé. */
   const pressedAt = useRef(0);
+  const heldTooLong = useRef(false);
   return (
     <>
       <button
         type="button"
         data-sticker-open
         aria-label={stickerAltOf(sticker)}
+        aria-haspopup="dialog"
         onPointerDown={() => {
           pressedAt.current = Date.now();
+          heldTooLong.current = false;
+        }}
+        onPointerUp={() => {
+          heldTooLong.current = pressedAt.current !== 0 && Date.now() - pressedAt.current > TAP_MAX_MS;
+          pressedAt.current = 0;
         }}
         onClick={() => {
-          if (pressedAt.current !== 0 && Date.now() - pressedAt.current > TAP_MAX_MS) return;
-          setOpen(true);
+          const held = heldTooLong.current;
+          heldTooLong.current = false;
+          if (!held) setOpen(true);
         }}
       >
         {children}

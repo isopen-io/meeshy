@@ -105,7 +105,10 @@ describe('StickerSheet', () => {
     await act(settle);
     await act(settle);
     expect(appQueryClient.getQueryData<readonly StickerDefinition[]>(STICKERS_QUERY_KEY)).toEqual([]);
-    expect(host.textContent).toContain('n’a pas pu être ajouté');
+    const notice = host.querySelector('[data-sticker-notice]');
+    expect(notice?.textContent).toContain('n’a pas pu être ajouté');
+    expect(notice?.classList.contains('sr-only')).toBe(false);
+    expect(host.querySelector<HTMLButtonElement>('[data-sticker-add]')?.disabled).toBe(false);
   });
 
   test('« Voir le pack » n’existe que si le gabarit dit son pack', async () => {
