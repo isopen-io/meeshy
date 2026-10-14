@@ -29,6 +29,8 @@ struct MessageMoreSheet: View {
     /// alors pas l'entrée, puisque `stickerFavorite` reste `nil` dans son
     /// contexte — la loi 4 est tenue en amont, pas ici.
     var onToggleStickerFavorite: (() -> Void)? = nil
+    /// « Ajouter à mes stickers » (#10630) — range le sticker REÇU en bibliothèque.
+    var onAddSticker: (() -> Void)? = nil
     /// Suppression du message entier — route vers le dialogue riche
     /// (« pour tous » / « pour moi ») de `ConversationView`.
     var onDeleteMessage: (() -> Void)? = nil
@@ -286,6 +288,7 @@ struct MessageMoreSheet: View {
             case .pin, .unpin: onPin?()
             case .star, .unstar: onToggleStar?()
             case .pinSticker, .unpinSticker: onToggleStickerFavorite?()
+            case .addSticker: onAddSticker?()
             case .delete: onDeleteMessage?()
             case .edit: onEdit?()
             case .copy: onCopy?()
@@ -364,7 +367,7 @@ struct MessageMoreSheet: View {
         // `pinSticker`/`unpinSticker` FONT et ferment, comme leurs voisins :
         // épingler une décoration n'ouvre rien à explorer.
         case .reply, .forward, .thread, .media, .pin, .unpin, .star, .unstar,
-             .pinSticker, .unpinSticker, .delete, .edit, .copy, .share, .imager: return false
+             .pinSticker, .unpinSticker, .addSticker, .delete, .edit, .copy, .share, .imager: return false
         case .views, .reactions, .language, .transcription, .sentiment, .history, .report: return true
         }
     }
@@ -380,7 +383,7 @@ struct MessageMoreSheet: View {
         // La DÉCORATION porte la couleur de marque, pas celle du favori de
         // message : deux verbes voisins qui partageraient une couleur se
         // liraient comme un seul contrôle en deux moitiés.
-        case .pinSticker, .unpinSticker: return MeeshyColors.indigo500
+        case .pinSticker, .unpinSticker, .addSticker: return MeeshyColors.indigo500
         case .delete: return MeeshyColors.error
         case .edit: return MeeshyColors.indigo500
         case .copy: return MeeshyColors.indigo400
@@ -469,7 +472,7 @@ struct MessageMoreSheet: View {
         case .report:
             MessageReportDetailView(onReport: { onReport?($0, $1); dismiss() }, onDismiss: { dismiss() })
         case .reply, .forward, .thread, .media, .pin, .unpin, .star, .unstar,
-             .pinSticker, .unpinSticker, .delete, .edit, .copy, .share, .imager:
+             .pinSticker, .unpinSticker, .addSticker, .delete, .edit, .copy, .share, .imager:
             EmptyView()
         }
     }
@@ -486,6 +489,7 @@ struct MessageMoreSheet: View {
         case .unstar: return "star.slash"
         case .pinSticker: return "rectangle.portrait.on.rectangle.portrait.angled"
         case .unpinSticker: return "rectangle.portrait.slash"
+        case .addSticker: return "plus.rectangle.on.rectangle"
         case .delete: return "trash"
         case .edit: return "pencil"
         case .copy: return "doc.on.doc"
@@ -518,6 +522,8 @@ struct MessageMoreSheet: View {
                                         defaultValue: "Épingler la décoration", bundle: .main)
         case .unpinSticker: return String(localized: "action.unpinSticker",
                                           defaultValue: "Retirer la décoration", bundle: .main)
+        case .addSticker: return String(localized: "message.sticker.add",
+                                        defaultValue: "Ajouter à mes stickers", bundle: .main)
         case .delete: return String(localized: "common.delete", defaultValue: "Supprimer", bundle: .main)
         case .edit: return String(localized: "action.edit", defaultValue: "Modifier", bundle: .main)
         case .copy: return String(localized: "action.copy", defaultValue: "Copier", bundle: .main)

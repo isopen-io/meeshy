@@ -60,6 +60,9 @@ enum MoreItem: String, Equatable {
     /// DÉCORATION dans la palette, où elle devient réutilisable partout
     /// ailleurs. Deux objets, deux magasins, deux verbes que le libellé sépare.
     case pinSticker, unpinSticker
+    /// **Ajouter le sticker REÇU à « Mes stickers »** (#10630) — offert seulement
+    /// quand il n'y est pas déjà (loi 4 : un contrôle existe s'il a un effet).
+    case addSticker
     /// Actions « faire » ajoutées au menu « Plus… » (exécutent + ferment) :
     /// éditer, copier, partager. `language`/`transcription` = explorables.
     case edit, copy, share
@@ -117,6 +120,12 @@ struct MessageMenuContext: Equatable {
     /// « épingler ». Deux booléens auraient laissé représentable un quatrième
     /// état qui n'existe pas (« pas un sticker, mais épinglé »).
     var stickerFavorite: Bool? = nil
+    /// **Le message EST un sticker** (#10630) : son image jointe n'est pas une
+    /// photo, donc « Enregistrer » (Photos) n'est JAMAIS offert.
+    var isSticker: Bool = false
+    /// « Ajouter à mes stickers » est offert : image à déposer ET absente de la
+    /// bibliothèque (`ReceivedSticker.offersAdd`).
+    var stickerAddable: Bool = false
     /// Réciprocité : qui ne partage pas ses accusés de lecture ne voit pas ceux
     /// des autres. L'entrée « vues » disparaît plutôt que d'ouvrir une feuille
     /// vide — le serveur ne renverrait rien de toute façon.
@@ -304,7 +313,7 @@ enum MessageActionResolver {
             out.append(.exportImage)
             if ctx.hasDefaultExportFormat { out.append(.exportQuick) }
         }
-        if ctx.saveableAttachmentCount == 1 && showsContent && ctx.exits.offers(.save) { out.append(.saveMedia) }
+        if ctx.saveableAttachmentCount == 1 && !ctx.isSticker && showsContent && ctx.exits.offers(.save) { out.append(.saveMedia) }
         // « Composer » suit immédiatement « Enregistrer » : ce sont les deux
         // gestes qui EMPORTENT le média hors de la conversation, et le second se
         // cherche à côté du premier. La CONDITION, elle, n'est pas ici : elle
@@ -344,6 +353,7 @@ enum MessageActionResolver {
         if let epinglee = ctx.stickerFavorite {
             actions.append(epinglee ? .unpinSticker : .pinSticker)
         }
+        if ctx.stickerAddable && showsContent && ctx.exits.offers(.save) { actions.append(.addSticker) }
         if ctx.canDelete && ctx.hasMedia { actions.append(.media) }
         if ctx.canDelete { actions.append(.delete) }
         sections.append(.actions(actions))
