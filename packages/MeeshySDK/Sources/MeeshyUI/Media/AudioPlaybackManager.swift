@@ -297,6 +297,9 @@ public class AudioPlaybackManager: NSObject, ObservableObject {
     private func resetState() {
         player?.stop()
         player = nil
+        // Un arrêt pendant le chargement laissait la bulle sur son indicateur, la tâche annulée sortant sans le
+        // remettre.
+        if isLoading { isLoading = false }
         timer?.invalidate()
         timer = nil
         if isPlaying { isPlaying = false }

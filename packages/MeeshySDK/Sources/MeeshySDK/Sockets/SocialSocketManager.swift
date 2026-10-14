@@ -557,10 +557,28 @@ public final class SocialSocketManager: ObservableObject, SocialSocketProviding,
     /// the resume path, but PRESERVES `hadPreviousConnection` so the next
     /// `.connect` is recognised as a reconnect (fires `didReconnect` → feed/social
     /// re-sync). Contrast `disconnect()` (logout/cold reset) which also clears it.
+    /// Les transports démontés, gardés vivants le temps que leurs accusés en attente tombent.
+    ///
+    /// Socket.IO arme l'expiration d'un `emitWithAck` avec une référence FAIBLE au client : libéré au démontage
+    /// (arrière-plan, rotation du jeton, reconnexion forcée), il n'appelait ni la réponse ni l'expiration, et la
+    /// tâche qui attendait — un envoi rejoué, un `call:end` — restait suspendue pour toujours.
+    private var retiringTransports: [SocketManager] = []
+    private static let ackRetirementGrace: TimeInterval = 12
+
+    private func retireTransport() {
+        guard let retiring = manager else { return }
+        retiringTransports.append(retiring)
+        let id = ObjectIdentifier(retiring)
+        DispatchQueue.main.asyncAfter(deadline: .now() + Self.ackRetirementGrace) { [weak self] in
+            self?.retiringTransports.removeAll { ObjectIdentifier($0) == id }
+        }
+    }
+
     private func suspendTransport() {
         reconnectTask?.cancel()
         reconnectTask = nil
         socket?.disconnect()
+        retireTransport()
         socket = nil
         manager = nil
         isConnected = false
