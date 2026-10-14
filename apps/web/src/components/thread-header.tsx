@@ -18,6 +18,7 @@ import type { Conversation } from '@/lib/api/types';
 import type { MenuRow } from '@/lib/reading-mode/catalog';
 import { apiConfig } from '@/lib/api/config';
 import { sessionStore } from '@/lib/api/session';
+import { callsAvailable } from '@/lib/calls/calls-availability';
 import { avatarOf, initialsOf, peerOf, presenceKeyOf } from '@/lib/view/conversation';
 import { usePresences } from '@/lib/view/use-presence';
 import { avatarMenuEntries } from '@/lib/view/avatar-menu';
@@ -387,7 +388,7 @@ export function ThreadHeader({
 {/* L'APPEL (#6382) — vocal ou vidéo, offert par `threadCallOffer`
                 (#10207) : « start » lance, « join-only » ne garde que les portes
                 d'un appel déjà en cours, « none » ne montre rien. */}
-            {callOffer === 'none' ? null : (
+            {callOffer === 'none' || !callsAvailable() ? null : (
               <ThreadCallButton conversationId={conversation.id} title={title} avatar={photo ?? null} group={group} liveCallHint={(conversation as ListConversation).activeCall ?? null} mayStart={callOffer === 'start'} />
             )}
             {/* EN APERÇU, « AGRANDIR » PREND LA PLACE DE LA LOUPE (#9031) :

@@ -7,6 +7,7 @@ import { sessionStore } from '@/lib/api/session';
 import type { Conversation } from '@/lib/api/types';
 import type { ConversationEngagementSnapshot } from '@meeshy/shared/types/engagement-scale';
 import { callActions } from '@/lib/calls/call-actions';
+import { callsAvailable } from '@/lib/calls/calls-availability';
 import { translate } from '@/lib/i18n-catalog';
 import { categoryIdOf, reactionOf, type ConversationFlags } from '@/lib/api/preferences';
 import { rowMenuText } from '@/lib/i18n-row-menu-catalog';
@@ -696,7 +697,7 @@ function LensRowImpl({
           </span>
         </Link>
         {/* « REJOINDRE » (H4) — frère du lien, jamais dedans : voir `LensJoinCallButton`. */}
-        {liveCall === null ? null : (
+        {liveCall === null || !callsAvailable() ? null : (
           <LensJoinCallButton
             request={{ conversationId: conversation.id, callId: liveCall.id, media: liveCall.kind === 'video' ? 'video' : 'audio', title, avatar: photo ?? null, isGroup: group }}
             label={translate(currentInterfaceLanguage(), 'callJoin.named', { name: title })}
@@ -725,7 +726,7 @@ function LensRowImpl({
         unread={unread}
         magnified={status.magnified}
         language={currentInterfaceLanguage()}
-        canCall={canCall}
+        canCall={canCall && callsAvailable()}
         canDelete={canCall}
         {...(menuMore === undefined ? {} : { more: menuMore })}
         categoryId={categoryIdOf(conversation)}

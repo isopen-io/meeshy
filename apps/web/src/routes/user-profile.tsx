@@ -20,6 +20,7 @@ import { userProfileTabs } from '@/lib/profile/tabs';
 import { useParams } from '@/lib/router';
 import { usePostGesture } from '@/lib/view/use-post-gesture';
 import { Link, href, navigate } from '@/routes/route-table';
+import { callsAvailable } from '@/lib/calls/calls-availability';
 import { ProfileCall } from '@/routes/user-profile-call';
 import { ProfileConversationsSection } from '@/routes/user-profile-conversations';
 import { useProfileController } from '@/routes/user-profile-controller';
@@ -248,7 +249,7 @@ export function UserProfileView({ username }: { readonly username: string }) {
                           onSignIn={onSignIn}
                         />
                       )}
-                      {isSelf || !signedIn ? null : (
+                      {isSelf || !signedIn || !callsAvailable() ? null : (
                         <ProfileCall language={language} person={callPerson} online={online} onFailed={onCallFailed} />
                       )}
                       <ProfileStatsSection
