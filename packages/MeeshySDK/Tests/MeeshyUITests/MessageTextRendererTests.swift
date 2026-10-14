@@ -335,3 +335,18 @@ final class SyntaxHighlighterProgressTests: XCTestCase {
         }
     }
 }
+
+/// Le cache des rapports d'aspect vidéo est borné : une longue session ne garde plus chaque vidéo jamais vue.
+final class VideoDisplayAspectCacheBoundTests: XCTestCase {
+    func test_theOldestRatiosLeave_beyondTheCapacity() async {
+        let cache = VideoDisplayAspectCache()
+        let capacity = VideoDisplayAspectCache.capacity
+        for index in 0...capacity {
+            await cache.store(1.5, for: "v\(index)")
+        }
+        let first = await cache.ratio(for: "v0")
+        let last = await cache.ratio(for: "v\(capacity)")
+        XCTAssertNil(first, "la plus ancienne est partie")
+        XCTAssertEqual(last, 1.5)
+    }
+}
