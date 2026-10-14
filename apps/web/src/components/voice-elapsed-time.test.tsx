@@ -6,6 +6,7 @@ import { ensureHappyDomRegistered, releaseHappyDomIfRegistered } from '@/test-su
 import { messagesOf } from '@/lib/api/fixtures';
 import { MEDIA_CONVERSATION_ID, MEDIA_VOICE_EN_WITNESS_ID } from '@/lib/api/fixtures-media';
 import type { Attachment } from '@/lib/api/types';
+import { translate } from '@/lib/i18n-catalog';
 
 import { Attachments } from './attachment-blocks';
 
@@ -70,7 +71,7 @@ describe('la bulle vocale compte le temps écoulé (#10625)', () => {
     Object.defineProperty(audio, 'currentTime', { value: 0, configurable: true, writable: true });
 
     await act(async () => {
-      (container.querySelector('button[aria-label="Lire l\'audio"]') as HTMLButtonElement).click();
+      (container.querySelector(`button[aria-label="${translate('fr', 'media.audio.play')}"]`) as HTMLButtonElement).click();
       await Promise.resolve();
     });
     expect(counter()).toBe('0:00');
@@ -83,7 +84,7 @@ describe('la bulle vocale compte le temps écoulé (#10625)', () => {
     expect(counter()).toBe('0:07');
 
     await act(async () => {
-      (container.querySelector('button[aria-label="Mettre en pause"]') as HTMLButtonElement).click();
+      (container.querySelector(`button[aria-label="${translate('fr', 'media.audio.pause')}"]`) as HTMLButtonElement).click();
     });
     expect(counter()).toBe('0:07');
   });

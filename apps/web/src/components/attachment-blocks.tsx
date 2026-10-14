@@ -14,7 +14,6 @@ import { attachmentOpenReport } from '@/lib/view/attachment-open-report';
 import { fileBadgeOf } from '@/lib/view/file-badge';
 import '@/styles/conversation-look.css';
 import { electAudio, type MediaCarrier } from '@/lib/view/media';
-import { registerNowPlaying, voiceNowPlayingTags } from '@/lib/view/now-playing';
 import { partitionAttachments, type MediaGridFrame } from '@/lib/view/media-grid-layout';
 import { waveformOf } from '@/lib/view/message';
 import { useMediaPlayback } from '@/lib/view/use-media-playback';
@@ -30,6 +29,7 @@ import {
 import { ThreadMediaContext } from '@/lib/view/thread-media-context';
 import { useKaraokeIndex } from '@/lib/view/use-karaoke';
 import { useAudioOnDemand } from '@/lib/view/use-audio-on-demand';
+import { useVoiceNowPlaying } from '@/lib/view/use-voice-now-playing';
 import { translate } from '@/lib/i18n-catalog';
 import { currentInterfaceLanguage } from '@/lib/interface-language';
 import { TRANSCRIPT_TEXT_OPACITY } from '@/lib/reading-mode/metrics';
@@ -105,16 +105,6 @@ const KARAOKE_STYLE: Readonly<Record<KaraokeTone, Readonly<Record<string, string
   },
 };
 
-/** L'adresse ABSOLUE d'une image, que la coque télécharge hors de la page (#10624). */
-function absoluteMediaUrl(url: string): string {
-  const src = attachmentSrc(url);
-  try {
-    return new URL(src, typeof location !== 'undefined' ? location.href : undefined).href;
-  } catch {
-    return src;
-  }
-}
-
 function VoiceAttachment({
   attachment: received,
   languages,
@@ -172,23 +162,17 @@ function VoiceAttachment({
      en est le seul moteur : la bulle reflète sa lecture et la commande, comme
      la bulle iOS reflète `ConversationAudioCoordinator`. Jamais un second son. */
   const carried = useCarriedPlayback(attachment.id);
-  /* LA CARTE DE LECTURE DE LA COQUE DIT CE VOCAL (#10624) — l'auteur, la
-     conversation, la date et l'avatar, enregistrés par id de pièce : la coque
-     les relit sur l'`<audio>` qui joue (`data-np-attachment`), ici comme dans
-     la visionneuse et le mini-lecteur qui rejouent ce vocal. */
+  /* LA CARTE DE LECTURE DE LA COQUE DIT CE VOCAL (#10624) — la coque les
+     relit sur l'`<audio>` qui joue (`data-np-attachment`), ici comme dans la
+     visionneuse et le mini-lecteur qui rejouent ce vocal. Coque seulement. */
   const thread = useContext(ThreadMediaContext);
-  const tags = voiceNowPlayingTags({
+  useVoiceNowPlaying(attachment.id, {
     carrier,
     conversationTitle: thread?.conversationTitle,
     conversationAvatarUrl: thread?.conversationAvatarUrl,
     message,
     attachment,
-    resolve: absoluteMediaUrl,
   });
-  useEffect(() => {
-    registerNowPlaying(attachment.id, tags);
-    // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [attachment.id, tags.sender, tags.conversation, tags.sentAtMs, tags.artworkUrl, tags.protected]);
   const { bind, reportedFraction } = own;
   const { status, progress, toggle, position, duration, seek, rate, setRate } = carried ?? own;
   const uiLanguage = currentInterfaceLanguage();
