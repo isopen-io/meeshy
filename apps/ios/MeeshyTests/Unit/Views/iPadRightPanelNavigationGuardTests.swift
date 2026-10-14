@@ -473,3 +473,25 @@ final class DetachedWindowsTests: XCTestCase {
         }
     }
 }
+
+/// Les aperçus de liens gardés sont plafonnés : chaque lien distinct s'ajoutait sans fin, et chaque ajout
+/// ré-encodait tout le fichier.
+@MainActor
+final class LinkPreviewStoreBoundTests: XCTestCase {
+
+    private func metadata(_ id: String, age: TimeInterval) -> LinkMetadata {
+        LinkMetadata(id: id, title: nil, description: nil, imageURL: nil, siteName: nil,
+                     fetchedAt: Date(timeIntervalSince1970: 1_800_000_000 - age))
+    }
+
+    func test_bounded_keepsTheMostRecentPreviews() {
+        let entries = Dictionary(uniqueKeysWithValues: (0..<10).map { ("u\($0)", metadata("u\($0)", age: TimeInterval($0))) })
+        let kept = LinkPreviewStore.bounded(entries, limit: 3)
+        XCTAssertEqual(Set(kept.keys), ["u0", "u1", "u2"])
+    }
+
+    func test_bounded_leavesASmallCacheUntouched() {
+        let entries = ["a": metadata("a", age: 1)]
+        XCTAssertEqual(LinkPreviewStore.bounded(entries, limit: 500), entries)
+    }
+}
