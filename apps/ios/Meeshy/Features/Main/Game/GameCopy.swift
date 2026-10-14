@@ -54,8 +54,8 @@ enum GameCopy {
     }
 
     /// Avant le niveau 5 : où les missions s'ouvrent, et où l'on en est.
-    static func missionsLocked(level: String) -> String {
-        String(localized: "game.missions.locked", defaultValue: "Les missions s’ouvrent au niveau 5 : trois par jour, et un coffre. Tu es au niveau \(level).", bundle: .main)
+    static func missionsLocked(level shown: String) -> String {
+        String(localized: "game.missions.locked", defaultValue: "Les missions s’ouvrent au niveau 5 : trois par jour, et un coffre. Tu es au niveau \(shown).", bundle: .main)
     }
 
     static func meeshes(_ count: Int) -> String {
