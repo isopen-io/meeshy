@@ -34,17 +34,36 @@ enum iPadRightColumn: Equatable {
 struct GamePanelTrail {
     var root: Route?
     var path = NavigationPath()
+    /// Les pages empilées, lisibles : `NavigationPath` ne rend pas ses éléments, et le relais vers l'iPhone
+    /// (`RootNavigationHandoff`) doit pouvoir les reprendre.
+    private(set) var routes: [Route] = []
+
+    init(root: Route? = nil) {
+        self.root = root
+    }
+
+    /// La pile renvoyée par la `NavigationStack` du panneau : un retour par glissement ne fait que la
+    /// raccourcir, et les pages lisibles suivent.
+    init(root: Route, path: NavigationPath, previous: GamePanelTrail) {
+        self.root = root
+        self.path = path
+        self.routes = previous.root == root ? Array(previous.routes.prefix(path.count)) : []
+    }
 
     func path(over route: Route) -> NavigationPath { root == route ? path : NavigationPath() }
+
+    func routes(over route: Route) -> [Route] { root == route ? routes : [] }
 
     mutating func push(_ route: Route, over root: Route) {
         if self.root != root { self = GamePanelTrail(root: root) }
         path.append(route)
+        routes.append(route)
     }
 
     mutating func pop() {
         guard !path.isEmpty else { return }
         path.removeLast()
+        if !routes.isEmpty { routes.removeLast() }
     }
 }
 

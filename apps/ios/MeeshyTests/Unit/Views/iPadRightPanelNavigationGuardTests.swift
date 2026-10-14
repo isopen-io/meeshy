@@ -269,6 +269,30 @@ final class iPadRightColumnAndHandoffTests: XCTestCase {
         XCTAssertEqual(placement.panelRoutes, [.notifications])
     }
 
+    // MARK: - Pile du Jeu dans le relais
+
+    func test_gameTrail_keepsReadableRoutes_andFollowsASwipeBack() {
+        var trail = GamePanelTrail()
+        trail.push(.progressionConcept(.league), over: .progression)
+        trail.push(.gamePage(.league), over: .progression)
+        XCTAssertEqual(trail.routes(over: .progression), [.progressionConcept(.league), .gamePage(.league)])
+        XCTAssertEqual(trail.routes(over: .settings), [], "la pile ne vaut que pour SA racine")
+
+        // Un retour par glissement : la NavigationStack rend un chemin raccourci.
+        var shorter = trail.path(over: .progression)
+        shorter.removeLast()
+        let swiped = GamePanelTrail(root: .progression, path: shorter, previous: trail)
+        XCTAssertEqual(swiped.routes(over: .progression), [.progressionConcept(.league)])
+    }
+
+    func test_gameTrail_crossesTheHandoff_andIsReplayedOnTheTablet() {
+        let stack = RootNavigationHandoff.stack(conversation: nil, panelRoute: .progression)
+            + [.progressionConcept(.league), .gamePage(.league)]
+        let placement = RootNavigationHandoff.tabletPlacement(of: stack)
+        XCTAssertNil(placement.conversation)
+        XCTAssertEqual(placement.panelRoutes, [.progression, .progressionConcept(.league), .gamePage(.league)])
+    }
+
     // MARK: - Poignée des colonnes
 
     func test_columnRatio_followsTheFingerFromTheDragStart() {

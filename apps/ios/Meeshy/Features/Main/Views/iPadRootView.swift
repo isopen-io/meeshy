@@ -182,7 +182,8 @@ struct iPadRootView: View {
             onAppear: installRouterCallbacks,
             onDisappear: uninstallRouterCallbacks,
             onStart: startRootServices,
-            navigationStack: RootNavigationHandoff.stack(conversation: activeConversation, panelRoute: rightPanelRoute),
+            navigationStack: RootNavigationHandoff.stack(conversation: activeConversation, panelRoute: rightPanelRoute)
+                + (rightPanelRoute.map { gameTrail.trail.routes(over: $0) } ?? []),
             onRestoreNavigation: restoreNavigation
         ))
         .modifier(RootIntentRoutingLayer(
@@ -411,7 +412,7 @@ struct iPadRootView: View {
                 rightPanelRoute: $rightPanelRoute,
                 gamePath: Binding(
                     get: { gameTrail.trail.path(over: route) },
-                    set: { gameTrail.trail = GamePanelTrail(root: route, path: $0) }
+                    set: { gameTrail.trail = GamePanelTrail(root: route, path: $0, previous: gameTrail.trail) }
                 ),
                 notificationManager: notifications.manager,
                 onOpenConversation: openConversation,
