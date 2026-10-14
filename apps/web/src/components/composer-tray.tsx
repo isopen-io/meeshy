@@ -10,7 +10,7 @@ const ComposerAudioTrim = lazy(() => import('./composer-audio-trim'));
 import { Glyph, GlyphSvg } from './glyph';
 import { COMPOSER_GLYPHS } from './glyphs-composer';
 import { translate } from '@/lib/i18n-catalog';
-import { currentInterfaceLanguage } from '@/lib/interface-language';
+import { currentInterfaceLanguage, type InterfaceLanguage } from '@/lib/interface-language';
 import { previewUrlFor } from '@/lib/send/attachment-preview-url';
 import { pendingTileGlyph } from '@/lib/send/pending-tile-glyph';
 import { type PendingAttachment } from '@/lib/send/attachments';
@@ -103,11 +103,13 @@ function formatDuration(durationMs: number): string {
 
 /** `1 min 12 s` — ce que le lecteur d'écran PRONONCE, là où `0:12` se lit à
  * l'œil (miroir `LocalizedNumber.spokenDuration`, `+Recording.swift:209`). */
-function spokenDuration(durationMs: number): string {
+function spokenDuration(durationMs: number, language: InterfaceLanguage): string {
   const seconds = Math.round(durationMs / 1000);
   const minutes = Math.floor(seconds / 60);
-  const rest = seconds % 60;
-  return minutes === 0 ? `${rest} s` : `${minutes} min ${rest} s`;
+  const rest = String(seconds % 60);
+  return minutes === 0
+    ? translate(language, 'composer.recording.seconds', { seconds: rest })
+    : translate(language, 'composer.recording.minutes', { minutes: String(minutes), seconds: rest });
 }
 
 /**
@@ -196,7 +198,8 @@ function RecordingBar({
 }) {
   const reduced = REDUCED_MOTION();
   const canSend = recorderState.durationMs >= MIN_SENDABLE_DURATION_MS;
-  const holdOn = 'Maintenez encore pour atteindre la durée minimum';
+  const language = currentInterfaceLanguage();
+  const holdOn = translate(language, 'composer.recording.holdOn');
   return (
     <div className="px-3 py-2.5">
       <div
@@ -211,8 +214,8 @@ function RecordingBar({
           onClick={onCancelRecording}
           className="tap-target-32 grid size-8 shrink-0 place-items-center rounded-full"
           style={{ backgroundColor: 'color-mix(in srgb, var(--ios-error-strong) 14%, transparent)' }}
-          aria-label="Annuler l’enregistrement"
-          title="Supprime le message vocal en cours"
+          aria-label={translate(language, 'composer.recording.cancel')}
+          title={translate(language, 'composer.recording.cancel.hint')}
         >
           <Glyph name="x" size={14} style={{ color: 'var(--ios-error-strong)' }} />
         </button>
@@ -231,10 +234,10 @@ function RecordingBar({
             className={`size-1.5 rounded-full${reduced ? '' : ' animate-pulse'}`}
             style={{ backgroundColor: 'var(--ios-error-strong)' }}
           />
-          <span className="sr-only">Enregistrement en cours, </span>
+          <span className="sr-only">{`${translate(language, 'composer.recording.inProgress')}, `}</span>
           <time dateTime={`PT${Math.round(recorderState.durationMs / 1000)}S`}>
             <span aria-hidden>{formatDuration(recorderState.durationMs)}</span>
-            <span className="sr-only">{spokenDuration(recorderState.durationMs)}</span>
+            <span className="sr-only">{spokenDuration(recorderState.durationMs, language)}</span>
           </time>
         </span>
 
@@ -244,8 +247,8 @@ function RecordingBar({
           aria-disabled={canSend ? undefined : true}
           className="tap-target-32 grid size-8 shrink-0 place-items-center rounded-full"
           style={{ backgroundColor: 'var(--recording-fill)', opacity: canSend ? 1 : 0.4 }}
-          aria-label="Arrêter et ajouter aux pièces jointes"
-          title={canSend ? 'Place le message vocal dans les pièces jointes pour l’éditer avant l’envoi' : holdOn}
+          aria-label={translate(language, 'composer.recording.stop')}
+          title={canSend ? translate(language, 'composer.recording.stop.hint') : holdOn}
         >
           <GlyphSvg glyph={COMPOSER_GLYPHS.stop} size={14} style={{ color: 'var(--recording-ink)' }} />
         </button>
@@ -259,8 +262,8 @@ function RecordingBar({
             background: 'linear-gradient(135deg, var(--accent), color-mix(in srgb, var(--accent) 65%, white))',
             opacity: canSend ? 1 : 0.4,
           }}
-          aria-label="Envoyer le message vocal"
-          title={canSend ? 'Termine et envoie l’enregistrement' : holdOn}
+          aria-label={translate(language, 'composer.recording.send')}
+          title={canSend ? translate(language, 'composer.recording.send.hint') : holdOn}
         >
           <Glyph name="arrowUp" size={16} className="text-white" />
         </button>
@@ -463,7 +466,7 @@ function PreviewStrip({
     <>
       <div
         role="group"
-        aria-label="Pièces jointes en attente"
+        aria-label={translate(currentInterfaceLanguage(), 'composer.pending.group')}
         className="scrollbar-none flex gap-3 overflow-x-auto px-3 py-2.5"
         style={{
           height: 100,
@@ -547,14 +550,14 @@ function NoticeBanner({ notice }: { readonly notice: ComposerNotice }) {
           className="tap-target-32 h-8 shrink-0 rounded-chip px-2 text-title font-semibold"
           style={{ color: 'var(--accent)' }}
         >
-          {notice.retryLabel ?? 'Réessayer'}
+          {notice.retryLabel ?? translate(currentInterfaceLanguage(), 'common.retry')}
         </button>
       ) : null}
       <button
         type="button"
         onClick={notice.onDismiss}
         className="grid size-11 shrink-0 place-items-center"
-        aria-label="Fermer l’avertissement"
+        aria-label={translate(currentInterfaceLanguage(), 'composer.notice.dismiss')}
       >
         <Glyph name="x" size={14} style={{ color: 'var(--color-ios-ink-2)' }} />
       </button>

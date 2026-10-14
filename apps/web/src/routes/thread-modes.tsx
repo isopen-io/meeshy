@@ -23,6 +23,7 @@ import type { TypingEntry } from '@/lib/api/typing-store';
 import type { Viewer } from '@/lib/api/viewer';
 import { dayLabel, type PlacedMessage } from '@/lib/grouping';
 import type { ConversationEpisode, FaceRampEntry } from '@/lib/summary/types';
+import { translate } from '@/lib/i18n-catalog';
 import { currentInterfaceLanguage } from '@/lib/interface-language';
 import type { MessageMenuController } from '@/lib/view/use-message-menu';
 import { checkStatusOf, isMineOf } from '@/lib/view/message';
@@ -476,10 +477,10 @@ export function ThreadModes({
           <div className="grid flex-1 place-items-center px-8 text-center">
             <div className="grid gap-2">
               <p className="text-title font-semibold" style={{ color: 'var(--color-ios-ink)' }}>
-                Aucun message pour l’instant
+                {translate(currentInterfaceLanguage(), 'thread.empty.title')}
               </p>
               <p className="text-body" style={{ color: 'var(--color-ios-ink-2)' }}>
-                Écrivez le premier — il sera traduit dans la langue de chacun.
+                {translate(currentInterfaceLanguage(), 'thread.empty.body')}
               </p>
             </div>
           </div>

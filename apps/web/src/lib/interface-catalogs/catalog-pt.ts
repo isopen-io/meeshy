@@ -26,6 +26,7 @@ import ptSignup from './catalog-pt-signup';
 import ptGallery from './catalog-pt-gallery';
 import ptMessageCard from './catalog-pt-message-card';
 import ptMentions from './catalog-pt-mentions';
+import ptShellLabels from './catalog-pt-shell-labels';
 import ptStudioChrome from './catalog-pt-studio-chrome';
 import ptEphemeral from './catalog-pt-ephemeral';
 import ptWriteRestriction from './catalog-pt-write-restriction';
@@ -1057,6 +1058,7 @@ const pt = {
   'message.detail.language.original': '{language} (original)',
 
   ...ptMentions,
+  ...ptShellLabels,
   ...ptStudioChrome,
   ...ptEphemeral,
   ...ptWriteRestriction,

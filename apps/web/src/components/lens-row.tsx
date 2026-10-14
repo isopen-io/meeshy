@@ -500,10 +500,10 @@ function LensRowImpl({
               className="rounded-chip px-1.5 text-check font-semibold whitespace-nowrap"
               style={{ backgroundColor: 'color-mix(in srgb, var(--accent) 18%, transparent)', color: 'var(--accent)' }}
             >
-              {group ? 'Groupe' : 'Direct'}
+              {translate(currentInterfaceLanguage(), group ? 'list.row.group' : 'list.row.direct')}
             </span>
             {flags.isArchived ? (
-              <Glyph name="archive" size={12} title="Archivée" style={{ color: 'var(--color-ios-ink-3)' }} />
+              <Glyph name="archive" size={12} title={translate(currentInterfaceLanguage(), 'list.row.archived')} style={{ color: 'var(--color-ios-ink-3)' }} />
             ) : null}
           </span>
 
@@ -566,7 +566,7 @@ function LensRowImpl({
               </span>
             )}
             {flags.isPinned ? (
-              <Glyph name="pushPin" size={12} title="Épinglée" style={{ color: 'var(--color-ios-ink-3)', opacity: chromeFade }} />
+              <Glyph name="pushPin" size={12} title={translate(currentInterfaceLanguage(), 'list.row.pinned')} style={{ color: 'var(--color-ios-ink-3)', opacity: chromeFade }} />
             ) : null}
             {/* LA SOURDINE SE VOIT (#10598) — la cloche barrée après le nom,
                 miroir du 🔕 d'iOS (`LentilleConversationRow.swift:262`) : le
