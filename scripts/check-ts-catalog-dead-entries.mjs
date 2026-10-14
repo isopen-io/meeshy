@@ -469,7 +469,7 @@ export const callersIn = (contents, nsNames) => {
 // Open Graph d'un lien d'affiliation, servie par la passerelle aux ROBOTS que Traefik trie par User-Agent
 // (jumelle des aperçus `/chat/<lien>` et `/l/<jeton>`). Aucun client ne l'appelle jamais : l'entrée existe parce
 // que le catalogue est généré depuis le manifeste. Valeur MESURÉE le 2026-10-13 en CI (run 38460483889 rouge sur 276).
-const BASELINE_DEAD_ENTRIES = 276;
+const BASELINE_DEAD_ENTRIES = 271;
 
 export const readWorld = (root) => {
   const groupFiles = readdirSync(join(root, GROUPS_DIR)).filter((name) => name.endsWith('.ts')).sort();

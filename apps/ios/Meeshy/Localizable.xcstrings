@@ -186043,53 +186043,6 @@
         }
       }
     },
-    "swipe.block": {
-      "extractionState": "stale",
-      "localizations": {
-        "ar": {
-          "stringUnit": {
-            "state": "translated",
-            "value": "حظر"
-          }
-        },
-        "de": {
-          "stringUnit": {
-            "state": "translated",
-            "value": "Blockieren"
-          }
-        },
-        "en": {
-          "stringUnit": {
-            "state": "translated",
-            "value": "Block"
-          }
-        },
-        "es": {
-          "stringUnit": {
-            "state": "translated",
-            "value": "Bloquear"
-          }
-        },
-        "fr": {
-          "stringUnit": {
-            "state": "translated",
-            "value": "Bloquer"
-          }
-        },
-        "it": {
-          "stringUnit": {
-            "state": "translated",
-            "value": "Blocca"
-          }
-        },
-        "pt-BR": {
-          "stringUnit": {
-            "state": "translated",
-            "value": "Bloquear"
-          }
-        }
-      }
-    },
     "swipe.hide": {
       "extractionState": "stale",
       "localizations": {
@@ -186415,53 +186368,6 @@
           "stringUnit": {
             "state": "translated",
             "value": "Desarquivar"
-          }
-        }
-      }
-    },
-    "swipe.unblock": {
-      "extractionState": "stale",
-      "localizations": {
-        "ar": {
-          "stringUnit": {
-            "state": "translated",
-            "value": "إلغاء الحظر"
-          }
-        },
-        "de": {
-          "stringUnit": {
-            "state": "translated",
-            "value": "Blockierung aufheben"
-          }
-        },
-        "en": {
-          "stringUnit": {
-            "state": "translated",
-            "value": "Unblock"
-          }
-        },
-        "es": {
-          "stringUnit": {
-            "state": "translated",
-            "value": "Desbloquear"
-          }
-        },
-        "fr": {
-          "stringUnit": {
-            "state": "translated",
-            "value": "Débloquer"
-          }
-        },
-        "it": {
-          "stringUnit": {
-            "state": "translated",
-            "value": "Sblocca"
-          }
-        },
-        "pt-BR": {
-          "stringUnit": {
-            "state": "translated",
-            "value": "Desbloquear"
           }
         }
       }
@@ -248111,43 +248017,43 @@
         "ar": {
           "stringUnit": {
             "state": "translated",
-            "value": "تُفتح المهام عند المستوى 5: ثلاث يوميًا وصندوق. أنت في المستوى %@."
+            "value": "تُفتح المهام عند المستوى 5: ثلاث يوميًا وصندوق. أنت في المستوى %lld."
           }
         },
         "de": {
           "stringUnit": {
             "state": "translated",
-            "value": "Missionen werden ab Level 5 freigeschaltet: drei pro Tag und eine Truhe. Du bist auf Level %@."
+            "value": "Missionen werden ab Level 5 freigeschaltet: drei pro Tag und eine Truhe. Du bist auf Level %lld."
           }
         },
         "en": {
           "stringUnit": {
             "state": "translated",
-            "value": "Missions open at level 5: three a day, and a chest. You are at level %@."
+            "value": "Missions open at level 5: three a day, and a chest. You are at level %lld."
           }
         },
         "es": {
           "stringUnit": {
             "state": "translated",
-            "value": "Las misiones se abren en el nivel 5: tres al día, y un cofre. Estás en el nivel %@."
+            "value": "Las misiones se abren en el nivel 5: tres al día, y un cofre. Estás en el nivel %lld."
           }
         },
         "fr": {
           "stringUnit": {
             "state": "translated",
-            "value": "Les missions s’ouvrent au niveau 5 : trois par jour, et un coffre. Tu es au niveau %@."
+            "value": "Les missions s’ouvrent au niveau 5 : trois par jour, et un coffre. Tu es au niveau %lld."
           }
         },
         "it": {
           "stringUnit": {
             "state": "translated",
-            "value": "Le missioni si aprono al livello 5: tre al giorno e un forziere. Sei al livello %@."
+            "value": "Le missioni si aprono al livello 5: tre al giorno e un forziere. Sei al livello %lld."
           }
         },
         "pt-BR": {
           "stringUnit": {
             "state": "translated",
-            "value": "As missões abrem no nível 5: três por dia e um baú. Você está no nível %@."
+            "value": "As missões abrem no nível 5: três por dia e um baú. Você está no nível %lld."
           }
         }
       }
