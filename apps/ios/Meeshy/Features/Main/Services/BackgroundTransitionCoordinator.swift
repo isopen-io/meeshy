@@ -145,6 +145,22 @@ final class BackgroundTransitionCoordinator: BackgroundTransitioning {
 
     // MARK: - Foreground entry
 
+    /// La reprise de qui n'a PAS de compte ouvert : un invité entré par lien, ou l'écran de connexion.
+    ///
+    /// `enterBackground` suspend la base et coupe les sockets pour tout le monde ; la reprise complète, elle,
+    /// n'est appelée que sous un compte. Sans ce pendant, la base restait suspendue au retour — toute écriture
+    /// refusée jusqu'au cycle suivant — pour l'invité revenu à sa conversation comme pour la personne partie
+    /// lire son code de connexion dans une autre app. Le socket de l'invité, détruit lui aussi, n'était
+    /// jamais reconstruit : aucun chemin de reconnexion n'existe sans jeton de compte.
+    func resumeWithoutSession() {
+        logger.info("Foreground resume (no account session)")
+        transitionGeneration &+= 1
+        DatabaseSuspension.resume()
+        guard !CallManagerHost.shared.isCallActiveForAudioGuard,
+              let guestSession = APIClient.shared.anonymousSessionToken, !guestSession.isEmpty else { return }
+        MessageSocketManager.shared.connectAnonymous(sessionToken: guestSession)
+    }
+
     func resumeFromBackground() async {
         logger.info("Foreground resume starting")
         transitionGeneration &+= 1

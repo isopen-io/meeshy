@@ -1957,7 +1957,10 @@ public final class MessageSocketManager: ObservableObject, MessageSocketProvidin
         if let socket, socket.status == .connected || socket.status == .connecting {
             return
         }
-        disconnect()
+        // Transport seul, pas `disconnect()` : au retour d'arrière-plan l'invité garde sa conversation
+        // ouverte, et ses salons doivent être rejoints au `.connect` — une remise à froid les oubliait.
+        // Un changement de compte passe par `disconnect()` de son côté.
+        suspendTransport()
 
         guard let url = SocketConfig.baseURL else { return }
 

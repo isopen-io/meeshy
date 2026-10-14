@@ -1042,7 +1042,12 @@ struct MeeshyApp: App {
     // MARK: - App Lifecycle Transitions
 
     private func handleForegroundTransition() async {
-        guard authManager.isAuthenticated else { return }
+        guard authManager.isAuthenticated else {
+            // Sans compte, la base suspendue à la mise en arrière-plan se relève quand même (#7059), et
+            // l'invité retrouve son socket.
+            BackgroundTransitionCoordinator.shared.resumeWithoutSession()
+            return
+        }
         // Coordinator rearms the sockets (force reconnect), flushes pending
         // delivery receipts and drives the conversation sync. We do NOT
         // check `isConnected` here — that flag is unreliable after iOS
