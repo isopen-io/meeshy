@@ -12,6 +12,9 @@ import MeeshySDK
 public final class AppearanceTileCache {
     public static let shared = AppearanceTileCache(countLimit: 32)
 
+    // iOS 26.1 : deinit synthétisée ISOLÉE → double-free au démontage xctest (Swift #85663).
+    nonisolated deinit {}
+
     private let storage = NSCache<NSString, UIImage>()
 
     public init(countLimit: Int) {
