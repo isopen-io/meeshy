@@ -1,6 +1,7 @@
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import type { KeyboardEvent as ReactKeyboardEvent, MouseEvent as ReactMouseEvent, PointerEvent as ReactPointerEvent } from 'react';
 import type { QueryClient } from '@tanstack/react-query';
+import type { MessageSticker } from '@meeshy/shared/types/message-sticker';
 import { useStore } from 'zustand/react';
 
 import { prismFor, served, type Served } from '@/lib/api/prism';
@@ -14,9 +15,10 @@ import type { Message } from '@/lib/api/types';
 import { discussionCardSubjectOf } from '@/lib/export/discussion-card-subject';
 import { readDefaultMessageCardFormat } from '@/lib/export/message-card-format';
 import { translate } from '@/lib/i18n-catalog';
-import { isMessagePiecesCatalogLoaded, loadMessagePiecesCatalog } from '@/lib/i18n-message-pieces-catalog';
+import { isMessagePiecesCatalogLoaded, loadMessagePiecesCatalog, translateMessagePieces } from '@/lib/i18n-message-pieces-catalog';
 import { currentInterfaceLanguage } from '@/lib/interface-language';
 import { openSendSheet } from '@/lib/send/send-sheet-store';
+import { useStickerLibrary } from '@/lib/stickers/use-sticker-library';
 import { safeLocalStorage } from '@/lib/storage';
 
 import {
@@ -37,6 +39,7 @@ import { PIECE_ATTRIBUTE, pieceIdAt, soleSaveablePieceOf, targetedPieceOf } from
 import { prewarmPieceReaction, usePieceMenu, type PieceMenuData } from './use-piece-menu';
 import { copyPlainText } from './copy-text';
 import { isMineOf } from './message';
+import { stickerOf } from './message-body';
 import { editOffered } from './message-edit';
 import { useDoubleTap, type DoubleTap } from './use-double-tap';
 import { SELECTION_CAP, copyTextOf, orderedIds, selectionReducer, type SelectionState } from './selection';
@@ -94,6 +97,15 @@ export type QuickReactionTarget = {
   readonly pieceId?: string;
 };
 
+/** Le menu d'un STICKER (#10630) : hors bibliothèque tant qu'elle n'est pas lue, l'ajout est offert — le doublon se déduplique côté serveur. */
+const stickerContextOf = (
+  message: Message,
+  library: { readonly has: (sticker: MessageSticker, picture: { readonly fileUrl: string } | undefined) => boolean },
+): { readonly sticker?: { readonly inLibrary: boolean } } => {
+  const sticker = stickerOf(message);
+  return sticker === null ? {} : { sticker: { inLibrary: library.has(sticker, message.attachments?.[0]) } };
+};
+
 export function useMessageMenu(params: {
   readonly conversationId: string;
   readonly messages: readonly Message[];
@@ -140,6 +152,9 @@ export function useMessageMenu(params: {
   const mine = useStore(reactionStore, (s) => s.mine);
 
   const messageOf = useCallback((id: string) => messages.find((m) => m.id === id), [messages]);
+  /* « AJOUTER À MES STICKERS » (#10630) — la bibliothèque n'est lue que quand le menu vise un sticker. */
+  const targetedMessage = menuTarget === null ? undefined : messages.find((m) => m.id === menuTarget.messageId);
+  const stickerLibrary = useStickerLibrary(targetedMessage !== undefined && stickerOf(targetedMessage) !== null);
   const piece = usePieceMenu({
     conversationId,
     viewerId,
@@ -478,6 +493,16 @@ export function useMessageMenu(params: {
         setDetailFor(messageId);
         return;
       }
+      if (id === 'addSticker') {
+        const message = messageOf(messageId);
+        const sticker = message === undefined ? null : stickerOf(message);
+        if (message === undefined || sticker === null) return;
+        const lang = currentInterfaceLanguage();
+        void stickerLibrary.add(sticker, message.attachments?.[0]).then((ok) =>
+          announce(translateMessagePieces(lang, ok ? 'message.sticker.added' : 'message.sticker.addFailed')),
+        );
+        return;
+      }
       /* « ENREGISTRER » (#10599) — la pièce unique, par la porte du menu d'une
          pièce (`pieceSave`) : une seule écriture du téléchargement. */
       if (id === 'save') {
@@ -497,7 +522,7 @@ export function useMessageMenu(params: {
       // `translate` ne passe jamais ici — `MessageMenu` l'intercepte en
       // interne et bascule sur son sous-menu (`onPickLanguage`).
     },
-    [copyableTextOf, params, announce, messageOf, discussionImageableOf, editOf, onPieceAction],
+    [copyableTextOf, params, announce, messageOf, discussionImageableOf, editOf, onPieceAction, stickerLibrary],
   );
 
   /** Le tap d'une rangée EN MODE SÉLECTION — bascule la coche ; le 101ᵉ id
@@ -639,6 +664,7 @@ export function useMessageMenu(params: {
       discussionImageable: discussionImageableOf(menuTarget.messageId),
       canEdit: editOf(menuTarget.messageId) !== null,
       canSave: soleSaveablePieceOf(message, Date.now()) !== null,
+      ...stickerContextOf(message, stickerLibrary),
     };
     const servedLanguage = servedOf(menuTarget.messageId)?.language ?? '';
     const lang = currentInterfaceLanguage();

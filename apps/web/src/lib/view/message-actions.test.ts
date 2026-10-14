@@ -74,7 +74,7 @@ describe('messageMenuItems — miroir MessageActionResolver.primaryActions, réd
    */
   test('ces clés se SERVENT — anglais puis arabe, jamais une recopie du français', async () => {
     await Promise.all([loadInterfaceCatalog('en'), loadInterfaceCatalog('ar')]);
-    expect(messageMenuItems(ctx()).flatMap((i) => (i.id === 'edit' ? [] : [translate('en', i.labelKey)]))).toEqual([
+    expect(messageMenuItems(ctx()).flatMap((i) => (i.id === 'edit' || i.id === 'addSticker' ? [] : [translate('en', i.labelKey)]))).toEqual([
       'Select',
       'Translate',
       'Copy',
@@ -83,7 +83,7 @@ describe('messageMenuItems — miroir MessageActionResolver.primaryActions, réd
       'Make an image',
       'More…',
     ]);
-    expect(messageMenuItems(ctx()).flatMap((i) => (i.id === 'edit' ? [] : [translate('ar', i.labelKey)]))).toEqual([
+    expect(messageMenuItems(ctx()).flatMap((i) => (i.id === 'edit' || i.id === 'addSticker' ? [] : [translate('ar', i.labelKey)]))).toEqual([
       'تحديد',
       'ترجمة',
       'نسخ',
@@ -410,5 +410,32 @@ describe('« Enregistrer » — un message à exactement une pièce enregistrabl
     expect(messageMenuItems(ctx({ canSave: true, isProtected: true })).map((i) => i.id)).not.toContain('save');
     expect(messageMenuItems(ctx({ canSave: true, leaves: false })).map((i) => i.id)).not.toContain('save');
     expect(messageMenuItems(ctx({ canSave: true, isViewOnce: true })).map((i) => i.id)).toEqual(['more']);
+  });
+});
+
+describe('messageMenuItems — « Ajouter à mes stickers » (#10630)', () => {
+  const sticker = { hasText: false, sticker: { inLibrary: false } } as const;
+
+  test('offert SEULEMENT quand le sticker n’est pas déjà dans la bibliothèque, après « Répondre »', () => {
+    expect(messageMenuItems(ctx(sticker)).map((i) => i.id)).toEqual(['select', 'forward', 'reply', 'addSticker', 'more']);
+    expect(messageMenuItems(ctx({ hasText: false, sticker: { inLibrary: true } })).map((i) => i.id)).not.toContain('addSticker');
+    expect(messageMenuItems(ctx({ hasText: false })).map((i) => i.id)).not.toContain('addSticker');
+  });
+
+  test('son libellé vit dans le catalogue du fil', () => {
+    expect(messageMenuItems(ctx(sticker)).find((i) => i.id === 'addSticker')).toEqual({
+      id: 'addSticker',
+      labelKey: 'message.sticker.add',
+      glyph: 'downloadSimple',
+    });
+  });
+
+  test('jamais « Enregistrer » sur un sticker, rangé ou non, même avec une pièce enregistrable', () => {
+    expect(messageMenuItems(ctx({ ...sticker, canSave: true })).map((i) => i.id)).not.toContain('save');
+    expect(messageMenuItems(ctx({ hasText: false, sticker: { inLibrary: true }, canSave: true })).map((i) => i.id)).not.toContain('save');
+  });
+
+  test('un contenu qui ne sort pas ne s’ajoute pas', () => {
+    expect(messageMenuItems(ctx({ ...sticker, isProtected: true })).map((i) => i.id)).not.toContain('addSticker');
   });
 });
