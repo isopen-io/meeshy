@@ -1105,6 +1105,23 @@
         "source": "Mesure de measure-weight.mjs le 2026-09-26 (`bun run build` puis `node scripts/measure-weight.mjs`) : 2,04 Ko gzip -9 -- l'ecran « Medias, liens et documents » d'une conversation (`components/conversation-media-hub.tsx` : sept segments, recherche posee, etats dessines, sentinelle de defilement). CHARGE A LA DEMANDE (`lazy()`, `conversation-media-section.tsx`) au tap sur « Tout voir » de la feuille de details ; ses rangees et sa grille (`conversation-media-hub-items.tsx`) sont partagees avec l'apercu de la feuille. Arrondi au Ko SUPERIEUR (3) + 1 Ko de marge, meme discipline que les chunks voisins."
       }
     },
+    "conversation_details_sheet": {
+      "pattern": "^assets/conversation-details-sheet-[A-Za-z0-9_-]{7}\\.js$",
+      "kb": {
+        "value": 15,
+        "status": "CIBLE -- MESUREE PAR #10613, NON ARBITREE",
+        "source": "Mesure du 2026-10-14 (`bun run build` puis gzip -9) : 12,80 Ko pour assets/conversation-details-sheet-<hash>.js -- la feuille de details d'une conversation (`components/conversation-details-sheet.tsx`) avec, depuis #10613 et #7836, la gestion des membres (`conversation-details-members.tsx` : menu par membre, confirmation, recherche), les reglages du groupe (`conversation-settings-section.tsx` : photo, titre, description, permissions) et les options du lecteur (`conversation-options-section.tsx`). CHARGEE A LA DEMANDE (`lazy()`, `conversation-details-sheet-lazy.tsx`) au toucher du titre d'une conversation ; ses mots vivent dans `catalog-conversation-manage-<langue>` (un chunk par langue), l'ajout de membres et le temps reel des membres dans leurs propres chunks. Premier plafond pose sur ce chunk : arrondi au Ko SUPERIEUR (13) + 2 Ko de marge. Pas de `dynamic_only` : les ecrans charges DEPUIS la feuille (Medias, ajout de membres) relisent statiquement les briques que Rollup a rangees dans ce chunk (feuille, avatar) -- c'est le parent qui les porte, pas une fuite."
+      }
+    },
+    "conversation_add_members_sheet": {
+      "pattern": "^assets/conversation-add-members-sheet-[A-Za-z0-9_-]{7}\\.js$",
+      "dynamic_only": true,
+      "kb": {
+        "value": 3,
+        "status": "CIBLE -- MESUREE PAR #10613, NON ARBITREE",
+        "source": "Mesure du 2026-10-14 (`bun run build` puis gzip -9) : 1,85 Ko pour assets/conversation-add-members-sheet-<hash>.js -- la feuille « Ajouter des membres » (`components/conversation-add-members-sheet.tsx` : amis d'abord, recherche de personnes, choix multiple, un seul POST). CHARGEE AU GESTE (`lazy()`, `conversation-details-members.tsx`). Arrondi au Ko SUPERIEUR (2) + 1 Ko de marge."
+      }
+    },
     "interface_catalogs_link_families": {
       "pattern": "^assets/catalog-link-families-(fr|en|es|pt|de|it|ar)-[A-Za-z0-9_-]+\\.js$",
       "dynamic_only": true,
