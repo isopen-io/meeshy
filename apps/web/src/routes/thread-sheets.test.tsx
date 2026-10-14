@@ -91,6 +91,7 @@ const menuOf = (overrides: Partial<ThreadSheetsMenu> = {}): ThreadSheetsMenu => 
   setExportFor: () => {},
   servedOf: () => undefined,
   starOf: () => null,
+  editOf: () => null,
   ...overrides,
 });
 

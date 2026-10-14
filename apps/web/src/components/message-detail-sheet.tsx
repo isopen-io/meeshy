@@ -1,5 +1,6 @@
 import { flag, languageName } from '@/lib/languages';
 import { translate } from '@/lib/i18n-catalog';
+import { translateMessagePieces } from '@/lib/i18n-message-pieces-catalog';
 import { currentInterfaceLanguage } from '@/lib/interface-language';
 import type { Attachment } from '@/lib/api/types';
 import type { TranslationChoice } from '@/lib/view/message-actions';
@@ -49,6 +50,12 @@ import { Sheet } from './sheet';
  * ne se confondent pas : un lecteur peut lire l'application en anglais et
  * vouloir ses dates au format de son pays.
  *
+ * « MODIFIER » (#10581) ouvre la section, à la place qu'iOS lui donne
+ * (`moreSections`, avant copier, imager et l'étoile) : `act.onEdit` nul ou
+ * absent, l'entrée n'existe pas. Son libellé vit dans le catalogue du fil
+ * (`message.edit.*`), que l'hôte sait chargé quand il remet le geste
+ * (`useMessageMenu.editOf`).
+ *
  * CE QUI RESTE FRANÇAIS ICI n'appartient pas à cette feuille : le bouton de
  * fermeture vient de `Sheet` (`aria-label="Fermer"`, en dur, partagé par
  * TOUTES les feuilles) — #7566 porte cet inventaire.
@@ -64,6 +71,7 @@ export function MessageDetailSheet({
   attachments,
   star,
   create = { onCompose: null, onImage: null },
+  act = {},
   onPickLanguage,
   onClose,
 }: {
@@ -84,6 +92,8 @@ export function MessageDetailSheet({
    * à composer ; rien à imager, ou message protégé) et ne s'offre pas.
    */
   readonly create?: { readonly onCompose: (() => void) | null; readonly onImage: (() => void) | null };
+  /** CE QUE LE LECTEUR PEUT FAIRE DU MESSAGE (#10581) — `null` ou absent : le geste ne s'offre pas. */
+  readonly act?: { readonly onEdit?: (() => void) | null };
   readonly onPickLanguage: (code: string) => void;
   readonly onClose: () => void;
 }) {
@@ -98,6 +108,23 @@ export function MessageDetailSheet({
 
   return (
     <Sheet title={translate(language, 'message.detail.title')} onClose={onClose}>
+      {act.onEdit == null ? null : (
+        <li>
+          <button
+            type="button"
+            data-message-act="edit"
+            onClick={() => {
+              act.onEdit?.();
+              onClose();
+            }}
+            className="flex w-full items-center gap-2.5 px-4 text-start text-body"
+            style={{ minHeight: 44, color: 'var(--color-ios-ink)' }}
+          >
+            <GlyphSvg glyph={THREAD_MENU_GLYPHS.pencilSimple} size={18} style={{ color: 'var(--accent)' }} />
+            <span className="flex-1">{translateMessagePieces(language, 'message.edit.action')}</span>
+          </button>
+        </li>
+      )}
       {creations.map((entry) =>
         entry.run === null ? null : (
           <li key={entry.id}>

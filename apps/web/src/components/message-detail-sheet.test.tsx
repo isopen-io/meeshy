@@ -4,6 +4,7 @@ import { afterAll, afterEach, beforeAll, describe, expect, test } from 'bun:test
 import { appQueryClient } from '@/lib/api/query-client';
 import { sessionStore } from '@/lib/api/session';
 import { loadInterfaceCatalog, translate } from '@/lib/i18n-catalog';
+import { loadMessagePiecesCatalog } from '@/lib/i18n-message-pieces-catalog';
 import { createActMounter } from '@/test-support/act-mount';
 import { modalLayersOpen } from '@/lib/view/modal-layers';
 import { ensureHappyDomRegistered, releaseHappyDomIfRegistered } from '@/test-support/happy-dom-environment';
@@ -24,7 +25,7 @@ const globals = globalThis as typeof globalThis & { IS_REACT_ACT_ENVIRONMENT?: b
 beforeAll(async () => {
   ensureHappyDomRegistered();
   globals.IS_REACT_ACT_ENVIRONMENT = true;
-  await Promise.all([loadInterfaceCatalog('fr'), loadInterfaceCatalog('en'), loadInterfaceCatalog('ar')]);
+  await Promise.all([loadInterfaceCatalog('fr'), loadInterfaceCatalog('en'), loadInterfaceCatalog('ar'), loadMessagePiecesCatalog('fr')]);
 });
 
 afterAll(async () => {
@@ -50,6 +51,7 @@ async function mountSheet(
     choices?: readonly { code: string; isOriginal: boolean; isServed: boolean }[];
     reactions?: readonly (readonly [string, number])[];
     readonly create?: { readonly onCompose: (() => void) | null; readonly onImage: (() => void) | null };
+    readonly act?: { readonly onEdit?: (() => void) | null };
   } = {},
 ) {
   return mounter.mount(
@@ -65,6 +67,7 @@ async function mountSheet(
         attachments={[]}
         star={extra.star ?? null}
         {...(extra.create === undefined ? {} : { create: extra.create })}
+        {...(extra.act === undefined ? {} : { act: extra.act })}
         onPickLanguage={() => undefined}
         onClose={extra.onClose ?? (() => undefined)}
       />
@@ -216,5 +219,28 @@ describe('« Plus… » déplie Composer ET Imager (#8693)', () => {
     expect([...imageOnly.querySelectorAll('[data-message-create]')].map((el) => el.getAttribute('data-message-create'))).toEqual(['image']);
     const none = await mountSheet(null, SERVER_MESSAGE_ID, { create: { onCompose: null, onImage: null } });
     expect(none.querySelector('[data-message-create]')).toBeNull();
+  });
+});
+
+describe('« Plus… » offre « Modifier » (#10581)', () => {
+  test('offert ⇒ première entrée, qui agit puis referme la feuille', async () => {
+    const journal: string[] = [];
+    const host = await mountSheet('sent', SERVER_MESSAGE_ID, {
+      act: { onEdit: () => journal.push('edit') },
+      create: { onCompose: null, onImage: () => undefined },
+      onClose: () => journal.push('close'),
+    });
+    const first = host.querySelector<HTMLElement>('li button');
+    expect(first?.getAttribute('data-message-act')).toBe('edit');
+    expect(first?.textContent).toBe('Modifier');
+    await mounter.click(first);
+    expect(journal).toEqual(['edit', 'close']);
+  });
+
+  test('non offert ⇒ aucune entrée', async () => {
+    const refused = await mountSheet('sent', SERVER_MESSAGE_ID, { act: { onEdit: null } });
+    expect(refused.querySelector('[data-message-act="edit"]')).toBeNull();
+    const silent = await mountSheet('sent');
+    expect(silent.querySelector('[data-message-act="edit"]')).toBeNull();
   });
 });

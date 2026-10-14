@@ -30,17 +30,17 @@ import type { Message } from './types';
  */
 export type MessageEditOutcome = 'ok' | 'unchanged' | 'offline' | 'refused';
 
-type EditedFields = Pick<Message, 'content' | 'isEdited'> & Partial<Pick<Message, 'translations' | 'validatedMentions'>>;
+type EditedFields = Pick<Message, 'content' | 'isEdited' | 'translations'> & Partial<Pick<Message, 'validatedMentions'>>;
 
 const editedFieldsOf = (message: Message): EditedFields => ({
   content: message.content,
   isEdited: message.isEdited,
-  ...(message.translations === undefined ? {} : { translations: message.translations }),
+  translations: message.translations,
   ...(message.validatedMentions === undefined ? {} : { validatedMentions: message.validatedMentions }),
 });
 
 const withEditedFields = (message: Message, fields: EditedFields): Message => {
-  const { translations: _translations, validatedMentions: _mentions, ...rest } = message;
+  const { validatedMentions: _mentions, ...rest } = message;
   return { ...rest, ...fields };
 };
 

@@ -50,6 +50,7 @@ export type ThreadSheetsMenu = Pick<
   | 'setExportFor'
   | 'servedOf'
   | 'starOf'
+  | 'editOf'
 >;
 
 /**
@@ -178,6 +179,7 @@ export function ThreadMessageSheets({
               messageId={detailMessage.id}
               attachments={exposed ? (detailMessage.attachments ?? []) : []}
               star={messageMenu.starOf(detailFor)}
+              act={{ onEdit: messageMenu.editOf(detailFor) }}
               create={{
                 onCompose: composable === undefined || composable === null ? null : () => void composeWithAttachment(composable, announce),
                 onImage: imageable ? () => messageMenu.setExportFor({ messageId: detailFor, quick: false }) : null,

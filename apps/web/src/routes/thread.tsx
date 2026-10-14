@@ -6,6 +6,7 @@ import { useStore } from 'zustand/react';
 import '@/routes/thread-styles';
 
 import { Composer } from '@/components/composer';
+import { MessageEditDock } from '@/components/message-edit-composer';
 import { SelectionToolbar } from '@/components/selection-toolbar';
 import { ThreadHeader } from '@/components/thread-header';
 import { ConversationDetailsContext } from '@/components/avatar-menu';
@@ -474,6 +475,7 @@ export default function ThreadScreen({ preview, focus }: ThreadScreenProps = {})
     messages,
     readerLanguages,
     send,
+    announce: announcer.announce,
   });
   const composeSend = compose.onSend;
   const returnToPresent = threadData.returnToPresent;
@@ -934,6 +936,7 @@ export default function ThreadScreen({ preview, focus }: ThreadScreenProps = {})
             invisible, mais permettre qu'on manipule les éléments entre »). */
         <ThreadWriteLock conversationId={conversationId} conversation={conversation}>
         <ThreadComposerChrome onFocus={chrome.onComposerFocus} onBlur={chrome.onComposerBlur}>
+          <MessageEditDock edit={compose.edit}>
           <Composer
             preferred={readerLanguages}
             onSend={sendAndReplayFlame}
@@ -947,6 +950,7 @@ export default function ThreadScreen({ preview, focus }: ThreadScreenProps = {})
               ? { replyTo: compose.replyTo, onCancelReply: compose.onCancelReply, imposedProtection: compose.imposedProtection }
               : {})}
           />
+          </MessageEditDock>
         </ThreadComposerChrome>
         </ThreadWriteLock>
       )}

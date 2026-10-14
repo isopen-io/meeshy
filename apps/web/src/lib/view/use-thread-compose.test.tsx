@@ -248,3 +248,33 @@ describe('useThreadCompose — publie la source des mentions du fil (#7826)', ()
     root = createRoot(container);
   });
 });
+
+describe('useThreadCompose — le mode édition (#10581)', () => {
+  const MINE = messageOf({ id: 'm-mine', senderId: VIEWER_ID, content: 'mon texte' });
+  const OTHER = messageOf({ id: 'm-other' });
+
+  test('`beginEdit` arme le mode sur le texte d’origine, `edit.cancel` le referme', () => {
+    const { state } = mount({ messages: [MINE, OTHER], send: () => {} });
+    act(() => state().beginEdit('m-mine'));
+    expect(state().edit.editing).toEqual({ messageId: 'm-mine', original: 'mon texte' });
+    act(() => state().edit.cancel());
+    expect(state().edit.editing).toBeNull();
+  });
+
+  test('armer une réponse sort du mode édition : le composeur revient avec sa citation', () => {
+    const { state } = mount({ messages: [MINE, OTHER], send: () => {} });
+    act(() => state().beginEdit('m-mine'));
+    act(() => state().setReplyTarget('m-other'));
+    expect(state().edit.editing).toBeNull();
+    expect(state().replyTo).toBeDefined();
+  });
+
+  test('la citation déjà armée est mise de côté avec le brouillon, et revient à l’annulation', () => {
+    const { state } = mount({ messages: [MINE, OTHER], send: () => {} });
+    act(() => state().setReplyTarget('m-other'));
+    act(() => state().beginEdit('m-mine'));
+    expect(state().edit.editing).not.toBeNull();
+    act(() => state().edit.cancel());
+    expect(state().replyTo).toBeDefined();
+  });
+});
