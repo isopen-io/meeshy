@@ -35,6 +35,13 @@ public enum ConversationAppearanceChange {
         return latestByConversation[conversationId]
     }
 
+    /// Oublie tout (déconnexion) : le compte suivant ne repart jamais du choix du précédent.
+    public static func reset() {
+        lock.lock()
+        latestByConversation.removeAll()
+        lock.unlock()
+    }
+
     public static func appearance(in notification: Notification, for conversationId: String) -> ConversationAppearance? {
         guard notification.userInfo?[conversationIdKey] as? String == conversationId else { return nil }
         return notification.userInfo?[appearanceKey] as? ConversationAppearance

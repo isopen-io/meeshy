@@ -14,13 +14,13 @@ final class ConversationStoreAppearanceTests: XCTestCase {
         )
     }
 
-    private func makeConv(version: Int = 5) -> MeeshyConversation {
+    private func makeConv(id: String = "conv-1", version: Int = 5, appearance: ConversationAppearance? = nil) -> MeeshyConversation {
         MeeshyConversation(
-            id: "conv-1", identifier: "conv-1", type: .direct,
+            id: id, identifier: id, type: .direct,
             lastMessageAt: Date(timeIntervalSince1970: 1_700_000_000),
             createdAt: Date(timeIntervalSince1970: 1_700_000_000),
             updatedAt: Date(timeIntervalSince1970: 1_700_000_000),
-            userState: ConversationUserState(version: version)
+            userState: ConversationUserState(appearance: appearance, version: version)
         )
     }
 
@@ -95,5 +95,67 @@ final class ConversationStoreAppearanceTests: XCTestCase {
         local.appearance = ConversationAppearance(background: .solid(color: "olive"))
         let merged = local.preferencesGrafted(onto: ConversationUserState())
         XCTAssertEqual(merged.appearance, local.appearance)
+    }
+
+    // MARK: Liste rafraîchie et cache disque
+
+    func test_hydrateMetadata_withAnotherAppearance_relaysItToTheOpenThread() async {
+        let store = makeStore()
+        let id = "conv-refresh-\(UUID().uuidString)"
+        await store.hydrate(makeConv(id: id, appearance: ConversationAppearance(background: .solid(color: "azur"))))
+        ConversationAppearanceChange.post(conversationId: id, appearance: ConversationAppearance(background: .solid(color: "azur")))
+        let fromAnotherDevice = ConversationAppearance(background: .solid(color: "sable"), accent: "lagon")
+
+        await store.hydrateMetadata([makeConv(id: id, version: 6, appearance: fromAnotherDevice)])
+
+        XCTAssertEqual(ConversationAppearanceChange.latest(for: id), fromAnotherDevice)
+    }
+
+    func test_hydrateList_withoutAppearanceAnyMore_relaysSignature() async {
+        let store = makeStore()
+        let id = "conv-cleared-\(UUID().uuidString)"
+        await store.hydrate(makeConv(id: id, appearance: ConversationAppearance(background: .solid(color: "azur"))))
+
+        await store.hydrateList([makeConv(id: id, version: 6, appearance: nil)])
+
+        XCTAssertEqual(ConversationAppearanceChange.latest(for: id), .default)
+    }
+
+    func test_hydrateList_firstSeed_relaysNothing() async {
+        let store = makeStore()
+        let id = "conv-seed-\(UUID().uuidString)"
+
+        await store.hydrateList([makeConv(id: id, appearance: ConversationAppearance(background: .solid(color: "sable")))])
+
+        XCTAssertNil(ConversationAppearanceChange.latest(for: id))
+    }
+
+    func test_reset_forgetsTheRelayedAppearances() async {
+        let store = makeStore()
+        let id = "conv-logout-\(UUID().uuidString)"
+        ConversationAppearanceChange.post(conversationId: id, appearance: ConversationAppearance(background: .solid(color: "sable")))
+
+        await store.reset()
+
+        XCTAssertNil(ConversationAppearanceChange.latest(for: id))
+    }
+
+    func test_cachedConversation_keepsItsAppearanceAcrossTheDiskRow() throws {
+        let chosen = ConversationAppearance(background: .photo(attachmentId: "a1", veil: 0.4, blur: 6), accent: "lagon")
+        let row = try JSONEncoder().encode(makeConv(appearance: chosen))
+
+        let restored = try JSONDecoder().decode(MeeshyConversation.self, from: row)
+
+        XCTAssertEqual(restored.userState.appearance, chosen)
+    }
+
+    func test_cachedConversation_writtenBeforeTheAppearance_readsNone() throws {
+        var legacy = try XCTUnwrap(JSONSerialization.jsonObject(with: JSONEncoder().encode(makeConv())) as? [String: Any])
+        legacy.removeValue(forKey: "appearance")
+        let row = try JSONSerialization.data(withJSONObject: legacy)
+
+        let restored = try JSONDecoder().decode(MeeshyConversation.self, from: row)
+
+        XCTAssertNil(restored.userState.appearance)
     }
 }
