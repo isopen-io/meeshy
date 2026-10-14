@@ -5,7 +5,8 @@ import { LONG_PRESS_MS } from './long-press';
 
 /**
  * LE DOUBLE TOUCHER D'UN MESSAGE (#10599) — deux touchers rapprochés sur une
- * rangée du fil posent la réaction la plus utilisée. La machine est PURE,
+ * rangée du fil ouvrent la barre de réaction rapide (décision porteur du
+ * 2026-10-14). La machine est PURE,
  * testable sans DOM ni minuteur réel, comme `pressReducer` (`long-press.ts`) :
  * le hook (`use-double-tap.ts`) ne fait qu'y brancher les événements et un
  * `setTimeout`.
