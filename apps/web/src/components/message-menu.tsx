@@ -14,14 +14,7 @@ import { safeAreaInsets } from '@/lib/view/safe-area';
 import { isProgrammaticScroll } from '@/lib/view/programmatic-scroll';
 import { useRovingMenu } from '@/lib/view/roving-menu';
 import { useBackDismiss } from '@/lib/view/use-back-dismiss';
-import { recordEmojiUsage, topEmojis } from '@/lib/emoji-usage';
-import {
-  EXTENDED_REACTIONS,
-  QUICK_REACTIONS,
-  type MessageActionId,
-  type MessageMenuItem,
-  type TranslationChoice,
-} from '@/lib/view/message-actions';
+import type { MessageActionId, MessageMenuItem, TranslationChoice } from '@/lib/view/message-actions';
 import { revealFloor, revealRestingFactor, revealRise, revealSplit } from '@/lib/view/message-menu-reveal';
 import {
   MENU_GAP,
@@ -32,7 +25,6 @@ import {
   PREVIEW_SCALE_FLOOR,
   RAIL_GAP,
   RAIL_HEIGHT,
-  RAIL_TILE,
   RAIL_TILE_GAP,
   railBandWidth,
   SIDE_PADDING,
@@ -41,6 +33,7 @@ import {
 import { GlyphSvg } from './glyph';
 import { THREAD_MENU_GLYPHS } from './glyphs-thread-menu';
 import { MessageMenuPieces } from './message-menu-pieces';
+import { quickReactionEmojis, RAIL_ITEM_COUNT, ReactionRailTiles } from './reaction-rail';
 
 /**
  * LE MENU DU MESSAGE (#5814) — appui long / clic droit / `ContextMenu` sur
@@ -59,8 +52,6 @@ import { MessageMenuPieces } from './message-menu-pieces';
  * `id`/`tabindex` sont RETIRÉS du clone pour que les gates gardent une
  * ancre UNIQUE par message dans le document.
  */
-
-const RAIL_ITEM_COUNT = QUICK_REACTIONS.length + 1; // 6 emojis + « Ajouter ».
 
 /** Un toucher sur le voile reste un toucher en deçà de ce parcours — miroir du
  * `minimumDistance: 12` du `DragGesture` de `MessageOverlayMenu.swift` (#9043). */
@@ -230,7 +221,7 @@ export function MessageMenu({
    * spectateur.
    */
   const [placement, setPlacement] = useState(() => computePlacement(listRows));
-  const [railEmojis] = useState(() => topEmojis({ count: QUICK_REACTIONS.length, defaults: EXTENDED_REACTIONS }));
+  const [railEmojis] = useState(quickReactionEmojis);
   const pieceMode = piece !== undefined;
   useLayoutEffect(() => {
     setPlacement(computePlacement(listRows));
@@ -446,7 +437,6 @@ export function MessageMenu({
 
   if (typeof document === 'undefined') return null;
 
-  const railTiles = [...railEmojis, '+'];
   const railWidthUsed = railBandWidth(window.innerWidth - 2 * SIDE_PADDING);
   // UNE mesure par rendu — deux `getBoundingClientRect()` en ligne dans le
   // JSX forçaient deux recalculs de layout pour la même ancre.
@@ -563,40 +553,22 @@ export function MessageMenu({
             pointerEvents: 'auto',
           }}
         >
-          {railTiles.map((tile, index) => {
-            const isPlus = index === railEmojis.length;
-            return (
-              <button
-                key={isPlus ? 'plus' : tile}
-                ref={(el) => {
-                  roving.itemRefs.current[index] = el;
-                }}
-                type="button"
-                role="menuitem"
-                tabIndex={index === roving.activeIndex ? 0 : -1}
-                aria-label={isPlus ? translate(language, 'message.menu.addReaction') : tile}
-                data-add-reaction={isPlus ? '' : undefined}
-                className="tap-target-34 grid place-items-center rounded-full"
-                style={{ width: RAIL_TILE, height: RAIL_TILE, fontSize: 22 }}
-                onClick={() => {
-                  if (isPlus) {
-                    onExpandReactions();
-                    onClose();
-                    return;
-                  }
-                  recordEmojiUsage(tile);
-                  onReact(tile);
-                  onClose();
-                }}
-              >
-                {isPlus ? (
-                  <GlyphSvg glyph={{ viewBox: '0 0 256 256', body: '<path d="M224,128a8,8,0,0,1-8,8H136v80a8,8,0,0,1-16,0V136H40a8,8,0,0,1,0-16h80V40a8,8,0,0,1,16,0v80h80A8,8,0,0,1,224,128Z"/>' }} size={16} />
-                ) : (
-                  tile
-                )}
-              </button>
-            );
-          })}
+          <ReactionRailTiles
+            emojis={railEmojis}
+            language={language}
+            activeIndex={roving.activeIndex}
+            itemRef={(index, el) => {
+              roving.itemRefs.current[index] = el;
+            }}
+            onPick={(emoji) => {
+              onReact(emoji);
+              onClose();
+            }}
+            onExpand={() => {
+              onExpandReactions();
+              onClose();
+            }}
+          />
         </div>
 
         {piece !== undefined && pieceBox !== null ? (
