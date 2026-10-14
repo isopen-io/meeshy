@@ -175,6 +175,65 @@
         <receiver
             android:name=".DeclineCallReceiver"
             android:exported="false" />
+        <!-- #10626 — les quatre widgets d'écran d'accueil d'iOS (MeeshyWidgets),
+             alimentés par la page via MeeshyWidgetsPlugin : aucun second SDK, aucune
+             mise à jour périodique. WidgetActionActivity relaie les gestes des lignes
+             (ouvrir, marquer lu) ; RecentConversationsService sert la liste. -->
+        <receiver
+            android:name=".UnreadCountWidget"
+            android:exported="false"
+            android:label="@string/widget_unread_name">
+            <intent-filter>
+                <action android:name="android.appwidget.action.APPWIDGET_UPDATE" />
+            </intent-filter>
+            <meta-data
+                android:name="android.appwidget.provider"
+                android:resource="@xml/widget_unread_info" />
+        </receiver>
+        <receiver
+            android:name=".RecentConversationsWidget"
+            android:exported="false"
+            android:label="@string/widget_recent_name">
+            <intent-filter>
+                <action android:name="android.appwidget.action.APPWIDGET_UPDATE" />
+            </intent-filter>
+            <meta-data
+                android:name="android.appwidget.provider"
+                android:resource="@xml/widget_recent_info" />
+        </receiver>
+        <receiver
+            android:name=".QuickReplyWidget"
+            android:exported="false"
+            android:label="@string/widget_quick_reply_name">
+            <intent-filter>
+                <action android:name="android.appwidget.action.APPWIDGET_UPDATE" />
+            </intent-filter>
+            <meta-data
+                android:name="android.appwidget.provider"
+                android:resource="@xml/widget_quick_reply_info" />
+        </receiver>
+        <receiver
+            android:name=".FavoriteContactsWidget"
+            android:exported="false"
+            android:label="@string/widget_favorites_name">
+            <intent-filter>
+                <action android:name="android.appwidget.action.APPWIDGET_UPDATE" />
+            </intent-filter>
+            <meta-data
+                android:name="android.appwidget.provider"
+                android:resource="@xml/widget_favorites_info" />
+        </receiver>
+        <service
+            android:name=".RecentConversationsService"
+            android:exported="false"
+            android:permission="android.permission.BIND_REMOTEVIEWS" />
+        <activity
+            android:name=".WidgetActionActivity"
+            android:excludeFromRecents="true"
+            android:exported="false"
+            android:noHistory="true"
+            android:taskAffinity=""
+            android:theme="@android:style/Theme.Translucent.NoTitleBar" />
     </application>
 
     <!-- Permissions -->
