@@ -38,8 +38,9 @@ import { blockTargetOf } from '@/lib/api/conversation-block-target';
 import { appQueryClient } from '@/lib/api/query-client';
 import { rowBlockAction, rowPreferenceAction } from '@/lib/api/row-intents';
 import type { RowIntent } from '@/lib/view/row-actions';
-import { applyFilter, emptinessOf, filterLabel, LIST_FILTERS, orderConversations, type ListFilter } from '@/lib/lens/filters';
+import { applyFilter, emptinessOf, filterLabel, LIST_FILTERS, NEUTRAL_SELECTION, orderConversations, selectionLabel, toggleFilter, type ListSelection } from '@/lib/lens/filters';
 import { memoriserLienParLecteur, partagerInvitationParrainee, retourInvitationParrainee } from '@/lib/view/invitation';
+import { authorStoryRing } from '@/lib/view/author-story-ring';
 import { useStoryRailProps } from '@/lib/view/use-story-rail';
 import { QuickActions, type QuickAction } from '@/components/quick-actions';
 import { resolveLensSections } from '@/lib/lens/sections';
@@ -249,10 +250,10 @@ const ACTIONS_DE_DEMARRAGE: readonly QuickAction[] = [
 ];
 
 export default function ConversationsScreen() {
-  const [filter, setFilter] = useState<ListFilter>('all');
+  const [selection, setSelection] = useState<ListSelection>(NEUTRAL_SELECTION);
   const [search, setSearch] = useState('');
   const interfaceLanguage = currentInterfaceLanguage();
-  useDismissRowSwipeOnViewChange(`${filter}\u0001${search}`);
+  useDismissRowSwipeOnViewChange(`${selection.join(',')}\u0001${search}`);
   const frame = useRef<HTMLUListElement | null>(null);
 
   /**
@@ -480,7 +481,7 @@ export default function ConversationsScreen() {
   const timeZone = useMemo(() => Intl.DateTimeFormat().resolvedOptions().timeZone, []);
   const minute = useMinute();
   const { visible, emptiness, sections, world } = useMemo(() => {
-    const kept = applyFilter({ conversations, filter, search, viewerId: viewer.id ?? '', overrides });
+    const kept = applyFilter({ conversations, selection, search, viewerId: viewer.id ?? '', overrides });
     const ordered = orderConversations(kept, overrides);
     /* WORLD WIDE SORT DES SECTIONS ET SE POSE AU-DESSUS D'ELLES (#10004), en
        rangée ordinaire (#10191) — seulement si le filtre et la recherche la
@@ -495,7 +496,7 @@ export default function ConversationsScreen() {
     // `minute` n'entre dans AUCUNE des expressions ci-dessus : c'est
     // volontaire — elle y est la clé qui fait ré-évaluer `new Date()`.
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [conversations, filter, search, viewer.id, overrides, categories, timeZone, minute]);
+  }, [conversations, selection, search, viewer.id, overrides, categories, timeZone, minute]);
 
   /**
    * LE PLIAGE DES SECTIONS (#8694, toute section depuis #10103) — Épingles et
@@ -566,6 +567,7 @@ export default function ConversationsScreen() {
       peerFocused={peerHereIn(focusedPeers, c, viewer.id ?? '')}
       peerMood={moodOf(peerKeyIn(c, viewer.id ?? ''))}
       peerMoodPostId={moodOf.postOf?.(peerKeyIn(c, viewer.id ?? ''))}
+      peerStoryRing={authorStoryRing(railProps.groups, peerKeyIn(c, viewer.id ?? '')) ?? undefined}
       engagement={effectiveEngagementOf({ byConversation: liveEngagements }, c)}
       status={{
         /**
@@ -676,13 +678,18 @@ export default function ConversationsScreen() {
         <li className="-mx-2 shrink-0">
           <nav data-list-filters aria-label={rowMenuText(interfaceLanguage, 'listFilter.nav')} className="scrollbar-none overflow-x-auto">
             <ul className="flex gap-2 px-4 py-1.5">
+              {/* LES PUCES SE COMPOSENT (#10598) — un appui pose, un second
+                  retire, « Tous » efface le reste : `toggleFilter`, la loi
+                  d'iOS (`ConversationFilterComposition`). `data-list-filter`
+                  est le crochet des gates : le nom suit la langue. */}
               {LIST_FILTERS.map((f) => {
-                const active = f === filter;
+                const active = selection.includes(f);
                 return (
                   <li key={f}>
                     <button
                       type="button"
-                      onClick={() => setFilter(f)}
+                      data-list-filter={f}
+                      onClick={() => setSelection((current) => toggleFilter(f, current))}
                       aria-pressed={active}
                       className="rounded-chip px-3 py-1.5 text-title font-medium whitespace-nowrap transition-colors"
                       style={
@@ -816,13 +823,13 @@ export default function ConversationsScreen() {
           >
             <Glyph name="magnifyingGlass" size={40} style={{ color: 'var(--color-ios-ink-3)' }} />
             <p className="text-body" style={{ color: 'var(--color-ios-ink)' }}>
-              Aucune conversation ne correspond à « {search || filterLabel(filter, interfaceLanguage)} ».
+              Aucune conversation ne correspond à « {search || selectionLabel(selection, interfaceLanguage)} ».
             </p>
             <button
               type="button"
               onClick={() => {
                 setSearch('');
-                setFilter('all');
+                setSelection(NEUTRAL_SELECTION);
               }}
               className="rounded-chip px-5 text-body font-semibold text-ios-on-brand"
               style={{ backgroundColor: 'var(--color-ios-brand)', minHeight: 44 }}

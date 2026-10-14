@@ -3,14 +3,18 @@ import type { KeyboardEvent as ReactKeyboardEvent, MouseEvent as ReactMouseEvent
 import type { QueryClient } from '@tanstack/react-query';
 import { useStore } from 'zustand/react';
 
+import { isReactionAllowed } from '@meeshy/shared/utils/reaction-limit';
+
 import { prismFor, served, type Served } from '@/lib/api/prism';
 import { reactAction } from '@/lib/api/query';
 import { appQueryClient } from '@/lib/api/query-client';
 import { apiDeps } from '@/lib/api/deps';
 import type { DataSource } from '@/lib/api/config';
 import type { ApiResult, HttpRequest } from '@/lib/api/http';
-import { reactionStore } from '@/lib/api/reaction-store';
+import { mineOf, reactionStore } from '@/lib/api/reaction-store';
 import type { Message } from '@/lib/api/types';
+import { favoriteReaction } from '@/components/reaction-rail';
+import { recordEmojiUsage } from '@/lib/emoji-usage';
 import { discussionCardSubjectOf } from '@/lib/export/discussion-card-subject';
 import { readDefaultMessageCardFormat } from '@/lib/export/message-card-format';
 import { translate } from '@/lib/i18n-catalog';
@@ -30,13 +34,17 @@ import {
   type TranslationChoice,
 } from './message-actions';
 import { contentExitOf, exitOffers } from './content-exit';
+import { doubleTapReactable } from './double-tap';
 import { admitForward, forwardRefusalOf, forwardRequestOf, type ForwardRefusal } from './forward';
 import { useLongPress, type LongPressAnchor } from './long-press';
-import { pieceIdAt, targetedPieceOf } from './message-piece';
+import { pieceIdAt, soleSaveablePieceOf, targetedPieceOf } from './message-piece';
+import { playReactionBurst } from './reaction-burst';
+import { prefersReducedMotion } from './reduced-motion';
 import { prewarmPieceReaction, usePieceMenu, type PieceMenuData } from './use-piece-menu';
 import { copyPlainText } from './copy-text';
 import { isMineOf } from './message';
 import { editOffered } from './message-edit';
+import { useDoubleTap, type DoubleTap } from './use-double-tap';
 import { SELECTION_CAP, copyTextOf, orderedIds, selectionReducer, type SelectionState } from './selection';
 import { useMessageDelete } from './use-message-delete';
 import { useMessagePin, type MessagePinEntry } from './use-message-pin';
@@ -135,7 +143,7 @@ export function useMessageMenu(params: {
     queryClient: params.queryClient ?? appQueryClient,
     transport: params.transport ?? apiDeps.transport,
   });
-  const { onPieceReact } = piece;
+  const { onPieceReact, onPieceAction } = piece;
   /* LES LIBELLÉS D'UNE PIÈCE (#9907) arrivent avec le fil, hors du catalogue d'interface. */
   useEffect(() => {
     void loadMessagePiecesCatalog(currentInterfaceLanguage()).catch(() => undefined);
@@ -301,26 +309,6 @@ export function useMessageMenu(params: {
    * la première peinture (menu de l'avatar) : le fil seul en paie le poids.
    */
   const gesture = useLongPress({ onOpen: (anchor) => openMenuFor({ ...anchor, origin: originRef.current }) });
-  const longPress = useMemo(() => {
-    const note = (event: { readonly target: EventTarget | null }) => {
-      originRef.current = event.target;
-    };
-    return {
-      ...gesture,
-      onPointerDown: (event: ReactPointerEvent<HTMLElement>) => {
-        note(event);
-        gesture.onPointerDown(event);
-      },
-      onContextMenu: (event: ReactMouseEvent<HTMLElement>) => {
-        note(event);
-        gesture.onContextMenu(event);
-      },
-      onKeyDown: (event: ReactKeyboardEvent<HTMLElement>) => {
-        note(event);
-        gesture.onKeyDown(event);
-      },
-    };
-  }, [gesture]);
 
   const onCloseMenu = useCallback(() => {
     setMenuTarget(null);
@@ -354,6 +342,69 @@ export function useMessageMenu(params: {
     },
     [conversationId, announce, onPieceReact],
   );
+
+  /**
+   * LE DOUBLE TOUCHER POSE LA RÉACTION LA PLUS UTILISÉE (#10599) — la première
+   * tuile du rail (`favoriteReaction`), par la porte du rail (`onMenuReact`) :
+   * sur la PIÈCE touchée quand le menu saurait la viser seule (au moins deux
+   * pièces visuelles, rien de protégé — `targetedPieceOf`), sur le message
+   * sinon. Le geste AJOUTE, il ne retire jamais : une réaction déjà posée
+   * rejoue l'éclosion et rien ne change. Un ajout refusé par le plafond part
+   * quand même vers `onMenuReact`, qui l'annonce — sans éclosion.
+   * Le menu ouvert et la sélection le neutralisent.
+   */
+  const blockedRef = useRef(false);
+  blockedRef.current = selection !== null || menuTarget !== null;
+  const onDoubleTap = useCallback(
+    (tap: DoubleTap) => {
+      const now = Date.now();
+      const message = messageOf(tap.messageId);
+      if (message === undefined || !doubleTapReactable(message, now)) return;
+      const emoji = favoriteReaction();
+      const pieceId = pieceIdAt(tap.origin, tap.row);
+      const piece = targetedPieceOf(message, pieceId, now) === null ? undefined : message.attachments?.find((a) => a.id === pieceId);
+      const mine = piece === undefined ? mineOf(message.id) : (piece.currentUserReactions ?? []);
+      const burst = () => playReactionBurst({ emoji, x: tap.x, y: tap.y, reducedMotion: prefersReducedMotion() });
+      if (mine.includes(emoji)) {
+        burst();
+        return;
+      }
+      if (isReactionAllowed(mine.length)) {
+        burst();
+        recordEmojiUsage(emoji);
+      }
+      onMenuReact(message.id, emoji, piece?.id);
+    },
+    [messageOf, onMenuReact],
+  );
+  const doubleTap = useDoubleTap({ enabled: () => !blockedRef.current, onDoubleTap });
+
+  /**
+   * LES GESTES D'UNE RANGÉE — l'appui long (menu) et le double toucher
+   * (réaction), étalés ensemble sur chaque rangée par l'hôte.
+   */
+  const longPress = useMemo(() => {
+    const note = (event: { readonly target: EventTarget | null }) => {
+      originRef.current = event.target;
+    };
+    return {
+      ...gesture,
+      onPointerDown: (event: ReactPointerEvent<HTMLElement>) => {
+        note(event);
+        gesture.onPointerDown(event);
+        doubleTap.onPointerDown(event);
+      },
+      onClickCapture: doubleTap.onClickCapture,
+      onContextMenu: (event: ReactMouseEvent<HTMLElement>) => {
+        note(event);
+        gesture.onContextMenu(event);
+      },
+      onKeyDown: (event: ReactKeyboardEvent<HTMLElement>) => {
+        note(event);
+        gesture.onKeyDown(event);
+      },
+    };
+  }, [gesture, doubleTap]);
 
   /**
    * BASCULE (revue #5814, défaut majeur 12) — c'est le SEUL geste qui pose
@@ -422,6 +473,14 @@ export function useMessageMenu(params: {
         setDetailFor(messageId);
         return;
       }
+      /* « ENREGISTRER » (#10599) — la pièce unique, par la porte du menu d'une
+         pièce (`pieceSave`) : une seule écriture du téléchargement. */
+      if (id === 'save') {
+        const message = messageOf(messageId);
+        const sole = message === undefined ? null : soleSaveablePieceOf(message, Date.now());
+        if (sole !== null) onPieceAction(messageId, sole.id, 'pieceSave');
+        return;
+      }
       if (id === 'export' || id === 'exportQuick' || id === 'exportDiscussion') {
         const message = messageOf(messageId);
         if (message === undefined || !imageableOf(messageMenuContextOf(message, { now: Date.now() }))) return;
@@ -433,7 +492,7 @@ export function useMessageMenu(params: {
       // `translate` ne passe jamais ici — `MessageMenu` l'intercepte en
       // interne et bascule sur son sous-menu (`onPickLanguage`).
     },
-    [copyableTextOf, params, announce, messageOf, discussionImageableOf, editOf],
+    [copyableTextOf, params, announce, messageOf, discussionImageableOf, editOf, onPieceAction],
   );
 
   /** Le tap d'une rangée EN MODE SÉLECTION — bascule la coche ; le 101ᵉ id
@@ -574,6 +633,7 @@ export function useMessageMenu(params: {
       hasDefaultExportFormat: readDefaultMessageCardFormat(safeLocalStorage()) !== null,
       discussionImageable: discussionImageableOf(menuTarget.messageId),
       canEdit: editOf(menuTarget.messageId) !== null,
+      canSave: soleSaveablePieceOf(message, Date.now()) !== null,
     };
     const servedLanguage = servedOf(menuTarget.messageId)?.language ?? '';
     const lang = currentInterfaceLanguage();
@@ -599,7 +659,7 @@ export function useMessageMenu(params: {
     onMenuReact,
     onMenuAction,
     onPieceChange,
-    onPieceAction: piece.onPieceAction,
+    onPieceAction,
     onPickLanguage,
     displayLanguageOf: (id: string) => displayLanguages.get(id),
     myReactionsOf: (id: string) => mine[id],
