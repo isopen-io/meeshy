@@ -26,6 +26,7 @@ import enSignup from './catalog-en-signup';
 import enGallery from './catalog-en-gallery';
 import enMessageCard from './catalog-en-message-card';
 import enMentions from './catalog-en-mentions';
+import enShellLabels from './catalog-en-shell-labels';
 import enStudioChrome from './catalog-en-studio-chrome';
 import enEphemeral from './catalog-en-ephemeral';
 import enWriteRestriction from './catalog-en-write-restriction';
@@ -1054,6 +1055,7 @@ const en = {
   'message.detail.language.original': '{language} (original)',
 
   ...enMentions,
+  ...enShellLabels,
   ...enStudioChrome,
   ...enEphemeral,
   ...enWriteRestriction,

@@ -230,7 +230,7 @@ describe('Attachments — le vocal, la piste suit le TEXTE servi (#5805, cycle 1
   test('le bouton porte le vocabulaire iOS repris, aucun aria-pressed, la durée 0:12', () => {
     const html = renderOne(voiceEn, { languages: ['fr'] });
     // React échappe l'apostrophe en entité HTML dans un attribut.
-    expect(html).toContain('aria-label="Lire l&#x27;audio"');
+    expect(html).toContain('aria-label="Lire l’audio"');
     expect(html).not.toContain('aria-pressed');
     expect(html).toContain('>0:12<');
   });
@@ -529,7 +529,7 @@ describe('Attachments — le vocal RAPPORTE sa consommation (#7225)', () => {
 
     expect(container.querySelector('[data-consumption]')).toBeNull();
 
-    const playButton = container.querySelector('button[aria-label="Lire l\'audio"]') as HTMLButtonElement;
+    const playButton = container.querySelector('button[aria-label="Lire l’audio"]') as HTMLButtonElement;
     await act(async () => {
       playButton.click();
       await Promise.resolve();
@@ -567,7 +567,7 @@ describe('Attachments — le vocal RAPPORTE sa consommation (#7225)', () => {
     Object.defineProperty(audio, 'currentTime', { value: 11.9, configurable: true, writable: true });
 
     await act(async () => {
-      (container.querySelector('button[aria-label="Lire l\'audio"]') as HTMLButtonElement).click();
+      (container.querySelector('button[aria-label="Lire l’audio"]') as HTMLButtonElement).click();
       await new Promise((resolve) => setTimeout(resolve, 40));
     });
 

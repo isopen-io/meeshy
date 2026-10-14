@@ -4,6 +4,8 @@ import lentilleTokens from '@meeshy/shared/design/lentille-tokens.json';
 
 import { ROW_HEIGHT } from './lens-row';
 import { SECTION_TOGGLE_MIN_HEIGHT } from './lens-sticker';
+import { translate } from '@/lib/i18n-catalog';
+import { currentInterfaceLanguage } from '@/lib/interface-language';
 
 /**
  * LE SQUELETTE DE LA LISTE (#5650, F5/§5 étape 9) — CACHE VIDE seulement
@@ -117,7 +119,7 @@ export function LensSkeletonRows() {
 
 export function LensSkeleton() {
   return (
-    <ul id="contenu" aria-busy="true" aria-label="Chargement des conversations" className="flex flex-1 flex-col overflow-hidden px-2">
+    <ul id="contenu" aria-busy="true" aria-label={translate(currentInterfaceLanguage(), 'list.loading')} className="flex flex-1 flex-col overflow-hidden px-2">
       <LensSkeletonRows />
     </ul>
   );

@@ -75,7 +75,7 @@ function ProfileHeaderBar({ title }: { readonly title: string }) {
     <header className="flex shrink-0 items-center gap-2 px-3 pt-3 pb-2">
       <Link
         to="list"
-        aria-label="Retour aux conversations"
+        aria-label={translate(currentInterfaceLanguage(), 'thread.state.backToList')}
         className="grid size-11 shrink-0 place-items-center rounded-chip focus-visible:outline-2 focus-visible:outline-offset-2"
         style={{ color: 'var(--color-ios-brand)', outlineColor: 'var(--color-ios-brand)' }}
       >

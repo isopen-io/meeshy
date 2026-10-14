@@ -26,6 +26,7 @@ import itSignup from './catalog-it-signup';
 import itGallery from './catalog-it-gallery';
 import itMessageCard from './catalog-it-message-card';
 import itMentions from './catalog-it-mentions';
+import itShellLabels from './catalog-it-shell-labels';
 import itStudioChrome from './catalog-it-studio-chrome';
 import itEphemeral from './catalog-it-ephemeral';
 import itWriteRestriction from './catalog-it-write-restriction';
@@ -1054,6 +1055,7 @@ const it = {
   'message.detail.language.original': '{language} (originale)',
 
   ...itMentions,
+  ...itShellLabels,
   ...itStudioChrome,
   ...itEphemeral,
   ...itWriteRestriction,

@@ -682,7 +682,7 @@ export default function MediaViewer({
       ref={dialogRef}
       role="dialog"
       aria-modal="true"
-      aria-label={`${scenes !== undefined ? 'Scène' : 'Média'} ${index + 1} sur ${items.length}`}
+      aria-label={translate(language, scenes !== undefined ? 'media.viewer.position.scene' : 'media.viewer.position.media', { index: String(index + 1), total: String(items.length) })}
       data-media-viewer
       data-viewer-index={index}
       data-viewer-attachment={current.id}
@@ -702,7 +702,7 @@ export default function MediaViewer({
       <ViewerTopBar
         placement="corridor"
         hidden={chromeHidden}
-        exit={{ kind: 'close', label: 'Fermer', onExit: onClose, buttonRef: closeButtonRef }}
+        exit={{ kind: 'close', label: translate(language, 'common.close'), onExit: onClose, buttonRef: closeButtonRef }}
         {...(identity !== undefined ? { identity } : {})}
         {...(page !== null && page.offers.save
           ? {

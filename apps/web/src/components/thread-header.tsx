@@ -225,7 +225,8 @@ export function ThreadHeader({
   const peerSignals = group
     ? {}
     : { presence: peerPresence, here: peerHere, hereActive: peerActive, hereFocused: peerFocused, hereDotRatio: HEADER_HERE_DOT_RATIO, ...(peerMood === undefined ? {} : { mood: peerMood, ...(peerMoodPostId === undefined ? {} : { moodPostId: peerMoodPostId }) }) };
-  const toggleLabel = expanded ? 'Replier l’en-tête' : 'Déplier l’en-tête';
+  const interfaceLanguage = currentInterfaceLanguage();
+  const toggleLabel = translate(interfaceLanguage, expanded ? 'thread.header.collapse' : 'thread.header.expand');
   /* LA RECHERCHE DANS LA CONVERSATION — la loupe était un bouton SANS
      gestionnaire depuis septembre : elle ouvre maintenant le panneau
      (`ThreadSearchPanel`), qui interroge `GET …/messages/search`. Son état
@@ -301,7 +302,11 @@ export function ThreadHeader({
             data-thread-back=""
             className="flex h-11 min-w-11 shrink-0 items-center gap-1 rounded-chip pe-1"
             style={{ color: 'var(--accent)' }}
-            aria-label={otherUnread > 0 ? `Retour — ${otherUnread} messages non lus ailleurs` : 'Retour'}
+            aria-label={
+              otherUnread > 0
+                ? translate(interfaceLanguage, otherUnread === 1 ? 'thread.header.back.unread.one' : 'thread.header.back.unread.other', { count: String(otherUnread) })
+                : translate(interfaceLanguage, 'common.back')
+            }
           >
             <Glyph name="caretLeft" size={22} className="rtl:-scale-x-100" />
             <UnreadBadge count={otherUnread} />
@@ -439,7 +444,7 @@ export function ThreadHeader({
                 data-thread-search-toggle=""
                 className={CHROME_ACTION_HIT_CLASS}
                 style={{ color: 'var(--accent)' }}
-                aria-label={translate(currentInterfaceLanguage(), 'thread.search.open')}
+                aria-label={translate(interfaceLanguage, 'thread.search.open')}
               >
                 <ChromeActionDisc>
                   <Glyph name="magnifyingGlass" size={13} />
@@ -494,7 +499,7 @@ export function ThreadHeader({
                 avatarDoor.kind === 'details'
                   ? translate(currentInterfaceLanguage(), 'a11y.avatar.conversation', { name: title })
                   : preview
-                    ? 'Détails de la conversation'
+                    ? translate(interfaceLanguage, 'thread.header.details')
                     : toggleLabel
               }
               {...(avatarDoor.kind === 'details' ? { 'data-thread-avatar-door': 'details' } : {})}
