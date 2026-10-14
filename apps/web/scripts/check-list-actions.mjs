@@ -452,9 +452,18 @@ check(!(await rowIds(page)).includes(SUBJECT), 'après « Archiver », la rangé
    la langue d'interface (#10593). Elles se COMPOSENT (#10598) : un appui pose,
    un second retire, « Tous » est l'absence de filtre. */
 const chip = (id) => `nav[data-list-filters] button[data-list-filter="${id}"]`;
+/* Attendre l'ÉTAT, jamais un délai : la puce a basculé quand son
+   `aria-pressed` a changé — « Tous » se dit toujours choisi après son appui. */
 const tapChip = async (id) => {
+  const before = await page.getAttribute(chip(id), 'aria-pressed');
   await page.click(chip(id));
-  await page.waitForTimeout(150);
+  await page.waitForFunction(
+    ([selector, was, neutral]) => {
+      const now = document.querySelector(selector)?.getAttribute('aria-pressed');
+      return neutral ? now === 'true' : now !== was;
+    },
+    [chip(id), before, id === 'all'],
+  );
 };
 const pressed = async (id) => (await page.getAttribute(chip(id), 'aria-pressed')) === 'true';
 
@@ -487,14 +496,18 @@ check(
   `« Personnel + Ouvertes » rend l’union (${personal.length} + ${open.length} ⇒ ${both.length})`,
 );
 /* … ET UN ÉTAT LES CROISE : « Non lus » parmi elles rend exactement celles
-   qui portent une pastille de non-lus. */
+   qui portent une pastille de non-lus — une rangée du jeu marquée non lue
+   pour que le croisement ait quelque chose à retenir. */
+const marked = both[0];
+await act(marked, 'Non lu');
 const unreadExpected = await page.$$eval('[data-row]', (els) => els.filter((el) => el.querySelector('[data-unread]') !== null).map((el) => el.dataset.row));
 await tapChip('unread');
 const unreadAmong = await rowIds(page);
 check(
-  JSON.stringify([...unreadAmong].sort()) === JSON.stringify([...unreadExpected].sort()),
+  unreadExpected.includes(marked) && unreadAmong.length < both.length && JSON.stringify([...unreadAmong].sort()) === JSON.stringify([...unreadExpected].sort()),
   `« Non lus » croise les types posés (${JSON.stringify(unreadAmong)} attendu ${JSON.stringify(unreadExpected)})`,
 );
+await act(marked, 'Lu');
 await tapChip('all');
 check(await pressed('all') && !(await pressed('personal')) && !(await pressed('unread')), '« Tous » efface la sélection composée');
 
