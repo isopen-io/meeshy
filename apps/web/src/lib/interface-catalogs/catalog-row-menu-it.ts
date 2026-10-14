@@ -1,0 +1,30 @@
+import type { RowMenuCatalog } from '../i18n-row-menu-catalog';
+
+/** LE MENU D'UNE LIGNE ET LES PUCES DE LA LISTE, ITALIEN (#10593). */
+const it = {
+  'rowMenu.details': 'Dettagli',
+  'rowMenu.rename': 'Rinomina',
+  'rowMenu.favorite': 'Preferito',
+  'rowMenu.favorite.remove': 'Rimuovi dai preferiti',
+  'rowMenu.moveTo': 'Sposta in…',
+  'rowMenu.moveTo.mine': 'Le mie conversazioni',
+  'rowMenu.block': 'Blocca',
+  'rowMenu.unblock': 'Sblocca',
+  'rowMenu.back': 'Indietro',
+  'rowMenu.block.title': 'Bloccare questo utente?',
+  'rowMenu.block.message': 'Questa persona non potrà più inviarti messaggi. La conversazione passa nel tuo archivio.',
+  'rowMenu.rename.title': 'Rinomina la conversazione',
+  'rowMenu.rename.label': 'Nome',
+  'rowMenu.rename.hint': 'Lascialo vuoto per ritrovare il nome originale.',
+  'rowMenu.rename.save': 'Salva',
+  'listFilter.nav': 'Filtri',
+  'listFilter.all': 'Tutte',
+  'listFilter.unread': 'Non letti',
+  'listFilter.favorites': 'Preferiti',
+  'listFilter.groups': 'Gruppi',
+  'listFilter.directs': 'Dirette',
+  'listFilter.pinned': 'Fissate',
+  'listFilter.archived': 'Archiviate',
+} as const satisfies RowMenuCatalog;
+
+export default it;

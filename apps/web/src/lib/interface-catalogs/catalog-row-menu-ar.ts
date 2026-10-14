@@ -1,0 +1,30 @@
+import type { RowMenuCatalog } from '../i18n-row-menu-catalog';
+
+/** LE MENU D'UNE LIGNE ET LES PUCES DE LA LISTE, ARABE (#10593). */
+const ar = {
+  'rowMenu.details': 'التفاصيل',
+  'rowMenu.rename': 'إعادة تسمية',
+  'rowMenu.favorite': 'مفضّل',
+  'rowMenu.favorite.remove': 'إزالة من المفضلة',
+  'rowMenu.moveTo': 'نقل إلى…',
+  'rowMenu.moveTo.mine': 'محادثاتي',
+  'rowMenu.block': 'حظر',
+  'rowMenu.unblock': 'إلغاء الحظر',
+  'rowMenu.back': 'رجوع',
+  'rowMenu.block.title': 'حظر هذا المستخدم؟',
+  'rowMenu.block.message': 'لن يتمكّن هذا الشخص من إرسال رسائل إليك. تنتقل المحادثة إلى أرشيفك.',
+  'rowMenu.rename.title': 'إعادة تسمية المحادثة',
+  'rowMenu.rename.label': 'الاسم',
+  'rowMenu.rename.hint': 'اتركه فارغًا لاستعادة اسمها الأصلي.',
+  'rowMenu.rename.save': 'حفظ',
+  'listFilter.nav': 'عوامل التصفية',
+  'listFilter.all': 'الكل',
+  'listFilter.unread': 'غير مقروءة',
+  'listFilter.favorites': 'المفضلة',
+  'listFilter.groups': 'المجموعات',
+  'listFilter.directs': 'المباشرة',
+  'listFilter.pinned': 'المثبّتة',
+  'listFilter.archived': 'المؤرشفة',
+} as const satisfies RowMenuCatalog;
+
+export default ar;

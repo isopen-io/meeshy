@@ -1,5 +1,5 @@
-import { useCallback, useMemo, useRef, useState } from 'react';
-import { useQueryClient } from '@tanstack/react-query';
+import { lazy, Suspense, useCallback, useMemo, useRef, useState } from 'react';
+import { useInfiniteQuery, useQueryClient } from '@tanstack/react-query';
 import { useStore } from 'zustand/react';
 
 import { ListHeader } from '@/components/list-header';
@@ -32,8 +32,13 @@ import { peerHereIn, peerKeyIn, useActiveHerePeers, useFocusedHerePeers, useHere
 import { effectiveEngagementOf } from '@/lib/api/conversation-engagement';
 import { useLiveEngagements } from '@/lib/view/use-conversation-engagement';
 import { resolveViewer } from '@/lib/api/viewer';
-import { conversationStore, effectiveFlagsOf, effectiveUnreadOf } from '@/lib/conversation-store';
-import { applyFilter, emptinessOf, FILTER_LABELS, LIST_FILTERS, orderConversations, type ListFilter } from '@/lib/lens/filters';
+import { conversationStore, effectiveFlagsOf, effectiveUnreadOf, withPreferenceOverrides } from '@/lib/conversation-store';
+import { blockedIdsOf, lazyBlockedUsersQueryOptions } from '@/lib/api/blocked-peers';
+import { blockTargetOf } from '@/lib/api/conversation-block-target';
+import { appQueryClient } from '@/lib/api/query-client';
+import { rowBlockAction, rowPreferenceAction } from '@/lib/api/row-intents';
+import type { RowIntent } from '@/lib/view/row-actions';
+import { applyFilter, emptinessOf, filterLabel, LIST_FILTERS, orderConversations, type ListFilter } from '@/lib/lens/filters';
 import { memoriserLienParLecteur, partagerInvitationParrainee, retourInvitationParrainee } from '@/lib/view/invitation';
 import { useStoryRailProps } from '@/lib/view/use-story-rail';
 import { QuickActions, type QuickAction } from '@/components/quick-actions';
@@ -51,6 +56,8 @@ import { PULL_THRESHOLD, pullTransform } from '@/lib/view/pull-to-refresh';
 import { usePullToRefresh } from '@/lib/view/use-pull-to-refresh';
 import { useReaderLanguages } from '@/lib/view/use-reader';
 import { useMinute } from '@/lib/view/use-minute';
+import { rowMenuText } from '@/lib/i18n-row-menu-catalog';
+import { currentInterfaceLanguage } from '@/lib/interface-language';
 
 /**
  * L'ECRAN DE LISTE.
@@ -110,6 +117,9 @@ import { useMinute } from '@/lib/view/use-minute';
 /** Référence STABLE — un `[]` littéral par rendu changerait l'identité de
  * `conversations` à chaque image et défairait les mémos qui en dépendent. */
 const EMPTY_CONVERSATIONS: readonly Conversation[] = [];
+
+/* Renommer et confirmer un blocage (#10593) : chargés au geste. */
+const ConversationRowDialogs = lazy(() => import('@/components/conversation-row-dialogs'));
 
 /**
  * `content-center` ET NON `place-items-center` SEUL (#5650, revue-correction)
@@ -241,6 +251,7 @@ const ACTIONS_DE_DEMARRAGE: readonly QuickAction[] = [
 export default function ConversationsScreen() {
   const [filter, setFilter] = useState<ListFilter>('all');
   const [search, setSearch] = useState('');
+  const interfaceLanguage = currentInterfaceLanguage();
   useDismissRowSwipeOnViewChange(`${filter}\u0001${search}`);
   const frame = useRef<HTMLUListElement | null>(null);
 
@@ -360,7 +371,11 @@ export default function ConversationsScreen() {
   const session = useStore(sessionStore, (s) => s.session);
   const viewer = useMemo(() => resolveViewer({ source: apiDeps.source, session }), [session]);
   const { languages: readerLanguages } = useReaderLanguages();
-  const conversations = list.data ?? EMPTY_CONVERSATIONS;
+  const overrides = useStore(conversationStore, (s) => s.overrides);
+  /* LA CONVERSATION EFFECTIVE (#10593) — le favori, la catégorie et le nom
+     personnel corrigés à l'instant du geste : filtres, sections, rangées et
+     fiche lisent la même valeur. */
+  const conversations = useMemo(() => withPreferenceOverrides(list.data ?? EMPTY_CONVERSATIONS, overrides), [list.data, overrides]);
   /* LA FICHE D'UNE CONVERSATION NON DIRECTE, OUVERTE DEPUIS SON AVATAR
      (#10300) — miroir de `ThemedConversationRow` (`onTap: onViewConversationInfo`).
      `setDetailsId` est stable : les rangées mémoïsées ne se re-rendent pas. Un
@@ -368,7 +383,39 @@ export default function ConversationsScreen() {
   const [detailsId, setDetailsId] = useState<string | null>(null);
   const openDetails = useSpeaksAsGuest() ? undefined : setDetailsId;
   const detailsConversation = detailsId === null ? undefined : conversations.find((c) => c.id === detailsId);
-  const overrides = useStore(conversationStore, (s) => s.overrides);
+  /**
+   * LES ENTRÉES D'iOS DU MENU D'UNE LIGNE (#10593) — Renommer ouvre la
+   * fenêtre, Bloquer la confirmation, Débloquer agit tout de suite (iOS ne
+   * confirme pas), Favori et Déplacer vers… écrivent la préférence. Un compte
+   * seulement : un visiteur n'a ni préférences ni blocages. Les refs gardent
+   * le rappel STABLE — `sameRowProps` ne repeint aucune rangée pour lui.
+   */
+  const account = apiDeps.source === 'fixtures' || session.status === 'authenticated';
+  const [renameId, setRenameId] = useState<string | null>(null);
+  const [blockId, setBlockId] = useState<string | null>(null);
+  const latest = useRef({ conversations, viewerId: viewer.id ?? '' });
+  latest.current = { conversations, viewerId: viewer.id ?? '' };
+  const handleRowIntent = useCallback((conversationId: string, intent: RowIntent) => {
+    if (intent.kind === 'rename') return setRenameId(conversationId);
+    if (intent.kind === 'favorite') return rowPreferenceAction(conversationId, { reaction: intent.emoji });
+    if (intent.kind === 'moveTo') return rowPreferenceAction(conversationId, { categoryId: intent.categoryId });
+    if (intent.intent === 'block') return setBlockId(conversationId);
+    const conversation = latest.current.conversations.find((c) => c.id === conversationId);
+    if (conversation !== undefined) void rowBlockAction({ conversation, viewerId: latest.current.viewerId, intent: 'unblock' });
+    return undefined;
+  }, []);
+  const onRowIntent = account && openDetails !== undefined ? handleRowIntent : undefined;
+  /* QUI LE LECTEUR A BLOQUÉ — le panier de « Découvrir », la MÊME source que
+     `performBlock` écrit : la ligne dit « Débloquer » à l'instant du geste.
+     Tant qu'il n'est pas lu, la ligne ne propose ni l'un ni l'autre. */
+  const blocked = useInfiniteQuery({ ...lazyBlockedUsersQueryOptions(apiDeps), enabled: onRowIntent !== undefined }, appQueryClient);
+  const blockedIds = useMemo(() => blockedIdsOf(blocked.data), [blocked.data]);
+  const peerBlockedOf = (c: Conversation): boolean | undefined => {
+    const peer = blockedIds === undefined ? undefined : blockTargetOf(c, viewer.id ?? '');
+    return peer === undefined || blockedIds === undefined ? undefined : blockedIds.has(peer.id);
+  };
+  const renameConversation = renameId === null ? undefined : conversations.find((c) => c.id === renameId);
+  const blockConversation = blockId === null ? undefined : conversations.find((c) => c.id === blockId);
   /**
    * LES CATÉGORIES DU LECTEUR (#10103) — un COMPTE seulement : un invité ou un
    * visiteur anonyme n'a pas de tiroirs, ses conversations tombent par date.
@@ -510,6 +557,9 @@ export default function ConversationsScreen() {
       unreadCount={effectiveUnreadOf(c, overrides)}
       onRowAction={rowAction}
       onOpenDetails={openDetails}
+      onRowIntent={onRowIntent}
+      peerBlocked={peerBlockedOf(c)}
+      categories={categories}
       typists={typists[c.id]}
       peerHere={peerHereIn(herePeers, c, viewer.id ?? '')}
       peerActive={peerHereIn(activePeers, c, viewer.id ?? '')}
@@ -624,7 +674,7 @@ export default function ConversationsScreen() {
           <StoryRail ref={observeGrandRail} variant="grande" inert={pinned} {...railProps} />
         </li>
         <li className="-mx-2 shrink-0">
-          <nav aria-label="Filtres" className="scrollbar-none overflow-x-auto">
+          <nav aria-label={rowMenuText(interfaceLanguage, 'listFilter.nav')} className="scrollbar-none overflow-x-auto">
             <ul className="flex gap-2 px-4 py-1.5">
               {LIST_FILTERS.map((f) => {
                 const active = f === filter;
@@ -645,7 +695,7 @@ export default function ConversationsScreen() {
                             }
                       }
                     >
-                      {FILTER_LABELS[f]}
+                      {filterLabel(f, interfaceLanguage)}
                     </button>
                   </li>
                 );
@@ -766,7 +816,7 @@ export default function ConversationsScreen() {
           >
             <Glyph name="magnifyingGlass" size={40} style={{ color: 'var(--color-ios-ink-3)' }} />
             <p className="text-body" style={{ color: 'var(--color-ios-ink)' }}>
-              Aucune conversation ne correspond à « {search || FILTER_LABELS[filter]} ».
+              Aucune conversation ne correspond à « {search || filterLabel(filter, interfaceLanguage)} ».
             </p>
             <button
               type="button"
@@ -880,6 +930,28 @@ export default function ConversationsScreen() {
           ) : null}
         </div>
       </div>
+      {renameConversation === undefined && blockConversation === undefined ? null : (
+        <Suspense fallback={null}>
+          <ConversationRowDialogs
+            language={interfaceLanguage}
+            viewerId={viewer.id ?? ''}
+            rename={renameConversation}
+            block={blockConversation}
+            onRename={(conversation, name) => {
+              setRenameId(null);
+              rowPreferenceAction(conversation.id, { customName: name });
+            }}
+            onBlock={(conversation) => {
+              setBlockId(null);
+              void rowBlockAction({ conversation, viewerId: viewer.id ?? '', intent: 'block' });
+            }}
+            onClose={() => {
+              setRenameId(null);
+              setBlockId(null);
+            }}
+          />
+        </Suspense>
+      )}
       {detailsConversation === undefined ? null : (
         <ConversationDetailsPortal
           open

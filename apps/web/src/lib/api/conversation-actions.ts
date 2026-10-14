@@ -8,7 +8,7 @@ import type { RowFlagActionId } from '@/lib/view/row-actions';
 import { findCachedConversation, patchConversation, patchConversationDetail, type ConversationsDeps } from './conversations';
 import { toDate } from './decode';
 import { outcomeOf } from './outcome';
-import { pushConversationFlags, pushRead, pushUnread } from './preferences';
+import { pushConversationFlags, pushRead, pushUnread, type ConversationPreferencePatch } from './preferences';
 import { caughtUpConversation } from './receipts';
 import type { Conversation } from './types';
 
@@ -157,4 +157,39 @@ export async function performRowAction(params: {
   }
   plan.applyConfirmed(result);
   deps.store.getState().clearOverride(conversationId, plan.keys);
+}
+
+/**
+ * `performPreferenceAction` (#10593) — favori, catégorie, nom personnel, par
+ * la MÊME loi que les drapeaux : correction optimiste dans le store, PUT
+ * PARTIEL (`PUT /user-preferences/conversations/:id`, le seul champ touché),
+ * puis la valeur SERVIE gagne (2xx, liste ET fiche du fil), le refus défait
+ * (4xx), la panne garde la correction (réseau, 5xx).
+ */
+export async function performPreferenceAction(params: {
+  readonly conversationId: string;
+  readonly patch: ConversationPreferencePatch;
+  readonly deps: ConversationActionDeps;
+}): Promise<void> {
+  const { conversationId, patch, deps } = params;
+  const keys = Object.keys(patch) as (keyof ConversationPreferencePatch)[];
+  deps.store.getState().setPreference(conversationId, patch);
+  if (deps.source !== 'gateway') return;
+
+  let result: unknown;
+  try {
+    result = await pushConversationFlags(deps.transport, conversationId, patch);
+  } catch {
+    return;
+  }
+
+  const outcome = outcomeOf(result);
+  if (outcome === 'transient') return;
+  if (outcome === 'success') {
+    const confirmed = { ...patch, ...successDataOf(result) };
+    const apply = (c: Conversation): Conversation => ({ ...c, userPreferences: [{ ...preferenceEntryOf(c), ...confirmed }] });
+    patchConversation(deps.queryClient, conversationId, apply);
+    patchConversationDetail(deps.queryClient, conversationId, apply);
+  }
+  deps.store.getState().clearOverride(conversationId, keys);
 }

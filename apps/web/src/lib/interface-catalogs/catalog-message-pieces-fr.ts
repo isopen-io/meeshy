@@ -37,6 +37,13 @@ const fr = {
   'message.delete.partial': '{failed} messages sur {count} n’ont pas pu être supprimés',
   'message.delete.partialOne': 'Un message sur {count} n’a pas pu être supprimé',
   'message.reactors.empty': 'Aucune réaction',
+  'message.pin.action': 'Épingler',
+  'message.unpin.action': 'Désépingler',
+  'message.pin.done': 'Message épinglé',
+  'message.unpin.done': 'Message désépinglé',
+  'message.pin.failed': 'Le message n’a pas pu être épinglé',
+  'message.unpin.failed': 'Le message n’a pas pu être désépinglé',
+  'message.report.title': 'Signaler ce message',
 } as const;
 
 export default fr;

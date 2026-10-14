@@ -33,6 +33,13 @@ const es = {
   'message.delete.partial': 'No se pudieron eliminar {failed} de {count} mensajes',
   'message.delete.partialOne': 'No se pudo eliminar 1 de {count} mensajes',
   'message.reactors.empty': 'Ninguna reacción',
+  'message.pin.action': 'Fijar',
+  'message.unpin.action': 'Desfijar',
+  'message.pin.done': 'Mensaje fijado',
+  'message.unpin.done': 'Mensaje desfijado',
+  'message.pin.failed': 'No se pudo fijar el mensaje',
+  'message.unpin.failed': 'No se pudo desfijar el mensaje',
+  'message.report.title': 'Denunciar este mensaje',
 } satisfies MessagePiecesCatalog;
 
 export default es;

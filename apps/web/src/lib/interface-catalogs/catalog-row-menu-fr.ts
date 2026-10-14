@@ -1,0 +1,28 @@
+/** LE MENU D'UNE LIGNE ET LES PUCES DE LA LISTE, FRANÇAIS — la source des clés (#10593). */
+const fr = {
+  'rowMenu.details': 'Détails',
+  'rowMenu.rename': 'Renommer',
+  'rowMenu.favorite': 'Favori',
+  'rowMenu.favorite.remove': 'Retirer le favori',
+  'rowMenu.moveTo': 'Déplacer vers…',
+  'rowMenu.moveTo.mine': 'Mes conversations',
+  'rowMenu.block': 'Bloquer',
+  'rowMenu.unblock': 'Débloquer',
+  'rowMenu.back': 'Retour',
+  'rowMenu.block.title': 'Bloquer cet utilisateur ?',
+  'rowMenu.block.message': 'Cette personne ne pourra plus vous envoyer de messages. La conversation rejoint vos archives.',
+  'rowMenu.rename.title': 'Renommer la conversation',
+  'rowMenu.rename.label': 'Nom',
+  'rowMenu.rename.hint': 'Laissez vide pour lui rendre son nom d’origine.',
+  'rowMenu.rename.save': 'Enregistrer',
+  'listFilter.nav': 'Filtres',
+  'listFilter.all': 'Tous',
+  'listFilter.unread': 'Non lus',
+  'listFilter.favorites': 'Favoris',
+  'listFilter.groups': 'Groupes',
+  'listFilter.directs': 'Directs',
+  'listFilter.pinned': 'Épinglés',
+  'listFilter.archived': 'Archivées',
+} as const;
+
+export default fr;
