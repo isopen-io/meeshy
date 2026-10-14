@@ -539,13 +539,6 @@ struct ConversationListView: View {
         // Hide section header when there are no user categories (flat list)
         if Self.showsSectionHeader(sectionId: group.section.id, isSingleUngroupedSection: isSingleUngroupedSection) {
             sectionHeaderLabel(for: group)
-                // La catégorie d'ORIGINE d'une conversation glissée, en couleur primaire.
-                .background(
-                    RoundedRectangle(cornerRadius: MeeshyRadius.sm)
-                        .fill(Color(hex: MeeshyColors.brandPrimaryHex)
-                            .opacity(dragOriginSectionId == group.section.id ? 0.22 : 0))
-                        .animation(.easeOut(duration: 0.2), value: dragOriginSectionId)
-                )
                 // Frame globale du header → registre inerte : cible de drop de la
                 // chip du morph drag (l'overlay hit-teste le doigt au relâchement).
                 .background(
@@ -563,6 +556,13 @@ struct ConversationListView: View {
                     dropTargetSection: $dropTargetSection,
                     onDrop: { handleDrop(to: group.section.id, providers: $0) }
                 ))
+                // Posé APRÈS le registre et le dépôt (contrat LWS-6) : la catégorie d'ORIGINE d'une conversation glissée, en couleur primaire.
+                .background(
+                    RoundedRectangle(cornerRadius: MeeshyRadius.sm)
+                        .fill(Color(hex: MeeshyColors.brandPrimaryHex)
+                            .opacity(dragOriginSectionId == group.section.id ? 0.22 : 0))
+                        .animation(.easeOut(duration: 0.2), value: dragOriginSectionId)
+                )
         }
     }
 
