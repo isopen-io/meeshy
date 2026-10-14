@@ -1,9 +1,12 @@
 import * as z from 'zod/mini';
 import * as directoryEndpoints from '@meeshy/shared/api/endpoints/directory';
 
+import type { ServedProfileDecor } from '@meeshy/shared/types/profile-decor';
+
 import { unwrap } from './client';
 import type { DataSource } from './config';
 import type { ApiResult, HttpTransport } from './http';
+import { readProfileDecor } from './profile-decor';
 
 /**
  * **LE PORT DU PROFIL PUBLIC** (#7032, étendu par #7083) —
@@ -63,6 +66,8 @@ export type PublicProfile = {
   readonly banner: string | null;
   readonly bio: string | null;
   readonly createdAt: string | null;
+  /** Le contour et la bannière de design équipés (#10632) ; absent = ancien serveur, rendu inchangé. */
+  readonly decor?: ServedProfileDecor;
 };
 
 /** Les onze compteurs de `UserStats`, moins `languages`/`achievements` que
@@ -150,6 +155,11 @@ const WireProfile = z.object({
   createdAt: optionalText,
 });
 
+const decorOf = (raw: unknown): { readonly decor?: ServedProfileDecor } => {
+  const decor = readProfileDecor(raw);
+  return decor === undefined ? {} : { decor };
+};
+
 const textOrNull = (value: string | null | undefined): string | null =>
   value === undefined || value === null || value.trim() === '' ? null : value;
 
@@ -167,6 +177,7 @@ export function decodePublicProfile(raw: unknown): PublicProfile | null {
     banner: textOrNull(banner),
     bio: textOrNull(bio),
     createdAt: textOrNull(createdAt),
+    ...decorOf(raw),
   };
 }
 
