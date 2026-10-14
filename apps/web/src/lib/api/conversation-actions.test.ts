@@ -104,6 +104,27 @@ describe("performRowAction('pin') — 2xx", () => {
   });
 });
 
+describe("performRowAction depuis la feuille de détails d'un fil ouvert directement (#7836)", () => {
+  test('la conversation que seul le cache du FIL connaît s’épingle quand même, et le fil prend la valeur confirmée', async () => {
+    const c = conversation({ id: 'c1', type: 'group', userPreferences: [{ isPinned: false }] });
+    const queryClient = new QueryClient();
+    queryClient.setQueryData(conversationQueryKey('c1'), c);
+    const store = freshStore();
+    const transport = createHttpTransport({
+      base: '',
+      fetchImpl: fakeFetch({ status: 200, body: { success: true, data: { isPinned: true, isMuted: false, isArchived: false } } }),
+    });
+
+    const promise = performRowAction({ conversationId: 'c1', action: 'pin', deps: { source: 'gateway', transport, store, queryClient } });
+    expect(effectiveFlagsOf(c, store.getState().overrides).isPinned).toBe(true);
+    await promise;
+
+    const detail = queryClient.getQueryData<Conversation>(conversationQueryKey('c1'));
+    expect((detail?.userPreferences as [{ isPinned: boolean }])[0]?.isPinned).toBe(true);
+    expect(effectiveFlagsOf(detail!, store.getState().overrides).isPinned).toBe(true);
+  });
+});
+
 describe("performRowAction('pin') — réseau (status 0) et 5xx", () => {
   test('l’override RESTE (transient)', async () => {
     const c = conversation({ id: 'c1', userPreferences: [{ isPinned: false }] });
