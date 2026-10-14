@@ -35,6 +35,7 @@ const fr = {
   'message.delete.failed': 'Le message n’a pas pu être supprimé',
   'message.delete.failedMany': 'Les messages n’ont pas pu être supprimés',
   'message.delete.partial': '{failed} messages sur {count} n’ont pas pu être supprimés',
+  'message.delete.partialOne': 'Un message sur {count} n’a pas pu être supprimé',
 } as const;
 
 export default fr;

@@ -37,6 +37,7 @@ import { copyPlainText } from './copy-text';
 import { isMineOf } from './message';
 import { editOffered } from './message-edit';
 import { SELECTION_CAP, copyTextOf, orderedIds, selectionReducer, type SelectionState } from './selection';
+import { useMessageDelete } from './use-message-delete';
 import { useMessageStar, type MessageStarEntry } from './use-message-star';
 
 /**
@@ -174,6 +175,35 @@ export function useMessageMenu(params: {
       return () => beginEdit(messageId);
     },
     [messageOf, beginEdit, viewerId, hasAccount],
+  );
+
+  /**
+   * « SUPPRIMER » (#10582) — le dialogue et ses effets (`use-message-delete.ts`),
+   * offerts à « Plus… » pour un message et à la barre pour la sélection. Le
+   * geste parti, la sélection se termine.
+   */
+  const deleteViewer = useMemo(() => ({ id: viewerId, hasAccount }), [viewerId, hasAccount]);
+  const endSelection = useCallback(() => setSelection(null), []);
+  const deletion = useMessageDelete({
+    conversationId,
+    messageOf,
+    viewer: deleteViewer,
+    announce,
+    queryClient: params.queryClient ?? appQueryClient,
+    transport: params.transport ?? apiDeps.transport,
+    onConfirmed: endSelection,
+  });
+  const { ask: askDelete, offerOf: deleteOfferFor } = deletion;
+  const deleteOf = useCallback(
+    (messageId: string): (() => void) | null => (deleteOfferFor([messageId]) === null ? null : () => askDelete([messageId])),
+    [deleteOfferFor, askDelete],
+  );
+  /** L'ordre est celui du FIL (`orderedIds`), comme pour le transfert : la boucle « pour tous » supprime dans l'ordre où on lit. */
+  const onDeleteSelection = useCallback(
+    (placed: readonly { readonly message: { readonly id: string } }[]) => {
+      if (selection !== null) askDelete(orderedIds(placed, new Set(selection.ids)));
+    },
+    [selection, askDelete],
   );
 
   /**
@@ -451,12 +481,13 @@ export function useMessageMenu(params: {
    * ou pas du tout, `admitForward`) ; « Copier » n'est pas rendu quand rien de
    * coché ne se copie. Un bouton interdit n'existe pas, il ne se grise pas.
    */
-  const selectionOffers = ((): { readonly forward: boolean; readonly copy: boolean } => {
-    if (selection === null) return { forward: false, copy: false };
+  const selectionOffers = ((): { readonly forward: boolean; readonly copy: boolean; readonly delete: boolean } => {
+    if (selection === null) return { forward: false, copy: false, delete: false };
     const picked = selection.ids.map((id) => messageOf(id)).filter((m): m is Message => m !== undefined);
     return {
       forward: admitForward(picked, Date.now()).admitted,
       copy: selection.ids.some((id) => (copyableTextOf(id) ?? '') !== ''),
+      delete: deleteOfferFor(selection.ids) !== null,
     };
   })();
 
@@ -559,7 +590,12 @@ export function useMessageMenu(params: {
     onEndSelection,
     onCopySelection,
     onForwardSelection,
+    onDeleteSelection,
     selectionOffers,
+    deleteOf,
+    deleteRequest: deletion.request,
+    onDismissDelete: deletion.dismiss,
+    onConfirmDelete: deletion.confirm,
     detailFor,
     setDetailFor,
     reactionSheetFor,

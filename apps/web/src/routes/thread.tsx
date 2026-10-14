@@ -907,6 +907,7 @@ export default function ThreadScreen({ preview, focus }: ThreadScreenProps = {})
           /* `placed` porte l'ordre du FIL — c'est lui qui ordonne les N
              transferts, jamais l'ordre des coches (#5866). */
           onForward={messageMenu.selectionOffers.forward ? () => messageMenu.onForwardSelection(placed) : null}
+          onDelete={messageMenu.selectionOffers.delete ? () => messageMenu.onDeleteSelection(placed) : null}
         />
       ) : (
         /*

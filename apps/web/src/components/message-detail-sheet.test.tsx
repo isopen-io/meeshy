@@ -51,7 +51,7 @@ async function mountSheet(
     choices?: readonly { code: string; isOriginal: boolean; isServed: boolean }[];
     reactions?: readonly (readonly [string, number])[];
     readonly create?: { readonly onCompose: (() => void) | null; readonly onImage: (() => void) | null };
-    readonly act?: { readonly onEdit?: (() => void) | null };
+    readonly act?: { readonly onEdit?: (() => void) | null; readonly onDelete?: (() => void) | null };
   } = {},
 ) {
   return mounter.mount(
@@ -242,5 +242,27 @@ describe('« Plus… » offre « Modifier » (#10581)', () => {
     expect(refused.querySelector('[data-message-act="edit"]')).toBeNull();
     const silent = await mountSheet('sent');
     expect(silent.querySelector('[data-message-act="edit"]')).toBeNull();
+  });
+});
+
+describe('« Plus… » offre « Supprimer » (#10582)', () => {
+  test('offert ⇒ dernière entrée de la section, qui referme la feuille PUIS ouvre le dialogue', async () => {
+    const journal: string[] = [];
+    const host = await mountSheet('sent', SERVER_MESSAGE_ID, {
+      act: { onEdit: () => journal.push('edit'), onDelete: () => journal.push('delete') },
+      create: { onCompose: null, onImage: () => undefined },
+      onClose: () => journal.push('close'),
+    });
+    const acts = [...host.querySelectorAll<HTMLElement>('[data-message-act], [data-message-create]')];
+    expect(acts.map((el) => el.getAttribute('data-message-act') ?? el.getAttribute('data-message-create'))).toEqual(['edit', 'image', 'delete']);
+    const entry = host.querySelector<HTMLElement>('[data-message-act="delete"]');
+    expect(entry?.textContent).toBe('Supprimer');
+    await mounter.click(entry);
+    expect(journal).toEqual(['close', 'delete']);
+  });
+
+  test('non offert ⇒ aucune entrée', async () => {
+    const host = await mountSheet('sent', SERVER_MESSAGE_ID, { act: { onDelete: null } });
+    expect(host.querySelector('[data-message-act="delete"]')).toBeNull();
   });
 });

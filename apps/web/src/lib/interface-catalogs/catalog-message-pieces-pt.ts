@@ -31,6 +31,7 @@ const pt = {
   'message.delete.failed': 'Não foi possível apagar a mensagem',
   'message.delete.failedMany': 'Não foi possível apagar as mensagens',
   'message.delete.partial': 'Não foi possível apagar {failed} de {count} mensagens',
+  'message.delete.partialOne': 'Não foi possível apagar 1 de {count} mensagens',
 } satisfies MessagePiecesCatalog;
 
 export default pt;

@@ -56,6 +56,10 @@ import { Sheet } from './sheet';
  * (`message.edit.*`), que l'hôte sait chargé quand il remet le geste
  * (`useMessageMenu.editOf`).
  *
+ * « SUPPRIMER » (#10582) FERME la section, comme sur iOS (`moreSections`,
+ * dernière action). Elle REFERME la feuille puis ouvre le dialogue de
+ * suppression — jamais deux modales l'une sur l'autre.
+ *
  * CE QUI RESTE FRANÇAIS ICI n'appartient pas à cette feuille : le bouton de
  * fermeture vient de `Sheet` (`aria-label="Fermer"`, en dur, partagé par
  * TOUTES les feuilles) — #7566 porte cet inventaire.
@@ -93,7 +97,7 @@ export function MessageDetailSheet({
    */
   readonly create?: { readonly onCompose: (() => void) | null; readonly onImage: (() => void) | null };
   /** CE QUE LE LECTEUR PEUT FAIRE DU MESSAGE (#10581) — `null` ou absent : le geste ne s'offre pas. */
-  readonly act?: { readonly onEdit?: (() => void) | null };
+  readonly act?: { readonly onEdit?: (() => void) | null; readonly onDelete?: (() => void) | null };
   readonly onPickLanguage: (code: string) => void;
   readonly onClose: () => void;
 }) {
@@ -162,6 +166,23 @@ export function MessageDetailSheet({
               style={{ color: 'var(--accent)' }}
             />
             <span className="flex-1">{translate(language, star.action === 'star' ? 'action.star' : 'action.unstar')}</span>
+          </button>
+        </li>
+      )}
+      {act.onDelete == null ? null : (
+        <li>
+          <button
+            type="button"
+            data-message-act="delete"
+            onClick={() => {
+              onClose();
+              act.onDelete?.();
+            }}
+            className="flex w-full items-center gap-2.5 px-4 text-start text-body"
+            style={{ minHeight: 44, color: 'var(--color-error)' }}
+          >
+            <GlyphSvg glyph={THREAD_MENU_GLYPHS.trash} size={18} />
+            <span className="flex-1">{translateMessagePieces(language, 'message.delete.action')}</span>
           </button>
         </li>
       )}

@@ -31,6 +31,7 @@ const ar = {
   'message.delete.failed': 'تعذّر حذف الرسالة',
   'message.delete.failedMany': 'تعذّر حذف الرسائل',
   'message.delete.partial': 'تعذّر حذف {failed} من {count} رسائل',
+  'message.delete.partialOne': 'تعذّر حذف رسالة واحدة من {count}',
 } satisfies MessagePiecesCatalog;
 
 export default ar;

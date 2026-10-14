@@ -31,6 +31,7 @@ const es = {
   'message.delete.failed': 'No se pudo eliminar el mensaje',
   'message.delete.failedMany': 'No se pudieron eliminar los mensajes',
   'message.delete.partial': 'No se pudieron eliminar {failed} de {count} mensajes',
+  'message.delete.partialOne': 'No se pudo eliminar 1 de {count} mensajes',
 } satisfies MessagePiecesCatalog;
 
 export default es;

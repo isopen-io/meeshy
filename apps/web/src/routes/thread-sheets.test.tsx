@@ -7,6 +7,7 @@ import { attachmentDefaults, message, translation } from '@/lib/api/fixtures-bas
 import type { Attachment, Message } from '@/lib/api/types';
 import { loadInterfaceCatalog } from '@/lib/i18n-catalog';
 import { loadExportCardCatalog } from '@/lib/i18n-export-card-catalog';
+import { loadMessagePiecesCatalog } from '@/lib/i18n-message-pieces-catalog';
 import { createActMounter } from '@/test-support/act-mount';
 import { ensureHappyDomRegistered, releaseHappyDomIfRegistered } from '@/test-support/happy-dom-environment';
 
@@ -29,7 +30,7 @@ const globals = globalThis as typeof globalThis & { IS_REACT_ACT_ENVIRONMENT?: b
 beforeAll(async () => {
   ensureHappyDomRegistered();
   globals.IS_REACT_ACT_ENVIRONMENT = true;
-  await loadInterfaceCatalog('fr');
+  await Promise.all([loadInterfaceCatalog('fr'), loadMessagePiecesCatalog('fr')]);
 });
 
 afterAll(async () => {
@@ -92,6 +93,10 @@ const menuOf = (overrides: Partial<ThreadSheetsMenu> = {}): ThreadSheetsMenu => 
   servedOf: () => undefined,
   starOf: () => null,
   editOf: () => null,
+  deleteOf: () => null,
+  deleteRequest: null,
+  onDismissDelete: () => {},
+  onConfirmDelete: () => {},
   ...overrides,
 });
 
@@ -277,5 +282,37 @@ describe('ThreadMessageSheets — les feuilles du message (#7429, extrait de rou
     expect(emoji).not.toBe('');
     await mounter.click(firstEmoji);
     expect(journal).toEqual([`react:${SERVER_MESSAGE_ID}:${emoji}`, 'sheet:null']);
+  });
+});
+
+describe('ThreadMessageSheets — le dialogue de suppression (#10582)', () => {
+  test('aucune demande ⇒ aucun dialogue', async () => {
+    const host = await mountSheets(menuOf(), [ownMessage()]);
+    expect(has(host, '[data-message-delete]')).toBe(false);
+  });
+
+  test('une demande ⇒ le dialogue offre ce que la règle a remis, et confirme auprès du contrôleur', async () => {
+    const journal: string[] = [];
+    const host = await mountSheets(
+      menuOf({
+        deleteRequest: { messageIds: [SERVER_MESSAGE_ID], offer: { forEveryone: false, forMe: true } },
+        onConfirmDelete: (mode) => journal.push(mode),
+      }),
+      [ownMessage()],
+    );
+    expect(has(host, '[data-message-delete="everyone"]')).toBe(false);
+    await mounter.click(host.querySelector('[data-message-delete="me"]'));
+    expect(journal).toEqual(['me']);
+  });
+
+  test('« Plus… » remet les gestes du contrôleur à la fiche : Modifier et Supprimer', async () => {
+    const journal: string[] = [];
+    const host = await mountSheets(
+      menuOf({ detailFor: SERVER_MESSAGE_ID, editOf: () => () => journal.push('edit'), deleteOf: () => () => journal.push('delete') }),
+      [ownMessage()],
+    );
+    expect(has(host, '[data-message-act="edit"]')).toBe(true);
+    await mounter.click(host.querySelector('[data-message-act="delete"]'));
+    expect(journal).toEqual(['delete']);
   });
 });

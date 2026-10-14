@@ -31,6 +31,7 @@ const de = {
   'message.delete.failed': 'Die Nachricht konnte nicht gelöscht werden',
   'message.delete.failedMany': 'Die Nachrichten konnten nicht gelöscht werden',
   'message.delete.partial': '{failed} von {count} Nachrichten konnten nicht gelöscht werden',
+  'message.delete.partialOne': '1 von {count} Nachrichten konnte nicht gelöscht werden',
 } satisfies MessagePiecesCatalog;
 
 export default de;
