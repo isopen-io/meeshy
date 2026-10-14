@@ -75,14 +75,25 @@ describe('chaque fichier déclaré est servi, octets et empreinte égaux', () =>
     expect(wrong.map((ref) => ref.src)).toEqual([]);
   });
 
-  it('aucun fichier du magasin n’est orphelin : chacun est engagé par un registre courant, celui des exemples ou retained.json', () => {
+  it('aucun fichier du magasin n’est orphelin : chacun est engagé par un registre courant, celui des exemples, retained.json, ou un registre de packs d’apparence (#10632, générateur distinct, même magasin)', () => {
     const samples = parsePackIndex(readJson(SAMPLE_REGISTRY_FILE)).entries;
     const sampleFiles = samples.flatMap((entry) => {
       const contract = parseGloryFramePackContract(readJson(join(PACK_ASSETS_DIR, entry.contract.src)));
       return [entry.cover, entry.contract, ...Object.values(entry.strings).flatMap((ref) => (ref === undefined ? [] : [ref])), ...(contract?.contract.frames.map((frame) => frame.thumb) ?? [])];
     });
     const retained = Object.values(readJson(RETAINED_FILE) as Record<string, readonly string[]>).flat();
-    const engaged = new Set([...declared, ...sampleFiles].map((ref) => ref.src).concat(retained));
+
+    type FileRef = { readonly src: string };
+    type AppearancePackEntry = { readonly cover: FileRef; readonly preview: FileRef | null; readonly contract: FileRef; readonly strings: Readonly<Record<string, FileRef>> };
+    const appearanceRefs = (entry: AppearancePackEntry): readonly FileRef[] => [entry.cover, entry.contract, ...(entry.preview ? [entry.preview] : []), ...Object.values(entry.strings)];
+    const appearancePackFiles = [
+      'design/appearance/wallpapers/packs.json',
+      'design/appearance/banners/packs.json',
+      'design/appearance/avatar-rings/packs.json',
+      'design/packs/samples/wallpaper.json',
+    ].flatMap((registry) => (readJson(join(REPO_ROOT, 'packages/shared', registry)) as readonly AppearancePackEntry[]).flatMap(appearanceRefs));
+
+    const engaged = new Set([...declared, ...sampleFiles, ...appearancePackFiles].map((ref) => ref.src).concat(retained));
     expect(readdirSync(PACK_ASSETS_DIR).filter((file) => !engaged.has(file))).toEqual([]);
   });
 

@@ -11,7 +11,7 @@
 import { readFileSync, writeFileSync } from 'node:fs';
 import { dirname, join, resolve } from 'node:path';
 import { fileURLToPath } from 'node:url';
-import { APPEARANCE_GAMUT, GAMUT_KEYS } from '../design/appearance/gamut';
+import { APPEARANCE_GAMUT, GAMUT_KEYS } from '../design/appearance/gamut.js';
 
 export const IOS_CATALOG_PATH = 'packages/MeeshySDK/Sources/MeeshySDK/Resources/appearance-catalog.json';
 export const IOS_CATALOG_SWIFT_PATH = 'packages/MeeshySDK/Sources/MeeshySDK/Appearance/AppearanceCatalogData.swift';
