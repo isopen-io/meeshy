@@ -2012,7 +2012,7 @@ struct ConversationListView: View {
     private func applyCommunities(_ apiCommunities: [APICommunity]) {
         let mapped = apiCommunities.map { $0.toCommunity() }
         userCommunities = mapped
-        userCommunityLookup = Dictionary(uniqueKeysWithValues: mapped.map { ($0.id, $0) })
+        userCommunityLookup = Dictionary(mapped.map { ($0.id, $0) }, uniquingKeysWith: { first, _ in first })
     }
 
     // communitiesSection, categoryFilters, themedSearchBar now live in

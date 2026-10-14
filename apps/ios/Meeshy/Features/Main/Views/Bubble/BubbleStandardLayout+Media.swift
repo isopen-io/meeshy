@@ -748,6 +748,7 @@ struct BubbleCarouselView: View {
                 .padding(MeeshySpacing.sm)
         }
         .onAppear {
+            guard !items.isEmpty else { return }
             let startIndex = max(0, min(carouselIndex, items.count - 1))
             currentPageID = items[startIndex].id
         }
@@ -760,8 +761,9 @@ struct BubbleCarouselView: View {
             carouselIndex = newIndex
 
             if oldIndex != newIndex {
-                let oldAttachment = items[oldIndex]
-                if oldAttachment.type == .video {
+                // Une pièce retirée entre-temps laisse l'ancien indice au-delà de la liste.
+                if items.indices.contains(oldIndex), items[oldIndex].type == .video {
+                    let oldAttachment = items[oldIndex]
                     // BUG E fix : release (URL-gated) plutôt que pause sur
                     // swipe-away — le player ne traîne pas en mémoire.
                     SharedAVPlayerManager.shared.release(urlString: oldAttachment.fileUrl)

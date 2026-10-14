@@ -1957,7 +1957,10 @@ public final class MessageSocketManager: ObservableObject, MessageSocketProvidin
         if let socket, socket.status == .connected || socket.status == .connecting {
             return
         }
-        disconnect()
+        // Transport seul, pas `disconnect()` : au retour d'arrière-plan l'invité garde sa conversation
+        // ouverte, et ses salons doivent être rejoints au `.connect` — une remise à froid les oubliait.
+        // Un changement de compte passe par `disconnect()` de son côté.
+        suspendTransport()
 
         guard let url = SocketConfig.baseURL else { return }
 
@@ -2799,6 +2802,20 @@ public final class MessageSocketManager: ObservableObject, MessageSocketProvidin
                 }
             }
             Logger.socket.info("MessageSocket disconnected")
+        }
+
+        // Une perte de transport n'émet PAS `.disconnect` quand la reconnexion automatique est active :
+        // Socket.IO émet `.reconnect` (`SocketManager.tryReconnect`). Sans ce récepteur, `isConnected`
+        // restait vrai pendant toute la coupure — chaque envoi attendait son accusé avant le repli REST,
+        // et le retour du réseau ne relançait rien.
+        socket.on(clientEvent: .reconnect) { [weak self] _, _ in
+            guard let self else { return }
+            self.stopHeartbeat()
+            DispatchQueue.main.async {
+                self.isConnected = false
+                self.connectionState = .reconnecting(attempt: 0)
+            }
+            Logger.socket.info("MessageSocket transport lost — reconnecting")
         }
 
         socket.on(clientEvent: .reconnectAttempt) { [weak self] _, _ in

@@ -377,7 +377,10 @@ final class CommunityListViewModel: ObservableObject {
             let mapped = response.data.map { $0.toCommunity() }
 
             if append {
-                communities.append(contentsOf: mapped)
+                // Une page qui chevauche la précédente (liste modifiée entre deux requêtes) ne pose pas deux
+                // lignes du même id dans la grille.
+                let known = Set(communities.map(\.id))
+                communities.append(contentsOf: mapped.filter { !known.contains($0.id) })
             } else {
                 communities = mapped
             }

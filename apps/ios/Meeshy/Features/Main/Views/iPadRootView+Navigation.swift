@@ -331,6 +331,10 @@ extension iPadRootView {
                     parentCommentId: notification.context?.parentCommentId ?? notification.metadata?.parentCommentId,
                     storyContext: StoryNotificationContext.from(notification)
                 )
+            } else if let conversationId = data?.conversationId, !conversationId.isEmpty {
+                // Pas d'entité à ouvrir : certaines notifications sociales anciennes ne portent que la
+                // conversation. Même repli que `RootView.navigateFromNotification` — jamais un tap muet.
+                navigateToConversationById(conversationId)
             }
 
         case .missedCall, .callDeclined, .legacyCallMissed,
@@ -538,6 +542,9 @@ extension iPadRootView {
                     parentCommentId: payload.parentCommentId,
                     storyContext: makeStoryContext(from: payload)
                 )
+            } else if let conversationId = payload.conversationId, !conversationId.isEmpty {
+                // Même repli que `RootView.navigateFromNotification` : jamais un tap muet.
+                navigateToConversationById(conversationId)
             }
 
         case .achievementUnlocked, .legacyAchievementUnlocked, .streakMilestone, .levelUp, .badgeEarned:
@@ -582,6 +589,23 @@ extension iPadRootView {
             return
         }
         Task {
+            // Le cache d'abord, comme `RootView` : un push touché à froid — la liste pas encore chargée — ou
+            // hors ligne ouvre le fil de la session précédente au lieu de buter sur le réseau.
+            let cachedList = await CacheCoordinator.shared.conversations.load(for: "list")
+            let cachedConversations: [MeeshyConversation]? = {
+                switch cachedList {
+                case .fresh(let list, _), .stale(let list, _): return list
+                case .expired, .empty: return nil
+                }
+            }()
+            if let cached = cachedConversations?.first(where: { $0.id == conversationId }) {
+                if let messageId = highlightMessageId {
+                    router.pendingHighlightMessageId = messageId
+                    router.pendingHighlightConversationId = conversationId
+                }
+                openConversation(cached)
+                return
+            }
             // Phase: navigate-from-notification timing race. Same retry-once
             // pattern as `RootView.navigateToConversationById` — a push for
             // a freshly-created conversation can land before the gateway

@@ -272,6 +272,11 @@ public class AudioPlaybackManager: NSObject, ObservableObject {
         case .failure(let error):
             Self.log.error("playData AVAudioPlayer init echec (\(data.count, privacy: .public)o): \(error.localizedDescription, privacy: .public)")
             isLoading = false
+            // Même sortie que l'échec de téléchargement : sans elle la file restait sur ce vocal, le bouton
+            // lecture ne rechargeait rien et la session audio n'était jamais rendue.
+            currentUrl = nil
+            releaseSession()
+            onPlaybackFinished?()
         case .success(let box):
             let ready = box.player
             player = ready

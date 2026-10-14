@@ -1,4 +1,5 @@
 import XCTest
+import MeeshySDK
 @testable import Meeshy
 
 /// Gardes de source sur le panneau droit iPad.
@@ -184,5 +185,169 @@ final class iPadRightPanelNavigationGuardTests: XCTestCase {
             code.contains("postActionPresentations("),
             "Les présentations d'action de post doivent passer par postActionPresentations(_:) ancré au body."
         )
+    }
+}
+
+/// La colonne droite de l'iPad et le relais de navigation entre les deux racines.
+///
+/// Deux défauts vécus à la lecture du code (2026-10-14) :
+///   1. fil ouvert, toute route posée dans le panneau restait INVISIBLE — la colonne montrait le fil d'abord — et
+///      le premier « retour » se dépensait à la retirer ;
+///   2. une fenêtre d'iPad passée en largeur compacte démontait `iPadRootView` pour `RootView` : le fil ouvert
+///      était perdu, dans les deux sens.
+@MainActor
+final class iPadRightColumnAndHandoffTests: XCTestCase {
+
+    private func makeConversation(_ id: String) -> Conversation {
+        MeeshyConversation(id: id, identifier: "ident-\(id)", type: .group, title: "Titre")
+    }
+
+    // MARK: - Colonne droite
+
+    func test_rightColumn_panelRoute_coversOpenConversation() {
+        let conversation = makeConversation("c1")
+        XCTAssertEqual(
+            iPadRightColumn.resolve(conversation: conversation, panelRoute: .settings),
+            .panel(.settings))
+    }
+
+    func test_rightColumn_conversationAlone_showsConversation() {
+        let conversation = makeConversation("c1")
+        XCTAssertEqual(
+            iPadRightColumn.resolve(conversation: conversation, panelRoute: nil),
+            .conversation(conversation))
+    }
+
+    func test_rightColumn_nothingOpen_showsConversationList() {
+        XCTAssertEqual(iPadRightColumn.resolve(conversation: nil, panelRoute: nil), .conversationList)
+    }
+
+    func test_visibleConversationId_isNilWhileARouteCoversTheConversation() {
+        let conversation = makeConversation("c1")
+        XCTAssertEqual(iPadRightColumn.visibleConversationId(conversation: conversation, panelRoute: nil), "c1")
+        XCTAssertNil(iPadRightColumn.visibleConversationId(conversation: conversation, panelRoute: .notifications))
+        XCTAssertNil(iPadRightColumn.visibleConversationId(conversation: nil, panelRoute: nil))
+    }
+
+    // MARK: - Relais
+
+    func test_stack_putsThePanelRouteAboveTheConversation() {
+        let conversation = makeConversation("c1")
+        XCTAssertEqual(
+            RootNavigationHandoff.stack(conversation: conversation, panelRoute: .settings),
+            [.conversation(conversation), .settings])
+        XCTAssertEqual(RootNavigationHandoff.stack(conversation: nil, panelRoute: .profile), [.profile])
+        XCTAssertEqual(RootNavigationHandoff.stack(conversation: nil, panelRoute: nil), [])
+    }
+
+    func test_tabletPlacement_keepsTheLastConversationAndWhatCoversIt() {
+        let first = makeConversation("c1")
+        let second = makeConversation("c2")
+        let placement = RootNavigationHandoff.tabletPlacement(
+            of: [.settings, .conversation(first), .profile, .conversation(second), .progression, .userStats])
+        XCTAssertEqual(placement.conversation, second)
+        XCTAssertEqual(placement.panelRoutes, [.progression, .userStats])
+    }
+
+    func test_tabletPlacement_withoutConversation_keepsEveryRoute() {
+        let placement = RootNavigationHandoff.tabletPlacement(of: [.settings, .links])
+        XCTAssertNil(placement.conversation)
+        XCTAssertEqual(placement.panelRoutes, [.settings, .links])
+    }
+
+    func test_tabletPlacement_ofAnEmptyStack_isEmpty() {
+        XCTAssertEqual(
+            RootNavigationHandoff.tabletPlacement(of: []),
+            RootNavigationHandoff.TabletPlacement(conversation: nil, panelRoutes: []))
+    }
+
+    func test_stackThenPlacement_roundTrips() {
+        let conversation = makeConversation("c1")
+        let placement = RootNavigationHandoff.tabletPlacement(
+            of: RootNavigationHandoff.stack(conversation: conversation, panelRoute: .notifications))
+        XCTAssertEqual(placement.conversation, conversation)
+        XCTAssertEqual(placement.panelRoutes, [.notifications])
+    }
+
+    // MARK: - Pile du Jeu dans le relais
+
+    func test_gameTrail_keepsReadableRoutes_andFollowsASwipeBack() {
+        var trail = GamePanelTrail()
+        trail.push(.progressionConcept(.league), over: .progression)
+        trail.push(.gamePage(.league), over: .progression)
+        XCTAssertEqual(trail.routes(over: .progression), [.progressionConcept(.league), .gamePage(.league)])
+        XCTAssertEqual(trail.routes(over: .settings), [], "la pile ne vaut que pour SA racine")
+
+        // Un retour par glissement : la NavigationStack rend un chemin raccourci.
+        var shorter = trail.path(over: .progression)
+        shorter.removeLast()
+        let swiped = GamePanelTrail(root: .progression, path: shorter, previous: trail)
+        XCTAssertEqual(swiped.routes(over: .progression), [.progressionConcept(.league)])
+    }
+
+    func test_gameTrail_crossesTheHandoff_andIsReplayedOnTheTablet() {
+        let stack = RootNavigationHandoff.stack(conversation: nil, panelRoute: .progression)
+            + [.progressionConcept(.league), .gamePage(.league)]
+        let placement = RootNavigationHandoff.tabletPlacement(of: stack)
+        XCTAssertNil(placement.conversation)
+        XCTAssertEqual(placement.panelRoutes, [.progression, .progressionConcept(.league), .gamePage(.league)])
+    }
+
+    // MARK: - Poignée des colonnes
+
+    func test_columnRatio_followsTheFingerFromTheDragStart() {
+        // 100 pt sur 1000 pt de large : dix points de pourcentage, quel que soit le nombre d'événements du geste.
+        XCTAssertEqual(iPadColumnRatio.dragged(from: 0.38, translation: 100, width: 1000), 0.48, accuracy: 0.0001)
+        XCTAssertEqual(iPadColumnRatio.dragged(from: 0.38, translation: 100, width: 1000), 0.48, accuracy: 0.0001)
+    }
+
+    func test_columnRatio_staysWithinItsBounds() {
+        XCTAssertEqual(iPadColumnRatio.dragged(from: 0.38, translation: 900, width: 1000), iPadColumnRatio.maximum)
+        XCTAssertEqual(iPadColumnRatio.dragged(from: 0.38, translation: -900, width: 1000), iPadColumnRatio.minimum)
+    }
+
+    func test_columnRatio_ignoresAZeroWidthWindow() {
+        XCTAssertEqual(iPadColumnRatio.dragged(from: 0.38, translation: 40, width: 0), 0.38)
+        XCTAssertEqual(iPadColumnRatio.dragged(from: 0.38, translation: .nan, width: 1000), 0.38)
+        XCTAssertEqual(iPadColumnRatio.clamped(.nan), iPadColumnRatio.minimum)
+    }
+
+    func test_handoff_recordsTheLatestStack() {
+        let handoff = RootNavigationHandoff()
+        XCTAssertEqual(handoff.routes, [])
+        handoff.record([.settings])
+        handoff.record([.profile, .links])
+        XCTAssertEqual(handoff.routes, [.profile, .links])
+    }
+}
+
+/// Le ménage de `tmp` ne touche que les copies connues, et seulement au-delà d'une semaine.
+final class TemporaryMediaSweeperTests: XCTestCase {
+
+    func test_onlyKnownPrefixes_olderThanAWeek_areSwept() {
+        let now = Date(timeIntervalSince1970: 1_800_000_000)
+        let old = now.addingTimeInterval(-8 * 24 * 3600)
+        let fresh = now.addingTimeInterval(-3600)
+        let swept = TemporaryMediaSweeper.expired([
+            (name: "composer_photo_A.jpg", modified: old),
+            (name: "composer_photo_B.jpg", modified: fresh),
+            (name: "recent_C.mov", modified: old),
+            (name: "composer-autosave-sessions", modified: old),
+            (name: "media-save-1234", modified: old),
+        ], now: now)
+        XCTAssertEqual(swept, ["composer_photo_A.jpg", "recent_C.mov"])
+    }
+
+    func test_sweep_removesOnlyTheExpiredFiles() throws {
+        let dir = FileManager.default.temporaryDirectory.appendingPathComponent("sweep-\(UUID().uuidString)")
+        try FileManager.default.createDirectory(at: dir, withIntermediateDirectories: true)
+        defer { try? FileManager.default.removeItem(at: dir) }
+        let oldFile = dir.appendingPathComponent("composer_file_old.pdf")
+        let keepFile = dir.appendingPathComponent("unrelated.txt")
+        try Data("a".utf8).write(to: oldFile)
+        try Data("b".utf8).write(to: keepFile)
+        TemporaryMediaSweeper.sweep(in: dir, now: Date().addingTimeInterval(8 * 24 * 3600))
+        XCTAssertFalse(FileManager.default.fileExists(atPath: oldFile.path))
+        XCTAssertTrue(FileManager.default.fileExists(atPath: keepFile.path))
     }
 }

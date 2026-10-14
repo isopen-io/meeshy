@@ -83,6 +83,7 @@ struct RootStoryDoorsLayer: ViewModifier {
     /// chargements parallèles. Il reste ÉCRIT dans `RootView`, qui possède
     /// tout ce qu'il touche.
     let onStart: @MainActor () async -> Void
+    @Environment(\.rootNavigationHandoff) private var navigationHandoff
 
     func body(content: Content) -> some View {
         content
@@ -128,6 +129,14 @@ struct RootStoryDoorsLayer: ViewModifier {
             }
             .onAppear {
                 DeviceLayout.activeWindowScene?.title = String(localized: "root.scene_title_default", defaultValue: "Meeshy — Conversations", bundle: .main)
+                // La fenêtre d'iPad vient de passer en largeur compacte : la pile reprend là où la racine iPad
+                // s'est arrêtée (`RootNavigationHandoff`).
+                if router.path.isEmpty, let routes = navigationHandoff?.routes, !routes.isEmpty {
+                    router.path = routes
+                }
+            }
+            .adaptiveOnChange(of: router.path) { _, path in
+                navigationHandoff?.record(path)
             }
             .task { await onStart() }
             .fullScreenCover(item: $storyViewerCoordinator.pendingRequest) { request in
