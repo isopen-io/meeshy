@@ -106,7 +106,11 @@ export function AddMembersSheet({
   };
 
   const submitLabel =
-    chosen.size === 1 ? t('conversationManage.add.submit.one') : t('conversationManage.add.submit.other', { count: String(chosen.size) });
+    chosen.size === 0
+      ? t('conversationManage.add.submit.none')
+      : chosen.size === 1
+        ? t('conversationManage.add.submit.one')
+        : t('conversationManage.add.submit.other', { count: String(chosen.size) });
 
   const row = (person: PersonSummary) => {
     const already = memberIds.has(person.id);

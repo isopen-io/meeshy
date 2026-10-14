@@ -30,6 +30,7 @@ const pt = {
   'conversationManage.add.searching': 'A procurar…',
   'conversationManage.add.submit.one': 'Adicionar 1 pessoa',
   'conversationManage.add.submit.other': 'Adicionar {count} pessoas',
+  'conversationManage.add.submit.none': 'Adicionar',
   'conversationManage.add.done.one': '1 membro adicionado',
   'conversationManage.add.done.other': '{count} membros adicionados',
   'conversationManage.add.partial': 'Algumas pessoas não puderam ser adicionadas.',

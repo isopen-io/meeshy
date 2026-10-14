@@ -258,7 +258,7 @@ describe('mes options (#7836)', () => {
     try {
       const { calls } = await mount(conversation({ currentUserRole: 'member' }));
       click('[data-conversation-option-pin]');
-      expect(($('[data-conversation-option-pin]') as HTMLInputElement).checked).toBe(true);
+      expect($('[data-conversation-option-pin]')?.getAttribute('aria-checked')).toBe('true');
       await settle();
       expect(writes(calls)[0]).toMatchObject({ method: 'PUT', path: '/api/v1/user-preferences/conversations/c-groupe', body: { isPinned: true } });
     } finally {

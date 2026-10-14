@@ -30,6 +30,7 @@ const de = {
   'conversationManage.add.searching': 'Suche…',
   'conversationManage.add.submit.one': '1 Person hinzufügen',
   'conversationManage.add.submit.other': '{count} Personen hinzufügen',
+  'conversationManage.add.submit.none': 'Hinzufügen',
   'conversationManage.add.done.one': '1 Mitglied hinzugefügt',
   'conversationManage.add.done.other': '{count} Mitglieder hinzugefügt',
   'conversationManage.add.partial': 'Einige Personen konnten nicht hinzugefügt werden.',

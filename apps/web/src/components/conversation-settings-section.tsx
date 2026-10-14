@@ -12,6 +12,7 @@ import { initialsOf } from '@/lib/view/conversation';
 import type { ConversationManagement } from '@/lib/view/conversation-management';
 
 import { Avatar } from './avatar';
+import { IosSwitch } from './ios-switch';
 
 /**
  * **LES RÉGLAGES DU GROUPE DEPUIS SA FEUILLE** (#7836) — ce que la roue dentée
@@ -282,27 +283,33 @@ export function SwitchRow({
   readonly onChange: (on: boolean) => void;
   readonly marker: `data-${string}`;
 }) {
+  const hintId = useId();
   return (
-    <label className="flex cursor-pointer items-center justify-between gap-3 px-3 py-2" style={{ minHeight: 52 }}>
+    <div className="flex items-center justify-between gap-3 px-3 py-2" style={{ minHeight: 52 }}>
       <span className="flex min-w-0 flex-col">
         <span className="text-body font-medium" style={{ color: 'var(--color-ios-ink)' }}>
           {label}
         </span>
         {hint === undefined ? null : (
-          <span className="text-caption" style={{ color: 'var(--color-ios-ink-2)' }}>
+          <span id={hintId} className="text-caption" style={{ color: 'var(--color-ios-ink-2)' }}>
             {hint}
           </span>
         )}
       </span>
-      <input
-        type="checkbox"
+      <button
+        type="button"
         role="switch"
+        aria-checked={checked}
+        aria-label={label}
+        {...(hint === undefined ? {} : { 'aria-describedby': hintId })}
         {...{ [marker]: '' }}
-        checked={checked}
-        onChange={(event) => onChange(event.currentTarget.checked)}
-        className="size-6 shrink-0 accent-[var(--accent)]"
-      />
-    </label>
+        onClick={() => onChange(!checked)}
+        className="grid shrink-0 place-items-center rounded-chip focus-visible:outline-2"
+        style={{ minWidth: 56, minHeight: 44, outlineColor: 'var(--accent)' }}
+      >
+        <IosSwitch checked={checked} tint="var(--accent)" />
+      </button>
+    </div>
   );
 }
 

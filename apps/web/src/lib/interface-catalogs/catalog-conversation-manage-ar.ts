@@ -30,6 +30,7 @@ const ar = {
   'conversationManage.add.searching': 'جارٍ البحث…',
   'conversationManage.add.submit.one': 'إضافة شخص واحد',
   'conversationManage.add.submit.other': 'إضافة {count} أشخاص',
+  'conversationManage.add.submit.none': 'إضافة',
   'conversationManage.add.done.one': 'تمت إضافة عضو واحد',
   'conversationManage.add.done.other': 'تمت إضافة {count} أعضاء',
   'conversationManage.add.partial': 'تعذّرت إضافة بعض الأشخاص.',
