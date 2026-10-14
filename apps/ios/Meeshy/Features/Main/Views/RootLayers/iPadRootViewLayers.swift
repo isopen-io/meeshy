@@ -160,6 +160,9 @@ struct iPadSheetsLayer: ViewModifier {
                         AnyView(ProfileUserPostsList(userId: uid, onOpenPost: { post in
                             router.deepLinkProfileUser = nil
                             router.push(.postDetail(post.id, post))
+                        }, onOpenReel: { reel, reels in
+                            // Parité RootView : un réel s'ouvre dans le lecteur, pas en détail plat.
+                            ProfilePostsOpener.openReel(reel, in: reels) { router.deepLinkProfileUser = nil }
                         }))
                     },
                     onCall: { request in
@@ -245,6 +248,8 @@ struct iPadCoversAndChromeLayer: ViewModifier {
     let onSyncPillTap: (OutboxUIItem.Source) -> Void
     let activeConversationIdForBanner: () -> String?
     let onMiniPlayerTap: () -> Void
+    /// Rouvre un réel qui n'a pas pu se charger (« Réessayer » de `ReelOpenFailureView`).
+    var onRetryReel: (_ postId: String, _ commentId: String?, _ parentCommentId: String?) async -> Void = { _, _, _ in }
 
     func body(content: Content) -> some View {
         content
@@ -282,7 +287,10 @@ struct iPadCoversAndChromeLayer: ViewModifier {
                     postId: request.postId,
                     startAtFirstUnviewed: request.startAtFirstUnviewed,
                     presentationSource: "iPadRootView.fromConv",
-                    initialAction: request.initialAction
+                    initialAction: request.initialAction,
+                    // Parité RootView : une notification de réponse descend jusqu'à SON commentaire.
+                    targetCommentId: request.targetCommentId,
+                    targetParentCommentId: request.targetParentCommentId
                 )
                 .zoomTransitionDestination(sourceID: request.id, in: storyZoomNamespace)
                 .environmentObject(router)
@@ -305,6 +313,17 @@ struct iPadCoversAndChromeLayer: ViewModifier {
             )
             .fullScreenCover(item: $reelsPresenter.launch) { launch in
                 GeometryReader { proxy in
+                    // Parité RootView (#6508) : un réel qui n'a pas pu se charger montre SON échec. Monté sur une
+                    // graine vide, le lecteur partait en démarrage à froid et jouait d'autres réels sans rapport.
+                    if let failure = launch.failure, let postId = launch.startId {
+                        ReelOpenFailureView(
+                            failure: failure,
+                            onRetry: {
+                                await onRetryReel(postId, launch.commentId, launch.parentCommentId)
+                            },
+                            onClose: { reelsPresenter.dismiss() }
+                        )
+                    } else {
                     ReelsPlayerView(
                         seedPosts: launch.seedPosts,
                         startId: launch.startId,
@@ -334,6 +353,7 @@ struct iPadCoversAndChromeLayer: ViewModifier {
                         }
                     )
                     .ignoresSafeArea()
+                    }
                 }
                 .environmentObject(router)
                 .environmentObject(statusViewModel)

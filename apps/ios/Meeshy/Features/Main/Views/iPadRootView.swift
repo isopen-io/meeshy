@@ -236,7 +236,8 @@ struct iPadRootView: View {
                 guard let target = MiniPlayerTapPolicy.target(
                     context: ConversationAudioCoordinator.shared.activeContext) else { return }
                 navigateToConversationById(target.conversationId, highlightMessageId: target.highlightMessageId)
-            }
+            },
+            onRetryReel: { await revealReel(postId: $0, commentId: $1, parentCommentId: $2) }
         ))
         // C4b — la rupture, posée PAR-DESSUS les feuilles : elle les recouvre,
         // elle ne passe pas derrière. Binding CONSTANT — le contrôleur n'expose

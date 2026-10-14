@@ -142,6 +142,29 @@ final class iPadRightPanelNavigationGuardTests: XCTestCase {
         )
     }
 
+    /// Parité iPhone (audit iPad 2026-10-14) : la couverture iPad du lecteur de réels montre l'échec d'un réel
+    /// introuvable, le lecteur de story reçoit le commentaire visé, et un réel de profil s'ouvre en lecteur.
+    func test_iPadCovers_matchTheiPhoneForReelsStoriesAndProfileReels() throws {
+        let layer = try source(of: "RootLayers/iPadRootViewLayers.swift")
+        XCTAssertTrue(layer.contains("ReelOpenFailureView("), "un réel introuvable montre son échec, pas d'autres réels")
+        XCTAssertTrue(layer.contains("targetCommentId: request.targetCommentId"))
+        XCTAssertTrue(layer.contains("targetParentCommentId: request.targetParentCommentId"))
+        XCTAssertTrue(layer.contains("onOpenReel: { reel, reels in"), "un réel de profil s'ouvre dans le lecteur")
+    }
+
+    func test_storyNotificationScreens_closeThePanelOnIPad() throws {
+        let stories = URL(fileURLWithPath: "\(#filePath)")
+            .deletingLastPathComponent().deletingLastPathComponent()
+            .deletingLastPathComponent().deletingLastPathComponent()
+            .appendingPathComponent("Meeshy/Features/Stories/Notifications")
+        for file in ["StoryNotificationTargetScreen.swift", "StoryExpiredContent.swift",
+                     "StoryNotificationOfflineContent.swift"] {
+            let code = strippingComments(try String(contentsOf: stories.appendingPathComponent(file), encoding: .utf8))
+            XCTAssertTrue(code.contains("PanelBackAction("), "\(file) : le retour doit opérer dans le panneau iPad")
+            XCTAssertFalse(code.contains(" dismiss()"), "\(file) : `dismiss()` seul ne fait rien à la racine du panneau")
+        }
+    }
+
     /// Les présentations déclenchées par les CARTES du feed (partage, citation,
     /// édition, commentaires de réel) ne doivent jamais être portées par
     /// `composerOverlay` : cette vue n'existe que composer ouvert, et un item

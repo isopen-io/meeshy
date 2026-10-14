@@ -209,7 +209,7 @@ struct iPadPanelDestination: View {
         case .communitySettings(let community):
             CommunitySettingsView(
                 community: community,
-                onUpdated: { _ in rightPanelRoute = .communityList },
+                onUpdated: { _ in rightPanelRoute = .communityDetail(community.id) },
                 onDeleted: { rightPanelRoute = nil },
                 onLeft: { rightPanelRoute = nil }
             )

@@ -148,7 +148,9 @@ extension iPadRootView {
         case .community(let id):
             rightPanelRoute = .communityDetail(id)
         case .unreadConversations:
-            // Widgets « Non lus » (#7811) : la liste sur le filtre de la puce.
+            // Widgets « Non lus » (#7811) : la liste sur le filtre de la puce. Le panneau ouvert la cachait —
+            // l'iPhone revient à la racine, l'iPad referme le panneau.
+            rightPanelRoute = nil
             conversationViewModel.selectedFilters = ConversationListEntry.unreadFilters
         case .recentConversation:
             // App Shortcut « Open Recent Conversation » et widget (#7811).
@@ -383,7 +385,8 @@ extension iPadRootView {
                 )
             }
 
-        case .friendRequest, .contactRequest, .friendAccepted, .contactAccepted, .contactJoined, .contactRecentlyActive:
+        case .friendRequest, .contactRequest, .friendAccepted, .contactAccepted, .contactJoined, .contactRecentlyActive,
+             .legacyFriendRequest, .legacyFriendAccepted, .legacyStatusUpdate:
             if let senderId = event.senderId {
                 router.deepLinkProfileUser = ProfileSheetUser(
                     userId: senderId,
@@ -397,7 +400,7 @@ extension iPadRootView {
              .storyReaction, .statusReaction,
              .storyNewComment, .friendStoryComment, .storyThreadReply,
              .friendNewStory, .friendNewMood:
-            if let postId = event.postId {
+            if let postId = event.postId, !postId.isEmpty {
                 routeSocialNotification(
                     postId: postId,
                     postType: event.postType,
@@ -407,6 +410,9 @@ extension iPadRootView {
                     parentCommentId: event.parentCommentId,
                     storyContext: makeStoryContext(from: event)
                 )
+            } else if let conversationId = event.conversationId, !conversationId.isEmpty {
+                // Même repli que `RootView.navigateFromNotification` : jamais un tap muet.
+                navigateToConversationById(conversationId)
             }
 
         case .achievementUnlocked, .legacyAchievementUnlocked, .streakMilestone, .levelUp, .badgeEarned:
@@ -748,10 +754,14 @@ extension iPadRootView {
     /// post déjà chargé et avec sa cible commentaire.
     func openReel(postId: String, commentId: String? = nil, parentCommentId: String? = nil) {
         Task { @MainActor in
-            await ReelDoor.live.open(postId: postId, commentId: commentId, parentCommentId: parentCommentId) { post in
-                rightPanelRoute = .postDetail(postId, post, showComments: commentId != nil,
-                                              commentId: commentId, parentCommentId: parentCommentId)
-            }
+            await revealReel(postId: postId, commentId: commentId, parentCommentId: parentCommentId)
+        }
+    }
+
+    func revealReel(postId: String, commentId: String?, parentCommentId: String?) async {
+        await ReelDoor.live.open(postId: postId, commentId: commentId, parentCommentId: parentCommentId) { post in
+            rightPanelRoute = .postDetail(postId, post, showComments: commentId != nil,
+                                          commentId: commentId, parentCommentId: parentCommentId)
         }
     }
 
