@@ -32,7 +32,7 @@ nonisolated struct BubbleContent: Equatable {
         case visualGrid([MeeshyMessageAttachment])    // images + videos
         /// One OR MORE audio tracks of the SAME message. A single track renders
         /// as the existing audio widget; two or more render as a horizontal
-        /// `AudioCarouselView` (multi-track carousel — spec lot A4).
+        /// `AudioStackView` (multi-track carousel — spec lot A4).
         case audio([MeeshyMessageAttachment])
         case nonMedia([MeeshyMessageAttachment])      // file + location
         /// Mixed content: any combination of visual + non-media + audio

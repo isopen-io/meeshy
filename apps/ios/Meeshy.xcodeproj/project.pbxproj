@@ -1036,7 +1036,7 @@
 		53533E98D9D7835B3B517178 /* ComposerConversationImageTests.swift in Sources */ = {isa = PBXBuildFile; fileRef = 16E4CC580826D1CC0CB73459 /* ComposerConversationImageTests.swift */; };
 		535F7B23D75DF7B28AC2BA3C /* ComposerAtelierHasOneMountSiteTests.swift in Sources */ = {isa = PBXBuildFile; fileRef = BD5C132D287FF4B187510412 /* ComposerAtelierHasOneMountSiteTests.swift */; };
 		5370B4688E88EE8B693A3A85 /* QuotedMediaFaceMountGuardTests.swift in Sources */ = {isa = PBXBuildFile; fileRef = 4E798F57CE60057513AD55D6 /* QuotedMediaFaceMountGuardTests.swift */; };
-		5395BFF593882FC3A49B9F1D /* AudioCarouselView.swift in Sources */ = {isa = PBXBuildFile; fileRef = FDDF15A8DA45DB357ACAD0DC /* AudioCarouselView.swift */; };
+		5395BFF593882FC3A49B9F1D /* AudioStackView.swift in Sources */ = {isa = PBXBuildFile; fileRef = FDDF15A8DA45DB357ACAD0DC /* AudioStackView.swift */; };
 		53D10E0E169E5310C18F6CA4 /* NSEDataSync.swift in Sources */ = {isa = PBXBuildFile; fileRef = B89D1BEA3DFE36FC19739954 /* NSEDataSync.swift */; };
 		53D869144841CBB89CF2EA1E /* CommentQuotedMediaViews.swift in Sources */ = {isa = PBXBuildFile; fileRef = 0C00C7F69BB4455F8410A6F9 /* CommentQuotedMediaViews.swift */; };
 		53E32F2C71031BEE80F418D8 /* StoryLiveProgressBars.swift in Sources */ = {isa = PBXBuildFile; fileRef = 7A4EF12E19A2D619C6E8A19E /* StoryLiveProgressBars.swift */; };
@@ -6467,7 +6467,7 @@
 		FDADAFF7BAD9792741634AF4 /* CommentMediaGalleryTests.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = CommentMediaGalleryTests.swift; sourceTree = "<group>"; };
 		FDB09A64F09C9725B14D216B /* FeedbackToastSurfacing.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = FeedbackToastSurfacing.swift; sourceTree = "<group>"; };
 		FDD80A5F8CAA4BC47D4BB9D0 /* GameHaptics.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = GameHaptics.swift; sourceTree = "<group>"; };
-		FDDF15A8DA45DB357ACAD0DC /* AudioCarouselView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = AudioCarouselView.swift; sourceTree = "<group>"; };
+		FDDF15A8DA45DB357ACAD0DC /* AudioStackView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = AudioStackView.swift; sourceTree = "<group>"; };
 		FDECE39D6D90114394E99EEA /* ComposerCanvasMatterArmsPostTests.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = ComposerCanvasMatterArmsPostTests.swift; sourceTree = "<group>"; };
 		FDED9440119014E9CA1A61DF /* FakeOfflineMessageQueue.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = FakeOfflineMessageQueue.swift; sourceTree = "<group>"; };
 		FDEDC27447DFCCBB5BFCACCA /* NewConversationViewModel.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = NewConversationViewModel.swift; sourceTree = "<group>"; };
@@ -10551,7 +10551,7 @@
 			children = (
 				E3C7AD0E47B6478E097E73DA /* AttachmentReactionPickerOverlay.swift */,
 				0327327AFEAB2172F21A1564 /* AudioBubbleRouter.swift */,
-				FDDF15A8DA45DB357ACAD0DC /* AudioCarouselView.swift */,
+				FDDF15A8DA45DB357ACAD0DC /* AudioStackView.swift */,
 				C53F0A5069E0FC64C23F67C6 /* BubbleAttachmentView.swift */,
 				A16D49F6EB8943E2809113E5 /* BubbleBackground.swift */,
 				807FBFB5D86D33C91AF92446 /* BubbleBlurRevealLifecycle.swift */,
@@ -11167,7 +11167,7 @@
 				57EC5F575CE42BAC5D3D68E8 /* AttachmentUploader.swift in Sources */,
 				88F45EFFAAA92554BC7228F4 /* AudioAvailabilityResolver.swift in Sources */,
 				BA06ECC1124B006451966D24 /* AudioBubbleRouter.swift in Sources */,
-				5395BFF593882FC3A49B9F1D /* AudioCarouselView.swift in Sources */,
+				5395BFF593882FC3A49B9F1D /* AudioStackView.swift in Sources */,
 				77639C99A5BA6A8F0CD50DF5 /* AudioFullscreenDial.swift in Sources */,
 				2A697AEE65A9DD0730EAC920 /* AudioFullscreenDismissDrag.swift in Sources */,
 				4681F75E988B1C42F4C541A5 /* AudioFullscreenPage+Transcription.swift in Sources */,

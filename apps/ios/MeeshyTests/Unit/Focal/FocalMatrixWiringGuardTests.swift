@@ -218,7 +218,7 @@ final class FocalMatrixWiringGuardTests: XCTestCase {
         )
         XCTAssertTrue(
             block.contains("activeAudioLanguage: activeAudioLanguage"),
-            "le carrousel audio doit recevoir la même bascule — plus jamais un nil en dur"
+            "la liste audio doit recevoir la même bascule — plus jamais un nil en dur"
         )
         let host = try stripped(hostPath)
         XCTAssertTrue(

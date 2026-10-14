@@ -342,7 +342,6 @@ final class LocalizationConsistencyTests: XCTestCase {
         "apps/ios/Meeshy/Features/Main/Services/WidgetDataManager.swift",  // 1
         "apps/ios/Meeshy/Features/Main/ViewModels/NewConversationViewModel.swift",  // 1
         "apps/ios/Meeshy/Features/Main/ViewModels/StoryExportShareViewModel.swift",  // 1
-        "apps/ios/Meeshy/Features/Main/Views/Bubble/AudioCarouselView.swift",  // 1
         "apps/ios/Meeshy/Features/Main/Views/ConversationMediaFilmstrip.swift",  // 1
         "apps/ios/Meeshy/Features/Main/Views/HashtagResultsView.swift",  // 1
         "apps/ios/Meeshy/Features/Main/Views/Skeletons/SkeletonFeedPost.swift",  // 1

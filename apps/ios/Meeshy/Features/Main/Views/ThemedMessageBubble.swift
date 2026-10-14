@@ -173,7 +173,7 @@ struct ThemedMessageBubble: View {
     var messageAudioItems: [ConversationViewModel.AudioItem] = []
     /// Cold-open (F1) : nom de conversation / file "à suivre" — forwardés
     /// jusqu'à `AudioMediaView` (`BubbleStandardLayout` -> `AudioMediaView`/
-    /// `AudioCarouselView`) pour que le plein écran audio ouvert SANS
+    /// `AudioStackView`) pour que le plein écran audio ouvert SANS
     /// lecture déjà active porte la même carte Now Playing / avance auto que
     /// `ConversationViewModel.playAudio(attachmentId:)`. `nil`-default garde
     /// les surfaces sans conversation (previews) inchangées.

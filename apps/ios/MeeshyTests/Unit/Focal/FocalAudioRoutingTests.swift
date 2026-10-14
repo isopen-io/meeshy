@@ -72,21 +72,21 @@ final class FocalAudioRoutingTests: XCTestCase {
 
     // MARK: - .carousel
 
-    func test_pureAudioMultiTrack_isCarousel() {
+    func test_pureAudioMultiTrack_isStack() {
         let content = makeContent(attachments: .audio([audioAttachment(id: "a1"), audioAttachment(id: "a2")]))
         XCTAssertEqual(FocalAudioRouting.mode(for: content), .carousel)
     }
 
     /// Garde : un `.mixed` multi-audio retombe au traitement standard —
     /// PAS carrousel (miroir de `BubbleStandardLayout.swift:766-769`).
-    func test_mixedMultiTrackAudio_isNotCarousel() {
+    func test_mixedMultiTrackAudio_isNotStack() {
         let content = makeContent(attachments: .mixed(
             visual: [], audio: [audioAttachment(id: "a1"), audioAttachment(id: "a2")], nonMedia: []
         ))
         XCTAssertNotEqual(FocalAudioRouting.mode(for: content), .carousel)
     }
 
-    func test_singleTrackAudio_isNeverCarousel() {
+    func test_singleTrackAudio_isNeverStack() {
         let content = makeContent(attachments: .audio([audioAttachment(id: "a1")]))
         XCTAssertNotEqual(FocalAudioRouting.mode(for: content), .carousel)
     }
@@ -185,5 +185,36 @@ final class FocalAudioRoutingTests: XCTestCase {
                 }
             }
         }
+    }
+
+    // MARK: - #10654 — une piste par ligne, jamais de pager i/N
+
+    private func bubbleSource(_ name: String) throws -> String {
+        let url = URL(fileURLWithPath: #filePath)
+            .deletingLastPathComponent()
+            .deletingLastPathComponent()
+            .deletingLastPathComponent()
+            .deletingLastPathComponent()
+            .appendingPathComponent("Meeshy/Features/Main/Views/Bubble/\(name)")
+        return try String(contentsOf: url, encoding: .utf8)
+    }
+
+    func test_audioStackView_rendersEachTrackOnItsOwnRow_withoutPagerOrIndicator() throws {
+        let source = try bubbleSource("AudioStackView.swift")
+        XCTAssertTrue(source.contains("ForEach(items)"), "chaque vocal a sa ligne")
+        XCTAssertFalse(source.contains("AdaptiveHorizontalPager"), "plus aucun pager horizontal")
+        XCTAssertFalse(source.contains("pageIndicator"), "plus d'indicateur i/N")
+        XCTAssertFalse(source.contains("BubbleInlinePagingPreferenceKey"), "plus de swipe détourné")
+        XCTAssertTrue(source.contains("footerModel: nil"), "pied de piste supprimé, un seul pied partagé")
+    }
+
+    func test_audioCarouselView_isGone() {
+        let url = URL(fileURLWithPath: #filePath)
+            .deletingLastPathComponent()
+            .deletingLastPathComponent()
+            .deletingLastPathComponent()
+            .deletingLastPathComponent()
+            .appendingPathComponent("Meeshy/Features/Main/Views/Bubble/AudioCarouselView.swift")
+        XCTAssertFalse(FileManager.default.fileExists(atPath: url.path))
     }
 }

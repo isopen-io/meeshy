@@ -29,10 +29,10 @@ import MeeshyUI
 ///
 /// **Corrections de types vs le texte littéral du contrat (RE-PREUVE)** :
 /// - `allAudioItems: [AudioItem]` → `[ConversationViewModel.AudioItem]`.
-///   `AudioMediaView`/`AudioCarouselView` (réutilisés par WS-3,
+///   `AudioMediaView`/`AudioStackView` (réutilisés par WS-3,
 ///   `Focal/Row/FocalAudioBlock.swift`) typent LEUR PROPRE paramètre
 ///   `allAudioItems` en `[ConversationViewModel.AudioItem]`
-///   (`ConversationMediaViews.swift:541`, `AudioCarouselView.swift:47`) — le
+///   (`ConversationMediaViews.swift:541`, `AudioStackView.swift:47`) — le
 ///   type nested de la god view, PAS le `struct AudioItem` top-level de
 ///   `ConversationStateStore.swift` (qui existe aussi, homonyme, mais n'est
 ///   consommé par aucun composant réutilisé ici). Utiliser le mauvais des

@@ -10,7 +10,7 @@ import MeeshyUI
 nonisolated enum FocalAudioMode: Equatable {
     case none
     /// `content.attachments == .audio(items)` pur, `items.count > 1`.
-    case carousel
+    case stack
     /// Audio seul (`audioIsSoleContent` — miroir).
     case soleWithFooter
     /// Audio + citation (`BubbleContent.audioHostsReply`, déjà public).
@@ -67,7 +67,7 @@ nonisolated enum FocalAudioRouting {
         // un `.mixed` multi-audio retombe au traitement standard (même
         // garde que le code réel, `BubbleStandardLayout.swift:766-769`).
         if case .audio = content.attachments, audios.count > 1 {
-            return .carousel
+            return .stack
         }
 
         // Miroir de `audioIsSoleContent` (`private`, `:278`). Le
@@ -108,7 +108,7 @@ nonisolated enum FocalAudioRouting {
 /// Bloc audio NU de la rangée plate — à la colonne du nom (`Row.contentIndent`)
 /// — routage par `FocalAudioRouting.mode(for:)`.
 ///
-/// **Réutilise** `AudioMediaView`/`AudioCarouselView` (contrat §WS-3) —
+/// **Réutilise** `AudioMediaView`/`AudioStackView` (contrat §WS-3) —
 /// TELS QUELS, sans les modifier (§1.3). Les deux exigent un `Message`
 /// complet (`let message: Message`, non optionnel) que `BubbleContent` seul
 /// ne porte pas (règle « leaf views, primitifs uniquement », contrat §3.6) —
@@ -200,8 +200,8 @@ struct FocalAudioBlock: View, Equatable {
             switch mode {
             case .none:
                 EmptyView()
-            case .carousel:
-                carouselBody
+            case .stack:
+                stackBody
             default:
                 standaloneBody
             }
@@ -210,7 +210,7 @@ struct FocalAudioBlock: View, Equatable {
     }
 
     @ViewBuilder
-    private var carouselBody: some View {
+    private var stackBody: some View {
         // `message` DÉRIVÉ de `allAudioItems` (voir doc de tête) — toutes
         // les pistes d'`audios` appartiennent au MÊME message.
         if let message = audioItem(for: audios.first?.id ?? "")?.message {
@@ -224,7 +224,7 @@ struct FocalAudioBlock: View, Equatable {
                     (att.id, audioItem(for: att.id)?.translatedAudios ?? [])
                 }
             )
-            AudioCarouselView(
+            AudioStackView(
                 items: audios,
                 message: message,
                 contactColor: accentHex,
