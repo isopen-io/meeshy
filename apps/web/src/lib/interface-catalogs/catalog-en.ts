@@ -40,6 +40,7 @@ import enPhonePrompt from './catalog-en-phone-prompt';
 import enUserProfile from './catalog-en-user-profile';
 import enContentRefused from './catalog-en-content-refused';
 import enPublicEntry from './catalog-en-public-entry';
+import enThreadSearch from './catalog-en-thread-search';
 
 const en = {
   'announce.messageSent': 'Message sent',
@@ -1070,6 +1071,7 @@ const en = {
   ...enUserProfile,
   ...enContentRefused,
   ...enPublicEntry,
+  ...enThreadSearch,
 } satisfies InterfaceCatalog;
 
 export default en;

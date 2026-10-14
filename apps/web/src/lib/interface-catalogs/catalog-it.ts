@@ -40,6 +40,7 @@ import itPhonePrompt from './catalog-it-phone-prompt';
 import itUserProfile from './catalog-it-user-profile';
 import itContentRefused from './catalog-it-content-refused';
 import itPublicEntry from './catalog-it-public-entry';
+import itThreadSearch from './catalog-it-thread-search';
 
 const it = {
   'announce.messageSent': 'Messaggio inviato',
@@ -1070,6 +1071,7 @@ const it = {
   ...itUserProfile,
   ...itContentRefused,
   ...itPublicEntry,
+  ...itThreadSearch,
 } satisfies InterfaceCatalog;
 
 export default it;
