@@ -90,8 +90,7 @@ public final class EdgeTranscriptionService: ObservableObject {
                     try await self.runRecognition(audioURL: audioURL, localeIdentifier: identifier)
                 }
                 group.addTask {
-                    let nanos = UInt64(max(1, timeout) * 1_000_000_000)
-                    try await Task.sleep(nanoseconds: nanos)
+                    try await Task.sleep(for: .seconds(max(1, timeout)))
                     throw EdgeTranscriptionError.timedOut
                 }
                 defer { group.cancelAll() }

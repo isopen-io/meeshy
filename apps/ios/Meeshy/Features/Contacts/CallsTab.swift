@@ -17,7 +17,7 @@ struct CallsTab: View {
     @State private var selectedCall: APICallRecord?
     @State private var confirmsClearAll = false
 
-    private static let searchDebounceNanoseconds: UInt64 = 250_000_000
+    private static let searchDebounceDuration: Duration = .milliseconds(250)
 
     var body: some View {
         VStack(spacing: 0) {
@@ -36,7 +36,7 @@ struct CallsTab: View {
         .task { await viewModel.loadCalls() }
         .task(id: viewModel.searchQuery) {
             if viewModel.isSearching {
-                try? await Task.sleep(nanoseconds: Self.searchDebounceNanoseconds)
+                try? await Task.sleep(for: Self.searchDebounceDuration)
                 guard !Task.isCancelled else { return }
             }
             await viewModel.applySearch()
