@@ -183,17 +183,32 @@ const servedCount = (data: unknown): number | undefined => {
   return typeof count === 'number' ? count : undefined;
 };
 
-export async function performDeleteForMe(params: DeleteParams): Promise<MessageDeleteResult> {
-  const { queryClient, conversationId, messages, transport } = params;
-  const [only] = messages;
-  if (only === undefined) return NOTHING;
-
-  const ids = new Set(messages.map((m) => m.id));
+/**
+ * CE QU'UN MESSAGE MASQUÉ « POUR MOI » QUITTE — le fil et l'écran des médias de
+ * SA conversation. Site unique : le geste local (`performDeleteForMe`) et
+ * l'événement reçu d'un autre appareil (`realtime-message-hidden.ts`, #10587)
+ * retirent les mêmes rangées. `describedByList` dit si la ligne de liste
+ * décrivait l'un d'eux — son remplaçant, seul le serveur le calcule.
+ */
+export function hideRowsForReader(
+  queryClient: QueryClient,
+  conversationId: string,
+  ids: ReadonlySet<string>,
+): { readonly removed: readonly RemovedRow[]; readonly describedByList: boolean } {
   const describedByList = ids.has(findCachedConversation(queryClient, conversationId)?.lastMessage?.id ?? '');
   const removed = [
     ...removeRows(queryClient, messagesQueryKey(conversationId), ids),
     ...removeRows(queryClient, mediaHubConversationKey(conversationId), ids),
   ];
+  return { removed, describedByList };
+}
+
+export async function performDeleteForMe(params: DeleteParams): Promise<MessageDeleteResult> {
+  const { queryClient, conversationId, messages, transport } = params;
+  const [only] = messages;
+  if (only === undefined) return NOTHING;
+
+  const { removed, describedByList } = hideRowsForReader(queryClient, conversationId, new Set(messages.map((m) => m.id)));
 
   const result = await transport.request<unknown>(
     messages.length === 1
