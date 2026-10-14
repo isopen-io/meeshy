@@ -275,7 +275,23 @@ extension iPadRootView {
              .translationCompleted, .translationReady, .legacyTranslationReady, .transcriptionCompleted,
              .legacyStoryReply, .reply,
              .messageEdited, .messageDeleted, .messagePinned, .messageForwarded:
-            guard let conversationId = data?.conversationId else { return }
+            guard let conversationId = data?.conversationId, !conversationId.isEmpty else {
+                // Même repli que `RootView.navigateFromNotification` pour toute la famille : sans conversation,
+                // l'entité est un post ou un commentaire — jamais un tap muet.
+                if let postId = notification.context?.postId ?? data?.postId ?? notification.metadata?.postId,
+                   !postId.isEmpty {
+                    routeSocialNotification(
+                        postId: postId,
+                        postType: notification.metadata?.postType,
+                        contentType: notification.metadata?.contentType,
+                        type: notification.notificationType,
+                        commentId: notification.context?.commentId ?? notification.metadata?.commentId,
+                        parentCommentId: notification.context?.parentCommentId ?? notification.metadata?.parentCommentId,
+                        storyContext: StoryNotificationContext.from(notification)
+                    )
+                }
+                return
+            }
             // Parité iPhone/push : scroll + flash sur le message exact.
             navigateToConversationById(
                 conversationId,
@@ -469,7 +485,21 @@ extension iPadRootView {
              .messageReaction, .reaction, .legacyMessageReaction,
              .translationCompleted, .translationReady, .legacyTranslationReady, .transcriptionCompleted,
              .messageEdited, .messageDeleted, .messagePinned, .messageForwarded:
-            guard let conversationId = payload.conversationId, !conversationId.isEmpty else { return }
+            guard let conversationId = payload.conversationId, !conversationId.isEmpty else {
+                // Même repli que `RootView.navigateFromNotification` : jamais un tap muet.
+                if let postId = payload.postId, !postId.isEmpty {
+                    routeSocialNotification(
+                        postId: postId,
+                        postType: payload.postType,
+                        contentType: payload.contentType,
+                        type: type,
+                        commentId: payload.commentId,
+                        parentCommentId: payload.parentCommentId,
+                        storyContext: makeStoryContext(from: payload)
+                    )
+                }
+                return
+            }
             navigateToConversationById(conversationId, highlightMessageId: payload.messageId)
 
         // Une mention vit SOIT dans une conversation SOIT dans un post/commentaire
