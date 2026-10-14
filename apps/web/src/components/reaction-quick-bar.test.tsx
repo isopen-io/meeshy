@@ -3,10 +3,11 @@ import { afterAll, afterEach, beforeAll, beforeEach, describe, expect, test } fr
 
 import { EMOJI_USAGE_KEY, recordEmojiUsage } from '@/lib/emoji-usage';
 import { QUICK_REACTIONS } from '@/lib/view/message-actions';
+import { SIDE_PADDING } from '@/lib/view/message-menu-metrics';
 import { createActMounter } from '@/test-support/act-mount';
 import { ensureHappyDomRegistered, releaseHappyDomIfRegistered } from '@/test-support/happy-dom-environment';
 
-import { ReactionAddCapsule } from './reaction-quick-bar';
+import { MessageReactionQuickBar, ReactionAddCapsule } from './reaction-quick-bar';
 
 /**
  * LA CAPSULE « + » ET SA BARRE RAPIDE (#10583) — sous le dernier message reçu,
@@ -178,5 +179,118 @@ describe('la capsule « + » sous le dernier message reçu (#10583)', () => {
       capsule.click();
     });
     expect(document.body.querySelector(BAR)).toBeNull();
+  });
+});
+
+/**
+ * LA MÊME BARRE, OUVERTE PAR LE DOUBLE TOUCHER D'UN MESSAGE (#10599, décision
+ * porteur du 2026-10-14) — ancrée au message (ou à la tuile visée), montée
+ * ouverte par son hôte, qui la démonte sur `onClose`.
+ */
+const ouvreSurMessage = async () => {
+  const journal: string[] = [];
+  const anchor = document.createElement('div');
+  anchor.tabIndex = 0;
+  anchor.getBoundingClientRect = () => new DOMRect(16, 300, 340, 60);
+  document.body.append(anchor);
+  await mounter.mount(
+    <MessageReactionQuickBar
+      anchor={anchor}
+      x={180}
+      onReact={(emoji) => journal.push(`react:${emoji}`)}
+      onExpand={() => journal.push('expand')}
+      onClose={() => journal.push('close')}
+    />,
+  );
+  const bar = document.body.querySelector<HTMLElement>(BAR);
+  if (bar === null) throw new Error('barre absente');
+  return { journal, anchor, bar };
+};
+
+describe('la barre rapide du double toucher d’un message (#10599)', () => {
+  afterEach(() => {
+    document.body.querySelectorAll('[tabindex="0"]').forEach((el) => el.remove());
+  });
+
+  test('montée ouverte : un menu « Réagir », les emojis du rail puis « ＋ », centré sous le doigt', async () => {
+    const { bar } = await ouvreSurMessage();
+    expect(bar.getAttribute('role')).toBe('menu');
+    expect(bar.getAttribute('aria-label')).toBe('Réagir');
+    const all = tiles(bar);
+    expect(all.length).toBe(QUICK_REACTIONS.length + 1);
+    expect(all.slice(0, -1).map((tile) => tile.textContent)).toEqual([...QUICK_REACTIONS]);
+    const width = Number.parseFloat(bar.style.width);
+    const left = Number.parseFloat(bar.style.left);
+    expect(left).toBe(Math.max(SIDE_PADDING, Math.min(180 - width / 2, window.innerWidth - width - SIDE_PADDING)));
+  });
+
+  test('choisir un emoji réagit, compte un emploi, referme la barre et rend le focus au message', async () => {
+    const { journal, bar, anchor } = await ouvreSurMessage();
+    await act(async () => {
+      tiles(bar).find((tile) => tile.textContent === '🔥')?.click();
+    });
+    expect(journal).toEqual(['react:🔥', 'close']);
+    expect(document.body.querySelector(BAR)).toBeNull();
+    expect(document.activeElement).toBe(anchor);
+    expect(window.localStorage.getItem(EMOJI_USAGE_KEY)).toContain('🔥');
+  });
+
+  test('« ＋ » ouvre la feuille complète et referme la barre, sans réagir', async () => {
+    const { journal, bar } = await ouvreSurMessage();
+    await act(async () => {
+      bar.querySelector<HTMLButtonElement>('button[data-add-reaction]')?.click();
+    });
+    expect(journal).toEqual(['expand', 'close']);
+  });
+
+  test('Échap referme et rend le focus au message', async () => {
+    const { journal, anchor } = await ouvreSurMessage();
+    await act(async () => {
+      document.dispatchEvent(new KeyboardEvent('keydown', { key: 'Escape', bubbles: true }));
+    });
+    expect(journal).toEqual(['close']);
+    expect(document.activeElement).toBe(anchor);
+  });
+
+  test('un toucher ailleurs referme, un toucher dans la barre non', async () => {
+    const { journal, bar } = await ouvreSurMessage();
+    await act(async () => {
+      bar.dispatchEvent(new Event('pointerdown', { bubbles: true }));
+    });
+    expect(journal).toEqual([]);
+    await act(async () => {
+      document.body.dispatchEvent(new Event('pointerdown', { bubbles: true }));
+    });
+    expect(journal).toEqual(['close']);
+  });
+
+  test('un défilement qui déplace le message referme', async () => {
+    const { journal, anchor } = await ouvreSurMessage();
+    anchor.getBoundingClientRect = () => new DOMRect(16, 120, 340, 60);
+    await act(async () => {
+      document.dispatchEvent(new Event('scroll'));
+    });
+    expect(journal).toEqual(['close']);
+  });
+
+  test('le retour matériel Android (popstate) referme la barre', async () => {
+    const { journal } = await ouvreSurMessage();
+    await act(async () => {
+      window.dispatchEvent(new PopStateEvent('popstate'));
+    });
+    expect(journal).toEqual(['close']);
+  });
+
+  test('le focus entre dans la barre, les flèches la parcourent', async () => {
+    const { bar } = await ouvreSurMessage();
+    await act(async () => {
+      await new Promise((resolve) => setTimeout(resolve, 30));
+    });
+    const all = tiles(bar);
+    expect(document.activeElement).toBe(all[0] ?? null);
+    await act(async () => {
+      bar.dispatchEvent(new KeyboardEvent('keydown', { key: 'ArrowRight', bubbles: true }));
+    });
+    expect(document.activeElement).toBe(all[1] ?? null);
   });
 });

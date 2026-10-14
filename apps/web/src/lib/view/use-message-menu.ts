@@ -30,14 +30,15 @@ import {
   type TranslationChoice,
 } from './message-actions';
 import { contentExitOf, exitOffers } from './content-exit';
+import { doubleTapReactable } from './double-tap';
 import { admitForward, forwardRefusalOf, forwardRequestOf, type ForwardRefusal } from './forward';
 import { useLongPress, type LongPressAnchor } from './long-press';
-import { pieceIdAt, soleSaveablePieceOf, targetedPieceOf } from './message-piece';
+import { PIECE_ATTRIBUTE, pieceIdAt, soleSaveablePieceOf, targetedPieceOf } from './message-piece';
 import { prewarmPieceReaction, usePieceMenu, type PieceMenuData } from './use-piece-menu';
 import { copyPlainText } from './copy-text';
 import { isMineOf } from './message';
 import { editOffered } from './message-edit';
-import { useDoubleTap } from './use-double-tap';
+import { useDoubleTap, type DoubleTap } from './use-double-tap';
 import { SELECTION_CAP, copyTextOf, orderedIds, selectionReducer, type SelectionState } from './selection';
 import { useMessageDelete } from './use-message-delete';
 import { useMessagePin, type MessagePinEntry } from './use-message-pin';
@@ -78,6 +79,18 @@ export type MessageMenuTargetState = {
   readonly messageId: string;
   readonly element: HTMLElement;
   readonly isMine: boolean;
+  readonly pieceId?: string;
+};
+
+/**
+ * LA BARRE DE RÉACTION RAPIDE QU'OUVRE UN DOUBLE TOUCHER (#10599) — ancrée au
+ * message (`anchor` : la rangée, ou la tuile de la pièce visée), centrée sous
+ * le doigt (`x`). `pieceId` : la réaction vise cette pièce ; absent, le message.
+ */
+export type QuickReactionTarget = {
+  readonly messageId: string;
+  readonly anchor: HTMLElement;
+  readonly x: number;
   readonly pieceId?: string;
 };
 
@@ -136,7 +149,7 @@ export function useMessageMenu(params: {
     queryClient: params.queryClient ?? appQueryClient,
     transport: params.transport ?? apiDeps.transport,
   });
-  const { onPieceReact, onPieceAction } = piece;
+  const { onPieceReact, onPieceAction, pieceDataOf } = piece;
   /* LES LIBELLÉS D'UNE PIÈCE (#9907) arrivent avec le fil, hors du catalogue d'interface. */
   useEffect(() => {
     void loadMessagePiecesCatalog(currentInterfaceLanguage()).catch(() => undefined);
@@ -337,21 +350,43 @@ export function useMessageMenu(params: {
   );
 
   /**
-   * LE DOUBLE TOUCHER OUVRE LE MENU DE L'APPUI LONG (#10599, décision porteur
-   * du 2026-10-14 : « Sur iOS le double toucher montre le menu, on garde
-   * cela ») — la MÊME porte (`openMenuFor`), donc le même menu, la même ancre
-   * et la même pièce visée : sur la tuile d'un message à plusieurs pièces, le
-   * menu vise CETTE pièce et son rail réagit sur elle, comme le sélecteur de
-   * la tuile iOS (`QuickReactionDoubleTap`). Le menu ouvert et la sélection
-   * le neutralisent.
+   * LE DOUBLE TOUCHER OUVRE LA BARRE DE RÉACTION RAPIDE (#10599, décision
+   * porteur du 2026-10-14 : « Non, sur le web le double toucher peut ouvrir
+   * plutôt un petit menu de réaction rapide ! ») — la barre de la capsule
+   * « + » (`MessageReactionQuickBar`), jamais le menu complet ni une réaction
+   * posée d'office. Sur la tuile d'un message à plusieurs pièces dont la pièce
+   * accepte une réaction (`pieceDataOf(…).canReact`, la loi du menu d'une
+   * pièce), la barre s'ancre sur la tuile et vise CETTE pièce. Ce que la
+   * capsule refuse, le geste le refuse (`doubleTapReactable`). Le menu
+   * ouvert, la barre ouverte et la sélection le neutralisent.
    */
+  const [quickReactionFor, setQuickReactionFor] = useState<QuickReactionTarget | null>(null);
+  const onCloseQuickReaction = useCallback(() => setQuickReactionFor(null), []);
   const blockedRef = useRef(false);
-  blockedRef.current = selection !== null || menuTarget !== null;
-  const doubleTap = useDoubleTap({ enabled: () => !blockedRef.current, onDoubleTap: openMenuFor });
+  blockedRef.current = selection !== null || menuTarget !== null || quickReactionFor !== null;
+  const onDoubleTap = useCallback(
+    ({ row, origin, x }: DoubleTap) => {
+      const messageId = row.dataset.row;
+      const message = messageId === undefined ? undefined : messageOf(messageId);
+      if (message === undefined || !doubleTapReactable(message, Date.now())) return;
+      const pieceId = pieceIdAt(origin, row);
+      const reactsOnPiece = pieceId !== undefined && pieceDataOf(message.id, pieceId)?.canReact === true;
+      if (reactsOnPiece) prewarmPieceReaction();
+      const tile = reactsOnPiece && origin instanceof Element ? origin.closest(`[${PIECE_ATTRIBUTE}]`) : null;
+      setQuickReactionFor({
+        messageId: message.id,
+        anchor: tile instanceof HTMLElement ? tile : row,
+        x,
+        ...(reactsOnPiece ? { pieceId } : {}),
+      });
+    },
+    [messageOf, pieceDataOf],
+  );
+  const doubleTap = useDoubleTap({ enabled: () => !blockedRef.current, onDoubleTap });
 
   /**
-   * LES GESTES D'UNE RANGÉE — l'appui long et le double toucher, qui ouvrent
-   * tous deux le menu, étalés ensemble sur chaque rangée par l'hôte.
+   * LES GESTES D'UNE RANGÉE — l'appui long (menu) et le double toucher
+   * (barre de réaction rapide), étalés ensemble sur chaque rangée par l'hôte.
    */
   const longPress = useMemo(() => {
     const note = (event: { readonly target: EventTarget | null }) => {
@@ -624,6 +659,8 @@ export function useMessageMenu(params: {
   return {
     menuTarget,
     menuData,
+    quickReactionFor,
+    onCloseQuickReaction,
     longPress,
     onCloseMenu,
     onMenuReact,

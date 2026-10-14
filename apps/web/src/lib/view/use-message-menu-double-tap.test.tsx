@@ -17,14 +17,15 @@ import { DOUBLE_TAP_GAP_MS } from './double-tap';
 import { useMessageMenu } from './use-message-menu';
 
 /**
- * #10599, DÉCISION PORTEUR DU 2026-10-14 — « Sur iOS le double toucher montre
- * le menu, on garde cela. » UN DOUBLE TOUCHER SUR UN MESSAGE OUVRE LE MENU DE
- * L'APPUI LONG ; sur la tuile d'un message à plusieurs pièces, ce menu vise
- * CETTE pièce (son rail réagit sur elle), comme le sélecteur de la tuile iOS.
+ * #10599, DÉCISION PORTEUR DU 2026-10-14 — « Non, sur le web le double toucher
+ * peut ouvrir plutôt un petit menu de réaction rapide ! » UN DOUBLE TOUCHER SUR
+ * UN MESSAGE OUVRE LA BARRE DE RÉACTION RAPIDE, ancrée au message — ni le menu
+ * complet de l'appui long, ni une réaction posée d'office ; sur la tuile d'un
+ * message à plusieurs pièces, la barre vise CETTE pièce.
  * Le témoin passe par le GESTE (appui puis clic, deux fois) sur une rangée qui
  * porte les gestionnaires que l'écran étale (`longPress`), et lit l'effet :
- * le menu ouvert (`menuTarget`), aucune réaction posée, l'ouverture (ou non)
- * du média.
+ * la cible de la barre (`quickReactionFor`), aucun menu, aucune réaction
+ * posée, l'ouverture (ou non) du média.
  */
 
 const globals = globalThis as typeof globalThis & { IS_REACT_ACT_ENVIRONMENT?: boolean };
@@ -154,48 +155,40 @@ async function doubleTap(el: Element): Promise<void> {
   await tap(el, { detail: 2 });
 }
 
-const noBurst = (): boolean => document.querySelector('[data-reaction-burst]') === null;
-
-describe('le double toucher ouvre le menu du message, comme iOS (#10599, porteur 2026-10-14)', () => {
-  test('sur le texte : le menu de l’appui long s’ouvre, ancré sur la rangée, et aucune réaction n’est posée', async () => {
+describe('le double toucher ouvre la barre de réaction rapide (#10599, porteur 2026-10-14)', () => {
+  test('sur le texte : la barre s’ouvre, ancrée sur la rangée, sans menu ni réaction posée', async () => {
     const { api } = mount(messageWith('m-texte', []));
     await doubleTap(container.querySelector('[data-text]')!);
-    const target = api().menuTarget;
-    expect(target?.messageId).toBe('m-texte');
-    expect(target?.element).toBe(container.querySelector('[data-row="m-texte"]'));
-    expect(target?.pieceId).toBeUndefined();
-    expect(api().menuData?.items.length ?? 0).toBeGreaterThan(0);
+    const bar = api().quickReactionFor;
+    expect(bar?.messageId).toBe('m-texte');
+    expect(bar?.anchor).toBe(container.querySelector('[data-row="m-texte"]'));
+    expect(bar?.x).toBe(120);
+    expect(bar?.pieceId).toBeUndefined();
+    expect(api().menuTarget).toBeNull();
     expect(mineOf('m-texte')).toEqual([]);
-    expect(noBurst()).toBe(true);
   });
 
-  test('le menu du double toucher est celui de l’appui long : mêmes entrées', async () => {
-    const pressed = mount(messageWith('m-texte', []));
-    await act(async () => {
-      container.querySelector('[data-row="m-texte"]')!.dispatchEvent(new MouseEvent('contextmenu', { bubbles: true, cancelable: true, clientX: 120, clientY: 80 }));
-    });
-    const fromLongPress = pressed.api().menuData?.items.map((item) => item.id);
-    act(() => pressed.api().onCloseMenu());
-    await act(async () => wait(DOUBLE_TAP_GAP_MS + 30));
+  test('la barre se referme par sa porte', async () => {
+    const { api } = mount(messageWith('m-texte', []));
     await doubleTap(container.querySelector('[data-text]')!);
-    expect(fromLongPress?.length ?? 0).toBeGreaterThan(0);
-    expect(pressed.api().menuData?.items.map((item) => item.id)).toEqual(fromLongPress);
+    act(() => api().onCloseQuickReaction());
+    expect(api().quickReactionFor).toBeNull();
   });
 
   test('un toucher seul n’ouvre rien', async () => {
     const { api } = mount(messageWith('m-texte', []));
     await tap(container.querySelector('[data-text]')!);
     await act(async () => wait(DOUBLE_TAP_GAP_MS + 30));
-    expect(api().menuTarget).toBeNull();
+    expect(api().quickReactionFor).toBeNull();
   });
 
-  test('sur le média d’un message à une pièce : la visionneuse ne s’ouvre pas, le menu du message s’ouvre', async () => {
+  test('sur le média d’un message à une pièce : la visionneuse ne s’ouvre pas, la barre vise le message', async () => {
     const { api, opened } = mount(messageWith('m-photo', ['a-1']));
     await doubleTap(container.querySelector('[data-tile="a-1"]')!);
     await act(async () => wait(DOUBLE_TAP_GAP_MS + 30));
     expect(opened).toEqual([]);
-    expect(api().menuTarget?.messageId).toBe('m-photo');
-    expect(api().menuTarget?.pieceId).toBeUndefined();
+    expect(api().quickReactionFor?.messageId).toBe('m-photo');
+    expect(api().quickReactionFor?.pieceId).toBeUndefined();
     expect(mineOf('m-photo')).toEqual([]);
   });
 
@@ -205,7 +198,7 @@ describe('le double toucher ouvre le menu du message, comme iOS (#10599, porteur
     expect(opened).toEqual([]);
     await act(async () => wait(DOUBLE_TAP_GAP_MS + 30));
     expect(opened).toEqual(['a-1']);
-    expect(api().menuTarget).toBeNull();
+    expect(api().quickReactionFor).toBeNull();
   });
 
   test('un clic clavier sur un média n’est jamais retenu', async () => {
@@ -214,7 +207,7 @@ describe('le double toucher ouvre le menu du message, comme iOS (#10599, porteur
     expect(opened).toEqual(['a-1']);
   });
 
-  test('dans un lot de photos, le double toucher ouvre le menu de la PIÈCE touchée, sans rien réagir à sa place', async () => {
+  test('dans un lot de photos, la barre vise la PIÈCE touchée et s’ancre sur sa tuile, sans rien réagir à sa place', async () => {
     const sent: AttachmentReactionRequest[] = [];
     setAttachmentReactionEmitter(async (request) => {
       sent.push(request);
@@ -225,32 +218,43 @@ describe('le double toucher ouvre le menu du message, comme iOS (#10599, porteur
       await doubleTap(container.querySelector('[data-tile="a-2"]')!);
       await act(async () => wait(DOUBLE_TAP_GAP_MS + 30));
       expect(opened).toEqual([]);
-      expect(api().menuTarget?.messageId).toBe('m-lot');
-      expect(api().menuTarget?.pieceId).toBe('a-2');
+      expect(api().quickReactionFor?.messageId).toBe('m-lot');
+      expect(api().quickReactionFor?.pieceId).toBe('a-2');
+      expect(api().quickReactionFor?.anchor).toBe(container.querySelector('[data-piece="a-2"]'));
+      expect(api().menuTarget).toBeNull();
       expect(sent).toEqual([]);
       expect(mineOf('m-lot')).toEqual([]);
-      expect(noBurst()).toBe(true);
     } finally {
       setAttachmentReactionEmitter(null);
     }
   });
 
-  test('menu ouvert, un nouveau double toucher ne change rien', async () => {
+  test('barre ouverte, un nouveau double toucher ne change rien', async () => {
     const { api } = mount(messageWith('m-lot', ['a-1', 'a-2', 'a-3']));
     await doubleTap(container.querySelector('[data-tile="a-2"]')!);
     await act(async () => wait(DOUBLE_TAP_GAP_MS + 30));
     await doubleTap(container.querySelector('[data-tile="a-3"]')!);
-    expect(api().menuTarget?.pieceId).toBe('a-2');
+    expect(api().quickReactionFor?.pieceId).toBe('a-2');
+  });
+
+  test('menu ouvert (appui long), le double toucher n’ouvre pas la barre', async () => {
+    const { api } = mount(messageWith('m-texte', []));
+    await act(async () => {
+      container.querySelector('[data-row="m-texte"]')!.dispatchEvent(new MouseEvent('contextmenu', { bubbles: true, cancelable: true, clientX: 120, clientY: 80 }));
+    });
+    expect(api().menuTarget?.messageId).toBe('m-texte');
+    await doubleTap(container.querySelector('[data-text]')!);
+    expect(api().quickReactionFor).toBeNull();
   });
 
   test('un contrôle de la rangée n’est jamais retardé et ne compte pas pour le geste', async () => {
     const { api, controls } = mount(messageWith('m-texte', []));
     await doubleTap(container.querySelector('[data-pill]')!);
     expect(controls).toEqual(['pill', 'pill']);
-    expect(api().menuTarget).toBeNull();
+    expect(api().quickReactionFor).toBeNull();
   });
 
-  test('la sélection de texte gagne : un double clic qui a sélectionné un mot n’ouvre pas le menu', async () => {
+  test('la sélection de texte gagne : un double clic qui a sélectionné un mot n’ouvre pas la barre', async () => {
     const { api } = mount(messageWith('m-texte', []));
     const text = container.querySelector('[data-text]')!;
     await tap(text);
@@ -260,15 +264,21 @@ describe('le double toucher ouvre le menu du message, comme iOS (#10599, porteur
     range.setEnd(text.firstChild!, 7);
     window.getSelection()?.addRange(range);
     await tap(text, { detail: 2 });
-    expect(api().menuTarget).toBeNull();
+    expect(api().quickReactionFor).toBeNull();
     expect(window.getSelection()?.toString()).toBe('regarde');
+  });
+
+  test('un message supprimé n’ouvre pas la barre', async () => {
+    const { api } = mount(messageWith('m-texte', [], { deletedAt: new Date() }));
+    await doubleTap(container.querySelector('[data-text]')!);
+    expect(api().quickReactionFor).toBeNull();
   });
 
   test('en sélection, le double toucher ne fait rien', async () => {
     const { api } = mount(messageWith('m-texte', []));
     act(() => api().onMenuAction('m-texte', 'select'));
     await doubleTap(container.querySelector('[data-text]')!);
+    expect(api().quickReactionFor).toBeNull();
     expect(api().menuTarget).toBeNull();
-    expect(mineOf('m-texte')).toEqual([]);
   });
 });

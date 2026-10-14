@@ -87,6 +87,8 @@ const ownMessage = (overrides: Partial<Message> = {}): Message =>
 const menuOf = (overrides: Partial<ThreadSheetsMenu> = {}): ThreadSheetsMenu => ({
   menuTarget: null,
   menuData: undefined,
+  quickReactionFor: null,
+  onCloseQuickReaction: () => {},
   onCloseMenu: () => {},
   onMenuReact: () => {},
   onMenuAction: () => {},
@@ -415,5 +417,78 @@ describe('ThreadMessageSheets — la liste de qui a réagi (#10583)', () => {
     await demande(SERVER_MESSAGE_ID);
     mounter.unmountAll();
     expect(reactorsSheetStore.getState().messageId).toBeNull();
+  });
+});
+
+describe('ThreadMessageSheets — la barre rapide du double toucher (#10599, porteur 2026-10-14)', () => {
+  const anchorOf = (): HTMLElement => {
+    const anchor = document.createElement('div');
+    anchor.tabIndex = 0;
+    document.body.append(anchor);
+    return anchor;
+  };
+  const quickTile = (): HTMLButtonElement | null => document.body.querySelector<HTMLButtonElement>('[data-reaction-quick-bar] button[role="menuitem"]');
+
+  test('aucune cible ⇒ aucune barre', async () => {
+    await mountSheets(menuOf(), [ownMessage()]);
+    expect(document.body.querySelector('[data-reaction-quick-bar]')).toBeNull();
+  });
+
+  test('une cible ⇒ la barre ; choisir un emoji réagit sur le message puis referme', async () => {
+    const journal: string[] = [];
+    const anchor = anchorOf();
+    await mountSheets(
+      menuOf({
+        quickReactionFor: { messageId: SERVER_MESSAGE_ID, anchor, x: 100 },
+        onMenuReact: (id, emoji, pieceId) => journal.push(`react:${id}:${emoji}:${String(pieceId)}`),
+        onCloseQuickReaction: () => journal.push('close'),
+      }),
+      [ownMessage()],
+    );
+    const tile = quickTile();
+    const emoji = tile?.textContent ?? '';
+    expect(emoji).not.toBe('');
+    await mounter.click(tile);
+    expect(journal).toEqual([`react:${SERVER_MESSAGE_ID}:${emoji}:undefined`, 'close']);
+    anchor.remove();
+  });
+
+  test('une cible PIÈCE ⇒ la réaction vise la pièce touchée', async () => {
+    const journal: string[] = [];
+    const anchor = anchorOf();
+    await mountSheets(
+      menuOf({
+        quickReactionFor: { messageId: SERVER_MESSAGE_ID, anchor, x: 100, pieceId: ATTACHMENT_ID },
+        onMenuReact: (id, emoji, pieceId) => journal.push(`react:${id}:${emoji}:${String(pieceId)}`),
+      }),
+      [ownMessage()],
+    );
+    const tile = quickTile();
+    await mounter.click(tile);
+    expect(journal).toEqual([`react:${SERVER_MESSAGE_ID}:${tile?.textContent ?? ''}:${ATTACHMENT_ID}`]);
+    anchor.remove();
+  });
+
+  test('« ＋ » de la barre ouvre la feuille complète du message', async () => {
+    const journal: string[] = [];
+    const anchor = anchorOf();
+    await mountSheets(
+      menuOf({
+        quickReactionFor: { messageId: SERVER_MESSAGE_ID, anchor, x: 100 },
+        setReactionSheetFor: (id) => journal.push(`sheet:${String(id)}`),
+        onCloseQuickReaction: () => journal.push('close'),
+      }),
+      [ownMessage()],
+    );
+    await mounter.click(document.body.querySelector('[data-reaction-quick-bar] button[data-add-reaction]'));
+    expect(journal).toEqual([`sheet:${SERVER_MESSAGE_ID}`, 'close']);
+    anchor.remove();
+  });
+
+  test('un message disparu du fil ne garde pas sa barre', async () => {
+    const anchor = anchorOf();
+    await mountSheets(menuOf({ quickReactionFor: { messageId: 'm-parti', anchor, x: 100 } }), [ownMessage()]);
+    expect(document.body.querySelector('[data-reaction-quick-bar]')).toBeNull();
+    anchor.remove();
   });
 });

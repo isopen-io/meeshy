@@ -1,4 +1,4 @@
-import { useState } from 'react';
+import { useEffect, useState } from 'react';
 import type { CSSProperties, KeyboardEvent as ReactKeyboardEvent, ReactNode } from 'react';
 import { createPortal } from 'react-dom';
 
@@ -32,10 +32,17 @@ import { quickReactionEmojis, RAIL_ITEM_COUNT, ReactionRailTiles } from './react
  *
  * L'ACCENT est relu sur la capsule et reposé sur le portail, qui vit hors de
  * la portée de `--accent` (même raison que `message-menu.tsx::accentOf`).
+ *
+ * LA MÊME BARRE S'OUVRE AU DOUBLE TOUCHER D'UN MESSAGE (#10599, décision
+ * porteur du 2026-10-14 : « sur le web le double toucher peut ouvrir plutôt un
+ * petit menu de réaction rapide ») — `MessageReactionQuickBar`, ancrée au
+ * message ou à la tuile visée, centrée sous le doigt. Une seule barre
+ * (`QuickBarRail`) sert les deux portes.
  */
 type BarBox = { readonly top: number; readonly left: number; readonly width: number; readonly accent: string | undefined };
 
-function barBoxOf(anchor: HTMLElement): BarBox {
+/** `centerX` : le point touché, sur lequel la barre se centre ; absent, elle s'aligne sur le bord de l'ancre. */
+function barBoxOf(anchor: HTMLElement, centerX?: number): BarBox {
   const rect = anchor.getBoundingClientRect();
   const safe = safeAreaInsets();
   const width = Math.min(RAIL_WIDTH, Math.max(0, window.innerWidth - 2 * SIDE_PADDING));
@@ -47,7 +54,8 @@ function barBoxOf(anchor: HTMLElement): BarBox {
     gap: RAIL_GAP,
     margin: SIDE_PADDING + safe.top,
   });
-  const left = Math.max(SIDE_PADDING, Math.min(rect.left, window.innerWidth - width - SIDE_PADDING));
+  const start = centerX === undefined ? rect.left : centerX - width / 2;
+  const left = Math.max(SIDE_PADDING, Math.min(start, window.innerWidth - width - SIDE_PADDING));
   const accent = getComputedStyle(anchor).getPropertyValue('--accent').trim();
   return { top, left, width, accent: accent === '' ? undefined : accent };
 }
@@ -82,20 +90,6 @@ export function ReactionAddCapsule({
     roving.setOpen(true);
   };
 
-  const onBarKeyDown = (event: ReactKeyboardEvent<HTMLDivElement>) => {
-    if (event.key === 'Tab') {
-      event.preventDefault();
-      roving.closeAndFocusButton();
-      return;
-    }
-    if (event.key === 'ArrowLeft' || event.key === 'ArrowRight') {
-      const forward = (event.key === 'ArrowRight') !== isRtl();
-      if (roving.handleKey(forward ? 'ArrowDown' : 'ArrowUp')) event.preventDefault();
-      return;
-    }
-    roving.onMenuKeyDown(event);
-  };
-
   return (
     <>
       <button
@@ -110,36 +104,104 @@ export function ReactionAddCapsule({
       >
         <Glyph name="smiley" size={14} />
       </button>
-      {roving.open && box !== null
-        ? createPortal(
-            <ReactionQuickBar
-              box={box}
-              onKeyDown={onBarKeyDown}
-              menuRef={roving.menuRef}
-              label={translate(language, 'message.menu.react')}
-              onBack={() => roving.setOpen(false)}
-            >
-              <ReactionRailTiles
-                emojis={emojis}
-                language={language}
-                activeIndex={roving.activeIndex}
-                itemRef={(index, el) => {
-                  roving.itemRefs.current[index] = el;
-                }}
-                onPick={(emoji) => {
-                  roving.closeAndFocusButton();
-                  onReact(emoji);
-                }}
-                onExpand={() => {
-                  roving.setOpen(false);
-                  onExpand();
-                }}
-              />
-            </ReactionQuickBar>,
-            document.body,
-          )
-        : null}
+      {roving.open && box !== null ? <QuickBarRail box={box} emojis={emojis} roving={roving} onReact={onReact} onExpand={onExpand} /> : null}
     </>
+  );
+}
+
+/**
+ * LA BARRE DU DOUBLE TOUCHER (#10599) — montée OUVERTE par son hôte tant que
+ * la cible est posée ; toute fermeture (choix, « ＋ », Échap, toucher
+ * ailleurs, défilement qui déplace le message, retour matériel) passe par
+ * `onClose`, qui la démonte. Le focus revient au message.
+ */
+export function MessageReactionQuickBar({
+  anchor,
+  x,
+  onReact,
+  onExpand,
+  onClose,
+}: {
+  /** Ce qui ancre la barre : la rangée du message, ou la tuile de la pièce visée. */
+  readonly anchor: HTMLElement;
+  /** Le point touché, sur lequel la barre se centre. */
+  readonly x: number;
+  readonly onReact: (emoji: string) => void;
+  readonly onExpand: () => void;
+  readonly onClose: () => void;
+}) {
+  const [emojis] = useState(quickReactionEmojis);
+  const [box] = useState(() => barBoxOf(anchor, x));
+  const roving = useRovingMenu({
+    itemCount: RAIL_ITEM_COUNT,
+    initialOpen: true,
+    anchor: () => anchor,
+    returnFocusTo: () => anchor,
+    onScroll: () => roving.setOpen(false),
+    onResize: () => roving.setOpen(false),
+  });
+  const { open } = roving;
+  useEffect(() => {
+    if (!open) onClose();
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [open]);
+  return open ? <QuickBarRail box={box} emojis={emojis} roving={roving} onReact={onReact} onExpand={onExpand} /> : null;
+}
+
+/** La barre posée en portail : le rail, son parcours clavier, ses sorties — écrite une fois pour les deux portes. */
+function QuickBarRail({
+  box,
+  emojis,
+  roving,
+  onReact,
+  onExpand,
+}: {
+  readonly box: BarBox;
+  readonly emojis: readonly string[];
+  readonly roving: ReturnType<typeof useRovingMenu>;
+  readonly onReact: (emoji: string) => void;
+  readonly onExpand: () => void;
+}) {
+  const language = currentInterfaceLanguage();
+  const onBarKeyDown = (event: ReactKeyboardEvent<HTMLDivElement>) => {
+    if (event.key === 'Tab') {
+      event.preventDefault();
+      roving.closeAndFocusButton();
+      return;
+    }
+    if (event.key === 'ArrowLeft' || event.key === 'ArrowRight') {
+      const forward = (event.key === 'ArrowRight') !== isRtl();
+      if (roving.handleKey(forward ? 'ArrowDown' : 'ArrowUp')) event.preventDefault();
+      return;
+    }
+    roving.onMenuKeyDown(event);
+  };
+  return createPortal(
+    <ReactionQuickBar
+      box={box}
+      onKeyDown={onBarKeyDown}
+      menuRef={roving.menuRef}
+      label={translate(language, 'message.menu.react')}
+      onBack={() => roving.setOpen(false)}
+    >
+      <ReactionRailTiles
+        emojis={emojis}
+        language={language}
+        activeIndex={roving.activeIndex}
+        itemRef={(index, el) => {
+          roving.itemRefs.current[index] = el;
+        }}
+        onPick={(emoji) => {
+          roving.closeAndFocusButton();
+          onReact(emoji);
+        }}
+        onExpand={() => {
+          roving.setOpen(false);
+          onExpand();
+        }}
+      />
+    </ReactionQuickBar>,
+    document.body,
   );
 }
 

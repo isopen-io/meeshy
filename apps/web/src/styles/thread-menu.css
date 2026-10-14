@@ -193,7 +193,7 @@
 }
 
 /*
- * LE DOUBLE TOUCHER D'UNE RANGÉE OUVRE LE MENU, IL NE ZOOME PAS (#10599) —
+ * LE DOUBLE TOUCHER D'UNE RANGÉE OUVRE LA BARRE DE RÉACTION, IL NE ZOOME PAS (#10599) —
  * `manipulation` garde le défilement et le pincement, et retire le zoom au
  * double toucher que Safari iOS applique encore à une page `width=device-width`.
  */

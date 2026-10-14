@@ -1,7 +1,6 @@
 import { useCallback, useEffect, useMemo, useRef } from 'react';
 import type { MouseEvent as ReactMouseEvent, PointerEvent as ReactPointerEvent } from 'react';
 
-import type { LongPressAnchor } from './long-press';
 import { IDLE_TAP, mediaOpenerOf, nextTapDeadline, tapKindOf, tapReducer, type TapEffect, type TapEvent, type TapState } from './double-tap';
 
 /**
@@ -17,12 +16,17 @@ import { IDLE_TAP, mediaOpenerOf, nextTapDeadline, tapKindOf, tapReducer, type T
  * LA SÉLECTION DE TEXTE GAGNE TOUJOURS : un double clic de souris sur un mot
  * le sélectionne au second appui, avant le clic. Si la sélection du document
  * est non vide dans la rangée, le second clic est traité comme un contrôle —
- * aucun menu, le mot reste sélectionné. Le double clic sur la marge de la
- * bulle, sur l'heure ou sur un média ouvre le menu.
+ * aucune barre, le mot reste sélectionné. Le double clic sur la marge de la
+ * bulle, sur l'heure ou sur un média ouvre la barre de réaction rapide.
  */
 
-/** L'ancre de l'appui long, plus la cible du second toucher — pour savoir quelle pièce il a touchée. */
-type DoubleTap = LongPressAnchor & { readonly origin: EventTarget | null };
+export type DoubleTap = {
+  readonly row: HTMLElement;
+  /** La cible du second toucher — pour savoir quelle pièce il a touchée. */
+  readonly origin: EventTarget | null;
+  /** L'abscisse du second toucher, sous laquelle la barre se centre. */
+  readonly x: number;
+};
 
 let replaying = false;
 
@@ -103,7 +107,7 @@ export function useDoubleTap(options: { readonly enabled: () => boolean; readonl
       event.preventDefault();
       event.stopPropagation();
       if (effects.includes('double')) {
-        optionsRef.current.onDoubleTap({ element: row, rect: row.getBoundingClientRect(), origin: event.target });
+        optionsRef.current.onDoubleTap({ row, origin: event.target, x: event.clientX });
       }
     },
     [apply],

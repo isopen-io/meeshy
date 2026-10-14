@@ -264,7 +264,7 @@ export function ThreadModes({
   readonly rowNoteOf?: (messageId: string) => ReactNode;
   readonly selection?: SelectionState | null;
   readonly onRowTap?: (messageId: string) => void;
-  /** Les gestes d'une rangée : l'appui long et le double toucher, qui ouvrent tous deux le menu (#10599). */
+  /** Les gestes d'une rangée : l'appui long (menu) et le double toucher (barre de réaction rapide, #10599). */
   readonly longPress?: MessageMenuController['longPress'];
   /** Glisser → répondre, ← transférer, et l'icône « Répondre » du pointeur
    * fin (#7559, #8899) — l'offre et l'effet du MENU (`useMessageMenu`). */

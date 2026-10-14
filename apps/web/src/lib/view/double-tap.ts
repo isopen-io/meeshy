@@ -1,9 +1,12 @@
+import type { Message } from '@/lib/api/types';
+import { protectionOf } from '@/lib/reading-mode/protection';
+
 import { LONG_PRESS_MS } from './long-press';
 
 /**
  * LE DOUBLE TOUCHER D'UN MESSAGE (#10599) — deux touchers rapprochés sur une
- * rangée du fil ouvrent le menu de l'appui long, comme iOS (décision porteur
- * du 2026-10-14). La machine est PURE,
+ * rangée du fil ouvrent la barre de réaction rapide (décision porteur du
+ * 2026-10-14). La machine est PURE,
  * testable sans DOM ni minuteur réel, comme `pressReducer` (`long-press.ts`) :
  * le hook (`use-double-tap.ts`) ne fait qu'y brancher les événements et un
  * `setTimeout`.
@@ -137,4 +140,15 @@ export function mediaOpenerOf(target: EventTarget | null): HTMLElement | null {
   if (!(target instanceof Element)) return null;
   const opener = target.closest(MEDIA_OPENER);
   return opener instanceof HTMLElement ? opener : null;
+}
+
+/**
+ * CE QU'UN DOUBLE TOUCHER PEUT RÉAGIR — ce que la capsule « + » offre
+ * (`thread-modes.tsx`) : ni un message supprimé, ni un éphémère échu, ni un
+ * envoi encore local (`cid_…`, que la passerelle ne connaît pas).
+ */
+export function doubleTapReactable(message: Pick<Message, 'id'> & Parameters<typeof protectionOf>[0], now: number): boolean {
+  if (message.id.startsWith('cid_')) return false;
+  const protection = protectionOf(message, now);
+  return protection !== 'deleted' && protection !== 'expired';
 }
