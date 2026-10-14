@@ -1,7 +1,7 @@
 import * as packsEndpoints from '@meeshy/shared/api/endpoints/packs';
 
 import type { ConversationsDeps } from './conversations';
-import { listOf, loadInstalledOf, type PackDeps, type PackPort } from './packs';
+import { listOf, type PackPort } from './packs';
 
 /**
  * **LE DOMAINE `wallpaper` DU PORT GÉNÉRIQUE DES PACKS** (#10631, § 9) — la
@@ -32,11 +32,22 @@ export const wallpaperPackPort: PackPort<WallpaperPackRef, WallpaperPackRef, Wal
   absentMeansEmpty: true,
 };
 
-/** Les identifiants des packs de fonds installés, ou `null` quand la passerelle ne répond pas (le sélecteur garde alors les défauts). */
-export async function loadInstalledWallpaperSlugs(deps: ConversationsDeps & { readonly signal?: AbortSignal }): Promise<ReadonlySet<string> | null> {
-  const packDeps: PackDeps = deps;
-  const result = await loadInstalledOf(wallpaperPackPort, packDeps);
-  return result.ok ? new Set(listOf(result.data, decodeRef).map((pack) => pack.slug)) : null;
+/**
+ * L'état du domaine `wallpaper` chez CE serveur : `supported` dit s'il le
+ * connaît (un ANCIEN serveur répond 404 — il ignorerait aussi un `PUT
+ * appearance`, § 11), `slugs` les packs installés. `null` sur une panne : l'appelant
+ * garde ses défauts sans conclure que le serveur est ancien.
+ */
+export type WallpaperInstallState = { readonly supported: boolean; readonly slugs: ReadonlySet<string> };
+
+export async function loadWallpaperInstallState(deps: ConversationsDeps & { readonly signal?: AbortSignal }): Promise<WallpaperInstallState | null> {
+  const result = await deps.transport.request<unknown>({
+    method: 'GET',
+    path: wallpaperPackPort.installed,
+    ...(deps.signal === undefined ? {} : { signal: deps.signal }),
+  });
+  if (result.ok) return { supported: true, slugs: new Set(listOf(result.data, decodeRef).map((pack) => pack.slug)) };
+  return result.status === 404 ? { supported: false, slugs: new Set() } : null;
 }
 
 export const wallpaperInstalledQueryKey = ['packs', 'wallpaper', 'installed'] as const;

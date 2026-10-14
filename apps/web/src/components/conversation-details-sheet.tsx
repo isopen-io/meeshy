@@ -25,6 +25,7 @@ import { useConversationManageCatalog } from '@/lib/view/use-conversation-manage
 
 import { Avatar } from './avatar';
 import { ConversationMembersSection } from './conversation-details-members';
+import { ConversationAppearanceEntry } from './conversation-appearance-entry';
 import { ConversationMediaSection } from './conversation-media-section';
 import { ConversationOptionsSection } from './conversation-options-section';
 import { ConversationSettingsSection } from './conversation-settings-section';
@@ -257,6 +258,8 @@ export function ConversationDetailsSheet({
         ) : null}
 
         {manageReady && signedIn ? <ConversationOptionsSection conversation={conversation} viewerId={viewerId} deps={deps} language={language} /> : null}
+
+        {signedIn ? <ConversationAppearanceEntry conversation={conversation} accent={accent} deps={deps} language={language} /> : null}
 
         {departures.includes('delete') ? (
           <div className="flex justify-center px-4 pb-8">
