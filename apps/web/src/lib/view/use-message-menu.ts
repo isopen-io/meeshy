@@ -37,7 +37,7 @@ import { contentExitOf, exitOffers } from './content-exit';
 import { doubleTapReactable } from './double-tap';
 import { admitForward, forwardRefusalOf, forwardRequestOf, type ForwardRefusal } from './forward';
 import { useLongPress, type LongPressAnchor } from './long-press';
-import { pieceIdAt, targetedPieceOf } from './message-piece';
+import { pieceIdAt, soleSaveablePieceOf, targetedPieceOf } from './message-piece';
 import { playReactionBurst } from './reaction-burst';
 import { prefersReducedMotion } from './reduced-motion';
 import { prewarmPieceReaction, usePieceMenu, type PieceMenuData } from './use-piece-menu';
@@ -143,7 +143,7 @@ export function useMessageMenu(params: {
     queryClient: params.queryClient ?? appQueryClient,
     transport: params.transport ?? apiDeps.transport,
   });
-  const { onPieceReact } = piece;
+  const { onPieceReact, onPieceAction } = piece;
   /* LES LIBELLÉS D'UNE PIÈCE (#9907) arrivent avec le fil, hors du catalogue d'interface. */
   useEffect(() => {
     void loadMessagePiecesCatalog(currentInterfaceLanguage()).catch(() => undefined);
@@ -473,6 +473,14 @@ export function useMessageMenu(params: {
         setDetailFor(messageId);
         return;
       }
+      /* « ENREGISTRER » (#10599) — la pièce unique, par la porte du menu d'une
+         pièce (`pieceSave`) : une seule écriture du téléchargement. */
+      if (id === 'save') {
+        const message = messageOf(messageId);
+        const sole = message === undefined ? null : soleSaveablePieceOf(message, Date.now());
+        if (sole !== null) onPieceAction(messageId, sole.id, 'pieceSave');
+        return;
+      }
       if (id === 'export' || id === 'exportQuick' || id === 'exportDiscussion') {
         const message = messageOf(messageId);
         if (message === undefined || !imageableOf(messageMenuContextOf(message, { now: Date.now() }))) return;
@@ -484,7 +492,7 @@ export function useMessageMenu(params: {
       // `translate` ne passe jamais ici — `MessageMenu` l'intercepte en
       // interne et bascule sur son sous-menu (`onPickLanguage`).
     },
-    [copyableTextOf, params, announce, messageOf, discussionImageableOf, editOf],
+    [copyableTextOf, params, announce, messageOf, discussionImageableOf, editOf, onPieceAction],
   );
 
   /** Le tap d'une rangée EN MODE SÉLECTION — bascule la coche ; le 101ᵉ id
@@ -625,6 +633,7 @@ export function useMessageMenu(params: {
       hasDefaultExportFormat: readDefaultMessageCardFormat(safeLocalStorage()) !== null,
       discussionImageable: discussionImageableOf(menuTarget.messageId),
       canEdit: editOf(menuTarget.messageId) !== null,
+      canSave: soleSaveablePieceOf(message, Date.now()) !== null,
     };
     const servedLanguage = servedOf(menuTarget.messageId)?.language ?? '';
     const lang = currentInterfaceLanguage();
@@ -650,7 +659,7 @@ export function useMessageMenu(params: {
     onMenuReact,
     onMenuAction,
     onPieceChange,
-    onPieceAction: piece.onPieceAction,
+    onPieceAction,
     onPickLanguage,
     displayLanguageOf: (id: string) => displayLanguages.get(id),
     myReactionsOf: (id: string) => mine[id],

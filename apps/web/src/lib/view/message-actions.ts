@@ -13,9 +13,9 @@ import { protectionOf } from '@/lib/reading-mode/protection';
  * `MessageActionResolver.primaryActions` (`apps/ios/Meeshy/Features/Main/
  * Components/MessageActionResolver.swift:253-274`) — réduit au sous-ensemble
  * que la v3.1 peut RÉELLEMENT servir (§ 1.2 de la spécification #5814) :
- * `saveMedia` et `callDetail` n'ont aucun port web, la loi 4 du dépôt (« un
- * contrôle existe s'il a un effet ») interdit de les lister. `edit` a le sien
- * depuis #10581.
+ * `callDetail` n'a aucun port web, la loi 4 du dépôt (« un contrôle existe
+ * s'il a un effet ») interdit de le lister. `edit` a le sien depuis #10581,
+ * `saveMedia` (ici `save`) depuis #10599.
  *
  * Ce fichier ne rend RIEN — c'est `message-menu.tsx` qui consomme cette loi.
  * Il ne porte donc AUCUN libellé : une loi PURE ne connaît pas la langue de
@@ -41,10 +41,10 @@ import { protectionOf } from '@/lib/reading-mode/protection';
  * serveur est dite ICI, avant l'aller-retour, pour qu'un refus ne se découvre
  * pas après coup.
  */
-export type MessageActionId = 'edit' | 'select' | 'translate' | 'copy' | 'forward' | 'reply' | 'export' | 'exportQuick' | 'exportDiscussion' | 'more';
+export type MessageActionId = 'edit' | 'save' | 'select' | 'translate' | 'copy' | 'forward' | 'reply' | 'export' | 'exportQuick' | 'exportDiscussion' | 'more';
 
 /** Les six glyphes du menu — miroir `MessageActionsMenu.swift:96-111`. */
-export type MessageMenuGlyph = 'pencilSimple' | 'checkCircle' | 'globe' | 'copy' | 'arrowBendUpRight' | 'magicWand' | 'imageSquare' | 'lightning' | 'dotsThree';
+export type MessageMenuGlyph = 'pencilSimple' | 'downloadSimple' | 'checkCircle' | 'globe' | 'copy' | 'arrowBendUpRight' | 'magicWand' | 'imageSquare' | 'lightning' | 'dotsThree';
 
 /**
  * UNE CLÉ, JAMAIS UN LIBELLÉ (#7555). `as const satisfies` plutôt qu'une
@@ -63,6 +63,8 @@ const MENU_LABEL_KEYS = {
   exportQuick: 'message.menu.exportQuick',
   exportDiscussion: 'message.menu.exportDiscussion',
   more: 'message.menu.more',
+  /* « ENREGISTRER » (#10599) — le mot de la visionneuse, déjà dans les sept langues : même geste, même mot. */
+  save: 'media.viewer.save',
 } as const satisfies Readonly<Record<Exclude<MessageActionId, 'edit'>, InterfaceCatalogKey>>;
 
 export type MessageMenuLabelKey = (typeof MENU_LABEL_KEYS)[keyof typeof MENU_LABEL_KEYS];
@@ -146,6 +148,12 @@ export type MessageMenuContext = {
    * l'hôte, qui connaît le lecteur ; absent ⇒ rien n'est offert.
    */
   readonly canEdit?: boolean;
+  /**
+   * LE MESSAGE PORTE EXACTEMENT UNE PIÈCE ENREGISTRABLE (#10599) —
+   * `soleSaveablePieceOf` (`message-piece.ts`), posé par l'hôte. Absent ⇒ rien
+   * n'est offert ; un contenu protégé ou qui ne sort pas ne l'offre jamais.
+   */
+  readonly canSave?: boolean;
 };
 
 type MenuPiece = { readonly mimeType: string; readonly isBlurred?: boolean; readonly isViewOnce?: boolean; readonly isEncrypted?: boolean; readonly effectFlags?: number | null };
@@ -238,6 +246,11 @@ export function messageMenuItems(ctx: MessageMenuContext): readonly MessageMenuI
     if (ctx.hasDefaultExportFormat === true) {
       items.push({ id: 'exportQuick', labelKey: MENU_LABEL_KEYS.exportQuick, glyph: 'lightning' });
     }
+  }
+  /* « ENREGISTRER » (#10599) — juste après « Imager », comme iOS le range
+     après l'export : les gestes qui EMPORTENT le contenu se suivent. */
+  if (ctx.canSave === true && !ctx.isProtected && ctx.leaves !== false) {
+    items.push({ id: 'save', labelKey: MENU_LABEL_KEYS.save, glyph: 'downloadSimple' });
   }
   items.push({ id: 'more', labelKey: MENU_LABEL_KEYS.more, glyph: 'dotsThree' });
   return items;

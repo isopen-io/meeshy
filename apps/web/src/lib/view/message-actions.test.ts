@@ -389,3 +389,26 @@ describe('« Modifier » — en tête du menu, comme sur iOS (#10581)', () => {
     expect(messageMenuItems(ctx({ canEdit: true }))[0]).toEqual({ id: 'edit', labelKey: 'message.edit.action', glyph: 'pencilSimple' });
   });
 });
+
+describe('« Enregistrer » — un message à exactement une pièce enregistrable (#10599)', () => {
+  test('après « Imager », avant « Plus… », comme `primaryActions` d’iOS', () => {
+    expect(messageMenuItems(ctx({ canSave: true })).map((i) => i.id)).toEqual(['select', 'translate', 'copy', 'forward', 'reply', 'export', 'save', 'more']);
+  });
+
+  test('le mot est celui de la visionneuse, le glyphe celui de la pièce', async () => {
+    const save = messageMenuItems(ctx({ canSave: true })).find((i) => i.id === 'save');
+    expect(save).toEqual({ id: 'save', labelKey: 'media.viewer.save', glyph: 'downloadSimple' });
+    await loadInterfaceCatalog('fr');
+    expect(translate('fr', 'media.viewer.save')).toBe('Enregistrer');
+  });
+
+  test('sans pièce enregistrable, pas d’entrée', () => {
+    expect(messageMenuItems(ctx()).map((i) => i.id)).not.toContain('save');
+  });
+
+  test('fail-closed : un contenu protégé ou qui ne sort pas ne l’offre jamais, même si l’hôte le croit', () => {
+    expect(messageMenuItems(ctx({ canSave: true, isProtected: true })).map((i) => i.id)).not.toContain('save');
+    expect(messageMenuItems(ctx({ canSave: true, leaves: false })).map((i) => i.id)).not.toContain('save');
+    expect(messageMenuItems(ctx({ canSave: true, isViewOnce: true })).map((i) => i.id)).toEqual(['more']);
+  });
+});

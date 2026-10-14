@@ -11,6 +11,7 @@ import {
   pieceMenuItems,
   piecePreviewBox,
   piecesMayOpen,
+  soleSaveablePieceOf,
   targetedPieceOf,
   withPieceRestored,
   withoutPiece,
@@ -198,5 +199,40 @@ describe('piecesMayOpen — un contenu protégé n’ouvre pas l’aperçu par p
   test('UNE pièce protégée ferme tout le lot', () => {
     const one = lot(3);
     expect(piecesMayOpen({ ...one, attachments: one.attachments!.map((a, i) => (i === 2 ? { ...a, isBlurred: true } : a)) }, NOW)).toBe(false);
+  });
+});
+
+describe('soleSaveablePieceOf — « Enregistrer » au menu d’un message à UNE pièce (#10599)', () => {
+  test('une photo seule s’enregistre depuis le menu du message', () => {
+    expect(soleSaveablePieceOf(lot(1), NOW)?.id).toBe('a-1');
+  });
+
+  test('un vocal ou un fichier seul aussi — iOS compte toute pièce', () => {
+    expect(soleSaveablePieceOf({ ...lot(1), attachments: [piece('a-1', 'audio/mp4')] }, NOW)?.id).toBe('a-1');
+    expect(soleSaveablePieceOf({ ...lot(1), attachments: [piece('a-1', 'application/pdf')] }, NOW)?.id).toBe('a-1');
+  });
+
+  test('zéro ou deux pièces : rien — un lot s’enregistre pièce par pièce', () => {
+    expect(soleSaveablePieceOf(lot(0), NOW)).toBeNull();
+    expect(soleSaveablePieceOf(lot(2), NOW)).toBeNull();
+    expect(soleSaveablePieceOf({ ...lot(1), attachments: [piece('a-1'), piece('a-2', 'audio/mp4')] }, NOW)).toBeNull();
+  });
+
+  test('jamais sur une vue unique, un flou (même révélé), un chiffré, un éphémère ou un supprimé', () => {
+    expect(soleSaveablePieceOf(lot(1, { isViewOnce: true }), NOW)).toBeNull();
+    expect(soleSaveablePieceOf(lot(1, { isBlurred: true }), NOW)).toBeNull();
+    expect(soleSaveablePieceOf(lot(1, { isEncrypted: true }), NOW)).toBeNull();
+    expect(soleSaveablePieceOf(lot(1, { expiresAt: new Date(NOW + 3_600_000) }), NOW)).toBeNull();
+    expect(soleSaveablePieceOf(lot(1, { deletedAt: new Date(NOW - 1000) }), NOW)).toBeNull();
+  });
+
+  test('la protection se lit aussi sur la PIÈCE', () => {
+    expect(soleSaveablePieceOf({ ...lot(1), attachments: [piece('a-1', 'image/jpeg', { isBlurred: true })] }, NOW)).toBeNull();
+    expect(soleSaveablePieceOf({ ...lot(1), attachments: [piece('a-1', 'image/jpeg', { isViewOnce: true })] }, NOW)).toBeNull();
+  });
+
+  test('un envoi encore local, ou une pièce sans fichier, ne s’enregistre pas', () => {
+    expect(soleSaveablePieceOf(lot(1, { id: 'cid_123' }), NOW)).toBeNull();
+    expect(soleSaveablePieceOf({ ...lot(1), attachments: [piece('a-1', 'image/jpeg', { fileUrl: '' })] }, NOW)).toBeNull();
   });
 });
