@@ -40,6 +40,7 @@ import dePhonePrompt from './catalog-de-phone-prompt';
 import deUserProfile from './catalog-de-user-profile';
 import deContentRefused from './catalog-de-content-refused';
 import dePublicEntry from './catalog-de-public-entry';
+import deThreadSearch from './catalog-de-thread-search';
 
 const de = {
   'announce.messageSent': 'Nachricht gesendet',
@@ -1070,6 +1071,7 @@ const de = {
   ...deUserProfile,
   ...deContentRefused,
   ...dePublicEntry,
+  ...deThreadSearch,
 } satisfies InterfaceCatalog;
 
 export default de;

@@ -40,6 +40,7 @@ import ptPhonePrompt from './catalog-pt-phone-prompt';
 import ptUserProfile from './catalog-pt-user-profile';
 import ptContentRefused from './catalog-pt-content-refused';
 import ptPublicEntry from './catalog-pt-public-entry';
+import ptThreadSearch from './catalog-pt-thread-search';
 
 /**
  * Le portugais du web est celui qu'iOS catalogue sous `pt-BR` : le script
@@ -1074,6 +1075,7 @@ const pt = {
   ...ptUserProfile,
   ...ptContentRefused,
   ...ptPublicEntry,
+  ...ptThreadSearch,
 } satisfies InterfaceCatalog;
 
 export default pt;

@@ -51,6 +51,7 @@ import frPhonePrompt from './catalog-fr-phone-prompt';
 import frUserProfile from './catalog-fr-user-profile';
 import frContentRefused from './catalog-fr-content-refused';
 import frPublicEntry from './catalog-fr-public-entry';
+import frThreadSearch from './catalog-fr-thread-search';
 
 const fr = {
   'announce.messageSent': 'Message envoyé',
@@ -1090,6 +1091,7 @@ const fr = {
   ...frUserProfile,
   ...frContentRefused,
   ...frPublicEntry,
+  ...frThreadSearch,
 } as const;
 
 export default fr;
