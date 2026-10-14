@@ -374,7 +374,7 @@ export async function checkMiniPlayerParity({ browser, BASE, expect, setScheme, 
   await bubble.click();
   await page.waitForFunction(
     ({ query, id }) =>
-      document.querySelector(query)?.paused === true && document.querySelector(`[data-attachment="${id}"] button`)?.getAttribute('aria-label') === "Lire l'audio",
+      document.querySelector(query)?.paused === true && document.querySelector(`[data-attachment="${id}"] button`)?.getAttribute('aria-label') === 'Lire l’audio',
     { query: miniAudio, id: aid },
     { timeout: 5000 },
   );

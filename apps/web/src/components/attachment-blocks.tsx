@@ -328,7 +328,7 @@ function VoiceAttachment({
           style={{ background: 'linear-gradient(135deg, var(--accent), color-mix(in srgb, var(--accent) 70%, transparent))' }}
           // « Lire l'audio » (`media.audio.play`, `AudioPlayerView.swift:1278`)
           // — vocabulaire iOS REPRIS tel quel (§1.6 de la spécification #5805).
-          aria-label={isPlaying ? 'Mettre en pause' : "Lire l'audio"}
+          aria-label={translate(currentInterfaceLanguage(), isPlaying ? 'media.audio.pause' : 'media.audio.play')}
         >
           {isPlaying ? (
             <GlyphSvg glyph={MEDIA_GLYPHS.pause} size={13} className="text-ios-on-brand" />
@@ -473,7 +473,7 @@ function VoiceAttachment({
       {isError ? (
         <div data-audio-status="error" className="flex items-center">
           <button type="button" onClick={toggle} className="text-mini underline" style={{ minHeight: 44 }}>
-            Lecture impossible — Réessayer
+            {translate(currentInterfaceLanguage(), 'media.playback.failed')}
           </button>
         </div>
       ) : null}

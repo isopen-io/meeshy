@@ -14,7 +14,7 @@ import { Glyph, GlyphSvg } from './glyph';
 import { THREAD_MENU_GLYPHS } from './glyphs-thread-menu';
 import { MessageReactors } from './message-reactors';
 import { MessageReceiptsSheet } from './message-receipts-sheet';
-import { STATUS_LABEL } from './message-blocks';
+import { statusLabel } from './message-blocks';
 import type { Delivery } from '@/lib/view/message';
 import { Sheet } from './sheet';
 
@@ -256,7 +256,7 @@ export function MessageDetailSheet({
       </li>
       <li className="flex items-center gap-2.5 px-4 pb-3 text-body" style={{ minHeight: 44, color: 'var(--color-ios-ink)' }}>
         <span>{fullDate}</span>
-        {delivery !== null ? <span style={{ color: 'var(--color-ios-ink-2)' }}> · {STATUS_LABEL[delivery]}</span> : null}
+        {delivery !== null ? <span style={{ color: 'var(--color-ios-ink-2)' }}> · {statusLabel(delivery, language)}</span> : null}
       </li>
 
       {/* Les accusés PAR PERSONNE sont refusés à un invité (#10205, 403

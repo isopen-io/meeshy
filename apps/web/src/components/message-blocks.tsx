@@ -6,7 +6,7 @@ import { useLongPress } from '@/lib/view/long-press';
 import { forwardLabelOf, type MessageBadge } from '@/lib/view/message-badges';
 import { openReactorsSheet } from '@/lib/view/reactors-sheet-store';
 import { languageColor, flag, languageName } from '@/lib/languages';
-import { translate } from '@/lib/i18n-catalog';
+import { translate, type InterfaceCatalogKey } from '@/lib/i18n-catalog';
 import { currentInterfaceLanguage, type InterfaceLanguage } from '@/lib/interface-language';
 import { META_TEXT_OPACITY } from '@/lib/reading-mode/metrics';
 import { shouldRevealSendingClock } from '@/lib/send/send-clock';
@@ -46,12 +46,17 @@ export const CHECKS: Record<Delivery, { readonly name: GlyphName; readonly size:
   read: { name: 'checks', size: 11, read: true },
 };
 
-export const STATUS_LABEL: Record<Delivery, string> = {
-  pending: 'en cours d’envoi',
-  sent: 'envoyé',
-  delivered: 'remis',
-  read: 'lu',
-};
+const STATUS_KEY = {
+  pending: 'message.status.pending',
+  sent: 'message.status.sent',
+  delivered: 'message.status.delivered',
+  read: 'message.status.read',
+} as const satisfies Record<Delivery, InterfaceCatalogKey>;
+
+/** L'état d'envoi dit dans la langue d'INTERFACE — « envoyé », « sent »… */
+export function statusLabel(status: Delivery, language: InterfaceLanguage = currentInterfaceLanguage()): string {
+  return translate(language, STATUS_KEY[status]);
+}
 
 /**
  * LA PASTILLE DU PRISME — elle ne se montre QUE si le texte affiché est une
@@ -224,8 +229,13 @@ export function ReactionChip({
       <span aria-hidden>{glyph}</span>
       <span className="tabular-nums opacity-70">{count}</span>
       <span className="offscreen">
-        {count} réaction{count > 1 ? 's' : ''} {glyph}
-        {mine ? ' — la vôtre' : ''}
+        {translate(
+          currentInterfaceLanguage(),
+          mine
+            ? count > 1 ? 'message.reaction.count.mine.other' : 'message.reaction.count.mine.one'
+            : count > 1 ? 'message.reaction.count.other' : 'message.reaction.count.one',
+          { count: String(count), emoji: glyph },
+        )}
       </span>
     </>
   );
@@ -236,7 +246,7 @@ export function ReactionChip({
       </span>
     );
   }
-  const label = mine ? `Retirer votre réaction ${glyph}` : `Réagir avec ${glyph}`;
+  const label = translate(currentInterfaceLanguage(), mine ? 'message.reaction.remove' : 'message.reaction.add', { emoji: glyph });
   if (reactorsFor !== undefined) {
     return (
       <ReactorsChipButton label={label} style={style} reactorsFor={reactorsFor} onToggle={onToggle}>
@@ -380,7 +390,7 @@ export function Check({
     <Glyph
       name={check.name}
       size={check.size}
-      {...(onOpen === undefined ? { title: STATUS_LABEL[status] } : {})}
+      {...(onOpen === undefined ? { title: statusLabel(status) } : {})}
       {...(check.read ? { style: { color: 'var(--color-read)' } } : {})}
     />
   );
@@ -560,7 +570,7 @@ export function Badges({ badges }: { readonly badges: readonly MessageBadge[] })
             data-badge="pinned"
             className="flex items-center gap-1 text-check font-medium"
             style={{ color: 'var(--ios-pinned)' }}
-            aria-label="Message épinglé"
+            aria-label={translate(currentInterfaceLanguage(), 'message.badge.pinned')}
           >
             {/* L'ÉPINGLE SEULE, DROITE (#7599, miroir iOS #7603) — le mot vit
                 dans le nom accessible de la rangée. */}
@@ -741,7 +751,7 @@ export function Quote({
      donc son contenu n'est PAS lu : sans ce segment, « une photo » n'était
      annoncée nulle part). */
   const label = [
-    translate(currentInterfaceLanguage(), 'quote.jumpTo', { name: quote.sender?.displayName ?? 'l’expéditeur' }),
+    translate(currentInterfaceLanguage(), 'quote.jumpTo', { name: quote.sender?.displayName ?? translate(currentInterfaceLanguage(), 'quote.sender.unknown') }),
     ...preview.inventory,
   ].join(', ');
 

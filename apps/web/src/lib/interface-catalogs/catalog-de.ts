@@ -26,6 +26,7 @@ import deSignup from './catalog-de-signup';
 import deGallery from './catalog-de-gallery';
 import deMessageCard from './catalog-de-message-card';
 import deMentions from './catalog-de-mentions';
+import deShellLabels from './catalog-de-shell-labels';
 import deStudioChrome from './catalog-de-studio-chrome';
 import deEphemeral from './catalog-de-ephemeral';
 import deWriteRestriction from './catalog-de-write-restriction';
@@ -1054,6 +1055,7 @@ const de = {
   'message.detail.language.original': '{language} (Original)',
 
   ...deMentions,
+  ...deShellLabels,
   ...deStudioChrome,
   ...deEphemeral,
   ...deWriteRestriction,

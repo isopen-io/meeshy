@@ -58,7 +58,8 @@ import { usePullToRefresh } from '@/lib/view/use-pull-to-refresh';
 import { useReaderLanguages } from '@/lib/view/use-reader';
 import { useMinute } from '@/lib/view/use-minute';
 import { rowMenuText } from '@/lib/i18n-row-menu-catalog';
-import { currentInterfaceLanguage } from '@/lib/interface-language';
+import { translate } from '@/lib/i18n-catalog';
+import { currentInterfaceLanguage, type InterfaceLanguage } from '@/lib/interface-language';
 
 /**
  * L'ECRAN DE LISTE.
@@ -131,13 +132,14 @@ const ConversationRowDialogs = lazy(() => import('@/components/conversation-row-
  * rangées au centre ; `gap-3` redevient l'espacement réel entre elles.
  */
 function ListError({ online, onRetry }: { readonly online: boolean; readonly onRetry: () => void }) {
+  const language = currentInterfaceLanguage();
   return (
     <li role="alert" className="grid flex-1 content-center justify-items-center gap-3 px-6 text-center">
       <span style={{ color: 'var(--color-error)' }}>
         <Glyph name="warningCircle" size={28} />
       </span>
       <p className="text-body font-semibold" style={{ color: 'var(--color-ios-ink)' }}>
-        {online ? 'Impossible de charger vos conversations' : 'Hors ligne'}
+        {translate(language, online ? 'list.error.title' : 'common.offline')}
       </p>
       <p className="text-caption" style={{ color: 'var(--color-ios-ink-2)' }}>
         {/*
@@ -151,9 +153,7 @@ function ListError({ online, onRetry }: { readonly online: boolean; readonly onR
           autrement : `conversations.error.title` + un sous-titre FIXE
           (`ConversationListView.swift:1761-1793`), jamais l'erreur brute.
         */}
-        {online
-          ? 'Réessayez dans un instant — vos messages sont en sécurité.'
-          : 'Vos conversations s’afficheront à la reconnexion.'}
+        {translate(language, online ? 'list.error.body' : 'list.error.body.offline')}
       </p>
       <button
         type="button"
@@ -161,7 +161,7 @@ function ListError({ online, onRetry }: { readonly online: boolean; readonly onR
         className="grid place-items-center rounded-chip px-5 text-body font-semibold text-ios-on-brand"
         style={{ backgroundColor: 'var(--color-ios-brand)', minHeight: 44 }}
       >
-        Réessayer
+        {translate(language, 'common.retry')}
       </button>
     </li>
   );
@@ -211,11 +211,11 @@ function lecteurCourant(): string | null {
  * `inviter`) — le remplir avec un mauvais candidat rendrait cet écart
  * impossible à solder.
  */
-const ACTIONS_DE_DEMARRAGE: readonly QuickAction[] = [
+const actionsDeDemarrage = (language: InterfaceLanguage): readonly QuickAction[] => [
   {
     key: 'inviter',
-    label: 'Inviter des amis',
-    hint: 'Partagez votre lien Meeshy : c’est ainsi que naît une première conversation.',
+    label: translate(language, 'list.quick.invite'),
+    hint: translate(language, 'list.quick.invite.hint'),
     glyph: 'linkSimple',
     // HÉROS, alors qu'iOS range `invite` en TUILE. L'écart est assumé et
     // TEMPORAIRE : les trois héros d'iOS — chercher des membres, ses contacts,
@@ -229,8 +229,8 @@ const ACTIONS_DE_DEMARRAGE: readonly QuickAction[] = [
   },
   {
     key: 'story',
-    label: 'Créer une story',
-    hint: 'Une image, un son, quelques mots — visibles vingt heures.',
+    label: translate(language, 'list.quick.story'),
+    hint: translate(language, 'list.quick.story.hint'),
     glyph: 'image',
     run: () => {
       navigate('/stories/new');
@@ -239,8 +239,8 @@ const ACTIONS_DE_DEMARRAGE: readonly QuickAction[] = [
   },
   {
     key: 'humeur',
-    label: 'Poser une humeur',
-    hint: 'Un emoji dit où vous en êtes, sans écrire un message.',
+    label: translate(language, 'list.quick.mood'),
+    hint: translate(language, 'list.quick.mood.hint'),
     glyph: 'smiley',
     run: () => {
       navigate('/status/new');
@@ -641,7 +641,7 @@ export default function ConversationsScreen() {
            géométrie. La loi porte les DEUX régimes — doigt posé sans
            transition, retour animé — voir son doc-comment. */
         style={{ paddingBottom: searchBarHeight, ...pullTransform(pull.phase, pull.offsetPx) }}
-        {...(loading ? { 'aria-busy': true, 'aria-label': 'Chargement des conversations' } : {})}
+        {...(loading ? { 'aria-busy': true, 'aria-label': translate(interfaceLanguage, 'list.loading') } : {})}
       >
         {/*
           LE RAIL ET LES FILTRES VIVENT DÉSORMAIS DANS LA VUE DÉFILANTE
@@ -793,7 +793,7 @@ export default function ConversationsScreen() {
           >
             <Glyph name="users" size={40} style={{ color: 'var(--color-ios-ink-3)' }} />
             <p className="text-body font-semibold" style={{ color: 'var(--color-ios-ink)' }}>
-              Aucune conversation pour l’instant.
+              {translate(interfaceLanguage, 'list.empty')}
             </p>
             {/*
               LA SORTIE DE L'ÉCRAN DE DÉMARRAGE (2026-09-08). Cet état récitait
@@ -807,9 +807,9 @@ export default function ConversationsScreen() {
               était pire — il DÉCRIVAIT l'issue sans la donner.
             */}
             <QuickActions
-              title="Commencez ici"
-              subtitle="Meeshy s’écrit à plusieurs — invitez quelqu’un à vous rejoindre."
-              actions={ACTIONS_DE_DEMARRAGE}
+              title={translate(interfaceLanguage, 'list.quick.start')}
+              subtitle={translate(interfaceLanguage, 'list.quick.subtitle')}
+              actions={actionsDeDemarrage(interfaceLanguage)}
               conversationCount={0}
             />
           </li>
@@ -823,7 +823,7 @@ export default function ConversationsScreen() {
           >
             <Glyph name="magnifyingGlass" size={40} style={{ color: 'var(--color-ios-ink-3)' }} />
             <p className="text-body" style={{ color: 'var(--color-ios-ink)' }}>
-              Aucune conversation ne correspond à « {search || selectionLabel(selection, interfaceLanguage)} ».
+              {translate(interfaceLanguage, 'list.empty.filter', { query: search || selectionLabel(selection, interfaceLanguage) })}
             </p>
             <button
               type="button"
@@ -834,7 +834,7 @@ export default function ConversationsScreen() {
               className="rounded-chip px-5 text-body font-semibold text-ios-on-brand"
               style={{ backgroundColor: 'var(--color-ios-brand)', minHeight: 44 }}
             >
-              Tout afficher
+              {translate(interfaceLanguage, 'list.showAll')}
             </button>
           </li>
         ) : null}
@@ -893,9 +893,9 @@ export default function ConversationsScreen() {
         {conversations.length > 0 ? (
           <li style={{ minHeight: visible.length > 0 ? '50dvh' : 0, flexShrink: 0 }}>
             <QuickActions
-              title="Et maintenant ?"
-              subtitle="Meeshy s’écrit à plusieurs — invitez quelqu’un à vous rejoindre."
-              actions={ACTIONS_DE_DEMARRAGE}
+              title={translate(interfaceLanguage, 'list.quick.next')}
+              subtitle={translate(interfaceLanguage, 'list.quick.subtitle')}
+              actions={actionsDeDemarrage(interfaceLanguage)}
               conversationCount={conversations.length}
             />
           </li>
@@ -926,13 +926,13 @@ export default function ConversationsScreen() {
             type="search"
             value={search}
             onChange={(e) => setSearch(e.currentTarget.value)}
-            placeholder="Rechercher…"
-            aria-label="Rechercher une conversation"
+            placeholder={translate(interfaceLanguage, 'list.search.placeholder')}
+            aria-label={translate(interfaceLanguage, 'list.search.label')}
             className="w-0 min-w-0 flex-1 bg-transparent text-input outline-none placeholder:text-ios-ink-3"
           />
           {search ? (
             <button type="button" onClick={() => setSearch('')} className="grid size-6 place-items-center">
-              <Glyph name="x" size={14} title="Effacer" style={{ color: 'var(--color-error)' }} />
+              <Glyph name="x" size={14} title={translate(interfaceLanguage, 'list.search.clear')} style={{ color: 'var(--color-error)' }} />
             </button>
           ) : null}
         </div>

@@ -30,6 +30,7 @@ import {
   TEXT_INDENT,
 } from '@/lib/reading-mode/metrics';
 import { useFocusFrame } from '@/lib/view/use-focus-frame';
+import { translate } from '@/lib/i18n-catalog';
 import { currentInterfaceLanguage } from '@/lib/interface-language';
 
 import { hereKeyOf } from '@/lib/view/use-conversation-viewing';
@@ -707,7 +708,7 @@ export const FocalRow = memo(function FocalRow({
             >
               {selected ? '✓' : null}
             </span>
-            <span className="offscreen">Sélectionner ce message</span>
+            <span className="offscreen">{translate(currentInterfaceLanguage(), 'thread.select.message')}</span>
           </button>
         ) : head ? (
           <span className="relative inline-flex">

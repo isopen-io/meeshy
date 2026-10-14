@@ -26,6 +26,7 @@ import arSignup from './catalog-ar-signup';
 import arGallery from './catalog-ar-gallery';
 import arMessageCard from './catalog-ar-message-card';
 import arMentions from './catalog-ar-mentions';
+import arShellLabels from './catalog-ar-shell-labels';
 import arStudioChrome from './catalog-ar-studio-chrome';
 import arEphemeral from './catalog-ar-ephemeral';
 import arWriteRestriction from './catalog-ar-write-restriction';
@@ -1051,6 +1052,7 @@ const ar = {
   'message.detail.language.original': '{language} (الأصل)',
 
   ...arMentions,
+  ...arShellLabels,
   ...arStudioChrome,
   ...arEphemeral,
   ...arWriteRestriction,
