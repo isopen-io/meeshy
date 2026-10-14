@@ -222,9 +222,11 @@ private extension View {
             )
     }
 
-    /// Une ombre courte qui détache le texte blanc d'une bannière claire, à la place d'un fond épais.
+    /// Un liseré d'ombre serré autour de chaque lettre, puis une ombre courte : le texte blanc reste lisible sur une
+    /// bannière claire, là où un fond épais la cacherait.
     func bannerTextShadow() -> some View {
-        shadow(color: .black.opacity(0.6), radius: 1.5, x: 0, y: 0.5)
+        shadow(color: .black.opacity(0.9), radius: 0.8)
+            .shadow(color: .black.opacity(0.5), radius: 2, x: 0, y: 0.5)
     }
 }
 
