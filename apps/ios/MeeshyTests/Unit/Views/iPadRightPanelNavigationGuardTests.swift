@@ -384,3 +384,50 @@ final class TemporaryMediaSweeperTests: XCTestCase {
         XCTAssertTrue(FileManager.default.fileExists(atPath: keepFile.path))
     }
 }
+
+/// Les fenêtres de Meeshy sur iPad (décision du porteur, 2026-10-14) : UNE fenêtre principale — une seconde copie
+/// renvoie vers la première —, et des fenêtres DÉTACHÉES pour une conversation ou pour les réels.
+@MainActor
+final class DetachedWindowsTests: XCTestCase {
+
+    private func appSource(_ path: String) throws -> String {
+        let root = URL(fileURLWithPath: "\(#filePath)")
+            .deletingLastPathComponent().deletingLastPathComponent()
+            .deletingLastPathComponent().deletingLastPathComponent()
+            .appendingPathComponent("Meeshy")
+        return try String(contentsOf: root.appendingPathComponent(path), encoding: .utf8)
+    }
+
+    func test_detachedContent_survivesSceneRestoration() throws {
+        for content in [DetachedWindowContent.conversation(id: "c1"), .reels(startId: "r1"), .reels(startId: nil)] {
+            let data = try JSONEncoder().encode(content)
+            XCTAssertEqual(try JSONDecoder().decode(DetachedWindowContent.self, from: data), content)
+        }
+    }
+
+    func test_theAppHasOneGatedMainWindow_andADetachedScene() throws {
+        let app = try appSource("MeeshyApp.swift")
+        XCTAssertTrue(app.contains("MainWindowGate {"), "la fenêtre principale passe par sa porte d'unicité")
+        XCTAssertTrue(app.contains("WindowGroup(id: DetachedWindowOpener.sceneId, for: DetachedWindowContent.self)"))
+        let order = try XCTUnwrap(app.range(of: "MainWindowGate {")).lowerBound
+            < (try XCTUnwrap(app.range(of: "WindowGroup(id: DetachedWindowOpener.sceneId")).lowerBound)
+        XCTAssertTrue(order, "la scène principale vient EN PREMIER : c'est elle qu'iPadOS ouvre par défaut")
+    }
+
+    func test_conversationsAndReels_offerTheirOwnWindow() throws {
+        let menu = try appSource("Features/Main/Views/ConversationListView+Overlays.swift")
+        XCTAssertTrue(menu.contains("DetachedWindowOpener.shared.open(.conversation(id: conversation.id))"))
+        let feed = try appSource("Features/Main/Views/FeedView.swift")
+        XCTAssertTrue(feed.contains("DetachedWindowOpener.shared.open(.reels(startId: nil))"))
+    }
+
+    func test_aDetachedWindow_mountsNoRoot() throws {
+        let host = try appSource("Features/Main/Views/AdaptiveRootView.swift")
+        let start = try XCTUnwrap(host.range(of: "struct DetachedWindowView: View {"))
+        let end = try XCTUnwrap(host.range(of: "enum DetachedConversationResolver"))
+        let body = host[start.upperBound..<end.lowerBound]
+        for root in ["iPadRootView(", "RootView(", "startRootServices", "RootIntentRoutingLayer("] {
+            XCTAssertFalse(body.contains(root), "une fenêtre détachée ne monte pas \(root) : la fenêtre principale tient les services")
+        }
+    }
+}
