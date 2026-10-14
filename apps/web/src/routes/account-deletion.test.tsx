@@ -121,10 +121,38 @@ describe('le lien de l’e-mail — la conséquence d’abord, le clic ensuite',
     expect(host.textContent).toContain('Reconnectez-vous à Internet, puis réessayez.');
   });
 
-  test('un lien incomplet, sans session : la page le dit et propose la connexion', async () => {
+});
+
+describe('déconnecté, sans lien — la page que Google Play déclare (#9921)', () => {
+  test('elle nomme l’appli, décrit les étapes, dit ce qui est supprimé, conservé, et le délai', async () => {
+    const script = scripted();
+    const host = await mount(<AccountDeletionPage link={null} signedIn={false} online language="fr" deps={script.deps} />);
+
+    expect(host.querySelector('h1')?.textContent).toBe('Supprimer votre compte Meeshy');
+    expect([...host.querySelectorAll('h2')].map((h) => h.textContent)).toEqual([
+      'Comment faire',
+      'Ce qui est supprimé',
+      'Ce qui est conservé',
+      'Délai',
+      'Vous ne pouvez plus vous connecter ?',
+    ]);
+    expect(host.querySelectorAll('ol > li')).toHaveLength(4);
+    expect(host.textContent).toContain('Réglages, Supprimer le compte');
+    expect(host.textContent).toContain('30 jours après votre confirmation');
+    expect(host.textContent).toContain('Compte supprimé');
+    expect(script.requested).toEqual([]);
+  });
+
+  test('se connecter ramène à cette page, où la demande se fait', async () => {
     const host = await mount(<AccountDeletionPage link={null} signedIn={false} online language="fr" deps={scripted().deps} />);
-    expect(host.querySelector('h1')?.textContent).toBe('Lien incomplet');
-    expect(host.querySelector('a[href="/login"]')?.textContent).toBe('Se connecter');
+    const signIn = host.querySelector(`a[href="/login?next=${encodeURIComponent('/account/deletion')}"]`);
+    expect(signIn?.textContent).toBe('Se connecter pour supprimer mon compte');
+  });
+
+  test('qui a perdu l’accès écrit à l’adresse de la politique de confidentialité', async () => {
+    const host = await mount(<AccountDeletionPage link={null} signedIn={false} online language="en" deps={scripted().deps} />);
+    expect(host.querySelector('h1')?.textContent).toBe('Delete your Meeshy account');
+    expect(host.querySelector('a[href="mailto:privacy@meeshy.me"]')?.textContent).toBe('privacy@meeshy.me');
   });
 });
 

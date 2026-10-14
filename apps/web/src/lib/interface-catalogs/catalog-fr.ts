@@ -10,6 +10,7 @@
  * où un site d'appel le concatène.
  */
 import frGallery from './catalog-fr-gallery';
+import frAccountDeletionGuide from './catalog-fr-account-deletion-guide';
 import frMessageCard from './catalog-fr-message-card';
 import frMentions from './catalog-fr-mentions';
 import frStudioChrome from './catalog-fr-studio-chrome';
@@ -200,6 +201,7 @@ const fr = {
   'feed.allLoaded': 'Toutes les publications sont chargées',
   'feed.newPosts.one': '{count} nouvelle publication',
   'feed.newPosts.other': '{count} nouvelles publications',
+  ...frAccountDeletionGuide,
   ...frIdentity,
   ...frMediaHub,
   ...frMediaViewer,
@@ -314,8 +316,6 @@ const fr = {
   'trackingLink.opening': 'Ouverture du lien…',
   'trackingLink.dead.title': 'Ce lien n’est plus disponible',
   'trackingLink.dead.body': 'Il a expiré, a été désactivé ou n’a jamais existé.',
-  'accountDeletion.incomplete.title': 'Lien incomplet',
-  'accountDeletion.incomplete.body': 'Ce lien ne porte pas les informations nécessaires. Connectez-vous pour demander la suppression de votre compte.',
   'accountDeletion.confirm.title': 'Confirmer la suppression de votre compte',
   'accountDeletion.confirm.body':
     'Votre compte sera désactivé au terme d’une période de grâce de 30 jours. D’ici là, le lien « Annuler » de l’e-mail vous permet de revenir en arrière.',

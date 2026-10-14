@@ -1,4 +1,5 @@
 import type { InterfaceCatalog } from '@/lib/i18n-catalog';
+import arAccountDeletionGuide from './catalog-ar-account-deletion-guide';
 import arComposerAttach from './catalog-ar-composer-attach';
 import arIdentity from './catalog-ar-identity';
 import arMediaHub from './catalog-ar-media-hub';
@@ -211,6 +212,7 @@ const ar = {
   'feed.allLoaded': 'تم تحميل جميع المنشورات',
   'feed.newPosts.one': 'منشور جديد {count}',
   'feed.newPosts.other': 'منشورات جديدة {count}',
+  ...arAccountDeletionGuide,
   ...arIdentity,
   ...arMediaHub,
   ...arMediaViewer,
@@ -322,8 +324,6 @@ const ar = {
   'trackingLink.opening': 'جارٍ فتح الرابط…',
   'trackingLink.dead.title': 'هذا الرابط لم يعد متاحًا',
   'trackingLink.dead.body': 'انتهت صلاحيته أو تم تعطيله أو لم يكن موجودًا قط.',
-  'accountDeletion.incomplete.title': 'رابط غير مكتمل',
-  'accountDeletion.incomplete.body': 'لا يحمل هذا الرابط المعلومات اللازمة. سجّل الدخول لطلب حذف حسابك.',
   'accountDeletion.confirm.title': 'تأكيد حذف حسابك',
   'accountDeletion.confirm.body': 'سيتم تعطيل حسابك بعد انتهاء فترة سماح مدتها 30 يومًا. وحتى ذلك الحين، يتيح لك رابط «إلغاء» في البريد الإلكتروني التراجع.',
   'accountDeletion.confirm.action': 'تأكيد الحذف',

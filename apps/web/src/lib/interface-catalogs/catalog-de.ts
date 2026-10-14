@@ -1,4 +1,5 @@
 import type { InterfaceCatalog } from '@/lib/i18n-catalog';
+import deAccountDeletionGuide from './catalog-de-account-deletion-guide';
 import deComposerAttach from './catalog-de-composer-attach';
 import deIdentity from './catalog-de-identity';
 import deMediaHub from './catalog-de-media-hub';
@@ -211,6 +212,7 @@ const de = {
   'feed.allLoaded': 'Alle Beiträge sind geladen',
   'feed.newPosts.one': '{count} neuer Beitrag',
   'feed.newPosts.other': '{count} neue Beiträge',
+  ...deAccountDeletionGuide,
   ...deIdentity,
   ...deMediaHub,
   ...deMediaViewer,
@@ -322,8 +324,6 @@ const de = {
   'trackingLink.opening': 'Link wird geöffnet…',
   'trackingLink.dead.title': 'Dieser Link ist nicht mehr verfügbar',
   'trackingLink.dead.body': 'Er ist abgelaufen, wurde deaktiviert oder hat nie existiert.',
-  'accountDeletion.incomplete.title': 'Unvollständiger Link',
-  'accountDeletion.incomplete.body': 'Diesem Link fehlen die nötigen Angaben. Melde dich an, um die Löschung deines Kontos zu beantragen.',
   'accountDeletion.confirm.title': 'Löschung deines Kontos bestätigen',
   'accountDeletion.confirm.body':
     'Dein Konto wird nach einer Karenzzeit von 30 Tagen deaktiviert. Bis dahin kannst du es dir über den Link „Abbrechen“ in der E-Mail anders überlegen.',

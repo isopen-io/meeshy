@@ -1,4 +1,5 @@
 import type { InterfaceCatalog } from '@/lib/i18n-catalog';
+import esAccountDeletionGuide from './catalog-es-account-deletion-guide';
 import esComposerAttach from './catalog-es-composer-attach';
 import esIdentity from './catalog-es-identity';
 import esMediaHub from './catalog-es-media-hub';
@@ -211,6 +212,7 @@ const es = {
   'feed.allLoaded': 'Todas las publicaciones están cargadas',
   'feed.newPosts.one': '{count} publicación nueva',
   'feed.newPosts.other': '{count} publicaciones nuevas',
+  ...esAccountDeletionGuide,
   ...esIdentity,
   ...esMediaHub,
   ...esMediaViewer,
@@ -322,8 +324,6 @@ const es = {
   'trackingLink.opening': 'Abriendo el enlace…',
   'trackingLink.dead.title': 'Este enlace ya no está disponible',
   'trackingLink.dead.body': 'Ha caducado, se ha desactivado o nunca ha existido.',
-  'accountDeletion.incomplete.title': 'Enlace incompleto',
-  'accountDeletion.incomplete.body': 'A este enlace le falta la información necesaria. Inicia sesión para solicitar la eliminación de tu cuenta.',
   'accountDeletion.confirm.title': 'Confirmar la eliminación de tu cuenta',
   'accountDeletion.confirm.body':
     'Tu cuenta se desactivará al final de un periodo de gracia de 30 días. Hasta entonces, el enlace «Cancelar» del correo te permite dar marcha atrás.',

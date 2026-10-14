@@ -1,4 +1,5 @@
 import type { InterfaceCatalog } from '@/lib/i18n-catalog';
+import ptAccountDeletionGuide from './catalog-pt-account-deletion-guide';
 import ptComposerAttach from './catalog-pt-composer-attach';
 import ptIdentity from './catalog-pt-identity';
 import ptMediaHub from './catalog-pt-media-hub';
@@ -215,6 +216,7 @@ const pt = {
   'feed.allLoaded': 'Todas as publicações foram carregadas',
   'feed.newPosts.one': '{count} nova publicação',
   'feed.newPosts.other': '{count} novas publicações',
+  ...ptAccountDeletionGuide,
   ...ptIdentity,
   ...ptMediaHub,
   ...ptMediaViewer,
@@ -326,8 +328,6 @@ const pt = {
   'trackingLink.opening': 'Abrindo o link…',
   'trackingLink.dead.title': 'Este link não está mais disponível',
   'trackingLink.dead.body': 'Ele expirou, foi desativado ou nunca existiu.',
-  'accountDeletion.incomplete.title': 'Link incompleto',
-  'accountDeletion.incomplete.body': 'Faltam a este link as informações necessárias. Entre para pedir a exclusão da sua conta.',
   'accountDeletion.confirm.title': 'Confirmar a exclusão da sua conta',
   'accountDeletion.confirm.body':
     'Sua conta será desativada ao fim de um período de carência de 30 dias. Até lá, o link “Cancelar” do e-mail permite voltar atrás.',
