@@ -487,4 +487,13 @@ final class ConversationServiceTests: XCTestCase {
         XCTAssertEqual(mock.lastRequest?.method, "PATCH")
         XCTAssertEqual(mock.lastRequest?.bodyJSON?["role"] as? String, "moderator")
     }
+
+    func test_updateParticipantRole_lowercaseRole_leftUnchanged() async throws {
+        let response = APIResponse<[String: String]>(success: true, data: [:], error: nil)
+        mock.stub("/conversations/conv1/participants/user1/role", result: response)
+
+        try await service.updateParticipantRole(conversationId: "conv1", userId: "user1", role: "admin")
+
+        XCTAssertEqual(mock.lastRequest?.bodyJSON?["role"] as? String, "admin")
+    }
 }
