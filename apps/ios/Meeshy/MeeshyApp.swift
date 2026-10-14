@@ -961,6 +961,7 @@ struct MeeshyApp: App {
                 .environmentObject(deepLinkRouter)
                 .preferredColorScheme(theme.preferredColorScheme)
         }
+        .handlesExternalEvents(matching: [DetachedWindowOpener.activityIdentifier])
     }
 
     // MARK: - Test seam (DEBUG)

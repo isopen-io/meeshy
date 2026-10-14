@@ -172,6 +172,10 @@ struct ConversationListView: View {
     @FocusState var isSearching: Bool
     @State var showSearchOverlay: Bool = false
     @State private var expandedSections: Set<String> = ["pinned", "other"]
+    /// Pendant le glisser d'une conversation : les catégories dépliées AVANT, rendues au dépôt ou à l'annulation.
+    @State private var sectionsBeforeDrag: Set<String>?
+    /// La catégorie d'où part la conversation glissée — son en-tête prend la couleur primaire.
+    @State private var dragOriginSectionId: String?
 
     // Performance optimized scroll variables
     @State private var selectedProfileUser: ProfileSheetUser? = nil
@@ -437,6 +441,10 @@ struct ConversationListView: View {
         // Sonde inerte : capture l'UIScrollView hôte pour l'auto-scroll de
         // bord du drag de chip (+Overlays). Aucune interaction, frame nulle.
         .background(ChipAutoScrollGrabber(driver: chipAutoScrollDriver))
+        // Le glisser se termine sans dépôt sur une catégorie (lâché ailleurs, ou en fenêtre) : on redéplie.
+        .onReceive(NotificationCenter.default.publisher(for: .conversationDragDidEnd)) { _ in
+            endConversationDrag()
+        }
     }
 
     /// L'épinglage est une propriété du CONTENEUR, pas de la vue de header
@@ -531,6 +539,13 @@ struct ConversationListView: View {
         // Hide section header when there are no user categories (flat list)
         if Self.showsSectionHeader(sectionId: group.section.id, isSingleUngroupedSection: isSingleUngroupedSection) {
             sectionHeaderLabel(for: group)
+                // La catégorie d'ORIGINE d'une conversation glissée, en couleur primaire.
+                .background(
+                    RoundedRectangle(cornerRadius: MeeshyRadius.sm)
+                        .fill(Color(hex: MeeshyColors.brandPrimaryHex)
+                            .opacity(dragOriginSectionId == group.section.id ? 0.22 : 0))
+                        .animation(.easeOut(duration: 0.2), value: dragOriginSectionId)
+                )
                 // Frame globale du header → registre inerte : cible de drop de la
                 // chip du morph drag (l'overlay hit-teste le doigt au relâchement).
                 .background(
@@ -746,7 +761,7 @@ struct ConversationListView: View {
             return userCommunityLookup[communityId] ?? userCommunities.first(where: { $0.id == communityId })
         }()
 
-        return ConversationRowItem(
+        var row = ConversationRowItem(
             conversation: conversation,
             community: community,
             rowWidth: rowWidth,
@@ -845,6 +860,8 @@ struct ConversationListView: View {
                 }
             )
         )
+        row.onDragBegan = { beginConversationDrag(conversation.id) }
+        return row
         .equatable()
     }
 
@@ -1934,7 +1951,34 @@ struct ConversationListView: View {
     /// drop de la chip du morph custom : « Épingles » épingle (jamais de
     /// dés-épinglage par drop), « other » → sectionId vide, no-op même
     /// section.
+    /// Le glisser d'une conversation commence : toutes les catégories se replient — la cible se vise d'un coup
+    /// d'œil —, et celle d'origine se marque.
+    private func beginConversationDrag(_ conversationId: String) {
+        DispatchQueue.main.async {
+            guard sectionsBeforeDrag == nil else { return }
+            sectionsBeforeDrag = expandedSections
+            dragOriginSectionId = conversationViewModel.groupedConversations
+                .first { $0.conversations.contains { $0.id == conversationId } }?.section.id
+            withAnimation(.spring(response: 0.3, dampingFraction: 0.85)) {
+                expandedSections = []
+            }
+        }
+    }
+
+    /// Dépôt ou annulation : les catégories dépliées avant le glisser le redeviennent. Sans persistance — le
+    /// repli du glisser n'est pas un choix de l'utilisateur.
+    private func endConversationDrag() {
+        guard let before = sectionsBeforeDrag else { return }
+        sectionsBeforeDrag = nil
+        withAnimation(.spring(response: 0.3, dampingFraction: 0.85)) {
+            expandedSections = before
+            dragOriginSectionId = nil
+            dropTargetSection = nil
+        }
+    }
+
     private func handleDrop(to sectionId: String, providers: [NSItemProvider]) -> Bool {
+        defer { endConversationDrag() }
         guard let provider = providers.first else { return false }
         _ = provider.loadObject(ofClass: NSString.self) { object, _ in
             guard let conversationId = object as? String else { return }

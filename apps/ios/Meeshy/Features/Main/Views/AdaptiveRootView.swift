@@ -141,6 +141,45 @@ final class DetachedWindowOpener {
     func open(_ content: DetachedWindowContent) { openAction?(content) }
 }
 
+extension DetachedWindowOpener {
+    /// L'activité d'une conversation glissée hors de la liste : déposée au bord de l'écran, iPadOS en fait une
+    /// fenêtre détachée (`NSUserActivityTypes`, Info.plist).
+    nonisolated static let conversationActivityType = "me.meeshy.app.detached-conversation"
+    /// Ce que la scène détachée revendique (`handlesExternalEvents(matching:)`) — jamais la fenêtre principale.
+    nonisolated static let activityIdentifier = "meeshy-detached-conversation"
+}
+
+extension Notification.Name {
+    /// La session de glisser d'une conversation s'est terminée — déposée ou annulée.
+    static let conversationDragDidEnd = Notification.Name("meeshy.conversationDragDidEnd")
+}
+
+/// Ce qu'une ligne de conversation glissée transporte : son id — qu'un en-tête de catégorie reçoit — et, sur iPad,
+/// l'activité qui en fait une fenêtre détachée au bord de l'écran.
+///
+/// Sa libération ANNONCE la fin de la session : le système relâche les objets glissés quand la session se termine,
+/// qu'ils aient été déposés ou non. SwiftUI ne signale pas l'annulation d'un `.onDrag` — c'est ce signal qui permet
+/// de redéplier les catégories quand on lâche ailleurs que sur une catégorie.
+nonisolated final class ConversationDragItemProvider: NSItemProvider, @unchecked Sendable {
+    init(conversationId: String, title: String, opensWindow: Bool) {
+        super.init()
+        registerObject(conversationId as NSString, visibility: .all)
+        if opensWindow {
+            let activity = NSUserActivity(activityType: DetachedWindowOpener.conversationActivityType)
+            activity.title = title
+            activity.userInfo = ["conversationId": conversationId]
+            activity.targetContentIdentifier = DetachedWindowOpener.activityIdentifier
+            registerObject(activity, visibility: .all)
+        }
+    }
+
+    deinit {
+        DispatchQueue.main.async {
+            NotificationCenter.default.post(name: .conversationDragDidEnd, object: nil)
+        }
+    }
+}
+
 /// Qui tient la fenêtre principale. La première scène qui se présente la prend ; si elle se déconnecte, la
 /// suivante encore attachée la reprend.
 @MainActor
@@ -172,6 +211,9 @@ final class MainWindowRegistry: ObservableObject {
     func isPrimary(_ scene: UIWindowScene) -> Bool { primary == ObjectIdentifier(scene) }
 
     var primarySession: UISceneSession? { primaryScene?.session }
+
+    /// La scène de la fenêtre principale — celle où se montrent toujours les appels.
+    var primaryWindowScene: UIWindowScene? { primaryScene }
 
     private func sceneDidDisconnect(_ gone: ObjectIdentifier?) {
         guard let gone, gone == primary else { return }
@@ -249,12 +291,12 @@ struct SecondaryMainWindowView: View {
     var body: some View {
         VStack(spacing: MeeshySpacing.md) {
             Image(systemName: "macwindow.on.rectangle")
-                .font(.system(size: 44, weight: .regular))
+                .font(MeeshyFont.relative(MeeshyFont.largeTitleSize, weight: .regular))
                 .foregroundColor(MeeshyColors.indigo500)
             Text(String(localized: "window.main.already_open.title", defaultValue: "Meeshy est déjà ouvert", bundle: .main))
-                .font(.system(size: 22, weight: .bold))
+                .font(MeeshyFont.relative(MeeshyFont.titleSize, weight: .bold))
             Text(String(localized: "window.main.already_open.body", defaultValue: "La fenêtre principale est ouverte ailleurs. Une conversation ou les réels peuvent, eux, avoir leur propre fenêtre.", bundle: .main))
-                .font(.system(size: 15))
+                .font(MeeshyFont.relative(MeeshyFont.bodySize, weight: .regular))
                 .foregroundColor(.secondary)
                 .multilineTextAlignment(.center)
                 .frame(maxWidth: 420)
@@ -265,7 +307,7 @@ struct SecondaryMainWindowView: View {
                 UIApplication.shared.requestSceneSessionDestruction(scene.session, options: nil)
             } label: {
                 Text(String(localized: "window.main.already_open.action", defaultValue: "Aller à la fenêtre principale", bundle: .main))
-                    .font(.system(size: 16, weight: .semibold))
+                    .font(MeeshyFont.relative(MeeshyFont.bodySize, weight: .semibold))
                     .padding(.horizontal, MeeshySpacing.lg)
                     .padding(.vertical, MeeshySpacing.sm)
             }
@@ -295,6 +337,8 @@ struct DetachedWindowView: View {
     @State private var scene: UIWindowScene?
     @State private var conversation: Conversation?
     @State private var conversationUnavailable = false
+    /// La conversation d'une fenêtre née d'un glisser au bord de l'écran : elle arrive par activité, pas par valeur.
+    @State private var draggedContent: DetachedWindowContent?
 
     var body: some View {
         ZStack {
@@ -302,7 +346,7 @@ struct DetachedWindowView: View {
             if !authManager.isAuthenticated {
                 note(String(localized: "window.detached.signed_out", defaultValue: "Connectez-vous dans la fenêtre principale de Meeshy.", bundle: .main))
             } else {
-                switch content {
+                switch content ?? draggedContent {
                 case .conversation(let id)?:
                     conversationWindow(id)
                 case .reels(let startId)?:
@@ -313,8 +357,14 @@ struct DetachedWindowView: View {
             }
         }
         .background(WindowSceneReader { scene = $0 })
-        // Les liens et activités vont à la fenêtre principale, jamais ici.
-        .handlesExternalEvents(preferring: [], allowing: [])
+        .onContinueUserActivity(DetachedWindowOpener.conversationActivityType) { activity in
+            if let id = activity.userInfo?["conversationId"] as? String, !id.isEmpty {
+                draggedContent = .conversation(id: id)
+            }
+        }
+        // Les liens vont à la fenêtre principale ; seule une conversation glissée au bord vient ici.
+        .handlesExternalEvents(preferring: [DetachedWindowOpener.activityIdentifier],
+                               allowing: [DetachedWindowOpener.activityIdentifier])
         .environmentObject(router)
         .environmentObject(storyViewModel)
         .environmentObject(statusViewModel)
@@ -324,6 +374,8 @@ struct DetachedWindowView: View {
         .sheet(item: $router.deepLinkProfileUser) { user in
             UserProfileSheet(
                 user: user,
+                moodEmoji: statusViewModel.statusForUser(userId: user.userId ?? "")?.moodEmoji,
+                onMoodTap: statusViewModel.moodTapHandler(for: user.userId ?? ""),
                 presenceProvider: { PresenceManager.shared.knownPresenceState(for: $0) }
             )
             .environmentObject(router)
@@ -433,7 +485,7 @@ struct DetachedWindowView: View {
 
     private func note(_ text: String) -> some View {
         Text(text)
-            .font(.system(size: 16))
+            .font(MeeshyFont.relative(MeeshyFont.bodySize, weight: .regular))
             .foregroundColor(.secondary)
             .multilineTextAlignment(.center)
             .padding(MeeshySpacing.xl)

@@ -421,6 +421,41 @@ final class DetachedWindowsTests: XCTestCase {
         XCTAssertTrue(feed.contains("DetachedWindowOpener.shared.open(.reels(startId: nil))"))
     }
 
+    func test_aDraggedConversation_carriesItsId_andItsWindowActivity() {
+        let provider = ConversationDragItemProvider(conversationId: "c1", title: "Équipe", opensWindow: true)
+        let types = provider.registeredTypeIdentifiers
+        XCTAssertTrue(types.contains { $0.contains("text") }, "l'id, qu'un en-tête de catégorie reçoit")
+        XCTAssertTrue(types.contains { $0.contains("useractivity") || $0.contains("user-activity") || $0.contains("activity") },
+                      "l'activité qui en fait une fenêtre au bord de l'écran : \(types)")
+        let flat = ConversationDragItemProvider(conversationId: "c1", title: "Équipe", opensWindow: false)
+        XCTAssertFalse(flat.registeredTypeIdentifiers.contains { $0.contains("activity") }, "sans fenêtres multiples, l'id seul")
+    }
+
+    func test_theEndOfADragSession_isAnnounced() {
+        let ended = expectation(forNotification: .conversationDragDidEnd, object: nil)
+        var provider: ConversationDragItemProvider? = ConversationDragItemProvider(conversationId: "c1", title: "x", opensWindow: false)
+        XCTAssertNotNil(provider)
+        provider = nil
+        wait(for: [ended], timeout: 2)
+    }
+
+    func test_draggingAConversation_foldsTheCategories_andRestoresThem() throws {
+        let list = try appSource("Features/Main/Views/ConversationListView.swift")
+        XCTAssertTrue(list.contains("sectionsBeforeDrag = expandedSections"), "les catégories dépliées sont retenues")
+        XCTAssertTrue(list.contains("expandedSections = []"), "toutes se replient pendant le glisser")
+        XCTAssertTrue(list.contains("expandedSections = before"), "elles se redéplient au dépôt ou à l'annulation")
+        XCTAssertTrue(list.contains("defer { endConversationDrag() }"), "le dépôt sur une catégorie redéplie aussi")
+        XCTAssertTrue(list.contains("dragOriginSectionId == group.section.id"), "la catégorie d'origine se marque")
+        XCTAssertTrue(list.contains("publisher(for: .conversationDragDidEnd)"), "l'annulation redéplie")
+    }
+
+    func test_callsAlwaysShowInTheMainWindow() throws {
+        let presenter = try appSource("Features/Main/Views/RootLayers/CallWindowPresenter.swift")
+        XCTAssertEqual(presenter.components(separatedBy: "CallWindowScene.target()").count - 1, 2,
+                       "l'écran d'appel et son point de retour visent la fenêtre principale")
+        XCTAssertFalse(presenter.contains("guard let scene = DeviceLayout.activeWindowScene"))
+    }
+
     func test_aDetachedWindow_mountsNoRoot() throws {
         let host = try appSource("Features/Main/Views/AdaptiveRootView.swift")
         let start = try XCTUnwrap(host.range(of: "struct DetachedWindowView: View {"))

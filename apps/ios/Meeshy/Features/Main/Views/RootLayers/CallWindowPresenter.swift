@@ -121,8 +121,10 @@ final class CallOverlayWindowHost: CallWindowHosting {
 
     func show(_ manager: CallManager) -> Bool {
         guard window == nil else { return true }
-        guard let scene = DeviceLayout.activeWindowScene else { return false }
-        let main = DeviceLayout.activeWindow
+        // TOUJOURS la fenêtre principale (décision du porteur, 2026-10-14) : un appel lancé ou reçu pendant qu'une
+        // conversation ou les réels ont leur propre fenêtre s'affiche là où vit sa présentation — et son PiP.
+        guard let scene = CallWindowScene.target() else { return false }
+        let main = scene.keyWindow ?? scene.windows.first
         previousKeyWindow = main
         // Un clavier ouvert dans l'écran d'en dessous (réponse à une story,
         // composer) vit dans une fenêtre système PLUS HAUTE que la nôtre : il
@@ -415,7 +417,7 @@ final class CallReturnPointWindowHost: CallReturnPointHosting {
 
     func show(_ manager: CallManager, coverage: CallScreenCoverage) -> Bool {
         guard window == nil else { return true }
-        guard let scene = DeviceLayout.activeWindowScene else { return false }
+        guard let scene = CallWindowScene.target() else { return false }
         let overlay = CallPassthroughWindow(windowScene: scene)
         let root = CallReturnPointRoot(
             callManager: manager,
@@ -437,5 +439,22 @@ final class CallReturnPointWindowHost: CallReturnPointHosting {
         window = nil
         overlay.isHidden = true
         overlay.rootViewController = nil
+    }
+}
+
+
+/// La scène où un appel se montre : la fenêtre principale, ramenée au premier plan si une fenêtre détachée
+/// l'occupait ; à défaut (un seul écran, registre pas encore servi), la scène active.
+@MainActor
+enum CallWindowScene {
+    static func target() -> UIWindowScene? {
+        guard let primary = MainWindowRegistry.shared.primaryWindowScene,
+              primary.activationState != .unattached else {
+            return DeviceLayout.activeWindowScene
+        }
+        if primary.activationState != .foregroundActive {
+            UIApplication.shared.requestSceneSessionActivation(primary.session, userActivity: nil, options: nil)
+        }
+        return primary
     }
 }

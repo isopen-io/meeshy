@@ -48,6 +48,8 @@ struct ConversationRowItem: View {
     let cachedPreviewMessages: [Message]
     let leadingActions: [SwipeAction]
     let trailingActions: [SwipeAction]
+    /// Le glisser de la ligne commence : la liste replie ses catégories et marque celle d'origine.
+    var onDragBegan: () -> Void = {}
     let onViewStory: () -> Void
     let onViewProfile: () -> Void
     let onViewConversationInfo: () -> Void
@@ -136,7 +138,12 @@ struct ConversationRowItem: View {
                     // via `ChipDropResolver`, même sémantique que le drop de
                     // la chip du morph custom.
                     .onDrag {
-                        NSItemProvider(object: conversation.id as NSString)
+                        onDragBegan()
+                        return ConversationDragItemProvider(
+                            conversationId: conversation.id,
+                            title: conversation.name,
+                            opensWindow: UIApplication.shared.supportsMultipleScenes
+                        )
                     }
                     .contextMenu {
                         nativeContextMenu()
