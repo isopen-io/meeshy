@@ -79,6 +79,7 @@ import { launchChromium } from './lib/browser.mjs';
 import { startDistServer } from './lib/gate-server.mjs';
 import { contrastOf } from './lib/contrast.mjs';
 import { checkLensRowMetaRest } from './lib/check-lens-row-meta.mjs';
+import { checkRowMenuMore } from './lib/check-row-menu-more.mjs';
 
 const DIST = new URL('../dist/', import.meta.url).pathname;
 /* Le serveur vit dans `lib/` depuis #6988 : celui qui était écrit ici
@@ -616,8 +617,8 @@ const menuFit = await shortPage.evaluate(() => {
   };
 });
 check(
-  menuFit.count === 7 && menuFit.allInView,
-  `à 390×640, les SEPT lignes du menu de la dernière rangée (deux appels, quatre actions, « Supprimer » — #7285) ont leur centre dans l'écran (${JSON.stringify(menuFit)})`,
+  menuFit.count === 11 && menuFit.allInView,
+  `à 390×640, les ONZE lignes du menu de la dernière rangée (deux appels, trois actions, Détails, Renommer, Favori, Déplacer vers… — #10593 —, « Archiver », « Supprimer » — #7285) ont leur centre dans l'écran (${JSON.stringify(menuFit)})`,
 );
 
 await shortContext.close();
@@ -975,7 +976,8 @@ for (const scheme of ['light', 'dark']) {
   const opened = await enPage.waitForSelector('[role="menu"][aria-label="Conversation actions"]', { timeout: 2000 }).then(() => true, () => false);
   const labels = opened ? await enPage.$$eval('[role="menu"] [role="menuitem"]', (els) => els.map((el) => (el.textContent ?? '').trim())) : [];
   check(
-    JSON.stringify(labels) === JSON.stringify(['Voice call', 'Video call', 'Pin', 'Mute', 'Read', 'Archive', 'Delete']),
+    JSON.stringify(labels) ===
+      JSON.stringify(['Voice call', 'Video call', 'Pin', 'Mute', 'Read', 'Details', 'Rename', 'Favorite', 'Move to…', 'Archive', 'Delete']),
     `en anglais, le menu d'une ligne est entièrement anglais — « Conversation actions » (${JSON.stringify(labels)})`,
   );
   await enContext.close();
@@ -983,6 +985,9 @@ for (const scheme of ['light', 'dark']) {
 
 // ------------- 14. l'heure et les points ne paraissent qu'au défilement (#9570)
 await checkLensRowMetaRest({ browser, base: BASE, row: SUBJECT, check });
+
+// ------------- 15. les entrées d'iOS du menu d'une ligne ont un effet (#10593)
+await checkRowMenuMore({ browser, base: BASE, check });
 
 await browser.close();
 served.close();

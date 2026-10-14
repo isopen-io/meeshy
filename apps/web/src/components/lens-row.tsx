@@ -8,11 +8,12 @@ import type { Conversation } from '@/lib/api/types';
 import type { ConversationEngagementSnapshot } from '@meeshy/shared/types/engagement-scale';
 import { callActions } from '@/lib/calls/call-actions';
 import { translate } from '@/lib/i18n-catalog';
-import type { ConversationFlags } from '@/lib/api/preferences';
+import { categoryIdOf, reactionOf, type ConversationFlags } from '@/lib/api/preferences';
+import { rowMenuText } from '@/lib/i18n-row-menu-catalog';
 import { accentOf, withAccent } from '@/lib/accent';
 import { MUTED_OPACITY } from '@/lib/lens/law';
 import { conversationRowSwipeSides } from '@/lib/view/conversation-row-swipe';
-import { isRowCallAction, type RowActionId, type RowFlagActionId } from '@/lib/view/row-actions';
+import { isRowCallAction, isRowFlagAction, type RowActionId, type RowFlagActionId, type RowIntent, type RowMenuMore } from '@/lib/view/row-actions';
 import { requestDeparture } from '@/lib/conversation-departure';
 import { useSpeaksAsGuest } from '@/lib/view/guest-focus';
 import { conversationAvatarDoor } from '@/lib/view/thread-header-offer';
@@ -113,6 +114,19 @@ export type LensRowProps = {
    */
   onOpenDetails?: ((conversationId: string) => void) | undefined;
   /**
+   * LES ENTRÉES D'iOS DU MENU (#10593) — Renommer, Bloquer/Débloquer, Favori,
+   * Déplacer vers… : la ligne NOMME le geste, l'écran l'exécute (fenêtres,
+   * confirmation, store). Même discipline que `onRowAction` : une fonction
+   * STABLE qui reçoit l'id. Absente (un visiteur sans compte), le menu n'a
+   * pas ces entrées.
+   */
+  onRowIntent?: ((conversationId: string, intent: RowIntent) => void) | undefined;
+  /** Le pair d'un direct est-il bloqué par le lecteur — `undefined` : pas de
+   * pair à compte (groupe, invité), aucune entrée de blocage. */
+  peerBlocked?: boolean | undefined;
+  /** Les catégories du lecteur, dans son ordre — le sous-menu « Déplacer vers… ». */
+  categories?: readonly { readonly id: string; readonly name: string }[] | undefined;
+  /**
    * QUI ÉCRIT DANS CETTE CONVERSATION, MAINTENANT (#5793, #7547) — les noms
    * des frappeurs vivants qui ne sont pas le lecteur, distribués par l'écran
    * (`useTypistNames`, `lib/api/use-typists.ts`) : une rangée est rendue dans un
@@ -166,6 +180,9 @@ function LensRowImpl({
   unreadCount,
   onRowAction,
   onOpenDetails,
+  onRowIntent,
+  peerBlocked,
+  categories,
   typists,
   peerHere = false,
   peerActive = false,
@@ -231,9 +248,26 @@ function LensRowImpl({
   /* Appeler depuis le menu de la ligne (#8109) : la passerelle refuse l'appel
      à un invité anonyme (`CallEventsHandler.ts`), comme `ThreadCallButton`. */
   const canCall = useStore(sessionStore, (state) => state.session.status === 'authenticated') || apiConfig.source === 'fixtures';
+  /* LE FAVORI ET LA CATÉGORIE (#10593) — lus sur la conversation EFFECTIVE
+     (`withPreferenceOverrides`) : le geste se voit à l'instant. */
+  const favorite = reactionOf(conversation);
+  const menuMore: RowMenuMore | undefined =
+    onRowIntent === undefined
+      ? undefined
+      : {
+          details: onOpenDetails !== undefined,
+          rename: group,
+          organize: canCall,
+          favorite,
+          block: group || peerBlocked === undefined ? null : peerBlocked ? 'unblock' : 'block',
+        };
   const onAction = (id: RowActionId) => {
     if (id === 'delete') return requestDeparture({ conversationId: conversation.id, kind: 'delete', returnToList: false });
-    if (!isRowCallAction(id)) return onRowAction(conversation.id, id);
+    if (id === 'details') return onOpenDetails?.(conversation.id);
+    if (id === 'rename') return onRowIntent?.(conversation.id, { kind: 'rename' });
+    if (id === 'block') return onRowIntent?.(conversation.id, { kind: 'block', intent: peerBlocked === true ? 'unblock' : 'block' });
+    if (isRowFlagAction(id)) return onRowAction(conversation.id, id);
+    if (!isRowCallAction(id)) return undefined;
     callActions.start({ conversationId: conversation.id, media: id === 'callVideo' ? 'video' : 'audio', title, avatar: photo ?? null, isGroup: group });
   };
 
@@ -506,6 +540,20 @@ function LensRowImpl({
               (`ThemedConversationRow.swift:296-300`, qui annonce épinglage ET
               sourdine).
             */}
+            {/* LE FAVORI (#10593) — l'emoji posé par le lecteur, à côté du nom,
+                comme le filtre « Favoris » le retient ; le lecteur d'écran
+                l'entend nommé. */}
+            {favorite === undefined ? null : (
+              <span
+                data-favorite
+                role="img"
+                aria-label={`${rowMenuText(currentInterfaceLanguage(), 'rowMenu.favorite')} ${favorite}`}
+                className="shrink-0 text-title leading-none"
+                style={{ opacity: chromeFade }}
+              >
+                {favorite}
+              </span>
+            )}
             {flags.isPinned ? (
               <Glyph name="pushPin" size={12} title="Épinglée" style={{ color: 'var(--color-ios-ink-3)', opacity: chromeFade }} />
             ) : null}
@@ -667,7 +715,11 @@ function LensRowImpl({
         language={currentInterfaceLanguage()}
         canCall={canCall}
         canDelete={canCall}
+        {...(menuMore === undefined ? {} : { more: menuMore })}
+        categoryId={categoryIdOf(conversation)}
+        {...(categories === undefined ? {} : { categories })}
         onAction={onAction}
+        onChoice={(choice) => onRowIntent?.(conversation.id, choice)}
       />
     </li>
   );
@@ -698,6 +750,7 @@ export function sameRowProps(prev: LensRowProps, next: LensRowProps): boolean {
   if (prev.unreadCount !== next.unreadCount) return false;
   if (prev.onRowAction !== next.onRowAction) return false;
   if (prev.onOpenDetails !== next.onOpenDetails) return false;
+  if (prev.onRowIntent !== next.onRowIntent || prev.peerBlocked !== next.peerBlocked || prev.categories !== next.categories) return false;
   /* `typists` (#5793, #7547) — comparés par VALEUR (les noms joints) : l'écran
      redistribue une carte d'identité neuve à chaque `typing:start`/`stop` de
      n'importe quelle conversation, et sans cette ligne la rangée concernée

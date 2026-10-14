@@ -4,12 +4,13 @@ import { translateMessagePieces } from '@/lib/i18n-message-pieces-catalog';
 import { currentInterfaceLanguage } from '@/lib/interface-language';
 import type { Attachment } from '@/lib/api/types';
 import type { TranslationChoice } from '@/lib/view/message-actions';
+import type { MessagePinEntry } from '@/lib/view/use-message-pin';
 import type { MessageStarEntry } from '@/lib/view/use-message-star';
 
 import { useSpeaksAsGuest } from '@/lib/view/guest-focus';
 import { hasServerMessageId } from '@/lib/view/message-receipts';
 
-import { GlyphSvg } from './glyph';
+import { Glyph, GlyphSvg } from './glyph';
 import { THREAD_MENU_GLYPHS } from './glyphs-thread-menu';
 import { MessageReactors } from './message-reactors';
 import { MessageReceiptsSheet } from './message-receipts-sheet';
@@ -22,9 +23,8 @@ import { Sheet } from './sheet';
  * question 4 tranchée) : SEULES les entrées qui ont un EFFET aujourd'hui
  * (loi 4) — Langues (même liste que Traduire), Réactions (les comptes tout de
  * suite, puis qui a réagi — `MessageReactors`, #10583), Envoyé (date complète
- * cadrée par la langue du lecteur, accusé). Épingler et
- * Signaler n'ont pas encore de port web (#7558) ; Modifier et Supprimer ont
- * le leur (#10581, #10582, plus bas).
+ * cadrée par la langue du lecteur, accusé). Modifier, Épingler, Supprimer
+ * et Signaler ont leur port (#10581, #7558, #10582, plus bas).
  *
  * « INFOS DU MESSAGE » (#7226, W7) — la section nominative
  * (Reçu/Vu/Pas encore) et par pièce jointe (ouvertures, téléchargements,
@@ -41,8 +41,7 @@ import { Sheet } from './sheet';
  *
  * « FAIRE » — LE FAVORI (#7378) : iOS ouvre sa feuille « Plus… » par les
  * actions, et y range l'étoile juste après l'épingle
- * (`MessageActionResolver.moreSections`). Le web n'a pas encore d'épingle :
- * l'étoile ouvre la feuille. Elle AGIT puis REFERME, comme une action iOS de
+ * (`MessageActionResolver.moreSections`). Elle AGIT puis REFERME, comme une action iOS de
  * cette section. `star` nul — état inconnu, lecteur sans compte, message
  * non favorisable — n'offre rien (`messageStarAction`).
  *
@@ -61,6 +60,13 @@ import { Sheet } from './sheet';
  * « SUPPRIMER » (#10582) FERME la section, comme sur iOS (`moreSections`,
  * dernière action). Elle REFERME la feuille puis ouvre le dialogue de
  * suppression — jamais deux modales l'une sur l'autre.
+ *
+ * « ÉPINGLER » / « DÉSÉPINGLER » (#7558) se range juste avant l'étoile, comme
+ * sur iOS (`moreSections` : imager, épingle, favori) ; `act.pin` nul, rien ne
+ * s'offre (`messagePinAction`). « SIGNALER » est seul dans sa section de
+ * MODÉRATION, à la fin de la feuille comme sur iOS (`.moderation([.report])`),
+ * jamais sur son propre message (`reportOffered`) : il referme la feuille puis
+ * ouvre la feuille des motifs.
  *
  * CE QUI RESTE FRANÇAIS ICI n'appartient pas à cette feuille : le bouton de
  * fermeture vient de `Sheet` (`aria-label="Fermer"`, en dur, partagé par
@@ -99,7 +105,12 @@ export function MessageDetailSheet({
    */
   readonly create?: { readonly onCompose: (() => void) | null; readonly onImage: (() => void) | null };
   /** CE QUE LE LECTEUR PEUT FAIRE DU MESSAGE (#10581) — `null` ou absent : le geste ne s'offre pas. */
-  readonly act?: { readonly onEdit?: (() => void) | null; readonly onDelete?: (() => void) | null };
+  readonly act?: {
+    readonly onEdit?: (() => void) | null;
+    readonly onDelete?: (() => void) | null;
+    readonly pin?: MessagePinEntry | null;
+    readonly onReport?: (() => void) | null;
+  };
   readonly onPickLanguage: (code: string) => void;
   readonly onClose: () => void;
 }) {
@@ -149,6 +160,23 @@ export function MessageDetailSheet({
             </button>
           </li>
         ),
+      )}
+      {act.pin == null ? null : (
+        <li>
+          <button
+            type="button"
+            data-message-act={act.pin.action}
+            onClick={() => {
+              act.pin?.onToggle();
+              onClose();
+            }}
+            className="flex w-full items-center gap-2.5 px-4 text-start text-body"
+            style={{ minHeight: 44, color: 'var(--color-ios-ink)' }}
+          >
+            <Glyph name="pushPin" size={18} style={{ color: 'var(--accent)' }} />
+            <span className="flex-1">{translateMessagePieces(language, act.pin.action === 'pin' ? 'message.pin.action' : 'message.unpin.action')}</span>
+          </button>
+        </li>
       )}
       {star === null ? null : (
         <li>
@@ -236,6 +264,24 @@ export function MessageDetailSheet({
       {delivery !== null && hasServerMessageId(messageId) && !speaksAsGuest ? (
         <MessageReceiptsSheet conversationId={conversationId} messageId={messageId} attachments={attachments} />
       ) : null}
+
+      {act.onReport == null ? null : (
+        <li style={{ borderTop: '0.5px solid var(--color-edge)' }}>
+          <button
+            type="button"
+            data-message-act="report"
+            onClick={() => {
+              onClose();
+              act.onReport?.();
+            }}
+            className="flex w-full items-center gap-2.5 px-4 text-start text-body"
+            style={{ minHeight: 44, color: 'var(--color-error)' }}
+          >
+            <Glyph name="warningCircle" size={18} />
+            <span className="flex-1">{translate(language, 'report.action')}</span>
+          </button>
+        </li>
+      )}
     </Sheet>
   );
 }

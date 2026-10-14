@@ -33,6 +33,13 @@ const en = {
   'message.delete.partial': '{failed} of {count} messages could not be deleted',
   'message.delete.partialOne': '1 of {count} messages could not be deleted',
   'message.reactors.empty': 'No reactions',
+  'message.pin.action': 'Pin',
+  'message.unpin.action': 'Unpin',
+  'message.pin.done': 'Message pinned',
+  'message.unpin.done': 'Message unpinned',
+  'message.pin.failed': 'The message could not be pinned',
+  'message.unpin.failed': 'The message could not be unpinned',
+  'message.report.title': 'Report this message',
 } satisfies MessagePiecesCatalog;
 
 export default en;
