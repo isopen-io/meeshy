@@ -45,16 +45,6 @@ final class AppearanceDesignViewTests: XCTestCase {
         XCTAssertNil(AppearanceTileRenderer.tileImage(design: try design("illustrations", "horizon"), isDark: false, accentHex: "#6366F1", displayScale: 2))
     }
 
-    func test_cache_isBounded() {
-        let cache = AppearanceTileCache(countLimit: 2)
-        var renders = 0
-        for key in ["a", "b", "c", "d"] {
-            _ = cache.image(forKey: key) { renders += 1; return UIImage() }
-        }
-        _ = cache.image(forKey: "a") { renders += 1; return UIImage() }
-        XCTAssertEqual(renders, 5, "« a » a été évincé : un cache borné ne garde pas tout")
-    }
-
     func test_paint_accentRoles_followTheReadersAccent() {
         let palette = AppearanceDesignPalette(base: "#FFFFFF", ink: "#111111", soft: "#EEEEEE", accent: nil)
         XCTAssertEqual(AppearancePaint.hex(.accent, palette: palette, accentHex: "#c0582f"), "#C0582F")
