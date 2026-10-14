@@ -5488,3 +5488,19 @@ Le prompt des Cadres de gloire (`docs/product/cadres-de-gloire/PROMPT-developpem
 **Écarts avec iOS.** iOS ouvre un sélecteur (tuile) ou le menu (rangée) au double toucher ; le web pose la réaction. La demande vient de l'issue ; l'iOS jumeau est à décider par le porteur.
 
 **Preuves.** `lib/view/double-tap.test.ts`, `lib/view/use-message-menu-double-tap.test.tsx`, `lib/view/use-message-menu-save.test.tsx`, `lib/view/message-actions.test.ts`, `lib/view/message-piece.test.ts`. **Kotlin natif** : rien (gel).
+
+## D-207 — Les filtres de la liste se composent avec la loi d'iOS, l'avatar d'un direct porte l'anneau des stories du pair, la sourdine a sa cloche barrée (2026-10-14, #10598, complète D-205)
+
+**Contexte.** La liste n'acceptait qu'UN filtre à la fois (`ListFilter` à valeur unique) et ses types ne recouvraient pas ceux d'iOS : « Groupes » retenait tout ce qui n'était pas direct, « Ouvertes », « Globales » et « Channels » n'existaient pas. iOS compose (`ConversationFilterComposition.swift`, `ConversationListViewModel.swift:576-626`). L'avatar de ligne ne recevait pas `storyRing`, et la sourdine ne se voyait que par le fondu du chrome.
+
+**Décision.**
+- **La sélection est un ensemble** (`ListSelection`, `lib/lens/filters.ts`) : `toggleFilter` pose ou retire d'un même appui, « Tous » efface le reste, une sélection vidée revient à « Tous ». Les TYPES s'additionnent (Personnel = `direct`, Privée = `group`, Ouvertes = `public`, Globales = `global`, Channels = `isAnnouncementChannel`), les ÉTATS se croisent entre eux et avec les types (Non lus, Favoris, et **Épinglés**, que le web garde alors qu'iOS range les épinglées dans une section), « Archivées » change de corpus et se compose avec le reste.
+- **Ordre des puces = `MeeshyConversationFilter.allCases`**, « Épinglés » avant « Archivées ». Cela défait le point de D-205 qui mettait « Favoris » juste après « Non lus ». Mots d'iOS dans les sept langues (`catalog-row-menu-*`) ; « Archivées » garde son libellé web.
+- **« Privée » ne retient que les groupes** : l'ancien « Groupes » (tout sauf direct) disparaît, comme sur iOS. « Ouvertes » ne retient que `public` : le type `community` qu'iOS y range n'existe pas dans `ConversationType` côté TypeScript.
+- **L'anneau vient du corpus du rail** (`authorStoryRing(railProps.groups, pair)`), aucune requête de plus ; seul un direct le porte. Non vue, l'avatar ouvre la story ; vue, il garde le profil (`identityTarget`, la règle de `MeeshyAvatar.swift:410`). Le comparateur de `memo` lit l'anneau par valeur.
+- **La sourdine porte `bellSlash`** après le nom, nommée pour le lecteur d'écran (`listRow.muted`), fondue avec le chrome comme le 🔕 d'iOS l'est avec sa rangée. Le texte hors écran « En sourdine » qu'elle remplace était écrit en français.
+- **Les gates touchent les puces par `data-list-filter`**, jamais par leur nom.
+
+**Écarts avec iOS, assumés.** iOS ajoute à l'avatar un menu d'appui long où « Voir la story » rejoint une story déjà vue ; l'avatar de la rangée web n'a pas de menu d'appui long. iOS exige aussi qu'une conversation hors archives soit `isActive` ; le web ne l'a jamais exigé et ce lot ne change pas cela. La cloche se pose en fin de ligne du nom, avec l'épingle et le favori, et non juste après le nom.
+
+**Preuves.** `lib/lens/filters.test.ts`, `components/lens-row-ring-mute.test.tsx`, `lib/i18n-row-menu-catalog.test.ts` ; `scripts/check-list-actions.mjs` § 4 et 5 (cloche visible et nommée, union de types, croisement « Non lus », second appui, « Tous »). À l'écran, sur un build `VITE_DATA_SOURCE=gateway` avec réponses simulées : anneau plein ⇒ `/story/…`, anneau atténué ⇒ `/u/…`, aucun anneau sur un groupe. **Non vérifié contre la passerelle de staging.** **Kotlin natif** : rien (gel) ; la coque Android de `apps/web` reçoit ce lot.
