@@ -28,9 +28,14 @@ const XMLNS = 'xmlns="http://www.w3.org/2000/svg"';
 const round2 = (value: number): number => Math.round(value * 100) / 100;
 const num = (value: number): string => String(round2(value));
 
+/** L'accent tombe sur Indigo Meeshy s'il n'est pas un `#RRGGBB` : rien de non validé n'entre dans le texte. */
+const FALLBACK_ACCENT = '#6366F1';
+const ACCENT_PATTERN = /^#[0-9A-Fa-f]{6}$/;
+const safeAccent = (accent: string): string => (ACCENT_PATTERN.test(accent) ? accent.toUpperCase() : FALLBACK_ACCENT);
+
 const roleColor = ({ design, scheme, accent }: DesignRenderArgs, role: PaintRole): string => {
   const palette = design.palettes[scheme];
-  const effective = palette.accent ?? accent;
+  const effective = palette.accent ?? safeAccent(accent);
   switch (role) {
     case 'ink':
       return palette.ink;
@@ -69,15 +74,25 @@ export function designTileSvg(args: DesignRenderArgs): string {
   return `${svgOpen(tile.width, tile.height, `0 0 ${num(tile.width)} ${num(tile.height)}`)}${baseRect(args, tile.width, tile.height)}${body}</svg>`;
 }
 
+/**
+ * La portée des identifiants d'un rendu : tout ce dont sa sortie dépend. Deux
+ * fonds posés dans la même page (galerie, aperçus) ne se volent jamais leur
+ * `url(#…)` ; deux rendus de même portée sont identiques, donc les partager
+ * est sans effet.
+ */
+const idScope = (args: DesignRenderArgs, width: number, height: number): string =>
+  `${args.design.key}-${args.scheme}-${safeAccent(args.accent).slice(1)}-${num(width)}x${num(height)}`.replace(/\./g, '_');
+
 const patternMarkup = (args: DesignRenderArgs, width: number, height: number): string => {
   const tile = args.design.tile;
   if (tile === undefined) return '';
+  const id = `t-${idScope(args, width, height)}`;
   const paths = tile.paths.map((stroke) => strokeMarkup(args, stroke)).join('');
   const scaled = tile.scale === 1 ? paths : `<g transform="scale(${num(tile.scale)})">${paths}</g>`;
   const turn = tile.rotation === 0 ? '' : ` patternTransform="rotate(${num(tile.rotation)})"`;
   return (
-    `<defs><pattern id="t" patternUnits="userSpaceOnUse" width="${num(tile.width * tile.scale)}" height="${num(tile.height * tile.scale)}"${turn}>${scaled}</pattern></defs>` +
-    `<rect width="${num(width)}" height="${num(height)}" fill="url(#t)"/>`
+    `<defs><pattern id="${id}" patternUnits="userSpaceOnUse" width="${num(tile.width * tile.scale)}" height="${num(tile.height * tile.scale)}"${turn}>${scaled}</pattern></defs>` +
+    `<rect width="${num(width)}" height="${num(height)}" fill="url(#${id})"/>`
   );
 };
 
@@ -94,6 +109,7 @@ const sceneMarkup = (args: DesignRenderArgs, width: number, height: number): str
 const gradientMarkup = (args: DesignRenderArgs, width: number, height: number): string => {
   const gradient = args.design.gradient;
   if (gradient === undefined) return '';
+  const scope = idScope(args, width, height);
   const radians = (gradient.angle * Math.PI) / 180;
   const [dx, dy] = [Math.sin(radians) / 2, -Math.cos(radians) / 2];
   const stops = gradient.stops.map((stop) => `<stop offset="${num(stop.at)}" stop-color="${roleColor(args, stop.role)}"/>`).join('');
@@ -101,15 +117,15 @@ const gradientMarkup = (args: DesignRenderArgs, width: number, height: number): 
   const blobDefs = gradient.blobs
     .map((blob, index) => {
       const color = roleColor(args, blob.role);
-      return `<radialGradient id="b${index}" gradientUnits="userSpaceOnUse" cx="${num(blob.x * width)}" cy="${num(blob.y * height)}" r="${num(blob.r * reach)}"><stop offset="0" stop-color="${color}" stop-opacity="${num(blob.opacity)}"/><stop offset="1" stop-color="${color}" stop-opacity="0"/></radialGradient>`;
+      return `<radialGradient id="b${index}-${scope}" gradientUnits="userSpaceOnUse" cx="${num(blob.x * width)}" cy="${num(blob.y * height)}" r="${num(blob.r * reach)}"><stop offset="0" stop-color="${color}" stop-opacity="${num(blob.opacity)}"/><stop offset="1" stop-color="${color}" stop-opacity="0"/></radialGradient>`;
     })
     .join('');
   const blobs = gradient.blobs
-    .map((blob, index) => `<circle cx="${num(blob.x * width)}" cy="${num(blob.y * height)}" r="${num(blob.r * reach)}" fill="url(#b${index})"/>`)
+    .map((blob, index) => `<circle cx="${num(blob.x * width)}" cy="${num(blob.y * height)}" r="${num(blob.r * reach)}" fill="url(#b${index}-${scope})"/>`)
     .join('');
   return (
-    `<defs><linearGradient id="g" x1="${num(0.5 - dx)}" y1="${num(0.5 - dy)}" x2="${num(0.5 + dx)}" y2="${num(0.5 + dy)}">${stops}</linearGradient>${blobDefs}</defs>` +
-    `<rect width="${num(width)}" height="${num(height)}" fill="url(#g)"/>${blobs}`
+    `<defs><linearGradient id="g-${scope}" x1="${num(0.5 - dx)}" y1="${num(0.5 - dy)}" x2="${num(0.5 + dx)}" y2="${num(0.5 + dy)}">${stops}</linearGradient>${blobDefs}</defs>` +
+    `<rect width="${num(width)}" height="${num(height)}" fill="url(#g-${scope})"/>${blobs}`
   );
 };
 

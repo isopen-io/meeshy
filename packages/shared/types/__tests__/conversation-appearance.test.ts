@@ -63,6 +63,13 @@ describe('readConversationAppearance — tolérant par champ, côté clients', (
     });
   });
 
+  it('un champ AJOUTÉ par une passerelle plus récente à un fond connu ne le fait pas tomber', () => {
+    expect(
+      readConversationAppearance(valid({ background: { kind: 'photo', attachmentId: ATTACHMENT, veil: 0.2, blur: 4, focus: { x: 0.5, y: 0.3 } } })).background,
+    ).toEqual({ kind: 'photo', attachmentId: ATTACHMENT, veil: 0.2, blur: 4 });
+    expect(readConversationAppearance(valid({ background: { kind: 'signature', extra: 1 } })).background).toEqual({ kind: 'signature' });
+  });
+
   it('un accent illisible retombe sur l’accent calculé SANS perdre le fond', () => {
     expect(readConversationAppearance(valid({ background: { kind: 'solid', color: 'olive' }, accent: 'couleur-future' }))).toEqual({
       v: 1,

@@ -43,7 +43,7 @@ describe('le rendu de référence des fonds (#10632, § 5.1)', () => {
     expect(svg).toContain('viewBox="0 0 90 190"');
     expect(svg).toContain('patternUnits="userSpaceOnUse" width="20" height="20" patternTransform="rotate(15)"');
     expect(svg).toContain('<g transform="scale(2)">');
-    expect(svg).toContain('fill="url(#t)"');
+    expect(svg).toContain('fill="url(#t-mini-light-6366F1-90x190)"');
   });
 
   it('suit l’accent effectif : un autre accent change la sortie, le même la laisse identique', () => {
@@ -71,6 +71,27 @@ describe('le rendu de référence des fonds (#10632, § 5.1)', () => {
       expect([...tagsOf(svg)].filter((tag) => !ALLOWED.has(tag))).toEqual([]);
       expect(svg).not.toMatch(/script|href|javascript|onload/i);
     });
+  });
+
+  it('deux rendus différents posés dans la même page ne partagent aucun identifiant (motif comme dégradé)', () => {
+    const idsOf = (svg: string): readonly string[] => [...svg.matchAll(/ id="([^"]+)"/g)].map((match) => match[1]!);
+    (['monogramme', 'aurore'] as const).forEach((key) => {
+      const first = designToSvg({ design: byKey(key), scheme: 'light', accent: ACCENT, width: 90, height: 190 });
+      const second = designToSvg({ design: byKey(key), scheme: 'light', accent: '#C2185B', width: 90, height: 190 });
+      const third = designToSvg({ design: byKey(key), scheme: 'dark', accent: ACCENT, width: 300, height: 100 });
+      expect(idsOf(first).length).toBeGreaterThan(0);
+      expect(idsOf(first).filter((id) => idsOf(second).includes(id) || idsOf(third).includes(id))).toEqual([]);
+      [first, second, third].forEach((svg) =>
+        [...svg.matchAll(/url\(#([^)]+)\)/g)].forEach((match) => expect(idsOf(svg)).toContain(match[1])),
+      );
+    });
+  });
+
+  it('un accent qui n’est pas un hex #RRGGBB ne peut rien injecter dans le balisage', () => {
+    const svg = designTileSvg({ design: pattern, scheme: 'light', accent: '#000"/><script>alert(1)</script><x a="' });
+    expect(svg).not.toMatch(/script/i);
+    expect([...tagsOf(svg)].filter((tag) => !ALLOWED.has(tag))).toEqual([]);
+    expect(designTileSvg({ design: pattern, scheme: 'light', accent: '#c2185b' })).toContain('stroke="#C2185B"');
   });
 
   it.each(['monogramme', 'aurore', 'maille', 'seigaiha', 'horizon', 'baobab'])('instantané stable de %s', (key) => {

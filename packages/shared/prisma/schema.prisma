@@ -6004,8 +6004,8 @@ model UserPackOwnership {
 
   user User @relation(fields: [userId], references: [id], onDelete: Cascade)
 
+  /// L'index unique sert aussi « les packs possédés de X » (préfixe userId) : aucun index userId seul.
   @@unique([userId, packKey])
-  @@index([userId])
 }
 
 /// Le CHOIX d'un utilisateur sur un pack : sans ligne, le défaut du pack

@@ -26,16 +26,32 @@ const gamutKey = z.enum(GAMUT_KEYS);
 
 const onVeilStep = (veil: number): boolean => Math.abs(veil / PHOTO_VEIL_STEP - Math.round(veil / PHOTO_VEIL_STEP)) < 1e-6;
 
-const BackgroundSchema = z.discriminatedUnion('kind', [
-  z.strictObject({ kind: z.literal('signature') }),
-  z.strictObject({ kind: z.literal('design'), pack: slug, design: slug }),
-  z.strictObject({ kind: z.literal('solid'), color: gamutKey }),
-  z.strictObject({
+const BACKGROUND_SHAPES = {
+  signature: { kind: z.literal('signature') },
+  design: { kind: z.literal('design'), pack: slug, design: slug },
+  solid: { kind: z.literal('solid'), color: gamutKey },
+  photo: {
     kind: z.literal('photo'),
     attachmentId: z.string().check(z.regex(OBJECT_ID_PATTERN)),
     veil: z.number().check(z.minimum(0), z.maximum(PHOTO_VEIL_MAX), z.refine(onVeilStep)),
     blur: z.int().check(z.minimum(0), z.maximum(PHOTO_BLUR_MAX)),
-  }),
+  },
+} as const;
+
+/** À l'écriture : un champ inconnu est refusé. */
+const BackgroundSchema = z.discriminatedUnion('kind', [
+  z.strictObject(BACKGROUND_SHAPES.signature),
+  z.strictObject(BACKGROUND_SHAPES.design),
+  z.strictObject(BACKGROUND_SHAPES.solid),
+  z.strictObject(BACKGROUND_SHAPES.photo),
+]);
+
+/** À la lecture : un champ AJOUTÉ par une passerelle plus récente est ignoré, le fond connu reste servi. */
+const TolerantBackgroundSchema = z.discriminatedUnion('kind', [
+  z.object(BACKGROUND_SHAPES.signature),
+  z.object(BACKGROUND_SHAPES.design),
+  z.object(BACKGROUND_SHAPES.solid),
+  z.object(BACKGROUND_SHAPES.photo),
 ]);
 export type ConversationBackground = z.infer<typeof BackgroundSchema>;
 
@@ -74,7 +90,7 @@ const asRecord = (input: unknown): Readonly<Record<string, unknown>> | null =>
 export function readConversationAppearance(input: unknown): ConversationAppearance {
   const record = asRecord(input);
   if (record === null) return DEFAULT_APPEARANCE;
-  const background = BackgroundSchema.safeParse(record['background']);
+  const background = TolerantBackgroundSchema.safeParse(record['background']);
   return {
     v: APPEARANCE_VERSION,
     background: background.success ? background.data : DEFAULT_APPEARANCE.background,
