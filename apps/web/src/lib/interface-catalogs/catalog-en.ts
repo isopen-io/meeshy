@@ -306,6 +306,7 @@ const en = {
   'notFound.title': "This address doesn't exist.",
 
   'pending.back': 'Back to conversations',
+  'pending.screen': 'The screen is on its way',
 
   'linkPage.home': 'Back to Meeshy',
   'linkPage.retry': 'Try again',

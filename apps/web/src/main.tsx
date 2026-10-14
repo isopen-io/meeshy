@@ -6,6 +6,7 @@ import { useStore } from 'zustand/react';
 import './styles/app.css';
 import './styles/sealed-exit.css';
 
+import { ScreenWait } from '@/components/screen-wait';
 import Shell from '@/components/shell';
 import { apiDeps } from '@/lib/api/deps';
 import { appQueryClient } from '@/lib/api/query-client';
@@ -73,7 +74,7 @@ function SessionGate({ children }: { children: ReactNode }) {
   /* L'IDENTITÉ SUIT LA CONVERSATION LUE (#8816) — posée AVANT la décision
      d'accès : sous l'identité anonyme d'un compte, la liste redirigerait
      sinon vers la connexion au lieu de rendre le compte. */
-  return useAnonymousScope(route) ? <RouteAccessGate>{children}</RouteAccessGate> : <Skeleton />;
+  return useAnonymousScope(route) ? <RouteAccessGate>{children}</RouteAccessGate> : <ScreenWait />;
 }
 
 function RouteAccessGate({ children }: { children: ReactNode }) {
@@ -103,21 +104,7 @@ function RouteAccessGate({ children }: { children: ReactNode }) {
     );
   }, [status, key, viewerId]);
 
-  return decision === 'allow' ? children : <Skeleton />;
-}
-
-/** Le squelette d'attente d'un ecran decoupe — statique, jamais un spinner. */
-function Skeleton() {
-  return (
-    <div className="grid gap-2 p-4" aria-busy="true">
-      <p className="text-meta" style={{ color: 'var(--color-ios-ink-2)' }}>
-        L’écran arrive…
-      </p>
-      {[0, 1, 2, 3].map((i) => (
-        <div key={i} className="h-20 rounded-[14px]" style={{ backgroundColor: 'var(--color-ios-card)' }} />
-      ))}
-    </div>
-  );
+  return decision === 'allow' ? children : <ScreenWait />;
 }
 
 /**
@@ -154,7 +141,7 @@ createRoot(root).render(
   <StrictMode>
     <QueryClientProvider client={appQueryClient}>
       <InterfaceLanguageRoot>
-        <Router wrap={(screen) => <Shell><SessionGate>{screen}</SessionGate></Shell>} skeleton={<Skeleton />} />
+        <Router wrap={(screen) => <Shell><SessionGate>{screen}</SessionGate></Shell>} skeleton={<ScreenWait />} />
       </InterfaceLanguageRoot>
     </QueryClientProvider>
   </StrictMode>,

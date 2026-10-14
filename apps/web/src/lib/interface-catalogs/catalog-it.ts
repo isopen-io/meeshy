@@ -306,6 +306,7 @@ const it = {
   'notFound.title': 'Questo indirizzo non esiste.',
 
   'pending.back': 'Torna alle conversazioni',
+  'pending.screen': 'La schermata sta arrivando',
 
   'linkPage.home': 'Torna a Meeshy',
   'linkPage.retry': 'Riprova',

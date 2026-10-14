@@ -295,6 +295,7 @@ const fr = {
   'notFound.title': "Cette adresse n'existe pas.",
 
   'pending.back': 'Revenir aux conversations',
+  'pending.screen': 'L’écran arrive',
 
   /* LES LIENS REÇUS (#6714, #6715) — les pages que visent les liens suivis
      `/l/:token` et les e-mails de compte (suppression, changement d'adresse,

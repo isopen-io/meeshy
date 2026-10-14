@@ -306,6 +306,7 @@ const ar = {
   'notFound.title': 'هذا العنوان غير موجود.',
 
   'pending.back': 'العودة إلى المحادثات',
+  'pending.screen': 'الشاشة في الطريق',
 
   'linkPage.home': 'العودة إلى Meeshy',
   'linkPage.retry': 'إعادة المحاولة',

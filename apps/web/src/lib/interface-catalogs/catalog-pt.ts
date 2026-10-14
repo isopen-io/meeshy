@@ -310,6 +310,7 @@ const pt = {
   'notFound.title': 'Este endereço não existe.',
 
   'pending.back': 'Voltar às conversas',
+  'pending.screen': 'A tela está chegando',
 
   'linkPage.home': 'Voltar ao Meeshy',
   'linkPage.retry': 'Tentar de novo',
