@@ -55,8 +55,10 @@ final class ConversationAppearanceViewModel: ObservableObject {
 
     /// Le voile se règle par pas de 0,05 (le contrat serveur refuse les autres valeurs).
     func setPhotoVeil(_ veil: Double) {
-        guard case .photo(let id, _, let blur) = appearance.background else { return }
+        guard case .photo(let id, let current, let blur) = appearance.background else { return }
         let stepped = (min(max(veil, 0), ConversationBackground.photoVeilMax) / ConversationBackground.photoVeilStep).rounded() * ConversationBackground.photoVeilStep
+        // Le même cran, à l'arrondi flottant près, n'est pas un nouveau choix : rien ne repart au serveur.
+        guard abs(stepped - current) >= ConversationBackground.photoVeilStep / 2 else { return }
         commit { $0.background = .photo(attachmentId: id, veil: stepped, blur: blur) }
     }
 

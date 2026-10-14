@@ -44,7 +44,8 @@ struct ConversationBackgroundView: View {
     var body: some View {
         content
             .animation(.easeInOut(duration: 0.18), value: resolution)
-            .onReceive(NotificationCenter.default.publisher(for: ConversationAppearanceChange.notification)) { note in
+            // Le store relaie depuis son acteur : l'état de la vue ne se touche que sur le fil principal.
+            .onReceive(NotificationCenter.default.publisher(for: ConversationAppearanceChange.notification).receive(on: DispatchQueue.main)) { note in
                 guard let changed = ConversationAppearanceChange.appearance(in: note, for: conversationId) else { return }
                 photoLoadFailed = false
                 appearance = changed
@@ -77,18 +78,23 @@ struct ConversationBackgroundView: View {
         ZStack {
             MeeshyColors.backgroundPrimary(isDark: isDark)
             if let photo {
-                ProgressiveCachedImage(
-                    thumbHash: photo.thumbHash,
-                    thumbnailUrl: photo.thumbnailUrl,
-                    fullUrl: photo.fullUrl,
-                    autoLoad: true,
-                    onFullImageFailure: { photoLoadFailed = true }
-                ) {
-                    Color.clear
-                }
-                .scaledToFill()
-                .blur(radius: CGFloat(blur))
-                .clipped()
+                // La photo REMPLIT le cadre proposé sans l'agrandir : un `scaledToFill` posé à même le
+                // ZStack lui donnerait la taille de l'image, et le fil se décalerait avec lui.
+                Color.clear
+                    .overlay {
+                        ProgressiveCachedImage(
+                            thumbHash: photo.thumbHash,
+                            thumbnailUrl: photo.thumbnailUrl,
+                            fullUrl: photo.fullUrl,
+                            autoLoad: true,
+                            onFullImageFailure: { photoLoadFailed = true }
+                        ) {
+                            Color.clear
+                        }
+                        .scaledToFill()
+                        .blur(radius: CGFloat(blur))
+                    }
+                    .clipped()
             }
             MeeshyColors.backgroundPrimary(isDark: isDark)
                 .opacity(ConversationBackgroundResolution.effectiveVeil(veil, reduceTransparency: reduceTransparency))

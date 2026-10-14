@@ -17,6 +17,7 @@ struct ConversationAppearanceSheet: View {
     @StateObject private var media: ConversationMediaHubViewModel
     @State private var veilDraft: Double = 0.3
     @State private var blurDraft: Double = 0
+    @State private var draggingSlider = false
     @Environment(\.dismiss) private var dismiss
     @Environment(\.colorScheme) private var colorScheme
 
@@ -64,10 +65,12 @@ struct ConversationAppearanceSheet: View {
             }
         }
         .task { media.select(.visual) }
-        .onReceive(NotificationCenter.default.publisher(for: ConversationAppearanceChange.notification)) { note in
+        .onReceive(NotificationCenter.default.publisher(for: ConversationAppearanceChange.notification).receive(on: DispatchQueue.main)) { note in
             if let remote = ConversationAppearanceChange.appearance(in: note, for: viewModel.conversationId) { viewModel.adopt(remote) }
         }
         .onAppear { syncDrafts() }
+        // Un refus (retour arrière) ou l'écho d'un autre appareil remet aussi les curseurs à leur place.
+        .onChange(of: viewModel.appearance) { _ in syncDrafts() }
     }
 
     private func syncDrafts() {
@@ -132,9 +135,7 @@ struct ConversationAppearanceSheet: View {
     private var photoSection: some View {
         section(String(localized: "conversation.appearance.section.photo", defaultValue: "Photo de la conversation", bundle: .main)) {
             if photoCandidates.isEmpty {
-                Text(String(localized: "conversation.appearance.photo.empty", defaultValue: "Aucune photo envoyée dans cette conversation", bundle: .main))
-                    .font(MeeshyFont.relative(MeeshyFont.subheadSize))
-                    .foregroundColor(theme.textMuted)
+                photoEmptyState
             } else {
                 LazyVGrid(columns: columns, spacing: MeeshySpacing.md) {
                     ForEach(photoCandidates, id: \.id) { attachment in
@@ -151,6 +152,9 @@ struct ConversationAppearanceSheet: View {
                             )
                             syncDrafts()
                         }
+                        .onAppear {
+                            if attachment.id == photoCandidates.last?.id, media.listing.canLoadMore { media.loadMore() }
+                        }
                     }
                 }
             }
@@ -158,6 +162,33 @@ struct ConversationAppearanceSheet: View {
                 photoSliders
             }
         }
+    }
+
+    /// Vide, oui — mais seulement une fois la galerie lue : pendant le chargement, hors ligne ou en
+    /// échec, l'état le dit plutôt que d'affirmer qu'aucune photo n'a été envoyée.
+    @ViewBuilder private var photoEmptyState: some View {
+        switch media.listing.phase {
+        case .loading:
+            HStack(spacing: MeeshySpacing.sm) {
+                ProgressView()
+                Text(ConversationMediaHubCopy.loading)
+            }
+            .font(MeeshyFont.relative(MeeshyFont.subheadSize))
+            .foregroundColor(theme.textMuted)
+            .accessibilityElement(children: .combine)
+        case .offline:
+            photoStateText(ConversationMediaHubCopy.offlineEmpty)
+        case .failed:
+            photoStateText(ConversationMediaHubCopy.error)
+        case .loaded:
+            photoStateText(String(localized: "conversation.appearance.photo.empty", defaultValue: "Aucune photo envoyée dans cette conversation", bundle: .main))
+        }
+    }
+
+    private func photoStateText(_ text: String) -> some View {
+        Text(text)
+            .font(MeeshyFont.relative(MeeshyFont.subheadSize))
+            .foregroundColor(theme.textMuted)
     }
 
     private func isSelectedPhoto(_ id: String) -> Bool {
@@ -170,15 +201,24 @@ struct ConversationAppearanceSheet: View {
             Text(String(localized: "conversation.appearance.photo.veil", defaultValue: "Voile", bundle: .main))
                 .font(MeeshyFont.relative(MeeshyFont.subheadSize, weight: .semibold))
             Slider(value: $veilDraft, in: 0...ConversationBackground.photoVeilMax, step: ConversationBackground.photoVeilStep) { editing in
+                draggingSlider = editing
                 if !editing { viewModel.setPhotoVeil(veilDraft) }
             }
             .accessibilityLabel(String(localized: "conversation.appearance.photo.veil", defaultValue: "Voile", bundle: .main))
+            // VoiceOver et le clavier ajustent le curseur sans geste de glissement : la valeur s'enregistre aussitôt.
+            .onChange(of: veilDraft) { value in
+                if !draggingSlider { viewModel.setPhotoVeil(value) }
+            }
             Text(String(localized: "conversation.appearance.photo.blur", defaultValue: "Flou", bundle: .main))
                 .font(MeeshyFont.relative(MeeshyFont.subheadSize, weight: .semibold))
             Slider(value: $blurDraft, in: 0...Double(ConversationBackground.photoBlurMax), step: 1) { editing in
+                draggingSlider = editing
                 if !editing { viewModel.setPhotoBlur(Int(blurDraft.rounded())) }
             }
             .accessibilityLabel(String(localized: "conversation.appearance.photo.blur", defaultValue: "Flou", bundle: .main))
+            .onChange(of: blurDraft) { value in
+                if !draggingSlider { viewModel.setPhotoBlur(Int(value.rounded())) }
+            }
         }
     }
 

@@ -69,6 +69,17 @@ final class ConversationAppearanceViewModelTests: XCTestCase {
         XCTAssertEqual(viewModel.currentPhotoSettings?.blur, 24)
     }
 
+    func test_photoVeil_onTheSameStep_doesNotWriteAgain() async {
+        let (viewModel, service) = makeViewModel(initial: ConversationAppearance(background: .photo(attachmentId: "64b7f0c2a1b2c3d4e5f60718", veil: 0.3, blur: 4)))
+        // Un curseur rendu à sa place (retour arrière, écho) renvoie la valeur qu'il porte déjà, à l'arrondi près.
+        viewModel.setPhotoVeil(0.30000000000000004)
+        viewModel.setPhotoVeil(0.31)
+        viewModel.setPhotoBlur(4)
+        try? await Task.sleep(nanoseconds: 50_000_000)
+        XCTAssertEqual(service.updateConversationPreferencesCallCount, 0)
+        XCTAssertEqual(viewModel.currentPhotoSettings?.veil, 0.3)
+    }
+
     func test_veilAndBlur_areIgnoredWhenTheBackgroundIsNotAPhoto() {
         let (viewModel, service) = makeViewModel()
         viewModel.setPhotoVeil(0.5)

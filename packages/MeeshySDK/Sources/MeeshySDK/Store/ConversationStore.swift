@@ -163,6 +163,7 @@ public actor ConversationStore {
     public func reset() async {
         conversations.removeAll()
         subjects.removeAll()
+        ConversationAppearanceChange.reset()
         // outbox-03 — l'outbox SQLite réhydrate ses rows à chaque boot et les
         // flushe `force: true` sous le token courant : la purge mémoire seule
         // laissait les mutations de A (dont .leave/.deleteForUser) se rejouer
@@ -190,6 +191,7 @@ public actor ConversationStore {
 
     public func hydrate(_ incoming: MeeshyConversation) {
         let conv = incoming.imposingServedArchive()
+        relayAppearance(from: conversations[conv.id], to: conv)
         conversations[conv.id] = conv
         // Seed or refresh the per-conv subject and the list snapshot.
         if let existing = subjects.subject(for: conv.id, initial: { conv }) {
@@ -200,6 +202,7 @@ public actor ConversationStore {
 
     public func hydrateList(_ convs: [MeeshyConversation]) {
         for conv in convs.map({ $0.imposingServedArchive() }) {
+            relayAppearance(from: conversations[conv.id], to: conv)
             conversations[conv.id] = conv
             if let existing = subjects.subject(for: conv.id, initial: { conv }) {
                 existing.send(conv)
@@ -254,6 +257,7 @@ public actor ConversationStore {
             merged = ConversationSyncEngine.reconcileUnread(
                 incoming: merged, local: existing, openConversationId: nil
             ).imposingServedArchive()
+            relayAppearance(from: existing, to: merged)
             conversations[merged.id] = merged
             if let subject = subjects.subject(for: merged.id, initial: { merged }) {
                 subject.send(merged)
@@ -903,6 +907,14 @@ public actor ConversationStore {
         conversations[conv.id] = conv
         subjects.send(conv)
         publishList()
+    }
+
+    /// Un fil OUVERT n'écoute que le relais (#10631) : une liste rafraîchie qui change le fond
+    /// d'une conversation déjà connue le lui dit, sinon il garderait le choix d'avant. Le premier
+    /// amorçage ne relaie rien — aucun fil n'a encore d'état à corriger.
+    private func relayAppearance(from previous: MeeshyConversation?, to next: MeeshyConversation) {
+        guard let previous, previous.userState.appearance != next.userState.appearance else { return }
+        ConversationAppearanceChange.post(conversationId: next.id, appearance: next.userState.appearance ?? .default)
     }
 
     private func publishList() {
