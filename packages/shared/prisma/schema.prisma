@@ -162,6 +162,11 @@ model User {
   avatar                    String?
   /// User profile banner/cover image
   banner                    String?
+  /// Le contour d'avatar ÉQUIPÉ (#10632) : `"<pack>/<item>"` d'un pack `avatar-ring` possédé. Visible des autres.
+  equippedAvatarRing        String?
+  /// La bannière de design ÉQUIPÉE (#10632) : `"<pack>/<item>"` d'un pack `banner` possédé. Non nulle, elle
+  /// prime sur l'image `banner` ; nulle, l'image `banner` (ou le défaut) s'affiche.
+  equippedBanner            String?
   isOnline                  Boolean  @default(false)
   /// Updated on every detectable activity (heartbeat, API request, typing, message send)
   lastActiveAt              DateTime @default(now())
@@ -448,6 +453,7 @@ model User {
   pushTokens               PushToken[]
   stickers                 UserSticker[]
   stickerPacks             UserStickerPack[]
+  packOwnerships           UserPackOwnership[]
 
   // Signal Protocol E2EE Relations
   signalPreKeyBundle SignalPreKeyBundle?
@@ -2778,6 +2784,11 @@ model UserConversationPreferences {
   /// orchestrator. Validated as an enum in the PUT route, not here — never a
   /// key/value store entry (E9).
   readingMode String @default("auto")
+
+  /// L'apparence PERSONNELLE de la conversation (#10631) : `ConversationAppearance`
+  /// (packages/shared/types/conversation-appearance.ts), validée par Zod à l'écriture.
+  /// Absente = Signature + accent calculé. Jamais servie à un autre membre.
+  appearance Json?
 
   /// Monotonic version for optimistic-concurrency resolution between
   /// client optimistic updates and socket-broadcast events. Server
@@ -5975,6 +5986,26 @@ model StickerPackItem {
   pack StickerPack @relation(fields: [packId], references: [id], onDelete: Cascade)
 
   @@unique([packId, key])
+}
+
+/// LA POSSESSION d'un pack payant (#10632). Écrite dans la MÊME transaction que la
+/// ligne `spend` du registre `MeeshLedger` (MeeshSpend.apply) : ni achat sans
+/// possession, ni possession sans achat. Les packs gratuits n'ont pas de ligne.
+model UserPackOwnership {
+  id           String   @id @default(auto()) @map("_id") @db.ObjectId
+  userId       String   @db.ObjectId
+  /// `packChoiceKey(domaine, slug)` — même clé que `UserStickerPack.packSlug`.
+  packKey      String
+  /// Le prix PAYÉ, figé à l'achat (le prix servi peut changer ensuite).
+  priceMeeshes Int
+  /// Le `requestId` de la dépense — relie la possession à sa ligne de registre.
+  requestId    String
+  acquiredAt   DateTime @default(now())
+
+  user User @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  @@unique([userId, packKey])
+  @@index([userId])
 }
 
 /// Le CHOIX d'un utilisateur sur un pack : sans ligne, le défaut du pack
