@@ -386,6 +386,20 @@ if (__SHELL__) {
 }
 
 /**
+ * ET LA COQUE ANDROID CONNAÎT LA SESSION DE LA PAGE (#10662) : le natif accuse
+ * la remise d'un push, refuse un appel et joue un vocal depuis sa notification
+ * sans la page (#10641). Posé à chaque lancement, après la première peinture,
+ * indépendamment du socket et des appels, retiré à la déconnexion.
+ */
+if (__SHELL__) {
+  const poserCredential = (): void => {
+    void import('@/lib/notifications/shell-credential').then(({ startShellCredentialSync }) => startShellCredentialSync());
+  };
+  if (document.readyState === 'complete') poserCredential();
+  else window.addEventListener('load', poserCredential, { once: true });
+}
+
+/**
  * LA CAPTURE D'UN CONTENU (#10508) — dans la coque seulement : un navigateur
  * ne détecte aucune capture. L'écoute se charge après la première peinture ;
  * elle déclare à la télémétrie ce que la coque détecte réellement, puis émet
