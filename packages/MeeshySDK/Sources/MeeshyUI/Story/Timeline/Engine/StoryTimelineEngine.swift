@@ -270,7 +270,7 @@ public final class StoryTimelineEngine {
         do {
             return try await source.loadAsset()
         } catch {
-            try? await Task.sleep(nanoseconds: 500_000_000)
+            try? await Task.sleep(for: .milliseconds(500))
             return try await source.loadAsset()
         }
     }
