@@ -314,8 +314,6 @@ const fr = {
   'trackingLink.opening': 'Ouverture du lien…',
   'trackingLink.dead.title': 'Ce lien n’est plus disponible',
   'trackingLink.dead.body': 'Il a expiré, a été désactivé ou n’a jamais existé.',
-  'accountDeletion.incomplete.title': 'Lien incomplet',
-  'accountDeletion.incomplete.body': 'Ce lien ne porte pas les informations nécessaires. Connectez-vous pour demander la suppression de votre compte.',
   'accountDeletion.confirm.title': 'Confirmer la suppression de votre compte',
   'accountDeletion.confirm.body':
     'Votre compte sera désactivé au terme d’une période de grâce de 30 jours. D’ici là, le lien « Annuler » de l’e-mail vous permet de revenir en arrière.',

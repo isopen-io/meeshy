@@ -24,6 +24,7 @@ import { currentInterfaceLanguage, type InterfaceLanguage } from '@/lib/interfac
 import { useOnline } from '@/lib/net/online';
 import { useSearch } from '@/lib/router';
 
+import { DeletionGuidePage } from './account-deletion-guide';
 import { ActionButton, ActionLink, LinkAlert, LinkPage, LinkText, REACH_FAILURE_BODY, type ActionTone } from './link-page-parts';
 import { PasswordInput } from '@/components/password-input';
 
@@ -42,8 +43,8 @@ import { PasswordInput } from '@/components/password-input';
  *    `DeleteAccountView.swift` — la phrase à la lettre ET le mot de passe
  *    courant. Elle envoie l'e-mail qui porte les liens ci-dessus.
  *
- * Sans jeton ni session, le lien est incomplet : la page le dit, et propose de
- * se connecter pour faire la demande.
+ * Sans jeton ni session, c'est l'adresse que Google Play déclare (#9921) : la
+ * page explique la démarche au visiteur déconnecté (`account-deletion-guide.tsx`).
  */
 
 export type AccountDeletionDeps = {
@@ -70,7 +71,7 @@ export function AccountDeletionPage({
 }: PageProps & { readonly link: DeletionLink | null; readonly signedIn: boolean }) {
   if (link !== null) return <DeletionLinkPage link={link} {...page} />;
   if (signedIn) return <DeletionRequestPage {...page} />;
-  return <IncompleteLinkPage language={page.language} />;
+  return <DeletionGuidePage language={page.language} />;
 }
 
 export default function AccountDeletionScreen() {
@@ -185,24 +186,6 @@ function DeletionDone({ resolution, language }: { readonly resolution: DeletionR
         </>
       }
     >
-      <ActionLink to="list" tone="secondary">
-        {translate(language, 'linkPage.home')}
-      </ActionLink>
-    </LinkPage>
-  );
-}
-
-function IncompleteLinkPage({ language }: { readonly language: InterfaceLanguage }) {
-  return (
-    <LinkPage
-      glyph="warningCircle"
-      tone="brand"
-      title={translate(language, 'accountDeletion.incomplete.title')}
-      body={<LinkText>{translate(language, 'accountDeletion.incomplete.body')}</LinkText>}
-    >
-      <ActionLink to="login" tone="primary">
-        {translate(language, 'linkPage.signIn')}
-      </ActionLink>
       <ActionLink to="list" tone="secondary">
         {translate(language, 'linkPage.home')}
       </ActionLink>
