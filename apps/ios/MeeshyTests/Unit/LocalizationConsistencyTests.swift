@@ -342,6 +342,9 @@ final class LocalizationConsistencyTests: XCTestCase {
         "apps/ios/Meeshy/Features/Main/Services/WidgetDataManager.swift",  // 1
         "apps/ios/Meeshy/Features/Main/ViewModels/NewConversationViewModel.swift",  // 1
         "apps/ios/Meeshy/Features/Main/ViewModels/StoryExportShareViewModel.swift",  // 1
+        // #10654 — le carrousel est devenu une liste : sa clé de rang l'a suivie
+        // (leçon 578).
+        "apps/ios/Meeshy/Features/Main/Views/Bubble/AudioStackView.swift",  // 1
         "apps/ios/Meeshy/Features/Main/Views/ConversationMediaFilmstrip.swift",  // 1
         "apps/ios/Meeshy/Features/Main/Views/HashtagResultsView.swift",  // 1
         "apps/ios/Meeshy/Features/Main/Views/Skeletons/SkeletonFeedPost.swift",  // 1

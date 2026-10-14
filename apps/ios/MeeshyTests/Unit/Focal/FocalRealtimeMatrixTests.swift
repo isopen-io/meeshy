@@ -242,8 +242,8 @@ final class FocalRealtimeMatrixTests: XCTestCase {
             meta: BubbleContent.Meta(timeString: "10:00", deliveryStatus: nil), isMe: false, senderName: "A", callNotice: nil, joinNotice: nil
         )
         XCTAssertNotEqual(
-            FocalAudioRouting.mode(for: content), .carousel,
-            "F07 : un `.mixed` à 3 pistes audio ne doit JAMAIS devenir un carrousel — le carrousel est " +
+            FocalAudioRouting.mode(for: content), .stack,
+            "F07 : un `.mixed` à 3 pistes audio ne doit JAMAIS devenir une pile — la pile est " +
             "réservé au cas `.audio` PUR (garde déjà exercée à 2 pistes par FocalAudioRoutingTests, " +
             "confirmée ici à 3)"
         )

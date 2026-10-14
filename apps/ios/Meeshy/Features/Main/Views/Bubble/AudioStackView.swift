@@ -7,8 +7,14 @@ import MeeshyUI
 /// other, each with its FULL player (waveform, speed/progress chips, karaoke).
 /// No pager, no "i/N" indicator.
 ///
-/// Every track is an attachment of the SAME `Message`, so the message-level
-/// footer is CONSTANT : ONE shared `BubbleFooter` closes the stack.
+/// Every track is an attachment of the SAME `Message`, so timestamp, delivery
+/// and sender are CONSTANT : ONE shared `BubbleFooter` closes the stack. Its
+/// language flags are the UNION of every visible track's languages (a
+/// heterogeneous message can carry one language per voice).
+///
+/// The pager used to say the rank of a track with its dots ; each row now says
+/// it to VoiceOver (« Vocal 2 sur 3 »), as an accessibility container that keeps
+/// the player's own controls reachable.
 ///
 /// Each row reuses `AudioMediaView` → `AudioBubbleRouter` → `AudioPlayerView`
 /// with `footerModel: nil`. Tapping play on a row routes through
@@ -47,12 +53,20 @@ struct AudioStackView: View {
 
     var body: some View {
         VStack(alignment: .leading, spacing: MeeshySpacing.xsPlus) {
-            ForEach(items) { attachment in
+            ForEach(Array(items.enumerated()), id: \.element.id) { index, attachment in
                 row(attachment)
+                    .accessibilityElement(children: .contain)
+                    .accessibilityLabel(Text(Self.rowAccessibilityLabel(index: index, count: items.count)))
             }
 
             BubbleFooter(
-                model: footerModel,
+                model: Self.sharedFooterModel(
+                    base: footerModel,
+                    trackIDs: items.map(\.id),
+                    transcriptions: transcriptions,
+                    translatedAudios: translatedAudios,
+                    activeAudioLanguage: activeAudioLanguage
+                ),
                 actions: footerActions,
                 style: .overlay,
                 isDark: isDark
@@ -69,6 +83,42 @@ struct AudioStackView: View {
                 .padding(.top, MeeshySpacing.xsPlus)
             }
         }
+    }
+
+    // MARK: - Shared footer
+
+    /// The message-level footer with the language flags of EVERY track : each
+    /// track's original (transcription) language, then its translated-audio
+    /// targets, deduplicated in reading order. The active flag follows
+    /// `activeAudioLanguage`. When no track carries per-track language data yet
+    /// (transcription not arrived), the message-level model is kept whole so
+    /// its flags are never blanked out.
+    static func sharedFooterModel(
+        base: BubbleFooterModel,
+        trackIDs: [String],
+        transcriptions: [String: MessageTranscription],
+        translatedAudios: [String: [MessageTranslatedAudio]],
+        activeAudioLanguage: String?
+    ) -> BubbleFooterModel {
+        let codes: [String] = trackIDs.flatMap { id -> [String] in
+            let original: [String] = transcriptions[id].map { [$0.language] } ?? []
+            return original + (translatedAudios[id] ?? []).map(\.targetLanguage)
+        }
+        let ordered = codes.reduce(into: [String]()) { seen, code in
+            if !seen.contains(code) { seen.append(code) }
+        }
+        guard !ordered.isEmpty else { return base }
+        var model = base
+        model.flags = ordered.map { FooterFlag(code: $0, isActive: $0 == activeAudioLanguage) }
+        return model
+    }
+
+    /// « Vocal 2 sur 3 » — the rank the pager's dots used to show, spoken.
+    static func rowAccessibilityLabel(index: Int, count: Int) -> String {
+        let position = index + 1
+        return String(localized: "bubble.audio.stack.position",
+                      defaultValue: "Vocal \(position) sur \(count)",
+                      bundle: .main)
     }
 
     @ViewBuilder

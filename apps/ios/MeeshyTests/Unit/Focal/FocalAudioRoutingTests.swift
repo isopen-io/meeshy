@@ -7,7 +7,7 @@ import MeeshySDK
 /// `FocalAudioRouting.mode(for:)` reproduit `audioIsSoleContent`/
 /// `audioHostsCaption` (`BubbleStandardLayout.swift`, `private`, non
 /// réutilisables — RE-PREUVE en tête de `FocalAudioBlock.swift`) +
-/// `BubbleContent.audioHostsReply` (public) + le garde carrousel (`.audio`
+/// `BubbleContent.audioHostsReply` (public) + le garde de pile (`.audio`
 /// pur, `count > 1`).
 @MainActor
 final class FocalAudioRoutingTests: XCTestCase {
@@ -70,25 +70,25 @@ final class FocalAudioRoutingTests: XCTestCase {
         XCTAssertEqual(FocalAudioRouting.mode(for: makeContent(text: "hello")), .none)
     }
 
-    // MARK: - .carousel
+    // MARK: - .stack
 
     func test_pureAudioMultiTrack_isStack() {
         let content = makeContent(attachments: .audio([audioAttachment(id: "a1"), audioAttachment(id: "a2")]))
-        XCTAssertEqual(FocalAudioRouting.mode(for: content), .carousel)
+        XCTAssertEqual(FocalAudioRouting.mode(for: content), .stack)
     }
 
     /// Garde : un `.mixed` multi-audio retombe au traitement standard —
-    /// PAS carrousel (miroir de `BubbleStandardLayout.swift:766-769`).
+    /// PAS une pile (miroir de `BubbleStandardLayout.swift:766-769`).
     func test_mixedMultiTrackAudio_isNotStack() {
         let content = makeContent(attachments: .mixed(
             visual: [], audio: [audioAttachment(id: "a1"), audioAttachment(id: "a2")], nonMedia: []
         ))
-        XCTAssertNotEqual(FocalAudioRouting.mode(for: content), .carousel)
+        XCTAssertNotEqual(FocalAudioRouting.mode(for: content), .stack)
     }
 
     func test_singleTrackAudio_isNeverStack() {
         let content = makeContent(attachments: .audio([audioAttachment(id: "a1")]))
-        XCTAssertNotEqual(FocalAudioRouting.mode(for: content), .carousel)
+        XCTAssertNotEqual(FocalAudioRouting.mode(for: content), .stack)
     }
 
     // MARK: - .soleWithFooter
@@ -201,7 +201,7 @@ final class FocalAudioRoutingTests: XCTestCase {
 
     func test_audioStackView_rendersEachTrackOnItsOwnRow_withoutPagerOrIndicator() throws {
         let source = try bubbleSource("AudioStackView.swift")
-        XCTAssertTrue(source.contains("ForEach(items)"), "chaque vocal a sa ligne")
+        XCTAssertTrue(source.contains("ForEach(Array(items.enumerated())"), "chaque vocal a sa ligne")
         XCTAssertFalse(source.contains("AdaptiveHorizontalPager"), "plus aucun pager horizontal")
         XCTAssertFalse(source.contains("pageIndicator"), "plus d'indicateur i/N")
         XCTAssertFalse(source.contains("BubbleInlinePagingPreferenceKey"), "plus de swipe détourné")

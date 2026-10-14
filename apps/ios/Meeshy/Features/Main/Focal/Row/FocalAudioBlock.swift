@@ -235,10 +235,10 @@ struct FocalAudioBlock: View, Equatable {
                 textTranslations: [],
                 allAudioItems: allAudioItems,
                 mentionDisplayNames: mentionDisplayNames,
-                // Le carrousel garde `.empty` (param non-optionnel) : ses
-                // drapeaux par-piste désignent la PAGE visible d'un message
-                // multi-pistes — une information de navigation, pas le
-                // basculeur de version retiré du chemin standalone.
+                // La pile garde `.empty` (param non-optionnel) : son pied ne
+                // porte que les langues de TOUTES ses pistes
+                // (`AudioStackView.sharedFooterModel`), pas le basculeur de
+                // version retiré du chemin standalone.
                 footerModel: .empty,
                 footerActions: .none,
                 activeAudioLanguage: activeAudioLanguage,
