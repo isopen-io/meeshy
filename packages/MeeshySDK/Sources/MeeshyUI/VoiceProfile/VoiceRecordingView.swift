@@ -277,7 +277,9 @@ public struct VoiceRecordingView<Recorder: AudioRecordingProviding>: View {
                         .foregroundColor(.secondary)
 
                     Button {
-                        recordedSamples.remove(at: index)
+                        // Par identité : deux croix touchées avant le re-rendu visaient un indice disparu, ou
+                        // l'échantillon voisin.
+                        recordedSamples.removeAll { $0.id == sample.id }
                     } label: {
                         Image(systemName: "xmark.circle.fill")
                             .font(.system(size: MeeshyIconSize.md))
