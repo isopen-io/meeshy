@@ -77,6 +77,20 @@ extension ConversationListView {
 
     @ViewBuilder
     func conversationContextMenu(for conversation: Conversation) -> some View {
+        // Sa propre fenêtre (iPad) : écrire à cette personne ou à ce groupe pendant qu'une autre conversation
+        // reste ouverte dans la fenêtre principale.
+        if DetachedWindowOpener.shared.isAvailable {
+            Button {
+                HapticFeedback.light()
+                DetachedWindowOpener.shared.open(.conversation(id: conversation.id))
+            } label: {
+                Label(
+                    String(localized: "window.detach.conversation", defaultValue: "Ouvrir dans une nouvelle fenêtre", bundle: .main),
+                    systemImage: "macwindow.badge.plus"
+                )
+            }
+        }
+
         // Pin/Unpin
         Button {
             HapticFeedback.medium()

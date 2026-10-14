@@ -135,6 +135,9 @@ struct MeeshyApp: App {
 
     var body: some Scene {
         WindowGroup {
+            // UNE fenêtre principale : une seconde copie ouverte par le système renvoie vers la première
+            // (`MainWindowGate`, AdaptiveRootView.swift).
+            MainWindowGate {
             SystemThemeDetector {
                 ZStack {
                     Group {
@@ -946,7 +949,19 @@ struct MeeshyApp: App {
                     UILanguageOverride.refreshNotificationLanguage()
                 }
             }
+            }
         }
+
+        // Les fenêtres DÉTACHÉES (iPad) : une conversation, ou le fil de réels, à côté de la fenêtre principale.
+        WindowGroup(id: DetachedWindowOpener.sceneId, for: DetachedWindowContent.self) { $content in
+            DetachedWindowView(content: content)
+                .environment(\.mentionContactsProvider, MentionContactsAudienceBridge())
+                .feedbackToastOverlay()
+                .environmentObject(authManager)
+                .environmentObject(deepLinkRouter)
+                .preferredColorScheme(theme.preferredColorScheme)
+        }
+        .handlesExternalEvents(matching: [DetachedWindowOpener.activityIdentifier])
     }
 
     // MARK: - Test seam (DEBUG)

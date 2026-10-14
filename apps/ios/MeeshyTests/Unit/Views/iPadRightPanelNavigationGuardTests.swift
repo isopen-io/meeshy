@@ -384,3 +384,92 @@ final class TemporaryMediaSweeperTests: XCTestCase {
         XCTAssertTrue(FileManager.default.fileExists(atPath: keepFile.path))
     }
 }
+
+/// Les fenêtres de Meeshy sur iPad (décision du porteur, 2026-10-14) : UNE fenêtre principale — une seconde copie
+/// renvoie vers la première —, et des fenêtres DÉTACHÉES pour une conversation ou pour les réels.
+@MainActor
+final class DetachedWindowsTests: XCTestCase {
+
+    private func appSource(_ path: String) throws -> String {
+        let root = URL(fileURLWithPath: "\(#filePath)")
+            .deletingLastPathComponent().deletingLastPathComponent()
+            .deletingLastPathComponent().deletingLastPathComponent()
+            .appendingPathComponent("Meeshy")
+        return try String(contentsOf: root.appendingPathComponent(path), encoding: .utf8)
+    }
+
+    func test_detachedContent_survivesSceneRestoration() throws {
+        for content in [DetachedWindowContent.conversation(id: "c1"), .reels(startId: "r1"), .reels(startId: nil)] {
+            let data = try JSONEncoder().encode(content)
+            XCTAssertEqual(try JSONDecoder().decode(DetachedWindowContent.self, from: data), content)
+        }
+    }
+
+    func test_theAppHasOneGatedMainWindow_andADetachedScene() throws {
+        let app = try appSource("MeeshyApp.swift")
+        XCTAssertTrue(app.contains("MainWindowGate {"), "la fenêtre principale passe par sa porte d'unicité")
+        XCTAssertTrue(app.contains("WindowGroup(id: DetachedWindowOpener.sceneId, for: DetachedWindowContent.self)"))
+        let order = try XCTUnwrap(app.range(of: "MainWindowGate {")).lowerBound
+            < (try XCTUnwrap(app.range(of: "WindowGroup(id: DetachedWindowOpener.sceneId")).lowerBound)
+        XCTAssertTrue(order, "la scène principale vient EN PREMIER : c'est elle qu'iPadOS ouvre par défaut")
+    }
+
+    func test_conversationsAndReels_offerTheirOwnWindow() throws {
+        let menu = try appSource("Features/Main/Views/ConversationListView+Overlays.swift")
+        XCTAssertTrue(menu.contains("DetachedWindowOpener.shared.open(.conversation(id: conversation.id))"))
+        let feed = try appSource("Features/Main/Views/FeedView.swift")
+        XCTAssertTrue(feed.contains("DetachedWindowOpener.shared.open(.reels(startId: nil))"))
+    }
+
+    func test_aDraggedConversation_carriesItsId_andItsWindowActivity() {
+        let provider = ConversationDragItemProvider(conversationId: "c1", title: "Équipe", opensWindow: true)
+        let types = provider.registeredTypeIdentifiers
+        XCTAssertTrue(types.contains { $0.contains("text") }, "l'id, qu'un en-tête de catégorie reçoit")
+        XCTAssertTrue(types.contains { $0.contains("useractivity") || $0.contains("user-activity") || $0.contains("activity") },
+                      "l'activité qui en fait une fenêtre au bord de l'écran : \(types)")
+        let flat = ConversationDragItemProvider(conversationId: "c1", title: "Équipe", opensWindow: false)
+        XCTAssertFalse(flat.registeredTypeIdentifiers.contains { $0.contains("activity") }, "sans fenêtres multiples, l'id seul")
+    }
+
+    func test_theEndOfADragSession_isAnnounced() {
+        var provider: ConversationDragItemProvider? = ConversationDragItemProvider(conversationId: "c1", title: "x", opensWindow: false)
+        let token = provider?.token
+        let ended = expectation(forNotification: .conversationDragDidEnd, object: nil) { note in
+            (note.object as? NSUUID).map { $0 as UUID } == token
+        }
+        provider = nil
+        wait(for: [ended], timeout: 2)
+    }
+
+    func test_draggingAConversation_foldsTheCategories_andRestoresThem() throws {
+        let list = try appSource("Features/Main/Views/ConversationListView.swift")
+        XCTAssertTrue(list.contains("sectionsBeforeDrag = expandedSections"), "les catégories dépliées sont retenues")
+        XCTAssertTrue(list.contains("expandedSections = []"), "toutes se replient pendant le glisser")
+        XCTAssertTrue(list.contains("var restored = before.union(expandedSections)"), "elles se redéplient au dépôt ou à l'annulation")
+        XCTAssertTrue(list.contains("defer { endConversationDrag(expanding: sectionId) }"), "le dépôt redéplie, et ouvre la catégorie qui reçoit")
+        XCTAssertTrue(list.contains("dragOriginSectionId == group.section.id"), "la catégorie d'origine se marque")
+        XCTAssertTrue(list.contains("publisher(for: .conversationDragDidEnd)"), "l'annulation redéplie")
+        XCTAssertTrue(list.contains("if let token, token != pendingDrag?.token { return }"), "la fin d'un AUTRE glisser est ignorée")
+        XCTAssertTrue(list.contains("delegate: ConversationListDragWatch(onEnter: collapseForConversationDrag)"),
+                      "le repli attend que le doigt bouge : un appui long qui finit en menu ne replie rien")
+    }
+
+    func test_callsAlwaysShowInTheMainWindow() throws {
+        let presenter = try appSource("Features/Main/Views/RootLayers/CallWindowPresenter.swift")
+        XCTAssertTrue(presenter.contains("guard let scene = CallWindowScene.target(activating: true)"),
+                      "l'écran d'appel vise la fenêtre principale et la ramène au premier plan")
+        XCTAssertTrue(presenter.contains("guard let scene = CallWindowScene.target() else"),
+                      "le point de retour vise la fenêtre principale sans voler le focus")
+        XCTAssertFalse(presenter.contains("guard let scene = DeviceLayout.activeWindowScene"))
+    }
+
+    func test_aDetachedWindow_mountsNoRoot() throws {
+        let host = try appSource("Features/Main/Views/AdaptiveRootView.swift")
+        let start = try XCTUnwrap(host.range(of: "struct DetachedWindowView: View {"))
+        let end = try XCTUnwrap(host.range(of: "enum DetachedConversationResolver"))
+        let body = host[start.upperBound..<end.lowerBound]
+        for root in ["iPadRootView(", "RootView(", "startRootServices", "RootIntentRoutingLayer("] {
+            XCTAssertFalse(body.contains(root), "une fenêtre détachée ne monte pas \(root) : la fenêtre principale tient les services")
+        }
+    }
+}
