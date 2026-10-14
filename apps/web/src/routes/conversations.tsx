@@ -33,7 +33,7 @@ import { effectiveEngagementOf } from '@/lib/api/conversation-engagement';
 import { useLiveEngagements } from '@/lib/view/use-conversation-engagement';
 import { resolveViewer } from '@/lib/api/viewer';
 import { conversationStore, effectiveFlagsOf, effectiveUnreadOf } from '@/lib/conversation-store';
-import { applyFilter, emptinessOf, FILTER_LABELS, LIST_FILTERS, orderConversations, type ListFilter } from '@/lib/lens/filters';
+import { applyFilter, emptinessOf, filterLabel, LIST_FILTERS, orderConversations, type ListFilter } from '@/lib/lens/filters';
 import { memoriserLienParLecteur, partagerInvitationParrainee, retourInvitationParrainee } from '@/lib/view/invitation';
 import { useStoryRailProps } from '@/lib/view/use-story-rail';
 import { QuickActions, type QuickAction } from '@/components/quick-actions';
@@ -51,6 +51,8 @@ import { PULL_THRESHOLD, pullTransform } from '@/lib/view/pull-to-refresh';
 import { usePullToRefresh } from '@/lib/view/use-pull-to-refresh';
 import { useReaderLanguages } from '@/lib/view/use-reader';
 import { useMinute } from '@/lib/view/use-minute';
+import { rowMenuText } from '@/lib/i18n-row-menu-catalog';
+import { currentInterfaceLanguage } from '@/lib/interface-language';
 
 /**
  * L'ECRAN DE LISTE.
@@ -241,6 +243,7 @@ const ACTIONS_DE_DEMARRAGE: readonly QuickAction[] = [
 export default function ConversationsScreen() {
   const [filter, setFilter] = useState<ListFilter>('all');
   const [search, setSearch] = useState('');
+  const interfaceLanguage = currentInterfaceLanguage();
   useDismissRowSwipeOnViewChange(`${filter}\u0001${search}`);
   const frame = useRef<HTMLUListElement | null>(null);
 
@@ -624,7 +627,7 @@ export default function ConversationsScreen() {
           <StoryRail ref={observeGrandRail} variant="grande" inert={pinned} {...railProps} />
         </li>
         <li className="-mx-2 shrink-0">
-          <nav aria-label="Filtres" className="scrollbar-none overflow-x-auto">
+          <nav aria-label={rowMenuText(interfaceLanguage, 'listFilter.nav')} className="scrollbar-none overflow-x-auto">
             <ul className="flex gap-2 px-4 py-1.5">
               {LIST_FILTERS.map((f) => {
                 const active = f === filter;
@@ -645,7 +648,7 @@ export default function ConversationsScreen() {
                             }
                       }
                     >
-                      {FILTER_LABELS[f]}
+                      {filterLabel(f, interfaceLanguage)}
                     </button>
                   </li>
                 );
@@ -766,7 +769,7 @@ export default function ConversationsScreen() {
           >
             <Glyph name="magnifyingGlass" size={40} style={{ color: 'var(--color-ios-ink-3)' }} />
             <p className="text-body" style={{ color: 'var(--color-ios-ink)' }}>
-              Aucune conversation ne correspond à « {search || FILTER_LABELS[filter]} ».
+              Aucune conversation ne correspond à « {search || filterLabel(filter, interfaceLanguage)} ».
             </p>
             <button
               type="button"

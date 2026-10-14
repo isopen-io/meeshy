@@ -3,7 +3,10 @@ import { sortConversations } from '@meeshy/shared/utils/conversation-sections';
 import { effectiveFlagsOf, effectiveUnreadOf, type ConversationOverride } from '@/lib/conversation-store';
 import { isGroup, titleOf } from '@/lib/view/conversation';
 import { listRankField } from '@/lib/api/list-preview';
+import { reactionOf } from '@/lib/api/preferences';
 import type { Conversation } from '@/lib/api/types';
+import { rowMenuText, type RowMenuCatalogKey } from '@/lib/i18n-row-menu-catalog';
+import type { InterfaceLanguage } from '@/lib/interface-language';
 
 /**
  * LES FILTRES DE LA LISTE (#5559 §5.5) — remplacent le tableau littéral de
@@ -19,19 +22,26 @@ import type { Conversation } from '@/lib/api/types';
  * recherche matche le nom AFFICHÉ (`titleOf`, qui porte déjà `customName`
  * depuis #5559 §5-view), jamais un champ brut.
  */
-export type ListFilter = 'all' | 'unread' | 'groups' | 'directs' | 'pinned' | 'archived';
+export type ListFilter = 'all' | 'unread' | 'favorites' | 'groups' | 'directs' | 'pinned' | 'archived';
 
-/** La PROSE reste en français (D-13) — ce sont les libellés des chips. */
-export const FILTER_LABELS: Record<ListFilter, string> = {
-  all: 'Tous',
-  unread: 'Non lus',
-  groups: 'Groupes',
-  directs: 'Directs',
-  pinned: 'Épinglés',
-  archived: 'Archivées',
+/**
+ * Les libellés des puces, dans la langue d'interface (#10593) — mots d'iOS
+ * (`conversation.filter.*`). « Favoris » suit « Non lus » : ce sont les deux
+ * filtres d'ÉTAT d'iOS (`ConversationFilterComposition.stateFilters`).
+ */
+const FILTER_LABEL_KEYS: Readonly<Record<ListFilter, RowMenuCatalogKey>> = {
+  all: 'listFilter.all',
+  unread: 'listFilter.unread',
+  favorites: 'listFilter.favorites',
+  groups: 'listFilter.groups',
+  directs: 'listFilter.directs',
+  pinned: 'listFilter.pinned',
+  archived: 'listFilter.archived',
 };
 
-export const LIST_FILTERS: readonly ListFilter[] = ['all', 'unread', 'groups', 'directs', 'pinned', 'archived'];
+export const filterLabel = (filter: ListFilter, language: InterfaceLanguage): string => rowMenuText(language, FILTER_LABEL_KEYS[filter]);
+
+export const LIST_FILTERS: readonly ListFilter[] = ['all', 'unread', 'favorites', 'groups', 'directs', 'pinned', 'archived'];
 
 type Overrides = Readonly<Record<string, ConversationOverride>>;
 
@@ -63,6 +73,9 @@ export function applyFilter(params: {
       return nonArchived;
     case 'unread':
       return nonArchived.filter((c) => effectiveUnreadOf(c, overrides) > 0);
+    // `.favoris` d'iOS (`ConversationListViewModel.swift:617`) : un emoji posé.
+    case 'favorites':
+      return nonArchived.filter((c) => reactionOf(c) !== undefined);
     case 'groups':
       return nonArchived.filter((c) => isGroup(c));
     case 'directs':
