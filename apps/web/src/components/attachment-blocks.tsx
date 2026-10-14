@@ -14,6 +14,7 @@ import { attachmentOpenReport } from '@/lib/view/attachment-open-report';
 import { fileBadgeOf } from '@/lib/view/file-badge';
 import '@/styles/conversation-look.css';
 import { electAudio, type MediaCarrier } from '@/lib/view/media';
+import { registerNowPlaying, voiceNowPlayingTags } from '@/lib/view/now-playing';
 import { partitionAttachments, type MediaGridFrame } from '@/lib/view/media-grid-layout';
 import { waveformOf } from '@/lib/view/message';
 import { useMediaPlayback } from '@/lib/view/use-media-playback';
@@ -104,14 +105,29 @@ const KARAOKE_STYLE: Readonly<Record<KaraokeTone, Readonly<Record<string, string
   },
 };
 
+/** L'adresse ABSOLUE d'une image, que la coque télécharge hors de la page (#10624). */
+function absoluteMediaUrl(url: string): string {
+  const src = attachmentSrc(url);
+  try {
+    return new URL(src, typeof location !== 'undefined' ? location.href : undefined).href;
+  } catch {
+    return src;
+  }
+}
+
 function VoiceAttachment({
   attachment: received,
   languages,
   displayLanguage,
   fallbackLanguage,
   onExpand,
+  carrier,
+  message,
 }: {
   readonly attachment: Attachment;
+  /** L'auteur et la date du vocal — décrits à la carte de lecture de la coque (#10624). */
+  readonly carrier?: MediaCarrier | undefined;
+  readonly message?: Message | undefined;
   readonly languages: readonly string[];
   readonly displayLanguage?: string;
   readonly fallbackLanguage: string;
@@ -156,6 +172,23 @@ function VoiceAttachment({
      en est le seul moteur : la bulle reflète sa lecture et la commande, comme
      la bulle iOS reflète `ConversationAudioCoordinator`. Jamais un second son. */
   const carried = useCarriedPlayback(attachment.id);
+  /* LA CARTE DE LECTURE DE LA COQUE DIT CE VOCAL (#10624) — l'auteur, la
+     conversation, la date et l'avatar, enregistrés par id de pièce : la coque
+     les relit sur l'`<audio>` qui joue (`data-np-attachment`), ici comme dans
+     la visionneuse et le mini-lecteur qui rejouent ce vocal. */
+  const thread = useContext(ThreadMediaContext);
+  const tags = voiceNowPlayingTags({
+    carrier,
+    conversationTitle: thread?.conversationTitle,
+    conversationAvatarUrl: thread?.conversationAvatarUrl,
+    message,
+    attachment,
+    resolve: absoluteMediaUrl,
+  });
+  useEffect(() => {
+    registerNowPlaying(attachment.id, tags);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [attachment.id, tags.sender, tags.conversation, tags.sentAtMs, tags.artworkUrl, tags.protected]);
   const { bind, reportedFraction } = own;
   const { status, progress, toggle, position, duration, seek, rate, setRate } = carried ?? own;
   const uiLanguage = currentInterfaceLanguage();
@@ -280,6 +313,7 @@ function VoiceAttachment({
         key={track.url}
         ref={bindAudio}
         preload="none"
+        data-np-attachment={attachment.id}
         data-track-language={track.language}
         className="hidden"
         {...(track.url === '' ? {} : { src: attachmentSrc(track.url) })}
@@ -294,7 +328,7 @@ function VoiceAttachment({
           style={{ background: 'linear-gradient(135deg, var(--accent), color-mix(in srgb, var(--accent) 70%, transparent))' }}
           // « Lire l'audio » (`media.audio.play`, `AudioPlayerView.swift:1278`)
           // — vocabulaire iOS REPRIS tel quel (§1.6 de la spécification #5805).
-          aria-label={isPlaying ? 'Mettre en pause' : "Lire l'audio"}
+          aria-label={translate(currentInterfaceLanguage(), isPlaying ? 'media.audio.pause' : 'media.audio.play')}
         >
           {isPlaying ? (
             <GlyphSvg glyph={MEDIA_GLYPHS.pause} size={13} className="text-ios-on-brand" />
@@ -439,7 +473,7 @@ function VoiceAttachment({
       {isError ? (
         <div data-audio-status="error" className="flex items-center">
           <button type="button" onClick={toggle} className="text-mini underline" style={{ minHeight: 44 }}>
-            Lecture impossible — Réessayer
+            {translate(currentInterfaceLanguage(), 'media.playback.failed')}
           </button>
         </div>
       ) : null}
@@ -593,6 +627,8 @@ export function Attachments({
             languages={languages}
             fallbackLanguage={fallbackLanguage}
             onExpand={() => setOpenAudioIndex(i)}
+            carrier={carrier}
+            message={message}
             {...(displayLanguage !== undefined ? { displayLanguage } : {})}
           />
         ),

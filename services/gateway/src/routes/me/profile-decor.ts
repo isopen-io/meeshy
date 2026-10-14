@@ -1,0 +1,84 @@
+/**
+ * `PUT /api/v1/me/profile-decor` (#10632, § 10.2) — équiper un contour d'avatar
+ * et/ou une bannière de design. `{ avatarRing?, banner? }` : champ absent =
+ * inchangé, `null` = retiré. Validation par `validateProfileDecorWrite`
+ * (domaine, existence, possession → 403 `PACK_NOT_OWNED`, loi des cadres →
+ * 403 `FRAME_USAGE_MISMATCH`). Diffusé en `profile:decor-updated` sur `user:<id>`
+ * (mes autres appareils). La lecture se fait par `GET /me` et le profil public.
+ */
+import type { FastifyInstance, FastifyReply, FastifyRequest } from 'fastify';
+import { errorResponseSchema } from '@meeshy/shared/types/api-schemas';
+import { SERVER_EVENTS } from '@meeshy/shared/types/socketio-events';
+
+import type { UnifiedAuthRequest } from '../../middleware/auth';
+import { PACK_NOT_OWNED_CODE } from '../pack-routes';
+import { servedProfileDecor, servedProfileDecorItemJsonSchema, validateProfileDecorWrite } from '../../services/appearance/profileDecor';
+import { startupPackIndex, type PackIndex } from '../../services/packs/PackIndex';
+import { AUTH_ERROR_CODES } from '../../utils/auth-error-codes';
+import { logError } from '../../utils/logger';
+import { sendError, sendForbidden, sendInternalError, sendSuccess, sendUnauthorized } from '../../utils/response.js';
+import { broadcastToUser } from '../../utils/socket-broadcast';
+
+export type ProfileDecorRoutesOptions = { readonly index?: PackIndex };
+
+const refJsonSchema = {
+  type: 'object',
+  nullable: true,
+  required: ['pack', 'item'],
+  additionalProperties: false,
+  properties: { pack: { type: 'string', maxLength: 24 }, item: { type: 'string', maxLength: 24 } },
+} as const;
+
+
+export const servedProfileDecorJsonSchema = {
+  type: 'object',
+  properties: { avatarRing: servedProfileDecorItemJsonSchema, banner: servedProfileDecorItemJsonSchema },
+} as const;
+
+type Body = { avatarRing?: { pack: string; item: string } | null; banner?: { pack: string; item: string } | null };
+
+export default async function profileDecorRoutes(fastify: FastifyInstance, options: ProfileDecorRoutesOptions = {}) {
+  fastify.put<{ Body: Body }>(
+    '/profile-decor',
+    {
+      onRequest: [fastify.authenticate],
+      schema: {
+        description: 'Équipe un contour d’avatar et/ou une bannière de design possédés (#10632). Champ absent = inchangé, null = retiré.',
+        tags: ['me', 'packs'],
+        summary: 'Equip profile decor',
+        body: { type: 'object', additionalProperties: false, properties: { avatarRing: refJsonSchema, banner: refJsonSchema } },
+        response: {
+          200: { type: 'object', properties: { success: { type: 'boolean' }, data: servedProfileDecorJsonSchema } },
+          400: errorResponseSchema,
+          401: errorResponseSchema,
+          403: errorResponseSchema,
+          500: errorResponseSchema,
+        },
+      },
+    },
+    async (request: FastifyRequest<{ Body: Body }>, reply: FastifyReply) => {
+      const authContext = (request as UnifiedAuthRequest).authContext;
+      if (!authContext?.isAuthenticated || !authContext.registeredUser) return sendUnauthorized(reply, 'Authentication required', { code: AUTH_ERROR_CODES.UNAUTHORIZED });
+      const userId = authContext.userId;
+      const index = options.index ?? startupPackIndex();
+      try {
+        const outcome = await validateProfileDecorWrite({ prisma: fastify.prisma, index, userId, input: request.body ?? {} });
+        if (outcome.kind === 'invalid') return sendError(reply, 400, 'Invalid profile decor', { code: 'INVALID_PROFILE_DECOR' });
+        if (outcome.kind === 'not-owned') return sendForbidden(reply, 'Pack not owned', { code: PACK_NOT_OWNED_CODE });
+        if (outcome.kind === 'usage-mismatch') return sendForbidden(reply, 'This frame cannot be used on an avatar', { code: 'FRAME_USAGE_MISMATCH' });
+
+        const row = await fastify.prisma.user.update({
+          where: { id: userId },
+          data: outcome.data,
+          select: { equippedAvatarRing: true, equippedBanner: true },
+        });
+        const decor = servedProfileDecor(index, row);
+        broadcastToUser(fastify, userId, SERVER_EVENTS.PROFILE_DECOR_UPDATED, { userId, decor, at: new Date().toISOString() });
+        return sendSuccess(reply, decor);
+      } catch (error) {
+        logError(fastify.log, 'Error equipping profile decor:', error);
+        return sendInternalError(reply, 'Error equipping profile decor');
+      }
+    },
+  );
+}

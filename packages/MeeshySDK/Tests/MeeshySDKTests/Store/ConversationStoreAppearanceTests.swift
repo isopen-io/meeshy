@@ -1,0 +1,99 @@
+import XCTest
+@testable import MeeshySDK
+
+/// #10631 — le fond et l'accent PERSONNELS d'une conversation voyagent avec les
+/// préférences : liste, écho socket d'un autre appareil, remise à zéro.
+final class ConversationStoreAppearanceTests: XCTestCase {
+
+    private func makeStore() -> ConversationStore {
+        let path = FileManager.default.temporaryDirectory.appendingPathComponent("store-outbox-\(UUID().uuidString).db").path
+        return ConversationStore(
+            preferenceService: MockPreferenceWriter(),
+            conversationService: MockLifecycleWriter(),
+            outbox: ConversationStateOutbox(dbPath: path)
+        )
+    }
+
+    private func makeConv(version: Int = 5) -> MeeshyConversation {
+        MeeshyConversation(
+            id: "conv-1", identifier: "conv-1", type: .direct,
+            lastMessageAt: Date(timeIntervalSince1970: 1_700_000_000),
+            createdAt: Date(timeIntervalSince1970: 1_700_000_000),
+            updatedAt: Date(timeIntervalSince1970: 1_700_000_000),
+            userState: ConversationUserState(version: version)
+        )
+    }
+
+    private func event(version: Int, reset: Bool = false, appearance: ConversationAppearance?) -> UserPreferencesUpdatedRemote {
+        UserPreferencesUpdatedRemote(
+            userId: "u1", conversationId: "conv-1", version: version, reset: reset,
+            preferences: reset ? nil : RemotePreferencesPayload(
+                isPinned: false, isMuted: false, mentionsOnly: false, isArchived: false, tags: [],
+                categoryId: nil, orderInCategory: nil, customName: nil, reaction: nil,
+                deletedForUserAt: nil, clearHistoryBefore: nil, appearance: appearance
+            )
+        )
+    }
+
+    func test_applyRemote_withAppearance_storesItOnTheUserState() async {
+        let store = makeStore()
+        await store.hydrate(makeConv())
+        let chosen = ConversationAppearance(background: .solid(color: "sable"), accent: "lagon", animate: true)
+
+        await store.applyRemote(event(version: 6, appearance: chosen))
+
+        let after = await store.conversation(id: "conv-1")!
+        XCTAssertEqual(after.userState.appearance, chosen)
+        XCTAssertEqual(ConversationAppearanceChange.latest(for: "conv-1"), chosen)
+    }
+
+    func test_applyRemote_staleVersion_keepsTheCurrentAppearance() async {
+        let store = makeStore()
+        var conv = makeConv(version: 9)
+        conv.userState.appearance = ConversationAppearance(background: .solid(color: "azur"))
+        await store.hydrate(conv)
+
+        await store.applyRemote(event(version: 3, appearance: ConversationAppearance(background: .solid(color: "sable"))))
+
+        let after = await store.conversation(id: "conv-1")!
+        XCTAssertEqual(after.userState.appearance?.background, .solid(color: "azur"))
+    }
+
+    func test_applyRemote_reset_returnsToSignature() async {
+        let store = makeStore()
+        var conv = makeConv()
+        conv.userState.appearance = ConversationAppearance(background: .solid(color: "azur"), accent: "corail")
+        await store.hydrate(conv)
+
+        await store.applyRemote(event(version: 6, reset: true, appearance: nil))
+
+        let after = await store.conversation(id: "conv-1")!
+        XCTAssertNil(after.userState.appearance)
+    }
+
+    func test_apiPreferencesDecoding_readsAppearance_andIgnoresAFutureKind() throws {
+        let json = #"{"isPinned":false,"appearance":{"v":1,"background":{"kind":"lottie-wall"},"accent":"prune","animate":true}}"#
+        let prefs = try JSONDecoder().decode(APIConversationPreferences.self, from: Data(json.utf8))
+        XCTAssertEqual(prefs.appearance?.background, .signature)
+        XCTAssertEqual(prefs.appearance?.accent, "prune")
+    }
+
+    func test_apiPreferencesDecoding_withoutAppearance_isNil() throws {
+        let prefs = try JSONDecoder().decode(APIConversationPreferences.self, from: Data(#"{"isPinned":true}"#.utf8))
+        XCTAssertNil(prefs.appearance)
+    }
+
+    func test_updateRequest_encodesAppearance_andOmitsItWhenUnset() throws {
+        let with = try JSONEncoder().encode(UpdateConversationPreferencesRequest(appearance: .default))
+        XCTAssertTrue(String(decoding: with, as: UTF8.self).contains(#""appearance":{"#))
+        let without = try JSONEncoder().encode(UpdateConversationPreferencesRequest(isPinned: true))
+        XCTAssertFalse(String(decoding: without, as: UTF8.self).contains("appearance"))
+    }
+
+    func test_preferencesGrafted_keepsTheLocalAppearance() {
+        var local = ConversationUserState()
+        local.appearance = ConversationAppearance(background: .solid(color: "olive"))
+        let merged = local.preferencesGrafted(onto: ConversationUserState())
+        XCTAssertEqual(merged.appearance, local.appearance)
+    }
+}

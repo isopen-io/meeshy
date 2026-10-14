@@ -27,8 +27,12 @@ import { isRegisteredUser, type UnifiedAuthRequest } from '../middleware/auth';
 import { permissionsService } from '../services/admin/permissions.service';
 import type { PackCatalog, PackInstallationBroadcast, PackViewer } from '../services/packs/PackCatalog';
 import { logError } from '../utils/logger';
-import { sendConflict, sendForbidden, sendInternalError, sendNotFound, sendSuccess } from '../utils/response.js';
+import { sendConflict, sendError, sendForbidden, sendInternalError, sendNotFound, sendSuccess } from '../utils/response.js';
+import { gameRateLimitConfig, refusalResponse } from './me/game-shared';
 import { broadcastToUser } from '../utils/socket-broadcast';
+
+/** Installer ou choisir un pack payant qu'on ne possède pas (#10632, § 4.2). */
+export const PACK_NOT_OWNED_CODE = 'PACK_NOT_OWNED';
 
 export const packEnvelope = (data: object) => ({ type: 'object', properties: { success: { type: 'boolean' }, data } }) as const;
 
@@ -154,6 +158,7 @@ export function registerPackRoutes<S, D extends S>(fastify: FastifyInstance, spe
     guard(`[${installed ? 'PUT' : 'DELETE'} ${basePath}/:slug/install]`, async (request: PackSlugRequest, reply, viewer) => {
       const outcome = await catalog.setInstalled(viewer.userId, request.params.slug, installed);
       if (outcome.kind === 'done') return sendSuccess(reply, outcome.pack);
+      if (outcome.kind === 'not-owned') return sendForbidden(reply, 'Pack not owned', { code: PACK_NOT_OWNED_CODE });
       if (outcome.kind === 'not-removable' && spec.notRemovable !== null) {
         return sendConflict(reply, spec.notRemovable.message, { code: spec.notRemovable.code });
       }
@@ -173,4 +178,68 @@ export function registerPackRoutes<S, D extends S>(fastify: FastifyInstance, spe
 
   fastify.put<{ Params: { slug: string } }>('/:slug/install', installSchema(true), install(true));
   fastify.delete<{ Params: { slug: string } }>('/:slug/install', installSchema(false), install(false));
+}
+
+const purchaseBodyJsonSchema = {
+  type: 'object',
+  required: ['requestId'],
+  additionalProperties: false,
+  properties: { requestId: { type: 'string', pattern: '^[A-Za-z0-9_-]{8,64}$' } },
+} as const;
+
+export type PackPurchaseRouteSpec<S, D extends S> = {
+  readonly catalog: PackCatalog<S, D>;
+  readonly guard: PackRouteGuard;
+  readonly basePath: string;
+  readonly tags: readonly string[];
+  readonly summaryJsonSchema: object;
+  readonly notFound: { readonly message: string; readonly code: string };
+};
+
+/**
+ * `POST /:slug/purchase` (#10632, § 4.3) : l'achat en Meeshes d'un pack payant.
+ * Corps `{ requestId }` généré par le client AU GESTE ; la dépense est
+ * idempotente par `(compte, requestId)` — un rejeu rend le même pack, sans
+ * second débit. Le prix est lu au registre. 409 : `PACK_IS_FREE`,
+ * `PACK_ALREADY_OWNED`, `INSUFFICIENT_MEESHES` (avec `balance`), `REQUEST_ID_CONFLICT`
+ * (un `requestId` déjà dépensé pour autre chose). Seau de débit
+ * propre (10 par minute et par compte), FERMÉ en cas de panne du magasin.
+ */
+export function registerPackPurchaseRoute<S, D extends S>(fastify: FastifyInstance, spec: PackPurchaseRouteSpec<S, D>): void {
+  fastify.post<{ Params: { slug: string }; Body: { requestId: string } }>(
+    '/:slug/purchase',
+    {
+      onRequest: [fastify.authenticate],
+      config: { rateLimit: gameRateLimitConfig(`pack-purchase:${spec.basePath}`, 10, true) },
+      schema: {
+        description: 'Achète un pack payant en Meeshes (#10632). Idempotent par `requestId` ; le prix est celui du registre.',
+        tags: [...spec.tags],
+        summary: 'Purchase a pack',
+        params: packSlugParamsJsonSchema,
+        body: purchaseBodyJsonSchema,
+        response: {
+          200: packEnvelope({ type: 'object', properties: { pack: spec.summaryJsonSchema, balance: { type: 'number' } } }),
+          409: refusalResponse,
+          ...PACK_ERRORS,
+        },
+      },
+    },
+    spec.guard(`[POST ${spec.basePath}/:slug/purchase]`, async (request: FastifyRequest<{ Params: { slug: string }; Body: { requestId: string } }>, reply, viewer) => {
+      const outcome = await spec.catalog.purchase(viewer.userId, request.params.slug, request.body.requestId);
+      switch (outcome.kind) {
+        case 'done':
+          return sendSuccess(reply, { pack: outcome.pack, balance: outcome.balance });
+        case 'not-found':
+          return sendNotFound(reply, spec.notFound.message, { code: spec.notFound.code });
+        case 'free':
+          return sendConflict(reply, 'Pack is free', { code: 'PACK_IS_FREE' });
+        case 'already-owned':
+          return sendConflict(reply, 'Pack already owned', { code: 'PACK_ALREADY_OWNED' });
+        case 'request-id-conflict':
+          return sendConflict(reply, 'Request id already used by another spend', { code: 'REQUEST_ID_CONFLICT' });
+        case 'insufficient':
+          return sendError(reply, 409, 'INSUFFICIENT_MEESHES', { code: 'INSUFFICIENT_MEESHES', details: { balance: outcome.balance } });
+      }
+    }),
+  );
 }

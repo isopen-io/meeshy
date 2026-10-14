@@ -225,7 +225,7 @@ final class FocalRealtimeMatrixTests: XCTestCase {
     /// exactement la garde F07 « carrousel multi-pistes » — vérifié ici sur
     /// un `.mixed` à 3 pistes audio (arité jamais exercée par
     /// `FocalAudioRoutingTests`, qui s'arrête à 2).
-    func test_F07_mixedThreeTrackAudio_isNeverCarousel() {
+    func test_F07_mixedThreeTrackAudio_isNeverStack() {
         let content = BubbleContent(
             messageId: "m", kind: .standard, text: nil, translation: nil, reply: nil,
             attachments: .mixed(
@@ -242,8 +242,8 @@ final class FocalRealtimeMatrixTests: XCTestCase {
             meta: BubbleContent.Meta(timeString: "10:00", deliveryStatus: nil), isMe: false, senderName: "A", callNotice: nil, joinNotice: nil
         )
         XCTAssertNotEqual(
-            FocalAudioRouting.mode(for: content), .carousel,
-            "F07 : un `.mixed` à 3 pistes audio ne doit JAMAIS devenir un carrousel — le carrousel est " +
+            FocalAudioRouting.mode(for: content), .stack,
+            "F07 : un `.mixed` à 3 pistes audio ne doit JAMAIS devenir une pile — la pile est " +
             "réservé au cas `.audio` PUR (garde déjà exercée à 2 pistes par FocalAudioRoutingTests, " +
             "confirmée ici à 3)"
         )

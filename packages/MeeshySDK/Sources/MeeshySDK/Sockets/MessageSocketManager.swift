@@ -375,14 +375,18 @@ public struct UserPreferencesConversationUpdatedSocketEvent: Decodable, Sendable
         /// les call sites de test antérieurs à G-124 (le décodage JSON, lui,
         /// exige TOUJOURS la clé — le champ n'est pas optionnel sur le fil).
         public let readingMode: String
+        /// Fond + accent personnels (#10631) — additif : absent d'un ancien serveur.
+        public let appearance: ConversationAppearance?
 
         public init(
             isPinned: Bool, isMuted: Bool, mentionsOnly: Bool, isArchived: Bool,
             tags: [String], categoryId: String?, orderInCategory: Int?,
             customName: String?, reaction: String?,
             deletedForUserAt: Date?, clearHistoryBefore: Date?,
-            readingMode: String = "auto"
+            readingMode: String = "auto",
+            appearance: ConversationAppearance? = nil
         ) {
+            self.appearance = appearance
             self.isPinned = isPinned; self.isMuted = isMuted
             self.mentionsOnly = mentionsOnly; self.isArchived = isArchived
             self.tags = tags; self.categoryId = categoryId; self.orderInCategory = orderInCategory

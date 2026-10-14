@@ -26,6 +26,7 @@ import deSignup from './catalog-de-signup';
 import deGallery from './catalog-de-gallery';
 import deMessageCard from './catalog-de-message-card';
 import deMentions from './catalog-de-mentions';
+import deShellLabels from './catalog-de-shell-labels';
 import deStudioChrome from './catalog-de-studio-chrome';
 import deEphemeral from './catalog-de-ephemeral';
 import deWriteRestriction from './catalog-de-write-restriction';
@@ -40,6 +41,7 @@ import dePhonePrompt from './catalog-de-phone-prompt';
 import deUserProfile from './catalog-de-user-profile';
 import deContentRefused from './catalog-de-content-refused';
 import dePublicEntry from './catalog-de-public-entry';
+import deThreadSearch from './catalog-de-thread-search';
 
 const de = {
   'announce.messageSent': 'Nachricht gesendet',
@@ -306,6 +308,7 @@ const de = {
   'notFound.title': 'Diese Adresse gibt es nicht.',
 
   'pending.back': 'Zurück zu den Unterhaltungen',
+  'pending.screen': 'Der Bildschirm wird geladen',
 
   'linkPage.home': 'Zurück zu Meeshy',
   'linkPage.retry': 'Erneut versuchen',
@@ -1052,6 +1055,7 @@ const de = {
   'message.detail.language.original': '{language} (Original)',
 
   ...deMentions,
+  ...deShellLabels,
   ...deStudioChrome,
   ...deEphemeral,
   ...deWriteRestriction,
@@ -1069,6 +1073,7 @@ const de = {
   ...deUserProfile,
   ...deContentRefused,
   ...dePublicEntry,
+  ...deThreadSearch,
 } satisfies InterfaceCatalog;
 
 export default de;

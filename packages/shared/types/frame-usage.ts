@@ -125,7 +125,6 @@ export function canUseFrame(usage: FrameUsage, context: FrameUseContext): boolea
 export const FRAME_USAGE_LABEL_KEYS = {
   callAndCapture: 'frame.usage.callAndCapture',
   captureOnly: 'frame.usage.captureOnly',
-  avatarOnly: 'frame.usage.avatarOnly',
   photoOnly: 'frame.usage.photoOnly',
   videoOnly: 'frame.usage.videoOnly',
   rankOnly: 'frame.usage.rankOnly',
@@ -138,6 +137,18 @@ export const FRAME_USAGE_LABEL_KEYS = {
 export type FrameUsageLabelKey = (typeof FRAME_USAGE_LABEL_KEYS)[keyof typeof FRAME_USAGE_LABEL_KEYS];
 
 /**
+ * Le libellé « Contour de profil » (#10632) : une clé À PART, additive. Les
+ * catalogues d'interface typés sur `FrameUsageLabelKey` (web, sept langues)
+ * ne la portent pas encore — l'ajouter à l'objet ci-dessus, ou élargir le
+ * type de `describeFrameUsage`, ferait rougir leur typage avant que le lot
+ * « contours » ne les ait traduits. Les clients la lisent par
+ * `describeAvatarUsage` ; le lot contours la fusionne dans
+ * `FRAME_USAGE_LABEL_KEYS` avec ses sept traductions, puis retire cette voie.
+ */
+export const AVATAR_USAGE_LABEL_KEY = 'frame.usage.avatarOnly';
+export type AvatarUsageLabelKey = typeof AVATAR_USAGE_LABEL_KEY;
+
+/**
  * Les paramètres sont des CLÉS (`rank` : clé de rang, `rarity`, `family`) que
  * le client traduit par ses propres libellés ; `division` est déjà en chiffres
  * romains, identiques dans toutes les langues.
@@ -147,7 +158,6 @@ export type FrameUsageLabel = { readonly key: FrameUsageLabelKey; readonly param
 const ROMAN: Readonly<Record<GloryDivision5, string>> = { 1: 'I', 2: 'II', 3: 'III', 4: 'IV', 5: 'V' };
 
 const freeLabel = (surfaces: readonly FreeFrameSurface[]): FrameUsageLabelKey => {
-  if (surfaces.includes('avatar') && !surfaces.some((surface) => surface !== 'avatar')) return FRAME_USAGE_LABEL_KEYS.avatarOnly;
   if (surfaces.includes('call')) return FRAME_USAGE_LABEL_KEYS.callAndCapture;
   if (surfaces.includes('photo') && surfaces.includes('video')) return FRAME_USAGE_LABEL_KEYS.captureOnly;
   return surfaces.includes('photo') ? FRAME_USAGE_LABEL_KEYS.photoOnly : FRAME_USAGE_LABEL_KEYS.videoOnly;
@@ -171,6 +181,12 @@ export function describeFrameUsage(usage: FrameUsage): FrameUsageLabel {
       return { key: FRAME_USAGE_LABEL_KEYS.momentOnly, params: { family: usage.family } };
   }
 }
+
+export type AvatarUsageLabel = { readonly key: AvatarUsageLabelKey; readonly params: Readonly<Record<string, string>> };
+
+/** « Contour de profil » pour un usage libre sur la seule surface avatar ; `null` pour tout autre usage. */
+export const describeAvatarUsage = (usage: FrameUsage): AvatarUsageLabel | null =>
+  usage.kind === 'free' && usage.surfaces.length === 1 && usage.surfaces[0] === 'avatar' ? { key: AVATAR_USAGE_LABEL_KEY, params: {} } : null;
 
 /**
  * La projection d'un cadre de capture d'appel : `live` ⇒ appel ET capture,

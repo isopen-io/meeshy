@@ -70,14 +70,14 @@ export function PostDetailHeader() {
     <header className="flex shrink-0 items-center gap-2 px-3 pt-3 pb-2">
       <Link
         to="feed"
-        aria-label="Retour au fil"
+        aria-label={translate(currentInterfaceLanguage(), 'feed.backToFeed')}
         className="grid size-11 shrink-0 place-items-center rounded-chip focus-visible:outline-2 focus-visible:outline-offset-2"
         style={{ color: 'var(--color-ios-brand)', outlineColor: 'var(--color-ios-brand)' }}
       >
         <Glyph name="caretLeft" size={20} className="rtl:-scale-x-100" />
       </Link>
       <h1 className="text-screen font-bold" style={{ color: 'var(--color-ios-ink)' }}>
-        Publication
+        {translate(currentInterfaceLanguage(), 'post.detail.title')}
       </h1>
     </header>
   );
@@ -90,10 +90,10 @@ export function PostDetailError({ online, onRetry }: { readonly online: boolean;
         <Glyph name="warningCircle" size={28} />
       </span>
       <p className="text-body font-semibold" style={{ color: 'var(--color-ios-ink)' }}>
-        {online ? 'Impossible de charger la publication' : 'Hors ligne'}
+        {translate(currentInterfaceLanguage(), online ? 'post.detail.error' : 'common.offline')}
       </p>
       <p className="text-caption" style={{ color: 'var(--color-ios-ink-2)' }}>
-        {online ? 'Réessayez dans un instant.' : 'La publication s’affichera à la reconnexion.'}
+        {translate(currentInterfaceLanguage(), online ? 'post.detail.error.body' : 'post.detail.offline.body')}
       </p>
       <button
         type="button"
@@ -101,7 +101,7 @@ export function PostDetailError({ online, onRetry }: { readonly online: boolean;
         className="grid place-items-center rounded-chip px-5 text-body font-semibold text-ios-on-brand"
         style={{ backgroundColor: 'var(--color-ios-brand)', minHeight: 44 }}
       >
-        Réessayer
+        {translate(currentInterfaceLanguage(), 'common.retry')}
       </button>
     </div>
   );
@@ -248,7 +248,7 @@ export default function PostDetailScreen() {
         ) : body === 'error' ? (
           <PostDetailError online={online} onRetry={() => void post.refetch()} />
         ) : (
-          <div aria-busy="true" aria-label="Chargement de la publication">
+          <div aria-busy="true" aria-label={translate(currentInterfaceLanguage(), 'post.detail.loading')}>
             <FeedSkeleton />
           </div>
         )}

@@ -1,0 +1,101 @@
+[
+  {
+    "slug": "contours-essentiels",
+    "domain": "avatar-ring",
+    "origin": "builtin",
+    "version": 1,
+    "order": 0,
+    "installedByDefault": true,
+    "removable": false,
+    "hidden": false,
+    "contractSchema": 1,
+    "cover": {
+      "src": "724d3e3ab2580a32.webp",
+      "bytes": 5724,
+      "sha256": "724d3e3ab2580a32f6437bfcd0c5930957717032804e7e066af906bb5e200998"
+    },
+    "preview": null,
+    "contract": {
+      "src": "fbebf21ffcfa5642.json",
+      "bytes": 3690,
+      "sha256": "fbebf21ffcfa5642b028c6b40ee4712f4aac408477d2667bdc96c457f41444da"
+    },
+    "strings": {
+      "fr": {
+        "src": "6bdf252c3f520da2.json",
+        "bytes": 137,
+        "sha256": "6bdf252c3f520da2b7c709d04e5cf1a78c87edaf220509c2afafdb37e13cf11b"
+      },
+      "en": {
+        "src": "59c8e9fe6d996ebd.json",
+        "bytes": 141,
+        "sha256": "59c8e9fe6d996ebdf1d5fcbd9c8fe80247f8511acd83cbace34253ad66f3ab65"
+      },
+      "es": {
+        "src": "4da2f6e56fbd76a1.json",
+        "bytes": 136,
+        "sha256": "4da2f6e56fbd76a10ddbe7805a958e2b399b5e6c6b516e914c55282f220038a8"
+      },
+      "pt": {
+        "src": "79f443c4c6fed651.json",
+        "bytes": 137,
+        "sha256": "79f443c4c6fed65135bd3ee462716c23109dba6e0c90a1d2f7eff6b9699bf61b"
+      },
+      "de": {
+        "src": "163df992d5ea95b8.json",
+        "bytes": 150,
+        "sha256": "163df992d5ea95b8b9e7db45d2ac571bd781423e0169e5f10b62d517cd573f13"
+      },
+      "it": {
+        "src": "fbd6afa15d90e729.json",
+        "bytes": 138,
+        "sha256": "fbd6afa15d90e729c55444e2e7dcc9b27e23261a009e9ae89685d13b1562debc"
+      },
+      "ar": {
+        "src": "c1268a73e389eb98.json",
+        "bytes": 158,
+        "sha256": "c1268a73e389eb98d86185994c1727003d6d29f0b343b09d6d765b3fc941015d"
+      }
+    },
+    "downloadBytes": {
+      "story": 3690,
+      "square": null
+    },
+    "names": {
+      "fr": {
+        "name": "Contours essentiels",
+        "description": "Six contours pour votre avatar."
+      },
+      "en": {
+        "name": "Essential rings",
+        "description": "Six rings for your avatar."
+      },
+      "es": {
+        "name": "Contornos esenciales",
+        "description": "Seis contornos para tu avatar."
+      },
+      "pt": {
+        "name": "Contornos essenciais",
+        "description": "Seis contornos para o teu avatar."
+      },
+      "de": {
+        "name": "Basis-Rahmen",
+        "description": "Sechs Rahmen für deinen Avatar."
+      },
+      "it": {
+        "name": "Contorni essenziali",
+        "description": "Sei contorni per il tuo avatar."
+      },
+      "ar": {
+        "name": "إطارات أساسية",
+        "description": "ست إطارات لصورتك الرمزية."
+      }
+    },
+    "usage": {
+      "kind": "free",
+      "surfaces": [
+        "avatar"
+      ]
+    }
+  }
+]

@@ -79,22 +79,4 @@ final class WidgetActionRules {
         }
         return out;
     }
-
-    /**
-     * La page publie des adresses deja resolues ; le natif ne telecharge que
-     * du HTTPS — ou la passerelle locale d'un build de developpement
-     * (`localhost`, l'hote vu de l'emulateur `10.0.2.2`).
-     */
-    static boolean isFetchableAvatar(String url) {
-        if (url == null) return false;
-        try {
-            URI uri = new URI(url);
-            String scheme = uri.getScheme();
-            String host = uri.getHost();
-            if ("https".equals(scheme)) return host != null;
-            return "http".equals(scheme) && ("localhost".equals(host) || "10.0.2.2".equals(host));
-        } catch (URISyntaxException unreadable) {
-            return false;
-        }
-    }
 }
