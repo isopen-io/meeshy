@@ -20,6 +20,17 @@ const en = {
   'message.edit.submit': 'Save the edit',
   'message.edit.done': 'Message edited',
   'message.edit.failed': 'The message could not be edited',
+  'message.delete.action': 'Delete',
+  'message.delete.title': 'Delete this message?',
+  'message.delete.titleMany': 'Delete {count} messages?',
+  'message.delete.hint': 'For everyone: the message disappears for all participants. For me: it is only hidden for you.',
+  'message.delete.forEveryone': 'Delete for everyone',
+  'message.delete.forMe': 'Delete for me',
+  'message.delete.done': 'Message deleted',
+  'message.delete.doneMany': '{count} messages deleted',
+  'message.delete.failed': 'The message could not be deleted',
+  'message.delete.failedMany': 'The messages could not be deleted',
+  'message.delete.partial': '{failed} of {count} messages could not be deleted',
 } satisfies MessagePiecesCatalog;
 
 export default en;

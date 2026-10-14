@@ -20,6 +20,17 @@ const de = {
   'message.edit.submit': 'Bearbeitung speichern',
   'message.edit.done': 'Nachricht bearbeitet',
   'message.edit.failed': 'Die Nachricht konnte nicht bearbeitet werden',
+  'message.delete.action': 'Löschen',
+  'message.delete.title': 'Diese Nachricht löschen?',
+  'message.delete.titleMany': '{count} Nachrichten löschen?',
+  'message.delete.hint': 'Für alle: Die Nachricht verschwindet bei allen Teilnehmern. Für mich: Sie wird nur bei dir ausgeblendet.',
+  'message.delete.forEveryone': 'Für alle löschen',
+  'message.delete.forMe': 'Für mich löschen',
+  'message.delete.done': 'Nachricht gelöscht',
+  'message.delete.doneMany': '{count} Nachrichten gelöscht',
+  'message.delete.failed': 'Die Nachricht konnte nicht gelöscht werden',
+  'message.delete.failedMany': 'Die Nachrichten konnten nicht gelöscht werden',
+  'message.delete.partial': '{failed} von {count} Nachrichten konnten nicht gelöscht werden',
 } satisfies MessagePiecesCatalog;
 
 export default de;

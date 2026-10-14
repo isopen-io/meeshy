@@ -20,6 +20,17 @@ const ar = {
   'message.edit.submit': 'حفظ التعديل',
   'message.edit.done': 'تم تعديل الرسالة',
   'message.edit.failed': 'تعذّر تعديل الرسالة',
+  'message.delete.action': 'حذف',
+  'message.delete.title': 'حذف هذه الرسالة؟',
+  'message.delete.titleMany': 'حذف {count} رسائل؟',
+  'message.delete.hint': 'للجميع: تختفي الرسالة لدى جميع المشاركين. لي فقط: تُخفى لديك وحدك.',
+  'message.delete.forEveryone': 'الحذف للجميع',
+  'message.delete.forMe': 'الحذف لي فقط',
+  'message.delete.done': 'تم حذف الرسالة',
+  'message.delete.doneMany': 'تم حذف {count} رسائل',
+  'message.delete.failed': 'تعذّر حذف الرسالة',
+  'message.delete.failedMany': 'تعذّر حذف الرسائل',
+  'message.delete.partial': 'تعذّر حذف {failed} من {count} رسائل',
 } satisfies MessagePiecesCatalog;
 
 export default ar;

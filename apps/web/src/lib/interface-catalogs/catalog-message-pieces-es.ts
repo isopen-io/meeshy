@@ -20,6 +20,17 @@ const es = {
   'message.edit.submit': 'Guardar la edición',
   'message.edit.done': 'Mensaje editado',
   'message.edit.failed': 'No se pudo editar el mensaje',
+  'message.delete.action': 'Eliminar',
+  'message.delete.title': '¿Eliminar este mensaje?',
+  'message.delete.titleMany': '¿Eliminar {count} mensajes?',
+  'message.delete.hint': 'Para todos: el mensaje desaparece para todos los participantes. Para mí: solo se oculta para ti.',
+  'message.delete.forEveryone': 'Eliminar para todos',
+  'message.delete.forMe': 'Eliminar para mí',
+  'message.delete.done': 'Mensaje eliminado',
+  'message.delete.doneMany': '{count} mensajes eliminados',
+  'message.delete.failed': 'No se pudo eliminar el mensaje',
+  'message.delete.failedMany': 'No se pudieron eliminar los mensajes',
+  'message.delete.partial': 'No se pudieron eliminar {failed} de {count} mensajes',
 } satisfies MessagePiecesCatalog;
 
 export default es;

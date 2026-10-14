@@ -24,6 +24,17 @@ const fr = {
   'message.edit.submit': 'Enregistrer la modification',
   'message.edit.done': 'Message modifié',
   'message.edit.failed': 'Le message n’a pas pu être modifié',
+  'message.delete.action': 'Supprimer',
+  'message.delete.title': 'Supprimer ce message ?',
+  'message.delete.titleMany': 'Supprimer {count} messages ?',
+  'message.delete.hint': 'Pour tout le monde : le message disparaît chez tous les participants. Pour moi : il n’est masqué que chez vous.',
+  'message.delete.forEveryone': 'Supprimer pour tout le monde',
+  'message.delete.forMe': 'Supprimer pour moi',
+  'message.delete.done': 'Message supprimé',
+  'message.delete.doneMany': '{count} messages supprimés',
+  'message.delete.failed': 'Le message n’a pas pu être supprimé',
+  'message.delete.failedMany': 'Les messages n’ont pas pu être supprimés',
+  'message.delete.partial': '{failed} messages sur {count} n’ont pas pu être supprimés',
 } as const;
 
 export default fr;
