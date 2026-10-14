@@ -41,6 +41,7 @@ import { draftOf, draftPatch, type ProfileDraft } from '@/lib/view/profile-draft
 import { moodsByAuthor } from '@/lib/view/story-tray';
 import {
   ContactSection,
+  DECOR_ACCENT,
   DecorEntries,
   IdentitySection,
   LanguagesSection,
@@ -391,7 +392,7 @@ export default function ProfileScreen() {
           side={decorSide}
           language={language}
           current={profile?.profileDecor?.[decorSide] ?? null}
-          accent="#6366F1"
+          accent={DECOR_ACCENT}
           onChoose={(choice) => void equipDecor(decorSide, choice)}
           onClose={() => setDecorSide(null)}
         />

@@ -6,6 +6,7 @@ import { parseServedProfileDecor, type ServedProfileDecor, type ServedProfileDec
 import type { ConversationsDeps } from '../api/conversations';
 import { MY_PROFILE_QUERY_KEY, type MyProfile } from '../api/profile';
 import { putProfileDecor } from '../api/profile-decor';
+import { publicProfileQueryKey, type PublicProfileView } from '../api/public-profile';
 import type { SocketClient } from '../net/socket';
 
 /**
@@ -29,10 +30,20 @@ export type EquipOutcome =
 
 const decorOf = (queryClient: QueryClient): ServedProfileDecor | undefined => queryClient.getQueryData<MyProfile>(MY_PROFILE_QUERY_KEY)?.profileDecor;
 
+/** Ma fiche publique en cache (`/u/<moi>`) montre le MÊME décor que mon profil — même loi que la photo (#8881). */
+const mirrorOntoPublicProfile = (queryClient: QueryClient, mine: MyProfile | undefined): void => {
+  if (mine?.profileDecor === undefined) return;
+  const decor = mine.profileDecor;
+  queryClient.setQueryData<PublicProfileView>(publicProfileQueryKey(mine.username), (view) =>
+    view === undefined || view.profile.id !== mine.id ? view : { ...view, profile: { ...view.profile, decor } },
+  );
+};
+
 const writeDecor = (queryClient: QueryClient, next: (current: ServedProfileDecor) => ServedProfileDecor): void => {
-  queryClient.setQueryData<MyProfile>(MY_PROFILE_QUERY_KEY, (profile) =>
+  const mine = queryClient.setQueryData<MyProfile>(MY_PROFILE_QUERY_KEY, (profile) =>
     profile === undefined || profile.profileDecor === undefined ? profile : { ...profile, profileDecor: next(profile.profileDecor) },
   );
+  mirrorOntoPublicProfile(queryClient, mine);
 };
 
 export async function equipProfileDecor(params: {
@@ -61,6 +72,7 @@ export function applyProfileDecorEvent(queryClient: QueryClient, payload: unknow
   const event = payload as Readonly<Record<string, unknown>>;
   const mine = queryClient.getQueryData<MyProfile>(MY_PROFILE_QUERY_KEY);
   if (mine === undefined || mine.profileDecor === undefined || event['userId'] !== mine.id) return;
+  if (typeof event['decor'] !== 'object' || event['decor'] === null) return;
   const decor = parseServedProfileDecor(event['decor']);
   writeDecor(queryClient, () => decor);
 }

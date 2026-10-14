@@ -677,7 +677,7 @@ export function StatsSection({ language, stats }: { readonly language: Interface
 }
 
 /** L'accent des bannières de design sur MON profil : l'indigo de la marque, la couleur que mon profil porte déjà. */
-const DECOR_ACCENT = '#6366F1';
+export const DECOR_ACCENT = '#6366F1';
 
 const ENTRY_CLASS = 'flex items-center gap-3 px-3.5 focus-visible:outline-2';
 

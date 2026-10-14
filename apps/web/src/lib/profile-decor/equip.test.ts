@@ -6,6 +6,7 @@ import type { ServedProfileDecor, ServedProfileDecorItem } from '@meeshy/shared/
 import type { ConversationsDeps } from '../api/conversations';
 import type { ApiResult, HttpRequest, HttpTransport } from '../api/http';
 import { MY_PROFILE_QUERY_KEY, type MyProfile } from '../api/profile';
+import { publicProfileQueryKey, type PublicProfileView } from '../api/public-profile';
 import { applyProfileDecorEvent, equipProfileDecor } from './equip';
 
 const ring = (item: string): ServedProfileDecorItem => ({ pack: 'contours-essentiels', item, origin: 'builtin', contract: null });
@@ -106,5 +107,48 @@ describe('le décor équipé sur un autre appareil', () => {
     const client = new QueryClient();
     applyProfileDecorEvent(client, { userId: 'u1', decor: { avatarRing: ring('laurier'), banner: null }, at: 'x' });
     expect(client.getQueryData(MY_PROFILE_QUERY_KEY)).toBeUndefined();
+  });
+});
+
+describe('ma fiche publique en cache suit le décor (#10632)', () => {
+  const myPublicView = (decor: ServedProfileDecor): PublicProfileView => ({
+    profile: { id: 'u1', username: 'ada', displayName: null, avatar: null, banner: null, bio: null, createdAt: null, decor },
+    stats: null,
+    relation: 'self',
+    isSelf: true,
+    blockedByViewer: false,
+    relationRequestId: null,
+    presence: null,
+  });
+  const publicDecorOf = (client: QueryClient) => client.getQueryData<PublicProfileView>(publicProfileQueryKey('Ada'))?.profile.decor;
+
+  test('un contour confirmé se voit aussi sur ma fiche publique', async () => {
+    const { client, deps } = setup(profile({ avatarRing: null, banner: null }), async () => ({ ok: true, data: { avatarRing: ring('filet'), banner: null } }));
+    client.setQueryData(publicProfileQueryKey('ada'), myPublicView({ avatarRing: null, banner: null }));
+    await equipProfileDecor({ queryClient: client, deps, side: 'avatarRing', choice: ring('filet') });
+    expect(publicDecorOf(client)?.avatarRing?.item).toBe('filet');
+  });
+
+  test('un refus laisse ma fiche publique telle quelle', async () => {
+    const { client, deps } = setup(profile({ avatarRing: ring('perle'), banner: null }), async () => ({ ok: false, status: 403, error: 'no' }));
+    client.setQueryData(publicProfileQueryKey('ada'), myPublicView({ avatarRing: ring('perle'), banner: null }));
+    await equipProfileDecor({ queryClient: client, deps, side: 'avatarRing', choice: ring('filet') });
+    expect(publicDecorOf(client)?.avatarRing?.item).toBe('perle');
+  });
+
+  test('l’événement d’un autre appareil repeint aussi ma fiche publique', () => {
+    const { client } = setup(profile({ avatarRing: null, banner: null }), async () => ({ ok: true, data: {} }));
+    client.setQueryData(publicProfileQueryKey('ada'), myPublicView({ avatarRing: null, banner: null }));
+    applyProfileDecorEvent(client, { userId: 'u1', decor: { avatarRing: null, banner: banner('aurore') }, at: 'x' });
+    expect(publicDecorOf(client)?.banner?.item).toBe('aurore');
+  });
+});
+
+describe('un événement de MON compte dont le décor est illisible', () => {
+  test('est ignoré entier : il n’efface pas ce que j’ai équipé', () => {
+    const { client } = setup(profile({ avatarRing: ring('perle'), banner: banner('aurore') }), async () => ({ ok: true, data: {} }));
+    applyProfileDecorEvent(client, { userId: 'u1', at: 'x' });
+    applyProfileDecorEvent(client, { userId: 'u1', decor: 'illisible', at: 'x' });
+    expect(decorOf(client)).toEqual({ avatarRing: ring('perle'), banner: banner('aurore') });
   });
 });
