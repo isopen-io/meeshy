@@ -1,5 +1,4 @@
 import type { InterfaceCatalog } from '@/lib/i18n-catalog';
-import arAccountDeletionGuide from './catalog-ar-account-deletion-guide';
 import arComposerAttach from './catalog-ar-composer-attach';
 import arIdentity from './catalog-ar-identity';
 import arMediaHub from './catalog-ar-media-hub';
@@ -212,7 +211,6 @@ const ar = {
   'feed.allLoaded': 'تم تحميل جميع المنشورات',
   'feed.newPosts.one': 'منشور جديد {count}',
   'feed.newPosts.other': 'منشورات جديدة {count}',
-  ...arAccountDeletionGuide,
   ...arIdentity,
   ...arMediaHub,
   ...arMediaViewer,

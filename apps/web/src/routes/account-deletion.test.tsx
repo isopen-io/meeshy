@@ -5,6 +5,8 @@ import type { ApiFailure, ApiResult } from '@/lib/api/http';
 import { buttonNamed, createActMounter } from '@/test-support/act-mount';
 import { ensureHappyDomRegistered, releaseHappyDomIfRegistered } from '@/test-support/happy-dom-environment';
 
+import { ACCOUNT_DELETION_GUIDE_KEYS, translateAccountDeletionGuide } from '@/lib/i18n-account-deletion-guide';
+
 import { AccountDeletionPage, type AccountDeletionDeps } from './account-deletion';
 
 /**
@@ -153,6 +155,15 @@ describe('déconnecté, sans lien — la page que Google Play déclare (#9921)',
     const host = await mount(<AccountDeletionPage link={null} signedIn={false} online language="en" deps={scripted().deps} />);
     expect(host.querySelector('h1')?.textContent).toBe('Delete your Meeshy account');
     expect(host.querySelector('a[href="mailto:privacy@meeshy.me"]')?.textContent).toBe('privacy@meeshy.me');
+  });
+
+  test('les sept langues ont chacune leur texte, jamais une recopie du français', () => {
+    const french = ACCOUNT_DELETION_GUIDE_KEYS.map((key) => translateAccountDeletionGuide('fr', key));
+    for (const language of ['en', 'es', 'pt', 'de', 'it', 'ar'] as const) {
+      const texts = ACCOUNT_DELETION_GUIDE_KEYS.map((key) => translateAccountDeletionGuide(language, key));
+      expect(texts.every((text) => text.trim() !== '')).toBe(true);
+      expect(texts.filter((text, index) => text === french[index])).toEqual([]);
+    }
   });
 });
 

@@ -1,5 +1,4 @@
 import type { InterfaceCatalog } from '@/lib/i18n-catalog';
-import enAccountDeletionGuide from './catalog-en-account-deletion-guide';
 import enComposerAttach from './catalog-en-composer-attach';
 import enIdentity from './catalog-en-identity';
 import enMediaHub from './catalog-en-media-hub';
@@ -212,7 +211,6 @@ const en = {
   'feed.allLoaded': 'All posts are loaded',
   'feed.newPosts.one': '{count} new post',
   'feed.newPosts.other': '{count} new posts',
-  ...enAccountDeletionGuide,
   ...enIdentity,
   ...enMediaHub,
   ...enMediaViewer,

@@ -1,5 +1,4 @@
 import type { InterfaceCatalog } from '@/lib/i18n-catalog';
-import esAccountDeletionGuide from './catalog-es-account-deletion-guide';
 import esComposerAttach from './catalog-es-composer-attach';
 import esIdentity from './catalog-es-identity';
 import esMediaHub from './catalog-es-media-hub';
@@ -212,7 +211,6 @@ const es = {
   'feed.allLoaded': 'Todas las publicaciones están cargadas',
   'feed.newPosts.one': '{count} publicación nueva',
   'feed.newPosts.other': '{count} publicaciones nuevas',
-  ...esAccountDeletionGuide,
   ...esIdentity,
   ...esMediaHub,
   ...esMediaViewer,

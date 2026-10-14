@@ -1,5 +1,4 @@
 import type { InterfaceCatalog } from '@/lib/i18n-catalog';
-import deAccountDeletionGuide from './catalog-de-account-deletion-guide';
 import deComposerAttach from './catalog-de-composer-attach';
 import deIdentity from './catalog-de-identity';
 import deMediaHub from './catalog-de-media-hub';
@@ -212,7 +211,6 @@ const de = {
   'feed.allLoaded': 'Alle Beiträge sind geladen',
   'feed.newPosts.one': '{count} neuer Beitrag',
   'feed.newPosts.other': '{count} neue Beiträge',
-  ...deAccountDeletionGuide,
   ...deIdentity,
   ...deMediaHub,
   ...deMediaViewer,

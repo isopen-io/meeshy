@@ -1,5 +1,4 @@
 import type { InterfaceCatalog } from '@/lib/i18n-catalog';
-import ptAccountDeletionGuide from './catalog-pt-account-deletion-guide';
 import ptComposerAttach from './catalog-pt-composer-attach';
 import ptIdentity from './catalog-pt-identity';
 import ptMediaHub from './catalog-pt-media-hub';
@@ -216,7 +215,6 @@ const pt = {
   'feed.allLoaded': 'Todas as publicações foram carregadas',
   'feed.newPosts.one': '{count} nova publicação',
   'feed.newPosts.other': '{count} novas publicações',
-  ...ptAccountDeletionGuide,
   ...ptIdentity,
   ...ptMediaHub,
   ...ptMediaViewer,

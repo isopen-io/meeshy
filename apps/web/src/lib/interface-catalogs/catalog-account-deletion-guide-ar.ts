@@ -1,6 +1,8 @@
+import type { AccountDeletionGuideCatalog } from '@/lib/i18n-account-deletion-guide';
+
 /**
- * LA PAGE DE SUPPRESSION VUE DÉCONNECTÉ — tranche du catalogue `catalog-ar.ts`,
- * extraite pour tenir le budget de taille (CLAUDE.md) : le catalogue la RÉPAND.
+ * LA PAGE DE SUPPRESSION VUE DÉCONNECTÉ — ses libellés, importés par la seule page
+ * qui les rend : les catalogues d'interface (budget `interface_catalogs`) n'en portent rien.
  * `routes/account-deletion-guide.tsx` (#9921).
  */
 const arAccountDeletionGuide = {
@@ -26,6 +28,6 @@ const arAccountDeletionGuide = {
   'accountDeletion.guide.delay.body': 'يُحذف حسابك بعد 30 يومًا من تأكيدك. حتى ذلك الحين، يمكنك الإلغاء بالرابط الوارد في البريد الإلكتروني.',
   'accountDeletion.guide.noAccess.title': 'لم يعد بإمكانك تسجيل الدخول؟',
   'accountDeletion.guide.noAccess.body': 'راسلنا من البريد الإلكتروني لحسابك طالبًا حذفه. نرد خلال 30 يومًا.',
-};
+} as const satisfies AccountDeletionGuideCatalog;
 
 export default arAccountDeletionGuide;

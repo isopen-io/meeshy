@@ -1,6 +1,8 @@
+import type { AccountDeletionGuideCatalog } from '@/lib/i18n-account-deletion-guide';
+
 /**
- * LA PAGE DE SUPPRESSION VUE DÉCONNECTÉ — tranche du catalogue `catalog-en.ts`,
- * extraite pour tenir le budget de taille (CLAUDE.md) : le catalogue la RÉPAND.
+ * LA PAGE DE SUPPRESSION VUE DÉCONNECTÉ — ses libellés, importés par la seule page
+ * qui les rend : les catalogues d'interface (budget `interface_catalogs`) n'en portent rien.
  * `routes/account-deletion-guide.tsx` (#9921).
  */
 const enAccountDeletionGuide = {
@@ -26,6 +28,6 @@ const enAccountDeletionGuide = {
   'accountDeletion.guide.delay.body': 'Your account is deleted 30 days after you confirm. Until then, you can cancel with the link in the email.',
   'accountDeletion.guide.noAccess.title': 'Can’t sign in anymore?',
   'accountDeletion.guide.noAccess.body': 'Write to us from your account’s email address asking for its deletion. We reply within 30 days.',
-};
+} as const satisfies AccountDeletionGuideCatalog;
 
 export default enAccountDeletionGuide;

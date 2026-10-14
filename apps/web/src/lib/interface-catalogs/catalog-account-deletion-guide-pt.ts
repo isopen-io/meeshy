@@ -1,6 +1,8 @@
+import type { AccountDeletionGuideCatalog } from '@/lib/i18n-account-deletion-guide';
+
 /**
- * LA PAGE DE SUPPRESSION VUE DÉCONNECTÉ — tranche du catalogue `catalog-pt.ts`,
- * extraite pour tenir le budget de taille (CLAUDE.md) : le catalogue la RÉPAND.
+ * LA PAGE DE SUPPRESSION VUE DÉCONNECTÉ — ses libellés, importés par la seule page
+ * qui les rend : les catalogues d'interface (budget `interface_catalogs`) n'en portent rien.
  * `routes/account-deletion-guide.tsx` (#9921).
  */
 const ptAccountDeletionGuide = {
@@ -26,6 +28,6 @@ const ptAccountDeletionGuide = {
   'accountDeletion.guide.delay.body': 'Sua conta é excluída 30 dias após sua confirmação. Até lá, você pode cancelar com o link recebido por e-mail.',
   'accountDeletion.guide.noAccess.title': 'Não consegue mais entrar?',
   'accountDeletion.guide.noAccess.body': 'Escreva para nós a partir do e-mail da sua conta pedindo a exclusão. Respondemos em até 30 dias.',
-};
+} as const satisfies AccountDeletionGuideCatalog;
 
 export default ptAccountDeletionGuide;
