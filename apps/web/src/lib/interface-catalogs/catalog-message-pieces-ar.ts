@@ -13,6 +13,13 @@ const ar = {
   'message.piece.deleted': 'تم حذف الوسائط',
   'message.piece.deleteFailed': 'تعذّر حذف الوسائط',
   'message.piece.preview': 'وسائط الرسالة',
+  'message.edit.action': 'تعديل',
+  'message.edit.banner': 'جارٍ التعديل',
+  'message.edit.cancel': 'إلغاء التعديل',
+  'message.edit.field': 'تعديل الرسالة',
+  'message.edit.submit': 'حفظ التعديل',
+  'message.edit.done': 'تم تعديل الرسالة',
+  'message.edit.failed': 'تعذّر تعديل الرسالة',
 } satisfies MessagePiecesCatalog;
 
 export default ar;

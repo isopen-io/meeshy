@@ -13,6 +13,13 @@ const pt = {
   'message.piece.deleted': 'Mídia excluída',
   'message.piece.deleteFailed': 'Não foi possível excluir a mídia',
   'message.piece.preview': 'Mídias da mensagem',
+  'message.edit.action': 'Editar',
+  'message.edit.banner': 'Edição',
+  'message.edit.cancel': 'Cancelar a edição',
+  'message.edit.field': 'Editar a mensagem',
+  'message.edit.submit': 'Guardar a edição',
+  'message.edit.done': 'Mensagem editada',
+  'message.edit.failed': 'Não foi possível editar a mensagem',
 } satisfies MessagePiecesCatalog;
 
 export default pt;

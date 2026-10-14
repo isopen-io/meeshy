@@ -13,6 +13,13 @@ const es = {
   'message.piece.deleted': 'Archivo eliminado',
   'message.piece.deleteFailed': 'No se pudo eliminar el archivo',
   'message.piece.preview': 'Archivos del mensaje',
+  'message.edit.action': 'Editar',
+  'message.edit.banner': 'Edición',
+  'message.edit.cancel': 'Cancelar la edición',
+  'message.edit.field': 'Editar el mensaje',
+  'message.edit.submit': 'Guardar la edición',
+  'message.edit.done': 'Mensaje editado',
+  'message.edit.failed': 'No se pudo editar el mensaje',
 } satisfies MessagePiecesCatalog;
 
 export default es;

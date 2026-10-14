@@ -13,6 +13,13 @@ const en = {
   'message.piece.deleted': 'Media deleted',
   'message.piece.deleteFailed': 'The media could not be deleted',
   'message.piece.preview': 'Message media',
+  'message.edit.action': 'Edit',
+  'message.edit.banner': 'Editing',
+  'message.edit.cancel': 'Cancel editing',
+  'message.edit.field': 'Edit the message',
+  'message.edit.submit': 'Save the edit',
+  'message.edit.done': 'Message edited',
+  'message.edit.failed': 'The message could not be edited',
 } satisfies MessagePiecesCatalog;
 
 export default en;

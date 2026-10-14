@@ -17,6 +17,13 @@ const fr = {
   'message.piece.deleted': 'Média supprimé',
   'message.piece.deleteFailed': 'Le média n’a pas pu être supprimé',
   'message.piece.preview': 'Médias du message',
+  'message.edit.action': 'Modifier',
+  'message.edit.banner': 'Modification',
+  'message.edit.cancel': 'Annuler la modification',
+  'message.edit.field': 'Modifier le message',
+  'message.edit.submit': 'Enregistrer la modification',
+  'message.edit.done': 'Message modifié',
+  'message.edit.failed': 'Le message n’a pas pu être modifié',
 } as const;
 
 export default fr;

@@ -13,6 +13,13 @@ const it = {
   'message.piece.deleted': 'Contenuto eliminato',
   'message.piece.deleteFailed': 'Impossibile eliminare il contenuto',
   'message.piece.preview': 'Contenuti del messaggio',
+  'message.edit.action': 'Modifica',
+  'message.edit.banner': 'Modifica in corso',
+  'message.edit.cancel': 'Annulla la modifica',
+  'message.edit.field': 'Modifica il messaggio',
+  'message.edit.submit': 'Salva la modifica',
+  'message.edit.done': 'Messaggio modificato',
+  'message.edit.failed': 'Impossibile modificare il messaggio',
 } satisfies MessagePiecesCatalog;
 
 export default it;

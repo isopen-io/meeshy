@@ -13,6 +13,13 @@ const de = {
   'message.piece.deleted': 'Medium gelöscht',
   'message.piece.deleteFailed': 'Das Medium konnte nicht gelöscht werden',
   'message.piece.preview': 'Medien der Nachricht',
+  'message.edit.action': 'Bearbeiten',
+  'message.edit.banner': 'Bearbeitung',
+  'message.edit.cancel': 'Bearbeitung abbrechen',
+  'message.edit.field': 'Nachricht bearbeiten',
+  'message.edit.submit': 'Bearbeitung speichern',
+  'message.edit.done': 'Nachricht bearbeitet',
+  'message.edit.failed': 'Die Nachricht konnte nicht bearbeitet werden',
 } satisfies MessagePiecesCatalog;
 
 export default de;
