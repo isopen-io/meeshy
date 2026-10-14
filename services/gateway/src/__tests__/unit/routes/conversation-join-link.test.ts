@@ -686,20 +686,32 @@ describe('POST /links/:key/members — invité sans pseudo saisi', () => {
     const res = await joinWithout({});
 
     expect(res.statusCode).toBeLessThan(300);
-    expect(writtenName()).toMatch(/^ano_[A-Z][a-z]+[A-Z][a-z]+\d{3,5}$/);
+    expect(writtenName()).toMatch(/^ano_[A-Z][a-z]+[A-Z][a-z]+[1-9]\d{1,4}$/);
   });
 
   it('un pseudo fait de blancs vaut un pseudo absent', async () => {
     const res = await joinWithout({ nickname: '   ' });
 
     expect(res.statusCode).toBeLessThan(300);
-    expect(writtenName()).toMatch(/^ano_[A-Z][a-z]+[A-Z][a-z]+\d{3,5}$/);
+    expect(writtenName()).toMatch(/^ano_[A-Z][a-z]+[A-Z][a-z]+[1-9]\d{1,4}$/);
   });
 
-  it('un pseudo saisi reste celui de l\'invité', async () => {
+  it('un pseudo saisi reste celui de l\'invité, suivi de son nombre (#10602)', async () => {
     const res = await joinWithout({ nickname: 'Awa' });
 
     expect(res.statusCode).toBeLessThan(300);
-    expect(writtenName()).toBe('ano_Awa');
+    expect(writtenName()).toMatch(/^ano_Awa[1-9]\d{1,4}$/);
+  });
+
+  it('sert à l\'invité le pseudo FINAL écrit, pas celui qu\'il a saisi (#10602)', async () => {
+    const res = await joinWithout({ nickname: 'Awa' });
+
+    expect(res.json().data.entry.username).toBe(writtenName());
+  });
+
+  it('sert aussi le pseudo généré quand rien n\'a été saisi', async () => {
+    const res = await joinWithout({});
+
+    expect(res.json().data.entry.username).toBe(writtenName());
   });
 });

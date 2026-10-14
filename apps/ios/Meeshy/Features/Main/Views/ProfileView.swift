@@ -252,11 +252,13 @@ struct ProfileView: View {
                     .accessibilityHint(opensFullscreen(user?.banner) ? ProfileImageCopy.openFullscreenHint : "")
                     .accessibilityAddTraits(opensFullscreen(user?.banner) ? .isButton : [])
                     .accessibilityAction { openFullscreen(user?.banner) }
-                    .overlay(alignment: .top) {
+                    .overlay {
+                        // #10601 — le niveau et le rang aux angles BAS : la découpe de la bannière s'applique aussi à
+                        // eux, leurs coins bas suivent donc l'arrondi de ses angles, sans débord ni jour.
                         if !isEditing, let userId = user?.id {
                             GameBannerBadge(userId: userId)
                                 .allowsHitTesting(false)
-                                .padding(MeeshySpacing.sm)
+                                .clipShape(RoundedRectangle(cornerRadius: MeeshyRadius.lg))
                         }
                     }
 

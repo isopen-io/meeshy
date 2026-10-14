@@ -474,6 +474,15 @@ describe('joinLinkAsGuest — POST /api/v1/links/:key/members, corps d’invité
     expect(result.ok ? result.data.attachmentKinds : 'échec').toEqual(['text', 'audio']);
   });
 
+  test('le pseudo FINAL servi par la passerelle (#10602) voyage avec la jonction, et un serveur d’avant le champ n’en sert aucun', async () => {
+    const numbered = fakeTransport(served({ entry: { outcome: 'new', username: 'ano_Awa4821' } }));
+    const result = await joinLinkAsGuest({ source: 'gateway', transport: numbered.transport }, { link: 'mshy_x', body: { language: 'fr', nickname: 'Awa' } });
+    expect(result.ok ? result.data.nickname : 'échec').toBe('ano_Awa4821');
+    const before = fakeTransport(served());
+    const old = await joinLinkAsGuest({ source: 'gateway', transport: before.transport }, { link: 'mshy_x', body: { language: 'fr' } });
+    expect(old.ok && 'nickname' in old.data).toBe(false);
+  });
+
   test('un lien qui ne restreint rien sert `null`, et un serveur d’avant le champ ne sert rien', async () => {
     const unrestricted = fakeTransport(served({ entry: { outcome: 'new', allowedAttachmentKinds: null } }));
     const restricted = await joinLinkAsGuest({ source: 'gateway', transport: unrestricted.transport }, { link: 'mshy_x', body: { language: 'fr' } });
