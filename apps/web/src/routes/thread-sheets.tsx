@@ -6,6 +6,7 @@ import { discussionCardSubjectOf } from '@/lib/export/discussion-card-subject';
 import { messageCardLanguagesOf, messageCardSubjectOf } from '@/lib/export/message-card-subject';
 import { currentInterfaceLanguage } from '@/lib/interface-language';
 import { MessageMenu } from '@/components/message-menu';
+import { MessageReactionQuickBar } from '@/components/reaction-quick-bar';
 import { reactionEntries } from '@/components/message-blocks';
 import type { Attachment, Message } from '@/lib/api/types';
 import { translate } from '@/lib/i18n-catalog';
@@ -50,6 +51,8 @@ export type ThreadSheetsMenu = Pick<
   MessageMenuController,
   | 'menuTarget'
   | 'menuData'
+  | 'quickReactionFor'
+  | 'onCloseQuickReaction'
   | 'onCloseMenu'
   | 'onMenuReact'
   | 'onMenuAction'
@@ -136,6 +139,20 @@ export function ThreadMessageSheets({
           />
         </Suspense>
       )}
+      {/* LA BARRE DE RÉACTION RAPIDE DU DOUBLE TOUCHER (#10599) — montée tant
+          que sa cible est posée ET que le message est encore dans le fil ;
+          un choix vise la pièce touchée quand la cible en porte une. */}
+      {((quick) =>
+        quick === null || !messages.some((m) => m.id === quick.messageId) ? null : (
+          <MessageReactionQuickBar
+            key={`${quick.messageId}:${quick.pieceId ?? ''}`}
+            anchor={quick.anchor}
+            x={quick.x}
+            onReact={(emoji) => messageMenu.onMenuReact(quick.messageId, emoji, quick.pieceId)}
+            onExpand={() => messageMenu.setReactionSheetFor(quick.messageId)}
+            onClose={messageMenu.onCloseQuickReaction}
+          />
+        ))(messageMenu.quickReactionFor)}
       {/* LE MENU DU MESSAGE (#5814) — portail conditionnel : monté SEULEMENT
           quand `useLongPress`/le clic droit/`ContextMenu` ont ciblé un
           message ET que ce message existe encore dans le fil. */}
