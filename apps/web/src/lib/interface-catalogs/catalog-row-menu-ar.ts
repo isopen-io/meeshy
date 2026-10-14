@@ -21,10 +21,14 @@ const ar = {
   'listFilter.all': 'الكل',
   'listFilter.unread': 'غير مقروءة',
   'listFilter.favorites': 'المفضلة',
-  'listFilter.groups': 'المجموعات',
-  'listFilter.directs': 'المباشرة',
+  'listFilter.personal': 'شخصية',
+  'listFilter.private': 'خاصة',
+  'listFilter.open': 'مفتوحة',
+  'listFilter.global': 'عامة',
+  'listFilter.channels': 'قنوات',
   'listFilter.pinned': 'المثبّتة',
   'listFilter.archived': 'المؤرشفة',
+  'listRow.muted': 'مكتومة',
 } as const satisfies RowMenuCatalog;
 
 export default ar;

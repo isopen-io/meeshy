@@ -19,10 +19,14 @@ const fr = {
   'listFilter.all': 'Tous',
   'listFilter.unread': 'Non lus',
   'listFilter.favorites': 'Favoris',
-  'listFilter.groups': 'Groupes',
-  'listFilter.directs': 'Directs',
+  'listFilter.personal': 'Personnel',
+  'listFilter.private': 'Privée',
+  'listFilter.open': 'Ouvertes',
+  'listFilter.global': 'Globales',
+  'listFilter.channels': 'Channels',
   'listFilter.pinned': 'Épinglés',
   'listFilter.archived': 'Archivées',
+  'listRow.muted': 'En sourdine',
 } as const;
 
 export default fr;

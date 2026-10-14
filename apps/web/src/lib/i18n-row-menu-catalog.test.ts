@@ -12,6 +12,13 @@ import type { InterfaceLanguage } from './interface-language';
 const loadAll = async (): Promise<ReadonlyArray<readonly [InterfaceLanguage, RowMenuCatalog]>> =>
   Promise.all(SUPPORTED_INTERFACE_LANGUAGES.map(async (language) => [language, await loadRowMenuCatalog(language)] as const));
 
+/**
+ * LES MOTS QU'iOS ÉCRIT PAREIL QU'EN FRANÇAIS (#10598) — `conversation.filter.*`
+ * de `Localizable.xcstrings` : « Channels » en anglais, « Globales » en
+ * espagnol. Une copie ailleurs reste un oubli de traduction.
+ */
+const SAME_AS_FRENCH_ON_IOS: ReadonlySet<string> = new Set(['en:listFilter.channels', 'es:listFilter.global']);
+
 const sorted = (values: Iterable<string>): readonly string[] => [...values].sort();
 
 describe('le catalogue du menu d’une ligne', () => {
@@ -28,7 +35,7 @@ describe('le catalogue du menu d’une ligne', () => {
       for (const [key, value] of Object.entries(catalog)) {
         expect({ language, key, empty: value.trim().length === 0 }).toEqual({ language, key, empty: false });
         expect({ language, key, params: catalogPlaceholders(value) }).toEqual({ language, key, params: [] });
-        if (language !== 'fr') expect({ language, key, copied: value === french[key as keyof RowMenuCatalog] }).toEqual({ language, key, copied: false });
+        if (language !== 'fr' && !SAME_AS_FRENCH_ON_IOS.has(`${language}:${key}`)) expect({ language, key, copied: value === french[key as keyof RowMenuCatalog] }).toEqual({ language, key, copied: false });
       }
     }
   });
@@ -38,6 +45,8 @@ describe('le catalogue du menu d’une ligne', () => {
     expect(rowMenuText('fr', 'rowMenu.moveTo.mine')).toBe('Mes conversations');
     expect(rowMenuText('en', 'rowMenu.favorite.remove')).toBe('Remove from favourites');
     expect(rowMenuText('fr', 'listFilter.favorites')).toBe('Favoris');
+    expect(rowMenuText('fr', 'listFilter.private')).toBe('Privée');
+    expect(rowMenuText('pt', 'listFilter.global')).toBe('Globais');
     expect(rowMenuText('de', 'rowMenu.unblock')).toBe('Blockierung aufheben');
   });
 });
