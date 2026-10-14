@@ -4,6 +4,7 @@ import MeeshySDK
 
 /// #10631 — quel fond peindre : ce qui ne se lit pas retombe sur Signature, la photo
 /// se retrouve sans réseau, « Réduire la transparence » force un voile ≥ 0,6.
+@MainActor
 final class ConversationBackgroundResolutionTests: XCTestCase {
 
     func test_resolve_withoutAppearance_isSignature() {
