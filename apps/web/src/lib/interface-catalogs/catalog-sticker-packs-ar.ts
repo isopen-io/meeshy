@@ -74,6 +74,7 @@ const arStickerPacks = {
   'packs.domain.capture-frame': "إطارات الالتقاط",
   'packs.price': "{price} ميشيز",
   'packs.owned': "مملوك",
+  'packs.included': "مُضمَّن",
   'packs.buy': "شراء · {price} ميشيز",
   'packs.error.insufficient': "ليس لديك ما يكفي من ميشيز لهذه الحزمة",
   'packs.error.purchase': "لم تتم عملية الشراء — حاول مرة أخرى، ولن يُخصم منك إلا مرة واحدة",

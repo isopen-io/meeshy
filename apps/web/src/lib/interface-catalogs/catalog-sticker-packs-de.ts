@@ -74,6 +74,7 @@ const deStickerPacks = {
   'packs.domain.capture-frame': "Aufnahmerahmen",
   'packs.price': "{price} Meeshes",
   'packs.owned': "Im Besitz",
+  'packs.included': "Inklusive",
   'packs.buy': "Kaufen · {price} Meeshes",
   'packs.error.insufficient': "Du hast nicht genug Meeshes für dieses Paket",
   'packs.error.purchase': "Der Kauf ist nicht durchgegangen — versuche es erneut, es wird nur einmal abgebucht",

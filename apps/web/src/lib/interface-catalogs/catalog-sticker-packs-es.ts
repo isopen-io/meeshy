@@ -74,6 +74,7 @@ const esStickerPacks = {
   'packs.domain.capture-frame': "Marcos de captura",
   'packs.price': "{price} Meeshes",
   'packs.owned': "Adquirido",
+  'packs.included': "Incluido",
   'packs.buy': "Comprar · {price} Meeshes",
   'packs.error.insufficient': "No tienes suficientes Meeshes para este pack",
   'packs.error.purchase': "La compra no se completó — inténtalo de nuevo, solo se te cobrará una vez",

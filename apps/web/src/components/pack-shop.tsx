@@ -4,7 +4,7 @@ import { useRef, useState } from 'react';
 import type { ReactNode } from 'react';
 
 import type { ApiResult } from '@/lib/api/http';
-import { createPackGestureGuard } from '@/lib/api/packs';
+import { createPackGestureGuard, newPurchaseRequestId } from '@/lib/api/packs';
 import { translateStickerPacks } from '@/lib/i18n-sticker-packs-catalog';
 import type { InterfaceLanguage } from '@/lib/interface-language';
 
@@ -44,15 +44,18 @@ export type PackShopAdapter<P extends ShopPack> = {
   price?(pack: P): number | null;
   /** La possession lue au serveur (`owned`) ; absent = possédé. Le client ne la décide jamais. */
   owned?(pack: P): boolean;
+  /** `false` = pack inclus que le serveur refuse de retirer : aucun geste « Retirer » ne s'offre. Absent = retirable. */
+  removable?(pack: P): boolean;
   /** L'achat d'un pack payant non possédé ; `requestId` est généré au geste et réutilisé au nouvel essai. */
   purchase?(pack: P, requestId: string): Promise<ApiResult<{ readonly balance: number | null }>>;
-  /** Écrit la possession AU GESTE (et le solde une fois connu) — le pack passe possédé et installé sans attendre le réseau. */
-  applyPurchased?(queryClient: QueryClient, pack: P, balance: number | null): void;
+  /**
+   * Écrit la possession : AU GESTE (`confirmed === null`, le pack passe possédé sans attendre le réseau),
+   * puis à la confirmation du serveur (`{ balance }`, `null` si le serveur ne l'a pas dit).
+   */
+  applyPurchased?(queryClient: QueryClient, pack: P, confirmed: { readonly balance: number | null } | null): void;
 };
 
 type Notice = 'install' | 'insufficient' | 'purchase' | null;
-
-const newRequestId = (): string => `buy-${crypto.randomUUID().replaceAll('-', '')}`;
 
 /** Un refus définitif oublie son `requestId` ; une panne réseau ou serveur le GARDE pour le nouvel essai. */
 const isRetryable = (failure: { readonly status: number; readonly code?: string }): boolean =>
@@ -95,7 +98,7 @@ export function PackShop<P extends ShopPack>({
     const purchase = adapter.purchase;
     if (purchase === undefined || !guard.current.tryBegin(pack.slug)) return;
     setFlying((current) => new Set([...current, pack.slug]));
-    const requestId = requestIds.current.get(pack.slug) ?? newRequestId();
+    const requestId = requestIds.current.get(pack.slug) ?? newPurchaseRequestId();
     requestIds.current.set(pack.slug, requestId);
     const beforeCatalogue = queryClient.getQueryData(adapter.catalogueKey);
     const beforeInstalled = queryClient.getQueryData(adapter.installedKey);
@@ -104,6 +107,11 @@ export function PackShop<P extends ShopPack>({
     const result = await purchase(pack, requestId);
     guard.current.end(pack.slug);
     setFlying((current) => new Set([...current].filter((slug) => slug !== pack.slug)));
+    if (!result.ok && result.code === 'PACK_ALREADY_OWNED') {
+      requestIds.current.delete(pack.slug);
+      adapter.applyPurchased?.(queryClient, pack, { balance: null });
+      return;
+    }
     if (!result.ok) {
       if (!isRetryable(result)) requestIds.current.delete(pack.slug);
       queryClient.setQueryData(adapter.catalogueKey, beforeCatalogue);
@@ -112,7 +120,7 @@ export function PackShop<P extends ShopPack>({
       return;
     }
     requestIds.current.delete(pack.slug);
-    adapter.applyPurchased?.(queryClient, pack, result.data.balance);
+    adapter.applyPurchased?.(queryClient, pack, { balance: result.data.balance });
   };
 
   const toggle = async (pack: P) => {
@@ -190,23 +198,29 @@ export function PackShop<P extends ShopPack>({
                     {[...adapter.meta(pack), ...(price === null ? [] : [adapter.owned?.(pack) === false ? translateStickerPacks(language, 'packs.price', { price: String(price) }) : translateStickerPacks(language, 'packs.owned')])].join(' · ')}
                   </p>
                 </div>
-                <button
-                  type="button"
-                  data-shop-toggle={pack.slug}
-                  {...(toBuy ? {} : { 'aria-pressed': pack.installed })}
-                  data-shop-buy={toBuy ? pack.slug : undefined}
-                  aria-busy={flying.has(pack.slug)}
-                  aria-label={`${action} ${title}`}
-                  onClick={() => void toggle(pack)}
-                  className="min-h-11 shrink-0 rounded-full px-4 text-body font-semibold"
-                  style={
-                    pack.installed && !toBuy
-                      ? { backgroundColor: 'var(--color-ios-fill)', color: 'var(--color-ios-ink)' }
-                      : { backgroundColor: 'var(--accent, var(--color-ios-brand))', color: 'var(--color-ios-on-brand)' }
-                  }
-                >
-                  {action}
-                </button>
+                {pack.installed && !toBuy && adapter.removable?.(pack) === false ? (
+                  <span data-shop-included={pack.slug} className="shrink-0 px-4 text-body font-semibold" style={{ color: 'var(--color-ios-ink-2)' }}>
+                    {translateStickerPacks(language, 'packs.included')}
+                  </span>
+                ) : (
+                  <button
+                    type="button"
+                    data-shop-toggle={pack.slug}
+                    {...(toBuy ? {} : { 'aria-pressed': pack.installed })}
+                    data-shop-buy={toBuy ? pack.slug : undefined}
+                    aria-busy={flying.has(pack.slug)}
+                    aria-label={`${action} ${title}`}
+                    onClick={() => void toggle(pack)}
+                    className="min-h-11 shrink-0 rounded-full px-4 text-body font-semibold"
+                    style={
+                      pack.installed && !toBuy
+                        ? { backgroundColor: 'var(--color-ios-fill)', color: 'var(--color-ios-ink)' }
+                        : { backgroundColor: 'var(--accent, var(--color-ios-brand))', color: 'var(--color-ios-on-brand)' }
+                    }
+                  >
+                    {action}
+                  </button>
+                )}
               </li>
             );
           })}

@@ -50,6 +50,7 @@ const initialSegment = (): Segment => {
 
 export function SettingsPacksScreen({ language }: { readonly language: InterfaceLanguage }) {
   const [segment, setSegment] = useState<Segment>(initialSegment);
+  const [askedDomain] = useState(initialDomain);
   const segments: readonly { readonly id: Segment; readonly label: string }[] = [
     { id: 'shop', label: translateStickerPacks(language, 'packs.segment.shop') },
     { id: 'stickers', label: translateStickerPacks(language, 'packs.segment.stickers') },
@@ -104,7 +105,7 @@ export function SettingsPacksScreen({ language }: { readonly language: Interface
             })}
           </div>
           {segment === 'shop' ? (
-            <UnifiedShop language={language} {...(initialDomain() === undefined ? {} : { initialDomain: initialDomain() })} />
+            <UnifiedShop language={language} {...(askedDomain === undefined ? {} : { initialDomain: askedDomain })} />
           ) : segment === 'stickers' ? (
             <StickerShop language={language} />
           ) : (

@@ -74,6 +74,7 @@ const itStickerPacks = {
   'packs.domain.capture-frame': "Cornici di cattura",
   'packs.price': "{price} Meeshes",
   'packs.owned': "Posseduto",
+  'packs.included': "Incluso",
   'packs.buy': "Acquista · {price} Meeshes",
   'packs.error.insufficient': "Non hai abbastanza Meeshes per questo pacchetto",
   'packs.error.purchase': "L’acquisto non è andato a buon fine — riprova, ti verrà addebitato una sola volta",

@@ -77,6 +77,7 @@ const frStickerPacks = {
   'packs.domain.capture-frame': "Cadres de capture",
   'packs.price': "{price} Meeshes",
   'packs.owned': "Possédé",
+  'packs.included': "Inclus",
   'packs.buy': "Acheter · {price} Meeshes",
   'packs.error.insufficient': "Vous n’avez pas assez de Meeshes pour ce pack",
   'packs.error.purchase': "L’achat n’a pas abouti — réessayez, vous ne serez débité qu’une fois",

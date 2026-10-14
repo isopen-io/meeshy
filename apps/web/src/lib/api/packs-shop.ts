@@ -1,6 +1,6 @@
 import * as z from 'zod/mini';
 
-import { PACK_DOMAINS, type PackDomain } from '@meeshy/shared/types/content-pack';
+import { PACK_DOMAINS, PACK_LANGUAGES, type PackDomain, type PackLanguage, type PackNames } from '@meeshy/shared/types/content-pack';
 
 import type { ConversationsDeps } from './conversations';
 import type { ApiResult } from './http';
@@ -28,6 +28,10 @@ export type ShopPack = {
   /** En Meeshes ; `null` = gratuit. */
   readonly price: number | null;
   readonly owned: boolean;
+  /** Nom et description par langue ; `name`/`description` restent le repli (français). */
+  readonly names: PackNames;
+  /** `false` = pack inclus (builtin) que le serveur refuse de retirer. */
+  readonly removable: boolean;
 };
 
 export type ShopResult = { readonly packs: readonly ShopPack[]; readonly balance: number | null };
@@ -44,7 +48,25 @@ const WirePack = z.object({
   installed: z.boolean(),
   price: z.optional(z.nullable(z.number())),
   owned: z.optional(z.boolean()),
+  removable: z.optional(z.boolean()),
+  names: z.optional(z.record(z.string(), z.unknown())),
 });
+
+const WireName = z.object({ name: z.string(), description: z.string() });
+
+const isPackLanguage = (value: string): value is PackLanguage => (PACK_LANGUAGES as readonly string[]).includes(value);
+
+const namesOf = (raw: Readonly<Record<string, unknown>> | undefined): PackNames =>
+  Object.fromEntries(
+    Object.entries(raw ?? {}).flatMap(([language, value]) => {
+      const parsed = WireName.safeParse(value);
+      return isPackLanguage(language) && parsed.success ? [[language, parsed.data]] : [];
+    }),
+  );
+
+/** La langue du lecteur, puis le français, puis le nom servi à plat. */
+export const shopPackText = (pack: ShopPack, language: PackLanguage): { readonly name: string; readonly description: string } =>
+  pack.names[language] ?? pack.names.fr ?? { name: pack.name, description: pack.description };
 
 const decodeFailure = { ok: false, status: 0, error: 'Invalid pack', code: 'DECODE' } as const;
 
@@ -66,6 +88,8 @@ export const decodeShopPack = (domain: PackDomain) => (raw: unknown): ShopPack |
     installed: wire.installed,
     price,
     owned: price === null ? true : (wire.owned ?? false),
+    names: namesOf(wire.names),
+    removable: wire.removable ?? true,
   };
 };
 
@@ -148,4 +172,4 @@ export async function purchasePack(deps: ConversationsDeps, domain: PackDomain, 
   return pack === null || !parsed.success ? decodeFailure : { ok: true, data: { pack, balance: parsed.data.balance ?? null } };
 }
 
-export const newPurchaseRequestId = (): string => `buy-${crypto.randomUUID().replaceAll('-', '')}`;
+export { newPurchaseRequestId } from './packs';

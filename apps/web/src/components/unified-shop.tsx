@@ -8,7 +8,7 @@ import type { ConversationsDeps } from '@/lib/api/conversations';
 import { apiDeps } from '@/lib/api/deps';
 import { attachmentSrc } from '@/lib/api/media-url';
 import { packQueryKeys } from '@/lib/api/pack-query-keys';
-import { loadShop, purchasePack, setShopPackInstalled, type ShopPack } from '@/lib/api/packs-shop';
+import { loadShop, purchasePack, setShopPackInstalled, shopPackText, type ShopPack } from '@/lib/api/packs-shop';
 import { translateStickerPacks } from '@/lib/i18n-sticker-packs-catalog';
 import type { PlainStickerPacksKey } from '@/lib/i18n-sticker-packs-catalog';
 import type { InterfaceLanguage } from '@/lib/interface-language';
@@ -30,7 +30,8 @@ import { PackShop, type PackShopAdapter } from './pack-shop';
 export type UnifiedFilter = 'all' | PackDomain;
 
 export const BALANCE_QUERY_KEY = ['me', 'packs', 'balance'] as const;
-const shopKey = (filter: UnifiedFilter) => ['me', 'packs', 'shop', filter] as const;
+const SHOP_KEY_ROOT = ['me', 'packs', 'shop'] as const;
+const shopKey = (filter: UnifiedFilter) => [...SHOP_KEY_ROOT, filter] as const;
 const SHOP_INSTALLED_KEY = ['me', 'packs', 'shop', 'installed'] as const;
 
 export type UnifiedPack = ShopPack & { readonly rawSlug: string };
@@ -46,10 +47,26 @@ const DOMAIN_KEYS: Readonly<Record<PackDomain, PlainStickerPacksKey>> = {
 
 export const keyedPack = (pack: ShopPack): UnifiedPack => ({ ...pack, rawSlug: pack.slug, slug: `${pack.domain}:${pack.slug}` });
 
-const markOwned = (queryClient: QueryClient, key: readonly unknown[], pack: UnifiedPack) =>
-  queryClient.setQueryData<readonly UnifiedPack[]>(key, (list) =>
-    (list ?? []).map((candidate) => (candidate.slug === pack.slug ? { ...candidate, owned: true, installed: true } : candidate)),
-  );
+const ownedIn = (pack: UnifiedPack) => (list: unknown) =>
+  Array.isArray(list)
+    ? (list as readonly UnifiedPack[]).map((candidate) => (candidate.slug === pack.slug ? { ...candidate, owned: true, installed: true } : candidate))
+    : list;
+
+/**
+ * Au geste, seule la liste affichée change (le retour arrière la rétablit) ; à la
+ * confirmation, la possession vaut pour TOUS les filtres déjà en cache (le serveur
+ * rend `owned: true, installed: true`) — revenu sur « Tout », un pack acheté n'est
+ * plus à acheter ; les surfaces du domaine se revalident.
+ */
+const markOwned = (queryClient: QueryClient, filter: UnifiedFilter, pack: UnifiedPack, confirmed: boolean) => {
+  if (!confirmed) {
+    queryClient.setQueryData(shopKey(filter), ownedIn(pack));
+    return;
+  }
+  queryClient.setQueriesData({ queryKey: SHOP_KEY_ROOT }, ownedIn(pack));
+  void queryClient.invalidateQueries({ queryKey: packQueryKeys(pack.domain).installed });
+  void queryClient.invalidateQueries({ queryKey: packQueryKeys(pack.domain).catalogue });
+};
 
 export const unifiedShopAdapter = (
   language: InterfaceLanguage,
@@ -72,8 +89,8 @@ export const unifiedShopAdapter = (
     void client.invalidateQueries({ queryKey: packQueryKeys(pack.domain).installed });
     void client.invalidateQueries({ queryKey: packQueryKeys(pack.domain).catalogue });
   },
-  title: (pack) => pack.name,
-  description: (pack) => pack.description,
+  title: (pack) => shopPackText(pack, language).name,
+  description: (pack) => shopPackText(pack, language).description,
   meta: (pack) => [
     ...(pack.author === '' ? [] : [translateStickerPacks(language, 'stickerPacks.by', { author: pack.author })]),
     translateStickerPacks(language, DOMAIN_KEYS[pack.domain]),
@@ -86,16 +103,15 @@ export const unifiedShopAdapter = (
     ),
   price: (pack) => pack.price,
   owned: (pack) => pack.owned,
+  removable: (pack) => pack.removable,
   purchase: async (pack, requestId) => {
     const result = await purchasePack(deps, pack.domain, pack.rawSlug, requestId);
     return result.ok ? { ok: true, data: { balance: result.data.balance } } : result;
   },
-  applyPurchased: (client, pack, balance) => {
-    markOwned(client, shopKey(filter), pack);
-    if (balance === null) return;
-    client.setQueryData(BALANCE_QUERY_KEY, balance);
-    void client.invalidateQueries({ queryKey: packQueryKeys(pack.domain).installed });
-    void client.invalidateQueries({ queryKey: packQueryKeys(pack.domain).catalogue });
+  applyPurchased: (client, pack, confirmed) => {
+    markOwned(client, filter, pack, confirmed !== null);
+    if (confirmed === null || confirmed.balance === null) return;
+    client.setQueryData(BALANCE_QUERY_KEY, confirmed.balance);
   },
 });
 

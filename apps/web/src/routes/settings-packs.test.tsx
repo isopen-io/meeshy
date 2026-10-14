@@ -83,4 +83,19 @@ describe('SettingsPacksScreen', () => {
     expect(frames.querySelector('[data-packs-segment="frames"]')?.getAttribute('aria-checked')).toBe('true');
     at('/');
   });
+
+  test('un domaine inconnu ne casse rien : la page s’ouvre comme avant, sur les stickers', async () => {
+    at('/settings?volet=packs&domaine=inconnu');
+    try {
+      const host = await mounter.mount(
+        <QueryClientProvider client={appQueryClient}>
+          <SettingsPacksScreen language="fr" />
+        </QueryClientProvider>,
+      );
+      expect(host.querySelector('[data-packs-segment="stickers"]')?.getAttribute('aria-checked')).toBe('true');
+      expect(host.querySelector('[data-unified-shop]')).toBe(null);
+    } finally {
+      at('/');
+    }
+  });
 });

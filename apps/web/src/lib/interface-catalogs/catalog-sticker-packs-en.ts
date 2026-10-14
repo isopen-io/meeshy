@@ -74,6 +74,7 @@ const enStickerPacks = {
   'packs.domain.capture-frame': "Capture frames",
   'packs.price': "{price} Meeshes",
   'packs.owned': "Owned",
+  'packs.included': "Included",
   'packs.buy': "Buy · {price} Meeshes",
   'packs.error.insufficient': "You don’t have enough Meeshes for this pack",
   'packs.error.purchase': "The purchase did not go through — try again, you will only be charged once",

@@ -22,6 +22,7 @@ beforeAll(async () => {
   ensureHappyDomRegistered();
   globals.IS_REACT_ACT_ENVIRONMENT = true;
   await loadStickerPacksCatalog('fr');
+  await loadStickerPacksCatalog('en');
 });
 
 afterAll(async () => {
@@ -57,10 +58,10 @@ const gatewayDeps = (answer: Answer): { deps: ConversationsDeps; calls: HttpRequ
 const pack = (slug: string, extra: Record<string, unknown> = {}) => ({ slug, name: `Pack ${slug}`, installed: false, ...extra });
 const shopOf = (packs: readonly unknown[], balance = 50) => ({ ok: true as const, data: { domains: [{ domain: 'wallpaper', packs }], balance } });
 
-const mountShop = (deps: ConversationsDeps, initialDomain?: 'wallpaper') =>
+const mountShop = (deps: ConversationsDeps, initialDomain?: 'wallpaper', language: 'fr' | 'en' = 'fr') =>
   mounter.mount(
     <QueryClientProvider client={appQueryClient}>
-      <UnifiedShop language="fr" deps={deps} initialDomain={initialDomain} />
+      <UnifiedShop language={language} deps={deps} initialDomain={initialDomain} />
     </QueryClientProvider>,
   );
 
@@ -148,5 +149,56 @@ describe('UnifiedShop', () => {
     await until(() => calls.some((call) => call.method === 'PUT'));
     expect(calls.find((call) => call.method === 'PUT')?.path).toBe('/api/v1/packs/wallpaper/w1/install');
     expect(posts(calls).length).toBe(0);
+  });
+
+  test('le nom et la description d’un pack suivent la langue de l’interface (names), jamais le seul nom français', async () => {
+    const names = { fr: { name: 'Aurore', description: 'Lueurs' }, en: { name: 'Dawn', description: 'Glows' } };
+    const { deps } = gatewayDeps(() => shopOf([pack('w1', { name: 'Aurore', description: 'Lueurs', names })]));
+    const host = await mountShop(deps, 'wallpaper', 'en');
+    await until(() => host.querySelector('[data-shop-pack="wallpaper:w1"] h3') !== null);
+    expect(host.querySelector('[data-shop-pack="wallpaper:w1"] h3')?.textContent).toBe('Dawn');
+    expect(host.querySelector('[data-shop-pack="wallpaper:w1"]')?.textContent).toContain('Glows');
+  });
+
+  test('un pack inclus non retirable ne propose pas de désinstaller : aucun geste voué au refus', async () => {
+    const { deps, calls } = gatewayDeps(() => shopOf([pack('w1', { installed: true, removable: false })]));
+    const host = await mountShop(deps, 'wallpaper');
+    await until(() => host.querySelector('[data-shop-pack="wallpaper:w1"]') !== null);
+    expect(buyButton(host)).toBe(null);
+    expect(host.querySelector('[data-shop-included="wallpaper:w1"]')?.textContent).toBe('Inclus');
+    expect(calls.filter((call) => call.method === 'DELETE').length).toBe(0);
+  });
+
+  test('un achat confirmé sous un filtre vaut pour la vitrine entière : revenu sur « Tout », le pack est possédé', async () => {
+    let bought = false;
+    const row = () => pack('w1', { price: 30, owned: bought, installed: bought });
+    const { deps } = gatewayDeps((request) => {
+      if (request.method === 'GET') return shopOf([row()]);
+      bought = true;
+      return { ok: true, data: { pack: row(), balance: 20 } };
+    });
+    const host = await mountShop(deps);
+    await until(() => buyButton(host) !== null);
+    await mounter.click(host.querySelector<HTMLElement>('[data-shop-domain="wallpaper"]'));
+    await until(() => host.querySelector('[data-unified-shop="wallpaper"]') !== null && buyButton(host) !== null);
+    await mounter.click(buyButton(host));
+    await until(() => host.querySelector('[data-shop-balance]')?.textContent === 'Solde : 20 Meeshes');
+    await mounter.click(host.querySelector<HTMLElement>('[data-shop-domain="all"]'));
+    await until(() => host.querySelector('[data-unified-shop="all"]') !== null);
+    expect(host.querySelector('[data-shop-pack="wallpaper:w1"]')?.textContent).toContain('Possédé');
+    expect(host.querySelector('[data-shop-buy]')).toBe(null);
+  });
+
+  test('409 PACK_ALREADY_OWNED (acheté depuis un autre appareil) : le pack reste possédé, sans message d’échec', async () => {
+    const { deps } = gatewayDeps((request) =>
+      request.method === 'GET' ? shopOf([pack('w1', { price: 30 })]) : { ok: false, status: 409, error: 'x', code: 'PACK_ALREADY_OWNED' },
+    );
+    const host = await mountShop(deps, 'wallpaper');
+    await until(() => buyButton(host) !== null);
+    await mounter.click(buyButton(host));
+    await act(settle);
+    await act(settle);
+    expect(host.querySelector('[role="status"]')?.textContent).toBe('');
+    expect(host.querySelector('[data-shop-pack="wallpaper:w1"]')?.textContent).toContain('Possédé');
   });
 });

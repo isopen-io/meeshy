@@ -74,6 +74,7 @@ const ptStickerPacks = {
   'packs.domain.capture-frame': "Molduras de captura",
   'packs.price': "{price} Meeshes",
   'packs.owned': "Adquirido",
+  'packs.included': "Incluído",
   'packs.buy': "Comprar · {price} Meeshes",
   'packs.error.insufficient': "Você não tem Meeshes suficientes para este pacote",
   'packs.error.purchase': "A compra não foi concluída — tente de novo, você só será cobrado uma vez",
