@@ -651,7 +651,11 @@ public final class APIClient: APIClientProviding, @unchecked Sendable {
                 // cours, session remplacée) : rien n'a été refusé, et une
                 // session expirée ferait démonter le compte qu'on quitte.
                 throw abandoned
-            } catch {
+            } catch let refused as MeeshyError {
+                // Seul un REFUS d'authentification vaut session expirée. Un rafraîchissement qui échoue
+                // sur le réseau — réouverture hors ligne, jeton de 24 h échu — passait pour un refus : le
+                // compte était déconnecté et sa base locale purgée pour une simple coupure.
+                guard case .auth = refused else { throw refused }
                 throw MeeshyError.auth(.sessionExpired)
             }
         }
@@ -792,7 +796,10 @@ public final class APIClient: APIClientProviding, @unchecked Sendable {
                                 // #10463 — même règle que le rafraîchissement
                                 // préventif : un abandon n'est pas un refus.
                                 throw abandoned
-                            } catch {
+                            } catch let refused as MeeshyError {
+                                // Même règle que le rafraîchissement préventif : une erreur serveur ou
+                                // réseau du second passage n'est pas un refus d'authentification.
+                                guard case .auth = refused else { throw refused }
                                 await AuthManager.shared.handleUnauthorized()
                                 throw MeeshyError.auth(.sessionExpired)
                             }

@@ -29,6 +29,11 @@ final class BackgroundTransitionCoordinator: BackgroundTransitioning {
 
     private var activeTaskId: UIBackgroundTaskIdentifier = .invalid
     private var isTransitioning = false
+    /// Avance à chaque entrée ET à chaque reprise. `enterBackground` court sur plusieurs attentes (cache,
+    /// accusés de push par le réseau) : revenu au premier plan avant sa fin, l'utilisateur voyait la tâche
+    /// reprendre APRÈS `resumeFromBackground`, détruire les sockets et suspendre la base d'une app visible —
+    /// plus de temps réel et des écritures refusées jusqu'au cycle suivant.
+    private var transitionGeneration: UInt64 = 0
 
     private init() {}
 
@@ -38,6 +43,8 @@ final class BackgroundTransitionCoordinator: BackgroundTransitioning {
         guard !isTransitioning else { return }
         isTransitioning = true
         defer { isTransitioning = false }
+        transitionGeneration &+= 1
+        let generation = transitionGeneration
 
         let taskId = UIApplication.shared.beginBackgroundTask(withName: "meeshy.background.transition") { [weak self] in
             // #7059 — L'OS ANNONCE LA SUSPENSION : c'est exactement l'instant du
@@ -88,6 +95,8 @@ final class BackgroundTransitionCoordinator: BackgroundTransitioning {
             // a genuine transport drop.
             if CallManagerHost.shared.isCallActiveForAudioGuard {
                 logger.info("Skipping socket suspend — call active (keep signaling channel)")
+            } else if generation != transitionGeneration {
+                logger.info("Skipping socket suspend — app resumed during the transition")
             } else {
                 MessageSocketManager.shared.prepareForBackground()
                 SocialSocketManager.shared.prepareForBackground()
@@ -125,7 +134,11 @@ final class BackgroundTransitionCoordinator: BackgroundTransitioning {
         // plus personne ne prend de verrou sur le fichier — c'est ce qui manquait
         // aux cinq suppressions 0xDEAD10CC mesurées sur l'appareil du porteur,
         // toutes venues d'écrivains que la garde de maintenance ne couvrait pas.
-        DatabaseSuspension.suspend()
+        if generation == transitionGeneration {
+            DatabaseSuspension.suspend()
+        } else {
+            logger.info("Skipping database suspend — app resumed during the transition")
+        }
 
         endBackgroundTask()
     }
@@ -134,6 +147,7 @@ final class BackgroundTransitionCoordinator: BackgroundTransitioning {
 
     func resumeFromBackground() async {
         logger.info("Foreground resume starting")
+        transitionGeneration &+= 1
         // #7059 — PREMIER GESTE, avant tout ce qui écrit. Les consommateurs
         // ci-dessous gravent en base dès la première ligne ; les laisser tourner
         // sur une base encore suspendue échangerait le plantage contre une

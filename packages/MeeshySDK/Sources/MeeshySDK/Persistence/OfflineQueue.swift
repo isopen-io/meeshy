@@ -871,6 +871,9 @@ public actor OfflineQueue {
         } catch {
             logger.error("cancelPendingSend failed: \(error.localizedDescription, privacy: .public)")
         }
+        // Le miroir mémoire suit la ligne : `retryAll()` rejoue `items` sans relire l'outbox, et un message
+        // annulé ou supprimé y restait — il repartait à la reconnexion suivante.
+        items.removeAll { $0.clientMessageId == cmid }
         await refreshPendingCount()
     }
 
@@ -896,6 +899,8 @@ public actor OfflineQueue {
         } catch {
             logger.error("clearSendMessageRow failed: \(error.localizedDescription, privacy: .public)")
         }
+        // Même règle que `cancelPendingSend` : supprimé ou déjà parti, il ne se rejoue plus.
+        items.removeAll { $0.clientMessageId == cmid }
         await refreshPendingCount()
     }
 
