@@ -1,0 +1,10 @@
+<?xml version="1.0" encoding="utf-8"?>
+<manifest xmlns:android="http://schemas.android.com/apk/res/android">
+    <application>
+        <!-- #10641 — DEBUG SEULEMENT : la banniere d'un vocal fabriquee pour la recette
+             (DebugVoiceNotificationReceiver), jamais dans la release. -->
+        <receiver
+            android:name=".DebugVoiceNotificationReceiver"
+            android:exported="true" />
+    </application>
+</manifest>
