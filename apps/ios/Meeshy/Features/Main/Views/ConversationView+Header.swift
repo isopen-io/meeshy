@@ -578,7 +578,7 @@ private struct HeaderCallButtonsView: View {
             Button {
                 startCall(isVideo: true)
             } label: {
-                Label(String(localized: "call.start.video", defaultValue: "Appel video", bundle: .main), systemImage: "video.fill")
+                Label(String(localized: "call.start.video", defaultValue: "Appel vidéo", bundle: .main), systemImage: "video.fill")
             }
         } label: {
             callGlyph("phone.fill")

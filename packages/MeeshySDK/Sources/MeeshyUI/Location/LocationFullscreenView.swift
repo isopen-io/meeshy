@@ -90,7 +90,7 @@ public struct LocationFullscreenView: View {
                     .foregroundColor(Color(hex: accentColor))
 
                 VStack(alignment: .leading, spacing: MeeshySpacing.xxs) {
-                    Text(placeName ?? String(localized: "location.fullscreen.sharedPosition", defaultValue: "Position partagee", bundle: .module))
+                    Text(placeName ?? String(localized: "location.fullscreen.sharedPosition", defaultValue: "Position partagée", bundle: .module))
                         .font(.system(size: MeeshyFont.bodySize, weight: .semibold))
                         .foregroundColor(.primary)
                     if let addr = address {
@@ -131,7 +131,7 @@ public struct LocationFullscreenView: View {
                     HStack(spacing: MeeshySpacing.xsPlus) {
                         Image(systemName: "arrow.triangle.turn.up.right.diamond.fill")
                             .font(.system(size: MeeshyIconSize.xs, weight: .semibold))
-                        Text(String(localized: "location.fullscreen.directions", defaultValue: "Itineraire", bundle: .module))
+                        Text(String(localized: "location.fullscreen.directions", defaultValue: "Itinéraire", bundle: .module))
                             .font(.system(size: MeeshyFont.subheadSize, weight: .semibold))
                     }
                     .foregroundColor(Color(hex: accentColor))

@@ -1231,7 +1231,7 @@ struct ConversationListBottomBar: View {
                             .font(MeeshyFont.relative(MeeshyFont.smallSize, weight: .semibold))
                             .foregroundColor(MeeshyColors.indigo300)
                     }
-                    .accessibilityLabel(String(localized: "accessibility.see_all_communities", defaultValue: "Voir toutes les communautes"))
+                    .accessibilityLabel(String(localized: "accessibility.see_all_communities", defaultValue: "Voir toutes les communautés"))
 
                     Button {
                         withAnimation(.spring(response: 0.3, dampingFraction: 0.8)) {
@@ -1249,7 +1249,7 @@ struct ConversationListBottomBar: View {
                                 )
                             )
                     }
-                    .accessibilityLabel(String(localized: "accessibility.close_communities", defaultValue: "Fermer les communautes"))
+                    .accessibilityLabel(String(localized: "accessibility.close_communities", defaultValue: "Fermer les communautés"))
                 }
             }
             .padding(.horizontal, MeeshySpacing.lg)
