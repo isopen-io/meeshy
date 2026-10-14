@@ -1,6 +1,7 @@
 package me.meeshy.app;
 
 import android.content.Context;
+import android.content.pm.ApplicationInfo;
 import android.graphics.Bitmap;
 import android.graphics.BitmapFactory;
 import android.graphics.BitmapShader;
@@ -35,7 +36,6 @@ final class WidgetAvatars {
 
     private static final String DIR = "widget-avatars";
     private static final int MAX_FILES = 64;
-    private static final int MAX_BYTES = 2 * 1024 * 1024;
     private static final int TIMEOUT_MS = 4000;
 
     private WidgetAvatars() {}
@@ -47,7 +47,8 @@ final class WidgetAvatars {
     }
 
     private static Bitmap photo(Context context, String url, int sizePx) {
-        if (!WidgetActionRules.isFetchableAvatar(url)) return null;
+        boolean debug = (context.getApplicationInfo().flags & ApplicationInfo.FLAG_DEBUGGABLE) != 0;
+        if (!WidgetAvatarRules.isFetchable(url, debug)) return null;
         File file = new File(dir(context), key(url) + ".png");
         if (file.exists()) {
             Bitmap cached = BitmapFactory.decodeFile(file.getAbsolutePath());
@@ -56,7 +57,7 @@ final class WidgetAvatars {
                 return cached;
             }
         }
-        byte[] bytes = download(url);
+        byte[] bytes = download(url, debug);
         if (bytes == null) return null;
         Bitmap decoded = decodeSampled(bytes, sizePx);
         if (decoded == null) return null;
@@ -65,38 +66,60 @@ final class WidgetAvatars {
         return scaled;
     }
 
-    private static byte[] download(String url) {
-        HttpURLConnection connection = null;
-        try {
-            connection = (HttpURLConnection) new URL(url).openConnection();
-            connection.setConnectTimeout(TIMEOUT_MS);
-            connection.setReadTimeout(TIMEOUT_MS);
-            connection.setInstanceFollowRedirects(true);
-            if (connection.getResponseCode() != HttpURLConnection.HTTP_OK) return null;
-            try (InputStream in = connection.getInputStream(); ByteArrayOutputStream out = new ByteArrayOutputStream()) {
-                byte[] buffer = new byte[16 * 1024];
-                int read;
-                while ((read = in.read(buffer)) != -1) {
-                    if (out.size() + read > MAX_BYTES) return null;
-                    out.write(buffer, 0, read);
+    /**
+     * Les redirections sont suivies A LA MAIN, au plus deux, chacune
+     * revalidee par la garde (`WidgetAvatarRules.redirectTarget`) : suivies
+     * par `HttpURLConnection`, elles meneraient sans controle vers n'importe
+     * quel hote.
+     */
+    private static byte[] download(String url, boolean debug) {
+        String current = url;
+        for (int hop = 0; hop <= WidgetAvatarRules.MAX_REDIRECTS; hop++) {
+            HttpURLConnection connection = null;
+            try {
+                connection = (HttpURLConnection) new URL(current).openConnection();
+                connection.setConnectTimeout(TIMEOUT_MS);
+                connection.setReadTimeout(TIMEOUT_MS);
+                connection.setInstanceFollowRedirects(false);
+                int code = connection.getResponseCode();
+                if (code >= 300 && code < 400) {
+                    current = WidgetAvatarRules.redirectTarget(current, connection.getHeaderField("Location"), debug);
+                    if (current == null) return null;
+                    continue;
                 }
-                return out.toByteArray();
+                if (code != HttpURLConnection.HTTP_OK) return null;
+                if (!WidgetAvatarRules.acceptsLength(connection.getContentLengthLong())) return null;
+                return readCapped(connection);
+            } catch (IOException | ClassCastException unreachable) {
+                return null;
+            } finally {
+                if (connection != null) connection.disconnect();
             }
-        } catch (IOException | ClassCastException unreachable) {
-            return null;
-        } finally {
-            if (connection != null) connection.disconnect();
+        }
+        return null;
+    }
+
+    private static byte[] readCapped(HttpURLConnection connection) throws IOException {
+        try (InputStream in = connection.getInputStream(); ByteArrayOutputStream out = new ByteArrayOutputStream()) {
+            byte[] buffer = new byte[16 * 1024];
+            int read;
+            while ((read = in.read(buffer)) != -1) {
+                if (out.size() + read > WidgetAvatarRules.MAX_BYTES) return null;
+                out.write(buffer, 0, read);
+            }
+            return out.toByteArray();
         }
     }
 
+    /** Dimensions lues AVANT le decodage : une image piege est refusee, les autres decodent pres de 2 × la pastille. */
     private static Bitmap decodeSampled(byte[] bytes, int sizePx) {
         BitmapFactory.Options bounds = new BitmapFactory.Options();
         bounds.inJustDecodeBounds = true;
         BitmapFactory.decodeByteArray(bytes, 0, bytes.length, bounds);
-        int smallest = Math.min(bounds.outWidth, bounds.outHeight);
-        if (smallest <= 0) return null;
+        if (!WidgetAvatarRules.acceptsDimensions(bounds.outWidth, bounds.outHeight)) return null;
         BitmapFactory.Options options = new BitmapFactory.Options();
-        options.inSampleSize = Math.max(1, Integer.highestOneBit(Math.max(1, smallest / sizePx)));
+        options.inSampleSize = WidgetAvatarRules.sampleSize(bounds.outWidth, bounds.outHeight, sizePx);
+        options.inPreferredConfig = Bitmap.Config.RGB_565;
         Bitmap decoded = BitmapFactory.decodeByteArray(bytes, 0, bytes.length, options);
         if (decoded == null) return null;
         int side = Math.min(decoded.getWidth(), decoded.getHeight());

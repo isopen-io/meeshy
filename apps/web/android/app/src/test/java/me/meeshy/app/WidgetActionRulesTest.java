@@ -1,9 +1,7 @@
 package me.meeshy.app;
 
 import static org.junit.Assert.assertEquals;
-import static org.junit.Assert.assertFalse;
 import static org.junit.Assert.assertNull;
-import static org.junit.Assert.assertTrue;
 
 import java.util.ArrayList;
 import java.util.Arrays;
@@ -13,8 +11,7 @@ import org.junit.Test;
 
 /**
  * #10626 — les actions des widgets : liens profonds vers une conversation, la
- * file « marquer lu » que la page vide au retour, et les seules photos que le
- * natif accepte de telecharger.
+ * file « marquer lu » que la page vide au retour (les photos : WidgetAvatarRulesTest).
  */
 public class WidgetActionRulesTest {
 
@@ -60,16 +57,5 @@ public class WidgetActionRulesTest {
         assertEquals(Collections.emptyList(), WidgetActionRules.parseIds(null));
         assertEquals(Collections.emptyList(), WidgetActionRules.parseIds("pas une liste"));
         assertEquals(Collections.singletonList("ok"), WidgetActionRules.parseIds("[\"ok\", 4, null]"));
-    }
-
-    @Test
-    public void onlySecureOrLocalPhotosAreFetched() {
-        assertTrue(WidgetActionRules.isFetchableAvatar("https://gate.meeshy.me/api/v1/attachments/a.jpg"));
-        assertTrue(WidgetActionRules.isFetchableAvatar("http://10.0.2.2:3000/a.jpg"));
-        assertTrue(WidgetActionRules.isFetchableAvatar("http://localhost:3000/a.jpg"));
-        assertFalse(WidgetActionRules.isFetchableAvatar("http://tracker.example/a.jpg"));
-        assertFalse(WidgetActionRules.isFetchableAvatar("file:///data/data/me.meeshy.app/x"));
-        assertFalse(WidgetActionRules.isFetchableAvatar("content://x"));
-        assertFalse(WidgetActionRules.isFetchableAvatar(null));
     }
 }
