@@ -19,7 +19,7 @@ import { waveformOf } from '@/lib/view/message';
 import { useMediaPlayback } from '@/lib/view/use-media-playback';
 import { handOffVideoPosition } from '@/lib/view/video-handoff';
 import { useCarriedPlayback } from '@/lib/view/audio-carry';
-import { PLAYBACK_SPEEDS, seekFraction, speedLabel } from '@/lib/view/media-transport';
+import { PLAYBACK_SPEEDS, formatMediaTime, seekFraction, speedLabel } from '@/lib/view/media-transport';
 import {
   karaokeSegments,
   karaokeTone,
@@ -343,8 +343,10 @@ function VoiceAttachment({
             />
           ))}
         </span>
-        <span className="shrink-0 text-time tabular-nums">
-          {Math.floor(seconds / 60)}:{String(seconds % 60).padStart(2, '0')}
+        {/* LE TEMPS QUI PASSE (#10625) — au repos la durée ; en lecture, et en
+            pause après lecture, la position courante, comme `AudioPlayerView`. */}
+        <span data-voice-time className="shrink-0 text-time tabular-nums">
+          {formatMediaTime(status === 'playing' || status === 'paused' ? position : seconds)}
         </span>
         {/* LA VITESSE (#6306) — un cycle, pas un menu : c'est le geste d'iOS
             (`cycleSpeed`), et un vocal se réécoute plus vite bien plus souvent
