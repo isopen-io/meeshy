@@ -10151,9 +10151,6 @@
 			path = Fonts;
 			sourceTree = "<group>";
 		};
-		BA041356F56605501DE64E47 /* Lentille */ = {
-			isa = PBXGroup;
-			children = (
 		B69918A58FF12A5B736EA818 /* Appearance */ = {
 			isa = PBXGroup;
 			children = (
@@ -10163,6 +10160,9 @@
 			path = Appearance;
 			sourceTree = "<group>";
 		};
+		BA041356F56605501DE64E47 /* Lentille */ = {
+			isa = PBXGroup;
+			children = (
 				7AA39B41F0FB43298F17E9C3 /* Chrome */,
 				1BE0C756AB79DBA3703C2CA1 /* Core */,
 				CEED013278C29B181C784E87 /* Mode */,
