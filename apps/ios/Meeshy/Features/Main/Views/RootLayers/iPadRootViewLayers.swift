@@ -60,6 +60,8 @@ struct iPadStoryAndLifecycleLayer: ViewModifier {
     let navigationStack: [Route]
     /// Reprend la pile laissée par la racine iPhone — appelé APRÈS `onAppear`, qui installe les callbacks du routeur.
     let onRestoreNavigation: ([Route]) -> Void
+    /// Ce que la colonne droite montre — le titre de la fenêtre sous App Exposé et Stage Manager.
+    let sceneTitle: String
     @Environment(\.rootNavigationHandoff) private var navigationHandoff
 
     func body(content: Content) -> some View {
@@ -118,6 +120,11 @@ struct iPadStoryAndLifecycleLayer: ViewModifier {
             }
             .adaptiveOnChange(of: navigationStack) { _, stack in
                 navigationHandoff?.record(stack)
+            }
+            // Parité `RootStoryDoorsLayer` : sans lui, la fenêtre iPad gardait le titre posé en largeur compacte,
+            // et deux fenêtres Meeshy sous Stage Manager portaient le même.
+            .adaptiveOnChange(of: sceneTitle, initial: true) { _, title in
+                DeviceLayout.activeWindowScene?.title = String(format: String(localized: "root.scene_title_format", defaultValue: "Meeshy — %@", bundle: .main), title)
             }
             .onDisappear(perform: onDisappear)
             .task { await onStart() }

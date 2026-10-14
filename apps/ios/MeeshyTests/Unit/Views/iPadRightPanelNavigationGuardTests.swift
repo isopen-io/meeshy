@@ -152,6 +152,16 @@ final class iPadRightPanelNavigationGuardTests: XCTestCase {
         XCTAssertTrue(layer.contains("onOpenReel: { reel, reels in"), "un réel de profil s'ouvre dans le lecteur")
     }
 
+    /// Parité iPhone : un seul hôte de toasts (MeeshyApp), les bandeaux d'attente montés, le titre de la fenêtre
+    /// suivi par la racine iPad.
+    func test_iPadRoot_toastsBannersAndWindowTitle_matchTheiPhone() throws {
+        let overlays = try source(of: "iPadRootView+Overlays.swift")
+        XCTAssertFalse(overlays.contains("FeedbackToastView("), "les toasts ont un hôte unique, au niveau de MeeshyApp")
+        XCTAssertTrue(overlays.contains("RootPendingBanners()"), "les bandeaux « en attente » existent aussi sur iPad")
+        let layer = try source(of: "RootLayers/iPadRootViewLayers.swift")
+        XCTAssertTrue(layer.contains("DeviceLayout.activeWindowScene?.title"), "la fenêtre iPad porte le titre de ce qu'elle montre")
+    }
+
     func test_storyNotificationScreens_closeThePanelOnIPad() throws {
         let stories = URL(fileURLWithPath: "\(#filePath)")
             .deletingLastPathComponent().deletingLastPathComponent()

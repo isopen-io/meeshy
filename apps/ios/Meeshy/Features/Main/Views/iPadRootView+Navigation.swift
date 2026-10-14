@@ -237,8 +237,12 @@ extension iPadRootView {
         } else if routeName.hasPrefix("storyDetail:") {
             let postId = String(routeName.dropFirst("storyDetail:".count))
             if let groupIdx = storyViewModel.groupIndex(forStoryId: postId) {
-                selectedStoryUserIdFromConv = storyViewModel.storyGroups[groupIdx].id
-                showStoryViewerFromConv = true
+                // Le coordinateur, comme l'iPhone : la requête porte son uid. Le couple @State de l'ancien
+                // chemin pouvait présenter le lecteur avant que l'uid ne soit posé — « Story introuvable ».
+                storyViewerCoordinator.present(StoryViewerRequest(
+                    id: storyViewModel.storyGroups[groupIdx].id,
+                    startAtFirstUnviewed: true
+                ))
             } else {
                 rightPanelRoute = .postDetail(postId)
             }

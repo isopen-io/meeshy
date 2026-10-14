@@ -24,7 +24,6 @@ import MeeshyUI
 
 struct iPadRootView: View {
     @StateObject var theme = ThemeManager.shared
-    @StateObject var toastManager = FeedbackToastManager.shared
     @StateObject var storyViewModel = StoryViewModel()
     @StateObject var statusViewModel = StatusViewModel()
     // Possédé sans être observé (cf. ConversationListVMOwner, RootView.swift) :
@@ -184,7 +183,9 @@ struct iPadRootView: View {
             onStart: startRootServices,
             navigationStack: RootNavigationHandoff.stack(conversation: activeConversation, panelRoute: rightPanelRoute)
                 + (rightPanelRoute.map { gameTrail.trail.routes(over: $0) } ?? []),
-            onRestoreNavigation: restoreNavigation
+            onRestoreNavigation: restoreNavigation,
+            sceneTitle: rightPanelRoute?.displayTitle ?? activeConversation?.name
+                ?? String(localized: "route.title.conversations", defaultValue: "Conversations", bundle: .main)
         ))
         .modifier(RootIntentRoutingLayer(
             router: router,
