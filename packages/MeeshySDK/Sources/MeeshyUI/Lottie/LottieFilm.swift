@@ -36,6 +36,11 @@ nonisolated public final class LottieFilmSource: @unchecked Sendable {
 ///   `CGContext` (`render(in:)`) ; son `display()` ne fait rien hors du fil
 ///   principal, d'où `@MainActor`. Le rendu asynchrone rend la main toutes
 ///   les quelques images pour ne jamais figer un geste.
+/// - Le rendu passe par une `LottieAnimationView` hors écran, jamais par un
+///   `LottieAnimationLayer` nu : seule la vue PLACE le calque d'animation
+///   (`layoutAnimation()`). Un calque nu le laisse centré sur son origine, et
+///   l'image ne montrait qu'un quart du sticker (7 % de pixels opaques contre
+///   20 % au web, mesuré le 2026-10-15).
 nonisolated public enum LottieFilm {
 
     /// Le rythme des images rasterisées : celui des films WebP qu'elles
@@ -91,17 +96,16 @@ nonisolated public enum LottieFilm {
     /// La première image, carrée, de `pixelSize` de côté.
     @MainActor
     public static func still(_ source: LottieFilmSource, pixelSize: Int) -> CGImage? {
-        let renderer = Renderer(source)
-        return renderer.image(at: source.animation.startFrame, pixelSize: pixelSize)
+        Renderer(source, pixelSize: pixelSize)?.image(at: source.animation.startFrame)
     }
 
     /// Toutes les images d'une boucle, d'un coup — pour un appel synchrone.
     @MainActor
     public static func decodedNow(_ source: LottieFilmSource, pixelSize: Int,
                                   framesPerSecond: Double = rasterFramesPerSecond) -> AnimatedImageDecoder.Decoded? {
-        let renderer = Renderer(source)
+        guard let renderer = Renderer(source, pixelSize: pixelSize) else { return nil }
         let times = frameTimes(source, framesPerSecond: framesPerSecond)
-        let frames = times.compactMap { renderer.image(at: $0, pixelSize: pixelSize) }
+        let frames = times.compactMap { renderer.image(at: $0) }
         return decoded(frames, expected: times.count, framesPerSecond: framesPerSecond)
     }
 
@@ -110,7 +114,7 @@ nonisolated public enum LottieFilm {
     @MainActor
     public static func decoded(_ source: LottieFilmSource, pixelSize: Int,
                                framesPerSecond: Double = rasterFramesPerSecond) async -> AnimatedImageDecoder.Decoded? {
-        let renderer = Renderer(source)
+        guard let renderer = Renderer(source, pixelSize: pixelSize) else { return nil }
         let times = frameTimes(source, framesPerSecond: framesPerSecond)
         var frames: [CGImage] = []
         frames.reserveCapacity(times.count)
@@ -119,7 +123,7 @@ nonisolated public enum LottieFilm {
                 await Task.yield()
                 if Task.isCancelled { return nil }
             }
-            guard let frame = renderer.image(at: time, pixelSize: pixelSize) else { return nil }
+            guard let frame = renderer.image(at: time) else { return nil }
             frames.append(frame)
         }
         return decoded(frames, expected: times.count, framesPerSecond: framesPerSecond)
@@ -137,35 +141,36 @@ nonisolated public enum LottieFilm {
         return AnimatedImageDecoder.Decoded(frames: frames, duration: Double(frames.count) / framesPerSecond, loopCount: 0)
     }
 
-    /// Un calque Lottie hors écran, réutilisé pour toutes les images d'un rendu.
+    /// Une vue Lottie hors écran, à la taille de l'image, réutilisée pour
+    /// toutes les images d'un rendu.
     @MainActor
     private struct Renderer {
-        let layer: LottieAnimationLayer
-        let bounds: CGRect
+        let view: LottieAnimationView
+        let side: CGFloat
 
-        init(_ source: LottieFilmSource) {
-            layer = LottieAnimationLayer(animation: source.animation,
-                                         configuration: LottieConfiguration(renderingEngine: .mainThread))
-            bounds = source.animation.bounds
-            layer.frame = bounds
+        init?(_ source: LottieFilmSource, pixelSize: Int) {
+            guard pixelSize > 0 else { return nil }
+            side = CGFloat(pixelSize)
+            view = LottieAnimationView(animation: source.animation,
+                                       configuration: LottieConfiguration(renderingEngine: .mainThread))
+            view.frame = CGRect(x: 0, y: 0, width: side, height: side)
+            view.contentMode = .scaleToFill
+            view.backgroundColor = .clear
+            view.layoutIfNeeded()
         }
 
-        func image(at time: AnimationFrameTime, pixelSize: Int) -> CGImage? {
-            guard pixelSize > 0, bounds.width > 0, bounds.height > 0 else { return nil }
+        func image(at time: AnimationFrameTime) -> CGImage? {
             CATransaction.begin()
             CATransaction.setDisableActions(true)
-            layer.currentFrame = time
-            layer.forceDisplayUpdate()
+            view.currentFrame = time
+            view.forceDisplayUpdate()
             CATransaction.commit()
-            let side = CGFloat(pixelSize)
             let format = UIGraphicsImageRendererFormat()
             format.scale = 1
             format.opaque = false
-            let image = UIGraphicsImageRenderer(size: CGSize(width: side, height: side), format: format).image { context in
-                context.cgContext.scaleBy(x: side / bounds.width, y: side / bounds.height)
-                layer.render(in: context.cgContext)
-            }
-            return image.cgImage
+            return UIGraphicsImageRenderer(size: CGSize(width: side, height: side), format: format).image { context in
+                view.layer.render(in: context.cgContext)
+            }.cgImage
         }
     }
 }
