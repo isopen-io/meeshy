@@ -322,8 +322,6 @@ const en = {
   'trackingLink.opening': 'Opening the link…',
   'trackingLink.dead.title': 'This link is no longer available',
   'trackingLink.dead.body': 'It has expired, been disabled, or never existed.',
-  'accountDeletion.incomplete.title': 'Incomplete link',
-  'accountDeletion.incomplete.body': 'This link is missing the information it needs. Sign in to request the deletion of your account.',
   'accountDeletion.confirm.title': 'Confirm the deletion of your account',
   'accountDeletion.confirm.body':
     'Your account will be deactivated after a 30-day grace period. Until then, the “Cancel” link in the email lets you change your mind.',

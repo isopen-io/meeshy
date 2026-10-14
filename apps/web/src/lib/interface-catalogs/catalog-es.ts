@@ -322,8 +322,6 @@ const es = {
   'trackingLink.opening': 'Abriendo el enlace…',
   'trackingLink.dead.title': 'Este enlace ya no está disponible',
   'trackingLink.dead.body': 'Ha caducado, se ha desactivado o nunca ha existido.',
-  'accountDeletion.incomplete.title': 'Enlace incompleto',
-  'accountDeletion.incomplete.body': 'A este enlace le falta la información necesaria. Inicia sesión para solicitar la eliminación de tu cuenta.',
   'accountDeletion.confirm.title': 'Confirmar la eliminación de tu cuenta',
   'accountDeletion.confirm.body':
     'Tu cuenta se desactivará al final de un periodo de gracia de 30 días. Hasta entonces, el enlace «Cancelar» del correo te permite dar marcha atrás.',

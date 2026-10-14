@@ -322,8 +322,6 @@ const it = {
   'trackingLink.opening': 'Apertura del link…',
   'trackingLink.dead.title': 'Questo link non è più disponibile',
   'trackingLink.dead.body': 'È scaduto, è stato disattivato o non è mai esistito.',
-  'accountDeletion.incomplete.title': 'Link incompleto',
-  'accountDeletion.incomplete.body': 'A questo link mancano le informazioni necessarie. Accedi per richiedere l’eliminazione del tuo account.',
   'accountDeletion.confirm.title': 'Conferma l’eliminazione del tuo account',
   'accountDeletion.confirm.body':
     'Il tuo account sarà disattivato al termine di un periodo di tolleranza di 30 giorni. Fino ad allora, il link «Annulla» dell’e-mail ti permette di tornare indietro.',

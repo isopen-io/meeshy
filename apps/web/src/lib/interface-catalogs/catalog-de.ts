@@ -322,8 +322,6 @@ const de = {
   'trackingLink.opening': 'Link wird geöffnet…',
   'trackingLink.dead.title': 'Dieser Link ist nicht mehr verfügbar',
   'trackingLink.dead.body': 'Er ist abgelaufen, wurde deaktiviert oder hat nie existiert.',
-  'accountDeletion.incomplete.title': 'Unvollständiger Link',
-  'accountDeletion.incomplete.body': 'Diesem Link fehlen die nötigen Angaben. Melde dich an, um die Löschung deines Kontos zu beantragen.',
   'accountDeletion.confirm.title': 'Löschung deines Kontos bestätigen',
   'accountDeletion.confirm.body':
     'Dein Konto wird nach einer Karenzzeit von 30 Tagen deaktiviert. Bis dahin kannst du es dir über den Link „Abbrechen“ in der E-Mail anders überlegen.',
