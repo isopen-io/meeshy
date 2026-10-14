@@ -5,6 +5,7 @@ import { useStore } from 'zustand/react';
 import { ListHeader } from '@/components/list-header';
 import { StoryRail } from '@/components/story-rail';
 import { Glyph } from '@/components/glyph';
+import { useDismissRowSwipeOnViewChange } from '@/components/conversation-row-swipe';
 import { LensRow, ROW_HEIGHT } from '@/components/lens-row';
 import { ConversationDetailsPortal } from '@/components/conversation-details-sheet-lazy';
 import { accentOf } from '@/lib/accent';
@@ -240,6 +241,7 @@ const ACTIONS_DE_DEMARRAGE: readonly QuickAction[] = [
 export default function ConversationsScreen() {
   const [filter, setFilter] = useState<ListFilter>('all');
   const [search, setSearch] = useState('');
+  useDismissRowSwipeOnViewChange(`${filter}\u0001${search}`);
   const frame = useRef<HTMLUListElement | null>(null);
 
   /**

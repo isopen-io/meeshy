@@ -886,8 +886,6 @@ struct ConversationListView: View {
         static let unarchive = String(localized: "swipe.unarchive")
         static let markRead = String(localized: "swipe.mark_read")
         static let markUnread = String(localized: "swipe.mark_unread")
-        static let block = String(localized: "swipe.block")
-        static let unblock = String(localized: "swipe.unblock")
         static let hide = String(localized: "swipe.hide")
     }
 
@@ -958,25 +956,6 @@ struct ConversationListView: View {
         ]
 
         if conversation.isArchiveImposed { actions.removeAll { $0.label == SwipeLabels.unarchive } }
-        if conversation.type == .direct, let userId = conversation.participantUserId {
-            let isBlocked = BlockService.shared.isBlocked(userId: userId)
-            actions.append(SwipeAction(
-                icon: isBlocked ? "hand.raised.slash.fill" : "hand.raised.fill",
-                label: isBlocked ? SwipeLabels.unblock : SwipeLabels.block,
-                color: MeeshyColors.error
-            ) {
-                if isBlocked {
-                    Task {
-                        await BlockActionCoordinator.shared.unblock(userId: userId)
-                        HapticFeedback.success()
-                    }
-                } else {
-                    sheetTargets.blockTarget = conversation
-                    showBlockConfirmation = true
-                }
-            })
-        }
-
         actions.append(SwipeAction(
             icon: "eye.slash.fill",
             label: SwipeLabels.hide,

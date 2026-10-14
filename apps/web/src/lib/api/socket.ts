@@ -29,6 +29,7 @@ import {
   isMessageDeletedEvent,
   isMessageEditedEvent,
 } from './realtime-message-mutations';
+import { applyMessageHiddenForMe, isMessageHiddenForMeEvent } from './realtime-message-hidden';
 import { applyMessageReactionUpdate, isMessageReactionUpdate } from './realtime-message-reactions';
 import {
   applyMediaCaptionTranslation,
@@ -455,6 +456,11 @@ export function createRealtimeConnection(session: RealtimeSessionInfo, deps: Rea
   const onMessageDeleted = (payload: unknown): void => {
     if (!isMessageDeletedEvent(payload)) return;
     applyMessageDeleted(deps.queryClient, payload);
+  };
+
+  /** `message:hidden-for-me` (#10587) — masqué pour moi sur un autre appareil : la rangée quitte le fil. Règle : `realtime-message-hidden.ts`. */
+  const onMessageHiddenForMe = (payload: unknown): void => {
+    if (isMessageHiddenForMeEvent(payload)) applyMessageHiddenForMe(deps.queryClient, payload, deps.viewerId());
   };
 
   /** `message:cited-post-withdrawn` (#7969) — la story citée est retirée : la carte passe « Story indisponible ». Règle : `realtime-cited-post.ts`. */
@@ -981,6 +987,7 @@ export function createRealtimeConnection(session: RealtimeSessionInfo, deps: Rea
   socket.on<unknown>(SERVER_EVENTS.REACTION_REMOVED, onMessageReactionChanged);
   socket.on<unknown>(SERVER_EVENTS.MESSAGE_EDITED, onMessageEdited);
   socket.on<unknown>(SERVER_EVENTS.MESSAGE_DELETED, onMessageDeleted);
+  socket.on<unknown>(SERVER_EVENTS.MESSAGE_HIDDEN_FOR_ME, onMessageHiddenForMe);
   socket.on<unknown>(SERVER_EVENTS.MESSAGE_CITED_POST_WITHDRAWN, onCitedPostWithdrawn);
   socket.on<unknown>(SERVER_EVENTS.READ_STATUS_UPDATED, onReadStatusUpdated);
   socket.on<unknown>(SERVER_EVENTS.MESSAGE_CONSUMED, onMessageConsumed);
@@ -1068,6 +1075,7 @@ export function createRealtimeConnection(session: RealtimeSessionInfo, deps: Rea
       socket.off<unknown>(SERVER_EVENTS.REACTION_REMOVED, onMessageReactionChanged);
       socket.off<unknown>(SERVER_EVENTS.MESSAGE_EDITED, onMessageEdited);
       socket.off<unknown>(SERVER_EVENTS.MESSAGE_DELETED, onMessageDeleted);
+      socket.off<unknown>(SERVER_EVENTS.MESSAGE_HIDDEN_FOR_ME, onMessageHiddenForMe);
       socket.off<unknown>(SERVER_EVENTS.MESSAGE_CITED_POST_WITHDRAWN, onCitedPostWithdrawn);
       socket.off<unknown>(SERVER_EVENTS.READ_STATUS_UPDATED, onReadStatusUpdated);
       socket.off<unknown>(SERVER_EVENTS.MESSAGE_CONSUMED, onMessageConsumed);

@@ -1,5 +1,6 @@
 import { QueryClientProvider } from '@tanstack/react-query';
 import { afterAll, afterEach, beforeAll, describe, expect, test } from 'bun:test';
+import { act } from 'react';
 import { renderToStaticMarkup } from 'react-dom/server';
 
 import { appQueryClient } from '@/lib/api/query-client';
@@ -7,6 +8,8 @@ import { attachmentDefaults, message, translation } from '@/lib/api/fixtures-bas
 import type { Attachment, Message } from '@/lib/api/types';
 import { loadInterfaceCatalog } from '@/lib/i18n-catalog';
 import { loadExportCardCatalog } from '@/lib/i18n-export-card-catalog';
+import { loadMessagePiecesCatalog } from '@/lib/i18n-message-pieces-catalog';
+import { closeReactorsSheet, openReactorsSheet, reactorsSheetStore } from '@/lib/view/reactors-sheet-store';
 import { createActMounter } from '@/test-support/act-mount';
 import { ensureHappyDomRegistered, releaseHappyDomIfRegistered } from '@/test-support/happy-dom-environment';
 
@@ -29,7 +32,7 @@ const globals = globalThis as typeof globalThis & { IS_REACT_ACT_ENVIRONMENT?: b
 beforeAll(async () => {
   ensureHappyDomRegistered();
   globals.IS_REACT_ACT_ENVIRONMENT = true;
-  await loadInterfaceCatalog('fr');
+  await Promise.all([loadInterfaceCatalog('fr'), loadMessagePiecesCatalog('fr')]);
 });
 
 afterAll(async () => {
@@ -91,6 +94,11 @@ const menuOf = (overrides: Partial<ThreadSheetsMenu> = {}): ThreadSheetsMenu => 
   setExportFor: () => {},
   servedOf: () => undefined,
   starOf: () => null,
+  editOf: () => null,
+  deleteOf: () => null,
+  deleteRequest: null,
+  onDismissDelete: () => {},
+  onConfirmDelete: () => {},
   ...overrides,
 });
 
@@ -276,5 +284,81 @@ describe('ThreadMessageSheets — les feuilles du message (#7429, extrait de rou
     expect(emoji).not.toBe('');
     await mounter.click(firstEmoji);
     expect(journal).toEqual([`react:${SERVER_MESSAGE_ID}:${emoji}`, 'sheet:null']);
+  });
+});
+
+describe('ThreadMessageSheets — le dialogue de suppression (#10582)', () => {
+  test('aucune demande ⇒ aucun dialogue', async () => {
+    const host = await mountSheets(menuOf(), [ownMessage()]);
+    expect(has(host, '[data-message-delete]')).toBe(false);
+  });
+
+  test('une demande ⇒ le dialogue offre ce que la règle a remis, et confirme auprès du contrôleur', async () => {
+    const journal: string[] = [];
+    const host = await mountSheets(
+      menuOf({
+        deleteRequest: { messageIds: [SERVER_MESSAGE_ID], offer: { forEveryone: false, forMe: true } },
+        onConfirmDelete: (mode) => journal.push(mode),
+      }),
+      [ownMessage()],
+    );
+    expect(has(host, '[data-message-delete="everyone"]')).toBe(false);
+    await mounter.click(host.querySelector('[data-message-delete="me"]'));
+    expect(journal).toEqual(['me']);
+  });
+
+  test('« Plus… » remet les gestes du contrôleur à la fiche : Modifier et Supprimer', async () => {
+    const journal: string[] = [];
+    const host = await mountSheets(
+      menuOf({ detailFor: SERVER_MESSAGE_ID, editOf: () => () => journal.push('edit'), deleteOf: () => () => journal.push('delete') }),
+      [ownMessage()],
+    );
+    expect(has(host, '[data-message-act="edit"]')).toBe(true);
+    await mounter.click(host.querySelector('[data-message-act="delete"]'));
+    expect(journal).toEqual(['delete']);
+  });
+});
+
+/**
+ * « QUI A RÉAGI » (#10583) — une pilule maintenue nomme son message
+ * (`reactors-sheet-store.ts`) ; l'hôte des feuilles monte la liste, avec les
+ * comptes que le fil connaît déjà.
+ */
+describe('ThreadMessageSheets — la liste de qui a réagi (#10583)', () => {
+  afterEach(() => closeReactorsSheet());
+
+  const reacted = () => ownMessage({ reactionSummary: { '❤️': 2 } });
+
+  const demande = async (messageId: string) => {
+    await act(async () => {
+      openReactorsSheet(messageId);
+    });
+    await mounter.settle();
+    await mounter.settle();
+  };
+
+  test('aucune demande ⇒ aucune feuille', async () => {
+    const host = await mountSheets(menuOf(), [reacted()]);
+    expect(has(host, '[data-message-reactors-sheet]')).toBe(false);
+  });
+
+  test('une pilule maintenue ⇒ la feuille de CE message, avec ses comptes', async () => {
+    const host = await mountSheets(menuOf(), [reacted()]);
+    await demande(SERVER_MESSAGE_ID);
+    expect(host.querySelector('[data-message-reactors-sheet]')?.getAttribute('data-message-reactors-sheet')).toBe(SERVER_MESSAGE_ID);
+    expect(host.querySelector('[data-message-reactors-group="❤️"] [data-message-reactors-count]')?.textContent).toBe('2');
+  });
+
+  test('un message qui n’est plus dans le fil ⇒ aucune feuille ouverte sur du vide', async () => {
+    const host = await mountSheets(menuOf(), [reacted()]);
+    await demande('66f0a1b2c3d4e5f6a7b8c9ff');
+    expect(has(host, '[data-message-reactors-sheet]')).toBe(false);
+  });
+
+  test('quitter le fil referme la demande : elle ne se rouvre pas dans le fil suivant', async () => {
+    await mountSheets(menuOf(), [reacted()]);
+    await demande(SERVER_MESSAGE_ID);
+    mounter.unmountAll();
+    expect(reactorsSheetStore.getState().messageId).toBeNull();
   });
 });
