@@ -1,5 +1,7 @@
 import * as z from 'zod/mini';
 
+import * as packsEndpoints from '@meeshy/shared/api/endpoints/packs';
+import * as stickerPacksEndpoints from '@meeshy/shared/api/endpoints/sticker-packs';
 import { PACK_DOMAINS, PACK_LANGUAGES, type PackDomain, type PackLanguage, type PackNames } from '@meeshy/shared/types/content-pack';
 
 import type { ConversationsDeps } from './conversations';
@@ -93,20 +95,89 @@ export const decodeShopPack = (domain: PackDomain) => (raw: unknown): ShopPack |
   };
 };
 
-/** Les stickers gardent `/sticker-packs` ; les autres domaines vivent sous `/packs/<domaine>`. */
-export const domainBase = (domain: PackDomain): string =>
-  domain === 'sticker' ? '/api/v1/sticker-packs' : `/api/v1/packs/${encodeURIComponent(domain)}`;
+type DomainRoutes = {
+  readonly catalogue: string;
+  readonly installed: string;
+  readonly bySlug: (slug: string) => string;
+  readonly install: (slug: string) => string;
+  readonly purchase?: (slug: string) => string;
+};
 
-export const SHOP_PATH = '/api/v1/packs/shop';
+/**
+ * Les routes de chaque domaine, lues dans le catalogue GÉNÉRÉ (#7716) : les
+ * stickers gardent `/sticker-packs`, les autres domaines vivent sous
+ * `/packs/<domaine>`. L'achat n'existe que là où la passerelle le monte.
+ */
+const CATALOGUED_ROUTES: Partial<Record<PackDomain, DomainRoutes>> = {
+  sticker: {
+    catalogue: stickerPacksEndpoints.root,
+    installed: stickerPacksEndpoints.installed,
+    bySlug: stickerPacksEndpoints.bySlug,
+    install: stickerPacksEndpoints.bySlugInstall,
+  },
+  'glory-frame': {
+    catalogue: packsEndpoints.gloryFrame,
+    installed: packsEndpoints.gloryFrameInstalled,
+    bySlug: packsEndpoints.gloryFrameBySlug,
+    install: packsEndpoints.gloryFrameBySlugInstall,
+  },
+  wallpaper: {
+    catalogue: packsEndpoints.wallpaper,
+    installed: packsEndpoints.wallpaperInstalled,
+    bySlug: packsEndpoints.wallpaperBySlug,
+    install: packsEndpoints.wallpaperBySlugInstall,
+    purchase: packsEndpoints.wallpaperBySlugPurchase,
+  },
+  'avatar-ring': {
+    catalogue: packsEndpoints.avatarRing,
+    installed: packsEndpoints.avatarRingInstalled,
+    bySlug: packsEndpoints.avatarRingBySlug,
+    install: packsEndpoints.avatarRingBySlugInstall,
+    purchase: packsEndpoints.avatarRingBySlugPurchase,
+  },
+  banner: {
+    catalogue: packsEndpoints.banner,
+    installed: packsEndpoints.bannerInstalled,
+    bySlug: packsEndpoints.bannerBySlug,
+    install: packsEndpoints.bannerBySlugInstall,
+    purchase: packsEndpoints.bannerBySlugPurchase,
+  },
+};
 
-export const shopPackPort = (domain: PackDomain): PackPort<ShopPack, ShopPack, ShopPack> => {
-  const decode = decodeShopPack(domain);
-  const base = domainBase(domain);
+/**
+ * Un domaine que la passerelle ne monte pas encore (`capture-frame`) garde la
+ * forme `/packs/<domaine>` : il répond 404, que `absentMeansEmpty` lit comme
+ * une vitrine vide. La racine se déduit du catalogue, jamais d'un littéral.
+ */
+const PACKS_ROOT = packsEndpoints.shop.slice(0, -'/shop'.length);
+
+const routesOf = (domain: PackDomain): DomainRoutes => {
+  const catalogued = CATALOGUED_ROUTES[domain];
+  if (catalogued !== undefined) return catalogued;
+  const base = `${PACKS_ROOT}/${encodeURIComponent(domain)}`;
   return {
     catalogue: base,
     installed: `${base}/installed`,
     bySlug: (slug) => `${base}/${encodeURIComponent(slug)}`,
     install: (slug) => `${base}/${encodeURIComponent(slug)}/install`,
+  };
+};
+
+export const SHOP_PATH = packsEndpoints.shop;
+
+export const purchasePath = (domain: PackDomain, slug: string): string => {
+  const routes = routesOf(domain);
+  return routes.purchase?.(slug) ?? `${routes.bySlug(slug)}/purchase`;
+};
+
+export const shopPackPort = (domain: PackDomain): PackPort<ShopPack, ShopPack, ShopPack> => {
+  const decode = decodeShopPack(domain);
+  const routes = routesOf(domain);
+  return {
+    catalogue: routes.catalogue,
+    installed: routes.installed,
+    bySlug: routes.bySlug,
+    install: routes.install,
     decodeSummary: decode,
     decodeInstalled: decode,
     decodeDetail: decode,
@@ -163,7 +234,7 @@ const WirePurchase = z.object({ pack: z.unknown(), balance: z.optional(z.number(
 export async function purchasePack(deps: ConversationsDeps, domain: PackDomain, slug: string, requestId: string): Promise<ApiResult<PurchaseResult>> {
   const result = await deps.transport.request<unknown>({
     method: 'POST',
-    path: `${domainBase(domain)}/${encodeURIComponent(slug)}/purchase`,
+    path: purchasePath(domain, slug),
     body: { requestId },
   });
   if (!result.ok) return result;
