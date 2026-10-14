@@ -323,6 +323,16 @@ const FROZEN_UNBOUNDED_FINDMANY: Readonly<Record<string, number>> = {
   'signal-protocol.ts': 1,
   'sync/membership.ts': 1,
   'user-deletions.ts': 2,
+  // Ajout assume (commit `f84a8d539b`, #10631/#10632) : `computeUserAchievementStats`
+  // relit UNE fois les identites `Participant` du compte (`{ where: { userId } }`,
+  // index `[userId]`) pour filtrer les trois agregations de messages par
+  // `senderId` indexe, a la place d'une jointure relationnelle sur `sender`
+  // (9 s observees en production sur `GET /directory/people/:handle?expand=stats`
+  // et sur `/me`). Sans `take` ni `skip` parce que la borne est AILLEURS : un
+  // utilisateur n'a qu'un Participant par conversation REJOINTE, deja borne par
+  // son propre historique — jamais par une table entiere. Voir le doc-comment de
+  // `computeUserAchievementStats` dans `user-stats.ts`.
+  'user-stats.ts': 1,
   // 1 -> 0, donc la CLE disparait : #4391 a retire le dernier `findMany` nu du
   // fichier — `GET /users/me/stats/timeline` ramenait UNE LIGNE PAR MESSAGE des
   // 90 derniers jours (`select: { createdAt }`, sans `take`) pour en faire un
