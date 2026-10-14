@@ -20,9 +20,9 @@ import { Sheet } from './sheet';
  * « PLUS… » — LA FEUILLE « DÉTAILS DU MESSAGE » (#5814, § 1.3 tableau,
  * question 4 tranchée) : SEULES les entrées qui ont un EFFET aujourd'hui
  * (loi 4) — Langues (même liste que Traduire), Réactions (comptes), Envoyé
- * (date complète cadrée par la langue du lecteur, accusé). Les entrées à
- * transport (Répondre/Transférer/Épingler/Supprimer/Signaler…) n'ont aucun
- * port web ce lot — issue compagnon (D-29).
+ * (date complète cadrée par la langue du lecteur, accusé). Épingler et
+ * Signaler n'ont pas encore de port web (#7558) ; Modifier et Supprimer ont
+ * le leur (#10581, #10582, plus bas).
  *
  * « INFOS DU MESSAGE » (#7226, W7) — la section nominative
  * (Reçu/Vu/Pas encore) et par pièce jointe (ouvertures, téléchargements,

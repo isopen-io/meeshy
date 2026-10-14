@@ -125,8 +125,8 @@ export type MessageMenuContext = {
   /**
    * UNE VUE UNIQUE N'OFFRE RIEN QUI TOUCHE À SON CONTENU (#7580) — ouverte ou
    * non : ni aperçu, ni copie, ni transfert, ni traduction, ni réponse qui la
-   * citerait. Le menu se réduit à « Plus… » (Infos) ; la suppression n'a pas
-   * encore de port web (`message-detail-sheet.tsx`, D-29).
+   * citerait. Le menu se réduit à « Plus… » : Infos, et Supprimer depuis
+   * #10582 (`message-detail-sheet.tsx`), comme `viewOnceSections` sur iOS.
    */
   readonly isViewOnce?: boolean;
   /** Un format d'export par défaut est enregistré sur l'appareil : « Export rapide » l'applique sans options. */
