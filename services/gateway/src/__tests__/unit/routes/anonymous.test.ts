@@ -180,7 +180,7 @@ describe('POST /anonymous/join/:linkId', () => {
       kind: 'member-joined',
       isAnonymous: true,
       viaShareLink: true,
-      username: 'ano_bob',
+      username: expect.stringMatching(/^ano_bob[1-9]\d{1,4}$/),
       givenName: 'Bob Smith',
       linkRules: { canSendMessages: true, canSendFiles: false, canSendImages: false },
     });
@@ -201,7 +201,7 @@ describe('POST /anonymous/join/:linkId', () => {
     const res = await app.inject({ method: 'POST', url: '/anonymous/join/' + LINK_ID, payload: { firstName: 'Bob', lastName: 'Smith', username: 'bob_sm123', language: 'fr' } });
     expect(res.statusCode).toBe(201);
     const written = (app as any).prisma.participant.create.mock.calls.at(-1)[0].data;
-    expect(written.displayName).toBe('ano_bob_sm123');
+    expect(written.displayName).toMatch(/^ano_bob_sm123[1-9]\d{1,4}$/);
   });
 
   it('returns 201 on successful join', async () => {

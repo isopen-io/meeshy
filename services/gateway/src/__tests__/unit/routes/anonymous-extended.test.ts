@@ -161,7 +161,7 @@ describe('POST /anonymous/join/:linkId — requireNickname', () => {
 
     expect(res.statusCode).toBe(201);
     const written = (app as any).prisma.participant.create.mock.calls.at(-1)[0].data;
-    expect(written.displayName).toMatch(/^ano_.+\d{3}$/);
+    expect(written.displayName).toMatch(/^ano_.+[^\d][1-9]\d{1,4}$/);
   });
 });
 
@@ -177,12 +177,12 @@ describe('POST /anonymous/join/:linkId — pseudo déjà porté dans la conversa
   beforeAll(async () => {
     app = await buildApp();
     (app as any).prisma.participant.findFirst
-      .mockResolvedValueOnce({ id: 'other-part', displayName: 'ano_bob_sm123' })
+      .mockResolvedValueOnce({ id: 'other-part' })
       .mockResolvedValue(null);
   });
   afterAll(async () => { await app.close(); });
 
-  it('admet le joignant sous le rang suivant plutôt que de le refuser', async () => {
+  it('admet le joignant sous un autre nombre plutôt que de le refuser', async () => {
     const res = await app.inject({
       method: 'POST', url: `/anonymous/join/${LINK_ID}`,
       payload: { ...VALID_BODY, username: 'bob_sm123' },
@@ -193,7 +193,10 @@ describe('POST /anonymous/join/:linkId — pseudo déjà porté dans la conversa
     // réponse ne peut rien prouver du pseudo résolu.
     expect(res.statusCode).toBe(201);
     const written = (app as any).prisma.participant.create.mock.calls.at(-1)[0].data;
-    expect(written.displayName).toBe('ano_bob_sm1232');
+    const firstCandidate = ((app as any).prisma.participant.findFirst.mock.calls[0][0] as any).where.displayName;
+    expect(written.displayName).toMatch(/^ano_bob_sm123[1-9]\d{1,4}$/);
+    expect(firstCandidate).toMatch(/^ano_bob_sm123[1-9]\d{1,4}$/);
+    expect(written.displayName).not.toBe(firstCandidate);
   });
 });
 

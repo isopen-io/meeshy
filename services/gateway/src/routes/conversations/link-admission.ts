@@ -3,8 +3,7 @@ import { z } from 'zod';
 import type { PrismaClient } from '@meeshy/shared/prisma/client';
 import type { ParticipantPermissions } from '@meeshy/shared/types/participant';
 import { normalizeLanguageForDedup } from '@meeshy/shared/utils/language-normalize';
-import { toAnonymousUsername } from '@meeshy/shared/utils/anonymous-username';
-import { automaticNickname } from '../../utils/anonymous-nickname';
+import { automaticNicknameBase, numberedAnonymousUsername } from '../../utils/anonymous-nickname';
 import { generateSessionToken, hashSessionToken } from '../../utils/session-token';
 import { SecuritySanitizer } from '../../utils/sanitize';
 import { logError } from '../../utils/logger';
@@ -252,15 +251,18 @@ async function joinAsGuest(
 ): Promise<LinkJoinOutcome> {
   const firstName = SecuritySanitizer.sanitizeText(profile.firstName || '');
   const lastName = SecuritySanitizer.sanitizeText(profile.lastName || '');
-  const requestedUsername =
+  const nicknameBase =
     profile.requestedUsername && profile.requestedUsername.trim() !== ''
       ? SecuritySanitizer.sanitizeUsername(profile.requestedUsername.trim())
-      : automaticNickname(firstName, lastName);
-  const desiredUsername = toAnonymousUsername(requestedUsername);
-  const username = await findFreeAnonymousUsername(prisma, desiredUsername, shareLink.conversationId);
+      : automaticNicknameBase(firstName, lastName);
+  const username = await findFreeAnonymousUsername(
+    prisma,
+    () => numberedAnonymousUsername(nicknameBase),
+    shareLink.conversationId
+  );
 
   if (!username) {
-    return { kind: 'username-taken', suggestion: toAnonymousUsername(automaticNickname(firstName, lastName)) };
+    return { kind: 'username-taken', suggestion: numberedAnonymousUsername(automaticNicknameBase(firstName, lastName)) };
   }
 
   const claimed = await claimLinkUse(prisma, shareLink.id, shareLink.maxUses, {
@@ -513,7 +515,8 @@ export async function performLinkJoin(params: LinkJoinParams): Promise<LinkJoinO
   }
   // `requireNickname` ne REFUSE plus un invité (directive porteur 2026-10-13) :
   // le champ vide passait inaperçu et fermait la porte. Sans pseudo saisi,
-  // `joinAsGuest` en génère un (`automaticNickname`).
+  // `joinAsGuest` en génère un (`automaticNicknameBase`, numéroté par
+  // `numberedAnonymousUsername`, #10602).
 
   const outcome = identity.kind === 'guest'
     ? await joinAsGuest(prisma, shareLink, profile, broadcast, params.requestUserAgent)
@@ -538,6 +541,10 @@ export async function performLinkJoin(params: LinkJoinParams): Promise<LinkJoinO
 
   return outcome;
 }
+
+/** Le pseudo d'un invité tel qu'il lui est servi — le profil d'abord, `displayName` en repli. */
+const guestUsernameOf = (participant: ParticipantRow): string =>
+  participant.anonymousSession?.profile?.username ?? participant.displayName;
 
 /**
  * La forme `{participant, conversation}` historique de `POST
@@ -568,7 +575,7 @@ export function participantConversationPayload(participant: ParticipantRow, shar
   return {
     participant: {
       id: participant.id,
-      username: participant.anonymousSession?.profile?.username ?? participant.displayName,
+      username: guestUsernameOf(participant),
       displayName: participant.displayName,
       firstName: participant.anonymousSession?.profile?.firstName ?? '',
       lastName: participant.anonymousSession?.profile?.lastName ?? '',
@@ -629,6 +636,7 @@ const linkMembersResponseSchema = {
             canViewHistory: { type: 'boolean' },
             rights: { type: 'object', properties: PARTICIPANT_RIGHTS_SCHEMA_PROPERTIES },
             allowedAttachmentKinds: allowedAttachmentKindsJsonSchema,
+            username: { type: 'string', description: "Le pseudo FINAL de l'invité, nombre compris (#10602) — visiteur sans compte" },
           },
         },
       },
@@ -678,7 +686,15 @@ function respondToJoinOutcome(reply: FastifyReply, result: LinkJoinOutcome): voi
             // § « POST /links/:key/members ». Un inscrit a déjà les siens
             // par `GET /conversations/:key/participants/:participantKey`.
             // #10001 — et, au même titre, les familles qu'un invité peut joindre.
-            ...(result.sessionToken ? { rights: result.rights, allowedAttachmentKinds: guestAttachmentKindsOf(result.shareLink) } : {}),
+            // #10602 — et le pseudo FINAL que la passerelle lui a donné (nombre
+            // compris) : le client l'affiche, jamais celui qu'il a saisi.
+            ...(result.sessionToken
+              ? {
+                  rights: result.rights,
+                  allowedAttachmentKinds: guestAttachmentKindsOf(result.shareLink),
+                  username: guestUsernameOf(result.participant),
+                }
+              : {}),
           },
         },
         { statusCode }
