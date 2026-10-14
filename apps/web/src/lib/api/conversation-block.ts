@@ -1,10 +1,9 @@
 import { effectiveFlagsOf } from '@/lib/conversation-store';
-import { peerOf } from '@/lib/view/conversation';
 
 import { performRowAction, type ConversationActionDeps } from './conversation-actions';
+import { blockTargetOf } from './conversation-block-target';
 import { findCachedConversation } from './conversations';
 import { performBlock, performUnblock, type FriendActionDeps, type FriendActionOutcome } from './friend-actions';
-import type { PersonSummary } from './friend-requests';
 import type { Conversation } from './types';
 
 /**
@@ -23,19 +22,6 @@ import type { Conversation } from './types';
 export type ConversationBlockDeps = ConversationActionDeps & FriendActionDeps;
 
 export type ConversationBlockIntent = 'block' | 'unblock';
-
-/** Le pair d'un direct, s'il a un compte — un invité ne se bloque pas. */
-export function blockTargetOf(conversation: Conversation, viewerId: string): PersonSummary | undefined {
-  const peer = peerOf(conversation, viewerId);
-  const id = peer?.userId ?? undefined;
-  if (peer === undefined || id === undefined || id === '') return undefined;
-  return {
-    id,
-    username: peer.user?.username ?? '',
-    displayName: peer.displayName ?? peer.user?.displayName ?? null,
-    avatar: peer.avatar ?? peer.user?.avatar ?? null,
-  };
-}
 
 export async function performConversationBlock(params: {
   readonly conversation: Conversation;
@@ -62,3 +48,5 @@ export async function performConversationBlock(params: {
   }
   return outcome;
 }
+
+export { blockTargetOf };

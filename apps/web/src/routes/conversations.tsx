@@ -1,4 +1,4 @@
-import { useCallback, useMemo, useRef, useState } from 'react';
+import { lazy, Suspense, useCallback, useMemo, useRef, useState } from 'react';
 import { useInfiniteQuery, useQueryClient } from '@tanstack/react-query';
 import { useStore } from 'zustand/react';
 
@@ -8,8 +8,6 @@ import { Glyph } from '@/components/glyph';
 import { useDismissRowSwipeOnViewChange } from '@/components/conversation-row-swipe';
 import { LensRow, ROW_HEIGHT } from '@/components/lens-row';
 import { ConversationDetailsPortal } from '@/components/conversation-details-sheet-lazy';
-import { ConfirmDialog } from '@/components/confirm-dialog';
-import { ConversationRenameDialog } from '@/components/conversation-rename-dialog';
 import { accentOf } from '@/lib/accent';
 import { titleOf } from '@/lib/view/conversation';
 import { useSpeaksAsGuest } from '@/lib/view/guest-focus';
@@ -35,12 +33,10 @@ import { effectiveEngagementOf } from '@/lib/api/conversation-engagement';
 import { useLiveEngagements } from '@/lib/view/use-conversation-engagement';
 import { resolveViewer } from '@/lib/api/viewer';
 import { conversationStore, effectiveFlagsOf, effectiveUnreadOf, withPreferenceOverrides } from '@/lib/conversation-store';
-import { blockedUsersQueryOptions, flattenBlockedUsers } from '@/lib/api/blocks';
-import { blockTargetOf } from '@/lib/api/conversation-block';
-import { customNameOf } from '@/lib/api/preferences';
+import { blockedIdsOf, lazyBlockedUsersQueryOptions } from '@/lib/api/blocked-peers';
+import { blockTargetOf } from '@/lib/api/conversation-block-target';
 import { appQueryClient } from '@/lib/api/query-client';
 import { rowBlockAction, rowPreferenceAction } from '@/lib/api/row-intents';
-import { translate } from '@/lib/i18n-catalog';
 import type { RowIntent } from '@/lib/view/row-actions';
 import { applyFilter, emptinessOf, filterLabel, LIST_FILTERS, orderConversations, type ListFilter } from '@/lib/lens/filters';
 import { memoriserLienParLecteur, partagerInvitationParrainee, retourInvitationParrainee } from '@/lib/view/invitation';
@@ -121,6 +117,9 @@ import { currentInterfaceLanguage } from '@/lib/interface-language';
 /** Référence STABLE — un `[]` littéral par rendu changerait l'identité de
  * `conversations` à chaque image et défairait les mémos qui en dépendent. */
 const EMPTY_CONVERSATIONS: readonly Conversation[] = [];
+
+/* Renommer et confirmer un blocage (#10593) : chargés au geste. */
+const ConversationRowDialogs = lazy(() => import('@/components/conversation-row-dialogs'));
 
 /**
  * `content-center` ET NON `place-items-center` SEUL (#5650, revue-correction)
@@ -409,11 +408,8 @@ export default function ConversationsScreen() {
   /* QUI LE LECTEUR A BLOQUÉ — le panier de « Découvrir », la MÊME source que
      `performBlock` écrit : la ligne dit « Débloquer » à l'instant du geste.
      Tant qu'il n'est pas lu, la ligne ne propose ni l'un ni l'autre. */
-  const blocked = useInfiniteQuery({ ...blockedUsersQueryOptions(apiDeps), enabled: onRowIntent !== undefined }, appQueryClient);
-  const blockedIds = useMemo(
-    () => (blocked.data === undefined ? undefined : new Set(flattenBlockedUsers(blocked.data).map((person) => person.id))),
-    [blocked.data],
-  );
+  const blocked = useInfiniteQuery({ ...lazyBlockedUsersQueryOptions(apiDeps), enabled: onRowIntent !== undefined }, appQueryClient);
+  const blockedIds = useMemo(() => blockedIdsOf(blocked.data), [blocked.data]);
   const peerBlockedOf = (c: Conversation): boolean | undefined => {
     const peer = blockedIds === undefined ? undefined : blockTargetOf(c, viewer.id ?? '');
     return peer === undefined || blockedIds === undefined ? undefined : blockedIds.has(peer.id);
@@ -934,32 +930,27 @@ export default function ConversationsScreen() {
           ) : null}
         </div>
       </div>
-      {renameConversation === undefined ? null : (
-        <ConversationRenameDialog
-          language={interfaceLanguage}
-          customName={customNameOf(renameConversation)}
-          originalName={titleOf({ ...renameConversation, userPreferences: [] }, viewer.id ?? '')}
-          onSave={(name) => {
-            setRenameId(null);
-            rowPreferenceAction(renameConversation.id, { customName: name });
-          }}
-          onCancel={() => setRenameId(null)}
-        />
-      )}
-      {blockConversation === undefined ? null : (
-        <ConfirmDialog
-          name="conversation-block"
-          title={rowMenuText(interfaceLanguage, 'rowMenu.block.title')}
-          body={rowMenuText(interfaceLanguage, 'rowMenu.block.message')}
-          cancelLabel={translate(interfaceLanguage, 'common.cancel')}
-          confirmLabel={rowMenuText(interfaceLanguage, 'rowMenu.block')}
-          tone="destructive"
-          onConfirm={() => {
-            setBlockId(null);
-            void rowBlockAction({ conversation: blockConversation, viewerId: viewer.id ?? '', intent: 'block' });
-          }}
-          onCancel={() => setBlockId(null)}
-        />
+      {renameConversation === undefined && blockConversation === undefined ? null : (
+        <Suspense fallback={null}>
+          <ConversationRowDialogs
+            language={interfaceLanguage}
+            viewerId={viewer.id ?? ''}
+            rename={renameConversation}
+            block={blockConversation}
+            onRename={(conversation, name) => {
+              setRenameId(null);
+              rowPreferenceAction(conversation.id, { customName: name });
+            }}
+            onBlock={(conversation) => {
+              setBlockId(null);
+              void rowBlockAction({ conversation, viewerId: viewer.id ?? '', intent: 'block' });
+            }}
+            onClose={() => {
+              setRenameId(null);
+              setBlockId(null);
+            }}
+          />
+        </Suspense>
       )}
       {detailsConversation === undefined ? null : (
         <ConversationDetailsPortal

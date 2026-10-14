@@ -1,7 +1,7 @@
 import { conversationStore } from '@/lib/conversation-store';
 
 import { performPreferenceAction } from './conversation-actions';
-import { performConversationBlock, type ConversationBlockIntent } from './conversation-block';
+import type { ConversationBlockIntent } from './conversation-block';
 import { apiDeps } from './deps';
 import type { FriendActionOutcome } from './friend-actions';
 import type { ConversationPreferencePatch } from './preferences';
@@ -19,12 +19,15 @@ export function rowPreferenceAction(conversationId: string, patch: ConversationP
   void performPreferenceAction({ conversationId, patch, deps: rowDeps() });
 }
 
-export function rowBlockAction(params: {
+/** Le geste de blocage se charge AU GESTE : il emporte le port de l'annuaire
+ * et `zod`, que la liste n'a pas à télécharger pour s'afficher. */
+export async function rowBlockAction(params: {
   readonly conversation: Conversation;
   readonly viewerId: string;
   readonly intent: ConversationBlockIntent;
 }): Promise<FriendActionOutcome> {
   const { viewerId } = params;
+  const { performConversationBlock } = await import('./conversation-block');
   return performConversationBlock({
     ...params,
     deps: { ...rowDeps(), isOnline: () => navigator.onLine, viewerId: () => viewerId },
