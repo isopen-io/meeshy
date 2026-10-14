@@ -856,6 +856,39 @@ final class OfflineQueueTests: XCTestCase {
         }
     }
 
+    // MARK: - Récupération à chaud : un envoi en vol n'est pas réarmé sous lui-même
+
+    /// Au lancement, tout `.inflight` revient en attente — personne ne peut le porter. Au retour au premier
+    /// plan, processus vivant, une ligne en vol RÉCENTE est un envoi en cours : la réarmer le dédoublait.
+    func test_bootRecovery_warm_keepsARecentInflightRow_butReclaimsAStaleOne() async throws {
+        let maybePool = await queue.outboxPoolForTesting
+        let pool = try XCTUnwrap(maybePool)
+        _ = try await queue.bootRecovery()   // le lancement
+
+        let recent = "cid_warm_recent_\(UUID().uuidString.lowercased())"
+        let stale = "cid_warm_stale_\(UUID().uuidString.lowercased())"
+        for cid in [recent, stale] {
+            try await queue.enqueue(OfflineQueueItem(conversationId: "conv-1", content: "x", clientMessageId: cid))
+        }
+        let old = Date().addingTimeInterval(-OutboxFlusher.staleInflightReclaimSeconds - 60)
+        try await pool.write { db in
+            try db.execute(sql: "UPDATE outbox SET status = ?, updatedAt = ? WHERE clientMessageId = ?",
+                           arguments: [OutboxStatus.inflight.rawValue, Date(), recent])
+            try db.execute(sql: "UPDATE outbox SET status = ?, updatedAt = ? WHERE clientMessageId = ?",
+                           arguments: [OutboxStatus.inflight.rawValue, old, stale])
+        }
+
+        let report = try await queue.bootRecovery()   // le retour au premier plan
+
+        XCTAssertEqual(report.inflightReset, 1)
+        let statuses = try await pool.read { db in
+            try OutboxRecord.filter([recent, stale].contains(Column("clientMessageId"))).fetchAll(db)
+                .reduce(into: [String: OutboxStatus]()) { $0[$1.clientMessageId ?? ""] = $1.status }
+        }
+        XCTAssertEqual(statuses[recent], .inflight, "un envoi en cours n'est pas réarmé sous lui-même")
+        XCTAssertEqual(statuses[stale], .pending, "un envoi en vol depuis plus de 30 minutes est repris")
+    }
+
     // MARK: - S6 — audio-orphan rows must be terminal (.exhausted), not .failed
 
     /// A crash between the outbox insert and the audio file copy leaves a
