@@ -474,9 +474,10 @@ nonisolated struct BubbleContent: Equatable {
     }
 
     /// Un emoji seul qui répond (#10628) : la carte citée en petit, puis
-    /// l'emoji en grand SANS bulle, comme un emoji envoyé seul. Site unique
-    /// du routage, partagé par la bulle et la rangée plate (Focal, Script,
-    /// Rivière).
+    /// l'emoji en grand SANS bulle, comme un emoji envoyé seul. Routage de la
+    /// BULLE ; la rangée plate (Focal, Script) n'a pas besoin de ce cas à
+    /// part : elle pose déjà la citation au-dessus (`flatRowDrawsQuote`) et
+    /// rend tout emoji seul en grand, citation ou non.
     var emojiReplyFloatsBelowQuote: Bool {
         isEmojiOnly && reply != nil
     }

@@ -870,15 +870,7 @@ struct BubbleStandardLayout: View {
         if let reply = content.reply, detachedStoryCitation == nil {
             quotedReplyView(reply.reference)
                 .padding(.bottom, MeeshySpacing.xs)
-                .onTapGesture {
-                    guard reply.reference.opensQuotedTarget else { return }
-                    HapticFeedback.light()
-                    if reply.isStory {
-                        onStoryReplyTap?(reply.reference.messageId)
-                    } else {
-                        onReplyTap?(reply.reference.messageId)
-                    }
-                }
+                .onTapGesture { openQuotedTarget(reply) }
         }
 
         // « modifié » se dit dans le PIED, à côté de l'heure (#7620) — posé

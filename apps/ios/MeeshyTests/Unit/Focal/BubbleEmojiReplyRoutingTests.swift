@@ -19,6 +19,18 @@ final class BubbleEmojiReplyRoutingTests: XCTestCase {
         XCTAssertFalse(makeContent(text: "ok", reply: makeReply()).emojiReplyFloatsBelowQuote)
     }
 
+    func test_flatRowDrawsQuote_emojiOnlyWithReply_isTrue() {
+        XCTAssertTrue(makeContent(text: "😂", reply: makeReply()).flatRowDrawsQuote,
+                      "Focal/Script : la carte citée se pose au-dessus de l'emoji en grand.")
+    }
+
+    func test_bubbleLayout_quoteCardsShareOneTapRule() throws {
+        let layout = try MyStoriesSourceCorpus.text(of: "Meeshy/Features/Main/Views/Bubble/BubbleStandardLayout.swift")
+        let emojiReply = try MyStoriesSourceCorpus.text(of: "Meeshy/Features/Main/Views/Bubble/BubbleStandardLayout+EmojiReply.swift")
+        XCTAssertTrue(layout.contains(".onTapGesture { openQuotedTarget(reply) }"))
+        XCTAssertTrue(emojiReply.contains(".onTapGesture { openQuotedTarget(reply) }"))
+    }
+
     func test_bubbleLayout_routesEmojiReplyThroughTheSharedPredicate() throws {
         let layout = try MyStoriesSourceCorpus.text(of: "Meeshy/Features/Main/Views/Bubble/BubbleStandardLayout.swift")
         XCTAssertTrue(layout.contains("content.emojiReplyFloatsBelowQuote"))
