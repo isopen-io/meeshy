@@ -1,5 +1,6 @@
 import { bridgeCallEvents } from '@/lib/calls/call-socket-bridge';
 import { setCallEngineWake } from '@/lib/calls/call-transport';
+import { callsAvailable } from '@/lib/calls/calls-availability';
 import { conversationStore } from '@/lib/conversation-store';
 import { createSocketIOClient } from '@/lib/net/socket-io-factory';
 import { bridgeBannerRevocations } from '@/lib/notifications/banner-revocation';
@@ -102,7 +103,7 @@ function bridgeCalls(next: RealtimeConnection | null): void {
     unbridgeCalls = null;
     return;
   }
-  const unbridge = bridgeCallEvents(next.socket);
+  const unbridge = callsAvailable() ? bridgeCallEvents(next.socket) : () => undefined;
   /* `presence:app-state` (B8) : la passerelle choisit la sonnerie socket ou la poussée selon que l'onglet est visible.
      Un onglet réveillé d'un long sommeil rouvre sa connexion et relit la liste (#10573). */
   const unwatch =
