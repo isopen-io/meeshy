@@ -249,6 +249,11 @@ public final class AuthManager: ObservableObject, AuthManaging {
 
     // MARK: - Active user
 
+    /// Le compte actif tel que le trousseau le garde, lisible AVANT la restauration de session. Une action
+    /// de notification (réponse rapide, commentaire) peut s'exécuter app tuée, avant `checkExistingSession` :
+    /// `currentUser` est encore vide, et le texte tapé sur l'écran verrouillé partait à la poubelle.
+    public var persistedActiveUserId: String? { activeUserId }
+
     var activeUserId: String? {
         get { keychain.load(forKey: activeUserIdUDKey, account: nil) }
         set {
