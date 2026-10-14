@@ -886,7 +886,7 @@ export const FocalRow = memo(function FocalRow({
               reactions={reactions}
               {...(myReactions === undefined ? {} : { myReactions })}
               {...(onPickLanguage === undefined ? {} : { onPickLanguage })}
-              {...(onReact === undefined ? {} : { onReact })}
+              {...(onReact === undefined ? {} : { onReact, reactorsFor: message.id })}
             />
           </div>
 
@@ -977,7 +977,7 @@ export const FocalRow = memo(function FocalRow({
                       })}
                   reactions={reactions}
                   {...(myReactions === undefined ? {} : { myReactions })}
-                  {...(onReact === undefined ? {} : { onToggleReaction: onReact })}
+                  {...(onReact === undefined ? {} : { onToggleReaction: onReact, reactorsFor: message.id })}
                 />
               ) : null}
               <FocusStamp

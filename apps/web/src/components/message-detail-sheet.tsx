@@ -11,6 +11,7 @@ import { hasServerMessageId } from '@/lib/view/message-receipts';
 
 import { GlyphSvg } from './glyph';
 import { THREAD_MENU_GLYPHS } from './glyphs-thread-menu';
+import { MessageReactors } from './message-reactors';
 import { MessageReceiptsSheet } from './message-receipts-sheet';
 import { STATUS_LABEL } from './message-blocks';
 import type { Delivery } from '@/lib/view/message';
@@ -19,8 +20,9 @@ import { Sheet } from './sheet';
 /**
  * « PLUS… » — LA FEUILLE « DÉTAILS DU MESSAGE » (#5814, § 1.3 tableau,
  * question 4 tranchée) : SEULES les entrées qui ont un EFFET aujourd'hui
- * (loi 4) — Langues (même liste que Traduire), Réactions (comptes), Envoyé
- * (date complète cadrée par la langue du lecteur, accusé). Épingler et
+ * (loi 4) — Langues (même liste que Traduire), Réactions (les comptes tout de
+ * suite, puis qui a réagi — `MessageReactors`, #10583), Envoyé (date complète
+ * cadrée par la langue du lecteur, accusé). Épingler et
  * Signaler n'ont pas encore de port web (#7558) ; Modifier et Supprimer ont
  * le leur (#10581, #10582, plus bas).
  *
@@ -217,12 +219,7 @@ export function MessageDetailSheet({
           <li className="px-4 pt-3 pb-1 text-mini font-semibold uppercase" style={{ color: 'var(--color-ios-ink-3)' }}>
             {translate(language, 'message.detail.reactions')}
           </li>
-          {reactions.map(([emoji, count]) => (
-            <li key={emoji} className="flex items-center gap-2.5 px-4 text-body" style={{ minHeight: 44, color: 'var(--color-ios-ink)' }}>
-              <span aria-hidden>{emoji}</span>
-              <span>{count}</span>
-            </li>
-          ))}
+          <MessageReactors messageId={messageId} reactions={reactions} />
         </>
       ) : null}
 

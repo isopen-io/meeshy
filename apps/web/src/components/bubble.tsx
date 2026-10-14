@@ -738,7 +738,7 @@ export function Bubble({
                   glyph={glyph}
                   count={count}
                   mine={mine}
-                  {...(onReact === undefined ? {} : { onToggle: () => onReact(glyph) })}
+                  {...(onReact === undefined ? {} : { onToggle: () => onReact(glyph), reactorsFor: message.id })}
                 />
               );
             })}

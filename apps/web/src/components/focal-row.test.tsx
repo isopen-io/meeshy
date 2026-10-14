@@ -6,6 +6,7 @@ import { renderToStaticMarkup } from 'react-dom/server';
 import { MESSAGE_EFFECT_FLAGS } from '@meeshy/shared/types/message-effect-flags';
 
 import { ensureHappyDomRegistered, releaseHappyDomIfRegistered } from '@/test-support/happy-dom-environment';
+import { reactorsSheetStore } from '@/lib/view/reactors-sheet-store';
 import type { EphemeralDeadline } from '@meeshy/shared/utils/ephemeral-deadline';
 
 import { FocalRow } from './focal-row';
@@ -585,6 +586,16 @@ describe('FocalRow — retirer une réaction en tapant sa capsule (#5865)', () =
       theirs.click();
     });
     expect(seen).toEqual(['❤️']);
+  });
+
+  test('clic droit sur une capsule ⇒ la liste de qui a réagi, pour CE message (#10583)', () => {
+    const el = mount(() => {});
+    const theirs = el.querySelector('button[aria-label="Réagir avec ❤️"]') as HTMLButtonElement;
+    act(() => {
+      theirs.dispatchEvent(new Event('contextmenu', { bubbles: true, cancelable: true }));
+    });
+    expect(reactorsSheetStore.getState().messageId).toBe('m-reactions');
+    reactorsSheetStore.getState().close();
   });
 });
 

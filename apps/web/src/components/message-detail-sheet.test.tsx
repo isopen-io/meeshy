@@ -266,3 +266,22 @@ describe('« Plus… » offre « Supprimer » (#10582)', () => {
     expect(host.querySelector('[data-message-act="delete"]')).toBeNull();
   });
 });
+
+/**
+ * « PLUS… » NOMME QUI A RÉAGI (#10583) — la section « Réactions » ne s'arrête
+ * plus aux comptes : elle monte la liste nominative (`MessageReactors`), qui
+ * peint les comptes tout de suite et lit les noms ensuite.
+ */
+describe('MessageDetailSheet — la section « Réactions » (#10583)', () => {
+  test('des réactions ⇒ les comptes, portés par la liste nominative', async () => {
+    const host = await mountSheet(null, SERVER_MESSAGE_ID, { reactions: [['👍', 2], ['❤️', 1]] });
+    const groups = [...host.querySelectorAll('[data-message-reactors-group]')];
+    expect(groups.map((row) => `${row.getAttribute('data-message-reactors-group')}:${row.querySelector('[data-message-reactors-count]')?.textContent}`)).toEqual(['👍:2', '❤️:1']);
+  });
+
+  test('aucune réaction ⇒ ni titre de section, ni liste', async () => {
+    const host = await mountSheet(null);
+    expect(host.querySelector('[data-message-reactors-group]')).toBeNull();
+    expect(host.textContent).not.toContain('Réactions');
+  });
+});

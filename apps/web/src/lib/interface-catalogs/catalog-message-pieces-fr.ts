@@ -36,6 +36,7 @@ const fr = {
   'message.delete.failedMany': 'Les messages n’ont pas pu être supprimés',
   'message.delete.partial': '{failed} messages sur {count} n’ont pas pu être supprimés',
   'message.delete.partialOne': 'Un message sur {count} n’a pas pu être supprimé',
+  'message.reactors.empty': 'Aucune réaction',
 } as const;
 
 export default fr;
