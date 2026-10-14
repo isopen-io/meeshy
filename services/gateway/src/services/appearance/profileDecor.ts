@@ -32,14 +32,15 @@ export const servedProfileDecorItemJsonSchema = {
 
 export type StoredProfileDecor = { readonly equippedAvatarRing?: string | null; readonly equippedBanner?: string | null };
 
-const resolveEntry = (index: PackIndex, domain: PackDomain, ref: ProfileDecorRef): PackIndexEntry | undefined => {
-  const entry = index.entries(domain).find((candidate) => candidate.slug === ref.pack && !candidate.hidden);
+/** Un pack MASQUÉ se sert en lecture (ce qui est équipé, payé compris, reste porté) ; il ne s'équipe plus. */
+const resolveEntry = (index: PackIndex, domain: PackDomain, ref: ProfileDecorRef, use: 'served' | 'equipped'): PackIndexEntry | undefined => {
+  const entry = index.entries(domain).find((candidate) => candidate.slug === ref.pack && (use === 'served' || !candidate.hidden));
   return entry !== undefined && index.itemKeys(entry).includes(ref.item) ? entry : undefined;
 };
 
 const servedItem = (index: PackIndex, domain: PackDomain, stored: string | null | undefined): ServedProfileDecorItem | null => {
   const ref = parseProfileDecorRef(stored);
-  const entry = ref === null ? undefined : resolveEntry(index, domain, ref);
+  const entry = ref === null ? undefined : resolveEntry(index, domain, ref, 'served');
   if (ref === null || entry === undefined) return null;
   return { pack: ref.pack, item: ref.item, origin: entry.origin, contract: entry.origin === 'builtin' ? null : entry.contract.src };
 };
@@ -88,7 +89,7 @@ export async function validateProfileDecorWrite({ prisma, index, userId, input }
     }
     const parsed = ProfileDecorRefSchema.safeParse(requested);
     if (!parsed.success) return { kind: 'invalid' };
-    const entry = resolveEntry(index, side.domain, parsed.data);
+    const entry = resolveEntry(index, side.domain, parsed.data, 'equipped');
     if (entry === undefined) return { kind: 'not-owned' };
     if (entry.price !== undefined) await loadOwned();
     if (!isPackOwned({ domain: side.domain, slug: entry.slug, price: entry.price }, owned)) return { kind: 'not-owned' };

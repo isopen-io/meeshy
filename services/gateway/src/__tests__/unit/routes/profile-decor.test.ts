@@ -126,6 +126,21 @@ describe('PUT /me/profile-decor', () => {
     expect(response.json().code).toBe('FRAME_USAGE_MISMATCH');
   });
 
+  it('un pack MASQUÉ ne s’équipe plus, même possédé (403) : il reste servi à qui le porte déjà', async () => {
+    const delisted = buildPackIndex({
+      registries: [[entry('banner', 'bannieres-retirees', { origin: 'official', installedByDefault: false, removable: true, hidden: true, price: 10 })]],
+      retained: [],
+      contractItemKeys: () => ['aurore'],
+    });
+    await env.app.close();
+    env = build({ owns: ['banner.bannieres-retirees'] });
+    await env.app.register(profileDecorRoutes, { index: delisted });
+    await env.app.ready();
+
+    expect((await put({ banner: { pack: 'bannieres-retirees', item: 'aurore' } })).statusCode).toBe(403);
+    expect(env.user.equippedBanner).toBeNull();
+  });
+
   it('refuse un corps mal formé (400) sans écrire', async () => {
     expect((await put({ avatarRing: { pack: 'Contours!', item: 'filet' } })).statusCode).toBe(400);
     expect(env.user.equippedAvatarRing).toBeNull();
@@ -137,6 +152,20 @@ describe('profileDecor servi', () => {
     expect(servedProfileDecor(INDEX, { equippedAvatarRing: 'disparu/filet', equippedBanner: 'bannieres/maille' })).toEqual({
       avatarRing: null,
       banner: { pack: 'bannieres', item: 'maille', origin: 'builtin', contract: null },
+    });
+  });
+
+  it('un contour ACHETÉ dont le pack est ensuite MASQUÉ reste servi : masquer retire de la boutique, jamais de ce qu’un compte a payé (#10632)', () => {
+    const delisted = buildPackIndex({
+      registries: [[
+        entry('avatar-ring', 'contours-retires', { origin: 'official', installedByDefault: false, removable: true, hidden: true, price: 30, usage: RING_USAGE, contract: ref('e', 'json') }),
+      ]],
+      retained: [],
+      contractItemKeys: () => ['filet'],
+    });
+
+    expect(servedProfileDecor(delisted, { equippedAvatarRing: 'contours-retires/filet', equippedBanner: null }).avatarRing).toEqual({
+      pack: 'contours-retires', item: 'filet', origin: 'official', contract: ref('e', 'json').src,
     });
   });
 
