@@ -22,6 +22,13 @@ public struct AppearanceDesignPalette: Codable, Hashable, Sendable {
     public let soft: String
     /// Absent ⇒ l'accent EFFECTIF du lecteur.
     public let accent: String?
+
+    public init(base: String, ink: String, soft: String, accent: String?) {
+        self.base = base
+        self.ink = ink
+        self.soft = soft
+        self.accent = accent
+    }
 }
 
 public struct AppearanceDesignStroke: Codable, Hashable, Sendable {
