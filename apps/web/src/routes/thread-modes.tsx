@@ -1,4 +1,4 @@
-import { Suspense, lazy, useCallback, useEffect, useState, type ReactNode, type Ref } from 'react';
+import { Suspense, lazy, useCallback, useEffect, useMemo, useState, type ReactNode, type Ref } from 'react';
 import type { Virtualizer } from '@tanstack/react-virtual';
 
 import type { ConversationReadingMode } from '@meeshy/shared/types/reading-modes';
@@ -9,6 +9,7 @@ import { Bubble } from '@/components/bubble';
 import { FocalRow } from '@/components/focal-row';
 import { MessageEffectsHost } from '@/components/message-effects-host';
 import { MessageSwipe } from '@/components/message-swipe';
+import { ReactionAddCapsule } from '@/components/reaction-quick-bar';
 import { UnfoldStage } from '@/components/unfold-stage';
 import { SummarySkeleton } from '@/components/summary/summary-skeleton';
 import { TypingRosterCell } from '@/components/typing-roster-cell';
@@ -30,6 +31,7 @@ import { unreadSeparatorLabel } from '@/lib/view/unread-separator';
 import { collapseUnfolded } from '@/lib/view/unfold-store';
 import { composeMessageLabel } from '@/lib/view/message-a11y-label';
 import { isSystemMessage } from '@/lib/view/message-badges';
+import { reactionCapsuleInset, reactionCapsuleTargetId } from '@/lib/view/reaction-capsule';
 import { served } from '@/lib/api/prism';
 import type { SelectionState } from '@/lib/view/selection';
 import { HighlightedPieceContext } from '@/lib/view/highlighted-piece';
@@ -175,6 +177,7 @@ export function ThreadModes({
   onSwipeAction,
   onPickLanguage,
   onReact,
+  onExpandReactions,
   onOpenDetail,
   storyRingOf,
   typists,
@@ -267,9 +270,12 @@ export function ThreadModes({
   readonly swipeActionsOf?: (message: Message) => { readonly canReply: boolean; readonly canForward: boolean } | undefined;
   readonly onSwipeAction?: (messageId: string, outcome: SwipeOutcome) => void;
   readonly onPickLanguage?: (messageId: string, code: string) => void;
-  /** Retire une réaction MIENNE en tapant sa capsule (#5865) — même geste
-   * que `onPickLanguage`, une seule loi vers `useMessageMenu.onMenuReact`. */
+  /** Bascule MA réaction (#5865, #10583) — même geste que `onPickLanguage`,
+   * une seule loi vers `useMessageMenu.onMenuReact`. */
   readonly onReact?: (messageId: string, emoji: string) => void;
+  /** « ＋ » de la barre rapide (#10583) : la feuille d'emojis complète, pour ce
+   * message. Sans elle, la capsule « + » ne se pose pas. */
+  readonly onExpandReactions?: (messageId: string) => void;
   /**
    * LA COCHE OUVRE LA FICHE (#7352, V4) — câblé UNIQUEMENT sur `<Bubble>`
    * (mode `bulles`), jamais sur `<FocalRow>` : sa ligne méta reste
@@ -345,6 +351,7 @@ export function ThreadModes({
   readonly unreadCount?: number;
 }) {
   const viewerId = viewer.id ?? '';
+  const capsuleTargetId = useMemo(() => reactionCapsuleTargetId({ messages: placed.map((p) => p.message), viewerId }), [placed, viewerId]);
 
   /**
    * LE REGISTRE DES PHASES DE RÉVÉLATION (#7142) — déclaré ICI, avant le
@@ -617,6 +624,12 @@ export function ThreadModes({
               contentWithheld: rowWithheld,
               phase: revealPhases.get(p.message.id) ?? { phase: 'hidden' },
             });
+            const rowOffersReactionCapsule =
+              onReact !== undefined &&
+              onExpandReactions !== undefined &&
+              rowSelected === undefined &&
+              rowProtection !== 'deleted' &&
+              rowProtection !== 'expired';
             const rowSwipeOffer =
               rowSelected !== undefined || isSystemMessage(p.message) || onSwipeAction === undefined
                 ? undefined
@@ -827,6 +840,20 @@ export function ThreadModes({
                   </UnfoldStage>
                   </MessageSwipe>
                 </div>
+                {/* LA CAPSULE « + » (#10583) — sous le dernier message reçu, HORS de
+                    la rangée : un appui long dessus n'ouvre pas le menu du message. */}
+                {p.message.id === capsuleTargetId && rowOffersReactionCapsule ? (
+                  <div
+                    data-reaction-add-for={p.message.id}
+                    className="flex pt-1.5 pb-0.5"
+                    style={{ paddingInlineStart: reactionCapsuleInset({ flat: usesFlatRow(mode) }) }}
+                  >
+                    <ReactionAddCapsule
+                      onReact={(emoji) => onReact?.(p.message.id, emoji)}
+                      onExpand={() => onExpandReactions?.(p.message.id)}
+                    />
+                  </div>
+                ) : null}
                 {rowNoteOf?.(p.message.id) ?? null}
               </li>
             );

@@ -5407,3 +5407,36 @@ Le prompt des Cadres de gloire (`docs/product/cadres-de-gloire/PROMPT-developpem
 **Preuves.** `lib/game-photo/glory-fonts.test.ts` (table = liste fermée, octets exacts par fichier, une face par fichier en `swap` bornée au latin, NOTICE complet, plages Unicode, pile système pour l'arabe, le cyrillique, l'hébreu, le CJK, chargement par face unique, aucune arête statique depuis l'entrée — rouge prouvé en ajoutant l'import à `main.tsx`). Mesure du 2026-10-12 : première peinture 90,00 Ko (inchangée), aucune police émise ni précachée tant que le peintre n'existe pas.
 
 **Ce qui reste.** L'avis `conformite-juridique` (OFL, nom réservé) à consigner sur #10158 ; la partie iOS du lot (TTF tels que distribués, enregistrés à la demande) ; le branchement dans le peintre (L7, #10159). **Kotlin natif** : rien (gel).
+
+## D-202 — Une ligne de conversation se balaie des deux côtés, 3 actions au plus par bord ; le menu « ⋮ » reste le véhicule de la souris, du clavier et du lecteur d'écran (2026-10-14, #10580, complète D-17)
+
+**Contexte.** D-17 faisait du menu ancré le SEUL véhicule des actions de rangée, faute d'un vocabulaire de glissement qui ne se dispute pas avec le défilement. Directive porteur du 2026-10-14 : la liste se manie pareil sur iOS, web et Android — la ligne se balaie, comme `SwipeableRow`.
+
+**Décision.**
+- **Deux bords, 3 actions au plus chacun** (`ROW_SWIPE_MAX_ACTIONS`, `lib/view/conversation-row-swipe.ts`). Début (sens de lecture) : épingler, sourdine. Fin : archiver, lu / non lu, supprimer. Les actions SONT celles du menu (`rowMenuItems`) : même id, même libellé, même glyphe, mêmes conditions (archive imposée, compte requis). La loi ne fait que les ranger par bord ; D-17 garde l'état en override.
+- **La géométrie est celle d'iOS** : cellule de 76 px, ouverture au-delà de 35 % de la zone ou d'un coup sec (450 px/s au-delà de 20 px), élastique à 18 %. **L'engagement est celui du dépôt** (`swipeEngages`, 3:1 au-delà de 22 px), plus strict que le 1:1 d'iOS : le défilement et le tirer-pour-rafraîchir gardent la main, avec `touch-action: pan-y`.
+- **Aucun rendu pendant le geste** : le décalage s'écrit sur le `<li>` en propriétés personnalisées, lues par `translate` — jamais `transform`, que la scène de la Lentille réécrit à chaque image. Les boutons ne sont montés que pendant le balayage, l'ouverture et le retour.
+- **Une seule ligne ouverte**, tenue hors des lignes (`lib/view/row-swipe-open.ts`, aucun abonnement). Elle revient en place au choix d'une action, au toucher ailleurs, au défilement, à l'ouverture d'une autre, au changement de vue (adresse, filtre, recherche), au retour matériel et sur Échap. Toucher son contenu la referme sans ouvrir la conversation.
+- **Le toucher seul.** La souris garde « ⋮ » et le clic droit ; le bouton « ⋮ » s'efface tant que la ligne est déplacée.
+
+**Écarts avec iOS, à leur issue.** iOS porte en plus « Verrouiller » au bord de début (#10579 y a ramené le bord de fin à archiver, lu, masquer) : le web n'a pas de verrou de conversation dans son menu de ligne. Le troisième geste du bord de fin s'appelle « Masquer » sur iOS et « Supprimer » ici, le mot que le menu web porte déjà (#7285). Les cellules se découvrent par rognage, sans la mise à l'échelle par cellule d'iOS.
+
+**Preuves.** `lib/view/conversation-row-swipe.test.ts` (bords, borne de 3 dans tous les états, parité avec le menu, géométrie), `components/lens-row-swipe.test.tsx` (geste au pointeur, RTL, mouvement réduit, chaque fermeture). **Non vérifié à l'écran à la date de cette entrée.** **Kotlin natif** : rien (gel) ; la coque Android de `apps/web` reçoit ce lot.
+
+## D-203 — On réagit d'un geste sans ouvrir le menu : toute pilule bascule, une capsule « + » sous le dernier message reçu ouvre le rail du menu, et une pilule maintenue nomme qui a réagi (2026-10-14, #10583)
+
+**Contexte.** Hors de l'élu Focal (#8536), une pilule ne faisait que retirer SA réaction ; poser celle d'un autre demandait l'appui long puis le rail. « Plus… » ne montrait que des comptes. iOS fait les trois d'un geste (`BubbleReactionsOverlay`, `quickReactionBar`).
+
+**Décision.**
+- **Toute pilule est un bouton dès que le fil sait réagir** (`onReact`) : la mienne se retire, celle d'autrui pose la même. Une seule loi, `performReaction` (optimiste, défaite sur un refus) — rien de nouveau côté réseau.
+- **La capsule « + » est posée par `ThreadModes`, sous la rangée et HORS d'elle**, pas dans les peaux : une écriture pour tous les modes, et un appui long dessus n'ouvre pas le menu du message. Sa cible est le dernier message qui n'est ni du lecteur ni du système (`reactionCapsuleTargetId`) ; elle s'efface en sélection, sur un message supprimé ou expiré, et chez un hôte sans geste de réaction.
+- **Le rail est écrit une fois** (`components/reaction-rail.tsx`) : le menu du message et la barre rapide posent les mêmes tuiles, le même classement par usage, le même « ＋ ». La barre est un menu ANCRÉ (`useRovingMenu`), pas une couche modale : Échap, toucher ailleurs, défilement qui déplace la capsule, redimensionnement, Tab et retour matériel (`useBackDismiss`) la referment.
+- **Les comptes ne viennent jamais de la lecture des noms.** `reactionSummary` les porte déjà : la liste les peint au premier rendu, `GET /reactions/:messageId` n'y ajoute que les noms (cache servi tout de suite, revalidé en silence ; relue quand les comptes changent). Les comptes font foi : un emoji que le fil ne compte plus n'a pas de ligne.
+- **Rien n'est fabriqué.** Un réacteur que la passerelle ne nomme pas n'a pas de ligne ; un refus se dit. La charge est relue champ par champ (`parseReactorGroups`).
+- **La pilule maintenue ouvre une feuille à elle**, par une demande (`reactors-sheet-store.ts`, motif de la feuille d'envoi) : la pilule vit au fond de trois peaux, l'hôte des feuilles en monte une. `useLongPress` réclame l'événement au plus profond — la rangée ne prend pas le geste de la pilule. Clic droit et Maj+F10 font le même geste.
+
+**Écarts avec iOS, assumés.** La barre rapide montre les 6 emojis du rail du menu (iOS : 15, défilables) — c'est le prix du « même rail ». iOS pose la capsule dans la rangée de pilules ; ici elle a sa ligne sous le message. La barre rapide d'iOS porte aussi une rangée d'actions (répondre, copier…) : le web la laisse au menu. La pilule garde ses libellés accessibles en français en dur (dette antérieure à ce lot, sans issue relevée).
+
+**Constat hors lot.** Le schéma de réponse de `GET /reactions/:messageId` déclare `users[].userId` alors que le service rend `participantId` : le sérialiseur retire l'identifiant, le web ne lit donc que `username` et `avatar`. Sans conséquence ici ; à trancher côté passerelle avant d'ouvrir un profil depuis cette liste.
+
+**Preuves.** `components/reaction-quick-bar.test.tsx`, `routes/thread-modes-reaction-capsule.test.tsx`, `components/reaction-chip-reactors.test.tsx`, `components/message-reactors.test.tsx`, `lib/api/reactors.test.ts`, `routes/thread-sheets.test.tsx`, et les témoins de pilule de `bubble.test.tsx` / `focal-row.test.tsx`. **Non vérifié à l'écran à la date de cette entrée**, poids du chunk du fil non remesuré. **Kotlin natif** : rien (gel) ; la coque Android de `apps/web` reçoit ce lot.

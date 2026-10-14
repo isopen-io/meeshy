@@ -104,25 +104,25 @@ const placedOf = (messages: readonly Message[]) => messages.map((m) => ({ messag
 describe('ce que la barre de sélection offre', () => {
   test('hors sélection, rien', () => {
     const { api } = mount([ordinary('m1')]);
-    expect(api().selectionOffers).toEqual({ forward: false, copy: false });
+    expect(api().selectionOffers).toMatchObject({ forward: false, copy: false });
   });
 
   test('des messages ordinaires : Transférer et Copier', () => {
     const { api } = mount([ordinary('m1'), ordinary('m2')]);
     select(api, ['m1', 'm2']);
-    expect(api().selectionOffers).toEqual({ forward: true, copy: true });
+    expect(api().selectionOffers).toMatchObject({ forward: true, copy: true });
   });
 
   test('une flamme à durée seule : Transférer, pas Copier', () => {
     const { api } = mount([timedFlame('f1')]);
     select(api, ['f1']);
-    expect(api().selectionOffers).toEqual({ forward: true, copy: false });
+    expect(api().selectionOffers).toMatchObject({ forward: true, copy: false });
   });
 
   test('un ordinaire ET une flamme à durée : Transférer, et Copier pour ce qui se copie', () => {
     const { api } = mount([ordinary('m1'), timedFlame('f1')]);
     select(api, ['m1', 'f1']);
-    expect(api().selectionOffers).toEqual({ forward: true, copy: true });
+    expect(api().selectionOffers).toMatchObject({ forward: true, copy: true });
   });
 
   const blockers: readonly (readonly [string, (id: string) => Message])[] = [

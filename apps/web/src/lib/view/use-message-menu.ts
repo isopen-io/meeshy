@@ -13,7 +13,7 @@ import type { Message } from '@/lib/api/types';
 import { discussionCardSubjectOf } from '@/lib/export/discussion-card-subject';
 import { readDefaultMessageCardFormat } from '@/lib/export/message-card-format';
 import { translate } from '@/lib/i18n-catalog';
-import { loadMessagePiecesCatalog } from '@/lib/i18n-message-pieces-catalog';
+import { isMessagePiecesCatalogLoaded, loadMessagePiecesCatalog } from '@/lib/i18n-message-pieces-catalog';
 import { currentInterfaceLanguage } from '@/lib/interface-language';
 import { openSendSheet } from '@/lib/send/send-sheet-store';
 import { safeLocalStorage } from '@/lib/storage';
@@ -35,7 +35,9 @@ import { pieceIdAt, targetedPieceOf } from './message-piece';
 import { prewarmPieceReaction, usePieceMenu, type PieceMenuData } from './use-piece-menu';
 import { copyPlainText } from './copy-text';
 import { isMineOf } from './message';
+import { editOffered } from './message-edit';
 import { SELECTION_CAP, copyTextOf, orderedIds, selectionReducer, type SelectionState } from './selection';
+import { useMessageDelete } from './use-message-delete';
 import { useMessageStar, type MessageStarEntry } from './use-message-star';
 
 /**
@@ -92,6 +94,8 @@ export function useMessageMenu(params: {
   readonly reply: {
     readonly setReplyTarget: (messageId: string) => void;
     readonly setReplyToMedia: (messageId: string, attachmentId: string) => void;
+    /** ARME LE MODE ÉDITION du composeur (#10581) ; absent : l'hôte n'en a pas, « Modifier » ne s'offre pas. */
+    readonly beginEdit?: (messageId: string) => void;
   };
   /**
    * LA RÉGION LIVE PARTAGÉE (revue #5814, défaut majeur 9) — remplace
@@ -152,6 +156,54 @@ export function useMessageMenu(params: {
       });
     },
     [messageOf, displayLanguages, readerLanguages],
+  );
+
+  /**
+   * « MODIFIER » (#10581) — le geste, ou `null` quand rien ne s'offre : la
+   * règle du serveur lue avant l'aller-retour (`editOffered`), un hôte qui a
+   * un mode édition, et le catalogue du fil chargé (le libellé y vit). Le menu
+   * et « Plus… » lisent cette même réponse.
+   */
+  const beginEdit = params.reply.beginEdit;
+  const hasAccount = params.canStar;
+  const editOf = useCallback(
+    (messageId: string): (() => void) | null => {
+      const message = messageOf(messageId);
+      if (message === undefined || beginEdit === undefined) return null;
+      if (!isMessagePiecesCatalogLoaded(currentInterfaceLanguage())) return null;
+      if (!editOffered(message, { id: viewerId, hasAccount }, { now: Date.now() })) return null;
+      return () => beginEdit(messageId);
+    },
+    [messageOf, beginEdit, viewerId, hasAccount],
+  );
+
+  /**
+   * « SUPPRIMER » (#10582) — le dialogue et ses effets (`use-message-delete.ts`),
+   * offerts à « Plus… » pour un message et à la barre pour la sélection. Le
+   * geste parti, la sélection se termine.
+   */
+  const deleteViewer = useMemo(() => ({ id: viewerId, hasAccount }), [viewerId, hasAccount]);
+  const endSelection = useCallback(() => setSelection(null), []);
+  const deletion = useMessageDelete({
+    conversationId,
+    messageOf,
+    viewer: deleteViewer,
+    announce,
+    queryClient: params.queryClient ?? appQueryClient,
+    transport: params.transport ?? apiDeps.transport,
+    onConfirmed: endSelection,
+  });
+  const { ask: askDelete, offerOf: deleteOfferFor } = deletion;
+  const deleteOf = useCallback(
+    (messageId: string): (() => void) | null => (deleteOfferFor([messageId]) === null ? null : () => askDelete([messageId])),
+    [deleteOfferFor, askDelete],
+  );
+  /** L'ordre est celui du FIL (`orderedIds`), comme pour le transfert : la boucle « pour tous » supprime dans l'ordre où on lit. */
+  const onDeleteSelection = useCallback(
+    (placed: readonly { readonly message: { readonly id: string } }[]) => {
+      if (selection !== null) askDelete(orderedIds(placed, new Set(selection.ids)));
+    },
+    [selection, askDelete],
   );
 
   /**
@@ -320,6 +372,13 @@ export function useMessageMenu(params: {
         params.reply.setReplyTarget(messageId);
         return;
       }
+      if (id === 'edit') {
+        const edit = editOf(messageId);
+        if (edit === null) return;
+        focusTakenRef.current = true;
+        edit();
+        return;
+      }
       /**
        * « TRANSFÉRER » ARME LA SÉLECTION (#5866, décision porteur #5989 du
        * 2026-09-23) — exactement l'effet de « Sélectionner », avec CE message
@@ -356,7 +415,7 @@ export function useMessageMenu(params: {
       // `translate` ne passe jamais ici — `MessageMenu` l'intercepte en
       // interne et bascule sur son sous-menu (`onPickLanguage`).
     },
-    [copyableTextOf, params, announce, messageOf, discussionImageableOf],
+    [copyableTextOf, params, announce, messageOf, discussionImageableOf, editOf],
   );
 
   /** Le tap d'une rangée EN MODE SÉLECTION — bascule la coche ; le 101ᵉ id
@@ -422,12 +481,13 @@ export function useMessageMenu(params: {
    * ou pas du tout, `admitForward`) ; « Copier » n'est pas rendu quand rien de
    * coché ne se copie. Un bouton interdit n'existe pas, il ne se grise pas.
    */
-  const selectionOffers = ((): { readonly forward: boolean; readonly copy: boolean } => {
-    if (selection === null) return { forward: false, copy: false };
+  const selectionOffers = ((): { readonly forward: boolean; readonly copy: boolean; readonly delete: boolean } => {
+    if (selection === null) return { forward: false, copy: false, delete: false };
     const picked = selection.ids.map((id) => messageOf(id)).filter((m): m is Message => m !== undefined);
     return {
       forward: admitForward(picked, Date.now()).admitted,
       copy: selection.ids.some((id) => (copyableTextOf(id) ?? '') !== ''),
+      delete: deleteOfferFor(selection.ids) !== null,
     };
   })();
 
@@ -495,6 +555,7 @@ export function useMessageMenu(params: {
       ...messageMenuContextOf(message, { now: Date.now() }),
       hasDefaultExportFormat: readDefaultMessageCardFormat(safeLocalStorage()) !== null,
       discussionImageable: discussionImageableOf(menuTarget.messageId),
+      canEdit: editOf(menuTarget.messageId) !== null,
     };
     const servedLanguage = servedOf(menuTarget.messageId)?.language ?? '';
     const lang = currentInterfaceLanguage();
@@ -529,7 +590,12 @@ export function useMessageMenu(params: {
     onEndSelection,
     onCopySelection,
     onForwardSelection,
+    onDeleteSelection,
     selectionOffers,
+    deleteOf,
+    deleteRequest: deletion.request,
+    onDismissDelete: deletion.dismiss,
+    onConfirmDelete: deletion.confirm,
     detailFor,
     setDetailFor,
     reactionSheetFor,
@@ -538,6 +604,7 @@ export function useMessageMenu(params: {
     setExportFor,
     servedOf,
     starOf,
+    editOf,
     swipeActionsOf,
   };
 }
