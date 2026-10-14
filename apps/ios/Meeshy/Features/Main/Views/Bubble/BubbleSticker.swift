@@ -5,7 +5,7 @@ import MeeshyUI
 /// **Un sticker de conversation, rendu SANS chrome de bulle** (#4823).
 ///
 /// Ni fond, ni coin, ni bordure : le sticker EST le message, comme un emoji
-/// libre. L'image (~160 pt) s'aligne à droite quand c'est le mien, à gauche
+/// libre. L'image (~210 pt) s'aligne à droite quand c'est le mien, à gauche
 /// sinon, avec la méta-ligne compacte (heure + statut de livraison) posée à
 /// côté et le strip de réactions à cheval sur le coin — exactement la
 /// silhouette de `emojiOnlyContent` dans `BubbleStandardLayout`, dont ce
@@ -34,17 +34,21 @@ struct BubbleSticker: View, Equatable {
 
     // MARK: - Mesures
 
-    /// Le côté de référence d'un sticker dans la bulle.
-    static let side: CGFloat = 160
+    /// Le côté de référence d'un sticker dans le fil — 210 pt (SOTA : Telegram,
+    /// WhatsApp, Signal, iMessage rendent un sticker bien plus grand qu'une
+    /// image de bulle ; 160 pt le laissait minuscule, #10630).
+    static let side: CGFloat = 210
     /// La boîte maximale d'un GABARIT — un cartouche (« Depuis le 12 mai »)
     /// est plus large que haut, et ne doit pas être écrasé dans un carré.
-    static let templateBox = CGSize(width: 240, height: side)
+    /// Proportionnelle au côté, comme celle de `MessageStickerArtwork`.
+    static let templateBox = CGSize(width: side * 1.5, height: side)
     /// La boîte d'un emoji libre — sert d'assiette aux décalages du mouvement,
     /// qui sont des FRACTIONS du côté rendu.
-    static let emojiBox = CGSize(width: 60, height: 60)
-    /// Le glyphe d'un sticker EMOJI. Un sticker garde sa taille : la règle de
-    /// #9054 (×4 / ×3 / ×2) ne vise que les messages d'emojis.
-    static let emojiGlyphSize: CGFloat = 90
+    static let emojiBox = CGSize(width: 80, height: 80)
+    /// Le glyphe d'un sticker EMOJI, proportionnel au côté (90 pour 160 hier).
+    /// Un sticker garde sa taille : la règle de #9054 (×4 / ×3 / ×2) ne vise
+    /// que les messages d'emojis.
+    static let emojiGlyphSize: CGFloat = 118
 
     // MARK: - Règles pures
 
@@ -188,6 +192,9 @@ struct BubbleSticker: View, Equatable {
     /// la consommation et confirme aussitôt, la destruction partant de la sortie
     /// de la conversation (#7500).
     var onConsumeViewOnce: ((String, @escaping (Bool) -> Void) -> Void)? = nil
+    /// Le `stickerId` de bibliothèque du message (#10630) : mon sticker renvoyé y
+    /// est déjà, la fiche n'offre pas de l'y ajouter.
+    var libraryStickerId: String? = nil
 
     /// Rappels — hors de l'égalité : ils ne changent pas le rendu.
     var onRetry: (() -> Void)? = nil
@@ -215,6 +222,7 @@ struct BubbleSticker: View, Equatable {
             && lhs.isLastInGroup == rhs.isLastInGroup
             && lhs.standalone == rhs.standalone
             && lhs.protection == rhs.protection
+            && lhs.libraryStickerId == rhs.libraryStickerId
     }
 
     /// L'état de révélation vit ICI, comme `ThemedMessageBubble` le possède
@@ -254,6 +262,13 @@ struct BubbleSticker: View, Equatable {
                         // Les effets du message se posent sur le sticker lui-même,
                         // jamais sur la rangée — même doctrine que la bulle.
                         .messageEffects(effects)
+                        // #10630 — ombre + flottement du CONTENEUR (coupé sous
+                        // Reduce Motion), puis le toucher ouvre la fiche : le
+                        // sticker n'a ni plein écran ni « Enregistrer l'image ».
+                        .stickerFloat()
+                        .stickerSheetOnTap(sticker: sticker, isMine: isMe,
+                                           libraryStickerId: libraryStickerId,
+                                           isEnabled: !isVeiled)
                         .blur(radius: isVeiled ? 18 : 0)
                         .allowsHitTesting(!isVeiled)
 

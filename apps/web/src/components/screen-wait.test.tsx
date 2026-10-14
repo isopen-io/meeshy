@@ -47,10 +47,11 @@ describe('ScreenWait', () => {
     expect(SCREEN_WAIT_ART).not.toContain('role="img"');
   });
 
-  test("le module d'attente ne charge ni le catalogue de stickers ni le moteur de rendu", () => {
+  test("le module d'attente ne charge ni le catalogue de stickers ni le moteur de rendu, et son dessin hors de la première peinture", () => {
     const source = readFileSync(fileURLToPath(new URL('./screen-wait.tsx', import.meta.url)), 'utf8');
     const art = readFileSync(fileURLToPath(new URL('./screen-wait-art.ts', import.meta.url)), 'utf8');
     for (const text of [source, art]) expect(text).not.toMatch(/from '@\/lib\/mee\//);
+    expect(source).not.toMatch(/from '\.\/screen-wait-art'/);
   });
 
   test("le conteneur annonce l'attente dans la langue de l'interface, et le dessin n'apparaît qu'après le délai", async () => {
