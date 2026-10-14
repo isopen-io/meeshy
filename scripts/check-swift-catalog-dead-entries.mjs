@@ -504,7 +504,14 @@ const EXCLUDED_DIR_NAMES = new Set(['Tests', 'MeeshyTests', 'MeeshyUIDeviceTests
 // User-Agent (jumelle des aperçus `/chat/<lien>` et `/l/<jeton>`). Aucun client ne l'appelle jamais, iOS pas plus
 // que le web : l'entrée existe parce que le catalogue est généré depuis le manifeste. Valeur MESURÉE le 2026-10-13
 // en CI (run 38458186282 rouge sur 314).
-const BASELINE_DEAD_ENTRIES = 314;
+// 314 -> 331 (#10673, 2026-10-14) : `MeEndpoint.profileDecor` (#10631, `PUT /me/profile-decor`) et les seize
+// cas de `PacksEndpoint` pour les packs d'apparence unifiés (#10632 : `avatarRing*`, `banner*`, `wallpaper*`,
+// `shop`) — régénérés depuis le manifeste par `npm run ios-endpoints:generate` (cliquet distinct, #10673) pour
+// rattraper `MeEndpoint.swift`/`PacksEndpoint.swift` en retard sur leurs routes RÉELLES (`routes/me/profile-decor.ts`,
+// `routes/packs/*`). PRÉMATURÉ au sens de ce cliquet : iOS n'a pas encore d'écran pour la boutique d'apparence ni
+// pour le décor de profil, même raison que les dizaines d'`AdminEndpoint.*`/`PacksEndpoint.gloryFrame*` ci-dessus.
+// Valeur MESURÉE le 2026-10-14 en local et en CI (run 38655284420 rouge sur 331).
+const BASELINE_DEAD_ENTRIES = 331;
 
 const CATALOG_ENUM_RE = /public enum ([A-Za-z0-9_]+)\s*:\s*MeeshyEndpoint\b/;
 // Une déclaration de cas n'a jamais de point après `case` ; une branche de
