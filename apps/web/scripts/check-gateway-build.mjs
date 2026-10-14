@@ -488,8 +488,12 @@ async function main() {
   // --- 2c. TIRER-POUR-RAFRAÎCHIR : conversations + stories/humeurs EN -------
   //         PARALLÈLE, sans squelette (#6195) --------------------------------
   {
-    // `serviceWorkers: 'block'` — voir le doc-comment du bloc 2.
-    const context = await browser.newContext({ serviceWorkers: 'block' });
+    // `serviceWorkers: 'block'` — voir le doc-comment du bloc 2. `locale:
+    // 'fr-FR'` (#10593) : les puces parlent la langue d'interface, que le
+    // script d'amorçage lit dans `navigator.languages` — le bloc les touche
+    // par leur nom français (« Épinglés », « Tous »), qu'un Chromium en
+    // `en-US` rend « Pinned » et « All ».
+    const context = await browser.newContext({ serviceWorkers: 'block', locale: 'fr-FR' });
     await context.addInitScript((session) => {
       window.localStorage.setItem('meeshy.session', JSON.stringify(session));
     }, SESSION);
@@ -743,7 +747,9 @@ async function main() {
       /* Le chrome qui PRÉCÈDE la liste : le rail et la bande de filtres. On
          prend le plus bas des deux — c'est lui qui borne le début légitime de
          l'état vide. */
-      const chrome = [...contenu.querySelectorAll('[data-rail="grande"], nav[aria-label="Filtres"]')];
+      /* `[data-list-filters]`, jamais le nom accessible (#10593) : il suit la
+         langue d'interface, et « Filters » sortait la bande de la mesure. */
+      const chrome = [...contenu.querySelectorAll('[data-rail="grande"], nav[data-list-filters]')];
       const bas = chrome.reduce((max, el) => Math.max(max, el.getBoundingClientRect().bottom), contenu.getBoundingClientRect().top);
       return Math.round(empty.getBoundingClientRect().top - bas);
     });
