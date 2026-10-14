@@ -264,4 +264,81 @@ public class NotificationVoiceRulesTest {
         assertEquals(100, capped.get(0).startMs);
         assertEquals(590, capped.get(49).startMs);
     }
+
+    // ── Revue adversariale (#10641) ─────────────────────────────────────────
+
+    private static String jwt(String payloadJson) {
+        java.util.Base64.Encoder b64 = java.util.Base64.getUrlEncoder().withoutPadding();
+        return b64.encodeToString("{\"alg\":\"HS256\"}".getBytes(java.nio.charset.StandardCharsets.UTF_8)) + "."
+            + b64.encodeToString(payloadJson.getBytes(java.nio.charset.StandardCharsets.UTF_8)) + ".sig";
+    }
+
+    @Test
+    public void aRegisteredAccountIsItsUserAcrossTokenRefreshes() {
+        String first = NotificationVoiceRules.accountOf("registered", jwt("{\"userId\":\"u1\",\"exp\":1}"));
+        String refreshed = NotificationVoiceRules.accountOf("registered", jwt("{\"userId\":\"u1\",\"exp\":2}"));
+        String other = NotificationVoiceRules.accountOf("registered", jwt("{\"userId\":\"u2\"}"));
+        assertNotNull(first);
+        assertEquals(first, refreshed);
+        assertFalse(first.equals(other));
+        assertFalse(first.contains("u1."));
+    }
+
+    @Test
+    public void anUnreadableOrAnonymousTokenIsAnOpaqueFingerprintNeverTheTokenItself() {
+        String anonymous = NotificationVoiceRules.accountOf("anonymous", "session-secret");
+        assertNotNull(anonymous);
+        assertFalse(anonymous.contains("session-secret"));
+        assertFalse(anonymous.equals(NotificationVoiceRules.accountOf("registered", "session-secret")));
+        assertNotNull(NotificationVoiceRules.accountOf("registered", "not.a-jwt"));
+        assertNull(NotificationVoiceRules.accountOf("registered", ""));
+        assertNull(NotificationVoiceRules.accountOf("unknown", "t"));
+    }
+
+    @Test
+    public void theOriginIsTheAccountAndTheEnvironment() {
+        String token = jwt("{\"userId\":\"u1\"}");
+        String prod = NotificationVoiceRules.origin("https://gate.meeshy.me/", "registered", token);
+        assertEquals(prod, NotificationVoiceRules.origin("https://gate.meeshy.me", "registered", token));
+        assertFalse(prod.equals(NotificationVoiceRules.origin("https://staging.meeshy.me", "registered", token)));
+        assertNull(NotificationVoiceRules.origin(null, "registered", token));
+        assertNull(NotificationVoiceRules.origin("https://gate.meeshy.me", "registered", null));
+    }
+
+    @Test
+    public void aPendingReportOrAnOfferedVoiceOnlyServesTheSameAccountOnTheSameEnvironment() {
+        // Apres une deconnexion, le rapport de A ne part ni avec le jeton de B
+        // ni vers l'autre `apiBase` (jeton de production vers le staging, #9232).
+        assertTrue(NotificationVoiceRules.sameOrigin("o1", "o1"));
+        assertFalse(NotificationVoiceRules.sameOrigin("o1", "o2"));
+        assertFalse(NotificationVoiceRules.sameOrigin(null, null));
+        assertFalse(NotificationVoiceRules.sameOrigin("o1", null));
+    }
+
+    @Test
+    public void aDownloadFinishedAfterPauseOrDestructionIsAbandoned() {
+        assertTrue(NotificationVoiceRules.mayPrepare(false, "m1", "m1"));
+        assertFalse(NotificationVoiceRules.mayPrepare(true, "m1", "m1"));
+        assertFalse(NotificationVoiceRules.mayPrepare(false, "m1", null));
+        assertFalse(NotificationVoiceRules.mayPrepare(false, "m1", "m2"));
+    }
+
+    @Test
+    public void onlyTheBannerOfThisMessageIsTouched() {
+        // Le tag vaut la conversation : une banniere plus recente du meme fil
+        // le porte aussi. A l'offre, une banniere encore vierge est la sienne.
+        assertTrue(NotificationVoiceRules.bannerMatches(null, "m1", true));
+        assertTrue(NotificationVoiceRules.bannerMatches("m1", "m1", true));
+        assertFalse(NotificationVoiceRules.bannerMatches("m2", "m1", true));
+        assertTrue(NotificationVoiceRules.bannerMatches("m1", "m1", false));
+        assertFalse(NotificationVoiceRules.bannerMatches(null, "m1", false));
+        assertFalse(NotificationVoiceRules.bannerMatches("m2", "m1", false));
+    }
+
+    @Test
+    public void theLockScreenNamesNobodyUnlessPrivateNotificationsAreAllowed() {
+        assertTrue(NotificationVoiceRules.revealOnLockScreen(1));
+        assertFalse(NotificationVoiceRules.revealOnLockScreen(0));
+        assertFalse(NotificationVoiceRules.revealOnLockScreen(-1));
+    }
 }

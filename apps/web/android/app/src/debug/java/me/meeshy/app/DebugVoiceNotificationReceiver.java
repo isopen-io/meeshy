@@ -17,16 +17,38 @@ import java.util.Map;
  * recette sur emulateur sans envoyer aucun message reel :
  *
  * <pre>
- * adb shell am broadcast -n me.meeshy.app/.DebugVoiceNotificationReceiver \
+ * adb shell run-as me.meeshy.app am broadcast --user 0 -n me.meeshy.app/.DebugVoiceNotificationReceiver \
  *   --es url https://gate.meeshy.me/api/v1/attachments/file/... [--ez protected true]
  * </pre>
  *
  * Aucun `attachmentId` par defaut : la recette ne rapporte aucune ecoute.
+ * Non exporte : seul l'uid de l'app (`run-as`) le declenche, jamais une
+ * autre application installee a cote de l'APK debug.
  */
 public class DebugVoiceNotificationReceiver extends BroadcastReceiver {
 
     @Override
     public void onReceive(Context context, Intent intent) {
+        if (intent.getBooleanExtra("clear", false)) {
+            // Le volet regroupe les bannieres d'une meme app : la recette repart d'un
+            // volet vide et d'un lecteur arrete.
+            try {
+                context.startService(new Intent(context, NotificationVoiceService.class).setAction(NotificationVoiceService.ACTION_STOP));
+            } catch (RuntimeException notRunning) {
+                // Aucun lecteur a arreter.
+            }
+            NotificationManager manager = context.getSystemService(NotificationManager.class);
+            if (manager != null) manager.cancelAll();
+            return;
+        }
+        if (intent.hasExtra("credential")) {
+            // Un credential FACTICE (session anonyme inconnue du serveur) : la coque
+            // n'offre l'ecoute qu'a un compte connecte. `--es credential ''` le retire.
+            String token = intent.getStringExtra("credential");
+            if (token == null || token.isEmpty()) CallShellStore.clearCredential(context);
+            else CallShellStore.saveCredential(context, extra(intent, "apiBase", "https://gate.meeshy.me"), "anonymous", token);
+            return;
+        }
         boolean secret = intent.getBooleanExtra("protected", false);
         String tag = extra(intent, "conversationId", "debug-voice");
         Map<String, String> data = new HashMap<>();

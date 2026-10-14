@@ -25,6 +25,7 @@ import android.os.Handler;
 import android.os.IBinder;
 import android.os.Looper;
 import android.os.SystemClock;
+import android.provider.Settings;
 import android.util.Log;
 import androidx.core.content.ContextCompat;
 import java.io.File;
@@ -109,6 +110,8 @@ public class NotificationVoiceService extends Service {
     private NotificationVoiceRules.Voice voice;
     private boolean playing;
     private boolean noisyRegistered;
+    private boolean destroyed;
+    private boolean interrupted;
     private long stretchStartMs = -1;
     private final List<NotificationVoiceRules.Stretch> stretches = new ArrayList<>();
 
@@ -119,11 +122,24 @@ public class NotificationVoiceService extends Service {
         }
     };
 
+    /**
+     * Une perte DEFINITIVE (une autre app joue) met en pause et rend le focus.
+     * Une perte PASSAGERE (le son d'une notification, un appel) met en pause
+     * en gardant le focus, et la lecture reprend quand il revient : sans cela,
+     * la banniere d'un message suivant arretait le vocal pour de bon.
+     */
     private final AudioManager.OnAudioFocusChangeListener focus = change -> {
-        if (change == AudioManager.AUDIOFOCUS_LOSS
-            || change == AudioManager.AUDIOFOCUS_LOSS_TRANSIENT
-            || change == AudioManager.AUDIOFOCUS_LOSS_TRANSIENT_CAN_DUCK) {
+        if (change == AudioManager.AUDIOFOCUS_LOSS) {
             pause("pause");
+        } else if (change == AudioManager.AUDIOFOCUS_LOSS_TRANSIENT
+            || change == AudioManager.AUDIOFOCUS_LOSS_TRANSIENT_CAN_DUCK) {
+            if (playing) {
+                interrupted = true;
+                hold("pause");
+            }
+        } else if (change == AudioManager.AUDIOFOCUS_GAIN && interrupted) {
+            interrupted = false;
+            if (player != null && !playing) startPlayback();
         }
     };
 
@@ -158,7 +174,9 @@ public class NotificationVoiceService extends Service {
         goForeground(notification());
         String action = intent == null ? null : intent.getAction();
         if (ACTION_PAUSE.equals(action)) {
-            if (player == null) stopNow();
+            // Touchee pendant le telechargement : le vocal demande est oublie,
+            // et le fichier qui arrivera sera abandonne (`mayPrepare`).
+            if (player == null) finish("dismissed", false);
             else pause("pause");
         } else if (ACTION_STOP.equals(action)) {
             finish("dismissed", false);
@@ -174,8 +192,10 @@ public class NotificationVoiceService extends Service {
     private void play(Map<String, String> data) {
         NotificationVoiceRules.Voice requested = NotificationVoiceRules.listenable(
             data, CallShellStore.apiBase(this), NotificationVoiceBanner.debuggable(this));
-        if (requested == null) {
-            stopNow();
+        // Une banniere recue par un AUTRE compte, ou sur l'autre environnement,
+        // ne s'ecoute pas : ni telechargement, ni rapport (#9232).
+        if (requested == null || !NotificationVoiceRules.sameOrigin(data.get(NotificationVoiceBanner.KEY_ORIGIN), CallShellStore.voiceOrigin(this))) {
+            if (voice == null) stopNow();
             return;
         }
         if (voice != null && requested.messageId.equals(voice.messageId) && player != null) {
@@ -194,8 +214,12 @@ public class NotificationVoiceService extends Service {
     private void download(NotificationVoiceRules.Voice target) {
         File fetched = fetch(target.url);
         main.post(() -> {
-            if (voice != target) {
+            NotificationVoiceRules.Voice current = voice;
+            boolean stillWanted = current == target
+                && NotificationVoiceRules.mayPrepare(destroyed, target.messageId, current.messageId);
+            if (!stillWanted) {
                 if (fetched != null) fetched.delete();
+                Log.i(TAG, "telechargement abandonne : vocal plus demande");
                 return;
             }
             if (fetched == null) {
@@ -214,6 +238,7 @@ public class NotificationVoiceService extends Service {
         String current = url;
         for (int hop = 0; hop <= NotificationVoiceRules.MAX_REDIRECTS; hop++) {
             HttpURLConnection connection = null;
+            File partial = null;
             try {
                 connection = (HttpURLConnection) URI.create(current).toURL().openConnection();
                 connection.setInstanceFollowRedirects(false);
@@ -228,7 +253,8 @@ public class NotificationVoiceService extends Service {
                 if (status != 200) return null;
                 if (!NotificationVoiceRules.servedAudio(connection.getContentType())) return null;
                 if (!NotificationVoiceRules.lengthAcceptable(connection.getContentLengthLong())) return null;
-                File out = File.createTempFile("voice", ".audio", getCacheDir());
+                partial = File.createTempFile("voice", ".audio", getCacheDir());
+                File out = partial;
                 long total = 0;
                 try (InputStream in = connection.getInputStream(); OutputStream sink = new FileOutputStream(out)) {
                     byte[] buffer = new byte[16 * 1024];
@@ -242,8 +268,11 @@ public class NotificationVoiceService extends Service {
                         sink.write(buffer, 0, read);
                     }
                 }
+                partial = null;
                 return out;
             } catch (Exception failure) {
+                // Une copie interrompue ne laisse pas de fichier partiel dans le cache.
+                if (partial != null) partial.delete();
                 Log.w(TAG, "vocal non telecharge", failure);
                 return null;
             } finally {
@@ -278,6 +307,13 @@ public class NotificationVoiceService extends Service {
         MediaPlayer media = player;
         if (media == null || playing) return;
         if (!requestFocus()) return;
+        interrupted = false;
+        startPlayback();
+    }
+
+    private void startPlayback() {
+        MediaPlayer media = player;
+        if (media == null || playing) return;
         MeeshyPlaybackPlugin.pauseRequested();
         media.start();
         playing = true;
@@ -290,19 +326,34 @@ public class NotificationVoiceService extends Service {
         goForeground(notification());
     }
 
+    /**
+     * La pause DEMANDEE (geste, casque, autre app) : focus rendu, et le
+     * service quitte le premier plan, sa notification se balaie.
+     */
     void pause(String endedBy) {
+        if (player == null || (!playing && !interrupted)) return;
+        interrupted = false;
+        hold(endedBy);
+        abandonFocus();
+        stopForeground(Service.STOP_FOREGROUND_DETACH);
+    }
+
+    /**
+     * La pause elle-meme. Le service RESTE au premier plan : une interruption
+     * passagere reprend seule, et Android refuse de rendre le premier plan a
+     * un service en arriere-plan.
+     */
+    private void hold(String endedBy) {
         MediaPlayer media = player;
         if (media == null || !playing) return;
         media.pause();
         playing = false;
         closeStretch(media.getCurrentPosition(), endedBy);
-        abandonFocus();
         unregisterNoisy();
         publish(false);
         report(media.getCurrentPosition(), false);
         NotificationManager manager = getSystemService(NotificationManager.class);
         if (manager != null) manager.notify(NOTIFICATION_ID, notification());
-        stopForeground(Service.STOP_FOREGROUND_DETACH);
     }
 
     private void finish(String endedBy, boolean complete) {
@@ -353,9 +404,12 @@ public class NotificationVoiceService extends Service {
         if (current == null) return;
         long position = player == null ? 0 : player.getCurrentPosition();
         long duration = player != null && player.getDuration() > 0 ? player.getDuration() : current.durationMs;
+        boolean reveal = revealOnLockScreen();
         session.setMetadata(new MediaMetadata.Builder()
-            .putString(MediaMetadata.METADATA_KEY_TITLE, NotificationVoiceRules.playerTitle(current, getString(R.string.notification_voice_title)))
-            .putString(MediaMetadata.METADATA_KEY_ARTIST, NotificationVoiceRules.playerSubtitle(current))
+            .putString(MediaMetadata.METADATA_KEY_TITLE, reveal
+                ? NotificationVoiceRules.playerTitle(current, getString(R.string.notification_voice_title))
+                : getString(R.string.notification_voice_title))
+            .putString(MediaMetadata.METADATA_KEY_ARTIST, reveal ? NotificationVoiceRules.playerSubtitle(current) : "")
             .putLong(MediaMetadata.METADATA_KEY_DURATION, Math.max(duration, 0))
             .build());
         int state = loading ? PlaybackState.STATE_BUFFERING : playing ? PlaybackState.STATE_PLAYING : PlaybackState.STATE_PAUSED;
@@ -375,7 +429,9 @@ public class NotificationVoiceService extends Service {
             : new Notification.Builder(this);
         builder.setSmallIcon(R.drawable.ic_stat_meeshy)
             .setColor(ContextCompat.getColor(this, R.color.meeshy_notification_accent))
-            .setVisibility(Notification.VISIBILITY_PUBLIC)
+            // L'ecran verrouille ne nomme personne : la version publique est generique.
+            .setVisibility(Notification.VISIBILITY_PRIVATE)
+            .setPublicVersion(publicVersion())
             .setOnlyAlertOnce(true)
             .setShowWhen(false)
             .setDeleteIntent(foreground(new Intent(this, NotificationVoiceService.class).setAction(ACTION_STOP), 1))
@@ -398,6 +454,31 @@ public class NotificationVoiceService extends Service {
             builder.addAction(new Notification.Action.Builder(Icon.createWithResource(this, icon), label, foreground(toggle, 2)).build());
         }
         return builder.build();
+    }
+
+    private Notification publicVersion() {
+        Notification.Builder builder = Build.VERSION.SDK_INT >= Build.VERSION_CODES.O
+            ? new Notification.Builder(this, CHANNEL)
+            : new Notification.Builder(this);
+        return builder.setSmallIcon(R.drawable.ic_stat_meeshy)
+            .setColor(ContextCompat.getColor(this, R.color.meeshy_notification_accent))
+            .setContentTitle(getString(R.string.notification_voice_title))
+            .setShowWhen(false)
+            .build();
+    }
+
+    /**
+     * Les metadonnees de la session s'affichent sur l'ecran verrouille HORS du
+     * masquage des notifications : elles ne nomment l'auteur et la
+     * conversation que si l'utilisateur y montre le contenu sensible.
+     */
+    private boolean revealOnLockScreen() {
+        try {
+            return NotificationVoiceRules.revealOnLockScreen(
+                Settings.Secure.getInt(getContentResolver(), "lock_screen_allow_private_notifications", -1));
+        } catch (RuntimeException unreadable) {
+            return false;
+        }
     }
 
     private PendingIntent foreground(Intent intent, int request) {
@@ -472,6 +553,8 @@ public class NotificationVoiceService extends Service {
     private void report(long positionMs, boolean complete) {
         NotificationVoiceRules.Voice current = voice;
         if (current == null) return;
+        String origin = payload == null ? null : payload.get(NotificationVoiceBanner.KEY_ORIGIN);
+        if (!NotificationVoiceRules.sameOrigin(origin, CallShellStore.voiceOrigin(this))) return;
         String url = NotificationVoiceRules.reportUrl(CallShellStore.apiBase(this), current.attachmentId);
         long duration = player != null && player.getDuration() > 0 ? player.getDuration() : current.durationMs;
         String body = NotificationVoiceRules.reportBody(positionMs, duration, complete, stretches, current.language);
@@ -480,12 +563,17 @@ public class NotificationVoiceService extends Service {
         Context context = getApplicationContext();
         io.execute(() -> {
             flushPending(context);
-            if (!send(context, url, body)) keepPending(context, url, body);
+            if (!send(context, origin, url, body)) keepPending(context, origin, url, body);
         });
     }
 
-    /** Best effort, comme l'accuse de remise : sans credential, rien ne part. */
-    private static boolean send(Context context, String url, String body) {
+    /**
+     * Best effort, comme l'accuse de remise. Ne part qu'avec le credential du
+     * compte ET de l'environnement qui ont ecoute : verifie au moment meme de
+     * l'envoi, le credential ayant pu changer depuis. Sinon, abandonne.
+     */
+    private static boolean send(Context context, String origin, String url, String body) {
+        if (!NotificationVoiceRules.sameOrigin(origin, CallShellStore.voiceOrigin(context))) return true;
         String[] header = CallShellStore.credentialHeader(context);
         if (header == null) return true;
         HttpURLConnection connection = null;
@@ -512,11 +600,16 @@ public class NotificationVoiceService extends Service {
         }
     }
 
-    private static synchronized void keepPending(Context context, String url, String body) {
+    /** La deconnexion vide la file ({@link CallShellStore#clearCredential}). */
+    static synchronized void forgetPending(Context context) {
+        context.getSharedPreferences(PREFS, MODE_PRIVATE).edit().remove(KEY_PENDING).apply();
+    }
+
+    private static synchronized void keepPending(Context context, String origin, String url, String body) {
         try {
             SharedPreferences prefs = context.getSharedPreferences(PREFS, MODE_PRIVATE);
             JSONArray pending = new JSONArray(prefs.getString(KEY_PENDING, "[]"));
-            pending.put(new JSONObject().put("url", url).put("body", body));
+            pending.put(new JSONObject().put("origin", origin).put("url", url).put("body", body));
             while (pending.length() > MAX_PENDING) pending.remove(0);
             prefs.edit().putString(KEY_PENDING, pending.toString()).apply();
         } catch (Exception ignored) {
@@ -533,9 +626,12 @@ public class NotificationVoiceService extends Service {
             JSONArray pending = new JSONArray(stored);
             for (int i = 0; i < pending.length(); i++) {
                 JSONObject entry = pending.getJSONObject(i);
+                String origin = entry.optString("origin", "");
                 String url = entry.getString("url");
                 String body = entry.getString("body");
-                if (!send(context, url, body)) keepPending(context, url, body);
+                // Une entree d'un autre compte ou d'un autre environnement ne part jamais.
+                if (!NotificationVoiceRules.sameOrigin(origin, CallShellStore.voiceOrigin(context))) continue;
+                if (!send(context, origin, url, body)) keepPending(context, origin, url, body);
             }
         } catch (Exception ignored) {
             Log.w(TAG, "ecoutes gardees illisibles");
@@ -544,7 +640,8 @@ public class NotificationVoiceService extends Service {
 
     @Override
     public void onDestroy() {
-        if (player != null) finish("dismissed", false);
+        destroyed = true;
+        if (voice != null) finish("dismissed", false);
         running = null;
         session.release();
         io.shutdown();

@@ -223,6 +223,107 @@ final class NotificationVoiceRules {
         return ordered;
     }
 
+
+    // ── Compte et environnement (revue adversariale #10641) ─────────────────
+
+    /**
+     * L'EMPREINTE du compte du credential pose par la page — jamais le jeton.
+     * Un compte inscrit est son `userId` (claim de `signSessionToken`), stable
+     * d'un rafraichissement a l'autre ; un jeton illisible ou anonyme est son
+     * condensat. Null sans credential reconnu (`CallShellRules.credentialHeader`).
+     */
+    static String accountOf(String kind, String token) {
+        if (token == null || token.trim().isEmpty()) return null;
+        if ("registered".equals(kind)) {
+            String user = jwtUser(token.trim());
+            return user != null ? "u:" + digest(user) : "r:" + digest(token.trim());
+        }
+        if ("anonymous".equals(kind)) return "a:" + digest(token.trim());
+        return null;
+    }
+
+    /** Le compte ET l'environnement : un rapport ou une ecoute ne servent que les leurs. */
+    static String origin(String apiBase, String kind, String token) {
+        String account = accountOf(kind, token);
+        if (account == null || apiBase == null) return null;
+        String base = apiBase.trim().toLowerCase(Locale.ROOT);
+        while (base.endsWith("/")) base = base.substring(0, base.length() - 1);
+        if (!base.startsWith("https://") && !base.startsWith("http://")) return null;
+        return account + "|" + base;
+    }
+
+    /** Fail-closed : deux origines inconnues ne se valent pas. */
+    static boolean sameOrigin(String recorded, String current) {
+        return recorded != null && recorded.equals(current);
+    }
+
+    /** Un telechargement acheve ne se prepare que pour le vocal encore demande, dans un service vivant. */
+    static boolean mayPrepare(boolean destroyed, String targetMessageId, String currentMessageId) {
+        return !destroyed && targetMessageId != null && targetMessageId.equals(currentMessageId);
+    }
+
+    /**
+     * La banniere retrouvee par son tag (la conversation) est-elle celle de CE
+     * message ? A l'offre, une banniere encore vierge (FCM vient de la poser)
+     * l'est ; ensuite, seule celle qui porte son identite.
+     */
+    static boolean bannerMatches(String stampedMessageId, String messageId, boolean offering) {
+        if (stampedMessageId == null) return offering;
+        return stampedMessageId.equals(messageId);
+    }
+
+    /**
+     * `lock_screen_allow_private_notifications` : 1 seulement montre auteur et
+     * conversation sur l'ecran verrouille. Illisible ou absent : rien ne se
+     * nomme (fail-closed).
+     */
+    static boolean revealOnLockScreen(int allowPrivateNotifications) {
+        return allowPrivateNotifications == 1;
+    }
+
+    private static String jwtUser(String token) {
+        String[] parts = token.split("\\.");
+        if (parts.length != 3) return null;
+        try {
+            String json = new String(base64Url(parts[1]), java.nio.charset.StandardCharsets.UTF_8);
+            String user = new org.json.JSONObject(json).optString("userId", "");
+            return user.isEmpty() ? null : user;
+        } catch (Exception unreadable) {
+            return null;
+        }
+    }
+
+    /** `java.util.Base64` n'existe qu'a l'API 26 (minSdk 24) : le decodeur base64url, a la main. */
+    private static byte[] base64Url(String text) {
+        String alphabet = "ABCDEFGHIJKLMNOPQRSTUVWXYZabcdefghijklmnopqrstuvwxyz0123456789-_";
+        java.io.ByteArrayOutputStream out = new java.io.ByteArrayOutputStream();
+        int buffer = 0;
+        int bits = 0;
+        for (char c : text.toCharArray()) {
+            if (c == '=') break;
+            int value = alphabet.indexOf(c == '+' ? '-' : c == '/' ? '_' : c);
+            if (value < 0) throw new IllegalArgumentException("base64url");
+            buffer = (buffer << 6) | value;
+            bits += 6;
+            if (bits >= 8) {
+                bits -= 8;
+                out.write((buffer >> bits) & 0xff);
+            }
+        }
+        return out.toByteArray();
+    }
+
+    private static String digest(String value) {
+        try {
+            byte[] hash = java.security.MessageDigest.getInstance("SHA-256").digest(value.getBytes(java.nio.charset.StandardCharsets.UTF_8));
+            StringBuilder hex = new StringBuilder();
+            for (int i = 0; i < 16; i++) hex.append(String.format(Locale.ROOT, "%02x", hash[i]));
+            return hex.toString();
+        } catch (java.security.NoSuchAlgorithmException impossible) {
+            return Integer.toHexString(value.hashCode());
+        }
+    }
+
     private static String configuredHost(String apiBase) {
         URI uri = parse(apiBase);
         if (uri == null || !"https".equalsIgnoreCase(text(uri.getScheme()))) return null;

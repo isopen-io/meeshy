@@ -9,6 +9,8 @@ import android.content.pm.ApplicationInfo;
 import android.graphics.drawable.Icon;
 import android.os.Build;
 import android.os.Bundle;
+import android.os.Handler;
+import android.os.Looper;
 import android.service.notification.StatusBarNotification;
 import android.util.Log;
 import java.util.HashMap;
@@ -35,12 +37,22 @@ final class NotificationVoiceBanner {
 
     private static final String TAG = "MeeshyNotificationVoice";
     static final String EXTRA_PAYLOAD = "me.meeshy.app.voice.PAYLOAD";
+    /** Le message dont la banniere porte l'action : le tag (la conversation) ne le dit pas. */
+    static final String EXTRA_MESSAGE_ID = "me.meeshy.app.voice.MESSAGE_ID";
+    /**
+     * Le compte et l'environnement qui ont recu ce push, poses par la coque a
+     * l'offre ({@link CallShellStore#voiceOrigin}) : une banniere du compte A
+     * ne s'ecoute pas une fois B connecte.
+     */
+    static final String KEY_ORIGIN = "meeshyVoiceOrigin";
+    private static final int OFFER_ATTEMPTS = 8;
+    private static final long OFFER_RETRY_MS = 250;
 
     /** Les cles de la charge qui decrivent le vocal — et elles seules. */
     private static final String[] KEYS = {
         "type", "conversationId", "conversationTitle", "messageId", "senderDisplayName", "senderUsername",
         "attachmentUrl", "attachmentMimeType", "attachmentDurationMs", "attachmentId", "attachmentLanguage",
-        "notificationLocKey", "encryptedContent", "gcm.notification.tag", "gcm.n.tag",
+        "notificationLocKey", "encryptedContent", "gcm.notification.tag", "gcm.n.tag", KEY_ORIGIN,
     };
 
     private NotificationVoiceBanner() {}
@@ -74,7 +86,24 @@ final class NotificationVoiceBanner {
         NotificationVoiceRules.Voice voice = NotificationVoiceRules.listenable(
             data, CallShellStore.apiBase(context), debuggable(context));
         if (voice == null || voice.tag.isEmpty()) return;
-        show(context, data, voice, false);
+        String origin = CallShellStore.voiceOrigin(context);
+        if (origin == null) return;
+        // Jamais lue de la charge : la coque la pose, elle ne la recoit pas.
+        Map<String, String> stamped = new HashMap<>(data);
+        stamped.put(KEY_ORIGIN, origin);
+        offerUntilShown(context.getApplicationContext(), stamped, voice, OFFER_ATTEMPTS);
+    }
+
+    /**
+     * `notify` est ASYNCHRONE : la banniere que FCM vient de poser n'est pas
+     * toujours deja dans `getActiveNotifications`. On la recherche quelques
+     * fois avant de renoncer (mesure sur emulateur : l'action manquait une
+     * fois sur deux sans ce delai).
+     */
+    private static void offerUntilShown(Context context, Map<String, String> data, NotificationVoiceRules.Voice voice, int attemptsLeft) {
+        if (place(context, data, voice, false, null, true) || attemptsLeft <= 1) return;
+        new Handler(Looper.getMainLooper()).postDelayed(
+            () -> offerUntilShown(context, data, voice, attemptsLeft - 1), OFFER_RETRY_MS);
     }
 
     /**
@@ -88,12 +117,23 @@ final class NotificationVoiceBanner {
 
     /** `note` remplace la duree sous le titre — l'echec d'une lecture s'y dit. */
     static void show(Context context, Map<String, String> data, NotificationVoiceRules.Voice voice, boolean playing, String note) {
+        place(context, data, voice, playing, note, false);
+    }
+
+    /** `false` seulement quand aucune banniere ne porte encore ce tag (a rechercher). */
+    private static boolean place(Context context, Map<String, String> data, NotificationVoiceRules.Voice voice, boolean playing, String note, boolean offering) {
         NotificationManager manager = context.getSystemService(NotificationManager.class);
-        if (manager == null || voice.tag.isEmpty()) return;
+        if (manager == null || data == null || voice.tag.isEmpty()) return true;
         Notification shown = find(manager, voice.tag);
-        if (shown == null) return;
+        if (shown == null) return false;
+        String stamped = shown.extras == null ? null : shown.extras.getString(EXTRA_MESSAGE_ID);
+        // Une banniere plus recente du meme fil porte le meme tag : on ne la touche pas.
+        if (!NotificationVoiceRules.bannerMatches(stamped, voice.messageId, offering)) return true;
         try {
             Notification.Builder builder = Notification.Builder.recoverBuilder(context, shown);
+            Bundle extras = new Bundle();
+            extras.putString(EXTRA_MESSAGE_ID, voice.messageId);
+            builder.addExtras(extras);
             builder.setActions(action(context, data, playing));
             builder.setOnlyAlertOnce(true);
             String sub = note != null ? note : NotificationVoiceRules.duration(voice.durationMs);
@@ -102,6 +142,7 @@ final class NotificationVoiceBanner {
         } catch (RuntimeException failure) {
             Log.w(TAG, "action d'ecoute non posee", failure);
         }
+        return true;
     }
 
     private static Notification find(NotificationManager manager, String tag) {
