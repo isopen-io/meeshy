@@ -3,18 +3,14 @@ import type { KeyboardEvent as ReactKeyboardEvent, MouseEvent as ReactMouseEvent
 import type { QueryClient } from '@tanstack/react-query';
 import { useStore } from 'zustand/react';
 
-import { isReactionAllowed } from '@meeshy/shared/utils/reaction-limit';
-
 import { prismFor, served, type Served } from '@/lib/api/prism';
 import { reactAction } from '@/lib/api/query';
 import { appQueryClient } from '@/lib/api/query-client';
 import { apiDeps } from '@/lib/api/deps';
 import type { DataSource } from '@/lib/api/config';
 import type { ApiResult, HttpRequest } from '@/lib/api/http';
-import { mineOf, reactionStore } from '@/lib/api/reaction-store';
+import { reactionStore } from '@/lib/api/reaction-store';
 import type { Message } from '@/lib/api/types';
-import { favoriteReaction } from '@/components/reaction-rail';
-import { recordEmojiUsage } from '@/lib/emoji-usage';
 import { discussionCardSubjectOf } from '@/lib/export/discussion-card-subject';
 import { readDefaultMessageCardFormat } from '@/lib/export/message-card-format';
 import { translate } from '@/lib/i18n-catalog';
@@ -34,17 +30,14 @@ import {
   type TranslationChoice,
 } from './message-actions';
 import { contentExitOf, exitOffers } from './content-exit';
-import { doubleTapReactable } from './double-tap';
 import { admitForward, forwardRefusalOf, forwardRequestOf, type ForwardRefusal } from './forward';
 import { useLongPress, type LongPressAnchor } from './long-press';
 import { pieceIdAt, soleSaveablePieceOf, targetedPieceOf } from './message-piece';
-import { playReactionBurst } from './reaction-burst';
-import { prefersReducedMotion } from './reduced-motion';
 import { prewarmPieceReaction, usePieceMenu, type PieceMenuData } from './use-piece-menu';
 import { copyPlainText } from './copy-text';
 import { isMineOf } from './message';
 import { editOffered } from './message-edit';
-import { useDoubleTap, type DoubleTap } from './use-double-tap';
+import { useDoubleTap } from './use-double-tap';
 import { SELECTION_CAP, copyTextOf, orderedIds, selectionReducer, type SelectionState } from './selection';
 import { useMessageDelete } from './use-message-delete';
 import { useMessagePin, type MessagePinEntry } from './use-message-pin';
@@ -344,44 +337,21 @@ export function useMessageMenu(params: {
   );
 
   /**
-   * LE DOUBLE TOUCHER POSE LA RÉACTION LA PLUS UTILISÉE (#10599) — la première
-   * tuile du rail (`favoriteReaction`), par la porte du rail (`onMenuReact`) :
-   * sur la PIÈCE touchée quand le menu saurait la viser seule (au moins deux
-   * pièces visuelles, rien de protégé — `targetedPieceOf`), sur le message
-   * sinon. Le geste AJOUTE, il ne retire jamais : une réaction déjà posée
-   * rejoue l'éclosion et rien ne change. Un ajout refusé par le plafond part
-   * quand même vers `onMenuReact`, qui l'annonce — sans éclosion.
-   * Le menu ouvert et la sélection le neutralisent.
+   * LE DOUBLE TOUCHER OUVRE LE MENU DE L'APPUI LONG (#10599, décision porteur
+   * du 2026-10-14 : « Sur iOS le double toucher montre le menu, on garde
+   * cela ») — la MÊME porte (`openMenuFor`), donc le même menu, la même ancre
+   * et la même pièce visée : sur la tuile d'un message à plusieurs pièces, le
+   * menu vise CETTE pièce et son rail réagit sur elle, comme le sélecteur de
+   * la tuile iOS (`QuickReactionDoubleTap`). Le menu ouvert et la sélection
+   * le neutralisent.
    */
   const blockedRef = useRef(false);
   blockedRef.current = selection !== null || menuTarget !== null;
-  const onDoubleTap = useCallback(
-    (tap: DoubleTap) => {
-      const now = Date.now();
-      const message = messageOf(tap.messageId);
-      if (message === undefined || !doubleTapReactable(message, now)) return;
-      const emoji = favoriteReaction();
-      const pieceId = pieceIdAt(tap.origin, tap.row);
-      const piece = targetedPieceOf(message, pieceId, now) === null ? undefined : message.attachments?.find((a) => a.id === pieceId);
-      const mine = piece === undefined ? mineOf(message.id) : (piece.currentUserReactions ?? []);
-      const burst = () => playReactionBurst({ emoji, x: tap.x, y: tap.y, reducedMotion: prefersReducedMotion() });
-      if (mine.includes(emoji)) {
-        burst();
-        return;
-      }
-      if (isReactionAllowed(mine.length)) {
-        burst();
-        recordEmojiUsage(emoji);
-      }
-      onMenuReact(message.id, emoji, piece?.id);
-    },
-    [messageOf, onMenuReact],
-  );
-  const doubleTap = useDoubleTap({ enabled: () => !blockedRef.current, onDoubleTap });
+  const doubleTap = useDoubleTap({ enabled: () => !blockedRef.current, onDoubleTap: openMenuFor });
 
   /**
-   * LES GESTES D'UNE RANGÉE — l'appui long (menu) et le double toucher
-   * (réaction), étalés ensemble sur chaque rangée par l'hôte.
+   * LES GESTES D'UNE RANGÉE — l'appui long et le double toucher, qui ouvrent
+   * tous deux le menu, étalés ensemble sur chaque rangée par l'hôte.
    */
   const longPress = useMemo(() => {
     const note = (event: { readonly target: EventTarget | null }) => {
