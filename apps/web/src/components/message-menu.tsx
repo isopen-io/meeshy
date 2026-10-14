@@ -82,7 +82,7 @@ type ListItem = MessageMenuItem | PieceMenuItem;
 const PIECE_ACTION_IDS: ReadonlySet<string> = new Set<PieceActionId>(['pieceReply', 'pieceSave', 'pieceForward', 'pieceDelete', 'wholeMessage']);
 const isPieceItem = (item: ListItem): item is PieceMenuItem => PIECE_ACTION_IDS.has(item.id);
 const labelOf = (language: InterfaceLanguage, item: ListItem): string =>
-  isPieceItem(item) || item.id === 'edit' ? translateMessagePieces(language, item.labelKey) : translate(language, item.labelKey);
+  isPieceItem(item) || item.id === 'edit' || item.id === 'addSticker' ? translateMessagePieces(language, item.labelKey) : translate(language, item.labelKey);
 
 const isRtl = (): boolean => typeof document !== 'undefined' && document.documentElement.dir === 'rtl';
 

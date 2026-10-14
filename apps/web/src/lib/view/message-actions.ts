@@ -41,7 +41,7 @@ import { protectionOf } from '@/lib/reading-mode/protection';
  * serveur est dite ICI, avant l'aller-retour, pour qu'un refus ne se découvre
  * pas après coup.
  */
-export type MessageActionId = 'edit' | 'save' | 'select' | 'translate' | 'copy' | 'forward' | 'reply' | 'export' | 'exportQuick' | 'exportDiscussion' | 'more';
+export type MessageActionId = 'edit' | 'addSticker' | 'save' | 'select' | 'translate' | 'copy' | 'forward' | 'reply' | 'export' | 'exportQuick' | 'exportDiscussion' | 'more';
 
 /** Les six glyphes du menu — miroir `MessageActionsMenu.swift:96-111`. */
 export type MessageMenuGlyph = 'pencilSimple' | 'downloadSimple' | 'checkCircle' | 'globe' | 'copy' | 'arrowBendUpRight' | 'magicWand' | 'imageSquare' | 'lightning' | 'dotsThree';
@@ -65,7 +65,7 @@ const MENU_LABEL_KEYS = {
   more: 'message.menu.more',
   /* « ENREGISTRER » (#10599) — le mot de la visionneuse, déjà dans les sept langues : même geste, même mot. */
   save: 'media.viewer.save',
-} as const satisfies Readonly<Record<Exclude<MessageActionId, 'edit'>, InterfaceCatalogKey>>;
+} as const satisfies Readonly<Record<Exclude<MessageActionId, 'edit' | 'addSticker'>, InterfaceCatalogKey>>;
 
 export type MessageMenuLabelKey = (typeof MENU_LABEL_KEYS)[keyof typeof MENU_LABEL_KEYS];
 
@@ -78,13 +78,17 @@ export type MessageMenuLabelKey = (typeof MENU_LABEL_KEYS)[keyof typeof MENU_LAB
  */
 export const EDIT_LABEL_KEY = 'message.edit.action' as const satisfies PlainMessagePiecesKey;
 
+/** « AJOUTER À MES STICKERS » (#10630) — même catalogue que « Modifier » : celui du fil. */
+export const ADD_STICKER_LABEL_KEY = 'message.sticker.add' as const satisfies PlainMessagePiecesKey;
+
 export type MessageMenuItem =
   | {
-      readonly id: Exclude<MessageActionId, 'edit'>;
+      readonly id: Exclude<MessageActionId, 'edit' | 'addSticker'>;
       readonly labelKey: MessageMenuLabelKey;
       readonly glyph: MessageMenuGlyph;
     }
-  | { readonly id: 'edit'; readonly labelKey: typeof EDIT_LABEL_KEY; readonly glyph: 'pencilSimple' };
+  | { readonly id: 'edit'; readonly labelKey: typeof EDIT_LABEL_KEY; readonly glyph: 'pencilSimple' }
+  | { readonly id: 'addSticker'; readonly labelKey: typeof ADD_STICKER_LABEL_KEY; readonly glyph: 'downloadSimple' };
 
 export type MessageMenuContext = {
   readonly hasText: boolean;
@@ -154,6 +158,13 @@ export type MessageMenuContext = {
    * n'est offert ; un contenu protégé ou qui ne sort pas ne l'offre jamais.
    */
   readonly canSave?: boolean;
+  /**
+   * LE MESSAGE EST UN STICKER (#10630) — posé par l'hôte, qui connaît la
+   * bibliothèque du lecteur. Hors bibliothèque, « Ajouter à mes stickers »
+   * s'offre ; déjà rangé, rien (loi 4 : un contrôle existe s'il a un effet).
+   * Un sticker n'offre JAMAIS « Enregistrer » : son image n'est pas une photo.
+   */
+  readonly sticker?: { readonly inLibrary: boolean };
 };
 
 type MenuPiece = { readonly mimeType: string; readonly isBlurred?: boolean; readonly isViewOnce?: boolean; readonly isEncrypted?: boolean; readonly effectFlags?: number | null };
@@ -235,6 +246,9 @@ export function messageMenuItems(ctx: MessageMenuContext): readonly MessageMenuI
     items.push({ id: 'forward', labelKey: MENU_LABEL_KEYS.forward, glyph: 'arrowBendUpRight' });
   }
   items.push({ id: 'reply', labelKey: MENU_LABEL_KEYS.reply, glyph: 'magicWand' });
+  if (ctx.sticker?.inLibrary === false && !ctx.isProtected && ctx.leaves !== false) {
+    items.push({ id: 'addSticker', labelKey: ADD_STICKER_LABEL_KEY, glyph: 'downloadSimple' });
+  }
   /* « IMAGER » (#8693, ex « Exporter en image ») — même garde que « Copier » :
      une image est une copie qu'on partage, ce qui ne se copie pas ne se peint
      pas (`lib/export/message-card-subject.ts`). Il tient dans le menu RAPIDE la
@@ -249,7 +263,7 @@ export function messageMenuItems(ctx: MessageMenuContext): readonly MessageMenuI
   }
   /* « ENREGISTRER » (#10599) — juste après « Imager », comme iOS le range
      après l'export : les gestes qui EMPORTENT le contenu se suivent. */
-  if (ctx.canSave === true && !ctx.isProtected && ctx.leaves !== false) {
+  if (ctx.canSave === true && ctx.sticker === undefined && !ctx.isProtected && ctx.leaves !== false) {
     items.push({ id: 'save', labelKey: MENU_LABEL_KEYS.save, glyph: 'downloadSimple' });
   }
   items.push({ id: 'more', labelKey: MENU_LABEL_KEYS.more, glyph: 'dotsThree' });

@@ -19,7 +19,7 @@ import { waveformOf } from '@/lib/view/message';
 import { useMediaPlayback } from '@/lib/view/use-media-playback';
 import { handOffVideoPosition } from '@/lib/view/video-handoff';
 import { useCarriedPlayback } from '@/lib/view/audio-carry';
-import { PLAYBACK_SPEEDS, seekFraction, speedLabel } from '@/lib/view/media-transport';
+import { PLAYBACK_SPEEDS, formatMediaTime, seekFraction, speedLabel } from '@/lib/view/media-transport';
 import {
   karaokeSegments,
   karaokeTone,
@@ -28,6 +28,7 @@ import {
 } from '@/lib/view/transcript-karaoke';
 import { ThreadMediaContext } from '@/lib/view/thread-media-context';
 import { useKaraokeIndex } from '@/lib/view/use-karaoke';
+import { useAudioOnDemand } from '@/lib/view/use-audio-on-demand';
 import { translate } from '@/lib/i18n-catalog';
 import { currentInterfaceLanguage } from '@/lib/interface-language';
 import { TRANSCRIPT_TEXT_OPACITY } from '@/lib/reading-mode/metrics';
@@ -36,6 +37,7 @@ import { Glyph, GlyphSvg } from './glyph';
 import { MEDIA_GLYPHS } from './glyphs-media';
 import { MaskedAttachment } from './masked-attachment';
 import { MediaGrid } from './media-grid';
+import { VoiceFileName, VoiceTranscribeZone } from './voice-bubble-parts';
 import { VeilRevealContext, revealedAttachment, useAttachmentMasked } from './view-once-opened';
 
 /**
@@ -103,7 +105,7 @@ const KARAOKE_STYLE: Readonly<Record<KaraokeTone, Readonly<Record<string, string
 };
 
 function VoiceAttachment({
-  attachment,
+  attachment: received,
   languages,
   displayLanguage,
   fallbackLanguage,
@@ -116,6 +118,8 @@ function VoiceAttachment({
   /** Le lecteur plein écran (#8333, miroir de la pastille de pourcentage iOS) — la lecture en cours y reprend à la même seconde. */
   readonly onExpand: () => void;
 }) {
+  const onDemand = useAudioOnDemand({ attachment: received, fallbackLanguage, readerLanguages: languages });
+  const attachment = onDemand.served;
   const { described: transcript, track } = electAudio({
     attachment,
     readerLanguages: languages,
@@ -343,8 +347,10 @@ function VoiceAttachment({
             />
           ))}
         </span>
-        <span className="shrink-0 text-time tabular-nums">
-          {Math.floor(seconds / 60)}:{String(seconds % 60).padStart(2, '0')}
+        {/* LE TEMPS QUI PASSE (#10625) — au repos la durée ; en lecture, et en
+            pause après lecture, la position courante, comme `AudioPlayerView`. */}
+        <span data-voice-time className="shrink-0 text-time tabular-nums">
+          {formatMediaTime(status === 'playing' || status === 'paused' ? position : seconds)}
         </span>
         {/* LA VITESSE (#6306) — un cycle, pas un menu : c'est le geste d'iOS
             (`cycleSpeed`), et un vocal se réécoute plus vite bien plus souvent
@@ -376,7 +382,12 @@ function VoiceAttachment({
         </button>
       </div>
 
-      {transcript.text !== '' ? (
+      <VoiceFileName originalName={attachment.originalName ?? ''} />
+      {attachment.transcription == null ? (
+        <VoiceTranscribeZone language={uiLanguage} busy={onDemand.transcribing} notice={onDemand.notice} onTranscribe={onDemand.transcribe} />
+      ) : null}
+
+      {transcript.text !== '' && transcript.text !== attachment.originalName ? (
         <p
           data-transcript
           className="text-title"

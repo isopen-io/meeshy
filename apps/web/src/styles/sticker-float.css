@@ -1,0 +1,29 @@
+/* LE STICKER FLOTTE (#10630) — ni bulle ni cadre : une ombre douce sous la
+   silhouette et un flottement LENT du conteneur (jamais de l'image : un sticker
+   animé garde son propre mouvement). Coupé sous « réduire les animations ». */
+[data-sticker-open] {
+  display: inline-block;
+  background: none;
+  border: 0;
+  padding: 0;
+  cursor: pointer;
+  max-width: 100%;
+  -webkit-tap-highlight-color: transparent;
+  filter: drop-shadow(0 6px 10px rgb(0 0 0 / 0.18));
+}
+
+@media (prefers-reduced-motion: no-preference) {
+  [data-sticker-open] {
+    animation: sticker-float 4.2s ease-in-out infinite;
+  }
+}
+
+@keyframes sticker-float {
+  0%,
+  100% {
+    transform: translateY(0);
+  }
+  50% {
+    transform: translateY(-4px);
+  }
+}

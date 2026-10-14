@@ -121,8 +121,11 @@ export function nextTapDeadline(state: TapState): number | null {
   return armed.secondDownAt === null ? armed.at + DOUBLE_TAP_GAP_MS : armed.secondDownAt + LONG_PRESS_MS;
 }
 
-/** Ce qu'ouvre un toucher simple sur une pièce : la tuile d'une photo, la surface d'une vidéo. Une tuile voilée se révèle — c'est un contrôle. */
-const MEDIA_OPENER = 'button[data-media-tile]:not([data-protected-attachment]), button[data-video-surface]';
+/**
+ * Ce qu'ouvre un toucher simple sur une pièce : la tuile d'une photo, la surface d'une vidéo, un STICKER (sa fiche, #10630).
+ * Une tuile voilée se révèle — c'est un contrôle.
+ */
+const MEDIA_OPENER = 'button[data-media-tile]:not([data-protected-attachment]), button[data-video-surface], button[data-sticker-open]';
 const CONTROL =
   'a[href], button, input, textarea, select, summary, label, audio, video[controls], [role="button"], [role="checkbox"], [role="slider"], [role="link"], [contenteditable="true"], [contenteditable=""]';
 

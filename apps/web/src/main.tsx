@@ -228,6 +228,21 @@ if (__SHELL__) {
 }
 
 /**
+ * LES WIDGETS D'ÉCRAN D'ACCUEIL DE LA COQUE ANDROID (#10626) — la page leur
+ * publie ce qu'elle tient déjà (non-lus, conversations, favoris) et vide leur
+ * file « marquer lu » ; une déconnexion les vide sur-le-champ. Hors coque, ou
+ * dans une coque construite avant le plugin, rien ne se charge — et, comme
+ * les autres écoutes de la coque, après la première peinture.
+ */
+if (__SHELL__) {
+  const brancherWidgets = (): void => {
+    void import('@/lib/shell-widgets/start').then(({ startShellWidgets }) => startShellWidgets());
+  };
+  if (document.readyState === 'complete') brancherWidgets();
+  else window.addEventListener('load', brancherWidgets, { once: true });
+}
+
+/**
  * UNE IMAGE, UNE VIDÉO OU UN LIEN PARTAGÉ DEPUIS UNE AUTRE APPLICATION OUVRE LA
  * FEUILLE D'ENVOI (#8884) — l'intent `SEND` de la coque Android est copié par
  * `MeeshyShareIntentPlugin`, lu ici ; le partage d'un lancement à froid attend
