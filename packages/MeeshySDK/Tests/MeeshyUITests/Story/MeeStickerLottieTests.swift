@@ -46,8 +46,10 @@ final class MeeStickerLottieTests: XCTestCase {
     func test_asyncFilm_matchesTheSynchronousOne() async throws {
         let sticker = try animatedSticker()
         let url = try XCTUnwrap(MeeStickerCatalog.fileURL(for: sticker))
-        let source = try XCTUnwrap(await LottieFilm.load(url: url))
-        let viaAsync = try XCTUnwrap(await LottieFilm.decoded(source, pixelSize: 64))
+        let loaded = await LottieFilm.load(url: url)
+        let source = try XCTUnwrap(loaded)
+        let rendered = await LottieFilm.decoded(source, pixelSize: 64)
+        let viaAsync = try XCTUnwrap(rendered)
         let viaSync = try XCTUnwrap(LottieFilm.decodedNow(source, pixelSize: 64))
         XCTAssertEqual(viaAsync.frames.count, viaSync.frames.count)
         XCTAssertEqual(pixels(viaAsync.frames[1]), pixels(viaSync.frames[1]))
