@@ -472,6 +472,10 @@ export const callersIn = (contents, nsNames) => {
 // 271 -> 270 (#7558, 2026-10-14) : `conversations.byIdMessagesByMessageIdPin` (`PUT`/`DELETE
 // …/messages/:messageId/pin`) a son appelant web — `apps/web/src/lib/api/pin-message.ts`, le geste « Épingler /
 // Désépingler » de la feuille « Plus… » du fil. Valeur MESURÉE le 2026-10-14 en local.
+// 270 -> 267 (#10613, #7836, #10615, 2026-10-14) : la fiche de groupe du web gagne trois appelants —
+// `conversations.byIdParticipantsByParticipantKey` (`DELETE …/participants/:key`, expulser),
+// `conversations.byIdParticipantsByUserIdBan` (`…/ban`) et `conversations.byIdParticipantsByUserIdRole`
+// (`…/participants/:key/role`, promouvoir/rétrograder). Valeur MESURÉE en CI (run 38602621428, rouge sur 267).
 const BASELINE_DEAD_ENTRIES = 267;
 
 export const readWorld = (root) => {
