@@ -121,10 +121,9 @@ export function Bubble({
   /** Les emojis que CE lecteur a posés sur CE message — marque `ReactionChip
    * mine` (#5814, T12). */
   myReactions?: readonly string[];
-  /** Retire une réaction MIENNE en tapant sa capsule (#5865) — jamais câblé
-   * sur une capsule d'autrui (`ReactionChip`, `onToggle`). `undefined` ⇒ la
-   * capsule reste un `<span>` inerte (loi 4 : pas de bouton qui promet un
-   * effet qu'il n'a pas). */
+  /** Bascule MA réaction en tapant une capsule : la mienne se retire (#5865),
+   * celle d'autrui pose la même (#10583). `undefined` ⇒ la capsule reste un
+   * `<span>` inerte (loi 4 : pas de bouton qui promet un effet qu'il n'a pas). */
   onReact?: (emoji: string) => void;
   /** Mode sélection ACTIF (`undefined` hors sélection). */
   selected?: boolean;
@@ -739,7 +738,7 @@ export function Bubble({
                   glyph={glyph}
                   count={count}
                   mine={mine}
-                  {...(mine && onReact !== undefined ? { onToggle: () => onReact(glyph) } : {})}
+                  {...(onReact === undefined ? {} : { onToggle: () => onReact(glyph) })}
                 />
               );
             })}

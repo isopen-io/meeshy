@@ -181,11 +181,11 @@ export function reactionEntries(
  * DEVIENT UN `<button>` QUAND `onToggle` EST FOURNI (#5865, suivi de #5814
  * — `bulle.md` écart 8) : iOS retire déjà une réaction en tapant directement
  * sa propre capsule (`BubbleReactionsOverlay.swift`), seul le rail du menu
- * du message (appui long) le permettait ici. L'hôte (`bubble.tsx`,
- * `focal-row.tsx`) ne câble `onToggle` QUE sur les capsules `mine` — taper
- * la capsule d'AUTRUI n'a pas de sens (on ne bascule pas la réaction de
- * quelqu'un d'autre), donc `onToggle` reste `undefined` pour elles et la
- * capsule garde son rendu `<span>` d'origine.
+ * du message (appui long) le permettait ici. Depuis #10583 l'hôte câble
+ * `onToggle` sur TOUTES les capsules, dans tous les modes de fil : la mienne
+ * se retire, celle d'autrui pose la même réaction (on ne touche jamais à la
+ * réaction de quelqu'un d'autre). Sans `onToggle` — fil en lecture seule —
+ * la capsule garde son rendu `<span>`.
  *
  * LA MARQUE RESTE TEXTUELLE, PAS `aria-pressed` (revue #5814) :
  * `aria-pressed` n'est défini QUE sur `role="button"`. Posé sur un `<span>`
@@ -205,9 +205,8 @@ export function ReactionChip({
   glyph: string;
   count: number;
   mine?: boolean;
-  /** Bascule la réaction en tapant la capsule — la ligne basse ne le fournit
-   * que sur la MIENNE (#5865, retirer) ; la bande de l'élu Focal le fournit
-   * sur toutes (#8536 : retirer la mienne, poser la mienne sur celle d'autrui). */
+  /** Bascule MA réaction en tapant la capsule : retirer la mienne (#5865),
+   * poser la mienne sur celle d'autrui (#8536 pour l'élu, #10583 partout). */
   onToggle?: () => void;
 }) {
   const style = {

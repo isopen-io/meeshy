@@ -104,7 +104,7 @@ export function FocalBottomLine({
             glyph={glyph}
             count={count}
             mine={mine}
-            {...(mine && onReact !== undefined ? { onToggle: () => onReact(glyph) } : {})}
+            {...(onReact === undefined ? {} : { onToggle: () => onReact(glyph) })}
           />
         );
       })}

@@ -576,9 +576,15 @@ describe('FocalRow — retirer une réaction en tapant sa capsule (#5865)', () =
     expect(seen).toEqual(['👍']);
   });
 
-  test('la capsule ❤️ (pas la mienne) reste un <span> inerte — aucun bouton', () => {
-    const el = mount(() => {});
-    expect(el.querySelector('button[aria-label*="❤️"]')).toBeNull();
+  test('tap sur la capsule ❤️ d’AUTRUI ⇒ onReact("❤️") : on pose la même réaction d’un geste (#10583)', () => {
+    const seen: string[] = [];
+    const el = mount((emoji) => seen.push(emoji));
+    const theirs = el.querySelector('button[aria-label="Réagir avec ❤️"]') as HTMLButtonElement;
+    expect(theirs).not.toBeNull();
+    act(() => {
+      theirs.click();
+    });
+    expect(seen).toEqual(['❤️']);
   });
 });
 

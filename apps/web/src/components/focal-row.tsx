@@ -174,9 +174,8 @@ export const FocalRow = memo(function FocalRow({
   /** Les emojis que CE lecteur a posés sur CE message (`reaction-store.ts`)
    * — marque `ReactionChip mine` (#5814, T12). */
   myReactions?: readonly string[];
-  /** Retire une réaction MIENNE en tapant sa capsule (#5865) — jamais câblé
-   * sur une capsule d'autrui (`ReactionChip`, `onToggle`). `undefined` ⇒ la
-   * capsule reste un `<span>` inerte (loi 4). */
+  /** Bascule MA réaction en tapant une capsule — la mienne se retire (#5865),
+   * celle d'autrui pose la même (#10583). `undefined` ⇒ `<span>` inerte (loi 4). */
   onReact?: (emoji: string) => void;
   /**
    * OUVRE LA FICHE DU MESSAGE (#8536) — le MÊME panneau que « Plus… » au menu
