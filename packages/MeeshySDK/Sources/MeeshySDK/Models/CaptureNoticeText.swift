@@ -139,7 +139,7 @@ public enum CaptureNoticeText {
     }
 
     private static let formatterLock = NSLock()
-    private static var formatterCache: [String: DateFormatter] = [:]
+    nonisolated(unsafe) private static var formatterCache: [String: DateFormatter] = [:]
 
     private static func format(_ date: Date, template: String, language: String, zone: TimeZone) -> String {
         let key = "\(language)_\(zone.identifier)_\(template)"
