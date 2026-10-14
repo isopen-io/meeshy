@@ -3,6 +3,8 @@ import { act } from 'react';
 import { createRoot, type Root } from 'react-dom/client';
 import { afterAll, afterEach, beforeAll, beforeEach, describe, expect, test } from 'bun:test';
 
+import type { ConversationsDeps } from '@/lib/api/conversations';
+import type { HttpRequest } from '@/lib/api/http';
 import type { Conversation } from '@/lib/api/types';
 import { ensureHappyDomRegistered, releaseHappyDomIfRegistered } from '@/test-support/happy-dom-environment';
 
@@ -32,12 +34,14 @@ afterEach(() => {
   document.documentElement.classList.remove('light');
 });
 
-async function show(c: Conversation): Promise<HTMLElement> {
-  const queryClient = new QueryClient();
+const offline: ConversationsDeps = { source: 'fixtures', transport: undefined } as unknown as ConversationsDeps;
+
+async function show(c: Conversation, deps: ConversationsDeps = offline): Promise<HTMLElement> {
+  const queryClient = new QueryClient({ defaultOptions: { queries: { retry: false } } });
   await act(async () => {
     root.render(
       <QueryClientProvider client={queryClient}>
-        <ConversationBackdrop conversation={c} accent="#6366F1" live={false} />
+        <ConversationBackdrop conversation={c} accent="#6366F1" live={false} deps={deps} />
       </QueryClientProvider>,
     );
   });
@@ -80,5 +84,31 @@ describe('le fond du fil', () => {
   test('une photo introuvable garde Signature, sans erreur', async () => {
     const backdrop = await show(conversation(chosen({ kind: 'photo', attachmentId: 'a'.repeat(24), veil: 0.3, blur: 4 })));
     expect(backdrop.dataset['appearance']).toBeUndefined();
+  });
+
+  test('une photo choisie sur un autre appareil (galerie absente) se lit par les métadonnées de la pièce, jamais par la route authentifiée', async () => {
+    const calls: HttpRequest[] = [];
+    const request = async (req: HttpRequest) => {
+      calls.push(req);
+      return { ok: true, data: { attachment: { id: 'b'.repeat(24), fileUrl: 'https://cdn.x/p.jpg' } } };
+    };
+    const deps = { source: 'gateway', transport: Object.assign(request, { request }) } as unknown as ConversationsDeps;
+    const OriginalImage = globalThis.Image;
+    class LoadingImage {
+      onload: (() => void) | null = null;
+      onerror: (() => void) | null = null;
+      set src(_value: string) {
+        setTimeout(() => this.onload?.(), 0);
+      }
+    }
+    (globalThis as { Image: unknown }).Image = LoadingImage;
+    try {
+      const backdrop = await show(conversation(chosen({ kind: 'photo', attachmentId: 'b'.repeat(24), veil: 0.3, blur: 4 })), deps);
+      expect(backdrop.dataset['appearance']).toBe('photo');
+      expect(backdrop.innerHTML).toContain('cdn.x/p.jpg');
+      expect(calls.map((call) => call.path)).toEqual([`/api/v1/attachments/${'b'.repeat(24)}/metadata`]);
+    } finally {
+      (globalThis as { Image: unknown }).Image = OriginalImage;
+    }
   });
 });

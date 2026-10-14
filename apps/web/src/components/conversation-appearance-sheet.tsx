@@ -97,7 +97,7 @@ export function ConversationAppearanceSheet({
             className="relative flex flex-col justify-end gap-2 overflow-hidden rounded-card p-3"
             style={{ ...accentVars(accent), ...backdropStyleVars(), isolation: 'isolate', height: 132 }}
           >
-            <ConversationBackdrop conversation={previewConversation} accent={accent} live={false} />
+            <ConversationBackdrop conversation={previewConversation} accent={accent} live={false} deps={deps} />
             <span className="self-start rounded-chip px-3 py-1 text-caption" style={{ backgroundColor: 'var(--color-ios-surface)', color: 'var(--color-ios-ink)' }}>
               {t('appearance.preview')}
             </span>

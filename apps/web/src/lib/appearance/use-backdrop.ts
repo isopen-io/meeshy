@@ -1,11 +1,12 @@
-import { useQueryClient } from '@tanstack/react-query';
+import { useQuery, useQueryClient } from '@tanstack/react-query';
 import type { AppearanceDesign } from '@meeshy/shared/types/appearance-design';
 import { useEffect, useState } from 'react';
 
 import { bindAppearanceLive } from '@/lib/api/conversation-appearance';
+import type { ConversationsDeps } from '@/lib/api/conversations';
 import { currentScheme, type ColorScheme } from '@/lib/scheme';
 
-import { photoSourceOf } from './photo-source';
+import { loadPhotoSource } from './photo-source';
 
 /** Le schéma peint (`:root.light`), suivi quand l'utilisateur ou le système le bascule — aucun réglage propre au fond. */
 export function useScheme(): ColorScheme {
@@ -73,31 +74,43 @@ function preload(src: string, onDone: (ok: boolean) => void): () => void {
   };
 }
 
+/** Une heure : l'adresse d'une pièce ordinaire est stable ; la relire rattrape un départ de la conversation. */
+const PHOTO_STALE_MS = 60 * 60 * 1000;
+
 /**
  * La photo d'un fond, de la vignette à la pleine définition. `undefined` tant
  * que rien n'est lisible, et si la pièce a disparu ou n'est plus accessible :
- * le fond reste Signature, sans spinner ni erreur (§ 11).
+ * le fond reste Signature, sans spinner ni erreur (§ 11). La source (galerie en
+ * cache, sinon métadonnées) est une requête mise en cache : un fil rouvert la
+ * relit sans réseau.
  */
-export function useBackdropPhoto(params: { readonly conversationId: string; readonly attachmentId: string | null }): string | undefined {
+export function useBackdropPhoto(params: { readonly conversationId: string; readonly attachmentId: string | null; readonly deps: ConversationsDeps }): string | undefined {
   const queryClient = useQueryClient();
-  const { conversationId, attachmentId } = params;
+  const { conversationId, attachmentId, deps } = params;
+  const source = useQuery({
+    queryKey: ['appearance', 'photo', conversationId, attachmentId ?? ''],
+    queryFn: () => loadPhotoSource({ queryClient, deps, conversationId, attachmentId: attachmentId ?? '' }),
+    enabled: attachmentId !== null,
+    staleTime: PHOTO_STALE_MS,
+  }).data;
+  const thumb = source?.thumb ?? null;
+  const full = source?.full ?? null;
   const [ready, setReady] = useState<{ readonly id: string; readonly src: string } | null>(null);
   useEffect(() => {
-    if (attachmentId === null) return undefined;
-    const source = photoSourceOf(queryClient, conversationId, attachmentId);
+    if (attachmentId === null || full === null) return undefined;
     let live = true;
     const cancels: (() => void)[] = [];
     const show = (src: string): void => {
       if (live) setReady({ id: attachmentId, src });
     };
-    if (source.thumb !== null) cancels.push(preload(source.thumb, (ok) => ok && show(source.thumb ?? '')));
-    cancels.push(preload(source.full, (ok) => ok && show(source.full)));
+    if (thumb !== null) cancels.push(preload(thumb, (ok) => ok && show(thumb)));
+    cancels.push(preload(full, (ok) => ok && show(full)));
     return () => {
       live = false;
       for (const cancel of cancels) cancel();
     };
-  }, [queryClient, conversationId, attachmentId]);
-  return ready !== null && ready.id === attachmentId ? ready.src : undefined;
+  }, [attachmentId, thumb, full]);
+  return source === null || ready === null || ready.id !== attachmentId ? undefined : ready.src;
 }
 
 /** Un autre appareil du lecteur change le fond ou l'accent : la liste et le fil le relisent du cache. */
