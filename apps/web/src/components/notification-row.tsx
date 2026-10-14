@@ -6,6 +6,7 @@ import { translate } from '@/lib/i18n-catalog';
 import { translateNotificationRow } from '@/lib/i18n-notification-row-catalog';
 import type { InterfaceLanguage } from '@/lib/interface-language';
 import { openNotificationTarget } from '@/lib/notifications/open-target';
+import { callsAvailable } from '@/lib/calls/calls-availability';
 import { notificationCallBack, type NotificationCallBack } from '@/lib/notifications/call-back';
 import { notificationAccent } from '@/lib/notifications/categories';
 import type { NotificationRecord } from '@/lib/notifications/record';
@@ -324,7 +325,7 @@ function NotificationRowView({
   const presentation = notificationRowPresentation(notification, { language, now });
   const target = notificationTarget(notification);
   const avatar = notification.actor?.avatar ?? null;
-  const callBack = notificationCallBack(notification);
+  const callBack = callsAvailable() ? notificationCallBack(notification) : null;
   const actions = onQuickAction === undefined ? [] : notificationQuickActions(notification, { isFriend });
 
   const surface: SurfaceProps = {

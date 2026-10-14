@@ -151,11 +151,11 @@
 
         <!-- #8049 — l'appel en cours tient au premier plan (micro, caméra) : sans
              lui, Android coupe le micro de la WebView dès que l'écran s'éteint
-             ou que l'utilisateur quitte l'app. -->
-        <service
-            android:name=".CallForegroundService"
-            android:exported="false"
-            android:foregroundServiceType="microphone|camera" />
+             ou que l'utilisateur quitte l'app. RETIRÉ tant que les appels de la
+             coque sont coupés (CallPush.CALLS_ENABLED, #10611) ; à remettre avec
+             eux, check-android-manifest.mjs le réclame alors :
+             <service android:name=".CallForegroundService" android:exported="false"
+                      android:foregroundServiceType="microphone|camera" /> -->
 
         <!-- #9238 — le message vocal en cours tient le micro au premier plan :
              sans lui, quitter l'app pendant l'enregistrement le rend muet. -->
@@ -230,10 +230,10 @@
          transitions de l'appel. -->
     <uses-permission android:name="android.permission.FOREGROUND_SERVICE" />
     <uses-permission android:name="android.permission.FOREGROUND_SERVICE_MICROPHONE" />
-    <uses-permission android:name="android.permission.FOREGROUND_SERVICE_CAMERA" />
     <!-- #9257 — la lecture d'un vocal tenue écran éteint (PlaybackForegroundService). -->
     <uses-permission android:name="android.permission.FOREGROUND_SERVICE_MEDIA_PLAYBACK" />
-    <uses-permission android:name="android.permission.USE_FULL_SCREEN_INTENT" />
+    <!-- FOREGROUND_SERVICE_CAMERA et USE_FULL_SCREEN_INTENT : retirés tant que les
+         appels de la coque sont coupés (#10611), rendus avec eux. -->
     <uses-permission android:name="android.permission.BLUETOOTH_CONNECT" />
     <uses-permission android:name="android.permission.WAKE_LOCK" />
     <uses-permission android:name="android.permission.VIBRATE" />
