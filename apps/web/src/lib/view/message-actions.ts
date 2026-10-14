@@ -311,6 +311,59 @@ export function starrableOf(
   return !message.isViewOnce && ((message.effectFlags ?? 0) & MESSAGE_EFFECT_FLAGS.VIEW_ONCE) === 0;
 }
 
+/**
+ * **ÉPINGLER / DÉTACHER, DANS « PLUS… »** (#7558) — miroir de
+ * `MessageActionResolver.moreSections` (`ctx.isPinned ? .unpin : .pin`), la
+ * règle du SERVEUR lue avant le geste (`services/gateway/src/routes/
+ * conversations/messages-pin.ts`) : les deux routes exigent un COMPTE
+ * (`allowAnonymous: false`) et un message connu, non supprimé ; un avis de
+ * capture se refuse. Tout membre l'épingle, auteur ou non — la passerelle ne
+ * demande aucun rôle.
+ *
+ * TROIS RESTRICTIONS de plus, assumées : un message SYSTÈME n'est jamais
+ * offert (l'avis de capture en est un, et aucun autre n'a de contenu à mettre
+ * en avant) ; une VUE UNIQUE non plus (iOS, `viewOnceSections`) ; un éphémère
+ * ÉCHU non plus — il n'est plus là pour personne.
+ *
+ * Mineur dans Meeshy Global : le client ne connaît pas la date de naissance,
+ * le refus 403 revient et se dit (`use-message-pin.ts`).
+ */
+export type MessagePinAction = 'pin' | 'unpin';
+
+type ModeratedMessage = Pick<Message, 'id' | 'senderId' | 'deletedAt' | 'messageType'>;
+
+const knownLiveMessage = (message: ModeratedMessage): boolean =>
+  !message.id.startsWith('cid_') && message.deletedAt == null && message.messageType !== 'system';
+
+const viewOnceOf = (message: Pick<Message, 'isViewOnce' | 'effectFlags'>): boolean =>
+  message.isViewOnce || ((message.effectFlags ?? 0) & MESSAGE_EFFECT_FLAGS.VIEW_ONCE) !== 0;
+
+export function messagePinAction(
+  message: ModeratedMessage & Pick<Message, 'pinnedAt' | 'expiresAt' | 'isViewOnce' | 'effectFlags'>,
+  viewer: { readonly hasAccount: boolean },
+  input: { readonly now: number },
+): MessagePinAction | null {
+  if (!viewer.hasAccount || !knownLiveMessage(message)) return null;
+  if (message.expiresAt != null && new Date(message.expiresAt).getTime() <= input.now) return null;
+  if (viewOnceOf(message)) return null;
+  return message.pinnedAt == null ? 'pin' : 'unpin';
+}
+
+/**
+ * **SIGNALER UN MESSAGE** (#7558) — `POST /reports` avec `reportedType:
+ * 'message'` exige un compte (`fastify.authenticate`) et que le signalant
+ * participe à la conversation, ce que le fil ouvert garantit. On ne signale
+ * JAMAIS son propre message (iOS l'offre sans condition, `moderation([.report])` :
+ * se signaler soi-même n'a aucun sens pour la modération). Une VUE UNIQUE ne
+ * l'offre pas, comme iOS (`viewOnceSections` : Supprimer et Infos seulement).
+ */
+export function reportOffered(
+  message: ModeratedMessage & Pick<Message, 'isViewOnce' | 'effectFlags'>,
+  viewer: { readonly id: string; readonly hasAccount: boolean },
+): boolean {
+  return viewer.hasAccount && knownLiveMessage(message) && !viewOnceOf(message) && message.senderId !== viewer.id;
+}
+
 /** Les 6 réactions rapides par DÉFAUT — miroir `MessageOverlayMenu.swift:99-101`.
  * Le rail et le composeur les classent par usage (`lib/emoji-usage.ts`, #7983). */
 export const QUICK_REACTIONS = ['😂', '❤️', '👍', '😮', '😢', '🔥'] as const;

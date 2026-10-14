@@ -33,6 +33,13 @@ const de = {
   'message.delete.partial': '{failed} von {count} Nachrichten konnten nicht gelöscht werden',
   'message.delete.partialOne': '1 von {count} Nachrichten konnte nicht gelöscht werden',
   'message.reactors.empty': 'Keine Reaktionen',
+  'message.pin.action': 'Anheften',
+  'message.unpin.action': 'Lösen',
+  'message.pin.done': 'Nachricht angeheftet',
+  'message.unpin.done': 'Nachricht gelöst',
+  'message.pin.failed': 'Die Nachricht konnte nicht angeheftet werden',
+  'message.unpin.failed': 'Die Nachricht konnte nicht gelöst werden',
+  'message.report.title': 'Diese Nachricht melden',
 } satisfies MessagePiecesCatalog;
 
 export default de;

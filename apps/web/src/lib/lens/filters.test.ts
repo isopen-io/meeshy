@@ -1,6 +1,7 @@
 import { describe, expect, test } from 'bun:test';
 
-import { applyFilter, emptinessOf, orderConversations } from './filters';
+import { applyFilter, emptinessOf, filterLabel, LIST_FILTERS, orderConversations } from './filters';
+import { loadRowMenuCatalog } from '@/lib/i18n-row-menu-catalog';
 import type { Conversation } from '@/lib/api/types';
 
 const conversation = (partial: Partial<Conversation>): Conversation =>
@@ -153,5 +154,27 @@ describe('emptinessOf — deux états DISTINCTS (#5559 T15)', () => {
   test('corpus non vide + résultats visibles ⇒ none', () => {
     const c = conversation({ id: 'c1' });
     expect(emptinessOf([c], [c])).toBe('none');
+  });
+});
+
+describe('applyFilter — favoris (#10593, `.favoris` d’iOS : un emoji posé)', () => {
+  test('« favorites » ne rend que les conversations qui portent un favori, hors archives', () => {
+    const conversations = [
+      conversation({ id: 'fav', userPreferences: [{ reaction: '🔥' }] }),
+      conversation({ id: 'plain', userPreferences: [{ reaction: null }] }),
+      conversation({ id: 'fav-archived', userPreferences: [{ reaction: '⭐️', isArchived: true }] }),
+    ];
+    const kept = applyFilter({ conversations, filter: 'favorites', search: '', viewerId: 'me', overrides: {} });
+    expect(kept.map((c) => c.id)).toEqual(['fav']);
+  });
+
+  test('la puce « Favoris » suit « Non lus », comme les filtres d’état d’iOS', () => {
+    expect(LIST_FILTERS.slice(0, 3)).toEqual(['all', 'unread', 'favorites']);
+  });
+
+  test('les puces parlent la langue d’interface', async () => {
+    await loadRowMenuCatalog('en');
+    expect(LIST_FILTERS.map((f) => filterLabel(f, 'fr'))).toEqual(['Tous', 'Non lus', 'Favoris', 'Groupes', 'Directs', 'Épinglés', 'Archivées']);
+    expect(filterLabel('favorites', 'en')).toBe('Favorites');
   });
 });

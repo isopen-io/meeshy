@@ -10,7 +10,7 @@ import { reactionEntries } from '@/components/message-blocks';
 import type { Attachment, Message } from '@/lib/api/types';
 import { translate } from '@/lib/i18n-catalog';
 import { offerStudioSeed } from '@/lib/stories/studio-seed';
-import { loadMessagePiecesCatalog } from '@/lib/i18n-message-pieces-catalog';
+import { loadMessagePiecesCatalog, translateMessagePieces } from '@/lib/i18n-message-pieces-catalog';
 import { closeReactorsSheet, reactorsSheetStore } from '@/lib/view/reactors-sheet-store';
 import { imageableOf, messageDetailExposureOf, messageMenuContextOf, translationChoices } from '@/lib/view/message-actions';
 import { deliveryOf as deliveryStatusOf, isMineOf } from '@/lib/view/message';
@@ -38,6 +38,8 @@ const MessageReactorsSheet = lazy(() =>
   })),
 );
 
+/** « SIGNALER » (#7558) — la feuille des motifs, celle des comptes et des publications, chargée au geste. */
+const ReportSheet = lazy(() => import('@/components/report-sheet').then((m) => ({ default: m.ReportSheet })));
 const MessageDeleteDialog = lazy(() => import('@/components/message-delete-dialog').then((m) => ({ default: m.MessageDeleteDialog })));
 const MessageDetailSheet = lazy(() => import('@/components/message-detail-sheet').then((m) => ({ default: m.MessageDetailSheet })));
 
@@ -67,6 +69,11 @@ export type ThreadSheetsMenu = Pick<
   | 'deleteRequest'
   | 'onDismissDelete'
   | 'onConfirmDelete'
+  | 'pinOf'
+  | 'reportOf'
+  | 'reportFor'
+  | 'onPickReportReason'
+  | 'onDismissReport'
 >;
 
 /**
@@ -209,7 +216,12 @@ export function ThreadMessageSheets({
               messageId={detailMessage.id}
               attachments={exposed ? (detailMessage.attachments ?? []) : []}
               star={messageMenu.starOf(detailFor)}
-              act={{ onEdit: messageMenu.editOf(detailFor), onDelete: messageMenu.deleteOf(detailFor) }}
+              act={{
+                onEdit: messageMenu.editOf(detailFor),
+                onDelete: messageMenu.deleteOf(detailFor),
+                pin: messageMenu.pinOf(detailFor),
+                onReport: messageMenu.reportOf(detailFor),
+              }}
               create={{
                 onCompose: composable === undefined || composable === null ? null : () => void composeWithAttachment(composable, announce),
                 onImage: imageable ? () => messageMenu.setExportFor({ messageId: detailFor, quick: false }) : null,
@@ -236,6 +248,23 @@ export function ThreadMessageSheets({
             />
           </Suspense>
         ))(messageMenu.deleteRequest)}
+      {/* LA FEUILLE DES MOTIFS (#7558) — ouverte par « Signaler » de « Plus… » ;
+          jamais sur un message qui a quitté le fil. */}
+      {((reportFor) => {
+        const reported = reportFor === null ? undefined : messages.find((m) => m.id === reportFor);
+        if (reported === undefined) return null;
+        return (
+          <Suspense fallback={null}>
+            <ReportSheet
+              name={reported.sender?.displayName ?? ''}
+              title={translateMessagePieces(currentInterfaceLanguage(), 'message.report.title')}
+              busy={false}
+              onPick={messageMenu.onPickReportReason}
+              onClose={messageMenu.onDismissReport}
+            />
+          </Suspense>
+        );
+      })(messageMenu.reportFor)}
       {((request) => {
         if (request === null) return null;
         const exportFor = request.messageId;

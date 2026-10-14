@@ -148,7 +148,9 @@ extension iPadRootView {
         case .community(let id):
             rightPanelRoute = .communityDetail(id)
         case .unreadConversations:
-            // Widgets « Non lus » (#7811) : la liste sur le filtre de la puce.
+            // Widgets « Non lus » (#7811) : la liste sur le filtre de la puce. Le panneau ouvert la cachait —
+            // l'iPhone revient à la racine, l'iPad referme le panneau.
+            rightPanelRoute = nil
             conversationViewModel.selectedFilters = ConversationListEntry.unreadFilters
         case .recentConversation:
             // App Shortcut « Open Recent Conversation » et widget (#7811).
@@ -235,8 +237,12 @@ extension iPadRootView {
         } else if routeName.hasPrefix("storyDetail:") {
             let postId = String(routeName.dropFirst("storyDetail:".count))
             if let groupIdx = storyViewModel.groupIndex(forStoryId: postId) {
-                selectedStoryUserIdFromConv = storyViewModel.storyGroups[groupIdx].id
-                showStoryViewerFromConv = true
+                // Le coordinateur, comme l'iPhone : la requête porte son uid. Le couple @State de l'ancien
+                // chemin pouvait présenter le lecteur avant que l'uid ne soit posé — « Story introuvable ».
+                storyViewerCoordinator.present(StoryViewerRequest(
+                    id: storyViewModel.storyGroups[groupIdx].id,
+                    startAtFirstUnviewed: true
+                ))
             } else {
                 rightPanelRoute = .postDetail(postId)
             }
@@ -269,7 +275,23 @@ extension iPadRootView {
              .translationCompleted, .translationReady, .legacyTranslationReady, .transcriptionCompleted,
              .legacyStoryReply, .reply,
              .messageEdited, .messageDeleted, .messagePinned, .messageForwarded:
-            guard let conversationId = data?.conversationId else { return }
+            guard let conversationId = data?.conversationId, !conversationId.isEmpty else {
+                // Même repli que `RootView.navigateFromNotification` pour toute la famille : sans conversation,
+                // l'entité est un post ou un commentaire — jamais un tap muet.
+                if let postId = notification.context?.postId ?? data?.postId ?? notification.metadata?.postId,
+                   !postId.isEmpty {
+                    routeSocialNotification(
+                        postId: postId,
+                        postType: notification.metadata?.postType,
+                        contentType: notification.metadata?.contentType,
+                        type: notification.notificationType,
+                        commentId: notification.context?.commentId ?? notification.metadata?.commentId,
+                        parentCommentId: notification.context?.parentCommentId ?? notification.metadata?.parentCommentId,
+                        storyContext: StoryNotificationContext.from(notification)
+                    )
+                }
+                return
+            }
             // Parité iPhone/push : scroll + flash sur le message exact.
             navigateToConversationById(
                 conversationId,
@@ -383,7 +405,8 @@ extension iPadRootView {
                 )
             }
 
-        case .friendRequest, .contactRequest, .friendAccepted, .contactAccepted, .contactJoined, .contactRecentlyActive:
+        case .friendRequest, .contactRequest, .friendAccepted, .contactAccepted, .contactJoined, .contactRecentlyActive,
+             .legacyFriendRequest, .legacyFriendAccepted, .legacyStatusUpdate:
             if let senderId = event.senderId {
                 router.deepLinkProfileUser = ProfileSheetUser(
                     userId: senderId,
@@ -397,7 +420,7 @@ extension iPadRootView {
              .storyReaction, .statusReaction,
              .storyNewComment, .friendStoryComment, .storyThreadReply,
              .friendNewStory, .friendNewMood:
-            if let postId = event.postId {
+            if let postId = event.postId, !postId.isEmpty {
                 routeSocialNotification(
                     postId: postId,
                     postType: event.postType,
@@ -407,6 +430,9 @@ extension iPadRootView {
                     parentCommentId: event.parentCommentId,
                     storyContext: makeStoryContext(from: event)
                 )
+            } else if let conversationId = event.conversationId, !conversationId.isEmpty {
+                // Même repli que `RootView.navigateFromNotification` : jamais un tap muet.
+                navigateToConversationById(conversationId)
             }
 
         case .achievementUnlocked, .legacyAchievementUnlocked, .streakMilestone, .levelUp, .badgeEarned:
@@ -459,7 +485,21 @@ extension iPadRootView {
              .messageReaction, .reaction, .legacyMessageReaction,
              .translationCompleted, .translationReady, .legacyTranslationReady, .transcriptionCompleted,
              .messageEdited, .messageDeleted, .messagePinned, .messageForwarded:
-            guard let conversationId = payload.conversationId, !conversationId.isEmpty else { return }
+            guard let conversationId = payload.conversationId, !conversationId.isEmpty else {
+                // Même repli que `RootView.navigateFromNotification` : jamais un tap muet.
+                if let postId = payload.postId, !postId.isEmpty {
+                    routeSocialNotification(
+                        postId: postId,
+                        postType: payload.postType,
+                        contentType: payload.contentType,
+                        type: type,
+                        commentId: payload.commentId,
+                        parentCommentId: payload.parentCommentId,
+                        storyContext: makeStoryContext(from: payload)
+                    )
+                }
+                return
+            }
             navigateToConversationById(conversationId, highlightMessageId: payload.messageId)
 
         // Une mention vit SOIT dans une conversation SOIT dans un post/commentaire
@@ -748,10 +788,14 @@ extension iPadRootView {
     /// post déjà chargé et avec sa cible commentaire.
     func openReel(postId: String, commentId: String? = nil, parentCommentId: String? = nil) {
         Task { @MainActor in
-            await ReelDoor.live.open(postId: postId, commentId: commentId, parentCommentId: parentCommentId) { post in
-                rightPanelRoute = .postDetail(postId, post, showComments: commentId != nil,
-                                              commentId: commentId, parentCommentId: parentCommentId)
-            }
+            await revealReel(postId: postId, commentId: commentId, parentCommentId: parentCommentId)
+        }
+    }
+
+    func revealReel(postId: String, commentId: String?, parentCommentId: String?) async {
+        await ReelDoor.live.open(postId: postId, commentId: commentId, parentCommentId: parentCommentId) { post in
+            rightPanelRoute = .postDetail(postId, post, showComments: commentId != nil,
+                                          commentId: commentId, parentCommentId: parentCommentId)
         }
     }
 

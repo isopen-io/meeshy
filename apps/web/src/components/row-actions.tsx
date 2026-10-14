@@ -1,16 +1,26 @@
-import { useEffect, useState } from 'react';
+import { useEffect, useState, type KeyboardEvent as ReactKeyboardEvent } from 'react';
 import { createPortal } from 'react-dom';
 
 import { placePopover, placePopoverVertical } from '@/lib/view/popover';
 import { useRovingMenu } from '@/lib/view/roving-menu';
-import { rowMenuItems, type RowActionGlyph as RowActionGlyphName, type RowActionId } from '@/lib/view/row-actions';
+import {
+  rowMenuItems,
+  rowSubmenuItems,
+  type RowActionGlyph as RowActionGlyphName,
+  type RowActionId,
+  type RowMenuMore,
+  type RowSubmenu,
+  type RowSubmenuChoice,
+} from '@/lib/view/row-actions';
 import { useBackDismiss } from '@/lib/view/use-back-dismiss';
 import type { ConversationFlags } from '@/lib/api/preferences';
 import { translate } from '@/lib/i18n-catalog';
+import { rowMenuText } from '@/lib/i18n-row-menu-catalog';
 import type { InterfaceLanguage } from '@/lib/interface-language';
 
 import { Glyph, GlyphSvg } from './glyph';
 import { CALLS_GLYPHS } from './glyphs-calls';
+import { ROW_MENU_GLYPHS, type RowMenuGlyphName } from './glyphs-row-menu';
 
 /**
  * LES ACTIONS DE RANGÉE — bouton + popover (#5559 §5.6), l'ADAPTATION web du
@@ -62,6 +72,9 @@ const MENU_GAP = 4;
  */
 const MENU_ITEM_HEIGHT = 44;
 const MENU_PADDING = 8;
+/** Le filet de 1 px en haut et en bas (`border`) : sans lui, la hauteur
+ * plafonnée (#10593) laissait 2 px à défiler dans un panneau qui tient. */
+const MENU_BORDER = 2;
 
 /**
  * LA TAILLE DESSINÉE, et pourquoi c'est 34 et non 32 : `tap-target-34`
@@ -82,9 +95,31 @@ const BUTTON_SIZE = 34;
  * balayées (`conversation-row-swipe.tsx`, #10580) : la caméra et la corbeille
  * vivent dans la planche des appels, les autres dans la planche commune.
  */
+const isRowMenuGlyph = (glyph: RowActionGlyphName): glyph is RowActionGlyphName & RowMenuGlyphName => glyph in ROW_MENU_GLYPHS;
+
 export function RowActionGlyph({ glyph, size }: { readonly glyph: RowActionGlyphName; readonly size: number }) {
-  return glyph === 'videoCamera' || glyph === 'trash' ? <GlyphSvg glyph={CALLS_GLYPHS[glyph]} size={size} /> : <Glyph name={glyph} size={size} />;
+  if (glyph === 'videoCamera' || glyph === 'trash') return <GlyphSvg glyph={CALLS_GLYPHS[glyph]} size={size} />;
+  if (isRowMenuGlyph(glyph)) return <GlyphSvg glyph={ROW_MENU_GLYPHS[glyph]} size={size} />;
+  return <Glyph name={glyph} size={size} />;
 }
+
+/**
+ * UNE LIGNE DU PANNEAU, quelle que soit sa nature (#10593) — une action, une
+ * porte de sous-menu, le retour, ou un choix de sous-menu (coché quand c'est
+ * la valeur courante). Le panneau ne connaît que cette forme : la navigation
+ * clavier, le placement et le rendu ne se dédoublent pas pour les sous-menus.
+ */
+type PanelEntry = {
+  readonly key: string;
+  readonly label: string;
+  readonly glyph?: RowActionGlyphName;
+  readonly leading?: 'back';
+  readonly destructive?: true;
+  readonly submenu?: RowSubmenu;
+  readonly checked?: boolean;
+  readonly ariaLabel?: string;
+  readonly select: () => void;
+};
 
 /**
  * LE RETOUR MATÉRIEL FERME LE MENU, PAS LA LISTE (#6357) — même loi que
@@ -101,6 +136,8 @@ function RowMenuBackDismiss({ onClose }: { readonly onClose: () => void }) {
   return null;
 }
 
+const NO_CATEGORIES: readonly { readonly id: string; readonly name: string }[] = [];
+
 export function RowActions({
   flags,
   unread,
@@ -108,7 +145,11 @@ export function RowActions({
   language,
   canCall = false,
   canDelete = false,
+  more,
+  categoryId,
+  categories = NO_CATEGORIES,
   onAction,
+  onChoice,
 }: {
   readonly flags: ConversationFlags;
   readonly unread: boolean;
@@ -121,11 +162,52 @@ export function RowActions({
   /** Élue par la bande de focus — seule rangée où le bouton reste visible
    * SANS survol ni focus (`status.magnified` de `LensRow`). */
   readonly magnified: boolean;
+  /** Les entrées d'iOS que le balayage ne porte pas (#10593). */
+  readonly more?: RowMenuMore;
+  /** La catégorie où la conversation est rangée — cochée dans « Déplacer vers… ». */
+  readonly categoryId?: string | undefined;
+  readonly categories?: readonly { readonly id: string; readonly name: string }[];
   readonly onAction: (id: RowActionId) => void;
+  /** Un choix de sous-menu (favori, catégorie) part vers l'écran. */
+  readonly onChoice?: (choice: RowSubmenuChoice) => void;
 }) {
-  const items = rowMenuItems({ flags, unread, language, canCall, canDelete });
-  const menuLabel = translate(language, 'rowActions.menu');
-  const [box, setBox] = useState<{ top: number; right: number; width: number }>({ top: 0, right: 0, width: MENU_WIDTH });
+  const items = rowMenuItems({ flags, unread, language, canCall, canDelete, ...(more === undefined ? {} : { more }) });
+  const [submenu, setSubmenu] = useState<RowSubmenu | null>(null);
+  const submenuTitle = submenu === null ? undefined : items.find((item) => item.submenu === submenu)?.label;
+  const menuLabel = submenuTitle ?? translate(language, 'rowActions.menu');
+  const [box, setBox] = useState<{ top: number; right: number; width: number; maxHeight: number }>({
+    top: 0,
+    right: 0,
+    width: MENU_WIDTH,
+    maxHeight: 0,
+  });
+
+  const entries: readonly PanelEntry[] =
+    submenu === null
+      ? items.map((item) => ({
+          key: item.id,
+          label: item.label,
+          glyph: item.glyph,
+          ...(item.destructive === true ? { destructive: true as const } : {}),
+          ...(item.submenu === undefined ? {} : { submenu: item.submenu }),
+          select: () => (item.submenu === undefined ? choose(item.id) : enter(item.submenu)),
+        }))
+      : [
+          {
+            key: 'back',
+            label: submenuTitle ?? '',
+            leading: 'back' as const,
+            ariaLabel: `${rowMenuText(language, 'rowMenu.back')}, ${submenuTitle ?? ''}`,
+            select: () => leave(),
+          },
+          ...rowSubmenuItems({ submenu, favorite: more?.favorite, categoryId, categories, language }).map((entry) => ({
+            key: entry.key,
+            label: entry.label,
+            checked: entry.checked,
+            ...(entry.destructive === true ? { destructive: true as const } : {}),
+            select: () => pick(entry.choice),
+          })),
+        ];
 
   /**
    * `placePopover` rend `right` dans le REPÈRE DE L'ANCRE (0 = bord droit du
@@ -145,7 +227,7 @@ export function RowActions({
    * instant (`MENU_ITEM_HEIGHT × items.length + MENU_PADDING`, déduit des
    * cotes réellement dessinées).
    */
-  const measure = () => {
+  const measure = (count: number = items.length) => {
     const anchor = buttonRef.current?.getBoundingClientRect();
     if (anchor === undefined) return;
     const placement = placePopover({ anchorRight: anchor.right, viewportWidth: window.innerWidth, preferredWidth: MENU_WIDTH, margin: MENU_MARGIN });
@@ -153,11 +235,18 @@ export function RowActions({
       anchorTop: anchor.top,
       anchorBottom: anchor.bottom,
       viewportHeight: window.innerHeight,
-      estimatedHeight: items.length * MENU_ITEM_HEIGHT + MENU_PADDING,
+      estimatedHeight: count * MENU_ITEM_HEIGHT + MENU_PADDING + MENU_BORDER,
       gap: MENU_GAP,
       margin: MENU_MARGIN,
     });
-    setBox({ top: vertical.top, right: window.innerWidth - anchor.right + placement.right, width: placement.width });
+    /* LE DERNIER RECOURS (#10593) : un sous-menu plus long que l'écran (vingt
+       catégories) défile DANS le panneau plutôt que de sortir du cadre. */
+    setBox({
+      top: vertical.top,
+      right: window.innerWidth - anchor.right + placement.right,
+      width: placement.width,
+      maxHeight: Math.max(MENU_ITEM_HEIGHT, window.innerHeight - vertical.top - MENU_MARGIN),
+    });
   };
 
   /**
@@ -170,11 +259,62 @@ export function RowActions({
    * attrape le défilement du conteneur de liste, qui ne remonte pas jusqu'à
    * `window`.
    */
-  const { open, setOpen, closeAndFocusButton, activeIndex, buttonRef, menuRef, itemRefs, onMenuKeyDown } = useRovingMenu({
-    itemCount: items.length,
+  const { open, setOpen, closeAndFocusButton, activeIndex, setActiveIndex, buttonRef, menuRef, itemRefs, handleKey } = useRovingMenu({
+    itemCount: entries.length,
     onScroll: () => setOpen(false),
     onResize: () => setOpen(false),
   });
+
+  /* Refermé, le menu se rouvrira sur sa liste principale. */
+  useEffect(() => {
+    if (!open) setSubmenu(null);
+  }, [open]);
+
+  /**
+   * ENTRER DANS UN SOUS-MENU, EN SORTIR (#10593) — le panneau se remplace et
+   * le focus suit : sur la première entrée en entrant, sur la porte quittée
+   * en sortant, pour qu'un lecteur d'écran ne perde jamais sa place.
+   */
+  const focusAt = (index: number) => {
+    setActiveIndex(index);
+    requestAnimationFrame(() => itemRefs.current[index]?.focus());
+  };
+  const enter = (next: RowSubmenu) => {
+    const count = rowSubmenuItems({ submenu: next, favorite: more?.favorite, categoryId, categories, language }).length + 1;
+    measure(count);
+    setSubmenu(next);
+    focusAt(0);
+  };
+  const leave = () => {
+    const from = submenu;
+    measure();
+    setSubmenu(null);
+    focusAt(Math.max(0, items.findIndex((item) => item.submenu === from)));
+  };
+  const pick = (choice: RowSubmenuChoice) => {
+    onChoice?.(choice);
+    closeAndFocusButton();
+  };
+
+  /** Flèche vers la fin de ligne : entrer ; vers le début : sortir — le sens
+   * suit l'écriture (l'arabe lit de droite à gauche). */
+  const onMenuKeyDown = (event: ReactKeyboardEvent<HTMLDivElement>) => {
+    const rtl = typeof document !== 'undefined' && document.documentElement.dir === 'rtl';
+    const forward = rtl ? 'ArrowLeft' : 'ArrowRight';
+    const backward = rtl ? 'ArrowRight' : 'ArrowLeft';
+    const active = entries[activeIndex];
+    if (event.key === forward && active?.submenu !== undefined) {
+      event.preventDefault();
+      enter(active.submenu);
+      return;
+    }
+    if (event.key === backward && submenu !== null) {
+      event.preventDefault();
+      leave();
+      return;
+    }
+    if (handleKey(event.key)) event.preventDefault();
+  };
 
   /**
    * LE MENU CONTEXTUEL DE LA LIGNE (#8109) — clic droit à la souris, appui
@@ -288,37 +428,64 @@ export function RowActions({
                 top: box.top,
                 right: box.right,
                 width: box.width,
+                maxHeight: box.maxHeight,
+                overflowY: 'auto',
                 backgroundColor: 'var(--color-ios-card)',
                 border: '1px solid var(--color-edge)',
               }}
             >
               <RowMenuBackDismiss onClose={() => setOpen(false)} />
-              {items.map((item, index) => (
+              {entries.map((entry, index) => (
                 <button
-                  key={item.id}
+                  key={entry.key}
                   ref={(el) => {
                     itemRefs.current[index] = el;
                   }}
                   type="button"
-                  role="menuitem"
+                  role={entry.checked === undefined ? 'menuitem' : 'menuitemradio'}
+                  {...(entry.checked === undefined ? {} : { 'aria-checked': entry.checked })}
+                  {...(entry.submenu === undefined ? {} : { 'aria-haspopup': 'menu' as const, 'aria-expanded': false })}
+                  {...(entry.ariaLabel === undefined ? {} : { 'aria-label': entry.ariaLabel })}
                   tabIndex={index === activeIndex ? 0 : -1}
+                  onFocus={() => setActiveIndex(index)}
                   onClick={(event) => {
                     event.preventDefault();
                     event.stopPropagation();
-                    choose(item.id);
+                    entry.select();
                   }}
-                  {...(item.destructive === true ? { 'data-destructive': 'true' } : {})}
+                  {...(entry.destructive === true ? { 'data-destructive': 'true' } : {})}
                   className="flex w-full items-center gap-2.5 px-3 py-2 text-start text-title font-medium"
                   style={
-                    item.destructive === true
+                    entry.destructive === true
                       ? { color: 'var(--color-error)', minHeight: 44, borderTop: '1px solid var(--color-edge)' }
-                      : { color: 'var(--color-ios-ink)', minHeight: 44 }
+                      : entry.leading === 'back'
+                        ? { color: 'var(--color-ios-ink)', minHeight: 44, borderBottom: '1px solid var(--color-edge)', fontWeight: 700 }
+                        : { color: 'var(--color-ios-ink)', minHeight: 44 }
                   }
                 >
-                  <span className="grid place-items-center" style={{ color: item.destructive === true ? 'currentColor' : 'var(--color-ios-ink-2)' }}>
-                    <RowActionGlyph glyph={item.glyph} size={16} />
-                  </span>
-                  {item.label}
+                  {entry.leading === 'back' ? (
+                    <span className="grid place-items-center rtl:-scale-x-100" style={{ color: 'var(--color-ios-ink-2)' }}>
+                      <Glyph name="caretLeft" size={16} />
+                    </span>
+                  ) : entry.glyph === undefined ? null : (
+                    <span className="grid place-items-center" style={{ color: entry.destructive === true ? 'currentColor' : 'var(--color-ios-ink-2)' }}>
+                      <RowActionGlyph glyph={entry.glyph} size={16} />
+                    </span>
+                  )}
+                  {/* Le libellé reste un nœud de texte DIRECT du bouton : son nom
+                      accessible et les sélecteurs de texte des gates le lisent
+                      sur la ligne elle-même, jamais sur un enfant. */}
+                  {entry.label}
+                  {entry.submenu === undefined ? null : (
+                    <span className="ms-auto grid place-items-center rtl:-scale-x-100" style={{ color: 'var(--color-ios-ink-3)' }}>
+                      <GlyphSvg glyph={ROW_MENU_GLYPHS.caretRight} size={14} />
+                    </span>
+                  )}
+                  {entry.checked === true ? (
+                    <span className="ms-auto grid place-items-center" style={{ color: 'var(--color-ios-brand)' }}>
+                      <Glyph name="check" size={16} />
+                    </span>
+                  ) : null}
                 </button>
               ))}
             </div>,

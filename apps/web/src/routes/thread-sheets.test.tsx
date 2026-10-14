@@ -32,7 +32,14 @@ const globals = globalThis as typeof globalThis & { IS_REACT_ACT_ENVIRONMENT?: b
 beforeAll(async () => {
   ensureHappyDomRegistered();
   globals.IS_REACT_ACT_ENVIRONMENT = true;
-  await Promise.all([loadInterfaceCatalog('fr'), loadMessagePiecesCatalog('fr')]);
+  /* Les feuilles se chargent au geste (`lazy`) : chargées d'avance, leur import
+     froid ne court plus contre le `settle` d'un témoin. */
+  await Promise.all([
+    loadInterfaceCatalog('fr'),
+    loadMessagePiecesCatalog('fr'),
+    import('@/components/message-detail-sheet'),
+    import('@/components/report-sheet'),
+  ]);
 });
 
 afterAll(async () => {
@@ -99,6 +106,11 @@ const menuOf = (overrides: Partial<ThreadSheetsMenu> = {}): ThreadSheetsMenu => 
   deleteRequest: null,
   onDismissDelete: () => {},
   onConfirmDelete: () => {},
+  pinOf: () => null,
+  reportOf: () => null,
+  reportFor: null,
+  onPickReportReason: () => {},
+  onDismissReport: () => {},
   ...overrides,
 });
 
@@ -316,6 +328,49 @@ describe('ThreadMessageSheets — le dialogue de suppression (#10582)', () => {
     expect(has(host, '[data-message-act="edit"]')).toBe(true);
     await mounter.click(host.querySelector('[data-message-act="delete"]'));
     expect(journal).toEqual(['delete']);
+  });
+});
+
+/**
+ * « ÉPINGLER » ET « SIGNALER » (#7558) — « Plus… » remet les gestes du
+ * contrôleur à la fiche, et une demande de signalement monte la feuille des
+ * motifs, dont le choix revient au contrôleur.
+ */
+describe('ThreadMessageSheets — épingler et signaler (#7558)', () => {
+  const theirs = () => ownMessage({ senderId: 'u-autre' });
+
+  test('« Plus… » remet l’épingle et le signalement du contrôleur à la fiche', async () => {
+    const journal: string[] = [];
+    const host = await mountSheets(
+      menuOf({
+        detailFor: SERVER_MESSAGE_ID,
+        pinOf: () => ({ action: 'pin', onToggle: () => journal.push('pin') }),
+        reportOf: () => () => journal.push('report'),
+      }),
+      [theirs()],
+    );
+    await mounter.click(host.querySelector('[data-message-act="pin"]'));
+    expect(journal).toEqual(['pin']);
+    expect(has(host, '[data-message-act="report"]')).toBe(true);
+  });
+
+  test('aucune demande ⇒ aucune feuille de motifs', async () => {
+    const host = await mountSheets(menuOf(), [theirs()]);
+    expect(host.ownerDocument.querySelector('[data-report-reason]') !== null).toBe(false);
+  });
+
+  test('une demande ⇒ la feuille « Signaler ce message » ; le motif choisi revient au contrôleur', async () => {
+    const journal: string[] = [];
+    const host = await mountSheets(menuOf({ reportFor: SERVER_MESSAGE_ID, onPickReportReason: (reason) => journal.push(reason) }), [theirs()]);
+    await mounter.settle();
+    expect(host.ownerDocument.body.textContent?.includes('Signaler ce message')).toBe(true);
+    await mounter.click(host.ownerDocument.querySelector('[data-report-reason="harassment"]'));
+    expect(journal).toEqual(['harassment']);
+  });
+
+  test('une demande sur un message qui n’est plus dans le fil ⇒ rien ne s’ouvre', async () => {
+    const host = await mountSheets(menuOf({ reportFor: '66f0a1b2c3d4e5f6a7b8c9ff' }), [theirs()]);
+    expect(host.ownerDocument.querySelector('[data-report-reason]') !== null).toBe(false);
   });
 });
 
