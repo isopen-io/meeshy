@@ -155,9 +155,20 @@ async function doubleTap(el: Element): Promise<void> {
 describe('le double toucher pose la réaction la plus utilisée (#10599)', () => {
   test('sur le texte : la première tuile du rail est posée, et elle éclot là où le doigt a touché', async () => {
     mount(messageWith('m-texte', []));
+    const bursts: HTMLElement[] = [];
+    const observer = new MutationObserver((records) =>
+      records.forEach((record) =>
+        record.addedNodes.forEach((node) => {
+          if (node instanceof HTMLElement && node.dataset.reactionBurst !== undefined) bursts.push(node);
+        }),
+      ),
+    );
+    observer.observe(document.body, { childList: true });
     await doubleTap(container.querySelector('[data-text]')!);
+    observer.disconnect();
     expect(mineOf('m-texte')).toEqual(['😂']);
-    const burst = document.querySelector<HTMLElement>('[data-reaction-burst]');
+    expect(bursts.length).toBe(1);
+    const burst = bursts[0];
     expect(burst?.textContent).toBe('😂');
     expect(burst?.getAttribute('aria-hidden')).toBe('true');
     expect(burst?.style.left).toBe('120px');
