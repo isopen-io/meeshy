@@ -32,6 +32,8 @@ import { existsSync, readFileSync } from 'node:fs';
 import { join } from 'node:path';
 import { parsePackIndex, type PackIndexEntry } from '@meeshy/shared/types/content-pack-index';
 import type { PackAssetRef, PackDomain } from '@meeshy/shared/types/content-pack';
+import { parseAppearancePackContract } from '@meeshy/shared/types/appearance-design';
+import { parseAvatarRingPackContract } from '@meeshy/shared/types/avatar-ring-design';
 import { parseGloryFramePackContract } from '@meeshy/shared/types/glory-frame-pack';
 import { gloryFrameAssets, parseGloryFrameContract } from '@meeshy/shared/types/glory-frames';
 
@@ -98,8 +100,14 @@ export function buildPackIndex(sources: PackIndexSources): PackIndex {
 
 export const EMPTY_PACK_INDEX: PackIndex = buildPackIndex({ registries: [], retained: [] });
 
-const REGISTRY_FILES = ['glory-frames/packs.json', 'call-capture-frames/packs.json'] as const;
-const SAMPLE_REGISTRY_FILES = ['packs/samples/glory-frame.json'] as const;
+const REGISTRY_FILES = [
+  'glory-frames/packs.json',
+  'call-capture-frames/packs.json',
+  'appearance/wallpapers/packs.json',
+  'appearance/avatar-rings/packs.json',
+  'appearance/banners/packs.json',
+] as const;
+const SAMPLE_REGISTRY_FILES = ['packs/samples/glory-frame.json', 'packs/samples/wallpaper.json'] as const;
 const RETAINED_FILE = 'packs/retained.json';
 
 /** Les exemples ne se lisent que sous `PACK_SAMPLES=1`, valeur exacte (fail-closed). */
@@ -136,19 +144,31 @@ function readJson(path: string): ReadResult {
 type ContractFiles = { readonly refs: readonly PackAssetRef[]; readonly frames: number };
 const NO_CONTRACT: ContractFiles = { refs: [], frames: 0 };
 
+/** Le contrat d'un pack de fonds, de bannières ou de contours : le nombre de modèles qu'il déclare, aucun fichier référencé (les dessins sont des DONNÉES). */
+function appearanceContractItems(domain: PackDomain, input: unknown): number {
+  if (domain === 'avatar-ring') return parseAvatarRingPackContract(input)?.rings.length ?? 0;
+  const contract = parseAppearancePackContract(input);
+  return contract !== null && contract.domain === domain ? contract.designs.length : 0;
+}
+
+const APPEARANCE_DOMAINS: readonly PackDomain[] = ['wallpaper', 'banner', 'avatar-ring'];
+
 /**
- * Les fichiers du contrat d'un pack de cadres, lu dans le magasin et vérifié
- * contre son empreinte : la vignette de chaque cadre et, pour un cadre complet
- * (L3), son masque, ses couches et ses passes. Contrat illisible ou altéré ⇒ rien.
+ * Les fichiers du contrat d'un pack, lu dans le magasin et vérifié contre son
+ * empreinte. Cadres de gloire : la vignette de chaque cadre et, pour un cadre
+ * complet (L3), son masque, ses couches et ses passes. Fonds, bannières et
+ * contours : le nombre de modèles. Contrat illisible ou altéré ⇒ rien.
  */
-function frameContractFiles(assetsDir: string, entry: PackIndexEntry): ContractFiles {
-  if (entry.domain !== 'glory-frame' || !ASSET_SRC.test(entry.contract.src)) return NO_CONTRACT;
+function contractFiles(assetsDir: string, entry: PackIndexEntry): ContractFiles {
+  const appearance = APPEARANCE_DOMAINS.includes(entry.domain);
+  if ((entry.domain !== 'glory-frame' && !appearance) || !ASSET_SRC.test(entry.contract.src)) return NO_CONTRACT;
   const path = join(assetsDir, entry.contract.src);
   if (!existsSync(path)) return NO_CONTRACT;
   try {
     const bytes = readFileSync(path);
     if (createHash('sha256').update(bytes).digest('hex') !== entry.contract.sha256) return NO_CONTRACT;
     const input = JSON.parse(bytes.toString('utf8')) as unknown;
+    if (appearance) return { refs: [], frames: appearanceContractItems(entry.domain, input) };
     const thumbs = parseGloryFramePackContract(input)?.contract.frames.map((frame) => frame.thumb) ?? [];
     const layers = parseGloryFrameContract(input)?.contract.frames.flatMap(gloryFrameAssets) ?? [];
     return { refs: [...thumbs, ...layers], frames: thumbs.length };
@@ -174,7 +194,7 @@ export function loadPackIndex(
   const contracts = new Map<string, ContractFiles>();
   const filesOf = (entry: PackIndexEntry): ContractFiles => {
     const key = `${entry.domain}.${entry.slug}`;
-    const known = contracts.get(key) ?? frameContractFiles(assetsDir, entry);
+    const known = contracts.get(key) ?? contractFiles(assetsDir, entry);
     contracts.set(key, known);
     return known;
   };
