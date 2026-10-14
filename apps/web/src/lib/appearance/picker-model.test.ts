@@ -26,6 +26,10 @@ describe('les gestes du sélecteur', () => {
     }
   });
 
+  test('une première photo part avec les défauts d’iOS : voile 0,3, sans flou (même geste, même fond sur les deux plateformes)', () => {
+    expect(photoBackground(base.background, ID)).toEqual({ kind: 'photo', attachmentId: ID, veil: 0.3, blur: 0 });
+  });
+
   test('une nouvelle photo garde le voile et le flou de la précédente', () => {
     const first = photoBackground(base.background, ID);
     const tuned = withPhotoTuning(withBackground(base, first), { veil: 0.5, blur: 12 });

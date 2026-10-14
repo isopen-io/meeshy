@@ -12,7 +12,8 @@ import type { GamutKey } from '@meeshy/shared/utils/appearance-gamut';
 /** Un geste du sélecteur : calculé sur l'apparence COURANTE au moment de l'application, jamais sur celle du dernier rendu (deux touchers rapides se cumulent). */
 export type AppearanceChange = (current: ConversationAppearance) => ConversationAppearance;
 
-export const PICKER_PHOTO_DEFAULTS = { veil: 0.3, blur: 6 } as const;
+/** Les défauts d'iOS (`ConversationAppearanceViewModel.selectPhoto`) : voile 0,3, aucun flou. */
+export const PICKER_PHOTO_DEFAULTS = { veil: 0.3, blur: 0 } as const;
 
 export const withBackground = (appearance: ConversationAppearance, background: ConversationBackground): ConversationAppearance => ({ ...appearance, background });
 
