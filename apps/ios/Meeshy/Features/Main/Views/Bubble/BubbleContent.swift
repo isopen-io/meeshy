@@ -473,6 +473,14 @@ nonisolated struct BubbleContent: Equatable {
         return false
     }
 
+    /// Un emoji seul qui répond (#10628) : la carte citée en petit, puis
+    /// l'emoji en grand SANS bulle, comme un emoji envoyé seul. Site unique
+    /// du routage, partagé par la bulle et la rangée plate (Focal, Script,
+    /// Rivière).
+    var emojiReplyFloatsBelowQuote: Bool {
+        isEmojiOnly && reply != nil
+    }
+
     static func == (lhs: BubbleContent, rhs: BubbleContent) -> Bool {
         lhs.messageId == rhs.messageId
             && lhs.kind == rhs.kind

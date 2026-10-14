@@ -626,14 +626,14 @@ struct FocalRow: View {
     }
 
     /// Miroir de la branche réelle (`:850-856`, lue jamais modifiée) :
-    /// emoji-only SANS citation ⇒ grand emoji libre ; sinon texte normal SI
+    /// emoji-only ⇒ grand emoji libre, citation ou non (#10628) ; sinon texte normal SI
     /// du contenu existe ET que l'audio ne l'héberge pas déjà en caption
     /// (`audioHostsCaption` ⇒ le texte vit DANS le widget audio, WS-3).
     @ViewBuilder
     private var textOrEmojiBlock: some View {
         if let sticker = content.sticker {
             stickerBlock(sticker)
-        } else if content.isEmojiOnly && content.reply == nil {
+        } else if content.isEmojiOnly {
             emojiBlock
         } else if content.hasTextOrNonMediaContent && audioMode != .hostsCaption {
             textBlock
