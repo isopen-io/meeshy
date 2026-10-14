@@ -92,3 +92,12 @@ describe('ce que le sélecteur propose', () => {
     expect(ringOptions({ installed: [], contracts: new Map() })).toEqual([]);
   });
 });
+
+describe('un contrat d’un autre domaine ne peint pas une bannière', () => {
+  test('un contrat de fonds de conversation sous l’adresse d’une bannière est ignoré', () => {
+    const design = BUILTIN_BANNER_PACKS[0]!.items[0]!;
+    const wallpaper = { domain: 'wallpaper', designs: [design] };
+    expect(resolveBanner(officialItem('p', design.key), new Map([['abcdef0123456789.json', wallpaper]]))).toBeNull();
+    expect(resolveBanner(officialItem('p', design.key), new Map([['abcdef0123456789.json', { domain: 'banner', designs: [design] }]]))?.key).toBe(design.key);
+  });
+});

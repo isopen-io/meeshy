@@ -1,4 +1,4 @@
-import { parseAppearanceDesign, parseAppearancePackContract, type AppearanceDesign } from '@meeshy/shared/types/appearance-design';
+import { parseAppearancePackContract, type AppearanceDesign } from '@meeshy/shared/types/appearance-design';
 import { parseAvatarRingPackContract, type AvatarRingDesign } from '@meeshy/shared/types/avatar-ring-design';
 import type { ProfileDecorRef, ServedProfileDecorItem } from '@meeshy/shared/types/profile-decor';
 
@@ -31,12 +31,14 @@ export function resolveBanner(item: ServedProfileDecorItem | null, contracts: Co
   if (item === null) return null;
   if (embedded(item)) return builtinBannerDesign(item);
   const contract = parseAppearancePackContract(contracts.get(item.contract ?? ''));
-  return contract?.designs.find((design) => design.key === item.item && parseAppearanceDesign(design) !== null) ?? null;
+  return contract?.domain === 'banner' ? (contract.designs.find((design) => design.key === item.item) ?? null) : null;
 }
 
 export type OptionGroup<Design> = {
   readonly pack: string;
   readonly origin: 'builtin' | 'official' | 'community';
+  /** L'adresse `<sha16>.json` du contrat d'un pack non embarqué ; `null` pour un `builtin`. */
+  readonly contract: string | null;
   readonly items: readonly { readonly ref: ProfileDecorRef; readonly design: Design }[];
 };
 
@@ -44,18 +46,18 @@ type OptionParams = { readonly installed: readonly DesignPackSummary[] | undefin
 
 const usable = (pack: DesignPackSummary): boolean => pack.installed && pack.owned !== false;
 
-const groupOf = <Design extends { readonly key: string }>(pack: string, origin: OptionGroup<Design>['origin'], designs: readonly Design[]): OptionGroup<Design>[] =>
-  designs.length === 0 ? [] : [{ pack, origin, items: designs.map((design) => ({ ref: { pack, item: design.key }, design })) }];
+const groupOf = <Design extends { readonly key: string }>(pack: string, origin: OptionGroup<Design>['origin'], contract: string | null, designs: readonly Design[]): OptionGroup<Design>[] =>
+  designs.length === 0 ? [] : [{ pack, origin, contract, items: designs.map((design) => ({ ref: { pack, item: design.key }, design })) }];
 
 function optionsOf<Design extends { readonly key: string }>(
   { installed, contracts }: OptionParams,
   builtin: readonly BuiltinPack<Design>[],
   contractDesigns: (raw: unknown) => readonly Design[],
 ): readonly OptionGroup<Design>[] {
-  if (installed === undefined) return builtin.filter((pack) => pack.installedByDefault).flatMap((pack) => groupOf(pack.slug, 'builtin', pack.items));
+  if (installed === undefined) return builtin.filter((pack) => pack.installedByDefault).flatMap((pack) => groupOf(pack.slug, 'builtin', null, pack.items));
   return installed.filter(usable).flatMap((pack) => {
-    if (pack.origin === 'builtin') return groupOf(pack.slug, 'builtin', builtin.find((candidate) => candidate.slug === pack.slug)?.items ?? []);
-    return groupOf(pack.slug, pack.origin, pack.contract === null ? [] : contractDesigns(contracts.get(pack.contract.src)));
+    if (pack.origin === 'builtin') return groupOf(pack.slug, 'builtin', null, builtin.find((candidate) => candidate.slug === pack.slug)?.items ?? []);
+    return groupOf(pack.slug, pack.origin, pack.contract?.src ?? null, pack.contract === null ? [] : contractDesigns(contracts.get(pack.contract.src)));
   });
 }
 
@@ -63,4 +65,7 @@ export const ringOptions = (params: OptionParams): readonly OptionGroup<AvatarRi
   optionsOf(params, BUILTIN_RING_PACKS, (raw) => parseAvatarRingPackContract(raw)?.rings ?? []);
 
 export const bannerOptions = (params: OptionParams): readonly OptionGroup<AppearanceDesign>[] =>
-  optionsOf(params, BUILTIN_BANNER_PACKS, (raw) => parseAppearancePackContract(raw)?.designs ?? []);
+  optionsOf(params, BUILTIN_BANNER_PACKS, (raw) => {
+    const contract = parseAppearancePackContract(raw);
+    return contract?.domain === 'banner' ? contract.designs : [];
+  });
