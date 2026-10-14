@@ -14,6 +14,7 @@ import { fileURLToPath } from 'node:url';
 import { APPEARANCE_GAMUT, GAMUT_KEYS } from '../design/appearance/gamut';
 
 export const IOS_CATALOG_PATH = 'packages/MeeshySDK/Sources/MeeshySDK/Resources/appearance-catalog.json';
+export const IOS_CATALOG_SWIFT_PATH = 'packages/MeeshySDK/Sources/MeeshySDK/Appearance/AppearanceCatalogData.swift';
 
 const HERE = dirname(fileURLToPath(import.meta.url));
 const SOURCE_DIR = resolve(HERE, '../design/appearance');
@@ -39,9 +40,18 @@ export function buildAppearanceCatalog() {
 
 export const renderAppearanceCatalog = (): string => `${JSON.stringify(buildAppearanceCatalog(), null, 2)}\n`;
 
+/**
+ * Le JSON embarqué en Swift : une ressource SwiftPM ferait générer `Bundle.module` dans MeeshySDK,
+ * ambigu avec celui de MeeshyUI dans tout test qui importe les deux. Le fichier JSON reste la copie
+ * lisible ; ce littéral en est le texte exact (chaîne brute, aucune interpolation possible).
+ */
+export const renderAppearanceCatalogSwift = (): string =>
+  `// GÉNÉRÉ — ne pas éditer à la main.\n//\n// Source : packages/shared/scripts/sync-appearance-catalog-ios.ts (\`bun scripts/sync-appearance-catalog-ios.ts\`).\n// Le témoin vitest appearance-catalog-ios-copy.test.ts exige ce fichier identique à la source partagée.\n\nenum AppearanceCatalogData {\n    static let json = #\"\"\"\n${JSON.stringify(buildAppearanceCatalog(), null, 2)}\n\"\"\"#\n}\n`;
+
 const isMain = process.argv[1] !== undefined && resolve(process.argv[1]) === fileURLToPath(import.meta.url);
 
 if (isMain) {
   writeFileSync(resolve(HERE, '../../..', IOS_CATALOG_PATH), renderAppearanceCatalog());
-  process.stdout.write(`${IOS_CATALOG_PATH} écrit\n`);
+  writeFileSync(resolve(HERE, '../../..', IOS_CATALOG_SWIFT_PATH), renderAppearanceCatalogSwift());
+  process.stdout.write(`${IOS_CATALOG_PATH} et ${IOS_CATALOG_SWIFT_PATH} écrits\n`);
 }

@@ -15,13 +15,9 @@ public struct AppearanceCatalog: Sendable {
 
     public static let empty = AppearanceCatalog(gamut: AppearanceGamut(entries: []), wallpaperPacks: [], bannerPacks: [], strings: [:])
 
-    /// Le catalogue de la copie embarquée ; vide (jamais un plantage) si elle est illisible.
-    public static let shared: AppearanceCatalog = {
-        guard let url = Bundle.module.url(forResource: "appearance-catalog", withExtension: "json"),
-              let data = try? Data(contentsOf: url),
-              let catalog = try? AppearanceCatalog.decode(data) else { return .empty }
-        return catalog
-    }()
+    /// Le catalogue de la copie embarquée (`AppearanceCatalogData`, GÉNÉRÉ depuis la source partagée) ;
+    /// vide (jamais un plantage) s'il est illisible.
+    public static let shared: AppearanceCatalog = (try? AppearanceCatalog.decode(Data(AppearanceCatalogData.json.utf8))) ?? .empty
 
     static func decode(_ data: Data) throws -> AppearanceCatalog {
         let raw = try JSONDecoder().decode(Raw.self, from: data)
