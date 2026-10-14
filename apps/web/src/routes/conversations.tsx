@@ -674,7 +674,7 @@ export default function ConversationsScreen() {
           <StoryRail ref={observeGrandRail} variant="grande" inert={pinned} {...railProps} />
         </li>
         <li className="-mx-2 shrink-0">
-          <nav aria-label={rowMenuText(interfaceLanguage, 'listFilter.nav')} className="scrollbar-none overflow-x-auto">
+          <nav data-list-filters aria-label={rowMenuText(interfaceLanguage, 'listFilter.nav')} className="scrollbar-none overflow-x-auto">
             <ul className="flex gap-2 px-4 py-1.5">
               {LIST_FILTERS.map((f) => {
                 const active = f === filter;
