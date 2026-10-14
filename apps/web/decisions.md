@@ -5407,3 +5407,18 @@ Le prompt des Cadres de gloire (`docs/product/cadres-de-gloire/PROMPT-developpem
 **Preuves.** `lib/game-photo/glory-fonts.test.ts` (table = liste fermée, octets exacts par fichier, une face par fichier en `swap` bornée au latin, NOTICE complet, plages Unicode, pile système pour l'arabe, le cyrillique, l'hébreu, le CJK, chargement par face unique, aucune arête statique depuis l'entrée — rouge prouvé en ajoutant l'import à `main.tsx`). Mesure du 2026-10-12 : première peinture 90,00 Ko (inchangée), aucune police émise ni précachée tant que le peintre n'existe pas.
 
 **Ce qui reste.** L'avis `conformite-juridique` (OFL, nom réservé) à consigner sur #10158 ; la partie iOS du lot (TTF tels que distribués, enregistrés à la demande) ; le branchement dans le peintre (L7, #10159). **Kotlin natif** : rien (gel).
+
+## D-202 — Une ligne de conversation se balaie des deux côtés, 3 actions au plus par bord ; le menu « ⋮ » reste le véhicule de la souris, du clavier et du lecteur d'écran (2026-10-14, #10580, complète D-17)
+
+**Contexte.** D-17 faisait du menu ancré le SEUL véhicule des actions de rangée, faute d'un vocabulaire de glissement qui ne se dispute pas avec le défilement. Directive porteur du 2026-10-14 : la liste se manie pareil sur iOS, web et Android — la ligne se balaie, comme `SwipeableRow`.
+
+**Décision.**
+- **Deux bords, 3 actions au plus chacun** (`ROW_SWIPE_MAX_ACTIONS`, `lib/view/conversation-row-swipe.ts`). Début (sens de lecture) : épingler, sourdine. Fin : archiver, lu / non lu, supprimer. Les actions SONT celles du menu (`rowMenuItems`) : même id, même libellé, même glyphe, mêmes conditions (archive imposée, compte requis). La loi ne fait que les ranger par bord ; D-17 garde l'état en override.
+- **La géométrie est celle d'iOS** : cellule de 76 px, ouverture au-delà de 35 % de la zone ou d'un coup sec (450 px/s au-delà de 20 px), élastique à 18 %. **L'engagement est celui du dépôt** (`swipeEngages`, 3:1 au-delà de 22 px), plus strict que le 1:1 d'iOS : le défilement et le tirer-pour-rafraîchir gardent la main, avec `touch-action: pan-y`.
+- **Aucun rendu pendant le geste** : le décalage s'écrit sur le `<li>` en propriétés personnalisées, lues par `translate` — jamais `transform`, que la scène de la Lentille réécrit à chaque image. Les boutons ne sont montés que pendant le balayage, l'ouverture et le retour.
+- **Une seule ligne ouverte**, tenue hors des lignes (`lib/view/row-swipe-open.ts`, aucun abonnement). Elle revient en place au choix d'une action, au toucher ailleurs, au défilement, à l'ouverture d'une autre, au changement de vue (adresse, filtre, recherche), au retour matériel et sur Échap. Toucher son contenu la referme sans ouvrir la conversation.
+- **Le toucher seul.** La souris garde « ⋮ » et le clic droit ; le bouton « ⋮ » s'efface tant que la ligne est déplacée.
+
+**Écarts avec iOS, à leur issue.** iOS porte en plus « Verrouiller » au bord de début et « Bloquer » au bord de fin (4 actions sur un direct) : le web n'a ni l'un ni l'autre dans son menu de ligne. Les cellules se découvrent par rognage, sans la mise à l'échelle par cellule d'iOS.
+
+**Preuves.** `lib/view/conversation-row-swipe.test.ts` (bords, borne de 3 dans tous les états, parité avec le menu, géométrie), `components/lens-row-swipe.test.tsx` (geste au pointeur, RTL, mouvement réduit, chaque fermeture). **Non vérifié à l'écran à la date de cette entrée.** **Kotlin natif** : rien (gel) ; la coque Android de `apps/web` reçoit ce lot.
