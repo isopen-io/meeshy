@@ -248017,43 +248017,43 @@
         "ar": {
           "stringUnit": {
             "state": "translated",
-            "value": "تُفتح المهام عند المستوى 5: ثلاث يوميًا وصندوق. أنت في المستوى %lld."
+            "value": "تُفتح المهام عند المستوى 5: ثلاث يوميًا وصندوق. أنت في المستوى %@."
           }
         },
         "de": {
           "stringUnit": {
             "state": "translated",
-            "value": "Missionen werden ab Level 5 freigeschaltet: drei pro Tag und eine Truhe. Du bist auf Level %lld."
+            "value": "Missionen werden ab Level 5 freigeschaltet: drei pro Tag und eine Truhe. Du bist auf Level %@."
           }
         },
         "en": {
           "stringUnit": {
             "state": "translated",
-            "value": "Missions open at level 5: three a day, and a chest. You are at level %lld."
+            "value": "Missions open at level 5: three a day, and a chest. You are at level %@."
           }
         },
         "es": {
           "stringUnit": {
             "state": "translated",
-            "value": "Las misiones se abren en el nivel 5: tres al día, y un cofre. Estás en el nivel %lld."
+            "value": "Las misiones se abren en el nivel 5: tres al día, y un cofre. Estás en el nivel %@."
           }
         },
         "fr": {
           "stringUnit": {
             "state": "translated",
-            "value": "Les missions s’ouvrent au niveau 5 : trois par jour, et un coffre. Tu es au niveau %lld."
+            "value": "Les missions s’ouvrent au niveau 5 : trois par jour, et un coffre. Tu es au niveau %@."
           }
         },
         "it": {
           "stringUnit": {
             "state": "translated",
-            "value": "Le missioni si aprono al livello 5: tre al giorno e un forziere. Sei al livello %lld."
+            "value": "Le missioni si aprono al livello 5: tre al giorno e un forziere. Sei al livello %@."
           }
         },
         "pt-BR": {
           "stringUnit": {
             "state": "translated",
-            "value": "As missões abrem no nível 5: três por dia e um baú. Você está no nível %lld."
+            "value": "As missões abrem no nível 5: três por dia e um baú. Você está no nível %@."
           }
         }
       }
