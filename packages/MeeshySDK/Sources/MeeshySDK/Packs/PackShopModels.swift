@@ -193,7 +193,7 @@ public final class PackShopService: PackShopProviding, @unchecked Sendable {
 
     public func shop(domains: [PackDomain]?) async throws -> PackShopResponse {
         let wanted = (domains ?? PackDomain.allCases).filter { $0 != .unknown }
-        let query = domains.map { [URLQueryItem(name: "domains", value: wanted.map(\.rawValue).joined(separator: ","))] }
+        let query = domains.map { _ in [URLQueryItem(name: "domains", value: wanted.map(\.rawValue).joined(separator: ","))] }
         do {
             let response: APIResponse<PackShopResponse> = try await api.request(
                 PacksEndpoint.shop, method: "GET", body: nil, queryItems: query
