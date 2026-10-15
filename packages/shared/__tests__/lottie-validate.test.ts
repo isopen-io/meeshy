@@ -24,6 +24,17 @@ describe('le validateur du JSON Lottie servi (#10638)', () => {
   ])('refuse « %s »', (reason, input) => {
     expect(validateLottie(input)).toEqual({ ok: false, reason });
   });
+  it('refuse une expression cachée dans un précomposé (assets[].layers)', () => {
+    const precomp = { id: 'comp_0', layers: [{ ty: 4, ks: { r: { a: 0, k: 0, x: 'wiggle(2,30)' } } }] };
+    expect(validateLottie({ ...valid(), assets: [precomp] })).toEqual({ ok: false, reason: 'expression' });
+  });
+  it('refuse un arbre trop profond pour être relu en entier, plutôt que de le laisser passer', () => {
+    const deep = Array.from({ length: 200 }).reduce<Record<string, unknown>>((inner) => ({ it: [inner] }), { x: 'time' });
+    expect(validateLottie({ ...valid(), layers: [{ ty: 4, shapes: [deep] }] })).toEqual({ ok: false, reason: 'expression' });
+  });
+  it('accepte le plus lourd des MeeStickers (316 Ko de JSON) : le plafond ne refuse pas le corpus du produit', () => {
+    expect(validateLottie(valid(), { bytes: 315_761 }).ok).toBe(true);
+  });
   it('refuse au-delà du plafond d’octets', () => {
     expect(validateLottie(valid(), { bytes: LOTTIE_LIMITS.maxBytes + 1 })).toEqual({ ok: false, reason: 'bytes' });
   });

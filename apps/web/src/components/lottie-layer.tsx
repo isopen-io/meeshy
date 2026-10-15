@@ -71,7 +71,9 @@ export function LottieLayer({
         });
         sync();
       } catch {
+        handle?.destroy();
         handle = null;
+        node.replaceChildren();
       }
     };
 

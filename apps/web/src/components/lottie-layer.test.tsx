@@ -166,6 +166,41 @@ describe('la couche animée Lottie', () => {
     expect(state).toMatchObject({ engineLoads: 0, created: 0 });
   });
 
+  test('« Réduire les animations » activé en cours de lecture détruit l’animation et libère l’observateur', async () => {
+    const listeners = new Set<() => void>();
+    let reduced = false;
+    window.matchMedia = ((query: string) => ({
+      get matches() {
+        return reduced && query.includes('reduced-motion');
+      },
+      media: query,
+      addEventListener: (_: string, listener: () => void) => listeners.add(listener),
+      removeEventListener: (_: string, listener: () => void) => listeners.delete(listener),
+    })) as unknown as typeof window.matchMedia;
+    const state = probe();
+    await mountLayer(state);
+    await becomeVisible();
+    expect(state.created).toBe(1);
+    reduced = true;
+    await act(async () => {
+      listeners.forEach((listener) => listener());
+    });
+    expect(state.destroys).toBe(1);
+    expect(observers.live()).toHaveLength(0);
+  });
+
+  test('un moteur qui échoue en cours de montage ne laisse aucun dessin partiel', async () => {
+    const failing = async (): Promise<LottiePlayer> => ({
+      loadAnimation: (args) => {
+        args.container.appendChild(document.createElementNS('http://www.w3.org/2000/svg', 'svg'));
+        throw new Error('rendu impossible');
+      },
+    });
+    const host = await mounter.mount(<LottieLayer sourceKey="casse" load={async () => bytesOf(animation)} player={failing} />);
+    await becomeVisible();
+    expect(host.querySelector('[data-lottie-layer] svg')).toBeNull();
+  });
+
   test('des octets absents (réseau, empreinte) laissent l’image fixe, sans bruit', async () => {
     const state = probe();
     await mounter.mount(<LottieLayer sourceKey="vide" load={async () => null} player={fakeEngine(state)} />);
