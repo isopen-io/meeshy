@@ -771,9 +771,22 @@ describe('Bubble — les états du message (#5936)', () => {
     expect(html).not.toContain('rounded-bubble');
   });
 
-  test('(iv) sticker ⇒ côté 160, aucune .rounded-bubble', () => {
+  test('(iv) sticker ⇒ aucune .rounded-bubble', () => {
     const html = renderFull({ ...BASE_MESSAGE, content: '🔥', metadata: { sticker: { emoji: '🔥' } } });
     expect(html).toContain('data-sticker-emoji');
+    expect(html).not.toContain('rounded-bubble');
+  });
+
+  test('(iv bis) le PNG d’un sticker en bulle se peint à 320 px (#9319), quelle que soit la cote iOS', () => {
+    const html = renderFull({
+      ...BASE_MESSAGE,
+      content: '',
+      metadata: { sticker: { stickerId: '507f1f77bcf86cd799439011' } },
+      attachments: [
+        { ...attachmentDefaults, id: 'st-1', messageId: BASE_MESSAGE.id, fileName: 's.png', originalName: 's.png', mimeType: 'image/png', fileSize: 4, fileUrl: 'https://cdn.example/s.png', uploadedBy: 'u-amina', createdAt: '2026-09-08T09:00:00.000Z' },
+      ],
+    });
+    expect(html).toContain('width="320"');
     expect(html).not.toContain('rounded-bubble');
   });
 

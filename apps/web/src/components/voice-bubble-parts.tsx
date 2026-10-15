@@ -47,7 +47,7 @@ export function VoiceTranscribeZone({
         <Glyph name="microphone" size={14} />
         <span>{translate(language, busy ? 'media.audio.transcribing' : 'media.audio.transcribe')}</span>
       </button>
-      <span role="status" className="text-mini opacity-80">
+      <span role="status" data-voice-transcribe-notice className="text-mini opacity-80">
         {notice !== null && !busy ? translate(language, notice) : null}
       </span>
     </div>

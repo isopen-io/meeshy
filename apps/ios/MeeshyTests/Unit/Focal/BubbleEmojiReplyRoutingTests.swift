@@ -27,8 +27,12 @@ final class BubbleEmojiReplyRoutingTests: XCTestCase {
     func test_bubbleLayout_quoteCardsShareOneTapRule() throws {
         let layout = try MyStoriesSourceCorpus.text(of: "Meeshy/Features/Main/Views/Bubble/BubbleStandardLayout.swift")
         let emojiReply = try MyStoriesSourceCorpus.text(of: "Meeshy/Features/Main/Views/Bubble/BubbleStandardLayout+EmojiReply.swift")
-        XCTAssertTrue(layout.contains(".onTapGesture { openQuotedTarget(reply) }"))
-        XCTAssertTrue(emojiReply.contains(".onTapGesture { openQuotedTarget(reply) }"))
+        let rule = ".onTapGesture { openQuotedTarget(reply) }"
+        XCTAssertTrue(emojiReply.contains(rule))
+        XCTAssertGreaterThanOrEqual(
+            layout.components(separatedBy: rule).count - 1, 2,
+            "L'unité du type contient +EmojiReply : la bulle texte doit poser SA propre règle à côté de celle de l'emoji en réponse."
+        )
     }
 
     func test_bubbleLayout_routesEmojiReplyThroughTheSharedPredicate() throws {
@@ -36,10 +40,25 @@ final class BubbleEmojiReplyRoutingTests: XCTestCase {
         XCTAssertTrue(layout.contains("content.emojiReplyFloatsBelowQuote"))
     }
 
-    func test_focalRow_doesNotFallBackToTextBlock_forEmojiReply() throws {
+    func test_flatRowRendersLargeEmoji_emojiOnlyWithReply_isTrue() {
+        XCTAssertTrue(makeContent(text: "😂", reply: makeReply()).flatRowRendersLargeEmoji,
+                      "Focal/Script/Rivière : un emoji seul en réponse reste un grand emoji libre.")
+    }
+
+    func test_flatRowRendersLargeEmoji_emojiOnlyWithoutReply_isTrue() {
+        XCTAssertTrue(makeContent(text: "😂", reply: nil).flatRowRendersLargeEmoji)
+    }
+
+    func test_flatRowRendersLargeEmoji_textWithReply_isFalse() {
+        XCTAssertFalse(makeContent(text: "ok", reply: makeReply()).flatRowRendersLargeEmoji)
+    }
+
+    func test_focalRow_routesEmojiThroughTheSharedPredicate() throws {
         let row = try MyStoriesSourceCorpus.text(of: "Meeshy/Features/Main/Focal/Row/FocalRow.swift")
-        XCTAssertFalse(row.contains("content.isEmojiOnly && content.reply == nil"),
-                       "un emoji seul en réponse reste un grand emoji libre en Focal/Script/Rivière.")
+        XCTAssertTrue(row.contains("} else if content.flatRowRendersLargeEmoji {"),
+                      "la rangée plate décide l'emoji en grand par le prédicat partagé, jamais par une condition locale.")
+        XCTAssertFalse(row.contains("content.reply == nil"),
+                       "aucune condition sur la citation ne doit renvoyer l'emoji en texte normal.")
     }
 
     private func makeReply() -> ReplyReference {

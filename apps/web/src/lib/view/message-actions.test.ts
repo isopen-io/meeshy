@@ -414,11 +414,11 @@ describe('« Enregistrer » — un message à exactement une pièce enregistrabl
 });
 
 describe('messageMenuItems — « Ajouter à mes stickers » (#10630)', () => {
-  const sticker = { hasText: false, sticker: { inLibrary: false } } as const;
+  const sticker = { hasText: false, sticker: { inLibrary: false, hasPicture: true } } as const;
 
   test('offert SEULEMENT quand le sticker n’est pas déjà dans la bibliothèque, après « Répondre »', () => {
     expect(messageMenuItems(ctx(sticker)).map((i) => i.id)).toEqual(['select', 'forward', 'reply', 'addSticker', 'more']);
-    expect(messageMenuItems(ctx({ hasText: false, sticker: { inLibrary: true } })).map((i) => i.id)).not.toContain('addSticker');
+    expect(messageMenuItems(ctx({ hasText: false, sticker: { inLibrary: true, hasPicture: true } })).map((i) => i.id)).not.toContain('addSticker');
     expect(messageMenuItems(ctx({ hasText: false })).map((i) => i.id)).not.toContain('addSticker');
   });
 
@@ -433,6 +433,10 @@ describe('messageMenuItems — « Ajouter à mes stickers » (#10630)', () => {
   test('jamais « Enregistrer » sur un sticker, rangé ou non, même avec une pièce enregistrable', () => {
     expect(messageMenuItems(ctx({ ...sticker, canSave: true })).map((i) => i.id)).not.toContain('save');
     expect(messageMenuItems(ctx({ hasText: false, sticker: { inLibrary: true }, canSave: true })).map((i) => i.id)).not.toContain('save');
+  });
+
+  test('un sticker SANS image jointe (glyphe emoji, gabarit seul) n’offre pas un ajout voué à l’échec', () => {
+    expect(messageMenuItems(ctx({ hasText: false, sticker: { inLibrary: false, hasPicture: false } })).map((i) => i.id)).not.toContain('addSticker');
   });
 
   test('un contenu qui ne sort pas ne s’ajoute pas', () => {

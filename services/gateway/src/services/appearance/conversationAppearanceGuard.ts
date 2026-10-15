@@ -95,5 +95,4 @@ export async function validateConversationAppearance(params: AppearanceGuardPara
   if (background.kind !== 'photo') return ok(appearance);
   if (!(await isMember(params))) return { kind: 'not-a-participant' };
   return (await photoAvailable(params, background.attachmentId)) ? ok(appearance) : { kind: 'attachment-unavailable' };
-  return ok(appearance);
 }
