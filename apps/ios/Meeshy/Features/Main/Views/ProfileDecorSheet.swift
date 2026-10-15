@@ -1,5 +1,6 @@
 import Combine
 import SwiftUI
+import UIKit
 import MeeshySDK
 import MeeshyUI
 
@@ -20,15 +21,21 @@ final class ProfileDecorModel: ObservableObject {
     @Published private(set) var failed = false
 
     private let service: any ProfileDecorProviding
-    private let installedPacks: @Sendable (PackDomain) async -> [ShopPack]?
+    private let installedPacks: @Sendable @concurrent (PackDomain) async -> [ShopPack]?
     private let userId: @MainActor () -> String?
     private let publish: @MainActor (ServedProfileDecor) -> Void
     private var subscription: AnyCancellable?
+    /// Le numéro du DERNIER choix de chaque côté : une réponse plus ancienne,
+    /// arrivée après lui, ne l'écrase ni ne le rétablit.
+    private var latestChoice: [ProfileDecorSide: Int] = [:]
+    /// Ce que le serveur a accepté en dernier : un refus y revient, jamais à un choix optimiste.
+    private var accepted: ServedProfileDecor
+    private var acceptedChoice: [ProfileDecorSide: Int] = [:]
 
     init(
         decor: ServedProfileDecor?,
         service: any ProfileDecorProviding = ProfileDecorService.shared,
-        installedPacks: @escaping @Sendable (PackDomain) async -> [ShopPack]? = { domain in
+        installedPacks: @escaping @Sendable @concurrent (PackDomain) async -> [ShopPack]? = { domain in
             try? await PackService<ShopPack>(domain: domain).installed()
         },
         userId: @escaping @MainActor () -> String? = { AuthManager.shared.currentUser?.id },
@@ -39,6 +46,7 @@ final class ProfileDecorModel: ObservableObject {
         center: NotificationCenter = .default
     ) {
         self.state = ProfileDecorState(decor: decor ?? .empty)
+        self.accepted = decor ?? .empty
         self.rings = ProfileDecorOptions.rings(installed: nil)
         self.banners = ProfileDecorOptions.banners(installed: nil)
         self.service = service
@@ -69,21 +77,36 @@ final class ProfileDecorModel: ObservableObject {
     func equip(_ ref: ProfileDecorRef?, side: ProfileDecorSide) async {
         guard current(side) != ref else { return }
         failed = false
+        let choice = (latestChoice[side] ?? 0) + 1
+        latestChoice[side] = choice
         let item = ref.map { ServedProfileDecorItem(pack: $0.pack, item: $0.item, origin: .builtin, contract: nil) }
-        let previous = state.equip(item, side: side)
+        state.equip(item, side: side)
         publish(state.decor)
+        let outcome: Result<ServedProfileDecor, Error>
         do {
-            let served = try await service.update(ProfileDecorWrite(side: side, choice: ref))
-            state.confirm(served)
+            outcome = .success(try await service.update(ProfileDecorWrite(side: side, choice: ref)))
         } catch {
-            state.rollback(side: side, to: previous)
+            outcome = .failure(error)
+        }
+        if case .success(let served) = outcome, choice > (acceptedChoice[side] ?? 0) {
+            acceptedChoice[side] = choice
+            accepted[side] = served[side]
+        }
+        guard latestChoice[side] == choice else { return }
+        switch outcome {
+        case .success(let served):
+            accepted = served
+            state.confirm(served)
+        case .failure:
+            state.rollback(side: side, to: accepted[side])
             failed = true
         }
         publish(state.decor)
     }
 
     private func receive(_ event: ProfileDecorUpdatedEvent) {
-        guard let id = userId() else { return }
+        guard let id = userId(), event.userId == id else { return }
+        accepted = event.decor
         state.apply(event: event, myUserId: id)
     }
 }
@@ -114,10 +137,9 @@ struct ProfileDecorSheet: View {
                     ringSection
                     bannerSection
                     if model.failed {
-                        Text(String(localized: "profile.decor.error", defaultValue: "Impossible d'enregistrer ce choix. Réessayez.", bundle: .main))
+                        Text(errorMessage)
                             .font(MeeshyFont.relative(MeeshyFont.footnoteSize, weight: .medium))
                             .foregroundColor(MeeshyColors.error)
-                            .accessibilityAddTraits(.updatesFrequently)
                     }
                 }
                 .padding(MeeshySpacing.lg)
@@ -132,6 +154,14 @@ struct ProfileDecorSheet: View {
             }
         }
         .task { await model.load() }
+        .adaptiveOnChange(of: model.failed) { _, failed in
+            guard failed else { return }
+            UIAccessibility.post(notification: .announcement, argument: errorMessage)
+        }
+    }
+
+    private var errorMessage: String {
+        String(localized: "profile.decor.error", defaultValue: "Impossible d'enregistrer ce choix. Réessayez.", bundle: .main)
     }
 
     // MARK: Contours
@@ -242,6 +272,8 @@ struct ProfileDecorSheet: View {
             Label(String(localized: "profile.decor.shop", defaultValue: "Plus dans la boutique", bundle: .main), systemImage: "bag")
                 .font(MeeshyFont.relative(MeeshyFont.footnoteSize, weight: .semibold))
                 .foregroundColor(Color(hex: MeeshyColors.brandPrimaryHex))
+                .frame(minHeight: 44)
+                .contentShape(Rectangle())
         }
     }
 
@@ -262,6 +294,13 @@ struct ProfileDecorEntry: View {
 
     @State private var showSheet = false
     private var theme: ThemeManager { ThemeManager.shared }
+
+    /// `profile:decor-updated` venu d'un AUTRE de mes appareils, feuille ouverte ou non :
+    /// mon compte repeint ; l'événement d'un autre compte ne touche rien (`nil`).
+    static func user(_ user: MeeshyUser?, applying event: ProfileDecorUpdatedEvent) -> MeeshyUser? {
+        guard let user, user.id == event.userId, user.profileDecor != event.decor else { return nil }
+        return user.withProfileDecor(event.decor)
+    }
 
     var body: some View {
         Button {
@@ -293,6 +332,11 @@ struct ProfileDecorEntry: View {
             .background(RoundedRectangle(cornerRadius: MeeshyRadius.md).fill(theme.surface(tint: MeeshyColors.indigo300Hex, intensity: 0.08)))
         }
         .buttonStyle(.plain)
+        .onReceive(NotificationCenter.default.publisher(for: .profileDecorUpdated).receive(on: DispatchQueue.main)) { notification in
+            guard let event = notification.object as? ProfileDecorUpdatedEvent,
+                  let repainted = Self.user(AuthManager.shared.currentUser, applying: event) else { return }
+            AuthManager.shared.currentUser = repainted
+        }
         .sheet(isPresented: $showSheet) {
             ProfileDecorSheet(
                 decor: user?.profileDecor,
