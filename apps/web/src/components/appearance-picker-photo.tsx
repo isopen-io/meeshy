@@ -17,11 +17,13 @@ import { ChoiceGroup, PickerSection, type ChoiceItem } from './appearance-picker
  * de CETTE conversation (cache d'abord : la même clé que l'écran des médias),
  * jamais une image d'ailleurs. Ne sont proposées que des images lisibles par
  * tous les membres : ni vue unique, ni floutée, ni éphémère — la passerelle les
- * refuserait de toute façon (404 `ATTACHMENT_NOT_AVAILABLE`).
+ * refuserait de toute façon (404 `ATTACHMENT_NOT_AVAILABLE`). Ni CHIFFRÉE
+ * (#10665) : le web n'a aucune clé de pièce, le fond ne la peindrait jamais.
  */
 const isPickable = (item: MediaHubAttachmentItem): boolean =>
   item.attachment.mimeType.toLowerCase().startsWith('image/') &&
   !maskedAttachment(item.attachment) &&
+  item.attachment.isEncrypted !== true &&
   (item.message as { readonly expiresAt?: unknown }).expiresAt == null;
 
 export function PhotoSection({

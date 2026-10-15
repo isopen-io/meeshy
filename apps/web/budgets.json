@@ -230,6 +230,15 @@
         "source": "Mesure du 2026-10-02 (`vite build` puis gzip -9) : DEUX copies, ~44,5 Ko chacune -- celle du worker et celle du repli du fil principal (Firefox, ou un worker qui refuse) ; un lecteur n en telecharge qu UNE. Mesure CI du 2026-10-02 : 44,02 Ko pour la copie du worker, 43,94 pour celle du repli. -- le flou d arriere-plan par segmentation (#8471, `lib/calls/video-effects-segmentation.ts`) et `@mediapipe/tasks-vision` 1.0.1 (Apache-2.0). Charge A LA DEMANDE au premier flou que la camera ne fait pas (`backgroundBlur` reste prioritaire), et JAMAIS precache (`vite.config.ts` > globIgnores). A cote, hors JS : le chargeur et le binaire WebAssembly (`assets/vision_wasm_module_internal-*` : 76 Ko + 3,4 Mo gzip, 11,8 Mo bruts) et le modele selfie segmenter float16 (`assets/selfie-segmenter-*.tflite`, 244 Ko), tous servis par Meeshy, telecharges a ce moment-la seulement. Somme des deux arrondie au Ko SUPERIEUR (89) + 2 Ko de marge."
       }
     },
+    "lottie_engine": {
+      "pattern": "^assets/lottie_light-[A-Za-z0-9_-]{7}\\.js$",
+      "dynamic_only": true,
+      "kb": {
+        "value": 49,
+        "status": "MESUREE PAR BUILD LOCAL LE 2026-10-15 -- A CONFIRMER PAR LE PORTEUR",
+        "source": "#10638 -- `lottie-web` 5.12.2 light (rendu SVG, sans expressions), charge par le seul `import()` de `lib/lottie/engine.ts` a la premiere couche animee VISIBLE. Mesure (`bun run build` puis gzip -9) : 45,82 Ko. Range par defaut dans `core`, il gonflait la premiere peinture de tous de ~85 a 137 Ko (`vite.config.ts` > manualChunks) : `dynamic_only` garde la porte. Arrondi au Ko superieur + 3 Ko de marge."
+      }
+    },
     "call_video_effects_rules": {
       "pattern": "^assets/(video-effects|self-zoom)-[A-Za-z0-9_-]{7}\\.js$",
       "kb": {

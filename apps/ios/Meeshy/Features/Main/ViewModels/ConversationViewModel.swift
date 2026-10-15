@@ -875,12 +875,11 @@ class ConversationViewModel: ObservableObject {
     /// La piste SERVIE entière (URL, durée, texte) — la descente de
     /// `effectiveAudioTrackUrl`, que l'aperçu d'appui long reçoit (#9010).
     func servedAudioTrack(for attachment: MessageAttachment, message: Message) -> ServedAudioTrack {
-        let transcript = messageTranscriptionsByAttachment[attachment.id]
-            ?? messageTranscriptions[message.id].flatMap { $0.attachmentId == attachment.id ? $0 : nil }
+        let transcript = originalTranscription(for: attachment, messageId: message.id)
         return AudioTrackLanguageResolver.servedTrack(
             of: attachment,
             manualOverride: bubbleLanguageSelections[message.id]?.activeDisplayLangCode,
-            originalLanguage: message.originalLanguage,
+            originalLanguage: trackOriginLanguage(for: attachment, message: message),
             preferredLanguages: ConversationLanguagePreferences(user: authManager.currentUser).resolved,
             translatedAudios: translatedAudioTracks(for: attachment, messageId: message.id),
             originalTranscript: transcript?.text ?? attachment.transcription?.text

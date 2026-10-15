@@ -23,6 +23,18 @@
     "contours-essentiels": {
       "name": "Essential rings",
       "description": "Six rings for your avatar."
+    },
+    "animes": {
+      "name": "Animated",
+      "description": "Wallpapers that breathe softly."
+    },
+    "bannieres-animees": {
+      "name": "Animated banners",
+      "description": "A subtle glint sweeps across the banner."
+    },
+    "contours-animes": {
+      "name": "Animated rings",
+      "description": "A golden arc travels around the avatar."
     }
   },
   "designs": {
@@ -39,7 +51,9 @@
     "treillis": "Trellis",
     "constellation": "Constellation",
     "horizon": "Horizon",
-    "baobab": "Baobab"
+    "baobab": "Baobab",
+    "brume-vivante": "Living mist",
+    "aurore-vive": "Vivid aurora"
   },
   "rings": {
     "filet": "Hairline",
@@ -47,7 +61,8 @@
     "perle": "Pearls",
     "aurore": "Aurora",
     "deco": "Deco",
-    "laurier": "Laurel"
+    "laurier": "Laurel",
+    "halo-or": "Golden halo"
   },
   "gamut": {
     "indigo": "Meeshy Indigo",

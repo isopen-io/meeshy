@@ -19,6 +19,8 @@ struct ConversationBackgroundView: View {
     @State private var appearance: ConversationAppearance?
     @State private var photo: ConversationBackgroundPhoto?
     @State private var photoLoadFailed = false
+    /// Suivi en direct : passer en mode économie d'énergie pendant la lecture fige la couche Lottie sur-le-champ.
+    @State private var lowPowerMode = ProcessInfo.processInfo.isLowPowerModeEnabled
     @Environment(\.accessibilityReduceTransparency) private var reduceTransparency
 
     init(
@@ -50,6 +52,9 @@ struct ConversationBackgroundView: View {
                 photoLoadFailed = false
                 appearance = changed
             }
+            .onReceive(NotificationCenter.default.publisher(for: .NSProcessInfoPowerStateDidChange).receive(on: DispatchQueue.main)) { _ in
+                lowPowerMode = ProcessInfo.processInfo.isLowPowerModeEnabled
+            }
     }
 
     @ViewBuilder private var content: some View {
@@ -63,6 +68,16 @@ struct ConversationBackgroundView: View {
                 accentHex: ConversationBackgroundResolution.effectiveAccentHex(appearance, computedHex: signature.accentHex, isDark: isDark)
             )
             .equatable()
+            .overlay {
+                if let lottie = design.lottie {
+                    PackLottieLayer(
+                        ref: lottie,
+                        animates: ConversationBackgroundResolution.animatesLottieLayer(appearance, lowPowerMode: lowPowerMode),
+                        contentMode: .fill
+                    )
+                }
+            }
+            .clipped()
             .ignoresSafeArea()
             .accessibilityHidden(true)
         case .solid(let hex):

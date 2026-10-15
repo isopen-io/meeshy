@@ -161,6 +161,21 @@ describe('une ligne', () => {
     expect(barre('m1')).not.toBe(barre('m-amina'));
   });
 
+  /** #10664 — l'accent PERSONNEL de la conversation (cache), « Automatique » = l'accent calculé. */
+  test('la barre prend l’accent CHOISI de sa conversation, et le calculé quand le choix est « Automatique »', async () => {
+    const chosen = { id: 'c-deploiement', userPreferences: [{ appearance: { v: 1, background: { kind: 'signature' }, accent: 'corail', animate: true } }] };
+    const auto = { id: 'c-amina', userPreferences: [{ appearance: { v: 1, background: { kind: 'signature' }, accent: null, animate: true } }] };
+    appQueryClient.setQueryData(['conversations'], {
+      pages: [{ conversations: [chosen, auto], pagination: { limit: 30, offset: 0, total: 2, hasMore: false }, cursorPagination: { limit: 30, hasMore: false, nextCursor: null } }],
+      pageParams: [undefined],
+    });
+    const el = mountNow();
+    await settle();
+    const barre = (id: string) => row(el, id)?.querySelector<HTMLElement>('[data-starred-accent]')?.style.backgroundColor ?? '';
+    expect(barre('m1').toLowerCase()).toBe('#f38b7b');
+    expect(barre('m-amina')).not.toBe('#f38b7b');
+  });
+
   /**
    * #7420 — le toucher ouvre la conversation SUR le message mis en favori, comme
    * `StarredMessagesView.navigate(to:)` iOS : l'adresse le nomme (`?message=`),

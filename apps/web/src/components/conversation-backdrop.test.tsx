@@ -139,4 +139,19 @@ describe('le fond du fil', () => {
       (globalThis as { Image: unknown }).Image = OriginalImage;
     }
   });
+  test('un modèle animé joue sa couche Lottie au-dessus du dessin ; « animations » coupées, le dessin seul reste (#10638)', async () => {
+    const animated = await show(conversation(chosen({ kind: 'design', pack: 'animes', design: 'brume-vivante' })));
+    expect(animated.dataset['appearance']).toBe('design');
+    expect(animated.querySelector('[data-lottie-layer="b19ebab0f4cfeed8.json"]')).not.toBeNull();
+    act(() => root.unmount());
+    root = createRoot(host);
+    const still = await show(conversation({ ...chosen({ kind: 'design', pack: 'animes', design: 'brume-vivante' }), animate: false }));
+    expect(still.dataset['appearance']).toBe('design');
+    expect(still.querySelector('[data-lottie-layer]')).toBeNull();
+  });
+
+  test('un modèle statique n’ajoute aucune couche', async () => {
+    const backdrop = await show(conversation(chosen({ kind: 'design', pack: 'essentiels', design: 'chevrons' })));
+    expect(backdrop.querySelector('[data-lottie-layer]')).toBeNull();
+  });
 });

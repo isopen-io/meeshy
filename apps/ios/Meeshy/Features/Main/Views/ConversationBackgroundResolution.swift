@@ -30,6 +30,12 @@ enum ConversationBackgroundResolution: Equatable {
         }
     }
 
+    /// Quand la couche Lottie d'un fond joue : le réglage « Animer » de la conversation, sauf en mode économie d'énergie.
+    /// « Réduire les animations » est tranché plus bas, par la couche elle-même (première image fixe).
+    static func animatesLottieLayer(_ appearance: ConversationAppearance?, lowPowerMode: Bool) -> Bool {
+        (appearance?.animate ?? true) && !lowPowerMode
+    }
+
     /// « Réduire la transparence » force un voile d'au moins 0,6 : le texte des bulles reste lisible sur la photo.
     static let reducedTransparencyVeilFloor = 0.6
 

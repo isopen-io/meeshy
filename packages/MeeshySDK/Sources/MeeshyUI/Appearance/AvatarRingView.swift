@@ -118,12 +118,17 @@ public extension View {
     /// Pose le contour AUTOUR de l'avatar sans changer sa mise en page : le contour est une superposition
     /// agrandie (l'avatar occupe le rayon 42 du viewBox 100). `nil` ⇒ la vue telle quelle (rendu historique).
     @ViewBuilder
-    func avatarRing(_ design: AvatarRingDesign?, avatarSize: CGFloat) -> some View {
+    func avatarRing(_ design: AvatarRingDesign?, avatarSize: CGFloat, animates: Bool = true) -> some View {
         if let design {
             overlay {
-                AvatarRingView(design: design)
-                    .equatable()
-                    .frame(width: avatarSize * 100 / 84, height: avatarSize * 100 / 84)
+                ZStack {
+                    AvatarRingView(design: design)
+                        .equatable()
+                    if let lottie = design.lottie {
+                        PackLottieLayer(ref: lottie, animates: animates)
+                    }
+                }
+                .frame(width: avatarSize * 100 / 84, height: avatarSize * 100 / 84)
             }
         } else {
             self

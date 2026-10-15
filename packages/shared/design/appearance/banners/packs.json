@@ -91,5 +91,98 @@
         "description": "ست لافتات لملفك الشخصي."
       }
     }
+  },
+  {
+    "slug": "bannieres-animees",
+    "domain": "banner",
+    "origin": "builtin",
+    "version": 1,
+    "order": 1,
+    "installedByDefault": true,
+    "removable": true,
+    "hidden": false,
+    "contractSchema": 1,
+    "cover": {
+      "src": "c23615594f604150.webp",
+      "bytes": 760,
+      "sha256": "c23615594f604150e6a865c3392cafd713b5f57f4c7b0f63a83b17906de05cef"
+    },
+    "preview": null,
+    "contract": {
+      "src": "8d457c88b17f07a9.json",
+      "bytes": 985,
+      "sha256": "8d457c88b17f07a924df9d3c931ab33bbdc739a3b8b9699dd29f039f070f63a1"
+    },
+    "strings": {
+      "fr": {
+        "src": "c1c26b807f9decbc.json",
+        "bytes": 34,
+        "sha256": "c1c26b807f9decbce2d5fc31dcaadb5b41591610312674d91efc0fc8aa14952b"
+      },
+      "en": {
+        "src": "355338cc62581315.json",
+        "bytes": 35,
+        "sha256": "355338cc62581315cf2ffee2e18d55e025410c14dab388ce1b5970ff8bf077d4"
+      },
+      "es": {
+        "src": "5343d24134f22a3e.json",
+        "bytes": 34,
+        "sha256": "5343d24134f22a3e3a0d6abf07c2de7fa9420288a8992847bfd323f3c094f167"
+      },
+      "pt": {
+        "src": "5343d24134f22a3e.json",
+        "bytes": 34,
+        "sha256": "5343d24134f22a3e3a0d6abf07c2de7fa9420288a8992847bfd323f3c094f167"
+      },
+      "de": {
+        "src": "1911e82637411866.json",
+        "bytes": 38,
+        "sha256": "1911e82637411866a0cbb14e743578ee6ada9a2939c66a1d84e370249039ad71"
+      },
+      "it": {
+        "src": "5343d24134f22a3e.json",
+        "bytes": 34,
+        "sha256": "5343d24134f22a3e3a0d6abf07c2de7fa9420288a8992847bfd323f3c094f167"
+      },
+      "ar": {
+        "src": "45ae33fc04fc8cae.json",
+        "bytes": 38,
+        "sha256": "45ae33fc04fc8cae8c79ff4019a474b2c1c222bddbae2ce29225405d48dc0f95"
+      }
+    },
+    "downloadBytes": {
+      "story": 985,
+      "square": null
+    },
+    "names": {
+      "fr": {
+        "name": "Bannières animées",
+        "description": "Un reflet discret traverse la bannière."
+      },
+      "en": {
+        "name": "Animated banners",
+        "description": "A subtle glint sweeps across the banner."
+      },
+      "es": {
+        "name": "Banners animados",
+        "description": "Un reflejo discreto cruza el banner."
+      },
+      "pt": {
+        "name": "Banners animados",
+        "description": "Um reflexo discreto atravessa o banner."
+      },
+      "de": {
+        "name": "Animierte Banner",
+        "description": "Ein dezenter Glanz zieht über das Banner."
+      },
+      "it": {
+        "name": "Banner animati",
+        "description": "Un riflesso discreto attraversa il banner."
+      },
+      "ar": {
+        "name": "لافتات متحركة",
+        "description": "وميض خفيف يعبر اللافتة."
+      }
+    }
   }
 ]

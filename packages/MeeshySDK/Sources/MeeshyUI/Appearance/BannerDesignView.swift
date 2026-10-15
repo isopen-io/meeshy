@@ -12,20 +12,28 @@ public struct BannerDesignView: View, Equatable {
     public let design: AppearanceDesign
     public let isDark: Bool
     public let accentHex: String
+    /// La décision de l'app : `false` ⇒ la couche animée du design montre sa première image (aperçus, économie d'énergie).
+    public let animates: Bool
 
-    public init(design: AppearanceDesign, isDark: Bool, accentHex: String) {
+    public init(design: AppearanceDesign, isDark: Bool, accentHex: String, animates: Bool = true) {
         self.design = design
         self.isDark = isDark
         self.accentHex = accentHex
+        self.animates = animates
     }
 
     nonisolated public static func == (lhs: BannerDesignView, rhs: BannerDesignView) -> Bool {
-        lhs.design == rhs.design && lhs.isDark == rhs.isDark && lhs.accentHex == rhs.accentHex
+        lhs.design == rhs.design && lhs.isDark == rhs.isDark && lhs.accentHex == rhs.accentHex && lhs.animates == rhs.animates
     }
 
     public var body: some View {
-        AppearanceDesignView(design: design, isDark: isDark, accentHex: accentHex)
-            .equatable()
-            .clipped()
+        ZStack {
+            AppearanceDesignView(design: design, isDark: isDark, accentHex: accentHex)
+                .equatable()
+            if let lottie = design.lottie {
+                PackLottieLayer(ref: lottie, animates: animates, contentMode: .fill)
+            }
+        }
+        .clipped()
     }
 }

@@ -111,7 +111,8 @@ public struct MeeshyMessage: Identifiable, Codable, Sendable {
     /// Sticker porté par le message (#4823), restitué depuis la colonne
     /// `stickerJson` du cache GRDB ou depuis `APIMessage.sticker`. `nil` pour
     /// un message sans sticker — et pour un sticker NON RENDABLE, ramené à
-    /// l'absence dès le décodage (`MessageSticker.ifRenderable`) : une bulle
+    /// l'absence dès le décodage (`MessageSticker.ifWireWorthy` : un `stickerId` de
+    /// bibliothèque seul est gardé, son image jointe le rend, #10655) : une bulle
     /// ne dessine jamais un sticker vide.
     public var sticker: MessageSticker?
 
@@ -333,7 +334,7 @@ public struct MeeshyMessage: Identifiable, Codable, Sendable {
         // la relecture du cache, pour qu'une ligne ancienne ou malformée ne
         // ressuscite jamais un sticker vide.
         let cachedSticker: MessageSticker? = try? c.decodeIfPresent(MessageSticker.self, forKey: .sticker)
-        sticker = cachedSticker?.ifRenderable
+        sticker = cachedSticker?.ifWireWorthy
         // Backward-compatible: rows cached before this field decode to `[:]`.
         trackedLinkMap = try c.decodeIfPresent([String: String].self, forKey: .trackedLinkMap) ?? [:]
         // Legacy migration: merge old isViewOnce/isBlurred bools into effects

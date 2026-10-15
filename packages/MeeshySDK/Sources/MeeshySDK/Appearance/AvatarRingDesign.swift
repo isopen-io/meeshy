@@ -37,16 +37,19 @@ public struct AvatarRingDesign: Codable, Hashable, Sendable, Identifiable {
     public let key: String
     public let stroke: AvatarRingStroke
     public let ornament: [AvatarRingOrnamentPath]
+    /// Couche animée facultative (D6, #10638), jouée au-dessus du contour ; illisible ⇒ ignorée.
+    public let lottie: PackAssetRef?
 
     public var id: String { key }
 
-    private enum CodingKeys: String, CodingKey { case key, stroke, ornament }
+    private enum CodingKeys: String, CodingKey { case key, stroke, ornament, lottie }
     private enum OrnamentKeys: String, CodingKey { case paths }
 
-    public init(key: String, stroke: AvatarRingStroke, ornament: [AvatarRingOrnamentPath] = []) {
+    public init(key: String, stroke: AvatarRingStroke, ornament: [AvatarRingOrnamentPath] = [], lottie: PackAssetRef? = nil) {
         self.key = key
         self.stroke = stroke
         self.ornament = ornament
+        self.lottie = lottie
     }
 
     /// Fail-closed : un contour sans couleur, ou dont un trait désigne une couleur absente, ne se lit pas.
@@ -59,6 +62,7 @@ public struct AvatarRingDesign: Codable, Hashable, Sendable, Identifiable {
         }
         let nested = try? c.nestedContainer(keyedBy: OrnamentKeys.self, forKey: .ornament)
         ornament = try nested?.decode([AvatarRingOrnamentPath].self, forKey: .paths) ?? []
+        lottie = (try? c.decodeIfPresent(PackAssetRef.self, forKey: .lottie)) ?? nil
         guard ornament.allSatisfy({ $0.color >= 0 && $0.color < stroke.colors.count }) else {
             throw DecodingError.dataCorruptedError(forKey: .ornament, in: c, debugDescription: "un trait désigne une couleur absente")
         }
@@ -72,6 +76,7 @@ public struct AvatarRingDesign: Codable, Hashable, Sendable, Identifiable {
             var nested = c.nestedContainer(keyedBy: OrnamentKeys.self, forKey: .ornament)
             try nested.encode(ornament, forKey: .paths)
         }
+        try c.encodeIfPresent(lottie, forKey: .lottie)
     }
 }
 

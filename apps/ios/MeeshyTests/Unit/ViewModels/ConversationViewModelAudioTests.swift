@@ -787,6 +787,56 @@ final class ConversationViewModelAudioTests: XCTestCase {
         XCTAssertEqual(vm.servedAudioTracks(of: m1)["a1"]?.url, "https://cdn/orig-ko.m4a")
     }
 
+    // MARK: - #10691 — la piste JOUÉE résout son Prisme depuis SA transcription
+
+    /// Témoin de rang (leçon 261) : prisme ['fr','en'], message étiqueté `fr`, piste
+    /// transcrite en ANGLAIS avec une piste TTS française ⇒ la lecture joue le français,
+    /// comme le widget l'affiche. Résolue depuis le message (fr = rang 1 = « déjà lu »),
+    /// la lecture jouait l'anglais sous un texte et un drapeau français.
+    func test_servedAudioTrack_trackTranscribedInEnglish_inFrenchLabelledMessage_playsItsFrenchTranslation() async {
+        let (vm, engine, _) = makeSUT(userSystemLanguage: "fr", userRegionalLanguage: "en")
+        var m1 = makeAudioMessage(
+            id: "m1",
+            senderId: otherUserId,
+            conversationId: testConversationId,
+            attachments: [makeAudioAttachment(id: "a1", fileUrl: "https://cdn/orig-en.m4a")],
+            createdAt: date(1_000)
+        )
+        m1.originalLanguage = "fr"
+        vm.messages = [m1]
+        vm.messageTranscriptionsByAttachment["a1"] = MessageTranscription(attachmentId: "a1", text: "Hello", language: "en")
+        vm.messageTranslatedAudiosByAttachment["a1"] = [
+            makeTranslatedTrack(attachmentId: "a1", lang: "fr", url: "https://cdn/voix-fr.m4a")
+        ]
+        await Task.yield()
+
+        XCTAssertEqual(vm.servedAudioTrack(for: m1.attachments[0], message: m1).language, "fr")
+        XCTAssertEqual(vm.queuedAudio(for: m1.attachments[0], message: m1).trackLanguage, "fr")
+
+        vm.playAudio(attachmentId: "a1")
+        await Task.yield()
+        XCTAssertEqual(engine.lastPlayedUrl, "https://cdn/voix-fr.m4a",
+                       "la lecture suit la langue de la PISTE, comme le widget — jamais celle du message")
+    }
+
+    /// Sans traduction, la piste originale part étiquetée dans la langue de SA transcription.
+    func test_queuedAudio_originalTrack_isLabelledWithItsTranscriptionLanguage() async {
+        let (vm, _, _) = makeSUT(userSystemLanguage: "fr")
+        var m1 = makeAudioMessage(
+            id: "m1",
+            senderId: otherUserId,
+            conversationId: testConversationId,
+            attachments: [makeAudioAttachment(id: "a1")],
+            createdAt: date(1_000)
+        )
+        m1.originalLanguage = "fr"
+        vm.messages = [m1]
+        vm.messageTranscriptionsByAttachment["a1"] = MessageTranscription(attachmentId: "a1", text: "Hola", language: "es")
+        await Task.yield()
+
+        XCTAssertEqual(vm.queuedAudio(for: m1.attachments[0], message: m1).trackLanguage, "es")
+    }
+
     // MARK: - #9259 — l'aperçu rendu par la bulle suit le drapeau du fil
 
     /// La langue que joue le widget audio de la bulle d'APERÇU : la bulle que

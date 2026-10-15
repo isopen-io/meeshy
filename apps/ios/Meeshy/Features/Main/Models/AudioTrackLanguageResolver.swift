@@ -22,6 +22,17 @@ import MeeshySDK
 /// `AudioMediaView.resolvedPreferredTranscriptionLanguage` (qui délègue ici).
 nonisolated enum AudioTrackLanguageResolver {
 
+    /// #10691 — la langue d'origine d'UNE piste : celle de SA transcription
+    /// quand elle est connue, sinon celle du message. Un message à plusieurs
+    /// vocaux porte une transcription par pièce jointe, chacune dans sa langue :
+    /// résoudre depuis le message prenait une piste en anglais pour « déjà dans
+    /// la langue du lecteur » et la servait en original, traduction française à
+    /// côté.
+    static func originLanguage(transcriptionLanguage: String?, messageOriginal: String) -> String {
+        let own = transcriptionLanguage?.trimmingCharacters(in: .whitespaces) ?? ""
+        return own.isEmpty ? messageOriginal : own
+    }
+
     static func resolve(
         manualOverride: String?,
         originalLanguage: String,

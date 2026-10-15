@@ -20,7 +20,7 @@ const base = (): Conversation =>
 
 type Sent = { readonly method: string; readonly url: string; readonly body: unknown };
 
-function harness(putStatus: number, galleryStatus = 200) {
+function harness(putStatus: number, galleryStatus = 200, gallery: readonly unknown[] = []) {
   const sent: Sent[] = [];
   const fetchImpl = (async (input: RequestInfo | URL, init?: RequestInit) => {
     const url = String(input);
@@ -31,7 +31,7 @@ function harness(putStatus: number, galleryStatus = 200) {
     }
     if (url.includes('/packs/wallpaper/installed')) return new Response(JSON.stringify({ success: true, data: [{ slug: 'heritages' }] }), { status: 200 });
     if (galleryStatus >= 400) return new Response(JSON.stringify({ success: false, error: 'down' }), { status: galleryStatus });
-    return new Response(JSON.stringify({ success: true, data: [], pagination: { total: 0, offset: 0, limit: 30, hasMore: false }, cursorPagination: { limit: 30, hasMore: false, nextCursor: null } }), { status: 200 });
+    return new Response(JSON.stringify({ success: true, data: gallery, pagination: { total: gallery.length, offset: 0, limit: 30, hasMore: false }, cursorPagination: { limit: 30, hasMore: false, nextCursor: null } }), { status: 200 });
   }) as unknown as typeof fetch;
   const transport = createHttpTransport({ base: '', fetchImpl });
   const queryClient = new QueryClient({ defaultOptions: { queries: { retry: false } } });
@@ -158,6 +158,28 @@ describe('le sélecteur de fond', () => {
     const section = host.querySelector('[data-appearance-photo]')?.textContent ?? '';
     expect(section).not.toContain('Aucune photo envoyée');
     expect(host.querySelector('[data-appearance-photo-unavailable]')).not.toBeNull();
+  });
+
+  /** #10665 — une pièce CHIFFRÉE ne se peint jamais sur le web (aucune clé de pièce) : elle ne se propose donc pas, sa vignette serait un chiffré. */
+  test('une photo chiffrée ne se propose pas comme fond', async () => {
+    const message = (id: string, attachment: Readonly<Record<string, unknown>>) => ({
+      id,
+      conversationId: 'c1',
+      content: '',
+      messageType: 'image',
+      createdAt: '2026-10-15T10:00:00.000Z',
+      updatedAt: '2026-10-15T10:00:00.000Z',
+      attachments: [{ messageId: id, fileName: `${id}.jpg`, originalName: `${id}.jpg`, mimeType: 'image/jpeg', fileSize: 10, createdAt: '2026-10-15T10:00:00.000Z', ...attachment }],
+    });
+    const h = harness(200, 200, [
+      message('m-clair', { id: 'a-clair', fileUrl: 'https://cdn.x/clair.jpg' }),
+      message('m-chiffre', { id: 'a-chiffre', fileUrl: 'https://cdn.x/chiffre.enc', isEncrypted: true }),
+    ]);
+    await open(h);
+    await settle(120);
+    const offered = [...host.querySelectorAll<HTMLImageElement>('[data-appearance-photo-group] img')].map((img) => img.getAttribute('src') ?? '');
+    expect(offered.some((src) => src.includes('clair.jpg'))).toBe(true);
+    expect(offered.some((src) => src.includes('chiffre.enc'))).toBe(false);
   });
 
   test('une galerie vide le dit', async () => {

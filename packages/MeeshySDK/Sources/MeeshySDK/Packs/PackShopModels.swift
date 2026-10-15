@@ -22,6 +22,10 @@ public struct ShopPack: InstallablePack {
     public var price: Int?
     /// `nil` = le serveur ne le dit pas (ancien serveur) : gratuit ⇒ possédé.
     public var owned: Bool?
+    /// `false` = un pack inclus (Essentiels, Mee, Contours essentiels…) : le serveur refuse de le
+    /// retirer (409 `PACK_NOT_REMOVABLE`), la vitrine n'offre donc pas « Retirer » (#10718).
+    /// Absent d'un ancien serveur ⇒ `true`, comme avant.
+    public var removable: Bool
 
     public var id: String { slug }
     public var isBundled: Bool { isBuiltin || origin == .builtin }
@@ -35,7 +39,8 @@ public struct ShopPack: InstallablePack {
 
     public init(slug: String, name: String, description: String = "", author: String = "",
                 isBuiltin: Bool = false, origin: PackOrigin = .official, coverUrl: String? = nil,
-                installed: Bool = false, installCount: Int = 0, price: Int? = nil, owned: Bool? = nil) {
+                installed: Bool = false, installCount: Int = 0, price: Int? = nil, owned: Bool? = nil,
+                removable: Bool = true) {
         self.slug = slug
         self.name = name
         self.description = description
@@ -47,10 +52,11 @@ public struct ShopPack: InstallablePack {
         self.installCount = installCount
         self.price = price
         self.owned = owned
+        self.removable = removable
     }
 
     enum CodingKeys: String, CodingKey {
-        case slug, name, description, author, origin, coverUrl, installed, installCount, price, owned
+        case slug, name, description, author, origin, coverUrl, installed, installCount, price, owned, removable
         case isBuiltin = "builtin"
     }
 
@@ -67,6 +73,7 @@ public struct ShopPack: InstallablePack {
         installCount = (try? c.decodeIfPresent(Int.self, forKey: .installCount)) ?? 0
         price = (try? c.decodeIfPresent(Int.self, forKey: .price)).flatMap { $0 > 0 ? $0 : nil }
         owned = try? c.decodeIfPresent(Bool.self, forKey: .owned)
+        removable = (try? c.decodeIfPresent(Bool.self, forKey: .removable)) ?? true
     }
 }
 

@@ -295,6 +295,7 @@ nonisolated enum RiverConversationMapping {
                 linksAreInert: message.senderIsAnonymous || !message.senderHasAccount,
                 contactCards: RiverContactCards(items: contactCards(of: message)),
                 capturesBlocked: message.exitOffer.capture.shieldsCapture(),
+                emojiFontSize: emojiFontSize(of: message, text: text),
                 identity: bubble.isSystem ? nil : RiverBubbleIdentity(
                     avatarURL: message.senderAvatarURL,
                     presence: presence(message),
@@ -490,6 +491,13 @@ nonisolated enum RiverConversationMapping {
     @MainActor static func contactCards(of message: MeeshyMessage) -> [MessageAttachment] {
         guard !message.protection().requiresVeil, !message.holdsViewOnce else { return [] }
         return message.attachments.filter(\.isContactCard)
+    }
+
+    /// #10637 — la taille d'un emoji seul, lue chez `BubbleContent` (jamais
+    /// recalculée) ; rien quand le texte est voilé ou absent.
+    @MainActor static func emojiFontSize(of message: MeeshyMessage, text: (MeeshyMessage) -> String) -> CGFloat? {
+        guard !displayedText(of: message, text: text).isEmpty else { return nil }
+        return BubbleContent.emojiOnlyResult(of: message).fontSize
     }
 
     static func displayedText(of message: MeeshyMessage, text: (MeeshyMessage) -> String) -> String {

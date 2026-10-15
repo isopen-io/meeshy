@@ -13,6 +13,7 @@ import conversationPreferencesRoutes from '../../../routes/conversation-preferen
 import { conversationListResponseSchema } from '@meeshy/shared/types/api-schemas';
 import { buildPackIndex } from '../../../services/packs/PackIndex';
 import { MESSAGE_EFFECT_FLAGS } from '@meeshy/shared/types/message-effect-flags';
+import { datamodelReel } from '../../security/prisma-relation-fields';
 
 const USER = '507f1f77bcf86cd799439011';
 const CONVERSATION = '507f1f77bcf86cd799439abc';
@@ -33,11 +34,11 @@ const INDEX = buildPackIndex({
 });
 
 type Row = Record<string, unknown>;
-type Attachment = { mimeType: string; isViewOnce: boolean; isBlurred: boolean; effectFlags: number; viewOnceBurnedAt: Date | null; message: Row };
+type Attachment = { mimeType: string; isViewOnce: boolean; isBlurred: boolean; effectFlags: number; message: Row };
 const JOINED_AT = new Date('2026-06-01T00:00:00Z');
 let messageSeq = 0;
 const photo = (over: Partial<Attachment> = {}, message: Row = {}): Attachment => ({
-  mimeType: 'image/jpeg', isViewOnce: false, isBlurred: false, effectFlags: 0, viewOnceBurnedAt: null,
+  mimeType: 'image/jpeg', isViewOnce: false, isBlurred: false, effectFlags: 0,
   message: {
     id: `507f1f77bcf86cd7994${String((messageSeq += 1)).padStart(5, '0')}`, createdAt: new Date('2026-07-01T00:00:00Z'),
     conversationId: CONVERSATION, deletedAt: null, expiresAt: null, ephemeralDuration: null, isViewOnce: false, isBlurred: false, effectFlags: 0, ...message,
@@ -59,6 +60,7 @@ const PHOTO_BEFORE_JOIN = '507f1f77bcf86cd799439f0c';
 const PHOTO_DELETED_FOR_ME = '507f1f77bcf86cd799439f0d';
 const PHOTO_BEFORE_CLEARED_HISTORY = '507f1f77bcf86cd799439f0e';
 const PHOTO_DELETED_FOR_ALL = '507f1f77bcf86cd799439f0f';
+const PHOTO_PURGED = '507f1f77bcf86cd799439f10';
 const CLEARED_AT = new Date('2026-08-01T00:00:00Z');
 
 const attachments: Record<string, Attachment> = {
@@ -77,6 +79,7 @@ const attachments: Record<string, Attachment> = {
   [PHOTO_DELETED_FOR_ME]: photo(),
   [PHOTO_BEFORE_CLEARED_HISTORY]: photo({}, { createdAt: new Date('2026-07-15T00:00:00Z') }),
   [PHOTO_DELETED_FOR_ALL]: photo({}, { deletedAt: new Date('2026-07-20T00:00:00Z') }),
+  [PHOTO_PURGED]: photo({}, { viewOnceBurnedAt: new Date('2026-07-21T00:00:00Z') }),
 };
 
 function build(options: { owns?: readonly string[]; clearedHistory?: boolean } = {}) {
@@ -210,6 +213,29 @@ describe('PUT /user-preferences/conversations/:id — appearance', () => {
 
     it('accepte une image de CETTE conversation', async () => {
       expect((await put(photoBackground(PHOTO_OK))).statusCode).toBe(200);
+    });
+
+    it('ne demande à la base que des colonnes qui EXISTENT (viewOnceBurnedAt n’est que sur Message) — le 500 de la recette du 2026-10-15', async () => {
+      const models = datamodelReel();
+      expect(models.length).toBeGreaterThan(0);
+      const fieldsOf = (name: string) => new Map((models.find((m) => m.name === name)?.fields ?? []).map((f) => [f.name, f]));
+      const unknown = (model: string, select: Record<string, unknown>, path: string): string[] =>
+        Object.entries(select).flatMap(([key, value]) => {
+          const field = fieldsOf(model).get(key);
+          if (!field) return [`${path}${key}`];
+          return typeof value === 'object' && value !== null && 'select' in value
+            ? unknown(field.type, (value as { select: Record<string, unknown> }).select, `${path}${key}.`)
+            : [];
+        });
+
+      await put(photoBackground(PHOTO_OK));
+
+      const call = env.prisma.messageAttachment.findUnique.mock.calls[0][0] as { select: Record<string, unknown> };
+      expect(unknown('MessageAttachment', call.select, '')).toEqual([]);
+    });
+
+    it('refuse une image dont le contenu a été purgé (vue unique brûlée sur le message)', async () => {
+      expect((await put(photoBackground(PHOTO_PURGED))).statusCode).toBe(404);
     });
 
     it.each([

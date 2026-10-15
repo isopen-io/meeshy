@@ -606,6 +606,14 @@ struct AudioMediaView: View, Equatable {
         return .audioTranslation
     }
 
+    /// #10691 — la langue d'origine de CETTE piste (sa transcription), repli : le message.
+    internal var trackOriginLanguage: String {
+        AudioTrackLanguageResolver.originLanguage(
+            transcriptionLanguage: transcription?.language,
+            messageOriginal: message.originalLanguage
+        )
+    }
+
     /// Prisme Linguistique — resolves the STARTING transcription-display
     /// language the same way `ConversationViewModel.preferredTranslation`
     /// resolves text: walk the ordered preference chain (systemLanguage >
@@ -630,7 +638,7 @@ struct AudioMediaView: View, Equatable {
         // pendant que le coordinateur en jouait une autre.
         AudioTrackLanguageResolver.resolve(
             manualOverride: activeAudioLanguageOverride,
-            originalLanguage: message.originalLanguage,
+            originalLanguage: trackOriginLanguage,
             preferredLanguages: ConversationLanguagePreferences(user: AuthManager.shared.currentUser).resolved,
             translatedAudios: translatedAudios
         )
@@ -749,7 +757,7 @@ struct AudioMediaView: View, Equatable {
             withAnimation(.spring(response: 0.25, dampingFraction: 0.8)) {
                 selectedAudioLangCode = AudioTrackLanguageResolver.resolve(
                     manualOverride: newLang,
-                    originalLanguage: message.originalLanguage,
+                    originalLanguage: trackOriginLanguage,
                     preferredLanguages: ConversationLanguagePreferences(user: AuthManager.shared.currentUser).resolved,
                     translatedAudios: translatedAudios
                 )
@@ -849,11 +857,11 @@ struct AudioMediaView: View, Equatable {
     /// toujours montrée (info), les langues traduites sont ajoutées au fur et
     /// à mesure qu'elles arrivent. La position du 🌐 ne dépend PAS du nombre
     /// de drapeaux (cf. `BubbleFooter.metaLeading`).
-    private var audioFooter: (BubbleFooterModel, BubbleFooterActions)? {
+    var audioFooter: (BubbleFooterModel, BubbleFooterActions)? {
         guard var model = footerModel else { return nil }
         var actions = footerActions
 
-        let origCode = message.originalLanguage.lowercased()
+        let origCode = trackOriginLanguage.lowercased()
         var codes = [origCode]
         for audio in translatedAudios {
             let code = audio.targetLanguage.lowercased()

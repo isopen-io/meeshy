@@ -27,10 +27,11 @@ import Foundation
 /// ```
 ///
 /// Tout est optionnel ; un sticker n'est RENDABLE qu'avec un `templateId` OU un
-/// `emoji` non vides (`isRenderable`). **Un `MessageSticker` décodé mais non
-/// rendable vaut ABSENT** : les consommateurs (`APIMessage`, `MeeshyMessage`,
-/// la colonne GRDB) le ramènent à `nil` via `ifRenderable`, jamais à une bulle
-/// vide. Un `animation` inconnu — publié par une version plus récente — se
+/// `emoji` non vides (`isRenderable`). **Un `MessageSticker` décodé qui ne mérite
+/// pas de voyager vaut ABSENT** : les consommateurs (`APIMessage`, `MeeshyMessage`,
+/// la colonne GRDB) le ramènent à `nil` via `ifWireWorthy` — un sticker de
+/// bibliothèque (`stickerId` seul) est GARDÉ, son image jointe le dessine (#10655),
+/// et la bulle le tient pour absent s'il n'a rien à peindre. Un `animation` inconnu — publié par une version plus récente — se
 /// décode en `nil` (le sticker reste, immobile), sur le patron de
 /// `StorySticker`.
 public struct MessageSticker: Codable, Equatable, Hashable, Sendable {

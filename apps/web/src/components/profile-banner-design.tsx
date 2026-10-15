@@ -5,6 +5,8 @@ import { designToSvg, type AppearanceScheme } from '@meeshy/shared/utils/appeara
 
 import { currentScheme } from '@/lib/scheme';
 
+import { PackLottieLayer } from './pack-lottie-layer';
+
 /**
  * **LA BANNIÈRE DE DESIGN** (#10632, § 5.1 et § 8.1) — le MÊME `AppearanceDesign`
  * qu'un fond de conversation, cadré en 3:1 : `designToSvg` (rendu de référence
@@ -33,12 +35,19 @@ export function useScheme(): AppearanceScheme {
 }
 
 export function ProfileBannerDesign({ design, accent, scheme }: { readonly design: AppearanceDesign; readonly accent: string; readonly scheme: AppearanceScheme }) {
-  return (
+  const painted = (
     <span
       aria-hidden="true"
       data-banner-design={design.key}
       className="pointer-events-none block size-full [&>svg]:block [&>svg]:size-full"
       dangerouslySetInnerHTML={{ __html: bannerSvgMarkup({ design, scheme, accent }) }}
     />
+  );
+  if (design.lottie === undefined) return painted;
+  return (
+    <span className="pointer-events-none relative block size-full">
+      {painted}
+      <PackLottieLayer lottie={design.lottie} />
+    </span>
   );
 }

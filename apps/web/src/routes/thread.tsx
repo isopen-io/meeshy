@@ -32,6 +32,7 @@ import { useAuthorStoryRings } from '@/lib/view/use-author-story-rings';
 import { AuthorMoodsContext, useAuthorMoods } from '@/lib/view/use-author-moods';
 import { topActiveMembers } from '@/lib/view/top-active-members';
 import { accentOf, withAccent } from '@/lib/accent';
+import { useColorScheme } from '@/lib/use-color-scheme';
 import { conversationStore } from '@/lib/conversation-store';
 import { isGroup, titleOf, unreadOf } from '@/lib/view/conversation';
 import { useOptionalRoute } from '@/lib/router';
@@ -165,6 +166,7 @@ export default function ThreadScreen({ preview, focus }: ThreadScreenProps = {})
    * (inchangé, observable nulle part) ; en `gateway`, la session RÉELLE tranche.
    */
   const session = useStore(sessionStore, (s) => s.session);
+  useColorScheme(); /* l'accent personnel dépend du schéma peint (#10663) */
   const viewer = useMemo(() => resolveViewer({ source: apiDeps.source, session }), [session]);
   /* QUITTER / SUPPRIMER depuis les détails (#7837, #7285) : un compte, comme la passerelle l'exige. */
   const signedIn = session.status === 'authenticated' || apiDeps.source === 'fixtures';

@@ -74,6 +74,16 @@ final class APIMessageStickerTests: XCTestCase {
         XCTAssertNil(message.sticker)
     }
 
+    /// #10655 — le web envoie un sticker de « Mes stickers » sous la seule forme `{ stickerId }` :
+    /// il est gardé (l'image jointe le rend), pas jeté.
+    func test_apiMessage_libraryStickerIdAlone_isKept() throws {
+        let message = try decodeMessage("""
+        {\(Self.head),
+         "sticker":{"stickerId":"65f0a1b2c3d4e5f6a7b8c9d0"}}
+        """)
+        XCTAssertEqual(message.sticker?.stickerId, "65f0a1b2c3d4e5f6a7b8c9d0")
+    }
+
     /// Un mouvement publié par une version plus récente ne fait tomber ni le
     /// sticker ni le message : le sticker reste, immobile.
     func test_apiMessage_unknownAnimationKeepsTheStickerStill() throws {

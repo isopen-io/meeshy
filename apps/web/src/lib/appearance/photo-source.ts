@@ -19,7 +19,7 @@ import { attachmentSrc } from '@/lib/api/media-url';
  */
 export type PhotoSource = { readonly thumb: string | null; readonly full: string };
 
-type CachedAttachment = { readonly id?: unknown; readonly fileUrl?: unknown; readonly thumbnailUrl?: unknown };
+type CachedAttachment = { readonly id?: unknown; readonly fileUrl?: unknown; readonly thumbnailUrl?: unknown; readonly isEncrypted?: unknown };
 
 const textOf = (value: unknown): string | null => (typeof value === 'string' && value !== '' ? value : null);
 
@@ -37,7 +37,15 @@ function cachedAttachment(queryClient: QueryClient, conversationId: string, atta
   return undefined;
 }
 
+/**
+ * UNE PIÈCE CHIFFRÉE N'EST JAMAIS UNE PHOTO À PEINDRE (#10665) : ses octets sont
+ * un chiffré, que ni le web ni le serveur ne savent ouvrir ici (aucune clé de
+ * pièce n'existe côté appareil web). Fail-closed : `null`, le fond reste
+ * Signature — jamais une `<img>` pointée sur un chiffré, jamais un clair servi
+ * par le serveur.
+ */
 function sourceOf(attachment: CachedAttachment | undefined): PhotoSource | null {
+  if (attachment?.isEncrypted === true) return null;
   const fileUrl = textOf(attachment?.fileUrl);
   if (fileUrl === null) return null;
   const thumbnailUrl = textOf(attachment?.thumbnailUrl);

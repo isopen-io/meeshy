@@ -57,3 +57,35 @@ describe('la bannière de design', () => {
     expect(light).not.toBe(dark);
   });
 });
+
+describe('la couche Lottie du contour et de la bannière (#10638)', () => {
+  const halo = BUILTIN_RING_PACKS.flatMap((pack) => pack.items).find((ring) => ring.key === 'halo-or')!;
+  const vive = BUILTIN_BANNER_PACKS.flatMap((pack) => pack.items).find((banner) => banner.key === 'aurore-vive')!;
+
+  test('un contour qui déclare lottie porte une couche animée, derrière l’avatar et décorative', () => {
+    const html = renderToStaticMarkup(
+      <AvatarRing ring={halo} size={90}>
+        <i data-avatar />
+      </AvatarRing>,
+    );
+    expect(html).toContain('data-lottie-layer="ec52a7f12af8a193.json"');
+    expect(html.indexOf('data-lottie-layer')).toBeLessThan(html.indexOf('data-avatar="true"'));
+    expect(html).toContain('<svg');
+  });
+
+  test('un contour sans lottie n’ajoute AUCUN nœud', () => {
+    const html = renderToStaticMarkup(
+      <AvatarRing ring={filet} size={90}>
+        <i data-avatar />
+      </AvatarRing>,
+    );
+    expect(html).not.toContain('data-lottie-layer');
+  });
+
+  test('une bannière animée superpose sa couche au dessin ; une bannière statique reste identique', () => {
+    expect(renderToStaticMarkup(<ProfileBannerDesign design={vive} accent="#6366F1" scheme="dark" />)).toContain('data-lottie-layer="cad11fe66d4fc9ec.json"');
+    const still = renderToStaticMarkup(<ProfileBannerDesign design={aurore} accent="#6366F1" scheme="dark" />);
+    expect(still).not.toContain('data-lottie-layer');
+    expect(still.startsWith('<span aria-hidden="true" data-banner-design="aurore"')).toBe(true);
+  });
+});

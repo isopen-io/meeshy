@@ -351,6 +351,10 @@ export type StickerPackItem = {
  */
 export type StickerPackSummary = PackSummaryBase & {
   readonly kinds: readonly StickerKind[];
+  /** Le prix en Meeshes ; `null` ou absent = gratuit (additif, ignoré par les anciens clients). */
+  readonly price?: number | null;
+  /** Gratuit ⇒ `true` ; payant ⇒ une ligne de possession existe (additif). */
+  readonly owned?: boolean;
 };
 
 export type StickerPackDetail = StickerPackSummary & {

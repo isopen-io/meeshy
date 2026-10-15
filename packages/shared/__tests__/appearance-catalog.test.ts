@@ -1,3 +1,4 @@
+import { createHash } from 'node:crypto';
 import { readFileSync } from 'node:fs';
 import { join } from 'node:path';
 import { describe, expect, it } from 'vitest';
@@ -7,6 +8,7 @@ import { AvatarRingPackContractSchema, parseAvatarRingDesign, parseAvatarRingPac
 import { canUseFrame } from '../types/frame-usage';
 import { parsePackIndex } from '../types/content-pack-index';
 import { GAMUT_KEYS } from '../design/appearance/gamut';
+import { validateLottie } from '../utils/lottie-validate';
 
 const DIR = join(__dirname, '../design/appearance');
 const read = (file: string): unknown => JSON.parse(readFileSync(join(DIR, file), 'utf8')) as unknown;
@@ -17,11 +19,12 @@ const banners = read('banners/designs.json') as PackFile;
 const rings = read('avatar-rings/rings.json') as PackFile;
 
 const wallpaperDesigns = wallpapers.packs.flatMap((pack) => pack.designs ?? []);
+const bannerKeys = banners.packs.flatMap((pack) => pack.designs ?? []).map((design) => (design as { key: string }).key);
 
-describe('le catalogue des 14 modèles de fond (#10632, § 6)', () => {
-  it('compte quatre packs builtin et 14 modèles que le contrat lit tous', () => {
-    expect(wallpapers.packs.map((pack) => pack.slug)).toEqual(['essentiels', 'heritages', 'nature-et-ciel', 'illustrations']);
-    expect(wallpaperDesigns).toHaveLength(14);
+describe('le catalogue des 15 modèles de fond (#10632, #10638, § 6)', () => {
+  it('compte cinq packs builtin et 15 modèles que le contrat lit tous', () => {
+    expect(wallpapers.packs.map((pack) => pack.slug)).toEqual(['essentiels', 'heritages', 'nature-et-ciel', 'illustrations', 'animes']);
+    expect(wallpaperDesigns).toHaveLength(15);
     wallpapers.packs.forEach((pack) => {
       const contract = parseAppearancePackContract({ domain: 'wallpaper', designs: pack.designs });
       expect(contract?.designs).toHaveLength(pack.designs?.length ?? -1);
@@ -30,15 +33,16 @@ describe('le catalogue des 14 modèles de fond (#10632, § 6)', () => {
 
   it('ne réutilise aucune clé, ni dans un pack, ni entre les packs de fonds', () => {
     const keys = wallpaperDesigns.map((design) => (design as { key: string }).key);
-    expect(new Set(keys).size).toBe(14);
+    expect(new Set(keys).size).toBe(15);
   });
 
-  it('installe « Essentiels » d’office et le garde ; les trois autres se retirent', () => {
+  it('installe « Essentiels » d’office et le garde ; les quatre autres se retirent', () => {
     expect(wallpapers.packs.map((pack) => [pack.installedByDefault, pack.removable])).toEqual([
       [true, false],
       [false, true],
       [false, true],
       [false, true],
+      [true, true],
     ]);
   });
 
@@ -114,10 +118,32 @@ describe('les noms en sept langues', () => {
 
   it.each(PACK_LANGUAGES.map((lang) => [lang] as const))('%s nomme chaque pack, modèle, contour et couleur', (lang) => {
     const strings = keysOf(lang);
-    expect(Object.keys(strings.designs).sort()).toEqual(wallpaperDesigns.map((design) => (design as { key: string }).key).sort());
-    expect(Object.keys(strings.rings)).toHaveLength(6);
+    expect(Object.keys(strings.designs).sort()).toEqual([...new Set([...wallpaperDesigns.map((design) => (design as { key: string }).key), ...bannerKeys])].sort());
+    expect(Object.keys(strings.rings)).toHaveLength(7);
     expect(Object.keys(strings.gamut).sort()).toEqual([...GAMUT_KEYS].sort());
     expect(Object.keys(strings.packs).sort()).toEqual([...wallpapers.packs, ...banners.packs, ...rings.packs].map((pack) => pack.slug).sort());
     expect(Object.values(strings.designs).every((name) => typeof name === 'string' && name.length > 0)).toBe(true);
+  });
+});
+
+describe('les couches animées du catalogue (#10638)', () => {
+  const animated = [...wallpapers.packs, ...banners.packs].flatMap((pack) => pack.designs ?? []).filter((design) => (design as { lottie?: unknown }).lottie !== undefined);
+  const animatedRings = rings.packs.flatMap((pack) => pack.rings ?? []).filter((ring) => (ring as { lottie?: unknown }).lottie !== undefined);
+
+  it('porte au moins un fond, une bannière et un contour animés, que les contrats lisent', () => {
+    expect(animated.length).toBeGreaterThanOrEqual(2);
+    expect(animatedRings.length).toBeGreaterThanOrEqual(1);
+    animated.forEach((design) => expect(parseAppearanceDesign(design)).not.toBeNull());
+    animatedRings.forEach((ring) => expect(parseAvatarRingDesign(ring)).not.toBeNull());
+  });
+
+  it('chaque couche désigne un fichier adressé par contenu, valide et sous le plafond', () => {
+    [...animated, ...animatedRings].forEach((item) => {
+      const ref = (item as { lottie: { src: string; bytes: number; sha256: string } }).lottie;
+      const bytes = readFileSync(join(DIR, 'lottie', ref.src));
+      expect(bytes.length).toBe(ref.bytes);
+      expect(createHash('sha256').update(bytes).digest('hex')).toBe(ref.sha256);
+      expect(validateLottie(JSON.parse(bytes.toString('utf8')) as unknown, { bytes: bytes.length }).ok).toBe(true);
+    });
   });
 });

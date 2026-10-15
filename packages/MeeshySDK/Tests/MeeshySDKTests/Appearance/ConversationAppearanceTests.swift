@@ -64,13 +64,13 @@ struct ConversationAppearanceTests {
 @Suite("AppearanceCatalog — la copie embarquée (#10631)")
 struct AppearanceCatalogTests {
 
-    @Test("le catalogue embarqué porte 16 couleurs, 4 packs de fonds, 14 modèles et 6 bannières")
+    @Test("le catalogue embarqué porte 16 couleurs, 5 packs de fonds, 15 modèles et 7 bannières")
     func bundledCatalogShape() {
         let catalog = AppearanceCatalog.shared
         #expect(catalog.gamut.entries.count == 16)
-        #expect(catalog.wallpaperPacks.map(\.slug) == ["essentiels", "heritages", "nature-et-ciel", "illustrations"])
-        #expect(catalog.wallpaperPacks.flatMap(\.designs).count == 14)
-        #expect(catalog.bannerPacks.flatMap(\.designs).count == 6)
+        #expect(catalog.wallpaperPacks.map(\.slug) == ["essentiels", "heritages", "nature-et-ciel", "illustrations", "animes"])
+        #expect(catalog.wallpaperPacks.flatMap(\.designs).count == 15)
+        #expect(catalog.bannerPacks.flatMap(\.designs).count == 7)
     }
 
     @Test("trouve un modèle par (pack, clé) et refuse une clé d'un autre pack")
@@ -82,10 +82,12 @@ struct AppearanceCatalogTests {
         #expect(catalog.wallpaper(pack: "essentiels", design: "aurore")?.style == .gradient)
     }
 
-    @Test("« Essentiels » est le seul pack présenté d'emblée")
+    /// c35652f640 installe d'office le pack animé « Brume vivante » (`animes`) — même attente que le web
+    /// (`visibleWallpaperPacks(new Set())` → essentiels, animes) ; ce témoin iOS n'avait pas suivi.
+    @Test("« Essentiels » et les fonds animés sont présentés d'emblée")
     func defaultWallpapers() {
         let packs = Set(AppearanceCatalog.shared.defaultWallpapers.map(\.pack.slug))
-        #expect(packs == ["essentiels"])
+        #expect(packs == ["essentiels", "animes"])
     }
 
     @Test("la gamme donne surface et accent par schéma, et refuse une clé inconnue")

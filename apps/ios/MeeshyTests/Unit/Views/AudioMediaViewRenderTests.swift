@@ -327,6 +327,37 @@ final class AudioMediaViewFirstRenderHeightTests: XCTestCase {
     }
 }
 
+// MARK: - #10691 — les drapeaux du vocal partent de la langue de SA piste
+
+@MainActor
+final class AudioMediaViewTrackOriginFlagsTests: XCTestCase {
+    private func frenchTrack() -> MessageTranslatedAudio {
+        MessageTranslatedAudio(
+            id: "t-fr", attachmentId: "att-test-1", targetLanguage: "fr",
+            url: "https://cdn/voix-fr.m4a", transcription: "Bonjour", durationMs: 1_000,
+            format: "m4a", cloned: false, quality: 0.9, ttsModel: "tts"
+        )
+    }
+
+    /// Message étiqueté `fr`, piste transcrite en anglais, traduction française : le pied
+    /// montre la V.O. ANGLAISE et la traduction française — deux drapeaux. Lu depuis le
+    /// message, la traduction française se confondait avec l'« original » et disparaissait.
+    func test_audioFooter_trackTranscribedInEnglish_showsItsOriginalAndTheFrenchTranslation() {
+        let view = AudioMediaView.makeForTest(
+            originalLanguage: "fr",
+            translatedAudios: [frenchTrack()],
+            transcription: MessageTranscription(attachmentId: "att-test-1", text: "Hello", language: "en"),
+            footerModel: BubbleFooterModel(
+                sender: nil, flags: [], showsTranslate: false, timestamp: "10:00",
+                delivery: nil, isOffline: false, isMe: false, sendStartedAt: nil
+            )
+        )
+
+        let codes = view.audioFooter?.0.flags.map { $0.code }
+        XCTAssertEqual(codes, ["en", "fr"])
+    }
+}
+
 extension AudioMediaView {
     static func makeForTest(
         replyReference: ReplyReference? = nil,
@@ -336,7 +367,9 @@ extension AudioMediaView {
         conversationName: String? = nil,
         audioQueueTailProvider: ((String) -> [QueuedAudio])? = nil,
         fileUrl: String = "https://example.com/test.m4a",
-        activeAudioLanguageOverride: String? = nil
+        activeAudioLanguageOverride: String? = nil,
+        transcription: MessageTranscription? = nil,
+        footerModel: BubbleFooterModel? = nil
     ) -> AudioMediaView {
         let attachment = MeeshyMessageAttachment(
             id: "att-test-1",
@@ -368,8 +401,10 @@ extension AudioMediaView {
             visualAttachments: [],
             isDark: false,
             accentColor: "#6366F1",
+            transcription: transcription,
             translatedAudios: translatedAudios,
             activeAudioLanguageOverride: activeAudioLanguageOverride,
+            footerModel: footerModel,
             replyReference: replyReference,
             replyIsStory: replyIsStory,
             conversationName: conversationName,

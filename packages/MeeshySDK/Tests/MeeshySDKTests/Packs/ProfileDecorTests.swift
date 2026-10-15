@@ -88,9 +88,9 @@ final class ProfileDecorTests: XCTestCase {
 
     // MARK: Résolution embarquée
 
-    func test_catalog_embedsTheSixRingsAndTheSixBanners() {
-        XCTAssertEqual(AvatarRingCatalog.shared.packs.flatMap(\.rings).map(\.key), ["filet", "double-filet", "perle", "aurore", "deco", "laurier"])
-        XCTAssertEqual(AppearanceCatalog.shared.bannerPacks.flatMap(\.designs).count, 6)
+    func test_catalog_embedsTheSevenRingsAndTheSevenBanners() {
+        XCTAssertEqual(AvatarRingCatalog.shared.packs.flatMap(\.rings).map(\.key), ["filet", "double-filet", "perle", "aurore", "deco", "laurier", "halo-or"])
+        XCTAssertEqual(AppearanceCatalog.shared.bannerPacks.flatMap(\.designs).count, 7)
         XCTAssertEqual(AvatarRingCatalog.shared.ringName("filet", language: "en") != nil, true)
     }
 
@@ -113,6 +113,18 @@ final class ProfileDecorTests: XCTestCase {
         let ok = ProfileDecorOptions.rings(installed: [ShopPack(slug: "contours-essentiels", name: "x", installed: true, price: 50, owned: true)])
         XCTAssertEqual(ok.first?.items.count, 6)
         XCTAssertEqual(ok.first?.items.first?.ref, ProfileDecorRef(pack: "contours-essentiels", item: "filet"))
+    }
+
+    /// #10719 — les packs ANIMÉS installés et possédés sont proposés, avec leur arc doré / leur reflet.
+    func test_options_installedAnimatedPacks_areOffered() {
+        let rings = ProfileDecorOptions.rings(installed: [
+            ShopPack(slug: "contours-essentiels", name: "x", installed: true),
+            ShopPack(slug: "contours-animes", name: "x", installed: true),
+        ])
+        XCTAssertEqual(rings.map(\.pack), ["contours-essentiels", "contours-animes"])
+        XCTAssertEqual(rings.last?.items.first?.ref, ProfileDecorRef(pack: "contours-animes", item: "halo-or"))
+        let banners = ProfileDecorOptions.banners(installed: [ShopPack(slug: "bannieres-animees", name: "x", installed: true)])
+        XCTAssertEqual(banners.first?.items.first?.ref, ProfileDecorRef(pack: "bannieres-animees", item: "aurore-vive"))
     }
 
     func test_options_beforeTheInstalledListIsKnownShowsTheDefaultPacks() {
