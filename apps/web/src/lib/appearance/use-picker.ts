@@ -1,12 +1,16 @@
 import { useQuery } from '@tanstack/react-query';
-import { useEffect, useState } from 'react';
+import { useEffect, useMemo, useState } from 'react';
 
 import type { ConversationsDeps } from '@/lib/api/conversations';
 import { loadWallpaperInstallState, wallpaperInstalledQueryKey } from '@/lib/api/packs-wallpaper';
 import { isAppearanceCatalogLoaded, loadAppearanceCatalog } from '@/lib/i18n-appearance-catalog';
 import type { InterfaceLanguage } from '@/lib/interface-language';
 
+import { sharedContractLoader } from '@/lib/profile-decor/use-decor-designs';
+import type { DesignPackSummary } from '@/lib/profile-decor/pack-summary';
+
 import type { WallpaperNames, WallpaperPack } from './wallpaper-catalog';
+import { missingWallpaperContracts, servedWallpaperPacks, withServedNames, type WallpaperContracts } from './wallpaper-served';
 
 /** Le catalogue des libellés du sélecteur (chargé avec la feuille, jamais au démarrage). */
 export function useAppearanceCatalog(language: InterfaceLanguage): boolean {
@@ -27,6 +31,41 @@ export function useAppearanceCatalog(language: InterfaceLanguage): boolean {
     };
   }, [language]);
   return ready;
+}
+
+const NO_PACKS: readonly DesignPackSummary[] = [];
+
+/**
+ * Les packs de fonds installés que la passerelle déclare et leurs contrats
+ * chargés (adressés par contenu, retenus pour la session). Sert le sélecteur ET
+ * le fond d'une conversation qui a choisi un modèle non embarqué (#10737).
+ */
+export function useServedWallpapers(deps: ConversationsDeps, enabled = true): { readonly installed: readonly DesignPackSummary[]; readonly contracts: WallpaperContracts; readonly state: ReturnType<typeof useWallpaperInstallState> } {
+  const state = useWallpaperInstallState(deps, enabled);
+  const installed = state.data?.packs ?? NO_PACKS;
+  const [contracts, setContracts] = useState<WallpaperContracts>(() => new Map());
+  useEffect(() => {
+    const wanted = missingWallpaperContracts(installed, contracts);
+    if (wanted.length === 0) return undefined;
+    let live = true;
+    void Promise.all(wanted.map(async (src) => [src, await sharedContractLoader().load(src)] as const)).then((loaded) => {
+      const found = loaded.filter(([, contract]) => contract !== null);
+      if (live && found.length > 0) setContracts((current) => new Map([...current, ...found]));
+    });
+    return () => {
+      live = false;
+    };
+  }, [installed, contracts]);
+  return { installed, contracts, state };
+}
+
+function useWallpaperInstallState(deps: ConversationsDeps, enabled: boolean) {
+  return useQuery({
+    queryKey: wallpaperInstalledQueryKey,
+    queryFn: () => loadWallpaperInstallState(deps),
+    enabled: enabled && deps.source === 'gateway',
+    staleTime: 60_000,
+  });
 }
 
 /**
@@ -51,16 +90,12 @@ export function useWallpaperPacks(params: { readonly deps: ConversationsDeps; re
       live = false;
     };
   }, [language]);
-  const state = useQuery({
-    queryKey: wallpaperInstalledQueryKey,
-    queryFn: () => loadWallpaperInstallState(deps),
-    enabled: deps.source === 'gateway',
-    staleTime: 60_000,
-  });
+  const { installed, contracts, state } = useServedWallpapers(deps);
   const slugs = state.data?.slugs ?? new Set<string>();
+  const served = useMemo(() => servedWallpaperPacks(installed, contracts), [installed, contracts]);
   return {
-    packs: loaded === null ? [] : loaded.visible(slugs),
-    names: loaded === null ? null : loaded.names,
+    packs: loaded === null ? [] : [...loaded.visible(slugs), ...served.filter((pack) => !loaded.packs.some((builtin) => builtin.slug === pack.slug))],
+    names: loaded === null ? null : withServedNames(loaded.names, installed, language),
     supported: deps.source !== 'gateway' ? true : state.data === undefined || state.data === null ? null : state.data.supported,
   };
 }

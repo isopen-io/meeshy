@@ -395,18 +395,31 @@ describe('#4173 c.7 — le défaut n’est PAS inversé sur cette ressource', ()
   });
 });
 
-describe('#4173 — ce que la route CHARGEAIT sans jamais le SERVIR', () => {
-  it('`conversationSchema` ne déclare aucun `userPreferences` — donc la requête ne doit pas l’ouvrir', async () => {
-    // Le contrat de fil est la mesure : `fast-json-stringify` applique
-    // `additionalProperties: false`, donc une relation absente du schéma est
-    // strippée avant d'atteindre le moindre client. La charger était du travail
-    // MORT — une jointure par ouverture de conversation, sur les trois clients.
+describe('#4173 / #10736 — les préférences du lecteur ne sont chargées que pour être SERVIES', () => {
+  it('`conversationSchema` ne déclare pas `userPreferences` : la route le sert par son enveloppe de détail', () => {
     expect(conversationSchema.properties).not.toHaveProperty('userPreferences');
+  });
 
+  it('le profil par défaut charge la ligne du LECTEUR seul et sert son apparence (#10736)', async () => {
+    const prisma = makePrisma();
+    prisma.conversation.findFirst.mockResolvedValue({
+      ...ROW(),
+      userPreferences: [{ isPinned: false, appearance: { v: 1, background: { kind: 'builtin', id: 'maille' }, accent: 'corail', animate: true }, clearHistoryBefore: null }],
+    });
+    const app = await buildApp(prisma);
+    const res = await app.inject({ method: 'GET', url: `/conversations/${CONV_ID}` });
+
+    expect((selectOf(prisma).userPreferences as { where: unknown }).where).toEqual({ userId: USER_ID });
+    const served = res.json().data.userPreferences;
+    expect(served[0].appearance.accent).toBe('corail');
+    expect(served[0]).not.toHaveProperty('clearHistoryBefore');
+    await app.close();
+  });
+
+  it('`?fields=id` ne paie pas la jointure des préférences', async () => {
     const prisma = makePrisma();
     const app = await buildApp(prisma);
-    await app.inject({ method: 'GET', url: `/conversations/${CONV_ID}` });
-
+    await app.inject({ method: 'GET', url: `/conversations/${CONV_ID}?fields=id` });
     expect(selectOf(prisma).userPreferences).toBeUndefined();
     await app.close();
   });

@@ -1,6 +1,7 @@
 import * as packsEndpoints from '@meeshy/shared/api/endpoints/packs';
 
 import type { ConversationsDeps } from './conversations';
+import { decodeDesignPackSummary, type DesignPackSummary } from '@/lib/profile-decor/pack-summary';
 import { listOf, type PackPort } from './packs';
 
 /**
@@ -38,7 +39,14 @@ export const wallpaperPackPort: PackPort<WallpaperPackRef, WallpaperPackRef, Wal
  * appearance`, § 11), `slugs` les packs installés. `null` sur une panne : l'appelant
  * garde ses défauts sans conclure que le serveur est ancien.
  */
-export type WallpaperInstallState = { readonly supported: boolean; readonly slugs: ReadonlySet<string> };
+export type WallpaperInstallState = {
+  readonly supported: boolean;
+  readonly slugs: ReadonlySet<string>;
+  /** Les résumés installés (origine, possession, adresse du contrat) : un pack officiel non embarqué ou tiers se peint depuis son contrat servi (#10737). */
+  readonly packs: readonly DesignPackSummary[];
+};
+
+const decodeWallpaperSummary = decodeDesignPackSummary('wallpaper');
 
 export async function loadWallpaperInstallState(deps: ConversationsDeps & { readonly signal?: AbortSignal }): Promise<WallpaperInstallState | null> {
   const result = await deps.transport.request<unknown>({
@@ -46,8 +54,8 @@ export async function loadWallpaperInstallState(deps: ConversationsDeps & { read
     path: wallpaperPackPort.installed,
     ...(deps.signal === undefined ? {} : { signal: deps.signal }),
   });
-  if (result.ok) return { supported: true, slugs: new Set(listOf(result.data, decodeRef).map((pack) => pack.slug)) };
-  return result.status === 404 ? { supported: false, slugs: new Set() } : null;
+  if (result.ok) return { supported: true, slugs: new Set(listOf(result.data, decodeRef).map((pack) => pack.slug)), packs: listOf(result.data, decodeWallpaperSummary) };
+  return result.status === 404 ? { supported: false, slugs: new Set(), packs: [] } : null;
 }
 
 export const wallpaperInstalledQueryKey = ['packs', 'wallpaper', 'installed'] as const;

@@ -21,7 +21,7 @@ import { generateDefaultConversationTitle } from '@meeshy/shared/utils/conversat
 import { canViewExactMemberCount, presentMemberCount } from '@meeshy/shared/utils/member-visibility';
 import type { ConversationParams } from './types';
 import { conversationDetailWithEngagementResponseSchema, loadViewerEngagementsOrEmpty } from './engagement';
-import { conversationDetailInclude } from './core-selects';
+import { conversationDetailInclude, conversationUserPreferencesSelect } from './core-selects';
 import { loadReadCursorBoundaries } from './read-cursor-projection';
 import { loadViewerBirthDate } from './viewerWriteRestriction';
 import { memberCountServedToViewer, membersServedToViewer } from '../../services/guests/guestMemberVisibility';
@@ -210,6 +210,9 @@ export const CONVERSATION_DETAIL_SERVED_FIELDS = [
   // Ce que le lecteur n'a pas le droit d'écrire ici (#9927) — composé depuis
   // le type de la conversation et sa date de naissance déclarée.
   'viewerWriteRestriction',
+  // Le fond et l'accent PERSONNELS du lecteur (#10736) — un fil ouvert par son
+  // adresse (`/c/:id`) n'a que cette route : sans eux il se peint en Signature.
+  'userPreferences',
 ] as const;
 
 /**
@@ -243,6 +246,7 @@ export const conversationDetailPlan: ColumnPlan<typeof conversationDetailColumns
     lastReadMessageCreatedAt: [],
     viewerEngagement: [],
     viewerWriteRestriction: ['type'],
+    userPreferences: [],
   },
 };
 
@@ -379,9 +383,15 @@ export function registerConversationDetailRoute(
         return refuserCommeIntrouvable(reply);
       }
 
+      const sertPreferences = isFieldServed(champs, 'userPreferences') && !authRequest.authContext.isAnonymous;
       const conversation = await prisma.conversation.findFirst({
         where: { id: conversationId },
-        select: selectForFields(conversationDetailPlan, champs)
+        select: {
+          ...selectForFields(conversationDetailPlan, champs),
+          ...(sertPreferences
+            ? { userPreferences: { where: { userId }, take: 1, select: conversationUserPreferencesSelect } }
+            : {})
+        }
       }) as Record<string, any> | null;
 
       if (!conversation) {
@@ -523,7 +533,7 @@ export function registerConversationDetailRoute(
             });
           })();
 
-      const { _count, participants: _rawParticipants, ...conversationData } = conversation;
+      const { _count, participants: _rawParticipants, userPreferences: rawPreferences, ...conversationData } = conversation;
 
       /**
        * La charge est COMPOSÉE de ce qui a été calculé, puis RESTREINTE par la
@@ -539,6 +549,11 @@ export function registerConversationDetailRoute(
       const charge: Record<string, unknown> = { ...conversationData };
       if (gatedParticipants !== undefined) charge.participants = membersServedToViewer(gatedParticipants, authRequest.authContext);
       if (sertTitre) charge.title = displayTitle;
+      if (sertPreferences) {
+        charge.userPreferences = ((rawPreferences ?? []) as ReadonlyArray<Record<string, unknown>>).map(
+          ({ clearHistoryBefore: _clear, readingMode: _mode, ...served }) => served
+        );
+      }
       if (sertEffectif) {
         // Même cap 199+ que la liste : deux surfaces, une seule présentation,
         // et le même droit de voir l'effectif ENTIER (`canViewExactMemberCount`).
