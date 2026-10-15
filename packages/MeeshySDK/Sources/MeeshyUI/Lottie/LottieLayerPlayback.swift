@@ -23,4 +23,15 @@ nonisolated public enum LottieLayerPlayback {
         guard sceneActive, onScreen else { return .paused(at: .currentFrame) }
         return .playing(.fromProgress(0, toProgress: 1, loopMode: .loop))
     }
+
+    /// La même loi, avec les DEUX « Réduire les animations » : celui du système et celui de
+    /// Meeshy (`meeshyForceReduceMotion`), qui ne peut que renforcer le premier.
+    public static func mode(animates: Bool, systemReduceMotion: Bool, userForcedReduceMotion: Bool, sceneActive: Bool, onScreen: Bool) -> LottiePlaybackMode {
+        mode(
+            animates: animates,
+            reduceMotion: MeeshyMotion.shouldReduce(system: systemReduceMotion, userForced: userForcedReduceMotion),
+            sceneActive: sceneActive,
+            onScreen: onScreen
+        )
+    }
 }

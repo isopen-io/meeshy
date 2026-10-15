@@ -20,7 +20,8 @@ public struct LottieLayerView: View {
     let animates: Bool
     let contentMode: ContentMode
 
-    @Environment(\.accessibilityReduceMotion) private var reduceMotion
+    @Environment(\.accessibilityReduceMotion) private var systemReduceMotion
+    @Environment(\.meeshyForceReduceMotion) private var userForcedReduceMotion
     @Environment(\.scenePhase) private var scenePhase
     @State private var onScreen = false
 
@@ -34,7 +35,13 @@ public struct LottieLayerView: View {
     public var body: some View {
         LottieView(animation: film.animation)
             .configuration(LottieLayerPlayback.configuration)
-            .playbackMode(LottieLayerPlayback.mode(animates: animates, reduceMotion: reduceMotion, sceneActive: scenePhase == .active, onScreen: onScreen))
+            .playbackMode(LottieLayerPlayback.mode(
+                animates: animates,
+                systemReduceMotion: systemReduceMotion,
+                userForcedReduceMotion: userForcedReduceMotion,
+                sceneActive: scenePhase == .active,
+                onScreen: onScreen
+            ))
             .resizable()
             .aspectRatio(contentMode: contentMode)
             .onAppear { onScreen = true }
@@ -61,6 +68,7 @@ public struct PackLottieLayer: View {
         self.animates = animates
         self.contentMode = contentMode
         self.store = store
+        _film = State(initialValue: ref.flatMap(LottieLayerSource.cachedFilm(for:)))
     }
 
     public var body: some View {
@@ -72,8 +80,9 @@ public struct PackLottieLayer: View {
             }
         }
         .task(id: ref?.src) {
+            guard let ref else { film = nil; return }
+            if let cached = LottieLayerSource.cachedFilm(for: ref) { film = cached; return }
             film = nil
-            guard let ref else { return }
             let loaded = await LottieLayerSource.film(for: ref, store: store)
             guard !Task.isCancelled else { return }
             film = loaded

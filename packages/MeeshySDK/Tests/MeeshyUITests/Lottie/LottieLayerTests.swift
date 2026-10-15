@@ -16,6 +16,11 @@ final class LottieLayerTests: XCTestCase {
 
     private var data: Data { Data(Self.reference.utf8) }
 
+    /// Le même film sous une empreinte propre au test : le cache mémoire des films est partagé par le processus.
+    private func uniqueData() -> Data {
+        Data(Self.reference.replacingOccurrences(of: "\"nm\":\"t\"", with: "\"nm\":\"\(UUID().uuidString)\"").utf8)
+    }
+
     private func ref(for data: Data) throws -> PackAssetRef {
         let digest = SHA256.hash(data: data).map { String(format: "%02x", $0) }.joined()
         return try XCTUnwrap(PackAssetRef(src: "\(digest.prefix(16)).json", bytes: data.count, sha256: digest))
@@ -41,6 +46,12 @@ final class LottieLayerTests: XCTestCase {
         XCTAssertEqual(LottieLayerPlayback.mode(animates: true, reduceMotion: true, sceneActive: false, onScreen: false), .paused(at: .progress(0)))
     }
 
+    func test_playback_inAppReduceMotion_alone_showsTheFirstFrame() {
+        XCTAssertEqual(LottieLayerPlayback.mode(animates: true, systemReduceMotion: false, userForcedReduceMotion: true, sceneActive: true, onScreen: true), .paused(at: .progress(0)), "le réglage « Réduire les animations » de Meeshy vaut celui du système")
+        XCTAssertEqual(LottieLayerPlayback.mode(animates: true, systemReduceMotion: true, userForcedReduceMotion: false, sceneActive: true, onScreen: true), .paused(at: .progress(0)))
+        XCTAssertEqual(LottieLayerPlayback.mode(animates: true, systemReduceMotion: false, userForcedReduceMotion: false, sceneActive: true, onScreen: true), .playing(.fromProgress(0, toProgress: 1, loopMode: .loop)))
+    }
+
     func test_engine_isCoreAnimation() {
         XCTAssertEqual(LottieLayerPlayback.configuration.renderingEngine, .coreAnimation)
     }
@@ -57,6 +68,7 @@ final class LottieLayerTests: XCTestCase {
     }
 
     func test_film_fromAPackAsset_downloadsOnce_thenReadsTheDisk() async throws {
+        let data = uniqueData()
         let fetcher = CountingFetcher(data: data)
         let store = ContentAddressedStore(directory: tempDirectory(), fetcher: fetcher)
         let ref = try ref(for: data)
@@ -70,8 +82,26 @@ final class LottieLayerTests: XCTestCase {
     func test_film_fromAPackAssetWhoseBytesAreNotTheEngagedOnes_isNil() async throws {
         let fetcher = CountingFetcher(data: Data("altéré en route".utf8))
         let store = ContentAddressedStore(directory: tempDirectory(), fetcher: fetcher)
-        let film = await LottieLayerSource.film(for: try ref(for: data), store: store)
+        let film = await LottieLayerSource.film(for: try ref(for: uniqueData()), store: store)
         XCTAssertNil(film)
+    }
+
+    func test_film_fromAPackAsset_staysInMemory_soAReopenedLayerShowsItAtOnce() async throws {
+        let data = uniqueData()
+        let ref = try ref(for: data)
+        XCTAssertNil(LottieLayerSource.cachedFilm(for: ref), "rien n'a encore été lu")
+        let store = ContentAddressedStore(directory: tempDirectory(), fetcher: CountingFetcher(data: data))
+        let read = await LottieLayerSource.film(for: ref, store: store)
+        let loaded = try XCTUnwrap(read)
+        let cached = try XCTUnwrap(LottieLayerSource.cachedFilm(for: ref), "un fond rouvert se monte sans attendre le disque")
+        XCTAssertTrue(cached === loaded, "un seul modèle en mémoire, partagé par toutes les couches du même fichier")
+    }
+
+    func test_film_aRejectedFile_isNeverKeptInMemory() async throws {
+        let ref = try ref(for: uniqueData())
+        let store = ContentAddressedStore(directory: tempDirectory(), fetcher: CountingFetcher(data: Data("altéré".utf8)))
+        _ = await LottieLayerSource.film(for: ref, store: store)
+        XCTAssertNil(LottieLayerSource.cachedFilm(for: ref))
     }
 
     // MARK: - Ce qu'elle montre à l'arrêt
