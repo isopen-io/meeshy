@@ -53,11 +53,20 @@ export function appearancePrisma() {
     const value = (row: Row) => (row[key] instanceof Date ? (row[key] as Date).getTime() : (row[key] as number));
     return [...rows].sort((a, b) => (dir === 'asc' ? value(a) - value(b) : value(b) - value(a)));
   };
+  // Le vrai client ne rend que les colonnes demandées : `contractReads` compte les lectures qui ramènent le contrat (jusqu'à 256 Ko).
+  const reads = { contract: 0 };
+  type Select = Record<string, boolean> | undefined;
+  const project = (row: Row | undefined, select: Select): Row | null => {
+    if (row === undefined) return null;
+    if (select === undefined || select.contractJson === true) reads.contract += 1;
+    return select === undefined ? row : (Object.fromEntries(Object.entries(row).filter(([key]) => select[key] === true)) as Row);
+  };
   const communityAppearancePack = {
-    findMany: async ({ where, orderBy }: { where?: Record<string, unknown>; orderBy?: Record<string, 'asc' | 'desc'> }) => sortCommunity(communityRows.filter((row) => matches(row, where)), orderBy),
-    findUnique: async ({ where }: { where: { domain_slug: { domain: string; slug: string } } }) =>
-      communityRows.find((row) => row.domain === where.domain_slug.domain && row.slug === where.domain_slug.slug) ?? null,
-    findFirst: async ({ where }: { where: Record<string, unknown> }) => communityRows.find((row) => matches(row, where)) ?? null,
+    findMany: async ({ where, orderBy, select }: { where?: Record<string, unknown>; orderBy?: Record<string, 'asc' | 'desc'>; select?: Select }) =>
+      sortCommunity(communityRows.filter((row) => matches(row, where)), orderBy).map((row) => project(row, select) as Row),
+    findUnique: async ({ where, select }: { where: { domain_slug: { domain: string; slug: string } }; select?: Select }) =>
+      project(communityRows.find((row) => row.domain === where.domain_slug.domain && row.slug === where.domain_slug.slug), select),
+    findFirst: async ({ where, select }: { where: Record<string, unknown>; select?: Select }) => project(communityRows.find((row) => matches(row, where)), select),
     count: async ({ where }: { where: Record<string, unknown> }) => communityRows.filter((row) => matches(row, where)).length,
     create: async ({ data }: { data: Record<string, unknown> }) => {
       if (communityRows.some((row) => row.domain === data.domain && row.slug === data.slug)) throw uniqueViolation();
@@ -74,11 +83,11 @@ export function appearancePrisma() {
       hit.forEach((row) => Object.assign(row, data));
       return { count: hit.length };
     },
-    update: async ({ where, data }: { where: { id: string }; data: Record<string, unknown> }) => {
+    update: async ({ where, data, select }: { where: { id: string }; data: Record<string, unknown>; select?: Select }) => {
       const row = communityRows.find((candidate) => candidate.id === where.id) as Row;
       const patch = Object.fromEntries(Object.entries(data).map(([key, value]) => (value !== null && typeof value === 'object' && 'increment' in (value as object) ? [key, (row[key] as number) + (value as { increment: number }).increment] : [key, value])));
       Object.assign(row, patch);
-      return row;
+      return project(row, select);
     },
   };
 
@@ -103,5 +112,5 @@ export function appearancePrisma() {
     }
   };
 
-  return { ...base, prisma: client as unknown as PrismaClient, ledger, ownerships, communityRows, grant: (userId: string, delta: number) => ledger.push({ id: nextId(), userId, delta, reason: 'grant', requestId: `grant-${seq}` }) };
+  return { ...base, prisma: client as unknown as PrismaClient, ledger, ownerships, communityRows, contractReads: () => reads.contract, grant: (userId: string, delta: number) => ledger.push({ id: nextId(), userId, delta, reason: 'grant', requestId: `grant-${seq}` }) };
 }

@@ -39,11 +39,21 @@ export type CommunityAppearanceRow = {
   readonly reviewNote: string | null;
   readonly price: number | null;
   readonly installCount: number;
-  readonly contractJson: string;
   readonly contractSha256: string;
   readonly contractSrc: string;
   readonly contractBytes: number;
+  readonly itemKeys: readonly string[];
 };
+
+/**
+ * Les colonnes d'une PROJECTION — tout sauf `contractJson` (jusqu'à 256 Ko) : lister,
+ * détailler, installer et acheter n'en ont jamais besoin. Seuls le magasin
+ * (`approvedContract`) et la lecture de modération (`contract`) le chargent.
+ */
+const ROW_SELECT = {
+  id: true, domain: true, slug: true, name: true, description: true, author: true, submitterId: true, status: true,
+  reviewNote: true, price: true, installCount: true, contractSha256: true, contractSrc: true, contractBytes: true, itemKeys: true,
+} as const;
 
 export type CommunityAppearanceDetail = AppearancePackDetail & { readonly reviewNote?: string | null };
 
@@ -59,7 +69,7 @@ export function communityAppearanceDetail(row: CommunityAppearanceRow, installed
     author: row.author,
     builtin: false,
     status: row.status as PackStatus,
-    itemCount: 0,
+    itemCount: row.itemKeys.length,
     coverUrl: null,
     installed,
     installCount: row.installCount,
@@ -88,21 +98,21 @@ export function prismaCommunityAppearanceStore(prisma: PrismaClient, domain: Com
   return {
     priced: true,
     async catalogue(installedOf, ownedKeys) {
-      const rows = await prisma.communityAppearancePack.findMany({ where: { domain, status: 'approved' }, orderBy: { installCount: 'desc' } });
+      const rows = await prisma.communityAppearancePack.findMany({ where: { domain, status: 'approved' }, orderBy: { installCount: 'desc' }, select: ROW_SELECT });
       return rows.map((row) => communityAppearanceDetail(row, installedOf(row.slug), ownedKeys));
     },
     async installed(slugs, ownedKeys) {
-      const rows = await prisma.communityAppearancePack.findMany({ where: { domain, slug: { in: [...slugs] }, status: 'approved' } });
+      const rows = await prisma.communityAppearancePack.findMany({ where: { domain, slug: { in: [...slugs] }, status: 'approved' }, select: ROW_SELECT });
       const order = new Map(slugs.map((slug, index) => [slug, index]));
       return [...rows].sort((a, b) => (order.get(a.slug) ?? 0) - (order.get(b.slug) ?? 0)).map((row) => communityAppearanceDetail(row, true, ownedKeys));
     },
     async detail(slug, viewer, installedOf, ownedKeys) {
-      const row = await prisma.communityAppearancePack.findUnique({ where: { domain_slug: { domain, slug } } });
+      const row = await prisma.communityAppearancePack.findUnique({ where: { domain_slug: { domain, slug } }, select: ROW_SELECT });
       if (row === null || !isCommunityAppearanceVisible(row, viewer)) return null;
       return communityAppearanceDetail(row, installedOf(slug), ownedKeys, viewer);
     },
     async installable(slug) {
-      const row = await prisma.communityAppearancePack.findUnique({ where: { domain_slug: { domain, slug } } });
+      const row = await prisma.communityAppearancePack.findUnique({ where: { domain_slug: { domain, slug } }, select: ROW_SELECT });
       if (row === null || row.status !== 'approved') return null;
       return {
         id: row.id,
@@ -113,7 +123,7 @@ export function prismaCommunityAppearanceStore(prisma: PrismaClient, domain: Com
       };
     },
     async addInstalls(id, delta) {
-      const row = await prisma.communityAppearancePack.update({ where: { id }, data: { installCount: { increment: delta } } });
+      const row = await prisma.communityAppearancePack.update({ where: { id }, data: { installCount: { increment: delta } }, select: { installCount: true } });
       return row.installCount;
     },
   };
@@ -126,6 +136,18 @@ export type SubmitCommunityAppearanceOutcome =
   | { readonly kind: 'too-many-pending' };
 
 export type CommunityReview = { readonly decision: 'approve' | 'reject'; readonly note: string | null; readonly price: number | null };
+
+/**
+ * `self-review` : un modérateur ne tranche pas sa PROPRE proposition — il fixerait
+ * lui-même le prix d'un pack dont il est l'auteur (et, demain, le reversement : #10724).
+ */
+export type ReviewCommunityAppearanceOutcome =
+  | { readonly kind: 'reviewed'; readonly pack: CommunityAppearanceDetail }
+  | { readonly kind: 'not-found' }
+  | { readonly kind: 'self-review' };
+
+/** Le contrat d'un pack, pour qui peut le voir : les OCTETS mêmes que le magasin servira après publication (relus par le schéma à la proposition). */
+export type CommunityAppearanceContract = { readonly contractSchema: number; readonly contractJson: string; readonly sha256: string };
 
 export type CommunityAppearancePacksDeps = {
   readonly prisma: PrismaClient;
@@ -151,7 +173,7 @@ export class CommunityAppearancePacks {
     const registries: PackRegistries = { [domain]: this.index.entries(domain).map((entry) => ({ slug: entry.slug, installedByDefault: entry.installedByDefault })) };
     if (isReservedPackSlug(domain, manifest.slug, registries)) return { kind: 'slug-taken' };
 
-    const existing = await this.prisma.communityAppearancePack.findUnique({ where: { domain_slug: { domain, slug: manifest.slug } } });
+    const existing = await this.prisma.communityAppearancePack.findUnique({ where: { domain_slug: { domain, slug: manifest.slug } }, select: { id: true, submitterId: true, status: true } });
     const replacing = existing !== null && existing.submitterId === userId && existing.status === 'rejected';
     if (existing !== null && !replacing) return { kind: 'slug-taken' };
     const pending = await this.prisma.communityAppearancePack.count({ where: { submitterId: userId, status: 'pending' } });
@@ -176,6 +198,7 @@ export class CommunityAppearancePacks {
           itemKeys: [...manifest.itemKeys],
           createdAt: this.now(),
         },
+        select: ROW_SELECT,
       });
       return { kind: 'submitted', pack: communityAppearanceDetail(row, false, undefined, { userId, canModerate: false }) };
     } catch (error) {
@@ -186,22 +209,28 @@ export class CommunityAppearancePacks {
 
   /** Les propositions d'un auteur dans ce domaine, les plus récentes d'abord — avec le mot du modérateur. */
   async submissions(userId: string, domain: CommunityAppearanceDomain): Promise<readonly CommunityAppearanceDetail[]> {
-    const rows = await this.prisma.communityAppearancePack.findMany({ where: { domain, submitterId: userId }, orderBy: { createdAt: 'desc' } });
+    const rows = await this.prisma.communityAppearancePack.findMany({ where: { domain, submitterId: userId }, orderBy: { createdAt: 'desc' }, select: ROW_SELECT });
     return rows.map((row) => communityAppearanceDetail(row, false, undefined, { userId, canModerate: false }));
   }
 
   /** La file de modération du domaine, la plus ancienne proposition d'abord. */
   async pending(moderatorId: string, domain: CommunityAppearanceDomain): Promise<readonly CommunityAppearanceDetail[]> {
-    const rows = await this.prisma.communityAppearancePack.findMany({ where: { domain, status: 'pending' }, orderBy: { createdAt: 'asc' } });
+    const rows = await this.prisma.communityAppearancePack.findMany({ where: { domain, status: 'pending' }, orderBy: { createdAt: 'asc' }, select: ROW_SELECT });
     return rows.map((row) => communityAppearanceDetail(row, false, undefined, { userId: moderatorId, canModerate: true }));
   }
 
-  /** Publie ou refuse un pack EN ATTENTE — `null` s'il n'y en a pas sous ce slug. Le passage est conditionnel : deux modérateurs ne se marchent pas dessus. */
-  async review(moderatorId: string, domain: CommunityAppearanceDomain, slug: string, review: CommunityReview): Promise<CommunityAppearanceDetail | null> {
+  /**
+   * Publie ou refuse un pack EN ATTENTE. Le passage est conditionnel : deux modérateurs
+   * ne se marchent pas dessus, et l'auteur (immuable) relu fait partie de la condition.
+   */
+  async review(moderatorId: string, domain: CommunityAppearanceDomain, slug: string, review: CommunityReview): Promise<ReviewCommunityAppearanceOutcome> {
+    const current = await this.prisma.communityAppearancePack.findUnique({ where: { domain_slug: { domain, slug } }, select: { submitterId: true, status: true } });
+    if (current === null || current.status !== 'pending') return { kind: 'not-found' };
+    if (current.submitterId === moderatorId) return { kind: 'self-review' };
     const approve = review.decision === 'approve';
     const price = approve && review.price !== null && Number.isInteger(review.price) && review.price >= 1 && review.price <= PACK_PRICE_MAX ? review.price : null;
     const flipped = await this.prisma.communityAppearancePack.updateMany({
-      where: { domain, slug, status: 'pending' },
+      where: { domain, slug, status: 'pending', submitterId: current.submitterId },
       data: {
         status: approve ? 'approved' : 'rejected',
         reviewNote: review.note?.trim().slice(0, PACK_LIMITS.maxReviewNoteLength) || null,
@@ -210,9 +239,20 @@ export class CommunityAppearancePacks {
         price,
       },
     });
-    if (flipped.count === 0) return null;
-    const row = await this.prisma.communityAppearancePack.findUnique({ where: { domain_slug: { domain, slug } } });
-    return row === null ? null : communityAppearanceDetail(row, false, undefined, { userId: moderatorId, canModerate: true });
+    if (flipped.count === 0) return { kind: 'not-found' };
+    const row = await this.prisma.communityAppearancePack.findUnique({ where: { domain_slug: { domain, slug } }, select: ROW_SELECT });
+    return row === null ? { kind: 'not-found' } : { kind: 'reviewed', pack: communityAppearanceDetail(row, false, undefined, { userId: moderatorId, canModerate: true }) };
+  }
+
+  /**
+   * Le contrat d'un pack communautaire pour un lecteur qui peut le VOIR : publié pour
+   * tous, en attente ou refusé pour son auteur et les modérateurs — sans quoi la
+   * modération publierait à l'aveugle, le magasin ne servant que les packs publiés.
+   */
+  async contract(domain: CommunityAppearanceDomain, slug: string, viewer: PackViewer): Promise<CommunityAppearanceContract | null> {
+    const row = await this.prisma.communityAppearancePack.findUnique({ where: { domain_slug: { domain, slug } }, select: { status: true, submitterId: true, contractJson: true, contractSha256: true } });
+    if (row === null || !isCommunityAppearanceVisible(row, viewer)) return null;
+    return { contractSchema: APPEARANCE_CONTRACT_SCHEMA, contractJson: row.contractJson, sha256: row.contractSha256 };
   }
 
   /** Le contrat d'un pack PUBLIÉ, par son adresse `<sha16>.json` — la porte du magasin des packs pour les contrats tiers. */
