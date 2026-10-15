@@ -610,7 +610,10 @@ final class BubbleQuotedReplyZoneLawTests: XCTestCase {
             (
                 "Meeshy/Features/Main/Views/Bubble/BubbleStandardLayout.swift",
                 "struct BubbleStandardLayout", 20_000,
-                "onStoryReplyTap?(reply.reference.messageId)"
+                // Depuis #10628 la carte citée de la bulle et celle de l'emoji
+                // en réponse partagent UN geste (`openQuotedTarget`) : la zone 3
+                // de la bulle est son unique appel.
+                "openQuotedTarget(reply)"
             ),
             (
                 "Meeshy/Features/Main/Views/Bubble/BubbleStandardLayout+Media.swift",
@@ -642,6 +645,19 @@ final class BubbleQuotedReplyZoneLawTests: XCTestCase {
                 "\(host.path) doit transmettre onQuotedMediaTap — sans ce fil, la miniature est décorative."
             )
         }
+    }
+
+    /// Le geste partagé de la zone 3 retourne bien au message cité — une seule
+    /// fois pour la story, une seule pour le message : sans lui, l'appel que
+    /// compte la garde ci-dessus n'ouvrirait rien.
+    func test_loiDesZones_leGestePartageRetourneAuMessageCite() throws {
+        let code = try anchored(
+            "Meeshy/Features/Main/Views/Bubble/BubbleStandardLayout+EmojiReply.swift",
+            "func openQuotedTarget(_ reply: BubbleContent.Reply)", floor: 500
+        )
+        XCTAssertEqual(code.components(separatedBy: "onStoryReplyTap?(reply.reference.messageId)").count - 1, 1)
+        XCTAssertEqual(code.components(separatedBy: "onReplyTap?(reply.reference.messageId)").count - 1, 1)
+        XCTAssertTrue(code.contains("guard reply.reference.opensQuotedTarget else { return }"))
     }
 
     // MARK: - Le fil jusqu'à l'hôte de résolution

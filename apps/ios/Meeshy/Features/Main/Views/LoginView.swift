@@ -224,6 +224,7 @@ struct LoginView: View {
         }
         .sheet(isPresented: $showForgotPassword, onDismiss: accessPresentationDismissed) {
             MeeshyForgotPasswordView(prefilledEmail: prefillableEmail)
+                .feedbackToastOverlay()
         }
         .sheet(item: $codeEntry, onDismiss: accessPresentationDismissed) { entry in
             EmailVerificationView(
@@ -233,10 +234,12 @@ struct LoginView: View {
                 pendingSessionToken: entry.pending.pendingSessionToken,
                 onVerified: { sessionGate.openWhenDismissed($0) }
             )
+            .feedbackToastOverlay()
         }
         .sheet(isPresented: $showMagicLink, onDismiss: accessPresentationDismissed) {
             MagicLinkView(onVerified: { sessionGate.openWhenDismissed($0) }, prefilledEmail: prefillableEmail)
                 .environmentObject(authManager)
+                .feedbackToastOverlay()
         }
         .fullScreenCover(isPresented: $showRegister, onDismiss: accessPresentationDismissed) {
             // #5218 — UN écran remplace l'assistant en huit étapes. `onComplete`
@@ -254,6 +257,7 @@ struct LoginView: View {
                     showRegister = false
                 }
             )
+            .feedbackToastOverlay()
         }
         .adaptiveOnChange(of: hasAccessPresentation) { _, presenting in
             if presenting { sessionGate.presentationBegan() }

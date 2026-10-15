@@ -158,4 +158,40 @@ final class ComposerFloatingSocleTests: XCTestCase {
         XCTAssertFalse(hote.contains(".adaptiveGlass(in:Circle())"),
                        "Aucun verre nu dans le chrome du meuble : le `⋯` est teinté comme la croix.")
     }
+
+    // MARK: - #10542 · Les trois commandes de la barre haute partagent un axe
+
+    /// **Sans verre natif (iOS 16 → 25), le visage du `⋯` se peint HORS du
+    /// `Menu`.** Le porteur a mesuré le `⋯` plus bas que la croix et le `(+)`
+    /// sur iOS 17.5 : seuls ces deux-là sont des `Button`, mis en page par
+    /// SwiftUI ; le libellé d'un `Menu` est peint par le système, qui n'en
+    /// garantit pas la place. Détaché, le visage est une vue ordinaire de la
+    /// rangée, au gabarit de ses voisins.
+    func test_menuFace_sansVerreNatif_leVisageEstDetache() {
+        XCTAssertEqual(ComposerTopBarMenuFace.resolve(nativeGlass: false), .detached)
+        XCTAssertEqual(ComposerTopBarMenuFace.resolve(nativeGlass: true), .label,
+                       "iOS 26 garde le verre interactif sur le libellé du menu.")
+    }
+
+    /// Le visage détaché est une vue ordinaire ; le `Menu` posé dessus ne garde
+    /// qu'une cible vide au même gabarit, et le nom accessible.
+    func test_leMenuDeLaBarreHaute_poseSaCibleVideSurLeVisage() throws {
+        let barre = AppSourceGuard.stripComments(try AppSourceGuard.unit(
+            "Meeshy/Features/Main/Composer/ComposerTopBar.swift"))
+            .components(separatedBy: .whitespacesAndNewlines).joined()
+        XCTAssertTrue(barre.contains("structComposerTopBarMenu<"),
+                      "Le menu de la barre haute a changé de nom — la garde doit être re-pointée.")
+        XCTAssertTrue(barre.contains("case.detached:face().accessibilityHidden(true).overlay{Menu(content:items){Color.clear"),
+                      "Sans verre natif, le visage se peint hors du menu, qui ne porte qu'une cible vide.")
+        XCTAssertTrue(barre.contains("case.label:Menu(content:items,label:face)"),
+                      "Avec le verre natif, le visage reste le libellé du menu.")
+    }
+
+    /// Le `⋯` du meuble passe par ce menu : un `Menu` nu y ramènerait le défaut.
+    func test_leDebordementDuMeuble_passeParLeMenuDeLaBarreHaute() throws {
+        let hote = AppSourceGuard.stripComments(try AppSourceGuard.composerHostSource())
+            .components(separatedBy: .whitespacesAndNewlines).joined()
+        XCTAssertTrue(hote.contains("varoverflowMenu:someView{ComposerTopBarMenu(label:ComposerOverflowCopy.menu){"),
+                      "Le `⋯` doit se monter par `ComposerTopBarMenu`, jamais par un `Menu` nu.")
+    }
 }

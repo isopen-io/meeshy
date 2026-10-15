@@ -720,6 +720,10 @@ extension ConversationViewModel {
                 await withdrawRefusedMessage(tempId: tempId, restriction: restriction)
                 return false
             }
+            if let slowMode = NewcomerSlowMode.from(error) {
+                await holdForSlowMode(tempId: tempId, slowMode: slowMode, error: error)
+                return false
+            }
             if error.isUserBlockedError {
                 Logger.messages.warning("perf:ios.send.fail.blocked clientMessageId=\(tempId, privacy: .public)")
                 _ = try? await messagePersistence.applyEvent(localId: tempId, event: .sendFailed(error))

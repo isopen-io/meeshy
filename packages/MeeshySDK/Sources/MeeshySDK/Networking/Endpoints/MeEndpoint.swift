@@ -64,6 +64,7 @@ public enum MeEndpoint: MeeshyEndpoint, Sendable {
     case preferencesNotification
     case preferencesPrivacy
     case preferencesVideo
+    case profileDecor
     case root
     case securityEvents
     case starredMessages
@@ -127,6 +128,7 @@ public enum MeEndpoint: MeeshyEndpoint, Sendable {
         case .preferencesNotification: return "/api/v1/me/preferences/notification"
         case .preferencesPrivacy: return "/api/v1/me/preferences/privacy"
         case .preferencesVideo: return "/api/v1/me/preferences/video"
+        case .profileDecor: return "/api/v1/me/profile-decor"
         case .root: return "/api/v1/me"
         case .securityEvents: return "/api/v1/me/security-events"
         case .starredMessages: return "/api/v1/me/starred-messages"

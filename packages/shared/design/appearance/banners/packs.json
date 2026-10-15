@@ -1,0 +1,95 @@
+[
+  {
+    "slug": "bannieres-essentielles",
+    "domain": "banner",
+    "origin": "builtin",
+    "version": 1,
+    "order": 0,
+    "installedByDefault": true,
+    "removable": false,
+    "hidden": false,
+    "contractSchema": 1,
+    "cover": {
+      "src": "c23615594f604150.webp",
+      "bytes": 760,
+      "sha256": "c23615594f604150e6a865c3392cafd713b5f57f4c7b0f63a83b17906de05cef"
+    },
+    "preview": null,
+    "contract": {
+      "src": "d4f06b1f24165674.json",
+      "bytes": 11700,
+      "sha256": "d4f06b1f24165674edd68677ebce926542dbdd5db56158552849b0420c7e2dbe"
+    },
+    "strings": {
+      "fr": {
+        "src": "ae4c3bec6aad4940.json",
+        "bytes": 161,
+        "sha256": "ae4c3bec6aad4940e0af3b793f4198cecd86eef50cf5dd0d339d42d93c53a684"
+      },
+      "en": {
+        "src": "7188467f9733b3cf.json",
+        "bytes": 156,
+        "sha256": "7188467f9733b3cf84eae4a30fe1304143eb7d51fd2a50a88a0541935ed95569"
+      },
+      "es": {
+        "src": "bf2b9a3db6bf1bf3.json",
+        "bytes": 159,
+        "sha256": "bf2b9a3db6bf1bf399f3e6f788afceca2ce95f46e4e0462c35a72df11315f865"
+      },
+      "pt": {
+        "src": "a90107e5a4918b0f.json",
+        "bytes": 158,
+        "sha256": "a90107e5a4918b0f6bcaa1e93b67e9e283983aeb9b000dcdd90d30c94bcd39e9"
+      },
+      "de": {
+        "src": "62b445d3b374340e.json",
+        "bytes": 157,
+        "sha256": "62b445d3b374340e14cb220c4c57b43a1232f90627712b20db69535bb55d6504"
+      },
+      "it": {
+        "src": "a39fe059b61b67cf.json",
+        "bytes": 159,
+        "sha256": "a39fe059b61b67cf4383b9274b2ce110a4627b8ffe9db0caf1636737106e1bcd"
+      },
+      "ar": {
+        "src": "1b565d11227fff16.json",
+        "bytes": 192,
+        "sha256": "1b565d11227fff16eec24c99a543ff15e2f9e890b556c4fb1bf5577cf150c861"
+      }
+    },
+    "downloadBytes": {
+      "story": 11700,
+      "square": null
+    },
+    "names": {
+      "fr": {
+        "name": "Bannières essentielles",
+        "description": "Six bannières pour votre profil."
+      },
+      "en": {
+        "name": "Essential banners",
+        "description": "Six banners for your profile."
+      },
+      "es": {
+        "name": "Banners esenciales",
+        "description": "Seis banners para tu perfil."
+      },
+      "pt": {
+        "name": "Banners essenciais",
+        "description": "Seis banners para o teu perfil."
+      },
+      "de": {
+        "name": "Basis-Banner",
+        "description": "Sechs Banner für dein Profil."
+      },
+      "it": {
+        "name": "Banner essenziali",
+        "description": "Sei banner per il tuo profilo."
+      },
+      "ar": {
+        "name": "لافتات أساسية",
+        "description": "ست لافتات لملفك الشخصي."
+      }
+    }
+  }
+]

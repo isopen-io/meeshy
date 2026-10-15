@@ -1,6 +1,7 @@
 import { PrismaClient } from '@meeshy/shared/prisma/client';
 import { getConnectedUser, type SocketUser } from './socket-helpers';
 import type { ConversationJoinErrorReason } from '@meeshy/shared/utils/conversation-join-error';
+import { PARTICIPATION_VIVANTE } from '../../routes/conversations/utils/access-control';
 
 export type ParticipantResolution = {
   participantId: string;
@@ -47,7 +48,7 @@ export async function resolveParticipant(opts: {
     // re-checks `isActive`, so an anon removed/banned since connect is rejected.
     const participantId = user.participantId || user.id;
     const anonParticipant = await prisma.participant.findFirst({
-      where: { id: participantId, conversationId, isActive: true },
+      where: { id: participantId, conversationId, ...PARTICIPATION_VIVANTE },
       select: { id: true, displayName: true, nickname: true },
     });
 
@@ -63,8 +64,10 @@ export async function resolveParticipant(opts: {
 
   const userId = user.userId || realUserId;
 
+  // #7389 — banni puis restauré : `isActive` rallumé, `bannedAt` posé. La même
+  // définition que les portes REST (`PARTICIPATION_VIVANTE`).
   const participant = await prisma.participant.findFirst({
-    where: { userId, conversationId, isActive: true },
+    where: { userId, conversationId, ...PARTICIPATION_VIVANTE },
     select: { id: true, displayName: true, nickname: true },
   });
 

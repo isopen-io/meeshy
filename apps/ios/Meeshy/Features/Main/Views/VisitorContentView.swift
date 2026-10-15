@@ -91,6 +91,9 @@ struct VisitorContentView: View {
     @State private var state: VisitorContentState = .pending
     @State private var attempt = 0
     @State private var isCardDismissed = false
+    /// #10483 — ce que l'écran montre est compté : impression et vue au
+    /// service, vue avec sa durée à la sortie.
+    @StateObject private var reach = VisitorContentReach()
 
     var body: some View {
         ZStack(alignment: .bottom) {
@@ -106,6 +109,10 @@ struct VisitorContentView: View {
         .task(id: attempt) {
             state = .pending
             state = await loader.load(request)
+            reach.stateChanged(state)
+        }
+        .onDisappear {
+            Task { await reach.left() }
         }
     }
 

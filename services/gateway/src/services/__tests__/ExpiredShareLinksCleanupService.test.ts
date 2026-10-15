@@ -74,6 +74,15 @@ const buildService = (rows: LinkRow[], options: { batchSize?: number } = {}) => 
   return { service, prisma, io, manager };
 };
 
+/**
+ * Le nombre de passes sur les liens ÉCHUS — chaque passe lit aussi les
+ * révocations différées en attente (#10470), une seconde lecture que ce
+ * compte ignore.
+ */
+const expiredSweeps = (prisma: unknown) => () =>
+  ((prisma as { conversationShareLink: { findMany: jest.Mock } }).conversationShareLink.findMany.mock.calls as Array<[{ where: Record<string, unknown> }]>)
+    .filter(([args]) => 'expiresAt' in args.where).length;
+
 const findManyArgs = (prisma: unknown) =>
   ((prisma as { conversationShareLink: { findMany: jest.Mock } })
     .conversationShareLink.findMany.mock.calls[0][0]) as {
@@ -210,18 +219,18 @@ describe('ExpiredShareLinksCleanupService', () => {
     jest.useFakeTimers();
     try {
       const { service, prisma } = buildService([linkRow()]);
-      const findMany = (prisma as unknown as { conversationShareLink: { findMany: jest.Mock } })
-        .conversationShareLink.findMany;
+      const sweeps = expiredSweeps(prisma);
 
       service.start(60_000);
-      expect(findMany).toHaveBeenCalledTimes(1);
+      await jest.advanceTimersByTimeAsync(0);
+      expect(sweeps()).toBe(1);
 
-      jest.advanceTimersByTime(60_000);
-      expect(findMany).toHaveBeenCalledTimes(2);
+      await jest.advanceTimersByTimeAsync(60_000);
+      expect(sweeps()).toBe(2);
 
       service.stop();
-      jest.advanceTimersByTime(180_000);
-      expect(findMany).toHaveBeenCalledTimes(2);
+      await jest.advanceTimersByTimeAsync(180_000);
+      expect(sweeps()).toBe(2);
     } finally {
       jest.useRealTimers();
     }
@@ -231,17 +240,17 @@ describe('ExpiredShareLinksCleanupService', () => {
     jest.useFakeTimers();
     try {
       const { service, prisma } = buildService([linkRow()]);
-      const findMany = (prisma as unknown as { conversationShareLink: { findMany: jest.Mock } })
-        .conversationShareLink.findMany;
+      const sweeps = expiredSweeps(prisma);
 
       service.start();
-      expect(findMany).toHaveBeenCalledTimes(1);
+      await jest.advanceTimersByTimeAsync(0);
+      expect(sweeps()).toBe(1);
 
-      jest.advanceTimersByTime(60 * 60 * 1000 - 1);
-      expect(findMany).toHaveBeenCalledTimes(1);
+      await jest.advanceTimersByTimeAsync(60 * 60 * 1000 - 1);
+      expect(sweeps()).toBe(1);
 
-      jest.advanceTimersByTime(1);
-      expect(findMany).toHaveBeenCalledTimes(2);
+      await jest.advanceTimersByTimeAsync(1);
+      expect(sweeps()).toBe(2);
 
       service.stop();
     } finally {

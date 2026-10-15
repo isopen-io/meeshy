@@ -183,7 +183,7 @@ extension StoryComposerView {
         isLoadingMedia = true
         mediaLoadProgress = 0
         mediaLoadLabel = kind == .video
-            ? String(localized: "story.composer.loadingVideo", defaultValue: "Chargement de la video...", bundle: .module)
+            ? String(localized: "story.composer.loadingVideo", defaultValue: "Chargement de la vidéo...", bundle: .module)
             : String(localized: "story.composer.loadingImage", defaultValue: "Chargement de l'image...", bundle: .module)
         Task {
             defer {
@@ -353,7 +353,7 @@ extension StoryComposerView {
 
             case .video(let sourceURL):
                 mediaLoadLabel = String(localized: "story.composer.loadingVideo",
-                                        defaultValue: "Chargement de la video...", bundle: .module)
+                                        defaultValue: "Chargement de la vidéo...", bundle: .module)
                 mediaLoadProgress = 0.3
                 let ext = sourceURL.pathExtension.isEmpty ? "mov" : sourceURL.pathExtension
                 let tempURL = FileManager.default.temporaryDirectory

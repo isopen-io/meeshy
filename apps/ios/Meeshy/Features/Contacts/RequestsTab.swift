@@ -113,6 +113,7 @@ struct RequestsTab: View {
             LazyVStack(spacing: 0) {
                 ForEach(Array(viewModel.receivedRequests.enumerated()), id: \.element.id) { index, request in
                     receivedRow(request, index: index)
+                        .onAppear { Task { await viewModel.receivedRowAppeared(id: request.id) } }
                 }
             }
             .padding(.top, MeeshySpacing.xs)
@@ -135,6 +136,9 @@ struct RequestsTab: View {
                 moodEmoji: statusViewModel.statusForUser(userId: request.senderId)?.moodEmoji,
                 onMoodTap: statusViewModel.moodTapHandler(for: request.senderId)
             )
+            .countsImpression(of: statusViewModel.statusForUser(userId: request.senderId)?.id) {
+                statusViewModel.trackImpression($0)
+            }
 
             VStack(alignment: .leading, spacing: MeeshySpacing.xxs) {
                 Text(name)
@@ -216,6 +220,7 @@ struct RequestsTab: View {
             LazyVStack(spacing: 0) {
                 ForEach(Array(viewModel.sentRequests.enumerated()), id: \.element.id) { index, request in
                     sentRow(request, index: index)
+                        .onAppear { Task { await viewModel.sentRowAppeared(id: request.id) } }
                 }
             }
             .padding(.top, MeeshySpacing.xs)

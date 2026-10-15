@@ -95,6 +95,7 @@ export function AdminUserPasswordSheet({
   portail = portailDuNavigateur(),
   deps = apiDeps,
   sovereign = false,
+  motiveFallback,
 }: {
   readonly userId: string;
   readonly language: AdminLanguage;
@@ -104,6 +105,8 @@ export function AdminUserPasswordSheet({
   readonly deps?: AdminDeps;
   /** Le rang souverain n'écrit pas de motif : le champ n'est pas rendu (`useAdminReach().isSovereign`, lu par la fiche). */
   readonly sovereign?: boolean;
+  /** Le motif proposé au rang d'administration (`adminMotiveOf(reach).fallback`, lu par la fiche, #10562) : un champ vide l'envoie. */
+  readonly motiveFallback?: string | undefined;
 }) {
   const [motif, setMotif] = useState('');
   const [prevenir, setPrevenir] = useState(false);
@@ -170,7 +173,8 @@ export function AdminUserPasswordSheet({
     }
   }
 
-  const motive = motiveState({ text: motif, minLength: ADMIN_PASSWORD_MOTIVE_MIN_LENGTH, required: false, sovereign, whenSovereign: 'hide' });
+  const motifPropose = sovereign ? undefined : motiveFallback;
+  const motive = motiveState({ text: motif, minLength: ADMIN_PASSWORD_MOTIVE_MIN_LENGTH, required: false, sovereign, whenSovereign: 'hide', fallback: motifPropose });
 
   async function appliquer() {
     if (envoi || motDePasse.length < ADMIN_PASSWORD_MIN_LENGTH || !motive.ready) return;
@@ -247,6 +251,7 @@ export function AdminUserPasswordSheet({
         required={false}
         sovereign={sovereign}
         whenSovereign="hide"
+        fallback={motifPropose}
         {...(motive.tooShort ? { error: translateAdmin(language, 'admin.people.password.motiveShort') } : {})}
         data={{ 'data-admin-password-motive': '' }}
       />

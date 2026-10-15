@@ -39,7 +39,7 @@ enum NotificationCategory: String, CaseIterable {
         case .all: return String(localized: "notifications.category.all", defaultValue: "Toutes", bundle: .module)
         case .unread: return String(localized: "notifications.category.unread", defaultValue: "Non lues", bundle: .module)
         case .messages: return String(localized: "notifications.category.messages", defaultValue: "Messages", bundle: .module)
-        case .reactions: return String(localized: "notifications.category.reactions", defaultValue: "Reactions", bundle: .module)
+        case .reactions: return String(localized: "notifications.category.reactions", defaultValue: "Réactions", bundle: .module)
         case .mentions: return String(localized: "notifications.category.mentions", defaultValue: "Mentions", bundle: .module)
         case .social: return String(localized: "notifications.category.social", defaultValue: "Social", bundle: .module)
         case .engagement: return String(localized: "notifications.category.engagement", defaultValue: "Engagements", bundle: .module)
@@ -47,7 +47,7 @@ enum NotificationCategory: String, CaseIterable {
         case .groups: return String(localized: "notifications.category.groups", defaultValue: "Groupes", bundle: .module)
         case .calls: return String(localized: "notifications.category.calls", defaultValue: "Appels", bundle: .module)
         case .translations: return String(localized: "notifications.category.translations", defaultValue: "Traductions", bundle: .module)
-        case .system: return String(localized: "notifications.category.system", defaultValue: "Systeme", bundle: .module)
+        case .system: return String(localized: "notifications.category.system", defaultValue: "Système", bundle: .module)
         }
     }
 

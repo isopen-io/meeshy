@@ -71,12 +71,13 @@ const TIERS = '507f1f77bcf86cd799439022';
 // ═══════════════════════════════════════════════════════════════════════════
 
 /**
- * Les treize clés servies SANS paramètre, relevées mécaniquement :
+ * Les quatorze clés servies SANS paramètre, relevées mécaniquement :
  * `publicUserSelect` (14 colonnes) moins `deactivatedAt` (chargé, jamais
  * déclaré) et moins `voiceModel` (relation dépouillée par `withVoiceFields`),
  * moins `isOnline`/`lastActiveAt` (retirés hors `?expand=presence`), plus les
  * trois clés FABRIQUÉES par la composition — `voicePublic`, `isAnonymous`,
- * `isMeeshyer`.
+ * `isMeeshyer` — et `profileDecor` (#10632, additif), composé depuis les deux
+ * colonnes `equippedAvatarRing` / `equippedBanner` qui, elles, ne sortent pas.
  */
 const CLES_PROFIL_NU = [
   'avatar',
@@ -89,6 +90,7 @@ const CLES_PROFIL_NU = [
   'isAnonymous',
   'isMeeshyer',
   'lastName',
+  'profileDecor',
   'role',
   'username',
   'voicePublic',
@@ -138,7 +140,7 @@ const lireProfil = (app: FastifyInstance, qs = '') =>
   app.inject({ method: 'GET', url: `${PREFIXE}/directory/people/${CIBLE}${qs}` });
 
 describe('GET /directory/people/:handle — sans paramètre, rien ne bouge', () => {
-  it('sert exactement les treize clés, ni une de plus ni une de moins', async () => {
+  it('sert exactement les quatorze clés, ni une de plus ni une de moins', async () => {
     const { app } = await monterProfil(TIERS);
 
     const data = (await lireProfil(app)).json().data as Record<string, unknown>;
@@ -542,6 +544,7 @@ const CLES_ME_NU = [
   'phoneNumber',
   'phoneVerifiedAt',
   'profileCompletionRate',
+  'profileDecor',
   'regionalLanguage',
   'role',
   'systemLanguage',
@@ -581,7 +584,7 @@ async function monterMoi(): Promise<{ app: FastifyInstance; prisma: any }> {
 }
 
 describe('GET /me — sans paramètre, rien ne bouge', () => {
-  it('sert exactement les trente clés', async () => {
+  it('sert exactement les trente et une clés', async () => {
     const { app } = await monterMoi();
 
     const user = (await app.inject({ method: 'GET', url: '/me' })).json().data.user;

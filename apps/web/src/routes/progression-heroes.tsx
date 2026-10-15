@@ -11,6 +11,7 @@ import {
   levelTitle,
   scoreLabel,
 } from '@/lib/view/progression';
+import { familyName, formatCount, gameText } from '@/lib/view/game-copy';
 import { meeshMissing } from '@/lib/view/meesh-copy';
 import { BRAND, CARD, INK, INK_2, MEESH_TINT, UNLOCKED_TINT } from '@/routes/progression-parts';
 
@@ -181,6 +182,15 @@ export function LevelHero({ progress, mintCost }: { progress: EngagementProgress
  * fenêtre que la liste. Un serveur qui ne sert pas encore le champ rend une
  * liste vide : aucune chip plutôt qu'une liste fausse.
  */
+/** La phrase sous les chips, composée comme celle d'iOS (`ProgressionCopy.elan(…)`) : les familles et la fenêtre, l'assise, puis l'effet (#10439). */
+function elanSentence(elan: NonNullable<EngagementProgress['elan']>): string {
+  const count = formatCount(elan.activeFamilyCount);
+  const families = gameText(elan.activeFamilyCount === 1 ? 'game.concept.elans.families.one' : 'game.concept.elans.families.other', { count });
+  const window = gameText('game.concept.elans.window', { families, days: formatCount(elan.windowDays) });
+  const standing = elan.hasStanding ? gameText('game.concept.elans.standing') : '';
+  return `${window}${standing}. ${gameText('game.concept.elans.effect', { factor: formatCount(elan.factor) })}`;
+}
+
 export function ElansHero({ progress }: { progress: EngagementProgress }) {
   const elan = progress.elan;
   const familles = elan?.activeFamilies ?? [];
@@ -199,13 +209,15 @@ export function ElansHero({ progress }: { progress: EngagementProgress }) {
           <GlyphSvg glyph={PROGRESSION_GLYPHS.magicWand} size={18} />
         </span>
         <h2 id="progression-elans" className="flex-1 text-body font-bold" style={{ color: INK }}>
-          {elan?.isAccelerated === true ? `Élan ×${elan.factor}` : 'Vos élans'}
+          {elan?.isAccelerated === true
+            ? gameText('game.concept.elans.factor', { factor: formatCount(elan.factor) })
+            : gameText('game.concept.elans.title')}
         </h2>
       </div>
 
       {familles.length === 0 ? (
         <p className="text-caption" style={{ color: INK_2 }}>
-          Tenez plusieurs familles en même temps : cela multiplie vos points.
+          {gameText('game.concept.elans.empty')}
         </p>
       ) : (
         <>
@@ -218,7 +230,7 @@ export function ElansHero({ progress }: { progress: EngagementProgress }) {
                     className="max-w-full truncate whitespace-nowrap rounded-chip px-2.5 py-1 text-check font-semibold"
                     style={{ backgroundColor: `color-mix(in srgb, ${BRAND} 16%, transparent)`, color: INK }}
                   >
-                    {FAMILY_LABELS[famille]}
+                    {familyName(famille)}
                   </span>
                 </GameTouch>
               </li>
@@ -226,13 +238,11 @@ export function ElansHero({ progress }: { progress: EngagementProgress }) {
           </ul>
           {elan?.isAccelerated === true ? (
             <p className="text-caption" style={{ color: INK_2 }}>
-              {elan.activeFamilyCount === 1 ? '1 famille active' : `${elan.activeFamilyCount} familles actives`} sur{' '}
-              {elan.windowDays} jours{elan.hasStanding ? ', plus votre assise' : ''} — vos prochains gestes rapportent{' '}
-              {elan.factor} fois plus.
+              {elanSentence(elan)}
             </p>
           ) : (
             <p className="text-caption" style={{ color: INK_2 }}>
-              Une famille de plus déclenche le multiplicateur.
+              {gameText('game.concept.elans.hint')}
             </p>
           )}
         </>

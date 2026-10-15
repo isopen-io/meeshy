@@ -128,10 +128,22 @@ nonisolated enum ComposerFirstView {
 
     /// **La zone basse porte-t-elle les options d'un outil ?**
     ///
-    /// Celles du DESSIN, et celles du TEXTE en cours d'édition sur la scène
-    /// (2026-09-28) : le rail, qui remplace ses portes par eux, choisit le réglage, la
-    /// zone basse le déplie.
-    static func lowZoneShowsToolOptions(drawing: Bool, textEditing: Bool) -> Bool {
-        (drawing && serves(.drawingToolOptions)) || railShowsTextTools(textEditing: textEditing)
+    /// Celles du TEXTE en cours d'édition sur la scène hors édition en place
+    /// (2026-09-28) : le rail, qui remplace ses portes par eux, choisit le
+    /// réglage, la zone basse le déplie. Le DESSIN n'y passe plus (#9145) : ses
+    /// options s'ouvrent à droite depuis le haut, et la scène ne remonte plus.
+    static func lowZoneShowsToolOptions(textEditing: Bool) -> Bool {
+        railShowsTextTools(textEditing: textEditing)
+    }
+
+    /// **Les options du DESSIN s'ouvrent à droite, depuis le haut** (#9145) —
+    /// la même plaque que les sous-outils d'un objet (#9138) : la colonne de
+    /// droite porte ses contrôleurs, la plaque déplie celui qu'on a touché.
+    /// Pendant qu'un trait est sélectionné, le panneau du pinceau ne rend rien
+    /// (`MeeshyToolOptionsPanel`) : la plaque ne se pose pas — jamais une
+    /// plaque de verre vide.
+    static func trailingPanelShowsDrawingOptions(drawing: Bool, expandedTool: Bool,
+                                                 strokeSelected: Bool) -> Bool {
+        drawing && expandedTool && !strokeSelected && serves(.drawingToolOptions)
     }
 }

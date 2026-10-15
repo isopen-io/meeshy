@@ -91,8 +91,7 @@ enum ReelSceneRouting {
 /// bornée à la barre quoi que le player rapporte.
 enum ReelSceneProgress {
     nonisolated static func fraction(elapsed: Double, duration: Double) -> Double {
-        guard duration > 0 else { return 0 }
-        return min(1, max(0, elapsed / duration))
+        PlaybackProgressLaw.fraction(itemSeconds: elapsed, durationSeconds: duration)
     }
 }
 

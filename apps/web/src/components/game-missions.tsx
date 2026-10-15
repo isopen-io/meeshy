@@ -11,7 +11,7 @@ import { timerLabel } from '@/lib/view/game-copy-v2';
 import { Chest, useChoreography } from '@/components/game';
 import { ProgressBar } from '@/components/progress-bar';
 import { difficultyName, formatCount, gameText, meeshCount, missionTitle, pointsLabel } from '@/lib/view/game-copy';
-import { chestBonusOddsLine, chestRewardLines, chestTodayLine, starFragmentsLabel } from '@/lib/view/game-chest-copy';
+import { chestRewardLines, starFragmentsLabel } from '@/lib/view/game-chest-copy';
 import { chestDetail, missionDetail } from '@/lib/view/game-detail';
 
 import { GAME_BRAND, GAME_ERROR, GAME_GOOD, GAME_INK, GAME_INK_2, GAME_ON_WARM, GAME_WARM, GameCard, GameChip } from './game-surface';
@@ -22,10 +22,9 @@ import { GameFactChips, GameRequirementLine, GameSpendLine, GameTouch } from './
  * un changement par jour (1 Meesh), et le coffre qui s'ouvre quand tout est
  * fait (conception, partie II « Missions du jour »).
  *
- * Le coffre dit son contenu AVANT l'ouverture (#10011 : ses points — 500 à
- * 10 000 selon les missions du jour —, sa Gloire, sa prime possible en points au
- * cours de la Meesh, une chance sur six d'un fragment d'étoile et une sur vingt
- * d'un gel) : un tirage dont on ignore les chances est une loterie, pas un jeu. Ouvert, ses récompenses se posent AU-
+ * Le coffre garde son contenu SECRET jusqu'à l'ouverture (#10567, qui renverse
+ * #10011) : fermé, il ne dit ni montant, ni chance, ni borne — la surprise est
+ * son contenu. Ouvert, ses récompenses se posent AU-
  * DESSUS de lui (`data-game-reward`) — c'est la cible de la chorégraphie
  * « chest », que ce composant joue quand le contenu servi arrive.
  *
@@ -60,8 +59,6 @@ export type GameMissionsProps = {
 
 const clock = (minute: number): string =>
   `${String(Math.floor(minute / 60)).padStart(2, '0')}:${String(minute % 60).padStart(2, '0')}`;
-
-const chance = (fraction: number): string => gameText('game.chest.chance', { odds: formatCount(Math.round(1 / fraction)) });
 
 function MissionRow({
   mission,
@@ -264,7 +261,6 @@ function ChestCard({
 
   const state = opening || chest.status === 'claimed' ? (chest.reward === null ? 'opening' : 'claimed') : chest.status;
   const open = state === 'opening' || state === 'claimed';
-  const { odds } = chest;
   return (
     <div data-game-chest-state={state} className="flex flex-col items-center gap-2 rounded-card px-3 py-3" style={{ backgroundColor: 'color-mix(in srgb, var(--ios-warning) 8%, transparent)' }}>
       <div ref={ref} className="flex flex-col items-center gap-2">
@@ -310,24 +306,6 @@ function ChestCard({
           {gameText('game.chest.claimed')}
         </p>
       ) : null}
-      {(state === 'locked' || state === 'ready') && chest.today != null ? (
-        <p data-game-chest-today="" className="text-center text-caption font-semibold" style={{ color: GAME_INK }}>
-          {chestTodayLine(chest.today)}
-        </p>
-      ) : null}
-      {(state === 'locked' || state === 'ready') && chest.today != null && chestBonusOddsLine(chest.today, odds) !== null ? (
-        <p data-game-chest-bonus="" className="text-center text-caption" style={{ color: GAME_INK }}>
-          {chestBonusOddsLine(chest.today, odds)}
-        </p>
-      ) : null}
-      <p className="text-center text-caption" style={{ color: GAME_INK_2 }}>
-        {gameText('game.chest.odds', {
-          min: formatCount(odds.minPoints),
-          max: pointsLabel(odds.maxPoints),
-          fragment: chance(odds.fragment),
-          freeze: chance(odds.freeze),
-        })}
-      </p>
       {starFragments === undefined ? null : (
         <p data-game-star-fragments="" className="text-center text-caption" style={{ color: GAME_INK_2 }}>
           {starFragmentsLabel(starFragments)}
@@ -413,7 +391,7 @@ export function GameMissions(props: GameMissionsProps) {
           <p className="text-caption font-semibold" style={{ color: GAME_INK_2 }}>
             {gameText('game.mission.reroll', { price: meeshCount(MISSION_REROLL_PRICE) })}
           </p>
-          <GameSpendLine concept="missions" held={held} cost={MISSION_REROLL_PRICE} format={meeshCount} />
+          <GameSpendLine concept="missions" held={held} cost={MISSION_REROLL_PRICE} format={meeshCount} missing={{ fact: 'spend_missing', line: (missing) => gameText('game.spend.missing.reroll', { missing }) }} />
         </div>
       ) : null}
       {errors?.reroll === undefined ? null : (

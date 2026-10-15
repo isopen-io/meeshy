@@ -1,13 +1,16 @@
 import { useEffect, useId, useRef, useState } from 'react';
 
 import { Sheet } from '@/components/sheet';
-import { useAdminReach } from '@/lib/admin/use-admin-reach';
+import { useAdminMotive } from '@/lib/admin/use-admin-motive';
 import { translateAdmin, type AdminLanguage } from '@/lib/i18n-admin-catalog';
 
+import { AdminGlyph } from './admin-glyph';
 import { AdminFormError, motiveState } from './form';
 import { BRAND, EDGE, INK, INK2, SURFACE } from './tone';
 
 const FOCUS = 'focus-visible:outline-2 focus-visible:outline-offset-2';
+/** Les gestes d'une confirmation sont de GROS boutons (#10562) : 52 px, au-delà du plancher de 44. */
+const BIG = 52;
 
 /**
  * **TOUT GESTE DESTRUCTIF OU SENSIBLE PASSE PAR ICI** (#8876) — une feuille
@@ -34,9 +37,19 @@ const FOCUS = 'focus-visible:outline-2 focus-visible:outline-offset-2';
  * profite sans la recopier. Tant que la matrice n'est pas lue, le lecteur
  * n'est pas souverain — le champ s'affiche (fermé par défaut).
  *
+ * **L'ADMIN NON PLUS NE SE JUSTIFIE PAS** (demande porteur 2026-10-13, #10562) : pour
+ * le rang d'administration, le motif est PROPOSÉ (`useAdminMotive().fallback`, « Contrôle
+ * aléatoire, test de fonctionnalité et suivi client ») : le champ s'ouvre DÉJÀ REMPLI, la
+ * confirmation est offerte d'emblée, et le motif se réécrit sans geste de plus ; vidé, c'est
+ * encore le motif proposé qui part. La passerelle n'exemptant que BIGBOSS, il part ÉCRIT.
+ *
  * Une NOTE n'est pas un motif (`motive.kind === 'note'`) : les notes d'un
  * dossier de signalement sont son CONTENU, pas une justification du geste —
- * elles restent offertes à tous les rangs, souverain compris.
+ * elles restent offertes à tous les rangs, souverain compris, et rien n'y est proposé.
+ *
+ * **LE DESSIN** (#10562) — un disque de ton (danger : avertissement, sinon information)
+ * ouvre la feuille ; les deux gestes sont de GROS boutons (52 px), côte à côte dès 640 px,
+ * empilés sur un téléphone, le geste confirmé en dernier, là où le pouce arrive.
  */
 export function AdminConfirmSheet({
   language,
@@ -67,9 +80,11 @@ export function AdminConfirmSheet({
   readonly onConfirm: (motive: string | null) => void;
   readonly onCancel: () => void;
 }) {
-  const reach = useAdminReach();
-  const motive = reach.isSovereign && requested?.kind !== 'note' ? undefined : requested;
-  const [text, setText] = useState('');
+  const rank = useAdminMotive(language);
+  const isNote = requested?.kind === 'note';
+  const motive = rank.sovereign && !isNote ? undefined : requested;
+  const fallback = motive === undefined || isNote ? undefined : rank.fallback;
+  const [text, setText] = useState(fallback ?? '');
   const field = useRef<HTMLTextAreaElement>(null);
   const cancel = useRef<HTMLButtonElement>(null);
   const motiveId = useId();
@@ -84,29 +99,54 @@ export function AdminConfirmSheet({
 
   /* La règle du motif est celle du kit (`motiveState`, #9463) ; le rang souverain est déjà
      tranché plus haut (`motive` absent), d'où `sovereign: false` ici. */
-  const state = motiveState({ text, minLength: motive?.minLength ?? 0, required: motive?.required ?? false, sovereign: false, whenSovereign: 'optional' });
+  const state = motiveState({
+    text,
+    minLength: motive?.minLength ?? 0,
+    required: motive?.required ?? false,
+    sovereign: false,
+    whenSovereign: 'optional',
+    fallback,
+  });
   const trimmed = state.trimmed;
   const tooShort = motive !== undefined && state.tooShort;
   const blocked = busy || tooShort;
+  const sent = motive === undefined ? null : fallback === undefined ? trimmed : state.sent;
 
   return (
     <Sheet title={title} presentation="centered" bodyAs="div" closeLabel={translateAdmin(language, 'admin.kit.close')} onClose={onCancel}>
-      <div data-admin-confirm className="grid gap-4 px-4 pb-4 pt-2">
-        <p className="text-body" style={{ color: INK }}>
-          {body}
-        </p>
+      <div data-admin-confirm data-admin-confirm-tone={tone} className="grid gap-5 px-5 pb-5 pt-2">
+        <div className="flex items-start gap-4">
+          <span
+            aria-hidden="true"
+            data-admin-confirm-glyph
+            className="grid shrink-0 place-items-center rounded-full"
+            style={{
+              width: 48,
+              height: 48,
+              color: tone === 'danger' ? 'var(--color-danger)' : BRAND,
+              backgroundColor: `color-mix(in srgb, ${tone === 'danger' ? 'var(--color-danger)' : BRAND} 14%, transparent)`,
+            }}
+          >
+            <AdminGlyph name={tone === 'danger' ? 'warning' : 'info'} size={24} />
+          </span>
+          <p className="min-w-0 flex-1 pt-1 text-body" style={{ color: INK }}>
+            {body}
+          </p>
+        </div>
 
         {motive === undefined ? null : (
           <label htmlFor={motiveId} className="grid gap-1">
             <span className="text-caption font-medium" style={{ color: INK2 }}>
-              {motive.label}
+              {fallback === undefined ? motive.label : translateAdmin(language, 'admin.kit.motiveProposed')}
             </span>
             <textarea
               id={motiveId}
               ref={field}
               data-admin-motive
+              {...(fallback === undefined ? {} : { 'data-admin-motive-proposed': text.trim() === fallback.trim() ? 'intact' : 'rewritten' })}
               rows={3}
               value={text}
+              {...(fallback === undefined ? {} : { placeholder: fallback })}
               onInput={(event) => setText(event.currentTarget.value)}
               onChange={() => undefined}
               aria-describedby={`${motiveId}-count`}
@@ -114,22 +154,26 @@ export function AdminConfirmSheet({
               style={{ backgroundColor: SURFACE, border: `1px solid ${EDGE}`, color: INK, outlineColor: BRAND }}
             />
             <span id={`${motiveId}-count`} data-admin-motive-count className="text-caption tabular-nums" style={{ color: tooShort ? 'var(--color-danger)' : INK2 }}>
-              {translateAdmin(language, 'admin.kit.confirm.motiveCount', { count: String(trimmed.length), min: String(motive.minLength) })}
+              {state.defaulted
+                ? translateAdmin(language, 'admin.kit.motiveDefaultNote')
+                : fallback !== undefined && trimmed === fallback.trim()
+                  ? translateAdmin(language, 'admin.kit.motiveProposedNote')
+                  : translateAdmin(language, 'admin.kit.confirm.motiveCount', { count: String(trimmed.length), min: String(motive.minLength) })}
             </span>
           </label>
         )}
 
         <AdminFormError text={error ?? ''} data={{ 'data-admin-confirm-error': '' }} />
 
-        <div className="flex flex-wrap justify-end gap-3">
+        <div className="grid grid-cols-1 gap-3 sm:grid-cols-2">
           <button
             type="button"
             ref={cancel}
             data-admin-action="cancel"
             disabled={busy}
             onClick={onCancel}
-            className={`rounded-chip px-5 text-body font-semibold disabled:opacity-40 ${FOCUS}`}
-            style={{ minHeight: 44, border: `1px solid ${EDGE}`, color: INK, backgroundColor: SURFACE, outlineColor: BRAND }}
+            className={`rounded-card px-5 text-body font-semibold disabled:opacity-40 ${FOCUS}`}
+            style={{ minHeight: BIG, border: `1px solid ${EDGE}`, color: INK, backgroundColor: SURFACE, outlineColor: BRAND }}
           >
             {translateAdmin(language, 'admin.kit.cancel')}
           </button>
@@ -138,9 +182,9 @@ export function AdminConfirmSheet({
             data-admin-action="confirm"
             disabled={blocked}
             aria-busy={busy}
-            onClick={() => onConfirm(motive === undefined ? null : trimmed)}
-            className={`rounded-chip px-5 text-body font-semibold text-ios-on-brand disabled:opacity-40 ${FOCUS}`}
-            style={{ minHeight: 44, backgroundColor: tone === 'danger' ? 'var(--color-danger)' : BRAND, outlineColor: BRAND }}
+            onClick={() => onConfirm(sent)}
+            className={`rounded-card px-5 text-body font-semibold text-ios-on-brand disabled:opacity-40 ${FOCUS}`}
+            style={{ minHeight: BIG, backgroundColor: tone === 'danger' ? 'var(--color-danger)' : BRAND, outlineColor: BRAND }}
           >
             {busy ? translateAdmin(language, 'admin.kit.confirm.busy') : confirmLabel}
           </button>

@@ -1194,11 +1194,11 @@ struct StoryCardView: View {
     /// marginée) au repos. Source de vérité : `StoryCanvasFraming.readerPresentation`
     /// (truth-table SDK pure, testée). Le long-press qui cache les contrôleurs
     /// agrandit ainsi le canvas pour épouser le viewport (user 2026-06-03).
-    private var canvasPresentation: StoryCanvasFraming.Presentation {
+    private func canvasPresentation(lifted: Bool) -> StoryCanvasFraming.Presentation {
         StorySceneFocus.presentation(
             resting: StoryCanvasFraming.readerPresentation(isFullscreenSession: isFullscreenStorySession,
                                                            chromeVisible: chromeVisible),
-            isComposing: isComposerEngaged)
+            isComposing: lifted)
     }
 
     /// `true` quand le canvas est étendu plein bord (`.free`) — pilote le voile,
@@ -1207,15 +1207,15 @@ struct StoryCardView: View {
     /// désormais `.immersive` (le canvas couvre le viewport) ; un test sur
     /// `.free` seul aurait laissé le voile, l'ombre et l'animation de carte
     /// croire qu'on est encore cardé au moment le plus plein écran de tous.
-    var canvasIsExpanded: Bool { canvasPresentation != .carded } // internal : idem
+    var canvasIsExpanded: Bool { canvasPresentation(lifted: composingSceneReserve != nil) != .carded } // internal : idem
 
-    var readerCanvasFraming: StoryCanvasFraming.Result { // internal : idem
+    func readerFraming(reserve: CGFloat?) -> StoryCanvasFraming.Result { // internal : idem
         StoryCanvasFraming.resolve(StorySceneFocus.framingInput(resting: .init(
             viewport: geometry.size,
             headerInset: topInset + 72,   // barres progress (~8) + ligne auteur (~48) + gap — clairance chrome, flush sans occlusion
             bottomInset: 64,              // marge basse ÷2 (it.48) — carte plus proche du bord bas
             sideInset: 8,                 // marges latérales ÷2 (it.48) — carte plus proche des bords L/R
-            state: canvasPresentation,
+            state: canvasPresentation(lifted: reserve != nil),
             // **Le rayon de la loi, jamais un littéral** (#6904) : le lecteur
             // arrondissait à 22 pendant que le plein écran cadré d'un post
             // arrondissait à 20 — la même carte se reconnaissait à ses coins.
@@ -1230,7 +1230,7 @@ struct StoryCardView: View {
             // pour qu'une seule surface ne puisse pas les faire diverger.
             verticalAlignment: StageChromeAlignment.verticalAlignment(canvasRatio: readerCanvasRatio),
             canvasRatio: readerCanvasRatio),
-            topInset: topInset, composerReserve: composingSceneReserve))
+            topInset: topInset, composerReserve: reserve))
     }
 
     var body: some View {
@@ -1297,7 +1297,7 @@ struct StoryCardView: View {
                     // cadre, même fond et même coins que la couche courante —
                     // et que le plein écran cadré d'un post (#6904).
                     .readerCard(layout: readerSceneLayout,
-                                framing: readerCanvasFraming,
+                                framing: readerCanvasFraming, resting: readerRestingFraming,
                                 thumbHash: readerBackdropHash(of: outgoing))
                     .storyCommentsReadingBlur(showCommentsOverlay)
                     .allowsHitTesting(false)
@@ -1384,7 +1384,7 @@ struct StoryCardView: View {
                     // le fond dedans et rogne aux coins de la loi ; le lecteur
                     // ne lui donne que sa PLACE et son ANIMATION.
                     .readerCard(layout: readerSceneLayout,
-                                framing: readerCanvasFraming,
+                                framing: readerCanvasFraming, resting: readerRestingFraming,
                                 thumbHash: readerBackdropHash(of: story))
                     // Ombre portée : la carte se détache du backdrop ThumbHash flou (même
                     // contenu) par son BORD arrondi + son ombre, pas par un voile sombre
@@ -1451,7 +1451,7 @@ struct StoryCardView: View {
                     // et même forme) → pas de saut entre le placeholder
                     // ThumbHash et le canvas.
                     .readerCard(layout: readerSceneLayout,
-                                framing: readerCanvasFraming,
+                                framing: readerCanvasFraming, resting: readerRestingFraming,
                                 thumbHash: readerBackdropHash(of: story))
                     .storyCommentsReadingBlur(showCommentsOverlay)
                     .animation(.spring(response: 0.42, dampingFraction: 0.84), value: canvasIsExpanded)

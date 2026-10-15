@@ -105,6 +105,8 @@ const HOOK_NAMES = [
   'useTypistAvatar',
   // #10003 — ce que le composeur offre : droits du lecteur et familles de l'invité.
   'useComposerAccess',
+  // #10624 — le fil prête à ses pièces le nom et l'avatar de la conversation.
+  'useThreadMediaValue',
 ] as const;
 
 const EARLY_RETURN_MARKERS = [

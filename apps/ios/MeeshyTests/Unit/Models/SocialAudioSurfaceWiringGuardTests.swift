@@ -37,7 +37,7 @@ final class SocialAudioSurfaceWiringGuardTests: XCTestCase {
         .postDetail:         "Meeshy/Features/Main/Views/PostDetailView+Media.swift",
         .comment:            "Meeshy/Features/Main/Views/CommentMediaView.swift",
         .reel:               "Meeshy/Features/Main/Views/ReelsPlayerView.swift",
-        .audioFullscreen:    "Meeshy/Features/Main/Views/AudioFullscreenView.swift",
+        .audioFullscreen:    "Meeshy/Features/Main/Views/AudioFullscreenPage.swift",
         .repostLegacyAudio:  "Meeshy/Features/Main/Views/PostDetailView+RepostEmbed.swift"
     ]
 
@@ -143,7 +143,7 @@ final class SocialAudioSurfaceWiringGuardTests: XCTestCase {
     /// `selectedLanguage = "orig"` ne consultait rien.
     func test_lePleinEcran_nInitialisePlusSaLangueEnLitteral() throws {
         let code = AppSourceGuard.stripComments(
-            try source("Meeshy/Features/Main/Views/AudioFullscreenView.swift")
+            try source("Meeshy/Features/Main/Views/AudioFullscreenPage.swift")
         )
         XCTAssertFalse(code.contains("var selectedLanguage: String = \"orig\""),
                        "la langue du plein écran redevient un littéral — elle ne consulte plus le Prisme")

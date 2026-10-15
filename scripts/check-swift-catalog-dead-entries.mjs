@@ -486,7 +486,32 @@ const EXCLUDED_DIR_NAMES = new Set(['Tests', 'MeeshyTests', 'MeeshyUIDeviceTests
 // (`/api/v1/admin/users/:userId/publications[/moderation]`) — la modération des publications d'un membre est un
 // écran d'administration web, sans écran iOS, même raison que les autres `AdminEndpoint.*`. Valeur MESURÉE le
 // 2026-10-12 en CI (run 38270055989 rouge sur 303) et en local.
-const BASELINE_DEAD_ENTRIES = 303;
+// 303 -> 310 (#10392, #10394, #10396, 2026-10-13) : `AdminEndpoint.postsGestures`, `.postsByPostIdGestures`,
+// `.reportsByReportIdAct`, `.commentsByCommentIdRemove` (gestes de publication et actes sur un signalement) et
+// `.opsHostMetrics`, `.opsStatus`, `.opsByOperation` (l'écran Opérations : hôte en direct, sauvegarde, purge) —
+// des écrans d'administration web, sans écran iOS, même raison que les autres `AdminEndpoint.*`. Valeur MESURÉE le
+// 2026-10-13 en CI (run 38319791863 rouge sur 310) et en local.
+// 310 -> 313 (#10483, #10499, 2026-10-13) : iOS compte désormais tout par `POST /social/events`
+// (`SocialEndpoint.events` gagne son appelant, -1) et ses quatre anciennes portes de comptage perdent le leur (+4) :
+// `PostsEndpoint.byPostIdView`, `.byPostIdImpression`, `.impressionsBatch`, `.engagementBatch`
+// (`.byPostIdAnonymousView` et `.byPostIdDownloads` étaient déjà sans appelant iOS sur dev). Ces entrées ne se
+// retirent PAS : la passerelle sert toujours ces routes aux ANCIENS clients (rétrocompatibilité stricte, #9223/#9231 —
+// un ancien chemin ne se retire qu'à zéro usage mesuré), et le catalogue est généré depuis son manifeste. Ce ne sont
+// pas des faux morts (#5427) : iOS ne les appelle vraiment plus. Valeur MESURÉE le 2026-10-13 en CI
+// (run 38371153599 rouge sur 313) et en local (diff des entrées mortes origin/dev ↔ feat/social-events-v2).
+// 313 -> 314 (#10559, 2026-10-13) : `AffiliateEndpoint.byTokenOg` (`GET /api/v1/affiliate/:token/og`) — la page
+// d'aperçu Open Graph d'un lien d'affiliation, servie par la passerelle aux ROBOTS que Traefik trie par
+// User-Agent (jumelle des aperçus `/chat/<lien>` et `/l/<jeton>`). Aucun client ne l'appelle jamais, iOS pas plus
+// que le web : l'entrée existe parce que le catalogue est généré depuis le manifeste. Valeur MESURÉE le 2026-10-13
+// en CI (run 38458186282 rouge sur 314).
+// 314 -> 331 (#10631, #10632, 2026-10-15) : la régénération des énumérations Swift (cliquet
+// `ios-endpoints-generated-ratchet` de `packages/shared`, rouge sur dev) inscrit les routes du décor de profil et
+// des trois domaines de packs d'apparence : `MeEndpoint.profileDecor` et, dans `PacksEndpoint`, `shop` puis pour
+// `wallpaper`, `banner` et `avatarRing` la liste, le détail, l'installation, l'achat et les installés (5 × 3).
+// Le web les appelle déjà (vitrine unique, `lib/api/packs-shop.ts`) ; l'app iOS ne les branche pas encore —
+// entrées PRÉMATURÉES, pas des faux morts (#5427). Valeur MESURÉE le 2026-10-15 en CI (Quality rouge sur
+// afe92fecb1) et en local.
+const BASELINE_DEAD_ENTRIES = 331;
 
 const CATALOG_ENUM_RE = /public enum ([A-Za-z0-9_]+)\s*:\s*MeeshyEndpoint\b/;
 // Une déclaration de cas n'a jamais de point après `case` ; une branche de

@@ -62,6 +62,11 @@ public struct StickerPackItem: Codable, Hashable, Sendable, Identifiable {
 
     public var id: String { key }
 
+    /// **Un sticker CINÉMATIQUE anime** (#9210) : sa vignette joue dans la
+    /// feuille, et son fichier part tel quel — un GIF ou un WebP animé reste
+    /// animé chez tout le monde (`packStickerFile` du web).
+    public var isAnimated: Bool { kind == .cinematic }
+
     public init(key: String, title: String, emoji: String, kind: StickerPackKind,
                 mimeType: String, fileUrl: String, width: Int, height: Int,
                 zones: [StickerPackTextZone] = []) {

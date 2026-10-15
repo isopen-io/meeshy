@@ -35,7 +35,7 @@ afterEach(() => {
   appQueryClient.clear();
 });
 
-async function mountSheet(props: { readonly postId: string; readonly viewCount: number | null; readonly subject?: 'story' | 'publication' }): Promise<HTMLElement> {
+async function mountSheet(props: { readonly postId: string; readonly viewCount: number | null; readonly subject?: 'story' | 'publication'; readonly anonymousViewCount?: number }): Promise<HTMLElement> {
   const host = await mounter.mount(
     <QueryClientProvider client={appQueryClient}>
       <ul>
@@ -169,5 +169,34 @@ describe('PublicationViewersSheet — la liste des lecteurs de MA story', () => 
     expect(host.querySelector('[data-viewers-empty]')).not.toBeNull();
     expect(host.textContent).toContain('Aucune vue pour le moment');
     expect(host.textContent).toContain('Les personnes qui regardent votre story apparaîtront ici.');
+  });
+});
+
+describe('PublicationViewersSheet — « et N visiteurs » (#10483)', () => {
+  test('champ absent (ancien serveur) ⇒ aucune ligne de visiteurs', async () => {
+    const host = await mountSheet({ postId: 'st-mienne', viewCount: 3 });
+    expect(host.querySelector('[data-viewers-visitors]')).toBeNull();
+  });
+
+  test('N > 0 ⇒ la ligne « et N visiteurs » suit la liste nominative', async () => {
+    const host = await mountSheet({ postId: 'st-mienne', viewCount: 7, anonymousViewCount: 4 });
+    expect(host.querySelectorAll('[data-story-viewer]')).toHaveLength(3);
+    expect(host.querySelector('[data-viewers-visitors]')?.textContent).toBe('et 4 visiteurs sans compte');
+  });
+
+  test('un seul visiteur ⇒ le singulier', async () => {
+    const host = await mountSheet({ postId: 'st-mienne', viewCount: 4, anonymousViewCount: 1 });
+    expect(host.querySelector('[data-viewers-visitors]')?.textContent).toBe('et 1 visiteur sans compte');
+  });
+
+  test('aucun lecteur nommé mais des visiteurs ⇒ la ligne des visiteurs, jamais « Aucune vue »', async () => {
+    const host = await mountSheet({ postId: 'st-mienne-sans-vue', viewCount: 2, anonymousViewCount: 2 });
+    expect(host.querySelector('[data-viewers-empty]')).toBeNull();
+    expect(host.querySelector('[data-viewers-visitors]')?.textContent).toBe('2 visiteurs sans compte');
+  });
+
+  test('zéro visiteur ⇒ aucune ligne', async () => {
+    const host = await mountSheet({ postId: 'st-mienne', viewCount: 3, anonymousViewCount: 0 });
+    expect(host.querySelector('[data-viewers-visitors]')).toBeNull();
   });
 });

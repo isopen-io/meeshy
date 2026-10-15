@@ -64,7 +64,7 @@ struct ConversationBackgroundConfig {
         self.isE2EEncrypted = conversation.encryptionMode == "e2ee"
         self.memberCount = conversation.memberCount
         self.topLanguages = topLanguages
-        let palette = conversation.colorPalette
+        let palette = conversation.displayPalette(isDark: isDarkMode)
         self.accentHex = palette.primary
         self.secondaryHex = palette.secondary
         self.isDarkMode = isDarkMode

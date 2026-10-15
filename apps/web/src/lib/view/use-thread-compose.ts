@@ -12,6 +12,7 @@ import { imposedReplyProtection, type ImposedReplyProtection } from '@meeshy/sha
 
 import { usePublishMentionSource } from './mention-source';
 import { useThreadDraft } from './use-draft';
+import { useMessageEdit, type MessageEditState } from './use-message-edit';
 import type { ComposerDraftReport } from './use-draft';
 import { useReplyToPreview, type ReplyToPreview } from './use-reply-preview';
 import type { useSend } from './use-send';
@@ -38,6 +39,9 @@ export type ThreadComposeState = {
   readonly reportComposerDraft: (report: ComposerDraftReport) => void;
   readonly onSend: (input: ThreadComposeSendInput) => void;
   readonly onCancelReply: () => void;
+  /** LE MODE ÉDITION (#10581) — armé par « Modifier » du menu, rendu par `MessageEditDock`. */
+  readonly edit: MessageEditState;
+  readonly beginEdit: (messageId: string) => void;
 };
 
 /**
@@ -72,8 +76,15 @@ export function useThreadCompose(params: {
    * (revue-correction #5813, défaut majeur 6), jamais son seul identifiant.
    * Type DÉRIVÉ du hook, jamais une signature recopiée. */
   readonly send: ReturnType<typeof useSend>['send'];
+  /** La région vivante du fil : l'issue d'une édition s'y dit (#10581). */
+  readonly announce?: (message: string) => void;
 }): ThreadComposeState {
   const { store, scope, conversationId, messages, readerLanguages, send } = params;
+
+  /* LE MODE ÉDITION (#10581) — armer une réponse en sort : le composeur
+     revient avec sa citation, on ne répond pas depuis le champ d'édition. */
+  const edit = useMessageEdit({ conversationId, messages, announce: params.announce });
+  const cancelEdit = edit.cancel;
 
   const { initial: initialDraft, initialProtection: stickyProtection, replyTarget, setReplyTarget: setDraftReplyTarget, reportComposerDraft } = useThreadDraft({
     store,
@@ -101,17 +112,19 @@ export function useThreadCompose(params: {
   const [replyPiece, setReplyPiece] = useState<string | null>(null);
   const setReplyTarget = useCallback(
     (id: string | null) => {
+      if (id !== null) cancelEdit();
       setReplyPiece(null);
       setDraftReplyTarget(id);
     },
-    [setDraftReplyTarget],
+    [setDraftReplyTarget, cancelEdit],
   );
   const setReplyToMedia = useCallback(
     (messageId: string, attachmentId: string) => {
+      cancelEdit();
       setDraftReplyTarget(messageId);
       setReplyPiece(attachmentId);
     },
-    [setDraftReplyTarget],
+    [setDraftReplyTarget, cancelEdit],
   );
 
   const quotedMessage = replyTarget === null ? undefined : messages.find((m) => m.id === replyTarget);
@@ -147,5 +160,5 @@ export function useThreadCompose(params: {
 
   const onCancelReply = useCallback(() => setReplyTarget(null), [setReplyTarget]);
 
-  return { initialDraft, stickyProtection, setReplyTarget, setReplyToMedia, replyTo, imposedProtection, reportComposerDraft, onSend, onCancelReply };
+  return { initialDraft, stickyProtection, setReplyTarget, setReplyToMedia, replyTo, imposedProtection, reportComposerDraft, onSend, onCancelReply, edit, beginEdit: edit.begin };
 }

@@ -41,6 +41,8 @@ struct StoryTrayView: View {
     @State private var myStoriesFollowUp = DeferredSheetFollowUp<MyStoriesFollowUp>()
     /// Session d'édition d'une story publiée (composer en mode édition).
     @State private var editingStorySession: StoryEditSession?
+    /// #10483 — chaque story dont l'anneau apparaît est un affichage, compté
+    /// une fois par montage du rail.
     /// La hauteur de la bande — la réserve `FloatingButtonSafeZone.storyBand`
     /// la dégage des bulles flottantes (#9363), et doit la contenir.
     static let trayHeight: CGFloat = 120
@@ -61,6 +63,7 @@ struct StoryTrayView: View {
             }
         }
         .frame(height: Self.trayHeight)
+        .onDisappear { Task { await SharedImpressionBatchers.flushRail() } }
         .myStoriesSheet(
             isPresented: $showMyStories,
             followUp: $myStoriesFollowUp,
@@ -194,14 +197,24 @@ struct StoryTrayView: View {
     private func storyRingCell(for group: StoryGroup) -> some View {
         StoryRingCell(
             group: group,
-            onViewStory: { presentStory(userId: group.id) },
+            onViewStory: {
+                ContentOpenReporter.shared.openStory(of: group)
+                presentStory(userId: group.id)
+            },
             onShowProfile: { selectedProfileUser = .from(storyGroup: group) },
             moodEmoji: statusViewModel.statusForUser(userId: group.id)?.moodEmoji,
             onMoodTap: statusViewModel.moodTapHandler(for: group.id)
         )
+        .equatable()
         // U1 — source de la transition zoom : la bulle « devient » le viewer
         // (id = userId du groupe, apparié au sourceID du cover RootView).
         .zoomTransitionSource(id: group.id, in: zoomNamespace)
+        .countsImpression(of: StoryRailReach.displayedStoryId(of: group), recountsOnChange: false) {
+            SharedImpressionBatchers.storyRail.record($0)
+        }
+        .countsImpression(of: statusViewModel.statusForUser(userId: group.id)?.id) {
+            SharedImpressionBatchers.moodRail.record($0)
+        }
     }
 
     /// Chemin de présentation unique pour toute la trail (feeds + chats). Si un
@@ -226,7 +239,7 @@ struct StoryTrayView: View {
 /// exact same `MeeshyAvatar` atom across the full-size trail and the compact
 /// pinned mini-trail. `context` drives the size (`.storyTray` 88pt vs
 /// `.storyTrayCompact` 36pt); all proportional metrics derive from it.
-struct StoryRingCell: View {
+struct StoryRingCell: View, Equatable {
     let group: StoryGroup
     var context: AvatarContext = .storyTray
     var showsUsername: Bool = true
@@ -246,6 +259,44 @@ struct StoryRingCell: View {
     /// tray à chaque mise à jour de statut globale (P1-3a).
     var moodEmoji: String? = nil
     var onMoodTap: ((CGPoint) -> Void)? = nil
+    /// Ce que la cellule AFFICHE, relevé une fois par passe du parent : la
+    /// comparaison (`==`) ne lit que lui, jamais les fermetures (#10574).
+    private let renderInputs: StoryRingCellRenderInputs
+
+    init(
+        group: StoryGroup,
+        context: AvatarContext = .storyTray,
+        showsUsername: Bool = true,
+        onViewStory: @escaping () -> Void,
+        onShowProfile: @escaping () -> Void,
+        contextMenuExtras: [AvatarContextMenuItem] = [],
+        moodEmoji: String? = nil,
+        onMoodTap: ((CGPoint) -> Void)? = nil
+    ) {
+        self.group = group
+        self.context = context
+        self.showsUsername = showsUsername
+        self.onViewStory = onViewStory
+        self.onShowProfile = onShowProfile
+        self.contextMenuExtras = contextMenuExtras
+        self.moodEmoji = moodEmoji
+        self.onMoodTap = onMoodTap
+        self.renderInputs = StoryRingCellRenderInputs(
+            group: group,
+            coverURL: latestStoryThumbnailURL(group),
+            avatarSize: context.size,
+            showsUsername: showsUsername,
+            moodEmoji: moodEmoji,
+            hasMoodTap: onMoodTap != nil,
+            presence: PresenceManager.shared.presenceState(for: group.id),
+            menuLabels: contextMenuExtras.map(\.label),
+            theme: ThemeManager.shared.mode
+        )
+    }
+
+    nonisolated static func == (lhs: StoryRingCell, rhs: StoryRingCell) -> Bool {
+        lhs.renderInputs == rhs.renderInputs
+    }
 
     private var isCompact: Bool { context.size <= 44 }
 
@@ -297,6 +348,56 @@ struct StoryRingCell: View {
             Logger.messages.info("[StoryRingCell] tap ring group.id=\(group.id, privacy: .public) username=\(group.username, privacy: .public)")
             onViewStory()
         }
+    }
+}
+
+// MARK: - Ce qu'une cellule d'anneau affiche (#10574)
+
+/// Mesuré sur l'iPhone le 2026-10-13 : 7 409 recalculs de `StoryRingCell` en
+/// 4 min 30, une cinquantaine à chaque passe de la liste — ses fermetures
+/// changent d'identité à chaque passe, SwiftUI ne pouvait rien prouver.
+nonisolated struct StoryRingCellRenderInputs: Equatable {
+    let id: String
+    let username: String
+    let avatarColor: String
+    let storyIds: [String]
+    let hasUnviewed: Bool
+    let liveCount: Int
+    let coverURL: String?
+    let avatarSize: CGFloat
+    let showsUsername: Bool
+    let moodEmoji: String?
+    let hasMoodTap: Bool
+    let presence: PresenceState
+    let menuLabels: [String]
+    let theme: ThemeMode
+
+    init(
+        group: StoryGroup,
+        coverURL: String?,
+        avatarSize: CGFloat,
+        showsUsername: Bool,
+        moodEmoji: String?,
+        hasMoodTap: Bool,
+        presence: PresenceState,
+        menuLabels: [String],
+        theme: ThemeMode,
+        now: Date = Date()
+    ) {
+        id = group.id
+        username = group.username
+        avatarColor = group.avatarColor
+        storyIds = group.stories.map(\.id)
+        hasUnviewed = group.hasUnviewed
+        liveCount = group.stories.filter { !$0.isExpired(at: now) }.count
+        self.coverURL = coverURL
+        self.avatarSize = avatarSize
+        self.showsUsername = showsUsername
+        self.moodEmoji = moodEmoji
+        self.hasMoodTap = hasMoodTap
+        self.presence = presence
+        self.menuLabels = menuLabels
+        self.theme = theme
     }
 }
 
@@ -705,6 +806,8 @@ struct PinnedStoryTrailBand: View {
     @State private var myStoriesFollowUp = DeferredSheetFollowUp<MyStoriesFollowUp>()
     /// Session d'édition d'une story publiée (composer en mode édition).
     @State private var editingStorySession: StoryEditSession?
+    /// #10483 — la mini-trail compte ses anneaux comme la grande trail, dans
+    /// la même file partagée.
 
     // Le rythme de la bascule titre → trail appartient au header : lui fait
     // disparaître le titre sur exactement la même courbe. Deux jeux de
@@ -762,6 +865,7 @@ struct PinnedStoryTrailBand: View {
                 .frame(height: Self.bandHeight * reveal, alignment: .top)
                 .clipped()
                 .allowsHitTesting(reveal > 0.6)
+                .onDisappear { Task { await SharedImpressionBatchers.flushRail() } }
                 .sheet(item: $selectedProfileUser) { user in
                     UserProfileSheet(
                         user: user,
@@ -841,6 +945,7 @@ struct PinnedStoryTrailBand: View {
                         moodEmoji: statusViewModel.statusForUser(userId: ownGroup.id)?.moodEmoji,
                         onMoodTap: statusViewModel.moodTapHandler(for: ownGroup.id)
                     )
+                    .equatable()
                     .zoomTransitionSource(id: ownGroup.id, in: zoomNamespace)
                 } else {
                     selfAvatarCell
@@ -850,13 +955,23 @@ struct PinnedStoryTrailBand: View {
                         group: group,
                         context: .storyTrayCompact,
                         showsUsername: false,
-                        onViewStory: { presentStory(userId: group.id) },
+                        onViewStory: {
+                            ContentOpenReporter.shared.openStory(of: group)
+                            presentStory(userId: group.id)
+                        },
                         onShowProfile: { selectedProfileUser = .from(storyGroup: group) },
                         moodEmoji: statusViewModel.statusForUser(userId: group.id)?.moodEmoji,
                         onMoodTap: statusViewModel.moodTapHandler(for: group.id)
                     )
+                    .equatable()
                     // U1 inc.2 — la mini-trail épinglée zoome aussi.
                     .zoomTransitionSource(id: group.id, in: zoomNamespace)
+                    .countsImpression(of: StoryRailReach.displayedStoryId(of: group), recountsOnChange: false) {
+                        SharedImpressionBatchers.storyRail.record($0)
+                    }
+                    .countsImpression(of: statusViewModel.statusForUser(userId: group.id)?.id) {
+                        SharedImpressionBatchers.moodRail.record($0)
+                    }
                 }
             }
             .padding(.leading, MeeshySpacing.lg)

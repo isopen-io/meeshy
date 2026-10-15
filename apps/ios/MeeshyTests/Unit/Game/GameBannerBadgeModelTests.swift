@@ -53,7 +53,8 @@ final class GameBannerBadgeModelTests: XCTestCase {
         XCTAssertEqual(model.points, 976)
         XCTAssertEqual(model.pointsToNext, 624)
         XCTAssertEqual(model.pointsText, GameText.bannerPoints(points: GameCopy.formatCount(976)))
-        XCTAssertEqual(model.missingText, GameText.bannerMissing(points: GameCopy.formatCount(624)))
+        XCTAssertEqual(model.missingText, GameText.bannerMissing(points: GameCopy.formatCount(624), level: GameCopy.formatCount(4)),
+                       "ce qu'il reste nomme le niveau visé (#10540)")
         XCTAssertEqual(model.levelProgress, Double(976 - 900) / Double(1600 - 900), accuracy: 0.0001)
     }
 

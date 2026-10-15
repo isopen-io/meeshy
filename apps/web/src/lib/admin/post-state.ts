@@ -1,3 +1,5 @@
+import { adminPostStateOf, type AdminPostState } from '@meeshy/shared/types/admin-publication-states';
+
 import { asRecord } from '@/lib/api/admin';
 
 /**
@@ -14,7 +16,7 @@ import { asRecord } from '@/lib/api/admin';
  *
  * Fonctions PURES : importées par le décodeur de la liste et par l'écran.
  */
-export type PostStateCode = 'published' | 'deleted' | 'expired';
+export type PostStateCode = AdminPostState;
 
 export const RESTRICTED_POST_VISIBILITIES = ['PRIVATE', 'ONLY', 'EXCEPT'] as const;
 
@@ -35,14 +37,29 @@ export function withPostRemoved(cached: unknown, at: string): unknown {
 }
 
 /**
- * Un seul état prioritaire : retirée > expirée > publiée. L'instant exact de
- * l'expiration compte comme expiré ; une date illisible ne fabrique AUCUN état
- * (la publication reste « publiée » — on ne prétend pas qu'une story s'est
- * éteinte sur la foi d'une chaîne qu'on ne sait pas lire).
+ * Un seul état prioritaire, la définition PARTAGÉE avec la passerelle (#10392,
+ * `adminPostStateOf`) : supprimée > hors ligne (retrait de modération) > expirée >
+ * privée > publiée. L'instant exact de l'expiration compte comme expiré ; une date
+ * illisible ne fabrique AUCUN état (on ne prétend pas qu'une story s'est éteinte
+ * sur la foi d'une chaîne qu'on ne sait pas lire). Une ligne qui ne porte ni
+ * l'audience ni le retrait (fiche d'un ancien serveur) se lit comme avant.
  */
-export function postStateOf(facts: { readonly deletedAt?: string | null; readonly expiresAt?: string | null }, now: Date): PostStateCode {
-  if (facts.deletedAt !== undefined && facts.deletedAt !== null && facts.deletedAt !== '') return 'deleted';
-  const expiry = Date.parse(facts.expiresAt ?? '');
-  if (Number.isNaN(expiry)) return 'published';
-  return expiry <= now.getTime() ? 'expired' : 'published';
+export function postStateOf(
+  facts: {
+    readonly deletedAt?: string | null;
+    readonly expiresAt?: string | null;
+    readonly moderationHiddenAt?: string | null;
+    readonly visibility?: string | null;
+  },
+  now: Date,
+): PostStateCode {
+  return adminPostStateOf(
+    {
+      visibility: facts.visibility ?? '',
+      deletedAt: facts.deletedAt ?? null,
+      expiresAt: facts.expiresAt ?? null,
+      moderationHiddenAt: facts.moderationHiddenAt ?? null,
+    },
+    now,
+  );
 }

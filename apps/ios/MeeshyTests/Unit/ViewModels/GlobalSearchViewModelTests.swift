@@ -37,7 +37,8 @@ final class GlobalSearchViewModelTests: XCTestCase {
     private func makeSUT(
         searchService: MessageSearchService? = nil,
         messageSocket: MockMessageSocket? = nil,
-        socialSocket: MockSocialSocket? = nil
+        socialSocket: MockSocialSocket? = nil,
+        socialEvents: MockSocialEventsV2Reporter? = nil
     ) throws -> (
         sut: GlobalSearchViewModel,
         mockAPI: MockAPIClientForApp,
@@ -54,9 +55,72 @@ final class GlobalSearchViewModelTests: XCTestCase {
             authManager: mockAuthManager,
             searchService: service,
             messageSocket: messageSocket ?? MockMessageSocket(),
-            socialSocket: socialSocket ?? MockSocialSocket()
+            socialSocket: socialSocket ?? MockSocialSocket(),
+            socialEvents: socialEvents ?? MockSocialEventsV2Reporter()
         )
         return (sut, mockAPI, mockUserService, mockAuthManager)
+    }
+
+    // MARK: - #10505 : l'identifiant de recherche est celui que la passerelle a servi
+
+    private func discoveries(_ reporter: MockSocialEventsV2Reporter, _ action: SocialDiscovery.Action) -> [SocialDiscovery] {
+        reporter.payloads { payload -> SocialDiscovery? in
+            guard case .discovery(let discovery) = payload, discovery.action == action else { return nil }
+            return discovery
+        }
+    }
+
+    func test_performSearch_serverServesSearchId_submittedEventCarriesIt() async throws {
+        let reporter = MockSocialEventsV2Reporter()
+        let (sut, _, mockUserService, _) = try makeSUT(socialEvents: reporter)
+        mockUserService.searchUsersResult = .success([UserSearchResult(id: "u7", username: "aminata")])
+        mockUserService.servedSearchId = "a1b2c3sealed"
+
+        await sut.performSearch(query: "aminata")
+
+        let submitted = discoveries(reporter, .searchSubmitted)
+        XCTAssertEqual(submitted.map(\.searchId), ["a1b2c3sealed"])
+        XCTAssertEqual(submitted.first?.resultCount, 1)
+        XCTAssertEqual(sut.searchId, "a1b2c3sealed")
+    }
+
+    func test_performSearch_serverServesNoSearchId_submittedEventHasNone() async throws {
+        let reporter = MockSocialEventsV2Reporter()
+        let (sut, _, mockUserService, _) = try makeSUT(socialEvents: reporter)
+        mockUserService.searchUsersResult = .success([UserSearchResult(id: "u7", username: "aminata")])
+
+        await sut.performSearch(query: "aminata")
+
+        let submitted = discoveries(reporter, .searchSubmitted)
+        XCTAssertEqual(submitted.count, 1)
+        XCTAssertNil(submitted.first?.searchId, "sans identifiant servi, le client n'en fabrique pas")
+        XCTAssertNil(sut.searchId)
+    }
+
+    func test_noteUserResultTapped_afterAServedSearch_carriesTheServedSearchId() async throws {
+        let reporter = MockSocialEventsV2Reporter()
+        let (sut, _, mockUserService, _) = try makeSUT(socialEvents: reporter)
+        mockUserService.searchUsersResult = .success([UserSearchResult(id: "u7", username: "aminata")])
+        mockUserService.servedSearchId = "a1b2c3sealed"
+        await sut.performSearch(query: "aminata")
+
+        sut.noteUserResultTapped("u7", position: 0)
+
+        XCTAssertEqual(discoveries(reporter, .searchResultClick).map(\.searchId), ["a1b2c3sealed"])
+    }
+
+    func test_noteUserResultTapped_remoteSearchFailed_carriesNoSearchId() async throws {
+        let reporter = MockSocialEventsV2Reporter()
+        let (sut, _, mockUserService, _) = try makeSUT(socialEvents: reporter)
+        mockUserService.searchUsersResult = .success([UserSearchResult(id: "u7", username: "aminata")])
+        mockUserService.servedSearchId = "a1b2c3sealed"
+        await sut.performSearch(query: "aminata")
+        mockUserService.searchUsersResult = .failure(URLError(.notConnectedToInternet))
+        await sut.performSearch(query: "aminata d")
+
+        sut.noteUserResultTapped("u7", position: 0)
+
+        XCTAssertEqual(discoveries(reporter, .searchResultClick).map(\.searchId), [nil], "l'identifiant d'une recherche précédente ne se recopie pas sur la suivante")
     }
 
     /// Drains the main dispatch queue deterministically: enqueues a continuation
@@ -261,6 +325,78 @@ final class GlobalSearchViewModelTests: XCTestCase {
         // Assert: no duplicates — the shared-id message appears exactly once
         let ids = sut.messageResults.map(\.id)
         XCTAssertEqual(ids.count, Set(ids).count, "mergeUnique must deduplicate by message id")
+    }
+
+    // MARK: - #9619 — un message qui disparaît ne sort pas par la recherche
+
+    /// La loi de sortie (#9572) : un contenu qui disparaît ne quitte pas sa
+    /// conversation. Un résultat de recherche le montrait en clair, hors de
+    /// toute couche sécurisée, et le laissait capturer — et le seul fait qu'il
+    /// RÉPONDE à la requête dit déjà un mot de son texte. Il n'y paraît donc
+    /// pas, ni par l'index local (FTS5), ni par le volet réseau.
+    func test_searchMessages_localResults_leaveOutMessagesThatDisappear() async throws {
+        let pool = try DatabaseQueue()
+        try MessageDatabaseMigrations.runAll(on: pool)
+        var viewOnce = SearchTestMessageRecordFactory.make(
+            localId: "local-view-once", conversationId: "conv-exit", content: "rendezvous secret unique"
+        )
+        viewOnce.effectFlags = MessageEffectFlags.viewOnce.rawValue
+        var timedFlame = SearchTestMessageRecordFactory.make(
+            localId: "local-timed-flame", conversationId: "conv-exit", content: "rendezvous secret flamme"
+        )
+        timedFlame.effectFlags = MessageEffectFlags.ephemeral.rawValue
+        timedFlame.ephemeralDuration = 30
+        var afterRead = SearchTestMessageRecordFactory.make(
+            localId: "local-after-read", conversationId: "conv-exit", content: "rendezvous secret lecture"
+        )
+        afterRead.effectFlags = MessageEffectFlags.ephemeral.rawValue | MessageEffectFlags.ephemeralAfterRead.rawValue
+        let ordinary = SearchTestMessageRecordFactory.make(
+            localId: "local-ordinary", conversationId: "conv-exit", content: "rendezvous public"
+        )
+        let records = [viewOnce, timedFlame, afterRead, ordinary]
+        try await pool.write { db in
+            for record in records { try record.insert(db) }
+        }
+        let (sut, mockAPI, mockUserService, mockAuthManager) = try makeSUT(
+            searchService: MessageSearchService(reader: pool)
+        )
+        mockAPI.errorToThrow = URLError(.notConnectedToInternet)
+        mockUserService.searchUsersResult = .failure(URLError(.notConnectedToInternet))
+        mockAuthManager.simulateLoggedIn(user: makeCurrentUser())
+
+        await sut.performSearch(query: "rendezvous")
+
+        XCTAssertEqual(
+            sut.messageResults.map(\.id), ["local-ordinary"],
+            "une vue unique, une flamme à durée et une flamme après lecture ne sortent pas par la recherche locale"
+        )
+    }
+
+    func test_searchMessages_remoteResults_leaveOutMessagesThatDisappear() async throws {
+        let (sut, mockAPI, mockUserService, mockAuthManager) = try makeSUT()
+        mockAuthManager.simulateLoggedIn(user: makeCurrentUser())
+        mockUserService.searchUsersResult = .success([])
+        let conversations: APIResponse<[APIConversation]> = JSONStub.decode("""
+        {"success":true,"data":[{"id":"conv-exit","type":"group","title":"Exit","createdAt":"2026-01-01T00:00:00Z"}]}
+        """)
+        mockAPI.stub("/conversations/search", result: conversations)
+        let messages: MessagesAPIResponse = JSONStub.decode("""
+        {"success":true,"data":[
+            {"id":"msg-ordinary","conversationId":"conv-exit","senderId":"user-002","content":"rendezvous public","createdAt":"2026-01-01T00:04:00.000Z"},
+            {"id":"msg-view-once","conversationId":"conv-exit","senderId":"user-002","content":"rendezvous secret unique","isViewOnce":true,"createdAt":"2026-01-01T00:03:00.000Z"},
+            {"id":"msg-timed-flame","conversationId":"conv-exit","senderId":"user-002","content":"rendezvous secret flamme","effectFlags":1,"ephemeralDuration":30,"createdAt":"2026-01-01T00:02:00.000Z"},
+            {"id":"msg-after-read","conversationId":"conv-exit","senderId":"user-002","content":"rendezvous secret lecture","effectFlags":9,"createdAt":"2026-01-01T00:01:00.000Z"},
+            {"id":"msg-view-once-piece","conversationId":"conv-exit","senderId":"user-002","content":"rendezvous secret piece","attachments":[{"id":"att-1","fileName":"a.jpg","originalName":"a.jpg","mimeType":"image/jpeg","fileSize":1,"fileUrl":"https://x/a.jpg","isViewOnce":true,"createdAt":"2026-01-01T00:00:00.000Z"}],"createdAt":"2026-01-01T00:00:00.000Z"}
+        ],"pagination":null,"cursorPagination":null,"hasNewer":null}
+        """)
+        mockAPI.stub("/conversations/conv-exit/messages/search", result: messages)
+
+        await sut.performSearch(query: "rendezvous")
+
+        XCTAssertEqual(
+            sut.messageResults.map(\.id), ["msg-ordinary"],
+            "le volet réseau applique la même loi : rien de ce qui disparaît, pièce jointe protégée comprise"
+        )
     }
 
     // MARK: - Tab Counts Tests
@@ -585,6 +721,32 @@ final class GlobalSearchViewModelTests: XCTestCase {
         XCTAssertEqual(
             sut.conversationResults.first?.lastMessagePreview, "Bonjour tout le monde",
             "la langue d'origine au rang 2 ne retrograde pas la langue primaire"
+        )
+    }
+
+    /// #9622 — la ligne de résultat de conversation est un aperçu publié HORS
+    /// du fil : le texte d'une flamme à durée, que le serveur sert, n'y paraît
+    /// pas ; seul son libellé de protection.
+    func test_searchConversations_timedFlameLastMessage_showsItsProtectionLabel_neverItsText() async throws {
+        let (sut, mockAPI, mockUserService, mockAuthManager) = try makeSUT()
+        mockAuthManager.simulateLoggedIn(
+            user: MeeshyUser(id: "user-001", username: "testuser", systemLanguage: "fr")
+        )
+        mockUserService.searchUsersResult = .success([])
+        let response: APIResponse<[APIConversation]> = JSONStub.decode("""
+        {"success":true,"data":[{
+          "id":"conv-flame-1","type":"group","title":"Flamme","createdAt":"2026-01-01T00:00:00Z",
+          "lastMessage":{"id":"msg-1","content":"Rendez-vous secret","effectFlags":1,"ephemeralDuration":30,"createdAt":"2026-01-01T00:00:00Z"}
+        }]}
+        """)
+        mockAPI.stub("/conversations/search", result: response)
+
+        await sut.performSearch(query: "flamme")
+
+        XCTAssertEqual(
+            sut.conversationResults.first?.lastMessagePreview,
+            OutsidePreview.protectionLabel(for: .timedFlame),
+            "le texte d'une flamme à durée ne sort pas par un résultat de recherche"
         )
     }
 

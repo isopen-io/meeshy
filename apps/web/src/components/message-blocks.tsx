@@ -1,10 +1,12 @@
-import { useEffect, useState, type ReactElement, type ReactNode } from 'react';
+import { useEffect, useRef, useState, type CSSProperties, type ReactElement, type ReactNode } from 'react';
 
 import type { Message } from '@/lib/api/types';
 import type { Delivery } from '@/lib/view/message';
+import { useLongPress } from '@/lib/view/long-press';
 import { forwardLabelOf, type MessageBadge } from '@/lib/view/message-badges';
+import { openReactorsSheet } from '@/lib/view/reactors-sheet-store';
 import { languageColor, flag, languageName } from '@/lib/languages';
-import { translate } from '@/lib/i18n-catalog';
+import { translate, type InterfaceCatalogKey } from '@/lib/i18n-catalog';
 import { currentInterfaceLanguage, type InterfaceLanguage } from '@/lib/interface-language';
 import { META_TEXT_OPACITY } from '@/lib/reading-mode/metrics';
 import { shouldRevealSendingClock } from '@/lib/send/send-clock';
@@ -44,12 +46,17 @@ export const CHECKS: Record<Delivery, { readonly name: GlyphName; readonly size:
   read: { name: 'checks', size: 11, read: true },
 };
 
-export const STATUS_LABEL: Record<Delivery, string> = {
-  pending: 'en cours d’envoi',
-  sent: 'envoyé',
-  delivered: 'remis',
-  read: 'lu',
-};
+const STATUS_KEY = {
+  pending: 'message.status.pending',
+  sent: 'message.status.sent',
+  delivered: 'message.status.delivered',
+  read: 'message.status.read',
+} as const satisfies Record<Delivery, InterfaceCatalogKey>;
+
+/** L'état d'envoi dit dans la langue d'INTERFACE — « envoyé », « sent »… */
+export function statusLabel(status: Delivery, language: InterfaceLanguage = currentInterfaceLanguage()): string {
+  return translate(language, STATUS_KEY[status]);
+}
 
 /**
  * LA PASTILLE DU PRISME — elle ne se montre QUE si le texte affiché est une
@@ -181,11 +188,11 @@ export function reactionEntries(
  * DEVIENT UN `<button>` QUAND `onToggle` EST FOURNI (#5865, suivi de #5814
  * — `bulle.md` écart 8) : iOS retire déjà une réaction en tapant directement
  * sa propre capsule (`BubbleReactionsOverlay.swift`), seul le rail du menu
- * du message (appui long) le permettait ici. L'hôte (`bubble.tsx`,
- * `focal-row.tsx`) ne câble `onToggle` QUE sur les capsules `mine` — taper
- * la capsule d'AUTRUI n'a pas de sens (on ne bascule pas la réaction de
- * quelqu'un d'autre), donc `onToggle` reste `undefined` pour elles et la
- * capsule garde son rendu `<span>` d'origine.
+ * du message (appui long) le permettait ici. Depuis #10583 l'hôte câble
+ * `onToggle` sur TOUTES les capsules, dans tous les modes de fil : la mienne
+ * se retire, celle d'autrui pose la même réaction (on ne touche jamais à la
+ * réaction de quelqu'un d'autre). Sans `onToggle` — fil en lecture seule —
+ * la capsule garde son rendu `<span>`.
  *
  * LA MARQUE RESTE TEXTUELLE, PAS `aria-pressed` (revue #5814) :
  * `aria-pressed` n'est défini QUE sur `role="button"`. Posé sur un `<span>`
@@ -201,14 +208,17 @@ export function ReactionChip({
   count,
   mine = false,
   onToggle,
+  reactorsFor,
 }: {
   glyph: string;
   count: number;
   mine?: boolean;
-  /** Bascule la réaction en tapant la capsule — la ligne basse ne le fournit
-   * que sur la MIENNE (#5865, retirer) ; la bande de l'élu Focal le fournit
-   * sur toutes (#8536 : retirer la mienne, poser la mienne sur celle d'autrui). */
+  /** Bascule MA réaction en tapant la capsule : retirer la mienne (#5865),
+   * poser la mienne sur celle d'autrui (#8536 pour l'élu, #10583 partout). */
   onToggle?: () => void;
+  /** Le message dont l'appui long (ou le clic droit) ouvre « qui a réagi »
+   * (#10583). Absent : la capsule laisse ce geste à la rangée qui la porte. */
+  reactorsFor?: string;
 }) {
   const style = {
     backgroundColor: mine ? 'color-mix(in srgb, var(--accent) 16%, var(--color-ios-card))' : 'var(--color-ios-card)',
@@ -219,31 +229,109 @@ export function ReactionChip({
       <span aria-hidden>{glyph}</span>
       <span className="tabular-nums opacity-70">{count}</span>
       <span className="offscreen">
-        {count} réaction{count > 1 ? 's' : ''} {glyph}
-        {mine ? ' — la vôtre' : ''}
+        {translate(
+          currentInterfaceLanguage(),
+          mine
+            ? count > 1 ? 'message.reaction.count.mine.other' : 'message.reaction.count.mine.one'
+            : count > 1 ? 'message.reaction.count.other' : 'message.reaction.count.one',
+          { count: String(count), emoji: glyph },
+        )}
       </span>
     </>
   );
-  if (onToggle !== undefined) {
+  if (onToggle === undefined) {
     return (
-      <button
-        type="button"
-        onClick={onToggle}
-        aria-label={mine ? `Retirer votre réaction ${glyph}` : `Réagir avec ${glyph}`}
-        /* `tap-target-chip` (`app.css`) étend la zone TACTILE à 44 px sans
-           grandir le DESSIN de la capsule (même dispositif que
-           `tap-target-22`/`tap-target-34` plus haut dans ce fichier). */
-        className="tap-target-chip flex items-center gap-0.5 rounded-chip px-1.5 py-0.5 text-check"
-        style={style}
-      >
+      <span className="flex items-center gap-0.5 rounded-chip px-1.5 py-0.5 text-check" style={style}>
         {content}
-      </button>
+      </span>
+    );
+  }
+  const label = translate(currentInterfaceLanguage(), mine ? 'message.reaction.remove' : 'message.reaction.add', { emoji: glyph });
+  if (reactorsFor !== undefined) {
+    return (
+      <ReactorsChipButton label={label} style={style} reactorsFor={reactorsFor} onToggle={onToggle}>
+        {content}
+      </ReactorsChipButton>
     );
   }
   return (
-    <span className="flex items-center gap-0.5 rounded-chip px-1.5 py-0.5 text-check" style={style}>
+    <button type="button" onClick={onToggle} aria-label={label} className={REACTION_CHIP_BUTTON_CLASS} style={style}>
       {content}
-    </span>
+    </button>
+  );
+}
+
+/* `tap-target-chip` (`app.css`) étend la zone TACTILE à 44 px sans grandir le
+   DESSIN de la capsule (même dispositif que `tap-target-22`/`tap-target-34`
+   plus haut dans ce fichier). */
+const REACTION_CHIP_BUTTON_CLASS = 'tap-target-chip flex items-center gap-0.5 rounded-chip px-1.5 py-0.5 text-check';
+
+/** Le clic que le navigateur émet au relâchement d'un appui long arrive dans
+ * cette fenêtre : il a ouvert la liste, il ne bascule pas la réaction. */
+const CLICK_AFTER_HOLD_MS = 700;
+
+/**
+ * LA CAPSULE QUI SAIT AUSSI NOMMER (#10583) — toucher bascule, maintenir ouvre
+ * « qui a réagi » (miroir `BubbleReactionsOverlay.pill` : `onTapGesture` /
+ * `onLongPressGesture`). Le clic droit et la touche de menu contextuel font le
+ * même geste (`useLongPress`).
+ *
+ * LA CAPSULE VIT DANS UNE RANGÉE QUI A SON PROPRE APPUI LONG (le menu du
+ * message) : `useLongPress` RÉCLAME l'événement au plus profond, la rangée ne
+ * répond donc pas à un geste que la capsule a pris.
+ *
+ * `aria-haspopup="dialog"` dit, sans mot à traduire, qu'un dialogue s'ouvre
+ * d'ici ; la liste reste atteignable sans ce geste par « Plus… ».
+ */
+function ReactorsChipButton({
+  label,
+  style,
+  reactorsFor,
+  onToggle,
+  children,
+}: {
+  readonly label: string;
+  readonly style: CSSProperties;
+  readonly reactorsFor: string;
+  readonly onToggle: () => void;
+  readonly children: ReactNode;
+}) {
+  const holding = useRef(false);
+  const heldOpenAt = useRef<number | null>(null);
+  const press = useLongPress({
+    onOpen: () => {
+      heldOpenAt.current = holding.current ? performance.now() : null;
+      openReactorsSheet(reactorsFor);
+    },
+  });
+  const release = () => {
+    holding.current = false;
+    press.onPointerUp();
+  };
+  return (
+    <button
+      type="button"
+      {...press}
+      onPointerDown={(event) => {
+        holding.current = event.button === 0;
+        heldOpenAt.current = null;
+        press.onPointerDown(event);
+      }}
+      onPointerUp={release}
+      onPointerCancel={release}
+      onClick={() => {
+        const openedAt = heldOpenAt.current;
+        heldOpenAt.current = null;
+        if (openedAt !== null && performance.now() - openedAt < CLICK_AFTER_HOLD_MS) return;
+        onToggle();
+      }}
+      aria-label={label}
+      aria-haspopup="dialog"
+      className={REACTION_CHIP_BUTTON_CLASS}
+      style={style}
+    >
+      {children}
+    </button>
   );
 }
 
@@ -302,7 +390,7 @@ export function Check({
     <Glyph
       name={check.name}
       size={check.size}
-      {...(onOpen === undefined ? { title: STATUS_LABEL[status] } : {})}
+      {...(onOpen === undefined ? { title: statusLabel(status) } : {})}
       {...(check.read ? { style: { color: 'var(--color-read)' } } : {})}
     />
   );
@@ -482,7 +570,7 @@ export function Badges({ badges }: { readonly badges: readonly MessageBadge[] })
             data-badge="pinned"
             className="flex items-center gap-1 text-check font-medium"
             style={{ color: 'var(--ios-pinned)' }}
-            aria-label="Message épinglé"
+            aria-label={translate(currentInterfaceLanguage(), 'message.badge.pinned')}
           >
             {/* L'ÉPINGLE SEULE, DROITE (#7599, miroir iOS #7603) — le mot vit
                 dans le nom accessible de la rangée. */}
@@ -663,7 +751,7 @@ export function Quote({
      donc son contenu n'est PAS lu : sans ce segment, « une photo » n'était
      annoncée nulle part). */
   const label = [
-    translate(currentInterfaceLanguage(), 'quote.jumpTo', { name: quote.sender?.displayName ?? 'l’expéditeur' }),
+    translate(currentInterfaceLanguage(), 'quote.jumpTo', { name: quote.sender?.displayName ?? translate(currentInterfaceLanguage(), 'quote.sender.unknown') }),
     ...preview.inventory,
   ].join(', ');
 

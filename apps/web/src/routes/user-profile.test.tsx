@@ -9,6 +9,7 @@ import { VIEWER_ID } from '@/lib/api/fixtures';
 import { friendRequestsQueryKey } from '@/lib/api/friend-requests';
 import { fixtureAuthorPosts } from '@/lib/api/fixtures-rich-text';
 import { sharedConversationsQueryKey } from '@/lib/api/shared-conversations';
+import { presenceStore } from '@/lib/api/presence-store';
 import { appQueryClient } from '@/lib/api/query-client';
 import { ensureHappyDomRegistered, releaseHappyDomIfRegistered } from '@/test-support/happy-dom-environment';
 
@@ -45,6 +46,7 @@ afterEach(() => {
   mounted?.container.remove();
   mounted = null;
   appQueryClient.clear();
+  presenceStore.getState().clear();
   /* LE RÉSEAU SE REMET ICI, jamais en fin de corps de témoin : une assertion
      qui casse avant la ligne de restauration laisserait l'`onlineManager` de
      TanStack en pause pour tout le reste du PROCESSUS — donc pour les autres
@@ -179,6 +181,24 @@ describe('la présence sur la fiche', () => {
     const el = await mount('kwame-mensah');
     expect(el.querySelector('[data-user-presence]')).toBeNull();
     expect(el.querySelector('[data-user-hero] [data-presence="online"]')).toBeNull();
+  });
+
+  /* VIVANTE (#10571) : un `user:status` arrivé après la requête du profil
+     prime sur la présence que la requête avait servie. */
+  test('un AMI parti : le user:status reçu éteint « En ligne » sans recharger la fiche', async () => {
+    const el = await mount('bruno.laurent');
+
+    act(() => presenceStore.getState().put('u-bruno', { isOnline: false, lastActiveAt: new Date(Date.now() - 2 * 86_400_000).toISOString() }));
+
+    expect(el.querySelector('[data-user-hero] [data-presence="online"]')).toBeNull();
+    expect(text(el.querySelector('[data-user-presence]'))).not.toBe('En ligne');
+  });
+
+  test('un TIERS reste muet même si une présence vivante le concerne : la fiche ne montre que ce que la passerelle y sert', async () => {
+    const el = await mount('kwame-mensah');
+    act(() => presenceStore.getState().put('u-kwame', { isOnline: true, lastActiveAt: new Date().toISOString() }));
+
+    expect(el.querySelector('[data-user-presence]')).toBeNull();
   });
 });
 

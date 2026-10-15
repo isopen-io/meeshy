@@ -5,7 +5,7 @@ import { enhancedLogger } from '../utils/logger-enhanced';
 import { validateBody } from '../validation/helpers.js';
 import { sendSuccess, sendGone, sendInternalError } from '../utils/response.js';
 import { errorResponseSchema } from '@meeshy/shared/types/api-schemas';
-import { disconnectRevokedSessions } from '../socketio/disconnectRevokedSessions';
+import { revokeDeletedAccountSessions } from '../socketio/revokeDeletedAccountSessions';
 import { createCustomRateLimiter } from '../utils/rate-limiter.js';
 import { purgeAccountIsolatedData, anonymizeUserIdentity } from '../services/AccountPurgeService';
 
@@ -117,6 +117,13 @@ export async function accountDeletionRoutes(fastify: FastifyInstance) {
                    * `confirm`/`cancel` ne purgent rien et restent `false`.
                    */
                   dataPurged: { type: 'boolean' },
+                  /**
+                   * #10264 — l'identifiant du compte SUPPRIMÉ, présent sur
+                   * `COMPLETED` seulement : l'appareil qui a ouvert le lien y
+                   * purge les données locales de ce compte, et d'aucun autre.
+                   * `confirm` n'ouvre qu'une grâce, `cancel` rend le compte.
+                   */
+                  deletedAccountId: { type: 'string' },
                 },
               },
             },
@@ -267,7 +274,12 @@ export async function accountDeletionRoutes(fastify: FastifyInstance) {
         // `etatAttendu`) a déjà purgé ces trois tables ISOLÉES depuis
         // `MaintenanceService` (#3632). Idempotent — rejouer ici ne coûte que
         // trois requêtes vides si la passe horaire est déjà passée.
-        await purgeAccountIsolatedData(fastify.prisma, demande.userId).catch((error) =>
+        await purgeAccountIsolatedData(fastify.prisma, demande.userId, {
+          shareLinkLive: {
+            resolveIO: () => fastify.socketIOHandler?.getManager?.()?.getIO(),
+            resolveManager: () => fastify.socketIOHandler?.getManager?.(),
+          },
+        }).catch((error) =>
           logger.warn(`[Deletion] purge des données isolées échouée user=${demande.userId}`, error)
         );
 
@@ -280,11 +292,9 @@ export async function accountDeletionRoutes(fastify: FastifyInstance) {
         // Le compte n'existe plus : ses sockets tombent, APRÈS l'écriture — un
         // socket resté ouvert recevrait encore les fils temps réel d'un compte
         // supprimé. Best-effort par construction.
-        await disconnectRevokedSessions({
+        await revokeDeletedAccountSessions({
           io: fastify.socketIOHandler?.getManager?.()?.getIO(),
           userId: demande.userId,
-          reason: 'logout_all_devices',
-          message: 'Your account was deleted — every session was signed out.',
           onError: (err) => logger.warn(`[Deletion] coupure des sockets échouée user=${demande.userId}`, err),
         });
 
@@ -304,6 +314,7 @@ export async function accountDeletionRoutes(fastify: FastifyInstance) {
           // promises par `privacy.json` (#4183 critère 7) sont donc purgées :
           // `dataPurged: true` dit enfin le vrai.
           dataPurged: true,
+          deletedAccountId: demande.userId,
         });
       } catch (error) {
         logger.error('[Deletion] échec de résolution', error as Error);
