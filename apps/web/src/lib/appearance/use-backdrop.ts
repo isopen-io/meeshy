@@ -4,7 +4,11 @@ import { useEffect, useState } from 'react';
 
 import { bindAppearanceLive } from '@/lib/api/conversation-appearance';
 import type { ConversationsDeps } from '@/lib/api/conversations';
+import { apiDeps } from '@/lib/api/deps';
 import { useColorScheme } from '@/lib/use-color-scheme';
+
+import { useServedWallpapers } from './use-picker';
+import { findServedDesign } from './wallpaper-served';
 
 import { loadPhotoSource } from './photo-source';
 
@@ -46,7 +50,12 @@ export function useWallpaperDesign(ref: { readonly pack: string; readonly design
       live = false;
     };
   }, [key]); // eslint-disable-line react-hooks/exhaustive-deps -- `ref` n'est lu que par sa clé
-  return found !== null && found.key === key ? found.design : undefined;
+  const builtin = found !== null && found.key === key ? found.design : undefined;
+  /* Un modèle hors du JSON embarqué (officiel non embarqué, tiers) se peint depuis son contrat servi (#10737). */
+  const settledWithoutBuiltin = found !== null && found.key === key && builtin === undefined;
+  const served = useServedWallpapers(apiDeps, settledWithoutBuiltin);
+  if (builtin !== undefined || ref === null || !settledWithoutBuiltin) return builtin;
+  return findServedDesign({ installed: served.installed, contracts: served.contracts, pack: ref.pack, design: ref.design });
 }
 
 function preload(src: string, onDone: (ok: boolean) => void): () => void {
