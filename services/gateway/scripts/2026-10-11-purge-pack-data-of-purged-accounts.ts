@@ -46,6 +46,7 @@ async function main(): Promise<void> {
     console.log(`  propositions non publiées   : ${report.totals.submissionsDeleted}`);
     console.log(`  packs publiés anonymisés    : ${report.totals.publishedAnonymized}`);
     console.log(`  fichiers                    : ${report.totals.filesDeleted}`);
+    console.log(`  packs achetés (possessions) : ${report.totals.ownershipsDeleted}`);
     if (DRY_RUN) console.log("\nÀ blanc : rien n'a été écrit. Relancer sans DRY_RUN pour appliquer.");
   } finally {
     await prisma.$disconnect();

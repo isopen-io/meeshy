@@ -98,7 +98,7 @@ function base() {
     ),
     user: { updateMany: async () => ({ count: 1 }) },
     // Les packs (#10151) : des collections vides.
-    ...(({ userStickerPack, userSticker, stickerPack, stickerPackItem }) => ({ userStickerPack, userSticker, stickerPack, stickerPackItem }))(fakePackDb({})),
+    ...(({ userStickerPack, userSticker, stickerPack, stickerPackItem, userPackOwnership }) => ({ userStickerPack, userSticker, stickerPack, stickerPackItem, userPackOwnership }))(fakePackDb({})),
   };
   return { prisma, userContact, contactJoinNotice, notification };
 }
