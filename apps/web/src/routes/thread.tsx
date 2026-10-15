@@ -31,7 +31,7 @@ import { resolveViewer } from '@/lib/api/viewer';
 import { useAuthorStoryRings } from '@/lib/view/use-author-story-rings';
 import { AuthorContexts } from '@/components/author-contexts';
 import { topActiveMembers } from '@/lib/view/top-active-members';
-import { accentOf, withAccent } from '@/lib/accent';
+import { accentOf, personalBubbleVars, withAccent } from '@/lib/accent';
 import { useColorScheme } from '@/lib/use-color-scheme';
 import { conversationStore } from '@/lib/conversation-store';
 import { isGroup, titleOf, unreadOf } from '@/lib/view/conversation';
@@ -704,7 +704,7 @@ export default function ThreadScreen({ preview, focus }: ThreadScreenProps = {})
     <div
       ref={chrome.host}
       className={`thread-root relative ${preview === undefined ? 'h-app' : 'h-full'} overflow-hidden`}
-      style={{ ...withAccent(accent), ...chromeStyleVars(), ...insetVars, ...backdropStyleVars() } as CSSProperties}
+      style={{ ...withAccent(accent), ...personalBubbleVars(conversation), ...chromeStyleVars(), ...insetVars, ...backdropStyleVars() } as CSSProperties}
     >
       <ConversationBackdrop conversation={conversation} accent={accent} live={preview === undefined} />
       <ThreadHeader

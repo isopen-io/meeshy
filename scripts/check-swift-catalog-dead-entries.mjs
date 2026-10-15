@@ -523,7 +523,9 @@ const EXCLUDED_DIR_NAMES = new Set(['Tests', 'MeeshyTests', 'MeeshyUIDeviceTests
 // packs en attente et les propositions de l'auteur — 12 entrées. Prématurées : la passerelle les sert, aucun
 // client n'a encore l'écran de modération ni de dépôt d'un pack vendeur (même relève au cliquet TS). Valeur
 // MESURÉE le 2026-10-15 en local sur 79129ae28f.
-const BASELINE_DEAD_ENTRIES = 326;
+// 326 -> 325 (2026-10-15) : une entrée de la vitrine gagne son appelant iOS (91e38008e2). Valeur MESURÉE en local
+// sur e13e8be719.
+const BASELINE_DEAD_ENTRIES = 325;
 
 const CATALOG_ENUM_RE = /public enum ([A-Za-z0-9_]+)\s*:\s*MeeshyEndpoint\b/;
 // Une déclaration de cas n'a jamais de point après `case` ; une branche de
