@@ -4,7 +4,7 @@ import { attachmentDefaults } from '@/lib/api/fixtures-base';
 import type { Attachment } from '@/lib/api/types';
 
 import { electAudio } from './media';
-import { translationOffers, withSupplied } from './audio-on-demand';
+import { transcriptionOffered, translationOffers, withSupplied } from './audio-on-demand';
 
 /**
  * #9256 — CE QUE LE LECTEUR A DEMANDÉ REJOINT LA PIÈCE AVANT LA DESCENTE.
@@ -77,5 +77,29 @@ describe('translationOffers (#9256)', () => {
   test('une langue vide ou inconnue du lecteur n’est jamais offerte comme cible vide', () => {
     expect(translationOffers({ readerLanguages: ['', 'wo'], versions: ['fr'] })).toContain('wo');
     expect(translationOffers({ readerLanguages: ['', 'wo'], versions: ['fr'] })).not.toContain('');
+  });
+});
+
+describe('transcriptionOffered (#10700)', () => {
+  const piece = { id: 'a1', fileUrl: 'https://cdn/x.m4a' };
+  const readable = { id: 'm1', isEncrypted: false, encryptionMode: null };
+
+  test('un vocal serveur-lisible téléversé offre « Transcrire »', () => {
+    expect(transcriptionOffered({ attachment: piece, message: readable })).toBe(true);
+  });
+  test('un hôte sans message garde l’offre', () => {
+    expect(transcriptionOffered({ attachment: piece })).toBe(true);
+  });
+  test('un message encore optimiste (cid_) ne l’offre pas', () => {
+    expect(transcriptionOffered({ attachment: piece, message: { ...readable, id: 'cid_9' } })).toBe(false);
+  });
+  test('une pièce pas encore téléversée (aperçu blob:) ne l’offre pas', () => {
+    expect(transcriptionOffered({ attachment: { id: 'a1', fileUrl: 'blob:http://x/1' }, message: readable })).toBe(false);
+  });
+  test('un message chiffré de bout en bout ne l’offre pas', () => {
+    expect(transcriptionOffered({ attachment: piece, message: { id: 'm1', isEncrypted: true, encryptionMode: 'e2ee' } })).toBe(false);
+  });
+  test('une conversation e2ee ne l’offre pas', () => {
+    expect(transcriptionOffered({ attachment: piece, message: readable, conversationEncryptionMode: 'e2ee' })).toBe(false);
   });
 });

@@ -88,6 +88,8 @@ export type MediaViewerPage = {
   readonly messageId: string;
   readonly conversationId: string;
   readonly offers: MediaPageOffers;
+  /** « Transcrire » d'un vocal (#10700) — faux quand le serveur ne lit pas le message ou que l'envoi est local ; absent ⇒ offert. */
+  readonly transcribe?: boolean;
   readonly onReply?: () => void;
   /** Ce que « Partager » remet à la feuille d'envoi — posé par l'hôte qui sait de quoi la pièce est la pièce (message, publication, média nu). */
   readonly share?: SendSheetRequest;

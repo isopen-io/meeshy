@@ -40,6 +40,8 @@ export type AudioOnDemand = {
   readonly versions: readonly string[];
   readonly offers: readonly string[];
   readonly transcribing: boolean;
+  /** La zone « Transcrire » a un effet : pas de transcription servie, et le serveur lit le vocal. */
+  readonly canTranscribe: boolean;
   readonly pendingLanguages: readonly string[];
   /** La DERNIÈRE langue demandée dont la version vient d'arriver — la page s'y place. */
   readonly arrived: string | null;
@@ -56,12 +58,15 @@ export function useAudioOnDemand({
   readerLanguages,
   deps,
   stallAfterMs = ON_DEMAND_STALL_MS,
+  transcribable = true,
 }: {
   readonly attachment: Attachment;
   readonly fallbackLanguage: string;
   readonly readerLanguages: readonly string[];
   readonly deps?: ConversationsDeps;
   readonly stallAfterMs?: number;
+  /** Le serveur peut lire ce vocal (#10700) ; faux ⇒ « Transcrire » n'est pas offert. */
+  readonly transcribable?: boolean;
 }): AudioOnDemand {
   const [supplied, setSupplied] = useState<SuppliedAudio>(NOTHING_SUPPLIED);
   const [transcribeAsked, setTranscribeAsked] = useState(false);
@@ -133,6 +138,7 @@ export function useAudioOnDemand({
     versions,
     offers,
     transcribing,
+    canTranscribe: transcribable && served.transcription == null,
     pendingLanguages,
     arrived,
     notice,

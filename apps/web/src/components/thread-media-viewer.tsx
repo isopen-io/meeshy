@@ -8,6 +8,7 @@ import { apiDeps } from '@/lib/api/deps';
 import type { Attachment, Message } from '@/lib/api/types';
 import { browserFileDeliveryHost, hasFileDeliveryDoor } from '@/lib/media/file-delivery-host';
 import type { MediaCarrier } from '@/lib/view/media';
+import { transcriptionOffered } from '@/lib/view/audio-on-demand';
 import { attachmentSendRequest, mediaPageOffers, type MediaViewerCapabilities } from '@/lib/view/viewer-page-offers';
 import { isMineOf } from '@/lib/view/message';
 import { threadMediaEntriesOf } from '@/lib/view/thread-media-list';
@@ -132,6 +133,7 @@ export default function ThreadMediaViewer({
             messageId: entry.message.id,
             conversationId: entry.message.conversationId,
             offers,
+            transcribe: transcriptionOffered({ attachment: entry.attachment, message: entry.message }),
             ...(offers.share
               ? { share: attachmentSendRequest({ attachment: entry.attachment, message: entry.message, mine: isMineOf(entry.message, viewerId), now, quoted }) }
               : {}),

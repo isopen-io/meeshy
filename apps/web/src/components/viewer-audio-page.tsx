@@ -57,6 +57,8 @@ export type ViewerAudioPageProps = {
   /** La page ACTIVE dit si elle joue : la visionneuse efface son chrome pendant l'écoute. */
   readonly onPlayingChange?: (playing: boolean) => void;
   readonly deps?: ConversationsDeps;
+  /** « Transcrire » a un effet pour ce vocal (#10700) — absent ⇒ offert. */
+  readonly transcribable?: boolean;
 };
 
 const WAVE_BARS = 48;
@@ -103,9 +105,10 @@ export default function ViewerAudioPage({
   onCarryRef,
   onPlayingChange,
   deps,
+  transcribable = true,
 }: ViewerAudioPageProps) {
   const [explored, setExplored] = useState<string | undefined>(displayLanguage);
-  const onDemand = useAudioOnDemand({ attachment: received, fallbackLanguage, readerLanguages: languages, ...(deps !== undefined ? { deps } : {}) });
+  const onDemand = useAudioOnDemand({ attachment: received, fallbackLanguage, readerLanguages: languages, transcribable, ...(deps !== undefined ? { deps } : {}) });
   const attachment = onDemand.served;
   const { versions } = onDemand;
   const [offering, setOffering] = useState(false);
@@ -419,7 +422,7 @@ export default function ViewerAudioPage({
             <p data-viewer-audio-transcript-empty className="text-center text-mini opacity-60">
               {translate(language, 'media.audio.transcript_empty')}
             </p>
-            <TranscribeAction language={language} busy={onDemand.transcribing} onTranscribe={onDemand.transcribe} />
+            {onDemand.canTranscribe ? <TranscribeAction language={language} busy={onDemand.transcribing} onTranscribe={onDemand.transcribe} /> : null}
           </div>
         )}
 
