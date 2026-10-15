@@ -474,7 +474,7 @@ export function ThreadModes({
             finit pas — sur un réseau lent, c'est l'interprétation la plus
             naturelle et la plus fausse.
           */
-          <div className="grid flex-1 place-items-center px-8 text-center">
+          <div data-thread-empty="" className="grid flex-1 place-items-center px-8 text-center">
             <div className="grid gap-2">
               <p className="text-title font-semibold" style={{ color: 'var(--color-ios-ink)' }}>
                 {translate(currentInterfaceLanguage(), 'thread.empty.title')}

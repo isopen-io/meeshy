@@ -628,9 +628,6 @@ export const RESERVED_SERVER_EVENTS: ReadonlySet<string> = new Set<string>([
   SERVER_EVENTS.CALL_TRANSLATION_REQUESTED,
   SERVER_EVENTS.CALL_TRANSLATION_ENABLED,
   SERVER_EVENTS.CALL_TRANSCRIPTION_RESULT,
-  // #10632 : déclaré par le lot fondation, émis par `PUT /me/profile-decor` (lot passerelle).
-  // Le lot passerelle RETIRE cette ligne en posant l'émetteur — la garde du sens inverse rougit sinon.
-  SERVER_EVENTS.PROFILE_DECOR_UPDATED,
 ]);
 
 // Événements du client vers le serveur
