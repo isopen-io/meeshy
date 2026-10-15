@@ -27,7 +27,7 @@ import {
 } from '../../../services/packs/samplePackPublisher';
 import { memoryPrisma } from '../routes/sticker-packs.harness';
 
-const MEE_STICKERS = resolve(__dirname, '../../../../../../packages/MeeshySDK/Sources/MeeshyUI/Resources/MeeStickers');
+const MEE_STICKERS = resolve(__dirname, '../../../../assets/sample-sticker-pack');
 const ACCOUNTS: Record<string, { id: string; role: string }> = {
   recette: { id: '68b0000000000000000000a1', role: 'USER' },
   modo: { id: '68b0000000000000000000c3', role: 'MODERATOR' },
