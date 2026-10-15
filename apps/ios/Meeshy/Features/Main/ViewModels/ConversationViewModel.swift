@@ -31,6 +31,11 @@ class ConversationViewModel: ObservableObject {
         } else {
             structureChanged = true
         }
+        // La confirmation d'un envoi remplace les pièces LOCALES par celles du
+        // serveur sans toucher à la structure : les mémoires de médias, keyées
+        // par identifiant de pièce, se vident aussi sur ce changement (#10690).
+        let mediaChanged = structureChanged
+            || !Self.sameAttachmentIdentities(messages, previousMessages ?? [])
 
         _messageIdIndex = nil
         forgetPrismResolutions(whoseOriginChangedFrom: previousMessages)
@@ -39,12 +44,14 @@ class ConversationViewModel: ObservableObject {
 
         if structureChanged {
             _topActiveMembers = nil
+            _mentionDisplayNames = nil
+            _mentionCandidates = nil
+        }
+        if mediaChanged {
             _mediaSenderInfoMap = nil
             _allVisualAttachments = nil
             _mediaCaptionMap = nil
             _allAudioItems = nil
-            _mentionDisplayNames = nil
-            _mentionCandidates = nil
         }
 
         // #7452 — l'unique réveil du fil se réarme ici, au seul endroit que
@@ -52,6 +59,16 @@ class ConversationViewModel: ObservableObject {
         // GRDB). Le retrait lui-même est toujours différé : voir
         // `EphemeralExpiryCoordinator`.
         refreshEphemeralExpirySchedule()
+    }
+
+    /// Les mêmes messages portent-ils les mêmes pièces, aux mêmes adresses ?
+    /// Comparé message par message, sans rien allouer.
+    nonisolated static func sameAttachmentIdentities(_ lhs: [Message], _ rhs: [Message]) -> Bool {
+        guard lhs.count == rhs.count else { return false }
+        return zip(lhs, rhs).allSatisfy { new, old in
+            new.attachments.count == old.attachments.count
+                && zip(new.attachments, old.attachments).allSatisfy { $0.id == $1.id && $0.fileUrl == $1.fileUrl }
+        }
     }
 
     /// L'ordonnanceur des disparitions d'éphémères — un réveil pour tout le

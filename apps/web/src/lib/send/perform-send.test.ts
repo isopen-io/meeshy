@@ -3,7 +3,8 @@ import { describe, expect, test } from 'bun:test';
 
 import { createHttpTransport } from '@/lib/api/http';
 import { CONVERSATIONS_QUERY_KEY } from '@/lib/api/conversations';
-import { messagesQueryKey } from '@/lib/api/messages';
+import { findCachedThreadMessage, messagesQueryKey } from '@/lib/api/messages';
+import { applyMessageNew } from '@/lib/api/realtime-apply';
 import type { Conversation, Message, MessageTranslation } from '@/lib/api/types';
 
 import { MESSAGE_EFFECT_FLAGS } from '@meeshy/shared/types/message-effect-flags';
@@ -664,6 +665,50 @@ describe('performSend — pièces jointes (#5668)', () => {
     expect(sentBody.messageType).toBe('audio');
     expect('content' in sentBody).toBe(false);
     expect(entriesOf(outbox.getState(), 'c-a')).toHaveLength(0);
+  });
+
+  /**
+   * **L'ÉCHO AVANT L'ACCUSÉ (#10690)** — la passerelle peut diffuser
+   * `message:new` (pièces SERVIES) avant que la réponse REST ne revienne.
+   * L'accusé repartait des pièces LOCALES (`pending-N`, `blob:`) et les
+   * réimposait : le vocal restait lu depuis le blob, et sa transcription,
+   * keyée par l'identifiant servi, était ignorée jusqu'à la réouverture.
+   */
+  test('un vocal dont l’écho précède l’accusé garde ses pièces SERVIES', async () => {
+    const queryClient = seededClient();
+    const outbox = createOutboxStore();
+    const served = { id: 'A1', messageId: 'm9', fileName: 'voix.webm', originalName: 'voix.webm', mimeType: 'audio/webm', fileSize: 3, fileUrl: 'https://x/voix.webm' };
+    const impl = (async (input: RequestInfo | URL, init?: RequestInit) => {
+      const url = String(input);
+      if (url.includes('/attachments/upload')) {
+        return new Response(JSON.stringify({ success: true, data: { attachments: [served] } }), { status: 200 });
+      }
+      const sent = JSON.parse(String(init?.body));
+      applyMessageNew(queryClient, outbox, {
+        id: 'm9', clientMessageId: sent.clientMessageId, conversationId: 'c-a', senderId: 'u-viewer',
+        content: '', originalLanguage: 'fr', messageType: 'audio', createdAt: '2026-09-09T10:00:00.000Z',
+        attachments: [served],
+      } as unknown as Parameters<typeof applyMessageNew>[2]);
+      return new Response(JSON.stringify(ackBody('m9', sent.clientMessageId)), { status: 200 });
+    }) as typeof fetch;
+    const deps: SendDeps = {
+      source: 'gateway',
+      transport: createHttpTransport({ base: '', fetchImpl: impl }),
+      queryClient,
+      outbox,
+      online: true,
+    };
+
+    await performSend({
+      conversationId: 'c-a',
+      draft: { content: '', originalLanguage: 'fr', attachments: [pendingAttachmentOf(new File([new Uint8Array(3)], 'voix.webm', { type: 'audio/webm' }), { durationMs: 900 })] },
+      viewerId: 'u-viewer',
+      deps,
+    });
+
+    const row = findCachedThreadMessage(queryClient, 'c-a', 'm9');
+    expect(row?.attachments?.map((a) => a.id)).toEqual(['A1']);
+    expect(row?.attachments?.[0]?.fileUrl).toBe('https://x/voix.webm');
   });
 
   test('texte + photo : messageType image, une seule photo ⇒ une seule catégorie', async () => {
