@@ -42,6 +42,16 @@ const ownHero = (props: Partial<Parameters<typeof OwnHero>[0]> = {}) =>
 
 const publicHero = (profile: PublicProfile) => renderToStaticMarkup(<PublicHero profile={profile} name="Grace" accent="#4F46E5" presence={null} />);
 
+describe('la couleur d\u2019accent du profil est la m\u00eame pour moi et pour les autres (#10741)', () => {
+  test('mon avatar sans photo et ma banni\u00e8re de design se peignent de l\u2019accent re\u00e7u, pas de l\u2019indigo de marque', () => {
+    const html = ownHero({ decor: { ring: null, banner: designs.banner }, accent: '#22C55E' });
+    expect(html.toLowerCase()).toContain('#22c55e');
+    expect(html).not.toContain('var(--color-ios-brand)"');
+    const same = publicHero({ id: 'u1', username: 'ada', displayName: 'Ada', avatar: null, banner: null, bio: null, createdAt: null, decor });
+    expect(same.toLowerCase()).toContain('#4f46e5');
+  });
+});
+
 describe('mon profil', () => {
   test('sans décor servi, le rendu est celui d’avant : l’image de bannière, aucun contour', () => {
     const html = ownHero();

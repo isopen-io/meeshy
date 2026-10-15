@@ -275,11 +275,14 @@ export function ProfileHero({
   mood,
   moodAuthorId,
   decor = NO_DESIGNS,
+  accent = DECOR_ACCENT,
 }: {
   readonly language: InterfaceLanguage;
   readonly profile: Pick<MyProfile, 'username' | 'displayName' | 'avatar' | 'banner'>;
   /** Le contour et la bannière de design équipés (#10632) : une bannière de design prime sur l'image, le contour entoure l'avatar. */
   readonly decor?: DecorDesigns;
+  /** La couleur d'accent du profil — la MÊME que celle que voient les autres (`authorAccentColor`), pour l'avatar sans photo et le dessin de la bannière (#10741). */
+  readonly accent?: string;
   readonly editing: boolean;
   readonly pending: PendingImages;
   readonly onPick: (kind: ProfileImageKind) => void;
@@ -308,7 +311,7 @@ export function ProfileHero({
   const avatarImage = (
     <Avatar
       initials={initialsOf(name)}
-      color="var(--color-ios-brand)"
+      color={accent}
       size={90}
       name={name}
       {...(avatar === null ? {} : { src: avatar })}
@@ -324,7 +327,7 @@ export function ProfileHero({
         aria-busy={pending.banner === undefined ? undefined : true}
       >
         {designedBanner !== null ? (
-          <ProfileBannerDesign design={designedBanner} accent={DECOR_ACCENT} scheme={scheme} />
+          <ProfileBannerDesign design={designedBanner} accent={accent} scheme={scheme} />
         ) : banner === null ? (
           <span
             aria-hidden="true"
