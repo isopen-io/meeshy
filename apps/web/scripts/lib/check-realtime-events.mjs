@@ -458,7 +458,8 @@ export async function checkRealtimeEvents({ browser, BASE, expect, setScheme, AA
    * de menu est une micro-tâche, `factBefore` y consomme donc 0 pas en
    * pratique.
    */
-  const modeChip = page.getByRole('button', { name: /Mode de lecture/ });
+  // Ce contexte est `en-US` par construction (prémisse ci-dessus) : depuis #10645 l'interface y parle anglais.
+  const modeChip = page.getByRole('button', { name: /Mode de lecture|Reading mode/ });
   const menuItem = (name) => page.getByRole('menuitemradio', { name });
   /**
    * `.rounded-chip` N'EST PAS LE BON SIGNAL — `Avatar` l'emploie DÉJÀ pour la
@@ -481,7 +482,7 @@ export async function checkRealtimeEvents({ browser, BASE, expect, setScheme, AA
   expect(scriptFlat, `${label} mode Script : la cellule n'a AUCUNE capsule, même tenue que Focal`);
 
   await modeChip.click();
-  await menuItem(/^Bulles/).click();
+  await menuItem(/^(Bulles|Bubbles)/).click();
   const bubblesCapsule = await chrono.factBefore(chrono.now() + MODE_SWITCH_FACT_BUDGET_MS, async () => (await hasCapsule()) === true);
   expect(bubblesCapsule, `${label} mode Bulles : la capsule à libellé reste la tenue du mode bulles`);
 

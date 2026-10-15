@@ -642,10 +642,22 @@ final class Router: ObservableObject {
             case .game(let link):
                 openGame(at: GameNavigationMap.entry(for: link))
 
+            case .packShop(let domain):
+                openPackShop(domain: domain)
+
             case .referral, .call, .external:
                 break
             }
         }
+    }
+
+    // MARK: - Vitrine des packs (#10632)
+
+    /// Ouvre Réglages puis la vitrine unique, filtrée sur `domain` : le lanceur
+    /// porte la demande jusqu'à `SettingsView`, qui présente `PacksSettingsView`.
+    func openPackShop(domain: PackDomain?) {
+        PackShopLauncher.shared.request(domain: domain)
+        replaceStack(with: .settings)
     }
 
     // MARK: - Conversation Deep Link
