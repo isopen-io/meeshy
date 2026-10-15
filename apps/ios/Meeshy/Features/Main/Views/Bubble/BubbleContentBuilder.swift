@@ -195,18 +195,7 @@ extension BubbleContent {
         // emoji-only. `BubbleStandardLayout` branches on `content.reply` —
         // no reply → free-floating large emoji (no bubble); reply → emoji
         // hosted in the bubble above the quoted-reply card, large & centered.
-        let emojiResult: EmojiDetector.EmojiOnlyResult = {
-            // `message.location` compte comme une pièce jointe pour cette
-            // détection : un emoji accompagné d'un lieu doit rendre la bulle
-            // (qui héberge LocationMessageView), pas l'emoji libre hors bulle —
-            // même sémantique qu'avec l'ancienne pièce jointe `.location`.
-            guard !message.content.isEmpty,
-                  message.attachments.isEmpty,
-                  message.location == nil else {
-                return .notEmojiOnly
-            }
-            return EmojiDetector.analyze(message.content)
-        }()
+        let emojiResult = Self.emojiOnlyResult(of: message)
         let isEmojiOnly = emojiResult != .notEmojiOnly
         self.text = effective.isEmpty ? nil : Self.text(
             raw: effective,
@@ -535,5 +524,18 @@ extension BubbleContent {
                     includesMe: entry.data.includesMe
                 )
             }
+    }
+
+    /// Le verdict « emoji seul » d'un message, site UNIQUE : la bulle, Focal,
+    /// Script et la Rivière (#10637) lisent la même taille, aucune ne la recalcule.
+    /// Un lieu ou une pièce jointe compte comme un contenu : la bulle qui
+    /// l'héberge reste une bulle.
+    static func emojiOnlyResult(of message: MeeshyMessage) -> EmojiDetector.EmojiOnlyResult {
+        guard !message.content.isEmpty,
+              message.attachments.isEmpty,
+              message.location == nil else {
+            return .notEmojiOnly
+        }
+        return EmojiDetector.analyze(message.content)
     }
 }
