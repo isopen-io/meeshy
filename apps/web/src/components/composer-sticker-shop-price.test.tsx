@@ -1,4 +1,5 @@
 import { QueryClientProvider } from '@tanstack/react-query';
+import { act } from 'react';
 import { afterAll, afterEach, beforeAll, describe, expect, test } from 'bun:test';
 
 import type { StickerPackSummary } from '@meeshy/shared/types/sticker-pack';
@@ -97,5 +98,28 @@ describe('boutique des stickers × prix et possession', () => {
     const shop = await mountShop(deps(() => ({ ok: false, status: 503, error: 'x' })).deps);
     expect(shop.querySelector('[data-shop-buy]')).toBeNull();
     expect(shop.querySelector('[data-shop-pack="gratuit"]')?.textContent).not.toContain('Possédé');
+  });
+
+  /** Au GESTE, le pack passe possédé sans attendre le réseau (optimiste) ; un refus le rend à « Acheter ». */
+  test('acheter : « Possédé » au geste, et retour à « Acheter » si le serveur refuse', async () => {
+    appQueryClient.setQueryData(PACK_CATALOGUE_QUERY_KEY, [pack('payant', { price: 120, owned: false })]);
+    appQueryClient.setQueryData(INSTALLED_PACKS_QUERY_KEY, []);
+    let answer: (value: ApiResult<unknown>) => void = () => undefined;
+    const pending = new Promise<ApiResult<unknown>>((resolve) => {
+      answer = resolve;
+    });
+    const transport = { request: async () => pending } as unknown as HttpTransport;
+    const shop = await mountShop({ source: 'gateway', transport });
+    await act(async () => {
+      shop.querySelector<HTMLButtonElement>('[data-shop-buy="payant"]')?.click();
+    });
+    expect(appQueryClient.getQueryData<readonly StickerPackSummary[]>(PACK_CATALOGUE_QUERY_KEY)?.[0]?.owned).toBe(true);
+    expect(shop.querySelector('[data-shop-buy="payant"]')).toBeNull();
+    await act(async () => {
+      answer({ ok: false, status: 409, error: 'x', code: 'INSUFFICIENT_MEESHES' });
+      await pending;
+    });
+    expect(appQueryClient.getQueryData<readonly StickerPackSummary[]>(PACK_CATALOGUE_QUERY_KEY)?.[0]?.owned).toBe(false);
+    expect(shop.querySelector('[data-shop-buy="payant"]')).not.toBeNull();
   });
 });

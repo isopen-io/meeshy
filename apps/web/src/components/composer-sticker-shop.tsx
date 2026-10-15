@@ -100,7 +100,7 @@ export const stickerShopAdapter = (language: InterfaceLanguage, deps: Conversati
   },
   applyPurchased: (queryClient, pack, confirmed) => {
     queryClient.setQueryData<readonly StickerPackSummary[]>(PACK_CATALOGUE_QUERY_KEY, (list) =>
-      (list ?? []).map((candidate) => (candidate.slug === pack.slug ? { ...candidate, owned: confirmed !== null, installed: confirmed !== null } : candidate)),
+      (list ?? []).map((candidate) => (candidate.slug === pack.slug ? { ...candidate, owned: true, installed: true } : candidate)),
     );
     if (confirmed === null) return;
     void queryClient.invalidateQueries({ queryKey: INSTALLED_PACKS_QUERY_KEY });
