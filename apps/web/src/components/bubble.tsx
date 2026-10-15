@@ -14,7 +14,7 @@ import type { PlacedMessage } from '@/lib/grouping';
 import { time } from '@/lib/grouping';
 import { languageBand, mountsBottomLine } from '@/lib/reading-mode/meta';
 import { protectionOf } from '@/lib/reading-mode/protection';
-import { BUBBLE_STICKER_RENDER_SIDE } from '@/lib/reading-mode/metrics';
+import { BUBBLE_STICKER_SIDE } from '@/lib/reading-mode/metrics';
 import { translate } from '@/lib/i18n-catalog';
 import { currentInterfaceLanguage } from '@/lib/interface-language';
 
@@ -377,7 +377,7 @@ export function Bubble({
       {sharedPlace !== null ? <LocationCard place={sharedPlace} accent="var(--accent)" language={currentInterfaceLanguage()} /> : null}
 
       {body.kind === 'sticker' ? (
-        <StickerArtwork sticker={body.sticker} picture={body.picture} side={BUBBLE_STICKER_RENDER_SIDE} />
+        <StickerArtwork sticker={body.sticker} picture={body.picture} side={BUBBLE_STICKER_SIDE} />
       ) : body.kind === 'emoji-only' ? (
         <EmojiOnly text={body.text} fontSize={body.fontSize} />
       ) : rendered.text ? (
