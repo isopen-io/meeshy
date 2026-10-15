@@ -61,6 +61,7 @@ const HOOK_NAMES = [
   'useStore',
   'useOptionalRoute',
   'useOnline',
+  'useColorScheme',
   'useConversationsSnapshot',
   'useReaderLanguages',
   'useLiveAnnouncer',
