@@ -93,6 +93,7 @@ extension StickerPickerView {
                     }
                     .buttonStyle(.plain)
                     .accessibilityLabel(item.title)
+                    .accessibilityIdentifier(StickerAccessibilityID.pack(pack.slug, item: item.id))
                 }
             }
         } header: {
