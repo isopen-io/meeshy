@@ -472,9 +472,16 @@ class StatusViewModel: ObservableObject {
 
     // MARK: - Lookup Methods
 
-    func statusForUser(userId: String) -> StatusEntry? {
+    /// L'humeur VIVANTE d'un utilisateur. Une humeur expire (`expiresAt`), mais
+    /// la liste n'est relue qu'au démarrage et au tirer pour rafraîchir — et
+    /// le cache la sert d'abord : sans ce filtre, l'avatar d'un ami gardait
+    /// une humeur éteinte au démarrage hors ligne ou après un jour au premier
+    /// plan. Même règle que l'humeur du tray (`StoryViewModel+Viewing`).
+    func statusForUser(userId: String, now: Date = Date()) -> StatusEntry? {
         guard let offset = statusIndexByUserId[userId], offset < statuses.count else { return nil }
-        return statuses[offset]
+        let entry = statuses[offset]
+        if let expiresAt = entry.expiresAt, expiresAt <= now { return nil }
+        return entry
     }
 
     // MARK: - Mood Tap Handler

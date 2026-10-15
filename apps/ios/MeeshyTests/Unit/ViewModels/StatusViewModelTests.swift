@@ -667,6 +667,16 @@ final class StatusViewModelTests: XCTestCase {
         XCTAssertEqual(result?.id, "lookup-entry")
     }
 
+    /// Une humeur éteinte ne se lit plus, même si la liste (servie par le cache) la porte encore.
+    func test_statusForUser_ignoresAnExpiredMood() {
+        let entry = makeStatusEntry(id: "mood", userId: "friend")
+        sut.statuses = [entry]
+
+        XCTAssertNotNil(sut.statusForUser(userId: "friend"), "Vivante, l'humeur se lit.")
+        XCTAssertNil(sut.statusForUser(userId: "friend", now: Date().addingTimeInterval(7200)),
+                     "Expirée (une heure de vie, lue deux heures plus tard), elle ne se lit plus.")
+    }
+
     func test_statusForUser_returnsNilForUnknownUser() {
         let entry = makeStatusEntry(userId: "known-user")
         sut.statuses = [entry]
