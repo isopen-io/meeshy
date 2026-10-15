@@ -162,9 +162,11 @@ final class ProgressionChromeGuardTests: XCTestCase {
         let rendu = RenderedScreen(ProgressionView(viewModel: vm), size: CGSize(width: 402, height: 4200))
         ecran = rendu
 
+        let blason = rendu.frame(of: "progression.rank.entry", borne: 30)
+        let compteur = rendu.frame(of: "progression.meesh.entry", borne: 30)
         let identifiants = rendu.identifiers
-        XCTAssertTrue(identifiants.contains("progression.rank.entry"), "le blason de rang n'est pas dans l'en-tête. Vus : \(identifiants)")
-        XCTAssertTrue(identifiants.contains("progression.meesh.entry"), "le compteur de Meeshes n'est pas dans l'en-tête. Vus : \(identifiants)")
+        XCTAssertNotNil(blason, "le blason de rang n'est pas dans l'en-tête. Vus : \(identifiants)")
+        XCTAssertNotNil(compteur, "le compteur de Meeshes n'est pas dans l'en-tête. Vus : \(identifiants)")
     }
 
     func test_theFrontPageHeader_carriesNothing_whenNothingIsServed() async {

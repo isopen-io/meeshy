@@ -22,6 +22,12 @@ final class PackShopUnifiedRoutingGuardTests: XCTestCase {
                       "la page Boutique des cadres est la vitrine unique (#10711)")
         XCTAssertFalse(source.contains("store.toggle(slug: slug)"),
                        "les cadres ne s'installent plus par l'ancien magasin, sans prix ni possession (#10711)")
+        XCTAssertTrue(source.contains("usageText: FrameUsageCopy.text"),
+                      "la vitrine des cadres dit où chaque pack sert, comme le magasin qu'elle remplace (#10711)")
+        XCTAssertTrue(source.contains("focusedSlug: focusedPack,\n                            language: PackShopScreen.language)"),
+                      "la vitrine des Réglages nomme ses packs dans la langue du lecteur (#10711)")
+        XCTAssertTrue(source.contains("focusedSlug: focusedPack, language: language,"),
+                      "la vitrine des cadres nomme ses packs dans la langue du lecteur (#10711)")
     }
 
     func test_lesOngletsDeCadresSuiventCeQueLaVitrineInstalle() {
