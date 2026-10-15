@@ -476,7 +476,11 @@ export const callersIn = (contents, nsNames) => {
 // `conversations.byIdParticipantsByParticipantKey` (`DELETE …/participants/:key`, expulser),
 // `conversations.byIdParticipantsByUserIdBan` (`…/ban`) et `conversations.byIdParticipantsByUserIdRole`
 // (`…/participants/:key/role`, promouvoir/rétrograder). Valeur MESURÉE en CI (run 38602621428, rouge sur 267).
-const BASELINE_DEAD_ENTRIES = 265;
+// 265 -> 277 (#10709, 2026-10-15) : la relecture des vendeurs tiers d'apparence inscrit au catalogue, pour les
+// fonds, les contours et les bannières, `…BySlugContract`, `…BySlugReview`, `…Pending` et `…Submissions` —
+// 12 entrées. Prématurées : la passerelle les sert, aucun client n'a encore l'écran de modération ni de dépôt
+// d'un pack vendeur. Valeur MESURÉE le 2026-10-15 en local sur 79129ae28f.
+const BASELINE_DEAD_ENTRIES = 277;
 
 export const readWorld = (root) => {
   const groupFiles = readdirSync(join(root, GROUPS_DIR)).filter((name) => name.endsWith('.ts')).sort();
