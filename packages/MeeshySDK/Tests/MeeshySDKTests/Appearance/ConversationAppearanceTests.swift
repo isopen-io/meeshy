@@ -82,10 +82,12 @@ struct AppearanceCatalogTests {
         #expect(catalog.wallpaper(pack: "essentiels", design: "aurore")?.style == .gradient)
     }
 
-    @Test("« Essentiels » est le seul pack présenté d'emblée")
+    /// c35652f640 installe d'office le pack animé « Brume vivante » (`animes`) — même attente que le web
+    /// (`visibleWallpaperPacks(new Set())` → essentiels, animes) ; ce témoin iOS n'avait pas suivi.
+    @Test("« Essentiels » et les fonds animés sont présentés d'emblée")
     func defaultWallpapers() {
         let packs = Set(AppearanceCatalog.shared.defaultWallpapers.map(\.pack.slug))
-        #expect(packs == ["essentiels"])
+        #expect(packs == ["essentiels", "animes"])
     }
 
     @Test("la gamme donne surface et accent par schéma, et refuse une clé inconnue")
