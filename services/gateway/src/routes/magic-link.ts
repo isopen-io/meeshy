@@ -9,7 +9,9 @@ import { initSessionService, markSessionTrusted } from '../services/SessionServi
 import { rememberPendingDeviceTrust } from './auth/pending-device-trust';
 import { enhancedLogger } from '../utils/logger-enhanced.js';
 import { sendSuccess, sendBadRequest, sendError, sendInternalError } from '../utils/response.js';
-import { userSchema, sessionSchema, errorResponseSchema, pendingSessionTokenProperty } from '@meeshy/shared/types/api-schemas';
+import { userSchema, sessionSchema, errorResponseSchema, pendingSessionTokenProperty, adoptWithinSecondsProperty } from '@meeshy/shared/types/api-schemas';
+import { provenChallengeAdoption } from '../services/auth/pending-two-factor';
+import { provenSessionAdoption, servedSession } from '../services/auth/session-adoption';
 import { pendingSessionTokenFor } from '../services/auth/email-verification-watch';
 import { AuthService } from '../services/AuthService';
 import { LOGIN_CODE_TTL_MINUTES } from '../services/auth/email-code';
@@ -243,7 +245,11 @@ export async function magicLinkRoutes(fastify: FastifyInstance) {
                 // `token`, ni `sessionToken`, ni `session`, ni `expiresIn`.
                 requires2FA: { type: 'boolean', description: 'True when the account carries a second factor — no access token is granted yet', example: true },
                 twoFactorToken: { type: 'string', description: 'Short-lived token identifying the pending login; present it to POST /auth/login/2fa with the user code' },
-                message: { type: 'string', description: 'Human-readable prompt for the second factor' }
+                message: { type: 'string', description: 'Human-readable prompt for the second factor' },
+
+                // #10518 — porté par les DEUX branches : le délai d'adoption
+                // de la session, ou la durée de vie du défi.
+                adoptWithinSeconds: adoptWithinSecondsProperty
               }
             }
           }
@@ -296,6 +302,7 @@ export async function magicLinkRoutes(fastify: FastifyInstance) {
         return sendSuccess(reply, {
           requires2FA: true,
           twoFactorToken: result.twoFactorToken,
+          ...provenChallengeAdoption(),
           user: result.user,
           message: 'Veuillez entrer votre code d\'authentification à deux facteurs'
         });
@@ -326,8 +333,9 @@ export async function magicLinkRoutes(fastify: FastifyInstance) {
         user: result.user,
         token: result.token,
         sessionToken: result.sessionToken,
-        session: { ...result.session, isTrusted: rememberDevice },
-        expiresIn
+        session: { ...servedSession(result.session ?? {}), isTrusted: rememberDevice },
+        expiresIn,
+        ...provenSessionAdoption(result.session ?? {}, new Date())
       });
 
     } catch (error) {

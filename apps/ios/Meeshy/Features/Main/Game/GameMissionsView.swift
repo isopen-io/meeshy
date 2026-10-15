@@ -7,9 +7,10 @@ import MeeshyUI
 /// (conception, partie II « Missions du jour »). Miroir de
 /// `apps/web/src/components/game-missions.tsx`.
 ///
-/// Le coffre dit son contenu AVANT l'ouverture : un tirage dont on ignore les
-/// chances est une loterie, pas un jeu. Ouvert, ses récompenses se posent AU-DESSUS
-/// de lui (`ChestStage`, 1,4 s, une tape par récompense).
+/// Le coffre garde son contenu SECRET jusqu'à l'ouverture (#10567, qui renverse
+/// #10011) : fermé, il ne dit ni montant, ni chance, ni borne — la surprise est son
+/// contenu. Ouvert, ses récompenses se posent AU-DESSUS de lui (`ChestStage`, 1,4 s,
+/// une tape par récompense).
 ///
 /// Avant chaque geste, ce qu'il dépense ou exige se dit (#9705) : le prix d'un
 /// changement contre les Meeshes en poche, les missions faites que le coffre
@@ -49,11 +50,7 @@ struct GameMissionsView: View {
     var body: some View {
         GameCard(anchor: .missions, title: String(localized: "game.missions.title", defaultValue: "Missions du jour", bundle: .main)) {
             if !missions.unlocked {
-                GameNote(text: String(
-                    localized: "game.missions.locked",
-                    defaultValue: "Les missions s’ouvrent au niveau 5 : trois par jour, et un coffre. Tu es au niveau \(GameCopy.formatCount(game.level.shown.level)).",
-                    bundle: .main
-                ))
+                GameNote(text: GameCopy.missionsLocked(level: GameCopy.formatCount(game.level.shown.level)))
                 GameFactChipRow(
                     concept: .missions,
                     items: GameSpendRows.requirement(GameSpend.requirement(current: game.level.shown.level, required: GameMissions.minLevel)),
@@ -103,7 +100,7 @@ struct GameMissionsView: View {
                         GameNote(text: GameCopy.rerollLabel)
                         GameFactChipRow(
                             concept: .missions,
-                            items: GameSpendRows.spend(rerollSpend, format: GameCopy.meeshes),
+                            items: GameSpendRows.spend(rerollSpend, format: GameCopy.meeshes, missing: { ConceptText.spendMissingReroll(missing: $0) }),
                             identifier: "game.missions.reroll.spend"
                         )
                     }
@@ -347,20 +344,6 @@ private struct GameChestCard: View {
             case .claimed:
                 GameNote(text: String(localized: "game.chest.claimed", defaultValue: "Reviens demain pour le prochain.", bundle: .main))
             }
-            // Le contenu CERTAIN et la prime possible, dits avant l'ouverture (#10011) : l'effort des missions du
-            // jour, et le cours de la prochaine Meesh du compte.
-            if phase == .locked || phase == .ready, let today = chest.today {
-                GameNote(text: GameCopy.chestToday(today))
-                    .multilineTextAlignment(.center)
-                    .accessibilityIdentifier("game.chest.today")
-                if let bonusLine = GameCopy.chestBonusOdds(today, odds: chest.odds) {
-                    GameNote(text: bonusLine)
-                        .multilineTextAlignment(.center)
-                        .accessibilityIdentifier("game.chest.bonus")
-                }
-            }
-            GameNote(text: oddsLine)
-                .multilineTextAlignment(.center)
             if let starFragments {
                 GameNote(text: GameCopy.starFragments(starFragments.collected))
                     .multilineTextAlignment(.center)
@@ -385,16 +368,5 @@ private struct GameChestCard: View {
             play += 1
             haptics.play(GameHapticPattern.chest(rewards: GameChestLines.of(reward).count))
         }
-    }
-
-    /// Les bornes et les deux tirages, avant l'ouverture : les points suivent les missions, le fragment d'étoile et
-    /// le gel ont leur chance dite (#10011).
-    private var oddsLine: String {
-        let odds = chest.odds
-        return String(
-            localized: "game.chest.odds",
-            defaultValue: "\(GameCopy.formatCount(odds.minPoints)) à \(GameCopy.points(odds.maxPoints)) selon tes missions · \(GameCopy.chance(odds.fragment)) d’un fragment d’étoile · \(GameCopy.chance(odds.freeze)) d’un gel",
-            bundle: .main
-        )
     }
 }

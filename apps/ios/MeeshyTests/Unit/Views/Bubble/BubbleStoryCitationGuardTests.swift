@@ -122,11 +122,18 @@ final class BubbleStoryCitationGuardTests: XCTestCase {
             host.contains("if let reply = content.reply, detachedStoryCitation == nil {"),
             "La citation plate doit se taire quand la carte de scène a pris la story."
         )
+        // Depuis #10628 la décision est produite par `BubbleContent` (ce que la
+        // bulle, la rangée plate et la rivière partagent) ; la bulle la relaie.
+        let card = try source(Self.card)
         XCTAssertEqual(
-            host.components(separatedBy: "private var detachedStoryCitation: ReplyReference?").count - 1, 1,
+            card.components(separatedBy: "var detachedStoryCitation: ReplyReference? {").count - 1, 1,
             "Un seul producteur de la décision — sinon les deux consommateurs (le " +
             "`body` qui MONTE la carte, le corps de bulle qui RETIRE la plate) " +
             "peuvent répondre différemment sur le même message."
+        )
+        XCTAssertEqual(
+            host.components(separatedBy: "var detachedStoryCitation: ReplyReference? { content.detachedStoryCitation }").count - 1, 1,
+            "La bulle relaie la décision de `BubbleContent`, elle ne la recalcule pas."
         )
         XCTAssertTrue(
             host.contains("BubbleStoryCitationCard("),

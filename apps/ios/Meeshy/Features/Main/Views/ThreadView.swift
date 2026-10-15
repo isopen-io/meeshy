@@ -59,7 +59,7 @@ struct ThreadView: View {
 
             Spacer()
 
-            Text(String(localized: "thread.repliesCount", defaultValue: "\(replies.count) reponses", bundle: .main))
+            Text(String(localized: "thread.repliesCount", defaultValue: "\(replies.count) réponses", bundle: .main))
                 .font(.caption.weight(.medium))
                 .foregroundColor(theme.textMuted)
         }
@@ -128,7 +128,7 @@ struct ThreadView: View {
                 .fill(Color(hex: accentColor).opacity(MeeshyOpacity.medium))
                 .frame(height: 1)
 
-            Text(String(localized: "thread.repliesCount", defaultValue: "\(replies.count) reponses", bundle: .main))
+            Text(String(localized: "thread.repliesCount", defaultValue: "\(replies.count) réponses", bundle: .main))
                 .font(.caption2.weight(.bold))
                 .foregroundColor(Color(hex: accentColor))
                 .padding(.horizontal, MeeshySpacing.sm)

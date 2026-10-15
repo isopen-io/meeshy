@@ -153,7 +153,7 @@ export function CallDevicesSheet({ onClose }: { readonly onClose: () => void }) 
   const [preferences, setPreferences] = useState(() => readDevicePreferences(browserPreferenceStorage()));
   const [failed, setFailed] = useState(false);
   const sinkId = useStore(callOutputStore, (state) => state.sinkId);
-  useBackDismiss(onClose);
+  useBackDismiss(onClose, { held: true });
   const panel = useRef<HTMLDivElement | null>(null);
   const sinks = typeof HTMLMediaElement !== 'undefined' && sinkSelectionSupported(HTMLMediaElement);
 

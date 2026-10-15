@@ -73,8 +73,8 @@ final class AuthManagerSessionRevokedTests: XCTestCase {
 
     // MARK: - Session active
 
-    func test_handleSessionRevoked_withActiveSession_clearsTheSession() {
-        AuthManager.shared.applySession(token: "tok-live", sessionToken: "sess-live", user: makeUser())
+    func test_handleSessionRevoked_withActiveSession_clearsTheSession() throws {
+        try AuthManager.shared.applySession(token: "tok-live", sessionToken: "sess-live", user: makeUser())
         XCTAssertTrue(AuthManager.shared.isAuthenticated)
 
         AuthManager.shared.handleSessionRevoked()
@@ -88,8 +88,8 @@ final class AuthManagerSessionRevokedTests: XCTestCase {
         XCTAssertNil(AuthManager.shared.currentUser)
     }
 
-    func test_handleSessionRevoked_withActiveSession_emitsSessionInvalidatedBeforeAuthFlip() {
-        AuthManager.shared.applySession(token: "tok-live", sessionToken: "sess-live", user: makeUser())
+    func test_handleSessionRevoked_withActiveSession_emitsSessionInvalidatedBeforeAuthFlip() throws {
+        try AuthManager.shared.applySession(token: "tok-live", sessionToken: "sess-live", user: makeUser())
 
         var emitCount = 0
         var wasStillAuthenticatedAtEmit: Bool?
@@ -109,7 +109,7 @@ final class AuthManagerSessionRevokedTests: XCTestCase {
     }
 
     func test_handleSessionRevoked_neverRefreshesTheToken() async throws {
-        AuthManager.shared.applySession(token: "tok-live", sessionToken: "sess-live", user: makeUser())
+        try AuthManager.shared.applySession(token: "tok-live", sessionToken: "sess-live", user: makeUser())
 
         AuthManager.shared.handleSessionRevoked()
 
@@ -146,8 +146,8 @@ final class AuthManagerSessionRevokedTests: XCTestCase {
     /// L'utilisateur doit SAVOIR pourquoi il a été déconnecté avant de se
     /// reconnecter : « fermée par l'équipe Meeshy » ne se lit pas comme
     /// « fermée depuis un autre de vos appareils ».
-    func test_handleSessionRevoked_gardeLeMotifPourLAvis() {
-        AuthManager.shared.applySession(token: "tok-live", sessionToken: "sess-live", user: makeUser())
+    func test_handleSessionRevoked_gardeLeMotifPourLAvis() throws {
+        try AuthManager.shared.applySession(token: "tok-live", sessionToken: "sess-live", user: makeUser())
 
         AuthManager.shared.handleSessionRevoked(reason: .adminRevoke)
 

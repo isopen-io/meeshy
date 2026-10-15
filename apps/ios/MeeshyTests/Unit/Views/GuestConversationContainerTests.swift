@@ -183,3 +183,96 @@ final class GuestViewerAccessTests: XCTestCase {
         XCTAssertFalse(GuestViewerAccess.offersWhoSaw(prefersReadReceipts: false, isGuest: false))
     }
 }
+
+/// #10442 — à `403 SHARE_LINK_EXPIRED` et `410 GUEST_ACCESS_REVOKED`, la
+/// session d'invité se termine : l'appareil l'oublie et l'écran dit pourquoi,
+/// avec une sortie — un nouveau lien, ou l'accueil.
+@MainActor
+final class GuestSessionEndingTests: XCTestCase {
+
+    private func makeContext(linkId: String = "mshy_abc", sessionToken: String = "anon_tok") -> AnonymousSessionContext {
+        AnonymousSessionContext(
+            sessionToken: sessionToken,
+            participantId: "part1",
+            permissions: ParticipantPermissions(),
+            linkId: linkId,
+            conversationId: "conv1"
+        )
+    }
+
+    func test_isEnded_refusalWithoutToken_endsTheCurrentSession() {
+        let session = GuestSession(identifier: "mshy_abc", context: makeContext())
+        XCTAssertTrue(session.isEnded(byRefusedToken: nil))
+    }
+
+    func test_isEnded_refusalOfThisSessionsToken_endsIt() {
+        let session = GuestSession(identifier: "mshy_abc", context: makeContext(sessionToken: "anon_tok"))
+        XCTAssertTrue(session.isEnded(byRefusedToken: "anon_tok"))
+    }
+
+    func test_isEnded_refusalOfAnotherToken_leavesANewSessionAlone() {
+        let session = GuestSession(identifier: "mshy_new", context: makeContext(linkId: "mshy_new", sessionToken: "anon_new"))
+        XCTAssertFalse(session.isEnded(byRefusedToken: "anon_old"))
+    }
+
+    func test_isEnded_sessionWithoutContext_hasNothingToEnd() {
+        XCTAssertFalse(GuestSession(identifier: "mshy_abc", context: nil).isEnded(byRefusedToken: nil))
+    }
+
+    func test_isEnded_alreadyEndedSession_isNotEndedTwice() {
+        let ended = GuestSession(identifier: "mshy_abc", context: makeContext()).ended(by: .linkExpired)
+        XCTAssertFalse(ended.isEnded(byRefusedToken: nil))
+    }
+
+    func test_endedBy_dropsTheContextAndKeepsTheReason() {
+        let session = GuestSession(identifier: "mshy_abc", context: makeContext(), isDeliberate: true)
+
+        let ended = session.ended(by: .accessRevoked)
+
+        XCTAssertNil(ended.context, "plus de fil, ni de départ à annoncer avec un jeton refusé")
+        XCTAssertEqual(ended.ended, .accessRevoked)
+        XCTAssertEqual(ended.identifier, "mshy_abc")
+        XCTAssertTrue(ended.isDeliberate)
+    }
+
+    func test_storedSessionKeys_coverTheLinkAndTheServedLinkId_once() {
+        XCTAssertEqual(GuestSession(identifier: "mshy_abc", context: makeContext(linkId: "mshy_abc")).storedSessionKeys, ["mshy_abc"])
+        XCTAssertEqual(GuestSession(identifier: "world", context: makeContext(linkId: "mshy_world")).storedSessionKeys, ["mshy_world", "world"])
+        XCTAssertEqual(GuestSession(identifier: "mshy_abc", context: nil).storedSessionKeys, ["mshy_abc"])
+    }
+
+    func test_storedSessionKeys_endingForgetsTheKeychainEntry() {
+        let ctx = makeContext(linkId: "test_guest_end_10442")
+        let session = GuestSession(identifier: "test_guest_end_10442", context: ctx)
+        AnonymousSessionStore.save(ctx)
+        defer { AnonymousSessionStore.delete(linkId: "test_guest_end_10442") }
+
+        session.storedSessionKeys.forEach { AnonymousSessionStore.delete(linkId: $0) }
+
+        XCTAssertNil(AnonymousSessionStore.load(linkId: "test_guest_end_10442"))
+    }
+
+    func test_newLink_joinAndChatLinks_yieldTheirIdentifier() {
+        XCTAssertEqual(GuestNewLink.identifier(in: "https://meeshy.me/join/mshy_new"), "mshy_new")
+        XCTAssertEqual(GuestNewLink.identifier(in: "  https://meeshy.me/chat/mshy_new\n"), "mshy_new")
+    }
+
+    func test_newLink_anythingElse_yieldsNothing() {
+        XCTAssertNil(GuestNewLink.identifier(in: ""))
+        XCTAssertNil(GuestNewLink.identifier(in: "bonjour"))
+        XCTAssertNil(GuestNewLink.identifier(in: "https://example.com/join/mshy_new"))
+        XCTAssertNil(GuestNewLink.identifier(in: "https://meeshy.me/u/alice"))
+    }
+
+    func test_copy_saysWhichEndAndDiffers() {
+        let expired = GuestSessionEndedCopy(end: .linkExpired)
+        let revoked = GuestSessionEndedCopy(end: .accessRevoked)
+
+        XCTAssertFalse(expired.title.isEmpty)
+        XCTAssertFalse(expired.message.isEmpty)
+        XCTAssertFalse(revoked.title.isEmpty)
+        XCTAssertFalse(revoked.message.isEmpty)
+        XCTAssertNotEqual(expired.title, revoked.title)
+        XCTAssertNotEqual(expired.systemImage, revoked.systemImage)
+    }
+}

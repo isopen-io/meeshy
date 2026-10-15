@@ -62,6 +62,9 @@ export async function setInstalledOf<S, I, D>(port: PackPort<S, I, D>, deps: Con
   return pack === null ? decodeFailure : { ok: true, data: pack };
 }
 
+/** Le `requestId` d'un achat, généré AU GESTE : 36 caractères `[A-Za-z0-9_-]` (contrat 8–64 du serveur). */
+export const newPurchaseRequestId = (): string => `buy-${crypto.randomUUID().replaceAll('-', '')}`;
+
 /**
  * **UN GESTE EN VOL PAR PACK** — un double toucher sur « Installer » ne part
  * qu'une fois : tant que la réponse du premier n'est pas revenue, le second

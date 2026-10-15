@@ -140,6 +140,8 @@ extension StoryViewModel {
             }
         )
         guard !candidates.isEmpty else { return }
+        // Borné : une story expire en 24 h, une session longue n'a pas à se souvenir de chacune.
+        if attemptedReceiverCoverStoryIds.count > 1_000 { attemptedReceiverCoverStoryIds.removeAll() }
         attemptedReceiverCoverStoryIds.formUnion(candidates.map(\.id))
 
         Task(priority: .utility) { [weak self] in
@@ -256,6 +258,9 @@ extension StoryViewModel {
     private func claimUnprefetchedURLs(for story: StoryItem) -> [String] {
         let all = Self.mediaURLStrings(for: story)
         let fresh = all.filter { !prefetchedMediaURLs.contains($0) }
+        // Borné : passé ce seuil, la mémoire de session repart de zéro — au pire un média déjà en cache
+        // est re-sondé une fois, au lieu d'un ensemble qui grossit tant que l'app reste ouverte.
+        if prefetchedMediaURLs.count > 2_000 { prefetchedMediaURLs.removeAll() }
         prefetchedMediaURLs.formUnion(fresh)
         return fresh
     }

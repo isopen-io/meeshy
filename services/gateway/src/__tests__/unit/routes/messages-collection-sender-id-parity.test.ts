@@ -120,6 +120,7 @@ function buildApp(): { app: FastifyInstance; prisma: any } {
           pinnedBy: SENDER_PARTICIPANT_ID,
           isViewOnce: false,
           isBlurred: false,
+          ephemeralDuration: null,
           expiresAt: null,
           effectFlags: 0,
           translations: null,

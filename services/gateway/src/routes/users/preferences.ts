@@ -1,4 +1,5 @@
 import type { FastifyInstance, FastifyRequest, FastifyReply } from 'fastify';
+import { issueSearchId } from '../../services/social/searchFingerprint';
 import { logError } from '../../utils/logger';
 import { buildPaginationMeta } from '../../utils/pagination';
 import { sendSuccess, sendPaginatedSuccess, sendUnauthorized, sendNotFound, sendInternalError } from '../../utils/response.js';
@@ -515,6 +516,12 @@ export async function searchUsers(fastify: FastifyInstance) {
                 limit: { type: 'number' },
                 returned: { type: 'number' }
               }
+            },
+            meta: {
+              type: 'object',
+              properties: {
+                searchId: { type: 'string', description: 'Identifiant opaque et signé de la recherche (#10506), recopié par l’événement discovery ; ne contient jamais le texte cherché' }
+              }
             }
           }
         },
@@ -539,6 +546,7 @@ export async function searchUsers(fastify: FastifyInstance) {
       }
 
       const searchTerm = q.trim();
+      const searchId = issueSearchId(searchTerm);
 
       // Deux régimes de correspondance, et la distinction est la garde (#4145).
       //
@@ -644,7 +652,9 @@ export async function searchUsers(fastify: FastifyInstance) {
         .map(u => applyPresenceVisibilityAsOffline(u, visibilityMap.get(u.id)))
         .sort(servedOnlineFirst);
 
-      return sendPaginatedSuccess(reply, gatedUsers, buildPaginationMeta(totalCount, offsetNum, limitNum, gatedUsers.length));
+      return sendPaginatedSuccess(reply, gatedUsers, buildPaginationMeta(totalCount, offsetNum, limitNum, gatedUsers.length), {
+        meta: { searchId },
+      });
     } catch (error) {
       logError(fastify.log, 'Error searching users', error);
       return sendInternalError(reply, 'Internal server error');

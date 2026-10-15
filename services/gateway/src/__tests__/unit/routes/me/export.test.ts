@@ -96,6 +96,12 @@ async function buildApp(opts: {
         (model) => [model, { findMany: jest.fn().mockResolvedValue([]), count: jest.fn().mockResolvedValue(0) }],
       ),
     ),
+    // La télémétrie de lecture (#10499, O6) : un compte qui n'a rien lu.
+    ...Object.fromEntries(
+      ['postImpression', 'postEngagement', 'postView', 'contentEvent'].map(
+        (model) => [model, { findMany: jest.fn().mockResolvedValue([]) }],
+      ),
+    ),
   } as any);
 
   app.decorate('authenticate', async (req: FastifyRequest) => {
@@ -146,6 +152,7 @@ describe('GET /export — default JSON (all types)', () => {
     // premiers (l'export RGPD ne doit pas exiger de connaître chaque catégorie).
     expect(body.data.requestedTypes).toEqual([
       'profile', 'messages', 'contacts', 'posts', 'stories', 'comments', 'reactions', 'media', 'voiceProfile', 'sessions', 'securityEvents', 'game', 'packs',
+      'readingActivity',
     ]);
     expect(body.data.profile).toBeDefined();
     expect(body.data.profile.id).toBe(USER_ID);

@@ -255,7 +255,7 @@ describe('StoryRail — ce que le corpus des stories apporte', () => {
   test('chaque tuile mène À LA STORY de son auteur (/story/$post), jamais au fil ni à /stories', () => {
     const el = mount({ variant: 'grande', groups: [group('u-amina', 'Amina Diallo')] });
     const lien = el.querySelector('a[data-story-author="u-amina"]') as HTMLAnchorElement;
-    expect(lien.getAttribute('href')).toBe('/story/st-u-amina');
+    expect(lien.getAttribute('href')).toBe('/story/st-u-amina?from=story_rail');
   });
 
   test('les deux portes flottantes n’existent QUE sur le grand plateau', () => {

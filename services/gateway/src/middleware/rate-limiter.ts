@@ -33,6 +33,8 @@ import { FastifyInstance, FastifyRequest, FastifyReply } from 'fastify';
 import rateLimit from '@fastify/rate-limit';
 import { UnifiedAuthRequest } from './auth';
 import { getCacheStore } from '../services/CacheStore';
+import { addressFingerprintOf } from '../utils/address-fingerprint';
+import { anonymousReaderKeyOf } from '../routes/social/anonymousReader';
 
 /**
  * Chemins exemptés du débit — sondes de disponibilité (#4219). Nommée et
@@ -278,15 +280,35 @@ export function createDirectoryRouteRateLimitConfig(
   };
 }
 
+/**
+ * Le seau d'un appelant SANS compte sur une route de posts (#10483) : sa clé de
+ * lecteur quand il porte un X-Session-Token (un bureau de trente personnes
+ * derrière une même IP = trente seaux), sinon l'EMPREINTE HMAC tournante de son
+ * adresse — jamais l'adresse en clair dans une clé Redis.
+ */
+function anonymousPostRouteKey(request: FastifyRequest): string {
+  const readerKey = anonymousReaderKeyOf(request);
+  return readerKey ? `reader:${readerKey}` : `addr:${addressFingerprintOf({ ip: request.ip })}`;
+}
+
+/**
+ * `view` et `impressionUnit` sont à la mesure d'un DÉFILEMENT de réels (#10403) :
+ * une vue et une impression par réel affiché, et la passerelle dédoublonne
+ * déjà la vue par (post, compte). Un plafond de 60 vues par compte, et
+ * l'impression unitaire laissée au seau global de 300/min par ADRESSE, jetaient
+ * en 429 les premières vues réelles des réels suivants — sans rejeu côté
+ * client (prod, 2026-10-12 : 1430 × 429 sur /view, 204 sur /impression).
+ */
 export function createPostRouteRateLimitConfig(
-  type: 'create' | 'like' | 'view' | 'comment' | 'impression' | 'engagement'
+  type: 'create' | 'like' | 'view' | 'comment' | 'impression' | 'impressionUnit' | 'engagement'
 ): object {
   const configs = {
     create: { max: 10, label: 'create' },
     like: { max: 30, label: 'like' },
-    view: { max: 60, label: 'view' },
+    view: { max: 240, label: 'view' },
     comment: { max: 20, label: 'comment' },
     impression: { max: 30, label: 'impression' },
+    impressionUnit: { max: 240, label: 'impression-unit' },
     engagement: { max: 20, label: 'engagement' },
   };
   const cfg = configs[type];
@@ -296,8 +318,11 @@ export function createPostRouteRateLimitConfig(
     ...GARDES_DE_CLE,
     keyGenerator: (request: FastifyRequest) => {
       const authContext = (request as UnifiedAuthRequest).authContext;
-      const id = authContext?.userId ?? `ip:${request.ip}`;
-      return `posts:${cfg.label}:${id}`;
+      // Le contexte NON authentifié du middleware facultatif porte
+      // `userId: 'anonymous'` : le lire versait tous les visiteurs dans UN seau
+      // (#10483, alias d'impression ouverts aux lecteurs sans compte).
+      const userId = authContext?.isAuthenticated === false ? undefined : authContext?.userId;
+      return `posts:${cfg.label}:${userId ?? anonymousPostRouteKey(request)}`;
     },
     errorResponseBuilder: () => ({
       success: false,

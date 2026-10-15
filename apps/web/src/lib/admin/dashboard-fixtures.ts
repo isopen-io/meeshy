@@ -256,6 +256,25 @@ export const SERVED = {
       { conversationId: IDS.famille, conversation: { id: IDS.famille, title: 'Famille', type: 'group' }, messagesSent: 3, lastResponseAt: '2026-09-30T09:00:00.000Z' },
     ],
   },
+  /* LA MACHINE (#10396) : la dernière mesure de l'hôte, en tête du tableau de bord. */
+  hostMetrics: {
+    source: 'host-proc',
+    hostname: 'meeshy',
+    sharedHost: true,
+    environment: 'staging',
+    intervalMs: 5000,
+    gpu: { kind: 'absent', reason: 'no-compute-gpu' },
+    samples: [
+      {
+        at: '2026-09-30T12:00:00.000Z',
+        cpu: { usedPercent: 42, cores: 8, load1: 1, load5: 1, load15: 1 },
+        memory: { totalBytes: 16_000_000_000, availableBytes: 8_000_000_000, usedBytes: 8_000_000_000 },
+        swap: { totalBytes: 0, usedBytes: 0 },
+        disk: { mount: '/', totalBytes: 100_000_000_000, freeBytes: 30_000_000_000, usedBytes: 70_000_000_000 },
+      },
+    ],
+    docker: null,
+  },
 } as const;
 
 export type DashRoute = keyof typeof SERVED;
@@ -276,6 +295,7 @@ const PATHS: readonly (readonly [Exclude<DashRoute, 'rankConversations' | 'rankM
   ['users', adminEndpoints.users],
   ['monitoring', adminEndpoints.monitoring],
   ['agent', adminEndpoints.agentStats],
+  ['hostMetrics', adminEndpoints.opsHostMetrics],
 ];
 
 /** Quelle lecture du tableau de bord une requête vise-t-elle ? `null` : aucune. */

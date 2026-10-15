@@ -188,6 +188,12 @@ function makePrisma(opts: PrismaOpts = {}) {
         (model) => [model, { findMany: jest.fn().mockResolvedValue([]), count: jest.fn().mockResolvedValue(0) }],
       ),
     ),
+    // La télémétrie de lecture (#10499, O6) : un compte qui n'a rien lu.
+    ...Object.fromEntries(
+      ['postImpression', 'postEngagement', 'postView', 'contentEvent'].map(
+        (model) => [model, { findMany: jest.fn().mockResolvedValue([]) }],
+      ),
+    ),
   };
 }
 

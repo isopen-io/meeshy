@@ -332,6 +332,9 @@ export function applyMessageTranslation(queryClient: QueryClient, data: Translat
     patchThreadMessages(queryClient, conversationId, (messages) =>
       messages.map((m) => (m.id === data.messageId ? merged : m)),
     );
+    /* Une requête du fil EN VOL rendrait le message nu, parti avant sa
+       traduction (#10573) : elle est relancée, motif `applyMessageNew`. */
+    keepLiveMessageOverFetch(queryClient, conversationId);
   }
 
   /* LA LIGNE SUIT MÊME FIL FERMÉ (#7547) — elle se retrouve par son DERNIER

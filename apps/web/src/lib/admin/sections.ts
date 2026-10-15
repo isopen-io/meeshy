@@ -203,9 +203,8 @@ export const ADMIN_SECTIONS: readonly AdminSection[] = [
   section('engagementScale', { permission: 'canAccessAdmin', glyph: 'flame', ready: true, adminRankOnly: true }),
   /* LES OPÉRATIONS DU SERVEUR (#10391, #10396) — l'hôte en direct (CPU, mémoire,
      disque), la sauvegarde et la purge des images. Rang d'administration :
-     `/admin/ops/*` exige `requireAdminRank()`. Servie dès que l'écran des
-     opérations est livré (#10396) : d'ici là, ni menu ni tuile n'y mènent. */
-  section('operations', { permission: 'canAccessAdmin', glyph: 'cpu', ready: false, adminRankOnly: true }),
+     `/admin/ops/*` exige `requireAdminRank()` ; seuls les gestes exigent BIGBOSS. */
+  section('operations', { permission: 'canAccessAdmin', glyph: 'cpu', ready: true, adminRankOnly: true }),
   section('monitoring', { permission: 'canViewAnalytics', glyph: 'heartbeat', ready: true, adminRankOnly: true }),
   section('languages', { permission: 'canViewAnalytics', glyph: 'translate', ready: true }),
   /* LE PILOTAGE DE L'AGENT (#6733) — `canManageAgent`, jamais `canAccessAdmin` :

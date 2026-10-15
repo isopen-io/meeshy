@@ -21,11 +21,15 @@ import MeeshyUI
 /// numéroté. `badgesLost` est ABSENT quand le serveur ne sert pas de quoi le
 /// calculer (`GameMintBadgeImpact`) : « inconnu » ne se dit pas « aucun ».
 ///
-/// AVANT le geste, la rangée de dépense (#9705) dit les points en poche, le prix et ce qui restera — ou, frappe
-/// impossible, les points CONVERTIBLES qui manquent : la frappe se retranche du score, mais seuls les convertibles
-/// la paient, et le verdict reste celui du serveur (`mint.canMint`).
+/// AVANT le geste, la rangée de dépense (#9705) dit les points en poche, les points À CONVERTIR, le prix et ce qui
+/// restera — ou, frappe impossible, les points à convertir qui manquent, dits avec leur cible (« pour la Meesh
+/// n° 79 », #10540) : la frappe se retranche du score, mais seuls les points à convertir la paient, et le verdict
+/// reste celui du serveur (`mint.canMint`).
 struct GameMintPreviewView: View {
     let game: GameBlock
+    /// Les points À CONVERTIR servis par le porte-monnaie (#10540). Absents : une frappe impossible les dit (le prix
+    /// moins le manque) ; possible, ils restent tus plutôt que devinés depuis le score.
+    var convertible: Int?
     /// Les badges que la frappe éteindrait ; `nil` quand le serveur ne sert pas de quoi le calculer.
     var badgesLost: Int?
     let online: Bool
@@ -52,6 +56,17 @@ struct GameMintPreviewView: View {
         )
     }
 
+    /// La rangée de dépense : En poche · À convertir · Coûte · Restera — ou la phrase du manque, qui nomme la pièce.
+    var spendItems: [GameFactChipItem] {
+        let toConvert: Int? = convertible ?? (mint.canMint ? nil : max(0, mint.price - mint.missingPoints))
+        let number = GameCopy.formatCount(mint.number)
+        return GameSpendRows.spend(
+            spend, format: GameCopy.points, formatMissing: GameCopy.convertiblePoints, heldFact: .score, missingFact: .mintMissing,
+            between: toConvert.map { GameFactChipItem(label: ConceptText.factToConvert, value: GameCopy.points($0), detail: .convertible) },
+            missing: { ConceptText.spendMissingMint(missing: $0, number: number) }
+        )
+    }
+
     private var rankChanges: Bool {
         afterStanding.rank != game.glory.rank || afterStanding.division5 != game.glory.shownDivision
     }
@@ -70,12 +85,7 @@ struct GameMintPreviewView: View {
                 .accessibilityAddTraits(.updatesFrequently)
                 .accessibilityIdentifier("game.mint.celebration")
             }
-            GameFactChipRow(
-                concept: .meesh,
-                items: GameSpendRows.spend(spend, format: GameCopy.points, formatMissing: GameCopy.convertiblePoints,
-                                           heldFact: .score, missingFact: .mintMissing),
-                identifier: "game.mint.spend"
-            )
+            GameFactChipRow(concept: .meesh, items: spendItems, identifier: "game.mint.spend")
             if mint.canMint {
                 consequences
                 GameActionButton(

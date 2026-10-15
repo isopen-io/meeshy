@@ -126,7 +126,7 @@ function Gauge({ model, level, tint, roll, large }: { readonly model: PlayerBann
       </span>
       {level.pointsToNext === null ? null : (
         <span data-player-banner-missing={level.pointsToNext} className="truncate text-caption tabular-nums" style={{ color: INK_2 }}>
-          {translateGame(language, 'game.banner.missing', { points: formatCount(missing, language) })}
+          {translateGame(language, 'game.banner.missing', { points: formatCount(missing, language), level: formatCount(level.nextLevel ?? level.level + 1, language) })}
         </span>
       )}
     </span>

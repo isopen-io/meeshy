@@ -167,6 +167,56 @@ final class ConversationAudioCoordinatorTests: XCTestCase {
         XCTAssertEqual(sut.activeContext?.conversationName, "Conv")
     }
 
+    // MARK: - #10383 — le plein écran impose l'ordre de réception à la file
+
+    func test_replaceUpcoming_keepsTheHeadPlaying_andSwapsTheTail() {
+        let (sut, engine) = makeSUT()
+        sut.play(current: makeQueuedAudio(attachmentId: "a"),
+                 tail: [makeQueuedAudio(attachmentId: "unread")],
+                 conversationName: "Conv", conversationArtworkURL: nil)
+        let playsBefore = engine.playCallCount
+
+        sut.replaceUpcoming([makeQueuedAudio(attachmentId: "b"), makeQueuedAudio(attachmentId: "c")])
+
+        XCTAssertEqual(sut.activeContext?.attachmentId, "a")
+        XCTAssertEqual(sut.queueCount, 3)
+        XCTAssertEqual(engine.playCallCount, playsBefore, "remplacer la suite ne relance pas la tête")
+    }
+
+    func test_replaceUpcoming_thenTheHeadFinishes_playsTheReplacedNext() async {
+        let (sut, engine) = makeSUT()
+        sut.play(current: makeQueuedAudio(attachmentId: "a"),
+                 tail: [makeQueuedAudio(attachmentId: "unread")],
+                 conversationName: "Conv", conversationArtworkURL: nil)
+        sut.replaceUpcoming([makeQueuedAudio(attachmentId: "b", fileUrl: "https://cdn/b.m4a")])
+
+        engine.simulateFinishPlayback()
+        await Task.yield()
+
+        XCTAssertEqual(sut.activeContext?.attachmentId, "b",
+                       "la fin d'un vocal enchaîne sur le suivant du plein écran, pas sur la file des non écoutés")
+        XCTAssertEqual(engine.lastPlayedUrl, "https://cdn/b.m4a")
+    }
+
+    func test_replaceUpcoming_dropsTheHeadFromTheTail() {
+        let (sut, _) = makeSUT()
+        sut.play(current: makeQueuedAudio(attachmentId: "a"), tail: [],
+                 conversationName: "Conv", conversationArtworkURL: nil)
+
+        sut.replaceUpcoming([makeQueuedAudio(attachmentId: "a"), makeQueuedAudio(attachmentId: "b")])
+
+        XCTAssertEqual(sut.queueCount, 2, "la tête ne se rejoue pas après elle-même")
+    }
+
+    func test_replaceUpcoming_withoutActiveContext_isNoOp() {
+        let (sut, _) = makeSUT()
+
+        sut.replaceUpcoming([makeQueuedAudio(attachmentId: "b")])
+
+        XCTAssertNil(sut.activeContext)
+        XCTAssertEqual(sut.queueCount, 0)
+    }
+
     func test_playKeepingQueue_withoutActiveContext_isNoOp() {
         let engine = MockAudioPlaybackEngine()
         let sut = ConversationAudioCoordinator(engine: engine)

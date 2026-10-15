@@ -5,8 +5,12 @@ import {
   auditForbiddenPermissions,
   auditManifestPermissions,
   auditShareIntentFilters,
+  CALL_ONLY_PERMISSIONS,
+  callsEnabledIn,
+  forbiddenPermissions,
   formatViolations,
   REQUIRED_PERMISSIONS,
+  requiredPermissions,
 } from './check-android-manifest.mjs';
 
 /**
@@ -179,14 +183,40 @@ describe('les permissions de l appel natif de la coque (#8049)', () => {
     'android.permission.VIBRATE',
   ];
 
+  const withCalls = requiredPermissions({ callsEnabled: true });
+
   for (const permission of CALL_PERMISSIONS) {
-    test(`${permission} est requise : son absence est une violation nommée`, () => {
-      expect(REQUIRED_PERMISSIONS).toContain(permission);
-      expect(auditManifestPermissions({ manifest: manifestWith(othersThan(permission)) })).toEqual([
+    test(`${permission} est requise quand les appels sont allumés : son absence est une violation nommée`, () => {
+      expect(withCalls).toContain(permission);
+      const others = withCalls.filter((required) => required !== permission).map(declaration);
+      expect(auditManifestPermissions({ manifest: manifestWith(others), required: withCalls })).toEqual([
         { permission, count: 0 },
       ]);
     });
   }
+});
+
+describe('les appels de la coque coupés (#10611) — la caméra au premier plan et la sonnerie plein écran sortent', () => {
+  test('ni requises ni tolérées tant que les appels sont coupés', () => {
+    for (const permission of CALL_ONLY_PERMISSIONS) {
+      expect(requiredPermissions({ callsEnabled: false })).not.toContain(permission);
+      expect(forbiddenPermissions({ callsEnabled: false })).toContain(permission);
+      expect(forbiddenPermissions({ callsEnabled: true })).not.toContain(permission);
+    }
+  });
+
+  test('une déclaration restée est une violation nommée', () => {
+    const manifest = manifestWith([...REQUIRED_PERMISSIONS.map(declaration), declaration('android.permission.USE_FULL_SCREEN_INTENT')]);
+    expect(auditForbiddenPermissions({ manifest, forbidden: forbiddenPermissions({ callsEnabled: false }) })).toEqual([
+      'android.permission.USE_FULL_SCREEN_INTENT',
+    ]);
+  });
+
+  test('le drapeau se lit dans CallPush.java, et son absence est refusée', () => {
+    expect(callsEnabledIn('    public static final boolean CALLS_ENABLED = false;')).toBe(false);
+    expect(callsEnabledIn('    public static final boolean CALLS_ENABLED = true;')).toBe(true);
+    expect(() => callsEnabledIn('class CallPush {}')).toThrow('CALLS_ENABLED');
+  });
 });
 
 const CALL_COMPONENTS: readonly string[] = [
@@ -219,6 +249,17 @@ describe('auditCallComponents — la coque déclare les composants de l appel na
     const manifest = manifestWith(CALL_COMPONENTS.filter((line) => !line.includes('MeeshyMessagingService')));
     expect(auditCallComponents({ manifest })).toEqual([
       '.MeeshyMessagingService — absent ou sans com.google.firebase.MESSAGING_EVENT',
+    ]);
+  });
+
+  test('appels coupés : le service au premier plan absent → aucune violation', () => {
+    const manifest = manifestWith(CALL_COMPONENTS.filter((line) => !line.includes('CallForegroundService')));
+    expect(auditCallComponents({ manifest, callsEnabled: false })).toEqual([]);
+  });
+
+  test('appels coupés : le service au premier plan resté → violation nommée', () => {
+    expect(auditCallComponents({ manifest: callComponentsWhere((line) => line), callsEnabled: false })).toEqual([
+      '.CallForegroundService — déclaré alors que les appels de la coque sont coupés (CallPush.CALLS_ENABLED)',
     ]);
   });
 

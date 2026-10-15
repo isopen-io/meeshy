@@ -1,4 +1,4 @@
-import { gaussianTaps, type Compositor } from './video-effects-blur';
+import { FRAGMENT_PRECISION, gaussianTaps, type Compositor } from './video-effects-blur';
 
 /**
  * **LE COMPOSITEUR DU FLOU** (#8471) — WebGL2, dans le worker, sur son propre
@@ -13,6 +13,9 @@ import { gaussianTaps, type Compositor } from './video-effects-blur';
  *
  * Le masque (`mask`) arrive à part, quinze fois par seconde ; il vaut 0
  * (tout flouté) tant qu'aucune découpe n'est arrivée.
+ *
+ * Les passes lisent en `highp` (#9203) : en `mediump`, demi-flottant sur un
+ * GPU mobile, la personne nette prenait la couleur de ses voisins.
  */
 
 const SCALE = 4;
@@ -29,7 +32,7 @@ void main() {
 }`;
 
 const DOWN = `#version 300 es
-precision mediump float;
+precision ${FRAGMENT_PRECISION} float;
 uniform sampler2D u_image;
 uniform vec2 u_texel;
 in vec2 v_uv;
@@ -39,7 +42,7 @@ void main() {
 }`;
 
 const BLUR = `#version 300 es
-precision mediump float;
+precision ${FRAGMENT_PRECISION} float;
 uniform sampler2D u_image;
 uniform vec2 u_step;
 uniform float u_center;
@@ -57,7 +60,7 @@ void main() {
 }`;
 
 const MIX = `#version 300 es
-precision mediump float;
+precision ${FRAGMENT_PRECISION} float;
 uniform sampler2D u_sharp;
 uniform sampler2D u_blurred;
 uniform sampler2D u_mask;
@@ -67,6 +70,9 @@ void main() {
   float person = smoothstep(0.3, 0.7, texture(u_mask, v_uv).r);
   o_color = vec4(mix(texture(u_blurred, v_uv).rgb, texture(u_sharp, v_uv).rgb, person), 1.0);
 }`;
+
+/** Les passes de fragment, relues par le témoin des couleurs (#9203). */
+export const FRAGMENT_SHADERS = { DOWN, BLUR, MIX } as const;
 
 type Program = { readonly program: WebGLProgram; readonly uniform: (name: string) => WebGLUniformLocation | null };
 

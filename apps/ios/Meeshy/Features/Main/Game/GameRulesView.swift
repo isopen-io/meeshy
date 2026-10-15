@@ -41,6 +41,8 @@ struct GameRulesPage: View {
                 VStack(alignment: .leading, spacing: MeeshySpacing.xl) {
                     intro
                     rules
+                    // « Chaque concept, en clair » (#10540) : aucun concept que Progression affiche n'est absent du carnet.
+                    GameRulesGlossarySection()
                     // Les badges, dits UN par UN (#9640) : matières et seuils, ruban, empreinte, les vingt par famille.
                     GameRulesBadgesSection()
                         .id(Self.sectionID(.badges))
@@ -182,6 +184,50 @@ struct GameRulesPage: View {
             }
         }
         .accessibilityHidden(true)
+    }
+}
+
+// MARK: - « Chaque concept, en clair » (#10540)
+
+/// LE GLOSSAIRE DU CARNET (miroir de la section `concepts-titre`, `apps/web/src/routes/progression-rules.tsx`) — les
+/// quinze concepts de Progression et ce qu'elle montre sans en faire une fiche (coffre, trésor, étapes des niveaux,
+/// Vent arrière, duo), un par un : ce que c'est, à quoi ça sert, comment ça se gagne et comment s'en servir. Une page
+/// qui explique : aucune entrée ne porte de geste.
+struct GameRulesGlossarySection: View {
+    private var theme: ThemeManager { ThemeManager.shared }
+
+    static let identifier = "game.rules.section.concepts"
+
+    var body: some View {
+        VStack(alignment: .leading, spacing: MeeshySpacing.sm) {
+            Text(GameRulesGlossary.sectionTitle)
+                .font(MeeshyFont.relative(MeeshyFont.titleSize, weight: .bold))
+                .foregroundColor(theme.textPrimary)
+                .accessibilityAddTraits(.isHeader)
+            Text(GameRulesGlossary.intro)
+                .font(MeeshyFont.relative(MeeshyFont.bodySize, weight: .regular))
+                .foregroundColor(theme.textMuted)
+                .fixedSize(horizontal: false, vertical: true)
+            ForEach(GameRulesGlossary.entries) { entry in
+                VStack(alignment: .leading, spacing: 2) {
+                    Text(entry.name)
+                        .font(MeeshyFont.relative(MeeshyFont.bodySize, weight: .bold))
+                        .foregroundColor(theme.textPrimary)
+                    Text(entry.body)
+                        .font(MeeshyFont.relative(MeeshyFont.bodySize, weight: .regular))
+                        .foregroundColor(theme.textMuted)
+                        .fixedSize(horizontal: false, vertical: true)
+                }
+                .frame(maxWidth: .infinity, alignment: .leading)
+                .padding(MeeshySpacing.md)
+                .background(RoundedRectangle(cornerRadius: MeeshyRadius.md, style: .continuous).fill(theme.backgroundSecondary))
+                .accessibilityElement(children: .combine)
+                .accessibilityIdentifier("game.rules.concept." + entry.key.rawValue)
+            }
+        }
+        .frame(maxWidth: .infinity, alignment: .leading)
+        .accessibilityElement(children: .contain)
+        .accessibilityIdentifier(Self.identifier)
     }
 }
 

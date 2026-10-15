@@ -13,10 +13,10 @@ import MeeshyUI
 struct StoryExportShareSheet: View {
     let story: StoryItem
     @ObservedObject var viewModel: StoryExportShareViewModel
-    /// Le pseudo de l'AUTEUR de la story : le filigrane le nomme, et seule SA
-    /// story porte l'interlude d'identité de l'utilisateur connecté (#9953).
+    /// L'AUTEUR de la story : le filigrane le nomme et l'interlude le présente
+    /// — jamais le lecteur devant la story d'un autre (#9953, #10536).
     /// `nil` (« Mes stories ») : l'utilisateur connecté est l'auteur.
-    var authorUsername: String? = nil
+    var author: StoryExportAuthor? = nil
     @Environment(\.dismiss) private var dismiss
     @Environment(\.colorScheme) private var colorScheme
 
@@ -170,7 +170,7 @@ struct StoryExportShareSheet: View {
         case .idle, .failed:
             Button {
                 HapticFeedback.medium()
-                Task { await viewModel.startExport(story: story, authorUsername: authorUsername) }
+                Task { await viewModel.startExport(story: story, author: author) }
             } label: {
                 Text(String(localized: "story.export.share.cta", defaultValue: "Exporter en vidéo"))
                     .font(MeeshyFont.relative(MeeshyFont.calloutSize, weight: .semibold))

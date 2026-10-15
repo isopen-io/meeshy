@@ -83,6 +83,24 @@ export function customNameOf(conversation: Conversation): string | undefined {
   return typeof value === 'string' && value.length > 0 ? value : undefined;
 }
 
+/** Le FAVORI du lecteur (#10593) — l'emoji qu'il a posé sur la conversation,
+ * `reaction` au wire comme sur iOS (`userState.reaction`). */
+export function reactionOf(conversation: Conversation): string | undefined {
+  const value = preferenceEntryOf(conversation)?.['reaction'];
+  return typeof value === 'string' && value.length > 0 ? value : undefined;
+}
+
+/**
+ * LES PRÉFÉRENCES QUI NE SONT PAS DES DRAPEAUX (#10593) — favori, catégorie,
+ * nom personnel. `null` RETIRE : la passerelle l'écrit tel quel
+ * (`conversation-preferences.ts`, `nullable: true` sur les trois).
+ */
+export type ConversationPreferencePatch = {
+  readonly reaction?: string | null;
+  readonly categoryId?: string | null;
+  readonly customName?: string | null;
+};
+
 /**
  * `PUT userPreferences.conversationsByConversationId` (§3.2,
  * `services/gateway/src/routes/conversation-preferences.ts:349-435`). Corps
@@ -94,7 +112,7 @@ export function customNameOf(conversation: Conversation): string | undefined {
 export function pushConversationFlags(
   transport: Transport,
   conversationId: string,
-  patch: Partial<ConversationFlags>,
+  patch: Partial<ConversationFlags> | ConversationPreferencePatch,
 ): Promise<unknown> {
   return transport({
     method: 'PUT',

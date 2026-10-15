@@ -550,7 +550,7 @@ final class StoryViewModelTests: XCTestCase {
         let group = makeStoryGroup(userId: "u1", stories: [item])
         sut.storyGroups = [group]
         var enqueuedStoryIds: [String] = []
-        sut.markViewedOutboxEnqueuer = { enqueuedStoryIds.append($0) }
+        sut.markViewedOutboxEnqueuer = { storyId, _ in enqueuedStoryIds.append(storyId) }
 
         sut.markViewed(storyId: storyId)
 

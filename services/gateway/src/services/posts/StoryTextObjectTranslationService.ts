@@ -20,6 +20,7 @@ import {
   isContentDerivedFromTextObjects,
 } from './storyContentComposition';
 import { isCanvasV3OrNewer, storyTranslatableTexts, translationSetPath } from './storyEffectsV3';
+import { servedTextIndex, textsWithoutCredits } from './repostCreditChips';
 
 const log = enhancedLogger.child({ module: 'StoryTextObjectTranslationService' });
 
@@ -152,19 +153,25 @@ export class StoryTextObjectTranslationService {
 
       log.info('StoryTextObject translations persisted — broadcasting', { postId, textObjectIndex });
 
-      const eventData: StoryTranslationUpdatedEventData = {
-        postId,
-        textObjectIndex,
-        translations,
-      };
+      // #10498, #10524 — l'index diffusé est celui du canvas SERVI, dont la
+      // puce de crédit est retirée.
+      const servedIndex = servedTextIndex({
+        storyEffects: post.storyEffects,
+        textIndex: textObjectIndex,
+      });
+      const eventData: StoryTranslationUpdatedEventData | null = servedIndex === null
+        ? null
+        : { postId, textObjectIndex: servedIndex, translations };
 
       // Broadcast to both the author's feed room (so they see translations land
       // in their own composer/preview) AND to viewers who can see the post.
       // Previously only the author was notified, so live viewers stayed on the
       // untranslated text until they refreshed.
       const recipientIds = await this.resolveBroadcastRecipients(post.authorId, post.visibility, post.visibilityUserIds);
-      for (const userId of recipientIds) {
-        this.io.to(ROOMS.feed(userId)).emit(SERVER_EVENTS.STORY_TRANSLATION_UPDATED, eventData);
+      if (eventData) {
+        for (const userId of recipientIds) {
+          this.io.to(ROOMS.feed(userId)).emit(SERVER_EVENTS.STORY_TRANSLATION_UPDATED, eventData);
+        }
       }
 
       // L'index recomposé doit remonter par le MÊME canal que la légende
@@ -219,10 +226,14 @@ export class StoryTextObjectTranslationService {
       translations: { ...((target.translations ?? {}) as Record<string, unknown>), ...translations },
     };
 
+    // #10523 — une story d'avant #4502 a pu ranger la puce de crédit dans son
+    // index : l'assemblage ne la reprend pas.
+    const assembled = textsWithoutCredits(storyEffects, textObjects);
+
     const fields: Record<string, Prisma.InputJsonValue> = {};
     const createdAt = new Date().toISOString();
     for (const lang of languages) {
-      const composed = composeStoryContentForLanguage(textObjects, lang);
+      const composed = composeStoryContentForLanguage(assembled, lang);
       if (!composed) continue;
       fields[`translations.${lang}`] = {
         text: composed,

@@ -25,6 +25,9 @@ import { useOnline } from '@/lib/net/online';
 import { shortRelativeTime } from '@/lib/relative-time';
 import { STORY_DEFAULT_REACTION, hasReactedToStory } from '@/lib/stories/reaction';
 import { storyRailParticipated, usePublicationParticipation } from '@/lib/view/publication-participation';
+import { ADVANCED_STORY, entryAttribution } from '@/lib/view/content-open';
+import { useStoryTelemetry } from '@/lib/telemetry/story-telemetry';
+import { useReadingSession, useViewAttribution } from '@/lib/view/reading-telemetry';
 import { resolveStoryCaption } from '@/lib/stories/caption';
 import { servedStoryIndicator } from '@/lib/stories/language-availability';
 import { currentInterfaceLanguage } from '@/lib/interface-language';
@@ -50,12 +53,14 @@ import {
   stableGroupOrder,
   storyEffectsBackgroundOf,
   storyMediaUrl,
+  storyRepostCredit,
   type StoryPlaybackGroup,
   type StoryPlaybackStory,
 } from '@/lib/stories/playback';
 import { resolveStoryPlaybackHold } from '@/lib/stories/playback-hold';
 import { initialsOf, participantAvatarOf } from '@/lib/view/conversation';
 import { useCommentsSheetHost } from '@/lib/view/use-comments-sheet-host';
+import { useStoryMediaClaim } from '@/lib/view/story-media-claim';
 import { useProfilePeekOpen } from '@/lib/view/profile-peek';
 import { useStoryActionRail } from '@/lib/view/use-story-action-rail';
 import { useStoryGestures } from '@/lib/view/use-story-gestures';
@@ -125,6 +130,8 @@ function authorLabel(group: StoryPlaybackGroup): string {
 
 export default function StoryScreen() {
   const { post } = useParams<'/story/$post'>();
+  /* Ouvrir une story arrête ce qui jouait ailleurs (#9586, `StoryMediaCoordinator.activate` iOS). */
+  useStoryMediaClaim();
   const [currentId, setCurrentId] = useState(post);
   /**
    * **LA PORTÉE « UN SEUL GROUPE »** (revue de #6149, défaut majeur 3) —
@@ -387,6 +394,40 @@ export default function StoryScreen() {
     markedRef.current.add(currentStory.id);
     void markStoryViewedAction(currentStory.id);
   }, [currentStory, visitor]);
+  /* L'IMPRESSION, LA DURÉE ET LA SÉANCE DE LA STORY (#10401) — la vue
+     d'ouverture d'un compte part ci-dessus (l'anneau s'éteint tout de suite) ;
+     celle d'un visiteur part ici, sous son jeton. La première story porte la
+     provenance d'entrée du lecteur, les suivantes l'enchaînement (#10483). */
+  const entry = useViewAttribution();
+  const [attributionOf] = useState(() => entryAttribution(entry, ADVANCED_STORY));
+  useReadingSession({
+    postId: currentStory?.id,
+    active: currentStory !== undefined,
+    contentType: 'STORY',
+    surface: 'story',
+    impressionSource: 'story',
+    openView: visitor,
+    attribution: attributionOf,
+  });
+  /* LES GESTES DU LECTEUR (#10506) — le tap et la sortie de l'utilisateur ;
+     l'avance automatique n'en est pas un. */
+  const storyTelemetry = useStoryTelemetry({
+    storyId: currentStory?.id,
+    slideIndex: playablePosition !== null && playablePosition !== 'close' ? playablePosition.storyIndex : undefined,
+    slideCount: group?.stories.length,
+    elapsedMs: () => elapsedRef.current + (paused ? 0 : performance.now() - startTsRef.current),
+  });
+  const userAdvance = useCallback(
+    (direction: 'previous' | 'next') => {
+      storyTelemetry.noteTap(direction);
+      advance(direction);
+    },
+    [storyTelemetry, advance],
+  );
+  const dismissByUser = useCallback(() => {
+    storyTelemetry.noteExit();
+    closeViewer();
+  }, [storyTelemetry, closeViewer]);
 
   const pause = useCallback(() => {
     setPaused((was) => {
@@ -485,9 +526,9 @@ export default function StoryScreen() {
      tiers gauche/droit. Les zones de tap restent (divergence admise : une
      story se REGARDE, le tap y avance). Une feuille ouverte réclame le doigt. */
   const swipe = useViewerSwipe({
-    onDismiss: closeViewer,
-    onNext: () => advance('next'),
-    onPrevious: () => advance('previous'),
+    onDismiss: dismissByUser,
+    onNext: () => userAdvance('next'),
+    onPrevious: () => userAdvance('previous'),
     enabled: !(sheetOpen || profilePeekOpen),
     rtl: typeof document !== 'undefined' && document.documentElement.dir === 'rtl',
   });
@@ -503,7 +544,7 @@ export default function StoryScreen() {
     paused,
     pause,
     resume,
-    advance,
+    advance: userAdvance,
     setChromeHidden,
     layerOpen: sheetOpen,
     swipe: swipe.handlers,
@@ -534,11 +575,11 @@ export default function StoryScreen() {
      commentaires). */
   const layerOpen = sheetOpen || profilePeekOpen || storySend.sheetOpen || language.barOpen;
   useStoryKeyboardShortcuts({
-    advance,
+    advance: userAdvance,
     paused,
     pause,
     resume,
-    closeViewer,
+    closeViewer: dismissByUser,
     showsSound,
     onToggleMute: toggleSound,
     layerOpen,
@@ -656,6 +697,9 @@ export default function StoryScreen() {
      story : la fiche de soi n'offre aucun geste relationnel. */
   const authorName = group === undefined ? '' : authorLabel(group);
   const authorUsername = group?.author?.username;
+  /* LE CRÉDIT D'UNE REPUBLICATION (#10524) — après la date, jamais dans le
+     canvas, comme `StoryViewerView+Header.swift`. */
+  const repostCredit = currentStory === undefined ? null : storyRepostCredit(currentStory);
   const identity: ViewerIdentityModel | null =
     group === undefined || currentStory === undefined
       ? null
@@ -668,6 +712,16 @@ export default function StoryScreen() {
             iso: new Date(currentStory.createdAt).toISOString(),
             label: shortRelativeTime(new Date(currentStory.createdAt), new Date(), reader.locale),
           },
+          ...(repostCredit === null
+            ? {}
+            : {
+                repost: {
+                  handle: repostCredit.handle,
+                  label: repostCredit.handle === null
+                    ? translate(interfaceLanguage, 'story.viewer.repost')
+                    : translate(interfaceLanguage, 'story.viewer.repostOf', { handle: repostCredit.handle }),
+                },
+              }),
         };
 
   return (
@@ -687,7 +741,7 @@ export default function StoryScreen() {
           besoin de sortir. Le `12px` conserve l'espacement de `top-3` quand il
           n'y a pas d'encoche : rien ne bouge là où rien n'était cassé. */}
       <div className="pointer-events-none absolute end-3" style={{ top: 'calc(var(--safe-top, 0px) + 12px)', zIndex: 2 }}>
-        {loading || notFound ? <ViewerExitButton exit={{ kind: 'close', label: 'Fermer', onExit: closeViewer }} /> : null}
+        {loading || notFound ? <ViewerExitButton exit={{ kind: 'close', label: translate(interfaceLanguage, 'common.close'), onExit: closeViewer }} /> : null}
       </div>
 
       {/* L'UNIQUE RÉGION VIVANTE DU LECTEUR — l'issue d'un geste s'y dit, et
@@ -707,7 +761,7 @@ export default function StoryScreen() {
               className="animate-pulse rounded-full"
               style={{ width: 32, height: 32, background: 'var(--color-media-fill)' }}
             />
-            <p className="text-body">Chargement…</p>
+            <p className="text-body">{translate(interfaceLanguage, 'story.viewer.loading')}</p>
           </div>
         </div>
       ) : visitorRefused ? (
@@ -717,11 +771,9 @@ export default function StoryScreen() {
       ) : notFound ? (
         <div role="alert" className="grid flex-1 content-center justify-items-center gap-4 px-8 text-center">
           <Glyph name="warningCircle" size={38} style={{ color: 'var(--color-on-media-3)' }} />
-          <p className="text-title font-bold">{online ? 'Story introuvable' : 'Hors ligne'}</p>
+          <p className="text-title font-bold">{translate(interfaceLanguage, online ? 'story.viewer.notFound' : 'common.offline')}</p>
           <p className="text-body" style={{ color: 'var(--color-on-media-3)' }}>
-            {online
-              ? 'Impossible de charger cette story. Réessayez ou fermez.'
-              : 'Cette story s’affichera à la reconnexion.'}
+            {translate(interfaceLanguage, online ? 'story.viewer.error.body' : 'story.viewer.offline.body')}
           </p>
           <div className="flex gap-3">
             <button
@@ -730,7 +782,7 @@ export default function StoryScreen() {
               className="rounded-full px-5 py-2 text-body font-semibold"
               style={{ background: 'var(--color-on-media)', color: 'var(--color-media-backdrop)', minHeight: 44 }}
             >
-              Réessayer
+              {translate(interfaceLanguage, 'common.retry')}
             </button>
             <Link
               to="list"
@@ -738,7 +790,7 @@ export default function StoryScreen() {
               className="grid place-items-center rounded-full px-5 text-body font-semibold"
               style={{ border: '1px solid var(--color-media-hairline)', minHeight: 44 }}
             >
-              Fermer
+              {translate(interfaceLanguage, 'common.close')}
             </Link>
           </div>
         </div>
@@ -820,7 +872,7 @@ export default function StoryScreen() {
             identity={identity}
             hidden={chromeYielded}
             language={interfaceLanguage}
-            onClose={closeViewer}
+            onClose={dismissByUser}
             onSave={ownerRail.handlers.save}
             onOptionsOpenChange={setOptionsOpen}
             /* LE CRÉDIT DU SON (#9678, vue `2f`) — lu sur la scène QUI JOUE : celle
@@ -939,7 +991,7 @@ export default function StoryScreen() {
           />
 
           <CommentsSheetPortal host={commentsHost} risesWithComposer />
-          <PublicationViewersSheetPortal host={ownerRail.viewers} viewCount={currentStory?.viewCount} />
+          <PublicationViewersSheetPortal host={ownerRail.viewers} viewCount={currentStory?.viewCount} anonymousViewCount={currentStory?.anonymousViewCount} />
         </div>
       ) : null}
       {invitation.dialog}

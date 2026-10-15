@@ -763,7 +763,7 @@ struct FeedPostCard: View {
                 address: item.place.address,
                 accentColor: accentColor,
                 senderName: post.author
-            )
+            ).closesForConversationOpening(.place)
         }
         // **Le plein écran d'un post passe par son SITE UNIQUE** (#4927).
         //

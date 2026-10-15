@@ -144,7 +144,7 @@ function makePrisma(rows: Row[]) {
           .map((row) => ({ id: row.id, userId: row.userId, role: row.role, user: { role: 'USER' } })),
       ),
     },
-    conversationShareLink: { update: jest.fn(async () => ({ id: SHARE_LINK_ID, isActive: false })) },
+    conversationShareLink: { updateMany: jest.fn(async () => ({ count: 1 })) },
   };
 }
 

@@ -1,0 +1,76 @@
+{
+  "packs": {
+    "essentiels": {
+      "name": "Essenciais",
+      "description": "Os padrões e gradientes de base."
+    },
+    "heritages": {
+      "name": "Heranças",
+      "description": "Padrões do mundo inteiro."
+    },
+    "nature-et-ciel": {
+      "name": "Natureza e céu",
+      "description": "Mapas, folhas, treliças e estrelas."
+    },
+    "illustrations": {
+      "name": "Ilustrações",
+      "description": "Paisagens desenhadas a traço."
+    },
+    "bannieres-essentielles": {
+      "name": "Banners essenciais",
+      "description": "Seis banners para o teu perfil."
+    },
+    "contours-essentiels": {
+      "name": "Contornos essenciais",
+      "description": "Seis contornos para o teu avatar."
+    }
+  },
+  "designs": {
+    "monogramme": "Monograma",
+    "chevrons": "Chevrons",
+    "aurore": "Aurora",
+    "maille": "Malha",
+    "art-deco": "Art déco",
+    "seigaiha": "Seigaiha",
+    "zellige": "Zellige",
+    "bogolan": "Bogolan",
+    "topographie": "Topografia",
+    "feuillage": "Folhagem",
+    "treillis": "Treliça",
+    "constellation": "Constelação",
+    "horizon": "Horizonte",
+    "baobab": "Baobá"
+  },
+  "rings": {
+    "filet": "Filete",
+    "double-filet": "Filete duplo",
+    "perle": "Pérolas",
+    "aurore": "Aurora",
+    "deco": "Deco",
+    "laurier": "Louro"
+  },
+  "gamut": {
+    "indigo": "Índigo Meeshy",
+    "bleu-nuit": "Azul-noite",
+    "azur": "Azul",
+    "lagon": "Lagoa",
+    "emeraude": "Esmeralda",
+    "olive": "Oliva",
+    "moutarde": "Mostarda",
+    "sable": "Areia",
+    "terracotta": "Terracota",
+    "corail": "Coral",
+    "rose-poudre": "Rosa empoeirado",
+    "framboise": "Framboesa",
+    "prune": "Ameixa",
+    "lavande": "Lavanda",
+    "ardoise": "Ardósia",
+    "graphite": "Grafite"
+  },
+  "modes": {
+    "signature": "Assinatura",
+    "solid": "Cor lisa",
+    "photo": "Foto da conversa"
+  },
+  "avatarUsage": "Contorno de perfil"
+}

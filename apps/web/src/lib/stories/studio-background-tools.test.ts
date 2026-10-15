@@ -39,8 +39,8 @@ describe('studioBackgroundToolActions — les gestes du fond, à côté de ses o
     expect(studioBackgroundToolActions({ offersPhoto: false, overlayFree: false, retouching: false })).toEqual(['remove']);
   });
 
-  test('en retouche, seulement retirer', () => {
-    expect(studioBackgroundToolActions({ offersPhoto: true, overlayFree: true, retouching: true })).toEqual(['remove']);
+  test('en retouche, pivoter (#9160) et retirer', () => {
+    expect(studioBackgroundToolActions({ offersPhoto: true, overlayFree: true, retouching: true })).toEqual(['rotate', 'remove']);
   });
 });
 

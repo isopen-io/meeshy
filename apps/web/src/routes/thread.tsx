@@ -6,7 +6,9 @@ import { useStore } from 'zustand/react';
 import '@/routes/thread-styles';
 
 import { Composer } from '@/components/composer';
+import { MessageEditDock } from '@/components/message-edit-composer';
 import { SelectionToolbar } from '@/components/selection-toolbar';
+import { ConversationBackdrop } from '@/components/conversation-backdrop';
 import { ThreadHeader } from '@/components/thread-header';
 import { ConversationDetailsContext } from '@/components/avatar-menu';
 import { ConversationDetailsPortal } from '@/components/conversation-details-sheet-lazy';
@@ -23,6 +25,7 @@ import { markCaughtUp } from '@/lib/api/receipts';
 import { clearConversationBanners } from '@/lib/notifications/conversation-banners';
 import { consumeViewOnceOptimistic } from '@/lib/api/view-once';
 import { sessionStore } from '@/lib/api/session';
+import { requestDeparture } from '@/lib/conversation-departure';
 import { useComposerAccess } from '@/lib/send/use-composer-access';
 import { resolveViewer } from '@/lib/api/viewer';
 import { useAuthorStoryRings } from '@/lib/view/use-author-story-rings';
@@ -79,7 +82,7 @@ import { useThreadOpenScroll } from '@/lib/view/use-thread-open-scroll';
 import { threadAnchorOf } from '@/lib/view/thread-anchor';
 import { useThreadJump } from '@/lib/view/use-thread-jump';
 import { summaryExits } from '@/lib/view/summary-exits';
-import { ThreadMediaContext } from '@/lib/view/thread-media-context';
+import { ThreadMediaContext, useThreadMediaValue } from '@/lib/view/thread-media-context';
 import { ThreadMessageSheets } from './thread-sheets';
 import { ThreadModes } from './thread-modes';
 
@@ -163,6 +166,8 @@ export default function ThreadScreen({ preview, focus }: ThreadScreenProps = {})
    */
   const session = useStore(sessionStore, (s) => s.session);
   const viewer = useMemo(() => resolveViewer({ source: apiDeps.source, session }), [session]);
+  /* QUITTER / SUPPRIMER depuis les détails (#7837, #7285) : un compte, comme la passerelle l'exige. */
+  const signedIn = session.status === 'authenticated' || apiDeps.source === 'fixtures';
   const storyRingOf = useAuthorStoryRings(viewer);
   const moodOf = useAuthorMoods(viewer);
 
@@ -471,6 +476,7 @@ export default function ThreadScreen({ preview, focus }: ThreadScreenProps = {})
     messages,
     readerLanguages,
     send,
+    announce: announcer.announce,
   });
   const composeSend = compose.onSend;
   const returnToPresent = threadData.returnToPresent;
@@ -497,10 +503,7 @@ export default function ThreadScreen({ preview, focus }: ThreadScreenProps = {})
    * visionneuse de TOUTE la conversation, et « Répondre » y arme la citation de
    * la PIÈCE ; valeur STABLE, lue par chaque grille de médias (`Attachments`).
    */
-  const threadMedia = useMemo(
-    () => ({ viewerId: viewer.id ?? '', onReplyToMedia: compose.setReplyToMedia }),
-    [viewer.id, compose.setReplyToMedia],
-  );
+  const threadMedia = useThreadMediaValue({ viewerId: viewer.id ?? '', onReplyToMedia: compose.setReplyToMedia, conversation });
 
   const messageMenu = useMessageMenu({
     conversationId,
@@ -702,7 +705,7 @@ export default function ThreadScreen({ preview, focus }: ThreadScreenProps = {})
       className={`thread-root relative ${preview === undefined ? 'h-app' : 'h-full'} overflow-hidden`}
       style={{ ...withAccent(accent), ...chromeStyleVars(), ...insetVars, ...backdropStyleVars() } as CSSProperties}
     >
-      <div className="thread-backdrop" aria-hidden />
+      <ConversationBackdrop conversation={conversation} accent={accent} live={preview === undefined} />
       <ThreadHeader
         title={title}
         accent={accent}
@@ -724,6 +727,7 @@ export default function ThreadScreen({ preview, focus }: ThreadScreenProps = {})
         onSelectReadingMode={reading.selectReadingMode}
         onResetReadingModeToAuto={reading.resetReadingModeToAuto}
         preview={preview !== undefined}
+        onJumpToMessage={jump.requestJump}
       />
       {/*
         L'ANNONCE LECTEUR D'ÉCRAN (#5813, § 6.3 ; #5814, § 5 étape 5 ;
@@ -844,7 +848,7 @@ export default function ThreadScreen({ preview, focus }: ThreadScreenProps = {})
             swipeActionsOf={messageMenu.swipeActionsOf}
             onSwipeAction={messageMenu.onMenuAction}
             onPickLanguage={messageMenu.onPickLanguage}
-            onReact={messageMenu.onMenuReact}
+            onReact={messageMenu.onMenuReact} onExpandReactions={messageMenu.setReactionSheetFor}
             onOpenDetail={messageMenu.setDetailFor}
             typists={typing.typists}
             typistAvatarOf={typistAvatarOf}
@@ -902,6 +906,7 @@ export default function ThreadScreen({ preview, focus }: ThreadScreenProps = {})
           /* `placed` porte l'ordre du FIL — c'est lui qui ordonne les N
              transferts, jamais l'ordre des coches (#5866). */
           onForward={messageMenu.selectionOffers.forward ? () => messageMenu.onForwardSelection(placed) : null}
+          onDelete={messageMenu.selectionOffers.delete ? () => messageMenu.onDeleteSelection(placed) : null}
         />
       ) : (
         /*
@@ -931,6 +936,7 @@ export default function ThreadScreen({ preview, focus }: ThreadScreenProps = {})
             invisible, mais permettre qu'on manipule les éléments entre »). */
         <ThreadWriteLock conversationId={conversationId} conversation={conversation}>
         <ThreadComposerChrome onFocus={chrome.onComposerFocus} onBlur={chrome.onComposerBlur}>
+          <MessageEditDock edit={compose.edit}>
           <Composer
             preferred={readerLanguages}
             onSend={sendAndReplayFlame}
@@ -944,6 +950,7 @@ export default function ThreadScreen({ preview, focus }: ThreadScreenProps = {})
               ? { replyTo: compose.replyTo, onCancelReply: compose.onCancelReply, imposedProtection: compose.imposedProtection }
               : {})}
           />
+          </MessageEditDock>
         </ThreadComposerChrome>
         </ThreadWriteLock>
       )}
@@ -963,6 +970,9 @@ export default function ThreadScreen({ preview, focus }: ThreadScreenProps = {})
           setDetailsOpen(false);
           jump.requestJump(messageId);
         }}
+        onRequestDeparture={
+          signedIn ? (kind) => requestDeparture({ conversationId: conversation.id, kind, returnToList: true }) : undefined
+        }
       />
 
       <ThreadMessageSheets

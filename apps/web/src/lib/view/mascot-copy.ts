@@ -32,7 +32,7 @@ export function mascotSay(line: MascotLine): string {
     case 'streak':
       return `${line.days} jours d’affilée, continue comme ça !`;
     case 'meesh-missing':
-      return `Encore ${points(line.missing)} et je frappe ta prochaine Meesh.`;
+      return `Encore ${points(line.missing)} à convertir et je frappe ta prochaine Meesh.`;
     case 'level-missing':
       return `Encore ${points(line.missing)} avant le niveau ${line.nextLevel}.`;
     case 'top-level':

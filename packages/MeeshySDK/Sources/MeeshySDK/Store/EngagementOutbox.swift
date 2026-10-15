@@ -234,10 +234,10 @@ public actor EngagementOutbox {
             ready = []
         }
 
-        // Dispatch ALL ready rows as ONE batch. The endpoint accepts an array and
-        // is rate-limited at 20/min per user — one POST for ≤50 sessions instead
-        // of one-POST-per-session, which used to hammer /posts/engagement/batch
-        // into 429s. A bounded caller (background transition) cancels this task
+        // Dispatch ALL ready rows as ONE batch (≤50, under the 200-event cap of
+        // POST /social/events, where they travel as `dwell` events since #10483).
+        // One POST for ≤50 sessions instead of one-POST-per-session, which used
+        // to hammer the old /posts/engagement/batch into 429s. A bounded caller (background transition) cancels this task
         // when its budget is spent: skip the dispatch, the rows stay `finalized`.
         guard !ready.isEmpty, !Task.isCancelled else { return }
         let sessions = ready.map { $0.1 }

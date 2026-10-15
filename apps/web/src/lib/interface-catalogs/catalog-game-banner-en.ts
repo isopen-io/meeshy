@@ -54,7 +54,7 @@ const en = {
   'game.banner.place.few': '{count}rd',
   'game.banner.place.other': '{count}th',
   'game.banner.points': '{points} pts',
-  'game.banner.missing': '{points} to go',
+  'game.banner.missing': '{points} to level {level}',
   'game.banner.separator': ', ',
   'game.league.name.quartz': 'Quartz',
   'game.league.name.ambre': 'Amber',

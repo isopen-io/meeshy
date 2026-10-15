@@ -1,4 +1,7 @@
-import { createContext } from 'react';
+import { createContext, useMemo } from 'react';
+
+import type { Conversation } from '@/lib/api/types';
+import { avatarOf, titleOf } from './conversation';
 
 /**
  * CE QUE LE FIL PRÊTE À SES PIÈCES JOINTES (#6303) — une tuile touchée DANS
@@ -15,6 +18,24 @@ import { createContext } from 'react';
 export type ThreadMediaContextValue = {
   readonly viewerId: string;
   readonly onReplyToMedia: (messageId: string, attachmentId: string) => void;
+  /** Le nom et l'avatar de la conversation, que la carte de lecture de la coque montre (#10624). */
+  readonly conversationTitle?: string | undefined;
+  readonly conversationAvatarUrl?: string | undefined;
 };
 
 export const ThreadMediaContext = createContext<ThreadMediaContextValue | null>(null);
+
+/** La valeur STABLE que le fil prête à ses pièces, avec le nom et l'avatar de la conversation (#10624). */
+export function useThreadMediaValue(params: {
+  readonly viewerId: string;
+  readonly onReplyToMedia: ThreadMediaContextValue['onReplyToMedia'];
+  readonly conversation: Conversation | undefined;
+}): ThreadMediaContextValue {
+  const { viewerId, onReplyToMedia, conversation } = params;
+  const conversationTitle = conversation !== undefined ? titleOf(conversation, viewerId) : undefined;
+  const conversationAvatarUrl = conversation !== undefined ? avatarOf(conversation, viewerId) : undefined;
+  return useMemo(
+    () => ({ viewerId, onReplyToMedia, conversationTitle, conversationAvatarUrl }),
+    [viewerId, onReplyToMedia, conversationTitle, conversationAvatarUrl],
+  );
+}

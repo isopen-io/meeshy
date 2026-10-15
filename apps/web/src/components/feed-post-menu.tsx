@@ -49,6 +49,8 @@ export type PostMenuHost = {
   readonly onEdit: (postId: string, content: string) => Promise<EditPostOutcome>;
   readonly onDelete: (postId: string) => void;
   readonly onReport: (postId: string, reason: ReportReason) => void;
+  /** LA FEUILLE DE SIGNALEMENT S'OUVRE (#10503) — un signal négatif, même sans motif choisi. */
+  readonly onReportOpen?: (postId: string) => void;
   /** LE BROUILLON DE L'ÉDITION EN COURS (#8849, jumelle de #8848) — absent,
    * la feuille ne sauvegarde rien. */
   readonly editDrafts?: DraftStore;

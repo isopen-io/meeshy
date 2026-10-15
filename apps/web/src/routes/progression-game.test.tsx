@@ -114,8 +114,8 @@ describe('les gestes se branchent sur les actions du crochet', () => {
   });
 
   test('l’échec de la frappe se lit dans l’aperçu', () => {
-    const page = fiche('meesh', withGame(), { actions: { ...idle, errors: { mint: 'Pas assez de points convertibles pour frapper une Meesh.' } } });
-    expect(page).toContain('Pas assez de points convertibles');
+    const page = fiche('meesh', withGame(), { actions: { ...idle, errors: { mint: 'Pas assez de points à convertir pour frapper une Meesh.' } } });
+    expect(page).toContain('Pas assez de points à convertir');
   });
 
   test('hors ligne : la frappe se tait', () => {

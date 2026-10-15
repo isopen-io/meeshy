@@ -43,6 +43,7 @@ import {
   everyOriginIsAllowed,
   fastifyCorsOrigin,
   isCorsRejection,
+  NATIVE_SHELL_ORIGINS,
   originIsAllowed,
   resolveAllowedOrigins,
   socketIoCorsOrigin,
@@ -363,11 +364,42 @@ describe('les coques Capacitor de la v3.1 sont des origines NOMMÉES du staging 
     }
   });
 
-  it('les origines de coque n\'entrent PAS dans les défauts de production', () => {
+  it('les origines de coque n\'entrent PAS dans les défauts : elles ont leur propre liste', () => {
     expect(DEFAULT_ALLOWED_ORIGINS).not.toContain(COQUE_IOS);
     expect(DEFAULT_ALLOWED_ORIGINS).not.toContain(COQUE_ANDROID);
-    expect(originIsAllowed(COQUE_IOS, { NODE_ENV: 'production' })).toBe(false);
-    expect(originIsAllowed(COQUE_ANDROID, { NODE_ENV: 'production' })).toBe(false);
+    expect([...NATIVE_SHELL_ORIGINS].sort()).toEqual([COQUE_IOS, COQUE_ANDROID].sort());
+  });
+});
+
+/**
+ * La 2.13.0 Android publiée ne joignait AUCUNE route de production (2026-10-14) :
+ * le `.env` de l'hôte ne déclarait pas `https://localhost`. Les coques sont
+ * désormais acceptées par la RÈGLE, quel que soit l'hôte.
+ */
+describe('les coques Capacitor joignent TOUT rang, sans réglage d\'hôte (2.13.0 Android)', () => {
+  const COQUE_IOS = 'capacitor://localhost';
+  const COQUE_ANDROID = 'https://localhost';
+  const LISTE_DE_PRODUCTION = 'https://meeshy.me,https://www.meeshy.me,https://gate.meeshy.me,https://ml.meeshy.me';
+
+  it.each(RANGS_QUI_DECIDENT)('rang %s — une liste qui ne les nomme pas sert quand même les deux coques', async (nodeEnv) => {
+    const env = envAvecListe(nodeEnv, LISTE_DE_PRODUCTION);
+    await expect(origineServieParHttp(env, COQUE_ANDROID)).resolves.toBe(COQUE_ANDROID);
+    await expect(origineServieParHttp(env, COQUE_IOS)).resolves.toBe(COQUE_IOS);
+    expect(verdictSocketIo(env, COQUE_ANDROID)).toBe('accepte');
+    expect(verdictSocketIo(env, COQUE_IOS)).toBe('accepte');
+  });
+
+  it('variables absentes (défauts) — les coques sont servies', () => {
+    expect(originIsAllowed(COQUE_ANDROID, { NODE_ENV: 'production' })).toBe(true);
+    expect(originIsAllowed(COQUE_IOS, { NODE_ENV: 'production' })).toBe(true);
+  });
+
+  it('seule l\'origine EXACTE de la WebView passe — ni port, ni http://, ni autre hôte', async () => {
+    const env = envAvecListe('production', LISTE_DE_PRODUCTION);
+    for (const intruse of ['https://localhost:3100', 'http://localhost', 'https://localhost.evil.example', 'capacitor://evil.example', 'https://evil.example']) {
+      await expect(origineServieParHttp(env, intruse)).resolves.toBeUndefined();
+      expect(verdictSocketIo(env, intruse)).toBe('refuse');
+    }
   });
 });
 
