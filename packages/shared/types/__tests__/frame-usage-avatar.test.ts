@@ -1,7 +1,7 @@
 import { describe, expect, it } from 'vitest';
 import { readFileSync } from 'node:fs';
 import { resolve } from 'node:path';
-import { AVATAR_USAGE_LABEL_KEY, FrameUseContextSchema, canUseFrame, describeAvatarUsage, parseFrameUsage } from '../frame-usage';
+import { FRAME_USAGE_LABEL_KEYS, FrameUseContextSchema, canUseFrame, describeFrameUsage, parseFrameUsage } from '../frame-usage';
 
 type Vectors = {
   readonly cases: readonly { readonly name: string; readonly usage: unknown; readonly context: unknown; readonly expected: boolean }[];
@@ -19,8 +19,8 @@ describe('la surface avatar de la loi d’usage des cadres (#10632)', () => {
   });
 
   it.each(vectors.labels.map((v) => [v.key, v] as const))('libellé %s', (_key, v) => {
-    expect(describeAvatarUsage(parseFrameUsage(v.usage)!)).toEqual({ key: v.key, params: v.params });
-    expect(v.key).toBe(AVATAR_USAGE_LABEL_KEY);
+    expect(describeFrameUsage(parseFrameUsage(v.usage)!)).toEqual({ key: v.key, params: v.params });
+    expect(v.key).toBe(FRAME_USAGE_LABEL_KEYS.avatarOnly);
   });
 
   it.each(vectors.invalidUsages.map((v) => [JSON.stringify(v), v] as const))('usage illisible %s ⇒ null', (_label, v) => {
@@ -28,8 +28,9 @@ describe('la surface avatar de la loi d’usage des cadres (#10632)', () => {
   });
 
   it('« Contour de profil » ne qualifie que l’usage avatar seul', () => {
-    expect(describeAvatarUsage({ kind: 'free', surfaces: ['photo', 'video'] })).toBeNull();
-    expect(describeAvatarUsage({ kind: 'prestige' })).toBeNull();
+    expect(describeFrameUsage({ kind: 'free', surfaces: ['photo', 'video'] }).key).toBe(FRAME_USAGE_LABEL_KEYS.captureOnly);
+    expect(describeFrameUsage({ kind: 'prestige' }).key).toBe(FRAME_USAGE_LABEL_KEYS.prestigeOnly);
+    expect(describeFrameUsage({ kind: 'free', surfaces: ['avatar'] }).key).toBe(FRAME_USAGE_LABEL_KEYS.avatarOnly);
   });
 
   it('un contexte avatar se lit', () => {

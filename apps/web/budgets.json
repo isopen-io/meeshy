@@ -1034,6 +1034,15 @@
         "source": "Mesure du 2026-10-14 (`bun run build` puis `node scripts/measure-weight.mjs`, gzip -9) : 3,0 Ko pour les SEPT catalogues du menu d une ligne et des puces de la liste (vingt-trois cles `rowMenu.*` et `listFilter.*` : Details, Renommer, Favori, Deplacer vers..., Bloquer, la confirmation du blocage, la fenetre de renommage, les sept puces), charges avec l ecran de la liste (`routes/route-table.tsx`, route `list`) et jamais au demarrage -- les catalogues d interface sont a 189,85 Ko pour un plafond de 190. Arrondi au Ko SUPERIEUR (3) + 1 Ko de marge."
       }
     },
+    "interface_catalogs_profile_decor": {
+      "pattern": "^assets/catalog-profile-decor-(fr|en|es|pt|de|it|ar)-[A-Za-z0-9_-]+\\.js$",
+      "dynamic_only": true,
+      "kb": {
+        "value": 4,
+        "status": "CIBLE -- ESTIMEE, NON ARBITREE (#10715)",
+        "source": "Les sept catalogues du decor de profil (Banniere, Contour, Photo, Aucun, Plus dans la boutique), charges avec la feuille de choix et jamais au demarrage. Estimation du 2026-10-15 depuis les sources gzip -9 (3,2 Ko pour les sept) : a remesurer par `bun run build` puis `node scripts/measure-weight.mjs`. Arrondi au Ko superieur."
+      }
+    },
     "emoji_picker_sheet": {
       "pattern": "^assets/emoji-picker-sheet-[A-Za-z0-9_-]+\\.js$",
       "kb": {

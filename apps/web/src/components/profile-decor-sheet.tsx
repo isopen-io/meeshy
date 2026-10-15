@@ -1,4 +1,4 @@
-import { useEffect, useState, type ReactNode } from 'react';
+import { useEffect, useState, type KeyboardEvent, type ReactNode } from 'react';
 
 import type { AppearanceDesign } from '@meeshy/shared/types/appearance-design';
 import type { AvatarRingDesign } from '@meeshy/shared/types/avatar-ring-design';
@@ -10,6 +10,7 @@ import type { InterfaceLanguage } from '@/lib/interface-language';
 import { appearanceNames, type AppearanceNames } from '@/lib/profile-decor/catalog';
 import type { DecorSide } from '@/lib/profile-decor/equip';
 import type { OptionGroup } from '@/lib/profile-decor/resolve';
+import { nextRadioIndex } from '@/lib/profile-decor/radio-keys';
 import { useDecorOptions } from '@/lib/profile-decor/use-decor-options';
 import { Link } from '@/routes/route-table';
 
@@ -52,6 +53,7 @@ function Tile({ label, checked, choice, onChoose, children }: { readonly label: 
       type="button"
       role="radio"
       aria-checked={checked}
+      tabIndex={checked ? 0 : -1}
       aria-label={label}
       data-decor-choice={choice}
       onClick={onChoose}
@@ -71,6 +73,17 @@ function Tile({ label, checked, choice, onChoose, children }: { readonly label: 
 }
 
 const RING_SAMPLE = 48;
+
+const moveFocus = (event: KeyboardEvent<HTMLElement>): void => {
+  const group = event.currentTarget;
+  const radios = Array.from(group.querySelectorAll<HTMLElement>('[role="radio"]'));
+  const from = radios.indexOf(document.activeElement as HTMLElement);
+  const rtl = getComputedStyle(group).direction === 'rtl';
+  const to = nextRadioIndex(event.key, from < 0 ? 0 : from, radios.length, rtl);
+  if (to === null) return;
+  event.preventDefault();
+  radios[to]?.focus();
+};
 
 export function DecorChoices({
   side,
@@ -95,7 +108,7 @@ export function DecorChoices({
   const noneLabel = translateProfileDecor(language, TILE_LABEL_KEY[side]);
   return (
     <div className="grid gap-4 p-4" data-decor-sheet={side}>
-      <div role="radiogroup" aria-label={translateProfileDecor(language, TITLE_KEY[side])} className="grid gap-4">
+      <div role="radiogroup" aria-label={translateProfileDecor(language, TITLE_KEY[side])} className="grid gap-4" onKeyDown={moveFocus}>
         <div className="grid grid-cols-3 gap-2">
           <Tile label={noneLabel} checked={current === null} choice={side === 'banner' ? 'photo' : 'none'} onChoose={() => onChoose(null)}>
             <span aria-hidden="true" className={side === 'banner' ? 'block aspect-[3/1] w-full rounded-chip' : 'block rounded-chip'} style={{ width: side === 'banner' ? '100%' : RING_SAMPLE, height: side === 'banner' ? undefined : RING_SAMPLE, backgroundColor: 'color-mix(in srgb, var(--color-ios-ink) 12%, transparent)' }} />

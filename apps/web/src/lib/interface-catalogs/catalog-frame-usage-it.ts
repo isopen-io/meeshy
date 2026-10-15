@@ -12,6 +12,7 @@ const it = {
   'frame.usage.achievementOnly': 'Solo traguardi',
   'frame.usage.achievementRarityOnly': 'Solo traguardi {rarity}',
   'frame.usage.momentOnly': 'Solo momenti «{family}»',
+  'frame.usage.avatarOnly': 'Solo contorno del profilo',
 } as const satisfies FrameUsageCatalog;
 
 export default it;
