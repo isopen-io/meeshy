@@ -139,7 +139,9 @@ public actor TusUploadManager {
     private let chunkSize: Int = 10 * 1024 * 1024 // 10 MB
     private let maxConcurrent: Int = 3
     private var activeCount = 0
-    nonisolated(unsafe) private var queue: [(URL, String, MeeshyRequestCredential, String?, String?, TusUploadTranscriptionMetadata?, Bool, CheckedContinuation<TusUploadResult, Error>)] = []
+    nonisolated(unsafe) private var queue: [(String, URL, String, MeeshyRequestCredential, String?, String?, TusUploadTranscriptionMetadata?, Bool, CheckedContinuation<TusUploadResult, Error>)] = []
+    /// Les envois en cours, par `fileId` : l'annulation de l'appelant les atteint (`cancelUpload`).
+    private var activeTasks: [String: Task<Void, Never>] = [:]
     private var progressMap: [String: FileUploadProgress] = [:]
     nonisolated(unsafe) private let progressSubject = PassthroughSubject<UploadQueueProgress, Never>()
     private let urlSession: URLSession
@@ -191,7 +193,7 @@ public actor TusUploadManager {
     }
 
     deinit {
-        for (_, _, _, _, _, _, _, continuation) in queue {
+        for (_, _, _, _, _, _, _, _, continuation) in queue {
             continuation.resume(throwing: CancellationError())
         }
     }
@@ -222,10 +224,31 @@ public actor TusUploadManager {
         )
         emitProgress()
 
-        return try await withCheckedThrowingContinuation { continuation in
-            queue.append((fileURL, mimeType, credential, uploadContext, thumbHash, transcription, capturedInApp, continuation))
-            processQueue()
+        // L'annulation de l'appelant atteint l'envoi : la file le retire s'il attend, sa tâche est annulée s'il
+        // tourne. Sans ce relais, `Task.checkCancellation()` ne voyait jamais rien — une pré-montée abandonnée ou
+        // une publication annulée continuait de monter le fichier en entier.
+        return try await withTaskCancellationHandler {
+            try await withCheckedThrowingContinuation { continuation in
+                guard !Task.isCancelled else {
+                    continuation.resume(throwing: CancellationError())
+                    return
+                }
+                queue.append((fileId, fileURL, mimeType, credential, uploadContext, thumbHash, transcription, capturedInApp, continuation))
+                processQueue()
+            }
+        } onCancel: {
+            Task { await self.cancelUpload(fileId: fileId) }
         }
+    }
+
+    private func cancelUpload(fileId: String) {
+        if let index = queue.firstIndex(where: { $0.0 == fileId }) {
+            let pending = queue.remove(at: index)
+            markFileFailed(fileName: pending.1.lastPathComponent, error: CancellationError())
+            pending.8.resume(throwing: CancellationError())
+            return
+        }
+        activeTasks[fileId]?.cancel()
     }
 
     public func uploadFiles(fileURLs: [(url: URL, mimeType: String)], credential: MeeshyRequestCredential) async throws -> [TusUploadResult] {
@@ -245,9 +268,9 @@ public actor TusUploadManager {
 
     private func processQueue() {
         while activeCount < maxConcurrent, !queue.isEmpty {
-            let (fileURL, mimeType, credential, uploadContext, thumbHash, transcription, capturedInApp, continuation) = queue.removeFirst()
+            let (fileId, fileURL, mimeType, credential, uploadContext, thumbHash, transcription, capturedInApp, continuation) = queue.removeFirst()
             activeCount += 1
-            Task {
+            activeTasks[fileId] = Task {
                 do {
                     let result = try await withBackgroundTask(named: "tus-upload-\(fileURL.lastPathComponent)") {
                         try await self.performTusUpload(fileURL: fileURL, mimeType: mimeType, credential: credential, uploadContext: uploadContext, thumbHash: thumbHash, transcription: transcription, capturedInApp: capturedInApp)
@@ -259,10 +282,12 @@ public actor TusUploadManager {
                     // caché, ex. via MessagePersistenceActor.adoptSDKLevel).
                     await Self.seedMediaCache(localFile: fileURL, result: result)
                     activeCount -= 1
+                    activeTasks[fileId] = nil
                     continuation.resume(returning: result)
                     processQueue()
                 } catch {
                     activeCount -= 1
+                    activeTasks[fileId] = nil
                     // Mark the failed file `.error` so it stops being surfaced as an
                     // in-flight `.uploading` file forever (stale "Envoi…" indicator)
                     // and is excluded from the batch aggregates by `emitProgress`.

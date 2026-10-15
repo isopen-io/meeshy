@@ -11,7 +11,10 @@ import auditReglagesPt from './admin/audit-reglages-pt';
 import personnesPt from './admin/personnes-pt';
 import conversationsAgentPt from './admin/conversations-agent-pt';
 import engagementScalePt from './admin/engagement-scale-pt';
+import gestesPt from './admin/gestes-pt';
+import operationsPt from './admin/operations-pt';
 import gameSeasonsPt from './admin/game-seasons-pt';
+import ergonomiePt from './admin/ergonomie-pt';
 
 const pt = {
   'admin.role': 'Seu papel: {role}',
@@ -380,7 +383,10 @@ const pt = {
   ...personnesPt,
   ...conversationsAgentPt,
   ...engagementScalePt,
+  ...gestesPt,
+  ...operationsPt,
   ...gameSeasonsPt,
+  ...ergonomiePt,
 } satisfies AdminInterfaceCatalog;
 
 export default pt;

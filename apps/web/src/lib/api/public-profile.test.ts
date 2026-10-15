@@ -7,7 +7,10 @@ import {
   decodePublicStats,
   decodeServedRelation,
   loadPublicProfile,
+  loadPublicProfileStats,
+  PUBLIC_PROFILE_QUERY_PREFIX,
   publicProfileQueryKey,
+  publicProfileStatsQueryKey,
   PUBLIC_PROFILE_STALE_TIME,
 } from './public-profile';
 
@@ -219,19 +222,22 @@ describe('decodePublicProfileView — la présence SERVIE (#9063)', () => {
 });
 
 describe('loadPublicProfile — ce que la requête demande', () => {
-  test('UN aller-retour : `expand=stats,relation,presence` — la passerelle tranche qui voit la présence', async () => {
+  /* L'identité ne demande PLUS `stats` (profil lent dans la coque Android) :
+     les compteurs sont le seul calcul coûteux de la route, et la fiche les
+     attendait pour se peindre. Ils ont leur propre lecture, ci-dessous. */
+  test('l’identité seule : `expand=relation,presence` — sans `stats`, que la fiche n’attend plus', async () => {
     const { transport, paths } = recordingTransport();
     await loadPublicProfile({ source: 'gateway', transport, handle: 'kwame-mensah' });
-    expect(paths).toEqual(['/api/v1/directory/people/kwame-mensah?expand=stats%2Crelation%2Cpresence']);
+    expect(paths).toEqual(['/api/v1/directory/people/kwame-mensah?expand=relation%2Cpresence']);
   });
 
   test('le handle est encodé', async () => {
     const { transport, paths } = recordingTransport();
     await loadPublicProfile({ source: 'gateway', transport, handle: 'a b/c' });
-    expect(paths[0]).toBe('/api/v1/directory/people/a%20b%2Fc?expand=stats%2Crelation%2Cpresence');
+    expect(paths[0]).toBe('/api/v1/directory/people/a%20b%2Fc?expand=relation%2Cpresence');
   });
 
-  test('la charge servie devient une VUE, pas un profil nu', async () => {
+  test('la charge servie devient une VUE, pas un profil nu — des compteurs servis y entrent encore', async () => {
     const { transport } = recordingTransport();
     const result = await loadPublicProfile({ source: 'gateway', transport, handle: 'kwame-mensah' });
     expect(result.ok).toBe(true);
@@ -239,6 +245,37 @@ describe('loadPublicProfile — ce que la requête demande', () => {
     expect(result.data.profile.id).toBe('u-rich-kwame');
     expect(result.data.stats?.postsCount).toBe(7);
     expect(result.data.relation).toBe('none');
+  });
+});
+
+describe('loadPublicProfileStats — les compteurs, à la même adresse', () => {
+  test('`expand=stats` sur le PSEUDO — jamais sur un identifiant qu’il faudrait attendre', async () => {
+    const { transport, paths } = recordingTransport();
+    await loadPublicProfileStats({ source: 'gateway', transport, handle: 'a b/c' });
+    expect(paths).toEqual(['/api/v1/directory/people/a%20b%2Fc?expand=stats']);
+  });
+
+  test('ne rend que les compteurs, un absent restant `null`', async () => {
+    const { transport } = recordingTransport();
+    const result = await loadPublicProfileStats({ source: 'gateway', transport, handle: 'kwame-mensah' });
+    expect(result.ok).toBe(true);
+    if (!result.ok) return;
+    expect(result.data?.postsCount).toBe(7);
+    expect(result.data?.totalMessages).toBeNull();
+  });
+
+  test('aucun jeu servi : `null`, jamais des zéros', async () => {
+    const transport = {
+      request: async () => ({ ok: true as const, status: 200, data: { id: 'u1', username: 'x' } }),
+    } as unknown as HttpTransport;
+    const result = await loadPublicProfileStats({ source: 'gateway', transport, handle: 'x' });
+    expect(result.ok && result.data === null).toBe(true);
+  });
+
+  test('sa clé vit HORS du préfixe des fiches, que `friend-actions` lit comme des vues', () => {
+    const key = publicProfileStatsQueryKey('Kwame-Mensah');
+    expect(key).toEqual(publicProfileStatsQueryKey('kwame-mensah'));
+    expect(key.slice(0, PUBLIC_PROFILE_QUERY_PREFIX.length)).not.toEqual([...PUBLIC_PROFILE_QUERY_PREFIX]);
   });
 });
 

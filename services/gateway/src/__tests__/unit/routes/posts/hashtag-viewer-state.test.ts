@@ -236,7 +236,8 @@ describe('scope=hashtag — l’état du LECTEUR sur chaque publication (#7396)'
 
     const servie = parId(res.json().data).get(AIMEE) as Record<string, unknown>;
     const ajoutees = Object.keys(servie).filter((cle) => !(cle in publication(AIMEE))).sort();
-    expect(ajoutees).toEqual(['currentUserReactions', 'isBookmarkedByMe', 'isLikedByMe', 'isRepostedByMe', 'mentions', 'viewerPoints']);
+    // `rankingSource` (#10501) dit le classement de la page, pas une donnée de personne.
+    expect(ajoutees).toEqual(['currentUserReactions', 'isBookmarkedByMe', 'isLikedByMe', 'isRepostedByMe', 'mentions', 'rankingSource', 'viewerPoints']);
     expect(servie.currentUserReactions).toEqual(['❤️']);
     await app.close();
   });

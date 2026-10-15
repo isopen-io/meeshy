@@ -105,6 +105,7 @@ struct FriendRequestListView: View {
                 LazyVStack(spacing: 0) {
                     ForEach(viewModel.receivedRequests) { request in
                         friendRequestRow(request)
+                            .onAppear { Task { await viewModel.receivedRowAppeared(id: request.id) } }
                     }
                 }
                 .padding(.top, MeeshySpacing.sm)

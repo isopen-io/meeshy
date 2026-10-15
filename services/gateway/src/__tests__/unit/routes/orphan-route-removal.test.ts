@@ -44,12 +44,13 @@ import fs from 'fs/promises';
 import os from 'os';
 import path from 'path';
 import jwt from 'jsonwebtoken';
+import { LIVE_SID, liveSession } from '../../../services/auth/__tests__/live-session-double';
 
 // ─── Doubles de la plomberie TUS (ESM pur, non transformable par Jest) ───────
 
 // Préfixe `mock` obligatoire : seule forme qu'une fabrique `jest.mock`
 // (hissée avant les déclarations du module) a le droit de refermer.
-const mockTusUploadOwner = 'tus-upload-owner-user-id';
+const mockTusUploadOwner = 'aaaaaaaaaaaaaaaaaaaaaaa1';
 
 type TusServerOptions = {
   onIncomingRequest?: (req: { headers: unknown }, uploadId: string) => Promise<void>;
@@ -179,7 +180,8 @@ describe('#4190 — les routes sans appelant ne sont plus montées', () => {
     const registerTusRoutes = await loadTusRegistrar(tmpDir);
 
     uploadApp = Fastify({ logger: false });
-    uploadApp.decorate('prisma', {} as never);
+    // #10493 — la porte TUS relit la session nommée par le `sid` du jeton.
+    uploadApp.decorate('prisma', { userSession: { findFirst: async () => liveSession() } } as never);
     collectRoutes(uploadApp, uploadRoutes);
     await registerTusRoutes(uploadApp);
     await uploadApp.ready();
@@ -265,7 +267,7 @@ describe('#4190 — les routes sans appelant ne sont plus montées', () => {
     const inconnue = await uploadApp.inject({ method: 'PUT', url: `${UPLOADS}/existing-upload-id` });
     expect(inconnue.statusCode).toBe(404);
 
-    const jetonDuProprietaire = jwt.sign({ userId: mockTusUploadOwner }, JWT_SECRET);
+    const jetonDuProprietaire = jwt.sign({ userId: mockTusUploadOwner, sid: LIVE_SID }, JWT_SECRET);
     const proprietaire = await uploadApp.inject({
       method: 'HEAD',
       url: `${UPLOADS}/existing-upload-id`,
@@ -279,7 +281,7 @@ describe('#4190 — les routes sans appelant ne sont plus montées', () => {
     const tiers = await uploadApp.inject({
       method: 'HEAD',
       url: `${UPLOADS}/existing-upload-id`,
-      headers: { authorization: `Bearer ${jwt.sign({ userId: 'quelqu-un-d-autre' }, JWT_SECRET)}` },
+      headers: { authorization: `Bearer ${jwt.sign({ userId: 'ccccccccccccccccccccccc1', sid: LIVE_SID }, JWT_SECRET)}` },
     });
     expect(tiers.statusCode).toBe(403);
   });

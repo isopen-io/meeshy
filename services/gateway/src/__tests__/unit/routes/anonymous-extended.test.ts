@@ -85,6 +85,7 @@ async function buildApp(prismaOverrides: Record<string, any> = {}): Promise<Fast
       findFirst: jest.fn().mockResolvedValue(null),
       create: jest.fn().mockResolvedValue(mockParticipant),
       update: jest.fn().mockResolvedValue(mockParticipant),
+      updateMany: jest.fn().mockResolvedValue({ count: 1 }),
       count: jest.fn().mockResolvedValue(0),
       findMany: jest.fn().mockResolvedValue([]),
     },
@@ -152,12 +153,15 @@ describe('POST /anonymous/join/:linkId — requireNickname', () => {
   });
   afterAll(async () => { await app.close(); });
 
-  it('returns 400 when nickname required but missing', async () => {
+  it('admet l\'invité sans pseudo saisi et lui en attribue un, au lieu de le refuser', async () => {
     const res = await app.inject({
       method: 'POST', url: `/anonymous/join/${LINK_ID}`,
       payload: VALID_BODY,
     });
-    expect(res.statusCode).toBe(400);
+
+    expect(res.statusCode).toBe(201);
+    const written = (app as any).prisma.participant.create.mock.calls.at(-1)[0].data;
+    expect(written.displayName).toMatch(/^ano_.+[^\d][1-9]\d{1,4}$/);
   });
 });
 
@@ -173,12 +177,12 @@ describe('POST /anonymous/join/:linkId — pseudo déjà porté dans la conversa
   beforeAll(async () => {
     app = await buildApp();
     (app as any).prisma.participant.findFirst
-      .mockResolvedValueOnce({ id: 'other-part', displayName: 'ano_bob_sm123' })
+      .mockResolvedValueOnce({ id: 'other-part' })
       .mockResolvedValue(null);
   });
   afterAll(async () => { await app.close(); });
 
-  it('admet le joignant sous le rang suivant plutôt que de le refuser', async () => {
+  it('admet le joignant sous un autre nombre plutôt que de le refuser', async () => {
     const res = await app.inject({
       method: 'POST', url: `/anonymous/join/${LINK_ID}`,
       payload: { ...VALID_BODY, username: 'bob_sm123' },
@@ -189,7 +193,10 @@ describe('POST /anonymous/join/:linkId — pseudo déjà porté dans la conversa
     // réponse ne peut rien prouver du pseudo résolu.
     expect(res.statusCode).toBe(201);
     const written = (app as any).prisma.participant.create.mock.calls.at(-1)[0].data;
-    expect(written.displayName).toBe('ano_bob_sm1232');
+    const firstCandidate = ((app as any).prisma.participant.findFirst.mock.calls[0][0] as any).where.displayName;
+    expect(written.displayName).toMatch(/^ano_bob_sm123[1-9]\d{1,4}$/);
+    expect(firstCandidate).toMatch(/^ano_bob_sm123[1-9]\d{1,4}$/);
+    expect(written.displayName).not.toBe(firstCandidate);
   });
 });
 
@@ -254,7 +261,7 @@ describe('POST /anonymous/leave — with shareLinkId', () => {
       payload: { sessionToken: SESSION_TOKEN },
     });
     expect(res.statusCode).toBe(200);
-    expect((app as any).prisma.conversationShareLink.update).toHaveBeenCalledWith(
+    expect((app as any).prisma.conversationShareLink.updateMany).toHaveBeenCalledWith(
       expect.objectContaining({ data: { currentConcurrentUsers: { decrement: 1 } } })
     );
   });
@@ -370,3 +377,67 @@ describe('GET /anonymous/link/:identifier — les trois refus 410 servent linkId
     await app.close();
   });
 });
+
+// ─── REFRESH: participation morte (#10457) ───────────────────────────────────
+
+/**
+ * #10457 — l'alias `POST /anonymous/refresh` juge la participation par la règle
+ * de `PARTICIPATION_VIVANTE` : désactivée OU bannie ⇒ 410
+ * `GUEST_ACCESS_REVOKED`, le code du REST et du socket, sans rien servir de la
+ * conversation ni relancer la présence. Avant, un banni encore actif recevait
+ * id, titre, type et droits, et repassait `isOnline` ; un désactivé recevait
+ * un 401 `SESSION_INVALID` qui l'envoyait retenter.
+ */
+describe('POST /anonymous/refresh — participation morte (#10457)', () => {
+  const refresh = (app: FastifyInstance) =>
+    app.inject({ method: 'POST', url: '/anonymous/refresh', payload: { sessionToken: SESSION_TOKEN } });
+
+  it('banni encore actif ⇒ 410 GUEST_ACCESS_REVOKED, rien servi, présence non relancée', async () => {
+    const app = await buildApp();
+    (app as any).prisma.participant.findFirst.mockResolvedValue({ ...mockParticipant, bannedAt: new Date('2026-10-13T09:00:00Z') });
+
+    const res = await refresh(app);
+    await app.close();
+
+    expect(res.statusCode).toBe(410);
+    expect(res.json()).toMatchObject({ success: false, error: 'GUEST_ACCESS_REVOKED' });
+    expect(res.json().data).toBeUndefined();
+    expect(res.body).not.toContain('Test Conv');
+    expect((app as any).prisma.participant.update).not.toHaveBeenCalled();
+  });
+
+  it('désactivé ⇒ 410 GUEST_ACCESS_REVOKED, plus 401 SESSION_INVALID', async () => {
+    const app = await buildApp();
+    (app as any).prisma.participant.findFirst.mockResolvedValue({ ...mockParticipant, isActive: false });
+
+    const res = await refresh(app);
+    await app.close();
+
+    expect(res.statusCode).toBe(410);
+    expect(res.json()).toMatchObject({ success: false, error: 'GUEST_ACCESS_REVOKED' });
+    expect((app as any).prisma.participant.update).not.toHaveBeenCalled();
+  });
+
+  it('désactivé ET lien échu ⇒ 410 LINK_EXPIRED, la cause première', async () => {
+    const app = await buildApp();
+    (app as any).prisma.participant.findFirst.mockResolvedValue({ ...mockParticipant, isActive: false });
+    (app as any).prisma.conversationShareLink.findUnique.mockResolvedValue({ ...mockShareLink, expiresAt: new Date('2020-01-01') });
+
+    const res = await refresh(app);
+    await app.close();
+
+    expect(res.statusCode).toBe(410);
+    expect(res.json()).toMatchObject({ error: 'LINK_EXPIRED' });
+  });
+
+  it('un jeton sans ligne garde le 401 : rien n’est confirmé à qui ne détient rien', async () => {
+    const app = await buildApp();
+
+    const res = await refresh(app);
+    await app.close();
+
+    expect(res.statusCode).toBe(401);
+    expect(res.body).not.toContain('GUEST_ACCESS_REVOKED');
+  });
+});
+

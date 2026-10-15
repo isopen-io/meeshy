@@ -85,11 +85,6 @@ class ConversationListViewModel: ObservableObject {
     /// tag ⇒ « toutes les conversations avec ce tag ») — `nil` = aucun filtre.
     @Published var activeTagFilter: String? = nil
 
-    /// Icône de synchronisation de la carte de focus (2026-08-22) : l'appui
-    /// rejoue l'outbox des mutations de conversation tout de suite.
-    func forceSync() {
-        Task { await store.flushOutbox() }
-    }
     private(set) var filteredConversations: [Conversation] = []
     @Published var groupedConversations: [(section: ConversationSection, conversations: [Conversation])] = []
     /// Taille du corpus que `groupedConversations` a groupé en dernier — voir
@@ -169,6 +164,7 @@ class ConversationListViewModel: ObservableObject {
     private let pageLimit = 100
     private var cancellables = Set<AnyCancellable>()
     var storyPrefetchTask: Task<Void, Never>?
+    lazy var messagePrefetcher = ConversationListMessagePrefetcher(messageService: messageService)
 
     /// Registre du pont ✦ gateway (G-124) — voir le commentaire du `didSet`
     /// de `conversations` ci-dessus pour l'alimentation, et l'en-tête de
@@ -651,6 +647,7 @@ class ConversationListViewModel: ObservableObject {
             .sink { [weak self] in
                 Task { @MainActor [weak self] in
                     await self?.reloadFromCache()
+                    if self?.messagePrefetcher.takeReloadArm() == true { self?.prefetchTopConversationMessages() }
                 }
             }
         // (Removed) ConversationPreferencesBroadcaster subscription: the options
@@ -1260,16 +1257,17 @@ class ConversationListViewModel: ObservableObject {
             }
             .store(in: &cancellables)
 
-        // NOTE: `messageSocket.didReconnect` is intentionally NOT observed here.
-        // `ConversationSyncEngine.startSocketRelay()` already handles the
-        // reconnect → `syncSinceLastCheckpoint()` chain at the SDK boundary,
-        // and any resulting list mutation flows back into this view-model
-        // through `syncEngine.conversationsDidChange` (subscribed in
-        // `observeSync()` above) which triggers `reloadFromCache()`.
-        // Subscribing twice produced N× delta-sync calls per flap — the
-        // 2026-05-11 audit traced a `/conversations` request burst back to
-        // exactly this duplication. Keeping the relay in the engine keeps
-        // one and only one delta sync per reconnect.
+        // `didReconnect` ne joue ICI aucun delta : le relais du moteur en joue un
+        // seul par reconnexion, revenu par `conversationsDidChange` (audit
+        // 2026-05-11 : deux abonnés doublaient les `/conversations`). Il ne
+        // rejoue que le préchargement — maintenant, et au rechargement suivant (#10572).
+        messageSocket.didReconnect
+            .receive(on: DispatchQueue.main)
+            .sink { [weak self] in
+                self?.messagePrefetcher.armForNextReload()
+                self?.prefetchTopConversationMessages()
+            }
+            .store(in: &cancellables)
     }
 
     // MARK: - Push Notification Subscription
@@ -1517,15 +1515,12 @@ class ConversationListViewModel: ObservableObject {
 
         let cached = await CacheCoordinator.shared.conversations.load(for: "list")
         switch cached {
-        case .fresh(let data, _):
+        case .fresh(let data, _), .stale(let data, _):
+            // Frais ou périmé, le cache peint et le delta revalide (#7631) : un
+            // cache de moins de 5 min ignore la réaction ou l'appel survenus app fermée.
             setConversations(data)
             loadFailed = false
-            loadState = .cachedFresh
-            lastFetchedAt = Date()
-        case .stale(let data, _):
-            setConversations(data)
-            loadFailed = false
-            loadState = .cachedStale
+            if case .fresh = cached { loadState = .cachedFresh } else { loadState = .cachedStale }
             lastFetchedAt = Date()
             Task { [weak self] in
                 await self?.syncEngine.syncSinceLastCheckpoint()
@@ -1970,7 +1965,12 @@ class ConversationListViewModel: ObservableObject {
         NotificationCoordinator.shared.markConversationRead(conversationId)
         guard Self.shouldDispatchListMarkAsRead(
             conversationId: conversationId,
-            activeConversationId: messageSocket.activeConversationId
+            // iPad multi-fenêtre : ouverte dans une fenêtre détachée, la
+            // conversation a déjà son marquage précis, même si elle n'est pas
+            // la plus récente.
+            activeConversationId: NotificationToastManager.shared.isConversationOpen(conversationId)
+                ? conversationId
+                : messageSocket.activeConversationId
         ) else {
             clearUnreadLocally(conversationId)
             return
@@ -2119,22 +2119,19 @@ class ConversationListViewModel: ObservableObject {
         }
     }
 
-    /// Précharge les messages des premières conversations — voir
+    /// Précharge dans GRDB les messages des premières conversations — voir
     /// `ConversationListMessagePrefetcher` (#8651 : jamais pour un autre
-    /// compte que celui qui l'a lancé, jamais pour un identifiant vide).
+    /// compte que celui qui l'a lancé ; #10572 : une passe à la fois).
     private func prefetchTopConversationMessages() {
         let userId = currentUserId
-        ConversationListMessagePrefetcher.start(
-            conversationIds: ConversationListMessagePrefetcher.targets(conversations),
-            messageService: messageService,
-            userId: userId,
-            username: authManager.currentUser?.username,
-            prism: authManager.currentUser?.preferredContentLanguages ?? [],
+        messagePrefetcher.schedule(ConversationListPrefetchRequest(
+            candidates: ConversationListMessagePrefetcher.targets(conversations),
+            owner: ConversationPrefetchOwner(userId: userId, username: authManager.currentUser?.username),
             stillOwner: { [weak self] in
                 guard let self, !userId.isEmpty else { return false }
                 return self.currentUserId == userId
             }
-        )
+        ))
     }
 
     /// Called when app returns to foreground — refresh stories if stale.
@@ -2156,16 +2153,15 @@ class ConversationListViewModel: ObservableObject {
         }
     }
 
-    /// Appelée quand la liste de conversations revient au premier plan.
-    /// Re-trie la liste en mémoire immédiatement (retour instantané), puis
-    /// lance un delta sync pour que les messages reçus via APNs pendant que
-    /// l'app était en arrière-plan remontent et réordonnent la liste.
-    /// Distinct de `handleForegroundReturn()`, qui ne rafraîchit que les
-    /// stories.
+    /// Retour au premier plan : re-trie la liste en mémoire (retour instantané),
+    /// joue le delta sync (les messages reçus via APNs en arrière-plan remontent
+    /// la liste), puis précharge les premières sur ces lignes à jour (#10572).
+    /// Distinct de `handleForegroundReturn()`, qui ne rafraîchit que les stories.
     func handleForegroundReactivation() {
         setConversations(conversations)
         Task { [weak self] in
             await self?.refresh()
+            self?.prefetchTopConversationMessages()
         }
     }
 

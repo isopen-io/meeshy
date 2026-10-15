@@ -30,8 +30,9 @@ struct GameFlamePanelView: View {
     var relightSpend: SpendPreview { GameSpend.preview(held: held, cost: flame.relightPrice) }
     private var cannotPayRelight: Bool { !relightSpend.affordable }
 
-    private func spendRow(_ spend: SpendPreview, identifier: String) -> some View {
-        GameFactChipRow(concept: .flame, items: GameSpendRows.spend(spend, format: GameCopy.meeshes), identifier: identifier)
+    /// `missing` : ce qu'il manque, dit avec le geste qu'il vise — acheter un gel, rallumer la Flamme (#10540).
+    private func spendRow(_ spend: SpendPreview, identifier: String, missing: @MainActor (String) -> String) -> some View {
+        GameFactChipRow(concept: .flame, items: GameSpendRows.spend(spend, format: GameCopy.meeshes, missing: missing), identifier: identifier)
     }
 
     var body: some View {
@@ -70,7 +71,7 @@ struct GameFlamePanelView: View {
                 bundle: .main
             ))
         } else {
-            spendRow(freezeSpend, identifier: "game.flame.freeze.spend")
+            spendRow(freezeSpend, identifier: "game.flame.freeze.spend", missing: { ConceptText.spendMissingFreeze(missing: $0) })
             GameActionButton(
                 title: String(
                     localized: "game.flame_panel.freeze_buy",
@@ -91,7 +92,7 @@ struct GameFlamePanelView: View {
                 defaultValue: "Ta Flamme s’est éteinte : rallume-la maintenant, elle repart là où elle s’était arrêtée.",
                 bundle: .main
             ))
-            spendRow(relightSpend, identifier: "game.flame.relight.spend")
+            spendRow(relightSpend, identifier: "game.flame.relight.spend", missing: { ConceptText.spendMissingRelight(missing: $0) })
             GameActionButton(
                 title: String(
                     localized: "game.flame_panel.relight",
@@ -107,7 +108,7 @@ struct GameFlamePanelView: View {
                 defaultValue: "Il te faut \(GameCopy.meeshes(flame.relightPrice)) pour la rallumer, si elle s’est éteinte il y a moins de 48 h.",
                 bundle: .main
             ))
-            spendRow(relightSpend, identifier: "game.flame.relight.spend")
+            spendRow(relightSpend, identifier: "game.flame.relight.spend", missing: { ConceptText.spendMissingRelight(missing: $0) })
         } else if isOut {
             GameNote(
                 text: String(

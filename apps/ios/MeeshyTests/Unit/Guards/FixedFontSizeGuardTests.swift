@@ -185,7 +185,6 @@ final class FixedFontSizeGuardTests: XCTestCase {
         "Features/Main/Views/AchievementBadgeView.swift",
         "Features/Main/Views/ActiveSessionsView.swift",
         "Features/Main/Views/AffiliateView.swift",
-        "Features/Main/Views/AudioFullscreenView.swift",
         "Features/Main/Views/Bubble/BubbleFailedRetryBar.swift",
         "Features/Main/Views/CallEffectsOverlay.swift",
         // #8276 — `CallView.swift` découpé : ses glyphes figés ont suivi leurs
@@ -441,7 +440,11 @@ final class FixedFontSizeGuardTests: XCTestCase {
     // (trois sites → un) et sa croix monte `FullscreenTopBar` (un glyphe).
     // 191 → 190 (#10366) : la puce de langue repasse sur une ligne en polices
     // sémantiques, son code pays de 7 pt figé disparaît.
-    private static let totalCeiling = 190
+    // 190 → 186 (#10383) : le plein écran audio dimensionne ses glyphes de
+    // transport et de traduction par leur CADRE (`resizable` + `frame`), plus
+    // par une police figée — quatre glyphes, aucun texte. `AudioFullscreenView`
+    // sort de `bearingFiles` (règle 4) ; sa page n'y entre pas.
+    private static let totalCeiling = 186
 
     // MARK: - Règle 1 — aucun écran neuf n'introduit de taille figée
 

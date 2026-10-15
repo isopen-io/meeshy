@@ -335,7 +335,7 @@ private struct CallJournalRow: View, Equatable {
     // durée si présente (mêmes segments que la pastille visuelle).
     private func rowAccessibilityLabel(name: String) -> String {
         let type = record.isVideo
-            ? String(localized: "calls.type.video", defaultValue: "Appel video", bundle: .main)
+            ? String(localized: "calls.type.video", defaultValue: "Appel vidéo", bundle: .main)
             : String(localized: "calls.type.audio", defaultValue: "Appel vocal", bundle: .main)
         let participants = record.participants.map(\.displayName)
         let withParticipants = participants.isEmpty
@@ -380,7 +380,7 @@ struct CallRowDialButton: View {
             Button {
                 dial(isVideo: true)
             } label: {
-                Label(String(localized: "call.start.video", defaultValue: "Appel video", bundle: .main), systemImage: "video.fill")
+                Label(String(localized: "call.start.video", defaultValue: "Appel vidéo", bundle: .main), systemImage: "video.fill")
             }
         } label: {
             Image(systemName: defaultIsVideo ? "video.fill" : "phone.fill")

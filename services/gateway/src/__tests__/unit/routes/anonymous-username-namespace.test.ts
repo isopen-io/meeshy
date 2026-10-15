@@ -19,9 +19,10 @@
  *      le nom et le pseudo de tout participant sans compte. `ano_` reste un
  *      préfixe lisible, PAS un espace réservé : un compte peut s'appeler
  *      `ano_bob`, il n'aura simplement pas le fantôme.
- *   2. Entre anonymes d'une même conversation, le rang tranche (`ano_bob2`).
- *      On entre toujours ; c'est le pseudo qui s'adapte, pas la personne qu'on
- *      renvoie.
+ *   2. Tout pseudo anonyme, saisi ou automatique, se termine par un nombre
+ *      de 2 à 5 chiffres (#10602) ; entre anonymes d'une même conversation,
+ *      un nombre déjà porté se retire. On entre toujours ; c'est le pseudo qui
+ *      s'adapte, pas la personne qu'on renvoie.
  *
  * @jest-environment node
  */
@@ -108,6 +109,8 @@ function resetPrisma(prisma: Prisma, link: typeof shareLink): void {
   prisma.message.create.mockReset().mockResolvedValue({ id: 'msg-1' });
 }
 
+const NUMBERED_BOBBY = /^ano_bobby[1-9]\d{1,4}$/;
+
 const join = (app: FastifyInstance, payload: Record<string, unknown>) =>
   app.inject({ method: 'POST', url: `/anonymous/join/${LINK_ID}`, payload });
 
@@ -127,19 +130,26 @@ describe('POST /anonymous/join/:linkId — espace de noms `ano_`', () => {
     expect(res.json().data.participant.username).toMatch(/^ano_/);
   });
 
-  it('préfixe aussi le pseudo CHOISI — l’espace réservé n’est pas optionnel', async () => {
+  it('préfixe aussi le pseudo CHOISI et le termine par 2 à 5 chiffres (#10602)', async () => {
     const res = await join(app, { firstName: 'Bob', lastName: 'Smith', username: 'bobby', language: 'fr' });
 
     expect(res.statusCode).toBe(201);
-    expect(res.json().data.participant.username).toBe('ano_bobby');
+    expect(res.json().data.participant.username).toMatch(NUMBERED_BOBBY);
   });
 
-  it('marque le participant lui-même, pas seulement la réponse', async () => {
-    await join(app, { firstName: 'Bob', lastName: 'Smith', username: 'bobby', language: 'fr' });
+  it('numérote aussi le pseudo automatique', async () => {
+    const res = await join(app, { firstName: 'Bob', lastName: 'Smith', language: 'fr' });
+
+    expect(res.json().data.participant.username).toMatch(/^ano_bob_sm[1-9]\d{1,4}$/);
+  });
+
+  it('marque le participant lui-même, et la réponse sert le pseudo ÉCRIT', async () => {
+    const res = await join(app, { firstName: 'Bob', lastName: 'Smith', username: 'bobby', language: 'fr' });
 
     const created = prisma.participant.create.mock.calls[0][0] as any;
-    expect(created.data.displayName).toBe('ano_bobby');
-    expect(created.data.anonymousSession.profile.username).toBe('ano_bobby');
+    expect(created.data.displayName).toMatch(NUMBERED_BOBBY);
+    expect(created.data.anonymousSession.profile.username).toBe(created.data.displayName);
+    expect(res.json().data.participant.username).toBe(created.data.displayName);
   });
 
   it('n’est plus refusé parce qu’un INSCRIT porte ce nom — le fantôme les distingue', async () => {
@@ -148,29 +158,33 @@ describe('POST /anonymous/join/:linkId — espace de noms `ano_`', () => {
     const res = await join(app, { firstName: 'Bob', lastName: 'Smith', username: 'bobby', language: 'fr' });
 
     expect(res.statusCode).toBe(201);
-    expect(res.json().data.participant.username).toBe('ano_bobby');
+    expect(res.json().data.participant.username).toMatch(NUMBERED_BOBBY);
   });
 
-  it('départage deux anonymes de la même conversation par le rang, sans refuser', async () => {
-    prisma.participant.findFirst.mockImplementation(async ({ where }: any) =>
-      where.displayName === 'ano_bobby' ? { id: 'squatter' } : null
-    );
+  it('deux joignants qui saisissent le même nom entrent tous les deux, sous deux nombres', async () => {
+    const first = await join(app, { firstName: 'Bob', lastName: 'Smith', username: 'bobby', language: 'fr' });
+    const second = await join(app, { firstName: 'Bob', lastName: 'Smith', username: 'bobby', language: 'fr' });
+
+    expect([first.statusCode, second.statusCode]).toEqual([201, 201]);
+    expect(first.json().data.participant.username).toMatch(NUMBERED_BOBBY);
+    expect(second.json().data.participant.username).toMatch(NUMBERED_BOBBY);
+  });
+
+  it('tire un autre nombre quand celui tiré est déjà porté dans la conversation, sans refuser', async () => {
+    const taken: string[] = [];
+    prisma.participant.findFirst.mockImplementation(async ({ where }: any) => {
+      if (taken.length >= 3) return null;
+      taken.push(where.displayName);
+      return { id: 'squatter' };
+    });
 
     const res = await join(app, { firstName: 'Bob', lastName: 'Smith', username: 'bobby', language: 'fr' });
 
     expect(res.statusCode).toBe(201);
-    expect(res.json().data.participant.username).toBe('ano_bobby2');
-  });
-
-  it('poursuit le rang tant que la place est prise', async () => {
-    const taken = new Set(['ano_bobby', 'ano_bobby2', 'ano_bobby3']);
-    prisma.participant.findFirst.mockImplementation(async ({ where }: any) =>
-      taken.has(where.displayName) ? { id: 'squatter' } : null
-    );
-
-    const res = await join(app, { firstName: 'Bob', lastName: 'Smith', username: 'bobby', language: 'fr' });
-
-    expect(res.json().data.participant.username).toBe('ano_bobby4');
+    const written = (prisma.participant.create.mock.calls[0][0] as any).data.displayName;
+    expect(written).toMatch(NUMBERED_BOBBY);
+    expect(taken).not.toContain(written);
+    taken.forEach((candidate) => expect(candidate).toMatch(NUMBERED_BOBBY));
   });
 
   it('ne cherche la place QUE dans la conversation visée', async () => {
@@ -180,7 +194,7 @@ describe('POST /anonymous/join/:linkId — espace de noms `ano_`', () => {
     expect(where).toMatchObject({ conversationId: CONV_ID, type: 'anonymous' });
   });
 
-  it('rend la main plutôt que de boucler quand toute la série est prise', async () => {
+  it('rend la main plutôt que de boucler quand tous les tirages sont pris', async () => {
     prisma.participant.findFirst.mockResolvedValue({ id: 'squatter' });
 
     const res = await join(app, { firstName: 'Bob', lastName: 'Smith', username: 'bobby', language: 'fr' });
@@ -194,7 +208,7 @@ describe('POST /anonymous/join/:linkId — espace de noms `ano_`', () => {
 
     const res = await join(app, { firstName: 'Bob', lastName: 'Smith', username: 'bobby', language: 'fr' });
 
-    expect(res.json().suggestedNickname).toMatch(/^ano_/);
+    expect(res.json().suggestedNickname).toMatch(/^ano_bob_sm[1-9]\d{1,4}$/);
   });
 });
 
@@ -207,17 +221,17 @@ describe('POST /anonymous/join/:linkId — pseudo exigé par le lien', () => {
 
   beforeEach(() => { resetPrisma(prisma, { ...shareLink, requireNickname: true }); });
 
-  it('refuse toujours un pseudo VIDE quand le lien en exige un', async () => {
+  it('admet un pseudo VIDE même quand le lien en exige un : la passerelle le nomme (directive 2026-10-13)', async () => {
     const res = await join(app, { firstName: 'Bob', lastName: 'Smith', language: 'fr' });
 
-    expect(res.statusCode).toBe(400);
+    expect(res.statusCode).toBe(201);
   });
 
   it('accepte le pseudo exigé, replacé dans l’espace réservé', async () => {
     const res = await join(app, { firstName: 'Bob', lastName: 'Smith', username: 'bobby', language: 'fr' });
 
     expect(res.statusCode).toBe(201);
-    expect(res.json().data.participant.username).toBe('ano_bobby');
+    expect(res.json().data.participant.username).toMatch(NUMBERED_BOBBY);
   });
 });
 
@@ -253,7 +267,7 @@ describe('POST /anonymous/join/:linkId — avis d’arrivée', () => {
     const { data } = prisma.message.create.mock.calls[0][0] as any;
     expect(data.metadata).toMatchObject({
       kind: 'member-joined',
-      displayName: 'ano_bobby',
+      displayName: expect.stringMatching(NUMBERED_BOBBY),
       isAnonymous: true,
       viaShareLink: true,
     });

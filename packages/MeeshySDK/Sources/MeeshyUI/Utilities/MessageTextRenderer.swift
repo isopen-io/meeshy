@@ -199,13 +199,14 @@ public enum MessageTextRenderer {
     /// Returns NSRanges suitable for AttributedString highlighting.
     public static func highlightRanges(in text: String, term: String) -> [NSRange] {
         guard !term.isEmpty else { return [] }
-        let lowered = text.lowercased()
-        let termLower = term.lowercased()
+        // Cherché dans `text` LUI-MÊME : « İ » s'allonge en passant en minuscules, et un indice pris
+        // dans la copie abaissée sortait des bornes du texte d'origine.
         var ranges: [NSRange] = []
-        var searchStart = lowered.startIndex
-        while let range = lowered.range(of: termLower, range: searchStart..<lowered.endIndex) {
-            let nsRange = NSRange(range, in: text)
-            ranges.append(nsRange)
+        var searchStart = text.startIndex
+        while searchStart < text.endIndex,
+              let range = text.range(of: term, options: .caseInsensitive, range: searchStart..<text.endIndex),
+              !range.isEmpty {
+            ranges.append(NSRange(range, in: text))
             searchStart = range.upperBound
         }
         return ranges

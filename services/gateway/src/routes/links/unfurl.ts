@@ -32,6 +32,12 @@ import {
   type LinkUnfurlSource
 } from '../../services/linkUnfurl/page';
 import {
+  composeAffiliateUnfurl,
+  isAffiliateToken,
+  loadAffiliateUnfurlSource,
+  type AffiliateUnfurlSource
+} from '../../services/linkUnfurl/affiliate';
+import {
   decideTrackingLinkUnfurl,
   isTrackingToken,
   loadTrackingLinkUnfurlSource,
@@ -208,6 +214,62 @@ export function registerLinkUnfurlRoute(
       .headers(RESPONSE_HEADERS)
       .type('text/html; charset=utf-8')
       .send(renderLinkUnfurlPage(atTrackingAddress(unfurl, { origin, token })));
+  });
+
+  const affiliateRows = new BoundedTtlCache<string, AffiliateUnfurlSource | null>({
+    maxSize: LINK_UNFURL_CACHE_MAX,
+    ttlMs: LINK_UNFURL_CACHE_TTL_MS
+  });
+
+  const readAffiliate = async (token: string): Promise<AffiliateUnfurlSource | null> => {
+    if (!isAffiliateToken(token)) return null;
+    const cached = affiliateRows.get(token);
+    if (cached !== undefined) return cached;
+    const row = await loadAffiliateUnfurlSource(prisma, token);
+    affiliateRows.set(token, row);
+    return row;
+  };
+
+  /**
+   * `GET /affiliate/:token/og` — la page que lisent les robots d'aperçu quand on
+   * colle `https://meeshy.me/signup/affiliate/<jeton>` (#10559) : qui invite, sa
+   * bannière sinon son avatar (`services/linkUnfurl/affiliate.ts`). Aucun clic
+   * n'est compté.
+   */
+  fastify.get<{ Params: { token: string } }>('/affiliate/:token/og', {
+    schema: {
+      description: 'Aperçu d’un lien d’affiliation pour les robots d’aperçu des messageries (#10559). Nomme celui qui invite et montre sa bannière, sinon son avatar — ce que la validation publique du jeton sert déjà. Toujours 200 : un jeton fermé ou inconnu, ou un compte désactivé, rend l’aperçu générique de Meeshy.',
+      tags: ['affiliate'],
+      summary: 'Aperçu d’un lien d’affiliation pour les robots',
+      params: {
+        type: 'object',
+        required: ['token'],
+        properties: { token: { type: 'string' } }
+      },
+      response: {
+        200: { description: 'Document HTML portant les balises Open Graph et Twitter Card', type: 'string' },
+        429: errorResponseSchema
+      }
+    },
+    config: { rateLimit: unfurlRateLimit('affiliate-unfurl') }
+  }, async (request, reply: FastifyReply) => {
+    const { token } = request.params;
+    const source = await readAffiliate(token).catch((error: unknown) => {
+      logWarn(fastify.log, 'Affiliate link unfurl read failed — serving the generic preview', error);
+      return null;
+    });
+    const unfurl = composeAffiliateUnfurl({
+      source,
+      token,
+      acceptLanguage: request.headers['accept-language'],
+      origin,
+      now: new Date()
+    });
+    return reply
+      .code(200)
+      .headers(RESPONSE_HEADERS)
+      .type('text/html; charset=utf-8')
+      .send(renderLinkUnfurlPage(unfurl));
   });
 }
 

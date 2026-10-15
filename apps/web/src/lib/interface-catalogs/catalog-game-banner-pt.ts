@@ -52,7 +52,7 @@ const pt = {
   'game.banner.place.one': '{count}º',
   'game.banner.place.other': '{count}º',
   'game.banner.points': '{points} pts',
-  'game.banner.missing': 'faltam {points}',
+  'game.banner.missing': 'faltam {points} rumo ao {level}',
   'game.banner.separator': ', ',
   'game.league.name.quartz': 'Quartzo',
   'game.league.name.ambre': 'Âmbar',

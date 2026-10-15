@@ -1,6 +1,7 @@
 import type { StarredMessageItem } from '@meeshy/shared/types/message-star';
 import { conversationAccentPalette } from '@meeshy/shared/utils/conversation-colors';
 
+import { personalAccentPalette } from '@/lib/accent';
 import { served } from '@/lib/api/prism';
 
 import { kindOf } from './message';
@@ -58,7 +59,12 @@ function excerptOf(message: StarredMessageItem['message'], preferredLanguages: r
 
 export function starredRowModel(
   item: StarredMessageItem,
-  context: { readonly preferredLanguages: readonly string[]; readonly locale: string },
+  context: {
+    readonly preferredLanguages: readonly string[];
+    readonly locale: string;
+    /** Les préférences du lecteur sur une conversation (`userPreferences`) : l'accent PERSONNEL (#10631). Absent = accent calculé. */
+    readonly preferencesOf?: (conversationId: string) => unknown;
+  },
 ): StarredRowModel {
   const { message, sender, conversation } = item;
   const conversationName = conversation.name ?? conversation.identifier;
@@ -72,6 +78,9 @@ export function starredRowModel(
     ),
     excerpt: excerptOf(message, context.preferredLanguages),
     conversationName,
-    accent: conversationAccentPalette({ name: conversationName, type: conversation.type }).primary,
+    accent: personalAccentPalette(
+      conversationAccentPalette({ name: conversationName, type: conversation.type }),
+      context.preferencesOf?.(message.conversationId),
+    ).primary,
   };
 }

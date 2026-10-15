@@ -120,23 +120,4 @@ extension GameCopy {
             return nil
         }
     }
-
-    /// « Ce coffre : 2 083 points · +208 Gloire » — le contenu certain, avant l’ouverture.
-    static func chestToday(_ content: ChestContent) -> String {
-        let points = GameCopy.points(content.points)
-        let glory = chestGlory(content.glory)
-        return String(localized: "game.chest.today", defaultValue: "Ce coffre : \(points) · \(glory)", bundle: .main)
-    }
-
-    /// « Prime : 1 chance sur 20 de 1 221 points, sinon 1 chance sur 6 de 244 points » — avant l’ouverture, au
-    /// cours de la prochaine Meesh du compte. `nil` devant un serveur qui ne sert pas la prime.
-    static func chestBonusOdds(_ content: ChestContent, odds: ChestOdds) -> String? {
-        guard let whole = content.bonusWhole, let fifth = content.bonusFifth,
-              let wholeChance = odds.bonusWhole, let fifthChance = odds.bonusFifth, whole > 0 else { return nil }
-        return String(
-            localized: "game.chest.bonusOdds",
-            defaultValue: "Prime : \(chance(wholeChance)) de \(points(whole)), sinon \(chance(fifthChance)) de \(points(fifth))",
-            bundle: .main
-        )
-    }
 }

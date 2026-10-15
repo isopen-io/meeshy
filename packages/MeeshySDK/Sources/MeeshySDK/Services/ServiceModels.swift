@@ -464,8 +464,12 @@ public struct UpdateConversationPreferencesRequest: Encodable, Sendable {
     public var reaction: String?
     public var customName: String?
     public var mentionsOnly: Bool?
+    /// Le fond et l'accent personnels (#10631). `nil` = inchangé (écriture partielle) ;
+    /// pour revenir à Signature, envoyer `ConversationAppearance.default`.
+    public var appearance: ConversationAppearance?
 
-    public init(isPinned: Bool? = nil, isMuted: Bool? = nil, isArchived: Bool? = nil, categoryId: String? = nil, tags: [String]? = nil, reaction: String? = nil, customName: String? = nil, mentionsOnly: Bool? = nil) {
+    public init(isPinned: Bool? = nil, isMuted: Bool? = nil, isArchived: Bool? = nil, categoryId: String? = nil, tags: [String]? = nil, reaction: String? = nil, customName: String? = nil, mentionsOnly: Bool? = nil, appearance: ConversationAppearance? = nil) {
+        self.appearance = appearance
         self.isPinned = isPinned; self.isMuted = isMuted; self.isArchived = isArchived
         self.categoryId = categoryId; self.tags = tags; self.reaction = reaction
         self.customName = customName; self.mentionsOnly = mentionsOnly

@@ -97,6 +97,7 @@ extension CallManager {
         // Force displayMode = .fullScreen (cf. startCall pour le rationale).
         displayMode = .fullScreen
         callState = .ringing(isOutgoing: false)
+        startIncomingRingTimeout()
         activeCallUUID = uuid
 
         callProvider.reportNewIncomingCall(with: uuid, update: update) { [weak self] error in
@@ -387,6 +388,7 @@ extension CallManager {
         // Force displayMode = .fullScreen (cf. startCall pour le rationale).
         displayMode = .fullScreen
         callState = .ringing(isOutgoing: false)
+        startIncomingRingTimeout()
 
         let uuid = UUID()
         activeCallUUID = uuid

@@ -172,11 +172,11 @@ describe('un CONTENU partagé s’ouvre dans sa page, avec la trace du partageur
   });
 });
 
-describe('sharedContentPath — l’adresse canonique, `?via=` compris', () => {
+describe('sharedContentPath — l’adresse canonique, `?via=` compris, marquée « arrivée par un lien de suivi » (#10483)', () => {
   test('un réel, une publication, une story, une humeur', () => {
-    expect(sharedContentPath({ type: 'REEL', id: 'r1' }, 'abc123')).toBe('/reel/r1?via=abc123');
-    expect(sharedContentPath({ type: 'POST', id: 'p1' }, 'abc123')).toBe('/post/p1?via=abc123');
-    expect(sharedContentPath({ type: 'STORY', id: 's1' }, 'abc123')).toBe('/story/s1?via=abc123');
-    expect(sharedContentPath({ type: 'STATUS', id: 'm1' }, 'abc123')).toBe('/mood/m1?via=abc123');
+    expect(sharedContentPath({ type: 'REEL', id: 'r1' }, 'abc123')).toBe('/reel/r1?via=abc123&from=tracking_link');
+    expect(sharedContentPath({ type: 'POST', id: 'p1' }, 'abc123')).toBe('/post/p1?via=abc123&from=tracking_link');
+    expect(sharedContentPath({ type: 'STORY', id: 's1' }, 'abc123')).toBe('/story/s1?via=abc123&from=tracking_link');
+    expect(sharedContentPath({ type: 'STATUS', id: 'm1' }, 'abc123')).toBe('/mood/m1?via=abc123&from=tracking_link');
   });
 });

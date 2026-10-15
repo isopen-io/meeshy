@@ -145,6 +145,12 @@ describe('forwardRequestOf — la sélection admise devient une demande d’envo
     ]);
   });
 
+  test('un STICKER part avec son sticker : la copie reste un sticker, jamais une image nue (#10630)', () => {
+    const sticker = sourceOf({ id: 'm3', content: '', metadata: { sticker: { stickerId: 's-1' } } });
+    const request = forwardRequestOf({ conversationId: 'c-src', messages: [sticker], now: NOW });
+    expect(messagesPayload(request).messages).toEqual([{ id: 'm3', content: '', originalLanguage: 'fr', sticker: { stickerId: 's-1' } }]);
+  });
+
   test('une flamme à durée part avec SA borne ; un message ordinaire n’en porte aucune', () => {
     const flame = sourceOf({ id: 'm2', effectFlags: MESSAGE_EFFECT_FLAGS.EPHEMERAL, ephemeralDuration: 300 });
     const request = forwardRequestOf({ conversationId: 'c-src', messages: [sourceOf(), flame], now: NOW });

@@ -132,7 +132,7 @@ const memeListe = (a, b) => a.length === b.length && a.every((valeur, index) => 
 const ADRESSES = [
   [{ notificationId: 'x', conversationId: 'abc' }, '/c/abc'],
   [{ postId: 'p1', postType: 'STORY' }, '/story/p1'],
-  [{ postId: 'p1', postType: 'REEL' }, '/post/p1'],
+  [{ postId: 'p1', postType: 'REEL' }, '/post/p1?from=notification'],
   [{ type: 'friend_request', friendRequestId: 'fr1' }, '/discover?onglet=requests&demandes=received'],
   [{ type: 'contact_joined', senderUsername: 'awa' }, '/u/awa'],
   [{ type: 'contact_recently_active', senderUsername: 'marie' }, '/u/marie'],

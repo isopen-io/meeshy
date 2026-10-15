@@ -48,8 +48,8 @@ final class GameNotificationRoutingTests: XCTestCase {
         XCTAssertEqual(iphone.components(separatedBy: entry).count - 1, 3, "jeu, paliers et lien du Jeu (#9947) : l'iPhone ouvre l'écran de la carte")
 
         let ipad = try source("Meeshy/Features/Main/Views/iPadRootView+Navigation.swift")
-        XCTAssertEqual(ipad.components(separatedBy: "case \(five):").count - 1, 3, "liste, bannière in-app et push : trois gestionnaires iPad")
-        XCTAssertEqual(ipad.components(separatedBy: entry).count - 1, 7, "jeu et paliers sur les trois gestionnaires iPad, plus le lien du Jeu (#9947)")
+        XCTAssertEqual(ipad.components(separatedBy: "case \(five):").count - 1, 1, "liste, bannière in-app et push : UN aiguillage iPad, comme l'iPhone")
+        XCTAssertEqual(ipad.components(separatedBy: entry).count - 1, 3, "jeu, paliers et lien du Jeu (#9947) : l'iPad ouvre l'écran de la carte, comme l'iPhone")
         XCTAssertFalse(ipad.contains("rightPanelRoute = .gamePage("), "plus aucune sous-page orpheline ouverte par une notification")
 
         for layers in ["Meeshy/Features/Main/Views/RootLayers/RootViewLayers.swift", "Meeshy/Features/Main/Views/RootLayers/iPadRootViewLayers.swift"] {

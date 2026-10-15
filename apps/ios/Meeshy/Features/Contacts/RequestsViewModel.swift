@@ -10,6 +10,7 @@ final class RequestsViewModel: ObservableObject {
     @Published var sentRequests: [FriendRequest] = []
     @Published var loadState: LoadState = .idle
     @Published var receivedHasMore = true
+    @Published var sentHasMore = true
 
     private let friendService: FriendServiceProviding
     /// Injected so tests can drive the accept/reject outbox path (enqueue
@@ -18,7 +19,17 @@ final class RequestsViewModel: ObservableObject {
     private let offlineQueue: OfflineQueueing
     private var profileRepaintSubscription: AnyCancellable?
     private var receivedOffset = 0
+    /// Rang SERVEUR de la page suivante des demandes envoyées : la route les
+    /// rend tous statuts confondus et la liste ne garde que celles en attente,
+    /// donc le nombre de lignes affichées n'est pas un rang (#8026).
+    private var sentOffset = 0
+    private var isLoadingMoreReceived = false
+    private var isLoadingMoreSent = false
     private let pageSize = 30
+    /// Pages servies sans aucune demande en attente qu'un même bas de liste
+    /// peut enchaîner : la dernière ligne ne réapparaît pas tant que rien ne
+    /// s'ajoute, donc une page « vide » ne doit pas arrêter le défilement.
+    private let maxSentPagesPerReach = 5
 
     /// In-flight silent revalidation tasks, kicked off when the cache returns
     /// `.stale`. Cancelled on `deinit` so a teardown mid-flight doesn't keep
@@ -86,16 +97,66 @@ final class RequestsViewModel: ObservableObject {
     }
 
     func loadMoreReceived() async {
-        guard receivedHasMore else { return }
+        guard receivedHasMore, !isLoadingMoreReceived else { return }
+        isLoadingMoreReceived = true
+        defer { isLoadingMoreReceived = false }
         do {
             let response = try await friendService.receivedRequests(offset: receivedOffset, limit: pageSize)
-            receivedRequests.append(contentsOf: response.data)
+            receivedRequests = Self.appendingNew(response.data, to: receivedRequests)
             receivedHasMore = response.pagination?.hasMore ?? false
             receivedOffset += response.data.count
         } catch {
             Self.logger.error("loadMoreReceived failed: \(error.localizedDescription)")
             receivedHasMore = false
         }
+    }
+
+    // MARK: - Bas de liste (#8026)
+
+    /// Une ligne de la liste reçue vient d'apparaître : la dernière charge la
+    /// page suivante.
+    func receivedRowAppeared(id: String) async {
+        guard receivedRequests.last?.id == id else { return }
+        await loadMoreReceived()
+    }
+
+    /// Une ligne de la liste envoyée vient d'apparaître : la dernière charge la
+    /// page suivante.
+    func sentRowAppeared(id: String) async {
+        guard sentRequests.last?.id == id else { return }
+        await loadMoreSent()
+    }
+
+    func loadMoreSent() async {
+        guard sentHasMore, !isLoadingMoreSent else { return }
+        isLoadingMoreSent = true
+        defer { isLoadingMoreSent = false }
+        for _ in 0..<maxSentPagesPerReach {
+            do {
+                let response = try await friendService.sentRequests(offset: sentOffset, limit: pageSize)
+                let before = sentRequests.count
+                sentRequests = Self.appendingNew(response.data.filter { $0.status == "pending" }, to: sentRequests)
+                sentOffset += response.data.count
+                sentHasMore = !response.data.isEmpty && (response.pagination?.hasMore ?? (response.data.count >= pageSize))
+                guard sentRequests.count == before, sentHasMore else { return }
+            } catch {
+                Self.logger.error("loadMoreSent failed: \(error.localizedDescription)")
+                sentHasMore = false
+                return
+            }
+        }
+    }
+
+    /// Ajoute les demandes d'une page suivante, sans reprendre celles déjà
+    /// affichées : une demande arrivée entre deux pages décale les rangs serveur.
+    nonisolated static func appendingNew(_ page: [FriendRequest], to shown: [FriendRequest]) -> [FriendRequest] {
+        let known = Set(shown.map(\.id))
+        return shown + page.filter { !known.contains($0.id) }
+    }
+
+    private func noteSentFirstPage(servedCount: Int, hasMore: Bool) {
+        sentOffset = servedCount
+        sentHasMore = hasMore
     }
 
     // MARK: - Load Sent
@@ -106,8 +167,11 @@ final class RequestsViewModel: ObservableObject {
         let store = await CacheCoordinator.shared.friendRequests
         let loader = CacheFirstLoader(store: store, key: sentKey)
         sentRevalidationTask?.cancel()
-        let fetch: @Sendable () async throws -> [FriendRequest] = {
+        let fetch: @Sendable () async throws -> [FriendRequest] = { [weak self] in
             let response = try await friendService.sentRequests(offset: 0, limit: pageSize)
+            let servedCount = response.data.count
+            let hasMore = response.pagination?.hasMore ?? (servedCount >= pageSize)
+            await self?.noteSentFirstPage(servedCount: servedCount, hasMore: hasMore)
             // Filter pending only — historical filter preserved.
             return response.data.filter { $0.status == "pending" }
         }
@@ -149,6 +213,7 @@ final class RequestsViewModel: ObservableObject {
         let senderId = acceptedRequest?.senderId
         let acceptedSender = acceptedRequest?.sender
         receivedRequests.removeAll { $0.id == requestId }
+        if acceptedRequest != nil { receivedOffset = max(0, receivedOffset - 1) }
         if let senderId {
             FriendshipCache.shared.didAcceptRequest(from: senderId)
         }
@@ -195,8 +260,10 @@ final class RequestsViewModel: ObservableObject {
     func reject(requestId: String) async {
         let snapshot = receivedRequests
         let cmid = ClientMutationId.generate()
-        let senderId = receivedRequests.first(where: { $0.id == requestId })?.senderId
+        let rejected = receivedRequests.first(where: { $0.id == requestId })
+        let senderId = rejected?.senderId
         receivedRequests.removeAll { $0.id == requestId }
+        if rejected != nil { receivedOffset = max(0, receivedOffset - 1) }
         if let senderId {
             FriendshipCache.shared.didRejectRequest(from: senderId)
         }
@@ -269,6 +336,8 @@ final class RequestsViewModel: ObservableObject {
         HapticFeedback.medium()
         do {
             try await friendService.deleteRequest(requestId: requestId)
+            // La ligne retirée côté serveur décale d'un rang la page suivante (#8026).
+            if receiverId != nil { sentOffset = max(0, sentOffset - 1) }
             FeedbackToastManager.shared.showSuccess(String(localized: "contacts.requests.cancel.success", defaultValue: "Demande annulée", bundle: .main))
         } catch {
             sentRequests = snapshot

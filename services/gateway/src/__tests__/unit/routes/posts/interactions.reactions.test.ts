@@ -47,7 +47,6 @@ import {
   mockUnbookmarkPost,
   mockRecordView,
   mockGetPostById,
-  mockRecordAnonymousOpen,
   mockSharePost,
   mockShareWithTrackingLink,
   mockGetPostShareLink,

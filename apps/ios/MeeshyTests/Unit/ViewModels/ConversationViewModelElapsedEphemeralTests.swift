@@ -247,8 +247,45 @@ final class ConversationViewModelElapsedEphemeralTests: XCTestCase {
             .deletingLastPathComponent().deletingLastPathComponent().deletingLastPathComponent()
             .deletingLastPathComponent().appendingPathComponent("Meeshy/Features/Main/Stores/MessageStore.swift")
         let source = try String(contentsOf: url, encoding: .utf8)
-        XCTAssertTrue(source.contains(".filter { !ExpiredEphemeralRow.isGone($0) }"),
-                      "le fil rend `MessageStore.messages` : c'est là qu'un mort doit partir")
+        XCTAssertTrue(source.contains("let published = ExpiredEphemeralRow.living("),
+                      "le fil rend `MessageStore.messages` : c'est là qu'un mort — et la réponse d'un mort (#10433) — doit partir")
+        XCTAssertTrue(source.contains("let kept = ExpiredEphemeralRow.living(messages)"),
+                      "la fin d'une combustion retire aussi les réponses de ce qui vient de brûler (#10433)")
+    }
+
+    // MARK: - #10433 : hors ligne, une réponse meurt avec ce qu'elle cite
+
+    private func reply(_ id: String, quoting quote: ReplyReference) -> Message {
+        var message = cached(id, flags: [])
+        message.replyToId = quote.messageId
+        message.replyTo = quote
+        return message
+    }
+
+    func test_cacheRowsToSurface_aReplyToADeadQuote_isNotResurrected() {
+        let sealed = ReplyReference(messageId: "m-flamme", authorName: "Bob", previewText: "secret")
+            .tombstoned(at: now.addingTimeInterval(-5), expired: true)
+        let rows = CachedThreadSurfacing.rows(
+            [reply("m-reply", quoting: sealed)], present: [],
+            ledger: FakeEphemeralLedger(), now: now)
+        XCTAssertTrue(rows.isEmpty)
+    }
+
+    func test_cacheRowsToSurface_aReplyToAnEphemeralBurnedHere_isNotResurrected() {
+        let quote = ReplyReference(messageId: "m-eph", authorName: "Bob", previewText: "secret")
+        let rows = CachedThreadSurfacing.rows(
+            [cached("m-eph", duration: 60), reply("m-reply", quoting: quote)], present: ["m-eph"],
+            ledger: FakeEphemeralLedger(deaths: ["m-eph": now.addingTimeInterval(-1)]), now: now)
+        XCTAssertTrue(rows.isEmpty)
+    }
+
+    func test_cacheRowsToSurface_aReplyToADeletedQuote_surfaces() {
+        let deleted = ReplyReference(messageId: "m-plain", authorName: "Bob", previewText: "salut")
+            .tombstoned(at: now.addingTimeInterval(-5))
+        let rows = CachedThreadSurfacing.rows(
+            [reply("m-reply", quoting: deleted)], present: [],
+            ledger: FakeEphemeralLedger(), now: now)
+        XCTAssertEqual(rows.map(\.id), ["m-reply"])
     }
 }
 

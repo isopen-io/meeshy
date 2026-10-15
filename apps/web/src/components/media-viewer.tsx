@@ -31,6 +31,7 @@ import { PROTECTED_ATTACHMENT_KEY, kindOf } from '@/lib/view/message';
 import { safeAreaInsets } from '@/lib/view/safe-area';
 import { prefersReducedMotion } from '@/lib/view/reduced-motion';
 import { yieldingChrome } from '@/lib/view/chrome-yields';
+import { useIdleChrome } from '@/lib/view/use-idle-chrome';
 import { SCENE_OPENING_EASING, SCENE_OPENING_MS, takeSceneOpening } from '@/lib/view/scene-opening';
 import { useBackDismiss } from '@/lib/view/use-back-dismiss';
 import { useConversationViewingFocus } from '@/lib/view/use-conversation-viewing';
@@ -578,6 +579,7 @@ export default function MediaViewer({
   };
 
   const audioPage = current !== undefined && kindOf(current) === 'audio';
+  const [audioPlaying, setAudioPlaying] = useState(false);
   const longPress = useLongPress({
     onOpen: () => {
       if (!audioPage) setPresentation(() => stageAfter(CARDED_STAGE, 'longPress'));
@@ -613,7 +615,27 @@ export default function MediaViewer({
      se lit pas sous « Fermer », sa légende et la pellicule. Au navigateur, un
      double tap est aussi deux taps (la bascule plein cadre s'annule) : c'est
      l'état zoomé de la page COURANTE qui compte. */
-  const chromeHidden = presentation.kind === 'full' || (zoomedId !== null && zoomedId === current?.id);
+  /* UNE OUVERTURE GAGNE SUR L'EFFACEMENT (#10629, `FullscreenChromeState.autoHiding`
+     iOS) : la rangée d'émojis ou le menu « … » ouvert tient le chrome. L'état
+     est daté par la pièce : changer de page oublie ce qui visait la précédente. */
+  const [overlay, setOverlay] = useState<{ readonly attachmentId: string; readonly rail: boolean; readonly menu: boolean }>({ attachmentId: '', rail: false, menu: false });
+  const overlayChange =
+    (slot: 'rail' | 'menu', attachmentId: string) =>
+    (open: boolean): void =>
+      setOverlay((now) => ({ ...(now.attachmentId === attachmentId ? now : { attachmentId, rail: false, menu: false }), [slot]: open }));
+  const overlayHeld = overlay.attachmentId === current?.id && (overlay.rail || overlay.menu);
+  const chromeIdle = useIdleChrome({ active: audioPage && audioPlaying, held: overlayHeld });
+  const chromeHidden = presentation.kind === 'full' || (zoomedId !== null && zoomedId === current?.id) || chromeIdle;
+  /* Un chrome effacé est INERTE : le focus qu'il tenait (la croix, posée à
+     l'ouverture) tomberait au `<body>`, hors de la visionneuse — Échap n'y
+     fermerait plus rien. Il revient à la visionneuse. */
+  useEffect(() => {
+    if (!chromeIdle) return;
+    const dialog = dialogRef.current;
+    const focused = document.activeElement;
+    const lost = focused === null || focused === document.body || (focused instanceof HTMLElement && focused.closest('[inert]') !== null);
+    if (dialog !== null && lost) dialog.focus({ preventScroll: true });
+  }, [chromeIdle]);
   if (current === undefined) return null;
 
   const identity = carrierIdentity(currentCarrier);
@@ -630,7 +652,16 @@ export default function MediaViewer({
       <div className="flex flex-col items-center gap-2">
         {page !== null && railOffered ? (
           <Suspense fallback={null}>
-            <ViewerMediaActions key={`rail:${current.id}`} slot="rail" page={page} language={language} onClose={onClose} announce={announce} hidden={chromeHidden} />
+            <ViewerMediaActions
+              key={`rail:${current.id}`}
+              slot="rail"
+              page={page}
+              language={language}
+              onClose={onClose}
+              announce={announce}
+              hidden={chromeHidden}
+              onOverlayChange={overlayChange('rail', current.id)}
+            />
           </Suspense>
         ) : null}
         {playsVideo ? <div ref={setRailSlot} data-viewer-video-controls="" className="flex flex-col items-center gap-2" /> : null}
@@ -651,7 +682,7 @@ export default function MediaViewer({
       ref={dialogRef}
       role="dialog"
       aria-modal="true"
-      aria-label={`${scenes !== undefined ? 'Scène' : 'Média'} ${index + 1} sur ${items.length}`}
+      aria-label={translate(language, scenes !== undefined ? 'media.viewer.position.scene' : 'media.viewer.position.media', { index: String(index + 1), total: String(items.length) })}
       data-media-viewer
       data-viewer-index={index}
       data-viewer-attachment={current.id}
@@ -671,13 +702,21 @@ export default function MediaViewer({
       <ViewerTopBar
         placement="corridor"
         hidden={chromeHidden}
-        exit={{ kind: 'close', label: 'Fermer', onExit: onClose, buttonRef: closeButtonRef }}
+        exit={{ kind: 'close', label: translate(language, 'common.close'), onExit: onClose, buttonRef: closeButtonRef }}
         {...(identity !== undefined ? { identity } : {})}
         {...(page !== null && page.offers.save
           ? {
               trailing: (
                 <Suspense fallback={null}>
-                  <ViewerMediaActions key={`menu:${current.id}`} slot="menu" page={page} language={language} onClose={onClose} announce={announce} />
+                  <ViewerMediaActions
+                    key={`menu:${current.id}`}
+                    slot="menu"
+                    page={page}
+                    language={language}
+                    onClose={onClose}
+                    announce={announce}
+                    onOverlayChange={overlayChange('menu', current.id)}
+                  />
                 </Suspense>
               ),
             }
@@ -784,6 +823,9 @@ export default function MediaViewer({
                       }}
                       onCarryRef={(carry) => {
                         if (i === index) registerCarry(attachment.id, carry);
+                      }}
+                      onPlayingChange={(playing) => {
+                        if (i === index) setAudioPlaying(playing);
                       }}
                       {...(displayLanguage !== undefined ? { displayLanguage } : {})}
                       {...(deps !== undefined ? { deps } : {})}

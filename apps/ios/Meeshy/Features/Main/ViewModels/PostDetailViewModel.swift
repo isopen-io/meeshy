@@ -50,6 +50,10 @@ class PostDetailViewModel: ObservableObject {
     private let socialSocket: any SocialSocketProviding
     private let languageProvider: LanguageProviding
     let offlineQueue: OfflineQueueing
+    private let openSources: DetailOpenSourceProviding
+    /// Les posts dont l'ouverture est déjà comptée par CETTE instance (#10483) :
+    /// le `.task` du détail se relance au retour d'un écran poussé.
+    private var countedOpenPostIds: Set<String> = []
     private var cancellables = Set<AnyCancellable>()
 
     // MARK: - Persistence Layer
@@ -60,8 +64,10 @@ class PostDetailViewModel: ObservableObject {
         postService: PostServiceProviding = PostService.shared,
         languageProvider: LanguageProviding = AuthManagerLanguageProvider(),
         offlineQueue: OfflineQueueing = OfflineQueue.shared,
-        socialSocket: any SocialSocketProviding = SocialSocketManager.shared
+        socialSocket: any SocialSocketProviding = SocialSocketManager.shared,
+        openSources: DetailOpenSourceProviding = DetailOpenSources.shared
     ) {
+        self.openSources = openSources
         self.postService = postService
         self.languageProvider = languageProvider
         self.offlineQueue = offlineQueue
@@ -133,17 +139,34 @@ class PostDetailViewModel: ObservableObject {
     /// Ouvrir la page Détail d'un post est, par règle produit, une vue TOTALE
     /// (chaque ouverture compte, jamais dédupliquée) ET une impression, comptées
     /// IMMÉDIATEMENT — avant et indépendamment du tracking d'engagement (durée de
-    /// lecture). Le gateway incrémente `postOpenCount` + `impressionCount` via
-    /// `POST /posts/:id/impression?source=detail`. On bump les compteurs affichés
+    /// lecture). Le gateway incrémente `postOpenCount` + `impressionCount` par
+    /// l'impression `source=detail` de `POST /social/events`. On bump les compteurs affichés
     /// de façon optimiste pour un feedback instantané, puis on enregistre (fire-
-    /// and-forget). La vue UNIQUE (`viewCount`, dédupliquée, non affichée) reste
-    /// portée par `viewPost` appelé séparément à l'ouverture.
+    /// and-forget), impression puis vue.
+    ///
+    /// Une ouverture se compte à la PREMIÈRE apparition de l'instance, pas à
+    /// chaque relance du `.task` (#10483). Son ENTRÉE (la marque posée par la
+    /// porte qui l'a amenée : tap d'un listing, notification, lien) donne la
+    /// source de l'impression et la provenance de la vue ; sans marque, `direct`.
     func registerDetailOpen(_ postId: String) async {
+        guard countedOpenPostIds.insert(postId).inserted else { return }
         if post != nil {
             post?.impressionCount += 1
             post?.postOpenCount += 1
         }
-        try? await postService.recordImpression(postId: postId, source: "detail")
+        let entry = openSources.consumeEntry(for: postId)
+        // Une seule requête : l'impression et la vue sont deux types qu'un
+        // serveur antérieur à #10483 connaît déjà ; la provenance et l'origine
+        // de la vue, inconnues de lui, sont retirées sans refus. `viewCount` est
+        // le TOTAL des vues : chaque ouverture en compte une, sous la même garde
+        // que l'impression, et porte par où elle est venue.
+        _ = try? await postService.recordSocialEvents(
+            [
+                .impression(postId: postId, source: entry.detailImpressionSource, surface: .detail),
+                .view(postId: postId, durationMs: nil, surface: .detail, entry: entry),
+            ],
+            credential: .account
+        )
     }
 
     private func refreshPost(_ postId: String) async {

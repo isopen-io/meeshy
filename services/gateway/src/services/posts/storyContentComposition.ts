@@ -1,3 +1,4 @@
+import { textsWithoutCredits } from './repostCreditChips';
 import { storyTranslatableTexts } from './storyEffectsV3';
 
 /**
@@ -180,10 +181,79 @@ export function postSignalText(params: {
   content?: string | null;
   storyEffects?: unknown;
 }): string | undefined {
-  const written = nonEmpty(params.content);
+  const withoutCredit = derivedContentWithoutCredits({ content: params.content, storyEffects: params.storyEffects });
+  const written = nonEmpty(withoutCredit ? withoutCredit.content : params.content);
   if (written) return written;
   // `storyTranslatableTexts` connaît les DEUX formes — v1 `textObjects` et v3
   // `scenes[].objects[kind=text]`. La recopier ici l'aurait fait diverger, et
   // le composer v3 est justement celui qui produit ces stories.
-  return nonEmpty(composeStoryContent(storyTranslatableTexts(params.storyEffects)));
+  // La puce « Reposté de @auteur » (texte verrouillé, #10497) n'est jamais le
+  // texte de l'auteur : ni aperçu, ni hashtag.
+  return nonEmpty(composeStoryContent(creditFreeTexts(params.storyEffects)));
+}
+
+const creditFreeTexts = (storyEffects: unknown): unknown[] =>
+  textsWithoutCredits(storyEffects, storyTranslatableTexts(storyEffects) ?? []);
+
+const isRecord = (value: unknown): value is Record<string, unknown> =>
+  typeof value === 'object' && value !== null && !Array.isArray(value);
+
+/**
+ * **Le `content` dérivé d'une story d'AVANT #4502, sans le texte de la puce**
+ * (#10523). La recopie y a rangé la concaténation de TOUS les textes du
+ * canvas, puce de crédit comprise, et ses `translations` en sont l'assemblage :
+ * le canvas se sert sans la puce (#10524), son index aussi.
+ *
+ * Le test est celui de `isContentDerivedFromTextObjects`, sur les textes
+ * ENREGISTRÉS : une légende écrite par l'auteur ne leur est pas égale et reste
+ * intacte. Chaque traduction se RECOMPOSE depuis les textes qui restent ; celle
+ * qui ne se recompose pas ne part pas — elle porte la traduction de la puce,
+ * et le lecteur retombe sur l'original.
+ *
+ * `null` ⇒ rien à retirer. `translations` n'est rendu que s'il a été reçu.
+ */
+export function derivedContentWithoutCredits(params: {
+  content: unknown;
+  translations?: unknown;
+  storyEffects: unknown;
+}): { content: string | null; translations?: Record<string, unknown> } | null {
+  if (typeof params.content !== 'string') return null;
+  const recorded = storyTranslatableTexts(params.storyEffects) ?? [];
+  const kept = textsWithoutCredits(params.storyEffects, recorded);
+  if (kept.length === recorded.length) return null;
+  if (!isContentDerivedFromTextObjects(params.content, recorded)) return null;
+
+  const content = nonEmpty(composeStoryContent(kept)) ?? null;
+  if (params.translations === undefined) return { content };
+
+  const translations = Object.fromEntries(
+    Object.entries(isRecord(params.translations) ? params.translations : {}).flatMap(([language, entry]) => {
+      const text = composeStoryContentForLanguage(kept, language);
+      return text && isRecord(entry) ? [[language, { ...entry, text }]] : [];
+    }),
+  );
+  return { content, translations };
+}
+
+/**
+ * La même loi sur une publication SERVIE, et sur la source qu'elle cite
+ * (`repostOf`). Se lit sur le canvas tel qu'ENREGISTRÉ : passe AVANT
+ * `withServedRepostCredits`, qui en retire la puce. Idempotente.
+ */
+export function withServedDerivedContent<T extends object>(post: T): T {
+  const own = servedDerivedContent(post);
+  const source = (post as { repostOf?: unknown }).repostOf;
+  const cited = isRecord(source) ? servedDerivedContent(source) : source;
+  if (own === post && cited === source) return post;
+  return { ...own, ...(cited !== source ? { repostOf: cited } : {}) };
+}
+
+function servedDerivedContent<T extends object>(post: T): T {
+  const row = post as { content?: unknown; translations?: unknown; storyEffects?: unknown };
+  const served = derivedContentWithoutCredits({
+    content: row.content,
+    translations: row.translations,
+    storyEffects: row.storyEffects,
+  });
+  return served ? { ...post, ...served } : post;
 }

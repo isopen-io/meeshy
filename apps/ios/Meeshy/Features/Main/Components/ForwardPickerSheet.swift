@@ -337,6 +337,9 @@ struct ForwardPickerSheet: View {
             onMoodTap: target.userId.flatMap { statusViewModel.moodTapHandler(for: $0) }
         )
         .equatable()
+        .countsImpression(of: target.userId.flatMap { statusViewModel.statusForUser(userId: $0)?.id }) {
+            statusViewModel.trackImpression($0)
+        }
     }
 
     // MARK: - Publication
