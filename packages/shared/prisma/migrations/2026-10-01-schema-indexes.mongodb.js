@@ -33,6 +33,10 @@ const dryRun = process.env.DRY_RUN === '1';
 const specs = [
   { collection: 'AdminAuditLog', name: 'AdminAuditLog_entity_entityId_idx', key: { entity: 1, entityId: 1 } },
   { collection: 'CallRecording', name: 'CallRecording_callSessionId_idx', key: { callSessionId: 1 } },
+  { collection: 'CommunityAppearancePack', name: 'CommunityAppearancePack_domain_slug_key', key: { domain: 1, slug: 1 }, unique: true },
+  { collection: 'CommunityAppearancePack', name: 'CommunityAppearancePack_domain_status_createdAt_idx', key: { domain: 1, status: 1, createdAt: 1 } },
+  { collection: 'CommunityAppearancePack', name: 'CommunityAppearancePack_submitterId_idx', key: { submitterId: 1 } },
+  { collection: 'CommunityAppearancePack', name: 'CommunityAppearancePack_contractSrc_idx', key: { contractSrc: 1 } },
   { collection: 'Conversation', name: 'Conversation_isActive_lastActivityAt_idx', key: { isActive: 1, lastActivityAt: 1 } },
   { collection: 'ConversationEngagement', name: 'ConversationEngagement_userId_conversationId_key', key: { userId: 1, conversationId: 1 }, unique: true },
   { collection: 'ConversationEngagement', name: 'ConversationEngagement_userId_updatedAt_idx', key: { userId: 1, updatedAt: 1 } },

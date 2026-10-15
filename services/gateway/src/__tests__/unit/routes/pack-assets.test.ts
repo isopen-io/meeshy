@@ -39,10 +39,10 @@ function tempAssets(files: Record<string, string>) {
   return dir;
 }
 
-async function buildApp(options: { index: PackIndex; assetsDir: string; globalMax?: number }): Promise<FastifyInstance> {
+async function buildApp(options: { index: PackIndex; assetsDir: string; globalMax?: number; community?: { approvedContract: (src: string) => Promise<string | null> } }): Promise<FastifyInstance> {
   const app = Fastify({ logger: false });
   await app.register(rateLimit, { global: true, max: options.globalMax ?? 300, timeWindow: '1 minute' });
-  await app.register(packAssetsRoutes, { prefix: '/api/v1/pack-assets', index: options.index, assetsDir: options.assetsDir });
+  await app.register(packAssetsRoutes, { prefix: '/api/v1/pack-assets', index: options.index, assetsDir: options.assetsDir, community: options.community ?? { approvedContract: async () => null } });
   app.get('/api/v1/autre', async () => ({ ok: true }));
   await app.ready();
   return app;

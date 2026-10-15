@@ -15,6 +15,7 @@ import { PACK_DOMAINS, isPackDomain, type PackDomain } from '@meeshy/shared/type
 
 import { MeeshSpend } from '../services/game/MeeshSpend';
 import { PackCatalog } from '../services/packs/PackCatalog';
+import { prismaCommunityAppearanceStore } from '../services/packs/CommunityAppearancePacks';
 import { startupPackIndex, type PackIndex } from '../services/packs/PackIndex';
 import { appearancePackSpec, APPEARANCE_PACK_DOMAINS } from '../services/packs/appearancePackSpec';
 import { gloryFramePackSpec } from '../services/packs/gloryFramePackSpec';
@@ -57,7 +58,7 @@ export async function packsShopRoutes(fastify: FastifyInstance, options: PacksSh
   const defaults = (): Readonly<Partial<Record<PackDomain, ShopCatalog>>> => ({
     sticker: new PackCatalog({ prisma: fastify.prisma, spec: stickerPackSpec(fastify.prisma) }),
     'glory-frame': new PackCatalog({ prisma: fastify.prisma, spec: gloryFramePackSpec({ index }) }),
-    ...Object.fromEntries(APPEARANCE_PACK_DOMAINS.map((domain) => [domain, new PackCatalog({ prisma: fastify.prisma, spec: appearancePackSpec({ index, domain }) })])),
+    ...Object.fromEntries(APPEARANCE_PACK_DOMAINS.map((domain) => [domain, new PackCatalog({ prisma: fastify.prisma, spec: appearancePackSpec({ index, domain, community: prismaCommunityAppearanceStore(fastify.prisma, domain) }) })])),
   });
   const catalogs = options.catalogs ?? defaults();
   const balance = options.balance ?? ((userId: string) => new MeeshSpend(fastify.prisma).balance(userId));
