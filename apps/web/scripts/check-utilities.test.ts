@@ -122,6 +122,23 @@ describe('escapeForCss — le sélecteur que Tailwind émet réellement', () => 
     expect(emitted.includes(`.${escapeForCss('@xxl:grid-cols-4')}`)).toBe(false);
     expect(emitted.includes(`.${escapeForCss('@xl:grid-cols-5')}`)).toBe(false);
   });
+
+  /**
+   * LE TÉMOIN DE L'ASTÉRISQUE (régression CI 2026-10-12, #10293).
+   *
+   * `w-[min(100%,calc(62dvh*9/16))]` (la scène caméra du déroulé photo,
+   * `game-photo-flow.tsx`) a été la première classe du dépôt à porter un `*`
+   * dans sa valeur arbitraire. Tailwind l'a compilée et émise comme toute
+   * autre classe spéciale déjà couverte ci-dessus — mais `escapeForCss`
+   * n'échappait pas l'astérisque, donc la recherche par sous-chaîne ne
+   * retrouvait jamais la règle pourtant présente : la classe passait pour
+   * morte sur `dev`, pour toute PR, sans rapport avec ce que cette classe
+   * change réellement.
+   */
+  test('l’astérisque d’une multiplication `calc()` se protège : `w-[min(100%,calc(62dvh*9/16))]` a sa règle', () => {
+    const emitted = '.w-\\[min\\(100\\%\\,calc\\(62dvh\\*9\\/16\\)\\)\\]{width:min(100%,calc(62dvh*9/16))}';
+    expect(emitted.includes(`.${escapeForCss('w-[min(100%,calc(62dvh*9/16))]')}`)).toBe(true);
+  });
 });
 
 describe('findRuleBody — le corps de la règle compilée pour une classe', () => {

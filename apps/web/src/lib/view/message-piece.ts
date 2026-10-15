@@ -3,7 +3,7 @@ import type { MessagePiecesCatalogKey } from '@/lib/i18n-message-pieces-catalog'
 
 import { contentExitOf, exitOffers, pieceIsOpen, type ExitMessage } from './content-exit';
 import { partitionAttachments } from './media-grid-layout';
-import type { MediaPageOffers } from './viewer-page-offers';
+import { mediaPageOffers, type MediaPageOffers, type ProtectableMessage } from './viewer-page-offers';
 
 /**
  * CHAQUE PIÈCE D'UN MESSAGE SE VISE SEULE (#9907, #9908, directive porteur du
@@ -71,6 +71,25 @@ export function targetedPieceOf(
   const pieces = menuPiecesOf(message);
   const index = pieces.findIndex((piece) => piece.id === pieceId);
   return index === -1 ? null : { pieces, index };
+}
+
+/**
+ * « ENREGISTRER » AU MENU DU MESSAGE (#10599) — la pièce qu'il enregistre, ou
+ * `null`. Miroir de `MessageActionResolver.primaryActions` (iOS,
+ * `saveableAttachmentCount == 1`) : EXACTEMENT une pièce — un lot s'enregistre
+ * pièce par pièce, depuis le menu de la tuile (`pieceSave`) ou la visionneuse.
+ * La loi est celle de la visionneuse (`mediaPageOffers`), jamais une seconde :
+ * ni vue unique, ni flou (même révélé — la pièce ORIGINALE fait foi), ni
+ * chiffré, ni contenu qui disparaît, ni envoi encore local, ni pièce sans
+ * fichier ; la protection se lit sur le message ET sur la pièce.
+ */
+const SAVE_ONLY: MediaPageOffers = { save: true, react: false, reply: false, compose: false, share: false };
+
+export function soleSaveablePieceOf(message: ProtectableMessage & Pick<Message, 'attachments'>, now: number): Attachment | null {
+  const pieces = (message.attachments ?? []).filter((piece): piece is Attachment => piece !== null && piece !== undefined);
+  const sole = pieces.length === 1 ? pieces[0] : undefined;
+  if (sole === undefined) return null;
+  return mediaPageOffers({ attachment: sole, message, capabilities: SAVE_ONLY, now }).save ? sole : null;
 }
 
 export type PieceActionId = 'pieceReply' | 'pieceSave' | 'pieceForward' | 'pieceDelete' | 'wholeMessage';

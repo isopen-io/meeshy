@@ -60,6 +60,11 @@ jest.mock('../../../../routes/me/security-events', () => ({
   securityEventsRoutes: jest.fn(async () => {}),
 }));
 
+jest.mock('../../../../routes/me/profile-decor', () => ({
+  __esModule: true,
+  default: jest.fn(async () => {}),
+}));
+
 jest.mock('../../../../middleware/auth', () => ({
   createUnifiedAuthMiddleware: jest.fn(),
 }));

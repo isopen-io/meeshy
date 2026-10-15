@@ -402,6 +402,17 @@ GET /api/v1/static/:filename   (JWT-protected)
 - Audio pipeline only via WS `message:send-with-attachments` (not REST)
 - MessageTranslationService emits `translatedAudio` (singular) - check data shape
 - Anonymous users have NO encryption
+- **Un lecteur SANS compte se désigne par sa CLÉ DE LECTEUR, jamais par son jeton (#10483).**
+  `readerKeyOf()` (`services/posts/readerKey.ts`) = `HMAC-SHA256(READER_KEY_HMAC_SECRET,
+  participant:<id> | token:<valeur>)` en hex 64 : c'est la seule chose qu'une ligne ou un
+  seau de débit garde d'un invité de lien ou d'un visiteur (`visitor_<uuid>`). La valeur de
+  X-Session-Token est un CREDENTIAL pour un invité : elle ne s'écrit nulle part.
+  `READER_KEY_HMAC_SECRET` est obligatoire en production ET en staging (`NODE_ENV=production`) —
+  la passerelle refuse de démarrer sans elle (`loadConfiguration`) ; distincte par environnement,
+  jamais tournée (chaque lecteur serait recompté). Ses vues et impressions entrent dans
+  `viewCount` / `impressionCount` (parts `anonymousViewCount` / `anonymousImpressionCount`)
+  sous la garde de LECTURE anonyme `readServableToAnonymous` : on ne compte que ce qu'un
+  anonyme peut lire. Décision : `decisions/2026-10-13-chaque-affichage-est-compte-avec-ou-sans-compte-10483.md`.
 - Admin audit trail required for all admin actions
 
 ## Tests — un témoin qui ne peut pas tomber n'est pas un témoin

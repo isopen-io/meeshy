@@ -134,9 +134,9 @@ final class StoryRepublishWiringGuardTests: XCTestCase {
 
         let host = AppSourceGuard.stripComments(try AppSourceGuard.composerHostSource())
         XCTAssertTrue(
-            host.contains("StoryComposerViewModel(reposting: story, authorHandle: authorHandle)"),
+            host.contains("StoryComposerViewModel(reposting: story)"),
             "Le composeur doit être construit par l'initialiseur de repost, qui " +
-            "préremplit la slide source et verrouille le badge d'attribution."
+            "préremplit la slide source et retire toute puce de crédit héritée (#10524)."
         )
     }
 

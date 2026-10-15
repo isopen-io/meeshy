@@ -1,3 +1,4 @@
+import { rememberSearchId, useSearchTelemetry } from '@/lib/telemetry/search-telemetry';
 import { keepPreviousData, useInfiniteQuery, useQuery, type UseInfiniteQueryResult } from '@tanstack/react-query';
 import { useCallback, useMemo, useRef, useState, type ReactNode } from 'react';
 import { useStore } from 'zustand/react';
@@ -207,15 +208,30 @@ export default function DiscoverScreen() {
 
   const [typed, setTyped] = useState('');
   const query = useSettled(typed, SEARCH_DEBOUNCE_MS).trim();
+  const searchIds = useRef(new Map<string, string>());
   const results = useQuery(
     {
       queryKey: ['users', 'search', query],
-      queryFn: async () => unwrap(await searchUsers(apiDeps, query)),
+      queryFn: async () => {
+        const served = await searchUsers(apiDeps, query);
+        rememberSearchId(searchIds.current, query, served);
+        return unwrap(served);
+      },
       enabled: enabled && tab === 'discover' && query.length >= MIN_QUERY_LENGTH,
       placeholderData: keepPreviousData,
     },
     appQueryClient,
   );
+  const { onResultsClick } = useSearchTelemetry({
+    query,
+    results: results.data,
+    searchId: searchIds.current.get(query),
+    settled: !results.isPlaceholderData,
+    minLength: MIN_QUERY_LENGTH,
+    resultKind: 'profile',
+    targetKind: 'profile',
+    rowAttribute: 'data-person',
+  });
 
   const [email, setEmail] = useState('');
   const [invite, setInvite] = useState<{ readonly status: InviteStatus; readonly sentTo: string }>({ status: 'idle', sentTo: '' });
@@ -298,7 +314,7 @@ export default function DiscoverScreen() {
         {translate(language, 'discover.search.empty', { query })}
       </p>
     ) : (
-      <ul data-discover-results aria-busy={results.isPlaceholderData} className="flex flex-col">
+      <ul data-discover-results aria-busy={results.isPlaceholderData} className="flex flex-col" onClickCapture={onResultsClick}>
         {results.data.map((person) => (
           <PersonResultRow key={person.id} language={language} person={person} relationship={relationshipOf(index, person.id)} handlers={handlers} />
         ))}

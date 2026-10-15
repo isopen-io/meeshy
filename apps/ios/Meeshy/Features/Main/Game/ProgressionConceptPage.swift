@@ -8,9 +8,12 @@ import MeeshyUI
 ///  1. le héros — l'emblème en grand, la valeur, la jauge vers l'étape suivante ; ou, quand le concept a sa PIÈCE
 ///     de jeu (anneau du niveau, frappe des Meeshes, détail de ligue, Élans), cette pièce À SA PLACE — jamais les
 ///     deux (amendement n° 4) ;
-///  2. « C'est quoi ? » — les deux phrases de la carte, à quoi ça sert (`why`) et comment ça marche (`how`) ;
-///  3. « Où j'en suis » — toutes les données du concept, en lignes libellé → valeur ;
-///  4. « Comment en gagner » — les deux conseils qui développent la carte (`tip1`, `tip2`) ;
+///  2. « C'est quoi ? » — ce que c'est (`what`), puis les deux phrases de la carte, à quoi ça sert (`why`) et comment
+///     ça marche (`how`) ;
+///  3. « Où j'en suis » — la phrase d'état d'abord (l'étape où l'on est, ce que le chiffre vise, #10540), puis les
+///     données du concept, en lignes libellé → valeur ;
+///  4. « Comment en gagner » — les deux conseils qui développent la carte (`tip1`, `tip2`) ; puis « Comment m'en
+///     servir » — l'usage du concept, en clair (`use`, #10540) ;
 ///  5. « À toi de jouer » — les GESTES du concept (frapper, ouvrir le coffre, changer une mission, protéger ou
 ///     rallumer la Flamme…) : ils vivent ICI, plus sur la première page ;
 ///  6. « Aller plus loin » — les sous-pages (classement de la ligue, parcours de saison, règles…).
@@ -160,18 +163,29 @@ struct ProgressionConceptContent: View {
                 GamePhotoOfferView(moment: offer, onStart: { photos.start($0) }, onLater: { photos.later($0) })
             }
             section(ConceptText.ficheWhat) {
+                sentence(ConceptText.what(concept))
                 sentence(ConceptText.why(concept), strong: true)
                 sentence(ConceptText.how(concept))
             }
             let facts = ProgressionConceptModel.facts(concept, progress: progress, game: game)
-            if !facts.isEmpty {
+            let state = ProgressionConceptModel.state(concept, progress: progress, game: game)
+            if state != nil || !facts.isEmpty {
                 section(ConceptText.ficheWhere) {
-                    ProgressionConceptFacts(facts: facts, concept: concept)
+                    if let state {
+                        sentence(state, strong: true)
+                            .accessibilityIdentifier("progression.concept.state")
+                    }
+                    if !facts.isEmpty {
+                        ProgressionConceptFacts(facts: facts, concept: concept)
+                    }
                 }
             }
             section(ConceptText.ficheEarn) {
                 sentence(ConceptText.tip1(concept))
                 sentence(ConceptText.tip2(concept))
+            }
+            section(ConceptText.ficheUse) {
+                sentence(ConceptText.use(concept))
             }
             if ProgressionConceptGestures.exist(for: concept, progress: progress, game: game), !hasPiece {
                 VStack(alignment: .leading, spacing: MeeshySpacing.xl) {
@@ -371,7 +385,8 @@ struct ProgressionConceptGestures: View {
             if let game {
                 // LE héro de frappe — le SEUL du jeu (#9537).
                 GameMintPreviewView(
-                    game: game, badgesLost: viewModel.mintBadgeImpact?.lost, online: viewModel.isOnline,
+                    game: game, convertible: progress.meesh?.debitablePoints,
+                    badgesLost: viewModel.mintBadgeImpact?.lost, online: viewModel.isOnline,
                     minting: viewModel.isMinting, error: viewModel.mintError,
                     celebration: viewModel.celebration, onMint: { Task { await viewModel.mint() } }
                 )

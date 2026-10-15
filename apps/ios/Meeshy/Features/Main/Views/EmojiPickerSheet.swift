@@ -350,7 +350,7 @@ struct EmojiPickerSheet: View {
     /// Un hôte qui insère l'emoji AILLEURS — le meuble, qui l'ajoute au texte —
     /// passe le sien (`composer.attach.emoji`), sans que les appelants de
     /// réaction (fil, préférences) aient à répéter le défaut.
-    var title: LocalizedStringResource = LocalizedStringResource("emoji.title", defaultValue: "Reactions")
+    var title: LocalizedStringResource = LocalizedStringResource("emoji.title", defaultValue: "Réactions")
     let onSelect: (String) -> Void
 
     @Environment(\.dismiss) private var dismiss

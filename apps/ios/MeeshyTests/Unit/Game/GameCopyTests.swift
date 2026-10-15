@@ -185,11 +185,6 @@ final class GameCopyTests: XCTestCase {
         XCTAssertNotEqual(GameCopy.clock(minuteOfDay: 21 * 60, locale: Locale(identifier: "en_US")), "21:00", "12 h en anglais américain")
     }
 
-    func test_chance_isOneOverTheOdds() {
-        XCTAssertTrue(GameCopy.chance(1.0 / 6.0).contains(GameCopy.formatCount(6)))
-        XCTAssertTrue(GameCopy.chance(1.0 / 20.0).contains(GameCopy.formatCount(20)))
-    }
-
     // MARK: - Mee et Meo
 
     func test_everyGuideAction_hasALabel() {

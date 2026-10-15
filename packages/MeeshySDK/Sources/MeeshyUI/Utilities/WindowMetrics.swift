@@ -21,7 +21,7 @@ enum WindowMetrics {
         return nil
     }
 
-    private static var activeWindow: UIWindow? {
+    static var activeWindow: UIWindow? {
         guard let scene = activeWindowScene else { return nil }
         for window in scene.windows where window.isKeyWindow {
             return window

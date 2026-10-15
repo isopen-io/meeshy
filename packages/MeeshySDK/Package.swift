@@ -49,6 +49,10 @@ let package = Package(
                 .product(name: "GRDB", package: "GRDB.swift"),
                 .product(name: "WebRTC", package: "WebRTC"),
             ],
+            // `Resources/appearance-catalog.json` n'est PAS une ressource SwiftPM : elle ferait générer
+            // `Bundle.module` ici, ambigu avec celui de MeeshyUI dans tout test qui importe les deux.
+            // Son contenu est embarqué en Swift (`AppearanceCatalogData.swift`), copie gardée identique.
+            exclude: ["Resources"],
             swiftSettings: coreSwiftSettings
         ),
         .target(

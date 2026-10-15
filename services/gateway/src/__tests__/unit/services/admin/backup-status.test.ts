@@ -21,6 +21,7 @@ import path from 'node:path';
 import {
   backupAlertOf,
   backupCardOf,
+  backupScheduleFromEnv,
   backupStatusFile,
   nextParisTime,
   parseBackupVerdict,
@@ -129,8 +130,31 @@ describe('la prochaine échéance, heure de Paris', () => {
     expect(nextParisTime(new Date('2026-03-28T05:00:00Z'), 5).toISOString()).toBe('2026-03-29T03:00:00.000Z');
   });
 
+  it('tient une minute : 2 h 30 de Paris en heure d’été est 00:30 UTC (#10460)', () => {
+    expect(nextParisTime(new Date('2026-10-13T00:35:00Z'), 2, 30).toISOString()).toBe('2026-10-14T00:30:00.000Z');
+    expect(nextParisTime(new Date('2026-10-13T00:20:00Z'), 2, 30).toISOString()).toBe('2026-10-13T00:30:00.000Z');
+  });
+
   it('est STRICTEMENT après l’instant donné', () => {
     expect(nextParisTime(new Date('2026-10-08T03:00:00Z'), 5).toISOString()).toBe('2026-10-09T03:00:00.000Z');
+  });
+});
+
+describe('l’heure de sauvegarde de l’environnement (#10460)', () => {
+  it('lit BACKUP_RUN_TIME en HH:MM', () => {
+    expect(backupScheduleFromEnv({ BACKUP_RUN_TIME: '02:30' })).toEqual({ hour: 2, minute: 30 });
+    expect(backupScheduleFromEnv({ BACKUP_RUN_TIME: ' 23:05 ' })).toEqual({ hour: 23, minute: 5 });
+  });
+
+  it('retombe sur minuit (la production) quand la variable manque ou ne se lit pas', () => {
+    for (const value of [undefined, '', '2h30', '24:00', '07:60', '7:30', '02:30:00']) {
+      expect(backupScheduleFromEnv({ BACKUP_RUN_TIME: value })).toEqual({ hour: 0, minute: 0 });
+    }
+  });
+
+  it('la carte annonce la prochaine sauvegarde à l’heure de l’environnement', () => {
+    const card = backupCardOf(parseBackupVerdict(verdict()), new Date('2026-10-13T00:35:00Z'), { hour: 2, minute: 30 });
+    expect(card?.nextRunAt).toBe('2026-10-14T00:30:00.000Z');
   });
 });
 

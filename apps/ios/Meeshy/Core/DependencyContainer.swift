@@ -335,6 +335,8 @@ final class DependencyContainer {
                 // (`ConversationSocketHandler`) : contenu vidé, citations
                 // scellées — une vue unique n'y est pas épargnée (#7960).
                 try await persistence.markDeleted(localId: messageId, deletedAt: expiredAt, expired: true)
+                // #10433 — les réponses d'un mort quittent la base avec lui.
+                try await persistence.purgeQuoteCascade(fromDead: [messageId])
             case let .citedPostWithdrawn(postId, conversationId, _):
                 try await persistence.markCitedPostWithdrawn(postId: postId, conversationId: conversationId)
             case let .reactionAdded(messageId, reactionId, emoji, participantId, maxCount, ownerUserId):
@@ -492,6 +494,14 @@ final class DependencyContainer {
                     // PendingStatusQueue. (pending_mark_read App Group est
                     // couvert par le wipe appgroup-01 — pas de doublon ici.)
                     ImpressionBatcher.purgeAllPendingImpressions()
+                    // #10501 — les pages servies au compte sortant ne situent
+                    // pas les impressions du suivant.
+                    ListingContextLedger.shared.reset()
+                    // #10500 — la file v2 et l'approximation des contenus
+                    // affichés appartiennent au compte sortant.
+                    await SocialEventsV2Outbox.shared.purgeAll()
+                    SocialNotificationInbox.shared.purge()
+                    await MainActor.run { RecentDisplayCaptureSource.shared.reset() }
                     await PendingStatusQueue.shared.clearAll()
                     // #8656 — les brouillons de commentaire sont rangés par post,
                     // sans compte : un post vu des deux comptes rendait au

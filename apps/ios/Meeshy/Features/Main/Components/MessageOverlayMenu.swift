@@ -200,6 +200,7 @@ struct MessageOverlayMenu: View {
             hasCallSummary: message.callSummary != nil,
             saveableAttachmentCount: message.attachments.filter { $0.type != .location }.count,
             canComposeMedia: ComposableAttachment.offers(message: message),
+            isSticker: message.sticker != nil, stickerAddable: ReceivedSticker.offersAdd(for: message, known: ReceivedStickerLedger.shared.ids),
             showReadReceipts: UserPreferencesManager.shared.privacy.showReadReceipts,
             exits: message.exitOffer, isViewOnce: message.holdsViewOnce, isBlurred: message.holdsBlur,
             hasDefaultExportFormat: MessageCardExportMenu.hasDefaultFormat, hasPaintableMedia: !MessageCardSubject.paintableMedia(of: message).isEmpty
@@ -228,6 +229,8 @@ struct MessageOverlayMenu: View {
             onShowMore?()
         case .callDetail:
             onShowCallDetail?()
+        case .addSticker:
+            ReceivedStickerLedger.shared.addSticker(of: message)
         case .exportImage, .exportQuick:
             onExportImage?(action == .exportQuick)
         case .wholeMessage, .replyToPiece, .deletePiece:

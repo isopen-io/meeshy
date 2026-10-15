@@ -9,15 +9,15 @@ import { currentInterfaceLanguage } from '@/lib/interface-language';
  * feuille de stickers : deux déclarations paresseuses auraient été deux
  * chargements à tenir d'accord (le catalogue des packs en est un).
  *
- * LA PALETTE D'EMOJIS, CHARGÉE À LA DEMANDE (#7280) — même discipline que
- * `LanguageSheet` et `EffectsSheet` : la grille des vingt (`EmojiGrid`,
- * SEULE liste du dépôt) et la feuille qui la porte n'entrent dans aucun
- * chunk tant qu'on n'a pas touché la tuile « Emoji ». La feuille de stickers
- * arrive AVEC les libellés de ses packs (`stickerPacks.*`), jamais au
- * démarrage.
+ * LA PALETTE D'EMOJIS, CHARGÉE À LA DEMANDE (#7280, #10531) — même discipline
+ * que `LanguageSheet` et `EffectsSheet` : la feuille d'emojis
+ * (`EmojiPickerSheet`) n'entre dans aucun chunk tant qu'on n'a pas touché la
+ * tuile « Emoji », et elle arrive AVEC ses libellés (`emojiPicker.*`,
+ * `prepareEmojiPickerSheet`), jamais au démarrage. La feuille de stickers arrive de même AVEC les libellés de ses
+ * packs (`stickerPacks.*`).
  */
 export const ComposerEmojiSheet = lazy(() =>
-  import('./composer-emoji-sheet').then((m) => ({ default: m.ComposerEmojiSheet })),
+  import('./composer-emoji-sheet').then((m) => m.prepareEmojiPickerSheet().then(() => ({ default: m.ComposerEmojiSheet }))),
 );
 
 export const ComposerStickerSheet = lazy(() =>

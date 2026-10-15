@@ -136,5 +136,18 @@ public enum FeedDatabaseMigrations {
                 t.add(column: "visibilityUserIdsJson", .text)
             }
         }
+
+        // Compteurs de portée (#10400) : le repli hors ligne servait des posts
+        // à « N likes · 0 impression » parce que seul `viewCount` était gardé.
+        // Colonnes NULLABLES : une ligne antérieure décode `nil` (jamais reçu),
+        // jamais un faux zéro. Additive, donc rétrocompatible.
+        migrator.registerMigration("feed_v5_post_reach_counters") { db in
+            try db.alter(table: "feed_posts") { t in
+                t.add(column: "impressionCount", .integer)
+                t.add(column: "postOpenCount", .integer)
+                t.add(column: "playCount", .integer)
+                t.add(column: "qualifiedViewCount", .integer)
+            }
+        }
     }
 }

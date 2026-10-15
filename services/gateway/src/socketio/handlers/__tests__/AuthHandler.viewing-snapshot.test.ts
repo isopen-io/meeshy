@@ -8,6 +8,7 @@
 
 import { describe, it, expect, afterEach } from '@jest/globals';
 import { AuthHandler } from '../AuthHandler';
+import { LIVE_SID, liveSession } from '../../../services/auth/__tests__/live-session-double';
 import type { Socket } from 'socket.io';
 import type { PrismaClient } from '@meeshy/shared/prisma/client';
 import type { StatusService } from '../../../services/StatusService';
@@ -26,7 +27,7 @@ const createSocket = (auth: Record<string, string>): Socket => ({
 const createPrisma = (): PrismaClient => ({
   user: {
     findUnique: jest.fn().mockResolvedValue({
-      id: 'user-123',
+      id: 'aaaaaaaaaaaaaaaaaaaa0123',
       systemLanguage: 'en',
       regionalLanguage: null,
       customDestinationLanguage: null,
@@ -37,6 +38,7 @@ const createPrisma = (): PrismaClient => ({
   participant: {
     findFirst: jest.fn().mockResolvedValue({
       id: 'anon-123',
+      isActive: true,
       displayName: 'Anonymous',
       language: 'en',
       conversationId: 'conv-123',
@@ -44,6 +46,7 @@ const createPrisma = (): PrismaClient => ({
     findUnique: jest.fn(),
     findMany: jest.fn().mockResolvedValue([]),
   },
+  userSession: { findFirst: jest.fn(async () => liveSession()) },
   callParticipant: { findMany: jest.fn().mockResolvedValue([]) },
 } as unknown as PrismaClient);
 
@@ -76,7 +79,7 @@ describe('AuthHandler — qui est déjà là (#8892)', () => {
     ['une authentification anonyme', { sessionToken: 'anon-session-token' }],
   ])('redit qui est dans chaque conversation après %s', async (_label, auth) => {
     process.env.JWT_SECRET = 'test-secret-key-for-unit-tests';
-    jest.spyOn(jwt, 'verify').mockReturnValue({ userId: 'user-123' } as never);
+    jest.spyOn(jwt, 'verify').mockReturnValue({ sid: LIVE_SID, userId: 'aaaaaaaaaaaaaaaaaaaa0123' } as never);
     const emitViewingSnapshots = jest.fn().mockResolvedValue(undefined);
     const socket = createSocket(auth);
 

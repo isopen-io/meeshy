@@ -373,7 +373,7 @@ public final class ConversationService: ConversationServiceProviding, @unchecked
         struct RoleBody: Encodable { let role: String }
         let _: APIResponse<[String: String]> = try await api.patch(
             ConversationsEndpoint.byIdParticipantsByUserIdRole(id: conversationId, userId: userId),
-            body: RoleBody(role: role)
+            body: RoleBody(role: role.lowercased())
         )
     }
 

@@ -49,11 +49,11 @@ public enum InviteLandingCopy {
 
     public static func conversationType(_ raw: String) -> String {
         switch raw.lowercased() {
-        case "direct": return String(localized: "joinFlow.preview.typeDirect", defaultValue: "Conversation privee", bundle: .module)
+        case "direct": return String(localized: "joinFlow.preview.typeDirect", defaultValue: "Conversation privée", bundle: .module)
         case "group": return String(localized: "joinFlow.preview.typeGroup", defaultValue: "Groupe", bundle: .module)
         case "public": return String(localized: "joinFlow.preview.typePublic", defaultValue: "Public", bundle: .module)
         case "global": return String(localized: "joinFlow.preview.typeGlobal", defaultValue: "Global", bundle: .module)
-        case "community": return String(localized: "joinFlow.preview.typeCommunity", defaultValue: "Communaute", bundle: .module)
+        case "community": return String(localized: "joinFlow.preview.typeCommunity", defaultValue: "Communauté", bundle: .module)
         case "channel": return String(localized: "joinFlow.preview.typeChannel", defaultValue: "Canal", bundle: .module)
         default: return String(localized: "joinFlow.preview.defaultTitle", defaultValue: "Conversation", bundle: .module)
         }

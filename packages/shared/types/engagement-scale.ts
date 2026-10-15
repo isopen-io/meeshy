@@ -46,13 +46,16 @@ import {
 import { emptyActTiers, type EngagementStreakTier, type EngagementStreaks } from './engagement-act-streaks.js';
 import {
   ENGAGEMENT_SCALE_POINTS_CEILING,
+  ENGAGEMENT_SCALE_TIER_POINTS_TOTAL_CEILING,
+  ENGAGEMENT_STREAK_TIERS_MAX,
   legacyStreakBonuses,
   parseLoyalty,
   parseStreakTiers,
   parseStreaks,
+  tierPointsWithinTotal,
 } from './engagement-scale-streaks.js';
 
-export { ENGAGEMENT_SCALE_POINTS_CEILING };
+export { ENGAGEMENT_SCALE_POINTS_CEILING, ENGAGEMENT_SCALE_TIER_POINTS_TOTAL_CEILING, ENGAGEMENT_STREAK_TIERS_MAX };
 
 /** Plafond DUR du multiplicateur, quel que soit le barème — l'administration règle en dessous. */
 export const ENGAGEMENT_SCALE_FACTOR_CEILING = 10;
@@ -449,6 +452,7 @@ export function parseEngagementScale(value: unknown): EngagementScale | null {
   if (multiplier === null || linkVisits === null || streaks === null || loyalty === null || abuse === null || pathCaps === null) {
     return null;
   }
+  if (!tierPointsWithinTotal(streaks, loyalty)) return null;
 
   const operations: Partial<Record<EngagementOperationKey, EngagementOperationRule>> = {};
   for (const [key, raw] of Object.entries(value.operations)) {

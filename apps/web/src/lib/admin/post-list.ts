@@ -1,3 +1,5 @@
+import { ADMIN_POST_STATES } from '@meeshy/shared/types/admin-publication-states';
+
 import { defineListSpec, type ListState } from './list-state';
 
 /**
@@ -30,6 +32,8 @@ export const POST_LIST_SPEC = defineListSpec({
     isDeleted: ['true', 'false'],
     isPinned: ['true', 'false'],
     period: POST_PERIODS,
+    /* L'état LU (#10392) : publiée, hors ligne, privée, expirée, supprimée — prime sur `isDeleted` côté passerelle. */
+    state: ADMIN_POST_STATES,
   },
   idFilters: ['authorId'],
   pageSizes: [20, 50, 100],

@@ -56,6 +56,13 @@ struct iPadStoryAndLifecycleLayer: ViewModifier {
     let onAppear: () -> Void
     let onDisappear: () -> Void
     let onStart: @MainActor () async -> Void
+    /// Le fil et la route ouverts, tels que l'iPhone les empilerait (`RootNavigationHandoff.stack`).
+    let navigationStack: [Route]
+    /// Reprend la pile laissée par la racine iPhone — appelé APRÈS `onAppear`, qui installe les callbacks du routeur.
+    let onRestoreNavigation: ([Route]) -> Void
+    /// Ce que la colonne droite montre — le titre de la fenêtre sous App Exposé et Stage Manager.
+    let sceneTitle: String
+    @Environment(\.rootNavigationHandoff) private var navigationHandoff
 
     func body(content: Content) -> some View {
         content
@@ -104,7 +111,21 @@ struct iPadStoryAndLifecycleLayer: ViewModifier {
                 guard pending, isConversationOpen else { return }
                 onRevealFeed()
             }
-            .onAppear(perform: onAppear)
+            .onAppear {
+                onAppear()
+                // La fenêtre vient de retrouver sa largeur : le fil ouvert en largeur compacte revient dans sa colonne.
+                if navigationStack.isEmpty, let routes = navigationHandoff?.routes, !routes.isEmpty {
+                    onRestoreNavigation(routes)
+                }
+            }
+            .adaptiveOnChange(of: navigationStack) { _, stack in
+                navigationHandoff?.record(stack)
+            }
+            // Parité `RootStoryDoorsLayer` : sans lui, la fenêtre iPad gardait le titre posé en largeur compacte,
+            // et deux fenêtres Meeshy sous Stage Manager portaient le même.
+            .adaptiveOnChange(of: sceneTitle, initial: true) { _, title in
+                DeviceLayout.activeWindowScene?.title = String(format: String(localized: "root.scene_title_format", defaultValue: "Meeshy — %@", bundle: .main), title)
+            }
             .onDisappear(perform: onDisappear)
             .task { await onStart() }
     }
@@ -146,6 +167,9 @@ struct iPadSheetsLayer: ViewModifier {
                         AnyView(ProfileUserPostsList(userId: uid, onOpenPost: { post in
                             router.deepLinkProfileUser = nil
                             router.push(.postDetail(post.id, post))
+                        }, onOpenReel: { reel, reels in
+                            // Parité RootView : un réel s'ouvre dans le lecteur, pas en détail plat.
+                            ProfilePostsOpener.openReel(reel, in: reels) { router.deepLinkProfileUser = nil }
                         }))
                     },
                     onCall: { request in
@@ -172,6 +196,10 @@ struct iPadSheetsLayer: ViewModifier {
                     .environmentObject(router)
                     .environmentObject(statusViewModel)
                     .presentationDetents([.medium, .large])
+                    .closesForConversationOpening(.sheet, close: {
+                        router.pendingShareContent = nil
+                        showSharePicker = false
+                    })
                 }
             }
             .adaptiveOnChange(of: router.pendingShareContent != nil) { _, hasContent in
@@ -182,6 +210,7 @@ struct iPadSheetsLayer: ViewModifier {
                     .environmentObject(statusViewModel)
                     .presentationDetents([.large])
                     .presentationDragIndicator(.visible)
+                    .closesForConversationOpening(.sheet)
             }
             // Aperçu de conversation (appui long / tirage sur un toast). La
             // feuille crée un environnement neuf : réinjecter ce que la
@@ -200,6 +229,7 @@ struct iPadSheetsLayer: ViewModifier {
                 .environmentObject(storyViewerCoordinator)
                 .presentationDetents([.large, .medium])
                 .presentationDragIndicator(.visible)
+                .closesForConversationOpening(.sheet)
             }
     }
 }
@@ -217,12 +247,16 @@ struct iPadCoversAndChromeLayer: ViewModifier {
     @Binding var showStoryViewerFromConv: Bool
     let selectedStoryUserIdFromConv: String?
     let activeConversationId: String?
+    /// Le fil sous les yeux — `nil` quand une route du panneau le recouvre (`iPadRightColumn`).
+    let visibleConversationId: String?
     /// La route ouverte dans le panneau de droite : un écran profond y cache la bannière du joueur (#9494).
     var rightPanelRoute: Route? = nil
     let onStoryReply: (ReplyContext) -> Void
     let onSyncPillTap: (OutboxUIItem.Source) -> Void
     let activeConversationIdForBanner: () -> String?
     let onMiniPlayerTap: () -> Void
+    /// Rouvre un réel qui n'a pas pu se charger (« Réessayer » de `ReelOpenFailureView`).
+    var onRetryReel: @MainActor (_ postId: String, _ commentId: String?, _ parentCommentId: String?) async -> Void = { _, _, _ in }
 
     func body(content: Content) -> some View {
         content
@@ -260,7 +294,10 @@ struct iPadCoversAndChromeLayer: ViewModifier {
                     postId: request.postId,
                     startAtFirstUnviewed: request.startAtFirstUnviewed,
                     presentationSource: "iPadRootView.fromConv",
-                    initialAction: request.initialAction
+                    initialAction: request.initialAction,
+                    // Parité RootView : une notification de réponse descend jusqu'à SON commentaire.
+                    targetCommentId: request.targetCommentId,
+                    targetParentCommentId: request.targetParentCommentId
                 )
                 .zoomTransitionDestination(sourceID: request.id, in: storyZoomNamespace)
                 .environmentObject(router)
@@ -283,6 +320,17 @@ struct iPadCoversAndChromeLayer: ViewModifier {
             )
             .fullScreenCover(item: $reelsPresenter.launch) { launch in
                 GeometryReader { proxy in
+                    // Parité RootView (#6508) : un réel qui n'a pas pu se charger montre SON échec. Monté sur une
+                    // graine vide, le lecteur partait en démarrage à froid et jouait d'autres réels sans rapport.
+                    if let failure = launch.failure, let postId = launch.startId {
+                        ReelOpenFailureView(
+                            failure: failure,
+                            onRetry: {
+                                await onRetryReel(postId, launch.commentId, launch.parentCommentId)
+                            },
+                            onClose: { reelsPresenter.dismiss() }
+                        )
+                    } else {
                     ReelsPlayerView(
                         seedPosts: launch.seedPosts,
                         startId: launch.startId,
@@ -312,6 +360,7 @@ struct iPadCoversAndChromeLayer: ViewModifier {
                         }
                     )
                     .ignoresSafeArea()
+                    }
                 }
                 .environmentObject(router)
                 .environmentObject(statusViewModel)
@@ -330,7 +379,7 @@ struct iPadCoversAndChromeLayer: ViewModifier {
             }
             .modifier(CallPresentationLayer(
                 miniPlayerOnTapBody: onMiniPlayerTap,
-                miniPlayerCurrentConversationId: { activeConversationId },
+                miniPlayerCurrentConversationId: { visibleConversationId },
                 // La BANNIÈRE DU JOUEUR (#9494), comme sur iPhone : la colonne des conversations reste là, mais un fil
                 // ouvert a besoin de toute sa hauteur, et le lecteur de réels est plein cadre.
                 playerBannerHosted: PlayerBannerPlacement.hostsOnTablet(
@@ -342,7 +391,9 @@ struct iPadCoversAndChromeLayer: ViewModifier {
             // iPhone, au même rang : APRÈS la pastille et la présentation
             // d'appel, qu'un `.overlay` posé plus tôt laisserait flotter sur la
             // carte. Garde : `OnboardingAboveGlobalChromeGuardTests`.
-            .onboardingHost(storyViewModel: storyViewModel, router: router)
+            // Sur iPad, la conversation ou le panneau qu'un push a ouvert vit hors de `Router.path` (#7780).
+            .onboardingHost(storyViewModel: storyViewModel, router: router,
+                            tabletDestinationIsOpen: activeConversationId != nil || rightPanelRoute != nil)
             // « Validez votre compte » (#8239) : une FEUILLE, qui passe après
             // l'onboarding (`OnboardingPresenceSignal`).
             .activationInviteHost()
@@ -353,5 +404,9 @@ struct iPadCoversAndChromeLayer: ViewModifier {
             // les liens de sa légende et de ses commentaires (#9075). Ici plutôt
             // que sur `iPadRootView.body` : plafond de profondeur (24).
             .inAppLinks(router: router)
+            // La fenêtre de ce routeur, posée par la couche la plus EXTERNE :
+            // feuilles et pleins écrans s'y déclarent, et une ouverture ne
+            // referme que ceux de cette fenêtre (#10543).
+            .environment(\.presentedSurfaceScope, router.surfaceScope)
     }
 }

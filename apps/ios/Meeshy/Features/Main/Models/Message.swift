@@ -175,3 +175,35 @@ extension Message {
     /// traduction, ni transfert, ni enregistrement, et son aperçu reste flou.
     nonisolated var holdsBlur: Bool { isBlurred || attachments.contains { $0.isBlurred } }
 }
+
+// MARK: - Ce qu'un aperçu dit d'un message HORS de sa conversation (#9622)
+
+/// **Le texte d'un message qui disparaît ne quitte pas sa conversation** — loi
+/// de sortie (#9572) appliquée aux aperçus publiés AILLEURS : l'écran d'accueil
+/// (widget, App Group), un résultat de recherche. Hors de la conversation,
+/// aucune couche sécurisée ne s'applique, et un widget garde son texte tant
+/// qu'il n'est pas rafraîchi — donc après la destruction du message. Le serveur
+/// sert déjà un libellé pour la vue unique et la flamme après lecture, mais le
+/// TEXTE d'une flamme à durée (#7451) : la nature, lue sur le dernier message,
+/// décide ici pour les trois, en un seul site.
+nonisolated enum OutsidePreview {
+
+    /// Le libellé qui remplace le texte d'un contenu qui disparaît ; `nil` pour
+    /// un contenu ordinaire.
+    static func protectionLabel(for nature: ContentExitLaw.Nature) -> String? {
+        switch nature {
+        case .ordinary: return nil
+        case .viewOnce: return String(localized: "protection.viewOnce", bundle: .main)
+        case .afterReadFlame: return String(localized: "protection.afterRead", bundle: .main)
+        case .timedFlame: return String(localized: "exit.preview.ephemeral", defaultValue: "Message éphémère", bundle: .main)
+        }
+    }
+
+    /// L'aperçu du dernier message d'une conversation, tel qu'il peut sortir :
+    /// le libellé de protection pour un contenu qui disparaît, sinon l'aperçu
+    /// résolu par le Prisme (`resolvedLastMessagePreview`).
+    static func lastMessage(of conversation: MeeshyConversation, preferredLanguages: [String]) -> String? {
+        protectionLabel(for: conversation.lastMessageContentExitLaw.nature)
+            ?? conversation.resolvedLastMessagePreview(preferredLanguages: preferredLanguages)
+    }
+}

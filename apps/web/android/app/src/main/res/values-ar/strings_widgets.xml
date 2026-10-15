@@ -1,0 +1,20 @@
+<?xml version="1.0" encoding="utf-8"?>
+<resources>
+    <!-- #10626 — les widgets d'ecran d'accueil de la coque. -->
+    <string name="widget_unread_name">الرسائل غير المقروءة</string>
+    <string name="widget_unread_description">تابع محادثاتك غير المقروءة</string>
+    <string name="widget_recent_name">المحادثات الأخيرة</string>
+    <string name="widget_recent_description">محادثاتك الأخيرة بنظرة واحدة</string>
+    <string name="widget_quick_reply_name">رد سريع</string>
+    <string name="widget_quick_reply_description">رد على آخر محادثة غير مقروءة</string>
+    <string name="widget_favorites_name">جهات الاتصال المفضلة</string>
+    <string name="widget_favorites_description">وصول سريع إلى جهات اتصالك المثبتة</string>
+    <string name="widget_unread_label">غير مقروءة</string>
+    <string name="widget_all_read">تمت قراءة الكل</string>
+    <string name="widget_signed_out">افتح Meeshy لرؤية محادثاتك</string>
+    <string name="widget_no_conversations">لا توجد محادثات بعد</string>
+    <string name="widget_no_favorites">ثبّت محادثة لتجدها هنا</string>
+    <string name="widget_nothing_to_reply">لا توجد رسالة بانتظار الرد</string>
+    <string name="widget_reply">رد</string>
+    <string name="widget_mark_read">وضع علامة كمقروءة</string>
+</resources>

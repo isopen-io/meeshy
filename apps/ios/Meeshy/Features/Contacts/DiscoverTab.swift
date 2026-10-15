@@ -229,6 +229,9 @@ struct DiscoverTab: View {
                 onMoodTap: statusViewModel.moodTapHandler(for: match.user.id)
             )
             .onTapGesture { router.deepLinkProfileUser = profileUser }
+            .countsImpression(of: statusViewModel.statusForUser(userId: match.user.id)?.id) {
+                statusViewModel.trackImpression($0)
+            }
 
             VStack(alignment: .leading, spacing: MeeshySpacing.xxs) {
                 Text(displayName)
@@ -340,6 +343,9 @@ struct DiscoverTab: View {
                 onMoodTap: statusViewModel.moodTapHandler(for: user.id)
             )
             .onTapGesture { router.deepLinkProfileUser = profileUser }
+            .countsImpression(of: statusViewModel.statusForUser(userId: user.id)?.id) {
+                statusViewModel.trackImpression($0)
+            }
 
             VStack(alignment: .leading, spacing: MeeshySpacing.xxs) {
                 Text(name)

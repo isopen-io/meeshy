@@ -91,7 +91,8 @@ const GESTURE_PATH: Readonly<Record<PostToggleKind, (postId: string) => string>>
   bookmark: postsEndpoints.byPostIdBookmark,
 };
 
-const isOn = (post: FeedPost | undefined, kind: PostToggleKind): boolean =>
+/** L'état d'un geste sur la carte peinte — « avant » le geste, relu par la télémétrie (#10502). */
+export const gestureIsOn = (post: FeedPost | undefined, kind: PostToggleKind): boolean =>
   kind === 'like' ? post?.isLikedByMe === true : post?.isBookmarkedByMe === true;
 
 function sendGesture(
@@ -129,7 +130,7 @@ export async function performPostGesture(params: {
      qu'une caisse déduisait « pas aimée » et envoyait un `POST` (ajouter) sur
      le geste qui voulait RETIRER. */
   const known = findCardPost(deps.queryClient, postId);
-  const on = !isOn(known, kind);
+  const on = !gestureIsOn(known, kind);
   /* LA PLACE DE LA LIGNE DANS LE CORPUS ENREGISTRÉ, relevée AVANT l'optimiste :
      après, la ligne n'y est plus. Absente du corpus (on enregistre depuis le
      Flux), la place est la TÊTE — un enregistrement neuf est le plus récent —,

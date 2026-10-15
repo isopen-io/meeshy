@@ -746,6 +746,32 @@ emit({
   role: "LE JEU de la note d'apres-appel (#8072) : charge avec sa carte, jamais dans le socle.",
 });
 
+/**
+ * LE JEU DU MENU D'UNE LIGNE DE CONVERSATION (#10593) — miroir des symboles du
+ * menu d'appui long d'iOS (`ConversationListView+Overlays.swift:79-366`) :
+ *
+ * | iOS | phosphor |
+ * |---|---|
+ * | `info.circle.fill` (Détails) | `info` |
+ * | `pencil` (Renommer) | `pencil-simple` |
+ * | `star` / `star.fill` (Favori, posé ou non) | `star` / `star-fill` |
+ * | `folder.fill` (Déplacer vers…) | `folder-simple` |
+ * | `hand.raised.fill` (Bloquer / Débloquer) | `hand-palm` |
+ * | `chevron.forward` (ouvre un sous-menu) | `caret-right` |
+ *
+ * `caretLeft` (retour du sous-menu) et `check` (l'entrée courante) restent au
+ * SOCLE. Chargé avec la liste, jamais dans le socle.
+ */
+const ROW_MENU = ['info', 'pencil-simple', 'star', 'star-fill', 'folder-simple', 'hand-palm', 'caret-right'];
+
+emit({
+  ids: ROW_MENU,
+  output: join(HERE, '../src/components/glyphs-row-menu.ts'),
+  constant: 'ROW_MENU_GLYPHS',
+  type: 'RowMenuGlyphName',
+  role: "LE JEU du menu d'une ligne de conversation (#10593) : detail, renommage, favori, rangement, blocage, charge avec la liste, jamais dans le socle.",
+});
+
 const STARRED = ['star', 'star-fill', 'chats-circle'];
 
 emit({

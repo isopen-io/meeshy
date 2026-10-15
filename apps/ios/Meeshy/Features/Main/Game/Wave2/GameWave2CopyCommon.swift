@@ -78,8 +78,10 @@ extension GameText {
         String(localized: "game2.banner.points", defaultValue: "\(points) pts", bundle: .main)
     }
 
-    static func bannerMissing(points: String) -> String {
-        String(localized: "game2.banner.missing", defaultValue: "encore \(points)", bundle: .main)
+    /// Ce qu'il reste nomme le niveau visé (#10540) : « encore 1 301 vers le 28 », jamais « encore 1 301 » à côté
+    /// d'un total de points.
+    static func bannerMissing(points: String, level: String) -> String {
+        String(localized: "game2.banner.missing", defaultValue: "encore \(points) vers le \(level)", bundle: .main)
     }
 
     static var bannerSeparator: String { String(localized: "game2.banner.separator", defaultValue: ", ", bundle: .main) }

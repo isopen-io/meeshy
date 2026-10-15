@@ -61,15 +61,19 @@ public enum CanvasChromeScheme {
     public nonisolated static func averageRelativeLuminance(of image: UIImage) -> Double? {
         guard let cg = image.cgImage else { return nil }
         let side = 8
-        var pixels = [UInt8](repeating: 0, count: side * side * 4)
+        // Le contexte alloue SON tampon : `&pixels` ne vaut que le temps de l'appel qui le reçoit, et le
+        // contexte écrivait dedans ensuite (`draw`) — un pointeur échappé, comportement indéfini.
         guard let space = CGColorSpace(name: CGColorSpace.sRGB),
-              let ctx = CGContext(data: &pixels, width: side, height: side,
+              let ctx = CGContext(data: nil, width: side, height: side,
                                   bitsPerComponent: 8, bytesPerRow: side * 4,
                                   space: space,
                                   bitmapInfo: CGImageAlphaInfo.premultipliedLast.rawValue)
         else { return nil }
         ctx.interpolationQuality = .medium
         ctx.draw(cg, in: CGRect(x: 0, y: 0, width: side, height: side))
+        guard let data = ctx.data else { return nil }
+        let pixels = Array(UnsafeBufferPointer(start: data.assumingMemoryBound(to: UInt8.self),
+                                               count: side * side * 4))
         func lin(_ c: Double) -> Double {
             c <= 0.03928 ? c / 12.92 : pow((c + 0.055) / 1.055, 2.4)
         }

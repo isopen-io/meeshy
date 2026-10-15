@@ -1,42 +1,6 @@
-import { z } from 'zod';
+import * as z from 'zod/mini';
 
-import type { GuestAttachmentKind } from './guest-attachment-kinds.js';
-
-/**
- * WORLD WIDE (#10000) — la conversation dans laquelle le monde entier entre
- * depuis meeshy.me, et ce qu'une landing doit savoir pour y faire entrer
- * quelqu'un.
- *
- * Elle est DISTINCTE de « Meeshy Global » (`identifier: 'meeshy'`), qui reste
- * inchangée : `meeshy` est le salon des INSCRITS, où chaque compte est ajouté à
- * l'inscription ; `world` est la porte d'entrée PUBLIQUE, où un invité sans
- * compte entre par un lien de partage stable.
- *
- * Les deux identifiants sont l'affaire du SERVEUR : il les sème au démarrage
- * (`services/gateway/src/services/world/worldConversation.ts`) et les SERT par
- * `GET /api/v1/world`. Un client ne les écrit jamais en dur — il lit l'entrée,
- * ce qui permet de changer de lien (révocation, rotation) sans republier
- * d'application.
- */
-export const WORLD_CONVERSATION_IDENTIFIER = 'world';
-
-export const WORLD_CONVERSATION_TITLE = 'World Wide';
-
-/** L'identifiant LISIBLE du lien de partage semé — la clé de jonction que la landing suit. */
-export const WORLD_SHARE_LINK_IDENTIFIER = 'mshy_world';
-
-/**
- * Ce qu'un INVITÉ de World Wide peut joindre (#10001, décision porteur du
- * 2026-10-10) : du texte `.txt` et de l'audio, rien d'autre. C'est un PLAFOND
- * posé sur la conversation (#10029) : le lien ne peut que le resserrer, et un
- * lien qui ne dit rien n'ouvre pas davantage. Les comptes ne sont pas concernés.
- */
-export const WORLD_GUEST_ATTACHMENT_KINDS: readonly GuestAttachmentKind[] = ['text', 'audio'];
-
-/** Les plafonds de familles décidés sur une conversation, par identifiant. */
-export const GUEST_ATTACHMENT_KIND_CEILINGS: Readonly<Record<string, readonly GuestAttachmentKind[]>> = {
-  [WORLD_CONVERSATION_IDENTIFIER]: WORLD_GUEST_ATTACHMENT_KINDS,
-};
+export * from './world-identity.js';
 
 /**
  * Ce que `GET /api/v1/world` sert — public, sans identité, mis en cache court.
@@ -53,16 +17,19 @@ export const GUEST_ATTACHMENT_KIND_CEILINGS: Readonly<Record<string, readonly Gu
  * visiteur sans compte ne voit pas le nombre de participants) : la passerelle
  * peut cesser de le servir sur cette route publique sans casser la landing ni
  * l'entrée `/world`, qui ne le montrent plus à un non-membre.
+ *
+ * Écrit en `zod/mini` (#10038) : le web le lit tel quel, sans jumelle, et sans
+ * faire entrer `zod` complet dans le chunk de son écran.
  */
 export const worldEntrySchema = z.object({
-  identifier: z.string().min(1),
-  title: z.string().min(1),
-  shareLinkIdentifier: z.string().min(1),
-  memberCount: z.number().int().nonnegative().optional(),
-  memberCountCapped: z.literal(true).optional(),
+  identifier: z.string().check(z.minLength(1)),
+  title: z.string().check(z.minLength(1)),
+  shareLinkIdentifier: z.string().check(z.minLength(1)),
+  memberCount: z.optional(z.number().check(z.int(), z.nonnegative())),
+  memberCountCapped: z.optional(z.literal(true)),
   /** Avatar et bannière de World Wide (#10204), adresses absolues — absents tant que la conversation n'en porte pas. */
-  avatar: z.string().min(1).optional(),
-  banner: z.string().min(1).optional(),
+  avatar: z.optional(z.string().check(z.minLength(1))),
+  banner: z.optional(z.string().check(z.minLength(1))),
 });
 
 export type WorldEntry = z.infer<typeof worldEntrySchema>;
