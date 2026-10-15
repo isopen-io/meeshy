@@ -20,6 +20,12 @@ import MeeshyUI
 /// with `footerModel: nil`. Tapping play on a row routes through
 /// `onPlayAudio(track.id)` → the `ConversationAudioCoordinator` queue, which
 /// chains the tracks top to bottom.
+///
+/// Language (#10678) : a row's own language pills choose THAT track only (the
+/// player's `externalLanguage`, per row) ; the MESSAGE channel is written by
+/// the shared footer's flags (`footerActions.onFlagTap`). `AudioMediaView`'s
+/// `onSelectAudioLanguage` is read only by its in-widget footer, which the
+/// rows never render (`footerModel: nil`) — passing it here would be inert.
 struct AudioStackView: View {
     /// The audio attachments of THIS message (count > 1, all same message).
     let items: [MessageAttachment]
@@ -58,9 +64,6 @@ struct AudioStackView: View {
     /// réagir, répondre et créer). Reçoit la piste TOUCHÉE : la page ouverte est
     /// celle de la ligne, jamais la première (#10678).
     var onOpenFullscreen: ((MessageAttachment) -> Void)? = nil
-    /// Canal de langue du MESSAGE (VM) : le tap sur une langue de la bande de
-    /// la ligne l'écrit, comme pour le vocal seul.
-    var onSelectAudioLanguage: ((String) -> Void)? = nil
 
     /// L'ouvreur de plein écran d'UNE ligne : lié à SA piste.
     static func fullscreenOpener(
@@ -165,7 +168,6 @@ struct AudioStackView: View {
             onShowTranslationDetail: onShowTranslationDetail,
             onRequestTranslation: onRequestTranslation,
             activeAudioLanguageOverride: activeAudioLanguage,
-            onSelectAudioLanguage: onSelectAudioLanguage,
             footerModel: nil,
             footerActions: .none,
             onPlayAudio: onPlayAudio,

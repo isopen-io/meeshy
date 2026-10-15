@@ -772,12 +772,7 @@ struct BubbleStandardLayout: View {
                     parentIsMe: content.isMe,
                     voiceConsentMissing: voiceConsentMissing,
                     onTapConsentNotice: onTapConsentNotice,
-                    onOpenFullscreen: onMediaTap,
-                    onSelectAudioLanguage: { code in
-                        withAnimation(.spring(response: 0.25, dampingFraction: 0.8)) {
-                            activeDisplayLangCode = code
-                        }
-                    }
+                    onOpenFullscreen: onMediaTap
                 )
             } else {
                 ForEach(audioAttachments) { attachment in
