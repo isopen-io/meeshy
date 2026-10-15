@@ -103,7 +103,9 @@ final class StoryMediaLayer_AsyncLoadTests: XCTestCase {
             layer.configure(with: media, geometry: geometry, mode: .edit)
         }
 
-        XCTAssertLessThan(elapsed, .milliseconds(50),
+        // 200 ms : le défaut gardé est un blocage RÉSEAU (des centaines de ms, sans fin sur un chargeur qui ne
+        // répond jamais). 50 ms laissait la charge d'un runner partagé faire échouer un configure() sain.
+        XCTAssertLessThan(elapsed, .milliseconds(200),
                           "configure() must not block on network — measured \(elapsed)")
 
         // The stub never resolved → `contents` is still nil and a load is
