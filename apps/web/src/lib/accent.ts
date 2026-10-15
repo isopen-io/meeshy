@@ -102,3 +102,14 @@ export const inkOnAccent = (accent: string): string =>
 export function withAccent(accent: string, rest?: CSSProperties): CSSProperties {
   return { ...rest, '--accent': accent, '--accent-ink': inkOnAccent(accent) } as CSSProperties;
 }
+
+/**
+ * LA BULLE ENVOYÉE À L'ACCENT PERSONNEL (#10734, D2) — seulement quand le
+ * lecteur a CHOISI un accent : « Automatique » garde le `brandPrimary` commun
+ * de toutes les conversations. L'encre est celle qui contraste le plus.
+ */
+export function personalBubbleVars(conversation: Pick<Conversation, 'id' | 'title' | 'identifier' | 'type'> & Partial<Pick<Conversation, 'userPreferences'>>): CSSProperties {
+  if (appearanceFromPreferences(conversation.userPreferences).accent === null) return {};
+  const accent = accentPaletteOf(conversation).primary;
+  return { '--bubble-mine-personal': accent, '--bubble-mine-personal-ink': inkOnAccent(accent) } as CSSProperties;
+}
