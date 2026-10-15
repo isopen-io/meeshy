@@ -151,11 +151,24 @@ function readJson(path: string): ReadResult {
 type ContractFiles = { readonly refs: readonly PackAssetRef[]; readonly frames: number; readonly keys: readonly string[] };
 const NO_CONTRACT: ContractFiles = { refs: [], frames: 0, keys: [] };
 
-/** Le contrat d'un pack de fonds, de bannières ou de contours : le nombre de modèles qu'il déclare, aucun fichier référencé (les dessins sont des DONNÉES). */
-function appearanceContractKeys(domain: PackDomain, input: unknown): readonly string[] {
-  if (domain === 'avatar-ring') return parseAvatarRingPackContract(input)?.rings.map((ring) => ring.key) ?? [];
+type AppearanceItem = { readonly key: string; readonly lottie?: PackAssetRef };
+
+/** Les modèles d'un pack de fonds, de bannières ou de contours. */
+function appearanceContractItems(domain: PackDomain, input: unknown): readonly AppearanceItem[] {
+  if (domain === 'avatar-ring') return parseAvatarRingPackContract(input)?.rings ?? [];
   const contract = parseAppearancePackContract(input);
-  return contract !== null && contract.domain === domain ? contract.designs.map((design) => design.key) : [];
+  return contract !== null && contract.domain === domain ? contract.designs : [];
+}
+
+/**
+ * Ce qu'un contrat d'apparence ouvre au magasin : ses clés, et la couche Lottie
+ * facultative de chaque modèle (D6, #10638) — le seul fichier qu'un dessin
+ * référence, les dessins eux-mêmes étant des DONNÉES.
+ */
+function appearanceContractFiles(domain: PackDomain, input: unknown): ContractFiles {
+  const items = appearanceContractItems(domain, input);
+  const keys = items.map((item) => item.key);
+  return { refs: items.flatMap((item) => (item.lottie === undefined ? [] : [item.lottie])), frames: keys.length, keys };
 }
 
 const APPEARANCE_DOMAINS: readonly PackDomain[] = ['wallpaper', 'banner', 'avatar-ring'];
@@ -164,7 +177,8 @@ const APPEARANCE_DOMAINS: readonly PackDomain[] = ['wallpaper', 'banner', 'avata
  * Les fichiers du contrat d'un pack, lu dans le magasin et vérifié contre son
  * empreinte. Cadres de gloire : la vignette de chaque cadre et, pour un cadre
  * complet (L3), son masque, ses couches et ses passes. Fonds, bannières et
- * contours : le nombre de modèles. Contrat illisible ou altéré ⇒ rien.
+ * contours : le nombre de modèles et leurs couches Lottie. Contrat illisible ou
+ * altéré ⇒ rien.
  */
 function contractFiles(assetsDir: string, entry: PackIndexEntry): ContractFiles {
   const appearance = APPEARANCE_DOMAINS.includes(entry.domain);
@@ -175,10 +189,7 @@ function contractFiles(assetsDir: string, entry: PackIndexEntry): ContractFiles 
     const bytes = readFileSync(path);
     if (createHash('sha256').update(bytes).digest('hex') !== entry.contract.sha256) return NO_CONTRACT;
     const input = JSON.parse(bytes.toString('utf8')) as unknown;
-    if (appearance) {
-      const keys = appearanceContractKeys(entry.domain, input);
-      return { refs: [], frames: keys.length, keys };
-    }
+    if (appearance) return appearanceContractFiles(entry.domain, input);
     const thumbs = parseGloryFramePackContract(input)?.contract.frames.map((frame) => frame.thumb) ?? [];
     const layers = parseGloryFrameContract(input)?.contract.frames.flatMap(gloryFrameAssets) ?? [];
     return { refs: [...thumbs, ...layers], frames: thumbs.length, keys: [] };

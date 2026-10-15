@@ -60,6 +60,24 @@ describe('registres d’apparence générés', () => {
     });
   });
 
+  it('chaque couche Lottie d’un contrat d’apparence est servie par le magasin (#10638) — sans quoi iOS, qui la télécharge, reste à l’image fixe', () => {
+    const entries = (['wallpaper', 'banner', 'avatar-ring'] as const).flatMap((domain) => index.entries(domain));
+    const lottieRefs = entries.flatMap((entry) => {
+      const contract = JSON.parse(readFileSync(join(ASSETS, entry.contract.src), 'utf8')) as {
+        readonly designs?: readonly { readonly lottie?: { readonly src: string; readonly sha256: string } }[];
+        readonly rings?: readonly { readonly lottie?: { readonly src: string; readonly sha256: string } }[];
+      };
+      return [...(contract.designs ?? []), ...(contract.rings ?? [])].flatMap((item) => (item.lottie ? [item.lottie] : []));
+    });
+
+    expect(lottieRefs.map((ref) => ref.src).sort()).toEqual(['b19ebab0f4cfeed8.json', 'cad11fe66d4fc9ec.json', 'ec52a7f12af8a193.json']);
+    lottieRefs.forEach((ref) => {
+      const path = join(ASSETS, ref.src);
+      expect(createHash('sha256').update(readFileSync(path)).digest('hex')).toBe(ref.sha256);
+      expect(index.isServedAsset(ref.src)).toBe(true);
+    });
+  });
+
   it('les sept langues nomment le pack et ses modèles', () => {
     const entry = index.entries('wallpaper')[0];
 
