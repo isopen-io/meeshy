@@ -109,10 +109,12 @@ public struct UnifiedShopView: View {
     @StateObject private var store: PackShopStore
     @State private var selected: PackDomain
     private let domains: [PackDomain]
+    private let focusedSlug: String?
 
     @MainActor
     public init(initialDomain: PackDomain? = nil, domains: [PackDomain] = PackDomain.allCases,
-                store: PackShopStore? = nil) {
+                focusedSlug: String? = nil, store: PackShopStore? = nil) {
+        self.focusedSlug = focusedSlug
         let offered = domains.filter { $0 != .unknown }
         self.domains = offered
         _store = StateObject(wrappedValue: store ?? PackShopStore())
@@ -214,7 +216,8 @@ public struct UnifiedShopView: View {
             PackShopView(rows: store.state.packs(in: domain)?.map(Self.row),
                          pending: pendingSlugs(in: domain),
                          showsFailure: store.state.failure != nil,
-                         failureText: failureText) { slug in
+                         failureText: failureText,
+                         focusedSlug: focusedSlug) { slug in
                 Task { await store.tap(domain: domain, slug: slug) }
             }
         }

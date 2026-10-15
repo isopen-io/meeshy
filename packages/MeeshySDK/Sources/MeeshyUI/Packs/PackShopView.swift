@@ -72,9 +72,13 @@ public struct PackShopView: View {
     /// Le message d'un refus précis (solde insuffisant…) ; à défaut, le message générique.
     let failureText: String?
     let onToggle: (String) -> Void
+    /// Le pack à mettre en avant (lien profond depuis la fiche d'un sticker, #10703) :
+    /// sa rangée est centrée une fois les rangées lues et marquée d'un contour.
+    let focusedSlug: String?
 
     public init(rows: [PackRow]?, pending: Set<String>, showsFailure: Bool, failureText: String? = nil,
-                onToggle: @escaping (String) -> Void) {
+                focusedSlug: String? = nil, onToggle: @escaping (String) -> Void) {
+        self.focusedSlug = focusedSlug
         self.rows = rows
         self.pending = pending
         self.showsFailure = showsFailure
@@ -84,7 +88,24 @@ public struct PackShopView: View {
 
     static let coverSide: CGFloat = 56
 
+    /// Le pack mis en avant n'existe que s'il figure parmi les rangées lues : un slug
+    /// inconnu ne marque ni ne fait défiler rien.
+    static func focusTarget(_ focusedSlug: String?, in rows: [PackRow]?) -> String? {
+        guard let focusedSlug, rows?.contains(where: { $0.slug == focusedSlug }) == true else { return nil }
+        return focusedSlug
+    }
+
     public var body: some View {
+        ScrollViewReader { proxy in
+            shelf
+                .task(id: Self.focusTarget(focusedSlug, in: rows)) {
+                    guard let target = Self.focusTarget(focusedSlug, in: rows) else { return }
+                    proxy.scrollTo(target, anchor: .center)
+                }
+        }
+    }
+
+    private var shelf: some View {
         VStack(alignment: .leading, spacing: MeeshySpacing.md) {
             if showsFailure {
                 Text(failureText ?? String(localized: "sticker.shop.failed",
@@ -140,7 +161,17 @@ public struct PackShopView: View {
                 toggleButton(row)
             }
         }
+        .padding(row.slug == focusedSlug ? 6 : 0)
+        .overlay {
+            if row.slug == focusedSlug {
+                RoundedRectangle(cornerRadius: MeeshyRadius.md)
+                    .stroke(MeeshyColors.indigo500, lineWidth: 2)
+                    .accessibilityHidden(true)
+            }
+        }
+        .id(row.slug)
         .accessibilityElement(children: .contain)
+        .accessibilityAddTraits(row.slug == focusedSlug ? .isSelected : [])
     }
 
     /// Le titre du bouton d'une rangée : acheter d'abord, installer ensuite.
