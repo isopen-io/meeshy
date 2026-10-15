@@ -16,4 +16,10 @@ final class PackShopFocusTests: XCTestCase {
         XCTAssertNil(PackShopView.focusTarget("chats", in: nil))
         XCTAssertNil(PackShopView.focusTarget(nil, in: rows("chats")))
     }
+
+    func test_showsOwned_onlyForAPaidPackIOwn() {
+        XCTAssertTrue(PackShopView.showsOwned(PackRow(slug: "a", name: "A", installed: true, price: 40, owned: true)))
+        XCTAssertFalse(PackShopView.showsOwned(PackRow(slug: "a", name: "A", installed: false, price: 40, owned: false)))
+        XCTAssertFalse(PackShopView.showsOwned(PackRow(slug: "a", name: "A", installed: true)))
+    }
 }

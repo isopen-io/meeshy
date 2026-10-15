@@ -149,6 +149,13 @@ public struct PackShopView: View {
                         .font(.system(size: 12, weight: .medium))
                         .foregroundStyle(MeeshyColors.indigo500)
                 }
+                if Self.showsOwned(row) {
+                    Label(String(localized: "shop.owned", defaultValue: "Possédé", bundle: .module),
+                          systemImage: "checkmark.seal.fill")
+                        .font(.system(size: 12, weight: .medium))
+                        .foregroundStyle(.secondary)
+                        .accessibilityIdentifier("shop.owned.\(row.slug)")
+                }
                 if !row.description.isEmpty {
                     Text(row.description)
                         .font(.system(size: 12))
@@ -172,6 +179,11 @@ public struct PackShopView: View {
         .id(row.slug)
         .accessibilityElement(children: .contain)
         .accessibilityAddTraits(row.slug == focusedSlug ? .isSelected : [])
+    }
+
+    /// Un pack PAYANT que je possède le dit (« Possédé ») ; un pack gratuit n'a rien à déclarer.
+    static func showsOwned(_ row: PackRow) -> Bool {
+        row.price != nil && row.owned
     }
 
     /// Le titre du bouton d'une rangée : acheter d'abord, installer ensuite.
