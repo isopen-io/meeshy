@@ -513,6 +513,10 @@ final class CallManager: ObservableObject {
     /// hasn't joined within `outgoingRingTimeoutSeconds`. Cancelled when the
     /// state leaves `.ringing(isOutgoing: true)` (offering / connecting / ended).
     var outgoingRingTimeoutTask: Task<Void, Never>?
+    /// Callee-side twin: an incoming call still ringing well past the ring budget — its `call:ended` lost (socket
+    /// mounted after the caller hung up, `call_cancel` push missed) — ends locally as missed. Without it the state
+    /// stayed `.ringing` with no exit: every later incoming call answered « busy » and `startCall` refused.
+    var incomingRingTimeoutTask: Task<Void, Never>?
     /// Task de setup d'un appel sortant (force-leave + ACK + media + listen).
     /// Auparavant un Task non-tracké : si endCallInternal fire pendant le
     /// setup (ex: CallKit teardown), le Task continuait à tourner — gardant

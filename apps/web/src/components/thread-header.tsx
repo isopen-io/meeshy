@@ -18,6 +18,7 @@ import type { Conversation } from '@/lib/api/types';
 import type { MenuRow } from '@/lib/reading-mode/catalog';
 import { apiConfig } from '@/lib/api/config';
 import { sessionStore } from '@/lib/api/session';
+import { callsAvailable } from '@/lib/calls/calls-availability';
 import { avatarOf, initialsOf, peerOf, presenceKeyOf } from '@/lib/view/conversation';
 import { usePresences } from '@/lib/view/use-presence';
 import { avatarMenuEntries } from '@/lib/view/avatar-menu';
@@ -39,6 +40,10 @@ import { EngagementPill } from './engagement-pill';
 import { GlyphSvg } from './glyph';
 import { MEDIA_GLYPHS } from './glyphs-media';
 import { HeaderFlame } from './header-flame';
+import { ThreadSearchPanel } from './thread-search-panel';
+import { apiDeps } from '@/lib/api/deps';
+import { useThreadSearch } from '@/lib/view/use-thread-search';
+import { searchLandingMode } from '@/lib/view/thread-search';
 
 /**
  * L'EN-TÊTE DU FIL — extrait de `routes/thread.tsx` (revue #5814, défaut
@@ -72,7 +77,16 @@ export function ThreadHeader({
   flameDismissed = false,
   onDismissFlame,
   flameReplay = 0,
+  onJumpToMessage,
 }: {
+  /**
+   * LE SAUT AU MESSAGE TROUVÉ PAR LA RECHERCHE — `jump.requestJump` du fil
+   * (`useThreadJump`), le même que celui des détails : le message est amené au
+   * centre et surligné, fenêtre `?around=` comprise s'il n'est pas chargé.
+   * Absent (un hôte qui ne sait pas sauter), toucher un résultat ferme
+   * seulement la recherche.
+   */
+  readonly onJumpToMessage?: ((messageId: string) => void) | undefined;
   /**
    * L'EN-TÊTE DE L'APERÇU TIRÉ DEPUIS LA BANNIÈRE (#8821, directive porteur
    * 2026-09-30 : « afficher tout le header de la conversation dans son bloc de
@@ -211,7 +225,20 @@ export function ThreadHeader({
   const peerSignals = group
     ? {}
     : { presence: peerPresence, here: peerHere, hereActive: peerActive, hereFocused: peerFocused, hereDotRatio: HEADER_HERE_DOT_RATIO, ...(peerMood === undefined ? {} : { mood: peerMood, ...(peerMoodPostId === undefined ? {} : { moodPostId: peerMoodPostId }) }) };
-  const toggleLabel = expanded ? 'Replier l’en-tête' : 'Déplier l’en-tête';
+  const interfaceLanguage = currentInterfaceLanguage();
+  const toggleLabel = translate(interfaceLanguage, expanded ? 'thread.header.collapse' : 'thread.header.expand');
+  /* LA RECHERCHE DANS LA CONVERSATION — la loupe était un bouton SANS
+     gestionnaire depuis septembre : elle ouvre maintenant le panneau
+     (`ThreadSearchPanel`), qui interroge `GET …/messages/search`. Son état
+     vit ICI parce que la loupe et le panneau sont tous deux dans cette bande ;
+     le fil n'en reçoit que le saut final. */
+  const search = useThreadSearch({ conversationId: conversation.id, deps: apiDeps });
+  const pickSearchHit = (messageId: string) => {
+    search.close();
+    const landing = searchLandingMode(readingMenuRows.find((row) => row.isCurrent)?.mode);
+    if (landing !== null) onSelectReadingMode(landing);
+    onJumpToMessage?.(messageId);
+  };
 
   return (
     /*
@@ -275,7 +302,11 @@ export function ThreadHeader({
             data-thread-back=""
             className="flex h-11 min-w-11 shrink-0 items-center gap-1 rounded-chip pe-1"
             style={{ color: 'var(--accent)' }}
-            aria-label={otherUnread > 0 ? `Retour — ${otherUnread} messages non lus ailleurs` : 'Retour'}
+            aria-label={
+              otherUnread > 0
+                ? translate(interfaceLanguage, otherUnread === 1 ? 'thread.header.back.unread.one' : 'thread.header.back.unread.other', { count: String(otherUnread) })
+                : translate(interfaceLanguage, 'common.back')
+            }
           >
             <Glyph name="caretLeft" size={22} className="rtl:-scale-x-100" />
             <UnreadBadge count={otherUnread} />
@@ -387,7 +418,7 @@ export function ThreadHeader({
 {/* L'APPEL (#6382) — vocal ou vidéo, offert par `threadCallOffer`
                 (#10207) : « start » lance, « join-only » ne garde que les portes
                 d'un appel déjà en cours, « none » ne montre rien. */}
-            {callOffer === 'none' ? null : (
+            {callOffer === 'none' || !callsAvailable() ? null : (
               <ThreadCallButton conversationId={conversation.id} title={title} avatar={photo ?? null} group={group} liveCallHint={(conversation as ListConversation).activeCall ?? null} mayStart={callOffer === 'start'} />
             )}
             {/* EN APERÇU, « AGRANDIR » PREND LA PLACE DE LA LOUPE (#9031) :
@@ -408,9 +439,12 @@ export function ThreadHeader({
             ) : (
               <button
                 type="button"
+                onClick={search.open ? search.close : search.openSearch}
+                aria-expanded={search.open}
+                data-thread-search-toggle=""
                 className={CHROME_ACTION_HIT_CLASS}
                 style={{ color: 'var(--accent)' }}
-                aria-label="Rechercher dans la conversation"
+                aria-label={translate(interfaceLanguage, 'thread.search.open')}
               >
                 <ChromeActionDisc>
                   <Glyph name="magnifyingGlass" size={13} />
@@ -465,7 +499,7 @@ export function ThreadHeader({
                 avatarDoor.kind === 'details'
                   ? translate(currentInterfaceLanguage(), 'a11y.avatar.conversation', { name: title })
                   : preview
-                    ? 'Détails de la conversation'
+                    ? translate(interfaceLanguage, 'thread.header.details')
                     : toggleLabel
               }
               {...(avatarDoor.kind === 'details' ? { 'data-thread-avatar-door': 'details' } : {})}
@@ -490,6 +524,7 @@ export function ThreadHeader({
         ) : null}
         </div>
       </div>
+      {search.open && !preview ? <ThreadSearchPanel search={search} onPick={pickSearchHit} /> : null}
       {/*
         LE BANDEAU DE COUPURE A QUITTÉ CET EN-TÊTE (#6080) — remplacé par la
         PASTILLE de synchronisation, montée une fois pour toute l'application

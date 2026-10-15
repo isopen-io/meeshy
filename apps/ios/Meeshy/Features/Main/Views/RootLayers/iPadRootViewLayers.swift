@@ -60,6 +60,8 @@ struct iPadStoryAndLifecycleLayer: ViewModifier {
     let navigationStack: [Route]
     /// Reprend la pile laissée par la racine iPhone — appelé APRÈS `onAppear`, qui installe les callbacks du routeur.
     let onRestoreNavigation: ([Route]) -> Void
+    /// Ce que la colonne droite montre — le titre de la fenêtre sous App Exposé et Stage Manager.
+    let sceneTitle: String
     @Environment(\.rootNavigationHandoff) private var navigationHandoff
 
     func body(content: Content) -> some View {
@@ -119,6 +121,11 @@ struct iPadStoryAndLifecycleLayer: ViewModifier {
             .adaptiveOnChange(of: navigationStack) { _, stack in
                 navigationHandoff?.record(stack)
             }
+            // Parité `RootStoryDoorsLayer` : sans lui, la fenêtre iPad gardait le titre posé en largeur compacte,
+            // et deux fenêtres Meeshy sous Stage Manager portaient le même.
+            .adaptiveOnChange(of: sceneTitle, initial: true) { _, title in
+                DeviceLayout.activeWindowScene?.title = String(format: String(localized: "root.scene_title_format", defaultValue: "Meeshy — %@", bundle: .main), title)
+            }
             .onDisappear(perform: onDisappear)
             .task { await onStart() }
     }
@@ -160,6 +167,9 @@ struct iPadSheetsLayer: ViewModifier {
                         AnyView(ProfileUserPostsList(userId: uid, onOpenPost: { post in
                             router.deepLinkProfileUser = nil
                             router.push(.postDetail(post.id, post))
+                        }, onOpenReel: { reel, reels in
+                            // Parité RootView : un réel s'ouvre dans le lecteur, pas en détail plat.
+                            ProfilePostsOpener.openReel(reel, in: reels) { router.deepLinkProfileUser = nil }
                         }))
                     },
                     onCall: { request in
@@ -245,6 +255,8 @@ struct iPadCoversAndChromeLayer: ViewModifier {
     let onSyncPillTap: (OutboxUIItem.Source) -> Void
     let activeConversationIdForBanner: () -> String?
     let onMiniPlayerTap: () -> Void
+    /// Rouvre un réel qui n'a pas pu se charger (« Réessayer » de `ReelOpenFailureView`).
+    var onRetryReel: @MainActor (_ postId: String, _ commentId: String?, _ parentCommentId: String?) async -> Void = { _, _, _ in }
 
     func body(content: Content) -> some View {
         content
@@ -282,7 +294,10 @@ struct iPadCoversAndChromeLayer: ViewModifier {
                     postId: request.postId,
                     startAtFirstUnviewed: request.startAtFirstUnviewed,
                     presentationSource: "iPadRootView.fromConv",
-                    initialAction: request.initialAction
+                    initialAction: request.initialAction,
+                    // Parité RootView : une notification de réponse descend jusqu'à SON commentaire.
+                    targetCommentId: request.targetCommentId,
+                    targetParentCommentId: request.targetParentCommentId
                 )
                 .zoomTransitionDestination(sourceID: request.id, in: storyZoomNamespace)
                 .environmentObject(router)
@@ -305,6 +320,17 @@ struct iPadCoversAndChromeLayer: ViewModifier {
             )
             .fullScreenCover(item: $reelsPresenter.launch) { launch in
                 GeometryReader { proxy in
+                    // Parité RootView (#6508) : un réel qui n'a pas pu se charger montre SON échec. Monté sur une
+                    // graine vide, le lecteur partait en démarrage à froid et jouait d'autres réels sans rapport.
+                    if let failure = launch.failure, let postId = launch.startId {
+                        ReelOpenFailureView(
+                            failure: failure,
+                            onRetry: {
+                                await onRetryReel(postId, launch.commentId, launch.parentCommentId)
+                            },
+                            onClose: { reelsPresenter.dismiss() }
+                        )
+                    } else {
                     ReelsPlayerView(
                         seedPosts: launch.seedPosts,
                         startId: launch.startId,
@@ -334,6 +360,7 @@ struct iPadCoversAndChromeLayer: ViewModifier {
                         }
                     )
                     .ignoresSafeArea()
+                    }
                 }
                 .environmentObject(router)
                 .environmentObject(statusViewModel)

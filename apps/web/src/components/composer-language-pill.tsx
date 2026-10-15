@@ -3,6 +3,8 @@ import type { Ref } from 'react';
 import { getLanguageInfo } from '@meeshy/shared/utils/languages';
 
 import { Glyph } from './glyph';
+import { translate } from '@/lib/i18n-catalog';
+import { currentInterfaceLanguage } from '@/lib/interface-language';
 import { spokenLanguageName } from '@/lib/view/language-name';
 
 /**
@@ -69,7 +71,7 @@ export function ComposerLanguagePill({
       ref={buttonRef}
       type="button"
       aria-haspopup="dialog"
-      aria-label={`Langue d’écriture : ${name}`}
+      aria-label={translate(currentInterfaceLanguage(), 'composer.language.pill', { language: name })}
       onClick={onOpen}
       data-composer-language={code}
       className="inline-flex min-h-11 min-w-11 shrink-0 items-center justify-center"

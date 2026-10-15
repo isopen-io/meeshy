@@ -1,0 +1,12 @@
+<?xml version="1.0" encoding="utf-8"?>
+<!-- #10641 — un vocal reçu s'écoute depuis sa notification (NotificationVoiceService).
+     Sept langues, les mêmes clés partout. -->
+<resources>
+    <string name="notification_voice_channel_name">Vocaux écoutés depuis une notification</string>
+    <string name="notification_voice_listen">Écouter</string>
+    <string name="notification_voice_pause">Pause</string>
+    <string name="notification_voice_resume">Reprendre</string>
+    <string name="notification_voice_title">Message vocal</string>
+    <string name="notification_voice_loading">Chargement du message vocal…</string>
+    <string name="notification_voice_failed">Impossible de lire ce message vocal</string>
+</resources>

@@ -53,6 +53,8 @@ enum DeepLinkDestination: Equatable {
     case call(conversationId: String, isVideo: Bool)
     /// Une saison ou une semaine de ligue (#9947) — `/me/progression/saison/{n}`, `/me/progression/ligue/{lundi}`.
     case game(GameLink)
+    /// `meeshy://settings/packs?domaine=<domaine>` : la vitrine unique, filtrée (#10632).
+    case packShop(domain: PackDomain?)
     case external(URL)
 }
 
@@ -285,6 +287,9 @@ enum DeepLinkParser {
             return queryValue("contactId", in: url).map { .conversation(id: $0, draftText: queryValue("message", in: url)) }
         // Widgets « Non lus » / « Récentes » et App Shortcut (#7811).
         case "conversations" where customScheme: return id.flatMap(conversationListEntry)
+        // La vitrine unique, filtrée par domaine (#10632, spec 2026-10-14 § 4.4).
+        case "settings" where customScheme && components.count == 2 && components[1] == "packs":
+            return .packShop(domain: PackDomain(queryValue: queryValue("domaine", in: url)))
         case "call" where customScheme && components.count == 1:
             return queryValue("contactId", in: url).map { .call(conversationId: $0, isVideo: queryValue("type", in: url) == "video") }
         default: break
@@ -371,6 +376,8 @@ enum DeepLink: Equatable {
     case hashtag(tag: String)
     /// Une saison ou une semaine de ligue (#9947), ouverte par `Router.openGame(at:)`.
     case game(GameLink)
+    /// La vitrine unique des packs, filtrée par domaine (#10632).
+    case packShop(domain: PackDomain?)
     /// `/l/<token>` dont la cible vit sur le web : lien EXTERNAL, ou type de
     /// cible que ce client ne connaît pas encore. Le consommateur l'OUVRE
     /// (Safari) — il ne la rejoint pas.
@@ -399,7 +406,7 @@ enum DeepLink: Equatable {
         case .joinLink, .chatLink, .magicLink, .emailVerificationLink, .externalLink, .unresolvedTrackedLink:
             return false
         case .trackedLink, .conversation, .postDetail, .storyDetail, .reel, .community,
-             .recentConversation, .unreadConversations, .userProfile, .ownProfile, .userLinks, .hashtag, .game:
+             .recentConversation, .unreadConversations, .userProfile, .ownProfile, .userLinks, .hashtag, .game, .packShop:
             return true
         }
     }
@@ -641,6 +648,7 @@ final class DeepLinkRouter: ObservableObject {
         case .userLinks:                  return .userLinks
         case .hashtag(let tag):           return .hashtag(tag: tag)
         case .game(let link):             return .game(link)
+        case .packShop(let domain):       return .packShop(domain: domain)
         case .joinLink(let identifier):   return .joinLink(identifier: identifier)
         case .chatLink(let identifier):   return .chatLink(identifier: identifier)
         case .magicLink(let token):       return .magicLink(token: token)

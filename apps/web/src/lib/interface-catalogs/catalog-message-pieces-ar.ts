@@ -13,6 +13,11 @@ const ar = {
   'message.piece.deleted': 'تم حذف الوسائط',
   'message.piece.deleteFailed': 'تعذّر حذف الوسائط',
   'message.piece.preview': 'وسائط الرسالة',
+  'message.sticker.add': 'إضافة إلى ملصقاتي',
+  'message.sticker.inLibrary': 'ضمن ملصقاتي',
+  'message.sticker.viewPack': 'عرض الحزمة',
+  'message.sticker.added': 'تمت إضافة الملصق إلى مكتبتك',
+  'message.sticker.addFailed': 'تعذّرت إضافة الملصق',
   'message.edit.action': 'تعديل',
   'message.edit.banner': 'جارٍ التعديل',
   'message.edit.cancel': 'إلغاء التعديل',
@@ -33,6 +38,13 @@ const ar = {
   'message.delete.partial': 'تعذّر حذف {failed} من {count} رسائل',
   'message.delete.partialOne': 'تعذّر حذف رسالة واحدة من {count}',
   'message.reactors.empty': 'لا توجد تفاعلات',
+  'message.pin.action': 'تثبيت',
+  'message.unpin.action': 'إلغاء التثبيت',
+  'message.pin.done': 'تم تثبيت الرسالة',
+  'message.unpin.done': 'تم إلغاء تثبيت الرسالة',
+  'message.pin.failed': 'تعذّر تثبيت الرسالة',
+  'message.unpin.failed': 'تعذّر إلغاء تثبيت الرسالة',
+  'message.report.title': 'الإبلاغ عن هذه الرسالة',
 } satisfies MessagePiecesCatalog;
 
 export default ar;

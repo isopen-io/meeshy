@@ -23,8 +23,9 @@ import type { TypingEntry } from '@/lib/api/typing-store';
 import type { Viewer } from '@/lib/api/viewer';
 import { dayLabel, type PlacedMessage } from '@/lib/grouping';
 import type { ConversationEpisode, FaceRampEntry } from '@/lib/summary/types';
+import { translate } from '@/lib/i18n-catalog';
 import { currentInterfaceLanguage } from '@/lib/interface-language';
-import type { useLongPress } from '@/lib/view/long-press';
+import type { MessageMenuController } from '@/lib/view/use-message-menu';
 import { checkStatusOf, isMineOf } from '@/lib/view/message';
 import type { LocalDelivery } from '@/lib/view/message';
 import { unreadSeparatorLabel } from '@/lib/view/unread-separator';
@@ -264,7 +265,8 @@ export function ThreadModes({
   readonly rowNoteOf?: (messageId: string) => ReactNode;
   readonly selection?: SelectionState | null;
   readonly onRowTap?: (messageId: string) => void;
-  readonly longPress?: ReturnType<typeof useLongPress>;
+  /** Les gestes d'une rangée : l'appui long (menu) et le double toucher (barre de réaction rapide, #10599). */
+  readonly longPress?: MessageMenuController['longPress'];
   /** Glisser → répondre, ← transférer, et l'icône « Répondre » du pointeur
    * fin (#7559, #8899) — l'offre et l'effet du MENU (`useMessageMenu`). */
   readonly swipeActionsOf?: (message: Message) => { readonly canReply: boolean; readonly canForward: boolean } | undefined;
@@ -472,13 +474,13 @@ export function ThreadModes({
             finit pas — sur un réseau lent, c'est l'interprétation la plus
             naturelle et la plus fausse.
           */
-          <div className="grid flex-1 place-items-center px-8 text-center">
+          <div data-thread-empty="" className="grid flex-1 place-items-center px-8 text-center">
             <div className="grid gap-2">
               <p className="text-title font-semibold" style={{ color: 'var(--color-ios-ink)' }}>
-                Aucun message pour l’instant
+                {translate(currentInterfaceLanguage(), 'thread.empty.title')}
               </p>
               <p className="text-body" style={{ color: 'var(--color-ios-ink-2)' }}>
-                Écrivez le premier — il sera traduit dans la langue de chacun.
+                {translate(currentInterfaceLanguage(), 'thread.empty.body')}
               </p>
             </div>
           </div>

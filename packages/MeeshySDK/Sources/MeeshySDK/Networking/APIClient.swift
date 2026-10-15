@@ -983,7 +983,8 @@ public final class APIClient: APIClientProviding, @unchecked Sendable {
     // MARK: - DELETE
 
     func delete(endpoint: String) async throws -> APIResponse<[String: Bool]> {
-        return try await stringRequest(endpoint: endpoint, method: "DELETE")
+        let acknowledgement: DeletionAcknowledgement = try await stringRequest(endpoint: endpoint, method: "DELETE")
+        return acknowledgement.response
     }
 
     // MARK: - DELETE with Encodable body
@@ -1035,7 +1036,8 @@ public final class APIClient: APIClientProviding, @unchecked Sendable {
     }
 
     public func delete(_ endpoint: any MeeshyEndpoint) async throws -> APIResponse<[String: Bool]> {
-        try await request(endpoint, method: "DELETE")
+        let acknowledgement: DeletionAcknowledgement = try await request(endpoint, method: "DELETE")
+        return acknowledgement.response
     }
 
     public func delete<T: Decodable, U: Encodable>(

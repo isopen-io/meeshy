@@ -13,6 +13,11 @@ const it = {
   'message.piece.deleted': 'Contenuto eliminato',
   'message.piece.deleteFailed': 'Impossibile eliminare il contenuto',
   'message.piece.preview': 'Contenuti del messaggio',
+  'message.sticker.add': 'Aggiungi ai miei sticker',
+  'message.sticker.inLibrary': 'Nei miei sticker',
+  'message.sticker.viewPack': 'Vedi il pacchetto',
+  'message.sticker.added': 'Sticker aggiunto alla tua libreria',
+  'message.sticker.addFailed': 'Impossibile aggiungere lo sticker',
   'message.edit.action': 'Modifica',
   'message.edit.banner': 'Modifica in corso',
   'message.edit.cancel': 'Annulla la modifica',
@@ -33,6 +38,13 @@ const it = {
   'message.delete.partial': 'Impossibile eliminare {failed} messaggi su {count}',
   'message.delete.partialOne': 'Impossibile eliminare 1 messaggio su {count}',
   'message.reactors.empty': 'Nessuna reazione',
+  'message.pin.action': 'Fissa',
+  'message.unpin.action': 'Rimuovi dai fissati',
+  'message.pin.done': 'Messaggio fissato',
+  'message.unpin.done': 'Messaggio rimosso dai fissati',
+  'message.pin.failed': 'Impossibile fissare il messaggio',
+  'message.unpin.failed': 'Impossibile rimuovere il messaggio dai fissati',
+  'message.report.title': 'Segnala questo messaggio',
 } satisfies MessagePiecesCatalog;
 
 export default it;

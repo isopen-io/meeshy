@@ -74,7 +74,13 @@ const attachedOn = (targetPage, selector) => () =>
  * les nœuds ferait passer un gate qui ne mesure rien — c'est la forme « un
  * témoin qui ne peut pas tomber » appliquée à un sélecteur.
  */
-const transcriptOf = (page, id) => page.locator(`[data-message="${id}"] [data-transcript]`).first().innerText();
+/* Une transcription ABSENTE se lit vide (f3b683623d) : la bulle vocale ne peint plus le nom du fichier en guise de
+   transcription — il a sa propre ligne —, si bien qu'avant le pipeline il n'y a plus de nœud `[data-transcript]`.
+   Attendre ce nœud faisait expirer le gate au lieu de constater « aucune transcription ». */
+const transcriptOf = async (page, id) => {
+  const node = page.locator(`[data-message="${id}"] [data-transcript]`).first();
+  return (await node.count()) === 0 ? '' : node.innerText();
+};
 
 /**
  * LA LANGUE QU'UN LECTEUR D'ÉCRAN ENTEND, jamais l'attribut posé sur le nœud
@@ -452,7 +458,8 @@ export async function checkRealtimeEvents({ browser, BASE, expect, setScheme, AA
    * de menu est une micro-tâche, `factBefore` y consomme donc 0 pas en
    * pratique.
    */
-  const modeChip = page.getByRole('button', { name: /Mode de lecture/ });
+  // Ce contexte est `en-US` par construction (prémisse ci-dessus) : depuis #10645 l'interface y parle anglais.
+  const modeChip = page.getByRole('button', { name: /Mode de lecture|Reading mode/ });
   const menuItem = (name) => page.getByRole('menuitemradio', { name });
   /**
    * `.rounded-chip` N'EST PAS LE BON SIGNAL — `Avatar` l'emploie DÉJÀ pour la
@@ -475,7 +482,7 @@ export async function checkRealtimeEvents({ browser, BASE, expect, setScheme, AA
   expect(scriptFlat, `${label} mode Script : la cellule n'a AUCUNE capsule, même tenue que Focal`);
 
   await modeChip.click();
-  await menuItem(/^Bulles/).click();
+  await menuItem(/^(Bulles|Bubbles)/).click();
   const bubblesCapsule = await chrono.factBefore(chrono.now() + MODE_SWITCH_FACT_BUDGET_MS, async () => (await hasCapsule()) === true);
   expect(bubblesCapsule, `${label} mode Bulles : la capsule à libellé reste la tenue du mode bulles`);
 

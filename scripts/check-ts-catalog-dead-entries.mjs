@@ -469,7 +469,14 @@ export const callersIn = (contents, nsNames) => {
 // Open Graph d'un lien d'affiliation, servie par la passerelle aux ROBOTS que Traefik trie par User-Agent
 // (jumelle des aperçus `/chat/<lien>` et `/l/<jeton>`). Aucun client ne l'appelle jamais : l'entrée existe parce
 // que le catalogue est généré depuis le manifeste. Valeur MESURÉE le 2026-10-13 en CI (run 38460483889 rouge sur 276).
-const BASELINE_DEAD_ENTRIES = 271;
+// 271 -> 270 (#7558, 2026-10-14) : `conversations.byIdMessagesByMessageIdPin` (`PUT`/`DELETE
+// …/messages/:messageId/pin`) a son appelant web — `apps/web/src/lib/api/pin-message.ts`, le geste « Épingler /
+// Désépingler » de la feuille « Plus… » du fil. Valeur MESURÉE le 2026-10-14 en local.
+// 270 -> 267 (#10613, #7836, #10615, 2026-10-14) : la fiche de groupe du web gagne trois appelants —
+// `conversations.byIdParticipantsByParticipantKey` (`DELETE …/participants/:key`, expulser),
+// `conversations.byIdParticipantsByUserIdBan` (`…/ban`) et `conversations.byIdParticipantsByUserIdRole`
+// (`…/participants/:key/role`, promouvoir/rétrograder). Valeur MESURÉE en CI (run 38602621428, rouge sur 267).
+const BASELINE_DEAD_ENTRIES = 265;
 
 export const readWorld = (root) => {
   const groupFiles = readdirSync(join(root, GROUPS_DIR)).filter((name) => name.endsWith('.ts')).sort();

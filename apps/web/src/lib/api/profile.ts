@@ -5,10 +5,13 @@ import { isProfileImageReference } from '@meeshy/shared/utils/profile-image-refe
 import * as meEndpoints from '@meeshy/shared/api/endpoints/me';
 import * as usersEndpoints from '@meeshy/shared/api/endpoints/users';
 
+import type { ServedProfileDecor } from '@meeshy/shared/types/profile-decor';
+
 import { unwrap } from './client';
 import { CONTACT_MASK, maskEmail } from './email-mask';
 import type { DataSource } from './config';
 import type { ApiResult, HttpTransport } from './http';
+import { readProfileDecor } from './profile-decor';
 
 /**
  * **LE PORT DU PROFIL** (#6289) — miroir `UserService` (iOS,
@@ -63,6 +66,8 @@ export type MyProfile = {
   readonly email: MaskedContact | null;
   readonly phone: MaskedContact | null;
   readonly createdAt: string | null;
+  /** Le contour et la bannière de design équipés (#10632) ; absent = ancien serveur, les sélecteurs ne s'ouvrent pas. */
+  readonly profileDecor?: ServedProfileDecor;
 };
 
 export type MyStats = {
@@ -106,7 +111,13 @@ const WireUser = z.object({
   emailVerifiedAt: z.optional(z.unknown()),
   phoneVerifiedAt: z.optional(z.unknown()),
   createdAt: z.optional(z.unknown()),
+  profileDecor: z.optional(z.unknown()),
 });
+
+const decorOf = (raw: unknown): { readonly profileDecor?: ServedProfileDecor } => {
+  const profileDecor = readProfileDecor(raw);
+  return profileDecor === undefined ? {} : { profileDecor };
+};
 
 const textOrNull = (value: string | null | undefined): string | null =>
   value === undefined || value === null || value.trim() === '' ? null : value;
@@ -134,6 +145,7 @@ export function decodeMyProfile(raw: unknown): MyProfile | null {
     email: email === null ? null : { masked: maskEmail(email), verified: isStamped(user.emailVerifiedAt) },
     phone: phone === null ? null : { masked: maskPhone(phone), verified: isStamped(user.phoneVerifiedAt) },
     createdAt: typeof user.createdAt === 'string' ? user.createdAt : null,
+    ...decorOf(raw),
   };
 }
 

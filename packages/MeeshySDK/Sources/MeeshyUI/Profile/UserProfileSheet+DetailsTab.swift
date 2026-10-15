@@ -196,7 +196,7 @@ extension UserProfileSheet {
             if isBlocked {
                 profileActionButton(
                     icon: "hand.raised.slash.fill",
-                    label: String(localized: "profile.action.unblockUser", defaultValue: "Debloquer l'utilisateur", bundle: .module),
+                    label: String(localized: "profile.action.unblockUser", defaultValue: "Débloquer l'utilisateur", bundle: .module),
                     color: MeeshyColors.warning,
                     action: { Task { await unblockUser() } }
                 )

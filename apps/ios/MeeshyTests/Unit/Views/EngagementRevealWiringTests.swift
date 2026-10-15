@@ -61,9 +61,9 @@ final class EngagementRevealWiringTests: XCTestCase {
 
         let ipad = AppSourceGuard.stripComments(
             try AppSourceGuard.unit("Meeshy/Features/Main/Views/iPadRootView.swift"))
-        XCTAssertEqual(ipad.components(separatedBy: "router.pendingEngagementReveal =").count - 1, 2,
-                       "Les gestionnaires API et socket dérivent le palier ; celui du push "
-                           + "n'en pose aucun, faute de métadonnée typée.")
+        XCTAssertTrue(ipad.contains("router.pendingEngagementReveal = ctx.reveal"),
+                      "L'iPad pose le palier par le MÊME contexte que l'iPhone (API, socket, push — ce dernier à "
+                          + "`nil`, faute de métadonnée typée), depuis l'aiguillage unique du 2026-10-14.")
     }
 
     // MARK: - La SECONDE porte : le geste, sans tap (#5847)
@@ -101,7 +101,9 @@ final class EngagementRevealWiringTests: XCTestCase {
 
         let ipad = AppSourceGuard.stripComments(
             try AppSourceGuard.unit("Meeshy/Features/Main/Views/iPadRootView.swift"))
-        XCTAssertEqual(ipad.components(separatedBy: "router.openGame(at: GameNavigationMap.entry(for:").count - 1, 7,
-                       "jeu et paliers sur les trois gestionnaires iPad, plus le lien du Jeu (#9947)")
+        XCTAssertEqual(ipad.components(separatedBy: "router.openGame(at: GameNavigationMap.entry(for:").count - 1, 3,
+                       "jeu, paliers et lien du Jeu (#9947) : l'aiguillage unique de l'iPad, comme l'iPhone")
+        let ipadReveal = try XCTUnwrap(ipad.range(of: "router.pendingEngagementReveal = ctx.reveal"))
+        XCTAssertTrue(ipad[ipadReveal.upperBound...].prefix(200).contains("router.openGame(at: GameNavigationMap.entry(for: ctx.type)"))
     }
 }

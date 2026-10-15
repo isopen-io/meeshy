@@ -741,7 +741,7 @@ export default function StoryScreen() {
           besoin de sortir. Le `12px` conserve l'espacement de `top-3` quand il
           n'y a pas d'encoche : rien ne bouge là où rien n'était cassé. */}
       <div className="pointer-events-none absolute end-3" style={{ top: 'calc(var(--safe-top, 0px) + 12px)', zIndex: 2 }}>
-        {loading || notFound ? <ViewerExitButton exit={{ kind: 'close', label: 'Fermer', onExit: closeViewer }} /> : null}
+        {loading || notFound ? <ViewerExitButton exit={{ kind: 'close', label: translate(interfaceLanguage, 'common.close'), onExit: closeViewer }} /> : null}
       </div>
 
       {/* L'UNIQUE RÉGION VIVANTE DU LECTEUR — l'issue d'un geste s'y dit, et
@@ -761,7 +761,7 @@ export default function StoryScreen() {
               className="animate-pulse rounded-full"
               style={{ width: 32, height: 32, background: 'var(--color-media-fill)' }}
             />
-            <p className="text-body">Chargement…</p>
+            <p className="text-body">{translate(interfaceLanguage, 'story.viewer.loading')}</p>
           </div>
         </div>
       ) : visitorRefused ? (
@@ -771,11 +771,9 @@ export default function StoryScreen() {
       ) : notFound ? (
         <div role="alert" className="grid flex-1 content-center justify-items-center gap-4 px-8 text-center">
           <Glyph name="warningCircle" size={38} style={{ color: 'var(--color-on-media-3)' }} />
-          <p className="text-title font-bold">{online ? 'Story introuvable' : 'Hors ligne'}</p>
+          <p className="text-title font-bold">{translate(interfaceLanguage, online ? 'story.viewer.notFound' : 'common.offline')}</p>
           <p className="text-body" style={{ color: 'var(--color-on-media-3)' }}>
-            {online
-              ? 'Impossible de charger cette story. Réessayez ou fermez.'
-              : 'Cette story s’affichera à la reconnexion.'}
+            {translate(interfaceLanguage, online ? 'story.viewer.error.body' : 'story.viewer.offline.body')}
           </p>
           <div className="flex gap-3">
             <button
@@ -784,7 +782,7 @@ export default function StoryScreen() {
               className="rounded-full px-5 py-2 text-body font-semibold"
               style={{ background: 'var(--color-on-media)', color: 'var(--color-media-backdrop)', minHeight: 44 }}
             >
-              Réessayer
+              {translate(interfaceLanguage, 'common.retry')}
             </button>
             <Link
               to="list"
@@ -792,7 +790,7 @@ export default function StoryScreen() {
               className="grid place-items-center rounded-full px-5 text-body font-semibold"
               style={{ border: '1px solid var(--color-media-hairline)', minHeight: 44 }}
             >
-              Fermer
+              {translate(interfaceLanguage, 'common.close')}
             </Link>
           </div>
         </div>

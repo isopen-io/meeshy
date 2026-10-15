@@ -26,6 +26,7 @@ import ptSignup from './catalog-pt-signup';
 import ptGallery from './catalog-pt-gallery';
 import ptMessageCard from './catalog-pt-message-card';
 import ptMentions from './catalog-pt-mentions';
+import ptShellLabels from './catalog-pt-shell-labels';
 import ptStudioChrome from './catalog-pt-studio-chrome';
 import ptEphemeral from './catalog-pt-ephemeral';
 import ptWriteRestriction from './catalog-pt-write-restriction';
@@ -40,6 +41,7 @@ import ptPhonePrompt from './catalog-pt-phone-prompt';
 import ptUserProfile from './catalog-pt-user-profile';
 import ptContentRefused from './catalog-pt-content-refused';
 import ptPublicEntry from './catalog-pt-public-entry';
+import ptThreadSearch from './catalog-pt-thread-search';
 
 /**
  * Le portugais du web est celui qu'iOS catalogue sous `pt-BR` : le script
@@ -310,6 +312,7 @@ const pt = {
   'notFound.title': 'Este endereço não existe.',
 
   'pending.back': 'Voltar às conversas',
+  'pending.screen': 'A tela está chegando',
 
   'linkPage.home': 'Voltar ao Meeshy',
   'linkPage.retry': 'Tentar de novo',
@@ -326,8 +329,6 @@ const pt = {
   'trackingLink.opening': 'Abrindo o link…',
   'trackingLink.dead.title': 'Este link não está mais disponível',
   'trackingLink.dead.body': 'Ele expirou, foi desativado ou nunca existiu.',
-  'accountDeletion.incomplete.title': 'Link incompleto',
-  'accountDeletion.incomplete.body': 'Faltam a este link as informações necessárias. Entre para pedir a exclusão da sua conta.',
   'accountDeletion.confirm.title': 'Confirmar a exclusão da sua conta',
   'accountDeletion.confirm.body':
     'Sua conta será desativada ao fim de um período de carência de 30 dias. Até lá, o link “Cancelar” do e-mail permite voltar atrás.',
@@ -1058,6 +1059,7 @@ const pt = {
   'message.detail.language.original': '{language} (original)',
 
   ...ptMentions,
+  ...ptShellLabels,
   ...ptStudioChrome,
   ...ptEphemeral,
   ...ptWriteRestriction,
@@ -1075,6 +1077,7 @@ const pt = {
   ...ptUserProfile,
   ...ptContentRefused,
   ...ptPublicEntry,
+  ...ptThreadSearch,
 } satisfies InterfaceCatalog;
 
 export default pt;

@@ -304,9 +304,9 @@ internal struct _InlineRenderer: View {
 
     private var playButtonAccessibilityLabel: String {
         switch player.availability {
-        case .ready:         return String(localized: "media.video.play", defaultValue: "Lire la video", bundle: .module)
-        case .needsDownload: return String(localized: "media.video.download", defaultValue: "Telecharger la video", bundle: .module)
-        case .downloading:   return String(localized: "media.video.downloading", defaultValue: "Telechargement en cours", bundle: .module)
+        case .ready:         return String(localized: "media.video.play", defaultValue: "Lire la vidéo", bundle: .module)
+        case .needsDownload: return String(localized: "media.video.download", defaultValue: "Télécharger la vidéo", bundle: .module)
+        case .downloading:   return String(localized: "media.video.downloading", defaultValue: "Téléchargement en cours", bundle: .module)
         }
     }
 
@@ -973,12 +973,12 @@ internal struct _FullscreenRenderer: View {
 
     private var downloadOverlayMessage: String {
         if loadFailed {
-            return String(localized: "media.video.unavailableRetry", defaultValue: "Video indisponible. Reessayer.", bundle: .module)
+            return String(localized: "media.video.unavailableRetry", defaultValue: "Vidéo indisponible. Réessayer.", bundle: .module)
         }
         switch player.availability {
         case .ready:         return ""
-        case .needsDownload: return String(localized: "media.video.downloadToPlay", defaultValue: "Telechargez pour lire la video", bundle: .module)
-        case .downloading:   return String(localized: "media.video.downloadingHint", defaultValue: "La lecture demarrera apres le telechargement", bundle: .module)
+        case .needsDownload: return String(localized: "media.video.downloadToPlay", defaultValue: "Téléchargez pour lire la vidéo", bundle: .module)
+        case .downloading:   return String(localized: "media.video.downloadingHint", defaultValue: "La lecture démarrera après le téléchargement", bundle: .module)
         }
     }
 

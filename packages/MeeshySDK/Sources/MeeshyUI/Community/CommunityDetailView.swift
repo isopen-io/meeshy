@@ -90,7 +90,7 @@ public struct CommunityDetailView: View {
             localColor = UserDefaults.standard.string(forKey: "community.color.\(viewModel.communityId)")
             localEmoji = UserDefaults.standard.string(forKey: "community.emoji.\(viewModel.communityId)")
         }
-        .alert(String(localized: "community.detail.leave.confirm.title", defaultValue: "Quitter la communaute ?", bundle: .module), isPresented: $showLeaveConfirm) {
+        .alert(String(localized: "community.detail.leave.confirm.title", defaultValue: "Quitter la communauté ?", bundle: .module), isPresented: $showLeaveConfirm) {
             Button(String(localized: "common.cancel", defaultValue: "Annuler", bundle: .module), role: .cancel) {}
             Button(String(localized: "community.detail.leave.button", defaultValue: "Quitter", bundle: .module), role: .destructive) {
                 Task {
@@ -105,7 +105,7 @@ public struct CommunityDetailView: View {
                 }
             }
         } message: {
-            Text(String(localized: "community.detail.leave.confirm.message", defaultValue: "Vous ne pourrez plus acceder aux channels de cette communaute.", bundle: .module))
+            Text(String(localized: "community.detail.leave.confirm.message", defaultValue: "Vous ne pourrez plus accéder aux channels de cette communauté.", bundle: .module))
         }
         .sheet(isPresented: $showAddChannel) {
             AddChannelSheet(
@@ -172,7 +172,7 @@ public struct CommunityDetailView: View {
                         Button {
                             showSettings = true
                         } label: {
-                            Label(String(localized: "community.detail.menu.settings", defaultValue: "Reglages", bundle: .module), systemImage: "gearshape.fill")
+                            Label(String(localized: "community.detail.menu.settings", defaultValue: "Réglages", bundle: .module), systemImage: "gearshape.fill")
                         }
                     }
 
@@ -257,7 +257,7 @@ public struct CommunityDetailView: View {
                 HStack(spacing: MeeshySpacing.xs) {
                     Image(systemName: community.isPrivate ? "lock.fill" : "globe")
                         .font(.system(size: MeeshyIconSize.xxs))
-                    Text(community.isPrivate ? String(localized: "community.privacy.private", defaultValue: "Privee", bundle: .module) : String(localized: "community.privacy.public", defaultValue: "Publique", bundle: .module))
+                    Text(community.isPrivate ? String(localized: "community.privacy.private", defaultValue: "Privée", bundle: .module) : String(localized: "community.privacy.public", defaultValue: "Publique", bundle: .module))
                         .font(.system(size: MeeshyFont.smallSize, weight: .medium))
                 }
                 .foregroundColor(theme.textMuted)
@@ -353,7 +353,7 @@ public struct CommunityDetailView: View {
                     }
                 }
                 if viewModel.isCreator {
-                    actionButton(icon: "gearshape.fill", title: String(localized: "community.detail.action.settings", defaultValue: "Reglages", bundle: .module)) {
+                    actionButton(icon: "gearshape.fill", title: String(localized: "community.detail.action.settings", defaultValue: "Réglages", bundle: .module)) {
                         showSettings = true
                     }
                 } else if !viewModel.isMember {
@@ -369,7 +369,7 @@ public struct CommunityDetailView: View {
                 } label: {
                     HStack(spacing: MeeshySpacing.xsPlus) {
                         Image(systemName: "rectangle.portrait.and.arrow.right")
-                        Text(String(localized: "community.detail.leave.label", defaultValue: "Quitter la communaute", bundle: .module))
+                        Text(String(localized: "community.detail.leave.label", defaultValue: "Quitter la communauté", bundle: .module))
                     }
                     .font(.system(size: 14, weight: .medium, design: .rounded))
                     .foregroundColor(MeeshyColors.error)
@@ -631,18 +631,18 @@ struct AddChannelSheet: View {
         }
         .task { await loadConversations() }
         .presentationDetents([.medium, .large])
-        .alert(String(localized: "community.addChannel.move.confirm.title", defaultValue: "Deplacer cette conversation ?", bundle: .module), isPresented: $showMoveConfirm) {
+        .alert(String(localized: "community.addChannel.move.confirm.title", defaultValue: "Déplacer cette conversation ?", bundle: .module), isPresented: $showMoveConfirm) {
             Button(String(localized: "common.cancel", defaultValue: "Annuler", bundle: .module), role: .cancel) {
                 pendingMoveConversation = nil
             }
-            Button(String(localized: "community.addChannel.move.button", defaultValue: "Deplacer", bundle: .module)) {
+            Button(String(localized: "community.addChannel.move.button", defaultValue: "Déplacer", bundle: .module)) {
                 if let conv = pendingMoveConversation {
                     Task { await addConversation(conv) }
                 }
                 pendingMoveConversation = nil
             }
         } message: {
-            Text(String(localized: "community.addChannel.move.confirm.message", defaultValue: "Cette conversation appartient deja a une autre communaute. Elle sera deplacee vers celle-ci.", bundle: .module))
+            Text(String(localized: "community.addChannel.move.confirm.message", defaultValue: "Cette conversation appartient déjà à une autre communauté. Elle sera déplacée vers celle-ci.", bundle: .module))
         }
     }
 
@@ -651,11 +651,11 @@ struct AddChannelSheet: View {
             Image(systemName: "bubble.left.and.bubble.right")
                 .font(.system(size: 40))
                 .foregroundColor(theme.textMuted)
-            Text(searchText.isEmpty ? String(localized: "community.addChannel.empty.noConversations", defaultValue: "Aucune conversation disponible", bundle: .module) : String(localized: "community.addChannel.empty.noResults", defaultValue: "Aucun resultat", bundle: .module))
+            Text(searchText.isEmpty ? String(localized: "community.addChannel.empty.noConversations", defaultValue: "Aucune conversation disponible", bundle: .module) : String(localized: "community.addChannel.empty.noResults", defaultValue: "Aucun résultat", bundle: .module))
                 .font(.system(size: MeeshyFont.bodySize, weight: .medium, design: .rounded))
                 .foregroundColor(theme.textSecondary)
             if searchText.isEmpty {
-                Text(String(localized: "community.addChannel.empty.hint", defaultValue: "Creez d'abord une conversation pour l'ajouter ici.", bundle: .module))
+                Text(String(localized: "community.addChannel.empty.hint", defaultValue: "Créez d'abord une conversation pour l'ajouter ici.", bundle: .module))
                     .font(.system(size: MeeshyFont.subheadSize))
                     .foregroundColor(theme.textMuted)
                     .multilineTextAlignment(.center)
@@ -716,7 +716,7 @@ struct AddChannelSheet: View {
                     }
 
                     if conversation.communityId != nil {
-                        Label(String(localized: "community.addChannel.otherCommunity", defaultValue: "Autre communaute", bundle: .module), systemImage: "arrow.triangle.swap")
+                        Label(String(localized: "community.addChannel.otherCommunity", defaultValue: "Autre communauté", bundle: .module), systemImage: "arrow.triangle.swap")
                             .font(.system(size: MeeshyFont.captionSize, weight: .medium))
                             .foregroundColor(MeeshyColors.amber500)
                     }

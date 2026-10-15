@@ -8,6 +8,7 @@ import '@/routes/thread-styles';
 import { Composer } from '@/components/composer';
 import { MessageEditDock } from '@/components/message-edit-composer';
 import { SelectionToolbar } from '@/components/selection-toolbar';
+import { ConversationBackdrop } from '@/components/conversation-backdrop';
 import { ThreadHeader } from '@/components/thread-header';
 import { ConversationDetailsContext } from '@/components/avatar-menu';
 import { ConversationDetailsPortal } from '@/components/conversation-details-sheet-lazy';
@@ -81,7 +82,7 @@ import { useThreadOpenScroll } from '@/lib/view/use-thread-open-scroll';
 import { threadAnchorOf } from '@/lib/view/thread-anchor';
 import { useThreadJump } from '@/lib/view/use-thread-jump';
 import { summaryExits } from '@/lib/view/summary-exits';
-import { ThreadMediaContext } from '@/lib/view/thread-media-context';
+import { ThreadMediaContext, useThreadMediaValue } from '@/lib/view/thread-media-context';
 import { ThreadMessageSheets } from './thread-sheets';
 import { ThreadModes } from './thread-modes';
 
@@ -502,10 +503,7 @@ export default function ThreadScreen({ preview, focus }: ThreadScreenProps = {})
    * visionneuse de TOUTE la conversation, et « Répondre » y arme la citation de
    * la PIÈCE ; valeur STABLE, lue par chaque grille de médias (`Attachments`).
    */
-  const threadMedia = useMemo(
-    () => ({ viewerId: viewer.id ?? '', onReplyToMedia: compose.setReplyToMedia }),
-    [viewer.id, compose.setReplyToMedia],
-  );
+  const threadMedia = useThreadMediaValue({ viewerId: viewer.id ?? '', onReplyToMedia: compose.setReplyToMedia, conversation });
 
   const messageMenu = useMessageMenu({
     conversationId,
@@ -707,7 +705,7 @@ export default function ThreadScreen({ preview, focus }: ThreadScreenProps = {})
       className={`thread-root relative ${preview === undefined ? 'h-app' : 'h-full'} overflow-hidden`}
       style={{ ...withAccent(accent), ...chromeStyleVars(), ...insetVars, ...backdropStyleVars() } as CSSProperties}
     >
-      <div className="thread-backdrop" aria-hidden />
+      <ConversationBackdrop conversation={conversation} accent={accent} live={preview === undefined} />
       <ThreadHeader
         title={title}
         accent={accent}
@@ -729,6 +727,7 @@ export default function ThreadScreen({ preview, focus }: ThreadScreenProps = {})
         onSelectReadingMode={reading.selectReadingMode}
         onResetReadingModeToAuto={reading.resetReadingModeToAuto}
         preview={preview !== undefined}
+        onJumpToMessage={jump.requestJump}
       />
       {/*
         L'ANNONCE LECTEUR D'ÉCRAN (#5813, § 6.3 ; #5814, § 5 étape 5 ;

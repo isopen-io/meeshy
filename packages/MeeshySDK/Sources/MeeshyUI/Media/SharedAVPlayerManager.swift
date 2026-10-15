@@ -520,6 +520,8 @@ public final class SharedAVPlayerManager: ObservableObject {
         // Sans lecteur, la complétion ne viendrait jamais et tout déplacement
         // suivant resterait en attente derrière celui-ci (#10555).
         guard player != nil else { return }
+        // `Int(_:)` trappe sur une valeur non finie : une position de reprise illisible ne déplace rien.
+        guard seconds.isFinite else { return }
         // Relevé AVANT le déplacement : c'est jusque-là que le visionnage a
         // porté. Le traqueur ignore de lui-même un déplacement à l'arrêt.
         stretchTracker.seek(from: positionMs, to: max(0, Int(seconds * 1000)))

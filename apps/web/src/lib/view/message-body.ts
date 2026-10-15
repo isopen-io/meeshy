@@ -323,7 +323,7 @@ export type BodyKind =
  * `textOrEmojiBlock` (`FocalRow.swift:604-615`) : sticker d'abord (« un
  * gabarit porte un emoji de repli, si bien qu'un message-sticker peut
  * satisfaire `isEmojiOnly` — le repli servi à la place de la chose »), puis
- * emoji seul SANS citation (`FocalRow.swift:612`), puis texte.
+ * emoji seul — avec ou sans citation : la carte citée se pose au-dessus, l'emoji garde ses tailles (#10628) —, puis texte.
  */
 export function bodyKindOf(
   message: Pick<Message, 'content' | 'metadata' | 'attachments' | 'replyTo'> & HoistedFields,
@@ -339,7 +339,7 @@ export function bodyKindOf(
     attachmentCount: message.attachments?.length ?? 0,
     hasPlace: place !== null,
   });
-  if (emoji !== null && message.replyTo === undefined) {
+  if (emoji !== null) {
     return { kind: 'emoji-only', text: message.content.trim(), fontSize: emoji.fontSize };
   }
 

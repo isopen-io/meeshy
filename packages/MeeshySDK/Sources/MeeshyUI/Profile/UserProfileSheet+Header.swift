@@ -29,7 +29,7 @@ extension UserProfileSheet {
         VStack(spacing: 0) {
             bannerSection
                 .frame(height: bannerHeight)
-                .overlay(alignment: .top) {
+                .overlay(alignment: .bottom) {
                     bannerGameBadge
                         .opacity(1 - Double(progress))
                 }
@@ -79,18 +79,15 @@ extension UserProfileSheet {
         }
     }
 
-    /// #10093, #10231 — le niveau et le rang du membre, posés sur sa bannière par l'app (`profileGameSection`) : ce
-    /// que SA visibilité autorise, rien sinon. L'app occupe toute la largeur — le niveau et ses points au début (après
-    /// le bouton Fermer), le rang à la fin. Le doigt le traverse — toucher la bannière l'ouvre toujours en plein écran.
+    /// #10093, #10231, #10601 — le niveau et le rang du membre, posés sur sa bannière par l'app (`profileGameSection`) :
+    /// ce que SA visibilité autorise, rien sinon. L'app occupe toute la bannière — le niveau à l'angle bas du début, le
+    /// rang à l'angle bas de la fin, leurs cadres posés sur le bord bas, loin du bouton Fermer. Le doigt le traverse —
+    /// toucher la bannière l'ouvre toujours en plein écran.
     @ViewBuilder
     var bannerGameBadge: some View {
         if !isBlocked, !isBlockedByTarget, let userId = resolvedUserId, !userId.isEmpty, let gameSection {
             gameSection.build(userId, displayUser.displayName ?? displayUser.username)
                 .allowsHitTesting(false)
-                .padding(.top, MeeshySpacing.mdPlus)
-                // Le bouton Fermer tient le coin de DÉBUT (`closeButton`) : le niveau commence après lui.
-                .padding(.leading, MeeshySpacing.lg + MeeshyControlSize.regular + MeeshySpacing.sm)
-                .padding(.trailing, MeeshySpacing.lg)
         }
     }
 

@@ -1,21 +1,24 @@
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import type { KeyboardEvent as ReactKeyboardEvent, MouseEvent as ReactMouseEvent, PointerEvent as ReactPointerEvent } from 'react';
 import type { QueryClient } from '@tanstack/react-query';
+import type { MessageSticker } from '@meeshy/shared/types/message-sticker';
 import { useStore } from 'zustand/react';
 
 import { prismFor, served, type Served } from '@/lib/api/prism';
 import { reactAction } from '@/lib/api/query';
 import { appQueryClient } from '@/lib/api/query-client';
 import { apiDeps } from '@/lib/api/deps';
+import type { DataSource } from '@/lib/api/config';
 import type { ApiResult, HttpRequest } from '@/lib/api/http';
 import { reactionStore } from '@/lib/api/reaction-store';
 import type { Message } from '@/lib/api/types';
 import { discussionCardSubjectOf } from '@/lib/export/discussion-card-subject';
 import { readDefaultMessageCardFormat } from '@/lib/export/message-card-format';
 import { translate } from '@/lib/i18n-catalog';
-import { isMessagePiecesCatalogLoaded, loadMessagePiecesCatalog } from '@/lib/i18n-message-pieces-catalog';
+import { isMessagePiecesCatalogLoaded, loadMessagePiecesCatalog, translateMessagePieces } from '@/lib/i18n-message-pieces-catalog';
 import { currentInterfaceLanguage } from '@/lib/interface-language';
 import { openSendSheet } from '@/lib/send/send-sheet-store';
+import { useStickerLibrary } from '@/lib/stickers/use-sticker-library';
 import { safeLocalStorage } from '@/lib/storage';
 
 import {
@@ -29,15 +32,20 @@ import {
   type TranslationChoice,
 } from './message-actions';
 import { contentExitOf, exitOffers } from './content-exit';
+import { doubleTapReactable } from './double-tap';
 import { admitForward, forwardRefusalOf, forwardRequestOf, type ForwardRefusal } from './forward';
 import { useLongPress, type LongPressAnchor } from './long-press';
-import { pieceIdAt, targetedPieceOf } from './message-piece';
+import { PIECE_ATTRIBUTE, pieceIdAt, soleSaveablePieceOf, targetedPieceOf } from './message-piece';
 import { prewarmPieceReaction, usePieceMenu, type PieceMenuData } from './use-piece-menu';
 import { copyPlainText } from './copy-text';
 import { isMineOf } from './message';
+import { stickerOf } from './message-body';
 import { editOffered } from './message-edit';
+import { useDoubleTap, type DoubleTap } from './use-double-tap';
 import { SELECTION_CAP, copyTextOf, orderedIds, selectionReducer, type SelectionState } from './selection';
 import { useMessageDelete } from './use-message-delete';
+import { useMessagePin, type MessagePinEntry } from './use-message-pin';
+import { useMessageReport } from './use-message-report';
 import { useMessageStar, type MessageStarEntry } from './use-message-star';
 
 /**
@@ -77,6 +85,27 @@ export type MessageMenuTargetState = {
   readonly pieceId?: string;
 };
 
+/**
+ * LA BARRE DE RÉACTION RAPIDE QU'OUVRE UN DOUBLE TOUCHER (#10599) — ancrée au
+ * message (`anchor` : la rangée, ou la tuile de la pièce visée), centrée sous
+ * le doigt (`x`). `pieceId` : la réaction vise cette pièce ; absent, le message.
+ */
+export type QuickReactionTarget = {
+  readonly messageId: string;
+  readonly anchor: HTMLElement;
+  readonly x: number;
+  readonly pieceId?: string;
+};
+
+/** Le menu d'un STICKER (#10630) : hors bibliothèque tant qu'elle n'est pas lue, l'ajout est offert — le doublon se déduplique côté serveur. */
+const stickerContextOf = (
+  message: Message,
+  library: { readonly has: (sticker: MessageSticker, picture: { readonly fileUrl: string } | undefined) => boolean },
+): { readonly sticker?: { readonly inLibrary: boolean } } => {
+  const sticker = stickerOf(message);
+  return sticker === null ? {} : { sticker: { inLibrary: library.has(sticker, message.attachments?.[0]) } };
+};
+
 export function useMessageMenu(params: {
   readonly conversationId: string;
   readonly messages: readonly Message[];
@@ -108,6 +137,8 @@ export function useMessageMenu(params: {
   /** INJECTABLES pour les témoins — le cache et le transport de l'application par défaut. */
   readonly queryClient?: QueryClient;
   readonly transport?: PieceMenuTransport;
+  /** La source servie au signalement (`reports.ts` se tait sur les fixtures) — celle de l'application par défaut. */
+  readonly source?: DataSource;
 }) {
   const { conversationId, messages, readerLanguages, viewerId, announce } = params;
 
@@ -121,6 +152,9 @@ export function useMessageMenu(params: {
   const mine = useStore(reactionStore, (s) => s.mine);
 
   const messageOf = useCallback((id: string) => messages.find((m) => m.id === id), [messages]);
+  /* « AJOUTER À MES STICKERS » (#10630) — la bibliothèque n'est lue que quand le menu vise un sticker. */
+  const targetedMessage = menuTarget === null ? undefined : messages.find((m) => m.id === menuTarget.messageId);
+  const stickerLibrary = useStickerLibrary(targetedMessage !== undefined && stickerOf(targetedMessage) !== null);
   const piece = usePieceMenu({
     conversationId,
     viewerId,
@@ -130,7 +164,7 @@ export function useMessageMenu(params: {
     queryClient: params.queryClient ?? appQueryClient,
     transport: params.transport ?? apiDeps.transport,
   });
-  const { onPieceReact } = piece;
+  const { onPieceReact, onPieceAction, pieceDataOf } = piece;
   /* LES LIBELLÉS D'UNE PIÈCE (#9907) arrivent avec le fil, hors du catalogue d'interface. */
   useEffect(() => {
     void loadMessagePiecesCatalog(currentInterfaceLanguage()).catch(() => undefined);
@@ -198,6 +232,19 @@ export function useMessageMenu(params: {
     (messageId: string): (() => void) | null => (deleteOfferFor([messageId]) === null ? null : () => askDelete([messageId])),
     [deleteOfferFor, askDelete],
   );
+  /**
+   * « ÉPINGLER » ET « SIGNALER » (#7558) — offerts par « Plus… » selon la règle
+   * du serveur (`messagePinAction`, `reportOffered`) ; l'épingle est optimiste
+   * (`use-message-pin.ts`), le signalement passe par la feuille des motifs
+   * (`use-message-report.ts`).
+   */
+  const transport = params.transport ?? apiDeps.transport;
+  const pinEntryOf = useMessagePin({ conversationId, viewer: deleteViewer, announce, queryClient: params.queryClient ?? appQueryClient, transport });
+  const pinOf = useCallback((messageId: string): MessagePinEntry | null => pinEntryOf(messageOf(messageId)), [pinEntryOf, messageOf]);
+  const source = params.source ?? apiDeps.source;
+  const reportDeps = useMemo(() => ({ source, transport }), [source, transport]);
+  const reporting = useMessageReport({ messageOf, viewer: deleteViewer, announce, deps: reportDeps });
+
   /** L'ordre est celui du FIL (`orderedIds`), comme pour le transfert : la boucle « pour tous » supprime dans l'ordre où on lit. */
   const onDeleteSelection = useCallback(
     (placed: readonly { readonly message: { readonly id: string } }[]) => {
@@ -283,26 +330,6 @@ export function useMessageMenu(params: {
    * la première peinture (menu de l'avatar) : le fil seul en paie le poids.
    */
   const gesture = useLongPress({ onOpen: (anchor) => openMenuFor({ ...anchor, origin: originRef.current }) });
-  const longPress = useMemo(() => {
-    const note = (event: { readonly target: EventTarget | null }) => {
-      originRef.current = event.target;
-    };
-    return {
-      ...gesture,
-      onPointerDown: (event: ReactPointerEvent<HTMLElement>) => {
-        note(event);
-        gesture.onPointerDown(event);
-      },
-      onContextMenu: (event: ReactMouseEvent<HTMLElement>) => {
-        note(event);
-        gesture.onContextMenu(event);
-      },
-      onKeyDown: (event: ReactKeyboardEvent<HTMLElement>) => {
-        note(event);
-        gesture.onKeyDown(event);
-      },
-    };
-  }, [gesture]);
 
   const onCloseMenu = useCallback(() => {
     setMenuTarget(null);
@@ -336,6 +363,68 @@ export function useMessageMenu(params: {
     },
     [conversationId, announce, onPieceReact],
   );
+
+  /**
+   * LE DOUBLE TOUCHER OUVRE LA BARRE DE RÉACTION RAPIDE (#10599, décision
+   * porteur du 2026-10-14 : « Non, sur le web le double toucher peut ouvrir
+   * plutôt un petit menu de réaction rapide ! ») — la barre de la capsule
+   * « + » (`MessageReactionQuickBar`), jamais le menu complet ni une réaction
+   * posée d'office. Sur la tuile d'un message à plusieurs pièces dont la pièce
+   * accepte une réaction (`pieceDataOf(…).canReact`, la loi du menu d'une
+   * pièce), la barre s'ancre sur la tuile et vise CETTE pièce. Ce que la
+   * capsule refuse, le geste le refuse (`doubleTapReactable`). Le menu
+   * ouvert, la barre ouverte et la sélection le neutralisent.
+   */
+  const [quickReactionFor, setQuickReactionFor] = useState<QuickReactionTarget | null>(null);
+  const onCloseQuickReaction = useCallback(() => setQuickReactionFor(null), []);
+  const blockedRef = useRef(false);
+  blockedRef.current = selection !== null || menuTarget !== null || quickReactionFor !== null;
+  const onDoubleTap = useCallback(
+    ({ row, origin, x }: DoubleTap) => {
+      const messageId = row.dataset.row;
+      const message = messageId === undefined ? undefined : messageOf(messageId);
+      if (message === undefined || !doubleTapReactable(message, Date.now())) return;
+      const pieceId = pieceIdAt(origin, row);
+      const reactsOnPiece = pieceId !== undefined && pieceDataOf(message.id, pieceId)?.canReact === true;
+      if (reactsOnPiece) prewarmPieceReaction();
+      const tile = reactsOnPiece && origin instanceof Element ? origin.closest(`[${PIECE_ATTRIBUTE}]`) : null;
+      setQuickReactionFor({
+        messageId: message.id,
+        anchor: tile instanceof HTMLElement ? tile : row,
+        x,
+        ...(reactsOnPiece ? { pieceId } : {}),
+      });
+    },
+    [messageOf, pieceDataOf],
+  );
+  const doubleTap = useDoubleTap({ enabled: () => !blockedRef.current, onDoubleTap });
+
+  /**
+   * LES GESTES D'UNE RANGÉE — l'appui long (menu) et le double toucher
+   * (barre de réaction rapide), étalés ensemble sur chaque rangée par l'hôte.
+   */
+  const longPress = useMemo(() => {
+    const note = (event: { readonly target: EventTarget | null }) => {
+      originRef.current = event.target;
+    };
+    return {
+      ...gesture,
+      onPointerDown: (event: ReactPointerEvent<HTMLElement>) => {
+        note(event);
+        gesture.onPointerDown(event);
+        doubleTap.onPointerDown(event);
+      },
+      onClickCapture: doubleTap.onClickCapture,
+      onContextMenu: (event: ReactMouseEvent<HTMLElement>) => {
+        note(event);
+        gesture.onContextMenu(event);
+      },
+      onKeyDown: (event: ReactKeyboardEvent<HTMLElement>) => {
+        note(event);
+        gesture.onKeyDown(event);
+      },
+    };
+  }, [gesture, doubleTap]);
 
   /**
    * BASCULE (revue #5814, défaut majeur 12) — c'est le SEUL geste qui pose
@@ -404,6 +493,24 @@ export function useMessageMenu(params: {
         setDetailFor(messageId);
         return;
       }
+      if (id === 'addSticker') {
+        const message = messageOf(messageId);
+        const sticker = message === undefined ? null : stickerOf(message);
+        if (message === undefined || sticker === null) return;
+        const lang = currentInterfaceLanguage();
+        void stickerLibrary.add(sticker, message.attachments?.[0]).then((ok) =>
+          announce(translateMessagePieces(lang, ok ? 'message.sticker.added' : 'message.sticker.addFailed')),
+        );
+        return;
+      }
+      /* « ENREGISTRER » (#10599) — la pièce unique, par la porte du menu d'une
+         pièce (`pieceSave`) : une seule écriture du téléchargement. */
+      if (id === 'save') {
+        const message = messageOf(messageId);
+        const sole = message === undefined ? null : soleSaveablePieceOf(message, Date.now());
+        if (sole !== null) onPieceAction(messageId, sole.id, 'pieceSave');
+        return;
+      }
       if (id === 'export' || id === 'exportQuick' || id === 'exportDiscussion') {
         const message = messageOf(messageId);
         if (message === undefined || !imageableOf(messageMenuContextOf(message, { now: Date.now() }))) return;
@@ -415,7 +522,7 @@ export function useMessageMenu(params: {
       // `translate` ne passe jamais ici — `MessageMenu` l'intercepte en
       // interne et bascule sur son sous-menu (`onPickLanguage`).
     },
-    [copyableTextOf, params, announce, messageOf, discussionImageableOf, editOf],
+    [copyableTextOf, params, announce, messageOf, discussionImageableOf, editOf, onPieceAction, stickerLibrary],
   );
 
   /** Le tap d'une rangée EN MODE SÉLECTION — bascule la coche ; le 101ᵉ id
@@ -556,6 +663,8 @@ export function useMessageMenu(params: {
       hasDefaultExportFormat: readDefaultMessageCardFormat(safeLocalStorage()) !== null,
       discussionImageable: discussionImageableOf(menuTarget.messageId),
       canEdit: editOf(menuTarget.messageId) !== null,
+      canSave: soleSaveablePieceOf(message, Date.now()) !== null,
+      ...stickerContextOf(message, stickerLibrary),
     };
     const servedLanguage = servedOf(menuTarget.messageId)?.language ?? '';
     const lang = currentInterfaceLanguage();
@@ -576,12 +685,14 @@ export function useMessageMenu(params: {
   return {
     menuTarget,
     menuData,
+    quickReactionFor,
+    onCloseQuickReaction,
     longPress,
     onCloseMenu,
     onMenuReact,
     onMenuAction,
     onPieceChange,
-    onPieceAction: piece.onPieceAction,
+    onPieceAction,
     onPickLanguage,
     displayLanguageOf: (id: string) => displayLanguages.get(id),
     myReactionsOf: (id: string) => mine[id],
@@ -605,6 +716,11 @@ export function useMessageMenu(params: {
     servedOf,
     starOf,
     editOf,
+    pinOf,
+    reportOf: reporting.reportOf,
+    reportFor: reporting.reportFor,
+    onPickReportReason: reporting.onPickReportReason,
+    onDismissReport: reporting.onDismissReport,
     swipeActionsOf,
   };
 }

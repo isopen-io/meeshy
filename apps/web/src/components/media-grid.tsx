@@ -19,6 +19,8 @@ import { MEDIA_GRID_MAX_WIDTH } from '@/lib/reading-mode/metrics';
 import { HighlightedPieceContext } from '@/lib/view/highlighted-piece';
 import { PIECE_RATIO_ATTRIBUTE, pieceAspectRatio } from '@/lib/view/message-preview';
 import { READER_LOCALE } from '@/lib/reader';
+import { translate } from '@/lib/i18n-catalog';
+import { currentInterfaceLanguage } from '@/lib/interface-language';
 
 import { AttachmentReactionBadge } from './attachment-reaction-badge';
 import { Glyph } from './glyph';
@@ -105,7 +107,7 @@ export function ImageTile({
           type="button"
           data-media-tile
           onClick={onOpen}
-          aria-label={`Ouvrir ${described.text}`}
+          aria-label={translate(currentInterfaceLanguage(), 'media.tile.open', { name: described.text })}
           className="absolute inset-0 block size-full cursor-pointer appearance-none border-0 bg-transparent p-0"
         >
           {img}
@@ -336,7 +338,7 @@ function OverflowVeil({
       type="button"
       data-overflow={count}
       onClick={() => onOpen(index)}
-      aria-label={`Ouvrir le média ${index + 1} sur ${total}, ${count} de plus`}
+      aria-label={translate(currentInterfaceLanguage(), 'media.tile.openOverflow', { index: String(index + 1), total: String(total), count: String(count) })}
       className="absolute inset-0 grid cursor-pointer appearance-none place-items-center border-0 font-bold text-on-media"
       style={{ backgroundColor: `color-mix(in srgb, var(--color-media-backdrop) ${OVERFLOW_VEIL_OPACITY * 100}%, transparent)`, fontSize: OVERFLOW_LABEL_SIZE }}
     >
@@ -390,7 +392,7 @@ function GridCellImage({
       data-media-tile
       data-attachment={attachment.id}
       onClick={onOpen}
-      aria-label={`Ouvrir ${described.text}`}
+      aria-label={translate(currentInterfaceLanguage(), 'media.tile.open', { name: described.text })}
       className="relative block size-full cursor-pointer appearance-none border-0 bg-transparent p-0"
       style={{
         backgroundColor: placeholder !== undefined ? undefined : 'color-mix(in srgb, var(--accent) 12%, transparent)',

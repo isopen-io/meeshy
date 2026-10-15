@@ -13,6 +13,11 @@ const en = {
   'message.piece.deleted': 'Media deleted',
   'message.piece.deleteFailed': 'The media could not be deleted',
   'message.piece.preview': 'Message media',
+  'message.sticker.add': 'Add to my stickers',
+  'message.sticker.inLibrary': 'In my stickers',
+  'message.sticker.viewPack': 'View pack',
+  'message.sticker.added': 'Sticker added to your library',
+  'message.sticker.addFailed': 'The sticker could not be added',
   'message.edit.action': 'Edit',
   'message.edit.banner': 'Editing',
   'message.edit.cancel': 'Cancel editing',
@@ -33,6 +38,13 @@ const en = {
   'message.delete.partial': '{failed} of {count} messages could not be deleted',
   'message.delete.partialOne': '1 of {count} messages could not be deleted',
   'message.reactors.empty': 'No reactions',
+  'message.pin.action': 'Pin',
+  'message.unpin.action': 'Unpin',
+  'message.pin.done': 'Message pinned',
+  'message.unpin.done': 'Message unpinned',
+  'message.pin.failed': 'The message could not be pinned',
+  'message.unpin.failed': 'The message could not be unpinned',
+  'message.report.title': 'Report this message',
 } satisfies MessagePiecesCatalog;
 
 export default en;

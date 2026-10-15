@@ -562,6 +562,9 @@ export const SERVER_EVENTS = {
   // --- Packs (#10148) : l'installation d'un pack, synchronisée entre les appareils du compte ---
   PACK_INSTALLATION_UPDATED: 'pack:installation-updated',
 
+  // --- Décor de profil (#10632) : contour d'avatar et bannière équipés, synchronisés entre mes appareils ---
+  PROFILE_DECOR_UPDATED: 'profile:decor-updated',
+
   // --- User Profile (realtime propagation to conversation partners) ---
   USER_UPDATED: 'user:updated',
 

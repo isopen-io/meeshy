@@ -91,7 +91,9 @@ final class NSEPendingMessageConsumer {
                 for: item.conversationId
             ) { existing, newItem in
                 guard !existing.contains(where: { $0.id == newItem.id }) else { return existing }
-                return (existing + [newItem]).sorted { $0.createdAt < $1.createdAt }
+                // Même plafond que la politique du cache (600), appliqué à l'ajout.
+                return Array((existing + [newItem]).sorted { $0.createdAt < $1.createdAt }
+                    .suffix(CachePolicy.messages.maxItemCount ?? Int.max))
             }
         }
 

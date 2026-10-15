@@ -111,8 +111,22 @@ describe('bodyKindOf — sticker avant emoji avant texte', () => {
     expect(bodyKindOf(message({ content: '👍' })).kind).toBe('emoji-only');
   });
 
-  test('emoji seul AVEC replyTo ⇒ text (FocalRow.swift:612)', () => {
-    expect(bodyKindOf(message({ content: '👍', replyTo: message({ id: 'q1' }) })).kind).toBe('text');
+  test('emoji seul AVEC replyTo ⇒ emoji-only : la carte citée en petit, l’emoji en grand sans bulle (#10628)', () => {
+    expect(bodyKindOf(message({ content: '👍', replyTo: message({ id: 'q1' }) }))).toEqual({
+      kind: 'emoji-only',
+      text: '👍',
+      fontSize: 68,
+    });
+  });
+
+  test('trois emoji AVEC replyTo ⇒ ×3 (51), quatre ⇒ ×2 (34) : les tailles de l’emoji envoyé seul', () => {
+    const quoted = message({ id: 'q1' });
+    expect(bodyKindOf(message({ content: '🎉🎉🎉', replyTo: quoted }))).toMatchObject({ kind: 'emoji-only', fontSize: 51 });
+    expect(bodyKindOf(message({ content: '🎉🎉🎉🎉', replyTo: quoted }))).toMatchObject({ kind: 'emoji-only', fontSize: 34 });
+  });
+
+  test('texte AVEC replyTo reste text', () => {
+    expect(bodyKindOf(message({ content: 'ok 👍', replyTo: message({ id: 'q1' }) })).kind).toBe('text');
   });
 
   test('sinon text', () => {

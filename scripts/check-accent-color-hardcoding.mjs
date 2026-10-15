@@ -355,7 +355,20 @@ const REFERENCE_LITERAL_COLOR_COUNT = 145;
 // 457 -> 458 (2026-10-13) : UserProfileSheet pose la pastille « Réessayer » sur
 // resolvedAccent, l'accent du PROFIL (déjà lu ainsi l. 494 du même fichier) —
 // une fiche de profil n'a pas de conversation, donc pas d'accentColor à reprendre.
-const REFERENCE_UNKNOWN_VARIABLE_COLOR_COUNT = 458;
+// 458 -> 459 (2026-10-14, #10601, #10608) : `ConversationListView.swift` surligne
+// la CATÉGORIE d'origine d'une conversation glissée avec
+// `Color(hex: MeeshyColors.brandPrimaryHex)` — une catégorie n'a pas d'accentColor
+// propre (il appartient à une conversation), même nature que l'entrée #10220
+// (`PacksSettingsView.swift`) : couleur SÉMANTIQUE hors du contexte conversation
+// que vise CLAUDE.md § Conversation Accent Color.
+// 459 -> 467 (2026-10-15, #10631, #10632) : le rendu d'APPARENCE peint les
+// palettes du CATALOGUE que l'utilisateur choisit — fond de conversation
+// (`ConversationBackgroundView`, `ConversationAppearanceSheet` : surface et
+// accent de chaque nuance, accent effectif de l'aperçu) et modèles de design
+// (`AppearanceDesignView`, `AppearancePaint`, `AppearanceTileRenderer` :
+// `palette.base`, rôles de la palette). La couleur y est la DONNÉE choisie,
+// pas une teinte d'interface : remplacer par accentColor trahirait le choix.
+const REFERENCE_UNKNOWN_VARIABLE_COLOR_COUNT = 467;
 
 import { readFileSync, readdirSync, statSync, realpathSync } from 'node:fs';
 import { join, dirname } from 'node:path';

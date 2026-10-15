@@ -35,6 +35,7 @@ import androidx.core.view.WindowInsetsCompat;
 import androidx.core.view.WindowInsetsControllerCompat;
 import com.getcapacitor.BridgeActivity;
 import com.getcapacitor.BridgeWebChromeClient;
+import com.getcapacitor.BridgeWebViewClient;
 import com.getcapacitor.PluginHandle;
 import com.getcapacitor.WebViewListener;
 import java.util.ArrayList;
@@ -73,6 +74,7 @@ public class MainActivity extends BridgeActivity {
      * rien, la ou le web agrandit l'element.
      */
     private WebChromeClient chromeClient;
+    private OnBackPressedCallback backCallback;
     private View fullscreenView;
     private WebChromeClient.CustomViewCallback fullscreenCallback;
 
@@ -261,6 +263,7 @@ public class MainActivity extends BridgeActivity {
         registerPlugin(MeeshyScreenGuardPlugin.class);
         registerPlugin(MeeshyLocalePlugin.class);
         registerPlugin(MeeshySystemBarsPlugin.class);
+        registerPlugin(MeeshyWidgetsPlugin.class);
         // #10034 — recreee par Android, l'activite rejoue l'ecran ouvert par le
         // chemin des liens profonds : `BridgeActivity.load()` relit l'intent.
         String route = savedInstanceState == null ? null : savedInstanceState.getString(ShellRoute.KEY);
@@ -340,6 +343,7 @@ public class MainActivity extends BridgeActivity {
                     floatOnFullscreen = false;
                     enterFloat();
                 }
+                syncBack();
             }
 
             @Override
@@ -356,6 +360,7 @@ public class MainActivity extends BridgeActivity {
                 fullscreenView = null;
                 fullscreenCallback = null;
                 callback.onCustomViewHidden();
+                syncBack();
             }
         };
         getBridge().getWebView().setWebChromeClient(chromeClient);
@@ -377,30 +382,46 @@ public class MainActivity extends BridgeActivity {
                     }
                 }
             );
-        getOnBackPressedDispatcher()
-            .addCallback(
-                this,
-                new OnBackPressedCallback(true) {
+        // #10585 — chaque entree d'historique (pushState et fermeture de
+        // panneau compris) dit si le retour reste a la WebView ou revient au
+        // systeme, qui anime alors le retour a l'accueil sur Android 16.
+        getBridge()
+            .setWebViewClient(
+                new BridgeWebViewClient(getBridge()) {
                     @Override
-                    public void handleOnBackPressed() {
-                        if (fullscreenView != null) {
-                            chromeClient.onHideCustomView();
-                            return;
-                        }
-                        WebView webView = getBridge().getWebView();
-                        if (webView != null && webView.canGoBack()) {
-                            webView.goBack();
-                            return;
-                        }
-                        // #7988 — depuis Android 12, ce retour ne detruit plus
-                        // l'activite : rouverte, elle doit retrouver ce callback,
-                        // sinon le retour fermerait l'app depuis n'importe quel ecran.
-                        setEnabled(false);
-                        getOnBackPressedDispatcher().onBackPressed();
-                        setEnabled(true);
+                    public void doUpdateVisitedHistory(WebView view, String url, boolean isReload) {
+                        super.doUpdateVisitedHistory(view, url, isReload);
+                        syncBack();
                     }
                 }
             );
+        backCallback = new OnBackPressedCallback(false) {
+            @Override
+            public void handleOnBackPressed() {
+                if (fullscreenView != null) {
+                    chromeClient.onHideCustomView();
+                    return;
+                }
+                WebView webView = getBridge().getWebView();
+                if (webView != null && webView.canGoBack()) {
+                    webView.goBack();
+                    return;
+                }
+                // #7988, #10585 — l'historique a change entre la derniere
+                // synchronisation et le geste : le retour revient au systeme,
+                // et la prochaine entree d'historique reactivera ce callback.
+                setEnabled(false);
+                getOnBackPressedDispatcher().onBackPressed();
+            }
+        };
+        getOnBackPressedDispatcher().addCallback(this, backCallback);
+        syncBack();
+    }
+
+    private void syncBack() {
+        WebView webView = getBridge() == null ? null : getBridge().getWebView();
+        if (backCallback == null) return;
+        backCallback.setEnabled(BackRules.interceptsBack(fullscreenView != null, webView != null && webView.canGoBack()));
     }
 
     /** #10034 — l'adresse in-app de la WebView, gardee pour une recreation. */

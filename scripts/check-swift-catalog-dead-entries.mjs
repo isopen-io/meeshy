@@ -504,7 +504,18 @@ const EXCLUDED_DIR_NAMES = new Set(['Tests', 'MeeshyTests', 'MeeshyUIDeviceTests
 // User-Agent (jumelle des aperçus `/chat/<lien>` et `/l/<jeton>`). Aucun client ne l'appelle jamais, iOS pas plus
 // que le web : l'entrée existe parce que le catalogue est généré depuis le manifeste. Valeur MESURÉE le 2026-10-13
 // en CI (run 38458186282 rouge sur 314).
-const BASELINE_DEAD_ENTRIES = 314;
+// 314 -> 331 (#10631, #10632, 2026-10-15) : la régénération des énumérations Swift (cliquet
+// `ios-endpoints-generated-ratchet` de `packages/shared`, rouge sur dev) inscrit les routes du décor de profil et
+// des trois domaines de packs d'apparence : `MeEndpoint.profileDecor` et, dans `PacksEndpoint`, `shop` puis pour
+// `wallpaper`, `banner` et `avatarRing` la liste, le détail, l'installation, l'achat et les installés (5 × 3).
+// Le web les appelle déjà (vitrine unique, `lib/api/packs-shop.ts`) ; l'app iOS ne les branche pas encore —
+// entrées PRÉMATURÉES, pas des faux morts (#5427). Valeur MESURÉE le 2026-10-15 en CI (Quality rouge sur
+// afe92fecb1) et en local.
+// 331 -> 315 (#10632, 2026-10-15) : la vitrine unique iOS (`PackShopService`, `PackService`) branche les routes
+// d'apparence que la régénération venait d'inscrire — `PacksEndpoint.shop`, et pour les fonds, contours et
+// bannières la liste, le détail, l'installation, l'achat et les installés. Valeur MESURÉE le 2026-10-15 en local
+// sur 5109a0e737 (CI « Quality » rouge sur l'amélioration non enregistrée).
+const BASELINE_DEAD_ENTRIES = 315;
 
 const CATALOG_ENUM_RE = /public enum ([A-Za-z0-9_]+)\s*:\s*MeeshyEndpoint\b/;
 // Une déclaration de cas n'a jamais de point après `case` ; une branche de

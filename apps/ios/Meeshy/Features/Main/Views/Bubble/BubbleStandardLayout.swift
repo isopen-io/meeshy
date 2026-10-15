@@ -742,7 +742,7 @@ struct BubbleStandardLayout: View {
                 let perPageTranslatedAudios = perAttachmentAudios.allSatisfy({ $0.value.isEmpty })
                     ? Dictionary(grouping: translatedAudios, by: { $0.attachmentId })
                     : perAttachmentAudios
-                AudioCarouselView(
+                AudioStackView(
                     items: auds,
                     message: message,
                     contactColor: content.isMe ? MeeshyColors.brandPrimaryHex : otherBubbleColor,
@@ -786,12 +786,12 @@ struct BubbleStandardLayout: View {
                 }
             }
 
-            // Emoji-only WITHOUT a reply: large emoji free-floating, no bubble.
-            // An emoji-only message that quotes another message keeps the
-            // bubble so the quoted-reply card renders — `textBubbleContent`
-            // hosts it and renders the emoji large & centered above the quote
-            // (see `bubbleInnerContent`).
-            if isEmojiOnly && content.reply == nil {
+            // Emoji-only: large emoji free-floating, no bubble. When it
+            // quotes another message, only the small quote card is boxed and
+            // the emoji sits below it, bubble-less (#10628).
+            if content.emojiReplyFloatsBelowQuote {
+                emojiReplyContent
+            } else if isEmojiOnly {
                 emojiOnlyContent
             } else if (content.hasTextOrNonMediaContent
                 || (content.reply != nil && !content.audioHostsReply && !content.visualHostsReply))
@@ -815,7 +815,7 @@ struct BubbleStandardLayout: View {
     // MARK: - Emoji-only path
 
     @ViewBuilder
-    private var emojiOnlyContent: some View {
+    var emojiOnlyContent: some View {
         // Layout emoji-only sans reply : l'emoji et la meta-row (timestamp +
         // delivery) forment un BLOC INDISSOCIABLE rendu sur la meme baseline,
         // colle au bord de la conversation cote isMe. `.fixedSize()` garantit
@@ -870,15 +870,7 @@ struct BubbleStandardLayout: View {
         if let reply = content.reply, detachedStoryCitation == nil {
             quotedReplyView(reply.reference)
                 .padding(.bottom, MeeshySpacing.xs)
-                .onTapGesture {
-                    guard reply.reference.opensQuotedTarget else { return }
-                    HapticFeedback.light()
-                    if reply.isStory {
-                        onStoryReplyTap?(reply.reference.messageId)
-                    } else {
-                        onReplyTap?(reply.reference.messageId)
-                    }
-                }
+                .onTapGesture { openQuotedTarget(reply) }
         }
 
         // « modifié » se dit dans le PIED, à côté de l'heure (#7620) — posé
@@ -908,19 +900,7 @@ struct BubbleStandardLayout: View {
                     // No `.onLongPressGesture` — see comment in `emojiOnlyContent`.
                     // The container's long-press opens the options overlay; the
                     // translate icon in the identity bar opens translation detail.
-                    if text.isEmojiOnly {
-                        // Emoji-only reply: emoji hosted inside the bubble, above
-                        // the quoted-reply card — large (same 90/60/45pt sizing as
-                        // the free-floating path). Pas de `.frame(maxWidth: .infinity)` :
-                        // la bulle doit epouser le contenu (emoji + quoted-reply
-                        // card), pas s'etirer sur 70% de la largeur d'ecran. Le
-                        // VStack parent gere deja l'alignement naturel a gauche.
-                        Text(message.content)
-                            .font(MeeshyFont.emoji(emojiFontSize))
-                            .fixedSize(horizontal: false, vertical: true)
-                    } else {
-                        expandableTextView
-                    }
+                    expandableTextView
                 }
 
                 if let text = content.text {
@@ -1150,7 +1130,7 @@ struct BubbleStandardLayout: View {
     /// trois peaux peuvent l'atteindre. Elle était déclarée « site unique » ici
     /// et l'était : mais à portée `private`, donc unique dans son fichier
     /// seulement. La rangée plate et la rivière retombaient sur l'aperçu plat.
-    private var detachedStoryCitation: ReplyReference? { content.detachedStoryCitation }
+    var detachedStoryCitation: ReplyReference? { content.detachedStoryCitation }
 
     /// Le geste de la carte, ou `nil` — sans identifiant il n'y a rien à
     /// ouvrir, et un tap qui n'ouvre rien est une cible morte (loi 4). La
@@ -1165,7 +1145,7 @@ struct BubbleStandardLayout: View {
         return { onStoryReplyTap(citation.messageId) }
     }
 
-    private func quotedReplyView(_ reply: ReplyReference) -> some View {
+    func quotedReplyView(_ reply: ReplyReference) -> some View {
         BubbleQuotedReply(
             reply: reply,
             parentIsMe: content.isMe,
@@ -1230,7 +1210,7 @@ struct BubbleStandardLayout: View {
 
     // MARK: - Bubble background
 
-    private var bubbleBackground: some View {
+    var bubbleBackground: some View {
         BubbleBackground(
             isMe: content.isMe,
             accentHex: otherBubbleColor,

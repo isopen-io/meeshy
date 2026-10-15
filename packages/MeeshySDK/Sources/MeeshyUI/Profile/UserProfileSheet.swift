@@ -373,7 +373,7 @@ public struct UserProfileSheet: View {
             pendingRequestId = request.id
             connectionStatus = .pendingSent(requestId: request.id)
             HapticFeedback.success()
-            postToast(String(localized: "profile.toast.requestSent", defaultValue: "Demande envoyee", bundle: .module), isSuccess: true)
+            postToast(String(localized: "profile.toast.requestSent", defaultValue: "Demande envoyée", bundle: .module), isSuccess: true)
         } catch {
             HapticFeedback.error()
             postToast(String(localized: "profile.toast.requestSendFailed", defaultValue: "Impossible d'envoyer la demande", bundle: .module), isSuccess: false)
@@ -388,7 +388,7 @@ public struct UserProfileSheet: View {
         HapticFeedback.medium()
         do {
             try await FriendService.shared.deleteRequest(requestId: requestId)
-            postToast(String(localized: "profile.toast.requestCancelled", defaultValue: "Demande annulee", bundle: .module), isSuccess: true)
+            postToast(String(localized: "profile.toast.requestCancelled", defaultValue: "Demande annulée", bundle: .module), isSuccess: true)
         } catch {
             FriendshipCache.shared.didSendRequest(to: userId, requestId: requestId)
             resolveConnectionStatus()
@@ -411,7 +411,7 @@ public struct UserProfileSheet: View {
         HapticFeedback.success()
         do {
             let _ = try await FriendService.shared.respond(requestId: requestId, accepted: true)
-            postToast(String(localized: "profile.toast.connectionAccepted", defaultValue: "Connexion acceptee", bundle: .module), isSuccess: true)
+            postToast(String(localized: "profile.toast.connectionAccepted", defaultValue: "Connexion acceptée", bundle: .module), isSuccess: true)
         } catch {
             FriendshipCache.shared.rollbackAccept(senderId: userId, requestId: requestId)
             resolveConnectionStatus()
@@ -428,7 +428,7 @@ public struct UserProfileSheet: View {
         HapticFeedback.medium()
         do {
             let _ = try await FriendService.shared.respond(requestId: requestId, accepted: false)
-            postToast(String(localized: "profile.toast.requestDeclined", defaultValue: "Demande refusee", bundle: .module), isSuccess: true)
+            postToast(String(localized: "profile.toast.requestDeclined", defaultValue: "Demande refusée", bundle: .module), isSuccess: true)
         } catch {
             FriendshipCache.shared.rollbackReject(senderId: userId, requestId: requestId)
             resolveConnectionStatus()
@@ -445,7 +445,7 @@ public struct UserProfileSheet: View {
             try await BlockService.shared.blockUser(userId: userId)
             isBlocked = true
             HapticFeedback.medium()
-            postToast(String(localized: "profile.toast.userBlocked", defaultValue: "Utilisateur bloque", bundle: .module), isSuccess: true)
+            postToast(String(localized: "profile.toast.userBlocked", defaultValue: "Utilisateur bloqué", bundle: .module), isSuccess: true)
         } catch {
             postToast(String(localized: "profile.toast.blockFailed", defaultValue: "Impossible de bloquer", bundle: .module), isSuccess: false)
         }
@@ -458,9 +458,9 @@ public struct UserProfileSheet: View {
             isBlocked = false
             resolveConnectionStatus()
             HapticFeedback.light()
-            postToast(String(localized: "profile.toast.userUnblocked", defaultValue: "Utilisateur debloque", bundle: .module), isSuccess: true)
+            postToast(String(localized: "profile.toast.userUnblocked", defaultValue: "Utilisateur débloqué", bundle: .module), isSuccess: true)
         } catch {
-            postToast(String(localized: "profile.toast.unblockFailed", defaultValue: "Impossible de debloquer", bundle: .module), isSuccess: false)
+            postToast(String(localized: "profile.toast.unblockFailed", defaultValue: "Impossible de débloquer", bundle: .module), isSuccess: false)
         }
     }
 
@@ -637,7 +637,7 @@ public struct UserProfileSheet: View {
 
     private var blockedByMeCard: some View {
         VStack(spacing: MeeshySpacing.md) {
-            Text(String(localized: "profile.blocked.byMe", defaultValue: "Vous avez bloque cet utilisateur", bundle: .module))
+            Text(String(localized: "profile.blocked.byMe", defaultValue: "Vous avez bloqué cet utilisateur", bundle: .module))
                 .font(.system(size: MeeshyFont.labelSize, weight: .medium))
                 .foregroundColor(theme.textSecondary)
 
@@ -645,7 +645,7 @@ public struct UserProfileSheet: View {
                 HapticFeedback.medium()
                 Task { await unblockUser() }
             } label: {
-                Text(String(localized: "profile.blocked.unblock", defaultValue: "Debloquer", bundle: .module))
+                Text(String(localized: "profile.blocked.unblock", defaultValue: "Débloquer", bundle: .module))
                     .font(.system(size: MeeshyFont.labelSize, weight: .semibold))
                     .foregroundColor(.white)
                     .padding(.horizontal, MeeshySpacing.xxl)

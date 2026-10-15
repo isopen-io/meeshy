@@ -586,6 +586,19 @@ struct FeedView: View {
                 .contentShape(Rectangle())
         }
         .buttonStyle(.plain)
+        // Les réels dans leur propre fenêtre (iPad) : le fil des publications reste dans la fenêtre principale.
+        .contextMenu {
+            if DetachedWindowOpener.shared.isAvailable {
+                Button {
+                    DetachedWindowOpener.shared.open(.reels(startId: nil))
+                } label: {
+                    Label(
+                        String(localized: "window.detach.reels", defaultValue: "Ouvrir les réels dans une nouvelle fenêtre", bundle: .main),
+                        systemImage: "macwindow.badge.plus"
+                    )
+                }
+            }
+        }
         .accessibilityLabel(String(localized: "feed.header.reels", defaultValue: "Lancer les Réels", bundle: .main))
         .accessibilityIdentifier("feed.header.reels")
     }

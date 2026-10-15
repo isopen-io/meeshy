@@ -158,6 +158,13 @@ nonisolated enum StickerLibraryPaste {
         return StoryStickerLibraryItem(id: id, thumbnail: image)
     }
 
+    /// Les identifiants déjà gardés — ce que « Ajouter à mes stickers » consulte
+    /// pour ne s'offrir que si le sticker reçu n'y est pas (#10630).
+    @MainActor
+    static func libraryIDs() async -> [String] {
+        await store.recentIDs()
+    }
+
     /// Les vignettes actuelles, du plus récent au plus ancien.
     @MainActor
     static func recents() async -> [StoryStickerLibraryItem] {

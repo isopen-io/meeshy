@@ -644,9 +644,9 @@ struct RootView: View {
             // « rejoint » rien.
             UIApplication.shared.open(url)
 
-        case .game(let link):
-            // Une saison ou une semaine de ligue (#9947) : la page du Jeu, posée sur Progression et la fiche.
+        case .game(let link): // Saison ou semaine de ligue (#9947) : la page du Jeu, posée sur Progression et la fiche.
             router.openGame(at: GameNavigationMap.entry(for: link))
+        case .packShop(let domain): router.openPackShop(domain: domain) // La vitrine filtrée (#10632).
 
         case .unresolvedTrackedLink:
             // Le serveur ne connaît pas ce token, ou on n'a pas pu le joindre.
@@ -1094,15 +1094,7 @@ struct RootView: View {
     /// `SettingsActionQueue` (typed offline, replayed on reconnect). Self-
     /// hides when the queue drains. Shown only when the device is online so
     /// it does not stack with `OfflineBanner`.
-    private var pendingSettingsBannerOverlay: some View {
-        VStack(spacing: MeeshySpacing.xs + 2) {
-            PendingSettingsBannerInline()
-            PendingStoryBannerInline()
-            Spacer()
-        }
-        .padding(.top, MeeshySpacing.xxxl + MeeshySpacing.lg)
-        .zIndex(189)
-    }
+    private var pendingSettingsBannerOverlay: some View { RootPendingBanners() }
 
     // MARK: - Themed Background
 
@@ -1403,6 +1395,20 @@ extension View {
 
 /// Inlined alongside `RootView` so the file remains self-contained without
 /// requiring a project.pbxproj entry for a separate component file.
+/// Les deux bandeaux d'attente, montés par les DEUX racines (l'iPad ne les montrait pas : un réglage ou une story
+/// en file hors ligne n'y laissait aucune trace).
+struct RootPendingBanners: View {
+    var body: some View {
+        VStack(spacing: MeeshySpacing.xs + 2) {
+            PendingSettingsBannerInline()
+            PendingStoryBannerInline()
+            Spacer()
+        }
+        .padding(.top, MeeshySpacing.xxxl + MeeshySpacing.lg)
+        .zIndex(189)
+    }
+}
+
 private struct PendingSettingsBannerInline: View {
     @State private var pendingCount: Int = 0
     @State private var subscription: AnyCancellable?

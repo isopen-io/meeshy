@@ -104,7 +104,7 @@ struct CallDetailSheet: View {
     private var redialButtons: some View {
         HStack(spacing: MeeshySpacing.md) {
             redialButton(isVideo: false, title: String(localized: "call.start.audio", defaultValue: "Appel vocal", bundle: .main), icon: "phone.fill")
-            redialButton(isVideo: true, title: String(localized: "call.start.video", defaultValue: "Appel video", bundle: .main), icon: "video.fill")
+            redialButton(isVideo: true, title: String(localized: "call.start.video", defaultValue: "Appel vidéo", bundle: .main), icon: "video.fill")
         }
     }
 
@@ -140,7 +140,7 @@ struct CallDetailSheet: View {
                 icon: record.isVideo ? "video.fill" : "phone.fill",
                 label: String(localized: "calls.detail.type", defaultValue: "Type", bundle: .main),
                 value: record.isVideo
-                    ? String(localized: "calls.type.video", defaultValue: "Appel video", bundle: .main)
+                    ? String(localized: "calls.type.video", defaultValue: "Appel vidéo", bundle: .main)
                     : String(localized: "calls.type.audio", defaultValue: "Appel vocal", bundle: .main)
             )
             detailRow(
@@ -158,7 +158,7 @@ struct CallDetailSheet: View {
             if let data = record.dataLabel {
                 detailRow(
                     icon: "arrow.up.arrow.down",
-                    label: String(localized: "calls.detail.data", defaultValue: "Donnees", bundle: .main),
+                    label: String(localized: "calls.detail.data", defaultValue: "Données", bundle: .main),
                     value: data
                 )
             }

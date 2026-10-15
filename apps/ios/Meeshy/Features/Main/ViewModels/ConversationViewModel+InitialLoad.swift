@@ -417,6 +417,13 @@ extension ConversationViewModel {
     // MARK: - Load Older Messages (infinite scroll)
 
     func loadOlderMessages() async {
+        await loadOlderMessages(anticipated: false)
+    }
+
+    /// `anticipated` : la page part d'elle-même, sans geste, derrière la précédente. Elle n'en relance pas
+    /// d'autre : chaque page terminée en enchaînait une nouvelle 150 ms plus tard, sans défilement et sans recul
+    /// sur erreur — une remontée unique téléchargeait alors tout l'historique, et le gardait en mémoire.
+    func loadOlderMessages(anticipated: Bool) async {
         // Defensive reset: isProgrammaticScroll can get stuck true when a
         // programmatic scroll is interrupted (e.g. view transition cancellation).
         // Since loadOlderMessages is only invoked by manual user scrolling,
@@ -515,13 +522,13 @@ extension ConversationViewModel {
         // immediately kick off the NEXT page in the background so it's
         // ready by the time the scroll reaches the new edge. This eliminates
         // the "hit the wall and wait" stutter on fast scrolls.
-        if hasOlderMessages, !isCurrentlyNearBottom {
+        if !anticipated, hasOlderMessages, !isCurrentlyNearBottom {
             Task { [weak self] in
                 // Small delay to let the current batch render and the
                 // scroll position stabilize before we start the next fetch.
                 try? await Task.sleep(for: .milliseconds(150))
                 guard let self, !self.isLoadingOlder else { return }
-                await self.loadOlderMessages()
+                await self.loadOlderMessages(anticipated: true)
             }
         }
     }

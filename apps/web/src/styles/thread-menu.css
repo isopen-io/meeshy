@@ -193,6 +193,15 @@
 }
 
 /*
+ * LE DOUBLE TOUCHER D'UNE RANGÉE OUVRE LA BARRE DE RÉACTION, IL NE ZOOME PAS (#10599) —
+ * `manipulation` garde le défilement et le pincement, et retire le zoom au
+ * double toucher que Safari iOS applique encore à une page `width=device-width`.
+ */
+[role='article'][data-row] {
+  touch-action: manipulation;
+}
+
+/*
  * L'ICÔNE « RÉPONDRE » DU POINTEUR FIN (#8899, `message-swipe.tsx`) — là où
  * le glissé n'existe pas. ABSENTE sans pointeur fin (doigt, coque Android) :
  * `display: none` retire aussi la halte de tabulation. Au pointeur fin, elle

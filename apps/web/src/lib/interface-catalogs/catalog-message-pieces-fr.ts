@@ -17,6 +17,11 @@ const fr = {
   'message.piece.deleted': 'Média supprimé',
   'message.piece.deleteFailed': 'Le média n’a pas pu être supprimé',
   'message.piece.preview': 'Médias du message',
+  'message.sticker.add': 'Ajouter à mes stickers',
+  'message.sticker.inLibrary': 'Dans mes stickers',
+  'message.sticker.viewPack': 'Voir le pack',
+  'message.sticker.added': 'Sticker ajouté à votre bibliothèque',
+  'message.sticker.addFailed': 'Le sticker n’a pas pu être ajouté',
   'message.edit.action': 'Modifier',
   'message.edit.banner': 'Modification',
   'message.edit.cancel': 'Annuler la modification',
@@ -37,6 +42,13 @@ const fr = {
   'message.delete.partial': '{failed} messages sur {count} n’ont pas pu être supprimés',
   'message.delete.partialOne': 'Un message sur {count} n’a pas pu être supprimé',
   'message.reactors.empty': 'Aucune réaction',
+  'message.pin.action': 'Épingler',
+  'message.unpin.action': 'Désépingler',
+  'message.pin.done': 'Message épinglé',
+  'message.unpin.done': 'Message désépinglé',
+  'message.pin.failed': 'Le message n’a pas pu être épinglé',
+  'message.unpin.failed': 'Le message n’a pas pu être désépinglé',
+  'message.report.title': 'Signaler ce message',
 } as const;
 
 export default fr;

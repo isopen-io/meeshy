@@ -1,5 +1,6 @@
 import type { DeliverFileOutcome } from '@/lib/media/deliver-file';
 import { browserFileDeliveryHost, type FileDeliveryHost } from '@/lib/media/file-delivery-host';
+import { browserClipboard, copyPlainText, type ClipboardEnv } from '@/lib/view/copy-text';
 
 /**
  * **ENREGISTRER UN TEXTE COMME FICHIER** (#10232) — l'export `store.app_events` se télécharge. Le texte est déjà là
@@ -36,12 +37,11 @@ function anchorFirst(host: FileDeliveryHost): FileDeliveryHost {
   return document === undefined || createObjectURL === undefined || revokeObjectURL === undefined ? host : { document, createObjectURL, revokeObjectURL };
 }
 
-/** Copie dans le presse-papiers ; `false` quand il est indisponible ou refusé (contexte non sûr, permission). */
-export async function copyText(text: string): Promise<boolean> {
-  try {
-    await navigator.clipboard.writeText(text);
-    return true;
-  } catch {
-    return false;
-  }
+/**
+ * Copie dans le presse-papiers, par le chemin de toutes les copies de l'app (#10591) : un `writeText` refusé (la
+ * WebView Android, geste plus « frais » — #8937) ou absent retombe sur la copie historique. `false` seulement quand
+ * les deux échouent.
+ */
+export async function copyText(text: string, env: ClipboardEnv = browserClipboard()): Promise<boolean> {
+  return (await copyPlainText(text, env)) === 'copied';
 }

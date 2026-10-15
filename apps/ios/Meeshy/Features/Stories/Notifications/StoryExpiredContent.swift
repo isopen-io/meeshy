@@ -41,6 +41,13 @@ public struct StoryExpiredContent: View {
     public let context: StoryNotificationContext
 
     @Environment(\.dismiss) private var dismiss
+    @Environment(\.isPresented) private var isPresented
+    @Environment(\.meeshyPanelDismiss) private var panelDismiss
+    /// Retour opérant dans les trois contextes : pile iPhone, panneau droit iPad — à la racine de sa pile,
+    /// où la fermeture de l’environnement ne fait rien et laissait la colonne sur son chargeur —, et feuille.
+    private var back: PanelBackAction {
+        PanelBackAction(isPresented: isPresented, dismiss: dismiss, panelDismiss: panelDismiss)
+    }
 
     @State private var background: Color = StoryBackgroundPalette.randomBackgroundColorAsColor()
 
@@ -166,7 +173,7 @@ public struct StoryExpiredContent: View {
             // Dismiss first so the composer presents from RootView with a
             // clean navigation stack — `.fullScreenCover` over `.fullScreenCover`
             // animates poorly on iOS 16/17.
-            dismiss()
+            back()
             NotificationCenter.default.post(name: .openStoryComposer, object: nil)
         } label: {
             Text("notifications.story.expired.cta.create")
@@ -186,7 +193,7 @@ public struct StoryExpiredContent: View {
     private var backLink: some View {
         let foreground = Self.foregroundOnBackground(background)
         Button {
-            dismiss()
+            back()
         } label: {
             Text("notifications.story.expired.back")
                 .font(.subheadline)

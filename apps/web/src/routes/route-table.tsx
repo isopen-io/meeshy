@@ -204,7 +204,16 @@ export const ROUTES = {
   home: { pattern: '/', screen: () => (__SHELL__ ? import('@/routes/home-shell') : import('@/routes/home')) },
   /* LA LISTE DES CONVERSATIONS déménage sur `/chats` (#10002, décision porteur
      du 2026-10-10) ; les adresses de fil (`/c/…`) ne changent pas. */
-  list: { pattern: '/chats', screen: () => import('@/routes/conversations') },
+  /* Le menu d'une ligne et les puces (#10593) parlent leur catalogue, chargé
+     AVEC l'écran — le cadre du grand écran passe par ce même chargeur. */
+  list: {
+    pattern: '/chats',
+    screen: () =>
+      Promise.all([
+        import('@/routes/conversations'),
+        import('@/lib/i18n-row-menu-catalog').then((m) => m.loadRowMenuCatalog(currentInterfaceLanguage())),
+      ]).then(([screen]) => screen),
+  },
   thread: { pattern: '/c/$conversation', screen: () => import('@/routes/thread') },
   /* NOUVELLE CONVERSATION (#5652) — nomenclature legacy reprise (D-5) :
      `apps/web/app/conversations/new` porte déjà ce chemin. */
@@ -709,7 +718,7 @@ export function DeferredSplitFrame(props: FrameProps): ReactNode {
 
 /* LE CATALOGUE D'INTERFACE (#6206) — chaque écran l'attend, en parallèle de
    son chunk : ce qui s'y rend lit ses libellés de façon synchrone. */
-export const { Router, Link, href, navigate } = createRouter(ROUTES, NotFound, {
+export const { Router, Link, href, navigate, preload } = createRouter(ROUTES, NotFound, {
   screenPrerequisite: () => loadInterfaceCatalog(currentInterfaceLanguage()),
   /* SUR GRAND ÉCRAN, LA LISTE ET LE FIL CÔTE À CÔTE (#10073, D-185) — sous
      1024 px, le cadre rend l'écran routé tel quel. */

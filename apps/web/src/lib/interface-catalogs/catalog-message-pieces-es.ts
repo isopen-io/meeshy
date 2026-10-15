@@ -13,6 +13,11 @@ const es = {
   'message.piece.deleted': 'Archivo eliminado',
   'message.piece.deleteFailed': 'No se pudo eliminar el archivo',
   'message.piece.preview': 'Archivos del mensaje',
+  'message.sticker.add': 'Añadir a mis stickers',
+  'message.sticker.inLibrary': 'En mis stickers',
+  'message.sticker.viewPack': 'Ver el pack',
+  'message.sticker.added': 'Sticker añadido a tu biblioteca',
+  'message.sticker.addFailed': 'No se pudo añadir el sticker',
   'message.edit.action': 'Editar',
   'message.edit.banner': 'Edición',
   'message.edit.cancel': 'Cancelar la edición',
@@ -33,6 +38,13 @@ const es = {
   'message.delete.partial': 'No se pudieron eliminar {failed} de {count} mensajes',
   'message.delete.partialOne': 'No se pudo eliminar 1 de {count} mensajes',
   'message.reactors.empty': 'Ninguna reacción',
+  'message.pin.action': 'Fijar',
+  'message.unpin.action': 'Desfijar',
+  'message.pin.done': 'Mensaje fijado',
+  'message.unpin.done': 'Mensaje desfijado',
+  'message.pin.failed': 'No se pudo fijar el mensaje',
+  'message.unpin.failed': 'No se pudo desfijar el mensaje',
+  'message.report.title': 'Denunciar este mensaje',
 } satisfies MessagePiecesCatalog;
 
 export default es;
