@@ -49,7 +49,12 @@ extension UserProfileSheet {
 
     var bannerSection: some View {
         ZStack(alignment: .bottom) {
-            if let bannerURL = displayUser.bannerURL, !bannerURL.isEmpty {
+            if let design = shownBannerDesign {
+                // #10632 — une bannière de design PRIME sur l'image `banner` ; décorative, rien ne s'ouvre en plein écran.
+                BannerDesignView(design: design, isDark: theme.mode.isDark, accentHex: resolvedAccent)
+                    .frame(height: ProfileHeaderMetrics.expandedBanner)
+                    .accessibilityHidden(true)
+            } else if let bannerURL = displayUser.bannerURL, !bannerURL.isEmpty {
                 // CachedAsyncImage (DiskCacheStore persistant) plutôt qu'AsyncImage :
                 // la bannière n'est téléchargée qu'une fois par installation, et le
                 // resolver interne accepte aussi les chemins relatifs du gateway.
@@ -89,6 +94,16 @@ extension UserProfileSheet {
             gameSection.build(userId, displayUser.displayName ?? displayUser.username)
                 .allowsHitTesting(false)
         }
+    }
+
+    /// La bannière de design équipée, lue du catalogue embarqué ; `nil` ⇒ rendu historique (image, puis dégradé).
+    var shownBannerDesign: AppearanceDesign? {
+        isBlockedByTarget ? nil : ProfileDecorResolver.banner(displayUser.profileDecor?.banner)
+    }
+
+    /// Le contour d'avatar équipé ; `nil` ⇒ avatar nu, comme avant.
+    var shownAvatarRing: AvatarRingDesign? {
+        isBlockedByTarget ? nil : ProfileDecorResolver.ring(displayUser.profileDecor?.avatarRing)
     }
 
     var defaultBannerGradient: some View {
@@ -183,6 +198,7 @@ extension UserProfileSheet {
             onViewStory: (showRing && ringState != .none) ? onViewStory : nil,
             onMoodTap: shownMoodEmoji == nil ? nil : onMoodTap
         )
+        .avatarRing(shownAvatarRing, avatarSize: 80)
     }
 
     /// L'humeur peinte sur l'avatar — le grand en-tête ET la barre compacte
