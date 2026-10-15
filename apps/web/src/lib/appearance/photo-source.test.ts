@@ -74,3 +74,24 @@ describe('charger la photo d’un fond choisi ailleurs (autre appareil, cache vi
     expect(calls).toHaveLength(0);
   });
 });
+
+describe('une pièce chiffrée ne se peint jamais (#10665)', () => {
+  test('la galerie en cache : Signature, jamais l’adresse du chiffré', () => {
+    expect(photoSourceOf(withGallery('c1', { id: ID, fileUrl: 'https://cdn.x/p.enc', isEncrypted: true }), 'c1', ID)).toBeNull();
+  });
+
+  test('les métadonnées : Signature aussi, et le serveur ne reçoit que l’identifiant', async () => {
+    const seen: string[] = [];
+    const deps = {
+      source: 'gateway',
+      transport: {
+        request: async (request: { path: string }) => {
+          seen.push(request.path);
+          return { ok: true, data: { attachment: { id: ID, fileUrl: 'https://cdn.x/p.enc', isEncrypted: true } } };
+        },
+      },
+    } as unknown as ConversationsDeps;
+    expect(await loadPhotoSource({ queryClient: new QueryClient(), deps, conversationId: 'c1', attachmentId: ID })).toBeNull();
+    expect(seen).toEqual([`/api/v1/attachments/${ID}/metadata`]);
+  });
+});
