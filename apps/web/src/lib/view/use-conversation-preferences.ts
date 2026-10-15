@@ -5,6 +5,9 @@ import { CONVERSATIONS_QUERY_KEY, conversationQueryKey, findCachedConversation }
 import type { Conversation } from '@/lib/api/types';
 import { useColorScheme } from '@/lib/use-color-scheme';
 
+/** La liste (`['conversations']`) ou la fiche (`['conversations', id]`) — jamais une page de messages (`['conversations', id, 'messages']`). */
+const carriesPreferences = (key: readonly unknown[]): boolean => key[0] === CONVERSATIONS_QUERY_KEY[0] && key.length <= 2;
+
 /**
  * LES PRÉFÉRENCES DU LECTEUR SUR UNE CONVERSATION, LUES DU CACHE (#10664) — pour
  * un écran qui ne porte pas l'objet conversation (les favoris) mais veut
@@ -19,7 +22,7 @@ export function useConversationPreferences(): (conversationId: string) => unknow
   useEffect(
     () =>
       queryClient.getQueryCache().subscribe((event) => {
-        if (event.type === 'updated' && event.query.queryKey[0] === CONVERSATIONS_QUERY_KEY[0]) setRevision((value) => value + 1);
+        if (event.type === 'updated' && event.action.type === 'success' && carriesPreferences(event.query.queryKey)) setRevision((value) => value + 1);
       }),
     [queryClient],
   );
