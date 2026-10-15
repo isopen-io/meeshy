@@ -39,6 +39,7 @@ import { Glyph, GlyphSvg } from './glyph';
 import { MEDIA_GLYPHS } from './glyphs-media';
 import { MaskedAttachment } from './masked-attachment';
 import { MediaGrid } from './media-grid';
+import { AttachmentReactionBadge } from './attachment-reaction-badge';
 import { VoiceFileName, VoiceTranscribeZone } from './voice-bubble-parts';
 import { VeilRevealContext, revealedAttachment, useAttachmentMasked } from './view-once-opened';
 
@@ -422,6 +423,8 @@ function VoiceAttachment({
       </div>
 
       <VoiceFileName originalName={attachment.originalName ?? ''} />
+      {/* LES RÉACTIONS DE LA PISTE (#10745) — la pastille partagée, au coin bas-gauche de la carte, comme sur une photo (`FocalAttachmentBlock.reactionsBadge`, toutes natures). */}
+      <AttachmentReactionBadge attachment={attachment} />
       {onDemand.canTranscribe ? (
         <VoiceTranscribeZone language={uiLanguage} busy={onDemand.transcribing} notice={onDemand.notice} onTranscribe={onDemand.transcribe} />
       ) : null}

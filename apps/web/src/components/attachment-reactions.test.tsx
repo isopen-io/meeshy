@@ -101,6 +101,25 @@ describe('pièce réagie SEULE', () => {
   });
 });
 
+describe('un vocal réagi montre sa pastille dans sa carte (#10745)', () => {
+  const [reacted] = piecesOf('mx-piece-reactions') as [Attachment];
+  const voice = (extra: Partial<Attachment> = {}): Attachment => ({ ...reacted, id: 'a-voice', mimeType: 'audio/wav', fileUrl: 'https://cdn.example/v.wav', ...extra });
+
+  test('la pastille vit DANS la carte du vocal, avec ses émojis et son total', () => {
+    const host = mount([voice()], 'box');
+    const card = host.querySelector<HTMLElement>('[data-voice-card]')!;
+    const badge = card.querySelector<HTMLElement>('[data-attachment-reactions="a-voice"]');
+    expect(badge).not.toBeNull();
+    expect(badge!.textContent).toContain('🔥');
+    expect(badge!.getAttribute('data-mine')).toBe('true');
+  });
+
+  test('un vocal sans réaction ne monte aucune pastille ; un vocal voilé n’en annonce aucune', () => {
+    expect(badgesOf(mount([voice({ reactionSummary: {}, currentUserReactions: [] })], 'box')).length).toBe(0);
+    expect(badgesOf(mount([voice({ isBlurred: true })], 'box')).length).toBe(0);
+  });
+});
+
 describe('une pièce PROTÉGÉE n’annonce rien, pas même un compte (leçon 275)', () => {
   test('floutée et réagie ⇒ aucune pastille', () => {
     const [reacted, quiet] = piecesOf('mx-piece-reactions') as [Attachment, Attachment];
