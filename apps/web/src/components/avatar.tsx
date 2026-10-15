@@ -216,12 +216,24 @@ type AvatarProps = {
   ring?: AvatarRingDesign | null;
 };
 
+/**
+ * L'anneau de story. Dans l'empreinte d'un contour, il touche l'avatar : peint
+ * de la couleur même d'un avatar à initiales, il s'y fondait (#10739). Un liseré
+ * d'1 px de la surface le sépare alors de l'avatar — visible quelle que soit la
+ * couleur de ce dernier. Hors contour, le rendu d'avant reste intact.
+ */
+function storyRingShadow({ stroke, unseen, color, separated }: { readonly stroke: number; readonly unseen: boolean; readonly color: string; readonly separated: boolean }): string {
+  const ink = unseen ? color : `color-mix(in srgb, ${color} 40%, transparent)`;
+  if (!separated || !unseen) return `inset 0 0 0 ${stroke}px ${ink}`;
+  return `inset 0 0 0 ${stroke - 1}px ${ink}, inset 0 0 0 ${stroke}px var(--color-ios-surface)`;
+}
+
 export function Avatar(props: AvatarProps) {
   const { ring, ...bare } = props;
   if (ring !== undefined && ring !== null) {
     return (
       <AvatarRingFrame ring={ring} size={props.size}>
-        {renderAvatar({ ...bare, size: ringedAvatarSize(props.size, props.storyRing !== undefined) })}
+        {renderAvatar({ ...bare, size: ringedAvatarSize(props.size, props.storyRing !== undefined) }, true)}
       </AvatarRingFrame>
     );
   }
@@ -247,7 +259,7 @@ function renderAvatar({
   moodStill = false,
   moodAuthorId,
   redundant,
-}: Omit<AvatarProps, 'ring'>) {
+}: Omit<AvatarProps, 'ring'>, storyRingSeparated = false) {
   const showsImage = src !== undefined && src !== '';
   const resolvedSrc = showsImage ? attachmentSrc(src) : undefined;
   const dot = here ? size * hereDotRatio : size * PRESENCE_DOT_RATIO;
@@ -350,9 +362,7 @@ function renderAvatar({
           className="pointer-events-none absolute rounded-chip"
           style={{
             inset: -(railRingBox(size) - size) / 2,
-            boxShadow: `inset 0 0 0 ${railStroke(size, storyRing.unseen)}px ${
-              storyRing.unseen ? color : `color-mix(in srgb, ${color} 40%, transparent)`
-            }`,
+            boxShadow: storyRingShadow({ stroke: railStroke(size, storyRing.unseen), unseen: storyRing.unseen, color, separated: storyRingSeparated }),
           }}
           aria-hidden
         />

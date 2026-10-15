@@ -110,6 +110,15 @@ describe('le contour dans l’empreinte de l’avatar (#10713, #10714)', () => {
     expect(html).toContain('width:80px;height:80px');
   });
 
+  test('l’anneau de story d’un avatar à initiales reste visible à côté du contour : un liseré de surface le sépare de l’avatar (#10739)', async () => {
+    const { Avatar } = await import('./avatar');
+    const style = (html: string) => /data-story-ring="unseen"[^>]*style="([^"]*)"/.exec(html)?.[1] ?? '';
+    const ringed = style(renderToStaticMarkup(<Avatar initials="AB" color="#7B9FB0" size={44} ring={filet} storyRing={{ entryStoryId: 'p1', unseen: true }} />));
+    expect(ringed).toContain('var(--color-ios-surface)');
+    const bare = style(renderToStaticMarkup(<Avatar initials="AB" color="#7B9FB0" size={44} storyRing={{ entryStoryId: 'p1', unseen: true }} />));
+    expect(bare).not.toContain('var(--color-ios-surface)');
+  });
+
   test('sans contour, l’avatar est inchangé', async () => {
     const { Avatar } = await import('./avatar');
     expect(renderToStaticMarkup(<Avatar initials="AB" color="#6366F1" size={44} ring={null} />)).toBe(renderToStaticMarkup(<Avatar initials="AB" color="#6366F1" size={44} />));
