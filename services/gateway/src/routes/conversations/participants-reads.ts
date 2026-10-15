@@ -33,6 +33,8 @@ import {
   loadMostActiveParticipants
 } from './participants-presence';
 import { isGuestViewer, sendAccountRequired } from '../../services/guests/guestMemberVisibility';
+import { participantProfileDecor } from '../../services/appearance/profileDecor';
+import { startupPackIndex } from '../../services/packs/PackIndex';
 const logger = enhancedLogger.child({ module: 'ConversationParticipantReadRoutes' });
 
 /**
@@ -273,11 +275,16 @@ export function registerParticipantReadRoutes(
       // ici — et c'est précisément parce qu'elle n'existait qu'ici que les deux
       // routes de MUTATION (invite, changement de rang) passaient un rang Prisma
       // brut sans gate. La fabrique partagée est désormais la source unique.
-      const formattedParticipants = paginatedParticipants.map(participant =>
-        serializeConversationParticipant(participant, {
-          presence: presenceFor(presenceViewer, presenceVis, participant.userId)
-        })
-      );
+      const formattedParticipants = paginatedParticipants.map(participant => {
+        const profileDecor = participantProfileDecor(startupPackIndex(), participant.user);
+        return {
+          ...serializeConversationParticipant(participant, {
+            presence: presenceFor(presenceViewer, presenceVis, participant.userId)
+          }),
+          // #10713 — le contour équipé, comme la liste et la fiche de conversation.
+          ...(profileDecor === undefined ? {} : { profileDecor })
+        };
+      });
 
       // Une page « en ligne » ne SERT que ce qu'elle montre en ligne : ce que
       // la porte vient de masquer (préférence, blocage, désactivation) en
