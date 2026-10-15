@@ -45,7 +45,6 @@ final class FileSizeBudgetGuardTests: XCTestCase {
     /// toujours. Chaque découpe est un lot à elle seule — `CallManager.swift`
     /// (6462 lignes) n'était pas un lot d'UI/UX ; il a eu le sien (2026-10-02).
     private static let legacyOverBudget: Set<String> = [
-        "BubbleStandardLayout.swift",
         "ConversationDashboardView.swift",
         "ConversationListView+Overlays.swift",
         "ConversationListView.swift",
@@ -609,7 +608,14 @@ final class FileSizeBudgetGuardTests: XCTestCase {
     // `StoryViewerView+Content.swift` vers `StoryViewerView+Navigation.swift`
     // AVANT d'y recevoir la télémétrie de lecture : extraire d'abord, ajouter
     // ensuite. Le plafond reprend exactement le mou que l'extraction ouvre.
-    private static let legacyLineCeiling = 34_302
+    //
+    // #10678 — 34 302 → 32 905 (−1 397). `BubbleStandardLayout.swift` (1 396
+    // lignes) se découpe par responsabilité en quatre extensions
+    // (`+TextBubble`, `+Footer`, `+Attachments`, `+Reveal`), sans changer une
+    // ligne de comportement : le type retombe à 814 lignes, chaque extension
+    // est sous le budget. Il sort de `legacyOverBudget` ENTIER, et le plafond
+    // baisse d'exactement ce qu'il pesait à la sortie.
+    private static let legacyLineCeiling = 32_905
 
     // MARK: - Règle 1 — pas de 43ᵉ
 

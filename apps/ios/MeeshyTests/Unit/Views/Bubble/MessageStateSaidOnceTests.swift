@@ -81,7 +81,7 @@ final class MessageStateSaidOnceTests: XCTestCase {
             .deletingLastPathComponent()  // MeeshyTests
             .deletingLastPathComponent()  // ios
             .appendingPathComponent("Meeshy/Features/Main")
-        return try String(contentsOf: root.appendingPathComponent(relative), encoding: .utf8)
+        return try AppSourceGuard.text(at: root.appendingPathComponent(relative))
     }
 
     func test_bubbleBlur_isGatedOnTheVeil_notOnTheBlurFlagAlone() throws {

@@ -29,7 +29,7 @@ final class BubbleWindowMetricsTests: XCTestCase {
             .deletingLastPathComponent()
             .deletingLastPathComponent()
             .appendingPathComponent(relativePath)
-        return try String(contentsOf: url, encoding: .utf8)
+        return try AppSourceGuard.text(at: url)
     }
 
     /// Comment lines are stripped before matching: the doc-comments deliberately

@@ -447,6 +447,10 @@
 		229CA02CA0FB543B2AD6E001 /* CallZoomLensControls.swift in Sources */ = {isa = PBXBuildFile; fileRef = 6576C186094DC919819EBA7E /* CallZoomLensControls.swift */; };
 		22CDB3361DD227557D81D429 /* ContentFetchFailure.swift in Sources */ = {isa = PBXBuildFile; fileRef = 74F63518D78D73B02CDFD9A1 /* ContentFetchFailure.swift */; };
 		22CFA759ADF840E2C53911AC /* BubbleStandardLayout+Accessibility.swift in Sources */ = {isa = PBXBuildFile; fileRef = 3CD5D363D3F601A1FF685C54 /* BubbleStandardLayout+Accessibility.swift */; };
+		A10678E0000000000000B001 /* BubbleStandardLayout+TextBubble.swift in Sources */ = {isa = PBXBuildFile; fileRef = A10678E0000000000000F001 /* BubbleStandardLayout+TextBubble.swift */; };
+		A10678E0000000000000B002 /* BubbleStandardLayout+Footer.swift in Sources */ = {isa = PBXBuildFile; fileRef = A10678E0000000000000F002 /* BubbleStandardLayout+Footer.swift */; };
+		A10678E0000000000000B003 /* BubbleStandardLayout+Attachments.swift in Sources */ = {isa = PBXBuildFile; fileRef = A10678E0000000000000F003 /* BubbleStandardLayout+Attachments.swift */; };
+		A10678E0000000000000B004 /* BubbleStandardLayout+Reveal.swift in Sources */ = {isa = PBXBuildFile; fileRef = A10678E0000000000000F004 /* BubbleStandardLayout+Reveal.swift */; };
 		A10628E0000000000000B001 /* BubbleStandardLayout+EmojiReply.swift in Sources */ = {isa = PBXBuildFile; fileRef = A10628E0000000000000F001 /* BubbleStandardLayout+EmojiReply.swift */; };
 		22E8A0C28416FCA912A313A5 /* StickerLibraryPaste.swift in Sources */ = {isa = PBXBuildFile; fileRef = 5223DCF6282006B05A2B2BC7 /* StickerLibraryPaste.swift */; };
 		22F5694D5990F2274FA5145C /* MentionComposerController.swift in Sources */ = {isa = PBXBuildFile; fileRef = 5E8C235F369843E99EF9B6DB /* MentionComposerController.swift */; };
@@ -4114,6 +4118,10 @@
 		A10628E0000000000000F002 /* BubbleEmojiReplyRoutingTests.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = BubbleEmojiReplyRoutingTests.swift; sourceTree = "<group>"; };
 		3CC68D4AFFD66F583FE85A6B /* MeeshyUIExports.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = MeeshyUIExports.swift; sourceTree = "<group>"; };
 		3CD5D363D3F601A1FF685C54 /* BubbleStandardLayout+Accessibility.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = "BubbleStandardLayout+Accessibility.swift"; sourceTree = "<group>"; };
+		A10678E0000000000000F001 /* BubbleStandardLayout+TextBubble.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = "BubbleStandardLayout+TextBubble.swift"; sourceTree = "<group>"; };
+		A10678E0000000000000F002 /* BubbleStandardLayout+Footer.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = "BubbleStandardLayout+Footer.swift"; sourceTree = "<group>"; };
+		A10678E0000000000000F003 /* BubbleStandardLayout+Attachments.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = "BubbleStandardLayout+Attachments.swift"; sourceTree = "<group>"; };
+		A10678E0000000000000F004 /* BubbleStandardLayout+Reveal.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = "BubbleStandardLayout+Reveal.swift"; sourceTree = "<group>"; };
 		A10628E0000000000000F001 /* BubbleStandardLayout+EmojiReply.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = "BubbleStandardLayout+EmojiReply.swift"; sourceTree = "<group>"; };
 		3CF1AD31E76E98E8A53BBEE0 /* CrashDiagnosticsManagerTests.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = CrashDiagnosticsManagerTests.swift; sourceTree = "<group>"; };
 		3D26B7574BDDF9768A70AA77 /* CameraRecordingReadinessTests.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = CameraRecordingReadinessTests.swift; sourceTree = "<group>"; };
@@ -10615,6 +10623,10 @@
 				DC5625A3FFF7FFD71902EC57 /* BubbleSecondaryContent.swift */,
 				867F7A4CB879D7390F12F046 /* BubbleStandardLayout.swift */,
 				3CD5D363D3F601A1FF685C54 /* BubbleStandardLayout+Accessibility.swift */,
+				A10678E0000000000000F001 /* BubbleStandardLayout+TextBubble.swift */,
+				A10678E0000000000000F002 /* BubbleStandardLayout+Footer.swift */,
+				A10678E0000000000000F003 /* BubbleStandardLayout+Attachments.swift */,
+				A10678E0000000000000F004 /* BubbleStandardLayout+Reveal.swift */,
 				A10628E0000000000000F001 /* BubbleStandardLayout+EmojiReply.swift */,
 				2F4937F432D49B989DB5F1DA /* BubbleStandardLayout+Media.swift */,
 				5B6ADF42360F752DF843F756 /* BubbleSticker.swift */,
@@ -11262,6 +11274,10 @@
 				2F026B6387C2C5A36A79476E /* BubbleReactionsOverlay.swift in Sources */,
 				7D6FB68FB50AEB4C41096ACC /* BubbleSecondaryContent.swift in Sources */,
 				22CFA759ADF840E2C53911AC /* BubbleStandardLayout+Accessibility.swift in Sources */,
+				A10678E0000000000000B001 /* BubbleStandardLayout+TextBubble.swift in Sources */,
+				A10678E0000000000000B002 /* BubbleStandardLayout+Footer.swift in Sources */,
+				A10678E0000000000000B003 /* BubbleStandardLayout+Attachments.swift in Sources */,
+				A10678E0000000000000B004 /* BubbleStandardLayout+Reveal.swift in Sources */,
 				A10628E0000000000000B001 /* BubbleStandardLayout+EmojiReply.swift in Sources */,
 				1FD88C667076A5F2CF7815E8 /* BubbleStandardLayout+Media.swift in Sources */,
 				523219510BBAFB6B2E3927F4 /* BubbleStandardLayout.swift in Sources */,

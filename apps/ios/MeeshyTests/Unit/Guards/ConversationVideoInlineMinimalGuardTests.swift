@@ -43,7 +43,7 @@ final class ConversationVideoInlineMinimalGuardTests: XCTestCase {
 
     private func stripped(_ relativePath: String) throws -> String {
         let url = appRoot.appendingPathComponent(relativePath)
-        return AppSourceGuard.stripComments(try String(contentsOf: url, encoding: .utf8))
+        return AppSourceGuard.stripComments(try AppSourceGuard.text(at: url))
     }
 
     /// Les appels `MeeshyVideoPlayer(` d'une source, chacun jusqu'à la

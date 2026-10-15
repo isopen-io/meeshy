@@ -272,7 +272,7 @@ final class ConversationViewLayerErasureSourceGuardTests: XCTestCase {
             .deletingLastPathComponent()   // .../MeeshyTests
             .deletingLastPathComponent()   // .../apps/ios
             .appendingPathComponent(relativePath)
-        return try String(contentsOf: url, encoding: .utf8)
+        return try AppSourceGuard.text(at: url)
     }
 
     /// Maillon → fichier. Chaque entrée doit se déclarer en `AnyView`.
@@ -289,7 +289,7 @@ final class ConversationViewLayerErasureSourceGuardTests: XCTestCase {
         ("private func contentStack(shouldBlur: Bool) -> AnyView",
          "Meeshy/Features/Main/Views/Bubble/BubbleStandardLayout.swift"),
         ("private var bubbleInnerContent: AnyView",
-         "Meeshy/Features/Main/Views/Bubble/BubbleStandardLayout.swift"),
+         "Meeshy/Features/Main/Views/Bubble/BubbleStandardLayout+TextBubble.swift"),
         ("var visualMediaGrid: AnyView",
          "Meeshy/Features/Main/Views/Bubble/BubbleStandardLayout+Media.swift"),
         ("func mediaWithReplyContainer(reply: BubbleContent.Reply) -> AnyView",

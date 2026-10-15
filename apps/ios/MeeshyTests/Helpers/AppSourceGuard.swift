@@ -143,6 +143,25 @@ enum AppSourceGuard {
         return [principal] + parties + compagnons.map(appRoot.appendingPathComponent)
     }
 
+    /// Lit un fichier ; `BubbleStandardLayout.swift` se lit comme sa FAMILLE
+    /// (`BubbleStandardLayout+*.swift`, #10678) : le type a été découpé par
+    /// responsabilité et une garde ne doit pas rougir parce que du code a
+    /// changé de fichier. Le SUPPRIMER reste rouge.
+    static func text(at url: URL) throws -> String {
+        guard url.lastPathComponent == "BubbleStandardLayout.swift" else {
+            return try String(contentsOf: url, encoding: .utf8)
+        }
+        let dossier = url.deletingLastPathComponent()
+        let parties = ((try? FileManager.default.contentsOfDirectory(
+            at: dossier, includingPropertiesForKeys: nil)) ?? [])
+            .filter { $0.pathExtension == "swift"
+                && $0.lastPathComponent.hasPrefix("BubbleStandardLayout+") }
+            .sorted { $0.lastPathComponent < $1.lastPathComponent }
+        return try ([url] + parties)
+            .map { try String(contentsOf: $0, encoding: .utf8) }
+            .joined(separator: "\n")
+    }
+
     static func unit(_ relativeToAppRoot: String,
                      alsoIncluding compagnons: [String] = []) throws -> String {
         try unitURLs(relativeToAppRoot, alsoIncluding: compagnons)

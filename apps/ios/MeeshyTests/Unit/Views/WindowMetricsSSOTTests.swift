@@ -32,7 +32,7 @@ final class WindowMetricsSSOTTests: XCTestCase {
             .deletingLastPathComponent()
             .deletingLastPathComponent()
             .appendingPathComponent(relativePath)
-        return try String(contentsOf: url, encoding: .utf8)
+        return try AppSourceGuard.text(at: url)
     }
 
     /// Comment lines are stripped before matching: the doc-comments deliberately
@@ -254,7 +254,7 @@ final class WindowMetricsSSOTTests: XCTestCase {
 
         for case let relativePath as String in walker where relativePath.hasSuffix(".swift") {
             let code = codeLines(
-                try String(contentsOf: appRoot.appendingPathComponent(relativePath), encoding: .utf8)
+                try AppSourceGuard.text(at: appRoot.appendingPathComponent(relativePath))
             )
             if code.contains("UIScreen.main.bounds") {
                 found.insert((relativePath as NSString).lastPathComponent)
@@ -289,7 +289,7 @@ final class WindowMetricsSSOTTests: XCTestCase {
 
         for case let relativePath as String in walker where relativePath.hasSuffix(".swift") {
             let code = codeLines(
-                try String(contentsOf: appRoot.appendingPathComponent(relativePath), encoding: .utf8)
+                try AppSourceGuard.text(at: appRoot.appendingPathComponent(relativePath))
             )
             if code.contains("connectedScenes") {
                 found.insert((relativePath as NSString).lastPathComponent)

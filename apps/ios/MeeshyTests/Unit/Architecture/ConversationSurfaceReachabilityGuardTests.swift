@@ -310,7 +310,7 @@ final class ConversationSurfaceReachabilityGuardTests: XCTestCase {
     /// dépôt — ne doit pas la ressusciter en la faisant compter pour une
     /// référence.
     private static func code(of url: URL) -> String? {
-        guard let raw = try? String(contentsOf: url, encoding: .utf8) else { return nil }
+        guard let raw = try? AppSourceGuard.text(at: url) else { return nil }
         return AppSourceGuard.stripComments(raw)
     }
 
@@ -489,7 +489,7 @@ final class ReadingModeProtectionChromeGuardTests: XCTestCase {
 
     private func source(at relativePath: String) throws -> String {
         let url = appRoot().appendingPathComponent(relativePath)
-        return try String(contentsOf: url, encoding: .utf8)
+        return try AppSourceGuard.text(at: url)
     }
 
     // MARK: - Les cinq modes, et le sixième
@@ -673,7 +673,7 @@ final class ComposerViewOnceReachabilityGuardTests: XCTestCase {
     }
 
     private func source(at relativePath: String) throws -> String {
-        try String(contentsOf: appRoot().appendingPathComponent(relativePath), encoding: .utf8)
+        try AppSourceGuard.text(at: appRoot().appendingPathComponent(relativePath))
     }
 
     // MARK: - #7472 — la vue unique se pose d'un seul geste, à côté du flou
