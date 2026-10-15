@@ -101,7 +101,10 @@ final class ComposerLoopFadeEnvelopeTests: XCTestCase {
 
         _ = try mixer.play(originHost: Self.origin(secondsAgo: 3.5), slideKey: "edit#fade", slideElapsed: 3.5)
 
-        XCTAssertEqual(mixer.appliedVolume(for: "fade") ?? -1, 0.5, accuracy: 0.05,
+        // Mesure EN PLEIN fondu d'entrée (une seconde) : le temps écoulé se lit à l'application, et chaque
+        // centième de retard d'un runner chargé ajoute un centième au volume (0,56 relevé en CI sur `main`).
+        // 0,15 de jeu garde le témoin tranchant — sans le tour rejoué, le volume resterait à 0.
+        XCTAssertEqual(mixer.appliedVolume(for: "fade") ?? -1, 0.5, accuracy: 0.15,
                        "À 0,5 s du deuxième tour, la piste remonte — elle n'est pas restée à zéro")
         mixer.shutdown()
     }
