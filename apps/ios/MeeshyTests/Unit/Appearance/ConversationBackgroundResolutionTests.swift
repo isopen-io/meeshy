@@ -83,4 +83,13 @@ final class ConversationBackgroundResolutionTests: XCTestCase {
         XCTAssertNil(memory.photo(for: "a0"), "la plus ancienne sort quand la mémoire est pleine")
         XCTAssertEqual(memory.photo(for: "a29")?.fullUrl, "f29")
     }
+
+    // MARK: - La couche Lottie du fond (#10638) : quand animer est une décision de l'app
+
+    func test_animatesLottieLayer_followsTheConversationChoice_andStopsInLowPowerMode() {
+        XCTAssertTrue(ConversationBackgroundResolution.animatesLottieLayer(ConversationAppearance(animate: true), lowPowerMode: false))
+        XCTAssertTrue(ConversationBackgroundResolution.animatesLottieLayer(nil, lowPowerMode: false), "sans choix, le défaut anime")
+        XCTAssertFalse(ConversationBackgroundResolution.animatesLottieLayer(ConversationAppearance(animate: false), lowPowerMode: false))
+        XCTAssertFalse(ConversationBackgroundResolution.animatesLottieLayer(ConversationAppearance(animate: true), lowPowerMode: true))
+    }
 }

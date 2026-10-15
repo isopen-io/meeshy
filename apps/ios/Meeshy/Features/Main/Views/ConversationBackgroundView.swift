@@ -63,6 +63,16 @@ struct ConversationBackgroundView: View {
                 accentHex: ConversationBackgroundResolution.effectiveAccentHex(appearance, computedHex: signature.accentHex, isDark: isDark)
             )
             .equatable()
+            .overlay {
+                if let lottie = design.lottie {
+                    PackLottieLayer(
+                        ref: lottie,
+                        animates: ConversationBackgroundResolution.animatesLottieLayer(appearance, lowPowerMode: ProcessInfo.processInfo.isLowPowerModeEnabled),
+                        contentMode: .fill
+                    )
+                }
+            }
+            .clipped()
             .ignoresSafeArea()
             .accessibilityHidden(true)
         case .solid(let hex):

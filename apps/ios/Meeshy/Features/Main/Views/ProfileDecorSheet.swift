@@ -195,7 +195,7 @@ struct ProfileDecorSheet: View {
         } label: {
             VStack(spacing: MeeshySpacing.xs) {
                 MeeshyAvatar(name: name, context: .custom(56), accentColor: MeeshyColors.brandPrimaryHex, avatarURL: avatarURL)
-                    .avatarRing(design, avatarSize: 56)
+                    .avatarRing(design, avatarSize: 56, animates: false)
                     .frame(width: 68, height: 68)
                 Text(label)
                     .font(MeeshyFont.relative(MeeshyFont.footnoteSize, weight: .medium))
@@ -237,7 +237,7 @@ struct ProfileDecorSheet: View {
             VStack(spacing: MeeshySpacing.xs) {
                 Group {
                     if let design {
-                        BannerDesignView(design: design, isDark: theme.mode.isDark, accentHex: MeeshyColors.brandPrimaryHex)
+                        BannerDesignView(design: design, isDark: theme.mode.isDark, accentHex: MeeshyColors.brandPrimaryHex, animates: false)
                     } else {
                         MeeshyColors.indigo500.opacity(0.12)
                     }
