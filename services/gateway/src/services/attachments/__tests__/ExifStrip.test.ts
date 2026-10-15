@@ -108,6 +108,33 @@ async function animatedWebpWithExif(): Promise<Buffer> {
     .toBuffer();
 }
 
+async function apngWith(...extra: readonly Buffer[]): Promise<Buffer> {
+  const still = await sharp({ create: { width: 8, height: 8, channels: 4, background: { r: 255, g: 0, b: 0, alpha: 1 } } })
+    .png()
+    .toBuffer();
+  const pixels = pngChunkData(still, 'IDAT');
+  const animation = Buffer.alloc(8);
+  animation.writeUInt32BE(1, 0);
+  return Buffer.concat([
+    still.subarray(0, 8),
+    pngChunk('IHDR', pngChunkData(still, 'IHDR')),
+    pngChunk('acTL', animation),
+    ...extra,
+    pngChunk('fcTL', frameControl(0)),
+    pngChunk('IDAT', pixels),
+    pngChunk('IEND', Buffer.alloc(0)),
+  ]);
+}
+
+async function animatedWebpRotatedWithSecret(): Promise<Buffer> {
+  const frame = (r: number) =>
+    sharp({ create: { width: 8, height: 4, channels: 4, background: { r, g: 0, b: 0, alpha: 1 } } }).png().toBuffer();
+  return sharp([await frame(255), await frame(0)], { join: { animated: true } })
+    .webp({ loop: 0, delay: [100, 100] })
+    .withExif({ IFD0: { Artist: 'gps-holder-secret', Orientation: '6' } })
+    .toBuffer();
+}
+
 describe('isExifStrippable', () => {
   it.each([
     ['image/jpeg', true],
@@ -178,6 +205,49 @@ describe('stripExifFromImageBuffer', () => {
     expect(after.pages).toBe(2);
     expect(after.delay).toEqual([100, 100]);
     expect(after.exif).toBeUndefined();
+  });
+
+  it('ne garde JAMAIS l’EXIF d’un WEBP animé qui porte une orientation (audit #10639)', async () => {
+    const animated = await animatedWebpRotatedWithSecret();
+    expect(animated.toString('latin1')).toContain('gps-holder-secret');
+
+    const stripped = await stripExifFromImageBuffer(animated, 'image/webp');
+
+    expect(stripped.toString('latin1')).not.toContain('gps-holder-secret');
+    expect((await sharp(stripped).metadata()).pages).toBe(2);
+  });
+
+  it.each([
+    ['un chunk privé', () => pngChunk('prVt', Buffer.from('gps-holder-secret', 'latin1'))],
+    ['un manifeste C2PA', () => pngChunk('caBX', Buffer.from('gps-holder-secret', 'latin1'))],
+    ['un EXIF ImageMagick', () => pngChunk('zxIf', Buffer.from('gps-holder-secret', 'latin1'))],
+    ['un profil ICC nommé', () => pngChunk('iCCP', Buffer.from('gps-holder-secret\0\0', 'latin1'))],
+  ])('ne garde d’un PNG animé que les chunks d’image : %s part (audit #10639)', async (_, extra) => {
+    const apng = await apngWith(extra());
+
+    const stripped = await stripExifFromImageBuffer(apng, 'image/png');
+
+    expect(stripped.toString('latin1')).not.toContain('gps-holder-secret');
+    expect(pngChunkTypes(stripped)).toEqual(['IHDR', 'acTL', 'fcTL', 'IDAT', 'IEND']);
+  });
+
+  it('ne garde rien de ce qui suit IEND dans un PNG animé (audit #10639)', async () => {
+    const apng = Buffer.concat([await apngWith(), Buffer.from('gps-holder-secret', 'latin1')]);
+
+    const stripped = await stripExifFromImageBuffer(apng, 'image/png');
+
+    expect(stripped.toString('latin1')).not.toContain('gps-holder-secret');
+  });
+
+  it('ne rend d’un PNG animé MAL FORMÉ que ses chunks d’image valides, refermés (audit #10639)', async () => {
+    const giant = Buffer.alloc(4);
+    giant.writeUInt32BE(0x7fffffff);
+    const apng = await apngWith(Buffer.concat([giant, Buffer.from('tEXtgps-holder-secret', 'latin1')]));
+
+    const stripped = await stripExifFromImageBuffer(apng, 'image/png');
+
+    expect(stripped.toString('latin1')).not.toContain('gps-holder-secret');
+    expect(pngChunkTypes(stripped)).toEqual(['IHDR', 'acTL', 'IEND']);
   });
 
   it('lit en temps linéaire un PNG forgé de 200 000 chunks vides', async () => {
