@@ -432,7 +432,7 @@ describe('messageMenuItems — « Ajouter à mes stickers » (#10630)', () => {
 
   test('jamais « Enregistrer » sur un sticker, rangé ou non, même avec une pièce enregistrable', () => {
     expect(messageMenuItems(ctx({ ...sticker, canSave: true })).map((i) => i.id)).not.toContain('save');
-    expect(messageMenuItems(ctx({ hasText: false, sticker: { inLibrary: true }, canSave: true })).map((i) => i.id)).not.toContain('save');
+    expect(messageMenuItems(ctx({ hasText: false, sticker: { inLibrary: true, hasPicture: true }, canSave: true })).map((i) => i.id)).not.toContain('save');
   });
 
   test('un sticker SANS image jointe (glyphe emoji, gabarit seul) n’offre pas un ajout voué à l’échec', () => {
