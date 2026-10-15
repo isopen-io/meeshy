@@ -3,6 +3,8 @@ import type { ReactNode } from 'react';
 import { RING_AVATAR_RADIUS, type AvatarRingDesign } from '@meeshy/shared/types/avatar-ring-design';
 import { avatarRingSvg } from '@meeshy/shared/utils/appearance-svg';
 
+import { PackLottieLayer } from './pack-lottie-layer';
+
 /**
  * **LE CONTOUR D'AVATAR** (#10632, § 8.1) — une COUCHE autour de l'avatar, qui
  * ne le modifie pas (`avatar.tsx` reste intact). Le dessin vient de
@@ -25,6 +27,7 @@ export function AvatarRing({ ring, size, children }: { readonly ring: AvatarRing
   return (
     <span data-avatar-ring={ring.key} className="relative inline-grid place-items-center" style={{ width: box, height: box }}>
       <span aria-hidden="true" className="pointer-events-none absolute inset-0" dangerouslySetInnerHTML={{ __html: avatarRingSvg({ ring, size: box }) }} />
+      <PackLottieLayer lottie={ring.lottie} />
       {children}
     </span>
   );

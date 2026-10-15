@@ -7,6 +7,8 @@ import { backdropViewOf } from '@/lib/appearance/backdrop-view';
 import { appearanceOf } from '@/lib/appearance/read';
 import { useAppearanceLive, useBackdropPhoto, useMediaFlag, useScheme, useWallpaperDesign } from '@/lib/appearance/use-backdrop';
 
+import { PackLottieLayer } from './pack-lottie-layer';
+
 /**
  * **LE FOND DU FIL** (#10631, § 8.1) — Signature par défaut (la couche CSS
  * d'origine, `thread-scene.css`, rendue À L'IDENTIQUE quand rien n'est choisi),
@@ -19,6 +21,10 @@ import { useAppearanceLive, useBackdropPhoto, useMediaFlag, useScheme, useWallpa
  * modèle `builtin` est embarqué — aucun réseau, aucun spinner. Ce qui n'est pas
  * encore prêt (le dessin chargé à la demande, la photo) laisse voir Signature,
  * puis se fond en 180 ms. Clair/sombre : suit la classe `:root.light`.
+ *
+ * COUCHE ANIMÉE (#10638) : un modèle qui déclare `lottie` la joue AU-DESSUS du
+ * dessin statique (qui reste l'image fixe) quand `animate` est vrai ; sous
+ * « Réduire les animations » ou en cas d'échec, le dessin seul reste.
  */
 export function ConversationBackdrop({
   conversation,
@@ -54,7 +60,9 @@ export function ConversationBackdrop({
           {...(view.flipInRtl ? { 'data-flip-rtl': '' } : {})}
           aria-hidden
           style={{ backgroundImage: 'none', ...view.style }}
-        />
+        >
+          {appearance.animate ? <PackLottieLayer lottie={design?.lottie} /> : null}
+        </div>
       );
     case 'photo':
       return (
