@@ -287,7 +287,7 @@ struct ConversationAppearanceSheet: View {
                         Image(systemName: "checkmark.circle.fill")
                             .foregroundColor(Color(hex: effectiveAccent))
                             .background(Circle().fill(.white))
-                            .padding(4)
+                            .padding(MeeshySpacing.xs)
                             .accessibilityHidden(true)
                     }
                 }
