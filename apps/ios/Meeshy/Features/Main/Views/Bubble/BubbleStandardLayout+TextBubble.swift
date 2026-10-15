@@ -82,7 +82,7 @@ extension BubbleStandardLayout {
                         place: place,
                         accentColor: contactColor,
                         onTapFullscreen: {
-                            fullscreenPlace = BubbleFullscreenPlace(place: place)
+                            presentFullscreen(place)
                         }
                     )
                 }

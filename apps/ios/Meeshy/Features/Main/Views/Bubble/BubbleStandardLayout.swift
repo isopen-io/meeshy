@@ -147,7 +147,11 @@ struct BubbleStandardLayout: View {
     /// local passent, elles, par `fullscreenLocationAttachment` (binding du
     /// wrapper) — deux états distincts car les véhicules diffèrent
     /// (`SharedPlace` vs `MessageAttachment`).
-    @State var fullscreenPlace: BubbleFullscreenPlace?
+    @State private var fullscreenPlace: BubbleFullscreenPlace?
+
+    func presentFullscreen(_ place: SharedPlace) {
+        fullscreenPlace = BubbleFullscreenPlace(place: place)
+    }
 
     // MARK: - Adaptive sizing (iPad regular size class needs a tighter cap)
 

@@ -606,46 +606,43 @@ final class BubbleQuotedReplyZoneLawTests: XCTestCase {
     /// (« ouvrir le fil », « répondre à nouveau ») sans qu'aucune garde ne
     /// bouge : le composant, lui, resterait à trois.
     func test_loiDesZones_chaqueHoteNePoseQuUneSeuleZone3() throws {
-        let hosts: [(path: String, marker: String, floor: Int, jump: String, forwardsIn: String)] = [
+        let hosts: [(path: String, marker: String, floor: Int, jump: String, sites: Int)] = [
             (
-                "Meeshy/Features/Main/Views/Bubble/BubbleStandardLayout+TextBubble.swift",
-                "extension BubbleStandardLayout", 3_000,
+                "Meeshy/Features/Main/Views/Bubble/BubbleStandardLayout.swift",
+                "struct BubbleStandardLayout", 20_000,
                 // Depuis #10628 la carte citée de la bulle et celle de l'emoji
-                // en réponse partagent UN geste (`openQuotedTarget`) : la zone 3
-                // de la bulle est son unique appel.
-                "openQuotedTarget(reply)",
-                "Meeshy/Features/Main/Views/Bubble/BubbleStandardLayout.swift"
+                // en réponse partagent UN geste (`openQuotedTarget`). Le type
+                // se lit comme son unité (#10678) : la bulle texte et l'emoji
+                // en réponse y posent chacun leur unique appel.
+                "openQuotedTarget(reply)", 2
             ),
             (
                 "Meeshy/Features/Main/Views/Bubble/BubbleStandardLayout+Media.swift",
                 "func mediaWithReplyContainer", 5_000,
-                "onStoryReplyTap?(reply.reference.messageId)",
-                "Meeshy/Features/Main/Views/Bubble/BubbleStandardLayout+Media.swift"
+                "onStoryReplyTap?(reply.reference.messageId)", 1
             ),
             (
                 "Meeshy/Features/Main/Views/ConversationMediaViews.swift",
                 "struct AudioMediaView", 20_000,
-                "onStoryReplyTap?(ref.messageId)",
-                "Meeshy/Features/Main/Views/ConversationMediaViews.swift"
+                "onStoryReplyTap?(ref.messageId)", 1
             )
         ]
 
         for host in hosts {
             let code = try anchored(host.path, host.marker, floor: host.floor)
-            let forwarding = try source(host.forwardsIn)
             XCTAssertEqual(
-                code.components(separatedBy: host.jump).count - 1, 1,
-                "\(host.path) doit poser EXACTEMENT une zone 3 (retour au message cité) autour de la " +
-                "citation. \(code.components(separatedBy: host.jump).count - 1) trouvée(s) : 0 = la citation " +
-                "n'est plus suivable, 2+ = un second point actionnable pour une seule capacité."
+                code.components(separatedBy: host.jump).count - 1, host.sites,
+                "\(host.path) doit poser EXACTEMENT \(host.sites) zone(s) 3 (retour au message cité) autour de la " +
+                "citation. \(code.components(separatedBy: host.jump).count - 1) trouvée(s) : moins = la citation " +
+                "n'est plus suivable, plus = un second point actionnable pour une seule capacité."
             )
             XCTAssertTrue(
-                forwarding.contains("onQuotedAuthorTap: onQuotedAuthorTap"),
+                code.contains("onQuotedAuthorTap: onQuotedAuthorTap"),
                 "\(host.path) doit transmettre onQuotedAuthorTap — sans ce fil, l'avatar de la citation est " +
                 "dessiné mais MORT, et le tap retombe silencieusement sur la zone 3."
             )
             XCTAssertTrue(
-                forwarding.contains("onQuotedMediaTap: onQuotedMediaTap"),
+                code.contains("onQuotedMediaTap: onQuotedMediaTap"),
                 "\(host.path) doit transmettre onQuotedMediaTap — sans ce fil, la miniature est décorative."
             )
         }

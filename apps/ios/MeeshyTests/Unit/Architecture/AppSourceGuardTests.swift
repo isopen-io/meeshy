@@ -104,4 +104,27 @@ final class AppSourceGuardTests: XCTestCase {
         XCTAssertEqual(AppSourceGuard.occurrences(ofIdentifier: "rail", in: "rail rail"), 2)
         XCTAssertEqual(AppSourceGuard.occurrences(ofIdentifier: "rail", in: ""), 0)
     }
+
+    // MARK: - #10678 — un fichier découpé se lit comme son UNITÉ
+
+    /// `BubbleStandardLayout.swift` s'est scindé en extensions frères : une
+    /// garde qui le lit par son chemin doit voir tout le type, exactement comme
+    /// `unit(_:)` le lit — sinon chaque garde négative passe au vert en lisant
+    /// la moitié qui ne contient pas l'interdit.
+    func test_textAt_leTypeDecoupe_seLitCommeSonUnite() throws {
+        let path = "Meeshy/Features/Main/Views/Bubble/BubbleStandardLayout.swift"
+        let url = try XCTUnwrap(AppSourceGuard.unitURLs(path).first)
+        let text = try AppSourceGuard.text(at: url)
+        XCTAssertEqual(text, try AppSourceGuard.unit(path))
+        XCTAssertTrue(text.contains("struct BubbleStandardLayout: View"))
+        XCTAssertTrue(text.contains("func revealBlurredContent()"), "+Reveal fait partie de l'unité")
+        XCTAssertTrue(text.contains("var emojiOnlyContent"), "+TextBubble fait partie de l'unité")
+    }
+
+    /// Tout autre fichier se lit SEUL : l'élargissement ne vaut que pour le
+    /// type découpé, il ne change rien aux gardes des autres fichiers.
+    func test_textAt_unFichierOrdinaire_seLitSeul() throws {
+        let url = try XCTUnwrap(AppSourceGuard.unitURLs("Meeshy/Features/Main/Views/ThemedMessageBubble.swift").first)
+        XCTAssertEqual(try AppSourceGuard.text(at: url), try String(contentsOf: url, encoding: .utf8))
+    }
 }

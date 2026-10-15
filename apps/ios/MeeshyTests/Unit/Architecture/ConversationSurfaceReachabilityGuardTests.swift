@@ -310,7 +310,7 @@ final class ConversationSurfaceReachabilityGuardTests: XCTestCase {
     /// dépôt — ne doit pas la ressusciter en la faisant compter pour une
     /// référence.
     private static func code(of url: URL) -> String? {
-        guard let raw = try? AppSourceGuard.text(at: url) else { return nil }
+        guard let raw = try? String(contentsOf: url, encoding: .utf8) else { return nil }
         return AppSourceGuard.stripComments(raw)
     }
 
