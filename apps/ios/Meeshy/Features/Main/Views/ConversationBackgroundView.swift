@@ -102,7 +102,7 @@ struct ConversationBackgroundView: View {
                             thumbnailUrl: photo.thumbnailUrl,
                             fullUrl: photo.fullUrl,
                             autoLoad: true,
-                            onFullImageFailure: { photoLoadFailed = true }
+                            onFullImageFailure: { settleFailedLoad(attachmentId: attachmentId) }
                         ) {
                             Color.clear
                         }
@@ -118,12 +118,26 @@ struct ConversationBackgroundView: View {
         .accessibilityHidden(true)
         .task(id: attachmentId) {
             photoLoadFailed = false
+            if ConversationBackgroundPhotoVerdict.source(for: knownAttachment(attachmentId)) == .needsDeviceKey {
+                photo = nil
+                photoLoadFailed = true
+                return
+            }
             photo = ConversationBackgroundPhoto.resolve(
                 attachmentId: attachmentId,
                 known: knownAttachment(attachmentId),
                 remembered: ConversationBackgroundPhotoMemory().photo(for: attachmentId),
                 serverOrigin: MeeshyConfig.shared.serverOrigin
             )
+        }
+    }
+
+    /// Une panne passagère garde la dernière photo ; seule une pièce disparue ou refusée rend Signature.
+    private func settleFailedLoad(attachmentId: String) {
+        Task {
+            if await ConversationBackgroundPhotoProbe.live.isGone(attachmentId: attachmentId) {
+                photoLoadFailed = true
+            }
         }
     }
 }
