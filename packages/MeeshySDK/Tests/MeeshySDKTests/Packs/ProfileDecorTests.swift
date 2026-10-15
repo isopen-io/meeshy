@@ -52,13 +52,13 @@ final class ProfileDecorTests: XCTestCase {
     func test_service_putsToTheProfileDecorRouteAndReadsTheServedDecor() async throws {
         let api = MockAPIClient()
         let served = ServedProfileDecor(avatarRing: item("contours-essentiels", "filet"), banner: nil)
-        api.stub("/api/v1/me/profile-decor", result: APIResponse<ServedProfileDecor>(success: true, data: served, error: nil))
+        api.stub("/me/profile-decor", result: APIResponse<ServedProfileDecor>(success: true, data: served, error: nil))
 
         let result = try await ProfileDecorService(api: api).update(ProfileDecorWrite(side: .avatarRing, choice: ProfileDecorRef(pack: "contours-essentiels", item: "filet")))
 
         XCTAssertEqual(result, served)
         XCTAssertEqual(api.lastRequest?.method, "PUT")
-        XCTAssertEqual(api.lastRequest?.path, "/api/v1/me/profile-decor")
+        XCTAssertEqual(api.lastRequest?.path, "/me/profile-decor")
     }
 
     // MARK: Équiper

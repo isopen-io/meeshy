@@ -29,7 +29,7 @@ export function assertSamplePublishTarget(baseUrl: string): URL {
   return url;
 }
 
-/** Les quatre stickers d'exemple — nos propres dessins, `MeeStickers` du SDK. */
+/** Les quatre stickers d'exemple — nos propres dessins, en WebP sous `services/gateway/assets/sample-sticker-pack` (les `MeeStickers` du SDK sont passés en `.lottie`). */
 export const SAMPLE_STICKER_FILES = [
   { key: 'coucou', title: 'Coucou', emoji: '👋', file: 'mee.duo-coucou.webp' },
   { key: 'bravo', title: 'Bravo', emoji: '👏', file: 'mee.duo-bravo.webp' },
