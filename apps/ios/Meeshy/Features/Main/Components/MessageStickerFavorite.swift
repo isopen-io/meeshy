@@ -40,8 +40,11 @@ nonisolated enum MessageStickerFavorite {
         if let mee = MeeStickerCatalog.sticker(forTemplateID: sticker.templateId) { return .mee(mee) }
         // Le GABARIT d'abord : il porte aussi un emoji de repli, et le lire en
         // premier épinglerait le repli à la place de la chose.
+        // Seul un gabarit du CATALOGUE s'épingle : la palette ne relit que lui.
+        // Un `pack.<slug>.<clé>` ou un gabarit inconnu y serait un favori
+        // invisible à jamais, et son emoji de repli ne le remplace pas (#10688).
         if let id = sticker.templateId, !id.isEmpty {
-            return StickerUsageEntry(kind: .template, value: id)
+            return StickerTemplateCatalog.template(id: id) == nil ? nil : StickerUsageEntry(kind: .template, value: id)
         }
         guard let emoji = sticker.emoji, !emoji.isEmpty else { return nil }
         return .emoji(emoji)
@@ -68,5 +71,15 @@ nonisolated enum MessageStickerFavorite {
                        in store: StickerUsageStore = .shared) {
         guard let entree = entry(for: sticker) else { return }
         store.toggleFavorite(entree)
+    }
+}
+
+/// Les mots du favori d'un sticker, partagés par la fiche et les trois menus.
+nonisolated enum StickerFavoriteCopy {
+    static var add: String {
+        String(localized: "message.sticker.favorite.add", defaultValue: "Ajouter aux favoris", bundle: .main)
+    }
+    static var remove: String {
+        String(localized: "message.sticker.favorite.remove", defaultValue: "Retirer des favoris", bundle: .main)
     }
 }
