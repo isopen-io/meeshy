@@ -11,8 +11,8 @@ final class AvatarRingViewTests: XCTestCase {
     func test_cyclicHex_startsOnTheFirstColorAndLoopsBackToIt() {
         let colors = ["#2DD4BF", "#7C3AED", "#6366F1"]
         XCTAssertEqual(AvatarRingView.cyclicHex(colors, at: 0), "#2DD4BF")
-        XCTAssertEqual(AvatarRingView.cyclicHex(colors, at: 0.25), "#7C3AED")
-        XCTAssertEqual(AvatarRingView.cyclicHex(colors, at: 0.5), "#6366F1")
+        XCTAssertEqual(AvatarRingView.cyclicHex(colors, at: 1.0 / 3.0), "#7C3AED")
+        XCTAssertEqual(AvatarRingView.cyclicHex(colors, at: 2.0 / 3.0), "#6366F1")
         XCTAssertEqual(AvatarRingView.cyclicHex(colors, at: 0.999).prefix(3), "#2D", "le dernier segment ramène à la première couleur")
     }
 
