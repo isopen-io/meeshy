@@ -370,5 +370,98 @@
         "description": "مناظر مرسومة بخطوط."
       }
     }
+  },
+  {
+    "slug": "animes",
+    "domain": "wallpaper",
+    "origin": "builtin",
+    "version": 1,
+    "order": 4,
+    "installedByDefault": true,
+    "removable": true,
+    "hidden": false,
+    "contractSchema": 1,
+    "cover": {
+      "src": "775660b987db12ee.webp",
+      "bytes": 806,
+      "sha256": "775660b987db12ee9b3fc4a5f53ff52e0cee6f8a63fd4aec9adafc6a90422136"
+    },
+    "preview": null,
+    "contract": {
+      "src": "05cbde79f9e17a45.json",
+      "bytes": 885,
+      "sha256": "05cbde79f9e17a45739a51adfe40b9c37d3821cfbe443d2584a9a2913aac3101"
+    },
+    "strings": {
+      "fr": {
+        "src": "719ad4e6f7f32f25.json",
+        "bytes": 38,
+        "sha256": "719ad4e6f7f32f2535eea1001c58b7442c6fc6828ff51e03056949abbc52a20f"
+      },
+      "en": {
+        "src": "7b8b8526b2726c48.json",
+        "bytes": 36,
+        "sha256": "7b8b8526b2726c48c12a8985c62495970d148918ab7ea894e7f04f3fbc257f93"
+      },
+      "es": {
+        "src": "86a14aa78f6e8226.json",
+        "bytes": 35,
+        "sha256": "86a14aa78f6e822612f0daa3bb4a697b74bf24ced30159ca9acefe78a38a2bd7"
+      },
+      "pt": {
+        "src": "f18c4ef2b98b4dd2.json",
+        "bytes": 36,
+        "sha256": "f18c4ef2b98b4dd29d463994aa9953feb5de029b6ff29a0555d6cd5de02c0066"
+      },
+      "de": {
+        "src": "848abdb881bbc607.json",
+        "bytes": 41,
+        "sha256": "848abdb881bbc607686f58da06d4abd24915d5ba889e7e8f1e7291c7438d548c"
+      },
+      "it": {
+        "src": "7b17dd59671a9292.json",
+        "bytes": 37,
+        "sha256": "7b17dd59671a92924170a2692c251e73daede565aa8476cbcf5b2799e4f8a99c"
+      },
+      "ar": {
+        "src": "35dbf701b03e058c.json",
+        "bytes": 38,
+        "sha256": "35dbf701b03e058c8025856007799028079aeb96b33d4bfd0c7d201f59babaa0"
+      }
+    },
+    "downloadBytes": {
+      "story": 885,
+      "square": null
+    },
+    "names": {
+      "fr": {
+        "name": "Animés",
+        "description": "Des fonds qui respirent doucement."
+      },
+      "en": {
+        "name": "Animated",
+        "description": "Wallpapers that breathe softly."
+      },
+      "es": {
+        "name": "Animados",
+        "description": "Fondos que respiran con suavidad."
+      },
+      "pt": {
+        "name": "Animados",
+        "description": "Fundos que respiram suavemente."
+      },
+      "de": {
+        "name": "Animiert",
+        "description": "Hintergründe, die sanft atmen."
+      },
+      "it": {
+        "name": "Animati",
+        "description": "Sfondi che respirano piano."
+      },
+      "ar": {
+        "name": "متحركة",
+        "description": "خلفيات تتنفس بهدوء."
+      }
+    }
   }
 ]

@@ -16,7 +16,7 @@
  * Usage : bun scripts/generate-appearance-packs.ts
  */
 import { createHash } from 'node:crypto';
-import { mkdirSync, readFileSync, writeFileSync } from 'node:fs';
+import { copyFileSync, mkdirSync, readdirSync, readFileSync, writeFileSync } from 'node:fs';
 import { join, resolve } from 'node:path';
 import sharp from 'sharp';
 import { parseAppearancePackContract, type AppearanceDesign } from '@meeshy/shared/types/appearance-design';
@@ -132,6 +132,8 @@ const SAMPLE_NAMES: Names = {
 };
 
 mkdirSync(ASSETS, { recursive: true });
+// Les couches Lottie (#10638) sont adressées par contenu dans les sources : la passerelle les sert telles quelles.
+for (const name of readdirSync(join(APPEARANCE, 'lottie'))) copyFileSync(join(APPEARANCE, 'lottie', name), join(ASSETS, name));
 mkdirSync(join(DESIGN, 'packs/samples'), { recursive: true });
 
 for (const kind of KINDS) {

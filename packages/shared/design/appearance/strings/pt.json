@@ -23,6 +23,18 @@
     "contours-essentiels": {
       "name": "Contornos essenciais",
       "description": "Seis contornos para o teu avatar."
+    },
+    "animes": {
+      "name": "Animados",
+      "description": "Fundos que respiram suavemente."
+    },
+    "bannieres-animees": {
+      "name": "Banners animados",
+      "description": "Um reflexo discreto atravessa o banner."
+    },
+    "contours-animes": {
+      "name": "Contornos animados",
+      "description": "Um arco dourado contorna o avatar."
     }
   },
   "designs": {
@@ -39,7 +51,9 @@
     "treillis": "Treliça",
     "constellation": "Constelação",
     "horizon": "Horizonte",
-    "baobab": "Baobá"
+    "baobab": "Baobá",
+    "brume-vivante": "Névoa viva",
+    "aurore-vive": "Aurora viva"
   },
   "rings": {
     "filet": "Filete",
@@ -47,7 +61,8 @@
     "perle": "Pérolas",
     "aurore": "Aurora",
     "deco": "Deco",
-    "laurier": "Louro"
+    "laurier": "Louro",
+    "halo-or": "Halo dourado"
   },
   "gamut": {
     "indigo": "Índigo Meeshy",

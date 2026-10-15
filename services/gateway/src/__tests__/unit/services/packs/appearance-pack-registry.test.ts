@@ -29,17 +29,17 @@ describe('registres d’apparence générés', () => {
   it('servent les quatre packs de fonds, « Essentiels » installé par défaut et non retirable', () => {
     const wallpapers = index.entries('wallpaper');
 
-    expect(wallpapers.map((pack) => pack.slug)).toEqual(['essentiels', 'heritages', 'nature-et-ciel', 'illustrations']);
-    expect(wallpapers.map((pack) => [pack.installedByDefault, pack.removable])).toEqual([[true, false], [false, true], [false, true], [false, true]]);
+    expect(wallpapers.map((pack) => pack.slug)).toEqual(['essentiels', 'heritages', 'nature-et-ciel', 'illustrations', 'animes']);
+    expect(wallpapers.map((pack) => [pack.installedByDefault, pack.removable])).toEqual([[true, false], [false, true], [false, true], [false, true], [true, true]]);
     expect(wallpapers.every((pack) => pack.origin === 'builtin' && pack.price === undefined)).toBe(true);
   });
 
-  it('porte 14 modèles de fonds, 6 bannières et 6 contours, clés lues dans les contrats vérifiés', () => {
+  it('porte 15 modèles de fonds, 7 bannières et 7 contours, clés lues dans les contrats vérifiés', () => {
     const count = (domain: 'wallpaper' | 'banner' | 'avatar-ring') => index.entries(domain).reduce((sum, pack) => sum + index.itemKeys(pack).length, 0);
 
-    expect(count('wallpaper')).toBe(14);
-    expect(count('banner')).toBe(6);
-    expect(count('avatar-ring')).toBe(6);
+    expect(count('wallpaper')).toBe(15);
+    expect(count('banner')).toBe(7);
+    expect(count('avatar-ring')).toBe(7);
     expect(index.itemKeys(index.entries('wallpaper')[0])).toEqual(['monogramme', 'chevrons', 'aurore', 'maille']);
   });
 

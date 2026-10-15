@@ -88,9 +88,9 @@ final class ProfileDecorTests: XCTestCase {
 
     // MARK: Résolution embarquée
 
-    func test_catalog_embedsTheSixRingsAndTheSixBanners() {
-        XCTAssertEqual(AvatarRingCatalog.shared.packs.flatMap(\.rings).map(\.key), ["filet", "double-filet", "perle", "aurore", "deco", "laurier"])
-        XCTAssertEqual(AppearanceCatalog.shared.bannerPacks.flatMap(\.designs).count, 6)
+    func test_catalog_embedsTheSevenRingsAndTheSevenBanners() {
+        XCTAssertEqual(AvatarRingCatalog.shared.packs.flatMap(\.rings).map(\.key), ["filet", "double-filet", "perle", "aurore", "deco", "laurier", "halo-or"])
+        XCTAssertEqual(AppearanceCatalog.shared.bannerPacks.flatMap(\.designs).count, 7)
         XCTAssertEqual(AvatarRingCatalog.shared.ringName("filet", language: "en") != nil, true)
     }
 

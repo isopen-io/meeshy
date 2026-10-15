@@ -1121,6 +1121,65 @@ enum AppearanceCatalogData {
           "fit": "fill"
         }
       ]
+    },
+    {
+      "slug": "animes",
+      "order": 4,
+      "installedByDefault": true,
+      "removable": true,
+      "designs": [
+        {
+          "key": "brume-vivante",
+          "style": "gradient",
+          "palettes": {
+            "light": {
+              "base": "#F5F4FB",
+              "ink": "#A5B4FC",
+              "soft": "#DDD6FE"
+            },
+            "dark": {
+              "base": "#0C0B1A",
+              "ink": "#4F46E5",
+              "soft": "#312E81"
+            }
+          },
+          "gradient": {
+            "angle": 180,
+            "stops": [
+              {
+                "role": "base",
+                "at": 0
+              },
+              {
+                "role": "soft",
+                "at": 1
+              }
+            ],
+            "blobs": [
+              {
+                "x": 0.25,
+                "y": 0.15,
+                "r": 0.7,
+                "role": "ink",
+                "opacity": 0.35
+              },
+              {
+                "x": 0.8,
+                "y": 0.85,
+                "r": 0.6,
+                "role": "accent",
+                "opacity": 0.25
+              }
+            ]
+          },
+          "fit": "fill",
+          "lottie": {
+            "src": "b19ebab0f4cfeed8.json",
+            "bytes": 1842,
+            "sha256": "b19ebab0f4cfeed8715e0264fab552c11fcce89f71ba78b2f01feb0b78ab634e"
+          }
+        }
+      ]
     }
   ],
   "banners": [
@@ -1503,6 +1562,72 @@ enum AppearanceCatalogData {
           "fit": "fill"
         }
       ]
+    },
+    {
+      "slug": "bannieres-animees",
+      "order": 1,
+      "installedByDefault": true,
+      "removable": true,
+      "designs": [
+        {
+          "key": "aurore-vive",
+          "style": "gradient",
+          "palettes": {
+            "light": {
+              "base": "#F2F6FA",
+              "ink": "#5EEAD4",
+              "soft": "#C4B5FD"
+            },
+            "dark": {
+              "base": "#0B1020",
+              "ink": "#2DD4BF",
+              "soft": "#7C3AED"
+            }
+          },
+          "gradient": {
+            "angle": 180,
+            "stops": [
+              {
+                "role": "base",
+                "at": 0
+              },
+              {
+                "role": "base",
+                "at": 1
+              }
+            ],
+            "blobs": [
+              {
+                "x": 0.2,
+                "y": 0.06,
+                "r": 0.6,
+                "role": "ink",
+                "opacity": 0.55
+              },
+              {
+                "x": 0.78,
+                "y": 0.04,
+                "r": 0.55,
+                "role": "soft",
+                "opacity": 0.5
+              },
+              {
+                "x": 0.5,
+                "y": 0,
+                "r": 0.65,
+                "role": "accent",
+                "opacity": 0.35
+              }
+            ]
+          },
+          "fit": "fill",
+          "lottie": {
+            "src": "cad11fe66d4fc9ec.json",
+            "bytes": 847,
+            "sha256": "cad11fe66d4fc9ec172d6cc27ceab46e27942f03487ead5216b9c0d0ce90a0af"
+          }
+        }
+      ]
     }
   ],
   "rings": [
@@ -1698,6 +1823,35 @@ enum AppearanceCatalogData {
           }
         }
       ]
+    },
+    {
+      "slug": "contours-animes",
+      "order": 1,
+      "installedByDefault": true,
+      "removable": true,
+      "usage": {
+        "kind": "free",
+        "surfaces": [
+          "avatar"
+        ]
+      },
+      "rings": [
+        {
+          "key": "halo-or",
+          "stroke": {
+            "style": "solid",
+            "width": 0.03,
+            "colors": [
+              "#C9A86A"
+            ]
+          },
+          "lottie": {
+            "src": "ec52a7f12af8a193.json",
+            "bytes": 867,
+            "sha256": "ec52a7f12af8a193ac26a882cbd360a657da52a19d5d98a58c74a7fc1f45d902"
+          }
+        }
+      ]
     }
   ],
   "strings": {
@@ -1726,6 +1880,18 @@ enum AppearanceCatalogData {
         "contours-essentiels": {
           "name": "Contours essentiels",
           "description": "Six contours pour votre avatar."
+        },
+        "animes": {
+          "name": "Animés",
+          "description": "Des fonds qui respirent doucement."
+        },
+        "bannieres-animees": {
+          "name": "Bannières animées",
+          "description": "Un reflet discret traverse la bannière."
+        },
+        "contours-animes": {
+          "name": "Contours animés",
+          "description": "Un arc doré fait le tour de l’avatar."
         }
       },
       "designs": {
@@ -1742,7 +1908,9 @@ enum AppearanceCatalogData {
         "treillis": "Treillis",
         "constellation": "Constellation",
         "horizon": "Horizon",
-        "baobab": "Baobab"
+        "baobab": "Baobab",
+        "brume-vivante": "Brume vivante",
+        "aurore-vive": "Aurore vive"
       },
       "rings": {
         "filet": "Filet",
@@ -1750,7 +1918,8 @@ enum AppearanceCatalogData {
         "perle": "Perles",
         "aurore": "Aurore",
         "deco": "Déco",
-        "laurier": "Laurier"
+        "laurier": "Laurier",
+        "halo-or": "Halo doré"
       },
       "gamut": {
         "indigo": "Indigo Meeshy",
@@ -1802,6 +1971,18 @@ enum AppearanceCatalogData {
         "contours-essentiels": {
           "name": "Essential rings",
           "description": "Six rings for your avatar."
+        },
+        "animes": {
+          "name": "Animated",
+          "description": "Wallpapers that breathe softly."
+        },
+        "bannieres-animees": {
+          "name": "Animated banners",
+          "description": "A subtle glint sweeps across the banner."
+        },
+        "contours-animes": {
+          "name": "Animated rings",
+          "description": "A golden arc travels around the avatar."
         }
       },
       "designs": {
@@ -1818,7 +1999,9 @@ enum AppearanceCatalogData {
         "treillis": "Trellis",
         "constellation": "Constellation",
         "horizon": "Horizon",
-        "baobab": "Baobab"
+        "baobab": "Baobab",
+        "brume-vivante": "Living mist",
+        "aurore-vive": "Vivid aurora"
       },
       "rings": {
         "filet": "Hairline",
@@ -1826,7 +2009,8 @@ enum AppearanceCatalogData {
         "perle": "Pearls",
         "aurore": "Aurora",
         "deco": "Deco",
-        "laurier": "Laurel"
+        "laurier": "Laurel",
+        "halo-or": "Golden halo"
       },
       "gamut": {
         "indigo": "Meeshy Indigo",
@@ -1878,6 +2062,18 @@ enum AppearanceCatalogData {
         "contours-essentiels": {
           "name": "Contornos esenciales",
           "description": "Seis contornos para tu avatar."
+        },
+        "animes": {
+          "name": "Animados",
+          "description": "Fondos que respiran con suavidad."
+        },
+        "bannieres-animees": {
+          "name": "Banners animados",
+          "description": "Un reflejo discreto cruza el banner."
+        },
+        "contours-animes": {
+          "name": "Contornos animados",
+          "description": "Un arco dorado rodea el avatar."
         }
       },
       "designs": {
@@ -1894,7 +2090,9 @@ enum AppearanceCatalogData {
         "treillis": "Celosía",
         "constellation": "Constelación",
         "horizon": "Horizonte",
-        "baobab": "Baobab"
+        "baobab": "Baobab",
+        "brume-vivante": "Bruma viva",
+        "aurore-vive": "Aurora viva"
       },
       "rings": {
         "filet": "Filete",
@@ -1902,7 +2100,8 @@ enum AppearanceCatalogData {
         "perle": "Perlas",
         "aurore": "Aurora",
         "deco": "Deco",
-        "laurier": "Laurel"
+        "laurier": "Laurel",
+        "halo-or": "Halo dorado"
       },
       "gamut": {
         "indigo": "Índigo Meeshy",
@@ -1954,6 +2153,18 @@ enum AppearanceCatalogData {
         "contours-essentiels": {
           "name": "Contornos essenciais",
           "description": "Seis contornos para o teu avatar."
+        },
+        "animes": {
+          "name": "Animados",
+          "description": "Fundos que respiram suavemente."
+        },
+        "bannieres-animees": {
+          "name": "Banners animados",
+          "description": "Um reflexo discreto atravessa o banner."
+        },
+        "contours-animes": {
+          "name": "Contornos animados",
+          "description": "Um arco dourado contorna o avatar."
         }
       },
       "designs": {
@@ -1970,7 +2181,9 @@ enum AppearanceCatalogData {
         "treillis": "Treliça",
         "constellation": "Constelação",
         "horizon": "Horizonte",
-        "baobab": "Baobá"
+        "baobab": "Baobá",
+        "brume-vivante": "Névoa viva",
+        "aurore-vive": "Aurora viva"
       },
       "rings": {
         "filet": "Filete",
@@ -1978,7 +2191,8 @@ enum AppearanceCatalogData {
         "perle": "Pérolas",
         "aurore": "Aurora",
         "deco": "Deco",
-        "laurier": "Louro"
+        "laurier": "Louro",
+        "halo-or": "Halo dourado"
       },
       "gamut": {
         "indigo": "Índigo Meeshy",
@@ -2030,6 +2244,18 @@ enum AppearanceCatalogData {
         "contours-essentiels": {
           "name": "Basis-Rahmen",
           "description": "Sechs Rahmen für deinen Avatar."
+        },
+        "animes": {
+          "name": "Animiert",
+          "description": "Hintergründe, die sanft atmen."
+        },
+        "bannieres-animees": {
+          "name": "Animierte Banner",
+          "description": "Ein dezenter Glanz zieht über das Banner."
+        },
+        "contours-animes": {
+          "name": "Animierte Konturen",
+          "description": "Ein goldener Bogen umkreist den Avatar."
         }
       },
       "designs": {
@@ -2046,7 +2272,9 @@ enum AppearanceCatalogData {
         "treillis": "Gitter",
         "constellation": "Sternbild",
         "horizon": "Horizont",
-        "baobab": "Baobab"
+        "baobab": "Baobab",
+        "brume-vivante": "Lebendiger Nebel",
+        "aurore-vive": "Lebhafte Aurora"
       },
       "rings": {
         "filet": "Haarlinie",
@@ -2054,7 +2282,8 @@ enum AppearanceCatalogData {
         "perle": "Perlen",
         "aurore": "Polarlicht",
         "deco": "Deco",
-        "laurier": "Lorbeer"
+        "laurier": "Lorbeer",
+        "halo-or": "Goldener Halo"
       },
       "gamut": {
         "indigo": "Meeshy-Indigo",
@@ -2106,6 +2335,18 @@ enum AppearanceCatalogData {
         "contours-essentiels": {
           "name": "Contorni essenziali",
           "description": "Sei contorni per il tuo avatar."
+        },
+        "animes": {
+          "name": "Animati",
+          "description": "Sfondi che respirano piano."
+        },
+        "bannieres-animees": {
+          "name": "Banner animati",
+          "description": "Un riflesso discreto attraversa il banner."
+        },
+        "contours-animes": {
+          "name": "Contorni animati",
+          "description": "Un arco dorato gira attorno all’avatar."
         }
       },
       "designs": {
@@ -2122,7 +2363,9 @@ enum AppearanceCatalogData {
         "treillis": "Graticcio",
         "constellation": "Costellazione",
         "horizon": "Orizzonte",
-        "baobab": "Baobab"
+        "baobab": "Baobab",
+        "brume-vivante": "Foschia viva",
+        "aurore-vive": "Aurora viva"
       },
       "rings": {
         "filet": "Filetto",
@@ -2130,7 +2373,8 @@ enum AppearanceCatalogData {
         "perle": "Perle",
         "aurore": "Aurora",
         "deco": "Deco",
-        "laurier": "Alloro"
+        "laurier": "Alloro",
+        "halo-or": "Alone dorato"
       },
       "gamut": {
         "indigo": "Indaco Meeshy",
@@ -2182,6 +2426,18 @@ enum AppearanceCatalogData {
         "contours-essentiels": {
           "name": "إطارات أساسية",
           "description": "ست إطارات لصورتك الرمزية."
+        },
+        "animes": {
+          "name": "متحركة",
+          "description": "خلفيات تتنفس بهدوء."
+        },
+        "bannieres-animees": {
+          "name": "لافتات متحركة",
+          "description": "وميض خفيف يعبر اللافتة."
+        },
+        "contours-animes": {
+          "name": "إطارات متحركة",
+          "description": "قوس ذهبي يدور حول الصورة الرمزية."
         }
       },
       "designs": {
@@ -2198,7 +2454,9 @@ enum AppearanceCatalogData {
         "treillis": "مشبك",
         "constellation": "كوكبة",
         "horizon": "أفق",
-        "baobab": "باوباب"
+        "baobab": "باوباب",
+        "brume-vivante": "ضباب حي",
+        "aurore-vive": "شفق نابض"
       },
       "rings": {
         "filet": "خط رفيع",
@@ -2206,7 +2464,8 @@ enum AppearanceCatalogData {
         "perle": "لآلئ",
         "aurore": "شفق",
         "deco": "ديكو",
-        "laurier": "غار"
+        "laurier": "غار",
+        "halo-or": "هالة ذهبية"
       },
       "gamut": {
         "indigo": "نيلي ميشي",

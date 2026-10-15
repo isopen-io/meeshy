@@ -23,6 +23,18 @@
     "contours-essentiels": {
       "name": "إطارات أساسية",
       "description": "ست إطارات لصورتك الرمزية."
+    },
+    "animes": {
+      "name": "متحركة",
+      "description": "خلفيات تتنفس بهدوء."
+    },
+    "bannieres-animees": {
+      "name": "لافتات متحركة",
+      "description": "وميض خفيف يعبر اللافتة."
+    },
+    "contours-animes": {
+      "name": "إطارات متحركة",
+      "description": "قوس ذهبي يدور حول الصورة الرمزية."
     }
   },
   "designs": {
@@ -39,7 +51,9 @@
     "treillis": "مشبك",
     "constellation": "كوكبة",
     "horizon": "أفق",
-    "baobab": "باوباب"
+    "baobab": "باوباب",
+    "brume-vivante": "ضباب حي",
+    "aurore-vive": "شفق نابض"
   },
   "rings": {
     "filet": "خط رفيع",
@@ -47,7 +61,8 @@
     "perle": "لآلئ",
     "aurore": "شفق",
     "deco": "ديكو",
-    "laurier": "غار"
+    "laurier": "غار",
+    "halo-or": "هالة ذهبية"
   },
   "gamut": {
     "indigo": "نيلي ميشي",

@@ -17,12 +17,12 @@ describe('la copie iOS du catalogue d’apparence (#10631, § 8.2)', () => {
     expect(read(IOS_CATALOG_SWIFT_PATH)).toContain(renderAppearanceCatalog().trimEnd());
   });
 
-  it('porte la gamme de 16 couleurs, les 14 fonds des 4 packs, 6 bannières, 6 contours et les 7 langues', () => {
+  it('porte la gamme de 16 couleurs, les 15 fonds des 5 packs, 7 bannières, 7 contours et les 7 langues', () => {
     const catalog = buildAppearanceCatalog();
     expect(catalog.gamut.map((entry) => entry.key)).toEqual([...GAMUT_KEYS]);
-    expect(catalog.wallpapers.flatMap((pack) => pack.designs)).toHaveLength(14);
-    expect(catalog.banners.flatMap((pack) => pack.designs)).toHaveLength(6);
-    expect(catalog.rings.flatMap((pack) => pack.rings)).toHaveLength(6);
+    expect(catalog.wallpapers.flatMap((pack) => pack.designs)).toHaveLength(15);
+    expect(catalog.banners.flatMap((pack) => pack.designs)).toHaveLength(7);
+    expect(catalog.rings.flatMap((pack) => pack.rings)).toHaveLength(7);
     expect(Object.keys(catalog.strings).sort()).toEqual(['ar', 'de', 'en', 'es', 'fr', 'it', 'pt']);
   });
 });

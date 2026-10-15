@@ -97,5 +97,104 @@
         "avatar"
       ]
     }
+  },
+  {
+    "slug": "contours-animes",
+    "domain": "avatar-ring",
+    "origin": "builtin",
+    "version": 1,
+    "order": 1,
+    "installedByDefault": true,
+    "removable": true,
+    "hidden": false,
+    "contractSchema": 1,
+    "cover": {
+      "src": "a0040abf0d734e87.webp",
+      "bytes": 5506,
+      "sha256": "a0040abf0d734e8755fe15d19c5e29417ca69e88591e49da530b973094eb0309"
+    },
+    "preview": null,
+    "contract": {
+      "src": "b9b7392e7d283e2a.json",
+      "bytes": 328,
+      "sha256": "b9b7392e7d283e2a5a55fa138b30de2b1f63210657d5d59bed3684ca6f387454"
+    },
+    "strings": {
+      "fr": {
+        "src": "e1c17dc55b522cef.json",
+        "bytes": 29,
+        "sha256": "e1c17dc55b522cef04004ae813a0033ccd46996815829634cf6a83d1399b5410"
+      },
+      "en": {
+        "src": "b6fe496462d63f63.json",
+        "bytes": 30,
+        "sha256": "b6fe496462d63f63ffd02b8083e21613a6aeca94266f8f68f4ba136e9704ec77"
+      },
+      "es": {
+        "src": "9df01473aedf2e9d.json",
+        "bytes": 30,
+        "sha256": "9df01473aedf2e9dcc7c386c8254d224b83c38aef58f2dd4e904939a7955fa2f"
+      },
+      "pt": {
+        "src": "f6173646923084e4.json",
+        "bytes": 31,
+        "sha256": "f6173646923084e4aa16aa96ea8c7c9fc3de811c8b847cceae6f40205dc89fb0"
+      },
+      "de": {
+        "src": "6cfc10666ad5f4a5.json",
+        "bytes": 32,
+        "sha256": "6cfc10666ad5f4a526bea0f34a537a7a4a9e0a0980541460517d0377f9418630"
+      },
+      "it": {
+        "src": "6c28b8c99b27899e.json",
+        "bytes": 31,
+        "sha256": "6c28b8c99b27899e2df9eceab2301df7f53bf81cebc1616caa1b56a2cdf70fa0"
+      },
+      "ar": {
+        "src": "09b25472ef37d77e.json",
+        "bytes": 38,
+        "sha256": "09b25472ef37d77e0efa35df840794a9b99530b5abc8b4c6135d708de1be2b8d"
+      }
+    },
+    "downloadBytes": {
+      "story": 328,
+      "square": null
+    },
+    "names": {
+      "fr": {
+        "name": "Contours animés",
+        "description": "Un arc doré fait le tour de l’avatar."
+      },
+      "en": {
+        "name": "Animated rings",
+        "description": "A golden arc travels around the avatar."
+      },
+      "es": {
+        "name": "Contornos animados",
+        "description": "Un arco dorado rodea el avatar."
+      },
+      "pt": {
+        "name": "Contornos animados",
+        "description": "Um arco dourado contorna o avatar."
+      },
+      "de": {
+        "name": "Animierte Konturen",
+        "description": "Ein goldener Bogen umkreist den Avatar."
+      },
+      "it": {
+        "name": "Contorni animati",
+        "description": "Un arco dorato gira attorno all’avatar."
+      },
+      "ar": {
+        "name": "إطارات متحركة",
+        "description": "قوس ذهبي يدور حول الصورة الرمزية."
+      }
+    },
+    "usage": {
+      "kind": "free",
+      "surfaces": [
+        "avatar"
+      ]
+    }
   }
 ]

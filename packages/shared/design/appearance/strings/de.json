@@ -23,6 +23,18 @@
     "contours-essentiels": {
       "name": "Basis-Rahmen",
       "description": "Sechs Rahmen für deinen Avatar."
+    },
+    "animes": {
+      "name": "Animiert",
+      "description": "Hintergründe, die sanft atmen."
+    },
+    "bannieres-animees": {
+      "name": "Animierte Banner",
+      "description": "Ein dezenter Glanz zieht über das Banner."
+    },
+    "contours-animes": {
+      "name": "Animierte Konturen",
+      "description": "Ein goldener Bogen umkreist den Avatar."
     }
   },
   "designs": {
@@ -39,7 +51,9 @@
     "treillis": "Gitter",
     "constellation": "Sternbild",
     "horizon": "Horizont",
-    "baobab": "Baobab"
+    "baobab": "Baobab",
+    "brume-vivante": "Lebendiger Nebel",
+    "aurore-vive": "Lebhafte Aurora"
   },
   "rings": {
     "filet": "Haarlinie",
@@ -47,7 +61,8 @@
     "perle": "Perlen",
     "aurore": "Polarlicht",
     "deco": "Deco",
-    "laurier": "Lorbeer"
+    "laurier": "Lorbeer",
+    "halo-or": "Goldener Halo"
   },
   "gamut": {
     "indigo": "Meeshy-Indigo",
