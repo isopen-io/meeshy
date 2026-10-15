@@ -113,7 +113,7 @@ const purchasedPack = (meta: unknown): { readonly domain?: unknown; readonly slu
   typeof meta === 'object' && meta !== null ? (meta as { domain?: unknown; slug?: unknown }) : null;
 
 class PurchaseRefusal extends Error {
-  constructor(readonly reason: 'already-owned') {
+  constructor(readonly reason: 'already-owned' | 'not-found') {
     super(reason);
   }
 }
@@ -218,11 +218,13 @@ export class PackCatalog<S, D extends S> {
    * ACHÈTE un pack payant du registre (#10632, § 4.3) : la dépense, la
    * possession et l'installation s'écrivent dans UNE transaction
    * (`MeeshSpend.spend`), idempotente par `(userId, requestId)`. Le prix est
-   * celui du REGISTRE, jamais celui d'un client. Un rejeu rend le même pack.
+   * celui du REGISTRE, jamais celui d'un client. Un rejeu rend le même pack,
+   * MÊME masqué depuis : le masquage refuse un geste NEUF (dans la garde, que
+   * le rejeu ne traverse pas), jamais la réponse d'un achat déjà payé.
    */
   async purchase(userId: string, slug: string, requestId: string): Promise<PurchaseOutcome<S>> {
     const pack = this.registryPack(slug);
-    if (pack === undefined || pack.hidden) return { kind: 'not-found' };
+    if (pack === undefined) return { kind: 'not-found' };
     const price = pack.price;
     if (price === undefined) return { kind: 'free' };
     const key = packChoiceKey(this.domain, slug);
@@ -235,6 +237,7 @@ export class PackCatalog<S, D extends S> {
         kind: 'pack-purchase',
         meta: { domain: this.domain, slug, version: pack.version ?? 1 },
         guard: async () => {
+          if (pack.hidden) throw new PurchaseRefusal('not-found');
           const owned = await this.prisma.userPackOwnership.findUnique({ where: { userId_packKey: { userId, packKey: key } }, select: { id: true } });
           if (owned !== null) throw new PurchaseRefusal('already-owned');
         },
@@ -256,7 +259,7 @@ export class PackCatalog<S, D extends S> {
       const installed = this.installedOf(await this.choices(userId))(slug);
       return { kind: 'done', pack: this.spec.toSummary(pack.project(installed, true)), balance: outcome.balance };
     } catch (error) {
-      if (error instanceof PurchaseRefusal) return { kind: 'already-owned' };
+      if (error instanceof PurchaseRefusal) return { kind: error.reason };
       if (error instanceof GameRefusal && error.code === 'REQUEST_ID_CONFLICT') return { kind: 'request-id-conflict' };
       throw error;
     }
