@@ -245,6 +245,7 @@ export async function exportPacks(prisma: PrismaClient, userId: string, page: Ex
     library: toSection(data.library.items, data.library.total, page),
     submissions: toSection(data.submissions.items, data.submissions.total, page),
     ownerships: toSection(data.ownerships.items, data.ownerships.total, page),
+    appearanceSubmissions: toSection(data.appearanceSubmissions.items, data.appearanceSubmissions.total, page),
   };
 }
 

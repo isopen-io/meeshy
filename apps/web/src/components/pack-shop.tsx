@@ -1,6 +1,6 @@
 import { useQuery, useQueryClient } from '@tanstack/react-query';
 import type { QueryClient } from '@tanstack/react-query';
-import { useRef, useState } from 'react';
+import { useEffect, useRef, useState } from 'react';
 import type { ReactNode } from 'react';
 
 import { ApiError } from '@/lib/api/client';
@@ -71,6 +71,7 @@ export function PackShop<P extends ShopPack>({
   hint,
   empty,
   footer,
+  focusSlug,
 }: {
   readonly adapter: PackShopAdapter<P>;
   readonly language: InterfaceLanguage;
@@ -78,6 +79,8 @@ export function PackShop<P extends ShopPack>({
   /** Ce que dit une boutique sans pack — un ancien serveur compris. */
   readonly empty?: string;
   readonly footer?: ReactNode;
+  /** Le pack à mettre en avant (#10703) — lien profond depuis la fiche d'un sticker : la rangée se centre et se marque. */
+  readonly focusSlug?: string | undefined;
 }) {
   const queryClient = useQueryClient();
   const guard = useRef(createPackGestureGuard());
@@ -155,6 +158,11 @@ export function PackShop<P extends ShopPack>({
   };
 
   const packs = (catalogue.data ?? []) as readonly P[];
+  const focusedRow = useRef<HTMLLIElement | null>(null);
+  const focusPresent = focusSlug !== undefined && packs.some((pack) => pack.slug === focusSlug);
+  useEffect(() => {
+    if (focusPresent) focusedRow.current?.scrollIntoView?.({ block: 'center' });
+  }, [focusPresent, focusSlug]);
   const notice =
     failure === 'insufficient'
       ? translateStickerPacks(language, 'packs.error.insufficient')
@@ -213,7 +221,13 @@ export function PackShop<P extends ShopPack>({
               ? translateStickerPacks(language, 'packs.buy', { price: String(price) })
               : translateStickerPacks(language, pack.installed ? 'stickerPacks.uninstall' : 'stickerPacks.install');
             return (
-              <li key={pack.slug} data-shop-pack={pack.slug} className="flex items-center gap-3 rounded-2xl p-3" style={{ backgroundColor: 'var(--color-ios-card)' }}>
+              <li
+                key={pack.slug}
+                data-shop-pack={pack.slug}
+                {...(pack.slug === focusSlug ? { 'data-shop-pack-focused': '', 'aria-current': 'true' as const, ref: focusedRow } : {})}
+                className="flex items-center gap-3 rounded-2xl p-3"
+                style={{ backgroundColor: 'var(--color-ios-card)', ...(pack.slug === focusSlug ? { outline: '2px solid var(--accent, var(--color-ios-brand))' } : {}) }}
+              >
                 {adapter.cover(pack)}
                 <div className="flex min-w-0 flex-1 flex-col gap-0.5">
                   <h3 className="truncate text-body font-semibold" style={{ color: 'var(--color-ios-ink)' }}>

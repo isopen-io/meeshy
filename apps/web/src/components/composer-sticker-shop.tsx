@@ -116,7 +116,7 @@ export const stickerShopAdapter = (language: InterfaceLanguage, deps: Conversati
   cover: (pack) => <PackCover pack={pack} />,
 });
 
-export function StickerShop({ language }: { readonly language: InterfaceLanguage }) {
+export function StickerShop({ language, focusSlug }: { readonly language: InterfaceLanguage; readonly focusSlug?: string | undefined }) {
   const queryClient = useQueryClient();
   const [submitting, setSubmitting] = useState(false);
 
@@ -156,6 +156,7 @@ export function StickerShop({ language }: { readonly language: InterfaceLanguage
         <PackShop
           adapter={stickerShopAdapter(language)}
           language={language}
+          focusSlug={focusSlug}
           hint={translateStickerPacks(language, 'stickerPacks.shop.hint')}
           footer={<SubmissionsFooter language={language} mine={mine} onSubmit={() => setSubmitting(true)} />}
         />

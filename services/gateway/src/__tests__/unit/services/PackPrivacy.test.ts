@@ -228,3 +228,39 @@ describe('purgePackData — la purge à l’expiration de la grâce (#10151)', (
     expect(files.removed).toEqual([]);
   });
 });
+
+describe('les propositions d’apparence d’un tiers suivent le compte (#10709)', () => {
+  const appearance = (id: string, submitterId: string, status: string, author = 'Awa'): Row => ({
+    id, domain: 'wallpaper', slug: `pack-${id}`, name: 'Dunes', description: '', author, submitterId, status, reviewNote: null, reviewedAt: null, price: null, installCount: 3, createdAt: AT, contractJson: '{"domain":"wallpaper","designs":[]}',
+  });
+  const rows = (): Row[] => [appearance('a1', PARTI, 'pending'), appearance('a2', PARTI, 'rejected'), appearance('a3', PARTI, 'approved'), appearance('a4', VOISIN, 'pending', 'Voisin')];
+
+  it('les exporte, contrat compris, sans rien du voisin', async () => {
+    const db = fakePackDb({ communityAppearancePack: rows() });
+    const data = await exportPackData(db as never, PARTI, PAGE);
+    expect(data.appearanceSubmissions.total).toBe(3);
+    expect(data.appearanceSubmissions.items.map((row) => row.slug).sort()).toEqual(['pack-a1', 'pack-a2', 'pack-a3']);
+    expect(data.appearanceSubmissions.items[0]).toHaveProperty('contractJson');
+    expect(JSON.stringify(data)).not.toContain('Voisin');
+  });
+
+  it('efface les non publiées, anonymise la publiée, laisse le voisin', async () => {
+    const db = fakePackDb({ communityAppearancePack: rows() });
+    const { files } = { files: fakeFileStore([]) };
+    const summary = await purgePackData(db as never, PARTI, { files: files.store });
+    expect(db.tables.communityAppearancePack.rows.map((row) => [row.id, row.author])).toEqual([
+      ['a3', DELETED_ACCOUNT_PACK_AUTHOR],
+      ['a4', 'Voisin'],
+    ]);
+    expect(summary).toMatchObject({ submissionsDeleted: 2, publishedAnonymized: 1 });
+    const again = await purgePackData(db as never, PARTI, { files: files.store });
+    expect(again).toMatchObject({ submissionsDeleted: 0, publishedAnonymized: 0 });
+  });
+
+  it('mesure à blanc ce que la purge effacerait', async () => {
+    const db = fakePackDb({ communityAppearancePack: rows() });
+    const measured = await measurePackData(db as never, PARTI, { files: fakeFileStore([]).store });
+    expect(measured).toMatchObject({ submissionsDeleted: 2, publishedAnonymized: 1 });
+    expect(db.tables.communityAppearancePack.rows).toHaveLength(4);
+  });
+});

@@ -12,6 +12,7 @@ import type { PackDomain } from '@meeshy/shared/types/content-pack';
 import { UnifiedShop } from '@/components/unified-shop';
 import { isPackDomain } from '@/lib/api/packs-shop';
 import { Link } from '@/routes/route-table';
+import { PACK_FOCUS_PARAM } from '@/routes/pack-focus-param';
 
 /**
  * **PACKS ET TÉLÉCHARGEMENTS** (#10149, demande porteur 2026-10-11) — le
@@ -42,15 +43,20 @@ export const initialDomain = (): PackDomain | undefined => {
   return isPackDomain(asked) ? asked : undefined;
 };
 
+/** `?pack=<slug>` (#10703) met un pack de stickers en avant : la fiche d'un sticker reçu y mène. */
+export const initialPack = (): string | undefined => searchParams().get(PACK_FOCUS_PARAM) ?? undefined;
+
 const initialSegment = (): Segment => {
   const params = searchParams();
   if (isPackDomain(params.get(DOMAIN_PARAM))) return 'shop';
+  if (params.get(PACK_FOCUS_PARAM) !== null) return 'stickers';
   return params.get(SEGMENT_PARAM) === FRAMES_SEGMENT_VALUE ? 'frames' : 'stickers';
 };
 
 export function SettingsPacksScreen({ language }: { readonly language: InterfaceLanguage }) {
   const [segment, setSegment] = useState<Segment>(initialSegment);
   const [askedDomain] = useState(initialDomain);
+  const [askedPack] = useState(initialPack);
   const segments: readonly { readonly id: Segment; readonly label: string }[] = [
     { id: 'shop', label: translateStickerPacks(language, 'packs.segment.shop') },
     { id: 'stickers', label: translateStickerPacks(language, 'packs.segment.stickers') },
@@ -107,7 +113,7 @@ export function SettingsPacksScreen({ language }: { readonly language: Interface
           {segment === 'shop' ? (
             <UnifiedShop language={language} {...(askedDomain === undefined ? {} : { initialDomain: askedDomain })} />
           ) : segment === 'stickers' ? (
-            <StickerShop language={language} />
+            <StickerShop language={language} focusSlug={askedPack} />
           ) : (
             <FramePackShop language={language} />
           )}

@@ -777,7 +777,7 @@ describe('Bubble — les états du message (#5936)', () => {
     expect(html).not.toContain('rounded-bubble');
   });
 
-  test('(iv bis) le PNG d’un sticker en bulle se peint à 320 px (#9319), quelle que soit la cote iOS', () => {
+  test('(iv bis) le PNG d’un sticker en bulle se peint à la cote d’iOS, 200 px (#10705)', () => {
     const html = renderFull({
       ...BASE_MESSAGE,
       content: '',
@@ -786,7 +786,7 @@ describe('Bubble — les états du message (#5936)', () => {
         { ...attachmentDefaults, id: 'st-1', messageId: BASE_MESSAGE.id, fileName: 's.png', originalName: 's.png', mimeType: 'image/png', fileSize: 4, fileUrl: 'https://cdn.example/s.png', uploadedBy: 'u-amina', createdAt: '2026-09-08T09:00:00.000Z' },
       ],
     });
-    expect(html).toContain('width="320"');
+    expect(html).toContain('width="200"');
     expect(html).not.toContain('rounded-bubble');
   });
 

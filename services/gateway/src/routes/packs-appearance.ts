@@ -11,14 +11,19 @@
  *
  * Les quatre packs de fonds, celui de bannières et celui de contours sont
  * `builtin` (embarqués) ; le registre est lu au démarrage (`PackIndex`).
+ *
+ * Les VENDEURS TIERS (#10709) proposent, par `POST /submissions`, des packs
+ * `community` que la modération publie (`packs-appearance-community.ts`).
  */
 import type { FastifyInstance } from 'fastify';
 
 import { PackCatalog } from '../services/packs/PackCatalog';
 import { startupPackIndex, type PackIndex } from '../services/packs/PackIndex';
+import { CommunityAppearancePacks, prismaCommunityAppearanceStore } from '../services/packs/CommunityAppearancePacks';
 import { appearancePackSpec, type AppearancePackDetail, type AppearancePackDomain, type AppearancePackSummary } from '../services/packs/appearancePackSpec';
 import { framePackDetailJsonSchema, framePackSummaryJsonSchema } from './packs-glory-frame';
 import { packInstallationBroadcaster, packRouteGuard, registerPackPurchaseRoute, registerPackRoutes } from './pack-routes';
+import { registerCommunityAppearanceRoutes } from './packs-appearance-community';
 
 export const APPEARANCE_PACK_ERROR_CODES = { NOT_FOUND: 'PACK_NOT_FOUND', NOT_REMOVABLE: 'PACK_NOT_REMOVABLE' } as const;
 
@@ -36,6 +41,7 @@ export const appearancePackDetailJsonSchema = {
   additionalProperties: false,
   properties: {
     ...appearanceSummaryProperties,
+    reviewNote: { type: 'string', nullable: true },
     contractSchema: framePackDetailJsonSchema.properties.contractSchema,
     contract: framePackDetailJsonSchema.properties.contract,
     strings: framePackDetailJsonSchema.properties.strings,
@@ -45,6 +51,7 @@ export const appearancePackDetailJsonSchema = {
 export type AppearancePacksRoutesOptions = {
   readonly catalog?: PackCatalog<AppearancePackSummary, AppearancePackDetail>;
   readonly index?: PackIndex;
+  readonly community?: CommunityAppearancePacks;
 };
 
 const LABELS: Readonly<Record<AppearancePackDomain, { readonly one: string; readonly many: string }>> = {
@@ -55,13 +62,15 @@ const LABELS: Readonly<Record<AppearancePackDomain, { readonly one: string; read
 
 export function appearancePacksPlugin(domain: AppearancePackDomain) {
   return async function appearancePacksRoutes(fastify: FastifyInstance, options: AppearancePacksRoutesOptions = {}) {
+    const index = options.index ?? startupPackIndex();
     const catalog =
       options.catalog ??
       new PackCatalog({
         prisma: fastify.prisma,
-        spec: appearancePackSpec({ index: options.index ?? startupPackIndex(), domain }),
+        spec: appearancePackSpec({ index, domain, community: prismaCommunityAppearanceStore(fastify.prisma, domain) }),
         broadcast: packInstallationBroadcaster(fastify),
       });
+    const community = options.community ?? new CommunityAppearancePacks({ prisma: fastify.prisma, index });
     const guard = packRouteGuard(fastify, { internalErrorMessage: `Error handling ${LABELS[domain].many} packs` });
     const basePath = `/packs/${domain}`;
     const notFound = { message: 'Pack not found', code: APPEARANCE_PACK_ERROR_CODES.NOT_FOUND };
@@ -83,6 +92,7 @@ export function appearancePacksPlugin(domain: AppearancePackDomain) {
         uninstall: { description: `Retire un pack de ${LABELS[domain].many} (#10632). 409 PACK_NOT_REMOVABLE pour un pack non retirable.`, summary: `Uninstall a ${LABELS[domain].one} pack` },
       },
     });
+    registerCommunityAppearanceRoutes(fastify, { domain, guard, packs: community, detailJsonSchema: appearancePackDetailJsonSchema });
     registerPackPurchaseRoute(fastify, { catalog, guard, basePath, tags: ['packs'], summaryJsonSchema: appearancePackSummaryJsonSchema, notFound });
   };
 }

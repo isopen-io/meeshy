@@ -17,12 +17,15 @@ public final class PackShopStore: ObservableObject {
 
     private let service: any PackShopProviding
     private let makeRequestId: () -> String
+    private let snapshots: any PackShopSnapshotStoring
     /// Les domaines de la dernière lecture : un refus relit la MÊME vitrine.
     private var shownDomains: [PackDomain]?
 
     public init(service: any PackShopProviding = PackShopService.shared,
+                snapshots: any PackShopSnapshotStoring = PackShopSnapshotStore.shared,
                 makeRequestId: @escaping () -> String = { UUID().uuidString }) {
         self.service = service
+        self.snapshots = snapshots
         self.makeRequestId = makeRequestId
     }
 
@@ -30,9 +33,21 @@ public final class PackShopStore: ObservableObject {
     /// pas les autres (`nil` = tous les domaines servis).
     public func load(domains: [PackDomain]? = nil) async {
         shownDomains = domains
+        if state.sections == nil {
+            switch snapshots.read(domains: domains) {
+            case .fresh(let cached, _):
+                state = state.loaded(cached)
+                return
+            case .stale(let cached, _):
+                state = state.loaded(cached)
+            case .expired, .empty:
+                break
+            }
+        }
         do {
             let response = try await service.shop(domains: domains)
             state = state.loaded(response)
+            snapshots.write(state, domains: domains)
             loadFailed = false
         } catch {
             // Un échec ne vide rien : la vitrine déjà lue reste affichée.
@@ -60,6 +75,7 @@ public final class PackShopStore: ObservableObject {
         do {
             let bought = try await service.purchase(domain: domain, slug: slug, requestId: requestId)
             state = state.purchaseSettled(domain, slug, bought)
+            snapshots.write(state, domains: shownDomains)
         } catch {
             let insufficient = PackHTTPStatus.isInsufficientMeeshes(error)
             let definitive = PackHTTPStatus.isDefinitiveRefusal(error)
@@ -77,6 +93,7 @@ public final class PackShopStore: ObservableObject {
         do {
             let confirmed = try await service.setInstalled(wantsInstalled, domain: domain, slug: slug)
             state = state.installSettled(domain, slug, confirmed: confirmed)
+            snapshots.write(state, domains: shownDomains)
         } catch {
             state = state.installRefused(domain, slug, restoring: previous)
             if PackHTTPStatus.code(of: error) == 403 { await load(domains: shownDomains) }

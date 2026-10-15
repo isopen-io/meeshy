@@ -818,6 +818,7 @@ export default function MediaViewer({
                       language={language}
                       pageIndex={i}
                       pageCount={items.length}
+                      transcribable={actionsAt?.(i)?.transcribe ?? true}
                       onToggleRef={(fn) => {
                         if (i === index) activePlayToggleRef.current = fn;
                       }}

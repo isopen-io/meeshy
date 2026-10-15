@@ -70,9 +70,8 @@ describe('le sticker d’un commentaire', () => {
     const art = host.querySelector('[data-comment-sticker] img');
     expect(art?.getAttribute('src')).toContain('abc.png');
     expect(art?.getAttribute('alt')).toBe('Sticker');
-    // La cote du web est celle de #9319 (224), pas un produit de la cote iOS : un témoin
-    // qui recalcule la formule du code grandissait avec elle (294 depuis #10658).
-    expect(art?.getAttribute('width')).toBe('224');
+    // Même cote qu'iOS en rangée plate (#10705) : 140, littéral, pour que le témoin ne suive pas le code.
+    expect(art?.getAttribute('width')).toBe('140');
   });
 
   test('l’aperçu embarqué ne porte que metadata.sticker : il se peint quand même', async () => {

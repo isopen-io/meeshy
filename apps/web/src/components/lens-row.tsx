@@ -22,6 +22,7 @@ import type { AuthorStoryRing } from '@/lib/view/author-story-ring';
 import { conversationAvatarDoor } from '@/lib/view/thread-header-offer';
 import { currentInterfaceLanguage } from '@/lib/interface-language';
 import { avatarOf, initialsOf, isGroup, peerOf, titleOf } from '@/lib/view/conversation';
+import { servedRingOf, useRingDesign } from '@/lib/profile-decor/author-ring';
 import { usePresence } from '@/lib/view/use-presence';
 import { useConversationPreview } from '@/lib/view/use-conversation-preview';
 import { useIsCurrentPath } from '@/lib/router';
@@ -246,6 +247,8 @@ function LensRowImpl({
     const handle = peerOf(conversation, viewerId)?.user?.username;
     return typeof handle === 'string' && handle !== '' ? handle : undefined;
   })();
+  /* LE CONTOUR DU PAIR (#10713) — servi avec le participant, additif : sans lui, l'avatar d'avant. */
+  const peerRing = useRingDesign(servedRingOf(peerOf(conversation, viewerId)));
   useColorScheme();
   const accent = accentOf(conversation);
   const guest = useSpeaksAsGuest();
@@ -468,6 +471,7 @@ function LensRowImpl({
             name={title}
             opacity={chromeFade}
             profileUsername={peerHandle}
+            {...(group || peerRing === null ? {} : { ring: peerRing })}
             {...(photo === undefined ? {} : { src: photo })}
             {...peerSignals}
             {...(group || peerStoryRing === undefined ? {} : { storyRing: peerStoryRing })}

@@ -63,6 +63,31 @@ describe('SettingsPacksScreen', () => {
     expect(host.querySelector('[data-sticker-shop]')).toBe(null);
   });
 
+  test('?pack=<slug> met CE pack en avant dans la boutique des stickers (#10703)', async () => {
+    at('/settings?volet=packs');
+    const first = await mounter.mount(
+      <QueryClientProvider client={appQueryClient}>
+        <SettingsPacksScreen language="fr" />
+      </QueryClientProvider>,
+    );
+    await until(() => first.querySelectorAll('[data-pack-shop="sticker"] [data-shop-pack]').length === 3);
+    const slug = first.querySelector('[data-shop-pack]')?.getAttribute('data-shop-pack') ?? '';
+    expect(first.querySelector('[data-shop-pack-focused]')).toBeNull();
+    mounter.unmountAll();
+
+    at(`/settings?volet=packs&pack=${slug}`);
+    const host = await mounter.mount(
+      <QueryClientProvider client={appQueryClient}>
+        <SettingsPacksScreen language="fr" />
+      </QueryClientProvider>,
+    );
+    await until(() => host.querySelector('[data-shop-pack-focused]') !== null);
+    expect(host.querySelector('[data-shop-pack-focused]')?.getAttribute('data-shop-pack')).toBe(slug);
+    expect(host.querySelectorAll('[data-shop-pack-focused]')).toHaveLength(1);
+    expect(host.querySelector('[data-shop-pack-focused]')?.getAttribute('aria-current')).toBe('true');
+    at('/');
+  });
+
   test('?domaine=<d> ouvre la vitrine filtrée sur ce domaine ; type=cadres reste lu', async () => {
     at('/settings?volet=packs&domaine=banner');
     const host = await mounter.mount(

@@ -3,7 +3,7 @@ import { renderToStaticMarkup } from 'react-dom/server';
 
 import { BUILTIN_BANNER_PACKS, BUILTIN_RING_PACKS } from '@/lib/profile-decor/catalog';
 
-import { AvatarRing, ringBoxSize } from './avatar-ring';
+import { AvatarRing, ringBoxSize, ringedAvatarSize } from './avatar-ring';
 import { bannerSvgMarkup, ProfileBannerDesign } from './profile-banner-design';
 
 const filet = BUILTIN_RING_PACKS[0]!.items[0]!;
@@ -87,5 +87,31 @@ describe('la couche Lottie du contour et de la bannière (#10638)', () => {
     const still = renderToStaticMarkup(<ProfileBannerDesign design={aurore} accent="#6366F1" scheme="dark" />);
     expect(still).not.toContain('data-lottie-layer');
     expect(still.startsWith('<span aria-hidden="true" data-banner-design="aurore"')).toBe(true);
+  });
+});
+
+describe('le contour dans l’empreinte de l’avatar (#10713, #10714)', () => {
+  test('l’avatar rétrécit pour tenir dans le cercle du contour, l’empreinte ne bouge pas', () => {
+    expect(ringedAvatarSize(44, false)).toBe(36);
+    expect(ringedAvatarSize(80, false)).toBe(67);
+  });
+
+  test('avec un anneau de story, l’avatar rétrécit encore : l’anneau reste à l’intérieur du contour', () => {
+    expect(ringedAvatarSize(80, true)).toBe(61);
+    expect(ringedAvatarSize(80, true) + 6).toBeLessThanOrEqual(Math.floor(80 * 0.84));
+  });
+
+  test('un avatar avec contour pose les deux couches, contour dehors et anneau de story dedans', async () => {
+    const { Avatar } = await import('./avatar');
+    const html = renderToStaticMarkup(<Avatar initials="AB" color="#6366F1" size={80} ring={filet} storyRing={{ entryStoryId: 'p1', unseen: true }} />);
+    expect(html).toContain('data-avatar-ring="filet"');
+    expect(html).toContain('data-story-ring="unseen"');
+    expect(html.indexOf('data-avatar-ring')).toBeLessThan(html.indexOf('data-story-ring'));
+    expect(html).toContain('width:80px;height:80px');
+  });
+
+  test('sans contour, l’avatar est inchangé', async () => {
+    const { Avatar } = await import('./avatar');
+    expect(renderToStaticMarkup(<Avatar initials="AB" color="#6366F1" size={44} ring={null} />)).toBe(renderToStaticMarkup(<Avatar initials="AB" color="#6366F1" size={44} />));
   });
 });

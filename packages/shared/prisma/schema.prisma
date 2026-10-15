@@ -5988,6 +5988,41 @@ model StickerPackItem {
   @@unique([packId, key])
 }
 
+/// Un pack d'APPARENCE proposé par un vendeur tiers (#10709) : fonds, contours ou bannières.
+/// Le contenu est un CONTRAT de données validé par le Zod des packs officiels, jamais un fichier.
+/// `pending` → `approved` par un modérateur, qui fixe aussi le prix ; seuls les `approved` sont servis.
+model CommunityAppearancePack {
+  id             String    @id @default(auto()) @map("_id") @db.ObjectId
+  /// wallpaper · avatar-ring · banner
+  domain         String
+  slug           String
+  name           String
+  description    String
+  author         String
+  submitterId    String    @db.ObjectId
+  /// pending · approved · rejected
+  status         String    @default("pending")
+  reviewNote     String?
+  reviewerId     String?   @db.ObjectId
+  reviewedAt     DateTime?
+  /// Le prix en Meeshes, fixé par le modérateur à la publication ; absent = gratuit.
+  price          Int?
+  installCount   Int       @default(0)
+  /// Le contrat re-sérialisé par le schéma, tel que servi (adressé par `contractSha256`).
+  contractJson   String
+  contractSha256 String
+  /// `<sha16>.json` — l'adresse sous laquelle le contrat est servi par le magasin des packs.
+  contractSrc    String
+  contractBytes  Int
+  itemKeys       String[]
+  createdAt      DateTime  @default(now())
+
+  @@unique([domain, slug])
+  @@index([domain, status, createdAt])
+  @@index([submitterId])
+  @@index([contractSrc])
+}
+
 /// LA POSSESSION d'un pack payant (#10632). Écrite dans la MÊME transaction que la
 /// ligne `spend` du registre `MeeshLedger` (MeeshSpend.apply) : ni achat sans
 /// possession, ni possession sans achat. Les packs gratuits n'ont pas de ligne.

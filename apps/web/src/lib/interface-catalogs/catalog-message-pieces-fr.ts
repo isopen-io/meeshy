@@ -19,6 +19,7 @@ const fr = {
   'message.piece.preview': 'Médias du message',
   'message.sticker.add': 'Ajouter à mes stickers',
   'message.sticker.inLibrary': 'Dans mes stickers',
+  'message.sticker.from': 'Envoyé par {name}',
   'message.sticker.viewPack': 'Voir le pack',
   'message.sticker.added': 'Sticker ajouté à votre bibliothèque',
   'message.sticker.addFailed': 'Le sticker n’a pas pu être ajouté',

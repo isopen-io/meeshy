@@ -234,19 +234,17 @@ export const REVEAL_FADE_DURATION_MS = 280;
  * dans `BubbleSticker.swift:38,44` (bulle — HORS `FocalMetrics`, une
  * SECONDE source que `check-curve.mjs` PARTIE 9 lit séparément).
  */
-export const STICKER_SIDE = 147;
-export const BUBBLE_STICKER_SIDE = 210;
+export const STICKER_SIDE = 140;
+export const BUBBLE_STICKER_SIDE = 200;
 export const STICKER_EMOJI_BOX = 80;
 
 /**
- * LA COTE DE RENDU DU WEB (#9319, porteur 2026-10-04 : « 224, 320 ») — 224 en
- * rangée plate et en commentaire, 320 en bulle, le carré borné à la largeur de
- * sa colonne. FIXE, découplée des cotes iOS ci-dessus (que `check-curve.mjs`
- * compare) : rendue comme « cote iOS × 2 », elle a suivi l'agrandissement iOS
- * de #10630 jusqu'à 294 et 420 sans que personne ne le décide.
+ * UNE SEULE COTE DE STICKER SUR LES DEUX CLIENTS (#10705, décision porteur
+ * 2026-10-15) : le web peint à la cote d'iOS — `BUBBLE_STICKER_SIDE` (~200) en
+ * bulle, `STICKER_SIDE` (proportionnelle, 140) en Focal, en rangée plate et en
+ * commentaire. Elle remplace les cotes propres du web (224 / 320, #9319), que
+ * la décision contredit ; `check-curve.mjs` garde les deux côtés ensemble.
  */
-export const STICKER_RENDER_SIDE = 224;
-export const BUBBLE_STICKER_RENDER_SIDE = 320;
 
 /** `FocalScrollPerspective.FocalMagnificationLaw.sustainedScrollMs` / `.highVelocityThreshold`. */
 export const SUSTAINED_SCROLL_MS = 4000;

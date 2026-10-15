@@ -46,6 +46,42 @@ export function appearancePrisma() {
     },
   };
 
+  const communityRows: Row[] = [];
+  const sortCommunity = (rows: Row[], orderBy?: Record<string, 'asc' | 'desc'>) => {
+    if (!orderBy) return rows;
+    const [[key, dir]] = Object.entries(orderBy) as [[string, 'asc' | 'desc']];
+    const value = (row: Row) => (row[key] instanceof Date ? (row[key] as Date).getTime() : (row[key] as number));
+    return [...rows].sort((a, b) => (dir === 'asc' ? value(a) - value(b) : value(b) - value(a)));
+  };
+  const communityAppearancePack = {
+    findMany: async ({ where, orderBy }: { where?: Record<string, unknown>; orderBy?: Record<string, 'asc' | 'desc'> }) => sortCommunity(communityRows.filter((row) => matches(row, where)), orderBy),
+    findUnique: async ({ where }: { where: { domain_slug: { domain: string; slug: string } } }) =>
+      communityRows.find((row) => row.domain === where.domain_slug.domain && row.slug === where.domain_slug.slug) ?? null,
+    findFirst: async ({ where }: { where: Record<string, unknown> }) => communityRows.find((row) => matches(row, where)) ?? null,
+    count: async ({ where }: { where: Record<string, unknown> }) => communityRows.filter((row) => matches(row, where)).length,
+    create: async ({ data }: { data: Record<string, unknown> }) => {
+      if (communityRows.some((row) => row.domain === data.domain && row.slug === data.slug)) throw uniqueViolation();
+      const row = { reviewNote: null, reviewerId: null, reviewedAt: null, price: null, installCount: 0, ...data, id: nextId() } as Row;
+      communityRows.push(row);
+      return row;
+    },
+    delete: async ({ where }: { where: { id: string } }) => {
+      const index = communityRows.findIndex((row) => row.id === where.id);
+      return communityRows.splice(index, 1)[0];
+    },
+    updateMany: async ({ where, data }: { where: Record<string, unknown>; data: Record<string, unknown> }) => {
+      const hit = communityRows.filter((row) => matches(row, where));
+      hit.forEach((row) => Object.assign(row, data));
+      return { count: hit.length };
+    },
+    update: async ({ where, data }: { where: { id: string }; data: Record<string, unknown> }) => {
+      const row = communityRows.find((candidate) => candidate.id === where.id) as Row;
+      const patch = Object.fromEntries(Object.entries(data).map(([key, value]) => (value !== null && typeof value === 'object' && 'increment' in (value as object) ? [key, (row[key] as number) + (value as { increment: number }).increment] : [key, value])));
+      Object.assign(row, patch);
+      return row;
+    },
+  };
+
   const user = {
     update: async ({ where, data }: { where: { id: string }; data: Record<string, unknown> }) => {
       users.set(where.id, { ...(users.get(where.id) ?? {}), ...data });
@@ -53,7 +89,7 @@ export function appearancePrisma() {
     },
   };
 
-  const client: Record<string, unknown> = { ...(base.prisma as unknown as Record<string, unknown>), meeshLedger, userPackOwnership, user };
+  const client: Record<string, unknown> = { ...(base.prisma as unknown as Record<string, unknown>), meeshLedger, userPackOwnership, user, communityAppearancePack };
   const snapshot = () => ({ ledger: [...ledger], ownerships: [...ownerships], choices: [...base.choices] });
   client.$transaction = async (work: (tx: unknown) => Promise<unknown>) => {
     const before = snapshot();
@@ -67,5 +103,5 @@ export function appearancePrisma() {
     }
   };
 
-  return { ...base, prisma: client as unknown as PrismaClient, ledger, ownerships, grant: (userId: string, delta: number) => ledger.push({ id: nextId(), userId, delta, reason: 'grant', requestId: `grant-${seq}` }) };
+  return { ...base, prisma: client as unknown as PrismaClient, ledger, ownerships, communityRows, grant: (userId: string, delta: number) => ledger.push({ id: nextId(), userId, delta, reason: 'grant', requestId: `grant-${seq}` }) };
 }

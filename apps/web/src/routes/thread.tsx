@@ -29,7 +29,7 @@ import { requestDeparture } from '@/lib/conversation-departure';
 import { useComposerAccess } from '@/lib/send/use-composer-access';
 import { resolveViewer } from '@/lib/api/viewer';
 import { useAuthorStoryRings } from '@/lib/view/use-author-story-rings';
-import { AuthorMoodsContext, useAuthorMoods } from '@/lib/view/use-author-moods';
+import { AuthorContexts } from '@/components/author-contexts';
 import { topActiveMembers } from '@/lib/view/top-active-members';
 import { accentOf, withAccent } from '@/lib/accent';
 import { useColorScheme } from '@/lib/use-color-scheme';
@@ -171,7 +171,6 @@ export default function ThreadScreen({ preview, focus }: ThreadScreenProps = {})
   /* QUITTER / SUPPRIMER depuis les détails (#7837, #7285) : un compte, comme la passerelle l'exige. */
   const signedIn = session.status === 'authenticated' || apiDeps.source === 'fixtures';
   const storyRingOf = useAuthorStoryRings(viewer);
-  const moodOf = useAuthorMoods(viewer);
 
   /**
    * LE `Participant` DU LECTEUR DANS cette conversation (#5813, étape 8) —
@@ -701,7 +700,7 @@ export default function ThreadScreen({ preview, focus }: ThreadScreenProps = {})
     <HerePeersContext.Provider value={herePeers}>
     <ActivePeersContext.Provider value={activePeers}>
     <FocusedPeersContext.Provider value={focusedPeers}>
-    <AuthorMoodsContext.Provider value={moodOf}>
+    <AuthorContexts viewer={viewer} participants={conversation?.participants}>
     <div
       ref={chrome.host}
       className={`thread-root relative ${preview === undefined ? 'h-app' : 'h-full'} overflow-hidden`}
@@ -990,7 +989,7 @@ export default function ThreadScreen({ preview, focus }: ThreadScreenProps = {})
         announce={announcer.announce}
       />
     </div>
-    </AuthorMoodsContext.Provider>
+    </AuthorContexts>
     </FocusedPeersContext.Provider>
     </ActivePeersContext.Provider>
     </HerePeersContext.Provider>

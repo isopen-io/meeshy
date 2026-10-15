@@ -150,7 +150,7 @@ describe('Quote — l’aperçu média d’une citation s’ouvre, le reste saut
     await act(async () => {
       host.querySelector<HTMLButtonElement>('button[data-quote-open="video"]')?.click();
     });
-    await waitFor(() => document.querySelector('[role="dialog"]') !== null);
+    await waitFor(() => document.querySelector('[role="dialog"] video') !== null);
     expect(document.querySelector('[role="dialog"]')).not.toBeNull();
     expect(document.querySelector('[role="dialog"] video')?.getAttribute('src')).toContain('sortie.mp4');
     expect(jumps).toBe(0);

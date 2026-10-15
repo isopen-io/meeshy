@@ -28,6 +28,7 @@ import {
 } from '@/lib/view/transcript-karaoke';
 import { ThreadMediaContext } from '@/lib/view/thread-media-context';
 import { useKaraokeIndex } from '@/lib/view/use-karaoke';
+import { transcriptionOffered } from '@/lib/view/audio-on-demand';
 import { useAudioOnDemand } from '@/lib/view/use-audio-on-demand';
 import { useVoiceNowPlaying } from '@/lib/view/use-voice-now-playing';
 import { translate } from '@/lib/i18n-catalog';
@@ -129,7 +130,13 @@ function VoiceAttachment({
   /** Le lecteur plein écran (#8333, miroir de la pastille de pourcentage iOS) — la lecture en cours y reprend à la même seconde. */
   readonly onExpand: () => void;
 }) {
-  const onDemand = useAudioOnDemand({ attachment: received, fallbackLanguage, readerLanguages: languages, ...(deps !== undefined ? { deps } : {}) });
+  const thread = useContext(ThreadMediaContext);
+  const onDemand = useAudioOnDemand({
+    attachment: received,
+    fallbackLanguage,
+    readerLanguages: languages,
+    transcribable: transcriptionOffered({ attachment: received, message, conversationEncryptionMode: thread?.conversationEncryptionMode }),
+    ...(deps !== undefined ? { deps } : {}) });
   const attachment = onDemand.served;
   const { described: transcript, track } = electAudio({
     attachment,
@@ -170,7 +177,6 @@ function VoiceAttachment({
   /* LA CARTE DE LECTURE DE LA COQUE DIT CE VOCAL (#10624) — la coque les
      relit sur l'`<audio>` qui joue (`data-np-attachment`), ici comme dans la
      visionneuse et le mini-lecteur qui rejouent ce vocal. Coque seulement. */
-  const thread = useContext(ThreadMediaContext);
   useVoiceNowPlaying(attachment.id, {
     carrier,
     conversationTitle: thread?.conversationTitle,
@@ -416,7 +422,7 @@ function VoiceAttachment({
       </div>
 
       <VoiceFileName originalName={attachment.originalName ?? ''} />
-      {attachment.transcription == null ? (
+      {onDemand.canTranscribe ? (
         <VoiceTranscribeZone language={uiLanguage} busy={onDemand.transcribing} notice={onDemand.notice} onTranscribe={onDemand.transcribe} />
       ) : null}
 

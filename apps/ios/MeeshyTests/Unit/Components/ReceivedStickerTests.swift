@@ -228,6 +228,11 @@ final class StickerFloatAndSizeTests: XCTestCase {
         XCTAssertLessThanOrEqual(BubbleSticker.side, 220)
     }
 
+    func test_stickerSide_isTheSharedConstant_twoHundred() {
+        XCTAssertEqual(BubbleSticker.side, 200)
+        XCTAssertEqual(FocalMetrics.Sticker.side, 140)
+    }
+
     func test_focalSticker_keepsTheBubbleRatio() {
         XCTAssertEqual(FocalMetrics.Sticker.side / BubbleSticker.side, 112.0 / 160.0, accuracy: 0.01)
     }

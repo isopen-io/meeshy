@@ -6,6 +6,8 @@ import { PRESENCE_HERE_HEX, PRESENCE_HEX, presenceTone } from '@meeshy/shared/ut
 
 import { attachmentSrc } from '@/lib/api/media-url';
 import type { UserPresenceStatus } from '@/lib/api/types';
+import type { AvatarRingDesign } from '@meeshy/shared/types/avatar-ring-design';
+import { AvatarRingFrame, ringedAvatarSize } from './avatar-ring';
 import { mediaImageCrossOrigin } from '@/lib/net/api-runtime-cache';
 import type { AuthorStoryRing } from '@/lib/view/author-story-ring';
 import { identityTarget } from '@/lib/view/identity-target';
@@ -39,26 +41,7 @@ import { Link } from '@/routes/route-table';
  * CSS locales aurait fait une quatrième table — celle qui dérive en silence.
  */
 
-export function Avatar({
-  initials,
-  color,
-  size,
-  presence,
-  here = false,
-  hereActive = false,
-  hereFocused = false,
-  hereDotRatio = HERE_DOT_RATIO,
-  name,
-  opacity,
-  src,
-  profileUsername,
-  storyRing,
-  mood,
-  moodPostId,
-  moodStill = false,
-  moodAuthorId,
-  redundant,
-}: {
+type AvatarProps = {
   initials: string;
   /** L'accent de la conversation — jamais une couleur codée en dur ici. */
   color: string;
@@ -227,7 +210,44 @@ export function Avatar({
    * la photo tant qu'elle charge, et redécouverts si elle échoue.
    */
   src?: string;
-}) {
+  /**
+   * Le contour équipé (#10713) : une COUCHE autour de l'avatar, dans la MÊME empreinte `size`. L'avatar rétrécit pour tenir dans le cercle du contour ; un anneau de story reste CONCENTRIQUE, juste à l'intérieur (#10714, décision porteur du 2026-10-15).
+   */
+  ring?: AvatarRingDesign | null;
+};
+
+export function Avatar(props: AvatarProps) {
+  const { ring, ...bare } = props;
+  if (ring !== undefined && ring !== null) {
+    return (
+      <AvatarRingFrame ring={ring} size={props.size}>
+        <Avatar {...bare} size={ringedAvatarSize(props.size, props.storyRing !== undefined)} />
+      </AvatarRingFrame>
+    );
+  }
+  return renderAvatar(bare);
+}
+
+function renderAvatar({
+  initials,
+  color,
+  size,
+  presence,
+  here = false,
+  hereActive = false,
+  hereFocused = false,
+  hereDotRatio = HERE_DOT_RATIO,
+  name,
+  opacity,
+  src,
+  profileUsername,
+  storyRing,
+  mood,
+  moodPostId,
+  moodStill = false,
+  moodAuthorId,
+  redundant,
+}: Omit<AvatarProps, 'ring'>) {
   const showsImage = src !== undefined && src !== '';
   const resolvedSrc = showsImage ? attachmentSrc(src) : undefined;
   const dot = here ? size * hereDotRatio : size * PRESENCE_DOT_RATIO;

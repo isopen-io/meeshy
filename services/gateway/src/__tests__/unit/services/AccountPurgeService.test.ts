@@ -82,8 +82,8 @@ function shareLinkTable(initial: ShareLinkRow[]) {
 }
 
 function packTables(db: ReturnType<typeof fakePackDb>) {
-  const { userStickerPack, userSticker, stickerPack, stickerPackItem, userPackOwnership } = db;
-  return { userStickerPack, userSticker, stickerPack, stickerPackItem, userPackOwnership };
+  const { userStickerPack, userSticker, stickerPack, stickerPackItem, userPackOwnership, communityAppearancePack } = db;
+  return { userStickerPack, userSticker, stickerPack, stickerPackItem, userPackOwnership, communityAppearancePack };
 }
 
 const NO_FILES = { packFiles: fakeFileStore([]).store };

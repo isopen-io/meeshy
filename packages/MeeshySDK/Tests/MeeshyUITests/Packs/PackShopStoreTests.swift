@@ -39,9 +39,9 @@ final class PackShopStoreTests: XCTestCase {
 
     private func paid(_ slug: String, price: Int = 20) -> ShopPack { ShopPack(slug: slug, name: slug, price: price, owned: false) }
 
-    private func makeStore(_ service: StubShopService) -> PackShopStore {
+    private func makeStore(_ service: StubShopService, snapshots: any PackShopSnapshotStoring = EmptySnapshots()) -> PackShopStore {
         var counter = 0
-        return PackShopStore(service: service, makeRequestId: { counter += 1; return "req-\(counter)" })
+        return PackShopStore(service: service, snapshots: snapshots, makeRequestId: { counter += 1; return "req-\(counter)" })
     }
 
     func test_load_servesTheShopAndTheBalance() async {
@@ -121,6 +121,63 @@ final class PackShopStoreTests: XCTestCase {
         XCTAssertTrue(service.purchaseRequestIds.isEmpty)
         XCTAssertEqual(service.installCalls.map(\.2), ["libre"])
         XCTAssertEqual(store.state.pack(.wallpaper, "libre")?.installed, true)
+    }
+
+    // MARK: Cache-First (#10710)
+
+    private struct EmptySnapshots: PackShopSnapshotStoring {
+        func read(domains: [PackDomain]?) -> CacheResult<PackShopResponse> { .empty }
+        func write(_ state: PackShopState, domains: [PackDomain]?) {}
+    }
+
+    private final class RecordingSnapshots: PackShopSnapshotStoring, @unchecked Sendable {
+        var cached: CacheResult<PackShopResponse>
+        var written: [PackShopState] = []
+        init(_ cached: CacheResult<PackShopResponse>) { self.cached = cached }
+        func read(domains: [PackDomain]?) -> CacheResult<PackShopResponse> { cached }
+        func write(_ state: PackShopState, domains: [PackDomain]?) { written.append(state) }
+    }
+
+    func test_load_withAStaleSnapshot_servesItAtOnce_thenRefreshesSilently() async {
+        let service = StubShopService(shop: shop([paid("frais")]))
+        let snapshots = RecordingSnapshots(.stale(shop([paid("ancien")]), age: 600))
+        let store = makeStore(service, snapshots: snapshots)
+
+        await store.load()
+
+        XCTAssertEqual(store.state.packs(in: .wallpaper)?.map(\.slug), ["frais"])
+        XCTAssertEqual(snapshots.written.last?.packs(in: .wallpaper)?.map(\.slug), ["frais"])
+    }
+
+    func test_load_withAStaleSnapshot_andNoNetwork_keepsTheLastKnownContent_withoutError() async {
+        let service = StubShopService(shop: shop([]))
+        service.shopResult = .failure(URLError(.notConnectedToInternet))
+        let store = makeStore(service, snapshots: RecordingSnapshots(.stale(shop([paid("ancien")]), age: 600)))
+
+        await store.load()
+
+        XCTAssertEqual(store.state.packs(in: .wallpaper)?.map(\.slug), ["ancien"])
+        XCTAssertFalse(store.loadFailed)
+    }
+
+    func test_load_withAFreshSnapshot_servesItWithoutAskingTheNetwork() async {
+        let service = StubShopService(shop: shop([paid("frais")]))
+        let store = makeStore(service, snapshots: RecordingSnapshots(.fresh(shop([paid("ancien")]), age: 5)))
+
+        await store.load()
+
+        XCTAssertEqual(store.state.packs(in: .wallpaper)?.map(\.slug), ["ancien"])
+    }
+
+    func test_load_withNoSnapshot_andNoNetwork_leavesTheShelfEmptyAndFlagsTheFailure() async {
+        let service = StubShopService(shop: shop([]))
+        service.shopResult = .failure(URLError(.notConnectedToInternet))
+        let store = makeStore(service)
+
+        await store.load()
+
+        XCTAssertNil(store.state.sections)
+        XCTAssertTrue(store.loadFailed)
     }
 
     func test_aFailedLoad_keepsTheShopAlreadyRead() async {

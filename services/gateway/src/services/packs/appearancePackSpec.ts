@@ -15,7 +15,7 @@ import type { FrameUsage } from '@meeshy/shared/types/frame-usage';
 import type { PackAssetRef, PackDomain, PackLanguage, PackSummary } from '@meeshy/shared/types/content-pack';
 import type { PackIndexEntry } from '@meeshy/shared/types/content-pack-index';
 import { STICKER_PACK_AUTHOR_MEESHY } from '@meeshy/shared/types/sticker-pack';
-import type { PackDomainSpec, RegistryPack } from './PackCatalog';
+import type { CommunityPackStore, PackDomainSpec, RegistryPack } from './PackCatalog';
 import type { PackIndex } from './PackIndex';
 import { PACK_ASSET_PATH } from './gloryFramePackSpec';
 
@@ -78,6 +78,11 @@ const registryOf = (index: PackIndex, domain: AppearancePackDomain): readonly Re
     project: (installed: boolean, owned: boolean) => appearancePackDetail(entry, installed, owned, index.itemCount(entry)),
   }));
 
-export function appearancePackSpec(options: { readonly index: PackIndex; readonly domain: AppearancePackDomain }): PackDomainSpec<AppearancePackSummary, AppearancePackDetail> {
-  return { domain: options.domain, registry: registryOf(options.index, options.domain), community: null, removalGuard: null, toSummary: appearancePackSummary };
+export function appearancePackSpec(options: {
+  readonly index: PackIndex;
+  readonly domain: AppearancePackDomain;
+  /** Les packs de vendeurs tiers publiés (#10709) ; absent = catalogue officiel seul. */
+  readonly community?: CommunityPackStore<AppearancePackDetail>;
+}): PackDomainSpec<AppearancePackSummary, AppearancePackDetail> {
+  return { domain: options.domain, registry: registryOf(options.index, options.domain), community: options.community ?? null, removalGuard: null, toSummary: appearancePackSummary };
 }

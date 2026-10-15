@@ -15,6 +15,7 @@ const pt = {
   'message.piece.preview': 'Mídias da mensagem',
   'message.sticker.add': 'Adicionar aos meus stickers',
   'message.sticker.inLibrary': 'Nos meus stickers',
+  'message.sticker.from': 'Enviado por {name}',
   'message.sticker.viewPack': 'Ver o pacote',
   'message.sticker.added': 'Sticker adicionado à sua biblioteca',
   'message.sticker.addFailed': 'Não foi possível adicionar o sticker',

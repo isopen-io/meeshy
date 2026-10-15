@@ -22,7 +22,7 @@
       "authenticated-only": "Authentifié (onRequest/preHandler référence fastify.authenticate) sans requirePermission/requireHierarchy/requireSovereign détecté, donc S2 ou S3. Les deux ne se distinguent pas mécaniquement : l'appartenance à la ressource (S3) peut être vérifiée à l'intérieur du corps du handler, invisible depuis le serveur assemblé."
     }
   },
-  "routeCount": 708,
+  "routeCount": 720,
   "routes": [
     {
       "method": "DELETE",
@@ -4250,6 +4250,34 @@
     },
     {
       "method": "GET",
+      "path": "/api/v1/packs/avatar-ring/pending",
+      "module": "appearancePacksRoutes~2",
+      "mountPrefix": "/api/v1/packs/avatar-ring",
+      "securityLevel": "inconnu",
+      "securityLevelCandidates": [
+        "S4",
+        "S5"
+      ],
+      "securityBasisKey": "permission-gated",
+      "hierarchyGated": false,
+      "adminPrefixed": false
+    },
+    {
+      "method": "GET",
+      "path": "/api/v1/packs/avatar-ring/submissions",
+      "module": "appearancePacksRoutes~2",
+      "mountPrefix": "/api/v1/packs/avatar-ring",
+      "securityLevel": "inconnu",
+      "securityLevelCandidates": [
+        "S2",
+        "S3"
+      ],
+      "securityBasisKey": "authenticated-only",
+      "hierarchyGated": false,
+      "adminPrefixed": false
+    },
+    {
+      "method": "GET",
       "path": "/api/v1/packs/banner",
       "module": "appearancePacksRoutes~3",
       "mountPrefix": "/api/v1/packs/banner",
@@ -4279,6 +4307,34 @@
     {
       "method": "GET",
       "path": "/api/v1/packs/banner/installed",
+      "module": "appearancePacksRoutes~3",
+      "mountPrefix": "/api/v1/packs/banner",
+      "securityLevel": "inconnu",
+      "securityLevelCandidates": [
+        "S2",
+        "S3"
+      ],
+      "securityBasisKey": "authenticated-only",
+      "hierarchyGated": false,
+      "adminPrefixed": false
+    },
+    {
+      "method": "GET",
+      "path": "/api/v1/packs/banner/pending",
+      "module": "appearancePacksRoutes~3",
+      "mountPrefix": "/api/v1/packs/banner",
+      "securityLevel": "inconnu",
+      "securityLevelCandidates": [
+        "S4",
+        "S5"
+      ],
+      "securityBasisKey": "permission-gated",
+      "hierarchyGated": false,
+      "adminPrefixed": false
+    },
+    {
+      "method": "GET",
+      "path": "/api/v1/packs/banner/submissions",
       "module": "appearancePacksRoutes~3",
       "mountPrefix": "/api/v1/packs/banner",
       "securityLevel": "inconnu",
@@ -4377,6 +4433,34 @@
     {
       "method": "GET",
       "path": "/api/v1/packs/wallpaper/installed",
+      "module": "appearancePacksRoutes",
+      "mountPrefix": "/api/v1/packs/wallpaper",
+      "securityLevel": "inconnu",
+      "securityLevelCandidates": [
+        "S2",
+        "S3"
+      ],
+      "securityBasisKey": "authenticated-only",
+      "hierarchyGated": false,
+      "adminPrefixed": false
+    },
+    {
+      "method": "GET",
+      "path": "/api/v1/packs/wallpaper/pending",
+      "module": "appearancePacksRoutes",
+      "mountPrefix": "/api/v1/packs/wallpaper",
+      "securityLevel": "inconnu",
+      "securityLevelCandidates": [
+        "S4",
+        "S5"
+      ],
+      "securityBasisKey": "permission-gated",
+      "hierarchyGated": false,
+      "adminPrefixed": false
+    },
+    {
+      "method": "GET",
+      "path": "/api/v1/packs/wallpaper/submissions",
       "module": "appearancePacksRoutes",
       "mountPrefix": "/api/v1/packs/wallpaper",
       "securityLevel": "inconnu",
@@ -8522,6 +8606,34 @@
     },
     {
       "method": "POST",
+      "path": "/api/v1/packs/avatar-ring/:slug/review",
+      "module": "appearancePacksRoutes~2",
+      "mountPrefix": "/api/v1/packs/avatar-ring",
+      "securityLevel": "inconnu",
+      "securityLevelCandidates": [
+        "S4",
+        "S5"
+      ],
+      "securityBasisKey": "permission-gated",
+      "hierarchyGated": false,
+      "adminPrefixed": false
+    },
+    {
+      "method": "POST",
+      "path": "/api/v1/packs/avatar-ring/submissions",
+      "module": "appearancePacksRoutes~2",
+      "mountPrefix": "/api/v1/packs/avatar-ring",
+      "securityLevel": "inconnu",
+      "securityLevelCandidates": [
+        "S2",
+        "S3"
+      ],
+      "securityBasisKey": "authenticated-only",
+      "hierarchyGated": false,
+      "adminPrefixed": false
+    },
+    {
+      "method": "POST",
       "path": "/api/v1/packs/banner/:slug/purchase",
       "module": "appearancePacksRoutes~3",
       "mountPrefix": "/api/v1/packs/banner",
@@ -8536,7 +8648,63 @@
     },
     {
       "method": "POST",
+      "path": "/api/v1/packs/banner/:slug/review",
+      "module": "appearancePacksRoutes~3",
+      "mountPrefix": "/api/v1/packs/banner",
+      "securityLevel": "inconnu",
+      "securityLevelCandidates": [
+        "S4",
+        "S5"
+      ],
+      "securityBasisKey": "permission-gated",
+      "hierarchyGated": false,
+      "adminPrefixed": false
+    },
+    {
+      "method": "POST",
+      "path": "/api/v1/packs/banner/submissions",
+      "module": "appearancePacksRoutes~3",
+      "mountPrefix": "/api/v1/packs/banner",
+      "securityLevel": "inconnu",
+      "securityLevelCandidates": [
+        "S2",
+        "S3"
+      ],
+      "securityBasisKey": "authenticated-only",
+      "hierarchyGated": false,
+      "adminPrefixed": false
+    },
+    {
+      "method": "POST",
       "path": "/api/v1/packs/wallpaper/:slug/purchase",
+      "module": "appearancePacksRoutes",
+      "mountPrefix": "/api/v1/packs/wallpaper",
+      "securityLevel": "inconnu",
+      "securityLevelCandidates": [
+        "S2",
+        "S3"
+      ],
+      "securityBasisKey": "authenticated-only",
+      "hierarchyGated": false,
+      "adminPrefixed": false
+    },
+    {
+      "method": "POST",
+      "path": "/api/v1/packs/wallpaper/:slug/review",
+      "module": "appearancePacksRoutes",
+      "mountPrefix": "/api/v1/packs/wallpaper",
+      "securityLevel": "inconnu",
+      "securityLevelCandidates": [
+        "S4",
+        "S5"
+      ],
+      "securityBasisKey": "permission-gated",
+      "hierarchyGated": false,
+      "adminPrefixed": false
+    },
+    {
+      "method": "POST",
+      "path": "/api/v1/packs/wallpaper/submissions",
       "module": "appearancePacksRoutes",
       "mountPrefix": "/api/v1/packs/wallpaper",
       "securityLevel": "inconnu",

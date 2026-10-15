@@ -8,6 +8,7 @@
  *  - sa BIBLIOTHÈQUE, `UserSticker`, et ses fichiers sous `stickers/<userId>/` ;
  *  - les packs qu'il a PROPOSÉS, `StickerPack` + `StickerPackItem`, et leurs
  *    fichiers sous `sticker-packs/<id>/` ;
+ *  - ses propositions de packs d'APPARENCE (fonds, contours, bannières : `CommunityAppearancePack`, #10709) ;
  *  - les packs qu'il a ACHETÉS en Meeshes, `UserPackOwnership` (#10632) : la
  *    ligne de dépense part avec le jeu (`GamePurge`), la possession part ici —
  *    sans quoi l'historique d'achat d'un compte purgé survivait à sa purge.
@@ -43,7 +44,7 @@ const UNPUBLISHED_STATUSES = ['pending', 'rejected'];
 
 const ACCOUNT_ID_SHAPE = /^[a-f0-9]{24}$/i;
 
-export type PackPrivacyDb = Pick<PrismaClient, 'userStickerPack' | 'userSticker' | 'stickerPack' | 'stickerPackItem' | 'userPackOwnership'>;
+export type PackPrivacyDb = Pick<PrismaClient, 'userStickerPack' | 'userSticker' | 'stickerPack' | 'stickerPackItem' | 'userPackOwnership' | 'communityAppearancePack'>;
 
 /** Le volume des téléversements, vu par la purge : chemins RELATIFS à sa racine. */
 export interface PackFileStore {
@@ -125,6 +126,12 @@ const SUBMISSION_SELECT = {
   },
 } as const;
 
+/** Les propositions d'apparence d'un tiers (#10709) : données seulement, aucun fichier. */
+const APPEARANCE_SUBMISSION_SELECT = {
+  domain: true, slug: true, name: true, description: true, author: true, status: true, reviewNote: true,
+  reviewedAt: true, price: true, installCount: true, createdAt: true, contractJson: true,
+} as const;
+
 const withFileUrl = <T extends { readonly filePath: string }>(row: T): T & { readonly fileUrl: string } => ({
   ...row,
   fileUrl: streamedFileUrlFromEnv(row.filePath),
@@ -137,7 +144,7 @@ const withFileUrl = <T extends { readonly filePath: string }>(row: T): T & { rea
  */
 export async function exportPackData(prisma: PackPrivacyDb, userId: string, page: PackExportPage) {
   const window = { take: page.limit, skip: page.offset };
-  const [choiceRows, choicesTotal, libraryRows, libraryTotal, submissionRows, submissionsTotal, ownershipRows, ownershipsTotal] = await Promise.all([
+  const [choiceRows, choicesTotal, libraryRows, libraryTotal, submissionRows, submissionsTotal, ownershipRows, ownershipsTotal, appearanceRows, appearanceTotal] = await Promise.all([
     prisma.userStickerPack.findMany({
       where: { userId },
       select: { packSlug: true, installedAt: true, updatedAt: true },
@@ -156,6 +163,8 @@ export async function exportPackData(prisma: PackPrivacyDb, userId: string, page
       ...window,
     }),
     prisma.userPackOwnership.count({ where: { userId } }),
+    prisma.communityAppearancePack.findMany({ where: { submitterId: userId }, select: APPEARANCE_SUBMISSION_SELECT, orderBy: { createdAt: 'desc' }, ...window }),
+    prisma.communityAppearancePack.count({ where: { submitterId: userId } }),
   ]);
 
   const choices = choiceRows.map(({ packSlug, installedAt, updatedAt }) => {
@@ -182,6 +191,7 @@ export async function exportPackData(prisma: PackPrivacyDb, userId: string, page
       total: submissionsTotal,
     },
     ownerships: { items: ownerships, total: ownershipsTotal },
+    appearanceSubmissions: { items: appearanceRows, total: appearanceTotal },
   };
 }
 
@@ -194,6 +204,8 @@ type PackPurgePlan = {
   readonly published: number;
   readonly files: readonly string[];
   readonly ownerships: number;
+  readonly appearanceUnpublished: number;
+  readonly appearancePublished: number;
 };
 
 const unpublishedOf = (userId: string) => ({ submitterId: userId, status: { in: UNPUBLISHED_STATUSES } });
@@ -201,13 +213,15 @@ const publishedOf = (userId: string) => ({ submitterId: userId, status: 'approve
 
 /** Ce que la purge effacerait, lu sans rien écrire — l'unique inventaire, partagé par la purge et sa mesure. */
 async function planPackPurge(prisma: PackPrivacyDb, userId: string, files: PackFileStore): Promise<PackPurgePlan> {
-  const [choices, libraryRows, unpublished, published, directoryFiles, ownerships] = await Promise.all([
+  const [choices, libraryRows, unpublished, published, directoryFiles, ownerships, appearanceUnpublished, appearancePublished] = await Promise.all([
     prisma.userStickerPack.count({ where: { userId } }),
     prisma.userSticker.findMany({ where: { userId }, select: { filePath: true } }),
     prisma.stickerPack.findMany({ where: unpublishedOf(userId), select: { id: true, items: { select: { filePath: true } } } }),
     prisma.stickerPack.count({ where: publishedOf(userId) }),
     ACCOUNT_ID_SHAPE.test(userId) ? files.list(`stickers/${userId}`) : Promise.resolve([]),
     prisma.userPackOwnership.count({ where: { userId } }),
+    prisma.communityAppearancePack.count({ where: unpublishedOf(userId) }),
+    prisma.communityAppearancePack.count({ where: publishedOf(userId) }),
   ]);
   const referenced = [...libraryRows.map((row) => row.filePath), ...unpublished.flatMap((pack) => pack.items.map((item) => item.filePath))];
   const candidates = [...new Set([...directoryFiles, ...referenced])];
@@ -219,6 +233,8 @@ async function planPackPurge(prisma: PackPrivacyDb, userId: string, files: PackF
     published,
     files: present.filter((file): file is string => file !== null),
     ownerships,
+    appearanceUnpublished,
+    appearancePublished,
   };
 }
 
@@ -228,8 +244,8 @@ export async function measurePackData(prisma: PackPrivacyDb, userId: string, opt
   return {
     choicesDeleted: plan.choices,
     libraryDeleted: plan.libraryRows,
-    submissionsDeleted: plan.unpublishedPackIds.length,
-    publishedAnonymized: plan.published,
+    submissionsDeleted: plan.unpublishedPackIds.length + plan.appearanceUnpublished,
+    publishedAnonymized: plan.published + plan.appearancePublished,
     filesDeleted: plan.files.length,
     ownershipsDeleted: plan.ownerships,
   };
@@ -242,19 +258,21 @@ export async function purgePackData(prisma: PackPrivacyDb, userId: string, optio
   const packIds = [...plan.unpublishedPackIds];
 
   if (packIds.length > 0) await prisma.stickerPackItem.deleteMany({ where: { packId: { in: packIds } } });
-  const [submissions, library, choices, published, ownerships] = await Promise.all([
+  const [submissions, library, choices, published, ownerships, appearanceSubmissions, appearancePublished] = await Promise.all([
     prisma.stickerPack.deleteMany({ where: { id: { in: packIds }, ...unpublishedOf(userId) } }),
     prisma.userSticker.deleteMany({ where: { userId } }),
     prisma.userStickerPack.deleteMany({ where: { userId } }),
     prisma.stickerPack.updateMany({ where: publishedOf(userId), data: { author: DELETED_ACCOUNT_PACK_AUTHOR } }),
     prisma.userPackOwnership.deleteMany({ where: { userId } }),
+    prisma.communityAppearancePack.deleteMany({ where: unpublishedOf(userId) }),
+    prisma.communityAppearancePack.updateMany({ where: publishedOf(userId), data: { author: DELETED_ACCOUNT_PACK_AUTHOR } }),
   ]);
 
   return {
     choicesDeleted: choices.count,
     libraryDeleted: library.count,
-    submissionsDeleted: submissions.count,
-    publishedAnonymized: published.count,
+    submissionsDeleted: submissions.count + appearanceSubmissions.count,
+    publishedAnonymized: published.count + appearancePublished.count,
     filesDeleted: removed.filter(Boolean).length,
     ownershipsDeleted: ownerships.count,
   };

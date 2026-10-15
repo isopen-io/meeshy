@@ -5,7 +5,7 @@ import MeeshyUI
 /// **Un sticker de conversation, rendu SANS chrome de bulle** (#4823).
 ///
 /// Ni fond, ni coin, ni bordure : le sticker EST le message, comme un emoji
-/// libre. L'image (~210 pt) s'aligne à droite quand c'est le mien, à gauche
+/// libre. L'image (200 pt) s'aligne à droite quand c'est le mien, à gauche
 /// sinon, avec la méta-ligne compacte (heure + statut de livraison) posée à
 /// côté et le strip de réactions à cheval sur le coin — exactement la
 /// silhouette de `emojiOnlyContent` dans `BubbleStandardLayout`, dont ce
@@ -34,10 +34,10 @@ struct BubbleSticker: View, Equatable {
 
     // MARK: - Mesures
 
-    /// Le côté de référence d'un sticker dans le fil — 210 pt (SOTA : Telegram,
-    /// WhatsApp, Signal, iMessage rendent un sticker bien plus grand qu'une
-    /// image de bulle ; 160 pt le laissait minuscule, #10630).
-    static let side: CGFloat = 210
+    /// Le côté de référence d'un sticker dans le fil — 200 pt, la cote
+    /// UNIQUE des deux clients (décision porteur 2026-10-15, #10705) : en bulle
+    /// ~200, proportionnelle en Focal / rangée plate (`FocalMetrics.Sticker`).
+    static let side: CGFloat = 200
     /// La boîte maximale d'un GABARIT — un cartouche (« Depuis le 12 mai »)
     /// est plus large que haut, et ne doit pas être écrasé dans un carré.
     /// Proportionnelle au côté, comme celle de `MessageStickerArtwork`.

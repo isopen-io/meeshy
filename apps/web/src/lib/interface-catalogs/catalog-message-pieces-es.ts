@@ -15,6 +15,7 @@ const es = {
   'message.piece.preview': 'Archivos del mensaje',
   'message.sticker.add': 'Añadir a mis stickers',
   'message.sticker.inLibrary': 'En mis stickers',
+  'message.sticker.from': 'Enviado por {name}',
   'message.sticker.viewPack': 'Ver el pack',
   'message.sticker.added': 'Sticker añadido a tu biblioteca',
   'message.sticker.addFailed': 'No se pudo añadir el sticker',
