@@ -71,7 +71,7 @@ const KARAOKE_STYLE: Readonly<Record<KaraokeTone, CSSProperties>> = {
   idle: { opacity: 0.85 },
   upcoming: { opacity: 0.55 },
   past: { opacity: 0.85 },
-  active: { opacity: 1, fontWeight: 700, color: 'var(--accent)' },
+  active: { opacity: 1, fontWeight: 700, color: 'var(--accent, var(--color-ios-brand))' },
 };
 
 const contain = (event: SyntheticEvent): void => event.stopPropagation();
@@ -88,7 +88,7 @@ const discStyle = (size: number, filled: boolean): CSSProperties => ({
 
 const pillStyle = (selected: boolean): CSSProperties => ({
   minHeight: 44,
-  backgroundColor: selected ? 'color-mix(in srgb, var(--accent) 70%, transparent)' : 'color-mix(in srgb, var(--color-on-media) 10%, transparent)',
+  backgroundColor: selected ? 'color-mix(in srgb, var(--accent, var(--color-ios-brand)) 70%, transparent)' : 'color-mix(in srgb, var(--color-on-media) 10%, transparent)',
   opacity: selected ? 1 : 0.8,
 });
 
@@ -296,7 +296,7 @@ export default function ViewerAudioPage({
               className="flex-1 rounded-full"
               style={{
                 height: `${Math.max(10, height * 4)}%`,
-                backgroundColor: index / waves.length < fraction ? 'var(--accent)' : 'var(--color-on-media)',
+                backgroundColor: index / waves.length < fraction ? 'var(--accent, var(--color-ios-brand))' : 'var(--color-on-media)',
                 opacity: index / waves.length < fraction ? 1 : 0.35,
               }}
             />
@@ -363,7 +363,7 @@ export default function ViewerAudioPage({
             }}
           >
             <span className="absolute inset-x-0 rounded-full" style={{ top: 10, height: 4, backgroundColor: 'color-mix(in srgb, var(--color-on-media) 25%, transparent)' }} />
-            <span className="absolute start-0 rounded-full" style={{ top: 10, height: 4, width: `${fraction * 100}%`, backgroundColor: 'var(--accent)' }} />
+            <span className="absolute start-0 rounded-full" style={{ top: 10, height: 4, width: `${fraction * 100}%`, backgroundColor: 'var(--accent, var(--color-ios-brand))' }} />
             <span
               className="absolute rounded-full bg-on-media"
               style={{ top: 4, width: 16, height: 16, insetInlineStart: `calc(${fraction * 100}% - 8px)` }}

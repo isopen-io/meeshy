@@ -16,6 +16,13 @@ final class ConversationViewRepaintRevisionGuardTests: XCTestCase {
         XCTAssertTrue(body.contains("repaintRevision &+= 1"))
     }
 
+    /// Les réglages enregistrés (`onConversationUpdated`) réécrivaient l'override EN DIRECT : un second
+    /// enregistrement (même `id`) ne redessinait rien. Tout passe par `admitRepainted`.
+    func test_conversationOverride_hasASingleWriter() throws {
+        let text = try source()
+        XCTAssertEqual(text.components(separatedBy: "conversationOverride = ").count - 1, 1)
+    }
+
     func test_liveConversation_readsTheRevisionToDependOnIt() throws {
         let text = try source()
         let body = try XCTUnwrap(text.range(of: "var liveConversation").map { String(text[$0.lowerBound...].prefix(160)) })

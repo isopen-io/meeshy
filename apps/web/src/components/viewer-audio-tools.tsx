@@ -26,7 +26,7 @@ const containKeys = (event: ReactKeyboardEvent): void => {
 
 const actionStyle: CSSProperties = {
   minHeight: 44,
-  backgroundColor: 'color-mix(in srgb, var(--accent) 70%, transparent)',
+  backgroundColor: 'color-mix(in srgb, var(--accent, var(--color-ios-brand)) 70%, transparent)',
 };
 
 const chipStyle = (pending: boolean): CSSProperties => ({

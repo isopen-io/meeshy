@@ -75,6 +75,7 @@ import {
   isReadStatusUpdated,
   isSocketMessage,
 } from './realtime-apply';
+import { applyTranscriptionReady, isTranscriptionReady } from './realtime-transcription-ready';
 import {
   applyMessageCountdownStarted,
   applyMessageExpired,
@@ -414,6 +415,12 @@ export function createRealtimeConnection(session: RealtimeSessionInfo, deps: Rea
   const onAttachmentUpdated = (payload: unknown): void => {
     if (!isAttachmentUpdated(payload)) return;
     applyMessageAttachmentUpdated(deps.queryClient, payload);
+  };
+
+  /** `audio:transcription-ready` (#10742) — la transcription demandée rejoint la bonne pièce sans rechargement. */
+  const onTranscriptionReady = (payload: unknown): void => {
+    if (!isTranscriptionReady(payload)) return;
+    applyTranscriptionReady(deps.queryClient, payload);
   };
 
   /**
@@ -990,6 +997,7 @@ export function createRealtimeConnection(session: RealtimeSessionInfo, deps: Rea
   socket.on<unknown>(SERVER_EVENTS.CONVERSATION_NEW, onConversationNew);
   socket.on<unknown>(SERVER_EVENTS.MESSAGE_TRANSLATION, onMessageTranslation);
   socket.on<unknown>(SERVER_EVENTS.MESSAGE_ATTACHMENT_UPDATED, onAttachmentUpdated);
+  socket.on<unknown>(SERVER_EVENTS.TRANSCRIPTION_READY, onTranscriptionReady);
   socket.on<unknown>(SERVER_EVENTS.ATTACHMENT_STATUS_UPDATED, onAttachmentStatusUpdated);
   socket.on<unknown>(SERVER_EVENTS.ATTACHMENT_REACTION_ADDED, onAttachmentReactionChanged);
   socket.on<unknown>(SERVER_EVENTS.ATTACHMENT_REACTION_REMOVED, onAttachmentReactionChanged);
@@ -1080,6 +1088,7 @@ export function createRealtimeConnection(session: RealtimeSessionInfo, deps: Rea
       socket.off<unknown>(SERVER_EVENTS.CONVERSATION_NEW, onConversationNew);
       socket.off<unknown>(SERVER_EVENTS.MESSAGE_TRANSLATION, onMessageTranslation);
       socket.off<unknown>(SERVER_EVENTS.MESSAGE_ATTACHMENT_UPDATED, onAttachmentUpdated);
+      socket.off<unknown>(SERVER_EVENTS.TRANSCRIPTION_READY, onTranscriptionReady);
       socket.off<unknown>(SERVER_EVENTS.ATTACHMENT_STATUS_UPDATED, onAttachmentStatusUpdated);
       socket.off<unknown>(SERVER_EVENTS.ATTACHMENT_REACTION_ADDED, onAttachmentReactionChanged);
       socket.off<unknown>(SERVER_EVENTS.ATTACHMENT_REACTION_REMOVED, onAttachmentReactionChanged);
