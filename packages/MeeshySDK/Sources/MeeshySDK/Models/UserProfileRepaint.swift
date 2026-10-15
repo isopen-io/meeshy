@@ -238,7 +238,8 @@ extension MeeshyUser {
             voiceSampleUrl: voiceSampleUrl,
             voiceSampleDurationMs: voiceSampleDurationMs,
             voiceQuality: voiceQuality,
-            activation: activation
+            activation: activation,
+            profileDecor: profileDecor
         )
     }
 }
