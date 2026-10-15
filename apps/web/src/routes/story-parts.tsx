@@ -10,6 +10,7 @@ import { watchMediaStall } from '@/lib/media/media-stall';
 import { feedMediaKindOf } from '@/lib/feed/layout';
 import { currentInterfaceLanguage, type InterfaceLanguage } from '@/lib/interface-language';
 import type { StoryPlaybackGroup } from '@/lib/stories/playback';
+import { translate } from '@/lib/i18n-catalog';
 
 /**
  * LES PIÈCES PURES DU LECTEUR DE STORY (#6801) — extraites de `story.tsx`,
@@ -371,7 +372,7 @@ export function ProgressBars({
   readonly onScrubEnd: (seconds: number) => void;
 }) {
   return (
-    <div role="group" aria-label={`Story ${index + 1} sur ${group.stories.length}`} className="flex" style={{ gap: 3, height: 3 }}>
+    <div role="group" aria-label={translate(currentInterfaceLanguage(), 'story.viewer.position', { index: String(index + 1), total: String(group.stories.length) })} className="flex" style={{ gap: 3, height: 3 }}>
       {group.stories.map((story, i) =>
         i === index ? (
           <span key={story.id} className="relative flex-1">

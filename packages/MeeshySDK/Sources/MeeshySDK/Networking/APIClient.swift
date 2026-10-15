@@ -116,74 +116,6 @@ public struct PaginatedAPIResponse<T: Decodable>: Decodable {
     }
 }
 
-/// Métadonnées hors-page d'une réponse paginée.
-///
-/// `data` ne peut dire que ce qui EXISTE ; certaines informations portent sur
-/// ce qui a disparu, et n'ont donc nulle part où tenir dans la page elle-même.
-public struct APIResponseMeta: Decodable, Sendable {
-    /// Tombstones du delta-sync des stories (`GET /posts/feed/stories?updatedSince`) :
-    /// ids des stories disparues depuis le curseur — supprimées par leur auteur,
-    /// ou périmées puis balayées côté serveur.
-    ///
-    /// Le merge delta client étant purement additif, c'est le SEUL canal par
-    /// lequel un client ayant manqué l'event socket `story:deleted` (app fermée
-    /// ou hors-ligne, aucun replay) apprend qu'il doit purger son cache.
-    public let deletedStoryIds: [String]?
-
-    /// `deletedStoryIds` a débordé son plafond serveur : des disparitions plus
-    /// anciennes n'ont PAS été rendues.
-    ///
-    /// Les tombstones n'ont aucun curseur de reprise — il n'y a donc pas de
-    /// « page suivante » de disparitions à demander. Le seul recours est un
-    /// fetch complet, dont le remplacement du tray purge les fantômes.
-    ///
-    /// Absent (`nil`) sur un gateway antérieur à ce champ : traité comme « pas
-    /// de troncature », c'est-à-dire exactement le comportement d'avant.
-    public let deletedStoryIdsTruncated: Bool?
-
-    /// Tombstones du delta-sync des conversations
-    /// (`GET /conversations?updatedSince=`) : ids des conversations qui ont
-    /// QUITTÉ la vue de l'utilisateur depuis le curseur — fermées, quittées,
-    /// bannies, ou supprimées-pour-moi depuis un AUTRE appareil.
-    ///
-    /// `data` d'une page delta ne porte que des lignes SERVIES, et la clause
-    /// serveur (conversation active, participant actif sans `deletedForMe`)
-    /// exclut précisément celles qui viennent de sortir : une disparition n'a
-    /// aucune place dans la page, pas même sous la forme d'un `isActive: false`.
-    /// Un leave ou un ban n'écrit d'ailleurs QUE la ligne `Participant` —
-    /// `Conversation.updatedAt` ne bouge pas, donc même une clause plus large ne
-    /// les verrait jamais.
-    ///
-    /// Jumeau web : `meta.deletedConversationIds`, lu par
-    /// `apps/web/hooks/queries/use-conversations-delta-sync.ts`.
-    public let deletedConversationIds: [String]?
-
-    /// `deletedConversationIds` a débordé son plafond serveur
-    /// (`CONVERSATION_TOMBSTONE_LIMIT`, 500 par stream) : des disparitions plus
-    /// anciennes n'ont PAS été rendues.
-    ///
-    /// Comme pour les stories, ces tombstones n'ont AUCUN curseur de reprise —
-    /// il n'existe pas de « page suivante » de disparitions à demander. Le seul
-    /// recours est la réconciliation complète, dont le remplacement de la liste
-    /// purge les fantômes.
-    ///
-    /// Absent (`nil`) sur un gateway antérieur à ce champ : traité comme « pas
-    /// de troncature », c'est-à-dire exactement le comportement d'avant.
-    public let deletedConversationIdsTruncated: Bool?
-
-    public init(
-        deletedStoryIds: [String]? = nil,
-        deletedStoryIdsTruncated: Bool? = nil,
-        deletedConversationIds: [String]? = nil,
-        deletedConversationIdsTruncated: Bool? = nil
-    ) {
-        self.deletedStoryIds = deletedStoryIds
-        self.deletedStoryIdsTruncated = deletedStoryIdsTruncated
-        self.deletedConversationIds = deletedConversationIds
-        self.deletedConversationIdsTruncated = deletedConversationIdsTruncated
-    }
-}
-
 public struct CursorPagination: Decodable, Sendable {
     public let nextCursor: String?
     public let hasMore: Bool?
@@ -278,49 +210,6 @@ public enum APIError: Error, LocalizedError {
 
 public final class APIClient: APIClientProviding, @unchecked Sendable {
     public static let shared = APIClient()
-
-    // MARK: - 401 Mapping (pure)
-
-    /// How a 401 response on `endpoint` should be surfaced. Extracted as a
-    /// pure decision so the credential-vs-session distinction is unit
-    /// testable without driving a real `URLSession` — see
-    /// `APIClientAuthMappingTests`.
-    enum UnauthorizedMapping: Equatable {
-        /// Wrong password / 2FA code / stale magic link — NOT a session
-        /// problem, so callers must NOT tear down or refresh anything.
-        case invalidCredentials(message: String)
-        /// A real session-expiry: refresh-token rejected, or a regular
-        /// endpoint whose retried-refresh attempt also 401'd.
-        case sessionExpired
-    }
-
-    /// P1 — a 401 on `/auth/login` or `/auth/login/2fa` means "these
-    /// credentials are wrong", never "your session expired" (there is no
-    /// session yet on these endpoints).
-    /// `/auth/refresh` is deliberately EXCLUDED: a 401 there means the
-    /// refresh token itself is dead, which is genuinely `.sessionExpired`.
-    /// `/auth/register` and `/auth/magic-link/*` are also deliberately
-    /// EXCLUDED — the gateway never returns 401 on either (both surface
-    /// every error as 400 via `sendBadRequest`; verified against
-    /// `services/gateway/src/routes/auth/register.ts` and
-    /// `services/gateway/src/routes/magic-link.ts`, zero `sendUnauthorized`
-    /// call sites in either file). Including them here would be scope creep
-    /// beyond the audited root cause (wrong password / 2FA code).
-    nonisolated static func mapUnauthorized(endpoint: String, serverMessage: String?) -> UnauthorizedMapping {
-        mapUnauthorized(authKind: MeeshyEndpointPolicy.authKind(forLegacyPath: endpoint),
-                        serverMessage: serverMessage)
-    }
-
-    /// La même règle, lue sur la politique DÉCLARÉE plutôt que déduite du
-    /// chemin. C'est cette forme que le pipeline consomme : une adresse typée
-    /// n'a pas à repasser par une comparaison de préfixe pour dire ce qu'elle
-    /// sait déjà d'elle-même.
-    nonisolated static func mapUnauthorized(
-        authKind: MeeshyEndpointAuthKind, serverMessage: String?
-    ) -> UnauthorizedMapping {
-        guard authKind == .credentials else { return .sessionExpired }
-        return .invalidCredentials(message: serverMessage ?? "Identifiants invalides")
-    }
 
     // MARK: - Ce que le pipeline a besoin de savoir d'une adresse (#4282)
 
@@ -498,7 +387,7 @@ public final class APIClient: APIClientProviding, @unchecked Sendable {
         tokenLock.withLock { $0 }
     }
 
-    private init() {
+    private convenience init() {
         let config = URLSessionConfiguration.default
         config.timeoutIntervalForRequest = 60
         config.timeoutIntervalForResource = 120
@@ -515,12 +404,17 @@ public final class APIClient: APIClientProviding, @unchecked Sendable {
         // SOTA P11: HTTP/3 is enabled by default on iOS 15+. The optimistic HTTP/3 flag lives on
         // URLRequest (assumesHTTP3Capable), not on URLSessionConfiguration. Apply per-request
         // via makeRequest() to skip the HTTP/2 → HTTP/3 upgrade negotiation on first upload.
-        self.urlSession = URLSession(
+        self.init(urlSession: URLSession(
             configuration: config,
             delegate: CertificatePinningDelegate(),
             delegateQueue: nil
-        )
+        ))
+    }
 
+    /// Un client sur une session FOURNIE : les témoins y posent leur
+    /// `URLProtocol` et observent ce qui part sur le fil (#10463).
+    init(urlSession: URLSession) {
+        self.urlSession = urlSession
         self.decoder = Self.makeAPIPayloadDecoder()
     }
 
@@ -661,10 +555,14 @@ public final class APIClient: APIClientProviding, @unchecked Sendable {
             let message = errBody?.message ?? errBody?.error
             switch statusCode {
             case 401:
+                AccountDeletedSignal.signal(statusCode: 401, body: data, presentedOwner: AccountDeletedSignal.owner(ofJWT: bearerToken))
                 throw MeeshyError.auth(.sessionExpired)
             case 403:
                 throw MeeshyError.forbidden(reason: message, body: data)
             case 429:
+                if let slowMode = NewcomerSlowMode.fromResponse(response, body: data) {
+                    throw MeeshyError.rejected(slowMode.rejection(message: message))
+                }
                 if let limit = DailyGestureLimit.fromBody(data) {
                     throw MeeshyError.rejected(APIRejection(
                         statusCode: 429, code: limit.gesture.rawValue, message: message ?? "Limite du jour atteinte",
@@ -748,7 +646,16 @@ public final class APIClient: APIClientProviding, @unchecked Sendable {
             do {
                 let freshToken = try await AuthManager.shared.refreshSession()
                 urlRequest.setValue("Bearer \(freshToken)", forHTTPHeaderField: "Authorization")
-            } catch {
+            } catch let abandoned as CancellationError {
+                // #10463 — rafraîchissement ABANDONNÉ (sortie de session en
+                // cours, session remplacée) : rien n'a été refusé, et une
+                // session expirée ferait démonter le compte qu'on quitte.
+                throw abandoned
+            } catch let refused as MeeshyError {
+                // Seul un REFUS d'authentification vaut session expirée. Un rafraîchissement qui échoue
+                // sur le réseau — réouverture hors ligne, jeton de 24 h échu — passait pour un refus : le
+                // compte était déconnecté et sa base locale purgée pour une simple coupure.
+                guard case .auth = refused else { throw refused }
                 throw MeeshyError.auth(.sessionExpired)
             }
         }
@@ -802,7 +709,9 @@ public final class APIClient: APIClientProviding, @unchecked Sendable {
                 // Une limite QUOTIDIENNE de gestes (429 `DAILY_*`, #9571) ne se
                 // rejoue pas : elle tient jusqu'à `resetAt`, des heures plus tard.
                 let dailyLimit = statusCode == 429 ? DailyGestureLimit.fromBody(data) : nil
-                if endpointAllowsRetry && dailyLimit == nil && Self.retryableStatusCodes.contains(statusCode) && attempt < Self.maxRetryAttempts {
+                // Le mode lent des nouveaux comptes (#7759) se DIT à l'auteur, jamais attendu en silence.
+                let slowMode = NewcomerSlowMode.fromResponse(httpResponse, body: data)
+                if endpointAllowsRetry && dailyLimit == nil && slowMode == nil && Self.retryableStatusCodes.contains(statusCode) && attempt < Self.maxRetryAttempts {
                     continue
                 }
 
@@ -811,6 +720,10 @@ public final class APIClient: APIClientProviding, @unchecked Sendable {
                 guard (200...299).contains(statusCode) else {
                     let errBody = try? decoder.decode(ErrorBody.self, from: data)
                     let errorMsg = errBody?.message ?? errBody?.error
+                    // #10442 — un invité de lien échu ou révoqué : la session se termine, elle ne se retente pas.
+                    if let guestToken = urlRequest.value(forHTTPHeaderField: "X-Session-Token") { GuestSessionEnd.signal(statusCode: statusCode, body: data, refusedSessionToken: guestToken) }
+                    // #10482 — « ce compte est supprimé », seulement s'il est le propriétaire du jeton présenté.
+                    AccountDeletedSignal.signal(statusCode: statusCode, body: data, presentedOwner: AccountDeletedSignal.presentedOwner(authorization: urlRequest.value(forHTTPHeaderField: "Authorization"), body: urlRequest.httpBody))
 
                     // Rupture cliente (C4b) : le gateway refuse ce BINAIRE, pas
                     // cette requête. Le signal part AVANT que l'erreur ne soit
@@ -879,7 +792,14 @@ public final class APIClient: APIClientProviding, @unchecked Sendable {
                                     UpgradeGateSignal.signal(statusCode: retryStatusCode, body: retryData)
                                     throw MeeshyError.server(statusCode: retryStatusCode, message: retryErrorMsg ?? "Erreur après rafraichissement")
                                 }
-                            } catch {
+                            } catch let abandoned as CancellationError {
+                                // #10463 — même règle que le rafraîchissement
+                                // préventif : un abandon n'est pas un refus.
+                                throw abandoned
+                            } catch let refused as MeeshyError {
+                                // Même règle que le rafraîchissement préventif : une erreur serveur ou
+                                // réseau du second passage n'est pas un refus d'authentification.
+                                guard case .auth = refused else { throw refused }
                                 await AuthManager.shared.handleUnauthorized()
                                 throw MeeshyError.auth(.sessionExpired)
                             }
@@ -901,6 +821,10 @@ public final class APIClient: APIClientProviding, @unchecked Sendable {
                         // errors) can decode them without a second request.
                         AgeGateSignal.signal(statusCode: statusCode, body: data)
                         throw MeeshyError.forbidden(reason: errorMsg, body: data)
+                    }
+
+                    if let slowMode {
+                        throw MeeshyError.rejected(slowMode.rejection(message: errorMsg))
                     }
 
                     if let dailyLimit {
@@ -937,6 +861,8 @@ public final class APIClient: APIClientProviding, @unchecked Sendable {
 
             throw MeeshyError.server(statusCode: lastStatusCode, message: "Requete echouee apres \(Self.maxRetryAttempts) tentatives (status \(lastStatusCode))")
         } catch let error as MeeshyError {
+            throw error
+        } catch let error as CancellationError {
             throw error
         } catch let error as DecodingError {
             var debugInfo = "Erreur de decodage: "
@@ -1057,7 +983,8 @@ public final class APIClient: APIClientProviding, @unchecked Sendable {
     // MARK: - DELETE
 
     func delete(endpoint: String) async throws -> APIResponse<[String: Bool]> {
-        return try await stringRequest(endpoint: endpoint, method: "DELETE")
+        let acknowledgement: DeletionAcknowledgement = try await stringRequest(endpoint: endpoint, method: "DELETE")
+        return acknowledgement.response
     }
 
     // MARK: - DELETE with Encodable body
@@ -1109,7 +1036,8 @@ public final class APIClient: APIClientProviding, @unchecked Sendable {
     }
 
     public func delete(_ endpoint: any MeeshyEndpoint) async throws -> APIResponse<[String: Bool]> {
-        try await request(endpoint, method: "DELETE")
+        let acknowledgement: DeletionAcknowledgement = try await request(endpoint, method: "DELETE")
+        return acknowledgement.response
     }
 
     public func delete<T: Decodable, U: Encodable>(

@@ -33,6 +33,26 @@ final class SectionFrameRegistry {
     var frames: [String: CGRect] = [:]
 }
 
+// MARK: - Glisser d'une conversation
+
+/// Le glisser d'une conversation en cours : son jeton et la catégorie d'où il part.
+struct PendingConversationDrag {
+    let token: UUID
+    let originSectionId: String?
+}
+
+/// Posé sur toute la liste : le premier passage d'un glisser au-dessus d'elle déclenche le repli des catégories.
+/// Il n'accepte jamais de dépôt — les en-têtes de catégorie, plus profonds, le reçoivent ; lâché ailleurs, le
+/// glisser s'annule.
+struct ConversationListDragWatch: DropDelegate {
+    let onEnter: () -> Void
+
+    func validateDrop(info: DropInfo) -> Bool { info.hasItemsConforming(to: [.text]) }
+    func dropEntered(info: DropInfo) { onEnter() }
+    func dropUpdated(info: DropInfo) -> DropProposal? { DropProposal(operation: .cancel) }
+    func performDrop(info: DropInfo) -> Bool { false }
+}
+
 // MARK: - Section Drop Delegate
 
 /// Cible de drop d'un header de section pour le drag NATIF des lignes
@@ -172,6 +192,13 @@ struct ConversationListView: View {
     @FocusState var isSearching: Bool
     @State var showSearchOverlay: Bool = false
     @State private var expandedSections: Set<String> = ["pinned", "other"]
+    /// Pendant le glisser d'une conversation : les catégories dépliées AVANT, rendues au dépôt ou à l'annulation.
+    @State private var sectionsBeforeDrag: Set<String>?
+    /// Le glisser en cours : son jeton et la catégorie d'où il part. Posé dès le soulèvement — qui précède aussi
+    /// le menu d'appui long —, il ne replie rien tant que le doigt n'a pas bougé au-dessus de la liste.
+    @State private var pendingDrag: PendingConversationDrag?
+    /// La catégorie d'où part la conversation glissée — son en-tête prend la couleur primaire.
+    @State private var dragOriginSectionId: String?
 
     // Performance optimized scroll variables
     @State private var selectedProfileUser: ProfileSheetUser? = nil
@@ -437,6 +464,12 @@ struct ConversationListView: View {
         // Sonde inerte : capture l'UIScrollView hôte pour l'auto-scroll de
         // bord du drag de chip (+Overlays). Aucune interaction, frame nulle.
         .background(ChipAutoScrollGrabber(driver: chipAutoScrollDriver))
+        // Le glisser se termine sans dépôt sur une catégorie (lâché ailleurs, ou en fenêtre) : on redéplie.
+        // Le glisser se déplace au-dessus de la liste : c'est un glisser, pas un appui long qui finira en menu.
+        .onDrop(of: [.text], delegate: ConversationListDragWatch(onEnter: collapseForConversationDrag))
+        .onReceive(NotificationCenter.default.publisher(for: .conversationDragDidEnd)) { note in
+            endConversationDrag(token: (note.object as? NSUUID).map { $0 as UUID })
+        }
     }
 
     /// L'épinglage est une propriété du CONTENEUR, pas de la vue de header
@@ -548,6 +581,13 @@ struct ConversationListView: View {
                     dropTargetSection: $dropTargetSection,
                     onDrop: { handleDrop(to: group.section.id, providers: $0) }
                 ))
+                // Posé APRÈS le registre et le dépôt (contrat LWS-6) : la catégorie d'ORIGINE d'une conversation glissée, en couleur primaire.
+                .background(
+                    RoundedRectangle(cornerRadius: MeeshyRadius.sm)
+                        .fill(Color(hex: MeeshyColors.brandPrimaryHex)
+                            .opacity(dragOriginSectionId == group.section.id ? 0.22 : 0))
+                        .animation(.easeOut(duration: 0.2), value: dragOriginSectionId)
+                )
         }
     }
 
@@ -746,7 +786,7 @@ struct ConversationListView: View {
             return userCommunityLookup[communityId] ?? userCommunities.first(where: { $0.id == communityId })
         }()
 
-        return ConversationRowItem(
+        var row = ConversationRowItem(
             conversation: conversation,
             community: community,
             rowWidth: rowWidth,
@@ -845,6 +885,8 @@ struct ConversationListView: View {
                 }
             )
         )
+        row.onDragBegan = { token in beginConversationDrag(conversation.id, token: token) }
+        return row
         .equatable()
     }
 
@@ -886,8 +928,6 @@ struct ConversationListView: View {
         static let unarchive = String(localized: "swipe.unarchive")
         static let markRead = String(localized: "swipe.mark_read")
         static let markUnread = String(localized: "swipe.mark_unread")
-        static let block = String(localized: "swipe.block")
-        static let unblock = String(localized: "swipe.unblock")
         static let hide = String(localized: "swipe.hide")
     }
 
@@ -958,25 +998,6 @@ struct ConversationListView: View {
         ]
 
         if conversation.isArchiveImposed { actions.removeAll { $0.label == SwipeLabels.unarchive } }
-        if conversation.type == .direct, let userId = conversation.participantUserId {
-            let isBlocked = BlockService.shared.isBlocked(userId: userId)
-            actions.append(SwipeAction(
-                icon: isBlocked ? "hand.raised.slash.fill" : "hand.raised.fill",
-                label: isBlocked ? SwipeLabels.unblock : SwipeLabels.block,
-                color: MeeshyColors.error
-            ) {
-                if isBlocked {
-                    Task {
-                        await BlockActionCoordinator.shared.unblock(userId: userId)
-                        HapticFeedback.success()
-                    }
-                } else {
-                    sheetTargets.blockTarget = conversation
-                    showBlockConfirmation = true
-                }
-            })
-        }
-
         actions.append(SwipeAction(
             icon: "eye.slash.fill",
             label: SwipeLabels.hide,
@@ -1955,7 +1976,50 @@ struct ConversationListView: View {
     /// drop de la chip du morph custom : « Épingles » épingle (jamais de
     /// dés-épinglage par drop), « other » → sectionId vide, no-op même
     /// section.
+    /// Le glisser d'une conversation commence : toutes les catégories se replient — la cible se vise d'un coup
+    /// d'œil —, et celle d'origine se marque.
+    private func beginConversationDrag(_ conversationId: String, token: UUID) {
+        DispatchQueue.main.async {
+            pendingDrag = PendingConversationDrag(
+                token: token,
+                originSectionId: conversationViewModel.groupedConversations
+                    .first { $0.conversations.contains { $0.id == conversationId } }?.section.id
+            )
+        }
+    }
+
+    /// Le doigt bouge au-dessus de la liste : on replie tout et on marque l'origine.
+    private func collapseForConversationDrag() {
+        guard let pendingDrag, sectionsBeforeDrag == nil else { return }
+        sectionsBeforeDrag = expandedSections
+        dragOriginSectionId = pendingDrag.originSectionId
+        withAnimation(.spring(response: 0.3, dampingFraction: 0.85)) {
+            expandedSections = []
+        }
+    }
+
+    /// Dépôt ou annulation : les catégories dépliées avant le glisser le redeviennent, plus celles qu'on aurait
+    /// dépliées pendant, plus la catégorie qui vient de recevoir la conversation. Sans persistance — le repli du
+    /// glisser n'est pas un choix de l'utilisateur. Une fin portant le jeton d'un AUTRE glisser est ignorée.
+    private func endConversationDrag(token: UUID? = nil, expanding target: String? = nil) {
+        if let token, token != pendingDrag?.token { return }
+        pendingDrag = nil
+        guard let before = sectionsBeforeDrag else {
+            dragOriginSectionId = nil
+            return
+        }
+        sectionsBeforeDrag = nil
+        withAnimation(.spring(response: 0.3, dampingFraction: 0.85)) {
+            var restored = before.union(expandedSections)
+            if let target, !target.isEmpty { restored.insert(target) }
+            expandedSections = restored
+            dragOriginSectionId = nil
+            dropTargetSection = nil
+        }
+    }
+
     private func handleDrop(to sectionId: String, providers: [NSItemProvider]) -> Bool {
+        defer { endConversationDrag(expanding: sectionId) }
         guard let provider = providers.first else { return false }
         _ = provider.loadObject(ofClass: NSString.self) { object, _ in
             guard let conversationId = object as? String else { return }
@@ -2033,7 +2097,7 @@ struct ConversationListView: View {
     private func applyCommunities(_ apiCommunities: [APICommunity]) {
         let mapped = apiCommunities.map { $0.toCommunity() }
         userCommunities = mapped
-        userCommunityLookup = Dictionary(uniqueKeysWithValues: mapped.map { ($0.id, $0) })
+        userCommunityLookup = Dictionary(mapped.map { ($0.id, $0) }, uniquingKeysWith: { first, _ in first })
     }
 
     // communitiesSection, categoryFilters, themedSearchBar now live in

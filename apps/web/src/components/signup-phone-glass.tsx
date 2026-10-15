@@ -39,6 +39,7 @@ export function phoneRefusalMessage(language: InterfaceLanguage, refusal: Signup
  * par `aria-describedby` et annoncé (`role="alert"`).
  */
 export function SignupPhoneGlass({
+  language,
   locale,
   country,
   phoneDigits,
@@ -48,9 +49,9 @@ export function SignupPhoneGlass({
   onFocus,
   onBlur,
   error,
-  benefit,
   inputRef,
 }: {
+  readonly language: InterfaceLanguage;
   readonly locale: string;
   readonly country: Country;
   readonly phoneDigits: string;
@@ -61,15 +62,13 @@ export function SignupPhoneGlass({
   readonly onBlur: () => void;
   /** Le refus à dire sous le champ — celui du serveur, ou celui de la saisie. */
   readonly error: string | undefined;
-  /** Ce que le numéro ouvre — lu d'emblée sous le champ, plus derrière un (i) (#8842). */
-  readonly benefit: string;
   readonly inputRef: Ref<HTMLInputElement>;
 }) {
   const glass = useRef<HTMLDivElement>(null);
   return (
     <div className="grid gap-2">
       <label htmlFor="signup-phone" className="text-caption font-medium" style={{ color: 'var(--color-ios-ink-3)' }}>
-        Téléphone
+        {translate(language, 'signup.phone.label')}
       </label>
       <div
         ref={glass}
@@ -92,7 +91,7 @@ export function SignupPhoneGlass({
           onClick={onOpenCountry}
           className="flex items-center gap-1.5 rounded-bubble px-3"
           style={{ minHeight: 44 }}
-          aria-label={`Pays : ${countryName(country, locale)}, ${country.dialCode}`}
+          aria-label={translate(language, 'signup.phone.country', { country: countryName(country, locale), dialCode: country.dialCode })}
         >
           <span aria-hidden="true">{country.flag}</span>
           <span className="text-body font-medium" style={{ color: 'var(--color-ios-ink)' }}>
@@ -114,7 +113,7 @@ export function SignupPhoneGlass({
           }}
           onFocus={onFocus}
           onBlur={onBlur}
-          placeholder="Numéro de téléphone"
+          placeholder={translate(language, 'signup.phone.placeholder')}
           className="w-0 min-w-0 flex-1 bg-transparent py-3 ps-2 text-input outline-none"
           style={{ color: 'var(--color-ios-ink)' }}
           aria-describedby={error !== undefined ? 'signup-phone-error signup-phone-hint' : 'signup-phone-hint'}
@@ -128,7 +127,7 @@ export function SignupPhoneGlass({
         </p>
       ) : null}
       <p id="signup-phone-hint" className="text-caption" style={{ color: 'var(--color-ios-ink-2)' }}>
-        {benefit}
+        {translate(language, 'signup.phone.benefit')}
       </p>
     </div>
   );

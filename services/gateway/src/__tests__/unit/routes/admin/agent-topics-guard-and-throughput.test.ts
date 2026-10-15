@@ -158,7 +158,7 @@ describe('/admin/agent/topics — la garde lit la matrice, jamais request.user.r
           deviceLocale: null, profileCompletionRate: null,
         }),
       },
-      userSession: { findFirst: jest.fn<any>().mockResolvedValue(null), update: jest.fn<any>() },
+      userSession: { findFirst: jest.fn<any>().mockResolvedValue({ isValid: true, expiresAt: new Date(Date.now() + 24 * 60 * 60 * 1000) }), update: jest.fn<any>() },
       participant: { findFirst: jest.fn<any>().mockResolvedValue(null) },
     };
 
@@ -170,7 +170,7 @@ describe('/admin/agent/topics — la garde lit la matrice, jamais request.user.r
     });
     await probe.ready();
 
-    const token = jwt.sign({ userId: BIGBOSS_ID, sid: 'test-session' }, JWT_SECRET, { expiresIn: '1h' });
+    const token = jwt.sign({ userId: BIGBOSS_ID, sid: '507f1f77bcf86cd799439031' }, JWT_SECRET, { expiresIn: '1h' });
     const res = await probe.inject({ method: 'GET', url: '/probe', headers: { authorization: `Bearer ${token}` } });
     await probe.close();
 

@@ -43,3 +43,15 @@ export function sealedQuoteVariant<T extends object>(audience: ReadonlyMap<strin
   const sealedAt = audience.get(key);
   return sealedAt ? withSealedQuote(payload, sealedAt) : payload;
 }
+
+/**
+ * #8686 — la mort de la chaîne citée pour le lecteur d'une room personnelle
+ * (`userId ?? id`, la clé de l'audience) : `conversation:updated` lui sert sa
+ * ligne de liste « expirée », comme `GET /conversations`.
+ */
+export function quotedDeathFor(
+  audience: ReadonlyMap<string, Date> | undefined,
+  participant: { readonly id: string; readonly userId?: string | null },
+): Date | null {
+  return audience?.get(participant.userId ?? participant.id) ?? null;
+}

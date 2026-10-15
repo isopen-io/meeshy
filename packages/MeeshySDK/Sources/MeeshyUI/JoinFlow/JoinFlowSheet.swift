@@ -246,7 +246,7 @@ public struct JoinFlowSheet: View {
             } label: {
                 HStack(spacing: MeeshySpacing.sm) {
                     Image(systemName: "arrow.clockwise")
-                    Text(String(localized: "joinFlow.error.retry", defaultValue: "Reessayer", bundle: .module))
+                    Text(String(localized: "joinFlow.error.retry", defaultValue: "Réessayer", bundle: .module))
                         .font(MeeshyFont.relative(MeeshyFont.bodySize, weight: .semibold))
                 }
                 .foregroundColor(MeeshyColors.indigo400)

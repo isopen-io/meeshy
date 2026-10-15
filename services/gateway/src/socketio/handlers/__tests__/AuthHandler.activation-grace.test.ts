@@ -14,6 +14,7 @@ import type { Socket } from 'socket.io';
 import type { PrismaClient } from '@meeshy/shared/prisma/client';
 
 import { AuthHandler } from '../AuthHandler';
+import { LIVE_SID, liveSession } from '../../../services/auth/__tests__/live-session-double';
 import type { StatusService } from '../../../services/StatusService';
 import { ACTIVATION_GRACE_EPOCH } from '../../../services/auth/account-activation';
 
@@ -33,7 +34,7 @@ const socketDe = (): Socket =>
   }) as unknown as Socket;
 
 const compte = (overrides: Record<string, unknown> = {}) => ({
-  id: 'user-8238',
+  id: 'aaaaaaaaaaaaaaaaaaaa8238',
   systemLanguage: 'fr',
   isActive: true,
   createdAt: CREATED,
@@ -48,7 +49,7 @@ const monter = (ligne: Record<string, unknown>, maintenant: Date) => {
     user: { findUnique: jest.fn(async () => ligne), update: jest.fn(async () => undefined) },
     participant: { findFirst: jest.fn(), findUnique: jest.fn(), findMany: jest.fn(async () => []) },
     callParticipant: { findMany: jest.fn(async () => []) },
-    userSession: { findFirst: jest.fn(async () => null) },
+    userSession: { findFirst: jest.fn(async () => liveSession()) },
   } as unknown as PrismaClient;
   const connectedUsers = new Map();
   const handler = new AuthHandler({
@@ -69,7 +70,7 @@ afterEach(() => jest.restoreAllMocks());
 describe('AuthHandler — le délai de grâce de l’adresse (#8238)', () => {
   it('J28, adresse non prouvée, aucun numéro : socket refusé, motif `activation_required`', async () => {
     process.env.JWT_SECRET = 'secret-8238';
-    jest.spyOn(jwt, 'verify').mockReturnValue({ userId: 'user-8238' } as never);
+    jest.spyOn(jwt, 'verify').mockReturnValue({ sid: LIVE_SID, userId: 'aaaaaaaaaaaaaaaaaaaa8238' } as never);
     const { handler, connectedUsers } = monter(compte(), jour(28));
     const socket = socketDe();
 
@@ -82,7 +83,7 @@ describe('AuthHandler — le délai de grâce de l’adresse (#8238)', () => {
 
   it('lit les colonnes de la loi dans la même requête que le compte', async () => {
     process.env.JWT_SECRET = 'secret-8238';
-    jest.spyOn(jwt, 'verify').mockReturnValue({ userId: 'user-8238' } as never);
+    jest.spyOn(jwt, 'verify').mockReturnValue({ sid: LIVE_SID, userId: 'aaaaaaaaaaaaaaaaaaaa8238' } as never);
     const { handler, prisma } = monter(compte(), jour(28));
 
     await handler.handleTokenAuthentication(socketDe());
@@ -100,7 +101,7 @@ describe('AuthHandler — le délai de grâce de l’adresse (#8238)', () => {
     ['J400 adresse prouvée', compte({ emailVerifiedAt: jour(3) }), jour(400)],
   ])('%s : socket authentifié', async (_nom, ligne, maintenant) => {
     process.env.JWT_SECRET = 'secret-8238';
-    jest.spyOn(jwt, 'verify').mockReturnValue({ userId: 'user-8238' } as never);
+    jest.spyOn(jwt, 'verify').mockReturnValue({ sid: LIVE_SID, userId: 'aaaaaaaaaaaaaaaaaaaa8238' } as never);
     const { handler, connectedUsers } = monter(ligne, maintenant);
     const socket = socketDe();
 

@@ -422,9 +422,10 @@ public struct SplitClipCommand: EditCommand {
             var restored = left
             restored.id = clipId
             restored.duration = (left.duration ?? 0) + (right.duration ?? 0)
-            let lower = min(leftIdx, rightIdx)
-            let upper = max(leftIdx, rightIdx)
-            project.mediaObjects.replaceSubrange(lower...upper, with: [restored])
+            // La moitié gauche redevient le clip, la droite part — par IDENTITÉ : un clip glissé entre
+            // les deux depuis la scission était emporté par un remplacement de plage.
+            project.mediaObjects[leftIdx] = restored
+            project.mediaObjects.removeAll { $0.id == rightId }
         case .audio:
             guard let leftIdx = project.audioPlayerObjects.firstIndex(where: { $0.id == leftId }),
                   let rightIdx = project.audioPlayerObjects.firstIndex(where: { $0.id == rightId }) else {
@@ -435,9 +436,10 @@ public struct SplitClipCommand: EditCommand {
             var restored = left
             restored.id = clipId
             restored.duration = (left.duration ?? 0) + (right.duration ?? 0)
-            let lower = min(leftIdx, rightIdx)
-            let upper = max(leftIdx, rightIdx)
-            project.audioPlayerObjects.replaceSubrange(lower...upper, with: [restored])
+            // La moitié gauche redevient le clip, la droite part — par IDENTITÉ : un clip glissé entre
+            // les deux depuis la scission était emporté par un remplacement de plage.
+            project.audioPlayerObjects[leftIdx] = restored
+            project.audioPlayerObjects.removeAll { $0.id == rightId }
         case .text:
             guard let leftIdx = project.textObjects.firstIndex(where: { $0.id == leftId }),
                   let rightIdx = project.textObjects.firstIndex(where: { $0.id == rightId }) else {
@@ -448,9 +450,10 @@ public struct SplitClipCommand: EditCommand {
             var restored = left
             restored.id = clipId
             restored.duration = (left.duration ?? 0) + (right.duration ?? 0)
-            let lower = min(leftIdx, rightIdx)
-            let upper = max(leftIdx, rightIdx)
-            project.textObjects.replaceSubrange(lower...upper, with: [restored])
+            // La moitié gauche redevient le clip, la droite part — par IDENTITÉ : un clip glissé entre
+            // les deux depuis la scission était emporté par un remplacement de plage.
+            project.textObjects[leftIdx] = restored
+            project.textObjects.removeAll { $0.id == rightId }
         case .sticker:
             throw EditCommandError.invalidState(reason: "stickers cannot be split on the timeline")
         case .place:

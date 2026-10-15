@@ -12,6 +12,7 @@ import { currentInterfaceLanguage, type InterfaceLanguage } from '@/lib/interfac
 import { useNotificationCounts } from '@/lib/view/use-notification-counts';
 import { usePendingFriendRequestCount } from '@/lib/view/use-pending-friend-requests';
 import { initialsOf, participantAvatarOf } from '@/lib/view/conversation';
+import { callsAvailable } from '@/lib/calls/calls-availability';
 import { PROFILE_DESTINATION, feedDiscDestination, menuLadderFor, type FloatingDestination } from '@/lib/view/floating-menu';
 import { isContextMenuKey } from '@/lib/view/long-press';
 import { belowScreenTop } from '@/lib/view/safe-area';
@@ -169,7 +170,7 @@ export function FloatingMenus({ routeKey, contained = false }: { readonly routeK
 
   /* L'ÉCHELLE DE CE LECTEUR (#6458) : le barreau d'administration n'existe que
      sur une matrice SERVIE portant le droit — jamais monté puis masqué. */
-  const ladder = menuLadderFor({ canAccessAdmin: useAdminAccess() });
+  const ladder = menuLadderFor({ canAccessAdmin: useAdminAccess(), calls: callsAvailable() });
   const [rooms, setRooms] = useState<LadderRooms | null>(null);
 
   const roving = useRovingMenu({

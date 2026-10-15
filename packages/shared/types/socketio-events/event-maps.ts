@@ -52,7 +52,7 @@ import type {
 
 // La ligne de réaction persistée — ce que l'accusé de `reaction:add` porte.
 import type { ReactionData } from '../reaction.js';
-import type { PackInstallationUpdatedEventData } from './pack.js';
+import type { PackInstallationUpdatedEventData, ProfileDecorUpdatedEventData } from './pack.js';
 
 // Import pour les événements d'appels vidéo
 import type {
@@ -396,6 +396,7 @@ export interface ServerToClientEvents {
 
   // Packs
   [SERVER_EVENTS.PACK_INSTALLATION_UPDATED]: (data: PackInstallationUpdatedEventData) => void;
+  [SERVER_EVENTS.PROFILE_DECOR_UPDATED]: (data: ProfileDecorUpdatedEventData) => void;
 
   // User Profile
   [SERVER_EVENTS.USER_UPDATED]: (data: UserUpdatedEventData) => void;

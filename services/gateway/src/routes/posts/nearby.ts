@@ -12,6 +12,7 @@ import { resolveDensityGridStepDegrees } from '../../services/location/geoDiscov
 import { createSocialDiscoveryRateLimitConfig, checkSharedRateLimit, type SharedRateLimitVerdict } from './socialRateLimit';
 import { getCacheStore } from '../../services/CacheStore';
 import { depreciee } from '../../utils/deprecation';
+import { rankedListingPage } from '../../services/social/listingContext';
 import { apiPath } from '@meeshy/shared/api/prefix';
 import { logError } from '../../utils/logger.js';
 
@@ -263,7 +264,8 @@ export function registerNearbyRoutes(
         wireReaderFromRequest(request as UnifiedAuthRequest),
       );
 
-      return sendSuccess(reply, resultat.data, { pagination: resultat.pagination });
+      const page = rankedListingPage(resultat, 'nearby');
+      return sendSuccess(reply, page.data, { pagination: page.pagination, meta: page.meta });
     } catch (error) {
       logError(fastify.log, '[GET /posts/nearby] Error', error);
       return sendInternalError(reply, 'Internal server error', { code: 'INTERNAL_ERROR' });

@@ -180,5 +180,23 @@ extension StoryCanvasUIView {
                 startEditDisplayLinkIfNeeded()
             }
         }
+        if PlaybackClockRearm.isDue(entersPlay: newMode == .play,
+                                    modeChanged: didChange,
+                                    clockRunning: displayLink != nil,
+                                    isOnScreen: window != nil) {
+            rearmPlaybackClock()
+        }
+    }
+
+    /// **Le tour suivant d'une scène allée au bout rejoue avec son horloge
+    /// (#10555).** La fin d'une scène invalide le lien de lecture
+    /// (`advancePlayheadIfActive` → `stopPlayback`), et le tour de boucle
+    /// repasse par `setMode(.play, time: .zero)` sans changer de mode : le son
+    /// et la vidéo repartaient, le playhead restait à zéro et la barre de
+    /// l'hôte sur sa dernière valeur. Réarmée sous la pause de l'hôte, elle
+    /// attend la reprise.
+    func rearmPlaybackClock() {
+        startPlayback()
+        displayLink?.isPaused = isPlaybackPaused
     }
 }

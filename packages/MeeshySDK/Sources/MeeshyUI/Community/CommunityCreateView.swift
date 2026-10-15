@@ -52,7 +52,7 @@ public struct CommunityCreateView: View {
 
             Spacer()
 
-            Text(String(localized: "community.create.title", defaultValue: "Nouvelle communaute", bundle: .module))
+            Text(String(localized: "community.create.title", defaultValue: "Nouvelle communauté", bundle: .module))
                 .font(.system(size: MeeshyFont.headlineSize, weight: .bold, design: .rounded))
                 .foregroundColor(theme.textPrimary)
 
@@ -111,7 +111,7 @@ public struct CommunityCreateView: View {
             )
 
             VStack(alignment: .leading, spacing: MeeshySpacing.xs) {
-                Text(viewModel.name.isEmpty ? String(localized: "community.create.preview.placeholder", defaultValue: "Ma communaute", bundle: .module) : viewModel.name)
+                Text(viewModel.name.isEmpty ? String(localized: "community.create.preview.placeholder", defaultValue: "Ma communauté", bundle: .module) : viewModel.name)
                     .font(.system(size: MeeshyFont.subtitleSize, weight: .bold, design: .rounded))
                     .foregroundColor(.white)
                     .lineLimit(2)
@@ -126,7 +126,7 @@ public struct CommunityCreateView: View {
                 HStack(spacing: MeeshySpacing.xsPlus) {
                     Image(systemName: viewModel.isPrivate ? "lock.fill" : "globe")
                         .font(.system(size: MeeshyIconSize.xxs, weight: .semibold))
-                    Text(viewModel.isPrivate ? String(localized: "community.privacy.private", defaultValue: "Privee", bundle: .module) : String(localized: "community.privacy.public", defaultValue: "Publique", bundle: .module))
+                    Text(viewModel.isPrivate ? String(localized: "community.privacy.private", defaultValue: "Privée", bundle: .module) : String(localized: "community.privacy.public", defaultValue: "Publique", bundle: .module))
                         .font(.system(size: MeeshyFont.footnoteSize, weight: .semibold))
                 }
                 .foregroundColor(.white.opacity(0.9))
@@ -146,7 +146,7 @@ public struct CommunityCreateView: View {
     private var formFields: some View {
         VStack(spacing: MeeshySpacing.lg) {
             fieldGroup(label: String(localized: "community.create.field.name", defaultValue: "Nom", bundle: .module), required: true) {
-                TextField(String(localized: "community.create.field.name.placeholder", defaultValue: "Nom de la communaute", bundle: .module), text: $viewModel.name)
+                TextField(String(localized: "community.create.field.name.placeholder", defaultValue: "Nom de la communauté", bundle: .module), text: $viewModel.name)
                     .textFieldStyle(.plain)
                     .font(.system(size: MeeshyFont.calloutSize, design: .rounded))
                     .foregroundColor(theme.textPrimary)
@@ -167,7 +167,7 @@ public struct CommunityCreateView: View {
             }
 
             fieldGroup(label: String(localized: "community.create.field.description", defaultValue: "Description", bundle: .module), required: false) {
-                TextField(String(localized: "community.create.field.description.placeholder", defaultValue: "De quoi parle cette communaute ?", bundle: .module), text: $viewModel.description, axis: .vertical)
+                TextField(String(localized: "community.create.field.description.placeholder", defaultValue: "De quoi parle cette communauté ?", bundle: .module), text: $viewModel.description, axis: .vertical)
                     .textFieldStyle(.plain)
                     .font(.system(size: MeeshyFont.calloutSize, design: .rounded))
                     .foregroundColor(theme.textPrimary)
@@ -256,10 +256,10 @@ public struct CommunityCreateView: View {
                 .frame(width: 32)
 
             VStack(alignment: .leading, spacing: MeeshySpacing.xxs) {
-                Text(String(localized: "community.create.privacy.title", defaultValue: "Communaute privee", bundle: .module))
+                Text(String(localized: "community.create.privacy.title", defaultValue: "Communauté privée", bundle: .module))
                     .font(.system(size: MeeshyFont.bodySize, weight: .semibold, design: .rounded))
                     .foregroundColor(theme.textPrimary)
-                Text(viewModel.isPrivate ? String(localized: "community.create.privacy.private.description", defaultValue: "Seuls les membres invites peuvent rejoindre", bundle: .module) : String(localized: "community.create.privacy.public.description", defaultValue: "Tout le monde peut decouvrir et rejoindre", bundle: .module))
+                Text(viewModel.isPrivate ? String(localized: "community.create.privacy.private.description", defaultValue: "Seuls les membres invités peuvent rejoindre", bundle: .module) : String(localized: "community.create.privacy.public.description", defaultValue: "Tout le monde peut découvrir et rejoindre", bundle: .module))
                     .font(.system(size: MeeshyFont.smallSize, design: .rounded))
                     .foregroundColor(theme.textSecondary)
             }
@@ -431,7 +431,7 @@ public struct CommunityCreateView: View {
                 } else {
                     Image(systemName: "plus.circle.fill")
                 }
-                Text(String(localized: "community.create.button", defaultValue: "Creer la communaute", bundle: .module))
+                Text(String(localized: "community.create.button", defaultValue: "Créer la communauté", bundle: .module))
             }
             .font(.system(size: 16, weight: .semibold, design: .rounded))
             .foregroundColor(.white)

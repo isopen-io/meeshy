@@ -372,6 +372,7 @@ const PUBLIC_ROUTES: Array<{ method: string; url: string; why: string }> = [
   { method: 'POST', url: '/api/v1/tracking-links', why: "garde optionnelle au montage, mais le HANDLER refuse tout appelant sans compte inscrit (#10291 : 401 sans session, 403 `REGISTERED_USER_REQUIRED` pour un invité) — la garde optionnelle garde les deux refus discernables (#4792). Le rattachement à une conversation (`conversationId`) exige en plus d'y participer." },
   { method: 'GET', url: '/api/v1/tracking-links/:token', why: 'résolution publique de lien court (design assumé, commentaire explicite dans le code)' },
   { method: 'GET', url: '/api/v1/tracking-links/:token/og', why: "page d'aperçu des robots (#10192) : 302 vers la cible web publique d'un lien actif (ce que l'ouverture du lien donne à quiconque le tient, sans clic compté), aperçu d'une invitation ouverte et publique, sinon générique sans rien de la cible" },
+  { method: 'GET', url: '/api/v1/affiliate/:token/og', why: "page d'aperçu des robots (#10559) : nom affiché, pseudo, bannière ou avatar de l'invitant d'un jeton ouvert — ce que la validation publique du jeton sert déjà ; jeton fermé ou compte désactivé ⇒ aperçu générique, aucun clic compté" },
   { method: 'GET', url: '/api/v1/tracking-links/:token/resolve', why: "idem ; `sharer` (#9149) n'expose que nom affiché, pseudo et avatar du partageur d'un CONTENU (link-sharer.ts, resolve-sharer.test.ts)" },
   { method: 'GET', url: '/api/v1/l/:token', why: 'redirection publique de lien court' },
   { method: 'POST', url: '/api/v1/tracking-links/:token/click', why: "comptage de clic public par design" },
@@ -412,7 +413,7 @@ const PUBLIC_ROUTES: Array<{ method: string; url: string; why: string }> = [
   // scope. Si cette garantie tombe un jour, c'est LUI qui rougira — pas ce
   // balayage. Ne retire pas ce témoin en croyant qu'il fait doublon.
   { method: 'GET', url: '/api/v1/social/posts', why: 'optionalAuth ; scope=author/community publics par conception, les six autres rendent 401 (prouvé par unit/routes/posts/social-posts-scope.test.ts)' },
-  { method: 'POST', url: '/api/v1/posts/:postId/anonymous-view', why: "comptage de vue anonyme, PostService.recordAnonymousOpen filtre explicitement au PUBLIC" },
+  { method: 'POST', url: '/api/v1/posts/:postId/anonymous-view', why: "comptage de vue anonyme sous la garde de LECTURE anonyme (readServableToAnonymous, #10483), lecteur désigné par sa clé HMAC" },
   {
     method: 'POST',
     url: '/api/v1/social/events',
@@ -422,14 +423,14 @@ const PUBLIC_ROUTES: Array<{ method: string; url: string; why: string }> = [
       "compte l'ouverture d'un contenu public, comme le faisait déjà " +
       "POST /posts/:postId/anonymous-view juste au-dessus, dont elle est le successeur. " +
       "Ce qu'un anonyme peut faire y est doublement borné, et pas par le seul fait d'être " +
-      "accepté : son audience est PUBLIC-seul (buildViewerVisibilityFilter(prisma, undefined), " +
-      "la même source de vérité que recordAnonymousOpen), et les seuls TYPES d'événement " +
-      "qu'il peut produire sont énumérés par TYPES_ANONYMES — une vue, rien d'autre ; " +
-      "impression, téléchargement et session d'engagement écrivent une ligne PORTANT une " +
-      "identité, et sortent en 403. Le 400 que voit ce balayage est le refus d'un appelant " +
-      "sans jeton de session : sans lui, il n'a aucune identité de seau, et son débit " +
-      "retomberait sur l'unique repli — exactement le seau partagé que ce lot ferme. " +
-      "Débit : 10/min par (sessionToken, postId) pour un visiteur, 30/min par compte sinon.",
+      "accepté : son audience est la garde de LECTURE anonyme (readServableToAnonymous, " +
+      "#10483 : public, vivant, auteur actif, original public), et les seuls TYPES d'événement " +
+      "qu'il peut produire sont énumérés par TYPES_ANONYMES — une vue et une impression, qui " +
+      "ne laissent que sa clé de lecteur HMAC et des compteurs ; téléchargement et session " +
+      "d'engagement écrivent une ligne PORTANT une identité, et sortent en 403. Le 400 que " +
+      "voit ce balayage est le refus d'un appelant sans jeton de session : sans lui, il n'a " +
+      "aucune identité de seau. Débit, en événements : 60/min par clé de lecteur et 600/min par " +
+      "empreinte d'adresse HMAC tournante pour un visiteur, 30 lots/min par compte sinon.",
   },
 
   // --- Attachments : fichiers statiques servis par nom de fichier UUIDv4

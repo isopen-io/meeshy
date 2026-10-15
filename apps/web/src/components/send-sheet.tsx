@@ -1,3 +1,5 @@
+import type { ShareDestination } from '@/lib/api/social-events-v2-types';
+import { shareDestinationOf } from '@/lib/send/share-destination';
 import { useCallback, useEffect, useId, useMemo, useRef, useState, useSyncExternalStore, type RefObject } from 'react';
 
 import { translate } from '@/lib/i18n-catalog';
@@ -164,10 +166,10 @@ export function SendSheet({
   /* Le verrou du départ est SYNCHRONE : `run` n'est lu qu'au rendu suivant, et
      deux clics dans la même tâche lanceraient deux moteurs — deux envois. */
   const launched = useRef(false);
-  const reportShared = (): void => {
+  const reportShared = (destination: ShareDestination): void => {
     if (counted.current) return;
     counted.current = true;
-    request.onShared?.();
+    request.onShared?.(destination);
   };
 
   const directory = useDirectory({ viewerId, query });
@@ -224,11 +226,11 @@ export function SendSheet({
     setNotice(say('sendSheet.announce.sent', { count: String(runState.order.length) }));
     if (!counted.current) {
       counted.current = true;
-      request.onShared?.();
+      request.onShared?.(shareDestinationOf({ conversations: selected.length, publish }));
     }
     const timer = setTimeout(() => frame.current?.dismiss(), SEND_SHEET_SUCCESS_HOLD_MS);
     return () => clearTimeout(timer);
-  }, [runState, say, request]);
+  }, [runState, say, request, selected.length, publish]);
 
   const waitingNetwork =
     runState !== null && runState.order.some((key) => {
@@ -254,14 +256,14 @@ export function SendSheet({
     void host.copy(url).then(
       () => {
         setNotice(say('sendSheet.linkCopied'));
-        reportShared();
+        reportShared('copy_link');
       },
       () => undefined,
     );
   };
   const moreOptions = (): void => {
     if (host.share !== undefined) {
-      void host.share(url === undefined ? {} : { url }).then(reportShared, () => undefined);
+      void host.share(url === undefined ? {} : { url }).then(() => reportShared('native_sheet'), () => undefined);
       return;
     }
     copyLink();

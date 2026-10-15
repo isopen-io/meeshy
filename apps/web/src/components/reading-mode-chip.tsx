@@ -2,6 +2,8 @@ import { useState } from 'react';
 
 import type { ConversationReadingMode } from '@meeshy/shared/types/reading-modes';
 import { Glyph } from './glyph';
+import { translate } from '@/lib/i18n-catalog';
+import { currentInterfaceLanguage } from '@/lib/interface-language';
 import type { MenuRow } from '@/lib/reading-mode/catalog';
 import { placePopover } from '@/lib/view/popover';
 import { findFocusableIndex, useRovingMenu } from '@/lib/view/roving-menu';
@@ -124,7 +126,7 @@ export function ReadingModeChip({
         }}
         aria-haspopup="menu"
         aria-expanded={open}
-        aria-label={`Mode de lecture : ${label}`}
+        aria-label={translate(currentInterfaceLanguage(), 'readingMode.chip', { mode: label })}
         /* LE MODE ET SA SOURCE, en données (#7337) : un gate qui les lisait
            dans « AUTO Résumé » mesurait le français du libellé, pas le mode.
            Jamais `data-reading-mode` : c'est la marque d'une RANGÉE plate
@@ -164,7 +166,7 @@ export function ReadingModeChip({
         <div
           ref={menuRef}
           role="menu"
-          aria-label="Modes de lecture"
+          aria-label={translate(currentInterfaceLanguage(), 'readingMode.menu')}
           onKeyDown={onMenuKeyDown}
           className="absolute top-full z-20 mt-1 overflow-hidden rounded-card py-1 shadow-cast"
           style={{
@@ -233,7 +235,7 @@ export function ReadingModeChip({
             className="flex w-full items-center gap-2 px-3 py-2 text-start text-title font-semibold"
             style={{ color: 'var(--accent)' }}
           >
-            Automatique
+            {translate(currentInterfaceLanguage(), 'readingMode.auto')}
           </button>
         </div>
       ) : null}

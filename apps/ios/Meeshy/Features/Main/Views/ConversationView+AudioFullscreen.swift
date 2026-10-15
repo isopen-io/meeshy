@@ -82,8 +82,14 @@ enum QuotedAudioFullscreen {
 
 extension ConversationMediaGalleryLayer {
 
-    /// Le plein écran audio ouvert par la zone média d'une citation.
-    func audioFullscreen(start: MessageAttachment) -> some View {
+    /// Le plein écran audio de la conversation — ouvert par la zone média
+    /// d'une citation (#8230) ET, depuis #10383, par la bulle d'un vocal : un
+    /// seul ouvreur, donc un seul plein écran qui sache réagir, répondre et
+    /// créer avec ce son (#8916).
+    ///
+    /// Fermer d'un glissement ramène le fil au message du vocal qu'on
+    /// écoutait — ce que faisait le plein écran local de la bulle.
+    func audioFullscreen(start: MessageAttachment, actions: AudioFullscreenActions?) -> some View {
         AudioFullscreenView(
             allAudioItems: QuotedAudioFullscreen.sources(
                 start: start,
@@ -94,7 +100,13 @@ extension ConversationMediaGalleryLayer {
             ),
             startAttachmentId: start.id,
             contactColor: accentColor,
-            mentionDisplayNames: viewModel.mentionDisplayNames
+            mentionDisplayNames: viewModel.mentionDisplayNames,
+            onDismissToMessage: { messageId in
+                guard viewModel.messages.contains(where: { $0.id == messageId }) else { return }
+                scrollState.scrollToMessageId = messageId
+                scrollState.scrollToMessageTrigger += 1
+            },
+            actions: actions
         )
     }
 }

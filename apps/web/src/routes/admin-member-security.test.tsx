@@ -227,7 +227,7 @@ describe('retirer la double authentification', () => {
     const { host, calls } = await open(armed(), { identity: ADMIN, replies: [patch('security', () => ({ ok: true, data: served({ twoFactorEnabledAt: null }) }))] });
 
     await ask(host, 'remove-two-factor');
-    expect(confirmButton()?.disabled).toBe(true);
+    expect(confirmButton()?.disabled).toBe(false);
     mounter.type(document.body, '[data-admin-motive]', 'trop bref');
     expect(confirmButton()?.disabled).toBe(true);
 
@@ -235,6 +235,16 @@ describe('retirer la double authentification', () => {
 
     expect(calls().find((request) => request.method === 'PATCH')?.body).toEqual({ twoFactorEnabled: false, reason: 'Appareil perdu, identité vérifiée' });
     expect(cached()?.twoFactorEnabled).toBe(false);
+  });
+});
+
+describe('un ADMIN ne se justifie pas : le motif proposé part tel quel (#10562)', () => {
+  test('retirer la double authentification sans rien écrire envoie le motif proposé', async () => {
+    const { host, calls } = await open(member({ twoFactorEnabledAt: '2026-05-01T00:00:00.000Z' }), { identity: ADMIN, replies: [patch('security', () => ({ ok: true, data: served({ twoFactorEnabledAt: null }) }))] });
+    await ask(host, 'remove-two-factor');
+    expect(motive()?.value).toBe('Contrôle aléatoire, test de fonctionnalité et suivi client');
+    await confirm();
+    expect(calls().find((request) => request.method === 'PATCH')?.body).toEqual({ twoFactorEnabled: false, reason: 'Contrôle aléatoire, test de fonctionnalité et suivi client' });
   });
 });
 

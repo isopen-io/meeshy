@@ -3,6 +3,7 @@ import { createRoot, type Root } from 'react-dom/client';
 import { afterAll, afterEach, beforeAll, describe, expect, test } from 'bun:test';
 
 import { ensureHappyDomRegistered, releaseHappyDomIfRegistered } from '@/test-support/happy-dom-environment';
+import { reactorsSheetStore } from '@/lib/view/reactors-sheet-store';
 import { loadInterfaceCatalog } from '@/lib/i18n-catalog';
 import type { Message } from '@/lib/api/types';
 
@@ -145,6 +146,17 @@ describe('l’élu de Focal — chaque contrôle agit au premier toucher', () =>
     const { host, journal } = mountElected();
     host.querySelector<HTMLButtonElement>('.focus-strip button[aria-label="Retirer votre réaction 👍"]')?.click();
     expect(journal.reacted).toEqual(['👍']);
+  });
+
+  test('clic droit sur une capsule de la bande ⇒ la liste de qui a réagi, pour ce message (#10583)', () => {
+    const { host } = mountElected();
+    const chip = host.querySelector<HTMLButtonElement>('.focus-strip button[aria-label="Réagir avec ❤️"]');
+    act(() => {
+      chip?.dispatchEvent(new Event('contextmenu', { bubbles: true, cancelable: true }));
+    });
+    const opened = reactorsSheetStore.getState().messageId;
+    reactorsSheetStore.getState().close();
+    expect(opened).not.toBeNull();
   });
 
   test('toucher la capsule d’AUTRUI y pose sa propre réaction — la capsule bascule', () => {

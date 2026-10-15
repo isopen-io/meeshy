@@ -22,7 +22,8 @@ import {
   updateLinkBodySchema,
   shareLinkSchema
 } from './types';
-import { revokeShareLinkGuests } from '../../socketio/revokeShareLinkGuests';
+import { closeShareLinkRevokingGuests } from '../../socketio/closeShareLinkRevokingGuests';
+import { shareLinkHasExpired } from '../../services/shareLinkReadGate';
 import {
   assertShareLinkMayReopen,
   mayReopenShareLink,
@@ -136,15 +137,28 @@ export async function applyShareLinkUpdate(
   // d'abord fait échouer FERMÉ : si la révocation lève, le lien reste actif et
   // la reprise est idempotente. L'ordre inverse laisse l'état exactement
   // interdit — lien fermé, invités encore dans la room.
-  if (data.isActive === false) {
-    await revokeShareLinkGuests({
+  //
+  // #10470 — au-delà d'`ASYNC_GUEST_REVOCATION_THRESHOLD` invités actifs, le
+  // lien est fermé sans attendre leur éviction, et la révocation en attente
+  // s'écrit dans CETTE écriture (`closeShareLinkRevokingGuests`).
+  if (closesShareLinkNow(data, new Date())) {
+    const closed = await closeShareLinkRevokingGuests({
       prisma: fastify.prisma,
       io: fastify.socketIOHandler?.getManager()?.getIO(),
       manager: fastify.socketIOHandler?.getManager(),
       shareLinkId: linkRowId,
+      close: (mark) => persistShareLinkUpdate(fastify, linkRowId, { ...data, ...mark }),
     });
+    return closed.result;
   }
+  return persistShareLinkUpdate(fastify, linkRowId, data);
+}
 
+async function persistShareLinkUpdate(
+  fastify: FastifyInstance,
+  linkRowId: string,
+  data: Record<string, unknown>
+) {
   const write = () => fastify.prisma.conversationShareLink.update({
     where: { id: linkRowId },
     data,
@@ -168,6 +182,23 @@ export async function applyShareLinkUpdate(
     if (row) await assertShareLinkMayReopen({ prisma: fastify.prisma, row, data, now: new Date() });
     return write();
   });
+}
+
+/**
+ * L'écriture FERME-t-elle le lien à l'instant où elle a lieu ? Deux formes :
+ * le désactiver (`isActive: false`), ou lui poser une échéance déjà PASSÉE
+ * (#10440) — sans quoi l'invité gardait sa room, réception ET envoi, jusqu'au
+ * balayage horaire (`ExpiredShareLinksCleanupService`). Une échéance
+ * raccourcie mais encore future ne ferme rien ici : les portes du lien échu la
+ * lisent à chaque requête REST, et le minuteur des sockets invités relit le
+ * lien au plus tard toutes les cinq minutes (`AuthHandler`). Retirer
+ * l'échéance (`null`) ne ferme rien.
+ */
+export function closesShareLinkNow(data: Record<string, unknown>, now: Date): boolean {
+  if (data.isActive === false) return true;
+  const expiresAt = data.expiresAt;
+  if (!(expiresAt instanceof Date) && typeof expiresAt !== 'string') return false;
+  return shareLinkHasExpired({ expiresAt }, now);
 }
 
 /**

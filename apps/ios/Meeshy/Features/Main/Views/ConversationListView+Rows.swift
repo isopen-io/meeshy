@@ -48,6 +48,8 @@ struct ConversationRowItem: View {
     let cachedPreviewMessages: [Message]
     let leadingActions: [SwipeAction]
     let trailingActions: [SwipeAction]
+    /// Le glisser de la ligne commence : la liste replie ses catégories et marque celle d'origine.
+    var onDragBegan: (UUID) -> Void = { _ in }
     let onViewStory: () -> Void
     let onViewProfile: () -> Void
     let onViewConversationInfo: () -> Void
@@ -117,7 +119,7 @@ struct ConversationRowItem: View {
                 // de la ligne (feedback user 2026-07-08). Le tap d'ouverture
                 // reste un `.onTapGesture` plein-ligne : les gestes internes
                 // de l'avatar (story/profil/mood) restent prioritaires.
-                rowCore
+                countedRowCore
                     .contentShape(Rectangle())
                     .onTapGesture {
                         HapticFeedback.light()
@@ -136,7 +138,13 @@ struct ConversationRowItem: View {
                     // via `ChipDropResolver`, même sémantique que le drop de
                     // la chip du morph custom.
                     .onDrag {
-                        NSItemProvider(object: conversation.id as NSString)
+                        let provider = ConversationDragItemProvider(
+                            conversationId: conversation.id,
+                            title: conversation.name,
+                            opensWindow: UIApplication.shared.supportsMultipleScenes
+                        )
+                        onDragBegan(provider.token)
+                        return provider
                     }
                     .contextMenu {
                         nativeContextMenu()
@@ -179,7 +187,7 @@ struct ConversationRowItem: View {
                         await onLoadPreview()
                     }
             } else {
-                rowCore
+                countedRowCore
                     .accessibilityElement(children: .combine)
                     .accessibilityAddTraits(.isButton)
                     .accessibilityHint(String(localized: "conversation.row.hint", bundle: .main))
@@ -326,6 +334,15 @@ struct ConversationRowItem: View {
             )
             .equatable()
         }
+    }
+
+    /// #10483 — l'humeur peinte sur l'avatar de la rangée est un affichage de
+    /// cette humeur : une impression à chaque apparition de la rangée. Posée
+    /// AUTOUR du mux, qui reste isolé dans `rowCore`
+    /// (`LentilleRowMuxSourceGuardTests`).
+    private var countedRowCore: some View {
+        rowCore
+            .countsImpression(of: moodStatus?.id) { SharedImpressionBatchers.moodAvatar.record($0) }
     }
 }
 

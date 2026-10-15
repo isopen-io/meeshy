@@ -89,7 +89,7 @@ struct CallWaitingBannerView: View {
                             .frame(minHeight: 44)
                             .background(MeeshyColors.success, in: Capsule())
                     }
-                    .accessibilityLabel(String(localized: "call.waiting.answer.a11y", defaultValue: "Raccrocher et repondre a \(callerName)", bundle: .main))
+                    .accessibilityLabel(String(localized: "call.waiting.answer.a11y", defaultValue: "Raccrocher et répondre à \(callerName)", bundle: .main))
                     .accessibilityHint(String(localized: "call.waiting.answer.hint", defaultValue: "Termine l'appel en cours et répond au nouvel appel entrant", bundle: .main))
                 }
                 .padding(.horizontal, MeeshySpacing.lg)

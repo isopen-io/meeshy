@@ -120,6 +120,69 @@ describe('réaction à un POST — le corps se tait, le pied dit le contenu', ()
   });
 });
 
+describe('une REPUBLICATION — le titre et le pied nomment le contenu republié (#10525)', () => {
+  const repost = (postType: string, title: string) =>
+    present(
+      record({
+        type: 'post_repost',
+        title,
+        content: '',
+        actor: { id: 'u-awa', username: 'awa', displayName: 'Awa', avatar: null },
+        metadata: { postType },
+      }),
+    );
+
+  test('un réel, une story, une publication : le titre servi, le pied à son icône', () => {
+    const cases: readonly (readonly [string, string, string, string])[] = [
+      ['REEL', 'Awa a republié votre réel', 'reel', 'Réel'],
+      ['STORY', 'Awa a republié votre story', 'story', 'Story'],
+      ['POST', 'Awa a republié votre publication', 'post', 'Publication'],
+    ];
+    cases.forEach(([postType, title, content, label]) => {
+      const row = repost(postType, title);
+      expect(row.title).toBe(title);
+      expect(row.footer).toEqual({ kind: 'content', content, text: label, expired: false });
+    });
+  });
+
+  test('un STATUS republié se dit « humeur » jusque dans le pied, comme le titre servi', () => {
+    const row = repost('STATUS', 'Awa a republié votre humeur');
+    expect(row.title).toBe('Awa a republié votre humeur');
+    expect(row.footer).toEqual({ kind: 'content', content: 'mood', text: 'Humeur', expired: false });
+  });
+
+  test('une réaction ou un commentaire sur un STATUS dit « Humeur » en pied, comme sa republication (#10526)', () => {
+    const cases: readonly (readonly [string, string])[] = [
+      ['status_reaction', 'Awa a réagi 🔥 à votre humeur'],
+      ['post_comment', 'Awa a commenté votre humeur'],
+      ['friend_story_comment', 'Awa a commenté une humeur'],
+    ];
+    cases.forEach(([type, title]) => {
+      const row = present(record({ type, title, content: '', metadata: { postType: 'STATUS' } }));
+      expect(row.footer).toEqual({ kind: 'content', content: 'mood', text: 'Humeur', expired: false });
+    });
+  });
+
+  test('une charge sans type (status_reaction seul) ou persistée en MOOD se lit aussi « Humeur »', () => {
+    const bare = present(record({ type: 'status_reaction', title: 'Awa a réagi 🔥 à votre humeur', content: '', metadata: {} }));
+    const mood = present(record({ type: 'status_reaction', title: 'Awa a réagi 🔥 à votre humeur', content: '', metadata: { postType: 'MOOD' } }));
+    expect(bare.footer).toEqual({ kind: 'content', content: 'mood', text: 'Humeur', expired: false });
+    expect(mood.footer).toEqual(bare.footer);
+  });
+
+  test('dans les sept langues, le pied d’un STATUS porte le mot du mood', async () => {
+    const MOT = { fr: 'Humeur', en: 'Mood', es: 'Estado de ánimo', pt: 'Humor', de: 'Stimmung', it: 'Stato d’animo', ar: 'مزاج' } as const;
+    for (const [language, mot] of Object.entries(MOT) as [keyof typeof MOT, string][]) {
+      await loadNotificationRowCatalog(language);
+      const row = notificationRowPresentation(
+        record({ type: 'status_reaction', title: 'Awa', content: '', metadata: { postType: 'STATUS' } }),
+        { language, now: NOW },
+      );
+      expect(row.footer).toEqual({ kind: 'content', content: 'mood', text: mot, expired: false });
+    }
+  });
+});
+
 describe('les messages — le groupe en pied, jamais répété', () => {
   test('le corps, puis le nom du groupe', () => {
     const row = present(

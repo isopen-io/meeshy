@@ -34,11 +34,28 @@ enum GameCopy {
             : String(localized: "game.points.other", defaultValue: "\(number) points", bundle: .main)
     }
 
+    /// « 5 823 points à convertir » — le SECOND solde (#10540) : la part des points que la frappe peut reprendre, seule
+    /// à payer une Meesh. Les points EN POCHE (`points`) font le niveau ; les deux soldes ont deux noms stables.
     static func convertiblePoints(_ count: Int) -> String {
         let number = formatCount(count)
         return isSingular(count)
-            ? String(localized: "game.points.convertible.one", defaultValue: "\(number) point convertible", bundle: .main)
-            : String(localized: "game.points.convertible.other", defaultValue: "\(number) points convertibles", bundle: .main)
+            ? String(localized: "game.points.convertible.one", defaultValue: "\(number) point à convertir", bundle: .main)
+            : String(localized: "game.points.convertible.other", defaultValue: "\(number) points à convertir", bundle: .main)
+    }
+
+    /// « Gloire 1 800 » — une quantité de Gloire, déjà formatée.
+    static func gloryAmount(_ glory: String) -> String {
+        String(localized: "game.rank.glory", defaultValue: "Gloire \(glory)", bundle: .main)
+    }
+
+    /// « Encore 3 pour Coffret » — ce qu'il manque au trésor, avec le palier visé.
+    static func treasuryNext(missing: String, tier: String) -> String {
+        String(localized: "game.treasury.next", defaultValue: "Encore \(missing) pour \(tier)", bundle: .main)
+    }
+
+    /// Avant le niveau 5 : où les missions s'ouvrent, et où l'on en est.
+    static func missionsLocked(level shown: String) -> String {
+        String(localized: "game.missions.locked", defaultValue: "Les missions s’ouvrent au niveau 5 : trois par jour, et un coffre. Tu es au niveau \(shown).", bundle: .main)
     }
 
     static func meeshes(_ count: Int) -> String {
@@ -474,7 +491,7 @@ enum GameCopy {
     static func errorMessage(for code: GameErrorCode?) -> String {
         switch code {
         case .insufficientPoints:
-            String(localized: "game.error.insufficient_points", defaultValue: "Pas assez de points convertibles pour frapper une Meesh.", bundle: .main)
+            String(localized: "game.error.insufficient_points", defaultValue: "Pas assez de points à convertir pour frapper une Meesh.", bundle: .main)
         case .insufficientMeeshes:
             String(localized: "game.error.insufficient_meeshes", defaultValue: "Il te faut une Meesh de plus pour ça.", bundle: .main)
         case .freezeAtMaximum:
@@ -602,11 +619,5 @@ enum GameCopy {
         let midnight = calendar.startOfDay(for: Date(timeIntervalSince1970: 1_790_000_000))
         let moment = calendar.date(byAdding: .minute, value: minuteOfDay, to: midnight) ?? midnight
         return moment.formatted(Date.FormatStyle(date: .omitted, time: .shortened, locale: locale, calendar: calendar, timeZone: calendar.timeZone))
-    }
-
-    /// « 1 chance sur 6 ».
-    static func chance(_ fraction: Double) -> String {
-        let denominator = fraction > 0 ? Int((1 / fraction).rounded()) : 0
-        return String(localized: "game.chest.chance", defaultValue: "1 chance sur \(formatCount(denominator))", bundle: .main)
     }
 }

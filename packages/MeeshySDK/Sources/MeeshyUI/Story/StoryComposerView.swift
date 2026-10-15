@@ -540,6 +540,9 @@ public struct StoryComposerView: View {
             // exécuté par lui rendrait un aperçu amputé — c'est l'un des deux
             // blocages qui avaient fait revenir ce lot en arrière au #4124.
             publishTrigger?.armPreview { presentPreview() }
+            // #10543 — la sortie demandée de l'extérieur EST la croix : elle
+            // écrit le brouillon avant de refermer.
+            publishTrigger?.armExit { handleDismiss() }
             publishTrigger?.report(canPublish: canPublish)
         }
         .onDisappear { publishTrigger?.disarm() }

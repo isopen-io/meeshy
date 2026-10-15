@@ -1,0 +1,62 @@
+/**
+ * `AvatarRingDesign` (#10632, § 5.2) — un contour d'avatar. Un contour se voit
+ * des AUTRES : ses couleurs sont FIXES (aucun rôle `accent`), identiques pour
+ * tous. Les traits d'ornement désignent leur couleur par l'INDEX dans
+ * `stroke.colors` — la palette d'un contour est la seule qu'il connaît.
+ *
+ * Rendu de référence : `avatarRingSvg` (`utils/appearance-svg.ts`).
+ */
+import * as z from 'zod/mini';
+import { PackAssetRefSchema } from './content-pack-index.js';
+import { APPEARANCE_LIMITS, PATH_D_PATTERN, hexSchema, slugSchema } from './appearance-design.js';
+
+export const RING_STROKE_STYLES = ['solid', 'double', 'dotted', 'dashed', 'gradient'] as const;
+export type RingStrokeStyle = (typeof RING_STROKE_STYLES)[number];
+
+/** Le rayon du cercle de l'avatar dans le viewBox 0 0 100 100 : l'ornement s'organise autour. */
+export const RING_AVATAR_RADIUS = 42;
+
+const RingOrnamentStrokeSchema = z.object({
+  d: z.string().check(z.regex(PATH_D_PATTERN)),
+  /** Index dans `stroke.colors`. */
+  color: z.int().check(z.minimum(0), z.maximum(3)),
+  opacity: z.number().check(z.minimum(0), z.maximum(1)),
+  width: z.optional(z.number().check(z.gt(0), z.maximum(40))),
+});
+export type RingOrnamentStroke = z.infer<typeof RingOrnamentStrokeSchema>;
+
+export const AvatarRingDesignSchema = z
+  .object({
+    key: slugSchema,
+    stroke: z.object({
+      style: z.enum(RING_STROKE_STYLES),
+      /** Fraction du diamètre. */
+      width: z.number().check(z.minimum(0.02), z.maximum(0.12)),
+      colors: z.array(hexSchema).check(z.minLength(1), z.maxLength(4)),
+    }),
+    ornament: z.optional(z.object({ paths: z.array(RingOrnamentStrokeSchema).check(z.minLength(1), z.maxLength(APPEARANCE_LIMITS.maxRingPaths)) })),
+    lottie: z.optional(PackAssetRefSchema),
+  })
+  .check(
+    z.refine((ring) => ring.ornament === undefined || ring.ornament.paths.every((path) => path.color < ring.stroke.colors.length)),
+    z.refine((ring) => (ring.ornament?.paths.reduce((total, path) => total + path.d.length, 0) ?? 0) <= APPEARANCE_LIMITS.maxTotalPathLength),
+  );
+export type AvatarRingDesign = z.infer<typeof AvatarRingDesignSchema>;
+
+export const parseAvatarRingDesign = (input: unknown): AvatarRingDesign | null => {
+  const parsed = AvatarRingDesignSchema.safeParse(input);
+  return parsed.success ? parsed.data : null;
+};
+
+export const AvatarRingPackContractSchema = z
+  .object({
+    domain: z.literal('avatar-ring'),
+    rings: z.array(AvatarRingDesignSchema).check(z.minLength(1), z.maxLength(APPEARANCE_LIMITS.maxPackDesigns)),
+  })
+  .check(z.refine((contract) => new Set(contract.rings.map((ring) => ring.key)).size === contract.rings.length));
+export type AvatarRingPackContract = z.infer<typeof AvatarRingPackContractSchema>;
+
+export const parseAvatarRingPackContract = (input: unknown): AvatarRingPackContract | null => {
+  const parsed = AvatarRingPackContractSchema.safeParse(input);
+  return parsed.success ? parsed.data : null;
+};

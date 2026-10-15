@@ -379,6 +379,8 @@ export async function anonymousRoutes(fastify: FastifyInstance, options: Anonymo
       switch (result.kind) {
         case 'invalid':
           return sendUnauthorized(reply, 'Session invalide ou expiree', { code: AUTH_ERROR_CODES.SESSION_INVALID });
+        case 'revoked':
+          return sendError(reply, 410, 'GUEST_ACCESS_REVOKED', { message: "L'acces de cet invite a ete retire" });
         case 'link-gone':
           return sendError(reply, 410, 'LINK_DEACTIVATED', { message: 'Le lien a ete desactive' });
         case 'link-expired':

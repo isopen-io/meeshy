@@ -25,6 +25,13 @@ export async function maintenanceRoutes(fastify: FastifyInstance) {
   const prisma = fastify.prisma as PrismaClient;
   const attachmentService = new AttachmentService(prisma);
   const maintenanceService = new MaintenanceService(prisma, attachmentService);
+  // #10449 — le nettoyage déclenché ici révoque les invités des liens expirés
+  // comme le balayage journalier : avec le vivant, pour couper leurs sockets
+  // sur-le-champ. Résolu à l'appel, le manager naissant après les routes.
+  maintenanceService.setShareLinkRevocationLive({
+    resolveIO: () => fastify.socketIOHandler?.getManager()?.getIO(),
+    resolveManager: () => fastify.socketIOHandler?.getManager(),
+  });
   const statusService = new StatusService(prisma);
 
   // Route pour obtenir les statistiques de maintenance

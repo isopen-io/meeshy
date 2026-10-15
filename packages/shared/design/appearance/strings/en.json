@@ -1,0 +1,76 @@
+{
+  "packs": {
+    "essentiels": {
+      "name": "Essentials",
+      "description": "The basic patterns and gradients."
+    },
+    "heritages": {
+      "name": "Heritage",
+      "description": "Patterns from around the world."
+    },
+    "nature-et-ciel": {
+      "name": "Nature and sky",
+      "description": "Maps, leaves, trellises and stars."
+    },
+    "illustrations": {
+      "name": "Illustrations",
+      "description": "Landscapes drawn in line."
+    },
+    "bannieres-essentielles": {
+      "name": "Essential banners",
+      "description": "Six banners for your profile."
+    },
+    "contours-essentiels": {
+      "name": "Essential rings",
+      "description": "Six rings for your avatar."
+    }
+  },
+  "designs": {
+    "monogramme": "Monogram",
+    "chevrons": "Chevrons",
+    "aurore": "Aurora",
+    "maille": "Mesh",
+    "art-deco": "Art Deco",
+    "seigaiha": "Seigaiha",
+    "zellige": "Zellige",
+    "bogolan": "Bogolan",
+    "topographie": "Topography",
+    "feuillage": "Foliage",
+    "treillis": "Trellis",
+    "constellation": "Constellation",
+    "horizon": "Horizon",
+    "baobab": "Baobab"
+  },
+  "rings": {
+    "filet": "Hairline",
+    "double-filet": "Double hairline",
+    "perle": "Pearls",
+    "aurore": "Aurora",
+    "deco": "Deco",
+    "laurier": "Laurel"
+  },
+  "gamut": {
+    "indigo": "Meeshy Indigo",
+    "bleu-nuit": "Midnight blue",
+    "azur": "Azure",
+    "lagon": "Lagoon",
+    "emeraude": "Emerald",
+    "olive": "Olive",
+    "moutarde": "Mustard",
+    "sable": "Sand",
+    "terracotta": "Terracotta",
+    "corail": "Coral",
+    "rose-poudre": "Dusty rose",
+    "framboise": "Raspberry",
+    "prune": "Plum",
+    "lavande": "Lavender",
+    "ardoise": "Slate",
+    "graphite": "Graphite"
+  },
+  "modes": {
+    "signature": "Signature",
+    "solid": "Solid color",
+    "photo": "Conversation photo"
+  },
+  "avatarUsage": "Profile ring"
+}

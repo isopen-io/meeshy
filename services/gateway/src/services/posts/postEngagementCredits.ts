@@ -1,5 +1,6 @@
 import type { PrismaClient } from '@meeshy/shared/prisma/client';
 import type { EngagementOperationKey } from '@meeshy/shared/types/engagement-operations';
+import { isEngagementStreakPostType } from '@meeshy/shared/types/engagement-act-streaks';
 import { EngagementService, type EngagementActivityOptions } from '../engagement/EngagementService';
 import { PUBLICATION_OPERATION_BY_TYPE } from '../engagement/viewerPostPoints';
 import type { RepostPassage } from './postVisibility';
@@ -68,7 +69,13 @@ export function creditPostGesture(
       prisma,
       userId,
       operationKey,
-      { postId: post.id, targetId: post.id, targetOwnerId: post.authorId, receipt: gesture.source },
+      {
+        postId: post.id,
+        targetId: post.id,
+        targetOwnerId: post.authorId,
+        receipt: gesture.source,
+        ...(isEngagementStreakPostType(post.type) ? { postType: post.type } : {}),
+      },
       recorder,
     ),
   );

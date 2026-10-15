@@ -229,4 +229,92 @@ struct FirstUnreadBoundaryTests {
         let received: FirstUnreadBoundary.Result? = await Task.detached { result }.value
         #expect(received == FirstUnreadBoundary.Result(firstUnreadId: "m1", unreadCount: 1))
     }
+
+    // MARK: - unreadCountHint (#7427) — miroir de `describe('firstUnreadBoundary — unreadCountHint (#7351, V3)')`
+
+    @Test("AUCUN rang chronologique, hint positif ⇒ élit les N DERNIERS candidats, jamais les premiers")
+    func hintWithoutRank_electsLastCandidates() {
+        let messages = [
+            message("m1", other, "2026-09-21T09:01:00Z"),
+            message("m2", other, "2026-09-21T09:02:00Z"),
+            message("m3", other, "2026-09-21T09:03:00Z"),
+        ]
+
+        let result = FirstUnreadBoundary.resolve(
+            messages: messages, lastReadMessageId: nil, lastReadAt: nil,
+            lastReadMessageCreatedAt: nil, viewerId: viewer, unreadCountHint: 2)
+
+        #expect(result == FirstUnreadBoundary.Result(firstUnreadId: "m2", unreadCount: 2))
+    }
+
+    @Test("le hint dépasse la fenêtre chargée ⇒ tous les candidats chargés sont non lus")
+    func hintLongerThanWindow_electsEveryCandidate() {
+        let messages = [
+            message("m1", other, "2026-09-21T09:01:00Z"),
+            message("m2", other, "2026-09-21T09:02:00Z"),
+        ]
+
+        let result = FirstUnreadBoundary.resolve(
+            messages: messages, lastReadMessageId: nil, lastReadAt: nil,
+            lastReadMessageCreatedAt: nil, viewerId: viewer, unreadCountHint: 50)
+
+        #expect(result == FirstUnreadBoundary.Result(firstUnreadId: "m1", unreadCount: 2))
+    }
+
+    @Test("AUCUN rang chronologique, hint à 0 ⇒ nil (rien n'est inventé comme non lu)")
+    func zeroHintWithoutRank_isNil() {
+        let messages = [message("m1", other, "2026-09-21T09:01:00Z")]
+
+        let result = FirstUnreadBoundary.resolve(
+            messages: messages, lastReadMessageId: nil, lastReadAt: nil,
+            lastReadMessageCreatedAt: nil, viewerId: viewer, unreadCountHint: 0)
+
+        #expect(result == nil)
+    }
+
+    @Test("un CURSEUR existe ⇒ un hint à 0 est IGNORÉ : le message arrivé après le curseur reste non lu")
+    func cursorPresent_ignoresZeroHint() {
+        let messages = [
+            message("m1", other, "2026-09-21T09:01:00Z"),
+            message("m2", other, "2026-09-21T09:05:00Z"),
+        ]
+
+        let result = FirstUnreadBoundary.resolve(
+            messages: messages, lastReadMessageId: "m1", lastReadAt: nil,
+            lastReadMessageCreatedAt: ISO8601DateFormatter().date(from: "2026-09-21T09:01:00Z"),
+            viewerId: viewer, unreadCountHint: 0)
+
+        #expect(result == FirstUnreadBoundary.Result(firstUnreadId: "m2", unreadCount: 1))
+    }
+
+    @Test("un rang chronologique existe (joinedAt) ⇒ le hint est IGNORÉ, la loi par curseur tranche seule")
+    func joinedAtPresent_ignoresHint() {
+        let messages = [
+            message("m1", other, "2019-04-02T09:00:00Z"),
+            message("m2", other, "2026-09-21T10:04:00Z"),
+        ]
+
+        let result = FirstUnreadBoundary.resolve(
+            messages: messages, lastReadMessageId: nil, lastReadAt: nil,
+            lastReadMessageCreatedAt: nil,
+            joinedAt: ISO8601DateFormatter().date(from: "2026-09-21T10:00:00Z"),
+            viewerId: viewer, unreadCountHint: 999)
+
+        #expect(result == FirstUnreadBoundary.Result(firstUnreadId: "m2", unreadCount: 1))
+    }
+
+    @Test("le hint ne compte que les messages d'AUTRUI : un message du lecteur n'en consomme aucun")
+    func hintCountsOnlyOthersMessages() {
+        let messages = [
+            message("m1", other, "2026-09-21T09:01:00Z"),
+            message("m2", other, "2026-09-21T09:02:00Z"),
+            message("m3", viewer, "2026-09-21T09:03:00Z"),
+        ]
+
+        let result = FirstUnreadBoundary.resolve(
+            messages: messages, lastReadMessageId: nil, lastReadAt: nil,
+            lastReadMessageCreatedAt: nil, viewerId: viewer, unreadCountHint: 1)
+
+        #expect(result == FirstUnreadBoundary.Result(firstUnreadId: "m2", unreadCount: 1))
+    }
 }

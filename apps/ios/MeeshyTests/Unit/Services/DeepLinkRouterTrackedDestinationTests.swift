@@ -117,6 +117,31 @@ final class DeepLinkRouterTrackedDestinationTests: XCTestCase {
 
     /// Une `originalUrl` non exploitable (schéma non http) ne devient pas une
     /// ouverture externe : `.unresolvedTrackedLink` reste la seule issue honnête.
+    // MARK: - Lien court d'invitation (#10560)
+
+    func test_invitationLink_carriesItsReferralCode() {
+        let link = resolved(kind: "tracking", type: "EXTERNAL",
+                            originalUrl: "https://meeshy.me/signup/affiliate/aff_1760905804502_9qgxyugbe8o")
+        XCTAssertEqual(DeepLinkRouter.trackedReferralCode(for: link), "aff_1760905804502_9qgxyugbe8o")
+    }
+
+    func test_invitationLinkByQuery_carriesItsReferralCode() {
+        let link = resolved(type: "EXTERNAL", originalUrl: "https://meeshy.me/signup?ref=aff_1760905804502_9qgxyugbe8o")
+        XCTAssertEqual(DeepLinkRouter.trackedReferralCode(for: link), "aff_1760905804502_9qgxyugbe8o")
+    }
+
+    func test_ordinaryLinks_carryNoReferralCode() {
+        XCTAssertNil(DeepLinkRouter.trackedReferralCode(for: nil))
+        XCTAssertNil(DeepLinkRouter.trackedReferralCode(
+            for: resolved(type: "EXTERNAL", originalUrl: "https://example.org/signup/affiliate/aff_1760905804502_9qgxyugbe8o")))
+        XCTAssertNil(DeepLinkRouter.trackedReferralCode(
+            for: resolved(type: "REEL", targetId: "r1", originalUrl: "https://meeshy.me/signup/affiliate/aff_1760905804502_9qgxyugbe8o")))
+        XCTAssertNil(DeepLinkRouter.trackedReferralCode(
+            for: resolved(kind: "conversation", type: "CONVERSATION", targetId: "c1",
+                          originalUrl: "https://meeshy.me/signup/affiliate/aff_1760905804502_9qgxyugbe8o")))
+        XCTAssertNil(DeepLinkRouter.trackedReferralCode(for: resolved(type: "EXTERNAL", originalUrl: "https://meeshy.me/reel/r1")))
+    }
+
     func test_nonWebOriginalUrl_isNotTreatedAsAnExternalOpen() {
         XCTAssertEqual(
             DeepLinkRouter.trackedDestination(

@@ -342,10 +342,21 @@ public struct MeeshyAvatar: View {
         return AvatarPresenceDot.resolve(presence: presenceState, isHere: isHere.isHere)
     }
 
-    /// VoiceOver : le nom, et « dans la conversation » quand le pair y est.
+    /// VoiceOver : le nom, son humeur (#10528), et « dans la conversation »
+    /// quand le pair y est.
     private var accessibilityName: String {
-        guard effectivePresence == .here else { return name }
-        return "\(name), \(AvatarPresenceDot.here.localizedLabel)"
+        Self.spokenName(name: name, moodEmoji: effectiveMoodEmoji, isHere: effectivePresence == .here)
+    }
+
+    /// La pastille d'humeur masque le point et n'est lue par personne : sans
+    /// ce libellé, l'humeur n'existait que pour l'œil.
+    public static func spokenName(name: String, moodEmoji: String?, isHere: Bool) -> String {
+        let mood = moodEmoji.flatMap { emoji -> String? in
+            guard !emoji.isEmpty else { return nil }
+            return String(localized: "avatar.a11y.mood", defaultValue: "humeur \(emoji)", bundle: .module)
+        }
+        let here = isHere ? AvatarPresenceDot.here.localizedLabel : nil
+        return ([name] + [mood, here].compactMap { $0 }).joined(separator: ", ")
     }
 
     private var hasTapHandler: Bool {

@@ -17,6 +17,13 @@ public struct StoryNotificationOfflineContent: View {
     public let onRetry: () -> Void
 
     @Environment(\.dismiss) private var dismiss
+    @Environment(\.isPresented) private var isPresented
+    @Environment(\.meeshyPanelDismiss) private var panelDismiss
+    /// Retour opérant dans les trois contextes : pile iPhone, panneau droit iPad — à la racine de sa pile,
+    /// où la fermeture de l’environnement ne fait rien et laissait la colonne sur son chargeur —, et feuille.
+    private var back: PanelBackAction {
+        PanelBackAction(isPresented: isPresented, dismiss: dismiss, panelDismiss: panelDismiss)
+    }
 
     init(cause: ContentFetchFailure, onRetry: @escaping () -> Void) {
         self.cause = cause
@@ -57,7 +64,7 @@ public struct StoryNotificationOfflineContent: View {
                 .buttonStyle(.plain)
 
                 Button {
-                    dismiss()
+                    back()
                 } label: {
                     Text("notifications.story.expired.back")
                         .font(.subheadline)

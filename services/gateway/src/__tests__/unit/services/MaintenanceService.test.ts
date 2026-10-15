@@ -99,6 +99,8 @@ function makePrisma(overrides: {
       count: jest.fn<any>().mockResolvedValue(0),
     },
     conversationShareLink: {
+      findMany: jest.fn<any>().mockResolvedValue([]),
+      findFirst: jest.fn<any>(async ({ where }: { where: { id: string } }) => ({ id: where.id })),
       deleteMany: jest.fn<any>().mockResolvedValue({ count: 0 }),
     },
     userSession: {
@@ -469,17 +471,23 @@ describe('cleanupExpiredData', () => {
     );
   });
 
-  it('deletes expired conversation share links', async () => {
+  it('deletes expired conversation share links — only those it found expired, after ending their guests (#10437)', async () => {
     const prisma = makePrisma();
+    (prisma.conversationShareLink.findMany as jest.Mock<any>).mockResolvedValue([{ id: 'link-expired' }]);
     const sut = new MaintenanceService(prisma as any, attachmentService as any);
 
     await sut.cleanupExpiredData();
 
-    expect(prisma.conversationShareLink.deleteMany).toHaveBeenCalledWith(
+    expect(prisma.conversationShareLink.findMany).toHaveBeenCalledWith(
       expect.objectContaining({
         where: expect.objectContaining({ expiresAt: expect.objectContaining({ lt: expect.any(Date) }) }),
       })
     );
+    // #10440 — la suppression relit l'échéance : un lien prolongé entre la
+    // lecture et la suppression reste.
+    expect(prisma.conversationShareLink.deleteMany).toHaveBeenCalledWith({
+      where: { id: { in: ['link-expired'] }, expiresAt: { lt: expect.any(Date) } },
+    });
   });
 
   it('does not throw on DB error during cleanup', async () => {
@@ -705,7 +713,8 @@ describe('processAccountDeletionRequests — la fin de période de grâce coupe 
 
     expect(prisma.userSession.deleteMany).toHaveBeenCalledWith({ where: { userId: 'user-a' } });
     expect(prisma.userVoiceModel.deleteMany).toHaveBeenCalledWith({ where: { userId: 'user-a' } });
-    expect(prisma.conversationShareLink.deleteMany).toHaveBeenCalledWith({ where: { createdBy: 'user-a' } });
+    // #10492 — les liens du compte sont LUS, leurs invités révoqués, puis supprimés.
+    expect(prisma.conversationShareLink.findMany).toHaveBeenCalledWith({ where: { createdBy: 'user-a' }, select: { id: true } });
     expect(prisma.notification.deleteMany).toHaveBeenCalledWith({ where: { userId: 'user-a' } });
     expect(prisma.userContact.deleteMany).toHaveBeenCalledWith({ where: { ownerId: 'user-a' } });
     expect(prisma.contactJoinNotice.deleteMany).toHaveBeenCalledWith({ where: { recipientId: 'user-a' } });

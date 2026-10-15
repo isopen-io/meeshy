@@ -11,6 +11,8 @@ const esIdentity = {
   'a11y.avatar.profile': 'Ver el perfil de {name}',
   'a11y.avatar.story': 'Ver la historia de {name}',
   'a11y.avatar.conversation': 'Ver la conversación {name}',
+  'a11y.avatar.mood': '{name}, estado de ánimo {mood}',
+  'mood.peek.title': 'Estado de ánimo de {name}',
   'avatar.menu.label': 'Acciones para {name}',
   'avatar.menu.view_profile': 'Ver el perfil',
   'userProfile.peek.openPage': 'Abrir el perfil completo',

@@ -1,9 +1,13 @@
 import { createContext, useCallback, useContext, useMemo } from 'react';
 
 import { useStatusMoods } from '@/lib/api/query';
-import { moodsByAuthor } from '@/lib/view/story-tray';
+import { currentMoodPosts, moodsByAuthor } from '@/lib/view/story-tray';
 
-export type MoodOf = (authorId: string | undefined) => string | undefined;
+/** L'emoji de l'humeur courante d'un auteur ; `postOf` rend le post de cette
+ * humeur, ce que l'avatar compte quand il la montre (#10483). */
+export type MoodOf = ((authorId: string | undefined) => string | undefined) & {
+  readonly postOf?: (authorId: string | undefined) => string | undefined;
+};
 
 const NO_MOOD: MoodOf = () => undefined;
 
@@ -19,7 +23,14 @@ const NO_MOOD: MoodOf = () => undefined;
 export function useAuthorMoods(viewer: { readonly isAnonymous: boolean }): MoodOf {
   const moods = useStatusMoods({ enabled: !viewer.isAnonymous });
   const byAuthor = useMemo(() => moodsByAuthor(moods.data ?? []), [moods.data]);
-  return useCallback((authorId: string | undefined) => (authorId === undefined ? undefined : byAuthor.get(authorId)), [byAuthor]);
+  const postByAuthor = useMemo(() => currentMoodPosts(moods.data ?? []), [moods.data]);
+  const emojiOf = useCallback((authorId: string | undefined) => (authorId === undefined ? undefined : byAuthor.get(authorId)), [byAuthor]);
+  return useMemo(
+    () => Object.assign((authorId: string | undefined) => emojiOf(authorId), {
+      postOf: (authorId: string | undefined) => (authorId === undefined ? undefined : postByAuthor.get(authorId)?.id),
+    }),
+    [emojiOf, postByAuthor],
+  );
 }
 
 /** Posé par l'écran de fil, lu par chaque avatar de personne du fil. Hors
@@ -28,4 +39,9 @@ export const AuthorMoodsContext = createContext<MoodOf>(NO_MOOD);
 
 export function useAuthorMood(authorId: string | undefined): string | undefined {
   return useContext(AuthorMoodsContext)(authorId);
+}
+
+/** Le post de l'humeur que `useAuthorMood` rend — `undefined` hors d'un fil. */
+export function useAuthorMoodPostId(authorId: string | undefined): string | undefined {
+  return useContext(AuthorMoodsContext).postOf?.(authorId);
 }

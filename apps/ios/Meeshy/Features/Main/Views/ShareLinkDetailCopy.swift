@@ -82,6 +82,17 @@ enum ShareLinkDetailCopy {
         date.map { ShareLinkDateFormat.dayAndTime($0) } ?? never
     }
 
+    static var expiresOn: String { String(localized: "participantProfile.linkExpires", defaultValue: "Expire le", bundle: .main) }
+    static var linkExpired: String { String(localized: "conversationCard.expired", defaultValue: "Lien expiré", bundle: .main) }
+
+    /// #10381 — la ligne de « Mes liens › Liens de partage » dit l'échéance
+    /// choisie à la création ; un lien sans échéance n'ajoute rien à sa ligne.
+    static func rowExpiry(_ date: Date?, now: Date = Date()) -> String? {
+        guard let date else { return nil }
+        guard date > now else { return linkExpired }
+        return "\(expiresOn) \(ShareLinkDateFormat.day(date))"
+    }
+
     static func languages(_ codes: [String]) -> String {
         codes.isEmpty ? allLanguages : ListFormatter.localizedString(byJoining: codes.map(LanguageData.autonym(for:)))
     }

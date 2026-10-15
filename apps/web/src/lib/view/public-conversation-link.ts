@@ -5,7 +5,7 @@ import { unwrap } from '@/lib/api/client';
 import { apiDeps } from '@/lib/api/deps';
 import { appQueryClient } from '@/lib/api/query-client';
 import { sessionStore, type GuestIdentity } from '@/lib/api/session';
-import { WORLD_IDENTIFIER } from '@/lib/lens/world-pin';
+import { WORLD_CONVERSATION_IDENTIFIER } from '@meeshy/shared/types/world-identity';
 import { shareLinkUrl } from '@/lib/links/web-origin';
 
 /**
@@ -32,7 +32,7 @@ export function conversationShareLinkOf(params: {
   const { conversation, guest } = params;
   const ownsIt = guest !== null && (guest.conversationId === conversation.id || guest.conversationId === conversation.identifier);
   if (ownsIt && guest.link !== '') return guest.link;
-  if (conversation.identifier !== WORLD_IDENTIFIER) return null;
+  if (conversation.identifier !== WORLD_CONVERSATION_IDENTIFIER) return null;
   return typeof params.worldLink === 'string' && params.worldLink !== '' ? params.worldLink : null;
 }
 
@@ -56,7 +56,7 @@ export function useConversationShareLink(conversation: { readonly id: string; re
         const { loadWorldEntry } = await import('@/lib/api/world');
         return unwrap(await loadWorldEntry({ ...apiDeps, signal }));
       },
-      enabled: own === null && conversation.identifier === WORLD_IDENTIFIER,
+      enabled: own === null && conversation.identifier === WORLD_CONVERSATION_IDENTIFIER,
       staleTime: WORLD_ENTRY_STALE_MS,
       retry: false,
     },

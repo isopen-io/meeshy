@@ -2,6 +2,7 @@ import Foundation
 import UIKit
 import MeeshySDK
 import SwiftUI
+import os
 
 /// **Un seul réveil pour tout le fil** — l'ordonnanceur qui fait disparaître un
 /// éphémère à son échéance (#7452, dimension 4).
@@ -84,15 +85,23 @@ extension ConversationViewModel {
     /// règle : l'ordonnanceur ne réécrit pas sa propre arithmétique d'échéance,
     /// sans quoi il pourrait retirer un message que le chrome montre encore
     /// vivant — deux horloges pour un même message, le défaut que ce lot ferme.
+    ///
+    /// #10433 — une RÉPONSE meurt au même instant que ce qu'elle cite
+    /// (`QuoteCascade`, miroir de la loi TS) : son échéance est la sienne
+    /// rapprochée de celle de sa chaîne citée, lue dans ce fil et dans la
+    /// citation embarquée — un éphémère sorti de la fenêtre emporte encore ses
+    /// réponses.
     var ephemeralDeadlines: [String: Date] {
         var table: [String: Date] = [:]
+        let quotes = QuoteCascade.MessageThread(messages, ledger: EphemeralReceiptLedger.shared, now: Date())
         for message in messages {
             // Filtre bon marché d'abord : cette propriété est relue à CHAQUE
             // changement de `messages`, et l'écrasante majorité des messages
-            // d'un fil n'est pas éphémère. Sans lui, chaque passe construirait
-            // un descripteur par message.
-            guard message.effects.flags.contains(.ephemeral) || message.expiresAt != nil else { continue }
-            guard let deadline = message.protection().ephemeralState.deadline else { continue }
+            // d'un fil n'est ni éphémère ni une réponse. Sans lui, chaque passe
+            // construirait un descripteur par message.
+            let declaresEphemeral = message.effects.flags.contains(.ephemeral) || message.expiresAt != nil
+            let own = declaresEphemeral ? message.protection().ephemeralState.deadline : nil
+            guard let deadline = QuoteCascade.inheritedExpiresAt([own, quotes.inheritedDeath(of: message)]) else { continue }
             table[message.id] = deadline
         }
         return table
@@ -110,7 +119,14 @@ extension ConversationViewModel {
     /// cette heure-là le réaffichait intact.
     var elapsedEphemeralIds: Set<String> {
         var ids: Set<String> = []
+        let now = Date()
+        let quotes = QuoteCascade.MessageThread(messages, ledger: EphemeralReceiptLedger.shared, now: now)
         for message in messages {
+            // #10433 — ce que la réponse cite est déjà mort : elle l'est aussi.
+            if let inherited = quotes.inheritedDeath(of: message), inherited <= now {
+                ids.insert(message.id)
+                continue
+            }
             guard message.effects.flags.contains(.ephemeral) || message.expiresAt != nil else { continue }
             guard message.protection().ephemeralState.hasElapsed else { continue }
             ids.insert(message.id)
@@ -169,6 +185,7 @@ extension ConversationViewModel {
         if !alreadyDead.isEmpty {
             messages.removeAll { alreadyDead.contains($0.id) }
             messageStore.dropGoneEphemerals()
+            purgeQuoteCascade(fromDead: Array(alreadyDead))
         }
         let burning = fresh.subtracting(alreadyDead)
         guard !burning.isEmpty else { return }
@@ -197,6 +214,21 @@ extension ConversationViewModel {
             self.messageStore.dropGoneEphemerals()
             for id in burning { self.burningEphemeralIds.removeValue(forKey: id) }
             self.refreshEphemeralExpirySchedule()
+            self.purgeQuoteCascade(fromDead: Array(burning))
+        }
+    }
+
+    /// #10433 — les réponses d'un mort quittent la BASE avec lui : sans quoi
+    /// elles revenaient au fil dès que le message cité sortait de la fenêtre.
+    func purgeQuoteCascade(fromDead ids: [String]) {
+        guard !ids.isEmpty else { return }
+        let persistence = messagePersistence
+        Task {
+            do {
+                try await persistence.purgeQuoteCascade(fromDead: ids)
+            } catch {
+                Logger.messages.warning("[EphemeralExpiry] purgeQuoteCascade failed \(ids.count, privacy: .public) id(s): \(error.localizedDescription, privacy: .public)")
+            }
         }
     }
 

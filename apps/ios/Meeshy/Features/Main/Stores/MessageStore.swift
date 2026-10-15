@@ -230,6 +230,14 @@ public final class MessageStore: ObservableObject {
     /// réellement DELTA (par `changeVersion`) est la suite naturelle.
     static let realtimeAnchoredWindowCap = 500
 
+    /// Plafond de la fenêtre `.latest` JAMAIS REMONTÉE (aucune ancre). La fusion protectrice de `publish`
+    /// préserve tout ce qui sort des 200 dernières lignes relues : sur un fil laissé ouvert — un iPad posé
+    /// sur un groupe actif — la fenêtre gagnait chaque message reçu et ne rendait rien, et chaque accusé
+    /// re-triait le tout sur la boucle principale. Sans ancre, la personne n'a jamais paginé vers le passé :
+    /// les lignes retirées sont à plus de mille rangées du présent, et `loadOlder` les relit depuis GRDB.
+    /// Une fenêtre ANCRÉE (historique remonté) n'est pas touchée — on ne retire rien sous les yeux de qui lit.
+    static let unanchoredWindowCap = 1_000
+
     // MARK: - Public State
 
     private(set) var messages: [MessageRecord] = []
@@ -508,13 +516,23 @@ public final class MessageStore: ObservableObject {
     /// fois, sur le chemin chaud. `apply(records:)` n'a pas cette garantie et
     /// continue d'appeler `publish`.
     private func publishUnchecked(records: [MessageRecord], mergeInMemory: Bool) {
-        let next: [MessageRecord]
+        var next: [MessageRecord]
+        #if DEBUG
+        var cappedIds: Set<String> = []
+        #endif
         if mergeInMemory, windowMode == .latest {
             let snapshotIds = Set(records.map(\.localId))
             let preserved = messages.filter { !snapshotIds.contains($0.localId) }
             next = preserved.isEmpty
                 ? records
                 : (records + preserved).sorted { $0.createdAt < $1.createdAt }
+            if windowAnchor == nil, next.count > Self.unanchoredWindowCap {
+                let overflow = next.count - Self.unanchoredWindowCap
+                #if DEBUG
+                cappedIds = Set(next.prefix(overflow).map(\.localId))
+                #endif
+                next.removeFirst(overflow)
+            }
         } else {
             next = records
         }
@@ -526,7 +544,7 @@ public final class MessageStore: ObservableObject {
         // render as a "message en double" the moment a later event re-snapshots.
         // Applied before the drop diagnostic so a collapsed mirror is never
         // mistaken for an unintended drop (the prior publish was deduped too).
-        let published = Self.collapsingDuplicateServerIds(next).filter { !ExpiredEphemeralRow.isGone($0) }
+        let published = ExpiredEphemeralRow.living(Self.collapsingDuplicateServerIds(next))
 
         #if DEBUG
         // BUG1 diagnostics — detect any publish that DROPS currently-displayed
@@ -539,7 +557,8 @@ public final class MessageStore: ObservableObject {
         let beforeCount = messages.count
         let beforeIds = Set(messages.map(\.localId))
         let afterIds = Set(published.map(\.localId))
-        let droppedIds = beforeIds.subtracting(afterIds)
+        // Les lignes rendues par le plafond (`unanchoredWindowCap`) sont un retrait VOULU, pas une perte.
+        let droppedIds = beforeIds.subtracting(afterIds).subtracting(cappedIds)
         if !droppedIds.isEmpty {
             let beforeById = Dictionary(messages.map { ($0.localId, $0) }, uniquingKeysWith: { a, _ in a })
             // Classify each dropped row: when its serverId survives in the
@@ -600,7 +619,7 @@ public final class MessageStore: ObservableObject {
     /// qui échoit à l'écran n'en provoque aucune. L'hôte appelle ce point à la
     /// fin de la combustion ; sans mort, rien n'est publié.
     func dropGoneEphemerals() {
-        let kept = messages.filter { !ExpiredEphemeralRow.isGone($0) }
+        let kept = ExpiredEphemeralRow.living(messages)
         guard kept.count != messages.count else { return }
         publishUnchecked(records: kept, mergeInMemory: false)
     }

@@ -443,6 +443,14 @@ struct ComposerMoodSurface: View {
 
     @State private var audiencePickerMode: PostVisibility?
 
+    /// La feuille complète des emojis (#10527), ouverte par la dernière
+    /// cellule de la grille.
+    @State private var isPickingAnotherEmoji = false
+
+    /// Le focus du mot. La question « sans un petit mot ? » y ramène l'auteur
+    /// (`ComposerMoodPublishGate`, par `composerMoodWordFocus`).
+    @FocusState private var isWordFocused: Bool
+
     /// Cinq colonnes, cellules 56×56 pt — les mesures de l'écran historique.
     /// Elles sont FIXES quand les libellés alentour suivent Dynamic Type, et
     /// c'est ce qui oblige le site de montage à offrir un conteneur qui défile.
@@ -466,6 +474,13 @@ struct ComposerMoodSurface: View {
         .sheet(item: $audiencePickerMode) { mode in
             AudienceUserPickerView(mode: mode, initialSelection: visibilityUserIds) { ids in
                 visibilityUserIds = ids
+            }
+        }
+        .sheet(isPresented: $isPickingAnotherEmoji) {
+            ComposerMoodEmojiSheet(offered: StatusViewModel.moodOptions) { picked in
+                emoji = picked
+                isPickingAnotherEmoji = false
+                HapticFeedback.medium()
             }
         }
     }
@@ -519,6 +534,7 @@ struct ComposerMoodSurface: View {
             Spacer(minLength: 0)
 
             headerPublishButton
+                .environment(\.composerMoodWordFocus, ComposerMoodWordFocus { isWordFocused = true })
         }
     }
 
@@ -558,6 +574,15 @@ struct ComposerMoodSurface: View {
         LazyVGrid(columns: columns, spacing: MeeshySpacing.lg) {
             ForEach(StatusViewModel.moodOptions, id: \.self) { option in
                 emojiCell(option)
+            }
+            // **Un autre emoji que ceux proposés** (#10527) : celui que la
+            // feuille complète a rendu prend sa cellule, à côté de la porte
+            // qui y mène — sans quoi l'humeur choisie ne se verrait nulle part.
+            if let autre = ComposerMoodEmojiChoice.custom(emoji, offered: StatusViewModel.moodOptions) {
+                emojiCell(autre)
+            }
+            ComposerMoodMoreEmojiCell(side: Self.cellSide) {
+                isPickingAnotherEmoji = true
             }
         }
     }
@@ -724,6 +749,7 @@ struct ComposerMoodSurface: View {
                 .font(MeeshyFont.relative(MeeshyFont.bodySize))
                 .foregroundColor(MeeshyColors.textPrimary(isDark: true))
                 .padding(MeeshySpacing.md)
+                .focused($isWordFocused)
                 .accessibilityLabel(Text(ComposerMoodCopy.placeholder))
         }
         .background(
