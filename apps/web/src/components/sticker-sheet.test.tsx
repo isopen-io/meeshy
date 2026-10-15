@@ -24,7 +24,7 @@ const globals = globalThis as typeof globalThis & { IS_REACT_ACT_ENVIRONMENT?: b
 const realFetch = globalThis.fetch;
 
 beforeAll(async () => {
-  ensureHappyDomRegistered();
+  ensureHappyDomRegistered({ url: 'http://localhost/' });
   globals.IS_REACT_ACT_ENVIRONMENT = true;
   await loadInterfaceCatalog('fr');
   await loadMessagePiecesCatalog('fr');
@@ -125,5 +125,21 @@ describe('StickerSheet', () => {
     mounter.unmountAll();
     const host = await open({ sticker: { templateId: 'pack.chats-de-paris.dodo', emoji: '😴' } });
     expect(host.querySelector('[data-sticker-view-pack]')).not.toBeNull();
+  });
+
+  test('la fiche nomme l’expéditeur quand la bulle le dit (#10703)', async () => {
+    appQueryClient.setQueryData(STICKERS_QUERY_KEY, []);
+    expect((await open({ senderName: 'Amina Diallo' })).querySelector('[data-sticker-sender]')?.textContent).toContain('Amina Diallo');
+    mounter.unmountAll();
+    expect((await open()).querySelector('[data-sticker-sender]')).toBeNull();
+  });
+
+  test('« Voir le pack » ouvre CE pack, pas la liste des packs (#10703)', async () => {
+    appQueryClient.setQueryData(STICKERS_QUERY_KEY, []);
+    const host = await open({ sticker: { templateId: 'pack.chats-de-paris.dodo', emoji: '😴' } });
+    await mounter.click(host.querySelector('[data-sticker-view-pack]'));
+    const params = new URLSearchParams(location.search);
+    expect(params.get('volet')).toBe('packs');
+    expect(params.get('pack')).toBe('chats-de-paris');
   });
 });

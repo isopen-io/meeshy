@@ -15,6 +15,7 @@ const ar = {
   'message.piece.preview': 'وسائط الرسالة',
   'message.sticker.add': 'إضافة إلى ملصقاتي',
   'message.sticker.inLibrary': 'ضمن ملصقاتي',
+  'message.sticker.from': 'أرسله {name}',
   'message.sticker.viewPack': 'عرض الحزمة',
   'message.sticker.added': 'تمت إضافة الملصق إلى مكتبتك',
   'message.sticker.addFailed': 'تعذّرت إضافة الملصق',

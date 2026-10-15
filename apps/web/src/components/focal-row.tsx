@@ -575,7 +575,7 @@ export const FocalRow = memo(function FocalRow({
       {sharedPlace !== null ? <LocationCard place={sharedPlace} accent="var(--accent)" language={currentInterfaceLanguage()} /> : null}
 
       {body.kind === 'sticker' ? (
-        <StickerArtwork sticker={body.sticker} picture={body.picture} side={STICKER_SIDE} />
+        <StickerArtwork sticker={body.sticker} picture={body.picture} side={STICKER_SIDE} senderName={message.sender?.displayName} />
       ) : body.kind === 'emoji-only' ? (
         <EmojiOnly text={body.text} fontSize={body.fontSize} />
       ) : rendered.text ? (

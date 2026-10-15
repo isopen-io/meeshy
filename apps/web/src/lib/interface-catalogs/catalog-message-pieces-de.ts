@@ -15,6 +15,7 @@ const de = {
   'message.piece.preview': 'Medien der Nachricht',
   'message.sticker.add': 'Zu meinen Stickern hinzufügen',
   'message.sticker.inLibrary': 'In meinen Stickern',
+  'message.sticker.from': 'Gesendet von {name}',
   'message.sticker.viewPack': 'Paket ansehen',
   'message.sticker.added': 'Sticker zu deiner Bibliothek hinzugefügt',
   'message.sticker.addFailed': 'Der Sticker konnte nicht hinzugefügt werden',

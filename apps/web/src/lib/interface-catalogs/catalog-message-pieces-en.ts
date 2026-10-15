@@ -15,6 +15,7 @@ const en = {
   'message.piece.preview': 'Message media',
   'message.sticker.add': 'Add to my stickers',
   'message.sticker.inLibrary': 'In my stickers',
+  'message.sticker.from': 'Sent by {name}',
   'message.sticker.viewPack': 'View pack',
   'message.sticker.added': 'Sticker added to your library',
   'message.sticker.addFailed': 'The sticker could not be added',

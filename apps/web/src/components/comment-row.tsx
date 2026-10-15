@@ -621,7 +621,7 @@ export function CommentRow({ comment, language, preferredLanguages, locale, now,
               <CommentBody comment={comment} contentLength={lu.text.length}>
                 {sticker !== null ? (
                   <div data-comment-sticker className="py-1">
-                    <StickerArtwork sticker={sticker.sticker} picture={sticker.picture} side={STICKER_SIDE} />
+                    <StickerArtwork sticker={sticker.sticker} picture={sticker.picture} side={STICKER_SIDE} senderName={name} />
                   </div>
                 ) : null}
                 {(sticker === null && media.length === 0) || lu.text.trim() !== '' ? (

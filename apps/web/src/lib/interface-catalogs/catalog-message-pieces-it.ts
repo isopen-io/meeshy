@@ -15,6 +15,7 @@ const it = {
   'message.piece.preview': 'Contenuti del messaggio',
   'message.sticker.add': 'Aggiungi ai miei sticker',
   'message.sticker.inLibrary': 'Nei miei sticker',
+  'message.sticker.from': 'Inviato da {name}',
   'message.sticker.viewPack': 'Vedi il pacchetto',
   'message.sticker.added': 'Sticker aggiunto alla tua libreria',
   'message.sticker.addFailed': 'Impossibile aggiungere lo sticker',

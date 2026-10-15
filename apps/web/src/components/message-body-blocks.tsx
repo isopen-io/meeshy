@@ -65,15 +65,18 @@ export function StickerArtwork({
   picture,
   side,
   interactive = true,
+  senderName,
 }: {
   readonly sticker: MessageSticker;
   readonly picture: Pick<Attachment, 'fileUrl'> | undefined;
   readonly side: number;
   readonly interactive?: boolean;
+  /** L'expéditeur, nommé sur la fiche (#10703). */
+  readonly senderName?: string | undefined;
 }) {
   const art = <StickerArt sticker={sticker} picture={picture} side={side} />;
   return interactive ? (
-    <StickerTouch sticker={sticker} picture={picture}>
+    <StickerTouch sticker={sticker} picture={picture} senderName={senderName}>
       {art}
     </StickerTouch>
   ) : (
@@ -86,10 +89,12 @@ const stickerAltOf = (sticker: MessageSticker): string => (sticker.emoji !== und
 function StickerTouch({
   sticker,
   picture,
+  senderName,
   children,
 }: {
   readonly sticker: MessageSticker;
   readonly picture: Pick<Attachment, 'fileUrl'> | undefined;
+  readonly senderName: string | undefined;
   readonly children: ReactNode;
 }) {
   const [open, setOpen] = useState(false);
@@ -123,7 +128,7 @@ function StickerTouch({
       </button>
       {open ? (
         <Suspense fallback={null}>
-          <StickerSheet sticker={sticker} picture={picture} onClose={() => setOpen(false)} />
+          <StickerSheet sticker={sticker} picture={picture} senderName={senderName} onClose={() => setOpen(false)} />
         </Suspense>
       ) : null}
     </>
