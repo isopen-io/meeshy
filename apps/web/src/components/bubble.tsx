@@ -319,10 +319,14 @@ export function Bubble({
     hasReactions: reactions.length > 0,
   });
 
-  const receivedBg = 'color-mix(in srgb, var(--accent) var(--ios-bubble-other-opacity), transparent)';
+  const receivedBg = 'color-mix(in srgb, var(--accent) var(--ios-bubble-other-opacity), var(--ios-surface))';
   const receivedHairline = 'color-mix(in srgb, var(--accent) var(--ios-bubble-other-hairline-opacity), transparent)';
   const bubbleSkin = isMine
-    ? { backgroundColor: 'var(--color-bubble-mine)', color: 'var(--color-ios-on-brand)', '--color-karaoke-ink': 'var(--color-ios-on-brand)' }
+    ? {
+        backgroundColor: 'var(--bubble-mine-personal, var(--color-bubble-mine))',
+        color: 'var(--bubble-mine-personal-ink, var(--color-ios-on-brand))',
+        '--color-karaoke-ink': 'var(--bubble-mine-personal-ink, var(--color-ios-on-brand))',
+      }
     : { backgroundColor: receivedBg, border: `1px solid ${receivedHairline}`, color: 'var(--color-ios-ink)' };
 
   /* La story citée REMPLACE la citation ordinaire — « une scène ne tient pas

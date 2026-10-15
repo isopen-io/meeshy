@@ -34,7 +34,7 @@ describe('la bulle envoyée suit l’accent personnel (#10734)', () => {
 
   test('avec un accent choisi, la bulle prend l’accent et son encre lisible', () => {
     const vars = personalBubbleVars(chosen('corail') as never) as Record<string, string>;
-    expect(vars['--bubble-mine-personal'].toLowerCase()).toBe(APPEARANCE_GAMUT.corail.dark.accent.toLowerCase());
+    expect(vars['--bubble-mine-personal']!.toLowerCase()).toBe(APPEARANCE_GAMUT.corail.dark.accent.toLowerCase());
     expect(vars['--bubble-mine-personal-ink']).toMatch(/^#(000000|FFFFFF)$/);
   });
 });

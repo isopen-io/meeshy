@@ -111,6 +111,7 @@ describe('Bulles — un emoji seul en réponse (#10628)', () => {
     const style = quoteBox!.getAttribute('style') ?? '';
     expect(style).toContain('var(--accent)');
     expect(style).not.toContain('var(--color-bubble-mine)');
+    expect(style).toContain('var(--ios-surface)');
     expect(root.querySelector('[data-emoji-only]')!.closest('.rounded-bubble')).toBeNull();
   });
 
