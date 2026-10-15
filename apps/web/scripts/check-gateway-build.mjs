@@ -488,8 +488,11 @@ async function main() {
   // --- 2c. TIRER-POUR-RAFRAÎCHIR : conversations + stories/humeurs EN -------
   //         PARALLÈLE, sans squelette (#6195) --------------------------------
   {
-    // `serviceWorkers: 'block'` — voir le doc-comment du bloc 2.
-    const context = await browser.newContext({ serviceWorkers: 'block' });
+    // `serviceWorkers: 'block'` — voir le doc-comment du bloc 2. `locale:
+    // 'fr-FR'` (#10593) : les puces parlent la langue d'interface, que le
+    // script d'amorçage lit dans `navigator.languages`. Le bloc touche les
+    // puces par `data-list-filter` (#10598), que la langue ne change pas.
+    const context = await browser.newContext({ serviceWorkers: 'block', locale: 'fr-FR' });
     await context.addInitScript((session) => {
       window.localStorage.setItem('meeshy.session', JSON.stringify(session));
     }, SESSION);
@@ -530,7 +533,7 @@ async function main() {
      * conversations synthétiques sont toutes `direct` et aucune n'est
      * épinglée : « Épinglés » rend donc exactement zéro rangée.
      */
-    await page.getByRole('button', { name: 'Épinglés' }).click();
+    await page.click('nav[data-list-filters] button[data-list-filter="pinned"]');
     await page.waitForFunction(() => document.querySelectorAll('[data-row]').length === 0, undefined, { timeout: 3000 });
     await page.waitForTimeout(1200);
     check(
@@ -550,7 +553,7 @@ async function main() {
       (await page.locator('[data-pagination-footer]').count()) === 0,
       'page 2c : sous un filtre à ZÉRO rangée, le pied de pagination est ABSENT',
     );
-    await page.getByRole('button', { name: 'Tous' }).click();
+    await page.click('nav[data-list-filters] button[data-list-filter="all"]');
     // `>= 30`, jamais `=== 30` : sur une régression de la garde ci-dessus, le
     // retour sur « Tous » rend les 45 rangées que la cascade a chargées — ce
     // qui doit RAPPORTER un échec, pas faire expirer une attente et abattre le
@@ -743,7 +746,9 @@ async function main() {
       /* Le chrome qui PRÉCÈDE la liste : le rail et la bande de filtres. On
          prend le plus bas des deux — c'est lui qui borne le début légitime de
          l'état vide. */
-      const chrome = [...contenu.querySelectorAll('[data-rail="grande"], nav[aria-label="Filtres"]')];
+      /* `[data-list-filters]`, jamais le nom accessible (#10593) : il suit la
+         langue d'interface, et « Filters » sortait la bande de la mesure. */
+      const chrome = [...contenu.querySelectorAll('[data-rail="grande"], nav[data-list-filters]')];
       const bas = chrome.reduce((max, el) => Math.max(max, el.getBoundingClientRect().bottom), contenu.getBoundingClientRect().top);
       return Math.round(empty.getBoundingClientRect().top - bas);
     });

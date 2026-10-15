@@ -40,6 +40,8 @@ import { MissionService, READ_ONLY_CREDIT } from '../../services/game/MissionSer
 import { PersonalMissionService } from '../../services/game/PersonalMissionService';
 import { enhancedLogger } from '../../utils/logger-enhanced';
 import { errorResponseSchema } from '@meeshy/shared/types/api-schemas';
+import { ENGAGEMENT_STREAK_ACTS, type ActStreakView } from '@meeshy/shared/types/engagement-act-streaks';
+import { ActStreakRecorder } from '../../services/engagement/ActStreakRecorder';
 import { sendSuccess, sendUnauthorized, sendNotFound, sendInternalError } from '../../utils/response.js';
 import { logError } from '../../utils/logger';
 
@@ -161,6 +163,22 @@ const engagementResponseSchema = {
         // l'ignore. `additionalProperties` parce que la forme est tenue par le
         // schéma Zod partagé (`gameBlockSchema`), validé avant de partir.
         game: { type: 'object', additionalProperties: true },
+        // Les séries PAR ACTE (#10389) — additif : un ancien client l'ignore,
+        // `streak` reste la série globale. `currentDays` est l'état écrit au
+        // dernier jour compté (`lastDay`) : un client le fait retomber à 0
+        // quand `lastDay` est antérieur à hier.
+        actStreaks: {
+          type: 'array',
+          items: {
+            type: 'object',
+            properties: {
+              act: { type: 'string', enum: [...ENGAGEMENT_STREAK_ACTS] },
+              currentDays: { type: 'number' },
+              longestDays: { type: 'number' },
+              lastDay: { type: 'string' },
+            },
+          },
+        },
       },
     },
   },
@@ -192,6 +210,7 @@ export async function meEngagementRoutes(fastify: FastifyInstance, options: Enga
     personal: new PersonalMissionService(fastify.prisma, { missions: gameMissions }),
   });
   const buildGameBlock = options.gameBlock ?? ((params) => gameBlocks.build(params));
+  const actStreakRecorder = new ActStreakRecorder(fastify.prisma);
 
   fastify.get(
     '/engagement',
@@ -228,7 +247,7 @@ export async function meEngagementRoutes(fastify: FastifyInstance, options: Enga
         // fermer un écran de consultation.
         await new GlobalAchievements(fastify.prisma).sweep(userId).catch(() => undefined);
 
-        const [user, counters, milestones, frappes, totauxMeesh, reach, scale] = await Promise.all([
+        const [user, counters, milestones, frappes, totauxMeesh, reach, scale, actStreaks] = await Promise.all([
           fastify.prisma.user.findUnique({ where: { id: userId }, select: USER_ENGAGEMENT_SELECT }),
           // `take` borné, jamais retiré (#4165 critère 4) — même si le
           // maximum THÉORIQUE tient déjà sous la borne : au plus
@@ -282,6 +301,15 @@ export async function meEngagementRoutes(fastify: FastifyInstance, options: Enga
           // que le crédit appliquera, fenêtre, seuils et plafond par niveau
           // compris — jamais les constantes d'avant le barème.
           engagementScaleServiceFor(fastify.prisma).current(),
+          // Les séries par acte (#10389) : une panne les retire de la charge,
+          // jamais l'écran entier.
+          actStreakRecorder.list(userId).catch((error: unknown): readonly ActStreakView[] | null => {
+            log.warn('act streaks unavailable, engagement served without them', {
+              userId,
+              error: error instanceof Error ? error.message : String(error),
+            });
+            return null;
+          }),
         ]);
 
         if (!user) {
@@ -368,6 +396,7 @@ export async function meEngagementRoutes(fastify: FastifyInstance, options: Enga
             lastMintedAt: frappes._max.createdAt?.toISOString() ?? null,
           },
           ...(game ? { game } : {}),
+          ...(actStreaks ? { actStreaks } : {}),
         });
       } catch (error) {
         logError('Error fetching engagement', error, { source: 'me-engagement-routes' });

@@ -1,8 +1,8 @@
 import { describe, expect, test } from 'bun:test';
 
-import { WORLD_CONVERSATION_IDENTIFIER } from '@meeshy/shared/types/world';
+import { WORLD_CONVERSATION_IDENTIFIER } from '@meeshy/shared/types/world-identity';
 
-import { pinWorldWide, WORLD_IDENTIFIER } from './world-pin';
+import { pinWorldWide } from './world-pin';
 
 /**
  * WORLD WIDE ÉPINGLÉE EN CARTE EN TÊTE DE LISTE (#10004). La liste la sort de
@@ -12,10 +12,6 @@ import { pinWorldWide, WORLD_IDENTIFIER } from './world-pin';
 const conv = (id: string, identifier?: string) => ({ id, ...(identifier === undefined ? {} : { identifier }) });
 
 describe('World Wide épinglée en carte (#10004)', () => {
-  test('l’identifiant est celui que le serveur sème — jamais une seconde écriture qui diverge', () => {
-    expect(WORLD_IDENTIFIER).toBe(WORLD_CONVERSATION_IDENTIFIER);
-  });
-
   test('World Wide sort des rangées et devient la carte', () => {
     const list = [conv('a'), conv('w', WORLD_CONVERSATION_IDENTIFIER), conv('b', 'meeshy')];
     const { world, rest } = pinWorldWide(list);

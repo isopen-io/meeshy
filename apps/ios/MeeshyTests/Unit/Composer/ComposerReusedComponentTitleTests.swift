@@ -77,8 +77,8 @@ final class ComposerReusedComponentTitleTests: XCTestCase {
         XCTAssertTrue(sheet.contains("structEmojiPickerSheet"), "EmojiPickerSheet introuvable ou vide")
         XCTAssertTrue(sheet.contains("vartitle:LocalizedStringResource"), "`EmojiPickerSheet` doit DÉCLARER `var title`")
         XCTAssertTrue(
-            sheet.contains("\"emoji.title\",defaultValue:\"Reactions\""),
-            "Le défaut de `EmojiPickerSheet.title` doit rester `emoji.title` / « Reactions » — pour que ses "
+            sheet.contains("\"emoji.title\",defaultValue:\"Réactions\""),
+            "Le défaut de `EmojiPickerSheet.title` doit rester `emoji.title` / « Réactions » (accentué depuis e3f11b5647) — pour que ses "
                 + "appelants de réaction (fil, préférences) gardent leur titre sans le répéter."
         )
     }

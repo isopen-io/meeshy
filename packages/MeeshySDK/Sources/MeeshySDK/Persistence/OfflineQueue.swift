@@ -620,6 +620,11 @@ public actor OfflineQueue {
     private static let legacyFileName = "offline_queue.json"
 
     private var items: [OfflineQueueItem] = []
+    /// La première récupération du processus remet TOUT `.inflight` en attente : personne ne peut encore les
+    /// porter. Les suivantes — retour au premier plan, processus vivant — ne réarment que les lignes en vol
+    /// depuis plus de `OutboxFlusher.staleInflightReclaimSeconds` : un gros envoi en cours pendant un aller-retour
+    /// d'arrière-plan repartait sinon en double, et le premier fini supprimait les fichiers sous l'autre.
+    private var hasRecoveredThisProcess = false
     private var isRetrying = false
     private var cancellables = Set<AnyCancellable>()
     let logger = Logger(subsystem: "com.meeshy.sdk", category: "offlinequeue")
@@ -871,6 +876,9 @@ public actor OfflineQueue {
         } catch {
             logger.error("cancelPendingSend failed: \(error.localizedDescription, privacy: .public)")
         }
+        // Le miroir mémoire suit la ligne : `retryAll()` rejoue `items` sans relire l'outbox, et un message
+        // annulé ou supprimé y restait — il repartait à la reconnexion suivante.
+        items.removeAll { $0.clientMessageId == cmid }
         await refreshPendingCount()
     }
 
@@ -896,6 +904,8 @@ public actor OfflineQueue {
         } catch {
             logger.error("clearSendMessageRow failed: \(error.localizedDescription, privacy: .public)")
         }
+        // Même règle que `cancelPendingSend` : supprimé ou déjà parti, il ne se rejoue plus.
+        items.removeAll { $0.clientMessageId == cmid }
         await refreshPendingCount()
     }
 
@@ -2601,12 +2611,18 @@ public actor OfflineQueue {
         let dec = decoder
         let log = logger
         var report = BootRecoveryReport()
+        let warm = hasRecoveredThisProcess
+        hasRecoveredThisProcess = true
+        let staleCutoff = Date().addingTimeInterval(-OutboxFlusher.staleInflightReclaimSeconds)
         do {
             report = try await pool.write { db in
                 var local = BootRecoveryReport()
-                let inflight = try OutboxRecord
+                var inflightQuery = OutboxRecord
                     .filter(Column("status") == OutboxStatus.inflight.rawValue)
-                    .fetchAll(db)
+                if warm {
+                    inflightQuery = inflightQuery.filter(Column("updatedAt") < staleCutoff)
+                }
+                let inflight = try inflightQuery.fetchAll(db)
                 for record in inflight {
                     try db.execute(sql: """
                         UPDATE outbox

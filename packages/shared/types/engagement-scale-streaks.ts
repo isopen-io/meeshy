@@ -32,6 +32,20 @@ import {
  */
 export const ENGAGEMENT_SCALE_POINTS_CEILING = 10_000_000;
 
+/**
+ * Ce qu'un barème peut distribuer en PALIERS à un seul compte : un milliard. Un
+ * palier se paie une fois par compte (seau `streak:…` / `loyalty:…`), donc la
+ * somme des paliers de la série globale, de chaque acte et de la fidélité borne
+ * ce qu'un compte en reçoit. `User.engagementScore` est un `Int` 32 bits
+ * (2 147 483 647) : au-delà, Mongo promeut le champ en entier 64 bits et Prisma
+ * ne relit plus la ligne — la fiche du compte et chaque classement qui la lit
+ * tombent. Cent paliers de dix millions y suffisaient.
+ */
+export const ENGAGEMENT_SCALE_TIER_POINTS_TOTAL_CEILING = 1_000_000_000;
+
+/** Paliers d'une liste (série globale, un acte, fidélité) : cent au plus. */
+export const ENGAGEMENT_STREAK_TIERS_MAX = 100;
+
 const isRecord = (value: unknown): value is Record<string, unknown> =>
   typeof value === 'object' && value !== null && !Array.isArray(value);
 
@@ -54,7 +68,7 @@ function readLabel(value: unknown): LabelRead {
  * Rendue triée par jours croissants ; `null` au premier palier illisible.
  */
 export function parseStreakTiers(value: unknown): readonly EngagementStreakTier[] | null {
-  if (!Array.isArray(value)) return null;
+  if (!Array.isArray(value) || value.length > ENGAGEMENT_STREAK_TIERS_MAX) return null;
   const tiers: EngagementStreakTier[] = [];
   for (const entry of value) {
     if (!isRecord(entry)) return null;
@@ -105,4 +119,11 @@ export function parseLoyalty(value: unknown): readonly EngagementStreakTier[] | 
  */
 export function legacyStreakBonuses(global: readonly EngagementStreakTier[]): readonly { readonly days: number; readonly points: number }[] {
   return global.map((tier) => ({ days: tier.days, points: Math.min(tier.points, LEGACY_STREAK_BONUS_POINTS_CEILING) }));
+}
+
+/** La somme des points de tous les paliers d'un barème tient-elle sous le plafond ? */
+export function tierPointsWithinTotal(streaks: EngagementStreaks, loyalty: readonly EngagementStreakTier[]): boolean {
+  const lists = [streaks.global, ...Object.values(streaks.acts), loyalty];
+  const total = lists.reduce((sum, tiers) => sum + tiers.reduce((inner, tier) => inner + tier.points, 0), 0);
+  return total <= ENGAGEMENT_SCALE_TIER_POINTS_TOTAL_CEILING;
 }

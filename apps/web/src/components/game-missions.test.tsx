@@ -131,13 +131,10 @@ describe('changer de mission', () => {
 });
 
 describe('le coffre', () => {
-  test('fermé tant que les missions ne sont pas finies, avec ce qu’il contient AVANT l’ouverture', () => {
+  test('fermé tant que les missions ne sont pas finies, avec ce qu’il attend', () => {
     const page = text(renderToStaticMarkup(<GameMissions {...props()} />));
     expect(page).toContain('Termine les missions du jour');
     expect(page).toMatch(/Faites \d \/ 3/);
-    expect(page).toMatch(/500 à 10 000 points/);
-    expect(page).toContain('1 chance sur 6');
-    expect(page).toContain('1 chance sur 20');
   });
 
   const done = (patch: Parameters<typeof gameBlockFixture>[0] = {}) => {
@@ -167,15 +164,18 @@ describe('le coffre', () => {
     expect(html).not.toContain('data-game-chest-open');
   });
 
-  test('dit son contenu CERTAIN et sa prime possible avant l’ouverture : l’effort du jour, le cours de la Meesh (#10011)', () => {
-    const html = renderToStaticMarkup(<GameMissions {...props()} />);
-    expect(html).toContain('data-game-chest-today');
-    expect(html).toContain('data-game-chest-bonus');
-    const page = text(html);
-    expect(page).toMatch(/Gloire/);
-    expect(page).toMatch(/Prime : 1 chance sur 20 de [\d  ]+ points, sinon 1 chance sur 6 de [\d  ]+ points/);
-    expect(page).toContain('fragment d’étoile');
-    expect(page).not.toMatch(/fragments? de Meesh/);
+  test('fermé, verrouillé ou prêt : son contenu reste secret — ni montant, ni chance, ni borne (#10567)', () => {
+    for (const closed of [props(), done()]) {
+      const html = renderToStaticMarkup(<GameMissions {...closed} />);
+      expect(html).not.toContain('data-game-chest-today');
+      expect(html).not.toContain('data-game-chest-bonus');
+      expect(html).not.toContain('data-game-reward');
+      const page = text(html);
+      expect(page).not.toMatch(/Ce coffre/);
+      expect(page).not.toMatch(/chance sur/);
+      expect(page).not.toMatch(/selon tes missions/);
+      expect(page).not.toMatch(/Prime/);
+    }
   });
 
   test('ouvert après #10011 : les points, la Gloire, la prime, le fragment d’étoile et le gel montent un à un', () => {

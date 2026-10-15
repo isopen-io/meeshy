@@ -252,6 +252,83 @@ final class AttachmentDownloadCenter {
     }
 }
 
+// MARK: - Présence sur l'appareil (règle SYNCHRONE, #10370)
+
+/// **« Ce média est-il déjà sur l'appareil ? » se lit par UNE règle
+/// synchrone** (#10370) — un `stat`, sous la clé exacte du cache typé, sans
+/// saut d'acteur.
+///
+/// Les surfaces partaient de `.needsDownload` et ne consultaient le disque
+/// qu'au retour d'une tâche asynchrone : un média déjà téléchargé se
+/// dessinait d'abord « ↓ », puis basculait. Le badge d'image, lui, ne
+/// regardait que l'ORIGINAL alors que la bulle affiche une VARIANTE — la
+/// variante sur le disque laissait le badge en place pour toujours. Chaque
+/// surface lit désormais cette règle au premier rendu ; la résolution
+/// asynchrone garde le dernier mot (elle consulte aussi le cache mémoire).
+extension AttachmentDownloadCenter {
+    /// Sonde le cache typé de `kind` sous `key` (clé déjà résolue). Pour
+    /// l'image, une variante décodée résidente en mémoire compte aussi : la
+    /// bulle décode sous une clé dimensionnée, le fichier nu peut manquer
+    /// alors que l'image est bel et bien affichée.
+    nonisolated static func isInTypedStore(key: String, kind: CacheStoreKind) -> Bool {
+        switch kind {
+        case .audio:
+            return CacheCoordinator.audioLocalFileURL(for: key) != nil
+        case .video:
+            return CacheCoordinator.videoLocalFileURL(for: key) != nil
+        case .image:
+            return CacheCoordinator.imageLocalFileURL(for: key) != nil
+                || DiskCacheStore.hasAnyCachedImageVariant(for: key)
+        }
+    }
+
+    /// `true` quand `urlString` est sur l'appareil : fichier local `file://`
+    /// existant, ou média rangé dans le cache typé sous la MÊME clé que celle
+    /// du téléchargement (`key(for:)`) — une clé de stockage brute
+    /// (`2025/10/<id>/p.jpg`) se cherche donc sous son URL résolue.
+    nonisolated static func isOnDevice(
+        urlString: String,
+        kind: CacheStoreKind,
+        stat: (String, CacheStoreKind) -> Bool = { AttachmentDownloadCenter.isInTypedStore(key: $0, kind: $1) },
+        fileExists: (String) -> Bool = { FileManager.default.fileExists(atPath: $0) }
+    ) -> Bool {
+        guard !urlString.isEmpty else { return false }
+        if urlString.hasPrefix("file://") {
+            return fileExists(URL(string: urlString)?.path ?? "")
+        }
+        return stat(key(for: urlString), kind)
+    }
+
+    /// La présence d'une PIÈCE JOINTE. Une image est sur l'appareil dès
+    /// qu'UNE de ses formes l'est : l'original, la variante que la surface
+    /// affiche (`displayedURL`), ou toute variante déclarée.
+    nonisolated static func isOnDevice(
+        _ attachment: MessageAttachment,
+        displayedURL: String? = nil,
+        stat: (String, CacheStoreKind) -> Bool = { AttachmentDownloadCenter.isInTypedStore(key: $0, kind: $1) },
+        fileExists: (String) -> Bool = { FileManager.default.fileExists(atPath: $0) }
+    ) -> Bool {
+        switch attachment.type {
+        case .image:
+            return imageCandidates(attachment, displayedURL: displayedURL).contains { candidate in
+                isOnDevice(urlString: candidate, kind: .image, stat: stat, fileExists: fileExists)
+            }
+        case .audio:
+            return isOnDevice(urlString: attachment.fileUrl, kind: .audio, stat: stat, fileExists: fileExists)
+        case .video:
+            return isOnDevice(urlString: attachment.fileUrl, kind: .video, stat: stat, fileExists: fileExists)
+        case .file, .location:
+            return false
+        }
+    }
+
+    /// Les formes d'une image, l'original d'abord puis la variante affichée.
+    nonisolated private static func imageCandidates(_ attachment: MessageAttachment, displayedURL: String?) -> [String] {
+        let variants = (attachment.imageVariants ?? []).map { $0.url }
+        return ([attachment.fileUrl, displayedURL ?? ""] + variants).filter { !$0.isEmpty }
+    }
+}
+
 // MARK: - Attachment Downloader (façade par vue sur le centre)
 
 /// La vue d'UNE surface sur le téléchargement d'un média. Elle ne télécharge

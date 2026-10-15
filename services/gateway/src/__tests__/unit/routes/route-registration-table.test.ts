@@ -230,7 +230,18 @@ describe('ROUTE_TABLE (#4278)', () => {
     // alias, aucune route retirée ni renommée. Vérifié : le manifeste passe de
     // 667 à 676 routes, soit exactement les huit routes d'admin et
     // `GET /me/game/seasons/calendar` (montée par `me-game`, déjà dans la table).
-    expect(ROUTE_TABLE.length).toBe(81);
+    // 84 : #10384 ajoute `admin-ops` (l'hôte en direct, la sauvegarde et la purge
+    // sous `/api/v1/admin/ops`), #10392 `admin-post-gestures` (les gestes de
+    // publication sous `/api/v1/admin/posts/…/gestures`) et #10394
+    // `admin-moderation-acts` (`/api/v1/admin/reports/:reportId/act`,
+    // `/api/v1/admin/comments/:commentId/remove`). Aucun alias, aucune route
+    // retirée ni renommée ; le manifeste gagne exactement ces sept routes.
+    // 88 : #10632 ajoute `packs-wallpaper`, `packs-avatar-ring`, `packs-banner`
+    // (les trois domaines d'apparence de la boutique unifiée, sous
+    // `/api/v1/packs/<domaine>`) et `packs-shop` (`GET /api/v1/packs/shop`,
+    // la vitrine qui les agrège). Aucun alias, aucune route retirée ni
+    // renommée.
+    expect(ROUTE_TABLE.length).toBe(88);
   });
 });
 

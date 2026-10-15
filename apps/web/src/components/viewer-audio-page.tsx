@@ -54,6 +54,8 @@ export type ViewerAudioPageProps = {
    * en se fermant et le confie au mini-lecteur. `null` : rien ne joue.
    */
   readonly onCarryRef?: (carry: CarryProvider | null) => void;
+  /** La page ACTIVE dit si elle joue : la visionneuse efface son chrome pendant l'écoute. */
+  readonly onPlayingChange?: (playing: boolean) => void;
   readonly deps?: ConversationsDeps;
 };
 
@@ -99,6 +101,7 @@ export default function ViewerAudioPage({
   pageCount,
   onToggleRef,
   onCarryRef,
+  onPlayingChange,
   deps,
 }: ViewerAudioPageProps) {
   const [explored, setExplored] = useState<string | undefined>(displayLanguage);
@@ -127,6 +130,13 @@ export default function ViewerAudioPage({
   });
   const { status, progress, position, duration, toggle, bind, seek, rate, setRate } = playback;
   const isPlaying = status === 'playing';
+
+  useEffect(() => {
+    if (!isActive) return undefined;
+    onPlayingChange?.(isPlaying);
+    return () => onPlayingChange?.(false);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [isActive, isPlaying]);
 
   const statusRef = useRef(status);
   statusRef.current = status;
@@ -245,6 +255,7 @@ export default function ViewerAudioPage({
         key={track.url}
         ref={bindAudio}
         preload="metadata"
+        data-np-attachment={attachment.id}
         data-viewer-audio-track={track.language}
         className="hidden"
         {...(track.url === '' ? {} : { src: attachmentSrc(track.url) })}

@@ -59,6 +59,29 @@ enum ProgressionCopy {
         }
     }
 
+    /// LE TITRE D'UN PALIER D'AXE (#7778) — le seuil, puis le nom de l'axe pris dans la phrase : « 10 amitiés nouées ».
+    /// En allemand, un nom commun garde sa majuscule ; seul l'adjectif qui ouvre le groupe la perd après le numéral
+    /// (« 10 geknüpfte Freundschaften », « 100 Sprachnachrichten »). L'adjectif se reconnaît à ce qu'il précède un mot
+    /// capitalisé. Les autres langues passent le nom entier en minuscule, comme avant.
+    static func badgeTierTitle(threshold: Int, axis: EngagementAxisKey) -> String {
+        badgeTierTitle(threshold: threshold,
+                       axisName: title(for: axis),
+                       language: Bundle.main.preferredLocalizations.first ?? "fr")
+    }
+
+    nonisolated static func badgeTierTitle(threshold: Int, axisName: String, language: String) -> String {
+        "\(threshold) \(axisNameInSentence(axisName, language: language))"
+    }
+
+    nonisolated private static func axisNameInSentence(_ name: String, language: String) -> String {
+        guard language.lowercased().hasPrefix("de") else { return name.lowercased() }
+        let words = name.split(separator: " ", omittingEmptySubsequences: false)
+        guard words.count >= 2,
+              let first = words[0].first, first.isUppercase,
+              let next = words[1].first, next.isUppercase else { return name }
+        return first.lowercased() + name.dropFirst()
+    }
+
     /// CE QUI COMPTE pour le badge d'un axe (#9640) — le geste précis que son compteur mesure, jamais la phrase de
     /// la famille. Miroir d'`ENGAGEMENT_AXIS_COUNTS` (`packages/shared/utils/engagement-labels.ts`, #9639) : les
     /// mêmes phrases, dans les sept langues.
@@ -175,6 +198,13 @@ enum ProgressionCopy {
     /// « 350 points » — le score qui porte le niveau.
     static func score(_ score: Int) -> String {
         String(localized: "progression.points", defaultValue: "\(score) points", bundle: .main)
+    }
+
+    /// « Élan ×3 » — le titre de la carte des élans quand le multiplicateur est actif (#7757), dans la langue du
+    /// lecteur comme la phrase juste dessous (« Momentum ×3 », « Schwung ×3 »). Le facteur est entier par construction.
+    nonisolated static func elanTitle(factor: Double) -> String {
+        let f = Int(factor.rounded())
+        return String(localized: "progression.elan.factor", defaultValue: "Élan ×\(f)", bundle: .main)
     }
 
     /// L'élan courant, et CE QUI LE PORTE (#5749) — un multiplicateur dont on

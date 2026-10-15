@@ -1,4 +1,5 @@
 import type { PrismaClient } from '@meeshy/shared/prisma/client';
+import { readSeenCounts } from './posts/seenCounts';
 import { PostVisibility, PostType } from '@meeshy/shared/prisma/client';
 import { decodeCursor, encodeCursor } from '../routes/posts/types';
 import { postInclude, statusPostSelect, storyPostInclude, trayStorySelect, NOT_DELETED, type PostPayload } from './posts/postIncludes';
@@ -192,7 +193,7 @@ export class PostFeedService {
     // - seenCounts       : combien de fois chaque candidat est déjà remonté (fatigue)
     const [interestAffinity, seenCounts] = await Promise.all([
       this.getInterestAffinity(userId),
-      this.getSeenCounts(userId, candidateIds),
+      readSeenCounts(this.prisma as never, userId, candidateIds),
     ]);
 
     // Phase 2 — Score the window (display order only; cursor is fixed above)
@@ -1168,30 +1169,6 @@ export class PostFeedService {
           .catch(() => undefined);
       }
       return affinity;
-    } catch {
-      return new Map();
-    }
-  }
-
-  /**
-   * Combien de fois chaque candidat est déjà remonté dans le feed du viewer.
-   * Sert la fatigue d'impression : on dégrade ce qui a déjà été montré pour
-   * renouveler le feed. Non caché (dépend du jeu de candidats courant et bouge
-   * vite). Dégradation gracieuse : erreur → Map vide (aucune pénalité).
-   */
-  private async getSeenCounts(userId: string, postIds: string[]): Promise<Map<string, number>> {
-    if (postIds.length === 0) return new Map();
-    try {
-      const grouped = await this.prisma.postImpression.groupBy({
-        by: ['postId'],
-        where: { userId, postId: { in: postIds } },
-        _count: { postId: true },
-      });
-      const counts = new Map<string, number>();
-      for (const row of grouped as Array<{ postId: string; _count?: { postId?: number } }>) {
-        counts.set(row.postId, row._count?.postId ?? 0);
-      }
-      return counts;
     } catch {
       return new Map();
     }

@@ -358,7 +358,7 @@ describe('FeedPostCard — le RÉEL, affiche immobile plein cadre', () => {
     const html = renderToStaticMarkup(
       <FeedPostCard model={modelOf(basePost({ id: 'reel-42', type: 'REEL', author: { id: 'u1', displayName: 'Yann Petit' } }))} />,
     );
-    expect(html).toContain('href="/reels?seed=reel-42"');
+    expect(html).toContain('href="/reels?seed=reel-42&amp;from=feed"');
     expect(html).toContain('aria-label="Regarder le réel de Yann Petit"');
     expect(html).toMatch(/<a[^>]*draggable="false"/);
   });
@@ -367,7 +367,7 @@ describe('FeedPostCard — le RÉEL, affiche immobile plein cadre', () => {
     const html = renderToStaticMarkup(
       <FeedPostCard model={modelOf(basePost({ id: 'reel-42', type: 'REEL' }))} onGesture={() => undefined} />,
     );
-    const link = html.indexOf('href="/reels?seed=reel-42"');
+    const link = html.indexOf('href="/reels?seed=reel-42&amp;from=feed"');
     const like = html.indexOf('data-feed-gesture="like"');
     expect(link).toBeGreaterThan(-1);
     expect(like).toBeGreaterThan(link);

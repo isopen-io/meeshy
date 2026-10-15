@@ -306,6 +306,9 @@ struct ParticipantsView: View {
                 presenceState: presence,
                 onMoodTap: statusViewModel.moodTapHandler(for: participant.id)
             )
+            .countsImpression(of: statusViewModel.statusForUser(userId: participant.id)?.id) {
+                statusViewModel.trackImpression($0)
+            }
 
             VStack(alignment: .leading, spacing: MeeshySpacing.xxs) {
                 HStack(spacing: MeeshySpacing.xsPlus) {

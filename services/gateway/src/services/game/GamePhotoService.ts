@@ -45,7 +45,7 @@ type PhotoDb = Pick<PrismaClient, 'gameProfile' | 'gamePhotoMoment'>;
 
 /** Ce que l'écriture de l'atmosphère demande au moteur des packs — `PackCatalog.setInstalled`, rien de plus. */
 export type FramePackInstaller = {
-  setInstalled(userId: string, slug: string, installed: true): Promise<{ readonly kind: 'done' | 'not-found' | 'not-removable' }>;
+  setInstalled(userId: string, slug: string, installed: true): Promise<{ readonly kind: 'done' | 'not-found' | 'not-removable' | 'not-owned' }>;
 };
 
 /** L'`_id` d'une ligne du registre : une empreinte de 24 hex de (compte, étape), stable et sans index. */

@@ -35,6 +35,8 @@ export type DatabaseBootstrapSteps = {
   ensurePostGeoIndex(): Promise<void>;
   ensureFriendRequestIndexes(): Promise<void>;
   ensureContactDeltaIndex(): Promise<void>;
+  /** Index de la télémétrie v2 (#10510) — facultatif pour les doubles antérieurs. */
+  ensureSocialEventIndexes?(): Promise<void>;
   shouldInitialize(): Promise<boolean>;
   initializeDatabase(): Promise<void>;
   ensureSeedAccountsVerified(): Promise<void>;
@@ -52,6 +54,7 @@ export async function bootstrapDatabase(
   await steps.ensurePostGeoIndex();
   await steps.ensureFriendRequestIndexes();
   await steps.ensureContactDeltaIndex();
+  await steps.ensureSocialEventIndexes?.();
 
   if (await steps.shouldInitialize()) {
     logger.info(

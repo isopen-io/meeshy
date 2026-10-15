@@ -24,7 +24,6 @@ import { appInstitutionalHref } from '@/lib/institutional-href';
 import type { InterfaceLanguage } from '@/lib/interface-language';
 import type { ThemePreference } from '@/lib/scheme';
 import { initialsOf } from '@/lib/view/conversation';
-import { FLOATING_CORRIDOR_BOTTOM } from '@/lib/view/floating-corridor';
 import type { DevicePushRow } from '@/lib/push/use-device-push';
 import { Link } from '@/routes/route-table';
 
@@ -59,15 +58,6 @@ export const SECURITY_PANEL_PARAM = 'volet';
 export const SECURITY_PANEL = 'securite';
 /** Le volet des packs (#10149) — `/settings?volet=packs`, sans route neuve. */
 export const PACKS_PANEL = 'packs';
-
-/**
- * **LE COULOIR DES DISQUES FLOTTANTS** — la loi de `floating-corridor.ts`, portée
- * comme la cloche et le Flux (`FEED_TOP_RESERVE`) : au repos, la carte de profil,
- * premier contrôle de l'écran, commence SOUS les deux disques. iOS y pose le grand
- * titre dépliable de `CollapsibleHeader` ; l'encoche s'annule dans la soustraction,
- * elle décale à la fois le couloir et l'écran (`pt-safe`).
- */
-export const SETTINGS_TOP_RESERVE = FLOATING_CORRIDOR_BOTTOM - SETTINGS_HEADER_HEIGHT;
 
 type IconSpec = { readonly set: 'socle'; readonly name: GlyphName } | { readonly set: 'ecran'; readonly name: SettingsGlyphName };
 
@@ -336,7 +326,8 @@ export type PreferencesView =
   | { readonly kind: 'loading' }
   | { readonly kind: 'error' };
 
-export type BooleanPreference = Exclude<keyof AppPreferences, 'theme'>;
+/** `allowAnalytics` est LU (#10502), jamais basculé d'ici : le web n'a pas d'interrupteur « Analytique ». */
+export type BooleanPreference = Exclude<keyof AppPreferences, 'theme' | 'allowAnalytics'>;
 
 type ToggleSpec = {
   readonly key: BooleanPreference;
@@ -835,10 +826,17 @@ export function SettingsOfflineNotice({ language }: { readonly language: Interfa
   );
 }
 
-/** Le contenu défilant : la réserve du couloir, puis les sections espacées comme `SettingsView`. */
+/**
+ * Le contenu défilant, ses sections espacées comme `SettingsView`.
+ *
+ * IL COMMENCE SOUS L'EN-TÊTE (#10634) — comme `SettingsView` d'iOS
+ * (`.padding(.top, MeeshySpacing.sm)`) et le profil : les disques flottants se
+ * posent par-dessus, au lieu de laisser sous l'en-tête la hauteur vide de leur
+ * couloir (122 px).
+ */
 export function SettingsContent({ children }: { readonly children: ReactNode }) {
   return (
-    <div className="mx-auto grid max-w-xl gap-6 pb-24" style={{ paddingTop: SETTINGS_TOP_RESERVE + 8 }}>
+    <div className="mx-auto grid max-w-xl gap-6 pb-24 pt-2">
       {children}
     </div>
   );

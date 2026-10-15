@@ -566,8 +566,8 @@ export function GamePhotoFlow({ moment, env, onClose, flameDays = null }: Props)
             ref={stage}
             {...(cameraLive ? sceneControls : {})}
             data-photo-stage={stageMode}
-            className="relative mx-auto w-[min(100%,calc(62dvh*9/16))] shrink-0 overflow-hidden rounded-card"
-            style={{ aspectRatio: '9 / 16', backgroundColor: 'var(--ios-indigo-950)' }}
+            className="relative mx-auto shrink-0 overflow-hidden rounded-card"
+            style={{ width: 'min(100%, calc(62dvh * 9 / 16))', aspectRatio: '9 / 16', backgroundColor: 'var(--ios-indigo-950)' }}
           >
             {stageMode === 'selfie' ? (
               <video ref={video} playsInline muted autoPlay className="absolute inset-0 size-full object-cover" style={{ transform: 'scaleX(-1)' }} />

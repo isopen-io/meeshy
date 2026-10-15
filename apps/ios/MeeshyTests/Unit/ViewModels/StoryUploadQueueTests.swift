@@ -565,6 +565,77 @@ final class StoryUploadQueueTests: XCTestCase {
         XCTAssertNotNil(media.loadedImages["st-anime"], "L'image fixe reste disponible pour le rendu")
     }
 
+    // MARK: - #10495 — « Impossible d'enregistrer les médias »
+
+    /// Le cas du porteur : une pré-montée a fini, l'image du média est donc
+    /// AUSSI rangée sous son adresse distante. La file l'écrivait sous un nom
+    /// tiré de l'adresse, échouait, et rien ne partait.
+    func test_enqueueStoryForOfflinePublish_imageKeyedByRemoteAddress_queuesTheStory() async {
+        FeedbackToastManager.shared.dismiss()
+        let slide = StorySlide()
+        let remote = "https://gate.meeshy.me/api/v1/attachments/file/2026/10/abc123.jpg"
+
+        await sut.enqueueStoryForOfflinePublish(
+            slides: [slide],
+            slideImages: [slide.id: Self.solidImage()],
+            loadedImages: ["media-1": Self.solidImage(), remote: Self.solidImage()],
+            loadedVideoURLs: [:]
+        )
+
+        let pending = await StoryPublishQueue.shared.pendingItems
+        XCTAssertEqual(pending.count, 1, "la story doit partir en file malgré l'alias distant")
+        XCTAssertNotEqual(FeedbackToastManager.shared.currentToast?.type, .error)
+    }
+
+    /// Le MÊME cas, sur le chemin EN LIGNE du porteur : l'écriture anticipée
+    /// (write-ahead) échouait, et le toast rouge s'affichait pendant que
+    /// l'envoi partait quand même depuis la mémoire.
+    func test_publishStoryInBackground_imageKeyedByRemoteAddress_persistsItsWriteAheadIntent() async {
+        FeedbackToastManager.shared.dismiss()
+        mockPostService.createStoryHangs = true
+        let slide = StorySlide()
+        let remote = "https://gate.meeshy.me/api/v1/attachments/file/2026/10/abc123.jpg"
+
+        sut.publishStoryInBackground(
+            slides: [slide],
+            slideImages: [slide.id: Self.solidImage()],
+            loadedImages: ["media-1": Self.solidImage(), remote: Self.solidImage()],
+            loadedVideoURLs: [:]
+        )
+
+        await waitUntil("l'intent write-ahead est persisté") {
+            await !StoryPublishQueue.shared.pendingItems.isEmpty
+        }
+        XCTAssertNotEqual(FeedbackToastManager.shared.currentToast?.type, .error,
+                          "aucun toast d'échec pendant une publication qui part")
+    }
+
+    /// Un média VRAIMENT irrécupérable (sa vidéo a disparu) : rien ne part en
+    /// file, mais la composition n'est pas perdue — le composer est déjà fermé,
+    /// elle est gardée en brouillon, et le toast dit QUEL média manque.
+    func test_enqueueStoryForOfflinePublish_vanishedVideo_keepsTheCompositionAsADraft() async {
+        var slide = StorySlide()
+        slide.effects.mediaObjects = [StoryMediaObject(id: "vid-1", kind: .video, aspectRatio: nil)]
+        let vanished = FileManager.default.temporaryDirectory
+            .appendingPathComponent("vanished-\(UUID().uuidString).mov")
+
+        await sut.enqueueStoryForOfflinePublish(
+            slides: [slide],
+            slideImages: [slide.id: Self.solidImage()],
+            loadedImages: [:],
+            loadedVideoURLs: ["vid-1": vanished]
+        )
+
+        let pending = await StoryPublishQueue.shared.pendingItems
+        XCTAssertTrue(pending.isEmpty, "une référence fantôme ferait échouer le rejeu")
+        let drafts = draftStore.listDrafts()
+        XCTAssertEqual(drafts.count, 1, "la composition doit survivre en brouillon")
+        XCTAssertEqual(draftStore.load(draftId: drafts.first?.id ?? "")?.slides.map(\.id), [slide.id])
+        XCTAssertNotNil(drafts.first?.lastPublishError)
+        XCTAssertEqual(FeedbackToastManager.shared.currentToast?.message,
+                       StoryPublishCopy.unsavedMedia(.video))
+    }
+
     /// **#8522 — le toast hors ligne nomme ce que l'auteur publie.**
     func test_offlineQueuedCopy_suitLeTypePublie() {
         XCTAssertEqual(StoryPublishCopy.queuedForOffline(.story),

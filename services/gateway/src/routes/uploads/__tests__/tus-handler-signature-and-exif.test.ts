@@ -27,6 +27,7 @@ import fs from 'fs/promises';
 import os from 'os';
 import path from 'path';
 import jwt from 'jsonwebtoken';
+import { LIVE_SID, liveSession } from '../../../services/auth/__tests__/live-session-double';
 import sharp from 'sharp';
 
 type CapturedTusOptions = {
@@ -89,7 +90,7 @@ function buildFakePrisma() {
     messageAttachment: { create: jest.fn<any>().mockResolvedValue({ id: 'created-attachment' }) },
     postMedia: { create: jest.fn<any>().mockResolvedValue({ id: 'created-post-media' }) },
     userSession: {
-      findFirst: jest.fn<any>().mockResolvedValue(null),
+      findFirst: jest.fn<any>().mockResolvedValue(liveSession()),
       update: jest.fn<any>().mockReturnValue({ catch: jest.fn() }),
     },
   };
@@ -100,7 +101,7 @@ function headersFrom(map: Record<string, string>) {
 }
 
 function registeredHeaders(userId = REGISTERED_USER_ID) {
-  return { authorization: `Bearer ${jwt.sign({ userId }, JWT_SECRET)}` };
+  return { authorization: `Bearer ${jwt.sign({ userId, sid: LIVE_SID }, JWT_SECRET)}` };
 }
 
 async function jpegWithExif(): Promise<Buffer> {

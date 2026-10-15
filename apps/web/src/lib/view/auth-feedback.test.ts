@@ -272,6 +272,15 @@ describe('resolveVerifyEmailOutcome — code faux ET code expiré rendent le MÊ
     expect(result).toEqual({ kind: 'verified' });
   });
 
+  test('un défi de SECOND FACTEUR ⇒ second-factor (#10474) : ni célébration ni connexion annoncée', () => {
+    const result = resolveVerifyEmailOutcome({
+      ok: true,
+      data: { verified: true, requires2FA: true, twoFactorToken: 'tf', user: { id: 'u', username: 'ada' } },
+      status: 200,
+    });
+    expect(result).toEqual({ kind: 'second-factor' });
+  });
+
   test('une réponse qui porte une session ⇒ signed-in (#8034) : l’écran quitte la vérification', () => {
     const result = resolveVerifyEmailOutcome({
       ok: true,

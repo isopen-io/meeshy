@@ -157,6 +157,15 @@ describe('FeedPostCard — le menu « ⋯ »', () => {
     expect(journal).toEqual(['report:p1:harassment']);
   });
 
+  test('ouvrir la feuille de signalement le dit à l’hôte (#10503), avant tout motif', async () => {
+    const { menu, journal } = host('u-me');
+    monte(post(), { ...menu, onReportOpen: (id) => journal.push(`report-open:${id}`) });
+
+    const signaler = (await ouvre()).find((e) => e.dataset.feedPostAction === 'report');
+    act(() => signaler?.click());
+    expect(journal).toEqual(['report-open:p1']);
+  });
+
   test('« Vues » ne paraît que pour un ADMINISTRATEUR (#9727) — et ouvre la liste de qui a vu', async () => {
     const { menu } = host('u-me', 'done', true);
     monte(post(), menu);
