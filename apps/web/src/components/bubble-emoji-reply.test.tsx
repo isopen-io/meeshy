@@ -63,11 +63,11 @@ const renderBubble = (m: Message) =>
     ),
   );
 
-const renderFocal = (m: Message) =>
+const renderFocal = (m: Message, mode: 'focal' | 'script' = 'focal') =>
   parse(
     renderToStaticMarkup(
       <FocalRow
-        mode="focal"
+        mode={mode}
         place={placed(m)}
         languages={['fr', 'en']}
         viewerId="u-viewer"
@@ -125,6 +125,15 @@ describe('Bulles — un emoji seul en réponse (#10628)', () => {
     expect((emoji as HTMLElement).style.fontSize).toBe('51px');
   });
 
+  test('un STICKER envoyé en réponse suit la même loi : carte boîtée en peau de marque, sticker dessous hors boîte', () => {
+    const root = renderBubble(emojiReply({ senderId: 'u-viewer', content: '🔥', metadata: { sticker: { emoji: '🔥' } } }));
+    const quote = root.querySelector('[data-quote-card]')!;
+    const sticker = root.querySelector('[data-sticker-emoji]')!;
+    expect(quote.closest('.rounded-bubble')!.getAttribute('style') ?? '').toContain('var(--color-bubble-mine)');
+    expect(sticker.closest('.rounded-bubble')).toBeNull();
+    expect(precedes(quote, sticker)).toBe(true);
+  });
+
   test('sans citation, l’emoji seul ne sert toujours aucune boîte', () => {
     const root = renderBubble(message({ content: '🎉🎉🎉🎉' }));
     expect(root.querySelector('.rounded-bubble')).toBeNull();
@@ -133,8 +142,8 @@ describe('Bulles — un emoji seul en réponse (#10628)', () => {
 });
 
 describe('Focal / Script — un emoji seul en réponse (#10628)', () => {
-  test('la carte citée puis l’emoji en grand, aucune boîte', () => {
-    const root = renderFocal(emojiReply());
+  test.each(['focal', 'script'] as const)('%s : la carte citée puis l’emoji en grand, aucune boîte', (mode) => {
+    const root = renderFocal(emojiReply(), mode);
     const quote = root.querySelector('[data-quote-card]');
     const emoji = root.querySelector('[data-emoji-only]');
     expect(quote).not.toBeNull();
