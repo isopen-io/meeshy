@@ -472,6 +472,49 @@ final class DetachedWindowsTests: XCTestCase {
             XCTAssertFalse(body.contains(root), "une fenêtre détachée ne monte pas \(root) : la fenêtre principale tient les services")
         }
     }
+
+    // MARK: - Appartenance à un compte
+
+    /// Première ouverture : la fenêtre adopte le compte actif.
+    func test_ownership_firstOpen_adoptsTheActiveAccount() {
+        XCTAssertEqual(DetachedWindowOwnership.verdict(owner: nil, current: "u-a"), .adopt("u-a"))
+        XCTAssertTrue(DetachedWindowOwnership.shows(owner: nil, current: "u-a"))
+    }
+
+    /// Le propriétaire revient (relance, retour de la session) : la fenêtre se garde.
+    func test_ownership_sameAccount_keepsTheWindow() {
+        XCTAssertEqual(DetachedWindowOwnership.verdict(owner: "u-a", current: "u-a"), .keep)
+        XCTAssertTrue(DetachedWindowOwnership.shows(owner: "u-a", current: "u-a"))
+    }
+
+    /// Changement de compte : rien du compte quitté ne se peint, la fenêtre se ferme.
+    func test_ownership_anotherAccount_closesWithoutShowing() {
+        XCTAssertEqual(DetachedWindowOwnership.verdict(owner: "u-a", current: "u-b"), .close)
+        XCTAssertFalse(DetachedWindowOwnership.shows(owner: "u-a", current: "u-b"),
+                       "La conversation du compte A ne doit jamais apparaître sous le compte B.")
+    }
+
+    /// Pendant la bascule (session sortie) : on attend, sans adopter ni fermer.
+    func test_ownership_signedOut_waits() {
+        XCTAssertEqual(DetachedWindowOwnership.verdict(owner: "u-a", current: nil), .waitForSignIn)
+        XCTAssertEqual(DetachedWindowOwnership.verdict(owner: "u-a", current: ""), .waitForSignIn)
+        XCTAssertFalse(DetachedWindowOwnership.shows(owner: "u-a", current: nil))
+    }
+
+    /// La vue lit bien la règle : sans ce câblage, les témoins ci-dessus resteraient verts sur une fenêtre
+    /// qui repeint la conversation du compte quitté.
+    func test_ownership_isWiredIntoTheDetachedWindow() throws {
+        let url = URL(fileURLWithPath: #filePath)
+            .deletingLastPathComponent()   // Views
+            .deletingLastPathComponent()   // Unit
+            .deletingLastPathComponent()   // MeeshyTests
+            .deletingLastPathComponent()   // apps/ios
+            .appendingPathComponent("Meeshy/Features/Main/Views/AdaptiveRootView.swift")
+        let code = try String(contentsOf: url, encoding: .utf8)
+        XCTAssertTrue(code.contains("@SceneStorage(\"meeshy.detached.ownerUserId\")"))
+        XCTAssertTrue(code.contains("DetachedWindowOwnership.shows(owner: ownerUserId, current: authManager.currentUser?.id)"))
+        XCTAssertTrue(code.contains(".task(id: authManager.currentUser?.id)"))
+    }
 }
 
 /// Les aperçus de liens gardés sont plafonnés : chaque lien distinct s'ajoutait sans fin, et chaque ajout
