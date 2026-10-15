@@ -1065,6 +1065,13 @@ export default defineConfig({
              * `call_video_segmentation`), hors du précache (`globIgnores`).
              */
             if (id.includes('@mediapipe/tasks-vision')) return undefined;
+            /**
+             * LOTTIE ET SON DÉZIPPEUR (#10638) — atteints UNIQUEMENT par les
+             * `import()` de `lib/lottie/engine.ts` et `lib/lottie/decode.ts`.
+             * Rangés dans `core`, ils y entraient malgré l'import dynamique :
+             * mesuré, la première peinture passait de ~85 à 137 Ko.
+             */
+            if (id.includes('/lottie-web/') || id.includes('/fflate/')) return undefined;
             return 'core';
           }
           /**
