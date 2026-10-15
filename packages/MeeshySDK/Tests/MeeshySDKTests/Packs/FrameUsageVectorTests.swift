@@ -93,7 +93,7 @@ struct FrameUsageVectorTests {
         }
     }
 
-    @Test("les dix clés de libellé sont celles de FRAME_USAGE_LABEL_KEYS")
+    @Test("les onze clés de libellé sont celles de FRAME_USAGE_LABEL_KEYS (avatarOnly comprise, #10715)")
     func labelKeysMatchTheSharedTable() throws {
         let source = try String(contentsOf: Self.packagesURL.appendingPathComponent("shared/types/frame-usage.ts"), encoding: .utf8)
         let block = try #require(source.range(of: #"(?s)export const FRAME_USAGE_LABEL_KEYS = \{(.*?)\} as const;"#, options: .regularExpression))
@@ -102,9 +102,9 @@ struct FrameUsageVectorTests {
         let keys = regex.matches(in: text, range: NSRange(text.startIndex..., in: text)).compactMap { match in
             Range(match.range(at: 1), in: text).map { String(text[$0]) }
         }
-        #expect(keys.count == 10)
+        #expect(keys.count == 11)
         #expect(Set(keys) == Set(FrameUsageLaw.LabelKey.all))
-        #expect(FrameUsageLaw.LabelKey.all.count == 10)
+        #expect(FrameUsageLaw.LabelKey.all.count == 11)
     }
 
     @Test("les cadres de capture d'appel se projettent comme le TypeScript")
