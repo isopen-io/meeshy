@@ -47,7 +47,7 @@ nonisolated enum LocationSearchPlan {
 
 struct LocationPickerView: View {
     /// Couleur PRIMAIRE de la conversation — les appelants passent
-    /// `conversation.accentColor`, qui est `colorPalette.primary`.
+    /// `conversation.accentColor`, qui est `displayPalette.primary`.
     let accentColor: String
     /// Émet un lieu COMPLET (coordonnées + nom + adresse + catégorie POI),
     /// pas de simples coordonnées nues : c'est ce que jetait l'ancienne
@@ -75,7 +75,7 @@ struct LocationPickerView: View {
     /// officielle du SDK. `DynamicColorGenerator.colorFor(context:)` calcule
     /// `accent = shiftHue(primary, -30°)` et n'applique jamais
     /// `saturationBoost` aux hex — cette dérivation reproduit donc
-    /// `conversation.colorPalette.accent` à l'identique, sans imposer un
+    /// `conversation.displayPalette.accent` à l'identique, sans imposer un
     /// nouveau paramètre aux sept sites d'appel.
     ///
     /// STOCKÉE, pas calculée : `hueShiftedHex` construit deux `UIColor` et un

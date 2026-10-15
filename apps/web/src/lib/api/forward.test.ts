@@ -45,6 +45,15 @@ describe('forwardBodyOf — ce qui part, et ce qui NE part JAMAIS', () => {
     });
   });
 
+  test('un STICKER garde son sticker : la passerelle ne recopie que les pièces, le client redit le sticker (#10630)', () => {
+    const body = forwardBodyOf({
+      message: { id: 'm4', content: '', originalLanguage: 'fr', sticker: { templateId: 'pack.chats.dodo', emoji: '😴' } },
+      clientMessageId: 'cid_4',
+    });
+    expect(body.sticker).toEqual({ templateId: 'pack.chats.dodo', emoji: '😴' });
+    expect('attachmentIds' in body).toBe(false);
+  });
+
   test('AUCUN `attachmentIds`, même sur un message qui n’a QUE des pièces jointes', () => {
     const body = forwardBodyOf({
       message: { id: 'm2', content: '', originalLanguage: 'fr' },

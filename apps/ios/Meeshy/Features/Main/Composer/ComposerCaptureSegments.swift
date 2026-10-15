@@ -15,11 +15,15 @@ nonisolated struct ComposerCaptureSegment: Identifiable, Equatable, Sendable {
     let id: String
     let url: URL
     let duration: TimeInterval
+    /// L'écriture de CE fichier vers Photos par la caméra, quand Réglages › Médias
+    /// demande l'original (#9684, #10284) ; `nil` = il n'y est pas.
+    let rawSave: Task<Bool, Never>?
 
-    init(id: String = UUID().uuidString, url: URL, duration: TimeInterval) {
+    init(id: String = UUID().uuidString, url: URL, duration: TimeInterval, rawSave: Task<Bool, Never>? = nil) {
         self.id = id
         self.url = url
         self.duration = duration
+        self.rawSave = rawSave
     }
 }
 

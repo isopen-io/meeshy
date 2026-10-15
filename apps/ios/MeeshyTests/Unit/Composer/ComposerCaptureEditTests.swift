@@ -314,7 +314,8 @@ final class ComposerCaptureEditTests: XCTestCase {
     /// qu'on recadre, même sur le plus petit écran servi (iPhone SE).
     func test_everyToolOpen_onTheSmallestScreen_stillLeavesACroppableScene() {
         let zone = ComposerEditScene.area(container: CGSize(width: 375, height: 667), top: 20, bottom: 0,
-                                          panels: [.presets, .sound, .trim])
+                                          panels: ComposerEditTools.panels(familyOpen: false,
+                                                                           active: [.crop, .trim, .sound]))
         XCTAssertGreaterThanOrEqual(zone.height, ComposerEditScene.minimumSide * 2)
     }
 
@@ -462,7 +463,6 @@ final class ComposerCaptureEditTests: XCTestCase {
         XCTAssertFalse(politique.savesOriginal, "par défaut, l'original ne rejoint pas Photos")
         XCTAssertEqual(politique.renderedMode, .manual, "par défaut, la flèche ⬇︎ enregistre le rendu")
         XCTAssertFalse(politique.savesRenderOnFinish(alreadySaved: false), "« Terminé » n'enregistre rien de lui-même")
-        XCTAssertTrue(politique.writesUntouchedTake, "une prise sans effet s'écrit : l'original n'y est pas")
     }
 
     func test_savePolicy_readsTheUserSettings() {
@@ -474,7 +474,6 @@ final class ComposerCaptureEditTests: XCTestCase {
         XCTAssertEqual(politique.renderedMode, .automatic)
         XCTAssertTrue(politique.savesRenderOnFinish(alreadySaved: false))
         XCTAssertFalse(politique.savesRenderOnFinish(alreadySaved: true), "jamais deux fois la même prise")
-        XCTAssertFalse(politique.writesUntouchedTake, "l'original y est déjà : une prise sans effet ne se double pas")
     }
 
     func test_savePolicy_unknownStoredMode_fallsBackToManual() {
@@ -535,6 +534,40 @@ final class ComposerCaptureEditTests: XCTestCase {
         XCTAssertEqual(session.takeSaveState, .idle, "la prise suivante repart avec sa flèche")
     }
 
+    /// **#10284 — « Enregistrer » suit le cadre** : masqué une fois la prise en
+    /// galerie AVEC ce cadre, il revient quand le cadre change, se masque de
+    /// nouveau après l'enregistrement, et revenir à un cadre déjà écrit le masque
+    /// sans écrire de doublon.
+    func test_saveTakeToPhotos_followsTheFrame_changingItOffersTheSaveAgain() async {
+        let galerie = MockComposerGallery()
+        let session = ComposerCaptureSession(stage: .armed, gallery: galerie, savePolicy: { .standard })
+        session.beginEditing(photo: UIImage(cgImage: ComposerCapturePhaseTests.photo(width: 30, height: 40)))
+        session.look = ComposerPhotoLook(filter: .warm)
+        session.saveTakeToPhotos()
+        await ComposerCaptureTakesTests.waitUntil { session.takeSaveState == .saved }
+        session.look = ComposerPhotoLook(filter: .cool)
+        XCTAssertEqual(session.takeSaveState, .idle, "un autre cadre : « Enregistrer » réapparaît")
+        session.saveTakeToPhotos()
+        await ComposerCaptureTakesTests.waitUntil { session.takeSaveState == .saved }
+        XCTAssertEqual(galerie.saveImageCount, 2, "réenregistrer avec le nouveau cadre écrit la nouvelle version")
+        session.look = ComposerPhotoLook(filter: .warm)
+        XCTAssertEqual(session.takeSaveState, .saved, "ce cadre-là est déjà dans Photos")
+        session.saveTakeToPhotos()
+        try? await Task.sleep(nanoseconds: 200_000_000)
+        XCTAssertEqual(galerie.saveImageCount, 2, "aucun doublon")
+    }
+
+    func test_takeSaveState_savedHidesTheButton_savingStillShowsItsWheel() {
+        XCTAssertTrue(ComposerTakeSaveState.idle.showsSave)
+        XCTAssertTrue(ComposerTakeSaveState.saving.showsSave)
+        XCTAssertFalse(ComposerTakeSaveState.saved.showsSave, "déjà enregistrée : le bouton disparaît")
+    }
+
+    func test_cameraBar_hidesTheSaveOnceTheTakeIsSaved() throws {
+        let barre = try ComposerCaptureTakesTests.code("Meeshy/Features/Main/Composer/ComposerSceneCameraBar.swift")
+        XCTAssertTrue(barre.contains("offersSave: onSave != nil && saveState.showsSave"))
+    }
+
     func test_saveTakeToPhotos_refused_offersTheArrowAgain() async {
         let galerie = MockComposerGallery(imageResult: false)
         let session = ComposerCaptureSession(stage: .armed, gallery: galerie, savePolicy: { .standard })
@@ -562,7 +595,10 @@ final class ComposerCaptureEditTests: XCTestCase {
         XCTAssertEqual(galerie.saveVideoCount, 1, "sans effet ni cadre, l'original rejoint Photos")
     }
 
-    func test_saveTakeToPhotos_untouchedVideo_originalAlreadySaved_writesNothingMore() async {
+    /// #10284 : « Enregistrer » lit un FAIT — le brut écrit par la caméra —,
+    /// jamais le réglage : une prise dont aucun brut n'a été écrit (ici ouverte
+    /// sans passer par la caméra) s'ÉCRIT, même réglage activé.
+    func test_saveTakeToPhotos_untouchedOutsideVideo_savesOriginalSetting_stillWritesTheTake() async {
         let galerie = MockComposerGallery()
         let lecteur = MockComposerLoopPlayer(duration: 3)
         let session = ComposerCaptureSession(stage: .armed, gallery: galerie,
@@ -571,7 +607,33 @@ final class ComposerCaptureEditTests: XCTestCase {
         await session.beginEditing(video: Self.clip())
         session.saveTakeToPhotos()
         await ComposerCaptureTakesTests.waitUntil { session.takeSaveState == .saved }
-        XCTAssertEqual(galerie.saveVideoCount, 0, "l'original y est déjà : la prise est dans Photos")
+        XCTAssertEqual(galerie.saveVideoCount, 1, "aucun brut écrit : la prise s'y écrit")
+    }
+
+    func test_finishEditingVideo_untouchedOutside_automatic_savesOriginalSetting_stillWritesTheTake() async {
+        let galerie = MockComposerGallery()
+        let lecteur = MockComposerLoopPlayer(duration: 3)
+        let session = ComposerCaptureSession(stage: .armed, gallery: galerie,
+                                             savePolicy: { CaptureSavePolicy(savesOriginal: true, renderedMode: .automatic) },
+                                             loopPlayerFactory: { _ in lecteur })
+        await session.beginEditing(video: Self.clip())
+        var remis = false
+        session.onDeliver = { _ in remis = true }
+        session.finishEditing()
+        await ComposerCaptureTakesTests.waitUntil { remis }
+        XCTAssertEqual(galerie.saveVideoCount, 1, "« Terminé » automatique écrit la prise dont aucun brut n'est dans Photos")
+    }
+
+    func test_frameTake_untouchedVideo_originalAlreadyInPhotos_writesNothingMore() async {
+        let galerie = MockComposerGallery()
+        let lecteur = MockComposerLoopPlayer(duration: 3)
+        let session = ComposerCaptureSession(stage: .armed, gallery: galerie,
+                                             savePolicy: { CaptureSavePolicy(savesOriginal: true, renderedMode: .manual) },
+                                             loopPlayerFactory: { _ in lecteur })
+        session.camera.librarySave = Task { true }
+        session.openFrameTake(video: Self.clip())
+        await ComposerCaptureTakesTests.waitUntil { session.takeSaveState == .saved && session.takeWrite == nil }
+        XCTAssertEqual(galerie.saveVideoCount, 0, "l'original de la prise par le cadre est dans Photos : rien ne se double")
     }
 
     func test_finishEditingVideo_untouched_automatic_withoutOriginal_writesTheTake() async {
@@ -627,14 +689,19 @@ final class ComposerCaptureEditTests: XCTestCase {
                        "jamais un échec silencieux")
     }
 
-    /// La caméra n'écrit plus le brut sans que le réglage le demande : chacune de
-    /// ses trois écritures (photo, vidéo, repli du dernier segment) le consulte.
+    /// La caméra écrit le brut si, et seulement si, Réglages › Médias le demande
+    /// (#9684) — quelle que soit la zone de la prise : la directive #10284 fixe
+    /// un défaut, le réglage de l'utilisateur prime (correction porteur
+    /// 2026-10-12). Chacune de ses trois écritures (photo, vidéo, repli du
+    /// dernier segment) passe par la même garde.
     func test_cameraModel_writesTheOriginalOnlyWhenThePolicySaysSo() throws {
         let camera = try ComposerCaptureTakesTests.code("Meeshy/Features/Main/Components/CameraModel.swift")
         let ecritures = camera.components(separatedBy: "PhotoLibraryManager.shared.save").count - 1
-        let gardes = camera.components(separatedBy: "CaptureSavePolicy.stored().savesOriginal").count - 1
+        XCTAssertTrue(camera.contains("func savesOriginal() -> Bool"))
+        let gardes = camera.components(separatedBy: "savesOriginal()").count - 2
         XCTAssertEqual(ecritures, 3)
-        XCTAssertEqual(gardes, ecritures, "chaque écriture du brut passe par la politique")
+        XCTAssertEqual(gardes, ecritures, "chaque écriture du brut passe par la garde")
+        XCTAssertFalse(camera.contains("keepsOriginalInApp"), "aucun veto de l'hôte ne passe outre le réglage")
     }
 
     func test_cameraBar_offersTheSaveArrow_wiredToTheSession() throws {

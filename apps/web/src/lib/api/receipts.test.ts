@@ -1,5 +1,4 @@
 import { QueryClient } from '@tanstack/react-query';
-import { createStore } from 'zustand/vanilla';
 import { afterEach, describe, expect, test } from 'bun:test';
 
 import {
@@ -15,7 +14,7 @@ import { messagesQueryKey, upsertThreadMessage } from './messages';
 import type { MessagesInfiniteData } from './messages-pages';
 import { decodeConversation } from './decode';
 import { createHttpTransport } from './http';
-import { effectiveUnreadOf, type ConversationStoreState } from '@/lib/conversation-store';
+import { effectiveUnreadOf, createConversationStore } from '@/lib/conversation-store';
 import { message, VIEWER_ID } from '@/lib/api/fixtures-base';
 import { unreadBoundaryOf } from '@/lib/view/unread-boundary';
 import { ensureHappyDomRegistered, releaseHappyDomIfRegistered } from '@/test-support/happy-dom-environment';
@@ -49,26 +48,7 @@ function fakeStorage(): StorageLike {
 /** Même magasin FRAIS que `conversation-actions.test.ts::freshStore` — une
  * instance dédiée par test, jamais le singleton partagé. */
 function freshStore() {
-  return createStore<ConversationStoreState>((set) => ({
-    overrides: {},
-    togglePin: () => {},
-    toggleMute: () => {},
-    toggleArchive: () => {},
-    markRead: (id) => set((s) => ({ overrides: { ...s.overrides, [id]: { ...s.overrides[id], unreadCount: 0 } } })),
-    markUnread: (id) => set((s) => ({ overrides: { ...s.overrides, [id]: { ...s.overrides[id], unreadCount: 1 } } })),
-    clearOverride: (id, keys) =>
-      set((s) => {
-        const current = s.overrides[id];
-        if (current === undefined) return s;
-        const removeUnread = keys.includes('unreadCount');
-        const next = { ...(!removeUnread && current.unreadCount !== undefined ? { unreadCount: current.unreadCount } : {}) };
-        if (Object.keys(next).length === 0) {
-          const { [id]: _removed, ...rest } = s.overrides;
-          return { overrides: rest };
-        }
-        return { overrides: { ...s.overrides, [id]: next } };
-      }),
-  }));
+  return createConversationStore();
 }
 
 const conversation = (partial: Partial<Conversation>): Conversation =>

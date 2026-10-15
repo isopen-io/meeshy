@@ -198,7 +198,9 @@ final class NotificationActionHandler: NotificationActionHandling {
         backgroundTasks: BackgroundTaskScheduling = UIApplicationBackgroundTaskScheduler(),
         authTokenProvider: @escaping @MainActor () -> String? = { AuthManager.shared.authToken },
         applyAuthToken: @escaping @MainActor (String?) -> Void = { APIClient.shared.authToken = $0 },
-        currentUserId: @escaping @MainActor () -> String? = { AuthManager.shared.currentUser?.id },
+        currentUserId: @escaping @MainActor () -> String? = {
+            AuthManager.shared.currentUser?.id ?? AuthManager.shared.persistedActiveUserId
+        },
         preferredLanguage: @escaping @MainActor () -> String? = {
             AuthManager.shared.currentUser?.preferredContentLanguages.first
         },

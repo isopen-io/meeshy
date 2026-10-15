@@ -92,6 +92,8 @@ extension OutboxDispatcher {
                     logger.info("createPost: média \(index, privacy: .public) déjà monté, upload sauté")
                     continue
                 }
+                // #10321 — l'auteur a pu retirer la publication entre deux montées.
+                try await OfflineQueue.shared.throwIfPublicationCancelled(outboxId: record.id)
                 guard FileManager.default.fileExists(atPath: absolutePath) else {
                     logger.error("Post media file missing on dispatch, path=\(stored, privacy: .public)")
                     fichiersDisparus += 1
@@ -286,6 +288,8 @@ extension OutboxDispatcher {
             // le serveur ne l'apprenait jamais.
             allowSoundExtraction: payload.allowSoundExtraction
         )
+        // #10321 — dernier point de contrôle : une publication retirée ne part pas.
+        try await OfflineQueue.shared.throwIfPublicationCancelled(outboxId: record.id)
         #if DEBUG
         // La vitrine (#9820) : elle crée le post et l'annonce au fil quand elle est installée ; sinon la requête part.
         let televerses = zip(zip(uploadedSourceIndexes, uploadedLocalPaths), zip(uploadedIds, uploadedUrls)).map { source, piece in

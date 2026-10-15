@@ -2,6 +2,9 @@ import { resolveConversationSections, type ConversationSection, type Sectionable
 
 import { effectiveFlagsOf, type ConversationOverride } from '@/lib/conversation-store';
 import { listRankField } from '@/lib/api/list-preview';
+import { categoryIdOf } from '@/lib/api/preferences';
+import { translate, type InterfaceCatalogKey } from '@/lib/i18n-catalog';
+import type { InterfaceLanguage } from '@/lib/interface-language';
 import type { Conversation } from '@/lib/api/types';
 
 /**
@@ -10,21 +13,23 @@ import type { Conversation } from '@/lib/api/types';
  * de la réécrire : c'est exactement le dispositif que `lens/filters.ts::orderConversations`
  * emploie déjà pour le TRI, ici étendu au PARTITIONNEMENT.
  *
- * `categories: []` TOUJOURS (§3 de la spécification — aucune catégorie n'est
- * câblée côté web-v2 cette itération) : un `categoryId` qui existerait sur le
- * wire retombe alors mécaniquement sur le temporel, exactement le repli que
- * la loi documente pour une catégorie inconnue (`conversation-sections.ts`
- * commentaire de `classify`). `liveCall` n'est jamais posé non plus — AUCUNE
- * plateforme du dépôt ne le modélise encore (même garde que
- * `SectionableConversation.liveCall`, `conversation-sections.ts:44-48`).
+ * LES CATÉGORIES DE L'UTILISATEUR ENTRENT (#10103). Celles qu'il a créées
+ * (`GET /me/categories`, `lib/api/conversation-categories.ts`) arrivent ici
+ * DANS L'ORDRE qu'il leur a donné ; une conversation rangée
+ * (`userPreferences[0].categoryId`) y tombe, les autres retombent sur les
+ * sections par date. Une catégorie inconnue (supprimée, pas encore chargée)
+ * retombe sur le temporel — le repli que la loi documente (`classify`).
+ * `liveCall` n'est jamais posé : AUCUNE plateforme du dépôt ne le modélise
+ * encore (même garde que `SectionableConversation.liveCall`).
  *
  * Identité des sections — `Lentille/Chrome/LentilleSectionIdentity.swift:54-66` :
  * `pinned`, `lentille.live`, `lentille.today`, `lentille.yesterday`,
- * `lentille.thisWeek`, `lentille.older`. Le préfixe `lentille.` marque les
- * sections NI repliables NI cibles de drop (`:479-485`) — la seule qui y
- * échappe est `pinned`, brute.
+ * `lentille.thisWeek`, `lentille.older` ; une catégorie est `category:<id>`
+ * (iOS prend l'identifiant nu — le préfixe ne sert ici qu'à ce qu'aucun
+ * identifiant de catégorie ne puisse jamais se confondre avec une section
+ * calculée).
  */
-export type LensSectionId =
+export type FixedLensSectionId =
   | 'pinned'
   | 'lentille.live'
   | 'lentille.today'
@@ -32,12 +37,23 @@ export type LensSectionId =
   | 'lentille.thisWeek'
   | 'lentille.older';
 
+export type LensSectionId = FixedLensSectionId | `category:${string}`;
+
+/** Ce que la section d'une catégorie sait d'elle : son nom (rendu tel que
+ * l'utilisateur l'a écrit) et la préférence serveur de son pliage. */
+export type LensSectionCategory = {
+  readonly id: string;
+  readonly name: string;
+  readonly isExpanded: boolean;
+};
+
 export type LensSection = {
   readonly id: LensSectionId;
   readonly conversations: readonly Conversation[];
+  readonly category?: LensSectionCategory;
 };
 
-const SECTION_ID: Record<Exclude<ConversationSection['kind'], 'category'>, LensSectionId> = {
+const SECTION_ID: Record<Exclude<ConversationSection['kind'], 'category'>, FixedLensSectionId> = {
   pinned: 'pinned',
   live: 'lentille.live',
   today: 'lentille.today',
@@ -49,20 +65,28 @@ const SECTION_ID: Record<Exclude<ConversationSection['kind'], 'category'>, LensS
 /**
  * Libellés en CASSE NORMALE (`LentilleSectionIdentity.swift:127-138`) — la
  * MAJUSCULE est le fait du STICKER (`textTransform: uppercase`,
- * `lens-sticker.tsx`), jamais de la donnée : une section porte son nom
- * lisible, le rendu décide de le crier ou non.
+ * `lens-sticker.tsx`), jamais de la donnée. Les sept langues reprennent mot
+ * pour mot le vocabulaire d'iOS (`lentille.section.*`, `Localizable.xcstrings`).
  */
-const SECTION_LABEL: Readonly<Record<LensSectionId, string>> = {
-  pinned: 'Épingles',
-  'lentille.live': 'En direct',
-  'lentille.today': "Aujourd'hui",
-  'lentille.yesterday': 'Hier',
-  'lentille.thisWeek': 'Cette semaine',
-  'lentille.older': 'Plus ancien',
-};
+const SECTION_LABEL_KEY = {
+  pinned: 'lensSection.label.pinned',
+  'lentille.live': 'lensSection.label.live',
+  'lentille.today': 'lensSection.label.today',
+  'lentille.yesterday': 'lensSection.label.yesterday',
+  'lentille.thisWeek': 'lensSection.label.thisWeek',
+  'lentille.older': 'lensSection.label.older',
+} as const satisfies Readonly<Record<FixedLensSectionId, InterfaceCatalogKey>>;
 
-export function sectionLabelOf(id: LensSectionId): string {
-  return SECTION_LABEL[id];
+const isFixedSectionId = (id: LensSectionId): id is FixedLensSectionId => id in SECTION_LABEL_KEY;
+
+/** Le nom d'une section : celui que l'utilisateur a donné à sa catégorie, ou
+ * le libellé de la section calculée dans la langue de l'interface. */
+export function lensSectionLabel(
+  section: { readonly id: LensSectionId; readonly category?: { readonly name: string } },
+  language: InterfaceLanguage,
+): string {
+  if (section.category !== undefined) return section.category.name;
+  return isFixedSectionId(section.id) ? translate(language, SECTION_LABEL_KEY[section.id]) : section.id;
 }
 
 type Overrides = Readonly<Record<string, ConversationOverride>>;
@@ -75,47 +99,53 @@ type Overrides = Readonly<Record<string, ConversationOverride>>;
  * `filters.ts::orderConversations` documente pour le tri.
  */
 function toSectionable(conversation: Conversation, overrides: Overrides): SectionableConversation {
+  const categoryId = categoryIdOf(conversation);
   return {
     id: conversation.id,
     isPinned: effectiveFlagsOf(conversation, overrides).isPinned,
     // `exactOptionalPropertyTypes` : n'écrire la clé QUE si elle a une valeur
     // (même garde que `filters.ts::orderConversations`).
+    ...(categoryId === undefined ? {} : { categoryId }),
     // LE RANG SERVI (#7592) : max(rang du lecteur, `lastMessageAt`).
     ...listRankField(conversation),
     updatedAt: conversation.updatedAt,
   };
 }
 
+const NO_CATEGORIES: readonly LensSectionCategory[] = [];
+
 /**
  * `resolveLensSections` — partitionne `conversations` (déjà FILTRÉES par
  * `applyFilter`, §1.1 de la spécification : recherche et corpus archivé sont
  * réglés AVANT le sectionnement) en sections ORDONNÉES et non vides.
+ * `categories` arrive dans l'ordre DÉCLARÉ par l'utilisateur.
  * `now`/`timeZone` sont INJECTÉS par l'appelant (la peau) — jamais lus ici.
  */
 export function resolveLensSections(params: {
   readonly conversations: readonly Conversation[];
   readonly overrides: Overrides;
+  readonly categories?: readonly LensSectionCategory[];
   readonly now: Date;
   readonly timeZone: string;
 }): readonly LensSection[] {
   const { conversations, overrides, now, timeZone } = params;
+  const categories = params.categories ?? NO_CATEGORIES;
+  const categoryById = new Map(categories.map((c) => [c.id, c] as const));
   const byId = new Map(conversations.map((c) => [c.id, c] as const));
   const sectionable = conversations.map((c) => toSectionable(c, overrides));
-  const sections = resolveConversationSections({ conversations: sectionable, categories: [], now, locale: 'fr-FR', timeZone });
+  const sections = resolveConversationSections({ conversations: sectionable, categories, now, locale: 'fr-FR', timeZone });
+  const conversationsOf = (section: ConversationSection): readonly Conversation[] =>
+    section.conversations.map((s) => byId.get(s.id)).filter((c): c is Conversation => c !== undefined);
 
   return sections.flatMap((section): readonly LensSection[] => {
-    // `categories: []` en entrée : la loi n'émet jamais `kind: 'category'`
-    // ici (aucune catégorie déclarée ne peut donc jamais matcher) — la garde
-    // rend ce cas IMPOSSIBLE à l'exécution plutôt que de laisser
-    // `SECTION_ID[section.kind]` échouer silencieusement en TypeScript non
-    // strict.
-    if (section.kind === 'category') return [];
+    if (section.kind !== 'category') return [{ id: SECTION_ID[section.kind], conversations: conversationsOf(section) }];
+    const category = categoryById.get(section.categoryId);
+    if (category === undefined) return [];
     return [
       {
-        id: SECTION_ID[section.kind],
-        conversations: section.conversations
-          .map((s) => byId.get(s.id))
-          .filter((c): c is Conversation => c !== undefined),
+        id: `category:${category.id}`,
+        conversations: conversationsOf(section),
+        category: { id: category.id, name: category.name, isExpanded: category.isExpanded },
       },
     ];
   });

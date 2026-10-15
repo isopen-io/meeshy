@@ -78,11 +78,17 @@ extension ConversationView {
     /// séparait donc le tap du premier pixel. L'image, elle, EST déjà
     /// rasterisée : elle amorce le cache d'aperçu sous l'URL locale — connue
     /// avant que le fichier existe — et la bulle peint sans rien attendre.
-    func sendStickerImage(_ image: UIImage, sticker: MessageSticker?) {
+    ///
+    /// **Un sticker ANIMÉ part avec son fichier d'origine** (#9210) : `original`
+    /// porte les octets et le type du pack cinématique, écrits tels quels ;
+    /// `image`, sa première image, ne sert qu'à peindre la bulle tout de suite.
+    func sendStickerImage(_ image: UIImage, sticker: MessageSticker?,
+                          original: StickerSendPipeline.OriginalFile? = nil) {
         let attachmentId = UUID().uuidString
         let directory = FileManager.default.temporaryDirectory
-        let fileName = StickerSendPipeline.fileName(for: attachmentId)
-        let fileURL = StickerSendPipeline.fileURL(id: attachmentId, in: directory)
+        let mimeType = original?.mimeType ?? StickerSendPipeline.pngMimeType
+        let fileName = StickerSendPipeline.fileName(for: attachmentId, mimeType: mimeType)
+        let fileURL = StickerSendPipeline.fileURL(id: attachmentId, in: directory, mimeType: mimeType)
 
         let currentUserId = AuthManager.shared.currentUser?.id ?? ""
         let senderColor = DynamicColorGenerator.colorForName(AuthManager.shared.currentUser?.displayName ?? "?")
@@ -94,7 +100,7 @@ extension ConversationView {
             // toutes les surfaces le taisent quand il vaut zéro. L'ESTIMER
             // afficherait un chiffre faux sous une image que le serveur
             // remplacera par sa propre pièce jointe deux secondes plus tard.
-            mimeType: "image/png", fileSize: 0,
+            mimeType: mimeType, fileSize: 0,
             fileUrl: localKey,
             width: Int(image.size.width * image.scale),
             height: Int(image.size.height * image.scale),
@@ -155,8 +161,8 @@ extension ConversationView {
 
         Task {
             await encodeWriteAndSendSticker(
-                image: image, attachmentId: attachmentId, directory: directory, localKey: localKey,
-                tempId: tempId, sticker: sticker,
+                image: image, original: original, attachmentId: attachmentId, directory: directory,
+                localKey: localKey, tempId: tempId, sticker: sticker,
                 replyId: replyId, storyReplyId: storyReplyId, storyRef: storyRef,
                 originalLanguage: lang, currentUserId: currentUserId, protection: protection
             )
@@ -170,14 +176,19 @@ extension ConversationView {
     /// bascule en échec (`markOptimisticMediaFailed`) au lieu de rester un
     /// spinner fantôme pour un fichier qui n'existera jamais.
     private func encodeWriteAndSendSticker(
-        image: UIImage, attachmentId: String, directory: URL, localKey: String,
+        image: UIImage, original: StickerSendPipeline.OriginalFile?,
+        attachmentId: String, directory: URL, localKey: String,
         tempId: String, sticker: MessageSticker?,
         replyId: String?, storyReplyId: String?, storyRef: ReplyReference?,
         originalLanguage: String, currentUserId: String, protection: MessageProtectionIntent
     ) async {
         let écrit: StickerSendPipeline.WrittenSticker
         do {
-            écrit = try await StickerSendPipeline.prepare(image, id: attachmentId, directory: directory)
+            if let original {
+                écrit = try await StickerSendPipeline.prepare(original, id: attachmentId, directory: directory)
+            } else {
+                écrit = try await StickerSendPipeline.prepare(image, id: attachmentId, directory: directory)
+            }
         } catch {
             Logger.messages.error("Sticker temp write failed: \(error.localizedDescription, privacy: .public)")
             await viewModel.markOptimisticMediaFailed(tempId: tempId, reason: error.localizedDescription)
@@ -189,7 +200,8 @@ extension ConversationView {
         // que la bulle peint déjà depuis le cache mémoire.
         Task { await CacheCoordinator.shared.images.save(écrit.data, for: localKey) }
         await uploadAndSendSticker(
-            fileURL: écrit.url, data: écrit.data, image: image, tempId: tempId, sticker: sticker,
+            fileURL: écrit.url, data: écrit.data, mimeType: original?.mimeType ?? StickerSendPipeline.pngMimeType,
+            image: image, tempId: tempId, sticker: sticker,
             replyId: replyId, storyReplyId: storyReplyId, storyRef: storyRef,
             originalLanguage: originalLanguage, currentUserId: currentUserId, protection: protection
         )
@@ -201,12 +213,12 @@ extension ConversationView {
     /// à côté de l'id remonté — sans lui, le destinataire recevrait une image
     /// muette.
     private func uploadAndSendSticker(
-        fileURL: URL, data: Data, image: UIImage, tempId: String, sticker: MessageSticker?,
+        fileURL: URL, data: Data, mimeType: String, image: UIImage, tempId: String, sticker: MessageSticker?,
         replyId: String?, storyReplyId: String?, storyRef: ReplyReference?,
         originalLanguage: String, currentUserId: String, protection: MessageProtectionIntent
     ) async {
         if NetworkMonitor.shared.isOffline {
-            await enqueueStickerOffline(fileURL: fileURL, tempId: tempId, sticker: sticker,
+            await enqueueStickerOffline(fileURL: fileURL, mimeType: mimeType, tempId: tempId, sticker: sticker,
                                         replyId: replyId, originalLanguage: originalLanguage)
             return
         }
@@ -220,7 +232,7 @@ extension ConversationView {
         }
         let uploader = TusUploadManager(baseURL: baseURL)
         do {
-            let result = try await uploader.uploadFile(fileURL: fileURL, mimeType: "image/png", credential: credential)
+            let result = try await uploader.uploadFile(fileURL: fileURL, mimeType: mimeType, credential: credential)
             // Amorcer sous la clé que le rendu résout : la transition bulle
             // optimiste → confirmée (file:// → URL serveur) lit un cache chaud
             // et ne retélécharge jamais notre propre upload.
@@ -248,7 +260,7 @@ extension ConversationView {
             // Même contrat que le groupe visuel : la bulle passe `.sending` →
             // `.queued` (horloge conservée) et l'outbox rejoue l'upload.
             _ = try? await viewModel.messagePersistence.applyEvent(localId: tempId, event: .sendFailed(error))
-            await enqueueStickerOffline(fileURL: fileURL, tempId: tempId, sticker: sticker,
+            await enqueueStickerOffline(fileURL: fileURL, mimeType: mimeType, tempId: tempId, sticker: sticker,
                                         replyId: replyId, originalLanguage: originalLanguage)
         }
     }
@@ -257,13 +269,13 @@ extension ConversationView {
     /// `pending-media/`), AVEC son `sticker` — c'est l'exigence de protocole
     /// qui le garantit, pas un défaut concret (voir `OfflineMessageQueueing`).
     private func enqueueStickerOffline(
-        fileURL: URL, tempId: String, sticker: MessageSticker?,
+        fileURL: URL, mimeType: String, tempId: String, sticker: MessageSticker?,
         replyId: String?, originalLanguage: String
     ) async {
         do {
             _ = try await OfflineQueue.shared.enqueueMedia(
                 sourceMediaURLs: [fileURL],
-                kinds: [AttachmentKind(mimeType: "image/png").rawValue],
+                kinds: [AttachmentKind(mimeType: mimeType).rawValue],
                 conversationId: viewModel.conversationId,
                 content: nil,
                 clientMessageId: tempId,

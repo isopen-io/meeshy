@@ -29,6 +29,10 @@ extension UserProfileSheet {
         VStack(spacing: 0) {
             bannerSection
                 .frame(height: bannerHeight)
+                .overlay(alignment: .bottom) {
+                    bannerGameBadge
+                        .opacity(1 - Double(progress))
+                }
                 .clipped()
                 .opacity(1 - Double(progress) * 0.6)
 
@@ -75,6 +79,18 @@ extension UserProfileSheet {
         }
     }
 
+    /// #10093, #10231, #10601 — le niveau et le rang du membre, posés sur sa bannière par l'app (`profileGameSection`) :
+    /// ce que SA visibilité autorise, rien sinon. L'app occupe toute la bannière — le niveau à l'angle bas du début, le
+    /// rang à l'angle bas de la fin, leurs cadres posés sur le bord bas, loin du bouton Fermer. Le doigt le traverse —
+    /// toucher la bannière l'ouvre toujours en plein écran.
+    @ViewBuilder
+    var bannerGameBadge: some View {
+        if !isBlocked, !isBlockedByTarget, let userId = resolvedUserId, !userId.isEmpty, let gameSection {
+            gameSection.build(userId, displayUser.displayName ?? displayUser.username)
+                .allowsHitTesting(false)
+        }
+    }
+
     var defaultBannerGradient: some View {
         LinearGradient(
             colors: isBlockedByTarget
@@ -99,16 +115,9 @@ extension UserProfileSheet {
             .accessibilityHidden(true)
         )
         .clipped()
-        .onTapGesture {
-            openFullscreenImage(url: displayUser.bannerURL, fallback: displayUser.resolvedDisplayName)
-        }
-        // Expose the banner tap to VoiceOver (raw onTapGesture isn't).
-        .accessibilityElement()
-        .accessibilityLabel(String(localized: "profile.banner.label", defaultValue: "Bannière de profil", bundle: .module))
-        .accessibilityAddTraits(.isButton)
-        .accessibilityAction {
-            openFullscreenImage(url: displayUser.bannerURL, fallback: displayUser.resolvedDisplayName)
-        }
+        // #10093 — un dégradé n'est pas une image : sans bannière, rien ne s'ouvre en plein écran. Décoratif, il se
+        // tait aussi pour VoiceOver.
+        .accessibilityHidden(true)
     }
 
     // MARK: - Identity
@@ -120,9 +129,9 @@ extension UserProfileSheet {
                 .onTapGesture {
                     openFullscreenImage(url: displayUser.avatarURL, fallback: displayUser.resolvedDisplayName)
                 }
-                // Expose the avatar tap to VoiceOver (a raw onTapGesture isn't).
-                .accessibilityAddTraits(.isButton)
-                .accessibilityHint(String(localized: "profile.avatar.viewFullscreen.hint", defaultValue: "Ouvre la photo en plein écran", bundle: .module))
+                // Expose the avatar tap to VoiceOver (a raw onTapGesture isn't) — seulement quand une photo s'ouvre.
+                .accessibilityAddTraits(hasAvatarPhoto ? .isButton : [])
+                .accessibilityHint(hasAvatarPhoto ? String(localized: "profile.avatar.viewFullscreen.hint", defaultValue: "Ouvre la photo en plein écran", bundle: .module) : "")
                 .accessibilityAction {
                     openFullscreenImage(url: displayUser.avatarURL, fallback: displayUser.resolvedDisplayName)
                 }
@@ -150,6 +159,11 @@ extension UserProfileSheet {
         .accessibilityHidden(ProfileHeaderMetrics.progress(offset: offset) > 0.5)
     }
 
+    /// Une photo à ouvrir en plein écran — sans elle, toucher l'avatar à initiales n'ouvre rien (#10093).
+    var hasAvatarPhoto: Bool {
+        ProfileFullscreenImage.opening(displayUser.avatarURL, fallbackText: "") != nil
+    }
+
     @ViewBuilder
     var profileAvatar: some View {
         let avatarName = displayUser.resolvedDisplayName
@@ -164,11 +178,23 @@ extension UserProfileSheet {
             accentColor: isBlockedByTarget ? MeeshyColors.blockedNeutralHex : resolvedAccent,
             avatarURL: displayUser.avatarURL,
             storyState: ringState,
-            moodEmoji: isBlockedByTarget ? nil : moodEmoji,
+            moodEmoji: shownMoodEmoji,
             presenceState: isBlockedByTarget ? nil : resolvedPresence,
             onViewStory: (showRing && ringState != .none) ? onViewStory : nil,
-            onMoodTap: isBlockedByTarget ? nil : onMoodTap
+            onMoodTap: shownMoodEmoji == nil ? nil : onMoodTap
         )
+    }
+
+    /// L'humeur peinte sur l'avatar — le grand en-tête ET la barre compacte
+    /// (#10529) : celle que l'app remet, sauf si la cible m'a bloqué. Une
+    /// chaîne vide n'est pas une humeur.
+    public nonisolated static func shownMood(_ emoji: String?, isBlockedByTarget: Bool) -> String? {
+        guard !isBlockedByTarget, let emoji, !emoji.isEmpty else { return nil }
+        return emoji
+    }
+
+    var shownMoodEmoji: String? {
+        Self.shownMood(moodEmoji, isBlockedByTarget: isBlockedByTarget)
     }
 
     /// Présence affichée sur l'avatar (grand header + barre compacte).
@@ -294,7 +320,9 @@ extension UserProfileSheet {
                 accentColor: isBlockedByTarget ? MeeshyColors.blockedNeutralHex : resolvedAccent,
                 avatarURL: displayUser.avatarURL,
                 storyState: .none,
-                presenceState: isBlockedByTarget ? nil : resolvedPresence
+                moodEmoji: shownMoodEmoji,
+                presenceState: isBlockedByTarget ? nil : resolvedPresence,
+                onMoodTap: shownMoodEmoji == nil ? nil : onMoodTap
             )
 
             VStack(alignment: .leading, spacing: 0) {

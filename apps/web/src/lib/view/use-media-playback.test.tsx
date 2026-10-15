@@ -56,6 +56,7 @@ function Harness({
   tag = 'audio',
   tracksTime = false,
   report,
+  onSoundBlocked,
 }: {
   readonly onReady: (playback: MediaPlayback) => void;
   readonly attachmentId: string;
@@ -63,8 +64,15 @@ function Harness({
   readonly tag?: 'audio' | 'video';
   readonly tracksTime?: boolean;
   readonly report?: HarnessReport;
+  readonly onSoundBlocked?: () => void;
 }) {
-  const playback = useMediaPlayback({ attachmentId, coordinator, tracksTime, ...(report !== undefined ? { report } : {}) });
+  const playback = useMediaPlayback({
+    attachmentId,
+    coordinator,
+    tracksTime,
+    ...(report !== undefined ? { report } : {}),
+    ...(onSoundBlocked !== undefined ? { onSoundBlocked } : {}),
+  });
   onReady(playback);
   const data = {
     'data-status': playback.status,
@@ -90,6 +98,7 @@ function mount(params: {
   readonly tag?: 'audio' | 'video';
   readonly tracksTime?: boolean;
   readonly report?: HarnessReport;
+  readonly onSoundBlocked?: () => void;
 }): HTMLDivElement {
   container = document.createElement('div');
   document.body.appendChild(container);
@@ -408,6 +417,123 @@ describe('useMediaPlayback — échec de lecture (#5805)', () => {
     expect(calls.loadCalls).toBe(1);
     expect(calls.playCalls).toBe(1);
     expect(statusOf(el)).toBe('playing');
+  });
+});
+
+/**
+ * UN REFUS N'EST PAS UNE PANNE — `play()` rejette pour trois raisons, et une
+ * seule est un média illisible. `AbortError` : un `pause()` (le réel quitté
+ * d'un balayage rapide) a interrompu la lecture demandée. `NotAllowedError` :
+ * la politique de lecture automatique refuse (iOS en économie d'énergie, son
+ * sans geste). Dans les deux cas le média reste lisible : l'afficher en panne
+ * faisait revenir le lecteur sur « Média indisponible ».
+ */
+function rejectPlay(el: HTMLMediaElement, name: string, before?: () => void): { attempts: number } {
+  const state = { attempts: 0 };
+  el.play = () => {
+    state.attempts += 1;
+    before?.();
+    return Promise.reject(new DOMException('refusé', name));
+  };
+  el.pause = () => {
+    el.dispatchEvent(new Event('pause'));
+  };
+  return state;
+}
+
+describe('useMediaPlayback — un refus de lecture n’est pas une panne', () => {
+  test('play() interrompu par pause() (AbortError) ⇒ en pause, jamais en erreur', async () => {
+    const coordinator = createMediaCoordinator();
+    let playback!: MediaPlayback;
+    const el = mount({ onReady: (p) => (playback = p), attachmentId: 'a', coordinator });
+    const media = mediaOf(el);
+    rejectPlay(media, 'AbortError', () => media.dispatchEvent(new Event('pause')));
+
+    await act(async () => {
+      playback.toggle();
+      await Promise.resolve();
+      await Promise.resolve();
+    });
+
+    expect(statusOf(el)).toBe('paused');
+  });
+
+  test('lecture automatique refusée (NotAllowedError) ⇒ en pause, coordinateur relâché, jamais en erreur', async () => {
+    const coordinator = createMediaCoordinator();
+    let playback!: MediaPlayback;
+    const el = mount({ onReady: (p) => (playback = p), attachmentId: 'a', coordinator });
+    rejectPlay(mediaOf(el), 'NotAllowedError');
+
+    await act(async () => {
+      playback.toggle();
+      await Promise.resolve();
+      await Promise.resolve();
+    });
+
+    expect(statusOf(el)).toBe('paused');
+    expect(coordinator.active()).toBeNull();
+  });
+
+  test('un décodeur en échec (autre rejet) reste une erreur', async () => {
+    const coordinator = createMediaCoordinator();
+    let playback!: MediaPlayback;
+    const el = mount({ onReady: (p) => (playback = p), attachmentId: 'a', coordinator });
+    rejectPlay(mediaOf(el), 'NotSupportedError');
+
+    await act(async () => {
+      playback.toggle();
+      await Promise.resolve();
+      await Promise.resolve();
+    });
+
+    expect(statusOf(el)).toBe('error');
+  });
+
+  test('avec onSoundBlocked, le son refusé COUPE le média et relance la lecture muette — le geste continue', async () => {
+    const coordinator = createMediaCoordinator();
+    let playback!: MediaPlayback;
+    let blocked = 0;
+    const el = mount({ onReady: (p) => (playback = p), attachmentId: 'a', coordinator, tag: 'video', onSoundBlocked: () => (blocked += 1) });
+    const media = mediaOf(el);
+    media.muted = false;
+    let attempts = 0;
+    media.play = () => {
+      attempts += 1;
+      if (!media.muted) return Promise.reject(new DOMException('son refusé', 'NotAllowedError'));
+      media.dispatchEvent(new Event('play'));
+      return Promise.resolve();
+    };
+
+    await act(async () => {
+      playback.toggle();
+      await Promise.resolve();
+      await Promise.resolve();
+      await Promise.resolve();
+    });
+
+    expect(blocked).toBe(1);
+    expect(media.muted).toBe(true);
+    expect(attempts).toBe(2);
+    expect(statusOf(el)).toBe('playing');
+  });
+
+  test('avec onSoundBlocked, un refus MÊME muet (économie d’énergie iOS) ⇒ en pause, sans boucle', async () => {
+    const coordinator = createMediaCoordinator();
+    let playback!: MediaPlayback;
+    let blocked = 0;
+    const el = mount({ onReady: (p) => (playback = p), attachmentId: 'a', coordinator, tag: 'video', onSoundBlocked: () => (blocked += 1) });
+    const media = mediaOf(el);
+    media.muted = false;
+    const state = rejectPlay(media, 'NotAllowedError');
+
+    await act(async () => {
+      playback.toggle();
+      for (let i = 0; i < 6; i += 1) await Promise.resolve();
+    });
+
+    expect(state.attempts).toBe(2);
+    expect(blocked).toBe(1);
+    expect(statusOf(el)).toBe('paused');
   });
 });
 

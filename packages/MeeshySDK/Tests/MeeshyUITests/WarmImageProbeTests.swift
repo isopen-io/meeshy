@@ -147,11 +147,34 @@ struct WarmImageProbeTests {
     @Test("les dix sites passent bien par la porte")
     func the_ten_call_sites_go_through_the_door() throws {
         let source = try sdkSource("Sources/MeeshyUI/Primitives/CachedAsyncImage.swift")
-        let passages = source.components(separatedBy: "WarmImageProbe.warmedImage(for:").count - 1
+        let warmed = source.components(separatedBy: "WarmImageProbe.warmedImage(for:").count - 1
+        let resident = source.components(separatedBy: "WarmImageProbe.residentImage(for:").count - 1
 
-        #expect(passages >= 10, """
+        #expect(warmed + resident >= 10, """
         Quatre composants, dix appels : ils doivent tous être là, sinon la garde négative \
-        garde le vide.
+        garde le vide. Depuis #10354, les inits de `CachedAsyncImage` et de \
+        `ProgressiveCachedImage` passent par la porte MÉMOIRE (`residentImage`).
         """)
+    }
+
+    /// #10354 — l'init d'une image de réel ne décode plus le disque sur le fil
+    /// principal : il sert la mémoire seule, le `.task` lit le disque.
+    @Test("les inits des images de média ne lisent que la mémoire")
+    func media_image_inits_read_memory_only() throws {
+        let source = try sdkSource("Sources/MeeshyUI/Primitives/CachedAsyncImage.swift")
+        for header in ["public struct CachedAsyncImage<", "public struct ProgressiveCachedImage<"] {
+            let start = try #require(source.range(of: header))
+            let initStart = try #require(source.range(of: "    public init(", range: start.upperBound..<source.endIndex))
+            let initEnd = try #require(source.range(of: "    public var body: some View", range: initStart.upperBound..<source.endIndex))
+            let body = String(source[initStart.lowerBound..<initEnd.lowerBound])
+            #expect(!body.contains("warmedImage("), "\(header) : l'init lit le disque")
+            #expect(body.contains("WarmImageProbe.residentImage(for:"), "\(header) : l'init ne sert plus la mémoire")
+        }
+    }
+
+    @Test("la porte mémoire ne sonde jamais le disque")
+    func resident_door_never_probes() {
+        let image = WarmImageProbe.residentImage(for: "https://x/poster.jpg", resident: { _ in nil })
+        #expect(image == nil)
     }
 }

@@ -11,6 +11,10 @@ import auditReglagesEs from './admin/audit-reglages-es';
 import personnesEs from './admin/personnes-es';
 import conversationsAgentEs from './admin/conversations-agent-es';
 import engagementScaleEs from './admin/engagement-scale-es';
+import gestesEs from './admin/gestes-es';
+import operationsEs from './admin/operations-es';
+import gameSeasonsEs from './admin/game-seasons-es';
+import ergonomieEs from './admin/ergonomie-es';
 
 const es = {
   'admin.role': 'Tu rol: {role}',
@@ -51,7 +55,9 @@ const es = {
   'admin.nav.agent.hint': 'Dirigir el agente de conversación',
   'admin.nav.settings.hint': 'Tu acceso y las preferencias del espacio',
   'admin.nav.engagementScale': 'Baremo de puntos',
-  'admin.nav.engagementScale.hint': 'Lo que cada gesto aporta en puntos',
+  'admin.nav.engagementScale.hint': 'Lo que aporta cada gesto, las rachas, la fidelidad y las temporadas del Juego',
+  'admin.nav.operations': 'Operaciones',
+  'admin.nav.operations.hint': 'El servidor en directo, la copia de seguridad y la purga de imágenes',
   'admin.users.search': 'Buscar una cuenta',
   'admin.users.count': '{count} cuenta(s)',
   'admin.users.unavailable': 'Lista no disponible por ahora.',
@@ -377,6 +383,10 @@ const es = {
   ...personnesEs,
   ...conversationsAgentEs,
   ...engagementScaleEs,
+  ...gestesEs,
+  ...operationsEs,
+  ...gameSeasonsEs,
+  ...ergonomieEs,
 } satisfies AdminInterfaceCatalog;
 
 export default es;

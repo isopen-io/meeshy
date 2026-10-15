@@ -384,12 +384,25 @@ button.focus-stamp::after {
    `:root.light` surcharge. Aucune animation : `animationsEnabled = false`
    côté iOS (décision produit batterie), D-1 prime sur toute intention
    d'animer ce fond. */
+/* LA LUEUR D'ACCENT SOUS L'EN-TÊTE ET LE COMPOSEUR (#10004, note « look » de
+   la planche World Wide) — deux couches de PLUS sur ce fond, jamais un voile
+   posé par-dessus le fil (#6537) : elles vivent au plan `z-index: -1`, le
+   contenu défile au-dessus d'elles comme au-dessus du dégradé. Haute : 22 %
+   de l'accent qui s'éteint sur 260 px (planche « Thread ») ; basse, plus
+   discrète, derrière le composeur. Les intensités en clair sont réduites :
+   un accent à 22 % sur du blanc devient une couleur de fond, plus une lueur.
+   `lib/view/author-ink.ts` mesure les noms d'auteur contre ce fond. */
 .thread-backdrop {
+  --thread-glow-top: color-mix(in srgb, var(--accent) 22%, transparent);
+  --thread-glow-bottom: color-mix(in srgb, var(--accent) 14%, transparent);
   position: absolute;
   inset: 0;
   z-index: -1;
   pointer-events: none;
-  background: linear-gradient(
+  background:
+    linear-gradient(180deg, var(--thread-glow-top), transparent 260px),
+    linear-gradient(0deg, var(--thread-glow-bottom), transparent 180px),
+    linear-gradient(
     135deg,
     var(--backdrop-dark-start) 0%,
     color-mix(in srgb, var(--accent) calc(var(--backdrop-dark-tint) * 100%), var(--backdrop-dark-start)) 50%,
@@ -397,10 +410,52 @@ button.focus-stamp::after {
   );
 }
 :root.light .thread-backdrop {
-  background: linear-gradient(
+  --thread-glow-top: color-mix(in srgb, var(--accent) 12%, transparent);
+  --thread-glow-bottom: color-mix(in srgb, var(--accent) 8%, transparent);
+  background:
+    linear-gradient(180deg, var(--thread-glow-top), transparent 260px),
+    linear-gradient(0deg, var(--thread-glow-bottom), transparent 180px),
+    linear-gradient(
     135deg,
     color-mix(in srgb, var(--accent) calc(var(--backdrop-light-tint-start) * 100%), var(--backdrop-light-base)) 0%,
     var(--backdrop-light-base) 50%,
     color-mix(in srgb, var(--accent) calc(var(--backdrop-light-tint-end) * 100%), var(--backdrop-light-base)) 100%
   );
+}
+
+/* LE FOND CHOISI (#10631, § 8.1). Signature (ci-dessus) reste le défaut et n'est
+   pas touché : ces règles ne s'appliquent qu'à `data-appearance`. La couche est
+   isolée (`contain: strict`) : ni la frappe ni le défilement ne la repeignent. */
+.thread-backdrop[data-appearance] {
+  contain: strict;
+  animation: thread-backdrop-in 180ms ease-out;
+}
+.thread-backdrop[data-appearance='photo'] {
+  overflow: hidden;
+}
+.thread-backdrop-photo,
+.thread-backdrop-veil {
+  position: absolute;
+  inset: 0;
+}
+.thread-backdrop-photo {
+  inset: -32px;
+  background-size: cover;
+  background-position: center;
+}
+[dir='rtl'] .thread-backdrop[data-flip-rtl] {
+  transform: scaleX(-1);
+}
+@keyframes thread-backdrop-in {
+  from {
+    opacity: 0;
+  }
+  to {
+    opacity: 1;
+  }
+}
+@media (prefers-reduced-motion: reduce) {
+  .thread-backdrop[data-appearance] {
+    animation: none;
+  }
 }

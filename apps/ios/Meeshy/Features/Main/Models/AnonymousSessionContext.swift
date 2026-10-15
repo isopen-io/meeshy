@@ -7,6 +7,15 @@ struct AnonymousSessionContext: Codable {
     let permissions: ParticipantPermissions
     let linkId: String
     let conversationId: String
+    /// Les familles que cet invité peut joindre (#10001, #10006) — `nil` quand
+    /// le lien ne restreint rien. Optionnel au décodage : une session
+    /// enregistrée avant ce champ se relit sans restriction déclarée, et le
+    /// serveur reste juge de chaque envoi.
+    var allowedAttachmentKinds: [GuestAttachmentKind]? = nil
+
+    var attachmentAllowance: GuestAttachmentAllowance {
+        GuestAttachmentAllowance(kinds: allowedAttachmentKinds)
+    }
 }
 
 extension AnonymousJoinResponse {
@@ -24,7 +33,8 @@ extension AnonymousJoinResponse {
                 canSendLinks: false
             ),
             linkId: linkId,
-            conversationId: conversation.id
+            conversationId: conversation.id,
+            allowedAttachmentKinds: conversation.attachmentAllowance.kinds
         )
     }
 }

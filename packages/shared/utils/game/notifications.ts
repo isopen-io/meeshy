@@ -16,6 +16,8 @@ export const GAME_NOTIFICATION_TYPES = [
   'game_season_step',
   /** La mission personnelle du jour, annoncée au début de sa plage horaire (#9539). */
   'game_mission_window',
+  /** Des étapes franchies app fermée peuvent rejoindre le carnet — regroupées, dans le plafond (#10175, D9). */
+  'game_photo_moment',
 ] as const;
 
 export type GameNotificationType = (typeof GAME_NOTIFICATION_TYPES)[number];
@@ -60,3 +62,7 @@ export function gameLeagueResultKey(params: {
   if (params.zone === 'promotion') return 'game.leaguePromoted';
   return params.zone === 'relegation' ? 'game.leagueRelegated' : 'game.leagueStayed';
 }
+
+/** Le texte du push photo (D13) : une étape au singulier, plusieurs en une phrase groupée qui dit leur nombre. */
+export const photoMomentNotificationKey = (count: number): 'game.photoMoment' | 'game.photoMoments' =>
+  count > 1 ? 'game.photoMoments' : 'game.photoMoment';

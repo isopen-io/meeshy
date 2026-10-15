@@ -82,6 +82,35 @@ final class AvatarPresenceDotTests: XCTestCase {
         XCTAssertNotEqual(AvatarPresenceDot.here.localizedLabel, PresenceState.online.localizedLabel)
     }
 
+    // MARK: - Le libellé lu par VoiceOver (#10528)
+
+    func test_spokenName_withoutMoodNorHere_isTheName() {
+        XCTAssertEqual(MeeshyAvatar.spokenName(name: "Nour", moodEmoji: nil, isHere: false), "Nour")
+        XCTAssertEqual(MeeshyAvatar.spokenName(name: "Nour", moodEmoji: "", isHere: false), "Nour")
+    }
+
+    /// La pastille masque le point et n'était lue par personne : l'humeur
+    /// n'existait que pour l'œil.
+    func test_spokenName_carriesTheMood() {
+        let spoken = MeeshyAvatar.spokenName(name: "Nour", moodEmoji: "🎉", isHere: false)
+        XCTAssertTrue(spoken.hasPrefix("Nour, "))
+        XCTAssertTrue(spoken.contains("🎉"))
+        XCTAssertNotEqual(spoken, "Nour, 🎉", "l'emoji seul ne dit pas que c'est une humeur")
+    }
+
+    func test_spokenName_carriesBothTheMoodAndHere() {
+        let spoken = MeeshyAvatar.spokenName(name: "Nour", moodEmoji: "🎉", isHere: true)
+        XCTAssertTrue(spoken.contains("🎉"))
+        XCTAssertTrue(spoken.hasSuffix(AvatarPresenceDot.here.localizedLabel))
+    }
+
+    func test_spokenName_hereAlone_isUnchanged() {
+        XCTAssertEqual(
+            MeeshyAvatar.spokenName(name: "Nour", moodEmoji: nil, isHere: true),
+            "Nour, \(AvatarPresenceDot.here.localizedLabel)"
+        )
+    }
+
     // MARK: - Les transitions du point (#9047)
 
     func test_transitionKey_changesWhenTheDotChangesNature() {

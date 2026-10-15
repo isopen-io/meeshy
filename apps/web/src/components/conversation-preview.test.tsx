@@ -1,3 +1,4 @@
+import { readFileSync } from 'node:fs';
 import { act } from 'react';
 import { renderToStaticMarkup } from 'react-dom/server';
 import { afterAll, afterEach, beforeAll, describe, expect, test } from 'bun:test';
@@ -140,7 +141,7 @@ describe('l’en-tête de l’aperçu — le COMPLET, sans chevron retour', () =
       <ThreadHeader
         title="Kwame"
         accent="#4455ff"
-        conversation={RICH_TEXT_DIRECT}
+        conversation={{ ...RICH_TEXT_DIRECT, encryptionMode: 'e2ee' }}
         viewerId="u-viewer"
         group={false}
         otherUnread={3}
@@ -170,7 +171,8 @@ describe('l’en-tête de l’aperçu — le COMPLET, sans chevron retour', () =
     expect(html).toContain('Chiffré de bout en bout');
     expect(html).toContain('data-thread-call');
     expect(html).toContain('class="thread-header glass');
-    expect(html).toContain('aria-label="Détails de la conversation"');
+    /* L'avatar ouvre la fiche (#10300) : ce pair n'a pas de compte, c'est donc celle de la conversation. */
+    expect(html).toContain('aria-label="Voir la conversation Kwame"');
   });
 });
 
@@ -246,6 +248,16 @@ describe('la feuille de l’aperçu', () => {
     expect(dialog?.getAttribute('aria-label')).toBe('Aperçu de la conversation');
     expect(dialog?.querySelector('[data-stub-thread]')).not.toBeNull();
     expect(dialog?.querySelector('a[href="/c/c1"]')).toBeNull();
+  });
+
+  test('sur ordinateur, l’aperçu ne prend plus toute la hauteur : 85 % de l’écran, centré (#10070)', async () => {
+    await sheet(() => undefined);
+    const panel = document.querySelector('[data-preview-scrim]')?.nextElementSibling;
+    const classes = panel?.className.split(' ') ?? [];
+    expect((panel as HTMLElement | undefined)?.style.top).toBe('var(--preview-top, calc(var(--safe-top) + 6px))');
+    expect(classes).toContain('md:bottom-[7.5dvh]');
+    const css = readFileSync(new URL('../styles/app.css', import.meta.url).pathname, 'utf8');
+    expect(css).toMatch(/@media \(min-width: 768px\) \{\s*\[data-conversation-preview\] \{\s*--preview-top: 7\.5dvh;/);
   });
 
   test('toucher HORS de l’aperçu le ferme', async () => {

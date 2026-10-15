@@ -412,7 +412,9 @@ extension StoryViewModel {
                 mediaCaption: serverMediaCaption.isEmpty ? nil : serverMediaCaption,
                 alsoAsReel: StoryAlsoAsReelWire.flag(requested: upload.alsoAsReel, type: upload.targetType,
                                                      slideCount: upload.slides.count,
-                                                     isRepost: upload.repostOfId != nil)
+                                                     isRepost: upload.repostOfId != nil),
+                // #10321 — même item, même slide ⇒ même clé : un rejeu après un succès perdu ne republie pas.
+                clientMutationId: ClientMutationId.storySlide(queueItemId: upload.queueId ?? upload.id, slideId: slide.id)
             )
 
             newPostIds.append(post.id)

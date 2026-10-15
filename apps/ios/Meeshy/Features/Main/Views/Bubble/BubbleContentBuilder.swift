@@ -7,12 +7,30 @@ extension BubbleContent {
     /// vidéo, carte de conversation) — résolus une seule fois. Partagé par la
     /// bulle et la Rivière (#8139) : deux résolutions de la carte finiraient
     /// par diverger au premier format de lien ajouté.
+    ///
+    /// `authorIsAnonymous` (#10286) — un invité sans compte n'émet AUCUN lien :
+    /// ni aperçu, ni carte de conversation, ni lecteur intégré, ni lien suivi ;
+    /// son adresse se lit telle qu'écrite.
     static func text(
         raw: String,
         trackedLinks: [String: String],
         isEmojiOnly: Bool = false,
-        emojiFontSize: CGFloat? = nil
+        emojiFontSize: CGFloat? = nil,
+        authorIsAnonymous: Bool = false
     ) -> Text {
+        if authorIsAnonymous {
+            return Text(
+                raw: raw,
+                isEmojiOnly: isEmojiOnly,
+                emojiFontSize: emojiFontSize,
+                firstLinkURL: nil,
+                embeddedVideo: nil,
+                trackedLinks: [:],
+                embedTrackedURL: nil,
+                conversationCardTarget: nil,
+                linksAreInert: true
+            )
+        }
         // Précalcul unique du lien (NSDataDetector) — réutilisé par
         // `hasBubbleBodyContent` et le rendu du link preview sans re-scan.
         let firstLinkURL = LinkPreviewFetcher.firstURL(in: raw)
@@ -158,7 +176,10 @@ extension BubbleContent {
             ?? message.originalLanguage
         // #9617 — l'avis de capture se compose CHEZ LE LECTEUR (langue
         // d'interface, fuseau) ; son `content` n'est que le repli français.
-        let effective = Self.captureNoticeText(for: message) ?? Self.resolveEffectiveContent(
+        // #7759 — la ligne d'arrivées de Meeshy Global, de même.
+        let effective = Self.captureNoticeText(for: message)
+            ?? Self.arrivalsNoticeText(for: message)
+            ?? Self.resolveEffectiveContent(
             message: message,
             translations: translations,
             preferredTranslation: preferredTranslation,
@@ -191,7 +212,8 @@ extension BubbleContent {
             raw: effective,
             trackedLinks: message.trackedLinkMap,
             isEmojiOnly: isEmojiOnly,
-            emojiFontSize: emojiResult.fontSize
+            emojiFontSize: emojiResult.fontSize,
+            authorIsAnonymous: message.senderIsAnonymous || !message.senderHasAccount
         )
 
         // --- Translation panel ---
@@ -270,7 +292,7 @@ extension BubbleContent {
         // mixing two-or-more categories falls into `.mixed` which carries audio
         // alongside visual/nonMedia so legacy "image + audio + file" rendering
         // is preserved. `audio` carries ALL audio tracks of the message: one
-        // renders as the existing widget, several as `AudioCarouselView`.
+        // renders as the existing widget, several as `AudioStackView`.
         switch (visual.isEmpty, audio.isEmpty, nonMedia.isEmpty) {
         case (true, true, true):
             self.attachments = .none
@@ -382,7 +404,8 @@ extension BubbleContent {
             slots: sticker.slots,
             animation: sticker.animation,
             emoji: sticker.emoji,
-            picture: picture
+            picture: picture,
+            libraryStickerId: sticker.stickerId
         )
     }
 
@@ -398,6 +421,15 @@ extension BubbleContent {
     ) -> String? {
         guard message.messageSource == .system, let notice = message.captureNotice else { return nil }
         return CaptureNoticeText.compose(notice, language: language, timeZone: timeZone)
+    }
+
+    /// **La ligne d'arrivées de Meeshy Global** (#7759) dans la langue
+    /// d'interface du lecteur, avec les clés `system.members.arrived.*` que la
+    /// ligne de liste dit déjà. `nil` pour tout autre message — et pour une
+    /// ligne dont la métadonnée ne se lit pas, qui retombe sur son `content`.
+    static func arrivalsNoticeText(for message: Message, strings: ConversationPreviewStrings? = nil) -> String? {
+        guard message.messageSource == .system, let notice = message.arrivalsNotice else { return nil }
+        return notice.text(strings ?? ConversationPreviewCatalog.strings())
     }
 
     static func resolveEffectiveContent(

@@ -1,0 +1,141 @@
+/**
+ * LE REGISTRE DES PACKS OFFICIELS ET INTÉGRÉS (#10148, LP0, § 5.10.2) — les
+ * schémas `zod/mini` que la passerelle et les clients appliquent à la
+ * frontière : fichiers adressés par contenu, entrées de registre (avec
+ * l'usage des cadres, #10146). Séparé de `content-pack.ts` pour que les
+ * chunks des stickers n'embarquent pas ces schémas.
+ */
+import * as z from 'zod/mini';
+import { FrameUsageSchema, type FrameUsage } from './frame-usage.js';
+import { GLORY_ATMOSPHERES } from './glory-atmospheres.js';
+import { PACK_DOMAINS, PACK_PRICE_MAX, PACK_LANGUAGES, PACK_LIMITS, PACK_SLUG_PATTERN, type PackAssetRef, type PackDefault, type PackDomain } from './content-pack.js';
+
+// ── Les fichiers adressés par contenu ───────────────────────────────────
+
+export const PACK_ASSET_EXTENSIONS = ['webp', 'png', 'json', 'woff2'] as const;
+const ASSET_SRC_PATTERN = new RegExp(`^[0-9a-f]{16}\\.(?:${PACK_ASSET_EXTENSIONS.join('|')})$`);
+const SHA256_PATTERN = /^[0-9a-f]{64}$/;
+
+export const PackAssetRefSchema: z.ZodMiniType<PackAssetRef> = z
+  .object({
+    src: z.string().check(z.regex(ASSET_SRC_PATTERN)),
+    bytes: z.int().check(z.minimum(0)),
+    sha256: z.string().check(z.regex(SHA256_PATTERN)),
+  })
+  .check(z.refine((ref) => ref.src.startsWith(ref.sha256.slice(0, 16))));
+
+// ── Le registre d'un pack officiel ou intégré ───────────────────────────
+
+const nameSchema = z.object({
+  name: z.string().check(z.trim(), z.minLength(1), z.maxLength(PACK_LIMITS.maxNameLength)),
+  description: z.string().check(z.trim(), z.minLength(1), z.maxLength(PACK_LIMITS.maxDescriptionLength)),
+});
+
+const collectionSchema = z.object({
+  slug: z.string().check(z.regex(PACK_SLUG_PATTERN), z.maxLength(PACK_LIMITS.maxSlugLength)),
+  /** Remplace l'usage du pack pour les cadres de cette collection. */
+  usage: z.optional(FrameUsageSchema),
+});
+
+/** Les domaines dont les packs portent des cadres, donc un usage. */
+const FRAME_DOMAINS: readonly PackDomain[] = ['glory-frame', 'capture-frame', 'avatar-ring'];
+
+type DeclaredUsages = { readonly usage?: FrameUsage; readonly collections?: readonly { readonly usage?: FrameUsage }[] };
+
+const declaredUsages = (entry: DeclaredUsages): readonly FrameUsage[] =>
+  [entry.usage, ...(entry.collections ?? []).map((collection) => collection.usage)].filter((usage): usage is FrameUsage => usage !== undefined);
+
+/** Un cadre de gloire récompense le jeu, jamais une capture libre ; un cadre de capture est libre, jamais une récompense du jeu. */
+const usageFitsDomain = (entry: DeclaredUsages & { readonly domain: PackDomain }): boolean => {
+  if (!FRAME_DOMAINS.includes(entry.domain)) return entry.domain === 'sticker' || declaredUsages(entry).length === 0;
+  const freeDomain = entry.domain === 'capture-frame' || entry.domain === 'avatar-ring';
+  return declaredUsages(entry).every((usage) => (usage.kind === 'free') === freeDomain) && avatarSurfaceConfined(entry);
+};
+
+/**
+ * Un pack de stickers n'a pas d'usage ; un pack de CAPTURE porte le sien ; un
+ * pack de GLOIRE peut le laisser à ses cadres quand ils ne partagent pas le
+ * même (l'Afrique éternelle sert cinq rangs, les moments quatre familles) :
+ * chaque cadre de son contrat porte alors son usage, obligatoire et lu
+ * fail-closed (`glory-frame-pack.ts`), et la boutique l'affiche cadre par
+ * cadre (#10154). Jamais un usage de pack qui mentirait sur ses cadres.
+ */
+const packUsageDeclared = (entry: { readonly domain: PackDomain; readonly usage?: FrameUsage }): boolean => {
+  if (!FRAME_DOMAINS.includes(entry.domain)) return entry.usage === undefined;
+  return entry.domain === 'glory-frame' || entry.usage !== undefined;
+};
+
+const sameSurfaces = (surfaces: readonly string[], expected: readonly string[]): boolean =>
+  surfaces.length === expected.length && expected.every((surface) => surfaces.includes(surface));
+
+/** Un contour d'avatar sert l'avatar et rien d'autre ; aucun autre domaine ne déclare la surface `avatar` (les anciens clients iOS rejetteraient une surface inconnue). */
+const avatarSurfaceConfined = (entry: DeclaredUsages & { readonly domain: PackDomain }): boolean =>
+  declaredUsages(entry).every((usage) => {
+    if (usage.kind !== 'free') return entry.domain !== 'avatar-ring';
+    return entry.domain === 'avatar-ring' ? sameSurfaces(usage.surfaces, ['avatar']) : !usage.surfaces.includes('avatar');
+  });
+
+/**
+ * L'entrée de registre d'un pack officiel ou intégré. Un pack de CADRES porte
+ * l'usage de ses cadres (`usage`, et par collection), que la loi d'usage lit :
+ * un cadre sans usage lisible ne se propose nulle part.
+ */
+export const PackIndexEntrySchema = z
+  .object({
+    slug: z.string().check(z.regex(PACK_SLUG_PATTERN), z.maxLength(PACK_LIMITS.maxSlugLength)),
+    domain: z.enum(PACK_DOMAINS),
+    origin: z.enum(['builtin', 'official']),
+    version: z.int().check(z.minimum(1)),
+    order: z.int().check(z.minimum(0)),
+    installedByDefault: z.boolean(),
+    removable: z.boolean(),
+    hidden: z.boolean(),
+    /** La version de contrat qu'un client doit savoir lire ; sinon « Mettre à jour Meeshy », et rien ne se télécharge. */
+    contractSchema: z.int().check(z.minimum(1)),
+    cover: PackAssetRefSchema,
+    preview: z.nullable(PackAssetRefSchema),
+    contract: PackAssetRefSchema,
+    strings: z.partialRecord(z.enum(PACK_LANGUAGES), PackAssetRefSchema),
+    downloadBytes: z.object({ story: z.int().check(z.minimum(0)), square: z.nullable(z.int().check(z.minimum(0))) }),
+    names: z.partialRecord(z.enum(PACK_LANGUAGES), nameSchema),
+    usage: z.optional(FrameUsageSchema),
+    /** Le prix en Meeshes (#10632) : absent = gratuit, jamais 0 ; jamais sur un pack intégré. */
+    price: z.optional(z.int().check(z.minimum(1), z.maximum(PACK_PRICE_MAX))),
+    collections: z.optional(z.array(collectionSchema)),
+    atmosphere: z.optional(z.enum(GLORY_ATMOSPHERES)),
+  })
+  .check(
+    z.refine(packUsageDeclared),
+    z.refine(usageFitsDomain),
+    z.refine((entry) => entry.atmosphere === undefined || entry.domain === 'glory-frame'),
+    z.refine((entry) => entry.removable || entry.installedByDefault),
+    z.refine((entry) => entry.price === undefined || entry.origin !== 'builtin'),
+    z.refine((entry) => entry.names.fr !== undefined),
+  );
+
+export type PackIndexEntry = z.infer<typeof PackIndexEntrySchema>;
+
+/**
+ * Lit un registre, fail-closed PAR ENTRÉE : une entrée illisible, ou qui
+ * reprend le slug d'une entrée précédente du même domaine, tombe seule.
+ */
+export function parsePackIndex(input: unknown): { readonly entries: readonly PackIndexEntry[]; readonly rejected: number } {
+  const raw: readonly unknown[] = Array.isArray(input) ? input : [];
+  const entries = raw.reduce<PackIndexEntry[]>((kept, candidate) => {
+    const parsed = PackIndexEntrySchema.safeParse(candidate);
+    if (!parsed.success) return kept;
+    const taken = kept.some((entry) => entry.domain === parsed.data.domain && entry.slug === parsed.data.slug);
+    return taken ? kept : [...kept, parsed.data];
+  }, []);
+  return { entries, rejected: raw.length - entries.length };
+}
+
+/** L'usage d'un cadre d'un pack : celui de sa collection s'il en déclare un, sinon celui du pack ; `null` ⇒ ne se propose nulle part. */
+export function frameUsageOf(entry: Pick<PackIndexEntry, 'usage' | 'collections'>, collection?: string): FrameUsage | null {
+  const own = collection === undefined ? undefined : entry.collections?.find((c) => c.slug === collection)?.usage;
+  return own ?? entry.usage ?? null;
+}
+
+/** Les défauts d'installation d'un registre lu, dans la forme que `isPackInstalled` attend. */
+export const packDefaultsOf = (entries: readonly PackIndexEntry[], domain: PackDomain): readonly PackDefault[] =>
+  entries.filter((entry) => entry.domain === domain).map(({ slug, installedByDefault }) => ({ slug, installedByDefault }));

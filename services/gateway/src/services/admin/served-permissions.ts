@@ -32,6 +32,7 @@ export type ServedPermissions = {
   readonly canManageNotifications: boolean;
   readonly canManageTranslations: boolean;
   readonly canManageAgent: boolean;
+  readonly canManageGame: boolean;
 };
 
 /**
@@ -79,6 +80,7 @@ export function servedUserPermissions(role: UserRoleEnum | string): ServedPermis
     canManageNotifications: central.canManageNotifications,
     canManageTranslations: central.canManageTranslations,
     canManageAgent: central.canManageAgent,
+    canManageGame: central.canManageGame,
   };
 }
 
@@ -96,5 +98,6 @@ export const servedPermissionsSchema = {
     canManageNotifications: { type: 'boolean' },
     canManageTranslations: { type: 'boolean' },
     canManageAgent: { type: 'boolean' },
+    canManageGame: { type: 'boolean' },
   },
 } as const;

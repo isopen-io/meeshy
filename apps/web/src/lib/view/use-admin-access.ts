@@ -66,3 +66,16 @@ export function useAdministrationRank(options: AdminAccessOptions = {}): boolean
   const { authenticated, identity } = useServedAdminIdentity(options);
   return authenticated && canEnterAdmin(identity?.permissions ?? null) && hasAdministrationRank(identity?.role ?? null);
 }
+
+/**
+ * **LE RÔLE DE PLATEFORME DU LECTEUR, TEL QUE SERVI** (#10102) — la même lecture
+ * que le barreau et `useAdministrationRank` (même clé, même fraîcheur : déjà en
+ * mémoire dès que le menu flottant l'a faite), rendue brute pour une loi qui
+ * juge un RANG plutôt qu'une permission (`mayOpenWorldParticipantCard`).
+ * `null` sans session ouverte, en vol, sur un refus ou une panne : le rôle
+ * n'est jamais deviné, et l'absence n'ouvre rien.
+ */
+export function useServedGlobalRole(options: AdminAccessOptions = {}): string | null {
+  const { authenticated, identity } = useServedAdminIdentity(options);
+  return authenticated ? (identity?.role ?? null) : null;
+}

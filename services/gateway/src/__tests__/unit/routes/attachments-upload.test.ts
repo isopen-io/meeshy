@@ -1,6 +1,6 @@
 /**
  * Unit tests for attachments/upload.ts
- * Tests POST /attachments/upload, POST /attachments/upload-text
+ * Tests POST /attachments/upload (POST /attachments/upload-text : attachments-upload-text.test.ts)
  *
  * @jest-environment node
  */
@@ -49,7 +49,7 @@ jest.mock('../../../services/attachments', () => ({
 // ─── Import after mocks ───────────────────────────────────────────────────────
 
 import multipart from '@fastify/multipart';
-import { registerUploadRoutes, MAX_TEXT_ATTACHMENT_LENGTH } from '../../../routes/attachments/upload';
+import { registerUploadRoutes } from '../../../routes/attachments/upload';
 
 // ─── Constants ────────────────────────────────────────────────────────────────
 
@@ -183,10 +183,7 @@ async function buildApp({
   participantId?: string | null;
   prisma?: any;
 } = {}): Promise<FastifyInstance> {
-  // `bodyLimit` aligné sur `server.ts` (50MB) — sans lui, le `bodyLimit` PAR
-  // DÉFAUT de Fastify (1MB) rejetterait déjà les payloads de test du plafond
-  // `MAX_TEXT_ATTACHMENT_LENGTH` (10MB) avant même d'atteindre la validation
-  // de schéma (`maxLength`) que ces tests vérifient.
+  // `bodyLimit` aligné sur `server.ts` (50MB), comme en production.
   const app = Fastify({ logger: false, ajv: { customOptions: { strict: false } }, bodyLimit: 50 * 1024 * 1024 });
 
   const authOptional = async (req: any) => {
@@ -517,7 +514,7 @@ describe('POST /attachments/upload — anonymous voice message allowed even when
   });
 });
 
-describe('POST /attachments/upload — un invité de World Wide ne joint rien tant que la garde décodante n’est pas livrée (audit #10000, #10029)', () => {
+describe('POST /attachments/upload — un invité de World Wide ne fait pas passer un en-tête MPEG pour un audio (audit #10000, #10029)', () => {
   const WORLD_LINK = { allowAnonymousFiles: false, allowAnonymousImages: false, conversation: { identifier: 'world' } };
   const MPEG_SYNC_THEN_HTML = Buffer.concat([Buffer.from([0xff, 0xfb]), Buffer.from('<html><script>alert(1)</script></html>', 'latin1')]);
   let app: FastifyInstance;
@@ -747,262 +744,5 @@ describe('POST /attachments/upload — anonymous without participantId', () => {
       payload: multipartFile('photo.jpg', 'image/jpeg'),
     });
     expect(res.statusCode).toBe(200);
-  });
-});
-
-// ─── POST /attachments/upload-text ────────────────────────────────────────────
-
-describe('POST /attachments/upload-text — not authenticated', () => {
-  let app: FastifyInstance;
-  beforeAll(async () => {
-    app = await buildApp({ authenticated: false, isAnonymous: false });
-  });
-  afterAll(async () => { await app.close(); });
-
-  it('returns 401 when not authenticated', async () => {
-    const res = await app.inject({
-      method: 'POST',
-      url: '/attachments/upload-text',
-      payload: { content: 'hello' },
-    });
-    expect(res.statusCode).toBe(401);
-  });
-});
-
-describe('POST /attachments/upload-text — success', () => {
-  let app: FastifyInstance;
-  beforeAll(async () => {
-    mockCreateTextAttachment.mockResolvedValue({ id: 'att-1', fileUrl: 'https://example.com/file.txt' });
-    app = await buildApp();
-  });
-  afterAll(async () => { await app.close(); });
-
-  it('returns 200 on successful text attachment creation', async () => {
-    const res = await app.inject({
-      method: 'POST',
-      url: '/attachments/upload-text',
-      payload: { content: 'Hello World', messageId: 'msg-123' },
-    });
-    expect(res.statusCode).toBe(200);
-    expect(res.json().success).toBe(true);
-  });
-
-  it('calls createTextAttachment with content and userId', async () => {
-    await app.inject({
-      method: 'POST',
-      url: '/attachments/upload-text',
-      payload: { content: 'Test content' },
-    });
-    expect(mockCreateTextAttachment).toHaveBeenCalledWith(
-      'Test content',
-      USER_ID,
-      false,
-      undefined,
-    );
-  });
-});
-
-describe('POST /attachments/upload-text — service error', () => {
-  let app: FastifyInstance;
-  beforeAll(async () => {
-    mockCreateTextAttachment.mockRejectedValue(new Error('storage error'));
-    app = await buildApp();
-  });
-  afterAll(async () => { await app.close(); });
-
-  it('returns 500 on service error', async () => {
-    const res = await app.inject({
-      method: 'POST',
-      url: '/attachments/upload-text',
-      payload: { content: 'test' },
-    });
-    expect(res.statusCode).toBe(500);
-  });
-
-  it('returns 500 with fallback message when error has no message', async () => {
-    const errNoMsg = new Error();
-    (errNoMsg as any).message = '';
-    mockCreateTextAttachment.mockRejectedValue(errNoMsg);
-    const res = await app.inject({
-      method: 'POST',
-      url: '/attachments/upload-text',
-      payload: { content: 'test' },
-    });
-    expect(res.statusCode).toBe(500);
-  });
-});
-
-// ── task-1-fix-round-3, I2 : ce point d'entrée était sans garde d'autorisation
-// anonyme, jusqu'à ~50 Mo (bodyLimit global), sans rien forger — le
-// contournement le plus simple des trois vus sur ce chantier.
-
-describe('POST /attachments/upload-text — anonymous, blocked when files are forbidden (task-1-fix-round-3, I2)', () => {
-  let app: FastifyInstance;
-  beforeAll(async () => {
-    // Baseline propre : si la garde d'autorisation manque, cette valeur
-    // résolue produirait un 200 (pas un 500 hérité d'un test précédent) —
-    // pour que le ROUGE prouve bien l'ABSENCE de garde, pas un état de mock
-    // fuité entre describe blocks.
-    mockCreateTextAttachment.mockResolvedValue({ id: 'should-not-be-created' });
-    app = await buildApp({
-      authenticated: false,
-      isAnonymous: true,
-      participantId: 'part-001',
-      prisma: makePrisma({ allowAnonymousFiles: false, allowAnonymousImages: true }),
-    });
-  });
-  afterAll(async () => { await app.close(); });
-
-  it('returns 403 when anonymous file upload is not allowed', async () => {
-    mockCreateTextAttachment.mockClear();
-    const res = await app.inject({
-      method: 'POST',
-      url: '/attachments/upload-text',
-      payload: { content: 'a wall of unauthorized text' },
-    });
-    expect(res.statusCode).toBe(403);
-    expect(mockCreateTextAttachment).not.toHaveBeenCalled();
-  });
-});
-
-describe('POST /attachments/upload-text — anonymous, share link not found (task-1-fix-round-3, I2)', () => {
-  let app: FastifyInstance;
-  beforeAll(async () => {
-    mockCreateTextAttachment.mockResolvedValue({ id: 'should-not-be-created' });
-    app = await buildApp({
-      authenticated: false,
-      isAnonymous: true,
-      participantId: 'part-001',
-      prisma: makePrisma(null),
-    });
-  });
-  afterAll(async () => { await app.close(); });
-
-  // #4856 — même verdict que `/attachments/upload` : c'est le lien de la
-  // session anonyme appelante, jamais celui d'un tiers.
-  it('returns 404 when share link does not exist', async () => {
-    mockCreateTextAttachment.mockClear();
-    const res = await app.inject({
-      method: 'POST',
-      url: '/attachments/upload-text',
-      payload: { content: 'text' },
-    });
-    expect(res.statusCode).toBe(404);
-    expect(mockCreateTextAttachment).not.toHaveBeenCalled();
-  });
-});
-
-describe('POST /attachments/upload-text — anonymous, allowed when files are permitted (task-1-fix-round-3, I2)', () => {
-  let app: FastifyInstance;
-  beforeAll(async () => {
-    mockCreateTextAttachment.mockResolvedValue({ id: 'att-anon-text' });
-    app = await buildApp({
-      authenticated: false,
-      isAnonymous: true,
-      participantId: 'part-001',
-      prisma: makePrisma({ allowAnonymousFiles: true, allowAnonymousImages: false }),
-    });
-  });
-  afterAll(async () => { await app.close(); });
-
-  it('returns 200 when anonymous file upload is allowed', async () => {
-    const res = await app.inject({
-      method: 'POST',
-      url: '/attachments/upload-text',
-      payload: { content: 'authorized text' },
-    });
-    expect(res.statusCode).toBe(200);
-    expect(mockCreateTextAttachment).toHaveBeenCalledWith('authorized text', 'anon-session', true, undefined);
-  });
-});
-
-describe('POST /attachments/upload-text — anonymous without participantId (task-1-fix-round-3, I2)', () => {
-  let app: FastifyInstance;
-  beforeAll(async () => {
-    mockCreateTextAttachment.mockResolvedValue({ id: 'att-anon-text-2' });
-    app = await buildApp({ authenticated: false, isAnonymous: true, participantId: null });
-  });
-  afterAll(async () => { await app.close(); });
-
-  it('skips the permission check and returns 200 when participantId is null', async () => {
-    const res = await app.inject({
-      method: 'POST',
-      url: '/attachments/upload-text',
-      payload: { content: 'text' },
-    });
-    expect(res.statusCode).toBe(200);
-  });
-});
-
-describe('POST /attachments/upload-text — content size cap (task-1-fix-round-3, I2)', () => {
-  let app: FastifyInstance;
-  beforeAll(async () => {
-    mockCreateTextAttachment.mockResolvedValue({ id: 'att-text-size' });
-    app = await buildApp();
-  });
-  afterAll(async () => { await app.close(); });
-
-  it('rejects a content string longer than MAX_TEXT_ATTACHMENT_LENGTH before it reaches the service', async () => {
-    mockCreateTextAttachment.mockClear();
-    const res = await app.inject({
-      method: 'POST',
-      url: '/attachments/upload-text',
-      payload: { content: 'a'.repeat(MAX_TEXT_ATTACHMENT_LENGTH + 1) },
-    });
-    expect(res.statusCode).toBe(400);
-    expect(mockCreateTextAttachment).not.toHaveBeenCalled();
-  });
-
-  it('accepts a content string exactly at MAX_TEXT_ATTACHMENT_LENGTH', async () => {
-    mockCreateTextAttachment.mockClear();
-    const res = await app.inject({
-      method: 'POST',
-      url: '/attachments/upload-text',
-      payload: { content: 'a'.repeat(MAX_TEXT_ATTACHMENT_LENGTH) },
-    });
-    expect(res.statusCode).toBe(200);
-    expect(mockCreateTextAttachment).toHaveBeenCalledTimes(1);
-  });
-});
-
-// task-1-fix-round-4 — le plafond round 3 comptait des POINTS DE CODE Unicode
-// (via `maxLength` AJV), pas des octets. Un contenu composé de caractères
-// astraux (4 octets chacun en UTF-8, 1 seul point de code chacun) peut donc
-// passer très en dessous de `MAX_TEXT_ATTACHMENT_LENGTH` points de code tout
-// en pesant NETTEMENT plus que `MAX_TEXT_ATTACHMENT_LENGTH` octets une fois
-// écrit sur disque par `Buffer.from(content, 'utf-8')` — jusqu'à ~4× en pire
-// cas. Ce test prouve que ce contournement est fermé : le plafond compte
-// désormais des octets réels (`Buffer.byteLength`), pas des caractères.
-describe('POST /attachments/upload-text — byte-based size cap, not codepoint-based (task-1-fix-round-4)', () => {
-  let app: FastifyInstance;
-  beforeAll(async () => {
-    mockCreateTextAttachment.mockResolvedValue({ id: 'should-not-be-created' });
-    app = await buildApp();
-  });
-  afterAll(async () => { await app.close(); });
-
-  it('rejects multi-byte content whose codepoint count passes the schema maxLength but whose UTF-8 byte weight exceeds MAX_TEXT_ATTACHMENT_LENGTH', async () => {
-    mockCreateTextAttachment.mockClear();
-
-    // 😀 (U+1F600) : exactement 1 point de code (ce qu'AJV `maxLength`
-    // compte), 4 octets en UTF-8 (ce que `Buffer.byteLength`/`Buffer.from`
-    // mesurent/écrivent réellement). `codepointCount` est le plus PETIT
-    // nombre de points de code pour lequel le poids en octets dépasse
-    // strictement le plafond, tout en restant très en dessous du plafond en
-    // points de code — la preuve la plus serrée du contournement.
-    const codepointCount = Math.floor(MAX_TEXT_ATTACHMENT_LENGTH / 4) + 1;
-    const content = '\u{1F600}'.repeat(codepointCount);
-
-    expect(codepointCount).toBeLessThan(MAX_TEXT_ATTACHMENT_LENGTH);
-    expect(Buffer.byteLength(content, 'utf-8')).toBeGreaterThan(MAX_TEXT_ATTACHMENT_LENGTH);
-
-    const res = await app.inject({
-      method: 'POST',
-      url: '/attachments/upload-text',
-      payload: { content },
-    });
-
-    expect(res.statusCode).toBe(400);
-    expect(mockCreateTextAttachment).not.toHaveBeenCalled();
   });
 });

@@ -421,6 +421,7 @@ extension MeeshyComposerHost {
             // La surface, elle, ne compte rien : elle relaie.
             railBadges: railDoorBadges,
             onRailDoor: { door in handleRailDoor(door) },
+            onRailDoorLongPress: railDoorLongPress,
             onRailToolControl: { control in handleRailToolControl(control) },
             onRailExitTool: { handleRailExitTool() },
             // **Le COLLAGE** (#4092) — la cinquième entrée de la vue `3b`, et la
@@ -544,10 +545,10 @@ extension MeeshyComposerHost {
             // **Les contrôles de l'outil du FOND prennent la même place** (#8847).
             // **Les options d'un objet en ÉDITION EN PLACE ne passent plus par
             // le bas** (#9138) : elles s'ouvrent à droite, depuis le haut
-            // (`inlinePanel`), et la scène ne remonte plus pour elles. Le bas
-            // ne sert plus que le dessin.
+            // (`inlinePanel`), et la scène ne remonte plus pour elles. Celles
+            // du DESSIN non plus (#9145) : le bas ne sert plus que le texte
+            // saisi hors édition en place.
             toolOptions: ComposerFirstView.lowZoneShowsToolOptions(
-                drawing: viewModel.isDrawingActive,
                 textEditing: sceneTextEditing && activeInlineEdit == nil)
                 ? AnyView(MeeshyToolOptionsPanel(viewModel: viewModel)) : nil,
             editsInline: activeInlineEdit != nil,
@@ -682,9 +683,7 @@ extension MeeshyComposerHost {
         return AnyView(
             ComposerSceneDescriptionPanel(
                 text: sceneDescriptionBinding,
-                placeholder: String(localized: "composer.description.placeholder",
-                                    defaultValue: "Ajouter une description",
-                                    bundle: .main),
+                placeholder: ComposerDescriptionCopy.amorce,
                 isCollapsed: $sceneDescriptionCollapsed,
                 // **L'encre suit le FOND** (#6127). Même loi que le reste du
                 // chrome de l'atelier — `CanvasChromeScheme`, résolue une fois

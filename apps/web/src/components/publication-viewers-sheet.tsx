@@ -71,11 +71,15 @@ export async function preparePublicationViewersSheet(): Promise<void> {
 export function PublicationViewersSheet({
   postId,
   viewCount,
+  anonymousViewCount,
   subject = 'story',
   onClose,
 }: {
   readonly postId: string;
   readonly viewCount: number | null | undefined;
+  /** Le compte des visiteurs sans compte que porte la publication (#10483) —
+   * celui que la liste sert prime ; absent des deux ⇒ aucune ligne. */
+  readonly anonymousViewCount?: number | null | undefined;
   readonly subject?: ViewersSubject;
   readonly onClose: () => void;
 }) {
@@ -88,6 +92,7 @@ export function PublicationViewersSheet({
   const [returnTo, setReturnTo] = useState<string | null>(null);
   const opened = openedId === null ? undefined : viewers.find((viewer) => viewer.id === openedId);
   const count = viewCount ?? query.data?.pagination.total;
+  const visitors = query.data?.anonymousViewCount ?? anonymousViewCount ?? 0;
   const title =
     count === undefined
       ? translate(lang, 'story.action.views')
@@ -113,6 +118,7 @@ export function PublicationViewersSheet({
           subject={subject}
           labelsReady={labelsReady}
           engagementUnavailable={engagementUnavailable}
+          visitors={visitors}
           returnFocusTo={returnTo}
           onOpen={setOpenedId}
         />
@@ -152,6 +158,7 @@ function ViewersBody({
   subject,
   labelsReady,
   engagementUnavailable,
+  visitors,
   returnFocusTo,
   onOpen,
 }: {
@@ -161,6 +168,7 @@ function ViewersBody({
   readonly subject: ViewersSubject;
   readonly labelsReady: boolean;
   readonly engagementUnavailable: boolean;
+  readonly visitors: number;
   readonly returnFocusTo: string | null;
   readonly onOpen: (viewerId: string) => void;
 }) {
@@ -204,6 +212,15 @@ function ViewersBody({
       </li>
     );
   }
+  if (viewers.length === 0 && visitors > 0) {
+    return labelsReady ? (
+      <VisitorsLine lang={lang} count={visitors} only />
+    ) : (
+      <li className="px-4 py-3 text-body" style={MUTED} data-viewers-loading>
+        {translate(lang, 'story.views.loading')}
+      </li>
+    );
+  }
   if (viewers.length === 0) {
     return (
       <li className="grid justify-items-center gap-2 px-8 py-10 text-center" data-viewers-empty>
@@ -236,7 +253,24 @@ function ViewersBody({
           onOpen={onOpen}
         />
       ))}
+      {visitors > 0 && labelsReady ? <VisitorsLine lang={lang} count={visitors} only={false} /> : null}
     </>
+  );
+}
+
+/**
+ * « et N visiteurs sans compte » — un agrégat, sans nom ni avatar (#10483).
+ * Ses libellés vivent dans le catalogue chargé avec la feuille : l'appelant
+ * ne la rend qu'une fois ce catalogue prêt.
+ */
+function VisitorsLine({ lang, count, only }: { readonly lang: InterfaceLanguage; readonly count: number; readonly only: boolean }) {
+  const key = only
+    ? count === 1 ? 'viewerEngagement.visitors.only.one' : 'viewerEngagement.visitors.only.other'
+    : count === 1 ? 'viewerEngagement.visitors.one' : 'viewerEngagement.visitors.other';
+  return (
+    <li className="px-4 py-3 text-body" style={MUTED} data-viewers-visitors>
+      {translateViewerEngagement(lang, key, { count: String(count) })}
+    </li>
   );
 }
 

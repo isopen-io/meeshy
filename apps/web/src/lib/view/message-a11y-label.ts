@@ -1,7 +1,7 @@
 import { isAfterReadMessage } from './after-read';
 import { kindOf } from './message';
 import type { Delivery } from './message';
-import { forwardAttributionOf, forwardLabelOf, systemRowOf, systemRowText } from './message-badges';
+import { forwardAttributionOf, forwardLabelOf, systemRowLabel, systemRowOf } from './message-badges';
 import { bodyKindOf, moodCitationOf, placeOf, storyCitationOf } from './message-body';
 import { time } from '@/lib/grouping';
 import { rendersContent, type ProtectionKind, type RevealPhase } from '@/lib/reading-mode/protection';
@@ -229,7 +229,7 @@ export function composeMessageLabel({
    * (`SystemNotice`) ne montre rien d'autre.
    */
   const systemRow = systemRowOf(message);
-  if (systemRow !== null) return systemRowText(systemRow, language);
+  if (systemRow !== null) return systemRowLabel(systemRow, language);
 
   /**
    * TROIS ÉTATS NE PEIGNENT AUCUN CHROME — un tombstone plat, ou rien du

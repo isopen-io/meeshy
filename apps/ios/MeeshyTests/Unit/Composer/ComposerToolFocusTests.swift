@@ -117,10 +117,98 @@ final class ComposerToolFocusTests: XCTestCase {
     // MARK: - La géométrie des boutons flottants (#8558, inchangée)
 
     func test_lesBoutonsFlottants_sontPlusPetits_etPlusHauts() {
-        XCTAssertLessThan(ComposerRailGeometry.floatingButtonSize, ComposerRailGeometry.railWidth)
         XCTAssertEqual(ComposerRailGeometry.railWidth, 44, "la cible tactile ne rétrécit pas")
         XCTAssertGreaterThanOrEqual(ComposerRailGeometry.floatingBottomInset,
                                     ComposerRailGeometry.gutter + ComposerRailGeometry.railWidth)
+    }
+
+    // MARK: - #10358 · Le rail gauche de la scène : glyphes blancs en relief
+
+    /// **Sans disque de verre, l'encre fait tout** (retour porteur 2026-10-12).
+    /// Sur la scène : blanc au repos, jaune quand l'entrée est active. En
+    /// colonne (rangée basse, éditeur), la teinte de l'appelant ne change pas.
+    func test_10358_encreDuRailSurLaScene_blancAuRepos_jauneActif() {
+        XCTAssertEqual(ComposerFloatingRailInk.glyph(separate: true, active: false, columnTint: .gray), .white)
+        XCTAssertEqual(ComposerFloatingRailInk.glyph(separate: true, active: true, columnTint: .gray), .yellow)
+        XCTAssertEqual(ComposerFloatingRailInk.glyph(separate: false, active: true, columnTint: .gray), .gray,
+                       "la rangée du bas n'est pas concernée")
+        XCTAssertGreaterThan(ComposerFloatingRailInk.shadowOpacity, 0, "le relief vient d'une ombre portée")
+        XCTAssertGreaterThan(ComposerFloatingRailInk.shadowRadius, 0)
+    }
+
+    /// Le gabarit commun peint l'encre de la loi et son relief, sans plus
+    /// aucun disque de verre ; la pastille de compte porte le même relief.
+    func test_10358_leGabaritDuRail_neMontePlusDeVerreParBouton() throws {
+        let rail = try source("Meeshy/Features/Main/Composer/ComposerLeadingRail.swift")
+            .components(separatedBy: .whitespacesAndNewlines).joined()
+        XCTAssertTrue(rail.contains("structComposerLeadingRail"), "le fichier lu n'est pas le rail")
+        XCTAssertFalse(rail.contains("ComposerRailButtonGlass("), "plus de bulle de verre autour des outils")
+        XCTAssertTrue(rail.contains(".foregroundColor(ComposerFloatingRailInk.glyph(separate:separateButtons,active:isOn,columnTint:tint))"))
+        XCTAssertEqual(rail.components(separatedBy: ".modifier(ComposerRailGlyphRelief(active:separateButtons))").count - 1, 2,
+                       "le glyphe ET la pastille de compte portent l'ombre")
+        XCTAssertTrue(rail.contains(".frame(width:ComposerRailGeometry.railWidth,height:ComposerRailGeometry.railWidth)"),
+                      "la cible reste de 44 pt")
+        XCTAssertTrue(rail.contains("isOn:control.isExpanded"),
+                      "un outil ouvert est une entrée active : jaune, et annoncée sélectionnée")
+    }
+
+    // MARK: - #10364 · Plus aucun cercle autour des outils du composer
+
+    /// **La loi des boutons d'outil flottants** (retour porteur 2026-10-12 :
+    /// « enlever les cercles autour des outils ») : jaune quand l'outil est
+    /// actif, sinon la teinte de repos — blanche par défaut, et l'action
+    /// destructrice garde sa couleur d'erreur au repos.
+    func test_10364_encreDUnOutilFlottant_jauneActif_teinteDeReposSinon() {
+        XCTAssertEqual(ComposerFloatingRailInk.floating(active: false), .white)
+        XCTAssertEqual(ComposerFloatingRailInk.floating(active: true), .yellow)
+        XCTAssertEqual(ComposerFloatingRailInk.floating(active: false, restTint: .red), .red,
+                       "supprimer reste rouge au repos")
+        XCTAssertEqual(ComposerFloatingRailInk.floating(active: true, restTint: .red), .yellow)
+        XCTAssertEqual(ComposerFloatingRailInk.glyph(separate: true, active: true, columnTint: .gray),
+                       ComposerFloatingRailInk.floating(active: true),
+                       "le rail gauche et les autres outils suivent la MÊME loi")
+    }
+
+    /// Les colonnes de la scène ne peignent plus que l'encre de repos : les
+    /// options du rail droit sont blanches, supprimer reste rouge.
+    @MainActor
+    func test_10364_lesOptionsDuRailDroit_peignentLEncreBlanche() {
+        XCTAssertEqual(ComposerTrailingColumnPaint(.exitTool).tint, ComposerFloatingRailInk.rest)
+        XCTAssertEqual(ComposerTrailingColumnPaint(.objectAction(.delete)).tint, MeeshyColors.error)
+    }
+
+    /// Le rail droit, le couloir de l'éditeur d'objet et la rangée d'outils du
+    /// document ne montent plus aucun disque de verre : glyphe en relief,
+    /// encre de la loi, cible de 44 pt.
+    func test_10364_aucunOutilNePorteDeCercle() throws {
+        let verre = try source("Meeshy/Features/Main/Composer/ComposerRailGlass.swift")
+        XCTAssertTrue(verre.contains("enum ComposerFloatingRailInk"), "le fichier lu n'est pas celui du verre des rails")
+        XCTAssertFalse(verre.contains("ComposerRailButtonGlass"), "le modificateur de disque est supprimé")
+
+        let droit = try source("Meeshy/Features/Main/Composer/ComposerTrailingRail.swift")
+            .components(separatedBy: .whitespacesAndNewlines).joined()
+        XCTAssertTrue(droit.contains("structComposerTrailingRail"), "le fichier lu n'est pas le rail droit")
+        XCTAssertFalse(droit.contains("ComposerRailButtonGlass("))
+        XCTAssertTrue(droit.contains(".foregroundColor(ComposerFloatingRailInk.floating(active:isOn,restTint:tint))"))
+        XCTAssertTrue(droit.contains(".modifier(ComposerRailGlyphRelief(active:true))"))
+        XCTAssertTrue(droit.contains(".frame(width:ComposerRailGeometry.railWidth,height:ComposerRailGeometry.railWidth)"),
+                      "la cible reste de 44 pt")
+        XCTAssertTrue(droit.contains(".accessibilityAddTraits(isOn?.isSelected:[])"),
+                      "l'état actif reste annoncé")
+
+        let editeur = try source("Meeshy/Features/Main/Composer/ComposerObjectEditorView.swift")
+            .components(separatedBy: .whitespacesAndNewlines).joined()
+        XCTAssertTrue(editeur.contains("privatevartoolRail"), "le couloir d'outils de l'éditeur est introuvable")
+        XCTAssertFalse(editeur.contains(".adaptiveLiquidGlass(in:Circle()"), "plus de disque dans l'éditeur d'objet")
+        XCTAssertTrue(editeur.contains(".foregroundStyle(ComposerFloatingRailInk.floating(active:ComposerObjectEditorRail.isSelected(entree,selected:selectedTool)))"))
+        XCTAssertTrue(editeur.contains(".frame(width:44,height:44)"))
+
+        let document = try source("Meeshy/Features/Main/Composer/ComposerDocumentSurface.swift")
+            .components(separatedBy: .whitespacesAndNewlines).joined()
+        XCTAssertTrue(document.contains("privatefunctoolButton("), "la tuile d'outil du document est introuvable")
+        XCTAssertFalse(document.contains(".adaptiveLiquidGlass(in:Circle()"), "plus de cercle dans la rangée du document")
+        XCTAssertTrue(document.contains(".foregroundColor(ComposerFloatingRailInk.floating(active:showColorPalette))"),
+                      "la palette ouverte passe au jaune")
     }
 
     private func source(_ chemin: String) throws -> String {

@@ -204,6 +204,13 @@ RUN apt-get update && apt-get install -y --no-install-recommends \
 
 WORKDIR /app
 
+# Le magasin adressé par contenu des packs officiels (#10157, L5) — servi par
+# `GET /api/v1/pack-assets/:file` depuis `/app/assets/packs`. Couche DÉDIÉE et
+# PRÉCOCE : ces fichiers changent rarement, leur couche se réutilise d'une
+# construction à l'autre. Les fichiers du registre d'EXEMPLES y sont aussi, mais
+# ne sont servis que sous `PACK_SAMPLES=1` (staging seulement).
+COPY --chown=gateway:nodejs services/gateway/assets/ ./assets/
+
 # Copy production node_modules from prod-deps
 COPY --from=prod-deps --chown=gateway:nodejs /app/node_modules ./node_modules
 

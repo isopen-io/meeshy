@@ -136,10 +136,9 @@ struct ConversationView: View {
     /// l'override — l'override garde la priorité, la valeur figée reste le
     /// repli, et un enregistrement des réglages repart du pair repeint. Une
     /// annonce qui ne change rien n'écrit rien : l'écran ne se redessine pas.
-    func admitPeerUpdate(_ event: UserUpdatedEvent) {
-        guard let repainted = DirectPeerRepaint.repainted(liveConversation, by: event) else { return }
-        conversationOverride = repainted
-    }
+    func admitPeerUpdate(_ event: UserUpdatedEvent) { admitRepainted(DirectPeerRepaint.repainted(liveConversation, by: event)) }
+    /// Écrivain partagé avec l'accent personnel relayé (#10631, `admitAppearance`).
+    func admitRepainted(_ repainted: Conversation?) { if let repainted { conversationOverride = repainted } }
 
     // NOTE: Properties below are internal (not private) for cross-file extension access.
     // Extensions in ConversationView+MessageRow, +Header, +ScrollIndicators, +Composer.
@@ -186,7 +185,7 @@ struct ConversationView: View {
     let readingModeCapabilities: ReadingModeOrchestrator.ReadingModeCapabilities
     /// Lot 3.2 — carte lieu de la rangée plate : plein écran (même patron
     /// que `BubbleFullscreenPlace` côté bulle).
-    @State private var focalFullscreenPlace: BubbleFullscreenPlace?
+    @State private var focalFullscreenPlace: FocalFullscreenPlace?
     /// Lot 3.2 — fichier à partager depuis la rangée plate (ShareSheet).
     @State private var focalShareFileItem: FocalShareFileItem?
     // `typingObserver` a été RETIRÉ (#5961). Il était capturé à l'`init` depuis
@@ -372,11 +371,11 @@ struct ConversationView: View {
     }
 
     var accentColor: String {
-        conversation?.accentColor ?? DynamicColorGenerator.colorForName(conversation?.name ?? "Unknown")
+        liveConversation?.displayPalette(isDark: isDark).primary ?? DynamicColorGenerator.colorForName(conversation?.name ?? "Unknown")
     }
 
     var secondaryColor: String {
-        conversation?.colorPalette.secondary ?? MeeshyColors.indigo300Hex
+        liveConversation?.displayPalette(isDark: isDark).secondary ?? MeeshyColors.indigo300Hex
     }
 
     var isDirect: Bool {
@@ -718,16 +717,7 @@ struct ConversationView: View {
             // primitives que la bulle (`BubbleStandardLayout`,
             // `.fullScreenCover(item: $fullscreenPlace)`), présentées ICI
             // parce que la rangée vit dans une cellule de collection.
-            .conversationCover(item: $focalFullscreenPlace) { item in
-                LocationFullscreenView(
-                    latitude: item.place.latitude,
-                    longitude: item.place.longitude,
-                    placeName: item.place.name,
-                    address: item.place.address,
-                    accentColor: accentColor,
-                    senderName: nil
-                )
-            }
+            .conversationCover(item: $focalFullscreenPlace) { focalPlaceFullscreen($0) }
             .sheet(item: $focalShareFileItem) { item in
                 ShareSheet(activityItems: [item.url])
             }
@@ -785,12 +775,10 @@ struct ConversationView: View {
                     isStarred: viewModel.isStarred(messageId: msg.id),
                     isEdited: msg.isEdited,
                     hasEditRevisions: !viewModel.editRevisions(for: msg.id).isEmpty,
-                    // **La décoration du message, et son état d'épinglage**
-                    // (2026-09-05). `nil` ⇒ ce n'est pas un sticker, et
-                    // l'entrée n'existe pas — la loi 4 tenue par la RÈGLE, pas
-                    // par un grisé.
+                    // Décoration (épinglage, 2026-09-05) ; `nil` ⇒ pas un sticker (loi 4). #10630 : sticker + ajout.
                     stickerFavorite: MessageStickerFavorite.state(for: msg.sticker),
-                    showReadReceipts: UserPreferencesManager.shared.privacy.showReadReceipts,
+                    isSticker: msg.sticker != nil, stickerAddable: ReceivedSticker.offersAdd(for: msg, known: ReceivedStickerLedger.shared.ids),
+                    showReadReceipts: GuestViewerAccess.offersWhoSaw(prefersReadReceipts: UserPreferencesManager.shared.privacy.showReadReceipts, isGuest: anonymousSession != nil),
                     exits: msg.exitOffer, isViewOnce: msg.holdsViewOnce, isBlurred: msg.holdsBlur, hasPaintableMedia: !MessageCardSubject.paintableMedia(of: msg).isEmpty
                 )
                 MessageMoreSheet(
@@ -1474,8 +1462,8 @@ struct ConversationView: View {
                     overlayState.moreSheetInitialItem = .language
                     overlayState.detailSheetMessage = msg
                 },
-                onFocalTapLocation: { place in
-                    focalFullscreenPlace = BubbleFullscreenPlace(place: place)
+                onFocalTapLocation: { place, messageId in
+                    focalFullscreenPlace = makeFocalFullscreenPlace(place, messageId: messageId)
                 },
                 onFocalShareFile: { url in
                     focalShareFileItem = FocalShareFileItem(url: url)
@@ -2042,30 +2030,14 @@ struct ConversationView: View {
         .transition(.opacity)
     }
 
-    @ViewBuilder
     private var anonymousHeaderBar: some View {
-        HStack {
-            ConversationTitleLabel(
-                name: liveConversation?.displayName ?? "Conversation",
-                favoriteEmoji: conversation?.userState.reaction,
-                font: MeeshyFont.relative(MeeshyFont.bodySize, weight: .semibold, design: .rounded),
-                color: .white
-            )
-            Spacer()
-            Button {
-                HapticFeedback.light()
-                dismiss()
-            } label: {
-                Image(systemName: "xmark")
-                    .font(MeeshyFont.relative(MeeshyIconSize.xxs, weight: .bold))
-                    .foregroundColor(theme.textMuted)
-                    .frame(width: MeeshyControlSize.compact, height: MeeshyControlSize.compact)
-                    .background(Circle().fill(theme.textMuted.opacity(MeeshyOpacity.light)))
-            }
-            .accessibilityLabel(String(localized: "conversation.view.close", bundle: .main))
-        }
-        .padding(.horizontal, MeeshySpacing.lg)
-        .padding(.top, MeeshySpacing.md)
+        ConversationGuestHeaderBar(
+            title: liveConversation?.displayName ?? "Conversation",
+            favoriteEmoji: conversation?.userState.reaction,
+            avatarURL: liveConversation?.avatar,
+            accentColor: accentColor, secondaryColor: secondaryColor,
+            guestLinkId: anonymousSession?.linkId, titleColor: theme.textPrimary, mutedColor: theme.textMuted
+        ) { dismiss() }
     }
 
     /// Type-erased to break the deep opaque-type chain that crashes the
@@ -2098,25 +2070,8 @@ struct ConversationView: View {
             },
             midContent: { expandedHeaderMidContent },
             avatar: { headerAvatarView },
-            background: { expandedHeaderBackground }
-        ))
-    }
-
-    /// Middle slot of the header band (between back button and avatar).
-    /// Extracted as a separate `@ViewBuilder` property because inlining the
-    /// `if composerState.showOptions { … } else { Spacer() }` branches
-    /// alongside the rest of the band produced an opaque return type that
-    /// Swift's runtime metadata resolver couldn't materialize — `body` would
-    /// crash at first render with a deep `swift_getTypeByMangledName` stack.
-    // Frontière NOMINALE — `ConversationHeaderMidContent` (#6194). L'`AnyView`
-    // posé ici en 2026-08 ne suffisait pas : c'est le getter de CE maillon que
-    // la trace du crash désigne, sous
-    // `__swift_instantiateConcreteTypeFromMangledNameV2`.
-    private var expandedHeaderMidContent: AnyView {
-        AnyView(ConversationHeaderMidContent(
-            layout: headerLayout,
-            titleAndTags: { AnyView(expandedHeaderTitleAndTags) },
-            actionButtons: { headerButtonsCluster }
+            background: { expandedHeaderBackground },
+            share: { AnyView(ConversationShareLinkSlot(conversation: liveConversation, guestLinkId: anonymousSession?.linkId, accentColor: accentColor, secondaryColor: secondaryColor)) }
         ))
     }
 
@@ -2143,7 +2098,7 @@ struct ConversationView: View {
     // NOMINAL supprime : son nom se substitue au sous-arbre entier dans le
     // mangled name, donc le démangleur n'a plus à le parcourir.
     // L'aperçu (#9031) : « agrandir » prend la place de la loupe.
-    private var headerButtonsCluster: AnyView {
+    var headerButtonsCluster: AnyView {
         AnyView(ConversationHeaderActionsCluster(
             callButtons: { headerCallButtons },
             searchButton: { previewMode ? openFullConversationButton : expandedHeaderSearchButton },
@@ -2220,7 +2175,7 @@ struct ConversationView: View {
     /// titre ouvre les détails ; en conversation DIRECTE, l'appui long
     /// propose détails OU profil de l'utilisateur.
     @ViewBuilder
-    private var expandedHeaderTitleAndTags: some View {
+    var expandedHeaderTitleAndTags: some View {
         VStack(alignment: .leading, spacing: MeeshySpacing.xs - 1) {
             HStack(alignment: .top, spacing: MeeshySpacing.xs) {
                 expandedHeaderTitleButton

@@ -18,6 +18,7 @@ import {
   hardenedRateLimitConfig,
 } from './socialRateLimit';
 import { resolveInteractionTarget } from '../../services/posts/postVisibility';
+import { mayRepostSource } from '../../services/posts/moderationHold';
 import { DailyGestureLimitReached } from '../../services/engagement/DailyGestureGate';
 import { refuseDailyGesture } from '../../utils/daily-gesture-refusal';
 import { withMutationLog, withMutationOutcome } from '../../utils/withMutationLog';
@@ -31,8 +32,10 @@ import { registerBookmarkRoutes } from './bookmarks';
 import { registerImpressionRoutes } from './impressions';
 import { depreciee } from '../../utils/deprecation';
 import { socialEventsDeprecation } from '../social/deprecation';
+import { admitAnonymousReader, resolveAnonymousReader } from '../social/anonymousReader';
 import {
   ingestSocialEvents,
+  refuseAnonymousBudget,
   socialEventsRateLimit,
   VIEW_ALIAS_SCHEMA,
   type SocialEventsActor,
@@ -40,6 +43,8 @@ import {
 } from '../social/events';
 import { registerShareRoutes } from './share';
 import { viewerListRequest, viewerListRefused } from './viewerListRequest';
+import { viewerListCounts } from '../../services/posts/viewerEngagement';
+import { notifyRepostedAuthor, readRepostedSource } from './repostedAuthorNotification';
 
 export function registerInteractionRoutes(
   fastify: FastifyInstance,
@@ -454,18 +459,11 @@ export function registerInteractionRoutes(
 
   // ALIAS de `POST /social/events` — POST /posts/:postId/anonymous-view
   //
-  // Compte une ouverture ANONYME (sans compte). Public, dédup faible par
-  // X-Session-Token (chaîne opaque). Les clients INSCRITS (JWT présent) sont
-  // comptés via le parcours engagement → no-op ici pour éviter le
-  // double-comptage. Voir spec 2026-06-17 (§ Sécurité). Pas de `preValidation`
-  // auth : on lit l'en-tête directement, sans tenter de résoudre un Participant
-  // (un jeton de navigateur n'en est pas un → éviterait un 401).
-  //
-  // Son SEAU DE DÉBIT change : il était `posts:view:ip:{ip}` — un seul seau pour
-  // tout ce qu'une adresse observe, quel que soit le post, donc une garde
-  // inefficace et un déni de service mutuel entre visiteurs légitimes derrière
-  // une même sortie NAT. Il est désormais `social:events:{sessionToken}:{postId}`,
-  // le même que sert la porte canonique.
+  // La vue d'un lecteur SANS compte (#10483) : clé de lecteur HMAC, garde de
+  // lecture anonyme, débit par lecteur et par adresse — le cœur de la porte
+  // canonique. Un client INSCRIT (JWT) y reçoit `counted: false` : il compte
+  // par `/view`. Pas de `preValidation` : l'invité se retrouve par l'empreinte
+  // de son jeton, un jeton de navigateur n'étant pas un Participant.
   fastify.post('/posts/:postId/anonymous-view', {
     onRequest: depreciee(socialEventsDeprecation()),
     config: { rateLimit: socialEventsRateLimit },
@@ -474,15 +472,16 @@ export function registerInteractionRoutes(
       if (request.headers.authorization) {
         return sendSuccess(reply, { counted: false }); // client inscrit → parcours engagement
       }
-      const sessionKey = request.headers['x-session-token'] as string | undefined;
-      if (!sessionKey || sessionKey.length === 0 || sessionKey.length > 128) {
+      const lecteur = await resolveAnonymousReader(prisma as never, request);
+      if (!lecteur) {
         return sendBadRequest(reply, 'Missing or invalid session key', { code: 'VALIDATION_ERROR' });
       }
+      if (!(await admitAnonymousReader(fastify, request, lecteur))) return refuseAnonymousBudget(reply);
 
       const { legacy } = await ingestSocialEvents(
         socialEventDeps,
         [{ type: 'view', postId: request.params.postId }],
-        { kind: 'anonymous', sessionKey },
+        lecteur,
       );
       return sendSuccess(reply, { counted: legacy.anonymousCounted });
     } catch (error) {
@@ -664,6 +663,7 @@ export function registerInteractionRoutes(
 
       return sendSuccess(reply, result.items, {
         pagination: { total: result.total, offset, limit, hasMore: result.hasMore },
+        meta: viewerListCounts(result),
       });
     } catch (error) {
       if (viewerListRefused(reply, error)) return;
@@ -700,7 +700,8 @@ export function registerInteractionRoutes(
 
       return sendSuccess(
         reply,
-        { viewers: result.viewers, ...(result.engagement !== undefined ? { engagement: result.engagement } : {}) },
+        { viewers: result.viewers, ...(result.engagement !== undefined ? { engagement: result.engagement } : {}),
+          ...viewerListCounts(result) },
         { pagination: { total: result.total, offset, limit, hasMore: result.hasMore } },
       );
     } catch (error) {
@@ -854,6 +855,8 @@ export function registerInteractionRoutes(
         return sendBadRequest(reply, 'Invalid request', { code: 'VALIDATION_ERROR' });
       }
       const data = parsed.data;
+      // #10315 — on ne republie que ce qu'on peut lire, et jamais ce qui est hors ligne.
+      if (!(await mayRepostSource(prisma, postId, authContext.registeredUser.id))) return sendNotFound(reply, 'Post not found', { code: 'POST_NOT_FOUND' });
 
       // Idempotent via clientMutationId (lot 7, tâche 7.1) : `repostPost`
       // n'est PAS naturellement idempotent — chaque appel `prisma.post.create`
@@ -954,25 +957,14 @@ export function registerInteractionRoutes(
       // (#6503, `getPostById` refusé par Prisma), le `catch` rendait 500 pour
       // un repost DÉJÀ créé, et l'app annonçait un échec au-dessus d'une
       // écriture actée (#6524).
+      // Site UNIQUE partagé avec `POST /posts { repostOfId }` (#10525).
       const notifService = fastify.notificationService;
-      if (notifService && repost.repostOfId && isFreshRepost) {
+      const sourcePostId = repost.repostOfId;
+      if (notifService && sourcePostId && isFreshRepost) {
         const actorId = authContext.registeredUser.id;
         void (async () => {
-          // Même garde que la route de traduction : sans le viewer, le lookup
-          // applique le filtre anonyme et ne retrouve pas une story réservée aux
-          // contacts — l'auteur d'une story repartagée n'était alors jamais
-          // notifié.
-          const original = await postService.getPostById(postId, actorId);
-          if (!original?.authorId) return;
-          await notifService.createPostRepostNotification({
-            actorId,
-            originalPostId: postId,
-            postAuthorId: original.authorId,
-            repostId: repost.id,
-            postType: (original as { type?: 'POST' | 'STORY' | 'MOOD' | 'STATUS' | 'REEL' }).type,
-            postCreatedAt: (original as { createdAt?: Date | string | null }).createdAt ?? undefined,
-            postExpiresAt: (original as { expiresAt?: Date | string | null }).expiresAt ?? undefined,
-          });
+          const source = await readRepostedSource((id, viewer) => postService.getPostById(id, viewer), sourcePostId, actorId);
+          await notifyRepostedAuthor(notifService, { actorId, source, sourcePostId, repostId: repost.id });
         })().catch((err) => enhancedLogger.warn('[POST /posts/:postId/repost]: notify post repost failed', { err }));
       }
 

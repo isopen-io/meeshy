@@ -10,6 +10,9 @@
 const itIdentity = {
   'a11y.avatar.profile': 'Vedi il profilo di {name}',
   'a11y.avatar.story': 'Vedi la storia di {name}',
+  'a11y.avatar.conversation': 'Vedi la conversazione {name}',
+  'a11y.avatar.mood': '{name}, umore {mood}',
+  'mood.peek.title': 'Umore di {name}',
   'avatar.menu.label': 'Azioni per {name}',
   'avatar.menu.view_profile': 'Vedi il profilo',
   'userProfile.peek.openPage': 'Apri il profilo completo',
@@ -39,6 +42,7 @@ const itIdentity = {
   'conversation.details.share.failed': 'Impossibile creare il link: riprova tra un momento.',
   'conversation.details.share.unavailable': 'Impossibile condividere qui: copia il link: {url}',
   'thread.header.active_members': 'Membri più attivi',
+  'thread.header.share': 'Condividi la conversazione',
 };
 
 export default itIdentity;

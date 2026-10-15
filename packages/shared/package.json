@@ -102,6 +102,8 @@
     "api-endpoints:generate": "tsx scripts/generate-api-endpoints.ts",
     "ios-endpoints:generate": "tsx scripts/generate-ios-endpoints.ts",
     "generate:call-frames": "bun scripts/generate-call-frames-swift.ts",
+    "import:glory-frames": "bun scripts/import-glory-frames.ts",
+    "generate:glory-frames": "bun scripts/generate-glory-frames.ts",
     "translator-languages:generate": "tsx scripts/generate-translator-languages.ts",
     "translator-languages:check": "tsx scripts/generate-translator-languages.ts --check",
     "generate": "prisma generate --schema=./prisma/schema.prisma --generator client",
@@ -134,10 +136,10 @@
   },
   "devDependencies": {
     "@types/node": "^20.19.43",
-    "@vitest/coverage-v8": "^5.0.0",
+    "@vitest/coverage-v8": "^5.0.3",
     "prisma": "^6.15.0",
     "typescript": "^7.0.2",
-    "vitest": "^5.0.0"
+    "vitest": "^5.0.3"
   },
   "engines": {
     "node": ">=22.19.0"

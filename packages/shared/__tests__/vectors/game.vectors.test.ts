@@ -62,6 +62,7 @@ describe('game.vectors.json ne diverge pas de la loi', () => {
         'missions-draw',
         'mission-reroll',
         'chest',
+        'star-fragments',
         'guide',
         ...GAME_VECTOR_LAWS_V2,
       ].sort(),

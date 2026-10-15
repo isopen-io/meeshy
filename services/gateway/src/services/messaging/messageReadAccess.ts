@@ -25,6 +25,10 @@
  * compte se retrouve par son `User.id` ; un invité n'a que sa ligne, donc ne
  * lit que SA conversation.
  *
+ * `readerMayReadMessages` est la MÊME loi pour une page de messages d'une seule
+ * conversation (#9899) : tout ce qui précède le verdict ne dépend que du
+ * lecteur, donc se lit une fois ; seul le verdict se rejoue par message.
+ *
  * Un lien de partage INTROUVABLE ne ferme ni ne borne : c'est la posture du
  * fil (`shareLinkReadGate.ts`, `historyFloor.ts`), et #3734 retire l'invité
  * d'un lien retiré par un autre chemin. Diverger ici refuserait un transfert à
@@ -97,7 +101,7 @@ import {
 } from '../../routes/conversations/ephemeralReaderDeadlines';
 import { unsetOrNull } from '../../utils/prisma-unset';
 import { HISTORY_FLOOR_PARTICIPANT_SELECT, loadHistoryFloor, type HistoryReader } from '../historyFloor';
-import { loadPersonalHistoryHiding, readPersonalHistoryHiding } from '../personalHistoryFilter';
+import { loadPersonalHistoryHiding, readPersonalHistoryHiding, type PersonalHistoryHiding } from '../personalHistoryFilter';
 import { shareLinkHasExpired } from '../shareLinkReadGate';
 import { readableByReader } from './messageStars/starredMessageVerdict';
 import { MAX_QUOTE_DEPTH } from './quoteCascade';
@@ -178,23 +182,33 @@ function participationWhere(reader: HistoryReader, conversationId: string): Pris
     : { conversationId, userId: reader.userId, isActive: true, ...unsetOrNull('bannedAt') };
 }
 
-async function readerParticipation(
+function findReaderParticipation(prisma: PrismaClient, reader: HistoryReader, conversationId: string) {
+  return prisma.participant.findFirst({
+    where: participationWhere(reader, conversationId),
+    select: { id: true, ...HISTORY_FLOOR_PARTICIPANT_SELECT },
+  });
+}
+
+/** Ce qui borne la lecture d'une conversation pour CE lecteur : le plancher et le masquage personnel. */
+type ReadingLaw = { readonly floor: Date | null; readonly hiding: PersonalHistoryHiding };
+
+/**
+ * La loi de lecture de la conversation, jugée une fois : le lien de partage
+ * (échu ⇒ `null`, personne ne lit), puis le plancher et le masquage. Elle ne
+ * dépend d'aucun message — c'est ce qui permet à la forme ensembliste de la
+ * payer une fois pour toute la page.
+ */
+async function readingLawOf(
   prisma: PrismaClient,
   params: {
     readonly reader: HistoryReader;
-    readonly message: ReadableMessageRow;
+    readonly participation: NonNullable<Awaited<ReturnType<typeof findReaderParticipation>>>;
+    readonly conversationId: string;
     readonly now: Date;
     readonly whenHidingUnreadable: UnreadableHidingPosture;
   },
-): Promise<ReaderParticipation | null> {
-  const { reader, message, now, whenHidingUnreadable } = params;
-
-  const participation = await prisma.participant.findFirst({
-    where: participationWhere(reader, message.conversationId),
-    select: { id: true, ...HISTORY_FLOOR_PARTICIPANT_SELECT },
-  });
-  if (!participation) return null;
-  if (message.deletedAt) return null;
+): Promise<ReadingLaw | null> {
+  const { reader, participation, conversationId, now, whenHidingUnreadable } = params;
 
   const link = participation.shareLinkId
     ? await prisma.conversationShareLink.findUnique({
@@ -207,12 +221,35 @@ async function readerParticipation(
   const hidingOf = whenHidingUnreadable === 'refuse' ? readPersonalHistoryHiding : loadPersonalHistoryHiding;
   const [floor, hiding] = await Promise.all([
     loadHistoryFloor(prisma, participation, { link }),
-    hidingOf(prisma, {
-      userId: reader.kind === 'user' ? reader.userId : null,
-      conversationId: message.conversationId,
-    }),
+    hidingOf(prisma, { userId: reader.kind === 'user' ? reader.userId : null, conversationId }),
   ]);
-  return readableByReader(message, { floor, hiding }) ? { id: participation.id } : null;
+  return { floor, hiding };
+}
+
+async function readerParticipation(
+  prisma: PrismaClient,
+  params: {
+    readonly reader: HistoryReader;
+    readonly message: ReadableMessageRow;
+    readonly now: Date;
+    readonly whenHidingUnreadable: UnreadableHidingPosture;
+  },
+): Promise<ReaderParticipation | null> {
+  const { reader, message, now, whenHidingUnreadable } = params;
+
+  const participation = await findReaderParticipation(prisma, reader, message.conversationId);
+  if (!participation) return null;
+  if (message.deletedAt) return null;
+
+  const law = await readingLawOf(prisma, {
+    reader,
+    participation,
+    conversationId: message.conversationId,
+    now,
+    whenHidingUnreadable,
+  });
+  if (!law) return null;
+  return readableByReader(message, law) ? { id: participation.id } : null;
 }
 
 export async function readerMayReadMessage(
@@ -225,6 +262,46 @@ export async function readerMayReadMessage(
   },
 ): Promise<boolean> {
   return (await readerParticipation(prisma, params)) !== null;
+}
+
+/**
+ * La forme ENSEMBLISTE : lesquels de ces messages, TOUS de `conversationId`, ce
+ * lecteur lit-il ? Rend les identifiants lisibles.
+ *
+ * C'est la même loi que {@link readerMayReadMessage}, lue UNE fois : la
+ * participation, le lien, le plancher et le masquage ne dépendent que du
+ * lecteur et de la conversation, jamais du message — seul le verdict final
+ * (`readableByReader`) se rejoue par message. Cent messages coûtent les mêmes
+ * lectures qu'un seul, au lieu de trois cents. Un témoin confronte les deux
+ * formes ligne à ligne : la loi n'a toujours qu'un énoncé.
+ *
+ * Un message d'une AUTRE conversation que `conversationId`, ou supprimé pour
+ * tous, n'est jamais lisible ici, et ne coûte aucune lecture : s'il n'en reste
+ * aucun à juger, rien n'est lu. Comme la forme unitaire, elle PROPAGE ses
+ * erreurs de lecture, sauf le masquage quand l'appelant a dit `'serve'`.
+ */
+export async function readerMayReadMessages(
+  prisma: PrismaClient,
+  params: {
+    readonly reader: HistoryReader;
+    readonly conversationId: string;
+    readonly messages: readonly ReadableMessageRow[];
+    readonly now: Date;
+    readonly whenHidingUnreadable: UnreadableHidingPosture;
+  },
+): Promise<ReadonlySet<string>> {
+  const { reader, conversationId, messages, now, whenHidingUnreadable } = params;
+
+  const candidates = messages.filter((message) => message.conversationId === conversationId && !message.deletedAt);
+  if (candidates.length === 0) return new Set();
+
+  const participation = await findReaderParticipation(prisma, reader, conversationId);
+  if (!participation) return new Set();
+
+  const law = await readingLawOf(prisma, { reader, participation, conversationId, now, whenHidingUnreadable });
+  if (!law) return new Set();
+
+  return new Set(candidates.filter((message) => readableByReader(message, law)).map((message) => message.id));
 }
 
 /** L'échéance que CE lecteur voit sur une bulle — `null` quand rien ne décompte pour lui. */

@@ -409,7 +409,7 @@ extension ConversationMediaGalleryView {
         GalleryScenePage(
             item: scene,
             stage: sceneStage(),
-            reference: GallerySceneStage.reference(viewport: DeviceLayout.windowSize),
+            reference: GallerySceneStage.reference(viewport: stageViewport),
             clock: sceneClock,
             presentation: stagePresentation,
             accentColor: accentColor,

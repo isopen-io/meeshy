@@ -1615,7 +1615,7 @@ public actor MessagePersistenceActor {
                     existing.cachedTimeString = timeString
                     if !pendingEdit {
                         existing.isEdited = api.isEdited ?? false
-                        existing.editedAt = nil
+                        existing.editedAt = api.editedAt
                     }
                     if !pendingDelete {
                         existing.deletedAt = api.deletedAt
@@ -1714,7 +1714,8 @@ public actor MessagePersistenceActor {
                     // pas effacer celui qu'un instantané plus riche a persisté.
                     existing.stickerJson = stickerJson ?? existing.stickerJson
                     existing.trackedLinksJson = trackedLinksJson ?? existing.trackedLinksJson
-                    existing.effectFlags = effectFlags
+                    existing.senderIsAnonymous = api.sender.map(\.isAnonymous) ?? existing.senderIsAnonymous; existing.senderHasAccount = api.sender.map(\.hasAccount) ?? existing.senderHasAccount
+                    existing.effectFlags = effectFlags; existing.adoptServedOriginalLanguage(api.originalLanguage)
                     // #7508 — l'horloge d'un éphémère COALESCE. Ses deux
                     // porteurs arrivent par des chemins différents et jamais
                     // ensemble : la DURÉE par `message:new` (sans échéance,
@@ -1793,7 +1794,7 @@ public actor MessagePersistenceActor {
                         maxViewOnceCount: nil,
                         viewOnceCount: 0,
                         isEdited: api.isEdited ?? false,
-                        editedAt: nil,
+                        editedAt: api.editedAt,
                         deletedAt: api.deletedAt,
                         pinnedAt: nil,
                         pinnedBy: nil,
@@ -1828,7 +1829,8 @@ public actor MessagePersistenceActor {
                         stickerJson: stickerJson,
                         // #7508 — le seul porteur d'horloge du temps réel.
                         ephemeralDuration: api.ephemeralDuration,
-                        trackedLinksJson: trackedLinksJson
+                        trackedLinksJson: trackedLinksJson,
+                        senderIsAnonymous: api.sender.map(\.isAnonymous), senderHasAccount: api.sender.map(\.hasAccount)
                     )
                     if api.consumedByMe == true {
                         record.sealAsOpenedViewOnce(at: Date())

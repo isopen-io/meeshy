@@ -364,6 +364,23 @@ describe('GET /links/:identifier — identity payloads survive serialization', (
   });
   afterAll(async () => { await app.close(); });
 
+  // #10205 — le visiteur de ce bloc est un INVITÉ (sans compte) : il ne lit
+  // plus ni membres ni autres invités. Les identités servies se jugent donc
+  // aussi chez un COMPTE ordinaire (non admin), qui les reçoit.
+  const compte = () => buildApp(
+    { isAuthenticated: true, isAnonymous: false, user: { id: 'other-user-id', username: 'other', firstName: 'O', lastName: 'U', displayName: 'Other', systemLanguage: 'en' } },
+    { type: 'user', isAuthenticated: true, isAnonymous: false, userId: 'other-user-id', registeredUser: { id: 'other-user-id', role: 'USER' } },
+  );
+
+  it('ne sert à l’invité ni membres, ni autres invités, ni effectif (#10205)', async () => {
+    const { data } = (await app.inject({ method: 'GET', url: `/links/${LINK_ID}` })).json();
+    expect(data.members).toEqual([]);
+    expect(data.anonymousParticipants).toEqual([]);
+    expect(data.stats).not.toHaveProperty('totalMembers');
+    expect(data.stats).not.toHaveProperty('totalAnonymousParticipants');
+    expect(data.stats).not.toHaveProperty('onlineAnonymousParticipants');
+  });
+
   // `currentUser`, `members` et `anonymousParticipants` étaient déclarés comme
   // des objets SANS `properties` : fast-json-stringify les réduisait à `{}`.
   // La vue partagée lit l'identité et la liste des participants dans ces trois
@@ -380,7 +397,9 @@ describe('GET /links/:identifier — identity payloads survive serialization', (
   });
 
   it('returns member identities', async () => {
-    const res = await app.inject({ method: 'GET', url: `/links/${LINK_ID}` });
+    const appCompte = await compte();
+    const res = await appCompte.inject({ method: 'GET', url: `/links/${LINK_ID}` });
+    await appCompte.close();
     const [member] = res.json().data.members;
     expect(member).toMatchObject({ role: 'member' });
     expect(member.user).toMatchObject({ id: USER_ID, username: 'alice', displayName: 'Alice' });
@@ -392,7 +411,9 @@ describe('GET /links/:identifier — identity payloads survive serialization', (
   // `false` même si le participant est réellement en ligne (fixture:
   // `isOnline: true`) : co-partager le lien n'est pas une amitié.
   it('masque la présence du participant anonyme pour un visiteur non privilégié', async () => {
-    const res = await app.inject({ method: 'GET', url: `/links/${LINK_ID}` });
+    const appCompte = await compte();
+    const res = await appCompte.inject({ method: 'GET', url: `/links/${LINK_ID}` });
+    await appCompte.close();
     const [participant] = res.json().data.anonymousParticipants;
     expect(participant).toMatchObject({
       id: 'part-2',
@@ -408,15 +429,19 @@ describe('GET /links/:identifier — identity payloads survive serialization', (
     });
   });
 
-  it("compte `stats.onlineAnonymousParticipants` à 0 pour ce même visiteur — pas un 0 fabriqué, la loi appliquée à l'agrégat", async () => {
-    const res = await app.inject({ method: 'GET', url: `/links/${LINK_ID}` });
+  it("compte `stats.onlineAnonymousParticipants` à 0 pour un compte non privilégié — pas un 0 fabriqué, la loi appliquée à l'agrégat", async () => {
+    const appCompte = await compte();
+    const res = await appCompte.inject({ method: 'GET', url: `/links/${LINK_ID}` });
+    await appCompte.close();
     expect(res.json().data.stats.onlineAnonymousParticipants).toBe(0);
     // Le total, lui, N'EST PAS de la présence — il reste exact.
     expect(res.json().data.stats.totalAnonymousParticipants).toBe(1);
   });
 
   it('never leaks the anonymous session envelope', async () => {
-    const res = await app.inject({ method: 'GET', url: `/links/${LINK_ID}` });
+    const appCompte = await compte();
+    const res = await appCompte.inject({ method: 'GET', url: `/links/${LINK_ID}` });
+    await appCompte.close();
     expect(res.payload).not.toContain('sessionTokenHash');
     expect(res.payload).not.toContain('deviceFingerprint');
     expect(res.json().data.anonymousParticipants[0].anonymousSession).toBeUndefined();
@@ -506,12 +531,12 @@ describe('GET /links/:identifier — présence des participants anonymes (direct
     await app.close();
   });
 
-  it('visiteur totalement anonyme (aucun `authContext`, aucun jeton) ⇒ masqué', async () => {
+  it('visiteur totalement anonyme (aucun `authContext`, aucun jeton) ⇒ ni liste ni agrégat (#10205)', async () => {
     mockFindShareLinkByIdentifier.mockResolvedValue(shareLinkWithAnonymousPeer());
     const app = await buildApp({ isAuthenticated: false, isAnonymous: false, user: null });
     const res = await app.inject({ method: 'GET', url: `/links/${LINK_ID}` });
-    expect(res.json().data.anonymousParticipants[0].isOnline).toBe(false);
-    expect(res.json().data.stats.onlineAnonymousParticipants).toBe(0);
+    expect(res.json().data.anonymousParticipants).toEqual([]);
+    expect(res.json().data.stats).not.toHaveProperty('onlineAnonymousParticipants');
     await app.close();
   });
 });
@@ -561,12 +586,12 @@ describe('GET /links/:identifier — dernière activité (`lastActiveAt`) gatée
     await app.close();
   });
 
-  it('visiteur totalement anonyme ⇒ `lastActiveAt: null` sur les DEUX listes', async () => {
+  it('visiteur totalement anonyme ⇒ les DEUX listes sont vides, donc aucune dernière activité (#10205)', async () => {
     mockFindShareLinkByIdentifier.mockResolvedValue(shareLinkWithAnonymousPeer());
     const app = await buildApp({ isAuthenticated: false, isAnonymous: false, user: null });
     const { data } = (await app.inject({ method: 'GET', url: `/links/${LINK_ID}` })).json();
-    expect(data.anonymousParticipants[0].lastActiveAt).toBeNull();
-    expect(data.members[0].user.lastActiveAt).toBeNull();
+    expect(data.anonymousParticipants).toEqual([]);
+    expect(data.members).toEqual([]);
     await app.close();
   });
 
@@ -622,6 +647,25 @@ describe('GET /links/:identifier — join requirements exposed to the client', (
       requireNickname: true,
       requireBirthday: true,
     });
+  });
+});
+
+describe('GET /links/:identifier — les termes du lien portent les familles des invités (#10001)', () => {
+  let app: FastifyInstance;
+  beforeAll(async () => {
+    mockFindShareLinkByIdentifier.mockResolvedValue({
+      ...mockShareLink,
+      allowedAttachmentKinds: [],
+      conversation: { ...mockShareLink.conversation, identifier: 'world' },
+    });
+    app = await buildApp({ isAuthenticated: false, isAnonymous: false, user: null });
+  });
+  afterAll(async () => { await app.close(); });
+
+  it('World Wide : texte et audio, même quand le lien ne liste rien — le plafond est sur la conversation', async () => {
+    const res = await app.inject({ method: 'GET', url: `/links/${LINK_ID}` });
+    expect(res.statusCode).toBe(200);
+    expect(res.json().data.link.allowedAttachmentKinds).toEqual(['text', 'audio']);
   });
 });
 

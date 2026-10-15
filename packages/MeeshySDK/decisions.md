@@ -30,3 +30,4 @@
 - [2026-08-21 : Le retour en vue PERSONNEL se relit ; il ne s'écrit pas localement](decisions/2026-08-21-le-retour-en-vue-personnel-se-relit-il-ne-s-ecrit-pas-localement.md)
 - [2026-08-22 : Plan 2D — le STOP budget D4 est levé par DÉROGATION du porteur produit, la virtualisation restant le gage](decisions/2026-08-22-plan-2d-le-stop-budget-d4-est-leve-par-derogation-du-porteur-produit.md)
 - [2026-10-05 : Le Jeu Meeshy — la loi dans le CŒUR, les briques dans l'UI, les routes écrites à la main](decisions/2026-10-05-le-jeu-meeshy-la-loi-au-coeur-les-briques-dans-l-ui-les-routes-a-la-main.md)
+- [2026-10-11 : La loi du carnet vit dans le SDK (`GamePhotoCatchUpLaw`, enveloppe app inchangée) et se rejoue sur les vecteurs partagés `photo-catch-up`, `photo-offer`, `photo-standing` ; une loi du jeu livre TS + vecteurs + Swift + évaluateur dans la même PR (#10155)](decisions/2026-10-11-la-loi-du-carnet-vit-dans-le-sdk-et-se-rejoue-sur-les-vecteurs.md)

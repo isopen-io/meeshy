@@ -69,11 +69,37 @@ export function flagsOf(conversation: Conversation): ConversationFlags {
   };
 }
 
+/** La catégorie où le lecteur a rangé la conversation (#10103) — `undefined`
+ * pour toute forme qui n'est pas un identifiant : la conversation tombe alors
+ * dans les sections par date, jamais dans une section fantôme. */
+export function categoryIdOf(conversation: Conversation): string | undefined {
+  const value = preferenceEntryOf(conversation)?.['categoryId'];
+  return typeof value === 'string' && value.length > 0 ? value : undefined;
+}
+
 export function customNameOf(conversation: Conversation): string | undefined {
   const entry = preferenceEntryOf(conversation);
   const value = entry?.['customName'];
   return typeof value === 'string' && value.length > 0 ? value : undefined;
 }
+
+/** Le FAVORI du lecteur (#10593) — l'emoji qu'il a posé sur la conversation,
+ * `reaction` au wire comme sur iOS (`userState.reaction`). */
+export function reactionOf(conversation: Conversation): string | undefined {
+  const value = preferenceEntryOf(conversation)?.['reaction'];
+  return typeof value === 'string' && value.length > 0 ? value : undefined;
+}
+
+/**
+ * LES PRÉFÉRENCES QUI NE SONT PAS DES DRAPEAUX (#10593) — favori, catégorie,
+ * nom personnel. `null` RETIRE : la passerelle l'écrit tel quel
+ * (`conversation-preferences.ts`, `nullable: true` sur les trois).
+ */
+export type ConversationPreferencePatch = {
+  readonly reaction?: string | null;
+  readonly categoryId?: string | null;
+  readonly customName?: string | null;
+};
 
 /**
  * `PUT userPreferences.conversationsByConversationId` (§3.2,
@@ -86,7 +112,7 @@ export function customNameOf(conversation: Conversation): string | undefined {
 export function pushConversationFlags(
   transport: Transport,
   conversationId: string,
-  patch: Partial<ConversationFlags>,
+  patch: Partial<ConversationFlags> | ConversationPreferencePatch,
 ): Promise<unknown> {
   return transport({
     method: 'PUT',

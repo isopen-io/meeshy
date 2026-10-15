@@ -37,6 +37,10 @@ import { deferAfterResponse, type AfterResponse } from '../utils/after-response'
 import { recordShareLinkVisit } from '../services/conversations/shareLinkVisits';
 import { EngagementService } from '../services/engagement/EngagementService';
 import { linkVisitorFromRequest, type LinkVisitRecorder } from './links/utils/link-visitor';
+import { allowedAttachmentKindsJsonSchema } from '@meeshy/shared/types/guest-attachment-kinds';
+import { guestAttachmentKindsOf } from '../services/attachments/ContentSignature';
+import { extractUserAgent } from '../services/GeoIPService';
+import { clientDecodesLegacyCounts, isGuestViewer } from '../services/guests/guestMemberVisibility';
 
 /**
  * Deux coutures injectables (#7794) : l'exécuteur post-réponse, pour qu'un
@@ -159,7 +163,8 @@ export async function anonymousRoutes(fastify: FastifyInstance, options: Anonymo
                     id: { type: 'string' },
                     title: { type: 'string' },
                     type: { type: 'string', enum: ['direct', 'group'] },
-                    allowViewHistory: { type: 'boolean' }
+                    allowViewHistory: { type: 'boolean' },
+                    allowedAttachmentKinds: allowedAttachmentKindsJsonSchema
                   }
                 },
                 linkId: { type: 'string', description: 'Original link ID' },
@@ -233,6 +238,7 @@ export async function anonymousRoutes(fastify: FastifyInstance, options: Anonymo
         key: linkId,
         authContext: undefined,
         requestIp: resolveClientIp(request),
+        requestUserAgent: extractUserAgent(request),
         profile: {
           firstName: body.firstName,
           lastName: body.lastName,
@@ -331,7 +337,8 @@ export async function anonymousRoutes(fastify: FastifyInstance, options: Anonymo
                     id: { type: 'string' },
                     title: { type: 'string' },
                     type: { type: 'string', enum: ['direct', 'group'] },
-                    allowViewHistory: { type: 'boolean' }
+                    allowViewHistory: { type: 'boolean' },
+                    allowedAttachmentKinds: allowedAttachmentKindsJsonSchema
                   }
                 }
               }
@@ -372,6 +379,8 @@ export async function anonymousRoutes(fastify: FastifyInstance, options: Anonymo
       switch (result.kind) {
         case 'invalid':
           return sendUnauthorized(reply, 'Session invalide ou expiree', { code: AUTH_ERROR_CODES.SESSION_INVALID });
+        case 'revoked':
+          return sendError(reply, 410, 'GUEST_ACCESS_REVOKED', { message: "L'acces de cet invite a ete retire" });
         case 'link-gone':
           return sendError(reply, 410, 'LINK_DEACTIVATED', { message: 'Le lien a ete desactive' });
         case 'link-expired':
@@ -497,6 +506,8 @@ export async function anonymousRoutes(fastify: FastifyInstance, options: Anonymo
                 allowAnonymousFiles: { type: 'boolean', description: 'Guests may send files' },
                 allowAnonymousImages: { type: 'boolean', description: 'Guests may send images' },
                 allowViewHistory: { type: 'boolean', description: 'Guests may read messages posted before they joined' },
+                // #10001 — les familles qu'un invité peut joindre (null : pas de restriction par famille).
+                allowedAttachmentKinds: allowedAttachmentKindsJsonSchema,
                 // #7794 — logo et bannière du groupe, et les types RÉELS
                 // (le schéma ne connaissait que `direct`/`group`). Rien qui
                 // identifie un membre : l'invité ne voit personne avant
@@ -587,9 +598,11 @@ export async function anonymousRoutes(fastify: FastifyInstance, options: Anonymo
         allowAnonymousFiles: true,
         allowAnonymousImages: true,
         allowViewHistory: true,
+        allowedAttachmentKinds: true,
         conversation: {
           select: {
             id: true,
+            identifier: true,
             title: true,
             description: true,
             type: true,
@@ -735,6 +748,28 @@ export async function anonymousRoutes(fastify: FastifyInstance, options: Anonymo
       const spokenLanguages = spokenLanguagesOf(allActiveParticipants);
       const languageCount = spokenLanguages.length;
 
+      // #10205 — un lecteur sans compte Meeshy ne lit ni le nombre de
+      // participants (effectifs, compteurs d'usage) ni la fiche de l'hôte :
+      // de lui ne restent que le nom affiché, le pseudo et l'avatar.
+      // RÉTROCOMPATIBILITÉ (#9223) : le SDK iOS publié décode `creator.id` et les
+      // trois effectifs en champs OBLIGATOIRES — à un client natif, une forme
+      // décodable aux effectifs NEUTRES (0), jamais le vrai chiffre.
+      const viewerIsGuest = isGuestViewer((request as UnifiedAuthRequest).authContext);
+      const legacyCounts = clientDecodesLegacyCounts(request.headers);
+      const guestCreator = shareLink.creator && {
+        ...(legacyCounts ? { id: shareLink.creator.id } : {}),
+        username: shareLink.creator.username,
+        displayName: shareLink.creator.displayName,
+        avatar: shareLink.creator.avatar,
+      };
+      const creator = viewerIsGuest ? guestCreator : shareLink.creator;
+      const guestStats = legacyCounts
+        ? { totalParticipants: 0, memberCount: 0, anonymousCount: 0, languageCount, spokenLanguages }
+        : { languageCount, spokenLanguages };
+      const stats = viewerIsGuest
+        ? guestStats
+        : { totalParticipants, memberCount, anonymousCount, languageCount, spokenLanguages };
+
       return sendSuccess(reply, {
           id: shareLink.id, // ID de la conversationShareLink pour les appels ulterieurs
           linkId: shareLink.linkId,
@@ -742,9 +777,9 @@ export async function anonymousRoutes(fastify: FastifyInstance, options: Anonymo
           description: shareLink.description,
           expiresAt: shareLink.expiresAt,
           maxUses: shareLink.maxUses,
-          currentUses: shareLink.currentUses,
+          ...(viewerIsGuest ? {} : { currentUses: shareLink.currentUses }),
           maxConcurrentUsers: shareLink.maxConcurrentUsers,
-          currentConcurrentUsers: shareLink.currentConcurrentUsers,
+          ...(viewerIsGuest ? {} : { currentConcurrentUsers: shareLink.currentConcurrentUsers }),
           requireAccount: shareLink.requireAccount,
           requireNickname: shareLink.requireNickname,
           requireEmail: shareLink.requireEmail,
@@ -754,16 +789,10 @@ export async function anonymousRoutes(fastify: FastifyInstance, options: Anonymo
           allowAnonymousFiles: shareLink.allowAnonymousFiles,
           allowAnonymousImages: shareLink.allowAnonymousImages,
           allowViewHistory: shareLink.allowViewHistory,
+          allowedAttachmentKinds: guestAttachmentKindsOf(shareLink),
           conversation: shareLink.conversation,
-          creator: shareLink.creator,
-          // Nouvelles statistiques
-          stats: {
-            totalParticipants,
-            memberCount,
-            anonymousCount,
-            languageCount,
-            spokenLanguages
-          }
+          creator,
+          stats
         });
 
     } catch (error) {

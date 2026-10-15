@@ -3660,7 +3660,7 @@
         "fr": {
           "stringUnit": {
             "state": "new",
-            "value": "Bresil"
+            "value": "Brésil"
           }
         },
         "it": {
@@ -3801,7 +3801,7 @@
         "fr": {
           "stringUnit": {
             "state": "new",
-            "value": "Cote d'Ivoire"
+            "value": "Côte d'Ivoire"
           }
         },
         "it": {
@@ -3989,7 +3989,7 @@
         "fr": {
           "stringUnit": {
             "state": "new",
-            "value": "Algerie"
+            "value": "Algérie"
           }
         },
         "it": {
@@ -4318,7 +4318,7 @@
         "fr": {
           "stringUnit": {
             "state": "new",
-            "value": "Coree du Sud"
+            "value": "Corée du Sud"
           }
         },
         "it": {
@@ -4553,7 +4553,7 @@
         "fr": {
           "stringUnit": {
             "state": "new",
-            "value": "Senegal"
+            "value": "Sénégal"
           }
         },
         "it": {
@@ -4694,7 +4694,7 @@
         "fr": {
           "stringUnit": {
             "state": "new",
-            "value": "Etats-Unis"
+            "value": "États-Unis"
           }
         },
         "it": {
@@ -4788,7 +4788,7 @@
         "fr": {
           "stringUnit": {
             "state": "new",
-            "value": "Numero de telephone"
+            "value": "Numéro de téléphone"
           }
         },
         "it": {
@@ -6715,7 +6715,7 @@
         "fr": {
           "stringUnit": {
             "state": "new",
-            "value": "Cet email est deja utilise!"
+            "value": "Cet email est déjà utilisé!"
           }
         },
         "it": {
@@ -7177,7 +7177,7 @@
         "fr": {
           "stringUnit": {
             "state": "new",
-            "value": "Ce numero semble invalide"
+            "value": "Ce numéro semble invalide"
           }
         },
         "it": {
@@ -7224,7 +7224,7 @@
         "fr": {
           "stringUnit": {
             "state": "new",
-            "value": "Ce numero est deja utilise!"
+            "value": "Ce numéro est déjà utilisé!"
           }
         },
         "it": {
@@ -7733,7 +7733,7 @@
         "fr": {
           "stringUnit": {
             "state": "new",
-            "value": "Ce pseudo est deja pris!"
+            "value": "Ce pseudo est déjà pris!"
           }
         },
         "it": {
@@ -7780,7 +7780,7 @@
         "fr": {
           "stringUnit": {
             "state": "new",
-            "value": "Verification non effectuee"
+            "value": "Vérification non effectuée"
           }
         },
         "it": {
@@ -7793,6 +7793,53 @@
           "stringUnit": {
             "state": "needs_review",
             "value": "Verificação não realizada"
+          }
+        }
+      }
+    },
+    "avatar.a11y.mood": {
+      "extractionState": "manual",
+      "localizations": {
+        "ar": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "المزاج %@"
+          }
+        },
+        "de": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Stimmung %@"
+          }
+        },
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "mood %@"
+          }
+        },
+        "es": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "estado de ánimo %@"
+          }
+        },
+        "fr": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "humeur %@"
+          }
+        },
+        "it": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "umore %@"
+          }
+        },
+        "pt-BR": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "humor %@"
           }
         }
       }
@@ -8956,7 +9003,7 @@
         "fr": {
           "stringUnit": {
             "state": "new",
-            "value": "Creez d'abord une conversation pour l'ajouter ici."
+            "value": "Créez d'abord une conversation pour l'ajouter ici."
           }
         },
         "it": {
@@ -9050,7 +9097,7 @@
         "fr": {
           "stringUnit": {
             "state": "new",
-            "value": "Aucun resultat"
+            "value": "Aucun résultat"
           }
         },
         "it": {
@@ -9097,7 +9144,7 @@
         "fr": {
           "stringUnit": {
             "state": "new",
-            "value": "Deplacer"
+            "value": "Déplacer"
           }
         },
         "it": {
@@ -9144,7 +9191,7 @@
         "fr": {
           "stringUnit": {
             "state": "new",
-            "value": "Cette conversation appartient deja a une autre communaute. Elle sera deplacee vers celle-ci."
+            "value": "Cette conversation appartient déjà à une autre communauté. Elle sera déplacée vers celle-ci."
           }
         },
         "it": {
@@ -9191,7 +9238,7 @@
         "fr": {
           "stringUnit": {
             "state": "new",
-            "value": "Deplacer cette conversation ?"
+            "value": "Déplacer cette conversation ?"
           }
         },
         "it": {
@@ -9238,7 +9285,7 @@
         "fr": {
           "stringUnit": {
             "state": "new",
-            "value": "Autre communaute"
+            "value": "Autre communauté"
           }
         },
         "it": {
@@ -9379,7 +9426,7 @@
         "fr": {
           "stringUnit": {
             "state": "new",
-            "value": "Creer la communaute"
+            "value": "Créer la communauté"
           }
         },
         "it": {
@@ -9567,7 +9614,7 @@
         "fr": {
           "stringUnit": {
             "state": "new",
-            "value": "De quoi parle cette communaute ?"
+            "value": "De quoi parle cette communauté ?"
           }
         },
         "it": {
@@ -9802,7 +9849,7 @@
         "fr": {
           "stringUnit": {
             "state": "new",
-            "value": "Nom de la communaute"
+            "value": "Nom de la communauté"
           }
         },
         "it": {
@@ -9943,7 +9990,7 @@
         "fr": {
           "stringUnit": {
             "state": "new",
-            "value": "Ma communaute"
+            "value": "Ma communauté"
           }
         },
         "it": {
@@ -9990,7 +10037,7 @@
         "fr": {
           "stringUnit": {
             "state": "new",
-            "value": "Seuls les membres invites peuvent rejoindre"
+            "value": "Seuls les membres invités peuvent rejoindre"
           }
         },
         "it": {
@@ -10037,7 +10084,7 @@
         "fr": {
           "stringUnit": {
             "state": "new",
-            "value": "Tout le monde peut decouvrir et rejoindre"
+            "value": "Tout le monde peut découvrir et rejoindre"
           }
         },
         "it": {
@@ -10084,7 +10131,7 @@
         "fr": {
           "stringUnit": {
             "state": "new",
-            "value": "Communaute privee"
+            "value": "Communauté privée"
           }
         },
         "it": {
@@ -10131,7 +10178,7 @@
         "fr": {
           "stringUnit": {
             "state": "new",
-            "value": "Nouvelle communaute"
+            "value": "Nouvelle communauté"
           }
         },
         "it": {
@@ -10366,7 +10413,7 @@
         "fr": {
           "stringUnit": {
             "state": "new",
-            "value": "Reglages"
+            "value": "Réglages"
           }
         },
         "it": {
@@ -10648,7 +10695,7 @@
         "fr": {
           "stringUnit": {
             "state": "new",
-            "value": "Vous ne pourrez plus acceder aux channels de cette communaute."
+            "value": "Vous ne pourrez plus accéder aux channels de cette communauté."
           }
         },
         "it": {
@@ -10695,7 +10742,7 @@
         "fr": {
           "stringUnit": {
             "state": "new",
-            "value": "Quitter la communaute ?"
+            "value": "Quitter la communauté ?"
           }
         },
         "it": {
@@ -10742,7 +10789,7 @@
         "fr": {
           "stringUnit": {
             "state": "new",
-            "value": "Quitter la communaute"
+            "value": "Quitter la communauté"
           }
         },
         "it": {
@@ -10836,7 +10883,7 @@
         "fr": {
           "stringUnit": {
             "state": "new",
-            "value": "Reglages"
+            "value": "Réglages"
           }
         },
         "it": {
@@ -11494,7 +11541,7 @@
         "fr": {
           "stringUnit": {
             "state": "new",
-            "value": "Creer une communaute"
+            "value": "Créer une communauté"
           }
         },
         "it": {
@@ -11541,7 +11588,7 @@
         "fr": {
           "stringUnit": {
             "state": "new",
-            "value": "Creer une communaute"
+            "value": "Créer une communauté"
           }
         },
         "it": {
@@ -11588,7 +11635,7 @@
         "fr": {
           "stringUnit": {
             "state": "new",
-            "value": "Rejoins ou cree une communaute pour collaborer"
+            "value": "Rejoins ou crée une communauté pour collaborer"
           }
         },
         "it": {
@@ -11635,7 +11682,7 @@
         "fr": {
           "stringUnit": {
             "state": "new",
-            "value": "Aucune communaute"
+            "value": "Aucune communauté"
           }
         },
         "it": {
@@ -11729,7 +11776,7 @@
         "fr": {
           "stringUnit": {
             "state": "new",
-            "value": "Communautes"
+            "value": "Communautés"
           }
         },
         "it": {
@@ -12058,7 +12105,7 @@
         "fr": {
           "stringUnit": {
             "state": "new",
-            "value": "Privee"
+            "value": "Privée"
           }
         },
         "it": {
@@ -13468,7 +13515,7 @@
         "fr": {
           "stringUnit": {
             "state": "new",
-            "value": "Echec du telechargement de l'avatar"
+            "value": "Échec du téléchargement de l'avatar"
           }
         },
         "it": {
@@ -13515,7 +13562,7 @@
         "fr": {
           "stringUnit": {
             "state": "new",
-            "value": "Avatar televerse"
+            "value": "Avatar téléversé"
           }
         },
         "it": {
@@ -13562,7 +13609,7 @@
         "fr": {
           "stringUnit": {
             "state": "new",
-            "value": "Echec du telechargement de la banniere"
+            "value": "Échec du téléchargement de la bannière"
           }
         },
         "it": {
@@ -13609,7 +13656,7 @@
         "fr": {
           "stringUnit": {
             "state": "new",
-            "value": "Banniere televersee"
+            "value": "Bannière téléversée"
           }
         },
         "it": {
@@ -13656,7 +13703,7 @@
         "fr": {
           "stringUnit": {
             "state": "new",
-            "value": "Communaute mise a jour"
+            "value": "Communauté mise à jour"
           }
         },
         "it": {
@@ -14596,7 +14643,7 @@
         "fr": {
           "stringUnit": {
             "state": "new",
-            "value": "Createur"
+            "value": "Créateur"
           }
         },
         "it": {
@@ -15019,7 +15066,7 @@
         "fr": {
           "stringUnit": {
             "state": "new",
-            "value": "Cette conversation sera fermee pour tous les membres. Plus personne ne pourra ecrire."
+            "value": "Cette conversation sera fermée pour tous les membres. Plus personne ne pourra écrire."
           }
         },
         "it": {
@@ -15160,7 +15207,7 @@
         "fr": {
           "stringUnit": {
             "state": "new",
-            "value": "Cette conversation disparaitra definitivement de votre liste. Les autres membres ne seront pas affectes."
+            "value": "Cette conversation disparaîtra définitivement de votre liste. Les autres membres ne seront pas affectés."
           }
         },
         "it": {
@@ -15771,7 +15818,7 @@
         "fr": {
           "stringUnit": {
             "state": "new",
-            "value": "Retrograder Membre"
+            "value": "Rétrograder Membre"
           }
         },
         "it": {
@@ -15912,7 +15959,7 @@
         "fr": {
           "stringUnit": {
             "state": "new",
-            "value": "Promouvoir Moderateur"
+            "value": "Promouvoir Modérateur"
           }
         },
         "it": {
@@ -16006,7 +16053,7 @@
         "fr": {
           "stringUnit": {
             "state": "new",
-            "value": "Aucun membre trouve"
+            "value": "Aucun membre trouvé"
           }
         },
         "it": {
@@ -16147,7 +16194,7 @@
         "fr": {
           "stringUnit": {
             "state": "new",
-            "value": "Seuls les admins peuvent ecrire"
+            "value": "Seuls les admins peuvent écrire"
           }
         },
         "it": {
@@ -16335,7 +16382,7 @@
         "fr": {
           "stringUnit": {
             "state": "new",
-            "value": "Desactive"
+            "value": "Désactivé"
           }
         },
         "it": {
@@ -16382,7 +16429,7 @@
         "fr": {
           "stringUnit": {
             "state": "new",
-            "value": "Qui peut ecrire"
+            "value": "Qui peut écrire"
           }
         },
         "it": {
@@ -16570,7 +16617,7 @@
         "fr": {
           "stringUnit": {
             "state": "new",
-            "value": "Moderateurs"
+            "value": "Modérateurs"
           }
         },
         "it": {
@@ -16946,7 +16993,7 @@
         "fr": {
           "stringUnit": {
             "state": "new",
-            "value": "Reglages"
+            "value": "Réglages"
           }
         },
         "it": {
@@ -16993,7 +17040,7 @@
         "fr": {
           "stringUnit": {
             "state": "new",
-            "value": "Echec du telechargement de l'avatar"
+            "value": "Échec du téléchargement de l'avatar"
           }
         },
         "it": {
@@ -17040,7 +17087,7 @@
         "fr": {
           "stringUnit": {
             "state": "new",
-            "value": "Avatar televerse"
+            "value": "Avatar téléversé"
           }
         },
         "it": {
@@ -17087,7 +17134,7 @@
         "fr": {
           "stringUnit": {
             "state": "new",
-            "value": "Echec du telechargement de la banniere"
+            "value": "Échec du téléchargement de la bannière"
           }
         },
         "it": {
@@ -17134,7 +17181,7 @@
         "fr": {
           "stringUnit": {
             "state": "new",
-            "value": "Banniere televersee"
+            "value": "Bannière téléversée"
           }
         },
         "it": {
@@ -17322,7 +17369,7 @@
         "fr": {
           "stringUnit": {
             "state": "new",
-            "value": "Role mis a jour"
+            "value": "Rôle mis à jour"
           }
         },
         "it": {
@@ -17369,7 +17416,7 @@
         "fr": {
           "stringUnit": {
             "state": "new",
-            "value": "Conversation mise a jour"
+            "value": "Conversation mise à jour"
           }
         },
         "it": {
@@ -17698,7 +17745,7 @@
         "fr": {
           "stringUnit": {
             "state": "new",
-            "value": "Reactions"
+            "value": "Réactions"
           }
         },
         "it": {
@@ -17745,7 +17792,7 @@
         "fr": {
           "stringUnit": {
             "state": "new",
-            "value": "Reactions"
+            "value": "Réactions"
           }
         },
         "it": {
@@ -20048,7 +20095,7 @@
         "fr": {
           "stringUnit": {
             "state": "new",
-            "value": "Reessayer"
+            "value": "Réessayer"
           }
         },
         "it": {
@@ -20471,7 +20518,7 @@
         "fr": {
           "stringUnit": {
             "state": "new",
-            "value": "Prenom"
+            "value": "Prénom"
           }
         },
         "it": {
@@ -21129,7 +21176,7 @@
         "fr": {
           "stringUnit": {
             "state": "new",
-            "value": "Communaute"
+            "value": "Communauté"
           }
         },
         "it": {
@@ -21176,7 +21223,7 @@
         "fr": {
           "stringUnit": {
             "state": "new",
-            "value": "Conversation privee"
+            "value": "Conversation privée"
           }
         },
         "it": {
@@ -21646,7 +21693,7 @@
         "fr": {
           "stringUnit": {
             "state": "new",
-            "value": "Itineraire"
+            "value": "Itinéraire"
           }
         },
         "it": {
@@ -21787,7 +21834,7 @@
         "fr": {
           "stringUnit": {
             "state": "new",
-            "value": "Position partagee"
+            "value": "Position partagée"
           }
         },
         "it": {
@@ -21834,7 +21881,7 @@
         "fr": {
           "stringUnit": {
             "state": "new",
-            "value": "Duree du partage"
+            "value": "Durée du partage"
           }
         },
         "it": {
@@ -21928,7 +21975,7 @@
         "fr": {
           "stringUnit": {
             "state": "new",
-            "value": "Arreter"
+            "value": "Arrêter"
           }
         },
         "it": {
@@ -23291,7 +23338,7 @@
         "fr": {
           "stringUnit": {
             "state": "new",
-            "value": "Luminosite"
+            "value": "Luminosité"
           }
         },
         "it": {
@@ -24137,7 +24184,7 @@
         "fr": {
           "stringUnit": {
             "state": "new",
-            "value": "Nettete"
+            "value": "Netteté"
           }
         },
         "it": {
@@ -24906,6 +24953,53 @@
         }
       }
     },
+    "media.save.alreadyInPhotos": {
+      "extractionState": "manual",
+      "localizations": {
+        "ar": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "موجود بالفعل في الصور"
+          }
+        },
+        "de": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Bereits in Fotos"
+          }
+        },
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Already in your Photos"
+          }
+        },
+        "es": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Ya está en Fotos"
+          }
+        },
+        "fr": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Déjà dans la photothèque"
+          }
+        },
+        "it": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Già in Foto"
+          }
+        },
+        "pt-BR": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Já está no Fotos"
+          }
+        }
+      }
+    },
     "media.transcription.a11y": {
       "extractionState": "manual",
       "localizations": {
@@ -25453,7 +25547,7 @@
         "fr": {
           "stringUnit": {
             "state": "new",
-            "value": "Telecharger la video"
+            "value": "Télécharger la vidéo"
           }
         },
         "it": {
@@ -25500,7 +25594,7 @@
         "fr": {
           "stringUnit": {
             "state": "new",
-            "value": "Telechargez pour lire la video"
+            "value": "Téléchargez pour lire la vidéo"
           }
         },
         "it": {
@@ -25547,7 +25641,7 @@
         "fr": {
           "stringUnit": {
             "state": "new",
-            "value": "Telechargement en cours"
+            "value": "Téléchargement en cours"
           }
         },
         "it": {
@@ -25594,7 +25688,7 @@
         "fr": {
           "stringUnit": {
             "state": "new",
-            "value": "La lecture demarrera apres le telechargement"
+            "value": "La lecture démarrera après le téléchargement"
           }
         },
         "it": {
@@ -26534,7 +26628,7 @@
         "fr": {
           "stringUnit": {
             "state": "new",
-            "value": "Video indisponible. Reessayer."
+            "value": "Vidéo indisponible. Réessayer."
           }
         },
         "it": {
@@ -27335,7 +27429,7 @@
         "fr": {
           "stringUnit": {
             "state": "new",
-            "value": "Reactions"
+            "value": "Réactions"
           }
         },
         "it": {
@@ -27429,7 +27523,7 @@
         "fr": {
           "stringUnit": {
             "state": "new",
-            "value": "Systeme"
+            "value": "Système"
           }
         },
         "it": {
@@ -27664,7 +27758,7 @@
         "fr": {
           "stringUnit": {
             "state": "new",
-            "value": "Aucun appel manque"
+            "value": "Aucun appel manqué"
           }
         },
         "it": {
@@ -28040,7 +28134,7 @@
         "fr": {
           "stringUnit": {
             "state": "new",
-            "value": "Vos notifications apparaitront ici"
+            "value": "Vos notifications apparaîtront ici"
           }
         },
         "it": {
@@ -28087,7 +28181,7 @@
         "fr": {
           "stringUnit": {
             "state": "new",
-            "value": "Aucune notification systeme"
+            "value": "Aucune notification système"
           }
         },
         "it": {
@@ -28852,6 +28946,100 @@
           "stringUnit": {
             "state": "needs_review",
             "value": "Notificações"
+          }
+        }
+      }
+    },
+    "pack.shelf.needsUpdate": {
+      "extractionState": "manual",
+      "localizations": {
+        "ar": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "حدّث Meeshy لرؤية إطارات هذه الحزمة."
+          }
+        },
+        "de": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Aktualisiere Meeshy, um die Rahmen dieses Pakets zu sehen."
+          }
+        },
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Update Meeshy to see the frames in this pack."
+          }
+        },
+        "es": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Actualiza Meeshy para ver los marcos de este paquete."
+          }
+        },
+        "fr": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Mets à jour Meeshy pour voir les cadres de ce pack."
+          }
+        },
+        "it": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Aggiorna Meeshy per vedere le cornici di questo pacchetto."
+          }
+        },
+        "pt-BR": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Atualize o Meeshy para ver as molduras deste pacote."
+          }
+        }
+      }
+    },
+    "pack.shelf.unavailable": {
+      "extractionState": "manual",
+      "localizations": {
+        "ar": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "تعذّر تحميل إطارات هذه الحزمة."
+          }
+        },
+        "de": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Die Rahmen dieses Pakets konnten nicht geladen werden."
+          }
+        },
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "The frames in this pack couldn’t be loaded."
+          }
+        },
+        "es": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "No se pudieron cargar los marcos de este paquete."
+          }
+        },
+        "fr": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Les cadres de ce pack n’ont pas pu se charger."
+          }
+        },
+        "it": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Impossibile caricare le cornici di questo pacchetto."
+          }
+        },
+        "pt-BR": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Não foi possível carregar as molduras deste pacote."
           }
         }
       }
@@ -30483,7 +30671,7 @@
         "fr": {
           "stringUnit": {
             "state": "new",
-            "value": "Debloquer l'utilisateur"
+            "value": "Débloquer l'utilisateur"
           }
         },
         "it": {
@@ -30624,7 +30812,7 @@
         "fr": {
           "stringUnit": {
             "state": "new",
-            "value": "Vous avez bloque cet utilisateur"
+            "value": "Vous avez bloqué cet utilisateur"
           }
         },
         "it": {
@@ -30671,7 +30859,7 @@
         "fr": {
           "stringUnit": {
             "state": "new",
-            "value": "Debloquer"
+            "value": "Débloquer"
           }
         },
         "it": {
@@ -30859,7 +31047,7 @@
         "fr": {
           "stringUnit": {
             "state": "new",
-            "value": "Interactions desactivees"
+            "value": "Interactions désactivées"
           }
         },
         "it": {
@@ -30966,6 +31154,53 @@
           "stringUnit": {
             "state": "needs_review",
             "value": "Criptografia de ponta a ponta ativada"
+          }
+        }
+      }
+    },
+    "profile.loadFailed.message": {
+      "extractionState": "extracted_with_value",
+      "localizations": {
+        "ar": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "تعذّر تحميل هذا الملف الشخصي."
+          }
+        },
+        "de": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Dieses Profil konnte nicht geladen werden."
+          }
+        },
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "This profile couldn't be loaded."
+          }
+        },
+        "es": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "No se pudo cargar este perfil."
+          }
+        },
+        "fr": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Ce profil n'a pas pu se charger."
+          }
+        },
+        "it": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Impossibile caricare questo profilo."
+          }
+        },
+        "pt-BR": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Não foi possível carregar este perfil."
           }
         }
       }
@@ -32175,7 +32410,7 @@
         "fr": {
           "stringUnit": {
             "state": "new",
-            "value": "Connexion acceptee"
+            "value": "Connexion acceptée"
           }
         },
         "it": {
@@ -32363,7 +32598,7 @@
         "fr": {
           "stringUnit": {
             "state": "new",
-            "value": "Demande annulee"
+            "value": "Demande annulée"
           }
         },
         "it": {
@@ -32410,7 +32645,7 @@
         "fr": {
           "stringUnit": {
             "state": "new",
-            "value": "Demande refusee"
+            "value": "Demande refusée"
           }
         },
         "it": {
@@ -32504,7 +32739,7 @@
         "fr": {
           "stringUnit": {
             "state": "new",
-            "value": "Demande envoyee"
+            "value": "Demande envoyée"
           }
         },
         "it": {
@@ -32551,7 +32786,7 @@
         "fr": {
           "stringUnit": {
             "state": "new",
-            "value": "Impossible de debloquer"
+            "value": "Impossible de débloquer"
           }
         },
         "it": {
@@ -32598,7 +32833,7 @@
         "fr": {
           "stringUnit": {
             "state": "new",
-            "value": "Utilisateur bloque"
+            "value": "Utilisateur bloqué"
           }
         },
         "it": {
@@ -32645,7 +32880,7 @@
         "fr": {
           "stringUnit": {
             "state": "new",
-            "value": "Utilisateur debloque"
+            "value": "Utilisateur débloqué"
           }
         },
         "it": {
@@ -51974,7 +52209,7 @@
         "fr": {
           "stringUnit": {
             "state": "new",
-            "value": "Photo/Video"
+            "value": "Photo/Vidéo"
           }
         },
         "it": {
@@ -52209,7 +52444,7 @@
         "fr": {
           "stringUnit": {
             "state": "new",
-            "value": "Arriere-plan"
+            "value": "Arrière-plan"
           }
         },
         "it": {
@@ -53478,7 +53713,7 @@
         "fr": {
           "stringUnit": {
             "state": "new",
-            "value": "Bibliotheque"
+            "value": "Bibliothèque"
           }
         },
         "it": {
@@ -53572,7 +53807,7 @@
         "fr": {
           "stringUnit": {
             "state": "new",
-            "value": "Chargement de la video..."
+            "value": "Chargement de la vidéo..."
           }
         },
         "it": {
@@ -54371,7 +54606,7 @@
         "fr": {
           "stringUnit": {
             "state": "new",
-            "value": "Prive"
+            "value": "Privé"
           }
         },
         "it": {
@@ -55687,7 +55922,7 @@
         "fr": {
           "stringUnit": {
             "state": "new",
-            "value": "Vous avez un brouillon non publie."
+            "value": "Vous avez un brouillon non publié."
           }
         },
         "it": {
@@ -55828,7 +56063,7 @@
         "fr": {
           "stringUnit": {
             "state": "new",
-            "value": "Video"
+            "value": "Vidéo"
           }
         },
         "it": {
@@ -55875,7 +56110,7 @@
         "fr": {
           "stringUnit": {
             "state": "new",
-            "value": "Visibilite"
+            "value": "Visibilité"
           }
         },
         "it": {
@@ -57567,7 +57802,7 @@
         "fr": {
           "stringUnit": {
             "state": "new",
-            "value": "Intensite"
+            "value": "Intensité"
           }
         },
         "it": {
@@ -59272,53 +59507,6 @@
           "stringUnit": {
             "state": "needs_review",
             "value": "Carregando story…"
-          }
-        }
-      }
-    },
-    "story.repost.credit": {
-      "extractionState": "manual",
-      "localizations": {
-        "ar": {
-          "stringUnit": {
-            "state": "translated",
-            "value": "أُعيد نشرها من ‎@%@"
-          }
-        },
-        "de": {
-          "stringUnit": {
-            "state": "translated",
-            "value": "Geteilt von @%@"
-          }
-        },
-        "en": {
-          "stringUnit": {
-            "state": "translated",
-            "value": "Reposted from @%@"
-          }
-        },
-        "es": {
-          "stringUnit": {
-            "state": "translated",
-            "value": "Republicado de @%@"
-          }
-        },
-        "fr": {
-          "stringUnit": {
-            "state": "translated",
-            "value": "Reposté de @%@"
-          }
-        },
-        "it": {
-          "stringUnit": {
-            "state": "translated",
-            "value": "Ripubblicato da @%@"
-          }
-        },
-        "pt-BR": {
-          "stringUnit": {
-            "state": "translated",
-            "value": "Republicado de @%@"
           }
         }
       }
@@ -65316,7 +65504,7 @@
         "fr": {
           "stringUnit": {
             "state": "new",
-            "value": "Duree"
+            "value": "Durée"
           }
         },
         "it": {
@@ -65551,7 +65739,7 @@
         "fr": {
           "stringUnit": {
             "state": "new",
-            "value": "Debut"
+            "value": "Début"
           }
         },
         "it": {
@@ -66712,7 +66900,7 @@
         "fr": {
           "stringUnit": {
             "state": "new",
-            "value": "Video BG"
+            "value": "Vidéo BG"
           }
         },
         "it": {
@@ -70969,7 +71157,7 @@
         "fr": {
           "stringUnit": {
             "state": "new",
-            "value": "Media non disponible"
+            "value": "Média non disponible"
           }
         },
         "it": {
@@ -73436,7 +73624,7 @@
         "fr": {
           "stringUnit": {
             "state": "new",
-            "value": "Video"
+            "value": "Vidéo"
           }
         },
         "it": {
@@ -74094,7 +74282,7 @@
         "fr": {
           "stringUnit": {
             "state": "new",
-            "value": "Medias"
+            "value": "Médias"
           }
         },
         "it": {
@@ -75034,7 +75222,7 @@
         "fr": {
           "stringUnit": {
             "state": "new",
-            "value": "Le clonage vocal est reserve aux personnes de 18 ans et plus."
+            "value": "Le clonage vocal est réservé aux personnes de 18 ans et plus."
           }
         },
         "it": {
@@ -75081,7 +75269,7 @@
         "fr": {
           "stringUnit": {
             "state": "new",
-            "value": "Verification d'age"
+            "value": "Vérification d'âge"
           }
         },
         "it": {
@@ -75175,7 +75363,7 @@
         "fr": {
           "stringUnit": {
             "state": "new",
-            "value": "Verifier"
+            "value": "Vérifier"
           }
         },
         "it": {
@@ -75222,7 +75410,7 @@
         "fr": {
           "stringUnit": {
             "state": "new",
-            "value": "Vos traductions audio utiliseront desormais votre voix clonee."
+            "value": "Vos traductions audio utiliseront désormais votre voix clonée."
           }
         },
         "it": {
@@ -75316,7 +75504,7 @@
         "fr": {
           "stringUnit": {
             "state": "new",
-            "value": "Profil vocal cree !"
+            "value": "Profil vocal créé !"
           }
         },
         "it": {
@@ -75457,7 +75645,7 @@
         "fr": {
           "stringUnit": {
             "state": "new",
-            "value": "Enregistrez quelques echantillons de votre voix"
+            "value": "Enregistrez quelques échantillons de votre voix"
           }
         },
         "it": {
@@ -75504,7 +75692,7 @@
         "fr": {
           "stringUnit": {
             "state": "new",
-            "value": "Un modele vocal unique est cree a partir de vos echantillons"
+            "value": "Un modèle vocal unique est créé à partir de vos échantillons"
           }
         },
         "it": {
@@ -75551,7 +75739,7 @@
         "fr": {
           "stringUnit": {
             "state": "new",
-            "value": "Vos traductions audio utiliseront votre voix clonee"
+            "value": "Vos traductions audio utiliseront votre voix clonée"
           }
         },
         "it": {
@@ -75598,7 +75786,7 @@
         "fr": {
           "stringUnit": {
             "state": "new",
-            "value": "Vous pouvez supprimer vos donnees vocales a tout moment (RGPD)"
+            "value": "Vous pouvez supprimer vos données vocales à tout moment (RGPD)"
           }
         },
         "it": {
@@ -75645,7 +75833,7 @@
         "fr": {
           "stringUnit": {
             "state": "new",
-            "value": "Vos echantillons sont chiffres et ne sont jamais partages"
+            "value": "Vos échantillons sont chiffrés et ne sont jamais partagés"
           }
         },
         "it": {
@@ -75739,7 +75927,7 @@
         "fr": {
           "stringUnit": {
             "state": "new",
-            "value": "J'accepte que mes echantillons vocaux soient utilises pour creer un profil vocal"
+            "value": "J'accepte que mes échantillons vocaux soient utilisés pour créer un profil vocal"
           }
         },
         "it": {
@@ -76021,7 +76209,7 @@
         "fr": {
           "stringUnit": {
             "state": "new",
-            "value": "Supprimer toutes les donnees vocales"
+            "value": "Supprimer toutes les données vocales"
           }
         },
         "it": {
@@ -76068,7 +76256,7 @@
         "fr": {
           "stringUnit": {
             "state": "new",
-            "value": "Cette action supprimera definitivement votre profil vocal, tous vos echantillons et revoquera votre consentement. Cette action est irreversible (RGPD)."
+            "value": "Cette action supprimera définitivement votre profil vocal, tous vos échantillons et révoquera votre consentement. Cette action est irreversible (RGPD)."
           }
         },
         "it": {
@@ -76162,7 +76350,7 @@
         "fr": {
           "stringUnit": {
             "state": "new",
-            "value": "Conforme au RGPD - Vos donnees vocales seront definitivement supprimees de nos serveurs."
+            "value": "Conforme au RGPD - Vos données vocales seront définitivement supprimées de nos serveurs."
           }
         },
         "it": {
@@ -76209,7 +76397,7 @@
         "fr": {
           "stringUnit": {
             "state": "new",
-            "value": "Aucun echantillon enregistre"
+            "value": "Aucun échantillon enregistré"
           }
         },
         "it": {
@@ -76256,7 +76444,7 @@
         "fr": {
           "stringUnit": {
             "state": "new",
-            "value": "Qualite"
+            "value": "Qualité"
           }
         },
         "it": {
@@ -76303,7 +76491,7 @@
         "fr": {
           "stringUnit": {
             "state": "new",
-            "value": "Echantillon"
+            "value": "Échantillon"
           }
         },
         "it": {
@@ -76350,7 +76538,7 @@
         "fr": {
           "stringUnit": {
             "state": "new",
-            "value": "Echantillons"
+            "value": "Échantillons"
           }
         },
         "it": {
@@ -76491,7 +76679,7 @@
         "fr": {
           "stringUnit": {
             "state": "new",
-            "value": "Duree totale"
+            "value": "Durée totale"
           }
         },
         "it": {
@@ -76538,7 +76726,7 @@
         "fr": {
           "stringUnit": {
             "state": "new",
-            "value": "Vos echantillons sont en cours de traitement. Cela peut prendre quelques minutes."
+            "value": "Vos échantillons sont en cours de traitement. Cela peut prendre quelques minutes."
           }
         },
         "it": {
@@ -76585,7 +76773,7 @@
         "fr": {
           "stringUnit": {
             "state": "new",
-            "value": "Creation du profil vocal..."
+            "value": "Création du profil vocal..."
           }
         },
         "it": {
@@ -76632,7 +76820,7 @@
         "fr": {
           "stringUnit": {
             "state": "new",
-            "value": "Creer le profil vocal"
+            "value": "Créer le profil vocal"
           }
         },
         "it": {
@@ -76679,7 +76867,7 @@
         "fr": {
           "stringUnit": {
             "state": "new",
-            "value": "Lisez le texte ci-dessous a voix haute. Enregistrez au moins 3 echantillons de 10 secondes chacun."
+            "value": "Lisez le texte ci-dessous à voix haute. Enregistrez au moins 3 échantillons de 10 secondes chacun."
           }
         },
         "it": {
@@ -76820,7 +77008,7 @@
         "fr": {
           "stringUnit": {
             "state": "new",
-            "value": "Lisez ce texte a voix haute"
+            "value": "Lisez ce texte à voix haute"
           }
         },
         "it": {
@@ -77008,7 +77196,7 @@
         "fr": {
           "stringUnit": {
             "state": "new",
-            "value": "Expire"
+            "value": "Expiré"
           }
         },
         "it": {
@@ -77243,7 +77431,7 @@
         "fr": {
           "stringUnit": {
             "state": "new",
-            "value": "Votre voix est utilisee pour les traductions audio"
+            "value": "Votre voix est utilisée pour les traductions audio"
           }
         },
         "it": {
@@ -77290,7 +77478,7 @@
         "fr": {
           "stringUnit": {
             "state": "new",
-            "value": "Enregistrez de nouveaux echantillons"
+            "value": "Enregistrez de nouveaux échantillons"
           }
         },
         "it": {
@@ -77337,7 +77525,7 @@
         "fr": {
           "stringUnit": {
             "state": "new",
-            "value": "Le traitement a echoue, reessayez"
+            "value": "Le traitement a échoué, réessayez"
           }
         },
         "it": {
@@ -77384,7 +77572,7 @@
         "fr": {
           "stringUnit": {
             "state": "new",
-            "value": "Creez un profil vocal pour activer le clonage"
+            "value": "Créez un profil vocal pour activer le clonage"
           }
         },
         "it": {
@@ -77478,7 +77666,7 @@
         "fr": {
           "stringUnit": {
             "state": "new",
-            "value": "Vos echantillons sont en cours de traitement"
+            "value": "Vos échantillons sont en cours de traitement"
           }
         },
         "it": {
@@ -79143,6 +79331,476 @@
           "stringUnit": {
             "state": "translated",
             "value": "Não foi possível atualizar o pacote. Tente de novo."
+          }
+        }
+      }
+    },
+    "frame.usage.callAndCapture": {
+      "extractionState": "manual",
+      "localizations": {
+        "ar": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "قابل للاستخدام: مكالمات الفيديو والالتقاطات"
+          }
+        },
+        "de": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Verwendbar: Videoanrufe und Aufnahmen"
+          }
+        },
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Usable: video calls and captures"
+          }
+        },
+        "es": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Utilizable: videollamadas y capturas"
+          }
+        },
+        "fr": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Utilisable : appels vidéo et captures"
+          }
+        },
+        "it": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Utilizzabile: videochiamate e acquisizioni"
+          }
+        },
+        "pt-BR": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Utilizável: chamadas de vídeo e capturas"
+          }
+        }
+      }
+    },
+    "frame.usage.captureOnly": {
+      "extractionState": "manual",
+      "localizations": {
+        "ar": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "التقاط الصور والفيديو فقط"
+          }
+        },
+        "de": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Nur Foto- und Videoaufnahme"
+          }
+        },
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Photo and video capture only"
+          }
+        },
+        "es": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Solo captura de foto y vídeo"
+          }
+        },
+        "fr": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Capture photo et vidéo uniquement"
+          }
+        },
+        "it": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Solo acquisizione di foto e video"
+          }
+        },
+        "pt-BR": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Somente captura de foto e vídeo"
+          }
+        }
+      }
+    },
+    "frame.usage.photoOnly": {
+      "extractionState": "manual",
+      "localizations": {
+        "ar": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "الصور فقط"
+          }
+        },
+        "de": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Nur Foto"
+          }
+        },
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Photo only"
+          }
+        },
+        "es": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Solo foto"
+          }
+        },
+        "fr": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Photo uniquement"
+          }
+        },
+        "it": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Solo foto"
+          }
+        },
+        "pt-BR": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Somente foto"
+          }
+        }
+      }
+    },
+    "frame.usage.videoOnly": {
+      "extractionState": "manual",
+      "localizations": {
+        "ar": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "الفيديو فقط"
+          }
+        },
+        "de": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Nur Video"
+          }
+        },
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Video only"
+          }
+        },
+        "es": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Solo vídeo"
+          }
+        },
+        "fr": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Vidéo uniquement"
+          }
+        },
+        "it": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Solo video"
+          }
+        },
+        "pt-BR": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Somente vídeo"
+          }
+        }
+      }
+    },
+    "frame.usage.rankOnly": {
+      "extractionState": "manual",
+      "localizations": {
+        "ar": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "الرتبة ⁦%@⁩ فقط"
+          }
+        },
+        "de": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Nur Rang %@"
+          }
+        },
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "%@ rank only"
+          }
+        },
+        "es": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Solo rango %@"
+          }
+        },
+        "fr": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Rang %@ uniquement"
+          }
+        },
+        "it": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Solo rango %@"
+          }
+        },
+        "pt-BR": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Somente rank %@"
+          }
+        }
+      }
+    },
+    "frame.usage.rankDivisionOnly": {
+      "extractionState": "manual",
+      "localizations": {
+        "ar": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "الرتبة ⁦%1$@ %2$@⁩ فقط"
+          }
+        },
+        "de": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Nur Rang %1$@ %2$@"
+          }
+        },
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "%1$@ %2$@ rank only"
+          }
+        },
+        "es": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Solo rango %1$@ %2$@"
+          }
+        },
+        "fr": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Rang %1$@ %2$@ uniquement"
+          }
+        },
+        "it": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Solo rango %1$@ %2$@"
+          }
+        },
+        "pt-BR": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Somente rank %1$@ %2$@"
+          }
+        }
+      }
+    },
+    "frame.usage.prestigeOnly": {
+      "extractionState": "manual",
+      "localizations": {
+        "ar": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "التميّز فقط"
+          }
+        },
+        "de": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Nur Prestige"
+          }
+        },
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Prestige only"
+          }
+        },
+        "es": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Solo prestigio"
+          }
+        },
+        "fr": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Prestige uniquement"
+          }
+        },
+        "it": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Solo prestigio"
+          }
+        },
+        "pt-BR": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Somente prestígio"
+          }
+        }
+      }
+    },
+    "frame.usage.achievementOnly": {
+      "extractionState": "manual",
+      "localizations": {
+        "ar": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "الإنجازات فقط"
+          }
+        },
+        "de": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Nur Erfolge"
+          }
+        },
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Achievements only"
+          }
+        },
+        "es": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Solo logros"
+          }
+        },
+        "fr": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Succès uniquement"
+          }
+        },
+        "it": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Solo traguardi"
+          }
+        },
+        "pt-BR": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Somente conquistas"
+          }
+        }
+      }
+    },
+    "frame.usage.achievementRarityOnly": {
+      "extractionState": "manual",
+      "localizations": {
+        "ar": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "إنجازات ⁦%@⁩ فقط"
+          }
+        },
+        "de": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Nur %@-Erfolge"
+          }
+        },
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "%@ achievements only"
+          }
+        },
+        "es": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Solo logros %@"
+          }
+        },
+        "fr": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Succès %@ uniquement"
+          }
+        },
+        "it": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Solo traguardi %@"
+          }
+        },
+        "pt-BR": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Somente conquistas %@"
+          }
+        }
+      }
+    },
+    "frame.usage.momentOnly": {
+      "extractionState": "manual",
+      "localizations": {
+        "ar": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "لحظة «⁦%@⁩» فقط"
+          }
+        },
+        "de": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Nur Moment „%@“"
+          }
+        },
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "“%@” moment only"
+          }
+        },
+        "es": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Solo momento «%@»"
+          }
+        },
+        "fr": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Moment « %@ » uniquement"
+          }
+        },
+        "it": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Solo momento «%@»"
+          }
+        },
+        "pt-BR": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Somente momento “%@”"
           }
         }
       }

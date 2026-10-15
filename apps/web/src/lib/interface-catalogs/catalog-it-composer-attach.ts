@@ -89,6 +89,20 @@ const itComposerAttach = {
   'composer.effects.entrance': 'Animazione di ingresso',
   'composer.effects.permanent': 'Effetto permanente',
   'composer.effects.clearAll': 'Cancella tutto',
+  'composer.guest.kind.text': 'File di testo (.txt)',
+  'composer.guest.kind.audio': 'Audio',
+  'composer.guest.kind.image': 'Immagine',
+  'composer.guest.kind.pdf': 'PDF',
+  'composer.guest.inline.text': 'file di testo (.txt)',
+  'composer.guest.inline.audio': 'audio',
+  'composer.guest.inline.image': 'immagini',
+  'composer.guest.inline.pdf': 'PDF',
+  'composer.guest.note': 'Senza account, {title} accetta i tuoi messaggi, i tuoi vocali e anche {kinds}.',
+  'composer.guest.createAccount': 'Crea un account per condividere il resto.',
+  'composer.guest.refused.kind': '«{name}» non è accettato qui: passano solo {kinds}.',
+  'composer.guest.refused.size': '«{name}» è troppo grande: al massimo {max}.',
+  'send.failure.guestKind': 'questo file non è accettato qui',
+  'send.failure.guestTooLarge': 'questo file è troppo grande qui (al massimo {max})',
 } satisfies ComposerAttachCatalogSlice;
 
 export default itComposerAttach;

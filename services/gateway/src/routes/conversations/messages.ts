@@ -27,6 +27,7 @@ import { registerMessagePinRoutes } from './messages-pin';
 import { registerMessageViewOnceRoutes } from './messages-view-once';
 import { registerMessageAfterReadRoutes } from './messages-after-read';
 import { registerMessageCaptureRoutes } from './messages-capture';
+import { registerSharedTranslationRoutes } from './shared-translations';
 import { registerMessageSearchRoute } from './messages-search';
 
 export { SendMessageBodySchema } from './messages-send';
@@ -113,6 +114,8 @@ export function registerMessagesRoutes(
   registerMessageAfterReadRoutes(fastify, prisma, participantAuth);
 
   registerMessageCaptureRoutes(fastify, prisma, participantAuth);
+
+  registerSharedTranslationRoutes(fastify, prisma, participantAuth);
 
   registerMessageSearchRoute(fastify, prisma, optionalAuth);
 }

@@ -95,6 +95,27 @@ public extension SignalEndpoint {
     var retryPolicy: MeeshyEndpointRetryPolicy { .never }
 }
 
+public extension ConversationsEndpoint {
+    /// **Le partage d'une traduction rend un refus que l'appareil LIT (#9899).**
+    ///
+    /// `POST …/shared-translations` répond 409 `SHARED_TRANSLATION_STALE_SOURCE`
+    /// quand le message a été modifié depuis que l'appareil l'a traduit : la
+    /// traduction ne dit plus ce que les autres lisent, elle reste locale. Sans
+    /// cette déclaration le transport ne rend qu'une phrase
+    /// (`MeeshyError.server(409, _)`), et ce refus se confondrait avec une panne —
+    /// `SharedTranslationService` en lit le CODE.
+    ///
+    /// Une seule adresse : toutes les autres routes de conversation gardent la
+    /// forme d'erreur qu'elles ont, et les sites qui filtrent leurs
+    /// `.server(400, _)` ne bougent pas.
+    var rejectionPolicy: MeeshyEndpointRejectionPolicy {
+        switch self {
+        case .byIdSharedTranslations: return .structured
+        default: return .opaque
+        }
+    }
+}
+
 
 // MARK: - Une catégorie de préférences DÉSIGNE son adresse (#4282)
 

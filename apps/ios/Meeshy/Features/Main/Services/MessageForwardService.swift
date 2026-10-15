@@ -172,6 +172,7 @@ final class MessageForwardService: MessageForwardServiceProviding {
                     clientMessageId: clientMessageId,
                     forwardedFromId: message.id,
                     forwardedFromConversationId: sourceId,
+                    sticker: message.sticker?.ifWireWorthy,
                     protection: MessageProtectionIntent(ephemeralDurationSeconds: ephemeralDuration)
                 ))
                 return .queuedOffline(conversationId: targetConversationId)
@@ -186,7 +187,8 @@ final class MessageForwardService: MessageForwardServiceProviding {
                 forwardedFromId: message.id,
                 forwardedFromConversationId: sourceId,
                 ephemeralDuration: ephemeralDuration,
-                clientMessageId: clientMessageId
+                clientMessageId: clientMessageId,
+                sticker: message.sticker?.ifWireWorthy
             )
             let _: APIResponse<SendMessageResponseData> = try await api.post(
                 ConversationsEndpoint.byIdMessages(id: targetConversationId),

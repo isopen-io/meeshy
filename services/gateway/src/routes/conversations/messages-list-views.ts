@@ -15,13 +15,13 @@
  * La mesure du 2026-09-02, faite sur le corps SÉRIALISÉ des trois routes et non
  * sur leur code, rend deux écarts qu'aucune lecture du code ne montre :
  *
- * - **Les gardes divergent.** Le refus d'un lien de partage ÉCHU
- *   (403 `SHARE_LINK_EXPIRED`) n'existe QUE sur `GET .../messages`. Ni la
- *   recherche ni la liste des épinglés ne lit `expiresAt` : elles lisent le
- *   lien pour son seul `allowViewHistory` (`loadReaderHistoryFloor`), ce qui
- *   rétrécit une LECTURE sans jamais fermer la PORTE. Un invité dont le lien
- *   est mort ne peut plus lire le fil, et peut toujours en chercher un mot ou
- *   en lire les épingles.
+ * - **Les gardes divergeaient.** Le refus d'un lien de partage ÉCHU
+ *   (403 `SHARE_LINK_EXPIRED`) n'existait que sur `GET .../messages` : la
+ *   recherche et la liste des épinglés lisaient le lien pour son seul
+ *   `allowViewHistory` (`loadReaderHistoryFloor`), ce qui rétrécissait une
+ *   LECTURE sans fermer la PORTE. Depuis #7388, les deux routes dédiées et le
+ *   fil de réponses (`threads.ts`) appellent la même porte
+ *   (`readerShareLinkHasExpired`, `services/shareLinkReadGate.ts`).
  * - **La forme diverge, en partie corrigée depuis (#4885).** Au 2026-09-02,
  *   un résultat de recherche ne portait NI `isViewOnce`, NI `isBlurred`, NI
  *   `expiresAt`, NI `attachments`, NI `deletedAt` — son `select` ne les
@@ -63,6 +63,8 @@
 import type { PrismaClient } from '@meeshy/shared/prisma/client';
 import { applyPersonalHistoryHiding, type PersonalHistoryHiding } from '../../services/personalHistoryFilter';
 import { GENRES_DE_MEDIA, lireGenres, predicatDeMedia } from './messages-media-kinds';
+import { appearsInSearch, SEARCH_EXIT_LAW_SELECT } from '../../services/messaging/searchExitLaw';
+import type { ContentExitProjection } from '@meeshy/shared/utils/content-exit-law';
 
 /** Les cinq sous-collections que `?view=` sait désigner. */
 export type CollectionView = 'timeline' | 'thread' | 'pinned' | 'search' | 'media';
@@ -311,8 +313,11 @@ const CANDIDATS_TRADUITS = 200;
  * final. Une recherche est la surface la plus révélatrice d'un historique
  * effacé — elle rend un message par son CONTENU, donc en connaître un mot
  * suffit.
+ *
+ * #10429 — un message qui disparaît (vue unique, flamme, sur lui ou une pièce)
+ * n'entre pas dans l'ensemble : même loi que la route dédiée.
  */
-type LigneTrouvee = { readonly id: string; readonly createdAt: Date; readonly translations?: unknown };
+type LigneTrouvee = ContentExitProjection & { readonly id: string; readonly createdAt: Date; readonly translations?: unknown };
 
 export async function resolveSearchMessageIds(
   prisma: Pick<PrismaClient, 'message'>,
@@ -323,7 +328,7 @@ export async function resolveSearchMessageIds(
       where: applyPersonalHistoryHiding({ ...base, content: { contains: term, mode: 'insensitive' } }, hiding),
       orderBy: { createdAt: 'desc' },
       take: wanted,
-      select: { id: true, createdAt: true },
+      select: { id: true, createdAt: true, ...SEARCH_EXIT_LAW_SELECT },
     }),
     prisma.message.findMany({
       where: applyPersonalHistoryHiding(
@@ -336,13 +341,14 @@ export async function resolveSearchMessageIds(
       ),
       orderBy: { createdAt: 'desc' },
       take: CANDIDATS_TRADUITS,
-      select: { id: true, createdAt: true, translations: true },
+      select: { id: true, createdAt: true, translations: true, ...SEARCH_EXIT_LAW_SELECT },
     }),
   ])) as unknown as [ReadonlyArray<LigneTrouvee>, ReadonlyArray<LigneTrouvee>];
 
-  const vus = new Set<string>(parContenu.map((m) => m.id));
-  const fusion: LigneTrouvee[] = [...parContenu];
-  for (const candidat of candidatsTraduits) {
+  const ordinaires = parContenu.filter(appearsInSearch);
+  const vus = new Set<string>(ordinaires.map((m) => m.id));
+  const fusion: LigneTrouvee[] = [...ordinaires];
+  for (const candidat of candidatsTraduits.filter(appearsInSearch)) {
     if (vus.has(candidat.id)) continue;
     if (!traductionContient(candidat.translations, term)) continue;
     vus.add(candidat.id);

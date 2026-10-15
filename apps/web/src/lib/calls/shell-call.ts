@@ -1,4 +1,3 @@
-import type { DeliveryReceiptCredential } from '@/lib/notifications/delivery-receipt-credential';
 import { NOTIFICATION_CLICKED_MESSAGE } from '@/lib/notifications/tap-navigation';
 
 import { listenCallAnswerIntents } from './call-answer-intent';
@@ -19,7 +18,7 @@ import type { ActiveCall, CallPhase, CallStoreApi } from './call-store';
  *   l'appel quand il sonne dans l'app — la MÊME loi que l'intention du service
  *   worker web (`call-answer-intent.ts`) ;
  * - un appel qui quitte la sonnerie dans l'app retire la notification native ;
- * - le credential que « Refuser » utilise app tuée suit la session ;
+ * - le credential que « Refuser » utilise app tuée est posé par la coque elle-même, appels offerts ou non (`notifications/shell-credential.ts`, #10662) ;
  * - l'activité qui flotte en image dans l'image (#8144) le dit à la page, qui
  *   réduit son rendu à l'image (`pictureInPicture`) ; ses boutons micro et
  *   raccrocher reviennent à la page (`pictureInPictureAction`).
@@ -109,7 +108,6 @@ export type ShellCallEnvironment = {
   readonly hangup: () => void;
   readonly store: Pick<CallStoreApi, 'getState' | 'subscribe'>;
   readonly accept: () => void;
-  readonly watchCredential: (write: (value: DeliveryReceiptCredential) => void) => () => void;
   readonly now: () => number;
 };
 
@@ -117,15 +115,6 @@ const callIdOf = (data: unknown): string | null => {
   const callId = (data as { readonly callId?: unknown } | null)?.callId;
   return typeof callId === 'string' && callId.trim() !== '' ? callId : null;
 };
-
-const credentialOptions = ({ apiBase, credential }: DeliveryReceiptCredential): ShellCredentialOptions | null => {
-  if (credential === null) return null;
-  return credential.kind === 'registered'
-    ? { apiBase, kind: 'registered', token: credential.token }
-    : { apiBase, kind: 'anonymous', token: credential.sessionToken };
-};
-
-type ShellCredentialOptions = { readonly apiBase: string; readonly kind: 'registered' | 'anonymous'; readonly token: string };
 
 export function bindShellCall(env: ShellCallEnvironment): () => void {
   let attached = true;
@@ -170,17 +159,10 @@ export function bindShellCall(env: ShellCallEnvironment): () => void {
     if (action === 'hangup') env.hangup();
   });
 
-  const stopCredential = env.watchCredential((value) => {
-    const options = credentialOptions(value);
-    if (options === null) send('clearCredential', {});
-    else send('setCredential', options);
-  });
-
   return () => {
     attached = false;
     env.pictureInPicture(false);
     stopCommands();
     stopIntents();
-    stopCredential();
   };
 }

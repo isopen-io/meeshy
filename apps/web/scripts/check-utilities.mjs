@@ -148,8 +148,16 @@ export const usedClasses = (files) => {
  * `@xl:grid-cols-4` sortent en `.\@container`, `.\@xl\:grid-cols-4`) : sans
  * lui, l'administration, première à les employer, voyait seize classes
  * vivantes passer pour mortes.
+ *
+ * L'astérisque d'une multiplication `calc()` s'y protège de même
+ * (`w-[min(100%,calc(62dvh*9/16))]` sort en
+ * `.w-\[min\(100\%\,calc\(62dvh\*9\/16\)\)\]`, #10293) : sans lui, la
+ * première classe du dépôt à porter un `*` dans sa valeur arbitraire — une
+ * multiplication en `calc()` — passait pour morte alors que Tailwind l'avait
+ * bel et bien émise, exactement comme les apostrophes et l'arobase avant
+ * elle.
  */
-export const escapeForCss = (name) => name.replace(/[.[\]/%#(),!:'"@]/g, (c) => `\\${c}`);
+export const escapeForCss = (name) => name.replace(/[.[\]/%#(),!:'"@*]/g, (c) => `\\${c}`);
 
 /** Le corps `{ ... }` de la règle `.name{...}` dans `css`, ou `null` si absente. */
 export const findRuleBody = (css, name) => {

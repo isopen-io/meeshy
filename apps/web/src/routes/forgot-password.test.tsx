@@ -101,8 +101,13 @@ describe('/forgot-password prend la forme de /login', () => {
     expect([...el.querySelectorAll('a')].some((a) => a.getAttribute('href') === '/login')).toBe(true);
   });
 
-  test('le pied de marque, comme sur /login', () => {
-    expect(text(mount())).toContain('Services CEO');
+  test('le pied de marque, comme sur /login : « by services.ceo », un lien vers la plateforme (#10096)', () => {
+    const el = mount();
+    expect(text(el)).toContain('by services.ceo');
+    const credit = el.querySelector('a[href="https://services.ceo"]');
+    expect(credit?.getAttribute('target')).toBe('_blank');
+    expect(credit?.getAttribute('rel')).toBe('noopener noreferrer');
+    expect(credit?.textContent).toBe('by services.ceo — ouvre la plateforme services.ceo dans un nouvel onglet');
   });
 
   /** LA COLONNE EST CELLE DE LA CONNEXION, PARTAGÉE (#6643) — l'écran la

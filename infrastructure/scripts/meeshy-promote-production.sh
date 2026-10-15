@@ -16,7 +16,7 @@
 #   promote  <service>=sha256:<64 hex> [...]
 #   rollback <service> [...]
 #
-# <service> ∈ { gateway translator agent }. Rien d'autre.
+# <service> ∈ { gateway translator agent webapp }. Rien d'autre.
 #
 # CE QUE CE SCRIPT FAIT
 #   - Il ne RECONSTRUIT rien et ne choisit rien : il promeut un digest que le
@@ -35,9 +35,11 @@
 #     conteneur, aucun accès à MongoDB ou Redis ;
 #   - aucune purge (`prune`), aucun `down`, aucun volume : les images de
 #     retour arrière doivent survivre, et les données ne sont pas son affaire ;
-#   - jamais la webapp : son image de staging porte `gate.staging.meeshy.me`
-#     figée au build (VITE_API_BASE, docker.yml). La promouvoir enverrait les
-#     utilisateurs de production sur la passerelle de staging.
+#   - jamais une webapp dont l'origine est figée au build : depuis #10208,
+#     l'image se configure au démarrage (`MEESHY_API_URL`, sinon l'hôte de la
+#     page) et la même image vaut pour staging et production. Une image
+#     antérieure — sans l'entrypoint `meeshy-runtime-config` — porte encore
+#     `gate.staging.meeshy.me` figée : elle est refusée au plan.
 #
 # RÉPÉTITION SUR STAGING (root sur l'hôte uniquement — `restrict` et
 # `PermitUserEnvironment no` empêchent la CI de poser ces variables) :
@@ -71,9 +73,13 @@ OVERRIDE_NAME="docker-compose.promotion.yml"
 LOCK_FILE="/run/lock/meeshy-promotion.lock"
 REGISTRY_NS="isopen"
 
-# ÉNUMÉRÉE, et dans l'ORDRE de bascule : la passerelle, face publique, en
-# dernier. `webapp`/`frontend` n'y sont pas, et c'est une décision (en-tête).
-SERVICES_PROMOUVABLES="translator agent gateway"
+# ÉNUMÉRÉE, et dans l'ORDRE de bascule : les services internes, puis la
+# passerelle, puis la webapp — qui peut appeler une route que seule la
+# nouvelle passerelle sert, jamais l'inverse.
+SERVICES_PROMOUVABLES="translator agent gateway webapp"
+# L'entrypoint qui écrit `config.js` au démarrage (#10208) : sa présence
+# prouve que l'image ne porte aucune origine figée au build.
+WEBAPP_ENTRYPOINT="meeshy-runtime-config"
 
 RC_REFUS=64
 RC_ECHEC=70
@@ -94,8 +100,16 @@ delai_sante() {
   esac
 }
 
-conteneur_cible() { echo "meeshy-$1$TARGET_SUFFIX"; }
-conteneur_source() { echo "meeshy-$1$SOURCE_SUFFIX"; }
+# Le service `webapp` (image `meeshy-webapp`) tourne sous le conteneur
+# `meeshy-frontend` sur les deux environnements.
+nom_conteneur() {
+  case "$1" in
+    webapp) echo frontend ;;
+    *) echo "$1" ;;
+  esac
+}
+conteneur_cible() { echo "meeshy-$(nom_conteneur "$1")$TARGET_SUFFIX"; }
+conteneur_source() { echo "meeshy-$(nom_conteneur "$1")$SOURCE_SUFFIX"; }
 conteneur_epingle() { echo "meeshy-rollback-pin-$1$TARGET_SUFFIX"; }
 depot() { echo "$REGISTRY_NS/meeshy-$1"; }
 
@@ -108,8 +122,8 @@ est_promouvable() {
 
 refuser_service() {
   case "$1" in
-    webapp|frontend|web)
-      refus "« $1 » n'est pas promouvable : l'image de staging porte gate.staging.meeshy.me figée au build (VITE_API_BASE)." ;;
+    frontend|web)
+      refus "« $1 » : le service s'appelle « webapp »." ;;
     *)
       refus "service non déclaré « $1 »" ;;
   esac
@@ -299,14 +313,34 @@ lire_cibles() {
     CIBLE[$svc]="$digest"
     ORDRE_DEMANDE="$ORDRE_DEMANDE $svc"
   done
+  verifier_couple "$ORDRE_DEMANDE "
 }
 
 lire_services() {
   local svc
   [ "$#" -gt 0 ] || refus "aucun service demandé"
+  local vus=" "
   for svc in "$@"; do
     est_promouvable "$svc" || refuser_service "$svc"
+    case "$vus" in *" $svc "*) refus "« $svc » demandé deux fois" ;; esac
+    vus="$vus$svc "
   done
+  verifier_couple " $* "
+}
+
+# #10290 — la passerelle et l'agent partagent un protocole qui évolue ensemble
+# (secret interne #10242, canal ZMQ signé #10288, routes de saison #10246) :
+# l'un n'est jamais DEMANDÉ sans l'autre, ni en promotion ni en retour arrière.
+# Un agent inchangé se demande quand même : le plan le marque
+# « deja-en-production », la bascule le saute, et son retour arrière ne fait rien.
+# Le couple bascule dans UNE commande, un service après l'autre : pendant la
+# fenêtre (santé de l'agent, puis recréation de la passerelle), un agent récent
+# côtoie l'ancienne passerelle — ses événements ZMQ non signés sont refusés.
+verifier_couple() {
+  local demandes="$1" g=0 a=0
+  case "$demandes" in *" gateway "*) g=1 ;; esac
+  case "$demandes" in *" agent "*) a=1 ;; esac
+  [ "$g" -eq "$a" ] || refus "passerelle et l'agent se promeuvent ensemble (#10290) : demander gateway ET agent dans la même commande"
 }
 
 # Imprime une ligne PLAN par service, ou refuse. Ne modifie rien.
@@ -335,6 +369,11 @@ planifier() {
       || refus "$svc : l'image de production n'a aucun digest de registre — retour arrière non garanti"
     prod_ref="$(depot "$svc")@$prod_digest"
 
+    if [ "$svc" = "webapp" ] \
+      && ! docker image inspect -f '{{json .Config.Entrypoint}}' "$ref" 2>/dev/null | grep -q "$WEBAPP_ENTRYPOINT"; then
+      refus "webapp : $digest est antérieure à #10208 (pas d'entrypoint $WEBAPP_ENTRYPOINT) — son origine d'API est figée au build"
+    fi
+
     if est_gpu "$image_cible" && ! est_gpu "$ref"; then
       refus "$svc : la production tourne en variante GPU, le digest demandé ne l'est pas"
     fi
@@ -358,8 +397,38 @@ planifier() {
 # précédent (deux retours successifs se rejouent l'un l'autre, comme attendu).
 # mode `auto` : retour après une bascule ratée — le digest raté n'est PAS noté
 # comme précédent, pour qu'un `rollback` manuel ultérieur n'y retourne jamais.
+# #10290 — ce que la DERNIÈRE promotion a fait de ce service : « promu » (il a
+# basculé), « inchange » (déjà en production, sauté). Absent (état antérieur à
+# #10290) : traité comme « promu », le comportement d'avant.
+derniere_action() { cat "$STATE_DIR/tx.$1" 2>/dev/null || echo promu; }
+
+# Plan d'un retour arrière manuel, SANS rien muter : une ligne par service, ou refus
+# de toute la demande si un service à revenir n'a pas de précédent noté.
+planifier_retour() {
+  local svc precedent
+  # D'abord TOUT vérifier : un refus ne laisse aucune ligne de plan derrière lui.
+  for svc in "$@"; do
+    [ "$(derniere_action "$svc")" = "inchange" ] && continue
+    [ -n "$(cat "$STATE_DIR/previous.$svc" 2>/dev/null || true)" ] \
+      || refus "$svc : aucun digest précédent noté — retour arrière refusé en entier, rien n'a bougé"
+  done
+  for svc in "$@"; do
+    if [ "$(derniere_action "$svc")" = "inchange" ]; then
+      dire "RETOUR_PLAN service=$svc action=rien raison=inchange-a-la-derniere-promotion"
+      continue
+    fi
+    precedent="$(cat "$STATE_DIR/previous.$svc" 2>/dev/null || true)"
+    [ -n "$precedent" ] || refus "$svc : aucun digest précédent noté — retour arrière refusé en entier, rien n'a bougé"
+    dire "RETOUR_PLAN service=$svc action=revenir vers=$precedent"
+  done
+}
+
 revenir() {
   local svc="$1" mode="${2:-manuel}" precedent courant
+  if [ "$mode" = "manuel" ] && [ "$(derniere_action "$svc")" = "inchange" ]; then
+    dire "RIEN service=$svc (inchangé à la dernière promotion)"
+    return 0
+  fi
   precedent="$(cat "$STATE_DIR/previous.$svc" 2>/dev/null || true)"
   [ -n "$precedent" ] || { journal "$svc : aucun digest précédent noté"; return "$RC_REFUS"; }
   courant="$(cat "$STATE_DIR/current.$svc" 2>/dev/null || true)"
@@ -387,12 +456,14 @@ promouvoir() {
     [ -n "$digest" ] || continue
     ref="$(depot "$svc")@$digest"
     if [ "${PROD_REF[$svc]}" = "$ref" ]; then
+      echo inchange > "$STATE_DIR/tx.$svc"
       dire "DEJA service=$svc digest=$digest"
       continue
     fi
     epingler "$svc" "${PROD_REF[$svc]}" \
       || { journal "$svc : impossible d'épingler ${PROD_REF[$svc]} — pas de bascule sans retour arrière"; echec=1; break; }
     echo "${PROD_REF[$svc]}" > "$STATE_DIR/previous.$svc"
+    echo promu > "$STATE_DIR/tx.$svc"
     historique "promote service=$svc vers=$ref depuis=${PROD_REF[$svc]} run=${run:-manuel}"
     if basculer "$svc" "$ref"; then
       dire "PROMU service=$svc digest=$digest precedent=${PROD_REF[$svc]#*@}"
@@ -435,14 +506,25 @@ init() {
 # ---------------------------------------------------------------------------
 self_test() {
   local echecs=0 rc interdit
-  essai() { ( "$0" __valider "$@" ) >/dev/null 2>&1; }
+  # Même interpréteur que l'appelant (bash ≥ 4 : tableaux associatifs), pas celui du shebang.
+  essai() { ( "${BASH:-bash}" "$0" __valider "$@" ) >/dev/null 2>&1; }
 
-  essai promote "gateway=sha256:$(printf 'a%.0s' $(seq 64))"; rc=$?
-  [ "$rc" -eq 0 ] || { echo "AVEUGLE: une demande valide a été refusée (rc=$rc)" >&2; echecs=$((echecs + 1)); }
+  for valide in \
+    "promote gateway=sha256:$(printf 'a%.0s' $(seq 64)) agent=sha256:$(printf 'c%.0s' $(seq 64))" \
+    "promote webapp=sha256:$(printf 'b%.0s' $(seq 64))" \
+    "rollback gateway agent" \
+    "rollback webapp"; do
+    # shellcheck disable=SC2086
+    essai $valide; rc=$?
+    [ "$rc" -eq 0 ] || { echo "AVEUGLE: « $valide » a été refusée (rc=$rc)" >&2; echecs=$((echecs + 1)); }
+  done
 
   for interdit in \
-    "promote webapp=sha256:$(printf 'a%.0s' $(seq 64))" \
+    "promote frontend=sha256:$(printf 'a%.0s' $(seq 64))" \
     "promote database=sha256:$(printf 'a%.0s' $(seq 64))" \
+    "promote gateway=sha256:$(printf 'a%.0s' $(seq 64))" \
+    "rollback agent" \
+    "rollback gateway agent gateway" \
     "promote gateway=sha256:abc" \
     "promote gateway=sha256:$(printf 'A%.0s' $(seq 64))" \
     "promote gateway=latest" \
@@ -488,6 +570,8 @@ valider() {
 main() {
   [ "${1:-}" = "--self-test" ] && { self_test; return $?; }
   [ "${1:-}" = "__valider" ] && { shift; valider "$@"; return $?; }
+  # Témoin sans Docker : plan d'un retour arrière, lu dans STATE_DIR, sans mutation.
+  [ "${1:-}" = "__plan_retour" ] && { shift; lire_services "$@"; planifier_retour "$@"; return $?; }
 
   local -a mots
   local demande="${SSH_ORIGINAL_COMMAND-$*}"
@@ -522,6 +606,7 @@ main() {
     rollback)
       surcharge_lue || refus "la surcharge n'est pas lue par compose — lancer init (voir note)"
       local svc rc_total=0
+      planifier_retour "${mots[@]:1}"
       for svc in "${mots[@]:1}"; do revenir "$svc" || rc_total=$?; done
       return "$rc_total" ;;
   esac

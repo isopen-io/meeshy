@@ -134,7 +134,7 @@ async function buildApp(opts: {
   const { authenticated = true, withSocialEvents = false } = opts;
 
   const app = Fastify({ logger: false });
-  const prisma = {} as any;
+  const prisma = { post: { findFirst: async () => null } } as any;
   const requiredAuth = makePreValidationAuth(authenticated);
 
   app.decorate('notificationService', {

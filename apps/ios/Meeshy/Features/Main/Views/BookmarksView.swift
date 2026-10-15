@@ -35,7 +35,7 @@ struct BookmarksView: View {
     @State private var storyAuthorUserId: String?
     @State private var filter: BookmarkFilter = .all
 
-    @StateObject private var impressions = ImpressionBatcher(source: "profile")
+    @StateObject private var impressions = ImpressionBatcher(source: "profile", surface: .bookmarks)
 
     /// Facette de tri de l'écran. `nonisolated` sur le TYPE : `CaseIterable` et
     /// `Identifiable` sont exercés hors du MainActor par le `ForEach` du picker.
@@ -72,6 +72,7 @@ struct BookmarksView: View {
         }
         .background(theme.backgroundGradient.ignoresSafeArea())
         .task { await viewModel.loadBookmarks() }
+        .onDisappear { Task { await impressions.flushNow() } }
         .fullScreenCover(isPresented: Binding(
             get: { storyAuthorUserId != nil },
             set: { if !$0 { storyAuthorUserId = nil } }
@@ -154,7 +155,9 @@ struct BookmarksView: View {
                         // comme n'importe quelle autre surface : leur apparition
                         // compte une impression. Elle était la dernière vue de
                         // contenu à ne rien remonter.
-                        .onAppear { trackImpression(postId: post.id) }
+                        .countsListedImpression(of: post.id, isVideo: post.isReel, in: impressions) {
+                            visiblePosts.firstIndex { $0.id == post.id }
+                        }
                     }
 
                     if viewModel.isLoading {
@@ -188,10 +191,6 @@ struct BookmarksView: View {
         .accessibilityLabel(String(localized: "bookmarks.filter.a11y", defaultValue: "Filtrer les favoris", bundle: .main))
     }
 
-    private func trackImpression(postId: String) {
-        impressions.record(postId)
-    }
-
     /// Un réel s'ouvre dans le lecteur immersif, amorcé avec les SEULS réels
     /// enregistrés : y glisser les posts enregistrés donnerait des pages vides
     /// entre deux vidéos.
@@ -200,12 +199,12 @@ struct BookmarksView: View {
         if post.isReel {
             ReelsPresenter.shared.present(
                 posts: FeedPost.reels(from: viewModel.posts),
-                startId: post.id
+                startId: post.id,
+                from: .bookmarks
             )
         } else {
-            router.push(.postDetail(post.id, post))
+            router.openPostDetail(post, from: .bookmarks)
         }
-        Task { try? await PostService.shared.viewPost(postId: post.id, duration: nil) }
     }
 
     private var bookmarksEmptyTitle: String {

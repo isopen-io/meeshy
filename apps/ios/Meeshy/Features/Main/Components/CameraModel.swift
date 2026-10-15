@@ -16,7 +16,13 @@ final class CameraModel: NSObject, ObservableObject, ComposerCaptureCameraProvid
         // Un modèle libéré sans `stop()` ne laisse pas son guet de la scène
         // inscrit au centre de notifications (#9295).
         if let subjectAreaObserver { NotificationCenter.default.removeObserver(subjectAreaObserver) }
+        sessionObservers.forEach { NotificationCenter.default.removeObserver($0) }
     }
+    /// Le guet de la santé de la session (#10308) — `CameraModel+Recovery`.
+    nonisolated(unsafe) var sessionObservers: [NSObjectProtocol] = []
+    /// Le rang de la dernière entrée vidéo posée (#10308) : la couche d'aperçu
+    /// ne règle sa connexion qu'à ce changement, jamais à chaque passe.
+    @Published private(set) var inputEpoch = 0
     nonisolated(unsafe) let session = AVCaptureSession()
     var capturedPhoto: UIImage?
     /// Les octets tels que l'appareil les a produits — EXIF compris. `nil`
@@ -26,6 +32,16 @@ final class CameraModel: NSObject, ObservableObject, ComposerCaptureCameraProvid
     /// L'enregistrement du BRUT de la dernière prise, posé AVANT son identifiant (#9351) —
     /// `nil` quand `CaptureSavePolicy` ne l'enregistre pas (défaut, #9684).
     var librarySave: Task<Bool, Never>?
+    /// Réglages › Médias « enregistrer l'original », lu par l'hôte (sa politique
+    /// injectée) ; sans hôte, le réglage stocké.
+    var savesOriginalSetting: (@MainActor () -> Bool)?
+
+    /// Le brut de TOUTE prise rejoint Photos si Réglages › Médias le demande, hors
+    /// cadre compris : la directive #10284 fixe un défaut, le réglage prime
+    /// (correction porteur 2026-10-12, `CaptureSaveLaw.destination(for:savesOriginal:)`).
+    func savesOriginal() -> Bool {
+        savesOriginalSetting?() ?? CaptureSavePolicy.stored().savesOriginal
+    }
     /// Le jeton de la prise, de son départ à sa LIVRAISON — chaque fichier porte
     /// le sien (`segmentTokens`) : `capturedVideoId` à l'arrivée, `abandonedRecordingId` sans fichier.
     private(set) var recordingId: String?
@@ -60,6 +76,13 @@ final class CameraModel: NSObject, ObservableObject, ComposerCaptureCameraProvid
     /// L'entrée de l'autre objectif, prête avant la bascule (#9753).
     nonisolated let preparedInputs = ComposerCameraPreparedInputs<AVCaptureDeviceInput>()
     nonisolated let liveFeed = ComposerCameraFeed()
+    /// Le vœu de la couche d'aperçu, que la bascule applique dans sa transaction (#10308).
+    nonisolated let previewMirroring = ComposerPreviewMirroring()
+    /// La session est configurée (ou en cours de l'être sur sa file) : on ne la
+    /// refait pas (#10307).
+    private(set) var sessionIsPrepared = false
+    /// De l'armement à la première trame, relevé dans la console (#10307).
+    nonisolated let firstFrameClock = ComposerCameraFirstFrameClock()
     #if DEBUG
     /// La caméra de recette (#9351) — `nil` hors simulateur ou sans `-MeeshyCaptureFixture`.
     let fixture: ComposerCaptureFixtureDriver?
@@ -171,34 +194,71 @@ final class CameraModel: NSObject, ObservableObject, ComposerCaptureCameraProvid
         }
     }
 
-    /// La configuration se fait sur la file de la session ; l'objectif installé
-    /// et le micro reviennent au fil principal, dans l'ordre de la file.
+    /// **La session se prépare AVANT d'être montrée** (#10307, porteur
+    /// 2026-10-12 : « armer la caméra vite »). Le composer qui s'ouvre sur un
+    /// format qui filme la configure déjà — sorties, objectif, connexions —
+    /// sans la lancer : aucun voyant caméra ne s'allume tant qu'on ne vise pas,
+    /// et l'armement n'a plus qu'à la démarrer. Seulement si l'accès est DÉJÀ
+    /// accordé : préparer ne demande jamais rien.
+    func prewarm() {
+        guard !runsFixture, AVCaptureDevice.authorizationStatus(for: .video) == .authorized else { return }
+        prepareSession()
+    }
+
+    /// Arme, puis lance : la configuration n'est faite qu'UNE fois par modèle —
+    /// un ré-armement ne retire ni ne repose rien (#10307), il garde l'objectif
+    /// choisi et démarre. Le micro déjà autorisé entre avant le lancement.
     private func setupSession() {
-        let armeLeMicro = CameraAudioArming.armsAtSetup(microphone: AVCaptureDevice.authorizationStatus(for: .audio),
-                                                        otherAudioPlaying: AVAudioSession.sharedInstance().isOtherAudioPlaying)
+        let prechauffee = sessionIsPrepared
+        prepareSession()
+        armMicrophoneAtSetup()
+        firstFrameClock.start(prewarmed: prechauffee)
+        sessionQueue.setRunning(true, session)
+    }
+
+    /// La configuration se fait sur la file de la session ; l'objectif installé
+    /// revient au fil principal, dans l'ordre de la file.
+    private func prepareSession() {
+        observeSessionHealth()
+        guard !sessionIsPrepared else { return }
+        sessionIsPrepared = true
+        liveFeed.watchFirstFrame { [firstFrameClock] in _ = firstFrameClock.report() }
         sessionQueue.perform { [weak self] in
             guard let self else { return }
             self.session.beginConfiguration()
-            self.session.sessionPreset = .high
+            if self.session.sessionPreset != .high { self.session.sessionPreset = .high }
             if self.session.canAddOutput(self.photoOutput) { self.session.addOutput(self.photoOutput) }
             if self.session.canAddOutput(self.videoOutput) { self.session.addOutput(self.videoOutput) }
             self.frameOutput.alwaysDiscardsLateVideoFrames = true
             self.frameOutput.setSampleBufferDelegate(self.liveFeed, queue: self.liveFeed.queue)
             if self.session.canAddOutput(self.frameOutput) { self.session.addOutput(self.frameOutput) }
             let installe = Self.installVideoInput(in: self.session, position: .back, outputs: self.orientedOutputs,
-                                                  prepared: self.preparedInputs)
-            let micro = armeLeMicro && Self.addAudioInput(to: self.session)
+                                                  prepared: self.preparedInputs,
+                                                  previewWanted: self.previewMirroring.isWanted)
             self.session.commitConfiguration()
             DispatchQueue.main.async {
                 MainActor.assumeIsolated {
                     if let installe { self.adopt(installe) }
-                    if micro { self.hasAudioInput = true }
+                    self.inputEpoch += 1
                 }
             }
+            self.preparedInputs.prepare(.front) { Self.videoInput(position: .front) }
         }
-        sessionQueue.setRunning(true, session)
+    }
+
+    /// Le micro déjà autorisé entre dans la session ARRÊTÉE (#9328), jamais
+    /// pendant qu'une musique joue ; décidé à l'armement, pas à la préparation.
+    private func armMicrophoneAtSetup() {
+        guard !hasAudioInput, CameraAudioArming.armsAtSetup(
+            microphone: AVCaptureDevice.authorizationStatus(for: .audio),
+            otherAudioPlaying: AVAudioSession.sharedInstance().isOtherAudioPlaying) else { return }
         sessionQueue.perform { [weak self] in
-            self?.preparedInputs.prepare(.front) { Self.videoInput(position: .front) }
+            guard let self else { return }
+            self.session.beginConfiguration()
+            let micro = Self.addAudioInput(to: self.session)
+            self.session.commitConfiguration()
+            guard micro else { return }
+            DispatchQueue.main.async { MainActor.assumeIsolated { self.hasAudioInput = true } }
         }
     }
 
@@ -273,7 +333,8 @@ final class CameraModel: NSObject, ObservableObject, ComposerCaptureCameraProvid
     nonisolated private static func installVideoInput(
         in session: AVCaptureSession, position: AVCaptureDevice.Position,
         outputs: [(AVCaptureOutput, ComposerCaptureMirrorRule.Output)],
-        prepared: ComposerCameraPreparedInputs<AVCaptureDeviceInput>
+        prepared: ComposerCameraPreparedInputs<AVCaptureDeviceInput>,
+        previewWanted: Bool
     ) -> InstalledCamera? {
         let ancienne = session.inputs.compactMap { $0 as? AVCaptureDeviceInput }.first { $0.device.hasMediaType(.video) }
         let nouvelle = prepared.take(position) ?? videoInput(position: position)
@@ -283,6 +344,7 @@ final class CameraModel: NSObject, ObservableObject, ComposerCaptureCameraProvid
                                                                        old: ancienne?.device.position) {
                 orient(outputs, for: objectif)
             }
+            ComposerPreviewMirroring.align(session.connections, wanted: previewWanted)
             guard issue == .swapped, let device = nouvelle?.device, let echelle else { return }
             openLens(device, opening: echelle.opening)
         }
@@ -419,11 +481,13 @@ final class CameraModel: NSObject, ObservableObject, ComposerCaptureCameraProvid
                 self.paintCover(ComposerCameraSwitchRule.Frame(image: trame), generation: generation, leaving: quitte)
             }
             let installe = Self.installVideoInput(in: self.session, position: position, outputs: self.orientedOutputs,
-                                                  prepared: self.preparedInputs)
+                                                  prepared: self.preparedInputs,
+                                                  previewWanted: self.previewMirroring.isWanted)
             let posee = CACurrentMediaTime()
             DispatchQueue.main.async {
                 MainActor.assumeIsolated {
                     if let installe { self.adopt(installe) }
+                    self.inputEpoch += 1
                     func ms(_ a: CFTimeInterval, _ b: CFTimeInterval) -> Int {
                         ComposerCameraSwitchTiming.milliseconds(from: a, to: b)
                     }
@@ -864,12 +928,24 @@ final class CameraModel: NSObject, ObservableObject, ComposerCaptureCameraProvid
     }
 
     /// Le nouvel objectif est en place : la prise reprend — ou se clôt, si
-    /// l'auteur a demandé l'arrêt pendant la bascule.
+    /// l'auteur a demandé l'arrêt pendant la bascule. Sa connexion peut naître
+    /// inactive : la reprise l'attend un instant (#10308) plutôt que de clore la
+    /// prise sur un refus d'une image ; un arrêt demandé entre-temps reste en file.
     private func resumeRecordingAfterSwitch() {
-        isSwitchingCameraDuringRecording = false
         let suite = switchFollower
         switchFollower = nil
         suite?(currentPosition)
+        Task { @MainActor [weak self] in
+            let limite = Date().addingTimeInterval(ComposerCameraSwitchRule.segmentResumeWait)
+            while let self, !self.videoRecordingIsPossible, !self.pendingStopRequested, Date() < limite {
+                try? await Task.sleep(nanoseconds: 30_000_000)
+            }
+            self?.reopenSegmentAfterSwitch()
+        }
+    }
+
+    private func reopenSegmentAfterSwitch() {
+        isSwitchingCameraDuringRecording = false
         if pendingStopRequested {
             pendingStopRequested = false
             let jeton = recordingId
@@ -897,7 +973,7 @@ final class CameraModel: NSObject, ObservableObject, ComposerCaptureCameraProvid
             // last recorded segment rather than losing the whole capture.
             if let lastSegment = segments.last {
                 capturedVideoURL = lastSegment
-                librarySave = CaptureSavePolicy.stored().savesOriginal
+                librarySave = savesOriginal()
                     ? Task { await Self.saveToPhotoLibrary { await PhotoLibraryManager.shared.saveVideo(at: lastSegment) } }
                     : nil
                 capturedVideoId = token ?? UUID().uuidString
@@ -906,7 +982,7 @@ final class CameraModel: NSObject, ObservableObject, ComposerCaptureCameraProvid
             return abandonRecording(token: token)
         }
         capturedVideoURL = finalURL
-        librarySave = CaptureSavePolicy.stored().savesOriginal
+        librarySave = savesOriginal()
             ? Task { await Self.saveToPhotoLibrary { await PhotoLibraryManager.shared.saveVideo(at: finalURL) } }
             : nil
         capturedVideoId = token ?? UUID().uuidString
@@ -1038,19 +1114,19 @@ extension CameraModel: AVCapturePhotoCaptureDelegate {
         // `PhotoLibraryManager` is deliberately non-@MainActor so its
         // `performChanges` block runs on Photos' own queue without the
         // executor-isolation SIGTRAP the previous inline save hit.
-        // L'original ne rejoint Photos que si le réglage le demande (#9684) :
-        // la prise reste dans la session de toute façon.
+        // L'original ne rejoint Photos que si le réglage le demande (#9684),
+        // quelle que soit la zone de la prise (#10284) : la prise reste dans la
+        // session de toute façon.
         let nom = ComposerPhotoEncoding.fileName(for: data, id: UUID().uuidString)
-        let enregistrement: Task<Bool, Never>? = CaptureSavePolicy.stored().savesOriginal
-            ? Task { await CameraModel.saveToPhotoLibrary { await PhotoLibraryManager.shared.saveImageFile(data, fileName: nom) } }
-            : nil
         Task { @MainActor in
             self.isTakingPhoto = false
             self.capturedPhoto = image
             // Les octets TRAITÉS, publiés à côté de l'image : ils portent
             // l'EXIF de la prise, qu'une `UIImage` ne rend pas.
             self.capturedPhotoData = data
-            self.librarySave = enregistrement
+            self.librarySave = self.savesOriginal()
+                ? Task { await CameraModel.saveToPhotoLibrary { await PhotoLibraryManager.shared.saveImageFile(data, fileName: nom) } }
+                : nil
             self.capturedPhotoId = UUID().uuidString
         }
     }

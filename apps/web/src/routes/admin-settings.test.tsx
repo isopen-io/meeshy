@@ -405,6 +405,7 @@ describe('qui entre dans les réglages — canAccessAdmin', () => {
 
     expect(host.querySelector('[data-admin-page-title]')?.textContent).toBe('Réglages');
     expect(host.querySelector('[data-admin-page-header] p')?.textContent).toContain('Votre accès');
-    expect(host.querySelector('[data-admin-page-header] nav')?.textContent).toContain('Plateforme');
+    expect(host.querySelector('[data-admin-page-header] nav')?.textContent).toContain('Système');
+    expect(host.querySelector('[data-admin-page-header] nav')?.textContent).not.toContain('Opérations');
   });
 });

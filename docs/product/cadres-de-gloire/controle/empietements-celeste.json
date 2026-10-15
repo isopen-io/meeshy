@@ -1,0 +1,197 @@
+[
+ {
+  "file": "celeste-ambassadeur-1",
+  "overlap": 0,
+  "face": 0,
+  "depth": 0,
+  "bbox": null,
+  "windowPx": 131531,
+  "layout": "pied",
+  "verdict": "ok"
+ },
+ {
+  "file": "celeste-ambassadeur-2",
+  "overlap": 0,
+  "face": 0,
+  "depth": 0,
+  "bbox": null,
+  "windowPx": 138121,
+  "layout": "pied",
+  "verdict": "ok"
+ },
+ {
+  "file": "celeste-ambassadeur-3",
+  "overlap": 0,
+  "face": 0,
+  "depth": 0,
+  "bbox": null,
+  "windowPx": 138208,
+  "layout": "balustrade",
+  "verdict": "ok"
+ },
+ {
+  "file": "celeste-ambassadeur-4",
+  "overlap": 21,
+  "face": 0,
+  "depth": 4,
+  "bbox": [
+   98,
+   690,
+   103,
+   697
+  ],
+  "windowPx": 139951,
+  "layout": "pied",
+  "verdict": "ok"
+ },
+ {
+  "file": "celeste-ambassadeur-5",
+  "overlap": 0,
+  "face": 0,
+  "depth": 0,
+  "bbox": null,
+  "windowPx": 132255,
+  "layout": "perchés",
+  "verdict": "ok"
+ },
+ {
+  "file": "celeste-legende-1",
+  "overlap": 0,
+  "face": 0,
+  "depth": 0,
+  "bbox": null,
+  "windowPx": 129463,
+  "layout": "pied",
+  "verdict": "ok"
+ },
+ {
+  "file": "celeste-legende-2",
+  "overlap": 0,
+  "face": 0,
+  "depth": 0,
+  "bbox": null,
+  "windowPx": 133912,
+  "layout": "perchés",
+  "verdict": "ok"
+ },
+ {
+  "file": "celeste-legende-3",
+  "overlap": 0,
+  "face": 0,
+  "depth": 0,
+  "bbox": null,
+  "windowPx": 138586,
+  "layout": "pied",
+  "verdict": "ok"
+ },
+ {
+  "file": "celeste-legende-4",
+  "overlap": 0,
+  "face": 0,
+  "depth": 0,
+  "bbox": null,
+  "windowPx": 133002,
+  "layout": "pied",
+  "verdict": "ok"
+ },
+ {
+  "file": "celeste-legende-5",
+  "overlap": 0,
+  "face": 0,
+  "depth": 0,
+  "bbox": null,
+  "windowPx": 132529,
+  "layout": "pied",
+  "verdict": "ok"
+ },
+ {
+  "file": "celeste-mythe-a",
+  "overlap": 0,
+  "face": 0,
+  "depth": 0,
+  "bbox": null,
+  "windowPx": 128623,
+  "layout": "pied",
+  "verdict": "ok"
+ },
+ {
+  "file": "celeste-mythe-b",
+  "overlap": 0,
+  "face": 0,
+  "depth": 0,
+  "bbox": null,
+  "windowPx": 124752,
+  "layout": "pied",
+  "verdict": "ok"
+ },
+ {
+  "file": "celeste-mythe-c",
+  "overlap": 0,
+  "face": 0,
+  "depth": 0,
+  "bbox": null,
+  "windowPx": 93777,
+  "layout": "pied",
+  "verdict": "ok"
+ },
+ {
+  "file": "celeste-oracle-a",
+  "overlap": 0,
+  "face": 0,
+  "depth": 0,
+  "bbox": null,
+  "windowPx": 137609,
+  "layout": "pied",
+  "verdict": "ok"
+ },
+ {
+  "file": "celeste-oracle-b",
+  "overlap": 0,
+  "face": 0,
+  "depth": 0,
+  "bbox": null,
+  "windowPx": 155311,
+  "layout": "feuilles",
+  "verdict": "ok"
+ },
+ {
+  "file": "celeste-oracle-c",
+  "overlap": 0,
+  "face": 0,
+  "depth": 0,
+  "bbox": null,
+  "windowPx": 137244,
+  "layout": "pied",
+  "verdict": "ok"
+ },
+ {
+  "file": "celeste-orateur-a",
+  "overlap": 0,
+  "face": 0,
+  "depth": 0,
+  "bbox": null,
+  "windowPx": 143996,
+  "layout": "pied",
+  "verdict": "ok"
+ },
+ {
+  "file": "celeste-orateur-b",
+  "overlap": 0,
+  "face": 0,
+  "depth": 0,
+  "bbox": null,
+  "windowPx": 129835,
+  "layout": "pied",
+  "verdict": "ok"
+ },
+ {
+  "file": "celeste-orateur-c",
+  "overlap": 0,
+  "face": 0,
+  "depth": 0,
+  "bbox": null,
+  "windowPx": 129297,
+  "layout": "pied",
+  "verdict": "ok"
+ }
+]

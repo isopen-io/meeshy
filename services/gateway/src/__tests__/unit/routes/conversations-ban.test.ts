@@ -6,6 +6,7 @@
  * @jest-environment node
  */
 
+import { roomDeliveries } from '../../helpers/room-deliveries';
 import { describe, it, expect, jest, beforeAll, afterAll } from '@jest/globals';
 import Fastify, { FastifyInstance } from 'fastify';
 import { makeChainableIO } from '../../helpers/chainable-io';
@@ -42,7 +43,7 @@ const CONV_ID = 'conv-aabbcc';
 function makeSocketIO() {
   const mockFetchSockets = jest.fn<any>().mockResolvedValue([{ leave: jest.fn() }]);
   const mockIo = {
-    to: jest.fn().mockReturnThis(),
+    to: jest.fn().mockReturnThis(), except: jest.fn().mockReturnThis(),
     emit: jest.fn(),
     in: jest.fn().mockReturnValue({ fetchSockets: mockFetchSockets }),
   };
@@ -392,17 +393,17 @@ describe('PATCH …/ban — les AUTRES appareils du banni', () => {
 
   afterAll(async () => { await app.close(); });
 
-  it('chaîne la room PERSONNELLE du banni, après celles des restants', () => {
-    expect(io._roomsFor('conversation:participant-banned')).toEqual([
-      `conversation:${CONV_ID}`,
-      'user:user-witness',
-      'user:part-anon',
-      `user:${TARGET_USER_ID}`,
-    ]);
+  it('atteint la room PERSONNELLE du banni, celles des restants et le fil — l\'effectif aux seuls comptes restants (#10205)', () => {
+    const delivered = roomDeliveries(io._sendsFor('conversation:participant-banned'));
+    expect([...delivered.keys()].sort()).toEqual([`conversation:${CONV_ID}`, 'user:part-anon', `user:${TARGET_USER_ID}`, 'user:user-witness'].sort());
+    expect(delivered.get('user:user-witness')).toHaveProperty('memberCount');
+    for (const room of [`conversation:${CONV_ID}`, 'user:part-anon', `user:${TARGET_USER_ID}`]) {
+      expect(delivered.get(room)).not.toHaveProperty('memberCount');
+    }
   });
 
-  it("n'émet qu'UNE fois — un appareil du banni resté dans la room ne double pas", () => {
-    expect(io._sent.filter((s) => s.event === 'conversation:participant-banned')).toHaveLength(1);
+  it("n'émet qu'UNE copie par room — un appareil du banni resté dans la room ne double pas", () => {
+    expect(() => roomDeliveries(io._sendsFor('conversation:participant-banned'))).not.toThrow();
   });
 });
 
@@ -459,12 +460,9 @@ describe('PATCH …/ban et …/unban — l\'effectif ENTIER pour l\'admin du gro
         })
     );
 
-    const sends = io._sendsFor('conversation:participant-banned');
-    expect(sends).toHaveLength(2);
-    expect(sends[0].payload).toMatchObject({ memberCount: 199, memberCountCapped: true });
-    expect(sends[0].excepts).toEqual(['user:user-admin']);
-    expect(sends[1].rooms).toEqual(['user:user-admin']);
-    expect(sends[1].payload).toMatchObject({ memberCount: 250 });
+    const delivered = roomDeliveries(io._sendsFor('conversation:participant-banned'));
+    expect(delivered.get(`conversation:${CONV_ID}`)).not.toHaveProperty('memberCount');
+    expect(delivered.get('user:user-admin')).toMatchObject({ memberCount: 250 });
   });
 
   it('sert 250 à l\'admin du groupe sur la levée', async () => {
@@ -475,10 +473,8 @@ describe('PATCH …/ban et …/unban — l\'effectif ENTIER pour l\'admin du gro
         .mockResolvedValueOnce({ id: 'part-target', userId: TARGET_USER_ID , bannedAt: new Date('2026-08-01T00:00:00.000Z') })
     );
 
-    const sends = io._sendsFor('conversation:participant-unbanned');
-    expect(sends).toHaveLength(2);
-    expect(sends[0].payload).toMatchObject({ memberCount: 199, memberCountCapped: true });
-    expect(sends[1].rooms).toEqual(['user:user-admin']);
-    expect(sends[1].payload).toMatchObject({ memberCount: 250 });
+    const delivered = roomDeliveries(io._sendsFor('conversation:participant-unbanned'));
+    expect(delivered.get(`conversation:${CONV_ID}`)).not.toHaveProperty('memberCount');
+    expect(delivered.get('user:user-admin')).toMatchObject({ memberCount: 250 });
   });
 });

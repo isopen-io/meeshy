@@ -290,7 +290,7 @@ final class ProgressionViewModelGameTests: XCTestCase {
 
     func test_mintBadgeImpact_isComputedFromTheServedCountersAndThePriceOfThisMint() async {
         let served = APIEngagementProgress(
-            counters: [.init(axisKey: "content.text_message", count: 60, points: 1_500)],
+            counters: [.init(axisKey: "content.text_message", count: 60, points: 1_831)],  // 1 587 (prix de la 13e) débite 52 messages sur 60
             milestones: [], streak: .init(currentStreakDays: 1, longestStreakDays: 1),
             level: .init(engagementScore: 121_800), meesh: GameFixture.meesh(), game: GameFixture.game()
         )

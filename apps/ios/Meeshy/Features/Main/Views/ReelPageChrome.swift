@@ -77,8 +77,8 @@ struct ReelMetaRow: View {
 /// Draggable seek bar for the active reel video — Instagram-reels style: just
 /// the track + thumb, no time numbers. Bound to the shared engine's
 /// `currentTime` / `duration`; dragging seeks anywhere in the clip via
-/// `seek(to:)`. Reuses the proven scrub pattern (GeometryReader + high-priority
-/// drag so the horizontal pan wins over the vertical pager).
+/// `seek(to:)`. GeometryReader + a horizontal-only drag (`ReelScrubAxis`,
+/// #10354): the vertical pager keeps every vertical swipe.
 ///
 /// App-side (not an SDK atom): it is bound to the `SharedAVPlayerManager`
 /// singleton and placed by a product decision (reels-only, no skip, no
@@ -92,13 +92,20 @@ struct ReelScrubBar: View {
 
     private var accent: Color { Color(hex: accentColor) }
 
+    /// Le doigt d'abord ; sinon la part jouée de l'élément EN COURS, lue sur
+    /// le lecteur (`liveProgress`, loi `PlaybackProgressLaw`) : au tour de
+    /// boucle elle repart de zéro avec l'image (#10555).
     private var progress: Double {
-        guard manager.duration > 0 else { return 0 }
-        return isSeeking ? seekFraction : manager.currentTime / manager.duration
+        isSeeking ? seekFraction : manager.liveProgress()
     }
 
     var body: some View {
-        track
+        // Rafraîchie par l'affichage tant que le réel joue : `currentTime`
+        // n'est publié que 2 à 5 fois par seconde, et la barre avançait par
+        // à-coups. En pause ou sous le doigt, plus aucun tick.
+        TimelineView(.animation(minimumInterval: 1.0 / 60.0, paused: !manager.isPlaying || isSeeking)) { _ in
+            track
+        }
             .accessibilityElement(children: .ignore)
             .accessibilityLabel(String(localized: "reels.scrub", defaultValue: "Avancer ou reculer", bundle: .main))
             // No on-screen time numbers (Instagram-reels style), but VoiceOver
@@ -120,14 +127,17 @@ struct ReelScrubBar: View {
                     .scaleEffect(isSeeking ? 1.25 : 1.0)
                     .offset(x: max(0, min(filledWidth - thumbSize / 2, geo.size.width - thumbSize)))
             }
-            // 32pt target + high-priority drag so the scrub wins over the
-            // vertical pager (same rationale as VideoTransportControls.seekBar).
+            // 32pt target. Le glissement ne revendique que l'axe HORIZONTAL
+            // (`ReelScrubAxis`, #10354) : un balayage vertical parti de la
+            // barre fait défiler le pager au lieu d'être avalé par elle.
             .frame(maxHeight: .infinity)
             .contentShape(Rectangle())
-            .highPriorityGesture(
-                DragGesture(minimumDistance: 0)
+            .simultaneousGesture(
+                DragGesture(minimumDistance: ReelScrubAxis.minimumDistance)
                     .onChanged { value in
-                        guard manager.duration > 0 else { return }
+                        guard manager.duration > 0,
+                              ReelScrubAxis.claims(translation: value.translation, alreadySeeking: isSeeking)
+                        else { return }
                         isSeeking = true
                         seekFraction = max(0, min(1, value.location.x / geo.size.width))
                     }
@@ -138,8 +148,9 @@ struct ReelScrubBar: View {
                         // the stale `seekFraction` forever — the scrub would
                         // stop tracking playback and seeks would die (the
                         // "scrub dead after a play-through" failure mode).
+                        let wasSeeking = isSeeking
                         defer { isSeeking = false; seekFraction = 0 }
-                        guard manager.duration > 0 else { return }
+                        guard manager.duration > 0, wasSeeking else { return }
                         let fraction = max(0, min(1, value.location.x / geo.size.width))
                         manager.seek(to: fraction * manager.duration)
                         HapticFeedback.light()

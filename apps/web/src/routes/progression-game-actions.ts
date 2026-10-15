@@ -196,7 +196,7 @@ export function useGameActions(
     },
     onSuccess: (result) => {
       spent('chest');
-      write((view) => withChestReward(view, result.reward, result.score));
+      write((view) => withChestReward(view, result.reward, result.score, result.starFragments));
     },
     onSettled: refresh,
   });

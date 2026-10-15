@@ -46,6 +46,7 @@ import { attachmentReplyToFromMetadata } from '../../services/messaging/attachme
 import { messageSenderUserSelect } from './utils/message-sender-select';
 import { logger } from './messages-shared';
 import { discoverConversationIdsByMessageIds, withOrphanedSenderRepair } from '../../services/messaging/withOrphanedSenderRepair';
+import { servedLinkMetadata } from '../../services/messaging/linkTrackingAuthor';
 import type {
   AttachmentAudioTranslationEntry,
   CurrentUserConsumption,
@@ -632,8 +633,9 @@ export function mapMessageRowForList(message: RawMessageRow, ctx: MessageRowMapp
           originalLanguage: message.originalLanguage || 'fr',
           messageType: message.messageType,
           messageSource: message.messageSource,
-          // Structured per-type payload (call-summary facts for system messages)
-          metadata: message.metadata ?? undefined,
+          // Structured per-type payload (call-summary facts for system messages) ;
+          // la carte de liens suivis d'un invité anonyme n'en sort pas (#10286).
+          metadata: servedLinkMetadata(message.metadata, message.sender) ?? undefined,
 
           // Édition/Suppression
           isEdited: message.isEdited,

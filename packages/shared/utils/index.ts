@@ -29,6 +29,7 @@ export * from './time-remaining.js';
 export * from './calendar-date.js';
 export * from './age.js';
 export * from './presence-visibility.js';
+export * from './call-permission.js';
 export * from './forward-source-visibility.js';
 export * from './participant-helpers.js';
 export * from './member-visibility.js';

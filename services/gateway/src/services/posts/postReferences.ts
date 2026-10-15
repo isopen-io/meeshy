@@ -12,6 +12,8 @@ import type { PrismaClient } from '@meeshy/shared/prisma/client';
 import type { PostMentionDisplayValue } from './postMentions';
 import { readDisplay } from './postMentions';
 import { postMentionInclude } from './postIncludes';
+import { withServedRepostCredits } from './repostCreditChips';
+import { withServedDerivedContent } from './storyContentComposition';
 import { negotiateWireStoryEffects, type WireReader } from './storyEffectsV3';
 
 export type { WireReader } from './storyEffectsV3';
@@ -153,7 +155,11 @@ export function withMentions<T extends { postMentions?: unknown; mentions?: unkn
   const flat = postMentions === undefined && Array.isArray(mentions)
     ? { ...rest, mentions: mentions as PostReference[] }
     : { ...rest, mentions: toPostReferences(postMentions as never) };
-  return withNestedRepostMentions(negotiateWireStoryEffects(flat, reader), reader);
+  // #10524 — la puce de crédit se retire avant la négociation, sur le blob
+  // tel qu'enregistré. #10523 — et d'abord du `content` qui en dérive, tant
+  // que le blob dit encore quel texte était la puce.
+  const served = withServedRepostCredits(withServedDerivedContent(flat));
+  return withNestedRepostMentions(negotiateWireStoryEffects(served, reader), reader);
 }
 
 /**
@@ -173,8 +179,15 @@ export function withMentions<T extends { postMentions?: unknown; mentions?: unkn
  * `repostOf` — il n'y a jamais de troisième étage.
  */
 function withNestedRepostMentions<T>(post: T, reader?: WireReader): T {
-  const repostOf = (post as { repostOf?: unknown }).repostOf;
-  if (!repostOf || typeof repostOf !== 'object') return post;
+  const loaded = (post as { repostOf?: unknown }).repostOf;
+  if (!loaded || typeof loaded !== 'object') return post;
+  // #10315 — un original PRIVÉ ou mis hors ligne par la modération ne voyage plus
+  // dans la republication d'un autre : `repostOf: null`, la forme qu'a déjà un
+  // original disparu. Ses deux colonnes de décision ne partent jamais sur le fil.
+  const { visibility, moderationHiddenAt, ...stripped } = loaded as { visibility?: unknown; moderationHiddenAt?: unknown };
+  if (visibility === 'PRIVATE' || (moderationHiddenAt !== null && moderationHiddenAt !== undefined)) return { ...post, repostOf: null };
+  const carried = 'visibility' in loaded || 'moderationHiddenAt' in loaded;
+  const repostOf = carried ? stripped : loaded;
 
   // La négociation du blob précède le tri des mentions : le chemin « pas de
   // références chargées » sort TÔT et laisserait sinon un
@@ -185,7 +198,7 @@ function withNestedRepostMentions<T>(post: T, reader?: WireReader): T {
     reader
   );
   if (nested.postMentions === undefined && nested.mentions === undefined) {
-    return nested === repostOf ? post : { ...post, repostOf: nested };
+    return nested === loaded ? post : { ...post, repostOf: nested };
   }
 
   return { ...post, repostOf: withMentions(nested, reader) };

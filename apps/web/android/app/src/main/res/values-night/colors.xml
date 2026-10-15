@@ -1,0 +1,6 @@
+<?xml version="1.0" encoding="utf-8"?>
+<!-- #10005 — la surface sombre de l'ecran (jeton « ios-surface » de `:root.dark`), fond de la fenetre
+     derriere les barres systeme quand le telephone est en schema sombre. -->
+<resources>
+    <color name="surface">#09090B</color>
+</resources>

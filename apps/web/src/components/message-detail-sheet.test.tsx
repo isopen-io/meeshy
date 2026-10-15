@@ -2,11 +2,14 @@ import { QueryClientProvider } from '@tanstack/react-query';
 import { afterAll, afterEach, beforeAll, describe, expect, test } from 'bun:test';
 
 import { appQueryClient } from '@/lib/api/query-client';
+import { sessionStore } from '@/lib/api/session';
 import { loadInterfaceCatalog, translate } from '@/lib/i18n-catalog';
+import { loadMessagePiecesCatalog } from '@/lib/i18n-message-pieces-catalog';
 import { createActMounter } from '@/test-support/act-mount';
 import { modalLayersOpen } from '@/lib/view/modal-layers';
 import { ensureHappyDomRegistered, releaseHappyDomIfRegistered } from '@/test-support/happy-dom-environment';
 
+import type { MessagePinEntry } from '@/lib/view/use-message-pin';
 import type { MessageStarEntry } from '@/lib/view/use-message-star';
 
 import { MessageDetailSheet } from './message-detail-sheet';
@@ -23,7 +26,7 @@ const globals = globalThis as typeof globalThis & { IS_REACT_ACT_ENVIRONMENT?: b
 beforeAll(async () => {
   ensureHappyDomRegistered();
   globals.IS_REACT_ACT_ENVIRONMENT = true;
-  await Promise.all([loadInterfaceCatalog('fr'), loadInterfaceCatalog('en'), loadInterfaceCatalog('ar')]);
+  await Promise.all([loadInterfaceCatalog('fr'), loadInterfaceCatalog('en'), loadInterfaceCatalog('ar'), loadMessagePiecesCatalog('fr')]);
 });
 
 afterAll(async () => {
@@ -49,6 +52,12 @@ async function mountSheet(
     choices?: readonly { code: string; isOriginal: boolean; isServed: boolean }[];
     reactions?: readonly (readonly [string, number])[];
     readonly create?: { readonly onCompose: (() => void) | null; readonly onImage: (() => void) | null };
+    readonly act?: {
+      readonly onEdit?: (() => void) | null;
+      readonly onDelete?: (() => void) | null;
+      readonly pin?: MessagePinEntry | null;
+      readonly onReport?: (() => void) | null;
+    };
   } = {},
 ) {
   return mounter.mount(
@@ -64,6 +73,7 @@ async function mountSheet(
         attachments={[]}
         star={extra.star ?? null}
         {...(extra.create === undefined ? {} : { create: extra.create })}
+        {...(extra.act === undefined ? {} : { act: extra.act })}
         onPickLanguage={() => undefined}
         onClose={extra.onClose ?? (() => undefined)}
       />
@@ -94,6 +104,23 @@ describe('MessageDetailSheet — la garde de « Infos du message »', () => {
   test('message ENVOYÉ mais encore OPTIMISTE (`cid_…`) ⇒ aucune section', async () => {
     const host = await mountSheet('sent', 'cid_2f1c8b0e-4a6d-4c11-9b5e-0f9a7c3d2e18');
     expect(host.querySelector('[data-message-receipts-title]')).toBe(null);
+  });
+
+  test('un INVITÉ ne demande pas les accusés par personne, que la passerelle lui refuse (#10205)', async () => {
+    sessionStore.setState({
+      session: {
+        status: 'guest',
+        sessionToken: 'anon',
+        guest: { participantId: 'p-awa', nickname: 'Awa', conversationId: 'c-deploiement', link: 'mshy_world', mayWrite: true },
+        expiresAt: Number.MAX_SAFE_INTEGER,
+      },
+    });
+    try {
+      const host = await mountSheet('sent');
+      expect(host.querySelector('[data-message-receipts-title]')).toBe(null);
+    } finally {
+      sessionStore.setState({ session: { status: 'anonymous' } });
+    }
   });
 });
 
@@ -198,5 +225,115 @@ describe('« Plus… » déplie Composer ET Imager (#8693)', () => {
     expect([...imageOnly.querySelectorAll('[data-message-create]')].map((el) => el.getAttribute('data-message-create'))).toEqual(['image']);
     const none = await mountSheet(null, SERVER_MESSAGE_ID, { create: { onCompose: null, onImage: null } });
     expect(none.querySelector('[data-message-create]')).toBeNull();
+  });
+});
+
+describe('« Plus… » offre « Modifier » (#10581)', () => {
+  test('offert ⇒ première entrée, qui agit puis referme la feuille', async () => {
+    const journal: string[] = [];
+    const host = await mountSheet('sent', SERVER_MESSAGE_ID, {
+      act: { onEdit: () => journal.push('edit') },
+      create: { onCompose: null, onImage: () => undefined },
+      onClose: () => journal.push('close'),
+    });
+    const first = host.querySelector<HTMLElement>('li button');
+    expect(first?.getAttribute('data-message-act')).toBe('edit');
+    expect(first?.textContent).toBe('Modifier');
+    await mounter.click(first);
+    expect(journal).toEqual(['edit', 'close']);
+  });
+
+  test('non offert ⇒ aucune entrée', async () => {
+    const refused = await mountSheet('sent', SERVER_MESSAGE_ID, { act: { onEdit: null } });
+    expect(refused.querySelector('[data-message-act="edit"]')).toBeNull();
+    const silent = await mountSheet('sent');
+    expect(silent.querySelector('[data-message-act="edit"]')).toBeNull();
+  });
+});
+
+describe('« Plus… » offre « Supprimer » (#10582)', () => {
+  test('offert ⇒ dernière entrée de la section, qui referme la feuille PUIS ouvre le dialogue', async () => {
+    const journal: string[] = [];
+    const host = await mountSheet('sent', SERVER_MESSAGE_ID, {
+      act: { onEdit: () => journal.push('edit'), onDelete: () => journal.push('delete') },
+      create: { onCompose: null, onImage: () => undefined },
+      onClose: () => journal.push('close'),
+    });
+    const acts = [...host.querySelectorAll<HTMLElement>('[data-message-act], [data-message-create]')];
+    expect(acts.map((el) => el.getAttribute('data-message-act') ?? el.getAttribute('data-message-create'))).toEqual(['edit', 'image', 'delete']);
+    const entry = host.querySelector<HTMLElement>('[data-message-act="delete"]');
+    expect(entry?.textContent).toBe('Supprimer');
+    await mounter.click(entry);
+    expect(journal).toEqual(['close', 'delete']);
+  });
+
+  test('non offert ⇒ aucune entrée', async () => {
+    const host = await mountSheet('sent', SERVER_MESSAGE_ID, { act: { onDelete: null } });
+    expect(host.querySelector('[data-message-act="delete"]')).toBeNull();
+  });
+});
+
+/**
+ * « ÉPINGLER » ET « SIGNALER » (#7558) — à la place qu'iOS leur donne
+ * (`MessageActionResolver.moreSections`) : l'épingle après « Imager » et avant
+ * le favori, « Signaler » seul en section de modération, à la fin de la feuille.
+ */
+describe('« Plus… » offre « Épingler » et « Signaler » (#7558)', () => {
+  test('l’épingle se range après Imager et avant Supprimer ; elle agit puis referme', async () => {
+    const journal: string[] = [];
+    const host = await mountSheet('sent', SERVER_MESSAGE_ID, {
+      act: { onEdit: () => undefined, onDelete: () => undefined, pin: { action: 'pin', onToggle: () => journal.push('pin') } },
+      create: { onCompose: null, onImage: () => undefined },
+      onClose: () => journal.push('close'),
+    });
+    const acts = [...host.querySelectorAll<HTMLElement>('[data-message-act], [data-message-create]')];
+    expect(acts.map((el) => el.getAttribute('data-message-act') ?? el.getAttribute('data-message-create'))).toEqual(['edit', 'image', 'pin', 'delete']);
+    const entry = host.querySelector<HTMLElement>('[data-message-act="pin"]');
+    expect(entry?.textContent).toBe('Épingler');
+    await mounter.click(entry);
+    expect(journal).toEqual(['pin', 'close']);
+  });
+
+  test('un message épinglé dit « Désépingler »', async () => {
+    const host = await mountSheet('sent', SERVER_MESSAGE_ID, { act: { pin: { action: 'unpin', onToggle: () => undefined } } });
+    expect(host.querySelector<HTMLElement>('[data-message-act="unpin"]')?.textContent).toBe('Désépingler');
+  });
+
+  test('« Signaler » ferme la feuille, PUIS ouvre les motifs — en dernier, après « Envoyé »', async () => {
+    const journal: string[] = [];
+    const host = await mountSheet(null, SERVER_MESSAGE_ID, {
+      act: { onReport: () => journal.push('report') },
+      onClose: () => journal.push('close'),
+    });
+    const items = [...host.querySelectorAll('li')];
+    const entry = host.querySelector<HTMLElement>('[data-message-act="report"]');
+    expect(entry?.textContent).toBe('Signaler');
+    expect(items.at(-1)?.contains(entry)).toBe(true);
+    await mounter.click(entry);
+    expect(journal).toEqual(['close', 'report']);
+  });
+
+  test('non offerts ⇒ aucune entrée', async () => {
+    const host = await mountSheet('sent', SERVER_MESSAGE_ID, { act: { pin: null, onReport: null } });
+    expect(host.querySelector('[data-message-act="pin"], [data-message-act="unpin"], [data-message-act="report"]')).toBeNull();
+  });
+});
+
+/**
+ * « PLUS… » NOMME QUI A RÉAGI (#10583) — la section « Réactions » ne s'arrête
+ * plus aux comptes : elle monte la liste nominative (`MessageReactors`), qui
+ * peint les comptes tout de suite et lit les noms ensuite.
+ */
+describe('MessageDetailSheet — la section « Réactions » (#10583)', () => {
+  test('des réactions ⇒ les comptes, portés par la liste nominative', async () => {
+    const host = await mountSheet(null, SERVER_MESSAGE_ID, { reactions: [['👍', 2], ['❤️', 1]] });
+    const groups = [...host.querySelectorAll('[data-message-reactors-group]')];
+    expect(groups.map((row) => `${row.getAttribute('data-message-reactors-group')}:${row.querySelector('[data-message-reactors-count]')?.textContent}`)).toEqual(['👍:2', '❤️:1']);
+  });
+
+  test('aucune réaction ⇒ ni titre de section, ni liste', async () => {
+    const host = await mountSheet(null);
+    expect(host.querySelector('[data-message-reactors-group]')).toBeNull();
+    expect(host.textContent).not.toContain('Réactions');
   });
 });

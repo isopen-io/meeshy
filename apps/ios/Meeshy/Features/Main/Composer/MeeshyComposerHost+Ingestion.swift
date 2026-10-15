@@ -174,10 +174,26 @@ extension MeeshyComposerHost {
             await ingestSoundFiles(urls)
             return
         }
+        // **Un fichier AUDIO devient un SON** (#10363, retour porteur
+        // 2026-10-12) : choisi par la porte média, l'appui long sur la
+        // photothèque ou la rangée du document, il prend le chemin de la
+        // feuille son — un objet audio de premier plan posé sur la scène, avec
+        // sa durée et sa forme d'onde —, jamais celui de la liste média.
+        let routes = ComposerImportedFileRoute.partition(urls)
+        if !routes.sounds.isEmpty {
+            await ingestSoundFiles(routes.sounds, placement: .foreground)
+        }
+        guard !routes.medias.isEmpty else {
+            // La demande du rail a reçu sa réponse (un son, ou rien) : la
+            // laisser armée poserait sur la scène le média suivant, même arrivé
+            // par une autre porte.
+            abandonRailPosing()
+            return
+        }
         // Même accumulation que la photothèque (#4879) : marquer le rail avant
         // d'écrire, et n'écrire qu'une fois.
         var medias: [ComposerDocumentMedia] = []
-        for sourceURL in urls {
+        for sourceURL in routes.medias {
             let scoped = sourceURL.startAccessingSecurityScopedResource()
             defer { if scoped { sourceURL.stopAccessingSecurityScopedResource() } }
             let declaredType = try? sourceURL.resourceValues(forKeys: [.contentTypeKey]).contentType
@@ -194,5 +210,39 @@ extension MeeshyComposerHost {
         }
         ingestIntoDocument(medias)
         HapticFeedback.light()
+    }
+}
+
+/// **Où va un fichier choisi dans l'importateur à l'intention MÉDIA** (#10363).
+///
+/// L'importateur de la porte média et de la rangée du document laisse choisir
+/// n'importe quel fichier (`ComposerFileImportIntent.media`, `.item`) : un
+/// MP3 y était versé dans la liste média du document comme une image. Un
+/// fichier AUDIO est un SON — il suit le chemin de l'intention `.sound` —, tout
+/// le reste reste un média. Le type se lit sur ce que le fournisseur DÉCLARE,
+/// et à défaut sur l'extension.
+nonisolated enum ComposerImportedFileRoute: Equatable {
+    case sound
+    case media
+
+    static func route(for type: UTType?) -> ComposerImportedFileRoute {
+        guard let type, type.conforms(to: .audio) else { return .media }
+        return .sound
+    }
+
+    static func declaredType(of url: URL) -> UTType? {
+        let declared = try? url.resourceValues(forKeys: [.contentTypeKey]).contentType
+        return declared ?? UTType(filenameExtension: url.pathExtension)
+    }
+
+    /// Les fichiers d'une même sélection, rangés par destination, chacun
+    /// dans l'ordre où l'auteur les a choisis.
+    static func partition(
+        _ urls: [URL],
+        typeOf: (URL) -> UTType? = ComposerImportedFileRoute.declaredType(of:)
+    ) -> (sounds: [URL], medias: [URL]) {
+        let routed = urls.map { (url: $0, route: route(for: typeOf($0))) }
+        return (sounds: routed.filter { $0.route == .sound }.map(\.url),
+                medias: routed.filter { $0.route == .media }.map(\.url))
     }
 }

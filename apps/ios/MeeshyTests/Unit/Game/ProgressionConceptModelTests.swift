@@ -63,12 +63,35 @@ final class ProgressionConceptModelTests: XCTestCase {
 
     func test_cards_beforeSeasonOne_saysWhenItOpens_neverAVoid() {
         let game = GameWave2Fixture.game(season: nil, seasonUpcoming: GameWave2Fixture.upcoming)
-        let cards = ProgressionConceptModel.cards(progress: progress(game), game: game)
+        let cards = ProgressionConceptModel.cards(progress: progress(game), game: game, now: localDate(2026, 10, 11, 12, 0))
 
         let season = cards.first { $0.concept == .season }
         XCTAssertEqual(season?.value, GameText.doorSeasonUpcoming(date: GameWave2Format.day("2026-12-21")),
                        "avant le lundi 2026-12-21 (#10014), la ligne annonce l'ouverture")
         XCTAssertNotEqual(season?.value, GameText.doorSeasonNone)
+    }
+
+    // MARK: - La porte bascule d'elle-même le jour de l'ouverture (#10224)
+
+    private func localDate(_ year: Int, _ month: Int, _ day: Int, _ hour: Int, _ minute: Int) -> Date {
+        Calendar.current.date(from: DateComponents(year: year, month: month, day: day, hour: hour, minute: minute)) ?? Date()
+    }
+
+    func test_seasonDoor_offlineCopy_stillUpcoming_theMinuteBeforeSundayEightPm() {
+        let game = GameWave2Fixture.game(season: nil, seasonUpcoming: GameWave2Fixture.upcoming)
+        let value = ProgressionConceptModel.value(.season, progress: progress(game), game: game, now: localDate(2026, 12, 20, 19, 59))
+        XCTAssertEqual(value, GameText.doorSeasonUpcoming(date: GameWave2Format.day("2026-12-21")))
+    }
+
+    func test_seasonDoor_offlineCopy_opensItself_atTheSundayEightPmClose() {
+        // Hors ligne, le bloc gardé porte encore `seasonUpcoming` : la porte calcule son état (`GameSeason.liveTense`).
+        let game = GameWave2Fixture.game(season: nil, seasonUpcoming: GameWave2Fixture.upcoming)
+        let cards = ProgressionConceptModel.cards(progress: progress(game), game: game, now: localDate(2026, 12, 20, 20, 0))
+        let season = cards.first { $0.concept == .season }
+        XCTAssertEqual(season?.value, GameText.doorSeason(number: GameCopy.formatCount(1)), "le jour J, la porte dit la saison ouverte")
+        XCTAssertNotEqual(season?.value, GameText.doorSeasonUpcoming(date: GameWave2Format.day("2026-12-21")))
+        let monday = ProgressionConceptModel.value(.season, progress: progress(game), game: game, now: localDate(2026, 12, 21, 9, 0))
+        XCTAssertEqual(monday, GameText.doorSeason(number: GameCopy.formatCount(1)))
     }
 
     func test_upcomingSeasonLine_namesTheNumberAndTheMonday() {
@@ -218,7 +241,8 @@ final class ProgressionConceptModelTests: XCTestCase {
                       "ce qui manque pour frapper est aux Points")
         XCTAssertFalse(ProgressionConceptModel.facts(.meesh, progress: served, game: poor).contains { $0.detail == .mintMissing })
         XCTAssertFalse(ProgressionConceptModel.chips(.meesh, progress: served, game: poor)
-            .contains(ConceptText.chipMissing(GameCopy.points(poor.mint.missingPoints))), "la carte des Meeshes ne redit pas ce qui manque")
+            .contains(ConceptText.chipToMeesh(number: GameCopy.formatCount(poor.mint.number), missing: GameCopy.formatCount(poor.mint.missingPoints))),
+                       "la carte des Meeshes ne redit pas ce qui manque")
         XCTAssertFalse(ProgressionConceptModel.chips(.points, progress: served, game: poor)
             .contains(GameText.bannerLevel(level: GameCopy.formatCount(poor.level.level))), "la carte des Points ne redit pas le niveau")
 
@@ -301,5 +325,248 @@ final class ProgressionConceptModelTests: XCTestCase {
         XCTAssertFalse(ProgressionConceptGestures.exist(for: .missions, progress: old, game: nil), "sans jeu, pas de missions à jouer")
         XCTAssertTrue(ProgressionConceptGestures.exist(for: .level, progress: old, game: nil), "devant un ancien serveur, la fiche du niveau garde ses paliers")
         XCTAssertFalse(ProgressionConceptGestures.exist(for: .meesh, progress: progress(nil, meesh: nil), game: nil), "sans solde servi, pas de frappe")
+    }
+
+    // MARK: - La phrase d'état (#10540)
+    //
+    // Retour du porteur : « j'ai 77 099 points, il te manque 1 839 points, points à convertir 5 823, niveau 27 ». Trois
+    // chiffres justes, qui mesurent trois choses, et aucun ne disait laquelle. Les cas chiffrés sont ceux du témoin
+    // web (`apps/web/src/lib/view/progression-state.test.ts`) ; chaque attente est composée par le catalogue, donc
+    // juste dans toute langue d'appareil.
+
+    /// Le compte du porteur, mesuré en production le 2026-10-13 : niveau 27, 78 Meeshes frappées, 3 gardées.
+    private let jcnm = GameFixture.game(score: 77_099, levelRecord: 27, minted: 78, debitable: 5_823, held: 3)
+    private var jcnmWallet: APIEngagementProgress.Meesh { GameFixture.meesh(balance: 3, minted: 78, debitable: 5_823) }
+
+    private func state(_ concept: ProgressionConcept, _ game: GameBlock?, meesh: APIEngagementProgress.Meesh? = GameFixture.meesh()) -> String? {
+        ProgressionConceptModel.state(concept, progress: progress(game, meesh: meesh), game: game)
+    }
+
+    private func n(_ value: Int) -> String { GameCopy.formatCount(value) }
+
+    func test_state_theOwnersAccount_readsTheLawItWasBuiltFrom() {
+        XCTAssertEqual(jcnm.level.shown.level, 27)
+        XCTAssertEqual(jcnm.level.shown.pointsToNext, 1_301, "le reste vers le niveau 28 : 78 400 − 77 099")
+        XCTAssertEqual(jcnm.mint.number, 79)
+        XCTAssertEqual(jcnm.mint.price, 7_662)
+        XCTAssertEqual(jcnm.mint.missingPoints, 1_839, "le manque vise la Meesh : 7 662 − 5 823")
+    }
+
+    func test_state_level_saysWhatIsDoneInThisLevel_andWhatRemainsForTheNext() {
+        XCTAssertEqual(state(.level, jcnm, meesh: jcnmWallet), ConceptText.stateLevelProgress(
+            level: n(27), done: GameCopy.points(4_199), span: n(5_500), left: n(1_301), next: n(28)
+        ))
+    }
+
+    func test_state_points_nameTheTwoBalances_andTheMissingAmountAimsAtTheCoin() {
+        XCTAssertEqual(state(.points, jcnm, meesh: jcnmWallet), ConceptText.statePointsMissing(
+            held: GameCopy.points(77_099), convertible: GameCopy.convertiblePoints(5_823), number: n(79),
+            price: GameCopy.points(7_662), missing: GameCopy.convertiblePoints(1_839)
+        ))
+    }
+
+    func test_state_meesh_saysWhatIsKept_whatWasMinted_andWhatTheNextAsks() {
+        let kept = ConceptText.stateMeeshKept(balance: GameCopy.meeshes(3), minted: n(78))
+        let next = ConceptText.stateMeeshNextMissing(number: n(79), price: GameCopy.points(7_662), missing: GameCopy.convertiblePoints(1_839))
+        XCTAssertEqual(state(.meesh, jcnm, meesh: jcnmWallet), kept + " " + next)
+
+        let none = GameFixture.game(score: 400, debitable: 400, held: 0)
+        let empty = state(.meesh, none, meesh: GameFixture.meesh(balance: 0, minted: 0, debitable: 400)) ?? ""
+        XCTAssertTrue(empty.hasPrefix(ConceptText.stateMeeshKeptNone(minted: n(0))), "aucune Meesh gardée ne se dit pas « 0 Meesh » : \(empty)")
+    }
+
+    func test_state_1301and1839_noLongerMix_eachCarriesItsTarget() {
+        let level = state(.level, jcnm, meesh: jcnmWallet) ?? ""
+        let points = state(.points, jcnm, meesh: jcnmWallet) ?? ""
+        XCTAssertTrue(level.contains(n(1_301)) && level.contains(n(28)), level)
+        XCTAssertFalse(level.contains(n(1_839)), level)
+        XCTAssertTrue(points.contains(n(1_839)) && points.contains(n(79)), points)
+        XCTAssertFalse(points.contains(n(1_301)), points)
+    }
+
+    func test_state_levelHeldByAStep_saysTheStep_neverZeroRemaining() throws {
+        let held = GameFixture.game(score: GameLevels.threshold(of: 25), glory: 0,
+                                    steps: GameLevelStepCounts(minted: 1, missionsDone: 0, flameRecord: 0))
+        XCTAssertTrue(held.level.shown.held, "le témoin veut un niveau retenu par une étape")
+        let step = try XCTUnwrap(held.level.shown.step)
+        XCTAssertEqual(step.level, 20)
+        XCTAssertEqual(state(.level, held), GameCopy.levelHeld(step))
+    }
+
+    func test_state_oldServer_keepsTheTargetOfWhatRemains_andInventsNothing() {
+        let old = progress(nil)
+        let next = old.level.scale.nextThreshold ?? 0
+        XCTAssertEqual(ProgressionConceptModel.state(.level, progress: old, game: nil), ConceptText.stateLevelSimple(
+            level: n(old.level.level), left: GameCopy.points(next - old.level.scale.value), next: n(old.level.level + 1)
+        ))
+        XCTAssertEqual(ProgressionConceptModel.state(.flame, progress: old, game: nil),
+                       ConceptText.stateFlameStreak(days: GameCopy.days(4), record: GameCopy.days(9)))
+        for concept in [ProgressionConcept.points, .meesh, .glory, .missions, .league, .season, .prestige, .showcase, .atlas] {
+            XCTAssertNil(ProgressionConceptModel.state(concept, progress: old, game: nil), "\(concept.rawValue) : rien n'est servi, rien ne se dit")
+        }
+    }
+
+    func test_state_points_enoughToMint_saySo_withoutAnyMissing() {
+        let rich = GameFixture.game()
+        XCTAssertTrue(rich.mint.canMint, "le témoin veut une frappe possible")
+        XCTAssertEqual(state(.points, rich), ConceptText.statePointsReady(
+            held: GameCopy.points(rich.level.score), convertible: GameCopy.convertiblePoints(121_800),
+            number: n(rich.mint.number), price: GameCopy.points(rich.mint.price)
+        ))
+        // Sans porte-monnaie servi et frappe possible : le solde à convertir reste inconnu, jamais déduit du score.
+        XCTAssertNil(ProgressionConceptModel.convertiblePoints(progress: progress(rich, meesh: nil), game: rich))
+        XCTAssertEqual(state(.points, rich, meesh: nil), ConceptText.statePointsReadyPlain(
+            held: GameCopy.points(rich.level.score), number: n(rich.mint.number), price: GameCopy.points(rich.mint.price)
+        ))
+    }
+
+    func test_state_withoutAServedWallet_theConvertibleBalanceComesFromThePriceAndTheMissing_neverFromTheScore() {
+        XCTAssertEqual(ProgressionConceptModel.convertiblePoints(progress: progress(jcnm, meesh: nil), game: jcnm), 5_823)
+        XCTAssertEqual(ProgressionConceptModel.convertiblePoints(progress: progress(jcnm, meesh: jcnmWallet), game: jcnm), 5_823)
+        XCTAssertTrue(state(.points, jcnm, meesh: nil)?.contains(GameCopy.convertiblePoints(5_823)) ?? false)
+    }
+
+    func test_state_flame_saysTheStepItIsAt() {
+        let risky = GameFixture.game(flameDays: 6, flameStatus: .atRisk)
+        XCTAssertEqual(state(.flame, risky), ConceptText.stateFlameAtRisk(days: GameCopy.days(6)))
+        let lit = GameFixture.game(flameDays: 6, flameStatus: .lit, freezes: 1)
+        XCTAssertEqual(state(.flame, lit), ConceptText.stateFlameLit(
+            days: GameCopy.days(6), bonus: n(lit.flame.bonusPercent), freezes: ConceptText.ratio(n(1), n(2))
+        ))
+        XCTAssertEqual(lit.flame.bonusPercent, 12, "six jours : 12 % de plus, lu sur la loi")
+        XCTAssertEqual(state(.flame, GameFixture.game(flameDays: 6, flameStatus: .covered)), ConceptText.stateFlameCovered(days: GameCopy.days(6)))
+        XCTAssertEqual(state(.flame, GameFixture.game(flameDays: 0, flameStatus: .out)), ConceptText.stateFlameOut)
+        XCTAssertEqual(state(.flame, GameFixture.game(flameDays: 0, flameStatus: .none)), ConceptText.stateFlameNone)
+    }
+
+    func test_state_missions_sayHowManyAreDone_andWhatRemainsForTheChest() {
+        let one = GameFixture.game(missions: [GameFixture.mission(id: "m1", completed: true), GameFixture.mission(id: "m2"), GameFixture.mission(id: "m3")])
+        XCTAssertEqual(state(.missions, one), ConceptText.stateMissionsProgress(done: n(1), total: n(3), left: n(2)))
+        let all = [GameFixture.mission(id: "m1", completed: true), GameFixture.mission(id: "m2", completed: true), GameFixture.mission(id: "m3", completed: true)]
+        XCTAssertEqual(state(.missions, GameFixture.game(missions: all, chestStatus: .ready)), ConceptText.stateMissionsReady(done: n(3), total: n(3)))
+        XCTAssertEqual(state(.missions, GameFixture.game(missions: all, chestStatus: .claimed)), ConceptText.stateMissionsClaimed(done: n(3), total: n(3)))
+
+        let early = GameFixture.game(score: 400)
+        XCTAssertFalse(early.missions.unlocked, "le témoin veut un jeu d'avant le niveau 5")
+        XCTAssertEqual(state(.missions, early), GameCopy.missionsLocked(level: n(early.level.shown.level)))
+    }
+
+    func test_state_league_saysThePlace_theWeekPoints_andTheZoneWithItsTarget() {
+        let top = GameWave2Fixture.game()
+        let place = ConceptText.stateLeaguePlace(league: GameText.leagueName(.jade), rank: n(4), size: n(12), points: GameCopy.points(410))
+        XCTAssertEqual(state(.league, top), place + " " + ConceptText.stateLeagueZonePromotion)
+
+        func placed(_ zone: LeagueZone, missing: Int?) -> GameBlock {
+            GameWave2Fixture.game(league: GameWave2Fixture.league(current: .init(
+                league: .jade, groupId: "g", groupSize: 12, rank: 4, weekPoints: 410, zone: zone, cup: nil, pointsToPromotion: missing
+            )))
+        }
+        XCTAssertEqual(state(.league, placed(.safe, missing: 120)), place + " " + ConceptText.stateLeagueZoneSafe(missing: GameCopy.points(120)))
+        XCTAssertEqual(state(.league, placed(.relegation, missing: 300)), place + " " + ConceptText.stateLeagueZoneRelegation(missing: GameCopy.points(300)))
+        XCTAssertEqual(state(.league, placed(.safe, missing: nil)), place, "sans manque servi, la zone ne s'invente pas")
+
+        let locked = GameWave2Fixture.game(league: GameWave2Fixture.league(access: .locked, current: nil))
+        XCTAssertEqual(state(.league, locked), GameText.leagueLocked(level: n(GameLeague.minLevel), current: n(locked.level.shown.level)))
+        let unplaced = GameWave2Fixture.game(league: GameWave2Fixture.league(current: nil))
+        XCTAssertEqual(state(.league, unplaced), ConceptText.stateLeagueUnplaced)
+    }
+
+    func test_state_season_saysTheWeek_theStep_andWhatIsMissingForTheNext() throws {
+        let game = GameWave2Fixture.game()
+        let season = try XCTUnwrap(game.season)
+        XCTAssertEqual(state(.season, game), ConceptText.stateSeasonProgress(
+            number: n(season.number), week: n(season.week), weeks: n(GameSeason.weeks), steps: n(season.steps),
+            total: n(season.stepsTotal), stars: GameText.seasonStars(count: season.starsToNext)
+        ))
+        XCTAssertEqual(state(.season, GameWave2Fixture.game(season: nil)), GameText.seasonNone)
+    }
+
+    func test_state_prestige_saysWhereItOpens_andWhereYouAre() {
+        let game = GameWave2Fixture.game()
+        XCTAssertEqual(state(.prestige, game), GameText.prestigeLocked(level: n(game.level.shown.level)))
+        XCTAssertEqual(state(.prestige, GameWave2Fixture.atLevel100()), GameText.prestigeMee)
+    }
+
+    func test_state_theCountedConcepts_theShowcaseAndTheAtlas_sayWhereTheyStand() {
+        let game = GameWave2Fixture.game()
+        let served = progress(game)
+        XCTAssertEqual(state(.badges, game), served.badgesEarned >= served.badgesTotal
+            ? ConceptText.stateCountComplete(done: n(served.badgesEarned), total: n(served.badgesTotal))
+            : ConceptText.stateCountBadges(done: n(served.badgesEarned), total: n(served.badgesTotal), left: n(served.badgesTotal - served.badgesEarned)))
+        XCTAssertEqual(state(.showcase, game), ConceptText.stateShowcaseCount(
+            trophies: GameText.doorShowcaseCount(count: 2), who: GameText.visibilityLabel(.friends)
+        ))
+        XCTAssertEqual(state(.atlas, game), ConceptText.stateAtlasProgress(stamped: n(1), total: n(GameAtlas.total), pending: n(1)))
+    }
+
+    /// Chaque concept dont la donnée est servie a SA phrase : jamais vide, jamais un trou de chaîne resté nu, et la
+    /// carte comme le lecteur d'écran lisent la même. Les Élans et les défis n'en ont que si leur donnée est servie.
+    func test_state_everyServedConcept_hasItsSentence_andTheCardCarriesIt() {
+        let alwaysSaid: Set<ProgressionConcept> = [.level, .points, .meesh, .glory, .flame, .missions, .league, .season, .prestige,
+                                                   .badges, .succes, .showcase, .atlas]
+        let cases: [(String, GameBlock, APIEngagementProgress.Meesh)] = [
+            ("jeu complet", GameWave2Fixture.game(), GameFixture.meesh()), ("compte du porteur", jcnm, jcnmWallet),
+        ]
+        for (label, game, wallet) in cases {
+            let served = progress(game, meesh: wallet)
+            for card in ProgressionConceptModel.cards(progress: served, game: game) {
+                let key = "\(card.concept.rawValue) (\(label))"
+                let line = ProgressionConceptModel.state(card.concept, progress: served, game: game)
+                XCTAssertEqual(card.state, line, "\(key) : la carte lit la phrase de la loi")
+                if alwaysSaid.contains(card.concept) {
+                    XCTAssertNotNil(line, "\(key) : pas de phrase d'état")
+                }
+                guard let line else { continue }
+                XCTAssertFalse(line.trimmingCharacters(in: .whitespaces).isEmpty, "\(key) : une phrase d'état vide")
+                for naked in ["%@", "%1$", "%2$", "%3$", "%%", "{", "game."] {
+                    XCTAssertFalse(line.contains(naked), "\(key) : « \(naked) » nu dans « \(line) »")
+                }
+                XCTAssertTrue(card.accessibilityLabel.contains(line), "\(key) : VoiceOver dit aussi la phrase d'état")
+            }
+        }
+    }
+
+    func test_state_elans_sayNothingUnserved_andTheServedOnesSayTheFamilies() {
+        let game = GameFixture.game()
+        let served = progress(game)
+        let line = ProgressionConceptModel.state(.elans, progress: served, game: game)
+        guard let elan = served.elan else {
+            XCTAssertNil(line, "sans élan servi, aucune phrase ne s'invente")
+            return
+        }
+        let families = ProgressionConceptModel.families(elan.activeFamilyCount)
+        XCTAssertEqual(line, elan.isAccelerated
+            ? ConceptText.stateElansActive(factor: GameCopy.factor(elan.factor), families: families)
+            : ConceptText.stateElansIdle(families: families))
+    }
+
+    /// Quatre questions par concept : ce que c'est, à quoi ça sert, comment ça marche, comment s'en servir — quatre
+    /// phrases, jamais une répétée.
+    func test_everyConcept_answersFourQuestions() {
+        for concept in ProgressionConcept.allCases {
+            let texts = [ConceptText.what(concept), ConceptText.why(concept), ConceptText.how(concept), ConceptText.use(concept)]
+            XCTAssertEqual(Set(texts).count, 4, "\(concept.rawValue) : une question reçoit la réponse d'une autre")
+            XCTAssertFalse(texts.contains(""), "\(concept.rawValue) : une question sans réponse")
+        }
+    }
+
+    /// Les pastilles et les lignes de la carte nomment leur cible : le niveau visé, la pièce visée, le rang visé.
+    func test_theChipsAndTheFacts_nameTheTargetOfWhatIsMissing() {
+        let served = progress(jcnm, meesh: jcnmWallet)
+        XCTAssertTrue(ProgressionConceptModel.chips(.level, progress: served, game: jcnm)
+            .contains(ConceptText.chipToLevel(level: n(28), points: GameCopy.points(1_301))))
+        XCTAssertEqual(ProgressionConceptModel.chips(.points, progress: served, game: jcnm), [
+            GameCopy.convertiblePoints(5_823), ConceptText.chipToMeesh(number: n(79), missing: n(1_839)),
+        ])
+        let facts = ProgressionConceptModel.facts(.points, progress: served, game: jcnm)
+        XCTAssertEqual(facts, [
+            ProgressionConceptFact(label: ConceptText.factConvertible, value: GameCopy.points(5_823), detail: .convertible),
+            ProgressionConceptFact(label: ConceptText.missingForMeesh(number: n(79)), value: GameCopy.convertiblePoints(1_839), detail: .mintMissing),
+        ])
+        let rich = GameFixture.game()
+        XCTAssertTrue(ProgressionConceptModel.chips(.points, progress: progress(rich), game: rich).contains(ConceptText.chipMintCovered))
+        let glory = ProgressionConceptModel.facts(.glory, progress: served, game: jcnm)
+        XCTAssertEqual(glory.first { $0.detail == .gloryMissing }?.label,
+                       jcnm.glory.next.map { ConceptText.missingForRank(rank: GameCopy.rankLabel($0.rank, division5: $0.shownDivision)) })
     }
 }

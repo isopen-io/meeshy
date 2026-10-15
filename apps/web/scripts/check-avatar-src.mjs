@@ -54,6 +54,12 @@ const EXEMPTIONS = [
     pourquoi:
       "LinkArrival (lib/api/link-arrivals.ts) et son décodeur WirePage ne portent aucun champ photo — la chaîne s'arrête au décodage de GET links.byLinkIdArrivals (#7813, #9357)",
   },
+  {
+    fichier: 'components/world-participant-card-sheet.tsx',
+    combien: 1,
+    pourquoi:
+      "worldParticipantCardSchema (packages/shared/types/world-participant-card.ts), liste blanche de la fiche de modération, ne porte aucun champ photo — la chaîne s'arrête à la projection de GET world.participantsByParticipantId (#10102)",
+  },
 ];
 
 /**

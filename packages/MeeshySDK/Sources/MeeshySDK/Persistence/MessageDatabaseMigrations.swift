@@ -376,5 +376,31 @@ public enum MessageDatabaseMigrations {
                 t.add(column: "trackedLinksJson", .text)
             }
         }
+
+        // **L'auteur sans compte** (#10286). Le fil ne lit que GRDB : sans
+        // elle, l'adresse écrite par un invité anonyme redevenait cliquable.
+        // Même convention nullable : NULL ⇒ inconnu, rendu comme un inscrit.
+        migrator.registerMigration("messages_sender_is_anonymous") { db in
+            try db.alter(table: "messages") { t in
+                t.add(column: "senderIsAnonymous", .boolean)
+            }
+        }
+
+        // **Le compte PROUVÉ de l'auteur** (#10286) — distinct de la colonne
+        // ci-dessus : un `type` absent n'affirme pas l'anonymat, mais ne prouve
+        // pas non plus un compte, et seuls les liens d'un compte prouvé vivent.
+        migrator.registerMigration("messages_sender_has_account") { db in
+            try db.alter(table: "messages") { t in
+                t.add(column: "senderHasAccount", .boolean)
+            }
+        }
+
+        // **La marque d'annulation d'une publication en vol** (#10321).
+        // `OutboxRecord.cancelRequestedAt` : NULL ⇒ personne n'a rien demandé.
+        migrator.registerMigration("outbox_v4_cancel_requested_at") { db in
+            try db.alter(table: "outbox") { t in
+                t.add(column: "cancelRequestedAt", .datetime)
+            }
+        }
     }
 }

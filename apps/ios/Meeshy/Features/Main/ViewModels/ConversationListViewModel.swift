@@ -85,11 +85,6 @@ class ConversationListViewModel: ObservableObject {
     /// tag ⇒ « toutes les conversations avec ce tag ») — `nil` = aucun filtre.
     @Published var activeTagFilter: String? = nil
 
-    /// Icône de synchronisation de la carte de focus (2026-08-22) : l'appui
-    /// rejoue l'outbox des mutations de conversation tout de suite.
-    func forceSync() {
-        Task { await store.flushOutbox() }
-    }
     private(set) var filteredConversations: [Conversation] = []
     @Published var groupedConversations: [(section: ConversationSection, conversations: [Conversation])] = []
     /// Taille du corpus que `groupedConversations` a groupé en dernier — voir
@@ -169,6 +164,7 @@ class ConversationListViewModel: ObservableObject {
     private let pageLimit = 100
     private var cancellables = Set<AnyCancellable>()
     var storyPrefetchTask: Task<Void, Never>?
+    lazy var messagePrefetcher = ConversationListMessagePrefetcher(messageService: messageService)
 
     /// Registre du pont ✦ gateway (G-124) — voir le commentaire du `didSet`
     /// de `conversations` ci-dessus pour l'alimentation, et l'en-tête de
@@ -632,169 +628,6 @@ class ConversationListViewModel: ObservableObject {
         }
     }
 
-    /// Groupe les conversations par section et les trie
-    /// - Peut s'exécuter sur n'importe quel thread (pas d'accès à self)
-    ///
-    /// Greffe LWS-5 (contrat `tasks/lentille-implementation-contract.md` §LWS-5,
-    /// E6) : drapeau OFF ⇒ branche legacy INCHANGÉE (`legacyGroupConversations`,
-    /// vérifiée bit-à-bit par `LentilleGroupingGraftTests`). Drapeau ON ⇒ le
-    /// classement/tri passe par le miroir `LentilleSectionResolver`
-    /// (`Lentille/Core/LentilleSectionResolver.swift`, GELÉ S1). Signature,
-    /// `nonisolated`, staticité : inchangées — c'est le seul point de greffe
-    /// (§4.4 du contrat).
-    nonisolated private static func groupConversations(
-        _ filtered: [Conversation],
-        categories: [ConversationSection],
-        draftSummaries: [String: DraftSummary]
-    ) -> [(section: ConversationSection, conversations: [Conversation])] {
-        guard LentilleFeatureFlag.isLentilleListEnabled else {
-            return legacyGroupConversations(filtered, categories: categories, draftSummaries: draftSummaries)
-        }
-        return lentilleGroupConversations(filtered, categories: categories)
-    }
-
-    /// Comportement D'AUJOURD'HUI, verbatim — seul appelant sous drapeau OFF.
-    /// Ne JAMAIS modifier cette fonction pour faire passer un test Lentille :
-    /// c'est la ligne de base que la greffe promet de ne pas bouger.
-    nonisolated private static func legacyGroupConversations(
-        _ filtered: [Conversation],
-        categories: [ConversationSection],
-        draftSummaries: [String: DraftSummary]
-    ) -> [(section: ConversationSection, conversations: [Conversation])] {
-        // No categories → flat list, no section headers needed
-        let hasPinned = filtered.contains { $0.userState.isPinned && $0.userState.sectionId == nil }
-        if categories.isEmpty && !hasPinned {
-            let sorted = filtered.sorted { conversationsAreInOrder($0, $1, draftSummaries: draftSummaries) }
-            return sorted.isEmpty ? [] : [(ConversationSection.other, sorted)]
-        }
-
-        var result: [(section: ConversationSection, conversations: [Conversation])] = []
-
-        // O(1) lookup sets
-        let categoryIds = Set(categories.map(\.id))
-
-        // Groupement O(n) unique — remplace les k passes filter O(n×k)
-        let bySection = Dictionary(grouping: filtered) { conv -> String in
-            if conv.userState.isPinned && conv.userState.sectionId == nil { return "__pinned__" }
-            return conv.userState.sectionId ?? "__other__"
-        }
-
-        // Pinned section
-        if let pinned = bySection["__pinned__"], !pinned.isEmpty {
-            result.append((ConversationSection.pinned, pinned.sorted { conversationsAreInOrder($0, $1, draftSummaries: draftSummaries) }))
-        }
-
-        // User categories (order preserved)
-        for category in categories {
-            if let sectionConvs = bySection[category.id], !sectionConvs.isEmpty {
-                let sorted = sectionConvs.sorted { conversationsAreInOrder($0, $1, draftSummaries: draftSummaries) }
-                result.append((category, sorted))
-            }
-        }
-
-        // Orphaned (catégorie supprimée) + non-catégorisées → section "other"
-        let otherConvs = (bySection["__other__"] ?? []) + filtered.filter { conv in
-            guard let sid = conv.userState.sectionId else { return false }
-            return !categoryIds.contains(sid)
-        }
-        if !otherConvs.isEmpty {
-            result.append((ConversationSection.other, otherConvs.sorted { conversationsAreInOrder($0, $1, draftSummaries: draftSummaries) }))
-        }
-
-        return result
-    }
-
-    /// Drapeau ON — classement/tri délégués au miroir `LentilleSectionResolver`
-    /// (loi E5/E6 : pinned → live → catégories utilisateur → temporel).
-    ///
-    /// Un écart assumé et documenté, pas un oubli : `liveCall` est TOUJOURS
-    /// `nil` — aucune plateforme (contrat §0, E13) ne porte encore de modèle
-    /// d'appel en direct sur `Conversation`, la section `.live` du résolveur
-    /// est donc structurellement vide ici. Elle est néanmoins TRADUITE (et non
-    /// ignorée) : le jour où le modèle d'appel arrive, cette fonction n'a rien
-    /// à apprendre.
-    ///
-    /// **Levée de l'écart I-060** (décision LWS-6/I-062, propriétaire du
-    /// conteneur) : les buckets `.live` et `.temporal` repliaient
-    /// provisoirement sur `.other` faute d'identité `MeeshyConversationSection`
-    /// (SDK gelé S1). Ils ont désormais la leur —
-    /// `LentilleSectionIdentity.live` / `.section(for:)`, construite depuis
-    /// l'initialiseur public du type SDK, sans toucher au paquet gelé — et
-    /// chaque section du résolveur est rendue TELLE QUELLE, dans son ordre
-    /// (`pinned` → `live` → catégories → today → yesterday → thisWeek →
-    /// older). Le repli disparaît : plus aucune conversation temporelle ne se
-    /// déguise en « Mes conversations ». La partition reste un recouvrement
-    /// exact de `filtered` (garanti par `LentilleSectionResolver`, vérifié par
-    /// `SectionResolverVectorTests`).
-    nonisolated private static func lentilleGroupConversations(
-        _ filtered: [Conversation],
-        categories: [ConversationSection]
-    ) -> [(section: ConversationSection, conversations: [Conversation])] {
-        var byId: [String: Conversation] = [:]
-        byId.reserveCapacity(filtered.count)
-
-        let sectionable: [LentilleSectionResolver.SectionableConversation] = filtered.map { conversation in
-            byId[conversation.id] = conversation
-            return LentilleSectionResolver.SectionableConversation(
-                id: conversation.id,
-                isPinned: conversation.userState.isPinned && conversation.userState.sectionId == nil,
-                categoryId: conversation.userState.sectionId,
-                orderInCategory: conversation.userState.orderInCategory.map { Double($0) },
-                lastMessageAt: conversation.listActivityAt,
-                updatedAt: conversation.updatedAt,
-                liveCall: nil
-            )
-        }
-        let sectionableCategories = categories.map { LentilleSectionResolver.SectionableCategory(id: $0.id) }
-
-        let resolved = LentilleSectionResolver.resolveSections(
-            conversations: sectionable,
-            categories: sectionableCategories,
-            now: Date(),
-            timeZone: .current
-        )
-
-        var result: [(section: ConversationSection, conversations: [Conversation])] = []
-
-        for section in resolved {
-            switch section {
-            case .pinned(let conversations):
-                result.append((ConversationSection.pinned, conversations.compactMap { byId[$0.id] }))
-            case .category(let categoryId, let conversations):
-                guard let category = categories.first(where: { $0.id == categoryId }) else { continue }
-                result.append((category, conversations.compactMap { byId[$0.id] }))
-            case .live(let conversations):
-                result.append((LentilleSectionIdentity.live, conversations.compactMap { byId[$0.id] }))
-            case .temporal(let kind, let conversations):
-                result.append((LentilleSectionIdentity.section(for: kind), conversations.compactMap { byId[$0.id] }))
-            }
-        }
-
-        return result
-    }
-
-    /// Ordre total de la liste de conversations. Épinglées d'abord ; parmi les
-    /// non-épinglées, les conversations avec un brouillon actif flottent en
-    /// tête (brouillon le plus récemment édité d'abord) ; le reste retombe sur
-    /// `listActivityAt` décroissant (une réaction à MON message compte, #7548).
-    /// Les épinglées aussi — la priorité brouillon ne s'applique qu'aux
-    /// non-épinglées.
-    nonisolated static func conversationsAreInOrder(
-        _ a: Conversation,
-        _ b: Conversation,
-        draftSummaries: [String: DraftSummary]
-    ) -> Bool {
-        if a.userState.isPinned != b.userState.isPinned { return a.userState.isPinned }
-        if a.userState.isPinned && b.userState.isPinned { return a.listActivityAt > b.listActivityAt }
-        let aHasDraft = draftSummaries[a.id] != nil
-        let bHasDraft = draftSummaries[b.id] != nil
-        if aHasDraft != bHasDraft { return aHasDraft }
-        if let aDraft = draftSummaries[a.id], let bDraft = draftSummaries[b.id] {
-            return aDraft.updatedAt > bDraft.updatedAt
-        }
-        return a.listActivityAt > b.listActivityAt
-    }
-
     // MARK: - Sync Engine Observation
 
     /// Slot dédié remplacé à chaque appel : `observeSync()` est invoqué par
@@ -814,6 +647,7 @@ class ConversationListViewModel: ObservableObject {
             .sink { [weak self] in
                 Task { @MainActor [weak self] in
                     await self?.reloadFromCache()
+                    if self?.messagePrefetcher.takeReloadArm() == true { self?.prefetchTopConversationMessages() }
                 }
             }
         // (Removed) ConversationPreferencesBroadcaster subscription: the options
@@ -1423,16 +1257,17 @@ class ConversationListViewModel: ObservableObject {
             }
             .store(in: &cancellables)
 
-        // NOTE: `messageSocket.didReconnect` is intentionally NOT observed here.
-        // `ConversationSyncEngine.startSocketRelay()` already handles the
-        // reconnect → `syncSinceLastCheckpoint()` chain at the SDK boundary,
-        // and any resulting list mutation flows back into this view-model
-        // through `syncEngine.conversationsDidChange` (subscribed in
-        // `observeSync()` above) which triggers `reloadFromCache()`.
-        // Subscribing twice produced N× delta-sync calls per flap — the
-        // 2026-05-11 audit traced a `/conversations` request burst back to
-        // exactly this duplication. Keeping the relay in the engine keeps
-        // one and only one delta sync per reconnect.
+        // `didReconnect` ne joue ICI aucun delta : le relais du moteur en joue un
+        // seul par reconnexion, revenu par `conversationsDidChange` (audit
+        // 2026-05-11 : deux abonnés doublaient les `/conversations`). Il ne
+        // rejoue que le préchargement — maintenant, et au rechargement suivant (#10572).
+        messageSocket.didReconnect
+            .receive(on: DispatchQueue.main)
+            .sink { [weak self] in
+                self?.messagePrefetcher.armForNextReload()
+                self?.prefetchTopConversationMessages()
+            }
+            .store(in: &cancellables)
     }
 
     // MARK: - Push Notification Subscription
@@ -1680,15 +1515,12 @@ class ConversationListViewModel: ObservableObject {
 
         let cached = await CacheCoordinator.shared.conversations.load(for: "list")
         switch cached {
-        case .fresh(let data, _):
+        case .fresh(let data, _), .stale(let data, _):
+            // Frais ou périmé, le cache peint et le delta revalide (#7631) : un
+            // cache de moins de 5 min ignore la réaction ou l'appel survenus app fermée.
             setConversations(data)
             loadFailed = false
-            loadState = .cachedFresh
-            lastFetchedAt = Date()
-        case .stale(let data, _):
-            setConversations(data)
-            loadFailed = false
-            loadState = .cachedStale
+            if case .fresh = cached { loadState = .cachedFresh } else { loadState = .cachedStale }
             lastFetchedAt = Date()
             Task { [weak self] in
                 await self?.syncEngine.syncSinceLastCheckpoint()
@@ -2133,7 +1965,12 @@ class ConversationListViewModel: ObservableObject {
         NotificationCoordinator.shared.markConversationRead(conversationId)
         guard Self.shouldDispatchListMarkAsRead(
             conversationId: conversationId,
-            activeConversationId: messageSocket.activeConversationId
+            // iPad multi-fenêtre : ouverte dans une fenêtre détachée, la
+            // conversation a déjà son marquage précis, même si elle n'est pas
+            // la plus récente.
+            activeConversationId: NotificationToastManager.shared.isConversationOpen(conversationId)
+                ? conversationId
+                : messageSocket.activeConversationId
         ) else {
             clearUnreadLocally(conversationId)
             return
@@ -2282,22 +2119,19 @@ class ConversationListViewModel: ObservableObject {
         }
     }
 
-    /// Précharge les messages des premières conversations — voir
+    /// Précharge dans GRDB les messages des premières conversations — voir
     /// `ConversationListMessagePrefetcher` (#8651 : jamais pour un autre
-    /// compte que celui qui l'a lancé, jamais pour un identifiant vide).
+    /// compte que celui qui l'a lancé ; #10572 : une passe à la fois).
     private func prefetchTopConversationMessages() {
         let userId = currentUserId
-        ConversationListMessagePrefetcher.start(
-            conversationIds: ConversationListMessagePrefetcher.targets(conversations),
-            messageService: messageService,
-            userId: userId,
-            username: authManager.currentUser?.username,
-            prism: authManager.currentUser?.preferredContentLanguages ?? [],
+        messagePrefetcher.schedule(ConversationListPrefetchRequest(
+            candidates: ConversationListMessagePrefetcher.targets(conversations),
+            owner: ConversationPrefetchOwner(userId: userId, username: authManager.currentUser?.username),
             stillOwner: { [weak self] in
                 guard let self, !userId.isEmpty else { return false }
                 return self.currentUserId == userId
             }
-        )
+        ))
     }
 
     /// Called when app returns to foreground — refresh stories if stale.
@@ -2319,16 +2153,15 @@ class ConversationListViewModel: ObservableObject {
         }
     }
 
-    /// Appelée quand la liste de conversations revient au premier plan.
-    /// Re-trie la liste en mémoire immédiatement (retour instantané), puis
-    /// lance un delta sync pour que les messages reçus via APNs pendant que
-    /// l'app était en arrière-plan remontent et réordonnent la liste.
-    /// Distinct de `handleForegroundReturn()`, qui ne rafraîchit que les
-    /// stories.
+    /// Retour au premier plan : re-trie la liste en mémoire (retour instantané),
+    /// joue le delta sync (les messages reçus via APNs en arrière-plan remontent
+    /// la liste), puis précharge les premières sur ces lignes à jour (#10572).
+    /// Distinct de `handleForegroundReturn()`, qui ne rafraîchit que les stories.
     func handleForegroundReactivation() {
         setConversations(conversations)
         Task { [weak self] in
             await self?.refresh()
+            self?.prefetchTopConversationMessages()
         }
     }
 

@@ -102,6 +102,16 @@ final class MeeshyEndpointPolicyTests: XCTestCase {
         XCTAssertEqual(AuthEndpoint.login.rejectionPolicy, .opaque)
         XCTAssertEqual(MeeshyEndpointPolicy.rejectionPolicy(forLegacyPath: "/auth/login"), .opaque)
     }
+
+    /// #9899 — le partage d'une traduction DOCUMENTE son refus 409
+    /// (`SHARED_TRANSLATION_STALE_SOURCE`) : sans cette déclaration, le transport
+    /// ne rendrait qu'une phrase et l'appareil ne saurait pas que le message a
+    /// changé depuis. Les autres routes de conversation gardent leur forme d'erreur.
+    func test_leDepotDUneTraductionPartagee_rendDesRefusTypes() {
+        XCTAssertEqual(ConversationsEndpoint.byIdSharedTranslations(id: "c").rejectionPolicy, .structured)
+        XCTAssertEqual(ConversationsEndpoint.root.rejectionPolicy, .opaque)
+        XCTAssertEqual(ConversationsEndpoint.byIdStats(id: "c").rejectionPolicy, .opaque)
+    }
 }
 
 

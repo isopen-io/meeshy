@@ -48,7 +48,9 @@ enum EngagementFlushTrigger {
         guard online else { EngagementRetryScheduler.shared.scheduleSoon(); return }
         let uid = AuthManager.shared.currentUser?.id   // captured String? is Sendable
         let dispatcher = EngagementDispatcher(
-            record: { sessions in try await PostService.shared.recordEngagement(sessions) },
+            record: { sessions in
+                _ = try await PostService.shared.recordSocialEvents(sessions.map(SocialEvent.dwell), credential: .account)
+            },
             currentUserId: { uid })
         await EngagementOutbox.shared.flush { sessions in await dispatcher.dispatch(sessions) }
     }

@@ -9,7 +9,8 @@
  * geste, ni que la déconnexion efface la session. Ce gate mesure, pour chaque
  * schéma × gabarit (390 × 844, 320 × 568) :
  *
- *  1. l'écran d'attente a disparu ; les sections d'iOS sont là ; dix bascules ;
+ *  1. l'écran d'attente a disparu ; les sections d'iOS sont là ; dix bascules, plus
+ *     celle de l'appareil (traduire sur cet appareil, #9898, réglage local) ;
  *     aucune entrée non portée n'est offerte — le legacy est décommissionné
  *     (#6702) — et aucun contrôle ne vise une autre origine : la suppression
  *     de compte ouvre sa page de la v2, dans le même onglet (#6715) ;
@@ -173,7 +174,11 @@ try {
         ['COMPTE', 'CONFIDENTIALITÉ', 'APPARENCE', 'NOTIFICATIONS', 'DONNÉES', 'OUTILS', 'À PROPOS'].every((title) => sections.includes(title)),
         `${label} : les sections d'iOS, « Données » comprise depuis que l'export y mène (#6725) (${JSON.stringify(sections)})`,
       );
-      check((await page.$$('[role="switch"]')).length === 10, `${label} : dix bascules que la passerelle obéit`);
+      check((await page.$$('[role="switch"]:not([data-setting="deviceTranslation"])')).length === 10, `${label} : dix bascules que la passerelle obéit`);
+      check(
+        (await page.$$('[role="switch"][data-setting="deviceTranslation"]')).length === 1,
+        `${label} : et celle de l'appareil — traduire sur cet appareil (#9898), un réglage local qui n'attend aucune passerelle`,
+      );
       check(((await textOf(page, '[data-settings-profile]')) ?? '').includes('@awa'), `${label} : la carte de profil porte la session`);
       // Le legacy est décommissionné (#6702) : une entrée non portée est MASQUÉE,
       // jamais marquée. La suppression de compte mène à SA page de la v2
@@ -198,17 +203,17 @@ try {
       await capture(page, `reglages-${suffix}`);
 
       // ------------------------------------------------ 2. atteignabilité
-      const corridor = await page.evaluate(() => {
-        const discs = [...document.querySelectorAll('.floating-menus button, .floating-menus a')]
-          .map((el) => el.getBoundingClientRect())
-          .filter((r) => r.width > 0 && r.height > 0);
+      /* #10634 — la carte de profil commence sous l'en-tête, comme
+         `SettingsView` d'iOS : les disques flottent par-dessus, et la mesure
+         « au repos » ci-dessous garde qu'ils ne volent ni contrôle ni texte. */
+      const top = await page.evaluate(() => {
+        const header = document.querySelector('header')?.getBoundingClientRect() ?? null;
         const card = document.querySelector('[data-settings-profile]')?.getBoundingClientRect() ?? null;
-        const discBottom = Math.max(0, ...discs.map((r) => r.bottom));
-        return { discs: discs.length, discBottom, cardTop: card?.top ?? null };
+        return { headerBottom: header?.bottom ?? null, cardTop: card?.top ?? null };
       });
       check(
-        corridor.discs >= 2 && corridor.cardTop !== null && corridor.cardTop >= corridor.discBottom,
-        `${label} : au repos, la carte de profil commence sous les disques flottants — ${JSON.stringify(corridor)}`,
+        top.headerBottom !== null && top.cardTop !== null && top.cardTop - top.headerBottom <= 16,
+        `${label} : la carte de profil commence sous l'en-tête, sans vide (#10634) — ${JSON.stringify(top)}`,
       );
       const rest = await reachAtRest(page, REACH);
       const blocked = rest.controls.filter((c) => !c.ok);
@@ -272,7 +277,14 @@ try {
 
       await context.setOffline(true);
       await page.waitForSelector('[data-settings-offline]');
-      check((await page.$$eval('[role="switch"]', (els) => els.filter((el) => !el.disabled).length)) === 0, `${label} : hors ligne, aucune bascule n'est actionnable`);
+      check(
+        (await page.$$eval('[role="switch"]:not([data-setting="deviceTranslation"])', (els) => els.filter((el) => !el.disabled).length)) === 0,
+        `${label} : hors ligne, aucune bascule de la passerelle n'est actionnable`,
+      );
+      check(
+        (await page.$$eval('[role="switch"][data-setting="deviceTranslation"]', (els) => els.filter((el) => !el.disabled).length)) === 1,
+        `${label} : hors ligne, la bascule de l'appareil reste actionnable — son accord est local (#9898)`,
+      );
       await page.click(`[data-theme-choice="${opposite}"]`);
       check(await within(page, (s) => document.documentElement.classList.contains(s), opposite), `${label} : hors ligne, le thème bascule quand même`);
       await capture(page, `reglages-hors-ligne-${suffix}`);

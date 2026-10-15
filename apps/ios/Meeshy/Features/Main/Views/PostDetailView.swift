@@ -776,7 +776,7 @@ struct PostDetailView: View {
                         .onPreferenceChange(ScrollOffsetPreferenceKey.self) { headerScrollRelay.offset = $0 }
                         .trackScrollContentOffset { headerScrollRelay.offset = -$0 }
                         // Par `onGeometryChange` : une préférence ne délivrait ici que `.zero` (#6708).
-                        .onGeometryChange(for: CGSize.self) { $0.size } action: { sceneMeasures.viewport = $0 }
+                        .onGeometryChange(for: CGSize.self) { $0.size } action: { sceneMeasures = sceneMeasures.recordingViewport($0, composerIsFocused: composerIsFocused) }
                         .onAppear {
                             if showComments {
                                 DispatchQueue.main.asyncAfter(deadline: .now() + 0.5) {
@@ -822,9 +822,7 @@ struct PostDetailView: View {
                 // Le second cas est un MENSONGE — l'écran affirme une
                 // suppression qui n'a pas eu lieu et n'offre que « Retour »,
                 // retirant la seule action utile : réessayer (#4903).
-                Spacer()
                 absenceState
-                Spacer()
             }
 
             // Le composeur ne survit pas à l'absence de post : commenter ce qui
@@ -894,11 +892,9 @@ struct PostDetailView: View {
             // notifications de ce post comme lues (cache local + serveur), le
             // contenu étant consommé.
             NotificationToastManager.shared.onPostOpened(postId)
-            // Record view when post detail is opened.
-            // - viewPost → vue UNIQUE (viewCount, dédupliquée, sauvegardée non affichée)
-            // - registerDetailOpen → vue TOTALE (postOpenCount, chaque ouverture) + impression,
-            //   comptées IMMÉDIATEMENT, avant tout tracking d'engagement (durée de lecture).
-            try? await PostService.shared.viewPost(postId: postId, duration: nil)
+            // Une ouverture du détail = une impression ET une vue (#10483),
+            // une seule fois par instance : le `.task` se relance au retour
+            // d'un écran poussé sans que ce soit une nouvelle ouverture.
             await viewModel.registerDetailOpen(postId)
             // Reprend le brouillon de commentaire laissé sur ce post (cache-first).
             if composerText.isEmpty, let draft = CommentDraftStore.shared.load(postId: postId) {
@@ -1030,7 +1026,7 @@ struct PostDetailView: View {
                 address: item.place.address,
                 accentColor: accentColor,
                 senderName: displayPost?.author
-            )
+            ).closesForConversationOpening(.place)
         }
         // **Le plein écran du détail passe par son SITE UNIQUE** (#4927,
         // raccordé le 2026-09-06).
@@ -1373,8 +1369,10 @@ struct PostDetailView: View {
                         isTextExpanded.toggle()
                     }
                     if isTextExpanded {
+                        // L'ouverture du détail a déjà compté sa vue
+                        // (`registerDetailOpen`) : déplier le texte n'en est
+                        // pas une seconde (#10483, viewCount = total).
                         EngagementTracker.shared.recordAction(.expandedText, surface: .detail)
-                        Task { try? await PostService.shared.viewPost(postId: postId, duration: nil) }  // viewPost stays duration-less
                     }
                 }
             }
@@ -1559,18 +1557,13 @@ EngagementGlyph(
                 HapticFeedback.light()
             } label: {
                 EngagementGlyph(
-                    // Le repost est le seul des trois à changer de FAMILLE selon
-                    // son état : flèches nues au repos, disque plein une fois
-                    // reposté. Son contour est donc `.circle` — et c'est juste :
-                    // il retrace le bord du glyphe AFFICHÉ. La règle proscrit
-                    // l'anneau ajouté autour d'un glyphe qui n'en a pas, pas la
-                    // famille `.circle` quand le glyphe EST un disque.
-                    outline: "arrow.2.squarepath.circle",
-                    filled: "arrow.2.squarepath.circle.fill",
-                    // Au REPOS, les flèches nues — l'apparence d'origine. Sans
-                    // ce paramètre, le repos aurait hérité du contour `.circle`
-                    // et gagné un cercle qu'il n'avait pas.
-                    inactiveSymbol: "arrow.2.squarepath",
+                    // Les flèches nues dans les deux états, comme le fil et le
+                    // réel : `arrow.2.squarepath.circle(.fill)` n'existe pas au
+                    // catalogue SF Symbols, l'état reposté se peignait vide
+                    // (#8939). Le reposté se lit à sa teinte et à son contour
+                    // d'accent.
+                    outline: "arrow.2.squarepath",
+                    filled: "arrow.2.squarepath",
                     participated: isPostReposted,
                     accentHex: accentColor,
                     activeTint: MeeshyColors.success,

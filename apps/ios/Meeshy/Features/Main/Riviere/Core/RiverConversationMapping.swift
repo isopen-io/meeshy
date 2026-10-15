@@ -292,6 +292,7 @@ nonisolated enum RiverConversationMapping {
                 protectedTap: protectedTap(of: message),
                 tapAfterReveal: tapAfterReveal(of: message),
                 linkEmbed: linkEmbed(of: message, text: text),
+                linksAreInert: message.senderIsAnonymous || !message.senderHasAccount,
                 contactCards: RiverContactCards(items: contactCards(of: message)),
                 capturesBlocked: message.exitOffer.capture.shieldsCapture(),
                 identity: bubble.isSystem ? nil : RiverBubbleIdentity(
@@ -329,7 +330,10 @@ nonisolated enum RiverConversationMapping {
         if let joinNotice = content.joinNotice { return .join(joinNotice) }
         if let callNotice = content.callNotice { return .call(callNotice) }
         // #9617 — un avis de capture se compose chez le lecteur, comme dans le fil.
-        return .plain(BubbleContent.captureNoticeText(for: message) ?? text(message))
+        // #7759 — la ligne d'arrivées aussi.
+        return .plain(BubbleContent.captureNoticeText(for: message)
+            ?? BubbleContent.arrivalsNoticeText(for: message)
+            ?? text(message))
     }
 
     /// R-6 — la citation mène à sa cible : le curseur du message cité,
@@ -464,7 +468,8 @@ nonisolated enum RiverConversationMapping {
         guard !message.protection().requiresVeil else { return nil }
         let displayed = displayedText(of: message, text: text)
         guard !displayed.isEmpty else { return nil }
-        let resolved = BubbleContent.text(raw: displayed, trackedLinks: message.trackedLinkMap)
+        let resolved = BubbleContent.text(raw: displayed, trackedLinks: message.trackedLinkMap,
+                                           authorIsAnonymous: message.senderIsAnonymous || !message.senderHasAccount)
         return resolved.firstLinkURL == nil ? nil : resolved
     }
 

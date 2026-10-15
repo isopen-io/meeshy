@@ -2,14 +2,13 @@ import { useState } from 'react';
 
 import { maskedAttachment } from '@meeshy/shared/utils/attachment-protection';
 
-import { apiConfig } from '@/lib/api/config';
+import { publicWebOrigin } from '@/lib/links/public-origin';
 import type { ConversationsDeps } from '@/lib/api/conversations';
 import { attachmentSrc } from '@/lib/api/media-url';
 import type { Message } from '@/lib/api/types';
 import { translate } from '@/lib/i18n-catalog';
 import type { InterfaceLanguage } from '@/lib/interface-language';
 import { internalPathOf } from '@/lib/links/internal-link';
-import { webOriginOf } from '@/lib/links/web-origin';
 import { thumbHashPlaceholder } from '@/lib/media/thumbhash';
 import type { MediaHubAttachmentItem, MediaHubItem, MediaHubLinkItem } from '@/lib/view/media-hub';
 import { isMineOf } from '@/lib/view/message';
@@ -49,7 +48,7 @@ const senderOf = (message: Message): string => message.sender?.displayName ?? ''
 
 const inAppPathOf = (href: string): string | null =>
   internalPathOf(href, {
-    origins: [webOriginOf(apiConfig.base, window.location.origin), window.location.origin],
+    origins: [publicWebOrigin(window.location.origin), window.location.origin],
     isAppPath,
   });
 

@@ -27,7 +27,8 @@ nonisolated extension CallFrameCatalogue {
                 names: CallFrameNames(show: .name, style: .caption, font: .handwriting, color: "#5A3E2E", fill: nil),
                 title: CallFrameTitle(source: .names, font: .curve, color: "#7A3E62", place: .top, size: .l, effect: CallFrameTextEffect.none, letterCase: CallFrameLetterCase.asIs),
                 subtitle: CallFrameTitle(source: .date, font: .handwriting, color: "#8A6A4A", place: .top, size: .s, effect: CallFrameTextEffect.none, letterCase: CallFrameLetterCase.asIs)
-            )
+            ),
+            surfaces: [.capture, .live]
         ),
         CallFrameDesign(
             id: "feerique.conte.comite",
@@ -50,7 +51,8 @@ nonisolated extension CallFrameCatalogue {
                 names: CallFrameNames(show: .name, style: .caption, font: .handwriting, color: "#5A3E2E", fill: nil),
                 title: CallFrameTitle(source: .group, font: .curve, color: "#7A3E62", place: .top, size: .l, effect: CallFrameTextEffect.none, letterCase: CallFrameLetterCase.asIs),
                 subtitle: CallFrameTitle(source: .date, font: .handwriting, color: "#8A6A4A", place: .top, size: .s, effect: CallFrameTextEffect.none, letterCase: CallFrameLetterCase.asIs)
-            )
+            ),
+            surfaces: [.capture, .live]
         ),
         CallFrameDesign(
             id: "feerique.conte.groupe",
@@ -73,7 +75,8 @@ nonisolated extension CallFrameCatalogue {
                 names: CallFrameNames(show: .name, style: .ribbon, font: .handwriting, color: "#5A3E2E", fill: "#F9C6D3"),
                 title: CallFrameTitle(source: .group, font: .curve, color: "#7A3E62", place: .top, size: .l, effect: CallFrameTextEffect.none, letterCase: CallFrameLetterCase.asIs),
                 subtitle: CallFrameTitle(source: .date, font: .handwriting, color: "#8A6A4A", place: .top, size: .s, effect: CallFrameTextEffect.none, letterCase: CallFrameLetterCase.asIs)
-            )
+            ),
+            surfaces: [.capture, .live]
         ),
         CallFrameDesign(
             id: "feerique.lucioles.duo",
@@ -96,7 +99,8 @@ nonisolated extension CallFrameCatalogue {
                 names: CallFrameNames(show: .handle, style: .tag, font: .handwriting, color: "#FFE9A8", fill: "#0A1412CC"),
                 title: CallFrameTitle(source: .names, font: .curve, color: "#FFE9A8", place: .top, size: .l, effect: CallFrameTextEffect.glow, letterCase: CallFrameLetterCase.asIs),
                 subtitle: nil
-            )
+            ),
+            surfaces: [.capture, .live]
         ),
         CallFrameDesign(
             id: "feerique.lucioles.comite",
@@ -119,7 +123,8 @@ nonisolated extension CallFrameCatalogue {
                 names: CallFrameNames(show: .handle, style: .badge, font: .curve, color: "#FFE9A8", fill: "#0A1412CC"),
                 title: CallFrameTitle(source: .group, font: .curve, color: "#FFE9A8", place: .top, size: .l, effect: CallFrameTextEffect.glow, letterCase: CallFrameLetterCase.asIs),
                 subtitle: nil
-            )
+            ),
+            surfaces: [.capture, .live]
         ),
         CallFrameDesign(
             id: "feerique.lucioles.groupe",
@@ -142,7 +147,8 @@ nonisolated extension CallFrameCatalogue {
                 names: CallFrameNames(show: .handle, style: .badge, font: .curve, color: "#FFE9A8", fill: "#0A1412CC"),
                 title: CallFrameTitle(source: .group, font: .curve, color: "#FFE9A8", place: .top, size: .l, effect: CallFrameTextEffect.glow, letterCase: CallFrameLetterCase.asIs),
                 subtitle: nil
-            )
+            ),
+            surfaces: [.capture, .live]
         ),
         CallFrameDesign(
             id: "feerique.lucioles.tablee",
@@ -165,7 +171,8 @@ nonisolated extension CallFrameCatalogue {
                 names: CallFrameNames(show: .none, style: .badge, font: .curve, color: "#FFE9A8", fill: nil),
                 title: CallFrameTitle(source: .group, font: .curve, color: "#FFE9A8", place: .top, size: .l, effect: CallFrameTextEffect.glow, letterCase: CallFrameLetterCase.asIs),
                 subtitle: nil
-            )
+            ),
+            surfaces: [.capture, .live]
         ),
         CallFrameDesign(
             id: "feerique.clair-de-lune.duo",
@@ -189,7 +196,8 @@ nonisolated extension CallFrameCatalogue {
                 names: CallFrameNames(show: .name, style: .caption, font: .curve, color: "#FFFFFF", fill: nil),
                 title: CallFrameTitle(source: .names, font: .calligraphy, color: "#FFF6D8", place: .top, size: .l, effect: CallFrameTextEffect.glow, letterCase: CallFrameLetterCase.asIs),
                 subtitle: CallFrameTitle(source: .date, font: .curve, color: "#F9C6D3", place: .top, size: .s, effect: CallFrameTextEffect.none, letterCase: CallFrameLetterCase.asIs)
-            )
+            ),
+            surfaces: [.capture, .live]
         ),
         CallFrameDesign(
             id: "feerique.clair-de-lune.comite",
@@ -213,7 +221,8 @@ nonisolated extension CallFrameCatalogue {
                 names: CallFrameNames(show: .name, style: .caption, font: .curve, color: "#FFFFFF", fill: nil),
                 title: CallFrameTitle(source: .group, font: .calligraphy, color: "#FFF6D8", place: .top, size: .l, effect: CallFrameTextEffect.glow, letterCase: CallFrameLetterCase.asIs),
                 subtitle: CallFrameTitle(source: .date, font: .curve, color: "#F9C6D3", place: .top, size: .s, effect: CallFrameTextEffect.none, letterCase: CallFrameLetterCase.asIs)
-            )
+            ),
+            surfaces: [.capture, .live]
         ),
         CallFrameDesign(
             id: "feerique.clair-de-lune.groupe",
@@ -237,7 +246,8 @@ nonisolated extension CallFrameCatalogue {
                 names: CallFrameNames(show: .name, style: .badge, font: .curve, color: "#FFFFFF", fill: "#1E2A5ACC"),
                 title: CallFrameTitle(source: .group, font: .calligraphy, color: "#FFF6D8", place: .top, size: .l, effect: CallFrameTextEffect.glow, letterCase: CallFrameLetterCase.asIs),
                 subtitle: CallFrameTitle(source: .date, font: .curve, color: "#F9C6D3", place: .top, size: .s, effect: CallFrameTextEffect.none, letterCase: CallFrameLetterCase.asIs)
-            )
+            ),
+            surfaces: [.capture, .live]
         ),
         CallFrameDesign(
             id: "feerique.clair-de-lune.tablee",
@@ -261,7 +271,8 @@ nonisolated extension CallFrameCatalogue {
                 names: CallFrameNames(show: .none, style: .badge, font: .curve, color: "#FFFFFF", fill: nil),
                 title: CallFrameTitle(source: .group, font: .calligraphy, color: "#FFF6D8", place: .top, size: .l, effect: CallFrameTextEffect.glow, letterCase: CallFrameLetterCase.asIs),
                 subtitle: CallFrameTitle(source: .date, font: .curve, color: "#F9C6D3", place: .top, size: .s, effect: CallFrameTextEffect.none, letterCase: CallFrameLetterCase.asIs)
-            )
+            ),
+            surfaces: [.capture, .live]
         ),
         CallFrameDesign(
             id: "feerique.coeur-de-rose.duo",
@@ -284,7 +295,8 @@ nonisolated extension CallFrameCatalogue {
                 names: CallFrameNames(show: .both, style: .ribbon, font: .curve, color: "#FFFFFF", fill: "#C24D78"),
                 title: CallFrameTitle(source: .names, font: .calligraphy, color: "#8C3B5C", place: .top, size: .l, effect: CallFrameTextEffect.none, letterCase: CallFrameLetterCase.asIs),
                 subtitle: CallFrameTitle(source: .date, font: .handwriting, color: "#A0587A", place: .top, size: .s, effect: CallFrameTextEffect.none, letterCase: CallFrameLetterCase.asIs)
-            )
+            ),
+            surfaces: [.capture, .live]
         )
     ]
 }

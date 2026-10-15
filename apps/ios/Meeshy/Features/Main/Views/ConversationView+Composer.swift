@@ -45,7 +45,7 @@ extension ConversationView {
     // matérialise plus que ses PROPRES modificateurs. Garde :
     // `ConversationComposerChainErasureSourceGuardTests`.
     var themedComposer: AnyView {
-        composerEditingCovers(composerStickerSheet(composerPickersAndSheets(composerCore)))
+        composerEditingCovers(composerStickerSheet(composerGuestAttachments(composerPickersAndSheets(composerCore))))
     }
 
     /// Accent RÉSOLU que l'hôte remet au composer : le bleu de marque quand un
@@ -109,7 +109,7 @@ extension ConversationView {
             // surface en devient propriétaire et route vers ses pipelines
             // existants (déclaré avant `accentColor` → doit apparaître ici pour
             // l'ordre d'arguments de l'initialiseur memberwise synthétisé).
-            onIngest: { items in handleComposerIngest(items) },
+            onIngest: { items in ingestRespectingGuestAllowance(items) },
             accentColor: composerAccent,
             secondaryColor: composerSecondaryColor,
             // Hide file/photo attachments in the notification preview composer
@@ -128,7 +128,7 @@ extension ConversationView {
                     composerText.flushPendingChange()
                 }
             },
-            onLocationRequest: { composerState.showLocationPicker = true },
+            onLocationRequest: guestDoor(guestAttachmentAllowance.offersContactsAndPlaces) { composerState.showLocationPicker = true },
             textBinding: textBinding,
             editBanner: composerState.editingMessageId != nil
                 ? AnyView(composerEditBanner)
@@ -174,10 +174,12 @@ extension ConversationView {
             // les rejoue FIFO. Les double-taps restent couverts par : champ vidé
             // synchrone (hasContent) et guard isUploading (attachments). Aucun
             // dedup par CONTENU : des emojis identiques partent en série (#7985).
-            onPhotoLibrary: { openPhotoLibraryPreselecting([]) },
-            onCamera: { composerState.showCamera = true },
-            onFilePicker: { composerState.showFilePicker = true },
-            onContactPicker: { composerState.showContactPicker = true },
+            // #10006 — un invité restreint ne voit que les portes dont la
+            // famille est ouverte (`ConversationView+GuestAttachments`).
+            onPhotoLibrary: guestDoor(guestAttachmentAllowance.offersVisualMedia) { openPhotoLibraryPreselecting([]) },
+            onCamera: guestDoor(guestAttachmentAllowance.offersVisualMedia) { composerState.showCamera = true },
+            onFilePicker: guestDoor(guestAttachmentAllowance.offersFiles) { openFileDoor() },
+            onContactPicker: guestDoor(guestAttachmentAllowance.offersContactsAndPlaces) { composerState.showContactPicker = true },
             onShowAttachments: {
                 // Carrousel de pièces jointes ouvert → ferme le panneau emoji
                 // pour ne jamais empiler deux surfaces d'entrée sous la barre.
@@ -194,20 +196,18 @@ extension ConversationView {
             },
             // Tuile « Sticker » (#4823) : la palette monte en feuille ; ce
             // qu'elle rend part comme un MESSAGE (`ConversationView+Sticker`).
-            onRequestStickerPicker: { composerState.showStickerPicker = true },
+            onRequestStickerPicker: guestDoor(guestAttachmentAllowance.offersVisualMedia) { composerState.showStickerPicker = true },
             // Cadre à mots (#5326) : la pastille de la barre remet le gabarit
             // choisi et le texte tapé ; l'envoi passe par le MÊME chemin que la
             // palette (`sendTemplateSticker` → `sendStickerImage`), qui porte
             // déjà la bulle optimiste, l'amorce de cache et l'outbox hors-ligne.
             // Le champ est vidé par la barre, qui en est la source.
-            onSendTextSticker: { gabarit, mots in
-                sendTemplateSticker(gabarit, slots: [StickerSlotFiller.textSlot: mots])
-            },
-            onRecentMediaSelected: { pick in ingestRecentMediaPick(pick) },
-            onRecentMediaEdit: { pick in editRecentMediaPick(pick) },
-            onRecentLibraryAssetSelected: { asset in ingestRecentLibraryAsset(asset) },
+            onSendTextSticker: textStickerDoor,
+            onRecentMediaSelected: recentMediaPickDoor,
+            onRecentMediaEdit: recentMediaEditDoor,
+            onRecentLibraryAssetSelected: recentLibraryAssetDoor,
             recentAttachedAssetIds: Set(composerState.attachedLibraryAssetIds),
-            onPhotoLibraryPreselecting: { ids in openPhotoLibraryPreselecting(ids) },
+            onPhotoLibraryPreselecting: photoLibraryPreselectingDoor,
             injectedEmoji: $composerState.emojiToInject,
             ephemeralChoice: $viewModel.composerEphemeralChoice,
             hideEphemeral: composerState.editingMessageId != nil,

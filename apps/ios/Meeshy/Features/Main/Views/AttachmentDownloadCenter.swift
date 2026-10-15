@@ -85,7 +85,6 @@ final class AttachmentDownloadCenter {
 
     private var active: [String: DownloadProgress] = [:]
     private var tasks: [String: Task<Void, Never>] = [:]
-    private var byteTasks: [String: Task<Data, Error>] = [:]
     private let subject = PassthroughSubject<(key: String, event: Event), Never>()
 
     /// La clé d'un média — celle sous laquelle le cache typé le range.
@@ -114,7 +113,6 @@ final class AttachmentDownloadCenter {
         case .finished, .failed, .cancelled:
             active[key] = nil
             tasks[key] = nil
-            byteTasks[key] = nil
         }
         subject.send((key: key, event: event))
     }
@@ -154,7 +152,6 @@ final class AttachmentDownloadCenter {
     /// Annule le téléchargement de `key` — pour TOUTES les surfaces qui le montrent.
     func cancel(key: String) {
         guard tasks[key] != nil else { return }
-        byteTasks[key]?.cancel()
         tasks[key]?.cancel()
         origins[key] = nil
         publish(.cancelled, for: key)
@@ -168,14 +165,9 @@ final class AttachmentDownloadCenter {
     func cancelPrefetch(urlString: String) {
         let key = Self.key(for: urlString)
         guard tasks[key] != nil, origins[key] != .manual else { return }
-        byteTasks[key]?.cancel()
         tasks[key]?.cancel()
         origins[key] = nil
         publish(.cancelled, for: key)
-    }
-
-    private func registerByteTask(_ task: Task<Data, Error>, for key: String) {
-        byteTasks[key] = task
     }
 
     private func finish(key: String, size: Int64) {
@@ -203,8 +195,14 @@ final class AttachmentDownloadCenter {
         )
     }
 
-    /// Streams URLSession.bytes, publie la progression, persiste dans le cache
-    /// typé sous la clé canonique résolue.
+    /// Télécharge EN FLUX vers un fichier par le funnel du cache typé (#9863),
+    /// publie la progression, et range le média sous la clé canonique résolue.
+    ///
+    /// Le funnel (`DiskCacheStore.data(for:progress:)`) tient à lui seul ce que
+    /// ce centre faisait à la main : dédoublonnage avec tout autre chemin en vol
+    /// (préchargement, lecteur), directives de fraîcheur (#9478), fichier de
+    /// transit déplacé dans le cache sans relecture. Annuler la tâche de la clé
+    /// annule le transfert qu'elle a ouvert.
     private nonisolated func run(
         key resolvedKey: String,
         urlString: String,
@@ -212,7 +210,7 @@ final class AttachmentDownloadCenter {
         cacheStore: CacheStoreKind
     ) async {
         do {
-            guard let url = MeeshyConfig.resolveMediaURL(urlString) else { throw URLError(.badURL) }
+            guard MeeshyConfig.resolveMediaURL(urlString) != nil else { throw URLError(.badURL) }
             let store: DiskCacheStore
             switch cacheStore {
             case .audio: store = await CacheCoordinator.shared.audio
@@ -231,96 +229,13 @@ final class AttachmentDownloadCenter {
                 return
             }
 
-            // Piggyback: another path (conversation prefetch, the player
-            // warm-up) is ALREADY fetching this media through the store's
-            // network funnel. Await that fetch instead of opening a duplicate
-            // connection — duplicate concurrent downloads of the same voice
-            // note were observed saturating slow cellular links (NSURLError
-            // -1001 bursts). Byte-level progress isn't available on this path.
-            if let existing = await store.inFlightDownload(for: resolvedKey) {
-                let data = try await existing.value
-                await finish(key: resolvedKey, size: Int64(data.count))
-                return
-            }
-
-            // Stream the bytes ourselves (progress UI) and persist into the
-            // typed cache INSIDE the task, then register it in the store's
-            // funnel so concurrent `data(for:)`/`image(for:)` callers coalesce
-            // onto this download.
-            let byteTask = Task<Data, Error> { [weak self] in
-                let (asyncBytes, response) = try await URLSession.shared.bytes(from: url)
-
-                guard let http = response as? HTTPURLResponse,
-                      (200...299).contains(http.statusCode) else {
-                    throw URLError(.badServerResponse)
+            // La progression arrive cadencée par le téléchargeur (au plus
+            // ~10 rapports par seconde), jamais un saut MainActor par paquet.
+            let data = try await store.data(for: resolvedKey, progress: { [weak self] written, expected in
+                Task { @MainActor in
+                    self?.report(key: resolvedKey, downloaded: written, total: expected > 0 ? expected : nil)
                 }
-
-                let expectedLength = http.expectedContentLength
-                if expectedLength > 0 {
-                    await self?.report(key: resolvedKey, total: expectedLength)
-                }
-
-                var data = Data()
-                if expectedLength > 0 {
-                    data.reserveCapacity(Int(expectedLength))
-                }
-
-                var buffer = [UInt8]()
-                buffer.reserveCapacity(16384)
-
-                for try await byte in asyncBytes {
-                    try Task.checkCancellation()
-                    buffer.append(byte)
-
-                    if buffer.count >= 16384 {
-                        data.append(contentsOf: buffer)
-                        buffer.removeAll(keepingCapacity: true)
-                        let current = Int64(data.count)
-                        await self?.report(key: resolvedKey, downloaded: current)
-                    }
-                }
-
-                try Task.checkCancellation()
-
-                if !buffer.isEmpty {
-                    data.append(contentsOf: buffer)
-                }
-
-                // Seed under the exact key the renderer resolves to — a
-                // download must never need to re-fetch on the next render.
-                // Persisted before returning so funnel piggybackers observe a
-                // warm cache — unless the gateway declared the media
-                // `no-store` (view-once) or `no-cache` (ephemeral), #9478.
-                await store.store(data, for: resolvedKey, honoring: http)
-                return data
-            }
-            // registerInFlightDownload returns false when another call
-            // registered its own download for this exact key between the
-            // piggyback check above and this attempt — a race the initial
-            // `inFlightDownload(for:)` read can't close by itself. Honor the
-            // Bool: only claim ownership (and the cancel wiring) when we
-            // actually won the race; otherwise cancel our now-redundant task
-            // and piggyback on the winner.
-            let registered = await store.registerInFlightDownload(byteTask, for: resolvedKey)
-            let data: Data
-            if registered {
-                await registerByteTask(byteTask, for: resolvedKey)
-                data = try await byteTask.value
-            } else {
-                byteTask.cancel()
-                if let existing = await store.inFlightDownload(for: resolvedKey) {
-                    data = try await existing.value
-                } else {
-                    // The registry entry can self-clear between our failed
-                    // `register` and this read (two actor hops). Falling back
-                    // to OUR own just-cancelled `byteTask` would throw
-                    // `CancellationError`, which the catch below swallows,
-                    // stranding the download forever. Read through the store's
-                    // own idempotent fetch instead: a cache hit if the winner
-                    // already persisted, or a fresh coalesced fetch otherwise.
-                    data = try await store.data(for: resolvedKey)
-                }
-            }
+            })
 
             if case .image = cacheStore, let image = UIImage(data: data) {
                 DiskCacheStore.cacheImageForPreview(image, key: resolvedKey)
@@ -328,9 +243,89 @@ final class AttachmentDownloadCenter {
 
             await finish(key: resolvedKey, size: Int64(data.count))
         } catch {
-            guard !Task.isCancelled, !(error is CancellationError) else { return }
+            // Seule l'annulation de CETTE clé (déjà publiée par `cancel`) se
+            // tait : un transfert rejoint puis annulé ailleurs (purge) doit
+            // sortir en échec, sinon la surface resterait sur « téléchargement ».
+            guard !Task.isCancelled else { return }
             await fail(key: resolvedKey)
         }
+    }
+}
+
+// MARK: - Présence sur l'appareil (règle SYNCHRONE, #10370)
+
+/// **« Ce média est-il déjà sur l'appareil ? » se lit par UNE règle
+/// synchrone** (#10370) — un `stat`, sous la clé exacte du cache typé, sans
+/// saut d'acteur.
+///
+/// Les surfaces partaient de `.needsDownload` et ne consultaient le disque
+/// qu'au retour d'une tâche asynchrone : un média déjà téléchargé se
+/// dessinait d'abord « ↓ », puis basculait. Le badge d'image, lui, ne
+/// regardait que l'ORIGINAL alors que la bulle affiche une VARIANTE — la
+/// variante sur le disque laissait le badge en place pour toujours. Chaque
+/// surface lit désormais cette règle au premier rendu ; la résolution
+/// asynchrone garde le dernier mot (elle consulte aussi le cache mémoire).
+extension AttachmentDownloadCenter {
+    /// Sonde le cache typé de `kind` sous `key` (clé déjà résolue). Pour
+    /// l'image, une variante décodée résidente en mémoire compte aussi : la
+    /// bulle décode sous une clé dimensionnée, le fichier nu peut manquer
+    /// alors que l'image est bel et bien affichée.
+    nonisolated static func isInTypedStore(key: String, kind: CacheStoreKind) -> Bool {
+        switch kind {
+        case .audio:
+            return CacheCoordinator.audioLocalFileURL(for: key) != nil
+        case .video:
+            return CacheCoordinator.videoLocalFileURL(for: key) != nil
+        case .image:
+            return CacheCoordinator.imageLocalFileURL(for: key) != nil
+                || DiskCacheStore.hasAnyCachedImageVariant(for: key)
+        }
+    }
+
+    /// `true` quand `urlString` est sur l'appareil : fichier local `file://`
+    /// existant, ou média rangé dans le cache typé sous la MÊME clé que celle
+    /// du téléchargement (`key(for:)`) — une clé de stockage brute
+    /// (`2025/10/<id>/p.jpg`) se cherche donc sous son URL résolue.
+    nonisolated static func isOnDevice(
+        urlString: String,
+        kind: CacheStoreKind,
+        stat: (String, CacheStoreKind) -> Bool = { AttachmentDownloadCenter.isInTypedStore(key: $0, kind: $1) },
+        fileExists: (String) -> Bool = { FileManager.default.fileExists(atPath: $0) }
+    ) -> Bool {
+        guard !urlString.isEmpty else { return false }
+        if urlString.hasPrefix("file://") {
+            return fileExists(URL(string: urlString)?.path ?? "")
+        }
+        return stat(key(for: urlString), kind)
+    }
+
+    /// La présence d'une PIÈCE JOINTE. Une image est sur l'appareil dès
+    /// qu'UNE de ses formes l'est : l'original, la variante que la surface
+    /// affiche (`displayedURL`), ou toute variante déclarée.
+    nonisolated static func isOnDevice(
+        _ attachment: MessageAttachment,
+        displayedURL: String? = nil,
+        stat: (String, CacheStoreKind) -> Bool = { AttachmentDownloadCenter.isInTypedStore(key: $0, kind: $1) },
+        fileExists: (String) -> Bool = { FileManager.default.fileExists(atPath: $0) }
+    ) -> Bool {
+        switch attachment.type {
+        case .image:
+            return imageCandidates(attachment, displayedURL: displayedURL).contains { candidate in
+                isOnDevice(urlString: candidate, kind: .image, stat: stat, fileExists: fileExists)
+            }
+        case .audio:
+            return isOnDevice(urlString: attachment.fileUrl, kind: .audio, stat: stat, fileExists: fileExists)
+        case .video:
+            return isOnDevice(urlString: attachment.fileUrl, kind: .video, stat: stat, fileExists: fileExists)
+        case .file, .location:
+            return false
+        }
+    }
+
+    /// Les formes d'une image, l'original d'abord puis la variante affichée.
+    nonisolated private static func imageCandidates(_ attachment: MessageAttachment, displayedURL: String?) -> [String] {
+        let variants = (attachment.imageVariants ?? []).map { $0.url }
+        return ([attachment.fileUrl, displayedURL ?? ""] + variants).filter { !$0.isEmpty }
     }
 }
 

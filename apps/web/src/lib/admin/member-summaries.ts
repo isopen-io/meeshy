@@ -31,6 +31,7 @@ export const ADMIN_MEMBER_SECTIONS = [
   'role',
   'conversations',
   'media',
+  'publications',
   'contacts',
   'communities',
   'voice',
@@ -47,8 +48,15 @@ export type AdminMemberSection = (typeof ADMIN_MEMBER_SECTIONS)[number];
  * la porte pas ne voit ni la carte ni sa modale, plutôt qu'une carte qui mènerait
  * à un refus. L'ordre des autres ne bouge pas.
  */
-export function adminMemberSectionsFor({ sensitive }: { readonly sensitive: boolean }): readonly AdminMemberSection[] {
-  return sensitive ? ADMIN_MEMBER_SECTIONS : ADMIN_MEMBER_SECTIONS.filter((section) => section !== 'preferences');
+export function adminMemberSectionsFor({
+  sensitive,
+  moderate = false,
+}: {
+  readonly sensitive: boolean;
+  /** `canModerateContent` (#10315) : la carte des publications et ses trois gestes ne s'offrent qu'à qui peut modérer. */
+  readonly moderate?: boolean;
+}): readonly AdminMemberSection[] {
+  return ADMIN_MEMBER_SECTIONS.filter((section) => (section !== 'preferences' || sensitive) && (section !== 'publications' || moderate));
 }
 
 export const ADMIN_MEMBER_SECTION_TITLES = {
@@ -58,6 +66,7 @@ export const ADMIN_MEMBER_SECTION_TITLES = {
   role: 'admin.people.card.role',
   conversations: 'admin.tab.conversations',
   media: 'admin.tab.media',
+  publications: 'admin.people.card.publications',
   contacts: 'admin.tab.contacts',
   communities: 'admin.tab.communities',
   voice: 'admin.tab.voice',
@@ -73,6 +82,7 @@ export const ADMIN_MEMBER_SECTION_GLYPHS = {
   role: 'shieldCheck',
   conversations: 'chats',
   media: 'image',
+  publications: 'newspaper',
   contacts: 'handshake',
   communities: 'usersThree',
   voice: 'microphone',
@@ -82,7 +92,7 @@ export const ADMIN_MEMBER_SECTION_GLYPHS = {
 } as const satisfies Readonly<Record<AdminMemberSection, AdminGlyphName>>;
 
 /** Les cartes dont les chiffres viennent de `GET …/stats` : elles suivent son état (squelette, erreur). */
-export const ADMIN_MEMBER_STAT_SECTIONS: ReadonlySet<AdminMemberSection> = new Set(['conversations', 'media', 'contacts', 'communities', 'security', 'reports']);
+export const ADMIN_MEMBER_STAT_SECTIONS: ReadonlySet<AdminMemberSection> = new Set(['conversations', 'media', 'publications', 'contacts', 'communities', 'security', 'reports']);
 
 export type AdminMemberSummary = { readonly values: readonly AdminSummaryValue[]; readonly sentence: string | null };
 
@@ -142,6 +152,8 @@ export function memberSummaryOf(
       return { values: [v('admin.stats.conversations', stat('conversations')), v('admin.stats.messagesSent', stat('messagesSent'))], sentence: null };
     case 'media':
       return { values: [v('admin.stats.mediaUploaded', stat('mediaUploaded')), v('admin.stats.posts', stat('posts'))], sentence: null };
+    case 'publications':
+      return { values: [v('admin.stats.posts', stat('posts'))], sentence: t('admin.people.publications.caption') };
     case 'contacts':
       return {
         values: [v('admin.stats.friends', stat('friends')), v('admin.stats.pendingIn', stat('pendingFriendRequestsIn')), v('admin.stats.pendingOut', stat('pendingFriendRequestsOut'))],

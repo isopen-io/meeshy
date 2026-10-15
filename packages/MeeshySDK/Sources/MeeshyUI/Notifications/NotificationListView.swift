@@ -263,9 +263,9 @@ public struct NotificationListView: View {
             case .engagement: return String(localized: "notifications.empty.engagement", defaultValue: "Aucun engagement", bundle: .module)
             case .contacts: return String(localized: "notifications.empty.contacts", defaultValue: "Aucune notification de contact", bundle: .module)
             case .groups: return String(localized: "notifications.empty.groups", defaultValue: "Aucune notification de groupe", bundle: .module)
-            case .calls: return String(localized: "notifications.empty.calls", defaultValue: "Aucun appel manque", bundle: .module)
+            case .calls: return String(localized: "notifications.empty.calls", defaultValue: "Aucun appel manqué", bundle: .module)
             case .translations: return String(localized: "notifications.empty.translations", defaultValue: "Aucune traduction", bundle: .module)
-            case .system: return String(localized: "notifications.empty.system", defaultValue: "Aucune notification systeme", bundle: .module)
+            case .system: return String(localized: "notifications.empty.system", defaultValue: "Aucune notification système", bundle: .module)
             }
         }()
 
@@ -279,7 +279,7 @@ public struct NotificationListView: View {
                 .font(.system(size: MeeshyFont.calloutSize, weight: .semibold))
                 .foregroundColor(theme.textPrimary)
 
-            Text(String(localized: "notifications.empty.subtitle", defaultValue: "Vos notifications apparaitront ici", bundle: .module))
+            Text(String(localized: "notifications.empty.subtitle", defaultValue: "Vos notifications apparaîtront ici", bundle: .module))
                 .font(.system(size: MeeshyFont.subheadSize))
                 .foregroundColor(theme.textMuted)
             Spacer()
@@ -582,7 +582,13 @@ final class NotificationListViewModel: ObservableObject {
             loadDidFail = false
             isLoading = false
             if category == .all {
-                try await CacheCoordinator.shared.notifications.save(response.data, for: Self.persistedCacheKey)
+                // La liste est déjà affichée : un cache non écrit ne la fait pas passer pour un échec de
+                // chargement, et ne prive pas la pastille de non-lus de son recalage.
+                do {
+                    try await CacheCoordinator.shared.notifications.save(response.data, for: Self.persistedCacheKey)
+                } catch {
+                    Logger.notifications.error("Notifications cache not written: \(error.localizedDescription)")
+                }
             }
             await NotificationToastManager.shared.refreshUnreadCount()
         } catch {

@@ -64,10 +64,13 @@ function fakeStorage() {
   };
 }
 
+const THEME_COLORS = { dark: '#0b0c14', light: '#f1f3f9' } as const;
+
 function fakeThemeColorMetas() {
   return (['dark', 'light'] as const).map((scheme) => ({
     media: `(prefers-color-scheme: ${scheme})`,
-    getAttribute: (name: string) => (name === 'data-scheme' ? scheme : null),
+    getAttribute: (name: string) =>
+      name === 'data-scheme' ? scheme : name === 'content' ? THEME_COLORS[scheme] : null,
   }));
 }
 
@@ -226,6 +229,71 @@ describe('la barre d’état de la coque suit le schéma PEINT, pas le système 
     cleanup = env.restore;
     (globalThis as { Capacitor?: unknown }).Capacitor = {
       PluginHeaders: [{ name: 'SystemBars' }],
+      nativePromise: () => Promise.reject(new Error('indisponible')),
+    };
+
+    setThemePreference('light');
+
+    expect(env.classList.contains('light')).toBe(true);
+  });
+});
+
+/**
+ * LE FOND DES BARRES SYSTÈME (#9533) — sous Android 15, la coque n'est pas
+ * bord à bord et le thème natif peint les barres selon le SYSTÈME. Le pont
+ * `MeeshySystemBars` reçoit la couleur `theme-color` du schéma PEINT, celle
+ * que Chrome donne à sa barre : la meta reste la seule source de la couleur.
+ */
+describe('le fond des barres de la coque prend la couleur theme-color du schéma PEINT (#9533)', () => {
+  function installShell(plugins: ReadonlyArray<string>) {
+    const appels: Array<{ plugin: string; methode: string; options: unknown }> = [];
+    (globalThis as { Capacitor?: unknown }).Capacitor = {
+      PluginHeaders: plugins.map((name) => ({ name })),
+      nativePromise: async (plugin: string, methode: string, options: unknown) => {
+        appels.push({ plugin, methode, options });
+        return {};
+      },
+    };
+    return () => appels.filter((appel) => appel.plugin === 'MeeshySystemBars');
+  }
+
+  test('choisir « clair » peint les barres de la couleur claire de la page', () => {
+    const env = installEnvironment();
+    cleanup = env.restore;
+    const peintures = installShell(['SystemBars', 'MeeshySystemBars']);
+
+    setThemePreference('light');
+
+    expect(peintures()).toEqual([{ plugin: 'MeeshySystemBars', methode: 'paint', options: { color: '#f1f3f9' } }]);
+  });
+
+  test('un choix sombre stocké sur un système clair peint les barres en sombre dès le démarrage', () => {
+    const env = installEnvironment();
+    cleanup = env.restore;
+    const peintures = installShell(['SystemBars', 'MeeshySystemBars']);
+    env.storage.setItem('meeshy.scheme', 'dark');
+    env.classList.toggle('dark', true);
+
+    followSystem();
+
+    expect(peintures()).toEqual([{ plugin: 'MeeshySystemBars', methode: 'paint', options: { color: '#0b0c14' } }]);
+  });
+
+  test('une coque construite avant le pont ne reçoit aucune peinture', () => {
+    const env = installEnvironment();
+    cleanup = env.restore;
+    const peintures = installShell(['SystemBars']);
+
+    setThemePreference('light');
+
+    expect(peintures()).toEqual([]);
+  });
+
+  test('un refus du pont ne casse pas la bascule du thème', () => {
+    const env = installEnvironment();
+    cleanup = env.restore;
+    (globalThis as { Capacitor?: unknown }).Capacitor = {
+      PluginHeaders: [{ name: 'MeeshySystemBars' }],
       nativePromise: () => Promise.reject(new Error('indisponible')),
     };
 

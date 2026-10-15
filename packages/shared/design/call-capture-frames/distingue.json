@@ -5,6 +5,10 @@
       "id": "distingue.monogramme",
       "mood": "distingue",
       "name": "Monogramme",
+      "surfaces": [
+        "capture",
+        "live"
+      ],
       "base": {
         "layout": {
           "arrangement": "grid",
@@ -125,6 +129,10 @@
       "id": "distingue.bibliotheque",
       "mood": "distingue",
       "name": "Bibliothèque",
+      "surfaces": [
+        "capture",
+        "live"
+      ],
       "base": {
         "layout": {
           "arrangement": "grid",
@@ -249,6 +257,10 @@
       "id": "distingue.cercle",
       "mood": "distingue",
       "name": "Cercle",
+      "surfaces": [
+        "capture",
+        "live"
+      ],
       "base": {
         "layout": {
           "arrangement": "grid",
@@ -387,6 +399,10 @@
       "id": "distingue.correspondance",
       "mood": "distingue",
       "name": "Correspondance",
+      "surfaces": [
+        "capture",
+        "live"
+      ],
       "base": {
         "layout": {
           "arrangement": "cascade",

@@ -1,3 +1,4 @@
+import { usePlaybackTelemetry } from '@/lib/telemetry/playback-session';
 import { lazy, memo, Suspense, useCallback, useEffect, useMemo, useRef, useState } from 'react';
 
 import { Glyph, GlyphSvg } from './glyph';
@@ -23,6 +24,10 @@ import type { InterfaceLanguage } from '@/lib/interface-language';
 import { reelStageOf } from '@/lib/reels/scene';
 import type { ReelPageMode } from '@/lib/reels/thread';
 import { useFrameProgress } from '@/lib/view/frame-progress';
+import type { ViewAttribution } from '@/lib/view/content-open';
+import { readingTelemetry, useReadingSession } from '@/lib/view/reading-telemetry';
+import { interactionOf } from '@/lib/telemetry/card-context';
+import { contentTapOf } from '@/lib/telemetry/content-taps';
 import { useReelPlayback } from '@/lib/view/use-reel-playback';
 
 /** Chargé À LA DEMANDE (#6903, motif D-54) : un réel de MÉDIAS (vidéo, audio,
@@ -82,6 +87,10 @@ export type ReelPageProps = {
    * automatique (#6903) — même politique que le réel vidéo (`soundOn =
    * false`), câblée par l'écran (`routes/reels.tsx`). */
   readonly onSoundBlocked: () => void;
+  /** PAR OÙ ce réel est arrivé à l'écran (#10483) — l'entrée du lecteur pour
+   * le premier, le balayage pour les suivants (`entryAttribution`). Stable
+   * chez l'hôte : la page ne se re-rend pas pour elle. */
+  readonly viewAttribution?: (postId: string) => ViewAttribution;
   /** Injectable pour les témoins UNIQUEMENT — la production prend les
    * dépendances de `BackgroundTrackAudio` ; sans elle, « la piste protégée
    * est refusée » ne s'éprouve qu'en laissant partir un vrai `fetch`. */
@@ -92,22 +101,26 @@ export type ReelPageProps = {
 };
 
 function ReelPlayable({
+  postId,
   media,
   tag,
   mode,
   soundOn,
   accent,
   language,
+  onSoundBlocked,
 }: {
+  readonly postId: string;
   readonly media: FeedCardMedia;
   readonly tag: 'video' | 'audio';
   readonly mode: Exclude<ReelPageMode, 'far'>;
   readonly soundOn: boolean;
   readonly accent: string;
   readonly language: InterfaceLanguage;
+  readonly onSoundBlocked: () => void;
 }) {
   const active = mode === 'active';
-  const { status, toggle, bind } = useReelPlayback({ mediaId: media.id, active, soundOn });
+  const { status, toggle, bind } = useReelPlayback({ mediaId: media.id, active, soundOn, onSoundBlocked });
   const poster = media.thumbnailSrc ?? media.placeholder;
   const preload = mode === 'warm' ? 'metadata' : 'auto';
   /* L'ATTENTE SE DIT (#9277) : l'élément lié est aussi écouté pour son buffer. */
@@ -123,6 +136,7 @@ function ReelPlayable({
   useEffect(() => (element === null ? undefined : watchMediaStall(element, setStalled)), [element]);
   const bar = useRef<HTMLSpanElement | null>(null);
   useFrameProgress({ media: element, playing: status === 'playing', bar });
+  usePlaybackTelemetry({ element, active, target: { kind: 'reel', id: postId }, mediaId: media.id, surface: 'reels' });
 
   return (
     <>
@@ -156,7 +170,10 @@ function ReelPlayable({
         className="absolute inset-0 grid place-items-center focus-visible:outline-2 focus-visible:-outline-offset-4"
         style={{ outlineColor: 'var(--color-on-media)', WebkitTapHighlightColor: 'transparent' }}
       >
-        {status === 'paused' ? (
+        {/* Le disque ▶ ne se pose que sur le réel VISIBLE : un voisin en pause
+            ne l'a pas été par le lecteur, et il glisserait dans le champ à
+            chaque balayage. */}
+        {active && status === 'paused' ? (
           <span aria-hidden="true" className={`${VIEWER_GLASS} grid size-18 place-items-center rounded-full`}>
             <Glyph name="fillPlay" size={34} className="text-on-media" />
           </span>
@@ -250,7 +267,7 @@ function ReelStage({
     return mode === 'far' ? (
       <ReelPoster src={stage.media.thumbnailSrc ?? stage.media.placeholder} />
     ) : (
-      <ReelPlayable media={stage.media} tag={stage.kind} mode={mode} soundOn={soundOn} accent={accent} language={language} />
+      <ReelPlayable postId={model.id} media={stage.media} tag={stage.kind} mode={mode} soundOn={soundOn} accent={accent} language={language} onSoundBlocked={onSoundBlocked} />
     );
   }
   if (stage.kind === 'images') {
@@ -395,6 +412,18 @@ export const ReelPage = memo(function ReelPage(props: ReelPageProps) {
    */
   const [soundUnavailable, setSoundUnavailable] = useState<ProtectedMediaUnavailableReason | null>(null);
   const participation = usePublicationParticipation(model.id);
+  /* LA LECTURE DU RÉEL ACTIF (#10401, #6486) — impression et vue à son
+     entrée à l'écran, durée et séance à sa sortie. Miroir
+     `ReelsViewModel.recordView` (iOS). */
+  useReadingSession({
+    postId: model.id,
+    active: mode === 'active',
+    contentType: 'REEL',
+    surface: 'reels',
+    impressionSource: 'feed',
+    openView: true,
+    ...(props.viewAttribution === undefined ? {} : { attribution: props.viewAttribution }),
+  });
   const sceneSound =
     stage.kind === 'scene' &&
     (soundUnavailable === null
@@ -411,10 +440,20 @@ export const ReelPage = memo(function ReelPage(props: ReelPageProps) {
     [noteMutes, soundOn, onToggleSound],
   );
   const chromeHidden = props.chromeHidden === true;
+  /* LES TAPS D'IDENTITÉ (#10502) — le même écouteur que la carte du fil. */
+  const postId = model.id;
+  const onTapCapture = useCallback(
+    (event: { readonly target: EventTarget | null }) => {
+      const tap = contentTapOf(event.target);
+      if (tap !== null) readingTelemetry.recordV2(interactionOf(postId, tap));
+    },
+    [postId],
+  );
 
   return (
     <article
       data-reel={model.id}
+      onClickCapture={onTapCapture}
       data-reel-index={index}
       data-reel-mode={mode}
       tabIndex={-1}

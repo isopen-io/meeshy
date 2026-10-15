@@ -174,10 +174,11 @@ extension ConversationViewModel {
 
     /// #7618 — une vue unique n'entre pas dans le défilement du plein écran :
     /// on ne l'atteint pas en balayant depuis une autre photo. Elle s'ouvre
-    /// seule, par sa puce (`ConversationMediaGalleryLayer`).
+    /// seule, par sa puce (`ConversationMediaGalleryLayer`). Un STICKER n'y entre
+    /// pas non plus : son image jointe n'est pas une photo (#10630).
     var allVisualAttachments: [MessageAttachment] {
         if let cached = _allVisualAttachments { return cached }
-        let result = messages.filter { !$0.holdsViewOnce }.flatMap { msg in
+        let result = messages.filter { !$0.holdsViewOnce && !ReceivedSticker.isGalleryExcluded($0) }.flatMap { msg in
             msg.attachments.filter { [.image, .video].contains($0.type) }
         }
         _allVisualAttachments = result

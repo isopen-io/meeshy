@@ -80,6 +80,11 @@ public struct APIMessageSender: Decodable, Sendable {
     /// type tranche.
     public var isAnonymous: Bool { type == "anonymous" }
 
+    /// L'auteur a-t-il un COMPTE qui l'engage (#10286) ? Fail-closed : seuls
+    /// `user` et `bot` le prouvent ; un type absent ou inconnu vaut invité,
+    /// et ses adresses restent du texte brut.
+    public var hasAccount: Bool { type == "user" || type == "bot" }
+
     public var resolvedUserId: String? {
         userId ?? user?.id
     }
@@ -522,6 +527,9 @@ public struct APIMessage: Sendable {
     public var joinNotice: JoinNoticeMetadata? = nil
     /// Avis de capture (`metadata.kind == "content-capture"`, #9617).
     public var captureNotice: CaptureNoticeMetadata? = nil
+    /// Ligne d'arrivées regroupées de Meeshy Global (`metadata.kind ==
+    /// "members-arrived"`, #7759).
+    public var arrivalsNotice: ArrivalsNoticeMetadata? = nil
     /// L'événement système d'un avis que le SERVEUR complète sur place (#8565
     /// — la ligne d'arrivées de Meeshy Global, qui ne part qu'en
     /// `message:edited`). Même forme que `lastMessageSystemEvent` de
@@ -642,6 +650,7 @@ extension APIMessage: Decodable {
         callSummary = try? c.decodeIfPresent(CallSummaryMetadata.self, forKey: .metadata)
         joinNotice = try? c.decodeIfPresent(JoinNoticeMetadata.self, forKey: .metadata)
         captureNotice = try? c.decodeIfPresent(CaptureNoticeMetadata.self, forKey: .metadata)
+        arrivalsNotice = try? c.decodeIfPresent(ArrivalsNoticeMetadata.self, forKey: .metadata)
         systemEvent = try? c.decodeIfPresent(LastMessageSystemEvent.self, forKey: .systemEvent)
         // Outbound-link tracking: prefer the top-level `trackingLinks` (socket
         // `message:new`); otherwise read it from the `metadata` envelope (REST).
@@ -1029,6 +1038,7 @@ extension APIMessage {
             senderName: effectiveSenderName, senderUsername: effectiveSenderUsername, senderColor: senderColor,
             senderAvatarURL: sender?.resolvedAvatar, senderUserId: sender?.resolvedUserId,
             senderIsAnonymous: sender?.isAnonymous ?? false,
+            senderHasAccount: sender.map(\.hasAccount) ?? (isMe || msgSource != .user),
             deliveryStatus: computedDeliveryStatus,
             isMe: isMe,
             deliveredToAllAt: deliveredToAllAt, readByAllAt: readByAllAt,
@@ -1037,6 +1047,7 @@ extension APIMessage {
             callSummary: callSummary,
             joinNotice: joinNotice,
             captureNotice: captureNotice,
+            arrivalsNotice: arrivalsNotice,
             sticker: sticker,
             trackedLinkMap: trackedLinkMap
         )

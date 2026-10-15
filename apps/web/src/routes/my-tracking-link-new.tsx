@@ -4,10 +4,9 @@ import { apiDeps } from '@/lib/api/deps';
 import { performCreateTrackingLink, type CreateFamilyLinkOutcome } from '@/lib/api/link-family-actions';
 import { emptyTrackingLinkDraft, normalizedUrl, TRACKING_NAME_MAX, TRACKING_UTM_MAX, trackingLinkUrl, type MyTrackingLink, type TrackingLinkDraft, type TrackingLinkDraftField } from '@/lib/api/my-tracking-links';
 import { appQueryClient } from '@/lib/api/query-client';
-import { apiConfig } from '@/lib/api/config';
+import { publicWebOrigin } from '@/lib/links/public-origin';
 import { translateLinkFamilies, type PlainLinkFamiliesKey } from '@/lib/i18n-link-families-catalog';
 import { currentInterfaceLanguage } from '@/lib/interface-language';
-import { webOriginOf } from '@/lib/links/web-origin';
 import { useOnline } from '@/lib/net/online';
 import { Field, FormError, SubmitButton } from '@/routes/link-family-form';
 import { LinksGlyph, LinksHeader, LinksOfflineNotice } from '@/routes/links-parts';
@@ -41,7 +40,7 @@ const FIELD_ERROR: Readonly<Record<TrackingLinkDraftField | 'taken', PlainLinkFa
 export default function MyTrackingLinkNewScreen() {
   const language = currentInterfaceLanguage();
   const online = useOnline();
-  const origin = useMemo(() => webOriginOf(apiConfig.base, window.location.origin), []);
+  const origin = useMemo(() => publicWebOrigin(window.location.origin), []);
   const [draft, setDraft] = useState<TrackingLinkDraft>(emptyTrackingLinkDraft);
   const [submitting, setSubmitting] = useState(false);
   const [feedback, setFeedback] = useState<Feedback | null>(null);

@@ -77,6 +77,9 @@ final class ComposerCaptureSession: ObservableObject {
     @Published var activeEditTools: Set<ComposerEditTool> = []
     /// Le son de la prise en retouche : gain et muet (#9754).
     @Published var takeSound = ComposerTakeSound()
+    /// La vidéo en retouche est mise en pause par l'auteur (#10356) : elle
+    /// reste arrêtée à sa position, à travers rognages et glissés de la tête.
+    @Published var editPaused = false
     /// Un glissé de la règle montre la frame sous elle : la boucle est suspendue
     /// et doit repartir à la fin du geste, même sur une plage inchangée (#9754).
     var trimScrubbing = false
@@ -97,12 +100,18 @@ final class ComposerCaptureSession: ObservableObject {
     /// Les segments s'assemblent, ou la vidéo se rend avec son look : le `✓`
     /// attend, et le dit.
     @Published var isRenderingLook = false
-    /// La flèche ⬇︎ de la retouche (#9684) : la prise ne s'enregistre qu'une fois.
-    @Published var takeSaveState = ComposerTakeSaveState.idle
-    /// L'écriture de la flèche en cours : détenue ici, jamais par la vue, elle
-    /// survit à ✕ et à la fermeture du viseur (#9684). `nil` : rendu impossible,
-    /// `false` : Photos a refusé (et l'a dit), `true` : enregistrée.
-    var takeWrite: Task<Bool?, Never>?
+    /// Les cadres avec lesquels la prise en retouche est (ou part) dans Photos —
+    /// l'état de la loi partagée (#10284) ; `takeSaveState` en est la projection.
+    @Published var takeSave = ComposerCaptureSession.noTakeSave
+    /// La dernière écriture vers Photos en cours (elles s'enchaînent) : détenue
+    /// ici, jamais par la vue, elle survit à ✕ et à la fermeture du viseur
+    /// (#9684). `nil` : rendu impossible, `false` : Photos a refusé (et l'a dit),
+    /// `true` : enregistrée.
+    @Published var takeWrite: Task<Bool?, Never>?
+    /// L'écriture du BRUT de la prise en retouche vers Photos par la caméra —
+    /// quand Réglages › Médias demande l'original (#9684), quelle que soit la zone
+    /// (#10284) ; `nil` : le brut n'y est pas (réglage par défaut, assemblage).
+    var editRawSave: Task<Bool, Never>?
     /// Ce que la capture écrit dans Photos — lu à chaque décision, jamais figé.
     let savePolicy: @MainActor () -> CaptureSavePolicy
     /// La date de la séance de prise : l'aperçu, la photo et la vidéo écrivent
@@ -231,10 +240,25 @@ final class ComposerCaptureSession: ObservableObject {
     func arm(mode: ComposerSceneCameraMode) {
         resetIntents()
         self.mode = mode
+        // **Les cadres d'emblée, « Aucun » choisi** (#10307, porteur 2026-10-12) :
+        // la bande s'ouvre sur la famille des cadres, sans en imposer un.
+        look = ComposerCaptureSession.openingLook
+        openFamily = ComposerCaptureSession.openingFamily
         stage = .armed
         armedAt = Date()
         watchThermalState()
         camera.configure()
+    }
+
+    /// La bande ouverte à l'armement, et le look qu'elle montre choisi (#10307).
+    static let openingFamily: ComposerLookFamily? = .frames
+    static let openingLook = ComposerPhotoLook()
+
+    /// **Préparer la session avant de la montrer** (#10307) : l'hôte qui peut
+    /// filmer l'appelle à son ouverture ; l'armement n'aura plus qu'à lancer.
+    func prewarm() {
+        guard stage == .off else { return }
+        camera.prewarm()
     }
 
     /// **Une entrée, pas un mode** : la prise rendue, le viseur se retire et la
@@ -363,7 +387,7 @@ final class ComposerCaptureSession: ObservableObject {
 
     /// **Une vidéo s'ACCUMULE** (#4099) : `✓` concatène.
     func collectSegment(_ url: URL) {
-        segments.append(ComposerCaptureSegment(url: url, duration: pendingSegmentDuration))
+        segments.append(ComposerCaptureSegment(url: url, duration: pendingSegmentDuration, rawSave: camera.librarySave))
         pendingSegmentDuration = 0
     }
 
@@ -379,7 +403,8 @@ final class ComposerCaptureSession: ObservableObject {
     }
 
     /// **`✓` assemble les segments et ouvre la retouche** (#9352, spec § 3.2) :
-    /// rien ne part avant « Terminé ». Un segment unique EST le fichier ; un
+    /// rien ne part avant « Terminé ». Un segment unique EST le fichier — et son
+    /// brut, si la caméra l'a écrit (réglage activé), est déjà dans Photos ; un
     /// assemblage qui échoue retombe sur le dernier segment plutôt que de perdre
     /// la prise entière. Un viseur fermé entre-temps n'ouvre rien.
     func validateSegments() {
@@ -395,6 +420,8 @@ final class ComposerCaptureSession: ObservableObject {
             isRenderingLook = false
             guard let url = finale ?? pris.last?.url else { return }
             await beginEditing(video: url)
+            guard phase == .editing(.video(url)) else { return }
+            editRawSave = pris.first(where: { $0.url == url })?.rawSave
         }
     }
 

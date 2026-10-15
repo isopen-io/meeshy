@@ -10,6 +10,9 @@
 const ptIdentity = {
   'a11y.avatar.profile': 'Ver o perfil de {name}',
   'a11y.avatar.story': 'Ver a story de {name}',
+  'a11y.avatar.conversation': 'Ver a conversa {name}',
+  'a11y.avatar.mood': '{name}, humor {mood}',
+  'mood.peek.title': 'Humor de {name}',
   'avatar.menu.label': 'Ações para {name}',
   'avatar.menu.view_profile': 'Ver o perfil',
   'userProfile.peek.openPage': 'Abrir o perfil completo',
@@ -39,6 +42,7 @@ const ptIdentity = {
   'conversation.details.share.failed': 'Não foi possível criar o link — tente novamente em instantes.',
   'conversation.details.share.unavailable': 'Não é possível compartilhar aqui — copie o link: {url}',
   'thread.header.active_members': 'Membros mais ativos',
+  'thread.header.share': 'Compartilhar a conversa',
 };
 
 export default ptIdentity;

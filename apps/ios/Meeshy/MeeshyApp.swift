@@ -135,6 +135,9 @@ struct MeeshyApp: App {
 
     var body: some Scene {
         WindowGroup {
+            // UNE fenêtre principale : une seconde copie ouverte par le système renvoie vers la première
+            // (`MainWindowGate`, AdaptiveRootView.swift).
+            MainWindowGate {
             SystemThemeDetector {
                 ZStack {
                     Group {
@@ -144,10 +147,10 @@ struct MeeshyApp: App {
                                 // mêmes contacts que celles de l'app, réchauffés
                                 // de la même façon.
                                 .environment(\.mentionContactsProvider, MentionContactsAudienceBridge())
-                                // #9481 — la vitrine de trophées d'un AUTRE membre, dans son profil : ce que SA
+                                // #9481, #10093 — le niveau et le rang d'un membre, sur la BANNIÈRE de sa fiche : ce que SA
                                 // visibilité autorise, rien sinon. Une seule injection, toutes les feuilles de profil la reçoivent.
-                                .environment(\.profileGameSection, ProfileGameSection { userId, name in
-                                    AnyView(GameProfileVisitorCard(userId: userId, name: name))
+                                .environment(\.profileGameSection, ProfileGameSection { userId, _ in
+                                    AnyView(GameBannerBadge(userId: userId))
                                 })
                         } else if hasCheckedSession && !Self.onboardingPreviewReplacesLogin && !authManager.isSwitchingAccount {
                             LoginView()
@@ -221,16 +224,22 @@ struct MeeshyApp: App {
                                 activeGuestSession = GuestSession(
                                     identifier: guestSession.identifier,
                                     context: ctx,
-                                    isDeliberate: guestSession.isDeliberate
+                                    isDeliberate: guestSession.isDeliberate,
+                                    origin: guestSession.origin
                                 )
                             },
                             onAccountRequest: { entry in
                                 deepLinkRouter.requestAccount(entry, forShareLink: guestSession.identifier)
                                 dismissGuestSession()
+                            },
+                            onNewLink: { identifier in
+                                activeGuestSession = GuestSession(identifier: identifier, context: AnonymousSessionStore.load(linkId: identifier), isDeliberate: guestSession.isDeliberate)
                             }
                         )
                     }
                 }
+                // Posté par le transport, hors du fil principal : la session se termine sur lui.
+                .onReceive(NotificationCenter.default.publisher(for: .meeshyGuestSessionEnded).receive(on: DispatchQueue.main)) { endGuestSession($0) }
                 .visitorContentCover(
                     presenter: visitorPresenter,
                     isEligible: !authManager.isAuthenticated && activeGuestSession == nil && launchSplash.phase != .covering
@@ -919,6 +928,18 @@ struct MeeshyApp: App {
                         isDeliberate: true
                     )
                 }
+                // #10006 — « Entrer dans World Wide » depuis l'écran de
+                // connexion : la session invitée s'ouvre sur la clé SERVIE
+                // par `GET /world`, et reprend celle que cet appareil y a déjà.
+                .adaptiveOnChange(of: deepLinkRouter.requestedWorldEntry) { _, entry in
+                    guard let entry else { return }
+                    deepLinkRouter.requestedWorldEntry = nil
+                    activeGuestSession = GuestSession(
+                        identifier: entry.shareLinkIdentifier,
+                        context: AnonymousSessionStore.load(linkId: entry.shareLinkIdentifier),
+                        origin: .world(entry)
+                    )
+                }
                 // Prisme Linguistique — dès que la langue principale de
                 // l'utilisateur change (login, changement de préférence), on la
                 // met en cache pour l'override de langue UI appliqué au prochain
@@ -928,7 +949,19 @@ struct MeeshyApp: App {
                     UILanguageOverride.refreshNotificationLanguage()
                 }
             }
+            }
         }
+
+        // Les fenêtres DÉTACHÉES (iPad) : une conversation, ou le fil de réels, à côté de la fenêtre principale.
+        WindowGroup(id: DetachedWindowOpener.sceneId, for: DetachedWindowContent.self) { $content in
+            DetachedWindowView(content: content)
+                .environment(\.mentionContactsProvider, MentionContactsAudienceBridge())
+                .feedbackToastOverlay()
+                .environmentObject(authManager)
+                .environmentObject(deepLinkRouter)
+                .preferredColorScheme(theme.preferredColorScheme)
+        }
+        .handlesExternalEvents(matching: [DetachedWindowOpener.activityIdentifier])
     }
 
     // MARK: - Test seam (DEBUG)
@@ -1024,7 +1057,12 @@ struct MeeshyApp: App {
     // MARK: - App Lifecycle Transitions
 
     private func handleForegroundTransition() async {
-        guard authManager.isAuthenticated else { return }
+        guard authManager.isAuthenticated else {
+            // Sans compte, la base suspendue à la mise en arrière-plan se relève quand même (#7059), et
+            // l'invité retrouve son socket.
+            BackgroundTransitionCoordinator.shared.resumeWithoutSession()
+            return
+        }
         // Coordinator rearms the sockets (force reconnect), flushes pending
         // delivery receipts and drives the conversation sync. We do NOT
         // check `isConnected` here — that flag is unreliable after iOS
@@ -1044,6 +1082,18 @@ struct MeeshyApp: App {
             AnonymousSessionStore.delete(linkId: id)
         }
         activeGuestSession = nil
+    }
+
+    /// #10442 — la passerelle a terminé la session (lien échu, accès retiré) :
+    /// l'appareil l'oublie (trousseau, jeton, socket et ses reconnexions) et
+    /// le fil laisse place à l'écran qui le dit.
+    private func endGuestSession(_ notification: Notification) {
+        guard let session = activeGuestSession, let end = GuestSessionEnd(notification: notification),
+              session.isEnded(byRefusedToken: GuestSessionEnd.refusedSessionToken(in: notification)) else { return }
+        session.storedSessionKeys.forEach { AnonymousSessionStore.delete(linkId: $0) }
+        APIClient.shared.anonymousSessionToken = nil
+        MessageSocketManager.shared.disconnect()
+        activeGuestSession = session.ended(by: end)
     }
 
     // MARK: - Guest Deep Link (handles join/chat links when not authenticated)

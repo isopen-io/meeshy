@@ -10,7 +10,11 @@ import { compile, match } from '@/lib/router';
 import { typeInto } from '@/test-support/act-mount';
 import { ensureHappyDomRegistered, releaseHappyDomIfRegistered } from '@/test-support/happy-dom-environment';
 
+import { WORLD_ENTRY_HANDOFF_KEY, WORLD_ENTRY_HANDOFF_TTL_MS } from '@/landing/world-entry';
+
 import { ChatJoin, type ChatJoinDeps } from './chat-join';
+import { guestEntryOf, type GuestEntry } from './chat-join-guest';
+import type { HandoffStorage } from './chat-join-handoff';
 import { ROUTES } from './route-table';
 
 /**
@@ -151,23 +155,51 @@ function depsWith(overrides: Partial<ChatJoinDeps> = {}): { readonly deps: ChatJ
     },
     origin: () => ORIGIN,
     now: () => NOW,
+    handoff: () => tabHolding(null).storage,
+    /* Un compte NON membre (#10282) — l'adhésion a ses témoins dans `chat-join-member.test.tsx`. */
+    cachedCard: () => undefined,
+    loadCard: async () => ({ ok: true, data: null }),
+    leave: async () => ({ ok: true, data: null }),
+    left: () => undefined,
     ...overrides,
   };
   return { deps, recorded };
 }
+
+/**
+ * L'ONGLET (`sessionStorage`) tel que la landing l'aurait laissé (#10094) — un
+ * jeton de passage, ou rien. `removed` dit ce que la jonction a EFFACÉ.
+ */
+function tabHolding(raw: string | null): { readonly storage: HandoffStorage; readonly removed: string[] } {
+  const held = new Map<string, string>(raw === null ? [] : [[WORLD_ENTRY_HANDOFF_KEY, raw]]);
+  const removed: string[] = [];
+  return {
+    removed,
+    storage: {
+      getItem: (key) => held.get(key) ?? null,
+      removeItem: (key) => {
+        removed.push(key);
+        held.delete(key);
+      },
+    },
+  };
+}
+
+const handoffToken = (overrides: Readonly<Record<string, unknown>> = {}): string =>
+  JSON.stringify({ link: LINK, name: 'Kenji', language: 'ar', at: NOW.getTime() - 2_000, ...overrides });
 
 const settle = () =>
   act(async () => {
     await new Promise((resolve) => setTimeout(resolve, 0));
   });
 
-async function mount(deps: ChatJoinDeps, link = LINK, anonymousRequested = false): Promise<HTMLDivElement> {
+async function mount(deps: ChatJoinDeps, link = LINK, anonymousRequested = false, entry: GuestEntry | null = null): Promise<HTMLDivElement> {
   const container = document.createElement('div');
   document.body.appendChild(container);
   const root = createRoot(container);
   mounted = { container, root };
   await act(async () => {
-    root.render(<ChatJoin link={link} deps={deps} anonymousRequested={anonymousRequested} />);
+    root.render(<ChatJoin link={link} deps={deps} anonymousRequested={anonymousRequested} entry={entry} />);
   });
   await settle();
   return container;
@@ -317,6 +349,15 @@ describe('la page d’accueil d’invitation (#7796) — dans l’ordre de la ma
       ['history', 'false'],
     ]);
     expect(text(el.querySelector('[data-invite-right="files"]'))).toContain('non autorisé');
+  });
+
+  test('d. World Wide dit ce qu’un invité peut joindre : des fichiers texte (.txt) et audio (#10121)', async () => {
+    const { deps } = depsWith(withInvitation({ guest: { ...OPEN_TERMS, mayImages: false, attachmentKinds: ['text', 'audio'] } }));
+    const el = await mount(deps);
+    const files = el.querySelector('[data-invite-right="files"]');
+    expect(files?.getAttribute('data-granted')).toBe('true');
+    expect(text(files)).toContain('Envoyer des fichiers texte (.txt) et audio');
+    expect(el.querySelector('[data-invite-right="images"]')?.getAttribute('data-granted')).toBe('false');
   });
 
   test('d. ce qu’on demandera, les langues acceptées, la validité et les places restantes', async () => {
@@ -563,6 +604,19 @@ describe('un visiteur SANS session REJOINT EN INVITÉ', () => {
     expect(recorded.order).toEqual(['adopt', 'interface fr', 'go /c/c-deploiement replace', 'joined']);
   });
 
+  test('la session adopte le pseudo FINAL servi par la passerelle, pas celui saisi (#10602)', async () => {
+    const { deps, recorded } = depsWith({
+      joinGuest: async () => ({ ...GUEST_JOINED, data: { ...GUEST_JOINED.data, nickname: 'ano_Awa4821' } }),
+    });
+    const el = await mount(deps);
+    typeInto(nicknameField(el), 'Awa');
+    await settle();
+
+    await submitGuest(el);
+
+    expect(recorded.adopted.map(([, guest]) => guest.nickname)).toEqual(['ano_Awa4821']);
+  });
+
   /**
    * #9710 — recette du 2026-10-08 : l'invitée choisit « English », rejoint, et
    * le fil s'ouvre sous une pastille « FR » et des libellés français. La
@@ -728,7 +782,7 @@ describe('chaque refus est un bandeau qui dit la cause et garde une sortie', () 
       const el = await mount(deps);
       const alert = el.querySelector('[role="alert"]');
       expect(text(alert)).toContain(cause);
-      const home = [...(alert?.querySelectorAll('a') ?? [])].find((a) => a.getAttribute('href') === '/');
+      const home = [...(alert?.querySelectorAll('a') ?? [])].find((a) => a.getAttribute('href') === '/chats');
       expect(text(home ?? null)).toBe('Revenir à l’accueil');
       expect(Number.parseInt(home?.style.minHeight ?? '0', 10)).toBeGreaterThanOrEqual(44);
       expect(el.querySelector('h1')).toBeNull();
@@ -860,5 +914,235 @@ describe('un compte CONNECTÉ peut rejoindre en « Anonyme » sans perdre sa ses
     await fillAndSubmit(el, 'Masque');
     expect(recorded.adopted.map(([, guest]) => guest.language)).toEqual(['en']);
     expect(recorded.interfaceLanguages).toEqual([]);
+  });
+});
+
+/* ========================================================================= *
+ *  L'ENTRÉE DE WORLD WIDE DEPUIS LA LANDING (#10003)
+ * ========================================================================= */
+
+describe('l’adresse d’entrée de la landing (#10003)', () => {
+  const entryOf = (query: string) => guestEntryOf(new URLSearchParams(query));
+
+  test('mode invité, nom et langue ⇒ une entrée ; le nom est rogné', () => {
+    expect(entryOf('mode=anonymous&name=%20Kenji%20&language=ar')).toEqual({ nickname: 'Kenji', language: 'ar' });
+    expect(entryOf('mode=anonymous&name=Kenji')).toEqual({ nickname: 'Kenji', language: null });
+  });
+
+  test('sans mode invité ou sans nom, aucune entrée', () => {
+    expect(entryOf('name=Kenji&language=ar')).toBe(null);
+    expect(entryOf('mode=anonymous&name=%20&language=ar')).toBe(null);
+    expect(entryOf('mode=anonymous')).toBe(null);
+  });
+});
+
+describe('un visiteur ENTRE depuis la landing avec son nom et sa langue (#10003)', () => {
+  const KENJI: GuestEntry = { nickname: 'Kenji', language: 'ar' };
+  const fromLanding = (overrides: Partial<ChatJoinDeps> = {}) => {
+    const tab = tabHolding(handoffToken());
+    return { ...depsWith({ handoff: () => tab.storage, ...overrides }), tab };
+  };
+
+  test('l’invité est CRÉÉ sans autre geste : le corps part, la session est adoptée, la langue prend l’interface, le fil s’ouvre', async () => {
+    const { deps, recorded, tab } = fromLanding();
+    await mount(deps, LINK, true, KENJI);
+    expect(recorded.guestJoins).toEqual([[LINK, { language: 'ar', nickname: 'Kenji' }]]);
+    expect(recorded.adopted.map(([, guest]) => [guest.nickname, guest.language])).toEqual([['Kenji', 'ar']]);
+    expect(recorded.order).toEqual(['adopt', 'interface ar', 'go /world replace', 'joined']);
+    expect(tab.removed).toEqual([WORLD_ENTRY_HANDOFF_KEY]);
+  });
+
+  /* `/world` ne lit que l'invité SANS compte (#10100) : un compte y est renvoyé
+     à la jonction par lien, qui lui reproposerait d'entrer. Entré sous son
+     identité anonyme (#8816), il rouvre le fil qu'il vient de rejoindre. */
+  test('un COMPTE entré en anonyme par une landing en cache ouvre le fil rejoint, pas /world', async () => {
+    signIn();
+    const { deps, recorded } = fromLanding();
+    await mount(deps, LINK, true, KENJI);
+    expect(recorded.guestJoins).toEqual([[LINK, { language: 'ar', nickname: 'Kenji' }]]);
+    expect(recorded.order).toEqual(['adopt', 'go /c/c-deploiement replace', 'joined']);
+  });
+
+  test('pendant l’entrée, l’invitation n’est pas peinte : l’écran attend, il ne propose rien', async () => {
+    const { deps } = fromLanding({ joinGuest: () => never() });
+    const el = await mount(deps, LINK, true, KENJI);
+    expect(el.querySelector('[data-invite-layout]')).toBeNull();
+    expect(guestForm(el)).toBeNull();
+  });
+
+  test('l’ANCIEN gabarit (nom sans langue) ouvre le formulaire, le nom pré-rempli, la langue pré-choisie du lien — rien ne part sans geste', async () => {
+    const { deps, recorded } = depsWith();
+    const el = await mount(deps, LINK, true, { nickname: 'Kenji', language: null });
+    expect(recorded.guestJoins).toEqual([]);
+    expect(guestForm(el)).not.toBeNull();
+    expect(nicknameField(el)?.value).toBe('Kenji');
+    expect(languageField(el)?.value).toBe('fr');
+  });
+
+  test('nom PRIS : le formulaire s’ouvre, la suggestion pré-remplie et dite, la langue choisie gardée', async () => {
+    const { deps, recorded } = fromLanding({
+      joinGuest: async () => ({ ok: false, status: 409, error: 'pris', code: 'USERNAME_TAKEN_IN_CONVERSATION', suggestedNickname: 'Kenji2' }),
+    });
+    const el = await mount(deps, LINK, true, KENJI);
+    expect(guestForm(el)).not.toBeNull();
+    expect(nicknameField(el)?.value).toBe('Kenji2');
+    expect(languageField(el)?.value).toBe('ar');
+    expect(text(el.querySelector('[role="alert"]'))).toContain('Kenji2');
+    expect(recorded.order).toEqual([]);
+  });
+
+  test('un lien qui exige plus que le nom et la langue ne s’en dispense pas : rien ne part, le champ manquant est demandé', async () => {
+    const { deps, recorded } = fromLanding(withTerms({ emailRequired: true }));
+    const el = await mount(deps, LINK, true, KENJI);
+    expect(recorded.guestJoins).toEqual([]);
+    expect(guestForm(el)).not.toBeNull();
+    expect(nicknameField(el)?.value).toBe('Kenji');
+    expect(el.querySelector('[data-guest-email]')?.getAttribute('aria-invalid')).toBe('true');
+  });
+
+  test('un lien réservé aux comptes ne crée personne', async () => {
+    const { deps, recorded } = fromLanding(withTerms({ allowed: false }));
+    const el = await mount(deps, LINK, true, KENJI);
+    expect(recorded.guestJoins).toEqual([]);
+    expect(el.querySelector('[data-invite-layout]')).not.toBeNull();
+    expect(el.querySelector('[data-invite-account-required]')).not.toBeNull();
+  });
+
+  test('l’entrée ne part qu’UNE fois', async () => {
+    const { deps, recorded } = fromLanding({
+      joinGuest: async (link, body) => {
+        recorded.guestJoins.push([link, body]);
+        return { ok: false, status: 429, error: 'trop', code: 'RATE_LIMITED' };
+      },
+    });
+    await mount(deps, LINK, true, KENJI);
+    await settle();
+    expect(recorded.guestJoins.length).toBe(1);
+  });
+});
+
+describe('une adresse d’entrée FORGÉE ne fait entrer personne sans son geste (#10094)', () => {
+  const KENJI: GuestEntry = { nickname: 'Kenji', language: 'ar' };
+  const holding = (raw: string | null) => {
+    const tab = tabHolding(raw);
+    return { ...depsWith({ handoff: () => tab.storage }), tab };
+  };
+
+  test('sans jeton de la landing : AUCUN POST, le formulaire s’ouvre pré-rempli du nom et de la langue de l’adresse', async () => {
+    const { deps, recorded } = holding(null);
+    const el = await mount(deps, LINK, true, KENJI);
+    expect(recorded.guestJoins).toEqual([]);
+    expect(recorded.order).toEqual([]);
+    expect(guestForm(el)).not.toBeNull();
+    expect(nicknameField(el)?.value).toBe('Kenji');
+    expect(languageField(el)?.value).toBe('ar');
+  });
+
+  test('le formulaire pré-rempli part au GESTE de l’utilisateur, avec ce qu’il montre', async () => {
+    const { deps, recorded } = holding(null);
+    const el = await mount(deps, LINK, true, KENJI);
+    await submitGuest(el);
+    expect(recorded.guestJoins).toEqual([[LINK, { language: 'ar', nickname: 'Kenji' }]]);
+  });
+
+  test('un jeton PÉRIMÉ ne vaut rien, et il est effacé', async () => {
+    const { deps, recorded, tab } = holding(handoffToken({ at: NOW.getTime() - WORLD_ENTRY_HANDOFF_TTL_MS - 1 }));
+    await mount(deps, LINK, true, KENJI);
+    expect(recorded.guestJoins).toEqual([]);
+    expect(tab.removed).toEqual([WORLD_ENTRY_HANDOFF_KEY]);
+  });
+
+  test('un jeton daté du FUTUR ne vaut rien', async () => {
+    const { deps, recorded } = holding(handoffToken({ at: NOW.getTime() + 60_000 }));
+    await mount(deps, LINK, true, KENJI);
+    expect(recorded.guestJoins).toEqual([]);
+  });
+
+  test('un jeton ne sert qu’UNE fois : la seconde arrivée par la même adresse attend le geste', async () => {
+    const tab = tabHolding(handoffToken());
+    const first = depsWith({ handoff: () => tab.storage });
+    await mount(first.deps, LINK, true, KENJI);
+    expect(first.recorded.guestJoins.length).toBe(1);
+    act(() => {
+      mounted?.root.unmount();
+      sessionStore.getState().clearSession();
+    });
+    mounted?.container.remove();
+    mounted = null;
+    const second = depsWith({ handoff: () => tab.storage });
+    const el = await mount(second.deps, LINK, true, KENJI);
+    expect(second.recorded.guestJoins).toEqual([]);
+    expect(guestForm(el)).not.toBeNull();
+  });
+
+  test('un jeton posé pour un AUTRE lien ne fait pas entrer dans celui-ci', async () => {
+    const { deps, recorded } = holding(handoffToken({ link: 'mshy_autre' }));
+    await mount(deps, LINK, true, KENJI);
+    expect(recorded.guestJoins).toEqual([]);
+  });
+
+  test('un jeton posé pour un AUTRE nom ou une AUTRE langue que ceux de l’adresse ne vaut rien', async () => {
+    const renamed = holding(handoffToken({ name: 'Ada' }));
+    await mount(renamed.deps, LINK, true, KENJI);
+    expect(renamed.recorded.guestJoins).toEqual([]);
+    act(() => mounted?.root.unmount());
+    mounted?.container.remove();
+    mounted = null;
+    const relanguaged = holding(handoffToken({ language: 'es' }));
+    await mount(relanguaged.deps, LINK, true, KENJI);
+    expect(relanguaged.recorded.guestJoins).toEqual([]);
+  });
+
+  test('un jeton mal formé ne vaut rien', async () => {
+    for (const raw of ['{', '"texte"', JSON.stringify({ link: LINK, name: 'Kenji', language: 'ar' })]) {
+      const { deps, recorded } = holding(raw);
+      await mount(deps, LINK, true, KENJI);
+      expect(recorded.guestJoins).toEqual([]);
+      act(() => mounted?.root.unmount());
+      mounted?.container.remove();
+      mounted = null;
+    }
+  });
+
+  test('sessionStorage REFUSÉ (navigation privée) : fail-closed, le formulaire et aucun POST', async () => {
+    const refused = (): never => {
+      throw new DOMException('refusé', 'SecurityError');
+    };
+    const { deps, recorded } = depsWith({ handoff: refused });
+    const el = await mount(deps, LINK, true, KENJI);
+    expect(recorded.guestJoins).toEqual([]);
+    expect(guestForm(el)).not.toBeNull();
+    expect(nicknameField(el)?.value).toBe('Kenji');
+  });
+});
+
+/**
+ * UN INVITÉ N'A QUE SON FIL, EN FOCUS (#10100) — un ancien lien de jonction
+ * rouvert par l'invité qui y est déjà entré ne lui repropose pas d'entrer : il
+ * rouvre son fil. L'entrée qui vient de la landing (jeton de passage) est celle
+ * de World Wide, qui se lit désormais sur `/world`.
+ */
+describe('un invité déjà entré par ce lien rouvre son fil (#10100)', () => {
+  const held = (link: string): GuestIdentity => ({ participantId: 'p-kenji', nickname: 'Kenji', conversationId: 'c-tenue', link, mayWrite: true });
+  const asGuest = (link: string) =>
+    act(() => {
+      sessionStore.getState().establishGuest({ sessionToken: 'anon_kenji', guest: held(link) });
+    });
+
+  test('son propre lien le ramène à son fil, sans formulaire ni nouvelle jonction', async () => {
+    asGuest(LINK);
+    const { deps, recorded } = depsWith();
+    const el = await mount(deps);
+    expect(recorded.order).toEqual(['go /c/c-tenue replace']);
+    expect(recorded.guestJoins).toEqual([]);
+    expect(guestForm(el)).toBeNull();
+  });
+
+  test('le lien d’une AUTRE conversation lui est proposé normalement', async () => {
+    asGuest('mshy_autre');
+    const { deps, recorded } = depsWith();
+    const el = await mount(deps);
+    expect(recorded.order).toEqual([]);
+    expect(el.querySelector('[data-invite-layout]')).not.toBeNull();
   });
 });

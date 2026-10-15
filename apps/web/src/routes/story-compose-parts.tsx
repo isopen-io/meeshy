@@ -1,4 +1,4 @@
-import type { CSSProperties, ReactNode } from 'react';
+import { useId, type CSSProperties, type ReactNode } from 'react';
 
 import { Glyph } from '@/components/glyph';
 import type { GlyphName } from '@/components/glyphs';
@@ -8,6 +8,7 @@ import { MEDIA_CAPTION_MAX } from '@/lib/stories/media-caption';
 import type { StudioPlane } from '@/lib/stories/story-document';
 import type { StudioDoor, StudioUploadState } from '@/lib/stories/studio';
 import { Link } from '@/routes/route-table';
+import { useDoorHold } from '@/routes/use-door-hold';
 
 /**
  * LES PIÈCES DU STUDIO DE STORY (#6900, élargies par #6943/#6944) —
@@ -69,6 +70,8 @@ export function StudioDoorButton({
   door,
   onSelect,
   onSelectMany,
+  onHold,
+  holdHint,
   disabled = false,
 }: {
   readonly label: string;
@@ -79,15 +82,24 @@ export function StudioDoorButton({
   /** PLUSIEURS fichiers d'un geste (#8533) — l'entrée devient `multiple` et
    * remet tout ce qui est choisi, dans l'ordre du choix. */
   readonly onSelectMany?: (files: readonly File[]) => void;
+  /** LA SECONDE ACTION, À L'APPUI LONG (#10306) — la photothèque tenue ouvre
+   * la caméra. `holdHint` la nomme au lecteur d'écran et au survol ; le
+   * clavier l'atteint par Maj+Entrée. */
+  readonly onHold?: () => void;
+  readonly holdHint?: string;
   /** VERROUILLÉE pendant l'envoi (#7707, revue-correction) — le plan est figé
    * au premier clic sur Publier ; poser un média après n'atteindrait jamais
    * la publication en cours, et laisserait croire à l'auteur qu'il compte. */
   readonly disabled?: boolean;
 }) {
+  const hold = useDoorHold(disabled ? undefined : onHold);
+  const hintId = useId();
+  const holds = onHold !== undefined && holdHint !== undefined;
   return (
     <label
-      title={label}
+      title={holds ? `${label} · ${holdHint}` : label}
       aria-disabled={disabled}
+      {...hold}
       className="glass grid place-items-center rounded-full focus-within:outline-2 focus-within:outline-offset-2"
       style={{
         width: TARGET,
@@ -106,6 +118,12 @@ export function StudioDoorButton({
         disabled={disabled}
         className="sr-only"
         aria-label={label}
+        {...(holds ? { 'aria-describedby': hintId, 'aria-keyshortcuts': 'Shift+Enter' } : {})}
+        onKeyDown={(event) => {
+          if (!holds || disabled || event.key !== 'Enter' || !event.shiftKey) return;
+          event.preventDefault();
+          onHold();
+        }}
         onChange={(event) => {
           const files = [...(event.currentTarget.files ?? [])];
           event.currentTarget.value = '';
@@ -113,6 +131,11 @@ export function StudioDoorButton({
           else if (files[0] !== undefined) onSelect(files[0]);
         }}
       />
+      {holds ? (
+        <span id={hintId} className="sr-only">
+          {holdHint}
+        </span>
+      ) : null}
       {glyph === 'layer' ? <LayerMark size={20} /> : <Glyph name={glyph} size={20} />}
     </label>
   );

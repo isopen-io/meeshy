@@ -165,17 +165,27 @@ export function ActionAnchor({
   );
 }
 
-/** Les seules destinations qu'une page de lien propose : l'accueil, la connexion, les réglages. */
-export type LinkDestination = 'list' | 'login' | 'settings';
+/** Les seules destinations qu'une page de lien propose : la landing (`home`, #10002), la liste, la connexion, les réglages. */
+export type LinkDestination = 'home' | 'list' | 'login' | 'settings';
 
 /**
  * `replace` : la page d'un lien reçu est une ENTRÉE, pas une étape. La
  * remplacer évite que « retour » ramène sur un lien déjà consommé — un clic
  * recompté, un jeton déjà dépensé.
  */
-export function ActionLink({ to, tone, children }: { readonly to: LinkDestination; readonly tone: ActionTone; readonly children: string }) {
+export function ActionLink({
+  to,
+  search,
+  tone,
+  children,
+}: {
+  readonly to: LinkDestination;
+  readonly search?: Readonly<Record<string, string>>;
+  readonly tone: ActionTone;
+  readonly children: string;
+}) {
   return (
-    <Link to={to} replace className={ACTION_CLASS} style={{ ...ACTION_FILL[tone], minHeight: ACTION_HEIGHT }}>
+    <Link to={to} {...(search === undefined ? {} : { search: { ...search } })} replace className={ACTION_CLASS} style={{ ...ACTION_FILL[tone], minHeight: ACTION_HEIGHT }}>
       {children}
     </Link>
   );

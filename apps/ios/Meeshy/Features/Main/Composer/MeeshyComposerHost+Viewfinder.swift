@@ -67,6 +67,56 @@ extension MeeshyComposerHost {
         return true
     }
 
+    /// **L'appui long sur la photothèque PROPOSE ses sources** (#10357,
+    /// porteur 2026-10-12, qui remplace l'armement direct de #10306) :
+    /// « Prendre une photo » — le viseur de la scène, seconde entrée de la
+    /// caméra quand le toucher sur la scène sélectionne au lieu d'armer — et
+    /// « Depuis les fichiers ». La caméra n'est proposée que si le format la
+    /// sert et que le viseur n'est pas déjà armé ; les fichiers le sont
+    /// toujours.
+    var railDoorLongPress: ComposerRailDoorLongPressHandler? {
+        ComposerRailDoorLongPressHandler(
+            sources: ComposerMediaSourcePolicy.longPressSources(for: .media,
+                                                                cameraServed: railLongPressServesCamera),
+            offer: { door in handleRailDoorLongPress(door) },
+            choose: { source in chooseRailLongPressSource(source) })
+    }
+
+    var railLongPressServesCamera: Bool {
+        ComposerSceneCamera.initialMode(for: selectedFormat) != nil && sceneCameraStage == .off
+    }
+
+    /// L'appui long PRÉSENTE le choix ; il n'ouvre rien lui-même.
+    func handleRailDoorLongPress(_ door: ComposerRailDoor) {
+        let sources = ComposerMediaSourcePolicy.longPressSources(for: door,
+                                                                 cameraServed: railLongPressServesCamera)
+        guard !sources.isEmpty else { return }
+        dismissTextEditing()
+        railLongPressSources = sources
+    }
+
+    /// **La source choisie s'ouvre comme depuis la porte** : ce qu'elle
+    /// rapporte se POSE sur la scène courante (`railPosesNextMedia`), comme la
+    /// photothèque du toucher bref. La caméra marque elle-même la pose à
+    /// l'armement ; l'importateur reçoit l'intention MÉDIA, jamais celle d'un
+    /// son restée d'une ouverture précédente.
+    func chooseRailLongPressSource(_ source: ComposerMediaIntake) {
+        railLongPressSources = nil
+        dismissTextEditing()
+        switch source {
+        case .camera:
+            guard railLongPressServesCamera else { return }
+            armSceneCamera()
+        case .files:
+            HapticFeedback.light()
+            fileImportIntent = .media
+            railPosesNextMedia = true
+            presentMediaIntake(.files)
+        case .photoLibrary:
+            railPosesNextMedia = presentMediaSources()
+        }
+    }
+
     /// **Le doigt glisse pendant la prise** : à droite le cadenas, à la
     /// verticale le zoom — la loi est celle de la machine.
     func handleSceneCaptureLongPressChanged(_ translation: CGPoint) {

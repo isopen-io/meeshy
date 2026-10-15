@@ -19,6 +19,8 @@ const globals = globalThis as typeof globalThis & { IS_REACT_ACT_ENVIRONMENT?: b
 type Calls = { play: number; pause: number };
 const calls = new Map<string, Calls>();
 const callsOf = (id: string): Calls => calls.get(id) ?? { play: 0, pause: 0 };
+/** Les réels dont le navigateur refuse la lecture SONORE (iOS, sans geste). */
+const refuseSound = new Set<string>();
 
 let restore: () => void = () => undefined;
 
@@ -35,6 +37,7 @@ beforeAll(() => {
   };
   proto.play = function play(this: HTMLMediaElement) {
     bump(this, 'play');
+    if (refuseSound.has(this.getAttribute('data-id') ?? '') && !this.muted) return Promise.reject(new DOMException('son refusé', 'NotAllowedError'));
     this.dispatchEvent(new Event('play'));
     return Promise.resolve();
   };
@@ -64,12 +67,15 @@ afterEach(() => {
   root = null;
   container = null;
   calls.clear();
+  refuseSound.clear();
 });
 
 type Page = { readonly id: string; readonly active: boolean };
 
+let soundBlocked = 0;
+
 function Reel({ id, active, soundOn, coordinator }: Page & { readonly soundOn: boolean; readonly coordinator: MediaCoordinator }) {
-  const playback = useReelPlayback({ mediaId: id, active, soundOn, coordinator });
+  const playback = useReelPlayback({ mediaId: id, active, soundOn, coordinator, onSoundBlocked: () => (soundBlocked += 1) });
   return <video ref={playback.bind} data-id={id} data-status={playback.status} />;
 }
 
@@ -189,5 +195,20 @@ describe('useReelPlayback — aucune fuite de lecteur', () => {
     expect(container!.querySelector('[data-id="a"]')).toBeNull();
     expect(coordinator.active()).not.toBeNull();
     expect(container!.querySelectorAll('video')).toHaveLength(1);
+  });
+
+  test('balayer vers un réel dont le son est refusé (iOS, sans geste) : il joue MUET, et l’écran l’apprend', async () => {
+    const coordinator = createMediaCoordinator();
+    soundBlocked = 0;
+    refuseSound.add('b');
+    await render({ pages: [{ id: 'a', active: true }, { id: 'b', active: false }], soundOn: true, coordinator });
+    await render({ pages: [{ id: 'a', active: false }, { id: 'b', active: true }], soundOn: true, coordinator });
+    await act(async () => {
+      for (let i = 0; i < 4; i += 1) await Promise.resolve();
+    });
+
+    expect(soundBlocked).toBe(1);
+    expect(videoOf('b').muted).toBe(true);
+    expect(videoOf('b').getAttribute('data-status')).toBe('playing');
   });
 });

@@ -1,10 +1,10 @@
 import {
   Suspense,
   createContext,
-  lazy,
   useCallback,
   useContext,
   useEffect,
+  useLayoutEffect,
   useMemo,
   useRef,
   useSyncExternalStore,
@@ -91,7 +91,7 @@ function subscriber(onSchemeChange: () => void): () => void {
  * moins avant le premier pixel qu'un `new URL()` gardé (le budget de la
  * courbe se tient à 0,1 Ko près).
  */
-function isCurrentHref(url: string): boolean {
+export function isCurrentHref(url: string): boolean {
   if (typeof window === 'undefined') return false;
   return url === `${window.location.pathname}${window.location.search}${window.location.hash}`;
 }
@@ -119,8 +119,37 @@ function isCurrentHref(url: string): boolean {
 export function navigate(url: string, replace = false): void {
   if (!replace && isCurrentHref(url)) return;
   if (replace) window.history.replaceState(null, '', url);
-  else window.history.pushState(null, '', url);
+  else {
+    window.history.pushState(null, '', url);
+    navigatedInApp = true;
+  }
   notify();
+}
+
+let navigatedInApp = false;
+
+/**
+ * LE LECTEUR A-T-IL DÉJÀ AVANCÉ DANS L'APPLICATION ? (#10483) — vrai dès le
+ * premier `pushState`. `document.referrer` est celui du CHARGEMENT de la
+ * page : il ne dit d'où vient un écran que tant que cet écran est celui de
+ * l'atterrissage. Une redirection (`replace`) ne compte pas comme un pas.
+ */
+export function hasNavigatedInApp(): boolean {
+  return navigatedInApp;
+}
+
+/**
+ * L'ADRESSE COURANTE EST-ELLE `path` ? (#10073) — un BOOLÉEN observé, pas
+ * l'adresse : une liste de cent rangées qui demande chacune « suis-je la
+ * conversation ouverte ? » ne re-rend, à chaque navigation, que les DEUX
+ * rangées dont la réponse change.
+ */
+export function useIsCurrentPath(path: string): boolean {
+  return useSyncExternalStore(
+    subscriber,
+    () => currentLocation.path === path,
+    () => false,
+  );
 }
 
 // --- La compilation des motifs --------------------------------------------
@@ -201,6 +230,16 @@ export function useOptionalRoute(): RouteContext | null {
   return useContext(Context);
 }
 
+/**
+ * UNE COUCHE DE LA COQUILLE NE SURVIT PAS À L'ÉCRAN QUI L'A OUVERTE (#10539) —
+ * la loi que trois hôtes recopiaient : changer d'adresse (route ou paramètre)
+ * la referme, avant la première image de la destination.
+ */
+export function useCloseOnNavigation(close: () => void): void {
+  const address = routeKey(useRoute());
+  useLayoutEffect(() => close, [address]);
+}
+
 export function useParams<T extends string>(): ParamsOf<T> {
   return useRoute().params as ParamsOf<T>;
 }
@@ -226,25 +265,99 @@ export type RouterOptions = {
    * les deux.
    */
   readonly screenPrerequisite?: () => Promise<unknown>;
+  /**
+   * LE CADRE (#10073) — ce qui ENTOURE l'écran routé, et peut monter à côté de
+   * lui l'écran d'une AUTRE route (`screenOf`) : la liste des conversations à
+   * gauche du fil, sur grand écran. Rendu à la MÊME position de l'arbre quelle
+   * que soit la route, il garde montés les écrans qu'il rend d'une navigation
+   * à l'autre — c'est ce qu'un `<Screen key>` seul ne peut pas faire.
+   */
+  readonly frame?: ComponentType<FrameProps>;
 };
 
+export type FrameProps = {
+  readonly routeKey: string;
+  readonly screen: ReactNode;
+  readonly screenOf: (key: string) => ComponentType | undefined;
+};
+
+/**
+ * UN ÉCRAN, UNE PROMESSE (#10636) — le registre que partagent le rendu, le
+ * préchargement à l'intention et le préchargement de fond.
+ *
+ * `lazy` gardait sa propre promesse : précharger relançait un `import()` à
+ * côté de la sienne, et même un module déjà en mémoire faisait SUSPENDRE
+ * l'écran le temps d'un `then` — l'attente paraissait, une image, sur un écran
+ * déjà là. Ici, un module chargé se rend dans le rendu même de la navigation.
+ *
+ * Un préchargement raté s'oublie : l'ouverture suivante réessaie. Un
+ * chargement raté PENDANT le rendu remonte, une fois, à la limite d'erreur —
+ * le comportement de `lazy`, sans boucle de réessais.
+ */
+type ScreenModule = { readonly default: ComponentType };
+
+function screenRegistryEntry(load: () => Promise<ScreenModule>) {
+  let pending: Promise<ScreenModule> | null = null;
+  let loaded: ComponentType | null = null;
+  let renderFailure: { readonly error: unknown } | null = null;
+
+  const ensure = (fromRender = false): Promise<ScreenModule> => {
+    if (pending !== null) return pending;
+    const request = load().then(
+      (module) => {
+        loaded = module.default;
+        return module;
+      },
+      (error: unknown) => {
+        pending = null;
+        if (fromRender) renderFailure = { error };
+        throw error;
+      },
+    );
+    pending = request;
+    return request;
+  };
+
+  function Screen() {
+    if (loaded !== null) {
+      const Loaded = loaded;
+      return <Loaded />;
+    }
+    if (renderFailure !== null) {
+      const { error } = renderFailure;
+      renderFailure = null;
+      throw error;
+    }
+    throw ensure(true);
+  }
+
+  return { load: (): Promise<ScreenModule> => ensure(), Screen: Screen as ComponentType };
+}
+
 export function createRouter<T extends RouteTable>(table: T, notFound: ComponentType, options: RouterOptions = {}) {
-  const { screenPrerequisite } = options;
+  const { screenPrerequisite, frame: Frame } = options;
   const entries = Object.entries(table).map(([key, route]) => {
-    const load =
+    const registry = screenRegistryEntry(
       screenPrerequisite === undefined
         ? route.screen
-        : () => Promise.all([route.screen(), screenPrerequisite()]).then(([screen]) => screen);
+        : () => Promise.all([route.screen(), screenPrerequisite()]).then(([screen]) => screen),
+    );
     return {
       key,
       pattern: route.pattern,
       compile: compile(route.pattern),
-      // `lazy` est appele UNE fois par route : le module se memorise tout seul,
-      // donc precharger revient a declencher l'import, et le rendu le retrouve.
-      Screen: lazy(load),
-      load,
+      Screen: registry.Screen,
+      load: registry.load,
     };
   });
+
+  /** Charge l'écran d'une route sans l'ouvrir — la même promesse que son rendu. */
+  const preload = (key: keyof T & string): Promise<unknown> => {
+    const entry = entries.find((e) => e.key === key);
+    return entry === undefined ? Promise.resolve() : entry.load();
+  };
+
+  const screenOf = (key: string): ComponentType | undefined => entries.find((e) => e.key === key)?.Screen;
 
   function href<C extends keyof T & string>(
     key: C,
@@ -327,7 +440,11 @@ export function createRouter<T extends RouteTable>(table: T, notFound: Component
       <Context.Provider value={context}>
         {wrap(
           <Suspense fallback={skeleton}>
-            <Screen key={routeKey(context)} />
+            {Frame === undefined ? (
+              <Screen key={routeKey(context)} />
+            ) : (
+              <Frame routeKey={context.key} screen={<Screen key={routeKey(context)} />} screenOf={screenOf} />
+            )}
           </Suspense>,
         )}
       </Context.Provider>
@@ -341,6 +458,7 @@ export function createRouter<T extends RouteTable>(table: T, notFound: Component
     replace = false,
     children,
     onClick: onClickProp,
+    onPointerDown: onPointerDownProp,
     anchorRef,
     ...rest
   }: {
@@ -388,7 +506,13 @@ export function createRouter<T extends RouteTable>(table: T, notFound: Component
     const armPrefetch = () => {
       const entry = entries.find((e) => e.key === to);
       if (!entry || timer.current) return;
-      timer.current = setTimeout(() => void entry.load(), 300);
+      timer.current = setTimeout(() => void entry.load().catch(() => undefined), 300);
+    };
+    /* LE TOUCHER EST UNE INTENTION DÉCLARÉE (#10636) : le doigt posé, l'écran
+       part sans attendre le relâcher ni les 300 ms du survol — le clic qui
+       suit retrouve la même promesse, souvent déjà tenue. */
+    const loadNow = () => {
+      void entries.find((e) => e.key === to)?.load().catch(() => undefined);
     };
     const disarm = () => {
       if (timer.current) clearTimeout(timer.current);
@@ -401,6 +525,10 @@ export function createRouter<T extends RouteTable>(table: T, notFound: Component
         {...rest}
         ref={anchorRef}
         href={url}
+        onPointerDown={(e) => {
+          onPointerDownProp?.(e);
+          loadNow();
+        }}
         onPointerEnter={armPrefetch}
         onPointerLeave={disarm}
         onFocus={armPrefetch}
@@ -423,5 +551,5 @@ export function createRouter<T extends RouteTable>(table: T, notFound: Component
     );
   }
 
-  return { Router, Link, href, navigate };
+  return { Router, Link, href, navigate, preload };
 }

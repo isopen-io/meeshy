@@ -437,40 +437,6 @@ final class PostServiceTests: XCTestCase {
         XCTAssertEqual(mock.requestCount, 1)
     }
 
-    func test_recordEngagement_postsBatch_toEngagementEndpoint() async throws {
-        let response = APIResponse(success: true, data: ["recorded": 1], error: nil)
-        mock.stub("/posts/engagement/batch", result: response)
-
-        let session = EngagementSession(
-            sessionId: "s1", userId: "u1", postId: "p1", contentType: .reel, surface: .reels,
-            startedAt: Date(timeIntervalSince1970: 1_700_000_000), dwellMs: 4000, watchMs: 3800,
-            mediaDurationMs: 15000, completed: false, truncated: false, consent: "granted",
-            actions: [], watchSamples: []
-        )
-
-        try await service.recordEngagement([session])
-
-        XCTAssertEqual(mock.requestCount, 1)
-        XCTAssertEqual(mock.lastRequest?.endpoint, "/posts/engagement/batch")
-        XCTAssertEqual(mock.lastRequest?.method, "POST")
-    }
-
-    func test_recordEngagement_emptyArray_doesNotCallNetwork() async throws {
-        try await service.recordEngagement([])
-        XCTAssertEqual(mock.requestCount, 0)
-    }
-
-    func test_recordImpression_postsTo_singleImpressionEndpoint() async throws {
-        let response = APIResponse(success: true, data: ["recorded": true], error: nil)
-        mock.stub("/posts/\(postId)/impression", result: response)
-
-        try await service.recordImpression(postId: postId, source: "detail")
-
-        XCTAssertEqual(mock.requestCount, 1)
-        XCTAssertEqual(mock.lastRequest?.endpoint, "/posts/\(postId)/impression")
-        XCTAssertEqual(mock.lastRequest?.method, "POST")
-    }
-
     // MARK: - update : tri-état du lieu (gestion de la position à l'édition)
 
     func test_update_setLocation_encodesThePlaceObject() async throws {

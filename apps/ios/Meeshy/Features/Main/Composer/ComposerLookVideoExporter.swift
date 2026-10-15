@@ -27,7 +27,8 @@ nonisolated enum ComposerLookVideoExporter {
     /// cube y lit la vidéo comme il y lisait l'aperçu.
     /// `timeRange` : la plage gardée par la découpe (#9353) — elle seule part,
     /// image et son ; `nil` ⇒ le clip entier.
-    /// `audioGain` : le son réglé en retouche (#9754), de 0 (muet) à 1 (intact).
+    /// `audioGain` : le son réglé en retouche (#9754), de 0 (muet) à 2 (#10360),
+    /// 1 = intact.
     @concurrent
     static func export(_ url: URL, look: ComposerPhotoLook, framing: ComposerFraming = .identity,
                        timeRange: CMTimeRange? = nil, aspect: CGFloat = ComposerLookPainter.designAspect,
@@ -44,10 +45,12 @@ nonisolated enum ComposerLookVideoExporter {
             let toile = ComposerLookPainter.canvas(for: upright, aspect: aspect)
             let scene = ComposerLookPainter.scene(for: look, canvas: toile, date: date, person: person)
             if look.frame != ComposerPhotoFrame.none, scene == nil { throw UnpaintedFrame() }
+            let visages = ComposerFaceEffects.export()
             let composition = AVMutableVideoComposition(asset: asset) { @Sendable request in
                 let declare = declaredSpaceName.flatMap { CGColorSpace(name: $0 as CFString) }
                 let image = ComposerLookPainter.paint(request.sourceImage, look: look, framing: framing,
-                                                      scene: scene, canvas: toile, declared: declare)
+                                                      scene: scene, canvas: toile, declared: declare,
+                                                      faces: visages)
                 request.finish(with: image.cropped(to: CGRect(origin: .zero, size: toile)), context: nil)
             }
             guard MeeshyVideoWatermarkBaker.sizesMatch(composition.renderSize, upright) else { return nil }
@@ -66,18 +69,25 @@ nonisolated enum ComposerLookVideoExporter {
     private struct UnpaintedFrame: Error {}
 
     /// **Le son réglé part dans le rendu** (#9754) : chaque piste de son porte
-    /// le gain de la retouche ; intact, aucun mixage n'est posé.
+    /// le gain de la retouche, par la loi de l'aperçu (#10360) — l'atténuation
+    /// au volume du mixage, l'amplification au-delà de 100 % par le même tap
+    /// (`ComposerTakeBoostTap`) ; intact, aucun mixage n'est posé.
     static func audioMix(_ asset: AVAsset, gain: Float) async -> AVAudioMix? {
         guard gain != 1, let pistes = try? await asset.loadTracks(withMediaType: .audio), !pistes.isEmpty else {
             return nil
         }
-        let mixage = AVMutableAudioMix()
-        mixage.inputParameters = pistes.map { piste in
-            let reglage = AVMutableAudioMixInputParameters(track: piste)
-            reglage.setVolume(max(0, min(1, gain)), at: .zero)
-            return reglage
+        let amplification = ComposerTakeGain.boost(gain)
+        guard amplification > 1 else {
+            let mixage = AVMutableAudioMix()
+            mixage.inputParameters = pistes.map { piste in
+                let reglage = AVMutableAudioMixInputParameters(track: piste)
+                reglage.setVolume(ComposerTakeGain.volume(gain), at: .zero)
+                return reglage
+            }
+            return mixage
         }
-        return mixage
+        return ComposerTakeBoostTap.audioMix(trackIDs: pistes.map(\.trackID), volume: ComposerTakeGain.volume(gain),
+                                             level: ComposerTakeBoostLevel(boost: amplification))
     }
 
     private static func write(_ asset: AVAsset, composition: AVVideoComposition, audioMix: AVAudioMix?,

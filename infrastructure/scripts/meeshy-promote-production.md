@@ -5,9 +5,11 @@ Fichiers du canal (#9325) :
 - `infrastructure/scripts/meeshy-promote-production.sh` — source de `/usr/local/bin/meeshy-promote-production.sh`
 - règle D de `scripts/check-docker-prune-noninteractive.mjs` — la clé de production ne vit que dans un workflow manuel, en environnement `production`
 
-Périmètre : `gateway`, `translator`, `agent`. **La webapp est exclue** : l'image de staging porte
-`VITE_API_BASE=https://gate.staging.meeshy.me` figée au build. Il faut d'abord une issue pour
-rendre l'origine de l'API lisible à l'exécution (une même image pour les deux environnements).
+Périmètre : `gateway`, `translator`, `agent`, `webapp` (conteneur `meeshy-frontend`), basculés dans
+cet ordre. La webapp y est entrée avec #10208 : son origine d'API se déclare au démarrage
+(`MEESHY_API_URL`, `infrastructure/webapp-runtime-config.md`), donc l'image recettée sur staging est
+celle de la production. Le plan refuse une image webapp antérieure (sans l'entrypoint
+`meeshy-runtime-config`), dont l'origine reste figée sur `gate.staging.meeshy.me`.
 
 ## Sur le serveur (root@meeshy.me)
 
@@ -45,10 +47,10 @@ rendre l'origine de l'API lisible à l'exécution (une même image pour les deux
 
 - Lire : `gh workflow run promote-production.yml --ref dev -f action=status`
 - Promouvoir :
-  `gh workflow run promote-production.yml --ref dev -f action=promote -f gateway=sha256:… -f recette=<URL>`.
+  `gh workflow run promote-production.yml --ref dev -f action=promote -f gateway=sha256:… -f agent=sha256:… -f recette=<URL>` — **passerelle et agent toujours ensemble** (#10290) : l'hôte refuse l'un sans l'autre ; un agent inchangé est sauté (« deja-en-production »).
   Prendre les digests dans la ligne `ETAT … staging=` du `status`.
-- **Retour arrière, une commande** : `gh workflow run promote-production.yml --ref dev -f action=rollback -f gateway=rollback`.
-  Sans GitHub, en root sur l'hôte : `meeshy-promote-production.sh rollback gateway`.
+- **Retour arrière, une commande** : `gh workflow run promote-production.yml --ref dev -f action=rollback -f gateway=rollback -f agent=rollback`.
+  Sans GitHub, en root sur l'hôte : `meeshy-promote-production.sh rollback gateway agent`.
 
 ## Avant la première promotion
 

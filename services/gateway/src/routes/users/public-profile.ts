@@ -3,7 +3,10 @@ import { isValidObjectId } from '@meeshy/shared/utils/object-id';
 import { sendNotFound } from '../../utils/response';
 import { selectForFields, type ColumnPlan, type FieldSet } from '../../utils/sparse-fieldset';
 import { gateProfilePresence } from './presence-gate';
+import { servedProfileDecor, servedProfileDecorItemJsonSchema } from '../../services/appearance/profileDecor';
+import { startupPackIndex } from '../../services/packs/PackIndex';
 import { targetHasBlockedViewer } from './profile-block-gate';
+import { isGuestViewer, sendAccountRequired, type GuestViewerContext } from '../../services/guests/guestMemberVisibility';
 
 /**
  * LA forme publique d'un profil — projection, schéma, composition, lecture.
@@ -107,6 +110,14 @@ export const publicProfileSchema = {
     voiceQuality: { type: 'number', nullable: true },
     isAnonymous: { type: 'boolean' },
     isMeeshyer: { type: 'boolean' },
+    // #10632 : le contour d'avatar et la bannière de design ÉQUIPÉS (additif).
+    profileDecor: {
+      type: 'object',
+      properties: {
+        avatarRing: servedProfileDecorItemJsonSchema,
+        banner: servedProfileDecorItemJsonSchema,
+      },
+    },
   },
 } as const;
 
@@ -149,6 +160,10 @@ export const publicUserSelect = {
   // Il ne sort pas : `publicProfileSchema` ne le déclare pas.
   deactivatedAt: true,
   createdAt: true,
+  // #10632 : chargés, jamais servis tels quels — `buildPublicProfile` les
+  // compose en `profileDecor` et RETIRE les colonnes brutes.
+  equippedAvatarRing: true,
+  equippedBanner: true,
   voiceModel: { select: voiceModelSelect }
 } as const;
 
@@ -185,6 +200,7 @@ export const publicProfilePlan: ColumnPlan<typeof publicUserSelect> = {
     voiceQuality: ['voiceModel'],
     isAnonymous: [],
     isMeeshyer: [],
+    profileDecor: ['equippedAvatarRing', 'equippedBanner'],
   },
 };
 
@@ -199,16 +215,18 @@ export const publicProfilePlan: ColumnPlan<typeof publicUserSelect> = {
  * en ont besoin. Un cast au site d'appel ferait taire l'erreur en rendant la
  * garde inopérante au typage.
  */
-export function buildPublicProfile<T extends { voiceModel?: VoiceModelFields | null }>(user: T) {
+export function buildPublicProfile<T extends { voiceModel?: VoiceModelFields | null; equippedAvatarRing?: string | null; equippedBanner?: string | null }>(user: T) {
   // `autoTranslateEnabled: true` était écrit EN DUR — un champ de contrat qui
   // ne disait rien de vrai, et qu'un client pouvait croire refléter la
   // préférence de la personne. `email: ''` et `phoneNumber: undefined`
   // prétendaient masquer ce qu'il suffit de ne pas charger. Les trois sont
   // retirés (#4161).
+  const { equippedAvatarRing, equippedBanner, ...visible } = user;
   return {
-    ...withVoiceFields(user),
+    ...withVoiceFields(visible),
     isAnonymous: false,
     isMeeshyer: true,
+    profileDecor: servedProfileDecor(startupPackIndex(), { equippedAvatarRing, equippedBanner }),
   };
 }
 
@@ -253,6 +271,11 @@ export async function servirProfilPublic(
   handle: string,
   fields: FieldSet = null
 ): Promise<Record<string, unknown> | null> {
+  // #10205 — un lecteur sans compte Meeshy ne lit AUCUN profil, avant toute lecture.
+  if (isGuestViewer((request as FastifyRequest & { authContext?: GuestViewerContext }).authContext)) {
+    sendAccountRequired(reply, 'A Meeshy account is required to see a user profile');
+    return null;
+  }
   const user = await fastify.prisma.user.findFirst({
     where: isValidObjectId(handle)
       ? { id: handle }

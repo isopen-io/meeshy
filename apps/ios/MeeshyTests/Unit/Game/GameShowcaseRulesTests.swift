@@ -41,16 +41,10 @@ final class GameShowcaseRulesTests: XCTestCase {
         XCTAssertEqual(GameVisitorShowcase.entries(nil), [])
     }
 
-    func test_aVisitorReadsAMonth_neverADay() {
+    func test_aServedTrophy_isOneEntry_namedByItsPresentation() {
         let entries = GameVisitorShowcase.entries(visitor(items: [GameVisitorTrophyItem(key: "trophy.flame.100", awardedMonth: "2026-09")]))
-        XCTAssertEqual(entries.count, 1)
-        XCTAssertEqual(entries.first?.caption, GameText.showcaseAwardedMonth(month: GameWave2Format.month("2026-09")))
-    }
-
-    func test_twoIdenticalCupsOfTheSameMonth_areOneCountedLine() {
-        let items = [GameVisitorTrophyItem(key: "trophy.league-cup.2026-10.jade.gold", awardedMonth: "2026-10", count: 2)]
-        let entries = GameVisitorShowcase.entries(visitor(items: items))
-        XCTAssertEqual(entries.first?.caption, GameText.showcaseAwardedMonthCount(month: GameWave2Format.month("2026-10"), count: GameCopy.formatCount(2)))
+        XCTAssertEqual(entries.map(\.key), ["trophy.flame.100"])
+        XCTAssertEqual(entries.first?.presentation, GameTrophyPresentation.of(key: "trophy.flame.100"))
     }
 
     func test_aKeyOfANewerVersion_isNotNamed() {
@@ -64,5 +58,33 @@ final class GameShowcaseRulesTests: XCTestCase {
                      GameVisitorTrophyItem(key: "trophy.season-cup.1", awardedMonth: "2026-12")]
         let entries = GameVisitorShowcase.entries(visitor(items: items, order: ["trophy.season-cup.1"]))
         XCTAssertEqual(entries.map(\.key), ["trophy.season-cup.1", "trophy.flame.100"])
+    }
+
+    // MARK: - La constellation (#10053)
+
+    private var ecran: RenderedScreen?
+    override func tearDown() { ecran?.dismount(); ecran = nil; super.tearDown() }
+
+    /// La bande de la carte de contact ne monte plus la constellation d'un autre (#10380) : le web l'a retirée avec la
+    /// carte visiteur (#10097) ; la bande garde le niveau, le rang, le trésor et trois coupes. La constellation reste
+    /// celle du membre, sur sa vitrine.
+    func test_theContactStrip_mountsNoConstellation() throws {
+        let iosRoot = URL(fileURLWithPath: #filePath)
+            .deletingLastPathComponent().deletingLastPathComponent().deletingLastPathComponent().deletingLastPathComponent()
+        let strip = try String(contentsOf: iosRoot.appendingPathComponent("Meeshy/Features/Main/Game/Wave2/GameProfileViews.swift"),
+                               encoding: .utf8)
+        XCTAssertTrue(strip.contains("struct GameContactStrip"))
+        XCTAssertFalse(strip.lowercased().contains("constellation"), "la bande ne lit ni ne peint la constellation d'un autre")
+        let showcase = try String(contentsOf: iosRoot.appendingPathComponent("Meeshy/Features/Main/Game/Wave2/GameShowcaseViews.swift"),
+                                  encoding: .utf8)
+        XCTAssertFalse(showcase.contains("init(stars:"), "plus aucune fiche ne monte la constellation d'un visiteur")
+    }
+
+    func test_theOwnersConstellation_saysItsStars_theNextOne_andItsCosmetics() {
+        let e = RenderedScreen(GameConstellationCard(collected: 23).padding(), size: CGSize(width: 402, height: 1200))
+        ecran = e
+        XCTAssertTrue(e.identifiers.contains("game.constellation"), "vus : \(e.identifiers)")
+        XCTAssertTrue(e.says(GameText.constellationNext(7)))
+        XCTAssertTrue(e.says(GameText.constellationCosmetic(kind: GameText.constellationKind(.frame), star: GameCopy.formatCount(2))))
     }
 }

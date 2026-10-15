@@ -11,6 +11,7 @@
  * mène au cadenas (posé du côté de début du déclencheur), l'axe VERTICAL
  * zoome. Chaque loi ne lit que son axe.
  */
+import { flashIntensityOf } from '@/lib/stories/studio-flash-intensity';
 
 export type LayoutDirection = 'ltr' | 'rtl';
 
@@ -91,39 +92,11 @@ export function flashSliderShown({ flash, plan }: { readonly flash: boolean; rea
   return flash && plan === 'screen';
 }
 
-export const FLASH_INTENSITY_MIN = 0.3;
-
-export function flashIntensityOf(value: unknown): number {
-  const number = typeof value === 'string' && value.trim() !== '' ? Number(value) : value;
-  if (typeof number !== 'number' || !Number.isFinite(number)) return 1;
-  return Math.min(1, Math.max(FLASH_INTENSITY_MIN, number));
-}
+export { FLASH_INTENSITY_MIN, flashIntensityOf, readFlashIntensity, writeFlashIntensity } from '@/lib/stories/studio-flash-intensity';
 
 /** Le blanc du sol : plein à 1, un gris lumineux plus bas. */
 export function flashFloorColor(intensity: number): string {
   const level = Math.round(255 * flashIntensityOf(intensity));
   // harmony-exempt: lumière physique du sol de capture, un gris calculé par intensité
   return `rgb(${level}, ${level}, ${level})`;
-}
-
-type FlashStorage = { readonly getItem: (key: string) => string | null; readonly setItem: (key: string, value: string) => void };
-
-const FLASH_INTENSITY_KEY = 'meeshy.studio.camera.flashIntensity';
-
-/** Mémorisée par lecteur (une commodité, jamais un état partagé) — un
- * stockage bloqué (navigation privée, données coupées) rend le blanc plein. */
-export function readFlashIntensity(storage: FlashStorage | null): number {
-  try {
-    return flashIntensityOf(storage?.getItem(FLASH_INTENSITY_KEY) ?? null);
-  } catch {
-    return 1;
-  }
-}
-
-export function writeFlashIntensity(storage: FlashStorage | null, value: number): void {
-  try {
-    storage?.setItem(FLASH_INTENSITY_KEY, String(flashIntensityOf(value)));
-  } catch {
-    // Un stockage refusé : la valeur vaut pour cette ouverture seulement.
-  }
 }

@@ -14,7 +14,7 @@ final class StickerPackServiceTests: XCTestCase {
     func test_installed_readsTheInstalledPacks() async throws {
         let mock = MockAPIClient()
         mock.stub("/sticker-packs/installed",
-                  result: APIResponse<[StickerPack]>(success: true, data: [pack("mee"), pack("chats")], error: nil))
+                  result: APIResponse<LossyDecodableArray<StickerPack>>(success: true, data: LossyDecodableArray(elements: [pack("mee"), pack("chats")]), error: nil))
         let service = StickerPackService(api: mock)
 
         let packs = try await service.installed()
@@ -27,7 +27,7 @@ final class StickerPackServiceTests: XCTestCase {
     func test_catalogue_readsTheShop() async throws {
         let mock = MockAPIClient()
         mock.stub("/sticker-packs",
-                  result: APIResponse<[StickerPack]>(success: true, data: [pack("mee"), pack("chats", installed: false)], error: nil))
+                  result: APIResponse<LossyDecodableArray<StickerPack>>(success: true, data: LossyDecodableArray(elements: [pack("mee"), pack("chats", installed: false)]), error: nil))
         let service = StickerPackService(api: mock)
 
         let packs = try await service.catalogue()

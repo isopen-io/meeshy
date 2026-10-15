@@ -28,6 +28,10 @@ import type { Conversation } from './types';
  */
 export const CONVERSATIONS_QUERY_KEY = ['conversations'] as const;
 export const conversationQueryKey = (id: string) => ['conversations', id] as const;
+/** Les catégories du lecteur (#10103, `conversation-categories.ts`) — leur clé vit
+ * ICI, à côté de celle de la liste qu'elles sectionnent : la socket l'invalide sur
+ * `category:*` sans tirer le port, son décodeur ni ses fixtures. */
+export const CONVERSATION_CATEGORIES_QUERY_KEY = ['conversation-categories'] as const;
 
 /** Le défaut serveur (`validatePagination`, `core-list.ts:151`) — c'est aussi
  * la seule limite que ce client demande jamais. */

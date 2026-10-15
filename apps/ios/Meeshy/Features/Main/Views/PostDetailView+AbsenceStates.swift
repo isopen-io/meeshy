@@ -16,17 +16,21 @@ import MeeshyUI
 /// à un fichier déjà hors budget, donc on extrait AVANT d'ajouter (#4903).
 extension PostDetailView {
 
-    /// L'état rendu quand il n'y a ni post ni chargement en cours.
-    @ViewBuilder
+    /// L'état rendu quand il n'y a ni post ni chargement en cours. Il occupe
+    /// tout l'écran : un refus y pose le noir du lecteur de réels de bord à
+    /// bord, un échec s'y centre.
     var absenceState: some View {
-        switch PostDetailAbsenceReason.resolve(hasPost: false, isLoading: false, failure: viewModel.loadFailure) {
-        case .networkFailed:
-            loadFailedState(.network)
-        case .serverFailed:
-            loadFailedState(.server)
-        case .present, .stillLoading, .unavailable:
-            unavailableState
+        Group {
+            switch PostDetailAbsenceReason.resolve(hasPost: false, isLoading: false, failure: viewModel.loadFailure) {
+            case .networkFailed:
+                loadFailedState(.network)
+            case .serverFailed:
+                loadFailedState(.server)
+            case .present, .stillLoading, .unavailable:
+                unavailableState
+            }
         }
+        .frame(maxWidth: .infinity, maxHeight: .infinity)
     }
 
     /// **Un échec de chargement n'est pas une disparition.**
@@ -80,36 +84,19 @@ extension PostDetailView {
     /// Contenu introuvable ou interdit : expiré, retiré, ou jamais accessible à
     /// cette personne. On ne distingue pas — l'utilisateur n'a rien de
     /// différent à faire, et prétendre savoir lequel serait inventer.
+    ///
+    /// **Il se présente comme un RÉEL refusé** (#10314, #10318 — décision
+    /// porteur du 2026-10-12 : « faire le même traitement que pour les
+    /// réels ») : le MÊME `ReelOpenFailureView`, sur son noir de média, avec ses
+    /// mots et « Retour », sans « Réessayer » — un refus ne s'essaie pas deux
+    /// fois. Un lien de publication et un lien de story hors audience
+    /// (`StoryDoor` retombe ici) s'ouvrent donc comme un lien de réel refusé.
+    /// La vue ne reçoit que la cause : rien du contenu ne peut y passer.
     var unavailableState: some View {
-        VStack(spacing: MeeshySpacing.md) {
-            Image(systemName: ContentFetchFailure.notFound.symbolName)
-                .font(MeeshyFont.relative(40))
-                .foregroundColor(theme.textMuted)
-                .accessibilityHidden(true)
-            Text(ContentFetchFailure.notFound.title)
-                .font(MeeshyFont.relative(MeeshyFont.headlineSize, weight: .semibold))
-                .foregroundColor(theme.textPrimary)
-                .multilineTextAlignment(.center)
-            Text(ContentFetchFailure.notFound.message)
-                .font(MeeshyFont.relative(MeeshyFont.labelSize))
-                .foregroundColor(theme.textSecondary)
-                .multilineTextAlignment(.center)
-            Button {
-                // Même geste que la flèche de l'en-tête (`postDetailHeader`) —
-                // et le seul disponible ici : l'en-tête ne se rend qu'avec un
-                // post, donc cette branche n'en a aucun.
-                HapticFeedback.light()
-                router.pop()
-            } label: {
-                Text(String(localized: "feed.post.detail.unavailable.back",
-                            defaultValue: "Retour", bundle: .main))
-                    .font(MeeshyFont.relative(MeeshyFont.bodySize, weight: .semibold))
-            }
-            .buttonStyle(.bordered)
-            .padding(.top, MeeshySpacing.xs)
-        }
-        .padding(MeeshySpacing.xxxl)
-        .frame(maxWidth: .infinity)
-        .accessibilityElement(children: .combine)
+        ReelOpenFailureView(
+            failure: .notFound,
+            onRetry: {},
+            onClose: { router.pop() }
+        )
     }
 }

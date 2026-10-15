@@ -1,7 +1,8 @@
 import { useEffect, useRef, useState, type FormEvent } from 'react';
 import { useStore } from 'zustand/react';
 
-import { AuthColumn, AuthColumnBar } from '@/components/auth-column';
+import { AuthCloseChip, AuthColumn } from '@/components/auth-column';
+import { PublicHeader, useInterfaceLanguage } from '@/components/public-header';
 import { CountrySheet } from '@/components/country-sheet';
 import { DerivedIdentity } from '@/components/derived-identity';
 import { EmailTakenActions } from '@/components/email-taken-actions';
@@ -21,6 +22,7 @@ import {
   useSignupReferral,
   type SignupReferralDeps,
 } from '@/components/signup-extras';
+import { SignupInviterHero } from '@/components/signup-inviter-hero';
 import { SignupIdentityCard, type SignupCodeDeps } from '@/components/signup-identity-card';
 import { SignupPhoneGlass, phoneRefusalMessage } from '@/components/signup-phone-glass';
 import { getLanguageInfo } from '@meeshy/shared/utils/languages';
@@ -29,7 +31,7 @@ import { auth, isPhoneConflict, isVerificationRequired, type RegisterBody, type 
 import type { ApiResult } from '@/lib/api/http';
 import { type Country } from '@/lib/countries';
 import { translate } from '@/lib/i18n-catalog';
-import { currentInterfaceLanguage } from '@/lib/interface-language';
+import type { InterfaceLanguage } from '@/lib/interface-language';
 import { sessionStore } from '@/lib/api/session';
 import { useOnline } from '@/lib/net/online';
 import { forgetPendingVerification } from '@/lib/pending-verification';
@@ -60,7 +62,7 @@ import {
 } from '@/lib/view/signup-phases';
 import { placeSignupFailure, usernameRefusalMessage, type SignupFeedback, type SignupField } from '@/lib/view/auth-feedback';
 import { forgetReferralCode } from '@/lib/view/referral-memory';
-import { landingAfterSession, safeNextPath } from '@/lib/session-guard';
+import { landingAfterSession, safeNextPath, sessionNextPath } from '@/lib/session-guard';
 import { appInstitutionalHref } from '@/lib/institutional-href';
 import { Link, href, navigate } from '@/routes/route-table';
 
@@ -86,14 +88,25 @@ export type { SignupReferralDeps } from '@/components/signup-extras';
  */
 
 /** L'AVERTISSEMENT DE VALIDATION (#6479), derrière un (i) depuis #6626. */
-const EMAIL_VERIFICATION: InfoHint = {
-  label: 'Pourquoi un lien',
-  text: 'Nous vous enverrons un lien à cette adresse : il faudra l’ouvrir pour valider votre compte.',
-  glyph: AUTH_GLYPHS.info,
-};
+function emailVerificationHint(language: InterfaceLanguage): InfoHint {
+  return {
+    label: translate(language, 'signup.email.hintLabel'),
+    text: translate(language, 'signup.email.verificationNotice'),
+    glyph: AUTH_GLYPHS.info,
+  };
+}
 
-/** CE QUE LE NUMÉRO OUVRE (#6441) — lu d'emblée sous le champ depuis #8842. */
-const PHONE_BENEFIT = 'Il vous permettra de vous connecter, et à vos proches de vous retrouver.';
+/** « Vous lirez Meeshy en {language} » — le nom de la langue garde son `lang`. */
+function LanguageChipText({ language, code, name }: { readonly language: InterfaceLanguage; readonly code: string; readonly name: string }) {
+  const [before = '', after = ''] = translate(language, 'signup.language.chip', { language: '{language}' }).split('{language}');
+  return (
+    <>
+      {before}
+      <span lang={code}>{name}</span>
+      {after}
+    </>
+  );
+}
 
 const EMPTY_FEEDBACK: SignupFeedback = {
   fieldErrors: {},
@@ -117,7 +130,7 @@ type FocusedField = SignupField | 'referral' | null;
  * de grâce (#8238) — l'écran du code n'est plus une étape.
  */
 export function landingAfterRegistration(input: { readonly next: string | null }): string {
-  return safeNextPath(input.next) ?? href('onboarding');
+  return sessionNextPath(input.next) ?? href('onboarding');
 }
 
 /** `next` lu sur l'ADRESSE plutôt que par `useSearch()` : l'écran est monté
@@ -287,7 +300,7 @@ export default function SignupScreen({
     setVerification(awaitingCode(result.data, form.email.trim().toLowerCase()));
   }
 
-  const interfaceLanguage = currentInterfaceLanguage();
+  const interfaceLanguage = useInterfaceLanguage();
   const isEmailTaken = feedback.showSignIn && takenEmail === form.email;
   const emailError = isEmailTaken
     ? translate(interfaceLanguage, 'signup.emailTaken.message')
@@ -304,7 +317,7 @@ export default function SignupScreen({
       : undefined);
   const usernameRefusal = usernameFieldRefusal(form);
   const usernameError =
-    feedback.fieldErrors.username ?? (usernameRefusal !== null ? usernameRefusalMessage(usernameRefusal) : undefined);
+    feedback.fieldErrors.username ?? (usernameRefusal !== null ? usernameRefusalMessage(interfaceLanguage, usernameRefusal) : undefined);
   const isPasswordStrong = hasPassword(form.password) && isPasswordValid(form.password);
   const language = getLanguageInfo(form.systemLanguage);
   const busy = isSubmitting || isValidating;
@@ -312,7 +325,7 @@ export default function SignupScreen({
   if (signInLinkEmail !== null) {
     return (
       <AuthColumn className="min-h-0">
-        <AuthColumnBar to="login" search={loginSearch} />
+        <PublicHeader language={interfaceLanguage} leading={<AuthCloseChip to="login" search={loginSearch} />} />
         <MagicLinkPanel
           {...(magicLinkDeps === undefined ? {} : { deps: magicLinkDeps })}
           next={next}
@@ -326,22 +339,24 @@ export default function SignupScreen({
 
   return (
     <AuthColumn className="min-h-0">
-      <AuthColumnBar to="login" search={loginSearch} />
+      <PublicHeader language={interfaceLanguage} leading={<AuthCloseChip to="login" search={loginSearch} />} />
 
       <div className="min-h-0 flex-1 overflow-y-auto px-6" data-signup-phase={phase}>
+        <SignupInviterHero language={interfaceLanguage} hero={referral.hero} />
         <form id="signup-form" onSubmit={handlePrimary} noValidate>
           <div className="grid gap-2 pt-2 pb-6">
             <h1 className="text-screen font-bold" style={{ color: 'var(--color-ios-ink)' }}>
-              Créer votre compte
+              {translate(interfaceLanguage, 'signup.title')}
             </h1>
             <p className="text-body" style={{ color: 'var(--color-ios-ink-2)' }}>
-              Vous lirez tout le monde dans votre langue.
+              {translate(interfaceLanguage, 'signup.subtitle')}
             </p>
           </div>
 
           <div className="grid gap-5 pb-5">
             {/* PHASE 1 — LE TÉLÉPHONE D'ABORD (#8288), REQUIS (#9343). */}
             <SignupPhoneGlass
+              language={interfaceLanguage}
               locale={locale}
               country={form.country}
               phoneDigits={form.phoneDigits}
@@ -354,13 +369,19 @@ export default function SignupScreen({
                 if (normalizedPhoneDigits(form.phoneDigits) !== '') setPhoneChecked(true);
               }}
               error={phoneError}
-              benefit={PHONE_BENEFIT}
               inputRef={phoneInput}
             />
 
             {/* PHASE 2 — L'ADRESSE PARAÎT. `aria-invalid` suit le REFUS. */}
             <RungReveal shown={progress.emailShown}>
-              <Field id="signup-email" label="Adresse e-mail" tint={INDIGO_TINT} focused={focused === 'email'} error={emailError} hint={EMAIL_VERIFICATION}>
+              <Field
+                id="signup-email"
+                label={translate(interfaceLanguage, 'signup.email.label')}
+                tint={INDIGO_TINT}
+                focused={focused === 'email'}
+                error={emailError}
+                hint={emailVerificationHint(interfaceLanguage)}
+              >
                 {({ id, describedBy }) => (
                   <input
                     id={id}
@@ -372,7 +393,7 @@ export default function SignupScreen({
                     onInput={(e) => patch({ email: e.currentTarget.value })}
                     onFocus={() => setFocused('email')}
                     onBlur={() => setFocused(null)}
-                    placeholder="vous@exemple.com"
+                    placeholder={translate(interfaceLanguage, 'signup.email.placeholder')}
                     className="w-full bg-transparent py-3 text-input outline-none"
                     style={{ color: 'var(--color-ios-ink)' }}
                     aria-describedby={describedBy}
@@ -394,6 +415,7 @@ export default function SignupScreen({
               verification={verification}
               identity={
                 <DerivedIdentity
+                  language={interfaceLanguage}
                   framed={false}
                   username={form.username ?? effectiveUsername(form)}
                   displayName={form.displayName ?? effectiveDisplayName(form)}
@@ -426,6 +448,7 @@ export default function SignupScreen({
               extra={
                 isPasswordRevealed ? (
                   <SignupPasswordBlock
+                    language={interfaceLanguage}
                     password={form.password}
                     onPassword={(password) => patch({ password })}
                     focused={focused === 'password'}
@@ -454,12 +477,13 @@ export default function SignupScreen({
                 >
                   <span aria-hidden="true">{language.flag}</span>
                   <span className="flex-1 text-title font-medium" style={{ color: 'var(--color-ios-ink-2)' }}>
-                    Vous lirez Meeshy en <span lang={language.code}>{language.nativeName ?? language.name}</span>
+                    <LanguageChipText language={interfaceLanguage} code={language.code} name={language.nativeName ?? language.name} />
                   </span>
-                  <span className={`text-title font-semibold ${INDIGO_LINK}`}>Changer</span>
+                  <span className={`text-title font-semibold ${INDIGO_LINK}`}>{translate(interfaceLanguage, 'signup.language.change')}</span>
                 </button>
 
                 <SignupReferralBlock
+                  language={interfaceLanguage}
                   referral={referral}
                   focused={focused === 'referral'}
                   onFocus={() => setFocused('referral')}
@@ -476,7 +500,7 @@ export default function SignupScreen({
               className="rounded-field px-4 py-2 text-center text-caption"
               style={{ backgroundColor: 'var(--color-ios-card)', color: 'var(--color-ios-ink-2)' }}
             >
-              Hors ligne — la création de compte n’est pas possible pour l’instant.
+              {translate(interfaceLanguage, 'signup.offline')}
             </p>
           ) : null}
 
@@ -515,14 +539,14 @@ export default function SignupScreen({
 
           <div className="grid gap-2">
             <p className="text-caption" style={{ color: 'var(--color-ios-ink-3)' }}>
-              En continuant, vous acceptez les conditions d’utilisation et la politique de confidentialité.
+              {translate(interfaceLanguage, 'signup.legal')}
             </p>
             <div className="flex gap-4">
               <a href={appInstitutionalHref('terms')} className={`text-caption font-semibold ${INDIGO_LINK}`} style={{ minHeight: 44 }}>
-                Conditions d’utilisation
+                {translate(interfaceLanguage, 'signup.legal.terms')}
               </a>
               <a href={appInstitutionalHref('privacy')} className={`text-caption font-semibold ${INDIGO_LINK}`} style={{ minHeight: 44 }}>
-                Politique de confidentialité
+                {translate(interfaceLanguage, 'signup.legal.privacy')}
               </a>
             </div>
           </div>
@@ -535,7 +559,7 @@ export default function SignupScreen({
             className="inline-flex items-center justify-self-center text-title font-semibold"
             style={{ minHeight: 44, color: 'var(--color-ios-ink-2)' }}
           >
-            Déjà un compte ?&nbsp;<span className={INDIGO_LINK}>Se connecter</span>
+            {translate(interfaceLanguage, 'signup.haveAccount')}&nbsp;<span className={INDIGO_LINK}>{translate(interfaceLanguage, 'signup.signIn')}</span>
           </Link>
         </div>
       </div>

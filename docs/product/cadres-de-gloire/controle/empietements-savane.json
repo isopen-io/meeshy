@@ -1,0 +1,247 @@
+[
+ {
+  "file": "savane-ambassadeur-1",
+  "overlap": 63,
+  "face": 0,
+  "depth": 4,
+  "bbox": [
+   99,
+   713,
+   441,
+   731
+  ],
+  "windowPx": 157984,
+  "layout": "ruban",
+  "verdict": "ok"
+ },
+ {
+  "file": "savane-ambassadeur-2",
+  "overlap": 0,
+  "face": 0,
+  "depth": 0,
+  "bbox": null,
+  "windowPx": 170778,
+  "layout": "perchés",
+  "verdict": "ok"
+ },
+ {
+  "file": "savane-ambassadeur-3",
+  "overlap": 0,
+  "face": 0,
+  "depth": 0,
+  "bbox": null,
+  "windowPx": 126439,
+  "layout": "perchés",
+  "verdict": "ok"
+ },
+ {
+  "file": "savane-ambassadeur-4",
+  "overlap": 0,
+  "face": 0,
+  "depth": 0,
+  "bbox": null,
+  "windowPx": 145068,
+  "layout": "perchés",
+  "verdict": "ok"
+ },
+ {
+  "file": "savane-ambassadeur-5",
+  "overlap": 0,
+  "face": 0,
+  "depth": 0,
+  "bbox": null,
+  "windowPx": 182205,
+  "layout": "perchés",
+  "verdict": "ok"
+ },
+ {
+  "file": "savane-legende-1",
+  "overlap": 7179,
+  "face": 0,
+  "depth": 74,
+  "bbox": [
+   311,
+   602,
+   462,
+   698
+  ],
+  "windowPx": 166416,
+  "layout": "selfie",
+  "verdict": "ok"
+ },
+ {
+  "file": "savane-legende-2",
+  "overlap": 0,
+  "face": 0,
+  "depth": 0,
+  "bbox": null,
+  "windowPx": 166019,
+  "layout": "ruban",
+  "verdict": "ok"
+ },
+ {
+  "file": "savane-legende-3",
+  "overlap": 86,
+  "face": 0,
+  "depth": 4,
+  "bbox": [
+   99,
+   357,
+   466,
+   514
+  ],
+  "windowPx": 146784,
+  "layout": "côtés",
+  "verdict": "ok"
+ },
+ {
+  "file": "savane-legende-4",
+  "overlap": 105,
+  "face": 0,
+  "depth": 4,
+  "bbox": [
+   141,
+   697,
+   417,
+   700
+  ],
+  "windowPx": 162048,
+  "layout": "pied",
+  "verdict": "ok"
+ },
+ {
+  "file": "savane-legende-5",
+  "overlap": 0,
+  "face": 0,
+  "depth": 0,
+  "bbox": null,
+  "windowPx": 165679,
+  "layout": "duo",
+  "verdict": "ok"
+ },
+ {
+  "file": "savane-mythe-a",
+  "overlap": 6,
+  "face": 0,
+  "depth": 2,
+  "bbox": [
+   100,
+   699,
+   101,
+   705
+  ],
+  "windowPx": 147413,
+  "layout": "ruban",
+  "verdict": "ok"
+ },
+ {
+  "file": "savane-mythe-b",
+  "overlap": 38,
+  "face": 0,
+  "depth": 4,
+  "bbox": [
+   92,
+   349,
+   448,
+   699
+  ],
+  "windowPx": 144724,
+  "layout": "Mee",
+  "verdict": "ok"
+ },
+ {
+  "file": "savane-mythe-c",
+  "overlap": 26,
+  "face": 0,
+  "depth": 4,
+  "bbox": [
+   266,
+   713,
+   274,
+   716
+  ],
+  "windowPx": 130375,
+  "layout": "duo",
+  "verdict": "ok"
+ },
+ {
+  "file": "savane-oracle-a",
+  "overlap": 103,
+  "face": 0,
+  "depth": 4,
+  "bbox": [
+   102,
+   248,
+   444,
+   696
+  ],
+  "windowPx": 172332,
+  "layout": "Mee",
+  "verdict": "ok"
+ },
+ {
+  "file": "savane-oracle-b",
+  "overlap": 28,
+  "face": 0,
+  "depth": 4,
+  "bbox": [
+   69,
+   564,
+   72,
+   574
+  ],
+  "windowPx": 155416,
+  "layout": "de",
+  "verdict": "ok"
+ },
+ {
+  "file": "savane-oracle-c",
+  "overlap": 21,
+  "face": 0,
+  "depth": 3,
+  "bbox": [
+   128,
+   729,
+   138,
+   732
+  ],
+  "windowPx": 161328,
+  "layout": "duo",
+  "verdict": "ok"
+ },
+ {
+  "file": "savane-orateur-a",
+  "overlap": 0,
+  "face": 0,
+  "depth": 0,
+  "bbox": null,
+  "windowPx": 158714,
+  "layout": "perchés",
+  "verdict": "ok"
+ },
+ {
+  "file": "savane-orateur-b",
+  "overlap": 0,
+  "face": 0,
+  "depth": 0,
+  "bbox": null,
+  "windowPx": 162829,
+  "layout": "côtés",
+  "verdict": "ok"
+ },
+ {
+  "file": "savane-orateur-c",
+  "overlap": 34,
+  "face": 0,
+  "depth": 4,
+  "bbox": [
+   136,
+   736,
+   148,
+   739
+  ],
+  "windowPx": 163011,
+  "layout": "pied",
+  "verdict": "ok"
+ }
+]

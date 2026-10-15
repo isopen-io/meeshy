@@ -5,7 +5,7 @@ import { flameForm, type FlameFormKey } from '@meeshy/shared/utils/game/flame';
 import type { AchievementRarity, GloryDivision5, GloryRankOrMythic, MythicSeatRef } from '@meeshy/shared/utils/game/glory';
 import type { GuideMomentKey } from '@meeshy/shared/utils/game/guide';
 import { photoMomentId, photoMomentOfGuideEvent, type PhotoMomentEmblemV2 } from '@meeshy/shared/utils/game/photo-moments';
-import type { PhotoCatchUpEntry, PhotoCatchUpStanding, PhotoStepEmblem, PhotoTrack } from '@meeshy/shared/utils/game/photo-catch-up';
+import type { PhotoCatchUpEntry, PhotoStepEmblem, PhotoTrack } from '@meeshy/shared/utils/game/photo-catch-up';
 import type { LeagueKey } from '@meeshy/shared/utils/game/league';
 import { LEVEL_TIER_KEYS, levelTierStart, type LevelTierKey } from '@meeshy/shared/utils/game/levels';
 import { levelReading } from '@/lib/game/ladder';
@@ -254,21 +254,8 @@ export function photoMomentsOfTransition(previous: EngagementWithGame, next: Eng
  * par les deux écrans ferait un morceau de plus, donc un nom de plus dans la
  * table de préchargement de l'entrée (mesuré : 90,01 Ko contre un plafond de 90).
  */
-export { PHOTO_TRACKS, photoCatchUp, photoOfferFor } from '@meeshy/shared/utils/game/photo-catch-up';
+export { PHOTO_TRACKS, catchUpStandingOf, photoCatchUp, photoOfferFor } from '@meeshy/shared/utils/game/photo-catch-up';
 export type { PhotoTrack } from '@meeshy/shared/utils/game/photo-catch-up';
-
-export function catchUpStandingOf(game: GameBlock): PhotoCatchUpStanding {
-  const { rank, division } = shownRank(game.glory);
-  return {
-    rank,
-    division,
-    levelRecord: levelReading(game.level).record,
-    prestige: game.level.prestige,
-    minted: Math.max(0, game.mint.number - 1),
-    treasuryTier: game.treasury.tier,
-    flameRecord: Math.max(game.level.ladder?.steps?.flameRecord ?? 0, game.flame.days),
-  };
-}
 
 const momentOfStep = (emblem: PhotoStepEmblem): PhotoMoment => {
   switch (emblem.kind) {

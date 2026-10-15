@@ -5,6 +5,9 @@ import type { ApiFailure, ApiResult } from '@/lib/api/http';
 import { buttonNamed, createActMounter } from '@/test-support/act-mount';
 import { ensureHappyDomRegistered, releaseHappyDomIfRegistered } from '@/test-support/happy-dom-environment';
 
+import { loadInterfaceCatalog } from '@/lib/i18n-catalog';
+import { ACCOUNT_DELETION_GUIDE_KEYS, translateAccountDeletionGuide } from '@/lib/i18n-account-deletion-guide';
+
 import { AccountDeletionPage, type AccountDeletionDeps } from './account-deletion';
 
 /**
@@ -20,7 +23,8 @@ import { AccountDeletionPage, type AccountDeletionDeps } from './account-deletio
 const globals = globalThis as typeof globalThis & { IS_REACT_ACT_ENVIRONMENT?: boolean };
 const { mount, unmountAll, click, type, submit } = createActMounter();
 
-beforeAll(() => {
+beforeAll(async () => {
+  await loadInterfaceCatalog('en');
   ensureHappyDomRegistered();
   globals.IS_REACT_ACT_ENVIRONMENT = true;
 });
@@ -61,7 +65,7 @@ describe('le lien de l’e-mail — la conséquence d’abord, le clic ensuite',
     expect(host.querySelector('h1')?.textContent).toBe('Confirmer la suppression de votre compte');
     expect(host.textContent).toContain('période de grâce de 30 jours');
     expect(buttonNamed(host, 'Confirmer la suppression')?.style.minHeight).toBe('52px');
-    expect(host.querySelector('a[href="/"]')?.textContent).toBe('Ne rien faire');
+    expect(host.querySelector('a[href="/chats"]')?.textContent).toBe('Ne rien faire');
     expect(script.resolved).toEqual([]);
   });
 
@@ -121,10 +125,47 @@ describe('le lien de l’e-mail — la conséquence d’abord, le clic ensuite',
     expect(host.textContent).toContain('Reconnectez-vous à Internet, puis réessayez.');
   });
 
-  test('un lien incomplet, sans session : la page le dit et propose la connexion', async () => {
+});
+
+describe('déconnecté, sans lien — la page que Google Play déclare (#9921)', () => {
+  test('elle nomme l’appli, décrit les étapes, dit ce qui est supprimé, conservé, et le délai', async () => {
+    const script = scripted();
+    const host = await mount(<AccountDeletionPage link={null} signedIn={false} online language="fr" deps={script.deps} />);
+
+    expect(host.querySelector('h1')?.textContent).toBe('Supprimer votre compte Meeshy');
+    expect([...host.querySelectorAll('h2')].map((h) => h.textContent)).toEqual([
+      'Comment faire',
+      'Ce qui est supprimé',
+      'Ce qui est conservé',
+      'Délai',
+      'Vous ne pouvez plus vous connecter ?',
+    ]);
+    expect(host.querySelectorAll('ol > li')).toHaveLength(4);
+    expect(host.textContent).toContain('Réglages, Supprimer le compte');
+    expect(host.textContent).toContain('30 jours après votre confirmation');
+    expect(host.textContent).toContain('Compte supprimé');
+    expect(script.requested).toEqual([]);
+  });
+
+  test('se connecter ramène à cette page, où la demande se fait', async () => {
     const host = await mount(<AccountDeletionPage link={null} signedIn={false} online language="fr" deps={scripted().deps} />);
-    expect(host.querySelector('h1')?.textContent).toBe('Lien incomplet');
-    expect(host.querySelector('a[href="/login"]')?.textContent).toBe('Se connecter');
+    const signIn = host.querySelector(`a[href="/login?next=${encodeURIComponent('/account/deletion')}"]`);
+    expect(signIn?.textContent).toBe('Se connecter pour supprimer mon compte');
+  });
+
+  test('qui a perdu l’accès écrit à l’adresse de la politique de confidentialité', async () => {
+    const host = await mount(<AccountDeletionPage link={null} signedIn={false} online language="en" deps={scripted().deps} />);
+    expect(host.querySelector('h1')?.textContent).toBe('Delete your Meeshy account');
+    expect(host.querySelector('a[href="mailto:privacy@meeshy.me"]')?.textContent).toBe('privacy@meeshy.me');
+  });
+
+  test('les sept langues ont chacune leur texte, jamais une recopie du français', () => {
+    const french = ACCOUNT_DELETION_GUIDE_KEYS.map((key) => translateAccountDeletionGuide('fr', key));
+    for (const language of ['en', 'es', 'pt', 'de', 'it', 'ar'] as const) {
+      const texts = ACCOUNT_DELETION_GUIDE_KEYS.map((key) => translateAccountDeletionGuide(language, key));
+      expect(texts.every((text) => text.trim() !== '')).toBe(true);
+      expect(texts.filter((text, index) => text === french[index])).toEqual([]);
+    }
   });
 });
 

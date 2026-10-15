@@ -35,7 +35,9 @@ import { legacyLevel } from '@meeshy/shared/utils/game/levels';
 import { meeshEdition, meeshPrice, previewMint, type MeeshEdition } from '@meeshy/shared/utils/game/mint';
 import { enhancedLogger } from '../../utils/logger-enhanced';
 import { withRetry } from '../MessageMediaConsumptionService';
+import { debitEngagementCounter } from '../engagement/EngagementCounterWrites';
 import { GloryService, gloryTotalFromLedger } from '../game/GloryService';
+import { GamePhotoService } from '../game/GamePhotoService';
 import { LEVEL_STEP_USER_SELECT, countMissionsDone, levelStepFactsOf } from '../game/LevelStepFacts';
 
 const log = enhancedLogger.child({ module: 'MeeshService' });
@@ -238,11 +240,12 @@ export class MeeshService {
           // Le compteur RESTANT se lit dans la réponse de l'écriture : une
           // relecture par axe allongeait la transaction, donc la fenêtre où un
           // autre écrivain la fait annuler.
-          const restant = await tx.engagementCounter.update({
-            where: { userId_axisKey: { userId, axisKey: ligne.axisKey } },
-            data: { points: { decrement: ligne.points }, count: { decrement: ligne.count } },
-            select: { count: true },
-          });
+          const restant = await debitEngagementCounter(tx, { userId, axisKey: ligne.axisKey, points: ligne.points, count: ligne.count });
+          // La ligne ne tient plus ce que le plan y a lu (un autre écrivain l'a
+          // entamée, ou sa colonne vaut `null`, #10541) : un décrément nu y
+          // écrirait un négatif — ou `null` — pendant que le score perd le prix
+          // entier. La tentative s'annule en bloc et repart de la LECTURE.
+          if (restant === null) throw Object.assign(new Error('mint plan no longer covered by its counters'), { code: 'P2034' });
           // Un axe dont la frappe ne reprend AUCUNE action (les conversations,
           // `MEESH_POINTS_ONLY_AXES`) garde ses badges intacts : son compteur
           // n'a pas bougé, il n'y a rien à éteindre.
@@ -254,7 +257,7 @@ export class MeeshService {
           // badge redescende comme le porteur l'a demandé. La contrainte unique
           // se libère du même coup : le badge se re-gagne et se re-notifie.
           // Ceux que le compteur couvre encore ne sont PAS touchés (#6465).
-          const eteints = clesNonCouvertes(BADGE_THRESHOLDS, restant.count ?? 0, (seuil) =>
+          const eteints = clesNonCouvertes(BADGE_THRESHOLDS, restant.count, (seuil) =>
             badgeMilestoneKey(ligne.axisKey, seuil),
           );
           if (eteints.length > 0) {
@@ -336,6 +339,13 @@ export class MeeshService {
 
       // La frappe a pu faire une étape des niveaux (#9706) : le niveau qui attendait monte d'un coup.
       await new GloryService(this.prisma).openLevels(userId);
+      // Le trésor a pu franchir un palier : le plus haut atteint se garde (D14, #10162) — au mieux, une
+      // panne ne coûte que l'écriture, rattrapée par la lecture qui sert le plus haut du gardé et du courant.
+      try {
+        await new GamePhotoService(this.prisma).notePeakTreasury(userId, totaux.balance);
+      } catch (error) {
+        log.warn('treasury peak not recorded', { userId, error: error instanceof Error ? error.message : String(error) });
+      }
 
       log.info('Meesh frappée', {
         userId,

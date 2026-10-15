@@ -3,6 +3,9 @@ import { translate } from '@/lib/i18n-catalog';
 import type { InterfaceLanguage } from '@/lib/interface-language';
 import { GLOBAL_ADULTS_ONLY } from '@/lib/write-restriction';
 
+import { GUEST_ATTACHMENT_REFUSAL_CODES } from '@meeshy/shared/types/guest-attachment-kind-rules';
+import { guestMaxSizeLabel } from './guest-attachment-policy';
+
 /**
  * LA CAUSE D'UN ENVOI QUI N'EST PAS PARTI (#5813, revue-correction) — le
  * SITE UNIQUE qui traduit un `ApiFailure` en une phrase que L'UTILISATEUR
@@ -69,6 +72,10 @@ export function sendFailureReason(
   /* #9928 — Meeshy Global est fermée en écriture aux 13-17 ans : la cause dit
      quand elle s'ouvrira (le composeur bascule dans le même état). */
   if (failure.code === GLOBAL_ADULTS_ONLY) return translate(language, 'composer.writeRestriction.minorGlobal');
+  /* #10001, #10003 — la passerelle a jugé le CONTENU réel d'une pièce jointe
+     d'invité (REST 403/413, socket) : la cause se dit, jamais « envoi refusé ». */
+  if (failure.code === GUEST_ATTACHMENT_REFUSAL_CODES.KIND_NOT_ALLOWED) return translate(language, 'send.failure.guestKind');
+  if (failure.code === GUEST_ATTACHMENT_REFUSAL_CODES.TOO_LARGE) return translate(language, 'send.failure.guestTooLarge', { max: guestMaxSizeLabel(language) });
   if (failure.status === 401) return translate(language, 'send.failure.sessionExpired');
   if (failure.status === 403) return translate(language, 'send.failure.forbidden');
   if (failure.status === 429) return translate(language, 'send.failure.tooMany');

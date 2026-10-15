@@ -17,7 +17,9 @@ enum PlayerBannerCopy {
     static func texts(for banner: GamePlayerBanner) -> PlayerBannerView.Texts {
         PlayerBannerView.Texts(
             points: GameText.bannerPoints(points: GameCopy.formatCount(banner.score)),
-            missing: banner.pointsToNext.map { GameText.bannerMissing(points: GameCopy.formatCount($0)) },
+            missing: banner.pointsToNext.map {
+                GameText.bannerMissing(points: GameCopy.formatCount($0), level: GameCopy.formatCount(banner.nextLevel ?? banner.level + 1))
+            },
             meeshes: banner.meeshes.map { GameCopy.formatCount($0) },
             place: banner.league.map { GameText.bannerPlace(count: $0.place) },
             flameDays: banner.flame.map { GameCopy.formatCount($0.days) }

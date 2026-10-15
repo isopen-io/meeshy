@@ -36,6 +36,28 @@ async function buildApp(): Promise<FastifyInstance> {
 const post = (app: FastifyInstance) =>
   app.inject({ method: 'POST', url: '/api/v1/me/meesh/mint', payload: { requestId: 'frappe-route-01' } });
 
+describe('POST /me/meesh/mint — aucune Meesh sans débit de points (#10011)', () => {
+  it('refuse en 400, sans aucune frappe, un client qui demande à payer en fragments', async () => {
+    mint.mockClear();
+    const app = await buildApp();
+    const res = await app.inject({ method: 'POST', url: '/api/v1/me/meesh/mint', payload: { requestId: 'frappe-route-02', payWith: 'fragments' } });
+    expect(res.statusCode).toBe(400);
+    expect(mint).not.toHaveBeenCalled();
+    await app.close();
+  });
+
+  it('frappe en points quand le client le dit, comme quand il ne dit rien', async () => {
+    mint.mockClear();
+    mint.mockResolvedValue({ status: 'minted', balance: 1, mintedLifetime: 1, plan: {}, receipt: null });
+    const app = await buildApp();
+    const res = await app.inject({ method: 'POST', url: '/api/v1/me/meesh/mint', payload: { requestId: 'frappe-route-03', payWith: 'points' } });
+    expect(res.statusCode).toBe(200);
+    expect(mint).toHaveBeenCalledWith(USER_ID, 'frappe-route-03');
+    mint.mockReset();
+    await app.close();
+  });
+});
+
 describe('POST /me/meesh/mint', () => {
   it('sert le reçu de la pièce à côté de l’ancienne forme, et reste valide au schéma partagé', async () => {
     mint.mockResolvedValueOnce({

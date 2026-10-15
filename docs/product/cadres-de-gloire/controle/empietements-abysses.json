@@ -1,0 +1,257 @@
+[
+ {
+  "file": "abysses-ambassadeur-1",
+  "overlap": 73,
+  "face": 0,
+  "depth": 3,
+  "bbox": [
+   92,
+   699,
+   449,
+   722
+  ],
+  "windowPx": 158623,
+  "layout": "pied",
+  "verdict": "ok"
+ },
+ {
+  "file": "abysses-ambassadeur-2",
+  "overlap": 4846,
+  "face": 0,
+  "depth": 76,
+  "bbox": [
+   372,
+   590,
+   447,
+   713
+  ],
+  "windowPx": 149247,
+  "layout": "selfie",
+  "verdict": "ok"
+ },
+ {
+  "file": "abysses-ambassadeur-3",
+  "overlap": 0,
+  "face": 0,
+  "depth": 0,
+  "bbox": null,
+  "windowPx": 159916,
+  "layout": "libre",
+  "verdict": "ok"
+ },
+ {
+  "file": "abysses-ambassadeur-4",
+  "overlap": 0,
+  "face": 0,
+  "depth": 0,
+  "bbox": null,
+  "windowPx": 150940,
+  "layout": "ruban",
+  "verdict": "ok"
+ },
+ {
+  "file": "abysses-ambassadeur-5",
+  "overlap": 70,
+  "face": 0,
+  "depth": 4,
+  "bbox": [
+   98,
+   707,
+   431,
+   719
+  ],
+  "windowPx": 162039,
+  "layout": "pied",
+  "verdict": "ok"
+ },
+ {
+  "file": "abysses-legende-1",
+  "overlap": 53,
+  "face": 0,
+  "depth": 4,
+  "bbox": [
+   140,
+   707,
+   441,
+   715
+  ],
+  "windowPx": 146986,
+  "layout": "pied",
+  "verdict": "ok"
+ },
+ {
+  "file": "abysses-legende-2",
+  "overlap": 0,
+  "face": 0,
+  "depth": 0,
+  "bbox": null,
+  "windowPx": 156572,
+  "layout": "ruban",
+  "verdict": "ok"
+ },
+ {
+  "file": "abysses-legende-3",
+  "overlap": 0,
+  "face": 0,
+  "depth": 0,
+  "bbox": null,
+  "windowPx": 157453,
+  "layout": "perches",
+  "verdict": "ok"
+ },
+ {
+  "file": "abysses-legende-4",
+  "overlap": 56,
+  "face": 0,
+  "depth": 4,
+  "bbox": [
+   111,
+   333,
+   446,
+   447
+  ],
+  "windowPx": 147616,
+  "layout": "cotes",
+  "verdict": "ok"
+ },
+ {
+  "file": "abysses-legende-5",
+  "overlap": 53,
+  "face": 0,
+  "depth": 4,
+  "bbox": [
+   124,
+   711,
+   401,
+   715
+  ],
+  "windowPx": 157439,
+  "layout": "pied",
+  "verdict": "ok"
+ },
+ {
+  "file": "abysses-mythe-a",
+  "overlap": 5287,
+  "face": 0,
+  "depth": 78,
+  "bbox": [
+   350,
+   592,
+   446,
+   709
+  ],
+  "windowPx": 155177,
+  "layout": "selfie",
+  "verdict": "ok"
+ },
+ {
+  "file": "abysses-mythe-b",
+  "overlap": 29,
+  "face": 0,
+  "depth": 3,
+  "bbox": [
+   95,
+   424,
+   445,
+   450
+  ],
+  "windowPx": 146330,
+  "layout": "cotes",
+  "verdict": "ok"
+ },
+ {
+  "file": "abysses-mythe-c",
+  "overlap": 0,
+  "face": 0,
+  "depth": 0,
+  "bbox": null,
+  "windowPx": 148059,
+  "layout": "perches",
+  "verdict": "ok"
+ },
+ {
+  "file": "abysses-oracle-a",
+  "overlap": 49,
+  "face": 0,
+  "depth": 4,
+  "bbox": [
+   117,
+   711,
+   436,
+   714
+  ],
+  "windowPx": 144970,
+  "layout": "ruban",
+  "verdict": "ok"
+ },
+ {
+  "file": "abysses-oracle-b",
+  "overlap": 85,
+  "face": 0,
+  "depth": 4,
+  "bbox": [
+   97,
+   379,
+   427,
+   453
+  ],
+  "windowPx": 122704,
+  "layout": "cotes",
+  "verdict": "ok"
+ },
+ {
+  "file": "abysses-oracle-c",
+  "overlap": 55,
+  "face": 0,
+  "depth": 4,
+  "bbox": [
+   96,
+   706,
+   447,
+   718
+  ],
+  "windowPx": 163027,
+  "layout": "pied",
+  "verdict": "ok"
+ },
+ {
+  "file": "abysses-orateur-a",
+  "overlap": 26,
+  "face": 0,
+  "depth": 4,
+  "bbox": [
+   116,
+   710,
+   399,
+   715
+  ],
+  "windowPx": 148987,
+  "layout": "libre",
+  "verdict": "ok"
+ },
+ {
+  "file": "abysses-orateur-b",
+  "overlap": 84,
+  "face": 0,
+  "depth": 4,
+  "bbox": [
+   150,
+   711,
+   417,
+   714
+  ],
+  "windowPx": 154715,
+  "layout": "pied",
+  "verdict": "ok"
+ },
+ {
+  "file": "abysses-orateur-c",
+  "overlap": 0,
+  "face": 0,
+  "depth": 0,
+  "bbox": null,
+  "windowPx": 156723,
+  "layout": "perches",
+  "verdict": "ok"
+ }
+]

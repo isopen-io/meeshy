@@ -108,6 +108,51 @@ final class ConversationViewModelWriteRestrictionTests: XCTestCase {
         XCTAssertNil(fx.sut.learnedWriteRestriction)
     }
 
+    // MARK: - #7759 — le mode lent des nouveaux comptes
+
+    private var newcomerSlowMode: MeeshyError {
+        .rejected(NewcomerSlowMode(retryAfterSeconds: 21).rejection(message: "Bienvenue !"))
+    }
+
+    func test_sendMessage_newcomerSlowMode_keepsTheMessageFailed_toResend() async throws {
+        let fx = try await makeFixture(restSendFailure: newcomerSlowMode)
+
+        let sent = await fx.sut.sendMessage(content: "Salut Global")
+
+        XCTAssertFalse(sent)
+        XCTAssertNil(fx.sut.learnedWriteRestriction, "un refus temporaire ne ferme pas le composeur")
+        let states = try await fx.pool.read { db in try String.fetchAll(db, sql: "SELECT state FROM messages") }
+        XCTAssertEqual(states, ["failed"], "la bulle reste, renvoyable d'un geste")
+    }
+
+    func test_sendMessage_newcomerSlowMode_neitherFallsBackNorQueues() async throws {
+        let fx = try await makeFixture(restSendFailure: newcomerSlowMode)
+
+        _ = await fx.sut.sendMessage(content: "Salut Global")
+
+        XCTAssertEqual(fx.messageSocket.sendViaSocketFallbackCallCount, 0)
+        let queued = await fx.offlineQueue.enqueueCount
+        XCTAssertEqual(queued, 0)
+    }
+
+    func test_slowModeNotice_saysTheDelay_inTheSevenLanguages() throws {
+        XCTAssertTrue(ConversationViewModel.slowModeNotice(NewcomerSlowMode(retryAfterSeconds: 21)).contains("21"))
+
+        let catalogURL = URL(fileURLWithPath: #filePath)
+            .deletingLastPathComponent().deletingLastPathComponent().deletingLastPathComponent()
+            .deletingLastPathComponent()
+            .appendingPathComponent("Meeshy/Localizable.xcstrings")
+        let root = try XCTUnwrap(JSONSerialization.jsonObject(with: Data(contentsOf: catalogURL)) as? [String: Any])
+        let strings = try XCTUnwrap(root["strings"] as? [String: Any])
+        let entry = try XCTUnwrap(strings["conversation.send.slow_mode"] as? [String: Any], "clé absente du catalogue")
+        let localizations = try XCTUnwrap(entry["localizations"] as? [String: Any])
+        for locale in ["fr", "en", "es", "de", "it", "pt-BR", "ar"] {
+            let unit = (localizations[locale] as? [String: Any])?["stringUnit"] as? [String: Any]
+            let value = unit?["value"] as? String ?? ""
+            XCTAssertTrue(value.contains("%lld"), "conversation.send.slow_mode [\(locale)] doit dire le délai — « \(value) »")
+        }
+    }
+
     // MARK: - Ce que la vue lit
 
     func test_writeRestriction_servedMinorGlobal_closesTheComposer() async throws {

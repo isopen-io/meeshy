@@ -233,9 +233,10 @@ struct ComposerDescriptionLayer: View {
         .accessibilityHint(Text(ComposerDescriptionCopy.editHint))
     }
 
-    /// Vide ⇒ une amorce, **jamais un cadre vide**. Un cadre annonce une zone de
-    /// saisie ; l'amorce annonce un geste, et c'est le geste qui manque à
-    /// l'auteur devant une description qu'il n'a pas encore écrite.
+    /// Vide ⇒ une amorce, **jamais un cadre vide**. Elle dit ce que la zone
+    /// ATTEND — « Ajouter une légende » (#10359) — et c'est le même mot que
+    /// l'invite du champ une fois la saisie ouverte : une seule zone, un seul
+    /// nom. Elle a la forme d'une invite de saisie, droite, sans italique.
     /// **L'encre suit le FOND, jamais une constante** (#6127, directive porteur
     /// 2026-09-12 : « Lorsque le fond de la scène est claire la description doit
     /// avoir son écriture fonction et vice versa »).
@@ -259,8 +260,8 @@ struct ComposerDescriptionLayer: View {
     /// mentions, faites pour les fonds de l'app, tombaient à 2,1:1 sur la même
     /// scène. `CanvasChromeScheme.sceneTextInk` tient 4,5:1 sur toute la
     /// palette avec le voile que l'hôte pose dessous. L'amorce se distingue par
-    /// l'italique, les entités par leur graisse et leur soulignement — jamais
-    /// par une encre plus pâle.
+    /// sa seule opacité d'invite, les entités par leur graisse et leur
+    /// soulignement.
     private var encre: Color { CanvasChromeScheme.sceneTextInk(for: colorScheme) }
 
     @ViewBuilder
@@ -268,8 +269,7 @@ struct ComposerDescriptionLayer: View {
         if text.isEmpty {
             Text(ComposerDescriptionCopy.amorce)
                 .font(MeeshyFont.relative(MeeshyFont.bodySize))
-                .italic()
-                .foregroundColor(encre)
+                .foregroundColor(encre.opacity(ComposerDescriptionCopy.amorceOpacity))
         } else {
             MessageTextRenderer.render(
                 text,
@@ -370,10 +370,12 @@ struct ComposerDescriptionLayer: View {
 
     private var field: some View {
         HStack(alignment: .bottom, spacing: MeeshySpacing.smPlus) {
-            // L'invite du champ porte l'encre de scène, comme l'amorce : le
-            // gris système du placeholder ne tient pas 4,5:1 sur la scène.
+            // L'invite du champ porte l'encre de scène, comme l'amorce, et la
+            // même forme (#10359) : le gris système du placeholder ne tient pas
+            // 4,5:1 sur la scène.
             TextField(text: $text,
-                      prompt: Text(placeholder).italic().foregroundColor(encre),
+                      prompt: Text(placeholder)
+                          .foregroundColor(encre.opacity(ComposerDescriptionCopy.amorceOpacity)),
                       axis: .vertical) { Text(placeholder) }
                 .lineLimit(fillsAvailableHeight ? 1...24 : 1...5)
                 .font(MeeshyFont.relative(MeeshyFont.bodySize))
@@ -410,19 +412,27 @@ struct ComposerDescriptionLayer: View {
 /// complétude et n'est jamais traduit.
 nonisolated enum ComposerDescriptionCopy {
 
+    /// **L'invite de la zone, au repos ET en saisie** (#10359). Un seul mot
+    /// pour une seule zone : le calque vide et le champ ouvert disent tous deux
+    /// ce qu'on y pose.
     static var amorce: String {
         String(localized: "composer.description.amorce",
-               defaultValue: "Touchez pour écrire", bundle: .main)
+               defaultValue: "Ajouter une légende", bundle: .main)
     }
+
+    /// L'opacité d'une invite de saisie. Assez haute pour rester lisible sur
+    /// les fonds clairs de la scène, assez basse pour ne pas se lire comme du
+    /// texte déjà écrit.
+    static let amorceOpacity: Double = 0.8
 
     static var editHint: String {
         String(localized: "composer.description.a11y.edit",
-               defaultValue: "Touchez pour modifier la description", bundle: .main)
+               defaultValue: "Touchez pour modifier la légende", bundle: .main)
     }
 
     static var done: String {
         String(localized: "composer.description.a11y.done",
-               defaultValue: "Terminer la description", bundle: .main)
+               defaultValue: "Terminer la légende", bundle: .main)
     }
 
     /// Le libellé du bouton de clavier de la COUCHE (#4124). Court, parce qu'il
@@ -439,7 +449,7 @@ nonisolated enum ComposerDescriptionCopy {
     /// parce que le geste n'est pas le même : ici on ouvre une couche.
     static var openLayer: String {
         String(localized: "composer.description.a11y.open",
-               defaultValue: "Écrire la description", bundle: .main)
+               defaultValue: "Écrire la légende", bundle: .main)
     }
 }
 

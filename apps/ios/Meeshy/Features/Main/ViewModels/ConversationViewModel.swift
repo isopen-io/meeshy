@@ -33,6 +33,7 @@ class ConversationViewModel: ObservableObject {
         }
 
         _messageIdIndex = nil
+        forgetPrismResolutions(whoseOriginChangedFrom: previousMessages)
         _cachedLastReceivedIndex = .uncomputed
         _cachedLastSentIndex = .uncomputed
 
@@ -1115,6 +1116,7 @@ class ConversationViewModel: ObservableObject {
             return cached.resolved
         }
         _cachedLanguagePreferences = prefs
+        translationResolutionCache.removeAll()
         return prefs.resolved
     }
 }

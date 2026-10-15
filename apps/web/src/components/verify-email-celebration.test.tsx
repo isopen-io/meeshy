@@ -135,7 +135,7 @@ describe('VerifyEmailFlow — l’arrivée par le lien est une célébration (#8
     expect(here()).toBe('/auth/verify-email');
     arrival.fire(ARRIVAL_MIN_MS);
     await settle();
-    expect(here()).toBe('/');
+    expect(here()).toBe('/chats');
     expect(takeOnboardingWaiver()).toBe(true);
   });
 
@@ -148,7 +148,7 @@ describe('VerifyEmailFlow — l’arrivée par le lien est une célébration (#8
     expect(here()).toBe('/auth/verify-email');
     arrival.fire(ARRIVAL_MAX_MS);
     await settle();
-    expect(here()).toBe('/');
+    expect(here()).toBe('/chats');
   });
 
   test('mouvement complet : le feu d’artifice se charge à la demande', async () => {
@@ -171,7 +171,7 @@ describe('VerifyEmailFlow — l’arrivée par le lien est une célébration (#8
     arrival.finishPrefetch();
     arrival.fire(ARRIVAL_MIN_MS);
     await settle();
-    expect(here()).toBe('/');
+    expect(here()).toBe('/chats');
   });
 
   test('lien refusé (expiré ou invalide) ⇒ aucune célébration, aucun préchargement, le message existant', async () => {
@@ -209,6 +209,6 @@ describe('VerifyEmailFlow — l’arrivée par le lien est une célébration (#8
     arrival.finishPrefetch();
     arrival.fire(ARRIVAL_MIN_MS);
     await settle();
-    expect(here()).toBe('/');
+    expect(here()).toBe('/chats');
   });
 });

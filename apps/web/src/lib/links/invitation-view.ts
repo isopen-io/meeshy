@@ -1,4 +1,5 @@
 import type { GuestTerms, InvitationLimits, SpokenLanguage } from '@/lib/api/link-join';
+import type { GuestAttachmentKind } from '@meeshy/shared/types/guest-attachment-kind-rules';
 
 /**
  * **LES RÈGLES PURES DE LA PAGE D'ACCUEIL D'INVITATION** (#7796, #7797) — ce
@@ -9,17 +10,40 @@ import type { GuestTerms, InvitationLimits, SpokenLanguage } from '@/lib/api/lin
 
 export type AnonymousRight = 'messages' | 'images' | 'files' | 'history';
 
-export type AnonymousRightRow = { readonly right: AnonymousRight; readonly granted: boolean };
+/** Une famille qu'on JOINT comme un fichier — l'image a sa propre ligne. */
+export type FileKind = Exclude<GuestAttachmentKind, 'image'>;
+
+export type AnonymousRightRow = {
+  readonly right: AnonymousRight;
+  readonly granted: boolean;
+  /** Les familles ouvertes, sur la ligne des fichiers quand le lien les liste (#10121). */
+  readonly kinds?: readonly FileKind[];
+};
+
+const isFileKind = (kind: GuestAttachmentKind): kind is FileKind => kind !== 'image';
+
+/** Les deux lignes de pièces jointes : la liste de familles du lien décide SEULE
+ * quand elle est servie (#10121, World Wide : texte `.txt` et audio) ; sans
+ * elle, les drapeaux du lien. */
+function attachmentRowsOf(guest: GuestTerms): readonly AnonymousRightRow[] {
+  const kinds = guest.attachmentKinds;
+  if (kinds === undefined || kinds === null) {
+    return [
+      { right: 'images', granted: guest.mayImages },
+      { right: 'files', granted: guest.mayFiles },
+    ];
+  }
+  const files = kinds.filter(isFileKind);
+  return [
+    { right: 'images', granted: kinds.includes('image') },
+    files.length === 0 ? { right: 'files', granted: false } : { right: 'files', granted: true, kinds: files },
+  ];
+}
 
 /** L'ordre de la carte « En anonyme, tu pourras » : écrire, images, fichiers,
  * puis lire ce qui précède l'arrivée — celui de la précision porteur (#7796). */
 export function anonymousRightsOf(guest: GuestTerms, readsHistory: boolean): readonly AnonymousRightRow[] {
-  return [
-    { right: 'messages', granted: guest.mayWrite },
-    { right: 'images', granted: guest.mayImages },
-    { right: 'files', granted: guest.mayFiles },
-    { right: 'history', granted: readsHistory },
-  ];
+  return [{ right: 'messages', granted: guest.mayWrite }, ...attachmentRowsOf(guest), { right: 'history', granted: readsHistory }];
 }
 
 export type AskedField = 'nickname' | 'email' | 'birthday';

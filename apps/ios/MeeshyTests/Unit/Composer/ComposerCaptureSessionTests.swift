@@ -177,10 +177,19 @@ final class ComposerCaptureSessionTests: XCTestCase {
     func test_laConfigurationInitiale_brancheLeMicroAvantDeLancerLaSession() throws {
         let camera = try String(contentsOf: Self.racineApp.appendingPathComponent(
             "Features/Main/Components/CameraModel.swift"), encoding: .utf8)
+        // Depuis #10307 la configuration de l'objectif n'est faite qu'une fois par modèle
+        // (prepareSession) ; le micro autorisé entre à l'ARMEMENT, dans la session encore
+        // arrêtée — avant le lancement, jamais après.
         let debut = try XCTUnwrap(camera.range(of: "private func setupSession()"))
-        let fin = try XCTUnwrap(camera.range(of: "session.commitConfiguration()", range: debut.upperBound..<camera.endIndex))
-        let configuration = String(camera[debut.upperBound..<fin.lowerBound])
-        XCTAssertTrue(configuration.contains("CameraAudioArming.armsAtSetup("),
-                      "le micro autorisé entre dans la MÊME configuration que l'objectif")
+        let fin = try XCTUnwrap(camera.range(of: "private func prepareSession()", range: debut.upperBound..<camera.endIndex))
+        let armement = String(camera[debut.upperBound..<fin.lowerBound])
+        let micro = try XCTUnwrap(armement.range(of: "armMicrophoneAtSetup()"),
+                                  "l'armement branche le micro autorisé")
+        let lancement = try XCTUnwrap(armement.range(of: "setRunning(true"), "l'armement lance la session")
+        XCTAssertLessThan(micro.lowerBound, lancement.lowerBound,
+                          "le micro autorisé entre dans la session ARRÊTÉE, avant son lancement")
+        let regle = try XCTUnwrap(camera.range(of: "private func armMicrophoneAtSetup()"))
+        XCTAssertTrue(camera[regle.upperBound...].prefix(400).contains("CameraAudioArming.armsAtSetup("),
+                      "seul un micro déjà autorisé entre à l'armement (#9328)")
     }
 }

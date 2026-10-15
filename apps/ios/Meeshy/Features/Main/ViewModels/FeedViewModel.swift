@@ -66,7 +66,7 @@ class FeedViewModel: ObservableObject {
 
     private var nextCursor: String?
     private let api: APIClientProviding
-    private let offlineQueue: OfflineQueueing
+    let offlineQueue: OfflineQueueing
     let feedCache: any FeedCacheStoring
     private let limit = 20
     private var cancellables = Set<AnyCancellable>()
@@ -465,7 +465,9 @@ class FeedViewModel: ObservableObject {
 
             // stores-09 — patch every cache key holding this post (detail key,
             // bookmarks…), not just "main-feed" via debouncedCacheSave.
-            let newLikes = posts[index].likes
+            // `post`, pas `posts[index]` : le fil a pu changer pendant l'attente, et l'indice désigner un
+            // autre post — ou plus aucun.
+            let newLikes = post.likes
             Task.detached(priority: .utility) { [feedCache = self.feedCache] in
                 await feedCache.patchEverywhere(itemId: postId) {
                     $0.isLiked = liked
@@ -475,7 +477,7 @@ class FeedViewModel: ObservableObject {
 
             // Sync optimistic like state to GRDB so the feed cache matches.
             if let persistence = feedPersistence {
-                let count = posts[index].likes
+                let count = newLikes
                 Task.detached(priority: .utility) {
                     try? await persistence.updateLikeCount(postId: postId, count: count, isLikedByMe: liked)
                 }
@@ -490,6 +492,16 @@ class FeedViewModel: ObservableObject {
         } catch {
             // Roll back optimistic state if the outbox refuses the row.
             restoreLike(postId: postId, isLiked: wasLiked, likes: priorLikes)
+        }
+    }
+
+    /// Pose en tête le post que l'on vient de publier — ou le REMPLACE si l'écho `post:created` l'a déjà
+    /// inséré pendant l'attente de la réponse : deux cartes du même id se partageaient sinon l'état d'une seule.
+    private func insertPublished(_ feedPost: FeedPost) {
+        if let existing = posts.firstIndex(where: { $0.id == feedPost.id }) {
+            posts[existing] = feedPost
+        } else {
+            posts.insert(feedPost, at: 0)
         }
     }
 
@@ -648,7 +660,7 @@ class FeedViewModel: ObservableObject {
                 discoverabilityPrecision: discoverabilityPrecision
             )
             let feedPost = apiPost.toFeedPost(preferredLanguages: preferredLanguages)
-            posts.insert(feedPost, at: 0)
+            insertPublished(feedPost)
             debouncedCacheSave()
             publishSuccess = true
 
@@ -692,7 +704,7 @@ class FeedViewModel: ObservableObject {
             )
             let apiPost = response.data
             let feedPost = apiPost.toFeedPost(preferredLanguages: preferredLanguages)
-            posts.insert(feedPost, at: 0)
+            insertPublished(feedPost)
             debouncedCacheSave()
             publishSuccess = true
 
@@ -775,68 +787,6 @@ class FeedViewModel: ObservableObject {
     /// offline" rule shared by every composer. `nonisolated` so it can be read
     /// from any isolation (matches `SyncPillViewModel.staleInflightThreshold`).
     nonisolated static let offlineStuckThreshold: TimeInterval = 60
-
-    /// Returns the last POST/REEL that got stuck offline (unsent for more than
-    /// `offlineStuckThreshold`) so the feed composer can pre-fill it as a draft.
-    ///
-    /// **Une ligne dont un média est de l'AUDIO n'est jamais proposée, et c'est
-    /// une garde de CONTENU, pas une préférence d'ergonomie.**
-    ///
-    /// Le composer du feed ne sait pas rouvrir un enregistrement : sa
-    /// restauration ne traite que l'image et la vidéo
-    /// (`FeedView+Attachments.restoreRecoveredMedia`). Offrir la ligne quand
-    /// même produisait une chaîne complète de DESTRUCTION — brouillon
-    /// « restauré » VIDE (un vocal n'a pas de texte), `recoveredPostCmid` posé
-    /// malgré tout, puis, à la publication suivante quelle qu'elle soit,
-    /// `supersedeRecoveredPost` → `cancelCreatePost`, qui efface le fichier
-    /// relocalisé ET la ligne. L'enregistrement n'a alors JAMAIS été vu par son
-    /// auteur, et rien ne le lui dit.
-    ///
-    /// Le trou n'existait pas avant que les deux jumeaux audio entrent dans
-    /// cette file : `case .audio: break` y était juste, et son commentaire
-    /// (« audio offline posts aren't queued through this composer path yet »)
-    /// était vrai. Un lot qui fait CONVERGER une chaîne doit énumérer les
-    /// CONSOMMATEURS de la ligne qu'il vient de créer, pas seulement les
-    /// producteurs.
-    ///
-    /// Prix assumé : tant qu'un vocal est bloqué en file, aucun brouillon plus
-    /// ancien n'est proposé. Une affordance de reprise retardée n'est pas
-    /// comparable à un enregistrement détruit.
-    func recoverUnsentPost() async -> RecoveredOfflinePost? {
-        let draft = await offlineQueue.recoverLastUnsentPost(
-            matchingTypes: ["POST", "REEL"],
-            olderThan: Self.offlineStuckThreshold
-        )
-        guard let draft else { return nil }
-        let porteUneVoix = draft.localMediaURLs.contains { url in
-            AttachmentKind(mimeType: MimeTypeResolver.mimeType(forURL: url)) == .audio
-        }
-        return porteUneVoix ? nil : draft
-    }
-
-    /// Supersedes a recovered post/reel when the user re-sends it from the
-    /// composer, so the resend replaces the stuck row (and reclaims its
-    /// pending-media files) instead of duplicating it on reconnect.
-    ///
-    /// Also drops the orphaned optimistic feed post keyed by this cmid: an
-    /// offline post/reel was inserted optimistically (id == cmid) when first
-    /// queued, and its `.createPost` row is what we're now deleting — without
-    /// this the optimistic card would linger in the feed forever (its row gone,
-    /// so it can never reconcile). The resend inserts a fresh optimistic card
-    /// under a new cmid.
-    func supersedeRecoveredPost(clientMutationId: String) async {
-        removeOptimisticPost(id: clientMutationId)
-        await offlineQueue.cancelCreatePost(clientMutationId: clientMutationId)
-    }
-
-    /// Removes an optimistic post by id (re-resolving the index since the feed
-    /// may mutate across an `await`). Rolls back a queued create the outbox
-    /// refused or exhausted.
-    private func removeOptimisticPost(id: String) {
-        guard let i = posts.firstIndex(where: { $0.id == id }) else { return }
-        posts.remove(at: i)
-        debouncedCacheSave()
-    }
 
     /// U1b — durably publishes an OFFLINE media post. Inserts an optimistic post
     /// keyed by a fresh cmid (rendering the picked files as a local-URL preview)
@@ -1270,6 +1220,7 @@ class FeedViewModel: ObservableObject {
     }
 
     func deletePost(_ postId: String) async {
+        guard !ClientMutationId.isValid(postId) else { return await withdrawPendingPublication(postId) }
         let snapshot = posts
         posts.removeAll { $0.id == postId }
 
@@ -1791,7 +1742,11 @@ class FeedViewModel: ObservableObject {
     /// Prefetch media for posts in the visible window + next 5.
     func prefetchMedia(around index: Int) {
         prefetchTask?.cancel()
-        let slice = Array(posts[max(0, index - 2)..<min(posts.count, index + 7)])
+        // L'indice a pu être pris 150 ms plus tôt : un rafraîchissement qui raccourcit le fil entre-temps
+        // rendait une borne basse au-delà de la haute.
+        let lower = min(max(0, index - 2), posts.count)
+        let upper = min(posts.count, max(lower, index + 7))
+        let slice = Array(posts[lower..<upper])
         prefetchTask = Task(priority: .utility) {
             guard !slice.isEmpty else { return }
 

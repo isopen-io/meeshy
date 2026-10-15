@@ -40,11 +40,8 @@ extension StoryCardView {
     /// mesurée et ce qui le soulève. Le panneau d'émojis soulève la plaque
     /// comme le clavier ; il ne compte pas dans la hauteur de la plaque.
     func commentsZoneReading(geometry: GeometryProxy) -> StoryCommentsZone.ComposerReading { // internal for cross-file extension access
-        let isFolded = composerFoldPresentation == .folded
-        let panel = showTextEmojiPicker && !isFolded ? emojiPanelHeight(geometry) : 0
-        let lift = panel > 0
-            ? composerBottomPadding(geometry) + panel
-            : (keyboard.isVisible ? keyboard.height : 0)
+        let panel = shownEmojiPanelHeight(geometry)
+        let lift = composerLift(geometry: geometry)
         return StoryCommentsZone.ComposerReading(
             state: StoryCommentsZone.state(hasComposer: !isOwnStory || replyingToStoryComment != nil,
                                            isShown: chromeVisible,
@@ -54,6 +51,18 @@ extension StoryCardView {
             keyboardHeight: lift,
             windowHeight: geometry.size.height,
             topReserved: topInset + 100)
+    }
+
+    /// **Ce qui soulève réellement la plaque** (#10544) — la valeur que la
+    /// scène, la liste des commentaires et la plaque suivent ensemble.
+    func composerLift(geometry: GeometryProxy) -> CGFloat { // internal for cross-file extension access
+        StoryKeyboardLift.lift(keyboardHeight: keyboard.isVisible ? keyboard.height : 0,
+                               emojiPanelHeight: shownEmojiPanelHeight(geometry),
+                               restingPadding: composerBottomPadding(geometry))
+    }
+
+    private func shownEmojiPanelHeight(_ geometry: GeometryProxy) -> CGFloat {
+        showTextEmojiPicker && composerFoldPresentation != .folded ? emojiPanelHeight(geometry) : 0
     }
 
     /// Le panneau d'émojis prend la place du clavier, à sa dernière hauteur.
@@ -178,6 +187,9 @@ extension StoryCardView {
                 foldControl: composerFoldControl,
                 sendComment: sendComment
             )
+                // Un écran, un observateur de clavier (#10544) : la barre lit
+                // celui du lecteur au lieu d'en créer un second.
+                .environment(\.composerHostKeyboard, keyboard)
                 // Marge latérale 16pt, alignée sur le `sideInset` (16) de
                 // la carte reader (`readerCanvasFraming`) et le
                 // `.padding(.trailing, 16)` du sidebar — même rythme 16pt

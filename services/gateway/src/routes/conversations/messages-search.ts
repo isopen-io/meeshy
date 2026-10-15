@@ -6,6 +6,7 @@
  * plancher d'historique). Voir `messages.ts` pour le composeur
  * (`registerMessagesRoutes`), qui appelle `registerMessageSearchRoute`.
  */
+import { servedLinkMetadata } from '../../services/messaging/linkTrackingAuthor';
 import { FastifyInstance } from 'fastify';
 import type { PrismaClient } from '@meeshy/shared/prisma/client';
 import { hoistLocationOnto } from '../../services/location/sharedPlace';
@@ -41,6 +42,8 @@ import { withOrphanedSenderRepair } from '../../services/messaging/withOrphanedS
 import { servePostReplyCitations } from '../../services/messaging/servedPostReply';
 import { keepAliveForReader, withInheritedExpiry } from '../../services/messaging/quoteCascade';
 import { readerParticipantIdOf } from './readerParticipant';
+import { appearsInSearch, SEARCH_EXIT_LAW_SELECT } from '../../services/messaging/searchExitLaw';
+import { readerShareLinkHasExpired, refuseExpiredShareLink } from '../../services/shareLinkReadGate';
 
 /**
  * LES DEUX REFUS DE CETTE ROUTE NE SONT PAS LE MÊME REFUS (#4792).
@@ -141,6 +144,10 @@ export function registerMessageSearchRoute(
       if (!conversationId) {
         return;
       }
+      // #7388 — la porte d'un lien de partage ÉCHU, la même que sur le fil.
+      if (await readerShareLinkHasExpired(prisma, { conversationId, reader: historyReaderFromAuthContext(authRequest.authContext) })) {
+        return refuseExpiredShareLink(reply);
+      }
 
       const queryLower = q.toLowerCase().trim();
 
@@ -187,6 +194,7 @@ export function registerMessageSearchRoute(
         // FORWARDABLE : le garde web/iOS qui interdit le transfert lit
         // `isViewOnce`, absent de cette réponse.
         ...MESSAGE_PROTECTION_SELECT,
+        ...SEARCH_EXIT_LAW_SELECT,
         sender: {
           // `sender` is a `Participant`, which has no `username`/`isOnline` of
           // its own — those live on the related `User`. Selecting `username`
@@ -267,9 +275,10 @@ export function registerMessageSearchRoute(
       });
 
       // Merge and deduplicate results
-      const seenIds = new Set(contentMatches.map(m => m.id));
-      const merged = [...contentMatches];
-      for (const tm of translationMatches) {
+      const ordinaryContentMatches = contentMatches.filter(appearsInSearch);
+      const seenIds = new Set(ordinaryContentMatches.map(m => m.id));
+      const merged = [...ordinaryContentMatches];
+      for (const tm of translationMatches.filter(appearsInSearch)) {
         if (!seenIds.has(tm.id)) {
           seenIds.add(tm.id);
           merged.push(tm);
@@ -285,8 +294,11 @@ export function registerMessageSearchRoute(
         merged,
         await readerParticipantIdOf(prisma, conversationId, authRequest.authContext)
       );
-      const hasMore = readerPage.alive.length > searchLimit;
-      const results = readerPage.alive.slice(0, searchLimit);
+      // #10429 — une réponse qui hérite de l'échéance de ce qu'elle cite
+      // (#8630) disparaît aussi : elle ne se trouve pas plus que lui.
+      const outliving = readerPage.alive.filter((msg) => !readerPage.inherited.has(msg.id));
+      const hasMore = outliving.length > searchLimit;
+      const results = outliving.slice(0, searchLimit);
 
       const lastId = results.length > 0 ? results[results.length - 1].id : null;
 
@@ -304,12 +316,14 @@ export function registerMessageSearchRoute(
       // flatten the participant `sender` (username/isOnline come from the nested
       // `user` relation) so the userMinimalSchema serializer keeps them.
       const mappedResults = results.map((msg: any) => {
-        const sender = msg.sender;
+        const { sender, attachments: _exitLawProjection, ...row } = msg;
         // Lot 1 : hoistLocationOnto hisse metadata.location en `location`
         // top-level — un résultat de recherche géolocalisé le perdait sinon.
         // hoistStickerOnto (#4823) : même hoist pour `metadata.sticker`.
         return hoistStickerOnto(hoistLocationOnto({
-          ...msg,
+          ...row,
+          // #10286 — un invité anonyme ne sert jamais sa carte de liens suivis.
+          metadata: servedLinkMetadata(msg.metadata, sender),
           // #4885 — les quatre drapeaux de protection, servis à l'identique
           // de `GET .../messages` (même source, `mapMessageProtectionFields`).
           ...withInheritedExpiry(

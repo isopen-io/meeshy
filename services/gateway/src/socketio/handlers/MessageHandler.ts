@@ -831,7 +831,7 @@ export class MessageHandler {
       // ajoutée par édition restait intraçable pour toujours.
       const editedLinks = await reconcileEditedLinks({
         linkService: this.trackingLinkService,
-        message: { id: validated.messageId, conversationId: message.conversationId },
+        message: { id: validated.messageId, conversationId: message.conversationId, sender: message.sender },
         content: contentAdmission.content,
         editorUserId: userId,
         onError: (err) => handlerLogger.warn('tracking link processing failed on socket edit', { messageId: validated.messageId, error: err }),
@@ -869,11 +869,10 @@ export class MessageHandler {
         return;
       }
 
-      // Les effets DURABLES de l'édition — l'écart de mots et de caractères sur
-      // les compteurs de la conversation. Ce transport, pourtant PRIMAIRE, ne
-      // les ajustait pas : ils restaient sur les longueurs du texte d'origine,
-      // définitivement. La liste vit dans `applyMessageEditEffects`, une fois
-      // pour les quatre transports.
+      // Les effets DURABLES de l'édition (compteurs, notifications, traductions
+      // partagées d'avant) vivent dans `applyMessageEditEffects`, une fois pour
+      // les quatre transports. `editedAt` est l'instant ÉCRIT ci-dessus, remis
+      // tel quel : la version de source d'une traduction partagée en est l'ISO.
       await applyMessageEditEffects(this.prisma, {
         id: message.id,
         conversationId: message.conversationId,
@@ -881,6 +880,7 @@ export class MessageHandler {
         senderUserId: message.sender?.userId ?? null,
         previousContent: message.content,
         content: editedContent,
+        editedAt,
       });
 
       // Ce que ce message doit à ceux qu'il NOMME, après édition. Ce chemin
@@ -1371,7 +1371,7 @@ export class MessageHandler {
       // `visible ⇔ auteur ET lecteur`, fail-CLOSED si la liste des lecteurs est
       // inconnue — composée avec le scellement de la citation d'un éphémère
       // déjà échu pour un lecteur (#8562) dans `resolvePeerBroadcastSplit`.
-      const { peerPayload, hiddenKeys, payloadForKey } =
+      const { peerPayload, hiddenKeys, payloadForKey, quotedDeathOf } =
         await resolvePeerBroadcastSplit(this.prisma, {
           senderUserId,
           sharedParticipants,
@@ -1539,7 +1539,7 @@ export class MessageHandler {
         for (const { room, participant } of targets) {
           this.io.to(room).emit(SERVER_EVENTS.CONVERSATION_UPDATED, {
             ...updatePayload,
-            ...resolveLastMessagePreviewGroup(participant, message)
+            ...resolveLastMessagePreviewGroup(participant, message, new Date(), { quotedDeathAt: quotedDeathOf(participant) })
           });
         }
         handlerLogger.debug('conversation:updated emitted', { conversationId: normalizedId, recipients: targets.length });

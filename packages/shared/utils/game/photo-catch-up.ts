@@ -13,20 +13,26 @@
  * `photoOfferFor` règle le RYTHME : une transition ne propose qu'UN moment, le plus marquant, et jamais une
  * étape qui en saute une autre — c'est l'étape ouverte de sa piste qui est proposée à sa place.
  *
- * Miroir Swift : `apps/ios/Meeshy/Features/Main/Game/Photo/GamePhotoCatchUp.swift`.
+ * `catchUpStandingOf` lit la situation dans le bloc `game` servi : UNE dérivation, que le web, iOS et le job
+ * serveur partagent — deux dérivations jumelles annonceraient des étapes que le carnet ne montre pas.
+ *
+ * Miroir Swift : `packages/MeeshySDK/Sources/MeeshySDK/Game/GamePhotoCatchUpLaw.swift`, rejoué sur les lois
+ * `photo-catch-up`, `photo-offer` et `photo-standing` de `game.vectors.json` (#10155).
  */
 
+import type { GameBlock } from '../../types/game.js';
 import { flameForm, type FlameFormKey } from './flame.js';
 import { GLORY_RANKS, type GloryDivision5, type GloryRankOrMythic } from './glory.js';
 import { LEVEL_TIER_KEYS, levelTierIndex, levelTierStart, type LevelTierKey } from './levels.js';
 import { meeshEdition, type MeeshEdition } from './mint.js';
 import { TREASURY_TIERS, type TreasuryTierKey } from './treasury.js';
+import { PHOTO_ALERT_POLICY, type PhotoAlertPolicy } from './photo-alert-policy.js';
 
 export const PHOTO_TRACKS = ['start', 'rank', 'tier', 'summit', 'meesh', 'treasury', 'flame'] as const;
 export type PhotoTrack = (typeof PHOTO_TRACKS)[number];
 
 /** L'ordre de préséance d'une proposition : un rang passe avant un palier, une Meesh en dernier. */
-const OFFER_PRIORITY: readonly PhotoTrack[] = ['start', 'rank', 'tier', 'summit', 'treasury', 'flame', 'meesh'];
+export const PHOTO_OFFER_PRIORITY: readonly PhotoTrack[] = ['start', 'rank', 'tier', 'summit', 'treasury', 'flame', 'meesh'];
 
 export const PHOTO_FLAME_THRESHOLDS = [7, 30, 100, 365] as const;
 
@@ -43,6 +49,27 @@ export type PhotoCatchUpStanding = {
   /** La plus longue Flamme (`ladder.steps.flameRecord`, à défaut les jours en cours). */
   readonly flameRecord: number;
 };
+
+/** Les cinq blocs du bloc `game` que la situation lit — le job serveur les sert sans le reste. */
+export type PhotoStandingSource = Pick<GameBlock, 'glory' | 'level' | 'mint' | 'treasury' | 'flame'>;
+
+/**
+ * La situation lue dans le bloc `game` servi : la division V..I (ou héritée devant un ancien serveur), le record
+ * de l'échelle ouverte par le rang (ou celui d'hier), les Meeshes déjà frappées (`mint.number` est la PROCHAINE),
+ * la plus longue Flamme (le record gravé, ou la série en cours si elle le dépasse).
+ */
+export function catchUpStandingOf(game: PhotoStandingSource): PhotoCatchUpStanding {
+  const ladder = game.level.ladder;
+  return {
+    rank: game.glory.rank,
+    division: game.glory.division5 ?? game.glory.division,
+    levelRecord: ladder?.record ?? game.level.record,
+    prestige: game.level.prestige,
+    minted: Math.max(0, game.mint.number - 1),
+    treasuryTier: game.treasury.tier,
+    flameRecord: Math.max(ladder?.steps?.flameRecord ?? 0, game.flame.days),
+  };
+}
 
 export type PhotoStepEmblem =
   | { readonly kind: 'start' }
@@ -131,9 +158,15 @@ const flameSteps = (standing: PhotoCatchUpStanding): PhotoStep[] =>
     emblem: { kind: 'flame', form: flameForm(days) ?? 'braise', days },
   }));
 
-/** Toutes les étapes franchies, piste après piste, chacune dans son ordre. */
-export function photoStepsReached(standing: PhotoCatchUpStanding): PhotoStep[] {
-  return [
+/** Ce que la politique photographie (`PHOTO_ALERT_POLICY.photographs`) : une étape non photographiable ne verrouille pas sa piste. */
+type PhotoStepsPolicy = Pick<PhotoAlertPolicy, 'photographs'>;
+
+const isPhotographed = (step: PhotoStep, policy: PhotoStepsPolicy): boolean =>
+  policy.photographs === 'every-step' || step.emblem.kind !== 'rank' || step.emblem.division === 5 || step.emblem.division === null;
+
+/** Toutes les étapes franchies que la politique photographie, piste après piste, chacune dans son ordre. */
+export function photoStepsReached(standing: PhotoCatchUpStanding, policy: PhotoStepsPolicy = PHOTO_ALERT_POLICY): PhotoStep[] {
+  const steps: PhotoStep[] = [
     { track: 'start', id: 'start', emblem: { kind: 'start' } },
     ...rankSteps(standing),
     ...tierSteps(standing),
@@ -142,12 +175,13 @@ export function photoStepsReached(standing: PhotoCatchUpStanding): PhotoStep[] {
     ...treasurySteps(standing),
     ...flameSteps(standing),
   ];
+  return steps.filter((step) => isPhotographed(step, policy));
 }
 
 /** Les étapes franchies sans photo gardée : la première de chaque piste est ouverte, les suivantes l'attendent. */
-export function photoCatchUp(standing: PhotoCatchUpStanding, keptIds: Iterable<string>): PhotoCatchUpEntry[] {
+export function photoCatchUp(standing: PhotoCatchUpStanding, keptIds: Iterable<string>, policy: PhotoStepsPolicy = PHOTO_ALERT_POLICY): PhotoCatchUpEntry[] {
   const kept = new Set(keptIds);
-  const missing = photoStepsReached(standing).filter((step) => !kept.has(step.id));
+  const missing = photoStepsReached(standing, policy).filter((step) => !kept.has(step.id));
   return missing.map((step) => {
     const first = missing.find((other) => other.track === step.track);
     return first === undefined || first.id === step.id
@@ -175,22 +209,28 @@ export function photoTrackOf(momentId: string): PhotoTrack | null {
   }
 }
 
-const priority = (momentId: string): number => {
+/** Le rang de préséance d'une identité : sa piste dans `PHOTO_OFFER_PRIORITY`, une identité hors piste en dernier. */
+export const photoOfferPriority = (momentId: string): number => {
   const track = photoTrackOf(momentId);
-  return track === null ? OFFER_PRIORITY.length : OFFER_PRIORITY.indexOf(track);
+  return track === null ? PHOTO_OFFER_PRIORITY.length : PHOTO_OFFER_PRIORITY.indexOf(track);
 };
 
 /**
  * LA proposition d'une transition : chaque moment d'une piste est remplacé par l'étape OUVERTE de sa piste
  * (aucune si la piste est à jour), puis le plus marquant l'emporte. `null` : rien à proposer.
  */
-export function photoOfferFor(momentIds: readonly string[], standing: PhotoCatchUpStanding, keptIds: Iterable<string>): string | null {
-  const open = photoCatchUp(standing, keptIds).filter((entry) => entry.state === 'open');
+export function photoOfferFor(
+  momentIds: readonly string[],
+  standing: PhotoCatchUpStanding,
+  keptIds: Iterable<string>,
+  policy: PhotoStepsPolicy = PHOTO_ALERT_POLICY,
+): string | null {
+  const open = photoCatchUp(standing, keptIds, policy).filter((entry) => entry.state === 'open');
   const candidates = momentIds.flatMap((id) => {
     const track = photoTrackOf(id);
     if (track === null) return [id];
     const step = open.find((entry) => entry.track === track);
     return step === undefined ? [] : [step.id];
   });
-  return [...new Set(candidates)].sort((a, b) => priority(a) - priority(b))[0] ?? null;
+  return [...new Set(candidates)].sort((a, b) => photoOfferPriority(a) - photoOfferPriority(b))[0] ?? null;
 }

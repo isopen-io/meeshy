@@ -671,6 +671,44 @@ final class AuthServiceTests: XCTestCase {
         }
     }
 
+    // MARK: - Premier mot de passe (#9186)
+
+    func test_changePassword_withoutCurrentPassword_omitsTheKey() async throws {
+        mock.stub("/users/me/password", result: SimpleAPIResponse(success: true, message: nil, error: nil))
+
+        try await service.changePassword(currentPassword: nil, newPassword: "Meeshy-2026!")
+
+        let body = try XCTUnwrap(mock.lastRequest?.bodyJSON)
+        XCTAssertNil(body["currentPassword"])
+        XCTAssertEqual(body["newPassword"] as? String, "Meeshy-2026!")
+    }
+
+    func test_hasPassword_readsTheSecuritySummaryOfMe() async throws {
+        mock.stub("/auth/me", result: APIResponse(
+            success: true,
+            data: MeSecurityResponseData(user: .init(security: .init(hasPassword: false))),
+            error: nil
+        ))
+
+        let hasPassword = try await service.hasPassword()
+
+        XCTAssertEqual(hasPassword, false)
+        let query = mock.lastRequest?.queryItems ?? []
+        XCTAssertTrue(query.contains(URLQueryItem(name: "expand", value: "security")))
+    }
+
+    func test_hasPassword_gatewayWithoutSecuritySummary_isUnknown() async throws {
+        mock.stub("/auth/me", result: APIResponse(
+            success: true,
+            data: MeSecurityResponseData(user: .init(security: nil)),
+            error: nil
+        ))
+
+        let hasPassword = try await service.hasPassword()
+
+        XCTAssertNil(hasPassword)
+    }
+
     // MARK: - logout
 
     func testLogoutCallsCorrectEndpoint() async {
@@ -692,29 +730,33 @@ final class AuthServiceTests: XCTestCase {
         XCTAssertEqual(mock.requestCount, 1)
     }
 
-    // MARK: - logoutThrowing(token:) — D5.hygiene
+    // MARK: - logoutThrowing(token:) — D5.hygiene, #10463
 
-    /// The explicitly-passed token must be sent as the Authorization header,
-    /// decoupled from `mock.authToken` (which stays `nil` here, standing in
-    /// for `AuthManager.logout()` having already wiped `APIClient.shared.authToken`
-    /// by the time the retry loop actually sends its request).
-    func testLogoutThrowingWithToken_sendsExplicitAuthorizationHeader_notAmbientAPIClientToken() async throws {
-        let response = APIResponse(success: true, data: ["loggedOut": true], error: nil)
-        mock.stub("/auth/logout", result: response)
+    /// The explicitly-passed token signs the request, decoupled from
+    /// `mock.authToken` (which stays `nil` here, standing in for
+    /// `AuthManager.logout()` having already wiped `APIClient.shared.authToken`).
+    /// #10463 — and it goes through the PINNED transport, never through `api`,
+    /// whose 401 path refreshes and replays under the active account's token.
+    func testLogoutThrowingWithToken_signsWithTheExplicitToken_throughThePinnedTransport() async throws {
+        let pinned = PinnedLogoutRecorder()
+        let pinnedService = AuthService(api: mock, pinned: pinned)
         mock.authToken = nil
 
-        try await service.logoutThrowing(token: "captured-token-abc")
+        try await pinnedService.logoutThrowing(token: "captured-token-abc")
 
-        XCTAssertEqual(mock.lastRequest?.endpoint, "/auth/logout")
-        XCTAssertEqual(mock.lastRequest?.method, "POST")
-        XCTAssertEqual(mock.lastRequest?.headers?["Authorization"], "Bearer captured-token-abc")
+        XCTAssertEqual(pinned.calls.map(\.path), [AuthEndpoint.logout.path])
+        XCTAssertEqual(pinned.calls.map(\.method), ["POST"])
+        XCTAssertEqual(pinned.calls.map(\.bearerToken), ["captured-token-abc"])
+        XCTAssertEqual(mock.requestCount, 0, "rien ne part par le transport qui rafraîchit et rejoue")
     }
 
     func testLogoutThrowingWithToken_propagatesServerError() async {
-        mock.errorToThrow = MeeshyError.network(.noConnection)
+        let pinned = PinnedLogoutRecorder()
+        pinned.error = MeeshyError.network(.noConnection)
+        let pinnedService = AuthService(api: mock, pinned: pinned)
 
         do {
-            try await service.logoutThrowing(token: "tok")
+            try await pinnedService.logoutThrowing(token: "tok")
             XCTFail("Expected error to be thrown")
         } catch let error as MeeshyError {
             if case .network(.noConnection) = error {
@@ -757,5 +799,47 @@ final class AuthServiceTests: XCTestCase {
         } catch {
             XCTFail("Expected error to be MeeshyError, got \(error)")
         }
+    }
+}
+
+/// Le transport ÉPINGLÉ, enregistré : ce que la déconnexion par jeton lui confie.
+private final class PinnedLogoutRecorder: PinnedRequesting, @unchecked Sendable {
+    struct Call: Sendable {
+        let path: String
+        let method: String
+        let bearerToken: String
+    }
+
+    private let lock = NSLock()
+    private var _calls: [Call] = []
+    private var _error: Error?
+
+    private func locked<T>(_ body: () -> T) -> T {
+        lock.lock()
+        defer { lock.unlock() }
+        return body()
+    }
+
+    var calls: [Call] { locked { _calls } }
+
+    var error: Error? {
+        get { locked { _error } }
+        set { locked { _error = newValue } }
+    }
+
+    func requestPinned<T: Decodable>(
+        _ endpoint: any MeeshyEndpoint,
+        method: String,
+        body: Data?,
+        headers: [String: String],
+        bearerToken: String
+    ) async throws -> T {
+        let failure: Error? = locked {
+            _calls.append(Call(path: endpoint.path, method: method, bearerToken: bearerToken))
+            return _error
+        }
+        if let failure { throw failure }
+        let data = Data(#"{"success":true,"data":{"loggedOut":true}}"#.utf8)
+        return try JSONDecoder().decode(T.self, from: data)
     }
 }

@@ -92,7 +92,7 @@ struct AchievementRevealView: View {
                 return String(localized: "reveal.badge.tier",
                               defaultValue: "Palier \(seuil)", bundle: .main)
             }
-            return "\(seuil) \(ProgressionCopy.title(for: clé).lowercased())"
+            return ProgressionCopy.badgeTierTitle(threshold: seuil, axis: clé)
         case .streak(let jours): return ProgressionCopy.streak(jours)
         case .level(let rang): return ProgressionCopy.levelTitle(rang)
         }
@@ -226,6 +226,8 @@ struct AchievementRevealView: View {
         // balayer trois fois ce qui est une seule nouvelle.
         .accessibilityElement(children: .combine)
         .accessibilityLabel(phraseAccessible)
+        // La célébration RETIENT : la conversation s'ouvre quand on la quitte (#10543).
+        .retainsAgainstConversationOpening(.game)
     }
 
     /// « Succès débloqué. <titre>. <explication> », puis la rareté en toutes lettres : la couleur du liseré n'est

@@ -10,6 +10,8 @@ export type ShareEntryDeps = {
   readonly take: () => Promise<IncomingShare | null>;
   readonly open: (request: SendSheetRequest) => void;
   readonly navigate: (path: string, replace: boolean) => void;
+  /** La liste des conversations (`href('list')`, `/chats` depuis #10002) — l'adresse où le partage s'efface. */
+  readonly home: string;
 };
 
 export type ShareEntryOutcome = 'opened' | 'login' | 'empty';
@@ -36,7 +38,7 @@ export async function enterSharedContent(deps: ShareEntryDeps): Promise<ShareEnt
   }
   const received = await deps.take();
   const request = received === null ? null : requestOfIncomingShare(received);
-  deps.navigate('/', true);
+  deps.navigate(deps.home, true);
   if (request === null) return 'empty';
   deps.open(request);
   return 'opened';

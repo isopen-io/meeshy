@@ -99,6 +99,14 @@ describe('developPhoto', () => {
     expect(journal.encoded[0]?.quality).toBeLessThanOrEqual(0.92);
   });
 
+  test('une borne et une qualité propres à un usage (la source du carnet : 1 440 px, q0,85), sans look', async () => {
+    const { env, journal } = fakeEnv();
+    await developPhoto({ image: {} as CanvasImageSource, size: { width: 3024, height: 4032 } }, env, { maxEdge: 1440, quality: 0.85, look: null });
+    expect(journal.painted).toEqual([{ crop: { x: 0, y: 0, width: 3024, height: 4032 }, size: { width: 1080, height: 1440 } }]);
+    expect(journal.encoded).toEqual([{ mime: 'image/jpeg', quality: 0.85 }]);
+    expect(journal.put).toBe(0);
+  });
+
   test('un recadrage (zoom numérique) borne la sortie à la taille du recadrage', async () => {
     const { env, journal } = fakeEnv();
     await developPhoto({ image: {} as CanvasImageSource, size: { width: 1920, height: 1080 }, crop: { x: 480, y: 270, width: 960, height: 540 } }, env);

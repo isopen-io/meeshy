@@ -177,6 +177,22 @@ final class GameOptimisticTests: XCTestCase {
         XCTAssertEqual(next.game.level.score, 121_890)
     }
 
+    func test_withChestReward_laysTheServedStarFragmentTotal_andEveryGestureKeepsIt() {
+        let base = GameFixture.game(score: 121_800, chestStatus: .ready).replacing(starFragments: .some(StarFragmentsTotal(collected: 4)))
+        let state = GameFixture.state(base)
+
+        let served = GameOptimistic.withChestReward(
+            state, reward: DailyChest(points: 500, fragment: true, freeze: false), score: 122_300,
+            starFragments: StarFragmentsTotal(collected: 5)
+        )
+        let unserved = GameOptimistic.withChestReward(state, reward: DailyChest(points: 500, fragment: false, freeze: false), score: 122_300)
+
+        XCTAssertEqual(served.game.starFragments, StarFragmentsTotal(collected: 5))
+        XCTAssertEqual(unserved.game.starFragments, StarFragmentsTotal(collected: 4))
+        XCTAssertEqual(GameOptimistic.afterChestOpening(state).game.starFragments, StarFragmentsTotal(collected: 4))
+        XCTAssertEqual(base.replacing(guideSeen: ["x"]).starFragments, StarFragmentsTotal(collected: 4))
+    }
+
     // MARK: - Rallumage
 
     func test_afterRelight_lightsTheFlameAndPaysItsPrice() {

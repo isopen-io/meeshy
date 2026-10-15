@@ -22,7 +22,7 @@ import {
   type PhotoMoment,
   type PhotoTrack,
 } from '@/lib/game-photo/moments';
-import type { NotebookEntry } from '@/lib/game-photo/notebook';
+import { notebookBytes, notebookSizeLabel, pendingOf, type LegacyState, type NotebookEntry } from '@/lib/game-photo/notebook';
 import { referralOf, referralShareText } from '@/lib/game-photo/referral';
 import { dateLabelOf, fileNameOf } from '@/lib/game-photo/render';
 import { useObjectUrl } from '@/lib/game-photo/use-object-url';
@@ -34,7 +34,9 @@ import { ProgressionShell } from '@/routes/progression-shell';
  * LE CARNET DE PROGRESSION (#9382) — conception, partie VI : « le carnet de
  * progression garde ces photos et montre le chemin parcouru ». Les photos
  * gardées, du plus récent au plus ancien, et les moments laissés en attente
- * (« plus tard », sept jours) avec de quoi les photographier maintenant.
+ * (« plus tard », sans échéance, #10161) avec de quoi les photographier
+ * maintenant. Il dit la place qu'il occupe et que ses photos vivent sur cet
+ * appareil ; un ancien carnet en quarantaine (D-154) se signale et se supprime.
  *
  * LOCAL à l'appareil : un stockage qui refuse se lit « carnet vide », jamais
  * une alerte qui ferait croire à une perte. Aucune image ne quitte l'appareil
@@ -44,7 +46,7 @@ import { ProgressionShell } from '@/routes/progression-shell';
  * LE RATTRAPAGE (#9961, #9962) : chaque étape déjà franchie sans photo gardée
  * se photographie, DANS L'ORDRE de sa piste (`photo-catch-up.ts`). Les étapes
  * se lisent dans le bloc du jeu DÉJÀ en cache — sans lui, la section se tait.
- * Un moment en attente qui est une étape ne paraît qu'une fois : là.
+ * Une étape de piste reportée ne paraît qu'une fois : là (`pendingOf`).
  */
 
 const CONFIRM_MS = 4000;
@@ -55,7 +57,13 @@ const storyFile = (entry: NotebookEntry): File | null =>
     ? null
     : entry.story instanceof File
       ? entry.story
-      : new File([entry.story], fileNameOf(entry.momentId, 'story'), { type: entry.story.type === '' ? 'image/png' : entry.story.type });
+      : storyFileOf(entry.story, entry.momentId);
+
+/* Un 9:16 neuf est un JPEG (#10238), un ancien un PNG : le nom suit le format. */
+const storyFileOf = (story: Blob, momentId: string): File => {
+  const type = story.type === '' ? 'image/png' : story.type;
+  return new File([story], fileNameOf(momentId, 'story', type), { type });
+};
 
 /* Les deux lignes se redéduisent de l'EMBLÈME, dans la langue d'aujourd'hui : une
    entrée gardée hier sous une autre langue ne reste pas figée dans celle-là. */
@@ -147,7 +155,7 @@ function PendingEntry({ entry, onTake }: { readonly entry: NotebookEntry; readon
           {title}
         </p>
         <p className="text-caption" style={{ color: GAME_INK_2 }}>
-          {gameText('game.notebook.pending_until', { date: dateLabelOf(new Date(entry.expiresAt ?? entry.createdAt)) })}
+          {gameText('game.notebook.pending_until')}
         </p>
       </div>
       <button
@@ -263,10 +271,19 @@ export function CarnetBody({
   const [entries, setEntries] = useState<readonly NotebookEntry[] | null>(null);
   const [taking, setTaking] = useState<PhotoMoment | null>(null);
 
+  const [legacy, setLegacy] = useState<LegacyState>('none');
+
   const load = useCallback(() => {
     void env.notebook.list().then(setEntries);
+    void env.notebook.legacy?.().then(setLegacy).catch(() => undefined);
   }, [env]);
   useEffect(load, [load]);
+
+  const discardLegacy = useCallback(() => {
+    void env.notebook.discardLegacy?.().then((done) => {
+      if (done) setLegacy('none');
+    });
+  }, [env]);
 
   const removed = useCallback((id: string) => setEntries((current) => current?.filter((entry) => entry.id !== id) ?? current), []);
 
@@ -278,12 +295,28 @@ export function CarnetBody({
     .filter((entry) => entry.status === 'kept')
     .sort((a, b) => Date.parse(b.createdAt) - Date.parse(a.createdAt));
   const catchUp = game === null ? [] : catchUpMoments(photoCatchUp(catchUpStandingOf(game), kept.map((entry) => entry.momentId)));
-  const caught = new Set(catchUp.map((entry) => entry.moment.id));
-  const pending = entries.filter((entry) => entry.status === 'pending' && !caught.has(entry.momentId));
+  const pending = pendingOf(entries);
 
   return (
     <div className="flex flex-col gap-4 px-4 py-3">
-      {entries.length === 0 ? (
+      {legacy === 'quarantined' ? (
+        <section data-carnet-legacy="" className="flex flex-col gap-2 rounded-card px-3 py-3" style={{ backgroundColor: GAME_CARD }}>
+          <p className="text-body" style={{ color: GAME_INK }}>
+            {gameText('game.notebook.legacy_quarantine')}
+          </p>
+          <button
+            type="button"
+            data-carnet-legacy-delete=""
+            onClick={discardLegacy}
+            className="self-start rounded-chip px-3 text-check font-semibold"
+            style={{ minHeight: 44, color: GAME_WARM }}
+          >
+            {gameText('game.notebook.legacy_delete')}
+          </button>
+        </section>
+      ) : null}
+
+      {pending.length === 0 && kept.length === 0 && catchUp.length === 0 ? (
         <section className="flex items-end gap-2 px-1">
           <GameBird bird="meeGuide" size={80} />
           <p className="flex-1 pb-2 text-body" style={{ color: GAME_INK }}>
@@ -320,6 +353,11 @@ export function CarnetBody({
           </ul>
         </section>
       )}
+
+      <p data-carnet-size="" className="px-1 text-caption" style={{ color: GAME_INK_2 }}>
+        {kept.length === 0 ? null : `${gameText('game.notebook.size', { size: notebookSizeLabel(notebookBytes(kept), currentInterfaceLanguage()) })} `}
+        {gameText('game.notebook.device_only')}
+      </p>
 
       {taking === null ? null : (
         <GamePhotoFlow

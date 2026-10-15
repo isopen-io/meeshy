@@ -154,6 +154,8 @@ struct ComposerSceneSurface: View {
     /// pour les portes elles-mêmes. Une entrée absente vaut « rien à dire ».
     var railBadges: [ComposerRailDoor: Int] = [:]
     var onRailDoor: ((ComposerRailDoor) -> Void)?
+    /// L'appui long d'une porte (#10357) : la photothèque propose ses sources.
+    var onRailDoorLongPress: ComposerRailDoorLongPressHandler?
     var onRailToolControl: ((ComposerToolControl) -> Void)?
     var onRailExitTool: (() -> Void)?
 
@@ -498,6 +500,7 @@ struct ComposerSceneSurface: View {
             ComposerLeadingRail(mode: .doors(portes),
                                 plateauTint: plateauTint,
                                 onDoor: onRailDoor,
+                                onDoorLongPress: onRailDoorLongPress,
                                 // Il FLOTTE : pas de ressort, sinon son socle
                                 // s'étire sur toute la hauteur de la scène et
                                 // la dernière entrée déborde sous elle.
@@ -534,6 +537,7 @@ struct ComposerSceneSurface: View {
             ComposerLeadingRail(mode: .doors(portes),
                                 plateauTint: plateauTint,
                                 onDoor: onRailDoor,
+                                onDoorLongPress: onRailDoorLongPress,
                                 axis: .horizontal,
                                 systemEntry: railSystemEntry,
                                 systemEntryAfter: railSystemEntryAfter,
@@ -573,6 +577,20 @@ struct ComposerSceneSurface: View {
     /// Le cadre du DESSIN dans l'écran : le panneau d'options s'y repère pour
     /// laisser voir l'objet qu'il règle (#9495).
     @State private var sceneCardFrame: CGRect = .null
+
+    /// Le cadre de la scène LIBRE, dans le même repère que la carte : le rail
+    /// droit s'y borne à la hauteur de la carte (#10542).
+    @State private var freeZoneFrame: CGRect = .null
+
+    /// Les marges verticales du rail droit : du haut de la carte, et au-dessus
+    /// de la remontée tant que sa colonne y tient (`trailingRailBand`).
+    private var trailingBand: ComposerRailBand {
+        let pied = [onUndo != nil, onRedo != nil, !toolIsOpen && onTimeButton != nil].filter { $0 }.count
+        return ComposerRailGeometry.trailingRailBand(
+            freeZone: freeZoneFrame, card: sceneCardFrame,
+            columnHeight: ComposerRailGeometry.columnHeight(entries: trailingOptions.count + pied,
+                                                            withSpring: !trailingFootFollowsOptions))
+    }
 
     /// **La hauteur des étages du bas, mesurée** (#8712) — ce qu'un panneau
     /// ouvert y occupe, et donc de combien la scène doit REMONTER.
@@ -618,6 +636,7 @@ struct ComposerSceneSurface: View {
         .onPreferenceChange(ComposerSceneCardLeadingKey.self) { sceneCardLeading = $0 }
         .onPreferenceChange(ComposerSceneCardWidthPreferenceKey.self) { sceneCardWidth = $0 }
         .onPreferenceChange(ComposerSceneCardFrameKey.self) { sceneCardFrame = $0 }
+        .onPreferenceChange(ComposerFreeZoneFrameKey.self) { freeZoneFrame = $0 }
         .onPreferenceChange(ComposerLowerFloorsHeightKey.self) { lowerFloorsHeight = $0 }
         // **La bascule outil <-> scène se fait en fondu** (#8652), coupé sous
         // Reduce Motion ; VoiceOver est prévenu que l'écran a changé, et son
@@ -953,11 +972,19 @@ struct ComposerSceneSurface: View {
             if timelinePanel == nil { composingFloors } else { friseRail }
         }
         .frame(maxWidth: .infinity, maxHeight: .infinity, alignment: .bottom)
+        .background {
+            GeometryReader { geo in
+                Color.clear.preference(key: ComposerFreeZoneFrameKey.self, value: geo.frame(in: .global))
+            }
+        }
         // **Les options du sous-outil ouvert, à droite depuis le haut** (#9138)
         // — sur la scène libre, alignées sur le haut de la colonne droite.
         .overlay {
             if timelinePanel == nil, let inlinePanel {
                 inlinePanel
+                    // Aligné sur le haut de la colonne droite, donc de la carte
+                    // (#10542) : la plaque pose elle-même sa gouttière.
+                    .padding(.top, trailingBand.top - ComposerRailGeometry.gutter)
                     .environment(\.composerSceneCardFrame, sceneCardFrame)
                     .transition(.opacity)
             }
@@ -1007,9 +1034,12 @@ struct ComposerSceneSurface: View {
                                      onTime: toolIsOpen ? nil : onTimeButton,
                                      timeIsOpen: timeIsOpen,
                                      footFollowsOptions: trailingFootFollowsOptions)
-                    .padding(.top, ComposerRailGeometry.gutter)
+                    // **Dans la hauteur de la CARTE** (#10542) : un outil
+                    // ouvert retire la barre haute, et la scène libre remonte
+                    // au-dessus de la carte — le rail, lui, n'en sort pas.
+                    .padding(.top, trailingBand.top)
                     .padding(.trailing, edge)
-                    .padding(.bottom, ComposerRailGeometry.floatingBottomInset)
+                    .padding(.bottom, trailingBand.bottom)
                     .transition(.opacity)
                 }
             }
@@ -1086,6 +1116,15 @@ struct ComposerSafeTopKey: PreferenceKey {
     static let defaultValue: CGFloat = 0
     static func reduce(value: inout CGFloat, nextValue: () -> CGFloat) {
         value = max(value, nextValue())
+    }
+}
+
+/// Le cadre de la scène libre, en repère global comme celui de la carte (#10542).
+struct ComposerFreeZoneFrameKey: PreferenceKey {
+    static let defaultValue: CGRect = .null
+    static func reduce(value: inout CGRect, nextValue: () -> CGRect) {
+        let suivant = nextValue()
+        if !suivant.isNull { value = suivant }
     }
 }
 

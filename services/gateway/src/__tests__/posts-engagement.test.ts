@@ -10,6 +10,7 @@
 
 import { describe, it, expect, beforeEach, jest } from '@jest/globals';
 import { PostService } from '../services/PostService';
+import { postCounterWritesOf } from './helpers/posts-counter-writes';
 
 const POST_A = '507f1f77bcf86cd799439011';
 const POST_B = '507f1f77bcf86cd799439012';
@@ -43,9 +44,11 @@ const buildPrisma = (overrides: Partial<Record<string, unknown>> = {}) => {
     upsert: jest.fn<(arg?: unknown) => Promise<UpsertResult>>().mockResolvedValue({ created: true }),
     findUnique: jest.fn<(arg?: unknown) => Promise<{ id: string } | null>>().mockResolvedValue(null),
   };
+  const $runCommandRaw = jest.fn<(arg?: unknown) => Promise<unknown>>().mockResolvedValue({ ok: 1 });
   const prisma = {
     post,
     postEngagement,
+    $runCommandRaw,
     $transaction: jest.fn(async (fn: unknown) => {
       if (typeof fn === 'function') return (fn as (tx: unknown) => unknown)(prisma);
       return Promise.all(fn as Promise<unknown>[]);
@@ -55,6 +58,7 @@ const buildPrisma = (overrides: Partial<Record<string, unknown>> = {}) => {
   return prisma as unknown as ConstructorParameters<typeof PostService>[0] & {
     post: typeof post;
     postEngagement: typeof postEngagement;
+    $runCommandRaw: typeof $runCommandRaw;
   };
 };
 
@@ -81,6 +85,17 @@ describe('PostService.recordEngagementBatch — ingestion', () => {
     expect(upsertArg().where).toEqual({
       sessionId: '11111111-1111-1111-1111-111111111111',
     });
+  });
+
+  it('une session de lecture a une durée de conservation : 90 jours (revue de conformité O7, #10510)', async () => {
+    const before = Date.now();
+    await service.recordEngagementBatch([mkSession()], 'u1');
+    const expiresAt = upsertArg().create.expiresAt as Date;
+
+    expect(expiresAt).toBeInstanceOf(Date);
+    expect(Math.round((expiresAt.getTime() - before) / 86_400_000)).toBe(90);
+    // Une mise à jour (rejeu d'un ACK perdu) ne prolonge pas la conservation.
+    expect(upsertArg().update.expiresAt).toBeUndefined();
   });
 
   it('persists the route userId, never the client-supplied userId', async () => {
@@ -135,8 +150,8 @@ describe('PostService.recordEngagementBatch — agrégation dénormalisée (INSE
   });
 
   const lastUpdateData = () => {
-    const calls = prisma.post.update.mock.calls;
-    return calls.length ? (calls[calls.length - 1][0] as { data: Record<string, unknown> }).data : undefined;
+    const writes = postCounterWritesOf(prisma.$runCommandRaw);
+    return writes.length ? writes[writes.length - 1].data : undefined;
   };
 
   it('increments postOpenCount on a NEW reels-surface session', async () => {
@@ -183,7 +198,7 @@ describe('PostService.recordEngagementBatch — agrégation dénormalisée (INSE
       [mkSession({ contentType: 'REEL', surface: 'reels' })],
       'u1',
     );
-    expect(prisma.post.update).not.toHaveBeenCalled();
+    expect(prisma.$runCommandRaw).not.toHaveBeenCalled();
   });
 
   it('adds playCount by the number of completions (watchSamples-derived completed)', async () => {

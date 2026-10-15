@@ -77,7 +77,7 @@ final class MediaGalleryChromeReachTests: XCTestCase {
     }
 
     private static var menuLabel: String {
-        String(localized: "gallery.menu.more", defaultValue: "Autres actions", bundle: .main)
+        FullscreenMoreMenuLabel.text
     }
 
     /// L'empreinte d'un aplat, ENCODÉE par le SDK plutôt qu'écrite à la main : sa

@@ -224,7 +224,7 @@ const f = {
   'admin.monitoring.routes.blind.other': 'Otro límite señalado',
 
   'admin.monitoring.backups.title': 'Copias de seguridad',
-  'admin.monitoring.backups.hint': 'La producción se respalda cada noche a medianoche, hora de París. Un control a las 5 h avisa a los administradores si algo falla.',
+  'admin.monitoring.backups.hint': 'Cada noche se hace una copia completa — base verificada, medios, configuración —; «Próxima copia» indica cuándo. Un control a las 5 h, hora de París, avisa a los administradores si algo falla.',
   'admin.monitoring.backups.state.ok': 'Correcta',
   'admin.monitoring.backups.state.failed': 'Fallida',
   'admin.monitoring.backups.state.stale': 'Demasiado antigua',

@@ -235,7 +235,7 @@ export function registerMessagesWriteRoutes(fastify: FastifyInstance, deps: Mess
       // circulation : base, mentions, retraduction, payload diffusé.
       const reconciledLinks = await reconcileEditedLinks({
         linkService: trackingLinkService,
-        message: { id: messageId, conversationId: message.conversationId },
+        message: { id: messageId, conversationId: message.conversationId, sender: message.sender },
         content: trimmedContent,
         editorUserId: userId,
         onError: (err) => logger.error('Error processing tracking links in edit', err as Error),
@@ -295,6 +295,7 @@ export function registerMessagesWriteRoutes(fastify: FastifyInstance, deps: Mess
         senderUserId: message.sender?.userId ?? null,
         previousContent: message.content,
         content: editedContent,
+        editedAt,
       });
 
       // Ce que cette édition doit aux gens qu'elle NOMME. Ce transport — celui
