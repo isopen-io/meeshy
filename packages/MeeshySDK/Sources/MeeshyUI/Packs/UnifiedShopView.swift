@@ -16,6 +16,8 @@ public final class PackShopStore: ObservableObject {
 
     private let service: any PackShopProviding
     private let makeRequestId: () -> String
+    /// Les domaines de la dernière lecture : un refus relit la MÊME vitrine.
+    private var shownDomains: [PackDomain]?
 
     public init(service: any PackShopProviding = PackShopService.shared,
                 makeRequestId: @escaping () -> String = { UUID().uuidString }) {
@@ -23,9 +25,12 @@ public final class PackShopStore: ObservableObject {
         self.makeRequestId = makeRequestId
     }
 
-    public func load() async {
+    /// `domains` : ceux que la vitrine montre — une vitrine filtrée ne lit
+    /// pas les autres (`nil` = tous les domaines servis).
+    public func load(domains: [PackDomain]? = nil) async {
+        shownDomains = domains
         do {
-            let response = try await service.shop(domains: nil)
+            let response = try await service.shop(domains: domains)
             state = state.loaded(response)
             loadFailed = false
         } catch {
@@ -60,7 +65,7 @@ public final class PackShopStore: ObservableObject {
             state = state.purchaseRefused(domain, slug, restoring: previous,
                                           failure: insufficient ? .insufficientMeeshes : .generic,
                                           definitive: definitive)
-            if definitive && !insufficient { await load() }
+            if definitive && !insufficient { await load(domains: shownDomains) }
         }
     }
 
@@ -73,7 +78,7 @@ public final class PackShopStore: ObservableObject {
             state = state.installSettled(domain, slug, confirmed: confirmed)
         } catch {
             state = state.installRefused(domain, slug, restoring: previous)
-            if PackHTTPStatus.code(of: error) == 403 { await load() }
+            if PackHTTPStatus.code(of: error) == 403 { await load(domains: shownDomains) }
         }
     }
 }
@@ -102,7 +107,7 @@ public struct UnifiedShopView: View {
             if domains.count > 1 { domainChips }
             shelf
         }
-        .task { await store.load() }
+        .task { await store.load(domains: domains) }
     }
 
     private var failureText: String? {
@@ -165,9 +170,23 @@ public struct UnifiedShopView: View {
     @ViewBuilder
     private var shelf: some View {
         if store.loadFailed {
-            Text(String(localized: "shop.error.load", defaultValue: "La boutique n’a pas pu se charger. Réessaie.", bundle: .module))
-                .font(.system(size: 13, weight: .medium))
-                .foregroundStyle(MeeshyColors.error)
+            VStack(alignment: .leading, spacing: MeeshySpacing.sm) {
+                Text(String(localized: "shop.error.load", defaultValue: "La boutique n’a pas pu se charger. Réessaie.", bundle: .module))
+                    .font(.system(size: 13, weight: .medium))
+                    .foregroundStyle(MeeshyColors.error)
+                Button {
+                    HapticFeedback.light()
+                    Task { await store.load(domains: domains) }
+                } label: {
+                    Text(String(localized: "common.retry", defaultValue: "Réessayer", bundle: .module))
+                        .font(.system(size: 13, weight: .semibold, design: .rounded))
+                        .padding(.horizontal, 14)
+                        .frame(minHeight: 44)
+                        .contentShape(Capsule())
+                }
+                .buttonStyle(.bordered)
+                .accessibilityIdentifier("shop.retry")
+            }
         } else if let packs = store.state.packs(in: selected), packs.isEmpty {
             Text(String(localized: "shop.empty", defaultValue: "Rien à découvrir ici pour l’instant.", bundle: .module))
                 .font(.system(size: 13))

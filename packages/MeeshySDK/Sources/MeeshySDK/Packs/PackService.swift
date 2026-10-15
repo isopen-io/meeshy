@@ -61,6 +61,24 @@ public struct PackRoutes: Sendable {
     }
 }
 
+/// **Un achat refusé dit POURQUOI** : le contrat de `POST …/:slug/purchase`
+/// documente quatre codes 409 (`INSUFFICIENT_MEESHES`, `PACK_ALREADY_OWNED`,
+/// `PACK_IS_FREE`, `REQUEST_ID_CONFLICT`). Sans cette déclaration le transport
+/// ne rend qu'une phrase (`MeeshyError.server(409, _)`) et la vitrine ne peut
+/// jamais dire « il te manque des Meeshes ». Écrit ici, à la main :
+/// `PacksEndpoint` est généré. Les lectures restent opaques — le repli d'un
+/// ancien serveur lit leur 404.
+public extension PacksEndpoint {
+    var rejectionPolicy: MeeshyEndpointRejectionPolicy {
+        switch self {
+        case .wallpaperBySlugPurchase, .avatarRingBySlugPurchase, .bannerBySlugPurchase:
+            return .structured
+        default:
+            return .opaque
+        }
+    }
+}
+
 public enum PackServiceError: Error, Equatable, Sendable {
     /// Le domaine n'est pas routable par ce client (`unknown`).
     case unroutableDomain

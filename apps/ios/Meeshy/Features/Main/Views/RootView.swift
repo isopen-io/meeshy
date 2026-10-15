@@ -644,12 +644,9 @@ struct RootView: View {
             // « rejoint » rien.
             UIApplication.shared.open(url)
 
-        case .game(let link):
-            // Une saison ou une semaine de ligue (#9947) : la page du Jeu, posée sur Progression et la fiche.
+        case .game(let link): // Saison ou semaine de ligue (#9947) : la page du Jeu, posée sur Progression et la fiche.
             router.openGame(at: GameNavigationMap.entry(for: link))
-
-        case .packShop(let domain):
-            router.openPackShop(domain: domain)
+        case .packShop(let domain): router.openPackShop(domain: domain) // La vitrine filtrée (#10632).
 
         case .unresolvedTrackedLink:
             // Le serveur ne connaît pas ce token, ou on n'a pas pu le joindre.

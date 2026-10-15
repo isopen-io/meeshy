@@ -150,6 +150,18 @@ final class PackShopTests: XCTestCase {
         XCTAssertEqual(mock.lastRequest?.bodyJSON?.count, 1, "le client n'envoie jamais de prix")
     }
 
+    func test_purchaseAddresses_declareStructuredRefusals_soTheInsufficientBalanceReachesTheScreen() throws {
+        let purchasable = PackDomain.allCases.filter(\.isPurchasable)
+        XCTAssertEqual(purchasable, [.wallpaper, .avatarRing, .banner])
+        for domain in purchasable {
+            let purchase = try XCTUnwrap(PackRoutes.of(domain)?.purchase, "\(domain)")
+            XCTAssertEqual(purchase("aurore").rejectionPolicy, .structured,
+                           "sans .structured, le 409 INSUFFICIENT_MEESHES arrive en .server(409) et l'écran ne dit jamais pourquoi")
+            XCTAssertEqual(PackRoutes.of(domain)?.catalogue.rejectionPolicy, .opaque)
+        }
+        XCTAssertEqual(PacksEndpoint.shop.rejectionPolicy, .opaque, "le repli d'un ancien serveur lit son 404 opaque")
+    }
+
     func test_purchase_aDomainWithoutPricesHasNoPurchaseAddress() async {
         do {
             _ = try await PackShopService(api: MockAPIClient()).purchase(domain: .sticker, slug: "mee", requestId: "req-geste-1")

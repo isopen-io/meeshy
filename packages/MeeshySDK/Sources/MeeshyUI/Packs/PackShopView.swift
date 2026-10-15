@@ -143,16 +143,26 @@ public struct PackShopView: View {
         .accessibilityElement(children: .contain)
     }
 
+    /// Le titre du bouton d'une rangée : acheter d'abord, installer ensuite.
+    static func buttonTitle(for row: PackRow) -> String {
+        if let price = row.price, row.needsPurchase {
+            return String(format: String(localized: "shop.buy.price", defaultValue: "Acheter · %lld", bundle: .module), price)
+        }
+        return row.installed
+            ? String(localized: "sticker.shop.remove", defaultValue: "Retirer", bundle: .module)
+            : String(localized: "sticker.shop.install", defaultValue: "Installer", bundle: .module)
+    }
+
+    /// Ce que VoiceOver lit : le geste, le pack et, pour un achat, son prix EN MEESHES.
+    static func voiceOverLabel(for row: PackRow) -> String {
+        guard let price = row.price, row.needsPurchase else { return "\(buttonTitle(for: row)) \(row.name)" }
+        return String(format: String(localized: "shop.buy.a11y", defaultValue: "Acheter %1$@ pour %2$lld Meeshes",
+                                     bundle: .module), row.name, price)
+    }
+
     private func toggleButton(_ row: PackRow) -> some View {
         let busy = pending.contains(row.slug)
-        let label: String
-        if let price = row.price, row.needsPurchase {
-            label = String(format: String(localized: "shop.buy.price", defaultValue: "Acheter · %lld", bundle: .module), price)
-        } else if row.installed {
-            label = String(localized: "sticker.shop.remove", defaultValue: "Retirer", bundle: .module)
-        } else {
-            label = String(localized: "sticker.shop.install", defaultValue: "Installer", bundle: .module)
-        }
+        let label = Self.buttonTitle(for: row)
         return Button {
             HapticFeedback.light()
             onToggle(row.slug)
@@ -175,7 +185,7 @@ public struct PackShopView: View {
         .buttonStyle(.plain)
         .disabled(busy)
         .opacity(busy ? 0.6 : 1)
-        .accessibilityLabel("\(label) \(row.name)")
+        .accessibilityLabel(Self.voiceOverLabel(for: row))
     }
 }
 

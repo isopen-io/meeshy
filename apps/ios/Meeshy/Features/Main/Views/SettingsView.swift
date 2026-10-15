@@ -587,6 +587,7 @@ struct SettingsView: View {
 
             Button {
                 HapticFeedback.light()
+                packsInitialDomain = nil
                 showPacks = true
             } label: {
                 settingsRow(icon: "shippingbox.fill", title: String(localized: "settings.packs.title", defaultValue: "Packs et téléchargements", bundle: .main), color: MeeshyColors.warningHex) {

@@ -79805,6 +79805,53 @@
         }
       }
     },
+    "shop.buy.a11y": {
+      "extractionState": "manual",
+      "localizations": {
+        "ar": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "شراء %1$@ مقابل %2$lld Meeshes"
+          }
+        },
+        "de": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "%1$@ für %2$lld Meeshes kaufen"
+          }
+        },
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Buy %1$@ for %2$lld Meeshes"
+          }
+        },
+        "es": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Comprar %1$@ por %2$lld Meeshes"
+          }
+        },
+        "fr": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Acheter %1$@ pour %2$lld Meeshes"
+          }
+        },
+        "it": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Acquista %1$@ per %2$lld Meeshes"
+          }
+        },
+        "pt-BR": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Comprar %1$@ por %2$lld Meeshes"
+          }
+        }
+      }
+    },
     "shop.buy.price": {
       "extractionState": "manual",
       "localizations": {

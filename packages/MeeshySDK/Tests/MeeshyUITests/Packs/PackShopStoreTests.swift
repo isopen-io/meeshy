@@ -8,10 +8,14 @@ private final class StubShopService: PackShopProviding, @unchecked Sendable {
     var installResult: Result<ShopPack, Error> = .failure(URLError(.notConnectedToInternet))
     private(set) var purchaseRequestIds: [String] = []
     private(set) var installCalls: [(Bool, PackDomain, String)] = []
+    private(set) var shopDomains: [[PackDomain]?] = []
 
     init(shop: PackShopResponse) { shopResult = .success(shop) }
 
-    func shop(domains: [PackDomain]?) async throws -> PackShopResponse { try shopResult.get() }
+    func shop(domains: [PackDomain]?) async throws -> PackShopResponse {
+        shopDomains.append(domains)
+        return try shopResult.get()
+    }
 
     func setInstalled(_ installed: Bool, domain: PackDomain, slug: String) async throws -> ShopPack {
         installCalls.append((installed, domain, slug))
@@ -47,6 +51,24 @@ final class PackShopStoreTests: XCTestCase {
 
         XCTAssertEqual(store.state.packs(in: .wallpaper)?.map(\.slug), ["aurore"])
         XCTAssertEqual(store.state.balance, 42)
+    }
+
+    func test_load_asksOnlyForTheDomainsTheShelfShows() async {
+        let service = StubShopService(shop: shop([paid("aurore")]))
+        let store = makeStore(service)
+
+        await store.load(domains: [.wallpaper])
+
+        XCTAssertEqual(service.shopDomains, [[.wallpaper]],
+                       "une vitrine filtrée ne lit pas les quatre autres domaines (cinq requêtes sur un ancien serveur)")
+    }
+
+    func test_buyButton_saysThePriceInMeeshesToVoiceOver() {
+        let label = PackShopView.voiceOverLabel(for: UnifiedShopView.row(paid("aurore", price: 20)))
+
+        XCTAssertTrue(label.contains("aurore"))
+        XCTAssertTrue(label.contains("20"))
+        XCTAssertTrue(label.contains("Meeshes"), "« Acheter · 20 » ne dit pas ce que coûte le geste")
     }
 
     func test_buy_isOptimisticThenConfirmedByTheServer() async {
