@@ -30,11 +30,19 @@ public struct PackRow: Identifiable, Hashable, Sendable {
     public let cover: PackCover
     /// « Rang Ambassadeur uniquement » — la loi d'usage, déjà traduite.
     public let usageText: String?
+    /// En Meeshes ; `nil` = gratuit (#10632).
+    public let price: Int?
+    /// Un pack payant non possédé s'ACHÈTE ; les autres s'installent.
+    public let owned: Bool
 
     public var id: String { slug }
 
+    /// Le geste du bouton : acheter d'abord, installer ensuite.
+    public var needsPurchase: Bool { price != nil && !owned }
+
     public init(slug: String, name: String, author: String = "", description: String = "",
-                installed: Bool, removable: Bool = true, cover: PackCover = .none, usageText: String? = nil) {
+                installed: Bool, removable: Bool = true, cover: PackCover = .none, usageText: String? = nil,
+                price: Int? = nil, owned: Bool = true) {
         self.slug = slug
         self.name = name
         self.author = author
@@ -43,6 +51,8 @@ public struct PackRow: Identifiable, Hashable, Sendable {
         self.removable = removable
         self.cover = cover
         self.usageText = usageText
+        self.price = price
+        self.owned = owned
     }
 }
 
@@ -59,13 +69,16 @@ public struct PackShopView: View {
     /// Le dernier geste a été refusé et annulé : la Boutique le DIT, sans
     /// quoi le bouton revenu en arrière aurait l'air d'un tap perdu.
     let showsFailure: Bool
+    /// Le message d'un refus précis (solde insuffisant…) ; à défaut, le message générique.
+    let failureText: String?
     let onToggle: (String) -> Void
 
-    public init(rows: [PackRow]?, pending: Set<String>, showsFailure: Bool,
+    public init(rows: [PackRow]?, pending: Set<String>, showsFailure: Bool, failureText: String? = nil,
                 onToggle: @escaping (String) -> Void) {
         self.rows = rows
         self.pending = pending
         self.showsFailure = showsFailure
+        self.failureText = failureText
         self.onToggle = onToggle
     }
 
@@ -74,7 +87,7 @@ public struct PackShopView: View {
     public var body: some View {
         VStack(alignment: .leading, spacing: MeeshySpacing.md) {
             if showsFailure {
-                Text(String(localized: "sticker.shop.failed",
+                Text(failureText ?? String(localized: "sticker.shop.failed",
                             defaultValue: "Le pack n’a pas pu changer d’état. Réessaie.", bundle: .module))
                     .font(.system(size: 13, weight: .medium))
                     .foregroundStyle(MeeshyColors.error)
@@ -130,11 +143,26 @@ public struct PackShopView: View {
         .accessibilityElement(children: .contain)
     }
 
-    private func toggleButton(_ row: PackRow) -> some View {
-        let busy = pending.contains(row.slug)
-        let label = row.installed
+    /// Le titre du bouton d'une rangée : acheter d'abord, installer ensuite.
+    static func buttonTitle(for row: PackRow) -> String {
+        if let price = row.price, row.needsPurchase {
+            return String(format: String(localized: "shop.buy.price", defaultValue: "Acheter · %lld", bundle: .module), price)
+        }
+        return row.installed
             ? String(localized: "sticker.shop.remove", defaultValue: "Retirer", bundle: .module)
             : String(localized: "sticker.shop.install", defaultValue: "Installer", bundle: .module)
+    }
+
+    /// Ce que VoiceOver lit : le geste, le pack et, pour un achat, son prix EN MEESHES.
+    static func voiceOverLabel(for row: PackRow) -> String {
+        guard let price = row.price, row.needsPurchase else { return "\(buttonTitle(for: row)) \(row.name)" }
+        return String(format: String(localized: "shop.buy.a11y", defaultValue: "Acheter %1$@ pour %2$lld Meeshes",
+                                     bundle: .module), row.name, price)
+    }
+
+    private func toggleButton(_ row: PackRow) -> some View {
+        let busy = pending.contains(row.slug)
+        let label = Self.buttonTitle(for: row)
         return Button {
             HapticFeedback.light()
             onToggle(row.slug)
@@ -157,7 +185,7 @@ public struct PackShopView: View {
         .buttonStyle(.plain)
         .disabled(busy)
         .opacity(busy ? 0.6 : 1)
-        .accessibilityLabel("\(label) \(row.name)")
+        .accessibilityLabel(Self.voiceOverLabel(for: row))
     }
 }
 

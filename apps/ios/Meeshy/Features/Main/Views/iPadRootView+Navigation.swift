@@ -164,6 +164,8 @@ extension iPadRootView {
         case .game(let link):
             // Même porte que l'iPhone (#9947) : la chaîne du Jeu, dans le panneau.
             router.openGame(at: GameNavigationMap.entry(for: link))
+        case .packShop(let domain):
+            router.openPackShop(domain: domain)
         case .unresolvedTrackedLink:
             FeedbackToastManager.shared.showError(
                 String(localized: "deepLink.tracked.unresolved",
