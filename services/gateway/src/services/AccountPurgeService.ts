@@ -218,6 +218,9 @@ export async function anonymizeUserIdentity(
       displayName: null,
       avatar: null,
       banner: null,
+      // #10632 — le décor de profil ÉQUIPÉ se voit des autres : il part avec l'avatar et la bannière.
+      equippedAvatarRing: null,
+      equippedBanner: null,
       bio: '',
       birthDate: null,
       searchTokens: [],

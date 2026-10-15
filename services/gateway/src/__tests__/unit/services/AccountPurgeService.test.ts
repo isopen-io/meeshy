@@ -334,6 +334,14 @@ describe('anonymizeUserIdentity', () => {
     });
   });
 
+  it('retire le contour d’avatar et la bannière de design ÉQUIPÉS (#10632) : un compte supprimé ne garde aucun décor de profil', async () => {
+    const prisma = fakeUserPrisma();
+    await anonymizeUserIdentity(prisma, USER_ID);
+
+    const [{ data }] = (prisma.user.updateMany as jest.Mock<any>).mock.calls[0] as [{ data: any }];
+    expect(data).toMatchObject({ equippedAvatarRing: null, equippedBanner: null });
+  });
+
   it('clears authentication secrets — 2FA, Signal Protocol keys, and rehashes the password', async () => {
     const prisma = fakeUserPrisma();
     await anonymizeUserIdentity(prisma, USER_ID);
