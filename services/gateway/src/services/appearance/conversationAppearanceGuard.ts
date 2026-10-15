@@ -74,8 +74,7 @@ async function photoAvailable({ prisma, conversationId, userId }: AppearanceGuar
       isViewOnce: true,
       isBlurred: true,
       effectFlags: true,
-      viewOnceBurnedAt: true,
-      message: { select: { id: true, createdAt: true, conversationId: true, deletedAt: true, expiresAt: true, ephemeralDuration: true, isViewOnce: true, isBlurred: true, effectFlags: true } },
+      message: { select: { id: true, viewOnceBurnedAt: true, createdAt: true, conversationId: true, deletedAt: true, expiresAt: true, ephemeralDuration: true, isViewOnce: true, isBlurred: true, effectFlags: true } },
     },
   });
   const message = attachment?.message;
@@ -89,7 +88,7 @@ async function photoAvailable({ prisma, conversationId, userId }: AppearanceGuar
     !protection.blurred &&
     attachment.mimeType.startsWith('image/') &&
     !maskedAttachment(attachment) &&
-    attachment.viewOnceBurnedAt == null;
+    message.viewOnceBurnedAt == null;
   if (!servable) return false;
   return readerMayReadMessage(prisma, { reader: { kind: 'user', userId }, message, now: new Date(), whenHidingUnreadable: 'refuse' });
 }
