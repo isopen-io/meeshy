@@ -7,6 +7,7 @@ const arStickerPacks = {
   'stickerPacks.send': 'إرسال',
   'stickerPacks.count': '{count} ملصقات',
   'stickerPacks.tab.shop': 'المتجر',
+  'stickerPacks.shopMore': 'المزيد في المتجر',
   'stickerPacks.install': 'تثبيت',
   'stickerPacks.uninstall': 'إزالة',
   'stickerPacks.shop.hint': 'ثبّت الحزم التي تريدها في ملصقاتك وأزل الباقي. تبقى الملصقات المُرسلة مقروءة.',

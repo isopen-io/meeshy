@@ -7,6 +7,7 @@ const ptStickerPacks = {
   'stickerPacks.send': 'Enviar',
   'stickerPacks.count': '{count} figurinhas',
   'stickerPacks.tab.shop': 'Loja',
+  'stickerPacks.shopMore': 'Mais na loja',
   'stickerPacks.install': 'Instalar',
   'stickerPacks.uninstall': 'Remover',
   'stickerPacks.shop.hint': 'Instale os pacotes que quer ver nas suas figurinhas e remova os outros. As figurinhas já enviadas continuam legíveis.',
