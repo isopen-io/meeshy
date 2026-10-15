@@ -41,6 +41,8 @@ struct SettingsView: View {
     @State private var showVoiceProfileManage = false
     @State private var showMediaDownload = false
     @State private var showPacks = false
+    @State private var packsInitialDomain: PackDomain?
+    @ObservedObject private var packShopLauncher = PackShopLauncher.shared
     @State private var scrollRelay = ScrollOffsetRelay()
     /// Miroirs des trois interrupteurs d'interface (#6482), lus UNE fois au
     /// montage comme `interfaceLanguageChoice` : chaque bascule écrit le miroir
@@ -150,7 +152,11 @@ struct SettingsView: View {
         .sheet(isPresented: $showSupport) { SupportView() }
         .sheet(isPresented: $showDataStorage) { DataStorageView() }
         .sheet(isPresented: $showMediaDownload) { MediaDownloadSettingsView() }
-        .sheet(isPresented: $showPacks) { PacksSettingsView() }
+        .sheet(isPresented: $showPacks) { PacksSettingsView(initialDomain: packsInitialDomain) }
+        .onReceive(packShopLauncher.$pending.compactMap { $0 }) { _ in
+            packsInitialDomain = packShopLauncher.consume()?.domain
+            showPacks = true
+        }
         .sheet(isPresented: $showDeleteAccount) { DeleteAccountView() }
         .task { await prefs.fetchFromBackend() }
     }
