@@ -88,7 +88,7 @@ extension PacksSettingsView {
             domain = entry
         } label: {
             Text(UnifiedShopView.title(of: entry))
-                .font(.system(size: 13, weight: .semibold, design: .rounded))
+                .font(MeeshyFont.relative(13, weight: .semibold, design: .rounded))
                 .foregroundStyle(isSelected ? Color.white : theme.textPrimary)
                 .padding(.horizontal, 14)
                 .frame(minHeight: 36)

@@ -126,7 +126,7 @@ public struct UnifiedShopView: View {
     private var balanceLine: some View {
         if let balance = store.state.balance {
             Text(String(format: String(localized: "shop.balance", defaultValue: "Meeshes : %lld", bundle: .module), balance))
-                .font(.system(size: 13, weight: .semibold, design: .rounded))
+                .font(MeeshyFont.relative(13, weight: .semibold, design: .rounded))
                 .foregroundStyle(.secondary)
                 .accessibilityIdentifier("shop.balance")
         }
@@ -150,7 +150,7 @@ public struct UnifiedShopView: View {
             store.dismissFailure()
         } label: {
             Text(Self.title(of: domain))
-                .font(.system(size: 13, weight: .semibold, design: .rounded))
+                .font(MeeshyFont.relative(13, weight: .semibold, design: .rounded))
                 .foregroundStyle(isSelected ? Color.white : Color.primary)
                 .padding(.horizontal, 14)
                 .frame(minHeight: 36)
@@ -173,14 +173,14 @@ public struct UnifiedShopView: View {
         if store.loadFailed {
             VStack(alignment: .leading, spacing: MeeshySpacing.sm) {
                 Text(String(localized: "shop.error.load", defaultValue: "La boutique n’a pas pu se charger. Réessaie.", bundle: .module))
-                    .font(.system(size: 13, weight: .medium))
+                    .font(MeeshyFont.relative(13, weight: .medium))
                     .foregroundStyle(MeeshyColors.error)
                 Button {
                     HapticFeedback.light()
                     Task { await store.load(domains: domains) }
                 } label: {
                     Text(String(localized: "common.retry", defaultValue: "Réessayer", bundle: .module))
-                        .font(.system(size: 13, weight: .semibold, design: .rounded))
+                        .font(MeeshyFont.relative(13, weight: .semibold, design: .rounded))
                         .padding(.horizontal, 14)
                         .frame(minHeight: 44)
                         .contentShape(Capsule())
@@ -190,7 +190,7 @@ public struct UnifiedShopView: View {
             }
         } else if let packs = store.state.packs(in: selected), packs.isEmpty {
             Text(String(localized: "shop.empty", defaultValue: "Rien à découvrir ici pour l’instant.", bundle: .module))
-                .font(.system(size: 13))
+                .font(MeeshyFont.relative(13))
                 .foregroundStyle(.secondary)
         } else {
             let domain = selected
