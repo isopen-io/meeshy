@@ -104,6 +104,12 @@ final class ProfileDecorModel: ObservableObject {
         publish(state.decor)
     }
 
+    /// Une photo de bannière téléversée reprend la main sur le design (comme le web) : sans ce
+    /// retrait, la nouvelle image resterait cachée dessous. Même chemin que le toucher « Aucun ».
+    func yieldBannerToUploadedPhoto() async {
+        await equip(nil, side: .banner)
+    }
+
     private func receive(_ event: ProfileDecorUpdatedEvent) {
         guard let id = userId(), event.userId == id else { return }
         accepted = event.decor
@@ -359,6 +365,11 @@ struct ProfileOwnBanner: View {
     let user: MeeshyUser?
     let accentColor: String
     let isDark: Bool
+
+    /// La photo que le toucher ouvre en plein écran : aucune quand un design la recouvre.
+    static func openablePhoto(of user: MeeshyUser?) -> String? {
+        ProfileDecorResolver.banner(user?.profileDecor?.banner) == nil ? user?.banner : nil
+    }
 
     var body: some View {
         if let design = ProfileDecorResolver.banner(user?.profileDecor?.banner) {

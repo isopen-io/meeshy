@@ -82,6 +82,7 @@ const enStickerPacks = {
   'packs.shop.empty': "No packs here yet.",
   'packs.shop.domains': "Shop category",
   'packs.shop.hint': "Every pack: stickers, frames, backgrounds, rings and banners. What you own shows up in the screens that use it.",
+  'packs.retry': "Try again",
 } satisfies StickerPacksCatalog;
 
 export default enStickerPacks;

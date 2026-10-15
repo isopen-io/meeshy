@@ -15,6 +15,7 @@ const pt = {
   'appearance.solid': 'Cor lisa',
   'appearance.photo': 'Foto da conversa',
   'appearance.photo_empty': 'Nenhuma foto foi enviada nesta conversa',
+  'appearance.photo_unavailable': 'Não é possível carregar as fotos agora',
   'appearance.photo_more': 'Mais fotos',
   'appearance.photo_item': 'Foto {index}',
   'appearance.veil': 'Véu',

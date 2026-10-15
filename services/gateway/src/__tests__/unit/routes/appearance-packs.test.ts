@@ -54,8 +54,8 @@ const REGISTRY = [
   entry('avatar-ring', 'contours', { origin: 'builtin', installedByDefault: true, removable: false, usage: { kind: 'free', surfaces: ['avatar'] } }),
 ];
 
-async function shopApp(extra: readonly ReturnType<typeof entry>[] = []) {
-  const db = appearancePrisma();
+async function shopApp(extra: readonly ReturnType<typeof entry>[] = [], options: { readonly db?: ReturnType<typeof appearancePrisma>; readonly hidden?: readonly string[] } = {}) {
+  const db = options.db ?? appearancePrisma();
   const emitted: Emitted[] = [];
   const io = { to: (room: string) => ({ emit: (event: string, payload: unknown) => void emitted.push({ room, event, payload }) }) };
   const app: FastifyInstance = Fastify({ logger: false });
@@ -65,7 +65,8 @@ async function shopApp(extra: readonly ReturnType<typeof entry>[] = []) {
     const userId = typeof request.headers['x-user'] === 'string' ? request.headers['x-user'] : ALICE;
     (request as unknown as Record<string, unknown>).authContext = { type: 'user', isAuthenticated: true, isAnonymous: false, userId, registeredUser: { id: userId, role: 'USER' } };
   });
-  const index = buildPackIndex({ registries: [[...REGISTRY, ...extra]], retained: [] });
+  const hide = (pack: ReturnType<typeof entry>) => (options.hidden?.includes(pack.slug) ? { ...pack, hidden: true } : pack);
+  const index = buildPackIndex({ registries: [[...REGISTRY, ...extra].map(hide)], retained: [] });
   await app.register(wallpaperPacksRoutes, { prefix: '/packs/wallpaper', index });
   await app.register(avatarRingPacksRoutes, { prefix: '/packs/avatar-ring', index });
   await app.register(bannerPacksRoutes, { prefix: '/packs/banner', index });
@@ -185,6 +186,22 @@ describe('achat en Meeshes', () => {
     expect([first, second].find((response) => response.statusCode === 409)?.json().code).toBe('PACK_ALREADY_OWNED');
     expect(db.ledger.filter((line) => line.reason === 'spend')).toHaveLength(1);
     expect(db.ownerships).toHaveLength(1);
+  });
+
+  it('rejouer le MÊME geste après que le pack a été masqué rend l’achat déjà payé — jamais un 404 qui ferait croire à un échec — et un geste neuf reste refusé', async () => {
+    const before = await shopApp();
+    before.db.grant(ALICE, 80);
+    before.db.grant(BOB, 80);
+    expect((await purchase(before.app, 'prestige', 'geste-0015')).statusCode).toBe(200);
+    const after = await shopApp([], { db: before.db, hidden: ['prestige'] });
+
+    const replay = await purchase(after.app, 'prestige', 'geste-0015');
+    const fresh = await purchase(after.app, 'prestige', 'geste-0016', BOB);
+
+    expect(replay.statusCode).toBe(200);
+    expect(replay.json().data).toMatchObject({ balance: 30, pack: { slug: 'prestige', owned: true } });
+    expect(fresh.statusCode).toBe(404);
+    expect(before.db.ledger.filter((line) => line.reason === 'spend')).toHaveLength(1);
   });
 
   it('diffuse pack:installation-updated sur user:<id> avec owned: true', async () => {

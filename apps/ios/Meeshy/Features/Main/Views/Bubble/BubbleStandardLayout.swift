@@ -771,7 +771,8 @@ struct BubbleStandardLayout: View {
                     audioQueueTailProvider: audioQueueTailProvider,
                     parentIsMe: content.isMe,
                     voiceConsentMissing: voiceConsentMissing,
-                    onTapConsentNotice: onTapConsentNotice
+                    onTapConsentNotice: onTapConsentNotice,
+                    onOpenFullscreen: onMediaTap
                 )
             } else {
                 ForEach(audioAttachments) { attachment in

@@ -852,9 +852,11 @@ extension StoryViewModel {
     }
 
     /// Seul un fichier écrit sous l'extension d'un conteneur ANIMÉ en porte
-    /// (`StoryOfflineMediaWriter`) ; les JPEG et PNG fixes ne sont pas relus.
+    /// (`StoryOfflineMediaWriter`). Un `.png` est relu, car un Mee part en PNG
+    /// animé (#10639) ; `container` écarte le PNG fixe, qui n'a pas d'`acTL`.
+    /// Les JPEG ne sont pas relus.
     private static func animatedStickerBytes(at url: URL) -> Data? {
-        guard ["gif", "webp"].contains(url.pathExtension.lowercased()),
+        guard ["gif", "webp", "png"].contains(url.pathExtension.lowercased()),
               let data = try? Data(contentsOf: url),
               AnimatedImageEligibility.container(data) != nil else { return nil }
         return data

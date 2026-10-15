@@ -152,3 +152,76 @@ describe('un événement de MON compte dont le décor est illisible', () => {
     expect(decorOf(client)).toEqual({ avatarRing: ring('perle'), banner: banner('aurore') });
   });
 });
+
+describe('deux choix rapprochés sur le même côté : les réponses se croisent (#10632)', () => {
+  type Pending = { readonly resolve: (answer: ApiResult<unknown>) => void };
+  const crossed = (initial: ServedProfileDecor) => {
+    const pending: Pending[] = [];
+    const harness = setup(profile(initial), () => new Promise<ApiResult<unknown>>((resolve) => pending.push({ resolve })));
+    return { ...harness, pending };
+  };
+  const flush = () => new Promise((resolve) => setTimeout(resolve, 0));
+
+  test('la réponse plus ancienne, arrivée en dernier, n’écrase pas le dernier choix', async () => {
+    const { client, deps, pending } = crossed({ avatarRing: ring('perle'), banner: null });
+    const first = equipProfileDecor({ queryClient: client, deps, side: 'avatarRing', choice: ring('filet') });
+    const second = equipProfileDecor({ queryClient: client, deps, side: 'avatarRing', choice: ring('laurier') });
+    await flush();
+    pending[1]?.resolve({ ok: true, data: { avatarRing: ring('laurier'), banner: null } });
+    await second;
+    pending[0]?.resolve({ ok: true, data: { avatarRing: ring('filet'), banner: null } });
+    await first;
+    expect(decorOf(client)?.avatarRing?.item).toBe('laurier');
+  });
+
+  test('le refus plus ancien, arrivé en dernier, ne rétablit pas l’état d’avant par-dessus le dernier choix', async () => {
+    const { client, deps, pending } = crossed({ avatarRing: ring('perle'), banner: null });
+    const first = equipProfileDecor({ queryClient: client, deps, side: 'avatarRing', choice: ring('filet') });
+    const second = equipProfileDecor({ queryClient: client, deps, side: 'avatarRing', choice: ring('laurier') });
+    await flush();
+    pending[1]?.resolve({ ok: true, data: { avatarRing: ring('laurier'), banner: null } });
+    await second;
+    pending[0]?.resolve({ ok: false, status: 403, error: 'no', code: 'PACK_NOT_OWNED' });
+    await first;
+    expect(decorOf(client)?.avatarRing?.item).toBe('laurier');
+  });
+
+  test('un refus du dernier choix revient à ce que le serveur a ACCEPTÉ, pas à un choix optimiste jamais confirmé', async () => {
+    const { client, deps, pending } = crossed({ avatarRing: ring('perle'), banner: null });
+    const first = equipProfileDecor({ queryClient: client, deps, side: 'avatarRing', choice: ring('filet') });
+    const second = equipProfileDecor({ queryClient: client, deps, side: 'avatarRing', choice: ring('laurier') });
+    await flush();
+    pending[0]?.resolve({ ok: false, status: 403, error: 'no', code: 'PACK_NOT_OWNED' });
+    await first;
+    pending[1]?.resolve({ ok: false, status: 403, error: 'no', code: 'PACK_NOT_OWNED' });
+    await second;
+    expect(decorOf(client)?.avatarRing?.item).toBe('perle');
+  });
+
+  test('la réponse d’un côté ne défait pas le choix en cours de l’autre côté', async () => {
+    const { client, deps, pending } = crossed({ avatarRing: null, banner: null });
+    const ringEquip = equipProfileDecor({ queryClient: client, deps, side: 'avatarRing', choice: ring('filet') });
+    const bannerEquip = equipProfileDecor({ queryClient: client, deps, side: 'banner', choice: banner('aurore') });
+    await flush();
+    pending[0]?.resolve({ ok: true, data: { avatarRing: ring('filet'), banner: null } });
+    await ringEquip;
+    expect(decorOf(client)?.banner?.item).toBe('aurore');
+    pending[1]?.resolve({ ok: true, data: { avatarRing: ring('filet'), banner: banner('aurore') } });
+    await bannerEquip;
+    expect(decorOf(client)).toEqual({ avatarRing: ring('filet'), banner: banner('aurore') });
+  });
+});
+
+describe('un profile:decor-updated arrivé pendant un choix en vol (#10632)', () => {
+  test('ne défait pas le choix affiché, et un refus revient au décor que l’événement a dit accepté', async () => {
+    let answer: ((value: ApiResult<unknown>) => void) | undefined;
+    const { client, deps } = setup(profile({ avatarRing: ring('perle'), banner: null }), () => new Promise((resolve) => (answer = resolve)));
+    const equip = equipProfileDecor({ queryClient: client, deps, side: 'avatarRing', choice: ring('filet') });
+    await new Promise((resolve) => setTimeout(resolve, 0));
+    applyProfileDecorEvent(client, { userId: 'u1', decor: { avatarRing: ring('laurier'), banner: banner('aurore') }, at: 'x' });
+    expect(decorOf(client)).toEqual({ avatarRing: ring('filet'), banner: banner('aurore') });
+    answer?.({ ok: false, status: 403, error: 'no' });
+    await equip;
+    expect(decorOf(client)).toEqual({ avatarRing: ring('laurier'), banner: banner('aurore') });
+  });
+});

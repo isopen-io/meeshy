@@ -85,6 +85,7 @@ struct MessageStickerArtwork: View {
             .modifier(MessageStickerMotion(animation: effectiveAnimation,
                                            appearedAt: appearedAt,
                                            box: artworkBox))
+            .accessibilityIdentifier(StickerAccessibilityID.messageArtwork)
             .onAppear { appearedAt = Date() }
             .onDisappear { appearedAt = nil }
             .task(id: renderKey) { renderTemplateIfNeeded() }

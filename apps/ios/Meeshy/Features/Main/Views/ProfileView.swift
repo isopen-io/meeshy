@@ -246,12 +246,12 @@ struct ProfileView: View {
                     .frame(height: 120)
                     .clipShape(RoundedRectangle(cornerRadius: MeeshyRadius.lg))
                     .contentShape(RoundedRectangle(cornerRadius: MeeshyRadius.lg))
-                    .onTapGesture { openFullscreen(user?.banner) }
+                    .onTapGesture { openFullscreen(ProfileOwnBanner.openablePhoto(of: user)) }
                     .accessibilityElement()
                     .accessibilityLabel(ProfileImageCopy.bannerLabel)
-                    .accessibilityHint(opensFullscreen(user?.banner) ? ProfileImageCopy.openFullscreenHint : "")
-                    .accessibilityAddTraits(opensFullscreen(user?.banner) ? .isButton : [])
-                    .accessibilityAction { openFullscreen(user?.banner) }
+                    .accessibilityHint(opensFullscreen(ProfileOwnBanner.openablePhoto(of: user)) ? ProfileImageCopy.openFullscreenHint : "")
+                    .accessibilityAddTraits(opensFullscreen(ProfileOwnBanner.openablePhoto(of: user)) ? .isButton : [])
+                    .accessibilityAction { openFullscreen(ProfileOwnBanner.openablePhoto(of: user)) }
                     .overlay {
                         // #10601 — le niveau et le rang aux angles BAS : la découpe de la bannière s'applique aussi à
                         // eux, leurs coins bas suivent donc l'arrondi de ses angles, sans débord ni jour.
@@ -958,6 +958,7 @@ struct ProfileView: View {
                 authManager.currentUser = Self.mergingServerUser(updatedUser, onto: authManager.currentUser)
                 HapticFeedback.success()
                 FeedbackToastManager.shared.showSuccess(String(localized: "profile.banner.updated", bundle: .main))
+                await ProfileDecorModel(decor: authManager.currentUser?.profileDecor).yieldBannerToUploadedPhoto()
             } catch {
                 HapticFeedback.error()
                 FeedbackToastManager.shared.showError(String(localized: "profile.banner.error", bundle: .main))

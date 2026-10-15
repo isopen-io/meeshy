@@ -165,7 +165,6 @@ export function UnifiedShop({
       </div>
       <Suspense fallback={null}>
         <PackShop
-          key={filter}
           adapter={adapter}
           language={language}
           hint={translateStickerPacks(language, 'packs.shop.hint')}

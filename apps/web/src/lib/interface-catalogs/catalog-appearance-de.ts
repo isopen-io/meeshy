@@ -15,6 +15,7 @@ const de = {
   'appearance.solid': 'Einfarbig',
   'appearance.photo': 'Foto der Unterhaltung',
   'appearance.photo_empty': 'In dieser Unterhaltung wurde kein Foto gesendet',
+  'appearance.photo_unavailable': 'Die Fotos können gerade nicht geladen werden',
   'appearance.photo_more': 'Mehr Fotos',
   'appearance.photo_item': 'Foto {index}',
   'appearance.veil': 'Schleier',
