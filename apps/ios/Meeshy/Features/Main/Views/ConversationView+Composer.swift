@@ -311,7 +311,7 @@ extension ConversationView {
     private func composerStickerSheet(_ content: AnyView) -> AnyView {
         AnyView(content
         .sheet(isPresented: $composerState.showStickerPicker) {
-            MeeshyStickerSheet(destination: StickerSheetDestination(diesCut: true) { choice in
+            MeeshyStickerSheet(destination: StickerSheetDestination(diesCut: true, leadsToVitrine: true) { choice in
                 composerState.showStickerPicker = false
                 sendStickerChoice(choice)
             }, accentColor: accentColor)

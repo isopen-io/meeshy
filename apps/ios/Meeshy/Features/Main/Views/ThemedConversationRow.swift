@@ -638,6 +638,13 @@ private struct ConversationAvatarView: View {
                 },
                 contextMenuItems: isDirect ? directContextMenuItems : groupContextMenuItems
             )
+            // LE CONTOUR DU PAIR (#10713) — dans l'empreinte de la ligne, l'anneau de story
+            // concentrique à l'intérieur (#10714) ; sans contour servi, l'avatar d'avant.
+            .avatarRingWithin(
+                isDirect ? ProfileDecorResolver.ring(conversation.participantRing) : nil,
+                footprint: AvatarContext.conversationList.size,
+                storyRingSize: storyRingState == .none ? nil : AvatarContext.conversationList.ringSize
+            )
 
             // Last seen tooltip
             if showLastSeenTooltip, let text = conversation.lastSeenLabel {
