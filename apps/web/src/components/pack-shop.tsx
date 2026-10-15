@@ -224,7 +224,7 @@ export function PackShop<P extends ShopPack>({
               <li
                 key={pack.slug}
                 data-shop-pack={pack.slug}
-                {...(pack.slug === focusSlug ? { 'data-shop-pack-focused': '', ref: focusedRow } : {})}
+                {...(pack.slug === focusSlug ? { 'data-shop-pack-focused': '', 'aria-current': 'true' as const, ref: focusedRow } : {})}
                 className="flex items-center gap-3 rounded-2xl p-3"
                 style={{ backgroundColor: 'var(--color-ios-card)', ...(pack.slug === focusSlug ? { outline: '2px solid var(--accent, var(--color-ios-brand))' } : {}) }}
               >

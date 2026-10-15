@@ -84,6 +84,7 @@ describe('SettingsPacksScreen', () => {
     await until(() => host.querySelector('[data-shop-pack-focused]') !== null);
     expect(host.querySelector('[data-shop-pack-focused]')?.getAttribute('data-shop-pack')).toBe(slug);
     expect(host.querySelectorAll('[data-shop-pack-focused]')).toHaveLength(1);
+    expect(host.querySelector('[data-shop-pack-focused]')?.getAttribute('aria-current')).toBe('true');
     at('/');
   });
 
