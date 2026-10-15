@@ -142,14 +142,16 @@ describe('Bulles — un emoji seul en réponse (#10628)', () => {
 });
 
 describe('Focal / Script — un emoji seul en réponse (#10628)', () => {
-  test.each(['focal', 'script'] as const)('%s : la carte citée puis l’emoji en grand, aucune boîte', (mode) => {
-    const root = renderFocal(emojiReply(), mode);
-    const quote = root.querySelector('[data-quote-card]');
-    const emoji = root.querySelector('[data-emoji-only]');
-    expect(quote).not.toBeNull();
-    expect(emoji).not.toBeNull();
-    expect(precedes(quote!, emoji!)).toBe(true);
-    expect(root.querySelector('.rounded-bubble')).toBeNull();
-    expect((emoji as HTMLElement).style.fontSize).toBe('68px');
-  });
+  for (const mode of ['focal', 'script'] as const) {
+    test(`${mode} : la carte citée puis l’emoji en grand, aucune boîte`, () => {
+      const root = renderFocal(emojiReply(), mode);
+      const quote = root.querySelector('[data-quote-card]');
+      const emoji = root.querySelector('[data-emoji-only]');
+      expect(quote).not.toBeNull();
+      expect(emoji).not.toBeNull();
+      expect(precedes(quote!, emoji!)).toBe(true);
+      expect(root.querySelector('.rounded-bubble')).toBeNull();
+      expect((emoji as HTMLElement).style.fontSize).toBe('68px');
+    });
+  }
 });
