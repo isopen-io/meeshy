@@ -1,5 +1,7 @@
 import type { ReactNode } from 'react';
 
+import { translate } from '@/lib/i18n-catalog';
+import { currentInterfaceLanguage } from '@/lib/interface-language';
 import { Link } from '@/routes/route-table';
 
 import { AuthAmbient } from './auth-chrome';
@@ -109,7 +111,7 @@ export function AuthCloseChip({
       replace
       className="grid place-items-center rounded-chip"
       style={{ minHeight: 44, minWidth: 44, color: 'var(--color-ios-ink-2)' }}
-      aria-label="Fermer"
+      aria-label={translate(currentInterfaceLanguage(), 'common.close')}
     >
       <Glyph name="x" size={20} />
     </Link>

@@ -33,6 +33,7 @@ import { useAudioOnDemand } from '@/lib/view/use-audio-on-demand';
 import { useVoiceNowPlaying } from '@/lib/view/use-voice-now-playing';
 import { translate } from '@/lib/i18n-catalog';
 import { currentInterfaceLanguage } from '@/lib/interface-language';
+import { fileWeightLabel } from '@/lib/view/file-weight';
 import { TRANSCRIPT_TEXT_OPACITY } from '@/lib/reading-mode/metrics';
 
 import { Glyph, GlyphSvg } from './glyph';
@@ -544,7 +545,7 @@ function FileAttachmentRow({
         {badge}
       </span>
       <span className="min-w-0 flex-1 truncate text-title font-semibold">{name}</span>
-      <span className="text-time opacity-70">{Math.round(attachment.fileSize / 1024)} Ko</span>
+      {attachment.fileSize > 0 ? <span className="text-time opacity-70">{fileWeightLabel(attachment.fileSize, currentInterfaceLanguage())}</span> : null}
     </a>
   );
 }

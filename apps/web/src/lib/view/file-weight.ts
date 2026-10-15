@@ -10,7 +10,7 @@ export function fileWeightLabel(bytes: number, language: string): string {
   const kilobytes = bytes / KILOBYTE;
   const useMegabytes = kilobytes >= KILOBYTE;
   const value = useMegabytes ? Math.round((kilobytes / KILOBYTE) * 10) / 10 : Math.max(1, Math.round(kilobytes));
-  if (language === 'fr') return `${value} ${useMegabytes ? 'Mo' : 'Ko'}`;
+  if (language === 'fr') return `${new Intl.NumberFormat('fr', { maximumFractionDigits: 1 }).format(value)} ${useMegabytes ? 'Mo' : 'Ko'}`;
   try {
     return new Intl.NumberFormat(language, { style: 'unit', unit: useMegabytes ? 'megabyte' : 'kilobyte', unitDisplay: 'short', maximumFractionDigits: 1 }).format(value);
   } catch {

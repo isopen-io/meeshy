@@ -5,6 +5,7 @@ import { renderToStaticMarkup } from 'react-dom/server';
 
 import { ensureHappyDomRegistered, releaseHappyDomIfRegistered } from '@/test-support/happy-dom-environment';
 import { scriptedGateway } from '@/test-support/scripted-transport';
+import { loadInterfaceCatalog } from '@/lib/i18n-catalog';
 import { attachmentDefaults } from '@/lib/api/fixtures-base';
 import { messagesOf } from '@/lib/api/fixtures';
 import { resolveInterfaceLanguageCode } from '@/lib/inline-interface-language-bootstrap.js';
@@ -666,6 +667,35 @@ describe('Attachments — ouvrir un document REÇU rapporte, jamais le sien (#73
     expect(link?.getAttribute('target')).toBe('_blank');
     expect(link?.getAttribute('aria-label')).toBe('Ouvrir contrat.pdf');
     expect(link?.style.minHeight).toBe('44px');
+  });
+
+  test('le poids du document suit la langue de l’interface — « 200 kB », jamais « 200 Ko » en anglais (#10748)', async () => {
+    await loadInterfaceCatalog('en');
+    const previous = document.documentElement.lang;
+    document.documentElement.lang = 'en';
+    try {
+      container = document.createElement('div');
+      document.body.appendChild(container);
+      root = createRoot(container);
+      act(() => {
+        root.render(<Attachments attachments={[document_]} languages={['en']} fallbackLanguage="en" mediaFrame="box" />);
+      });
+      const text = container.querySelector('[data-attachment-file="att-doc-1"]')?.textContent ?? '';
+      expect(text).toContain('200');
+      expect(text).not.toContain('Ko');
+    } finally {
+      document.documentElement.lang = previous;
+    }
+  });
+
+  test('un document de taille inconnue (0) ne s’annonce pas « 0 Ko », comme sur iOS (#10748)', () => {
+    container = document.createElement('div');
+    document.body.appendChild(container);
+    root = createRoot(container);
+    act(() => {
+      root.render(<Attachments attachments={[{ ...document_, fileSize: 0 }]} languages={['fr']} fallbackLanguage="fr" mediaFrame="box" />);
+    });
+    expect(container.querySelector('[data-attachment-file="att-doc-1"]')?.textContent ?? '').not.toContain('Ko');
   });
 
   test('dans la coque, un document EN COURS D’ENVOI (blob:) n’est pas un lien — la WebView naviguerait dessus (#8402)', () => {

@@ -18,4 +18,8 @@ describe('le poids suit la langue de l\u2019interface (#10748)', () => {
   test('au-delà d\u2019un mébi-octet, le méga-octet à une décimale', () => {
     expect(fileWeightLabel(1_572_864, 'en')).toContain('1.5');
   });
+
+  test('français : la décimale s\u2019écrit avec une virgule (« 1,5 Mo »)', () => {
+    expect(fileWeightLabel(1_572_864, 'fr')).toBe('1,5 Mo');
+  });
 });
