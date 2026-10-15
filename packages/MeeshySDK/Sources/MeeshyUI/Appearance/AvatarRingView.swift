@@ -114,13 +114,41 @@ public struct AvatarRingView: View, Equatable {
     }
 }
 
+// MARK: - Contour et anneau de story, concentriques (#10714)
+
+/// Décision porteur du 2026-10-15, la même sur le web (`ringedAvatarSize`) : le contour
+/// est DEHORS, l'anneau de story JUSTE DEDANS, et l'avatar se réduit légèrement pour
+/// que l'anneau tienne dans le trou du contour — les deux restent visibles.
+public enum AvatarRingGeometry {
+    /// L'échelle de l'avatar (anneau de story compris) sous un contour : son anneau de
+    /// story (`storyRingSize`, l'emprise de `MeeshyAvatar` quand il en porte un) se ramène
+    /// au diamètre de l'avatar nu, c'est-à-dire au trou du contour. `1` sans anneau de story.
+    public static func avatarScale(avatarSize: CGFloat, storyRingSize: CGFloat?) -> CGFloat {
+        guard let storyRingSize, avatarSize > 0, storyRingSize > avatarSize else { return 1 }
+        return avatarSize / storyRingSize
+    }
+
+    /// La part de l'empreinte que l'avatar occupe sous un contour : le cercle de rayon 42
+    /// du viewBox 100 (miroir de `AVATAR_FRACTION`, `avatar-ring.tsx`).
+    public static let holeFraction: CGFloat = 0.84
+
+    /// L'échelle de l'avatar quand le contour tient DANS son empreinte (#10713, listes et
+    /// bulles) : l'avatar se ramène au trou du contour, et son anneau de story avec lui.
+    public static func footprintScale(footprint: CGFloat, storyRingSize: CGFloat?) -> CGFloat {
+        holeFraction * avatarScale(avatarSize: footprint, storyRingSize: storyRingSize)
+    }
+}
+
 public extension View {
     /// Pose le contour AUTOUR de l'avatar sans changer sa mise en page : le contour est une superposition
     /// agrandie (l'avatar occupe le rayon 42 du viewBox 100). `nil` ⇒ la vue telle quelle (rendu historique).
+    /// `storyRingSize` (l'emprise de l'anneau de story quand l'avatar en porte un) réduit l'avatar pour que
+    /// l'anneau passe DANS le contour, concentrique, au lieu d'être recouvert (#10714).
     @ViewBuilder
-    func avatarRing(_ design: AvatarRingDesign?, avatarSize: CGFloat, animates: Bool = true) -> some View {
+    func avatarRing(_ design: AvatarRingDesign?, avatarSize: CGFloat, storyRingSize: CGFloat? = nil, animates: Bool = true) -> some View {
         if let design {
-            overlay {
+            scaleEffect(AvatarRingGeometry.avatarScale(avatarSize: avatarSize, storyRingSize: storyRingSize))
+            .overlay {
                 ZStack {
                     AvatarRingView(design: design)
                         .equatable()
@@ -129,6 +157,30 @@ public extension View {
                     }
                 }
                 .frame(width: avatarSize * 100 / 84, height: avatarSize * 100 / 84)
+            }
+        } else {
+            self
+        }
+    }
+
+    /// Le contour DANS l'empreinte de l'avatar (#10713) — pour les cotes FIXES (ligne de
+    /// liste, bulle) : le contour occupe la cote `footprint`, l'avatar (anneau de story
+    /// compris, #10714) se réduit à son trou. Rien ne grandit, rien ne se décale, et le
+    /// contour se pose sans perte d'image quand il arrive. Immobile par défaut : une
+    /// liste en porte des dizaines.
+    @ViewBuilder
+    func avatarRingWithin(_ design: AvatarRingDesign?, footprint: CGFloat, storyRingSize: CGFloat? = nil, animates: Bool = false) -> some View {
+        if let design {
+            scaleEffect(AvatarRingGeometry.footprintScale(footprint: footprint, storyRingSize: storyRingSize))
+            .overlay {
+                ZStack {
+                    AvatarRingView(design: design)
+                        .equatable()
+                    if animates, let lottie = design.lottie {
+                        PackLottieLayer(ref: lottie, animates: animates)
+                    }
+                }
+                .frame(width: footprint, height: footprint)
             }
         } else {
             self

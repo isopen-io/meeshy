@@ -356,6 +356,8 @@ public struct MeeshyConversation: Identifiable, Hashable, Codable, Sendable {
     public var participantUsername: String? = nil
     public var participantAvatarURL: String? = nil
     public var participantBanner: String? = nil
+    /// Le contour d'avatar équipé du pair d'une directe (#10713) — posé après l'init, comme `bridge`.
+    public var participantRing: ServedProfileDecorItem? = nil
     public var lastSeenAt: Date? = nil
 
     public var closedAt: Date? = nil
@@ -578,6 +580,7 @@ public struct MeeshyConversation: Identifiable, Hashable, Codable, Sendable {
         h.combine(participantUsername)
         h.combine(participantAvatarURL)
         h.combine(participantBanner)
+        h.combine(participantRing)
         h.combine(tags)
         h.combine(userState.reaction)
         // Catégorie — AFFICHÉE par l'encoche haut-gauche de la carte de focus
@@ -754,7 +757,7 @@ public struct MeeshyConversation: Identifiable, Hashable, Codable, Sendable {
         case recentMessages, tags
         case bridge
         case isAnnouncementChannel, defaultWriteRole, slowModeSeconds, autoTranslateEnabled
-        case participantUserId, participantUsername, participantAvatarURL, participantBanner, lastSeenAt
+        case participantUserId, participantUsername, participantAvatarURL, participantBanner, participantRing, lastSeenAt
         case closedAt, closedBy, currentUserRole, currentUserJoinedAt
         case language, theme, colorPalette
 
@@ -836,6 +839,7 @@ public struct MeeshyConversation: Identifiable, Hashable, Codable, Sendable {
         self.participantUsername = try c.decodeIfPresent(String.self, forKey: .participantUsername)
         self.participantAvatarURL = try c.decodeIfPresent(String.self, forKey: .participantAvatarURL)
         self.participantBanner = try c.decodeIfPresent(String.self, forKey: .participantBanner)
+        self.participantRing = try? c.decodeIfPresent(ServedProfileDecorItem.self, forKey: .participantRing)
         self.lastSeenAt = try c.decodeIfPresent(Date.self, forKey: .lastSeenAt)
         self.closedAt = try c.decodeIfPresent(Date.self, forKey: .closedAt)
         self.closedBy = try c.decodeIfPresent(String.self, forKey: .closedBy)
@@ -936,6 +940,7 @@ public struct MeeshyConversation: Identifiable, Hashable, Codable, Sendable {
         try c.encodeIfPresent(participantUsername, forKey: .participantUsername)
         try c.encodeIfPresent(participantAvatarURL, forKey: .participantAvatarURL)
         try c.encodeIfPresent(participantBanner, forKey: .participantBanner)
+        try c.encodeIfPresent(participantRing, forKey: .participantRing)
         try c.encodeIfPresent(lastSeenAt, forKey: .lastSeenAt)
         try c.encodeIfPresent(closedAt, forKey: .closedAt)
         try c.encodeIfPresent(closedBy, forKey: .closedBy)

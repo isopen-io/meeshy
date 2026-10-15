@@ -198,7 +198,11 @@ extension UserProfileSheet {
             onViewStory: (showRing && ringState != .none) ? onViewStory : nil,
             onMoodTap: shownMoodEmoji == nil ? nil : onMoodTap
         )
-        .avatarRing(shownAvatarRing, avatarSize: AvatarContext.profileSheet.size)
+        .avatarRing(
+            shownAvatarRing,
+            avatarSize: AvatarContext.profileSheet.size,
+            storyRingSize: ringState == .none ? nil : AvatarContext.profileSheet.ringSize
+        )
     }
 
     /// L'humeur peinte sur l'avatar — le grand en-tête ET la barre compacte
