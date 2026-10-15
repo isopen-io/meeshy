@@ -1,6 +1,34 @@
+import Combine
 import SwiftUI
 import MeeshySDK
 import MeeshyUI
+
+// MARK: - Le lanceur de la vitrine (#10632)
+
+/// **Porte la demande « ouvre la vitrine sur tel domaine »** de la porte (lien
+/// profond, « Plus dans la boutique ») jusqu'à `SettingsView`, qui la consomme
+/// une fois et présente `PacksSettingsView(initialDomain:)`.
+@MainActor
+final class PackShopLauncher: ObservableObject {
+    nonisolated deinit {}
+    static let shared = PackShopLauncher()
+
+    struct Request: Equatable, Identifiable {
+        let id = UUID()
+        let domain: PackDomain?
+    }
+
+    @Published private(set) var pending: Request?
+
+    func request(domain: PackDomain?) {
+        pending = Request(domain: domain)
+    }
+
+    func consume() -> Request? {
+        defer { pending = nil }
+        return pending
+    }
+}
 
 // MARK: - Réglages › Packs et téléchargements (#10150)
 
@@ -9,8 +37,15 @@ import MeeshyUI
 /// sur l'appareil.
 struct PacksSettingsView: View {
     @Environment(\.dismiss) private var dismiss
-    @State private var domain: PackDomain = .sticker
+    @State private var domain: PackDomain
     private var theme: ThemeManager { ThemeManager.shared }
+
+    /// `initialDomain` ouvre la vitrine FILTRÉE (lien profond `meeshy://settings/packs?domaine=…`,
+    /// « Plus dans la boutique ») ; absent, la vitrine s'ouvre sur les stickers (#10632).
+    init(initialDomain: PackDomain? = nil) {
+        let opened = initialDomain.flatMap { PackDomain.allCases.contains($0) ? $0 : nil } ?? .sticker
+        _domain = State(initialValue: opened)
+    }
 
     var body: some View {
         ZStack {
@@ -29,19 +64,46 @@ struct PacksSettingsView: View {
 
     private var content: some View {
         VStack(alignment: .leading, spacing: MeeshySpacing.lg) {
-            Picker(String(localized: "settings.packs.domain", defaultValue: "Type de pack", bundle: .main),
-                   selection: $domain) {
-                Text(String(localized: "settings.packs.stickers", defaultValue: "Stickers", bundle: .main))
-                    .tag(PackDomain.sticker)
-                Text(String(localized: "settings.packs.frames", defaultValue: "Cadres du jeu", bundle: .main))
-                    .tag(PackDomain.gloryFrame)
+            ScrollView(.horizontal, showsIndicators: false) {
+                HStack(spacing: MeeshySpacing.sm) {
+                    ForEach(PackDomain.allCases, id: \.self) { entry in
+                        domainChip(entry)
+                    }
+                }
+                .padding(.horizontal, MeeshySpacing.lg)
             }
-            .pickerStyle(.segmented)
-            .padding(.horizontal, MeeshySpacing.lg)
+            .accessibilityLabel(String(localized: "settings.packs.domain", defaultValue: "Type de pack", bundle: .main))
 
             PackShopScreen(domain: domain)
         }
         .padding(.vertical, MeeshySpacing.md)
+    }
+}
+
+extension PacksSettingsView {
+    fileprivate func domainChip(_ entry: PackDomain) -> some View {
+        let isSelected = entry == domain
+        return Button {
+            HapticFeedback.light()
+            domain = entry
+        } label: {
+            Text(UnifiedShopView.title(of: entry))
+                .font(.system(size: 13, weight: .semibold, design: .rounded))
+                .foregroundStyle(isSelected ? Color.white : theme.textPrimary)
+                .padding(.horizontal, 14)
+                .frame(minHeight: 36)
+                .background {
+                    if isSelected {
+                        Capsule().fill(MeeshyColors.brandGradient)
+                    } else {
+                        Capsule().fill(theme.textPrimary.opacity(0.08))
+                    }
+                }
+                .frame(minHeight: 44)
+                .contentShape(Capsule())
+        }
+        .buttonStyle(.plain)
+        .accessibilityAddTraits(isSelected ? .isSelected : [])
     }
 }
 
@@ -60,6 +122,13 @@ struct PackShopScreen: View {
                 .padding(.horizontal, MeeshySpacing.lg)
         case .gloryFrame:
             FramePackShopScreen(store: .shared, shelf: .shared)
+        case .wallpaper, .avatarRing, .banner:
+            // La vitrine unique (#10632) : prix en Meeshes, possession, achat optimiste.
+            UnifiedShopView(initialDomain: domain, domains: [domain])
+                .id(domain)
+                .padding(.horizontal, MeeshySpacing.lg)
+        case .unknown:
+            EmptyView()
         }
     }
 }
