@@ -264,7 +264,7 @@ nonisolated public enum FocalMetrics {
     /// dessin, lui, est le même atome — seule la stature change. Le rapport
     /// de la bulle est conservé (112/160 = 147/210 = 0,7 : #10630).
     nonisolated public enum Sticker {
-        public static let side: CGFloat = 147
+        public static let side: CGFloat = 140
     }
 
     nonisolated public enum Media {
