@@ -466,7 +466,7 @@ extension APIConversation {
             memberCount: memberCount ?? participants?.count ?? 2,
             memberCountCapped: memberCountCapped ?? false,
             lastMessageAt: lastMessageAt ?? lastMessage?.createdAt ?? createdAt,
-            encryptionMode: encryptionMode ?? (convType == .direct ? "e2ee" : nil),
+            encryptionMode: encryptionMode,
             createdAt: createdAt, updatedAt: updatedAt ?? createdAt,
             unreadCount: unreadCount ?? 0, lastMessagePreview: lastMessage?.content?.meeshyPreviewTruncated,
             lastMessageAttachments: lastMsgAttachments,
