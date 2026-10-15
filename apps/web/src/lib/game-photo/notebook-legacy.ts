@@ -1,4 +1,4 @@
-import { LEGACY_NOTEBOOK_DB, notebookDbName, type LegacyState, type NotebookBackend, type NotebookEntry } from './notebook';
+import { LEGACY_NOTEBOOK_DB, notebookDbName, releaseNotebookConnections, type LegacyState, type NotebookBackend, type NotebookEntry } from './notebook';
 
 export { LEGACY_NOTEBOOK_DB };
 
@@ -124,6 +124,19 @@ const settle = <T>(request: IDBRequest<T>): Promise<T> =>
     request.onerror = () => reject(request.error ?? new Error('IndexedDB'));
   });
 
+/**
+ * Supprime une base sans jamais pendre : une connexion d'un autre onglet qui
+ * n'écoute pas `versionchange` la tient — la suppression reste alors en file
+ * et aboutira quand il la rendra (`blocked`), le geste rend la main.
+ */
+const deleteDatabase = (factory: IDBFactory, name: string): Promise<void> =>
+  new Promise((resolve, reject) => {
+    const request = factory.deleteDatabase(name);
+    request.onsuccess = () => resolve();
+    request.onblocked = () => resolve();
+    request.onerror = () => reject(request.error ?? new Error('IndexedDB'));
+  });
+
 /** Ouvre la base EXISTANTE sans jamais la créer : une base absente abandonne sa propre création. */
 function openExisting(factory: IDBFactory): Promise<IDBDatabase | null> {
   return new Promise((resolve, reject) => {
@@ -178,7 +191,7 @@ export function indexedDbLegacyStore(factory: IDBFactory): LegacyNotebookStore {
       });
     },
     discard: async () => {
-      await settle(factory.deleteDatabase(LEGACY_NOTEBOOK_DB));
+      await deleteDatabase(factory, LEGACY_NOTEBOOK_DB);
     },
   };
 }
@@ -191,7 +204,8 @@ export function indexedDbLegacyStore(factory: IDBFactory): LegacyNotebookStore {
 export async function forgetAccountNotebook(factory: IDBFactory | undefined, userId: string): Promise<void> {
   if (factory === undefined) return;
   try {
-    await settle(factory.deleteDatabase(notebookDbName(userId)));
+    releaseNotebookConnections(notebookDbName(userId));
+    await deleteDatabase(factory, notebookDbName(userId));
   } catch {
     /* rien à effacer */
   }
@@ -200,5 +214,32 @@ export async function forgetAccountNotebook(factory: IDBFactory | undefined, use
     if ((await legacy.probe()) === 'present') await legacy.quarantine();
   } catch {
     /* rien à marquer */
+  }
+}
+
+
+/**
+ * LE BALAYAGE DU DÉMARRAGE (audit #10237) — un retrait qui n'a pas abouti (onglet
+ * fermé avant la fin, base tenue par un autre onglet) laisse le carnet d'un
+ * compte qui n'est plus au coffre. Au démarrage, hors première peinture, ses
+ * bases partent. Ne part QUE la base d'un compte que l'appareil ne connaît plus
+ * (`knownAccountsOf` : coffre, compte connecté, clés rangées sous son identité) ;
+ * un coffre illisible n'efface rien, un navigateur sans `databases()` non plus.
+ */
+export async function sweepOrphanNotebooks(params: { readonly factory: IDBFactory | undefined; readonly storage: KeyedStorage; readonly current: string | null }): Promise<void> {
+  const { factory, storage, current } = params;
+  if (factory === undefined || typeof factory.databases !== 'function') return;
+  const known = knownAccountsOf(storage, current ?? '');
+  if (known.has(UNKNOWN_ACCOUNT)) return;
+  try {
+    const prefix = notebookDbName('');
+    const orphans = (await factory.databases()).flatMap(({ name }) => {
+      if (name === undefined || !name.startsWith(prefix)) return [];
+      const owner = name.slice(prefix.length);
+      return owner === '' || known.has(owner) ? [] : [owner];
+    });
+    await Promise.all(orphans.map((owner) => forgetAccountNotebook(factory, owner)));
+  } catch {
+    /* rien à balayer */
   }
 }

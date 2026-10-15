@@ -6,7 +6,9 @@ import type { Message } from './types';
  *
  * `GET /conversations/:id/messages` sert `currentUserReactions` par message —
  * les emojis que CE lecteur a posés, résolus par la passerelle en UNE requête
- * pour la page. La page suffit : aucun `GET /reactions/:id` ne part plus.
+ * pour la page. La page suffit : aucun `GET /reactions/:id` ne part au
+ * chargement du fil. Cette route ne sert plus que les NOMS, au geste qui les
+ * demande (`api/reactors.ts`, #10583).
  *
  * **Un geste local pendant le chargement gagne** : la page décrit l'état du
  * serveur AVANT ce geste. `snapshotMine()` se prend avant la requête ; un

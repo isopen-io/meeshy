@@ -28,6 +28,8 @@ import { useRoute } from '@/lib/router';
 import { chromeYields } from '@/lib/view/chrome-yields';
 import { sceneYieldOf, writingSceneScale, yieldingScene } from '@/lib/view/scene-yields';
 import { REEL_COLUMN_STYLE } from '@/lib/view/reading-column';
+import { SWIPED_REEL, entryAttribution } from '@/lib/view/content-open';
+import { useViewAttribution } from '@/lib/view/reading-telemetry';
 import { screenGestureYields, shortcutYieldsToTarget } from '@/lib/view/shortcut-scope';
 import { useCommentsSheetHost } from '@/lib/view/use-comments-sheet-host';
 import { useMinute } from '@/lib/view/use-minute';
@@ -195,6 +197,10 @@ export default function ReelsScreen() {
      réel d'entrée. */
   const { params, search } = useRoute();
   const seed = reelSeedOf({ params, search });
+  /* LE PREMIER RÉEL porte la provenance d'entrée (tap d'un listing, lien,
+     notification…), les réels atteints par balayage `listing` / `reels` (#10483). */
+  const entry = useViewAttribution();
+  const [viewAttribution] = useState(() => entryAttribution(entry, SWIPED_REEL));
   const online = useOnline();
   const { languages: readerLanguages } = useReaderLanguages();
   const minute = useMinute();
@@ -252,8 +258,9 @@ export default function ReelsScreen() {
         heldIds: held.current.ids,
         activeId: held.current.activeId,
         composed: composeReelThread({ entryIds, known, served: reels.data ?? EMPTY_POSTS }),
+        ...(seed !== undefined ? { entryId: seed } : {}),
       }),
-    [entryIds, known, reels.data],
+    [entryIds, known, reels.data, seed],
   );
   /* UN MODÈLE PAR PUBLICATION, GARDÉ tant que la publication, la langue et la
      minute ne changent pas (#9277) : une page de réels de plus ne recompose
@@ -438,6 +445,7 @@ export default function ReelsScreen() {
             onGesture={visitor ? ask : onGesture}
             onShare={visitor ? ask : onShare}
             onSoundBlocked={soundBlocked}
+            viewAttribution={viewAttribution}
             chromeHidden={chromeYielded}
             {...(canWrite ? { onComment: comments.open, onRepost } : { onComment: ask })}
           />

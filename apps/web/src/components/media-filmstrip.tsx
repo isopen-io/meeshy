@@ -15,6 +15,7 @@ import {
   filmstripScrollOffset,
 } from '@/lib/view/media-stage';
 
+import { translate } from '@/lib/i18n-catalog';
 import type { InterfaceLanguage } from '@/lib/interface-language';
 
 import { Glyph } from './glyph';
@@ -89,7 +90,7 @@ export function MediaFilmstrip({
     <div
       data-filmstrip
       role="group"
-      aria-label="Pellicule"
+      aria-label={translate(language, 'media.filmstrip')}
       ref={trackRef}
       onScroll={onScroll}
       className="pointer-events-auto flex overflow-x-auto box-border"
@@ -122,7 +123,7 @@ export function MediaFilmstrip({
             data-filmstrip-item
             data-attachment={attachment.id}
             {...(isMasked ? { 'data-protected-attachment': 'hidden' as const } : {})}
-            aria-label={isMasked ? `Média protégé ${index + 1} sur ${items.length}` : `Média ${index + 1} sur ${items.length}`}
+            aria-label={translate(language, isMasked ? 'media.filmstrip.item.protected' : 'media.filmstrip.item', { index: String(index + 1), total: String(items.length) })}
             {...(isCurrent ? { 'aria-current': 'true' as const } : {})}
             onClick={() => onSelect(index)}
             className="media-filmstrip-item relative flex shrink-0 items-center justify-center overflow-hidden bg-media-backdrop"

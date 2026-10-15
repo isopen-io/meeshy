@@ -50,7 +50,7 @@ final class ContactRecentlyActiveRoutingTests: XCTestCase {
     func test_handleNotificationTaps_contactRecentlyActive_opensTheActorProfile_onIPadListSocketAndPush() throws {
         let labels = profileBranchLabels(in: try source("Meeshy/Features/Main/Views/iPadRootView+Navigation.swift"))
 
-        XCTAssertEqual(labels.count, 3, "liste, bannière in-app et push : trois gestionnaires iPad")
+        XCTAssertEqual(labels.count, 1, "liste, bannière in-app et push : UN aiguillage iPad, comme l'iPhone (2026-10-14)")
         for label in labels {
             XCTAssertTrue(label.contains(".contactRecentlyActive"),
                           "gestionnaire iPad sans « X était sur Meeshy récemment » : \(label)")

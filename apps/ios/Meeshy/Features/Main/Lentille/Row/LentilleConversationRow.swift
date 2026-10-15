@@ -75,7 +75,8 @@ struct LentilleConversationRow: View {
     /// d'information, l'objet reste le même ».
     var magnification: LentilleMagnification? = nil
 
-    private var accentColorHex: String { conversation.accentColor }
+    private var palette: ConversationColorPalette { conversation.displayPalette(isDark: isDark) }
+    private var accentColorHex: String { palette.primary }
     private var accent: Color { Color(hex: accentColorHex) }
     private var textPrimary: Color { MeeshyColors.textPrimary(isDark: isDark) }
     private var textSecondary: Color { MeeshyColors.textSecondary(isDark: isDark) }
@@ -222,6 +223,7 @@ struct LentilleConversationRow: View {
 
             LentilleRowAvatar(
                 conversation: conversation,
+                palette: palette,
                 presenceState: effectivePresenceState,
                 isPeerHere: isPeerHere,
                 storyRingState: storyRingState,
@@ -601,6 +603,7 @@ extension LentilleConversationRow: @MainActor Equatable {
 /// (52pt, réservé au rang historique, §0).
 private struct LentilleRowAvatar: View {
     let conversation: Conversation
+    let palette: ConversationColorPalette
     let presenceState: PresenceState?
     let isPeerHere: ConversationHere
     let storyRingState: StoryRingState
@@ -647,8 +650,8 @@ private struct LentilleRowAvatar: View {
         MeeshyAvatar(
             name: conversation.name,
             context: LentilleMetrics.Avatar.context,
-            accentColor: conversation.accentColor,
-            secondaryColor: conversation.colorPalette.secondary,
+            accentColor: palette.primary,
+            secondaryColor: palette.secondary,
             avatarURL: isDirect ? conversation.participantAvatarURL : conversation.avatar,
             storyState: storyRingState,
             moodEmoji: moodStatus?.moodEmoji,

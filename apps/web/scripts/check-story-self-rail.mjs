@@ -266,6 +266,11 @@ async function runScheme({ colorScheme, locale, dir }) {
   check(true, `${tag} : le réseau revenu, Publier se rallume`);
 
   await page.click('[data-mood-publish]');
+  /* Une humeur SANS mot demande confirmation (#10527) : la question prend la
+     place du bouton Publier, et « Publier sans mot » la confirme. */
+  await page.waitForSelector('[data-mood-bare]', { timeout: 8000 });
+  check(true, `${tag} : sans mot, la question de confirmation se pose avant de publier`);
+  await page.click('[data-mood-bare-publish]');
 
   await page.waitForSelector(`${MOOD}[data-mood]`, { timeout: 8000 });
   const apres = await page.evaluate(

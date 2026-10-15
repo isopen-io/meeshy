@@ -177,7 +177,7 @@ describe('la cellule « soi » porte DEUX pastilles, et deux seulement', () => {
     const mien = el.querySelector('[data-story-author="u-moi"]');
     expect(mien?.getAttribute('href')).toBe('/stories/mine');
     expect(mien?.getAttribute('aria-label')).toBe('Gérer mes stories');
-    expect(el.querySelector('[data-story-author="u-ines"]')?.getAttribute('href')).toBe('/story/st-u-ines');
+    expect(el.querySelector('[data-story-author="u-ines"]')?.getAttribute('href')).toBe('/story/st-u-ines?from=story_rail');
   });
 });
 

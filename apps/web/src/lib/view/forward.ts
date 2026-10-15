@@ -3,6 +3,7 @@ import type { Message } from '@/lib/api/types';
 import type { ForwardSource } from '@/lib/api/forward';
 import type { SendPreview, SoleMedia } from '@/lib/send/send-sheet-plan';
 import type { SendSheetRequest } from '@/lib/send/send-sheet-store';
+import { stickerOf } from './message-body';
 
 /**
  * LE TRANSFERT, CÔTÉ CLIENT (#5866, #9573) — la règle que `admitMessageForward`
@@ -92,11 +93,13 @@ const previewOfMessages = (messages: readonly Message[], now: number): SendPrevi
 const forwardSourceOf = (message: Message, now: number): ForwardSource => {
   const { forward } = contentExitOf(message, now);
   const bound = forward.allowed ? forward.maxDurationSeconds : null;
+  const sticker = stickerOf(message);
   return {
     id: message.id,
     content: message.content,
     originalLanguage: message.originalLanguage,
     ...(bound === null ? {} : { maxDurationSeconds: bound }),
+    ...(sticker === null ? {} : { sticker }),
   };
 };
 

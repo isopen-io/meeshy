@@ -46,4 +46,17 @@ export interface NotificationAttachmentWire {
   readonly firstAttachmentFileSize?: number;
   /** Durée en millisecondes du 1er attachment audio/video. */
   readonly firstAttachmentDurationMs?: number;
+  /**
+   * #10641 — l'identité de la pièce jointe dont `firstAttachmentUrl` sert le
+   * fichier (ou la piste traduite). La coque Android joue un vocal depuis sa
+   * notification et en RAPPORTE l'écoute (`POST /attachments/:id/status`),
+   * comme la page : sans elle, l'auteur ne saurait jamais qu'il a été écouté.
+   */
+  readonly firstAttachmentId?: string;
+  /**
+   * #10641 — la langue de la piste TRADUITE servie à la place de l'original,
+   * absente quand c'est l'original. Une piste traduite est l'écoute d'une
+   * AUTRE version du contenu (`AttachmentStatusBodySchema.language`).
+   */
+  readonly firstAttachmentLanguage?: string;
 }

@@ -379,12 +379,19 @@ export function createPreferenceRouter(
           //    consentement voix n'applique RIEN — la garde d'écriture était
           //    redondante, et c'est elle qui verrouillait les réglages.
           //  · TÉLÉMÉTRIE / ANALYTIQUE — `telemetryEnabled`, `allowAnalytics` :
-          //    AUCUN lecteur d'usage dans le dépôt. La garde d'écriture était
+          //    aucune garde d'usage CÔTÉ PASSERELLE. La garde d'écriture était
           //    donc la seule, et la retirer laisserait un document affirmant
           //    `true` pour un non-consentant. C'est pourquoi ces deux-là
           //    passent à `false` PAR DÉFAUT dans le même lot : un système dont
           //    l'état PAR DÉFAUT viole son propre modèle de consentement n'a
           //    pas un problème de validation, il a un problème de défaut.
+          //    Mais `allowAnalytics` a des lecteurs CÔTÉ CLIENT (#10405) : le
+          //    traceur d'engagement iOS (`EngagementTracker`) s'éteint quand il
+          //    vaut `false`. Tant qu'un client n'écrit pas le consentement
+          //    (`PUT /me/consents/analytics`) avant la préférence, ce défaut
+          //    fige les sessions d'engagement — temps regardé, lecture
+          //    complète, ouverture d'un réel. Témoin :
+          //    `consent-gated-defaults-invariant.test.ts`.
           //
           // L'invariant qui en résulte est gardé par
           // `consent-gated-defaults-invariant.test.ts` : aucune préférence

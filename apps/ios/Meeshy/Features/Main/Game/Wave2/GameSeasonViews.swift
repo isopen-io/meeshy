@@ -327,7 +327,8 @@ private struct GameSeasonSeal: View {
             } else {
                 // Avant l'achat : les Meeshes en poche, le prix et ce qui restera — ou combien il en manque (#9705).
                 let spend = GameSpend.preview(held: held, cost: season.sealPrice)
-                GameFactChipRow(concept: .season, items: GameSpendRows.spend(spend, format: GameCopy.meeshes), identifier: "game.season.seal.spend")
+                GameFactChipRow(concept: .season, items: GameSpendRows.spend(spend, format: GameCopy.meeshes, missing: { ConceptText.spendMissingSeal(missing: $0) }),
+                                identifier: "game.season.seal.spend")
                 GameActionButton(
                     title: GameText.seasonSealBuy(price: GameCopy.meeshes(season.sealPrice)), busy: model.pending.seal,
                     disabled: !model.isOnline || !spend.affordable, tint: MeeshyColors.warning, identifier: "game.season.seal.buy"

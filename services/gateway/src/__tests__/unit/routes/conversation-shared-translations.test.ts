@@ -409,23 +409,29 @@ describe('POST /conversations/:id/shared-translations', () => {
         () => shareBody(),
         () => scene({ deletions: [{ userId: USER_ID, messageId: MSG_1 }] }),
       ],
-      [
-        'un message d’une conversation dont l’appelant est banni',
-        () => shareBody(),
-        () =>
-          scene({
-            participants: [
-              participantRow({ id: SHARER, userId: USER_ID, bannedAt: new Date('2026-09-10T00:00:00.000Z') }),
-              participantRow({ id: PEER, userId: OTHER_USER_ID }),
-            ],
-          }),
-      ],
     ])('refuse 404 pour %s — le même refus pour tous', async (_label, body, storeOf) => {
       const h = await buildApp({ store: storeOf() });
 
       const res = await post(h, body());
 
       expect(res.statusCode).toBe(404);
+      expect(h.shares).toEqual([]);
+      expect(h.emitted).toEqual([]);
+    });
+
+    it('refuse au banni dont la ligne est restée active le refus d’un non-participant (#7389)', async () => {
+      const h = await buildApp({
+        store: scene({
+          participants: [
+            participantRow({ id: SHARER, userId: USER_ID, bannedAt: new Date('2026-09-10T00:00:00.000Z') }),
+            participantRow({ id: PEER, userId: OTHER_USER_ID }),
+          ],
+        }),
+      });
+
+      const res = await post(h, shareBody());
+
+      expect(res.statusCode).toBe(403);
       expect(h.shares).toEqual([]);
       expect(h.emitted).toEqual([]);
     });

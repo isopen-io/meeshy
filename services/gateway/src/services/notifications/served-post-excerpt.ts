@@ -27,6 +27,7 @@ import {
   resolvePrismTranslation,
 } from '@meeshy/shared/utils/conversation-helpers';
 import { sliceCodePoints } from '@meeshy/shared/utils/text-truncate';
+import { derivedContentWithoutCredits } from '../posts/storyContentComposition';
 
 /** La borne historique des appelants — un extrait IDENTIFIE, il ne raconte pas. */
 export const POST_EXCERPT_MAX_CODE_POINTS = 80;
@@ -35,6 +36,7 @@ const POST_EXCERPT_SELECT = {
   content: true,
   originalLanguage: true,
   translations: true,
+  storyEffects: true,
   deletedAt: true,
   expiresAt: true,
 } as const;
@@ -43,6 +45,8 @@ export type PostExcerptSource = {
   readonly content: string | null;
   readonly originalLanguage: string | null;
   readonly translations: unknown;
+  /** Lu pour retirer la puce de crédit d'un `content` dérivé (#10523), jamais servi. */
+  readonly storyEffects?: unknown;
   readonly deletedAt: Date | null;
   readonly expiresAt: Date | null;
 };
@@ -64,11 +68,18 @@ export function servePostExcerpt(params: {
   const { source } = params;
   if (!source || isWithheld(source, params.now)) return undefined;
 
-  const original = source.content?.trim() ?? '';
+  const withoutCredit = derivedContentWithoutCredits({
+    content: source.content,
+    translations: source.translations ?? null,
+    storyEffects: source.storyEffects,
+  });
+  const text = withoutCredit ?? { content: source.content, translations: source.translations };
+
+  const original = text.content?.trim() ?? '';
   if (original === '') return undefined;
 
   const translation = resolvePrismTranslation({
-    translations: buildPostTranslationRecord(source.translations),
+    translations: buildPostTranslationRecord(text.translations),
     originalLanguage: source.originalLanguage,
     preferredLanguages: params.preferredLanguages,
   });

@@ -119,11 +119,14 @@ import { anonymousUsersAdminRoutes } from './admin/anonymous-users';
 import { systemRankingsRoutes } from './admin/system-rankings';
 import { broadcastRoutes } from './admin/broadcasts';
 import { adminPostRoutes } from './admin/posts';
+import { adminPostGestureRoutes } from './admin/post-gestures';
+import { adminModerationActRoutes } from './admin/moderation-acts';
 import { agentAdminRoutes } from './admin/agent';
 import { agentTopicsRoutes } from './admin/agent-topics';
 import { gameSeasonsAdminRoutes } from './admin/game-seasons';
 import { routeUsageAdminRoutes } from './admin/route-usage';
 import { adminOversightRoutes } from './admin/oversight';
+import { adminOpsRoutes } from './admin/ops';
 import { userRoutes } from './users';
 import meRoutes from './me';
 import { mePermissionsRoutes } from './me/permissions';
@@ -141,6 +144,8 @@ import { meStickersRoutes } from './me/stickers';
 import { stickerPacksRoutes } from './sticker-packs';
 import { gloryFramePacksRoutes } from './packs-glory-frame';
 import { packAssetsRoutes } from './pack-assets';
+import { avatarRingPacksRoutes, bannerPacksRoutes, wallpaperPacksRoutes } from './packs-appearance';
+import { packsShopRoutes } from './packs-shop';
 import { accountDeletionRoutes } from './account-deletion';
 import { directoryAvailabilityRoutes } from './directory/availability';
 import { directoryPeopleRoutes } from './directory/people';
@@ -283,7 +288,12 @@ export const ROUTE_TABLE_BEFORE_ATTACHMENTS: readonly RouteRegistrationEntry[] =
   { name: 'admin-anonymous-users', prefix: `${API_PREFIX}/admin`, module: anonymousUsersAdminRoutes },
   { name: 'admin-rankings', prefix: `${API_PREFIX}/admin`, module: systemRankingsRoutes },
   { name: 'admin-broadcasts', prefix: `${API_PREFIX}/admin/broadcasts`, module: broadcastRoutes },
+  { name: 'admin-ops', prefix: `${API_PREFIX}/admin/ops`, module: adminOpsRoutes },
   { name: 'admin-posts', prefix: `${API_PREFIX}/admin`, module: adminPostRoutes },
+  // Les gestes de publication depuis la liste (#10392) : hors ligne, remise en ligne, audience.
+  { name: 'admin-post-gestures', prefix: `${API_PREFIX}/admin`, module: adminPostGestureRoutes },
+  // Un signalement se traite en un geste (#10394) : l'action sur le contenu et la clôture partent ensemble.
+  { name: 'admin-moderation-acts', prefix: `${API_PREFIX}/admin`, module: adminModerationActRoutes },
   { name: 'admin-agent', prefix: `${API_PREFIX}/admin/agent`, module: agentAdminRoutes },
   { name: 'admin-agent-topics', prefix: `${API_PREFIX}/admin/agent`, module: agentTopicsRoutes },
   { name: 'admin-game-seasons', prefix: `${API_PREFIX}/admin/game`, module: gameSeasonsAdminRoutes },
@@ -347,6 +357,14 @@ export const ROUTE_TABLE_BEFORE_ATTACHMENTS: readonly RouteRegistrationEntry[] =
   // stickers, sur la spec `glory-frame` : un montage PAR DOMAINE, jamais un
   // `:domain`. Registre VIDE jusqu'au L3 (boutique `[]`, installation 404).
   { name: 'packs-glory-frame', prefix: `${API_PREFIX}/packs/glory-frame`, module: gloryFramePacksRoutes },
+  // La boutique UNIFIÉE (#10632) — trois domaines de plus sur le MÊME moteur
+  // (fonds de conversation, contours d'avatar, bannières de profil), chacun
+  // avec son achat en Meeshes, et la vitrine qui les agrège. Un montage par
+  // domaine, jamais un `:domain`.
+  { name: 'packs-wallpaper', prefix: `${API_PREFIX}/packs/wallpaper`, module: wallpaperPacksRoutes },
+  { name: 'packs-avatar-ring', prefix: `${API_PREFIX}/packs/avatar-ring`, module: avatarRingPacksRoutes },
+  { name: 'packs-banner', prefix: `${API_PREFIX}/packs/banner`, module: bannerPacksRoutes },
+  { name: 'packs-shop', prefix: `${API_PREFIX}/packs/shop`, module: packsShopRoutes },
   // Le magasin adressé par contenu des packs officiels (#10157, L5) — PUBLIC,
   // immuable, liste blanche calculée au démarrage par `PackIndex`, aucune
   // lecture de base, seau de débit propre. Préfixe distinct de `/packs/` pour

@@ -50,7 +50,7 @@ const fr = {
   'game.banner.place.one': '{count}re',
   'game.banner.place.other': '{count}e',
   'game.banner.points': '{points} pts',
-  'game.banner.missing': 'encore {points}',
+  'game.banner.missing': 'encore {points} vers le {level}',
   'game.banner.separator': ', ',
   'game.league.name.quartz': 'Quartz',
   'game.league.name.ambre': 'Ambre',

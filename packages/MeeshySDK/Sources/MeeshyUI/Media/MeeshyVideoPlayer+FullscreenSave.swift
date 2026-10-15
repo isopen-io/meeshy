@@ -29,12 +29,15 @@ extension _FullscreenRenderer {
                     let (tempURL, _) = try await URLSession.shared.download(from: url)
                     try FileManager.default.moveItem(at: tempURL, to: tempFile)
                 }
-                let ok = await PhotoLibraryManager.shared.saveVideo(at: tempFile)
+                // Dédoublonné (#10370) : déjà dans l'album ⇒ rien n'est écrit, et on le dit.
+                let outcome = await PhotoLibraryManager.shared.addVideo(at: tempFile, alias: player.attachment.id)
+                let ok = outcome.isInAlbum
                 try? FileManager.default.removeItem(at: tempFile)
                 await MainActor.run {
                     withAnimation(.spring(response: 0.3, dampingFraction: 0.8)) {
                         saveState = ok ? .saved : .failed
                     }
+                    if outcome == .alreadyPresent { PhotoAlbumSaveFeedback.announceAlreadyInAlbum() }
                     if ok {
                         HapticFeedback.success()
                         player.onSaveSuccess?()

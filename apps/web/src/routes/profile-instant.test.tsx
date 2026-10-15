@@ -5,6 +5,7 @@ import { afterAll, afterEach, beforeAll, describe, expect, test } from 'bun:test
 
 import { fixtureMyProfile } from '@/lib/api/fixtures-profile';
 import { MY_PROFILE_QUERY_KEY, MY_STATS_QUERY_KEY } from '@/lib/api/profile';
+import { STATUS_MOODS_QUERY_KEY, type StatusMoodPost } from '@/lib/api/stories';
 import { appQueryClient } from '@/lib/api/query-client';
 import { loadInterfaceCatalog } from '@/lib/i18n-catalog';
 import { gamePrefs } from '@/lib/game/preferences';
@@ -42,8 +43,15 @@ afterEach(() => {
   gamePrefs.set({ hidden: false });
 });
 
+const SETTLE_ROUNDS = 80;
+
+/** Les tours demandés, PUIS tant qu'une requête de l'écran est en vol : une
+ * réponse qui retombe après le dernier tour est une mise à jour hors `act`. */
 const settle = async (turns = 2): Promise<void> => {
-  for (let i = 0; i < turns; i += 1) await act(() => new Promise<void>((resolve) => setTimeout(resolve, 25)));
+  for (let i = 0; i < turns || appQueryClient.isFetching() > 0; i += 1) {
+    if (i === SETTLE_ROUNDS) throw new Error('une requête de la fiche n’a jamais reçu sa réponse');
+    await act(() => new Promise<void>((resolve) => setTimeout(resolve, 25)));
+  }
 };
 
 function mountNow(): HTMLDivElement {
@@ -116,4 +124,37 @@ describe('ma fiche', () => {
       expect(document.querySelector('[data-media-viewer]') === null).toBe(true);
     });
   }
+});
+
+/**
+ * **MON PROFIL MONTRE MON HUMEUR** (#10530) — lue dans le corpus déjà servi
+ * (`?scope=statuses`, la requête du rail), jamais demandée à part : l'humeur
+ * d'un AUTRE n'atterrit pas sur ma photo.
+ */
+describe('mon humeur', () => {
+  const me = (): string => fixtureMyProfile().id;
+  const corpus = (posts: readonly StatusMoodPost[]): void => {
+    appQueryClient.setQueryData(STATUS_MOODS_QUERY_KEY, posts);
+  };
+
+  test('l’humeur que j’ai posée se lit sur ma photo', async () => {
+    withImages();
+    corpus([
+      { id: 'st-ines', authorId: 'u-ines', moodEmoji: '☕' },
+      { id: 'st-moi', authorId: me(), moodEmoji: '🎉', content: 'On fête ça' },
+    ]);
+    const el = mountNow();
+    await settle();
+
+    expect(el.querySelector('[data-profile-hero] [data-mood]')?.getAttribute('data-mood')).toBe('🎉');
+  });
+
+  test('sans humeur de ma part, ma photo n’en porte aucune', async () => {
+    withImages();
+    corpus([{ id: 'st-ines', authorId: 'u-ines', moodEmoji: '☕' }]);
+    const el = mountNow();
+    await settle();
+
+    expect(el.querySelector('[data-profile-hero] [data-mood]')).toBeNull();
+  });
 });

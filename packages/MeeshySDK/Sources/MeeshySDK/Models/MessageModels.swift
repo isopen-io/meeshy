@@ -527,6 +527,9 @@ public struct APIMessage: Sendable {
     public var joinNotice: JoinNoticeMetadata? = nil
     /// Avis de capture (`metadata.kind == "content-capture"`, #9617).
     public var captureNotice: CaptureNoticeMetadata? = nil
+    /// Ligne d'arrivées regroupées de Meeshy Global (`metadata.kind ==
+    /// "members-arrived"`, #7759).
+    public var arrivalsNotice: ArrivalsNoticeMetadata? = nil
     /// L'événement système d'un avis que le SERVEUR complète sur place (#8565
     /// — la ligne d'arrivées de Meeshy Global, qui ne part qu'en
     /// `message:edited`). Même forme que `lastMessageSystemEvent` de
@@ -647,6 +650,7 @@ extension APIMessage: Decodable {
         callSummary = try? c.decodeIfPresent(CallSummaryMetadata.self, forKey: .metadata)
         joinNotice = try? c.decodeIfPresent(JoinNoticeMetadata.self, forKey: .metadata)
         captureNotice = try? c.decodeIfPresent(CaptureNoticeMetadata.self, forKey: .metadata)
+        arrivalsNotice = try? c.decodeIfPresent(ArrivalsNoticeMetadata.self, forKey: .metadata)
         systemEvent = try? c.decodeIfPresent(LastMessageSystemEvent.self, forKey: .systemEvent)
         // Outbound-link tracking: prefer the top-level `trackingLinks` (socket
         // `message:new`); otherwise read it from the `metadata` envelope (REST).
@@ -1043,6 +1047,7 @@ extension APIMessage {
             callSummary: callSummary,
             joinNotice: joinNotice,
             captureNotice: captureNotice,
+            arrivalsNotice: arrivalsNotice,
             sticker: sticker,
             trackedLinkMap: trackedLinkMap
         )

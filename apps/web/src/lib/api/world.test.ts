@@ -3,7 +3,7 @@ import { describe, expect, test } from 'bun:test';
 import { WORLD_CONVERSATION_TITLE, worldEntrySchema } from '@meeshy/shared/types/world';
 
 import type { ApiResult, HttpRequest, HttpTransport } from './http';
-import { decodeWorldEntry, loadWorldEntry, WORLD_FALLBACK_TITLE } from './world';
+import { loadWorldEntry, WORLD_FALLBACK_TITLE } from './world';
 
 function fakeTransport(result: ApiResult<unknown>) {
   const requests: HttpRequest[] = [];
@@ -17,7 +17,11 @@ function fakeTransport(result: ApiResult<unknown>) {
 
 const SERVED = { identifier: 'world', title: 'World Wide', shareLinkIdentifier: 'mshy_world', memberCount: 199, memberCountCapped: true };
 
-describe('decodeWorldEntry — jumelle zod/mini de worldEntrySchema', () => {
+test('le titre de repli est celui que le serveur sème', () => {
+  expect(WORLD_FALLBACK_TITLE).toBe(WORLD_CONVERSATION_TITLE);
+});
+
+describe('le décodage de GET /world est celui du schéma partagé (#10038)', () => {
   const samples: readonly unknown[] = [
     SERVED,
     { ...SERVED, memberCountCapped: undefined },
@@ -26,22 +30,28 @@ describe('decodeWorldEntry — jumelle zod/mini de worldEntrySchema', () => {
     { ...SERVED, memberCount: 1.5 },
     { ...SERVED, shareLinkIdentifier: '' },
     { ...SERVED, memberCountCapped: false },
+    { ...SERVED, avatar: 'https://cdn.meeshy.me/world/avatar.png', banner: 'https://cdn.meeshy.me/world/banner.png' },
     { identifier: 'world', title: 'World Wide', shareLinkIdentifier: 'mshy_world' },
     { identifier: 'world' },
     null,
     'world',
   ];
 
-  test('accepte et refuse exactement ce que le schéma partagé accepte et refuse', () => {
+  test('accepte et refuse exactement ce que worldEntrySchema accepte et refuse', async () => {
     for (const sample of samples) {
       const shared = worldEntrySchema.safeParse(sample);
-      expect(decodeWorldEntry(sample)).toEqual(shared.success ? shared.data : null);
+      const { transport } = fakeTransport({ ok: true, data: sample });
+      const result = await loadWorldEntry({ source: 'gateway', transport });
+      expect(result.ok ? result.data : null).toEqual(shared.success ? shared.data : null);
     }
   });
-});
 
-test('le titre de repli est la jumelle de WORLD_CONVERSATION_TITLE', () => {
-  expect(WORLD_FALLBACK_TITLE).toBe(WORLD_CONVERSATION_TITLE);
+  test('l’avatar et la bannière servis traversent (#10204)', async () => {
+    const served = { ...SERVED, avatar: 'https://cdn.meeshy.me/world/avatar.png', banner: 'https://cdn.meeshy.me/world/banner.png' };
+    const { transport } = fakeTransport({ ok: true, data: served });
+    const result = await loadWorldEntry({ source: 'gateway', transport });
+    expect(result.ok && [result.data.avatar, result.data.banner]).toEqual([served.avatar, served.banner]);
+  });
 });
 
 describe('loadWorldEntry — GET /api/v1/world', () => {

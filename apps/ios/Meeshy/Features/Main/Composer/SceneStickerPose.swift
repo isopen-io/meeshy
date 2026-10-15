@@ -17,6 +17,15 @@ enum StickerPackItemImages {
         let data: Data
         /// Un sticker CINÉMATIQUE : ses octets suivent l'image sur la scène.
         let isAnimated: Bool
+        /// Le type du fichier du pack — celui qui part avec ses octets.
+        var mimeType: String = "image/png"
+
+        /// **Ce qui part dans une conversation** (#9210) : le fichier du pack
+        /// TEL QUEL quand il anime — réencodé en PNG depuis sa première image,
+        /// il arrivait figé chez tout le monde. `nil` ⇒ le PNG d'hier.
+        var outgoingFile: StickerSendPipeline.OriginalFile? {
+            isAnimated ? StickerSendPipeline.OriginalFile(data: data, mimeType: mimeType) : nil
+        }
     }
 
     static func load(_ item: StickerPackItem) async -> Loaded? {
@@ -26,7 +35,7 @@ enum StickerPackItemImages {
             Logger.media.error("Sticker pack image unavailable: \(item.key, privacy: .public)")
             return nil
         }
-        return Loaded(image: image, data: data, isAnimated: item.kind == .cinematic)
+        return Loaded(image: image, data: data, isAnimated: item.isAnimated, mimeType: item.mimeType)
     }
 }
 

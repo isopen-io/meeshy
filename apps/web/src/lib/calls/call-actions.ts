@@ -1,3 +1,4 @@
+import { callsAvailable } from './calls-availability';
 import { primeTones } from './call-tones';
 import type { CallFeedbackIssue, CallFeedbackRating } from './call-feedback';
 import type { CallReactionEmoji } from '@meeshy/shared/types/call-control-law';
@@ -26,9 +27,11 @@ const run = (fn: (engine: CallEngine) => unknown): void => {
   void loadCallEngine().then(fn);
 };
 
+/* Aucune porte d'appel n'est montée là où les appels sont coupés ; une porte
+   oubliée ne compose pas pour autant (`calls-availability.ts`). */
 export const callActions = {
-  start: (request: StartCallRequest): void => run((engine) => engine.start(request)),
-  join: (request: JoinCallRequest): void => run((engine) => engine.join(request)),
+  start: (request: StartCallRequest): void => (callsAvailable() ? run((engine) => engine.start(request)) : undefined),
+  join: (request: JoinCallRequest): void => (callsAvailable() ? run((engine) => engine.join(request)) : undefined),
   accept: (options?: { readonly audioOnly?: boolean }): void => run((engine) => engine.accept(options)),
   decline: (): void => run((engine) => engine.decline()),
   /** Entendre l'appelant avant de décrocher fait taire la sonnerie (#8627). */

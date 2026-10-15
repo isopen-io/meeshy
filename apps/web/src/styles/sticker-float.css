@@ -1,0 +1,39 @@
+/* LE STICKER FLOTTE (#10630) — ni bulle ni cadre : une ombre douce sous la
+   silhouette et un flottement LENT du conteneur (jamais de l'image : un sticker
+   animé garde son propre mouvement). Coupé sous « réduire les animations ». */
+[data-sticker-open] {
+  display: inline-block;
+  background: none;
+  border: 0;
+  padding: 0;
+  cursor: pointer;
+  max-width: 100%;
+  -webkit-tap-highlight-color: transparent;
+  filter: drop-shadow(0 6px 10px rgb(0 0 0 / 0.18));
+}
+
+/* La COURSE du flottement est réservée dans la rangée : un `transform` ne
+   déplace pas la mise en page, si bien que les 4 px de la montée peignaient
+   le sticker par-dessus le nom et l'heure de la rangée du dessus (#7881 —
+   la rangée CONTIENT ce que le sticker peint). La réserve n'existe que tant
+   que le flottement existe. */
+@media (prefers-reduced-motion: no-preference) {
+  [data-sticker-open] {
+    padding-block-start: var(--sticker-float-travel);
+    animation: sticker-float 4.2s ease-in-out infinite;
+  }
+}
+
+:root {
+  --sticker-float-travel: 4px;
+}
+
+@keyframes sticker-float {
+  0%,
+  100% {
+    transform: translateY(0);
+  }
+  50% {
+    transform: translateY(calc(-1 * var(--sticker-float-travel)));
+  }
+}

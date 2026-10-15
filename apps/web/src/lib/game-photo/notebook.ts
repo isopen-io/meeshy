@@ -71,6 +71,8 @@ export type NotebookBackend = {
   readonly get: (id: string) => Promise<NotebookEntry | undefined>;
   readonly all: () => Promise<readonly NotebookEntry[]>;
   readonly remove: (id: string) => Promise<void>;
+  /** Vrai quand la base a été RENDUE (suppression demandée) : il faut la rouvrir. */
+  readonly released?: () => boolean;
 };
 
 export type KeptPhoto = {
@@ -261,6 +263,15 @@ const write = async (db: IDBDatabase, work: (store: IDBObjectStore) => IDBReques
   await Promise.all([settle(work(transaction.objectStore(STORE))), done]);
 };
 
+/** Les connexions que CET onglet tient, par base : une suppression les rend d'abord. */
+const liveConnections = new Map<string, Set<() => void>>();
+
+/** Rend toutes les connexions de cet onglet à la base `name` (avant de la supprimer). */
+export function releaseNotebookConnections(name: string): void {
+  [...(liveConnections.get(name) ?? [])].forEach((release) => release());
+  liveConnections.delete(name);
+}
+
 /** Le carnet d'un compte sur IndexedDB ; `null` quand la base ne s'ouvre pas (absente, refusée, mode privé). */
 export async function openIndexedDbBackend(factory: IDBFactory | undefined, name: string): Promise<NotebookBackend | null> {
   if (factory === undefined) return null;
@@ -271,12 +282,22 @@ export async function openIndexedDbBackend(factory: IDBFactory | undefined, name
       if (!db.objectStoreNames.contains(STORE)) db.createObjectStore(STORE, { keyPath: 'id' });
     };
     const db = await settle(request);
+    let released = false;
+    const release = (): void => {
+      released = true;
+      db.close();
+      liveConnections.get(name)?.delete(release);
+    };
+    /* Une suppression (cet onglet ou un autre) prévient d'abord : on rend la base, sinon elle attend à jamais. */
+    db.onversionchange = release;
+    liveConnections.set(name, (liveConnections.get(name) ?? new Set()).add(release));
     const read = (): IDBObjectStore => db.transaction(STORE, 'readonly').objectStore(STORE);
     return {
       put: (entry) => write(db, (store) => store.put(entry)),
       get: async (id) => (await settle(read().get(id))) as NotebookEntry | undefined,
       all: async () => (await settle(read().getAll())) as NotebookEntry[],
       remove: (id) => write(db, (store) => store.delete(id)),
+      released: () => released,
     };
   } catch {
     return null;
@@ -290,14 +311,18 @@ export async function openIndexedDbBackend(factory: IDBFactory | undefined, name
  */
 export function accountBackend(params: { readonly reader: () => string | null; readonly open: (userId: string) => Promise<NotebookBackend | null> }): NotebookBackend {
   const opened = new Map<string, Promise<NotebookBackend | null>>();
-  const ready = async (): Promise<NotebookBackend> => {
+  const ready = async (retry = true): Promise<NotebookBackend> => {
     const userId = params.reader();
     if (userId === null) throw new Error('Aucun compte');
     const pending = opened.get(userId) ?? params.open(userId);
     opened.set(userId, pending);
     const backend = await pending;
     if (backend === null) throw new Error('Carnet indisponible');
-    return backend;
+    if (backend.released?.() !== true) return backend;
+    /* Sa base a été rendue (compte retiré) : l'entrée part, la prochaine ouverture en crée une neuve. */
+    if (opened.get(userId) === pending) opened.delete(userId);
+    if (!retry) throw new Error('Carnet indisponible');
+    return ready(false);
   };
   return {
     put: async (entry) => (await ready()).put(entry),

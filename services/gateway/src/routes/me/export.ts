@@ -22,6 +22,7 @@ import {
 import { RECIPIENT_LANG_SELECT, recipientLanguage } from '../../utils/recipient-language';
 import { withoutExpiredConnectionTraces } from '../../services/retention/retention-bounds';
 import { exportGame } from './export-game';
+import { exportReadingActivity } from './export-reading';
 
 const logger = enhancedLogger.child({ module: 'DataExport' });
 
@@ -40,10 +41,12 @@ type ExportType =
   | 'sessions'
   | 'securityEvents'
   | 'game'
-  | 'packs';
+  | 'packs'
+  | 'readingActivity';
 
 const VALID_TYPES: ExportType[] = [
   'profile', 'messages', 'contacts', 'posts', 'stories', 'comments', 'reactions', 'media', 'voiceProfile', 'sessions', 'securityEvents', 'game', 'packs',
+  'readingActivity',
 ];
 
 type ExportFormat = 'json' | 'csv';
@@ -93,6 +96,19 @@ export function toCsv(headers: string[], rows: Record<string, unknown>[]): strin
 // colonnes du `select` correspondant dans `export-sections.ts`.
 
 const gameRowsSchema = { type: 'array', items: { type: 'object', additionalProperties: true } } as const;
+
+/** La télémétrie de lecture du compte (#10499, O6) — quatre listes de lignes. */
+const readingActivityExportSchema = {
+  type: 'object',
+  nullable: true,
+  properties: {
+    impressions: gameRowsSchema,
+    engagements: gameRowsSchema,
+    views: gameRowsSchema,
+    contentEvents: gameRowsSchema,
+    hasMore: { type: 'object', additionalProperties: { type: 'boolean' } },
+  },
+} as const;
 
 const gameExportSchema = {
   type: 'object',
@@ -360,7 +376,7 @@ export async function dataExportRoutes(fastify: FastifyInstance) {
             types: {
               type: 'string',
               description:
-                'Comma-separated: profile,messages,contacts,posts,stories,comments,reactions,media,voiceProfile,sessions,securityEvents,game,packs. ' +
+                'Comma-separated: profile,messages,contacts,posts,stories,comments,reactions,media,voiceProfile,sessions,securityEvents,game,packs,readingActivity. ' +
                 'Defaults to all eleven.',
             },
             limit: {
@@ -475,6 +491,7 @@ export async function dataExportRoutes(fastify: FastifyInstance) {
                   securityEventsHasMore: { type: 'boolean', nullable: true },
                   game: gameExportSchema,
                   packs: packsExportSchema,
+                  readingActivity: readingActivityExportSchema,
                   csv: {
                     type: 'object',
                     additionalProperties: { type: 'string' },
@@ -712,6 +729,10 @@ export async function dataExportRoutes(fastify: FastifyInstance) {
 
         if (requestedTypes.includes('game')) {
           exportData.game = await exportGame(fastify.prisma, userId, page);
+        }
+
+        if (requestedTypes.includes('readingActivity')) {
+          exportData.readingActivity = await exportReadingActivity(fastify.prisma, userId, page);
         }
 
         if (requestedTypes.includes('packs')) {

@@ -4,12 +4,12 @@ import { Glyph } from '@/components/glyph';
 import { translate, type InterfaceCatalogKey } from '@/lib/i18n-catalog';
 import type { InterfaceLanguage } from '@/lib/interface-language';
 import type { PublicationKind } from '@/lib/stories/publication-kind';
-import { withVisualFilter, type StudioDraft } from '@/lib/stories/studio';
-import type { StudioBackgroundSection } from '@/lib/stories/studio-background-tools';
+import { withPage, withVisualFilter, type StudioDraft } from '@/lib/stories/studio';
+import type { StudioBackgroundSection, StudioBackgroundToolAction } from '@/lib/stories/studio-background-tools';
 import type { FilterThumbnailRenderer } from '@/lib/stories/studio-filter-thumbnails';
 import type { StudioOpenTool } from '@/lib/stories/studio-focus';
 import { STUDIO_INLINE_SECTION_KEYS, type StudioInlineSection } from '@/lib/stories/studio-inline-edit';
-import type { StudioPage } from '@/lib/stories/studio-page';
+import { pageWithBackgroundTurned, type StudioPage } from '@/lib/stories/studio-page';
 import {
   STUDIO_EFFECT_LABEL_KEYS,
   studioEffectCarousel,
@@ -45,6 +45,7 @@ const BACKGROUND_LABELS = {
   edit: 'story.studio.background.menu.edit',
   retake: 'story.studio.background.menu.retake',
   forward: 'story.studio.background.menu.forward',
+  rotate: 'story.studio.background.menu.rotate',
   remove: 'story.studio.background.menu.remove',
 } as const;
 
@@ -169,10 +170,11 @@ export function useStudioSceneColumns({
     if (plan !== null) rehearse(plan);
   };
 
-  const backgroundHandlers: Record<StudioBackgroundMenuAction, () => void> = {
+  const backgroundHandlers: Record<StudioBackgroundMenuAction | StudioBackgroundToolAction, () => void> = {
     edit: background.onEdit,
     retake: background.onRetake,
     forward: background.onForward,
+    rotate: () => edit((draft) => withPage(draft, draft.currentPage, pageWithBackgroundTurned)),
     remove: background.onRemove,
   };
 

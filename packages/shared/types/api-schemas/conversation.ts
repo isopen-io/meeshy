@@ -638,7 +638,8 @@ export const conversationMinimalSchema = {
           tags: { type: 'array', items: { type: 'string' }, description: 'User-defined tags' },
           categoryId: { type: 'string', nullable: true, description: 'Category ID for organization' },
           customName: { type: 'string', nullable: true, description: 'User-defined custom conversation name (drives DM display name)' },
-          reaction: { type: 'string', nullable: true, description: 'User reaction/emoji for conversation' }
+          reaction: { type: 'string', nullable: true, description: 'User reaction/emoji for conversation' },
+          appearance: { type: 'object', nullable: true, additionalProperties: true, description: 'Personal conversation background and accent (ConversationAppearance); the reader only' }
         }
       },
       description: 'User preferences for this conversation'

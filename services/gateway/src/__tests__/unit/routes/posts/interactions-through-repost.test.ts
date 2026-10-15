@@ -90,7 +90,7 @@ describe('POST /posts/:postId/like — par où le like est passé (#9584)', () =
     );
 
     expect(res.statusCode).toBe(200);
-    expect(mockLikePost).toHaveBeenCalledWith(ORIGINAL, READER, '👍', { through: { id: REPOST, authorId: REPOSTER } });
+    expect(mockLikePost).toHaveBeenCalledWith(ORIGINAL, READER, '👍', { through: expect.objectContaining({ id: REPOST, authorId: REPOSTER, type: 'POST' }) });
   });
 
   it('sur un post ordinaire : aucune republication traversée', async () => {

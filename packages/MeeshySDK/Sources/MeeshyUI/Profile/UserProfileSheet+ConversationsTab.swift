@@ -27,7 +27,7 @@ extension UserProfileSheet {
                 }
 
                 Text(isInteractionDisabled
-                     ? String(localized: "profile.conversations.interactionsDisabled", defaultValue: "Interactions desactivees", bundle: .module)
+                     ? String(localized: "profile.conversations.interactionsDisabled", defaultValue: "Interactions désactivées", bundle: .module)
                      : String(localized: "profile.conversations.noShared", defaultValue: "Aucune conversation en commun", bundle: .module))
                     .font(.system(size: 12, weight: .medium))
                     .foregroundColor(theme.textSecondary)

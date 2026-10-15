@@ -114,7 +114,7 @@ const gameSettled = (): boolean =>
 
 async function mountSheet(node: React.ReactNode): Promise<HTMLDivElement> {
   const container = await mount(node);
-  for (let round = 0; !gameSettled(); round += 1) {
+  for (let round = 0; !gameSettled() || appQueryClient.isFetching() > 0; round += 1) {
     if (round === GAME_SETTLE_ROUNDS) throw new Error('la bannière du jeu de la feuille n’a jamais reçu sa réponse');
     await settleRound();
   }

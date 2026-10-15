@@ -788,8 +788,8 @@ struct MeeshyComposerHost: View {
             // « un seul objet, un seul site d'adoption » tient — `adoptDraft`
             // s'applique dessus douze lignes plus bas, comme aux autres.
             composer = hydrate
-        case .repostingStory(let story, let authorHandle):
-            composer = StoryComposerViewModel(reposting: story, authorHandle: authorHandle)
+        case .repostingStory(let story, _):
+            composer = StoryComposerViewModel(reposting: story)
         case nil:
             if let mediaSeed {
                 composer = StoryComposerViewModel(seeding: mediaSeed)
