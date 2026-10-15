@@ -627,6 +627,16 @@ export const conversationMinimalSchema = {
       nullable: true,
       description: 'Auto-translation enabled (disabled for E2EE conversations)'
     },
+    // #10720 — le chiffrement de bout en bout est OPTIONNEL, par conversation :
+    // seul le serveur sait si une ligne l'est. Absent du fil, un client le
+    // devinait (iOS posait « e2ee » sur toute directe) et la fiche affichait
+    // « Chiffrement actif » sur une conversation en clair.
+    encryptionMode: {
+      type: 'string',
+      enum: ['server', 'e2ee', 'hybrid'],
+      nullable: true,
+      description: 'Encryption mode (null = not encrypted)'
+    },
     userPreferences: {
       type: 'array',
       items: {

@@ -288,6 +288,8 @@ export const conversationListQuerySelect = (viewerId: string) => ({
   isAnnouncementChannel: true,
   slowModeSeconds: true,
   autoTranslateEnabled: true,
+  // #10720 — le chiffrement est optionnel par conversation : la fiche le lit ici.
+  encryptionMode: true,
   // #7545 — ce qui s'est passé DEPUIS le dernier message, résolu en une
   // lecture batchée par page (`loadConversationListActivity`).
   lastReactionId: true,
