@@ -110,11 +110,18 @@ public struct UnifiedShopView: View {
     @State private var selected: PackDomain
     private let domains: [PackDomain]
     private let focusedSlug: String?
+    private let language: String
+    private let usageText: ((FrameUsage) -> String)?
 
+    /// `language` nomme les packs dans la langue du lecteur ; `usageText` traduit la loi d'usage
+    /// d'un cadre (« Rang Ambassadeur uniquement ») — l'app la possède, la vitrine l'affiche (#10711).
     @MainActor
     public init(initialDomain: PackDomain? = nil, domains: [PackDomain] = PackDomain.allCases,
-                focusedSlug: String? = nil, store: PackShopStore? = nil) {
+                focusedSlug: String? = nil, language: String = "fr",
+                usageText: ((FrameUsage) -> String)? = nil, store: PackShopStore? = nil) {
         self.focusedSlug = focusedSlug
+        self.language = language
+        self.usageText = usageText
         let offered = domains.filter { $0 != .unknown }
         self.domains = offered
         _store = StateObject(wrappedValue: store ?? PackShopStore())
@@ -213,7 +220,7 @@ public struct UnifiedShopView: View {
                 .foregroundStyle(.secondary)
         } else {
             let domain = selected
-            PackShopView(rows: store.state.packs(in: domain)?.map(Self.row),
+            PackShopView(rows: store.state.packs(in: domain)?.map { Self.row($0, language: language, usageText: usageText) },
                          pending: pendingSlugs(in: domain),
                          showsFailure: store.state.failure != nil,
                          failureText: failureText,
@@ -228,8 +235,10 @@ public struct UnifiedShopView: View {
         return Set(store.state.pending.filter { $0.hasPrefix(prefix) }.map { String($0.dropFirst(prefix.count)) })
     }
 
-    /// Un pack de la vitrine en rangée de Boutique.
-    public static func row(_ pack: ShopPack) -> PackRow {
+    /// Un pack de la vitrine en rangée de Boutique : nommé dans la langue du lecteur, avec la loi
+    /// d'usage d'un cadre quand l'app sait la dire.
+    public static func row(_ pack: ShopPack, language: String = "fr",
+                           usageText: ((FrameUsage) -> String)? = nil) -> PackRow {
         let cover: PackCover
         if MeeStickerCatalog.cast(forPackSlug: pack.slug) != nil {
             cover = .mee(slug: pack.slug)
@@ -238,8 +247,10 @@ public struct UnifiedShopView: View {
         } else {
             cover = .remote(pack.coverUrl)
         }
-        return PackRow(slug: pack.slug, name: pack.name, author: pack.author, description: pack.description,
+        return PackRow(slug: pack.slug, name: pack.localizedName(language: language), author: pack.author,
+                       description: pack.localizedDescription(language: language),
                        installed: pack.installed, removable: pack.removable, cover: cover,
+                       usageText: pack.usage.flatMap { usage in usageText.map { $0(usage) } },
                        price: pack.price, owned: pack.isOwned)
     }
 

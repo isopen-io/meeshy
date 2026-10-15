@@ -120,6 +120,9 @@ struct PackShopScreen: View {
     let domain: PackDomain
     var focusedPack: String?
 
+    /// La langue dans laquelle la vitrine nomme ses packs — celle du magasin des cadres qu'elle remplace.
+    static var language: String { AuthManager.shared.currentUser?.systemLanguage ?? "fr" }
+
     var body: some View {
         switch domain {
         case .gloryFrame:
@@ -127,7 +130,8 @@ struct PackShopScreen: View {
         case .sticker, .wallpaper, .avatarRing, .banner:
             // La vitrine unique (#10632, #10711) : prix en Meeshes, possession, achat optimiste —
             // les stickers y passent comme les fonds, plus de seconde Boutique.
-            UnifiedShopView(initialDomain: domain, domains: [domain], focusedSlug: focusedPack)
+            UnifiedShopView(initialDomain: domain, domains: [domain], focusedSlug: focusedPack,
+                            language: PackShopScreen.language)
                 .id(domain)
                 .padding(.horizontal, MeeshySpacing.lg)
         case .unknown:
@@ -157,7 +161,8 @@ struct FramePackShopScreen: View {
                 switch page {
                 case .shop:
                     UnifiedShopView(initialDomain: .gloryFrame, domains: [.gloryFrame],
-                                    focusedSlug: focusedPack, store: vitrine)
+                                    focusedSlug: focusedPack, language: language,
+                                    usageText: FrameUsageCopy.text, store: vitrine)
                 case .pack(let slug):
                     FramePackShelfView(content: shelf.contents[slug] ?? .loading)
                         .task(id: slug) {
