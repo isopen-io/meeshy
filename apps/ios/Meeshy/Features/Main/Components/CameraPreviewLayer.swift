@@ -10,6 +10,9 @@ struct CameraPreviewLayer: UIViewRepresentable {
     /// détache — un passage par image, jamais deux. Elle reste montée, le pont
     /// des touchers y convertit toujours ses points.
     var mirrorsFrames = true
+    /// Le rang de la dernière entrée vidéo posée (`CameraModel.inputEpoch`) :
+    /// une bascule refait la connexion de la couche, qu'il faut alors régler.
+    var connectionEpoch = 0
 
     /// **La couche d'aperçu EST la couche de la vue** (#4080).
     ///
@@ -32,14 +35,17 @@ struct CameraPreviewLayer: UIViewRepresentable {
         var previewLayer: AVCaptureVideoPreviewLayer { layer as! AVCaptureVideoPreviewLayer }
     }
 
+    func makeCoordinator() -> CameraPreviewConnectionHolder {
+        CameraPreviewConnectionHolder()
+    }
+
     func makeUIView(context: Context) -> PreviewHost {
         let view = PreviewHost()
         view.backgroundColor = .black
         view.previewLayer.session = session
         view.previewLayer.videoGravity = .resizeAspectFill
         focusPoints?.attach(view)
-        view.previewLayer.connection?.isEnabled = mirrorsFrames
-        view.isHidden = !mirrorsFrames
+        applyConnection(to: view, sync: context.coordinator)
         return view
     }
 
@@ -48,11 +54,43 @@ struct CameraPreviewLayer: UIViewRepresentable {
         // la frame, elle, n'a plus à être posée — `layerClass` s'en charge.
         if uiView.previewLayer.session !== session {
             uiView.previewLayer.session = session
+            context.coordinator.sync = CameraPreviewConnectionSync()
         }
         focusPoints?.attach(uiView)
-        uiView.previewLayer.connection?.isEnabled = mirrorsFrames
-        uiView.isHidden = !mirrorsFrames
+        applyConnection(to: uiView, sync: context.coordinator)
     }
+
+    /// **La connexion ne se touche que quand elle change** (#10308). Chaque
+    /// passe SwiftUI la relisait et la réécrivait — celles que la bascule
+    /// déclenche elle-même comprises : le fil principal attendait alors la fin
+    /// de la reconfiguration de la session, l'écran figé, et chaque écriture
+    /// sur une session en marche en relançait une.
+    private func applyConnection(to view: PreviewHost, sync: CameraPreviewConnectionHolder) {
+        view.isHidden = !mirrorsFrames
+        guard sync.sync.needsWrite(enabled: mirrorsFrames, epoch: connectionEpoch) else { return }
+        view.previewLayer.connection?.isEnabled = mirrorsFrames
+    }
+}
+
+/// **Ce que la couche d'aperçu a déjà reçu** (#10308) : la connexion ne
+/// s'écrit qu'à un changement de vœu ou d'entrée vidéo.
+nonisolated struct CameraPreviewConnectionSync: Equatable, Sendable {
+    private(set) var appliedEnabled: Bool?
+    private(set) var appliedEpoch: Int?
+
+    /// `true` ⇒ écrire `isEnabled` maintenant ; l'état appliqué est retenu.
+    mutating func needsWrite(enabled: Bool, epoch: Int) -> Bool {
+        guard appliedEnabled != enabled || appliedEpoch != epoch else { return false }
+        appliedEnabled = enabled
+        appliedEpoch = epoch
+        return true
+    }
+}
+
+/// La mémoire de la couche d'aperçu — une référence, qu'écrire n'invalide pas.
+final class CameraPreviewConnectionHolder {
+    var sync = CameraPreviewConnectionSync()
+    nonisolated deinit {}
 }
 
 /// **Le pont entre un toucher et le capteur** (#9295).
@@ -89,5 +127,38 @@ final class CameraPreviewFocusPoints {
     nonisolated static func layerPoint(global point: CGPoint, previewFrame: CGRect) -> CGPoint? {
         guard !previewFrame.isEmpty, previewFrame.contains(point) else { return nil }
         return CGPoint(x: point.x - previewFrame.minX, y: point.y - previewFrame.minY)
+    }
+}
+
+/// **Ce que la couche d'aperçu doit montrer, connu de la bascule** (#10308).
+///
+/// Une bascule refait la connexion de la couche, qui renaît ACTIVÉE. Quand la
+/// vue Metal peint, il fallait la désactiver après coup, depuis le fil
+/// principal : une écriture sur une session en marche, qui la reconfigure une
+/// seconde fois — l'aperçu gèle, noircit, juste après chaque retournement.
+/// La bascule la règle désormais DANS sa transaction, d'après ce vœu.
+nonisolated final class ComposerPreviewMirroring: @unchecked Sendable {
+    private let lock = NSLock()
+    private var wanted = true
+
+    var isWanted: Bool {
+        get {
+            lock.lock()
+            defer { lock.unlock() }
+            return wanted
+        }
+        set {
+            lock.lock()
+            wanted = newValue
+            lock.unlock()
+        }
+    }
+
+    /// Dans la configuration ouverte par l'appelant : les connexions de couche
+    /// d'aperçu prennent le vœu, les autres ne sont pas touchées.
+    static func align(_ connections: [AVCaptureConnection], wanted: Bool) {
+        for connexion in connections where connexion.videoPreviewLayer != nil && connexion.isEnabled != wanted {
+            connexion.isEnabled = wanted
+        }
     }
 }

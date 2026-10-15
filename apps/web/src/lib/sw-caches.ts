@@ -36,6 +36,26 @@ export const SW_RUNTIME_CACHES = {
 export const SW_RUNTIME_CACHE_NAMES: readonly string[] = Object.values(SW_RUNTIME_CACHES);
 
 /**
+ * LE SEAU DE `/config.js` (#10208) — la configuration du DÉPLOIEMENT, pas une
+ * donnée de lecteur : hors de `SW_RUNTIME_CACHES`, donc ni la fin d'un compte
+ * ni une mise à jour ne le purgent. Le purger ne ferait que priver le prochain
+ * démarrage hors ligne de l'origine déclarée.
+ */
+export const SW_DEPLOYMENT_CONFIG_CACHE = 'deployment-config';
+
+/**
+ * LE SEAU DES FICHIERS DE PACKS (#10149) — vignettes, contrats et chaînes
+ * servis par `packAssets.byFile` (`<sha16>.<ext>`), adressés par CONTENU donc
+ * immuables : la page les y range elle-même (`lib/packs/pack-asset-store.ts`,
+ * qui en porte le JUMEAU pour ne pas tirer ce module hors de la première peinture)
+ * après avoir vérifié leur SHA-256. Hors de `SW_RUNTIME_CACHES` : ce n'est pas
+ * une donnée de lecteur (le même fichier sert tout le monde), ni la fin d'un
+ * compte ni une mise à jour ne le purgent — le purger ne ferait que les
+ * retélécharger.
+ */
+export const SW_PACK_ASSETS_CACHE = 'meeshy-pack-assets';
+
+/**
  * LE NAMESPACE DU LEGACY, dont la v2 a HÉRITÉ la responsabilité (#6702) : son
  * worker ne s'exécutera plus jamais, donc plus rien d'autre n'effacera ce qu'il
  * a laissé. `public/sw-legacy-purge.js` le purge à l'activation ; ce littéral

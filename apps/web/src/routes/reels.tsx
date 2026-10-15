@@ -19,13 +19,17 @@ import { translate } from '@/lib/i18n-catalog';
 import { currentInterfaceLanguage, type InterfaceLanguage } from '@/lib/interface-language';
 import { useOnline } from '@/lib/net/online';
 import { currentHistory, reelsExitOf } from '@/lib/reels/exit';
+import { createReelMediaUnlocker } from '@/lib/reels/media-unlock';
 import { reelPrimeSourceOf } from '@/lib/reels/scene';
+import { createPagerSettle } from '@/lib/reels/settle';
 import { useReelPreload } from '@/lib/reels/use-reel-preload';
 import { activeIndexOf, composeReelThread, entryReelIds, holdReelThread, neighborIndex, pageModeOf, reelSeedOf, reelVisitorState, shouldLoadMoreReels } from '@/lib/reels/thread';
 import { useRoute } from '@/lib/router';
 import { chromeYields } from '@/lib/view/chrome-yields';
 import { sceneYieldOf, writingSceneScale, yieldingScene } from '@/lib/view/scene-yields';
 import { REEL_COLUMN_STYLE } from '@/lib/view/reading-column';
+import { SWIPED_REEL, entryAttribution } from '@/lib/view/content-open';
+import { useViewAttribution } from '@/lib/view/reading-telemetry';
 import { screenGestureYields, shortcutYieldsToTarget } from '@/lib/view/shortcut-scope';
 import { useCommentsSheetHost } from '@/lib/view/use-comments-sheet-host';
 import { useMinute } from '@/lib/view/use-minute';
@@ -50,7 +54,8 @@ import { href, navigate } from '@/routes/route-table';
  * - **Le défilement est celui du navigateur** : `scroll-snap` obligatoire, un
  *   arrêt par réel (`snap-always`). Le geste reste sur le compositeur — aucun
  *   suivi du doigt réécrit en JavaScript, aucune transition qui l'amortit. Le
- *   réel visible se lit sur la position (`activeIndexOf`), une fois par image.
+ *   réel visible se lit sur la position (`activeIndexOf`), une fois le geste
+ *   FINI (`lib/reels/settle.ts`) : jamais à mi-balayage.
  * - **Au clavier**, flèches et Page haut/bas valent le balayage ; le défilement
  *   est instantané sous `prefers-reduced-motion`. Échap referme.
  * - **La sortie est l'historique** : `/reels` est une adresse, le retour du
@@ -192,6 +197,10 @@ export default function ReelsScreen() {
      réel d'entrée. */
   const { params, search } = useRoute();
   const seed = reelSeedOf({ params, search });
+  /* LE PREMIER RÉEL porte la provenance d'entrée (tap d'un listing, lien,
+     notification…), les réels atteints par balayage `listing` / `reels` (#10483). */
+  const entry = useViewAttribution();
+  const [viewAttribution] = useState(() => entryAttribution(entry, SWIPED_REEL));
   const online = useOnline();
   const { languages: readerLanguages } = useReaderLanguages();
   const minute = useMinute();
@@ -249,8 +258,9 @@ export default function ReelsScreen() {
         heldIds: held.current.ids,
         activeId: held.current.activeId,
         composed: composeReelThread({ entryIds, known, served: reels.data ?? EMPTY_POSTS }),
+        ...(seed !== undefined ? { entryId: seed } : {}),
       }),
-    [entryIds, known, reels.data],
+    [entryIds, known, reels.data, seed],
   );
   /* UN MODÈLE PAR PUBLICATION, GARDÉ tant que la publication, la langue et la
      minute ne changent pas (#9277) : une page de réels de plus ne recompose
@@ -299,21 +309,9 @@ export default function ReelsScreen() {
     anchorTop: 0,
     reducedMotion: prefersReducedMotion(),
   });
-  const frame = useRef<number | null>(null);
-  const onScroll = useCallback(() => {
-    if (frame.current !== null) return;
-    frame.current = window.requestAnimationFrame(() => {
-      frame.current = null;
-      const el = scroller.current;
-      if (el !== null) setActiveIndex(activeIndexOf({ scrollTop: el.scrollTop, pageHeight: el.clientHeight, count }));
-    });
-  }, [count]);
-  useEffect(
-    () => () => {
-      if (frame.current !== null) window.cancelAnimationFrame(frame.current);
-    },
-    [],
-  );
+  const countRef = useRef(count);
+  countRef.current = count;
+  const [unlocker] = useState(createReelMediaUnlocker);
 
   const close = useCallback(() => {
     if (reelsExitOf(currentHistory()) === 'back') window.history.back();
@@ -372,6 +370,39 @@ export default function ReelsScreen() {
   });
   const ask = invitation.ask;
 
+  /* LE RÉEL REGARDÉ SE DÉCIDE GESTE FINI (`lib/reels/settle.ts`) — doigt levé,
+     puis `scrollend` ou un court silence : aucune pause, aucune lecture, aucun
+     montage de lecteur pendant les images du balayage. Le doigt qui se lève
+     BÉNIT aussi les voisins montés (`lib/reels/media-unlock.ts`) : sous iOS,
+     le réel suivant précharge alors vraiment, et joue avec le son. Écouteurs
+     PASSIFS : un `touchstart` actif retarderait le départ du défilement. */
+  const pagerShown = !loading && !failed && !coldOffline && count > 0;
+  useEffect(() => {
+    const el = scroller.current;
+    if (!pagerShown || el === null) return undefined;
+    const settle = createPagerSettle({
+      onSettle: () => setActiveIndex(activeIndexOf({ scrollTop: el.scrollTop, pageHeight: el.clientHeight, count: countRef.current })),
+    });
+    const lifted = (): void => {
+      unlocker.unlock(el);
+      settle.touchEnded();
+    };
+    const passive = { passive: true } as const;
+    el.addEventListener('scroll', settle.scrolled, passive);
+    el.addEventListener('scrollend', settle.scrollEnded, passive);
+    el.addEventListener('touchstart', settle.touchStarted, passive);
+    el.addEventListener('touchend', lifted, passive);
+    el.addEventListener('touchcancel', lifted, passive);
+    return () => {
+      el.removeEventListener('scroll', settle.scrolled);
+      el.removeEventListener('scrollend', settle.scrollEnded);
+      el.removeEventListener('touchstart', settle.touchStarted);
+      el.removeEventListener('touchend', lifted);
+      el.removeEventListener('touchcancel', lifted);
+      settle.dispose();
+    };
+  }, [pagerShown, unlocker]);
+
   const body = loading ? (
     <ReelsSkeleton language={language} />
   ) : failed || coldOffline ? (
@@ -387,7 +418,6 @@ export default function ReelsScreen() {
         aria-label={translate(language, 'reels.title')}
         aria-busy={isFetchingNextPage}
         data-reels-pager
-        onScroll={onScroll}
         /* LA FEUILLE RÉCLAME LE GESTE (D-90, miroir du rail `inert` de
            `routes/story.tsx`) — un sous-arbre inerte n'intercepte plus le
            doigt ni le clavier : sans elle, un balayage sous la feuille
@@ -415,6 +445,7 @@ export default function ReelsScreen() {
             onGesture={visitor ? ask : onGesture}
             onShare={visitor ? ask : onShare}
             onSoundBlocked={soundBlocked}
+            viewAttribution={viewAttribution}
             chromeHidden={chromeYielded}
             {...(canWrite ? { onComment: comments.open, onRepost } : { onComment: ask })}
           />

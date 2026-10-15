@@ -37,6 +37,8 @@ export type ReferralValidation = {
     readonly firstName?: string | null;
     readonly lastName?: string | null;
     readonly avatar?: string | null;
+    /** La bannière de profil de l'invitant (#10559) — absente d'une passerelle plus ancienne. */
+    readonly banner?: string | null;
   };
 };
 
@@ -60,4 +62,37 @@ export function inviterName(validation: ReferralValidation): string {
   if (displayName !== '') return displayName;
   const full = [user.firstName ?? '', user.lastName ?? ''].map((part) => part.trim()).filter((part) => part !== '').join(' ');
   return full !== '' ? full : user.username;
+}
+
+/**
+ * CE QUE LE CADRE « QUI M'INVITE » MONTRE (#10559) — et rien de plus : ni
+ * identifiant, ni présence. `username` est `null` quand le pseudo EST déjà le
+ * nom montré : il ne se répète pas sous lui-même.
+ */
+export type InviterCard = {
+  readonly name: string;
+  readonly username: string | null;
+  readonly avatar: string | null;
+  readonly banner: string | null;
+};
+
+const presentOrNull = (value: string | null | undefined): string | null => {
+  const trimmed = (value ?? '').trim();
+  return trimmed === '' ? null : trimmed;
+};
+
+/** La carte d'un jeton VALIDE qui nomme quelqu'un — `null` sinon. Le nom suit
+ * `inviterName` : nom affiché, sinon prénom et nom, sinon le pseudo. */
+export function inviterCardOf(validation: ReferralValidation): InviterCard | null {
+  const user = validation.affiliateUser;
+  if (!validation.isValid || user === undefined) return null;
+  const name = inviterName(validation).trim();
+  if (name === '') return null;
+  const username = presentOrNull(user.username);
+  return {
+    name,
+    username: username === name ? null : username,
+    avatar: presentOrNull(user.avatar),
+    banner: presentOrNull(user.banner),
+  };
 }

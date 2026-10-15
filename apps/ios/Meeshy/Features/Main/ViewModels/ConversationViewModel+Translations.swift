@@ -347,6 +347,10 @@ extension ConversationViewModel {
             translationResolutionCache.removeAll()
             cachedRevisionForTranslation = preferredLanguageRevision
         }
+        // #9191 — le prisme se lit AVANT le cache : un profil arrivé après une
+        // première résolution (connexion neuve) change le prisme, et la lecture
+        // de `preferredLanguages` vide alors les résolutions faites sans lui.
+        let readerPrism = preferredLanguages
         switch translationResolutionCache[messageId] {
         case .some(let cached):
             return cached
@@ -358,23 +362,72 @@ extension ConversationViewModel {
             return nil
         }
 
-        let originalLang = messageIndex(for: messageId)
+        // #8896 — la langue d'origine se lit sur le message de la fenêtre. Un
+        // message pas encore entré dans `messages` (rendu depuis le magasin
+        // avant le miroir) n'en a pas : elle se lit alors sur les traductions,
+        // et la résolution reste PROVISOIRE — jamais mise en cache, sinon le
+        // rang 2 servi trop tôt collait à la bulle (le `didSet` de `messages`
+        // ne vide pas ce cache).
+        let windowOrigin = messageIndex(for: messageId)
             .map { messages[$0].originalLanguage.lowercased() }
+        let originalLang = windowOrigin ?? Self.translatedFromLanguage(of: translations)
+        let resolved = Self.prismTranslation(
+            in: translations, originalLanguage: originalLang, preferredLanguages: readerPrism
+        )
+        if windowOrigin != nil {
+            translationResolutionCache.updateValue(resolved, forKey: messageId)
+        }
+        return resolved
+    }
 
-        let langs = preferredLanguages
-        for lang in langs {
+    /// Descente du Prisme sur UN message — règle 3 : la langue d'origine
+    /// concourt à son RANG. La première langue du lecteur servie gagne, par une
+    /// traduction ou parce que le message est déjà écrit dedans (⇒ `nil`,
+    /// l'original). Aucune traduction servie ⇒ `nil`, jamais `translations.first`.
+    static func prismTranslation(
+        in translations: [MessageTranslation], originalLanguage: String?, preferredLanguages: [String]
+    ) -> MessageTranslation? {
+        for lang in preferredLanguages {
             let langLower = lang.lowercased()
-            if let orig = originalLang, orig == langLower {
-                translationResolutionCache.updateValue(nil, forKey: messageId)
-                return nil
-            }
+            if originalLanguage == langLower { return nil }
             if let match = translations.first(where: { $0.targetLanguage.lowercased() == langLower }) {
-                translationResolutionCache[messageId] = match
                 return match
             }
         }
-        translationResolutionCache.updateValue(nil, forKey: messageId)
         return nil
+    }
+
+    /// #9191 — une résolution mise en cache a été calculée sur la langue
+    /// d'origine de la fenêtre. Quand la base corrige cette origine (une ligne
+    /// née provisoire — bulle de la NSE, réconciliation depuis le cache —
+    /// reçoit l'origine servie par la passerelle), la résolution d'avant ment :
+    /// elle servait l'original d'un message coréen pris pour du français. Elle
+    /// se retire, la bulle redescend le Prisme sur la bonne origine.
+    func forgetPrismResolutions(whoseOriginChangedFrom previous: [Message]?) {
+        guard let previous, !translationResolutionCache.isEmpty else { return }
+        for id in Self.messageIdsWhoseOriginChanged(from: previous, to: messages) {
+            translationResolutionCache.removeValue(forKey: id)
+        }
+    }
+
+    /// Les messages présents des deux côtés dont la langue d'origine a changé.
+    nonisolated static func messageIdsWhoseOriginChanged(from previous: [Message], to current: [Message]) -> [String] {
+        let before = Dictionary(
+            previous.map { ($0.id, $0.originalLanguage.lowercased()) },
+            uniquingKeysWith: { first, _ in first }
+        )
+        return current.compactMap { message in
+            guard let origin = before[message.id], origin != message.originalLanguage.lowercased() else { return nil }
+            return message.id
+        }
+    }
+
+    /// Langue SOURCE déclarée par les traductions d'un message — repli quand le
+    /// message n'est pas dans la fenêtre. « auto » n'est pas une langue.
+    static func translatedFromLanguage(of translations: [MessageTranslation]) -> String? {
+        translations.lazy
+            .map { $0.sourceLanguage.lowercased() }
+            .first { !$0.isEmpty && $0 != "auto" }
     }
 
     /// Version linguistique que le lecteur a RÉELLEMENT sous les yeux pour ce

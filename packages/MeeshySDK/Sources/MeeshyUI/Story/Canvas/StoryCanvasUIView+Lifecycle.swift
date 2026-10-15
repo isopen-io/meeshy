@@ -17,6 +17,12 @@ extension StoryCanvasUIView {
         super.didMoveToWindow()
         if window != nil {
             startEditDisplayLinkIfNeeded()
+            // Le canevas sonore d'édition qui arrive à l'écran prend la main
+            // sur le son de la scène, à la phase où elle en était (#10362).
+            if mode == .edit, playsAudioInEditMode {
+                claimEditAudio()
+                resumeEditAudioIfSilenced()
+            }
             // Ré-arme le link de lecture invalidé par `willMove(toWindow: nil)`
             // quand le canvas revient à l'écran sans repasser par `setMode`
             // (cover/sheet présenté au-dessus du viewer puis dismissé).
@@ -187,8 +193,15 @@ extension StoryCanvasUIView {
         // AVAudioEngine leakés à chaque fermeture). Ré-armé symétriquement
         // dans `didMoveToWindow` pour le cas re-attach sans `setMode`.
         stopPlayback()
+        // La capture plein cadre du verre (une texture Metal à la taille du
+        // rendu) ne sert qu'à l'écran : hors fenêtre, elle se rend, et la
+        // lecture la refait au retour — sa clé part avec elle (#9864).
+        backdropCapture.invalidate()
         forEachAVPlayer { $0.pause() }
         audioMixer.stop()
         releasePlaybackSessionIfNeeded()
+        // Rend la main APRÈS s'être tu : le canevas d'en dessous reprend le
+        // son à la phase partagée (#10362).
+        releaseEditAudio()
     }
 }

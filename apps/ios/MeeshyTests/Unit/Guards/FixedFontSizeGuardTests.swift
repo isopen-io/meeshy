@@ -185,7 +185,6 @@ final class FixedFontSizeGuardTests: XCTestCase {
         "Features/Main/Views/AchievementBadgeView.swift",
         "Features/Main/Views/ActiveSessionsView.swift",
         "Features/Main/Views/AffiliateView.swift",
-        "Features/Main/Views/AudioFullscreenView.swift",
         "Features/Main/Views/Bubble/BubbleFailedRetryBar.swift",
         "Features/Main/Views/CallEffectsOverlay.swift",
         // #8276 — `CallView.swift` découpé : ses glyphes figés ont suivi leurs
@@ -337,7 +336,8 @@ final class FixedFontSizeGuardTests: XCTestCase {
     /// (`Text(flags[i])`, 20 pt) — est parti avec le fichier. Un cliquet qui ne
     /// descend pas quand la population descend cesse d'être un cliquet.
     // 35 → 34 (#8878) : le libellé de 10 pt du rail de la story part avec son fichier.
-    private static let textCeiling = 34
+    // 34 → 33 (#10366) : le code pays figé de la puce de langue repasse en `.caption2`.
+    private static let textCeiling = 33
 
     /// Tous receveurs confondus. **Ne doit que DESCENDRE.** 247 avant le
     /// correctif du 264i, 245 après (le glyphe et le chiffre de la tuile de
@@ -438,7 +438,13 @@ final class FixedFontSizeGuardTests: XCTestCase {
     // `bearingFiles` (règle 4) ; `StoryViewerContainer.swift` garde son glyphe d'erreur.
     // 194 → 191 (#8878) : le rail des réels n'a plus que le contour de participation
     // (trois sites → un) et sa croix monte `FullscreenTopBar` (un glyphe).
-    private static let totalCeiling = 191
+    // 191 → 190 (#10366) : la puce de langue repasse sur une ligne en polices
+    // sémantiques, son code pays de 7 pt figé disparaît.
+    // 190 → 186 (#10383) : le plein écran audio dimensionne ses glyphes de
+    // transport et de traduction par leur CADRE (`resizable` + `frame`), plus
+    // par une police figée — quatre glyphes, aucun texte. `AudioFullscreenView`
+    // sort de `bearingFiles` (règle 4) ; sa page n'y entre pas.
+    private static let totalCeiling = 186
 
     // MARK: - Règle 1 — aucun écran neuf n'introduit de taille figée
 

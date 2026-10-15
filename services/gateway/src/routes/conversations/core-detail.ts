@@ -24,6 +24,7 @@ import { conversationDetailWithEngagementResponseSchema, loadViewerEngagementsOr
 import { conversationDetailInclude } from './core-selects';
 import { loadReadCursorBoundaries } from './read-cursor-projection';
 import { loadViewerBirthDate } from './viewerWriteRestriction';
+import { memberCountServedToViewer, membersServedToViewer } from '../../services/guests/guestMemberVisibility';
 import { viewerWriteRestrictionOf } from '@meeshy/shared/utils/global-minor-restriction';
 import {
   parseStrictFieldList,
@@ -530,18 +531,19 @@ export function registerConversationDetailRoute(
        * l'est dès que `title` est demandé — et c'est la restriction qui empêche
        * ce détour d'élargir la réponse au-delà de ce que l'appelant a nommé.
        */
+      // #10205 — un invité (sans compte) ne reçoit que SA ligne et aucun effectif.
       const charge: Record<string, unknown> = { ...conversationData };
-      if (gatedParticipants !== undefined) charge.participants = gatedParticipants;
+      if (gatedParticipants !== undefined) charge.participants = membersServedToViewer(gatedParticipants, authRequest.authContext);
       if (sertTitre) charge.title = displayTitle;
       if (sertEffectif) {
         // Même cap 199+ que la liste : deux surfaces, une seule présentation,
         // et le même droit de voir l'effectif ENTIER (`canViewExactMemberCount`).
-        Object.assign(charge, presentMemberCount(_count.participants, {
+        Object.assign(charge, memberCountServedToViewer(presentMemberCount(_count.participants, {
           viewerSeesExactCount: canViewExactMemberCount({
             platformRole: authRequest.authContext.registeredUser?.role ?? null,
             conversationRole: callerConversationRole
           })
-        }));
+        }), authRequest.authContext));
       }
       // Le rang était résolu ici depuis toujours — pour décider du plafond
       // d'effectif juste au-dessus — et n'était pas servi. Les clients

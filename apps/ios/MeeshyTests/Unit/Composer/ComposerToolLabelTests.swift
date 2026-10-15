@@ -81,8 +81,10 @@ final class ComposerToolLabelTests: XCTestCase {
             src.contains("Text(ComposerDocumentCopy.label(tool))"),
             "Une légende est revenue sous un outil du document (directive porteur 2026-09-27)."
         )
-        XCTAssertTrue(src.contains(".adaptiveLiquidGlass(in:Circle(),tint:plateauTint.opacity(0.55),interactive:true)"),
-                      "L'outil porte le disque de verre teinté des rails.")
+        XCTAssertFalse(src.contains(".adaptiveLiquidGlass(in:Circle(),tint:plateauTint.opacity(0.55),interactive:true)"),
+                       "Plus de cercle autour des outils du document (#10364).")
+        XCTAssertTrue(src.contains(".modifier(ComposerRailGlyphRelief(active:true))"),
+                      "L'outil est un glyphe blanc en relief, comme les rails de la scène (#10364).")
     }
 
     // 1 bis — le retrait fonctionne. Sans ce témoin, une régression du

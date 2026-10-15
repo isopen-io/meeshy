@@ -1,3 +1,7 @@
+import { lazy, useSyncExternalStore, type ReactNode } from 'react';
+import { useStore } from 'zustand/react';
+
+import { sessionStore } from '@/lib/api/session';
 import { currentAdminLanguage, loadAdminInterfaceCatalog } from '@/lib/i18n-admin-catalog';
 import { loadInterfaceCatalog, suspendForInterfaceCatalog, translate } from '@/lib/i18n-catalog';
 import { currentInterfaceLanguage, type InterfaceLanguage } from '@/lib/interface-language';
@@ -6,7 +10,8 @@ import { loadLinkFamiliesCatalog } from '@/lib/i18n-link-families-catalog';
 import { loadNotificationRowCatalog } from '@/lib/i18n-notification-row-catalog';
 import type { GameScreen } from '@/lib/i18n-game-catalog';
 import { loadOnboardingCatalog } from '@/lib/i18n-onboarding-catalog';
-import { createRouter } from '@/lib/router';
+import { createRouter, type FrameProps } from '@/lib/router';
+import { isWide, splitPaneOf, subscribeWide } from '@/lib/view/split-query';
 
 /**
  * LA TABLE DES ROUTES — le seul endroit du depot qui connait les adresses.
@@ -113,6 +118,8 @@ const adminLanguagesScreen = () =>
   Promise.all([import('@/routes/admin-languages'), loadAdminInterfaceCatalog(currentAdminLanguage())]).then(([screen]) => screen);
 const adminSettingsScreen = () =>
   Promise.all([import('@/routes/admin-settings'), loadAdminInterfaceCatalog(currentAdminLanguage())]).then(([screen]) => screen);
+const adminOperationsScreen = () =>
+  Promise.all([import('@/routes/admin-operations'), loadAdminInterfaceCatalog(currentAdminLanguage())]).then(([screen]) => screen);
 const adminEngagementScaleScreen = () =>
   Promise.all([import('@/routes/admin-engagement-scale'), loadAdminInterfaceCatalog(currentAdminLanguage())]).then(([screen]) => screen);
 /* L'ACCUEIL POST-INSCRIPTION (#7729) — son chunk ET son catalogue
@@ -168,8 +175,16 @@ const progressionCarnetScreen = () =>
    sur un catalogue non chargé, et aucun autre écran n'en paie les octets. */
 const chatJoinScreen = () =>
   Promise.all([import('@/routes/chat-join'), loadInviteCatalog(currentInterfaceLanguage())]).then(([screen]) => screen);
+/* L'ENTRÉE SANS COMPTE DANS WORLD WIDE (#10003) — ses libellés `world.*`
+   vivent dans le même catalogue que la jonction par lien, dont elle rejoue la
+   porte et les refus. */
+const worldEntryScreen = () =>
+  Promise.all([import('@/routes/world-entry'), loadInviteCatalog(currentInterfaceLanguage())]).then(([screen]) => screen);
+/* LA FICHE D'UN LIEN DE PARTAGE monte son formulaire d'édition, dont les
+   libellés `links.create.*` vivent dans le catalogue des familles de liens
+   (#10322). */
 const shareLinkScreen = () =>
-  Promise.all([import('@/routes/share-link'), loadInviteCatalog(currentInterfaceLanguage())]).then(([screen]) => screen);
+  withLinkFamiliesCatalog(Promise.all([import('@/routes/share-link'), loadInviteCatalog(currentInterfaceLanguage())]).then(([screen]) => screen));
 const shareLinkArrivalsScreen = () =>
   Promise.all([import('@/routes/share-link-arrivals'), loadInviteCatalog(currentInterfaceLanguage())]).then(([screen]) => screen);
 
@@ -181,7 +196,24 @@ const notificationsScreen = () =>
   Promise.all([import('@/routes/notifications'), loadNotificationRowCatalog(currentInterfaceLanguage())]).then(([screen]) => screen);
 
 export const ROUTES = {
-  list: { pattern: '/', screen: () => import('@/routes/conversations') },
+  /* LA LANDING (#10002) — `/` est la page d'accueil de meeshy.me pour TOUS,
+     prérendue par langue (`scripts/prerender-landing.tsx`) ; nginx sert le
+     document statique, et cet écran ne rend `/` que lorsque c'est la coquille
+     qui la reçoit (service worker, développement). Dans la coque, `/` ouvre la
+     liste : c'est l'adresse que ses liens, ses pushs et son démarrage visaient. */
+  home: { pattern: '/', screen: () => (__SHELL__ ? import('@/routes/home-shell') : import('@/routes/home')) },
+  /* LA LISTE DES CONVERSATIONS déménage sur `/chats` (#10002, décision porteur
+     du 2026-10-10) ; les adresses de fil (`/c/…`) ne changent pas. */
+  /* Le menu d'une ligne et les puces (#10593) parlent leur catalogue, chargé
+     AVEC l'écran — le cadre du grand écran passe par ce même chargeur. */
+  list: {
+    pattern: '/chats',
+    screen: () =>
+      Promise.all([
+        import('@/routes/conversations'),
+        import('@/lib/i18n-row-menu-catalog').then((m) => m.loadRowMenuCatalog(currentInterfaceLanguage())),
+      ]).then(([screen]) => screen),
+  },
   thread: { pattern: '/c/$conversation', screen: () => import('@/routes/thread') },
   /* NOUVELLE CONVERSATION (#5652) — nomenclature legacy reprise (D-5) :
      `apps/web/app/conversations/new` porte déjà ce chemin. */
@@ -200,6 +232,13 @@ export const ROUTES = {
      Le legacy la servait (`apps/web/app/chat/[id]`, D-5) et ne la sert plus.
      PUBLIQUE : `session-guard.ts` ne la range dans aucun ensemble. */
   chatJoin: { pattern: '/chat/$link', screen: chatJoinScreen },
+  /* ENTRER DANS WORLD WIDE SANS COMPTE (#10003, planche « Onboarding ») — nom,
+     langue, puis le fil, par la clé que sert `GET /world`. La landing y mène
+     avec le nom et la langue (`landing/world-entry.ts`). L'invité y RESTE
+     (#10100) : son fil s'y ouvre en focus, sans liste ni navigation, et s'y
+     rouvre au rafraîchissement. PUBLIQUE, comme `chatJoin` : l'écran renvoie
+     lui-même un compte vers la jonction par lien, puis son application. */
+  world: { pattern: '/world', screen: worldEntryScreen },
   /* Le tableau de bord des streaks & badges (#5547) — sous `/me/`, l'espace
      du profil (inventaire de parité : `/me` est V4.0.0), privé (garde de
      session), découpé comme les autres : aucun octet avant le premier pixel. */
@@ -220,8 +259,15 @@ export const ROUTES = {
   /* LA LIGUE (#9384, #9385) — la ligue publique, la ligue entre amis et la
      mission en duo. PRIVÉE : `session-guard.ts`. */
   progressionLigue: { pattern: '/me/progression/ligue', screen: progressionLigueScreen },
+  /* UNE SEMAINE DE LIGUE NOMMÉE (#9947) — le lien canonique d'une semaine, son lundi
+     (`leagueWeekLinkPath`, `packages/shared`) : celui que porte la carte d'un événement
+     in-app `COMPETITION`. PRIVÉE. */
+  progressionLigueSemaine: { pattern: '/me/progression/ligue/$semaine', screen: progressionLigueScreen },
   /* LA SAISON (#9386) — huit semaines, quarante étapes gratuites, la rangée Sceau. PRIVÉE. */
   progressionSaison: { pattern: '/me/progression/saison', screen: progressionSaisonScreen },
+  /* UNE SAISON NOMMÉE (#9947) — passée, en cours ou future (`seasonLinkPath`) : celle
+     que porte la carte d'un événement in-app `NEW_SEASON`. PRIVÉE. */
+  progressionSaisonNumero: { pattern: '/me/progression/saison/$saison', screen: progressionSaisonScreen },
   /* LA VITRINE, L'ATLAS ET LE PRESTIGE (#9387, #9388, #9389) — PRIVÉES. */
   progressionVitrine: { pattern: '/me/progression/vitrine', screen: progressionVitrineScreen },
   progressionAtlas: { pattern: '/me/progression/atlas', screen: progressionAtlasScreen },
@@ -289,7 +335,14 @@ export const ROUTES = {
      (`Post.type = 'STATUS'`, corpus distinct côté passerelle,
      `?scope=statuses`), elle n'a ni scène ni durée, et le bouton système
      « retour » doit refermer la composition d'humeur seule. */
-  statusCompose: { pattern: '/status/new', screen: () => import('@/routes/status-compose') },
+  statusCompose: {
+    pattern: '/status/new',
+    screen: () =>
+      Promise.all([
+        import('@/routes/status-compose'),
+        import('@/lib/i18n-mood-compose-catalog').then((m) => m.loadMoodComposeCatalog(currentInterfaceLanguage())),
+      ]).then(([screen]) => screen),
+  },
   /* PUBLIER DANS LE FIL (#7449, composer unique depuis #7497) — la porte de
      création de l'en-tête du Flux : `/posts/new` ouvre le studio au format
      post, `/posts/new?type=reel` au format réel. PLURIEL, comme
@@ -446,7 +499,7 @@ export const ROUTES = {
      seul tenant. L'ORDRE compte : le routeur rend la PREMIÈRE adresse qui
      correspond, et `new` serait sinon lu comme le linkId d'un lien. */
   shareLinks: { pattern: '/links/share', screen: () => import('@/routes/share-links') },
-  shareLinkNew: { pattern: '/links/share/new', screen: () => import('@/routes/share-link-new') },
+  shareLinkNew: { pattern: '/links/share/new', screen: () => withLinkFamiliesCatalog(import('@/routes/share-link-new')) },
   shareLinkArrivals: { pattern: '/links/share/$link/arrivals', screen: shareLinkArrivalsScreen },
   shareLink: { pattern: '/links/share/$link', screen: shareLinkScreen },
   /* LES TROIS AUTRES FAMILLES (#6408, #6409, #6410) — miroir `Route.trackingLinks`,
@@ -601,6 +654,10 @@ export const ROUTES = {
      Déclaré AUSSI dans `session-guard.ts`. */
   adminEngagementScale: { pattern: '/admin/engagement-scale', screen: adminEngagementScaleScreen },
   admEngagementScale: { pattern: '/adm/engagement-scale', screen: adminEngagementScaleScreen },
+  /* LES OPÉRATIONS DU SERVEUR (#10391, #10396) — littéral à deux segments, comme
+     l'agent et le barème : l'hôte en direct, la sauvegarde, la purge. */
+  adminOperations: { pattern: '/admin/operations', screen: adminOperationsScreen },
+  admOperations: { pattern: '/adm/operations', screen: adminOperationsScreen },
   /* LE PARTAGE VENU D'UNE AUTRE APPLICATION (#8884) — l'adresse du
      `share_target` de la PWA (`lib/share-incoming/share-target.ts`) : le worker
      y redirige après avoir rangé le `POST` du système, la page ouvre la feuille
@@ -638,8 +695,32 @@ export function NotFound() {
   );
 }
 
+/* LE CADRE CÔTE À CÔTE, CHARGÉ À LA DEMANDE (#10086, après #10073 / D-185).
+   Le cadre n'est utile qu'à partir de 1024 px : un téléphone ne doit pas le
+   télécharger avant son premier pixel. La règle (`split-query.ts`, quelques
+   lignes) reste dans le socle ; le cadre lui-même, sa mémoire de scrollport
+   et son volet vide ne partent que lorsqu'elle l'accorde. Sur un grand écran
+   au démarrage, le chunk part dès l'évaluation de ce module, en parallèle du
+   premier rendu — jamais à la suite de l'écran qu'il encadre ; s'il échoue,
+   c'est `lazy` qui redemande et qui le dit au rendu. */
+const splitFrameModule = () => import('@/routes/split-frame').then(({ SplitFrame }) => ({ default: SplitFrame }));
+const SplitFrame = lazy(splitFrameModule);
+if (isWide()) void splitFrameModule().catch(() => undefined);
+
+/** Sous 1024 px, sur toute autre route que la liste et le fil, et pour
+ * l'invité d'un lien : l'écran routé TEL QUEL, sans rien charger. */
+export function DeferredSplitFrame(props: FrameProps): ReactNode {
+  const wide = useSyncExternalStore(subscribeWide, isWide, () => false);
+  const guest = useStore(sessionStore, (state) => state.session.status === 'guest');
+  if (splitPaneOf({ routeKey: props.routeKey, wide, guest }) === null) return props.screen;
+  return <SplitFrame {...props} />;
+}
+
 /* LE CATALOGUE D'INTERFACE (#6206) — chaque écran l'attend, en parallèle de
    son chunk : ce qui s'y rend lit ses libellés de façon synchrone. */
-export const { Router, Link, href, navigate } = createRouter(ROUTES, NotFound, {
+export const { Router, Link, href, navigate, preload } = createRouter(ROUTES, NotFound, {
   screenPrerequisite: () => loadInterfaceCatalog(currentInterfaceLanguage()),
+  /* SUR GRAND ÉCRAN, LA LISTE ET LE FIL CÔTE À CÔTE (#10073, D-185) — sous
+     1024 px, le cadre rend l'écran routé tel quel. */
+  frame: DeferredSplitFrame,
 });

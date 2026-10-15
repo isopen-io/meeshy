@@ -277,4 +277,16 @@ final class CaptureShieldTests: XCTestCase {
         let transport = try source("Media/VideoTransportControls.swift")
         XCTAssertTrue(transport.contains("ProtectedPlaybackPolicy.of(isCaptureShielded:isCaptureShielded).permitted(requestedControls)"))
     }
+
+    // MARK: - Le bouclier ne change pas la disposition (#10352)
+
+    /// La zone sûre est déjà appliquée par la mise en page SwiftUI qui POSE le
+    /// bouclier. Réappliquée par le contrôleur hébergé, elle retranchait 59 et
+    /// 34 pt à une page plein écran protégée : son cadre fixe, plus grand que
+    /// ce qui restait, sortait du viewport — et le clavier la soulevait.
+    func test_host_doesNotReapplyTheSafeAreaToItsContent() throws {
+        guard #available(iOS 16.4, *) else { throw XCTSkip("safeAreaRegions : iOS 16.4+") }
+        XCTAssertTrue(host(CountingLayer()).hosting.safeAreaRegions.isEmpty,
+                      "le contenu protégé occupe exactement la place que son hôte lui donne")
+    }
 }

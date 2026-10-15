@@ -208,7 +208,7 @@ try {
       livePage.setDefaultTimeout(10_000);
       const liveErrors = [];
       livePage.on('pageerror', (error) => liveErrors.push(error.message));
-      await livePage.goto(`${BASE}/`, { waitUntil: 'load' });
+      await livePage.goto(`${BASE}/chats`, { waitUntil: 'load' });
       const banner = await livePage.waitForSelector(`[data-call-resume="${LIVE_CALL}"]`, { timeout: 5000 }).then(() => true, () => false);
       check(banner, `${label} : un appel vivant fait paraître « Reprendre l'appel »`);
       check(

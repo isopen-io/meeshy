@@ -209,8 +209,9 @@ final class PermissionGateSourceGuardTests: XCTestCase {
             "setupSession() ne DEMANDE jamais le micro : la demande reste à " +
             "enableAudioCaptureIfNeeded(), au mode Vidéo."
         )
+        let compact = setup.replacingOccurrences(of: "\\s+", with: "", options: .regularExpression)
         XCTAssertTrue(
-            setup.contains("CameraAudioArming.armsAtSetup(microphone: AVCaptureDevice.authorizationStatus(for: .audio),"),
+            compact.contains("CameraAudioArming.armsAtSetup(microphone:AVCaptureDevice.authorizationStatus(for:.audio),"),
             "Seul un micro déjà autorisé entre à l'ouverture (#9328)."
         )
 

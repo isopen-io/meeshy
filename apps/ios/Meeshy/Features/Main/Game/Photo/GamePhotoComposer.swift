@@ -11,9 +11,6 @@ struct ComposedPhoto {
     let squareData: Data
     let mode: PhotoMode
 
-    var kept: KeptPhoto {
-        KeptPhoto(story: storyData, square: squareData, mode: mode)
-    }
 }
 
 /// LA COMPOSITION DE L'IMAGE (#9382) — conception, partie VI : « image finale par

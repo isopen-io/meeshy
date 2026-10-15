@@ -5,6 +5,10 @@
       "id": "corporate.conseil",
       "mood": "corporate",
       "name": "Conseil",
+      "surfaces": [
+        "capture",
+        "live"
+      ],
       "base": {
         "layout": {
           "arrangement": "grid",
@@ -130,6 +134,10 @@
       "id": "corporate.keynote",
       "mood": "corporate",
       "name": "Keynote",
+      "surfaces": [
+        "capture",
+        "live"
+      ],
       "base": {
         "layout": {
           "arrangement": "arch",
@@ -272,6 +280,10 @@
       "id": "corporate.badge",
       "mood": "corporate",
       "name": "Badge",
+      "surfaces": [
+        "capture",
+        "live"
+      ],
       "base": {
         "layout": {
           "arrangement": "grid",
@@ -382,6 +394,10 @@
       "id": "corporate.poignee-de-main",
       "mood": "corporate",
       "name": "Poignée de main",
+      "surfaces": [
+        "capture",
+        "live"
+      ],
       "base": {
         "layout": {
           "arrangement": "split",

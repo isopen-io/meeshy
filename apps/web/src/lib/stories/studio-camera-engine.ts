@@ -1,5 +1,6 @@
 import { developPhoto, PHOTO_MIME } from '@/lib/media/photo-develop';
 import { appelNatifMethode, coqueCourante } from '@/lib/native-shell';
+import { acquireCamera } from '@/lib/stories/studio-camera-open';
 import { digitalZoomCrop, zoomRangeOf, type CameraZoomRange } from '@/lib/stories/studio-capture-gestures';
 import { cameraVideoMime, type CameraFacing } from '@/lib/stories/studio-quick-capture';
 
@@ -18,7 +19,9 @@ export type CameraOpenResult =
 export type DigitalZoomSource = { readonly video: HTMLVideoElement; readonly zoom: () => number };
 
 export type CameraEngine = {
-  readonly open: (facing: CameraFacing) => Promise<CameraOpenResult>;
+  /** `previous` : la BASCULE avant ↔ arrière (#10308) — sa vidéo s'arrête
+   * avant la demande, son micro passe au nouveau flux (`acquireCamera`). */
+  readonly open: (facing: CameraFacing, previous?: MediaStream) => Promise<CameraOpenResult>;
   /** Résout quand l'image est VIVANTE et l'exposition posée : une photo
    * prise sur la première image sortirait sombre. */
   readonly live: (video: HTMLVideoElement) => Promise<void>;
@@ -122,12 +125,14 @@ export function createBrowserCameraEngine(): CameraEngine {
   };
 
   return {
-    async open(facing) {
+    async open(facing, previous) {
       if (typeof navigator === 'undefined' || navigator.mediaDevices?.getUserMedia === undefined) return { ok: false };
       try {
-        const stream = await navigator.mediaDevices.getUserMedia({
-          video: { facingMode: facing, width: { ideal: 1080 }, height: { ideal: 1920 } },
-          audio: true,
+        const stream = await acquireCamera<MediaStreamTrack, MediaStream>({
+          facing,
+          ...(previous !== undefined ? { previous } : {}),
+          request: (constraints) => navigator.mediaDevices.getUserMedia(constraints),
+          assemble: (tracks) => new MediaStream([...tracks]),
         });
         const track = stream.getVideoTracks()[0];
         const capabilities: unknown = track?.getCapabilities?.() ?? {};

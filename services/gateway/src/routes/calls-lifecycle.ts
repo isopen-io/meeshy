@@ -16,6 +16,7 @@ import { logger } from '../utils/logger.js';
 import { sendSuccess, sendError, sendForbidden } from '../utils/response.js';
 import { toCallSessionResponse } from '../utils/call-session-response.js';
 import { OBJECT_ID_PATTERN } from '@meeshy/shared/utils/object-id';
+import { CALL_ERROR_CODES } from '@meeshy/shared/types/video-call';
 import {
   initiateCallSchema,
   endCallSchema,
@@ -151,7 +152,7 @@ export function registerCallsLifecycleRoutes(fastify: FastifyInstance, deps: Cal
           ...errorResponseSchema
         },
         403: {
-          description: 'Forbidden - User not a member of the conversation',
+          description: 'Forbidden - User not a member of the conversation, or not allowed to start a call here (CALL_NOT_ALLOWED, #10207)',
           ...errorResponseSchema
         },
         429: {
@@ -200,7 +201,10 @@ export function registerCallsLifecycleRoutes(fastify: FastifyInstance, deps: Cal
         ? errorMessage.split(':').slice(1).join(':').trim()
         : errorMessage;
 
-      return sendError(reply, 400, errorCode, { message });
+      // #10207 — un refus d'ADMISSION (loi `canStartCall`) est un 403 ; les
+      // autres échecs d'initiation gardent leur 400 historique.
+      const notAllowed = errorCode === CALL_ERROR_CODES.CALL_NOT_ALLOWED;
+      return sendError(reply, notAllowed ? 403 : 400, errorCode, { message, code: errorCode });
     }
   });
 

@@ -6,7 +6,7 @@ import Foundation
 /// C'est la résolution EFFECTIVE côté gateway (`rights ?? permissions`), et non
 /// la configuration courante du lien : celle-ci a pu changer depuis l'arrivée,
 /// et ne régit plus qui est déjà entré.
-public struct ParticipantEntryCapabilities: Decodable, Sendable, Equatable {
+public struct ParticipantEntryCapabilities: Codable, Sendable, Equatable {
     public let canSendMessages: Bool
     public let canSendFiles: Bool
     public let canSendImages: Bool
@@ -187,7 +187,7 @@ public struct ParticipantRightsUpdatedEvent: Decodable, Sendable, Equatable {
 /// ce même lien, et sa configuration est celle de l'hôte, pas un renseignement
 /// sur la personne. Les plages IP n'y figurent volontairement pas — une règle de
 /// pare-feu n'a aucune surface d'affichage.
-public struct ParticipantEntryLink: Decodable, Sendable, Equatable {
+public struct ParticipantEntryLink: Codable, Sendable, Equatable {
     public let name: String?
     public let isActive: Bool
     public let expiresAt: Date?
@@ -226,7 +226,7 @@ public struct ParticipantEntryLink: Decodable, Sendable, Equatable {
 /// l'analyse agent (`AgentAnalysisModels.swift`) — un profil de style
 /// rédactionnel, sans rapport. Deux types homonymes dans le même module se
 /// seraient masqués l'un l'autre.
-public struct ConversationParticipantProfile: Decodable, Sendable, Equatable {
+public struct ConversationParticipantProfile: Codable, Sendable, Equatable, CacheIdentifiable {
     public let participantId: String
     public let conversationId: String
     /// Le participant n'a pas de compte.
@@ -282,6 +282,9 @@ public struct ConversationParticipantProfile: Decodable, Sendable, Equatable {
     public let canGrantHistory: Bool?
 
     /// Nom lisible : ce que la personne a écrit en entrant, à défaut son pseudo.
+    /// #10111 — la clé de la fiche dans le cache : une participation, jamais un compte.
+    public var id: String { "\(conversationId)/\(participantId)" }
+
     public var resolvedFullName: String {
         let full = [firstName, lastName]
             .compactMap { $0?.trimmingCharacters(in: .whitespaces) }

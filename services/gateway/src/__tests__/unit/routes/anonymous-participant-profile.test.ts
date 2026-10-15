@@ -508,12 +508,13 @@ describe('GET …/profile — présence (régime strict)', () => {
     expect(data.lastActiveAt).toBeNull();
   });
 
-  it('viewer anonyme ⇒ cachée, et le service reçoit un viewer nul', async () => {
-    const data = await fetchProfile(setup('member', registeredRow), REGISTERED_ID, 'anonymous');
+  it('viewer anonyme ⇒ la fiche d’un autre est refusée (403 ACCOUNT_REQUIRED, #10205), sans résoudre de présence', async () => {
+    const ctx = setup('member', registeredRow);
+    const data = await fetchProfile(ctx, REGISTERED_ID, 'anonymous');
 
-    expect(data.isOnline).toBe(false);
-    expect(data.lastActiveAt).toBeNull();
-    expect(mockResolveForTarget).toHaveBeenCalledWith(null, { id: registeredRow.userId, deactivatedAt: null });
+    expect(data).toBeUndefined();
+    expect(ctx.reply._body).toMatchObject({ success: false, code: 'ACCOUNT_REQUIRED' });
+    expect(mockResolveForTarget).not.toHaveBeenCalled();
   });
 
   // Un visiteur sans compte n'a pas de `User.id` : le service ne peut pas le

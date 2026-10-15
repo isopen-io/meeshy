@@ -131,7 +131,7 @@ struct StoryHeaderView: View {
                 generateLink: true
             )
             if let shortUrl = result.shortUrl, let url = URL(string: shortUrl) {
-                shareableStoryLink = ShareableLink(url: url, fileSource: .story(story, authorUsername: currentGroup?.username))
+                shareableStoryLink = ShareableLink(url: url, fileSource: .story(story, author: currentGroup.map(StoryExportAuthor.init(group:))))
                 HapticFeedback.light()
                 return
             }
@@ -139,7 +139,7 @@ struct StoryHeaderView: View {
             // intentional fall-through: try raw URL fallback
         }
         if let fallback {
-            shareableStoryLink = ShareableLink(url: fallback, fileSource: .story(story, authorUsername: currentGroup?.username))
+            shareableStoryLink = ShareableLink(url: fallback, fileSource: .story(story, author: currentGroup.map(StoryExportAuthor.init(group:))))
             HapticFeedback.light()
         } else {
             FeedbackToastManager.shared.showError(
@@ -184,6 +184,10 @@ struct StoryHeaderView: View {
     /// aussi ce qui tient l'aperçu du composer hors du menu : il monte le
     /// lecteur SANS conteneur, donc sans hôte de présentation.
     @Environment(\.meeshyComposeSeedRequest) private var demanderComposer: ((ComposerSeedTarget) -> Void)?
+    /// L'humeur de la personne dont on ouvre le profil, et son toucher (#10529) —
+    /// les résolveurs de la racine, hérités par la visionneuse et sa feuille.
+    @Environment(\.meeshyMoodEmojiResolver) private var moodEmojiResolver
+    @Environment(\.meeshyMoodTapResolver) private var moodTapResolver
     /// Le menu « … » ouvert fait BOUCLER la story (#9821) : l'en-tête le dit au
     /// lecteur, qui seul survit aux ticks de la barre.
     @Environment(\.storyOptionsMenuPresenceChange) private var optionsMenuPresenceChange: ((Bool) -> Void)?
@@ -366,7 +370,6 @@ struct StoryHeaderView: View {
                     }
                 }
             }
-            .accessibilityLabel(String(localized: "story.viewer.a11y.options", defaultValue: "Options de la story", bundle: .main))
         }
         .padding(.horizontal, FullscreenTopBarLayout.horizontalPadding)
         .adaptiveOnChange(of: currentStory?.id, initial: true) { _, _ in
@@ -375,6 +378,8 @@ struct StoryHeaderView: View {
         .sheet(item: $selectedProfileUser) { user in
             UserProfileSheet(
                 user: user,
+                moodEmoji: moodEmojiResolver?(user.userId ?? ""),
+                onMoodTap: moodTapResolver?(user.userId ?? ""),
                 presenceProvider: { PresenceManager.shared.knownPresenceState(for: $0) },
                 postsContent: { uid in AnyView(ProfileUserPostsList(
                     userId: uid,
@@ -530,11 +535,12 @@ struct StoryHeaderView: View {
         }
     }
 
-    /// **La règle d'offre décide, pas le menu** (critère 2 de #6085). Une slide
-    /// à deux médias, une slide sans média ni texte : aucune cible, donc aucune
-    /// entrée. Le Prisme du lecteur descend sur le texte qui pré-remplira la
-    /// description — la graine d'un composer est du CONTENU, et le Prisme
-    /// s'applique à tout le contenu.
+    /// **La règle d'offre décide, pas le menu** (critère 2 de #6085). Depuis
+    /// #9994 elle reprend la SCÈNE entière — plusieurs médias, textes posés,
+    /// stickers, effets ; seule une slide qui ne porte rien, ou qu'on ne saurait
+    /// recréer à l'identique, n'a pas de cible, donc pas d'entrée. Le Prisme du
+    /// lecteur descend sur le texte qui pré-remplira la description — la graine
+    /// d'un composer est du CONTENU, et le Prisme s'applique à tout le contenu.
     private func resolveComposableSlide() -> ComposerSeedTarget? {
         guard demanderComposer != nil, let story = currentStory else { return nil }
         return ComposerSeedTarget(

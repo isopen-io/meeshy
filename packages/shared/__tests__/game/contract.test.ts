@@ -17,6 +17,7 @@ import {
   gameBlockSchema,
   guideSeenRequestSchema,
   guideSeenResponseSchema,
+  meeshMintRequestSchema,
   meeshMintResponseSchema,
   missionRerollRequestSchema,
   missionRerollResponseSchema,
@@ -24,7 +25,9 @@ import {
   type EngagementPayloadWithGame,
   type GameBlock,
 } from '../../types/game.js';
+import { CHEST_ODDS, chestContentForEffort, dayEffort } from '../../utils/game/chest.js';
 import { buildGameBlock, type GameMissionRecord } from '../../utils/game/game-block.js';
+import { meeshPrice } from '../../utils/game/mint.js';
 import { levelThreshold } from '../../utils/game/levels.js';
 import { drawDailyMissions } from '../../utils/game/missions.js';
 import { isEngagementProgressPayload } from '../../types/engagement.js';
@@ -74,7 +77,7 @@ describe('le bloc game', () => {
     expect(b.level).toMatchObject({ level: 34, tier: 'eclat', record: 36, prestige: 0, canPrestige: false });
     expect(b.glory).toMatchObject({ glory: 2000, rank: 'echo', division: 3, division5: 5, mythic: null });
     expect(b.treasury).toMatchObject({ held: 9, tier: 'bourse' });
-    expect(b.mint).toMatchObject({ number: 13, price: 1294, edition: 'silver', canMint: true, levelsLost: 0 });
+    expect(b.mint).toMatchObject({ number: 13, price: 1587, edition: 'silver', canMint: true, levelsLost: 0 });
   });
 
   it('sert la lecture ouverte par le rang dans ladder, sous les mêmes valeurs qu\'hier quand le niveau est sous 100 (#9688)', () => {
@@ -222,8 +225,43 @@ describe('le bloc game', () => {
   });
 
   it('expose les probabilités du coffre avant l\'ouverture, sans contenu', () => {
-    expect(block().chest.odds).toEqual({ minPoints: 60, maxPoints: 200, fragment: 1 / 6, freeze: 1 / 20 });
+    expect(block().chest.odds).toEqual({ ...CHEST_ODDS });
     expect(block().chest.reward).toBeNull();
+  });
+
+  it('dit le contenu certain du coffre et ses primes avant l\'ouverture : l\'effort du jour, le cours de la Meesh (#10011)', () => {
+    const missions = missionRecords(34);
+    expect(block({ missions }).chest.today).toEqual(chestContentForEffort(dayEffort(missions), meeshPrice(13)));
+    expect(block({ missions, mintedLifetime: 100 }).chest.today).toMatchObject({ bonusWhole: 16_556, bonusFifth: 3311 });
+    expect(block({ missions: [] }).chest.today).toBeNull();
+  });
+
+  it('dit la prime au cours FIGÉ au début du jour quand la passerelle le sert, et au cours d\'avant sinon (#10219)', () => {
+    const missions = missionRecords(34);
+    // 12 frappées à vie, 9 avant le jour : le prix de la 10e (1 221), pas celui de la 13e.
+    expect(block({ missions, mintedLifetime: 12, chestMintBase: 9 }).chest.today).toMatchObject({ bonusWhole: 1221 });
+    expect(block({ missions, mintedLifetime: 12 }).chest.today).toEqual(chestContentForEffort(dayEffort(missions), meeshPrice(13)));
+    expect(block({ missions, mintedLifetime: 12, chestMintBase: null }).chest.today).toEqual(chestContentForEffort(dayEffort(missions), meeshPrice(13)));
+  });
+
+  it('sert les fragments d\'étoile collectés quand la passerelle les connaît, et pas sinon — aucune frappe par fragments', () => {
+    const served = block({ starFragments: 7 });
+    expect(served.starFragments).toEqual({ collected: 7 });
+    expect('starFragments' in block()).toBe(false);
+    expect('withFragments' in served.mint).toBe(false);
+    expect('meeshFragments' in served.chest).toBe(false);
+    expect(gameBlockSchema.safeParse(served).success).toBe(true);
+    const parsed = gameBlockSchema.safeParse({ ...served, starFragments: { collected: 'beaucoup' } });
+    expect(parsed.success && parsed.data.starFragments).toBeUndefined();
+  });
+
+  it('lit encore le coffre d\'un ancien serveur, et laisse tomber seul un contenu du jour illisible', () => {
+    const served = block();
+    const legacy = { ...served, chest: { status: served.chest.status, odds: { minPoints: 60, maxPoints: 200, fragment: 1 / 6, freeze: 1 / 20 }, reward: null } };
+    expect(gameBlockSchema.safeParse(legacy).success).toBe(true);
+    const parsed = gameBlockSchema.safeParse({ ...served, chest: { ...served.chest, today: { points: 'beaucoup' } } });
+    expect(parsed.success).toBe(true);
+    expect(parsed.success && parsed.data.chest.today).toBeUndefined();
   });
 
   it('propose de changer une mission une fois par jour, à une Meesh', () => {
@@ -365,6 +403,18 @@ describe('les réponses', () => {
     const mission = block().missions.items[1]!;
     expect(missionRerollResponseSchema.safeParse({ mission, balance: 8 }).success).toBe(true);
     expect(chestClaimResponseSchema.safeParse({ status: 'claimed', reward: { points: 90, fragment: false, freeze: false }, score: 12_270 }).success).toBe(true);
+    expect(
+      chestClaimResponseSchema.safeParse({
+        status: 'claimed',
+        reward: { points: 2083 + 244, fragment: true, freeze: false, glory: 208, bonus: 'fifth', bonusPoints: 244 },
+        score: 12_270,
+        starFragments: { collected: 3 },
+      }).success,
+    ).toBe(true);
+    expect(meeshMintRequestSchema.safeParse({ requestId: 'frappe-0001', payWith: 'points' }).success).toBe(true);
+    expect(meeshMintRequestSchema.safeParse({ requestId: 'frappe-0001', payWith: 'fragments' }).success).toBe(false);
+    expect(meeshMintRequestSchema.safeParse({ requestId: 'frappe-0001', payWith: 'euros' }).success).toBe(false);
+    expect(meeshMintRequestSchema.safeParse({ requestId: 'frappe-0001' }).success).toBe(true);
     expect(guideSeenResponseSchema.safeParse({ guideSeen: ['a'] }).success).toBe(true);
   });
 });

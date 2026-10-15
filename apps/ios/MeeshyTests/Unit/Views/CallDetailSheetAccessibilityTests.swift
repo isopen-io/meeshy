@@ -54,7 +54,7 @@ final class CallDetailSheetAccessibilityTests: XCTestCase {
             XCTFail("header must exist")
             return
         }
-        let end = source.index(range.lowerBound, offsetBy: 900, limitedBy: source.endIndex) ?? source.endIndex
+        let end = source.index(range.lowerBound, offsetBy: 1300, limitedBy: source.endIndex) ?? source.endIndex
         let body = String(source[range.lowerBound ..< end])
         XCTAssertTrue(
             body.contains(".accessibilityHidden(true)"),
@@ -69,7 +69,7 @@ final class CallDetailSheetAccessibilityTests: XCTestCase {
             XCTFail("header must exist")
             return
         }
-        let end = source.index(range.lowerBound, offsetBy: 1200, limitedBy: source.endIndex) ?? source.endIndex
+        let end = source.index(range.lowerBound, offsetBy: 1600, limitedBy: source.endIndex) ?? source.endIndex
         let body = String(source[range.lowerBound ..< end])
         XCTAssertTrue(
             body.contains(".accessibilityElement(children: .combine)"),

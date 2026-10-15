@@ -14,7 +14,6 @@ import type { MissionFactSignal } from '@meeshy/shared/utils/game/missions';
 import type { PrismaClient } from '@meeshy/shared/prisma/client';
 import {
   BADGE_THRESHOLDS,
-  STREAK_THRESHOLDS,
   LEVEL_THRESHOLDS,
   CONTENT_ENGAGEMENT_AXES,
   CONVERSATION_ENGAGEMENT_AXES,
@@ -22,7 +21,6 @@ import {
   engagementAxisFamily,
   isEngagementAxisKey,
   levelMilestoneKey,
-  streakMilestoneKey,
   type EngagementAxisFamily,
   type EngagementAxisKey,
   type EngagementAchievementKey,
@@ -32,7 +30,6 @@ import {
   elanUnderScale,
   linkVisitPoints,
   pointsForOperation,
-  streakBonusPoints,
   type EngagementScale,
   type EngagementScaleElan,
 } from '@meeshy/shared/types/engagement-scale';
@@ -41,7 +38,8 @@ import {
   type EngagementOperationKey,
 } from '@meeshy/shared/types/engagement-operations';
 import { notificationString } from '@meeshy/shared/utils/notification-strings';
-import { engagementAchievementTitle, engagementAxisLabel } from '@meeshy/shared/utils/engagement-labels';
+import { engagementAchievementTitle } from '@meeshy/shared/utils/engagement-labels';
+import { tierReachedNotification } from '@meeshy/shared/utils/tier-reached-notification';
 import { NotificationService } from '../notifications/NotificationService';
 import { getSharedNotificationService } from '../notifications/notification-service-registry';
 import { RECIPIENT_LANG_SELECT, recipientLanguage } from '../../utils/recipient-language';
@@ -56,12 +54,16 @@ import { getEngagementEmitIO } from './engagement-emit-registry';
 import { memberSignature } from './memberSignature';
 import { EngagementQuotas, dayBucket } from './EngagementQuotas';
 import { EngagementGameHooks, applyTailwind, quarterPoints } from '../game/EngagementGameHooks';
-import { writeStreak } from '../game/FlameService';
 import type { MessageSignalInput } from '../game/MessageGameSignals';
 import { levelForUnlocks } from '@meeshy/shared/utils/game/levels';
 import { withRetry } from '../MessageMediaConsumptionService';
+import { creditEngagementCounter } from './EngagementCounterWrites';
+import { rawCommandNumber } from './rawCommandNumber';
 
 import type { EngagementActivityOptions, EngagementLinkVisit } from './engagementActivityTypes';
+import { EngagementStreaks } from './EngagementStreaks';
+import { ENGAGEMENT_ROUTE } from './engagementRoute';
+import type { ActStreakView, EngagementStreakPostType } from '@meeshy/shared/types/engagement-act-streaks';
 
 const log = enhancedLogger.child({ module: 'EngagementService' });
 
@@ -111,14 +113,15 @@ function isP2002(err: unknown): boolean {
   return typeof err === 'object' && err !== null && (err as { code?: string }).code === 'P2002';
 }
 
-/**
- * L'indice de route que les QUATRE notifications de réengagement transportent
- * (`metadata.route`, projeté en `data.route` sur le fil push) : l'écran
- * « Progression », qui RESTITUE le palier annoncé. Un client qui sait naviguer
- * par nom de route (iOS `pushNavigateToRoute`, la v3.1 web) le suit tel quel ;
- * un client qui route par TYPE de notification n'a rien à lire ici.
- */
-export const ENGAGEMENT_ROUTE = 'progression';
+export { ENGAGEMENT_ROUTE };
+
+/** Ce qu'un crédit dit aux séries : le jour civil du compte, et ce qui range le geste sous un acte. */
+type CreditDay = {
+  readonly today: Date;
+  readonly timezone: string | null;
+  readonly postType?: EngagementStreakPostType;
+  readonly conversationId?: string;
+};
 
 /** Le rang d'un seuil de score dans l'échelle des niveaux — « niveau 3 » pour le palier 150. */
 export function levelIndexOf(threshold: number): number {
@@ -152,6 +155,9 @@ export class EngagementService {
   /** Le jeu (#9374…#9377) : Vent arrière, frein de l'entre-soi, missions, Gloire. */
   private readonly game: EngagementGameHooks;
 
+  /** Les séries — globale, par acte — et la fidélité (#10389, #10390). */
+  private readonly streaks: EngagementStreaks;
+
   constructor(
     private readonly prisma: PrismaClient,
     deps: EngagementServiceDeps = {},
@@ -162,6 +168,12 @@ export class EngagementService {
     this.quotas = new EngagementQuotas(prisma);
     this.receipts = new EngagementReceipts(prisma, this.quotas, this.postRecorder, this.scale);
     this.game = deps.game ?? new EngagementGameHooks(prisma, (userId, points, axisKey) => this.creditGamePoints(userId, points, axisKey));
+    this.streaks = new EngagementStreaks(prisma, this.quotas, this.game, (userId, points) => this.updateEngagementScore(userId, points));
+  }
+
+  /** Les séries d'acte du compte (#10389) — ce que `GET /me/engagement` sert. */
+  actStreaks(userId: string): Promise<readonly ActStreakView[]> {
+    return this.streaks.list(userId);
   }
 
   /**
@@ -333,7 +345,12 @@ export class EngagementService {
     });
     if (!admitted) return false;
 
-    await this.credit(scale, userId, operationKey, points, options.actorId);
+    await this.credit(scale, userId, operationKey, points, {
+      today,
+      timezone: inputs.timezone,
+      ...(options.postType !== undefined ? { postType: options.postType } : {}),
+      ...(conversationId !== undefined ? { conversationId } : {}),
+    }, options.actorId);
     const rememberedTargetId = heavy ? options.targetId : undefined;
     if (rememberedTargetId !== undefined) {
       await this.quotas.remember(userId, operationKey, rememberedTargetId, points);
@@ -380,6 +397,11 @@ export class EngagementService {
    * (#6428), et un écrivain concurrent fait annuler la tentative au lieu d'être
    * écrasé. Les paliers et la Gloire qui suivent ne font jamais échouer un
    * crédit déjà écrit — ce qui ferait rendre, puis repayer, la mission.
+   *
+   * Le compteur passe par `creditEngagementCounter` (#10541) : la commande
+   * s'exécute dans la session de la transaction — annulée et rejouée avec elle,
+   * mesuré — et crédite une colonne `points` absente ou `null` comme un zéro, là
+   * où `{ increment }` la laissait à `null` pendant que le score montait.
    */
   async creditGamePoints(userId: string, points: number, axisKey: EngagementAxisKey): Promise<void> {
     if (!Number.isInteger(points) || points <= 0) return;
@@ -390,11 +412,7 @@ export class EngagementService {
           select: { engagementScore: true, levelRecord: true },
         });
         if (!account) return null;
-        await tx.engagementCounter.upsert({
-          where: { userId_axisKey: { userId, axisKey } },
-          create: { userId, axisKey, count: 0, points },
-          update: { points: { increment: points } },
-        });
+        await creditEngagementCounter(tx, { userId, axisKey, points, count: 0 });
         const score = (account.engagementScore ?? 0) + points;
         await tx.user.update({ where: { id: userId }, data: { engagementScore: score } });
         return { score, levelRecord: account.levelRecord ?? null };
@@ -427,20 +445,21 @@ export class EngagementService {
   /**
    * Écrit un crédit DÉJÀ admis : compteur de l'opération, badges et succès si
    * l'opération est un axe de « Progression », série, score.
+   *
+   * Le compteur et le score reçoivent le MÊME montant par le même idiome
+   * (`$ifNull`) : `creditEngagementCounter` ici, `updateEngagementScore` plus
+   * bas. Tant que le compteur s'écrivait par `{ increment }`, une ligne à
+   * `points: null` laissait le score monter seul (#10541).
    */
   private async credit(
     scale: EngagementScale,
     userId: string,
     operationKey: EngagementOperationKey,
     points: number,
+    day: CreditDay,
     actorId?: string,
   ): Promise<void> {
-    const counter = await this.prisma.engagementCounter.upsert({
-      where: { userId_axisKey: { userId, axisKey: operationKey } },
-      create: { userId, axisKey: operationKey, count: 1, points },
-      update: { count: { increment: 1 }, points: { increment: points } },
-      select: { count: true },
-    });
+    const counter = await creditEngagementCounter(this.prisma, { userId, axisKey: operationKey, points, count: 1 });
 
     const newCount = counter.count;
     const previousCount = newCount - 1;
@@ -453,7 +472,15 @@ export class EngagementService {
       }
       await this.tryAwardAchievements(userId, operationKey, previousCount);
     }
-    await this.updateStreak(scale, userId);
+    await this.streaks.afterCredit({
+      scale,
+      userId,
+      operationKey,
+      today: civilDayKey(day.today),
+      timezone: day.timezone,
+      ...(day.postType !== undefined ? { postType: day.postType } : {}),
+      ...(day.conversationId !== undefined ? { conversationId: day.conversationId } : {}),
+    });
     await this.updateEngagementScore(userId, points);
   }
 
@@ -489,7 +516,7 @@ export class EngagementService {
     }
     const visitNumber = await this.quotas.increment(creatorId, operationKey, `link:${linkKey}`);
     const points = linkVisitPoints(rules, visitNumber);
-    await this.credit(scale, creatorId, operationKey, points);
+    await this.credit(scale, creatorId, operationKey, points, { today, timezone: inputs.timezone });
     return points;
   }
 
@@ -607,17 +634,21 @@ export class EngagementService {
       // LECTEUR (`engagementAxisLabel`, même catalogue que la v3.1 web et le
       // miroir iOS) ; `route` dit au client où le tap MÈNE — l'écran
       // « Progression » (#5547 web, #5698 iOS), jamais un autre.
+      // #10298 — le PALIER (rang dans l'échelle) en titre, l'EXPLOIT chiffré
+      // et le palier en corps : « Commentaires écrits : 1 000 — bravo, vous
+      // êtes au palier 6 ! ». Le seuil seul (« palier 1000 ») se lisait comme
+      // un millième palier.
+      const banner = tierReachedNotification(lang, { kind: 'badge', axisKey, threshold });
+      if (banner === null) return;
       await notificationService.createNotification({
         userId,
         type: 'badge_earned',
         priority: 'normal',
-        content: notificationString(lang, 'engagement.badgeEarned', {
-          title: engagementAxisLabel(lang, axisKey),
-          count: threshold,
-        }),
+        title: banner.title,
+        content: banner.body,
         context: {},
         ...(actor ? { actor } : {}),
-        metadata: { action: 'view_details', route: ENGAGEMENT_ROUTE, axisKey, threshold },
+        metadata: { action: 'view_details', route: ENGAGEMENT_ROUTE, axisKey, threshold, tierRank: banner.rank, value: banner.value },
       });
     } catch (err) {
       log.warn('badge_earned notification failed after milestone was recorded', {
@@ -738,109 +769,6 @@ export class EngagementService {
   }
 
   /**
-   * Une activité qualifiante — n'importe quel appel à `recordActivity`, sur
-   * n'importe quel axe (§ 5) — fait avancer la série de jours actifs.
-   * Comparaison par JOUR CIVIL DANS LE FUSEAU DE L'UTILISATEUR (`User.timezone`,
-   * repli UTC si absent — #5734) : plusieurs activités le même jour civil ne
-   * l'incrémentent qu'une fois ; un jour sauté la remet à 1.
-   *
-   * Lecture puis écriture CONDITIONNELLE (`writeStreak`, #9376) : la série
-   * s'écrit seulement si la Flamme vaut encore ce qu'on a lu. Un gel acheté,
-   * offert par le coffre ou une Flamme rallumée entre les deux fait reprendre
-   * le calcul au lieu d'être écrasé — une Meesh dépensée n'est jamais perdue.
-   *
-   * `currentStreakDays`/`longestStreakDays` portent un `@default(0)` dans le
-   * schéma, qui ne s'applique qu'à la CRÉATION — un `User` créé avant cette
-   * migration a ces champs ABSENTS, pas à zéro (même piège que
-   * `Conversation.firstMessageSentAt`, cf. `packages/shared/CLAUDE.md`).
-   * D'où les replis : une série pour un compte pré-existant démarre à 1,
-   * jamais `NaN`.
-   */
-  private async updateStreak(scale: EngagementScale, userId: string): Promise<void> {
-    // La transition est la LOI de la Flamme (`advanceFlame`, #9376) : un jour
-    // manqué consomme un gel quand les gels les couvrent TOUS, sinon la Flamme
-    // s'éteint — la série perdue est gardée pour le rallumage de 48 h. Sans gel,
-    // le comportement d'avant est exact : un jour sauté remet la série à 1.
-    const written = await writeStreak(this.prisma, userId, new Date());
-    if (written === null) return;
-    const { plan, previousStreak } = written;
-
-    const crossedThresholds = STREAK_THRESHOLDS.filter(
-      (threshold) => threshold > previousStreak && threshold <= plan.streak,
-    );
-
-    for (const threshold of crossedThresholds) {
-      await this.tryAwardStreakMilestone(userId, threshold);
-    }
-    await this.creditStreakBonus(scale, userId, previousStreak, plan.streak);
-    await this.game.onStreak(userId, plan);
-  }
-
-  /**
-   * La CONSTANCE paie (#8959) : franchir 7, 30 ou 100 jours actifs crédite le
-   * bonus du barème, une fois par palier (`EngagementMilestone` porte déjà
-   * l'anti-rejeu du palier, le seau `streak:<jours>` celui du bonus), jamais
-   * multiplié.
-   */
-  private async creditStreakBonus(
-    scale: EngagementScale,
-    userId: string,
-    previousStreak: number,
-    newStreak: number,
-  ): Promise<void> {
-    const operationKey: EngagementOperationKey = 'streak.bonus';
-    for (const bonus of scale.streakBonuses) {
-      if (bonus.points <= 0 || streakBonusPoints([bonus], previousStreak, newStreak) === 0) continue;
-      if (!(await this.quotas.claim(userId, operationKey, `streak:${bonus.days}`, 1))) continue;
-      await this.prisma.engagementCounter.upsert({
-        where: { userId_axisKey: { userId, axisKey: operationKey } },
-        create: { userId, axisKey: operationKey, count: 1, points: bonus.points },
-        update: { count: { increment: 1 }, points: { increment: bonus.points } },
-      });
-      await this.updateEngagementScore(userId, bonus.points);
-    }
-  }
-
-  /**
-   * Même garde anti-rejeu que `tryAwardBadge` (§ 4), portée par la contrainte
-   * unique `EngagementMilestone(userId, milestoneType, milestoneKey)`.
-   */
-  private async tryAwardStreakMilestone(userId: string, threshold: number): Promise<void> {
-    try {
-      await this.prisma.engagementMilestone.create({
-        data: {
-          userId,
-          milestoneType: 'streak',
-          milestoneKey: streakMilestoneKey(threshold),
-        },
-      });
-    } catch (err) {
-      if (isP2002(err)) return;
-      throw err;
-    }
-
-    try {
-      const user = await this.prisma.user.findUnique({ where: { id: userId }, select: RECIPIENT_LANG_SELECT });
-      const lang = recipientLanguage(user, 'fr');
-      const notificationService = getSharedNotificationService() ?? new NotificationService(this.prisma);
-      await notificationService.createNotification({
-        userId,
-        type: 'streak_milestone',
-        priority: 'normal',
-        content: notificationString(lang, 'engagement.streakMilestone', { count: threshold }),
-        context: {},
-        metadata: { action: 'view_details', route: ENGAGEMENT_ROUTE, threshold },
-      });
-    } catch (err) {
-      log.warn('streak_milestone notification failed after milestone was recorded', {
-        userId,
-        threshold,
-        error: err instanceof Error ? err.message : String(err),
-      });
-    }
-  }
-
-  /**
    * Ajoute `points` au score agrégé `User.engagementScore` et notifie chaque
    * palier `LEVEL_THRESHOLDS` franchi par CET incrément précis — même
    * mécanique que le compteur d'axe (§ 5, § 7).
@@ -890,13 +818,16 @@ export class EngagementService {
       update: [{ $set: { engagementScore: { $add: [{ $ifNull: ['$engagementScore', 0] }, points] } } }],
       new: true,
       fields: { engagementScore: 1, levelRecord: 1 },
-    } as never)) as unknown as { value?: { engagementScore?: number; levelRecord?: number | null } | null };
+    } as never)) as unknown as { value?: { engagementScore?: unknown; levelRecord?: unknown } | null };
 
-    const newScore = result?.value?.engagementScore;
+    // Le score et le record se lisent par `rawCommandNumber` (#10541) : la
+    // colonne est un `long` sur la plupart des comptes, qu'une commande brute
+    // peut rendre en `{ $numberLong }`.
+    const newScore = rawCommandNumber(result?.value?.engagementScore);
     // Compte introuvable (supprimé entre l'activité et ce crédit) : rien à
     // notifier, et surtout pas un palier calculé sur `undefined`.
-    if (typeof newScore !== 'number') return;
-    await this.afterScore(userId, points, newScore, result?.value?.levelRecord ?? null);
+    if (newScore === null) return;
+    await this.afterScore(userId, points, newScore, rawCommandNumber(result?.value?.levelRecord));
   }
 
   /** Les paliers que `points` vient de franchir, et la Gloire du premier passage. */
@@ -938,17 +869,21 @@ export class EngagementService {
       const user = await this.prisma.user.findUnique({ where: { id: userId }, select: RECIPIENT_LANG_SELECT });
       const lang = recipientLanguage(user, 'fr');
       const notificationService = getSharedNotificationService() ?? new NotificationService(this.prisma);
+      // Le NIVEAU, jamais le seuil de score : « Niveau 150 atteint » (le
+      // palier de points) se lisait comme un cent-cinquantième niveau. Le
+      // niveau est le RANG du palier dans l'échelle (§ 7) — le même que
+      // l'écran « Progression » affiche (`EngagementLevelProgress.level`).
+      // #10298 — et le corps dit ce qui l'a fait atteindre : les points.
+      const banner = tierReachedNotification(lang, { kind: 'level', threshold });
+      if (banner === null) return;
       await notificationService.createNotification({
         userId,
         type: 'level_up',
         priority: 'normal',
-        // Le NIVEAU, jamais le seuil de score : « Niveau 150 atteint » (le
-        // palier de points) se lisait comme un cent-cinquantième niveau. Le
-        // niveau est le RANG du palier dans l'échelle (§ 7) — le même que
-        // l'écran « Progression » affiche (`EngagementLevelProgress.level`).
-        content: notificationString(lang, 'engagement.levelUp', { count: levelIndexOf(threshold) }),
+        title: banner.title,
+        content: banner.body,
         context: {},
-        metadata: { action: 'view_details', route: ENGAGEMENT_ROUTE, threshold, level: levelIndexOf(threshold) },
+        metadata: { action: 'view_details', route: ENGAGEMENT_ROUTE, threshold, level: levelIndexOf(threshold), tierRank: banner.rank, value: banner.value },
       });
     } catch (err) {
       log.warn('level_up notification failed after milestone was recorded', {

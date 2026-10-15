@@ -94,7 +94,7 @@ export const afterSeasonClaim = (view: EngagementWithGame, step: number): Engage
     if (!Number.isInteger(step) || step < 1 || step > season.steps || season.claimedSteps.includes(step)) return null;
     const claimedSteps = [...season.claimedSteps, step].sort((a, b) => a - b);
     const nextStep = Array.from({ length: season.steps }, (_, i) => i + 1).find((s) => !claimedSteps.includes(s));
-    const reward = nextStep === undefined ? null : seasonStepReward(nextStep);
+    const reward = nextStep === undefined ? null : seasonStepReward(nextStep, season.stepPoints);
     return { ...season, claimedSteps, nextReward: nextStep === undefined || reward === null ? null : { step: nextStep, reward } };
   });
 

@@ -60,6 +60,7 @@ const MATRICE: AdminPermissions = {
   canManageNotifications: true,
   canManageTranslations: true,
   canManageAgent: false,
+  canManageGame: false,
 };
 
 async function cadre(role: string): Promise<HTMLDivElement> {
@@ -145,7 +146,8 @@ describe('le menu latéral d’administration', () => {
       act(() => {
         window.dispatchEvent(new KeyboardEvent('keydown', { key: 'Tab', shiftKey, bubbles: true, cancelable: true }));
       });
-    const focusables = (hote: HTMLElement) => [...(hote.querySelector('[role="dialog"]')?.querySelectorAll<HTMLElement>('a[href], button:not([disabled])') ?? [])];
+    /* Le champ « Aller à… » (#10562) est dans l'ordre de tabulation, entre la croix et les entrées. */
+    const focusables = (hote: HTMLElement) => [...(hote.querySelector('[role="dialog"]')?.querySelectorAll<HTMLElement>('a[href], button:not([disabled]), input:not([disabled])') ?? [])];
 
     test('à l’ouverture, le focus ENTRE dans le tiroir : sur son bouton de fermeture', async () => {
       const { hote } = await ouvrir();
@@ -227,6 +229,46 @@ describe('le menu latéral d’administration', () => {
  * à droite de l'en-tête, et son titre dans le contenu, où il est le seul
  * `<h1>` de la page.
  */
+describe('« Aller à… » filtre le menu (#10562)', () => {
+  const filtre = (racine: ParentNode) => racine.querySelector<HTMLInputElement>('[data-admin-sidebar] [data-admin-nav-filter]');
+  const taper = (champ: HTMLInputElement | null, valeur: string) =>
+    act(() => {
+      if (champ === null) return;
+      Object.getOwnPropertyDescriptor(HTMLInputElement.prototype, 'value')?.set?.call(champ, valeur);
+      champ.dispatchEvent(new Event('input', { bubbles: true }));
+    });
+  const touche = (champ: HTMLInputElement | null, key: string) =>
+    act(() => {
+      champ?.dispatchEvent(new KeyboardEvent('keydown', { key, bubbles: true, cancelable: true }));
+    });
+
+  test('taper garde les seules sections dont le libellé ou le groupe contient chaque mot, sans accents', async () => {
+    const hote = await cadre('BIGBOSS');
+    const avant = entrees(hote.querySelector('[data-admin-sidebar]') ?? hote).length;
+    await taper(filtre(hote), 'journal');
+    expect(entrees(hote.querySelector('[data-admin-sidebar]') ?? hote)).toEqual(['audit']);
+    await taper(filtre(hote), 'zzz');
+    expect(entrees(hote.querySelector('[data-admin-sidebar]') ?? hote)).toEqual([]);
+    expect(hote.querySelector('[data-admin-sidebar] [data-admin-nav-empty]')?.textContent).toBe('Aucune section ne correspond.');
+    await touche(filtre(hote), 'Escape');
+    expect(filtre(hote)?.value).toBe('');
+    expect(entrees(hote.querySelector('[data-admin-sidebar]') ?? hote)).toHaveLength(avant);
+  });
+
+  test('Entrée suit la première section trouvée', async () => {
+    const hote = await cadre('BIGBOSS');
+    await taper(filtre(hote), 'comptes');
+    await touche(filtre(hote), 'Enter');
+    expect(window.location.pathname).toBe('/admin/users');
+  });
+
+  test('replié en rail, le menu ne porte pas de champ', async () => {
+    const hote = await cadre('BIGBOSS');
+    act(() => hote.querySelector<HTMLButtonElement>('[data-admin-sidebar-toggle]')?.click());
+    expect(filtre(hote)).toBeNull();
+  });
+});
+
 describe('l’en-tête « ‹ Comptes » et son action', () => {
   test('le libellé suit le retour à gauche, l’action est à droite, et aucun titre n’est posé dans l’en-tête', async () => {
     appQueryClient.setQueryData(ADMIN_PERMISSIONS_QUERY_KEY, { role: 'ADMIN', permissions: MATRICE });

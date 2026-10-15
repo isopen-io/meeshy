@@ -332,7 +332,43 @@ const REFERENCE_LITERAL_COLOR_COUNT = 145;
 //   la teinte d'attente de la pièce servie par l'API, une couleur de donnée,
 //   même motif que les 32 `thumbnailColor` déjà comptés.
 // Valeur MESURÉE le 2026-10-10 (CI 38045575542).
-const REFERENCE_UNKNOWN_VARIABLE_COLOR_COUNT = 456;
+//
+// 2026-10-11 (#10220) — variables inconnues 456 → 458 :
+// - `ConversationGuestHeaderBar.swift` (1, #10206) — `Color(hex: secondaryColor)`,
+//   second membre du dégradé du bouton « Partager » d'un invité sans compte ;
+//   l'hexa est REÇU en paramètre (comme `accentColor`, juste à côté, qui lui
+//   matche déjà la liste admise), même nature que les entrées #9907 ;
+// - `PacksSettingsView.swift` (1, #10150, LP2 « Cadres de gloire ») —
+//   `Color(hex: MeeshyColors.brandPrimaryHex)`, la teinte de la flèche de
+//   retour d'un écran de réglages statique : couleur SÉMANTIQUE (brand
+//   primary) hors du contexte conversation que vise CLAUDE.md § Conversation
+//   Accent Color.
+// Valeur MESURÉE le 2026-10-11 (CI 38162549528).
+//
+// 2026-10-12 (#10358) — variables inconnues 458 → 457 :
+// - `ComposerDocumentSurface.swift` (−1, 7e7dc53b9e) — `Color(hex:
+//   MeeshyColors.brandPrimaryHex)` retiré de l'icône de palette du rail
+//   document : remplacé par `ComposerFloatingRailInk.floating(active:)`, la
+//   même loi de glyphe en relief que le rail gauche et le rail droit.
+// Valeur MESURÉE le 2026-10-12 (CI 38302041896, run ebc05cc7d5 ; confirmée
+// indépendamment par run 38320669253 sur `dev`).
+// 457 -> 458 (2026-10-13) : UserProfileSheet pose la pastille « Réessayer » sur
+// resolvedAccent, l'accent du PROFIL (déjà lu ainsi l. 494 du même fichier) —
+// une fiche de profil n'a pas de conversation, donc pas d'accentColor à reprendre.
+// 458 -> 459 (2026-10-14, #10601, #10608) : `ConversationListView.swift` surligne
+// la CATÉGORIE d'origine d'une conversation glissée avec
+// `Color(hex: MeeshyColors.brandPrimaryHex)` — une catégorie n'a pas d'accentColor
+// propre (il appartient à une conversation), même nature que l'entrée #10220
+// (`PacksSettingsView.swift`) : couleur SÉMANTIQUE hors du contexte conversation
+// que vise CLAUDE.md § Conversation Accent Color.
+// 459 -> 467 (2026-10-15, #10631, #10632) : le rendu d'APPARENCE peint les
+// palettes du CATALOGUE que l'utilisateur choisit — fond de conversation
+// (`ConversationBackgroundView`, `ConversationAppearanceSheet` : surface et
+// accent de chaque nuance, accent effectif de l'aperçu) et modèles de design
+// (`AppearanceDesignView`, `AppearancePaint`, `AppearanceTileRenderer` :
+// `palette.base`, rôles de la palette). La couleur y est la DONNÉE choisie,
+// pas une teinte d'interface : remplacer par accentColor trahirait le choix.
+const REFERENCE_UNKNOWN_VARIABLE_COLOR_COUNT = 467;
 
 import { readFileSync, readdirSync, statSync, realpathSync } from 'node:fs';
 import { join, dirname } from 'node:path';

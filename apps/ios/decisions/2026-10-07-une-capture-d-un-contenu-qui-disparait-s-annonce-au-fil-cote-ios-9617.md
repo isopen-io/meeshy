@@ -45,3 +45,20 @@
 **Conséquences**:
 - Fichiers d'application créés (projet régénéré par XcodeGen) : `Services/ContentCaptureReporter.swift`, `Views/MessageListViewController+ContentCapture.swift`, `MeeshyTests/Unit/Services/ContentCaptureReporterTests.swift`.
 - Miroir Kotlin natif : rien reçu (gel du 2026-09-16). Dette consignée, non soldée.
+
+### #9632 — les surfaces qui restent NOIRES, une à une (2026-10-13)
+
+**La règle qui les départage** : une surface n'annonce que si l'AFFICHER, c'est le LIRE — l'accusé de lecture qu'elle pose à l'instant d'une capture est celui qu'elle aurait posé de toute façon (le fil par ses cellules visibles, le plein écran par sa page ouverte). Partout ailleurs, poser un accusé pour pouvoir annoncer ferait de la CAPTURE le déclencheur de la LECTURE : une flamme après lecture commencerait son décompte parce qu'on a pris l'écran d'une liste, et l'auteur serait prévenu d'une lecture que personne n'a faite. Ces surfaces gardent donc la règle fermée par défaut (`shieldsCapture()`, aucune valeur d'annonce) : la flamme y est NOIRE, aucune capture n'y est silencieuse. La décision porteur (« capture non noircie » pour un éphémère) est tenue là où le contenu se LIT — fil et plein écran — et le noir n'est que le repli des surfaces de passage.
+
+- **Rivière** : elle ne pose aucun accusé de lecture par bulle — son curseur ne pose pas d'accusé par message (#3901 l'évite pour le curseur). Un accusé par bulle visible posé à la capture lirait d'un coup tout ce que le pane croise, y compris une flamme effleurée. Elle reste noire ; elle continue de DÉCLARER ce qu'elle montre (`MeasuredCaptureSurface`), sans effet tant que rien n'est lu.
+- **Aperçu de ligne** (`ConversationPreviewLine`) : la liste des conversations ne lit pas ; un accusé posé depuis elle marquerait lue une conversation jamais ouverte.
+- **Feuille « Plus »** (`MessageMoreSheet`) : le message est déjà dans le fil, qui l'annonce s'il est visible ; la feuille n'est qu'une seconde présentation, sans preuve d'affichage propre.
+- **Épinglés** (`ConversationInfoSheet+Pinned`) : une liste de rappels, pas une lecture — un épinglé peut ne jamais avoir été vu.
+- **Fil de discussion** (`ThreadView`) : il ne pose pas d'accusés par message ; s'il en pose un jour sur ses rangées visibles, il deviendra une `ContentCaptureSource` comme le fil et quittera cette liste.
+- **Aperçu de transfert** (`ForwardPickerSheet`) : un éphémère ne se transfère pas librement (#9573) ; son aperçu est un écran de passage.
+- **Réponse en cours** (`ConversationView+ComposerBanners`, `MediaReplyComposerBar`) : la citation du composeur montre un message déjà lu dans le fil — c'est le fil qui l'annonce ; le bandeau n'ajoute rien à déclarer.
+- **Hub de médias** (`ConversationMediaHubView`) : une grille de toutes les pièces de la conversation, sans page ouverte ni accusé ; ouvrir une pièce passe par le plein écran, qui annonce.
+- **Plein écran d'un lieu** (`ConversationView+ViewOnceExit`, #9621) : non enregistré ; il porte le verdict de son message, fermé par défaut.
+- **Aperçu d'appui long** (menu natif iOS 26, `MessageOverlayMenu`) : le menu natif est attaché sous la valeur d'annonce du fil et son aperçu en héritait ; `MessageMenuPreviewContainer` la remet à faux. L'overlay est monté hors du fil, à la valeur par défaut. La bulle d'origine, visible dans le fil, reste annoncée par lui.
+
+**Le témoin** : `CaptureShieldCoverageGuardTests` CLASSE chaque fichier qui pose un bouclier — lecteur de la valeur d'annonce (n'annonce que sous une surface enregistrée) ou surface noire nommée ici. Un bouclier neuf ne naît pas sans dire de quel côté il est ; une surface noire ne lit jamais l'annonce ; chacune est nommée dans cette section.

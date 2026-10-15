@@ -118,6 +118,9 @@ export const CommonSchemas = {
 
 ## Adding Socket.IO Events
 1. Add constant to `SERVER_EVENTS` or `CLIENT_EVENTS` in `types/socketio-events/event-names.ts`
+   — sauf pour les domaines que le web lit dès sa première peinture (présence « regarde »,
+   session, consentement d'enregistrement) : leur nom va dans `*-event-names.ts`, que les deux
+   cartes répandent, pour que le socle n'importe pas la carte entière (#9966)
 2. Define data interface (e.g., `ReactionUpdateEventData`) in `types/socketio-events/<domaine>.ts`
 3. Add to `ServerToClientEvents` or `ClientToServerEvents` in `types/socketio-events/event-maps.ts`
    (le SEUL fichier qui cite tous les domaines — c'est l'assemblage, pas un domaine)

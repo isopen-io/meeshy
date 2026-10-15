@@ -28,9 +28,10 @@
  * le journal.
  */
 
+import { createHash } from 'node:crypto';
 import type { PrismaClient } from '@meeshy/shared/prisma/client';
 import type { NotificationType } from '@meeshy/shared/types/notification';
-import { countsAgainstGameDailyCap, gameLeagueResultKey } from '@meeshy/shared/utils/game/notifications';
+import { countsAgainstGameDailyCap, gameLeagueResultKey, photoMomentNotificationKey } from '@meeshy/shared/utils/game/notifications';
 import { personalMissionActivity } from '@meeshy/shared/utils/game/personal-mission';
 import { personalMissionPhrase } from '@meeshy/shared/utils/game/personal-mission-copy';
 import type { LeagueKey } from '@meeshy/shared/utils/game/league';
@@ -72,6 +73,16 @@ export type GameNotificationEvent =
       readonly templateKey: string;
       readonly startsAt: Date;
       readonly endsAt: Date;
+    }
+  | {
+      /**
+       * Des étapes franchies app fermée peuvent rejoindre le carnet (#10175) : le résumé groupé des étapes ni
+       * présentées ni notifiées (`photoAlertDigest`), le jour LOCAL du destinataire.
+       */
+      readonly kind: 'photo-moment';
+      readonly recipientId: string;
+      readonly stepIds: readonly string[];
+      readonly dayKey: string;
     };
 
 export type GameNotifyResult =
@@ -108,6 +119,11 @@ type Plan = {
   readonly collapseId: string;
   /** Compte-t-elle contre le plafond d'une notification de jeu par jour ? (Les duos et la mission du jour : non.) */
   readonly capped: boolean;
+  /**
+   * Un créneau du jour déjà pris la DIFFÈRE au lieu de la taire (le push photo, § 5.16.4) : sa clé « une seule
+   * fois » se rend, et la prochaine fenêtre permise la reprend. Les autres notifications plafonnées se taisent.
+   */
+  readonly deferrable?: boolean;
   readonly content: (lang: string, timezone: string | null) => string;
   readonly metadata: Record<string, unknown>;
   readonly actorId?: string;
@@ -129,6 +145,10 @@ function clockLabel(instant: Date, lang: string, timezone: string | null): strin
     return new Intl.DateTimeFormat('en', options).format(instant);
   }
 }
+
+/** L'empreinte d'un résumé : le même ensemble d'étapes, quel que soit l'ordre, est le même événement. */
+const digestFingerprint = (stepIds: readonly string[]): string =>
+  createHash('sha256').update([...new Set(stepIds)].sort().join('|')).digest('hex').slice(0, 16);
 
 function planOf(event: GameNotificationEvent): Plan {
   switch (event.kind) {
@@ -207,6 +227,21 @@ function planOf(event: GameNotificationEvent): Plan {
           endsAt: event.endsAt.toISOString(),
         },
       };
+    case 'photo-moment': {
+      const count = new Set(event.stepIds).size;
+      return {
+        type: 'game_photo_moment',
+        priority: 'low',
+        onceKey: `photo:${event.dayKey}:${digestFingerprint(event.stepIds)}`,
+        // UN identifiant : le résumé du jour remplace le précédent sur l'écran (apns-collapse-id, tag, FCM).
+        collapseId: 'game-photo-moment',
+        capped: countsAgainstGameDailyCap('game_photo_moment'),
+        deferrable: true,
+        // Le texte ne dit ni l'étape ni le rang (écran verrouillé, D13) ; l'ancre est pour le seul carnet.
+        content: (lang) => text(lang, photoMomentNotificationKey(count), count),
+        metadata: { action: 'view_details', route: ROUTE, gameSection: 'carnet', count, focusStepId: event.stepIds[0] ?? null },
+      };
+    }
   }
 }
 
@@ -258,6 +293,7 @@ export class GameNotifier {
     // et la mission du jour en sortent (#9541) : ni comptés, ni pris.
     const dayKey = `notif:game:day:${event.recipientId}:${dayKeyOf(now, recipient.timezone)}`;
     if (plan.capped && !(await throttle.setnx(dayKey, plan.type, DAY_TTL_SECONDS))) {
+      if (plan.deferrable) await throttle.del?.(onceKey).catch(() => undefined);
       return 'skipped:daily-cap';
     }
 
@@ -288,6 +324,8 @@ export class GameNotifier {
       });
     if (created === null) {
       await release();
+      // Un résumé photo refusé n'a rien annoncé : sa clé se rend, sinon le passage suivant le lirait « déjà parti ».
+      if (plan.deferrable) await throttle.del?.(onceKey).catch(() => undefined);
       return 'skipped:declined';
     }
     return 'sent';

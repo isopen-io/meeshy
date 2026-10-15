@@ -183,6 +183,26 @@ function projeterRelation(valeur: unknown, arbre: PrismaQueryNode, chemin: strin
 }
 
 /**
+ * La PROJECTION seule : ce que Prisma rend d'une ligne sous l'`include` /
+ * `select` d'un appel, pour un double qui a déjà trouvé sa ligne (`findUnique`
+ * par identifiant, `findMany`) et ne veut pas de la recherche. Même règle, un
+ * seul exemplaire — `true` garde une colonne (une colonne absente reste absente),
+ * `{ select }` descend dans une relation, une liste est filtrée par son `where`
+ * puis projetée. Le `where` de la RACINE n'est pas jugé ici : l'appelant l'a déjà
+ * appliqué pour choisir sa ligne.
+ *
+ * Seules les clés `select` et `include` sont lues : un appelant qui passe tout
+ * l'argument de sa lecture (`take`, `orderBy`) en retire d'abord ce qu'il a
+ * appliqué lui-même.
+ */
+export function projectDocument(
+  row: MongoDocument,
+  query: Pick<PrismaQueryNode, 'select' | 'include'>
+): MongoDocument {
+  return projeterLigne(row, noeud('projection', query), 'projection');
+}
+
+/**
  * Le double : une COLLECTION en mémoire, et la première ligne qui satisfait le
  * `where` demandé — projetée par l'arbre `include` / `select` de l'appel.
  * Rend `null` quand rien n'apparie, exactement comme Prisma.

@@ -603,7 +603,10 @@ public struct SyntaxHighlighter {
                 if let prefix = def.preprocessorPrefix, remaining.hasPrefix(prefix) {
                     let trimmed = String(remaining).trimmingCharacters(in: .whitespaces)
                     if trimmed.hasPrefix(prefix) && (i == line.startIndex || line[line.index(before: i)].isWhitespace) {
-                        let wordEnd = scanWord(from: i, in: line)
+                        // Le mot se lit APRÈS le préfixe : `#` n'est ni lettre ni chiffre, et lu depuis
+                        // lui `scanWord` rendait l'indice de départ — la boucle n'avançait plus jamais.
+                        let afterPrefix = line.index(i, offsetBy: prefix.count, limitedBy: line.endIndex) ?? line.endIndex
+                        let wordEnd = scanWord(from: afterPrefix, in: line)
                         tokens.append(SyntaxToken(String(line[i..<wordEnd]), .preprocessor))
                         i = wordEnd
                         continue

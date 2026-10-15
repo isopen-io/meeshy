@@ -12,26 +12,11 @@
  * ferait descendre `lib/view` dans `components`, à contresens de la pile.
  * Chaque hôte compose son `InfoHint` à partir de ces chaînes — le glyphe est
  * son affaire, le MOT est commun.
- *
- * **Et le même texte n'est pas toujours rendu de la même façon.** `/login` rend
- * `HOW_IT_WORKS_TEXT` en CLAIR (le porteur y veut la phrase visible sous la
- * baguette, sans titre) et `/auth/magic-link` le replie derrière son (i). C'est
- * exactement pourquoi ce module tient le TEXTE et pas sa mise en scène.
  */
 
-/** La question que le (i) répond — jamais « Plus d'infos » (§ `InfoHint.label`). */
-export const HOW_IT_WORKS_LABEL = 'Comment ça marche';
-
-/**
- * CE QUE L'UTILISATEUR A BESOIN DE SAVOIR (#6626).
- *
- * Directive porteur 2026-09-15 : « l'utilisateur a besoin de savoir qu'il va se
- * connecter par e-mail et non de savoir que c'est magic-mail… garder la
- * baguette mais être clair et simple ». Le mot « magique » ne paraît nulle part
- * à l'écran — la BAGUETTE reste l'icône de la connexion par e-mail.
- */
-export const HOW_IT_WORKS_TEXT =
-  'Pas de mot de passe à retenir : nous vous envoyons un lien par e-mail. Ouvrez-le et vous êtes connecté.';
+/* « Comment ça marche » et sa réponse vivent au catalogue d'interface
+   (`magicLink.howItWorks*`, #10007) : la connexion se lit dans les sept
+   langues, et le panneau du lien par e-mail en est l'unique hôte. */
 
 export const NOTHING_RECEIVED_LABEL = 'Rien reçu ?';
 

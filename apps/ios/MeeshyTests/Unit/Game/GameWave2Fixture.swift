@@ -29,7 +29,7 @@ enum GameWave2Fixture {
         )
     }
 
-    static func season(steps: Int = 4, claimed: [Int] = [1, 2], sealOwned: Bool = false) -> GameSeasonBlock {
+    static func season(steps: Int = 4, claimed: [Int] = [1, 2], sealOwned: Bool = false, stepPoints: Int? = nil) -> GameSeasonBlock {
         let progress = GameSeason.progress(stars: steps * GameSeason.starsPerStep + 2)
         let next = (1...GameSeason.steps).first { $0 <= steps && !claimed.contains($0) }
         return GameSeasonBlock(
@@ -37,9 +37,9 @@ enum GameWave2Fixture {
             stars: progress.stars, steps: progress.steps, stepsTotal: GameSeason.steps, starsToNext: progress.starsToNext,
             progress: progress.progress, completed: false, claimedSteps: claimed,
             nextReward: next.flatMap { step in
-                GameSeason.stepReward(step).map { GameSeasonBlock.NextReward(step: step, reward: .init(kind: $0.kind, amount: $0.amount)) }
+                GameSeason.stepReward(step, stepPoints: stepPoints).map { GameSeasonBlock.NextReward(step: step, reward: .init(kind: $0.kind, amount: $0.amount)) }
             },
-            sealOwned: sealOwned, sealPrice: GameSeason.sealPrice
+            sealOwned: sealOwned, sealPrice: GameSeason.sealPrice, stepPoints: stepPoints
         )
     }
 

@@ -207,10 +207,12 @@ public final class StoryCanvasUIView: UIView {
         didSet {
             guard oldValue != playsAudioInEditMode else { return }
             if playsAudioInEditMode {
+                claimEditAudio()
                 lastAudioConfigRevision = nil
                 reconfigureAudioForPlayback()
             } else {
                 audioMixer.stop()
+                releaseEditAudio()
             }
         }
     }

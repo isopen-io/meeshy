@@ -1,9 +1,11 @@
+import { useScrollDepthTelemetry } from '@/lib/telemetry/scroll-depth';
 import { useCallback, useEffect, useMemo, useRef } from 'react';
 
 import { CommentThread } from '@/components/comment-thread';
 import { FeedPostCard } from '@/components/feed-post-card';
 import { Glyph } from '@/components/glyph';
 import { SceneFullscreenGallery } from '@/components/scene-fullscreen-gallery';
+import { RefusedContentBackdrop, RefusedContentNotice, refusalViewOf } from '@/components/refused-content';
 import { isContentRefusal as isRefusal, useVisitorInvitation } from '@/components/visitor-invitation';
 import { translate } from '@/lib/i18n-catalog';
 import { currentInterfaceLanguage } from '@/lib/interface-language';
@@ -18,6 +20,7 @@ import { useMinute } from '@/lib/view/use-minute';
 import { usePostGesture } from '@/lib/view/use-post-gesture';
 import { usePublicationRoom } from '@/lib/view/use-publication-room';
 import { READING_COLUMN_STYLE } from '@/lib/view/reading-column';
+import { detailImpressionSourceOf, dwellContentTypeOf, useReadingSession, useViewAttribution } from '@/lib/view/reading-telemetry';
 import { useReaderLanguages } from '@/lib/view/use-reader';
 import { Link, href, navigate } from '@/routes/route-table';
 
@@ -67,40 +70,16 @@ export function PostDetailHeader() {
     <header className="flex shrink-0 items-center gap-2 px-3 pt-3 pb-2">
       <Link
         to="feed"
-        aria-label="Retour au fil"
+        aria-label={translate(currentInterfaceLanguage(), 'feed.backToFeed')}
         className="grid size-11 shrink-0 place-items-center rounded-chip focus-visible:outline-2 focus-visible:outline-offset-2"
         style={{ color: 'var(--color-ios-brand)', outlineColor: 'var(--color-ios-brand)' }}
       >
         <Glyph name="caretLeft" size={20} className="rtl:-scale-x-100" />
       </Link>
       <h1 className="text-screen font-bold" style={{ color: 'var(--color-ios-ink)' }}>
-        Publication
+        {translate(currentInterfaceLanguage(), 'post.detail.title')}
       </h1>
     </header>
-  );
-}
-
-/** 403 et 404 confondus (D-6) — rien de la publication ne transparaît. */
-export function PostDetailRefused() {
-  return (
-    <div className="grid flex-1 content-center justify-items-center gap-3 px-8 text-center">
-      <span style={{ color: 'var(--color-ios-ink-3)' }}>
-        <Glyph name="lock" size={28} />
-      </span>
-      <p className="text-body font-semibold" style={{ color: 'var(--color-ios-ink)' }}>
-        Cette publication n’est pas accessible
-      </p>
-      <p className="text-caption" style={{ color: 'var(--color-ios-ink-2)' }}>
-        Elle n’existe pas, ou vous n’y avez pas accès.
-      </p>
-      <Link
-        to="feed"
-        className="grid place-items-center rounded-chip px-5 text-body font-semibold text-ios-on-brand"
-        style={{ backgroundColor: 'var(--color-ios-brand)', minHeight: 44 }}
-      >
-        Retour au fil
-      </Link>
-    </div>
   );
 }
 
@@ -111,10 +90,10 @@ export function PostDetailError({ online, onRetry }: { readonly online: boolean;
         <Glyph name="warningCircle" size={28} />
       </span>
       <p className="text-body font-semibold" style={{ color: 'var(--color-ios-ink)' }}>
-        {online ? 'Impossible de charger la publication' : 'Hors ligne'}
+        {translate(currentInterfaceLanguage(), online ? 'post.detail.error' : 'common.offline')}
       </p>
       <p className="text-caption" style={{ color: 'var(--color-ios-ink-2)' }}>
-        {online ? 'Réessayez dans un instant.' : 'La publication s’affichera à la reconnexion.'}
+        {translate(currentInterfaceLanguage(), online ? 'post.detail.error.body' : 'post.detail.offline.body')}
       </p>
       <button
         type="button"
@@ -122,12 +101,31 @@ export function PostDetailError({ online, onRetry }: { readonly online: boolean;
         className="grid place-items-center rounded-chip px-5 text-body font-semibold text-ios-on-brand"
         style={{ backgroundColor: 'var(--color-ios-brand)', minHeight: 44 }}
       >
-        Réessayer
+        {translate(currentInterfaceLanguage(), 'common.retry')}
       </button>
     </div>
   );
 }
 
+export type PostDetailBody = 'card' | 'visitor-refused' | 'refused' | 'error' | 'loading';
+
+/**
+ * CE QUE LE DÉTAIL MONTRE, selon le verdict de la passerelle (#10314, #10318).
+ * Un refus — 403 et 404 confondus (D-6) — se présente comme un réel refusé
+ * (`components/refused-content.tsx`) : le noir de média, l'invitation par-dessus
+ * pour un visiteur, la notice « Retour » pour un membre. Une panne garde
+ * « Réessayer » — jamais confondue avec un refus.
+ */
+export function postDetailBodyOf(input: {
+  readonly served: boolean;
+  readonly visitor: boolean;
+  readonly refused: boolean;
+  readonly failed: boolean;
+}): PostDetailBody {
+  if (input.served) return 'card';
+  if (input.refused) return refusalViewOf({ visitor: input.visitor }) === 'invitation' ? 'visitor-refused' : 'refused';
+  return input.failed ? 'error' : 'loading';
+}
 
 export default function PostDetailScreen() {
   const { post: postId } = useParams<'/post/$post'>();
@@ -177,6 +175,23 @@ export default function PostDetailScreen() {
     state: model !== undefined ? 'served' : isRefusal(post.error) ? 'refused' : 'pending',
   });
   const { visitor, ask } = invitation;
+  const body = postDetailBodyOf({ served: model !== undefined, visitor, refused: isRefusal(post.error), failed: post.isError });
+  /* LA LECTURE DU DÉTAIL (#10401) — ouvrir une publication est une
+     impression `detail` ET une vue, comptées tout de suite ; la durée et la
+     séance partent à la sortie. Miroir `PostDetailViewModel` (iOS). La vue
+     porte PAR OÙ la fiche est arrivée (#10483) : un tap de listing, une
+     notification, un lien de suivi ou de partage, un autre site, ou rien. */
+  const attribution = useViewAttribution();
+  useScrollDepthTelemetry({ frame, target: model === undefined ? null : { kind: 'post', id: model.id }, contentKind: 'thread', surface: 'detail' });
+  useReadingSession({
+    postId: model?.id,
+    active: model !== undefined,
+    contentType: dwellContentTypeOf(post.data?.type),
+    surface: 'detail',
+    impressionSource: detailImpressionSourceOf(search),
+    openView: true,
+    attribution: () => attribution,
+  });
 
   // `?scene=N` — LE LIEN PROFOND (#6902, § F de la spécification) : l'ADRESSE
   // que le carrousel de scène (`Next scene`, `share-url.ts`) et un lien reçu
@@ -226,12 +241,14 @@ export default function PostDetailScreen() {
             onOpenScene={sceneGallery.onOpenScene}
             registerScene={registerScene}
           />
-        ) : visitor && isRefusal(post.error) ? null : isRefusal(post.error) ? (
-          <PostDetailRefused />
-        ) : post.isError ? (
+        ) : body === 'visitor-refused' ? (
+          <RefusedContentBackdrop />
+        ) : body === 'refused' ? (
+          <RefusedContentNotice language={currentInterfaceLanguage()} onBack={() => navigate(href('feed'), true)} />
+        ) : body === 'error' ? (
           <PostDetailError online={online} onRetry={() => void post.refetch()} />
         ) : (
-          <div aria-busy="true" aria-label="Chargement de la publication">
+          <div aria-busy="true" aria-label={translate(currentInterfaceLanguage(), 'post.detail.loading')}>
             <FeedSkeleton />
           </div>
         )}

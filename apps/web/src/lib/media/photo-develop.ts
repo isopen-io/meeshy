@@ -128,16 +128,20 @@ function browserSurface(size: PhotoSize): PhotoSurface | null {
 
 export const browserPhotoEnv: PhotoEnv = { surface: browserSurface };
 
-export async function developPhoto(source: PhotoSource, env: PhotoEnv = browserPhotoEnv): Promise<Blob | null> {
+/** Ce qu'un usage règle autrement que la prise de vue : la borne, la qualité, le look (`null` : aucun, l'image telle quelle). */
+export type DevelopOptions = { readonly maxEdge?: number; readonly quality?: number; readonly look?: PhotoLook | null };
+
+export async function developPhoto(source: PhotoSource, env: PhotoEnv = browserPhotoEnv, options: DevelopOptions = {}): Promise<Blob | null> {
   const crop = source.crop ?? { x: 0, y: 0, width: source.size.width, height: source.size.height };
   if (crop.width <= 0 || crop.height <= 0) return null;
-  const size = developedSize(crop);
+  const size = developedSize(crop, options.maxEdge ?? PHOTO_MAX_EDGE);
   const surface = env.surface(size);
   if (surface === null) return null;
   surface.paint(source.image, crop, size);
-  const pixels = surface.pixels();
-  if (pixels !== null) surface.put(developPixels(pixels, size));
-  return surface.encode(PHOTO_MIME, PHOTO_QUALITY);
+  const look = options.look === undefined ? PHOTO_LOOK : options.look;
+  const pixels = look === null ? null : surface.pixels();
+  if (pixels !== null && look !== null) surface.put(developPixels(pixels, size, look));
+  return surface.encode(PHOTO_MIME, options.quality ?? PHOTO_QUALITY);
 }
 
 export type DecodedPhoto = { readonly image: CanvasImageSource; readonly size: PhotoSize; readonly close: () => void };

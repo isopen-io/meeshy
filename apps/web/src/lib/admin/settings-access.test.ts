@@ -25,10 +25,10 @@ const synthetic = (id: AdminSectionId, permission: AdminPermissionKey, ready: bo
   return { ...real, permission, ready };
 };
 
-describe('les dix capacités', () => {
+describe('les onze capacités', () => {
   test('la liste couvre exactement les clés de la matrice servie — aucune oubliée, aucune en trop', () => {
     expect([...CAPABILITY_KEYS].sort()).toEqual(Object.keys(BIGBOSS.permissions).sort());
-    expect(new Set(CAPABILITY_KEYS).size).toBe(10);
+    expect(new Set(CAPABILITY_KEYS).size).toBe(11);
   });
 
   test('chacune est dite dans les quatre langues de l’administration : libellé et explication', async () => {

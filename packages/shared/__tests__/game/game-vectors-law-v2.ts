@@ -56,6 +56,26 @@ import {
 } from '../../utils/game/league.js';
 import type { MissionSignal } from '../../utils/game/missions.js';
 import { photoMomentId, photoMomentOfGuideEvent } from '../../utils/game/photo-moments.js';
+import {
+  GAME_VECTOR_LAWS_PHOTO,
+  buildGameVectorsPhoto,
+  evaluateGameVectorPhoto,
+  evaluatePhotoDayVector,
+  type GameVectorInputPhoto,
+  type GameVectorInputPhotoDay,
+} from './game-vectors-law-photo.js';
+import {
+  GAME_VECTOR_LAWS_CONSTELLATION,
+  buildGameVectorsConstellation,
+  evaluateGameVectorConstellation,
+  type GameVectorInputConstellation,
+} from './game-vectors-law-constellation.js';
+import {
+  GAME_VECTOR_LAWS_SCHEDULE,
+  buildGameVectorsSchedule,
+  evaluateGameVectorSchedule,
+  type GameVectorInputSchedule,
+} from './game-vectors-law-schedule.js';
 import { prestigeTransition } from '../../utils/game/prestige.js';
 import {
   achievementGloryAtEarning,
@@ -69,8 +89,11 @@ import { mythicSignature } from '../../utils/game/mythic-signature.js';
 import {
   canBuySeal,
   claimSeasonStep,
+  liveSeasonTense,
   seasonAt,
   seasonCalendar,
+  seasonTenseAt,
+  type SeasonTense,
   seasonOfMoment,
   seasonProgress,
   seasonSettlement,
@@ -165,7 +188,12 @@ export type GameVectorInputV2 =
   | { readonly law: 'guide-choose'; readonly events: readonly (GuideEvent | GuideEventV2)[]; readonly seen: readonly string[] }
   | { readonly law: 'photo-moment'; readonly event: GuideEventV2 }
   | { readonly law: 'trophy-visitor-key'; readonly key: string; readonly awardedMonth: string }
-  | { readonly law: 'showcase-visitor'; readonly owned: readonly TrophyRecord[]; readonly order: readonly string[] };
+  | { readonly law: 'showcase-visitor'; readonly owned: readonly TrophyRecord[]; readonly order: readonly string[] }
+  | { readonly law: 'season-tense'; readonly startDay: string; readonly endDay: string; readonly served: SeasonTense; readonly dayKey: string; readonly minuteOfDay: number }
+  | GameVectorInputPhoto
+  | GameVectorInputPhotoDay
+  | GameVectorInputConstellation
+  | GameVectorInputSchedule;
 
 export const GAME_VECTOR_LAWS_V2 = [
   'league-week',
@@ -214,6 +242,10 @@ export const GAME_VECTOR_LAWS_V2 = [
   'photo-moment',
   'trophy-visitor-key',
   'showcase-visitor',
+  'season-tense',
+  ...GAME_VECTOR_LAWS_PHOTO,
+  ...GAME_VECTOR_LAWS_CONSTELLATION,
+  ...GAME_VECTOR_LAWS_SCHEDULE,
 ] as const;
 
 const lawSet: ReadonlySet<string> = new Set(GAME_VECTOR_LAWS_V2);
@@ -369,13 +401,28 @@ export function evaluateGameVectorV2(input: GameVectorInputV2): unknown {
       return { key: chosen === null ? null : chosen.key, presentation: chosen === null ? null : chosen.presentation };
     }
     case 'photo-moment': {
+      if ('dayKey' in input) return evaluatePhotoDayVector(input);
       const emblem = photoMomentOfGuideEvent(input.event);
       return { emblem, id: emblem === null ? null : photoMomentId(emblem) };
     }
     case 'trophy-visitor-key':
       return { key: visitorTrophyKey(input) };
+    case 'season-tense':
+      return { tense: seasonTenseAt(input, input), live: liveSeasonTense(input, input) };
     case 'showcase-visitor':
       return visitorShowcase(input);
+    case 'photo-catch-up':
+    case 'photo-offer':
+    case 'photo-standing':
+    case 'photo-alert':
+      return evaluateGameVectorPhoto(input);
+    case 'constellation':
+    case 'constellation-key':
+    case 'league-next-close':
+      return evaluateGameVectorConstellation(input);
+    case 'season-schedule':
+    case 'season-edit':
+      return evaluateGameVectorSchedule(input);
   }
 }
 
@@ -803,6 +850,23 @@ export function buildGameVectorsV2() {
     vector(`vitrine d'un visiteur, cas ${i + 1}`, { law: 'showcase-visitor', owned: visitorOwned, order }),
   );
 
+  // L'état d'une saison à un moment (#10131) : la saison 1, ses deux fermetures, une horloge en retard.
+  const tenses = (
+    [
+      ['2026-12-20', 1199, 'upcoming'],
+      ['2026-12-20', 1200, 'upcoming'],
+      ['2026-12-21', 0, 'upcoming'],
+      ['2027-02-14', 1199, 'current'],
+      ['2027-02-14', 1200, 'current'],
+      ['2027-03-01', 0, 'upcoming'],
+      ['2026-12-01', 0, 'current'],
+      ['2026-12-01', 0, 'past'],
+      ['2027-01-10', 600, 'past'],
+    ] as const
+  ).map(([dayKey, minuteOfDay, served]) =>
+    vector(`état de la saison 1, servie ${served}, le ${dayKey} à ${minuteOfDay} min`, { law: 'season-tense', startDay: '2026-12-21', endDay: '2027-02-14', served, dayKey, minuteOfDay }),
+  );
+
   return [
     ...weeks,
     ...weekPoints,
@@ -849,5 +913,9 @@ export function buildGameVectorsV2() {
     ...visitorKeys,
     ...monthParses,
     ...visitorShowcases,
+    ...tenses,
+    ...buildGameVectorsPhoto(),
+    ...buildGameVectorsConstellation(),
+    ...buildGameVectorsSchedule(),
   ];
 }

@@ -2,7 +2,8 @@
  * La section `game` de `GET /me/export` (#9384 à #9392, conformité I-2) — tout
  * ce que le Jeu Meeshy garde d'UN compte : progression, réglages, consentement
  * de ligue, pseudonyme, historique des ligues, points de semaine, duos, saisons,
- * trophées, tampons de l'Atlas, missions, Gloire et Meeshes (RGPD art. 15 et 20).
+ * trophées, tampons de l'Atlas, missions, Gloire et Meeshes, réglages photo et registre des moments
+ * photo (#10162) (RGPD art. 15 et 20).
  *
  * Ce que la section ne contient JAMAIS :
  *  - rien d'un AUTRE compte : le duo ne nomme pas le partenaire, la ligue ne
@@ -23,7 +24,7 @@ export async function exportGame(prisma: PrismaClient, userId: string, page: Exp
   const skip = page.offset;
   const clip = <T>(rows: T[]): { items: T[]; more: boolean } => ({ items: rows.slice(0, page.limit), more: rows.length > page.limit });
 
-  const [account, settings, pseudonym, memberships, weekPoints, duosAsInviter, duosAsInvitee, seasons, trophies, atlas, missions, glory, meeshes, mythicSeat] =
+  const [account, settings, pseudonym, memberships, weekPoints, duosAsInviter, duosAsInvitee, seasons, trophies, atlas, missions, glory, meeshes, mythicSeat, photoMoments] =
     await Promise.all([
       prisma.user.findUnique({
         where: { id: userId },
@@ -76,6 +77,12 @@ export async function exportGame(prisma: PrismaClient, userId: string, page: Exp
       prisma.gloryLedger.findMany({ where: { userId }, select: { delta: true, reason: true, createdAt: true }, orderBy: { createdAt: 'desc' }, take, skip }),
       prisma.meeshLedger.findMany({ where: { userId }, select: { delta: true, reason: true, createdAt: true }, orderBy: { createdAt: 'desc' }, take, skip }),
       prisma.mythicSeat.findUnique({ where: { userId }, select: { number: true, edition: true, grantedAt: true } }),
+      prisma.gamePhotoMoment.findMany({
+        where: { userId },
+        select: { stepId: true, detectedAt: true, presentedAt: true, notifiedAt: true },
+        orderBy: { updatedAt: 'desc' },
+        take, skip,
+      }),
     ]);
 
   const duos = [
@@ -93,6 +100,9 @@ export async function exportGame(prisma: PrismaClient, userId: string, page: Exp
     missions: clip(missions),
     gloryLedger: clip(glory),
     meeshLedger: clip(meeshes),
+    photoMoments: clip(
+      photoMoments.map((m) => ({ stepId: m.stepId, detectedAt: asIso(m.detectedAt), presentedAt: asIso(m.presentedAt), notifiedAt: asIso(m.notifiedAt) })),
+    ),
   };
 
   return {
@@ -107,6 +117,11 @@ export async function exportGame(prisma: PrismaClient, userId: string, page: Exp
           friendsLeagueOptOutAt: asIso(settings.friendsLeagueOptOutAt),
           showcaseOrder: settings.showcaseOrder ?? [],
           mythicAt: asIso(settings.mythicAt),
+          frameAtmosphere: settings.frameAtmosphere ?? null,
+          photoInvitations: settings.photoInvitations ?? null,
+          photoAlertsBaselineAt: asIso(settings.photoAlertsBaselineAt),
+          photoAlertsBaseline: settings.photoAlertsBaseline ?? null,
+          treasuryPeakTier: settings.treasuryPeakTier ?? null,
         }
       : null,
     mythicSeat: mythicSeat ? { number: mythicSeat.number, edition: mythicSeat.edition, grantedAt: asIso(mythicSeat.grantedAt) } : null,
@@ -120,6 +135,7 @@ export async function exportGame(prisma: PrismaClient, userId: string, page: Exp
     missions: lists.missions.items,
     gloryLedger: lists.gloryLedger.items,
     meeshLedger: lists.meeshLedger.items,
+    photoMoments: lists.photoMoments.items,
     hasMore: Object.values(lists).some((list) => list.more),
   };
 }

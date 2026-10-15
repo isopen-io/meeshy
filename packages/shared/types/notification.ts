@@ -175,6 +175,8 @@ export enum NotificationTypeEnum {
   GAME_SEASON_STEP = 'game_season_step',
   /** La mission personnelle du jour commence : sa plage horaire est dans le texte (#9539). */
   GAME_MISSION_WINDOW = 'game_mission_window',
+  /** Des étapes du jeu franchies app fermée peuvent rejoindre le carnet : une notification groupée, dans le plafond (#10175). */
+  GAME_PHOTO_MOMENT = 'game_photo_moment',
 
   // ===== PAYMENT/SUBSCRIPTION =====
   SUBSCRIPTION_EXPIRING = 'subscription_expiring',

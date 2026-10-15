@@ -55,6 +55,9 @@ public enum MessageTextRenderer {
     /// what messages pass since their surlignage already comes from
     /// `validatedMentions` upstream. An empty `Set` is NOT the same as `nil`: it
     /// means the caller checked and nobody matched, so nothing links.
+    /// Pass `linksAreInert` for text whose author has no account (#10286):
+    /// every link — raw URL, `[label](url)`, `[[url]]`, `m+<token>` — is shown
+    /// exactly as written, as plain text, never tappable.
     /// Callers that omit these parameters retain identical behavior to before.
     public static func render(
         _ text: String,
@@ -67,14 +70,15 @@ public enum MessageTextRenderer {
         mentionDisplayNames: [String: String]? = nil,
         highlightTerm: String? = nil,
         trackedLinks: [String: String]? = nil,
-        validUsernames: Set<String>? = nil
+        validUsernames: Set<String>? = nil,
+        linksAreInert: Bool = false
     ) -> Text {
         guard !text.isEmpty else { return Text("") }
         return Text(attributed(text, fontSize: fontSize, color: color, mentionColor: mentionColor,
                                hashtagColor: hashtagColor, accentColor: accentColor,
                                usesRelativeFont: usesRelativeFont, mentionDisplayNames: mentionDisplayNames,
                                highlightTerm: highlightTerm, trackedLinks: trackedLinks,
-                               validUsernames: validUsernames))
+                               validUsernames: validUsernames, linksAreInert: linksAreInert))
     }
 
     /// The `AttributedString` behind `render` — same parameters, plus the web
@@ -93,6 +97,7 @@ public enum MessageTextRenderer {
         highlightTerm: String? = nil,
         trackedLinks: [String: String]? = nil,
         validUsernames: Set<String>? = nil,
+        linksAreInert: Bool = false,
         webOrigin: String = MeeshyConfig.shared.webOrigin
     ) -> AttributedString {
         guard !text.isEmpty else { return AttributedString() }
@@ -104,6 +109,7 @@ public enum MessageTextRenderer {
             mentionDisplayNames: mentionDisplayNames,
             trackedLinks: trackedLinks,
             validUsernames: validUsernames,
+            linksAreInert: linksAreInert,
             webOrigin: webOrigin
         )
         if MessageBlockParser.hasBlockSyntax(text) {
@@ -124,6 +130,7 @@ public enum MessageTextRenderer {
         let mentionDisplayNames: [String: String]?
         let trackedLinks: [String: String]?
         let validUsernames: Set<String>?
+        var linksAreInert: Bool = false
         var webOrigin: String = MeeshyConfig.shared.webOrigin
     }
 
@@ -192,13 +199,14 @@ public enum MessageTextRenderer {
     /// Returns NSRanges suitable for AttributedString highlighting.
     public static func highlightRanges(in text: String, term: String) -> [NSRange] {
         guard !term.isEmpty else { return [] }
-        let lowered = text.lowercased()
-        let termLower = term.lowercased()
+        // Cherché dans `text` LUI-MÊME : « İ » s'allonge en passant en minuscules, et un indice pris
+        // dans la copie abaissée sortait des bornes du texte d'origine.
         var ranges: [NSRange] = []
-        var searchStart = lowered.startIndex
-        while let range = lowered.range(of: termLower, range: searchStart..<lowered.endIndex) {
-            let nsRange = NSRange(range, in: text)
-            ranges.append(nsRange)
+        var searchStart = text.startIndex
+        while searchStart < text.endIndex,
+              let range = text.range(of: term, options: .caseInsensitive, range: searchStart..<text.endIndex),
+              !range.isEmpty {
+            ranges.append(NSRange(range, in: text))
             searchStart = range.upperBound
         }
         return ranges
@@ -661,6 +669,14 @@ public enum MessageTextRenderer {
 
             case .link(let written):
                 charOffset += written.sourceCount
+                if context.linksAreInert {
+                    charOffset += written.inertText.count - written.sourceCount
+                    var plain = AttributedString(written.inertText)
+                    plain.font = Self.font(fontSize, .regular, relative: usesRelativeFont)
+                    plain.foregroundColor = color
+                    result.append(plain)
+                    continue
+                }
                 guard let display = LinkDisplayLaw.resolve(written, trackedLinks: trackedLinks,
                                                             webOrigin: context.webOrigin) else {
                     result.append(AttributedString(written.sourceText))
@@ -720,6 +736,16 @@ private extension WrittenLink {
     }
 
     var sourceCount: Int { sourceText.count }
+
+    /// #10286 — what an author without an account typed, the notation kept:
+    /// `[label](url)` keeps its address visible (a label alone would hide the
+    /// destination). Mirror of `writtenTextOf` (`apps/web/src/lib/links/link-display.ts`).
+    var inertText: String {
+        switch self {
+        case .labelled(let label, let url): return "[\(label)](\(url.absoluteString))"
+        default: return sourceText
+        }
+    }
 }
 
 private extension String {

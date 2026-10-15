@@ -6,11 +6,12 @@ import { renderToStaticMarkup } from 'react-dom/server';
 import { resolveEngagementProgress } from '@meeshy/shared/utils/engagement-progress';
 import { PROGRESSION_CONCEPTS } from '@meeshy/shared/utils/progression-layout';
 
-import { GameProfileOwn } from '@/components/game-profile-own';
+import { ContactGameStrip } from '@/components/game-contact-strip';
 import { PlayerBanner } from '@/components/player-banner';
 import type { EngagementWithGame } from '@/lib/api/engagement';
 import { ENGAGEMENT_PROGRESS_FIXTURE } from '@/lib/api/engagement-fixture';
 import { GAME_EXTRAS_TODAY, gameBlockWithExtrasFixture } from '@/lib/api/game-fixture';
+import { userGameFixture, userShowcaseFixture } from '@/lib/api/game-v2-queries-fixture';
 import {
   GAME_CATALOG_PARTS,
   GAME_SCREEN_PARTS,
@@ -117,6 +118,32 @@ const ENTRIES: Readonly<Record<Exclude<GameScreen, 'banner'>, readonly string[]>
   ],
   rules: ['routes/progression-rules.tsx'],
 };
+
+/**
+ * LES CLÉS DES CARTES DU JEU D'UNE FICHE ONT UN LECTEUR (#10097) — « Mon jeu »,
+ * « Le jeu de … » et la vitrine d'un visiteur (`game.profile.*`,
+ * `game.standing.*`, le mois d'obtention `game.showcase.awarded_month*`)
+ * nommaient des cartes que plus aucune fiche ne monte depuis que le niveau et le
+ * rang sont sur la bannière (#10092). Une clé sans lecteur est une traduction
+ * morte dans sept langues.
+ */
+const PROFILE_CARD_KEY = /^game\.(profile\.|standing\.|showcase\.awarded_month)/;
+
+function sourcesUnder(dir: string): readonly string[] {
+  return readdirSync(dir, { withFileTypes: true }).flatMap((entry) => {
+    const path = join(dir, entry.name);
+    if (entry.isDirectory()) return entry.name === 'interface-catalogs' || entry.name === 'test-support' ? [] : sourcesUnder(path);
+    return /\.tsx?$/.test(entry.name) && !/\.test\.tsx?$/.test(entry.name) ? [path] : [];
+  });
+}
+
+describe('les clés des cartes du jeu d’une fiche', () => {
+  test('chaque clé game.profile.*, game.standing.* et game.showcase.awarded_month* est lue par une source', () => {
+    const read = new Set(sourcesUnder(SRC).flatMap(gameKeysIn));
+    const unread = [...partOfKey.keys()].filter((key) => PROFILE_CARD_KEY.test(key) && !read.has(key));
+    expect(unread).toEqual([]);
+  });
+});
 
 describe('la coupe couvre le catalogue, sans trou ni doublon', () => {
   test('chaque clé française vit dans UNE partie', () => {
@@ -261,9 +288,9 @@ describe('chaque écran se rend avec ses SEULES parties, dans les sept langues',
       expect(rendered(renderToStaticMarkup(<RulesBody />)).length).toBeGreaterThan(1000);
     });
 
-    test(`${language} : « Mon jeu » sur le profil, sans les fiches ni le carnet`, async () => {
+    test(`${language} : la bande du jeu d’une carte de contact, sans les fiches ni le carnet`, async () => {
       await only(language, 'profile');
-      expect(rendered(renderToStaticMarkup(<GameProfileOwn progress={playing} />)).length).toBeGreaterThan(200);
+      expect(rendered(renderToStaticMarkup(<ContactGameStrip showcase={userShowcaseFixture()} game={userGameFixture()} />))).toContain('data-game-contact-strip');
     });
   }
 

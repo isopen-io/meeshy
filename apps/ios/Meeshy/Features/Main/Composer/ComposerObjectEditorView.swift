@@ -511,24 +511,21 @@ struct ComposerObjectEditorView: View {
                             panel = ComposerObjectEditorRail.panelState(explicitlyCollapsed: range)
                         }
                     } label: {
+                        // **Un petit bouton SÉPARÉ, sans disque de verre**
+                        // (#10364, comme les rails de la scène) : glyphe BLANC
+                        // en relief par son ombre, JAUNE pour l'outil ouvert.
                         Image(systemName: ComposerObjectEditorRail.symbolName(entree))
-                            .font(.body.weight(.semibold))
+                            .font(.title3.weight(.semibold))
                             .symbolRenderingMode(.hierarchical)
-                            .foregroundStyle(MeeshyColors.textPrimary(isDark: true))
+                            .foregroundStyle(ComposerFloatingRailInk.floating(
+                                active: ComposerObjectEditorRail.isSelected(entree, selected: selectedTool)))
+                            .modifier(ComposerRailGlyphRelief(active: true))
                             // 44 pt de CIBLE quel que soit le glyphe
                             // (dimension 5) : dessiné à sa taille naturelle, un
                             // `clock` donnerait 17 pt que personne n'atteint du
                             // pouce.
                             .frame(width: 44, height: 44)
-                            .contentShape(Circle())
-                            // **Un petit bouton SÉPARÉ, dans son disque de verre**
-                            // (directive porteur 2026-09-27 : « pas de long
-                            // bandeau de contrôleur à gauche ou à droite, juste
-                            // des petits boutons »). L'outil ouvert passe à
-                            // l'indigo.
-                            .adaptiveLiquidGlass(in: Circle(),
-                                           tint: ComposerObjectEditorRail.isSelected(entree, selected: selectedTool)
-                                               ? MeeshyColors.brandPrimary : plateauTint.opacity(0.55), interactive: true)
+                            .contentShape(Rectangle())
                     }
                     .buttonStyle(.plain)
                     .accessibilityLabel(ComposerObjectEditorCopy.entry(entree))
@@ -541,9 +538,9 @@ struct ComposerObjectEditorView: View {
         .frame(width: ComposerObjectEditorRail.railWidth)
         // **Plus de CARTE depuis le 2026-09-27** : le #5097 l'avait posée pour
         // que le rail ne se confonde pas avec les options, clavier levé. Chaque
-        // bouton porte désormais son propre disque de verre — la frontière est
-        // tenue bouton par bouton, et la bande que le porteur a retirée ne
-        // revient pas.
+        // bouton est désormais un glyphe blanc en relief (#10364) — la
+        // frontière est tenue bouton par bouton, et la bande que le porteur a
+        // retirée ne revient pas.
         .padding(.vertical, 8)
         .accessibilityElement(children: .contain)
         .accessibilityLabel(ComposerObjectEditorCopy.toolRow)
@@ -805,7 +802,7 @@ struct ComposerObjectEditorView: View {
         section(ComposerObjectEditorCopy.plan, .plan) {
             ComposerObjectPlanControls(viewModel: viewModel,
                                        objectId: objectId,
-                                       onSelectText: { openEditor($0) },
+                                       onSelectObject: { openEditor($0) },
                                        holdsGesture: $planHoldsGesture)
         }
     }

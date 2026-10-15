@@ -381,4 +381,22 @@ public struct ConversationColorPalette: Sendable {
         self.primary = primary; self.secondary = secondary
         self.accent = accent; self.saturationBoost = saturationBoost
     }
+
+    /// Déclinaison d'une primaire : secondaire +30°, accent −30° (la même
+    /// dérivation que `DynamicColorGenerator.colorFor`, miroir de
+    /// `conversationAccentPaletteFromPrimary`, `packages/shared`).
+    public static func derived(fromPrimary primary: String, saturationBoost: Double = 0) -> ConversationColorPalette {
+        let bare = bareHex(primary)
+        return ConversationColorPalette(
+            primary: bare,
+            secondary: DynamicColorGenerator.hueShiftedHex(bare, degrees: 30),
+            accent: DynamicColorGenerator.hueShiftedHex(bare, degrees: -30),
+            saturationBoost: saturationBoost
+        )
+    }
+
+    /// `#e0604e` → `E0604E` : la forme des hex de la palette (sans dièse, majuscules).
+    public static func bareHex(_ hex: String) -> String {
+        (hex.hasPrefix("#") ? String(hex.dropFirst()) : hex).uppercased()
+    }
 }

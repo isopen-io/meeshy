@@ -12,7 +12,11 @@ import type { ParticipantPermissions } from '@meeshy/shared/types/participant';
 import { attachmentDefaults } from '@/lib/api/fixtures-base';
 import type { Attachment } from '@/lib/api/types';
 
+import type { InterfaceLanguage } from '@/lib/interface-language';
+
 import { previewUrlFor } from './attachment-preview-url';
+import type { GuestAttachmentKind } from '@meeshy/shared/types/guest-attachment-kind-rules';
+import { guestAttachmentVerdict, guestRefusalText } from './guest-attachment-policy';
 
 /**
  * LA SÉLECTION DU COMPOSEUR (#5668, étape b) — état PUR, hors DOM et hors
@@ -143,8 +147,19 @@ export function acceptPendingFiles(params: {
   readonly current: readonly PendingAttachment[];
   readonly files: readonly File[];
   readonly rights?: ParticipantPermissions;
+  /** L'INVITÉ D'UN LIEN RESTREINT PAR FAMILLE (#10003) — ses familles priment
+   * sur ses droits instantanés (#10029), et le refus nomme ce qui passe. */
+  readonly guest?: { readonly kinds: readonly GuestAttachmentKind[]; readonly language: InterfaceLanguage };
 }): { readonly list: readonly PendingAttachment[]; readonly refusal?: string } {
-  const denied = params.files.find((file) => !mayAttach(params.rights, file.type));
+  const guest = params.guest;
+  if (guest !== undefined) {
+    const screened = params.files.map((file) => ({ file, verdict: guestAttachmentVerdict(file, guest.kinds) }));
+    const refused = screened.find((entry) => !entry.verdict.ok);
+    if (refused !== undefined && !refused.verdict.ok) {
+      return { list: params.current, refusal: guestRefusalText(guest.language, { name: refused.file.name, reason: refused.verdict.reason, kinds: guest.kinds }) };
+    }
+  }
+  const denied = guest === undefined ? params.files.find((file) => !mayAttach(params.rights, file.type)) : undefined;
   if (denied !== undefined) {
     return { list: params.current, refusal: `« ${denied.name} » : ce type de pièce jointe ne vous est pas autorisé ici` };
   }

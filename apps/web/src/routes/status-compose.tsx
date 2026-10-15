@@ -1,4 +1,4 @@
-import { useMemo, useRef, useState } from 'react';
+import { Suspense, useEffect, useId, useMemo, useRef, useState } from 'react';
 import { useQueryClient } from '@tanstack/react-query';
 import { useStore } from 'zustand';
 
@@ -9,14 +9,18 @@ import { performMoodPost } from '@/lib/api/status-actions';
 import { useStatusMoods } from '@/lib/api/query';
 import { resolveViewer } from '@/lib/api/viewer';
 import { translate } from '@/lib/i18n-catalog';
+import { moodComposeText } from '@/lib/i18n-mood-compose-catalog';
 import { currentInterfaceLanguage, type InterfaceLanguage } from '@/lib/interface-language';
 import { useOnline } from '@/lib/net/online';
 import { navigate } from '@/lib/router';
 import { useMentionSource } from '@/lib/view/mention-source';
+import { moodPublishStep } from '@/lib/view/mood-bare-publish';
 import { useMentionField } from '@/lib/view/use-mention-field';
+import { ComposerEmojiSheet } from '@/components/composer-sheets-lazy';
+import { Glyph } from '@/components/glyph';
 import { MentionFieldPanel } from '@/components/mention-suggestions';
 import { selfRailEntry } from '@/lib/view/story-rail-self';
-import { Link } from '@/routes/route-table';
+import { Link, href } from '@/routes/route-table';
 
 /**
  * **MON HUMEUR** (#6150) — la seconde porte de ma cellule du rail, à son
@@ -51,8 +55,8 @@ import { Link } from '@/routes/route-table';
  * (`Post.moodEmoji`, `schema.prisma` : « ex: "😴", "🎉", "💪", "☕" ») et leurs
  * voisines immédiates. Une grille FERMÉE plutôt qu'un sélecteur d'emoji
  * complet : douze choix se touchent sans réfléchir, et zéro configuration
- * obligatoire (dimension 7). Le clavier d'emoji du système reste la porte de
- * sortie de qui veut autre chose — c'est la suite nommée dans l'issue.
+ * obligatoire (dimension 7). Qui veut autre chose ouvre la feuille d'emojis
+ * du dépôt par `MoodMoreButton` (#10527).
  */
 export const MOOD_CHOICES: readonly string[] = [
   '😊',
@@ -146,6 +150,100 @@ export function MoodGrid({
   );
 }
 
+/**
+ * **UN AUTRE EMOJI QUE CEUX PROPOSÉS** (#10527) — la porte vers la feuille
+ * d'emojis du dépôt (`ComposerEmojiSheet`, celle du composeur et des
+ * commentaires : tous les emojis, par catégories, avec recherche et récents
+ * depuis #10531). HORS du `radiogroup` : ce
+ * bouton n'est pas un treizième choix, il en ouvre d'autres.
+ */
+export function MoodMoreButton({
+  language,
+  onOpen,
+}: {
+  readonly language: InterfaceLanguage;
+  readonly onOpen: () => void;
+}) {
+  const label = moodComposeText(language, 'status.compose.more');
+  return (
+    <div className="flex px-4 pb-1">
+      <button
+        type="button"
+        data-mood-more
+        aria-label={label}
+        aria-haspopup="dialog"
+        onClick={onOpen}
+        className="inline-flex items-center gap-2 rounded-chip px-3 text-check focus-visible:outline-2 focus-visible:outline-offset-2"
+        style={{
+          minWidth: 44,
+          minHeight: 44,
+          color: 'var(--color-ios-ink-2)',
+          backgroundColor: 'var(--color-ios-card)',
+          outlineColor: 'var(--color-ios-brand)',
+        }}
+      >
+        <Glyph name="plus" size={16} />
+        <span aria-hidden="true">{label}</span>
+      </button>
+    </div>
+  );
+}
+
+/**
+ * **« SANS UN PETIT MOT ? »** (#10527) — la question prend la PLACE du bouton
+ * Publier, là où le doigt se trouve déjà : chacune des deux réponses est à un
+ * geste. Le focus va à « Ajouter un mot », la réponse qui ne publie rien, et
+ * c'est lui qui fait lire la question au lecteur d'écran (`aria-labelledby`).
+ */
+export function MoodBareQuestion({
+  language,
+  onAddWord,
+  onPublish,
+}: {
+  readonly language: InterfaceLanguage;
+  readonly onAddWord: () => void;
+  readonly onPublish: () => void;
+}) {
+  const titleId = useId();
+  const addRef = useRef<HTMLButtonElement>(null);
+  useEffect(() => {
+    addRef.current?.focus();
+  }, []);
+  return (
+    <div role="alertdialog" aria-labelledby={titleId} data-mood-bare className="mb-3 flex flex-col gap-2">
+      <p id={titleId} className="text-center text-body font-semibold" style={{ color: 'var(--color-ios-ink)' }}>
+        {moodComposeText(language, 'status.compose.bare.ask')}
+      </p>
+      <div className="flex gap-2">
+        <button
+          ref={addRef}
+          type="button"
+          data-mood-bare-add
+          onClick={onAddWord}
+          className="grid flex-1 place-items-center rounded-chip px-4 py-3 text-body font-semibold text-white focus-visible:outline-2 focus-visible:outline-offset-2"
+          style={{ minHeight: 44, background: 'var(--color-ios-brand)', outlineColor: 'var(--color-ios-brand)' }}
+        >
+          {moodComposeText(language, 'status.compose.bare.add')}
+        </button>
+        <button
+          type="button"
+          data-mood-bare-publish
+          onClick={onPublish}
+          className="grid flex-1 place-items-center rounded-chip px-4 py-3 text-body font-semibold focus-visible:outline-2 focus-visible:outline-offset-2"
+          style={{
+            minHeight: 44,
+            color: 'var(--color-ios-ink)',
+            backgroundColor: 'var(--color-ios-card)',
+            outlineColor: 'var(--color-ios-brand)',
+          }}
+        >
+          {moodComposeText(language, 'status.compose.bare.publish')}
+        </button>
+      </div>
+    </div>
+  );
+}
+
 const DIRECTORY = { directory: true } as const;
 
 export default function StatusComposeScreen() {
@@ -174,6 +272,8 @@ export default function StatusComposeScreen() {
   const mention = useMentionField({ text: note, fieldRef: noteRef, onText: setNote, source: mentionSource });
   const [enVol, setEnVol] = useState(false);
   const [refus, setRefus] = useState(false);
+  const [feuille, setFeuille] = useState(false);
+  const [demande, setDemande] = useState(false);
 
   const selection = choisi ?? courante;
   const viewerId = viewer.id ?? undefined;
@@ -189,8 +289,21 @@ export default function StatusComposeScreen() {
    */
   const publiable = selection !== undefined && viewerId !== undefined && !enVol && online;
 
+  /* LA QUESTION NE VIT QUE TANT QU'ELLE A UN SENS : un mot écrit, le réseau
+     perdu ou un envoi en vol la retirent sans qu'on ait à la refermer. */
+  const question = demande && publiable && moodPublishStep({ note }) === 'ask';
+
+  const valider = () => {
+    if (moodPublishStep({ note }) === 'ask') {
+      setDemande(true);
+      return;
+    }
+    void publier();
+  };
+
   const publier = async () => {
     if (selection === undefined || viewerId === undefined) return;
+    setDemande(false);
     setEnVol(true);
     setRefus(false);
     const out = await performMoodPost({
@@ -206,7 +319,7 @@ export default function StatusComposeScreen() {
     });
     setEnVol(false);
     if (out.status === 'saved') {
-      navigate('/', true);
+      navigate(href('list'), true);
       return;
     }
     if (out.status === 'refused') setRefus(true);
@@ -224,6 +337,12 @@ export default function StatusComposeScreen() {
         </p>
 
         <MoodGrid language={language} selected={selection} onSelect={setChoisi} />
+        <MoodMoreButton
+          language={language}
+          onOpen={() => {
+            setFeuille(true);
+          }}
+        />
 
         <div className="relative px-4 py-3">
           <label className="flex flex-col gap-1.5">
@@ -273,23 +392,51 @@ export default function StatusComposeScreen() {
       </div>
 
       <div className="shrink-0 px-4 pb-safe">
-        <button
-          type="button"
-          data-mood-publish
-          disabled={!publiable}
-          onClick={() => {
-            void publier();
-          }}
-          className="mb-3 grid w-full place-items-center rounded-chip px-5 py-3 text-body font-semibold text-white focus-visible:outline-2 focus-visible:outline-offset-2"
-          style={{
-            minHeight: 44,
-            background: publiable ? 'var(--color-ios-brand)' : 'color-mix(in srgb, var(--color-ios-ink-3) 40%, transparent)',
-            outlineColor: 'var(--color-ios-brand)',
-          }}
-        >
-          {translate(language, enVol ? 'status.compose.publishing' : 'status.compose.publish')}
-        </button>
+        {question ? (
+          <MoodBareQuestion
+            language={language}
+            onAddWord={() => {
+              setDemande(false);
+              noteRef.current?.focus();
+            }}
+            onPublish={() => {
+              void publier();
+            }}
+          />
+        ) : (
+          <button
+            type="button"
+            data-mood-publish
+            disabled={!publiable}
+            onClick={() => {
+              valider();
+            }}
+            className="mb-3 grid w-full place-items-center rounded-chip px-5 py-3 text-body font-semibold text-white focus-visible:outline-2 focus-visible:outline-offset-2"
+            style={{
+              minHeight: 44,
+              background: publiable ? 'var(--color-ios-brand)' : 'color-mix(in srgb, var(--color-ios-ink-3) 40%, transparent)',
+              outlineColor: 'var(--color-ios-brand)',
+            }}
+          >
+            {translate(language, enVol ? 'status.compose.publishing' : 'status.compose.publish')}
+          </button>
+        )}
       </div>
+
+      {feuille ? (
+        <Suspense fallback={null}>
+          <ComposerEmojiSheet
+            title={moodComposeText(language, 'status.compose.more')}
+            onPick={(emoji) => {
+              setFeuille(false);
+              setChoisi(emoji);
+            }}
+            onClose={() => {
+              setFeuille(false);
+            }}
+          />
+        </Suspense>
+      ) : null}
     </main>
   );
 }

@@ -222,7 +222,7 @@ final class ConversationTopChromeFadeTests: XCTestCase {
 
     func test_expandedBand_carriesNoActionButtons_titleOpensDetails_directLongPressOffersProfile() throws {
         let viewSource = try conversationViewSource()
-        guard let start = viewSource.range(of: "private var expandedHeaderTitleAndTags"),
+        guard let start = viewSource.range(of: "var expandedHeaderTitleAndTags"),
               let end = viewSource.range(of: "private var expandedHeaderTitleButton")
         else { return XCTFail("bornes de la bande dépliée introuvables") }
         let band = viewSource[start.lowerBound..<end.lowerBound]

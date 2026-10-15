@@ -2,6 +2,7 @@ import type { PrismaClient } from '@meeshy/shared/prisma/client';
 import { EPHEMERAL_UNRECEIVED_RETENTION_MS } from '@meeshy/shared/utils/ephemeral-countdown';
 import { MESSAGE_EFFECT_FLAGS } from '@meeshy/shared/types/message-effect-flags';
 import { unsetOrNull } from '../../utils/prisma-unset';
+import { eraseSharedTranslations, type SharedTranslationErasureClient } from './sharedTranslationErasure';
 import { computeViewOnceStates, type ViewOnceAudiencePrisma } from './viewOnceAudience';
 
 /**
@@ -17,6 +18,12 @@ import { computeViewOnceStates, type ViewOnceAudiencePrisma } from './viewOnceAu
  * garde « (1) · déjà ouvert » chez chacun, jusqu'à ce que l'éphémère (s'il l'est
  * aussi) ou une suppression explicite retire la bulle. L'annonce est
  * `message:view-once-purged` : « purgez le contenu, gardez la bulle ».
+ *
+ * Elle efface aussi les traductions PARTAGÉES du message (#9899) : la table
+ * voisine de `Message.translations` gardait la version scellée d'un contenu que
+ * la purge venait de détruire. Cette purge n'appelle pas
+ * `applyMessageRemovalEffects` (aucun `deletedAt`, la bulle reste) : l'effacement
+ * lui incombe, UNE requête pour toute la passe.
  */
 
 /** Une passe purge au plus ce nombre de messages. */
@@ -42,7 +49,7 @@ export interface PurgeViewOnceOptions {
 }
 
 export async function purgeDueViewOnceContent(
-  prisma: ViewOncePurgePrisma,
+  prisma: ViewOncePurgePrisma & SharedTranslationErasureClient,
   options: PurgeViewOnceOptions,
 ): Promise<{ purged: number }> {
   const due = (await prisma.message.findMany({
@@ -59,39 +66,49 @@ export async function purgeDueViewOnceContent(
     take: options.batchSize ?? DEFAULT_PURGE_BATCH,
   })) as Array<{ id: string; conversationId: string; attachments: Array<{ id: string }> }>;
 
-  let purged = 0;
-  for (const message of due) {
-    // Les fichiers d'abord : si l'effacement de la ligne échoue, son échéance
-    // reste posée et la passe suivante la reprend.
-    await Promise.allSettled(
-      message.attachments.map((attachment) => options.attachmentRemover.deleteAttachment(attachment.id)),
-    );
-    try {
-      await prisma.message.update({
-        where: { id: message.id },
-        data: {
-          content: '',
-          encryptedContent: null,
-          encryptionMetadata: null,
-          translations: null,
-          metadata: null,
-          viewOnceBurnAt: null,
-          viewOnceBurnedAt: options.now,
-        },
-      });
-    } catch (err) {
-      options.onError?.(message.id, err);
-      continue;
+  const purgedIds: string[] = [];
+  try {
+    for (const message of due) {
+      // Les fichiers d'abord : si l'effacement de la ligne échoue, son échéance
+      // reste posée et la passe suivante la reprend.
+      await Promise.allSettled(
+        message.attachments.map((attachment) => options.attachmentRemover.deleteAttachment(attachment.id)),
+      );
+      try {
+        await prisma.message.update({
+          where: { id: message.id },
+          data: {
+            content: '',
+            encryptedContent: null,
+            encryptionMetadata: null,
+            translations: null,
+            metadata: null,
+            viewOnceBurnAt: null,
+            viewOnceBurnedAt: options.now,
+          },
+        });
+      } catch (err) {
+        options.onError?.(message.id, err);
+        continue;
+      }
+      purgedIds.push(message.id);
+      try {
+        await options.announce?.({ id: message.id, conversationId: message.conversationId });
+      } catch (err) {
+        options.onError?.(message.id, err);
+      }
     }
-    purged += 1;
-    try {
-      await options.announce?.({ id: message.id, conversationId: message.conversationId });
-    } catch (err) {
-      options.onError?.(message.id, err);
-    }
+  } finally {
+    // Les traductions PARTAGÉES des seuls messages dont le contenu est vraiment
+    // parti : une ligne qui a résisté garde son échéance, et la passe suivante
+    // reprendra les deux. En `finally` : un rappel `onError` qui lèverait
+    // interromprait la boucle, et les messages déjà purgés garderaient leur
+    // version scellée jusqu'à une passe qui ne les revoit jamais (leur échéance
+    // est effacée). BEST-EFFORT dans l'unité même — elle ne lève pas.
+    await eraseSharedTranslations(prisma, { messageIds: purgedIds });
   }
 
-  return { purged };
+  return { purged: purgedIds.length };
 }
 
 /**

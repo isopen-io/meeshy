@@ -184,6 +184,15 @@ public struct FullscreenCloseButton: View {
     }
 }
 
+/// **Le nom du ⋯ plein écran — UN, porté par l'atome** (#8918). Aucune
+/// visionneuse ne le recouvre : le même contrôle s'annonçait « Autres actions »
+/// dans la galerie et « Options de la story » dans la story.
+public enum FullscreenMoreMenuLabel {
+    public static var text: String {
+        String(localized: "media.video.more_options", defaultValue: "Plus d'options", bundle: .module)
+    }
+}
+
 /// **Le menu « Plus d'options »** — `ellipsis`, au bord de FIN de la barre haute.
 /// Le contenu (copier, partager, enregistrer, signaler…) reste à l'hôte.
 public struct FullscreenMoreMenu<Content: View>: View {
@@ -223,7 +232,6 @@ public struct FullscreenMoreMenu<Content: View>: View {
                 FullscreenChromeDisc(systemImage: FullscreenChromeSymbol.more, tone: tone)
             }
         }
-        .accessibilityLabel(String(localized: "media.video.more_options",
-                                   defaultValue: "Plus d'options", bundle: .module))
+        .accessibilityLabel(FullscreenMoreMenuLabel.text)
     }
 }

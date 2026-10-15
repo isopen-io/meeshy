@@ -139,7 +139,8 @@ extension GameBlock.Missions {
 
 extension GameBlock.Chest {
     func replacing(status: Status? = nil, reward: DailyChest?? = nil) -> GameBlock.Chest {
-        GameBlock.Chest(status: status ?? self.status, odds: odds, reward: reward ?? self.reward)
+        GameBlock.Chest(status: status ?? self.status, odds: odds, reward: reward ?? self.reward,
+                        today: today)
     }
 }
 
@@ -183,6 +184,7 @@ extension GameBlock {
         flame: Flame? = nil,
         boosts: Boosts? = nil,
         guideSeen: [String]? = nil,
+        starFragments: StarFragmentsTotal?? = nil,
         wave2: GameWave2? = nil
     ) -> GameBlock {
         GameBlock(
@@ -195,6 +197,8 @@ extension GameBlock {
             flame: flame ?? self.flame,
             boosts: boosts ?? self.boosts,
             guideSeen: guideSeen ?? self.guideSeen,
+            // Le total collecté (#10011) traverse chaque geste optimiste : seul le serveur le change.
+            starFragments: starFragments ?? self.starFragments,
             wave2: wave2 ?? self.wave2
         )
     }

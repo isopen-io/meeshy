@@ -1,0 +1,252 @@
+[
+ {
+  "file": "olympe-ambassadeur-1",
+  "overlap": 36,
+  "face": 0,
+  "depth": 4,
+  "bbox": [
+   102,
+   711,
+   434,
+   720
+  ],
+  "windowPx": 141785,
+  "layout": "pied",
+  "verdict": "ok"
+ },
+ {
+  "file": "olympe-ambassadeur-2",
+  "overlap": 53,
+  "face": 0,
+  "depth": 4,
+  "bbox": [
+   111,
+   727,
+   431,
+   731
+  ],
+  "windowPx": 147370,
+  "layout": "ruban",
+  "verdict": "ok"
+ },
+ {
+  "file": "olympe-ambassadeur-3",
+  "overlap": 0,
+  "face": 0,
+  "depth": 0,
+  "bbox": null,
+  "windowPx": 129378,
+  "layout": "perches",
+  "verdict": "ok"
+ },
+ {
+  "file": "olympe-ambassadeur-4",
+  "overlap": 84,
+  "face": 0,
+  "depth": 4,
+  "bbox": [
+   74,
+   421,
+   466,
+   478
+  ],
+  "windowPx": 180112,
+  "layout": "cotes",
+  "verdict": "ok"
+ },
+ {
+  "file": "olympe-ambassadeur-5",
+  "overlap": 0,
+  "face": 0,
+  "depth": 0,
+  "bbox": null,
+  "windowPx": 153637,
+  "layout": "perches",
+  "verdict": "ok"
+ },
+ {
+  "file": "olympe-legende-1",
+  "overlap": 33,
+  "face": 0,
+  "depth": 4,
+  "bbox": [
+   104,
+   701,
+   109,
+   712
+  ],
+  "windowPx": 147096,
+  "layout": "ruban",
+  "verdict": "ok"
+ },
+ {
+  "file": "olympe-legende-2",
+  "overlap": 0,
+  "face": 0,
+  "depth": 0,
+  "bbox": null,
+  "windowPx": 116017,
+  "layout": "cotes",
+  "verdict": "ok"
+ },
+ {
+  "file": "olympe-legende-3",
+  "overlap": 9179,
+  "face": 0,
+  "depth": 105,
+  "bbox": [
+   332,
+   556,
+   436,
+   719
+  ],
+  "windowPx": 148434,
+  "layout": "selfie",
+  "verdict": "ok"
+ },
+ {
+  "file": "olympe-legende-4",
+  "overlap": 105,
+  "face": 0,
+  "depth": 4,
+  "bbox": [
+   141,
+   723,
+   417,
+   726
+  ],
+  "windowPx": 151722,
+  "layout": "pied",
+  "verdict": "ok"
+ },
+ {
+  "file": "olympe-legende-5",
+  "overlap": 0,
+  "face": 0,
+  "depth": 0,
+  "bbox": null,
+  "windowPx": 152121,
+  "layout": "libre",
+  "verdict": "ok"
+ },
+ {
+  "file": "olympe-mythe-a",
+  "overlap": 73,
+  "face": 0,
+  "depth": 4,
+  "bbox": [
+   136,
+   719,
+   409,
+   722
+  ],
+  "windowPx": 145537,
+  "layout": "pied",
+  "verdict": "ok"
+ },
+ {
+  "file": "olympe-mythe-b",
+  "overlap": 36,
+  "face": 0,
+  "depth": 3,
+  "bbox": [
+   104,
+   416,
+   436,
+   460
+  ],
+  "windowPx": 146400,
+  "layout": "cotes",
+  "verdict": "ok"
+ },
+ {
+  "file": "olympe-mythe-c",
+  "overlap": 0,
+  "face": 0,
+  "depth": 0,
+  "bbox": null,
+  "windowPx": 140323,
+  "layout": "perches",
+  "verdict": "ok"
+ },
+ {
+  "file": "olympe-oracle-a",
+  "overlap": 65,
+  "face": 0,
+  "depth": 4,
+  "bbox": [
+   100,
+   388,
+   440,
+   447
+  ],
+  "windowPx": 148202,
+  "layout": "cotes",
+  "verdict": "ok"
+ },
+ {
+  "file": "olympe-oracle-b",
+  "overlap": 0,
+  "face": 0,
+  "depth": 0,
+  "bbox": null,
+  "windowPx": 121405,
+  "layout": "ruban",
+  "verdict": "ok"
+ },
+ {
+  "file": "olympe-oracle-c",
+  "overlap": 8,
+  "face": 0,
+  "depth": 2,
+  "bbox": [
+   104,
+   461,
+   105,
+   468
+  ],
+  "windowPx": 151782,
+  "layout": "cotes",
+  "verdict": "ok"
+ },
+ {
+  "file": "olympe-orateur-a",
+  "overlap": 55,
+  "face": 0,
+  "depth": 4,
+  "bbox": [
+   144,
+   705,
+   421,
+   724
+  ],
+  "windowPx": 149570,
+  "layout": "pied",
+  "verdict": "ok"
+ },
+ {
+  "file": "olympe-orateur-b",
+  "overlap": 0,
+  "face": 0,
+  "depth": 0,
+  "bbox": null,
+  "windowPx": 150051,
+  "layout": "libre",
+  "verdict": "ok"
+ },
+ {
+  "file": "olympe-orateur-c",
+  "overlap": 70,
+  "face": 0,
+  "depth": 4,
+  "bbox": [
+   136,
+   716,
+   401,
+   720
+  ],
+  "windowPx": 151218,
+  "layout": "pied",
+  "verdict": "ok"
+ }
+]

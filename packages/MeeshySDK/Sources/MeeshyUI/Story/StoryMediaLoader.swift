@@ -178,7 +178,14 @@ public final class StoryMediaLoader {
     /// Annulable (#9702) : un balayage rapide annule la tâche qui prépare un
     /// réel déjà dépassé ; les deux attentes (statut, préroulage) se libèrent
     /// aussitôt au lieu de tenir un décodeur jusqu'à cinq secondes.
-    public func preloadVideoPlayer(url: URL) async -> AVPlayer {
+    ///
+    /// `resume` (#10354) : la position où poser la tête AVANT le préroulage,
+    /// rendue depuis la durée réelle de l'élément (`nil` : le début). Le voisin
+    /// déjà commencé dans une session précédente arrive à sa place, ses tampons
+    /// pleins là, au lieu de jouer depuis zéro pendant le geste puis de sauter.
+    public func preloadVideoPlayer(
+        url: URL, resume: ((TimeInterval) -> TimeInterval?)? = nil
+    ) async -> AVPlayer {
         let thermalState = ProcessInfo.processInfo.thermalState
         let localFile = url.isFileURL ? nil : CacheCoordinator.videoLocalFileURL(for: url.absoluteString)
         let item = AVPlayerItem(url: Self.prerollSource(remote: url, localFile: localFile))
@@ -236,6 +243,24 @@ public final class StoryMediaLoader {
         // reel the user has already swiped past.
         guard player.currentItem?.status == .readyToPlay, !Task.isCancelled else { return player }
 
+        let duration = item.duration.seconds
+        if let target = resume?(duration.isFinite ? duration : 0) {
+            let tolerance = CMTime(seconds: PlaybackResumeLaw.tolerance, preferredTimescale: 600)
+            await withCheckedContinuation { (continuation: CheckedContinuation<Void, Never>) in
+                player.seek(to: CMTime(seconds: target, preferredTimescale: 600),
+                            toleranceBefore: tolerance, toleranceAfter: tolerance) { _ in
+                    continuation.resume()
+                }
+            }
+            guard !Task.isCancelled else { return player }
+        }
+
+        // Relu APRÈS l'attente du déplacement, et sur le LECTEUR (#10554) :
+        // `preroll` lève une exception si son statut n'est pas « prêt ».
+        guard SharedAVPlayerManager.isReadyForPreroll(
+            playerStatus: player.status, itemStatus: player.currentItem?.status
+        ) else { return player }
+
         let prerolling = PrerollHandle(player: player)
         await withTaskCancellationHandler {
             await withCheckedContinuation { continuation in
@@ -270,10 +295,12 @@ public final class StoryMediaLoader {
     /// un réel déjà dépassé chasserait, par FIFO, le voisin qu'on va montrer.
     /// Un lecteur dont l'élément a ÉCHOUÉ n'y entre pas non plus — il
     /// occuperait une place de décodeur pour une image qui ne viendra pas.
-    public func preloadAndCachePlayer(url: URL) async {
+    public func preloadAndCachePlayer(
+        url: URL, resume: ((TimeInterval) -> TimeInterval?)? = nil
+    ) async {
         let key = url.absoluteString
         guard playerCache[key] == nil, !Task.isCancelled else { return }
-        let player = await preloadVideoPlayer(url: url)
+        let player = await preloadVideoPlayer(url: url, resume: resume)
         guard !Task.isCancelled,
               player.currentItem?.status != .failed,
               playerCache[key] == nil else {
@@ -338,13 +365,23 @@ public final class StoryMediaLoader {
         if hadPlayers { announcePoolChange() }
     }
 
+    /// **La distance de chaque lecteur au réel affiché** (#10354), déclarée par
+    /// l'écran qui la connaît, clé = URL distante. Le pool déborde en rendant le
+    /// plus LOIN (`PlayerPoolEviction`) : le réel qu'on vient de quitter garde
+    /// son lecteur face à un préchauffage tardif. Vide : ordre d'arrivée.
+    private var retentionDistances: [String: Int] = [:]
+
+    public func setRetentionDistances(_ distances: [String: Int]) {
+        retentionDistances = distances
+    }
+
     private func insert(_ player: AVPlayer, for key: String) {
         playerCache[key] = player
         playerCacheOrder.append(key)
-        // Enforce limit — evict oldest first (FIFO)
-        while playerCache.count > maxCachedPlayers, !playerCacheOrder.isEmpty {
-            let oldest = playerCacheOrder.removeFirst()
-            if let evicted = playerCache.removeValue(forKey: oldest) {
+        while playerCache.count > maxCachedPlayers,
+              let victim = PlayerPoolEviction.victim(order: playerCacheOrder, distances: retentionDistances) {
+            playerCacheOrder.removeAll { $0 == victim }
+            if let evicted = playerCache.removeValue(forKey: victim) {
                 Self.release(evicted)
             }
         }

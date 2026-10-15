@@ -756,25 +756,26 @@ struct ComposerDocumentSurface: View {
             lastTappedTool = tool
             onTool?(tool)
         } label: {
-            // **Un petit bouton de verre, SANS légende** (directive porteur
-            // 2026-09-27 : « enlève les captions partout »), le même dessin que
+            // **Un glyphe blanc en relief, SANS légende ni cercle** (directive
+            // porteur 2026-09-27 : « enlève les captions partout » ; #10364 :
+            // « enlever les cercles autour des outils »), le même dessin que
             // les rails de la scène. Le nom de l'outil reste celui que
             // VoiceOver annonce.
             Image(systemName: tool.symbolName)
                 .font(.title3)
                 .symbolRenderingMode(.hierarchical)
                 .composerToolBounce(active: lastTappedTool == tool)
-                .foregroundColor(MeeshyColors.textSecondary(isDark: true))
+                .foregroundColor(ComposerFloatingRailInk.floating(active: false))
+                .modifier(ComposerRailGlyphRelief(active: true))
                 .frame(width: ComposerDocumentToolRowFit.minimumTileWidth,
                        height: ComposerDocumentToolRowFit.minimumTileWidth)
-                .adaptiveLiquidGlass(in: Circle(), tint: plateauTint.opacity(0.55), interactive: true)
-                .contentShape(Circle())
+                .contentShape(Rectangle())
         }
         .accessibilityLabel(Text(ComposerDocumentCopy.label(tool)))
     }
 
     /// L'icône « couleur de fond » (#4031) — replie/déplie `backgroundStrip`.
-    /// Active (palette dépliée) : teintée accent pour dire « ouvert ».
+    /// Active (palette dépliée) : jaune pour dire « ouvert » (#10364).
     @ViewBuilder
     private var backgroundColorToggle: some View {
         Button {
@@ -789,13 +790,11 @@ struct ComposerDocumentSurface: View {
             Image(systemName: "paintpalette")
                 .font(.title3)
                 .symbolRenderingMode(.hierarchical)
-                .foregroundColor(showColorPalette
-                    ? Color(hex: MeeshyColors.brandPrimaryHex)
-                    : MeeshyColors.textSecondary(isDark: true))
+                .foregroundColor(ComposerFloatingRailInk.floating(active: showColorPalette))
+                .modifier(ComposerRailGlyphRelief(active: true))
                 .frame(width: ComposerDocumentToolRowFit.minimumTileWidth,
                        height: ComposerDocumentToolRowFit.minimumTileWidth)
-                .adaptiveLiquidGlass(in: Circle(), tint: plateauTint.opacity(0.55), interactive: true)
-                .contentShape(Circle())
+                .contentShape(Rectangle())
         }
         .accessibilityLabel(Text(ComposerDocumentCopy.background))
         // Le doc-comment ci-dessus écrivait la règle à l'envers — « Active

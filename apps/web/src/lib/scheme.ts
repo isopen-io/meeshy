@@ -27,8 +27,7 @@ function applyScheme(scheme: ColorScheme): void {
   const light = scheme === 'light';
   document.documentElement.classList.toggle('light', light);
   document.documentElement.classList.toggle('dark', !light);
-  syncBrowserBar(scheme);
-  syncShellSystemBars(scheme);
+  syncShellSystemBars(scheme, syncBrowserBar(scheme));
 }
 
 /**
@@ -39,10 +38,14 @@ function applyScheme(scheme: ColorScheme): void {
  * schéma (`data-scheme`) ; on active celle du schéma PEINT et on éteint
  * l'autre, sans recopier ses couleurs ici.
  */
-function syncBrowserBar(scheme: ColorScheme): void {
+function syncBrowserBar(scheme: ColorScheme): string | null {
+  let color: string | null = null;
   document.querySelectorAll('meta[name="theme-color"][data-scheme]').forEach((meta) => {
-    (meta as HTMLMetaElement).media = meta.getAttribute('data-scheme') === scheme ? 'all' : 'not all';
+    const painted = meta.getAttribute('data-scheme') === scheme;
+    (meta as HTMLMetaElement).media = painted ? 'all' : 'not all';
+    if (painted) color = meta.getAttribute('content');
   });
+  return color;
 }
 
 /**
@@ -51,9 +54,22 @@ function syncBrowserBar(scheme: ColorScheme): void {
  * dans l'app sur un téléphone clair, les icônes sombres se posaient sur le
  * fond sombre et l'heure disparaissait. `DARK` = icônes claires, `LIGHT` =
  * icônes sombres. Hors coque, la barre appartient au navigateur : rien à faire.
+ *
+ * LE FOND DES BARRES (#9533). Sous Android 15, la coque n'est pas bord à
+ * bord : le thème natif peint les barres selon le SYSTÈME, et des icônes
+ * sombres se posaient sur une barre noire. `MeeshySystemBars` reçoit la
+ * couleur `theme-color` du schéma peint, celle que Chrome donne à sa barre ;
+ * la coque décide seule des versions où elle peint.
  */
-function syncShellSystemBars(scheme: ColorScheme): void {
-  const systemBars = appelNatif(coqueCourante(), 'SystemBars');
+function syncShellSystemBars(scheme: ColorScheme, color: string | null): void {
+  const coque = coqueCourante();
+  const paint = appelNatif(coque, 'MeeshySystemBars');
+  if (paint !== null && color) {
+    paint('paint', { color }).catch(() => {
+      /* Fond non peint : les icônes, elles, suivent déjà le thème. */
+    });
+  }
+  const systemBars = appelNatif(coque, 'SystemBars');
   if (systemBars === null) return;
   systemBars('setStyle', { style: scheme === 'light' ? 'LIGHT' : 'DARK' }).catch(() => {
     /* Barre non réglée : le thème de l'app, lui, est déjà peint. */
@@ -121,8 +137,7 @@ export function setThemePreference(preference: ThemePreference): void {
  * seul basculement systeme suffirait a arreter tout suivi ulterieur.
  */
 export function followSystem(): () => void {
-  syncBrowserBar(currentScheme());
-  syncShellSystemBars(currentScheme());
+  syncShellSystemBars(currentScheme(), syncBrowserBar(currentScheme()));
   const query = window.matchMedia('(prefers-color-scheme: light)');
   const onSchemeChange = (e: MediaQueryListEvent) => {
     if (currentThemePreference() === 'system') applyScheme(e.matches ? 'light' : 'dark');

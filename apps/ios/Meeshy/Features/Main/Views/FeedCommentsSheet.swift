@@ -340,7 +340,7 @@ struct CommentsSheetView: View {
         let topLevel = topLevelComments   // filtré UNE fois par rendu (3 lectures avant)
         sheetBody(topLevel)
             // Les médias de TOUS les commentaires du post (racines + réponses chargées) se feuillettent ensemble en plein écran.
-            .commentMediaGallery(topLevel: topLevel, replies: repliesMap)
+            .commentMediaGallery(topLevel: topLevel, replies: repliesMap).closesForConversationOpening(.sheet)
     }
 
     private func sheetBody(_ topLevel: [FeedComment]) -> some View {

@@ -763,7 +763,7 @@ struct FeedPostCard: View {
                 address: item.place.address,
                 accentColor: accentColor,
                 senderName: post.author
-            )
+            ).closesForConversationOpening(.place)
         }
         // **Le plein écran d'un post passe par son SITE UNIQUE** (#4927).
         //
@@ -998,17 +998,18 @@ struct FeedPostCard: View {
                 HapticFeedback.light()
             } label: {
                 HStack(spacing: MeeshySpacing.xsPlus) {
-                    ZStack {
-                        Image(systemName: isReposted ? "arrow.2.squarepath.circle.fill" : "arrow.2.squarepath")
-                            .font(MeeshyFont.relative(17))
-                            .scaleEffect(isRepostInFlight ? 0.85 : 1.0)
-                        // Accent BORDER on the glyph when the current user reposted.
-                        if isReposted {
-                            Image(systemName: "arrow.2.squarepath.circle")
-                                .font(MeeshyFont.relative(17))
-                                .foregroundColor(Color(hex: accentColor))
-                        }
-                    }
+                    // Les flèches nues dans les deux états, comme le réel : la famille `.circle` du repost n'existe pas
+                    // au catalogue SF Symbols et l'état reposté se peignait vide (#8939). Le reposté se lit à sa teinte
+                    // et au contour d'accent qu'EngagementGlyph superpose.
+                    EngagementGlyph(
+                        outline: "arrow.2.squarepath",
+                        filled: "arrow.2.squarepath",
+                        participated: isReposted,
+                        accentHex: accentColor,
+                        activeTint: MeeshyColors.success,
+                        inactiveTint: theme.textSecondary
+                    )
+                    .scaleEffect(isRepostInFlight ? 0.85 : 1.0)
                     let count = displayRepostCount ?? post.repostCount
                     if count > 0 {
                         Text("\(count)")

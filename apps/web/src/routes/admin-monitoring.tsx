@@ -44,7 +44,7 @@ export function AdminMonitoringPanel({ language, deps = apiDeps, now = defaultNo
         language={language}
         title={translateAdmin(language, 'admin.nav.monitoring')}
         subtitle={translateAdmin(language, 'admin.monitoring.subtitle')}
-        crumbs={[{ label: translateAdmin(language, 'admin.group.platform') }, { label: translateAdmin(language, 'admin.nav.monitoring') }]}
+        crumbs={[{ label: translateAdmin(language, 'admin.group.operations') }, { label: translateAdmin(language, 'admin.nav.monitoring') }]}
       />
       <AdminOfflineNotice language={language} />
       <AdminTabs

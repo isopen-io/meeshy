@@ -118,3 +118,16 @@ describe('sendFailureReason — dans la langue d’interface', () => {
     }
   });
 });
+
+describe('sendFailureReason — une pièce jointe d’invité refusée sur son contenu (#10001, #10003)', () => {
+  test('la famille refusée se dit, jamais « envoi refusé »', () => {
+    expect(sendFailureReason(failure(403, { code: 'GUEST_ATTACHMENT_KIND_NOT_ALLOWED' }))).toBe('ce fichier n’est pas accepté ici');
+  });
+
+  test('le fichier trop lourd dit le plafond, dans chaque langue', () => {
+    expect(sendFailureReason(failure(413, { code: 'GUEST_ATTACHMENT_TOO_LARGE' }))).toContain('25');
+    for (const language of SUPPORTED_INTERFACE_LANGUAGES) {
+      expect(sendFailureReasonIn(failure(413, { code: 'GUEST_ATTACHMENT_TOO_LARGE' }), language)).not.toContain('{');
+    }
+  });
+});

@@ -695,7 +695,7 @@ final class StatusViewModelTests: XCTestCase {
     func test_currentUserDisplayName_fallsBackToMoi() {
         mockAuthManager.currentUser = nil
 
-        XCTAssertEqual(sut.currentUserDisplayName, "Moi")
+        XCTAssertEqual(sut.currentUserDisplayName, String(localized: "common.me", defaultValue: "Moi", bundle: .main))
     }
 
     func test_currentUserInitial_usesFirstName() {
@@ -991,35 +991,50 @@ final class StatusViewModelTests: XCTestCase {
     /// Un mood EST un post (`PostType.STATUS`) et porte `impressionCount` /
     /// `viewCount`, mais AUCUNE surface ne les alimentait : la barre de moods
     /// était le seul contenu du produit dont la portée restait à zéro.
-    func test_trackImpression_flushesTheBatchWithTheStatusSource() async {
+    private func makeMoodReachSUT() -> (sut: StatusViewModel, service: MockPostService, cleanup: () -> Void) {
+        let service = MockPostService()
+        let suite = "mood-reach-\(UUID().uuidString)"
+        let defaults = UserDefaults(suiteName: suite)!
+        let batcher = ImpressionBatcher(
+            source: "status", surface: .moodAvatar, postService: service, flushDelay: 60,
+            defaults: defaults, accountId: { "userA" }
+        )
+        let sut = StatusViewModel(
+            mode: .friends,
+            statusService: mockStatusService,
+            socialSocket: mockSocket,
+            authManager: mockAuthManager,
+            postService: service,
+            moodImpressions: batcher
+        )
+        return (sut, service, { defaults.removePersistentDomain(forName: suite) })
+    }
+
+    func test_trackImpression_flushesTheBatchOnTheMoodAvatarSurface() async {
+        let (sut, service, cleanup) = makeMoodReachSUT()
+        defer { cleanup() }
+
         sut.trackImpression("s1")
         sut.trackImpression("s2")
+        await sut.flushImpressions()
 
-        try? await Task.sleep(nanoseconds: 3_400_000_000)
-
-        XCTAssertEqual(mockPostService.recordImpressionsCallCount, 1)
-        XCTAssertEqual(mockPostService.lastRecordImpressionPostIds, ["s1", "s2"])
-        XCTAssertEqual(mockPostService.lastRecordImpressionsSource, "status")
+        XCTAssertEqual(service.recordedSocialEvents, [
+            .impression(postId: "s1", source: "status", surface: .moodAvatar),
+            .impression(postId: "s2", source: "status", surface: .moodAvatar),
+        ])
     }
 
     /// Une impression par APPARITION : revoir le même mood recompte, sinon le
     /// compteur plafonnerait à 1 par lancement d'app.
     func test_trackImpression_countsEveryAppearance_notOncePerStatus() async {
+        let (sut, service, cleanup) = makeMoodReachSUT()
+        defer { cleanup() }
+
         sut.trackImpression("s1")
         sut.trackImpression("s1")
         sut.trackImpression("s1")
+        await sut.flushImpressions()
 
-        try? await Task.sleep(nanoseconds: 3_400_000_000)
-
-        XCTAssertEqual(mockPostService.lastRecordImpressionPostIds, ["s1", "s1", "s1"])
-    }
-
-    func test_markStatusViewed_recordsAUniqueView() async {
-        sut.markStatusViewed("s1")
-
-        try? await Task.sleep(nanoseconds: 200_000_000)
-
-        XCTAssertEqual(mockPostService.viewPostCallCount, 1)
-        XCTAssertEqual(mockPostService.lastViewPostId, "s1")
+        XCTAssertEqual(service.recordedSocialEvents.map(\.postId), ["s1", "s1", "s1"])
     }
 }

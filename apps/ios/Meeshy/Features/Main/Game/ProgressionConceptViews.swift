@@ -179,9 +179,10 @@ struct GameValueRoll: ViewModifier {
 
 // MARK: - La carte de la première page
 
-/// UNE CARTE PAR CONCEPT, à trois étages : la tête (emblème, nom, valeur, chevron), les données importantes en
-/// pastilles (et la jauge fine vers l'étape suivante), puis le pourquoi et le comment. La carte ENTIÈRE ouvre la
-/// fiche ; elle ne porte aucun geste du jeu. Un seul élément pour VoiceOver : concept, valeur, pourquoi, bouton.
+/// UNE CARTE PAR CONCEPT, à quatre étages : la tête (emblème, nom, valeur, chevron), les données importantes en
+/// pastilles (et la jauge fine vers l'étape suivante), la phrase d'état — l'étape où l'on est et ce que la valeur vise
+/// (#10540) —, puis le pourquoi et le comment. La carte ENTIÈRE ouvre la fiche ; elle ne porte aucun geste du jeu. Un
+/// seul élément pour VoiceOver : concept, valeur, pourquoi, état, bouton.
 struct ProgressionConceptCardView: View {
     let card: ProgressionConceptCard
     let game: GameBlock?
@@ -205,6 +206,13 @@ struct ProgressionConceptCardView: View {
                 if let gauge = card.gauge {
                     ProgressionBar(progress: entered ? gauge : 0, tint: card.concept.tint, label: card.name)
                         .animation(reduceMotion ? nil : .easeOut(duration: GameTimeline.levelGainDuration), value: entered)
+                }
+                if let state = card.state {
+                    // La phrase d'état se lit EN ENTIER : c'est elle qui dit ce que chaque chiffre vise.
+                    Text(state)
+                        .font(MeeshyFont.relative(MeeshyFont.footnoteSize, weight: .bold))
+                        .foregroundColor(theme.textPrimary)
+                        .fixedSize(horizontal: false, vertical: true)
                 }
                 Text(card.why)
                     .font(MeeshyFont.relative(MeeshyFont.footnoteSize, weight: .semibold))

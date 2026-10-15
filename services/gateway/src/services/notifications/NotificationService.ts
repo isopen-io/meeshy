@@ -43,7 +43,7 @@ import {
   resolvePrismTranslation,
 } from '@meeshy/shared/utils/conversation-helpers';
 import { notificationString, buildNotificationDisplay } from '@meeshy/shared/utils/notification-strings';
-import { publicMediaUrlFromEnv } from '../attachments/publicMediaUrl';
+import { pushMediaFields } from './push-media-fields';
 import { recipientLanguage } from '../../utils/recipient-language';
 import { notificationLogger, securityLogger } from '../../utils/logger-enhanced';
 import { sanitizeNotificationInputs, persistedNotificationTitle } from './sanitizeInputs';
@@ -554,6 +554,7 @@ export class NotificationService {
     readonly mimeType?: string;
     readonly durationMs?: number;
     readonly fileSize?: number;
+    readonly language?: string;
   } {
     const original = {
       url: params.originalUrl,
@@ -572,7 +573,7 @@ export class NotificationService {
     // l'extension, le corps se compose sans durée plutôt qu'avec une fausse, et
     // le plafond mémoire (#7003) retombe sur sa mesure APRÈS téléchargement
     // plutôt que sur un chiffre emprunté.
-    return { url: track.url, mimeType: track.mimeType, durationMs: track.durationMs };
+    return { url: track.url, mimeType: track.mimeType, durationMs: track.durationMs, language: params.served.language };
   }
 
   /**
@@ -826,6 +827,7 @@ export class NotificationService {
         // la phrase (« a commenté un réel de Windie Nh ») au lieu d'être posé
         // à côté en sous-titre. Même chemin que `parentCommentPreview`.
         authorName: (typeof meta.contentAuthorName === 'string' ? meta.contentAuthorName : null),
+        conversationTitle: params.context.conversationTitle ?? null,
       };
       // On ne touche la base pour la langue du destinataire QUE si un rendu
       // localisé en a réellement besoin (titre localisé du type, ou corps
@@ -1086,43 +1088,10 @@ export class NotificationService {
                 // embarquer vaincrait le mode privé (et translatedContent
                 // voyagerait en clair dans le canal push malgré l'opt-out).
                 ...(showPreview ? {
-                  // Phase A — message media inline (audio waveform, image preview,
-                  // video thumb). L'extension iOS lit ces champs pour télécharger le
-                  // fichier et l'attacher comme UNNotificationAttachment (UTI typeHint).
-                  //
-                  // Cycle 125 — SECOND VERROU, même arbitrage que
-                  // `previewPrismSource` et `prePersistedMessageFields` : un
-                  // `notificationLocKey` ne se pose que sur un placeholder de
-                  // protection (`protectedPreview` en est l'unique producteur),
-                  // et la NSE attache `attachmentUrl` sans jamais le regarder.
-                  // Un appelant qui masque le corps sans retirer son média perd
-                  // ici le rich-push, jamais le secret : une garde de
-                  // confidentialité échoue en montrant MOINS.
-                  ...(params.context.notificationLocKey ? {
-                    attachmentUrl: '',
-                    attachmentMimeType: '',
-                    attachmentDurationMs: '',
-                    attachmentFileSize: '',
-                  } : {
-                    // #7022 — L'ADRESSE SE COMPOSE ICI : la NSE descend cette
-                    // chaîne SANS base configurée, donc une clé de stockage (la
-                    // forme que `normalize-media-urls.ts` laisse en base) n'y est
-                    // pas une adresse. Règle et mesures : `publicMediaUrl.ts`.
-                    attachmentUrl: publicMediaUrlFromEnv(params.context.firstAttachmentUrl || ''),
-                    attachmentMimeType: params.context.firstAttachmentMimeType || '',
-                    attachmentDurationMs: params.context.firstAttachmentDurationMs != null
-                      ? String(params.context.firstAttachmentDurationMs)
-                      : '',
-                    // #7003 — la NSE la lit AVANT de lancer la requête : une
-                    // pièce jointe trop lourde pour son enveloppe de 24 Mo ne
-                    // se refuse utilement qu'avant d'être descendue. Elle
-                    // voyage sous le même verrou que l'URL qu'elle décrit :
-                    // un média protégé n'annonce pas plus sa taille que son
-                    // adresse.
-                    attachmentFileSize: params.context.firstAttachmentFileSize != null
-                      ? String(params.context.firstAttachmentFileSize)
-                      : '',
-                  }),
+                  // Phase A — le média inline (NSE iOS, lecture de la coque
+                  // Android #10641), sous le SECOND VERROU du cycle 125 :
+                  // `push-media-fields.ts`.
+                  ...pushMediaFields(params.context),
                   encryptedContent: params.context.encryptedContent || '',
                   // #8857 — le détail du contenu, sous le MÊME second verrou que le média.
                   ...(params.context.notificationLocKey ? {} : contentDetailPushFields(params.context.contentDetail)),
@@ -1358,6 +1327,8 @@ export class NotificationService {
     /** MIME type du 1er attachment, ex. `audio/m4a`, `image/jpeg`, `video/mp4`.
      *  Utilisé par l'extension pour choisir le UTI typeHint correct. */
     firstAttachmentMimeType?: string;
+    /** #10641 — l'identité de la pièce jointe, pour rapporter une écoute faite depuis la notification. */
+    firstAttachmentId?: string;
     /**
      * Les pistes TRADUITES de la première pièce jointe, par langue — cycle 128.
      * Élues par la langue du texte SERVI, cf. {@link servedAttachmentMedia}.
@@ -1552,6 +1523,10 @@ export class NotificationService {
         // site la multipliait par 1000 comme si elle était en secondes : un
         // vocal de 34 s partait sur le fil annoncé pour 9 h 26.
         firstAttachmentDurationMs: servedMedia.durationMs,
+        // #10641 — l'écoute faite depuis la notification se rapporte sur CETTE
+        // pièce jointe, dans la langue de la piste jouée.
+        ...(params.firstAttachmentId ? { firstAttachmentId: params.firstAttachmentId } : {}),
+        ...(servedMedia.language ? { firstAttachmentLanguage: servedMedia.language } : {}),
         encryptedContent: params.encryptedContent,
         notificationLocKey: params.notificationLocKey,
         ...(params.contentDetail ? { contentDetail: params.contentDetail } : {}),

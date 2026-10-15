@@ -1029,7 +1029,7 @@ final class MessageExitOfferTests: XCTestCase {
     }
 
     func test_audioFullscreen_saveIsGatedInButtonAndGesture() throws {
-        let code = try source("Views/AudioFullscreenView.swift")
+        let code = try source("Views/AudioFullscreenPage.swift") + source("Views/AudioFullscreenPage+Transcription.swift")
         XCTAssertTrue(code.contains("ContentExitGated(contentId:attachment.id){downloadButton}"))
         XCTAssertTrue(code.contains("privatefuncrequestSave(){saveCoordinator.exitGate=exitGateguardexitGate.mayLeave(attachment.id)else{return}"))
         XCTAssertEqual(code.components(separatedBy: "saveCoordinator.requestSave(").count - 1, 1)

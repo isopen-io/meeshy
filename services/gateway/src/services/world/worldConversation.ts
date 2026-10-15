@@ -10,7 +10,9 @@
  * est `removeWorldSeed` (`world/worldSeedOperations.ts`).
  *
  * Trois écritures, chacune créée UNE fois et relue ensuite :
- *  1. la conversation `world` (type `global`, titre « World Wide ») ;
+ *  1. la conversation `world` (type `global`, titre « World Wide »), avec son
+ *     avatar et sa bannière servis par l'application web (#10204,
+ *     `world/worldBranding.ts`) — posés s'ils MANQUENT, jamais remplacés ;
  *  2. ses membres réservés, désignés par une ADRESSE de configuration et jamais
  *     par un pseudo (`world/worldReservedMembers.ts`) — `meeshy` créateur,
  *     `admin` et les adresses de `WORLD_ADMIN_EMAILS` (le porteur, `jcnm`)
@@ -39,6 +41,7 @@ import type { MemberRoleType } from '@meeshy/shared/types/role-types';
 import {
   WORLD_CONVERSATION_IDENTIFIER,
   WORLD_CONVERSATION_TITLE,
+  WORLD_GUEST_ATTACHMENT_KINDS,
   WORLD_SHARE_LINK_IDENTIFIER,
   type WorldEntry,
 } from '@meeshy/shared/types/world';
@@ -46,7 +49,8 @@ import { presentMemberCount } from '@meeshy/shared/utils/member-visibility';
 import { generateUniqueShareLinkId } from '../../routes/links/utils/link-helpers';
 import { FOUNDING_MEMBER_PERMISSIONS } from '../participantRights';
 import { isShareLinkOpen } from '../conversationCard';
-import { recipientLanguage } from '../../utils/recipient-language';
+import { missingWorldBranding, worldBranding, type WorldBranding } from './worldBranding';
+import { RECIPIENT_LANG_SELECT, recipientLanguage } from '../../utils/recipient-language';
 import {
   WORLD_CREATOR_DESIGNATION,
   designateWorldReservedAccounts,
@@ -64,6 +68,8 @@ export type WorldSeedDeps = {
   readonly prisma: PrismaClient;
   readonly logger: WorldSeedLogger;
   readonly identities: WorldReservedIdentities;
+  /** L'origine publique du frontend qui sert l'avatar et la bannière — `FRONTEND_URL` par défaut (#10204). */
+  readonly appOrigin?: string;
 };
 
 export type WorldMemberOutcome = 'joined' | 'already-member' | 'left' | 'absent' | 'ineligible';
@@ -75,26 +81,36 @@ export type WorldSeedReport = {
 };
 
 /**
- * Les termes du lien d'entrée publique. Un INVITÉ écrit ; il ne joint RIEN,
- * audio compris, tant que la garde décodante de #10001 / #10029 n'est pas
- * livrée.
+ * Les termes du lien d'entrée publique. Un INVITÉ écrit, et ne joint que du
+ * texte `.txt` et de l'audio (#10001, décision porteur du 2026-10-10).
  *
- * Les drapeaux ci-dessous NE SUFFISENT PAS à le garantir (second passage de
- * l'audit adversarial de #10000) : l'exemption « voix » de
- * `classifyAnonymousAttachment` ne lit ni `allowAnonymousFiles` ni
- * `allowAnonymousImages`, `link-admission.ts` grave `canSendAudios` d'après le
- * droit d'ÉCRIRE, et un en-tête de deux octets suffisait à mériter « audio ».
- * Ce qui ferme la porte est la garde elle-même, décidée sur la CONVERSATION
- * World Wide (`ContentSignature.ts`, `WORLD_GUEST_ATTACHMENTS_CLOSED_REASON`),
- * sur REST comme sur tus ; le pré-vol (`inspectWorldSeed`) la met à l'épreuve
- * de contenus déguisés et bloque si l'un passe.
+ * `allowedAttachmentKinds` le dit aux clients, qui filtrent leur sélecteur ;
+ * ce qui le GARANTIT est la garde de `ContentSignature.ts`
+ * (`classifyAnonymousAttachment`), qui parcourt le contenu ENTIER sur tus et
+ * REST et relit la famille de chaque pièce à l'envoi (REST, socket), pièces
+ * recopiées par un transfert ou une diffusion comprises (#10051). Elle se décide
+ * sur la CONVERSATION (`GUEST_ATTACHMENT_KIND_CEILINGS`, #10029) : un lien qui
+ * ne dit rien n'ouvre pas davantage, et ni `allowAnonymousFiles` ni les droits
+ * gravés à l'entrée (`link-admission.ts`) n'y entrent. Le pré-vol
+ * (`inspectWorldSeed`) la met à l'épreuve de contenus déguisés et bloque si
+ * l'un passe ; il nomme aussi les risques résiduels qu'elle laisse passer (une
+ * charge arbitraire dans un conteneur audio, #10045) et bloque tant que le
+ * porteur ne les a pas acceptés (#10057).
  *
- * `allowAnonymousFiles` reste semé FERMÉ : `link-admission.ts` GRAVE
- * `canSendFiles` / `canSendVideos` dans chaque participation à l'entrée, et le
- * seed ne réécrit jamais la ligne du lien. `allowViewHistory: false` : un
- * invité lit le salon depuis son arrivée, comme tout anonyme (#4169) — la
- * planche « Onboarding » montre d'ailleurs un fil qui commence à « {nom} a
- * rejoint World Wide ».
+ * `allowAnonymousFiles` reste semé FERMÉ : la porte des fichiers génériques ne
+ * s'ouvre pas, la liste des familles la remplace. `allowViewHistory: true`
+ * (décision porteur du 2026-10-11, #10099) : qui entre dans World Wide, invité
+ * comme inscrit, lit ce qui s'y est dit avant lui — le droit est gravé à
+ * l'entrée (`link-admission.ts`), et un salon vide de tout historique n'est
+ * pas une conversation du monde entier.
+ *
+ * Le seed ne réécrit jamais ces termes sur un lien existant, à une exception :
+ * un lien semé AVANT la colonne `allowedAttachmentKinds` (liste vide) la reçoit
+ * — jamais un choix qu'un administrateur a posé depuis. Un historique coupé
+ * depuis par un administrateur ou un hôte reste donc coupé au démarrage
+ * suivant ; le lien et les entrants semés avec l'ancien terme
+ * `allowViewHistory: false` se réalignent UNE fois, par la migration
+ * `packages/shared/prisma/migrations/2026-10-11-world-wide-history-open.mongodb.js`.
  */
 export const WORLD_SHARE_LINK_TERMS = {
   name: WORLD_CONVERSATION_TITLE,
@@ -103,11 +119,12 @@ export const WORLD_SHARE_LINK_TERMS = {
   allowAnonymousMessages: true,
   allowAnonymousFiles: false,
   allowAnonymousImages: false,
-  allowViewHistory: false,
+  allowViewHistory: true,
   requireAccount: false,
   requireNickname: true,
   requireEmail: false,
   requireBirthday: false,
+  allowedAttachmentKinds: [...WORLD_GUEST_ATTACHMENT_KINDS],
 } as const;
 
 function isUniqueViolation(error: unknown): boolean {
@@ -126,11 +143,21 @@ async function createOrReread<T>(create: () => Promise<T>, reread: () => Promise
   }
 }
 
-async function ensureConversation(prisma: PrismaClient): Promise<{ id: string; created: boolean }> {
+async function ensureConversation(prisma: PrismaClient, branding: WorldBranding | null): Promise<{ id: string; created: boolean }> {
   const find = () =>
-    prisma.conversation.findFirst({ where: { identifier: WORLD_CONVERSATION_IDENTIFIER }, select: { id: true } });
+    prisma.conversation.findFirst({
+      where: { identifier: WORLD_CONVERSATION_IDENTIFIER },
+      select: { id: true, avatar: true, banner: true },
+    });
   const existing = await find();
-  if (existing) return { id: existing.id, created: false };
+  if (existing) {
+    // #10204 — l'image qui MANQUE se pose ; celle qu'un administrateur a choisie reste.
+    const missing = missingWorldBranding(existing, branding);
+    if (Object.keys(missing).length > 0) {
+      await prisma.conversation.update({ where: { id: existing.id }, data: missing });
+    }
+    return { id: existing.id, created: false };
+  }
 
   const { row, created } = await createOrReread(
     () =>
@@ -141,6 +168,7 @@ async function ensureConversation(prisma: PrismaClient): Promise<{ id: string; c
           description: 'La conversation du monde entier, traduite dans la langue de chacun',
           type: 'global',
           isActive: true,
+          ...(branding ?? {}),
         },
         select: { id: true },
       }),
@@ -160,6 +188,9 @@ async function ensureMember(
   const existing = await find();
   if (existing) return existing.isActive ? 'already-member' : 'left';
 
+  // La langue de la participation se descend ICI, sur une lecture qui charge
+  // les quatre colonnes du Prisme (#4642, #4662) : posée une fois, à la création.
+  const prefs = await prisma.user.findUnique({ where: { id: account.id }, select: { ...RECIPIENT_LANG_SELECT } });
   const { created } = await createOrReread(
     () =>
       prisma.participant.create({
@@ -169,7 +200,7 @@ async function ensureMember(
           type: 'user',
           displayName: account.displayName || account.username,
           role,
-          language: recipientLanguage(account, 'fr'),
+          language: recipientLanguage(prefs, 'fr'),
           permissions: { ...FOUNDING_MEMBER_PERMISSIONS },
           joinedAt: new Date(),
           isActive: true,
@@ -178,6 +209,22 @@ async function ensureMember(
     find,
   );
   return created ? 'joined' : 'already-member';
+}
+
+/**
+ * Un lien semé avant la colonne `allowedAttachmentKinds` la reçoit — et lui
+ * seul : une liste déjà posée, même par un administrateur, n'est pas touchée.
+ */
+async function poseGuestAttachmentKinds(
+  deps: WorldSeedDeps,
+  link: { readonly id: string; readonly allowedAttachmentKinds?: readonly string[] | null },
+): Promise<void> {
+  if (link.allowedAttachmentKinds && link.allowedAttachmentKinds.length > 0) return;
+  await deps.prisma.conversationShareLink.update({
+    where: { id: link.id },
+    data: { allowedAttachmentKinds: [...WORLD_GUEST_ATTACHMENT_KINDS] },
+  });
+  deps.logger.info(`[WORLD] lien "${WORLD_SHARE_LINK_IDENTIFIER}" : familles des invités posées (${WORLD_GUEST_ATTACHMENT_KINDS.join(', ')})`);
 }
 
 async function ensureShareLink(
@@ -189,11 +236,14 @@ async function ensureShareLink(
   const find = () =>
     prisma.conversationShareLink.findFirst({
       where: { identifier: WORLD_SHARE_LINK_IDENTIFIER },
-      select: { id: true, conversationId: true },
+      select: { id: true, conversationId: true, allowedAttachmentKinds: true },
     });
   const existing = await find();
   if (existing) {
-    if (existing.conversationId === conversationId) return 'existing';
+    if (existing.conversationId === conversationId) {
+      await poseGuestAttachmentKinds(deps, existing);
+      return 'existing';
+    }
     logger.error(
       `[WORLD] l'identifiant de lien "${WORLD_SHARE_LINK_IDENTIFIER}" désigne une AUTRE conversation — aucun lien World Wide créé, la landing n'aura pas d'entrée tant que ce conflit n'est pas tranché`,
     );
@@ -212,6 +262,7 @@ async function ensureShareLink(
       prisma.conversationShareLink.create({
         data: {
           ...WORLD_SHARE_LINK_TERMS,
+          allowedAttachmentKinds: [...WORLD_SHARE_LINK_TERMS.allowedAttachmentKinds],
           allowedCountries: [],
           allowedLanguages: [],
           allowedIpRanges: [],
@@ -234,7 +285,7 @@ async function ensureShareLink(
  */
 export async function ensureWorldConversation(deps: WorldSeedDeps): Promise<WorldSeedReport> {
   const { prisma, logger, identities } = deps;
-  const conversation = await ensureConversation(prisma);
+  const conversation = await ensureConversation(prisma, worldBranding(deps.appOrigin));
   const designated = await designateWorldReservedAccounts(prisma, identities);
 
   const members = await Promise.all(
@@ -271,7 +322,7 @@ export async function ensureWorldConversation(deps: WorldSeedDeps): Promise<Worl
 export async function loadWorldEntry(prisma: PrismaClient): Promise<WorldEntry | null> {
   const conversation = await prisma.conversation.findFirst({
     where: { identifier: WORLD_CONVERSATION_IDENTIFIER, isActive: true },
-    select: { id: true, identifier: true, title: true },
+    select: { id: true, identifier: true, title: true, avatar: true, banner: true },
   });
   if (!conversation) return null;
 
@@ -288,5 +339,7 @@ export async function loadWorldEntry(prisma: PrismaClient): Promise<WorldEntry |
     title: conversation.title || WORLD_CONVERSATION_TITLE,
     shareLinkIdentifier: link.identifier,
     ...presentMemberCount(count),
+    ...(conversation.avatar ? { avatar: conversation.avatar } : {}),
+    ...(conversation.banner ? { banner: conversation.banner } : {}),
   };
 }

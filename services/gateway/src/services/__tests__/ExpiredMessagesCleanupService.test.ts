@@ -23,6 +23,7 @@ jest.mock('../../utils/logger-enhanced', () => {
 
 import { enhancedLogger } from '../../utils/logger-enhanced';
 import { ExpiredMessagesCleanupService } from '../ExpiredMessagesCleanupService';
+import { sharedTranslationRow, sharedTranslationTable } from '../../__tests__/helpers/shared-translation-table';
 
 const sharedLog = enhancedLogger.child({ module: 'test-probe' }) as unknown as {
   error: jest.Mock;
@@ -525,5 +526,106 @@ describe('ExpiredMessagesCleanupService', () => {
     } finally {
       jest.useRealTimers();
     }
+  });
+});
+
+/**
+ * L'échéance d'un éphémère DÉTRUIT le contenu (`content`, `encryptedContent`,
+ * `translations`, `metadata`) — et laissait la version SCELLÉE que les appareils
+ * des membres s'étaient passée (#9899, audit C4) : ce que l'expéditeur croyait
+ * détruit restait lisible, pour qui détenait la clé, dans la table voisine.
+ *
+ * Le balayage appelle `applyMessageRemovalEffects` pour chaque message, et
+ * l'effacement y vit : ces témoins gardent que l'appel reste le chemin, et que
+ * la table se vide vraiment. Le double de la table APPLIQUE le `where`.
+ */
+describe('ExpiredMessagesCleanupService — traductions partagées', () => {
+  const serviceWith = (rows: MessageRow[], table: ReturnType<typeof sharedTranslationTable>) => {
+    const base = buildPrisma(rows);
+    // Le double rend ses lignes à TOUTE lecture ; la cascade des réponses (#8630)
+    // interroge `replyToId` et prendrait les autres lignes pour des réponses à
+    // emporter. Personne ne cite ces messages : la base répondrait « aucune ».
+    (base as unknown as { message: { findMany: jest.Mock } }).message.findMany.mockImplementation(
+      async (args: unknown) => (JSON.stringify(args).includes('replyToId') ? [] : rows),
+    );
+    const prisma = {
+      ...(base as object),
+      sharedTranslation: table.delegate,
+    } as unknown as import('@meeshy/shared/prisma/client').PrismaClient;
+    const service = new ExpiredMessagesCleanupService(prisma, {
+      attachmentRemover: buildAttachments(),
+      now: () => NOW,
+      resolveManager: () => null,
+    });
+    return { service, prisma };
+  };
+
+  it('efface les traductions partagées du message échu — toutes ses langues', async () => {
+    const table = sharedTranslationTable([
+      sharedTranslationRow({ id: 'fr', messageId: 'msg-1', targetLanguage: 'fr' }),
+      sharedTranslationRow({ id: 'en', messageId: 'msg-1', targetLanguage: 'en' }),
+    ]);
+    const { service } = serviceWith([messageRow()], table);
+
+    await service.cleanup();
+
+    expect(table.remainingIds()).toEqual([]);
+  });
+
+  it("laisse intactes celles d'un message que la requête rendrait sans être échu", async () => {
+    // Le filet `_isLapsed` refuse le message ; l'effacement ne doit pas le
+    // rattraper par la porte de derrière.
+    const table = sharedTranslationTable([
+      sharedTranslationRow({ id: 'détruit', messageId: 'msg-1' }),
+      sharedTranslationRow({ id: 'pas-échu', messageId: 'msg-pas-echu' }),
+      sharedTranslationRow({ id: 'jamais-éphémère', messageId: 'msg-sans-echeance' }),
+    ]);
+    const { service } = serviceWith(
+      [
+        messageRow({ id: 'msg-1' }),
+        messageRow({ id: 'msg-pas-echu', expiresAt: new Date(NOW.getTime() + 60_000) }),
+        messageRow({ id: 'msg-sans-echeance', expiresAt: null }),
+      ],
+      table,
+    );
+
+    await service.cleanup();
+
+    expect(table.remainingIds()).toEqual(['pas-échu', 'jamais-éphémère']);
+  });
+
+  it("garde celles d'un message dont l'effacement a échoué — la passe suivante reprend les deux", async () => {
+    const table = sharedTranslationTable([sharedTranslationRow({ id: 'reste', messageId: 'msg-1' })]);
+    const { service, prisma } = serviceWith([messageRow()], table);
+    (prisma as unknown as { message: { update: jest.Mock } }).message.update.mockRejectedValueOnce(
+      new Error('write conflict'),
+    );
+
+    await service.cleanup();
+
+    expect(table.remainingIds()).toEqual(['reste']);
+  });
+
+  it("une table voisine qui ne répond pas ne fait ni échouer la passe ni sortir le message du décompte", async () => {
+    const table = sharedTranslationTable([sharedTranslationRow({ messageId: 'msg-1' })]);
+    table.deleteMany.mockRejectedValueOnce(new Error('mongo down'));
+    const { service } = serviceWith([messageRow()], table);
+
+    await expect(service.cleanup()).resolves.toEqual({ burned: 1 });
+  });
+
+  it("la purge d'une vue unique efface aussi les traductions partagées de la bulle purgée", async () => {
+    // L'autre moitié du même service : `purgeViewOnce` n'appelle pas les effets
+    // de retrait (la bulle reste, aucun `deletedAt`) et porte l'effacement
+    // elle-même.
+    const table = sharedTranslationTable([
+      sharedTranslationRow({ id: 'purgée', messageId: 'msg-1' }),
+      sharedTranslationRow({ id: 'voisine', messageId: 'msg-ailleurs' }),
+    ]);
+    const { service } = serviceWith([messageRow()], table);
+
+    await service.purgeViewOnce();
+
+    expect(table.remainingIds()).toEqual(['voisine']);
   });
 });

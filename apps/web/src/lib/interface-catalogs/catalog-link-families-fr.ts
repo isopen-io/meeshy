@@ -2,7 +2,9 @@
  * LES TROIS AUTRES FAMILLES DE « MES LIENS », FRANÇAIS (#6408, #6409, #6410) —
  * la SOURCE des clés `linkFamilies.*` : listes, détails et créations des liens
  * de suivi, de parrainage et de communauté. Mots repris d'iOS
- * (`tracking.links.*`, `affiliate.*`, `community.links.*`). Chargé avec ces
+ * (`tracking.links.*`, `affiliate.*`, `community.links.*`). Et le formulaire
+ * d'un lien de PARTAGE (`links.create.*`, création et édition — #10322),
+ * sorti du catalogue commun que tout lecteur télécharge. Chargé avec ces
  * écrans seulement (`i18n-link-families-catalog`), jamais au démarrage ; les
  * six autres langues portent exactement ces clés (`satisfies LinkFamiliesCatalog`).
  */
@@ -126,6 +128,55 @@ const fr = {
   'linkFamilies.community.fullLink': 'Lien complet',
   'linkFamilies.community.role': 'Votre rôle',
   'linkFamilies.community.visibility': 'Visibilité',
+  'links.create.title': 'Nouveau lien de partage',
+  'links.create.section.conversation': 'Conversation',
+  'links.create.choose': 'Choisir un groupe ou une communauté',
+  'links.create.picker.title': 'Choisir une conversation',
+  'links.create.picker.empty': 'Aucune conversation ne peut recevoir un lien pour l’instant.',
+  'links.create.section.identity': 'Identité du lien',
+  'links.create.name': 'Nom du lien',
+  'links.create.name.placeholder': 'ex. : Partage Twitter',
+  'links.create.description': 'Description (facultative)',
+  'links.create.description.placeholder': 'ex. : Rejoins notre groupe…',
+  'links.create.section.access': 'Accès invités',
+  'links.create.section.access.subtitle': 'Ce que les visiteurs doivent fournir pour rejoindre',
+  'links.create.access.account': 'Compte requis',
+  'links.create.access.account.caption': 'Seuls les membres Meeshy peuvent rejoindre',
+  'links.create.access.nickname': 'Pseudonyme requis',
+  'links.create.access.nickname.caption': 'Le visiteur doit choisir un pseudo',
+  'links.create.access.email': 'E-mail requis',
+  'links.create.access.email.caption': 'Le visiteur doit fournir son e-mail',
+  'links.create.access.birthday': 'Date de naissance requise',
+  'links.create.access.birthday.caption': 'Permet le contrôle d’âge',
+  'links.create.section.permissions': 'Permissions',
+  'links.create.section.permissions.subtitle': 'Ce que les invités anonymes peuvent faire',
+  'links.create.permission.messages': 'Envoyer des messages',
+  'links.create.permission.messages.caption': 'Les invités peuvent écrire dans la conversation',
+  'links.create.permission.images': 'Envoyer des images',
+  'links.create.permission.images.caption': 'Les invités peuvent partager des photos',
+  'links.create.permission.files': 'Envoyer des fichiers',
+  'links.create.permission.files.caption': 'Les invités peuvent envoyer des documents',
+  'links.create.permission.history': 'Voir l’historique',
+  'links.create.permission.history.caption': 'Les invités voient les messages précédents',
+  'links.create.section.limits': 'Limites',
+  'links.create.section.limits.subtitle': 'Contrôlez l’audience et la durée de vie du lien',
+  'links.create.limit.uses': 'Limiter les utilisations',
+  'links.create.limit.max.one': '{count} utilisation au maximum',
+  'links.create.limit.max.other': '{count} utilisations au maximum',
+  'links.create.limit.count': 'Nombre d’utilisations',
+  'links.create.limit.invalid': 'Choisissez un nombre entier entre 1 et {max}.',
+  'links.create.expiration': 'Expiration',
+  'links.create.expiration.never': 'Jamais',
+  'links.create.expiration.h24': '24 heures',
+  'links.create.expiration.d7': '7 jours',
+  'links.create.expiration.d30': '30 jours',
+  'links.create.expiration.m3': '3 mois',
+  'links.create.button': 'Créer le lien de partage',
+  'links.create.inprogress': 'Création en cours…',
+  'links.create.error.conversation': 'Choisissez d’abord une conversation.',
+  'links.create.error.offline': 'Hors ligne : le lien n’a pas été créé.',
+  'links.create.error.refused': 'Vous ne pouvez pas créer de lien pour cette conversation.',
+  'links.create.error.default': 'Le lien n’a pas pu être créé. Réessayez.',
 } as const;
 
 export default fr;

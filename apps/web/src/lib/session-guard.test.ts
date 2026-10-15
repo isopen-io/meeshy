@@ -20,7 +20,9 @@ const PRIVATE_ROUTES: readonly RouteKey[] = [
   'conversationsNew',
   'progression',
   'progressionLigue',
+  'progressionLigueSemaine',
   'progressionSaison',
+  'progressionSaisonNumero',
   'progressionVitrine',
   'progressionAtlas',
   'progressionPrestige',
@@ -407,9 +409,9 @@ describe("toute route d'administration déclarée dans ROUTES est PRIVÉE (#8876
     expect(publiques).toEqual([]);
   });
 
-  test('et la déclaration les connaît toutes : quarante adresses neuves + les seize d’avant + les deux du barème de points (#8906)', () => {
+  test('et la déclaration les connaît toutes : quarante adresses neuves + les seize d’avant + les deux du barème de points (#8906) + les deux des opérations (#10391)', () => {
     const adresses = Object.values(ROUTES).filter((route) => route.pattern.startsWith('/adm')).length;
-    expect(adresses).toBe(58);
+    expect(adresses).toBe(60);
   });
 });
 
@@ -500,4 +502,12 @@ describe('landingAfterSession — `next` s’il est sûr, l’accueil sinon', ()
     expect(landingAfterSession('//evil.com', '/')).toBe('/');
     expect(landingAfterSession('https://evil.com', '/accueil')).toBe('/accueil');
   });
+});
+
+describe('/world est ouvert à tous : l’entrée ET le fil de l’invité y vivent (#10100)', () => {
+  for (const sessionStatus of ['anonymous', 'guest', 'authenticated'] as const) {
+    test(`${sessionStatus} ⇒ allow`, () => {
+      expect(resolveRouteAccess({ sessionStatus, source: 'gateway', routeKey: 'world' })).toBe('allow');
+    });
+  }
 });

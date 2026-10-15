@@ -107,7 +107,7 @@ describe('parseEngagementScale', () => {
       parseEngagementScale({ ...DEFAULT_ENGAGEMENT_SCALE, operations: { ...ops, 'tool.sticker': { points: -1, multiplied: true, cap: null } } }),
     ).toBeNull();
     expect(
-      parseEngagementScale({ ...DEFAULT_ENGAGEMENT_SCALE, operations: { ...ops, 'tool.sticker': { points: 1_000_000, multiplied: true, cap: null } } }),
+      parseEngagementScale({ ...DEFAULT_ENGAGEMENT_SCALE, operations: { ...ops, 'tool.sticker': { points: 10_000_001, multiplied: true, cap: null } } }),
     ).toBeNull();
   });
 

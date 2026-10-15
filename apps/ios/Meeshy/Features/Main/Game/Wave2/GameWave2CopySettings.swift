@@ -43,38 +43,11 @@ extension GameText {
 
     static var settingsLeagueOff: String { String(localized: "game2.settings.league.off", defaultValue: "Tu n’es pas dans la ligue publique. Ta ligue entre amis reste ouverte.", bundle: .main) }
 
-    static var profileTitle: String { String(localized: "game2.profile.title", defaultValue: "Mon jeu", bundle: .main) }
-
     static func profileLevel(level: String, tier: String) -> String {
         String(localized: "game2.profile.level", defaultValue: "Niveau \(level) · \(tier)", bundle: .main)
     }
 
-    static func profileGlory(glory: String) -> String {
-        String(localized: "game2.profile.glory", defaultValue: "\(glory) de Gloire", bundle: .main)
-    }
-
-    static func profileTreasury(meeshes: String, tier: String) -> String {
-        String(localized: "game2.profile.treasury", defaultValue: "\(meeshes) · \(tier)", bundle: .main)
-    }
-
-    static func profileFlame(days: String) -> String {
-        String(localized: "game2.profile.flame", defaultValue: "Flamme : \(days)", bundle: .main)
-    }
-
     static var profileShowcase: String { String(localized: "game2.profile.showcase", defaultValue: "Vitrine", bundle: .main) }
-
-    static var profileMedals: String { String(localized: "game2.profile.medals", defaultValue: "Médailles", bundle: .main) }
-
-    static var profileSeeProgress: String { String(localized: "game2.profile.see_progress", defaultValue: "Voir ma progression", bundle: .main) }
-
-    static var profileSeeShowcase: String { String(localized: "game2.profile.see_showcase", defaultValue: "Voir toute la vitrine", bundle: .main) }
-
-    static func profileVisitorTitle(name: String) -> String {
-        String(localized: "game2.profile.visitor_title", defaultValue: "Vitrine de \(name)", bundle: .main)
-    }
-
-    static var profileNoTrophy: String { String(localized: "game2.profile.no_trophy", defaultValue: "Pas encore de trophée.", bundle: .main) }
-
 }
 
 // MARK: - Ce que le catalogue du web ne dit pas : l'opposition à la ligue entre amis (conformité B-2)

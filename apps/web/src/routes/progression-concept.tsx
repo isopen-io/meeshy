@@ -34,11 +34,14 @@ import { ProgressionPage } from '@/routes/progression-page';
  *   1. le héros        — l'emblème en grand, la valeur, la jauge vers la suite ;
  *                         OU la pièce de jeu du concept, qui le REMPLACE (Niveau,
  *                         Ligue, Élans, Meeshes — amendement n° 4, règle 3) ;
- *   2. « C'est quoi ? » — à quoi ça sert, comment ça marche : la MÊME phrase que
- *                         sur la carte de la première page, jamais une seconde ;
- *   3. « Où j'en suis » — les données que le héros ne montre pas déjà
- *                         (`ficheView`) ; absente quand il n'en reste aucune ;
+ *   2. « C'est quoi ? » — ce que c'est, puis à quoi ça sert et comment ça marche :
+ *                         la MÊME phrase que sur la carte de la première page,
+ *                         jamais une seconde ;
+ *   3. « Où j'en suis » — la phrase d'état d'abord (l'étape où l'on est, ce que
+ *                         le chiffre vise, #10540), puis les données que le héros
+ *                         ne montre pas déjà (`ficheView`) ;
  *   4. « Comment en gagner » — deux gestes simples ;
+ *      « Comment m'en servir » — l'usage du concept, en clair (#10540) ;
  *   5. les gestes — ouvrir le coffre, changer une mission, protéger la Flamme :
  *                         ils vivent ICI, plus sur la première page (la frappe
  *                         est dans la pièce des Meeshes, son seul site) ;
@@ -98,7 +101,7 @@ function Hero({ concept, view }: { readonly concept: ConceptView; readonly view:
 function Explained({ label, text }: { readonly label: string; readonly text: string }) {
   return (
     <p className="text-body" style={{ color: GAME_INK }}>
-      <span className="block text-caption font-semibold" style={{ color: GAME_INK_2 }}>
+      <span data-fiche-question="" className="block text-caption font-semibold" style={{ color: GAME_INK_2 }}>
         {label}
       </span>
       {text}
@@ -123,6 +126,7 @@ function pieceOf(concept: ProgressionConcept, view: EngagementWithGame, host: Fi
           <GameMintPreview
             mint={game.mint}
             held={game.level.score}
+            convertible={view.meesh?.debitablePoints}
             badgesLost={view.mintBadgeLoss}
             online={online}
             minting={actions.pending.mint}
@@ -157,6 +161,7 @@ function gesturesOf(concept: ProgressionConcept, view: EngagementWithGame, host:
         <GameMissions
           missions={game.missions}
           chest={game.chest}
+          starFragments={game.starFragments?.collected}
           held={game.treasury.held}
           level={shownLevelOf(game.level).level}
           prismHour={game.boosts.prismHour}
@@ -251,11 +256,17 @@ export function ConceptFiche({
         </div>
       )}
       <FicheSection id="what" title={gameText('game.fiche.what')}>
+        <Explained label={gameText('game.concept.what_label')} text={shown.what} />
         <Explained label={gameText('game.concept.why_label')} text={shown.why} />
         <Explained label={gameText('game.concept.how_label')} text={shown.how} />
       </FicheSection>
-      {where.facts.length === 0 ? null : (
+      {where.state === null && where.facts.length === 0 ? null : (
         <FicheSection id="where" title={gameText('game.fiche.where')}>
+          {where.state === null ? null : (
+            <p data-fiche-state="" className="text-body font-semibold" style={{ color: GAME_INK }}>
+              {where.state}
+            </p>
+          )}
           <ConceptFacts facts={where.facts} open={(fact) => detailOfRef(fact.ref, concept, fact.label, fact.value, view)} />
         </FicheSection>
       )}
@@ -265,6 +276,11 @@ export function ConceptFiche({
             <li key={tip}>{tip}</li>
           ))}
         </ul>
+      </FicheSection>
+      <FicheSection id="use" title={gameText('game.fiche.use')}>
+        <p className="text-body" style={{ color: GAME_INK }}>
+          {shown.use}
+        </p>
       </FicheSection>
       {gestures === null ? null : (
         <div data-fiche-section="gestures" className="flex scroll-mt-20 flex-col gap-4">

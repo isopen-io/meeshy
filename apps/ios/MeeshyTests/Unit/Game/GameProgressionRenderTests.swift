@@ -235,13 +235,18 @@ final class GameProgressionRenderTests: XCTestCase {
         let sans = APIEngagementProgress(
             counters: [], milestones: [], streak: .init(currentStreakDays: 0, longestStreakDays: 0),
             level: .init(engagementScore: 36),
-            meesh: GameFixture.meesh()
+            meesh: GameFixture.meesh(debitable: 50_000_000)
         )
         let vm = await loadedViewModel(sans)
 
-        let identifiants = monter(ProgressionConceptPage(concept: .meesh, viewModel: vm)).identifiers
+        let rendu = monter(ProgressionConceptPage(concept: .meesh, viewModel: vm))
+        // Le harnais ne relève que les ÉLÉMENTS d'accessibilité : le conteneur du détail d'avant (`.contain`) n'en est
+        // pas un, son bouton de frappe si — d'où des points de quoi frapper. On attend le bouton, posé après la relecture.
+        let detail = rendu.frame(of: "progression.meesh.mint")
+        let identifiants = rendu.identifiers
 
-        XCTAssertTrue(identifiants.contains("progression.meesh.detail"), "la fiche des Meeshes garde sa frappe d'avant : \(identifiants)")
+        XCTAssertNotNil(detail, "la fiche des Meeshes garde sa frappe d'avant : \(identifiants) — "
+                        + "progress \(vm.progress != nil), game \(vm.game != nil), état \(vm.loadState)")
         XCTAssertFalse(identifiants.contains("progression.concept.hero"), "la frappe d'avant est le héros : pas de second")
         XCTAssertFalse(identifiants.contains { $0.hasPrefix("game.") && !$0.hasPrefix("game.element.") },
                        "du jeu est monté sans le bloc : \(identifiants)")

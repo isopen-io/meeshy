@@ -1,6 +1,8 @@
+import AVFoundation
 import CoreMedia
 import XCTest
 import UIKit
+import MeeshyUI
 @testable import Meeshy
 
 /// **Les outils du mode édition d'une prise** (#9754, directives porteur
@@ -54,7 +56,10 @@ final class ComposerEditToolsTests: XCTestCase {
 
     func test_panels_stackEveryActiveTool_fromTheProportionsDownToTheCut() {
         XCTAssertEqual(ComposerEditTools.panels(familyOpen: false, active: [.trim, .sound, .crop]),
-                       [.presets, .sound, .trim], "la coupe se pose au plus près des outils")
+                       [.presets, .trim],
+                       "la coupe se pose au plus près des outils ; le son se peint dessus, sans panneau (#10356)")
+        XCTAssertEqual(ComposerEditTools.panels(familyOpen: false, active: [.sound, .crop]), [.presets, .sound],
+                       "Couper retiré : le spectre garde sa propre piste")
         XCTAssertEqual(ComposerEditTools.panels(familyOpen: false, active: [.crop]), [.presets])
         XCTAssertEqual(ComposerEditTools.panels(familyOpen: false, active: []), [])
         XCTAssertEqual(ComposerEditTools.panels(familyOpen: true, active: [.crop, .trim, .sound]), [.band],
@@ -100,18 +105,18 @@ final class ComposerEditToolsTests: XCTestCase {
     func test_aVideo_opensWithCutSoundAndCropTogether_andEachLeavesAlone() async {
         let (session, _) = await videoSession()
         XCTAssertEqual(session.activeEditTools, [.crop, .trim, .sound])
-        XCTAssertEqual(session.editPanels, [.presets, .sound, .trim])
+        XCTAssertEqual(session.editPanels, [.presets, .trim], "le son se peint sur la coupe (#10356)")
         XCTAssertTrue(session.showsCropBrackets)
         session.toggleEditTool(.trim)
         XCTAssertEqual(session.editPanels, [.presets, .sound], "Couper se retire seul")
         XCTAssertTrue(session.showsCropBrackets, "les équerres restent")
         session.toggleEditTool(.trim)
-        XCTAssertEqual(session.editPanels, [.presets, .sound, .trim])
+        XCTAssertEqual(session.editPanels, [.presets, .trim])
         session.toggleFamily(.filters)
         XCTAssertEqual(session.editPanels, [.band])
         XCTAssertEqual(session.activeEditTools, [.crop, .trim, .sound], "la bande replie les panneaux, rien ne s'éteint")
         session.toggleFamily(.filters)
-        XCTAssertEqual(session.editPanels, [.presets, .sound, .trim], "la bande repliée, ils reviennent")
+        XCTAssertEqual(session.editPanels, [.presets, .trim], "la bande repliée, ils reviennent")
         session.cancelEditing()
         XCTAssertEqual(session.activeEditTools, [])
         XCTAssertEqual(session.editPanels, [])
@@ -123,21 +128,54 @@ final class ComposerEditToolsTests: XCTestCase {
         session.toggleEditTool(.sound)
         XCTAssertNil(session.openFamily, "le toucher d'un outil replie la bande")
         XCTAssertEqual(session.activeEditTools, [.crop, .trim, .sound])
-        XCTAssertEqual(session.editPanels, [.presets, .sound, .trim])
+        XCTAssertEqual(session.editPanels, [.presets, .trim])
+        XCTAssertTrue(session.shownEditTools.contains(.sound), "le son, lui, se montre sur la coupe")
     }
 
     // MARK: - (2) Son : spectre, ligne de volume, bouton muet
 
-    func test_theMuteSwitch_sitsRightOfOneTrack_theSpectrumFirst() {
-        XCTAssertEqual(ComposerEditTools.muteHost(panels: [.presets, .sound, .trim], hasAudio: true), .sound)
-        XCTAssertEqual(ComposerEditTools.muteHost(panels: [.trim], hasAudio: true), .trim,
-                       "le bouton muet se pose à DROITE de la barre de trim quand le spectre est retiré")
-        XCTAssertNil(ComposerEditTools.muteHost(panels: [.trim], hasAudio: false), "un clip muet n'en a pas")
-        XCTAssertNil(ComposerEditTools.muteHost(panels: [.presets], hasAudio: true))
-        XCTAssertTrue(ComposerEditTools.reservesMuteColumn(.trim, panels: [.sound, .trim], hasAudio: true),
-                      "la coupe sous le spectre garde la place du bouton : les deux pistes du temps s'alignent")
-        XCTAssertFalse(ComposerEditTools.reservesMuteColumn(.sound, panels: [.sound, .trim], hasAudio: true))
-        XCTAssertFalse(ComposerEditTools.reservesMuteColumn(.trim, panels: [.trim], hasAudio: true))
+    /// **#10356 — « Son » ne rétrécit plus la scène.** Le spectre se pose sur
+    /// la bande vidéo depuis #10341 ; il ne réserve donc aucune hauteur, et la
+    /// scène garde la taille qu'elle a sans lui.
+    func test_10356_theSoundTool_reservesNoHeight_whileTheCutIsShown() {
+        let avecSon = ComposerEditTools.panels(familyOpen: false, active: [.crop, .trim, .sound])
+        let sansSon = ComposerEditTools.panels(familyOpen: false, active: [.crop, .trim])
+        XCTAssertEqual(ComposerEditScene.bottomReserve(avecSon), ComposerEditScene.bottomReserve(sansSon))
+        let ecran = CGSize(width: 402, height: 874)
+        XCTAssertEqual(ComposerEditScene.area(container: ecran, top: 62, bottom: 34, panels: avecSon),
+                       ComposerEditScene.area(container: ecran, top: 62, bottom: 34, panels: sansSon),
+                       "allumer « Son » ne déplace pas la scène")
+    }
+
+    /// **#10356 — lecture et muet, en bas à droite de la SCÈNE**, la pause à
+    /// gauche du muet ; la rangée s'écarte du crochet du coin.
+    func test_10356_playbackRow_sitsBottomRightOfTheScene_clearOfTheCornerBracket() {
+        let cible = MeeshyControlSize.tapTarget
+        let scene = CGRect(x: 16, y: 100, width: 300, height: 500)
+        let deux = ComposerEditPlaybackLayout.frame(scene: scene, hasAudio: true, clearsBrackets: false)
+        XCTAssertEqual(deux.height, cible, "cible de 44 pt")
+        XCTAssertEqual(deux.width, cible * 2 + ComposerEditPlaybackLayout.spacing, accuracy: 0.001)
+        XCTAssertEqual(deux.maxX, scene.maxX - ComposerEditPlaybackLayout.margin, accuracy: 0.001)
+        XCTAssertEqual(deux.maxY, scene.maxY - ComposerEditPlaybackLayout.margin, accuracy: 0.001)
+        XCTAssertTrue(scene.contains(deux), "posée SUR la vidéo")
+        let crochets = ComposerEditPlaybackLayout.frame(scene: scene, hasAudio: true, clearsBrackets: true)
+        XCTAssertLessThanOrEqual(crochets.maxX, scene.maxX - cible, "le crochet du coin garde sa cible")
+        let seul = ComposerEditPlaybackLayout.frame(scene: scene, hasAudio: false, clearsBrackets: false)
+        XCTAssertEqual(seul.width, cible, accuracy: 0.001, "un clip muet n'a que la lecture")
+        XCTAssertNotEqual(ComposerCaptureCopy.playbackLabel(paused: true),
+                          ComposerCaptureCopy.playbackLabel(paused: false), "« Lire » et « Pause »")
+    }
+
+    func test_10356_theMuteButton_leftTheBand_forTheScene() throws {
+        let bas = try ComposerCaptureTakesTests.code("Meeshy/Features/Main/Composer/ComposerCaptureBottomRow.swift")
+        XCTAssertFalse(bas.contains("ComposerTakeMuteButton("), "plus de bouton muet sur la bande")
+        XCTAssertFalse(bas.contains("toggleTakeMute"))
+        let chrome = try ComposerCaptureTakesTests.code("Meeshy/Features/Main/Composer/ComposerCaptureViews.swift")
+        XCTAssertTrue(chrome.contains("ComposerEditPlaybackControls("), "lecture et muet sont montés sur la scène")
+        XCTAssertTrue(chrome.contains("onTogglePlayback: { session.toggleEditPlayback() }"))
+        XCTAssertTrue(chrome.contains("onToggleMute: { session.toggleTakeMute() }"))
+        XCTAssertTrue(chrome.contains("ComposerEditPlaybackLayout.frame(scene: ComposerEditScene.rect(aspect: aspect, in: zone)"),
+                      "la rangée se pose sur la scène que les crochets cadrent")
     }
 
     func test_aSilentClip_offersNoSoundTool() async {
@@ -149,11 +187,13 @@ final class ComposerEditToolsTests: XCTestCase {
     }
 
     func test_takeSound_gainFollowsTheLine_andMuteRemembersTheGain() {
-        XCTAssertEqual(ComposerTakeSound.gain(atY: 0, height: 52), 1, "en haut le plein")
+        XCTAssertEqual(ComposerTakeSound.gain(atY: 0, height: 52), 2, "en haut 200 % (#10341)")
         XCTAssertEqual(ComposerTakeSound.gain(atY: 52, height: 52), 0, "en bas le silence")
-        XCTAssertEqual(ComposerTakeSound.gain(atY: 26, height: 52), 0.5, accuracy: 0.0001)
-        XCTAssertEqual(ComposerTakeSound.gain(atY: -40, height: 52), 1, "borné")
-        XCTAssertEqual(ComposerTakeSound.lineY(gain: 0.25, height: 52), 39, accuracy: 0.0001)
+        XCTAssertEqual(ComposerTakeSound.gain(atY: 26, height: 52), 1, accuracy: 0.0001, "100 % au milieu")
+        XCTAssertEqual(ComposerTakeSound.gain(atY: -40, height: 52), 2, "borné")
+        XCTAssertEqual(ComposerTakeSound.lineY(gain: 1, height: 52), 26, accuracy: 0.0001, "le son intact au milieu")
+        XCTAssertEqual(ComposerTakeSound.lineY(gain: 0.5, height: 52), 39, accuracy: 0.0001)
+        XCTAssertEqual(ComposerTakeSound.percent(2), 200)
         var son = ComposerTakeSound(gain: 0.4)
         XCTAssertEqual(son.effectiveGain, 0.4, accuracy: 0.0001)
         son.muted = true
@@ -161,7 +201,7 @@ final class ComposerEditToolsTests: XCTestCase {
         son.muted = false
         XCTAssertEqual(son.effectiveGain, 0.4, accuracy: 0.0001, "réactiver rend le gain d'avant")
         XCTAssertTrue(ComposerTakeSound().isUntouched)
-        XCTAssertEqual(ComposerTakeSound.stepped(0.95, up: true), 1)
+        XCTAssertEqual(ComposerTakeSound.stepped(1.95, up: true), 2)
     }
 
     func test_session_appliesGainAndMuteToThePreview_andResetsWithTheEdit() async {
@@ -191,6 +231,107 @@ final class ComposerEditToolsTests: XCTestCase {
         XCTAssertTrue(export.contains("|| audioGain != 1"), "un son réglé force le rendu")
         XCTAssertTrue(export.contains("session.audioMix = audioMix"), "le gain part dans le fichier")
         XCTAssertTrue(export.contains("setVolume("))
+    }
+
+    // MARK: - Le gain au-delà de 100 % s'entend dans l'aperçu (#10360)
+
+    func test_takeGain_splitsIntoAnAttenuationAndABoost() {
+        XCTAssertEqual(ComposerTakeGain.volume(0.5), 0.5, accuracy: 0.0001)
+        XCTAssertEqual(ComposerTakeGain.boost(0.5), 1, "sous 100 %, rien à amplifier")
+        XCTAssertEqual(ComposerTakeGain.volume(1), 1)
+        XCTAssertEqual(ComposerTakeGain.boost(1), 1)
+        XCTAssertEqual(ComposerTakeGain.volume(1.5), 1, "au-dessus de 100 %, le volume reste plein")
+        XCTAssertEqual(ComposerTakeGain.boost(1.5), 1.5, accuracy: 0.0001, "et le tap amplifie le reste")
+        XCTAssertEqual(ComposerTakeGain.boost(2), 2)
+        XCTAssertEqual(ComposerTakeGain.boost(9), 2, "borné à 200 %")
+        XCTAssertEqual(ComposerTakeGain.volume(0), 0, "muet")
+        XCTAssertEqual(ComposerTakeGain.volume(.nan), 1)
+        XCTAssertEqual(ComposerTakeGain.boost(.nan), 1)
+    }
+
+    func test_amplifiedSample_isLinearBelowTheKnee_andSoftClipsAbove() {
+        XCTAssertEqual(ComposerTakeGain.amplified(0.7, boost: 1), 0.7, "sans amplification, intact")
+        XCTAssertEqual(ComposerTakeGain.amplified(0.1, boost: 2), 0.2, accuracy: 0.0001, "200 % double le son")
+        XCTAssertEqual(ComposerTakeGain.amplified(-0.2, boost: 1.5), -0.3, accuracy: 0.0001)
+        XCTAssertEqual(ComposerTakeGain.amplified(0.4, boost: 2), 0.8, accuracy: 0.0001, "le genou lui-même")
+        let fort = ComposerTakeGain.amplified(1, boost: 2)
+        XCTAssertGreaterThan(fort, ComposerTakeGain.knee, "au-delà du genou, le son monte encore")
+        XCTAssertLessThan(fort, 1, "sans jamais atteindre la pleine échelle : pas de craquement")
+        XCTAssertEqual(ComposerTakeGain.amplified(-1, boost: 2), -fort, accuracy: 0.0001, "symétrique")
+        XCTAssertLessThan(ComposerTakeGain.amplified(0.6, boost: 2), fort, "monotone")
+        XCTAssertEqual(ComposerTakeGain.amplified(0.4001, boost: 2), 0.8002, accuracy: 0.001, "continu au genou")
+    }
+
+    func test_boostTap_amplifiesEverySampleOfEveryBuffer() {
+        var echantillons: [Float] = [0.1, -0.2, 0.3, 1]
+        echantillons.withUnsafeMutableBytes { octets in
+            var liste = AudioBufferList(mNumberBuffers: 1, mBuffers: AudioBuffer(
+                mNumberChannels: 1, mDataByteSize: UInt32(octets.count), mData: octets.baseAddress))
+            ComposerTakeBoostTap.amplify(&liste, boost: 2)
+        }
+        XCTAssertEqual(echantillons[0], 0.2, accuracy: 0.0001)
+        XCTAssertEqual(echantillons[1], -0.4, accuracy: 0.0001)
+        XCTAssertEqual(echantillons[2], 0.6, accuracy: 0.0001)
+        XCTAssertEqual(echantillons[3], ComposerTakeGain.amplified(1, boost: 2), accuracy: 0.0001)
+        var intacts: [Float] = [0.5, -0.5]
+        intacts.withUnsafeMutableBytes { octets in
+            var liste = AudioBufferList(mNumberBuffers: 1, mBuffers: AudioBuffer(
+                mNumberChannels: 1, mDataByteSize: UInt32(octets.count), mData: octets.baseAddress))
+            ComposerTakeBoostTap.amplify(&liste, boost: 1)
+        }
+        XCTAssertEqual(intacts, [0.5, -0.5], "à 100 %, le tap ne touche rien")
+    }
+
+    func test_boostTap_acceptsOnlyFloat32() {
+        var flottant = AudioStreamBasicDescription()
+        flottant.mFormatID = kAudioFormatLinearPCM
+        flottant.mFormatFlags = kAudioFormatFlagIsFloat | kAudioFormatFlagIsNonInterleaved
+        flottant.mBitsPerChannel = 32
+        XCTAssertTrue(ComposerTakeBoostTap.acceptsFloats(flottant))
+        var entier = flottant
+        entier.mFormatFlags = kAudioFormatFlagIsSignedInteger
+        entier.mBitsPerChannel = 16
+        XCTAssertFalse(ComposerTakeBoostTap.acceptsFloats(entier), "un format inattendu passe intact")
+    }
+
+    func test_boostTap_mixPutsATapOnEveryTrack_sharingOneLevel() throws {
+        let niveau = ComposerTakeBoostLevel()
+        XCTAssertNotNil(ComposerTakeBoostTap.make(niveau), "le système crée le tap")
+        let mixage = try XCTUnwrap(ComposerTakeBoostTap.audioMix(trackIDs: [1, 2], volume: 1, level: niveau))
+        XCTAssertEqual(mixage.inputParameters.map(\.trackID), [1, 2])
+        XCTAssertTrue(mixage.inputParameters.allSatisfy { $0.audioTapProcessor != nil })
+        XCTAssertNil(ComposerTakeBoostTap.audioMix(trackIDs: [], volume: 1, level: niveau), "sans son, pas de mixage")
+        niveau.boost = 1.5
+        XCTAssertEqual(niveau.boost, 1.5, accuracy: 0.0001, "le tap lit le niveau qu'on règle, sans se reconstruire")
+        niveau.boost = 7
+        XCTAssertEqual(niveau.boost, 2)
+        XCTAssertEqual(ComposerTakeBoostLevel(boost: 0.3).boost, 1, "un niveau n'atténue jamais")
+    }
+
+    func test_session_passesTheGainAbove100_toThePreview() async {
+        let (session, lecteur) = await videoSession()
+        session.setTakeGain(1.5)
+        XCTAssertEqual(lecteur.volumes.last ?? -1, 1.5, accuracy: 0.0001, "l'aperçu reçoit le gain réel, pas 1")
+        session.toggleTakeMute()
+        XCTAssertEqual(lecteur.volumes.last, 0)
+        session.toggleTakeMute()
+        XCTAssertEqual(lecteur.volumes.last ?? -1, 1.5, accuracy: 0.0001, "rétabli, le son amplifié revient")
+    }
+
+    /// Le niveau vit sur le lecteur, et chaque élément qui joue — boucle
+    /// reconstruite, frame sous la règle, filet du tick — porte son tap.
+    func test_theLoopPlayer_andTheRender_serveTheSameGainLaw() throws {
+        let boucle = try ComposerCaptureTakesTests.code("Meeshy/Features/Main/Composer/ComposerEditSources.swift")
+        XCTAssertTrue(boucle.contains("player.volume = ComposerTakeGain.volume(gain)"))
+        XCTAssertTrue(boucle.contains("boostLevel.boost = ComposerTakeGain.boost(gain)"))
+        XCTAssertFalse(boucle.contains("max(0, min(1, gain))"), "l'aperçu ne borne plus le gain à 100 %")
+        XCTAssertGreaterThanOrEqual(boucle.components(separatedBy: "attachBoost(to: element)").count - 1, 3,
+                                    "la boucle reconstruite, la règle et le filet portent chacun le tap")
+        XCTAssertTrue(boucle.contains("level: boostLevel"), "un seul niveau, partagé par tous les éléments")
+        let export = try ComposerCaptureTakesTests.code("Meeshy/Features/Main/Composer/ComposerLookVideoExporter.swift")
+        XCTAssertTrue(export.contains("ComposerTakeBoostTap.audioMix("), "le rendu amplifie par le même tap")
+        XCTAssertTrue(export.contains("ComposerTakeGain.volume(gain)"))
+        XCTAssertFalse(export.contains("max(0, min(1, gain))"))
     }
 
     // MARK: - (4) La frame exacte sous la règle
@@ -234,12 +375,11 @@ final class ComposerEditToolsTests: XCTestCase {
         let bas = try ComposerCaptureTakesTests.code("Meeshy/Features/Main/Composer/ComposerCaptureBottomRow.swift")
         XCTAssertTrue(bas.contains("editTools: session.editTools"))
         XCTAssertTrue(bas.contains("ForEach(session.editPanels, id: \\.self)"), "chaque outil actif a son panneau")
-        XCTAssertTrue(bas.contains("ComposerTakeMuteButton("), "le bouton muet")
         XCTAssertTrue(bas.contains("ComposerSoundTrack("), "le spectre en couleur")
         let rail = try ComposerCaptureTakesTests.code("Meeshy/Features/Main/Composer/ComposerLookStrip.swift")
         XCTAssertTrue(rail.contains(".buttonStyle(ComposerBounceButtonStyle())"))
         let son = try ComposerCaptureTakesTests.code("Meeshy/Features/Main/Composer/ComposerSoundTrack.swift")
         XCTAssertTrue(son.contains("accessibilityAdjustableAction"), "VoiceOver règle le volume")
-        XCTAssertTrue(son.contains(".buttonStyle(ComposerBounceButtonStyle())"))
+        XCTAssertTrue(son.contains(".buttonStyle(ComposerBounceButtonStyle())"), "lecture et muet rebondissent")
     }
 }

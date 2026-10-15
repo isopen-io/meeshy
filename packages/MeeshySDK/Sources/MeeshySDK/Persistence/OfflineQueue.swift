@@ -364,6 +364,10 @@ public protocol OfflineQueueing: Sendable {
     /// when the user re-sends the recovered draft so the resend replaces the
     /// stuck row instead of racing it to the server (no duplicate on reconnect).
     func cancelCreatePost(clientMutationId: String) async
+
+    /// #10321 — « Supprimer » sur une publication encore en file : retirée si
+    /// elle attend, marquée si elle est en vol. Voir `OfflineQueue+PublicationCancel`.
+    func cancelPendingPublication(clientMutationId: String) async -> PublicationCancellation
 }
 
 /// A recovered offline post / status / reel, decoded from a stuck `.createPost`
@@ -616,6 +620,11 @@ public actor OfflineQueue {
     private static let legacyFileName = "offline_queue.json"
 
     private var items: [OfflineQueueItem] = []
+    /// La première récupération du processus remet TOUT `.inflight` en attente : personne ne peut encore les
+    /// porter. Les suivantes — retour au premier plan, processus vivant — ne réarment que les lignes en vol
+    /// depuis plus de `OutboxFlusher.staleInflightReclaimSeconds` : un gros envoi en cours pendant un aller-retour
+    /// d'arrière-plan repartait sinon en double, et le premier fini supprimait les fichiers sous l'autre.
+    private var hasRecoveredThisProcess = false
     private var isRetrying = false
     private var cancellables = Set<AnyCancellable>()
     let logger = Logger(subsystem: "com.meeshy.sdk", category: "offlinequeue")
@@ -867,6 +876,9 @@ public actor OfflineQueue {
         } catch {
             logger.error("cancelPendingSend failed: \(error.localizedDescription, privacy: .public)")
         }
+        // Le miroir mémoire suit la ligne : `retryAll()` rejoue `items` sans relire l'outbox, et un message
+        // annulé ou supprimé y restait — il repartait à la reconnexion suivante.
+        items.removeAll { $0.clientMessageId == cmid }
         await refreshPendingCount()
     }
 
@@ -892,6 +904,8 @@ public actor OfflineQueue {
         } catch {
             logger.error("clearSendMessageRow failed: \(error.localizedDescription, privacy: .public)")
         }
+        // Même règle que `cancelPendingSend` : supprimé ou déjà parti, il ne se rejoue plus.
+        items.removeAll { $0.clientMessageId == cmid }
         await refreshPendingCount()
     }
 
@@ -2348,30 +2362,10 @@ public actor OfflineQueue {
         return nil
     }
 
+    /// Délègue à `cancelPendingPublication` (#10321) : une ligne EN VOL n'est
+    /// plus supprimée sous les pieds du téléverseur, elle est marquée.
     public func cancelCreatePost(clientMutationId cmid: String) async {
-        let outboxId = "ofqm_\(cmid)"
-        guard let pool = outboxPool else { return }
-        // Reclaim pending-media files before deleting the row so they don't leak.
-        do {
-            if let record = try await pool.read({ db in try OutboxRecord.fetchOne(db, key: outboxId) }) {
-                let payload = try JSONDecoder().decode(CreatePostPayload.self, from: record.payload)
-                for stored in payload.localMediaPaths ?? [] {
-                    FileManager.default.removeItemLogging(atPath: Self.absoluteMediaPath(forStored: stored), context: "cancelCreatePost media")
-                }
-            }
-        } catch {
-            // Non bloquant : la ligne est supprimée juste après. Seuls les
-            // fichiers médias associés restent alors sur disque.
-            logger.error("cancelCreatePost: pending media not reclaimed, files leaked on disk: \(error.localizedDescription, privacy: .public)")
-        }
-        do {
-            try await pool.write { db in
-                _ = try OutboxRecord.deleteOne(db, key: outboxId)
-            }
-        } catch {
-            logger.error("cancelCreatePost failed: \(error.localizedDescription, privacy: .public)")
-        }
-        await refreshPendingCount()
+        _ = await cancelPendingPublication(clientMutationId: cmid)
     }
 
     // MARK: - Reaction Enqueue (Wave 1 Task 3.6 — ports ReactionQueue.enqueue)
@@ -2617,12 +2611,18 @@ public actor OfflineQueue {
         let dec = decoder
         let log = logger
         var report = BootRecoveryReport()
+        let warm = hasRecoveredThisProcess
+        hasRecoveredThisProcess = true
+        let staleCutoff = Date().addingTimeInterval(-OutboxFlusher.staleInflightReclaimSeconds)
         do {
             report = try await pool.write { db in
                 var local = BootRecoveryReport()
-                let inflight = try OutboxRecord
+                var inflightQuery = OutboxRecord
                     .filter(Column("status") == OutboxStatus.inflight.rawValue)
-                    .fetchAll(db)
+                if warm {
+                    inflightQuery = inflightQuery.filter(Column("updatedAt") < staleCutoff)
+                }
+                let inflight = try inflightQuery.fetchAll(db)
                 for record in inflight {
                     try db.execute(sql: """
                         UPDATE outbox

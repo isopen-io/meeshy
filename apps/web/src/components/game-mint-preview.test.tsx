@@ -129,10 +129,11 @@ describe('avant le geste, ce que la frappe dépense (#9705)', () => {
     expect(page).toContain('Restera 3 779 points');
   });
 
-  test('des points en poche qui ne sont pas convertibles ne paient pas la frappe : le manque se dit en convertibles', () => {
+  test('des points en poche qui ne sont pas à convertir ne paient pas la frappe : le manque se dit en points à convertir, pour SA Meesh', () => {
     const page = text(renderToStaticMarkup(<GameMintPreview {...props({ score: 5000, debitablePoints: 900 })} />));
     expect(page).toContain('En poche 5 000 points');
-    expect(page).toContain('Il manque 321 points convertibles');
+    expect(page).toContain('À convertir 900 points');
+    expect(page).toContain('Il manque 321 points à convertir pour la Meesh n° 4.');
   });
 });
 
@@ -144,7 +145,7 @@ describe('une frappe pas encore possible : pas de bouton grisé', () => {
   });
 
   test('ce qu’il manque, en une ligne, et le prix de la prochaine', () => {
-    expect(text(html)).toContain('Il manque 621 points convertibles');
+    expect(text(html)).toContain('Il manque 621 points à convertir pour la Meesh n° 4.');
     expect(text(html)).not.toContain('Restera');
     expect(html).toMatch(/data-game-mint-price=""[^>]*>1\s221\spoints</);
   });
@@ -158,7 +159,7 @@ describe('la dixième Meesh : le prix monte', () => {
   test('la 11e coûte plus, et le héros le dit', () => {
     const page = text(renderToStaticMarkup(<GameMintPreview {...props({ mintedLifetime: 10, score: 3000, debitablePoints: 3000 })} />));
     expect(page).toContain('n° 11');
-    expect(page).toContain('1 294 points');
+    expect(page).toContain('1 587 points');
   });
 
   test('la centième est en or', () => {

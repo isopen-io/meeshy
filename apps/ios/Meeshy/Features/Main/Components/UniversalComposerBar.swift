@@ -400,16 +400,18 @@ struct UniversalComposerBar: View {
     /// que de pousser la zone d'aperçu sous l'en-tête (`ComposerPanelFrame`).
     @Environment(\.composerPanelYieldsToHost) var panelYieldsToHost
 
-    /// Tracks the system keyboard so the attachment carousel can be sized to the
-    /// exact space the keyboard last occupied (seamless keyboard <-> carousel swap).
-    @StateObject private var keyboardObserver = KeyboardObserver()
+    /// La dernière hauteur du clavier, pour que le panneau des pièces reprenne
+    /// exactement sa place. L'observateur de l'hôte s'il en publie un, sinon
+    /// celui de la barre — jamais deux pour un écran (#10544).
+    @Environment(\.composerHostKeyboard) var hostKeyboard
+    @State var ownKeyboard = ComposerKeyboardSource()
 
     /// Height for the attachment carousel — matches the last known keyboard
     /// height so swapping keyboard <-> carousel keeps the input row still,
     /// never shorter than the panel's own content, and never so tall that the
     /// composer leaves the screen (`ComposerPanelHeightLaw`, #8869).
     var attachmentPanelHeight: CGFloat {
-        let keyboard = max(keyboardObserver.lastKnownHeight, 260)
+        let keyboard = max(ownKeyboard.lastKnownHeight(host: hostKeyboard), 260)
         // iPad / macOS gets a taller floor so the roomy recent-media grid has
         // breathing room; iPhone keeps a floor that shows two rows of the grid.
         let recentFloor: CGFloat = DeviceLayout.isPad ? 460 : 324

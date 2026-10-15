@@ -339,65 +339,6 @@ public struct UserPreferencesUpdatedEvent: Decodable, Sendable {
     }
 }
 
-/// `user:preferences-updated` — **conversation scope**. Mirrors the gateway's
-/// `UserPreferencesConversationUpdatedEventData` (versioned per-conversation
-/// preferences). The same socket event name also carries a flat **category
-/// scope** (`{ userId, category }`) decoded by `UserPreferencesUpdatedEvent`;
-/// the decode site discriminates on the presence of `conversationId`.
-///
-/// `version` drives optimistic-vs-socket resolution in `ConversationStore`
-/// (drop when `version <= local`). `reset == true` (DELETE) carries
-/// `preferences == nil` — the client restores its local defaults.
-public struct UserPreferencesConversationUpdatedSocketEvent: Decodable, Sendable {
-    public struct Preferences: Decodable, Sendable {
-        public let isPinned: Bool
-        public let isMuted: Bool
-        public let mentionsOnly: Bool
-        public let isArchived: Bool
-        public let tags: [String]
-        public let categoryId: String?
-        public let orderInCategory: Int?
-        public let customName: String?
-        public let reaction: String?
-        public let deletedForUserAt: Date?
-        public let clearHistoryBefore: Date?
-        /// `ReadingModePreference` (raw : `auto|focal|script|resume|riviere`) —
-        /// G-124, champ requis du payload gelé `ConversationPreferencesPayload`
-        /// (`packages/shared/types/socketio-events.ts`, « payload complet »,
-        /// jamais omis par le gateway sur ce scope). Décodé en `String` brute
-        /// ici (pas `ReadingModeOrchestrator.ReadingModePreference` — ce type
-        /// vit dans l'app, `MeeshySDK` ne le connaît pas) ; l'app-level
-        /// consommateur (`ConversationStoreSocketBridge`
-        /// `.onReadingModePreferenceChanged`) fait le `RawRepresentable` sur
-        /// SES 5 cas gelés, une valeur inconnue y rendant simplement `nil`.
-        ///
-        /// Défaut `"auto"` dans l'init memberwise ci-dessous UNIQUEMENT pour
-        /// les call sites de test antérieurs à G-124 (le décodage JSON, lui,
-        /// exige TOUJOURS la clé — le champ n'est pas optionnel sur le fil).
-        public let readingMode: String
-
-        public init(
-            isPinned: Bool, isMuted: Bool, mentionsOnly: Bool, isArchived: Bool,
-            tags: [String], categoryId: String?, orderInCategory: Int?,
-            customName: String?, reaction: String?,
-            deletedForUserAt: Date?, clearHistoryBefore: Date?,
-            readingMode: String = "auto"
-        ) {
-            self.isPinned = isPinned; self.isMuted = isMuted
-            self.mentionsOnly = mentionsOnly; self.isArchived = isArchived
-            self.tags = tags; self.categoryId = categoryId; self.orderInCategory = orderInCategory
-            self.customName = customName; self.reaction = reaction
-            self.deletedForUserAt = deletedForUserAt; self.clearHistoryBefore = clearHistoryBefore
-            self.readingMode = readingMode
-        }
-    }
-    public let userId: String
-    public let conversationId: String
-    public let version: Int
-    public let reset: Bool
-    public let preferences: Preferences?
-}
-
 /// `conversation:deleted` — per-user soft delete broadcast to the user's room.
 /// Named `…SocketEvent` to avoid clashing with `ConversationDeletedEvent`
 /// (the store input type, same module).
@@ -562,23 +503,6 @@ public struct PresenceSnapshotEvent: Decodable, Sendable {
     public init(users: [UserStatusEvent]) {
         self.users = users
     }
-}
-
-// MARK: - Translation Event Data
-
-public struct TranslationData: Codable, Sendable, CacheIdentifiable {
-    public let id: String
-    public let messageId: String
-    public let sourceLanguage: String
-    public let targetLanguage: String
-    public let translatedContent: String
-    public let translationModel: String
-    public let confidenceScore: Double?
-}
-
-public struct TranslationEvent: Codable, Sendable {
-    public let messageId: String
-    public let translations: [TranslationData]
 }
 
 // MARK: - Transcription Event Data
@@ -1888,23 +1812,6 @@ public final class MessageSocketManager: ObservableObject, MessageSocketProvidin
     /// retry loop. A `.notArmed` outcome there means the app is left with no
     /// transport and nothing retrying — so the caller has to arm the backoff
     /// ladder. See `forceReconnect()`.
-    /// Les en-têtes du handshake — le JWT, et le jeton de session s'il existe.
-    ///
-    /// Extrait pour être testable : la construction du `SocketManager` ne l'est
-    /// pas, et c'est la PRÉSENCE de la seconde clé qui décide si la révocation
-    /// d'une session peut atteindre cet appareil.
-    /// Le jeton est passé en PARAMÈTRE, jamais lu depuis le singleton ici :
-    /// `AuthManager` est isolé `@MainActor`, et cette fonction est appelée
-    /// depuis le contexte de transport. La lire ici forcerait un saut d'acteur
-    /// dans une construction synchrone — et rendrait la fonction intestable.
-    static func handshakeHeaders(token: String, sessionToken: String?) -> [String: String] {
-        var headers = ["Authorization": "Bearer \(token)"]
-        if let sessionToken, !sessionToken.isEmpty {
-            headers["x-session-token"] = sessionToken
-        }
-        return headers
-    }
-
     @discardableResult
     func establishTransport() -> SocketConnectOutcome {
         // Ne JAMAIS reconstruire le socket tant qu'une connexion existe ou est
@@ -1991,7 +1898,10 @@ public final class MessageSocketManager: ObservableObject, MessageSocketProvidin
         if let socket, socket.status == .connected || socket.status == .connecting {
             return
         }
-        disconnect()
+        // Transport seul, pas `disconnect()` : au retour d'arrière-plan l'invité garde sa conversation
+        // ouverte, et ses salons doivent être rejoints au `.connect` — une remise à froid les oubliait.
+        // Un changement de compte passe par `disconnect()` de son côté.
+        suspendTransport()
 
         guard let url = SocketConfig.baseURL else { return }
 
@@ -2026,11 +1936,29 @@ public final class MessageSocketManager: ObservableObject, MessageSocketProvidin
     /// `leaveConversation` / typing accounting stays accurate after resume).
     /// Contrast `disconnect()`, the logout/cold reset, which additionally clears
     /// all of that so the next login is a genuine cold connect with no rooms.
+    /// Les transports démontés, gardés vivants le temps que leurs accusés en attente tombent.
+    ///
+    /// Socket.IO arme l'expiration d'un `emitWithAck` avec une référence FAIBLE au client : libéré au démontage
+    /// (arrière-plan, rotation du jeton, reconnexion forcée), il n'appelait ni la réponse ni l'expiration, et la
+    /// tâche qui attendait — un envoi rejoué, un `call:end` — restait suspendue pour toujours.
+    private var retiringTransports: [SocketManager] = []
+    private static let ackRetirementGrace: TimeInterval = 12
+
+    private func retireTransport() {
+        guard let retiring = manager else { return }
+        retiringTransports.append(retiring)
+        let id = ObjectIdentifier(retiring)
+        DispatchQueue.main.asyncAfter(deadline: .now() + Self.ackRetirementGrace) { [weak self] in
+            self?.retiringTransports.removeAll { ObjectIdentifier($0) == id }
+        }
+    }
+
     private func suspendTransport() {
         reconnectTask?.cancel()
         reconnectTask = nil
         stopHeartbeat()
         socket?.disconnect()
+        retireTransport()
         socket = nil
         manager = nil
         isConnected = false
@@ -2835,6 +2763,20 @@ public final class MessageSocketManager: ObservableObject, MessageSocketProvidin
             Logger.socket.info("MessageSocket disconnected")
         }
 
+        // Une perte de transport n'émet PAS `.disconnect` quand la reconnexion automatique est active :
+        // Socket.IO émet `.reconnect` (`SocketManager.tryReconnect`). Sans ce récepteur, `isConnected`
+        // restait vrai pendant toute la coupure — chaque envoi attendait son accusé avant le repli REST,
+        // et le retour du réseau ne relançait rien.
+        socket.on(clientEvent: .reconnect) { [weak self] _, _ in
+            guard let self else { return }
+            self.stopHeartbeat()
+            DispatchQueue.main.async {
+                self.isConnected = false
+                self.connectionState = .reconnecting(attempt: 0)
+            }
+            Logger.socket.info("MessageSocket transport lost — reconnecting")
+        }
+
         socket.on(clientEvent: .reconnectAttempt) { [weak self] _, _ in
             guard let self else { return }
             self.reconnectAttempt += 1
@@ -2845,15 +2787,15 @@ public final class MessageSocketManager: ObservableObject, MessageSocketProvidin
             Logger.socket.info("MessageSocket reconnect attempt \(attempt)")
         }
 
-        socket.on(clientEvent: .error) { data, _ in
-            // Log but NEVER force a logout from a socket error. Loose string
+        socket.on(clientEvent: .error) { [weak self] data, _ in
+            // Never force a logout from a socket error (#10442: a guest's ended session stops the transport). Loose string
             // matching on error payloads produced false positives that kicked
             // the user out on transient failures. Socket.IO's built-in
             // reconnect loop will retry; the APIClient 401 path (which calls
             // `AuthManager.handleUnauthorized`) is the only place that can
             // trigger a silent token refresh, and even that preserves the
             // session on failure.
-            Logger.socket.error("MessageSocket error: \(data)")
+            self?.handleSocketError(data)
         }
 
         // --- Heartbeat ACK — measure RTT ---
@@ -3031,15 +2973,6 @@ public final class MessageSocketManager: ObservableObject, MessageSocketProvidin
             }
         }
 
-        // --- Translation events ---
-
-        socket.on("message:translation") { [weak self] data, _ in
-            guard let self else { return }
-            self.decode(TranslationEvent.self, from: data) { [weak self] event in
-                self?.translationReceived.send(event)
-            }
-        }
-
         // --- Transcription events ---
 
         socket.on("audio:transcription-ready") { [weak self] data, _ in
@@ -3108,8 +3041,9 @@ public final class MessageSocketManager: ObservableObject, MessageSocketProvidin
         // `refreshSession(force:)` obtiendrait un JWT neuf — `/auth/refresh` ne
         // verifie pas que la session existe encore — et re-armerait pour 24 h
         // la session qu'on vient de revoquer. Le `reason` sert l'avis d'avant la reconnexion (#9612).
-        socket.on("auth:session-revoked") { data, _ in
+        socket.on("auth:session-revoked") { [weak self] data, _ in
             let reason = SessionRevocationReason.fromSocketPayload(data)
+            if self?.signalAccountDeleted(sessionRevokedPayload: data) != nil { return } // #10482 — retrait, pas « session fermée »
             Logger.socket.warning("MessageSocket: session revoked — forcing re-authentication")
             Task { @MainActor in
                 AuthManager.shared.handleSessionRevoked(reason: reason)
@@ -3146,6 +3080,7 @@ public final class MessageSocketManager: ObservableObject, MessageSocketProvidin
             }
         }
 
+        registerTranslationHandlers(on: socket)
         registerViewOnceHandlers(on: socket)
         registerCitedPostHandlers(on: socket)
         registerConversationEngagementHandlers(on: socket)

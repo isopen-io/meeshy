@@ -29,9 +29,14 @@ enum GameDetailText {
 
     static var locked: String { String(localized: "game.detail.locked", defaultValue: "Pas encore obtenu", bundle: .main) }
 
-    /// « Il manque … » — ce qu'il reste à réunir.
-    static func missing(_ missing: String) -> String {
-        String(localized: "game.detail.missing", defaultValue: "Il manque \(missing)", bundle: .main)
+    /// Ce qu'il manque à un badge sans étoile : le manque nomme sa cible (#10540), jamais « Il manque 37 ».
+    static func badgeMissing(missing: String) -> String {
+        String(localized: "game.detail.badge.missing", defaultValue: "Il manque \(missing) pour la première étoile", bundle: .main)
+    }
+
+    /// Où en est une étape des niveaux, dite avec ce qu'elle vise.
+    static func levelStepProgress(progress: String) -> String {
+        String(localized: "game.detail.levelstep.progress", defaultValue: "Tu en es à \(progress) pour cette étape", bundle: .main)
     }
 
     /// Le lien vers la fiche du concept, hors de cette fiche.
@@ -86,7 +91,7 @@ enum GameDetailText {
         case .mission: String(localized: "game.detail.mission.what", defaultValue: "Une mission est un petit but à atteindre aujourd’hui.", bundle: .main)
         case .chest: String(localized: "game.detail.chest.what", defaultValue: "Le coffre du jour s’ouvre quand tes missions sont faites.", bundle: .main)
         case .coin: String(localized: "game.detail.coin.what", defaultValue: "La Meesh est la pièce rare de Meeshy. Chaque pièce porte son numéro.", bundle: .main)
-        case .levelRing: String(localized: "game.detail.ring.what", defaultValue: "L’anneau montre ton niveau : il se remplit avec tes points.", bundle: .main)
+        case .levelRing: String(localized: "game.detail.ring.what", defaultValue: "L’anneau montre ton niveau : il se remplit avec tes points en poche.", bundle: .main)
         case .treasuryTier: String(localized: "game.detail.treasury.what", defaultValue: "Ton trésor grandit avec les Meeshes que tu gardes.", bundle: .main)
         case .elanFamily: String(localized: "game.detail.elan.what", defaultValue: "Une famille regroupe des gestes qui se ressemblent.", bundle: .main)
         case .levelStep: String(localized: "game.detail.levelstep.what", defaultValue: "De 10 à 100, chaque dizaine de niveaux demande une étape simple.", bundle: .main)
@@ -112,8 +117,8 @@ enum GameDetailText {
         case .flameForm: String(localized: "game.detail.flame.how", defaultValue: "Plus elle est grande, plus tes récompenses de mission augmentent.", bundle: .main)
         case .freeze: String(localized: "game.detail.freeze.how", defaultValue: "Achète-le avec tes Meeshes, ou trouve-le dans le coffre du jour.", bundle: .main)
         case .mission: String(localized: "game.detail.mission.how", defaultValue: "Elle rapporte des points et te rapproche du coffre du jour.", bundle: .main)
-        case .chest: String(localized: "game.detail.chest.how", defaultValue: "Des points, et parfois un fragment de Meesh ou un gel.", bundle: .main)
-        case .coin: String(localized: "game.detail.coin.how", defaultValue: "Frappe-la avec tes points dès que tu en as assez.", bundle: .main)
+        case .chest: String(localized: "game.detail.chest.how", defaultValue: "Des points selon tes missions, de la Gloire, parfois une prime en points, un fragment d’étoile ou un gel.", bundle: .main)
+        case .coin: String(localized: "game.detail.coin.how", defaultValue: "Frappe-la avec tes points à convertir dès que tu en as assez.", bundle: .main)
         case .levelRing: String(localized: "game.detail.ring.how", defaultValue: "Gagne des points : quand l’anneau est plein, tu montes d’un niveau.", bundle: .main)
         case .treasuryTier: String(localized: "game.detail.treasury.how", defaultValue: "Garde tes Meeshes au lieu de les dépenser pour atteindre le palier suivant.", bundle: .main)
         case .elanFamily: String(localized: "game.detail.elan.how", defaultValue: "Chaque geste rapporte des points. Plusieurs familles actives déclenchent un élan.", bundle: .main)
@@ -128,13 +133,14 @@ enum GameDetailText {
     static func fact(_ key: GameDetailFactKey) -> String {
         switch key {
         case .tier: String(localized: "game.detail.fact.tier", defaultValue: "Dix niveaux font un palier. Chaque palier a son nom et sa couleur.", bundle: .main)
-        case .score: String(localized: "game.detail.fact.score", defaultValue: "Ce sont les points que tu as en poche. Ils font ton niveau.", bundle: .main)
-        case .levelNext: String(localized: "game.detail.fact.level_next", defaultValue: "Ce sont les points qu’il te manque pour monter d’un niveau.", bundle: .main)
+        case .score: String(localized: "game.detail.fact.score", defaultValue: "Ce sont tous tes points du moment. Ils font ton niveau. Une frappe en retire le prix.", bundle: .main)
+        case .convertible: String(localized: "game.detail.fact.convertible", defaultValue: "C’est la part de tes points que la frappe peut reprendre. Elle seule paie une Meesh.", bundle: .main)
+        case .levelNext: String(localized: "game.detail.fact.level_next", defaultValue: "Ce sont les points en poche qu’il te manque pour monter d’un niveau.", bundle: .main)
         case .levelRecord: String(localized: "game.detail.fact.level_record", defaultValue: "C’est le plus haut niveau que tu as atteint.", bundle: .main)
         case .tailwind: String(localized: "game.detail.fact.tailwind", defaultValue: "Après une frappe, tes points comptent plus jusqu’à ton niveau record.", bundle: .main)
-        case .mintPrice: String(localized: "game.detail.fact.mint_price", defaultValue: "C’est le prix de ta prochaine Meesh. Il monte à chaque frappe.", bundle: .main)
-        case .mintMissing: String(localized: "game.detail.fact.mint_missing", defaultValue: "Ce sont les points qu’il te manque pour frapper ta prochaine Meesh.", bundle: .main)
-        case .canMint: String(localized: "game.detail.fact.can_mint", defaultValue: "Tu as assez de points : tu peux frapper une Meesh dans sa fiche.", bundle: .main)
+        case .mintPrice: String(localized: "game.detail.fact.mint_price", defaultValue: "C’est le prix de ta prochaine Meesh, en points à convertir. Il monte toutes les dix frappes.", bundle: .main)
+        case .mintMissing: String(localized: "game.detail.fact.mint_missing", defaultValue: "Ce sont les points à convertir qu’il te manque pour frapper ta prochaine Meesh.", bundle: .main)
+        case .canMint: String(localized: "game.detail.fact.can_mint", defaultValue: "Tu as assez de points à convertir : tu peux frapper une Meesh dans sa fiche.", bundle: .main)
         case .factor: String(localized: "game.detail.fact.factor", defaultValue: "Tes prochains gestes rapportent ce nombre de fois plus de points.", bundle: .main)
         case .mintNext: String(localized: "game.detail.fact.mint_next", defaultValue: "Chaque Meesh porte son numéro. Une sur cent est en or, une sur mille en prisme.", bundle: .main)
         case .mintGlory: String(localized: "game.detail.fact.mint_glory", defaultValue: "Chaque frappe ajoute cette Gloire à ton rang.", bundle: .main)
@@ -193,6 +199,11 @@ enum GameBadgeGuideText {
     static var ladderTitle: String { String(localized: "game.badge.ladder_title", defaultValue: "Les sept paliers", bundle: .main) }
 
     static var upcomingTitle: String { String(localized: "game.badge.upcoming_title", defaultValue: "À venir", bundle: .main) }
+
+    /// Un badge ÉTEINT par une frappe : ce qu'il manque dit sa cible — le rallumer. La phrase de l'étagère.
+    static func imprint(missing: String) -> String {
+        String(localized: "game.badge.a11y.imprint", defaultValue: "Éteint, encore \(missing) pour le rallumer", bundle: .main)
+    }
 
     static var guideLink: String { String(localized: "game.badge.guide_link", defaultValue: "Comprendre les badges", bundle: .main) }
 

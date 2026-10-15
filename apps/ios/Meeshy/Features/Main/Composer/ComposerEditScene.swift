@@ -1,6 +1,7 @@
 import CoreGraphics
 import Foundation
 import MeeshySDK
+import MeeshyUI
 
 /// Ce qui s'ouvre sous la scène de retouche, au-dessus des outils.
 nonisolated enum ComposerEditPanel: Hashable, Sendable {
@@ -63,9 +64,21 @@ nonisolated enum ComposerEditScene {
         }
     }
 
+    /// **Une famille ouverte descend AU NIVEAU de son rail** (#10311, porteur
+    /// 2026-10-12 : « ses éléments descendent au niveau du rail, pas un panneau
+    /// flottant plus haut ») : Filtres · Effets · Cadres en colonne, la bande à
+    /// leur droite, sur une seule rangée — elle prend la place des outils.
+    static var familyRow: CGFloat {
+        let familles = CGFloat(ComposerLookFamily.allCases.count)
+        let rail = familles * MeeshyControlSize.tapTarget + (familles - 1) * MeeshySpacing.sm
+        return max(bandHeight + 2 * ComposerTriggerOutline.outset, rail)
+    }
+
     /// Ce que le bas retient sous la scène : les outils, et chaque panneau
-    /// montré — les outils composent (#9754), leurs panneaux s'empilent.
+    /// montré — les outils composent (#9754), leurs panneaux s'empilent. La
+    /// bande d'une famille, elle, remplace la rangée des outils (#10311).
     static func bottomReserve(_ panels: [ComposerEditPanel]) -> CGFloat {
+        guard panels != [.band] else { return familyRow + gap * 2 }
         let montes = panels.map(panelHeight).filter { $0 > 0 }
         return toolsRow + montes.map { $0 + gap }.reduce(0, +) + gap * 2
     }

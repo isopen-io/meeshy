@@ -52,6 +52,10 @@ const describedBy = (...ids: readonly (string | undefined)[]): string | undefine
  *   en écrire un.
  * - `sent` : le motif nettoyé qui part, ou `null` — un champ vide n'envoie jamais
  *   une chaîne vide que la passerelle refuserait.
+ * - `fallback` : le motif PROPOSÉ au rang d'administration (`useAdminMotive`, demande
+ *   porteur 2026-10-13, #10562) — un ADMIN n'a rien à justifier : laissé vide, le champ
+ *   envoie ce motif-là, et la passerelle, qui n'exempte que BIGBOSS, le reçoit écrit.
+ *   Un motif commencé reste le sien et suit la règle ordinaire.
  */
 export function motiveState({
   text,
@@ -59,18 +63,29 @@ export function motiveState({
   required,
   sovereign,
   whenSovereign,
+  fallback,
 }: {
   readonly text: string;
   readonly minLength: number;
   readonly required: boolean;
   readonly sovereign: boolean;
   readonly whenSovereign: 'hide' | 'optional';
-}): { readonly trimmed: string; readonly shown: boolean; readonly tooShort: boolean; readonly ready: boolean; readonly sent: string | null } {
+  readonly fallback?: string | undefined;
+}): {
+  readonly trimmed: string;
+  readonly shown: boolean;
+  readonly tooShort: boolean;
+  readonly ready: boolean;
+  readonly sent: string | null;
+  readonly defaulted: boolean;
+} {
   const trimmed = text.trim();
-  if (sovereign && whenSovereign === 'hide') return { trimmed, shown: false, tooShort: false, ready: true, sent: null };
+  if (sovereign && whenSovereign === 'hide') return { trimmed, shown: false, tooShort: false, ready: true, sent: null, defaulted: false };
+  const proposed = fallback?.trim() ?? '';
+  if (trimmed === '' && proposed !== '') return { trimmed, shown: true, tooShort: false, ready: true, sent: proposed, defaulted: true };
   const mandatory = required && !sovereign;
   const tooShort = (mandatory || trimmed !== '') && trimmed.length < Math.max(minLength, mandatory ? 1 : 0);
-  return { trimmed, shown: true, tooShort, ready: !tooShort, sent: trimmed === '' ? null : trimmed };
+  return { trimmed, shown: true, tooShort, ready: !tooShort, sent: trimmed === '' ? null : trimmed, defaulted: false };
 }
 
 /**
@@ -189,6 +204,8 @@ type TextInputProps = {
   readonly errorData?: AdminData | undefined;
   readonly data?: AdminData | undefined;
   readonly disabled?: boolean;
+  /** La direction du TEXTE saisi (un texte arabe se tape et se lit de droite à gauche, quelle que soit la langue de l'écran). */
+  readonly dir?: 'ltr' | 'rtl';
 };
 
 /**
@@ -221,6 +238,7 @@ export function AdminTextInput({
   errorData,
   data,
   disabled = false,
+  dir,
 }: TextInputProps) {
   const [focused, setFocused] = useState(false);
   return (
@@ -241,6 +259,7 @@ export function AdminTextInput({
             type={type}
             value={value}
             disabled={disabled}
+            {...(dir === undefined ? {} : { dir })}
             {...(inputMode === undefined ? {} : { inputMode })}
             {...(min === undefined ? {} : { min })}
             {...(step === undefined ? {} : { step })}
@@ -277,6 +296,10 @@ export function AdminTextArea({
   rows = 3,
   maxLength,
   data,
+  dir,
+  note,
+  noteTone,
+  noteData,
 }: {
   readonly id: string;
   readonly label: string;
@@ -285,13 +308,27 @@ export function AdminTextArea({
   readonly rows?: number;
   readonly maxLength?: number;
   readonly data?: AdminData;
+  /** La direction du TEXTE saisi (un texte arabe se tape de droite à gauche, quelle que soit la langue de l'écran). */
+  readonly dir?: 'ltr' | 'rtl';
+  /** Une note sous le champ (un compteur de signes) — citée par `aria-describedby`. */
+  readonly note?: string | undefined;
+  readonly noteTone?: 'neutral' | 'danger';
+  readonly noteData?: AdminData;
 }) {
   return (
-    <AdminField id={id} label={label}>
+    <AdminField
+      id={id}
+      label={label}
+      note={note}
+      {...(noteTone === undefined ? {} : { noteTone })}
+      {...(noteData === undefined ? {} : { noteData })}
+    >
       <textarea
         {...data}
         id={id}
         rows={rows}
+        {...(dir === undefined ? {} : { dir })}
+        {...(note === undefined ? {} : { 'aria-describedby': `${id}-note` })}
         value={value}
         {...(maxLength === undefined ? {} : { maxLength })}
         onInput={(event) => onValue(event.currentTarget.value)}
@@ -487,6 +524,7 @@ export function AdminReasonField({
   required,
   sovereign,
   whenSovereign,
+  fallback,
   error,
   data,
 }: {
@@ -499,25 +537,30 @@ export function AdminReasonField({
   readonly required: boolean;
   readonly sovereign: boolean;
   readonly whenSovereign: 'hide' | 'optional';
+  /** Le motif proposé au rang d'administration (`useAdminMotive().fallback`) : il se lit en filigrane et part si le champ reste vide. */
+  readonly fallback?: string | undefined;
   readonly error?: string;
   readonly data?: AdminData;
 }) {
-  const state = motiveState({ text: value, minLength, required, sovereign, whenSovereign });
+  const state = motiveState({ text: value, minLength, required, sovereign, whenSovereign, fallback });
   if (!state.shown) return null;
-  const lifted = required && sovereign;
+  const lifted = required && (sovereign || fallback !== undefined);
   return (
     <AdminTextInput
       id={id}
       label={lifted ? translateAdmin(language, 'admin.kit.motiveOptional') : label}
       value={value}
       onValue={onValue}
+      {...(fallback === undefined ? {} : { placeholder: fallback })}
       note={
-        minLength > 0
-          ? translateAdmin(language, 'admin.kit.confirm.motiveCount', { count: String(state.trimmed.length), min: String(minLength) })
-          : undefined
+        state.defaulted
+          ? translateAdmin(language, 'admin.kit.motiveDefaultNote')
+          : minLength > 0
+            ? translateAdmin(language, 'admin.kit.confirm.motiveCount', { count: String(state.trimmed.length), min: String(minLength) })
+            : undefined
       }
       noteTone={state.tooShort ? 'danger' : 'neutral'}
-      noteData={{ 'data-admin-motive-count': '' }}
+      noteData={state.defaulted ? { 'data-admin-motive-default': '' } : { 'data-admin-motive-count': '' }}
       error={error}
       data={data}
     />
@@ -545,8 +588,8 @@ export type AdminFormSecondary = {
 };
 
 /**
- * **LES GESTES D'UN FORMULAIRE** — la disposition d'`AdminConfirmSheet` (alignés à
- * droite, jamais étirés). Un geste à la fois : pendant l'envoi, le principal se dit
+ * **LES GESTES D'UN FORMULAIRE** — la disposition d'`AdminConfirmSheet` : de GROS boutons
+ * (52 px, #10562), empilés sur toute la largeur d'un téléphone, alignés à droite dès 640 px. Un geste à la fois : pendant l'envoi, le principal se dit
  * occupé et les autres gestes qui ÉCRIVENT attendent. Annuler reste offert, en vol
  * comme hors ligne, puisqu'il n'écrit rien : on peut toujours renoncer à attendre.
  * Hors ligne, les gestes qui écrivent sont désactivés (ce que l'avis
@@ -572,15 +615,16 @@ export function AdminFormActions({
   const busy = primary?.busy === true;
   const writeBlocked = busy || !online;
   return (
-    <div data-admin-form-actions data-admin-form-offline={online ? 'false' : 'true'} className="flex flex-wrap justify-end gap-3">
+    <div data-admin-form-actions data-admin-form-offline={online ? 'false' : 'true'} className="grid grid-cols-1 gap-3 sm:flex sm:flex-wrap sm:justify-end">
       {onCancel === undefined ? null : (
-        <AdminButton onClick={onCancel} data={{ 'data-admin-form-cancel': '' }}>
+        <AdminButton size="lg" onClick={onCancel} data={{ 'data-admin-form-cancel': '' }}>
           {cancelLabel ?? translateAdmin(language, 'admin.kit.cancel')}
         </AdminButton>
       )}
       {secondary.map((action) => (
         <AdminButton
           key={action.id}
+          size="lg"
           tone={action.tone ?? 'secondary'}
           disabled={writeBlocked || action.disabled === true}
           onClick={action.onClick}
@@ -591,6 +635,7 @@ export function AdminFormActions({
       ))}
       {primary === undefined ? null : (
         <AdminButton
+          size="lg"
           type={primary.type ?? 'button'}
           tone={primary.tone ?? 'primary'}
           busy={busy}

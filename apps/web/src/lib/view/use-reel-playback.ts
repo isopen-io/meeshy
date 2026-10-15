@@ -19,7 +19,9 @@ import { useMediaPlayback, type MediaPlayback } from './use-media-playback';
  *   par le lecteur (tap) n'est jamais annulée au rendu suivant ;
  * - le son suit la préférence de l'écran, posée AVANT le premier `play()` (un
  *   navigateur refuse une lecture sonore sans activation préalable, jamais une
- *   lecture muette) ;
+ *   lecture muette) ; refusée quand même (iOS : un balayage n'est pas un geste
+ *   pour un élément jamais touché), la lecture repart MUETTE plutôt que de
+ *   s'arrêter sur « Média indisponible » (`onSoundBlocked`) ;
  * - l'onglet masqué suspend la lecture et la rend à son retour, sauf si le
  *   lecteur l'avait lui-même mise en pause (motif `routes/story.tsx`).
  */
@@ -28,9 +30,15 @@ export function useReelPlayback(params: {
   readonly active: boolean;
   readonly soundOn: boolean;
   readonly coordinator?: MediaCoordinator;
+  /** Le son du réel atteint d'un balayage est refusé (iOS) : il joue muet, et l'écran coupe sa préférence. */
+  readonly onSoundBlocked?: () => void;
 }): MediaPlayback {
-  const { mediaId, active, soundOn, coordinator } = params;
-  const playback = useMediaPlayback({ attachmentId: mediaId, ...(coordinator !== undefined ? { coordinator } : {}) });
+  const { mediaId, active, soundOn, coordinator, onSoundBlocked } = params;
+  const playback = useMediaPlayback({
+    attachmentId: mediaId,
+    ...(coordinator !== undefined ? { coordinator } : {}),
+    ...(onSoundBlocked !== undefined ? { onSoundBlocked } : {}),
+  });
   const { status, toggle, setMuted } = playback;
 
   useEffect(() => {

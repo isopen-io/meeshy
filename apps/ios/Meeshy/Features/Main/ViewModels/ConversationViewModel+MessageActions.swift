@@ -482,8 +482,9 @@ extension ConversationViewModel {
 
         // Optimistic update: write through persistence so the store
         // observation surfaces the change without a direct messages mutation.
-        let editedAt = Date()
-        try? await messagePersistence.markEdited(localId: messageId, newContent: trimmed, editedAt: editedAt)
+        // Dated past the stored (server) edit date when the device clock lags
+        // behind it, so the ordering guard never drops the user's own edit (#9997).
+        let editedAt = try? await messagePersistence.markEditedLocally(localId: messageId, newContent: trimmed)
 
         // Offline: route the edit through the durable outbox (flushed on
         // reconnect, T10) instead of losing it on the failed REST call.
@@ -506,7 +507,7 @@ extension ConversationViewModel {
             // Revert on failure — both the persisted content AND the history
             // entry we just wrote (so the user doesn't see a phantom
             // revision that never actually reached the server).
-            if let original = originalContent {
+            if let original = originalContent, let editedAt {
                 try? await messagePersistence.markEdited(localId: messageId, newContent: original, editedAt: editedAt)
                 EditHistoryStore.shared.removeHistory(for: serverId(for: messageId))
             }

@@ -5,22 +5,65 @@ import MeeshyUI
 
 // MARK: - iPad Root View Right Panel Content (Hub Routes)
 
+/// Ce que la colonne droite de l'iPad montre.
+///
+/// Une route ouverte PASSE DEVANT la conversation, comme une page poussée par-dessus un fil sur iPhone. L'ordre
+/// inverse laissait la route posée mais invisible : réglages, notifications, le post d'un push ou d'un lien touché
+/// fil ouvert n'ouvraient rien, et le premier « retour » se dépensait à retirer cette route que personne ne voyait.
+/// `Router.onPopRequested` retire déjà la route avant la conversation : cet ordre est le sien.
+enum iPadRightColumn: Equatable {
+    case panel(Route)
+    case conversation(Conversation)
+    case conversationList
+
+    static func resolve(conversation: Conversation?, panelRoute: Route?) -> iPadRightColumn {
+        if let panelRoute { return .panel(panelRoute) }
+        if let conversation { return .conversation(conversation) }
+        return .conversationList
+    }
+
+    /// La conversation que la personne a SOUS LES YEUX : `nil` quand une route la recouvre. La pastille de
+    /// synchronisation et le mini-lecteur s'effacent devant un fil visible, pas devant un fil recouvert.
+    static func visibleConversationId(conversation: Conversation?, panelRoute: Route?) -> String? {
+        panelRoute == nil ? conversation?.id : nil
+    }
+}
+
 /// La pile du JEU au-dessus de la route racine du panneau droit (#9564, amendement n° 4). Elle ne vaut que pour SA
 /// racine : un panneau ouvert sur une autre route part d'une pile vide, sans jamais rejouer une page d'avant.
 struct GamePanelTrail {
     var root: Route?
     var path = NavigationPath()
+    /// Les pages empilées, lisibles : `NavigationPath` ne rend pas ses éléments, et le relais vers l'iPhone
+    /// (`RootNavigationHandoff`) doit pouvoir les reprendre.
+    private(set) var routes: [Route] = []
+
+    init(root: Route? = nil) {
+        self.root = root
+    }
+
+    /// La pile renvoyée par la `NavigationStack` du panneau : un retour par glissement ne fait que la
+    /// raccourcir, et les pages lisibles suivent.
+    init(root: Route, path: NavigationPath, previous: GamePanelTrail) {
+        self.root = root
+        self.path = path
+        self.routes = previous.root == root ? Array(previous.routes.prefix(path.count)) : []
+    }
 
     func path(over route: Route) -> NavigationPath { root == route ? path : NavigationPath() }
+
+    func routes(over route: Route) -> [Route] { root == route ? routes : [] }
 
     mutating func push(_ route: Route, over root: Route) {
         if self.root != root { self = GamePanelTrail(root: root) }
         path.append(route)
+        routes.append(route)
     }
 
     mutating func pop() {
         guard !path.isEmpty else { return }
         path.removeLast()
+        if !routes.isEmpty { routes.removeLast() }
     }
 }
 
@@ -166,7 +209,7 @@ struct iPadPanelDestination: View {
         case .communitySettings(let community):
             CommunitySettingsView(
                 community: community,
-                onUpdated: { _ in rightPanelRoute = .communityList },
+                onUpdated: { _ in rightPanelRoute = .communityDetail(community.id) },
                 onDeleted: { rightPanelRoute = nil },
                 onLeft: { rightPanelRoute = nil }
             )
@@ -210,8 +253,8 @@ struct iPadPanelDestination: View {
         case .progressionNotebook:
             GameNotebookPage()
                 .navigationBarHidden(true)
-        case .gamePage(let page):
-            GamePageView(page: page)
+        case .gamePage(let page, let focus):
+            GamePageView(page: page, focus: focus)
                 .navigationBarHidden(true)
         case .progressionConcept(let concept, let section):
             ProgressionConceptPage(concept: concept, section: section)
@@ -364,6 +407,24 @@ struct iPadLeftColumnHeader: View {
 
 // MARK: - iPad Resizable Handle
 
+/// La part de la largeur que prend la colonne gauche de l'iPad.
+enum iPadColumnRatio {
+    static let minimum: CGFloat = 0.30
+    static let maximum: CGFloat = 0.50
+
+    /// La part après un glissement de `translation` points depuis `start`. Une largeur nulle — la fenêtre en cours
+    /// de redimensionnement — ne déplace rien : la division rendrait une part qui n'est pas un nombre.
+    static func dragged(from start: CGFloat, translation: CGFloat, width: CGFloat) -> CGFloat {
+        guard width > 0, translation.isFinite else { return clamped(start) }
+        return clamped(start + translation / width)
+    }
+
+    static func clamped(_ ratio: CGFloat) -> CGFloat {
+        guard ratio.isFinite else { return minimum }
+        return min(maximum, max(minimum, ratio))
+    }
+}
+
 struct iPadResizableHandle: View {
     @Binding var ratio: CGFloat
     let screenWidth: CGFloat
@@ -371,9 +432,13 @@ struct iPadResizableHandle: View {
     @Environment(\.colorScheme) private var colorScheme
     private var isDark: Bool { colorScheme == .dark }
     @State private var isDragging = false
+    /// La part de la colonne AU DÉBUT du geste. `value.translation` se mesure depuis ce début : l'ajouter à une
+    /// part déjà déplacée par l'événement précédent comptait le même déplacement à chaque image, et la poignée
+    /// filait devant le doigt.
+    @State private var dragStartRatio: CGFloat?
 
-    private let minRatio: CGFloat = 0.30
-    private let maxRatio: CGFloat = 0.50
+    private let minRatio = iPadColumnRatio.minimum
+    private let maxRatio = iPadColumnRatio.maximum
     private let handleWidth: CGFloat = 20
 
     var body: some View {
@@ -395,12 +460,14 @@ struct iPadResizableHandle: View {
             DragGesture(minimumDistance: 8)
                 .onChanged { value in
                     isDragging = true
-                    let currentX = screenWidth * ratio + value.translation.width
-                    let newRatio = currentX / screenWidth
-                    ratio = min(maxRatio, max(minRatio, newRatio))
+                    let start = dragStartRatio ?? ratio
+                    dragStartRatio = start
+                    ratio = iPadColumnRatio.dragged(
+                        from: start, translation: value.translation.width, width: screenWidth)
                 }
                 .onEnded { _ in
                     isDragging = false
+                    dragStartRatio = nil
                 }
         )
         .ignoresSafeArea()

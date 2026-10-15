@@ -32,6 +32,12 @@ export const SUBPAGE_CONCEPT = {
 
 export type SubpageRoute = keyof typeof SUBPAGE_CONCEPT;
 
+/** La semaine ou la saison qu'un lien NOMME (#9947) : la même sous-page que sa forme nue, sous la même fiche. */
+export const NAMED_SUBPAGE_ALIASES: Readonly<Record<string, SubpageRoute>> = {
+  progressionLigueSemaine: 'progressionLigue',
+  progressionSaisonNumero: 'progressionSaison',
+};
+
 /** Les portes de la première page qui ne sont pas des concepts : niveau 2, sous Progression. */
 export const ANNEX_ROUTES = ['progressionCarnet', 'progressionRegles', 'progressionReglages'] as const;
 
@@ -71,7 +77,8 @@ export function gameScreenOf(route: { readonly key: string; readonly params: Rea
     const concept = route.params.concept ?? '';
     return { kind: 'fiche', concept: isProgressionConceptKey(concept) ? concept : 'level' };
   }
-  if (isSubpage(route.key)) return { kind: 'subpage', route: route.key, concept: SUBPAGE_CONCEPT[route.key] };
+  const subpage = NAMED_SUBPAGE_ALIASES[route.key] ?? route.key;
+  if (isSubpage(subpage)) return { kind: 'subpage', route: subpage, concept: SUBPAGE_CONCEPT[subpage] };
   if (isAnnex(route.key)) return { kind: 'annex', route: route.key };
   return null;
 }

@@ -94,12 +94,48 @@ public struct ShareLinkCreator: Decodable, Sendable {
     }
 }
 
+/// L'identifiant du créateur ne part pas vers un visiteur sans compte
+/// (#10205, #10216) : son absence ne fait pas tomber la page d'invitation.
+extension ShareLinkCreator {
+    enum CodingKeys: String, CodingKey {
+        case id, username, firstName, lastName, displayName, avatar
+    }
+
+    public init(from decoder: Decoder) throws {
+        let c = try decoder.container(keyedBy: CodingKeys.self)
+        id = try c.decodeIfPresent(String.self, forKey: .id) ?? ""
+        username = try c.decode(String.self, forKey: .username)
+        firstName = try c.decodeIfPresent(String.self, forKey: .firstName)
+        lastName = try c.decodeIfPresent(String.self, forKey: .lastName)
+        displayName = try c.decodeIfPresent(String.self, forKey: .displayName)
+        avatar = try c.decodeIfPresent(String.self, forKey: .avatar)
+    }
+}
+
 public struct ShareLinkStats: Decodable, Sendable {
     public let totalParticipants: Int
     public let memberCount: Int
     public let anonymousCount: Int
     public let languageCount: Int
     public let spokenLanguages: [String]
+}
+
+/// Un visiteur sans compte ne reçoit pas les effectifs (#10205, #10216) : un
+/// serveur qui les tait — ou les sert neutres, à zéro — se décode, et l'écran
+/// ne montre aucun « 0 personnes » (`InviteGroupFacts`).
+extension ShareLinkStats {
+    enum CodingKeys: String, CodingKey {
+        case totalParticipants, memberCount, anonymousCount, languageCount, spokenLanguages
+    }
+
+    public init(from decoder: Decoder) throws {
+        let c = try decoder.container(keyedBy: CodingKeys.self)
+        totalParticipants = try c.decodeIfPresent(Int.self, forKey: .totalParticipants) ?? 0
+        memberCount = try c.decodeIfPresent(Int.self, forKey: .memberCount) ?? 0
+        anonymousCount = try c.decodeIfPresent(Int.self, forKey: .anonymousCount) ?? 0
+        languageCount = try c.decodeIfPresent(Int.self, forKey: .languageCount) ?? 0
+        spokenLanguages = try c.decodeIfPresent([String].self, forKey: .spokenLanguages) ?? []
+    }
 }
 
 // MARK: - Anonymous Join Request (POST /anonymous/join/:linkId)
@@ -173,6 +209,13 @@ public struct JoinedConversation: Decodable {
     public let title: String?
     public let type: String
     public let allowViewHistory: Bool
+    /// Les familles BRUTES qu'un invité de ce lien peut joindre (#10001) —
+    /// absent ou `null` quand le lien ne restreint rien.
+    public let allowedAttachmentKinds: [String]?
+
+    public var attachmentAllowance: GuestAttachmentAllowance {
+        GuestAttachmentAllowance(kinds: GuestAttachmentKind.knownKinds(from: allowedAttachmentKinds))
+    }
 }
 
 // MARK: - Create Share Link Request (POST /links)

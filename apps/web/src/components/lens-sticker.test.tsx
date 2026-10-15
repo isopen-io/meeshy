@@ -1,3 +1,5 @@
+import { readFileSync } from 'node:fs';
+
 import { describe, expect, test } from 'bun:test';
 import { renderToStaticMarkup } from 'react-dom/server';
 
@@ -60,7 +62,7 @@ describe('le bloc de section', () => {
   });
 
   test('les rangées sont dans une liste PROPRE à la section, jamais frères de son en-tête', () => {
-    expect(html).toMatch(/<\/h2><ul><li data-row=/);
+    expect(html).toMatch(/<\/h2><ul[^>]*><li data-row=/);
   });
 
   test("le bloc ne rétrécit pas — il est l'élément flex de la liste, comme les rangées l'étaient", () => {
@@ -142,7 +144,94 @@ describe('le pliage d’une section (#8694)', () => {
   test('le chevron pointe vers l’avant replié (retourné en arabe), vers le bas déplié', () => {
     const folded = renderToStaticMarkup(<LensSticker id="pinned" fold={{ folded: true, unread: 0, onToggle: noop }} />);
     const open = renderToStaticMarkup(<LensSticker id="pinned" fold={{ folded: false, unread: 0, onToggle: noop }} />);
-    expect(folded).toMatch(/<svg[^>]*class="-rotate-90 rtl:rotate-90"/);
+    expect(folded).toMatch(/<svg[^>]*class="[^"]*-rotate-90 rtl:rotate-90"/);
     expect(open).not.toContain('rotate');
+  });
+});
+
+/**
+ * TOUTE SECTION SE REPLIE (#10103) — catégories et sections par date
+ * comprises. L'en-tête est un VRAI bouton accordéon : il nomme la liste qu'il
+ * commande (`aria-controls`), offre une cible de 44 px au doigt, et le
+ * dépliage qu'un GESTE vient de provoquer s'anime — jamais la première
+ * peinture, et jamais sous `prefers-reduced-motion`.
+ */
+describe('le pliage de toute section (#10103)', () => {
+  const noop = () => {};
+
+  for (const id of ['lentille.today', 'lentille.yesterday', 'lentille.thisWeek', 'lentille.older', 'pinned'] as const) {
+    test(`${id} : le bouton commande la liste de ses rangées (aria-controls → id)`, () => {
+      const html = renderToStaticMarkup(
+        <LensSection id={id} fold={{ folded: false, unread: 0, onToggle: noop }}>
+          <li data-row="c1">rangée</li>
+        </LensSection>,
+      );
+      const controls = /aria-controls="([^"]+)"/.exec(html)?.[1];
+      expect(controls).toBeDefined();
+      expect(html).toContain(`<ul id="${controls}"`);
+    });
+  }
+
+  test('repliée, la liste commandée existe encore — vide et masquée : aria-controls ne pointe jamais dans le vide', () => {
+    const html = renderToStaticMarkup(
+      <LensSection id="lentille.older" fold={{ folded: true, unread: 0, onToggle: noop }}>
+        <li data-row="c1">rangée</li>
+      </LensSection>,
+    );
+    const controls = /aria-controls="([^"]+)"/.exec(html)?.[1];
+    expect(html).toMatch(new RegExp(`<ul id="${controls}" hidden=""></ul>`));
+    expect(html).not.toContain('data-row');
+  });
+
+  test('la cible du bouton fait au moins 44 px de haut', () => {
+    const html = renderToStaticMarkup(<LensSticker id="lentille.today" fold={{ folded: false, unread: 0, onToggle: noop }} />);
+    expect(html).toMatch(/<button[^>]*style="[^"]*min-height:44px/);
+  });
+
+  test('une catégorie porte le nom que l’utilisateur lui a donné, dans l’en-tête et dans le nom lu', () => {
+    const html = renderToStaticMarkup(
+      <LensSticker id="category:cat-1" category={{ name: 'Travail' }} fold={{ folded: true, unread: 2, onToggle: noop }} />,
+    );
+    expect(html).toContain('data-sticker="category:cat-1"');
+    expect(html).toContain('>Travail</span>');
+    expect(html).toContain('aria-label="Travail, repliée, 2 messages non lus"');
+  });
+
+  test('le dépliage qu’un geste vient de provoquer s’anime ; la première peinture, jamais', () => {
+    const animated = renderToStaticMarkup(
+      <LensSection id="lentille.today" fold={{ folded: false, unread: 0, onToggle: noop, animate: true }}>
+        <li data-row="c1">rangée</li>
+      </LensSection>,
+    );
+    const still = renderToStaticMarkup(
+      <LensSection id="lentille.today" fold={{ folded: false, unread: 0, onToggle: noop }}>
+        <li data-row="c1">rangée</li>
+      </LensSection>,
+    );
+    expect(animated).toContain('data-section-unfolding=""');
+    expect(still).not.toContain('data-section-unfolding');
+  });
+
+  test('le chevron tourne sous mouvement permis seulement', () => {
+    const html = renderToStaticMarkup(<LensSticker id="lentille.today" fold={{ folded: true, unread: 0, onToggle: noop }} />);
+    expect(html).toMatch(/<svg[^>]*class="[^"]*motion-safe:transition-transform/);
+  });
+});
+
+describe('la feuille du dépliage (#10103)', () => {
+  const css = readFileSync(new URL('../styles/lens-section.css', import.meta.url), 'utf8');
+
+  test('une animation COURTE, sur l’opacité et la transformation seules — rien qui remette la liste en page', () => {
+    const keyframes = /@keyframes lens-section-unfold\s*\{([\s\S]*?)\n\}/.exec(css)?.[1] ?? '';
+    expect(keyframes).toContain('opacity');
+    expect(keyframes).toContain('transform');
+    expect(keyframes).not.toMatch(/height|margin|padding|top:/);
+    const duration = Number(/animation:\s*lens-section-unfold\s+(\d+)ms/.exec(css)?.[1]);
+    expect(duration).toBeGreaterThan(0);
+    expect(duration).toBeLessThanOrEqual(200);
+  });
+
+  test('prefers-reduced-motion la coupe', () => {
+    expect(css).toMatch(/@media \(prefers-reduced-motion: reduce\)\s*\{[\s\S]*animation:\s*none/);
   });
 });

@@ -117,8 +117,14 @@ final class VisitorContentTests: XCTestCase {
         XCTAssertEqual(VisitorContentRequest(link: .reel(postId: "r1"), via: "t")?.via, "t")
     }
 
+    func test_requestInit_storyLink_mapsToStory() {
+        XCTAssertEqual(
+            VisitorContentRequest(link: .storyDetail(postId: "s1"), via: "t"),
+            VisitorContentRequest(postId: "s1", kind: .story, via: "t")
+        )
+    }
+
     func test_requestInit_otherLinks_areNotVisitorContent() {
-        XCTAssertNil(VisitorContentRequest(link: .storyDetail(postId: "s1"), via: nil))
         XCTAssertNil(VisitorContentRequest(link: .conversation(id: "c1"), via: nil))
         XCTAssertNil(VisitorContentRequest(link: .joinLink(identifier: "j1"), via: nil))
         XCTAssertNil(VisitorContentRequest(link: .userProfile(username: "ada"), via: nil))
@@ -241,10 +247,20 @@ final class VisitorContentTests: XCTestCase {
     func test_present_nonContentLink_presentsNothing() {
         let sut = VisitorContentPresenter(router: makeRouter(), isAuthenticated: { false })
 
-        XCTAssertFalse(sut.present(.storyDetail(postId: "s1")))
         XCTAssertFalse(sut.present(.userProfile(username: "ada")))
         XCTAssertFalse(sut.present(nil))
         XCTAssertNil(sut.request)
+    }
+
+    func test_present_signedOutStoryLink_presentsVisitorAndKeepsPendingLink() {
+        let router = makeRouter()
+        router.pendingDeepLink = .storyDetail(postId: "s1")
+        let sut = VisitorContentPresenter(router: router, isAuthenticated: { false })
+
+        XCTAssertTrue(sut.present(router.pendingDeepLink))
+
+        XCTAssertEqual(sut.request, VisitorContentRequest(postId: "s1", kind: .story, via: nil))
+        XCTAssertEqual(router.pendingDeepLink, .storyDetail(postId: "s1"))
     }
 
     func test_requestAccount_signUp_closesThenOpensSignUpBehind() {
@@ -288,6 +304,43 @@ final class VisitorContentTests: XCTestCase {
     func test_title_withSharer_namesTheSharer() {
         XCTAssertTrue(VisitorInvitationCopy.title(kind: .reel, sharer: ada()).contains("Ada Lovelace"))
         XCTAssertTrue(VisitorInvitationCopy.title(kind: .post, sharer: TrackedLinkSharer(username: "ada")).contains("@ada"))
+    }
+
+    func test_title_storyWithSharer_namesTheSharerWithoutPlaceholder() {
+        let title = VisitorInvitationCopy.title(kind: .story, sharer: ada())
+        XCTAssertTrue(title.contains("Ada Lovelace"))
+        XCTAssertFalse(title.contains("%@"))
+        XCTAssertNotEqual(title, VisitorInvitationCopy.title(kind: .post, sharer: ada()))
+    }
+
+    // MARK: - #10317 — un contenu refusé montre le fond neutre, jamais une page claire
+
+    func test_surface_eachState_hasItsOwnSurface() {
+        XCTAssertEqual(VisitorContentSurface(state: .pending), .loading)
+        XCTAssertEqual(VisitorContentSurface(state: .served(post: makeAPIPost().toFeedPost(preferredLanguages: []), sharer: nil)), .reader)
+        XCTAssertEqual(VisitorContentSurface(state: .refused), .neutralBackdrop)
+        XCTAssertEqual(VisitorContentSurface(state: .failed), .neutralBackdrop)
+    }
+
+    func test_neutralBackdrop_carriesNoDataOfTheRefusedContent() {
+        XCTAssertTrue(
+            Mirror(reflecting: VisitorRefusedBackdrop()).children.isEmpty,
+            "le fond ne prend aucune propriété : il ne peut rien porter du contenu refusé"
+        )
+    }
+
+    func test_actions_servedRefusedAndFailed_areDistinct() {
+        let served = VisitorInvitationAction.actions(for: .served(post: makeAPIPost().toFeedPost(preferredLanguages: []), sharer: nil))
+        let refused = VisitorInvitationAction.actions(for: .refused)
+        let failed = VisitorInvitationAction.actions(for: .failed)
+
+        XCTAssertEqual(served, [.signUp, .signIn, .keepWatching])
+        XCTAssertEqual(refused, [.signUp, .signIn], "un refus n'a rien à réessayer ni à regarder")
+        XCTAssertEqual(failed, [.retry, .signUp, .signIn], "une panne garde « Réessayer »")
+    }
+
+    func test_actions_pending_offersNothing() {
+        XCTAssertEqual(VisitorInvitationAction.actions(for: .pending), [])
     }
 
     func test_title_withoutSharer_invitesWithoutName() {

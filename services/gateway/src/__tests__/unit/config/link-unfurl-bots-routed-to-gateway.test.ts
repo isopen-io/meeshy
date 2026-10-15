@@ -140,3 +140,118 @@ describe.each(DEPLOIEMENTS)('$compose — les robots d’aperçu de /chat/<lien>
     expect(middlewares).toContain('rate-limit@file');
   });
 });
+
+/**
+ * #10192 — les mêmes robots qui déplient un lien SUIVI `/l/<jeton>` reçoivent
+ * l'aperçu de sa cible publique (`GET /api/v1/tracking-links/:token/og`).
+ */
+const SUIVIS = [
+  { compose: 'docker-compose.staging.yml', router: 'frontend-staging-track-unfurl', chatRouter: 'frontend-staging-unfurl', gatewayRouter: 'gateway-staging' },
+  { compose: 'docker-compose.prod.yml', router: 'frontend-track-unfurl', chatRouter: 'frontend-unfurl', gatewayRouter: 'gateway' },
+] as const;
+
+describe.each(SUIVIS)('$compose — les robots d’aperçu de /l/<jeton> vont à la passerelle', ({ compose, router, chatRouter, gatewayRouter }) => {
+  const labels = labelsOf(fs.readFileSync(path.join(COMPOSE_DIR, compose), 'utf8'));
+  const value = (key: string) => {
+    const raw = labels.find((l) => l.startsWith(`${key}=`))?.slice(key.length + 1);
+    return raw === undefined ? undefined : composeLiteral(raw);
+  };
+  const rule = value(`traefik.http.routers.${router}.rule`) ?? '';
+  const chatRule = value(`traefik.http.routers.${chatRouter}.rule`) ?? '';
+  const middlewares = (value(`traefik.http.routers.${router}.middlewares`) ?? '').split(',');
+  const rewrite = middlewares[0] ?? '';
+  const pathPattern = goRegex(rule.match(/PathRegexp\(`([^`]+)`\)/)?.[1] ?? '$^');
+  const agent = goRegex(rule.match(/HeaderRegexp\(`User-Agent`, `([^`]+)`\)/)?.[1] ?? '$^');
+
+  it('écoute le même hôte et les mêmes robots que /chat/<lien>', () => {
+    expect(rule.split(' && ')[0]).toBe(chatRule.split(' && ')[0]);
+    expect(rule.match(/HeaderRegexp\([^)]*\)/)?.[0]).toBe(chatRule.match(/HeaderRegexp\([^)]*\)/)?.[0]);
+    expect(ROBOTS.filter((ua) => !agent.test(ua))).toEqual([]);
+    expect(HUMAINS.filter((ua) => agent.test(ua))).toEqual([]);
+  });
+
+  it('ne capte que la forme d’un jeton que la passerelle accepte, jamais l’état « expiré »', () => {
+    expect(pathPattern.test('/l/Ab3xYz')).toBe(true);
+    expect(pathPattern.test('/l/Ab3xYz/')).toBe(true);
+    expect(pathPattern.test(`/l/${'a'.repeat(50)}`)).toBe(true);
+    expect(pathPattern.test(`/l/${'a'.repeat(51)}`)).toBe(false);
+    expect(pathPattern.test('/l/a')).toBe(false);
+    expect(pathPattern.test('/l/Ab3xYz/expired')).toBe(false);
+    expect(pathPattern.test('/l/a.b')).toBe(false);
+    expect(rule).toContain(`!Query(\`${LINK_UNFURL_OPEN_QUERY.split('=')[0]}\`, \`${LINK_UNFURL_OPEN_QUERY.split('=')[1]}\`)`);
+  });
+
+  it('réécrit /l/<jeton> en la page d’aperçu que la passerelle SERT', () => {
+    const regex = value(`traefik.http.middlewares.${rewrite}.replacepathregex.regex`) ?? '$^';
+    const replacement = value(`traefik.http.middlewares.${rewrite}.replacepathregex.replacement`) ?? '';
+    expect('/l/Ab3xYz'.replace(new RegExp(regex), replacement)).toBe('/api/v1/tracking-links/Ab3xYz/og');
+    expect('/l/Ab3xYz/'.replace(new RegExp(regex), replacement)).toBe('/api/v1/tracking-links/Ab3xYz/og');
+    expect(manifest.routes.some((r) => r.method === 'GET' && r.path === '/api/v1/tracking-links/:token/og')).toBe(true);
+  });
+
+  it('passe devant l’application, vers la passerelle, avec son TLS et ses limites', () => {
+    expect(Number(value(`traefik.http.routers.${router}.priority`))).toBe(Number(value(`traefik.http.routers.${chatRouter}.priority`)));
+    expect(value(`traefik.http.routers.${router}.service`)).toBe(gatewayRouter);
+    expect(value(`traefik.http.routers.${router}.entrypoints`)).toBe(value(`traefik.http.routers.${gatewayRouter}.entrypoints`));
+    expect(value(`traefik.http.routers.${router}.tls.certresolver`)).toBe(value(`traefik.http.routers.${gatewayRouter}.tls.certresolver`));
+    expect(middlewares).toContain('rate-limit@file');
+  });
+});
+
+/**
+ * #10559 — les mêmes robots qui déplient un lien d'AFFILIATION
+ * `/signup/affiliate/<jeton>` reçoivent l'aperçu de celui qui invite
+ * (`GET /api/v1/affiliate/:token/og`).
+ */
+const AFFILIATIONS = [
+  { compose: 'docker-compose.staging.yml', router: 'frontend-staging-affiliate-unfurl', chatRouter: 'frontend-staging-unfurl', gatewayRouter: 'gateway-staging' },
+  { compose: 'docker-compose.prod.yml', router: 'frontend-affiliate-unfurl', chatRouter: 'frontend-unfurl', gatewayRouter: 'gateway' },
+] as const;
+
+describe.each(AFFILIATIONS)('$compose — les robots d’aperçu de /signup/affiliate/<jeton> vont à la passerelle', ({ compose, router, chatRouter, gatewayRouter }) => {
+  const labels = labelsOf(fs.readFileSync(path.join(COMPOSE_DIR, compose), 'utf8'));
+  const value = (key: string) => {
+    const raw = labels.find((l) => l.startsWith(`${key}=`))?.slice(key.length + 1);
+    return raw === undefined ? undefined : composeLiteral(raw);
+  };
+  const rule = value(`traefik.http.routers.${router}.rule`) ?? '';
+  const chatRule = value(`traefik.http.routers.${chatRouter}.rule`) ?? '';
+  const middlewares = (value(`traefik.http.routers.${router}.middlewares`) ?? '').split(',');
+  const rewrite = middlewares[0] ?? '';
+  const pathPattern = goRegex(rule.match(/PathRegexp\(`([^`]+)`\)/)?.[1] ?? '$^');
+  const agent = goRegex(rule.match(/HeaderRegexp\(`User-Agent`, `([^`]+)`\)/)?.[1] ?? '$^');
+
+  it('écoute le même hôte et les mêmes robots que /chat/<lien>', () => {
+    expect(rule.split(' && ')[0]).toBe(chatRule.split(' && ')[0]);
+    expect(rule.match(/HeaderRegexp\([^)]*\)/)?.[0]).toBe(chatRule.match(/HeaderRegexp\([^)]*\)/)?.[0]);
+    expect(ROBOTS.filter((ua) => !agent.test(ua))).toEqual([]);
+    expect(HUMAINS.filter((ua) => agent.test(ua))).toEqual([]);
+  });
+
+  it('ne capte que la forme d’un jeton que la passerelle accepte, jamais l’inscription elle-même', () => {
+    expect(pathPattern.test('/signup/affiliate/aff_1760000000000_k3j2h1g0f9d8a')).toBe(true);
+    expect(pathPattern.test('/signup/affiliate/ref_AMANI7/')).toBe(true);
+    expect(pathPattern.test(`/signup/affiliate/${'a'.repeat(100)}`)).toBe(true);
+    expect(pathPattern.test(`/signup/affiliate/${'a'.repeat(101)}`)).toBe(false);
+    expect(pathPattern.test('/signup/affiliate/')).toBe(false);
+    expect(pathPattern.test('/signup/affiliate/a.b')).toBe(false);
+    expect(pathPattern.test('/signup')).toBe(false);
+    expect(rule).toContain(`!Query(\`${LINK_UNFURL_OPEN_QUERY.split('=')[0]}\`, \`${LINK_UNFURL_OPEN_QUERY.split('=')[1]}\`)`);
+  });
+
+  it('réécrit /signup/affiliate/<jeton> en la page d’aperçu que la passerelle SERT', () => {
+    const regex = value(`traefik.http.middlewares.${rewrite}.replacepathregex.regex`) ?? '$^';
+    const replacement = value(`traefik.http.middlewares.${rewrite}.replacepathregex.replacement`) ?? '';
+    expect('/signup/affiliate/aff_abc'.replace(new RegExp(regex), replacement)).toBe('/api/v1/affiliate/aff_abc/og');
+    expect('/signup/affiliate/aff_abc/'.replace(new RegExp(regex), replacement)).toBe('/api/v1/affiliate/aff_abc/og');
+    expect(manifest.routes.some((r) => r.method === 'GET' && r.path === '/api/v1/affiliate/:token/og')).toBe(true);
+  });
+
+  it('passe devant l’application, vers la passerelle, avec son TLS et ses limites', () => {
+    expect(Number(value(`traefik.http.routers.${router}.priority`))).toBe(Number(value(`traefik.http.routers.${chatRouter}.priority`)));
+    expect(value(`traefik.http.routers.${router}.service`)).toBe(gatewayRouter);
+    expect(value(`traefik.http.routers.${router}.entrypoints`)).toBe(value(`traefik.http.routers.${gatewayRouter}.entrypoints`));
+    expect(value(`traefik.http.routers.${router}.tls.certresolver`)).toBe(value(`traefik.http.routers.${gatewayRouter}.tls.certresolver`));
+    expect(middlewares).toContain('rate-limit@file');
+  });
+});

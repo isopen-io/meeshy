@@ -9,9 +9,9 @@ import os
 /// la protection de l'aperçu (vue unique, éphémère, flouté), ne sont composés
 /// qu'à UN endroit : `GET /conversations` (`routes/conversations/core-list.ts`).
 ///
-/// D'où la règle : l'ACTIVITÉ d'une ligne (`lastMessageAt`) et son aperçu
-/// voyagent ENSEMBLE. `/sync` dit QUELLES lignes ont bougé ; la route riche
-/// les réécrit. Une ligne que `/sync` découvre n'entre dans la liste que par
+/// D'où la règle : l'ACTIVITÉ d'une ligne (`lastMessageAt`, et depuis #7631 sa
+/// dernière réaction et son appel en cours) et son aperçu voyagent ENSEMBLE.
+/// `/sync` dit QUELLES lignes ont bougé ; la route riche les réécrit. Une ligne que `/sync` découvre n'entre dans la liste que par
 /// la route riche — jamais sans aperçu.
 ///
 /// Sans elle, une conversation qui avait reçu des messages pendant
@@ -28,12 +28,21 @@ extension ConversationSyncEngine {
     static let rehydratationMaxPages = 20
 
     /// Une ligne servie par `/sync` que la liste ne peut pas peindre juste :
-    /// inconnue du cache, ou dont l'activité a bougé (message reçu, ou dernier
-    /// message supprimé — `lastMessageAt` recule alors).
+    /// inconnue du cache, dont l'activité a bougé (message reçu, ou dernier
+    /// message supprimé — `lastMessageAt` recule alors), ou modifiée depuis ce
+    /// que le cache tient (#7631).
+    ///
+    /// Le troisième cas est celui de la réaction et de l'appel : la passerelle
+    /// les inscrit sur la conversation (`lastReactionId`, `activeCallId`), ce qui
+    /// avance `updatedAt` SANS toucher `lastMessageAt`, et la ligne maigre ne
+    /// porte ni l'une ni l'autre. Une réaction reçue ou un appel terminé app
+    /// fermée restaient donc ceux du cache jusqu'au plein de 24 h. Vue depuis la
+    /// ligne maigre, une telle modification ne se distingue pas d'un renommage :
+    /// toute ligne plus récente que le cache se relit riche.
     static func doitEtreRehydratee(_ recue: MeeshyConversation, existante: MeeshyConversation?) -> Bool {
         guard recue.isActive else { return false }
         guard let existante else { return true }
-        return recue.lastMessageAt != existante.lastMessageAt
+        return recue.lastMessageAt != existante.lastMessageAt || recue.updatedAt > existante.updatedAt
     }
 
     /// La borne `updatedSince` qui couvre toutes les lignes à réhydrater. La

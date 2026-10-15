@@ -299,7 +299,7 @@ describe('VerifyEmailFlow — le lien de l’e-mail (`?token=`) connecte au mont
     });
 
     expect(stub.calls).toEqual([{ email: 'neuf@meeshy.example', token: 'tok-1' }]);
-    expect(here()).toBe('/');
+    expect(here()).toBe('/chats');
   });
 
   test('avec `next` sûr : on y arrive', async () => {
@@ -358,7 +358,7 @@ describe('VerifyEmailFlow — le code ouvre la session (#8034)', () => {
     });
 
     expect(stub.calls).toEqual([{ email: 'neuf@meeshy.example', code: '123456', password: 'secret-1' }]);
-    expect(here()).toBe('/');
+    expect(here()).toBe('/chats');
     const { pendingVerificationFor } = await import('@/lib/pending-verification');
     expect(pendingVerificationFor('neuf@meeshy.example')).toBeNull();
   });

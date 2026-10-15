@@ -1,9 +1,12 @@
+import { act, type ReactNode } from 'react';
+import { createRoot } from 'react-dom/client';
 import { afterAll, beforeAll, describe, expect, test } from 'bun:test';
 import { renderToStaticMarkup } from 'react-dom/server';
 
 import { RICH_TEXT_CONVERSATION, RICH_TEXT_DIRECT } from '@/lib/api/fixtures-rich-text';
 import type { Conversation, Message, Participant } from '@/lib/api/types';
 import type { PlacedMessage } from '@/lib/grouping';
+import { sessionStore } from '@/lib/api/session';
 import { loadInterfaceCatalog } from '@/lib/i18n-catalog';
 import type { AuthorStoryRing } from '@/lib/view/author-story-ring';
 import { ensureHappyDomRegistered, releaseHappyDomIfRegistered } from '@/test-support/happy-dom-environment';
@@ -205,7 +208,9 @@ describe('En direct, le titre déplié de l’en-tête est la porte du pair', ()
   });
 
   test('avec une story, il ouvre sa story', () => {
-    const html = header(direct, false, RING);
+    /* Le TITRE seul : l'avatar voisin mène, lui, au profil du pair (#10300). */
+    const page = header(direct, false, RING);
+    const html = page.slice(page.indexOf('<h1'), page.indexOf('</h1>'));
 
     expect(html).toContain('href="/story/story-amina-1"');
     expect(html).not.toContain('href="/u/amina.diallo"');
@@ -216,5 +221,66 @@ describe('En direct, le titre déplié de l’en-tête est la porte du pair', ()
 
     expect(html).not.toContain('href="/u/');
     expect(html).not.toContain('href="/story/');
+  });
+});
+
+/* Rendu CLIENT : le rendu serveur lit l'état INITIAL du magasin de session
+   (`getServerSnapshot`), jamais l'invité posé par le témoin. */
+const clientHtml = (node: ReactNode): string => {
+  const globals = globalThis as typeof globalThis & { IS_REACT_ACT_ENVIRONMENT?: boolean };
+  globals.IS_REACT_ACT_ENVIRONMENT = true;
+  const host = document.createElement('div');
+  document.body.appendChild(host);
+  const root = createRoot(host);
+  act(() => root.render(node));
+  const html = host.innerHTML;
+  act(() => root.unmount());
+  host.remove();
+  delete globals.IS_REACT_ACT_ENVIRONMENT;
+  return html;
+};
+
+describe('un visiteur sans compte n’ouvre aucune fiche (#10205, directive porteur du 2026-10-11)', () => {
+  const asGuest = () =>
+    sessionStore.setState({
+      session: {
+        status: 'guest',
+        sessionToken: 'anon',
+        guest: { participantId: 'p-awa', nickname: 'Awa', conversationId: 'c-witness', link: 'mshy_world', mayWrite: true },
+        expiresAt: Number.MAX_SAFE_INTEGER,
+      },
+    });
+  const reset = () => sessionStore.setState({ session: { status: 'anonymous' } });
+  const focalRow = (mode: 'focal' | 'script') => (
+    <FocalRow mode={mode} place={placeOf(messageOf())} languages={['fr']} viewerId="u-viewer" ephemeralDeadline={{ state: 'none' }} onJumpToMessage={() => {}} senderStoryRing={RING} />
+  );
+
+  for (const mode of ['focal', 'script'] as const) {
+    test(`${mode} : ni l’avatar ni le nom ne mènent au profil ou à la story, même avec un anneau`, () => {
+      expect(clientHtml(focalRow(mode))).toContain('href="/story/story-amina-1"');
+      asGuest();
+      try {
+        const html = clientHtml(focalRow(mode));
+        expect(html).not.toContain('href="/u/');
+        expect(html).not.toContain('href="/story/');
+        expect(html).toContain('Amina Diallo');
+      } finally {
+        reset();
+      }
+    });
+  }
+
+  test('Bulles : ni l’avatar ni le nom ne mènent nulle part', () => {
+    asGuest();
+    try {
+      const html = clientHtml(
+        <Bubble place={placeOf(messageOf())} languages={['fr']} isGrouped viewerId="u-viewer" ephemeralDeadline={{ state: 'none' }} onJumpToMessage={() => {}} senderStoryRing={RING} />,
+      );
+      expect(html).not.toContain('href="/u/');
+      expect(html).not.toContain('href="/story/');
+      expect(html).toContain('Amina Diallo');
+    } finally {
+      reset();
+    }
   });
 });

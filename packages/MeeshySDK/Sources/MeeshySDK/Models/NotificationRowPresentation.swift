@@ -55,16 +55,17 @@ public struct NotificationRowPresentation: Equatable, Sendable {
 
 /// Deux textes d'une même ligne « se répètent » quand, une fois dépouillés de
 /// leurs guillemets, de leur casse, de leurs espaces et d'une troncature « … »,
-/// l'un est l'autre ou le début de l'autre. Le serveur tronque ses citations
+/// l'un est l'autre, le début ou la FIN de l'autre. Le serveur tronque ses citations
 /// (« Superbe features qui vient avec tellement d'… ») : l'égalité stricte ne
-/// les aurait jamais reconnues.
+/// les aurait jamais reconnues. Et un titre qui FINIT par le groupe (« Awa a rejoint
+/// Les Amis ») le dit déjà : le pied « Les Amis » se tait (#10299, comme le web).
 public enum NotificationRowText {
 
     public static func repeats(_ candidate: String, _ other: String) -> Bool {
         let a = normalized(candidate)
         let b = normalized(other)
         guard !a.isEmpty, !b.isEmpty else { return false }
-        return a == b || a.hasPrefix(b) || b.hasPrefix(a)
+        return a == b || a.hasPrefix(b) || b.hasPrefix(a) || a.hasSuffix(b) || b.hasSuffix(a)
     }
 
     /// Garde, dans l'ordre, chaque texte qui ne répète aucun des précédents.
@@ -260,9 +261,13 @@ public extension APINotification {
 
     // MARK: Paliers
 
+    /// #10298 — un palier qui porte `tierRank` a son titre (le palier) et son corps (l'exploit) composés
+    /// par la passerelle : la cloche les rend tels quels, comme le push et le web. Sans lui (lignes
+    /// d'avant), l'app recompose depuis son catalogue.
     private func milestonePresentation(_ milestone: NotificationMilestone, copy: NotificationCopyLookup) -> NotificationRowPresentation {
-        let name = milestoneName(milestone, copy: copy) ?? formattedTitle
-        let reason = milestoneReason(milestone, copy: copy) ?? Self.firstNonEmpty(content)
+        let served = metadata?.tierRank != nil
+        let name = (served ? Self.firstNonEmpty(title) : nil) ?? milestoneName(milestone, copy: copy) ?? formattedTitle
+        let reason = (served ? Self.firstNonEmpty(content) : nil) ?? milestoneReason(milestone, copy: copy) ?? Self.firstNonEmpty(content)
         let texts = NotificationRowText.distinct([name, reason])
         return NotificationRowPresentation(
             leading: .milestone(symbol: milestone.symbol),

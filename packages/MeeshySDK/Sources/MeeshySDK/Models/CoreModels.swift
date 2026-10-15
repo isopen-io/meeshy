@@ -378,10 +378,16 @@ public struct MeeshyConversation: Identifiable, Hashable, Codable, Sendable {
 
     public let colorPalette: ConversationColorPalette
 
-    public var accentColor: String { colorPalette.primary }
+    public var accentColor: String { displayPrimary }
     public var name: String { title ?? identifier }
     public var displayName: String { userState.customName ?? title ?? identifier }
     public var isArchived: Bool { !isActive }
+
+    /// L'identifiant de World Wide, la conversation globale ouverte au monde
+    /// (miroir de `WORLD_IDENTIFIER`, `apps/web/src/lib/lens/world-pin.ts`).
+    /// Meeshy Global (`meeshy`) est une AUTRE conversation globale.
+    public static let worldWideIdentifier = "world"
+    public var isWorldWide: Bool { identifier == Self.worldWideIdentifier }
 
     /// Présence du pair d'une conversation directe, dérivée du SEUL signal que
     /// le modèle porte (`lastSeenAt`) via la règle produit 1/3/5.
@@ -505,6 +511,7 @@ public struct MeeshyConversation: Identifiable, Hashable, Codable, Sendable {
         var h = Hasher()
         h.combine(lastMessagePreview)
         h.combine(userState.unreadCount)
+        h.combine(userState.appearance?.accent)
         h.combine(lastMessageAt)
         h.combine(lastMessageSenderName)
         h.combine(lastMessageAttachmentCount)
@@ -765,6 +772,8 @@ public struct MeeshyConversation: Identifiable, Hashable, Codable, Sendable {
         case userStateTags
         case version, lastSyncedAt, pendingMutationCount
         case isLocked, hasDraft, draftPreview
+        // Le fond et l'accent personnels (#10631) : le cache disque les garde, le premier rendu hors ligne aussi.
+        case appearance
     }
 
     public init(from decoder: Decoder) throws {
@@ -862,6 +871,7 @@ public struct MeeshyConversation: Identifiable, Hashable, Codable, Sendable {
             clearHistoryBefore: try c.decodeIfPresent(Date.self, forKey: .clearHistoryBefore),
             customName: try c.decodeIfPresent(String.self, forKey: .customName),
             reaction: try c.decodeIfPresent(String.self, forKey: .reaction),
+            appearance: try? c.decodeIfPresent(ConversationAppearance.self, forKey: .appearance),
             tags: try c.decodeIfPresent([String].self, forKey: .userStateTags) ?? [],
             sectionId: try c.decodeIfPresent(String.self, forKey: .sectionId),
             orderInCategory: try c.decodeIfPresent(Int.self, forKey: .orderInCategory),
@@ -960,6 +970,7 @@ public struct MeeshyConversation: Identifiable, Hashable, Codable, Sendable {
         try c.encode(userState.isLocked, forKey: .isLocked)
         try c.encode(userState.hasDraft, forKey: .hasDraft)
         try c.encodeIfPresent(userState.draftPreview, forKey: .draftPreview)
+        try c.encodeIfPresent(userState.appearance, forKey: .appearance)
     }
 }
 

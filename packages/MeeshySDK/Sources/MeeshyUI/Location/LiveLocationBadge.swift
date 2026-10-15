@@ -45,7 +45,7 @@ public struct LiveLocationBadge: View {
                 Button {
                     onStop()
                 } label: {
-                    Text(String(localized: "location.live.stop", defaultValue: "Arreter", bundle: .module))
+                    Text(String(localized: "location.live.stop", defaultValue: "Arrêter", bundle: .module))
                         .font(.system(size: MeeshyFont.captionSize, weight: .bold))
                         .foregroundColor(MeeshyColors.tileCoral)
                         .padding(.horizontal, MeeshySpacing.sm)
@@ -111,7 +111,7 @@ public struct LiveLocationDurationPicker: View {
                 Image(systemName: "timer")
                     .font(.system(size: MeeshyIconSize.xs, weight: .semibold))
                     .foregroundColor(Color(hex: accentColor))
-                Text(String(localized: "location.live.shareDuration", defaultValue: "Duree du partage", bundle: .module))
+                Text(String(localized: "location.live.shareDuration", defaultValue: "Durée du partage", bundle: .module))
                     .font(.system(size: MeeshyFont.subheadSize, weight: .semibold))
                     .foregroundColor(.primary)
             }

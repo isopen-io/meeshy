@@ -30,9 +30,12 @@ import { currentAdminLanguage, suspendForAdminInterfaceCatalog, translateAdmin, 
 import { useParams } from '@/lib/router';
 import { participantAvatarOf } from '@/lib/view/conversation';
 import { useLiveAnnouncer } from '@/lib/view/use-live-announcer';
+import { gestureEffect } from '@/lib/admin/post-gestures';
 
 import { AdminAnnouncement } from '@/components/admin/announcement';
 import { AdminPostRemoval, PostAudioTrack, PostCommentsSection, PostEngagementSection, PostMediaSection, PostStorySection, PostViewersSection } from './admin-post-parts';
+import { AdminCommentRemoval } from './admin-comment-removal';
+import { AdminPostGestureBar } from './admin-post-gestures';
 
 /**
  * **LA FICHE D'UNE PUBLICATION** (#8876) — `/admin/posts/$post` ·
@@ -257,7 +260,30 @@ export function AdminPostPanel({
       case 'story':
         return fiche.story === null ? null : <PostStorySection language={language} story={fiche.story} />;
       case 'comments':
-        return <PostCommentsSection language={language} fiche={fiche} now={now} />;
+        return (
+          <PostCommentsSection
+            language={language}
+            fiche={fiche}
+            now={now}
+            {...(reach.can('canModerateContent')
+              ? {
+                  commentActions: (commentId: string) => (
+                    <AdminCommentRemoval
+                      language={language}
+                      commentId={commentId}
+                      onAnnounce={announcer.announce}
+                      deps={deps}
+                      optimistic={{
+                        key: adminPostQueryKey(postId),
+                        apply: (before) =>
+                          before === null || before === undefined ? before : { ...(before as AdminPostFiche), comments: (before as AdminPostFiche).comments.filter((entry) => entry.id !== commentId) },
+                      }}
+                    />
+                  ),
+                }
+              : {})}
+          />
+        );
       case 'viewers':
         return <PostViewersSection language={language} fiche={fiche} now={now} />;
     }
@@ -303,7 +329,21 @@ export function AdminPostPanel({
                 {fiche.isEdited ? <AdminBadge tone="neutral">{translateAdmin(language, 'admin.posts.edited')}</AdminBadge> : null}
               </>
             }
-            actions={reach.can('canModerateContent') ? <AdminPostRemoval language={language} fiche={fiche} deps={deps} onAnnounce={announcer.announce} /> : undefined}
+            actions={
+              reach.can('canModerateContent') ? (
+                <div className="flex flex-wrap items-center gap-2">
+                  <AdminPostGestureBar
+                    language={language}
+                    post={{ id: fiche.id, state: postStateOf(fiche, now), visibility: fiche.visibility, moderationPriorVisibility: fiche.moderationPriorVisibility }}
+                    onAnnounce={announcer.announce}
+                    deps={deps}
+                    optimistic={{ key: adminPostQueryKey(postId), apply: (before, intent, at) => (before === null || before === undefined ? before : gestureEffect(before as AdminPostFiche, intent, at)) }}
+                    invalidate={[['admin', 'posts']]}
+                  />
+                  <AdminPostRemoval language={language} fiche={fiche} deps={deps} onAnnounce={announcer.announce} />
+                </div>
+              ) : undefined
+            }
           />
         }
         stats={

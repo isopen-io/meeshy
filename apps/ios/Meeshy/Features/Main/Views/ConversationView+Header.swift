@@ -10,8 +10,10 @@ extension ConversationView {
 
     // MARK: - Conversation Background
     var conversationBackground: some View {
-        ConversationAnimatedBackground(
-            config: ConversationBackgroundConfig(
+        ConversationBackgroundView(
+            conversationId: conversation?.id ?? "",
+            initialAppearance: liveConversation?.userState.appearance,
+            signature: ConversationBackgroundConfig(
                 conversationType: conversation?.type ?? .direct,
                 isEncrypted: conversation?.encryptionMode != nil,
                 isE2EEncrypted: conversation?.encryptionMode == "e2ee",
@@ -19,7 +21,8 @@ extension ConversationView {
                 accentHex: accentColor,
                 secondaryHex: secondaryColor,
                 isDarkMode: isDark
-            )
+            ),
+            knownAttachment: { id in viewModel.messages.lazy.flatMap(\.attachments).first { $0.id == id } }
         )
         // Le fond vit toute la vie de l'écran : c'est là qu'il écoute le pair
         // d'un direct (#9359). Seule une annonce qui CHANGE le pair affiché
@@ -27,6 +30,26 @@ extension ConversationView {
         .onReceive(MessageSocketManager.shared.userUpdated.receive(on: DispatchQueue.main)) { event in
             admitPeerUpdate(event)
         }
+        // L'accent personnel choisi (ou rétabli) repeint le fil, ses bulles, son
+        // composeur et son en-tête aussitôt, sans relecture réseau (#10631).
+        .onReceive(NotificationCenter.default.publisher(for: ConversationAppearanceChange.notification).receive(on: DispatchQueue.main)) { note in
+            admitAppearance(note)
+        }
+        // Traduction sur l'appareil (#9899) : le fond vit aussi longtemps que
+        // l'écran, et la couche n'y peint rien.
+        .deviceTranslationLayer(
+            viewModel: viewModel,
+            isEnabled: !previewMode && anonymousSession == nil,
+            encryptionMode: liveConversation?.encryptionMode
+        )
+    }
+
+    /// Seul un changement de ce qui se voit écrit l'override : l'écho d'un choix déjà
+    /// appliqué ne redessine rien.
+    func admitAppearance(_ note: Notification) {
+        guard let live = liveConversation,
+              let changed = ConversationAppearanceChange.appearance(in: note, for: live.id) else { return }
+        admitRepainted(live.adoptingAppearance(changed))
     }
 
     // MARK: - Header Avatar (thin wrapper → extracted struct to avoid PAC crashes)
@@ -51,6 +74,7 @@ extension ConversationView {
             headerPresenceState: headerPresenceState,
             showsIdentity: headerLayout.avatarShowsIdentity,
             isPreview: previewMode,
+            door: headerAvatarDoor,
             onSetExpanded: { setHeaderExpanded($0) },
             onDismissFlame: { dismissHeaderFlame() },
             onNavigateToDM: { userId, name in
@@ -64,6 +88,33 @@ extension ConversationView {
             onViewMemberProfile: { user in
                 router.openProfile(user, inConversation: conversation?.id)
             }
+        ))
+    }
+
+    /// Ce que le toucher de l'avatar de l'en-tête ouvre (#10300) — lu sur la
+    /// conversation VIVANTE, comme la bande d'avatars.
+    var headerAvatarDoor: ConversationHeaderAvatarDoor {
+        .resolve(
+            isDirect: liveConversation?.type == .direct,
+            isGuest: anonymousSession != nil,
+            peerUserId: liveConversation?.participantUserId,
+            hasConversation: liveConversation != nil
+        )
+    }
+
+    /// Middle slot of the header band (between back button and avatar).
+    /// Frontière NOMINALE — `ConversationHeaderMidContent` (#6194) : c'est le
+    /// getter de ce maillon que la trace du crash désignait, sous
+    /// `__swift_instantiateConcreteTypeFromMangledNameV2`. Quand l'avatar ouvre
+    /// une fiche (#10300), la bascule de l'en-tête passe à la zone libre de la bande.
+    var expandedHeaderMidContent: AnyView {
+        AnyView(ConversationHeaderMidContent(
+            layout: headerLayout,
+            titleAndTags: { AnyView(expandedHeaderTitleAndTags) },
+            actionButtons: { headerButtonsCluster },
+            onToggleBand: headerAvatarDoor.bandToggles(isPreview: previewMode)
+                ? { setHeaderExpanded(!composerState.showOptions) }
+                : nil
         ))
     }
 
@@ -152,30 +203,39 @@ extension ConversationView {
     }
 
     private var headerCallButtonsOnly: AnyView {
-        // #3585 — un groupe s'appelle depuis le MÊME bouton qu'un contact : la
-        // poignée de l'appel est la conversation, son nom le titre du groupe.
-        if conversation?.type == .group, let groupId = conversation?.id, !groupId.isEmpty {
+        guard let entry = HeaderCallEntry.resolve(
+            conversation: conversation,
+            viewerPlatformRole: AuthManager.shared.currentUser?.role,
+            viewerIsGuest: anonymousSession != nil
+        ) else { return AnyView(EmptyView()) }
+        switch entry.callee {
+        case .conversation:
+            // #3585 — un groupe s'appelle depuis le MÊME bouton qu'un contact : la
+            // poignée de l'appel est la conversation, son nom le titre du groupe.
+            let groupId = conversation?.id ?? ""
             return AnyView(HeaderCallButtonsView(
                 conversationId: groupId,
                 userId: groupId,
                 calleeName: conversation?.displayName ?? "",
                 accentColor: accentColor,
                 secondaryColor: secondaryColor,
-                isGroup: true
+                isGroup: true,
+                canStart: entry.canStart
+            ))
+        case .peer(let userId):
+            // §7.6 — the start-call buttons are owned by a dedicated subview that
+            // observes CallManager, so during an active call they swap to a
+            // "tap to return" indicator (preventing a 2nd call from the header)
+            // without forcing the whole ConversationView to observe the singleton.
+            return AnyView(HeaderCallButtonsView(
+                conversationId: conversation?.id ?? "",
+                userId: userId,
+                calleeName: resolvedCalleeName,
+                accentColor: accentColor,
+                secondaryColor: secondaryColor,
+                canStart: entry.canStart
             ))
         }
-        guard isDirect, let userId = conversation?.participantUserId else { return AnyView(EmptyView()) }
-        // §7.6 — the start-call buttons are owned by a dedicated subview that
-        // observes CallManager, so during an active call they swap to a
-        // "tap to return" indicator (preventing a 2nd call from the header)
-        // without forcing the whole ConversationView to observe the singleton.
-        return AnyView(HeaderCallButtonsView(
-            conversationId: conversation?.id ?? "",
-            userId: userId,
-            calleeName: resolvedCalleeName,
-            accentColor: accentColor,
-            secondaryColor: secondaryColor
-        ))
     }
 
     /// Resolves the callee display name for DM calls.
@@ -304,6 +364,50 @@ extension ConversationView {
     }
 }
 
+// MARK: - Ce que l'en-tête offre pour appeler (#10207)
+
+/// Qui l'en-tête appelle, et si le lecteur peut LANCER cet appel. La
+/// permission est la loi unique du SDK (`CallPermission.canStartCall`, miroir
+/// de `packages/shared/utils/call-permission.ts`) ; ce type n'y ajoute que la
+/// FORME de l'appel que l'app sait passer : un pair pour un direct, la
+/// conversation pour un groupe ou une public.
+///
+/// `nil` : aucun bouton d'appel — invité sans compte, conversation `global`,
+/// ou type que l'app n'appelle pas. Une `public` dont le lecteur n'est ni
+/// créateur ni administrateur garde l'entrée avec `canStart == false` : il ne
+/// lance rien, mais rejoint l'appel déjà en cours.
+struct HeaderCallEntry: Equatable {
+
+    enum Callee: Equatable {
+        case peer(userId: String)
+        case conversation
+    }
+
+    let callee: Callee
+    let canStart: Bool
+
+    static func resolve(conversation: Conversation?, viewerPlatformRole: String?, viewerIsGuest: Bool) -> HeaderCallEntry? {
+        guard let conversation, !viewerIsGuest, conversation.type != .global else { return nil }
+        let canStart = CallPermission.canStartCall(CallPermission.Context(
+            conversationType: conversation.type.rawValue,
+            viewerIsCreator: conversation.currentUserRole?.lowercased() == MemberRole.creator.rawValue,
+            viewerConversationRole: conversation.currentUserRole,
+            viewerPlatformRole: viewerPlatformRole,
+            viewerIsGuest: viewerIsGuest
+        ))
+        switch conversation.type {
+        case .direct:
+            guard let peer = conversation.participantUserId, !peer.isEmpty else { return nil }
+            return HeaderCallEntry(callee: .peer(userId: peer), canStart: canStart)
+        case .group, .public:
+            guard !conversation.id.isEmpty else { return nil }
+            return HeaderCallEntry(callee: .conversation, canStart: canStart)
+        default:
+            return nil
+        }
+    }
+}
+
 // MARK: - Header Call Buttons (§7.6)
 // Owns the CallManager observation so the header reacts to call state without
 // the whole ConversationView subscribing. Idle → audio + video start buttons;
@@ -319,6 +423,10 @@ private struct HeaderCallButtonsView: View {
     /// #3585 — `userId` porte alors la conversation (poignée CallKit du groupe)
     /// et `calleeName` son titre.
     var isGroup = false
+    /// `false` : le lecteur ne LANCE pas d'appel ici (#10207 — une `public`
+    /// dont il n'est ni créateur ni administrateur) ; il rejoint seulement
+    /// celui qui est déjà en cours.
+    var canStart = true
 
     @ObservedObject private var callManager = CallManager.shared
     /// Set when the SERVER (not this device's own `CallManager`) reports an
@@ -345,7 +453,7 @@ private struct HeaderCallButtonsView: View {
                 }
             } else if let activeCall = reconciledActiveCall {
                 rejoinCallIndicator(activeCall)
-            } else {
+            } else if canStart {
                 startCallButtons
             }
         }
@@ -486,7 +594,7 @@ private struct HeaderCallButtonsView: View {
             Button {
                 startCall(isVideo: true)
             } label: {
-                Label(String(localized: "call.start.video", defaultValue: "Appel video", bundle: .main), systemImage: "video.fill")
+                Label(String(localized: "call.start.video", defaultValue: "Appel vidéo", bundle: .main), systemImage: "video.fill")
             }
         } label: {
             callGlyph("phone.fill")
@@ -553,8 +661,10 @@ private struct ConversationHeaderAvatarView: View {
     /// L'IDENTITÉ — pile des plus actifs puis interlocuteur ou groupe — plutôt
     /// que l'avatar replié (`ConversationHeaderLayout.avatarShowsIdentity`).
     let showsIdentity: Bool
-    /// Dans l'aperçu, l'avatar ouvre les détails : il n'y a rien à replier.
+    /// Dans l'aperçu, il n'y a rien à replier.
     let isPreview: Bool
+    /// Ce que le toucher de l'avatar ouvre (#10300).
+    let door: ConversationHeaderAvatarDoor
     var onSetExpanded: (Bool) -> Void
     var onDismissFlame: () -> Void
     var onNavigateToDM: (String, String) -> Void
@@ -667,21 +777,54 @@ private struct ConversationHeaderAvatarView: View {
         return avatarContextMenu(for: userId, name: conversation?.name ?? "Contact")
     }
 
-    /// Le toucher de l'identité : dans le fil il replie l'en-tête, dans
-    /// l'aperçu il ouvre les détails de la conversation (comme le web).
-    private func identityTap() {
+    /// Le toucher de l'avatar (#10300) : il OUVRE LA FICHE — le profil du pair
+    /// d'un direct, les détails de toute autre conversation, déplié comme replié
+    /// et dans l'aperçu. Sans fiche à ouvrir (visiteur sans compte, #10205), il
+    /// garde la bascule de l'en-tête, que la zone libre de la bande porte sinon.
+    private func openDoor() {
         HapticFeedback.light()
-        if isPreview {
+        switch door {
+        case .profile:
+            onViewProfile?()
+        case .details:
             composerState.showConversationInfo = true
-        } else {
-            onSetExpanded(false)
+        case .toggle:
+            guard !isPreview else { return }
+            onSetExpanded(!showsIdentity)
         }
+    }
+
+    private func toggleBand() {
+        HapticFeedback.light()
+        onSetExpanded(!showsIdentity)
+    }
+
+    private func doorAccessibility(menu: [AvatarContextMenuItem]) -> HeaderAvatarDoorAccessibility {
+        HeaderAvatarDoorAccessibility(
+            label: door.accessibilityLabel(name: conversation?.name ?? "?", expanded: showsIdentity),
+            toggleLabel: door.bandToggles(isPreview: isPreview) ? ConversationHeaderAvatarDoor.toggleLabel(expanded: showsIdentity) : nil,
+            menuItems: menu,
+            onOpen: openDoor,
+            onToggle: toggleBand
+        )
+    }
+
+    /// Les entrées du pair d'un direct pour VoiceOver : la story (que
+    /// `MeeshyAvatar` ajoute d'office à son menu) puis le menu d'appui long.
+    private var directAccessibilityMenu: [AvatarContextMenuItem] {
+        guard let userId = conversation?.participantUserId else { return [] }
+        guard memberStoryState(for: userId) != .none else { return directContextMenu }
+        let story = AvatarContextMenuItem(
+            label: String(localized: "bubble.avatar.viewStory", defaultValue: "Voir la story", bundle: .main),
+            icon: "play.circle.fill"
+        ) { openStory(of: userId) }
+        return [story] + directContextMenu
     }
 
     var body: some View {
         if showsIdentity {
-            // Identity: participant avatar(s) — tap collapses band (fil) or
-            // opens details (aperçu, #9031)
+            // Identity: participant avatar(s) — tap opens the profile (direct)
+            // or the conversation details (#10300)
             if isDirect, let userId = conversation?.participantUserId {
                 MeeshyAvatar(
                     name: conversation?.name ?? "?",
@@ -693,7 +836,7 @@ private struct ConversationHeaderAvatarView: View {
                     moodEmoji: statusViewModel.statusForUser(userId: userId)?.moodEmoji,
                     presenceState: PresenceManager.shared.presenceState(for: userId),
                     isHere: isHere(userId),
-                    onTap: identityTap,
+                    onTap: openDoor,
                     onViewStory: {
                         headerState.storyUserIdForHeader = userId
                         headerState.showStoryViewerFromHeader = true
@@ -701,6 +844,7 @@ private struct ConversationHeaderAvatarView: View {
                     onMoodTap: statusViewModel.moodTapHandler(for: userId),
                     contextMenuItems: directContextMenu
                 )
+                .modifier(doorAccessibility(menu: directAccessibilityMenu))
             } else {
                 HStack(spacing: MeeshySpacing.xs) {
                     // Stacked active member avatars
@@ -732,12 +876,14 @@ private struct ConversationHeaderAvatarView: View {
                         accentColor: accentColor,
                         secondaryColor: secondaryColor,
                         avatarURL: conversation?.avatar,
-                        onTap: identityTap
+                        onTap: openDoor
                     )
+                    .modifier(doorAccessibility(menu: []))
                 }
             }
         } else {
-            // Collapsed: avatar trigger — tap expands band, long press shows context menu
+            // Collapsed: tap opens the profile or the details (#10300) — the band's
+            // free space expands it — long press shows the context menu
             MeeshyAvatar(
                 name: conversation?.name ?? "?",
                 context: .conversationHeaderCollapsed,
@@ -748,10 +894,7 @@ private struct ConversationHeaderAvatarView: View {
                 moodEmoji: headerMoodEmoji,
                 presenceState: headerPresenceState,
                 isHere: isDirect ? isHere(conversation?.participantUserId) : .absent,
-                onTap: {
-                    HapticFeedback.light()
-                    onSetExpanded(true)
-                },
+                onTap: openDoor,
                 onViewStory: isDirect ? {
                     if let userId = conversation?.participantUserId {
                         headerState.storyUserIdForHeader = userId
@@ -761,6 +904,7 @@ private struct ConversationHeaderAvatarView: View {
                 onMoodTap: isDirect ? statusViewModel.moodTapHandler(for: conversation?.participantUserId ?? "", repliesInline: true) : nil,
                 contextMenuItems: directContextMenu
             )
+            .modifier(doorAccessibility(menu: isDirect ? directAccessibilityMenu : []))
             // La flamme du jour, sous l'avatar replié (#9031).
             .modifier(HeaderFlameDecoration(
                 conversationId: conversation?.id ?? "",

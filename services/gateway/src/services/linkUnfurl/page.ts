@@ -54,6 +54,8 @@ export type LinkUnfurlSource = {
   readonly expiresAt: Date | null;
   readonly maxUses: number | null;
   readonly currentUses: number;
+  /** Un lien borné à des plages d'adresses n'est pas PUBLIC (#10192) : son aperçu reste générique. */
+  readonly allowedIpRanges: readonly string[];
   readonly conversation: {
     readonly title: string | null;
     readonly isActive: boolean;
@@ -74,6 +76,7 @@ const linkUnfurlSelect = {
   expiresAt: true,
   maxUses: true,
   currentUses: true,
+  allowedIpRanges: true,
   conversation: { select: { title: true, isActive: true, closedAt: true } },
   creator: {
     select: {
@@ -104,7 +107,16 @@ export type LinkUnfurl = {
   readonly imageUrl: string;
   readonly imageAlt: string;
   readonly linkLabel: string;
+  /**
+   * Ce que la page SAIT de son image (#10559). Absent : l'image de marque et ses
+   * dimensions. `null` : une image d'utilisateur, dont rien n'est annoncé.
+   */
+  readonly imageMeta?: UnfurlImageMeta | null;
+  /** Absent : la grande carte. `summary` : une image carrée (un avatar). */
+  readonly card?: 'summary' | 'summary_large_image';
 };
+
+export type UnfurlImageMeta = { readonly type: string; readonly width: number; readonly height: number };
 
 const LINE_BREAKS = /[\t\n\r\f\v\u2028\u2029]+/g;
 const INVISIBLE_CONTROLS = /[\p{Cc}\u115F\u1160\u3164\uFFA0]/gu;
@@ -119,7 +131,7 @@ const ZERO_WIDTH_JOINER = '\u200D';
  * liant de largeur nulle survit, qui compose les émojis — et un texte qui n'est
  * fait que de lui ne nomme rien. L'échappement HTML vient APRÈS, au rendu.
  */
-function cleanUserText(text: string | null | undefined, max: number): string | null {
+export function cleanUserText(text: string | null | undefined, max: number): string | null {
   const cleaned = (text ?? '')
     .replace(LINE_BREAKS, ' ')
     .replace(INVISIBLE_CONTROLS, '')
@@ -154,12 +166,17 @@ const firstServed = (codes: readonly string[]): UnfurlLanguage | null =>
  * premier rang que le catalogue sert. Sans hôte ni rang servi, la langue que le
  * robot demande, puis le français.
  */
-function unfurlLanguage(creator: LinkUnfurlSource['creator'], acceptLanguage: string | undefined): UnfurlLanguage {
+export function unfurlLanguage(creator: RecipientLanguagePrefs | null, acceptLanguage: string | undefined): UnfurlLanguage {
   return firstServed(recipientLanguages(creator)) ?? firstServed(acceptedLanguages(acceptLanguage)) ?? DEFAULT_LANGUAGE;
 }
 
-const isOpen = (source: LinkUnfurlSource, now: Date): boolean =>
-  isShareLinkOpen(source, now) && !isConversationClosed(source.conversation);
+/**
+ * Un lien dont l'aperçu NOMME son titre et son hôte : ouvert (actif, non échu,
+ * non épuisé, conversation non close) ET public — aucune plage d'adresses ne le
+ * borne (#10192). Tout autre lien rend l'aperçu générique.
+ */
+const isPublicAndOpen = (source: LinkUnfurlSource, now: Date): boolean =>
+  isShareLinkOpen(source, now) && !isConversationClosed(source.conversation) && source.allowedIpRanges.length === 0;
 
 /** L'hôte que l'invitation NOMME : un compte actif, non supprimé, dont le nom (sinon le pseudo) se lit une fois nettoyé. */
 function nameableHost(creator: LinkUnfurlSource['creator']): string | null {
@@ -187,7 +204,7 @@ export function composeLinkUnfurl(params: {
   readonly now: Date;
 }): LinkUnfurl {
   const { source, identifier, acceptLanguage, origin, now } = params;
-  const live = source !== null && isUnfurlableIdentifier(identifier) && isOpen(source, now) ? source : null;
+  const live = source !== null && isUnfurlableIdentifier(identifier) && isPublicAndOpen(source, now) ? source : null;
   const host = live ? nameableHost(live.creator) : null;
   const lang = unfurlLanguage(host ? live?.creator ?? null : null, acceptLanguage);
   const copy = UNFURL_COPY[lang];
@@ -217,6 +234,14 @@ export function composeLinkUnfurl(params: {
 type MetaTag = readonly [attribute: 'name' | 'property', key: string, value: string];
 
 export function renderLinkUnfurlPage(unfurl: LinkUnfurl): string {
+  const imageMeta = unfurl.imageMeta === undefined ? LINK_UNFURL_IMAGE : unfurl.imageMeta;
+  const imageTags: readonly MetaTag[] = imageMeta === null
+    ? []
+    : [
+        ['property', 'og:image:type', imageMeta.type],
+        ['property', 'og:image:width', String(imageMeta.width)],
+        ['property', 'og:image:height', String(imageMeta.height)]
+      ];
   const tags: readonly MetaTag[] = [
     ['name', 'description', unfurl.description],
     ['name', 'robots', 'noindex, nofollow'],
@@ -227,11 +252,9 @@ export function renderLinkUnfurlPage(unfurl: LinkUnfurl): string {
     ['property', 'og:description', unfurl.description],
     ['property', 'og:url', unfurl.url],
     ['property', 'og:image', unfurl.imageUrl],
-    ['property', 'og:image:type', LINK_UNFURL_IMAGE.type],
-    ['property', 'og:image:width', String(LINK_UNFURL_IMAGE.width)],
-    ['property', 'og:image:height', String(LINK_UNFURL_IMAGE.height)],
+    ...imageTags,
     ['property', 'og:image:alt', unfurl.imageAlt],
-    ['name', 'twitter:card', 'summary_large_image'],
+    ['name', 'twitter:card', unfurl.card ?? 'summary_large_image'],
     ['name', 'twitter:title', unfurl.title],
     ['name', 'twitter:description', unfurl.description],
     ['name', 'twitter:image', unfurl.imageUrl],

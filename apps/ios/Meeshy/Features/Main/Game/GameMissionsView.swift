@@ -7,9 +7,10 @@ import MeeshyUI
 /// (conception, partie II « Missions du jour »). Miroir de
 /// `apps/web/src/components/game-missions.tsx`.
 ///
-/// Le coffre dit son contenu AVANT l'ouverture : un tirage dont on ignore les
-/// chances est une loterie, pas un jeu. Ouvert, ses récompenses se posent AU-DESSUS
-/// de lui (`ChestStage`, 1,4 s, une tape par récompense).
+/// Le coffre garde son contenu SECRET jusqu'à l'ouverture (#10567, qui renverse
+/// #10011) : fermé, il ne dit ni montant, ni chance, ni borne — la surprise est son
+/// contenu. Ouvert, ses récompenses se posent AU-DESSUS de lui (`ChestStage`, 1,4 s,
+/// une tape par récompense).
 ///
 /// Avant chaque geste, ce qu'il dépense ou exige se dit (#9705) : le prix d'un
 /// changement contre les Meeshes en poche, les missions faites que le coffre
@@ -49,11 +50,7 @@ struct GameMissionsView: View {
     var body: some View {
         GameCard(anchor: .missions, title: String(localized: "game.missions.title", defaultValue: "Missions du jour", bundle: .main)) {
             if !missions.unlocked {
-                GameNote(text: String(
-                    localized: "game.missions.locked",
-                    defaultValue: "Les missions s’ouvrent au niveau 5 : trois par jour, et un coffre. Tu es au niveau \(GameCopy.formatCount(game.level.shown.level)).",
-                    bundle: .main
-                ))
+                GameNote(text: GameCopy.missionsLocked(level: GameCopy.formatCount(game.level.shown.level)))
                 GameFactChipRow(
                     concept: .missions,
                     items: GameSpendRows.requirement(GameSpend.requirement(current: game.level.shown.level, required: GameMissions.minLevel)),
@@ -103,7 +100,7 @@ struct GameMissionsView: View {
                         GameNote(text: GameCopy.rerollLabel)
                         GameFactChipRow(
                             concept: .missions,
-                            items: GameSpendRows.spend(rerollSpend, format: GameCopy.meeshes),
+                            items: GameSpendRows.spend(rerollSpend, format: GameCopy.meeshes, missing: { ConceptText.spendMissingReroll(missing: $0) }),
                             identifier: "game.missions.reroll.spend"
                         )
                     }
@@ -118,7 +115,7 @@ struct GameMissionsView: View {
                 }
                 GameChestCard(
                     chest: game.chest, opening: chestOpening, online: online, error: errors.chest,
-                    haptics: haptics, onClaim: onClaim, missions: missions
+                    haptics: haptics, onClaim: onClaim, missions: missions, starFragments: game.starFragments
                 )
             }
         }
@@ -281,13 +278,16 @@ private struct GameChestCard: View {
     let onClaim: () -> Void
     /// Les missions du jour : ce que le coffre attend, dit dans ses précisions.
     let missions: GameBlock.Missions
+    /// Les fragments d'étoile collectés (#10011) — `nil` devant un serveur antérieur.
+    let starFragments: StarFragmentsTotal?
 
     @State private var play = 0
     @State private var rewarded: Bool
 
     init(chest: GameBlock.Chest, opening: Bool, online: Bool, error: String?, haptics: GameHapticsProviding,
-         onClaim: @escaping () -> Void, missions: GameBlock.Missions) {
+         onClaim: @escaping () -> Void, missions: GameBlock.Missions, starFragments: StarFragmentsTotal? = nil) {
         self.missions = missions
+        self.starFragments = starFragments
         self.chest = chest
         self.opening = opening
         self.online = online
@@ -344,8 +344,11 @@ private struct GameChestCard: View {
             case .claimed:
                 GameNote(text: String(localized: "game.chest.claimed", defaultValue: "Reviens demain pour le prochain.", bundle: .main))
             }
-            GameNote(text: oddsLine)
-                .multilineTextAlignment(.center)
+            if let starFragments {
+                GameNote(text: GameCopy.starFragments(starFragments.collected))
+                    .multilineTextAlignment(.center)
+                    .accessibilityIdentifier("game.starFragments")
+            }
             if !opening {
                 GameErrorLine(message: error, identifier: "game.chest.error")
             }
@@ -363,16 +366,7 @@ private struct GameChestCard: View {
             guard !rewarded else { return }
             rewarded = true
             play += 1
-            haptics.play(GameHapticPattern.chest(rewards: 1 + (reward.fragment ? 1 : 0) + (reward.freeze ? 1 : 0)))
+            haptics.play(GameHapticPattern.chest(rewards: GameChestLines.of(reward).count))
         }
-    }
-
-    private var oddsLine: String {
-        let odds = chest.odds
-        return String(
-            localized: "game.chest.odds",
-            defaultValue: "\(GameCopy.formatCount(odds.minPoints)) à \(GameCopy.points(odds.maxPoints)) · \(GameCopy.chance(odds.fragment)) d’un fragment · \(GameCopy.chance(odds.freeze)) d’un gel",
-            bundle: .main
-        )
     }
 }

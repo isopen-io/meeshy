@@ -85,8 +85,14 @@ extension GameSeasonBlock {
             claimedSteps: claimedSteps ?? self.claimedSteps,
             nextReward: nextReward ?? self.nextReward,
             sealOwned: sealOwned ?? self.sealOwned,
-            sealPrice: sealPrice
+            sealPrice: sealPrice,
+            stepPoints: stepPoints
         )
+    }
+
+    /// La récompense gratuite d'une étape de CETTE saison : ses points à elle (calendrier servi, #10232), sinon la loi.
+    func stepReward(_ step: Int) -> SeasonReward? {
+        GameSeason.stepReward(step, stepPoints: servedStepPoints)
     }
 }
 
@@ -175,7 +181,7 @@ enum GameWave2Optimistic {
         let claimed = (season.claimedSteps + [step]).sorted()
         let nextStep = (1...max(1, season.steps)).first { !claimed.contains($0) && $0 <= season.steps }
         let next: GameSeasonBlock.NextReward? = nextStep.flatMap { step in
-            GameSeason.stepReward(step).map {
+            season.stepReward(step).map {
                 GameSeasonBlock.NextReward(step: step, reward: .init(kind: $0.kind, amount: $0.amount))
             }
         }

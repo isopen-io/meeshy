@@ -1,0 +1,76 @@
+{
+  "packs": {
+    "essentiels": {
+      "name": "Essenziali",
+      "description": "I motivi e le sfumature di base."
+    },
+    "heritages": {
+      "name": "Eredità",
+      "description": "Motivi da tutto il mondo."
+    },
+    "nature-et-ciel": {
+      "name": "Natura e cielo",
+      "description": "Mappe, foglie, graticci e stelle."
+    },
+    "illustrations": {
+      "name": "Illustrazioni",
+      "description": "Paesaggi disegnati a tratto."
+    },
+    "bannieres-essentielles": {
+      "name": "Banner essenziali",
+      "description": "Sei banner per il tuo profilo."
+    },
+    "contours-essentiels": {
+      "name": "Contorni essenziali",
+      "description": "Sei contorni per il tuo avatar."
+    }
+  },
+  "designs": {
+    "monogramme": "Monogramma",
+    "chevrons": "Chevron",
+    "aurore": "Aurora",
+    "maille": "Maglia",
+    "art-deco": "Art déco",
+    "seigaiha": "Seigaiha",
+    "zellige": "Zellige",
+    "bogolan": "Bogolan",
+    "topographie": "Topografia",
+    "feuillage": "Fogliame",
+    "treillis": "Graticcio",
+    "constellation": "Costellazione",
+    "horizon": "Orizzonte",
+    "baobab": "Baobab"
+  },
+  "rings": {
+    "filet": "Filetto",
+    "double-filet": "Doppio filetto",
+    "perle": "Perle",
+    "aurore": "Aurora",
+    "deco": "Deco",
+    "laurier": "Alloro"
+  },
+  "gamut": {
+    "indigo": "Indaco Meeshy",
+    "bleu-nuit": "Blu notte",
+    "azur": "Azzurro",
+    "lagon": "Laguna",
+    "emeraude": "Smeraldo",
+    "olive": "Oliva",
+    "moutarde": "Senape",
+    "sable": "Sabbia",
+    "terracotta": "Terracotta",
+    "corail": "Corallo",
+    "rose-poudre": "Rosa cipria",
+    "framboise": "Lampone",
+    "prune": "Prugna",
+    "lavande": "Lavanda",
+    "ardoise": "Ardesia",
+    "graphite": "Grafite"
+  },
+  "modes": {
+    "signature": "Firma",
+    "solid": "Tinta unita",
+    "photo": "Foto della conversazione"
+  },
+  "avatarUsage": "Contorno del profilo"
+}

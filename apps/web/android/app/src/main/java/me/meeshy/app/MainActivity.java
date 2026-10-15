@@ -7,24 +7,35 @@ import android.app.RemoteAction;
 import android.content.Intent;
 import android.content.pm.PackageManager;
 import android.content.res.Configuration;
+import android.location.LocationManager;
+import android.net.Uri;
 import android.graphics.Bitmap;
 import android.graphics.drawable.Icon;
 import android.os.Build;
 import android.os.Bundle;
 import android.os.SystemClock;
+import android.provider.MediaStore;
+import android.provider.Settings;
 import android.util.Rational;
 import android.view.View;
 import android.view.ViewGroup;
+import android.webkit.GeolocationPermissions;
 import android.webkit.RenderProcessGoneDetail;
+import android.webkit.ValueCallback;
 import android.webkit.WebChromeClient;
 import android.webkit.WebView;
 import android.widget.FrameLayout;
 import androidx.activity.OnBackPressedCallback;
+import androidx.activity.result.ActivityResult;
+import androidx.activity.result.ActivityResultLauncher;
+import androidx.activity.result.contract.ActivityResultContracts;
+import androidx.core.location.LocationManagerCompat;
 import androidx.core.view.WindowCompat;
 import androidx.core.view.WindowInsetsCompat;
 import androidx.core.view.WindowInsetsControllerCompat;
 import com.getcapacitor.BridgeActivity;
 import com.getcapacitor.BridgeWebChromeClient;
+import com.getcapacitor.BridgeWebViewClient;
 import com.getcapacitor.PluginHandle;
 import com.getcapacitor.WebViewListener;
 import java.util.ArrayList;
@@ -63,6 +74,7 @@ public class MainActivity extends BridgeActivity {
      * rien, la ou le web agrandit l'element.
      */
     private WebChromeClient chromeClient;
+    private OnBackPressedCallback backCallback;
     private View fullscreenView;
     private WebChromeClient.CustomViewCallback fullscreenCallback;
 
@@ -74,6 +86,10 @@ public class MainActivity extends BridgeActivity {
 
     /** #9847 — la video qui flotte joue-t-elle ? null tant que la page ne l'a pas dit. */
     private Boolean floatPlaying;
+
+    /** #10087 — le selecteur de photos du systeme, et l'entree qui attend sa reponse. */
+    private ActivityResultLauncher<Intent> photoPicker;
+    private ValueCallback<Uri[]> pickCallback;
 
     static boolean isInForeground() {
         return inForeground;
@@ -189,6 +205,39 @@ public class MainActivity extends BridgeActivity {
         if (call != null) call.pictureInPictureChanged(active);
     }
 
+    /** #10227 — les reglages de localisation du systeme, comme Chrome a defaut de Play Services. */
+    private void openLocationSettings() {
+        try {
+            startActivity(new Intent(Settings.ACTION_LOCATION_SOURCE_SETTINGS));
+        } catch (android.content.ActivityNotFoundException missing) {
+            // Aucun ecran de reglages : la page garde son « Reessayer ».
+        }
+    }
+
+    private boolean locationEnabled() {
+        LocationManager manager = (LocationManager) getSystemService(LOCATION_SERVICE);
+        return manager == null || LocationManagerCompat.isLocationEnabled(manager);
+    }
+
+    /** #10087 — l'entree recoit toujours une reponse, vide quand rien n'est choisi. */
+    private void photosPicked(ActivityResult result) {
+        ValueCallback<Uri[]> callback = pickCallback;
+        pickCallback = null;
+        if (callback == null) return;
+        Intent data = result.getData();
+        if (result.getResultCode() != RESULT_OK || data == null) {
+            callback.onReceiveValue(null);
+            return;
+        }
+        if (data.getClipData() != null) {
+            Uri[] picked = new Uri[data.getClipData().getItemCount()];
+            for (int i = 0; i < picked.length; i++) picked[i] = data.getClipData().getItemAt(i).getUri();
+            callback.onReceiveValue(picked);
+            return;
+        }
+        callback.onReceiveValue(data.getData() == null ? null : new Uri[] { data.getData() });
+    }
+
     private MeeshyCallPlugin callPlugin() {
         PluginHandle handle = getBridge() == null ? null : getBridge().getPlugin("MeeshyCall");
         return handle == null ? null : (MeeshyCallPlugin) handle.getInstance();
@@ -213,9 +262,19 @@ public class MainActivity extends BridgeActivity {
         registerPlugin(MeeshyFileSinkPlugin.class);
         registerPlugin(MeeshyScreenGuardPlugin.class);
         registerPlugin(MeeshyLocalePlugin.class);
+        registerPlugin(MeeshySystemBarsPlugin.class);
+        registerPlugin(MeeshyWidgetsPlugin.class);
+        // #10034 — recreee par Android, l'activite rejoue l'ecran ouvert par le
+        // chemin des liens profonds : `BridgeActivity.load()` relit l'intent.
+        String route = savedInstanceState == null ? null : savedInstanceState.getString(ShellRoute.KEY);
+        if (route != null) setIntent(new Intent(Intent.ACTION_VIEW, Uri.parse(route)));
         super.onCreate(savedInstanceState);
+        // #10375 — les touches de volume reglent les medias, comme dans Chrome,
+        // et non la sonnerie ; un appel les rend a la voix (`MeeshyCallPlugin`).
+        setVolumeControlStream(VolumeStreamRules.stream(false));
         suivreTailleDuTexte(getResources().getConfiguration());
         SilentNotificationChannel.ensure(ShellLocale.wrap(this));
+        photoPicker = registerForActivityResult(new ActivityResultContracts.StartActivityForResult(), this::photosPicked);
         // #8547 — sans `poster`, le web montre le fond du `<video>` jusqu'a sa
         // premiere image ; la WebView dessine son icone « lecture » grise si
         // son client ne fournit pas d'apercu. On garde le client de Capacitor
@@ -224,6 +283,45 @@ public class MainActivity extends BridgeActivity {
             @Override
             public Bitmap getDefaultVideoPoster() {
                 return Bitmap.createBitmap(1, 1, Bitmap.Config.ARGB_8888);
+            }
+
+            /**
+             * #10087 — une entree qui n'accepte que des photos et/ou des
+             * videos ouvre le selecteur de photos du systeme, comme Chrome ;
+             * tout le reste garde le chemin de Capacitor.
+             */
+            @Override
+            @SuppressLint("NewApi")
+            public boolean onShowFileChooser(WebView webView, ValueCallback<Uri[]> callback, FileChooserParams params) {
+                String type = PhotoPickRules.pickerType(Build.VERSION.SDK_INT, params.getAcceptTypes(), params.isCaptureEnabled());
+                if (type == null) return super.onShowFileChooser(webView, callback, params);
+                Intent pick = new Intent(MediaStore.ACTION_PICK_IMAGES);
+                if (!PhotoPickRules.BOTH.equals(type)) pick.setType(type);
+                if (params.getMode() == FileChooserParams.MODE_OPEN_MULTIPLE) {
+                    pick.putExtra(MediaStore.EXTRA_PICK_IMAGES_MAX, MediaStore.getPickImagesMaxLimit());
+                }
+                if (pickCallback != null) pickCallback.onReceiveValue(null);
+                pickCallback = callback;
+                try {
+                    photoPicker.launch(pick);
+                } catch (android.content.ActivityNotFoundException missing) {
+                    pickCallback = null;
+                    return super.onShowFileChooser(webView, callback, params);
+                }
+                return true;
+            }
+
+            /**
+             * #10227 — Capacitor demande la permission, puis la page recoit
+             * sa reponse ; localisation eteinte, la coque ouvre ses reglages
+             * comme Chrome, et « Reessayer » aboutit au retour.
+             */
+            @Override
+            public void onGeolocationPermissionsShowPrompt(String origin, GeolocationPermissions.Callback callback) {
+                super.onGeolocationPermissionsShowPrompt(origin, (requestOrigin, allow, retain) -> {
+                    callback.invoke(requestOrigin, allow, retain);
+                    if (LocationPromptRules.opensLocationSettings(allow, locationEnabled())) openLocationSettings();
+                });
             }
 
             @Override
@@ -245,6 +343,7 @@ public class MainActivity extends BridgeActivity {
                     floatOnFullscreen = false;
                     enterFloat();
                 }
+                syncBack();
             }
 
             @Override
@@ -261,16 +360,20 @@ public class MainActivity extends BridgeActivity {
                 fullscreenView = null;
                 fullscreenCallback = null;
                 callback.onCustomViewHidden();
+                syncBack();
             }
         };
         getBridge().getWebView().setWebChromeClient(chromeClient);
+        // #10250 — la WebView dessine son effet de bord sans lire
+        // `overscroll-behavior` ; Chrome, lui, le coupe comme la page le demande.
+        getBridge().getWebView().setOverScrollMode(View.OVER_SCROLL_NEVER);
         getBridge()
             .addWebViewListener(
                 new WebViewListener() {
                     @Override
                     public boolean onRenderProcessGone(WebView webView, RenderProcessGoneDetail detail) {
                         long now = SystemClock.elapsedRealtime();
-                        if (!RendererRecovery.shouldRecover(lastRendererRecovery, now)) {
+                        if (!RendererRecovery.shouldRecover(lastRendererRecovery, now, detail.didCrash())) {
                             return false;
                         }
                         lastRendererRecovery = now;
@@ -279,30 +382,56 @@ public class MainActivity extends BridgeActivity {
                     }
                 }
             );
-        getOnBackPressedDispatcher()
-            .addCallback(
-                this,
-                new OnBackPressedCallback(true) {
+        // #10585 — chaque entree d'historique (pushState et fermeture de
+        // panneau compris) dit si le retour reste a la WebView ou revient au
+        // systeme, qui anime alors le retour a l'accueil sur Android 16.
+        getBridge()
+            .setWebViewClient(
+                new BridgeWebViewClient(getBridge()) {
                     @Override
-                    public void handleOnBackPressed() {
-                        if (fullscreenView != null) {
-                            chromeClient.onHideCustomView();
-                            return;
-                        }
-                        WebView webView = getBridge().getWebView();
-                        if (webView != null && webView.canGoBack()) {
-                            webView.goBack();
-                            return;
-                        }
-                        // #7988 — depuis Android 12, ce retour ne detruit plus
-                        // l'activite : rouverte, elle doit retrouver ce callback,
-                        // sinon le retour fermerait l'app depuis n'importe quel ecran.
-                        setEnabled(false);
-                        getOnBackPressedDispatcher().onBackPressed();
-                        setEnabled(true);
+                    public void doUpdateVisitedHistory(WebView view, String url, boolean isReload) {
+                        super.doUpdateVisitedHistory(view, url, isReload);
+                        syncBack();
                     }
                 }
             );
+        backCallback = new OnBackPressedCallback(false) {
+            @Override
+            public void handleOnBackPressed() {
+                if (fullscreenView != null) {
+                    chromeClient.onHideCustomView();
+                    return;
+                }
+                WebView webView = getBridge().getWebView();
+                if (webView != null && webView.canGoBack()) {
+                    webView.goBack();
+                    return;
+                }
+                // #7988, #10585 — l'historique a change entre la derniere
+                // synchronisation et le geste : le retour revient au systeme,
+                // et la prochaine entree d'historique reactivera ce callback.
+                setEnabled(false);
+                getOnBackPressedDispatcher().onBackPressed();
+            }
+        };
+        getOnBackPressedDispatcher().addCallback(this, backCallback);
+        syncBack();
+    }
+
+    private void syncBack() {
+        WebView webView = getBridge() == null ? null : getBridge().getWebView();
+        if (backCallback == null) return;
+        backCallback.setEnabled(BackRules.interceptsBack(fullscreenView != null, webView != null && webView.canGoBack()));
+    }
+
+    /** #10034 — l'adresse in-app de la WebView, gardee pour une recreation. */
+    @Override
+    public void onSaveInstanceState(Bundle outState) {
+        super.onSaveInstanceState(outState);
+        WebView webView = getBridge() == null ? null : getBridge().getWebView();
+        if (webView == null) return;
+        String route = ShellRoute.restoreLink(webView.getUrl(), getBridge().getAppUrl());
+        if (route != null) outState.putString(ShellRoute.KEY, route);
     }
 
     /**

@@ -6,6 +6,7 @@ import { env } from './env';
 import { createLlmProvider } from './llm/llm-factory';
 import { describeLlmStartup } from './llm/llm-startup-log';
 import { LlmRouter } from './llm/llm-router';
+import { LlmBudgetGate, resolveDailyBudgetUsd, resolveMaxConcurrentCalls } from './llm/budgeted-llm';
 import type { LlmProvider } from './llm/types';
 import { buildAgentGraph, type TracerRef } from './graph/graph';
 import { ZmqAgentListener } from './zmq/zmq-listener';
@@ -23,6 +24,8 @@ import { detectInterpellation } from './reactive/interpellation-detector';
 import { configRoutes } from './routes/config';
 import { deliveryRoutes } from './routes/delivery';
 import { readingRoutes } from './routes/reading';
+import { installInternalGuard } from './routes/internal-guard';
+import { seasonProposalRoutes } from './routes/season-proposal';
 import { createBridgeReadingOutlet, messageReaderFromStore } from './reading/bridge-reading-outlet';
 import { findEligibleConversations } from './scheduler/eligible-conversations';
 import { startDailySnapshotCron } from './cron/daily-snapshot';
@@ -33,8 +36,23 @@ import { TopicSeedService } from './topics/TopicSeedService';
 import { TopicUsageService } from './topics/TopicUsageService';
 
 const server = Fastify({ logger: true });
+// #10242 — toute route sauf /health exige le secret interne de la passerelle (fermée sans lui).
+installInternalGuard(server, { internalToken: env.AGENT_INTERNAL_TOKEN });
 const prisma = new PrismaClient();
 const redis = new Redis(env.REDIS_URL);
+
+// #10287 — la porte du budget : posée sous la relance de CHAQUE fournisseur de base
+// (`createLlmProvider(…, budgetGate.wrap)`), elle borne toute sortie LLM de l'agent —
+// graphe, réactif, lecture, saison — au budget du jour en dollars et à maxConcurrentCalls,
+// lus dans AgentGlobalConfig (cache Redis). Configuration illisible ⇒ refus (fermé).
+const persistence = new MongoPersistence(prisma);
+const configCache = new ConfigCache(redis, persistence);
+const budgetManager = new DailyBudgetManager(redis);
+const globalConfigForBudget = () => configCache.getGlobalConfig();
+const budgetGate = new LlmBudgetGate(budgetManager, {
+  budgetUsd: async () => resolveDailyBudgetUsd(await globalConfigForBudget()),
+  maxConcurrentCalls: async () => resolveMaxConcurrentCalls(await globalConfigForBudget().catch(() => null)),
+});
 
 server.get('/health', { logLevel: 'warn' }, async () => ({
   status: 'ok',
@@ -78,7 +96,7 @@ async function buildLlmFromConfig(): Promise<LlmProvider> {
     baseUrl: llmConfig?.baseUrl ?? undefined,
     temperature: llmConfig?.temperature ?? undefined,
     maxTokens: llmConfig?.maxTokens ?? undefined,
-  });
+  }, budgetGate.wrap);
 
   const fallbackProviderName = (llmConfig?.fallbackProvider as 'openai' | 'anthropic' | null)
     ?? (globalConfig?.fallbackProvider as 'openai' | 'anthropic' | null)
@@ -100,7 +118,7 @@ async function buildLlmFromConfig(): Promise<LlmProvider> {
 
   if (fallbackKey && fallbackArmed) {
     const { withFallback } = await import('./llm/llm-fallback');
-    const fallback = createLlmProvider({ provider: fallbackProviderName, apiKey: fallbackKey, model: fallbackModel });
+    const fallback = createLlmProvider({ provider: fallbackProviderName, apiKey: fallbackKey, model: fallbackModel }, budgetGate.wrap);
     return withFallback(primary, fallback);
   }
   return primary;
@@ -128,16 +146,13 @@ async function start() {
     topicUsage: topicUsageService,
   });
   const stateManager = new RedisStateManager(redis);
-  const persistence = new MongoPersistence(prisma);
-
-  const zmqListener = new ZmqAgentListener(env.ZMQ_HOST, env.ZMQ_PULL_PORT);
+  // #10288 — le PULL n'accepte que les messages signés par la passerelle (même secret que le HTTP).
+  const zmqListener = new ZmqAgentListener(env.ZMQ_HOST, env.ZMQ_PULL_PORT, env.AGENT_INTERNAL_TOKEN);
   const zmqPublisher = new ZmqAgentPublisher(env.ZMQ_HOST, env.ZMQ_PUB_PORT);
 
   await zmqListener.initialize();
   await zmqPublisher.initialize();
 
-  const configCache = new ConfigCache(redis, persistence);
-  const budgetManager = new DailyBudgetManager(redis);
   await configCache.startListening();
 
   // Rebuild the LLM provider in-place whenever the global config or the
@@ -184,6 +199,9 @@ async function start() {
     reader: messageReaderFromStore(stateManager),
   });
   server.register((instance) => readingRoutes(instance, bridgeReadingOutlet));
+  // #10234 — proposition de saison (l'IA propose, un humain valide). Ne reçoit que le LLM :
+  // ni base, ni file, ni horloge — la route rend un brouillon validé par la loi partagée.
+  server.register((instance) => seasonProposalRoutes(instance, llm, { internalToken: env.AGENT_INTERNAL_TOKEN }));
 
   const reactiveHandler = new ReactiveHandler(llm, persistence, stateManager, deliveryQueue);
   const scanner = new ConversationScanner(graph, persistence, stateManager, deliveryQueue, redis, configCache, budgetManager, tracerRef);
@@ -285,10 +303,16 @@ async function start() {
     }
   });
 
-  server.get('/debug/scanner-status', async () => ({
-    pendingDeliveries: await deliveryQueue.pendingCount,
-    uptime: process.uptime(),
-  }));
+  server.get('/debug/scanner-status', async () => {
+    const budgetUsd = resolveDailyBudgetUsd(await globalConfigForBudget().catch(() => null));
+    return {
+      pendingDeliveries: await deliveryQueue.pendingCount,
+      uptime: process.uptime(),
+      // #10287 — la dépense LLM du jour (UTC) face au budget appliqué.
+      llmSpentTodayUsd: await budgetManager.getLlmSpendToday(),
+      llmDailyBudgetUsd: budgetUsd,
+    };
+  });
 
   zmqListener.startListening().catch((error) => {
     server.log.error('ZMQ listener error:', error);

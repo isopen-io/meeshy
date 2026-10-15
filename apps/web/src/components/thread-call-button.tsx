@@ -43,6 +43,7 @@ export function ThreadCallButton({
   avatar,
   group,
   liveCallHint = null,
+  mayStart = true,
 }: {
   readonly conversationId: string;
   readonly title: string;
@@ -50,6 +51,10 @@ export function ThreadCallButton({
   readonly group: boolean;
   /** L'appel en cours que la ligne de liste connaît déjà (`activeCall`), `null` sinon. */
   readonly liveCallHint?: { readonly id: string; readonly kind: string } | null;
+  /** Le lecteur peut-il LANCER un appel ici (`threadCallOffer`, #10207) ? Sans
+      ce droit, seules les portes d'un appel déjà en cours restent :
+      « Rejoindre » et « Revenir à l'appel ». */
+  readonly mayStart?: boolean;
 }) {
   const language = currentInterfaceLanguage();
   const [open, setOpen] = useState(false);
@@ -128,6 +133,7 @@ export function ThreadCallButton({
       </button>
     );
   }
+  if (!mayStart) return null;
 
   return (
     <div ref={root} className="relative shrink-0">

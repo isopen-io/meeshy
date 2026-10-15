@@ -205,11 +205,7 @@ struct GameHeroView: View {
         if level.held, let step = level.step { return GameCopy.levelHeld(step) }
         return level.nextThreshold == nil
             ? GameCopy.levelTop(cap: level.cap)
-            : String(
-                localized: "game.level.to_next",
-                defaultValue: "Encore \(GameCopy.points(level.pointsToNext)) avant le niveau \(GameCopy.formatCount(level.level + 1))",
-                bundle: .main
-            )
+            : GameCopy.levelToNext(remaining: level.pointsToNext, nextLevel: level.level + 1)
     }
 
     private var recordText: String {

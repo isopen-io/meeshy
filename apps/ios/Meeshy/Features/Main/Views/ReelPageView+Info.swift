@@ -237,3 +237,19 @@ struct ReelBorrowedSoundCredit: View {
         }
     }
 }
+
+// MARK: - Une élection ne réévalue que les deux pages qu'elle touche (#10354)
+
+extension ReelPageView: Equatable {
+    /// Les fermetures sont hors de l'égalité : elles ne portent que des
+    /// actions, jamais ce que la page affiche. Le modèle de vue est le même
+    /// objet pour toutes les pages du lecteur.
+    nonisolated static func == (lhs: ReelPageView, rhs: ReelPageView) -> Bool {
+        lhs.isActive == rhs.isActive
+            && lhs.isSettled == rhs.isSettled
+            && lhs.revealCompleted == rhs.revealCompleted
+            && lhs.chromeHidden == rhs.chromeHidden
+            && lhs.isWithinPreloadWindow == rhs.isWithinPreloadWindow
+            && FeedPost.rendersSameReelPage(lhs.reel, rhs.reel)
+    }
+}

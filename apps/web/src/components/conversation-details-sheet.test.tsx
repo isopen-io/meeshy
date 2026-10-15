@@ -6,9 +6,11 @@ import { afterAll, afterEach, beforeAll, beforeEach, describe, expect, test } fr
 import type { PaginationMeta } from '@meeshy/shared/types/api-responses';
 
 import type { ConversationsDeps } from '@/lib/api/conversations';
+import { sessionStore } from '@/lib/api/session';
 import type { ApiResult, HttpRequest, HttpTransport } from '@/lib/api/http';
 import type { Conversation, Participant } from '@/lib/api/types';
 import { loadInterfaceCatalog } from '@/lib/i18n-catalog';
+import type { DepartureKind } from '@/lib/conversation-departure';
 import type { PortailPartage } from '@/lib/view/invitation';
 import { ensureHappyDomRegistered, releaseHappyDomIfRegistered } from '@/test-support/happy-dom-environment';
 
@@ -114,6 +116,7 @@ const monteFeuille = async (options: {
   readonly conversation?: Conversation;
   readonly replies: Readonly<Record<string, ApiResult<unknown> | 'pending'>>;
   readonly portail?: PortailPartage;
+  readonly onRequestDeparture?: (kind: DepartureKind) => void;
 }) => {
   const { deps, calls } = transportOf(options.replies);
   const client = new QueryClient({ defaultOptions: { queries: { retry: false } } });
@@ -132,6 +135,7 @@ const monteFeuille = async (options: {
           deps={deps}
           origin="https://meeshy.me"
           {...(options.portail === undefined ? {} : { portail: options.portail })}
+          {...(options.onRequestDeparture === undefined ? {} : { onRequestDeparture: options.onRequestDeparture })}
           onClose={() => {}}
         />
       </QueryClientProvider>,
@@ -244,6 +248,85 @@ describe('ConversationDetailsSheet — ce que la feuille montre (#7829)', () => 
   });
 });
 
+describe('ConversationDetailsSheet — quitter et supprimer (#7837, #7285)', () => {
+  const departures = () => [...document.querySelectorAll<HTMLButtonElement>('[data-conversation-departure]')];
+
+  test('en groupe : « Quitter » à côté du partage, « Supprimer pour moi » en bas, chacun à 44 px au moins', async () => {
+    await monteFeuille({ replies: { [MEMBERS]: 'pending' }, onRequestDeparture: () => {} });
+    expect(departures().map((b) => [b.dataset.conversationDeparture, b.textContent])).toEqual([
+      ['leave', 'Quitter'],
+      ['delete', 'Supprimer pour moi'],
+    ]);
+    for (const button of departures()) expect(Number.parseFloat(button.style.minHeight)).toBeGreaterThanOrEqual(44);
+    expect(document.querySelector('[data-conversation-details-share]')?.parentElement).toBe(departures()[0]?.parentElement ?? null);
+  });
+
+  test('toucher l’un ou l’autre DEMANDE le geste, qui sera confirmé — il ne part jamais d’un seul toucher', async () => {
+    const asked: DepartureKind[] = [];
+    await monteFeuille({ replies: { [MEMBERS]: 'pending' }, onRequestDeparture: (kind) => asked.push(kind) });
+    act(() => departures()[0]?.click());
+    act(() => departures()[1]?.click());
+    expect(asked).toEqual(['leave', 'delete']);
+  });
+
+  test('une conversation DIRECTE ne se quitte pas : seule la suppression est offerte', async () => {
+    await monteFeuille({
+      conversation: conversation({ type: 'direct', title: 'Nour' }),
+      replies: { [MEMBERS]: 'pending' },
+      onRequestDeparture: () => {},
+    });
+    expect(departures().map((b) => b.dataset.conversationDeparture)).toEqual(['delete']);
+  });
+
+  test('sans hôte qui sache partir (visiteur sans compte), aucun geste n’est rendu', async () => {
+    await monteFeuille({ replies: { [MEMBERS]: 'pending' } });
+    expect(departures()).toEqual([]);
+  });
+});
+
+describe('ConversationDetailsSheet — les statistiques (#7835)', () => {
+  const STATS = 'GET /api/v1/conversations/c-groupe/stats';
+
+  const REPLIES = { [MEMBERS]: 'pending', [STATS]: { ok: true, data: { totalMessages: 3 } } as ApiResult<unknown> } as const;
+
+  afterEach(() => {
+    sessionStore.setState({ session: { status: 'anonymous' } });
+  });
+
+  test('un compte inscrit voit la section Statistiques, chargée à la demande', async () => {
+    sessionStore.setState({
+      session: { status: 'authenticated', user: { id: 'u-moi', username: 'moi', displayName: 'Moi Même' }, token: 'jwt', sessionToken: 's', expiresAt: Number.MAX_SAFE_INTEGER },
+    } as Parameters<typeof sessionStore.setState>[0]);
+    const { calls } = await monteFeuille({ replies: REPLIES });
+    for (let tries = 0; tries < 100 && container.querySelector('[data-conversation-stats-counters]') === null; tries += 1) await settle();
+    expect(container.querySelector('[data-conversation-stat="messages"]')?.textContent).toContain('3');
+    expect(calls().some((call) => `${call.method} ${call.path}` === STATS)).toBe(true);
+  });
+
+  test('un INVITÉ (la passerelle lui refuse la route) : aucune statistique demandée ni montrée', async () => {
+    sessionStore.setState({
+      session: {
+        status: 'guest',
+        sessionToken: 'anon',
+        guest: { participantId: 'p-awa', nickname: 'Awa', conversationId: 'c-groupe', link: 'mshy_world', mayWrite: true },
+        expiresAt: Number.MAX_SAFE_INTEGER,
+      },
+    } as Parameters<typeof sessionStore.setState>[0]);
+    const { calls } = await monteFeuille({ replies: REPLIES });
+    await settle();
+    await settle();
+    expect(container.querySelector('[data-conversation-stats]')).toBeNull();
+    expect(calls().some((call) => call.path.endsWith('/stats'))).toBe(false);
+  });
+
+  test('sans session (visiteur), rien non plus', async () => {
+    const { calls } = await monteFeuille({ replies: REPLIES });
+    await settle();
+    expect(container.querySelector('[data-conversation-stats]')).toBeNull();
+    expect(calls().some((call) => call.path.endsWith('/stats'))).toBe(false);
+  });
+});
+
 describe('ThreadHeader — les portes vers les détails (#7829)', () => {
   const monteEnTete = (options: { readonly conversation: Conversation; readonly title: string; readonly expanded: boolean }) => {
     const ouvertures: string[] = [];
@@ -298,7 +381,7 @@ describe('ThreadHeader — les portes vers les détails (#7829)', () => {
 
   test('l’appui long sur l’avatar de l’en-tête (replié) ouvre le menu, pas la bascule', () => {
     const ouvertures = monteEnTete({ conversation: conversation(), title: 'Équipe Lyon', expanded: false });
-    const bascule = document.querySelector('button[aria-label="Déplier l’en-tête"]');
+    const bascule = document.querySelector('[data-thread-avatar-door]');
     act(() => {
       bascule?.dispatchEvent(new MouseEvent('contextmenu', { bubbles: true, cancelable: true, button: 2 }));
     });

@@ -87,6 +87,7 @@ function makePrisma(overrides: Record<string, any> = {}) {
       groupBy: jest.fn<any>().mockResolvedValue([]),
     },
     participant: {
+      findMany: jest.fn<any>().mockResolvedValue([{ id: "p1" }]),
       count: jest.fn<any>().mockResolvedValue(0),
     },
     friendRequest: {

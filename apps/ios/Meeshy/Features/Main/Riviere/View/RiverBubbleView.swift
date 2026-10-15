@@ -99,6 +99,8 @@ struct RiverBubbleContent: Equatable {
     /// `BubbleLinkEmbed` que les autres modes (#8139). `nil` : aucun lien, ou
     /// un texte voilé dont le lien ne doit pas fuir à côté.
     let linkEmbed: BubbleContent.Text?
+    /// L'auteur n'a pas de compte (#10286) : ses adresses restent du texte brut.
+    let linksAreInert: Bool
     /// Les cartes de visite du message, rendues par `BubbleAttachmentView`
     /// comme partout ailleurs (#8139).
     let contactCards: RiverContactCards
@@ -134,6 +136,7 @@ struct RiverBubbleContent: Equatable {
         protectedTap: ProtectedContentTap = .none,
         tapAfterReveal: ProtectedContentTap = .none,
         linkEmbed: BubbleContent.Text? = nil,
+        linksAreInert: Bool = false,
         contactCards: RiverContactCards = RiverContactCards(items: []),
         capturesBlocked: Bool = false,
         identity: RiverBubbleIdentity? = nil
@@ -158,6 +161,7 @@ struct RiverBubbleContent: Equatable {
         self.protectedTap = protectedTap
         self.tapAfterReveal = tapAfterReveal
         self.linkEmbed = linkEmbed
+        self.linksAreInert = linksAreInert
         self.contactCards = contactCards
         self.capturesBlocked = capturesBlocked
     }
@@ -524,6 +528,7 @@ struct RiverBubbleView: View, Equatable {
             hashtagTint: MeeshyColors.hashtagColor(isDark: isDark),
             linkTint: laneColor,
             isDark: isDark,
+            linksAreInert: content.linksAreInert,
             fontSize: FocalMetrics.Text.size
         )
         .lineSpacing(FocalMetrics.Text.lineSpacing(forResolvedFontSize: FocalMetrics.Text.size))

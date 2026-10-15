@@ -24,6 +24,7 @@ where Item.ID == String {
     @Binding private var currentPageID: String?
     private let page: (Int, Item) -> Page
     private let onMajorityPage: ((String) -> Void)?
+    private let onScrollingChange: ((Bool) -> Void)?
 
     /// - Parameters:
     ///   - items: pages to display, in order.
@@ -32,17 +33,23 @@ where Item.ID == String {
     ///     passe plus de la moitié de la zone visible (`VerticalPagerMajority`,
     ///     #9837) — sans attendre que le paging se pose, contrairement à
     ///     `currentPageID`. iOS 17+ ; sous iOS 16, seul `currentPageID` parle.
+    ///   - onScrollingChange: le pager commence (`true`) ou cesse (`false`)
+    ///     de défiler (#10354) — doigt, inertie ou animation de paging. Le
+    ///     travail lourd du réel entrant attend `false`. iOS 18+ ; avant, rien
+    ///     n'est signalé et `currentPageID` fait foi.
     ///   - page: builds a page from its index and item. Each page fills the
     ///     container in both axes.
     public init(
         items: [Item],
         currentPageID: Binding<String?>,
         onMajorityPage: ((String) -> Void)? = nil,
+        onScrollingChange: ((Bool) -> Void)? = nil,
         @ViewBuilder page: @escaping (Int, Item) -> Page
     ) {
         self.items = items
         self._currentPageID = currentPageID
         self.onMajorityPage = onMajorityPage
+        self.onScrollingChange = onScrollingChange
         self.page = page
     }
 
@@ -63,6 +70,7 @@ where Item.ID == String {
             }
             .scrollTargetBehavior(.paging)
             .scrollPosition(id: $currentPageID)
+            .modifier(ScrollingReporter(onScrollingChange: onScrollingChange))
             .ignoresSafeArea()
         } else {
             GeometryReader { proxy in
@@ -96,6 +104,27 @@ where Item.ID == String {
                 )
             } action: { isMajority in
                 if isMajority { onMajorityPage(id) }
+            }
+        } else {
+            content
+        }
+    }
+}
+
+/// Signale le début et la fin du défilement (#10354), une fois par bord.
+/// Sans consommateur, rien n'est observé.
+private struct ScrollingReporter: ViewModifier {
+    let onScrollingChange: ((Bool) -> Void)?
+
+    func body(content: Content) -> some View {
+        if #available(iOS 18.0, *) {
+            if let onScrollingChange {
+                content.onScrollPhaseChange { old, new in
+                    guard old.isScrolling != new.isScrolling else { return }
+                    onScrollingChange(new.isScrolling)
+                }
+            } else {
+                content
             }
         } else {
             content

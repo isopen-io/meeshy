@@ -31,14 +31,20 @@ public enum MeEndpoint: MeeshyEndpoint, Sendable {
     case gameDuoInvite
     case gameFlameFreezes
     case gameFlameRelight
+    case gameFramesAtmosphere
     case gameGuideSeen
     case gameLeagueConsent
     case gameLeagueFriends
     case gameLeaguePseudonym
     case gameLeagueWeek
+    case gameLeagueWeeksByWeekKey(weekKey: String)
     case gameMissionsByMissionIdReroll(missionId: String)
+    case gamePhotoMomentsInvitations
+    case gamePhotoMomentsPresented
     case gamePrestige
     case gamePrivacy
+    case gameSeasonsByNumber(number: String)
+    case gameSeasonsCalendar
     case gameSeasonSeal
     case gameSeasonStepsByStepClaim(step: String)
     case gameShowcaseOrder
@@ -58,6 +64,7 @@ public enum MeEndpoint: MeeshyEndpoint, Sendable {
     case preferencesNotification
     case preferencesPrivacy
     case preferencesVideo
+    case profileDecor
     case root
     case securityEvents
     case starredMessages
@@ -88,14 +95,20 @@ public enum MeEndpoint: MeeshyEndpoint, Sendable {
         case .gameDuoInvite: return "/api/v1/me/game/duo/invite"
         case .gameFlameFreezes: return "/api/v1/me/game/flame/freezes"
         case .gameFlameRelight: return "/api/v1/me/game/flame/relight"
+        case .gameFramesAtmosphere: return "/api/v1/me/game/frames/atmosphere"
         case .gameGuideSeen: return "/api/v1/me/game/guide/seen"
         case .gameLeagueConsent: return "/api/v1/me/game/league/consent"
         case .gameLeagueFriends: return "/api/v1/me/game/league/friends"
         case .gameLeaguePseudonym: return "/api/v1/me/game/league/pseudonym"
         case .gameLeagueWeek: return "/api/v1/me/game/league/week"
+        case .gameLeagueWeeksByWeekKey(let weekKey): return "/api/v1/me/game/league/weeks/\(weekKey)"
         case .gameMissionsByMissionIdReroll(let missionId): return "/api/v1/me/game/missions/\(missionId)/reroll"
+        case .gamePhotoMomentsInvitations: return "/api/v1/me/game/photo-moments/invitations"
+        case .gamePhotoMomentsPresented: return "/api/v1/me/game/photo-moments/presented"
         case .gamePrestige: return "/api/v1/me/game/prestige"
         case .gamePrivacy: return "/api/v1/me/game/privacy"
+        case .gameSeasonsByNumber(let number): return "/api/v1/me/game/seasons/\(number)"
+        case .gameSeasonsCalendar: return "/api/v1/me/game/seasons/calendar"
         case .gameSeasonSeal: return "/api/v1/me/game/season/seal"
         case .gameSeasonStepsByStepClaim(let step): return "/api/v1/me/game/season/steps/\(step)/claim"
         case .gameShowcaseOrder: return "/api/v1/me/game/showcase/order"
@@ -115,6 +128,7 @@ public enum MeEndpoint: MeeshyEndpoint, Sendable {
         case .preferencesNotification: return "/api/v1/me/preferences/notification"
         case .preferencesPrivacy: return "/api/v1/me/preferences/privacy"
         case .preferencesVideo: return "/api/v1/me/preferences/video"
+        case .profileDecor: return "/api/v1/me/profile-decor"
         case .root: return "/api/v1/me"
         case .securityEvents: return "/api/v1/me/security-events"
         case .starredMessages: return "/api/v1/me/starred-messages"

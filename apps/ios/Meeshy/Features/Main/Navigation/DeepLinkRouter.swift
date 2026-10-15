@@ -51,6 +51,8 @@ enum DeepLinkDestination: Equatable {
     /// l'inscription, pas un lieu de l'app.
     case referral(code: String)
     case call(conversationId: String, isVideo: Bool)
+    /// Une saison ou une semaine de ligue (#9947) — `/me/progression/saison/{n}`, `/me/progression/ligue/{lundi}`.
+    case game(GameLink)
     case external(URL)
 }
 
@@ -243,7 +245,8 @@ enum DeepLinkParser {
         guard let head = components.first else { return nil }
         let id = identifier(components, 1)
         switch head {
-        case "me": return .ownProfile
+        // `/me/progression/saison|ligue[/…]` (#9947) est le Jeu ; le reste de `/me` reste le profil.
+        case "me": return GameLinkParser.link(from: components).map { .game($0) } ?? .ownProfile
         case "links": return .userLinks
         case "share": return parseShareQuery(url)
         case "auth": return authLink(id: id, components: components, url: url)
@@ -366,6 +369,8 @@ enum DeepLink: Equatable {
     case ownProfile
     case userLinks
     case hashtag(tag: String)
+    /// Une saison ou une semaine de ligue (#9947), ouverte par `Router.openGame(at:)`.
+    case game(GameLink)
     /// `/l/<token>` dont la cible vit sur le web : lien EXTERNAL, ou type de
     /// cible que ce client ne connaît pas encore. Le consommateur l'OUVRE
     /// (Safari) — il ne la rejoint pas.
@@ -394,7 +399,7 @@ enum DeepLink: Equatable {
         case .joinLink, .chatLink, .magicLink, .emailVerificationLink, .externalLink, .unresolvedTrackedLink:
             return false
         case .trackedLink, .conversation, .postDetail, .storyDetail, .reel, .community,
-             .recentConversation, .unreadConversations, .userProfile, .ownProfile, .userLinks, .hashtag:
+             .recentConversation, .unreadConversations, .userProfile, .ownProfile, .userLinks, .hashtag, .game:
             return true
         }
     }
@@ -431,6 +436,13 @@ final class DeepLinkRouter: ObservableObject {
     /// à résoudre, celui-là une IDENTITÉ déjà choisie. Les confondre ferait
     /// reprendre la résolution à zéro et reposerait la question.
     @Published var requestedGuestJoin: String?
+
+    /// « Entrer dans World Wide » choisi sur l'écran de connexion (#10006).
+    ///
+    /// L'entrée SERVIE par `GET /world` voyage avec le choix : la session
+    /// invitée (portée par `MeeshyApp`) s'ouvre sur la clé qu'elle nomme, sans
+    /// relire le réseau ni écrire d'identifiant en dur.
+    @Published var requestedWorldEntry: WorldEntry?
 
     /// Le `/l/<jeton>` d'où vient la destination en attente (#9171). La
     /// résolution remplace le jeton par sa cible typée ; sans cette trace, un
@@ -478,6 +490,9 @@ final class DeepLinkRouter: ObservableObject {
     private let isAuthenticated: @MainActor () -> Bool
     private let hasResolvedSession: @MainActor () -> Bool
     private let dialConversationCall: @MainActor (String, Bool) -> Void
+    /// #10483 — la porte qui amène un contenu en détail le MARQUE de son
+    /// entrée : lien de suivi, lien `?via=`, lien venu d'ailleurs, ou rien.
+    private let entries: DetailOpenSourceProviding
 
     init(
         drafts: DraftStore = .shared,
@@ -486,8 +501,10 @@ final class DeepLinkRouter: ObservableObject {
         hasResolvedSession: @escaping @MainActor () -> Bool = { AuthManager.shared.hasResolvedStoredSession },
         dialConversationCall: @escaping @MainActor (String, Bool) -> Void = { conversationId, isVideo in
             Task { await CallBackDialer.shared.dialConversation(id: conversationId, isVideo: isVideo) }
-        }
+        },
+        entries: DetailOpenSourceProviding = DetailOpenSources.shared
     ) {
+        self.entries = entries
         self.drafts = drafts
         self.referrals = referrals
         self.isAuthenticated = isAuthenticated
@@ -512,10 +529,39 @@ final class DeepLinkRouter: ObservableObject {
             // n'attend son issue.
             Task { await resolver.recordClick(token: token) }
             let resolved = try? await resolver.resolve(token: token)
+            // Un lien court d'INVITATION (#10560) : son adresse d'origine est un
+            // `/signup/affiliate/<code>`, qui n'est pas une destination mais un
+            // code à retenir — exactement ce que fait le lien direct. Sans cette
+            // voie, il tombait dans « Ce lien n'a pas pu être ouvert ».
+            if let code = Self.trackedReferralCode(for: resolved) {
+                self.trackedLinkOrigin = nil
+                _ = self.captureReferral(code)
+                return
+            }
             let destination = Self.trackedDestination(for: resolved, token: token)
+            if let contentId = Self.contentId(of: destination) {
+                self.entries.mark(contentId, entry: .trackingLink)
+            }
             self.trackedLinkOrigin = TrackedLinkOrigin(token: token, link: destination)
             self.pendingDeepLink = destination
         }
+    }
+
+    /// Le code d'invitation qu'un lien de suivi transporte, quand son adresse
+    /// d'origine est un lien d'invitation Meeshy (`/signup/affiliate/<code>`,
+    /// `/signup?ref=<code>`). `nil` pour tout autre lien. Une cible typée
+    /// (story, réel, post, profil, conversation) prime : elle n'est jamais une
+    /// invitation, quelle que soit son adresse.
+    static func trackedReferralCode(for resolved: ResolvedTrackedLink?) -> String? {
+        guard let resolved else { return nil }
+        let kind = (resolved.kind ?? "").lowercased()
+        let type = (resolved.targetType ?? "").uppercased()
+        guard kind != "conversation", type != "CONVERSATION" else { return nil }
+        if let targetId = resolved.targetId, !targetId.isEmpty,
+           ["STORY", "PROFILE", "REEL", "POST", "STATUS"].contains(type) { return nil }
+        guard let url = resolved.originalUrl.flatMap(URL.init(string:)),
+              case .referral(let code) = DeepLinkParser.parse(url) else { return nil }
+        return code
     }
 
     /// Maps a resolved tracked link to a `DeepLink`.
@@ -594,6 +640,7 @@ final class DeepLinkRouter: ObservableObject {
         case .ownProfile:                 return .ownProfile
         case .userLinks:                  return .userLinks
         case .hashtag(let tag):           return .hashtag(tag: tag)
+        case .game(let link):             return .game(link)
         case .joinLink(let identifier):   return .joinLink(identifier: identifier)
         case .chatLink(let identifier):   return .chatLink(identifier: identifier)
         case .magicLink(let token):       return .magicLink(token: token)
@@ -634,9 +681,29 @@ final class DeepLinkRouter: ObservableObject {
             return false
         case let destination:
             guard let link = Self.link(for: destination) else { return false }
+            if let contentId = Self.contentId(of: link) {
+                entries.mark(contentId, entry: Self.entry(forLaunchURL: url))
+            }
             pendingDeepLink = link
             return true
         }
+    }
+
+    /// Le contenu qu'un lien amène sur un écran détail (post, story, réel).
+    static func contentId(of link: DeepLink) -> String? {
+        switch link {
+        case .postDetail(let id), .storyDetail(let id), .reel(let id): return id
+        default: return nil
+        }
+    }
+
+    /// L'entrée d'un contenu ouvert par le système : un lien de partage
+    /// Meeshy porte `?via=` ; un lien web sans marque vient d'ailleurs ; le
+    /// schéma `meeshy://` (widget, raccourci) n'a pas de référent.
+    static func entry(forLaunchURL url: URL) -> ContentEntry {
+        if DeepLinkParser.queryValue("via", in: url) != nil { return .sharedLink }
+        let scheme = url.scheme?.lowercased()
+        return scheme == "https" || scheme == "http" ? .external : .direct
     }
 
     /// Sans compte, l'invitation MÉMORISE son code et ouvre l'inscription, qui

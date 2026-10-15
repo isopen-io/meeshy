@@ -37,6 +37,7 @@ function capturedPageUntouched(page: StudioPage, taken: File): boolean {
     background.trim === undefined &&
     background.muted === undefined &&
     background.crop === undefined &&
+    background.rotation === undefined &&
     page.overlay === null &&
     page.sound === null &&
     page.duration === undefined &&

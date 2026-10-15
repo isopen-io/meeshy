@@ -1,0 +1,40 @@
+import type frPublicEntry from './catalog-fr-public-entry';
+
+/** L'entrée publique (#10007) — tranche `pt` de `catalog-fr-public-entry.ts`, mêmes clés. */
+const ptPublicEntry = {
+  'publicHeader.home': 'Início do Meeshy',
+  'publicHeader.language': 'Idioma',
+  'login.world.title': 'Entrar no {title}',
+  'login.world.subtitle': 'Sem conta · seu nome e seu idioma',
+  'login.world.or': 'ou com sua conta',
+  'login.offline': 'Offline — não é possível entrar no momento.',
+  'login.twoFactor.title': 'Autenticação em dois fatores',
+  'login.twoFactor.lead': 'Digite o código do seu aplicativo de autenticação.',
+  'login.twoFactor.code': 'Código de 6 dígitos',
+  'login.twoFactor.submit': 'Validar',
+  'login.twoFactor.busy': 'Verificando…',
+  'login.twoFactor.cancel': 'Cancelar',
+  'login.passwordDoor': 'Entrar com usuário e senha',
+  'login.username.label': 'E-mail, telefone ou usuário',
+  'login.username.placeholder': 'Usuário, e-mail ou telefone',
+  'login.password.label': 'Senha',
+  'login.submit': 'Entrar',
+  'login.submit.busy': 'Entrando…',
+  'login.emailDoor': 'Entrar por e-mail',
+  'login.forgotPassword': 'Esqueceu a senha?',
+  'login.forgotPassword.label': 'Esqueci a senha',
+  'login.noAccount': 'Não tem conta?',
+  'login.createAccount': 'Criar uma conta',
+  'magicLink.title': 'Seu endereço de e-mail',
+  'magicLink.howItWorks': 'Como funciona',
+  'magicLink.howItWorks.text': 'Nenhuma senha para lembrar: enviamos um link por e-mail. Abra-o e você estará conectado.',
+  'magicLink.email.label': 'Endereço de e-mail',
+  'magicLink.email.placeholder': 'nome@exemplo.com',
+  'magicLink.email.invalid': 'Endereço de e-mail inválido',
+  'magicLink.rateLimited': 'Muitas solicitações — tente novamente daqui a uma hora.',
+  'magicLink.offline': 'Sem conexão. Verifique sua rede e tente novamente.',
+  'magicLink.submit': 'Receber o link',
+  'magicLink.submit.busy': 'Enviando…',
+} satisfies Readonly<Record<keyof typeof frPublicEntry, string>>;
+
+export default ptPublicEntry;

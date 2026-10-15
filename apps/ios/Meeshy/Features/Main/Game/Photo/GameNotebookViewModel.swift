@@ -13,7 +13,7 @@ final class GameNotebookViewModel: ObservableObject {
 
     /// Les photos gardées, la plus récente d'abord.
     @Published private(set) var kept: [NotebookEntry] = []
-    /// Les moments laissés « plus tard » : sept jours pour les photographier.
+    /// Les moments laissés « plus tard » : ils attendent sans échéance (#10161).
     @Published private(set) var pending: [NotebookEntry] = []
     /// Les étapes déjà franchies sans photo gardée (#9961, #9962) : la première de chaque piste est ouverte,
     /// les suivantes l'attendent. Un moment en attente d'une piste suivie ne se montre QUE là.
@@ -21,6 +21,8 @@ final class GameNotebookViewModel: ObservableObject {
     @Published private(set) var thumbnails: [String: UIImage] = [:]
     @Published private(set) var isLoaded = false
     @Published private(set) var removalFailed = false
+    /// La place qu'occupent les images du carnet (#10161).
+    @Published private(set) var occupiedBytes: Int64 = 0
 
     private let notebook: GamePhotoNotebooking
     /// Où en est le jeu, lu dans le CACHE (la même clé que Progression) — jamais le réseau : le carnet
@@ -48,11 +50,13 @@ final class GameNotebookViewModel: ObservableObject {
         let keptEntries = entries.filter { $0.status == .kept }
         let keptIds = Set(keptEntries.map(\.momentId))
         let steps = await standing().map { GamePhotoCatchUp.catchUp($0, kept: keptIds) } ?? []
-        let stepIds = Set(steps.map(\.id))
         kept = keptEntries
-        pending = entries.filter { $0.status == .pending && !stepIds.contains($0.momentId) }
+        // « En attente » ne garde que les moments NON déductibles : une étape de piste reportée n'apparaît
+        // que dans « À rattraper » (#10161), même quand le jeu n'est pas en cache.
+        pending = entries.filter { $0.status == .pending && GamePhotoCatchUp.track(of: $0.momentId) == nil }
         catchUp = steps
         isLoaded = true
+        occupiedBytes = await notebook.occupiedBytes()
         for entry in kept where thumbnails[entry.momentId] == nil {
             guard let data = await notebook.imageData(for: entry, square: false) else { continue }
             let image = await Task.detached(priority: .utility) { Self.thumbnail(from: data, maxPixel: 320) }.value

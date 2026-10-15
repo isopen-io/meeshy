@@ -5,6 +5,7 @@
  * @jest-environment node
  */
 
+import { roomDeliveries } from '../../helpers/room-deliveries';
 import { describe, it, expect, jest, beforeAll, afterAll } from '@jest/globals';
 import Fastify, { FastifyInstance } from 'fastify';
 import { makeChainableIO } from '../../helpers/chainable-io';
@@ -364,17 +365,22 @@ describe('POST /conversations/:id/leave — les AUTRES appareils du partant', ()
 
   afterAll(async () => { await app.close(); });
 
-  it('chaîne la room PERSONNELLE du partant, après celles des restants', () => {
-    expect(socket.mockIo._roomsFor('conversation:participant-left')).toEqual([
+  it('atteint la room PERSONNELLE du partant, celles des restants et le fil — l\'effectif aux seuls comptes restants (#10205)', () => {
+    const delivered = roomDeliveries(socket.mockIo._sendsFor('conversation:participant-left'));
+    expect([...delivered.keys()].sort()).toEqual([
       `conversation:${CONV_ID}`,
-      `user:${WITNESS_ID}`,
       `user:${ANON_PARTICIPANT_ID}`,
       `user:${USER_ID}`,
-    ]);
+      `user:${WITNESS_ID}`,
+    ].sort());
+    expect(delivered.get(`user:${WITNESS_ID}`)).toHaveProperty('memberCount');
+    for (const room of [`conversation:${CONV_ID}`, `user:${ANON_PARTICIPANT_ID}`, `user:${USER_ID}`]) {
+      expect(delivered.get(room)).not.toHaveProperty('memberCount');
+    }
   });
 
-  it("n'émet qu'UNE fois — un appareil du partant resté dans la room ne double pas", () => {
-    expect(socket.mockIo._sent.filter((s) => s.event === 'conversation:participant-left')).toHaveLength(1);
+  it("n'émet qu'UNE copie par room — un appareil du partant resté dans la room ne double pas", () => {
+    expect(() => roomDeliveries(socket.mockIo._sendsFor('conversation:participant-left'))).not.toThrow();
   });
 
   it('adresse le partant AVANT de le sortir de la room', () => {
@@ -450,16 +456,14 @@ describe('POST /conversations/:id/leave — l\'effectif ENTIER pour l\'admin du 
 
   it('sert 250 à l\'admin du groupe et « 199+ » aux autres', () => {
     const sends = socket.mockIo._sendsFor('conversation:participant-left');
-    expect(sends).toHaveLength(2);
+    const delivered = roomDeliveries(sends);
 
-    expect(sends[0].payload).toMatchObject({ memberCount: 199, memberCountCapped: true });
-    // Sans l'exclusion, l'admin qui a le FIL ouvert recevrait AUSSI la copie
-    // plafonnée, par la room de conversation.
-    expect(sends[0].excepts).toEqual([`user:${WITNESS_ID}`]);
+    // Le fil ne reçoit AUCUN effectif ; il exclut l'admin, servi par sa room.
+    expect(delivered.get(`conversation:${CONV_ID}`)).not.toHaveProperty('memberCount');
+    expect(sends.find((send) => send.rooms.includes(`conversation:${CONV_ID}`))!.excepts).toContain(`user:${WITNESS_ID}`);
 
-    expect(sends[1].rooms).toEqual([`user:${WITNESS_ID}`]);
-    expect(sends[1].payload).toMatchObject({ memberCount: 250 });
-    expect((sends[1].payload as any).memberCountCapped).toBeUndefined();
+    expect(delivered.get(`user:${WITNESS_ID}`)).toMatchObject({ memberCount: 250 });
+    expect(delivered.get(`user:${WITNESS_ID}`).memberCountCapped).toBeUndefined();
   });
 
   it('demande le rôle de conversation ET le rôle plateforme des restants', () => {

@@ -13,7 +13,7 @@ import MeeshySDK
 
 extension GameLawVectorEvaluator {
 
-    /// Les quarante-six lois de la vague 2 — la liste que `GameLawVectorTests` exige.
+    /// Les quarante-sept lois de la vague 2, plus celles du carnet (#10155) — la liste que `GameLawVectorTests` exige.
     static let wave2Laws: [String] = [
         "league-week", "league-week-points", "league-access", "league-pseudonym", "league-pseudonym-draw",
         "league-pseudonym-check", "league-snapshot", "league-groups", "league-settle", "league-friends",
@@ -22,8 +22,8 @@ extension GameLawVectorEvaluator {
         "season-stars", "season-seal", "trophy-key", "trophy-parse", "trophy-flame", "showcase-order",
         "showcase-view", "showcase-cap", "trophy-month", "atlas", "atlas-language", "prestige", "rarity",
         "rarity-display", "mythic-seats", "mythic-crossing", "mythic-signature", "badge-tier", "badge-served", "guide-v2", "guide-choose", "photo-moment",
-        "trophy-visitor-key", "showcase-visitor",
-    ]
+        "trophy-visitor-key", "showcase-visitor", "season-tense",
+    ] + photoLaws + constellationLaws + scheduleLaws
 
     static func evaluateWave2(law: String, input: GameJSON) throws -> GameJSON {
         switch law {
@@ -45,6 +45,7 @@ extension GameLawVectorEvaluator {
         case "duo-transition": return try duoTransition(input)
         case "season-calendar": return seasonCalendar(input)
         case "season-at": return seasonAt(input)
+        case "season-tense": return seasonTense(input)
         case "season-progress": return seasonProgress(input)
         case "season-reward": return seasonReward(input)
         case "season-claim": return seasonClaim(input)
@@ -77,6 +78,9 @@ extension GameLawVectorEvaluator {
         case "trophy-visitor-key":
             return object(["key": .optionalString(GameTrophies.visitorKey(key: string(input, "key"), awardedMonth: string(input, "awardedMonth")))])
         case "showcase-visitor": return showcaseVisitor(input)
+        case "photo-catch-up", "photo-offer", "photo-standing", "photo-alert": return try evaluatePhoto(law: law, input: input)
+        case "constellation", "constellation-key", "league-next-close": return try evaluateConstellation(law: law, input: input)
+        case "season-schedule": return try evaluateSchedule(law: law, input: input)
         default: throw GameLawVectorError.unknownLaw(law)
         }
     }
@@ -296,6 +300,17 @@ extension GameLawVectorEvaluator {
             "week": .optionalInt(GameSeason.week(at: at.dayKey)),
             "seasonOfMoment": .optionalInt(GameSeason.season(of: at)),
             "upcoming": .optionalString(GameSeason.upcoming(of: at)?.startDay),
+        ])
+    }
+
+    private static func seasonTense(_ input: GameJSON) -> GameJSON {
+        let at = moment(input)
+        let startDay = string(input, "startDay")
+        let endDay = string(input, "endDay")
+        let served = GameArchiveStatus(rawValue: string(input, "served")) ?? .upcoming
+        return object([
+            "tense": .string(GameSeason.tense(startDay: startDay, endDay: endDay, at: at).rawValue),
+            "live": .string(GameSeason.liveTense(served: served, startDay: startDay, endDay: endDay, at: at).rawValue),
         ])
     }
 
@@ -594,6 +609,7 @@ extension GameLawVectorEvaluator {
     }
 
     private static func photoMoment(_ input: GameJSON) throws -> GameJSON {
+        if let dayKey = input["dayKey"].stringValue { return photoDayMoment(dayKey) }
         guard let emblem = GamePhotoMomentsV2.emblem(of: try guideEventV2(input["event"])) else {
             return object(["emblem": .null, "id": .null])
         }

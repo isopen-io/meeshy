@@ -242,7 +242,7 @@ describe('le disque du Flux (#6456)', () => {
    */
   test('sur le Flux : un lien vers la liste, nommé « Conversations », à la marque Meeshy', () => {
     monter('feed');
-    expect(disque().getAttribute('href')).toBe('/');
+    expect(disque().getAttribute('href')).toBe('/chats');
     expect(disque().getAttribute('aria-label')).toBe('Conversations');
     expect(disque().getAttribute('data-disc-face')).toBe('conversations');
     expect(disque().querySelectorAll('svg line')).toHaveLength(3);
@@ -496,6 +496,7 @@ describe('le barreau « Administration » (#6458)', () => {
       // dépend pas de cette clé : il mène au hub, dont la porte reste
       // `canAccessAdmin`.
       canManageAgent: false,
+      canManageGame: false,
     },
   });
 

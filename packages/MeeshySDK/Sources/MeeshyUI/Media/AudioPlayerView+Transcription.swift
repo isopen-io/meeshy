@@ -6,12 +6,11 @@ import MeeshySDK
 // Extrait de AudioPlayerView.swift (budget de taille, #4950 / D-AUDIO-03) :
 // le bloc de transcription (shimmer, texte karaoké, boutons Transcrire /
 // Re-transcrire / Voir plus) et ses helpers purs. Tous les `@State` qu'il lit
-// ou mute (`isTranscribing`, `isRetranscribing`, `isTranscriptionExpanded`,
-// `transcriptionPulsePhase`) restent déclarés dans le struct principal
+// ou mute (`isTranscribing`, `isRetranscribing`, `isTranscriptionExpanded`)
+// restent déclarés dans le struct principal
 // (une extension ne peut pas porter de propriété stockée) et sont devenus
 // `internal` là-bas pour rester lisibles/mutables ici — même règle pour
-// `player`, `isDark`, `accent`, `chromePlan`, `slotDivider`, `systemReduce`,
-// `userForced`.
+// `player`, `isDark`, `accent`, `chromePlan`, `slotDivider`.
 
 extension AudioPlayerView {
 
@@ -253,31 +252,26 @@ extension AudioPlayerView {
     }
 
     /// Shimmer placeholder displayed while a transcription request is in flight.
-    /// Three rounded lines (the third truncated to ~120pt) pulse opacity in
-    /// sync. Pure SwiftUI, iOS 16+ compatible. The pulse is driven by a
-    /// `@State` flipped in `onAppear` so it starts immediately on mount.
+    /// Three rounded lines (the third truncated to ~120pt) swept by
+    /// `LoadingSheen`, the SDK's unique loading sheen (#9869) — it stays
+    /// static under Reduce Motion (system or in-app) and stops off screen.
     @ViewBuilder
     private var transcriptionShimmer: some View {
         let lineColor: Color = isDark ? Color.white.opacity(0.10) : Color.black.opacity(0.08)
+        let sheenTint: Color = isDark ? Color.white.opacity(0.18) : Color.black.opacity(0.10)
         VStack(alignment: .leading, spacing: MeeshySpacing.xsPlus) {
             shimmerLine(color: lineColor, width: nil)
             shimmerLine(color: lineColor, width: nil)
             shimmerLine(color: lineColor, width: 120)
         }
+        .modifier(LoadingSheen(style: LoadingSheenStyle(
+            tint: sheenTint,
+            band: .fraction(0.6),
+            duration: 1.5,
+            masksToContent: true
+        )))
         .padding(.horizontal, MeeshySpacing.md)
         .padding(.vertical, MeeshySpacing.sm)
-        .opacity(transcriptionPulsePhase ? 0.55 : 1.0)
-        .animation(
-            .easeInOut(duration: 0.9).repeatForever(autoreverses: true),
-            value: transcriptionPulsePhase
-        )
-        .onAppear {
-            // Reduce Motion (system or in-app): static placeholder lines,
-            // no perpetual opacity pulse.
-            guard !MeeshyMotion.shouldReduce(system: systemReduce, userForced: userForced) else { return }
-            transcriptionPulsePhase = true
-        }
-        .onDisappear { transcriptionPulsePhase = false }
         .accessibilityLabel(Text(String(
             localized: "media.audio.transcribing",
             defaultValue: "Transcription en cours",
@@ -533,7 +527,7 @@ extension AudioPlayerView {
             // `currentTime == 0` + segment 0 à `startTime == 0` faussait l'allumage).
             let activeIdx = activeTranscriptionIndex(in: segments)
             FlowLayout(spacing: 0) {
-                ForEach(Array(segments.enumerated()), id: \.element.id) { index, segment in
+                ForEach(Array(segments.enumerated()), id: \.offset) { index, segment in
                     let isActive = index == activeIdx
                     let isPast = activeIdx != nil && index < activeIdx!
 

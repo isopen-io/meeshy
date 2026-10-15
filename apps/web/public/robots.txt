@@ -10,6 +10,7 @@ Disallow: /settings
 Disallow: /notifications
 Disallow: /conversation
 Disallow: /conversations
+Disallow: /chats
 Disallow: /chat
 Disallow: /call
 Disallow: /feed
@@ -28,7 +29,10 @@ Disallow: /u
 
 # Les robots d'APERÇU des messageries (#9712) déplient une invitation /chat/<lien> :
 # la page qu'ils reçoivent (passerelle, routeur Traefik *-unfurl) porte
-# `noindex`, rien ne s'indexe. Le reste leur est fermé comme à tous.
+# `noindex`, rien ne s'indexe. Ils déplient aussi /chats, /c/<id> et /l/<jeton>
+# (#10192) : un aperçu GÉNÉRIQUE, qui ne dit rien de ce que l'adresse désigne,
+# ou celui de la cible publique d'un lien suivi. Le reste leur est fermé comme
+# à tous.
 User-Agent: Twitterbot
 User-Agent: LinkedInBot
 User-Agent: facebookexternalhit
@@ -40,6 +44,8 @@ User-Agent: TelegramBot
 User-Agent: WhatsApp
 User-Agent: SkypeUriPreview
 Allow: /chat/
+Allow: /chats
+Allow: /l/
 Disallow: /api/
 Disallow: /admin
 Disallow: /dashboard
@@ -62,7 +68,6 @@ Disallow: /story
 Disallow: /reel
 Disallow: /post
 Disallow: /hashtag
-Disallow: /l/
 Disallow: /links
 Disallow: /u
 

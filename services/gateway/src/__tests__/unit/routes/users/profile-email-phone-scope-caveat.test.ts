@@ -101,7 +101,9 @@ const ligneCible = {
  * `makeSelectAwareUserUpdate` dans `profile.test.ts`, même principe.
  */
 function findFirstConscientDuSelect() {
-  return jest.fn<any>(async (args: { select?: Record<string, unknown> }) => {
+  return jest.fn<any>(async (args: { select?: Record<string, unknown>; where?: Record<string, unknown> }) => {
+    // La question du blocage n'a pas de ligne : personne n'a bloqué personne.
+    if (args?.where?.blockedUserIds) return null;
     if (!args?.select) return ligneCible;
     const restreint: Record<string, unknown> = {};
     for (const cle of Object.keys(args.select)) {
@@ -154,7 +156,8 @@ async function monter(prisma: ReturnType<typeof prismaPartage>): Promise<Fastify
   // sérialisations doit les faire passer par la MÊME couche.
   app.get(
     '/probe/:handle',
-    { schema: { response: { 200: publicProfileSchema } } },
+    // Un lecteur INSCRIT (#10205 : un lecteur sans compte ne lit aucun profil).
+    { schema: { response: { 200: publicProfileSchema } }, preHandler: (app as any).authenticate },
     async (req: FastifyRequest<{ Params: { handle: string } }>, reply: FastifyReply) => {
       const profil = await servirProfilPublic(app, req, reply, req.params.handle);
       if (!profil) return reply;

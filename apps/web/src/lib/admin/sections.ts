@@ -73,6 +73,13 @@ export type AdminPermissions = {
    * 403, que la loi 4 interdit au même titre qu'un contrôle inerte.
    */
   readonly canManageAgent: boolean;
+  /**
+   * **LA GARDE RÉELLE DES ROUTES `/admin/game/*`** (#10232, #10233) — le calendrier
+   * des saisons du Jeu : programmer, décaler, mettre en pause une saison FUTURE,
+   * valider une proposition de l'IA, exporter `store.app_events`. BIGBOSS et ADMIN
+   * la portent, aucun autre rôle : la tuile se lit sur elle, jamais sur le rang.
+   */
+  readonly canManageGame: boolean;
 };
 
 export type AdminPermissionKey = keyof AdminPermissions;
@@ -137,15 +144,16 @@ export type ServedAdminSection = AdminSection;
 
 export type AdminGroup = { readonly id: AdminGroupId; readonly labelKey: AdminGroupLabelKey };
 
-/** Les sept groupes du menu, dans l'ordre où ils se lisent. */
+/** Les huit domaines du menu (#10391), dans l'ordre où ils se lisent. */
 export const ADMIN_GROUPS: readonly AdminGroup[] = [
   { id: 'overview', labelKey: 'admin.group.overview' },
-  { id: 'people', labelKey: 'admin.group.people' },
-  { id: 'exchanges', labelKey: 'admin.group.exchanges' },
   { id: 'content', labelKey: 'admin.group.content' },
   { id: 'moderation', labelKey: 'admin.group.moderation' },
+  { id: 'people', labelKey: 'admin.group.people' },
+  { id: 'exchanges', labelKey: 'admin.group.exchanges' },
   { id: 'growth', labelKey: 'admin.group.growth' },
-  { id: 'platform', labelKey: 'admin.group.platform' },
+  { id: 'scales', labelKey: 'admin.group.scales' },
+  { id: 'operations', labelKey: 'admin.group.operations' },
 ];
 
 type SectionFacts = {
@@ -165,12 +173,15 @@ const section = (id: AdminSectionId, facts: SectionFacts): AdminSection => ({
 });
 
 /**
- * Les dix-neuf sections, dans l'ordre des sept groupes (#8876). La permission
+ * Les vingt sections, dans l'ordre des huit domaines (#8876, #10391). La permission
  * est celle de la route QUE LA SECTION OUVRE — une tuile ne promet jamais plus
  * que sa garde serveur (#6843).
  */
 export const ADMIN_SECTIONS: readonly AdminSection[] = [
   section('dashboard', { permission: 'canAccessAdmin', glyph: 'squaresFour', ready: true }),
+  section('posts', { permission: 'canModerateContent', glyph: 'newspaper', ready: true }),
+  section('reports', { permission: 'canModerateContent', glyph: 'flag', ready: true }),
+  section('audit', { permission: 'canViewAuditLogs', glyph: 'scroll', ready: true }),
   section('users', { permission: 'canManageUsers', glyph: 'users', ready: true }),
   /* LES ANONYMES (#7873) — les participants entrés par un lien sans compte.
      Même seuil que les comptes : ce sont des personnes, et leur fiche mène à
@@ -182,23 +193,24 @@ export const ADMIN_SECTIONS: readonly AdminSection[] = [
   section('conversations', { permission: 'canManageConversations', glyph: 'chats', ready: true, adminRankOnly: true }),
   section('communities', { permission: 'canManageGroups', glyph: 'usersThree', ready: true }),
   section('shareLinks', { permission: 'canManageConversations', glyph: 'linkSimple', ready: true }),
-  section('posts', { permission: 'canModerateContent', glyph: 'newspaper', ready: true }),
-  section('reports', { permission: 'canModerateContent', glyph: 'flag', ready: true }),
-  section('audit', { permission: 'canViewAuditLogs', glyph: 'scroll', ready: true }),
   section('analytics', { permission: 'canViewAnalytics', glyph: 'chartLine', ready: true }),
   section('ranking', { permission: 'canViewAnalytics', glyph: 'trophy', ready: true }),
   section('trackingLinks', { permission: 'canViewAnalytics', glyph: 'target', ready: true }),
   section('broadcasts', { permission: 'canManageNotifications', glyph: 'megaphone', ready: true }),
+  /* LES BARÈMES (#8906, #10391) — ce que chaque geste rapporte, les séries, la
+     fidélité, et les saisons du Jeu. La passerelle les réserve à ADMIN et
+     BIGBOSS (`requireAdminRank()`) : `adminRankOnly`, sous l'accès à l'espace. */
+  section('engagementScale', { permission: 'canAccessAdmin', glyph: 'flame', ready: true, adminRankOnly: true }),
+  /* LES OPÉRATIONS DU SERVEUR (#10391, #10396) — l'hôte en direct (CPU, mémoire,
+     disque), la sauvegarde et la purge des images. Rang d'administration :
+     `/admin/ops/*` exige `requireAdminRank()` ; seuls les gestes exigent BIGBOSS. */
+  section('operations', { permission: 'canAccessAdmin', glyph: 'cpu', ready: true, adminRankOnly: true }),
   section('monitoring', { permission: 'canViewAnalytics', glyph: 'heartbeat', ready: true, adminRankOnly: true }),
   section('languages', { permission: 'canViewAnalytics', glyph: 'translate', ready: true }),
   /* LE PILOTAGE DE L'AGENT (#6733) — `canManageAgent`, jamais `canAccessAdmin` :
      la tuile porte le seuil de ce qu'elle OUVRE. Et aucun `adminRankOnly` —
      sa garde serveur est une permission, pas un rang. */
   section('agent', { permission: 'canManageAgent', glyph: 'robot', ready: true }),
-  /* LE BARÈME DE POINTS (#8906) — ce que chaque geste rapporte. La passerelle
-     le réserve à ADMIN et BIGBOSS (`requireAdminRank()`) : `adminRankOnly`, sous
-     l'accès à l'espace — un MODERATOR ne verrait qu'un refus. */
-  section('engagementScale', { permission: 'canAccessAdmin', glyph: 'flame', ready: true, adminRankOnly: true }),
   section('settings', { permission: 'canAccessAdmin', glyph: 'gear', ready: true }),
 ];
 

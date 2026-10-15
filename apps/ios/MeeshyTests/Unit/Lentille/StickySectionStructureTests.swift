@@ -32,7 +32,7 @@ final class StickySectionStructureTests: XCTestCase {
     }
 
     private func viewModelSource() throws -> String {
-        try source(at: "Meeshy/Features/Main/ViewModels/ConversationListViewModel.swift")
+        try source(at: "Meeshy/Features/Main/ViewModels/ConversationListViewModel+Ordering.swift")
     }
 
     private func source(at relativePath: String) throws -> String {

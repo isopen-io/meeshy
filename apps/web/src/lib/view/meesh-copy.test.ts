@@ -14,13 +14,13 @@ function motAccorde(rendu: string): string {
   return rendu.replace(/\d+/g, '').replace(/\s+/g, ' ').trim();
 }
 
-describe('le point convertible s’accorde', () => {
+describe('le point à convertir s’accorde', () => {
   test('à 1 et à 2, le mot change', () =>
     expect(motAccorde(meeshMissing(1, 0))).not.toBe(motAccorde(meeshMissing(2, 0))));
-  test('« point convertible » au singulier', () =>
-    expect(meeshMissing(1, 0)).toBe('Encore 1 point convertible avant une Meesh.'));
-  test('« points convertibles » au pluriel', () =>
-    expect(meeshMissing(2, 0)).toBe('Encore 2 points convertibles avant une Meesh.'));
+  test('« point à convertir » au singulier', () =>
+    expect(meeshMissing(1, 0)).toBe('Encore 1 point à convertir avant une Meesh.'));
+  test('« points à convertir » au pluriel', () =>
+    expect(meeshMissing(2, 0)).toBe('Encore 2 points à convertir avant une Meesh.'));
 });
 
 describe('le point de conversation s’accorde', () => {
@@ -44,5 +44,5 @@ describe('le point de conversation s’accorde', () => {
 });
 
 describe('le plancher ABSENT ne compose rien', () => {
-  test('zéro ⇒ une seule phrase', () => expect(meeshMissing(4, 0)).toBe('Encore 4 points convertibles avant une Meesh.'));
+  test('zéro ⇒ une seule phrase', () => expect(meeshMissing(4, 0)).toBe('Encore 4 points à convertir avant une Meesh.'));
 });

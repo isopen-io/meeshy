@@ -37,6 +37,8 @@ import { CommentReactionHandler } from './handlers/CommentReactionHandler';
 import { PostReactionHandler } from './handlers/PostReactionHandler';
 import { ConversationHandler } from './handlers/ConversationHandler';
 import { AdminAgentHandler } from './handlers/AdminAgentHandler';
+import { AdminMetricsHandler } from './handlers/AdminMetricsHandler';
+import { hostMetricsProbe } from '../services/admin/host-metrics-probe';
 import { AgentAdminRelay } from './AgentAdminRelay';
 import { CallService } from '../services/CallService';
 import { AttachmentService } from '../services/attachments';
@@ -274,6 +276,7 @@ export class MeeshySocketIOManager {
   private postReactionHandler!: PostReactionHandler;
   private conversationHandler!: ConversationHandler;
   private adminAgentHandler!: AdminAgentHandler;
+  private adminMetricsHandler!: AdminMetricsHandler;
   private agentAdminRelay: AgentAdminRelay | null = null;
 
   // Mapping des utilisateurs connectés
@@ -380,15 +383,27 @@ export class MeeshySocketIOManager {
     // clients). Seul le manager tient `io` : il fournit le révocateur, résolu à
     // l'appel (`this.io` naît quelques lignes plus bas). Même mécanisme que
     // `revoke-all-sessions` et que la désactivation par un admin (`routes/admin`).
+    //
+    // #10264 — la fin de grâce n'est PAS une suppression : l'annulation rend
+    // encore le compte. Ses sockets tombent sans nommer de compte supprimé
+    // (`deletedAccountId`), que seule la purge confirmée (`COMPLETED`) émet.
     this.maintenanceService.setSessionRevoker((userId: string) =>
       disconnectRevokedSessions({
         io: this.io,
         userId,
         reason: 'logout_all_devices',
-        message: 'Your account was deleted — every session was signed out.',
+        message: 'Your account deletion grace period ended — every session was signed out.',
         onError: (err: unknown) => logger.warn('[MAINTENANCE] socket fanout failed on grace-period expiry', { err, userId }),
       })
     );
+
+    // #10440 — le balayage journalier révoque les invités d'un lien expiré par
+    // `revokeShareLinkGuests` : départ annoncé, appel et position éteints,
+    // sockets coupés. Résolus à l'appel, comme ci-dessus.
+    this.maintenanceService.setShareLinkRevocationLive({
+      resolveIO: () => this.io,
+      resolveManager: () => this,
+    });
 
     // Initialiser Socket.IO avec les types shared
     this.io = new SocketIOServer<ClientToServerEvents, ServerToClientEvents>(httpServer, {
@@ -481,6 +496,14 @@ export class MeeshySocketIOManager {
     this.adminAgentHandler = new AdminAgentHandler({
       prisma: this.prisma,
       socketToUser: this.socketToUser,
+    });
+
+    this.adminMetricsHandler = new AdminMetricsHandler({
+      io: this.io,
+      probe: hostMetricsProbe(),
+      socketToUser: this.socketToUser,
+      roleOf: (userId) => this.prisma.user.findUnique({ where: { id: userId }, select: { role: true } }).then((user) => user?.role ?? null),
+      roomSize: (room) => this.io.sockets.adapter.rooms.get(room)?.size ?? 0,
     });
 
     const reactionService = new ReactionService(prisma);
@@ -1738,6 +1761,7 @@ export class MeeshySocketIOManager {
       this.agentAdminRelay.start().catch((error) => {
         logger.error('❌ Erreur démarrage AgentAdminRelay', error);
       });
+      this.adminMetricsHandler.start();
       // ✅ FIX BUG #3: SUPPRIMER le polling périodique
       // Le système utilise maintenant uniquement les événements Socket.IO (connect/disconnect)
       // et le broadcast de statut lors de ces événements
@@ -1896,6 +1920,14 @@ export class MeeshySocketIOManager {
           logger.error('[ADMIN_AGENT_UNSUBSCRIBE] Error:', error);
           callback?.({ success: false, error: 'Internal server error' });
         }
+      });
+
+      socket.on(CLIENT_EVENTS.ADMIN_METRICS_SUBSCRIBE, (data, ack) => {
+        this.adminMetricsHandler.handleSubscribe(socket, data, ack).catch((error) => logger.error('[ADMIN_METRICS_SUBSCRIBE] Error:', error));
+      });
+
+      socket.on(CLIENT_EVENTS.ADMIN_METRICS_UNSUBSCRIBE, () => {
+        try { this.adminMetricsHandler.handleUnsubscribe(socket); } catch (error) { logger.error('[ADMIN_METRICS_UNSUBSCRIBE] Error:', error); }
       });
 
       socket.on(CLIENT_EVENTS.REACTION_ADD, async (data, callback) => {
@@ -3064,7 +3096,7 @@ export class MeeshySocketIOManager {
             normalizedId,
             message,
             broadcastPayload,
-            resolvedSenderId,
+            resolvedSenderId, quotedDeaths: sealedQuote,
             ...(sealedKeys.length > 0
               ? { payloadForReader: (key: string) => sealedQuoteVariant(sealedQuote, key, broadcastPayload) }
               : {}),
@@ -3374,6 +3406,7 @@ export class MeeshySocketIOManager {
     this.io.engine?.close();
     const steps: ReadonlyArray<() => unknown> = [
       () => this.agentAdminRelay?.stop(),
+      () => this.adminMetricsHandler?.stop(),
       () => this.translationService.close(),
       // Minuteries des partages de position : sinon la boucle vit 8 h de plus.
       () => this.locationHandler.dispose(),

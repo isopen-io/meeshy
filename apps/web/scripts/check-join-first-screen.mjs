@@ -99,7 +99,7 @@ const ETATS = [
     nom: 'lien expiré — le bandeau remplace tout',
     chemin: `/chat/${EXPIRE}`,
     pret: '[role="alert"]',
-    primaire: 'a[href="/"]',
+    primaire: 'a[href="/chats"]',
     absent: '[data-guest-form]',
   },
 ];

@@ -127,8 +127,8 @@ export function ComposerTopRow({
 }) {
   const counter = characterCounterOf({ text, ...(maxLength === undefined ? {} : { maxLength }) });
   /** LES LIBELLÉS DE L'ÉPHÉMÈRE (#8304) ET DE LA VUE UNIQUE (#7354) passent
-   * par le catalogue ; le flou et les effets restent en français en dur,
-   * dette antérieure (#6310) que ce lot ne répand pas. */
+   * par le catalogue ; le flou et les effets aussi, depuis la passe des
+   * libellés de la coquille (`catalog-fr-shell-labels.ts`). */
   const language = currentInterfaceLanguage();
   const armedEphemeral = ephemeralSeconds === undefined ? undefined : ephemeralDurationLabelOf(ephemeralSeconds);
   const ephemeralDuration = armedEphemeral === undefined ? '' : translate(language, armedEphemeral.displayKey);
@@ -194,12 +194,12 @@ export function ComposerTopRow({
             locks.blurred
               ? translate(language, 'composer.protection.imposed.blur')
               : blurred
-                ? 'Mode flou actif'
-                : 'Activer le mode flou'
+                ? translate(language, 'composer.blur.active')
+                : translate(language, 'composer.blur.activate')
           }
         >
           <Glyph name="eyeSlash" size={16} />
-          {blurred ? <span className="text-title font-bold">Flou</span> : null}
+          {blurred ? <span className="text-title font-bold">{translate(language, 'composer.blur.label')}</span> : null}
         </button>
 
         {/* « VUE UNIQUE » (#7597) — sans condition, à côté du flou. Chaque
@@ -228,7 +228,11 @@ export function ComposerTopRow({
           data-composer-effects
           className="flex min-h-11 min-w-11 shrink-0 items-center justify-center gap-1 rounded-chip px-2"
           style={effectCount > 0 ? armedStyle('var(--accent)') : { color: 'var(--composer-icon)' }}
-          aria-label={effectCount > 0 ? `${effectCount} effet(s) actif(s)` : 'Ajouter des effets au message'}
+          aria-label={
+            effectCount > 0
+              ? translate(language, effectCount === 1 ? 'composer.effects.active.one' : 'composer.effects.active.other', { count: String(effectCount) })
+              : translate(language, 'composer.effects.add')
+          }
         >
           <GlyphSvg glyph={THREAD_MENU_GLYPHS.magicWand} size={16} />
           {effectCount > 0 ? <span className="text-title font-bold">{effectCount}</span> : null}

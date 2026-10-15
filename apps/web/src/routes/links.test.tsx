@@ -94,6 +94,19 @@ describe('la liste', () => {
     expect(html).toMatch(/data-share-link-status[^>]*>· Inactif</);
   });
 
+  test('#10381 — l’expiration choisie à la création se lit sur la ligne et s’annonce au lecteur d’écran', () => {
+    const date = new Intl.DateTimeFormat('fr', { dateStyle: 'medium' }).format(new Date('2099-10-20T06:49:56.000Z'));
+    const html = plain(renderToStaticMarkup(<ShareLinkRow language="fr" link={link({ expiresAt: '2099-10-20T06:49:56.000Z' })} copied={false} onCopy={noop} />));
+    expect(html).toMatch(new RegExp(`data-share-link-expiry[^>]*>· Expire le ${date.replace(/\s/gu, ' ')}<`));
+    expect(html).toContain(`aria-label="Invitation, Actif, 3 rejoints, Équipe déploiement et Expire le ${date.replace(/\s/gu, ' ')}"`);
+  });
+
+  test('#10381 — une échéance passée se dit « Lien expiré », un lien sans échéance n’ajoute rien', () => {
+    const past = renderToStaticMarkup(<ShareLinkRow language="fr" link={link({ expiresAt: '2000-01-01T00:00:00.000Z' })} copied={false} onCopy={noop} />);
+    expect(past).toMatch(/data-share-link-expiry[^>]*>· Lien expiré</);
+    expect(renderToStaticMarkup(<ShareLinkRow language="fr" link={link()} copied={false} onCopy={noop} />)).not.toContain('data-share-link-expiry');
+  });
+
   test('« copier » devient une coche quand le lien vient d’être copié', () => {
     const idle = renderToStaticMarkup(<ShareLinkRow language="fr" link={link()} copied={false} onCopy={noop} />);
     const done = renderToStaticMarkup(<ShareLinkRow language="fr" link={link()} copied onCopy={noop} />);

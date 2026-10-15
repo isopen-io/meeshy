@@ -40,6 +40,7 @@ struct SettingsView: View {
     @State private var showVoiceProfileWizard = false
     @State private var showVoiceProfileManage = false
     @State private var showMediaDownload = false
+    @State private var showPacks = false
     @State private var scrollRelay = ScrollOffsetRelay()
     /// Miroirs des trois interrupteurs d'interface (#6482), lus UNE fois au
     /// montage comme `interfaceLanguageChoice` : chaque bascule écrit le miroir
@@ -149,6 +150,7 @@ struct SettingsView: View {
         .sheet(isPresented: $showSupport) { SupportView() }
         .sheet(isPresented: $showDataStorage) { DataStorageView() }
         .sheet(isPresented: $showMediaDownload) { MediaDownloadSettingsView() }
+        .sheet(isPresented: $showPacks) { PacksSettingsView() }
         .sheet(isPresented: $showDeleteAccount) { DeleteAccountView() }
         .task { await prefs.fetchFromBackend() }
     }
@@ -576,6 +578,19 @@ struct SettingsView: View {
             }
             .accessibilityLabel(String(localized: "settings.media.download.a11y", bundle: .main))
             .accessibilityHint(String(localized: "settings.media.download.hint", bundle: .main))
+
+            Button {
+                HapticFeedback.light()
+                showPacks = true
+            } label: {
+                settingsRow(icon: "shippingbox.fill", title: String(localized: "settings.packs.title", defaultValue: "Packs et téléchargements", bundle: .main), color: MeeshyColors.warningHex) {
+                    Image(systemName: "chevron.forward")
+                        .font(MeeshyFont.relative(MeeshyIconSize.xs, weight: .semibold))
+                        .foregroundColor(theme.textMuted)
+                }
+            }
+            .accessibilityLabel(String(localized: "settings.packs.title", defaultValue: "Packs et téléchargements", bundle: .main))
+            .accessibilityHint(String(localized: "settings.packs.hint", defaultValue: "Installe ou retire des packs de stickers et de cadres du jeu", bundle: .main))
 
             Button {
                 HapticFeedback.light()

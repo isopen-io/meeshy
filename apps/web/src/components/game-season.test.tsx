@@ -70,7 +70,7 @@ describe('une saison en cours', () => {
     expect(html).toContain('data-game-season-state="ready"');
     expect(html).toContain('data-game-season-state="locked"');
     expect(html).toContain('aria-label="Étape 1, réclamée, +100"');
-    expect(html).toContain('aria-label="Étape 5, à réclamer, Un fragment"');
+    expect(html).toContain('aria-label="Étape 5, à réclamer, Un fragment d’étoile"');
   });
 
   test('les trois premières sont réclamées, les onze suivantes à réclamer, le reste à venir', () => {

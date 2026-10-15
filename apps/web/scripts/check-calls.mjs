@@ -323,7 +323,7 @@ try {
       coldPage.setDefaultTimeout(10_000);
       const coldErrors = [];
       coldPage.on('pageerror', (error) => coldErrors.push(error.message));
-      await coldPage.goto(`${BASE}/`, { waitUntil: 'load' });
+      await coldPage.goto(`${BASE}/chats`, { waitUntil: 'load' });
       await coldPage.waitForSelector('[data-floating-menu]');
       const setNetwork = (online) =>
         coldPage.evaluate((value) => {

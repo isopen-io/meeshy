@@ -72,10 +72,19 @@ nonisolated enum ComposerEditTools {
     static let panelOrder: [ComposerEditTool] = [.crop, .sound, .trim]
 
     /// Les panneaux sous la scène : la bande d'une famille ouverte, sinon un par
-    /// outil actif.
+    /// outil actif — **sauf le son quand la coupe est montrée** (#10356) : il se
+    /// pose alors PAR-DESSUS la bande vidéo (#10341) et ne prend aucune place à
+    /// lui. La scène ne rétrécit plus pour une place vide.
     static func panels(familyOpen: Bool, active: Set<ComposerEditTool>) -> [ComposerEditPanel] {
         guard !familyOpen else { return [.band] }
-        return panelOrder.filter(active.contains).map(panel(for:))
+        return panelOrder
+            .filter { active.contains($0) && !(overlaysTrim($0) && active.contains(.trim)) }
+            .map(panel(for:))
+    }
+
+    /// Le son se peint sur la bande vidéo tant qu'elle est montrée (#10341).
+    static func overlaysTrim(_ tool: ComposerEditTool) -> Bool {
+        tool == .sound
     }
 
     static func panel(for tool: ComposerEditTool) -> ComposerEditPanel {
@@ -90,32 +99,18 @@ nonisolated enum ComposerEditTools {
     static func showsBrackets(active: Set<ComposerEditTool>) -> Bool {
         active.contains(.crop)
     }
-
-    /// **Le bouton muet se pose à DROITE d'UNE piste** : celle du spectre si
-    /// elle est montrée, sinon celle de la coupe — dès que la prise a un son.
-    static func muteHost(panels: [ComposerEditPanel], hasAudio: Bool) -> ComposerEditPanel? {
-        guard hasAudio else { return nil }
-        return panels.first { $0 == .sound } ?? panels.first { $0 == .trim }
-    }
-
-    /// Les deux pistes du temps gardent la même largeur : celle qui ne porte pas
-    /// le bouton muet réserve sa place, et leurs instants s'alignent.
-    static func reservesMuteColumn(_ panel: ComposerEditPanel, panels: [ComposerEditPanel], hasAudio: Bool) -> Bool {
-        guard panel == .trim || panel == .sound, let hote = muteHost(panels: panels, hasAudio: hasAudio) else {
-            return false
-        }
-        return hote != panel
-    }
 }
 
 /// **Le son de la prise** (#9754) : un gain réglé à la ligne de volume, et un
 /// muet qui le coupe tout à fait sans l'oublier — réactiver rend le gain d'avant.
 /// L'aperçu l'entend et le rendu final le grave (`videoRender`, une seule recette).
 ///
-/// Le gain va de 0 à 100 % : `AVAudioMix` et `AVPlayer` ne savent pas amplifier
-/// au-delà du niveau enregistré.
+/// Le gain va de 0 à 200 % : `AVAudioMix` et `AVPlayer` ne savent pas amplifier
+/// au-delà du niveau enregistré — la part au-dessus de 100 % passe par
+/// `ComposerTakeGain`, la même loi dans l'aperçu et dans le rendu (#10360).
 nonisolated struct ComposerTakeSound: Equatable, Sendable {
-    static let range: ClosedRange<Double> = 0...1
+    /// **100 % au MILIEU de la piste, de 0 à 200 %** (porteur 2026-10-12, #10341).
+    static let range: ClosedRange<Double> = 0...2
     /// Le pas d'un balayage VoiceOver.
     static let accessibilityStep: Double = 0.1
 
@@ -135,16 +130,16 @@ nonisolated struct ComposerTakeSound: Equatable, Sendable {
         return min(range.upperBound, max(range.lowerBound, gain))
     }
 
-    /// Le doigt posé à `y` sur une piste de `height` points : en haut le plein,
-    /// en bas le silence.
+    /// Le doigt posé à `y` sur une piste de `height` points : en haut 200 %, au
+    /// milieu le son tel quel, en bas le silence.
     static func gain(atY y: CGFloat, height: CGFloat) -> Double {
         guard height > 0 else { return 1 }
-        return clamped(1 - Double(min(max(y / height, 0), 1)))
+        return clamped(range.upperBound * (1 - Double(min(max(y / height, 0), 1))))
     }
 
     /// Où se trace la ligne de volume, depuis le haut de la piste.
     static func lineY(gain: Double, height: CGFloat) -> CGFloat {
-        CGFloat(1 - clamped(gain)) * max(0, height)
+        CGFloat(1 - clamped(gain) / range.upperBound) * max(0, height)
     }
 
     static func stepped(_ gain: Double, up: Bool) -> Double {
@@ -153,6 +148,43 @@ nonisolated struct ComposerTakeSound: Equatable, Sendable {
 
     static func percent(_ gain: Double) -> Int {
         Int((clamped(gain) * 100).rounded())
+    }
+}
+
+/// **Le gain qu'on entend est celui qui part** (#10360) : un gain se sépare en
+/// une ATTÉNUATION (0…1, le volume que `AVPlayer` et `AVAudioMix` savent poser)
+/// et une AMPLIFICATION (1…2, que seul un tap sur les échantillons sait faire,
+/// `ComposerTakeBoostTap`). L'aperçu et le rendu servent cette loi, et elle seule.
+///
+/// L'amplification s'écrête en DOUCEUR : linéaire jusqu'au genou, puis une
+/// tangente hyperbolique qui tend vers la pleine échelle sans jamais l'atteindre —
+/// un cri amplifié sature avec rondeur au lieu de craquer.
+nonisolated enum ComposerTakeGain {
+    /// Au-dessous du genou, l'échantillon amplifié reste tel quel.
+    static let knee: Float = 0.8
+
+    /// La part que le volume du lecteur ou du mixage pose : 0…1.
+    static func volume(_ gain: Float) -> Float {
+        guard gain.isFinite else { return 1 }
+        return min(1, max(0, gain))
+    }
+
+    /// La part que le tap pose : 1 (rien) … 2.
+    static func boost(_ gain: Float) -> Float {
+        guard gain.isFinite else { return 1 }
+        return max(1, min(Float(ComposerTakeSound.range.upperBound), gain))
+    }
+
+    /// Un échantillon amplifié, écrêté en douceur au-delà du genou. Sans
+    /// amplification, l'échantillon passe intact.
+    static func amplified(_ sample: Float, boost: Float) -> Float {
+        guard boost > 1, sample.isFinite else { return sample }
+        let porte = sample * boost
+        let amplitude = abs(porte)
+        guard amplitude > knee else { return porte }
+        let marge = 1 - knee
+        let doux = knee + marge * tanh((amplitude - knee) / marge)
+        return porte < 0 ? -doux : doux
     }
 }
 

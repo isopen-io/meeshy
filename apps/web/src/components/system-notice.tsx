@@ -1,11 +1,12 @@
 import { lazy, Suspense, useState } from 'react';
 
 import { callActions } from '@/lib/calls/call-actions';
+import { callsAvailable } from '@/lib/calls/calls-availability';
 import { callIdentityOf, type CallNoticeTarget } from '@/lib/calls/call-notice';
 import { translate } from '@/lib/i18n-catalog';
 import { currentInterfaceLanguage, type InterfaceLanguage } from '@/lib/interface-language';
 import type { SystemRow } from '@/lib/view/message-badges';
-import { systemRowText } from '@/lib/view/message-badges';
+import { systemRowLabel, systemRowText } from '@/lib/view/message-badges';
 import { META_TEXT_OPACITY } from '@/lib/reading-mode/metrics';
 
 import { Attachments } from './attachment-blocks';
@@ -45,8 +46,8 @@ export function SystemNotice({
   /** La langue d'INTERFACE de la rangée — celle du document par défaut. */
   readonly language?: InterfaceLanguage;
 }) {
-  const label = systemRowText(row, language);
-  const action = row.kind === 'call' && callTarget !== null ? <CallNoticeAction target={callTarget} languages={languages} /> : null;
+  const label = systemRowLabel(row, language);
+  const action = row.kind === 'call' && callTarget !== null && callsAvailable() ? <CallNoticeAction target={callTarget} languages={languages} /> : null;
   const content = <SystemNoticeContent row={row} language={language} />;
   /* LA TEINTE (revue-correction #5936, défaut majeur 5) — `--color-ios-ink-2`
      à `META_TEXT_OPACITY` (0,55), le cran MÉTA déjà dérivé et déjà tenu pour
@@ -121,10 +122,15 @@ function SystemNoticeContent({ row, language }: { readonly row: SystemRow; reado
     return (
       <>
         {row.isAnonymous ? (
-          <GlyphSvg glyph={THREAD_IDENTITY_GLYPHS.maskHappy} size={13} style={{ color: 'var(--ios-purple-500)' }} />
+          <span data-join-guest="" className="inline-flex">
+            <GlyphSvg glyph={THREAD_IDENTITY_GLYPHS.maskHappy} size={13} style={{ color: 'var(--ios-purple-500)' }} />
+          </span>
         ) : (
           <GlyphSvg glyph={THREAD_STATES_GLYPHS.userPlus} size={13} />
         )}
+        {/* Même raison que l'espace du handle, juste dessous (#10101) : sur
+            la peau `row`, le glyphe se collait à la phrase. */}
+        {' '}
         <span>{systemRowText(row, language)}</span>
         {/* L'ESPACE EST ÉCRITE (#9710) : sur la peau `row`, ces morceaux ne
             vivent pas dans une boîte flexible, et rien d'autre ne les sépare —
@@ -136,17 +142,9 @@ function SystemNoticeContent({ row, language }: { readonly row: SystemRow; reado
             <span style={{ opacity: 0.85 }}>{row.handle}</span>
           </>
         ) : null}
-        {row.isAnonymous ? (
-          <>
-            {' '}
-            <span
-              className="rounded-chip px-1.5 py-0.5 text-[10.5px] font-semibold"
-              style={{ color: 'var(--ios-purple-500)', backgroundColor: 'color-mix(in srgb, var(--ios-purple-500) 12%, transparent)' }}
-            >
-              {translate(language, 'message.join.noAccount')}
-            </span>
-          </>
-        ) : null}
+        {/* LE MASQUE SUFFIT (#10101) : la pastille « sans compte » qui le
+            répétait à côté du nom a quitté la rangée. Le lecteur d'écran,
+            lui, l'entend dans le nom accessible (`systemRowLabel`). */}
       </>
     );
   }

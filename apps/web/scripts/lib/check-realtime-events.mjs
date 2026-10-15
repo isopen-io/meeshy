@@ -74,7 +74,13 @@ const attachedOn = (targetPage, selector) => () =>
  * les nœuds ferait passer un gate qui ne mesure rien — c'est la forme « un
  * témoin qui ne peut pas tomber » appliquée à un sélecteur.
  */
-const transcriptOf = (page, id) => page.locator(`[data-message="${id}"] [data-transcript]`).first().innerText();
+/* Une transcription ABSENTE se lit vide (f3b683623d) : la bulle vocale ne peint plus le nom du fichier en guise de
+   transcription — il a sa propre ligne —, si bien qu'avant le pipeline il n'y a plus de nœud `[data-transcript]`.
+   Attendre ce nœud faisait expirer le gate au lieu de constater « aucune transcription ». */
+const transcriptOf = async (page, id) => {
+  const node = page.locator(`[data-message="${id}"] [data-transcript]`).first();
+  return (await node.count()) === 0 ? '' : node.innerText();
+};
 
 /**
  * LA LANGUE QU'UN LECTEUR D'ÉCRAN ENTEND, jamais l'attribut posé sur le nœud
@@ -504,7 +510,7 @@ export async function checkRealtimeEvents({ browser, BASE, expect, setScheme, AA
      `chrono`, déjà en pause. La réinstaller ici écraserait son journal en
      silence (§1.1 de `paused-chronology.mjs`) sans qu'aucun `expect` n'en
      dépende : c'était un doublon d'infrastructure, pas un témoin. */
-  await listPage.goto(`${BASE}/`, { waitUntil: 'load' });
+  await listPage.goto(`${BASE}/chats`, { waitUntil: 'load' });
   const listOrigin = await bootLiveChronology({ chrono, targetPage: listPage, selector: '[data-row="c-live"]', expect, what: `${label} la liste` });
   if (listOrigin === null) {
     await context.close();

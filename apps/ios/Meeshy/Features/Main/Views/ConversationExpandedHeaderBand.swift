@@ -59,12 +59,16 @@ struct ConversationExpandedHeaderBand: View {
     let midContent: () -> AnyView
     let avatar: () -> AnyView
     let background: () -> AnyView
+    /// « Partager » à côté de l'avatar (#10206) — vide quand la conversation
+    /// n'a pas d'adresse publique.
+    var share: () -> AnyView = { AnyView(EmptyView()) }
 
     var body: some View {
         VStack(alignment: .leading, spacing: 0) {
             HStack(spacing: MeeshySpacing.sm) {
                 if layout.showsBackButton { backButton() }
                 midContent()
+                share()
                 avatar()
             }
             .padding(.leading, layout.showsBackButton ? 0 : MeeshySpacing.xs)
@@ -223,6 +227,9 @@ struct ConversationHeaderMidContent: View {
     let layout: ConversationHeaderLayout
     let titleAndTags: () -> AnyView
     let actionButtons: () -> AnyView
+    /// La bascule de l'en-tête quand l'avatar ouvre une fiche (#10300) : la zone
+    /// libre — l'espace avant les actions replié, la colonne du titre dépliée.
+    var onToggleBand: (() -> Void)? = nil
 
     var body: some View {
         if layout.showsTitle && layout.showsActions {
@@ -235,6 +242,7 @@ struct ConversationHeaderMidContent: View {
             }
         } else if layout.showsTitle {
             titleAndTags()
+                .modifier(HeaderBandToggleArea(onToggle: onToggleBand))
         } else {
             // Le bouton d'appel reste à côté de la recherche dans les DEUX
             // états : le repli ne bascule que la zone nom/tags.
@@ -242,6 +250,7 @@ struct ConversationHeaderMidContent: View {
                 Spacer()
                 actionButtons()
             }
+            .modifier(HeaderBandToggleArea(onToggle: onToggleBand))
         }
     }
 }

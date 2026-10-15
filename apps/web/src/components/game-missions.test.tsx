@@ -131,13 +131,10 @@ describe('changer de mission', () => {
 });
 
 describe('le coffre', () => {
-  test('fermé tant que les missions ne sont pas finies, avec ce qu’il contient AVANT l’ouverture', () => {
+  test('fermé tant que les missions ne sont pas finies, avec ce qu’il attend', () => {
     const page = text(renderToStaticMarkup(<GameMissions {...props()} />));
     expect(page).toContain('Termine les missions du jour');
     expect(page).toMatch(/Faites \d \/ 3/);
-    expect(page).toMatch(/60 à 200 points/);
-    expect(page).toContain('1 chance sur 6');
-    expect(page).toContain('1 chance sur 20');
   });
 
   const done = (patch: Parameters<typeof gameBlockFixture>[0] = {}) => {
@@ -165,6 +162,39 @@ describe('le coffre', () => {
     expect(html.match(/data-game-reward/g)).toHaveLength(3);
     expect(text(html)).toContain('+120 points');
     expect(html).not.toContain('data-game-chest-open');
+  });
+
+  test('fermé, verrouillé ou prêt : son contenu reste secret — ni montant, ni chance, ni borne (#10567)', () => {
+    for (const closed of [props(), done()]) {
+      const html = renderToStaticMarkup(<GameMissions {...closed} />);
+      expect(html).not.toContain('data-game-chest-today');
+      expect(html).not.toContain('data-game-chest-bonus');
+      expect(html).not.toContain('data-game-reward');
+      const page = text(html);
+      expect(page).not.toMatch(/Ce coffre/);
+      expect(page).not.toMatch(/chance sur/);
+      expect(page).not.toMatch(/selon tes missions/);
+      expect(page).not.toMatch(/Prime/);
+    }
+  });
+
+  test('ouvert après #10011 : les points, la Gloire, la prime, le fragment d’étoile et le gel montent un à un', () => {
+    const html = renderToStaticMarkup(
+      <GameMissions {...done({ chestClaimed: true, chestReward: { points: 2083 + 244, fragment: true, freeze: true, glory: 208, bonus: 'fifth', bonusPoints: 244 } })} />,
+    );
+    expect(html.match(/data-game-reward/g)).toHaveLength(5);
+    const page = text(html);
+    expect(page).toContain('+208 Gloire');
+    expect(page).toMatch(/\+2[  ]?083 points/);
+    expect(page).toMatch(/Prime\s:\s\+244\spoints, un cinquième de Meesh/);
+    expect(page).toContain('Un fragment d’étoile');
+    expect(html).not.toContain('data-game-chest-today');
+  });
+
+  test('dit le total de fragments d’étoile collectés, quand la passerelle le sert', () => {
+    const page = text(renderToStaticMarkup(<GameMissions {...props()} starFragments={3} />));
+    expect(page).toContain('3 fragments d’étoile');
+    expect(renderToStaticMarkup(<GameMissions {...props()} />)).not.toContain('data-game-star-fragments');
   });
 
   test('en cours d’ouverture : le coffre s’ouvre déjà, le contenu est attendu', () => {

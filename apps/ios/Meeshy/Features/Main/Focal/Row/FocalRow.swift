@@ -277,7 +277,8 @@ struct FocalRow: View {
                         isAgentAuthored: input.isAgentAuthored,
                         isAgentGrammarEnabled: input.showsAgentGrammar
                     ),
-                    onOpenProfile: actions.onOpenProfile
+                    onOpenProfile: actions.onOpenProfile,
+                    onMoodTap: actions.onMoodTap
                 )
                 .opacity(input.isFocused ? 0 : 1)
             }
@@ -576,7 +577,8 @@ struct FocalRow: View {
                 onQuotedAuthorTap: actions.onQuotedAuthorTap,
                 onQuotedMediaTap: actions.onQuotedMediaTap,
                 audioQueueTailProvider: actions.audioQueueTailProvider,
-                onTapConsentNotice: actions.onTapConsentNotice
+                onTapConsentNotice: actions.onTapConsentNotice,
+                onMediaTap: actions.onMediaTap
             )
         }
     }
@@ -624,14 +626,14 @@ struct FocalRow: View {
     }
 
     /// Miroir de la branche réelle (`:850-856`, lue jamais modifiée) :
-    /// emoji-only SANS citation ⇒ grand emoji libre ; sinon texte normal SI
+    /// emoji-only ⇒ grand emoji libre, citation ou non (#10628) ; sinon texte normal SI
     /// du contenu existe ET que l'audio ne l'héberge pas déjà en caption
     /// (`audioHostsCaption` ⇒ le texte vit DANS le widget audio, WS-3).
     @ViewBuilder
     private var textOrEmojiBlock: some View {
         if let sticker = content.sticker {
             stickerBlock(sticker)
-        } else if content.isEmojiOnly && content.reply == nil {
+        } else if content.isEmojiOnly {
             emojiBlock
         } else if content.hasTextOrNonMediaContent && audioMode != .hostsCaption {
             textBlock
@@ -662,6 +664,8 @@ struct FocalRow: View {
     @ViewBuilder
     private func stickerBlock(_ sticker: BubbleContent.Sticker) -> some View {
         MessageStickerArtwork(sticker: sticker, side: FocalMetrics.Sticker.side)
+            .stickerFloat()
+            .stickerSheetOnTap(sticker: sticker, isMine: content.isMe)
             .padding(.leading, indent)
             .accessibilityLabel(BubbleSticker.accessibilityLabel(for: sticker))
     }
@@ -720,7 +724,7 @@ struct FocalRow: View {
                 hashtagTint: MeeshyColors.hashtagColor(isDark: input.isDark),
                 linkTint: Color(hex: input.accentHex),
                 isDark: input.isDark,
-                trackedLinks: content.text?.trackedLinks ?? [:],
+                trackedLinks: content.text?.trackedLinks ?? [:], linksAreInert: content.text?.linksAreInert == true,
                 fontSize: textSize,
                 // Aucune entrée gouvernant la HAUTEUR ne dépend de
                 // `isFocused` (decisions.md 2026-08-22 bis) : seul le
@@ -1092,6 +1096,7 @@ struct FocalRow: View {
                 isAgentGrammarEnabled: input.showsAgentGrammar
                 ),
                 onOpenProfile: actions.onOpenProfile,
+                onMoodTap: actions.onMoodTap,
                 avatarDiameter: FocalMetrics.FocusStrip.identityAvatarSize,
                 nameSize: FocalMetrics.FocusStrip.identityNameSize,
                 fillsWidth: false

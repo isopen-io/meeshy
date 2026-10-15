@@ -591,44 +591,32 @@ extension ConversationView {
                     for (item, result) in zip(pendingUploads, uploadResults) {
                         let att = item.attachment
                         let fileURL = item.fileURL
-                        // Off-MainActor read: this `Task` inherits the
-                        // MainActor isolation of `sendMessageWithAttachments`
-                        // (project default actor isolation), so a raw
-                        // `Data(contentsOf:)` here froze the UI for the
-                        // duration of every large video/photo read on send.
-                        let fileData = await ConversationView.readAttachmentFileBytes(fileURL)
                         uploadedIds.append(result.id)
-                        if let fileData {
-                            // Seed under the exact key the renderer resolves to
-                            // so the optimistic→confirmed transition (file:// →
-                            // server URL) reads a hot cache and never
-                            // re-downloads our own upload. See RC3.3.
-                            let renderKey = MeeshyConfig.resolveMediaURL(result.fileUrl)?.absoluteString ?? result.fileUrl
-                            let effectiveType: MeeshyMessageAttachment.AttachmentType = send.group.kind == .audio ? .audio : att.type
-                            switch effectiveType {
-                            case .audio:
-                                await CacheCoordinator.shared.audio.store(fileData, for: renderKey)
-                                await CacheCoordinator.shared.audio.store(fileData, for: fileURL.absoluteString)
-                            case .image:
-                                await CacheCoordinator.shared.images.store(fileData, for: renderKey)
-                                if let image = UIImage(data: fileData) {
-                                    DiskCacheStore.cacheImageForPreview(image, key: renderKey)
-                                }
-                            default:
-                                await CacheCoordinator.shared.video.store(fileData, for: renderKey)
-                            }
-                            // Seed server-returned thumbnail so the confirmed
-                            // bubble renders from cache (no network flash on
-                            // optimistic→server URL reconciliation). Only for
-                            // non-audio groups which carry a thumbnailUrl.
-                            if effectiveType != .audio,
-                               let thumbUrl = result.thumbnailUrl,
-                               let thumbImage = thumbnails[att.id],
-                               let thumbData = await ImageCompressor.jpegOffMain(thumbImage, quality: 0.8) {
-                                let thumbKey = MeeshyConfig.resolveMediaURL(thumbUrl)?.absoluteString ?? thumbUrl
-                                await CacheCoordinator.shared.thumbnails.store(thumbData, for: thumbKey)
-                                DiskCacheStore.cacheImageForPreview(thumbImage, key: thumbKey)
-                            }
+                        // #9875 — le fichier est DÉJÀ dans le cache typé, copié
+                        // par `TusUploadManager` sous la clé de rendu : aucun
+                        // octet n'est relu ici. L'aperçu décodé de la bulle
+                        // optimiste change seulement de clé, et le vocal reste
+                        // lisible sous son adresse `file://` le temps de la
+                        // réconciliation.
+                        let renderKey = TusUploadManager.renderCacheKey(forFileUrl: result.fileUrl)
+                        let effectiveType: MeeshyMessageAttachment.AttachmentType = send.group.kind == .audio ? .audio : att.type
+                        if effectiveType == .audio {
+                            await CacheCoordinator.shared.audio.seed(copyingLocalFile: fileURL, for: fileURL.absoluteString)
+                        }
+                        if effectiveType == .image, let preview = DiskCacheStore.cachedImage(for: fileURL.absoluteString) {
+                            DiskCacheStore.cacheImageForPreview(preview, key: renderKey)
+                        }
+                        // Seed server-returned thumbnail so the confirmed
+                        // bubble renders from cache (no network flash on
+                        // optimistic→server URL reconciliation). Only for
+                        // non-audio groups which carry a thumbnailUrl.
+                        if effectiveType != .audio,
+                           let thumbUrl = result.thumbnailUrl,
+                           let thumbImage = thumbnails[att.id],
+                           let thumbData = await ImageCompressor.jpegOffMain(thumbImage, quality: 0.8) {
+                            let thumbKey = MeeshyConfig.resolveMediaURL(thumbUrl)?.absoluteString ?? thumbUrl
+                            await CacheCoordinator.shared.thumbnails.store(thumbData, for: thumbKey)
+                            DiskCacheStore.cacheImageForPreview(thumbImage, key: thumbKey)
                         }
                         localAttachments.append(PreparationTracking.promoted(
                             result.toMessageAttachment(uploadedBy: currentUserId), capturedInApp: att.capturedInApp))
@@ -667,6 +655,15 @@ extension ConversationView {
                     // par clientMessageId côté gateway évite tout doublon).
                     _ = try? await viewModel.messagePersistence.applyEvent(
                         localId: send.tempId, event: .sendFailed(error))
+                    // #10006 — le refus d'une pièce d'INVITÉ est définitif :
+                    // l'outbox le rejouerait en vain. La bulle dit pourquoi.
+                    if let refusal = error as? GuestAttachmentRefusal {
+                        await viewModel.markOptimisticMediaFailed(
+                            tempId: send.tempId,
+                            reason: GuestAttachmentCopy.serverRefusal(refusal, kinds: anonymousSession?.allowedAttachmentKinds)
+                        )
+                        continue
+                    }
                     var requeued = false
                     if send.group.kind == .audio {
                         let urls = send.group.attachments.compactMap { mediaFiles[$0.id] }

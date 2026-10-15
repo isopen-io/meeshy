@@ -455,63 +455,13 @@ extension StoryViewerView {
         resumeTimer()
     }
 
-    // MARK: - Navigation
-
-    // Pas de haptic ici : `goToNext`/`goToPrevious` sont aussi le chemin de
-    // l'auto-advance (timer `onCompletion`) — vibrer à chaque slide casse la
-    // fluidité de lecture (retour user 2026-07-13 : « 3 retours haptiques par
-    // slide »). Le tick unique par navigation MANUELLE vit au point de geste
-    // (touchUp nav dans +Canvas, commit de swipe de groupe ci-dessus).
-    func goToNext() {
-        guard !isDismissing && !isTransitioning && !isComposerEngaged else { return }
-        guard let group = currentGroup else { return }
-
-        if currentStoryIndex < group.stories.count - 1 {
-            crossFadeStory {
-                currentStoryIndex += 1
-                progressClock.reset()
-            }
-        } else if currentGroupIndex < groups.count - 1 {
-            if isPreviewMode {
-                isPresented = false
-                return
-            }
-            groupTransition(forward: true) {
-                currentGroupIndex += 1
-                currentStoryIndex = entryIndex(of: groups[currentGroupIndex])
-                progressClock.reset()
-            }
-        } else {
-            if isPreviewMode {
-                isPresented = false
-                return
-            }
-            dismissViewer()
-        }
-    }
-
-    func goToPrevious() {
-        guard !isDismissing && !isTransitioning && !isComposerEngaged else { return }
-
-        if currentStoryIndex > 0 {
-            crossFadeStory {
-                currentStoryIndex -= 1
-                progressClock.reset()
-            }
-        } else if currentGroupIndex > 0 {
-            groupTransition(forward: false) {
-                currentGroupIndex -= 1
-                currentStoryIndex = max(0, groups[currentGroupIndex].stories.count - 1)
-                progressClock.reset()
-            }
-        }
-    }
-
     /// True cross-dissolve for stories within the same user.
     /// Old content stays visible (outgoing layer) while new content fades in on top —
     /// eliminates the flash caused by AsyncImage reloading between swaps.
     /// Supports StoryTransitionEffect: fade, zoom, slide, reveal.
-    private func crossFadeStory(update: @escaping () -> Void) {
+    // Non-private : appelée par `goToNext`/`goToPrevious`
+    // (`StoryViewerView+Navigation.swift`).
+    func crossFadeStory(update: @escaping () -> Void) {
         isTransitioning = true
 
         // 1. Snapshot current story as outgoing (already rendered, no reload needed)
@@ -526,10 +476,10 @@ extension StoryViewerView {
         update()
         markCurrentViewed()
 
-        // Fire-and-forget prefetch — thumbHash provides instant visual while full image loads
+        // La slide entrante d'abord ; ses voisines N±1, N±2 se préparent dès
+        // sa première image (`prepareNeighborWindow`, #10348).
+        interruptNeighborWindow()
         if let story = currentStory { prefetchAllMedia(for: story) }
-        prefetchStory(at: currentStoryIndex + 1)
-        prefetchStory(at: currentStoryIndex + 2)
 
         let incomingEffect = currentStory?.storyEffects?.opening
 
@@ -636,27 +586,6 @@ extension StoryViewerView {
         }
     }
 
-    /// Dismiss — shrink to small card and fly toward top
-    func dismissViewer() {
-        guard !isDismissing else { return }
-        isTransitioning = true
-        slideTimer.setPaused(true)
-        // Déclencher le fade-out audio immédiat lors du dismiss
-        NotificationCenter.default.post(name: .storyAudioFadeOut, object: nil)
-
-        // isDismissing MUST be inside withAnimation so computed transforms animate
-        withAnimation(.spring(response: 0.5, dampingFraction: 0.82)) {
-            isDismissing = true
-            dragOffset = 0
-            horizontalDrag = 0
-            groupSlide = 0
-        }
-
-        DispatchQueue.main.asyncAfter(deadline: .now() + 0.45) {
-            isPresented = false
-        }
-    }
-
     // MARK: - Timer
 
     /// L'agrégat de pause (`shouldPauseTimer`) et la boucle vivent dans
@@ -664,7 +593,6 @@ extension StoryViewerView {
     func startTimer() {
         progressClock.reset()
         isContentReady = false
-        hasFiredFadeOut = false
         hasFiredNextPrefetch = false
         // Toutes les surfaces du reader tombent au changement de slide, pas
         // seulement les commentaires : un strip de langues ou une barre d'emojis
@@ -1144,110 +1072,6 @@ extension StoryViewerView {
             // (`activePostId`). Idempotent : le manager ignore une story déjà
             // déclarée active et coalesce les appels serveur.
             NotificationToastManager.shared.onPostOpened(story.id)
-        }
-    }
-
-    // MARK: - Prefetch
-
-    /// Précharge tous les médias d'une story : legacy media, mediaObjects, audioPlayerObjects, backgroundAudio.
-    /// Retourne un Task awaitable pour permettre de bloquer sur le chargement si nécessaire.
-    @discardableResult
-    private func prefetchAllMedia(for story: StoryItem) -> Task<Void, Never> {
-        var urls: [String] = []
-
-        urls.append(contentsOf: story.media.compactMap(\.url))
-
-        if let mediaObjs = story.storyEffects?.mediaObjects {
-            for obj in mediaObjs {
-                if let urlStr = story.media.first(where: { $0.id == obj.postMediaId })?.url {
-                    urls.append(urlStr)
-                }
-            }
-        }
-
-        if let audioObjs = story.storyEffects?.audioPlayerObjects {
-            for obj in audioObjs {
-                if let urlStr = story.media.first(where: { $0.id == obj.postMediaId })?.url {
-                    urls.append(urlStr)
-                }
-            }
-        }
-
-        if let bgAudioId = story.storyEffects?.backgroundAudioId {
-            if let urlStr = story.media.first(where: { $0.id == bgAudioId })?.url {
-                urls.append(urlStr)
-            }
-        }
-
-        let uniqueURLs = Array(Set(urls))
-        let task = Task {
-            let imageStore = await CacheCoordinator.shared.images
-            for urlString in uniqueURLs {
-                // Annulé par l'onDisappear du viewer : sans ce check, les
-                // téléchargements + prerolls AVPlayer continuaient après la
-                // fermeture (borné par le cache FIFO de 6 players, mais
-                // réseau/CPU gaspillés pour un viewer mort).
-                guard !Task.isCancelled else { return }
-                let mediaType = story.media.first(where: { $0.url == urlString })?.type
-                if mediaType == .video {
-                    // Le canvas relit la vidéo via `CacheCoordinator.shared.video`
-                    // (`videoLocalFileURL(for:)`). Le prefetch DOIT peupler CE
-                    // store — pas `images` — sinon le canvas tombe en cache-miss
-                    // et re-télécharge ce qui vient d'être préchargé.
-                    _ = try? await CacheCoordinator.shared.video.data(for: urlString)
-                    if let url = URL(string: urlString) {
-                        await StoryMediaLoader.shared.preloadAndCachePlayer(url: url)
-                    }
-                } else if mediaType == .audio {
-                    // Idem : le lecteur audio relit via le store `audio`.
-                    _ = try? await CacheCoordinator.shared.audio.data(for: urlString)
-                } else {
-                    // Image: use image(for:) to populate UIImage NSCache for instant display
-                    _ = await imageStore.image(for: urlString)
-                }
-            }
-            guard !Task.isCancelled else { return }
-            // Pre-probe foreground video audio tracks so `storyHasAudibleSound`
-            // resolves to its final value before the slide is rendered —
-            // without this, the sound button « apparait après quelques 100 ms »
-            // when the story carries a video with audio (user bug 2026-05-28
-            // « le calcul pour savoir si on affiche le bouton son doit se
-            // faire avant qu'on affiche la story »). The probe lives in
-            // `StoryViewerView.swift` so it can touch the private @State /
-            // private resolveVideoURL helpers directly.
-            await self.preProbeVideoAudio(for: story)
-        }
-        prefetchTasks.append(task)
-        return task
-    }
-
-    /// Précharge la story à l'index donné dans le groupe actuel.
-    @discardableResult
-    func prefetchStory(at index: Int) -> Task<Void, Never>? {
-        guard currentGroupIndex < groups.count else { return nil }
-        let stories = groups[currentGroupIndex].stories
-        guard index >= 0, index < stories.count else { return nil }
-        return prefetchAllMedia(for: stories[index])
-    }
-
-    /// Précharge toutes les stories du groupe actuel, puis la fenêtre d'ENTRÉE
-    /// des deux groupes suivants (directive user 2026-08-20 : « précharger les
-    /// groupes suivants » — une story déjà locale s'ouvre instantanément).
-    /// La fenêtre part de `entryIndex(of:)` — la slide sur laquelle un switch
-    /// forward atterrit réellement (première non-vue non-expirée) — et non des
-    /// 2 premières slides du groupe, souvent déjà vues donc jamais rejouées.
-    func prefetchCurrentGroup() {
-        guard currentGroupIndex >= 0, currentGroupIndex < groups.count else { return }
-
-        groups[currentGroupIndex].stories.forEach { prefetchAllMedia(for: $0) }
-
-        for nextGroupIdx in (currentGroupIndex + 1)...(currentGroupIndex + 2)
-        where nextGroupIdx < groups.count {
-            let nextGroup = groups[nextGroupIdx]
-            nextGroup.stories
-                .dropFirst(entryIndex(of: nextGroup))
-                .prefix(2)
-                .forEach { prefetchAllMedia(for: $0) }
         }
     }
 }
