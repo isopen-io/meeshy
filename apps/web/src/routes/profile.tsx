@@ -3,6 +3,7 @@ import { useCallback, useEffect, useMemo, useRef, useState, type ChangeEvent } f
 import { useStore } from 'zustand/react';
 
 import type { ServedProfileDecorItem } from '@meeshy/shared/types/profile-decor';
+import { authorAccentColor } from '@meeshy/shared/utils/conversation-colors';
 
 import { GameBannerOwnSlot } from '@/components/game-profile-slots';
 import { LanguageSheet } from '@/components/language-sheet';
@@ -210,6 +211,8 @@ export default function ProfileScreen() {
   );
 
   const identity = identityOf(profile, sessionUser);
+  /* UNE SEULE COULEUR D'ACCENT DE PROFIL (#10741) : celle que voient les autres. */
+  const accent = myId === undefined ? DECOR_ACCENT : authorAccentColor(myId, identity?.displayName ?? identity?.username ?? '');
   const prism = prismOf(profile, sessionUser);
   const editing = draft !== null;
 
@@ -314,6 +317,7 @@ export default function ProfileScreen() {
               mood={mood}
               moodAuthorId={myId}
               decor={designs}
+              accent={accent}
             />
           )}
           <StatsSection language={language} stats={statsQuery.data ?? null} />
@@ -392,7 +396,7 @@ export default function ProfileScreen() {
           side={decorSide}
           language={language}
           current={profile?.profileDecor?.[decorSide] ?? null}
-          accent={DECOR_ACCENT}
+          accent={accent}
           onChoose={(choice) => void equipDecor(decorSide, choice)}
           onClose={() => setDecorSide(null)}
         />

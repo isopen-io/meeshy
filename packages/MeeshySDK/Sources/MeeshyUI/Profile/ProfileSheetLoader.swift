@@ -92,17 +92,25 @@ final class ProfileSheetLoader: ObservableObject {
             profile = fresh
             profileLoadFailed = false
             await data.storeProfile(fresh, lookupKey: key)
-        } catch let error as APIError {
-            if case .serverError(403, _) = error {
-                isBlockedByTarget = true
-            } else {
-                profileLoadFailed = profile == nil
-            }
+        } catch APIError.serverError(403, _) {
+            markBlockedByTarget()
+        } catch APIError.serverError(404, _) where profile != nil {
+            markBlockedByTarget()
+        } catch MeeshyError.server(statusCode: 404, message: _) where profile != nil {
+            markBlockedByTarget()
         } catch MeeshyError.forbidden {
             // Un refus n'est pas une panne : réessayer ne changerait rien.
         } catch {
             profileLoadFailed = profile == nil
         }
+    }
+
+    /// La passerelle sert 404 au BLOQUÉ (#10750) — le transport le lève en `MeeshyError.server` : sur une
+    /// fiche déjà peinte, rien du cache (décor, actions, statistiques) ne reste.
+    private func markBlockedByTarget() {
+        isBlockedByTarget = true
+        profile = nil
+        stats = nil
     }
 
     private func synchronizeStats(_ userId: String) async {

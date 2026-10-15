@@ -39,6 +39,7 @@ public extension ConversationPreviewMessage {
             isForwarded: nature?.isForwarded,
             systemEvent: nature?.systemEvent,
             callSummary: nature?.callSummary,
+            sticker: nature?.sticker,
             location: place.map { ConversationPreviewPlace(name: $0.name, address: $0.address) },
             attachment: attachments.first.map(ConversationPreviewAttachment.init(attachment:)),
             attachmentSummary: nature?.attachmentSummary

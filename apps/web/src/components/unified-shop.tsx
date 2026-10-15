@@ -13,7 +13,22 @@ import { translateStickerPacks } from '@/lib/i18n-sticker-packs-catalog';
 import type { PlainStickerPacksKey } from '@/lib/i18n-sticker-packs-catalog';
 import type { InterfaceLanguage } from '@/lib/interface-language';
 
+import { meeStickersOfPack } from '@/lib/mee/catalog';
+import { renderMeeSticker } from '@/lib/mee/render';
+import { isMeeBuiltinPack, type MeeBuiltinPack } from '@/lib/mee/types';
+
 import type { PackShopAdapter } from './pack-shop';
+
+/** La vignette d'un pack Mee intégré : son premier Mee, dessiné par le client (le serveur ne sert aucune image). */
+function MeePackCover({ slug }: { readonly slug: MeeBuiltinPack }) {
+  const box = 'block h-14 w-14 shrink-0 rounded-xl';
+  const first = meeStickersOfPack(slug)[0];
+  return first === undefined ? (
+    <span aria-hidden className={box} />
+  ) : (
+    <span aria-hidden className={box} dangerouslySetInnerHTML={{ __html: renderMeeSticker(first, { uid: `shop-${slug}`, animated: false }) }} />
+  );
+}
 
 /** Chargée à la demande, comme dans `frame-pack-shop.tsx` : `pack_shop` est `dynamic_only` (budgets.json). */
 const PackShop = lazy(() => import('./pack-shop').then((m) => ({ default: m.PackShop })));
@@ -99,7 +114,9 @@ export const unifiedShopAdapter = (
     translateStickerPacks(language, DOMAIN_KEYS[pack.domain]),
   ],
   cover: (pack) =>
-    pack.coverUrl === null ? (
+    pack.domain === 'sticker' && pack.builtin === true && isMeeBuiltinPack(pack.rawSlug) ? (
+      <MeePackCover slug={pack.rawSlug} />
+    ) : pack.coverUrl === null ? (
       <span aria-hidden className="block h-14 w-14 shrink-0 rounded-xl" style={{ backgroundColor: 'var(--color-ios-fill)' }} />
     ) : (
       <img src={attachmentSrc(pack.coverUrl)} alt="" loading="lazy" decoding="async" className="block h-14 w-14 shrink-0 rounded-xl object-cover" />

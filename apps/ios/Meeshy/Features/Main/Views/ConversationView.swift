@@ -125,11 +125,11 @@ struct ConversationView: View {
     /// ses champs internes changent. L'override est la seule source vivante.
     @State private var conversationOverride: Conversation?
 
-    /// La conversation à AFFICHER : l'override s'il existe, sinon la valeur
-    /// figée. `internal` (pas `private`) : lue par l'extension
-    /// `ConversationView+Header`, qui vit dans un autre fichier — `private` est
-    /// à portée de fichier.
-    var liveConversation: Conversation? { conversationOverride ?? conversation }
+    /// La conversation à AFFICHER : l'override s'il existe, sinon la valeur figée (lue par `+Header`).
+    var liveConversation: Conversation? { _ = repaintRevision; return conversationOverride ?? conversation }
+    /// `==` ne compare que l'`id` : une copie repeinte écrite dans `@State` est ÉGALE et n'invalide
+    /// rien. Cette révision, lue par `liveConversation`, porte le redessin (#10751).
+    @State private var repaintRevision = 0
 
     /// Le pair d'un direct OUVERT renommé ou repeint à `user:updated` (#9359) :
     /// l'annonce s'applique à la conversation AFFICHÉE et le résultat devient
@@ -137,8 +137,8 @@ struct ConversationView: View {
     /// repli, et un enregistrement des réglages repart du pair repeint. Une
     /// annonce qui ne change rien n'écrit rien : l'écran ne se redessine pas.
     func admitPeerUpdate(_ event: UserUpdatedEvent) { admitRepainted(DirectPeerRepaint.repainted(liveConversation, by: event)) }
-    /// Écrivain partagé avec l'accent personnel relayé (#10631, `admitAppearance`).
-    func admitRepainted(_ repainted: Conversation?) { if let repainted { conversationOverride = repainted } }
+    /// Écrivain UNIQUE de l'override : pair (#9359), accent relayé (#10631), réglages enregistrés.
+    func admitRepainted(_ repainted: Conversation?) { guard let repainted else { return }; conversationOverride = repainted; repaintRevision &+= 1 }
 
     // NOTE: Properties below are internal (not private) for cross-file extension access.
     // Extensions in ConversationView+MessageRow, +Header, +ScrollIndicators, +Composer.
@@ -594,7 +594,7 @@ struct ConversationView: View {
             .modifier(ConversationInfoSheetLayer(
                 isPresented: $composerState.showConversationInfo, scrollState: $scrollState,
                 conversation: liveConversation, accentColor: accentColor, messages: viewModel.messages,
-                router: router, onConversationUpdated: { conversationOverride = $0 }))
+                router: router, onConversationUpdated: { admitRepainted($0) }))
             .alert(String(localized: "conversation.view.action_selected", bundle: .main), isPresented: Binding(get: { composerState.actionAlert != nil }, set: { if !$0 { composerState.actionAlert = nil } })) {
                 Button(String(localized: "common.ok", bundle: .main)) { composerState.actionAlert = nil }
             } message: { Text(composerState.actionAlert ?? "") }

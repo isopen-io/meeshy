@@ -100,13 +100,15 @@ struct ComposerPasteInterceptor: UIViewRepresentable {
         func install(on textView: UITextView) {
             self.textView = textView
             textView.pasteDelegate = self
-            if let configuration = textView.pasteConfiguration {
-                configuration.addAcceptableTypeIdentifiers(Self.attachableTypes)
-            } else {
-                textView.pasteConfiguration = UIPasteConfiguration(
-                    acceptableTypeIdentifiers: [UTType.plainText.identifier, UTType.text.identifier, UTType.url.identifier] + Self.attachableTypes
-                )
-            }
+            textView.pasteConfiguration = Self.configuration(merging: textView.pasteConfiguration)
+        }
+
+        /// Ne mute JAMAIS la configuration existante (UIKit peut la poser gelée) : en construit une neuve.
+        static func configuration(merging existing: UIPasteConfiguration?) -> UIPasteConfiguration {
+            let base = existing?.acceptableTypeIdentifiers
+                ?? [UTType.plainText.identifier, UTType.text.identifier, UTType.url.identifier]
+            let merged = base + attachableTypes.filter { !base.contains($0) }
+            return UIPasteConfiguration(acceptableTypeIdentifiers: merged)
         }
 
         func textPasteConfigurationSupporting(_ textPasteConfigurationSupporting: UITextPasteConfigurationSupporting,

@@ -98,7 +98,7 @@ const submit = (app: FastifyInstance, m: unknown = manifest(), assets?: Record<s
   app.inject({ method: 'POST', url: '/submissions', ...submission(m, assets) });
 
 describe('the built-in packs', () => {
-  it('lists Mee, Meo and Mee & Meo first, installed until the user removes them', async () => {
+  it('lists Mee, Meo and Mee & Meo first, included: they cannot be removed (#10738)', async () => {
     const { app } = await buildApp();
     const res = await app.inject({ method: 'GET', url: '/' });
     expect(res.statusCode).toBe(200);
@@ -109,13 +109,10 @@ describe('the built-in packs', () => {
     ]);
 
     const removed = await app.inject({ method: 'DELETE', url: '/meo/install' });
-    expect(removed.json().data).toMatchObject({ slug: 'meo', installed: false });
+    expect(removed.statusCode).toBe(409);
+    expect(removed.json()).toMatchObject({ code: 'PACK_NOT_REMOVABLE' });
     const installed = await app.inject({ method: 'GET', url: '/installed' });
-    expect(installed.json().data.map((p: { slug: string }) => p.slug)).toEqual(['mee', 'mee-et-meo']);
-
-    await app.inject({ method: 'PUT', url: '/meo/install' });
-    const back = await app.inject({ method: 'GET', url: '/installed' });
-    expect(back.json().data.map((p: { slug: string }) => p.slug)).toEqual(['mee', 'meo', 'mee-et-meo']);
+    expect(installed.json().data.map((p: { slug: string }) => p.slug)).toEqual(['mee', 'meo', 'mee-et-meo']);
     await app.close();
   });
 });

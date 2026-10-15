@@ -1,4 +1,4 @@
-import { useCallback, useMemo, useState } from 'react';
+import { useCallback, useEffect, useMemo, useState } from 'react';
 import { useQuery } from '@tanstack/react-query';
 import { useStore } from 'zustand/react';
 
@@ -15,7 +15,7 @@ import {
   type FriendActionOutcome,
 } from '@/lib/api/friend-actions';
 import type { PersonSummary } from '@/lib/api/friend-requests';
-import { publicProfileQueryOptions, publicProfileStatsQueryOptions, type PublicProfile } from '@/lib/api/public-profile';
+import { publicProfileQueryKey, publicProfileQueryOptions, publicProfileStatsQueryOptions, type PublicProfile } from '@/lib/api/public-profile';
 import { appQueryClient } from '@/lib/api/query-client';
 import { reportUser, type ReportReason } from '@/lib/api/reports';
 import { presenceStore } from '@/lib/api/presence-store';
@@ -25,6 +25,7 @@ import { translate, type InterfaceCatalogKey } from '@/lib/i18n-catalog';
 import type { InterfaceLanguage } from '@/lib/interface-language';
 import type { KnownPerson } from '@/lib/profile/known-people';
 import { knownPersonOrCached } from '@/lib/profile/known-people-cache';
+import { profileFailureOf } from '@/lib/profile/failure';
 import { profilePresenceLine } from '@/lib/profile/presence-line';
 import { actionsFor, pendingRequestFrom, relationFromServed, type ProfileActionKind } from '@/lib/profile/relation';
 import { announcementToneOf } from '@/lib/view/announcement-tone';
@@ -118,7 +119,16 @@ export function useProfileController(username: string, language: InterfaceLangua
      peint au premier rendu, et la lecture repart à CHAQUE ouverture, fraîche
      ou non : statistiques et relation bougent sous les gestes des autres. Un
      échec garde la fiche affichée (TanStack conserve `data`). */
-  const view = useQuery({ ...publicProfileQueryOptions({ ...apiDeps, handle: username }), refetchOnMount: 'always' }, appQueryClient);
+  const fetched = useQuery({ ...publicProfileQueryOptions({ ...apiDeps, handle: username }), refetchOnMount: 'always' }, appQueryClient);
+  /* UN REFUS DE REVALIDATION REMPLACE LA FICHE EN CACHE (#10740) : un 403/404
+     servi alors que la fiche est déjà là (le profil m'a bloqué, ou a disparu)
+     ne la garde pas affichée avec son décor périmé — elle sort de l'écran à
+     l'instant et du cache persisté, pour qu'un rechargement ne la rende pas. */
+  const gone = fetched.isError && profileFailureOf(fetched.error, true) === 'refused';
+  useEffect(() => {
+    if (gone) appQueryClient.removeQueries({ queryKey: publicProfileQueryKey(username), exact: true });
+  }, [gone, username]);
+  const view = gone ? { ...fetched, data: undefined } : fetched;
   /* LES COMPTEURS PARTENT DANS LE MÊME TOUR, JAMAIS APRÈS (profil lent dans la
      coque Android) — même adresse, autre `expand` (`public-profile.ts`) : la
      fiche se peint dès que l'identité et la relation sont là, les compteurs

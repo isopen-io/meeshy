@@ -196,6 +196,20 @@ public enum ProfileDecorOptions {
         public let items: [(ref: ProfileDecorRef, design: Design)]
     }
 
+    /// Une proposition à plat : sa clé (`pack/item`) est unique sur TOUTE la liste.
+    public struct Entry<Design: Sendable>: Sendable, Identifiable {
+        public let ref: ProfileDecorRef
+        public let design: Design
+        public var id: String { ref.pack + "/" + ref.item }
+    }
+
+    /// Les groupes mis à plat pour une grille. Deux `ForEach` imbriqués dans une grille paresseuse,
+    /// l'intérieur identifié par son rang, se disputent les mêmes identifiants d'un groupe à l'autre :
+    /// la première vignette du second pack (Halo doré, Aurore vive) disparaissait (#10719).
+    public static func flattened<Design: Sendable>(_ groups: [OptionGroup<Design>]) -> [Entry<Design>] {
+        groups.flatMap { group in group.items.map { Entry(ref: $0.ref, design: $0.design) } }
+    }
+
     public static func rings(installed: [ShopPack]?, catalog: AvatarRingCatalog = .shared) -> [OptionGroup<AvatarRingDesign>] {
         groups(installed: installed, builtin: catalog.packs.map { ($0.slug, $0.installedByDefault, $0.rings) })
     }

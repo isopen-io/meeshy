@@ -177,7 +177,7 @@ public struct ConversationUpdatedEvent: Decodable, Sendable {
         case lastMessageIsBlurred, lastMessageIsViewOnce, lastMessageExpiresAt
         case lastMessageType, lastMessageEffectFlags, lastMessageEphemeralDuration
         case lastMessageIsEncrypted, lastMessageIsForwarded
-        case lastMessageSystemEvent, lastMessageCallSummary, lastMessageAttachmentSummary
+        case lastMessageSystemEvent, lastMessageCallSummary, lastMessageAttachmentSummary, lastMessageSticker
         case lastReaction, activeCall, listRankAt
     }
 
@@ -244,7 +244,8 @@ public struct ConversationUpdatedEvent: Decodable, Sendable {
             isForwarded: (try? container.decodeIfPresent(Bool.self, forKey: .lastMessageIsForwarded)) ?? false,
             systemEvent: try? container.decodeIfPresent(LastMessageSystemEvent.self, forKey: .lastMessageSystemEvent),
             callSummary: try? container.decodeIfPresent(LastMessageCallSummary.self, forKey: .lastMessageCallSummary),
-            attachmentSummary: try? container.decodeIfPresent(LastMessageAttachmentSummary.self, forKey: .lastMessageAttachmentSummary)
+            attachmentSummary: try? container.decodeIfPresent(LastMessageAttachmentSummary.self, forKey: .lastMessageAttachmentSummary),
+            sticker: try? container.decodeIfPresent(ConversationPreviewSticker.self, forKey: .lastMessageSticker)
         )
         lastMessageNature = nature.isEmpty ? nil : nature
         lastReaction = container.contains(.lastReaction)

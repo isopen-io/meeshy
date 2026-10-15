@@ -196,6 +196,18 @@ describe('storyCitationOf — la carte subsiste, le geste non', () => {
     });
   });
 
+  test('une réponse chargée par REST (postReplyTo sans storyReplyToId) construit la carte de la story (#10746)', () => {
+    const citation = storyCitationOf(
+      message({ metadata: { postReplyTo: { id: 'p9', type: 'STORY', moodEmoji: null, previewText: 'Plage', thumbnailUrl: null, createdAt: '2026-09-10T08:00:00.000Z' } } }),
+    );
+    expect(citation).toEqual({ id: 'p9', previewText: 'Plage', thumbnailUrl: null, createdAt: '2026-09-10T08:00:00.000Z', unavailable: false });
+  });
+
+  test('un post qui n’est pas une story, sans clé servie, ne fabrique pas de carte', () => {
+    expect(storyCitationOf(message({ metadata: { postReplyTo: { id: 'p7', type: 'POST', moodEmoji: null, previewText: 'x', createdAt: '2026-09-10T08:00:00.000Z' } } }))).toBeNull();
+    expect(storyCitationOf(message({}))).toBeNull();
+  });
+
   test('une humeur (moodEmoji non nul) ⇒ null — pas de scène', () => {
     const citation = storyCitationOf(
       message({ storyReplyToId: 'p1', metadata: { postReplyTo: { id: 'p1', type: 'STATUS', moodEmoji: '😊', previewText: '', thumbnailUrl: null, createdAt: '' } } }),

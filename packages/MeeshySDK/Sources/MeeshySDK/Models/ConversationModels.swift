@@ -99,13 +99,15 @@ public struct APIConversationLastMessage: Decodable, Sendable {
     public let systemEvent: LastMessageSystemEvent?
     public let callSummary: LastMessageCallSummary?
     public let attachmentSummary: LastMessageAttachmentSummary?
+    /// Sticker hissé de `metadata.sticker` (#10752) — sa présence fait du message un sticker.
+    public let sticker: ConversationPreviewSticker?
 
     enum CodingKeys: String, CodingKey {
         case id, content, senderId, createdAt, messageType, sender, attachments
         case _count
         case isBlurred, isViewOnce, expiresAt, location
         case effectFlags, ephemeralDuration, isEncrypted, isForwarded
-        case systemEvent, callSummary, attachmentSummary
+        case systemEvent, callSummary, attachmentSummary, sticker
     }
 
     /// La nature telle que le serveur la sert ; `nil` sur un serveur antérieur.
@@ -118,7 +120,8 @@ public struct APIConversationLastMessage: Decodable, Sendable {
             isForwarded: isForwarded ?? false,
             systemEvent: systemEvent,
             callSummary: callSummary,
-            attachmentSummary: attachmentSummary
+            attachmentSummary: attachmentSummary,
+            sticker: sticker
         )
         return nature.isEmpty ? nil : nature
     }

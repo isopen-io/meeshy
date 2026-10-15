@@ -97,6 +97,24 @@ const cacheConversationsWith = (user: { readonly id: string; readonly username: 
   });
 };
 
+describe('un profil qui m\u2019a bloqu\u00e9 ne reste pas affich\u00e9 depuis le cache (#10740)', () => {
+  for (const [surface, render] of Object.entries({
+    'la page': (handle: string) => <UserProfileView username={handle} />,
+    'la feuille d\u2019aper\u00e7u': (handle: string) => <ProfilePeekSheet username={handle} onClose={() => {}} />,
+  })) {
+    test(`${surface} : un 404 de revalidation remplace la fiche en cache par l\u2019\u00e9tat indisponible, sans d\u00e9cor`, async () => {
+      const view = fixturePublicProfile('kwame-mensah') as PublicProfileView;
+      appQueryClient.setQueryData(publicProfileQueryKey('bloqueur'), { ...view, profile: { ...view.profile, username: 'bloqueur' } });
+      const el = mountNow(render('bloqueur'));
+      expect(el.querySelector('[data-user-hero]') === null).toBe(false);
+      await settle();
+      expect(el.querySelector('[data-user-hero]') === null).toBe(true);
+      expect(el.querySelector('[data-profile-failure="refused"]') === null).toBe(false);
+      expect(appQueryClient.getQueryData(publicProfileQueryKey('bloqueur'))).toBeUndefined();
+    });
+  }
+});
+
 const surfaces = {
   'la page': (handle: string) => <UserProfileView username={handle} />,
   'la feuille d’aperçu': (handle: string) => <ProfilePeekSheet username={handle} onClose={() => {}} />,
