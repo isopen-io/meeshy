@@ -88,6 +88,27 @@ xcodebuild test-without-building -project apps/ios/Meeshy.xcodeproj -scheme Mees
 `** TEST FAILED **` + `Testing cancelled because the build failed` (exit 65) = le bundle de tests n'a pas compilé/linké. Lire la ligne `error:` juste au-dessus et corriger la compile — ne pas fouiller la logique des tests.
 - **Piège accès cross-file** : un `@State private var` d'une `View` SwiftUI est **inaccessible depuis un fichier d'extension `View+Xxx.swift`** (même module). Symptôme CI : `'<prop>' is inaccessible due to 'private' protection level`. Fix : retirer `private` (internal par défaut) sur toute propriété stockée touchée par un fichier extension frère. Cas vécu `composerFocusTrigger` (StoryViewerView ↔ StoryViewerView+Content.swift), corrigé 2026-06-23.
 
+### Piloter un iPhone branché depuis le Mac (#10682)
+
+`devicectl` n'a aucune entrée tactile, et `idb` ne voit que les simulateurs. Pour toucher l'écran d'un iPhone réel sans les mains du porteur, on passe par la télécommande XCUITest `MeeshyUIDeviceTests/DeviceRemote.swift`. C'est un serveur TCP lancé sur l'appareil, que `iproxy` relie au Mac par USB. Elle n'est dans aucun gate.
+
+```bash
+R=apps/ios/scripts/iphone-remote/iphone-remote.sh
+$R start                                        # compile, installe la build du dépôt, lance le serveur (≈ 2 min)
+$R url meeshy://conversation/<id>               # lien profond
+$R tap "Sticker"                                # toucher par libellé ou identifiant d'accessibilité
+$R xy 220 545                                   # toucher en POINTS (capture en pixels ÷ 3 sur un Pro Max)
+$R swipe 90 690 330 690                         # glisser rapide ; drag x1 y1 x2 y2 s pour un glisser lent
+$R tree | grep Button                           # arbre d'accessibilité
+$R shot nom                                     # capture → $IPHONE_REMOTE_OUT/nom.png
+$R log RECETTE                                  # journal de Meeshy filtré
+$R stop
+```
+
+- `start` **remplace l'app de l'iPhone** par la build du dépôt (Debug), sur l'environnement que l'app avait déjà choisi (staging ou production). En production, n'écrire qu'aux comptes de test convenus avec le porteur.
+- Ce qui n'a pas d'identifiant d'accessibilité ne se touche que par coordonnées, et un décalage de mise en page fait tomber le toucher à côté. Poser un `accessibilityIdentifier` sur tout ce qu'une recette doit atteindre (#10683).
+- Un NSLog temporaire (préfixe `RECETTE`) lu par `$R log RECETTE` mesure ce que l'écran ne montre pas. Il ne se commite jamais.
+
 ## Naming Conventions
 
 Based on [Swift.org API Design Guidelines](https://www.swift.org/documentation/api-design-guidelines/):
