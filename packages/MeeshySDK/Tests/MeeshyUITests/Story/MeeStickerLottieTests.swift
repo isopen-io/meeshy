@@ -79,7 +79,9 @@ final class MeeStickerLottieTests: XCTestCase {
         XCTAssertEqual(urls.count, 16)
         let loaded = await withTaskGroup(of: Bool.self) { group in
             for url in urls { group.addTask { await LottieFilm.load(url: url) != nil } }
-            return await group.reduce(0) { $0 + ($1 ? 1 : 0) }
+            var count = 0
+            for await ok in group where ok { count += 1 }
+            return count
         }
         XCTAssertEqual(loaded, urls.count, "chaque case lit son film, même quand toutes le lisent ensemble")
     }
