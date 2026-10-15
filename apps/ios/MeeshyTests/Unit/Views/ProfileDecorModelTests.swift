@@ -202,6 +202,42 @@ final class ProfileDecorModelTests: XCTestCase {
         XCTAssertEqual(model.state.decor, decor)
     }
 
+    // MARK: - Une photo de bannière téléversée reprend la main sur le design
+
+    func test_yieldBannerToUploadedPhoto_withADesignEquipped_retiresTheBannerOnly() async {
+        let service = StubService()
+        let ring = item("contours-essentiels", "perle")
+        service.result = .success(ServedProfileDecor(avatarRing: ring, banner: nil))
+        let model = model(decor: ServedProfileDecor(avatarRing: ring, banner: item("bannieres-essentielles", "aurore")), service: service)
+
+        await model.yieldBannerToUploadedPhoto()
+
+        XCTAssertEqual(service.writes, [ProfileDecorWrite(side: .banner, choice: nil)], "sans ce retrait, la nouvelle photo resterait cachée sous le design")
+        XCTAssertNil(model.state.decor.banner)
+        XCTAssertEqual(model.state.decor.avatarRing, ring, "le contour ne bouge pas")
+    }
+
+    func test_yieldBannerToUploadedPhoto_withoutDesign_sendsNothing() async {
+        let service = StubService()
+        let model = model(decor: ServedProfileDecor(avatarRing: item("contours-essentiels", "perle")), service: service)
+
+        await model.yieldBannerToUploadedPhoto()
+
+        XCTAssertTrue(service.writes.isEmpty)
+    }
+
+    func test_openablePhoto_aDesignCoversThePhoto_nothingOpens() {
+        let user = MeeshyUser(id: "u1", username: "alice", banner: "https://cdn/b.jpg", profileDecor: ServedProfileDecor(banner: item("bannieres-essentielles", "aurore")))
+
+        XCTAssertNil(ProfileOwnBanner.openablePhoto(of: user), "toucher le design n'ouvre pas en plein écran la photo qu'il recouvre")
+    }
+
+    func test_openablePhoto_withoutDesign_isTheBannerPhoto() {
+        let user = MeeshyUser(id: "u1", username: "alice", banner: "https://cdn/b.jpg")
+
+        XCTAssertEqual(ProfileOwnBanner.openablePhoto(of: user), "https://cdn/b.jpg")
+    }
+
     // MARK: - Le décor survit aux copies de MeeshyUser
 
     func test_mergingServerUser_aServerAnswerWithoutDecor_keepsTheLocalDecor() {
