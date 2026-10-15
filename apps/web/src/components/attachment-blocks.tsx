@@ -114,8 +114,10 @@ function VoiceAttachment({
   carrier,
   message,
   trackOf,
+  deps,
 }: {
   readonly attachment: Attachment;
+  readonly deps?: ConversationsDeps | undefined;
   /** Rang du vocal quand le message en porte plusieurs — annoncé « Vocal 2 sur 3 ». */
   readonly trackOf?: { readonly index: number; readonly total: number } | undefined;
   /** L'auteur et la date du vocal — décrits à la carte de lecture de la coque (#10624). */
@@ -127,7 +129,7 @@ function VoiceAttachment({
   /** Le lecteur plein écran (#8333, miroir de la pastille de pourcentage iOS) — la lecture en cours y reprend à la même seconde. */
   readonly onExpand: () => void;
 }) {
-  const onDemand = useAudioOnDemand({ attachment: received, fallbackLanguage, readerLanguages: languages });
+  const onDemand = useAudioOnDemand({ attachment: received, fallbackLanguage, readerLanguages: languages, ...(deps !== undefined ? { deps } : {}) });
   const attachment = onDemand.served;
   const { described: transcript, track } = electAudio({
     attachment,
@@ -627,6 +629,7 @@ export function Attachments({
             carrier={carrier}
             message={message}
             trackOf={audio.length > 1 ? { index: i + 1, total: audio.length } : undefined}
+            deps={deps}
             {...(displayLanguage !== undefined ? { displayLanguage } : {})}
           />
         ),

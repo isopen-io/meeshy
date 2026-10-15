@@ -6,15 +6,19 @@ import { renderToStaticMarkup } from 'react-dom/server';
 import { ensureHappyDomRegistered, releaseHappyDomIfRegistered } from '@/test-support/happy-dom-environment';
 import { messagesOf } from '@/lib/api/fixtures';
 import { MEDIA_CONVERSATION_ID, MEDIA_VOICE_EN_WITNESS_ID } from '@/lib/api/fixtures-media';
+import type { ConversationsDeps } from '@/lib/api/conversations';
+import type { HttpTransport } from '@/lib/api/http';
 import type { Attachment } from '@/lib/api/types';
+import { loadInterfaceCatalog } from '@/lib/i18n-catalog';
 
 import { Attachments } from './attachment-blocks';
 
 const globals = globalThis as typeof globalThis & { IS_REACT_ACT_ENVIRONMENT?: boolean };
 
-beforeAll(() => {
+beforeAll(async () => {
   ensureHappyDomRegistered();
   globals.IS_REACT_ACT_ENVIRONMENT = true;
+  await loadInterfaceCatalog('fr');
 });
 
 afterAll(async () => {
@@ -75,6 +79,27 @@ describe('la bulle vocale moderne', () => {
       button?.click();
     });
     expect(container.querySelector('[data-voice-transcribe]')?.getAttribute('aria-busy')).toBe('true');
+    act(() => root.unmount());
+    container.remove();
+  });
+
+  test('un échec de « Transcrire » se dit dans la bulle et rend le bouton (#10629)', async () => {
+    const transport = { request: async () => ({ ok: false, status: 503, error: 'TRANSLATOR_UNAVAILABLE' }) } as unknown as HttpTransport;
+    const deps: ConversationsDeps = { source: 'gateway', transport };
+    const container = document.createElement('div');
+    document.body.appendChild(container);
+    const root = createRoot(container);
+    act(() => {
+      root.render(<Attachments attachments={[voice()]} languages={['fr']} fallbackLanguage="fr" mediaFrame="box" deps={deps} />);
+    });
+    await act(async () => {
+      container.querySelector<HTMLButtonElement>('[data-voice-transcribe]')?.click();
+    });
+    await act(async () => new Promise<void>((resolve) => setTimeout(resolve, 10)));
+    const button = container.querySelector<HTMLButtonElement>('[data-voice-transcribe]');
+    expect(button?.disabled).toBe(false);
+    expect(button?.getAttribute('aria-busy')).toBe('false');
+    expect(container.querySelector('[data-voice-transcribe-notice]')?.textContent ?? '').not.toBe('');
     act(() => root.unmount());
     container.remove();
   });
