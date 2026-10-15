@@ -138,7 +138,7 @@ export async function purgeAccountIsolatedData(
       `arrivalAnnouncements=${summary.arrivalAnnouncementsDeleted} sharedTranslations=${summary.sharedTranslationsDeleted} ` +
       `gameDuos=${summary.game.duosDeleted} ` +
       `packChoices=${packs.choicesDeleted} stickers=${packs.libraryDeleted} packSubmissions=${packs.submissionsDeleted} ` +
-      `packsAnonymized=${packs.publishedAnonymized} packFiles=${packs.filesDeleted} ` +
+      `packsAnonymized=${packs.publishedAnonymized} packFiles=${packs.filesDeleted} packOwnerships=${packs.ownershipsDeleted} ` +
       `impressions=${readingTelemetry.impressions} engagements=${readingTelemetry.engagements} ` +
       `views=${readingTelemetry.views} contentEvents=${readingTelemetry.contentEvents}`
   );
@@ -218,6 +218,9 @@ export async function anonymizeUserIdentity(
       displayName: null,
       avatar: null,
       banner: null,
+      // #10632 — le décor de profil ÉQUIPÉ se voit des autres : il part avec l'avatar et la bannière.
+      equippedAvatarRing: null,
+      equippedBanner: null,
       bio: '',
       birthDate: null,
       searchTokens: [],

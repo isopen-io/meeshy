@@ -313,7 +313,7 @@ export async function checkMessageStates({ browser, BASE, expect, setScheme, AA_
     (await rowOf('st-sticker').locator('img[alt^="Sticker"]').count()) === 0,
     `${label} st-sticker : AUCUNE <img> — le PNG n'est que le repli des clients qui ne dessinent pas`,
   );
-  /* LA POLICE (180 : le 90 de `BubbleSticker.emojiGlyphSize` × `STICKER_RENDER_SCALE`, rendu ×2 du web, #9319 ;
+  /* LA POLICE (180 : le 90 de `BubbleSticker.emojiGlyphSize` × 2, rendu ×2 du web, #9319 ;
      un sticker garde sa taille, #9054) — et AUCUN débord
      (#7881). La boîte 60×60 (`BubbleSticker.emojiBox`) servie en CSS laissait
      un glyphe de ~100 px déborder de sa rangée sur le nom, l'heure et le

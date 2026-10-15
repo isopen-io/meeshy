@@ -42,6 +42,7 @@ extension StickerPickerView {
                     .accessibilityLabel(String(localized: "story.sticker.a11y",
                                                defaultValue: "Autocollant \(emoji)",
                                                bundle: .module))
+                    .accessibilityIdentifier(StickerAccessibilityID.emoji(emoji))
                 }
             }
             // **Plus de marge horizontale ICI** (2026-09-05) : la feuille est
@@ -145,6 +146,7 @@ extension StickerPickerView {
                                 defaultValue: "Autocollant de votre bibliothèque",
                                 bundle: .module
                             ))
+                            .accessibilityIdentifier(StickerAccessibilityID.library(item.id))
                         }
                     }
                     .padding(.vertical, 4)

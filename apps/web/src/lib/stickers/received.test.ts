@@ -7,6 +7,7 @@ import {
   resetAddedStickersForTests,
   stickerInLibrary,
   stickerKeyOf,
+  stickerAddable,
   stickerPackSlugOf,
 } from './received';
 
@@ -52,5 +53,13 @@ describe('receivedStickerFile', () => {
   test('une image illisible rend null', async () => {
     expect(await receivedStickerFile('/a.png', async () => new Response('', { status: 404 }))).toBeNull();
     expect(await receivedStickerFile('/a.png', async () => Promise.reject(new Error('réseau')))).toBeNull();
+  });
+});
+
+describe('stickerAddable', () => {
+  test('seule une image jointe se dépose en bibliothèque', () => {
+    expect(stickerAddable(picture)).toBe(true);
+    expect(stickerAddable(undefined)).toBe(false);
+    expect(stickerAddable({ fileUrl: '' })).toBe(false);
   });
 });

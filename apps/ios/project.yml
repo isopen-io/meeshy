@@ -456,6 +456,7 @@ targets:
       PRODUCT_BUNDLE_IDENTIFIER: me.meeshy.app.uitests
       TEST_TARGET_NAME: Meeshy
       CODE_SIGN_STYLE: Automatic
+      GENERATE_INFOPLIST_FILE: YES
     dependencies:
       - target: Meeshy
 

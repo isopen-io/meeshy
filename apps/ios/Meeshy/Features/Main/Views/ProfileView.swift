@@ -246,12 +246,12 @@ struct ProfileView: View {
                     .frame(height: 120)
                     .clipShape(RoundedRectangle(cornerRadius: MeeshyRadius.lg))
                     .contentShape(RoundedRectangle(cornerRadius: MeeshyRadius.lg))
-                    .onTapGesture { openFullscreen(user?.banner) }
+                    .onTapGesture { openFullscreen(ProfileOwnBanner.openablePhoto(of: user)) }
                     .accessibilityElement()
                     .accessibilityLabel(ProfileImageCopy.bannerLabel)
-                    .accessibilityHint(opensFullscreen(user?.banner) ? ProfileImageCopy.openFullscreenHint : "")
-                    .accessibilityAddTraits(opensFullscreen(user?.banner) ? .isButton : [])
-                    .accessibilityAction { openFullscreen(user?.banner) }
+                    .accessibilityHint(opensFullscreen(ProfileOwnBanner.openablePhoto(of: user)) ? ProfileImageCopy.openFullscreenHint : "")
+                    .accessibilityAddTraits(opensFullscreen(ProfileOwnBanner.openablePhoto(of: user)) ? .isButton : [])
+                    .accessibilityAction { openFullscreen(ProfileOwnBanner.openablePhoto(of: user)) }
                     .overlay {
                         // #10601 — le niveau et le rang aux angles BAS : la découpe de la bannière s'applique aussi à
                         // eux, leurs coins bas suivent donc l'arrondi de ses angles, sans débord ni jour.
@@ -333,34 +333,8 @@ struct ProfileView: View {
         }
     }
 
-    @ViewBuilder
     private var bannerImage: some View {
-        if let bannerURL = user?.banner, !bannerURL.isEmpty {
-            // CachedBannerImage : cache 3-tiers (NSCache -> disque -> reseau) avec
-            // warm-sync synchrone depuis le disque a l'init. Le banner reapparait
-            // instantanement a chaque retour sur le profil, sans refetch reseau ni
-            // re-decodage full-res (l'AsyncImage natif re-fetchait + re-decodait a
-            // chaque rendu). Le blur ThumbHash s'affiche en attendant le full image.
-            CachedBannerImage(
-                urlString: bannerURL,
-                thumbHash: user?.bannerThumbHash,
-                fallbackColor: accentColor,
-                height: 120
-            )
-        } else {
-            bannerPlaceholder
-        }
-    }
-
-    private var bannerPlaceholder: some View {
-        LinearGradient(
-            colors: [
-                Color(hex: accentColor).opacity(0.3),
-                MeeshyColors.indigo300.opacity(0.2)
-            ],
-            startPoint: .topLeading,
-            endPoint: .bottomTrailing
-        )
+        ProfileOwnBanner(user: user, accentColor: accentColor, isDark: theme.mode.isDark)
     }
 
     // MARK: - Identity Section
@@ -522,6 +496,7 @@ struct ProfileView: View {
             .accessibilityHint(String(localized: "profile.stats.a11y.hint", defaultValue: "Ouvre les statistiques détaillées", bundle: .main))
 
             progressionEntry
+            ProfileDecorEntry(user: user) { router.openPackShop(domain: $0) }
         }
     }
 
@@ -865,8 +840,9 @@ struct ProfileView: View {
     /// directly from `MeeshyTests` via `@testable import Meeshy` without
     /// instantiating the SwiftUI view.
     static func mergingServerUser(_ server: MeeshyUser, onto local: MeeshyUser?) -> MeeshyUser {
-        guard server.voicePublic == nil, let voicePublic = local?.voicePublic else { return server }
-        return server.withProfileChanges(voicePublic: voicePublic)
+        let decor = server.profileDecor ?? local?.profileDecor
+        let merged = server.voicePublic == nil && local?.voicePublic != nil ? server.withProfileChanges(voicePublic: local?.voicePublic) : server
+        return merged.profileDecor == decor ? merged : merged.withProfileDecor(decor)
     }
 
     private func saveProfile() {
@@ -982,6 +958,7 @@ struct ProfileView: View {
                 authManager.currentUser = Self.mergingServerUser(updatedUser, onto: authManager.currentUser)
                 HapticFeedback.success()
                 FeedbackToastManager.shared.showSuccess(String(localized: "profile.banner.updated", bundle: .main))
+                await ProfileDecorModel(decor: authManager.currentUser?.profileDecor).yieldBannerToUploadedPhoto()
             } catch {
                 HapticFeedback.error()
                 FeedbackToastManager.shared.showError(String(localized: "profile.banner.error", bundle: .main))
@@ -1066,7 +1043,8 @@ extension MeeshyUser {
             voiceSampleUrl: voiceSampleUrl,
             voiceSampleDurationMs: voiceSampleDurationMs,
             voiceQuality: voiceQuality,
-            activation: activation
+            activation: activation,
+            profileDecor: profileDecor
         )
     }
 }

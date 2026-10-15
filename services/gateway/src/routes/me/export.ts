@@ -221,13 +221,26 @@ const packsExportSchema = {
         },
       },
     },
+    // #10632 — les packs ACHETÉS en Meeshes : domaine, slug, prix payé, date.
+    ownerships: {
+      type: 'array',
+      items: {
+        type: 'object',
+        properties: {
+          domain: { type: 'string', nullable: true },
+          slug: { type: 'string' },
+          priceMeeshes: { type: 'integer' },
+          acquiredAt: { type: 'string' },
+        },
+      },
+    },
     counts: {
       type: 'object',
-      properties: { choices: { type: 'integer' }, library: { type: 'integer' }, submissions: { type: 'integer' } },
+      properties: { choices: { type: 'integer' }, library: { type: 'integer' }, submissions: { type: 'integer' }, ownerships: { type: 'integer' } },
     },
     hasMore: {
       type: 'object',
-      properties: { choices: { type: 'boolean' }, library: { type: 'boolean' }, submissions: { type: 'boolean' } },
+      properties: { choices: { type: 'boolean' }, library: { type: 'boolean' }, submissions: { type: 'boolean' }, ownerships: { type: 'boolean' } },
     },
   },
 } as const;
@@ -741,8 +754,9 @@ export async function dataExportRoutes(fastify: FastifyInstance) {
             choices: sections.choices.items,
             library: sections.library.items,
             submissions: sections.submissions.items,
-            counts: { choices: sections.choices.total, library: sections.library.total, submissions: sections.submissions.total },
-            hasMore: { choices: sections.choices.hasMore, library: sections.library.hasMore, submissions: sections.submissions.hasMore },
+            ownerships: sections.ownerships.items,
+            counts: { choices: sections.choices.total, library: sections.library.total, submissions: sections.submissions.total, ownerships: sections.ownerships.total },
+            hasMore: { choices: sections.choices.hasMore, library: sections.library.hasMore, submissions: sections.submissions.hasMore, ownerships: sections.ownerships.hasMore },
           };
         }
 
@@ -814,7 +828,7 @@ export async function dataExportRoutes(fastify: FastifyInstance) {
 
           // Les packs : une table par liste ; les éléments d'une proposition voyagent en JSON dans leur cellule.
           const packs = exportData.packs as Record<string, unknown> | undefined;
-          for (const childKey of ['choices', 'library', 'submissions'] as const) {
+          for (const childKey of ['choices', 'library', 'submissions', 'ownerships'] as const) {
             const rows = (packs?.[childKey] ?? []) as Record<string, unknown>[];
             const flat = rows.map((row) => ('items' in row ? { ...row, items: JSON.stringify(row.items) } : row));
             if (flat.length > 0) csvSections[`packs.${childKey}`] = toCsv(Object.keys(flat[0]), flat);

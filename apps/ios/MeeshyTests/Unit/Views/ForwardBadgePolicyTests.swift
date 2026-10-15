@@ -124,7 +124,7 @@ final class ForwardAttributionSiteGuardTests: XCTestCase {
     }
 
     private func source(_ relativePath: String) throws -> String {
-        try String(contentsOf: repoRoot().appendingPathComponent(relativePath), encoding: .utf8)
+        try AppSourceGuard.text(at: repoRoot().appendingPathComponent(relativePath))
     }
 
     /// **Le résolveur est passé EN AMONT — et la garde le suit** (2026-09-06).

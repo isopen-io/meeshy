@@ -113,8 +113,13 @@ function VoiceAttachment({
   onExpand,
   carrier,
   message,
+  trackOf,
+  deps,
 }: {
   readonly attachment: Attachment;
+  readonly deps?: ConversationsDeps | undefined;
+  /** Rang du vocal quand le message en porte plusieurs — annoncé « Vocal 2 sur 3 ». */
+  readonly trackOf?: { readonly index: number; readonly total: number } | undefined;
   /** L'auteur et la date du vocal — décrits à la carte de lecture de la coque (#10624). */
   readonly carrier?: MediaCarrier | undefined;
   readonly message?: Message | undefined;
@@ -124,7 +129,7 @@ function VoiceAttachment({
   /** Le lecteur plein écran (#8333, miroir de la pastille de pourcentage iOS) — la lecture en cours y reprend à la même seconde. */
   readonly onExpand: () => void;
 }) {
-  const onDemand = useAudioOnDemand({ attachment: received, fallbackLanguage, readerLanguages: languages });
+  const onDemand = useAudioOnDemand({ attachment: received, fallbackLanguage, readerLanguages: languages, ...(deps !== undefined ? { deps } : {}) });
   const attachment = onDemand.served;
   const { described: transcript, track } = electAudio({
     attachment,
@@ -270,7 +275,17 @@ function VoiceAttachment({
 
   return (
     /* LE VOCAL EN CARTE TEINTÉE PAR L'ACCENT (#10004, `styles/conversation-look.css`). */
-    <div className="voice-card flex flex-col gap-1" data-voice-card data-attachment={attachment.id}>
+    <div
+      className="voice-card flex flex-col gap-1"
+      data-voice-card
+      data-attachment={attachment.id}
+      {...(trackOf !== undefined
+        ? {
+            role: 'group',
+            'aria-label': translate(uiLanguage, 'media.audio.track_of', { index: String(trackOf.index), total: String(trackOf.total) }),
+          }
+        : {})}
+    >
       {/* L'ÉLÉMENT N'EST JAMAIS AFFICHÉ (pas de `controls`) : le chrome est le
           bouton + l'onde ci-dessous, exactement comme iOS.
 
@@ -613,6 +628,8 @@ export function Attachments({
             onExpand={() => setOpenAudioIndex(i)}
             carrier={carrier}
             message={message}
+            trackOf={audio.length > 1 ? { index: i + 1, total: audio.length } : undefined}
+            deps={deps}
             {...(displayLanguage !== undefined ? { displayLanguage } : {})}
           />
         ),

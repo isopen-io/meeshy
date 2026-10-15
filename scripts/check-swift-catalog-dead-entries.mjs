@@ -515,7 +515,10 @@ const EXCLUDED_DIR_NAMES = new Set(['Tests', 'MeeshyTests', 'MeeshyUIDeviceTests
 // d'apparence que la régénération venait d'inscrire — `PacksEndpoint.shop`, et pour les fonds, contours et
 // bannières la liste, le détail, l'installation, l'achat et les installés. Valeur MESURÉE le 2026-10-15 en local
 // sur 5109a0e737 (CI « Quality » rouge sur l'amélioration non enregistrée).
-const BASELINE_DEAD_ENTRIES = 315;
+// 315 -> 314 (#10632, 2026-10-15) : `MeEndpoint.profileDecor` (`PUT /api/v1/me/profile-decor`) a son appelant
+// iOS — `ProfileDecorService.update`, qui équipe un contour d'avatar ou une bannière depuis le profil. Valeur
+// MESURÉE le 2026-10-15 en local sur e6ba10bab4.
+const BASELINE_DEAD_ENTRIES = 314;
 
 const CATALOG_ENUM_RE = /public enum ([A-Za-z0-9_]+)\s*:\s*MeeshyEndpoint\b/;
 // Une déclaration de cas n'a jamais de point après `case` ; une branche de

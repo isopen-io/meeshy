@@ -493,4 +493,18 @@ final class MessageForwardServiceTests: XCTestCase {
         XCTAssertEqual(creator.createCallCount, 0)
         XCTAssertEqual(api.postCount, 0)
     }
+
+    /// La table de dédoublonnage des transferts est BORNÉE : un transfert mis en file hors ligne, ou en échec
+    /// réseau jamais rejoué, gardait sa clé toute la session.
+    func test_laTableDeDedoublonnageEstBornee() throws {
+        XCTAssertEqual(MessageForwardService.dedupCapacity, 256)
+        let url = URL(fileURLWithPath: #filePath)
+            .deletingLastPathComponent()   // Services
+            .deletingLastPathComponent()   // Unit
+            .deletingLastPathComponent()   // MeeshyTests
+            .deletingLastPathComponent()   // apps/ios
+            .appendingPathComponent("Meeshy/Features/Main/Services/MessageForwardService.swift")
+        let code = try String(contentsOf: url, encoding: .utf8)
+        XCTAssertTrue(code.contains("BoundedFIFOMap<String, String>(capacity: MessageForwardService.dedupCapacity)"))
+    }
 }

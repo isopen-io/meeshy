@@ -114,6 +114,15 @@ struct StoryTrayView: View {
             .presentationDetents([.medium, .large])
             .presentationDragIndicator(.visible)
         }
+        // L'EXPIRATION AU FIL DE L'EAU — une story expire 24 h après sa
+        // publication, mais le tray ne la balayait qu'aux CHARGEMENTS
+        // (démarrage, tirer pour rafraîchir, reconnexion). Une app restée au
+        // premier plan plus d'un jour sans reconnecter (un iPad posé sur un
+        // support) gardait l'avatar d'un ami dont toutes les stories étaient
+        // éteintes : le toucher ouvrait un lecteur qui n'avait rien à jouer.
+        // Balayé à l'affichage, puis à cadence fixe tant que le tray est visible
+        // (`StoryViewModel.sweepExpiredStoriesWhileVisible`, annulé avec la `.task`).
+        .task { await viewModel.sweepExpiredStoriesWhileVisible() }
     }
 
     // MARK: - Story Scroll View

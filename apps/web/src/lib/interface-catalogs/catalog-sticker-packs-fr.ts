@@ -85,6 +85,7 @@ const frStickerPacks = {
   'packs.shop.empty': "Aucun pack ici pour le moment.",
   'packs.shop.domains': "Domaine de la boutique",
   'packs.shop.hint': "Tous les packs : stickers, cadres, fonds, contours et bannières. Ce que vous possédez apparaît dans les écrans concernés.",
+  'packs.retry': "Réessayer",
 } as const;
 
 export default frStickerPacks;

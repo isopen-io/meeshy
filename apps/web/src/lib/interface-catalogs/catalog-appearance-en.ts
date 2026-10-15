@@ -15,6 +15,7 @@ const en = {
   'appearance.solid': 'Solid color',
   'appearance.photo': 'Conversation photo',
   'appearance.photo_empty': 'No photo has been sent in this conversation',
+  'appearance.photo_unavailable': 'Photos can’t be loaded right now',
   'appearance.photo_more': 'More photos',
   'appearance.photo_item': 'Photo {index}',
   'appearance.veil': 'Veil',

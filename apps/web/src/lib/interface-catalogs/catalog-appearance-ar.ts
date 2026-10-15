@@ -15,6 +15,7 @@ const ar = {
   'appearance.solid': 'لون موحّد',
   'appearance.photo': 'صورة المحادثة',
   'appearance.photo_empty': 'لم تُرسَل أي صورة في هذه المحادثة',
+  'appearance.photo_unavailable': 'تعذّر تحميل الصور حاليًا',
   'appearance.photo_more': 'المزيد من الصور',
   'appearance.photo_item': 'الصورة {index}',
   'appearance.veil': 'طبقة التعتيم',

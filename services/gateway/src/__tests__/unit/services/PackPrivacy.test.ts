@@ -72,7 +72,11 @@ function seed() {
     'sticker-packs/p3-dir/trois.webp',
     'sticker-packs/p4-dir/quatre.webp',
   ]);
-  const db = fakePackDb({ userStickerPack, userSticker, stickerPack, stickerPackItem });
+  const userPackOwnership: Row[] = [
+    { id: 'o1', userId: PARTI, packKey: 'wallpaper.echantillon', priceMeeshes: 40, requestId: 'achat-0001', acquiredAt: LATER },
+    { id: 'o2', userId: VOISIN, packKey: 'banner.echantillon', priceMeeshes: 25, requestId: 'achat-0002', acquiredAt: AT },
+  ];
+  const db = fakePackDb({ userStickerPack, userSticker, stickerPack, stickerPackItem, userPackOwnership });
   return { db, files };
 }
 
@@ -135,6 +139,15 @@ describe('exportPackData — ce que le compte a fait des packs (#10151)', () => 
     expect(data.submissions.items.map((pack) => pack.slug).sort()).toEqual(['en-attente', 'publie', 'refuse']);
   });
 
+  it('exporte ses ACHATS de packs (#10632) : domaine, slug, prix payé et date, sans l’identifiant technique de la dépense', async () => {
+    const { db } = seed();
+
+    const data = await exportPackData(db as never, PARTI, PAGE);
+
+    expect(data.ownerships.total).toBe(1);
+    expect(data.ownerships.items).toEqual([{ domain: 'wallpaper', slug: 'echantillon', priceMeeshes: 40, acquiredAt: LATER }]);
+  });
+
   it('ne sort rien du voisin', async () => {
     const { db } = seed();
 
@@ -143,6 +156,7 @@ describe('exportPackData — ce que le compte a fait des packs (#10151)', () => 
 
     expect(text).not.toContain(VOISIN);
     expect(text).not.toContain('du-voisin');
+    expect(text).not.toContain('banner.echantillon');
   });
 });
 
@@ -156,6 +170,7 @@ describe('purgePackData — la purge à l’expiration de la grâce (#10151)', (
     expect(db.tables.userSticker.rows.map((row) => row.id)).toEqual(['s2']);
     expect(db.tables.stickerPack.rows.map((row) => row.id).sort()).toEqual(['p3', 'p4']);
     expect(db.tables.stickerPackItem.rows.map((row) => row.id).sort()).toEqual(['i3', 'i4']);
+    expect(db.tables.userPackOwnership.rows.map((row) => row.id)).toEqual(['o2']);
     expect([...files.files].sort()).toEqual([
       'sticker-packs/p3-dir/trois.webp',
       'sticker-packs/p4-dir/quatre.webp',
@@ -167,6 +182,7 @@ describe('purgePackData — la purge à l’expiration de la grâce (#10151)', (
       submissionsDeleted: 2,
       publishedAnonymized: 1,
       filesDeleted: 4,
+      ownershipsDeleted: 1,
     });
   });
 
@@ -187,7 +203,7 @@ describe('purgePackData — la purge à l’expiration de la grâce (#10151)', (
 
     const second = await purgePackData(db as never, PARTI, { files: files.store });
 
-    expect(second).toEqual({ choicesDeleted: 0, libraryDeleted: 0, submissionsDeleted: 0, publishedAnonymized: 0, filesDeleted: 0 });
+    expect(second).toEqual({ choicesDeleted: 0, libraryDeleted: 0, submissionsDeleted: 0, publishedAnonymized: 0, filesDeleted: 0, ownershipsDeleted: 0 });
     expect(JSON.stringify(db.tables)).toBe(after);
   });
 
@@ -197,7 +213,7 @@ describe('purgePackData — la purge à l’expiration de la grâce (#10151)', (
 
     const measured = await measurePackData(db as never, PARTI, { files: files.store });
 
-    expect(measured).toEqual({ choicesDeleted: 3, libraryDeleted: 1, submissionsDeleted: 2, publishedAnonymized: 1, filesDeleted: 4 });
+    expect(measured).toEqual({ choicesDeleted: 3, libraryDeleted: 1, submissionsDeleted: 2, publishedAnonymized: 1, filesDeleted: 4, ownershipsDeleted: 1 });
     expect(JSON.stringify(db.tables)).toBe(before);
     expect(db.writes).toEqual([]);
     expect(files.removed).toEqual([]);

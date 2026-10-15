@@ -13,6 +13,14 @@ struct StickerSheetView: View {
 
     @State private var inLibrary = false
     @State private var isAdding = false
+    @State private var isFavorite = false
+
+    /// Ce qu'on POSSÈDE déjà (emoji, gabarit du catalogue, Mee) se met en
+    /// favori ; seul ce qu'on n'a pas se dépose dans « Mes stickers » (#10688).
+    private var favoriteEntry: StickerUsageEntry? {
+        MessageStickerFavorite.entry(for: MessageSticker(templateId: sticker.templateId, slots: sticker.slots,
+                                                         animation: sticker.animation, emoji: sticker.emoji))
+    }
 
     private static let previewSide: CGFloat = 220
 
@@ -22,7 +30,9 @@ struct StickerSheetView: View {
                 .padding(.top, 28)
                 .accessibilityLabel(BubbleSticker.accessibilityLabel(for: sticker))
 
-            if savable != nil {
+            if let favoriteEntry {
+                favoriteRow(favoriteEntry)
+            } else if savable != nil {
                 libraryRow
             }
             Spacer(minLength: 0)
@@ -30,7 +40,10 @@ struct StickerSheetView: View {
         .frame(maxWidth: .infinity)
         .padding(.horizontal, 24)
         .padding(.bottom, 24)
-        .task { await syncLibraryState() }
+        .task {
+            if let favoriteEntry { isFavorite = StickerUsageStore.shared.isFavorite(favoriteEntry) }
+            await syncLibraryState()
+        }
         .modifier(StickerSheetDetents())
     }
 
@@ -66,6 +79,24 @@ struct StickerSheetView: View {
             .buttonStyle(.plain)
             .disabled(isAdding)
         }
+    }
+
+    private func favoriteRow(_ entry: StickerUsageEntry) -> some View {
+        Button {
+            HapticFeedback.light()
+            StickerUsageStore.shared.toggleFavorite(entry)
+            isFavorite = StickerUsageStore.shared.isFavorite(entry)
+        } label: {
+            Label(isFavorite ? StickerFavoriteCopy.remove : StickerFavoriteCopy.add,
+                  systemImage: isFavorite ? "star.slash" : "star.fill")
+                .font(.headline)
+                .frame(maxWidth: .infinity)
+                .padding(.vertical, 14)
+                .background(Capsule().fill(MeeshyColors.brandGradient))
+                .foregroundStyle(Color.white)
+        }
+        .buttonStyle(.plain)
+        .accessibilityIdentifier("message.sticker.favorite")
     }
 
     private func syncLibraryState() async {

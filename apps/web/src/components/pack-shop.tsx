@@ -3,6 +3,7 @@ import type { QueryClient } from '@tanstack/react-query';
 import { useRef, useState } from 'react';
 import type { ReactNode } from 'react';
 
+import { ApiError } from '@/lib/api/client';
 import type { ApiResult } from '@/lib/api/http';
 import { createPackGestureGuard, newPurchaseRequestId } from '@/lib/api/packs';
 import { translateStickerPacks } from '@/lib/i18n-sticker-packs-catalog';
@@ -57,6 +58,9 @@ export type PackShopAdapter<P extends ShopPack> = {
 
 type Notice = 'install' | 'insufficient' | 'purchase' | null;
 
+/** Les rangées fantômes du premier chargement (cache vide) — jamais au-dessus d'un cache. */
+const SKELETON_ROWS = [0, 1, 2] as const;
+
 /** Un refus définitif oublie son `requestId` ; une panne réseau ou serveur le GARDE pour le nouvel essai. */
 const isRetryable = (failure: { readonly status: number; readonly code?: string }): boolean =>
   failure.status === 0 || failure.status >= 500 || failure.code === 'TIMEOUT';
@@ -85,7 +89,7 @@ export function PackShop<P extends ShopPack>({
     queryKey: adapter.catalogueKey,
     queryFn: async ({ signal }) => {
       const result = await adapter.loadCatalogue(signal);
-      if (!result.ok) throw new Error(result.error);
+      if (!result.ok) throw new ApiError(result);
       return result.data;
     },
     staleTime: 5 * 60 * 1000,
@@ -171,7 +175,31 @@ export function PackShop<P extends ShopPack>({
         {notice}
       </p>
 
-      {catalogue.isSuccess && packs.length === 0 && empty !== undefined ? (
+      {catalogue.isError && catalogue.data === undefined ? (
+        <button
+          type="button"
+          data-pack-shop-retry
+          onClick={() => void catalogue.refetch()}
+          className="min-h-11 self-start rounded-full px-4 text-body font-semibold focus-visible:outline-2"
+          style={{ outlineColor: 'var(--color-ios-brand)', backgroundColor: 'var(--color-ios-fill)', color: 'var(--color-ios-ink)' }}
+        >
+          {translateStickerPacks(language, 'packs.retry')}
+        </button>
+      ) : null}
+
+      {catalogue.isPending && catalogue.data === undefined ? (
+        <ul className="flex flex-col gap-2" aria-busy>
+          {SKELETON_ROWS.map((row) => (
+            <li key={row} data-pack-shop-skeleton aria-hidden="true" className="flex items-center gap-3 rounded-2xl p-3" style={{ backgroundColor: 'var(--color-ios-card)' }}>
+              <span className="block h-14 w-14 shrink-0 animate-pulse rounded-xl motion-reduce:animate-none" style={{ backgroundColor: 'var(--color-ios-fill)' }} />
+              <span className="flex min-w-0 flex-1 flex-col gap-2">
+                <span className="block h-4 w-2/5 animate-pulse rounded motion-reduce:animate-none" style={{ backgroundColor: 'var(--color-ios-fill)' }} />
+                <span className="block h-3 w-3/5 animate-pulse rounded motion-reduce:animate-none" style={{ backgroundColor: 'var(--color-ios-fill)' }} />
+              </span>
+            </li>
+          ))}
+        </ul>
+      ) : catalogue.isSuccess && packs.length === 0 && empty !== undefined ? (
         <p data-pack-shop-empty className="py-6 text-center text-body" style={{ color: 'var(--color-ios-ink-2)' }}>
           {empty}
         </p>

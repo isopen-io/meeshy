@@ -82,6 +82,7 @@ const deStickerPacks = {
   'packs.shop.empty': "Hier gibt es noch keine Pakete.",
   'packs.shop.domains': "Shop-Kategorie",
   'packs.shop.hint': "Alle Pakete: Sticker, Rahmen, Hintergründe, Ringe und Banner. Was du besitzt, erscheint in den passenden Bildschirmen.",
+  'packs.retry': "Erneut versuchen",
 } satisfies StickerPacksCatalog;
 
 export default deStickerPacks;

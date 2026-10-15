@@ -111,4 +111,32 @@ describe('le fond du fil', () => {
       (globalThis as { Image: unknown }).Image = OriginalImage;
     }
   });
+
+  test('la pleine définition déjà chargée n’est jamais remplacée par la vignette arrivée après elle', async () => {
+    const id = 'c'.repeat(24);
+    const request = async () => ({ ok: true, data: { attachment: { id, fileUrl: 'https://cdn.x/full.jpg', thumbnailUrl: 'https://cdn.x/thumb.jpg' } } });
+    const deps = { source: 'gateway', transport: Object.assign(request, { request }) } as unknown as ConversationsDeps;
+    const OriginalImage = globalThis.Image;
+    class CachedFullImage {
+      onload: (() => void) | null = null;
+      onerror: (() => void) | null = null;
+      set src(value: string) {
+        setTimeout(() => this.onload?.(), value.includes('thumb') ? 60 : 0);
+      }
+    }
+    (globalThis as { Image: unknown }).Image = CachedFullImage;
+    try {
+      const backdrop = await show(conversation(chosen({ kind: 'photo', attachmentId: id, veil: 0.3, blur: 4 })), deps);
+      await act(async () => {
+        await new Promise((resolve) => setTimeout(resolve, 120));
+      });
+      const photo = backdrop.querySelector('.thread-backdrop-photo') as HTMLElement;
+      expect(photo.style.backgroundImage).toContain('full.jpg');
+      expect(photo.style.filter).toBe('blur(4px)');
+      const veil = backdrop.querySelector('.thread-backdrop-veil') as HTMLElement;
+      expect(veil.style.backgroundColor).toContain('0.3');
+    } finally {
+      (globalThis as { Image: unknown }).Image = OriginalImage;
+    }
+  });
 });

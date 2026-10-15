@@ -251,7 +251,9 @@ struct FocalAudioBlock: View, Equatable {
                 audioQueueTailProvider: audioQueueTailProvider,
                 parentIsMe: content.isMe,
                 voiceConsentMissing: voiceConsentMissing,
-                onTapConsentNotice: onTapConsentNotice
+                onTapConsentNotice: onTapConsentNotice,
+                chrome: Self.flatChrome,
+                onOpenFullscreen: onMediaTap
             )
         }
     }

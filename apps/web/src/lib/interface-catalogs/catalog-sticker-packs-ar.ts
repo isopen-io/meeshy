@@ -82,6 +82,7 @@ const arStickerPacks = {
   'packs.shop.empty': "لا توجد حزم هنا بعد.",
   'packs.shop.domains': "فئة المتجر",
   'packs.shop.hint': "كل الحزم: ملصقات وإطارات وخلفيات وحلقات ولافتات. ما تملكه يظهر في الشاشات التي تستخدمها.",
+  'packs.retry': "إعادة المحاولة",
 } satisfies StickerPacksCatalog;
 
 export default arStickerPacks;

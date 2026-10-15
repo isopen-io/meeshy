@@ -38,6 +38,7 @@ const enMediaViewer = {
   'media.sound.library': 'Library sound',
   'media.sound.mute': 'Mute background sound',
   'media.sound.unmute': 'Unmute background sound',
+  'media.audio.track_of': 'Voice message {index} of {total}',
 };
 
 export default enMediaViewer;

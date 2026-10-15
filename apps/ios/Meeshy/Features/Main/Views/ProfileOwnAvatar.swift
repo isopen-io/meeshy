@@ -35,5 +35,6 @@ struct ProfileOwnAvatar: View {
             moodEmoji: mood,
             onMoodTap: mood == nil ? nil : moodTapResolver?(userId)
         )
+        .avatarRing(ProfileDecorResolver.ring(user?.profileDecor?.avatarRing), avatarSize: AvatarContext.profileBanner.size)
     }
 }

@@ -189,6 +189,81 @@ describe('UnifiedShop', () => {
     expect(host.querySelector('[data-shop-buy]')).toBe(null);
   });
 
+  test('un nouvel essai sous un AUTRE filtre réutilise le MÊME requestId : changer de puce n’oublie pas l’achat en suspens', async () => {
+    let attempt = 0;
+    const { deps, calls } = gatewayDeps((request) => {
+      if (request.method === 'GET') return shopOf([pack('w1', { price: 30 })]);
+      attempt += 1;
+      return attempt === 1
+        ? { ok: false, status: 0, error: 'offline' }
+        : { ok: true, data: { pack: pack('w1', { price: 30, owned: true, installed: true }), balance: 1 } };
+    });
+    const host = await mountShop(deps, 'wallpaper');
+    await until(() => buyButton(host) !== null);
+    await mounter.click(buyButton(host));
+    await until(() => (host.querySelector('[role="status"]')?.textContent ?? '') !== '');
+    await mounter.click(host.querySelector<HTMLElement>('[data-shop-domain="all"]'));
+    await until(() => host.querySelector('[data-unified-shop="all"]') !== null && buyButton(host) !== null);
+    await mounter.click(buyButton(host));
+    await until(() => posts(calls).length === 2);
+    expect(JSON.stringify(posts(calls)[1]?.body)).toBe(JSON.stringify(posts(calls)[0]?.body));
+  });
+
+  test('un double toucher à cheval sur un changement de filtre ne part qu’une fois', async () => {
+    let release: () => void = () => {};
+    const gate = new Promise<void>((resolve) => {
+      release = resolve;
+    });
+    const { deps, calls } = gatewayDeps(async (request) => {
+      if (request.method === 'GET') return shopOf([pack('w1', { price: 30 })]);
+      await gate;
+      return { ok: true, data: { pack: pack('w1', { price: 30, owned: true, installed: true }), balance: 20 } };
+    });
+    const host = await mountShop(deps, 'wallpaper');
+    await until(() => buyButton(host) !== null);
+    await mounter.click(buyButton(host));
+    await mounter.click(host.querySelector<HTMLElement>('[data-shop-domain="all"]'));
+    await until(() => host.querySelector('[data-unified-shop="all"]') !== null && buyButton(host) !== null);
+    await mounter.click(buyButton(host));
+    expect(posts(calls).length).toBe(1);
+    release();
+    await until(() => host.querySelector('[data-shop-balance]')?.textContent === 'Solde : 20 Meeshes');
+  });
+
+  test('une vitrine qui n’a pas pu se charger offre « Réessayer », qui la recharge', async () => {
+    let gets = 0;
+    const { deps } = gatewayDeps(() => {
+      gets += 1;
+      return gets === 1 ? { ok: false, status: 403, error: 'denied' } : shopOf([pack('w1', { price: 30 })]);
+    });
+    const host = await mountShop(deps, 'wallpaper');
+    await until(() => host.querySelector('[data-pack-shop-retry]') !== null);
+    expect(host.querySelector('[role="status"]')?.textContent).toContain('pas pu être chargés');
+    expect(host.querySelector('[data-pack-shop-retry]')?.textContent).toBe('Réessayer');
+    await mounter.click(host.querySelector<HTMLElement>('[data-pack-shop-retry]'));
+    await until(() => host.querySelector('[data-shop-pack="wallpaper:w1"]') !== null);
+    expect(host.querySelector('[data-pack-shop-retry]')).toBe(null);
+  });
+
+  test('au premier chargement, des rangées fantômes tiennent la place — muettes pour le lecteur d’écran, immobiles sous « Réduire les animations »', async () => {
+    let release: () => void = () => {};
+    const gate = new Promise<void>((resolve) => {
+      release = resolve;
+    });
+    const { deps } = gatewayDeps(async () => {
+      await gate;
+      return shopOf([pack('w1', { price: 30 })]);
+    });
+    const host = await mountShop(deps, 'wallpaper');
+    await until(() => host.querySelectorAll('[data-pack-shop-skeleton]').length > 0);
+    const ghost = host.querySelector('[data-pack-shop-skeleton]');
+    expect(ghost?.getAttribute('aria-hidden')).toBe('true');
+    expect(ghost?.innerHTML ?? '').toContain('motion-reduce:animate-none');
+    release();
+    await until(() => host.querySelector('[data-shop-pack="wallpaper:w1"]') !== null);
+    expect(host.querySelector('[data-pack-shop-skeleton]')).toBe(null);
+  });
+
   test('409 PACK_ALREADY_OWNED (acheté depuis un autre appareil) : le pack reste possédé, sans message d’échec', async () => {
     const { deps } = gatewayDeps((request) =>
       request.method === 'GET' ? shopOf([pack('w1', { price: 30 })]) : { ok: false, status: 409, error: 'x', code: 'PACK_ALREADY_OWNED' },

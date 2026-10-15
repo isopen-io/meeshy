@@ -40,4 +40,11 @@ struct FrameUsageLocalizationTests {
         }
         #expect(values["en"] != french, "\(key) : l'anglais recopie le français")
     }
+
+    /// `describeFrameUsage` rend `avatarOnly` pour un contour d'avatar (#10632) : l'étagère
+    /// des cadres l'affiche, donc la clé hors de `all` doit aussi parler les sept langues.
+    @Test("le libellé d'un contour d'avatar est traduit dans les sept langues")
+    func avatarKeyIsTranslated() throws {
+        try keyIsTranslated(key: FrameUsageLaw.LabelKey.avatarOnly)
+    }
 }

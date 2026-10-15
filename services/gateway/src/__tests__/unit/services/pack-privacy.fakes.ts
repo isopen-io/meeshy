@@ -90,13 +90,14 @@ function model(name: string, tables: Tables, writes: string[], relations: Relati
   };
 }
 
-/** La base des packs : choix, bibliothèque, packs proposés et leurs éléments, comptes. */
-export function fakePackDb(seed: Partial<Record<'userStickerPack' | 'userSticker' | 'stickerPack' | 'stickerPackItem' | 'user', Row[]>>): FakeDb {
+/** La base des packs : choix, bibliothèque, packs proposés et leurs éléments, possessions achetées, comptes. */
+export function fakePackDb(seed: Partial<Record<'userStickerPack' | 'userSticker' | 'stickerPack' | 'stickerPackItem' | 'userPackOwnership' | 'user', Row[]>>): FakeDb {
   const tables: Tables = {
     userStickerPack: { rows: [...(seed.userStickerPack ?? [])] },
     userSticker: { rows: [...(seed.userSticker ?? [])] },
     stickerPack: { rows: [...(seed.stickerPack ?? [])] },
     stickerPackItem: { rows: [...(seed.stickerPackItem ?? [])] },
+    userPackOwnership: { rows: [...(seed.userPackOwnership ?? [])] },
     user: { rows: [...(seed.user ?? [])] },
   };
   const writes: string[] = [];
@@ -107,6 +108,7 @@ export function fakePackDb(seed: Partial<Record<'userStickerPack' | 'userSticker
     userSticker: model('userSticker', tables, writes),
     stickerPack: model('stickerPack', tables, writes, { items: { table: 'stickerPackItem', foreignKey: 'packId' } }),
     stickerPackItem: model('stickerPackItem', tables, writes),
+    userPackOwnership: model('userPackOwnership', tables, writes),
     user: model('user', tables, writes),
   };
 }

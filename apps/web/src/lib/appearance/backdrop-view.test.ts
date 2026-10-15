@@ -63,6 +63,12 @@ describe('ce que le fond peint', () => {
     expect(view).toMatchObject({ kind: 'photo', src: 'https://x/p.jpg', blur: 8, veil: 0.3 });
   });
 
+  test('le voile est le fond primaire d’iOS du schéma (MeeshyColors.backgroundPrimary : #09090B en sombre, blanc en clair)', () => {
+    const photo = { kind: 'photo', attachmentId: 'a'.repeat(24), veil: 0.3, blur: 0 } as const;
+    expect(backdropViewOf({ ...args, appearance: appearance(photo), design: undefined, photoSrc: 'x' })).toMatchObject({ veilColor: '9, 9, 11' });
+    expect(backdropViewOf({ ...args, scheme: 'light', appearance: appearance(photo), design: undefined, photoSrc: 'x' })).toMatchObject({ veilColor: '255, 255, 255' });
+  });
+
   test('« Réduire la transparence » force un voile d’au moins 0,6', () => {
     const photo = { kind: 'photo', attachmentId: 'a'.repeat(24), veil: 0.1, blur: 0 } as const;
     const view = backdropViewOf({ ...args, appearance: appearance(photo), design: undefined, photoSrc: 'x', reducedTransparency: true });

@@ -20,7 +20,7 @@ const base = (): Conversation =>
 
 type Sent = { readonly method: string; readonly url: string; readonly body: unknown };
 
-function harness(putStatus: number) {
+function harness(putStatus: number, galleryStatus = 200) {
   const sent: Sent[] = [];
   const fetchImpl = (async (input: RequestInfo | URL, init?: RequestInit) => {
     const url = String(input);
@@ -30,6 +30,7 @@ function harness(putStatus: number) {
       return new Response(JSON.stringify(putStatus < 400 ? { success: true, data: {} } : { success: false, error: 'no', code: putStatus === 403 ? 'PACK_NOT_OWNED' : 'X' }), { status: putStatus });
     }
     if (url.includes('/packs/wallpaper/installed')) return new Response(JSON.stringify({ success: true, data: [{ slug: 'heritages' }] }), { status: 200 });
+    if (galleryStatus >= 400) return new Response(JSON.stringify({ success: false, error: 'down' }), { status: galleryStatus });
     return new Response(JSON.stringify({ success: true, data: [], pagination: { total: 0, offset: 0, limit: 30, hasMore: false }, cursorPagination: { limit: 30, hasMore: false, nextCursor: null } }), { status: 200 });
   }) as unknown as typeof fetch;
   const transport = createHttpTransport({ base: '', fetchImpl });
@@ -148,6 +149,22 @@ describe('le sélecteur de fond', () => {
     await settle(60);
     expect(chosen(h).background).toEqual({ kind: 'signature' });
     expect(host.querySelector('[data-appearance-error]')?.textContent ?? '').not.toBe('');
+  });
+
+  test('une galerie qui ne répond pas ne se dit pas vide : elle dit que les photos ne se chargent pas', async () => {
+    const h = harness(200, 503);
+    await open(h);
+    await settle(120);
+    const section = host.querySelector('[data-appearance-photo]')?.textContent ?? '';
+    expect(section).not.toContain('Aucune photo envoyée');
+    expect(host.querySelector('[data-appearance-photo-unavailable]')).not.toBeNull();
+  });
+
+  test('une galerie vide le dit', async () => {
+    const h = harness(200);
+    await open(h);
+    await settle(120);
+    expect(host.querySelector('[data-appearance-photo]')?.textContent ?? '').toContain('Aucune photo envoyée');
   });
 
   test('« Automatique » rend l’accent calculé', async () => {

@@ -58,7 +58,12 @@ describe('le catalogue des 14 modèles de fond (#10632, § 6)', () => {
     const [monogramme] = wallpaperDesigns as { tile: { paths: { opacity: number; d: string }[] } }[];
     const dense = structuredClone(monogramme);
     dense.tile.paths[0]!.opacity = 0.4;
-    expect(isDiscreetPattern(parseAppearanceDesign(dense)!)).toBe(false);
+    expect(parseAppearanceDesign(dense)).toBeNull();
+    expect(parseAppearancePackContract({ domain: 'wallpaper', designs: [dense] })).toBeNull();
+    expect(parseAppearancePackContract({ domain: 'banner', designs: [dense] })).toBeNull();
+    const atCap = structuredClone(monogramme);
+    atCap.tile.paths[0]!.opacity = 0.12;
+    expect(parseAppearanceDesign(atCap)).not.toBeNull();
     const injected = structuredClone(monogramme);
     injected.tile.paths[0]!.d = 'M0 0 L1 1"/><script>';
     expect(parseAppearanceDesign(injected)).toBeNull();

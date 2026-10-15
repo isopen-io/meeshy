@@ -161,10 +161,11 @@ export type MessageMenuContext = {
   /**
    * LE MESSAGE EST UN STICKER (#10630) — posé par l'hôte, qui connaît la
    * bibliothèque du lecteur. Hors bibliothèque, « Ajouter à mes stickers »
-   * s'offre ; déjà rangé, rien (loi 4 : un contrôle existe s'il a un effet).
+   * s'offre ; déjà rangé ou sans image jointe à déposer, rien (loi 4 : un
+   * contrôle existe s'il a un effet).
    * Un sticker n'offre JAMAIS « Enregistrer » : son image n'est pas une photo.
    */
-  readonly sticker?: { readonly inLibrary: boolean };
+  readonly sticker?: { readonly inLibrary: boolean; readonly hasPicture: boolean };
 };
 
 type MenuPiece = { readonly mimeType: string; readonly isBlurred?: boolean; readonly isViewOnce?: boolean; readonly isEncrypted?: boolean; readonly effectFlags?: number | null };
@@ -246,7 +247,7 @@ export function messageMenuItems(ctx: MessageMenuContext): readonly MessageMenuI
     items.push({ id: 'forward', labelKey: MENU_LABEL_KEYS.forward, glyph: 'arrowBendUpRight' });
   }
   items.push({ id: 'reply', labelKey: MENU_LABEL_KEYS.reply, glyph: 'magicWand' });
-  if (ctx.sticker?.inLibrary === false && !ctx.isProtected && ctx.leaves !== false) {
+  if (ctx.sticker?.inLibrary === false && ctx.sticker.hasPicture && !ctx.isProtected && ctx.leaves !== false) {
     items.push({ id: 'addSticker', labelKey: ADD_STICKER_LABEL_KEY, glyph: 'downloadSimple' });
   }
   /* « IMAGER » (#8693, ex « Exporter en image ») — même garde que « Copier » :

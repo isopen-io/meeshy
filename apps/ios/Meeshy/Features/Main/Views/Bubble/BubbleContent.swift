@@ -478,11 +478,16 @@ nonisolated struct BubbleContent: Equatable {
 
     /// Un emoji seul qui répond (#10628) : la carte citée en petit, puis
     /// l'emoji en grand SANS bulle, comme un emoji envoyé seul. Routage de la
-    /// BULLE ; la rangée plate (Focal, Script) n'a pas besoin de ce cas à
-    /// part : elle pose déjà la citation au-dessus (`flatRowDrawsQuote`) et
-    /// rend tout emoji seul en grand, citation ou non.
+    /// BULLE ; la rangée plate a le sien, `flatRowRendersLargeEmoji`.
     var emojiReplyFloatsBelowQuote: Bool {
         isEmojiOnly && reply != nil
+    }
+
+    /// La rangée plate (Focal, Script, Rivière) rend tout emoji seul en grand,
+    /// citation ou non (#10628) : la citation est déjà posée au-dessus
+    /// (`flatRowDrawsQuote`). Le sticker passe avant, il a son propre dessin.
+    var flatRowRendersLargeEmoji: Bool {
+        sticker == nil && isEmojiOnly
     }
 
     static func == (lhs: BubbleContent, rhs: BubbleContent) -> Bool {

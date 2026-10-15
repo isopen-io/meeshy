@@ -41,6 +41,7 @@ extension ConversationView {
             hasCallSummary: msg.callSummary != nil,
             saveableAttachmentCount: msg.attachments.filter { $0.type != .location }.count,
             canComposeMedia: ComposableAttachment.offers(message: msg),
+            stickerFavorite: MessageStickerFavorite.state(for: msg.sticker),
             isSticker: msg.sticker != nil, stickerAddable: ReceivedSticker.offersAdd(for: msg, known: ReceivedStickerLedger.shared.ids),
             showReadReceipts: GuestViewerAccess.offersWhoSaw(prefersReadReceipts: UserPreferencesManager.shared.privacy.showReadReceipts, isGuest: anonymousSession != nil),
             // `exits` est LOAD-BEARING (#9573) : son défaut laisse tout
@@ -185,6 +186,14 @@ extension ConversationView {
             } label: {
                 Label(String(localized: "message.sticker.add", defaultValue: "Ajouter à mes stickers", bundle: .main),
                       systemImage: "plus.rectangle.on.rectangle")
+            }
+        case .favoriteSticker, .unfavoriteSticker:
+            Button {
+                HapticFeedback.light()
+                MessageStickerFavorite.toggle(for: msg.sticker)
+            } label: {
+                Label(action == .favoriteSticker ? StickerFavoriteCopy.add : StickerFavoriteCopy.remove,
+                      systemImage: action == .favoriteSticker ? "star" : "star.slash")
             }
         case .wholeMessage, .replyToPiece, .deletePiece:
             // Le menu d'une PIÈCE seulement (#9907, #9908) — jamais servi ici.

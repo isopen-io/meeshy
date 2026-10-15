@@ -565,6 +565,51 @@ final class StoryUploadQueueTests: XCTestCase {
         XCTAssertNotNil(media.loadedImages["st-anime"], "L'image fixe reste disponible pour le rendu")
     }
 
+    /// **#10639 — un Mee posé dans une story part en PNG ANIMÉ, et le rejeu
+    /// le gardait FIXE.** La relecture ne cherchait l'animation que dans un
+    /// `.gif` ou un `.webp` : l'APNG, écrit en `.png`, repartait en image fixe
+    /// (recette sur iPhone du 2026-10-15, story publiée sans acTL).
+    func test_enqueueStoryForOfflinePublish_stickerAPNG_resteAnimeAuRejeu() async throws {
+        let apng = try Self.makeAPNG(frames: 3)
+        XCTAssertEqual(AnimatedImageEligibility.container(apng), .apng)
+        var slide = StorySlide()
+        slide.effects.stickerObjects = [StorySticker(id: "st-mee", emoji: "🐦")]
+
+        await sut.enqueueStoryForOfflinePublish(
+            slides: [slide],
+            slideImages: [:],
+            loadedImages: ["st-mee": try XCTUnwrap(UIImage(data: apng))],
+            loadedVideoURLs: [:],
+            loadedStickerAnimations: ["st-mee": apng]
+        )
+
+        let pending = await StoryPublishQueue.shared.pendingItems
+        let refs = try XCTUnwrap(pending.first?.mediaReferences)
+        let media = try sut.loadMediaFromReferences(refs)
+        XCTAssertEqual(media.loadedStickerAnimations["st-mee"], apng,
+                       "Le rejeu doit retrouver le PNG animé, pas seulement son image fixe")
+    }
+
+    private static func makeAPNG(frames: Int) throws -> Data {
+        let data = NSMutableData()
+        let destination = try XCTUnwrap(CGImageDestinationCreateWithData(
+            data as CFMutableData, "public.png" as CFString, frames, nil))
+        CGImageDestinationSetProperties(destination, [
+            kCGImagePropertyPNGDictionary: [kCGImagePropertyAPNGLoopCount: 0]
+        ] as CFDictionary)
+        for index in 0..<frames {
+            let image = UIGraphicsImageRenderer(size: CGSize(width: 8, height: 8)).image { context in
+                UIColor(white: CGFloat(index) / CGFloat(max(frames - 1, 1)), alpha: 1).setFill()
+                context.fill(CGRect(x: 0, y: 0, width: 8, height: 8))
+            }
+            CGImageDestinationAddImage(destination, try XCTUnwrap(image.cgImage), [
+                kCGImagePropertyPNGDictionary: [kCGImagePropertyAPNGDelayTime: 0.1]
+            ] as CFDictionary)
+        }
+        XCTAssertTrue(CGImageDestinationFinalize(destination))
+        return data as Data
+    }
+
     // MARK: - #10495 — « Impossible d'enregistrer les médias »
 
     /// Le cas du porteur : une pré-montée a fini, l'image du média est donc

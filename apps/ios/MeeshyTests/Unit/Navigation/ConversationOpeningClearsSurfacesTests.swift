@@ -298,7 +298,7 @@ final class ConversationOpeningClearsSurfacesTests: XCTestCase {
             .deletingLastPathComponent()
             .appendingPathComponent("Meeshy")
         return AppSourceGuard.stripComments(
-            try String(contentsOf: root.appendingPathComponent(relativePath), encoding: .utf8))
+            try AppSourceGuard.text(at: root.appendingPathComponent(relativePath)))
     }
 
     func test_everySurfaceFamily_declaresItselfAtItsMountPoint() throws {
@@ -414,7 +414,7 @@ final class ConversationOpeningClearsSurfacesTests: XCTestCase {
         let enumerator = try XCTUnwrap(FileManager.default.enumerator(at: root, includingPropertiesForKeys: nil))
         var askers: [String] = []
         for case let url as URL in enumerator where url.pathExtension == "swift" {
-            let source = AppSourceGuard.stripComments(try String(contentsOf: url, encoding: .utf8))
+            let source = AppSourceGuard.stripComments(try AppSourceGuard.text(at: url))
             if source.contains(".clearForConversation(") || source.contains(".clearForConversation {") {
                 askers.append(url.lastPathComponent)
             }
@@ -431,7 +431,7 @@ final class ConversationOpeningClearsSurfacesTests: XCTestCase {
         var callFiles = 0
         for case let url as URL in enumerator where url.pathExtension == "swift" && url.lastPathComponent.contains("Call") {
             callFiles += 1
-            let source = AppSourceGuard.stripComments(try String(contentsOf: url, encoding: .utf8))
+            let source = AppSourceGuard.stripComments(try AppSourceGuard.text(at: url))
             XCTAssertFalse(source.contains("closesForConversationOpening"), "\(url.lastPathComponent) : un appel ne se referme pas")
         }
         XCTAssertGreaterThan(callFiles, 3)

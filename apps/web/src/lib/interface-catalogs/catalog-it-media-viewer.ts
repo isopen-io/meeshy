@@ -38,6 +38,7 @@ const itMediaViewer = {
   'media.sound.library': 'Audio della libreria',
   'media.sound.mute': 'Disattiva il sottofondo',
   'media.sound.unmute': 'Riattiva il sottofondo',
+  'media.audio.track_of': 'Messaggio vocale {index} di {total}',
 };
 
 export default itMediaViewer;

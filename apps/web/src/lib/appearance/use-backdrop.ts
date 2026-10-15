@@ -99,12 +99,19 @@ export function useBackdropPhoto(params: { readonly conversationId: string; read
   useEffect(() => {
     if (attachmentId === null || full === null) return undefined;
     let live = true;
+    let fullShown = false;
     const cancels: (() => void)[] = [];
     const show = (src: string): void => {
       if (live) setReady({ id: attachmentId, src });
     };
-    if (thumb !== null) cancels.push(preload(thumb, (ok) => ok && show(thumb)));
-    cancels.push(preload(full, (ok) => ok && show(full)));
+    if (thumb !== null) cancels.push(preload(thumb, (ok) => ok && !fullShown && show(thumb)));
+    cancels.push(
+      preload(full, (ok) => {
+        if (!ok) return;
+        fullShown = true;
+        show(full);
+      }),
+    );
     return () => {
       live = false;
       for (const cancel of cancels) cancel();

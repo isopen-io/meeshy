@@ -48,7 +48,7 @@ final class ConversationMenuSystemDesignGuardTests: XCTestCase {
             .deletingLastPathComponent()
             .deletingLastPathComponent()
             .appendingPathComponent(relativePath)
-        return try String(contentsOf: url, encoding: .utf8)
+        return try AppSourceGuard.text(at: url)
     }
 
     /// Un chemin destructif est conforme s'il ARME une cible de confirmation,

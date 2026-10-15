@@ -18,7 +18,7 @@ final class ReceivedStickerTests: XCTestCase {
 
     private func makeMessage(
         attachments: [MeeshyMessageAttachment]? = nil,
-        sticker: MessageSticker? = MessageSticker(emoji: "🎉"),
+        sticker: MessageSticker? = MessageSticker(templateId: "pack.chats.c1", emoji: "🐱"),
         isMe: Bool = false
     ) -> MeeshyMessage {
         var message = MeeshyMessage(
@@ -30,13 +30,13 @@ final class ReceivedStickerTests: XCTestCase {
         return message
     }
 
-    private func menu(isSticker: Bool, addable: Bool, attachments: Int = 1,
+    private func menu(isSticker: Bool, addable: Bool, favorite: Bool? = nil, attachments: Int = 1,
                       exits: MessageExitOffer = .unrestricted, isBlurred: Bool = false) -> MessageMenuContext {
         MessageMenuContext(isMine: false, canEdit: false, canDelete: false,
                            hasText: false, hasMedia: true, hasTimebasedMedia: false,
                            isPinned: false, isStarred: false, isEdited: false,
                            hasEditRevisions: false, saveableAttachmentCount: attachments,
-                           isSticker: isSticker, stickerAddable: addable,
+                           stickerFavorite: favorite, isSticker: isSticker, stickerAddable: addable,
                            exits: exits, isBlurred: isBlurred)
     }
 
@@ -75,6 +75,49 @@ final class ReceivedStickerTests: XCTestCase {
     func test_offersAdd_aLibraryStickerReceivedFromSomeoneElse_stillOffersIt() {
         let theirs = makeMessage(sticker: MessageSticker(stickerId: "6a0ad86a6e21a483b4443d12"), isMe: false)
         XCTAssertTrue(ReceivedSticker.offersAdd(for: theirs, known: []))
+    }
+
+    // MARK: - Ce qu'on possède déjà (#10688)
+
+    /// « Cœur, qui bat » est un gabarit du catalogue, embarqué dans l'app : on
+    /// le possède déjà. Le déposer dans « Mes stickers » en ferait un doublon
+    /// figé ; ce qu'on en veut, c'est le retrouver en tête de la palette.
+    func test_offersAdd_aCatalogTemplate_isFalse_itIsAlreadyOwned() {
+        let heart = makeMessage(sticker: MessageSticker(templateId: StickerTemplateCatalog.ID.loveHeartFrame, emoji: "💞"))
+        XCTAssertFalse(ReceivedSticker.offersAdd(for: heart, known: []))
+    }
+
+    func test_offersAdd_anEmojiSticker_isFalse_itIsAlreadyOwned() {
+        XCTAssertFalse(ReceivedSticker.offersAdd(for: makeMessage(sticker: MessageSticker(emoji: "🎉")), known: []))
+    }
+
+    func test_offersAdd_aMee_isFalse_itIsAlreadyOwned() {
+        let mee = makeMessage(sticker: MessageSticker(templateId: "mee.mee-coucou", emoji: "👋"))
+        XCTAssertFalse(ReceivedSticker.offersAdd(for: mee, known: []))
+    }
+
+    func test_offersAdd_aThirdPartyPackSticker_stillOffersIt() {
+        XCTAssertTrue(ReceivedSticker.offersAdd(for: makeMessage(), known: []))
+    }
+
+    func test_menu_anOwnedSticker_offersTheFavorite_inTheQuickMenu() {
+        let pin = MessageActionResolver.primaryActions(menu(isSticker: true, addable: false, favorite: false))
+        XCTAssertTrue(pin.contains(.favoriteSticker))
+        XCTAssertFalse(pin.contains(.addSticker))
+        let unpin = MessageActionResolver.primaryActions(menu(isSticker: true, addable: false, favorite: true))
+        XCTAssertTrue(unpin.contains(.unfavoriteSticker))
+        XCTAssertFalse(unpin.contains(.favoriteSticker))
+    }
+
+    func test_menu_aStickerThatCannotBePinned_offersNoFavorite() {
+        let actions = MessageActionResolver.primaryActions(menu(isSticker: true, addable: true, favorite: nil))
+        XCTAssertFalse(actions.contains(.favoriteSticker))
+        XCTAssertFalse(actions.contains(.unfavoriteSticker))
+    }
+
+    func test_menu_aBlurredSticker_neverOffersTheFavorite() {
+        let actions = MessageActionResolver.primaryActions(menu(isSticker: true, addable: false, favorite: false, isBlurred: true))
+        XCTAssertFalse(actions.contains(.favoriteSticker))
     }
 
     /// Les QUATRE modes de lecture lisent l'identifiant de bibliothèque sur le même
