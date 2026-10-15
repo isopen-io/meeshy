@@ -33,9 +33,11 @@ public struct PackShopSnapshotStore: PackShopSnapshotStoring, @unchecked Sendabl
         self.now = now
     }
 
+    private static let keyPrefix = "meeshy.pack-shop-snapshot.v1."
+
     private static func key(_ domains: [PackDomain]?) -> String {
         let names = (domains ?? PackDomain.allCases).filter { $0 != .unknown }.map(\.rawValue).sorted()
-        return "meeshy.pack-shop-snapshot.v1." + names.joined(separator: ",")
+        return keyPrefix + names.joined(separator: ",")
     }
 
     public func read(domains: [PackDomain]?) -> CacheResult<PackShopResponse> {
@@ -55,5 +57,13 @@ public struct PackShopSnapshotStore: PackShopSnapshotStoring, @unchecked Sendabl
         let snapshot = Snapshot(sections: sections, balance: state.balance, savedAt: now())
         guard let data = try? JSONEncoder().encode(snapshot) else { return }
         defaults.set(data, forKey: Self.key(domains))
+    }
+
+    /// L'instantané porte le solde et les packs POSSÉDÉS du compte qui l'a lu : il part avec sa
+    /// session (`AuthManager.leaveActiveSession`), jamais servi au compte suivant.
+    public func clearAll() {
+        defaults.dictionaryRepresentation().keys
+            .filter { $0.hasPrefix(Self.keyPrefix) }
+            .forEach(defaults.removeObject(forKey:))
     }
 }

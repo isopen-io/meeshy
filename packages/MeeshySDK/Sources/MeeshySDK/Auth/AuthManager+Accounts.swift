@@ -200,6 +200,9 @@ extension AuthManager {
         // COURANTE : sans purge, un PATCH /users/me du compte A s'appliquerait
         // au profil du compte B.
         await SettingsActionQueue.shared.clearAll()
+        // #10710 — l'instantané de la vitrine porte le solde et les achats du
+        // compte sortant, sans scoping userId : le suivant ne l'hérite pas.
+        PackShopSnapshotStore.shared.clearAll()
         guard let userId = activeUserId else {
             // sync-04 — les watermarks de delta-sync sont per-user en
             // UserDefaults globaux : sans reset, le compte suivant hérite du
