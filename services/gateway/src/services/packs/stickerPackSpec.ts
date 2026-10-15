@@ -99,7 +99,7 @@ export const isStickerPackVisible = (row: Pick<StickerPackRow, 'status' | 'submi
 const STICKER_REGISTRY: readonly RegistryPack<StickerPackDetail>[] = BUILTIN_STICKER_PACKS.map((pack) => ({
   slug: pack.slug,
   installedByDefault: pack.installedByDefault,
-  removable: true,
+  removable: false,
   hidden: false,
   project: (installed: boolean): StickerPackDetail => ({
     slug: pack.slug,
@@ -146,7 +146,7 @@ export function prismaStickerPackStore(prisma: PrismaClient): CommunityPackStore
   };
 }
 
-/** Le domaine `sticker` : intégrés retirables, magasin communautaire, aucune garde de retrait. */
+/** Le domaine `sticker` : intégrés INCLUS (non retirables, #10738), magasin communautaire, aucune garde de retrait. */
 export function stickerPackSpec(prisma: PrismaClient): PackDomainSpec<StickerPackSummary, StickerPackDetail> {
   return {
     domain: 'sticker',

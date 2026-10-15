@@ -34,6 +34,8 @@ export type ShopPack = {
   readonly names: PackNames;
   /** `false` = pack inclus (builtin) que le serveur refuse de retirer. */
   readonly removable: boolean;
+  /** Pack de stickers intégré (Mee, Meo, Mee & Meo) : dessiné par le client, servi sans image. */
+  readonly builtin?: true;
 };
 
 export type ShopResult = { readonly packs: readonly ShopPack[]; readonly balance: number | null };
@@ -51,6 +53,7 @@ const WirePack = z.object({
   price: z.optional(z.nullable(z.number())),
   owned: z.optional(z.boolean()),
   removable: z.optional(z.boolean()),
+  builtin: z.optional(z.boolean()),
   names: z.optional(z.record(z.string(), z.unknown())),
 });
 
@@ -91,7 +94,8 @@ export const decodeShopPack = (domain: PackDomain) => (raw: unknown): ShopPack |
     price,
     owned: price === null ? true : (wire.owned ?? false),
     names: namesOf(wire.names),
-    removable: wire.removable ?? true,
+    removable: wire.removable ?? !(domain === 'sticker' && wire.builtin === true),
+    ...(domain === 'sticker' && wire.builtin === true ? { builtin: true as const } : {}),
   };
 };
 

@@ -58,7 +58,7 @@ const gatewayDeps = (answer: Answer): { deps: ConversationsDeps; calls: HttpRequ
 const pack = (slug: string, extra: Record<string, unknown> = {}) => ({ slug, name: `Pack ${slug}`, installed: false, ...extra });
 const shopOf = (packs: readonly unknown[], balance = 50) => ({ ok: true as const, data: { domains: [{ domain: 'wallpaper', packs }], balance } });
 
-const mountShop = (deps: ConversationsDeps, initialDomain?: 'wallpaper', language: 'fr' | 'en' = 'fr') =>
+const mountShop = (deps: ConversationsDeps, initialDomain?: 'wallpaper' | 'sticker', language: 'fr' | 'en' = 'fr') =>
   mounter.mount(
     <QueryClientProvider client={appQueryClient}>
       <UnifiedShop language={language} deps={deps} initialDomain={initialDomain} />
@@ -166,6 +166,16 @@ describe('UnifiedShop', () => {
     await until(() => host.querySelector('[data-shop-pack="wallpaper:w1"]') !== null);
     expect(buyButton(host)).toBe(null);
     expect(host.querySelector('[data-shop-included="wallpaper:w1"]')?.textContent).toBe('Inclus');
+    expect(calls.filter((call) => call.method === 'DELETE').length).toBe(0);
+  });
+
+  test('un pack de stickers intégré (Mee) est Inclus même d’un ancien serveur, et sa vignette est dessinée (#10738)', async () => {
+    const mee = { slug: 'mee', name: 'Mee', description: 'Le colibri', builtin: true, installed: true, coverUrl: null };
+    const { deps, calls } = gatewayDeps(() => ({ ok: true as const, data: { domains: [{ domain: 'sticker', packs: [mee] }], balance: 0 } }));
+    const host = await mountShop(deps, 'sticker');
+    await until(() => host.querySelector('[data-shop-pack="sticker:mee"]') !== null);
+    expect(host.querySelector('[data-shop-included="sticker:mee"]')?.textContent).toBe('Inclus');
+    expect(host.querySelector('[data-shop-pack="sticker:mee"] svg')).not.toBeNull();
     expect(calls.filter((call) => call.method === 'DELETE').length).toBe(0);
   });
 

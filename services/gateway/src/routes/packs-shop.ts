@@ -20,6 +20,7 @@ import { startupPackIndex, type PackIndex } from '../services/packs/PackIndex';
 import { appearancePackSpec, APPEARANCE_PACK_DOMAINS } from '../services/packs/appearancePackSpec';
 import { gloryFramePackSpec } from '../services/packs/gloryFramePackSpec';
 import { stickerPackSpec } from '../services/packs/stickerPackSpec';
+import { builtinStickerPackNames } from '../services/packs/stickerPackNames';
 import { sendSuccess } from '../utils/response.js';
 import { packEnvelope, packRouteGuard } from './pack-routes';
 
@@ -47,6 +48,14 @@ const shopResponseJsonSchema = packEnvelope({
     balance: { type: 'number' },
   },
 });
+
+/** Un pack de stickers INTÉGRÉ est inclus : jamais retirable, et nommé dans les sept langues (#10738). */
+const includedStickerPack = (domain: PackDomain, pack: object): Record<string, unknown> => {
+  const { slug, builtin } = pack as { readonly slug?: string; readonly builtin?: boolean };
+  if (domain !== 'sticker' || builtin !== true || slug === undefined) return {};
+  const names = builtinStickerPackNames(slug);
+  return { removable: false, ...(names === null ? {} : { names }) };
+};
 
 export const parseShopDomains = (raw: string | undefined): readonly PackDomain[] | null => {
   if (raw === undefined || raw.trim() === '') return null;
@@ -80,7 +89,7 @@ export async function packsShopRoutes(fastify: FastifyInstance, options: PacksSh
       const wanted = parseShopDomains(request.query.domains);
       const served = PACK_DOMAINS.filter((domain) => catalogs[domain] !== undefined && (wanted === null || wanted.includes(domain)));
       const [packs, solde] = await Promise.all([
-        Promise.all(served.map(async (domain) => ({ domain, packs: (await (catalogs[domain] as ShopCatalog).catalogue(viewer.userId)).map((pack) => ({ domain, ...pack })) }))),
+        Promise.all(served.map(async (domain) => ({ domain, packs: (await (catalogs[domain] as ShopCatalog).catalogue(viewer.userId)).map((pack) => ({ domain, ...pack, ...includedStickerPack(domain, pack) })) }))),
         balance(viewer.userId),
       ]);
       reply.header('Cache-Control', 'private, no-cache');
