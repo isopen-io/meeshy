@@ -378,7 +378,7 @@ public struct MeeshyConversation: Identifiable, Hashable, Codable, Sendable {
 
     public let colorPalette: ConversationColorPalette
 
-    public var accentColor: String { displayPalette.primary }
+    public var accentColor: String { displayPrimary }
     public var name: String { title ?? identifier }
     public var displayName: String { userState.customName ?? title ?? identifier }
     public var isArchived: Bool { !isActive }

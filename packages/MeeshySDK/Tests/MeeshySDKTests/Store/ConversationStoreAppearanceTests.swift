@@ -158,4 +158,33 @@ final class ConversationStoreAppearanceTests: XCTestCase {
 
         XCTAssertNil(restored.userState.appearance)
     }
+
+    // MARK: Le choix LOCAL atteint la ligne de liste, sans réseau
+
+    func test_adoptLocalAppearance_repaintsTheListRowWithoutBumpingTheVersion() async {
+        let store = makeStore()
+        let id = "conv-local-\(UUID().uuidString)"
+        await store.hydrate(makeConv(id: id, version: 5))
+
+        await store.adoptLocalAppearance(ConversationAppearance(accent: "corail"), for: id)
+
+        let after = await store.conversation(id: id)!
+        XCTAssertEqual(after.displayPalette(scheme: .light).primary, "E0604E")
+        XCTAssertEqual(after.userState.version, 5)
+    }
+
+    func test_adoptLocalAppearance_unknownConversation_isIgnored() async {
+        let store = makeStore()
+
+        await store.adoptLocalAppearance(ConversationAppearance(accent: "corail"), for: "conv-absent")
+
+        let absent = await store.conversation(id: "conv-absent")
+        XCTAssertNil(absent)
+    }
+
+    func test_adoptingAppearance_signatureAndNoChoiceAreTheSame_soNothingRepaints() {
+        let conv = makeConv(appearance: nil)
+        XCTAssertNil(conv.adoptingAppearance(.default))
+        XCTAssertEqual(conv.adoptingAppearance(ConversationAppearance(accent: "lagon"))?.userState.appearance?.accent, "lagon")
+    }
 }

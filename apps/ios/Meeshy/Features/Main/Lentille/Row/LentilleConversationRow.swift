@@ -223,6 +223,7 @@ struct LentilleConversationRow: View {
 
             LentilleRowAvatar(
                 conversation: conversation,
+                palette: palette,
                 presenceState: effectivePresenceState,
                 isPeerHere: isPeerHere,
                 storyRingState: storyRingState,
@@ -602,6 +603,7 @@ extension LentilleConversationRow: @MainActor Equatable {
 /// (52pt, réservé au rang historique, §0).
 private struct LentilleRowAvatar: View {
     let conversation: Conversation
+    let palette: ConversationColorPalette
     let presenceState: PresenceState?
     let isPeerHere: ConversationHere
     let storyRingState: StoryRingState

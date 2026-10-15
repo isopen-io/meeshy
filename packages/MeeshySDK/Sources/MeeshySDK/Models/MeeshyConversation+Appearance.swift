@@ -25,12 +25,36 @@ public extension MeeshyConversation {
     /// La palette que l'utilisateur VOIT : l'accent de la gamme choisi (sa teinte du
     /// schéma) décliné à ±30°, sinon la palette calculée, inchangée.
     func displayPalette(scheme: AppearanceScheme) -> ConversationColorPalette {
-        guard let key = userState.appearance?.accent,
-              let hex = AppearanceCatalog.shared.gamut.accent(key, scheme: scheme) else { return colorPalette }
+        guard let hex = personalAccentHex(scheme: scheme) else { return colorPalette }
         return ConversationColorPalette.derived(fromPrimary: hex, saturationBoost: colorPalette.saturationBoost)
     }
 
     func displayPalette(isDark: Bool) -> ConversationColorPalette { displayPalette(scheme: isDark ? .dark : .light) }
 
-    var displayPalette: ConversationColorPalette { displayPalette(scheme: .current) }
+    /// Le schéma courant n'est lu que si un accent personnel existe : la très grande
+    /// majorité des conversations n'en a pas, et `accentColor` est lu par cellule.
+    var displayPalette: ConversationColorPalette {
+        guard userState.appearance?.accent != nil else { return colorPalette }
+        return displayPalette(scheme: .current)
+    }
+
+    /// La primaire d'affichage seule, sans les deux rotations de teinte (`accentColor`).
+    var displayPrimary: String {
+        guard userState.appearance?.accent != nil, let hex = personalAccentHex(scheme: .current) else { return colorPalette.primary }
+        return ConversationColorPalette.bareHex(hex)
+    }
+
+    /// La conversation avec l'apparence choisie ; `nil` quand rien de ce qui se
+    /// voit ne change (Signature par défaut et absence de choix se valent).
+    func adoptingAppearance(_ appearance: ConversationAppearance?) -> MeeshyConversation? {
+        guard (userState.appearance ?? .default) != (appearance ?? .default) else { return nil }
+        var adopted = self
+        adopted.userState.appearance = appearance
+        return adopted
+    }
+
+    private func personalAccentHex(scheme: AppearanceScheme) -> String? {
+        guard let key = userState.appearance?.accent else { return nil }
+        return AppearanceCatalog.shared.gamut.accent(key, scheme: scheme)
+    }
 }

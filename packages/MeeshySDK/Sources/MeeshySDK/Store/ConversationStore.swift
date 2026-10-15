@@ -375,6 +375,14 @@ public actor ConversationStore {
         }
     }
 
+    /// Le choix d'apparence LOCAL (optimiste, ou son retour arrière) repeint la ligne
+    /// de liste aussitôt, sans attendre l'écho : la version ne bouge pas, l'écho
+    /// `user:preferences-updated` reste l'autorité (#10631).
+    public func adoptLocalAppearance(_ appearance: ConversationAppearance, for convId: String) {
+        guard let adopted = conversations[convId]?.adoptingAppearance(appearance) else { return }
+        commit(adopted)
+    }
+
     // MARK: - Remote event application
 
     /// Apply a `USER_PREFERENCES_UPDATED` socket event. Drops the event

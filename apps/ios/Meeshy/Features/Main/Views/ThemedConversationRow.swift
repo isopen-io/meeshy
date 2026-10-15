@@ -315,6 +315,7 @@ struct ThemedConversationRow: View {
     private var avatarView: some View {
         ConversationAvatarView(
             conversation: conversation,
+            palette: palette,
             presenceState: presenceState,
             isPeerHere: isPeerHere,
             storyRingState: storyRingState,
@@ -558,6 +559,7 @@ enum ConversationAvatarMenu {
 
 private struct ConversationAvatarView: View {
     let conversation: Conversation
+    let palette: ConversationColorPalette
     let presenceState: PresenceState?
     let isPeerHere: ConversationHere
     let storyRingState: StoryRingState
@@ -607,7 +609,7 @@ private struct ConversationAvatarView: View {
             MeeshyAvatar(
                 name: conversation.name,
                 context: .conversationList,
-                accentColor: accentColor,
+                accentColor: palette.primary,
                 secondaryColor: palette.secondary,
                 avatarURL: isDirect ? conversation.participantAvatarURL : conversation.avatar,
                 storyState: storyRingState,
