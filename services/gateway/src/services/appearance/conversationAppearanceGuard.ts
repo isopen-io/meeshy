@@ -2,15 +2,16 @@
  * LA GARDE de l'apparence d'une conversation (#10631, #10632, § 10.1) —
  * module UNIQUE appelé par la route AVANT `writeConversationPreferences`.
  *
+ *   0. le lecteur est MEMBRE de la conversation — sinon 403 `not-a-participant`,
+ *      AVANT toute autre question (#10651) : un non-membre reçoit la même
+ *      réponse quel que soit le fond demandé, ni la forme de l'entrée, ni ses
+ *      possessions, ni une pièce jointe ne sont examinées pour lui ;
  *   1. `parseConversationAppearance` strict — sinon 400 `INVALID_APPEARANCE` ;
  *   2. `design` : le pack existe au registre `wallpaper` (non masqué), le modèle
  *      est dans son contrat, et le lecteur le POSSÈDE (`isPackOwned`) — sinon
  *      403 `PACK_NOT_OWNED`, un pack inconnu compris (on ne confirme pas son
  *      existence) ;
- *   3. `photo` : le lecteur est d'abord MEMBRE de la conversation (sinon 403
- *      `not-a-participant`, avant toute lecture de la pièce — un non-membre ne
- *      doit pas pouvoir sonder quelles pièces vivent où) ; puis la pièce jointe
- *      existe, appartient à un message de CETTE conversation, ni supprimé, ni
+ *   3. `photo` : la pièce jointe existe, appartient à un message de CETTE conversation, ni supprimé, ni
  *      éphémère, ni à vue unique, ni flouté (colonnes ET bitfield), c'est
  *      une image non purgée, et le lecteur LIT ce message (`readerMayReadMessage` :
  *      plancher d'historique, message retiré de sa vue, historique vidé) —
@@ -94,11 +95,11 @@ async function photoAvailable({ prisma, conversationId, userId }: AppearanceGuar
 }
 
 export async function validateConversationAppearance(params: AppearanceGuardParams): Promise<AppearanceGuardOutcome> {
+  if (!(await isMember(params))) return { kind: 'not-a-participant' };
   const appearance = parseConversationAppearance(params.input);
   if (appearance === null) return { kind: 'invalid' };
   const { background } = appearance;
   if (background.kind === 'design') return (await designOwned(params, background.pack, background.design)) ? ok(appearance) : { kind: 'not-owned' };
   if (background.kind !== 'photo') return ok(appearance);
-  if (!(await isMember(params))) return { kind: 'not-a-participant' };
   return (await photoAvailable(params, background.attachmentId)) ? ok(appearance) : { kind: 'attachment-unavailable' };
 }

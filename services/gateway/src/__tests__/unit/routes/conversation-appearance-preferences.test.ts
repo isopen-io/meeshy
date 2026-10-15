@@ -257,6 +257,30 @@ describe('PUT /user-preferences/conversations/:id — appearance', () => {
     expect(env.rows.size).toBe(0);
   });
 
+  it('un non-membre reçoit la MÊME réponse quel que soit le fond demandé : l’appartenance précède toute validation (#10651)', async () => {
+    const probes = [
+      appearance({ kind: 'photo', attachmentId: PHOTO_NOT_MINE, veil: 0.3, blur: 8 }),
+      appearance({ kind: 'photo', attachmentId: PHOTO_OK, veil: 0.3, blur: 8 }),
+      appearance({ kind: 'photo', attachmentId: '507f1f77bcf86cd799439fff', veil: 0.3, blur: 8 }),
+      appearance({ kind: 'photo', attachmentId: 'pas-un-identifiant', veil: 0.3, blur: 8 }),
+      appearance({ kind: 'design', pack: 'prestige', design: 'aurore' }),
+      appearance({ kind: 'design', pack: 'essentiels', design: 'aurore' }),
+      appearance({ kind: 'signature' }),
+    ];
+
+    const seen: { status: number; body: unknown }[] = [];
+    for (const probe of probes) {
+      const response = await put(probe, NOT_MINE);
+      seen.push({ status: response.statusCode, body: response.json() });
+    }
+
+    expect(seen).toEqual(probes.map(() => ({ status: 403, body: { success: false, error: 'Not a member of this conversation', message: 'Not a member of this conversation' } })));
+    expect(env.prisma.messageAttachment.findUnique).not.toHaveBeenCalled();
+    expect(env.prisma.userPackOwnership.findMany).not.toHaveBeenCalled();
+    expect(env.rows.size).toBe(0);
+    expect(env.emits).toHaveLength(0);
+  });
+
   it('refuse un non-membre (403) sans rien écrire', async () => {
     const response = await put(appearance({ kind: 'signature' }), NOT_MINE);
 
