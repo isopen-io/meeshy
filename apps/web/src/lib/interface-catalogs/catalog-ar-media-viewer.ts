@@ -38,6 +38,7 @@ const arMediaViewer = {
   'media.sound.library': 'صوت من المكتبة',
   'media.sound.mute': 'كتم صوت الخلفية',
   'media.sound.unmute': 'تشغيل صوت الخلفية',
+  'media.audio.track_of': 'رسالة صوتية {index} من {total}',
 };
 
 export default arMediaViewer;
