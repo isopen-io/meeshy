@@ -93,12 +93,12 @@ for (const [surface, render] of Object.entries(surfaces)) {
       expect(heroName(el)).toBe('Kwame Mensah');
     });
 
-    test('un échec de synchro laisse la fiche affichée — jamais une erreur à sa place', async () => {
+    test('un refus de synchro (404) ne laisse pas la fiche en cache affichée (#10740)', async () => {
       cachedAs('fantome-en-cache', 'Fantôme');
       const el = mountNow(render('fantome-en-cache'));
       await settle();
-      expect(heroName(el)).toBe('Fantôme');
-      expect(el.querySelector('[data-profile-failure]') === null).toBe(true);
+      expect(el.querySelector('[data-user-hero]') === null).toBe(true);
+      expect(el.querySelector('[data-profile-failure="refused"]') === null).toBe(false);
     });
 
     test('une fiche jamais vue s’amorce avec ce qu’on savait de la personne touchée', async () => {
