@@ -133,11 +133,20 @@ final class Plan2DRenderMeasureTests: XCTestCase {
     /// budget d'usage au plancher A11 reste NON validé (voir la ligne P0 D4).
     private static let provisionalRegressionBudgetSeconds: Double = 0.01
 
+    /// Le MEILLEUR de plusieurs rendus, après un rendu de préchauffage : un échantillon unique, à froid,
+    /// payait les caches de polices et le bruit d'un runner chargé (33 ms relevés en CI sur `main` pour un
+    /// coût réel de 1 à 2,5 ms). Une régression ralentit TOUS les rendus — donc aussi le meilleur ; le bruit,
+    /// lui, n'en ralentit que certains. Le garde-fou reste aussi tranchant, sans dépendre de la charge.
+    private static let regressionSamples = 5
+
     func test_render_thirtyTracks_bothZooms_staysUnderProvisionalBudget() {
         for zoom in Plan2DZoom.allCases {
-            let start = CFAbsoluteTimeGetCurrent()
-            _ = render(zoom: zoom)
-            let elapsed = CFAbsoluteTimeGetCurrent() - start
+            _ = render(zoom: zoom)   // préchauffage
+            let elapsed = (0..<Self.regressionSamples).map { _ -> Double in
+                let start = CFAbsoluteTimeGetCurrent()
+                _ = render(zoom: zoom)
+                return CFAbsoluteTimeGetCurrent() - start
+            }.min() ?? .infinity
             XCTAssertLessThan(
                 elapsed, Self.provisionalRegressionBudgetSeconds,
                 "Rendu \(zoom) à \(elapsed)s — au-delà du garde-fou de régression de "
