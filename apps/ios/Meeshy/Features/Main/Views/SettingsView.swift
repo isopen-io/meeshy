@@ -42,6 +42,7 @@ struct SettingsView: View {
     @State private var showMediaDownload = false
     @State private var showPacks = false
     @State private var packsInitialDomain: PackDomain?
+    @State private var packsFocusedPack: String?
     @ObservedObject private var packShopLauncher = PackShopLauncher.shared
     @State private var scrollRelay = ScrollOffsetRelay()
     /// Miroirs des trois interrupteurs d'interface (#6482), lus UNE fois au
@@ -152,9 +153,11 @@ struct SettingsView: View {
         .sheet(isPresented: $showSupport) { SupportView() }
         .sheet(isPresented: $showDataStorage) { DataStorageView() }
         .sheet(isPresented: $showMediaDownload) { MediaDownloadSettingsView() }
-        .sheet(isPresented: $showPacks) { PacksSettingsView(initialDomain: packsInitialDomain) }
+        .sheet(isPresented: $showPacks) { PacksSettingsView(initialDomain: packsInitialDomain, focusedPack: packsFocusedPack) }
         .onReceive(packShopLauncher.$pending.compactMap { $0 }) { _ in
-            packsInitialDomain = packShopLauncher.consume()?.domain
+            let request = packShopLauncher.consume()
+            packsInitialDomain = request?.domain
+            packsFocusedPack = request?.pack
             showPacks = true
         }
         .sheet(isPresented: $showDeleteAccount) { DeleteAccountView() }
@@ -588,6 +591,7 @@ struct SettingsView: View {
             Button {
                 HapticFeedback.light()
                 packsInitialDomain = nil
+                packsFocusedPack = nil
                 showPacks = true
             } label: {
                 settingsRow(icon: "shippingbox.fill", title: String(localized: "settings.packs.title", defaultValue: "Packs et téléchargements", bundle: .main), color: MeeshyColors.warningHex) {

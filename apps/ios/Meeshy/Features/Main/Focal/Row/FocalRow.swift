@@ -665,7 +665,7 @@ struct FocalRow: View {
     private func stickerBlock(_ sticker: BubbleContent.Sticker) -> some View {
         MessageStickerArtwork(sticker: sticker, side: FocalMetrics.Sticker.side)
             .stickerFloat()
-            .stickerSheetOnTap(sticker: sticker, isMine: content.isMe)
+            .stickerSheetOnTap(sticker: sticker, isMine: content.isMe, senderName: content.senderName)
             .padding(.leading, indent)
             .accessibilityLabel(BubbleSticker.accessibilityLabel(for: sticker))
     }

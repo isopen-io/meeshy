@@ -646,7 +646,7 @@ struct RootView: View {
 
         case .game(let link): // Saison ou semaine de ligue (#9947) : la page du Jeu, posée sur Progression et la fiche.
             router.openGame(at: GameNavigationMap.entry(for: link))
-        case .packShop(let domain): router.openPackShop(domain: domain) // La vitrine filtrée (#10632).
+        case .packShop(let domain, let pack): router.openPackShop(domain: domain, pack: pack) // La vitrine filtrée (#10632).
 
         case .unresolvedTrackedLink:
             // Le serveur ne connaît pas ce token, ou on n'a pas pu le joindre.

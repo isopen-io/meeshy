@@ -642,8 +642,8 @@ final class Router: ObservableObject {
             case .game(let link):
                 openGame(at: GameNavigationMap.entry(for: link))
 
-            case .packShop(let domain):
-                openPackShop(domain: domain)
+            case .packShop(let domain, let pack):
+                openPackShop(domain: domain, pack: pack)
 
             case .referral, .call, .external:
                 break
@@ -655,8 +655,8 @@ final class Router: ObservableObject {
 
     /// Ouvre Réglages puis la vitrine unique, filtrée sur `domain` : le lanceur
     /// porte la demande jusqu'à `SettingsView`, qui présente `PacksSettingsView`.
-    func openPackShop(domain: PackDomain?) {
-        PackShopLauncher.shared.request(domain: domain)
+    func openPackShop(domain: PackDomain?, pack: String? = nil) {
+        PackShopLauncher.shared.request(domain: domain, pack: pack)
         replaceStack(with: .settings)
     }
 
