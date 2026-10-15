@@ -27,8 +27,12 @@ final class BubbleEmojiReplyRoutingTests: XCTestCase {
     func test_bubbleLayout_quoteCardsShareOneTapRule() throws {
         let layout = try MyStoriesSourceCorpus.text(of: "Meeshy/Features/Main/Views/Bubble/BubbleStandardLayout.swift")
         let emojiReply = try MyStoriesSourceCorpus.text(of: "Meeshy/Features/Main/Views/Bubble/BubbleStandardLayout+EmojiReply.swift")
-        XCTAssertTrue(layout.contains(".onTapGesture { openQuotedTarget(reply) }"))
-        XCTAssertTrue(emojiReply.contains(".onTapGesture { openQuotedTarget(reply) }"))
+        let rule = ".onTapGesture { openQuotedTarget(reply) }"
+        XCTAssertTrue(emojiReply.contains(rule))
+        XCTAssertGreaterThanOrEqual(
+            layout.components(separatedBy: rule).count - 1, 2,
+            "L'unité du type contient +EmojiReply : la bulle texte doit poser SA propre règle à côté de celle de l'emoji en réponse."
+        )
     }
 
     func test_bubbleLayout_routesEmojiReplyThroughTheSharedPredicate() throws {
