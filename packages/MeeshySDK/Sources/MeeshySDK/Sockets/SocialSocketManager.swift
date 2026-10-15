@@ -393,7 +393,10 @@ public final class SocialSocketManager: ObservableObject, SocialSocketProviding,
     /// (résumé d'app / réseau revenu), le gateway a oublié nos rooms — sans re-join
     /// les likes/commentaires/réactions temps réel du post ouvert cessaient
     /// silencieusement. Préservé à travers `suspendTransport`, vidé au `disconnect()`.
-    private var joinedPostRooms: Set<String> = []
+    /// Les salons de post et combien d'ÉCRANS en tiennent chacun. Un ensemble ne comptait pas : un réel affiché
+    /// rejoignait son salon, la feuille de commentaires ouverte puis fermée par-dessus le QUITTAIT — et l'écran
+    /// resté visible perdait likes et commentaires en direct, jusqu'au re-join de la reconnexion suivante.
+    private var joinedPostRooms: [String: Int] = [:]
     /// Fires on every reconnect (a `.connect` that follows a previous one).
     /// R2 — feed re-sync trigger; FeedViewModel observes this to backfill
     /// posts/reactions missed while the social socket was down.
@@ -554,10 +557,28 @@ public final class SocialSocketManager: ObservableObject, SocialSocketProviding,
     /// the resume path, but PRESERVES `hadPreviousConnection` so the next
     /// `.connect` is recognised as a reconnect (fires `didReconnect` → feed/social
     /// re-sync). Contrast `disconnect()` (logout/cold reset) which also clears it.
+    /// Les transports démontés, gardés vivants le temps que leurs accusés en attente tombent.
+    ///
+    /// Socket.IO arme l'expiration d'un `emitWithAck` avec une référence FAIBLE au client : libéré au démontage
+    /// (arrière-plan, rotation du jeton, reconnexion forcée), il n'appelait ni la réponse ni l'expiration, et la
+    /// tâche qui attendait — un envoi rejoué, un `call:end` — restait suspendue pour toujours.
+    private var retiringTransports: [SocketManager] = []
+    private static let ackRetirementGrace: TimeInterval = 12
+
+    private func retireTransport() {
+        guard let retiring = manager else { return }
+        retiringTransports.append(retiring)
+        let id = ObjectIdentifier(retiring)
+        DispatchQueue.main.asyncAfter(deadline: .now() + Self.ackRetirementGrace) { [weak self] in
+            self?.retiringTransports.removeAll { ObjectIdentifier($0) == id }
+        }
+    }
+
     private func suspendTransport() {
         reconnectTask?.cancel()
         reconnectTask = nil
         socket?.disconnect()
+        retireTransport()
         socket = nil
         manager = nil
         isConnected = false
@@ -660,7 +681,10 @@ public final class SocialSocketManager: ObservableObject, SocialSocketProviding,
     public func joinPostRoom(postId: String) {
         // Tracker AVANT toute émission : le handler `.connect` re-émet `post:join`
         // pour toutes les rooms de `joinedPostRooms` une fois le handshake terminé.
-        joinedPostRooms.insert(postId)
+        let holders = (joinedPostRooms[postId] ?? 0) + 1
+        joinedPostRooms[postId] = holders
+        // Déjà tenu par un autre écran : le serveur l'a, rien à émettre.
+        guard holders == 1 else { return }
         guard socket?.status == .connected else {
             // Socket pas encore connecté : émettre serait perdu. Le re-join du
             // handler `.connect` prendra le relais (miroir de joinConversation).
@@ -671,14 +695,20 @@ public final class SocialSocketManager: ObservableObject, SocialSocketProviding,
     }
 
     public func leavePostRoom(postId: String) {
-        joinedPostRooms.remove(postId)
+        guard let holders = joinedPostRooms[postId] else { return }
+        guard holders <= 1 else {
+            // Un autre écran le tient encore : on ne le quitte pas sous ses yeux.
+            joinedPostRooms[postId] = holders - 1
+            return
+        }
+        joinedPostRooms[postId] = nil
         socket?.emit("post:leave", ["postId": postId])
         Logger.socket.info("SocialSocket left post room: \(postId)")
     }
 
     /// Rooms à re-joindre après un (re)connect, ordre déterministe pour les tests.
     func postRoomsToRejoinOnConnect() -> [String] {
-        joinedPostRooms.sorted()
+        joinedPostRooms.keys.sorted()
     }
 
     // MARK: - Comment Reaction Emission
@@ -941,6 +971,19 @@ public final class SocialSocketManager: ObservableObject, SocialSocketProviding,
                 }
             }
             Logger.socket.info("SocialSocket disconnected")
+        }
+
+        // Une perte de transport n'émet PAS `.disconnect` quand la reconnexion automatique est active :
+        // Socket.IO émet `.reconnect` (`SocketManager.tryReconnect`). Sans ce récepteur, `isConnected`
+        // restait vrai pendant toute la coupure — chaque envoi attendait son accusé avant le repli REST,
+        // et le retour du réseau ne relançait rien.
+        socket.on(clientEvent: .reconnect) { [weak self] _, _ in
+            guard let self else { return }
+            DispatchQueue.main.async {
+                self.isConnected = false
+                self.connectionState = .reconnecting(attempt: 0)
+            }
+            Logger.socket.info("SocialSocket transport lost — reconnecting")
         }
 
         socket.on(clientEvent: .reconnectAttempt) { [weak self] _, _ in

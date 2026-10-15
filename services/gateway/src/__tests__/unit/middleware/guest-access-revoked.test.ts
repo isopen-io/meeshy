@@ -134,6 +134,31 @@ describe('Invité révoqué — le refus nomme sa cause (#4410)', () => {
     expect(res.json()).toEqual({ ok: true });
   });
 
+  it('un participant BANNI encore actif rend 410 GUEST_ACCESS_REVOKED : la garde lit la participation VIVANTE, pas `isActive` seul (#10449)', async () => {
+    const app = await sonde({ ...participant(true), bannedAt: new Date('2026-10-13T09:00:00Z') });
+    const res = await app.inject({
+      method: 'GET',
+      url: '/sonde',
+      headers: { 'x-session-token': JETON },
+    });
+    await app.close();
+
+    expect(res.statusCode).toBe(410);
+    expect(res.json()).toMatchObject({ success: false, error: 'GUEST_ACCESS_REVOKED' });
+  });
+
+  it('un participant actif au `bannedAt` nul passe (#10449)', async () => {
+    const app = await sonde({ ...participant(true), bannedAt: null });
+    const res = await app.inject({
+      method: 'GET',
+      url: '/sonde',
+      headers: { 'x-session-token': JETON },
+    });
+    await app.close();
+
+    expect(res.statusCode).toBe(200);
+  });
+
   it('la requête ne filtre plus sur `isActive` — sans quoi la distinction est impossible à faire', async () => {
     const prismaEspion = {
       user: { findUnique: jest.fn<any>().mockResolvedValue(null) },
@@ -160,5 +185,8 @@ describe('Invité révoqué — le refus nomme sa cause (#4410)', () => {
     const where = (prismaEspion.participant.findFirst as any).mock.calls[0][0].where;
     expect(where.isActive).toBeUndefined();
     expect(where.type).toBe('anonymous');
+    // #10449 — la ligne porte de quoi juger la participation VIVANTE.
+    const select = (prismaEspion.participant.findFirst as any).mock.calls[0][0].select;
+    expect(select).toMatchObject({ isActive: true, bannedAt: true });
   });
 });

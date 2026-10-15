@@ -73,3 +73,54 @@ export async function mayServePostToAnonymous(
   });
   return row !== null && isServableToAnonymous(row, now);
 }
+
+/** Ce que la passe de lot lit : la garde, plus de quoi nommer la racine d'un repost. */
+export const ANONYMOUS_POST_BATCH_SELECT = {
+  id: true,
+  originalRepostOfId: true,
+  ...ANONYMOUS_POST_ACL_SELECT,
+} satisfies Prisma.PostSelect;
+
+type AnonymousPostBatchRow = AnonymousPostAclRow & {
+  readonly id: string;
+  readonly originalRepostOfId: string | null;
+};
+
+export type AnonymousPostBatchPrisma = {
+  readonly post: {
+    readonly findMany: (args: {
+      where: Prisma.PostWhereInput;
+      select: typeof ANONYMOUS_POST_BATCH_SELECT;
+      take: number;
+    }) => Promise<readonly AnonymousPostBatchRow[]>;
+  };
+};
+
+/**
+ * La garde de lecture anonyme, en UNE passe pour tout un lot (#10483) — ce
+ * qu'un visiteur peut LIRE est exactement ce qu'il peut COMPTER. La clé de la
+ * carte est un id servable ; sa valeur, la RACINE de son repost (`null` pour
+ * un original), pour que le crédit de la racine ne relise pas le post.
+ *
+ * Les ids malformés sont écartés avant la requête ; la borne `take` est redite
+ * à la requête, jamais laissée à l'appelant.
+ */
+export async function readServableToAnonymous(
+  prisma: AnonymousPostBatchPrisma,
+  postIds: readonly string[],
+  now: Date = new Date(),
+): Promise<ReadonlyMap<string, string | null>> {
+  const ids = [...new Set(postIds)].filter(isValidObjectId);
+  if (ids.length === 0) return new Map();
+  const rows = await prisma.post.findMany({
+    where: { id: { in: ids }, deletedAt: NOT_DELETED },
+    select: ANONYMOUS_POST_BATCH_SELECT,
+    take: ids.length,
+  });
+  return new Map(rows
+    .filter((row) => isServableToAnonymous(row, now))
+    .map((row) => {
+      const root = row.originalRepostOfId ?? row.repostOfId;
+      return [row.id, root !== null && root !== row.id ? root : null] as const;
+    }));
+}

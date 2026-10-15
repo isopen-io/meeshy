@@ -29,10 +29,10 @@ import MeeshyUI
 ///
 /// **Corrections de types vs le texte littéral du contrat (RE-PREUVE)** :
 /// - `allAudioItems: [AudioItem]` → `[ConversationViewModel.AudioItem]`.
-///   `AudioMediaView`/`AudioCarouselView` (réutilisés par WS-3,
+///   `AudioMediaView`/`AudioStackView` (réutilisés par WS-3,
 ///   `Focal/Row/FocalAudioBlock.swift`) typent LEUR PROPRE paramètre
 ///   `allAudioItems` en `[ConversationViewModel.AudioItem]`
-///   (`ConversationMediaViews.swift:541`, `AudioCarouselView.swift:47`) — le
+///   (`ConversationMediaViews.swift:541`, `AudioStackView.swift:47`) — le
 ///   type nested de la god view, PAS le `struct AudioItem` top-level de
 ///   `ConversationStateStore.swift` (qui existe aussi, homonyme, mais n'est
 ///   consommé par aucun composant réutilisé ici). Utiliser le mauvais des
@@ -377,6 +377,9 @@ struct FocalRowActions {
     /// CORRIGÉ vs le texte littéral du contrat (`ProfileUser`, inexistant
     /// dans le dépôt) — voir doc de tête de fichier.
     var onOpenProfile: ((ProfileSheetUser) -> Void)?
+    /// Toucher la pastille d'humeur de l'auteur (#10528) : l'hôte ouvre la
+    /// bulle d'humeur à l'ancre remise (centre de la pastille, repère global).
+    var onMoodTap: ((CGPoint) -> Void)?
     /// Appui long sur un avis d'arrivée — ouvre la fiche de PARTICIPATION de
     /// l'arrivant, par son `Participant.id`. Distinct de `onOpenProfile`, qui
     /// présente un compte : l'avis mène à la fiche quelle que soit la porte.
@@ -417,6 +420,7 @@ struct FocalRowActions {
         onSetSecondaryLanguage: ((String, String?) -> Void)? = nil,
         onPlayAudio: ((String) -> Void)? = nil,
         onOpenProfile: ((ProfileSheetUser) -> Void)? = nil,
+        onMoodTap: ((CGPoint) -> Void)? = nil,
         onOpenParticipantProfile: ((String) -> Void)? = nil,
         onViewStory: ((String) -> Void)? = nil,
         onCallBack: ((String) -> Void)? = nil,
@@ -442,6 +446,7 @@ struct FocalRowActions {
         self.onSetSecondaryLanguage = onSetSecondaryLanguage
         self.onPlayAudio = onPlayAudio
         self.onOpenProfile = onOpenProfile
+        self.onMoodTap = onMoodTap
         self.onOpenParticipantProfile = onOpenParticipantProfile
         self.onViewStory = onViewStory
         self.onCallBack = onCallBack

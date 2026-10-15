@@ -802,7 +802,7 @@ struct ComposerObjectEditorView: View {
         section(ComposerObjectEditorCopy.plan, .plan) {
             ComposerObjectPlanControls(viewModel: viewModel,
                                        objectId: objectId,
-                                       onSelectText: { openEditor($0) },
+                                       onSelectObject: { openEditor($0) },
                                        holdsGesture: $planHoldsGesture)
         }
     }

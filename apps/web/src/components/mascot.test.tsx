@@ -21,8 +21,8 @@ import { Mascot, MascotCoach } from './mascot';
 
 describe('mascotSay — la phrase de chaque ligne', () => {
   test('compte les points avant la prochaine Meesh, accordés', () => {
-    expect(mascotSay({ kind: 'meesh-missing', missing: 821 })).toBe('Encore 821 points et je frappe ta prochaine Meesh.');
-    expect(mascotSay({ kind: 'meesh-missing', missing: 1 })).toBe('Encore 1 point et je frappe ta prochaine Meesh.');
+    expect(mascotSay({ kind: 'meesh-missing', missing: 821 })).toBe('Encore 821 points à convertir et je frappe ta prochaine Meesh.');
+    expect(mascotSay({ kind: 'meesh-missing', missing: 1 })).toBe('Encore 1 point à convertir et je frappe ta prochaine Meesh.');
   });
 
   test('invite à frapper en disant le prix', () => {

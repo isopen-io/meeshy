@@ -11,7 +11,7 @@ public struct EmojiCategory: Identifiable, Sendable {
     }
 
     public static let all: [EmojiCategory] = [
-        EmojiCategory(name: String(localized: "emoji.category.reactions", defaultValue: "Reactions", bundle: .module), icon: "🔥", emojis: [
+        EmojiCategory(name: String(localized: "emoji.category.reactions", defaultValue: "Réactions", bundle: .module), icon: "🔥", emojis: [
             "❤️", "😂", "🔥", "👏", "😮", "😢", "🥰", "😍",
             "💯", "🙏", "🤣", "😭", "✨", "🎉", "💪", "👍",
             "😊", "💕", "🤩", "😘", "❤️‍🔥", "🥺", "😎", "👀",
@@ -488,7 +488,7 @@ public struct EmojiFullPickerSheet: View {
             Capsule()
                 .fill(style == .dark ? Color.white.opacity(MeeshyOpacity.medium) : Color.gray.opacity(MeeshyOpacity.medium))
                 .frame(width: 36, height: 4).padding(.top, MeeshySpacing.smPlus)
-            Text(String(localized: "emoji.picker.title", defaultValue: "Reactions", bundle: .module))
+            Text(String(localized: "emoji.picker.title", defaultValue: "Réactions", bundle: .module))
                 .font(.system(size: MeeshyFont.bodySize, weight: .semibold))
                 .foregroundColor(style == .dark ? .white.opacity(MeeshyOpacity.intense) : .primary)
                 .padding(.bottom, MeeshySpacing.xs)
@@ -603,7 +603,7 @@ public struct CategorizedEmojiPickerSheet: View {
     public var body: some View {
         VStack(spacing: MeeshySpacing.smPlus) {
             // Titre seul — pas de bouton Close (dismiss via drag/detent) ni recherche.
-            Text(String(localized: "emoji.picker.title", defaultValue: "Reactions", bundle: .module))
+            Text(String(localized: "emoji.picker.title", defaultValue: "Réactions", bundle: .module))
                 .font(.system(size: MeeshyFont.bodySize, weight: .semibold))
                 .foregroundColor(style == .dark ? .white.opacity(MeeshyOpacity.intense) : .primary)
                 .padding(.top, MeeshySpacing.lg)

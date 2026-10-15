@@ -141,7 +141,7 @@ final class FocalDynamicTypeTests: XCTestCase {
     // MARK: - Branche 6 : audio
 
     /// `FocalAudioBlock` délègue ENTIÈREMENT le rendu (waveform, transcription
-    /// traduite en italique) à `AudioMediaView`/`AudioCarouselView` (§1.3, lus
+    /// traduite en italique) à `AudioMediaView`/`AudioStackView` (§1.3, lus
     /// jamais modifiés) — ce fichier lui-même ne pose donc aucun `.lineLimit`
     /// (rien à tronquer, il ne contient aucun `Text` de contenu). La
     /// vérification Dynamic Type de la transcription elle-même est hors
@@ -151,7 +151,7 @@ final class FocalDynamicTypeTests: XCTestCase {
         XCTAssertFalse(
             code.contains(".lineLimit("),
             "FocalAudioBlock.swift pose un `.lineLimit` — ce fichier ne devrait faire que router vers " +
-            "AudioMediaView/AudioCarouselView (§1.3), sans texte de contenu propre à tronquer."
+            "AudioMediaView/AudioStackView (§1.3), sans texte de contenu propre à tronquer."
         )
     }
 

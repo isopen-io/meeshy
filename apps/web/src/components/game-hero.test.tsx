@@ -164,8 +164,10 @@ describe('comment gagner — dérivé du barème', () => {
 
   test('chaque puce dit son nom et ses points, tirés du barème', () => {
     const body = text(page);
-    for (const rule of earnRules()) expect(body.replace(/\s/g, '')).toContain(`+${rule.points}`);
-    expect(body).toContain('Contenu jusqu’à +1 000');
+    for (const rule of earnRules()) expect(body.replace(/\s/g, '')).toContain(`jusqu’à${rule.points}`);
+    /* Le « + » était inutile devant un plafond (porteur, #10540) : « jusqu’à 1 000 », pas « jusqu’à +1 000 ». */
+    expect(body).not.toMatch(/jusqu’à\s*\+/);
+    expect(body).toContain('Contenu jusqu’à 1 000');
     expect(ENGAGEMENT_FAMILY_TOP_POINTS.content).toBe(1000);
   });
 
@@ -174,7 +176,7 @@ describe('comment gagner — dérivé du barème', () => {
     const markup = html({}, { rules });
     const chips = [...markup.matchAll(/data-game-earn-chip="([a-z]+)"/g)].map((m) => m[1]);
     expect(chips[0]).toBe('comment');
-    expect(text(markup)).toContain('+5 000');
+    expect(text(markup)).toContain('Commentaires jusqu’à 5 000');
   });
 
   /* Les puces menaient au carnet des règles ; depuis #9563 (amendement n° 2) chaque famille se touche et ouvre SES précisions. */
@@ -186,7 +188,7 @@ describe('comment gagner — dérivé du barème', () => {
   });
 
   test('chaque puce se lit en entier et mesure 44 points', () => {
-    expect(text(page)).toContain('Contenu jusqu’à +1 000');
+    expect(text(page)).toContain('Contenu jusqu’à 1 000');
     expect(page).toMatch(/data-game-earn-chip="content"[^>]*min-height:44px/);
   });
 });

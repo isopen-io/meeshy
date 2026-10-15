@@ -52,6 +52,14 @@ final class CallShellStore {
 
     static void clearCredential(Context context) {
         prefs(context).edit().remove(KEY_API_BASE).remove(KEY_KIND).remove(KEY_TOKEN).apply();
+        // #10641 — une ecoute de ce compte ne part jamais avec le jeton du suivant.
+        NotificationVoiceService.forgetPending(context);
+    }
+
+    /** #10641 — le compte et l'environnement du credential courant, ou null ({@link NotificationVoiceRules#origin}). */
+    static String voiceOrigin(Context context) {
+        SharedPreferences prefs = prefs(context);
+        return NotificationVoiceRules.origin(prefs.getString(KEY_API_BASE, null), prefs.getString(KEY_KIND, null), prefs.getString(KEY_TOKEN, null));
     }
 
     static String apiBase(Context context) {

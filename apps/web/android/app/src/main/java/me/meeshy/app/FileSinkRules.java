@@ -10,10 +10,14 @@ import java.util.regex.Pattern;
  * ne puisse pas remplir le stockage de l'appareil. Et `shareFileAt` (#9553)
  * ne partage qu'un fichier existant, pose directement dans le dossier du
  * recepteur : jamais un autre fichier de l'app, quel que soit le chemin recu.
+ * Et ce qu'un arret brutal laisse au sol part a la corbeille au demarrage
+ * (#10547) : `emptyTrash` la vide hors du thread principal.
  */
 final class FileSinkRules {
 
     static final long MAX_BYTES = 2L * 1024 * 1024 * 1024;
+
+    static final String TRASH_PREFIX = "file-sink-trash-";
 
     private static final Pattern EXTENSION = Pattern.compile("[a-z0-9]{1,8}");
 
@@ -34,6 +38,23 @@ final class FileSinkRules {
             return parent != null && parent.equals(sinkDirectory.getCanonicalFile());
         } catch (IOException error) {
             return false;
+        }
+    }
+
+    static boolean isTrash(String name) {
+        return name != null && name.startsWith(TRASH_PREFIX);
+    }
+
+    static void emptyTrash(File cache) {
+        File[] entries = cache == null ? null : cache.listFiles();
+        if (entries == null) return;
+        for (File entry : entries) {
+            if (!isTrash(entry.getName())) continue;
+            File[] leftovers = entry.listFiles();
+            if (leftovers != null) {
+                for (File leftover : leftovers) leftover.delete();
+            }
+            entry.delete();
         }
     }
 }

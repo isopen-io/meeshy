@@ -1,17 +1,12 @@
-import jwt from 'jsonwebtoken';
 import type { FastifyRequest } from 'fastify';
 import { AuthRouteContext } from './types';
 import { invalidateAllSessions } from '../../services/SessionService';
 import { disconnectRevokedSessions } from '../../socketio/disconnectRevokedSessions';
 import { logWarn } from '../../utils/logger';
 import { getJwtSecret } from '../../utils/secrets';
+import { verifyRevokeAllLinkToken } from '../../services/auth/revoke-all-link-token';
 
 const JWT_SECRET = getJwtSecret();
-
-interface RevokeAllPayload {
-  userId: string;
-  action: 'revoke-all';
-}
 
 export function registerRevokeAllSessionsRoute(context: AuthRouteContext) {
   const { fastify } = context;
@@ -93,17 +88,12 @@ export function registerRevokeAllSessionsRoute(context: AuthRouteContext) {
     async (request, reply) => {
       const { token } = request.query;
 
-      let payload: RevokeAllPayload;
-      try {
-        payload = jwt.verify(token, JWT_SECRET) as RevokeAllPayload;
-      } catch {
+      // #10493 — le jeton du lien n'est vérifiable qu'ici : clé dérivée et
+      // audience propres, l'ancienne forme des e-mails déjà partis comprise.
+      const payload = verifyRevokeAllLinkToken(token, JWT_SECRET);
+      if (!payload) {
         reply.type('text/html').code(400);
         return '<html><body style="font-family:sans-serif;text-align:center;padding:60px"><h2>Link expired or invalid</h2><p>This security link has expired. Please log in to manage your sessions.</p></body></html>';
-      }
-
-      if (payload.action !== 'revoke-all' || !payload.userId) {
-        reply.type('text/html').code(400);
-        return '<html><body style="font-family:sans-serif;text-align:center;padding:60px"><h2>Invalid link</h2></body></html>';
       }
 
       const count = await invalidateAllSessions(payload.userId, undefined, 'email_revoke_all');

@@ -19,7 +19,7 @@ import { waveformOf } from '@/lib/view/message';
 import { useMediaPlayback } from '@/lib/view/use-media-playback';
 import { handOffVideoPosition } from '@/lib/view/video-handoff';
 import { useCarriedPlayback } from '@/lib/view/audio-carry';
-import { PLAYBACK_SPEEDS, seekFraction, speedLabel } from '@/lib/view/media-transport';
+import { PLAYBACK_SPEEDS, formatMediaTime, seekFraction, speedLabel } from '@/lib/view/media-transport';
 import {
   karaokeSegments,
   karaokeTone,
@@ -28,6 +28,8 @@ import {
 } from '@/lib/view/transcript-karaoke';
 import { ThreadMediaContext } from '@/lib/view/thread-media-context';
 import { useKaraokeIndex } from '@/lib/view/use-karaoke';
+import { useAudioOnDemand } from '@/lib/view/use-audio-on-demand';
+import { useVoiceNowPlaying } from '@/lib/view/use-voice-now-playing';
 import { translate } from '@/lib/i18n-catalog';
 import { currentInterfaceLanguage } from '@/lib/interface-language';
 import { TRANSCRIPT_TEXT_OPACITY } from '@/lib/reading-mode/metrics';
@@ -36,6 +38,7 @@ import { Glyph, GlyphSvg } from './glyph';
 import { MEDIA_GLYPHS } from './glyphs-media';
 import { MaskedAttachment } from './masked-attachment';
 import { MediaGrid } from './media-grid';
+import { VoiceFileName, VoiceTranscribeZone } from './voice-bubble-parts';
 import { VeilRevealContext, revealedAttachment, useAttachmentMasked } from './view-once-opened';
 
 /**
@@ -103,19 +106,26 @@ const KARAOKE_STYLE: Readonly<Record<KaraokeTone, Readonly<Record<string, string
 };
 
 function VoiceAttachment({
-  attachment,
+  attachment: received,
   languages,
   displayLanguage,
   fallbackLanguage,
   onExpand,
+  carrier,
+  message,
 }: {
   readonly attachment: Attachment;
+  /** L'auteur et la date du vocal — décrits à la carte de lecture de la coque (#10624). */
+  readonly carrier?: MediaCarrier | undefined;
+  readonly message?: Message | undefined;
   readonly languages: readonly string[];
   readonly displayLanguage?: string;
   readonly fallbackLanguage: string;
   /** Le lecteur plein écran (#8333, miroir de la pastille de pourcentage iOS) — la lecture en cours y reprend à la même seconde. */
   readonly onExpand: () => void;
 }) {
+  const onDemand = useAudioOnDemand({ attachment: received, fallbackLanguage, readerLanguages: languages });
+  const attachment = onDemand.served;
   const { described: transcript, track } = electAudio({
     attachment,
     readerLanguages: languages,
@@ -152,6 +162,17 @@ function VoiceAttachment({
      en est le seul moteur : la bulle reflète sa lecture et la commande, comme
      la bulle iOS reflète `ConversationAudioCoordinator`. Jamais un second son. */
   const carried = useCarriedPlayback(attachment.id);
+  /* LA CARTE DE LECTURE DE LA COQUE DIT CE VOCAL (#10624) — la coque les
+     relit sur l'`<audio>` qui joue (`data-np-attachment`), ici comme dans la
+     visionneuse et le mini-lecteur qui rejouent ce vocal. Coque seulement. */
+  const thread = useContext(ThreadMediaContext);
+  useVoiceNowPlaying(attachment.id, {
+    carrier,
+    conversationTitle: thread?.conversationTitle,
+    conversationAvatarUrl: thread?.conversationAvatarUrl,
+    message,
+    attachment,
+  });
   const { bind, reportedFraction } = own;
   const { status, progress, toggle, position, duration, seek, rate, setRate } = carried ?? own;
   const uiLanguage = currentInterfaceLanguage();
@@ -276,6 +297,7 @@ function VoiceAttachment({
         key={track.url}
         ref={bindAudio}
         preload="none"
+        data-np-attachment={attachment.id}
         data-track-language={track.language}
         className="hidden"
         {...(track.url === '' ? {} : { src: attachmentSrc(track.url) })}
@@ -290,7 +312,7 @@ function VoiceAttachment({
           style={{ background: 'linear-gradient(135deg, var(--accent), color-mix(in srgb, var(--accent) 70%, transparent))' }}
           // « Lire l'audio » (`media.audio.play`, `AudioPlayerView.swift:1278`)
           // — vocabulaire iOS REPRIS tel quel (§1.6 de la spécification #5805).
-          aria-label={isPlaying ? 'Mettre en pause' : "Lire l'audio"}
+          aria-label={translate(currentInterfaceLanguage(), isPlaying ? 'media.audio.pause' : 'media.audio.play')}
         >
           {isPlaying ? (
             <GlyphSvg glyph={MEDIA_GLYPHS.pause} size={13} className="text-ios-on-brand" />
@@ -343,8 +365,10 @@ function VoiceAttachment({
             />
           ))}
         </span>
-        <span className="shrink-0 text-time tabular-nums">
-          {Math.floor(seconds / 60)}:{String(seconds % 60).padStart(2, '0')}
+        {/* LE TEMPS QUI PASSE (#10625) — au repos la durée ; en lecture, et en
+            pause après lecture, la position courante, comme `AudioPlayerView`. */}
+        <span data-voice-time className="shrink-0 text-time tabular-nums">
+          {formatMediaTime(status === 'playing' || status === 'paused' ? position : seconds)}
         </span>
         {/* LA VITESSE (#6306) — un cycle, pas un menu : c'est le geste d'iOS
             (`cycleSpeed`), et un vocal se réécoute plus vite bien plus souvent
@@ -376,7 +400,12 @@ function VoiceAttachment({
         </button>
       </div>
 
-      {transcript.text !== '' ? (
+      <VoiceFileName originalName={attachment.originalName ?? ''} />
+      {attachment.transcription == null ? (
+        <VoiceTranscribeZone language={uiLanguage} busy={onDemand.transcribing} notice={onDemand.notice} onTranscribe={onDemand.transcribe} />
+      ) : null}
+
+      {transcript.text !== '' && transcript.text !== attachment.originalName ? (
         <p
           data-transcript
           className="text-title"
@@ -428,7 +457,7 @@ function VoiceAttachment({
       {isError ? (
         <div data-audio-status="error" className="flex items-center">
           <button type="button" onClick={toggle} className="text-mini underline" style={{ minHeight: 44 }}>
-            Lecture impossible — Réessayer
+            {translate(currentInterfaceLanguage(), 'media.playback.failed')}
           </button>
         </div>
       ) : null}
@@ -582,6 +611,8 @@ export function Attachments({
             languages={languages}
             fallbackLanguage={fallbackLanguage}
             onExpand={() => setOpenAudioIndex(i)}
+            carrier={carrier}
+            message={message}
             {...(displayLanguage !== undefined ? { displayLanguage } : {})}
           />
         ),

@@ -462,7 +462,21 @@ export const callersIn = (contents, nsNames) => {
 // web télécharge le champ `yaml` de la réponse JSON (`admin.gameSeasonsAppEvents`). Les sept autres entrées
 // `admin.gameSeasons*` et `me.gameSeasonsCalendar` ont leur appelant (`apps/web/src/lib/api/admin-game-seasons.ts`,
 // `game-season-calendar.ts`). Valeur MESURÉE le 2026-10-12 en local.
-const BASELINE_DEAD_ENTRIES = 278;
+// 276 -> 275 (#10502, #10499, 2026-10-13) : `me.consents` (`GET /api/v1/me/consents`) a son appelant web —
+// `apps/web/src/lib/api/consents.ts`, qui confirme l'accord d'analyse du contexte de lot `/social/events`
+// (a44deebecf). Valeur MESURÉE le 2026-10-13 en CI (run 38380030207 rouge sur 275) et en local.
+// 275 -> 276 (#10559, 2026-10-13) : `affiliate.byTokenOg` (`GET /api/v1/affiliate/:token/og`) — la page d'aperçu
+// Open Graph d'un lien d'affiliation, servie par la passerelle aux ROBOTS que Traefik trie par User-Agent
+// (jumelle des aperçus `/chat/<lien>` et `/l/<jeton>`). Aucun client ne l'appelle jamais : l'entrée existe parce
+// que le catalogue est généré depuis le manifeste. Valeur MESURÉE le 2026-10-13 en CI (run 38460483889 rouge sur 276).
+// 271 -> 270 (#7558, 2026-10-14) : `conversations.byIdMessagesByMessageIdPin` (`PUT`/`DELETE
+// …/messages/:messageId/pin`) a son appelant web — `apps/web/src/lib/api/pin-message.ts`, le geste « Épingler /
+// Désépingler » de la feuille « Plus… » du fil. Valeur MESURÉE le 2026-10-14 en local.
+// 270 -> 267 (#10613, #7836, #10615, 2026-10-14) : la fiche de groupe du web gagne trois appelants —
+// `conversations.byIdParticipantsByParticipantKey` (`DELETE …/participants/:key`, expulser),
+// `conversations.byIdParticipantsByUserIdBan` (`…/ban`) et `conversations.byIdParticipantsByUserIdRole`
+// (`…/participants/:key/role`, promouvoir/rétrograder). Valeur MESURÉE en CI (run 38602621428, rouge sur 267).
+const BASELINE_DEAD_ENTRIES = 265;
 
 export const readWorld = (root) => {
   const groupFiles = readdirSync(join(root, GROUPS_DIR)).filter((name) => name.endsWith('.ts')).sort();

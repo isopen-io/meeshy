@@ -561,7 +561,14 @@ extension StoryViewModel {
             mentionsBySlide: mentionsBySlide,
             composerMediaTexts: composerMediaTexts,
             allowSoundExtraction: allowSoundExtraction,
-            alsoAsReel: alsoAsReel
+            alsoAsReel: alsoAsReel,
+            onUnsavedMedia: { [weak self] outcome in
+                self?.keepCompositionWithUnsavedMedia(
+                    outcome, slides: slides, slideImages: slideImages, loadedImages: loadedImages,
+                    loadedVideoURLs: loadedVideoURLs, loadedAudioURLs: loadedAudioURLs,
+                    visibility: visibility, visibilityUserIds: visibilityUserIds,
+                    originalLanguage: originalLanguage, draftId: draftId)
+            }
         ) else { return }
 
         insertOptimisticOfflineStories(
@@ -635,7 +642,12 @@ extension StoryViewModel {
         composerMediaTexts: ComposerMediaTexts = .none,
         allowSoundExtraction: Bool? = nil,
         /// « Aussi en réel » (#9476) — persisté : un rejeu sans lui publierait la story seule.
-        alsoAsReel: Bool = false
+        alsoAsReel: Bool = false,
+        /// Appelé quand un média ne peut VRAIMENT pas être écrit (#10495). Le
+        /// chemin hors ligne y garde la composition et nomme le média ; le
+        /// chemin en ligne n'en passe pas : son envoi continue depuis la
+        /// mémoire, et lui annoncer un échec serait faux.
+        onUnsavedMedia: ((StoryOfflineMediaWriter.Outcome) -> Void)? = nil
     ) async -> (queueId: String, tempStoryId: String)? {
         // 1. Re-key slide backgrounds.
         let bgImages = Dictionary(
@@ -684,10 +696,7 @@ extension StoryViewModel {
                 "offline.publish aborted — médias non persistés: \(mediaOutcome.failedElementIds.joined(separator: ","), privacy: .public)")
             // Le dossier partiel ne sert à rien et occuperait le disque.
             try? fm.removeItem(at: offlineDir)
-            FeedbackToastManager.shared.showError(String(
-                localized: "story.publish.queue.mediaError",
-                defaultValue: "Impossible d'enregistrer les médias de la story — réessayez"
-            ))
+            onUnsavedMedia?(mediaOutcome)
             return nil
         }
         let mediaReferences = mediaOutcome.references
@@ -1066,6 +1075,41 @@ extension StoryViewModel {
     }
 }
 
+extension StoryViewModel {
+
+    /// **Un média irrécupérable ne fait pas perdre la composition** (#10495).
+    ///
+    /// Sur le chemin hors ligne, le composer est déjà fermé et son
+    /// autosauvegarde jetée quand la file refuse : ne rien faire perdait tout
+    /// le travail. La composition devient un brouillon — avec ce qui a pu être
+    /// gardé — marqué de l'erreur, et le toast dit QUEL média manque.
+    func keepCompositionWithUnsavedMedia(
+        _ outcome: StoryOfflineMediaWriter.Outcome,
+        slides: [StorySlide],
+        slideImages: [String: UIImage],
+        loadedImages: [String: UIImage],
+        loadedVideoURLs: [String: URL],
+        loadedAudioURLs: [String: URL],
+        visibility: String,
+        visibilityUserIds: [String],
+        originalLanguage: String?,
+        draftId: String?
+    ) {
+        let message = StoryPublishCopy.unsavedMedia(outcome.failures.first?.kind ?? .image)
+        let keptId = draftId ?? UUID().uuidString
+        let images = slideImages.reduce(into: loadedImages) { acc, entry in
+            acc["slide-bg-\(entry.key)"] = entry.value
+        }
+        draftStore.save(draftId: keptId, slides: slides, visibility: visibility,
+                        visibilityUserIds: visibilityUserIds, originalLanguage: originalLanguage)
+        draftStore.saveMedia(draftId: keptId,
+                             images: images.filter { !$0.key.contains("/") },
+                             videoURLs: loadedVideoURLs, audioURLs: loadedAudioURLs)
+        draftStore.recordPublishFailure(draftId: keptId, message: message)
+        FeedbackToastManager.shared.showError(message)
+    }
+}
+
 /// **Ce que dit la file hors ligne, selon ce que l'auteur publie** (#8522).
 /// Un post mis en file s'annonçait « Story enregistrée ».
 nonisolated enum StoryPublishCopy {
@@ -1080,6 +1124,22 @@ nonisolated enum StoryPublishCopy {
         case .post, .status:
             return String(localized: "post.publish.queue.enqueued",
                           defaultValue: "Post enregistré — publication au retour en ligne")
+        }
+    }
+
+    /// Le média qu'une publication hors ligne n'a pas pu garder, NOMMÉ
+    /// (#10495) — « les médias » ne disait pas lequel reprendre.
+    static func unsavedMedia(_ kind: StoryOfflineMediaWriter.MediaKind) -> String {
+        switch kind {
+        case .image:
+            return String(localized: "story.publish.queue.mediaError.image",
+                          defaultValue: "Une photo n'a pas pu être enregistrée — votre publication est gardée dans vos brouillons")
+        case .video:
+            return String(localized: "story.publish.queue.mediaError.video",
+                          defaultValue: "Une vidéo n'a pas pu être enregistrée — votre publication est gardée dans vos brouillons")
+        case .audio:
+            return String(localized: "story.publish.queue.mediaError.audio",
+                          defaultValue: "Un son n'a pas pu être enregistré — votre publication est gardée dans vos brouillons")
         }
     }
 }

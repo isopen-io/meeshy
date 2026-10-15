@@ -1,111 +1,84 @@
 import SwiftUI
 
-/// **Où la pastille de synchronisation se pose : dans la bande de la barre
-/// d'état, hors du contenu** (#9680, demande porteur 2026-10-08 : « trop
-/// centrée dans l'écran, elle devrait être plus haut »).
+/// **Où la pastille de synchronisation se pose : sous la zone sûre, nettement
+/// décollée du capteur** (#10371, retour porteur 2026-10-12).
 ///
-/// Elle se posait SOUS le chrome de son hôte — 64 + 8 pt sous la zone sûre à
-/// la racine, 114 + 8 pt en conversation, 8 pt ailleurs, 0 sur iPad : quatre
-/// marges écrites à quatre endroits, et une pastille qui flottait au tiers
-/// haut du fil. Elle se pose désormais là où vit l'état du système, au-dessus
-/// de tout contenu :
+/// > « Il est trop proche de la Dynamic Island ! Et il n'est pas destiné à être
+/// > là-bas ! Il faut redescendre d'environ 2 fois la hauteur de ce composant. »
 ///
-/// | appareil | bande | où |
-/// |---|---|---|
-/// | iPhone à îlot / à encoche | `underSensorHousing` | juste sous le capteur, à cheval sur le bord haut de la zone sûre |
-/// | iPad | `statusBarCenter` | au centre de la barre d'état, libre (heure à gauche, batterie à droite) |
-/// | iPhone à bouton d'accueil, paysage | `belowStatusBar` | sous la barre d'état, dont l'heure occupe le centre |
+/// **Cette règle SUPPLANTE celle de #9680** (2026-10-08), qui posait la pastille
+/// « dans la bande de la barre d'état » — juste sous l'îlot, à cheval sur le haut
+/// de la zone sûre (`safeAreaTop − 11 + 1`), au centre de la barre d'état sur
+/// iPad. Collée au capteur, elle se lisait comme un élément du SYSTÈME, ce
+/// qu'elle n'est pas : c'est un état de l'APP.
 ///
-/// Le titre des écrans à en-tête flottant (#5835) et les boutons du chrome de
-/// conversation commencent à `safeAreaTop + 8` au plus tôt : la pastille ne
-/// déborde de la zone sûre que de `maximumIntrusionIntoSafeArea`, le haut d'une
-/// cible tactile de 44 pt, jamais un titre.
+/// La pose est désormais UNE règle pour tous les appareils — iPhone à îlot, à
+/// encoche, à bouton d'accueil, iPad : le haut de la pastille se place à
+/// `seatBelowSafeArea` sous le haut de la zone sûre. C'est l'ancienne pose sous
+/// l'îlot descendue de `descent` (2 × les 22 pt de l'ancienne capsule). Plus
+/// bas, elle peut passer sur un titre ou un chrome : c'est un calque
+/// TRANSITOIRE, centré, au-dessus du contenu, accepté comme tel par le porteur.
 ///
 /// Fonction PURE : c'est la DÉCISION qui se teste (`SyncPillPlacementTests`) ;
 /// le rendu n'a qu'un point de montage, `inSyncPillBand()`.
 nonisolated enum SyncPillPlacement {
-    enum Band: Equatable, Sendable {
-        case underSensorHousing
-        case statusBarCenter
-        case belowStatusBar
-    }
 
-    /// Plus petit encart haut d'un iPhone à capteur : 44 pt (encoche du X) ;
-    /// 47–50 sur les encoches suivantes, 59–62 sous un îlot. Un iPhone à bouton
-    /// d'accueil en a 20.
-    static let sensorHousingMinimumInset: CGFloat = 44
+    /// Hauteur de la capsule AVANT #10371 — l'unité dans laquelle le porteur a
+    /// exprimé la descente.
+    static let formerPillHeight: CGFloat = 22
 
-    /// Écart entre le bas du capteur et le haut de la zone sûre (îlot : bas à
-    /// 48 pt, zone sûre à 59 pt). La pastille se pose juste sous le capteur.
+    /// Écart, sous un îlot, entre le bas du capteur et le haut de la zone sûre
+    /// (bas à 48 pt, zone sûre à 59 pt) : l'ancienne pose s'y logeait.
     static let sensorToSafeAreaGap: CGFloat = 11
 
-    /// Air laissé entre le capteur (ou la barre d'état) et la pastille.
-    static let clearance: CGFloat = 1
+    /// Air que l'ancienne pose laissait sous le capteur.
+    static let formerClearance: CGFloat = 1
 
-    /// Ce que la pastille s'autorise sous le haut de la zone sûre — moins que
-    /// la marge de 8 pt sous laquelle commencent les chromes et les titres.
-    static var maximumIntrusionIntoSafeArea: CGFloat {
-        SyncPillMetrics.height - sensorToSafeAreaGap + clearance
-    }
+    /// « Redescendre d'environ 2 fois la hauteur de ce composant. »
+    static let descent: CGFloat = 2 * formerPillHeight
 
-    static func band(safeAreaTop: CGFloat, isPad: Bool) -> Band {
-        if isPad {
-            return safeAreaTop >= SyncPillMetrics.height ? .statusBarCenter : .belowStatusBar
-        }
-        return safeAreaTop >= sensorHousingMinimumInset ? .underSensorHousing : .belowStatusBar
-    }
+    /// Où le haut de la pastille se pose, sous le haut de la zone sûre : l'ancienne
+    /// pose sous l'îlot (`− 11 + 1`), descendue de `descent` — 34 pt.
+    static let seatBelowSafeArea: CGFloat = formerClearance - sensorToSafeAreaGap + descent
 
     /// **L'encart haut de l'ÉCRAN, depuis deux cadres globaux** — celui du
     /// conteneur qui ignore la zone sûre, celui du même conteneur qui la
     /// respecte (motif `FloatingButtonGeometry.measured`, #9679).
     ///
-    /// La première version lisait `safeAreaInsets` sur un `GeometryReader`
-    /// portant `.ignoresSafeArea()` : il rend une zone sûre NULLE, et la
-    /// pastille se posait à y = 1, entièrement SOUS l'îlot (recette 2026-10-08,
-    /// iPhone 17 Pro). L'écart des deux cadres n'a pas ce défaut.
+    /// Un lecteur qui ignore la zone sûre rend des `safeAreaInsets` NULS : la
+    /// pastille se posait à y = 1, sous l'îlot (recette 2026-10-08, iPhone 17
+    /// Pro). L'écart des deux cadres n'a pas ce défaut.
     ///
     /// Un conteneur qui ne touche pas le haut de l'écran (poussé par une
-    /// bannière) n'a pas de capteur au-dessus de lui : encart nul, et la
-    /// pastille se pose en haut du conteneur.
+    /// bannière) n'a pas de capteur au-dessus de lui : encart nul.
     static func screenSafeAreaTop(container: CGRect, safeRegion: CGRect, reportedTop: CGFloat) -> CGFloat {
         guard container.minY <= 0.5 else { return 0 }
         return max(reportedTop, safeRegion.minY - container.minY, 0)
     }
 
     /// Encart supposé quand la mesure rend 0 sur un iPhone en portrait : le
-    /// plus haut des îlots (iPhone 16/17 Pro). Sur une encoche, la pastille se
-    /// pose alors quelques points plus bas, VISIBLE ; l'inverse — supposer
-    /// l'encart le plus bas — la remettrait sous l'îlot.
+    /// plus haut des îlots (iPhone 16/17 Pro). Supposer le plus bas la
+    /// rapprocherait du capteur, ce que #10371 refuse.
     static let unmeasuredPortraitInset: CGFloat = 62
 
     /// **Où poser la pastille dans son conteneur.**
     ///
-    /// Un iPhone en PORTRAIT a toujours un encart haut (20 pt au moins, sous la
-    /// barre d'état) : en lire 0 sur un conteneur qui touche le haut de l'écran
-    /// est une mesure ratée — transitoire (première passe de mise en page) ou
-    /// hôte qui a consommé la zone sûre. La pastille ne se pose alors ni sous
-    /// l'îlot (y = 1, recette du 2026-10-08) ni nulle part (une version qui
-    /// attendait la passe suivante ne s'affichait plus du tout) : elle prend
-    /// `unmeasuredPortraitInset`.
+    /// Un iPhone en PORTRAIT a toujours un encart haut (20 pt au moins) : en lire
+    /// 0 sur un conteneur qui touche le haut de l'écran est une mesure ratée —
+    /// transitoire, ou hôte qui a consommé la zone sûre. La pastille prend alors
+    /// `unmeasuredPortraitInset` au lieu de remonter sous l'îlot.
     static func topOffset(container: CGRect, safeRegion: CGRect, reportedTop: CGFloat, isPad: Bool) -> CGFloat {
         let measured = screenSafeAreaTop(container: container, safeRegion: safeRegion, reportedTop: reportedTop)
         let isPortrait = container.height > container.width
         let touchesTop = container.minY <= 0.5
         let unmeasured = !isPad && isPortrait && touchesTop && measured <= 0
-        return topOffset(safeAreaTop: unmeasured ? unmeasuredPortraitInset : measured, isPad: isPad)
+        return topOffset(safeAreaTop: unmeasured ? unmeasuredPortraitInset : measured)
     }
 
     /// Distance entre le bord HAUT DE L'ÉCRAN (de l'hôte, zone sûre comprise)
-    /// et le haut de la pastille.
-    static func topOffset(safeAreaTop: CGFloat, isPad: Bool) -> CGFloat {
-        switch band(safeAreaTop: safeAreaTop, isPad: isPad) {
-        case .underSensorHousing:
-            return safeAreaTop - sensorToSafeAreaGap + clearance
-        case .statusBarCenter:
-            return ((safeAreaTop - SyncPillMetrics.height) / 2).rounded(.down)
-        case .belowStatusBar:
-            return safeAreaTop + clearance
-        }
+    /// et le haut de la pastille — la même règle sur tout appareil.
+    static func topOffset(safeAreaTop: CGFloat) -> CGFloat {
+        max(safeAreaTop, 0) + seatBelowSafeArea
     }
 }
 
@@ -136,9 +109,9 @@ private struct SyncPillBandMount: ViewModifier {
 }
 
 extension View {
-    /// Pose la pastille de synchronisation dans la bande de la barre d'état
-    /// (`SyncPillPlacement`). À appliquer à `ConnectionBanner` dans un
-    /// `.overlay(alignment: .top)` de l'hôte.
+    /// Pose la pastille de synchronisation sous la zone sûre, décollée du
+    /// capteur (`SyncPillPlacement`, #10371). À appliquer à `ConnectionBanner`
+    /// dans un `.overlay(alignment: .top)` de l'hôte.
     func inSyncPillBand() -> some View {
         modifier(SyncPillBandMount())
     }

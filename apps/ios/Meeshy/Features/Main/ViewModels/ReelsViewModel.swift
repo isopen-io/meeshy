@@ -93,6 +93,16 @@ final class ReelsViewModel: ObservableObject {
     private var cancellables = Set<AnyCancellable>()
     private let service: PostServiceProviding
     private let cache: ReelFeedCacheReading
+    /// #10483 — l'impression d'un réel porte sa surface (`reels`) ; la source
+    /// `feed` reste celle du compteur historique. Groupée et persistée.
+    private lazy var impressions = ImpressionBatcher(source: "feed", surface: .reels, postService: service)
+    /// #10501 — l'impression du réel actuellement à l'écran.
+    private var listedImpression: String?
+    /// #10483 — l'entrée du lecteur : le PREMIER réel compté porte la marque
+    /// de la porte qui l'a ouvert (tap du fil ou du profil, notification,
+    /// lien) ; les suivants, atteints par balayage, sont un listing `reels`.
+    private let openSources: DetailOpenSourceProviding
+    private var entryConsumed = false
 
     /// Same key `FeedViewModel` writes the main feed under — the reel pager
     /// reuses that cache so a cold-start launch shares the feed's offline data.
@@ -101,9 +111,11 @@ final class ReelsViewModel: ObservableObject {
     init(
         service: PostServiceProviding = PostService.shared,
         cache: ReelFeedCacheReading = CacheCoordinatorReelFeedCache(),
-        postDeletedEvents: AnyPublisher<String, Never> = SocialSocketManager.shared.postDeleted.eraseToAnyPublisher()
+        postDeletedEvents: AnyPublisher<String, Never> = SocialSocketManager.shared.postDeleted.eraseToAnyPublisher(),
+        openSources: DetailOpenSourceProviding = DetailOpenSources.shared
     ) {
         self.service = service
+        self.openSources = openSources
         self.cache = cache
         subscribeToLikeEvents()
         subscribeToBookmarkEvents()
@@ -611,13 +623,44 @@ final class ReelsViewModel: ObservableObject {
     }
 
     func recordView(_ id: String) {
-        // Vue UNIQUE (`viewCount`) — dédupliquée côté serveur par `PostView`
-        // (`@@unique(postId, userId)`) : rejouer l'appel ne la gonfle pas.
-        Task { try? await service.viewPost(postId: id, duration: nil) }
+        // Le lecteur de réels EST un écran détail (#10483) : chaque réel qui
+        // s'installe à l'écran compte une vue (et une impression ci-dessous),
+        // ici seulement — le tap qui présente le lecteur n'envoie que `open`.
+        let entry = readerEntry(for: id)
+        Task { [service] in
+            _ = try? await service.recordSocialEvents(
+                [.view(postId: id, durationMs: nil, surface: .reels, entry: entry)],
+                credential: .account
+            )
+        }
         // Impression (portée) — le réel est apparu à l'écran. Comptée à CHAQUE
         // apparition : revenir sur un réel déjà vu est une nouvelle impression.
         // La déduplication de session qui vivait ici plafonnait le compteur à 1
         // par réel et par lancement d'app.
-        Task { try? await service.recordImpression(postId: id, source: "feed") }
+        closeListedImpression()
+        listedImpression = impressions.recordListed(id, position: reels.firstIndex { $0.id == id }, isVideo: true)
+        // Un réel installé occupe tout l'écran jusqu'au suivant.
+        if let listedImpression { impressions.noteVisible(fraction: 1, of: listedImpression) }
+    }
+
+    /// Le réel à l'écran cède la place : sa mesure de visibilité se clôt.
+    private func closeListedImpression() {
+        guard let previous = listedImpression else { return }
+        listedImpression = nil
+        impressions.noteGone(previous)
+    }
+
+    private func readerEntry(for id: String) -> ContentEntry {
+        guard entryConsumed else {
+            entryConsumed = true
+            return openSources.consumeEntry(for: id)
+        }
+        return .listing(.reels)
+    }
+
+    /// Le lecteur se ferme : les impressions en attente partent.
+    func flushImpressions() async {
+        closeListedImpression()
+        await impressions.flushNow()
     }
 }

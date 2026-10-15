@@ -3,7 +3,12 @@ import {
   resolveForwardSourceBroadcastPayload,
   withoutForwardSourceOrItsPath,
 } from '../services/preferences/forward-source-visibility';
-import { loadSealedQuoteAudience, sealedQuoteVariant, type QuotedEphemeralSubject } from './quotedEphemeralAudience';
+import {
+  loadSealedQuoteAudience,
+  quotedDeathFor,
+  sealedQuoteVariant,
+  type QuotedEphemeralSubject,
+} from './quotedEphemeralAudience';
 
 /**
  * Les lecteurs d'une diffusion `message:new` qui ne peuvent PAS recevoir la
@@ -24,6 +29,8 @@ export type PeerBroadcastSplit<T> = {
   readonly hiddenRooms: string[];
   readonly hiddenKeys: ReadonlySet<string>;
   readonly payloadForKey: (key: string) => T;
+  /** #8686 — la mort de la chaîne citée pour ce lecteur : sa ligne de liste part « expirée ». */
+  readonly quotedDeathOf: (participant: { readonly id: string; readonly userId?: string | null }) => Date | null;
 };
 
 export async function resolvePeerBroadcastSplit<T extends object>(
@@ -58,5 +65,6 @@ export async function resolvePeerBroadcastSplit<T extends object>(
     hiddenRooms: [...hiddenKeys].map(params.userRoom),
     hiddenKeys,
     payloadForKey,
+    quotedDeathOf: (participant) => quotedDeathFor(sealed, participant),
   };
 }

@@ -26,6 +26,7 @@ import esSignup from './catalog-es-signup';
 import esGallery from './catalog-es-gallery';
 import esMessageCard from './catalog-es-message-card';
 import esMentions from './catalog-es-mentions';
+import esShellLabels from './catalog-es-shell-labels';
 import esStudioChrome from './catalog-es-studio-chrome';
 import esEphemeral from './catalog-es-ephemeral';
 import esWriteRestriction from './catalog-es-write-restriction';
@@ -40,6 +41,7 @@ import esPhonePrompt from './catalog-es-phone-prompt';
 import esUserProfile from './catalog-es-user-profile';
 import esContentRefused from './catalog-es-content-refused';
 import esPublicEntry from './catalog-es-public-entry';
+import esThreadSearch from './catalog-es-thread-search';
 
 const es = {
   'announce.messageSent': 'Mensaje enviado',
@@ -306,6 +308,7 @@ const es = {
   'notFound.title': 'Esta dirección no existe.',
 
   'pending.back': 'Volver a las conversaciones',
+  'pending.screen': 'La pantalla está llegando',
 
   'linkPage.home': 'Volver a Meeshy',
   'linkPage.retry': 'Reintentar',
@@ -322,8 +325,6 @@ const es = {
   'trackingLink.opening': 'Abriendo el enlace…',
   'trackingLink.dead.title': 'Este enlace ya no está disponible',
   'trackingLink.dead.body': 'Ha caducado, se ha desactivado o nunca ha existido.',
-  'accountDeletion.incomplete.title': 'Enlace incompleto',
-  'accountDeletion.incomplete.body': 'A este enlace le falta la información necesaria. Inicia sesión para solicitar la eliminación de tu cuenta.',
   'accountDeletion.confirm.title': 'Confirmar la eliminación de tu cuenta',
   'accountDeletion.confirm.body':
     'Tu cuenta se desactivará al final de un periodo de gracia de 30 días. Hasta entonces, el enlace «Cancelar» del correo te permite dar marcha atrás.',
@@ -880,6 +881,8 @@ const es = {
   'story.action.reply': 'Responder',
   'story.action.forward': 'Enviar',
   'story.action.repost': 'Republicar',
+  'story.viewer.repost': 'Republicación',
+  'story.viewer.repostOf': 'Republicado de @{handle}',
   'story.action.views': 'Vistas',
   'story.action.share': 'Compartir',
   'story.action.save': 'Guardar',
@@ -1052,6 +1055,7 @@ const es = {
   'message.detail.language.original': '{language} (original)',
 
   ...esMentions,
+  ...esShellLabels,
   ...esStudioChrome,
   ...esEphemeral,
   ...esWriteRestriction,
@@ -1069,6 +1073,7 @@ const es = {
   ...esUserProfile,
   ...esContentRefused,
   ...esPublicEntry,
+  ...esThreadSearch,
 } satisfies InterfaceCatalog;
 
 export default es;

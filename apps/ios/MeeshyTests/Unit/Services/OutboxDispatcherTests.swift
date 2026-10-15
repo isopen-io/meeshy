@@ -543,3 +543,29 @@ final class OutboxDispatcherTests: XCTestCase {
         }
     }
 }
+
+/// #10500 — la vue d'une story rejouée par la file hors ligne garde
+/// l'identité de SA ligne : une réponse perdue puis un rejeu ne la recomptent
+/// pas, et elle est datée de sa mise en file.
+extension OutboxDispatcherTests {
+
+    func test_storyView_sameRow_sameEventId_datedWhenQueued() {
+        let payload = MarkStoryViewedPayload(clientMutationId: "cmid_0f8fad5b-d9cb-469f-a165-70867728950e", storyId: "s1")
+        let queuedAt = Date(timeIntervalSince1970: 1_700_000_000)
+
+        let first = OutboxDispatcher.storyView(payload, queuedAt: queuedAt)
+        let replay = OutboxDispatcher.storyView(payload, queuedAt: queuedAt)
+
+        XCTAssertEqual(first.stamp, replay.stamp)
+        XCTAssertEqual(first.stamp.eventId, "0f8fad5b-d9cb-469f-a165-70867728950e")
+        XCTAssertEqual(first.stamp.occurredAt, queuedAt)
+        XCTAssertEqual(first.event, .view(postId: "s1", durationMs: nil, surface: .story, entry: nil))
+    }
+
+    func test_storyView_twoRows_twoEventIds() {
+        let one = OutboxDispatcher.storyView(MarkStoryViewedPayload(clientMutationId: ClientMutationId.generate(), storyId: "s1"), queuedAt: Date())
+        let other = OutboxDispatcher.storyView(MarkStoryViewedPayload(clientMutationId: ClientMutationId.generate(), storyId: "s1"), queuedAt: Date())
+
+        XCTAssertNotEqual(one.stamp.eventId, other.stamp.eventId, "Deux vues distinctes restent deux vues.")
+    }
+}

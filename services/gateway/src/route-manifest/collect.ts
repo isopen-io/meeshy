@@ -620,7 +620,12 @@ function hookLooksLikeAuth(fn: unknown, authenticateRef: unknown): boolean {
   return (
     fn === authenticateRef ||
     hookSource(fn).includes('.authenticate(') ||
-    hookSource(fn).includes(UNIFIED_AUTH_CALL_MARKER)
+    hookSource(fn).includes(UNIFIED_AUTH_CALL_MARKER) ||
+    // Un hook qui DÉCLARE son régime (`AUTH_REGIME`) est un hook d'identité par
+    // déclaration — c'est la forme d'un aiguillage qui COMPOSE deux middlewares
+    // (`reachAuth`, #10483 : facultatif pour un lecteur anonyme, garde
+    // historique sinon), dont la source ne contient aucun des deux marqueurs.
+    hookRegime(fn) !== undefined
   );
 }
 

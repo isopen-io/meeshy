@@ -323,6 +323,12 @@ const FROZEN_UNBOUNDED_FINDMANY: Readonly<Record<string, number>> = {
   'signal-protocol.ts': 1,
   'sync/membership.ts': 1,
   'user-deletions.ts': 2,
+  // #10643 — les statistiques d'un profil lisent les identités du compte
+  // (`Participant.id`, une par conversation rejointe, index `[userId]`,
+  // `select: { id }` seul) pour compter ses messages par `senderId` indexé au
+  // lieu d'un `$lookup` par message (1 265 ms → 9 ms mesurés). Borner cette
+  // lecture fausserait les comptes au-delà de la borne, sans le moindre signal.
+  'user-stats.ts': 1,
   // 1 -> 0, donc la CLE disparait : #4391 a retire le dernier `findMany` nu du
   // fichier — `GET /users/me/stats/timeline` ramenait UNE LIGNE PAR MESSAGE des
   // 90 derniers jours (`select: { createdAt }`, sans `take`) pour en faire un

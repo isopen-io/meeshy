@@ -10,6 +10,7 @@ import { loadSoundStats, EMPTY_SOUND_STATS, type SoundStats } from '../../servic
 import { NOT_MUTED_WHERE, NOT_DELETED_SOUND_WHERE } from '../../services/posts/soundFormats';
 import { sendSuccess, sendUnauthorized, sendBadRequest, sendNotFound, sendForbidden, sendError } from '../../utils/response';
 import { depreciee } from '../../utils/deprecation';
+import { rankedListingPage } from '../../services/social/listingContext';
 
 /**
  * Forme d'identifiant `Sound`/`Post` (ObjectId Mongo) — exportée pour
@@ -463,6 +464,7 @@ export function registerSoundRoutes(fastify: FastifyInstance, prisma: PrismaClie
     const { cursor, limit } = parsed.data;
 
     const resultat = await chargerPostsParSon(prisma, request.params.id, { cursor, limit });
-    return sendSuccess(reply, resultat.data, { pagination: resultat.pagination });
+    const page = rankedListingPage(resultat, 'sound');
+    return sendSuccess(reply, page.data, { pagination: page.pagination, meta: page.meta });
   });
 }

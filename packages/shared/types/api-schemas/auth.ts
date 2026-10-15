@@ -419,6 +419,20 @@ export const pendingSessionTokenProperty = {
 } as const;
 
 /**
+ * Le délai d'adoption d'une preuve par lien (#10518) — `ProvenSessionAdoption`
+ * (`utils/proven-session-adoption.ts`). Déclaré par les DEUX routes qui
+ * remettent une telle preuve (`POST /auth/verify-email`,
+ * `POST /auth/magic-link/validate`) : un champ absent du schéma n'atteint
+ * aucun client.
+ */
+export const adoptWithinSecondsProperty = {
+  type: 'integer',
+  minimum: 0,
+  example: 599,
+  description: 'UPPER BOUND, in seconds, counted from when this response was produced, to adopt what the proof returned: the session (first authenticated call, at most 600) or the second-factor challenge (POST /auth/login/2fa, at most 300). A duration, to be applied to the instant the client received the response. It is a ceiling, not a promise: a newer challenge for the same account replaces this one, and a session can be revoked earlier. Decided and enforced by the server alone.'
+} as const;
+
+/**
  * La branche « vérification requise » de `POST /auth/login` (#8033) et de
  * `POST /auth/register` (#8055, réduite à la revendication par #8238) — UNE
  * forme, deux routes.
@@ -477,7 +491,8 @@ export const verifyEmailResponseSchema = {
         expiresIn: { type: 'number', example: 86400 },
         passwordSet: { type: 'boolean', description: 'True when the optional password was applied' },
         requires2FA: { type: 'boolean' },
-        twoFactorToken: { type: 'string', description: 'Present it to POST /login/2fa with the second-factor code' }
+        twoFactorToken: { type: 'string', description: 'Present it to POST /login/2fa with the second-factor code' },
+        adoptWithinSeconds: adoptWithinSecondsProperty
       }
     }
   }

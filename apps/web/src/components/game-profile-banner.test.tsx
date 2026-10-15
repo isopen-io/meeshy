@@ -6,7 +6,7 @@ import type { InterfaceLanguage } from '@/lib/interface-language';
 import { createActMounter } from '@/test-support/act-mount';
 import { ensureHappyDomRegistered, releaseHappyDomIfRegistered } from '@/test-support/happy-dom-environment';
 
-import { GameProfileBanner, type BannerStanding } from './game-profile-banner';
+import { AVATAR_CLEARANCE, GameProfileBanner, type BannerStanding } from './game-profile-banner';
 
 /**
  * LE JEU SUR LA BANNIÈRE DU PROFIL (#10231, précision porteur 2026-10-11) —
@@ -59,7 +59,7 @@ describe('le niveau et ses points au début de la bannière', () => {
     expect(words(start?.querySelector('[data-profile-banner-level-name]'))).toBe('Étincelle');
     expect(start?.querySelector('[data-game-level="12"]') !== null).toBe(true);
     expect(words(start?.querySelector('[data-profile-banner-points]'))).toBe('976 pts');
-    expect(words(start?.querySelector('[data-profile-banner-missing]'))).toBe('encore 624');
+    expect(words(start?.querySelector('[data-profile-banner-missing]'))).toBe('encore 624 vers le 13');
   });
 
   test('il s’ancre au DÉBUT (gauche, droite en RTL), le rang à la FIN', async () => {
@@ -111,7 +111,7 @@ describe('un libellé par groupe, lisible dans les sept langues', () => {
     }
     const level = host.querySelector('[data-profile-banner-level]')?.getAttribute('aria-label') ?? '';
     expect(level.startsWith('Niveau 12, palier Étincelle')).toBe(true);
-    expect(level.endsWith(', 976 pts, encore 624')).toBe(true);
+    expect(level.endsWith(', 976 pts, encore 624 vers le 13')).toBe(true);
     expect(host.querySelector('[data-profile-banner-rank]')?.getAttribute('aria-label')).toBe('Murmure V');
   });
 
@@ -127,11 +127,56 @@ describe('un libellé par groupe, lisible dans les sept langues', () => {
     setInterfaceLanguage('fr');
   });
 
-  test('les deux groupes portent le verre du site, et le jeu laisse passer le toucher vers la bannière', async () => {
+  test('le jeu laisse passer le toucher vers la bannière', async () => {
     const host = await mount(<GameProfileBanner standing={standing()} />);
-    const classes = (selector: string): readonly string[] => (host.querySelector(selector)?.getAttribute('class') ?? '').split(/\s+/);
-    expect(classes('[data-profile-banner-level]')).toContain('glass');
-    expect(classes('[data-profile-banner-rank]')).toContain('glass');
-    expect(classes('[data-profile-banner-game]')).toContain('pointer-events-none');
+    expect((host.querySelector('[data-profile-banner-game]')?.getAttribute('class') ?? '').split(/\s+/)).toContain('pointer-events-none');
+  });
+});
+
+/**
+ * #10601 (directive porteur 2026-10-14) — le niveau à l'angle BAS du début, le
+ * rang à l'angle BAS de la fin ; chaque cadre a les coins hauts arrondis et les
+ * coins bas carrés, posés sur le bord bas de la bannière ; leur fond est un
+ * voile léger, plus le verre épais qui cachait la bannière.
+ */
+describe('les deux cadres aux angles bas de la bannière', () => {
+  const classes = (host: Element, selector: string): readonly string[] => (host.querySelector(selector)?.getAttribute('class') ?? '').split(/\s+/);
+
+  test('la bande se pose sur le bord BAS, d’un bord à l’autre, sans marge', async () => {
+    const host = await mount(<GameProfileBanner standing={standing()} />);
+    const band = styleOf(host.querySelector('[data-profile-banner-game]'));
+    expect(band).toMatch(/(^|;)\s*bottom:\s*0(px)?\s*(;|$)/);
+    expect(band).toMatch(/inset-inline-start:\s*0(px)?\s*(;|$)/);
+    expect(band).toMatch(/inset-inline-end:\s*0(px)?\s*(;|$)/);
+    expect(band).not.toMatch(/(^|[^-])top\s*:/);
+    expect(classes(host, '[data-profile-banner-game]')).toContain('items-end');
+  });
+
+  test('chaque cadre : coins hauts arrondis, coins bas carrés', async () => {
+    const host = await mount(<GameProfileBanner standing={standing()} />);
+    for (const group of ['level', 'rank'] as const) {
+      const names = classes(host, `[data-profile-banner-${group}]`);
+      expect(names).toContain('rounded-t-card');
+      expect(names.filter((name) => /^rounded(-|$)/.test(name) && name !== 'rounded-t-card')).toEqual([]);
+    }
+  });
+
+  test('un voile léger plutôt que le verre : la bannière se voit, le texte blanc porte son ombre', async () => {
+    const host = await mount(<GameProfileBanner standing={standing()} />);
+    for (const group of ['level', 'rank'] as const) {
+      const names = classes(host, `[data-profile-banner-${group}]`);
+      expect(names.some((name) => name.startsWith('glass'))).toBe(false);
+      expect(names).toContain('text-on-media');
+      expect(names.some((name) => name.startsWith('[text-shadow:'))).toBe(true);
+      const veil = names.map((name) => /^bg-\[color-mix\(in_srgb,var\(--color-media-backdrop\)_(\d+)%,transparent\)\]$/.exec(name)).find((match) => match !== null) ?? null;
+      expect(veil !== null && Number(veil[1]) <= 30).toBe(true);
+    }
+  });
+
+  test('chaque cadre s’arrête avant l’avatar posé au milieu du bas', async () => {
+    const host = await mount(<GameProfileBanner standing={standing()} />);
+    for (const group of ['level', 'rank'] as const) {
+      expect(styleOf(host.querySelector(`[data-profile-banner-${group}]`))).toContain(`max-width: calc((100% - ${AVATAR_CLEARANCE}px) / 2)`);
+    }
   });
 });

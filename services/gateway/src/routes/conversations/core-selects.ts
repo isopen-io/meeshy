@@ -80,7 +80,12 @@ export const conversationUserPreferencesSelect = {
   // schema wire, donc strippé de la réponse comme `clearHistoryBefore` :
   // aucun client ne lit `readingMode` via CETTE route, `GET
   // /user-preferences/conversations/:id` reste l'unique surface qui l'expose.
-  readingMode: true
+  readingMode: true,
+  // #10631 — le fond et l'accent PERSONNELS du lecteur. Servi au lecteur SEUL
+  // (le `where: { userId: viewerId }, take: 1` de l'appelant), et DÉCLARÉ dans
+  // le schema wire (`userPreferences`, api-schemas/conversation.ts), sinon
+  // fast-json-stringify le retire — même piège que `reaction`.
+  appearance: true
 } as const;
 
 /**

@@ -3,8 +3,7 @@ import { z } from 'zod';
 import type { PrismaClient } from '@meeshy/shared/prisma/client';
 import type { ParticipantPermissions } from '@meeshy/shared/types/participant';
 import { normalizeLanguageForDedup } from '@meeshy/shared/utils/language-normalize';
-import { toAnonymousUsername } from '@meeshy/shared/utils/anonymous-username';
-import { generateNickname } from '../../utils/anonymous-nickname';
+import { automaticNicknameBase, numberedAnonymousUsername } from '../../utils/anonymous-nickname';
 import { generateSessionToken, hashSessionToken } from '../../utils/session-token';
 import { SecuritySanitizer } from '../../utils/sanitize';
 import { logError } from '../../utils/logger';
@@ -218,10 +217,18 @@ async function claimLinkUse(
   maxUses: number | null,
   extraIncrements: Record<string, { increment: number }> = {}
 ): Promise<boolean> {
+  // #10470 (R2) — l'état du lien se revérifie AU MOMENT de la réservation : une
+  // fermeture ou une échéance tombée depuis la lecture d'admission refuse, sans
+  // quoi l'invité entrerait après la fermeture et échapperait à la révocation.
+  const now = new Date();
   const claim = await prisma.conversationShareLink.updateMany({
     where: {
       id: linkId,
-      ...(maxUses === null ? {} : { OR: [{ maxUses: null }, { currentUses: { lt: maxUses } }] }),
+      isActive: true,
+      AND: [
+        { OR: [{ expiresAt: null }, { expiresAt: { isSet: false } }, { expiresAt: { gt: now } }] },
+        ...(maxUses === null ? [] : [{ OR: [{ maxUses: null }, { currentUses: { lt: maxUses } }] }]),
+      ],
     },
     data: { currentUses: { increment: 1 }, ...extraIncrements },
   });
@@ -244,15 +251,18 @@ async function joinAsGuest(
 ): Promise<LinkJoinOutcome> {
   const firstName = SecuritySanitizer.sanitizeText(profile.firstName || '');
   const lastName = SecuritySanitizer.sanitizeText(profile.lastName || '');
-  const requestedUsername =
+  const nicknameBase =
     profile.requestedUsername && profile.requestedUsername.trim() !== ''
       ? SecuritySanitizer.sanitizeUsername(profile.requestedUsername.trim())
-      : generateNickname(firstName, lastName);
-  const desiredUsername = toAnonymousUsername(requestedUsername);
-  const username = await findFreeAnonymousUsername(prisma, desiredUsername, shareLink.conversationId);
+      : automaticNicknameBase(firstName, lastName);
+  const username = await findFreeAnonymousUsername(
+    prisma,
+    () => numberedAnonymousUsername(nicknameBase),
+    shareLink.conversationId
+  );
 
   if (!username) {
-    return { kind: 'username-taken', suggestion: toAnonymousUsername(generateNickname(firstName, lastName)) };
+    return { kind: 'username-taken', suggestion: numberedAnonymousUsername(automaticNicknameBase(firstName, lastName)) };
   }
 
   const claimed = await claimLinkUse(prisma, shareLink.id, shareLink.maxUses, {
@@ -503,13 +513,10 @@ export async function performLinkJoin(params: LinkJoinParams): Promise<LinkJoinO
   if (shareLink.requireBirthday && (!profile.birthday || profile.birthday.trim() === '')) {
     return { kind: 'validation', message: 'La date de naissance est obligatoire pour rejoindre cette conversation' };
   }
-  if (
-    identity.kind === 'guest' &&
-    shareLink.requireNickname &&
-    (!profile.requestedUsername || profile.requestedUsername.trim() === '')
-  ) {
-    return { kind: 'validation', message: "Le nom d'utilisateur est obligatoire pour rejoindre cette conversation" };
-  }
+  // `requireNickname` ne REFUSE plus un invité (directive porteur 2026-10-13) :
+  // le champ vide passait inaperçu et fermait la porte. Sans pseudo saisi,
+  // `joinAsGuest` en génère un (`automaticNicknameBase`, numéroté par
+  // `numberedAnonymousUsername`, #10602).
 
   const outcome = identity.kind === 'guest'
     ? await joinAsGuest(prisma, shareLink, profile, broadcast, params.requestUserAgent)
@@ -534,6 +541,10 @@ export async function performLinkJoin(params: LinkJoinParams): Promise<LinkJoinO
 
   return outcome;
 }
+
+/** Le pseudo d'un invité tel qu'il lui est servi — le profil d'abord, `displayName` en repli. */
+const guestUsernameOf = (participant: ParticipantRow): string =>
+  participant.anonymousSession?.profile?.username ?? participant.displayName;
 
 /**
  * La forme `{participant, conversation}` historique de `POST
@@ -564,7 +575,7 @@ export function participantConversationPayload(participant: ParticipantRow, shar
   return {
     participant: {
       id: participant.id,
-      username: participant.anonymousSession?.profile?.username ?? participant.displayName,
+      username: guestUsernameOf(participant),
       displayName: participant.displayName,
       firstName: participant.anonymousSession?.profile?.firstName ?? '',
       lastName: participant.anonymousSession?.profile?.lastName ?? '',
@@ -625,6 +636,7 @@ const linkMembersResponseSchema = {
             canViewHistory: { type: 'boolean' },
             rights: { type: 'object', properties: PARTICIPANT_RIGHTS_SCHEMA_PROPERTIES },
             allowedAttachmentKinds: allowedAttachmentKindsJsonSchema,
+            username: { type: 'string', description: "Le pseudo FINAL de l'invité, nombre compris (#10602) — visiteur sans compte" },
           },
         },
       },
@@ -674,7 +686,15 @@ function respondToJoinOutcome(reply: FastifyReply, result: LinkJoinOutcome): voi
             // § « POST /links/:key/members ». Un inscrit a déjà les siens
             // par `GET /conversations/:key/participants/:participantKey`.
             // #10001 — et, au même titre, les familles qu'un invité peut joindre.
-            ...(result.sessionToken ? { rights: result.rights, allowedAttachmentKinds: guestAttachmentKindsOf(result.shareLink) } : {}),
+            // #10602 — et le pseudo FINAL que la passerelle lui a donné (nombre
+            // compris) : le client l'affiche, jamais celui qu'il a saisi.
+            ...(result.sessionToken
+              ? {
+                  rights: result.rights,
+                  allowedAttachmentKinds: guestAttachmentKindsOf(result.shareLink),
+                  username: guestUsernameOf(result.participant),
+                }
+              : {}),
           },
         },
         { statusCode }
@@ -867,6 +887,9 @@ export function registerLinkAdmissionRoutes(
         switch (result.kind) {
           case 'invalid':
             sendUnauthorized(reply, 'Session invalide ou expirée', { code: AUTH_ERROR_CODES.SESSION_INVALID });
+            return;
+          case 'revoked':
+            sendError(reply, 410, 'GUEST_ACCESS_REVOKED', { message: "L'accès de cet invité a été retiré" });
             return;
           case 'link-gone':
             sendError(reply, 410, 'LINK_DEACTIVATED', { message: 'Le lien a été désactivé' });

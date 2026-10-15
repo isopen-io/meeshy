@@ -32,6 +32,7 @@ jest.mock('../../../../services/CacheStore', () => ({
 }));
 
 import { registerCreationRoutes } from '../../../../routes/tracking-links/creation';
+import { liveSession } from '../../../../services/auth/__tests__/live-session-double';
 
 const TOKEN = 'abc123XYZ';
 const OWNER_ID = '507f1f77bcf86cd799439099';
@@ -57,7 +58,7 @@ const TRACKING_LINK = {
 
 /** Une session VIVANTE dont le porteur n'est PAS le créateur du lien. */
 const prismaAutreUtilisateur = () => ({
-  userSession: { findFirst: jest.fn(async () => ({ isValid: true })) },
+  userSession: { findFirst: jest.fn(async () => liveSession()) },
   user: {
     findUnique: jest.fn(async () => ({
       id: OTHER_USER_ID,

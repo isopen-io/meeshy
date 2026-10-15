@@ -173,6 +173,8 @@ export type StoryPlaybackStory = {
    * jamais la longueur de sa propre page (`PublicationViewersSheet`, note
    * C4 — miroir `StoryViewersSheet:1381`). */
   readonly viewCount?: number | null;
+  /** Les vues SANS compte (#10483), un agrégat — « et N visiteurs » sous la liste. */
+  readonly anonymousViewCount?: number | null;
   readonly currentUserReactions?: readonly string[] | null;
   /** La carte des adresses suivies (#9074), lue par `trackingLinksOf` — jamais un champ direct. */
   readonly metadata?: unknown;
@@ -186,7 +188,27 @@ export type StoryRepostSource = {
   readonly id: string;
   readonly storyEffects?: unknown;
   readonly media?: readonly StoryPlaybackMedia[] | null;
+  /** L'auteur de la source (`authorSelect`) : le crédit de l'en-tête le nomme. */
+  readonly author?: { readonly username?: string | null; readonly displayName?: string | null } | null;
 };
+
+/**
+ * LE CRÉDIT D'UNE STORY REPUBLIÉE (#10524) — il vit dans l'EN-TÊTE, après la
+ * date, jamais dans le canvas : la passerelle ne sert plus la puce « Reposté
+ * de @auteur ». Miroir de `StoryViewerView+Header.swift` (icône + « @handle »,
+ * pseudo sinon nom). `null` ⇒ pas une republication, ou une source que la
+ * passerelle ne sert pas ; `handle: null` ⇒ l'icône seule.
+ */
+export function storyRepostCredit(
+  story: Pick<StoryPlaybackStory, 'repostOf'>,
+): { readonly handle: string | null } | null {
+  const source = story.repostOf;
+  if (source === undefined || source === null) return null;
+  const named = [source.author?.username, source.author?.displayName].find(
+    (value): value is string => typeof value === 'string' && value.trim() !== '',
+  );
+  return { handle: named ?? null };
+}
 
 /**
  * LA SCÈNE QU'UNE STORY JOUE (#9678) — son propre document, sinon, pour une

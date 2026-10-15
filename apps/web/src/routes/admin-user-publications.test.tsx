@@ -104,7 +104,8 @@ describe('les publications d’un membre', () => {
     await click(host.querySelector('[data-admin-publications-all]'));
     await click(host.querySelector('[data-admin-action="take-offline"]'));
     expect(document.querySelector('[data-admin-confirm]')?.textContent).toContain('sauf leur auteur et l’administration');
-    expect(confirmer()?.disabled).toBe(true);
+    /* L’ADMIN trouve le motif proposé déjà écrit (#10562) : la confirmation est offerte d’emblée. */
+    expect(confirmer()?.disabled).toBe(false);
     mounter.type(document, '[data-admin-motive]', 'Contenu signalé');
     await click(confirmer());
     await mounter.settle();

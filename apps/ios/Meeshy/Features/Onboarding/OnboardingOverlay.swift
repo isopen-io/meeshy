@@ -142,6 +142,8 @@ struct OnboardingOverlay: View {
 struct OnboardingHost: ViewModifier {
     let storyViewModel: StoryViewModel
     let router: Router
+    /// iPad (#7780) : une conversation ou un panneau est ouvert dans la racine — état que `Router.path` ne porte pas.
+    var tabletDestinationIsOpen: Bool = false
 
     @StateObject private var model = OnboardingViewModel()
     @State private var startedForUserId: String?
@@ -166,6 +168,9 @@ struct OnboardingHost: ViewModifier {
                 .removeDuplicates()
                 .receive(on: DispatchQueue.main)) { isElsewhere in
                 model.routingChanged(isElsewhere: isElsewhere)
+            }
+            .adaptiveOnChange(of: tabletDestinationIsOpen, initial: true) { _, isOpen in
+                model.tabletDestinationChanged(isOpen: isOpen)
             }
             // La célébration de l'arrivée (#8089) passe AVANT la première
             // carte : lue, comme le routage, avant l'état serveur.
@@ -260,7 +265,8 @@ struct OnboardingHost: ViewModifier {
 
 extension View {
     /// Pose l'onboarding post-inscription sur une racine. UNE ligne, des deux côtés.
-    func onboardingHost(storyViewModel: StoryViewModel, router: Router) -> some View {
-        modifier(OnboardingHost(storyViewModel: storyViewModel, router: router))
+    func onboardingHost(storyViewModel: StoryViewModel, router: Router, tabletDestinationIsOpen: Bool = false) -> some View {
+        modifier(OnboardingHost(storyViewModel: storyViewModel, router: router,
+                                tabletDestinationIsOpen: tabletDestinationIsOpen))
     }
 }

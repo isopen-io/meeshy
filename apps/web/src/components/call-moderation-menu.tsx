@@ -30,7 +30,7 @@ import { useBackDismiss } from '@/lib/view/use-back-dismiss';
  */
 
 function BackLayer({ onClose }: { readonly onClose: () => void }): null {
-  useBackDismiss(onClose);
+  useBackDismiss(onClose, { held: true });
   return null;
 }
 

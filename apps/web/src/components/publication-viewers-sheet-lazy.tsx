@@ -27,13 +27,15 @@ const LazyPublicationViewersSheet = lazy(() =>
 export function PublicationViewersSheetPortal({
   host,
   viewCount,
+  anonymousViewCount,
 }: {
   readonly host: CommentsSheetHost;
   readonly viewCount: number | null | undefined;
+  readonly anonymousViewCount?: number | null | undefined;
 }) {
   return host.postId !== null ? (
     <Suspense fallback={null}>
-      <LazyPublicationViewersSheet postId={host.postId} viewCount={viewCount} onClose={host.close} />
+      <LazyPublicationViewersSheet postId={host.postId} viewCount={viewCount} anonymousViewCount={anonymousViewCount} onClose={host.close} />
     </Suspense>
   ) : null;
 }

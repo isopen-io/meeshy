@@ -1,0 +1,118 @@
+import { readFileSync } from 'node:fs';
+import { join } from 'node:path';
+import { describe, expect, it } from 'vitest';
+import { PACK_LANGUAGES } from '../types/content-pack';
+import { AppearancePackContractSchema, isDiscreetPattern, parseAppearanceDesign, parseAppearancePackContract, patternInkOpacity } from '../types/appearance-design';
+import { AvatarRingPackContractSchema, parseAvatarRingDesign, parseAvatarRingPackContract } from '../types/avatar-ring-design';
+import { canUseFrame } from '../types/frame-usage';
+import { parsePackIndex } from '../types/content-pack-index';
+import { GAMUT_KEYS } from '../design/appearance/gamut';
+
+const DIR = join(__dirname, '../design/appearance');
+const read = (file: string): unknown => JSON.parse(readFileSync(join(DIR, file), 'utf8')) as unknown;
+
+type PackFile = { readonly packs: readonly { readonly slug: string; readonly order: number; readonly installedByDefault: boolean; readonly removable: boolean; readonly usage?: unknown; readonly designs?: readonly unknown[]; readonly rings?: readonly unknown[] }[] };
+const wallpapers = read('wallpapers/designs.json') as PackFile;
+const banners = read('banners/designs.json') as PackFile;
+const rings = read('avatar-rings/rings.json') as PackFile;
+
+const wallpaperDesigns = wallpapers.packs.flatMap((pack) => pack.designs ?? []);
+
+describe('le catalogue des 14 modèles de fond (#10632, § 6)', () => {
+  it('compte quatre packs builtin et 14 modèles que le contrat lit tous', () => {
+    expect(wallpapers.packs.map((pack) => pack.slug)).toEqual(['essentiels', 'heritages', 'nature-et-ciel', 'illustrations']);
+    expect(wallpaperDesigns).toHaveLength(14);
+    wallpapers.packs.forEach((pack) => {
+      const contract = parseAppearancePackContract({ domain: 'wallpaper', designs: pack.designs });
+      expect(contract?.designs).toHaveLength(pack.designs?.length ?? -1);
+    });
+  });
+
+  it('ne réutilise aucune clé, ni dans un pack, ni entre les packs de fonds', () => {
+    const keys = wallpaperDesigns.map((design) => (design as { key: string }).key);
+    expect(new Set(keys).size).toBe(14);
+  });
+
+  it('installe « Essentiels » d’office et le garde ; les trois autres se retirent', () => {
+    expect(wallpapers.packs.map((pack) => [pack.installedByDefault, pack.removable])).toEqual([
+      [true, false],
+      [false, true],
+      [false, true],
+      [false, true],
+    ]);
+  });
+
+  it('couvre les trois styles', () => {
+    const styles = new Set(wallpaperDesigns.map((design) => parseAppearanceDesign(design)?.style));
+    expect(styles).toEqual(new Set(['pattern', 'illustration', 'gradient']));
+  });
+
+  it('tient le plafond d’opacité : tout motif reste discret (12 % d’encre)', () => {
+    const patterns = wallpaperDesigns.map((design) => parseAppearanceDesign(design)).filter((design) => design?.style === 'pattern');
+    expect(patterns).toHaveLength(10);
+    patterns.forEach((design) => expect(isDiscreetPattern(design!)).toBe(true));
+    expect(Math.max(...patterns.map((design) => patternInkOpacity(design!)))).toBeLessThanOrEqual(0.12);
+  });
+
+  it('refuse un motif trop dense, un chemin injecté et un bloc de forme qui ne correspond pas au style', () => {
+    const [monogramme] = wallpaperDesigns as { tile: { paths: { opacity: number; d: string }[] } }[];
+    const dense = structuredClone(monogramme);
+    dense.tile.paths[0]!.opacity = 0.4;
+    expect(isDiscreetPattern(parseAppearanceDesign(dense)!)).toBe(false);
+    const injected = structuredClone(monogramme);
+    injected.tile.paths[0]!.d = 'M0 0 L1 1"/><script>';
+    expect(parseAppearanceDesign(injected)).toBeNull();
+    expect(parseAppearanceDesign({ ...(monogramme as object), style: 'illustration' })).toBeNull();
+    expect(parseAppearanceDesign({ ...(monogramme as object), palettes: { light: { base: '#fff', ink: '#000', soft: '#eee' }, dark: {} } })).toBeNull();
+  });
+
+  it('refuse un contrat de pack à clés dupliquées', () => {
+    const [first] = wallpaperDesigns;
+    expect(AppearancePackContractSchema.safeParse({ domain: 'wallpaper', designs: [first, first] }).success).toBe(false);
+  });
+});
+
+describe('les 6 bannières et les 6 contours (#10632, § 6)', () => {
+  it('reprennent six fonds À L’IDENTIQUE', () => {
+    const [pack] = banners.packs;
+    expect(pack?.slug).toBe('bannieres-essentielles');
+    expect(pack?.designs).toHaveLength(6);
+    pack?.designs?.forEach((banner) => expect(wallpaperDesigns).toContainEqual(banner));
+    expect(parseAppearancePackContract({ domain: 'banner', designs: pack?.designs })?.designs).toHaveLength(6);
+  });
+
+  it('les six contours se lisent, aux clés uniques, et le contrat refuse un index de couleur hors palette', () => {
+    const [pack] = rings.packs;
+    expect(pack?.slug).toBe('contours-essentiels');
+    const contract = parseAvatarRingPackContract({ domain: 'avatar-ring', rings: pack?.rings });
+    expect(contract?.rings.map((ring) => ring.key)).toEqual(['filet', 'double-filet', 'perle', 'aurore', 'deco', 'laurier']);
+    const laurier = structuredClone(pack?.rings?.[5]) as { ornament: { paths: { color: number }[] } };
+    laurier.ornament.paths[0]!.color = 2;
+    expect(parseAvatarRingDesign(laurier)).toBeNull();
+    expect(AvatarRingPackContractSchema.safeParse({ domain: 'avatar-ring', rings: [pack?.rings?.[0], pack?.rings?.[0]] }).success).toBe(false);
+  });
+
+  it('le registre du pack de contours est lisible et ne sert que l’avatar', () => {
+    const [pack] = rings.packs;
+    const asset = (prefix: string, ext = 'webp') => ({ src: `${prefix}.${ext}`, bytes: 10, sha256: prefix.padEnd(64, '0') });
+    const { entries } = parsePackIndex([
+      { slug: pack?.slug, domain: 'avatar-ring', origin: 'builtin', version: 1, order: 0, installedByDefault: true, removable: false, hidden: false, contractSchema: 1, cover: asset('a1b2c3d4e5f60718'), preview: null, contract: asset('c1b2c3d4e5f60718', 'json'), strings: {}, downloadBytes: { story: 0, square: null }, names: { fr: { name: 'Contours', description: 'Six contours.' } }, usage: pack?.usage },
+    ]);
+    expect(entries).toHaveLength(1);
+    expect(canUseFrame(entries[0]!.usage!, { kind: 'avatar' })).toBe(true);
+    expect(canUseFrame(entries[0]!.usage!, { kind: 'call' })).toBe(false);
+  });
+});
+
+describe('les noms en sept langues', () => {
+  const keysOf = (lang: string) => read(`strings/${lang}.json`) as { packs: object; designs: object; rings: object; gamut: object; modes: object; avatarUsage: string };
+
+  it.each(PACK_LANGUAGES.map((lang) => [lang] as const))('%s nomme chaque pack, modèle, contour et couleur', (lang) => {
+    const strings = keysOf(lang);
+    expect(Object.keys(strings.designs).sort()).toEqual(wallpaperDesigns.map((design) => (design as { key: string }).key).sort());
+    expect(Object.keys(strings.rings)).toHaveLength(6);
+    expect(Object.keys(strings.gamut).sort()).toEqual([...GAMUT_KEYS].sort());
+    expect(Object.keys(strings.packs).sort()).toEqual([...wallpapers.packs, ...banners.packs, ...rings.packs].map((pack) => pack.slug).sort());
+    expect(Object.values(strings.designs).every((name) => typeof name === 'string' && name.length > 0)).toBe(true);
+  });
+});

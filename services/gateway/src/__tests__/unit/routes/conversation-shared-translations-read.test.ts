@@ -232,7 +232,10 @@ describe('GET /conversations/:id/shared-translations', () => {
 
       const res = await get(h, { messageIds: MSG_1, languages: 'fr' });
 
-      expect(res.json().data.sharedTranslations).toEqual([]);
+      // #7389 — la porte d'accès elle-même le refuse désormais, comme un
+      // non-participant : rien de la conversation ne sort, pas même une liste vide.
+      expect(res.statusCode).toBe(403);
+      expect(res.json().data).toBeUndefined();
     });
 
     it('répond 500 et ne sert rien quand le masquage personnel de l’appelant ne répond pas — jamais « il ne masque rien »', async () => {

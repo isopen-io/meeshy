@@ -4,7 +4,7 @@ import { useRef, useState } from 'react';
 import type { ReactNode } from 'react';
 
 import type { ApiResult } from '@/lib/api/http';
-import { createPackGestureGuard } from '@/lib/api/packs';
+import { createPackGestureGuard, newPurchaseRequestId } from '@/lib/api/packs';
 import { translateStickerPacks } from '@/lib/i18n-sticker-packs-catalog';
 import type { InterfaceLanguage } from '@/lib/interface-language';
 
@@ -40,7 +40,26 @@ export type PackShopAdapter<P extends ShopPack> = {
   description(pack: P): string;
   meta(pack: P): readonly string[];
   cover(pack: P): ReactNode;
+  /** En Meeshes ; `null` ou absent = gratuit. Affichage seulement. */
+  price?(pack: P): number | null;
+  /** La possession lue au serveur (`owned`) ; absent = possédé. Le client ne la décide jamais. */
+  owned?(pack: P): boolean;
+  /** `false` = pack inclus que le serveur refuse de retirer : aucun geste « Retirer » ne s'offre. Absent = retirable. */
+  removable?(pack: P): boolean;
+  /** L'achat d'un pack payant non possédé ; `requestId` est généré au geste et réutilisé au nouvel essai. */
+  purchase?(pack: P, requestId: string): Promise<ApiResult<{ readonly balance: number | null }>>;
+  /**
+   * Écrit la possession : AU GESTE (`confirmed === null`, le pack passe possédé sans attendre le réseau),
+   * puis à la confirmation du serveur (`{ balance }`, `null` si le serveur ne l'a pas dit).
+   */
+  applyPurchased?(queryClient: QueryClient, pack: P, confirmed: { readonly balance: number | null } | null): void;
 };
+
+type Notice = 'install' | 'insufficient' | 'purchase' | null;
+
+/** Un refus définitif oublie son `requestId` ; une panne réseau ou serveur le GARDE pour le nouvel essai. */
+const isRetryable = (failure: { readonly status: number; readonly code?: string }): boolean =>
+  failure.status === 0 || failure.status >= 500 || failure.code === 'TIMEOUT';
 
 export function PackShop<P extends ShopPack>({
   adapter,
@@ -58,7 +77,8 @@ export function PackShop<P extends ShopPack>({
 }) {
   const queryClient = useQueryClient();
   const guard = useRef(createPackGestureGuard());
-  const [failed, setFailed] = useState(false);
+  const [failure, setFailure] = useState<Notice>(null);
+  const requestIds = useRef(new Map<string, string>());
   const [flying, setFlying] = useState<ReadonlySet<string>>(new Set());
 
   const catalogue = useQuery({
@@ -71,13 +91,46 @@ export function PackShop<P extends ShopPack>({
     staleTime: 5 * 60 * 1000,
   });
 
+  const needsPurchase = (pack: P): boolean =>
+    adapter.purchase !== undefined && (adapter.price?.(pack) ?? null) !== null && adapter.owned?.(pack) === false;
+
+  const buy = async (pack: P) => {
+    const purchase = adapter.purchase;
+    if (purchase === undefined || !guard.current.tryBegin(pack.slug)) return;
+    setFlying((current) => new Set([...current, pack.slug]));
+    const requestId = requestIds.current.get(pack.slug) ?? newPurchaseRequestId();
+    requestIds.current.set(pack.slug, requestId);
+    const beforeCatalogue = queryClient.getQueryData(adapter.catalogueKey);
+    const beforeInstalled = queryClient.getQueryData(adapter.installedKey);
+    setFailure(null);
+    adapter.applyPurchased?.(queryClient, pack, null);
+    const result = await purchase(pack, requestId);
+    guard.current.end(pack.slug);
+    setFlying((current) => new Set([...current].filter((slug) => slug !== pack.slug)));
+    if (!result.ok && result.code === 'PACK_ALREADY_OWNED') {
+      requestIds.current.delete(pack.slug);
+      adapter.applyPurchased?.(queryClient, pack, { balance: null });
+      return;
+    }
+    if (!result.ok) {
+      if (!isRetryable(result)) requestIds.current.delete(pack.slug);
+      queryClient.setQueryData(adapter.catalogueKey, beforeCatalogue);
+      queryClient.setQueryData(adapter.installedKey, beforeInstalled);
+      setFailure(result.code === 'INSUFFICIENT_MEESHES' ? 'insufficient' : 'purchase');
+      return;
+    }
+    requestIds.current.delete(pack.slug);
+    adapter.applyPurchased?.(queryClient, pack, { balance: result.data.balance });
+  };
+
   const toggle = async (pack: P) => {
+    if (needsPurchase(pack)) return buy(pack);
     if (!guard.current.tryBegin(pack.slug)) return;
     setFlying((current) => new Set([...current, pack.slug]));
     const next = !pack.installed;
     const beforeCatalogue = queryClient.getQueryData(adapter.catalogueKey);
     const beforeInstalled = queryClient.getQueryData(adapter.installedKey);
-    setFailed(false);
+    setFailure(null);
     queryClient.setQueryData<readonly P[]>(adapter.catalogueKey, (list) =>
       (list ?? []).map((candidate) => (candidate.slug === pack.slug ? { ...candidate, installed: next } : candidate)),
     );
@@ -91,16 +144,21 @@ export function PackShop<P extends ShopPack>({
     if (!result.ok) {
       queryClient.setQueryData(adapter.catalogueKey, beforeCatalogue);
       queryClient.setQueryData(adapter.installedKey, beforeInstalled);
-      setFailed(true);
+      setFailure('install');
       return;
     }
     complete?.(queryClient);
   };
 
   const packs = (catalogue.data ?? []) as readonly P[];
-  const notice = failed
-    ? translateStickerPacks(language, 'stickerPacks.error.install')
-    : catalogue.isError
+  const notice =
+    failure === 'insufficient'
+      ? translateStickerPacks(language, 'packs.error.insufficient')
+      : failure === 'purchase'
+        ? translateStickerPacks(language, 'packs.error.purchase')
+        : failure === 'install'
+          ? translateStickerPacks(language, 'stickerPacks.error.install')
+          : catalogue.isError
       ? translateStickerPacks(language, 'stickerPacks.error.load')
       : '';
 
@@ -121,7 +179,11 @@ export function PackShop<P extends ShopPack>({
         <ul className="flex flex-col gap-2" aria-busy={catalogue.isPending}>
           {packs.map((pack) => {
             const title = adapter.title(pack);
-            const action = translateStickerPacks(language, pack.installed ? 'stickerPacks.uninstall' : 'stickerPacks.install');
+            const price = adapter.price?.(pack) ?? null;
+            const toBuy = needsPurchase(pack);
+            const action = toBuy
+              ? translateStickerPacks(language, 'packs.buy', { price: String(price) })
+              : translateStickerPacks(language, pack.installed ? 'stickerPacks.uninstall' : 'stickerPacks.install');
             return (
               <li key={pack.slug} data-shop-pack={pack.slug} className="flex items-center gap-3 rounded-2xl p-3" style={{ backgroundColor: 'var(--color-ios-card)' }}>
                 {adapter.cover(pack)}
@@ -133,25 +195,32 @@ export function PackShop<P extends ShopPack>({
                     {adapter.description(pack)}
                   </p>
                   <p className="text-caption" style={{ color: 'var(--color-ios-ink-3)' }}>
-                    {adapter.meta(pack).join(' · ')}
+                    {[...adapter.meta(pack), ...(price === null ? [] : [adapter.owned?.(pack) === false ? translateStickerPacks(language, 'packs.price', { price: String(price) }) : translateStickerPacks(language, 'packs.owned')])].join(' · ')}
                   </p>
                 </div>
-                <button
-                  type="button"
-                  data-shop-toggle={pack.slug}
-                  aria-pressed={pack.installed}
-                  aria-busy={flying.has(pack.slug)}
-                  aria-label={`${action} ${title}`}
-                  onClick={() => void toggle(pack)}
-                  className="min-h-11 shrink-0 rounded-full px-4 text-body font-semibold"
-                  style={
-                    pack.installed
-                      ? { backgroundColor: 'var(--color-ios-fill)', color: 'var(--color-ios-ink)' }
-                      : { backgroundColor: 'var(--accent, var(--color-ios-brand))', color: 'var(--color-ios-on-brand)' }
-                  }
-                >
-                  {action}
-                </button>
+                {pack.installed && !toBuy && adapter.removable?.(pack) === false ? (
+                  <span data-shop-included={pack.slug} className="shrink-0 px-4 text-body font-semibold" style={{ color: 'var(--color-ios-ink-2)' }}>
+                    {translateStickerPacks(language, 'packs.included')}
+                  </span>
+                ) : (
+                  <button
+                    type="button"
+                    data-shop-toggle={pack.slug}
+                    {...(toBuy ? {} : { 'aria-pressed': pack.installed })}
+                    data-shop-buy={toBuy ? pack.slug : undefined}
+                    aria-busy={flying.has(pack.slug)}
+                    aria-label={`${action} ${title}`}
+                    onClick={() => void toggle(pack)}
+                    className="min-h-11 shrink-0 rounded-full px-4 text-body font-semibold"
+                    style={
+                      pack.installed && !toBuy
+                        ? { backgroundColor: 'var(--color-ios-fill)', color: 'var(--color-ios-ink)' }
+                        : { backgroundColor: 'var(--accent, var(--color-ios-brand))', color: 'var(--color-ios-on-brand)' }
+                    }
+                  >
+                    {action}
+                  </button>
+                )}
               </li>
             );
           })}
