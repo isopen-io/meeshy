@@ -51,21 +51,22 @@ nonisolated public enum LottieFilm {
 
     // MARK: Lecture
 
-    /// Lit un `.lottie` hors du fil principal.
+    /// Lit un `.lottie` hors du fil principal, à son tour dans la file de
+    /// lecture.
     @concurrent
     public static func load(url: URL) async -> LottieFilmSource? {
-        read(url)
+        await withCheckedContinuation { continuation in
+            reading.async { continuation.resume(returning: read(url)) }
+        }
     }
 
-    /// Lit un `.lottie` depuis un appel SYNCHRONE. Sur le fil principal, la
-    /// lecture part sur une file de fond et le fil attend — quelques
-    /// millisecondes pour un sticker, que lottie-ios refuse de faire sur le
-    /// fil principal lui-même.
+    /// Lit un `.lottie` depuis un appel SYNCHRONE : la lecture part dans la
+    /// file de lecture et l'appelant attend — quelques millisecondes pour un
+    /// sticker, que lottie-ios refuse de faire sur le fil principal.
     public static func loadNow(url: URL) -> LottieFilmSource? {
-        guard Thread.isMainThread else { return read(url) }
         let pending = Pending()
         let done = DispatchSemaphore(value: 0)
-        DispatchQueue.global(qos: .userInitiated).async {
+        reading.async {
             pending.value = read(url)
             done.signal()
         }
@@ -79,11 +80,21 @@ nonisolated public enum LottieFilm {
         nonisolated deinit {}
     }
 
+    /// Une lecture à la fois : `DotLottieFile` échoue quand plusieurs fichiers
+    /// se décompressent en même temps — sur iPhone, 15 lectures simultanées
+    /// sur 17 rendaient une erreur et les cases de la feuille restaient vides
+    /// (recette du 2026-10-15). Une file série, et non un verrou : les tâches
+    /// en attente n'immobilisent aucun fil du pool coopératif. Une lecture
+    /// coûte quelques millisecondes ; le cache de lottie-ios sert ensuite les
+    /// suivantes sans décompresser.
+    private static let reading = DispatchQueue(label: "me.meeshy.lottie-film.reading", qos: .userInitiated)
+
     private static func read(_ url: URL) -> LottieFilmSource? {
         switch DotLottieFile.SynchronouslyBlockingCurrentThread.loadedFrom(filepath: url.path) {
         case .success(let file):
             return file.animations.first.map { LottieFilmSource($0.animation) }
-        case .failure:
+        case .failure(let error):
+            NSLog("[LottieFilm] lecture de %@ impossible : %@", url.lastPathComponent, String(describing: error))
             return nil
         }
     }
