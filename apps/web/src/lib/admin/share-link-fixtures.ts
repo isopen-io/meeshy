@@ -26,7 +26,7 @@ export const servedShareLink = (overrides: Readonly<Record<string, unknown>> = {
   currentUses: 12,
   maxConcurrentUsers: null,
   currentConcurrentUsers: 2,
-  expiresAt: '2026-10-15T18:00:00.000Z',
+  expiresAt: '2099-10-15T18:00:00.000Z',
   isActive: true,
   allowAnonymousMessages: true,
   allowAnonymousFiles: false,
