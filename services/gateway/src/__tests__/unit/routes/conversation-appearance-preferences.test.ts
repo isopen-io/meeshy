@@ -34,9 +34,14 @@ const INDEX = buildPackIndex({
 
 type Row = Record<string, unknown>;
 type Attachment = { mimeType: string; isViewOnce: boolean; isBlurred: boolean; effectFlags: number; viewOnceBurnedAt: Date | null; message: Row };
+const JOINED_AT = new Date('2026-06-01T00:00:00Z');
+let messageSeq = 0;
 const photo = (over: Partial<Attachment> = {}, message: Row = {}): Attachment => ({
   mimeType: 'image/jpeg', isViewOnce: false, isBlurred: false, effectFlags: 0, viewOnceBurnedAt: null,
-  message: { conversationId: CONVERSATION, deletedAt: null, expiresAt: null, ephemeralDuration: null, isViewOnce: false, isBlurred: false, effectFlags: 0, ...message },
+  message: {
+    id: `507f1f77bcf86cd7994${String((messageSeq += 1)).padStart(5, '0')}`, createdAt: new Date('2026-07-01T00:00:00Z'),
+    conversationId: CONVERSATION, deletedAt: null, expiresAt: null, ephemeralDuration: null, isViewOnce: false, isBlurred: false, effectFlags: 0, ...message,
+  },
   ...over,
 });
 const PHOTO_OK = '507f1f77bcf86cd799439f01';
@@ -50,6 +55,11 @@ const PHOTO_IN_FLAGGED_EPHEMERAL = '507f1f77bcf86cd799439f08';
 const PHOTO_IN_TIMED_MESSAGE = '507f1f77bcf86cd799439f09';
 const PHOTO_IN_FLAGGED_BLURRED = '507f1f77bcf86cd799439f0a';
 const PHOTO_NOT_MINE = '507f1f77bcf86cd799439f0b';
+const PHOTO_BEFORE_JOIN = '507f1f77bcf86cd799439f0c';
+const PHOTO_DELETED_FOR_ME = '507f1f77bcf86cd799439f0d';
+const PHOTO_BEFORE_CLEARED_HISTORY = '507f1f77bcf86cd799439f0e';
+const PHOTO_DELETED_FOR_ALL = '507f1f77bcf86cd799439f0f';
+const CLEARED_AT = new Date('2026-08-01T00:00:00Z');
 
 const attachments: Record<string, Attachment> = {
   [PHOTO_OK]: photo(),
@@ -63,18 +73,28 @@ const attachments: Record<string, Attachment> = {
   [PHOTO_IN_TIMED_MESSAGE]: photo({}, { ephemeralDuration: 30 }),
   [PHOTO_IN_FLAGGED_BLURRED]: photo({}, { effectFlags: MESSAGE_EFFECT_FLAGS.BLURRED }),
   [PHOTO_NOT_MINE]: photo({}, { conversationId: NOT_MINE }),
+  [PHOTO_BEFORE_JOIN]: photo({}, { createdAt: new Date('2026-05-01T00:00:00Z') }),
+  [PHOTO_DELETED_FOR_ME]: photo(),
+  [PHOTO_BEFORE_CLEARED_HISTORY]: photo({}, { createdAt: new Date('2026-07-15T00:00:00Z') }),
+  [PHOTO_DELETED_FOR_ALL]: photo({}, { deletedAt: new Date('2026-07-20T00:00:00Z') }),
 };
 
-function build(options: { owns?: readonly string[] } = {}) {
+function build(options: { owns?: readonly string[]; clearedHistory?: boolean } = {}) {
   const rows = new Map<string, Row>();
   const emits: { room: string; event: string; payload: any }[] = [];
   const key = (where: any) => `${where.userId_conversationId.userId}:${where.userId_conversationId.conversationId}`;
   const prisma = {
-    participant: { findFirst: jest.fn(async ({ where }: any) => (where.conversationId === NOT_MINE ? null : { id: 'p1' })) },
+    participant: {
+      findFirst: jest.fn(async ({ where }: any) =>
+        where.conversationId === NOT_MINE ? null : { id: 'p1', role: 'member', joinedAt: JOINED_AT, shareLinkId: null, historyVisibleFrom: null, permissions: { canViewHistory: false }, anonymousSession: null, user: { role: 'USER' } },
+      ),
+    },
+    userMessageDeletion: { findMany: jest.fn(async () => [{ messageId: attachments[PHOTO_DELETED_FOR_ME].message.id }]) },
     userConversationCategory: { findFirst: jest.fn(async () => null) },
     userPackOwnership: { findMany: jest.fn(async () => (options.owns ?? []).map((packKey) => ({ packKey }))) },
     messageAttachment: { findUnique: jest.fn(async ({ where }: any) => attachments[where.id] ?? null) },
     userConversationPreferences: {
+      findFirst: jest.fn(async () => (options.clearedHistory ? { clearHistoryBefore: CLEARED_AT } : null)),
       findUnique: jest.fn(async ({ where }: any) => rows.get(key(where)) ?? null),
       upsert: jest.fn(async ({ where, create, update }: any) => {
         const k = key(where);
@@ -100,7 +120,7 @@ function build(options: { owns?: readonly string[] } = {}) {
 describe('PUT /user-preferences/conversations/:id — appearance', () => {
   let env: ReturnType<typeof build>;
 
-  const boot = async (options: { owns?: readonly string[] } = {}) => {
+  const boot = async (options: { owns?: readonly string[]; clearedHistory?: boolean } = {}) => {
     env = build(options);
     await env.app.register(conversationPreferencesRoutes, { index: INDEX });
     await env.app.ready();
@@ -203,11 +223,25 @@ describe('PUT /user-preferences/conversations/:id — appearance', () => {
       ['d’un message éphémère par son seul bitfield', PHOTO_IN_FLAGGED_EPHEMERAL],
       ['d’un message à durée éphémère pas encore lu', PHOTO_IN_TIMED_MESSAGE],
       ['d’un message flouté par son seul bitfield', PHOTO_IN_FLAGGED_BLURRED],
+      ['d’un message supprimé pour tous', PHOTO_DELETED_FOR_ALL],
+      ['postée AVANT mon arrivée dans une conversation qui ne m’ouvre pas l’historique', PHOTO_BEFORE_JOIN],
+      ['d’un message que j’ai retiré de MA vue', PHOTO_DELETED_FOR_ME],
     ])('refuse une pièce %s : 404 ATTACHMENT_NOT_AVAILABLE, sans distinguer les causes', async (_label, id) => {
       const response = await put(photoBackground(id));
 
       expect(response.statusCode).toBe(404);
       expect(response.json().code).toBe('ATTACHMENT_NOT_AVAILABLE');
+      expect(env.rows.size).toBe(0);
+    });
+
+    it('refuse une pièce d’avant l’historique que j’ai vidé : le fond ne ressuscite pas ce que je ne lis plus', async () => {
+      await env.app.close();
+      await boot({ clearedHistory: true });
+
+      const before = await put(photoBackground(PHOTO_BEFORE_CLEARED_HISTORY));
+
+      expect(before.statusCode).toBe(404);
+      expect(before.json().code).toBe('ATTACHMENT_NOT_AVAILABLE');
       expect(env.rows.size).toBe(0);
     });
   });

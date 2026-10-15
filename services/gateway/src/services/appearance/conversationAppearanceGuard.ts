@@ -11,10 +11,14 @@
  *      `not-a-participant`, avant toute lecture de la pièce — un non-membre ne
  *      doit pas pouvoir sonder quelles pièces vivent où) ; puis la pièce jointe
  *      existe, appartient à un message de CETTE conversation, ni supprimé, ni
- *      éphémère, ni à vue unique, ni flouté (colonnes ET bitfield), et c'est
- *      une image non purgée — sinon 404 `ATTACHMENT_NOT_AVAILABLE`, sans
- *      distinguer les causes. Le serveur ne stocke QUE l'identifiant (E2EE
- *      compris : la pièce peut être chiffrée).
+ *      éphémère, ni à vue unique, ni flouté (colonnes ET bitfield), c'est
+ *      une image non purgée, et le lecteur LIT ce message (`readerMayReadMessage` :
+ *      plancher d'historique, message retiré de sa vue, historique vidé) —
+ *      sinon 404 `ATTACHMENT_NOT_AVAILABLE`, sans distinguer les causes. Un
+ *      fond ne ressuscite pas ce que le fil ne sert plus à ce lecteur, et la
+ *      route ne confirme pas l'existence d'une pièce d'avant son arrivée. Le
+ *      serveur ne stocke QUE l'identifiant (E2EE compris : la pièce peut être
+ *      chiffrée).
  *
  * L'appartenance reste AUSSI vérifiée par l'écrivain unique, pour tout fond.
  */
@@ -24,6 +28,7 @@ import { maskedAttachment } from '@meeshy/shared/utils/attachment-protection';
 import { messageProtection } from '@meeshy/shared/utils/message-protection';
 import { parseConversationAppearance, type ConversationAppearance } from '@meeshy/shared/types/conversation-appearance';
 import type { PackIndex } from '../packs/PackIndex';
+import { readerMayReadMessage } from '../messaging/messageReadAccess';
 
 export type AppearanceGuardOutcome =
   | { readonly kind: 'ok'; readonly appearance: ConversationAppearance }
@@ -60,7 +65,7 @@ async function isMember({ prisma, userId, conversationId }: AppearanceGuardParam
  * éphémère comprise) au niveau du message, `maskedAttachment` à celui de la
  * pièce. Le chiffrement n'est pas un refus : le serveur ne garde que l'id.
  */
-async function photoAvailable({ prisma, conversationId }: AppearanceGuardParams, attachmentId: string): Promise<boolean> {
+async function photoAvailable({ prisma, conversationId, userId }: AppearanceGuardParams, attachmentId: string): Promise<boolean> {
   const attachment = await prisma.messageAttachment.findUnique({
     where: { id: attachmentId },
     select: {
@@ -69,13 +74,13 @@ async function photoAvailable({ prisma, conversationId }: AppearanceGuardParams,
       isBlurred: true,
       effectFlags: true,
       viewOnceBurnedAt: true,
-      message: { select: { conversationId: true, deletedAt: true, expiresAt: true, ephemeralDuration: true, isViewOnce: true, isBlurred: true, effectFlags: true } },
+      message: { select: { id: true, createdAt: true, conversationId: true, deletedAt: true, expiresAt: true, ephemeralDuration: true, isViewOnce: true, isBlurred: true, effectFlags: true } },
     },
   });
   const message = attachment?.message;
   if (!attachment || !message) return false;
   const protection = messageProtection(message);
-  return (
+  const servable =
     message.conversationId === conversationId &&
     message.deletedAt == null &&
     !protection.ephemeral &&
@@ -83,8 +88,9 @@ async function photoAvailable({ prisma, conversationId }: AppearanceGuardParams,
     !protection.blurred &&
     attachment.mimeType.startsWith('image/') &&
     !maskedAttachment(attachment) &&
-    attachment.viewOnceBurnedAt == null
-  );
+    attachment.viewOnceBurnedAt == null;
+  if (!servable) return false;
+  return readerMayReadMessage(prisma, { reader: { kind: 'user', userId }, message, now: new Date(), whenHidingUnreadable: 'refuse' });
 }
 
 export async function validateConversationAppearance(params: AppearanceGuardParams): Promise<AppearanceGuardOutcome> {
