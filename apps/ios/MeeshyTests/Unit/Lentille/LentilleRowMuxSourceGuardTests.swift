@@ -189,4 +189,23 @@ final class LentilleRowMuxSourceGuardTests: XCTestCase {
             "La branche ON garde son portillon, un cran plus bas, là où l'élection le ré-évalue."
         )
     }
+
+    // MARK: - Trois actions au plus par côté (#10579)
+
+    func test_swipeActions_eachSideDeclaresAtMostThree() throws {
+        let code = normalizedCode(try source(at: "Meeshy/Features/Main/Views/ConversationListView.swift"))
+        guard let leading = code.range(of: "private func leadingSwipeActions("),
+              let trailing = code.range(of: "private func trailingSwipeActions("),
+              let end = code.range(of: "return actions }", range: trailing.upperBound..<code.endIndex) else {
+            XCTFail("leadingSwipeActions / trailingSwipeActions introuvables")
+            return
+        }
+        let leadingBody = String(code[leading.upperBound..<trailing.lowerBound])
+        let trailingBody = String(code[trailing.upperBound..<end.lowerBound])
+        XCTAssertLessThanOrEqual(occurrences(of: "SwipeAction(", in: leadingBody), 3)
+        XCTAssertLessThanOrEqual(
+            occurrences(of: "SwipeAction(", in: trailingBody), 3,
+            "SwipeableRow tronque à trois : une quatrième action déclarée ici ferait disparaître « Masquer » en silence."
+        )
+    }
 }

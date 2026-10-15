@@ -6,6 +6,8 @@ import { ShareLinkSheet } from '@/components/share-link-sheet';
 import type { StoryRailProps } from '@/components/story-rail';
 import { publicWebOrigin } from '@/lib/links/public-origin';
 import { apiDeps } from '@/lib/api/deps';
+import { translate } from '@/lib/i18n-catalog';
+import { currentInterfaceLanguage } from '@/lib/interface-language';
 import type { Conversation } from '@/lib/api/types';
 import { Link } from '@/routes/route-table';
 
@@ -50,6 +52,7 @@ export function ListHeader({
 }) {
   const [shareSheetOpen, setShareSheetOpen] = useState(false);
   const [feedback, setFeedback] = useState<string | null>(null);
+  const language = currentInterfaceLanguage();
 
   return (
     /* `gap-1` ET NON `gap-3` (#10101) : chaque porte fait déjà 44 px autour
@@ -62,7 +65,7 @@ export function ListHeader({
       <button
         type="button"
         onClick={() => setShareSheetOpen(true)}
-        aria-label="Créer un lien de partage"
+        aria-label={translate(language, 'list.header.share')}
         className="grid size-11 shrink-0 place-items-center rounded-chip focus-visible:outline-2 focus-visible:outline-offset-2"
         style={{ color: 'var(--color-ios-brand)', outlineColor: 'var(--color-ios-brand)' }}
       >
@@ -75,7 +78,7 @@ export function ListHeader({
       </button>
       <Link
         to="conversationsNew"
-        aria-label="Nouvelle conversation"
+        aria-label={translate(language, 'list.header.new')}
         className="grid size-11 shrink-0 place-items-center rounded-chip focus-visible:outline-2 focus-visible:outline-offset-2"
         style={{ color: 'var(--color-ios-brand)', outlineColor: 'var(--color-ios-brand)' }}
       >
@@ -95,7 +98,7 @@ export function ListHeader({
       */}
       <Link
         to="progression"
-        aria-label="Progression — badges, niveau et série"
+        aria-label={translate(language, 'list.header.progression')}
         className="grid size-11 shrink-0 place-items-center rounded-chip focus-visible:outline-2 focus-visible:outline-offset-2"
         style={{ color: 'var(--color-ios-brand)', outlineColor: 'var(--color-ios-brand)' }}
       >

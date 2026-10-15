@@ -35,7 +35,7 @@ const MEDIA_VOICE_EN_ATTACHMENT_ID = 'media-2-a1';
 const MEDIA_VOICE_DE_ATTACHMENT_ID = 'media-3-a1';
 const MEDIA_BROKEN_IMAGE_ATTACHMENT_ID = 'media-5-a1';
 const MEDIA_BROKEN_VOICE_ATTACHMENT_ID = 'media-6-a1';
-const PLAY_LABEL = "Lire l'audio";
+const PLAY_LABEL = 'Lire l’audio';
 const PAUSE_LABEL = 'Mettre en pause';
 
 /**
@@ -688,7 +688,7 @@ export async function checkThreadMedia({ browser, BASE, expect, setScheme, AA_TH
   );
   await flagOf('media-3').click();
   await mediaPage.waitForFunction(
-    (id) => document.querySelector(`[data-attachment="${id}"] button`)?.getAttribute('aria-label') === "Lire l'audio",
+    (id) => document.querySelector(`[data-attachment="${id}"] button`)?.getAttribute('aria-label') === 'Lire l’audio',
     MEDIA_VOICE_DE_ATTACHMENT_ID,
     { timeout: 3000 },
   ).catch(() => {});

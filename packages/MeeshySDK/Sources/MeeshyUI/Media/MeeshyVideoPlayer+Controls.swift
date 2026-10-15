@@ -370,6 +370,8 @@ internal struct _FullscreenOverlayControls: View {
     /// La ligne `largeur × hauteur · poids · durée` (#9577) — `nil` ⇒ aucune.
     var infoSegments: [MediaInfoLine.Segment] = []
     var declaredDuration: Double = 0
+    /// Le média est déjà dans l'album Meeshy (#10370) : une coche, pas une flèche.
+    var isInAlbum = false
 
     /// **De haut en bas : barre haute, scène, progression sur toute la largeur
     /// de l'écran, ligne d'informations** (#9577, directive porteur
@@ -475,7 +477,9 @@ internal struct _FullscreenOverlayControls: View {
         } else {
             FullscreenChromeButton(
                 systemImage: saveGlyph,
-                label: String(localized: "common.save", defaultValue: "Enregistrer", bundle: .module)
+                label: isInAlbum && saveState == .idle
+                    ? PhotoAlbumSaveFeedback.alreadyInAlbumMessage
+                    : String(localized: "common.save", defaultValue: "Enregistrer", bundle: .module)
             ) {
                 exitGate.perform { onSave?() }
             }
@@ -485,7 +489,8 @@ internal struct _FullscreenOverlayControls: View {
 
     private var saveGlyph: String {
         switch saveState {
-        case .idle, .saving: return FullscreenChromeSymbol.save
+        case .idle: return isInAlbum ? FullscreenChromeSymbol.saved : FullscreenChromeSymbol.save
+        case .saving: return FullscreenChromeSymbol.save
         case .saved: return FullscreenChromeSymbol.saved
         case .failed: return FullscreenChromeSymbol.close
         }

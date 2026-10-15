@@ -345,10 +345,12 @@ export async function unifiedPreferenceRoutes(fastify: FastifyInstance): Promise
         // vérifier, et la mesure sur staging l'a partagée en deux : pour la
         // famille AUDIO une garde d'USAGE existe et fait le travail, donc
         // stocker `true` n'applique rien ; pour `telemetryEnabled` et
-        // `allowAnalytics` aucun lecteur d'usage n'existe — d'où leur passage à
-        // `false` par défaut dans le même lot, plutôt qu'une garde d'écriture
-        // qui verrouillait trois catégories de réglages sur sept pour un compte
-        // neuf. Détail complet : `preference-router-factory.ts`, même lot.
+        // `allowAnalytics` aucune garde d'usage n'existe côté passerelle —
+        // d'où leur passage à `false` par défaut dans le même lot, plutôt
+        // qu'une garde d'écriture qui verrouillait trois catégories de
+        // réglages sur sept pour un compte neuf. `allowAnalytics` est en
+        // revanche LU par les clients (#10405 : le traceur d'engagement iOS
+        // s'éteint à `false`). Détail complet : `preference-router-factory.ts`.
         const violations = (
           await Promise.all(
             writes.map(async (write) =>

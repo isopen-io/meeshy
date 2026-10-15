@@ -182,6 +182,17 @@ export function ShareLinksStats({ language, summary }: { readonly language: Inte
   );
 }
 
+/**
+ * #10381 — miroir `ShareLinkDetailCopy.rowExpiry` : la ligne dit l'échéance
+ * choisie à la création ; un lien sans échéance n'ajoute rien à sa ligne.
+ */
+export function shareLinkExpiryLabel(language: InterfaceLanguage, expiresAt: string | null, now: Date = new Date()): string | null {
+  if (expiresAt === null) return null;
+  const deadline = new Date(expiresAt);
+  if (deadline.getTime() <= now.getTime()) return translate(language, 'conversation.card.expired');
+  return `${translate(language, 'links.detail.expiresAt')} ${new Intl.DateTimeFormat(language, { dateStyle: 'medium' }).format(deadline)}`;
+}
+
 /** Miroir `ShareLinksView.shareLinkRow` — le lien ouvre le détail, « copier » copie son adresse. */
 export function ShareLinkRow({
   language,
@@ -196,11 +207,13 @@ export function ShareLinkRow({
 }) {
   const name = displayNameOf(link);
   const joined = joinedLabel(language, link.currentUses);
+  const expiry = shareLinkExpiryLabel(language, link.expiresAt);
   const label = new Intl.ListFormat(language, { type: 'unit', style: 'short' }).format([
     name,
     statusLabel(language, link.isActive),
     joined,
     ...(link.conversationTitle === null ? [] : [link.conversationTitle]),
+    ...(expiry === null ? [] : [expiry]),
   ]);
   return (
     <li data-share-link={link.linkId} data-share-link-active={link.isActive} className="relative flex items-center gap-1 rounded-card ps-3.5 pe-1" style={{ ...CARD_STYLE, minHeight: SHARE_LINK_ROW_HEIGHT }}>
@@ -228,6 +241,11 @@ export function ShareLinkRow({
             {link.conversationTitle === null ? null : (
               <span data-share-link-conversation className="truncate" style={{ color: INK_2 }}>
                 · {link.conversationTitle}
+              </span>
+            )}
+            {expiry === null ? null : (
+              <span data-share-link-expiry className="shrink-0" style={{ color: INK_2 }}>
+                · {expiry}
               </span>
             )}
           </span>

@@ -27,4 +27,19 @@ public class ScreenGuardRulesTest {
         assertFalse(ScreenGuardRules.secure(Boolean.FALSE));
         assertFalse(ScreenGuardRules.secure(null));
     }
+
+    /** #10508 — la capture d'ecran ne se detecte qu'a partir d'Android 14 (API 34), et rien avant. */
+    @Test
+    public void screenshotsAreDetectedFromApi34Only() {
+        assertFalse(ScreenGuardRules.detectsScreenshots(33));
+        assertTrue(ScreenGuardRules.detectsScreenshots(34));
+        assertTrue(ScreenGuardRules.detectsScreenshots(35));
+    }
+
+    /** #10508 — l'enregistrement ou la recopie ne se detecte qu'a partir d'Android 15 (API 35). */
+    @Test
+    public void recordingIsDetectedFromApi35Only() {
+        assertFalse(ScreenGuardRules.detectsRecording(34));
+        assertTrue(ScreenGuardRules.detectsRecording(35));
+    }
 }

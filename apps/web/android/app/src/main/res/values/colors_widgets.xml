@@ -1,0 +1,12 @@
+<?xml version="1.0" encoding="utf-8"?>
+<!-- #10626 — les widgets d'ecran d'accueil : surface et encres des jetons iOS
+     (packages/design-tokens/ios.css), marque = brandPrimary / brandDeep de
+     `MeeshyWidgets.swift` (WidgetColors). -->
+<resources>
+    <color name="widget_surface">#FFFFFF</color>
+    <color name="widget_ink">#111827</color>
+    <color name="widget_ink_2">#6B7280</color>
+    <color name="widget_brand">#6366F1</color>
+    <color name="widget_brand_deep">#4338CA</color>
+    <color name="widget_on_brand">#FFFFFF</color>
+</resources>

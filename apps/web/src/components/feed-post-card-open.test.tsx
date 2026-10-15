@@ -129,7 +129,7 @@ describe('FeedPostCard — toucher la publication ouvre sa fiche', () => {
 
     const lien = lienOuverture();
     expect(lien).not.toBeNull();
-    expect(lien?.getAttribute('href')).toBe('/post/p1');
+    expect(lien?.getAttribute('href')).toBe('/post/p1?from=feed');
     /* « il y a 2 h » ne dit pas OÙ l'on va — et c'est le seul contrôle du fil
        qui y mène pour qui n'y voit pas. */
     expect(lien?.getAttribute('aria-label')).toBe('Ouvrir la publication de Léa');
@@ -138,7 +138,7 @@ describe('FeedPostCard — toucher la publication ouvre sa fiche', () => {
 
   test('le texte est COUVERT par un second lien vers la même fiche', () => {
     monte(basePost({ content: 'Bonjour à tous', originalLanguage: 'fr' }));
-    expect(calqueCorps()?.getAttribute('href')).toBe('/post/p1');
+    expect(calqueCorps()?.getAttribute('href')).toBe('/post/p1?from=feed');
   });
 
   /**
@@ -198,7 +198,7 @@ describe('FeedPostCard — toucher la publication ouvre sa fiche', () => {
   test('une publication sans texte n’a pas de calque, et s’ouvre quand même par l’heure', () => {
     monte(basePost({ media: [{ id: 'm1', mimeType: 'image/jpeg', fileUrl: 'a.jpg', order: 0 }] }));
     expect(calqueCorps()).toBeNull();
-    expect(lienOuverture()?.getAttribute('href')).toBe('/post/p1');
+    expect(lienOuverture()?.getAttribute('href')).toBe('/post/p1?from=feed');
   });
 
   /** LA FICHE NE MÈNE PAS À ELLE-MÊME : `routes/post.tsx` monte la MÊME carte
@@ -217,7 +217,7 @@ describe('FeedPostCard — toucher la publication ouvre sa fiche', () => {
     monte(basePost({ id: 'reel-42', type: 'REEL' }));
     expect(lienOuverture()).toBeNull();
     expect(calqueCorps()).toBeNull();
-    expect(container.querySelector('a[data-feed-reel-open]')?.getAttribute('href')).toBe('/reels?seed=reel-42');
+    expect(container.querySelector('a[data-feed-reel-open]')?.getAttribute('href')).toBe('/reels?seed=reel-42&from=feed');
   });
 });
 

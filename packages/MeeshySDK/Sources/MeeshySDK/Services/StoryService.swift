@@ -7,7 +7,6 @@ public protocol StoryServiceProviding: Sendable {
     /// le gateway ne renvoie que les stories créées/modifiées depuis ce
     /// timestamp. `nil` = tray complet (comportement historique).
     func list(cursor: String?, limit: Int, updatedSince: Date?) async throws -> PaginatedAPIResponse<[APIPost]>
-    func markViewed(storyId: String) async throws
     func delete(storyId: String) async throws
     func react(storyId: String, emoji: String) async throws
     func repost(storyId: String) async throws
@@ -74,16 +73,6 @@ public final class StoryService: StoryServiceProviding, @unchecked Sendable {
         )
         cachePosts(response.data)
         return response
-    }
-
-    public func markViewed(storyId: String) async throws {
-        // Le gateway renvoie `{ viewed: true }` — une valeur **Bool**. Décoder en
-        // `[String: String]` faisait échouer le décodage à CHAQUE vue (Bool ≠
-        // String) ; l'exception était avalée par le `catch` silencieux côté
-        // ViewModel, masquant du même coup les vrais échecs réseau (la story
-        // pouvait alors réapparaître non-vue au prochain `list()`). On décode
-        // donc la forme réelle. (2026-06-01)
-        let _: APIResponse<[String: Bool]> = try await api.request(PostsEndpoint.byPostIdView(postId: storyId), method: "POST")
     }
 
     public func delete(storyId: String) async throws {

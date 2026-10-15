@@ -433,11 +433,16 @@ final class WidgetDataManager: NotificationWidgetSink {
     /// portée de toute résolution ultérieure. Le publier brut montrait le
     /// dernier message dans la langue de l'EXPÉDITEUR pendant que la même
     /// conversation, ouverte dans l'app, affichait sa traduction.
+    ///
+    /// Et pour la même raison, un message qui disparaît n'y laisse que son
+    /// libellé de protection (#9622, `OutsidePreview`) : l'écran d'accueil n'a
+    /// aucune couche sécurisée, et garde le texte jusqu'au prochain
+    /// rafraîchissement — après la destruction du message.
     private func formatLastMessage(
         _ conv: MeeshyConversation,
         preferredLanguages: [String]
     ) -> String {
-        if let preview = conv.resolvedLastMessagePreview(preferredLanguages: preferredLanguages),
+        if let preview = OutsidePreview.lastMessage(of: conv, preferredLanguages: preferredLanguages),
            !preview.isEmpty {
             if let sender = conv.lastMessageSenderName, conv.type != .direct {
                 return "\(sender): \(preview)"

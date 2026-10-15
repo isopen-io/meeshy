@@ -163,7 +163,7 @@ final class StoryHeaderMenuWiringGuardTests: XCTestCase {
     /// « Enregistrer la vidéo » y remplace l'entrée « Enregistrer » du menu.
     func test_shareWithFriend_carriesTheStoryFile_forSaveVideo() throws {
         let text = try header()
-        XCTAssertTrue(text.contains("fileSource: .story(story, authorUsername: currentGroup?.username)"))
+        XCTAssertTrue(text.contains("fileSource: .story(story, author: currentGroup.map(StoryExportAuthor.init(group:)))"))
         XCTAssertTrue(text.contains("ShareSheet(activityItems: link.activityItems)"))
     }
 
@@ -184,9 +184,9 @@ final class StoryHeaderMenuWiringGuardTests: XCTestCase {
         XCTAssertTrue(canvas[headerCall.upperBound...].prefix(1200).contains("showExportShareSheet: $showExportShareSheet"))
         let viewer = try MyStoriesSourceCorpus.text(of: "Meeshy/Features/Main/Views/StoryViewerView.swift")
         XCTAssertTrue(viewer.contains(".sheet(isPresented: $showExportShareSheet"))
-        XCTAssertTrue(viewer.contains("viewModel: exportShareViewModel, authorUsername: currentGroup?.username"))
+        XCTAssertTrue(viewer.contains("viewModel: exportShareViewModel, author: currentGroup.map(StoryExportAuthor.init(group:))"))
         let sheet = try MyStoriesSourceCorpus.text(of: "Meeshy/Features/Main/Views/StoryExportShareSheet.swift")
         XCTAssertTrue(sheet.contains("languagePicker"), "La feuille garde le choix de la langue à graver.")
-        XCTAssertTrue(sheet.contains("viewModel.startExport(story: story, authorUsername: authorUsername)"))
+        XCTAssertTrue(sheet.contains("viewModel.startExport(story: story, author: author)"))
     }
 }

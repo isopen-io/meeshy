@@ -135,6 +135,9 @@ struct ThemedMessageBubble: View {
     var senderIsHere: ConversationHere = .absent
     var senderMoodEmoji: String? = nil
     var senderStoryRingState: StoryRingState = .none
+    /// Toucher la pastille d'humeur de l'auteur (#10529) — l'hôte ouvre la bulle
+    /// d'humeur (emoji + texte) à l'ancre remise. Hors `==` : une fermeture.
+    var onSenderMoodTap: ((CGPoint) -> Void)? = nil
     var onViewStory: (() -> Void)? = nil
     var onAddReaction: ((String) -> Void)? = nil
     var onToggleReaction: ((String) -> Void)? = nil
@@ -170,7 +173,7 @@ struct ThemedMessageBubble: View {
     var messageAudioItems: [ConversationViewModel.AudioItem] = []
     /// Cold-open (F1) : nom de conversation / file "à suivre" — forwardés
     /// jusqu'à `AudioMediaView` (`BubbleStandardLayout` -> `AudioMediaView`/
-    /// `AudioCarouselView`) pour que le plein écran audio ouvert SANS
+    /// `AudioStackView`) pour que le plein écran audio ouvert SANS
     /// lecture déjà active porte la même carte Now Playing / avance auto que
     /// `ConversationViewModel.playAudio(attachmentId:)`. `nil`-default garde
     /// les surfaces sans conversation (previews) inchangées.
@@ -349,7 +352,7 @@ struct ThemedMessageBubble: View {
                     if let sticker = content.sticker {
                         stickerLayout(content: content, sticker: sticker)
                     } else {
-                        standardLayout(content: content)
+                        standardLayout(content: content).environment(\.bubbleSenderMoodTap, onSenderMoodTap)
                     }
                 }
                 // #9574, #9617 — annoncé OU noir : une vue unique, et une

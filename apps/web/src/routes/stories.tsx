@@ -13,6 +13,7 @@ import { currentInterfaceLanguage, type InterfaceLanguage } from '@/lib/interfac
 import { initialsOf, participantAvatarOf } from '@/lib/view/conversation';
 import { groupStoriesByAuthor, storyAuthorLabel, type StoryTrayGroup } from '@/lib/view/story-tray';
 import { useSearch } from '@/lib/router';
+import { openLinkProps, useImpressionRef } from '@/lib/view/reading-telemetry';
 import { Link } from '@/routes/route-table';
 
 /* LA COQUILLE COMMUNE (#6149) — extraite dans `stories-parts.tsx` pour que
@@ -81,6 +82,7 @@ export function StoryRow({ language, group }: { readonly language: InterfaceLang
     <Link
       to="story"
       params={{ post: group.entryStoryId }}
+      {...(group.isMine ? {} : openLinkProps(group.entryStoryId, 'story_rail'))}
       className="flex w-full items-center gap-3 rounded-card px-3 py-2.5"
       style={{ backgroundColor: 'var(--color-ios-card)' }}
     >
@@ -109,6 +111,16 @@ export function StoryRow({ language, group }: { readonly language: InterfaceLang
         </span>
       </span>
     </Link>
+  );
+}
+
+/** Une ligne de la liste compte son impression comme une tuile du rail (#10483). */
+export function StoryRowItem({ language, group }: { readonly language: InterfaceLanguage; readonly group: StoryTrayGroup }) {
+  const impressionRef = useImpressionRef(group.isMine ? undefined : group.entryStoryId, 'story', 'story_rail');
+  return (
+    <li ref={impressionRef}>
+      <StoryRow language={language} group={group} />
+    </li>
   );
 }
 
@@ -151,9 +163,7 @@ export default function StoriesScreen() {
         ) : (
           <ul className="flex flex-col gap-2 py-2">
             {montres.map((g) => (
-              <li key={g.authorId}>
-                <StoryRow language={language} group={g} />
-              </li>
+              <StoryRowItem key={g.authorId} language={language} group={g} />
             ))}
           </ul>
         )}

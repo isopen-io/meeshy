@@ -50,6 +50,9 @@ public struct ConversationUserState: Codable, Hashable, Sendable {
 
     public var customName: String?
     public var reaction: String?
+    /// Le fond et l'accent PERSONNELS de la conversation (#10631). `nil` =
+    /// Signature + accent calculé ; jamais partagé avec les autres membres.
+    public var appearance: ConversationAppearance?
     /// User-defined free-form tags (matches the Prisma `String[]` shape).
     /// `MeeshyConversation.tags` (the existing `[MeeshyConversationTag]`
     /// field) remains a separate display-layer concern until Phase 6/7
@@ -97,6 +100,7 @@ public struct ConversationUserState: Codable, Hashable, Sendable {
         clearHistoryBefore: Date? = nil,
         customName: String? = nil,
         reaction: String? = nil,
+        appearance: ConversationAppearance? = nil,
         tags: [String] = [],
         sectionId: String? = nil,
         orderInCategory: Int? = nil,
@@ -120,6 +124,7 @@ public struct ConversationUserState: Codable, Hashable, Sendable {
         self.clearHistoryBefore = clearHistoryBefore
         self.customName = customName
         self.reaction = reaction
+        self.appearance = appearance
         self.tags = tags
         self.sectionId = sectionId
         self.orderInCategory = orderInCategory
@@ -165,6 +170,7 @@ public struct ConversationUserState: Codable, Hashable, Sendable {
         merged.clearHistoryBefore = clearHistoryBefore
         merged.customName = customName
         merged.reaction = reaction
+        merged.appearance = appearance
         merged.tags = tags
         merged.sectionId = sectionId
         merged.orderInCategory = orderInCategory
@@ -205,6 +211,7 @@ public struct ConversationUserState: Codable, Hashable, Sendable {
             clearHistoryBefore: try c.decodeIfPresent(Date.self, forKey: .clearHistoryBefore),
             customName: try c.decodeIfPresent(String.self, forKey: .customName),
             reaction: try c.decodeIfPresent(String.self, forKey: .reaction),
+            appearance: try c.decodeIfPresent(ConversationAppearance.self, forKey: .appearance),
             tags: try c.decodeIfPresent([String].self, forKey: .tags) ?? [],
             sectionId: try c.decodeIfPresent(String.self, forKey: .sectionId),
             orderInCategory: try c.decodeIfPresent(Int.self, forKey: .orderInCategory),

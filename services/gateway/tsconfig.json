@@ -32,8 +32,8 @@
     "rootDir": "./",
     "baseUrl": "./",
     "paths": {
-      "@meeshy/shared": ["../../packages/shared/dist/index.d.ts"],
-      "@meeshy/shared/*": ["../../packages/shared/dist/*"],
+      "@meeshy/shared": ["../../packages/shared/dist/index.d.ts", "./packages/shared/dist/index.d.ts"],
+      "@meeshy/shared/*": ["../../packages/shared/dist/*", "./packages/shared/dist/*"],
       "@shared/*": ["./shared/*"]
     },
     "declaration": true,

@@ -23,6 +23,7 @@ import { SmsService } from './SmsService';
 import { GeoIPService } from './GeoIPService';
 import { normalizePhoneWithCountry } from '../utils/normalize';
 import { enhancedLogger } from '../utils/logger-enhanced';
+import { unsetOrNull } from '../utils/prisma-unset';
 
 // Logger dédié pour PhonePasswordResetService
 const logger = enhancedLogger.child({ module: 'PhonePasswordResetService' });
@@ -487,11 +488,26 @@ export class PhonePasswordResetService {
         return { success: false, error: 'invalid_code' };
       }
 
-      // 5. Generate password reset token (same format as email reset)
+      // 5. Le jeton SMS se consomme D'ABORD, par une écriture CONDITIONNELLE
+      // (#10475) : deux vérifications concurrentes du même code passaient
+      // toutes deux la lecture de l'étape 2 et émettaient chacune un jeton de
+      // réinitialisation. `usedAt` d'un jeton frais est ABSENT : `unsetOrNull`.
+      const completed = await this.prisma.phonePasswordResetToken.updateMany({
+        where: { id: token.id, isRevoked: false, verificationStep: 'CODE_PENDING', ...unsetOrNull('usedAt') },
+        data: {
+          usedAt: new Date(),
+          verificationStep: 'COMPLETED'
+        }
+      });
+      if (completed.count !== 1) {
+        return { success: false, error: 'token_expired' };
+      }
+
+      // 6. Generate password reset token (same format as email reset)
       const resetToken = crypto.randomBytes(32).toString('base64url');
       const resetTokenHash = crypto.createHash('sha256').update(resetToken).digest('hex');
 
-      // 6. Create password reset token in database
+      // 7. Create password reset token in database
       await this.prisma.passwordResetToken.create({
         data: {
           userId: token.userId,
@@ -499,15 +515,6 @@ export class PhonePasswordResetService {
           expiresAt: new Date(Date.now() + 15 * 60 * 1000), // 15 min
           ipAddress,
           userAgent
-        }
-      });
-
-      // 7. Mark phone reset token as used
-      await this.prisma.phonePasswordResetToken.update({
-        where: { id: token.id },
-        data: {
-          usedAt: new Date(),
-          verificationStep: 'COMPLETED'
         }
       });
 

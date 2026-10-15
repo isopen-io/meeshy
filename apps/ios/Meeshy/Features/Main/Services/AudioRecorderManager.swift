@@ -128,6 +128,9 @@ final class AudioRecorderManager: ObservableObject, AudioRecordingProviding {
         levelHistory = Array(repeating: 0, count: 15)
         audioLevels = levelHistory
 
+        // Un second démarrage sans arrêt entre les deux laissait l'ancien minuteur tourner à 20 Hz
+        // jusqu'à la fin du processus.
+        timer?.invalidate()
         timer = Timer.scheduledTimer(withTimeInterval: 0.05, repeats: true) { [weak self] _ in
             Task { @MainActor in self?.updateMetering() }
         }

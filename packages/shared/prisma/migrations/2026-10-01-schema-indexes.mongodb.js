@@ -54,6 +54,7 @@ const specs = [
   { collection: 'StoryBackgroundAudio', name: 'Sound_uploaderId_contentHash_key', key: { uploaderId: 1, contentHash: 1 }, unique: true },
   { collection: 'User', name: 'User_referralCode_key', key: { referralCode: 1 }, unique: true, partialFilterExpression: { referralCode: { $type: 'string' } } },
   { collection: 'UserConversationPreferences', name: 'UserConversationPreferences_userId_conversationId_key', key: { userId: 1, conversationId: 1 }, unique: true },
+  { collection: 'UserPackOwnership', name: 'UserPackOwnership_userId_packKey_key', key: { userId: 1, packKey: 1 }, unique: true },
   { collection: 'UserSticker', name: 'UserSticker_userId_contentHash_key', key: { userId: 1, contentHash: 1 }, unique: true },
   { collection: 'UserSticker', name: 'UserSticker_userId_lastUsedAt_idx', key: { userId: 1, lastUsedAt: 1 } },
   { collection: 'UserStickerPack', name: 'UserStickerPack_userId_packSlug_key', key: { userId: 1, packSlug: 1 }, unique: true },

@@ -178,8 +178,10 @@ describe('le selfie', () => {
     const stage = host.querySelector<HTMLElement>('[data-photo-stage]');
     expect(stage?.classList.contains('shrink-0')).toBe(true);
     expect(stage?.classList.contains('w-full')).toBe(false);
-    expect(stage?.classList.contains('w-[min(100%,calc(62dvh*9/16))]')).toBe(true);
     const style = (stage?.getAttribute('style') ?? '').replace(/\s+/g, '');
+    // La largeur bornée par la hauteur vit dans le style (`min(100%, calc(62dvh * 9 / 16))`, que happy-dom ne relit pas) :
+    // la classe arbitraire d'avant n'avait AUCUNE règle dans la feuille servie (gate check-utilities, CI dev du 2026-10-13).
+    expect([...(stage?.classList ?? [])].some((name) => name.startsWith('w-['))).toBe(false);
     expect(style).toContain('aspect-ratio:9/16');
     expect(style).not.toContain('max-height');
   });

@@ -146,6 +146,7 @@ export function FocusStrip({
   reactions,
   myReactions,
   onToggleReaction,
+  reactorsFor,
 }: {
   readonly servedLanguage: string;
   readonly originalLanguage: string;
@@ -171,6 +172,8 @@ export function FocusStrip({
    * Absente (hôte en lecture seule), la capsule reste inerte.
    */
   readonly onToggleReaction?: (emoji: string) => void;
+  /** Le message dont une capsule maintenue ouvre « qui a réagi » (#10583). */
+  readonly reactorsFor?: string;
 }) {
   /* `PrismPastille` rend `null` quand la langue servie EST la langue
      d'origine (rien à basculer) : sans cette garde, sa capsule restait
@@ -205,7 +208,7 @@ export function FocusStrip({
             glyph={glyph}
             count={count}
             mine={myReactions?.includes(glyph) ?? false}
-            {...(onToggleReaction === undefined ? {} : { onToggle: () => onToggleReaction(glyph) })}
+            {...(onToggleReaction === undefined ? {} : { onToggle: () => onToggleReaction(glyph), ...(reactorsFor === undefined ? {} : { reactorsFor }) })}
           />
         </span>
       ))}

@@ -490,7 +490,7 @@ final class CommunitySettingsViewModel: ObservableObject {
             var community = apiCommunity.toCommunity()
             community.color = localColor
             community.emoji = localEmoji
-            postToast(message: String(localized: "community.settings.toast.updated", defaultValue: "Communaute mise a jour", bundle: .module), isSuccess: true)
+            postToast(message: String(localized: "community.settings.toast.updated", defaultValue: "Communauté mise à jour", bundle: .module), isSuccess: true)
             return community
         } catch {
             errorMessage = error.localizedDescription
@@ -504,9 +504,9 @@ final class CommunitySettingsViewModel: ObservableObject {
         defer { isUploadingAvatar = false }
         if let url = await uploadCompressedImage(data, prefix: "community_avatar") {
             avatarUrl = url
-            postToast(message: String(localized: "community.settings.toast.avatarUploaded", defaultValue: "Avatar televerse", bundle: .module), isSuccess: true)
+            postToast(message: String(localized: "community.settings.toast.avatarUploaded", defaultValue: "Avatar téléversé", bundle: .module), isSuccess: true)
         } else {
-            postToast(message: String(localized: "community.settings.toast.avatarFailed", defaultValue: "Echec du telechargement de l'avatar", bundle: .module), isSuccess: false)
+            postToast(message: String(localized: "community.settings.toast.avatarFailed", defaultValue: "Échec du téléchargement de l'avatar", bundle: .module), isSuccess: false)
         }
     }
 
@@ -515,9 +515,9 @@ final class CommunitySettingsViewModel: ObservableObject {
         defer { isUploadingBanner = false }
         if let url = await uploadCompressedImage(data, prefix: "community_banner") {
             bannerUrl = url
-            postToast(message: String(localized: "community.settings.toast.bannerUploaded", defaultValue: "Banniere televersee", bundle: .module), isSuccess: true)
+            postToast(message: String(localized: "community.settings.toast.bannerUploaded", defaultValue: "Bannière téléversée", bundle: .module), isSuccess: true)
         } else {
-            postToast(message: String(localized: "community.settings.toast.bannerFailed", defaultValue: "Echec du telechargement de la banniere", bundle: .module), isSuccess: false)
+            postToast(message: String(localized: "community.settings.toast.bannerFailed", defaultValue: "Échec du téléchargement de la bannière", bundle: .module), isSuccess: false)
         }
     }
 

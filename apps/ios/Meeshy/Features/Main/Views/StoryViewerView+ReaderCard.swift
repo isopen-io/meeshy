@@ -76,8 +76,9 @@ extension View {
     /// clignoter la bande.
     func readerCard(layout: SceneShape.Layout,
                     framing: StoryCanvasFraming.Result,
+                    resting: StoryCanvasFraming.Result? = nil,
                     thumbHash: String?) -> some View {
-        modifier(ReaderCardPlacement(layout: layout, framing: framing, thumbHash: thumbHash))
+        modifier(ReaderCardPlacement(layout: layout, framing: framing, resting: resting, thumbHash: thumbHash))
     }
 }
 
@@ -87,9 +88,16 @@ extension View {
 /// la carte sautait. Le ressort suit désormais le cadrage lui-même, au seul
 /// site que les trois couches partagent — et Reduce Motion y pose la carte
 /// sans mouvement.
+///
+/// **Le ressort ne couvre que le cadrage de REPOS** (#10544). Ce que le
+/// clavier déplace arrive déjà dans la transaction de `KeyboardObserver`, la
+/// même que la plaque et la liste des commentaires : keyé sur `framing`, le
+/// ressort la remplaçait et la carte suivait sa propre courbe. `resting` est
+/// le cadrage sans la réserve du composeur ; absent, la clé reste `framing`.
 private struct ReaderCardPlacement: ViewModifier {
     let layout: SceneShape.Layout
     let framing: StoryCanvasFraming.Result
+    let resting: StoryCanvasFraming.Result?
     let thumbHash: String?
     @Environment(\.accessibilityReduceMotion) private var reduceMotion
 
@@ -100,6 +108,6 @@ private struct ReaderCardPlacement: ViewModifier {
                   hostScale: framing.scale) { content }
             .scaleEffect(framing.scale)
             .offset(y: framing.offset.height)
-            .animation(StorySceneFocus.reframeAnimation(reduceMotion: reduceMotion), value: framing)
+            .animation(StorySceneFocus.reframeAnimation(reduceMotion: reduceMotion), value: resting ?? framing)
     }
 }

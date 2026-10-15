@@ -64,6 +64,7 @@ function buildPrisma(overrides: StatsPrismaOverrides = {}): PrismaClient {
       findMany: jest.fn(() => Promise.resolve([])),
     },
     participant: {
+      findMany: jest.fn(() => Promise.resolve([{ id: "p1" }])),
       // Honors the `isActive` filter so the double distinguishes
       // "active conversations" from "every conversation ever joined". A count
       // without `isActive: true` sweeps in left/banned/removed memberships
@@ -275,6 +276,36 @@ describe('computeUserStats', () => {
     const where = (translationCountCall?.[0] as { where: Record<string, unknown> }).where;
     expect(where.translations).toEqual({ not: { equals: null } });
     expect(where.NOT).toBeUndefined();
+  });
+
+  /*
+   * LE PROFIL LENT (coque Android, `/u/:username` sur son squelette plus de
+   * 9 s) — `sender: { userId }` est une RELATION : Prisma la traduit sur
+   * MongoDB en un `$lookup` par document de la collection `Message`. Les trois
+   * agrégations sur les messages doivent filtrer sur `senderId` (indexé), à
+   * partir des identités du compte lues une seule fois.
+   */
+  it('counts messages by indexed senderId — never through the `sender` relation', async () => {
+    const prisma = buildPrisma({ totalMessages: 3 });
+    const doubles = prisma as unknown as {
+      participant: { findMany: jest.Mock };
+      message: { count: jest.Mock; groupBy: jest.Mock };
+    };
+    doubles.participant.findMany.mockImplementation(() => Promise.resolve([{ id: 'p-a' }, { id: 'p-b' }]));
+
+    const stats = await computeUserStats(prisma, 'u1');
+
+    expect(stats.totalMessages).toBe(3);
+    expect(doubles.participant.findMany).toHaveBeenCalledTimes(1);
+    expect(doubles.participant.findMany).toHaveBeenCalledWith({ where: { userId: 'u1' }, select: { id: true } });
+    const wheres = [...doubles.message.count.mock.calls, ...doubles.message.groupBy.mock.calls].map(
+      (call: unknown[]) => (call[0] as { where: Record<string, unknown> }).where
+    );
+    expect(wheres).toHaveLength(3);
+    for (const where of wheres) {
+      expect(where.sender).toBeUndefined();
+      expect(where.senderId).toEqual({ in: ['p-a', 'p-b'] });
+    }
   });
 });
 

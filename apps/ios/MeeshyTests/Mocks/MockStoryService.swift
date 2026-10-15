@@ -14,7 +14,6 @@ final class MockStoryService: StoryServiceProviding, @unchecked Sendable {
     /// Pages servies dans l'ordre, une par appel à `list`. Prioritaire sur
     /// `listResult` tant qu'elle n'est pas épuisée.
     var listResults: [Result<PaginatedAPIResponse<[APIPost]>, Error>] = []
-    var markViewedResult: Result<Void, Error> = .success(())
     var deleteResult: Result<Void, Error> = .success(())
     var reactResult: Result<Void, Error> = .success(())
     var commentResult: Result<APIPostComment, Error> = .success(
@@ -39,9 +38,6 @@ final class MockStoryService: StoryServiceProviding, @unchecked Sendable {
     var lastListCursor: String?
     var lastListLimit: Int?
     var lastListUpdatedSince: Date?
-
-    var markViewedCallCount = 0
-    var lastMarkViewedStoryId: String?
 
     var deleteCallCount = 0
     var lastDeleteStoryId: String?
@@ -82,12 +78,6 @@ final class MockStoryService: StoryServiceProviding, @unchecked Sendable {
             return try listResults.removeFirst().get()
         }
         return try listResult.get()
-    }
-
-    func markViewed(storyId: String) async throws {
-        markViewedCallCount += 1
-        lastMarkViewedStoryId = storyId
-        try markViewedResult.get()
     }
 
     func delete(storyId: String) async throws {
@@ -172,10 +162,6 @@ final class MockStoryService: StoryServiceProviding, @unchecked Sendable {
         listCursors = []
         lastListCursor = nil
         lastListLimit = nil
-
-        markViewedResult = .success(())
-        markViewedCallCount = 0
-        lastMarkViewedStoryId = nil
 
         deleteResult = .success(())
         deleteCallCount = 0

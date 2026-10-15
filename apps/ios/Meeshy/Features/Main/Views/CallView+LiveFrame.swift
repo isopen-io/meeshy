@@ -56,7 +56,8 @@ extension CallView {
     @ViewBuilder
     var liveFrameSurface: some View {
         if callManager.isVideoUIActive, layer.activeMode == nil, let design = liveFrameDisplay.design {
-            CallLiveFrameSurface(design: design, people: liveFramePeople, texts: liveFrameTexts, sources: liveFrameSources)
+            CallLiveFrameSurface(design: design, people: liveFramePeople, texts: liveFrameTexts, sources: liveFrameSources,
+                                 chromeInsets: (Self.chromeTopInset, Self.chromeBottomInset))
                 .allowsHitTesting(false)
                 .accessibilityElement()
                 .accessibilityLabel(CallLiveFrameCopy.surface(design.name))

@@ -213,6 +213,8 @@ extension CallManager {
         settlePendingAnswerAction(fulfilled: false, reason: "teardown before connect")
         outgoingRingTimeoutTask?.cancel()
         outgoingRingTimeoutTask = nil
+        incomingRingTimeoutTask?.cancel()
+        incomingRingTimeoutTask = nil
         // Cancel le Task de setup outgoing (force-leave + ACK + media +
         // listenForParticipantJoined). Sans ça, après endCallInternal, ce
         // Task continuait à tourner et pouvait re-armer la connexion, faire

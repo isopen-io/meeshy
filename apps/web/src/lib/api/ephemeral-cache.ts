@@ -1,6 +1,7 @@
 import type { DehydratedState } from '@tanstack/react-query';
 
-import { isEphemeralGone } from '@/lib/view/ephemeral-gone';
+import { livingMessages } from '@/lib/view/ephemeral-gone';
+import { lookupOf } from '@/lib/view/quote-cascade';
 
 import type { MessagesInfiniteData } from './messages-pages';
 import type { Message } from './types';
@@ -13,12 +14,16 @@ import type { Message } from './types';
  * du fil ne le chasse. La passerelle le ressert encore une heure
  * (`isEphemeralServableToReader`, la grâce de la directive #7451) : c'est au
  * client de le taire, et il le fait par la MÊME loi que le fil
- * (`isEphemeralGone`), à l'écriture comme à la relecture.
+ * (`livingMessages`), à l'écriture comme à la relecture.
  *
  * `isMine: false` sans perte : l'expéditeur n'a jamais de réception locale
  * (`resolveEphemeralDeadline` ne la pose que chez un destinataire), et sans
  * elle la règle ne lit que l'échéance SERVIE — exactement sa lecture pour
  * l'expéditeur.
+ *
+ * #10433 — une RÉPONSE quitte le disque avec ce qu'elle cite : les citations
+ * se lisent dans TOUTES les pages du fil, une citation pouvant viser une page
+ * plus ancienne.
  */
 
 const isThreadKey = (key: readonly unknown[]): boolean =>
@@ -27,14 +32,21 @@ const isThreadKey = (key: readonly unknown[]): boolean =>
 const isPagesData = (data: unknown): data is MessagesInfiniteData =>
   typeof data === 'object' && data !== null && Array.isArray((data as { pages?: unknown }).pages);
 
+const notMine = (): boolean => false;
+const nothing: ReadonlySet<string> = new Set();
+
 function prunePages(data: MessagesInfiniteData, now: number): MessagesInfiniteData {
-  const gone = (message: Message): boolean => isEphemeralGone({ message, isMine: false, now });
-  if (!data.pages.some((page) => Array.isArray(page.messages) && page.messages.some(gone))) return data;
+  const lookup = lookupOf(data.pages.flatMap((page) => (Array.isArray(page.messages) ? page.messages : [])));
+  const kept = (messages: readonly Message[]): readonly Message[] =>
+    livingMessages({ messages, isMine: notMine, now, destroyingIds: nothing, expiredIds: nothing, lookup });
+  if (!data.pages.some((page) => Array.isArray(page.messages) && kept(page.messages) !== page.messages)) return data;
   return {
     ...data,
-    pages: data.pages.map((page) =>
-      Array.isArray(page.messages) ? { ...page, messages: page.messages.filter((message) => !gone(message)) } : page,
-    ),
+    pages: data.pages.map((page) => {
+      if (!Array.isArray(page.messages)) return page;
+      const messages = kept(page.messages);
+      return messages === page.messages ? page : { ...page, messages };
+    }),
   };
 }
 

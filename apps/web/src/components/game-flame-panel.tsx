@@ -86,7 +86,7 @@ export function GameFlamePanel(props: GameFlamePanelProps) {
         </p>
       ) : (
         <>
-          <GameSpendLine concept="flame" held={held} cost={flame.freezePrice} format={meeshCount} />
+          <GameSpendLine concept="flame" held={held} cost={flame.freezePrice} format={meeshCount} missing={{ fact: 'spend_missing', line: (missing) => gameText('game.spend.missing.freeze', { missing }) }} />
           <ActionButton marker="data-game-freeze-buy" busy={buyingFreeze} disabled={!online || !freeze.affordable} onClick={onBuyFreeze}>
             {gameText('game.flame_panel.freeze_buy', { price: meeshCount(flame.freezePrice) })}
           </ActionButton>
@@ -99,7 +99,7 @@ export function GameFlamePanel(props: GameFlamePanelProps) {
           <p className="text-caption" style={{ color: GAME_INK_2 }}>
             {gameText('game.flame_panel.relight_intro')}
           </p>
-          <GameSpendLine concept="flame" held={held} cost={flame.relightPrice} format={meeshCount} />
+          <GameSpendLine concept="flame" held={held} cost={flame.relightPrice} format={meeshCount} missing={{ fact: 'spend_missing', line: (missing) => gameText('game.spend.missing.relight', { missing }) }} />
           <ActionButton marker="data-game-relight" busy={relighting} disabled={!online || cannotPayRelight} onClick={onRelight}>
             {gameText('game.flame_panel.relight', { price: meeshCount(flame.relightPrice) })}
           </ActionButton>
@@ -111,7 +111,7 @@ export function GameFlamePanel(props: GameFlamePanelProps) {
           <p className="text-caption" style={{ color: GAME_INK_2 }}>
             {gameText('game.flame_panel.relight_missing_window', { missing: meeshCount(flame.relightPrice) })}
           </p>
-          <GameSpendLine concept="flame" held={held} cost={flame.relightPrice} format={meeshCount} />
+          <GameSpendLine concept="flame" held={held} cost={flame.relightPrice} format={meeshCount} missing={{ fact: 'spend_missing', line: (missing) => gameText('game.spend.missing.relight', { missing }) }} />
         </>
       ) : null}
       {out && !flame.canRelight && !cannotPayRelight ? (

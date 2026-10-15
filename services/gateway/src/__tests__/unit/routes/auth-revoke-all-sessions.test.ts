@@ -78,7 +78,7 @@ describe('GET /auth/revoke-all-sessions — wrong action', () => {
     const res = await app.inject({ method: 'GET', url: '/revoke-all-sessions?token=valid-token' });
     expect(res.statusCode).toBe(400);
     expect(res.headers['content-type']).toContain('text/html');
-    expect(res.body).toContain('Invalid link');
+    expect(res.body).toContain('expired or invalid');
   });
 });
 

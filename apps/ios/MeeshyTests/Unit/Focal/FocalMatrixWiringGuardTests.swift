@@ -218,7 +218,7 @@ final class FocalMatrixWiringGuardTests: XCTestCase {
         )
         XCTAssertTrue(
             block.contains("activeAudioLanguage: activeAudioLanguage"),
-            "le carrousel audio doit recevoir la même bascule — plus jamais un nil en dur"
+            "la liste audio doit recevoir la même bascule — plus jamais un nil en dur"
         )
         let host = try stripped(hostPath)
         XCTAssertTrue(
@@ -449,6 +449,33 @@ final class FocalMatrixWiringGuardTests: XCTestCase {
             code.contains("let typingFlat = self.readingMode != .bubbles"),
             "la tenue plate du typing est décidée par readingMode — la capsule reste le rendu bulles"
         )
+    }
+
+    // MARK: - Humeur de l'auteur (#10528)
+
+    /// La pastille d'humeur se peignait sur l'avatar de l'auteur sans aucun
+    /// gestionnaire : elle prenait le toucher et n'ouvrait rien.
+    func test_host_feedsTheMoodTapToTheRowActions() throws {
+        XCTAssertTrue(
+            try stripped(hostPath).contains("FocalRowActions(onMoodTap: statuses.moodTapHandler(for: senderId))"),
+            "l'hôte doit remettre à la rangée le toucher de l'humeur de l'auteur — la bulle d'humeur (StatusBubbleController) s'ouvre par lui"
+        )
+    }
+
+    func test_focalRow_forwardsTheMoodTapToBothIdentityHeaders() throws {
+        let code = try stripped(rowPath)
+        XCTAssertEqual(
+            code.components(separatedBy: "onMoodTap: actions.onMoodTap").count - 1, 2,
+            "l'en-tête d'identité de la rangée ET la chip du focus transmettent le toucher de l'humeur"
+        )
+    }
+
+    /// Dans la liste des messages, l'humeur ne s'anime pas : ni respiration
+    /// (le contexte `.custom` n'en a pas), ni pulse.
+    func test_identityHeader_keepsTheMoodStillAndTappable() throws {
+        let code = try stripped("Meeshy/Features/Main/Focal/Row/FocalIdentityHeader.swift")
+        XCTAssertTrue(code.contains("enablePulse: false"), "aucun pulse sur la pastille d'une rangée de message")
+        XCTAssertTrue(code.contains("onMoodTap: onMoodTap"), "l'avatar de l'auteur reçoit le toucher de l'humeur")
     }
 
 }

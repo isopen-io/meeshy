@@ -62,6 +62,9 @@ public enum AnimatedImageMemo {
     private static let cache: NSCache<NSString, Entry> = {
         let cache = NSCache<NSString, Entry>()
         cache.countLimit = countLimit
+        // Un plafond en OCTETS aussi : un sticker redimensionné une douzaine de fois remplissait les 24 places
+        // de cycles décodés de ~75 Mo chacun.
+        cache.totalCostLimit = 96 * 1024 * 1024
         return cache
     }()
 
@@ -79,7 +82,10 @@ public enum AnimatedImageMemo {
         guard let decoded = AnimatedImageDecoder.decode(bytes, maxPixelSize: maxPixelSize) else {
             return nil
         }
-        cache.setObject(Entry(decoded), forKey: identity)
+        // Une image répétée par la cadence (`AnimatedImageTiming`) ne pèse qu'une fois.
+        var seen = Set<ObjectIdentifier>()
+        let cost = decoded.frames.reduce(0) { seen.insert(ObjectIdentifier($1)).inserted ? $0 + $1.bytesPerRow * $1.height : $0 }
+        cache.setObject(Entry(decoded), forKey: identity, cost: cost)
         return decoded
     }
 

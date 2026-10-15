@@ -1,5 +1,8 @@
 import type { EmphasisStyle } from '@meeshy/shared/utils/text-segments';
 
+import { translate, type InterfaceCatalogKey } from '@/lib/i18n-catalog';
+import { currentInterfaceLanguage } from '@/lib/interface-language';
+
 /**
  * **LES QUATRE EMPHASES À PORTÉE DE DOIGT** (#7849) — la barre qui apparaît
  * au-dessus du champ dès qu'un mot est SÉLECTIONNÉ. Gras, italique, souligné,
@@ -13,15 +16,18 @@ import type { EmphasisStyle } from '@meeshy/shared/utils/text-segments';
  */
 
 export const FORMAT_BUTTONS = [
-  { style: 'bold', letter: 'B', label: 'Gras', shortcut: 'B', css: { fontWeight: 800 } },
-  { style: 'italic', letter: 'I', label: 'Italique', shortcut: 'I', css: { fontStyle: 'italic', fontFamily: 'Georgia, serif' } },
-  { style: 'underline', letter: 'U', label: 'Souligné', shortcut: 'U', css: { textDecoration: 'underline' } },
-  { style: 'strikethrough', letter: 'S', label: 'Barré', shortcut: 'Maj+X', css: { textDecoration: 'line-through' } },
+  { style: 'bold', letter: 'B', label: 'composer.format.bold', shortcut: 'B', shift: false, css: { fontWeight: 800 } },
+  { style: 'italic', letter: 'I', label: 'composer.format.italic', shortcut: 'I', shift: false, css: { fontStyle: 'italic', fontFamily: 'Georgia, serif' } },
+  { style: 'underline', letter: 'U', label: 'composer.format.underline', shortcut: 'U', shift: false, css: { textDecoration: 'underline' } },
+  { style: 'strikethrough', letter: 'S', label: 'composer.format.strikethrough', shortcut: 'X', shift: true, css: { textDecoration: 'line-through' } },
 ] as const satisfies readonly {
   readonly style: EmphasisStyle;
   readonly letter: string;
-  readonly label: string;
+  /** La clé du catalogue d'interface qui NOMME l'emphase. */
+  readonly label: InterfaceCatalogKey;
   readonly shortcut: string;
+  /** Le raccourci passe par Maj (« Maj+X » en français, « Shift+X » en anglais). */
+  readonly shift: boolean;
   readonly css: React.CSSProperties;
 }[];
 
@@ -47,22 +53,26 @@ export function emphasisShortcutOf(event: {
 }
 
 export function ComposerFormatBar({ onFormat }: { readonly onFormat: (style: EmphasisStyle) => void }) {
+  const language = currentInterfaceLanguage();
   return (
     <div
       role="toolbar"
-      aria-label="Mise en forme"
+      aria-label={translate(language, 'composer.format.toolbar')}
       data-format-bar=""
       className="flex items-center gap-1 px-3 pt-2"
     >
-      {FORMAT_BUTTONS.map((button) => (
+      {FORMAT_BUTTONS.map((button) => {
+        const label = translate(language, button.label);
+        const shortcut = button.shift ? `${translate(language, 'composer.format.shift')}+${button.shortcut}` : button.shortcut;
+        return (
         <button
           key={button.style}
           type="button"
           onPointerDown={(event) => event.preventDefault()}
           onMouseDown={(event) => event.preventDefault()}
           onClick={() => onFormat(button.style)}
-          aria-label={`${button.label} (Ctrl+${button.shortcut})`}
-          title={`${button.label} — Ctrl+${button.shortcut}`}
+          aria-label={`${label} (Ctrl+${shortcut})`}
+          title={`${label} — Ctrl+${shortcut}`}
           data-format={button.style}
           className="grid size-11 place-items-center rounded-chip text-[17px]"
           style={{
@@ -73,7 +83,8 @@ export function ComposerFormatBar({ onFormat }: { readonly onFormat: (style: Emp
         >
           <span aria-hidden>{button.letter}</span>
         </button>
-      ))}
+        );
+      })}
     </div>
   );
 }

@@ -40,6 +40,10 @@ nonisolated class NotificationService: UNNotificationServiceExtension {
     ) {
         extensionStartTime = Date()
         self.contentHandler = contentHandler
+        // #10507 — « reçue » : déposée dans la boîte du groupe d'app, sans réseau.
+        if let received = SocialNotificationEvents.event(.received, userInfo: request.content.userInfo) {
+            SocialNotificationInbox.shared.append(received)
+        }
         bestAttemptContent = request.content.mutableCopy() as? UNMutableNotificationContent
 
         guard let bestAttemptContent else {
