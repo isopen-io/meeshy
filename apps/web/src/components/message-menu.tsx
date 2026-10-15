@@ -319,16 +319,17 @@ export function MessageMenu({
   useLayoutEffect(() => {
     const source = target.element;
     const previousOpacity = source.style.opacity;
-    source.style.opacity = '0';
     const host = previewHostRef.current;
     /* EN MODE PIÈCE (#9907), l'aperçu est le défilement des pièces, rendu par
        React : aucun clone, et la rangée reste effacée. */
     if (host === null || pieceMode) {
+      source.style.opacity = '0';
       return () => {
         source.style.opacity = previousOpacity;
       };
     }
     const clone = source.cloneNode(true) as HTMLElement;
+    source.style.opacity = '0';
     stripPreviewIdentity(clone);
     /* LA FORME PROTÉGÉE ET LA PROPORTION D'ORIGINE (#8008) : le clone ne
        recopie jamais une fenêtre de lecture ouverte, et ses pièces reprennent

@@ -554,6 +554,16 @@ describe('MessageMenu — le sujet est nommé, le clone est neutralisé (revue #
     expect(menu.getAttribute('aria-label')).toContain('Un texte suffisamment distinctif');
   });
 
+  test('le clone ne recopie pas l’effacement de la rangée source (#10733)', () => {
+    const el = mount({ text: 'Un texte visible' });
+    act(() => {
+      row(el).dispatchEvent(new MouseEvent('contextmenu', { bubbles: true, cancelable: true }));
+    });
+    const clone = document.querySelector('[data-message-preview]') as HTMLElement;
+    expect(row(el).style.opacity).toBe('0');
+    expect(clone.style.opacity).not.toBe('0');
+  });
+
   test('le clone porte `inert` — plus aucun élément focalisable dans l’aperçu', () => {
     const el = mount();
     act(() => {
