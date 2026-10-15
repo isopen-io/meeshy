@@ -44,12 +44,12 @@ struct ThemedConversationRow: View {
     /// « Rejoindre » l'appel en cours, offert par la ligne d'aperçu (#7548).
     var onJoinLiveCall: (() -> Void)? = nil
 
-    private var palette: ConversationColorPalette { conversation.displayPalette(isDark: isDark) }
-    private var accentColor: String { palette.primary }
+    private var colorPalette: ConversationColorPalette { conversation.displayPalette(isDark: isDark) }
+    private var accentColor: String { colorPalette.primary }
 
     // Pre-parsed accent Color — avoids 19× hex parsing per render
     private var accent: Color { Color(hex: accentColor) }
-    private var accentSecondary: Color { Color(hex: palette.secondary) }
+    private var accentSecondary: Color { Color(hex: colorPalette.secondary) }
 
     private var textPrimary: Color { MeeshyColors.textPrimary(isDark: isDark) }
     private var textSecondary: Color { MeeshyColors.textSecondary(isDark: isDark) }
@@ -315,7 +315,7 @@ struct ThemedConversationRow: View {
     private var avatarView: some View {
         ConversationAvatarView(
             conversation: conversation,
-            palette: palette,
+            palette: colorPalette,
             presenceState: presenceState,
             isPeerHere: isPeerHere,
             storyRingState: storyRingState,
