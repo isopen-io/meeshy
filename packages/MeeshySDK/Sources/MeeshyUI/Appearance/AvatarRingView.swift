@@ -122,8 +122,8 @@ public extension View {
         if let design {
             overlay {
                 AvatarRingView(design: design)
-                    .frame(width: avatarSize * 100 / 84, height: avatarSize * 100 / 84)
                     .equatable()
+                    .frame(width: avatarSize * 100 / 84, height: avatarSize * 100 / 84)
             }
         } else {
             self

@@ -163,6 +163,11 @@ public struct ProfileDecorState: Equatable, Sendable {
 public struct ProfileDecorUpdatedEvent: Decodable, Sendable, Equatable {
     public let userId: String
     public let decor: ServedProfileDecor
+
+    public init(userId: String, decor: ServedProfileDecor) {
+        self.userId = userId
+        self.decor = decor
+    }
 }
 
 /// Résolution du dessin d'un décor servi : le `builtin` se lit dans le catalogue EMBARQUÉ, sans réseau.
