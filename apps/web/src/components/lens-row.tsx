@@ -12,6 +12,7 @@ import { translate } from '@/lib/i18n-catalog';
 import { categoryIdOf, reactionOf, type ConversationFlags } from '@/lib/api/preferences';
 import { rowMenuText } from '@/lib/i18n-row-menu-catalog';
 import { accentOf, withAccent } from '@/lib/accent';
+import { useColorScheme } from '@/lib/use-color-scheme';
 import { MUTED_OPACITY } from '@/lib/lens/law';
 import { conversationRowSwipeSides } from '@/lib/view/conversation-row-swipe';
 import { isRowCallAction, isRowFlagAction, type RowActionId, type RowFlagActionId, type RowIntent, type RowMenuMore } from '@/lib/view/row-actions';
@@ -245,6 +246,7 @@ function LensRowImpl({
     const handle = peerOf(conversation, viewerId)?.user?.username;
     return typeof handle === 'string' && handle !== '' ? handle : undefined;
   })();
+  useColorScheme();
   const accent = accentOf(conversation);
   const guest = useSpeaksAsGuest();
   const avatarDoor = conversationAvatarDoor({

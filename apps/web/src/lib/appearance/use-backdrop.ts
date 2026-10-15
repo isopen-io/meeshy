@@ -4,22 +4,12 @@ import { useEffect, useState } from 'react';
 
 import { bindAppearanceLive } from '@/lib/api/conversation-appearance';
 import type { ConversationsDeps } from '@/lib/api/conversations';
-import { currentScheme, type ColorScheme } from '@/lib/scheme';
+import { useColorScheme } from '@/lib/use-color-scheme';
 
 import { loadPhotoSource } from './photo-source';
 
 /** Le schéma peint (`:root.light`), suivi quand l'utilisateur ou le système le bascule — aucun réglage propre au fond. */
-export function useScheme(): ColorScheme {
-  const [scheme, setScheme] = useState<ColorScheme>(() => (typeof document === 'undefined' ? 'dark' : currentScheme()));
-  useEffect(() => {
-    if (typeof document === 'undefined' || typeof MutationObserver === 'undefined') return undefined;
-    const observer = new MutationObserver(() => setScheme(currentScheme()));
-    observer.observe(document.documentElement, { attributes: true, attributeFilter: ['class'] });
-    setScheme(currentScheme());
-    return () => observer.disconnect();
-  }, []);
-  return scheme;
-}
+export const useScheme = useColorScheme;
 
 /** Une préférence d'accessibilité du système (`prefers-reduced-transparency`, `prefers-reduced-motion`). */
 export function useMediaFlag(query: string): boolean {

@@ -15,6 +15,7 @@ import { bindConversationViewing, viewingStore } from './conversation-viewing';
 import { bindConversationEngagement, engagementStore } from './conversation-engagement';
 import { bindPostEngagement } from './publication-engagement';
 import { bindProfileDecorSync } from '../profile-decor/equip';
+import { bindAppearanceLiveLazily } from './appearance-live';
 import { bindPresenceLive } from './presence-live';
 import { presenceStore } from './presence-store';
 import { apiDeps } from './deps';
@@ -119,6 +120,8 @@ function bridgeCalls(next: RealtimeConnection | null): void {
   const unengagePosts = bindPostEngagement({ socket: next.socket, queryClient: appQueryClient });
   /* `profile:decor-updated` (#10632) : le contour et la bannière équipés sur un autre de mes appareils. */
   const undecor = bindProfileDecorSync({ socket: next.socket, queryClient: appQueryClient });
+  /* `user:preferences-updated` (#10663) : le fond et l'accent changés ailleurs repeignent la liste sans fil ouvert. */
+  const unappearance = bindAppearanceLiveLazily({ socket: next.socket, queryClient: appQueryClient });
   /* La présence vivante (#10571) : `user:status`, `presence:snapshot` et la frappe tiennent chaque pastille à jour. */
   const unpresence = bindPresenceLive({ socket: next.socket, store: presenceStore, viewerId: currentViewerId });
   /* `notification:deleted` ferme aussi la bannière du service worker (#8752), comme la coque et iOS. */
@@ -130,6 +133,7 @@ function bridgeCalls(next: RealtimeConnection | null): void {
     unengage();
     unengagePosts();
     undecor();
+    unappearance();
     unpresence();
     unrevoke();
   };
