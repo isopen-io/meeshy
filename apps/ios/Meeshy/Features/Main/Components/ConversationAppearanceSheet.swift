@@ -20,6 +20,8 @@ struct ConversationAppearanceSheet: View {
     @State private var blurDraft: Double = 0
     @State private var draggingSlider = false
     @State private var showsShop = false
+    /// Les packs de fonds possédés et installés (`nil` tant qu'ils ne sont pas lus : les packs installés d'office).
+    @State private var installedWallpapers: [ShopPack]?
     @Environment(\.dismiss) private var dismiss
     @Environment(\.colorScheme) private var colorScheme
 
@@ -68,13 +70,28 @@ struct ConversationAppearanceSheet: View {
             }
         }
         .task { media.select(.visual) }
-        .sheet(isPresented: $showsShop) { PacksSettingsView(initialDomain: .wallpaper) }
+        .task { await loadInstalledWallpapers() }
+        // « Plus dans la boutique » installe puis revient : le sélecteur relit les packs installés.
+        .sheet(isPresented: $showsShop, onDismiss: { Task { await loadInstalledWallpapers() } }) {
+            PacksSettingsView(initialDomain: .wallpaper)
+        }
         .onReceive(NotificationCenter.default.publisher(for: ConversationAppearanceChange.notification).receive(on: DispatchQueue.main)) { note in
             if let remote = ConversationAppearanceChange.appearance(in: note, for: viewModel.conversationId) { viewModel.adopt(remote) }
         }
         .onAppear { syncDrafts() }
         // Un refus (retour arrière) ou l'écho d'un autre appareil remet aussi les curseurs à leur place.
         .onChange(of: viewModel.appearance) { _ in syncDrafts() }
+    }
+
+    private func loadInstalledWallpapers() async {
+        let result: Result<[ShopPack], Error>
+        do {
+            result = .success(try await PackService<ShopPack>(domain: .wallpaper).installed())
+        } catch {
+            result = .failure(error)
+        }
+        guard let list = WallpaperPackOptions.installedList(from: result) else { return }
+        installedWallpapers = list
     }
 
     private func syncDrafts() {
@@ -95,7 +112,7 @@ struct ConversationAppearanceSheet: View {
                     LinearGradient(colors: [Color(hex: effectiveAccent).opacity(0.25), MeeshyColors.backgroundPrimary(isDark: isDark)], startPoint: .top, endPoint: .bottom)
                 } action: { viewModel.selectSignature() }
 
-                ForEach(catalog.wallpaperPacks) { pack in
+                ForEach(WallpaperPackOptions.packs(installed: installedWallpapers, catalog: catalog)) { pack in
                     ForEach(pack.designs) { design in
                         tile(
                             label: catalog.designName(design.key, language: language) ?? design.key,
@@ -131,7 +148,7 @@ struct ConversationAppearanceSheet: View {
     private var photoCandidates: [MessageAttachment] {
         media.listing.items.compactMap { item -> MessageAttachment? in
             guard case .attachment(let attachment) = item.payload,
-                  attachment.type == .image, !attachment.isViewOnce, !attachment.isBlurred else { return nil }
+                  attachment.type == .image, ConversationBackgroundPhotoVerdict.mayBeOffered(attachment) else { return nil }
             return attachment
         }
     }
@@ -144,7 +161,7 @@ struct ConversationAppearanceSheet: View {
                 LazyVGrid(columns: columns, spacing: MeeshySpacing.md) {
                     ForEach(photoCandidates, id: \.id) { attachment in
                         tile(
-                            label: attachment.originalName,
+                            label: ConversationBackgroundPhotoVerdict.accessibilityLabel(createdAt: attachment.createdAt),
                             selected: isSelectedPhoto(attachment.id)
                         ) {
                             CachedAsyncImage(url: attachment.thumbnailUrl ?? attachment.fileUrl, targetSize: CGSize(width: 72, height: 96), thumbHash: attachment.thumbHash)

@@ -518,7 +518,12 @@ const EXCLUDED_DIR_NAMES = new Set(['Tests', 'MeeshyTests', 'MeeshyUIDeviceTests
 // 315 -> 314 (#10632, 2026-10-15) : `MeEndpoint.profileDecor` (`PUT /api/v1/me/profile-decor`) a son appelant
 // iOS — `ProfileDecorService.update`, qui équipe un contour d'avatar ou une bannière depuis le profil. Valeur
 // MESURÉE le 2026-10-15 en local sur e6ba10bab4.
-const BASELINE_DEAD_ENTRIES = 314;
+// 314 -> 326 (#10709, 2026-10-15) : la relecture des vendeurs tiers d'apparence inscrit au catalogue, pour les
+// fonds, les contours et les bannières, le contrat d'un pack en attente, son verdict de modération, la file des
+// packs en attente et les propositions de l'auteur — 12 entrées. Prématurées : la passerelle les sert, aucun
+// client n'a encore l'écran de modération ni de dépôt d'un pack vendeur (même relève au cliquet TS). Valeur
+// MESURÉE le 2026-10-15 en local sur 79129ae28f.
+const BASELINE_DEAD_ENTRIES = 326;
 
 const CATALOG_ENUM_RE = /public enum ([A-Za-z0-9_]+)\s*:\s*MeeshyEndpoint\b/;
 // Une déclaration de cas n'a jamais de point après `case` ; une branche de

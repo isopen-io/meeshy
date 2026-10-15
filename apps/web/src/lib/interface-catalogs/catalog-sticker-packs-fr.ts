@@ -10,6 +10,7 @@ const frStickerPacks = {
   'stickerPacks.send': 'Envoyer',
   'stickerPacks.count': '{count} stickers',
   'stickerPacks.tab.shop': 'Boutique',
+  'stickerPacks.shopMore': 'Plus dans la boutique',
   'stickerPacks.install': 'Installer',
   'stickerPacks.uninstall': 'Retirer',
   'stickerPacks.shop.hint': 'Installez les packs que vous voulez retrouver dans vos stickers, retirez les autres. Les stickers déjà envoyés restent lisibles.',

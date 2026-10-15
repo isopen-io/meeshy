@@ -16,6 +16,7 @@ extension MessageSocketManager {
         socket.on("profile:decor-updated") { [weak self] data, _ in
             guard let self else { return }
             self.decode(ProfileDecorUpdatedEvent.self, from: data) { event in
+                Task { @MainActor in AuthManager.shared.apply(event) }
                 NotificationCenter.default.post(name: .profileDecorUpdated, object: event)
             }
         }

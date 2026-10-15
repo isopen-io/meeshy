@@ -46,7 +46,9 @@ export const conversationListParticipantSelect = {
       avatar: true,
       banner: true,
       isOnline: true,
-      lastActiveAt: true
+      lastActiveAt: true,
+      // #10713 — chargé, jamais servi tel quel : composé en `profileDecor`.
+      equippedAvatarRing: true
     }
   }
 } as const;
@@ -222,7 +224,9 @@ export const conversationDetailInclude = {
           username: true,
           displayName: true,
           firstName: true,
-          lastName: true
+          lastName: true,
+          // #10713 — chargé, jamais servi tel quel : composé en `profileDecor`.
+          equippedAvatarRing: true
         }
       }
     }

@@ -7,6 +7,7 @@ const deStickerPacks = {
   'stickerPacks.send': 'Senden',
   'stickerPacks.count': '{count} Sticker',
   'stickerPacks.tab.shop': 'Shop',
+  'stickerPacks.shopMore': 'Mehr im Shop',
   'stickerPacks.install': 'Installieren',
   'stickerPacks.uninstall': 'Entfernen',
   'stickerPacks.shop.hint': 'Installiere die Pakete, die du in deinen Stickern haben willst, und entferne die anderen. Bereits gesendete Sticker bleiben lesbar.',

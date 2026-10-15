@@ -538,6 +538,7 @@ extension APIConversation {
         conversation.userState.lastReadMessageId = lastReadMessageId
         conversation.userState.lastReadMessageCreatedAt = lastReadMessageCreatedAt
         conversation.userState.appearance = prefs?.appearance
+        conversation.participantRing = convType == .direct ? otherParticipant?.profileDecor?.avatarRing : nil
 
         return conversation
     }

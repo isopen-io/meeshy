@@ -5,7 +5,8 @@
  *   - `GET  /submissions`     les propositions de l'appelant, avec le mot du modérateur ;
  *   - `POST /submissions`     proposer un pack — corps JSON `{ slug, name, description?, author, contract }` ;
  *   - `GET  /pending`         la file de modération (`canModerateContent`) ;
- *   - `POST /:slug/review`    publier (`approve`, avec un prix facultatif) ou refuser (`reject`).
+ *   - `POST /:slug/review`    publier (`approve`, avec un prix facultatif) ou refuser (`reject`) — jamais sa propre proposition ;
+ *   - `GET  /:slug/contract`  le contrat d'un pack visible du lecteur (en attente : auteur et modérateurs).
  *
  * La validation vit dans `packages/shared/types/community-appearance-pack.ts`,
  * la loi dans `services/packs/CommunityAppearancePacks.ts` ; ce fichier n'en fait
@@ -19,7 +20,7 @@ import { PACK_LIMITS, PACK_PRICE_MAX } from '@meeshy/shared/types/content-pack';
 
 import { requirePermission } from '../middleware/authorize';
 import type { CommunityAppearancePacks } from '../services/packs/CommunityAppearancePacks';
-import { sendBadRequest, sendConflict, sendNotFound, sendSuccess } from '../utils/response.js';
+import { sendBadRequest, sendConflict, sendForbidden, sendNotFound, sendSuccess } from '../utils/response.js';
 import { gameRateLimitConfig } from './me/game-shared';
 import { PACK_ERRORS, packEnvelope, packSlugParamsJsonSchema, type PackRouteGuard, type PackSlugRequest } from './pack-routes';
 
@@ -28,6 +29,7 @@ export const COMMUNITY_APPEARANCE_ERROR_CODES = {
   SLUG_TAKEN: 'APPEARANCE_PACK_SLUG_TAKEN',
   TOO_MANY_PENDING: 'APPEARANCE_PACK_TOO_MANY_PENDING',
   NOT_FOUND: 'APPEARANCE_PACK_NOT_FOUND',
+  SELF_REVIEW: 'APPEARANCE_PACK_SELF_REVIEW',
 } as const;
 
 /** Le corps d'une proposition : le contrat et son enveloppe tiennent largement sous ce plafond. */
@@ -119,7 +121,9 @@ export function registerCommunityAppearanceRoutes(fastify: FastifyInstance, spec
     {
       onRequest: [fastify.authenticate, requireModerator],
       schema: {
-        description: 'Publie (`approve`, avec un `price` facultatif en Meeshes : absent = gratuit) ou refuse (`reject`) un pack en attente, avec un mot facultatif pour son auteur (#10709). Le prix est fixé ICI, jamais par le vendeur.',
+        description:
+          'Publie (`approve`, avec un `price` facultatif en Meeshes : absent = gratuit) ou refuse (`reject`) un pack en attente, avec un mot facultatif pour son auteur (#10709). ' +
+          'Le prix est fixé ICI, jamais par le vendeur. 403 APPEARANCE_PACK_SELF_REVIEW : un modérateur ne tranche pas sa propre proposition.',
         tags: [...tags, 'admin'],
         summary: `Review a ${domain} pack`,
         params: packSlugParamsJsonSchema,
@@ -138,9 +142,44 @@ export function registerCommunityAppearanceRoutes(fastify: FastifyInstance, spec
     guard(`[POST ${basePath}/:slug/review]`, async (request: PackSlugRequest, reply, viewer) => {
       const body = reviewBodySchema.safeParse(request.body);
       if (!body.success) return sendBadRequest(reply, 'Invalid review', { code: 'VALIDATION_ERROR' });
-      const pack = await packs.review(viewer.userId, domain, request.params.slug, { decision: body.data.decision, note: body.data.note ?? null, price: body.data.price ?? null });
-      if (!pack) return sendNotFound(reply, 'No pack awaiting review under this name', { code: COMMUNITY_APPEARANCE_ERROR_CODES.NOT_FOUND });
-      return sendSuccess(reply, pack);
+      const outcome = await packs.review(viewer.userId, domain, request.params.slug, { decision: body.data.decision, note: body.data.note ?? null, price: body.data.price ?? null });
+      switch (outcome.kind) {
+        case 'reviewed':
+          return sendSuccess(reply, outcome.pack);
+        case 'self-review':
+          return sendForbidden(reply, 'A moderator cannot review their own pack', { code: COMMUNITY_APPEARANCE_ERROR_CODES.SELF_REVIEW });
+        case 'not-found':
+          return sendNotFound(reply, 'No pack awaiting review under this name', { code: COMMUNITY_APPEARANCE_ERROR_CODES.NOT_FOUND });
+      }
+    }),
+  );
+
+  fastify.get(
+    '/:slug/contract',
+    {
+      onRequest: [fastify.authenticate],
+      schema: {
+        description:
+          `Le contrat d'un pack de ${domain} d'un vendeur tiers (#10709), en JSON sérialisé — les octets que \`/pack-assets\` servira, à l'empreinte \`sha256\` : publié pour tous, en attente ou refusé pour son auteur et les modérateurs — ` +
+          'la modération voit ce qu’elle publie. 404 pour un pack officiel (son contrat est servi par `/pack-assets`) ou invisible du lecteur.',
+        tags,
+        summary: `Read a community ${domain} pack contract`,
+        params: packSlugParamsJsonSchema,
+        response: {
+          200: packEnvelope({
+            type: 'object',
+            additionalProperties: false,
+            required: ['contractSchema', 'contractJson', 'sha256'],
+            properties: { contractSchema: { type: 'integer' }, contractJson: { type: 'string' }, sha256: { type: 'string' } },
+          }),
+          ...PACK_ERRORS,
+        },
+      },
+    },
+    guard(`[GET ${basePath}/:slug/contract]`, async (request: PackSlugRequest, reply, viewer) => {
+      const contract = await packs.contract(domain, request.params.slug, viewer);
+      if (contract === null) return sendNotFound(reply, 'Pack not found', { code: COMMUNITY_APPEARANCE_ERROR_CODES.NOT_FOUND });
+      return sendSuccess(reply, contract);
     }),
   );
 }

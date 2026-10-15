@@ -172,6 +172,8 @@ public struct APIParticipant: Decodable, Identifiable, Sendable {
     public let nickname: String?
     public let lastActiveAt: Date?
     public let user: APIConversationUser?
+    /// Le contour d'avatar équipé, servi avec le participant (#10713) — absent sans contour ou sans compte.
+    public let profileDecor: ServedProfileDecor?
 
     public init(
         id: String,
@@ -192,7 +194,8 @@ public struct APIParticipant: Decodable, Identifiable, Sendable {
         bannedAt: Date? = nil,
         nickname: String? = nil,
         lastActiveAt: Date? = nil,
-        user: APIConversationUser? = nil
+        user: APIConversationUser? = nil,
+        profileDecor: ServedProfileDecor? = nil
     ) {
         self.id = id
         self.conversationId = conversationId
@@ -213,6 +216,7 @@ public struct APIParticipant: Decodable, Identifiable, Sendable {
         self.nickname = nickname
         self.lastActiveAt = lastActiveAt
         self.user = user
+        self.profileDecor = profileDecor
     }
 
     public var name: String { nickname ?? displayName ?? "Unknown" }

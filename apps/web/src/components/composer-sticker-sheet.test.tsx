@@ -177,6 +177,17 @@ describe('ComposerStickerSheet', () => {
     expect(ready()).toBe(true);
   };
 
+  test('la Boutique mène à la vitrine unique filtrée sur les stickers (#10712)', async () => {
+    appQueryClient.setQueryData(STICKERS_QUERY_KEY, []);
+    const host = await mount();
+    await mounter.click(host.querySelector('[data-sticker-tab="shop"]'));
+    await until(() => host.querySelector('[data-sticker-shop-more]') !== null);
+    const more = host.querySelector('[data-sticker-shop-more]');
+    expect(more?.textContent).toBe('Plus dans la boutique');
+    expect(more?.getAttribute('href')).toContain('domaine=sticker');
+    expect(more?.getAttribute('href')).toContain('volet=packs');
+  });
+
   test('retirer un pack dans la Boutique le retire des onglets AU GESTE ; le réinstaller le rend', async () => {
     appQueryClient.setQueryData(STICKERS_QUERY_KEY, []);
     const host = await mount();

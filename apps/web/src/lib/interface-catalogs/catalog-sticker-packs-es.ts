@@ -7,6 +7,7 @@ const esStickerPacks = {
   'stickerPacks.send': 'Enviar',
   'stickerPacks.count': '{count} stickers',
   'stickerPacks.tab.shop': 'Tienda',
+  'stickerPacks.shopMore': 'Más en la tienda',
   'stickerPacks.install': 'Instalar',
   'stickerPacks.uninstall': 'Quitar',
   'stickerPacks.shop.hint': 'Instala los paquetes que quieras tener en tus stickers y quita los demás. Los stickers ya enviados siguen siendo legibles.',

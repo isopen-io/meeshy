@@ -88,7 +88,7 @@ public struct FrameUsageLabel: Sendable, Hashable {
 
 public enum FrameUsageLaw {
 
-    /// Les dix clés du libellé d'usage, identiques au web (`FRAME_USAGE_LABEL_KEYS`).
+    /// Les onze clés du libellé d'usage, identiques au web (`FRAME_USAGE_LABEL_KEYS`).
     public enum LabelKey {
         public static let callAndCapture = "frame.usage.callAndCapture"
         public static let captureOnly = "frame.usage.captureOnly"
@@ -100,12 +100,13 @@ public enum FrameUsageLaw {
         public static let achievementOnly = "frame.usage.achievementOnly"
         public static let achievementRarityOnly = "frame.usage.achievementRarityOnly"
         public static let momentOnly = "frame.usage.momentOnly"
-        /// Clé additive (#10632), hors de `all` : le TS la tient à part (`AVATAR_USAGE_LABEL_KEY`).
+        /// « Contour de profil uniquement » (#10632) — dans la table depuis #10715, comme côté TS.
         public static let avatarOnly = "frame.usage.avatarOnly"
 
         public static let all: [String] = [
             callAndCapture, captureOnly, photoOnly, videoOnly, rankOnly,
             rankDivisionOnly, prestigeOnly, achievementOnly, achievementRarityOnly, momentOnly,
+            avatarOnly,
         ]
     }
 

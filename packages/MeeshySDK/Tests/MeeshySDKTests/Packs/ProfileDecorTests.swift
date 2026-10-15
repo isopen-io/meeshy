@@ -88,6 +88,41 @@ final class ProfileDecorTests: XCTestCase {
 
     // MARK: Résolution embarquée
 
+    // MARK: Mes autres appareils, quel que soit l'écran (#10715)
+
+    func test_userApplying_myEvent_repaintsOnlyTheDecor() {
+        let user = MeeshyUser(id: "moi", username: "alice")
+        let decor = ServedProfileDecor(avatarRing: item("contours-essentiels", "perle"))
+
+        let repainted = user.applying(ProfileDecorUpdatedEvent(userId: "moi", decor: decor))
+
+        XCTAssertEqual(repainted?.profileDecor, decor)
+        XCTAssertEqual(repainted?.username, "alice")
+    }
+
+    func test_userApplying_anotherAccountOrAnUnchangedDecor_isNil() {
+        let decor = ServedProfileDecor(avatarRing: item("contours-essentiels", "perle"))
+        let user = MeeshyUser(id: "moi", username: "alice").withProfileDecor(decor)
+
+        XCTAssertNil(user.applying(ProfileDecorUpdatedEvent(userId: "autre", decor: .empty)))
+        XCTAssertNil(user.applying(ProfileDecorUpdatedEvent(userId: "moi", decor: decor)))
+    }
+
+    @MainActor
+    func test_authManagerApply_repaintsTheSignedInUserWithoutAnyScreen() {
+        let manager = AuthManager.shared
+        let previous = manager.currentUser
+        defer { manager.currentUser = previous }
+        manager.currentUser = MeeshyUser(id: "moi", username: "alice")
+        let decor = ServedProfileDecor(banner: item("bannieres-essentielles", "aurore"))
+
+        manager.apply(ProfileDecorUpdatedEvent(userId: "moi", decor: decor))
+        XCTAssertEqual(manager.currentUser?.profileDecor, decor)
+
+        manager.apply(ProfileDecorUpdatedEvent(userId: "autre", decor: .empty))
+        XCTAssertEqual(manager.currentUser?.profileDecor, decor, "l'événement d'un autre compte ne touche rien")
+    }
+
     func test_catalog_embedsTheSevenRingsAndTheSevenBanners() {
         XCTAssertEqual(AvatarRingCatalog.shared.packs.flatMap(\.rings).map(\.key), ["filet", "double-filet", "perle", "aurore", "deco", "laurier", "halo-or"])
         XCTAssertEqual(AppearanceCatalog.shared.bannerPacks.flatMap(\.designs).count, 7)

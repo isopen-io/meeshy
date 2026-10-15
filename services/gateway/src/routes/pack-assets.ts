@@ -112,9 +112,11 @@ export async function packAssetsRoutes(fastify: FastifyInstance, options: PackAs
       if (!index.isServedAsset(file)) {
         const contract = COMMUNITY_CONTRACT.test(file) ? await community.approvedContract(file) : null;
         if (contract === null) return sendNotFound(reply, 'Pack asset not found', { code: NOT_FOUND_CODE });
-        reply.header('ETag', `"${fingerprintOf(file)}"`);
+        const communityEtag = `"${fingerprintOf(file)}"`;
+        reply.header('ETag', communityEtag);
         reply.header('Cache-Control', PACK_ASSETS_CACHE_CONTROL);
         reply.header('X-Content-Type-Options', 'nosniff');
+        if (ifNoneMatchMatches(request.headers['if-none-match'], communityEtag)) return reply.code(304).send();
         return reply.type(CONTENT_TYPES.json).send(contract);
       }
       const etag = `"${fingerprintOf(file)}"`;

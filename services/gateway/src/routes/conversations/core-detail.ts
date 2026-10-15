@@ -25,6 +25,8 @@ import { conversationDetailInclude } from './core-selects';
 import { loadReadCursorBoundaries } from './read-cursor-projection';
 import { loadViewerBirthDate } from './viewerWriteRestriction';
 import { memberCountServedToViewer, membersServedToViewer } from '../../services/guests/guestMemberVisibility';
+import { participantProfileDecor } from '../../services/appearance/profileDecor';
+import { startupPackIndex } from '../../services/packs/PackIndex';
 import { viewerWriteRestrictionOf } from '@meeshy/shared/utils/global-minor-restriction';
 import {
   parseStrictFieldList,
@@ -511,8 +513,10 @@ export function registerConversationDetailRoute(
             return chargedParticipants.map((m: any) => {
               const liveOnline = fastify.presenceChecker?.isOnline(m.userId ?? m.id);
               const vis = presenceFor(detailPresenceViewer, presenceVis, m.userId);
+              const profileDecor = participantProfileDecor(startupPackIndex(), m.user);
               return {
                 ...m,
+                ...(profileDecor === undefined ? {} : { profileDecor }),
                 isOnline: vis.showOnline ? (liveOnline === undefined ? m.isOnline : liveOnline) : false,
                 lastActiveAt: vis.showLastSeenTimestamp ? m.lastActiveAt : null
               };

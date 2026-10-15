@@ -7,6 +7,7 @@ const enStickerPacks = {
   'stickerPacks.send': 'Send',
   'stickerPacks.count': '{count} stickers',
   'stickerPacks.tab.shop': 'Shop',
+  'stickerPacks.shopMore': 'More in the shop',
   'stickerPacks.install': 'Install',
   'stickerPacks.uninstall': 'Remove',
   'stickerPacks.shop.hint': 'Install the packs you want in your stickers and remove the others. Stickers already sent stay readable.',

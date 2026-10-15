@@ -251,3 +251,65 @@ describe('le contrat se sert depuis le magasin adressé par contenu, après publ
     expect((await server.inject({ method: 'GET', url: `/pack-assets/${created.contract.src}` })).statusCode).toBe(404);
   });
 });
+
+describe('relecture du lot (#10709) : ce que la boutique et la modération voient', () => {
+  it('compte les éléments du contrat : un pack de deux fonds en annonce deux, partout', async () => {
+    const { server } = await app();
+    const created = await submit(server, wallpaperPack('duo', { contract: { domain: 'wallpaper', designs: [design('dunes'), design('vagues')] } }));
+    expect(created.json().data.itemCount).toBe(2);
+    await review(server, 'duo', { decision: 'approve' });
+    const shop = (await get(server, '/packs/wallpaper')).json().data as { slug: string; itemCount: number }[];
+    expect(shop.find((pack) => pack.slug === 'duo')?.itemCount).toBe(2);
+    expect((await get(server, '/packs/wallpaper/duo')).json().data.itemCount).toBe(2);
+  });
+
+  it('ne charge jamais le contrat (jusqu’à 256 Ko par pack) pour lister, détailler, installer ou acheter', async () => {
+    const { server, db } = await app();
+    await submit(server, wallpaperPack());
+    await review(server, 'dunes-pack', { decision: 'approve', price: 40 });
+    db.grant(BUYER, 100);
+    const before = db.contractReads();
+    await get(server, '/packs/wallpaper');
+    await get(server, '/packs/shop');
+    await get(server, '/packs/wallpaper/dunes-pack');
+    await server.inject({ method: 'POST', url: '/packs/wallpaper/dunes-pack/purchase', headers: as(BUYER), payload: { requestId: 'req-0000010' } });
+    await server.inject({ method: 'PUT', url: '/packs/wallpaper/dunes-pack/install', headers: as(BUYER) });
+    await get(server, '/packs/wallpaper/installed');
+    await get(server, '/packs/wallpaper/pending', MODERATOR);
+    await get(server, '/packs/wallpaper/submissions', AUTHOR);
+    expect(db.contractReads() - before).toBe(0);
+  });
+
+  it('le modérateur et l’auteur lisent le contrat d’un pack EN ATTENTE ; un tiers, jamais', async () => {
+    const { server } = await app();
+    await submit(server, wallpaperPack());
+    const asModerator = await get(server, '/packs/wallpaper/dunes-pack/contract', MODERATOR);
+    expect(asModerator.statusCode).toBe(200);
+    const served = asModerator.json().data as { contractSchema: number; contractJson: string; sha256: string };
+    expect(served.contractSchema).toBe(1);
+    expect(JSON.parse(served.contractJson)).toMatchObject({ domain: 'wallpaper', designs: [{ key: 'dunes' }] });
+    expect(createHash('sha256').update(served.contractJson, 'utf8').digest('hex')).toBe(served.sha256);
+    expect((await get(server, '/packs/wallpaper/dunes-pack/contract', AUTHOR)).statusCode).toBe(200);
+    const asStranger = await get(server, '/packs/wallpaper/dunes-pack/contract', BUYER);
+    expect([asStranger.statusCode, asStranger.json().code]).toEqual([404, 'APPEARANCE_PACK_NOT_FOUND']);
+    expect((await get(server, '/packs/wallpaper/essentiels/contract', MODERATOR)).statusCode).toBe(404);
+  });
+
+  it('un modérateur ne publie ni ne refuse sa propre proposition, et ne fixe pas son propre prix', async () => {
+    const { server, db } = await app();
+    await submit(server, wallpaperPack(), 'wallpaper', MODERATOR);
+    const self = await review(server, 'dunes-pack', { decision: 'approve', price: 999 });
+    expect([self.statusCode, self.json().code]).toEqual([403, 'APPEARANCE_PACK_SELF_REVIEW']);
+    expect(db.communityRows[0]).toMatchObject({ status: 'pending', price: null });
+  });
+
+  it('le contrat publié répond 304 à un client qui l’a déjà (If-None-Match)', async () => {
+    const { server } = await app();
+    const created = (await submit(server, wallpaperPack())).json().data as { contract: { src: string } };
+    await review(server, 'dunes-pack', { decision: 'approve' });
+    const url = `/pack-assets/${created.contract.src}`;
+    const etag = (await server.inject({ method: 'GET', url })).headers.etag as string;
+    const again = await server.inject({ method: 'GET', url, headers: { 'if-none-match': etag } });
+    expect(again.statusCode).toBe(304);
+  });
+});

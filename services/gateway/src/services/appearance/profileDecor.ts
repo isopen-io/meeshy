@@ -50,6 +50,20 @@ export const servedProfileDecor = (index: PackIndex, stored: StoredProfileDecor 
     ? EMPTY_PROFILE_DECOR
     : { avatarRing: servedItem(index, 'avatar-ring', stored.equippedAvatarRing), banner: servedItem(index, 'banner', stored.equippedBanner) };
 
+/**
+ * Le contour qui voyage AVEC un participant (#10713) — listes, fiche, bulles.
+ * `undefined` (clé absente) pour un participant sans compte, sans contour, ou
+ * dont le contour a quitté le registre : la charge reste additive, et un ancien
+ * client n'y voit rien de neuf.
+ */
+export const participantProfileDecor = (
+  index: PackIndex,
+  user: { readonly equippedAvatarRing?: string | null } | null | undefined,
+): { readonly avatarRing: ServedProfileDecorItem } | undefined => {
+  const avatarRing = servedItem(index, 'avatar-ring', user?.equippedAvatarRing);
+  return avatarRing === null ? undefined : { avatarRing };
+};
+
 export type ProfileDecorWriteOutcome =
   | { readonly kind: 'ok'; readonly data: StoredProfileDecor }
   | { readonly kind: 'invalid' }

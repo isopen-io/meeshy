@@ -58,10 +58,11 @@ describe('conversationDetailInclude (F1 participants cap + F8 strict select)', (
     }
   });
 
-  it('keeps the nested user fields the server needs for default title generation (the wire strips nested user)', () => {
+  it('keeps the nested user fields the server needs for default title generation and the equipped ring (#10713) — the wire strips nested user', () => {
     const userSelect = (participants.select.user as { select: Record<string, unknown> }).select;
     expect(Object.keys(userSelect).sort()).toEqual([
       'displayName',
+      'equippedAvatarRing',
       'firstName',
       'id',
       'lastName',
