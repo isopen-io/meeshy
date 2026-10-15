@@ -52,6 +52,8 @@ import { ReadingModePreferenceSchema, type ReadingModePreference } from '@meeshy
 import { loadWithdrawnCitations, servePostReplyCitation } from '../../services/messaging/servedPostReply';
 import type { ConversationType } from '@meeshy/shared/types/conversation';
 import { loadViewerBirthDate, servedListRowRestriction } from './viewerWriteRestriction';
+import { participantProfileDecor } from '../../services/appearance/profileDecor';
+import { startupPackIndex } from '../../services/packs/PackIndex';
 import {
   conversationListQuerySelect,
   conversationLastMessagePreviewSelect,
@@ -745,8 +747,11 @@ export function registerConversationListRoute(
             const vis = presenceFor(presenceViewer, presenceVis, m.userId);
             const hideOnline = !vis.showOnline;
             const hideLastSeen = !vis.showLastSeenTimestamp;
+            const profileDecor = participantProfileDecor(startupPackIndex(), m.user);
             return {
               ...m,
+              // #10713 — le contour équipé du pair, dessiné par la ligne de liste.
+              ...(profileDecor === undefined ? {} : { profileDecor }),
               // Bannière de profil top-level : le schéma participant (minimal) est
               // plat et strippe `user`, donc on lève la bannière au niveau
               // participant pour la remontée en DM. Réservé aux DM — en groupe le

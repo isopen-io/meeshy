@@ -18,6 +18,29 @@ import { userMinimalSchema } from './user.js';
 // =============================================================================
 
 /**
+ * Le contour d'avatar ÉQUIPÉ d'un participant (#10713) — la forme servie par
+ * `/me` et le profil public (`ServedProfileDecor`, `types/profile-decor.ts`),
+ * réduite au contour : c'est lui que les listes et les bulles dessinent.
+ * ADDITIVE — absente pour un participant sans contour ou sans compte.
+ */
+export const participantProfileDecorSchema = {
+  type: 'object',
+  description: 'Equipped avatar ring served with the participant (#10713)',
+  properties: {
+    avatarRing: {
+      type: 'object',
+      nullable: true,
+      properties: {
+        pack: { type: 'string' },
+        item: { type: 'string' },
+        origin: { type: 'string' },
+        contract: { type: 'string', nullable: true },
+      },
+    },
+  },
+} as const;
+
+/**
  * Conversation participant schema with full user information
  */
 export const conversationParticipantSchema = {
@@ -34,6 +57,7 @@ export const conversationParticipantSchema = {
     displayName: { type: 'string', nullable: true, description: 'Display name' },
     avatar: { type: 'string', nullable: true, description: 'Avatar URL' },
     banner: { type: 'string', nullable: true, description: 'Profile banner URL' },
+    profileDecor: participantProfileDecorSchema,
     role: {
       type: 'string',
       enum: ['USER', 'ADMIN', 'MODERATOR', 'BIGBOSS', 'AUDIT', 'ANALYST'],
@@ -393,6 +417,7 @@ export const conversationParticipantMinimalSchema = {
     displayName: { type: 'string', nullable: true, description: 'Display name' },
     avatar: { type: 'string', nullable: true, description: 'Avatar URL' },
     banner: { type: 'string', nullable: true, description: 'Profile banner URL (flattened top-level for DM surfacing)' },
+    profileDecor: participantProfileDecorSchema,
     role: { type: 'string', description: 'Member role' },
     language: { type: 'string', nullable: true, description: 'Preferred language' },
     nickname: { type: 'string', nullable: true, description: 'Nickname in conversation' },
