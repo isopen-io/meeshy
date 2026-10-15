@@ -39,6 +39,25 @@ public protocol APIClientProviding: Sendable {
     func offsetPaginatedRequest<T: Decodable>(_ endpoint: any MeeshyEndpoint, offset: Int, limit: Int) async throws -> OffsetPaginatedAPIResponse<[T]>
 }
 
+/// UNE requête signée par un jeton FIGÉ par l'appelant, que rien ne
+/// rafraîchit ni ne rejoue sous un autre (#9743, #10463).
+///
+/// Séparé d'`APIClientProviding` : ce contrat ne promet pas « parler à
+/// l'API », il promet « parler AU NOM de ce jeton et d'aucun autre ». La
+/// déconnexion par jeton en dépend — rejouée sous le jeton du compte actif
+/// après un 401, elle fermerait la session de ce compte-là.
+public protocol PinnedRequesting: Sendable {
+    func requestPinned<T: Decodable>(
+        _ endpoint: any MeeshyEndpoint,
+        method: String,
+        body: Data?,
+        headers: [String: String],
+        bearerToken: String
+    ) async throws -> T
+}
+
+extension APIClient: PinnedRequesting {}
+
 public extension APIClientProviding {
 
     /// La forme que les conformants à `String` attendent : le chemin PRIVÉ de

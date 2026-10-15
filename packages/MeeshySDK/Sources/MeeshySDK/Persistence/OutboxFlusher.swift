@@ -287,9 +287,12 @@ public actor OutboxFlusher {
     /// transitory auth failure, NOT a permanent dispatch error. It must not consume
     /// the retry budget — otherwise a brief session expiry permanently exhausts every
     /// queued row before the app gets a chance to refresh the token.
+    /// `CancellationError` is the same transitory state seen from the other side:
+    /// APIClient rethrows it when a session exit or an account switch abandons the
+    /// token refresh (#10463), where it used to map it to `.auth(.sessionExpired)`.
     private static func isSessionExpiry(_ error: Error) -> Bool {
         if case MeeshyError.auth = error { return true }
-        return false
+        return error is CancellationError
     }
 
     /// P7-7 — codes URLError de TRANSPORT (réseau/serveur injoignable). Liste

@@ -152,8 +152,9 @@ describe('POST /posts/:postId/impression', () => {
     });
     expect(res.statusCode).toBe(200);
     expect(res.json().data.recorded).toBe(true);
+    // La ligne porte désormais sa fin de conservation (90 j, #10510).
     expect(impressionCreateMany).toHaveBeenCalledWith({
-      data: [{ postId: POST_ID, userId: 'u1', source: 'detail' }],
+      data: [{ postId: POST_ID, userId: 'u1', source: 'detail', expiresAt: expect.any(Date) }],
     });
     expect(postCounterWritesOf(postCounterCommand)).toContainEqual(counterWrite([POST_ID], { impressionCount: { increment: 1 } }));
     expect(postCounterWritesOf(postCounterCommand)).toContainEqual(counterWrite([POST_ID], { postOpenCount: { increment: 1 } }));
@@ -191,6 +192,11 @@ describe('POST /posts/:postId/impression', () => {
     expect(postFindUnique).not.toHaveBeenCalled();
     // Trois appels ⇒ trois lots ⇒ trois résolutions : une PAR LOT, jamais par post.
     expect(passesRacines()).toHaveLength(3);
+  });
+
+  it('#10403 — la route unitaire a son propre seau PAR COMPTE, plus le seau global par adresse', async () => {
+    const { createPostRouteRateLimitConfig } = await import('../middleware/rate-limiter');
+    expect(createPostRouteRateLimitConfig).toHaveBeenCalledWith('impressionUnit');
   });
 
   it('rejects an unknown source with 400', async () => {

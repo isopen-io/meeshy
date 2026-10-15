@@ -135,6 +135,9 @@ struct MeeshyApp: App {
 
     var body: some Scene {
         WindowGroup {
+            // UNE fenêtre principale : une seconde copie ouverte par le système renvoie vers la première
+            // (`MainWindowGate`, AdaptiveRootView.swift).
+            MainWindowGate {
             SystemThemeDetector {
                 ZStack {
                     Group {
@@ -228,10 +231,15 @@ struct MeeshyApp: App {
                             onAccountRequest: { entry in
                                 deepLinkRouter.requestAccount(entry, forShareLink: guestSession.identifier)
                                 dismissGuestSession()
+                            },
+                            onNewLink: { identifier in
+                                activeGuestSession = GuestSession(identifier: identifier, context: AnonymousSessionStore.load(linkId: identifier), isDeliberate: guestSession.isDeliberate)
                             }
                         )
                     }
                 }
+                // Posté par le transport, hors du fil principal : la session se termine sur lui.
+                .onReceive(NotificationCenter.default.publisher(for: .meeshyGuestSessionEnded).receive(on: DispatchQueue.main)) { endGuestSession($0) }
                 .visitorContentCover(
                     presenter: visitorPresenter,
                     isEligible: !authManager.isAuthenticated && activeGuestSession == nil && launchSplash.phase != .covering
@@ -941,7 +949,19 @@ struct MeeshyApp: App {
                     UILanguageOverride.refreshNotificationLanguage()
                 }
             }
+            }
         }
+
+        // Les fenêtres DÉTACHÉES (iPad) : une conversation, ou le fil de réels, à côté de la fenêtre principale.
+        WindowGroup(id: DetachedWindowOpener.sceneId, for: DetachedWindowContent.self) { $content in
+            DetachedWindowView(content: content)
+                .environment(\.mentionContactsProvider, MentionContactsAudienceBridge())
+                .feedbackToastOverlay()
+                .environmentObject(authManager)
+                .environmentObject(deepLinkRouter)
+                .preferredColorScheme(theme.preferredColorScheme)
+        }
+        .handlesExternalEvents(matching: [DetachedWindowOpener.activityIdentifier])
     }
 
     // MARK: - Test seam (DEBUG)
@@ -1037,7 +1057,12 @@ struct MeeshyApp: App {
     // MARK: - App Lifecycle Transitions
 
     private func handleForegroundTransition() async {
-        guard authManager.isAuthenticated else { return }
+        guard authManager.isAuthenticated else {
+            // Sans compte, la base suspendue à la mise en arrière-plan se relève quand même (#7059), et
+            // l'invité retrouve son socket.
+            BackgroundTransitionCoordinator.shared.resumeWithoutSession()
+            return
+        }
         // Coordinator rearms the sockets (force reconnect), flushes pending
         // delivery receipts and drives the conversation sync. We do NOT
         // check `isConnected` here — that flag is unreliable after iOS
@@ -1057,6 +1082,18 @@ struct MeeshyApp: App {
             AnonymousSessionStore.delete(linkId: id)
         }
         activeGuestSession = nil
+    }
+
+    /// #10442 — la passerelle a terminé la session (lien échu, accès retiré) :
+    /// l'appareil l'oublie (trousseau, jeton, socket et ses reconnexions) et
+    /// le fil laisse place à l'écran qui le dit.
+    private func endGuestSession(_ notification: Notification) {
+        guard let session = activeGuestSession, let end = GuestSessionEnd(notification: notification),
+              session.isEnded(byRefusedToken: GuestSessionEnd.refusedSessionToken(in: notification)) else { return }
+        session.storedSessionKeys.forEach { AnonymousSessionStore.delete(linkId: $0) }
+        APIClient.shared.anonymousSessionToken = nil
+        MessageSocketManager.shared.disconnect()
+        activeGuestSession = session.ended(by: end)
     }
 
     // MARK: - Guest Deep Link (handles join/chat links when not authenticated)

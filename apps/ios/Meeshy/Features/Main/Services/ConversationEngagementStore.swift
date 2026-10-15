@@ -165,8 +165,18 @@ final class PostViewerPointsStore: ObservableObject {
         return known[postId]?.viewerPoints ?? seed
     }
 
+    /// Au-delà, les points connus repartent de zéro : chaque post jamais vu y restait pour la session.
+    static let maxTrackedPosts = 2_000
+
+    private func makeRoom() {
+        guard known.count > Self.maxTrackedPosts || lastRead.count > Self.maxTrackedPosts else { return }
+        known.removeAll()
+        lastRead.removeAll()
+    }
+
     func noteRead(postId: String, viewerPoints: Int?) {
         guard !postId.isEmpty, let viewerPoints, lastRead[postId] != viewerPoints else { return }
+        makeRoom()
         lastRead[postId] = viewerPoints
         known[postId] = PostViewerPoints.kept(known[postId], viewerPoints: viewerPoints, at: nil)
     }
@@ -175,6 +185,7 @@ final class PostViewerPointsStore: ObservableObject {
         let next = PostViewerPoints.kept(known[snapshot.postId], viewerPoints: snapshot.viewerPoints, at: snapshot.at)
         guard next != known[snapshot.postId] else { return }
         objectWillChange.send()
+        makeRoom()
         known[snapshot.postId] = next
     }
 

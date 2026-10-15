@@ -46,6 +46,7 @@ describe('DerivedIdentity — deux saisies remplies, aucun bouton « Modifier »
   function rendu(options: { suggestions?: readonly string[]; usernameError?: string } = {}) {
     return renderToStaticMarkup(
       <DerivedIdentity
+        language="fr"
         username="jean-dupont"
         displayName="Jean Dupont"
         usernamePlaceholder="jean-dupont"

@@ -14,6 +14,7 @@ import { accorder, refuser, type VerdictDeGeste } from './utils/participant-gest
 import type { PasserelleSocketDeConversation } from './utils/participant-geste-socket'
 import { postConversationNotice, noticeActor, noticeBroadcast } from '../../services/conversations/conversationNotice'
 import { announceConversationLanguageChange } from '../../services/message-translation/conversationLanguageChanges'
+import { guestShareLinkId } from '../../services/shareLinkReadGate'
 
 const logger = enhancedLogger.child({ module: 'ConversationBanCore' })
 
@@ -168,14 +169,19 @@ export async function bannirParticipant(
   // Ce qui est fermé, c'est la PORTE, pas la salle : les personnes déjà
   // entrées par ce lien restent membres. Et il n'y a rien à fermer pour un
   // créateur ou un membre ajouté à la main, qui n'ont pas de `shareLinkId`.
+  // Le lien se lit comme aux autres portes : la colonne d'abord, la session
+  // embarquée en repli (#10465). La fermeture est bornée à CETTE conversation :
+  // une ligne héritée dont la session nommerait le lien d'une autre ne donne
+  // pas au modérateur d'ici le pouvoir de le fermer.
   let closedShareLinkId: string | null = null
-  if (targetParticipant.shareLinkId) {
+  const entryShareLinkId = guestShareLinkId(targetParticipant)
+  if (entryShareLinkId) {
     try {
-      await prisma.conversationShareLink.update({
-        where: { id: targetParticipant.shareLinkId },
+      const closed = await prisma.conversationShareLink.updateMany({
+        where: { id: entryShareLinkId, conversationId: id },
         data: { isActive: false },
       })
-      closedShareLinkId = targetParticipant.shareLinkId
+      closedShareLinkId = closed.count > 0 ? entryShareLinkId : null
     } catch (linkError) {
       // Le bannissement, lui, est ÉCRIT. Un lien déjà supprimé ne doit pas
       // faire échouer le geste qui compte — mais il se dit, sans quoi

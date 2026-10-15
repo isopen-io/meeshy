@@ -230,6 +230,7 @@ struct ReelsPlayerView: View {
             finalizeReelSession(for: viewModel.currentId)
             NotificationToastManager.shared.onPostClosed(viewModel.currentId)
             Task { await EngagementTracker.shared.end(surface: .reels) }
+            Task { await viewModel.flushImpressions() }
         }
         .statusBarHidden(true)
     }

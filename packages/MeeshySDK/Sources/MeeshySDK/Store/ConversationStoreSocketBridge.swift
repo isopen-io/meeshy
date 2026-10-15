@@ -432,7 +432,8 @@ public final class ConversationStoreSocketBridge {
                     customName: p.customName,
                     reaction: p.reaction,
                     deletedForUserAt: p.deletedForUserAt,
-                    clearHistoryBefore: p.clearHistoryBefore
+                    clearHistoryBefore: p.clearHistoryBefore,
+                    appearance: p.appearance
                 )
             }
         )

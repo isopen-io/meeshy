@@ -56,7 +56,7 @@ const ar = {
   'game.banner.place.one': 'المركز {count}',
   'game.banner.place.other': 'المركز {count}',
   'game.banner.points': '{points} نقطة',
-  'game.banner.missing': 'باقٍ {points}',
+  'game.banner.missing': 'باقٍ {points} نحو المستوى {level}',
   'game.banner.separator': '، ',
   'game.league.name.quartz': 'كوارتز',
   'game.league.name.ambre': 'عنبر',

@@ -44,9 +44,9 @@ final class ImageFullscreenAutoLoadWiringTests: XCTestCase {
         let source = try sdkSource("Sources/MeeshyUI/Media/ImageViewerView.swift")
         XCTAssertFalse(source.contains("MeeshyImageWatermark"),
                        "Le chemin direct d'ImageFullscreen ne sert que des médias de CONVERSATION : la directive 2026-09-12 leur interdit la marque.")
-        XCTAssertTrue(source.contains("PhotoLibraryManager.shared.saveImage(data)"),
-                      "Le chemin nominal écrit les octets REÇUS via saveImage — pas de saveFromURL : ils viennent du cache partagé, pas d'un aller-retour réseau.")
-        XCTAssertTrue(source.contains("PhotoLibraryManager.shared.saveImageFile(at: onDisk)"),
-                      "#9685 — le fichier du cache part d'abord PAR RÉFÉRENCE, sans relecture ni décodage.")
+        XCTAssertTrue(source.contains("PhotoLibraryManager.shared.addImage(data, alias: attachmentId)"),
+                      "Le chemin nominal écrit les octets REÇUS via addImage (dédoublonné, #10370) — pas de saveFromURL : ils viennent du cache partagé, pas d'un aller-retour réseau.")
+        XCTAssertTrue(source.contains("PhotoLibraryManager.shared.addImageFile(at: onDisk, alias: attachmentId)"),
+                      "#9685 — le fichier du cache part d'abord PAR RÉFÉRENCE, sans relecture ni décodage ; #10370 — par le point d'écriture dédoublonné.")
     }
 }

@@ -81,7 +81,9 @@ public struct MessageStateMachine: Sendable {
             retryCount = 0
             state = .queued
 
-        case (.queued, .retryExhausted):
+        // `.sending` aussi : un envoi hors ligne naît `.sending` sans passer par `.queued`, et l'épuisement
+        // refusé laissait la bulle sur l'horloge, sans « Réessayer » ni « Supprimer ».
+        case (.queued, .retryExhausted), (.sending, .retryExhausted):
             state = .failed
 
         default:

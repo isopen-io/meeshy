@@ -78,9 +78,10 @@ export async function checkOfflineStates({ browser, BASE, expect }) {
   // --- 1 : la conversation sans historique.
   const empty = await context.newPage();
   await empty.goto(`${BASE}/c/c-nouvelle`, { waitUntil: 'load' });
-  await awaitFact(empty.getByText('Aucun message pour l’instant'));
+  // L'état vide suit la langue d'interface (#10645) : désigné par sa poignée, énoncé sans langue.
+  await awaitFact(empty.locator('[data-thread-empty] p').first());
   expect(
-    (await empty.getByText('Aucun message pour l’instant').count()) > 0,
+    isSpokenLabel(await empty.locator('[data-thread-empty] p').first().textContent(), 'thread.empty'),
     "une conversation sans historique dessine son état vide",
   );
   expect(

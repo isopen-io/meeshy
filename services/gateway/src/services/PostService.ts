@@ -12,9 +12,9 @@ import { borrowedSoundReelEntries } from './posts/storyReelCompanion';
 import { applyMediaOrder } from './posts/mediaOrder';
 import { triggerMediaCaptionTranslations, writeMediaCaption, type WrittenMediaCaption } from './posts/mediaCaptionWrites';
 import { triggerMediaAltTranslations, writeMediaAlt, type WrittenMediaAlt } from './posts/mediaAltWrites';
-import { engagementAggregateIncrements } from './posts/engagementIncrements';
-import { creditPostView } from './posts/postViewCredit';
-import { incrementPostCounters } from './posts/postCounters';
+import { creditEngagedReaderView } from './posts/postViewCredit';
+import { recordEngagementBatch, recordView, type EngagementSessionInput } from './posts/postReach';
+import { recordAnonymousView } from './posts/anonymousReach';
 import { qualifiesAsReel } from '@meeshy/shared/utils/reel-composition';
 import { ephemeralExpiresAt } from './posts/ephemeralPosts';
 import { isEphemeralPostType, type RepostPassage } from './posts/postVisibility';
@@ -30,15 +30,16 @@ import { enhancedLogger } from '../utils/logger-enhanced';
 import { ZMQSingleton } from './ZmqSingleton';
 import { authorSelect, mediaInclude, postInclude } from './posts/postIncludes';
 import { projectReferencesForViewer, toPostReferences } from './posts/postReferences';
-import { attachReferenceAccess, consumeReferenceView, resolveReferenceAccess } from './posts/referenceAccess';
+import { attachReferenceAccess } from './posts/referenceAccess';
 import { remapStoryEffectsMediaIds } from './posts/storyEffectsMediaRemap';
+import { storyEffectsWithoutCredits } from './posts/repostCreditChips';
 import { isContentDerivedFromTextObjects, storyTextObjectText } from './posts/storyContentComposition';
 import { storyTranslatableTexts } from './posts/storyEffectsV3';
 import { syncPostTrackingLinks } from './posts/publicationTrackingLinks';
 import { storyContentEditRequested } from './posts/storyEditPolicy';
 import { SoundCaptureService } from './posts/SoundCaptureService';
 import { applyPostRemovalEffects } from './posts/postRemovalEffects';
-import { creditPostEngagement, creditSource, creditStoryViewed } from './posts/postEngagementCredits';
+import { creditPostEngagement, creditSource } from './posts/postEngagementCredits';
 import { retractReactionNotifications } from './notifications/retractReactionNotifications';
 import { reproduceEditedSubjectNotifications } from './posts/reproduceEditedSubjectNotifications';
 import { getSharedNotificationService } from './notifications/notification-service-registry';
@@ -220,6 +221,13 @@ export class PostService {
 
     let repostOfId: string | undefined;
     let originalRepostOfId: string | undefined;
+
+    // #10524 — aucune puce « Reposté de @auteur » ne s'enregistre : un client
+    // antérieur à la règle l'envoie encore. Appliqué AVANT toute lecture du
+    // canvas, donc aussi aux traductions, aux signaux et au réel.
+    if (data.storyEffects !== undefined) {
+      data = { ...data, storyEffects: storyEffectsWithoutCredits(data.storyEffects) };
+    }
 
     if (data.repostOfId) {
       const sourcePost = await this.prisma.post.findFirst({
@@ -1038,7 +1046,9 @@ export class PostService {
     const updateData: any = {
       ...rest,
       visibility: data.visibility,
-      storyEffects: (data.storyEffects as any) ?? undefined,
+      // #10522, #10524 — un ancien client renvoie son canvas en cache, puce
+      // de crédit comprise : elle ne se réintroduit pas.
+      storyEffects: (storyEffectsWithoutCredits(data.storyEffects) as any) ?? undefined,
       isEdited: true,
     };
     if (data.visibilityUserIds !== undefined) {
@@ -1443,6 +1453,7 @@ export class PostService {
   async likePost(postId: string, userId: string, emoji: string = '❤️', passage: { readonly through?: RepostPassage } = {}) {
     try {
       await this.postReactionService.addReaction({ postId, userId, emoji, ...passage });
+      await creditEngagedReaderView(this.prisma, { postId, userId });
     } catch (err: unknown) {
       const message = err instanceof Error ? err.message : '';
       if (message.includes('not found') || message.includes('deleted')) {
@@ -1728,261 +1739,28 @@ export class PostService {
     throw new Error('Unable to generate unique share token');
   }
 
-  /**
-   * Enregistre une vue. Retourne `true` UNIQUEMENT lors de la première vue
-   * réelle du post AFFICHÉ (création du PostView) — permet à l'appelant de ne
-   * déclencher les effets de bord coûteux « une fois » (ex : marquer les
-   * notifications du post comme lues) sans les rejouer à chaque impression
-   * répétée du feed. Le crédit de la racine (ci-dessous) n'influence JAMAIS
-   * cette valeur de retour.
-   *
-   * Repost (chantier reposts cohérents & watermark, tâche 1) : quand le post
-   * visionné pointe vers un original (`repostOfId`), la RACINE de la chaîne
-   * (`originalRepostOfId ?? repostOfId` — jamais le parent intermédiaire) est
-   * créditée EN PLUS via `creditPostView`, donc avec EXACTEMENT les mêmes
-   * règles de dédup que le post affiché — y compris le MÊME filtre de
-   * visibilité que le post affiché (une racine FRIENDS-only repostée en
-   * PUBLIC reste inaccessible à un inconnu : sans ce filtre, n'importe qui
-   * pourrait créditer/exposer un original privé via son repost public).
-   *
-   * Chaque crédit (affiché, racine) est gardé INDÉPENDAMMENT par le même
-   * invariant anti-auto-inflation : l'auteur d'UN post donné n'inflate jamais
-   * SON PROPRE compteur en le consultant. Un reposteur qui revisionne son
-   * propre repost ne gonfle donc pas ce repost, mais reste un viewer légitime
-   * de l'ORIGINAL — dont l'auteur diffère — et crédite bien la racine.
-   *
-   * RÉFÉRENCES (2026-08-19) : cette route est aussi le SEUL acte qui dépense le
-   * droit qu'une référence ouvre sur un contenu expiré. Elle l'est parce
-   * qu'elle est DÉCLARÉE — la vue est affirmée par le client au moment où il
-   * affiche. Poser la consommation sur une lecture l'aurait dépensée avant tout
-   * affichage : la NSE préfetche le post à la réception de la notification, la
-   * revalidation cache-first relit derrière, le pull-to-refresh relit encore.
-   * Le crédit de la RACINE, lui, garde le filtre d'audience : une référence
-   * posée sur un repost n'ouvre pas l'original.
-   */
-  async recordView(postId: string, userId: string, duration?: number): Promise<boolean> {
-    try {
-      // Enforce visibility before recording — without this, any authenticated
-      // user could increment viewCount on any private story by ID, and have
-      // their userId surface in the author's `/posts/:id/views` response
-      // (information disclosure + view inflation).
-      const visibilityFilter = await this.buildVisibilityFilter(userId);
-      const VIEW_SELECT = {
-        id: true, authorId: true, repostOfId: true, originalRepostOfId: true,
-        type: true, expiresAt: true,
-      } as const;
-      const post = await this.prisma.post.findFirst({
-        where: { id: postId, deletedAt: NOT_DELETED, ...visibilityFilter },
-        select: VIEW_SELECT,
-      });
-
-      // Un référencé HORS audience ne passe pas le filtre ci-dessus — c'est
-      // pourtant lui que la référence a le droit d'amener ici. On relit sans
-      // filtre, et seule la référence décide.
-      const target = post ?? await this.prisma.post.findFirst({
-        where: { id: postId, deletedAt: NOT_DELETED },
-        select: VIEW_SELECT,
-      });
-      if (!target) return false;
-
-      const now = new Date();
-      const referencePost = { id: target.id, type: target.type, expiresAt: target.expiresAt };
-      const access = await resolveReferenceAccess({
-        prisma: this.prisma,
-        post: referencePost,
-        viewerId: userId,
-        now,
-      });
-
-      // Ni membre de l'audience, ni référencé : rien à enregistrer.
-      if (!post && access !== 'granted') return false;
-      if (access === 'consumed') return false;
-
-      // La vue DÉCLARÉE est le seul acte qui dépense le droit. Une lecture ne
-      // consomme jamais rien — la NSE préfetche, le cache revalide, le
-      // pull-to-refresh relit.
-      if (access === 'granted') {
-        await consumeReferenceView({
-          prisma: this.prisma,
-          post: referencePost,
-          viewerId: userId,
-          now,
-        });
-      }
-
-      // Sanitize duration: client-supplied → cap at 5 minutes (way past any
-      // reasonable story).
-      const safeDuration = duration !== undefined
-        ? Math.max(0, Math.min(300_000, Math.round(duration)))
-        : undefined;
-
-      // Author re-opening their own story shouldn't inflate viewCount — but
-      // this guards ONLY the displayed post's own credit. It must NOT abort
-      // the whole call: a reposter viewing their own repost is still a
-      // legitimate viewer of the ORIGINAL (see root credit below).
-      const isNewView = target.authorId === userId
-        ? false
-        : await creditPostView(this.prisma, { postId, userId, durationMs: safeDuration });
-      creditStoryViewed(this.prisma, { viewerId: userId, story: target, isNewView, durationMs: safeDuration });
-
-      const rootId = target.originalRepostOfId ?? target.repostOfId;
-      if (rootId && rootId !== postId) {
-        // Même filtre de visibilité que le post affiché — pas de requête
-        // supplémentaire hors périmètre, le filtre est déjà résolu ci-dessus.
-        const root = await this.prisma.post.findFirst({
-          where: { id: rootId, deletedAt: NOT_DELETED, ...visibilityFilter },
-          select: { id: true, authorId: true },
-        });
-        if (root && root.authorId !== userId) {
-          await creditPostView(this.prisma, { postId: rootId, userId, durationMs: safeDuration });
-        }
-      }
-
-      return isNewView;
-    } catch (error) {
-      // P7-2 — course double-submit : l'index unique (postId,userId) fait
-      // lever P2002 sur le create concurrent. Dédup ATTENDUE → no-op
-      // silencieux ; les compteurs restent exacts (l'incrément n'a pas été
-      // atteint). Pattern miroir de recordAnonymousOpen ci-dessous.
-      if (error && typeof error === 'object' && 'code' in error && error.code === 'P2002') {
-        return false;
-      }
-      // Toute AUTRE erreur (Mongo injoignable, validation) était avalée en
-      // silence par l'ancien `catch {}` — loggée désormais pour ne pas
-      // masquer une vraie panne sur ce chemin (initiative 6cd1a3c47).
-      log.warn('recordView failed', {
-        postId,
-        error: error instanceof Error ? error.message : String(error),
-      });
-      return false;
-    }
+  /** Enregistre une vue d'un compte — corps : `posts/postReach.ts`. */
+  async recordView(postId: string, userId: string, duration?: number, context?: Parameters<typeof recordView>[4]): Promise<boolean> {
+    return recordView(
+      { prisma: this.prisma, visibilityFilter: (viewer) => this.buildVisibilityFilter(viewer) },
+      postId,
+      userId,
+      duration, context,
+    );
   }
 
   /**
-   * Compte une ouverture ANONYME (sans compte) d'un post. v1 "comptage bête" :
-   * dédup faible par `sessionKey` (chaîne opaque du header X-Session-Token).
-   * Retourne `true` UNIQUEMENT au 1ᵉʳ insert d'un (postId, sessionKey) — ce qui
-   * incrémente `postOpenCount`. Doublon (P2002) ou post non public → `false`.
-   * Failles connues : voir la section Sécurité de la spec 2026-06-17.
+   * Compte la vue d'un lecteur SANS compte (#10483) sous la garde
+   * `isServableToAnonymous` — corps : `posts/anonymousReach.ts`. `readerKey`
+   * est la clé HMAC (`readerKeyOf`), jamais la valeur de X-Session-Token.
    */
-  async recordAnonymousOpen(postId: string, sessionKey: string): Promise<boolean> {
-    try {
-      // Un anonyme ne voit que du PUBLIC — réutilise la source de vérité de visibilité.
-      const visibilityFilter = await this.buildVisibilityFilter(undefined);
-      const post = await this.prisma.post.findFirst({
-        where: { id: postId, deletedAt: NOT_DELETED, ...visibilityFilter },
-        select: { id: true },
-      });
-      if (!post) return false;
-
-      // Dédup INSERT-only : l'unicité (postId, sessionKey) fait lever P2002 sur doublon.
-      try {
-        await this.prisma.anonymousPostOpen.create({ data: { postId, sessionKey } });
-      } catch {
-        return false; // déjà compté pour cette session (ou insert en échec) → no-op
-      }
-
-      await incrementPostCounters(this.prisma, [postId], { postOpenCount: { increment: 1 } });
-      return true;
-    } catch {
-      return false; // fire-and-forget : un compteur ne doit jamais casser une requête
-    }
+  async recordAnonymousView(postId: string, readerKey: string, durationMs?: number): Promise<boolean> {
+    return recordAnonymousView(this.prisma, { postId, readerKey, durationMs });
   }
 
-  /**
-   * Ingestion append-only des sessions d'engagement (LOT 4 + agrégation LOT 5).
-   *
-   * - Upsert sur `sessionId` → idempotent : rejouer un ACK perdu après un 200 est
-   *   un no-op (aucun double comptage).
-   * - Skip-and-continue : un post supprimé entre `begin` et `flush` est ignoré
-   *   sans faire échouer le reste du batch.
-   * - Caps défensifs (300 s) sur `dwellMs`/`watchMs`.
-   * - `userId` provient de la route (jamais du client) — anti spoofing.
-   * - Agrégation dénormalisée alimentée UNIQUEMENT à l'INSERT d'une nouvelle ligne
-   *   (jamais aux updates/retries idempotents) : `postOpenCount`, `playCount`,
-   *   `qualifiedViewCount`. N'altère NI `viewCount` NI `PostView`.
-   *
-   * Retourne le nombre de sessions persistées (insert ou update).
-   */
-  async recordEngagementBatch(
-    sessions: Array<{
-      sessionId: string; userId?: string; postId: string; contentType: string; surface: string;
-      startedAt: string; dwellMs: number; watchMs?: number; mediaDurationMs?: number;
-      completed?: boolean; truncated?: boolean; consent?: string;
-      actions?: unknown[]; watchSamples?: unknown[];
-    }>,
-    userId: string,
-  ): Promise<number> {
-    const capped = sessions.slice(0, 50);
-    let recorded = 0;
-
-    for (const s of capped) {
-      try {
-        const post = await this.prisma.post.findFirst({
-          where: { id: s.postId, deletedAt: NOT_DELETED },
-          select: { id: true, authorId: true },
-        });
-        if (!post) continue; // skip-and-continue: post deleted between begin and flush
-
-        const dwellMs = Math.max(0, Math.min(300_000, Math.round(s.dwellMs)));
-        const watchMs = s.watchMs !== undefined
-          ? Math.max(0, Math.min(300_000, Math.round(s.watchMs)))
-          : undefined;
-        const mediaDurationMs = s.mediaDurationMs !== undefined
-          ? Math.max(0, Math.round(s.mediaDurationMs))
-          : undefined;
-
-        const completed = s.completed === true;
-        const data = {
-          postId: s.postId,
-          userId,
-          contentType: s.contentType,
-          surface: s.surface,
-          startedAt: new Date(s.startedAt),
-          dwellMs,
-          watchMs,
-          mediaDurationMs,
-          completed,
-          truncated: s.truncated === true,
-          consent: s.consent,
-          actions: (s.actions ?? []) as Prisma.InputJsonValue,
-          watchSamples: (s.watchSamples ?? []) as Prisma.InputJsonValue,
-        };
-
-        const before = await this.prisma.postEngagement.findUnique({
-          where: { sessionId: s.sessionId },
-          select: { id: true },
-        });
-        const isInsert = !before;
-
-        await this.prisma.postEngagement.upsert({
-          where: { sessionId: s.sessionId },
-          update: data,
-          create: { sessionId: s.sessionId, ...data },
-        });
-
-        if (isInsert) {
-          await incrementPostCounters(this.prisma, [s.postId], engagementAggregateIncrements({
-            surface: s.surface,
-            contentType: s.contentType,
-            dwellMs,
-            watchMs,
-            mediaDurationMs,
-            completed,
-            watchSamples: s.watchSamples ?? [],
-          }));
-        }
-        recorded += 1;
-      } catch (error) {
-        // Une session dont l'écriture ou l'incrément a échoué n'est PAS comptée
-        // dans `recorded` (#10402) ; le lot continue, et l'échec se dit.
-        log.warn('recordEngagementBatch: session not recorded', {
-          postId: s.postId,
-          error: error instanceof Error ? error.message : String(error),
-        });
-      }
-    }
-    return recorded;
+  /** Sessions d'engagement d'un compte — corps : `posts/postReach.ts`. */
+  async recordEngagementBatch(sessions: readonly EngagementSessionInput[], userId: string): Promise<number> {
+    return recordEngagementBatch(this.prisma, sessions, userId);
   }
 
   // `userId`/`platform` : pas de table de partage par utilisateur/plateforme
@@ -2314,7 +2092,9 @@ export class PostService {
         }
 
         snapshotMedia = duplicatedMedia;
-        snapshotStoryEffects = original.storyEffects as Prisma.InputJsonValue | undefined;
+        snapshotStoryEffects = storyEffectsWithoutCredits(
+          original.storyEffects as Prisma.InputJsonValue | undefined,
+        );
 
         // STATUS carries its text in `content` (the mood caption); STORY carries
         // its text inside `storyEffects` (rendered on the canvas). Inherit the

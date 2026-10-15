@@ -1,5 +1,6 @@
 import SwiftUI
 import MeeshySDK
+import MeeshyUI
 
 // MARK: - La sortie d'une conversation consomme ce qu'on y a lu (#7500)
 
@@ -72,5 +73,45 @@ extension ConversationView {
                 _ = await vm.consumeViewOnce(messageId: messageId)
             }
         }
+    }
+}
+
+// MARK: - Le plein écran d'un lieu de la rangée Focal garde la loi de sortie (#9621)
+
+/// Le lieu touché dans la rangée Focal, et le verdict de capture de SON
+/// message, lu une fois au toucher. Le plein écran n'est enregistré auprès
+/// d'aucun détecteur de capture : une vue unique comme une flamme y restent
+/// NOIRES (#9617, annoncé OU noir) ; un message introuvable aussi (fermé par
+/// défaut).
+nonisolated struct FocalFullscreenPlace: Identifiable {
+    let place: SharedPlace
+    let isCaptureShielded: Bool
+    var id: String { "\(place.latitude),\(place.longitude)" }
+
+    init(place: SharedPlace, message: Message?) {
+        self.place = place
+        self.isCaptureShielded = message?.exitOffer.capture.shieldsCapture() ?? true
+    }
+}
+
+extension ConversationView {
+
+    /// Le lieu touché, porté avec le verdict de son message.
+    func makeFocalFullscreenPlace(_ place: SharedPlace, messageId: String) -> FocalFullscreenPlace {
+        FocalFullscreenPlace(place: place, message: viewModel.messages.first { $0.id == messageId })
+    }
+
+    /// Présenté ICI parce que la rangée vit dans une cellule de collection —
+    /// mêmes primitives que la bulle, sous le bouclier de son message.
+    func focalPlaceFullscreen(_ item: FocalFullscreenPlace) -> some View {
+        LocationFullscreenView(
+            latitude: item.place.latitude,
+            longitude: item.place.longitude,
+            placeName: item.place.name,
+            address: item.place.address,
+            accentColor: accentColor,
+            senderName: nil
+        )
+        .captureShield(item.isCaptureShielded)
     }
 }

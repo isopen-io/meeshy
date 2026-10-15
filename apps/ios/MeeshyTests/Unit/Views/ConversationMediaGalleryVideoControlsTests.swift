@@ -26,7 +26,7 @@ final class ConversationMediaGalleryVideoControlsTests: XCTestCase {
         // play/pause du transport partagé. Le poster ne doit exister que
         // tant que le player n'est pas attaché à cette URL.
         let source = try gallerySource()
-        guard source.range(of: "if !isPlayerAttached {\n                playOrDownloadButton") != nil else {
+        guard source.range(of: #"if !isPlayerAttached \{\s*\n\s*playOrDownloadButton"#, options: .regularExpression) != nil else {
             XCTFail(
                 "GalleryVideoPage must gate playOrDownloadButton on !isPlayerAttached " +
                 "(not !isPlayerActive) so the paused state shows ONLY the shared transport controls."

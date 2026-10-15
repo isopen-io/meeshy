@@ -92,7 +92,7 @@ describe('post:reaction-add depuis la carte d’une republication simple', () =>
 
     await handler.handleAddReaction(socket as never, { postId: REPOST, emoji: '👍' }, jest.fn());
 
-    expect(addReaction).toHaveBeenCalledWith({ postId: ORIGINAL, userId: READER, emoji: '👍', through: { id: REPOST, authorId: REPOSTER } });
+    expect(addReaction).toHaveBeenCalledWith({ postId: ORIGINAL, userId: READER, emoji: '👍', through: { id: REPOST, authorId: REPOSTER, type: 'POST' } });
   });
 
   it('sur un post ordinaire, ne nomme aucune republication', async () => {

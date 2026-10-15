@@ -2,6 +2,7 @@ import { useEffect, useRef, useState } from 'react';
 import { useStore } from 'zustand/react';
 
 import { auth } from '@/lib/api/auth';
+import { accountReplacementOf, provenSessionOf, type AccountReplacement, type ProvenSessionGestures } from '@/lib/api/proven-session';
 import type { ArrivalDeps } from '@/lib/arrival/arrival';
 import { sessionStore } from '@/lib/api/session';
 import { translate } from '@/lib/i18n-catalog';
@@ -18,10 +19,11 @@ import { useCountdown } from '@/lib/view/use-countdown';
 import { resolveVerifyEmailOutcome } from '@/lib/view/auth-feedback';
 import { href, Link, navigate } from '@/routes/route-table';
 
+import { AccountReplacementPrompt } from './account-replacement-prompt';
 import { ArrivalCelebration } from './arrival-celebration';
 import { AuthBrandFooter } from './auth-chrome';
 import { AuthColumn, AuthColumnBar } from './auth-column';
-import { EmailCodeForm, verifyEmailErrorText, withStrongEmail } from './email-code-form';
+import { awaitsSecondFactor, EmailCodeForm, goToSecondFactor, verifyEmailErrorText, withStrongEmail } from './email-code-form';
 import { Glyph } from './glyph';
 
 /**
@@ -76,6 +78,8 @@ export type VerifyEmailFlowDeps = {
   readonly appHandoff?: AppHandoff;
   /** L'arrivée célébrée (#8088) — `browserArrival` si absente. */
   readonly arrival?: ArrivalDeps;
+  /** La question « un AUTRE compte » (#10451) — les gestes de l'appareil si absents. */
+  readonly accountGestures?: ProvenSessionGestures;
 };
 
 const browserArrival: ArrivalDeps = {
@@ -99,7 +103,7 @@ const defaultDeps: VerifyEmailFlowDeps = {
   now: () => Date.now(),
 };
 
-type LinkPhase = 'idle' | 'handoff' | 'in-app' | 'checking' | 'celebrating' | 'refused';
+type LinkPhase = 'idle' | 'handoff' | 'in-app' | 'checking' | 'confirm' | 'celebrating' | 'refused';
 
 export function VerifyEmailFlow({
   email,
@@ -125,6 +129,7 @@ export function VerifyEmailFlow({
     email === null || token === null || token === '' ? 'idle' : handoffUrl !== null ? 'handoff' : 'checking',
   );
   const [linkError, setLinkError] = useState<string | null>(null);
+  const [replacement, setReplacement] = useState<AccountReplacement | null>(null);
   const linkConsumed = useRef(false);
   const handedOff = useRef(false);
 
@@ -149,8 +154,18 @@ export function VerifyEmailFlow({
     if (linkPhase !== 'checking' || email === null || token === null || linkConsumed.current) return;
     linkConsumed.current = true;
     void deps.verifyEmail({ email, token }).then((result) => {
+      const pending = result.ok ? accountReplacementOf(sessionStore.getState().session, provenSessionOf(result.data)) : null;
+      if (pending !== null) {
+        setReplacement(pending);
+        setLinkPhase('confirm');
+        return;
+      }
       const outcome = resolveVerifyEmailOutcome(result);
-      if (outcome.kind === 'signed-in') {
+      if (outcome.kind === 'second-factor' && awaitsSecondFactor()) {
+        goToSecondFactor();
+        return;
+      }
+      if (outcome.kind === 'signed-in' || outcome.kind === 'second-factor') {
         setLinkPhase('celebrating');
         return;
       }
@@ -206,7 +221,20 @@ export function VerifyEmailFlow({
     <AuthColumn>
       <AuthColumnBar to={closeTarget} title={translate(language, 'verifyEmail.bar.title')} />
 
-      {linkPhase === 'celebrating' ? (
+      {linkPhase === 'confirm' && replacement !== null ? (
+        <div className="flex flex-1 flex-col justify-center px-8">
+          <AccountReplacementPrompt
+            language={language}
+            replacement={replacement}
+            {...(deps.accountGestures === undefined ? {} : { gestures: deps.accountGestures })}
+            onAdopted={() => (replacement.proven.kind === 'second-factor' ? goToSecondFactor() : setLinkPhase('celebrating'))}
+            onDiscarded={() => {
+              forgetPendingVerification();
+              navigate(href('list'), true);
+            }}
+          />
+        </div>
+      ) : linkPhase === 'celebrating' ? (
         <ArrivalCelebration deps={deps.arrival ?? browserArrival} language={language} onLand={() => arriveAfterLink(next)} />
       ) : verified ? (
         <div className="flex flex-1 flex-col items-center justify-center gap-5 px-8 text-center" role="status">
@@ -272,6 +300,7 @@ export function VerifyEmailFlow({
             verifyEmail={deps.verifyEmail}
             {...(deps.verificationStatus === undefined ? {} : { verificationStatus: deps.verificationStatus })}
             pendingSessionToken={pending?.pendingSessionToken ?? null}
+            {...(deps.accountGestures === undefined ? {} : { accountGestures: deps.accountGestures })}
             onVerified={() => setVerified(true)}
             autoFocus
             initialError={linkError}

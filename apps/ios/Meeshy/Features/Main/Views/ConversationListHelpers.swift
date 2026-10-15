@@ -139,8 +139,9 @@ struct ConversationPreviewView: View {
 
     private var isDark: Bool { colorScheme == .dark }
 
-    private var accentColor: String { conversation.accentColor }
-    private var secondaryColor: String { conversation.colorPalette.secondary }
+    private var palette: ConversationColorPalette { conversation.displayPalette(isDark: isDark) }
+    private var accentColor: String { palette.primary }
+    private var secondaryColor: String { palette.secondary }
 
     /// Couleur du texte de l'en-tête du preview. Avec bannière, le voile sombre
     /// du `headerBackground` garantit la lisibilité du blanc. Sans bannière, le

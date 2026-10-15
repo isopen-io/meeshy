@@ -10,8 +10,10 @@ extension ConversationView {
 
     // MARK: - Conversation Background
     var conversationBackground: some View {
-        ConversationAnimatedBackground(
-            config: ConversationBackgroundConfig(
+        ConversationBackgroundView(
+            conversationId: conversation?.id ?? "",
+            initialAppearance: liveConversation?.userState.appearance,
+            signature: ConversationBackgroundConfig(
                 conversationType: conversation?.type ?? .direct,
                 isEncrypted: conversation?.encryptionMode != nil,
                 isE2EEncrypted: conversation?.encryptionMode == "e2ee",
@@ -19,13 +21,19 @@ extension ConversationView {
                 accentHex: accentColor,
                 secondaryHex: secondaryColor,
                 isDarkMode: isDark
-            )
+            ),
+            knownAttachment: { id in viewModel.messages.lazy.flatMap(\.attachments).first { $0.id == id } }
         )
         // Le fond vit toute la vie de l'écran : c'est là qu'il écoute le pair
         // d'un direct (#9359). Seule une annonce qui CHANGE le pair affiché
         // écrit l'état — les autres ne redessinent rien.
         .onReceive(MessageSocketManager.shared.userUpdated.receive(on: DispatchQueue.main)) { event in
             admitPeerUpdate(event)
+        }
+        // L'accent personnel choisi (ou rétabli) repeint le fil, ses bulles, son
+        // composeur et son en-tête aussitôt, sans relecture réseau (#10631).
+        .onReceive(NotificationCenter.default.publisher(for: ConversationAppearanceChange.notification).receive(on: DispatchQueue.main)) { note in
+            admitAppearance(note)
         }
         // Traduction sur l'appareil (#9899) : le fond vit aussi longtemps que
         // l'écran, et la couche n'y peint rien.
@@ -34,6 +42,14 @@ extension ConversationView {
             isEnabled: !previewMode && anonymousSession == nil,
             encryptionMode: liveConversation?.encryptionMode
         )
+    }
+
+    /// Seul un changement de ce qui se voit écrit l'override : l'écho d'un choix déjà
+    /// appliqué ne redessine rien.
+    func admitAppearance(_ note: Notification) {
+        guard let live = liveConversation,
+              let changed = ConversationAppearanceChange.appearance(in: note, for: live.id) else { return }
+        admitRepainted(live.adoptingAppearance(changed))
     }
 
     // MARK: - Header Avatar (thin wrapper → extracted struct to avoid PAC crashes)
@@ -578,7 +594,7 @@ private struct HeaderCallButtonsView: View {
             Button {
                 startCall(isVideo: true)
             } label: {
-                Label(String(localized: "call.start.video", defaultValue: "Appel video", bundle: .main), systemImage: "video.fill")
+                Label(String(localized: "call.start.video", defaultValue: "Appel vidéo", bundle: .main), systemImage: "video.fill")
             }
         } label: {
             callGlyph("phone.fill")

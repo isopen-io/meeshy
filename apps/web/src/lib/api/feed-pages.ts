@@ -1,3 +1,4 @@
+import type { ServedListing } from '@/lib/telemetry/served-listing';
 import type { InfiniteData } from '@tanstack/react-query';
 import type { Attachment } from '@meeshy/shared/types/attachment';
 import type { PostVisibility } from '@meeshy/shared/types/post';
@@ -174,6 +175,10 @@ export type FeedPost = {
    * il écarte ce qui n'a pas la forme d'un `{ url, token }`.
    */
   readonly metadata?: unknown;
+  /** La source de classement servie par item (#10501), lue par `servedListingOf`. */
+  readonly rankingSource?: unknown;
+  /** Le listing servi, posé au chargement de la page (`withServedListing`) — absent si le serveur ne dit rien. */
+  readonly servedListing?: ServedListing;
   readonly trackingLinks?: unknown;
   readonly likeCount?: number | null;
   readonly commentCount?: number | null;

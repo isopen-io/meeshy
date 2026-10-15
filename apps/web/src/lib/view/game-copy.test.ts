@@ -100,9 +100,9 @@ describe('les nombres s’accordent', () => {
     expect(pointsLabel(1294, 'en')).toBe('1,294 points');
     expect(formatCount(1221, 'de')).toBe('1.221');
   });
-  test('points convertibles', () => {
-    expect(convertiblePointsLabel(1, 'fr')).toBe('1 point convertible');
-    expect(convertiblePointsLabel(621, 'fr')).toBe('621 points convertibles');
+  test('points à convertir : le nom stable du solde qui paie une Meesh (#10540)', () => {
+    expect(convertiblePointsLabel(1, 'fr')).toBe('1 point à convertir');
+    expect(convertiblePointsLabel(621, 'fr')).toBe('621 points à convertir');
   });
   test('Meeshes', () => {
     expect(meeshCount(0, 'fr')).toBe('Aucune Meesh');

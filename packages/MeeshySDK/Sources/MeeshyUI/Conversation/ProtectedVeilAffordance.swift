@@ -126,6 +126,11 @@ public nonisolated enum ProtectedVeilPressLaw {
 /// Une pression ANNULÉE (doigt sorti) laisse une mesure orpheline : au-delà de
 /// `staleAfter` après son relâcher, elle ne qualifie plus le toucher suivant.
 public final class ProtectedVeilPressClock {
+    // MeeshyUI compile sous isolation MainActor par défaut : la deinit
+    // synthétisée y est ISOLÉE et tue xctest au démontage (iOS 18.4+/26,
+    // Swift #85663). Garde : MeeshyUIDeinitSourceGuardTests + passe binaire.
+    nonisolated deinit {}
+
     public static let staleAfter: TimeInterval = 0.5
 
     private var began: Date?

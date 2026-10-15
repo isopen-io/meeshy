@@ -30,6 +30,15 @@ import { GLYPHS } from './glyphs';
  * lui-même sur `document.body` (menu du message, actions d'une rangée). À
  * `z-index` 30 — celui des menus flottants de la coquille, qu'elle recouvre
  * par l'ordre du document —, ces menus, montés APRÈS elle, restent au-dessus.
+ *
+ * **ET `#root` DEVIENT SON PROPRE CONTEXTE D'EMPILEMENT tant qu'elle vit**
+ * (#10539). Le lecteur de stories est une ROUTE peinte à `z-index` 200 dans
+ * `#root` : l'aperçu, à 30, s'ouvrait DESSOUS. Le monter au-dessus de 200 le
+ * ferait passer devant les menus que son propre fil pose sur `<body>` (40, 50).
+ * `isolation: isolate` enferme les étages de l'écran recouvert dans `#root`,
+ * qui se peint alors tout entier sous l'aperçu — sans toucher à un seul
+ * `z-index`. Les couches posées sur `<body>` (visionneuse, feuilles), elles,
+ * sont refermées avant l'ouverture (`previewNotificationConversation`).
  */
 
 /** Au-delà de 96 px tirés vers le bas, la poignée ferme l'aperçu ; en deçà, la feuille revient. */
@@ -40,9 +49,14 @@ const CORNER = 22;
 function useInertBackdrop(): void {
   useEffect(() => {
     const root = document.getElementById('root');
-    if (root === null || root.hasAttribute('inert')) return;
-    root.setAttribute('inert', '');
-    return () => root.removeAttribute('inert');
+    if (root === null) return;
+    const held = root.hasAttribute('inert');
+    root.style.isolation = 'isolate';
+    if (!held) root.setAttribute('inert', '');
+    return () => {
+      root.style.isolation = '';
+      if (!held) root.removeAttribute('inert');
+    };
   }, []);
 }
 

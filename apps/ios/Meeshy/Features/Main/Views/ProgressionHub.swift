@@ -288,7 +288,7 @@ struct ProgressionElansHero: View {
 
     private var titre: String {
         guard let elan = progress.elan, elan.isAccelerated else { return ProgressionCopy.elansTitle }
-        return "Élan ×\(Int(elan.factor))"
+        return ProgressionCopy.elanTitle(factor: elan.factor)
     }
 
     private var explication: String {

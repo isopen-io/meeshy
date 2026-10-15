@@ -55,6 +55,11 @@ export * from './tracking-link.js';
 // Lien d'invitation (#7794, #7797) — aperçu du groupe et statistiques du lien
 export * from './share-link-stats.js';
 
+// Écrans d'affichage d'un contenu, portés par les événements de portée (#10483)
+export * from './content-surfaces.js';
+export * from './content-reach.js';
+export * from './social-events-v2.js';
+
 // Sticker porté par un message (#4823) — descripteur dédié, hissé depuis `metadata.sticker`
 export * from './message-sticker.js';
 export * from './sticker-definition.js';
