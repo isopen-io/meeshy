@@ -7,7 +7,6 @@ import type { PostComment } from '@/lib/api/publication-comments';
 import { ensureHappyDomRegistered, releaseHappyDomIfRegistered } from '@/test-support/happy-dom-environment';
 
 import { CommentRow } from './comment-row';
-import { STICKER_RENDER_SCALE, STICKER_SIDE } from '@/lib/reading-mode/metrics';
 
 /**
  * UN COMMENTAIRE PEUT PORTER UN STICKER (#9080) — dans la MÊME forme que le
@@ -71,8 +70,9 @@ describe('le sticker d’un commentaire', () => {
     const art = host.querySelector('[data-comment-sticker] img');
     expect(art?.getAttribute('src')).toContain('abc.png');
     expect(art?.getAttribute('alt')).toBe('Sticker');
-    // La cote suit la loi dérivée d'iOS (#10658) : jamais un nombre en dur.
-    expect(art?.getAttribute('width')).toBe(String(STICKER_SIDE * STICKER_RENDER_SCALE));
+    // La cote du web est celle de #9319 (224), pas un produit de la cote iOS : un témoin
+    // qui recalcule la formule du code grandissait avec elle (294 depuis #10658).
+    expect(art?.getAttribute('width')).toBe('224');
   });
 
   test('l’aperçu embarqué ne porte que metadata.sticker : il se peint quand même', async () => {
