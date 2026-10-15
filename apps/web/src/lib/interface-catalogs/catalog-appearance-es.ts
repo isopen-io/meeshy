@@ -15,6 +15,7 @@ const es = {
   'appearance.solid': 'Color liso',
   'appearance.photo': 'Foto de la conversación',
   'appearance.photo_empty': 'No se ha enviado ninguna foto en esta conversación',
+  'appearance.photo_unavailable': 'Las fotos no se pueden cargar en este momento',
   'appearance.photo_more': 'Más fotos',
   'appearance.photo_item': 'Foto {index}',
   'appearance.veil': 'Velo',

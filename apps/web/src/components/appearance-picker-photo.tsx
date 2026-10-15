@@ -64,7 +64,11 @@ export function PhotoSection({
 
   return (
     <PickerSection title={t('appearance.photo')} marker="data-appearance-photo">
-      {photos.length === 0 && !query.isPending ? (
+      {photos.length === 0 && query.isError ? (
+        <p className="px-4 text-caption" style={{ color: 'var(--color-ios-ink-2)' }} data-appearance-photo-unavailable>
+          {t('appearance.photo_unavailable')}
+        </p>
+      ) : photos.length === 0 && !query.isPending ? (
         <p className="px-4 text-caption" style={{ color: 'var(--color-ios-ink-2)' }}>
           {t('appearance.photo_empty')}
         </p>

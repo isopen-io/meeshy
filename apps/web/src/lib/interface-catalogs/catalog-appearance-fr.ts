@@ -13,6 +13,7 @@ const fr = {
   'appearance.solid': 'Couleur unie',
   'appearance.photo': 'Photo de la conversation',
   'appearance.photo_empty': 'Aucune photo envoyée dans cette conversation',
+  'appearance.photo_unavailable': 'Les photos ne se chargent pas pour l’instant',
   'appearance.photo_more': 'Plus de photos',
   'appearance.photo_item': 'Photo {index}',
   'appearance.veil': 'Voile',

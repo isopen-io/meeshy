@@ -15,6 +15,7 @@ const it = {
   'appearance.solid': 'Tinta unita',
   'appearance.photo': 'Foto della conversazione',
   'appearance.photo_empty': 'Nessuna foto è stata inviata in questa conversazione',
+  'appearance.photo_unavailable': 'Al momento non è possibile caricare le foto',
   'appearance.photo_more': 'Altre foto',
   'appearance.photo_item': 'Foto {index}',
   'appearance.veil': 'Velo',

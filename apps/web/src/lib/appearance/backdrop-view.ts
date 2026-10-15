@@ -32,6 +32,8 @@ const SCENE_HEIGHT = 760;
 const ROTATED_SIDE = 1200;
 const CACHE_LIMIT = 32;
 const REDUCED_TRANSPARENCY_VEIL = 0.6;
+/** Le voile est le fond primaire d'iOS (`MeeshyColors.backgroundPrimary(isDark:)` : `#09090B` / `#FFFFFF`), en composantes RVB. */
+const VEIL_RGB: Readonly<Record<AppearanceScheme, string>> = { dark: '9, 9, 11', light: '255, 255, 255' };
 
 const cache = new Map<string, BackdropStyle>();
 
@@ -105,7 +107,7 @@ export function backdropViewOf(args: {
             src: photoSrc,
             blur: background.blur,
             veil: args.reducedTransparency === true ? Math.max(background.veil, REDUCED_TRANSPARENCY_VEIL) : background.veil,
-            veilColor: scheme === 'dark' ? '0, 0, 0' : '255, 255, 255',
+            veilColor: VEIL_RGB[scheme],
           };
   }
 }
