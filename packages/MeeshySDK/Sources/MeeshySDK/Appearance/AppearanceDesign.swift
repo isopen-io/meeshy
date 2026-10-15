@@ -95,6 +95,9 @@ public struct AppearanceDesign: Codable, Hashable, Sendable, Identifiable {
     public let tile: AppearanceDesignTile?
     public let scene: AppearanceDesignScene?
     public let gradient: AppearanceDesignGradient?
+    /// Couche animée facultative (D6, #10638) : un fichier de pack que le moteur Lottie joue AU-DESSUS du dessin.
+    /// Illisible ⇒ ignorée : le dessin vectoriel reste la vérité, l'animation n'est qu'un plus.
+    public let lottie: PackAssetRef?
 
     public var id: String { key }
 
@@ -103,7 +106,7 @@ public struct AppearanceDesign: Codable, Hashable, Sendable, Identifiable {
     }
 
     private enum CodingKeys: String, CodingKey {
-        case key, style, palettes, tile, scene, gradient
+        case key, style, palettes, tile, scene, gradient, lottie
     }
 
     private enum PaletteKeys: String, CodingKey {
@@ -120,6 +123,7 @@ public struct AppearanceDesign: Codable, Hashable, Sendable, Identifiable {
         tile = try c.decodeIfPresent(AppearanceDesignTile.self, forKey: .tile)
         scene = try c.decodeIfPresent(AppearanceDesignScene.self, forKey: .scene)
         gradient = try c.decodeIfPresent(AppearanceDesignGradient.self, forKey: .gradient)
+        lottie = (try? c.decodeIfPresent(PackAssetRef.self, forKey: .lottie)) ?? nil
     }
 
     public func encode(to encoder: Encoder) throws {
@@ -132,6 +136,7 @@ public struct AppearanceDesign: Codable, Hashable, Sendable, Identifiable {
         try c.encodeIfPresent(tile, forKey: .tile)
         try c.encodeIfPresent(scene, forKey: .scene)
         try c.encodeIfPresent(gradient, forKey: .gradient)
+        try c.encodeIfPresent(lottie, forKey: .lottie)
     }
 
     public init(
@@ -141,7 +146,8 @@ public struct AppearanceDesign: Codable, Hashable, Sendable, Identifiable {
         dark: AppearanceDesignPalette,
         tile: AppearanceDesignTile? = nil,
         scene: AppearanceDesignScene? = nil,
-        gradient: AppearanceDesignGradient? = nil
+        gradient: AppearanceDesignGradient? = nil,
+        lottie: PackAssetRef? = nil
     ) {
         self.key = key
         self.style = style
@@ -150,6 +156,7 @@ public struct AppearanceDesign: Codable, Hashable, Sendable, Identifiable {
         self.tile = tile
         self.scene = scene
         self.gradient = gradient
+        self.lottie = lottie
     }
 }
 
