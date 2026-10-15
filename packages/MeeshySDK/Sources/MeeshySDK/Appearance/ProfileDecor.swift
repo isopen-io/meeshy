@@ -49,7 +49,7 @@ public struct ServedProfileDecor: Codable, Hashable, Sendable {
     private enum CodingKeys: String, CodingKey { case avatarRing, banner }
 
     public init(from decoder: Decoder) throws {
-        let c = try decoder.container(keyedBy: CodingKeys.self)
+        guard let c = try? decoder.container(keyedBy: CodingKeys.self) else { return }
         avatarRing = try? c.decodeIfPresent(ServedProfileDecorItem.self, forKey: .avatarRing)
         banner = try? c.decodeIfPresent(ServedProfileDecorItem.self, forKey: .banner)
     }
