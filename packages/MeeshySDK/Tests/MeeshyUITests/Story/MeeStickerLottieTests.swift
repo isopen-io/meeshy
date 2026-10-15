@@ -71,6 +71,19 @@ final class MeeStickerLottieTests: XCTestCase {
         XCTAssertNil(MeeStickerCatalog.animatedImageData(for: still))
     }
 
+    /// La feuille monte une case par sticker, et chacune lit son film en
+    /// même temps : sur iPhone, 15 lectures simultanées sur 17 échouaient et
+    /// les cases restaient vides (recette 2026-10-15).
+    func test_concurrentLoads_ofDistinctFilms_allSucceed() async throws {
+        let urls = MeeStickerCatalog.all.filter(\.animated).prefix(16).compactMap { MeeStickerCatalog.fileURL(for: $0) }
+        XCTAssertEqual(urls.count, 16)
+        let loaded = await withTaskGroup(of: Bool.self) { group in
+            for url in urls { group.addTask { await LottieFilm.load(url: url) != nil } }
+            return await group.reduce(0) { $0 + ($1 ? 1 : 0) }
+        }
+        XCTAssertEqual(loaded, urls.count, "chaque case lit son film, même quand toutes le lisent ensemble")
+    }
+
     func test_frameCount_neverDropsBelowOne() {
         XCTAssertEqual(LottieFilm.frameCount(duration: 0, framesPerSecond: 15), 1)
         XCTAssertEqual(LottieFilm.frameCount(duration: 4, framesPerSecond: 15), 60)
