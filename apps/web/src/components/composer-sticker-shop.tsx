@@ -19,6 +19,7 @@ import {
   loadPackCatalogue,
   setPackInstalled,
 } from '@/lib/api/sticker-packs';
+import { purchasePack } from '@/lib/api/packs-shop';
 import { translateStickerPacks } from '@/lib/i18n-sticker-packs-catalog';
 import type { PlainStickerPacksKey } from '@/lib/i18n-sticker-packs-catalog';
 import type { InterfaceLanguage } from '@/lib/interface-language';
@@ -90,6 +91,20 @@ export const stickerShopAdapter = (language: InterfaceLanguage, deps: Conversati
     if (!result.ok) return null;
     const detail: StickerPackDetail = { ...result.data, installed: true };
     return (queryClient) => writeInstalled(queryClient, pack.slug, detail);
+  },
+  price: (pack) => pack.price ?? null,
+  owned: (pack) => pack.owned ?? true,
+  purchase: async (pack, requestId) => {
+    const result = await purchasePack(deps, 'sticker', pack.slug, requestId);
+    return result.ok ? { ok: true, data: { balance: result.data.balance } } : result;
+  },
+  applyPurchased: (queryClient, pack, confirmed) => {
+    queryClient.setQueryData<readonly StickerPackSummary[]>(PACK_CATALOGUE_QUERY_KEY, (list) =>
+      (list ?? []).map((candidate) => (candidate.slug === pack.slug ? { ...candidate, owned: confirmed !== null, installed: confirmed !== null } : candidate)),
+    );
+    if (confirmed === null) return;
+    void queryClient.invalidateQueries({ queryKey: INSTALLED_PACKS_QUERY_KEY });
+    void queryClient.invalidateQueries({ queryKey: PACK_CATALOGUE_QUERY_KEY });
   },
   title: (pack) => pack.name,
   description: (pack) => pack.description,
