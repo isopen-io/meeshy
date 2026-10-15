@@ -88,7 +88,9 @@ public final class PreferenceService: PreferenceServiceProviding, @unchecked Sen
     }
 
     public func updateConversationPreferences(conversationId: String, request: UpdateConversationPreferencesRequest) async throws {
-        let _: APIResponse<[String: String]> = try await api.put(
+        // #10716 — la route rend la LIGNE entière (`data.isPinned`, `data.tags`…), pas un
+        // dictionnaire de chaînes : on n'attend de la réponse que son accusé.
+        let _: APIResponse<EmptySuccess> = try await api.put(
             UserPreferencesEndpoint.conversationsByConversationId(conversationId: conversationId), body: request
         )
     }

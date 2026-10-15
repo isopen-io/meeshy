@@ -116,7 +116,7 @@ final class PreferenceServiceTests: XCTestCase {
     // MARK: - updateConversationPreferences
 
     func testUpdateConversationPreferencesCallsCorrectEndpoint() async throws {
-        let response = APIResponse(success: true, data: ["status": "ok"], error: nil)
+        let response = APIResponse(success: true, data: EmptySuccess(), error: nil)
         mock.stub("/user-preferences/conversations/conv123", result: response)
 
         let request = UpdateConversationPreferencesRequest(isPinned: true, isMuted: false)
@@ -125,6 +125,18 @@ final class PreferenceServiceTests: XCTestCase {
         XCTAssertEqual(mock.requestCount, 1)
         XCTAssertEqual(mock.lastRequest?.endpoint, "/user-preferences/conversations/conv123")
         XCTAssertEqual(mock.lastRequest?.method, "PUT")
+    }
+
+    /// #10716 — la passerelle répond la ligne ENTIÈRE ; le décodage de l'accusé ne doit pas
+    /// exiger un dictionnaire de chaînes (« Type mismatch for type String at path data.isPinned »).
+    func testUpdateConversationPreferencesAcknowledgementDecodesTheFullRowResponse() throws {
+        let json = Data("""
+        {"success":true,"data":{"id":"p1","isPinned":true,"isMuted":false,"tags":["a"],"categoryId":null,"version":3}}
+        """.utf8)
+        let ack = try JSONDecoder().decode(APIResponse<EmptySuccess>.self, from: json)
+        XCTAssertTrue(ack.success)
+        XCTAssertThrowsError(try JSONDecoder().decode(APIResponse<[String: String]>.self, from: json),
+                             "l'ancien type attendu échouait sur cette réponse")
     }
 
     func testUpdateConversationPreferencesThrowsOnError() async {
