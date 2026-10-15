@@ -1,4 +1,4 @@
-import { useMemo } from 'react';
+import { useContext, useMemo } from 'react';
 
 import { maskedAttachment } from '@meeshy/shared/utils/attachment-protection';
 
@@ -11,6 +11,7 @@ import type { MediaCarrier } from '@/lib/view/media';
 import { transcriptionOffered } from '@/lib/view/audio-on-demand';
 import { attachmentSendRequest, mediaPageOffers, type MediaViewerCapabilities } from '@/lib/view/viewer-page-offers';
 import { isMineOf } from '@/lib/view/message';
+import { ThreadMediaContext } from '@/lib/view/thread-media-context';
 import { threadMediaEntriesOf } from '@/lib/view/thread-media-list';
 import { useMediaHubIndex } from '@/lib/view/use-media-hub-index';
 
@@ -72,6 +73,7 @@ export default function ThreadMediaViewer({
   readonly onClose: () => void;
   readonly onReplyToMedia: (messageId: string, attachmentId: string) => void;
 }) {
+  const thread = useContext(ThreadMediaContext);
   const index = useMediaHubIndex({ deps: deps ?? apiDeps, conversationId: opened.conversationId, kind, term: null });
   const indexMessages = index.query.data;
   const entries = useMemo(
@@ -133,7 +135,7 @@ export default function ThreadMediaViewer({
             messageId: entry.message.id,
             conversationId: entry.message.conversationId,
             offers,
-            transcribe: transcriptionOffered({ attachment: entry.attachment, message: entry.message }),
+            transcribe: transcriptionOffered({ attachment: entry.attachment, message: entry.message, conversationEncryptionMode: thread?.conversationEncryptionMode }),
             ...(offers.share
               ? { share: attachmentSendRequest({ attachment: entry.attachment, message: entry.message, mine: isMineOf(entry.message, viewerId), now, quoted }) }
               : {}),

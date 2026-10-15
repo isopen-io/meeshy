@@ -10,6 +10,7 @@ import type { ConversationsDeps } from '@/lib/api/conversations';
 import type { HttpTransport } from '@/lib/api/http';
 import type { Attachment } from '@/lib/api/types';
 import { loadInterfaceCatalog } from '@/lib/i18n-catalog';
+import { ThreadMediaContext } from '@/lib/view/thread-media-context';
 
 import { Attachments } from './attachment-blocks';
 
@@ -75,6 +76,15 @@ describe('la bulle vocale moderne', () => {
 
   test('un vocal chiffré de bout en bout n’offre pas « Transcrire » (#10700)', () => {
     expect(htmlOf({ ...witnessMessage(), isEncrypted: true, encryptionMode: 'e2ee' })).not.toContain('data-voice-transcribe');
+  });
+
+  test('dans une conversation chiffrée de bout en bout, un vocal ne propose pas « Transcrire », même si son message n’est pas marqué (#10700)', () => {
+    const markup = renderToStaticMarkup(
+      <ThreadMediaContext.Provider value={{ viewerId: 'u-viewer', onReplyToMedia: () => {}, conversationEncryptionMode: 'e2ee' }}>
+        <Attachments attachments={[voice()]} languages={['fr']} fallbackLanguage="fr" mediaFrame="box" message={{ ...witnessMessage(), isEncrypted: false, encryptionMode: null }} />
+      </ThreadMediaContext.Provider>,
+    );
+    expect(markup).not.toContain('data-voice-transcribe');
   });
 
   test('un vocal encore optimiste (cid_) n’offre pas « Transcrire » (#10700)', () => {

@@ -21,6 +21,8 @@ export type ThreadMediaContextValue = {
   /** Le nom et l'avatar de la conversation, que la carte de lecture de la coque montre (#10624). */
   readonly conversationTitle?: string | undefined;
   readonly conversationAvatarUrl?: string | undefined;
+  /** Le régime de chiffrement de la conversation (#10700) — « Transcrire » ne s'offre pas quand le serveur ne la lit pas. */
+  readonly conversationEncryptionMode?: string | null | undefined;
 };
 
 export const ThreadMediaContext = createContext<ThreadMediaContextValue | null>(null);
@@ -34,8 +36,9 @@ export function useThreadMediaValue(params: {
   const { viewerId, onReplyToMedia, conversation } = params;
   const conversationTitle = conversation !== undefined ? titleOf(conversation, viewerId) : undefined;
   const conversationAvatarUrl = conversation !== undefined ? avatarOf(conversation, viewerId) : undefined;
+  const conversationEncryptionMode = conversation?.encryptionMode ?? null;
   return useMemo(
-    () => ({ viewerId, onReplyToMedia, conversationTitle, conversationAvatarUrl }),
-    [viewerId, onReplyToMedia, conversationTitle, conversationAvatarUrl],
+    () => ({ viewerId, onReplyToMedia, conversationTitle, conversationAvatarUrl, conversationEncryptionMode }),
+    [viewerId, onReplyToMedia, conversationTitle, conversationAvatarUrl, conversationEncryptionMode],
   );
 }
