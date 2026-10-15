@@ -112,7 +112,8 @@ public final class PreferenceService: PreferenceServiceProviding, @unchecked Sen
 
     public func patchCategory(id: String, isExpanded: Bool) async throws {
         let body = ["isExpanded": isExpanded]
-        let _: APIResponse<[String: String]> = try await api.patch(
+        // #10716 — la route rend la LIGNE de catégorie (`isExpanded`, `order`) : seul l'accusé compte.
+        let _: APIResponse<EmptySuccess> = try await api.patch(
             MeEndpoint.preferencesCategoriesByCategoryId(categoryId: id), body: body
         )
     }
@@ -125,7 +126,8 @@ public final class PreferenceService: PreferenceServiceProviding, @unchecked Sen
     }
 
     public func patchPreferences<T: Encodable>(category: PreferenceCategory, body: T) async throws {
-        let _: APIResponse<[String: String]> = try await api.patch(
+        // #10716 — la route rend la catégorie entière (booléens, nombres) : seul l'accusé compte.
+        let _: APIResponse<EmptySuccess> = try await api.patch(
             category.endpoint, body: body
         )
     }

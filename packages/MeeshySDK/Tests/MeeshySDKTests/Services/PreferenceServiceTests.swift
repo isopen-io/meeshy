@@ -161,7 +161,7 @@ final class PreferenceServiceTests: XCTestCase {
     // MARK: - patchCategory
 
     func testPatchCategoryCallsCorrectEndpoint() async throws {
-        let response = APIResponse(success: true, data: ["status": "ok"], error: nil)
+        let response = APIResponse(success: true, data: EmptySuccess(), error: nil)
         mock.stub("/me/preferences/categories/cat1", result: response)
 
         try await service.patchCategory(id: "cat1", isExpanded: false)
@@ -172,13 +172,23 @@ final class PreferenceServiceTests: XCTestCase {
     }
 
     func testPatchCategoryWithExpandedTrue() async throws {
-        let response = APIResponse(success: true, data: ["status": "ok"], error: nil)
+        let response = APIResponse(success: true, data: EmptySuccess(), error: nil)
         mock.stub("/me/preferences/categories/cat2", result: response)
 
         try await service.patchCategory(id: "cat2", isExpanded: true)
 
         XCTAssertEqual(mock.lastRequest?.endpoint, "/me/preferences/categories/cat2")
         XCTAssertEqual(mock.lastRequest?.method, "PATCH")
+    }
+
+    /// #10716 — un PATCH de catégorie rend la LIGNE (`isExpanded` booléen, `order` entier) et un PATCH
+    /// de préférences rend la catégorie (booléens) : aucun n'est un dictionnaire de chaînes.
+    func testPatchAcknowledgementsDecodeTheRowsTheGatewayServes() throws {
+        let category = Data(#"{"success":true,"data":{"id":"c1","name":"Travail","isExpanded":false,"order":2}}"#.utf8)
+        let privacy = Data(#"{"success":true,"data":{"showOnlineStatus":true,"showLastSeen":false}}"#.utf8)
+        XCTAssertTrue(try JSONDecoder().decode(APIResponse<EmptySuccess>.self, from: category).success)
+        XCTAssertTrue(try JSONDecoder().decode(APIResponse<EmptySuccess>.self, from: privacy).success)
+        XCTAssertThrowsError(try JSONDecoder().decode(APIResponse<[String: String]>.self, from: category))
     }
 
     // MARK: - getAllPreferences
@@ -237,7 +247,7 @@ final class PreferenceServiceTests: XCTestCase {
     // MARK: - patchPreferences
 
     func testPatchPreferencesPrivacy() async throws {
-        let response = APIResponse(success: true, data: ["status": "ok"], error: nil)
+        let response = APIResponse(success: true, data: EmptySuccess(), error: nil)
         mock.stub("/me/preferences/privacy", result: response)
 
         let body = ["showOnlineStatus": false]
@@ -249,7 +259,7 @@ final class PreferenceServiceTests: XCTestCase {
     }
 
     func testPatchPreferencesAudio() async throws {
-        let response = APIResponse(success: true, data: ["status": "ok"], error: nil)
+        let response = APIResponse(success: true, data: EmptySuccess(), error: nil)
         mock.stub("/me/preferences/audio", result: response)
 
         let body = ["transcriptionEnabled": true]
@@ -260,7 +270,7 @@ final class PreferenceServiceTests: XCTestCase {
     }
 
     func testPatchPreferencesMessage() async throws {
-        let response = APIResponse(success: true, data: ["status": "ok"], error: nil)
+        let response = APIResponse(success: true, data: EmptySuccess(), error: nil)
         mock.stub("/me/preferences/message", result: response)
 
         let body = ["sendOnEnter": false]
@@ -270,7 +280,7 @@ final class PreferenceServiceTests: XCTestCase {
     }
 
     func testPatchPreferencesNotification() async throws {
-        let response = APIResponse(success: true, data: ["status": "ok"], error: nil)
+        let response = APIResponse(success: true, data: EmptySuccess(), error: nil)
         mock.stub("/me/preferences/notification", result: response)
 
         let body = ["pushEnabled": false]
@@ -280,7 +290,7 @@ final class PreferenceServiceTests: XCTestCase {
     }
 
     func testPatchPreferencesVideo() async throws {
-        let response = APIResponse(success: true, data: ["status": "ok"], error: nil)
+        let response = APIResponse(success: true, data: EmptySuccess(), error: nil)
         mock.stub("/me/preferences/video", result: response)
 
         let body = ["mirrorLocalVideo": false]
@@ -290,7 +300,7 @@ final class PreferenceServiceTests: XCTestCase {
     }
 
     func testPatchPreferencesDocument() async throws {
-        let response = APIResponse(success: true, data: ["status": "ok"], error: nil)
+        let response = APIResponse(success: true, data: EmptySuccess(), error: nil)
         mock.stub("/me/preferences/document", result: response)
 
         let body = ["autoDownloadEnabled": true]
@@ -300,7 +310,7 @@ final class PreferenceServiceTests: XCTestCase {
     }
 
     func testPatchPreferencesApplication() async throws {
-        let response = APIResponse(success: true, data: ["status": "ok"], error: nil)
+        let response = APIResponse(success: true, data: EmptySuccess(), error: nil)
         mock.stub("/me/preferences/application", result: response)
 
         let body = ["compactMode": true]
