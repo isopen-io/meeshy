@@ -54,7 +54,8 @@ enum DeepLinkDestination: Equatable {
     /// Une saison ou une semaine de ligue (#9947) — `/me/progression/saison/{n}`, `/me/progression/ligue/{lundi}`.
     case game(GameLink)
     /// `meeshy://settings/packs?domaine=<domaine>` : la vitrine unique, filtrée (#10632).
-    case packShop(domain: PackDomain?)
+    /// `pack=<slug>` met CE pack en avant dans la vitrine (#10703) — même paramètre que le web.
+    case packShop(domain: PackDomain?, pack: String? = nil)
     case external(URL)
 }
 
@@ -289,7 +290,8 @@ enum DeepLinkParser {
         case "conversations" where customScheme: return id.flatMap(conversationListEntry)
         // La vitrine unique, filtrée par domaine (#10632, spec 2026-10-14 § 4.4).
         case "settings" where customScheme && components.count == 2 && components[1] == "packs":
-            return .packShop(domain: PackDomain(queryValue: queryValue("domaine", in: url)))
+            return .packShop(domain: PackDomain(queryValue: queryValue("domaine", in: url)),
+                             pack: PackFocusSlug.normalized(queryValue("pack", in: url)))
         case "call" where customScheme && components.count == 1:
             return queryValue("contactId", in: url).map { .call(conversationId: $0, isVideo: queryValue("type", in: url) == "video") }
         default: break
@@ -377,7 +379,7 @@ enum DeepLink: Equatable {
     /// Une saison ou une semaine de ligue (#9947), ouverte par `Router.openGame(at:)`.
     case game(GameLink)
     /// La vitrine unique des packs, filtrée par domaine (#10632).
-    case packShop(domain: PackDomain?)
+    case packShop(domain: PackDomain?, pack: String? = nil)
     /// `/l/<token>` dont la cible vit sur le web : lien EXTERNAL, ou type de
     /// cible que ce client ne connaît pas encore. Le consommateur l'OUVRE
     /// (Safari) — il ne la rejoint pas.
@@ -648,7 +650,7 @@ final class DeepLinkRouter: ObservableObject {
         case .userLinks:                  return .userLinks
         case .hashtag(let tag):           return .hashtag(tag: tag)
         case .game(let link):             return .game(link)
-        case .packShop(let domain):       return .packShop(domain: domain)
+        case .packShop(let domain, let pack): return .packShop(domain: domain, pack: pack)
         case .joinLink(let identifier):   return .joinLink(identifier: identifier)
         case .chatLink(let identifier):   return .chatLink(identifier: identifier)
         case .magicLink(let token):       return .magicLink(token: token)

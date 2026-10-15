@@ -10,7 +10,9 @@ struct StickerSheetView: View {
     let sticker: BubbleContent.Sticker
     let savable: StoryStickerLibrary.Savable?
     let isMine: Bool
+    var senderName: String? = nil
 
+    @Environment(\.dismiss) private var dismiss
     @State private var inLibrary = false
     @State private var isAdding = false
     @State private var isFavorite = false
@@ -30,10 +32,20 @@ struct StickerSheetView: View {
                 .padding(.top, 28)
                 .accessibilityLabel(BubbleSticker.accessibilityLabel(for: sticker))
 
+            if let sender = StickerSheetLinks.senderLine(senderName) {
+                Text(sender)
+                    .font(.subheadline)
+                    .foregroundStyle(.secondary)
+                    .accessibilityIdentifier("message.sticker.sender")
+            }
+
             if let favoriteEntry {
                 favoriteRow(favoriteEntry)
             } else if savable != nil {
                 libraryRow
+            }
+            if let vitrine = StickerSheetLinks.vitrine(templateId: sticker.templateId) {
+                viewPackRow(vitrine)
             }
             Spacer(minLength: 0)
         }
@@ -79,6 +91,25 @@ struct StickerSheetView: View {
             .buttonStyle(.plain)
             .disabled(isAdding)
         }
+    }
+
+    /// « Voir le pack » ouvre la vitrine des stickers centrée sur CE pack (#10703) : la fiche se
+    /// ferme, la porte profonde fait le reste — la même que le lien `meeshy://`.
+    private func viewPackRow(_ vitrine: DeepLink) -> some View {
+        Button {
+            HapticFeedback.light()
+            dismiss()
+            DeepLinkRouter.shared.pendingDeepLink = vitrine
+        } label: {
+            Label(String(localized: "message.sticker.viewPack", defaultValue: "Voir le pack", bundle: .main),
+                  systemImage: "bag")
+                .font(.subheadline.weight(.semibold))
+                .foregroundStyle(MeeshyColors.indigo500)
+                .frame(maxWidth: .infinity, minHeight: 44)
+                .contentShape(Rectangle())
+        }
+        .buttonStyle(.plain)
+        .accessibilityIdentifier("message.sticker.viewPack")
     }
 
     private func favoriteRow(_ entry: StickerUsageEntry) -> some View {
@@ -138,6 +169,7 @@ private struct StickerSheetDetents: ViewModifier {
 struct StickerSheetOnTap: ViewModifier {
     let sticker: BubbleContent.Sticker
     let isMine: Bool
+    var senderName: String? = nil
     var isEnabled: Bool = true
 
     @State private var isPresented = false
@@ -155,7 +187,7 @@ struct StickerSheetOnTap: ViewModifier {
             .accessibilityAddTraits(.isButton)
             .accessibilityAction { if isEnabled { isPresented = true } }
             .sheet(isPresented: $isPresented) {
-                StickerSheetView(sticker: sticker, savable: savable, isMine: isMine)
+                StickerSheetView(sticker: sticker, savable: savable, isMine: isMine, senderName: senderName)
             }
             .onDisappear { pendingOpen?.cancel(); pendingOpen = nil }
     }
@@ -177,7 +209,8 @@ struct StickerSheetOnTap: ViewModifier {
 }
 
 extension View {
-    func stickerSheetOnTap(sticker: BubbleContent.Sticker, isMine: Bool, isEnabled: Bool = true) -> some View {
-        modifier(StickerSheetOnTap(sticker: sticker, isMine: isMine, isEnabled: isEnabled))
+    func stickerSheetOnTap(sticker: BubbleContent.Sticker, isMine: Bool, senderName: String? = nil,
+                           isEnabled: Bool = true) -> some View {
+        modifier(StickerSheetOnTap(sticker: sticker, isMine: isMine, senderName: senderName, isEnabled: isEnabled))
     }
 }

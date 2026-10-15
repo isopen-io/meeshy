@@ -444,6 +444,7 @@ struct ThemedMessageBubble: View {
     private func stickerLayout(content: BubbleContent, sticker: BubbleContent.Sticker) -> some View {
         BubbleSticker(
             sticker: sticker,
+            senderName: content.senderName,
             messageId: content.messageId,
             isMe: content.isMe,
             isDark: isDark,

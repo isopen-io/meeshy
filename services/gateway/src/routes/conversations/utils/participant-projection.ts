@@ -32,7 +32,9 @@ export const participantListUserSelect = {
       isActive: true,
       createdAt: true,
       updatedAt: true,
-      deactivatedAt: true
+      deactivatedAt: true,
+      // #10713 — chargé, jamais servi tel quel : composé en `profileDecor`.
+      equippedAvatarRing: true
     }
   }
 } as const;

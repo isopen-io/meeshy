@@ -57,4 +57,13 @@ final class PackShopSnapshotStoreTests: XCTestCase {
         store.write(PackShopState(), domains: nil)
         guard case .empty = store.read(domains: nil) else { return XCTFail("rien à écrire") }
     }
+
+    func test_clearAll_forgetsEveryShelf() {
+        let store = makeStore(Clock())
+        store.write(state(), domains: nil)
+        store.write(state(), domains: [.wallpaper])
+        store.clearAll()
+        guard case .empty = store.read(domains: nil) else { return XCTFail("la vitrine entière est oubliée") }
+        guard case .empty = store.read(domains: [.wallpaper]) else { return XCTFail("chaque rayon est oublié") }
+    }
 }

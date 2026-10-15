@@ -50,4 +50,44 @@ final class PackShopDeepLinkTests: XCTestCase {
         _ = PacksSettingsView(initialDomain: .banner)
         _ = PacksSettingsView()
     }
+
+    // MARK: - #10703 — `pack=<slug>` met CE pack en avant
+
+    func test_packsLink_withAPack_carriesItsSlug() {
+        XCTAssertEqual(parse("meeshy://settings/packs?domaine=sticker&pack=chats-de-paris"),
+                       .packShop(domain: .sticker, pack: "chats-de-paris"))
+        XCTAssertEqual(parse("meeshy://settings/packs?pack=Chats-De-Paris"),
+                       .packShop(domain: nil, pack: "chats-de-paris"))
+    }
+
+    func test_packsLink_withAnUnreadableSlug_opensTheShopWithoutFocus() {
+        XCTAssertEqual(parse("meeshy://settings/packs?pack=../etc"), .packShop(domain: nil, pack: nil))
+        XCTAssertEqual(parse("meeshy://settings/packs?pack="), .packShop(domain: nil, pack: nil))
+    }
+
+    func test_launcher_carriesThePackToTheSettings() {
+        let launcher = PackShopLauncher()
+
+        launcher.request(domain: .sticker, pack: "chats-de-paris")
+
+        let request = launcher.consume()
+        XCTAssertEqual(request?.domain, .sticker)
+        XCTAssertEqual(request?.pack, "chats-de-paris")
+    }
+
+    func test_vitrineLinkOfAStickerSheet_isTheStickerShopOnThatPack() {
+        XCTAssertEqual(StickerSheetLinks.vitrine(templateId: "pack.chats-de-paris.dodo"),
+                       .packShop(domain: .sticker, pack: "chats-de-paris"))
+    }
+
+    func test_vitrineLinkOfAStickerSheet_isAbsentWithoutAPack() {
+        XCTAssertNil(StickerSheetLinks.vitrine(templateId: nil))
+        XCTAssertNil(StickerSheetLinks.vitrine(templateId: "since-date"))
+    }
+
+    func test_senderLine_saysTheNameOrNothing() {
+        XCTAssertNil(StickerSheetLinks.senderLine(nil))
+        XCTAssertNil(StickerSheetLinks.senderLine("   "))
+        XCTAssertTrue(StickerSheetLinks.senderLine(" Amina Diallo ")?.contains("Amina Diallo") == true)
+    }
 }

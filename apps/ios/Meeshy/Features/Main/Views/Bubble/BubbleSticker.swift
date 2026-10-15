@@ -158,6 +158,8 @@ struct BubbleSticker: View, Equatable {
     // MARK: - Entrées
 
     let sticker: BubbleContent.Sticker
+    /// Le nom de l'expéditeur, dit par la fiche du sticker (#10703).
+    var senderName: String? = nil
     let messageId: String
     let isMe: Bool
     let isDark: Bool
@@ -203,6 +205,7 @@ struct BubbleSticker: View, Equatable {
 
     static func == (lhs: BubbleSticker, rhs: BubbleSticker) -> Bool {
         lhs.sticker == rhs.sticker
+            && lhs.senderName == rhs.senderName
             && lhs.messageId == rhs.messageId
             && lhs.isMe == rhs.isMe
             && lhs.isDark == rhs.isDark
@@ -262,7 +265,7 @@ struct BubbleSticker: View, Equatable {
                         // Reduce Motion), puis le toucher ouvre la fiche : le
                         // sticker n'a ni plein écran ni « Enregistrer l'image ».
                         .stickerFloat()
-                        .stickerSheetOnTap(sticker: sticker, isMine: isMe, isEnabled: !isVeiled)
+                        .stickerSheetOnTap(sticker: sticker, isMine: isMe, senderName: senderName, isEnabled: !isVeiled)
                         .blur(radius: isVeiled ? 18 : 0)
                         .allowsHitTesting(!isVeiled)
 

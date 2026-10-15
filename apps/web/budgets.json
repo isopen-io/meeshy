@@ -1038,9 +1038,9 @@
       "pattern": "^assets/catalog-profile-decor-(fr|en|es|pt|de|it|ar)-[A-Za-z0-9_-]+\\.js$",
       "dynamic_only": true,
       "kb": {
-        "value": 4,
-        "status": "CIBLE -- ESTIMEE, NON ARBITREE (#10715)",
-        "source": "Les sept catalogues du decor de profil (Banniere, Contour, Photo, Aucun, Plus dans la boutique), charges avec la feuille de choix et jamais au demarrage. Estimation du 2026-10-15 depuis les sources gzip -9 (3,2 Ko pour les sept) : a remesurer par `bun run build` puis `node scripts/measure-weight.mjs`. Arrondi au Ko superieur."
+        "value": 3,
+        "status": "CIBLE -- MESUREE PAR #10715, NON ARBITREE",
+        "source": "Mesure du 2026-10-15 (`bun run build` puis `node scripts/measure-weight.mjs`, gzip -9) : 1,84 Ko pour les SEPT catalogues du decor de profil (Banniere, Contour, Photo, Aucun, Plus dans la boutique), charges avec la feuille de choix et jamais au demarrage. Arrondi au Ko SUPERIEUR (2) + 1 Ko de marge."
       }
     },
     "emoji_picker_sheet": {

@@ -105,6 +105,9 @@ public struct PaginatedParticipant: Codable, Identifiable, Sendable {
     /// le déclare — et il n'était pas décodé ici : un visiteur sans compte
     /// s'affichait donc exactement comme un inscrit dans la liste des membres.
     public let type: String?
+    /// Le contour d'avatar équipé, servi avec la ligne de la liste paginée (#10713) — absent sans
+    /// contour ou sans compte ; un ancien serveur ne le sert pas.
+    public let profileDecor: ServedProfileDecor?
 
     /// Ce participant a-t-il un compte ? Tranché par `type`, jamais par le
     /// pseudo — `ano_` est lisible mais pas réservé.
@@ -116,8 +119,9 @@ public struct PaginatedParticipant: Codable, Identifiable, Sendable {
         displayName: String? = nil, avatar: String? = nil,
         conversationRole: String? = nil, isOnline: Bool? = nil,
         lastActiveAt: Date? = nil, joinedAt: Date? = nil, isActive: Bool? = nil,
-        type: String? = nil
+        type: String? = nil, profileDecor: ServedProfileDecor? = nil
     ) {
+        self.profileDecor = profileDecor
         self.id = id; self.userId = userId; self.username = username
         self.firstName = firstName; self.lastName = lastName
         self.displayName = displayName; self.avatar = avatar

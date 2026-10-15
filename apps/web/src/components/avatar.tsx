@@ -221,7 +221,7 @@ export function Avatar(props: AvatarProps) {
   if (ring !== undefined && ring !== null) {
     return (
       <AvatarRingFrame ring={ring} size={props.size}>
-        <Avatar {...bare} size={ringedAvatarSize(props.size, props.storyRing !== undefined)} />
+        {renderAvatar({ ...bare, size: ringedAvatarSize(props.size, props.storyRing !== undefined) })}
       </AvatarRingFrame>
     );
   }

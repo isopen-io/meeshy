@@ -26,9 +26,22 @@ public struct ShopPack: InstallablePack {
     /// retirer (409 `PACK_NOT_REMOVABLE`), la vitrine n'offre donc pas « Retirer » (#10718).
     /// Absent d'un ancien serveur ⇒ `true`, comme avant.
     public var removable: Bool
+    /// Le nom et la description par langue (`{ en: { name, description } }`), comme le web les lit (#10711).
+    public var names: [String: PackLocalizedName]
+    /// Où les cadres d'un pack de cadres servent (#10711) ; `nil` hors cadres ou illisible.
+    public var usage: FrameUsage?
 
     public var id: String { slug }
     public var isBundled: Bool { isBuiltin || origin == .builtin }
+
+    /// Le nom dans la langue du lecteur, sinon celui que sert la passerelle.
+    public func localizedName(language: String) -> String {
+        names[FramePack.packLanguage(language)]?.name ?? name
+    }
+
+    public func localizedDescription(language: String) -> String {
+        names[FramePack.packLanguage(language)]?.description ?? description
+    }
     public var coverFile: PackAssetFile? { PackAssetFile(servedPath: coverUrl) }
 
     /// La règle unique de possession : un pack gratuit est possédé par tout
@@ -40,7 +53,9 @@ public struct ShopPack: InstallablePack {
     public init(slug: String, name: String, description: String = "", author: String = "",
                 isBuiltin: Bool = false, origin: PackOrigin = .official, coverUrl: String? = nil,
                 installed: Bool = false, installCount: Int = 0, price: Int? = nil, owned: Bool? = nil,
-                removable: Bool = true) {
+                removable: Bool = true, names: [String: PackLocalizedName] = [:], usage: FrameUsage? = nil) {
+        self.names = names
+        self.usage = usage
         self.slug = slug
         self.name = name
         self.description = description
@@ -57,6 +72,7 @@ public struct ShopPack: InstallablePack {
 
     enum CodingKeys: String, CodingKey {
         case slug, name, description, author, origin, coverUrl, installed, installCount, price, owned, removable
+        case names, usage
         case isBuiltin = "builtin"
     }
 
@@ -74,6 +90,16 @@ public struct ShopPack: InstallablePack {
         price = (try? c.decodeIfPresent(Int.self, forKey: .price)).flatMap { $0 > 0 ? $0 : nil }
         owned = try? c.decodeIfPresent(Bool.self, forKey: .owned)
         removable = (try? c.decodeIfPresent(Bool.self, forKey: .removable)) ?? true
+        names = Self.lossyNames(c)
+        usage = try? c.decodeIfPresent(FrameUsage.self, forKey: .usage)
+    }
+
+    /// Une langue illisible tombe seule : les autres noms restent.
+    private static func lossyNames(_ c: KeyedDecodingContainer<CodingKeys>) -> [String: PackLocalizedName] {
+        guard let nested = try? c.nestedContainer(keyedBy: DynamicKey.self, forKey: .names) else { return [:] }
+        return nested.allKeys.reduce(into: [String: PackLocalizedName]()) { map, key in
+            if let value = try? nested.decode(PackLocalizedName.self, forKey: key) { map[key.stringValue] = value }
+        }
     }
 }
 

@@ -306,6 +306,9 @@ struct ParticipantsView: View {
                 presenceState: presence,
                 onMoodTap: statusViewModel.moodTapHandler(for: participant.id)
             )
+            // LE CONTOUR DU MEMBRE (#10713) — dans l'empreinte de l'avatar, sans rien décaler.
+            .avatarRingWithin(ProfileDecorResolver.ring(participant.profileDecor?.avatarRing),
+                              footprint: AvatarContext.userListItem.size)
             .countsImpression(of: statusViewModel.statusForUser(userId: participant.id)?.id) {
                 statusViewModel.trackImpression($0)
             }

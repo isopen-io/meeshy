@@ -173,8 +173,9 @@ struct ProfileDecorSheet: View {
     // MARK: Contours
 
     private var ringSection: some View {
-        VStack(alignment: .leading, spacing: MeeshySpacing.md) {
-            header(String(localized: "profile.decor.ring.section", defaultValue: "Contour d'avatar", bundle: .main))
+        let title = String(localized: "profile.decor.ring.section", defaultValue: "Contour d'avatar", bundle: .main)
+        return VStack(alignment: .leading, spacing: MeeshySpacing.md) {
+            header(title)
             LazyVGrid(columns: [GridItem(.adaptive(minimum: 84), spacing: MeeshySpacing.md)], spacing: MeeshySpacing.md) {
                 ringTile(ref: nil, design: nil, label: noneLabel)
                 ForEach(model.rings, id: \.pack) { group in
@@ -185,6 +186,7 @@ struct ProfileDecorSheet: View {
             }
             shopLink(.avatarRing)
         }
+        .decorSection(title)
     }
 
     private func ringTile(ref: ProfileDecorRef?, design: AvatarRingDesign?, label: String) -> some View {
@@ -214,10 +216,11 @@ struct ProfileDecorSheet: View {
     // MARK: Bannières
 
     private var bannerSection: some View {
-        VStack(alignment: .leading, spacing: MeeshySpacing.md) {
-            header(String(localized: "profile.decor.banner.section", defaultValue: "Bannière", bundle: .main))
+        let title = String(localized: "profile.decor.banner.section", defaultValue: "Bannière", bundle: .main)
+        return VStack(alignment: .leading, spacing: MeeshySpacing.md) {
+            header(title)
             LazyVGrid(columns: [GridItem(.adaptive(minimum: 150), spacing: MeeshySpacing.md)], spacing: MeeshySpacing.md) {
-                bannerTile(ref: nil, design: nil, label: noneLabel)
+                bannerTile(ref: nil, design: nil, label: photoLabel)
                 ForEach(model.banners, id: \.pack) { group in
                     ForEach(Array(group.items.enumerated()), id: \.offset) { _, entry in
                         bannerTile(ref: entry.ref, design: entry.design, label: AppearanceCatalog.shared.designName(entry.design.key, language: language) ?? entry.design.key)
@@ -226,6 +229,7 @@ struct ProfileDecorSheet: View {
             }
             shopLink(.banner)
         }
+        .decorSection(title)
     }
 
     private func bannerTile(ref: ProfileDecorRef?, design: AppearanceDesign?, label: String) -> some View {
@@ -263,6 +267,11 @@ struct ProfileDecorSheet: View {
         String(localized: "profile.decor.none", defaultValue: "Aucun", bundle: .main)
     }
 
+    /// Sans bannière de design, c'est la PHOTO de bannière qui s'affiche : la tuile le dit (comme le web, #10715).
+    private var photoLabel: String {
+        String(localized: "profile.decor.photo", defaultValue: "Photo", bundle: .main)
+    }
+
     private func header(_ title: String) -> some View {
         Text(title)
             .font(MeeshyFont.relative(MeeshyFont.labelSize, weight: .semibold))
@@ -289,6 +298,16 @@ struct ProfileDecorSheet: View {
     }
 }
 
+private extension View {
+    /// Une section du décor est un CONTENEUR nommé pour VoiceOver (#10715) : chaque tuile
+    /// s'entend avec son côté (« Contour d'avatar » / « Bannière »), pas seulement l'en-tête
+    /// — miroir du `radiogroup` nommé du web.
+    func decorSection(_ title: String) -> some View {
+        accessibilityElement(children: .contain)
+            .accessibilityLabel(title)
+    }
+}
+
 // MARK: - L'entrée depuis mon profil
 
 /// Une rangée du profil qui ouvre la feuille. Elle porte sa propre présentation :
@@ -301,11 +320,11 @@ struct ProfileDecorEntry: View {
     @State private var showSheet = false
     private var theme: ThemeManager { ThemeManager.shared }
 
-    /// `profile:decor-updated` venu d'un AUTRE de mes appareils, feuille ouverte ou non :
-    /// mon compte repeint ; l'événement d'un autre compte ne touche rien (`nil`).
+    /// `profile:decor-updated` venu d'un AUTRE de mes appareils : la règle vit au SDK
+    /// (`MeeshyUser.applying`), et c'est le socket qui repeint mon compte — quel que soit
+    /// l'écran ouvert, cette rangée affichée ou non (#10715).
     static func user(_ user: MeeshyUser?, applying event: ProfileDecorUpdatedEvent) -> MeeshyUser? {
-        guard let user, user.id == event.userId, user.profileDecor != event.decor else { return nil }
-        return user.withProfileDecor(event.decor)
+        user?.applying(event)
     }
 
     var body: some View {
@@ -338,11 +357,6 @@ struct ProfileDecorEntry: View {
             .background(RoundedRectangle(cornerRadius: MeeshyRadius.md).fill(theme.surface(tint: MeeshyColors.indigo300Hex, intensity: 0.08)))
         }
         .buttonStyle(.plain)
-        .onReceive(NotificationCenter.default.publisher(for: .profileDecorUpdated).receive(on: DispatchQueue.main)) { notification in
-            guard let event = notification.object as? ProfileDecorUpdatedEvent,
-                  let repainted = Self.user(AuthManager.shared.currentUser, applying: event) else { return }
-            AuthManager.shared.currentUser = repainted
-        }
         .sheet(isPresented: $showSheet) {
             ProfileDecorSheet(
                 decor: user?.profileDecor,
