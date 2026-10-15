@@ -200,6 +200,7 @@ struct MessageOverlayMenu: View {
             hasCallSummary: message.callSummary != nil,
             saveableAttachmentCount: message.attachments.filter { $0.type != .location }.count,
             canComposeMedia: ComposableAttachment.offers(message: message),
+            stickerFavorite: MessageStickerFavorite.state(for: message.sticker),
             isSticker: message.sticker != nil, stickerAddable: ReceivedSticker.offersAdd(for: message, known: ReceivedStickerLedger.shared.ids),
             showReadReceipts: UserPreferencesManager.shared.privacy.showReadReceipts,
             exits: message.exitOffer, isViewOnce: message.holdsViewOnce, isBlurred: message.holdsBlur,
@@ -231,6 +232,9 @@ struct MessageOverlayMenu: View {
             onShowCallDetail?()
         case .addSticker:
             ReceivedStickerLedger.shared.addSticker(of: message)
+        case .favoriteSticker, .unfavoriteSticker:
+            HapticFeedback.light()
+            MessageStickerFavorite.toggle(for: message.sticker)
         case .exportImage, .exportQuick:
             onExportImage?(action == .exportQuick)
         case .wholeMessage, .replyToPiece, .deletePiece:
@@ -732,7 +736,13 @@ struct MessageOverlayMenu: View {
         let files = message.attachments.filter { !AttachmentKind(mimeType: $0.mimeType).isMedia }
 
         VStack(alignment: message.isMe ? .trailing : .leading, spacing: MeeshySpacing.sm) {
-            if !images.isEmpty {
+            // Un sticker se dessine comme dans le fil, animé et à l'échelle de
+            // l'écran ; sa pièce jointe n'est qu'un PNG figé, servi d'abord en
+            // vignette basse définition (#10688).
+            if let sticker = BubbleContent.resolveSticker(message.sticker, attachments: message.attachments) {
+                MessageStickerArtwork(sticker: sticker, side: BubbleSticker.side)
+                    .accessibilityLabel(BubbleSticker.accessibilityLabel(for: sticker))
+            } else if !images.isEmpty {
                 OverlayPreviewMediaGrid(attachments: images, masked: false)
             }
 

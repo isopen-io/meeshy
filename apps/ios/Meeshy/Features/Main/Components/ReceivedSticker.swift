@@ -46,8 +46,12 @@ nonisolated enum ReceivedSticker {
 
     /// « Ajouter à mes stickers » est-il offert pour ce message ? Il l'est s'il y
     /// a une image à déposer ET qu'elle n'est pas déjà rangée (loi 4).
+    /// Un sticker qu'on POSSÈDE déjà — emoji, gabarit du catalogue, Mee — ne
+    /// se dépose pas dans « Mes stickers » : il s'y figerait en doublon. Il se
+    /// met en favori (#10688).
     static func offersAdd(for message: MeeshyMessage, known: Set<String>) -> Bool {
-        guard let savable = savable(in: message) else { return false }
+        guard MessageStickerFavorite.entry(for: message.sticker) == nil,
+              let savable = savable(in: message) else { return false }
         return !isInLibrary(savable, isMine: message.isMe,
                             libraryStickerId: message.sticker?.stickerId, known: known)
     }
