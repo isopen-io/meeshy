@@ -132,12 +132,16 @@ struct ConversationBackgroundView: View {
         }
     }
 
-    /// Une panne passagère garde la dernière photo ; seule une pièce disparue ou refusée rend Signature.
+    /// Une panne passagère garde la dernière photo ; seule une pièce disparue, refusée ou chiffrée
+    /// rend Signature — et seulement si elle est encore la photo du fond quand le verdict revient.
     private func settleFailedLoad(attachmentId: String) {
         Task {
-            if await ConversationBackgroundPhotoProbe.live.isGone(attachmentId: attachmentId) {
-                photoLoadFailed = true
-            }
+            guard await ConversationBackgroundPhotoProbe.live.fallsBackToSignature(attachmentId: attachmentId),
+                  ConversationBackgroundPhotoVerdict.settles(
+                      probed: attachmentId,
+                      current: ConversationBackgroundResolution.resolve(appearance, isDark: isDark)
+                  ) else { return }
+            photoLoadFailed = true
         }
     }
 }

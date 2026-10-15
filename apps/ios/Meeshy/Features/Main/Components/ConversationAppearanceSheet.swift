@@ -21,7 +21,8 @@ struct ConversationAppearanceSheet: View {
     @State private var draggingSlider = false
     @State private var showsShop = false
     /// Les packs de fonds possédés et installés (`nil` tant qu'ils ne sont pas lus : les packs installés d'office).
-    @State private var installedWallpapers: [ShopPack]?
+    /// Cache-first : la dernière liste lue pour ce compte, puis la relecture réseau.
+    @State private var installedWallpapers: [ShopPack]? = InstalledWallpapersMemo.shared.packs(for: AuthManager.shared.currentUser?.id)
     @Environment(\.dismiss) private var dismiss
     @Environment(\.colorScheme) private var colorScheme
 
@@ -91,6 +92,7 @@ struct ConversationAppearanceSheet: View {
             result = .failure(error)
         }
         guard let list = WallpaperPackOptions.installedList(from: result) else { return }
+        InstalledWallpapersMemo.shared.remember(list, for: AuthManager.shared.currentUser?.id)
         installedWallpapers = list
     }
 
@@ -342,5 +344,25 @@ struct ConversationAppearanceSheet: View {
         .buttonStyle(.plain)
         .accessibilityLabel(label)
         .accessibilityAddTraits(selected ? [.isButton, .isSelected] : .isButton)
+    }
+}
+
+// MARK: - La dernière liste de packs de fonds lue, par compte (#10708, Cache-First)
+
+/// Mémoire de processus, bornée à UN compte : la rouverture du sélecteur ne repeint pas la grille
+/// sous le doigt, et un autre compte ne lit jamais la liste du premier.
+struct InstalledWallpapersMemo {
+    @MainActor static var shared = InstalledWallpapersMemo()
+
+    private var entry: (userId: String, packs: [ShopPack])?
+
+    func packs(for userId: String?) -> [ShopPack]? {
+        guard let userId, let entry, entry.userId == userId else { return nil }
+        return entry.packs
+    }
+
+    mutating func remember(_ packs: [ShopPack], for userId: String?) {
+        guard let userId else { return }
+        entry = (userId, packs)
     }
 }

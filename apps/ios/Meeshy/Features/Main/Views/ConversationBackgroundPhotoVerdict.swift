@@ -36,6 +36,12 @@ nonisolated enum ConversationBackgroundPhotoVerdict: Equatable {
         return String(format: format, date)
     }
 
+    /// Un verdict arrive APRÈS le réseau : il ne tranche que si la photo sondée est encore celle du fond.
+    static func settles(probed attachmentId: String, current: ConversationBackgroundResolution) -> Bool {
+        guard case .photo(let shown, _, _) = current else { return false }
+        return shown == attachmentId
+    }
+
     /// Le sélecteur ne propose pas une photo qu'il ne saurait pas peindre.
     static func mayBeOffered(_ attachment: MeeshyMessageAttachment) -> Bool {
         !attachment.isEncrypted && !attachment.isViewOnce && !attachment.isBlurred
@@ -43,29 +49,33 @@ nonisolated enum ConversationBackgroundPhotoVerdict: Equatable {
 }
 
 /// Interroge les métadonnées de la pièce (appartenance vérifiée à chaque lecture) pour savoir
-/// si l'échec d'un chargement d'image est une disparition ou une panne.
+/// si l'échec d'un chargement d'image est une disparition, un chiffré sans clé, ou une panne.
 nonisolated struct ConversationBackgroundPhotoProbe: Sendable {
-    private nonisolated struct Ignored: Decodable {
-        nonisolated init(from decoder: Decoder) throws {}
+    private nonisolated struct Metadata: Decodable {
+        nonisolated struct Attachment: Decodable { let isEncrypted: Bool? }
+        let attachment: Attachment
     }
 
-    private let fetch: @Sendable (String) async throws -> Void
+    /// Rend `isEncrypted` de la pièce ; lève l'erreur du réseau telle quelle.
+    private let fetchIsEncrypted: @Sendable (String) async throws -> Bool
 
-    init(fetch: @escaping @Sendable (String) async throws -> Void) {
-        self.fetch = fetch
+    init(fetchIsEncrypted: @escaping @Sendable (String) async throws -> Bool) {
+        self.fetchIsEncrypted = fetchIsEncrypted
     }
 
     static let live = ConversationBackgroundPhotoProbe { attachmentId in
-        let _: Ignored = try await APIClient.shared.request(
+        let response: APIResponse<Metadata> = try await APIClient.shared.request(
             AttachmentsEndpoint.byAttachmentIdMetadata(attachmentId: attachmentId),
             method: "GET", body: nil, queryItems: nil
         )
+        return response.data.attachment.isEncrypted == true
     }
 
-    func isGone(attachmentId: String) async -> Bool {
+    /// Signature si la pièce a disparu ou est refusée, ou si elle est chiffrée (une pièce hors de la
+    /// fenêtre chargée du fil n'est connue qu'ici) ; toute autre panne garde la dernière photo.
+    func fallsBackToSignature(attachmentId: String) async -> Bool {
         do {
-            try await fetch(attachmentId)
-            return false
+            return try await fetchIsEncrypted(attachmentId)
         } catch {
             return ConversationBackgroundPhotoVerdict.of(error) == .gone
         }
