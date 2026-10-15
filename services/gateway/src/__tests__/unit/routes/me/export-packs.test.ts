@@ -99,8 +99,8 @@ describe('GET /export?types=packs', () => {
       }),
     ]);
     expect(packs.ownerships).toEqual([{ domain: 'avatar-ring', slug: 'echantillon', priceMeeshes: 30, acquiredAt: AT.toISOString() }]);
-    expect(packs.counts).toEqual({ choices: 2, library: 1, submissions: 1, ownerships: 1 });
-    expect(packs.hasMore).toEqual({ choices: false, library: false, submissions: false, ownerships: false });
+    expect(packs.counts).toEqual({ choices: 2, library: 1, submissions: 1, ownerships: 1, appearanceSubmissions: 0 });
+    expect(packs.hasMore).toEqual({ choices: false, library: false, submissions: false, ownerships: false, appearanceSubmissions: false });
     expect(JSON.stringify(packs)).not.toContain(OTHER);
     await app.close();
   });

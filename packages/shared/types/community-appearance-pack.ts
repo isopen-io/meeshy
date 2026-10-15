@@ -15,6 +15,7 @@
  *   - un plafond d'octets sur le contrat entier.
  */
 import { PACK_LIMITS, PACK_SLUG_PATTERN } from './content-pack.js';
+import { STICKER_PACK_AUTHOR_MEESHY } from './sticker-pack.js';
 import { AppearancePackContractSchema, APPEARANCE_CONTRACT_SCHEMA } from './appearance-design.js';
 import { AvatarRingPackContractSchema } from './avatar-ring-design.js';
 
@@ -89,7 +90,7 @@ export function validateCommunityAppearanceManifest(domain: CommunityAppearanceD
   const description = text(input.description ?? '', PACK_LIMITS.maxDescriptionLength, true);
   if (description === null) problems.push({ path: 'description', code: 'description' });
   const author = text(input.author, PACK_LIMITS.maxAuthorLength, false);
-  if (author === null) problems.push({ path: 'author', code: 'author' });
+  if (author === null || author.toLowerCase() === STICKER_PACK_AUTHOR_MEESHY.toLowerCase()) problems.push({ path: 'author', code: 'author' });
   if (isRecord(input.contract) && input.contract.domain !== domain) problems.push({ path: 'contract.domain', code: 'domain-mismatch' });
 
   const parsed = problems.some((problem) => problem.code === 'domain-mismatch') ? null : parseContract(domain, input.contract);

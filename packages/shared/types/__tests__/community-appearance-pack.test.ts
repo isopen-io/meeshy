@@ -56,7 +56,7 @@ describe('la proposition d’un pack d’apparence par un tiers (#10709)', () =>
 
   it('refuse un nom, un slug ou un auteur invalides ou à balises', () => {
     const contract = { domain: 'wallpaper', designs: [wallpaperDesign()] };
-    for (const extra of [{ slug: 'Bad Slug' }, { name: '' }, { name: '<b>x</b>' }, { author: 'x'.repeat(41) }, { description: 5 }]) {
+    for (const extra of [{ slug: 'Bad Slug' }, { name: '' }, { name: '<b>x</b>' }, { author: 'x'.repeat(41) }, { author: ' MEESHY ' }, { description: 5 }]) {
       expect(validateCommunityAppearanceManifest('wallpaper', manifest(contract, extra))).toHaveProperty('problems');
     }
     expect(validateCommunityAppearanceManifest('wallpaper', 'x')).toEqual({ problems: [{ path: '', code: 'not-an-object' }] });
