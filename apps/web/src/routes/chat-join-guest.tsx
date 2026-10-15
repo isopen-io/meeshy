@@ -18,9 +18,11 @@ import { ANONYMOUS_MODE } from '@/lib/links/invitation-view';
  * mais la séparation garde la question « que voit-on avant de choisir ? »
  * lisible d'un seul fichier.
  *
- * **PSEUDO ET LANGUE CÔTE À CÔTE**, l'un et l'autre sur une rangée qui se
- * REPLIE sous 360 px (`flex-wrap`) : c'est ce qui garde l'action primaire dans
- * le premier écran, la mesure que #5561 pose comme critère de fin. E-mail et
+ * **NOM ANONYME ET LANGUE SUR LA MÊME RANGÉE, TÉLÉPHONE COMPRIS** (directive
+ * porteur 2026-10-13) : la langue SUIT le champ du nom, elle ne passe plus
+ * dessous — la rangée ne se replie pas, les deux champs se partagent la
+ * largeur (3 pour 2). C'est aussi ce qui garde l'action primaire dans le
+ * premier écran, la mesure que #5561 pose comme critère de fin. E-mail et
  * date de naissance ne paraissent QUE si le lien les exige — les afficher
  * « au cas où » coûterait deux champs à tout le monde pour une minorité de
  * liens.
@@ -121,8 +123,8 @@ export function GuestForm({
         </p>
       ) : null}
 
-      <div className="flex flex-wrap gap-3">
-        <div className="min-w-[10rem] flex-1">
+      <div className="flex gap-3">
+        <div className="min-w-0 flex-[3]">
           <Field
             id="chat-join-nickname"
             label={translateInvite(language, terms.nicknameRequired ? 'invite.guest.nickname' : 'invite.guest.nickname.optional')}
@@ -155,7 +157,7 @@ export function GuestForm({
           </Field>
         </div>
 
-        <div className="min-w-[8rem] flex-1">
+        <div className="min-w-0 flex-[2]">
           <Field
             id="chat-join-language"
             label={translateInvite(language, 'invite.guest.language')}

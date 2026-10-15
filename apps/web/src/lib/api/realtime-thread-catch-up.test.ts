@@ -8,7 +8,7 @@ import { localMessage, threadOf, threadPages } from '@/test-support/thread-cache
 
 import { messagesQueryKey } from './messages';
 import type { MessagesPage } from './messages-pages';
-import { applyMessageNew } from './realtime-apply';
+import { applyMessageNew, applyMessageTranslation } from './realtime-apply';
 import { catchUpThreadMessage } from './realtime-thread-catch-up';
 import type { Message } from './types';
 
@@ -136,5 +136,52 @@ describe('#9291 — catchUpThreadMessage : un signal personnel qui nomme un mess
     const client = new QueryClient();
     catchUpThreadMessage(client, { conversationId: 'c-jamais', messageId: 'm-1' });
     expect(client.getQueryData(messagesQueryKey('c-jamais'))).toBeUndefined();
+  });
+});
+
+/**
+ * #10573 — la TRADUCTION avait le trou que #9291 a fermé pour `message:new` :
+ * `applyMessageTranslation` posait la traduction dans le fil, puis la réponse
+ * d'une requête du fil partie AVANT elle la remplaçait par le message nu.
+ */
+describe('#10573 — une traduction reçue PENDANT une requête du fil survit à sa réponse', () => {
+  const english = { id: 't-1', messageId: 'm-1', sourceLanguage: 'fr', targetLanguage: 'en', translatedContent: 'arrived', translationModel: 'nllb', cacheKey: 'k-1', cached: false };
+  const translated = localMessage({ ...fresh, translations: [english] as unknown as Message['translations'] });
+  const translationEvent = { messageId: 'm-1', translations: [english] };
+  const englishOf = (client: QueryClient): string | undefined =>
+    threadOf(client, 'c-a')?.messages.find((m) => m.id === 'm-1')?.translations.find((t) => t.targetLanguage === 'en')?.translatedContent;
+
+  test('la réponse partie avant la traduction ne la retire pas du fil ouvert', async () => {
+    const client = new QueryClient();
+    client.setQueryData(messagesQueryKey('c-a'), threadPages([older, fresh]));
+    const inFlight = deferred();
+    const server = {
+      calls: 0,
+      respond: (): Promise<MessagesPage> => (server.calls === 1 ? inFlight.promise : Promise.resolve(pageOf([older, translated]))),
+    };
+    const { unsubscribe } = openThread(client, server);
+
+    applyMessageTranslation(client, translationEvent);
+    expect(englishOf(client)).toBe('arrived');
+    inFlight.resolve(pageOf([older, fresh]));
+    await settle(client);
+
+    expect(englishOf(client)).toBe('arrived');
+    unsubscribe();
+  });
+
+  test('sans requête en vol, la traduction ne déclenche AUCUNE relecture', async () => {
+    const client = new QueryClient();
+    const server = { calls: 0, respond: (): Promise<MessagesPage> => Promise.resolve(pageOf([older, fresh])) };
+    const { unsubscribe } = openThread(client, server);
+    await settle(client);
+    const before = server.calls;
+
+    applyMessageTranslation(client, translationEvent);
+    await settle(client);
+
+    expect(server.calls).toBe(before);
+    expect(englishOf(client)).toBe('arrived');
+    unsubscribe();
   });
 });

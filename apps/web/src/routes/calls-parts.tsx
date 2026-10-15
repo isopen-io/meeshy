@@ -208,7 +208,9 @@ function CallsSearchField({ language, search }: { readonly language: InterfaceLa
         aria-label={translate(language, 'calls.search')}
         placeholder={translate(language, 'calls.search')}
         enterKeyHint="search"
-        className="w-0 min-w-0 flex-1 bg-transparent text-input outline-none"
+        // 44 px au moins (#10645) : à 320 px de large, les capsules en français laissaient au champ 40 px — sous
+        // la cible d'un doigt. La rangée prend ces quelques pixels dans sa marge, jamais au-delà de l'écran.
+        className="w-0 min-w-11 flex-1 bg-transparent text-input outline-none"
         style={{ color: INK }}
       />
       {search.value === '' ? null : (

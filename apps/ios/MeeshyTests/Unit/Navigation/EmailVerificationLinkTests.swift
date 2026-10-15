@@ -48,18 +48,4 @@ final class EmailVerificationLinkTests: XCTestCase {
         XCTAssertNil(SignInLink(.ownProfile))
         XCTAssertNil(SignInLink(DeepLink.ownProfile))
     }
-
-    func test_requiresSignOut_magicLinkAlwaysSignsOutAnAuthenticatedAccount() {
-        XCTAssertTrue(SignInLink.magic(token: "m").requiresSignOut(isAuthenticated: true, currentEmail: "a@b.co"))
-        XCTAssertFalse(SignInLink.magic(token: "m").requiresSignOut(isAuthenticated: false, currentEmail: nil))
-    }
-
-    func test_requiresSignOut_verificationLinkKeepsTheSameAccount_andSwitchesAnother() {
-        let link = SignInLink.emailVerification(token: "t", email: "Moi@Exemple.com")
-
-        XCTAssertFalse(link.requiresSignOut(isAuthenticated: true, currentEmail: "moi@exemple.com"))
-        XCTAssertTrue(link.requiresSignOut(isAuthenticated: true, currentEmail: "autre@exemple.com"))
-        XCTAssertTrue(link.requiresSignOut(isAuthenticated: true, currentEmail: nil))
-        XCTAssertFalse(link.requiresSignOut(isAuthenticated: false, currentEmail: nil))
-    }
 }

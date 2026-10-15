@@ -25,7 +25,9 @@ import { PrismaClient } from '@meeshy/shared/prisma/client';
 // voir le commentaire en tête de `route-registration.ts`).
 import { logger } from './gateway-logger';
 import { getJwtSecret } from './utils/secrets';
+import { readerKeySecret } from './services/posts/readerKey';
 import { schemaValidationErrorResponse } from './utils/schema-validation-error';
+import { contentTypeParserErrorResponse } from './utils/content-type-parser-error';
 import * as fs from 'fs';
 import * as path from 'path';
 import { MessageTranslationService } from './services/message-translation/MessageTranslationService';
@@ -94,6 +96,9 @@ interface Config {
 function loadConfiguration(): Config {
   const nodeEnv = process.env.NODE_ENV || 'development';
   const isDev = nodeEnv === 'development';
+  // #10483 — la clé de lecteur anonyme : sans secret en production, refuser de
+  // démarrer plutôt que de recompter tous les lecteurs à chaque redémarrage.
+  readerKeySecret();
   return {
     nodeEnv,
     isDev,
@@ -430,6 +435,28 @@ class MeeshyServer {
         });
         const { statusCode: refusStatus, ...corpsRefus } = schemaRefusal;
         return reply.code(refusStatus).send(corpsRefus);
+      }
+
+      // Refus du PARSEUR DE CORPS (#8052) : type de contenu non pris en charge
+      // (415), corps JSON vide ou illisible (400), corps trop gros (413). Une
+      // saisie du client, pas une panne — même raison et même place que le
+      // refus de schéma ci-dessus : avant `logger.error`, sans quoi chaque
+      // requête mal formée accusait le serveur et masquait les vrais 500.
+      const parserRefusal = contentTypeParserErrorResponse(error);
+      if (parserRefusal) {
+        logger.warn('Body parser refused request', {
+          module: 'ErrorHandler',
+          func: 'setErrorHandler',
+          path: redactReaderFileUrl(request.url),
+          method: request.method,
+          code: parserRefusal.code
+        });
+        return reply.code(parserRefusal.statusCode).send({
+          success: false,
+          error: parserRefusal.error,
+          message: parserRefusal.message,
+          code: parserRefusal.code
+        });
       }
 
       logger.error('Uncaught error in request handler', {

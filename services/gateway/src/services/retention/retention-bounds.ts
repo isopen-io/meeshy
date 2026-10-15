@@ -42,10 +42,11 @@ const CLOSED_WITHOUT_DATE: Prisma.UserSessionWhereInput = { OR: [{ invalidatedAt
  * Les sessions dont la conservation est ÉCHUE :
  *  - closes depuis plus de 90 jours ;
  *  - closes sans date de clôture, inactives depuis plus de 90 jours ;
- *  - échues depuis plus de 90 jours ET inactives depuis plus de 90 jours —
- *    l'échéance seule ne suffit pas : `/auth/refresh` et la garde REST ne
- *    lisent pas `expiresAt`, une session échue mais rafraîchie est VIVANTE
- *    (audit A2-2, #9656).
+ *  - échues depuis plus de 90 jours ET inactives depuis plus de 90 jours.
+ *    Depuis #10328, `/auth/refresh`, la garde REST et le socket refusent une
+ *    session échue ; la condition d'inactivité (audit A2-2, #9656) reste une
+ *    marge : une ligne purgée ne nomme plus rien, et son jeton est refusé
+ *    comme inconnu.
  */
 export function expiredSessionRetentionWhere(now: Date): Prisma.UserSessionWhereInput {
   const cutoff = daysBefore(now, RETENTION.closedSessionDays);

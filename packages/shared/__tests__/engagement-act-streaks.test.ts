@@ -14,6 +14,8 @@ import {
 import {
   DEFAULT_ENGAGEMENT_SCALE,
   ENGAGEMENT_SCALE_POINTS_CEILING,
+  ENGAGEMENT_SCALE_TIER_POINTS_TOTAL_CEILING,
+  ENGAGEMENT_STREAK_TIERS_MAX,
   mergeEngagementScaleBody,
   parseEngagementScale,
   type EngagementScale,
@@ -164,6 +166,33 @@ describe('parseEngagementScale — séries et fidélité', () => {
       withStreaks({ global: [{ days: 365, points: 100_000 }], acts: { story: [{ days: 7, points: 50 }] } }, { loyalty: [{ days: 30, points: 5 }] }),
     );
     expect(parseEngagementScale(asJson(parsed))).toEqual(parsed);
+  });
+});
+
+describe('la somme des paliers tient dans le score', () => {
+  const tiers = (count: number, points: number) => Array.from({ length: count }, (_, index) => ({ days: index + 1, points }));
+
+  it("refuse un barème dont un compte toucherait plus d'un milliard de points de paliers : le score est un entier 32 bits", () => {
+    const loyalty = tiers(101, ENGAGEMENT_SCALE_POINTS_CEILING);
+    expect(parseEngagementScale(withStreaks({ global: [] }, { loyalty }))).toBeNull();
+  });
+
+  it('compte ensemble la série globale, chaque acte et la fidélité', () => {
+    const half = tiers(50, ENGAGEMENT_SCALE_POINTS_CEILING);
+    expect(parseEngagementScale(withStreaks({ global: half, acts: { post: half } }, { loyalty: [{ days: 365, points: 1 }] }))).toBeNull();
+    expect(parseEngagementScale(withStreaks({ global: half, acts: { post: half } }))).not.toBeNull();
+  });
+
+  it(`borne chaque liste à ${100} paliers`, () => {
+    expect(ENGAGEMENT_STREAK_TIERS_MAX).toBe(100);
+    expect(parseEngagementScale(withStreaks({ global: tiers(ENGAGEMENT_STREAK_TIERS_MAX + 1, 1) }))).toBeNull();
+    expect(parseEngagementScale(withStreaks({ global: tiers(ENGAGEMENT_STREAK_TIERS_MAX, 1) }))).not.toBeNull();
+  });
+
+  it("garde l'année de fidélité à 100 000 points et un palier à dix millions", () => {
+    expect(ENGAGEMENT_SCALE_TIER_POINTS_TOTAL_CEILING).toBe(1_000_000_000);
+    const scale = parseEngagementScale(withStreaks({ global: [{ days: 365, points: ENGAGEMENT_SCALE_POINTS_CEILING }] }, { loyalty: [{ days: 365, points: 100_000 }] }));
+    expect(scale?.loyalty).toEqual([{ days: 365, points: 100_000 }]);
   });
 });
 

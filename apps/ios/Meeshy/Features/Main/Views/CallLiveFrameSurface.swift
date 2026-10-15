@@ -12,6 +12,8 @@ struct CallLiveFrameSurface: UIViewRepresentable {
     let people: [CallFramePerson]
     let texts: CallFrameTexts
     let sources: [String: CallLiveFrameVideoSource]
+    /// Les encarts du chrome de l'appel, en points (#9777) : la rangée d'en-tête et la pilule s'y posent.
+    let chromeInsets: (top: CGFloat, bottom: CGFloat)
 
     func makeCoordinator() -> CallLiveFrameRenderer {
         CallLiveFrameRenderer()
@@ -22,7 +24,8 @@ struct CallLiveFrameSurface: UIViewRepresentable {
     }
 
     func updateUIView(_ view: MTKView, context: Context) {
-        context.coordinator.update(design: design, people: people, texts: texts, sources: sources, view: view)
+        context.coordinator.update(design: design, people: people, texts: texts, sources: sources,
+                                   chromeInsets: chromeInsets, view: view)
     }
 
     static func dismantleUIView(_ view: MTKView, coordinator: CallLiveFrameRenderer) {
@@ -46,6 +49,7 @@ final class CallLiveFrameRenderer: NSObject, MTKViewDelegate {
     private var design: CallFrameDesign?
     private var people: [CallFramePerson] = []
     private var texts: CallFrameTexts?
+    private var chromeInsets: (top: CGFloat, bottom: CGFloat) = (0, 0)
     private var requested: CallLiveFrameLayerInputs?
     private var scene: CallLiveFrameScene?
 
@@ -84,11 +88,13 @@ final class CallLiveFrameRenderer: NSObject, MTKViewDelegate {
         return view
     }
 
-    func update(design: CallFrameDesign, people: [CallFramePerson], texts: CallFrameTexts, sources: [String: CallLiveFrameVideoSource], view: MTKView) {
+    func update(design: CallFrameDesign, people: [CallFramePerson], texts: CallFrameTexts, sources: [String: CallLiveFrameVideoSource],
+                chromeInsets: (top: CGFloat, bottom: CGFloat), view: MTKView) {
         if self.design?.id != design.id { meter.reset(limitMs: CallLiveFrameBudget.limitMs(for: design.cost)) }
         self.design = design
         self.people = people
         self.texts = texts
+        self.chromeInsets = chromeInsets
         feed.attach(sources)
         requestPaintIfNeeded(view: view)
     }
@@ -107,7 +113,9 @@ final class CallLiveFrameRenderer: NSObject, MTKViewDelegate {
         guard let design, let texts else { return }
         let size = CallLiveFrameRule.paintSize(viewSize: view.bounds.size, scale: view.contentScaleFactor)
         guard size != .zero else { return }
-        let inputs = CallLiveFrameLayerInputs(frameId: design.id, people: people, texts: texts, size: size)
+        let reserve = CallLiveFrameRule.chromeReserve(viewHeight: view.bounds.height, topInset: chromeInsets.top,
+                                                      bottomInset: chromeInsets.bottom)
+        let inputs = CallLiveFrameLayerInputs(frameId: design.id, people: people, texts: texts, size: size, reserve: reserve)
         guard CallLiveFrameRule.needsRepaint(current: requested, next: inputs) else { return }
         requested = inputs
         let deliver: @MainActor (CallLiveFrameScene?) -> Void = { [weak self] painted in

@@ -458,6 +458,92 @@ final class ConversationViewModelTests: XCTestCase {
         )
     }
 
+    /// #10572 — cinq messages détenus, puis une absence de plus de trente :
+    /// le refresh pose les trente plus récents, TOUS postérieurs au bloc
+    /// détenu. Le rattrapage doit repartir du plus récent message détenu AVANT
+    /// ce refresh. Relu après, le curseur tombait sur le plus récent des
+    /// trente, et le trou entre les deux blocs ne se comblait jamais.
+    func test_loadMessages_surUnTrouPlusLongQueLaPage_rattrapeDepuisLeCurseurDAvantLeRefresh() async throws {
+        let (sut, newestHeld) = try await makeWarmSUT(heldAt: Date(timeIntervalSince1970: 1_748_736_000))
+        mockMessageService.listResult = .success(
+            makeBackfillResponse(idPrefix: "recent", count: 30, createdAtISO: "2026-06-01T10:00:00.000Z")
+        )
+        mockMessageService.listAfterResult = .success(makeMessagesResponse())
+
+        await sut.loadMessages()
+        let rattrape = await MessageStoreObservationHelper.awaitCondition(timeout: 2.0) {
+            self.mockMessageService.listAfterCallCount >= 1
+        }
+
+        XCTAssertTrue(rattrape, "un refresh qui ne rejoint pas le bloc détenu laisse un trou à combler")
+        let after = try XCTUnwrap(mockMessageService.lastListAfterAfter)
+        XCTAssertLessThanOrEqual(after, newestHeld)
+        XCTAssertGreaterThan(
+            after, newestHeld.addingTimeInterval(-0.01),
+            "le curseur est le plus récent message détenu AVANT le refresh, pas le plus récent servi par lui"
+        )
+    }
+
+    /// La moitié négative : une page de refresh qui REMONTE jusqu'au bloc
+    /// détenu le recouvre sans trou — un rattrapage n'y serait qu'une seconde
+    /// lecture des mêmes messages, à chaque ouverture.
+    func test_loadMessages_quandLeRefreshRejointLeBlocDetenu_neRattrapePas() async throws {
+        let (sut, _) = try await makeWarmSUT(heldAt: Date(timeIntervalSince1970: 1_748_736_000))
+        mockMessageService.listResult = .success(
+            makeBackfillResponse(idPrefix: "overlap", count: 30, createdAtISO: "2025-01-01T00:00:00.000Z")
+        )
+
+        await sut.loadMessages()
+        let revalide = await MessageStoreObservationHelper.awaitCondition(timeout: 2.0) {
+            self.mockMessageService.listCallCount >= 1 && !sut.isRevalidating
+        }
+
+        XCTAssertTrue(revalide)
+        XCTAssertEqual(mockMessageService.listAfterCallCount, 0)
+    }
+
+    func test_openingGapCursor_withNothingHeld_returnsNil() {
+        XCTAssertNil(ConversationViewModel.openingGapCursor(heldUpTo: nil, refreshReachedBackTo: Date()))
+    }
+
+    func test_openingGapCursor_whenTheRefreshServedNothing_returnsTheHeldWatermark() {
+        let held = Date(timeIntervalSince1970: 1_000)
+        XCTAssertEqual(ConversationViewModel.openingGapCursor(heldUpTo: held, refreshReachedBackTo: nil), held)
+    }
+
+    func test_openingGapCursor_whenThePageStartsAfterTheHeldBlock_returnsTheHeldWatermark() {
+        let held = Date(timeIntervalSince1970: 1_000)
+        XCTAssertEqual(
+            ConversationViewModel.openingGapCursor(heldUpTo: held, refreshReachedBackTo: held.addingTimeInterval(60)),
+            held
+        )
+    }
+
+    func test_openingGapCursor_whenThePageReachesTheHeldBlock_returnsNil() {
+        let held = Date(timeIntervalSince1970: 1_000)
+        XCTAssertNil(ConversationViewModel.openingGapCursor(heldUpTo: held, refreshReachedBackTo: held))
+    }
+
+    /// Cinq messages SERVEUR détenus en GRDB, le plus récent à `heldAt + 4 s`.
+    private func makeWarmSUT(heldAt base: Date) async throws -> (ConversationViewModel, Date) {
+        let pool = try makeInMemoryPool()
+        let persistence = MessagePersistenceActor(dbWriter: pool)
+        let records: [MessageRecord] = (0..<5).map { i in
+            var record = MessageStoreObservationHelper.makeRecord(
+                localId: "held-\(i)", conversationId: testConversationId,
+                senderId: testUserId, content: "msg \(i)",
+                state: .sent, createdAt: base.addingTimeInterval(Double(i))
+            )
+            record.cachedTimeString = MessageRecord.computeTimeString(for: record.createdAt)
+            return record
+        }
+        try await pool.write { db in
+            for record in records { try record.insert(db) }
+        }
+        let sut = makeSUT(dependencies: ConversationDependencies(dbPool: pool, persistence: persistence))
+        return (sut, base.addingTimeInterval(4))
+    }
+
     // MARK: - syncMissedMessages (T9 — reconnect gap recovery via watermark)
 
     /// The backfill must ask the gateway for messages created *after* the

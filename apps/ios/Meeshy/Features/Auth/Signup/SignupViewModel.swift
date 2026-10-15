@@ -497,7 +497,8 @@ final class SignupViewModel: ObservableObject {
         let confirmer = self.confirmer
         let celebration = self.celebration
         return {
-            confirmer.openSession(held)
+            // #10450 — une session refusée par l'appareil ne prépare aucune arrivée.
+            guard confirmer.openSession(held) else { return }
             celebration.prepare(userId: held.user.id)
         }
     }

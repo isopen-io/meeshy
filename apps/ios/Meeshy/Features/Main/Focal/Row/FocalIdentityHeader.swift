@@ -49,6 +49,10 @@ struct FocalIdentityHeader: View, Equatable {
     let isDark: Bool
     var agentStyle: AgentAuthoredStyle.Descriptor = .human
     var onOpenProfile: ((ProfileSheetUser) -> Void)? = nil
+    /// Toucher la pastille d'humeur de l'auteur (#10528) — l'hôte ouvre la
+    /// bulle d'humeur à l'ancre remise. Sans lui, la pastille est un dessin
+    /// et le toucher revient à l'avatar.
+    var onMoodTap: ((CGPoint) -> Void)? = nil
 
     // MARK: - Gabarit (directive 2026-08-24 — le focus réemploie cet en-tête)
 
@@ -122,7 +126,8 @@ struct FocalIdentityHeader: View, Equatable {
                     presenceState: senderPresence,
                     isHere: senderIsHere,
                     enablePulse: false,
-                    isDark: isDark
+                    isDark: isDark,
+                    onMoodTap: onMoodTap
                 )
                 .agentAuthoredAvatarRing(agentStyle, diameter: avatarSize)
 

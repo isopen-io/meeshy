@@ -774,9 +774,11 @@ public struct APINotification: Codable, Identifiable, Sendable, Equatable, Cache
                 return "\(actorName) \(content)"
             }
             let emoji = metadata?.emoji ?? metadata?.reactionEmoji
+            if notificationType != .commentLike, socialProseKind == "MOOD" {
+                return moodReactionFallbackTitle(actorName: actorName, emoji: emoji)
+            }
             let typeLabel: String = {
                 if notificationType == .storyReaction || metadata?.postType == "STORY" { return "story" }
-                if notificationType == .statusReaction || metadata?.postType == "STATUS" { return "statut" }
                 if notificationType == .commentLike { return "commentaire" }
                 return "publication"
             }()
@@ -793,6 +795,9 @@ public struct APINotification: Codable, Identifiable, Sendable, Equatable, Cache
         case .commentReply:
             return "\(actorName) a repondu a votre commentaire"
         case .postComment, .legacyPostComment:
+            if socialProseKind == "MOOD" {
+                return String(format: String(localized: "notification.comment.fallbackTitle.mood", defaultValue: "%@ a commenté votre humeur", bundle: .main), actorName)
+            }
             return "\(actorName) a commente votre publication"
         case .storyNewComment:
             return "\(actorName) a commente votre story"
@@ -808,7 +813,7 @@ public struct APINotification: Codable, Identifiable, Sendable, Equatable, Cache
         case .friendNewMood:
             return "\(actorName) a partage une humeur"
         case .postRepost:
-            return "\(actorName) a repartage votre publication"
+            return String(format: repostFallbackTitleFormat, actorName)
         case .translationCompleted, .translationReady, .legacyTranslationReady, .transcriptionCompleted:
             return "Traduction disponible"
         case .voiceCloneReady:
@@ -977,22 +982,50 @@ public struct APINotification: Codable, Identifiable, Sendable, Equatable, Cache
 // MARK: - Social context & lifecycle helpers
 
 extension APINotification {
-    /// Libellé typé du contenu social : distingue story / réel / mood / statut /
-    /// publication. Lit `metadata.postType` (réactions, commentaires) ou
+    /// Libellé typé du contenu social : distingue story / réel / humeur /
+    /// publication (un STATUS se dit « humeur »). Lit `metadata.postType` (réactions, commentaires) ou
     /// `metadata.contentType` (friend_new_*), avec repli sur le type de notif.
+    /// #10525 — la phrase d'une republication sans titre servi (ligne d'avant
+    /// le titre persisté) nomme le contenu republié, comme la passerelle : un
+    /// STATUS est « votre humeur ».
+    private var repostFallbackTitleFormat: String {
+        switch socialProseKind {
+        case "REEL": return String(localized: "notification.repost.fallbackTitle.reel", defaultValue: "%@ a republié votre réel", bundle: .main)
+        case "STORY": return String(localized: "notification.repost.fallbackTitle.story", defaultValue: "%@ a republié votre story", bundle: .main)
+        case "MOOD": return String(localized: "notification.repost.fallbackTitle.mood", defaultValue: "%@ a republié votre humeur", bundle: .main)
+        default: return String(localized: "notification.repost.fallbackTitle.post", defaultValue: "%@ a republié votre publication", bundle: .main)
+        }
+    }
+
+    /// #10526 — une réaction à un mood sans phrase servie dit « votre humeur »,
+    /// comme la passerelle, avec ou sans emoji.
+    private func moodReactionFallbackTitle(actorName: String, emoji: String?) -> String {
+        guard let emoji, !emoji.isEmpty else {
+            return String(format: String(localized: "notification.like.fallbackTitle.mood", defaultValue: "%@ a aimé votre humeur", bundle: .main), actorName)
+        }
+        return String(format: String(localized: "notification.reaction.fallbackTitle.mood", defaultValue: "%1$@ a réagi %2$@ à votre humeur", bundle: .main), actorName, emoji)
+    }
+
+    /// Le type d'un contenu social, dans le mot que le lecteur lit : un STATUS
+    /// est une « humeur » (§ 7), qu'on le republie, y réagisse ou le commente
+    /// (#10525, #10526) — le fil, lui, garde STATUS. Jumelle de `postProseKind`
+    /// (`packages/shared/utils/notification-strings.ts`).
+    private var socialProseKind: String? {
+        let declared = (metadata?.postType ?? metadata?.contentType)?.uppercased()
+        if declared == nil, notificationType == .statusReaction { return "MOOD" }
+        return declared == "STATUS" ? "MOOD" : declared
+    }
+
     var socialKindLabel: String {
-        switch (metadata?.postType ?? metadata?.contentType)?.uppercased() {
+        switch socialProseKind {
         case "STORY": return String(localized: "content.kind.story", defaultValue: "Story", bundle: .main)
         case "REEL": return String(localized: "content.kind.reel", defaultValue: "Réel", bundle: .main)
         case "MOOD": return String(localized: "content.kind.mood", defaultValue: "Humeur", bundle: .main)
-        case "STATUS": return String(localized: "content.kind.status", defaultValue: "Statut", bundle: .main)
         case "POST": return String(localized: "content.kind.post", defaultValue: "Publication", bundle: .main)
         default:
             switch notificationType {
             case .storyReaction, .storyNewComment, .friendStoryComment, .storyThreadReply, .friendNewStory:
                 return String(localized: "content.kind.story", defaultValue: "Story", bundle: .main)
-            case .statusReaction:
-                return String(localized: "content.kind.status", defaultValue: "Statut", bundle: .main)
             case .friendNewMood:
                 return String(localized: "content.kind.mood", defaultValue: "Humeur", bundle: .main)
             default:

@@ -77,6 +77,20 @@ extension ConversationListView {
 
     @ViewBuilder
     func conversationContextMenu(for conversation: Conversation) -> some View {
+        // Sa propre fenêtre (iPad) : écrire à cette personne ou à ce groupe pendant qu'une autre conversation
+        // reste ouverte dans la fenêtre principale.
+        if DetachedWindowOpener.shared.isAvailable {
+            Button {
+                HapticFeedback.light()
+                DetachedWindowOpener.shared.open(.conversation(id: conversation.id))
+            } label: {
+                Label(
+                    String(localized: "window.detach.conversation", defaultValue: "Ouvrir dans une nouvelle fenêtre", bundle: .main),
+                    systemImage: "macwindow.badge.plus"
+                )
+            }
+        }
+
         // Pin/Unpin
         Button {
             HapticFeedback.medium()
@@ -1231,7 +1245,7 @@ struct ConversationListBottomBar: View {
                             .font(MeeshyFont.relative(MeeshyFont.smallSize, weight: .semibold))
                             .foregroundColor(MeeshyColors.indigo300)
                     }
-                    .accessibilityLabel(String(localized: "accessibility.see_all_communities", defaultValue: "Voir toutes les communautes"))
+                    .accessibilityLabel(String(localized: "accessibility.see_all_communities", defaultValue: "Voir toutes les communautés"))
 
                     Button {
                         withAnimation(.spring(response: 0.3, dampingFraction: 0.8)) {
@@ -1249,7 +1263,7 @@ struct ConversationListBottomBar: View {
                                 )
                             )
                     }
-                    .accessibilityLabel(String(localized: "accessibility.close_communities", defaultValue: "Fermer les communautes"))
+                    .accessibilityLabel(String(localized: "accessibility.close_communities", defaultValue: "Fermer les communautés"))
                 }
             }
             .padding(.horizontal, MeeshySpacing.lg)

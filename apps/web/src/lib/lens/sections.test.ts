@@ -117,7 +117,7 @@ describe('resolveLensSections — sur les fixtures web-v2', () => {
   const timeZone = 'Europe/Paris';
 
   function sections() {
-    const visible = applyFilter({ conversations: CONVERSATIONS, filter: 'all', search: '', viewerId: 'u-viewer', overrides: {} });
+    const visible = applyFilter({ conversations: CONVERSATIONS, selection: ['all'], search: '', viewerId: 'u-viewer', overrides: {} });
     return resolveLensSections({ conversations: visible, overrides: {}, now, timeZone });
   }
 
@@ -162,7 +162,7 @@ describe('resolveLensSections — sur les fixtures web-v2', () => {
   });
 
   test('partition sans perte : union des sections = corpus filtré, sans doublon', () => {
-    const visible = applyFilter({ conversations: CONVERSATIONS, filter: 'all', search: '', viewerId: 'u-viewer', overrides: {} });
+    const visible = applyFilter({ conversations: CONVERSATIONS, selection: ['all'], search: '', viewerId: 'u-viewer', overrides: {} });
     const s = resolveLensSections({ conversations: visible, overrides: {}, now, timeZone });
     const ids = s.flatMap((section) => section.conversations.map((c) => c.id));
     expect(new Set(ids).size).toBe(ids.length);
@@ -170,7 +170,7 @@ describe('resolveLensSections — sur les fixtures web-v2', () => {
   });
 
   test('un témoin de RANG temporel autre que le premier : "now" avancé de 24h range le jour courant en "hier"', () => {
-    const visible = applyFilter({ conversations: CONVERSATIONS, filter: 'all', search: '', viewerId: 'u-viewer', overrides: {} });
+    const visible = applyFilter({ conversations: CONVERSATIONS, selection: ['all'], search: '', viewerId: 'u-viewer', overrides: {} });
     const laterNow = new Date(now.getTime() + 24 * 60 * 60 * 1000);
     const s = resolveLensSections({ conversations: visible, overrides: {}, now: laterNow, timeZone });
     const yesterday = s.find((section) => section.id === 'lentille.yesterday');
@@ -178,7 +178,7 @@ describe('resolveLensSections — sur les fixtures web-v2', () => {
   });
 
   test("l'override optimiste entre dans la loi : épingler localement fait migrer vers ÉPINGLES", () => {
-    const visible = applyFilter({ conversations: CONVERSATIONS, filter: 'all', search: '', viewerId: 'u-viewer', overrides: {} });
+    const visible = applyFilter({ conversations: CONVERSATIONS, selection: ['all'], search: '', viewerId: 'u-viewer', overrides: {} });
     const s = resolveLensSections({
       conversations: visible,
       overrides: { 'c-deploiement': { flags: { isPinned: true } } },
@@ -240,7 +240,7 @@ describe('lensSectionLabel — casse NORMALE, jamais de majuscules dans la donn�
 describe('resolveLensSections — les catégories de l’utilisateur (#10103)', () => {
   const now = FIXTURES_LOADED_AT;
   const timeZone = 'Europe/Paris';
-  const visible = () => applyFilter({ conversations: CONVERSATIONS, filter: 'all', search: '', viewerId: 'u-viewer', overrides: {} });
+  const visible = () => applyFilter({ conversations: CONVERSATIONS, selection: ['all'], search: '', viewerId: 'u-viewer', overrides: {} });
   const categories = [
     { id: 'cat-travail', name: 'Travail', isExpanded: true },
     { id: 'cat-proches', name: 'Proches', isExpanded: false },

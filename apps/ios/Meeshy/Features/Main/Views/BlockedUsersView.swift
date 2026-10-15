@@ -41,7 +41,7 @@ struct BlockedUsersView: View {
             }
         } message: {
             if let user = userToUnblock {
-                Text(String(localized: "blocked.users.unblock.confirm", defaultValue: "Voulez-vous debloquer \(user.name) ?", bundle: .main))
+                Text(String(localized: "blocked.users.unblock.confirm", defaultValue: "Voulez-vous débloquer \(user.name) ?", bundle: .main))
             }
         }
         .task { await viewModel.loadBlocked() }

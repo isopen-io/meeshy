@@ -513,6 +513,10 @@ final class CallManager: ObservableObject {
     /// hasn't joined within `outgoingRingTimeoutSeconds`. Cancelled when the
     /// state leaves `.ringing(isOutgoing: true)` (offering / connecting / ended).
     var outgoingRingTimeoutTask: Task<Void, Never>?
+    /// Callee-side twin: an incoming call still ringing well past the ring budget — its `call:ended` lost (socket
+    /// mounted after the caller hung up, `call_cancel` push missed) — ends locally as missed. Without it the state
+    /// stayed `.ringing` with no exit: every later incoming call answered « busy » and `startCall` refused.
+    var incomingRingTimeoutTask: Task<Void, Never>?
     /// Task de setup d'un appel sortant (force-leave + ACK + media + listen).
     /// Auparavant un Task non-tracké : si endCallInternal fire pendant le
     /// setup (ex: CallKit teardown), le Task continuait à tourner — gardant
@@ -748,6 +752,13 @@ final class CallManager: ObservableObject {
     /// `reason == "rejected"` marks a DECLINE — the replay must preserve it,
     /// or it resurrects the `missed` mislabel (arc reject 2026-07-12).
     var pendingEndReconciliations: [(callId: String, reason: String?)] = []
+
+    /// Combien de fois la fin de chaque appel a été armée pour un rejeu. Sans plafond, une fin que la passerelle
+    /// refuse (appel déjà clos, `NOT_A_PARTICIPANT`) se réarmait à CHAQUE reconnexion pour toute la vie du
+    /// processus : deux émissions par reconnexion, jusqu'à vider le quota de fins d'appel — et refuser le
+    /// raccroché d'un vrai appel.
+    var endReconciliationArmings: [String: Int] = [:]
+    static let maxEndReconciliationArmings = 4
 
     #if canImport(WebRTC)
     /// Paresseux (#7955) : `PiPCallController` monte une vue AVKit à sa naissance.

@@ -87,7 +87,14 @@ struct ReelSceneView: View {
     }
 
     var body: some View {
-        let duration = carrier.toRenderableSlide(preferredLanguages: []).computedTotalDuration()
+        // Le Prisme du lecteur, UNE fois : la slide jouée et sa durée en
+        // dépendent toutes deux (un texte long allonge le tour).
+        let languages = AuthManager.shared.currentUser?.preferredContentLanguages ?? []
+        // La durée du tour que le player JOUE (#10555), pas une seconde
+        // dérivation depuis d'autres effets et sans les langues du lecteur.
+        let duration = MeeshyScenePlayer.playedDuration(document: document,
+                                                        carrier: carrier,
+                                                        preferredContentLanguages: languages)
         // **Un réel qui porte une scène montre LA carte de la story** —
         // le même composant, la même forme, le même fond (directive porteur du
         // 2026-09-17 : « Partir du fait que le composant est déjà fait et le
@@ -132,7 +139,7 @@ struct ReelSceneView: View {
                                       isPlaying: .constant(isPlaying),
                                       accentColorHex: reel.authorColor,
                                       carrier: carrier,
-                                      preferredContentLanguages: AuthManager.shared.currentUser?.preferredContentLanguages ?? [],
+                                      preferredContentLanguages: languages,
                                       isMuted: isMuted,
                                       // Le canvas ne peint jamais son hors-champ :
                                       // la carte le peint, comme aux quatre

@@ -75,9 +75,9 @@ describe('adminPostStateOf', () => {
 });
 
 describe('adminGesturesFor', () => {
-  it("ne propose rien sur une supprimée, la remise en ligne seule sur une hors ligne", () => {
+  it("ne propose rien sur une supprimée, la remise en ligne (audience de l'auteur ou choisie) sur une hors ligne", () => {
     expect(adminGesturesFor('deleted')).toEqual([]);
-    expect(adminGesturesFor('offline')).toEqual(['restore']);
+    expect(adminGesturesFor('offline')).toEqual(['restore', 'set-visibility']);
     expect(adminGesturesFor('published')).toEqual(['take-offline', 'set-visibility']);
   });
 });

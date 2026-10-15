@@ -37,15 +37,19 @@ nonisolated struct CallFrameStage {
     let boxes: [CallFrameSlotBox]
     let people: [CallFramePerson]
     let texts: CallFrameTexts
+    /// Les bandes que des contrôles couvrent à l'écran (#9777) : aucun texte du cadre ne s'y pose.
+    let reserve: CallFrameChromeReserve
 
-    init(frame: CallFrameDesign, people: [CallFramePerson], texts: CallFrameTexts, size: CGSize) {
+    init(frame: CallFrameDesign, people: [CallFramePerson], texts: CallFrameTexts, size: CGSize,
+         reserve: CallFrameChromeReserve = .none) {
         self.frame = frame
         self.size = size
         self.bounds = CGRect(origin: .zero, size: size)
-        self.areas = CallFrameLayoutGeometry.areas(frame.look.layout, size: size)
-        self.boxes = CallFrameLayoutGeometry.slots(for: frame, people: people.count, size: size)
+        self.areas = CallFrameLayoutGeometry.areas(frame.look.layout, size: size, reserve: reserve)
+        self.boxes = CallFrameLayoutGeometry.slots(for: frame, people: people.count, size: size, reserve: reserve)
         self.people = people
         self.texts = texts
+        self.reserve = reserve
     }
 
     var look: CallFrameLook { frame.look }
@@ -124,6 +128,7 @@ nonisolated enum CallFrameRenderer {
             texts.isGroup ? "g" : "d",
             texts.date,
             texts.accentHex.map { "\($0.primary)/\($0.secondary)" } ?? "\u{2205}",
+            "\(stage.reserve.top)/\(stage.reserve.bottom)",
         ]
         let people = stage.people.map { "\($0.id)\u{1E}\($0.name)\u{1E}\($0.handle ?? "")\u{1E}\($0.isSelf ? 1 : 0)" }
         return (head + people).joined(separator: "\u{1F}")

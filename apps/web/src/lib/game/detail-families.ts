@@ -64,6 +64,7 @@ export const GAME_DETAIL_HOW: Readonly<Record<GameDetailFamily, 'obtain' | 'give
 export const GAME_DETAIL_FACTS = [
   'tier',
   'score',
+  'convertible',
   'level_next',
   'level_record',
   'tailwind',

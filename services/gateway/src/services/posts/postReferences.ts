@@ -12,6 +12,8 @@ import type { PrismaClient } from '@meeshy/shared/prisma/client';
 import type { PostMentionDisplayValue } from './postMentions';
 import { readDisplay } from './postMentions';
 import { postMentionInclude } from './postIncludes';
+import { withServedRepostCredits } from './repostCreditChips';
+import { withServedDerivedContent } from './storyContentComposition';
 import { negotiateWireStoryEffects, type WireReader } from './storyEffectsV3';
 
 export type { WireReader } from './storyEffectsV3';
@@ -153,7 +155,11 @@ export function withMentions<T extends { postMentions?: unknown; mentions?: unkn
   const flat = postMentions === undefined && Array.isArray(mentions)
     ? { ...rest, mentions: mentions as PostReference[] }
     : { ...rest, mentions: toPostReferences(postMentions as never) };
-  return withNestedRepostMentions(negotiateWireStoryEffects(flat, reader), reader);
+  // #10524 — la puce de crédit se retire avant la négociation, sur le blob
+  // tel qu'enregistré. #10523 — et d'abord du `content` qui en dérive, tant
+  // que le blob dit encore quel texte était la puce.
+  const served = withServedRepostCredits(withServedDerivedContent(flat));
+  return withNestedRepostMentions(negotiateWireStoryEffects(served, reader), reader);
 }
 
 /**

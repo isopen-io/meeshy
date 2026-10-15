@@ -23,6 +23,7 @@ final class FullscreenMoreMenuSingleLabelGuardTests: XCTestCase {
         for host in Self.hosts {
             let code = AppSourceGuard.stripComments(try AppSourceGuard.unit(host))
             let chains = Self.modifierChains(after: "FullscreenMoreMenu(", in: code)
+                + Self.modifierChains(after: "FullscreenMoreMenu {", in: code)
             XCTAssertFalse(chains.isEmpty, "\(host) ne monte plus FullscreenMoreMenu — la garde ne mesure rien")
             for chain in chains {
                 XCTAssertFalse(chain.contains(".accessibilityLabel("),

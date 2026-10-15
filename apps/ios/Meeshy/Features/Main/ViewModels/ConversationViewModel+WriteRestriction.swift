@@ -28,4 +28,23 @@ extension ConversationViewModel {
         try? await messagePersistence.purgeMessages(ids: [tempId])
         await ConversationSyncEngine.shared.withdrawLocalMessage(conversationId: conversationId, messageId: tempId)
     }
+
+    /// #7759 — le mode lent des nouveaux comptes (Meeshy Global) est un refus
+    /// TEMPORAIRE : ni le socket ni la file ne le forcent. La bulle reste, en
+    /// échec, renvoyable d'un geste ; l'auteur lit pourquoi et dans combien de
+    /// temps, dans sa langue.
+    func holdForSlowMode(tempId: String, slowMode: NewcomerSlowMode, error: Error) async {
+        Logger.messages.warning("perf:ios.send.fail.slow-mode clientMessageId=\(tempId, privacy: .public) retryAfter=\(slowMode.retryAfterSeconds, privacy: .public)")
+        _ = try? await messagePersistence.applyEvent(localId: tempId, event: .sendFailed(error))
+        _ = try? await messagePersistence.applyEvent(localId: tempId, event: .retryExhausted)
+        FeedbackToastManager.shared.showError(Self.slowModeNotice(slowMode))
+    }
+
+    nonisolated static func slowModeNotice(_ slowMode: NewcomerSlowMode) -> String {
+        String(
+            localized: "conversation.send.slow_mode",
+            defaultValue: "Un message toutes les 30 s pour les nouveaux comptes — réessaie dans \(slowMode.retryAfterSeconds) s",
+            bundle: .main
+        )
+    }
 }

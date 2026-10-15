@@ -19,6 +19,10 @@ const pt = {
   'viewerEngagement.empty.subtitle': 'As pessoas que virem esta publicação aparecerão aqui.',
   'viewerEngagement.forbidden': 'Você não tem acesso à lista de quem viu esta publicação.',
   'viewerEngagement.unavailable': 'O detalhe da atividade está temporariamente indisponível.',
+  'viewerEngagement.visitors.one': 'e {count} visitante sem conta',
+  'viewerEngagement.visitors.other': 'e {count} visitantes sem conta',
+  'viewerEngagement.visitors.only.one': '{count} visitante sem conta',
+  'viewerEngagement.visitors.only.other': '{count} visitantes sem conta',
 } satisfies ViewerEngagementCatalog;
 
 export default pt;

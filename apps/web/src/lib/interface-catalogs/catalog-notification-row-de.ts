@@ -6,7 +6,6 @@ const deNotificationRow = {
   'notifications.row.kind.story': 'Story',
   'notifications.row.kind.reel': 'Reel',
   'notifications.row.kind.mood': 'Stimmung',
-  'notifications.row.kind.status': 'Status',
   'notifications.row.kind.post': 'Beitrag',
   'notifications.row.media.photo': '📷 Foto',
   'notifications.row.media.video': '🎥 Video',

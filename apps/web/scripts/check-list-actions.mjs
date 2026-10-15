@@ -47,7 +47,8 @@
  *     son menu plutôt que de tomber sur le conteneur muet qui l'enveloppe.
  *  9. LE MENU NE DÉBORDE JAMAIS DU BAS DE L'ÉCRAN — #5559 revue-correction,
  *     défaut 7 : sur un viewport de 390×640, le menu de la DERNIÈRE rangée
- *     se RETOURNE au-dessus de son ancre et ses SIX lignes restent
+ *     se RETOURNE au-dessus de son ancre et ses SEPT lignes (« Supprimer »
+ *     compris, #7285) restent
  *     atteignables.
  * 10. « 0 CONTRÔLE SANS GESTIONNAIRE » (#5652) — les trois boutons ronds de
  *     l'en-tête ont chacun leur effet MESURÉ (feuille ouverte + retour
@@ -78,6 +79,7 @@ import { launchChromium } from './lib/browser.mjs';
 import { startDistServer } from './lib/gate-server.mjs';
 import { contrastOf } from './lib/contrast.mjs';
 import { checkLensRowMetaRest } from './lib/check-lens-row-meta.mjs';
+import { checkRowMenuMore } from './lib/check-row-menu-more.mjs';
 
 const DIST = new URL('../dist/', import.meta.url).pathname;
 /* Le serveur vit dans `lib/` depuis #6988 : celui qui était écrit ici
@@ -387,10 +389,18 @@ check((await avatarOpacity(SUBJECT)) === 0.55, `après « Silence », le CHROME 
  */
 check((await rowTitleOpacity(SUBJECT)) === 1, "après « Silence », le titre reste à pleine opacité (lisible)");
 check((await rowPreviewOpacity(SUBJECT)) === 1, "après « Silence », l'aperçu reste à pleine opacité (lisible)");
-const mutedSpoken = await page.$eval(`[data-row="${SUBJECT}"]`, (el) => el.textContent?.includes('En sourdine') ?? false);
-check(mutedSpoken, 'la sourdine est aussi DITE — le fondu ne se lit qu’à l’œil');
+/* LA SOURDINE SE VOIT ET SE DIT (#10598) — la cloche barrée après le nom,
+   miroir du 🔕 d'iOS, nommée pour le lecteur d'écran ; le fondu seul ne se
+   lisait pas. Repérée par `data-muted`, jamais par son nom, qui suit la langue. */
+const mutedMark = await page.$eval(`[data-row="${SUBJECT}"]`, (el) => {
+  const glyph = el.querySelector('[data-muted] svg[role="img"]');
+  const box = glyph?.getBoundingClientRect();
+  return { label: glyph?.getAttribute('aria-label') ?? '', width: box?.width ?? 0 };
+});
+check(mutedMark.label.length > 0 && mutedMark.width > 0, `la sourdine porte une cloche barrée VISIBLE et NOMMÉE (${JSON.stringify(mutedMark)})`);
 await act(SUBJECT, 'Son');
 check((await avatarOpacity(SUBJECT)) === 1, 'après « Son », le CHROME revient à pleine opacité');
+check((await page.$(`[data-row="${SUBJECT}"] [data-muted]`)) === null, 'après « Son », la cloche barrée disparaît');
 
 check((await unreadBadge(SUBJECT)) === '2', `avant action, le badge de non-lus affiche 2 (${await unreadBadge(SUBJECT)})`);
 /**
@@ -438,16 +448,68 @@ await act(SUBJECT, 'Archiver');
 check(!(await rowIds(page)).includes(SUBJECT), 'après « Archiver », la rangée quitte le corpus « Tous »');
 
 // ------------------------------------------------------- 5. les chips filtrent
-await page.click('button:text-is("Archivées")');
-await page.waitForTimeout(150);
+/* Les puces se repèrent par `data-list-filter`, jamais par leur nom, qui suit
+   la langue d'interface (#10593). Elles se COMPOSENT (#10598) : un appui pose,
+   un second retire, « Tous » est l'absence de filtre. */
+const chip = (id) => `nav[data-list-filters] button[data-list-filter="${id}"]`;
+/* Attendre l'ÉTAT, jamais un délai : la puce a basculé quand son
+   `aria-pressed` a changé — « Tous » se dit toujours choisi après son appui. */
+const tapChip = async (id) => {
+  const before = await page.getAttribute(chip(id), 'aria-pressed');
+  await page.click(chip(id));
+  await page.waitForFunction(
+    ([selector, was, neutral]) => {
+      const now = document.querySelector(selector)?.getAttribute('aria-pressed');
+      return neutral ? now === 'true' : now !== was;
+    },
+    [chip(id), before, id === 'all'],
+  );
+};
+const pressed = async (id) => (await page.getAttribute(chip(id), 'aria-pressed')) === 'true';
+
+await tapChip('archived');
 const archived = await rowIds(page);
 check(archived.includes(SUBJECT), `la rangée archivée apparaît sous « Archivées » (${JSON.stringify(archived)})`);
 check(archived.length === 2, `« Archivées » ne rend QUE les archivées (${archived.length} attendues : 2)`);
+check(!(await pressed('all')), '« Archivées » posé, « Tous » ne se dit plus choisi');
 
-await page.click('button:text-is("Épinglés")');
-await page.waitForTimeout(150);
+await tapChip('archived');
+check(await pressed('all'), 'un second appui sur « Archivées » le retire : « Tous » revient');
+check(!(await rowIds(page)).includes(SUBJECT), 'et l’archivée quitte la liste');
+
+await tapChip('pinned');
 const pinned = await rowIds(page);
 check(pinned.length === 1 && pinned[0] === 'c-amina', `« Épinglés » ne rend que l’épinglée du jeu (${JSON.stringify(pinned)})`);
+await tapChip('pinned');
+
+/* LES TYPES S'ADDITIONNENT : « Personnel + Ouvertes » rend les directs ET les
+   publiques, jamais leur intersection vide. */
+await tapChip('personal');
+const personal = await rowIds(page);
+await tapChip('personal');
+await tapChip('open');
+const open = await rowIds(page);
+await tapChip('personal');
+const both = await rowIds(page);
+check(
+  personal.length > 0 && open.length > 0 && both.length === personal.length + open.length && (await pressed('personal')) && (await pressed('open')),
+  `« Personnel + Ouvertes » rend l’union (${personal.length} + ${open.length} ⇒ ${both.length})`,
+);
+/* … ET UN ÉTAT LES CROISE : « Non lus » parmi elles rend exactement celles
+   qui portent une pastille de non-lus — une rangée du jeu marquée non lue
+   pour que le croisement ait quelque chose à retenir. */
+const marked = both[0];
+await act(marked, 'Non lu');
+const unreadExpected = await page.$$eval('[data-row]', (els) => els.filter((el) => el.querySelector('[data-unread]') !== null).map((el) => el.dataset.row));
+await tapChip('unread');
+const unreadAmong = await rowIds(page);
+check(
+  unreadExpected.includes(marked) && unreadAmong.length < both.length && JSON.stringify([...unreadAmong].sort()) === JSON.stringify([...unreadExpected].sort()),
+  `« Non lus » croise les types posés (${JSON.stringify(unreadAmong)} attendu ${JSON.stringify(unreadExpected)})`,
+);
+await act(marked, 'Lu');
+await tapChip('all');
+check(await pressed('all') && !(await pressed('personal')) && !(await pressed('unread')), '« Tous » efface la sélection composée');
 
 // ------------------------------------------------------- 6. l'état vide tient dans l'écran
 await page.fill('input[type="search"]', 'zzzzzz');
@@ -615,8 +677,8 @@ const menuFit = await shortPage.evaluate(() => {
   };
 });
 check(
-  menuFit.count === 6 && menuFit.allInView,
-  `à 390×640, les SIX lignes du menu de la dernière rangée (deux appels, quatre actions) ont leur centre dans l'écran (${JSON.stringify(menuFit)})`,
+  menuFit.count === 11 && menuFit.allInView,
+  `à 390×640, les ONZE lignes du menu de la dernière rangée (deux appels, trois actions, Détails, Renommer, Favori, Déplacer vers… — #10593 —, « Archiver », « Supprimer » — #7285) ont leur centre dans l'écran (${JSON.stringify(menuFit)})`,
 );
 
 await shortContext.close();
@@ -762,7 +824,7 @@ await enTetePage.click('[data-rail="grande"] a[data-story-author]');
    chunk. Attendre la SCÈNE elle-même, pas seulement l'URL. */
 await enTetePage.waitForSelector('[data-story-scene]', { timeout: 5000 }).catch(() => {});
 const surLecteur = await enTetePage.evaluate(() => ({
-  pathname: window.location.pathname,
+  pathname: `${window.location.pathname}${window.location.search}`,
   scene: document.querySelector('[data-story-scene]')?.getAttribute('data-story-scene') ?? null,
   auteur: document.querySelector('[data-story-scene] [data-story-author]')?.getAttribute('data-story-author') ?? null,
 }));
@@ -974,7 +1036,8 @@ for (const scheme of ['light', 'dark']) {
   const opened = await enPage.waitForSelector('[role="menu"][aria-label="Conversation actions"]', { timeout: 2000 }).then(() => true, () => false);
   const labels = opened ? await enPage.$$eval('[role="menu"] [role="menuitem"]', (els) => els.map((el) => (el.textContent ?? '').trim())) : [];
   check(
-    JSON.stringify(labels) === JSON.stringify(['Voice call', 'Video call', 'Pin', 'Mute', 'Read', 'Archive']),
+    JSON.stringify(labels) ===
+      JSON.stringify(['Voice call', 'Video call', 'Pin', 'Mute', 'Read', 'Details', 'Rename', 'Favorite', 'Move to…', 'Archive', 'Delete']),
     `en anglais, le menu d'une ligne est entièrement anglais — « Conversation actions » (${JSON.stringify(labels)})`,
   );
   await enContext.close();
@@ -982,6 +1045,9 @@ for (const scheme of ['light', 'dark']) {
 
 // ------------- 14. l'heure et les points ne paraissent qu'au défilement (#9570)
 await checkLensRowMetaRest({ browser, base: BASE, row: SUBJECT, check });
+
+// ------------- 15. les entrées d'iOS du menu d'une ligne ont un effet (#10593)
+await checkRowMenuMore({ browser, base: BASE, check });
 
 await browser.close();
 served.close();

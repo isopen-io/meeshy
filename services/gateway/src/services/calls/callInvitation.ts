@@ -115,6 +115,19 @@ export async function recordCallInvitation(
 }
 
 /**
+ * L'appel nomme-t-il cette clé parmi ses invités ? Un invité de lien ne sonne
+ * pas au premier appel (`ringableCallees`) et `call:join` par socket le refuse :
+ * `call:check-active` ne lui rejoue (bannière, TURN neufs) que l'appel qui
+ * l'INVITE (#10473).
+ */
+export function isInvitedToCall(
+  session: { readonly invitedUserIds?: readonly string[] | null },
+  key: string
+): boolean {
+  return (session.invitedUserIds ?? []).includes(key);
+}
+
+/**
  * La participation par laquelle une personne INVITÉE rejoint cet appel — `null`
  * si elle n'y est pas invitée, si l'appel est terminé, ou si elle est bannie de
  * la conversation. Un membre actif ne passe pas par ici : sa propre

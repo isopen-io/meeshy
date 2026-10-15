@@ -10,16 +10,20 @@ import android.content.Context;
 import android.content.Intent;
 import android.content.IntentFilter;
 import android.content.pm.ServiceInfo;
+import android.graphics.Bitmap;
 import android.graphics.drawable.Icon;
 import android.media.AudioManager;
+import android.media.MediaMetadata;
 import android.media.session.MediaSession;
 import android.media.session.PlaybackState;
 import android.os.Build;
 import android.os.Handler;
 import android.os.IBinder;
 import android.os.Looper;
+import android.os.SystemClock;
 import android.util.Log;
 import androidx.core.content.ContextCompat;
+import java.util.TimeZone;
 
 /**
  * Le message vocal ecoute tient la lecture au PREMIER PLAN (#9257). Sans lui,
@@ -51,6 +55,15 @@ import androidx.core.content.ContextCompat;
  * Un casque debranche ou deconnecte pendant la lecture (#9946) met le vocal
  * en pause par la meme voie, comme Chrome : sans cela il repartait sur le
  * haut-parleur du telephone.
+ *
+ * La carte DIT ce qui joue et SE PILOTE (#10624), comme la carte Now Playing
+ * d'iOS : la page remet le vocal (`nowPlaying`) — auteur, conversation, date,
+ * avatar, duree, position, vitesse — aux seules ruptures, et la session
+ * EXTRAPOLE la position (position + vitesse + horodatage), la barre avancant
+ * seule. Glisser la barre et les ±15 s reviennent a la page en position visee
+ * (`seekRequested`) : la page reste le SEUL moteur, aucun lecteur natif ne
+ * relit le fichier. Sans description (une page plus ancienne), la carte garde
+ * ses libelles generiques. Les regles sont dans {@link PlaybackRules}.
  */
 public class PlaybackForegroundService extends Service {
 
@@ -90,8 +103,20 @@ public class PlaybackForegroundService extends Service {
         if (service != null) new Handler(Looper.getMainLooper()).post(() -> service.parked());
     }
 
+    /** Le dernier vocal decrit par la page, applique des que le service vit. */
+    private static volatile PlaybackRules.Track described;
+
+    static void describe(PlaybackRules.Track track) {
+        described = track;
+        new Handler(Looper.getMainLooper()).post(() -> {
+            PlaybackForegroundService service = running;
+            if (service != null && described == track) service.show(track);
+        });
+    }
+
     private MediaSession session;
     private boolean playing = true;
+    private PlaybackRules.Track track;
 
     private final BroadcastReceiver noisy = new BroadcastReceiver() {
         @Override
@@ -116,22 +141,122 @@ public class PlaybackForegroundService extends Service {
             public void onPlay() {
                 resume();
             }
+
+            @Override
+            public void onSeekTo(long positionMs) {
+                seek(positionMs);
+            }
+
+            @Override
+            public void onCustomAction(String action, android.os.Bundle extras) {
+                skip(action);
+            }
+
+            @Override
+            public void onSkipToNext() {
+                MeeshyPlaybackPlugin.skipRequested(true);
+            }
+
+            @Override
+            public void onSkipToPrevious() {
+                MeeshyPlaybackPlugin.skipRequested(false);
+            }
         });
-        session.setPlaybackState(state(true));
+        session.setPlaybackState(state());
         session.setActive(true);
+        PlaybackRules.Track pending = described;
+        if (pending != null) show(pending);
         ContextCompat.registerReceiver(this, noisy, new IntentFilter(AudioManager.ACTION_AUDIO_BECOMING_NOISY), ContextCompat.RECEIVER_NOT_EXPORTED);
     }
 
-    private static PlaybackState state(boolean playing) {
-        return new PlaybackState.Builder()
-            .setActions(playing
-                ? PlaybackState.ACTION_PAUSE | PlaybackState.ACTION_PLAY_PAUSE
-                : PlaybackState.ACTION_PLAY | PlaybackState.ACTION_PLAY_PAUSE)
+    private PlaybackState state() {
+        long now = SystemClock.elapsedRealtime();
+        PlaybackState.Builder builder = new PlaybackState.Builder();
+        if (track == null) {
+            return builder
+                .setActions(PlaybackRules.actions(playing, 0, false, false))
+                .setState(playing ? PlaybackState.STATE_PLAYING : PlaybackState.STATE_PAUSED, PlaybackState.PLAYBACK_POSITION_UNKNOWN, playing ? 1f : 0f)
+                .build();
+        }
+        builder
+            .setActions(PlaybackRules.actions(playing, track.durationMs, track.canNext, track.canPrevious))
             .setState(
-                playing ? PlaybackState.STATE_PLAYING : PlaybackState.STATE_PAUSED,
-                PlaybackState.PLAYBACK_POSITION_UNKNOWN,
-                playing ? 1f : 0f)
-            .build();
+                playing ? (track.buffering ? PlaybackState.STATE_BUFFERING : PlaybackState.STATE_PLAYING) : PlaybackState.STATE_PAUSED,
+                track.position(now),
+                playing && !track.buffering ? track.rate : 0f,
+                now);
+        if (track.durationMs > 0) {
+            builder.addCustomAction(new PlaybackState.CustomAction.Builder(PlaybackRules.ACTION_BACK, getString(R.string.playback_back), android.R.drawable.ic_media_rew).build());
+            builder.addCustomAction(new PlaybackState.CustomAction.Builder(PlaybackRules.ACTION_FORWARD, getString(R.string.playback_forward), android.R.drawable.ic_media_ff).build());
+        }
+        return builder.build();
+    }
+
+    private PlaybackRules.Labels labels(PlaybackRules.Track shown) {
+        return PlaybackRules.labels(
+            shown.sender,
+            shown.conversation,
+            shown.sentAtMs,
+            shown.protectedTrack,
+            getString(R.string.playback_voice_message),
+            getString(R.string.playback_protected),
+            getResources().getConfiguration().getLocales().get(0),
+            TimeZone.getDefault()
+        );
+    }
+
+    private MediaMetadata metadata(PlaybackRules.Track shown, Bitmap artwork) {
+        PlaybackRules.Labels labels = labels(shown);
+        MediaMetadata.Builder builder = new MediaMetadata.Builder()
+            .putString(MediaMetadata.METADATA_KEY_TITLE, labels.title)
+            .putString(MediaMetadata.METADATA_KEY_ARTIST, labels.artist)
+            .putString(MediaMetadata.METADATA_KEY_ALBUM, labels.album)
+            .putLong(MediaMetadata.METADATA_KEY_DURATION, shown.durationMs);
+        if (artwork != null) builder.putBitmap(MediaMetadata.METADATA_KEY_ALBUM_ART, artwork);
+        return builder.build();
+    }
+
+    /** La page decrit son vocal : la carte le montre, et va chercher son image s'il le faut. */
+    void show(PlaybackRules.Track next) {
+        if (session == null) return;
+        track = next;
+        playing = next.playing;
+        Bitmap artwork = PlaybackArtwork.cached(next.artworkUrl);
+        session.setMetadata(metadata(next, artwork));
+        session.setPlaybackState(state());
+        if (artwork == null) {
+            PlaybackArtwork.load(this, next.artworkUrl, (url, loaded) -> {
+                PlaybackRules.Track current = track;
+                if (session == null || current == null || !current.key.equals(next.key)) return;
+                session.setMetadata(metadata(current, loaded));
+                refresh();
+            });
+        }
+        refresh();
+    }
+
+    /** La notification suit ce que la carte montre, sans changer d'etat au premier plan. */
+    private void refresh() {
+        NotificationManager manager = getSystemService(NotificationManager.class);
+        if (manager != null) manager.notify(NOTIFICATION_ID, notification(playing));
+    }
+
+    /** La barre glissee : la position visee part a la page, la carte la montre tout de suite. */
+    void seek(long positionMs) {
+        if (track == null) return;
+        long now = SystemClock.elapsedRealtime();
+        long target = PlaybackRules.clamp(positionMs, track.durationMs);
+        if (!MeeshyPlaybackPlugin.seekRequested(target)) return;
+        track = track.seek(target, now);
+        if (session != null) session.setPlaybackState(state());
+    }
+
+    /** ±15 s, depuis la position extrapolee. */
+    void skip(String action) {
+        if (track == null) return;
+        long offset = PlaybackRules.ACTION_BACK.equals(action) ? -PlaybackRules.SKIP_MS : PlaybackRules.ACTION_FORWARD.equals(action) ? PlaybackRules.SKIP_MS : 0;
+        if (offset == 0) return;
+        seek(PlaybackRules.skip(track.position(SystemClock.elapsedRealtime()), offset, track.durationMs));
     }
 
     /** La page a mis ses vocaux en pause a la demande de la coque. */
@@ -139,7 +264,8 @@ public class PlaybackForegroundService extends Service {
         MediaSession current = session;
         if (current == null) return;
         playing = false;
-        current.setPlaybackState(state(false));
+        if (track != null) track = track.at(SystemClock.elapsedRealtime(), false);
+        current.setPlaybackState(state());
         NotificationManager manager = getSystemService(NotificationManager.class);
         if (manager != null) manager.notify(NOTIFICATION_ID, notification(false));
         stopForeground(Service.STOP_FOREGROUND_DETACH);
@@ -153,13 +279,16 @@ public class PlaybackForegroundService extends Service {
             return;
         }
         playing = true;
-        if (session != null) session.setPlaybackState(state(true));
+        if (track != null) track = track.at(SystemClock.elapsedRealtime(), true);
+        if (session != null) session.setPlaybackState(state());
         foreground();
     }
 
     @Override
     public void onDestroy() {
         if (running == this) running = null;
+        described = null;
+        track = null;
         unregisterReceiver(noisy);
         if (session != null) session.release();
         // Une notification garee a quitte le premier plan : elle ne part pas seule.
@@ -180,8 +309,12 @@ public class PlaybackForegroundService extends Service {
             resume();
             return START_NOT_STICKY;
         }
+        if (intent != null && (PlaybackRules.ACTION_BACK.equals(intent.getAction()) || PlaybackRules.ACTION_FORWARD.equals(intent.getAction()))) {
+            skip(intent.getAction());
+            return START_NOT_STICKY;
+        }
         playing = true;
-        if (session != null) session.setPlaybackState(state(true));
+        if (session != null) session.setPlaybackState(state());
         foreground();
         return START_NOT_STICKY;
     }
@@ -239,10 +372,13 @@ public class PlaybackForegroundService extends Service {
         } else {
             builder = new Notification.Builder(this);
         }
-        return builder
+        PlaybackRules.Track shown = track;
+        PlaybackRules.Labels labels = shown == null ? null : labels(shown);
+        boolean seekable = shown != null && shown.durationMs > 0;
+        builder
             .setSmallIcon(android.R.drawable.ic_media_play)
-            .setContentTitle(getString(playing ? R.string.playback_ongoing : R.string.playback_paused))
-            .setContentText(getString(R.string.playback_return))
+            .setContentTitle(labels != null ? labels.title : getString(playing ? R.string.playback_ongoing : R.string.playback_paused))
+            .setContentText(labels != null ? (labels.artist != null ? labels.artist : getString(R.string.playback_return)) : getString(R.string.playback_return))
             .setCategory(Notification.CATEGORY_SERVICE)
             .setOngoing(playing)
             .setShowWhen(false)
@@ -250,12 +386,27 @@ public class PlaybackForegroundService extends Service {
             .setContentIntent(open)
             .setStyle(new Notification.MediaStyle()
                 .setMediaSession(session.getSessionToken())
-                .setShowActionsInCompactView(0))
-            .addAction(new Notification.Action.Builder(
+                .setShowActionsInCompactView(seekable ? new int[] { 0, 1, 2 } : new int[] { 0 }));
+        Bitmap artwork = shown == null ? null : PlaybackArtwork.cached(shown.artworkUrl);
+        if (artwork != null) builder.setLargeIcon(artwork);
+        if (seekable) builder.addAction(skipAction(PlaybackRules.ACTION_BACK, android.R.drawable.ic_media_rew, R.string.playback_back, NOTIFICATION_ID + 3));
+        builder.addAction(new Notification.Action.Builder(
                 Icon.createWithResource(this, playing ? android.R.drawable.ic_media_pause : android.R.drawable.ic_media_play),
                 getString(playing ? R.string.playback_pause : R.string.playback_play),
                 toggle
-            ).build())
+            ).build());
+        if (seekable) builder.addAction(skipAction(PlaybackRules.ACTION_FORWARD, android.R.drawable.ic_media_ff, R.string.playback_forward, NOTIFICATION_ID + 4));
+        return builder
             .build();
+    }
+
+    private Notification.Action skipAction(String action, int icon, int label, int requestCode) {
+        PendingIntent intent = PendingIntent.getService(
+            this,
+            requestCode,
+            new Intent(this, PlaybackForegroundService.class).setAction(action),
+            PendingIntent.FLAG_UPDATE_CURRENT | PendingIntent.FLAG_IMMUTABLE
+        );
+        return new Notification.Action.Builder(Icon.createWithResource(this, icon), getString(label), intent).build();
     }
 }

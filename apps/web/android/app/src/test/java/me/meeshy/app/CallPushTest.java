@@ -30,7 +30,25 @@ public class CallPushTest {
     }
 
     private static CallPush route(Map<String, String> data) {
-        return CallPush.route(data, false, CallRingLedger.empty(), NOW);
+        return CallPush.route(data, false, CallRingLedger.empty(), NOW, true);
+    }
+
+    @Test
+    public void callsAreOffInTheFirstStoreRelease() {
+        assertFalse(CallPush.CALLS_ENABLED);
+    }
+
+    @Test
+    public void aCallPushDoesNotRingWhileCallsAreOff() {
+        assertEquals(CallPush.Kind.SUPPRESS, CallPush.route(ring(), false, CallRingLedger.empty(), NOW, false).kind);
+    }
+
+    @Test
+    public void aMessagePushStillReachesThePluginWhileCallsAreOff() {
+        Map<String, String> data = new HashMap<>();
+        data.put("type", "new_message");
+        data.put("conversationId", "conv1");
+        assertEquals(CallPush.Kind.NOT_CALL, CallPush.route(data, false, CallRingLedger.empty(), NOW, false).kind);
     }
 
     @Test
@@ -97,19 +115,19 @@ public class CallPushTest {
 
     @Test
     public void theAppInForegroundDoesNotRingTwice() {
-        assertEquals(CallPush.Kind.SUPPRESS, CallPush.route(ring(), true, CallRingLedger.empty(), NOW).kind);
+        assertEquals(CallPush.Kind.SUPPRESS, CallPush.route(ring(), true, CallRingLedger.empty(), NOW, true).kind);
     }
 
     @Test
     public void aSilencedCallDoesNotRingAgain() {
         CallRingLedger ledger = CallRingLedger.empty().with("c1", NOW - 1_000);
-        assertEquals(CallPush.Kind.SUPPRESS, CallPush.route(ring(), false, ledger, NOW).kind);
+        assertEquals(CallPush.Kind.SUPPRESS, CallPush.route(ring(), false, ledger, NOW, true).kind);
     }
 
     @Test
     public void aCancelThatArrivedFirstSilencesTheLateRing() {
         CallRingLedger ledger = CallRingLedger.empty().with("c1", NOW);
-        assertEquals(CallPush.Kind.SUPPRESS, CallPush.route(ring(), false, ledger, NOW + 5_000).kind);
+        assertEquals(CallPush.Kind.SUPPRESS, CallPush.route(ring(), false, ledger, NOW + 5_000, true).kind);
     }
 
     @Test

@@ -88,6 +88,10 @@ function base() {
     // Les traductions partagées (#9899) : un compte sans participant.
     participant: table([]),
     sharedTranslation: table([]),
+    postImpression: table([]),
+    postEngagement: table([]),
+    postView: table([]),
+    contentEvent: table([]),
     // Le jeu (#9384) : des collections vides.
     ...Object.fromEntries(
       [...GAME_PURGED_MODELS, 'gameDuo', 'leagueGroupWeek', 'affiliateVisitSession', 'mythicSeat', 'mythicEdition'].map((model) => [model, table([])]),

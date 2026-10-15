@@ -61,7 +61,6 @@ final class FileSizeBudgetGuardTests: XCTestCase {
         "MessageListViewController.swift",
         "P2PWebRTCClient.swift",
         "PostDetailView.swift",
-        "ProfileUserPostsList.swift",
         "RootView.swift",
         "StoryViewerView+Canvas.swift",
         "StoryViewerView+Content.swift",
@@ -593,7 +592,24 @@ final class FileSizeBudgetGuardTests: XCTestCase {
     // composeur, et `StoryViewerView+Content.swift` (−53) et `StoryViewerView.swift`
     // (−1) perdent ce qu'elle remplace ; `StoryViewerView+Canvas.swift` (−1) gagne
     // l'état de la prise vocale en resserrant un doc-comment. Les hôtes RESTENT en dette.
-    private static let legacyLineCeiling = 35_721
+    //
+    // #10483 — 35 721 → 35 550 (−171). Le contexte d'une notification touchée
+    // (`NotificationNavContext`, ses trois constructeurs) quitte `RootView.swift`
+    // pour `RootView+NotificationNavContext.swift` (−172) avant que la racine ne
+    // gagne le marquage de la source d'ouverture (+1). L'hôte RESTE en dette.
+    //
+    // #10483 — 35 550 → 34 373 (−1 177). `ProfileUserPostsList.swift` repasse SOUS
+    // le budget (1 177 lignes comptées) : le tap du profil ne compte plus sa propre
+    // vue derrière `PostViewThrottle` (retiré), la destination ouverte la compte. Il
+    // sort de `legacyOverBudget` ENTIER, et le plafond baisse d'exactement ce qu'il
+    // pesait à la sortie.
+    //
+    // #10506 — 34 373 → 34 302 (−71). La navigation du lecteur de story
+    // (`goToNext`, `goToPrevious`, `dismissViewer`) sort de
+    // `StoryViewerView+Content.swift` vers `StoryViewerView+Navigation.swift`
+    // AVANT d'y recevoir la télémétrie de lecture : extraire d'abord, ajouter
+    // ensuite. Le plafond reprend exactement le mou que l'extraction ouvre.
+    private static let legacyLineCeiling = 34_302
 
     // MARK: - Règle 1 — pas de 43ᵉ
 

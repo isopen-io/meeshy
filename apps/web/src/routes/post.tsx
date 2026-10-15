@@ -1,3 +1,4 @@
+import { useScrollDepthTelemetry } from '@/lib/telemetry/scroll-depth';
 import { useCallback, useEffect, useMemo, useRef } from 'react';
 
 import { CommentThread } from '@/components/comment-thread';
@@ -19,6 +20,7 @@ import { useMinute } from '@/lib/view/use-minute';
 import { usePostGesture } from '@/lib/view/use-post-gesture';
 import { usePublicationRoom } from '@/lib/view/use-publication-room';
 import { READING_COLUMN_STYLE } from '@/lib/view/reading-column';
+import { detailImpressionSourceOf, dwellContentTypeOf, useReadingSession, useViewAttribution } from '@/lib/view/reading-telemetry';
 import { useReaderLanguages } from '@/lib/view/use-reader';
 import { Link, href, navigate } from '@/routes/route-table';
 
@@ -68,14 +70,14 @@ export function PostDetailHeader() {
     <header className="flex shrink-0 items-center gap-2 px-3 pt-3 pb-2">
       <Link
         to="feed"
-        aria-label="Retour au fil"
+        aria-label={translate(currentInterfaceLanguage(), 'feed.backToFeed')}
         className="grid size-11 shrink-0 place-items-center rounded-chip focus-visible:outline-2 focus-visible:outline-offset-2"
         style={{ color: 'var(--color-ios-brand)', outlineColor: 'var(--color-ios-brand)' }}
       >
         <Glyph name="caretLeft" size={20} className="rtl:-scale-x-100" />
       </Link>
       <h1 className="text-screen font-bold" style={{ color: 'var(--color-ios-ink)' }}>
-        Publication
+        {translate(currentInterfaceLanguage(), 'post.detail.title')}
       </h1>
     </header>
   );
@@ -88,10 +90,10 @@ export function PostDetailError({ online, onRetry }: { readonly online: boolean;
         <Glyph name="warningCircle" size={28} />
       </span>
       <p className="text-body font-semibold" style={{ color: 'var(--color-ios-ink)' }}>
-        {online ? 'Impossible de charger la publication' : 'Hors ligne'}
+        {translate(currentInterfaceLanguage(), online ? 'post.detail.error' : 'common.offline')}
       </p>
       <p className="text-caption" style={{ color: 'var(--color-ios-ink-2)' }}>
-        {online ? 'Réessayez dans un instant.' : 'La publication s’affichera à la reconnexion.'}
+        {translate(currentInterfaceLanguage(), online ? 'post.detail.error.body' : 'post.detail.offline.body')}
       </p>
       <button
         type="button"
@@ -99,7 +101,7 @@ export function PostDetailError({ online, onRetry }: { readonly online: boolean;
         className="grid place-items-center rounded-chip px-5 text-body font-semibold text-ios-on-brand"
         style={{ backgroundColor: 'var(--color-ios-brand)', minHeight: 44 }}
       >
-        Réessayer
+        {translate(currentInterfaceLanguage(), 'common.retry')}
       </button>
     </div>
   );
@@ -174,6 +176,22 @@ export default function PostDetailScreen() {
   });
   const { visitor, ask } = invitation;
   const body = postDetailBodyOf({ served: model !== undefined, visitor, refused: isRefusal(post.error), failed: post.isError });
+  /* LA LECTURE DU DÉTAIL (#10401) — ouvrir une publication est une
+     impression `detail` ET une vue, comptées tout de suite ; la durée et la
+     séance partent à la sortie. Miroir `PostDetailViewModel` (iOS). La vue
+     porte PAR OÙ la fiche est arrivée (#10483) : un tap de listing, une
+     notification, un lien de suivi ou de partage, un autre site, ou rien. */
+  const attribution = useViewAttribution();
+  useScrollDepthTelemetry({ frame, target: model === undefined ? null : { kind: 'post', id: model.id }, contentKind: 'thread', surface: 'detail' });
+  useReadingSession({
+    postId: model?.id,
+    active: model !== undefined,
+    contentType: dwellContentTypeOf(post.data?.type),
+    surface: 'detail',
+    impressionSource: detailImpressionSourceOf(search),
+    openView: true,
+    attribution: () => attribution,
+  });
 
   // `?scene=N` — LE LIEN PROFOND (#6902, § F de la spécification) : l'ADRESSE
   // que le carrousel de scène (`Next scene`, `share-url.ts`) et un lien reçu
@@ -230,7 +248,7 @@ export default function PostDetailScreen() {
         ) : body === 'error' ? (
           <PostDetailError online={online} onRetry={() => void post.refetch()} />
         ) : (
-          <div aria-busy="true" aria-label="Chargement de la publication">
+          <div aria-busy="true" aria-label={translate(currentInterfaceLanguage(), 'post.detail.loading')}>
             <FeedSkeleton />
           </div>
         )}

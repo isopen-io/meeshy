@@ -465,3 +465,24 @@ describe('POST /logout — service error', () => {
     await app.close();
   });
 });
+
+describe('POST /logout — refuser une session prouvée ne l’adopte pas (#10477)', () => {
+  it('la route déclare `adoptsSession: false`, que lit la porte d’authentification', async () => {
+    const app = Fastify({ logger: false, ajv: { customOptions: { strict: false } } });
+    const vus: Array<boolean | undefined> = [];
+    app.decorate('authenticate', async (req: FastifyRequest) => {
+      vus.push(req.routeOptions.config.adoptsSession);
+      (req as unknown as { user: { userId: string } }).user = { userId: USER_ID };
+    });
+    registerLoginRoutes({
+      fastify: app, authService: makeAuthService(), redis: null, prisma: null,
+      phoneTransferService: {}, smsService: {}, cacheStore: {},
+    } as never);
+    await app.ready();
+
+    await app.inject({ method: 'POST', url: '/logout' });
+
+    expect(vus).toEqual([false]);
+    await app.close();
+  });
+});

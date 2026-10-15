@@ -188,6 +188,7 @@ struct ShareLinksView: View {
             : String(localized: "share.links.status.inactive", defaultValue: "Inactif", bundle: .main)
         var parts = [link.displayName, status, joinedCountLabel(link.currentUses)]
         if let conv = link.conversationTitle { parts.append(conv) }
+        if let expiry = ShareLinkDetailCopy.rowExpiry(link.expiresAt) { parts.append(expiry) }
         return parts.joined(separator: ", ")
     }
 
@@ -221,6 +222,12 @@ struct ShareLinksView: View {
                             .foregroundColor(theme.textMuted)
                             .lineLimit(1)
                     }
+                }
+                if let expiry = ShareLinkDetailCopy.rowExpiry(link.expiresAt) {
+                    Text(expiry)
+                        .font(.caption)
+                        .foregroundColor(MeeshyColors.warning)
+                        .lineLimit(1)
                 }
             }
             // The active/inactive state was signalled ONLY by the (hidden) badge

@@ -136,6 +136,13 @@ nonisolated enum NSEAttachmentPolicy {
     /// même double forme chaîne / nombre que la taille.
     static func declaredDurationMs(_ raw: Any?) -> Int? { declaredInt(raw) }
 
+    /// La passerelle DÉCLARE-t-elle une durée de vie (`ephemeralDuration`, en
+    /// secondes, #7451) ? Une durée nulle, négative ou illisible n'en est pas
+    /// une — même lecture que `NotificationPayloadHelpers.ephemeralDeadline`.
+    static func declaresEphemeralDuration(userInfo: [AnyHashable: Any]) -> Bool {
+        (declaredInt(userInfo["ephemeralDuration"]) ?? 0) > 0
+    }
+
     /// Un entier de la charge `data`, qu'il voyage en nombre ou en chaîne.
     /// `declaredFileSize` en est le nom MÉTIER ; `declaresProtection` lit des
     /// drapeaux, pas une taille, et appelle donc celui-ci.

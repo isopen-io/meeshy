@@ -62,9 +62,10 @@ final class StoryPhotoSaveService: ObservableObject {
     private let photoSaver: PhotoLibrarySaving
     private let toasts: FeedbackToastSurfacing
     private let preferredLanguages: @MainActor () -> [String]
-    private let intro: @MainActor @Sendable () async -> StoryExportIntroContent?
-    /// Borne dure sur `BoundedAsyncResolution.resolve(_:timeout:)` — voir sa doc pour le pourquoi.
-    private let introTimeout: Duration
+    /// L'habillage se résout ICI et nulle part ailleurs (`StoryExportDressing`,
+    /// #10536) : interlude, carte de fin, pseudo du filigrane. Borné dans le
+    /// temps — voir `BoundedAsyncResolution.resolve(_:timeout:)`.
+    private let dressings: StoryExportDressingResolver
 
     /// Tentative courante par story : incrémentée à chaque `save()` ET à
     /// chaque `cancel()` — c'est la SEULE source de vérité sur « quelle
@@ -90,7 +91,8 @@ final class StoryPhotoSaveService: ObservableObject {
         toasts: FeedbackToastSurfacing? = nil,
         preferredLanguages: (@MainActor () -> [String])? = nil,
         introTimeout: Duration = BoundedAsyncResolution.defaultTimeout,
-        intro: (@MainActor @Sendable () async -> StoryExportIntroContent?)? = nil,
+        intro: StoryExportDressingResolver.ViewerIntro? = nil,
+        authorIntro: StoryExportDressingResolver.AuthorIntro? = nil,
         concatenate: (@MainActor ([URL], URL) async -> Bool)? = nil,
         watermark: (@MainActor (String?) -> StoryExportWatermark?)? = nil
     ) {
@@ -102,8 +104,8 @@ final class StoryPhotoSaveService: ObservableObject {
         self.toasts = toasts ?? FeedbackToastManager.shared
         self.preferredLanguages = preferredLanguages
             ?? { AuthManager.shared.currentUser?.preferredContentLanguages ?? [] }
-        self.introTimeout = introTimeout
-        self.intro = intro ?? StoryExportIntroFactory.currentUser
+        self.dressings = StoryExportDressingResolver(viewerIntro: intro, authorIntro: authorIntro,
+                                                     timeout: introTimeout)
         self.watermark = watermark ?? { @MainActor handle in MeeshyExportWatermark.make(username: handle) }
         self.concatenate = concatenate ?? { @MainActor parts, output in
             await StoryExportSequence.concatenate(parts, to: output)
@@ -142,47 +144,36 @@ final class StoryPhotoSaveService: ObservableObject {
     /// progression sur `jobs[story.id]`. Idempotent : un second appel pendant
     /// qu'un job tourne pour la même story est ignoré (le menu reste
     /// atteignable via le long-press pendant l'export).
-    /// - Parameter authorUsername: le pseudo de l'AUTEUR de la story — celui que
-    ///   le filigrane nomme. L'interlude d'identité (celle de l'utilisateur
-    ///   connecté) ne précède que SA propre story : un lecteur qui enregistre la
-    ///   story d'un autre ne la signe pas de son visage.
-    func save(story: StoryItem, authorUsername: String?) {
-        bakeStory(story, author: authorUsername, resolvesIdentity: Self.isViewer(authorUsername))
-    }
-
-    /// SA propre story (« Mes stories », rail de l'auteur) : l'utilisateur
-    /// connecté EST l'auteur — son pseudo au filigrane, son interlude devant.
-    func save(story: StoryItem) {
-        bakeStory(story, author: AuthManager.shared.currentUser?.username, resolvesIdentity: true)
-    }
-
-    private func bakeStory(_ story: StoryItem, author: String?, resolvesIdentity: Bool) {
+    /// - Parameter author: l'AUTEUR de la story. Une story sort TOUJOURS avec
+    ///   son prélude et sa carte de fin (#10536) ; l'interlude présente
+    ///   l'auteur — jamais le lecteur qui enregistre la story d'un autre
+    ///   (#9953) — et le filigrane le nomme. `nil` : l'utilisateur connecté est
+    ///   l'auteur.
+    func save(story: StoryItem, author: StoryExportAuthor?) {
         let languages = exportLanguages(of: story)
         bakeThenSave(jobKey: story.id,
                      slides: [story.toRenderableSlide(preferredLanguages: languages)],
                      languages: languages,
                      stickerMedia: story.media,
-                     author: author,
-                     resolvesIdentity: resolvesIdentity,
-                     appendsBrandOutro: true)
+                     dressing: .forStory(of: author, viewer: .current))
     }
 
-    private static func isViewer(_ username: String?) -> Bool {
-        guard let username, let me = AuthManager.shared.currentUser?.username else { return false }
-        return username.caseInsensitiveCompare(me) == .orderedSame
+    /// SA propre story (« Mes stories », rail de l'auteur) : l'utilisateur
+    /// connecté EST l'auteur — son pseudo au filigrane, son interlude devant.
+    func save(story: StoryItem) {
+        save(story: story, author: nil)
     }
 
     /// **UNE SCÈNE DE POST S'ENREGISTRE COMME UNE STORY** (#7052) — même bake,
     /// même anneau, même annulation, même nettoyage.
     ///
-    /// Trois différences, toutes décidées par le porteur (#7043) :
+    /// Deux différences, toutes décidées par le porteur (#7043) :
     ///
     /// - la slide est celle de la scène OUVERTE (`renderableSlide`), et non la
     ///   scène 0 que le porteur du post rendrait ;
-    /// - `resolvesIdentity: false` — pas d'interlude, donc rien à résoudre, et
-    ///   surtout pas les 4 s de `BoundedAsyncResolution` avant un bake qu'on
-    ///   sait déjà sans prélude ;
-    /// - `appendsBrandOutro: false` — l'œuvre SEULE, sans carte de fin.
+    /// - l'habillage `.bareWork` — l'œuvre SEULE : pas d'interlude, donc rien
+    ///   à résoudre (et surtout pas les 4 s de `BoundedAsyncResolution` avant
+    ///   un bake qu'on sait déjà sans prélude), et pas de carte de fin.
     ///
     /// Un second chemin qui réimplémenterait le jeton de génération, la
     /// coupure d'avant-bake, `uncancellableJobs` ou le nettoyage du MP4
@@ -197,9 +188,7 @@ final class StoryPhotoSaveService: ObservableObject {
                      // que le porteur transporte (#4852) : sans cet index,
                      // Photos recevrait 🖼️ à leur place.
                      stickerMedia: scene.carrier.media,
-                     author: scene.authorUsername,
-                     resolvesIdentity: false,
-                     appendsBrandOutro: false)
+                     dressing: .bareWork(author: scene.authorUsername))
     }
 
     /// **UN RÉEL (OU UN POST COMPOSÉ) S'ENREGISTRE COMME UNE STORY** (#9681) —
@@ -215,9 +204,7 @@ final class StoryPhotoSaveService: ObservableObject {
                      slides: Self.renderableSlides(of: post, preferredLanguages: languages),
                      languages: languages,
                      stickerMedia: post.media,
-                     author: post.savedWorkAuthorUsername,
-                     resolvesIdentity: false,
-                     appendsBrandOutro: false)
+                     dressing: .bareWork(author: post.savedWorkAuthorUsername))
     }
 
     /// **Le MP4 de la scène d'un post, rendu À LA DEMANDE pour la feuille de partage**
@@ -227,17 +214,21 @@ final class StoryPhotoSaveService: ObservableObject {
     func renderSceneFile(of post: FeedPost) async -> URL? {
         let languages = preferredLanguages()
         return await bake(slides: Self.renderableSlides(of: post, preferredLanguages: languages),
-                          languages: languages, stickerMedia: post.media, author: post.savedWorkAuthorUsername,
-                          intro: nil, appendsBrandOutro: false)
+                          languages: languages, stickerMedia: post.media,
+                          plan: await dressings.plan(for: .bareWork(author: post.savedWorkAuthorUsername)))
     }
 
-    /// Le MP4 d'une story pour la feuille de partage (#9682) — le rendu de
-    /// `save(story:)`, carte de fin comprise, sans l'attente de l'interlude.
-    func renderStoryFile(of story: StoryItem, authorUsername: String?) async -> URL? {
+    /// Le MP4 d'une story pour la feuille de partage (#9682) — le MÊME
+    /// habillage que `save(story:author:)` : prélude d'identité et carte de fin
+    /// (#10536). Ce chemin passait `intro: nil` : « Enregistrer la vidéo »,
+    /// Fichiers et AirDrop sortaient une story sans prélude, comme un réel. La
+    /// résolution d'identité reste bornée — la feuille n'attend pas un avatar
+    /// qui ne revient pas.
+    func renderStoryFile(of story: StoryItem, author: StoryExportAuthor?) async -> URL? {
         let languages = exportLanguages(of: story)
         return await bake(slides: [story.toRenderableSlide(preferredLanguages: languages)],
-                          languages: languages, stickerMedia: story.media, author: authorUsername,
-                          intro: nil, appendsBrandOutro: true)
+                          languages: languages, stickerMedia: story.media,
+                          plan: await dressings.plan(for: .forStory(of: author, viewer: .current)))
     }
 
     /// **Le rendu d'une ou plusieurs slides en UN MP4** (#9681). Une slide : un
@@ -246,10 +237,10 @@ final class StoryPhotoSaveService: ObservableObject {
     /// fin sur la dernière —, puis les morceaux s'enchaînent dans l'ordre du
     /// document, comme le lecteur les enchaîne (#6763). La progression couvre la
     /// suite entière ; une annulation arrête avant la scène suivante.
-    private func bake(slides: [StorySlide], languages: [String], stickerMedia: [FeedMedia], author: String?,
-                      intro: StoryExportIntroContent?, appendsBrandOutro: Bool,
+    private func bake(slides: [StorySlide], languages: [String], stickerMedia: [FeedMedia],
+                      plan: StoryExportDressingPlan,
                       onProgress: ((Double) -> Void)? = nil) async -> URL? {
-        let watermark = self.watermark(author)
+        let watermark = self.watermark(plan.watermarkHandle)
         var parts: [URL] = []
         for (index, slide) in slides.enumerated() {
             guard !Task.isCancelled else { break }
@@ -257,10 +248,10 @@ final class StoryPhotoSaveService: ObservableObject {
                 slide: slide,
                 languages: languages,
                 watermark: watermark,
-                intro: index == 0 ? intro : nil,
+                intro: index == 0 ? plan.intro : nil,
                 inputs: StoryExportInputs(stickerImageSources: StoryExporter.stickerImageSources(
                     for: slide.effects.stickerObjects, media: stickerMedia)),
-                appendsBrandOutro: appendsBrandOutro && index == slides.count - 1,
+                appendsBrandOutro: plan.appendsBrandOutro && index == slides.count - 1,
                 onProgress: onProgress.map { report in
                     { fraction in report((Double(index) + fraction) / Double(slides.count)) }
                 },
@@ -299,16 +290,15 @@ final class StoryPhotoSaveService: ObservableObject {
         return document.scenes.indices.map { slide(StoryEffects(rendering: document, sceneIndex: $0)) }
     }
 
-    /// Le corps PARTAGÉ des deux entrées ci-dessus : bake, écriture Photos,
-    /// anneau, annulation, nettoyage. Ce qui varie est passé en paramètre ;
+    /// Le corps PARTAGÉ des entrées ci-dessus : bake, écriture Photos,
+    /// anneau, annulation, nettoyage. Ce qui varie est passé en paramètre —
+    /// dont l'HABILLAGE, que l'entrée déclare et que ce corps ne choisit pas ;
     /// tout le reste — et c'est l'essentiel — ne se duplique pas.
     private func bakeThenSave(jobKey storyId: String,
                               slides: [StorySlide],
                               languages: [String],
                               stickerMedia: [FeedMedia],
-                              author: String?,
-                              resolvesIdentity: Bool,
-                              appendsBrandOutro: Bool) {
+                              dressing: StoryExportDressing) {
         guard jobs[storyId] == nil else { return }
 
         // Nouvelle tentative pour cette story : voir la doc de `generations`.
@@ -321,16 +311,14 @@ final class StoryPhotoSaveService: ObservableObject {
             guard let self else { return }
             // Résolu DANS le Task (async), BORNÉ dans le temps : l'identité
             // (avatar / fond / mood) se charge depuis le cache, réseau si
-            // absent — voir `BoundedAsyncResolution.resolve`. `intro` est la
-            // closure injectée à l'init, pas le singleton — l'injection en
-            // test reste honorée.
-            // `resolvesIdentity: false` (scène de post, #7052) : aucun
-            // interlude n'est dû, donc rien à résoudre — et surtout pas les
-            // 4 s de `BoundedAsyncResolution` avant un bake qu'on sait déjà
-            // sans prélude. L'anneau resterait à 0 % pour rien.
-            let introContent = resolvesIdentity
-                ? await BoundedAsyncResolution.resolve(self.intro, timeout: self.introTimeout)
-                : nil
+            // absent — voir `StoryExportDressingResolver.plan(for:)`. Les
+            // closures d'identité sont celles injectées à l'init, pas le
+            // singleton — l'injection en test reste honorée.
+            // `.bareWork` (scène de post #7052, réel #9681) : aucun interlude
+            // n'est dû, donc rien n'est résolu — et surtout pas les 4 s de
+            // borne avant un bake qu'on sait déjà sans prélude. L'anneau
+            // resterait à 0 % pour rien.
+            let plan = await self.dressings.plan(for: dressing)
             // Tentative déjà périmée AVANT même que le bake ne démarre.
             // Sur une installation fraîche, la résolution d'identité court
             // jusqu'à `introTimeout` (4 s) : l'anneau affiche 0 %, et
@@ -357,9 +345,7 @@ final class StoryPhotoSaveService: ObservableObject {
                 slides: slides,
                 languages: languages,
                 stickerMedia: stickerMedia,
-                author: author,
-                intro: introContent,
-                appendsBrandOutro: appendsBrandOutro,
+                plan: plan,
                 onProgress: { [weak self] fraction in
                     guard let self, self.isCurrent(generation, for: storyId) else { return }
                     self.jobs[storyId] = StorySaveProgressMapper.bake(fraction)
