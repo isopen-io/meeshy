@@ -172,6 +172,37 @@ final class ProfileDecorTests: XCTestCase {
         XCTAssertTrue(entries.contains { $0.ref == ProfileDecorRef(pack: "contours-animes", item: "halo-or") })
     }
 
+    /// Le fil RÉEL de `GET /packs/{avatar-ring,banner}/installed` (staging, 2026-10-16, champs servis
+    /// conservés) se décode comme le transport le décode, et la feuille propose les packs animés (#10719).
+    func test_installedWire_staging_offersTheAnimatedPacksInTheFlatGrid() throws {
+        func served(_ domain: String, _ packs: [(slug: String, removable: Bool)]) -> String {
+            let items = packs.map { p in
+                #"{"slug":"\#(p.slug)","name":"\#(p.slug)","author":"Meeshy","builtin":true,"status":"approved","itemCount":1,"#
+                + #""coverUrl":"/api/v1/pack-assets/a0040abf0d734e87.webp","installed":true,"installCount":0,"domain":"\#(domain)","#
+                + #""origin":"builtin","version":1,"downloadBytes":{"story":328,"square":null},"removable":\#(p.removable),"#
+                + #""names":{"en":{"name":"Animated","description":"A golden arc."}},"preview":null,"#
+                + #""usage":{"kind":"free","surfaces":["avatar"]},"price":null,"owned":true,"contractSchema":1,"#
+                + #""contract":{"src":"b9b7392e7d283e2a.json","bytes":328,"sha256":"b9b7"}}"#
+            }
+            return #"{"success":true,"data":["# + items.joined(separator: ",") + "]}"
+        }
+        let rings = try decode(APIResponse<LossyDecodableArray<ShopPack>>.self, served("avatar-ring", [
+            ("contours-essentiels", false), ("contours-animes", true)
+        ])).data.elements
+        let banners = try decode(APIResponse<LossyDecodableArray<ShopPack>>.self, served("banner", [
+            ("bannieres-essentielles", false), ("bannieres-animees", true)
+        ])).data.elements
+
+        let ringIds = ProfileDecorOptions.flattened(ProfileDecorOptions.rings(installed: rings)).map(\.id)
+        let bannerIds = ProfileDecorOptions.flattened(ProfileDecorOptions.banners(installed: banners)).map(\.id)
+
+        XCTAssertEqual(rings.map(\.slug), ["contours-essentiels", "contours-animes"])
+        XCTAssertTrue(ringIds.contains("contours-animes/halo-or"))
+        XCTAssertTrue(bannerIds.contains("bannieres-animees/aurore-vive"))
+        XCTAssertEqual(Set(ringIds).count, ringIds.count)
+        XCTAssertEqual(Set(bannerIds).count, bannerIds.count)
+    }
+
     func test_options_beforeTheInstalledListIsKnownShowsTheDefaultPacks() {
         XCTAssertEqual(ProfileDecorOptions.rings(installed: nil).first?.pack, "contours-essentiels")
         XCTAssertEqual(ProfileDecorOptions.banners(installed: nil).first?.pack, "bannieres-essentielles")
