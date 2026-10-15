@@ -138,8 +138,13 @@ function confirmOntoPublicProfile(queryClient: QueryClient, profile: MyProfile):
  * la session (en-tête, réglages, rail des stories), ma fiche publique et la
  * ligne de mon compte dans la liste de l'appareil (#8886) — celle que la
  * connexion et « Changer de compte » affichent.
+ *
+ * Le décor (#10632) n'est composé que par `GET /me` : une réponse de `PATCH`
+ * qui ne le sert pas ne dit rien de lui, et le cache garde le sien.
  */
-function confirm(deps: ProfileActionDeps, profile: MyProfile): void {
+function confirm(deps: ProfileActionDeps, served: MyProfile): void {
+  const held = deps.queryClient.getQueryData<MyProfile>(MY_PROFILE_QUERY_KEY)?.profileDecor;
+  const profile = served.profileDecor === undefined && held !== undefined ? { ...served, profileDecor: held } : served;
   deps.queryClient.setQueryData(MY_PROFILE_QUERY_KEY, profile);
   deps.session.getState().updateUser(sessionFieldsOfProfile(profile));
   confirmOntoPublicProfile(deps.queryClient, profile);

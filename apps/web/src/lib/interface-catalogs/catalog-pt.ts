@@ -26,6 +26,7 @@ import ptSignup from './catalog-pt-signup';
 import ptGallery from './catalog-pt-gallery';
 import ptMessageCard from './catalog-pt-message-card';
 import ptMentions from './catalog-pt-mentions';
+import ptShellLabels from './catalog-pt-shell-labels';
 import ptStudioChrome from './catalog-pt-studio-chrome';
 import ptEphemeral from './catalog-pt-ephemeral';
 import ptWriteRestriction from './catalog-pt-write-restriction';
@@ -40,6 +41,7 @@ import ptPhonePrompt from './catalog-pt-phone-prompt';
 import ptUserProfile from './catalog-pt-user-profile';
 import ptContentRefused from './catalog-pt-content-refused';
 import ptPublicEntry from './catalog-pt-public-entry';
+import ptThreadSearch from './catalog-pt-thread-search';
 
 /**
  * Le portugais du web est celui qu'iOS catalogue sous `pt-BR` : le script
@@ -1057,6 +1059,7 @@ const pt = {
   'message.detail.language.original': '{language} (original)',
 
   ...ptMentions,
+  ...ptShellLabels,
   ...ptStudioChrome,
   ...ptEphemeral,
   ...ptWriteRestriction,
@@ -1074,6 +1077,7 @@ const pt = {
   ...ptUserProfile,
   ...ptContentRefused,
   ...ptPublicEntry,
+  ...ptThreadSearch,
 } satisfies InterfaceCatalog;
 
 export default pt;

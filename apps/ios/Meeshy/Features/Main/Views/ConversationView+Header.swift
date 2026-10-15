@@ -10,8 +10,10 @@ extension ConversationView {
 
     // MARK: - Conversation Background
     var conversationBackground: some View {
-        ConversationAnimatedBackground(
-            config: ConversationBackgroundConfig(
+        ConversationBackgroundView(
+            conversationId: conversation?.id ?? "",
+            initialAppearance: liveConversation?.userState.appearance,
+            signature: ConversationBackgroundConfig(
                 conversationType: conversation?.type ?? .direct,
                 isEncrypted: conversation?.encryptionMode != nil,
                 isE2EEncrypted: conversation?.encryptionMode == "e2ee",
@@ -19,7 +21,8 @@ extension ConversationView {
                 accentHex: accentColor,
                 secondaryHex: secondaryColor,
                 isDarkMode: isDark
-            )
+            ),
+            knownAttachment: { id in viewModel.messages.lazy.flatMap(\.attachments).first { $0.id == id } }
         )
         // Le fond vit toute la vie de l'écran : c'est là qu'il écoute le pair
         // d'un direct (#9359). Seule une annonce qui CHANGE le pair affiché

@@ -15,6 +15,7 @@ import { time } from '@/lib/grouping';
 import { languageBand, mountsBottomLine } from '@/lib/reading-mode/meta';
 import { protectionOf } from '@/lib/reading-mode/protection';
 import { BUBBLE_STICKER_SIDE, STICKER_RENDER_SCALE } from '@/lib/reading-mode/metrics';
+import { translate } from '@/lib/i18n-catalog';
 import { currentInterfaceLanguage } from '@/lib/interface-language';
 
 import { hereKeyOf } from '@/lib/view/use-conversation-viewing';
@@ -520,7 +521,7 @@ export function Bubble({
             >
               {selected ? '✓' : null}
             </span>
-            <span className="offscreen">Sélectionner ce message</span>
+            <span className="offscreen">{translate(currentInterfaceLanguage(), 'thread.select.message')}</span>
           </button>
         ) : null}
         {/* LES BADGES DE TÊTE (#5936) — AU-DESSUS de la bulle, HORS du fond

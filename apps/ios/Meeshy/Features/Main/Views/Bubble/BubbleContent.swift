@@ -32,7 +32,7 @@ nonisolated struct BubbleContent: Equatable {
         case visualGrid([MeeshyMessageAttachment])    // images + videos
         /// One OR MORE audio tracks of the SAME message. A single track renders
         /// as the existing audio widget; two or more render as a horizontal
-        /// `AudioCarouselView` (multi-track carousel — spec lot A4).
+        /// `AudioStackView` (multi-track carousel — spec lot A4).
         case audio([MeeshyMessageAttachment])
         case nonMedia([MeeshyMessageAttachment])      // file + location
         /// Mixed content: any combination of visual + non-media + audio
@@ -300,6 +300,9 @@ nonisolated struct BubbleContent: Equatable {
         let emoji: String?
         /// Le PNG rendu par l'expéditeur, s'il est arrivé.
         let picture: Picture?
+        /// Le sticker de « Mes stickers » d'où vient l'image (#10630) : la fiche et
+        /// le menu le lisent ici, dans les quatre modes de lecture.
+        var libraryStickerId: String? = nil
     }
 
     let messageId: String

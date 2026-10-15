@@ -476,7 +476,7 @@ export const callersIn = (contents, nsNames) => {
 // `conversations.byIdParticipantsByParticipantKey` (`DELETE …/participants/:key`, expulser),
 // `conversations.byIdParticipantsByUserIdBan` (`…/ban`) et `conversations.byIdParticipantsByUserIdRole`
 // (`…/participants/:key/role`, promouvoir/rétrograder). Valeur MESURÉE en CI (run 38602621428, rouge sur 267).
-const BASELINE_DEAD_ENTRIES = 267;
+const BASELINE_DEAD_ENTRIES = 265;
 
 export const readWorld = (root) => {
   const groupFiles = readdirSync(join(root, GROUPS_DIR)).filter((name) => name.endsWith('.ts')).sort();

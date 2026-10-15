@@ -171,6 +171,14 @@
             android:exported="false"
             android:foregroundServiceType="mediaPlayback" />
 
+        <!-- #10641 — le vocal reçu s'écoute depuis sa notification, sans ouvrir
+             l'app : lecteur système (MediaPlayer), au premier plan le temps de
+             la lecture (NotificationVoiceService). -->
+        <service
+            android:name=".NotificationVoiceService"
+            android:exported="false"
+            android:foregroundServiceType="mediaPlayback" />
+
         <!-- #8049 — « Refuser » de la notification d'appel, app tuée comprise. -->
         <receiver
             android:name=".DeclineCallReceiver"

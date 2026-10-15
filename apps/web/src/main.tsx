@@ -19,7 +19,7 @@ import { landingAfterSession, resolveRouteAccess } from '@/lib/session-guard';
 import { useAnonymousScope } from '@/lib/view/use-anonymous-scope';
 import { installSealedExitGuard } from '@/lib/view/sealed-exit-guard';
 import { shellStartHref } from '@/lib/links/shell-start';
-import { Router, href, navigate } from '@/routes/route-table';
+import { Router, href, navigate, preload } from '@/routes/route-table';
 
 /**
  * Defaut 3c (recette 2026-09-07, #5604) : la bascule clair/sombre du systeme
@@ -146,6 +146,28 @@ createRoot(root).render(
     </QueryClientProvider>
   </StrictMode>,
 );
+
+/**
+ * LES ÉCRANS PRINCIPAUX SE PRÉCHARGENT EN TÂCHE DE FOND (#10636) — après le
+ * `load`, un écran par moment d'inactivité, et seulement pour un compte
+ * connecté : un visiteur ne télécharge pas les écrans qu'il n'ouvrira pas.
+ */
+{
+  const precharger = (): void => {
+    const lancer = (): void =>
+      void import('@/lib/view/screen-preload').then(({ preloadScreensWhenIdle, browserIdle, browserNetworkHints }) =>
+        preloadScreensWhenIdle({ preload, idle: browserIdle, network: browserNetworkHints() }),
+      );
+    if (sessionStore.getState().session.status === 'authenticated') return lancer();
+    const stop = sessionStore.subscribe((state) => {
+      if (state.session.status !== 'authenticated') return;
+      stop();
+      lancer();
+    });
+  };
+  if (document.readyState === 'complete') precharger();
+  else window.addEventListener('load', precharger, { once: true });
+}
 
 /**
  * LE CONSENTEMENT D'ANALYSE QUE LA TÉLÉMÉTRIE DÉCLARE (#10502) — la bascule
@@ -361,6 +383,20 @@ if (__SHELL__) {
   };
   if (document.readyState === 'complete') guetter();
   else window.addEventListener('load', guetter, { once: true });
+}
+
+/**
+ * ET LA COQUE ANDROID CONNAÎT LA SESSION DE LA PAGE (#10662) : le natif accuse
+ * la remise d'un push, refuse un appel et joue un vocal depuis sa notification
+ * sans la page (#10641). Posé à chaque lancement, après la première peinture,
+ * indépendamment du socket et des appels, retiré à la déconnexion.
+ */
+if (__SHELL__) {
+  const poserCredential = (): void => {
+    void import('@/lib/notifications/shell-credential').then(({ startShellCredentialSync }) => startShellCredentialSync());
+  };
+  if (document.readyState === 'complete') poserCredential();
+  else window.addEventListener('load', poserCredential, { once: true });
 }
 
 /**

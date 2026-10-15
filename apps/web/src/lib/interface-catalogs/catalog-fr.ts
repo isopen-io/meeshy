@@ -12,6 +12,7 @@
 import frGallery from './catalog-fr-gallery';
 import frMessageCard from './catalog-fr-message-card';
 import frMentions from './catalog-fr-mentions';
+import frShellLabels from './catalog-fr-shell-labels';
 import frStudioChrome from './catalog-fr-studio-chrome';
 import frEphemeral from './catalog-fr-ephemeral';
 import frWriteRestriction from './catalog-fr-write-restriction';
@@ -51,6 +52,7 @@ import frPhonePrompt from './catalog-fr-phone-prompt';
 import frUserProfile from './catalog-fr-user-profile';
 import frContentRefused from './catalog-fr-content-refused';
 import frPublicEntry from './catalog-fr-public-entry';
+import frThreadSearch from './catalog-fr-thread-search';
 
 const fr = {
   'announce.messageSent': 'Message envoyé',
@@ -1042,6 +1044,7 @@ const fr = {
 
   ...frThreadStates,
   ...frMentions,
+  ...frShellLabels,
   ...frStudioChrome,
   ...frEphemeral,
   ...frWriteRestriction,
@@ -1090,6 +1093,7 @@ const fr = {
   ...frUserProfile,
   ...frContentRefused,
   ...frPublicEntry,
+  ...frThreadSearch,
 } as const;
 
 export default fr;

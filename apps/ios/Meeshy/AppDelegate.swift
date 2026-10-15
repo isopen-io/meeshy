@@ -717,7 +717,11 @@ extension AppDelegate: @preconcurrency UNUserNotificationCenterDelegate {
             rawType: userInfo["type"] as? String,
             conversationType: userInfo["conversationType"] as? String,
             conversationId: conversationId,
-            activeConversationId: MessageSocketManager.shared.activeConversationId
+            // iPad multi-fenêtre : une conversation affichée dans N'IMPORTE
+            // QUELLE fenêtre tait sa bannière, pas seulement la plus récente.
+            activeConversationId: conversationId.flatMap {
+                NotificationToastManager.shared.isConversationOpen($0) ? $0 : nil
+            } ?? MessageSocketManager.shared.activeConversationId
         )
 
         // Un push de REMPLACEMENT (édition, réaction changée) annule la bannière d'avant AVANT

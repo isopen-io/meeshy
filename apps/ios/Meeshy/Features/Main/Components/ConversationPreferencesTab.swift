@@ -19,6 +19,7 @@ struct ConversationPreferencesTab: View {
     @State private var showLeaveConfirm: Bool = false
     @State private var showDeleteConfirm: Bool = false
     @State private var showEmojiPicker: Bool = false
+    @State private var showAppearanceSheet: Bool = false
     @State private var customNameLocal: String = ""
 
     private var isDirect: Bool { conversation.type == .direct }
@@ -168,6 +169,29 @@ struct ConversationPreferencesTab: View {
                 }
             }
             .buttonStyle(.plain)
+
+            Divider().padding(.leading, 54).opacity(MeeshyOpacity.medium)
+
+            Button {
+                showAppearanceSheet = true
+            } label: {
+                settingsRow(icon: "paintpalette.fill", iconColor: accentColor, title: String(localized: "conversation.appearance.entry.title", defaultValue: "Fond de la conversation", bundle: .main)) {
+                    Image(systemName: "chevron.forward")
+                        .font(MeeshyFont.relative(11, weight: .semibold))
+                        .foregroundColor(theme.textMuted)
+                        .accessibilityHidden(true)
+                }
+            }
+            .buttonStyle(.plain)
+            .sheet(isPresented: $showAppearanceSheet) {
+                ConversationAppearanceSheet(
+                    conversationId: conversation.id,
+                    initial: conversation.userState.appearance,
+                    accentColor: accentColor
+                )
+                .presentationDetents([.large])
+                .presentationDragIndicator(.visible)
+            }
         }
         .sheet(isPresented: $showEmojiPicker) {
             EmojiPickerSheet(

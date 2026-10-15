@@ -351,6 +351,9 @@ struct DetachedWindowView: View {
     /// Ce que la valeur de scène ne restaure pas : l'id de la conversation déposée au bord. Sans lui, la fenêtre
     /// revenait vide à la relance.
     @SceneStorage("meeshy.detached.conversationId") private var storedConversationId: String?
+    /// Le compte qui a ouvert la fenêtre. Une conversation ou un fil de réels appartient à UN compte : après un
+    /// changement de compte, la fenêtre ne doit rien montrer au suivant — elle se ferme.
+    @SceneStorage("meeshy.detached.ownerUserId") private var ownerUserId: String?
     @ObservedObject private var mainWindows = MainWindowRegistry.shared
 
     var body: some View {
@@ -358,6 +361,9 @@ struct DetachedWindowView: View {
             RootThemedBackground(theme: theme)
             if !authManager.isAuthenticated {
                 note(String(localized: "window.detached.signed_out", defaultValue: "Connectez-vous dans la fenêtre principale de Meeshy.", bundle: .main))
+            } else if !DetachedWindowOwnership.shows(owner: ownerUserId, current: authManager.currentUser?.id) {
+                // Un autre compte est actif : rien de l'ancien ne se peint, pas même une image — la fenêtre se ferme.
+                ProgressView()
             } else {
                 switch content ?? draggedContent {
                 case .conversation(let id)?:
@@ -380,6 +386,17 @@ struct DetachedWindowView: View {
         .onAppear {
             if content == nil, draggedContent == nil, let id = storedConversationId, !id.isEmpty {
                 draggedContent = .conversation(id: id)
+            }
+        }
+        .task(id: authManager.currentUser?.id) {
+            switch DetachedWindowOwnership.verdict(owner: ownerUserId, current: authManager.currentUser?.id) {
+            case .adopt(let userId):
+                ownerUserId = userId
+            case .close:
+                conversation = nil
+                closeWindow()
+            case .keep, .waitForSignIn:
+                break
             }
         }
         // 6. La fenêtre principale tient sockets et synchronisation : fermée (par l'utilisateur ou par le système),
@@ -533,7 +550,41 @@ struct DetachedWindowView: View {
 
     private func closeWindow() {
         guard let session = scene?.session else { return }
+        // La fenêtre principale revient d'abord : hors Stage Manager elle était passée en arrière-plan, et
+        // fermer seule la fenêtre détachée renvoyait à l'écran d'accueil (recette iPad du 2026-10-14).
+        if let primary = MainWindowRegistry.shared.primarySession {
+            UIApplication.shared.requestSceneSessionActivation(primary, userActivity: nil, options: nil)
+        }
         UIApplication.shared.requestSceneSessionDestruction(session, options: nil)
+    }
+}
+
+/// À qui appartient une fenêtre détachée. Pendant un changement de compte, la session sort puis revient sous un
+/// AUTRE compte : la conversation (ou le fil de réels) gardée par la fenêtre est celle du compte quitté, et la
+/// repeindre la montrerait au suivant — titre, avatar, dernier message — en rejoignant sa room sous le nouveau
+/// jeton.
+enum DetachedWindowOwnership: Equatable {
+    /// Aucun compte actif : la fenêtre attend (la note « Connectez-vous » s'affiche).
+    case waitForSignIn
+    /// Première ouverture : la fenêtre appartient désormais à ce compte.
+    case adopt(String)
+    /// Le compte propriétaire est actif.
+    case keep
+    /// Un autre compte est actif : la fenêtre se ferme.
+    case close
+
+    static func verdict(owner: String?, current: String?) -> DetachedWindowOwnership {
+        guard let current, !current.isEmpty else { return .waitForSignIn }
+        guard let owner, !owner.isEmpty else { return .adopt(current) }
+        return owner == current ? .keep : .close
+    }
+
+    /// Le contenu ne se rend que pour son propriétaire (ou une fenêtre qui n'en a pas encore).
+    static func shows(owner: String?, current: String?) -> Bool {
+        switch verdict(owner: owner, current: current) {
+        case .adopt, .keep: return true
+        case .close, .waitForSignIn: return false
+        }
     }
 }
 

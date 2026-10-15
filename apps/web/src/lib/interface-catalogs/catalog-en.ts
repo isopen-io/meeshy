@@ -26,6 +26,7 @@ import enSignup from './catalog-en-signup';
 import enGallery from './catalog-en-gallery';
 import enMessageCard from './catalog-en-message-card';
 import enMentions from './catalog-en-mentions';
+import enShellLabels from './catalog-en-shell-labels';
 import enStudioChrome from './catalog-en-studio-chrome';
 import enEphemeral from './catalog-en-ephemeral';
 import enWriteRestriction from './catalog-en-write-restriction';
@@ -40,6 +41,7 @@ import enPhonePrompt from './catalog-en-phone-prompt';
 import enUserProfile from './catalog-en-user-profile';
 import enContentRefused from './catalog-en-content-refused';
 import enPublicEntry from './catalog-en-public-entry';
+import enThreadSearch from './catalog-en-thread-search';
 
 const en = {
   'announce.messageSent': 'Message sent',
@@ -1053,6 +1055,7 @@ const en = {
   'message.detail.language.original': '{language} (original)',
 
   ...enMentions,
+  ...enShellLabels,
   ...enStudioChrome,
   ...enEphemeral,
   ...enWriteRestriction,
@@ -1070,6 +1073,7 @@ const en = {
   ...enUserProfile,
   ...enContentRefused,
   ...enPublicEntry,
+  ...enThreadSearch,
 } satisfies InterfaceCatalog;
 
 export default en;

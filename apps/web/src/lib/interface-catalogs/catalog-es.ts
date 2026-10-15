@@ -26,6 +26,7 @@ import esSignup from './catalog-es-signup';
 import esGallery from './catalog-es-gallery';
 import esMessageCard from './catalog-es-message-card';
 import esMentions from './catalog-es-mentions';
+import esShellLabels from './catalog-es-shell-labels';
 import esStudioChrome from './catalog-es-studio-chrome';
 import esEphemeral from './catalog-es-ephemeral';
 import esWriteRestriction from './catalog-es-write-restriction';
@@ -40,6 +41,7 @@ import esPhonePrompt from './catalog-es-phone-prompt';
 import esUserProfile from './catalog-es-user-profile';
 import esContentRefused from './catalog-es-content-refused';
 import esPublicEntry from './catalog-es-public-entry';
+import esThreadSearch from './catalog-es-thread-search';
 
 const es = {
   'announce.messageSent': 'Mensaje enviado',
@@ -1053,6 +1055,7 @@ const es = {
   'message.detail.language.original': '{language} (original)',
 
   ...esMentions,
+  ...esShellLabels,
   ...esStudioChrome,
   ...esEphemeral,
   ...esWriteRestriction,
@@ -1070,6 +1073,7 @@ const es = {
   ...esUserProfile,
   ...esContentRefused,
   ...esPublicEntry,
+  ...esThreadSearch,
 } satisfies InterfaceCatalog;
 
 export default es;

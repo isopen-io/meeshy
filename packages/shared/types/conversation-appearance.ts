@@ -80,7 +80,12 @@ export const DEFAULT_APPEARANCE: ConversationAppearance = {
 /** STRICT : la passerelle, à l'écriture. `null` ⇒ 400 `INVALID_APPEARANCE`. */
 export const parseConversationAppearance = (input: unknown): ConversationAppearance | null => {
   const parsed = ConversationAppearanceSchema.safeParse(input);
-  return parsed.success ? parsed.data : null;
+  if (!parsed.success) return null;
+  // Reconstruit champ par champ : la passerelle compile ces sources avec
+  // `strictNullChecks: false`, où zod infère CHAQUE clé optionnelle — rendre
+  // `parsed.data` tel quel cassait la construction de son image Docker.
+  const { v, background, accent, animate } = parsed.data;
+  return { v, background, accent, animate };
 };
 
 const asRecord = (input: unknown): Readonly<Record<string, unknown>> | null =>
