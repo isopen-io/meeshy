@@ -138,7 +138,14 @@ final class MessageForwardService: MessageForwardServiceProviding {
     private let isOnline: () -> Bool
     private let conversationCreator: ConversationCreating
     private let authManager: AuthManaging
-    private var clientMessageIds: [String: String] = [:]
+    /// La clé de dédoublonnage d'un transfert (`message→cible`) et l'identifiant
+    /// client qu'un nouvel essai doit REJOUER. Retirée à l'envoi et au refus ;
+    /// gardée après un échec réseau ou une mise en file hors ligne — c'est
+    /// elle qui dédoublonne le rejeu. BORNÉE : un transfert jamais rejoué
+    /// gardait sa clé toute la session, et la table ne faisait que grossir.
+    /// Les plus récentes suffisent à tout rejeu d'une session.
+    private var clientMessageIds = BoundedFIFOMap<String, String>(capacity: MessageForwardService.dedupCapacity)
+    nonisolated static let dedupCapacity = 256
 
     init(
         api: APIClientProviding = APIClient.shared,
