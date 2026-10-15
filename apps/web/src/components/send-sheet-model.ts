@@ -158,6 +158,7 @@ const kindOfMime = (mime: string): SendPreview['kind'] => {
 
 const KIND_LABEL: Readonly<Partial<Record<SendPreview['kind'], SendSheetCatalogKey>>> = {
   image: 'sendSheet.preview.photo',
+  sticker: 'sendSheet.preview.sticker',
   video: 'sendSheet.preview.video',
   audio: 'sendSheet.preview.voice',
   file: 'sendSheet.preview.file',

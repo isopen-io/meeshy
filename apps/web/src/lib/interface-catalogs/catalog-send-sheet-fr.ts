@@ -52,6 +52,7 @@ const fr = {
   'sendSheet.announce.sent': 'Envoyé à {count}',
   'sendSheet.preview.messages': '{count} messages',
   'sendSheet.preview.photo': 'Photo',
+  'sendSheet.preview.sticker': 'Sticker',
   'sendSheet.preview.video': 'Vidéo',
   'sendSheet.preview.voice': 'Message vocal',
   'sendSheet.preview.file': 'Fichier',

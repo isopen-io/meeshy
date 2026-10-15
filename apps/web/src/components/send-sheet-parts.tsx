@@ -37,6 +37,7 @@ const KIND_GLYPH: Readonly<Record<PreviewView['kind'], GlyphName | null>> = {
   text: null,
   messages: 'checks',
   image: 'image',
+  sticker: null,
   video: null,
   audio: 'microphone',
   file: 'file',
