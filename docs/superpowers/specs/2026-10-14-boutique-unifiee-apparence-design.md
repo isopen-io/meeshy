@@ -427,11 +427,12 @@ Lecture : `GET /me` et le profil public (`routes/users/public-profile.ts`) serve
 
 Aucune migration de données : tous les champs sont optionnels, absents se lisent comme le défaut. Index : `UserPackOwnership` est une collection neuve (index créés par la migration idempotente du dépôt, jamais `prisma db push` en prod/staging).
 
-## 12. Vendeurs tiers (rendu possible, non livré)
+## 12. Vendeurs tiers (livré côté passerelle, #10709)
 
 - Origine `community` pour `wallpaper`, `banner` et `avatar-ring` : le circuit `PackSubmissions` (proposition → modération → `approved`) s'étend par domaine ; le contenu soumis est un `AppearancePackContract` — des DONNÉES validées par le même Zod (aucun SVG brut, regex de chemins, plafonds), donc sans surface d'injection.
 - Prix d'un pack communautaire : la ligne `spend` de l'acheteur porte `meta.sellerId` ; un `transfer_in` vers le vendeur (moins une part plateforme) s'écrit dans la même transaction. Non livré : issue de suivi.
 - La possession (`UserPackOwnership`) ne dépend pas de l'origine : rien à migrer le jour venu.
+- **Livré (#10709)** : `POST /packs/<domaine>/submissions` (corps JSON, `validateCommunityAppearanceManifest`), `GET /submissions`, `GET /pending` et `POST /:slug/review` (`canModerateContent`) ; table `CommunityAppearancePack` ; le prix est fixé par le MODÉRATEUR à la publication, jamais proposé ; aucune couche `lottie` ni fichier téléversé pour un tiers ; le contrat est servi par `/pack-assets/<sha16>.json` après `approved` seulement ; export et purge RGPD (`PackPrivacy`). Index à poser en production par la migration idempotente `2026-10-01-schema-indexes.mongodb.js` (feu vert porteur).
 
 ## 13. Sécurité, performance, accessibilité
 
