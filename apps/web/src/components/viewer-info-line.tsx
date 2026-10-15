@@ -2,6 +2,7 @@ import type { Attachment } from '@/lib/api/types';
 import { translate } from '@/lib/i18n-catalog';
 import type { InterfaceLanguage } from '@/lib/interface-language';
 import type { InfoDuration } from '@/lib/view/media-transport';
+import { fileWeightLabel } from '@/lib/view/file-weight';
 import { kindOf } from '@/lib/view/message';
 
 import { Glyph } from './glyph';
@@ -35,7 +36,7 @@ export function ViewerInfoLine({
 }) {
   const kind = kindOf(attachment);
   const sizeLabel = facts && attachment.width !== undefined && attachment.height !== undefined ? `${attachment.width} × ${attachment.height}` : null;
-  const weightLabel = facts ? `${Math.max(1, Math.round(attachment.fileSize / 1024))} Ko` : null;
+  const weightLabel = facts ? fileWeightLabel(attachment.fileSize, language) : null;
   const parts = [
     sizeLabel === null ? null : { key: 'size', node: sizeLabel },
     weightLabel === null ? null : { key: 'weight', node: weightLabel },

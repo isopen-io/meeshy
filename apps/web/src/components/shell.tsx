@@ -13,7 +13,7 @@ import { currentInterfaceLanguage } from '@/lib/interface-language';
 import { conversationPreviewStore } from '@/lib/notifications/conversation-preview';
 import { inAppBannerStore } from '@/lib/notifications/in-app-banner';
 import { skipLinkLabel } from '@/lib/skip-link';
-import { floatingMenusHost } from '@/lib/view/floating-gate';
+import { floatingMenusHost, floatingMenusRouteKey } from '@/lib/view/floating-gate';
 import { isWide, subscribeWide } from '@/lib/view/split-query';
 import { useSyncPillArmed } from '@/lib/view/sync-pill-gate';
 import { useRoute } from '@/lib/router';
@@ -201,13 +201,14 @@ export default function Shell({ children }: { children: ReactNode }) {
   const majAnnoncee = useAppUpdateAnnounced();
   const invitationArmee = useActivationInviteArmed();
   const gardeEmail = useEmailGatePresenter();
-  const routeKey = useRoute().key;
+  const route = useRoute();
+  const routeKey = route.key;
   /* SUR ORDINATEUR, LE CADRE CÔTE À CÔTE POSE LES MENUS DANS LA COLONNE DE LA
      LISTE (#10117) : la coquille ne les pose sur la fenêtre que hors du cadre,
      par la même règle — jamais deux couches. */
   const large = useSyncExternalStore(subscribeWide, isWide, () => false);
   const invite = useStore(sessionStore, (state) => state.session.status === 'guest');
-  const menusArmes = floatingMenusHost({ routeKey, wide: large, guest: invite }) === 'screen';
+  const menusArmes = floatingMenusHost({ routeKey: floatingMenusRouteKey(route), wide: large, guest: invite }) === 'screen';
 
   /* APRÈS le premier pixel, pendant qu'on est encore en ligne. L'effet ne
      s'exécute pas au rendu serveur, donc le préchauffage institutionnel n'en

@@ -81,7 +81,7 @@ export function StoryTopBar({
       identity={identity}
       soundDocument={soundDocument}
       soundControl={soundControl}
-      exit={{ kind: 'close', label: 'Fermer', onExit: onClose }}
+      exit={{ kind: 'close', label: translate(language, 'common.close'), onExit: onClose }}
       trailing={
         <>
           {prism}
