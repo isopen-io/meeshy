@@ -119,6 +119,8 @@ public struct LastMessageNature: Codable, Sendable, Hashable {
     public let systemEvent: LastMessageSystemEvent?
     public let callSummary: LastMessageCallSummary?
     public let attachmentSummary: LastMessageAttachmentSummary?
+    /// Le message EST un sticker (#10752) : un sticker part en `messageType: "image"` avec sa PNG jointe, seule cette présence le distingue d'une photo.
+    public let sticker: ConversationPreviewSticker?
 
     public init(
         messageType: String? = nil,
@@ -128,7 +130,8 @@ public struct LastMessageNature: Codable, Sendable, Hashable {
         isForwarded: Bool = false,
         systemEvent: LastMessageSystemEvent? = nil,
         callSummary: LastMessageCallSummary? = nil,
-        attachmentSummary: LastMessageAttachmentSummary? = nil
+        attachmentSummary: LastMessageAttachmentSummary? = nil,
+        sticker: ConversationPreviewSticker? = nil
     ) {
         self.messageType = messageType
         self.effectFlags = effectFlags
@@ -138,6 +141,7 @@ public struct LastMessageNature: Codable, Sendable, Hashable {
         self.systemEvent = systemEvent
         self.callSummary = callSummary
         self.attachmentSummary = attachmentSummary
+        self.sticker = sticker
     }
 
     /// La même nature, son événement système remplacé — un avis complété sur
@@ -146,7 +150,7 @@ public struct LastMessageNature: Codable, Sendable, Hashable {
         LastMessageNature(
             messageType: messageType, effectFlags: effectFlags, ephemeralDuration: ephemeralDuration,
             isEncrypted: isEncrypted, isForwarded: isForwarded, systemEvent: event,
-            callSummary: callSummary, attachmentSummary: attachmentSummary
+            callSummary: callSummary, attachmentSummary: attachmentSummary, sticker: sticker
         )
     }
 
@@ -156,7 +160,7 @@ public struct LastMessageNature: Codable, Sendable, Hashable {
     public var isEmpty: Bool {
         messageType == nil && effectFlags == nil && ephemeralDuration == nil
             && !isEncrypted && !isForwarded
-            && systemEvent == nil && callSummary == nil && attachmentSummary == nil
+            && systemEvent == nil && callSummary == nil && attachmentSummary == nil && sticker == nil
     }
 }
 
@@ -271,7 +275,8 @@ public extension LastMessageNature {
             isEncrypted: message.isEncrypted,
             isForwarded: message.forwardedFromId != nil,
             callSummary: call,
-            attachmentSummary: LastMessageAttachmentSummary(attachments: message.attachments)
+            attachmentSummary: LastMessageAttachmentSummary(attachments: message.attachments),
+            sticker: message.sticker.map { ConversationPreviewSticker(templateId: $0.templateId, emoji: $0.emoji) }
         )
     }
 }

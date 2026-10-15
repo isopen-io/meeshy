@@ -261,8 +261,16 @@ struct ForwardPickerSheet: View {
     /// Une flamme à durée se transfère : son aperçu se rend dans la couche sécurisée (#9574).
     private var previewCaptureBlocked: Bool { message.exitOffer.capture.shieldsCapture() }
 
-    private var previewText: String {
+    /// Même mot que la ligne d'aperçu de la liste et que le web (#10752).
+    static var stickerPreviewLabel: String {
+        String(localized: "attachment.sticker", defaultValue: "Sticker", bundle: .main)
+    }
+
+    private var previewText: String { Self.previewText(for: message) }
+
+    static func previewText(for message: Message) -> String {
         if !message.content.isEmpty { return message.content }
+        if message.sticker != nil { return Self.stickerPreviewLabel }
         guard let first = message.attachments.first else {
             return String(localized: "forward.media-placeholder", defaultValue: "[Média]", bundle: .main)
         }
