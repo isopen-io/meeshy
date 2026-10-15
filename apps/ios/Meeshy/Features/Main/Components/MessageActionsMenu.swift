@@ -106,6 +106,8 @@ struct MessageActionsMenu: View {
         case .replyToPiece: return "arrowshape.turn.up.left"
         case .deletePiece: return "trash"
         case .addSticker: return "plus.rectangle.on.rectangle"
+        case .favoriteSticker: return "star"
+        case .unfavoriteSticker: return "star.slash"
         }
     }
 
@@ -125,6 +127,8 @@ struct MessageActionsMenu: View {
         case .replyToPiece: return String(localized: "action.reply", defaultValue: "Répondre", bundle: .main)
         case .deletePiece: return String(localized: "action.delete_media", defaultValue: "Supprimer le média", bundle: .main)
         case .addSticker: return String(localized: "message.sticker.add", defaultValue: "Ajouter à mes stickers", bundle: .main)
+        case .favoriteSticker: return StickerFavoriteCopy.add
+        case .unfavoriteSticker: return StickerFavoriteCopy.remove
         }
     }
 }

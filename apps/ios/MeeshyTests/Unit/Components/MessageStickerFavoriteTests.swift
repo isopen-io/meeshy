@@ -38,6 +38,22 @@ final class MessageStickerFavoriteTests: XCTestCase {
         XCTAssertEqual(entree?.value, "🎬")
     }
 
+    /// **Un sticker de pack tiers ne s'épingle pas encore (#10688)** : la
+    /// palette ne sait relire que le catalogue, et un favori `pack.…` y serait
+    /// invisible à jamais. Son emoji de repli non plus : ce serait épingler le
+    /// repli à la place de la chose.
+    func test_unStickerDePack_neRendRienTantQueLaPaletteNeSaitPasLeRelire() {
+        XCTAssertNil(MessageStickerFavorite.entry(for: MessageSticker(templateId: "pack.chats.c1", emoji: "🐱")))
+    }
+
+    func test_unGabaritInconnuDuCatalogue_neRendRien() {
+        XCTAssertNil(MessageStickerFavorite.entry(for: MessageSticker(templateId: "future.template", emoji: "✨")))
+    }
+
+    func test_unMee_sEpingleCommeMee() {
+        XCTAssertEqual(MessageStickerFavorite.entry(for: MessageSticker(templateId: "mee.mee-coucou"))?.kind, .mee)
+    }
+
     /// **Un message SANS sticker ne rend rien** — c'est ce `nil` qui retire
     /// l'entrée du menu, jamais un grisé (loi 4).
     func test_unMessageSansSticker_neRendRien() {

@@ -43,6 +43,10 @@ enum PrimaryAction: String, Equatable {
     /// qu'« Enregistrer » tient pour une photo, comme le menu du web : offert
     /// seulement quand il n'y est pas déjà (loi 4 : un contrôle existe s'il a un effet).
     case addSticker
+    /// **Mettre en favori un sticker qu'on possède déjà** (#10688) — emoji,
+    /// gabarit du catalogue ou Mee : à la place d'« Ajouter à mes stickers »,
+    /// qui n'a de sens que pour ce qu'on n'a pas.
+    case favoriteSticker, unfavoriteSticker
 }
 
 /// Item d'une section de la feuille « Plus… ».
@@ -316,6 +320,9 @@ enum MessageActionResolver {
         }
         if ctx.saveableAttachmentCount == 1 && !ctx.isSticker && showsContent && ctx.exits.offers(.save) { out.append(.saveMedia) }
         if ctx.stickerAddable && showsContent && ctx.exits.offers(.save) { out.append(.addSticker) }
+        if let favorite = ctx.stickerFavorite, showsContent {
+            out.append(favorite ? .unfavoriteSticker : .favoriteSticker)
+        }
         // « Composer » suit immédiatement « Enregistrer » : ce sont les deux
         // gestes qui EMPORTENT le média hors de la conversation, et le second se
         // cherche à côté du premier. La CONDITION, elle, n'est pas ici : elle
