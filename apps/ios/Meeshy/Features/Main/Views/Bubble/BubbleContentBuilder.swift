@@ -259,7 +259,7 @@ extension BubbleContent {
         // gabarit) et `message.sticker`. Le PNG est rattaché au sticker et
         // RETIRÉ de la grille visuelle : sans cette exclusion, la bulle
         // rendrait le sticker natif ET, dessous, son propre repli en photo.
-        // Un sticker non rendable vaut absent (`ifRenderable`) et laisse la
+        // Un sticker sans rien à peindre vaut absent et laisse la
         // pièce jointe à la grille — mieux vaut la photo qu'un vide.
         let sticker = Self.resolveSticker(message.sticker, attachments: message.attachments)
         self.sticker = sticker
@@ -368,7 +368,8 @@ extension BubbleContent {
 
     /// Le sticker que la bulle dessine, avec le PNG qui l'accompagne — `nil`
     /// quand le message n'en porte pas, ou en porte un NON rendable (ni
-    /// gabarit ni emoji : rien à peindre, `MessageSticker.ifRenderable`).
+    /// gabarit ni emoji ni image jointe : rien à peindre). Un `stickerId` de
+    /// bibliothèque seul se dessine par son PNG (#10655).
     ///
     /// Le PNG est la PREMIÈRE pièce jointe image : le composer n'en envoie
     /// qu'une, et un lecteur qui en verrait deux n'aurait aucun moyen de dire
@@ -378,7 +379,7 @@ extension BubbleContent {
         _ sticker: MessageSticker?,
         attachments: [MeeshyMessageAttachment]
     ) -> Sticker? {
-        guard let sticker = sticker?.ifRenderable else { return nil }
+        guard let sticker = sticker?.ifWireWorthy else { return nil }
         let picture = attachments.first(where: { $0.type == .image }).map {
             Sticker.Picture(
                 attachmentId: $0.id,
@@ -388,6 +389,9 @@ extension BubbleContent {
                 thumbnailColor: $0.thumbnailColor
             )
         }
+        // #10655 — un sticker de bibliothèque envoyé du web ne porte que son `stickerId` :
+        // il se dessine par son image jointe. Sans image, ni gabarit ni emoji : rien à peindre.
+        guard sticker.isRenderable || picture != nil else { return nil }
         return Sticker(
             templateId: sticker.templateId,
             slots: sticker.slots,

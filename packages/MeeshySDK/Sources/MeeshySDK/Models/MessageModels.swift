@@ -487,7 +487,8 @@ public struct APIMessage: Sendable {
     /// Sticker porté par le message (#4823), hissé par le gateway depuis
     /// `metadata.sticker` sur ses deux producteurs (REST et `message:new`) ;
     /// repli sur l'enveloppe `metadata` pour une charge qui ne le hisse pas.
-    /// Toujours RENDABLE quand non nil (`MessageSticker.ifRenderable`) — un
+    /// Toujours `ifWireWorthy` quand non nil : rendable, OU un sticker de
+    /// bibliothèque (`stickerId` seul, l'image jointe le rend, #10655) — un
     /// sticker vide sur le fil vaut absence. Même patron `var`/`= nil` que
     /// `location` pour garder l'init memberwise source-compatible.
     public var sticker: MessageSticker? = nil
@@ -621,7 +622,7 @@ extension APIMessage: Decodable {
         // sticker non rendable vaut absence (règle de `MessageSticker`).
         let rootSticker: MessageSticker? = try? c.decodeIfPresent(MessageSticker.self, forKey: .sticker)
         let metadataSticker: MessageSticker? = (try? c.decodeIfPresent(MessageStickerEnvelope.self, forKey: .metadata))?.sticker
-        sticker = rootSticker?.ifRenderable ?? metadataSticker?.ifRenderable
+        sticker = rootSticker?.ifWireWorthy ?? metadataSticker?.ifWireWorthy
         isEncrypted = try c.decodeIfPresent(Bool.self, forKey: .isEncrypted)
         encryptionMode = try c.decodeIfPresent(String.self, forKey: .encryptionMode)
         createdAt = try c.decode(Date.self, forKey: .createdAt)

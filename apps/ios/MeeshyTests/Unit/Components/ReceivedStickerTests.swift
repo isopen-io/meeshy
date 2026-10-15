@@ -129,6 +129,28 @@ final class ReceivedStickerTests: XCTestCase {
         XCTAssertEqual(sticker?.libraryStickerId, "6a0ad86a6e21a483b4443d12")
     }
 
+    /// #10655 — un sticker « Mes stickers » du web n'arrive que sous `{ stickerId }` : il se dessine
+    /// par son image jointe (bulle sticker), jamais comme une photo ; sans image, rien à peindre.
+    func test_resolveSticker_libraryStickerIdAlone_isDrawnFromItsAttachedPicture() {
+        let sticker = BubbleContent.resolveSticker(
+            MessageSticker(stickerId: "6a0ad86a6e21a483b4443d12"), attachments: [makeImage()])
+        XCTAssertEqual(sticker?.picture?.attachmentId, "att1")
+        XCTAssertEqual(sticker?.libraryStickerId, "6a0ad86a6e21a483b4443d12")
+    }
+
+    func test_resolveSticker_libraryStickerIdAlone_withoutPicture_isAbsent() {
+        XCTAssertNil(BubbleContent.resolveSticker(MessageSticker(stickerId: "6a0ad86a6e21a483b4443d12"), attachments: []))
+    }
+
+    func test_bubbleContent_libraryStickerIdAlone_isAStickerBubble_notAPhotoGrid() {
+        let message = makeMessage(sticker: MessageSticker(stickerId: "6a0ad86a6e21a483b4443d12"), isMe: false)
+        let content = BubbleContent(message: message, translations: [], preferredTranslation: nil,
+                                    currentUserId: "me", timeString: "12:00")
+        XCTAssertNotNil(content.sticker)
+        XCTAssertTrue(ReceivedSticker.isGalleryExcluded(message), "un sticker n'entre dans aucune galerie")
+        XCTAssertTrue(ReceivedSticker.offersAdd(for: message, known: []), "« Ajouter à mes stickers », pas « Enregistrer »")
+    }
+
     // MARK: - Le menu
 
     /// Le menu RAPIDE de l'appui long l'offre, à la place qu'« Enregistrer » occupe pour une
