@@ -18,6 +18,7 @@ import { translate } from '@/lib/i18n-catalog';
 import { isMessagePiecesCatalogLoaded, loadMessagePiecesCatalog, translateMessagePieces } from '@/lib/i18n-message-pieces-catalog';
 import { currentInterfaceLanguage } from '@/lib/interface-language';
 import { openSendSheet } from '@/lib/send/send-sheet-store';
+import { stickerAddable } from '@/lib/stickers/received';
 import { useStickerLibrary } from '@/lib/stickers/use-sticker-library';
 import { safeLocalStorage } from '@/lib/storage';
 
@@ -101,9 +102,10 @@ export type QuickReactionTarget = {
 const stickerContextOf = (
   message: Message,
   library: { readonly has: (sticker: MessageSticker, picture: { readonly fileUrl: string } | undefined) => boolean },
-): { readonly sticker?: { readonly inLibrary: boolean } } => {
+): { readonly sticker?: { readonly inLibrary: boolean; readonly hasPicture: boolean } } => {
   const sticker = stickerOf(message);
-  return sticker === null ? {} : { sticker: { inLibrary: library.has(sticker, message.attachments?.[0]) } };
+  const picture = message.attachments?.[0];
+  return sticker === null ? {} : { sticker: { inLibrary: library.has(sticker, picture), hasPicture: stickerAddable(picture) } };
 };
 
 export function useMessageMenu(params: {
