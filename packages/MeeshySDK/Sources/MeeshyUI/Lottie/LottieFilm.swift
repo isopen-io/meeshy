@@ -75,6 +75,8 @@ nonisolated public enum LottieFilm {
 
     private final class Pending: @unchecked Sendable {
         var value: LottieFilmSource?
+
+        nonisolated deinit {}
     }
 
     private static func read(_ url: URL) -> LottieFilmSource? {
