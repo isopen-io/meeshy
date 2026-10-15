@@ -98,4 +98,27 @@ final class HashtagResultsViewModelTests: XCTestCase {
 
         XCTAssertEqual(service.getPostsByHashtagCallCount, 1)
     }
+
+    // MARK: - #10483 — chaque résultat affiché compte
+
+    func test_recordImpression_eachAppearance_sendsAHashtagImpression() async {
+        let service = MockPostService()
+        let suite = "hashtag-reach-\(UUID().uuidString)"
+        let defaults = UserDefaults(suiteName: suite)!
+        defer { defaults.removePersistentDomain(forName: suite) }
+        let batcher = ImpressionBatcher(
+            source: "search", surface: .hashtag, postService: service, flushDelay: 60,
+            defaults: defaults, accountId: { "userA" }
+        )
+        let sut = HashtagResultsViewModel(tag: "paris", service: service, impressions: batcher)
+
+        sut.recordImpression("p1")
+        sut.recordImpression("p1")
+        await sut.flushImpressions()
+
+        XCTAssertEqual(service.recordedSocialEvents, [
+            .impression(postId: "p1", source: "search", surface: .hashtag),
+            .impression(postId: "p1", source: "search", surface: .hashtag),
+        ], "Revoir un résultat le recompte : aucun dédoublonnage.")
+    }
 }

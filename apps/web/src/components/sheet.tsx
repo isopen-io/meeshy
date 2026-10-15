@@ -29,10 +29,11 @@ import { useBackDismiss } from '@/lib/view/use-back-dismiss';
  * cette coquille porte le comportement modal, l'en-tête et le champ de
  * recherche — c'est-à-dire exactement ce qui serait recopié de travers.
  *
- * LE CHAMP DE RECHERCHE EST OPTIONNEL (#5814, § 5 étape 4) — les feuilles
- * « Détails du message » et « Ajouter une réaction » n'ont rien à filtrer :
- * une recherche sur cinq lignes ou vingt emojis fixes n'a aucun effet, et un
- * contrôle sans effet est le défaut que la loi 4 du dépôt interdit. Les
+ * LE CHAMP DE RECHERCHE EST OPTIONNEL (#5814, § 5 étape 4) — la feuille
+ * « Détails du message » n'a rien à filtrer : une recherche sur cinq lignes
+ * n'a aucun effet, et un contrôle sans effet est le défaut que la loi 4 du
+ * dépôt interdit. (« Ajouter une réaction » cherche depuis #10531 : elle
+ * porte tous les emojis.) Les
  * quatre props de recherche vont ENSEMBLE (aucune n'a de sens seule) —
  * absentes, le bandeau de recherche ne se monte pas du tout.
  */

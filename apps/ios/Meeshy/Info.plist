@@ -86,6 +86,7 @@
 	<array>
 		<string>INSendMessageIntent</string>
 		<string>INStartCallIntent</string>
+		<string>me.meeshy.app.detached-conversation</string>
 	</array>
 	<key>NSVoIPUsageDescription</key>
 	<string>Meeshy uses VoIP to enable real-time voice and video calls with your contacts.</string>

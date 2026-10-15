@@ -527,7 +527,7 @@ extension AudioPlayerView {
             // `currentTime == 0` + segment 0 à `startTime == 0` faussait l'allumage).
             let activeIdx = activeTranscriptionIndex(in: segments)
             FlowLayout(spacing: 0) {
-                ForEach(Array(segments.enumerated()), id: \.element.id) { index, segment in
+                ForEach(Array(segments.enumerated()), id: \.offset) { index, segment in
                     let isActive = index == activeIdx
                     let isPast = activeIdx != nil && index < activeIdx!
 

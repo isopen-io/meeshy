@@ -1,0 +1,76 @@
+{
+  "packs": {
+    "essentiels": {
+      "name": "الأساسيات",
+      "description": "الأنماط والتدرجات الأساسية."
+    },
+    "heritages": {
+      "name": "الإرث",
+      "description": "أنماط من كل أنحاء العالم."
+    },
+    "nature-et-ciel": {
+      "name": "الطبيعة والسماء",
+      "description": "خرائط وأوراق ومشابك ونجوم."
+    },
+    "illustrations": {
+      "name": "رسوم",
+      "description": "مناظر مرسومة بخطوط."
+    },
+    "bannieres-essentielles": {
+      "name": "لافتات أساسية",
+      "description": "ست لافتات لملفك الشخصي."
+    },
+    "contours-essentiels": {
+      "name": "إطارات أساسية",
+      "description": "ست إطارات لصورتك الرمزية."
+    }
+  },
+  "designs": {
+    "monogramme": "أحرف متشابكة",
+    "chevrons": "شيفرون",
+    "aurore": "شفق",
+    "maille": "شبكة متدرجة",
+    "art-deco": "آرت ديكو",
+    "seigaiha": "سيغايها",
+    "zellige": "زليج",
+    "bogolan": "بوغولان",
+    "topographie": "طبوغرافيا",
+    "feuillage": "أوراق",
+    "treillis": "مشبك",
+    "constellation": "كوكبة",
+    "horizon": "أفق",
+    "baobab": "باوباب"
+  },
+  "rings": {
+    "filet": "خط رفيع",
+    "double-filet": "خطان رفيعان",
+    "perle": "لآلئ",
+    "aurore": "شفق",
+    "deco": "ديكو",
+    "laurier": "غار"
+  },
+  "gamut": {
+    "indigo": "نيلي ميشي",
+    "bleu-nuit": "أزرق ليلي",
+    "azur": "لازوردي",
+    "lagon": "بحيرة",
+    "emeraude": "زمردي",
+    "olive": "زيتوني",
+    "moutarde": "خردلي",
+    "sable": "رملي",
+    "terracotta": "قرميدي",
+    "corail": "مرجاني",
+    "rose-poudre": "وردي باهت",
+    "framboise": "توتي",
+    "prune": "برقوقي",
+    "lavande": "لافندر",
+    "ardoise": "أردوازي",
+    "graphite": "غرافيت"
+  },
+  "modes": {
+    "signature": "التوقيع",
+    "solid": "لون موحد",
+    "photo": "صورة المحادثة"
+  },
+  "avatarUsage": "إطار الملف الشخصي"
+}

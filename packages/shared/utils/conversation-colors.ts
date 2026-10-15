@@ -383,6 +383,21 @@ export function conversationAccentPalette(
 }
 
 /**
+ * La palette d'une primaire DONNÉE (#10632) : secondaire = teinte +30°,
+ * accent = −30° — la MÊME dérivation que `conversationAccentPalette`
+ * (miroir de `ColorGeneration.hueShiftedHex` iOS), pour qu'un accent
+ * personnel choisi dans la gamme se décline comme un accent calculé.
+ */
+export function conversationAccentPaletteFromPrimary(primaryHex: string): ConversationAccentPalette {
+  const primary = primaryHex.trim().replace(/^#/, '').toUpperCase();
+  return {
+    primary: `#${primary}`,
+    secondary: `#${shiftHue(primary, 30)}`,
+    accent: `#${shiftHue(primary, -30)}`,
+  };
+}
+
+/**
  * Hash DJB2 sur 64 bits non signés avec repli (wraparound) — miroir de
  * `DynamicColorGenerator.stableHash` (`ColorGeneration.swift` L224-230).
  * `BigInt` est nécessaire : les valeurs intermédiaires dépassent

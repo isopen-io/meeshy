@@ -87,6 +87,9 @@ export type StoryVisual = {
   readonly trim?: StudioMediaTrim;
   readonly muted?: true;
   readonly crop?: MediaCropRect;
+  /** LE QUART DE TOUR d'un fond retouché (#9160) — `transform.rotation` de
+   * SON objet, là où `CanvasV3Migration` iOS écrit `StoryMediaObject.rotation`. */
+  readonly rotation?: number;
 };
 
 export type StoryFrame = { readonly fitMode: SceneFitMode; readonly backdrop: SceneBackdrop };
@@ -201,7 +204,7 @@ function composeObjects(input: StoryComposition): ObjectV3[] {
             anchor: CENTER,
             plane: 'content',
             z: 0,
-            transform: IDENTITY,
+            transform: background.rotation !== undefined ? { ...IDENTITY, rotation: background.rotation } : IDENTITY,
             payload: {
               ...addressPayload(background.address),
               mediaType: background.mediaType,
@@ -312,6 +315,7 @@ type VisualSlot<A> = {
   readonly trim?: StudioMediaTrim;
   readonly muted?: true;
   readonly crop?: MediaCropRect;
+  readonly rotation?: number;
 };
 type OverlaySlot<A> = VisualSlot<A> & { readonly pose: StudioPose; readonly timing?: StudioTiming };
 type SoundSlot<A> = { readonly source: A; readonly plane: StudioPlane };
@@ -342,6 +346,7 @@ function storyCompositionOf<A>(
     ...(slot.trim !== undefined ? { trim: slot.trim } : {}),
     ...(slot.muted !== undefined ? { muted: slot.muted } : {}),
     ...(slot.crop !== undefined ? { crop: slot.crop } : {}),
+    ...(slot.rotation !== undefined ? { rotation: slot.rotation } : {}),
   });
   return {
     texts: params.texts,

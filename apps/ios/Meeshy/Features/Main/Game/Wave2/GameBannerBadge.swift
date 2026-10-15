@@ -47,7 +47,9 @@ struct GameBannerBadgeModel: Equatable {
     }
 
     var pointsText: String? { points.map { GameText.bannerPoints(points: GameCopy.formatCount($0)) } }
-    var missingText: String? { pointsToNext.map { GameText.bannerMissing(points: GameCopy.formatCount($0)) } }
+    var missingText: String? {
+        pointsToNext.map { GameText.bannerMissing(points: GameCopy.formatCount($0), level: GameCopy.formatCount(level + 1)) }
+    }
 
     /// « Niveau 3, palier Étincelle, premier palier, 976 points, Encore 624 points avant le niveau 4 ».
     var levelAccessibilityLabel: String {
@@ -108,21 +110,40 @@ struct GameBannerBadge: View {
     }
 }
 
-/// Les deux groupes, chacun sur son verre, aux deux bouts de la bannière : le niveau et ses points au DÉBUT, le rang à
-/// la FIN. La vue occupe toute la largeur que l'hôte lui donne ; un `HStack` suit le sens de lecture, le RTL inverse
-/// donc les deux bouts sans rien de plus.
+/// Les deux groupes, chacun sur son verre, aux deux angles BAS de la bannière (#10601, directive porteur 2026-10-14) : le
+/// niveau et ses points à l'angle bas du DÉBUT, le rang à l'angle bas de la FIN. Chaque cadre a les coins HAUTS arrondis
+/// et les coins BAS carrés, posés sur le bord bas de la bannière : il en épouse la limite. Le fond est un voile léger,
+/// sans matière floutée — la bannière et ses dessins se voient au travers ; une ombre de texte tient la lecture sur une
+/// bannière claire. La vue occupe tout le cadre que l'hôte lui donne (la bannière) ; un `HStack` suit le sens de
+/// lecture, le RTL inverse donc les deux angles sans rien de plus. L'avatar chevauche le MILIEU du bas de la bannière :
+/// chaque groupe s'arrête avant lui (`centerClearance`).
 struct GameBannerBadgeView: View {
     let model: GameBannerBadgeModel
+    /// La largeur réservée au milieu du bas de la bannière : l'avatar (90 pt et son liseré de 4) et 4 pt de jour de
+    /// chaque côté.
+    var centerClearance: CGFloat = GameBannerBadgeView.avatarClearance
+
+    static let avatarClearance: CGFloat = 106
+    /// Les coins hauts de chaque cadre ; les coins bas restent carrés, sur le bord de la bannière.
+    static let cornerRadius: CGFloat = MeeshyRadius.md
+    static let roundedCorners: UIRectCorner = [.topLeft, .topRight]
+    /// Le voile : assez pour détacher le groupe, assez peu pour laisser voir la bannière.
+    static let veilOpacity: Double = 0.24
 
     @ScaledMetric(relativeTo: .caption) private var emblemSize: CGFloat = 36
 
     var body: some View {
-        HStack(alignment: .top, spacing: MeeshySpacing.sm) {
-            levelGroup
-            Spacer(minLength: MeeshySpacing.sm)
-            rankGroup
+        GeometryReader { proxy in
+            let side = max(0, (proxy.size.width - centerClearance) / 2)
+            HStack(alignment: .bottom, spacing: 0) {
+                levelGroup
+                    .frame(maxWidth: side, alignment: .leading)
+                Spacer(minLength: 0)
+                rankGroup
+                    .frame(maxWidth: side, alignment: .trailing)
+            }
+            .frame(width: proxy.size.width, height: proxy.size.height, alignment: .bottom)
         }
-        .frame(maxWidth: .infinity, alignment: .top)
         .environment(\.colorScheme, .dark)
         .dynamicTypeSize(...DynamicTypeSize.xxLarge)
     }
@@ -142,14 +163,19 @@ struct GameBannerBadgeView: View {
                         Text(pointsText)
                             .font(MeeshyFont.relative(MeeshyFont.footnoteSize, weight: .bold))
                             .foregroundColor(.white)
+                            .lineLimit(1)
+                            .minimumScaleFactor(0.8)
                         if let missingText = model.missingText {
                             Text(missingText)
                                 .font(MeeshyFont.relative(MeeshyFont.captionSize, weight: .medium))
-                                .foregroundColor(.white.opacity(0.85))
+                                .foregroundColor(.white.opacity(0.92))
+                                .lineLimit(2)
                         }
                     }
-                    .lineLimit(1)
-                    .minimumScaleFactor(0.8)
+                    .bannerTextShadow()
+                    // Toute la place que l'avatar laisse : sans elle, le reste se replie sur la largeur de sa plus
+                    // courte ligne et les points rétrécissent pour s'y tenir.
+                    .frame(maxWidth: .infinity, alignment: .leading)
                     .layoutPriority(1)
                 }
             }
@@ -180,20 +206,27 @@ struct GameBannerBadgeView: View {
             .foregroundColor(.white)
             .lineLimit(1)
             .minimumScaleFactor(0.8)
+            .bannerTextShadow()
     }
 }
 
 private extension View {
-    /// Le verre qui détache un groupe de n'importe quelle image : matière fine, voile sombre, filet clair.
+    /// Le cadre d'un groupe : coins hauts arrondis, coins bas carrés posés sur le bord bas de la bannière, voile léger.
     func glassGroup() -> some View {
-        padding(.horizontal, MeeshySpacing.smPlus)
-            .padding(.vertical, MeeshySpacing.xs)
+        padding(.horizontal, MeeshySpacing.xs)
+            .padding(.top, MeeshySpacing.xs)
+            .padding(.bottom, MeeshySpacing.xsPlus)
             .background(
-                RoundedRectangle(cornerRadius: MeeshyRadius.md)
-                    .fill(.ultraThinMaterial)
-                    .overlay(RoundedRectangle(cornerRadius: MeeshyRadius.md).fill(Color.black.opacity(0.28)))
-                    .overlay(RoundedRectangle(cornerRadius: MeeshyRadius.md).stroke(Color.white.opacity(0.18), lineWidth: 0.5))
+                RoundedCorner(radius: GameBannerBadgeView.cornerRadius, corners: GameBannerBadgeView.roundedCorners)
+                    .fill(Color.black.opacity(GameBannerBadgeView.veilOpacity))
             )
+    }
+
+    /// Un liseré d'ombre serré autour de chaque lettre, puis une ombre courte : le texte blanc reste lisible sur une
+    /// bannière claire, là où un fond épais la cacherait.
+    func bannerTextShadow() -> some View {
+        shadow(color: .black.opacity(0.9), radius: 0.8)
+            .shadow(color: .black.opacity(0.5), radius: 2, x: 0, y: 0.5)
     }
 }
 

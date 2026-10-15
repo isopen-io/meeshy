@@ -261,7 +261,12 @@ public final class AudioMixer: AudioMixerProviding {
     }
 
     public func teardown() {
-        nodes.values.forEach { $0.stop() }
+        // Arrêtés PUIS détachés : `configure` repasse ici à chaque commande de la timeline, et un nœud
+        // seulement oublié restait branché au mixeur — un de plus par clip et par édition.
+        nodes.values.forEach {
+            $0.stop()
+            engine.detach($0)
+        }
         nodes.removeAll()
         files.removeAll()
         volumes.removeAll()

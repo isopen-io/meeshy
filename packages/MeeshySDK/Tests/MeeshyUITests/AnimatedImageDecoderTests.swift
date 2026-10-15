@@ -80,6 +80,17 @@ final class AnimatedImageDecoderTests: XCTestCase {
 
     // MARK: - Ce qui EST une animation
 
+    /// Au-delà du budget d'octets, une image sur `step` est gardée et porte la durée de celles qu'elle
+    /// remplace : moins d'images en mémoire, la même durée à l'écran.
+    func test_auDelaDuBudget_lAnimationGardeSaDuree_avecMoinsDImages() throws {
+        let gif = try makeGIF(delays: [0.1, 0.1, 0.1, 0.1, 0.1, 0.1])
+        let complete = try XCTUnwrap(AnimatedImageDecoder.decode(gif))
+        XCTAssertEqual(complete.frames.count, 6)
+        let sampled = try XCTUnwrap(AnimatedImageDecoder.decode(gif, bytesBudget: 1))
+        XCTAssertEqual(Set(sampled.frames.map(ObjectIdentifier.init)).count, 2, "deux images distinctes au plus")
+        XCTAssertEqual(sampled.duration, complete.duration, accuracy: 0.02)
+    }
+
     func test_unGIFanime_rendSesImagesEtSaDuree() throws {
         let decoded = try XCTUnwrap(AnimatedImageDecoder.decode(try makeGIF(delays: [0.1, 0.1, 0.1])))
         XCTAssertEqual(decoded.frames.count, 3)

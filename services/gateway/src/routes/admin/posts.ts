@@ -12,6 +12,8 @@ import { broadcastPostRemoval } from '../../socketio/broadcastPostRemoval';
 import { announceCitedPostWithdrawal } from '../../socketio/announceCitedPostWithdrawal';
 import { requirePermission } from '../../middleware/authorize';
 import { judgeReason, sendReasonRefusal } from '../../middleware/sovereign-reason';
+import { ADMIN_POST_STATES, adminPostStateOf, type AdminPostState } from '@meeshy/shared/types/admin-publications';
+import { adminPostStateWhere } from './post-state-filter';
 
 /**
  * Ligne de la liste d'administration des posts.
@@ -41,6 +43,10 @@ const adminPostRowSchema = {
     isEdited: { type: 'boolean', nullable: true },
     deletedAt: { type: 'string', format: 'date-time', nullable: true },
     expiresAt: { type: 'string', format: 'date-time', nullable: true },
+    // L'état LU (#10392) et ce qui le date : la liste dit « hors ligne » sans relire la fiche.
+    state: { type: 'string', enum: [...ADMIN_POST_STATES] },
+    moderationHiddenAt: { type: 'string', format: 'date-time', nullable: true },
+    moderationPriorVisibility: { type: 'string', nullable: true },
     likeCount: { type: 'number', nullable: true },
     commentCount: { type: 'number', nullable: true },
     repostCount: { type: 'number', nullable: true },
@@ -97,6 +103,7 @@ interface PostListQuery {
   period?: 'today' | 'week' | 'month';
   isDeleted?: string;
   isPinned?: string;
+  state?: AdminPostState;
 }
 
 // authorSelect / mediaSelect are shared from services/posts/postIncludes.
@@ -195,6 +202,9 @@ const adminPostDetailSelect = {
   isEdited: true,
   contentEditedAt: true,
   deletedAt: true,
+  // Le retrait de modération (#10392) : la fiche dit « hors ligne » et propose les gestes justes.
+  moderationHiddenAt: true,
+  moderationPriorVisibility: true,
   createdAt: true,
   updatedAt: true,
   author: { select: authorSelect },
@@ -473,7 +483,8 @@ export async function adminPostRoutes(fastify: FastifyInstance): Promise<void> {
           authorId: { type: 'string', description: 'Filter by author user ID' },
           period: { type: 'string', enum: ['today', 'week', 'month'], description: 'Filter by time period' },
           isDeleted: { type: 'string', enum: ['true', 'false'], description: 'Filter by deletion status (default: non-deleted only)' },
-          isPinned: { type: 'string', enum: ['true', 'false'], description: 'Filter by pinned status' }
+          isPinned: { type: 'string', enum: ['true', 'false'], description: 'Filter by pinned status' },
+          state: { type: 'string', enum: [...ADMIN_POST_STATES], description: 'Filter by read state (#10392): published, offline, private, expired, deleted — overrides isDeleted' }
         }
       },
       response: {
@@ -518,7 +529,8 @@ export async function adminPostRoutes(fastify: FastifyInstance): Promise<void> {
         authorId,
         period,
         isDeleted,
-        isPinned
+        isPinned,
+        state
       } = request.query as PostListQuery;
 
       const { offset: offsetNum, limit: limitNum } = validatePagination(offset, limit);
@@ -534,6 +546,12 @@ export async function adminPostRoutes(fastify: FastifyInstance): Promise<void> {
         // PAS de colonne `deletedAt`, et `deletedAt: null` n'en appariait
         // aucun — la liste par défaut était vide (leçon 318).
         where.deletedAt = NOT_DELETED;
+      }
+
+      const now = new Date();
+      if (state !== undefined) {
+        delete where.deletedAt;
+        Object.assign(where, adminPostStateWhere(state, now));
       }
 
       if (search) {
@@ -575,6 +593,8 @@ export async function adminPostRoutes(fastify: FastifyInstance): Promise<void> {
             isEdited: true,
             deletedAt: true,
             expiresAt: true,
+            moderationHiddenAt: true,
+            moderationPriorVisibility: true,
             likeCount: true,
             commentCount: true,
             repostCount: true,
@@ -605,7 +625,15 @@ export async function adminPostRoutes(fastify: FastifyInstance): Promise<void> {
         fastify.prisma.post.count({ where })
       ]);
 
-      return sendPaginatedSuccess(reply, posts, {
+      const rows = posts.map((post) => ({
+        ...post,
+        state: adminPostStateOf(
+          { visibility: post.visibility, deletedAt: post.deletedAt ?? null, expiresAt: post.expiresAt ?? null, moderationHiddenAt: post.moderationHiddenAt ?? null },
+          now
+        )
+      }));
+
+      return sendPaginatedSuccess(reply, rows, {
         total: totalCount,
         limit: limitNum,
         offset: offsetNum,

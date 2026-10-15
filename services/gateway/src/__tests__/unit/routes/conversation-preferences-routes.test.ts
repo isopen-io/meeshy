@@ -403,6 +403,10 @@ describe('DELETE /user-preferences/conversations/:conversationId', () => {
       customName: null,
       reaction: null,
       clearHistoryBefore: null,
+      // #10632 § 10.1 — « DELETE (remise à zéro) l'efface comme le reste » :
+      // un fond photo ou un modèle survivait au reset, que les autres appareils
+      // venaient pourtant d'effacer sur la foi de `reset: true`.
+      appearance: null,
       version: { increment: 1 },
     });
     await appCustom.close();

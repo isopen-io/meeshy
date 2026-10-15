@@ -44,11 +44,12 @@ struct ThemedConversationRow: View {
     /// « Rejoindre » l'appel en cours, offert par la ligne d'aperçu (#7548).
     var onJoinLiveCall: (() -> Void)? = nil
 
-    private var accentColor: String { conversation.accentColor }
+    private var colorPalette: ConversationColorPalette { conversation.displayPalette(isDark: isDark) }
+    private var accentColor: String { colorPalette.primary }
 
     // Pre-parsed accent Color — avoids 19× hex parsing per render
     private var accent: Color { Color(hex: accentColor) }
-    private var accentSecondary: Color { Color(hex: conversation.colorPalette.secondary) }
+    private var accentSecondary: Color { Color(hex: colorPalette.secondary) }
 
     private var textPrimary: Color { MeeshyColors.textPrimary(isDark: isDark) }
     private var textSecondary: Color { MeeshyColors.textSecondary(isDark: isDark) }
@@ -314,6 +315,7 @@ struct ThemedConversationRow: View {
     private var avatarView: some View {
         ConversationAvatarView(
             conversation: conversation,
+            palette: colorPalette,
             presenceState: presenceState,
             isPeerHere: isPeerHere,
             storyRingState: storyRingState,
@@ -557,6 +559,7 @@ enum ConversationAvatarMenu {
 
 private struct ConversationAvatarView: View {
     let conversation: Conversation
+    let palette: ConversationColorPalette
     let presenceState: PresenceState?
     let isPeerHere: ConversationHere
     let storyRingState: StoryRingState
@@ -606,8 +609,8 @@ private struct ConversationAvatarView: View {
             MeeshyAvatar(
                 name: conversation.name,
                 context: .conversationList,
-                accentColor: conversation.accentColor,
-                secondaryColor: conversation.colorPalette.secondary,
+                accentColor: palette.primary,
+                secondaryColor: palette.secondary,
                 avatarURL: isDirect ? conversation.participantAvatarURL : conversation.avatar,
                 storyState: storyRingState,
                 moodEmoji: moodStatus?.moodEmoji,

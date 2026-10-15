@@ -73,6 +73,7 @@ export function sendError(
     code?: string;
     details?: Record<string, unknown>;
     violations?: unknown[];
+    accountId?: string;
   }
 ): void {
   // `details` est étalé à la RACINE — c'est là que les clients lisent les champs
@@ -81,13 +82,17 @@ export function sendError(
   // deux mondes : l'appelant croit avoir transmis. L'enveloppe reste maîtresse
   // de ses quatre clés, et le schéma de réponse de chaque route reste l'arbitre
   // final de ce qui sort.
-  const response: ApiResponse<never> & { violations?: unknown[] } = {
+  // `accountId` nomme le compte qu'un refus concerne (#10264, `ACCOUNT_DELETED`) :
+  // déclaré au superset `errorResponseSchema`, il survit à toute route qui le
+  // déclare, quand un étalement de `details` serait supprimé.
+  const response: ApiResponse<never> & { violations?: unknown[]; accountId?: string } = {
     ...(options?.details ?? {}),
     success: false,
     error,
     message: options?.message || error,
     code: options?.code,
-    ...(options?.violations ? { violations: options.violations } : {})
+    ...(options?.violations ? { violations: options.violations } : {}),
+    ...(options?.accountId ? { accountId: options.accountId } : {})
   };
 
   reply.status(statusCode).send(response);

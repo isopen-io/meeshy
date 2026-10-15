@@ -84,11 +84,7 @@ private struct GameTreasuryTile: View {
                 caption(treasury.tier.map(GameCopy.treasuryName)
                     ?? String(localized: "game.treasury.hint", defaultValue: "Garde tes Meeshes : elles remplissent ton trésor", bundle: .main))
                 if let next = treasury.next {
-                    caption(String(
-                        localized: "game.treasury.next",
-                        defaultValue: "Encore \(GameCopy.formatCount(next.missing)) pour \(GameCopy.treasuryName(next.key))",
-                        bundle: .main
-                    ))
+                    caption(GameCopy.treasuryNext(missing: GameCopy.formatCount(next.missing), tier: GameCopy.treasuryName(next.key)))
                 }
             }
         )

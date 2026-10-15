@@ -79,7 +79,7 @@ public struct AnonymousJoinFormView: View {
 
             formField(
                 icon: "person.fill",
-                placeholder: String(localized: "joinFlow.form.firstName", defaultValue: "Prenom", bundle: .module),
+                placeholder: String(localized: "joinFlow.form.firstName", defaultValue: "Prénom", bundle: .module),
                 text: $viewModel.firstName,
                 field: .firstName,
                 autocapitalization: .words

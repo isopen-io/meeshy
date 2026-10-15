@@ -255,6 +255,12 @@ public final class StoryMediaLoader {
             guard !Task.isCancelled else { return player }
         }
 
+        // Relu APRÈS l'attente du déplacement, et sur le LECTEUR (#10554) :
+        // `preroll` lève une exception si son statut n'est pas « prêt ».
+        guard SharedAVPlayerManager.isReadyForPreroll(
+            playerStatus: player.status, itemStatus: player.currentItem?.status
+        ) else { return player }
+
         let prerolling = PrerollHandle(player: player)
         await withTaskCancellationHandler {
             await withCheckedContinuation { continuation in

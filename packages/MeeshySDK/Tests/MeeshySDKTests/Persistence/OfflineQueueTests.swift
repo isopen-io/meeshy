@@ -707,15 +707,17 @@ final class OfflineQueueTests: XCTestCase {
         try await enqueueCreatePost(cmid: "cmid_post", content: "a post", type: "POST")
         try await enqueueCreatePost(cmid: "cmid_status", content: "a mood", type: "STATUS", moodEmoji: "🎉")
 
+        // `olderThan: -60` et non 0 : une ligne écrite à l'instant porte une date arrondie à la milliseconde par
+        // la base, qui peut tomber APRÈS « maintenant » — le seuil 0 la manquait une fois sur vingt.
         // A status composer recovers only STATUS rows.
-        let status = await queue.recoverLastUnsentPost(matchingTypes: ["STATUS"], olderThan: 0)
+        let status = await queue.recoverLastUnsentPost(matchingTypes: ["STATUS"], olderThan: -60)
         XCTAssertEqual(status?.type, "STATUS")
         XCTAssertEqual(status?.content, "a mood")
         XCTAssertEqual(status?.moodEmoji, "🎉")
         XCTAssertEqual(status?.clientMutationId, "cmid_status")
 
         // A post composer recovers POST/REEL but never a STATUS row.
-        let post = await queue.recoverLastUnsentPost(matchingTypes: ["POST", "REEL"], olderThan: 0)
+        let post = await queue.recoverLastUnsentPost(matchingTypes: ["POST", "REEL"], olderThan: -60)
         XCTAssertEqual(post?.type, "POST")
         XCTAssertEqual(post?.content, "a post")
     }
@@ -854,6 +856,39 @@ final class OfflineQueueTests: XCTestCase {
         for path in try XCTUnwrap(item.localAudioPaths) {
             XCTAssertTrue(path.contains(cid))
         }
+    }
+
+    // MARK: - Récupération à chaud : un envoi en vol n'est pas réarmé sous lui-même
+
+    /// Au lancement, tout `.inflight` revient en attente — personne ne peut le porter. Au retour au premier
+    /// plan, processus vivant, une ligne en vol RÉCENTE est un envoi en cours : la réarmer le dédoublait.
+    func test_bootRecovery_warm_keepsARecentInflightRow_butReclaimsAStaleOne() async throws {
+        let maybePool = await queue.outboxPoolForTesting
+        let pool = try XCTUnwrap(maybePool)
+        _ = try await queue.bootRecovery()   // le lancement
+
+        let recent = "cid_warm_recent_\(UUID().uuidString.lowercased())"
+        let stale = "cid_warm_stale_\(UUID().uuidString.lowercased())"
+        for cid in [recent, stale] {
+            try await queue.enqueue(OfflineQueueItem(conversationId: "conv-1", content: "x", clientMessageId: cid))
+        }
+        let old = Date().addingTimeInterval(-OutboxFlusher.staleInflightReclaimSeconds - 60)
+        try await pool.write { db in
+            try db.execute(sql: "UPDATE outbox SET status = ?, updatedAt = ? WHERE clientMessageId = ?",
+                           arguments: [OutboxStatus.inflight.rawValue, Date(), recent])
+            try db.execute(sql: "UPDATE outbox SET status = ?, updatedAt = ? WHERE clientMessageId = ?",
+                           arguments: [OutboxStatus.inflight.rawValue, old, stale])
+        }
+
+        let report = try await queue.bootRecovery()   // le retour au premier plan
+
+        XCTAssertEqual(report.inflightReset, 1)
+        let statuses = try await pool.read { db in
+            try OutboxRecord.filter([recent, stale].contains(Column("clientMessageId"))).fetchAll(db)
+                .reduce(into: [String: OutboxStatus]()) { $0[$1.clientMessageId ?? ""] = $1.status }
+        }
+        XCTAssertEqual(statuses[recent], .inflight, "un envoi en cours n'est pas réarmé sous lui-même")
+        XCTAssertEqual(statuses[stale], .pending, "un envoi en vol depuis plus de 30 minutes est repris")
     }
 
     // MARK: - S6 — audio-orphan rows must be terminal (.exhausted), not .failed

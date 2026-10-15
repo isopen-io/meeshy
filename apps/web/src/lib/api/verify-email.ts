@@ -27,6 +27,10 @@ export type VerifyEmailData = {
   readonly sessionToken?: string;
   readonly user?: SessionUser;
   readonly expiresIn?: number;
+  /** Un compte à SECOND FACTEUR reçoit un défi à la place de la session
+   * (contrat de `POST /auth/verify-email`) : la saisie du code attend. */
+  readonly requires2FA?: boolean;
+  readonly twoFactorToken?: string;
 };
 
 export type VerifiedSession = VerifyEmailData & { readonly token: string; readonly sessionToken: string; readonly user: SessionUser };

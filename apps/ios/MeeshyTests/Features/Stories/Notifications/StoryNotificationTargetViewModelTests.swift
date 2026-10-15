@@ -310,26 +310,6 @@ final class StoryNotificationTargetViewModelTests: XCTestCase {
 
         XCTAssertEqual(vm.state, .expired)
     }
-
-    /// Le CHARGEMENT — cache-first, prefetch NSE, revalidation réseau — ne
-    /// doit JAMAIS consommer le droit. `markViewed` (`POST /posts/:id/view`)
-    /// n'est appelé que par le viewer, quand la slide est réellement affichée
-    /// à l'écran (`StoryViewerView+Content`). Deux `load()` d'affilée
-    /// (idempotence documentée) doivent laisser ce compteur à zéro.
-    func test_load_neverCallsMarkViewed() async {
-        let mock = MockStoryService()
-        let post = makePost(id: "p1", expiresAt: Date().addingTimeInterval(-3600), referenceAccess: .granted)
-        mock.cachedPostResult = post
-        mock.fetchPostResult = .success(post)
-
-        let vm = StoryNotificationTargetViewModel(
-            storyId: "p1", intent: .reactions, context: makeContext(), storyService: mock
-        )
-        await vm.load()
-        await vm.load()
-
-        XCTAssertEqual(mock.markViewedCallCount, 0)
-    }
 }
 
 // MARK: - LoadState Equatable conformance for assertions

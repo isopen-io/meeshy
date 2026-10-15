@@ -36,6 +36,7 @@ import { DailyGestureLimitReached } from '../../services/engagement/DailyGesture
 import { dailyGestureAck } from '../../utils/daily-gesture-refusal.js';
 import { SocialEventsHandler } from './SocialEventsHandler';
 import { emitServerEvent } from '../serverEmit';
+import { creditEngagedReaderView } from '../../services/posts/postViewCredit';
 
 /** Emoji canonique du "like" — aligné REST (`interactions.ts`) + web (`HEART_EMOJI`). */
 const HEART_EMOJI = '❤️';
@@ -249,6 +250,10 @@ export class PostReactionHandler {
         // `unchanged` guard and this handler's own already-absent guard on remove.
         return;
       }
+
+      // #10404 — réagir, c'est avoir vu : même crédit que le chemin REST
+      // (`PostService.likePost`). Il ne lève jamais.
+      await creditEngagedReaderView(this.prisma, { postId: targetPostId, userId });
 
       this.broadcastReactionChange(targetPostId, validated.emoji, 'add', userId, updateEvent)
         .catch(err => this.logger.error('post reaction:add broadcast failed', err, { postId: targetPostId }));

@@ -1,12 +1,11 @@
 import { QueryClient } from '@tanstack/react-query';
-import { createStore } from 'zustand/vanilla';
 import { describe, expect, test } from 'bun:test';
 
 import { performRowAction } from './conversation-actions';
 import { CONVERSATIONS_QUERY_KEY, conversationQueryKey, findCachedConversation } from './conversations';
 import { createHttpTransport } from './http';
 import { message, VIEWER_ID } from './fixtures-base';
-import { effectiveFlagsOf, effectiveUnreadOf, type ConversationStoreState } from '@/lib/conversation-store';
+import { effectiveFlagsOf, effectiveUnreadOf, createConversationStore } from '@/lib/conversation-store';
 import { unreadBoundaryOf } from '@/lib/view/unread-boundary';
 import type { Conversation, Message } from './types';
 
@@ -29,34 +28,7 @@ const conversation = (partial: Partial<Conversation>): Conversation =>
  * mais une instance DÉDIÉE par test plutôt que le singleton partagé : deux
  * tests de ce fichier ne doivent jamais se voir l'un l'autre. */
 function freshStore() {
-  return createStore<ConversationStoreState>((set) => ({
-    overrides: {},
-    togglePin: (id, current) =>
-      set((s) => ({ overrides: { ...s.overrides, [id]: { ...s.overrides[id], flags: { ...s.overrides[id]?.flags, isPinned: !current } } } })),
-    toggleMute: (id, current) =>
-      set((s) => ({ overrides: { ...s.overrides, [id]: { ...s.overrides[id], flags: { ...s.overrides[id]?.flags, isMuted: !current } } } })),
-    toggleArchive: (id, current) =>
-      set((s) => ({ overrides: { ...s.overrides, [id]: { ...s.overrides[id], flags: { ...s.overrides[id]?.flags, isArchived: !current } } } })),
-    markRead: (id) => set((s) => ({ overrides: { ...s.overrides, [id]: { ...s.overrides[id], unreadCount: 0 } } })),
-    markUnread: (id) => set((s) => ({ overrides: { ...s.overrides, [id]: { ...s.overrides[id], unreadCount: 1 } } })),
-    clearOverride: (id, keys) =>
-      set((s) => {
-        const current = s.overrides[id];
-        if (current === undefined) return s;
-        const removeFlags = new Set(keys.filter((k) => k !== 'unreadCount'));
-        const removeUnread = keys.includes('unreadCount');
-        const remainingFlags = current.flags === undefined ? [] : Object.entries(current.flags).filter(([k]) => !removeFlags.has(k as never));
-        const next = {
-          ...(remainingFlags.length > 0 ? { flags: Object.fromEntries(remainingFlags) } : {}),
-          ...(!removeUnread && current.unreadCount !== undefined ? { unreadCount: current.unreadCount } : {}),
-        };
-        if (Object.keys(next).length === 0) {
-          const { [id]: _removed, ...rest } = s.overrides;
-          return { overrides: rest };
-        }
-        return { overrides: { ...s.overrides, [id]: next } };
-      }),
-  }));
+  return createConversationStore();
 }
 
 function fakeFetch(response: { readonly status: number; readonly body?: unknown }) {
@@ -129,6 +101,27 @@ describe("performRowAction('pin') — 2xx", () => {
     expect(effectiveFlagsOf(cached!, store.getState().overrides).isPinned).toBe(true);
     expect((cached?.userPreferences as [{ isPinned: boolean }])[0]?.isPinned).toBe(true);
     expect(store.getState().overrides['c1']?.flags?.isPinned).toBeUndefined();
+  });
+});
+
+describe("performRowAction depuis la feuille de détails d'un fil ouvert directement (#7836)", () => {
+  test('la conversation que seul le cache du FIL connaît s’épingle quand même, et le fil prend la valeur confirmée', async () => {
+    const c = conversation({ id: 'c1', type: 'group', userPreferences: [{ isPinned: false }] });
+    const queryClient = new QueryClient();
+    queryClient.setQueryData(conversationQueryKey('c1'), c);
+    const store = freshStore();
+    const transport = createHttpTransport({
+      base: '',
+      fetchImpl: fakeFetch({ status: 200, body: { success: true, data: { isPinned: true, isMuted: false, isArchived: false } } }),
+    });
+
+    const promise = performRowAction({ conversationId: 'c1', action: 'pin', deps: { source: 'gateway', transport, store, queryClient } });
+    expect(effectiveFlagsOf(c, store.getState().overrides).isPinned).toBe(true);
+    await promise;
+
+    const detail = queryClient.getQueryData<Conversation>(conversationQueryKey('c1'));
+    expect((detail?.userPreferences as [{ isPinned: boolean }])[0]?.isPinned).toBe(true);
+    expect(effectiveFlagsOf(detail!, store.getState().overrides).isPinned).toBe(true);
   });
 });
 

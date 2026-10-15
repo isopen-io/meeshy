@@ -2,6 +2,7 @@ package me.meeshy.app;
 
 import android.app.NotificationManager;
 import android.content.Context;
+import android.content.Intent;
 import android.util.Log;
 import androidx.annotation.NonNull;
 import com.google.firebase.messaging.FirebaseMessagingService;
@@ -28,7 +29,9 @@ import java.util.List;
  *   plugin, exactement ce que faisait son propre service
  *   (`PushNotificationsPlugin.sendRemoteMessage` / `onNewToken`) ; et une
  *   ARRIVEE de message y accuse sa remise ({@link PushDeliveryReceipt}, #8124),
- *   comme le service worker web et la NSE iOS.
+ *   comme le service worker web et la NSE iOS ;
+ * - un VOCAL dont FCM vient d'afficher la banniere y gagne l'action
+ *   « Ecouter » ({@link NotificationVoiceBanner}, #10641).
  *
  * Le plugin est atteint par reflexion, pas par heritage : `cap sync` ne
  * synchronise que `dependencies` et `devDependencies`, et le plugin est
@@ -47,6 +50,23 @@ public class MeeshyMessagingService extends FirebaseMessagingService {
     private static final String TAG = "MeeshyMessaging";
     private static final String PLUGIN = "com.capacitorjs.plugins.pushnotifications.PushNotificationsPlugin";
     private static final int TIMEOUT_MS = 8_000;
+
+    /**
+     * #10641 — une banniere de message est affichee par FCM LUI-MEME, app
+     * fermee (bloc `notification` de la charge) : `onMessageReceived` n'est
+     * pas appele, et c'est le seul moment ou la coque voit passer ce push.
+     * Une fois l'affichage fait par `super`, la banniere d'un vocal ecoutable
+     * recoit son action ; tout autre push repart inchange.
+     */
+    @Override
+    public void handleIntent(Intent intent) {
+        super.handleIntent(intent);
+        try {
+            NotificationVoiceBanner.offer(this, NotificationVoiceBanner.payloadOf(intent == null ? null : intent.getExtras()));
+        } catch (RuntimeException failure) {
+            Log.w(TAG, "action d'ecoute non posee", failure);
+        }
+    }
 
     @Override
     public void onMessageReceived(@NonNull RemoteMessage message) {

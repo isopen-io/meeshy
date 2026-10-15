@@ -447,7 +447,15 @@ final class CallTranscriptionService: ObservableObject, CallTranscriptionService
         }
         input.installTap(onBus: 0, bufferSize: 1024, format: format, block: tapBlock)
         audioEngine.prepare()
-        try audioEngine.start()
+        do {
+            try audioEngine.start()
+        } catch {
+            // Le moteur a refusé de partir (session interrompue, appel en attente) : `isCaptureActive` reste
+            // faux, donc `stopLocalCapture` ne retirerait jamais ce tap — et la tentative suivante en poserait
+            // un second sur le même bus, une exception que rien ne rattrape.
+            input.removeTap(onBus: 0)
+            throw error
+        }
         isCaptureActive = true
         observeConfigurationChanges()
         observeAudioInterruptions()

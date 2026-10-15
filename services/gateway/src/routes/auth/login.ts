@@ -477,6 +477,9 @@ export function registerLoginRoutes(context: AuthRouteContext) {
         }
       }
     },
+    // #10477 — se déconnecter est aussi REFUSER une session prouvée par un
+    // lien : franchir l'authentification ici ne doit pas l'adopter.
+    config: { adoptsSession: false },
     preValidation: [fastify.authenticate]
   }, async (request: FastifyRequest, reply: FastifyReply) => {
     try {

@@ -18,6 +18,9 @@ import { commentDrafts, type CommentDraft } from '@/lib/comments/comment-draft';
 import { browserCommentUploadFor, forgetUploadedCommentMedia, uploadCommentMedia, type CommentMediaUpload } from '@/lib/comments/comment-media';
 import { unsentComments, unsentOf } from '@/lib/comments/unsent-comments';
 import { composingPostOf, postCommentImageable } from '@/lib/export/composed-comment-card';
+import { commentInteractionOf, commentNegativeOf, interactionOf } from '@/lib/telemetry/card-context';
+import { commentTapOf } from '@/lib/telemetry/content-taps';
+import { readingTelemetry } from '@/lib/view/reading-telemetry';
 import { resolveFeedText } from '@/lib/feed/text';
 import { translate } from '@/lib/i18n-catalog';
 import { currentInterfaceLanguage } from '@/lib/interface-language';
@@ -258,6 +261,8 @@ export function CommentThread({
          réseau) : la racine s'ouvre sur une caisse qui porte déjà la réponse. */
       if (target !== null) setExpanded((current) => (current.has(target.rootId) ? current : new Set([...current, target.rootId])));
       const result = await sending;
+      /* CONFIRMÉ seulement (#10502) : un avis (hors ligne, non confirmé) n'a pas encore abouti. */
+      if (result.ok && result.notice === undefined) readingTelemetry.recordV2(interactionOf(postId, 'comment_submit'));
       if (result.ok && target !== null) setReplyTarget((current) => (current === target ? null : current));
       return result.ok
         ? { ok: true, ...(result.notice === undefined ? {} : { message: result.notice }) }
@@ -391,9 +396,10 @@ export function CommentThread({
             postImageableOf,
             onCopy: (text) => void copyPlainText(text).then((outcome) => say(outcome === 'copied' ? 'feed.post.copied' : 'feed.post.copy_failed')),
             onReport: (commentId, reason) =>
-              void reportCommentAction(commentId, reason).then((outcome) =>
-                say(outcome === 'done' ? 'report.done' : outcome === 'throttled' ? 'report.throttled' : 'report.failed'),
-              ),
+              void reportCommentAction(commentId, reason).then((outcome) => {
+                say(outcome === 'done' ? 'report.done' : outcome === 'throttled' ? 'report.throttled' : 'report.failed');
+                if (outcome === 'done') readingTelemetry.recordV2(commentNegativeOf(postId, commentId, 'report_submit', { reasonCode: reason }));
+              }),
             failureOf: (commentId) => failures.get(commentId)?.failure,
             onRetryGesture: (commentId) => {
               const failed = failures.get(commentId);
@@ -426,9 +432,19 @@ export function CommentThread({
     [postId, expanded, toggleReplies, language, reader.languages, reader.locale, now, gestures],
   );
 
+  /* LES TAPS D'IDENTITÉ DES RANGÉES (#10502) — un écouteur pour tout le fil. */
+  const onTapCapture = useCallback(
+    (event: { readonly target: EventTarget | null }) => {
+      const found = commentTapOf(event.target);
+      if (found !== null) readingTelemetry.recordV2(commentInteractionOf(postId, found.commentId, found.tap));
+    },
+    [postId],
+  );
+
   return (
     <section
       data-comment-thread={postId}
+      onClickCapture={onTapCapture}
       aria-label={translate(language, 'comments.title')}
       /* LA DESTINATION DE REPLI DU FOCUS quand la rangée qui le portait vient
          d'être supprimée (défaut majeur 6) : `-1` la rend focalisable au

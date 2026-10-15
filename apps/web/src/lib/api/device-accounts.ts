@@ -9,6 +9,7 @@ import { forgetAccountCaches } from './account-caches';
 import { createAccountSwitcher, createAccountVault, forgettingLocalData, purgeAccountLocalData } from './accounts';
 import { logout } from './auth';
 import { httpTransport } from './client';
+import { createProvenSessionGestures } from './proven-session';
 import { sessionStore } from './session';
 
 /**
@@ -71,6 +72,18 @@ export const accountSwitcher = createAccountSwitcher({
       })
       .catch(() => undefined);
   },
+});
+
+/**
+ * LE LIEN D'UN AUTRE COMPTE (#10451) — accepter passe par la bascule (le
+ * compte quitté reste au sélecteur), refuser referme la session prouvée côté
+ * passerelle. Chargé au geste par `AccountReplacementPrompt`.
+ */
+export const provenSessions = createProvenSessionGestures({
+  store: sessionStore,
+  transport: httpTransport,
+  suspend: () => accountSwitcher.suspend(),
+  noteActive: (user) => accountVault.noteActive(user),
 });
 
 /**

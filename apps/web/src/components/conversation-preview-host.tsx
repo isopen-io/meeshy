@@ -1,9 +1,9 @@
-import { lazy, Suspense, useLayoutEffect } from 'react';
+import { lazy, Suspense } from 'react';
 import { useStore } from 'zustand/react';
 
 import { ThreadSkeleton } from '@/components/thread-states';
 import { closeConversationPreview, conversationPreviewStore } from '@/lib/notifications/conversation-preview';
-import { routeKey, useRoute } from '@/lib/router';
+import { useCloseOnNavigation } from '@/lib/router';
 
 import { loadThreadScreen } from './conversation-preview-chunks';
 import { ConversationPreviewSheet } from './conversation-preview-sheet';
@@ -27,9 +27,8 @@ const LazyThreadScreen = lazy(loadThreadScreen);
 
 export function ConversationPreviewHost() {
   const conversationId = useStore(conversationPreviewStore, (state) => state.conversationId);
-  const address = routeKey(useRoute());
 
-  useLayoutEffect(() => closeConversationPreview, [address]);
+  useCloseOnNavigation(closeConversationPreview);
 
   if (conversationId === null) return null;
   return (

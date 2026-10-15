@@ -3,6 +3,8 @@ import { useMemo, useRef, useState } from 'react';
 import { Glyph } from '@/components/glyph';
 import { ComposerLanguagePill } from '@/components/composer-language-pill';
 import { LanguageSheet } from '@/components/language-sheet';
+import { translate } from '@/lib/i18n-catalog';
+import { currentInterfaceLanguage } from '@/lib/interface-language';
 import { previewUrlFor } from '@/lib/send/attachment-preview-url';
 import type { PendingAttachment } from '@/lib/send/attachments';
 import type { ComposeProtection } from '@/lib/send/compose-protection';
@@ -98,6 +100,7 @@ export function LegendePlan({
   /** Une saisie REMPLACE celle de sa pièce — jamais de doublon dans la liste :
    * la loi garde la dernière, mais laisser le tableau enfler ferait diverger ce
    * qu'on voit de ce qu'on envoie. */
+  const language = currentInterfaceLanguage();
   const noter = (champs: { readonly texte?: string; readonly langue?: string }) => {
     setSaisies((precedentes) => [
       ...precedentes.filter((s) => s.localId !== courante.localId),
@@ -114,7 +117,7 @@ export function LegendePlan({
       className="fixed inset-0 z-50 flex flex-col bg-media-backdrop/95 text-on-media"
       role="dialog"
       aria-modal="true"
-      aria-label="Légender les images avant l’envoi"
+      aria-label={translate(language, 'composer.caption.dialog')}
       data-legende-plan
     >
       <div className="flex items-center justify-between px-2 py-2">
@@ -127,7 +130,7 @@ export function LegendePlan({
           type="button"
           onClick={onAnnuler}
           className="grid size-11 place-items-center"
-          aria-label="Revenir au composeur sans envoyer"
+          aria-label={translate(language, 'composer.caption.back')}
         >
           <Glyph name="caretLeft" size={20} className="rtl:-scale-x-100" />
         </button>
@@ -138,7 +141,7 @@ export function LegendePlan({
           type="button"
           onClick={() => onRetirer(courante.localId)}
           className="grid size-11 place-items-center"
-          aria-label={`Retirer ${courante.name} de l’envoi`}
+          aria-label={translate(language, 'composer.caption.remove', { name: courante.name })}
         >
           <span
             className="grid size-[22px] place-items-center rounded-full text-ios-on-brand"
@@ -167,7 +170,7 @@ export function LegendePlan({
       <div
         className="flex gap-2 overflow-x-auto px-3 py-2"
         role="tablist"
-        aria-label="Images à envoyer, dans l’ordre de sélection"
+        aria-label={translate(language, 'composer.caption.strip')}
         data-legende-pellicule
       >
         {apercus.map(({ piece, url }, i) => (
@@ -176,7 +179,7 @@ export function LegendePlan({
             type="button"
             role="tab"
             aria-selected={i === index}
-            aria-label={`Image ${i + 1} sur ${pending.length} : ${piece.name}`}
+            aria-label={translate(language, 'composer.caption.item', { index: String(i + 1), total: String(pending.length), name: piece.name })}
             onClick={() => setPage(i)}
             className="relative grid size-14 shrink-0 place-items-center overflow-hidden rounded-[10px]"
             style={{ outline: i === index ? '2px solid var(--accent)' : 'none', opacity: i === index ? 1 : 0.55 }}
@@ -201,10 +204,10 @@ export function LegendePlan({
         <textarea
           value={texte}
           onInput={(event) => noter({ texte: (event.target as HTMLTextAreaElement).value })}
-          placeholder="Ajouter une légende à cette image…"
+          placeholder={translate(language, 'composer.caption.placeholder')}
           rows={1}
           className="min-h-11 flex-1 resize-none rounded-[18px] bg-media-fill px-3 py-2 text-body placeholder:text-on-media-3"
-          aria-label={`Légende de ${courante.name}`}
+          aria-label={translate(language, 'composer.caption.field', { name: courante.name })}
           data-legende-champ
         />
         <button
@@ -215,7 +218,9 @@ export function LegendePlan({
           className="grid size-11 shrink-0 place-items-center rounded-full"
           style={{ backgroundColor: 'var(--accent)' }}
           aria-label={
-            pending.length === 1 ? 'Envoyer l’image' : `Envoyer les ${pending.length} images`
+            pending.length === 1
+              ? translate(language, 'composer.caption.send.one')
+              : translate(language, 'composer.caption.send.other', { count: String(pending.length) })
           }
           data-legende-envoyer
         >
@@ -225,7 +230,7 @@ export function LegendePlan({
 
       {choixLangueOuvert ? (
         <LanguageSheet
-          title="Langue de la légende"
+          title={translate(language, 'composer.caption.language')}
           selected={langue}
           onSelect={(code) => {
             noter({ langue: code });

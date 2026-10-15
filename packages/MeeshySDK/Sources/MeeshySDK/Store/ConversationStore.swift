@@ -163,6 +163,7 @@ public actor ConversationStore {
     public func reset() async {
         conversations.removeAll()
         subjects.removeAll()
+        ConversationAppearanceChange.reset()
         // outbox-03 — l'outbox SQLite réhydrate ses rows à chaque boot et les
         // flushe `force: true` sous le token courant : la purge mémoire seule
         // laissait les mutations de A (dont .leave/.deleteForUser) se rejouer
@@ -190,6 +191,7 @@ public actor ConversationStore {
 
     public func hydrate(_ incoming: MeeshyConversation) {
         let conv = incoming.imposingServedArchive()
+        relayAppearance(from: conversations[conv.id], to: conv)
         conversations[conv.id] = conv
         // Seed or refresh the per-conv subject and the list snapshot.
         if let existing = subjects.subject(for: conv.id, initial: { conv }) {
@@ -200,6 +202,7 @@ public actor ConversationStore {
 
     public func hydrateList(_ convs: [MeeshyConversation]) {
         for conv in convs.map({ $0.imposingServedArchive() }) {
+            relayAppearance(from: conversations[conv.id], to: conv)
             conversations[conv.id] = conv
             if let existing = subjects.subject(for: conv.id, initial: { conv }) {
                 existing.send(conv)
@@ -254,6 +257,7 @@ public actor ConversationStore {
             merged = ConversationSyncEngine.reconcileUnread(
                 incoming: merged, local: existing, openConversationId: nil
             ).imposingServedArchive()
+            relayAppearance(from: existing, to: merged)
             conversations[merged.id] = merged
             if let subject = subjects.subject(for: merged.id, initial: { merged }) {
                 subject.send(merged)
@@ -371,6 +375,14 @@ public actor ConversationStore {
         }
     }
 
+    /// Le choix d'apparence LOCAL (optimiste, ou son retour arrière) repeint la ligne
+    /// de liste aussitôt, sans attendre l'écho : la version ne bouge pas, l'écho
+    /// `user:preferences-updated` reste l'autorité (#10631).
+    public func adoptLocalAppearance(_ appearance: ConversationAppearance, for convId: String) {
+        guard let adopted = conversations[convId]?.adoptingAppearance(appearance) else { return }
+        commit(adopted)
+    }
+
     // MARK: - Remote event application
 
     /// Apply a `USER_PREFERENCES_UPDATED` socket event. Drops the event
@@ -391,6 +403,7 @@ public actor ConversationStore {
                 version: event.version,
                 lastSyncedAt: Date()
             )
+            ConversationAppearanceChange.post(conversationId: event.conversationId, appearance: .default)
         } else {
             if let prefs = event.preferences {
                 conv.userState.isPinned = prefs.isPinned
@@ -404,6 +417,8 @@ public actor ConversationStore {
                 conv.userState.reaction = prefs.reaction
                 conv.userState.deletedForUserAt = prefs.deletedForUserAt
                 conv.userState.clearHistoryBefore = prefs.clearHistoryBefore
+                conv.userState.appearance = prefs.appearance
+                ConversationAppearanceChange.post(conversationId: event.conversationId, appearance: prefs.appearance ?? .default)
             }
             conv.userState.version = event.version
             conv.userState.lastSyncedAt = Date()
@@ -902,6 +917,14 @@ public actor ConversationStore {
         publishList()
     }
 
+    /// Un fil OUVERT n'écoute que le relais (#10631) : une liste rafraîchie qui change le fond
+    /// d'une conversation déjà connue le lui dit, sinon il garderait le choix d'avant. Le premier
+    /// amorçage ne relaie rien — aucun fil n'a encore d'état à corriger.
+    private func relayAppearance(from previous: MeeshyConversation?, to next: MeeshyConversation) {
+        guard let previous, previous.userState.appearance != next.userState.appearance else { return }
+        ConversationAppearanceChange.post(conversationId: next.id, appearance: next.userState.appearance ?? .default)
+    }
+
     private func publishList() {
         let snapshot = Array(conversations.values).sorted { $0.listActivityAt > $1.listActivityAt }
         subjects.list.send(snapshot)
@@ -1045,6 +1068,7 @@ public struct RemotePreferencesPayload: Sendable, Hashable {
     public let reaction: String?
     public let deletedForUserAt: Date?
     public let clearHistoryBefore: Date?
+    public let appearance: ConversationAppearance?
 
     public init(
         isPinned: Bool,
@@ -1057,8 +1081,10 @@ public struct RemotePreferencesPayload: Sendable, Hashable {
         customName: String?,
         reaction: String?,
         deletedForUserAt: Date?,
-        clearHistoryBefore: Date?
+        clearHistoryBefore: Date?,
+        appearance: ConversationAppearance? = nil
     ) {
+        self.appearance = appearance
         self.isPinned = isPinned
         self.isMuted = isMuted
         self.mentionsOnly = mentionsOnly

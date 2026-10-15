@@ -31,7 +31,7 @@ export function CallDeclineSheet({
   readonly onClose: () => void;
 }) {
   const [draft, setDraft] = useState('');
-  useBackDismiss(onClose);
+  useBackDismiss(onClose, { held: true });
   const panel = useRef<HTMLDivElement | null>(null);
 
   useEffect(() => {

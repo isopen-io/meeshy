@@ -218,10 +218,13 @@ describe('le rang souverain agit sans motif (spec 2026-10-04 § 4)', () => {
     expect(patch?.body).toEqual({ title: 'Atelier du jeudi' });
   });
 
-  test('ADMIN : sans motif, les deux gestes restent inactifs', async () => {
-    await monter();
+  test('ADMIN : sans motif écrit, le motif proposé part (#10562)', async () => {
+    const { t } = await monter();
     mounter.type(document.body, '[data-admin-conv-field="title"]', 'Atelier du jeudi');
-    expect(q<HTMLButtonElement>('[data-admin-conv-save]')?.disabled).toBe(true);
-    expect(q<HTMLButtonElement>('[data-admin-conv-remove]')?.disabled).toBe(true);
+    const save = q<HTMLButtonElement>('[data-admin-conv-save]');
+    expect(save?.disabled).toBe(false);
+    expect(q<HTMLButtonElement>('[data-admin-conv-remove]')?.disabled).toBe(false);
+    await mounter.click(save);
+    expect(t.calls().find((call) => call.method === 'PATCH')?.body).toEqual({ title: 'Atelier du jeudi', reason: 'Contrôle aléatoire, test de fonctionnalité et suivi client' });
   });
 });

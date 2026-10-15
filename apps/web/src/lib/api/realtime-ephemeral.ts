@@ -9,10 +9,12 @@ import type {
 import { isAfterReadMessage } from '@/lib/view/after-read';
 import { DESTRUCTION_MS, announceDestruction } from '@/lib/view/ephemeral-destruction';
 import { forgetEphemeral, noteEphemeralReception, noteServedDeadline } from '@/lib/view/ephemeral-reception';
+import { inheritedQuoteDeathMs } from '@/lib/view/quote-cascade';
 
 import { expireLastMessage } from './list-preview';
 import { findCachedThreadMessage, patchThreadMessages } from './messages';
 import { tombstoneQuotesOf } from './realtime-message-mutations';
+import type { Message } from './types';
 import { sealViewOnceIn } from './view-once-seal';
 
 /**
@@ -43,6 +45,14 @@ export function isMessageCountdownStartedEvent(payload: unknown): payload is Mes
 
 const hasEphemeralDuration = (duration: number | undefined): boolean =>
   typeof duration === 'number' && Number.isFinite(duration) && duration > 0;
+
+const noLookup: ReadonlyMap<string, Message> = new Map();
+
+/** Ce que la rangée cite est-il déjà mort pour ce lecteur ? (sa citation scellée, ou l'échéance qu'elle porte) */
+const diesWithItsQuote = (message: Message, now: Date): boolean => {
+  const at = inheritedQuoteDeathMs(message, { isMine: () => false, now: now.getTime(), lookup: noLookup });
+  return at !== null && at <= now.getTime();
+};
 
 /**
  * `applyMessageExpired` — **LE MESSAGE DISPARAÎT SUR-LE-CHAMP.**
@@ -91,8 +101,15 @@ export function applyMessageExpired(
      les destinataires passés (#7578) : ici, la rangée reste, « déjà ouverte »,
      et perd seulement ce qu'elle pouvait encore porter. */
   const cached = findCachedThreadMessage(queryClient, data.conversationId, data.messageId);
-  /* Une vue unique FLAMME-ŒIL (#8304) est un éphémère : elle part. */
-  if (cached?.isViewOnce === true && !hasEphemeralDuration(cached.ephemeralDuration) && !isAfterReadMessage(cached)) {
+  /* Une vue unique FLAMME-ŒIL (#8304) est un éphémère : elle part. Une vue
+     unique qui CITE un message mort (#8630, #10433) meurt avec lui : c'est la
+     cascade, pas sa destruction serveur — elle part aussi. */
+  if (
+    cached?.isViewOnce === true &&
+    !hasEphemeralDuration(cached.ephemeralDuration) &&
+    !isAfterReadMessage(cached) &&
+    !diesWithItsQuote(cached, now)
+  ) {
     patchThreadMessages(queryClient, data.conversationId, (messages) => sealViewOnceIn(messages, data.messageId));
     return;
   }

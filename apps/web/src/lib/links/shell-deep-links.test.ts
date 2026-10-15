@@ -8,6 +8,25 @@ const SERVIS = ['/c/', '/u/', '/chat/'];
 const isAppPath = (path: string): boolean => SERVIS.some((prefixe) => path.startsWith(prefixe) && path.length > prefixe.length);
 
 describe('cheminDuLienEntrant', () => {
+  test('une WebView d’avant Chrome 130 (hôte vide, chemin « //c/abc » pour un schéma non spécial) mène au même écran', () => {
+    const Native = globalThis.URL;
+    class LegacyURL extends Native {
+      override get host(): string {
+        return this.protocol === 'meeshy:' ? '' : super.host;
+      }
+      override get pathname(): string {
+        return this.protocol === 'meeshy:' ? `//${super.host}${super.pathname}` : super.pathname;
+      }
+    }
+    globalThis.URL = LegacyURL as typeof URL;
+    try {
+      expect(cheminDuLienEntrant('meeshy://c/abc', isAppPath)).toBe('/c/abc');
+      expect(cheminDuLienEntrant('meeshy://c/abc?compose=1#x', isAppPath)).toBe('/c/abc?compose=1#x');
+    } finally {
+      globalThis.URL = Native;
+    }
+  });
+
   test('un App Link meeshy.me donne son chemin in-app, requête et fragment compris', () => {
     expect(cheminDuLienEntrant('https://meeshy.me/c/abc?m=1#x', isAppPath)).toBe('/c/abc?m=1#x');
   });

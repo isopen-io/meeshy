@@ -58,6 +58,7 @@ export const GAME_PURGED_MODELS = [
   'atlasStamp',
   'engagementPostPoints',
   'gamePhotoMoment',
+  'engagementActStreak',
 ] as const;
 
 /** Les modèles de jeu par compte qui ne se purgent PAS par `deleteMany({ userId })`, et la raison. */
@@ -204,6 +205,7 @@ export async function purgeGameData(prisma: PurgeDb, userId: string, deps: GameP
     prisma.atlasStamp.deleteMany({ where }),
     prisma.engagementPostPoints.deleteMany({ where }),
     prisma.gamePhotoMoment.deleteMany({ where }),
+    prisma.engagementActStreak.deleteMany({ where }),
   ]);
   const deleted = Object.fromEntries(GAME_PURGED_MODELS.map((model, index) => [model, counts[index]!.count]));
 

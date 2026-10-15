@@ -38,6 +38,7 @@ import { protectedPreview, maskedAttachment } from '../../services/notifications
 import { contentExitLawOfSource } from '@meeshy/shared/utils/content-exit-law';
 import { canAccessConversation } from '../conversations/utils/access-control';
 import { mayServePostToAnonymous } from './anonymousPostGate';
+import { notifyRepostedAuthor, readRepostedSource, repostedAuthorToNotify } from './repostedAuthorNotification';
 import { audienceChangeVerdict, mayRepostSource } from '../../services/posts/moderationHold';
 import { sendSuccess, sendUnauthorized, sendBadRequest, sendNotFound, sendForbidden, sendInternalError, sendError, sendUpgradeRequired, sendGone, sendConflict } from '../../utils/response';
 import { getAppVersionFloor, getAppStoreUrl, isBelowFloor } from '../../utils/appVersion';
@@ -492,6 +493,20 @@ export function registerCoreRoutes(
         }), { statusCode: 201 });
       }
 
+      // #10525 — une story ou un mood republié par le composeur passe par ICI,
+      // pas par `/repost` : son auteur doit être prévenu de la même façon. La
+      // source est relue AVANT le noyau, qui retire son auteur de l'éventail
+      // d'amis (« a republié votre story » prime sur « nouvelle story ») ; une
+      // relecture qui jette ne défait pas une publication actée (#6524).
+      const sourcePostId = (post as { repostOfId?: string | null }).repostOfId ?? null;
+      const repostedSource = sourcePostId
+        ? await readRepostedSource((id, viewer) => postService.getPostById(id, viewer), sourcePostId, authorId)
+            .catch((err: unknown) => {
+              logWarn(fastify.log, '[POST /posts]: reposted source read failed', err);
+              return null;
+            })
+        : null;
+
       // Le CORPS de la publication — le noyau partagé avec
       // `POST /posts/from-attachment` (#4151). Il porte le Prisme, les
       // mentions, la relecture des références, la diffusion, les hashtags,
@@ -510,8 +525,9 @@ export function registerCoreRoutes(
         submittedContent: parsed.data.content,
         // Le texte d'une story ne vit pas dans sa légende : il vit dans les
         // objets de canevas. Sans ce champ, un `@handle` tapé sur une slide ne
-        // nommait personne.
-        storyEffects: parsed.data.storyEffects,
+        // nommait personne. Le canvas ENREGISTRÉ, jamais celui de la requête :
+        // `createPost` a pu y retirer une puce de crédit indue (#10497).
+        storyEffects: (post as { storyEffects?: unknown }).storyEffects,
         // Les nommés que le TEXTE ne porte pas : badge posé sur le canevas
         // d'une story, note sous le contenu, métadonnée silencieuse. Sans ce
         // canal, les nommer imposait d'écrire leur `@handle` dans la légende —
@@ -523,7 +539,17 @@ export function registerCoreRoutes(
         detectedLanguage: parsed.data.detectedLanguage,
         editedInApp: parsed.data.editedInApp,
         porte: 'POST /posts',
+        repostedAuthorId: repostedAuthorToNotify(repostedSource, authorId),
       });
+
+      if (sourcePostId) {
+        notifyRepostedAuthor(fastify.notificationService, {
+          actorId: authorId,
+          source: repostedSource,
+          sourcePostId,
+          repostId: post.id,
+        }).catch((err: unknown) => logWarn(fastify.log, '[POST /posts]: notify post repost failed', err));
+      }
 
       if (!companionReel) {
         return sendSuccess(reply, served, { statusCode: 201 });

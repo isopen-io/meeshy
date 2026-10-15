@@ -27,6 +27,14 @@ enum NotificationDetailCategories {
                 intentIdentifiers: [],
                 options: [.customDismissAction]
             ),
+            // #7455 — un éphémère garde les gestes d'un message : son décompte
+            // vit dans la notification déployée.
+            UNNotificationCategory(
+                identifier: MeeshyNotificationCategory.ephemeral.rawValue,
+                actions: [reply, markRead],
+                intentIdentifiers: [],
+                options: [.customDismissAction]
+            ),
             UNNotificationCategory(
                 identifier: MeeshyNotificationCategory.location.rawValue,
                 actions: [

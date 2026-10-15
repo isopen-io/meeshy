@@ -21,8 +21,17 @@ extension MessagePersistenceActor {
     /// (#8633) : le contenu et l'horloge d'ordre suivent, `isEdited` reste tel
     /// quel. `editedAt` n'est ici que l'horloge de la garde d'ordre ; ce qui
     /// dit « modifié » est `isEdited`.
-    public func markEdited(localId: String, newContent: String, editedAt: Date, marksEdited: Bool = true) throws {
-        try applyEdit(localId: localId, newContent: newContent, marksEdited: marksEdited) { stored in
+    /// `arrivalsNotice` — la ligne d'arrivées complétée (#7759) : sa
+    /// métadonnée suit son contenu, sans quoi la bulle composée chez le
+    /// lecteur dirait l'ancien compte sous le nouveau repli.
+    public func markEdited(
+        localId: String, newContent: String, editedAt: Date, marksEdited: Bool = true,
+        arrivalsNotice: ArrivalsNoticeMetadata? = nil
+    ) throws {
+        let noticeJson = arrivalsNotice.flatMap {
+            JSONEncoder().encodeOrLog($0, field: "joinNoticeJson", id: localId)
+        }
+        try applyEdit(localId: localId, newContent: newContent, marksEdited: marksEdited, noticeJson: noticeJson) { stored in
             // Ordering guard: `message:edited` carries no monotonic sequence, so a
             // delayed/duplicate socket delivery can arrive after a newer edit was
             // already applied. Comparing against the stored `editedAt` stops a
@@ -69,7 +78,7 @@ extension MessagePersistenceActor {
     /// la refuser. Rend la date posée.
     @discardableResult
     private func applyEdit(
-        localId: String, newContent: String, marksEdited: Bool,
+        localId: String, newContent: String, marksEdited: Bool, noticeJson: Data? = nil,
         stamp: @Sendable (Date?) -> Date?
     ) throws -> Date? {
         let applied: (conversationId: String, editedAt: Date)? = try dbWriter.write { db in
@@ -81,10 +90,11 @@ extension MessagePersistenceActor {
             try db.execute(
                 sql: """
                     UPDATE messages SET content = ?, isEdited = (isEdited OR ?), editedAt = ?,
+                    joinNoticeJson = COALESCE(?, joinNoticeJson),
                     updatedAt = ?, changeVersion = changeVersion + 1
                     WHERE localId = ? OR serverId = ?
                     """,
-                arguments: [newContent, marksEdited, editedAt, Date(), localId, localId]
+                arguments: [newContent, marksEdited, editedAt, noticeJson, Date(), localId, localId]
             )
             if !Self.holdsProtectedContent(existing) {
                 try Self.followQuotes(of: existing, in: db) { quote in

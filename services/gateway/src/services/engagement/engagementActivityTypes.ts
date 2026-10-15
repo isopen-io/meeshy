@@ -3,6 +3,8 @@
  * d'`EngagementService.ts` (budget de taille, #9635) ; le service les ré-exporte, aucun appelant ne change.
  */
 
+import type { EngagementStreakPostType } from '@meeshy/shared/types/engagement-act-streaks';
+
 /**
  * Ce que le GESTE sait de plus que l'axe : qui l'a déclenché quand ce n'est
  * pas le crédité lui-même (`social.invite_joined` crédite l'inviteur pour
@@ -35,6 +37,12 @@ export type EngagementActivityOptions = {
   readonly variant?: string;
   /** Le contenu qui produit ce crédit (#9584) — une source ne crédite un post qu'une fois, et la retirer le reprend. */
   readonly receipt?: string;
+  /**
+   * Le TYPE de la publication visée (#10389) — une réaction de post fait
+   * avancer la série de l'acte qui correspond (`reaction_post`, `reaction_reel`,
+   * `reaction_story`) ; absent, elle n'en fait avancer aucune.
+   */
+  readonly postType?: EngagementStreakPostType;
 };
 
 /** Ce qu'une visite de lien fait savoir au crédit. */

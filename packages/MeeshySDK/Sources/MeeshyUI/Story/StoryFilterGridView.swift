@@ -132,7 +132,7 @@ public struct StoryFilterGridView: View {
     private var intensitySlider: some View {
         let primaryTextColor: Color = colorScheme == .dark ? .white : MeeshyColors.indigo950
         return HStack(spacing: 12) {
-            Text(String(localized: "story.filters.intensity", defaultValue: "Intensite", bundle: .module))
+            Text(String(localized: "story.filters.intensity", defaultValue: "Intensité", bundle: .module))
                 .font(.system(size: 12, weight: .medium))
                 .foregroundStyle(primaryTextColor.opacity(0.7))
 
