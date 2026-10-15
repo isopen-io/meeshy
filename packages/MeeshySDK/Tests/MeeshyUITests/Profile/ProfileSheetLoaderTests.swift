@@ -111,6 +111,27 @@ final class ProfileSheetLoaderTests: XCTestCase {
         XCTAssertTrue(sut.isBlockedByTarget)
     }
 
+    func test_open_404OverACachedProfile_marksBlockedByTarget() async {
+        let (sut, _) = makeSUT(
+            cachedProfile: .fresh([makeUser(displayName: "Bob en cache")], age: 10),
+            fetchedProfile: .failure(APIError.serverError(404, nil))
+        )
+
+        await sut.open(userId: "u-bob", username: "bob")
+
+        XCTAssertTrue(sut.isBlockedByTarget)
+        XCTAssertFalse(sut.profileLoadFailed)
+    }
+
+    func test_open_404OnColdCache_isAPlainFailureNotABlock() async {
+        let (sut, _) = makeSUT(fetchedProfile: .failure(APIError.serverError(404, nil)))
+
+        await sut.open(userId: "u-bob", username: "bob")
+
+        XCTAssertFalse(sut.isBlockedByTarget)
+        XCTAssertTrue(sut.profileLoadFailed)
+    }
+
     // MARK: - Un profil qui n'a pas pu se charger (#8025)
 
     func test_open_emptyCacheAndSynchronizationFails_offersARetry() async {

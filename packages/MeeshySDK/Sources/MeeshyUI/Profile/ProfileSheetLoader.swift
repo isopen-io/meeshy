@@ -95,6 +95,8 @@ final class ProfileSheetLoader: ObservableObject {
         } catch let error as APIError {
             if case .serverError(403, _) = error {
                 isBlockedByTarget = true
+            } else if case .serverError(404, _) = error, profile != nil {
+                isBlockedByTarget = true
             } else {
                 profileLoadFailed = profile == nil
             }
