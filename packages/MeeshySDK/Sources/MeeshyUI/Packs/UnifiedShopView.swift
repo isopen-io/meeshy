@@ -219,7 +219,7 @@ public struct UnifiedShopView: View {
             cover = .remote(pack.coverUrl)
         }
         return PackRow(slug: pack.slug, name: pack.name, author: pack.author, description: pack.description,
-                       installed: pack.installed, removable: true, cover: cover,
+                       installed: pack.installed, removable: pack.removable, cover: cover,
                        price: pack.price, owned: pack.isOwned)
     }
 

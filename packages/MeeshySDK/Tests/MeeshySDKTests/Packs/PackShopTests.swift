@@ -271,4 +271,19 @@ final class PackShopTests: XCTestCase {
         XCTAssertFalse(PackHTTPStatus.isDefinitiveRefusal(URLError(.notConnectedToInternet)))
         XCTAssertFalse(PackHTTPStatus.isDefinitiveRefusal(APIError.serverError(503, nil)))
     }
+
+    // MARK: #10718 — removable
+
+    func test_shopPack_decodesRemovable_andDefaultsToTrueFromAnOlderServer() throws {
+        let included = try decode(ShopPack.self, #"{"slug":"essentiels","removable":false,"installed":true}"#)
+        let legacy = try decode(ShopPack.self, #"{"slug":"ancien"}"#)
+        XCTAssertFalse(included.removable)
+        XCTAssertTrue(legacy.removable)
+    }
+
+    func test_stickerPack_removable_isDeducedFromBuiltin_whenTheWireIsSilent_andServedWhenItSpeaks() throws {
+        XCTAssertFalse(try decode(StickerPack.self, #"{"slug":"x","builtin":true}"#).removable)
+        XCTAssertTrue(try decode(StickerPack.self, #"{"slug":"x"}"#).removable)
+        XCTAssertFalse(try decode(StickerPack.self, #"{"slug":"x","removable":false}"#).removable)
+    }
 }

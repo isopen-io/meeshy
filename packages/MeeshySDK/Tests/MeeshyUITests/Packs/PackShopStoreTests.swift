@@ -142,4 +142,12 @@ final class PackShopStoreTests: XCTestCase {
         XCTAssertTrue(row.needsPurchase)
         XCTAssertFalse(UnifiedShopView.row(ShopPack(slug: "libre", name: "libre")).needsPurchase)
     }
+
+    /// #10718 — un pack inclus ne se retire pas : la rangée n'offre plus « Retirer » (le serveur répond 409).
+    func test_row_carriesRemovability_soAnIncludedPackOffersNoRemove() {
+        XCTAssertFalse(UnifiedShopView.row(ShopPack(slug: "essentiels", name: "Essentiels", installed: true, removable: false)).removable)
+        XCTAssertTrue(UnifiedShopView.row(ShopPack(slug: "prestige", name: "Prestige", installed: true)).removable)
+        let sticker = StickerPack(slug: "mee", name: "Mee", isBuiltin: true, installed: true)
+        XCTAssertFalse(StickerPackShopView.row(sticker).removable)
+    }
 }

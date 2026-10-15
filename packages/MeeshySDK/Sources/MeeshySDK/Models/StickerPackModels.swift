@@ -116,13 +116,18 @@ public struct StickerPack: Codable, Hashable, Sendable, Identifiable {
     public var installed: Bool
     public var installCount: Int
     public let items: [StickerPackItem]
+    /// Un pack dessiné par le client (Mee, Meo…) est inclus : le serveur refuse de le retirer
+    /// (409 `PACK_NOT_REMOVABLE`). Le résumé de stickers ne le sert pas — il se déduit de `isBuiltin`
+    /// quand le fil se tait, et prime quand il parle (#10718).
+    public let removable: Bool
 
     public var id: String { slug }
 
     public init(slug: String, name: String, description: String = "", author: String = "",
                 isBuiltin: Bool = false, status: StickerPackStatus = .approved,
                 itemCount: Int = 0, kinds: [StickerPackKind] = [], coverUrl: String? = nil,
-                installed: Bool = false, installCount: Int = 0, items: [StickerPackItem] = []) {
+                installed: Bool = false, installCount: Int = 0, items: [StickerPackItem] = [],
+                removable: Bool? = nil) {
         self.slug = slug
         self.name = name
         self.description = description
@@ -135,11 +140,12 @@ public struct StickerPack: Codable, Hashable, Sendable, Identifiable {
         self.installed = installed
         self.installCount = installCount
         self.items = items
+        self.removable = removable ?? !(isBuiltin || BuiltinStickerPack(slug: slug) != nil)
     }
 
     enum CodingKeys: String, CodingKey {
         case slug, name, description, author, status, itemCount, kinds, coverUrl
-        case installed, installCount, items
+        case installed, installCount, items, removable
         case isBuiltin = "builtin"
     }
 
@@ -157,6 +163,7 @@ public struct StickerPack: Codable, Hashable, Sendable, Identifiable {
         installed = try c.decodeIfPresent(Bool.self, forKey: .installed) ?? false
         installCount = try c.decodeIfPresent(Int.self, forKey: .installCount) ?? 0
         items = try c.decodeIfPresent([StickerPackItem].self, forKey: .items) ?? []
+        removable = try c.decodeIfPresent(Bool.self, forKey: .removable) ?? !(isBuiltin || BuiltinStickerPack(slug: slug) != nil)
     }
 
     /// **Ce qu'iOS sait poser ou envoyer** : les stickers fixes et cinématiques.
