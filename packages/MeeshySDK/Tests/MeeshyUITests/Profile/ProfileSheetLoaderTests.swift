@@ -121,6 +121,30 @@ final class ProfileSheetLoaderTests: XCTestCase {
 
         XCTAssertTrue(sut.isBlockedByTarget)
         XCTAssertFalse(sut.profileLoadFailed)
+        XCTAssertNil(sut.profile, "rien du cache ne reste peint sur la fiche d'un pair qui m'a bloqué")
+    }
+
+    /// Le transport RÉEL ne lève jamais `APIError` : un 404 sort en `MeeshyError.server(statusCode: 404, …)` (#10750).
+    func test_open_404FromTheRealTransportOverACachedProfile_marksBlockedAndDropsTheCache() async {
+        let (sut, _) = makeSUT(
+            cachedProfile: .fresh([makeUser(displayName: "Bob en cache")], age: 10),
+            fetchedProfile: .failure(MeeshyError.server(statusCode: 404, message: "User not found"))
+        )
+
+        await sut.open(userId: "u-bob", username: "bob")
+
+        XCTAssertTrue(sut.isBlockedByTarget)
+        XCTAssertNil(sut.profile)
+        XCTAssertFalse(sut.profileLoadFailed)
+    }
+
+    func test_open_404FromTheRealTransportOnColdCache_isAPlainFailure() async {
+        let (sut, _) = makeSUT(fetchedProfile: .failure(MeeshyError.server(statusCode: 404, message: "User not found")))
+
+        await sut.open(userId: "u-bob", username: "bob")
+
+        XCTAssertFalse(sut.isBlockedByTarget)
+        XCTAssertTrue(sut.profileLoadFailed)
     }
 
     func test_open_404OnColdCache_isAPlainFailureNotABlock() async {
