@@ -252,7 +252,7 @@ struct ReelFeedCard: View, Equatable {
                 address: item.place.address,
                 accentColor: accentHex,
                 senderName: displayAuthor
-            )
+            ).closesForConversationOpening(.place)
         }
         .mediaSaveFlow(mediaSaveCoordinator)
     }
@@ -271,7 +271,7 @@ struct ReelFeedCard: View, Equatable {
         switch kind {
         case .video:
             if let media {
-                ReelFeedVideoSurface(media: media, isActive: isActive, isEngineOwned: $isEngineOwned, isSoundAudible: $isSoundAudible)
+                ReelFeedVideoSurface(media: media, isActive: isActive, playbackTarget: SocialTarget(kind: .reel, id: post.id), isEngineOwned: $isEngineOwned, isSoundAudible: $isSoundAudible)
                     .frame(width: width, height: height)
                     .clipped()
             } else {

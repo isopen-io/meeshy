@@ -224,7 +224,7 @@ struct ConversationEncryptionDetailSheet: View {
         switch mode {
         case .e2ee:
             return String(localized: "conversation.encryption.mode.e2ee.label",
-                          defaultValue: "Bout en bout (Signal)",
+                          defaultValue: "Bout en bout (sur vos appareils)",
                           bundle: .main)
         case .server:
             return String(localized: "conversation.encryption.mode.server.label",

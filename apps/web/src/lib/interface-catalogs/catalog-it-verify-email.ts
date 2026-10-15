@@ -36,6 +36,16 @@ const itVerifyEmail = {
   'verifyEmail.arrival.lead': 'Stiamo preparando le tue conversazioni…',
   'verifyEmail.arrival.status': 'Indirizzo confermato — accesso in corso…',
   'emailSent.codeOrLink': 'Inserisci il codice a 6 cifre ricevuto su {email} oppure apri il link della stessa e-mail.',
+  'signInLink.switchAccount.title': 'Aprire un ALTRO account?',
+  'signInLink.switchAccount.lead': 'Hai effettuato l’accesso come @{current}, ma ciò che hai appena aperto porta a un altro account:',
+  'signInLink.switchAccount.warning': 'Se non hai richiesto tu questo link o codice, annulla: resti connesso e non cambia nulla.',
+  'signInLink.switchAccount.cancel': 'Annulla e resta su @{current}',
+  'signInLink.switchAccount.confirm': 'Apri questo altro account',
+  'signInLink.switchAccount.kept': '@{current} resterà tra i tuoi account su questo dispositivo.',
+  'signInLink.switchAccount.busy': 'Un attimo…',
+  'signInLink.switchAccount.failed': 'Impossibile aprire questo altro account al momento. Resti connesso e il link è stato chiuso.',
+  'signInLink.switchAccount.expired': 'Questo link è scaduto: richiedine uno nuovo. Resti connesso.',
+  'signInLink.switchAccount.leave': 'Torna alla home',
 };
 
 export default itVerifyEmail;

@@ -288,7 +288,9 @@ struct SharePickerView: View {
                     // de liste : le sélecteur de destination montre les MÊMES
                     // conversations, et une même ligne ne peut pas dire deux
                     // textes selon l'écran qui la rend.
-                    if let preview = conv.resolvedLastMessagePreview(
+                    // Un message qui disparaît n'y laisse que son libellé (#9622).
+                    if let preview = OutsidePreview.lastMessage(
+                        of: conv,
                         preferredLanguages: preferredContentLanguages
                     ), !preview.isEmpty {
                         Text("\u{2022}")

@@ -240,6 +240,10 @@ extension CallManager {
                 )
                 guard self.activeCallUUID == uuid else {
                     Logger.calls.info("[CALL_SETUP] ACK arrived after end — discarding (uuid changed)")
+                    // Raccroché AVANT l'accusé : le raccroché n'avait pas d'identifiant à clore, et le
+                    // serveur tient maintenant un appel que personne ne terminera — l'appelé sonnait
+                    // jusqu'au délai du serveur pour un appelant parti.
+                    self.emitCallEndReliably(callId: ack.callId)
                     return
                 }
                 let dynamicServers = ack.iceServers.map { server in

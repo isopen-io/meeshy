@@ -359,4 +359,28 @@ final class AccentVectorTests: XCTestCase {
             )
         }
     }
+
+    // MARK: - #10631 — un accent PERSONNEL se décline comme un accent calculé
+
+    /// `ConversationColorPalette.derived(fromPrimary:)` (la palette d'affichage
+    /// d'un accent choisi dans la gamme) rejoue, sur la primaire de CHAQUE
+    /// vecteur de palette, le secondaire et l'accent attendus — les mêmes
+    /// vecteurs que rejoue `conversationAccentPaletteFromPrimary` côté web
+    /// (`packages/shared/__tests__/conversation-accent-from-primary.test.ts`).
+    func test_derivedFromPrimary_replaysEveryPaletteVector_likeTheWebMirror() {
+        let palettes = Self.loadCases().compactMap { testCase -> (String, String, String)? in
+            guard let primary = testCase.expected.primary,
+                  let secondary = testCase.expected.secondary,
+                  let accent = testCase.expected.accent else { return nil }
+            return (Self.stripHash(primary), Self.stripHash(secondary), Self.stripHash(accent))
+        }
+        XCTAssertEqual(palettes.count, 20, "20 vecteurs de palette attendus — le compte a changé.")
+
+        for (primary, secondary, accent) in palettes {
+            let derived = ConversationColorPalette.derived(fromPrimary: "#" + primary.lowercased())
+            XCTAssertEqual(derived.primary, primary)
+            XCTAssertEqual(derived.secondary, secondary, "secondaire (+30°) de #\(primary)")
+            XCTAssertEqual(derived.accent, accent, "accent (−30°) de #\(primary)")
+        }
+    }
 }

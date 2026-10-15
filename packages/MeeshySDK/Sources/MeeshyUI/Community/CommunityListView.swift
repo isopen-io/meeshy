@@ -57,7 +57,7 @@ public struct CommunityListView: View {
         // `scrollRelay.offset` sans s'y abonner (P1-1).
         ScrollOffsetReader(relay: scrollRelay) { offset in
         CollapsibleHeader(
-            title: String(localized: "community.list.title", defaultValue: "Communautes", bundle: .module),
+            title: String(localized: "community.list.title", defaultValue: "Communautés", bundle: .module),
             scrollOffset: offset,
             onBack: {
                 if let onDismiss {
@@ -81,7 +81,7 @@ public struct CommunityListView: View {
                             )
                         )
                 }
-                .accessibilityLabel(String(localized: "community.list.create.accessibilityLabel", defaultValue: "Creer une communaute", bundle: .module))
+                .accessibilityLabel(String(localized: "community.list.create.accessibilityLabel", defaultValue: "Créer une communauté", bundle: .module))
             }
         )
         }
@@ -131,11 +131,11 @@ public struct CommunityListView: View {
                     )
                 )
 
-            Text(String(localized: "community.list.empty.title", defaultValue: "Aucune communaute", bundle: .module))
+            Text(String(localized: "community.list.empty.title", defaultValue: "Aucune communauté", bundle: .module))
                 .font(.system(size: MeeshyFont.subtitleSize, weight: .bold, design: .rounded))
                 .foregroundColor(theme.textPrimary)
 
-            Text(String(localized: "community.list.empty.subtitle", defaultValue: "Rejoins ou cree une communaute pour collaborer", bundle: .module))
+            Text(String(localized: "community.list.empty.subtitle", defaultValue: "Rejoins ou crée une communauté pour collaborer", bundle: .module))
                 .font(.system(size: MeeshyFont.labelSize, design: .rounded))
                 .foregroundColor(theme.textSecondary)
                 .multilineTextAlignment(.center)
@@ -143,7 +143,7 @@ public struct CommunityListView: View {
             Button { onCreateCommunity?() } label: {
                 HStack(spacing: MeeshySpacing.xsPlus) {
                     Image(systemName: "plus.circle.fill")
-                    Text(String(localized: "community.list.empty.createButton", defaultValue: "Creer une communaute", bundle: .module))
+                    Text(String(localized: "community.list.empty.createButton", defaultValue: "Créer une communauté", bundle: .module))
                 }
                 .font(.system(size: 15, weight: .semibold, design: .rounded))
                 .foregroundColor(.white)
@@ -377,7 +377,10 @@ final class CommunityListViewModel: ObservableObject {
             let mapped = response.data.map { $0.toCommunity() }
 
             if append {
-                communities.append(contentsOf: mapped)
+                // Une page qui chevauche la précédente (liste modifiée entre deux requêtes) ne pose pas deux
+                // lignes du même id dans la grille.
+                let known = Set(communities.map(\.id))
+                communities.append(contentsOf: mapped.filter { !known.contains($0.id) })
             } else {
                 communities = mapped
             }

@@ -51,11 +51,14 @@ export function AdminMemberQuickActions({
   language,
   onAnnounce,
   deps = apiDeps,
+  embedded = false,
 }: {
   readonly membre: AdminUserDetail;
   readonly language: AdminLanguage;
   readonly onAnnounce: (texte: string) => void;
   readonly deps?: AdminDeps;
+  /** Posé DANS la carte d'édition rapide (#10562) : ni carte propre, de GROS boutons. */
+  readonly embedded?: boolean;
 }) {
   const ecriture = useMemberWrite({ userId: membre.id, language, onAnnounce });
   const visibles = ACTIONS.filter((action) => action.visible(membre));
@@ -80,8 +83,8 @@ export function AdminMemberQuickActions({
     <section
       aria-label={translateAdmin(language, 'admin.quick.title')}
       data-admin-quick-actions=""
-      className={`${GLASS_CARD_CLASS} grid gap-3 p-4`}
-      style={GLASS_CARD_EDGE}
+      className={embedded ? 'flex flex-wrap items-center gap-2' : `${GLASS_CARD_CLASS} grid gap-3 p-4`}
+      {...(embedded ? {} : { style: GLASS_CARD_EDGE })}
     >
       {visibles.length === 0 ? null : (
         <div className="flex flex-wrap gap-2">
@@ -89,6 +92,7 @@ export function AdminMemberQuickActions({
             <AdminButton
               key={action.id}
               tone={action.id === 'activate' ? 'primary' : 'secondary'}
+              size={embedded ? 'lg' : 'md'}
               disabled={etat.phase === 'saving'}
               data={{ 'data-admin-quick': action.id }}
               onClick={() => lancer(action)}

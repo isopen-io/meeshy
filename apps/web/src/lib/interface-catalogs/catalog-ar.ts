@@ -26,6 +26,7 @@ import arSignup from './catalog-ar-signup';
 import arGallery from './catalog-ar-gallery';
 import arMessageCard from './catalog-ar-message-card';
 import arMentions from './catalog-ar-mentions';
+import arShellLabels from './catalog-ar-shell-labels';
 import arStudioChrome from './catalog-ar-studio-chrome';
 import arEphemeral from './catalog-ar-ephemeral';
 import arWriteRestriction from './catalog-ar-write-restriction';
@@ -40,6 +41,7 @@ import arPhonePrompt from './catalog-ar-phone-prompt';
 import arUserProfile from './catalog-ar-user-profile';
 import arContentRefused from './catalog-ar-content-refused';
 import arPublicEntry from './catalog-ar-public-entry';
+import arThreadSearch from './catalog-ar-thread-search';
 
 const ar = {
   'announce.messageSent': 'تم إرسال الرسالة',
@@ -306,6 +308,7 @@ const ar = {
   'notFound.title': 'هذا العنوان غير موجود.',
 
   'pending.back': 'العودة إلى المحادثات',
+  'pending.screen': 'الشاشة في الطريق',
 
   'linkPage.home': 'العودة إلى Meeshy',
   'linkPage.retry': 'إعادة المحاولة',
@@ -322,8 +325,6 @@ const ar = {
   'trackingLink.opening': 'جارٍ فتح الرابط…',
   'trackingLink.dead.title': 'هذا الرابط لم يعد متاحًا',
   'trackingLink.dead.body': 'انتهت صلاحيته أو تم تعطيله أو لم يكن موجودًا قط.',
-  'accountDeletion.incomplete.title': 'رابط غير مكتمل',
-  'accountDeletion.incomplete.body': 'لا يحمل هذا الرابط المعلومات اللازمة. سجّل الدخول لطلب حذف حسابك.',
   'accountDeletion.confirm.title': 'تأكيد حذف حسابك',
   'accountDeletion.confirm.body': 'سيتم تعطيل حسابك بعد انتهاء فترة سماح مدتها 30 يومًا. وحتى ذلك الحين، يتيح لك رابط «إلغاء» في البريد الإلكتروني التراجع.',
   'accountDeletion.confirm.action': 'تأكيد الحذف',
@@ -877,6 +878,8 @@ const ar = {
   'story.action.reply': 'رد',
   'story.action.forward': 'إرسال',
   'story.action.repost': 'إعادة نشر',
+  'story.viewer.repost': 'إعادة نشر',
+  'story.viewer.repostOf': 'أُعيد نشره من @{handle}',
   'story.action.views': 'المشاهدات',
   'story.action.share': 'مشاركة',
   'story.action.save': 'حفظ',
@@ -1049,6 +1052,7 @@ const ar = {
   'message.detail.language.original': '{language} (الأصل)',
 
   ...arMentions,
+  ...arShellLabels,
   ...arStudioChrome,
   ...arEphemeral,
   ...arWriteRestriction,
@@ -1066,6 +1070,7 @@ const ar = {
   ...arUserProfile,
   ...arContentRefused,
   ...arPublicEntry,
+  ...arThreadSearch,
 } satisfies InterfaceCatalog;
 
 export default ar;

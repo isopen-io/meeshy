@@ -776,7 +776,7 @@ struct PostDetailView: View {
                         .onPreferenceChange(ScrollOffsetPreferenceKey.self) { headerScrollRelay.offset = $0 }
                         .trackScrollContentOffset { headerScrollRelay.offset = -$0 }
                         // Par `onGeometryChange` : une préférence ne délivrait ici que `.zero` (#6708).
-                        .onGeometryChange(for: CGSize.self) { $0.size } action: { sceneMeasures.viewport = $0 }
+                        .onGeometryChange(for: CGSize.self) { $0.size } action: { sceneMeasures = sceneMeasures.recordingViewport($0, composerIsFocused: composerIsFocused) }
                         .onAppear {
                             if showComments {
                                 DispatchQueue.main.asyncAfter(deadline: .now() + 0.5) {
@@ -892,11 +892,9 @@ struct PostDetailView: View {
             // notifications de ce post comme lues (cache local + serveur), le
             // contenu étant consommé.
             NotificationToastManager.shared.onPostOpened(postId)
-            // Record view when post detail is opened.
-            // - viewPost → vue UNIQUE (viewCount, dédupliquée, sauvegardée non affichée)
-            // - registerDetailOpen → vue TOTALE (postOpenCount, chaque ouverture) + impression,
-            //   comptées IMMÉDIATEMENT, avant tout tracking d'engagement (durée de lecture).
-            try? await PostService.shared.viewPost(postId: postId, duration: nil)
+            // Une ouverture du détail = une impression ET une vue (#10483),
+            // une seule fois par instance : le `.task` se relance au retour
+            // d'un écran poussé sans que ce soit une nouvelle ouverture.
             await viewModel.registerDetailOpen(postId)
             // Reprend le brouillon de commentaire laissé sur ce post (cache-first).
             if composerText.isEmpty, let draft = CommentDraftStore.shared.load(postId: postId) {
@@ -1028,7 +1026,7 @@ struct PostDetailView: View {
                 address: item.place.address,
                 accentColor: accentColor,
                 senderName: displayPost?.author
-            )
+            ).closesForConversationOpening(.place)
         }
         // **Le plein écran du détail passe par son SITE UNIQUE** (#4927,
         // raccordé le 2026-09-06).
@@ -1371,8 +1369,10 @@ struct PostDetailView: View {
                         isTextExpanded.toggle()
                     }
                     if isTextExpanded {
+                        // L'ouverture du détail a déjà compté sa vue
+                        // (`registerDetailOpen`) : déplier le texte n'en est
+                        // pas une seconde (#10483, viewCount = total).
                         EngagementTracker.shared.recordAction(.expandedText, surface: .detail)
-                        Task { try? await PostService.shared.viewPost(postId: postId, duration: nil) }  // viewPost stays duration-less
                     }
                 }
             }

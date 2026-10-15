@@ -165,8 +165,16 @@ export const ADMIN_DESTINATION: FloatingDestination = {
  * l'administration. Le barreau n'est jamais monté puis masqué : un lien caché
  * resterait dans le parcours de tabulation.
  */
-export function menuLadderFor({ canAccessAdmin }: { readonly canAccessAdmin: boolean }): readonly FloatingDestination[] {
-  return canAccessAdmin ? [...MENU_LADDER, ADMIN_DESTINATION] : MENU_LADDER;
+export function menuLadderFor({
+  canAccessAdmin,
+  calls = true,
+}: {
+  readonly canAccessAdmin: boolean;
+  /** Faux dans la coque Android tant que ses appels sont coupés (`calls-availability.ts`). */
+  readonly calls?: boolean;
+}): readonly FloatingDestination[] {
+  const ladder = calls ? MENU_LADDER : MENU_LADDER.filter((entry) => entry !== CALLS_DESTINATION);
+  return canAccessAdmin ? [...ladder, ADMIN_DESTINATION] : ladder;
 }
 
 /** Le bouton de GAUCHE, hors du Flux. */

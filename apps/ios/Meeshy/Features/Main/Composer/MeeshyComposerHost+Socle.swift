@@ -741,14 +741,19 @@ extension MeeshyComposerHost {
     /// déjà `ComposerControlMetrics.visualDiameter` (36 pt) de haut, et le
     /// texte + les deux paddings horizontaux de 14 pt la portent bien au-delà
     /// des 44 pt HIG en largeur.
+    ///
+    /// **Sans un mot, la flèche DEMANDE avant de publier** (#10527) :
+    /// `ComposerMoodPublishGate` reçoit le geste ci-dessus tel quel et ne
+    /// décide que du moment où il part — il n'ouvre aucun second chemin.
     var moodHeaderPublishButton: some View {
         publishCapsule(
-            Button {
-                publishDocument(ComposerPublishChoice(format: selectedFormat, layout: nil))
-            } label: {
+            ComposerMoodPublishGate(
+                text: documentText,
+                isRepublication: intent.origin.repostedPostId != nil,
+                publish: { publishDocument(ComposerPublishChoice(format: selectedFormat, layout: nil)) }
+            ) {
                 publishCapsuleLabel
             }
-            .buttonStyle(.plain)
         )
     }
 

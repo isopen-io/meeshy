@@ -2,6 +2,7 @@ import * as adminEndpoints from '@meeshy/shared/api/endpoints/admin';
 
 import { excerptOf } from '@/lib/admin/interpret/labels';
 import { isRestrictedVisibility } from '@/lib/admin/post-state';
+import { parseCanvasDocument, type CanvasDocument } from '@/lib/canvas/document';
 
 import { asCount, asRecord, asText, type AdminDeps } from './admin';
 import { decodeAdminPersonRef, type AdminPersonRef } from './admin-posts';
@@ -100,6 +101,15 @@ export type AdminPostFiche = {
   readonly contentEditedAt: string | null;
   readonly expiresAt: string | null;
   readonly deletedAt: string | null;
+  /** Le retrait de modération (#10392) — posé, la fiche dit « hors ligne » et propose « Remettre en ligne ». */
+  readonly moderationHiddenAt: string | null;
+  readonly moderationPriorVisibility: string | null;
+  /**
+   * La SCÈNE v3 lue par la loi du lecteur (`parseCanvasDocument`) — jamais le blob brut, qui
+   * ne sort pas de la fiche : l'aperçu la remet au lecteur de scène de l'application (#10393).
+   * `null` sans scène v3.
+   */
+  readonly canvas: CanvasDocument | null;
   readonly createdAt: string | null;
   readonly updatedAt: string | null;
   readonly author: AdminPersonRef | null;
@@ -274,6 +284,9 @@ export function decodeAdminPostFiche(raw: unknown): AdminPostFiche | null {
     contentEditedAt: textOrNull(post.contentEditedAt),
     expiresAt: textOrNull(post.expiresAt),
     deletedAt: textOrNull(post.deletedAt),
+    moderationHiddenAt: textOrNull(post.moderationHiddenAt),
+    moderationPriorVisibility: textOrNull(post.moderationPriorVisibility),
+    canvas: parseCanvasDocument(post.storyEffects),
     createdAt: textOrNull(post.createdAt),
     updatedAt: textOrNull(post.updatedAt),
     author: decodeAdminPersonRef(post.author),

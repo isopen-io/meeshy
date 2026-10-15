@@ -259,7 +259,8 @@ final class CommunityMembersViewModel: ObservableObject {
             )
 
             if append {
-                members.append(contentsOf: response.data)
+                let known = Set(members.map(\.id))
+                members.append(contentsOf: response.data.filter { !known.contains($0.id) })
             } else {
                 members = response.data
             }

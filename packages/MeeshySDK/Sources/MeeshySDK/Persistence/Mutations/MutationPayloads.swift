@@ -21,13 +21,28 @@ import Foundation
 /// R6 — payload du kind `.markStoryViewed` : le « vu » d'une story survit à
 /// un kill/offline et se rejoue au reconnect. `storyId` sert aussi d'anchor
 /// de coalescing (latest-wins par story).
+///
+/// #10483 — la vue porte l'ENTRÉE du lecteur (provenance, origine d'un
+/// listing). Gardées en chaînes BRUTES : une ligne écrite par une version plus
+/// récente, avec une valeur que celle-ci ne connaît pas, se décode quand même
+/// (la valeur inconnue se lit comme absente) ; une ligne antérieure n'a pas les
+/// clés.
 public struct MarkStoryViewedPayload: Codable, Sendable, Equatable {
     public let clientMutationId: String
     public let storyId: String
+    public let provenance: String?
+    public let origin: String?
 
-    public init(clientMutationId: String, storyId: String) {
+    public init(clientMutationId: String, storyId: String, entry: ContentEntry? = nil) {
         self.clientMutationId = clientMutationId
         self.storyId = storyId
+        self.provenance = entry?.provenance.rawValue
+        self.origin = entry?.origin?.rawValue
+    }
+
+    public var entry: ContentEntry? {
+        guard let provenance = provenance.flatMap(ViewProvenance.init(rawValue:)) else { return nil }
+        return ContentEntry(provenance: provenance, origin: origin.flatMap(OpenOrigin.init(rawValue:)))
     }
 }
 

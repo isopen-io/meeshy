@@ -12,6 +12,36 @@
  * Les paramètres sont encodés ICI (encodeURIComponent) : passer la valeur brute.
  */
 
+/** GET /api/v1/packs/avatar-ring */
+export const avatarRing = '/api/v1/packs/avatar-ring';
+
+/** GET /api/v1/packs/avatar-ring/:slug */
+export const avatarRingBySlug = (slug: string): string => `/api/v1/packs/avatar-ring/${encodeURIComponent(slug)}`;
+
+/** PUT · DELETE /api/v1/packs/avatar-ring/:slug/install */
+export const avatarRingBySlugInstall = (slug: string): string => `/api/v1/packs/avatar-ring/${encodeURIComponent(slug)}/install`;
+
+/** POST /api/v1/packs/avatar-ring/:slug/purchase */
+export const avatarRingBySlugPurchase = (slug: string): string => `/api/v1/packs/avatar-ring/${encodeURIComponent(slug)}/purchase`;
+
+/** GET /api/v1/packs/avatar-ring/installed */
+export const avatarRingInstalled = '/api/v1/packs/avatar-ring/installed';
+
+/** GET /api/v1/packs/banner */
+export const banner = '/api/v1/packs/banner';
+
+/** GET /api/v1/packs/banner/:slug */
+export const bannerBySlug = (slug: string): string => `/api/v1/packs/banner/${encodeURIComponent(slug)}`;
+
+/** PUT · DELETE /api/v1/packs/banner/:slug/install */
+export const bannerBySlugInstall = (slug: string): string => `/api/v1/packs/banner/${encodeURIComponent(slug)}/install`;
+
+/** POST /api/v1/packs/banner/:slug/purchase */
+export const bannerBySlugPurchase = (slug: string): string => `/api/v1/packs/banner/${encodeURIComponent(slug)}/purchase`;
+
+/** GET /api/v1/packs/banner/installed */
+export const bannerInstalled = '/api/v1/packs/banner/installed';
+
 /** GET /api/v1/packs/glory-frame */
 export const gloryFrame = '/api/v1/packs/glory-frame';
 
@@ -23,3 +53,21 @@ export const gloryFrameBySlugInstall = (slug: string): string => `/api/v1/packs/
 
 /** GET /api/v1/packs/glory-frame/installed */
 export const gloryFrameInstalled = '/api/v1/packs/glory-frame/installed';
+
+/** GET /api/v1/packs/shop */
+export const shop = '/api/v1/packs/shop';
+
+/** GET /api/v1/packs/wallpaper */
+export const wallpaper = '/api/v1/packs/wallpaper';
+
+/** GET /api/v1/packs/wallpaper/:slug */
+export const wallpaperBySlug = (slug: string): string => `/api/v1/packs/wallpaper/${encodeURIComponent(slug)}`;
+
+/** PUT · DELETE /api/v1/packs/wallpaper/:slug/install */
+export const wallpaperBySlugInstall = (slug: string): string => `/api/v1/packs/wallpaper/${encodeURIComponent(slug)}/install`;
+
+/** POST /api/v1/packs/wallpaper/:slug/purchase */
+export const wallpaperBySlugPurchase = (slug: string): string => `/api/v1/packs/wallpaper/${encodeURIComponent(slug)}/purchase`;
+
+/** GET /api/v1/packs/wallpaper/installed */
+export const wallpaperInstalled = '/api/v1/packs/wallpaper/installed';

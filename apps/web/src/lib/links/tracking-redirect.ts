@@ -95,9 +95,12 @@ const CONTENT_ROUTE: Readonly<Record<SharedContentType, string>> = { POST: 'post
  * (`GET /tracking-links/:token/resolve` → `sharer`), sans qu'aucune identité
  * ne voyage dans l'adresse. Les quatre chemins sont ceux que la passerelle
  * grave (`PostService.shareWithTrackingLink`) et que la table des routes sert.
+ * `from=tracking_link` (#10483) dit à l'écran ouvert que le lecteur est passé
+ * par le lien de SUIVI — `?via=` seul, recopié d'une barre d'adresse, reste
+ * un lien de partage (`viewProvenanceOf`, `lib/view/content-open.ts`).
  */
 export function sharedContentPath(content: SharedContent, via: string): string {
-  return `/${CONTENT_ROUTE[content.type]}/${encodeURIComponent(content.id)}?via=${encodeURIComponent(via)}`;
+  return `/${CONTENT_ROUTE[content.type]}/${encodeURIComponent(content.id)}?via=${encodeURIComponent(via)}&from=tracking_link`;
 }
 
 export function decideTrackingRedirect(input: {

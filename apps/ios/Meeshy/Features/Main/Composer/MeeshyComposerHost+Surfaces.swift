@@ -545,10 +545,10 @@ extension MeeshyComposerHost {
             // **Les contrôles de l'outil du FOND prennent la même place** (#8847).
             // **Les options d'un objet en ÉDITION EN PLACE ne passent plus par
             // le bas** (#9138) : elles s'ouvrent à droite, depuis le haut
-            // (`inlinePanel`), et la scène ne remonte plus pour elles. Le bas
-            // ne sert plus que le dessin.
+            // (`inlinePanel`), et la scène ne remonte plus pour elles. Celles
+            // du DESSIN non plus (#9145) : le bas ne sert plus que le texte
+            // saisi hors édition en place.
             toolOptions: ComposerFirstView.lowZoneShowsToolOptions(
-                drawing: viewModel.isDrawingActive,
                 textEditing: sceneTextEditing && activeInlineEdit == nil)
                 ? AnyView(MeeshyToolOptionsPanel(viewModel: viewModel)) : nil,
             editsInline: activeInlineEdit != nil,

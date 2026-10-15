@@ -79,3 +79,26 @@ describe('rowMenuItems — le menu parle la langue d’interface du lecteur (#81
     ).toEqual(['Unpin', 'Sound', 'Unread', 'Unarchive']);
   });
 });
+
+describe('rowMenuItems — supprimer depuis la ligne (#7285)', () => {
+  const flags = { isPinned: false, isMuted: false, isArchived: false };
+
+  test('un compte voit « Supprimer » en DERNIER, marqué destructif, comme le menu de la liste iOS', () => {
+    const items = rowMenuItems({ flags, unread: false, language: 'fr', canDelete: true });
+    expect(items.map((i) => i.id)).toEqual(['pin', 'mute', 'read', 'archive', 'delete']);
+    expect(items.at(-1)).toEqual({ id: 'delete', label: 'Supprimer', glyph: 'trash', destructive: true });
+    expect(items.filter((i) => i.destructive === true).map((i) => i.id)).toEqual(['delete']);
+  });
+
+  test('sans compte, aucune suppression n’est offerte', () => {
+    expect(rowMenuItems({ flags, unread: false, language: 'fr' }).some((i) => i.id === 'delete')).toBe(false);
+  });
+
+  test('« Supprimer » se dit dans chaque langue avec le mot d’iOS (common.delete)', async () => {
+    const expected = { en: 'Delete', es: 'Eliminar', pt: 'Excluir', de: 'Löschen', it: 'Elimina', ar: 'حذف' } as const;
+    for (const [language, label] of Object.entries(expected) as [keyof typeof expected, string][]) {
+      await loadInterfaceCatalog(language);
+      expect({ language, label: rowMenuItems({ flags, unread: false, language, canDelete: true }).at(-1)?.label }).toEqual({ language, label });
+    }
+  });
+});

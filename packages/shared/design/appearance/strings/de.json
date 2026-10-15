@@ -1,0 +1,76 @@
+{
+  "packs": {
+    "essentiels": {
+      "name": "Essentials",
+      "description": "Die Grundmuster und Verläufe."
+    },
+    "heritages": {
+      "name": "Erbe",
+      "description": "Muster aus aller Welt."
+    },
+    "nature-et-ciel": {
+      "name": "Natur und Himmel",
+      "description": "Karten, Blätter, Gitter und Sterne."
+    },
+    "illustrations": {
+      "name": "Illustrationen",
+      "description": "Landschaften in Linien gezeichnet."
+    },
+    "bannieres-essentielles": {
+      "name": "Basis-Banner",
+      "description": "Sechs Banner für dein Profil."
+    },
+    "contours-essentiels": {
+      "name": "Basis-Rahmen",
+      "description": "Sechs Rahmen für deinen Avatar."
+    }
+  },
+  "designs": {
+    "monogramme": "Monogramm",
+    "chevrons": "Chevrons",
+    "aurore": "Polarlicht",
+    "maille": "Mesh",
+    "art-deco": "Art déco",
+    "seigaiha": "Seigaiha",
+    "zellige": "Zellige",
+    "bogolan": "Bogolan",
+    "topographie": "Topografie",
+    "feuillage": "Blattwerk",
+    "treillis": "Gitter",
+    "constellation": "Sternbild",
+    "horizon": "Horizont",
+    "baobab": "Baobab"
+  },
+  "rings": {
+    "filet": "Haarlinie",
+    "double-filet": "Doppelte Haarlinie",
+    "perle": "Perlen",
+    "aurore": "Polarlicht",
+    "deco": "Deco",
+    "laurier": "Lorbeer"
+  },
+  "gamut": {
+    "indigo": "Meeshy-Indigo",
+    "bleu-nuit": "Nachtblau",
+    "azur": "Azur",
+    "lagon": "Lagune",
+    "emeraude": "Smaragd",
+    "olive": "Oliv",
+    "moutarde": "Senf",
+    "sable": "Sand",
+    "terracotta": "Terrakotta",
+    "corail": "Koralle",
+    "rose-poudre": "Altrosa",
+    "framboise": "Himbeere",
+    "prune": "Pflaume",
+    "lavande": "Lavendel",
+    "ardoise": "Schiefer",
+    "graphite": "Graphit"
+  },
+  "modes": {
+    "signature": "Signatur",
+    "solid": "Einfarbig",
+    "photo": "Foto der Unterhaltung"
+  },
+  "avatarUsage": "Profilrahmen"
+}

@@ -303,8 +303,8 @@ final class MessageListViewController: UIViewController {
     /// Open the detail sheet on the language / translation tab.
     var onShowTranslationDetail: ((String) -> Void)?
     var longMessageExpansionState = LongMessageExpansionState() // #8147 / #8157
-    /// Lot 3.2 — carte lieu de la rangée plate : plein écran (ConversationView).
-    var onFocalTapLocation: ((SharedPlace) -> Void)?
+    /// Lot 3.2 — carte lieu de la rangée plate : plein écran (ConversationView), avec son message (#9621).
+    var onFocalTapLocation: ((SharedPlace, String) -> Void)?
     /// Lot 3.2 — partage d'un fichier téléchargé depuis la rangée plate.
     var onFocalShareFile: ((URL) -> Void)?
     /// Tap on a media attachment — typically presents a fullscreen viewer.
@@ -1546,8 +1546,8 @@ final class MessageListViewController: UIViewController {
                         // évaluation de son body (audit fluidité 2026-08-21).
                         preferredAudioLangCode: preferredAudioLang,
                         showAvatar: !direct,
-                        senderIsHere: senderIsHere,
-                        senderStoryRingState: senderRingState,
+                        senderIsHere: senderIsHere, senderMoodEmoji: statuses.statusForUser(userId: senderId)?.moodEmoji,
+                        senderStoryRingState: senderRingState, onSenderMoodTap: statuses.moodTapHandler(for: senderId),
                         onViewStory: (senderRingState != .none)
                             ? { viewSenderStoryHandler?(senderId) }
                             : nil,
@@ -1734,7 +1734,7 @@ final class MessageListViewController: UIViewController {
                     focusTimestamp: self.focalDetailedLocalId == localId ? self.focalFocusTimestamp(for: message.createdAt) : nil,
                     availableWidth: self.rowAvailableWidth
                 )
-                var focalActions = FocalRowActions()
+                var focalActions = FocalRowActions(onMoodTap: statuses.moodTapHandler(for: senderId))
                 focalActions.onToggleReaction = { emoji in toggleReactionHandler?(messageId, emoji) }
                 focalActions.onAddReaction = addReactionHandler
                 focalActions.onOpenReactPicker = openReactPickerHandler
@@ -1751,7 +1751,7 @@ final class MessageListViewController: UIViewController {
                 focalActions.onRequestTranslation = requestTranslationHandler
                 focalActions.onShowTranslationDetail = showTranslationHandler
                 focalActions.onToggleExpanded = { [weak self] in self?.toggleLongMessageExpansion(localId) }
-                focalActions.onTapLocation = tapLocationHandler
+                focalActions.onTapLocation = { place in tapLocationHandler?(place, messageId) }
                 focalActions.onShareFile = shareFileHandler
                 focalActions.onSetActiveDisplayLanguage = { [weak self] msgId, code in
                     self?.conversationViewModel?.setBubbleActiveDisplayLanguage(code, for: msgId)

@@ -1,4 +1,4 @@
-import * as packAssetsEndpoints from '@meeshy/shared/api/endpoints/pack-assets';
+import { packAssetUrl } from './pack-asset-url';
 import type { PackAssetRef } from '@meeshy/shared/types/content-pack';
 
 /**
@@ -40,7 +40,7 @@ const CONTENT_TYPES: Readonly<Record<string, string>> = {
 
 const contentTypeOf = (src: string): string => CONTENT_TYPES[src.slice(src.lastIndexOf('.') + 1)] ?? 'application/octet-stream';
 
-export const packAssetUrl = (src: string, origin: string): string => new URL(packAssetsEndpoints.byFile(src), origin).href;
+export { packAssetUrl };
 
 export async function sha256Hex(bytes: ArrayBuffer): Promise<string> {
   const digest = await crypto.subtle.digest('SHA-256', bytes);

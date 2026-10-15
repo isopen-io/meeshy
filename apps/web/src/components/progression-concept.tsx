@@ -229,9 +229,10 @@ function Head({ emblem, name, value }: { readonly emblem: ReactNode; readonly na
 }
 
 /**
- * LA CARTE D'UN CONCEPT sur la première page — trois étages, et la carte
+ * LA CARTE D'UN CONCEPT sur la première page — quatre étages, et la carte
  * entière ouvre la fiche : la tête ; les données importantes en chips (et la
- * jauge fine quand il y a une étape suivante) ; à quoi ça sert et comment ça
+ * jauge fine quand il y a une étape suivante) ; la phrase d'état, qui dit
+ * l'étape où l'on est et ce que la valeur vise (#10540) ; à quoi ça sert et comment ça
  * marche, deux lignes au plus chacune — sans libellé visible, la place manque à
  * 320 px : la première phrase est à l'encre, la seconde en retrait, et un
  * lecteur d'écran entend « à quoi ça sert » puis « comment ça marche ». Aucun
@@ -251,6 +252,11 @@ export function ConceptCard({ concept, view }: { readonly concept: ConceptView; 
       <Head emblem={<ConceptEmblem concept={concept.key} view={view} size={36} />} name={concept.name} value={concept.value} />
       <ConceptChips chips={concept.chips} urgent={concept.urgent} />
       {concept.gauge === null ? null : <ConceptGauge gaugeKey={`card:${concept.key}`} progress={concept.gauge} label={`${concept.name} — ${concept.value}`} />}
+      {concept.state === null ? null : (
+        <span data-concept-state="" className="text-caption font-semibold" style={{ color: GAME_INK }}>
+          {concept.state}
+        </span>
+      )}
       <span className="sr-only">{gameText('game.concept.why_label')} :</span>
       <span data-concept-why="" className="line-clamp-2 text-caption" style={{ color: GAME_INK }}>
         {concept.why}

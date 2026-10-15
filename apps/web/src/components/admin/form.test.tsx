@@ -64,6 +64,22 @@ describe('motiveState — la seule copie de la règle du motif', () => {
     ['rôle, vide', ROLE, '   ', false, { shown: true, tooShort: false, ready: true, sent: null }],
   ] as const;
 
+  const PROPOSE = 'Contrôle aléatoire, test de fonctionnalité et suivi client';
+
+  test('ADMIN (motif proposé), vide : part le motif proposé, rien ne bloque (#10562)', () => {
+    const state = motiveState({ ...CONVERSATION, text: '  ', sovereign: false, fallback: PROPOSE });
+    expect(state).toMatchObject({ shown: true, tooShort: false, ready: true, sent: PROPOSE, defaulted: true });
+  });
+
+  test('ADMIN (motif proposé), écrit : c’est le sien qui part, sous la règle ordinaire', () => {
+    expect(motiveState({ ...CONVERSATION, text: 'court', sovereign: false, fallback: PROPOSE })).toMatchObject({ tooShort: true, ready: false, defaulted: false });
+    expect(motiveState({ ...CONVERSATION, text: ' abus répétés ', sovereign: false, fallback: PROPOSE })).toMatchObject({ ready: true, sent: 'abus répétés', defaulted: false });
+  });
+
+  test('souverain « masqué » : le motif proposé ne fait pas réapparaître le champ', () => {
+    expect(motiveState({ ...PASSWORD, text: '', sovereign: true, fallback: PROPOSE })).toMatchObject({ shown: false, sent: null });
+  });
+
   for (const [name, regime, text, sovereign, expected] of CASES) {
     test(name, () => {
       const state = motiveState({ ...regime, text, sovereign });
@@ -311,6 +327,28 @@ describe('AdminReasonField + AdminFormActions — un motif requis trop court blo
     expect((host.querySelector('[data-admin-test-submit]') as HTMLButtonElement).disabled).toBe(false);
   });
 
+  test('motif proposé (ADMIN) : en filigrane, libellé « facultatif », et un champ vide envoie le motif proposé (#10562)', async () => {
+    function Proposed({ onSubmit }: { readonly onSubmit: (sent: string | null) => void }) {
+      const [text, setText] = useState('');
+      const fallback = 'Contrôle aléatoire, test de fonctionnalité et suivi client';
+      const state = motiveState({ text, minLength: 3, required: true, sovereign: false, whenSovereign: 'optional', fallback });
+      return (
+        <>
+          <AdminReasonField id="admin-test-proposed" language="fr" label="Motif du bannissement" value={text} minLength={3} required sovereign={false} whenSovereign="optional" fallback={fallback} onValue={setText} />
+          <AdminFormActions language="fr" primary={{ label: 'Bannir', disabled: !state.ready, onClick: () => onSubmit(state.sent), data: { 'data-admin-test-submit': '' } }} onCancel={() => undefined} />
+        </>
+      );
+    }
+    const sent: (string | null)[] = [];
+    const host = await mount(<Proposed onSubmit={(motif) => sent.push(motif)} />);
+    const input = host.querySelector('#admin-test-proposed') as HTMLInputElement;
+    expect(host.querySelector('label[for="admin-test-proposed"]')?.textContent).toBe('Motif (facultatif)');
+    expect(input.getAttribute('placeholder')).toBe('Contrôle aléatoire, test de fonctionnalité et suivi client');
+    expect(host.querySelector('[data-admin-motive-default]')?.textContent).toBe('Laissé vide, le motif proposé part tel quel.');
+    await click(host.querySelector('[data-admin-test-submit]') as HTMLButtonElement);
+    expect(sent).toEqual(['Contrôle aléatoire, test de fonctionnalité et suivi client']);
+  });
+
   test('« masqué pour le souverain » : rien n’est rendu', async () => {
     const host = await mount(
       <AdminReasonField id="admin-test-hidden" language="fr" label="Motif" value="" minLength={10} required={false} sovereign whenSovereign="hide" onValue={() => undefined} />,
@@ -357,7 +395,8 @@ describe('AdminFormActions — un geste à la fois, jamais hors ligne', () => {
     await click(host.querySelector('[data-admin-test-remove]'));
     await click(cancel);
     expect([removed, cancelled]).toEqual([1, 1]);
-    for (const button of host.querySelectorAll('button')) expect((button as HTMLButtonElement).style.minHeight).toBe('44px');
+    /* Les gestes d’un formulaire sont de GROS boutons (#10562). */
+    for (const button of host.querySelectorAll('button')) expect((button as HTMLButtonElement).style.minHeight).toBe('52px');
   });
 
   test('armer un secondaire qui change de libellé GARDE le focus sur le même bouton (#9463)', async () => {

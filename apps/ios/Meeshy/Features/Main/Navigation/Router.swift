@@ -236,8 +236,18 @@ final class Router: ObservableObject {
     /// portes, qu'une porte ajoutée demain aurait oublié de garder.
     let refusesProfiles: Bool
 
-    init(refusesProfiles: Bool = false) {
+    /// Ce qui est présenté par-dessus la navigation (#10539).
+    private let surfaces: PresentedSurfaceRegistryProviding
+
+    /// La fenêtre de ce routeur (#10543) : la racine la pose dans
+    /// l'environnement, et une ouverture ne referme que les surfaces qui s'y
+    /// sont présentées — pas celles de l'autre fenêtre d'un iPad.
+    let surfaceScope = PresentedSurfaceScope()
+
+    init(refusesProfiles: Bool = false,
+         surfaces: PresentedSurfaceRegistryProviding = PresentedSurfaceRegistry.shared) {
         self.refusesProfiles = refusesProfiles
+        self.surfaces = surfaces
     }
 
     /// La fiche d'un participant SANS COMPTE, à ouvrir.
@@ -307,7 +317,26 @@ final class Router: ObservableObject {
         !path.isEmpty && !isHubRoute
     }
 
+    /// Une conversation poussée — liste, pastille de synchronisation,
+    /// recherche, communauté — passe par le site qui libère l'écran (#10543) :
+    /// rien de présenté, elle s'empile sur-le-champ, comme avant.
     func push(_ route: Route) {
+        guard case .conversation = route else {
+            place(route)
+            return
+        }
+        clearPresentedSurfaces { [weak self] beneathClosingSurface in
+            guard beneathClosingSurface else {
+                self?.place(route)
+                return
+            }
+            var transaction = Transaction()
+            transaction.disablesAnimations = true
+            withTransaction(transaction) { self?.place(route) }
+        }
+    }
+
+    private func place(_ route: Route) {
         if currentRoute == route { return }
 
         // iPad intercept: if the callback handles the route, skip NavigationStack push
@@ -436,7 +465,37 @@ final class Router: ObservableObject {
         return pendingHighlightConversationId.map { $0 == conversationId } ?? true
     }
 
+    /// **LE site qui libère l'écran devant une conversation** (#10539) — et
+    /// devant le post, le réel ou la story qu'une notification ouvre (#10543).
+    ///
+    /// Story, réel, galerie, plein écran d'une conversation, feuille, fiche de
+    /// profil : tout ce qui s'est déclaré dans CETTE fenêtre se referme, puis
+    /// `open` pose la cible. Aucun appelant ne referme lui-même — toast, push,
+    /// lien profond, réponse et `push(.conversation)` passent tous ici.
+    /// `beneathClosingSurface` : une surface part, la cible se pose dessous
+    /// SANS animation et c'est la fermeture qui la révèle — une seule
+    /// transition à l'écran, jamais deux qui se croisent.
+    ///
+    /// L'appel, lui, vit dans sa propre fenêtre et ne se déclare pas : il reste.
+    func clearPresentedSurfaces(thenOpen open: @escaping @MainActor (_ beneathClosingSurface: Bool) -> Void) {
+        surfaces.clearForConversation(in: surfaceScope) { [weak self] closedSurfaces in
+            guard let self else { return }
+            let closesProfile = deepLinkProfileUser != nil || participantProfileTarget != nil
+            if deepLinkProfileUser != nil { deepLinkProfileUser = nil }
+            if participantProfileTarget != nil { participantProfileTarget = nil }
+            open(closedSurfaces || closesProfile)
+        }
+    }
+
     func navigateToConversation(_ conversation: Conversation, highlightMessageId: String? = nil) {
+        clearPresentedSurfaces { [weak self] beneathClosingSurface in
+            self?.showConversation(conversation, highlightMessageId: highlightMessageId,
+                                   beneathClosingSurface: beneathClosingSurface)
+        }
+    }
+
+    private func showConversation(_ conversation: Conversation, highlightMessageId: String?,
+                                  beneathClosingSurface: Bool) {
         pendingHighlightMessageId = highlightMessageId
         pendingHighlightConversationId = highlightMessageId == nil ? nil : conversation.id
 
@@ -455,7 +514,13 @@ final class Router: ObservableObject {
         // mutations rapprochees → "NavigationRequestObserver tried to update
         // multiple times per frame". `NavigationStack(path:)` recoit
         // desormais une transition atomique.
-        path = [.conversation(conversation)]
+        guard beneathClosingSurface else {
+            path = [.conversation(conversation)]
+            return
+        }
+        var transaction = Transaction()
+        transaction.disablesAnimations = true
+        withTransaction(transaction) { path = [.conversation(conversation)] }
     }
 
     /// Replaces the whole nav stack with a single route. On iPhone this is ONE

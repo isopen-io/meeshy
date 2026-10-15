@@ -1,4 +1,5 @@
 import XCTest
+import MeeshySDK
 @testable import Meeshy
 
 // MARK: - StoryTrayWiringGuardTests
@@ -123,5 +124,64 @@ final class StoryTrayWiringGuardTests: XCTestCase {
             actions.contains("viewModel.pendingDraftId = nil"),
             "Le dismiss du cover doit consommer pendingDraftId — sinon le PROCHAIN « + » rouvrirait le dernier brouillon repris"
         )
+    }
+
+    // MARK: - Une cellule d'anneau ne se recalcule que si ce qu'elle affiche change (#10574)
+
+    private func ringGroup(storyIds: [String] = ["s1"], viewed: Bool = false, username: String = "alice") -> StoryGroup {
+        StoryGroup(
+            id: "u1",
+            username: username,
+            avatarColor: "FF2E63",
+            avatarURL: nil,
+            stories: storyIds.map {
+                StoryItem(
+                    id: $0, content: "hello", media: [], storyEffects: nil,
+                    createdAt: Date(timeIntervalSince1970: 0),
+                    expiresAt: Date(timeIntervalSince1970: 72_000),
+                    isViewed: viewed, updatedAt: nil
+                )
+            }
+        )
+    }
+
+    private func ringInputs(
+        group: StoryGroup? = nil,
+        coverURL: String? = "https://x/cover.jpg",
+        moodEmoji: String? = nil,
+        presence: PresenceState = .online,
+        theme: ThemeMode = .dark
+    ) -> StoryRingCellRenderInputs {
+        StoryRingCellRenderInputs(
+            group: group ?? ringGroup(), coverURL: coverURL, avatarSize: 64, showsUsername: true,
+            moodEmoji: moodEmoji, hasMoodTap: true, presence: presence, menuLabels: [], theme: theme,
+            now: Date(timeIntervalSince1970: 10)
+        )
+    }
+
+    func test_storyRingCell_sameDisplayedData_isEqual() {
+        XCTAssertEqual(ringInputs(), ringInputs())
+    }
+
+    func test_storyRingCell_eachDisplayedChange_isDistinguished() {
+        let base = ringInputs()
+
+        XCTAssertNotEqual(base, ringInputs(group: ringGroup(storyIds: ["s1", "s2"])), "une story de plus")
+        XCTAssertNotEqual(base, ringInputs(group: ringGroup(viewed: true)), "anneau lu")
+        XCTAssertNotEqual(base, ringInputs(group: ringGroup(username: "bob")), "nom")
+        XCTAssertNotEqual(base, ringInputs(coverURL: "https://x/other.jpg"), "couverture")
+        XCTAssertNotEqual(base, ringInputs(moodEmoji: "🔥"), "humeur")
+        XCTAssertNotEqual(base, ringInputs(presence: .away), "présence")
+        XCTAssertNotEqual(base, ringInputs(theme: .light), "thème")
+    }
+
+    func test_storyRingCell_isMountedEquatableAtEverySite() throws {
+        let source = AppSourceGuard.stripComments(try AppSourceGuard.unit("Meeshy/Features/Main/Views/StoryTrayView.swift"))
+        let sites = source.components(separatedBy: "StoryRingCell(").dropFirst()
+
+        XCTAssertEqual(sites.count, 3)
+        for site in sites {
+            XCTAssertTrue(site.prefix(1_400).contains(".equatable()"), "un site monte la cellule sans sa garde")
+        }
     }
 }

@@ -22,7 +22,7 @@ import { adminUserDetailQueryKey } from '@/lib/api/admin-user-detail';
 import { apiDeps } from '@/lib/api/deps';
 import { translateAdmin, type AdminLanguage } from '@/lib/i18n-admin-catalog';
 import { useOnline } from '@/lib/net/online';
-import { useAdminReach } from '@/lib/admin/use-admin-reach';
+import { useAdminMotive } from '@/lib/admin/use-admin-motive';
 
 /**
  * **BANNIR, LEVER, CONSULTER** (#6819) — la feuille, ouverte depuis la fiche.
@@ -116,8 +116,8 @@ export function AdminUserBanSheet({
   const premierJour = tomorrowOf(now());
   /* Le rang souverain bannit sans motif (spec 2026-10-04 § 4) : le champ reste, FACULTATIF —
      un motif commencé se valide encore (trois caractères), un champ vide part sans `reason`. */
-  const souverain = useAdminReach().isSovereign;
-  const motive = motiveState({ text: motif, minLength: MOTIF_MINIMUM, required: true, sovereign: souverain, whenSovereign: 'optional' });
+  const { sovereign: souverain, fallback: motifPropose } = useAdminMotive(language);
+  const motive = motiveState({ text: motif, minLength: MOTIF_MINIMUM, required: true, sovereign: souverain, whenSovereign: 'optional', fallback: motifPropose });
 
   /**
    * Les deux clés sont EN DUR, et ce n'est pas une simplification : passées en
@@ -174,6 +174,7 @@ export function AdminUserBanSheet({
         required
         sovereign={souverain}
         whenSovereign="optional"
+        fallback={motifPropose}
         data={{ 'data-admin-ban-reason': '' }}
       />
 

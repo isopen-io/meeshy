@@ -185,6 +185,11 @@ struct ComposerCaptureChrome: View {
         session.gestureContext(allowsPhoto: allowsPhoto, allowsVideo: allowsVideo)
     }
 
+    /// Sous un cadre, le chrome blanc se pose sur un voile qui lui garde 4,5:1 (#9777).
+    private var chromeVeil: Double {
+        ComposerCaptureChromeLegibility.veilOpacity(framed: session.look.frame != ComposerPhotoFrame.none)
+    }
+
     /// « Terminé » rend : seule la croix répond encore.
     private var finishing: Bool {
         session.phase.isEditing && session.isRenderingLook
@@ -284,10 +289,13 @@ struct ComposerCaptureChrome: View {
                     onDone: { session.finishEditing() },
                     saveState: session.takeSaveState,
                     onSave: { session.saveTakeToPhotos() })
+                .background(ComposerCaptureChromeVeil(edge: .top, opacity: chromeVeil))
                 Spacer(minLength: 0)
                 ComposerCaptureBottomRow(session: session, context: context)
                     .allowsHitTesting(!finishing)
+                    .background(ComposerCaptureChromeVeil(edge: .bottom, opacity: chromeVeil))
             }
+            .animation(reduceMotion ? nil : .easeOut(duration: 0.2), value: chromeVeil)
             if session.isRenderingLook {
                 ProgressView()
                     .progressViewStyle(.circular)

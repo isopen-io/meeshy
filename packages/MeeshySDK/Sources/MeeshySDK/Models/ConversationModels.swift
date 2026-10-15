@@ -137,6 +137,9 @@ public struct APIConversationPreferences: Codable, Sendable {
     public var reaction: String?
     public var customName: String?
     public var mentionsOnly: Bool?
+    /// Le fond et l'accent personnels (#10631) — additif : un ancien serveur
+    /// ne le sert pas, un nouveau le sert au seul lecteur.
+    public var appearance: ConversationAppearance?
     /// Monotonic version for optimistic-concurrency resolution
     /// (`incoming.version <= local -> drop`). Populated by the gateway
     /// in Phase 1 of the unification refactor. Optional for backward
@@ -154,7 +157,8 @@ public struct APIConversationPreferences: Codable, Sendable {
         reaction: String? = nil,
         customName: String? = nil,
         mentionsOnly: Bool? = nil,
-        version: Int? = nil
+        version: Int? = nil,
+        appearance: ConversationAppearance? = nil
     ) {
         self.isPinned = isPinned
         self.isMuted = isMuted
@@ -166,6 +170,7 @@ public struct APIConversationPreferences: Codable, Sendable {
         self.customName = customName
         self.mentionsOnly = mentionsOnly
         self.version = version
+        self.appearance = appearance
     }
 }
 
@@ -532,6 +537,7 @@ extension APIConversation {
         // .reconcileUnread`, qui en reste l'UNIQUE loi de fusion.
         conversation.userState.lastReadMessageId = lastReadMessageId
         conversation.userState.lastReadMessageCreatedAt = lastReadMessageCreatedAt
+        conversation.userState.appearance = prefs?.appearance
 
         return conversation
     }

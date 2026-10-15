@@ -126,6 +126,26 @@ describe('holdReelThread — une relecture ne déplace pas le réel regardé', (
     expect(holdReelThread({ heldIds: ['a', 'b'], activeId: 'zz', composed })).toBe(composed);
   });
 
+  test('une graine lue APRÈS la page de réels prend la tête : rien n’était regardé sous le squelette', () => {
+    const composed = [reel('graine'), reel('a'), reel('b')];
+    expect(holdReelThread({ heldIds: ['a', 'b'], activeId: 'a', composed, entryId: 'graine' })).toBe(composed);
+  });
+
+  test('une graine déjà tenue ne lève pas la tenue : le réel regardé garde sa place', () => {
+    const held = holdReelThread({
+      heldIds: ['graine', 'a', 'b'],
+      activeId: 'a',
+      composed: [reel('b'), reel('graine'), reel('a')],
+      entryId: 'graine',
+    });
+    expect(ids(held)).toEqual(['graine', 'a', 'b']);
+  });
+
+  test('une graine que la composition ne porte pas (refusée, supprimée) ne lève pas la tenue', () => {
+    const held = holdReelThread({ heldIds: ['a', 'b'], activeId: 'b', composed: [reel('b'), reel('a')], entryId: 'graine' });
+    expect(ids(held)).toEqual(['a', 'b']);
+  });
+
   test('un ordre inchangé rend la composition elle-même', () => {
     const composed = [reel('a'), reel('b'), reel('c')];
     expect(holdReelThread({ heldIds: ['a', 'b'], activeId: 'b', composed })).toBe(composed);

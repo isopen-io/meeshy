@@ -15,10 +15,11 @@ import {
 import { StoryRailSelfTile } from '@/components/story-rail-self-tile';
 import { GLYPH_SIZE } from '@/components/ui-chrome';
 import { translate } from '@/lib/i18n-catalog';
-import type { InterfaceLanguage } from '@/lib/interface-language';
+import { currentInterfaceLanguage, type InterfaceLanguage } from '@/lib/interface-language';
 import { initialsOf, participantAvatarOf } from '@/lib/view/conversation';
 import { railGroupsWithoutSelf, type StoryRailSelfEntry } from '@/lib/view/story-rail-self';
 import { storyAuthorLabel, type StoryTrayGroup } from '@/lib/view/story-tray';
+import { openLinkProps, useImpressionRef, useMergedRefs } from '@/lib/view/reading-telemetry';
 import { Link } from '@/routes/route-table';
 
 /**
@@ -136,6 +137,12 @@ function StoryTile({
   const cellule = railCellWidth(size, showsLabel);
   const hitPad = railHitPad(cellule);
   const trait = railStroke(size, group.hasUnseen);
+  /* LA TUILE À L'ÉCRAN EST VUE (#10483) — la story d'entrée ET l'humeur
+     qu'elle porte, chacune une impression par apparition (50 % pendant une
+     seconde), jamais à la réception du corpus. Ma tuile ne compte rien. */
+  const storyRef = useImpressionRef(group.isMine ? undefined : group.entryStoryId, 'story', 'story_rail');
+  const moodRef = useImpressionRef(group.isMine || !group.moodEmoji ? undefined : group.moodPostId, 'status', 'story_rail');
+  const impressionRef = useMergedRefs(storyRef, moodRef);
   const authorAriaLabel =
     combien > 1
       ? `${label}, ${combien} stories${group.hasUnseen ? ', non vues' : ''}`
@@ -249,6 +256,7 @@ function StoryTile({
        mesurable ne peut être gardé par rien, et la cote redérive en silence
        (leçon 575). */
     <li
+      ref={impressionRef}
       data-story-tile={size}
       data-rail-tile={size}
       className="flex shrink-0 flex-col items-center gap-1"
@@ -265,7 +273,7 @@ function StoryTile({
           {body}
         </Link>
       ) : (
-        <Link to="story" params={{ post: group.entryStoryId }} aria-label={authorAriaLabel} {...linkProps}>
+        <Link to="story" params={{ post: group.entryStoryId }} {...openLinkProps(group.entryStoryId, 'story_rail')} aria-label={authorAriaLabel} {...linkProps}>
           {body}
         </Link>
       )}
@@ -303,6 +311,7 @@ function StoryTile({
 export const RAIL_ACTIONS_WIDTH = CHROME_ACTION_HIT * 2;
 
 function RailActions() {
+  const language = currentInterfaceLanguage();
   return (
     <div className="pointer-events-none absolute inset-y-0 end-0 flex">
       <span
@@ -319,7 +328,7 @@ function RailActions() {
       >
         <Link
           to="storyCompose"
-          aria-label="Créer une story"
+          aria-label={translate(language, 'stories.rail.create')}
           className={`pointer-events-auto ${CHROME_ACTION_HIT_CLASS} focus-visible:outline-2 focus-visible:outline-offset-2`}
           style={{ color: 'var(--color-ios-brand)', outlineColor: 'var(--color-ios-brand)' }}
         >
@@ -329,7 +338,7 @@ function RailActions() {
         </Link>
         <Link
           to="stories"
-          aria-label="Voir toutes les stories"
+          aria-label={translate(language, 'stories.rail.all')}
           className={`pointer-events-auto ${CHROME_ACTION_HIT_CLASS} focus-visible:outline-2 focus-visible:outline-offset-2`}
           style={{ color: 'var(--color-ios-ink-2)', outlineColor: 'var(--color-ios-brand)' }}
         >

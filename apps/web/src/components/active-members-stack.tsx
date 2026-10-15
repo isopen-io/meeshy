@@ -57,6 +57,7 @@ export function ActiveMembersStack({
       {members.map((member, index) => {
         const ring = storyRingOf?.(member.id);
         const mood = moodOf(member.id);
+        const moodPostId = moodOf.postOf?.(member.id);
         const entries = avatarMenuEntries({ username: member.username, storyRing: ring, details: onOpenDetails !== undefined });
         return (
           <li
@@ -78,7 +79,7 @@ export function ActiveMembersStack({
                 {...(member.avatar === undefined ? {} : { src: member.avatar })}
                 {...(member.username === undefined ? {} : { profileUsername: member.username })}
                 {...(ring === undefined ? {} : { storyRing: ring })}
-                {...(mood === undefined ? {} : { mood })}
+                {...(mood === undefined ? {} : { mood, ...(moodPostId === undefined ? {} : { moodPostId }) })}
               />
             </AvatarMenuTrigger>
           </li>

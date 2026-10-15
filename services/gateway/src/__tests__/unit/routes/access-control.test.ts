@@ -1,5 +1,5 @@
 import { describe, it, expect, jest, beforeEach } from '@jest/globals';
-import { canAccessConversation, resolveCallerParticipant } from '../../../routes/conversations/utils/access-control';
+import { canAccessConversation, resolveCallerParticipant, PARTICIPATION_VIVANTE } from '../../../routes/conversations/utils/access-control';
 import { findFirstIn, type MongoDocument } from '../../helpers/mongo-where';
 
 const VALID_CONVERSATION_ID = '507f1f77bcf86cd799439011';
@@ -73,7 +73,7 @@ describe('canAccessConversation', () => {
         where: {
           conversationId: VALID_CONVERSATION_ID,
           userId: VALID_USER_ID,
-          isActive: true,
+          ...PARTICIPATION_VIVANTE,
         },
       });
     });
@@ -243,7 +243,7 @@ describe('canAccessConversation', () => {
         where: {
           conversationId: VALID_CONVERSATION_ID,
           userId: VALID_USER_ID,
-          isActive: true,
+          ...PARTICIPATION_VIVANTE,
         },
       });
     });
@@ -293,7 +293,7 @@ describe('canAccessConversation', () => {
         where: {
           conversationId: VALID_CONVERSATION_ID,
           userId: VALID_USER_ID,
-          isActive: true,
+          ...PARTICIPATION_VIVANTE,
         },
       });
     });
