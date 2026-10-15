@@ -82,6 +82,7 @@ const itStickerPacks = {
   'packs.shop.empty': "Nessun pacchetto qui per ora.",
   'packs.shop.domains': "Categoria del negozio",
   'packs.shop.hint': "Tutti i pacchetti: sticker, cornici, sfondi, contorni e banner. Ciò che possiedi appare nelle schermate che lo usano.",
+  'packs.retry': "Riprova",
 } satisfies StickerPacksCatalog;
 
 export default itStickerPacks;

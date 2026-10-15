@@ -82,6 +82,7 @@ const esStickerPacks = {
   'packs.shop.empty': "Aún no hay packs aquí.",
   'packs.shop.domains': "Categoría de la tienda",
   'packs.shop.hint': "Todos los packs: stickers, marcos, fondos, contornos y banners. Lo que tienes aparece en las pantallas que lo usan.",
+  'packs.retry': "Reintentar",
 } satisfies StickerPacksCatalog;
 
 export default esStickerPacks;

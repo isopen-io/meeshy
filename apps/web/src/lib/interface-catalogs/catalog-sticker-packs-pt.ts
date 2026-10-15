@@ -82,6 +82,7 @@ const ptStickerPacks = {
   'packs.shop.empty': "Ainda não há pacotes aqui.",
   'packs.shop.domains': "Categoria da loja",
   'packs.shop.hint': "Todos os pacotes: stickers, molduras, fundos, contornos e banners. O que você possui aparece nas telas que o usam.",
+  'packs.retry': "Tentar novamente",
 } satisfies StickerPacksCatalog;
 
 export default ptStickerPacks;
