@@ -4,6 +4,7 @@ import { RING_AVATAR_RADIUS, type AvatarRingDesign } from '@meeshy/shared/types/
 import { avatarRingSvg } from '@meeshy/shared/utils/appearance-svg';
 
 import { PackLottieLayer } from './pack-lottie-layer';
+import { railRingBox } from './rail-tile';
 
 /**
  * **LE CONTOUR D'AVATAR** (#10632, § 8.1) — une COUCHE autour de l'avatar, qui
@@ -27,6 +28,29 @@ export function AvatarRing({ ring, size, children }: { readonly ring: AvatarRing
   return (
     <span data-avatar-ring={ring.key} className="relative inline-grid place-items-center" style={{ width: box, height: box }}>
       <span aria-hidden="true" className="pointer-events-none absolute inset-0" dangerouslySetInnerHTML={{ __html: avatarRingSvg({ ring, size: box }) }} />
+      <PackLottieLayer lottie={ring.lottie} />
+      {children}
+    </span>
+  );
+}
+
+/**
+ * **LE CONTOUR DANS L'EMPREINTE DE L'AVATAR** (#10713, #10714) — pour les
+ * surfaces à cote FIXE (liste, bulle, participants) : la boîte du contour EST
+ * l'empreinte `size`, rien ne grandit, rien ne se décale. Le cercle intérieur du
+ * dessin (84 %) reçoit l'avatar, réduit en conséquence. Un anneau de story reste
+ * à l'INTÉRIEUR du contour, concentrique (décision porteur du 2026-10-15) : les
+ * deux sont visibles, le contour dehors, l'anneau juste dedans.
+ */
+export const ringedAvatarSize = (footprint: number, hasStoryRing: boolean): number => {
+  const hole = Math.floor(footprint * AVATAR_FRACTION);
+  return Math.max(1, hasStoryRing ? hole - railRingBox(0) : hole);
+};
+
+export function AvatarRingFrame({ ring, size, children }: { readonly ring: AvatarRingDesign; readonly size: number; readonly children: ReactNode }) {
+  return (
+    <span data-avatar-ring={ring.key} className="relative inline-grid shrink-0 place-items-center" style={{ width: size, height: size }}>
+      <span aria-hidden="true" className="pointer-events-none absolute inset-0" dangerouslySetInnerHTML={{ __html: avatarRingSvg({ ring, size }) }} />
       <PackLottieLayer lottie={ring.lottie} />
       {children}
     </span>
