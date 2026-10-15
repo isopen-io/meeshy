@@ -511,7 +511,11 @@ const EXCLUDED_DIR_NAMES = new Set(['Tests', 'MeeshyTests', 'MeeshyUIDeviceTests
 // Le web les appelle déjà (vitrine unique, `lib/api/packs-shop.ts`) ; l'app iOS ne les branche pas encore —
 // entrées PRÉMATURÉES, pas des faux morts (#5427). Valeur MESURÉE le 2026-10-15 en CI (Quality rouge sur
 // afe92fecb1) et en local.
-const BASELINE_DEAD_ENTRIES = 331;
+// 331 -> 315 (#10632, 2026-10-15) : la vitrine unique iOS (`PackShopService`, `PackService`) branche les routes
+// d'apparence que la régénération venait d'inscrire — `PacksEndpoint.shop`, et pour les fonds, contours et
+// bannières la liste, le détail, l'installation, l'achat et les installés. Valeur MESURÉE le 2026-10-15 en local
+// sur 5109a0e737 (CI « Quality » rouge sur l'amélioration non enregistrée).
+const BASELINE_DEAD_ENTRIES = 315;
 
 const CATALOG_ENUM_RE = /public enum ([A-Za-z0-9_]+)\s*:\s*MeeshyEndpoint\b/;
 // Une déclaration de cas n'a jamais de point après `case` ; une branche de
