@@ -162,6 +162,16 @@ final class ProfileDecorTests: XCTestCase {
         XCTAssertEqual(banners.first?.items.first?.ref, ProfileDecorRef(pack: "bannieres-animees", item: "aurore-vive"))
     }
 
+    func test_flattened_firstTileOfEachPackKeepsItsOwnUniqueId() {
+        let rings = ProfileDecorOptions.rings(installed: nil)
+        let entries = ProfileDecorOptions.flattened(rings)
+
+        XCTAssertGreaterThan(rings.count, 1)
+        XCTAssertEqual(Set(entries.map(\.id)).count, entries.count)
+        XCTAssertEqual(entries.count, rings.reduce(0) { $0 + $1.items.count })
+        XCTAssertTrue(entries.contains { $0.ref == ProfileDecorRef(pack: "contours-animes", item: "halo-or") })
+    }
+
     func test_options_beforeTheInstalledListIsKnownShowsTheDefaultPacks() {
         XCTAssertEqual(ProfileDecorOptions.rings(installed: nil).first?.pack, "contours-essentiels")
         XCTAssertEqual(ProfileDecorOptions.banners(installed: nil).first?.pack, "bannieres-essentielles")

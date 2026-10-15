@@ -178,10 +178,8 @@ struct ProfileDecorSheet: View {
             header(title)
             LazyVGrid(columns: [GridItem(.adaptive(minimum: 84), spacing: MeeshySpacing.md)], spacing: MeeshySpacing.md) {
                 ringTile(ref: nil, design: nil, label: noneLabel)
-                ForEach(model.rings, id: \.pack) { group in
-                    ForEach(Array(group.items.enumerated()), id: \.offset) { _, entry in
-                        ringTile(ref: entry.ref, design: entry.design, label: AvatarRingCatalog.shared.ringName(entry.design.key, language: language) ?? entry.design.key)
-                    }
+                ForEach(ProfileDecorOptions.flattened(model.rings)) { entry in
+                    ringTile(ref: entry.ref, design: entry.design, label: AvatarRingCatalog.shared.ringName(entry.design.key, language: language) ?? entry.design.key)
                 }
             }
             shopLink(.avatarRing)
@@ -221,10 +219,8 @@ struct ProfileDecorSheet: View {
             header(title)
             LazyVGrid(columns: [GridItem(.adaptive(minimum: 150), spacing: MeeshySpacing.md)], spacing: MeeshySpacing.md) {
                 bannerTile(ref: nil, design: nil, label: photoLabel)
-                ForEach(model.banners, id: \.pack) { group in
-                    ForEach(Array(group.items.enumerated()), id: \.offset) { _, entry in
-                        bannerTile(ref: entry.ref, design: entry.design, label: AppearanceCatalog.shared.designName(entry.design.key, language: language) ?? entry.design.key)
-                    }
+                ForEach(ProfileDecorOptions.flattened(model.banners)) { entry in
+                    bannerTile(ref: entry.ref, design: entry.design, label: AppearanceCatalog.shared.designName(entry.design.key, language: language) ?? entry.design.key)
                 }
             }
             shopLink(.banner)
