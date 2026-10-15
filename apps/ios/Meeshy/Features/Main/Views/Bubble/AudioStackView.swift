@@ -50,6 +50,25 @@ struct AudioStackView: View {
     var parentIsMe: Bool = false
     var voiceConsentMissing: Bool = false
     var onTapConsentNotice: (() -> Void)? = nil
+    /// Tenue du player de CHAQUE ligne : `.card` en bulle, la tenue plate de
+    /// Focal (`FocalAudioBlock.flatChrome`) sous la rangée plate — la même que
+    /// le vocal seul (#10678).
+    var chrome: AudioPlayerChrome = .card
+    /// Ouvreur du plein écran de la CONVERSATION (celui du vocal seul, qui sait
+    /// réagir, répondre et créer). Reçoit la piste TOUCHÉE : la page ouverte est
+    /// celle de la ligne, jamais la première (#10678).
+    var onOpenFullscreen: ((MessageAttachment) -> Void)? = nil
+    /// Canal de langue du MESSAGE (VM) : le tap sur une langue de la bande de
+    /// la ligne l'écrit, comme pour le vocal seul.
+    var onSelectAudioLanguage: ((String) -> Void)? = nil
+
+    /// L'ouvreur de plein écran d'UNE ligne : lié à SA piste.
+    static func fullscreenOpener(
+        for attachment: MessageAttachment,
+        via open: ((MessageAttachment) -> Void)?
+    ) -> (() -> Void)? {
+        open.map { open in { open(attachment) } }
+    }
 
     var body: some View {
         VStack(alignment: .leading, spacing: MeeshySpacing.xsPlus) {
@@ -135,6 +154,7 @@ struct AudioStackView: View {
             visualAttachments: [],
             isDark: isDark,
             accentColor: accentColor,
+            chrome: chrome,
             transcription: transcriptions[attachment.id],
             translatedAudios: translatedAudios[attachment.id] ?? [],
             textTranslations: textTranslations,
@@ -145,11 +165,13 @@ struct AudioStackView: View {
             onShowTranslationDetail: onShowTranslationDetail,
             onRequestTranslation: onRequestTranslation,
             activeAudioLanguageOverride: activeAudioLanguage,
+            onSelectAudioLanguage: onSelectAudioLanguage,
             footerModel: nil,
             footerActions: .none,
             onPlayAudio: onPlayAudio,
             conversationName: conversationName,
-            audioQueueTailProvider: audioQueueTailProvider
+            audioQueueTailProvider: audioQueueTailProvider,
+            onOpenFullscreen: Self.fullscreenOpener(for: attachment, via: onOpenFullscreen)
         )
         .equatable()
         .padding(.trailing, MeeshySpacing.xs)
