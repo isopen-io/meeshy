@@ -323,9 +323,15 @@ export function Bubble({
   const receivedHairline = 'color-mix(in srgb, var(--accent) var(--ios-bubble-other-hairline-opacity), transparent)';
   const bubbleSkin = isMine
     ? {
+        /* L'ENCRE DE MARQUE SE RÉPOSE DANS LA BULLE (#10734) : liens, citation,
+           barre de lecture, méta et bande d'échec lisent `--color-ios-on-brand`
+           / `--color-meta-mine` ; sur un accent clair (encre noire), ils
+           restaient blancs. Sans accent personnel, les jetons de marque. */
+        '--color-ios-on-brand': 'var(--bubble-mine-personal-ink, var(--ios-on-brand))',
+        '--color-meta-mine': 'var(--bubble-mine-personal-meta, var(--ios-bubble-meta-mine))',
         backgroundColor: 'var(--bubble-mine-personal, var(--color-bubble-mine))',
-        color: 'var(--bubble-mine-personal-ink, var(--color-ios-on-brand))',
-        '--color-karaoke-ink': 'var(--bubble-mine-personal-ink, var(--color-ios-on-brand))',
+        color: 'var(--color-ios-on-brand)',
+        '--color-karaoke-ink': 'var(--color-ios-on-brand)',
       }
     : { backgroundColor: receivedBg, border: `1px solid ${receivedHairline}`, color: 'var(--color-ios-ink)' };
 

@@ -106,10 +106,16 @@ export function withAccent(accent: string, rest?: CSSProperties): CSSProperties 
 /**
  * LA BULLE ENVOYÉE À L'ACCENT PERSONNEL (#10734, D2) — seulement quand le
  * lecteur a CHOISI un accent : « Automatique » garde le `brandPrimary` commun
- * de toutes les conversations. L'encre est celle qui contraste le plus.
+ * de toutes les conversations. L'encre est celle qui contraste le plus, et la
+ * méta (heure, coches) en dérive au même titre que le blanc à 70 % d'iOS.
  */
 export function personalBubbleVars(conversation: Pick<Conversation, 'id' | 'title' | 'identifier' | 'type'> & Partial<Pick<Conversation, 'userPreferences'>>): CSSProperties {
   if (appearanceFromPreferences(conversation.userPreferences).accent === null) return {};
   const accent = accentPaletteOf(conversation).primary;
-  return { '--bubble-mine-personal': accent, '--bubble-mine-personal-ink': inkOnAccent(accent) } as CSSProperties;
+  const ink = inkOnAccent(accent);
+  return {
+    '--bubble-mine-personal': accent,
+    '--bubble-mine-personal-ink': ink,
+    '--bubble-mine-personal-meta': `color-mix(in srgb, ${ink} 70%, transparent)`,
+  } as CSSProperties;
 }

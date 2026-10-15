@@ -109,10 +109,19 @@ function stripPreviewIdentity(root: HTMLElement): void {
  * On lit la valeur RÉSOLUE sur l'ancre et on la repose sur le portail : une
  * seule source (celle de l'écran), jamais un second calcul de couleur.
  */
-function accentOf(element: HTMLElement): string | undefined {
+const CONVERSATION_SKIN_VARS = ['--accent', '--bubble-mine-personal', '--bubble-mine-personal-ink', '--bubble-mine-personal-meta'] as const;
+
+/* La PEAU PERSONNELLE de la bulle envoyée (#10734) voyage avec l'accent : sans
+   elle, l'aperçu cloné d'un message envoyé retombait sur l'indigo commun
+   au-dessus d'un fil peint à l'accent choisi. */
+function conversationSkinOf(element: HTMLElement): CSSProperties | undefined {
   if (typeof window === 'undefined') return undefined;
-  const value = getComputedStyle(element).getPropertyValue('--accent').trim();
-  return value === '' ? undefined : value;
+  const computed = getComputedStyle(element);
+  const entries = CONVERSATION_SKIN_VARS.flatMap((name) => {
+    const value = computed.getPropertyValue(name).trim();
+    return value === '' ? [] : [[name, value] as const];
+  });
+  return entries.length === 0 ? undefined : (Object.fromEntries(entries) as CSSProperties);
 }
 
 /** `--safe-top`/`--safe-bottom` — posées par `thread-menu.css` depuis
@@ -447,7 +456,7 @@ export function MessageMenu({
   // couvre, DANS `roving.menuRef` : un toucher sans glisser y ferme le menu
   // (`onSurfacePointerUp`) ; `useRovingMenu` ferme toujours sur tout
   // `pointerdown` hors du cluster (document-level, § roving-menu.ts).
-  const accent = accentOf(target.element);
+  const skin = conversationSkinOf(target.element);
 
   /**
    * LA RANGÉE PLATE (Focal/Script) N'A NI FOND NI RAYON (revue #5814,
@@ -513,7 +522,7 @@ export function MessageMenu({
   };
 
   return createPortal(
-    <div className="message-menu-backdrop" style={accent === undefined ? undefined : ({ '--accent': accent } as CSSProperties)}>
+    <div className="message-menu-backdrop" style={skin}>
       <div
         ref={roving.menuRef}
         role="menu"
@@ -639,7 +648,7 @@ export function MessageMenu({
                pixel pour pixel la rangée pressée) : `drop-shadow`, pas
                `box-shadow`, parce que le clone n'est pas rectangulaire en
                peau Bulles (rayon 18). Deux passes, miroir iOS : un halo
-               teinté à l'accent DÉJÀ résolu (`accentOf`, jamais un second
+               teinté à l'accent DÉJÀ résolu (`conversationSkinOf`, jamais un second
                calcul de couleur) et une ombre noire — l'aperçu se décolle
                ainsi du voile flouté sur les DEUX peaux et les DEUX schémas. */
             filter: `drop-shadow(0 0 22px color-mix(in srgb, var(--accent) 28%, transparent)) drop-shadow(0 16px 16px color-mix(in srgb, var(--color-scrim-soft) 65%, transparent))`,
