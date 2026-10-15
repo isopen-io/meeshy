@@ -44,11 +44,12 @@ struct ThemedConversationRow: View {
     /// « Rejoindre » l'appel en cours, offert par la ligne d'aperçu (#7548).
     var onJoinLiveCall: (() -> Void)? = nil
 
-    private var accentColor: String { conversation.accentColor }
+    private var palette: ConversationColorPalette { conversation.displayPalette(isDark: isDark) }
+    private var accentColor: String { palette.primary }
 
     // Pre-parsed accent Color — avoids 19× hex parsing per render
     private var accent: Color { Color(hex: accentColor) }
-    private var accentSecondary: Color { Color(hex: conversation.colorPalette.secondary) }
+    private var accentSecondary: Color { Color(hex: palette.secondary) }
 
     private var textPrimary: Color { MeeshyColors.textPrimary(isDark: isDark) }
     private var textSecondary: Color { MeeshyColors.textSecondary(isDark: isDark) }
@@ -606,8 +607,8 @@ private struct ConversationAvatarView: View {
             MeeshyAvatar(
                 name: conversation.name,
                 context: .conversationList,
-                accentColor: conversation.accentColor,
-                secondaryColor: conversation.colorPalette.secondary,
+                accentColor: accentColor,
+                secondaryColor: palette.secondary,
                 avatarURL: isDirect ? conversation.participantAvatarURL : conversation.avatar,
                 storyState: storyRingState,
                 moodEmoji: moodStatus?.moodEmoji,

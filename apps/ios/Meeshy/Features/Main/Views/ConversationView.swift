@@ -372,11 +372,11 @@ struct ConversationView: View {
     }
 
     var accentColor: String {
-        conversation?.accentColor ?? DynamicColorGenerator.colorForName(conversation?.name ?? "Unknown")
+        conversation?.displayPalette(isDark: isDark).primary ?? DynamicColorGenerator.colorForName(conversation?.name ?? "Unknown")
     }
 
     var secondaryColor: String {
-        conversation?.colorPalette.secondary ?? MeeshyColors.indigo300Hex
+        conversation?.displayPalette(isDark: isDark).secondary ?? MeeshyColors.indigo300Hex
     }
 
     var isDirect: Bool {

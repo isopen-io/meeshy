@@ -378,7 +378,7 @@ public struct MeeshyConversation: Identifiable, Hashable, Codable, Sendable {
 
     public let colorPalette: ConversationColorPalette
 
-    public var accentColor: String { colorPalette.primary }
+    public var accentColor: String { displayPalette.primary }
     public var name: String { title ?? identifier }
     public var displayName: String { userState.customName ?? title ?? identifier }
     public var isArchived: Bool { !isActive }
@@ -511,6 +511,7 @@ public struct MeeshyConversation: Identifiable, Hashable, Codable, Sendable {
         var h = Hasher()
         h.combine(lastMessagePreview)
         h.combine(userState.unreadCount)
+        h.combine(userState.appearance?.accent)
         h.combine(lastMessageAt)
         h.combine(lastMessageSenderName)
         h.combine(lastMessageAttachmentCount)

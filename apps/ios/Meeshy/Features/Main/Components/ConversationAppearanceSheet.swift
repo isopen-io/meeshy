@@ -11,6 +11,7 @@ import MeeshyUI
 // et état « sélectionné » portés à VoiceOver.
 
 struct ConversationAppearanceSheet: View {
+    /// L'accent CALCULÉ de la conversation (« Automatique »), jamais l'accent personnel déjà choisi.
     let accentColor: String
 
     @StateObject private var viewModel: ConversationAppearanceViewModel

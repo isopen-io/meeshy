@@ -190,7 +190,7 @@ struct ConversationPreferencesTab: View {
                 ConversationAppearanceSheet(
                     conversationId: conversation.id,
                     initial: conversation.userState.appearance,
-                    accentColor: accentColor
+                    accentColor: conversation.colorPalette.primary
                 )
                 .presentationDetents([.large])
                 .presentationDragIndicator(.visible)
