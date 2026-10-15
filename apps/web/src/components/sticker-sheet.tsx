@@ -6,7 +6,7 @@ import type { Attachment } from '@/lib/api/types';
 import { translate } from '@/lib/i18n-catalog';
 import { currentInterfaceLanguage } from '@/lib/interface-language';
 import { loadMessagePiecesCatalog, translateMessagePieces } from '@/lib/i18n-message-pieces-catalog';
-import { stickerPackSlugOf } from '@/lib/stickers/received';
+import { stickerAddable, stickerPackSlugOf } from '@/lib/stickers/received';
 import { useStickerLibrary } from '@/lib/stickers/use-sticker-library';
 import { PACKS_PANEL, SECURITY_PANEL_PARAM } from '@/routes/settings-sections';
 import { href, navigate } from '@/routes/route-table';
@@ -51,6 +51,7 @@ export function StickerSheet({
 
   const t = (key: Parameters<typeof translateMessagePieces>[1]) => translateMessagePieces(language, key as never);
   const inLibrary = library.has(sticker, picture);
+  const addable = stickerAddable(picture);
   const packSlug = stickerPackSlugOf(sticker);
 
   const add = async () => {
@@ -75,18 +76,18 @@ export function StickerSheet({
           <p data-sticker-in-library className="text-body font-semibold" style={{ color: 'var(--color-ios-ink-2)' }}>
             {t('message.sticker.inLibrary')} ✓
           </p>
-        ) : (
+        ) : addable ? (
           <button
             type="button"
             data-sticker-add
-            disabled={busy || picture === undefined}
+            disabled={busy}
             onClick={() => void add()}
             className="min-h-11 rounded-full px-5 text-body font-semibold"
             style={{ backgroundColor: 'var(--accent)', color: 'var(--color-ios-on-brand)' }}
           >
             {t('message.sticker.add')}
           </button>
-        )}
+        ) : null}
         {packSlug !== null ? (
           <button type="button" data-sticker-view-pack onClick={openPack} className="min-h-11 px-4 text-body" style={{ color: 'var(--accent)' }}>
             {t('message.sticker.viewPack')}

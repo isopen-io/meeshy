@@ -239,12 +239,14 @@ export const BUBBLE_STICKER_SIDE = 210;
 export const STICKER_EMOJI_BOX = 80;
 
 /**
- * LE WEB REND LE STICKER DEUX FOIS PLUS GRAND (#9319, porteur 2026-10-04) —
- * dans les fils comme dans les commentaires. Les cotes ci-dessus restent
- * celles d'iOS (que `check-curve.mjs` compare) ; ce facteur s'applique au
- * RENDU, et le carré se borne à la largeur de sa colonne.
+ * LA COTE DE RENDU DU WEB (#9319, porteur 2026-10-04 : « 224, 320 ») — 224 en
+ * rangée plate et en commentaire, 320 en bulle, le carré borné à la largeur de
+ * sa colonne. FIXE, découplée des cotes iOS ci-dessus (que `check-curve.mjs`
+ * compare) : rendue comme « cote iOS × 2 », elle a suivi l'agrandissement iOS
+ * de #10630 jusqu'à 294 et 420 sans que personne ne le décide.
  */
-export const STICKER_RENDER_SCALE = 2;
+export const STICKER_RENDER_SIDE = 224;
+export const BUBBLE_STICKER_RENDER_SIDE = 320;
 
 /** `FocalScrollPerspective.FocalMagnificationLaw.sustainedScrollMs` / `.highVelocityThreshold`. */
 export const SUSTAINED_SCROLL_MS = 4000;

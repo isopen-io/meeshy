@@ -91,6 +91,14 @@ const shapeMatchesStyle = (design: { readonly style: AppearanceStyle; readonly t
   return present.length === 1 && present[0] === design.style;
 };
 
+/** L'encre d'une tuile : celle de son trait le plus dense (les traits d'une tuile sont posés pour ne pas se superposer). */
+const tileInkOpacity = (tile: { readonly paths: readonly DesignStroke[] } | undefined): number =>
+  tile === undefined ? 0 : Math.max(...tile.paths.map((stroke) => stroke.opacity));
+
+/**
+ * Un fond ou une bannière à motif trop dense est REFUSÉ à la lecture (la passerelle ne le sert pas, aucun client ne le peint) :
+ * le plafond est une loi du contrat, pas une recommandation du catalogue intégré.
+ */
 export const AppearanceDesignSchema = z
   .object({
     key: slugSchema,
@@ -105,6 +113,7 @@ export const AppearanceDesignSchema = z
   })
   .check(
     z.refine(shapeMatchesStyle),
+    z.refine((design) => tileInkOpacity(design.tile) <= APPEARANCE_LIMITS.maxPatternOpacity),
     z.refine((design) => strokesOf(design).reduce((total, stroke) => total + stroke.d.length, 0) <= APPEARANCE_LIMITS.maxTotalPathLength),
   );
 export type AppearanceDesign = z.infer<typeof AppearanceDesignSchema>;
@@ -114,12 +123,8 @@ export const parseAppearanceDesign = (input: unknown): AppearanceDesign | null =
   return parsed.success ? parsed.data : null;
 };
 
-/**
- * L'opacité cumulée d'un motif : celle de son trait le plus dense (les traits
- * d'une tuile sont posés pour ne pas se superposer). 0 hors motif.
- */
-export const patternInkOpacity = (design: AppearanceDesign): number =>
-  design.tile === undefined ? 0 : Math.max(...design.tile.paths.map((stroke) => stroke.opacity));
+/** L'opacité cumulée d'un motif, 0 hors motif. */
+export const patternInkOpacity = (design: AppearanceDesign): number => tileInkOpacity(design.tile);
 
 /** Un motif DISCRET : jamais plus de 12 % d'encre. Les illustrations et dégradés ne sont pas des motifs. */
 export const isDiscreetPattern = (design: AppearanceDesign): boolean => patternInkOpacity(design) <= APPEARANCE_LIMITS.maxPatternOpacity;

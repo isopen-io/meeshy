@@ -24,6 +24,9 @@ export const stickerKeyOf = (sticker: MessageSticker, picture: Picture): string 
   return sticker.stickerId ?? null;
 };
 
+/** Seule une image jointe se dépose en bibliothèque : un sticker sans elle (glyphe emoji, gabarit seul) n'offre aucun ajout. */
+export const stickerAddable = (picture: Picture): boolean => picture !== undefined && picture.fileUrl !== '';
+
 /** Le pack d'où vient le sticker, quand son gabarit le dit (`pack.<slug>.<clé>`). */
 export const stickerPackSlugOf = (sticker: MessageSticker): string | null => parseStickerPackTemplateId(sticker.templateId)?.slug ?? null;
 

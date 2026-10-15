@@ -294,6 +294,21 @@ extension StoryViewModel {
     ///
     /// Retourne les stories retirées (vide si rien à faire — aucune écriture de
     /// cache n'est alors déclenchée).
+    /// La cadence du balayage d'expiration : une story vit 24 h, une minute de
+    /// retard sur sa disparition est invisible.
+    nonisolated static let expirySweepInterval: Duration = .seconds(60)
+
+    /// Balaie les stories mortes maintenant, puis à `expirySweepInterval`, tant
+    /// que la tâche appelante vit — le tray l'appelle depuis sa `.task`, que
+    /// SwiftUI annule quand il disparaît. `purgeDeadStories` sort sans rien
+    /// écrire quand rien n'est mort : le coût d'un tour est une passe sur le tray.
+    func sweepExpiredStoriesWhileVisible() async {
+        while !Task.isCancelled {
+            purgeDeadStories()
+            try? await Task.sleep(for: Self.expirySweepInterval)
+        }
+    }
+
     @discardableResult
     func purgeDeadStories(deletedIds: Set<String> = [], includingExpired: Bool = true) -> [StoryItem] {
         let currentUserId = AuthManager.shared.currentUser?.id

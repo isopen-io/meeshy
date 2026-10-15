@@ -207,4 +207,13 @@ final class StoryTraySheetChainingTests: XCTestCase {
             "…et jamais la lecture directe : elle vit au menu contextuel (« Voir ma story »)."
         )
     }
+
+    /// Une story expire 24 h après sa publication : le tray la balaie tant qu'il est visible, pas seulement aux
+    /// chargements — sans quoi une app restée un jour au premier plan gardait des avatars sans rien à jouer.
+    func test_trayBalaieLesStoriesExpireesTantQuIlEstVisible() throws {
+        let tray = try traySource()
+        XCTAssertTrue(tray.contains(".task { await viewModel.sweepExpiredStoriesWhileVisible() }"),
+                      "Le tray balaie les stories mortes tant qu'il est monté (la `.task` s'annule à sa disparition).")
+        XCTAssertEqual(StoryViewModel.expirySweepInterval, .seconds(60))
+    }
 }

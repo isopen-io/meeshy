@@ -111,6 +111,14 @@ describe('StickerSheet', () => {
     expect(host.querySelector<HTMLButtonElement>('[data-sticker-add]')?.disabled).toBe(false);
   });
 
+  test('un sticker sans image jointe n’affiche aucun bouton d’ajout mort', async () => {
+    appQueryClient.setQueryData(STICKERS_QUERY_KEY, []);
+    const host = await open({ sticker: { emoji: '🔥' }, picture: undefined });
+    expect(host.querySelector('[data-sticker-preview]')).not.toBeNull();
+    expect(host.querySelector('[data-sticker-add]')).toBeNull();
+    expect(host.querySelector('[data-sticker-in-library]')).toBeNull();
+  });
+
   test('« Voir le pack » n’existe que si le gabarit dit son pack', async () => {
     appQueryClient.setQueryData(STICKERS_QUERY_KEY, []);
     expect((await open()).querySelector('[data-sticker-view-pack]')).toBeNull();

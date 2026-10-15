@@ -27,7 +27,7 @@ export const EMOJI_ONLY_FONT_SIZES = {
 
 /**
  * Le glyphe d'un sticker EMOJI — `BubbleSticker.emojiGlyphSize` (90) rendu
- * DEUX fois plus grand sur le web (#9319, `STICKER_RENDER_SCALE`). Un sticker
+ * DEUX fois plus grand sur le web (#9319). Un sticker
  * garde sa taille : la règle de #9054 ne vise que les messages d'emojis.
  */
 export const STICKER_EMOJI_GLYPH_SIZE = 180;

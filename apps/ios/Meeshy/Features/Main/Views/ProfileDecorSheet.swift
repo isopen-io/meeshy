@@ -233,7 +233,7 @@ struct ProfileDecorSheet: View {
                     if let design {
                         BannerDesignView(design: design, isDark: theme.mode.isDark, accentHex: MeeshyColors.brandPrimaryHex)
                     } else {
-                        Color(hex: MeeshyColors.brandPrimaryHex).opacity(0.12)
+                        MeeshyColors.indigo500.opacity(0.12)
                     }
                 }
                 .aspectRatio(3, contentMode: .fit)
@@ -271,7 +271,7 @@ struct ProfileDecorSheet: View {
         } label: {
             Label(String(localized: "profile.decor.shop", defaultValue: "Plus dans la boutique", bundle: .main), systemImage: "bag")
                 .font(MeeshyFont.relative(MeeshyFont.footnoteSize, weight: .semibold))
-                .foregroundColor(Color(hex: MeeshyColors.brandPrimaryHex))
+                .foregroundColor(MeeshyColors.indigo500)
                 .frame(minHeight: 44)
                 .contentShape(Rectangle())
         }
@@ -279,7 +279,7 @@ struct ProfileDecorSheet: View {
 
     private func selectionBackground(_ selected: Bool) -> some View {
         RoundedRectangle(cornerRadius: MeeshyRadius.md)
-            .stroke(selected ? Color(hex: MeeshyColors.brandPrimaryHex) : Color.clear, lineWidth: 2)
+            .stroke(selected ? MeeshyColors.indigo500 : Color.clear, lineWidth: 2)
     }
 }
 

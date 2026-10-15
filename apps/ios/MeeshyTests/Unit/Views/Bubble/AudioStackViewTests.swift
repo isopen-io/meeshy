@@ -87,4 +87,24 @@ final class AudioStackViewTests: XCTestCase {
 
         XCTAssertEqual(Set(labels).count, 3)
     }
+
+    // MARK: - #10678 — chaque piste reçoit ce que reçoit un vocal seul
+
+    private func audioAttachment(_ id: String) -> MessageAttachment {
+        MessageAttachment(id: id, mimeType: "audio/mp4", fileUrl: "https://example.test/\(id).m4a")
+    }
+
+    func test_fullscreenOpener_secondTrack_opensThatTrackNotTheFirst() {
+        var opened: [String] = []
+        let second = audioAttachment("a2")
+
+        let opener = AudioStackView.fullscreenOpener(for: second, via: { opened.append($0.id) })
+        opener?()
+
+        XCTAssertEqual(opened, ["a2"])
+    }
+
+    func test_fullscreenOpener_withoutConversationOpener_isNilSoTheLocalCoverServes() {
+        XCTAssertNil(AudioStackView.fullscreenOpener(for: audioAttachment("a1"), via: nil))
+    }
 }

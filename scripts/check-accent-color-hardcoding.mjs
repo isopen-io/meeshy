@@ -368,7 +368,13 @@ const REFERENCE_LITERAL_COLOR_COUNT = 145;
 // (`AppearanceDesignView`, `AppearancePaint`, `AppearanceTileRenderer` :
 // `palette.base`, rôles de la palette). La couleur y est la DONNÉE choisie,
 // pas une teinte d'interface : remplacer par accentColor trahirait le choix.
-const REFERENCE_UNKNOWN_VARIABLE_COLOR_COUNT = 467;
+// 467 -> 471 (2026-10-15, #10632) : `AvatarRingView.swift` (4) peint le CONTOUR d'avatar équipé depuis
+// `stroke.colors` du catalogue — première et seconde couleur du trait, l'arc du dégradé cyclique et la
+// couleur d'un trait d'ornement. Un contour se voit des AUTRES et garde des couleurs FIXES, identiques
+// pour tous (spec § 5.2) : la couleur est la DONNÉE du contour, l'accent de conversation la trahirait.
+// La feuille de décor (`ProfileDecorSheet.swift`) prend `MeeshyColors.indigo500`, sans `Color(hex:)`.
+// Valeur MESURÉE le 2026-10-15 en local.
+const REFERENCE_UNKNOWN_VARIABLE_COLOR_COUNT = 471;
 
 import { readFileSync, readdirSync, statSync, realpathSync } from 'node:fs';
 import { join, dirname } from 'node:path';

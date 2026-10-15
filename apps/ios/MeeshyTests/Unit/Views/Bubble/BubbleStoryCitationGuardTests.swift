@@ -118,9 +118,16 @@ final class BubbleStoryCitationGuardTests: XCTestCase {
     func test_theFlatCitation_standsDownWhenTheSceneCardTookIt() throws {
         let host = try source(Self.host)
 
-        XCTAssertTrue(
-            host.contains("if let reply = content.reply, detachedStoryCitation == nil {"),
-            "La citation plate doit se taire quand la carte de scène a pris la story."
+        let flatSites = host.components(separatedBy: "if let reply = content.reply").count - 1
+        let standingDown = host.components(
+            separatedBy: "if let reply = content.reply, detachedStoryCitation == nil {").count - 1
+        XCTAssertGreaterThanOrEqual(
+            standingDown, 2,
+            "La bulle texte ET l'emoji en réponse posent chacun leur citation plate."
+        )
+        XCTAssertEqual(
+            standingDown, flatSites,
+            "Chaque citation plate doit se taire quand la carte de scène a pris la story."
         )
         // Depuis #10628 la décision est produite par `BubbleContent` (ce que la
         // bulle, la rangée plate et la rivière partagent) ; la bulle la relaie.
