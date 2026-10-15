@@ -32,7 +32,10 @@ udid() {
 start() {
   local device
   device="$(udid)"
-  (cd "$IOS_DIR" && xcodegen generate >/dev/null)
+  # Même règle que `meeshy.sh` (ensure_project_is_current) : régénérer
+  # seulement si le projet ignore la télécommande, jamais à chaque lancement.
+  grep -q "DeviceRemote.swift" "$IOS_DIR/Meeshy.xcodeproj/project.pbxproj" \
+    || (cd "$IOS_DIR" && xcodegen generate >/dev/null)
   echo "Compilation du runner pour ${device}…"
   xcodebuild build-for-testing -project "$IOS_DIR/Meeshy.xcodeproj" -scheme MeeshyDeviceMetrics \
     -destination "platform=iOS,id=$device" -derivedDataPath "$IOS_DIR/Build" \
