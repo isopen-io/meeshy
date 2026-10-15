@@ -131,7 +131,11 @@ enum AppSourceGuard {
     /// n'ont aucune raison de s'appeler `Type+…`.
     static func unitURLs(_ relativeToAppRoot: String,
                          alsoIncluding compagnons: [String] = []) -> [URL] {
-        let principal = appRoot.appendingPathComponent(relativeToAppRoot)
+        familyURLs(of: appRoot.appendingPathComponent(relativeToAppRoot))
+            + compagnons.map(appRoot.appendingPathComponent)
+    }
+
+    private static func familyURLs(of principal: URL) -> [URL] {
         let dossier = principal.deletingLastPathComponent()
         let base = principal.deletingPathExtension().lastPathComponent
         let voisins = (try? FileManager.default.contentsOfDirectory(
@@ -140,7 +144,18 @@ enum AppSourceGuard {
             .filter { $0.pathExtension == "swift"
                 && $0.deletingPathExtension().lastPathComponent.hasPrefix(base + "+") }
             .sorted { $0.lastPathComponent < $1.lastPathComponent }
-        return [principal] + parties + compagnons.map(appRoot.appendingPathComponent)
+        return [principal] + parties
+    }
+
+    /// Lit un fichier ; `BubbleStandardLayout.swift` se lit comme son UNITÉ
+    /// (`BubbleStandardLayout+*.swift`, #10678), par le même glob que
+    /// `unit(_:)` : le type a été découpé par responsabilité et une garde ne
+    /// doit ni rougir ni verdir parce que du code a changé de fichier.
+    static func text(at url: URL) throws -> String {
+        let urls = url.lastPathComponent == "BubbleStandardLayout.swift" ? familyURLs(of: url) : [url]
+        return try urls
+            .map { try String(contentsOf: $0, encoding: .utf8) }
+            .joined(separator: "\n")
     }
 
     static func unit(_ relativeToAppRoot: String,

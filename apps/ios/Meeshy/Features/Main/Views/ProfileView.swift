@@ -333,34 +333,8 @@ struct ProfileView: View {
         }
     }
 
-    @ViewBuilder
     private var bannerImage: some View {
-        if let bannerURL = user?.banner, !bannerURL.isEmpty {
-            // CachedBannerImage : cache 3-tiers (NSCache -> disque -> reseau) avec
-            // warm-sync synchrone depuis le disque a l'init. Le banner reapparait
-            // instantanement a chaque retour sur le profil, sans refetch reseau ni
-            // re-decodage full-res (l'AsyncImage natif re-fetchait + re-decodait a
-            // chaque rendu). Le blur ThumbHash s'affiche en attendant le full image.
-            CachedBannerImage(
-                urlString: bannerURL,
-                thumbHash: user?.bannerThumbHash,
-                fallbackColor: accentColor,
-                height: 120
-            )
-        } else {
-            bannerPlaceholder
-        }
-    }
-
-    private var bannerPlaceholder: some View {
-        LinearGradient(
-            colors: [
-                Color(hex: accentColor).opacity(0.3),
-                MeeshyColors.indigo300.opacity(0.2)
-            ],
-            startPoint: .topLeading,
-            endPoint: .bottomTrailing
-        )
+        ProfileOwnBanner(user: user, accentColor: accentColor, isDark: theme.mode.isDark)
     }
 
     // MARK: - Identity Section
@@ -522,6 +496,7 @@ struct ProfileView: View {
             .accessibilityHint(String(localized: "profile.stats.a11y.hint", defaultValue: "Ouvre les statistiques détaillées", bundle: .main))
 
             progressionEntry
+            ProfileDecorEntry(user: user) { router.openPackShop(domain: $0) }
         }
     }
 
@@ -865,8 +840,9 @@ struct ProfileView: View {
     /// directly from `MeeshyTests` via `@testable import Meeshy` without
     /// instantiating the SwiftUI view.
     static func mergingServerUser(_ server: MeeshyUser, onto local: MeeshyUser?) -> MeeshyUser {
-        guard server.voicePublic == nil, let voicePublic = local?.voicePublic else { return server }
-        return server.withProfileChanges(voicePublic: voicePublic)
+        let decor = server.profileDecor ?? local?.profileDecor
+        let merged = server.voicePublic == nil && local?.voicePublic != nil ? server.withProfileChanges(voicePublic: local?.voicePublic) : server
+        return merged.profileDecor == decor ? merged : merged.withProfileDecor(decor)
     }
 
     private func saveProfile() {
@@ -1066,7 +1042,8 @@ extension MeeshyUser {
             voiceSampleUrl: voiceSampleUrl,
             voiceSampleDurationMs: voiceSampleDurationMs,
             voiceQuality: voiceQuality,
-            activation: activation
+            activation: activation,
+            profileDecor: profileDecor
         )
     }
 }

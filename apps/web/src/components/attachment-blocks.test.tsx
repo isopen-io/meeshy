@@ -104,6 +104,29 @@ describe('Attachments — l’image (#5805)', () => {
   });
 });
 
+describe('Attachments — plusieurs vocaux : chaque piste est annoncée (#10678)', () => {
+  const voice = attachmentOf(MEDIA_VOICE_EN_WITNESS_ID);
+  const render = (count: number) =>
+    renderToStaticMarkup(
+      <Attachments
+        attachments={Array.from({ length: count }, (_, i) => ({ ...voice, id: `${voice.id}-${i}` }))}
+        languages={['fr']}
+        fallbackLanguage="fr"
+        mediaFrame="box"
+      />,
+    );
+
+  test('trois vocaux : « Vocal 1 sur 3 », « Vocal 2 sur 3 », « Vocal 3 sur 3 », chacun avec son nom et sa zone', () => {
+    const html = render(3);
+    ['Vocal 1 sur 3', 'Vocal 2 sur 3', 'Vocal 3 sur 3'].forEach((label) => expect(html).toContain(`aria-label="${label}"`));
+    expect(html.match(/data-voice-expand/g)?.length).toBe(3);
+  });
+
+  test('un seul vocal : aucune annonce de rang', () => {
+    expect(render(1)).not.toContain('sur 1');
+  });
+});
+
 describe('Attachments — le vocal suit sa lecture mot à mot (#7911)', () => {
   const voiceEn = attachmentOf(MEDIA_VOICE_EN_WITNESS_ID);
 

@@ -20,16 +20,19 @@ final class ConversationAppearanceViewModel: ObservableObject {
     let conversationId: String
     private let service: PreferenceServiceProviding
     private let photoMemory: ConversationBackgroundPhotoMemory
+    private let store: ConversationStore
 
     init(
         conversationId: String,
         initial: ConversationAppearance?,
         service: PreferenceServiceProviding = PreferenceService.shared,
-        photoMemory: ConversationBackgroundPhotoMemory = ConversationBackgroundPhotoMemory()
+        photoMemory: ConversationBackgroundPhotoMemory = ConversationBackgroundPhotoMemory(),
+        store: ConversationStore = .shared
     ) {
         self.conversationId = conversationId
         self.service = service
         self.photoMemory = photoMemory
+        self.store = store
         self.appearance = ConversationAppearanceChange.latest(for: conversationId) ?? initial ?? .default
     }
 
@@ -108,9 +111,11 @@ final class ConversationAppearanceViewModel: ObservableObject {
         }
     }
 
+    /// Le fil ouvert l'apprend par le relais, la ligne de liste par le store.
     private func apply(_ value: ConversationAppearance) {
         appearance = value
         ConversationAppearanceChange.post(conversationId: conversationId, appearance: value)
+        Task { [store, conversationId] in await store.adoptLocalAppearance(value, for: conversationId) }
     }
 
     /// Un refus rétablit l'état d'AVANT — sauf si un choix plus récent a déjà remplacé celui qui a échoué.

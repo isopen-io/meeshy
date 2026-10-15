@@ -38,6 +38,7 @@ const ptMediaViewer = {
   'media.sound.library': 'Som da biblioteca',
   'media.sound.mute': 'Silenciar som de fundo',
   'media.sound.unmute': 'Ativar som de fundo',
+  'media.audio.track_of': 'Mensagem de voz {index} de {total}',
 };
 
 export default ptMediaViewer;

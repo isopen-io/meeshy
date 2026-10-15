@@ -11,6 +11,7 @@ import MeeshyUI
 // et état « sélectionné » portés à VoiceOver.
 
 struct ConversationAppearanceSheet: View {
+    /// L'accent CALCULÉ de la conversation (« Automatique »), jamais l'accent personnel déjà choisi.
     let accentColor: String
 
     @StateObject private var viewModel: ConversationAppearanceViewModel
@@ -18,6 +19,7 @@ struct ConversationAppearanceSheet: View {
     @State private var veilDraft: Double = 0.3
     @State private var blurDraft: Double = 0
     @State private var draggingSlider = false
+    @State private var showsShop = false
     @Environment(\.dismiss) private var dismiss
     @Environment(\.colorScheme) private var colorScheme
 
@@ -47,6 +49,7 @@ struct ConversationAppearanceSheet: View {
                     solidSection
                     photoSection
                     accentSection
+                    shopLink
                     resetButton
                     if let message = viewModel.errorMessage {
                         Text(message)
@@ -65,6 +68,7 @@ struct ConversationAppearanceSheet: View {
             }
         }
         .task { media.select(.visual) }
+        .sheet(isPresented: $showsShop) { PacksSettingsView(initialDomain: .wallpaper) }
         .onReceive(NotificationCenter.default.publisher(for: ConversationAppearanceChange.notification).receive(on: DispatchQueue.main)) { note in
             if let remote = ConversationAppearanceChange.appearance(in: note, for: viewModel.conversationId) { viewModel.adopt(remote) }
         }
@@ -249,6 +253,19 @@ struct ConversationAppearanceSheet: View {
         }
     }
 
+    /// « Plus dans la boutique » : la vitrine unique, filtrée sur les fonds (#10632).
+    private var shopLink: some View {
+        Button {
+            HapticFeedback.light()
+            showsShop = true
+        } label: {
+            Label(String(localized: "conversation.appearance.shop", defaultValue: "Plus dans la boutique", bundle: .main),
+                  systemImage: "bag")
+                .frame(maxWidth: .infinity, minHeight: 44)
+        }
+        .buttonStyle(.bordered)
+    }
+
     private var resetButton: some View {
         Button(role: .destructive) {
             viewModel.reset()
@@ -287,7 +304,7 @@ struct ConversationAppearanceSheet: View {
                         Image(systemName: "checkmark.circle.fill")
                             .foregroundColor(Color(hex: effectiveAccent))
                             .background(Circle().fill(.white))
-                            .padding(4)
+                            .padding(MeeshySpacing.xs)
                             .accessibilityHidden(true)
                     }
                 }

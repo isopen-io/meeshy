@@ -39,7 +39,7 @@ final class BubbleEffectPerimeterSourceGuardTests: XCTestCase {
     /// rougirait sur sa propre explication.
     private func strippedSource(_ relativePath: String) throws -> String {
         let url = bubbleRoot.appendingPathComponent(relativePath)
-        let raw = try String(contentsOf: url, encoding: .utf8)
+        let raw = try AppSourceGuard.text(at: url)
         let stripped = AppSourceGuard.stripComments(raw)
 
         XCTAssertFalse(

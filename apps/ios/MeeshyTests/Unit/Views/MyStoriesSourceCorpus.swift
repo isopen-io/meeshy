@@ -70,7 +70,7 @@ enum MyStoriesSourceCorpus {
     /// gardes qui doivent vraiment viser un fichier précis.
     static func text(of relativePath: String, file: StaticString = #filePath) throws -> String {
         let url = appRoot(file: file).appendingPathComponent(relativePath)
-        return strippingComments(try String(contentsOf: url, encoding: .utf8))
+        return strippingComments(try AppSourceGuard.text(at: url))
     }
 
     // MARK: - Retrait des commentaires

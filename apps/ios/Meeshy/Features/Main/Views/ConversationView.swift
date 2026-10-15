@@ -136,10 +136,9 @@ struct ConversationView: View {
     /// l'override — l'override garde la priorité, la valeur figée reste le
     /// repli, et un enregistrement des réglages repart du pair repeint. Une
     /// annonce qui ne change rien n'écrit rien : l'écran ne se redessine pas.
-    func admitPeerUpdate(_ event: UserUpdatedEvent) {
-        guard let repainted = DirectPeerRepaint.repainted(liveConversation, by: event) else { return }
-        conversationOverride = repainted
-    }
+    func admitPeerUpdate(_ event: UserUpdatedEvent) { admitRepainted(DirectPeerRepaint.repainted(liveConversation, by: event)) }
+    /// Écrivain partagé avec l'accent personnel relayé (#10631, `admitAppearance`).
+    func admitRepainted(_ repainted: Conversation?) { if let repainted { conversationOverride = repainted } }
 
     // NOTE: Properties below are internal (not private) for cross-file extension access.
     // Extensions in ConversationView+MessageRow, +Header, +ScrollIndicators, +Composer.
@@ -372,11 +371,11 @@ struct ConversationView: View {
     }
 
     var accentColor: String {
-        conversation?.accentColor ?? DynamicColorGenerator.colorForName(conversation?.name ?? "Unknown")
+        liveConversation?.displayPalette(isDark: isDark).primary ?? DynamicColorGenerator.colorForName(conversation?.name ?? "Unknown")
     }
 
     var secondaryColor: String {
-        conversation?.colorPalette.secondary ?? MeeshyColors.indigo300Hex
+        liveConversation?.displayPalette(isDark: isDark).secondary ?? MeeshyColors.indigo300Hex
     }
 
     var isDirect: Bool {

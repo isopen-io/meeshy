@@ -516,6 +516,10 @@ public struct MeeshyUser: Codable, Identifiable, Sendable {
     /// seulement (connexion, `/auth/me`) ; `nil` sur une passerelle antérieure.
     public let activation: UserActivation?
 
+    /// Le contour d'avatar et la bannière de design équipés (#10632), visibles des
+    /// autres. `nil` = un ancien serveur ne le sert pas : le profil se rend comme avant.
+    public let profileDecor: ServedProfileDecor?
+
     public init(
         id: String, username: String, email: String? = nil,
         firstName: String? = nil, lastName: String? = nil,
@@ -540,7 +544,8 @@ public struct MeeshyUser: Codable, Identifiable, Sendable {
         voiceSampleUrl: String? = nil,
         voiceSampleDurationMs: Int? = nil,
         voiceQuality: Double? = nil,
-        activation: UserActivation? = nil
+        activation: UserActivation? = nil,
+        profileDecor: ServedProfileDecor? = nil
     ) {
         self.id = id
         self.username = username
@@ -580,6 +585,40 @@ public struct MeeshyUser: Codable, Identifiable, Sendable {
         self.voiceSampleDurationMs = voiceSampleDurationMs
         self.voiceQuality = voiceQuality
         self.activation = activation
+        self.profileDecor = profileDecor
+    }
+
+    /// Le même compte avec un autre décor de profil (équipement optimiste, événement socket).
+    public func withProfileDecor(_ decor: ServedProfileDecor?) -> MeeshyUser {
+        MeeshyUser(
+            id: id, username: username, email: email,
+            firstName: firstName, lastName: lastName,
+            displayName: displayName, bio: bio,
+            avatar: avatar, avatarThumbHash: avatarThumbHash,
+            banner: banner, bannerThumbHash: bannerThumbHash,
+            role: role,
+            systemLanguage: systemLanguage, regionalLanguage: regionalLanguage,
+            isOnline: isOnline, lastActiveAt: lastActiveAt,
+            createdAt: createdAt, updatedAt: updatedAt,
+            blockedUserIds: blockedUserIds,
+            isActive: isActive, deactivatedAt: deactivatedAt,
+            isAnonymous: isAnonymous, isMeeshyer: isMeeshyer,
+            phoneNumber: phoneNumber,
+            emailVerifiedAt: emailVerifiedAt, phoneVerifiedAt: phoneVerifiedAt,
+            customDestinationLanguage: customDestinationLanguage,
+            autoTranslateEnabled: autoTranslateEnabled,
+            deviceLocale: deviceLocale,
+            timezone: timezone,
+            registrationCountry: registrationCountry,
+            profileCompletionRate: profileCompletionRate,
+            signalIdentityKeyPublic: signalIdentityKeyPublic,
+            voicePublic: voicePublic,
+            voiceSampleUrl: voiceSampleUrl,
+            voiceSampleDurationMs: voiceSampleDurationMs,
+            voiceQuality: voiceQuality,
+            activation: activation,
+            profileDecor: decor
+        )
     }
 
     /// Returns a new MeeshyUser with the specified profile fields replaced.
@@ -624,7 +663,8 @@ public struct MeeshyUser: Codable, Identifiable, Sendable {
             voiceSampleUrl: voiceSampleUrl,
             voiceSampleDurationMs: voiceSampleDurationMs,
             voiceQuality: voiceQuality,
-            activation: activation
+            activation: activation,
+            profileDecor: profileDecor
         )
     }
 

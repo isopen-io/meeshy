@@ -27,6 +27,8 @@ public enum FreeFrameSurface: String, CaseIterable, Codable, Sendable, Hashable 
     case call
     case photo
     case video
+    /// Les contours d'avatar de profil (#10632) : une surface à part entière.
+    case avatar
 }
 
 /// Les familles de moments du jeu qu'un cadre de moment peut servir.
@@ -63,6 +65,7 @@ public enum FrameUsage: Sendable, Hashable {
 /// Le contexte qui demande un cadre : l'appel, une capture, une étape du jeu.
 public enum FrameUseContext: Sendable, Hashable {
     case call
+    case avatar
     case capture(FrameCaptureMedia)
     case rank(GloryRank, division: GloryDivision5?)
     case prestige
@@ -97,6 +100,8 @@ public enum FrameUsageLaw {
         public static let achievementOnly = "frame.usage.achievementOnly"
         public static let achievementRarityOnly = "frame.usage.achievementRarityOnly"
         public static let momentOnly = "frame.usage.momentOnly"
+        /// Clé additive (#10632), hors de `all` : le TS la tient à part (`AVATAR_USAGE_LABEL_KEY`).
+        public static let avatarOnly = "frame.usage.avatarOnly"
 
         public static let all: [String] = [
             callAndCapture, captureOnly, photoOnly, videoOnly, rankOnly,
@@ -129,6 +134,8 @@ public enum FrameUsageLaw {
         switch context {
         case .call:
             return surfaces.contains(.call)
+        case .avatar:
+            return surfaces.contains(.avatar)
         case .capture(let media):
             return surfaces.contains(.call) || surfaces.contains(media == .photo ? .photo : .video)
         case .rank, .prestige, .achievement, .moment:
@@ -156,6 +163,7 @@ public enum FrameUsageLaw {
     }
 
     private static func freeLabel(_ surfaces: [FreeFrameSurface]) -> String {
+        if surfaces == [.avatar] { return LabelKey.avatarOnly }
         if surfaces.contains(.call) { return LabelKey.callAndCapture }
         if surfaces.contains(.photo) && surfaces.contains(.video) { return LabelKey.captureOnly }
         return surfaces.contains(.photo) ? LabelKey.photoOnly : LabelKey.videoOnly
@@ -240,6 +248,8 @@ extension FrameUseContext: Codable {
         switch kind {
         case "call":
             self = .call
+        case "avatar":
+            self = .avatar
         case "capture":
             self = .capture(try container.decode(FrameCaptureMedia.self, forKey: .media))
         case "rank":
@@ -265,6 +275,8 @@ extension FrameUseContext: Codable {
         switch self {
         case .call:
             try container.encode("call", forKey: .kind)
+        case .avatar:
+            try container.encode("avatar", forKey: .kind)
         case .capture(let media):
             try container.encode("capture", forKey: .kind)
             try container.encode(media, forKey: .media)

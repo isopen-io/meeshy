@@ -228,7 +228,7 @@ final class ConversationMediaGalleryFullscreenSharpTests: XCTestCase {
             .deletingLastPathComponent()
             .deletingLastPathComponent()
             .appendingPathComponent(relativePath)
-        return try String(contentsOf: url, encoding: .utf8)
+        return try AppSourceGuard.text(at: url)
     }
 
     private func block(from startMarker: String, upTo endMarker: String, in code: String) throws -> String {

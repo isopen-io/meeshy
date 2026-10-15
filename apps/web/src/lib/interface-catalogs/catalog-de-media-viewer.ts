@@ -38,6 +38,7 @@ const deMediaViewer = {
   'media.sound.library': 'Ton aus der Bibliothek',
   'media.sound.mute': 'Hintergrundton aus',
   'media.sound.unmute': 'Hintergrundton ein',
+  'media.audio.track_of': 'Sprachnachricht {index} von {total}',
 };
 
 export default deMediaViewer;

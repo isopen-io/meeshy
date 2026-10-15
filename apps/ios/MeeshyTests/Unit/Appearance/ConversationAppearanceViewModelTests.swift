@@ -109,4 +109,19 @@ final class ConversationAppearanceViewModelTests: XCTestCase {
         XCTAssertEqual(memory.photo(for: "64b7f0c2a1b2c3d4e5f60718"), photo)
         XCTAssertEqual(viewModel.currentPhotoSettings?.veil ?? 0, 0.3, accuracy: 1e-9)
     }
+
+    func test_setAccent_repaintsTheListRowInTheStore_withoutWaitingForTheEcho() async {
+        let id = "conv-accent-\(UUID().uuidString)"
+        await ConversationStore.shared.hydrate(MeeshyConversation(id: id, identifier: id, type: .group))
+        let (viewModel, _) = makeViewModel(id: id)
+
+        viewModel.setAccent("corail")
+
+        var row = await ConversationStore.shared.conversation(id: id)
+        for _ in 0..<200 where row?.userState.appearance?.accent != "corail" {
+            try? await Task.sleep(nanoseconds: 10_000_000)
+            row = await ConversationStore.shared.conversation(id: id)
+        }
+        XCTAssertEqual(row?.displayPalette(scheme: .light).primary, "E0604E")
+    }
 }
