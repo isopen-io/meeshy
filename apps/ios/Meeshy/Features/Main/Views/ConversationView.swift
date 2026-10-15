@@ -129,7 +129,15 @@ struct ConversationView: View {
     /// figée. `internal` (pas `private`) : lue par l'extension
     /// `ConversationView+Header`, qui vit dans un autre fichier — `private` est
     /// à portée de fichier.
-    var liveConversation: Conversation? { conversationOverride ?? conversation }
+    var liveConversation: Conversation? {
+        _ = repaintRevision
+        return conversationOverride ?? conversation
+    }
+
+    /// `MeeshyConversation.==` ne compare que l'`id` : réécrire l'override par une copie
+    /// repeinte (accent, pair) est, pour `@State`, une valeur ÉGALE et n'invalide rien (#10751).
+    /// Cette révision, lue par `liveConversation`, porte l'invalidation.
+    @State private var repaintRevision = 0
 
     /// Le pair d'un direct OUVERT renommé ou repeint à `user:updated` (#9359) :
     /// l'annonce s'applique à la conversation AFFICHÉE et le résultat devient
@@ -138,7 +146,11 @@ struct ConversationView: View {
     /// annonce qui ne change rien n'écrit rien : l'écran ne se redessine pas.
     func admitPeerUpdate(_ event: UserUpdatedEvent) { admitRepainted(DirectPeerRepaint.repainted(liveConversation, by: event)) }
     /// Écrivain partagé avec l'accent personnel relayé (#10631, `admitAppearance`).
-    func admitRepainted(_ repainted: Conversation?) { if let repainted { conversationOverride = repainted } }
+    func admitRepainted(_ repainted: Conversation?) {
+        guard let repainted else { return }
+        conversationOverride = repainted
+        repaintRevision &+= 1
+    }
 
     // NOTE: Properties below are internal (not private) for cross-file extension access.
     // Extensions in ConversationView+MessageRow, +Header, +ScrollIndicators, +Composer.
