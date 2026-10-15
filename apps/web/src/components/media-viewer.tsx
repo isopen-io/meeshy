@@ -1,5 +1,5 @@
 import { Suspense, lazy, useEffect, useLayoutEffect, useRef, useState } from 'react';
-import type { KeyboardEvent as ReactKeyboardEvent, PointerEvent as ReactPointerEvent, ReactNode } from 'react';
+import type { CSSProperties, KeyboardEvent as ReactKeyboardEvent, PointerEvent as ReactPointerEvent, ReactNode } from 'react';
 import { createPortal } from 'react-dom';
 
 import { maskedAttachment } from '@meeshy/shared/utils/attachment-protection';
@@ -170,6 +170,15 @@ export type MediaViewerProps = {
   readonly container?: Element | null;
 };
 
+/** L'accent résolu de l'écran de conversation ouvert, ou `undefined` hors d'une conversation (le repli CSS prend alors la marque). */
+function threadAccent(): string | undefined {
+  if (typeof document === 'undefined') return undefined;
+  const root = document.querySelector('.thread-root');
+  if (root === null) return undefined;
+  const value = getComputedStyle(root).getPropertyValue('--accent').trim();
+  return value === '' ? undefined : value;
+}
+
 /** À combien de pages du bout l'hôte est prié d'étendre la liste. */
 export const NEAR_END_PAGES = 3;
 
@@ -238,7 +247,7 @@ function carrierIdentity(carrier: MediaCarrier | undefined): ViewerIdentityModel
   return {
     name: carrier.sender.displayName,
     initials: initialsOf(carrier.sender.displayName),
-    avatarColor: 'var(--accent)',
+    avatarColor: 'var(--accent, var(--color-ios-brand))',
     ...(carrier.sender.avatarUrl === null ? {} : { avatarSrc: carrier.sender.avatarUrl }),
     time: {
       iso: carrier.sentAt,
@@ -433,6 +442,10 @@ export default function MediaViewer({
   const [presentation, setPresentation] = useState<StagePresentation>(CARDED_STAGE);
   const [zoomedId, setZoomedId] = useState<string | null>(null);
   const dialogRef = useRef<HTMLDivElement | null>(null);
+  /* L'ACCENT DE LA CONVERSATION TRAVERSE LE PORTAIL (#10743) : `--accent` est posée par
+     `routes/thread.tsx` sur sa racine, et cette couche vit hors d'elle. On lit la valeur
+     RÉSOLUE à l'ouverture (motif `message-menu.tsx`), jamais un second calcul de couleur. */
+  const [accent] = useState(() => threadAccent());
   const closeButtonRef = useRef<HTMLButtonElement | null>(null);
   const previouslyFocusedRef = useRef<HTMLElement | null>(null);
   const activePlayToggleRef = useRef<(() => void) | null>(null);
@@ -690,6 +703,7 @@ export default function MediaViewer({
       className="media-viewer-layer fixed inset-0 flex flex-col bg-media-backdrop"
       onKeyDown={onKeyDown}
       tabIndex={-1}
+      {...(accent === undefined ? {} : { style: { '--accent': accent } as CSSProperties })}
     >
       {/* Barre haute — le chrome COMMUN des plein écrans (#8879) : l'auteur et
           l'heure, « … » (Enregistrer y vit, iOS #6145), puis la croix EN FIN de
@@ -780,6 +794,7 @@ export default function MediaViewer({
                 data-full-pixels={fullPixels}
                 className="media-viewer-page absolute inset-0"
                 style={{ transform: `translateX(${distance * 100}%)`, display: Math.abs(distance) > 1 ? 'none' : 'block' }}
+                {...(distance === 0 ? {} : { inert: true, 'aria-hidden': true })}
               >
                 {!fullPixels ? (
                   <ViewerBackdropPage attachment={attachment} />
