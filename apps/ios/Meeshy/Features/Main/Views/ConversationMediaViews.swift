@@ -857,11 +857,11 @@ struct AudioMediaView: View, Equatable {
     /// toujours montrée (info), les langues traduites sont ajoutées au fur et
     /// à mesure qu'elles arrivent. La position du 🌐 ne dépend PAS du nombre
     /// de drapeaux (cf. `BubbleFooter.metaLeading`).
-    private var audioFooter: (BubbleFooterModel, BubbleFooterActions)? {
+    var audioFooter: (BubbleFooterModel, BubbleFooterActions)? {
         guard var model = footerModel else { return nil }
         var actions = footerActions
 
-        let origCode = message.originalLanguage.lowercased()
+        let origCode = trackOriginLanguage.lowercased()
         var codes = [origCode]
         for audio in translatedAudios {
             let code = audio.targetLanguage.lowercased()

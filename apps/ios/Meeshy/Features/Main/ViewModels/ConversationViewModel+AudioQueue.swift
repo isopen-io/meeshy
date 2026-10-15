@@ -65,9 +65,26 @@ extension ConversationViewModel {
             senderName: message.senderName ?? "",
             senderAvatarURL: message.senderAvatarURL,
             receivedAt: message.createdAt,
-            trackLanguage: served.language ?? message.originalLanguage,
+            trackLanguage: served.language ?? trackOriginLanguage(for: attachment, message: message),
             isTranslatedTrack: served.language != nil,
             isProtected: Self.isProtectedVoice(message)
+        )
+    }
+
+    /// La transcription ORIGINALE d'un vocal : par pièce jointe d'abord, repli par message filtré.
+    func originalTranscription(for attachment: MessageAttachment, messageId: String) -> MessageTranscription? {
+        messageTranscriptionsByAttachment[attachment.id]
+            ?? messageTranscriptions[messageId].flatMap { $0.attachmentId == attachment.id ? $0 : nil }
+    }
+
+    /// #10691 — la langue d'origine de CETTE piste (sa transcription, repli : le message),
+    /// la même que le widget lit (`AudioMediaView.trackOriginLanguage`) : la piste jouée et
+    /// le texte affiché descendent le Prisme depuis le même point.
+    func trackOriginLanguage(for attachment: MessageAttachment, message: Message) -> String {
+        AudioTrackLanguageResolver.originLanguage(
+            transcriptionLanguage: originalTranscription(for: attachment, messageId: message.id)?.language
+                ?? attachment.transcription?.language,
+            messageOriginal: message.originalLanguage
         )
     }
 
