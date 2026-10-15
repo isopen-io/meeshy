@@ -35,7 +35,10 @@ final class ComposerBackgroundLoopFadeEnvelopeTests: XCTestCase {
 
         _ = try mixer.play(originHost: Self.origin(secondsAgo: 5.5), slideKey: "edit#bg", slideElapsed: 5.5)
 
-        XCTAssertEqual(mixer.appliedBackgroundVolume() ?? -1, 0.5, accuracy: 0.05,
+        // La mesure tombe EN PLEIN fondu de sortie (une seconde) : le temps écoulé se lit à l'application,
+        // et chaque centième de retard d'un runner chargé retire un centième au volume (0,44 relevé en CI sur
+        // `main`). 0,15 de jeu garde le témoin tranchant — sans le fondu rejoué, le fond serait à 1.
+        XCTAssertEqual(mixer.appliedBackgroundVolume() ?? -1, 0.5, accuracy: 0.15,
                        "À 0,5 s de la fin du deuxième tour, le fondu de sortie se rejoue")
         mixer.shutdown()
     }
