@@ -309,7 +309,11 @@ extension ConversationSyncEngine {
         let msg = apiMessage.toMessage(
             currentUserId: userId, currentUsername: username, currentUserDisplayName: displayName, preferredLanguages: preferredLanguages)
         await cache.messages.upsert(item: msg, for: msg.conversationId) { existing, new in
-            existing.contains(where: { $0.id == new.id }) ? existing : existing + [new]
+            // Le plafond de la politique (600) ne s'appliquait qu'à `save` : une conversation active jamais
+            // ouverte gagnait chaque message reçu, et chaque ajout recopiait et ré-encodait tout le tableau.
+            existing.contains(where: { $0.id == new.id })
+                ? existing
+                : Array((existing + [new]).suffix(CachePolicy.messages.maxItemCount ?? Int.max))
         }
         // Persist into the app's GRDB message store too — this is the ONLY
         // global `message:new` sink, so without it a broadcast for a CLOSED

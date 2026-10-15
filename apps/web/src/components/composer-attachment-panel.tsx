@@ -10,7 +10,7 @@ import { translate } from '@/lib/i18n-catalog';
 import { currentInterfaceLanguage } from '@/lib/interface-language';
 import { mayAttach } from '@/lib/send/attachments';
 import type { ContactSource } from '@/lib/send/contact-card';
-import type { GuestKind } from '@/lib/send/guest-attachment-kinds';
+import type { GuestAttachmentKind } from '@meeshy/shared/types/guest-attachment-kind-rules';
 import { guestAcceptAttribute, guestKindsAllowMime, guestKindsPhrase, type GuestAttachments } from '@/lib/send/guest-attachment-policy';
 import { Link } from '@/routes/route-table';
 
@@ -206,7 +206,7 @@ export type ComposerAttachmentPanelProps = {
 };
 
 /** Les tuiles de fichier d'un invité restreint, dans l'ordre de la planche. */
-const GUEST_FILE_TILES: ReadonlyArray<{ readonly kind: Exclude<GuestKind, 'image'>; readonly color: string }> = [
+const GUEST_FILE_TILES: ReadonlyArray<{ readonly kind: Exclude<GuestAttachmentKind, 'image'>; readonly color: string }> = [
   { kind: 'text', color: 'var(--ios-tile-file)' },
   { kind: 'audio', color: 'var(--ios-tile-voice)' },
   { kind: 'pdf', color: 'var(--ios-tile-file)' },

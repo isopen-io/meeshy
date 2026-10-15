@@ -11,6 +11,9 @@ export type KnownPerson = {
   readonly username: string;
   readonly displayName: string | null;
   readonly avatar: string | null;
+  /** Le `User.id`, quand la source le portait (la liste des conversations,
+   * `known-people-cache.ts`) — absent d'un simple toucher de nom. */
+  readonly id?: string | null;
 };
 
 const CAPACITY = 200;
@@ -27,6 +30,7 @@ export function rememberPerson(person: KnownPerson): void {
     username: person.username,
     displayName: person.displayName ?? previous?.displayName ?? null,
     avatar: person.avatar ?? previous?.avatar ?? null,
+    id: person.id ?? previous?.id ?? null,
   };
   const kept = [...known].filter(([entry]) => entry !== key).slice(-(CAPACITY - 1));
   known = new Map([...kept, [key, merged]]);

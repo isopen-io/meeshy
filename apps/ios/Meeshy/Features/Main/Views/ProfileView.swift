@@ -103,7 +103,7 @@ struct ProfileView: View {
                 imageURL: image.value,
                 fallbackText: user?.displayName ?? user?.username ?? "",
                 accentColor: accentColor
-            )
+            ).closesForConversationOpening(.profilePhoto)
         }
         .adaptiveOnChange(of: avatarItem) { _, newItem in
             guard let newItem else { return }
@@ -252,11 +252,13 @@ struct ProfileView: View {
                     .accessibilityHint(opensFullscreen(user?.banner) ? ProfileImageCopy.openFullscreenHint : "")
                     .accessibilityAddTraits(opensFullscreen(user?.banner) ? .isButton : [])
                     .accessibilityAction { openFullscreen(user?.banner) }
-                    .overlay(alignment: .top) {
+                    .overlay {
+                        // #10601 — le niveau et le rang aux angles BAS : la découpe de la bannière s'applique aussi à
+                        // eux, leurs coins bas suivent donc l'arrondi de ses angles, sans débord ni jour.
                         if !isEditing, let userId = user?.id {
                             GameBannerBadge(userId: userId)
                                 .allowsHitTesting(false)
-                                .padding(MeeshySpacing.sm)
+                                .clipShape(RoundedRectangle(cornerRadius: MeeshyRadius.lg))
                         }
                     }
 
@@ -282,13 +284,7 @@ struct ProfileView: View {
 
             // Avatar overlapping banner
             ZStack(alignment: .bottomTrailing) {
-                MeeshyAvatar(
-                    name: user?.displayName ?? user?.username ?? "?",
-                    context: .profileBanner,
-                    accentColor: accentColor,
-                    secondaryColor: MeeshyColors.indigo300Hex,
-                    avatarURL: user?.avatar
-                )
+                ProfileOwnAvatar(user: user, accentColor: accentColor, isEditing: isEditing)
                 .overlay(
                     Circle()
                         .stroke(theme.backgroundGradient, lineWidth: 4)

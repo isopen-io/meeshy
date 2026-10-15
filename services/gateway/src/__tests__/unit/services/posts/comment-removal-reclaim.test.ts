@@ -60,3 +60,23 @@ describe('retirer son commentaire — à qui la reprise s’applique', () => {
     expect(removalReclaimsAuthorCredits({ removedBy: OTHER, authorId: COMMENTER, byModeration: false })).toBe(false);
   });
 });
+
+describe('retirer un commentaire PAR LA MODÉRATION (#10394)', () => {
+  it("la modération retire le commentaire d'un autre, et reprend les crédits de chaque auteur du fil", async () => {
+    const { service, recorder } = setup();
+
+    const result = await service.deleteComment(COMMENT, 'moderator', undefined, { byModeration: true });
+
+    expect(result?.deletedCommentIds).toEqual([COMMENT, REPLY_BY_OTHER, REPLY_BY_SELF]);
+    expect(recorder.reclaimSource.mock.calls).toEqual([
+      [COMMENTER, `comment:${COMMENT}`, {}],
+      [OTHER, `comment:${REPLY_BY_OTHER}`, {}],
+      [COMMENTER, `comment:${REPLY_BY_SELF}`, {}],
+    ]);
+  });
+
+  it('sans la modération, le commentaire d’un autre reste refusé', async () => {
+    const { service } = setup();
+    await expect(service.deleteComment(COMMENT, 'moderator', undefined)).rejects.toThrow('FORBIDDEN');
+  });
+});

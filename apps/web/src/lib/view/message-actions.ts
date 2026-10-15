@@ -3,6 +3,7 @@ import { MESSAGE_EFFECT_FLAGS } from '@meeshy/shared/types/message-effect-flags'
 import { contentExitOf, exitOffers, messageExitOffers, pieceIsOpen, type ExitMessage } from '@/lib/view/content-exit';
 import type { Message, MessageTranslation } from '@/lib/api/types';
 import type { InterfaceCatalogKey } from '@/lib/i18n-catalog';
+import type { PlainMessagePiecesKey } from '@/lib/i18n-message-pieces-catalog';
 import { kindOf, translationsOf } from '@/lib/view/message';
 import { protectionOf } from '@/lib/reading-mode/protection';
 
@@ -12,8 +13,9 @@ import { protectionOf } from '@/lib/reading-mode/protection';
  * `MessageActionResolver.primaryActions` (`apps/ios/Meeshy/Features/Main/
  * Components/MessageActionResolver.swift:253-274`) — réduit au sous-ensemble
  * que la v3.1 peut RÉELLEMENT servir (§ 1.2 de la spécification #5814) :
- * `edit`, `saveMedia` et `callDetail` n'ont aucun port web, la loi 4 du
- * dépôt (« un contrôle existe s'il a un effet ») interdit de les lister.
+ * `callDetail` n'a aucun port web, la loi 4 du dépôt (« un contrôle existe
+ * s'il a un effet ») interdit de le lister. `edit` a le sien depuis #10581,
+ * `saveMedia` (ici `save`) depuis #10599.
  *
  * Ce fichier ne rend RIEN — c'est `message-menu.tsx` qui consomme cette loi.
  * Il ne porte donc AUCUN libellé : une loi PURE ne connaît pas la langue de
@@ -39,10 +41,10 @@ import { protectionOf } from '@/lib/reading-mode/protection';
  * serveur est dite ICI, avant l'aller-retour, pour qu'un refus ne se découvre
  * pas après coup.
  */
-export type MessageActionId = 'select' | 'translate' | 'copy' | 'forward' | 'reply' | 'export' | 'exportQuick' | 'exportDiscussion' | 'more';
+export type MessageActionId = 'edit' | 'addSticker' | 'save' | 'select' | 'translate' | 'copy' | 'forward' | 'reply' | 'export' | 'exportQuick' | 'exportDiscussion' | 'more';
 
 /** Les six glyphes du menu — miroir `MessageActionsMenu.swift:96-111`. */
-export type MessageMenuGlyph = 'checkCircle' | 'globe' | 'copy' | 'arrowBendUpRight' | 'magicWand' | 'imageSquare' | 'lightning' | 'dotsThree';
+export type MessageMenuGlyph = 'pencilSimple' | 'downloadSimple' | 'checkCircle' | 'globe' | 'copy' | 'arrowBendUpRight' | 'magicWand' | 'imageSquare' | 'lightning' | 'dotsThree';
 
 /**
  * UNE CLÉ, JAMAIS UN LIBELLÉ (#7555). `as const satisfies` plutôt qu'une
@@ -61,15 +63,32 @@ const MENU_LABEL_KEYS = {
   exportQuick: 'message.menu.exportQuick',
   exportDiscussion: 'message.menu.exportDiscussion',
   more: 'message.menu.more',
-} as const satisfies Readonly<Record<MessageActionId, InterfaceCatalogKey>>;
+  /* « ENREGISTRER » (#10599) — le mot de la visionneuse, déjà dans les sept langues : même geste, même mot. */
+  save: 'media.viewer.save',
+} as const satisfies Readonly<Record<Exclude<MessageActionId, 'edit' | 'addSticker'>, InterfaceCatalogKey>>;
 
-export type MessageMenuLabelKey = (typeof MENU_LABEL_KEYS)[MessageActionId];
+export type MessageMenuLabelKey = (typeof MENU_LABEL_KEYS)[keyof typeof MENU_LABEL_KEYS];
 
-export type MessageMenuItem = {
-  readonly id: MessageActionId;
-  readonly labelKey: MessageMenuLabelKey;
-  readonly glyph: MessageMenuGlyph;
-};
+/**
+ * « MODIFIER » LIT SON LIBELLÉ DANS LE CATALOGUE DU FIL (#10581) — celui
+ * d'interface a atteint son plafond (`budgets.json` › `interface_catalogs`) ;
+ * le catalogue des pièces, chargé avec le fil, porte aussi ce que le menu
+ * fait du message entier. L'union nomme l'écart : le rendu sait par
+ * l'identifiant dans quel catalogue lire.
+ */
+export const EDIT_LABEL_KEY = 'message.edit.action' as const satisfies PlainMessagePiecesKey;
+
+/** « AJOUTER À MES STICKERS » (#10630) — même catalogue que « Modifier » : celui du fil. */
+export const ADD_STICKER_LABEL_KEY = 'message.sticker.add' as const satisfies PlainMessagePiecesKey;
+
+export type MessageMenuItem =
+  | {
+      readonly id: Exclude<MessageActionId, 'edit' | 'addSticker'>;
+      readonly labelKey: MessageMenuLabelKey;
+      readonly glyph: MessageMenuGlyph;
+    }
+  | { readonly id: 'edit'; readonly labelKey: typeof EDIT_LABEL_KEY; readonly glyph: 'pencilSimple' }
+  | { readonly id: 'addSticker'; readonly labelKey: typeof ADD_STICKER_LABEL_KEY; readonly glyph: 'downloadSimple' };
 
 export type MessageMenuContext = {
   readonly hasText: boolean;
@@ -112,8 +131,8 @@ export type MessageMenuContext = {
   /**
    * UNE VUE UNIQUE N'OFFRE RIEN QUI TOUCHE À SON CONTENU (#7580) — ouverte ou
    * non : ni aperçu, ni copie, ni transfert, ni traduction, ni réponse qui la
-   * citerait. Le menu se réduit à « Plus… » (Infos) ; la suppression n'a pas
-   * encore de port web (`message-detail-sheet.tsx`, D-29).
+   * citerait. Le menu se réduit à « Plus… » : Infos, et Supprimer depuis
+   * #10582 (`message-detail-sheet.tsx`), comme `viewOnceSections` sur iOS.
    */
   readonly isViewOnce?: boolean;
   /** Un format d'export par défaut est enregistré sur l'appareil : « Export rapide » l'applique sans options. */
@@ -127,6 +146,25 @@ export type MessageMenuContext = {
   readonly hasImageableMedia?: boolean;
   /** Le rang de la première photo ou vidéo que « Composer » peut poser dans le studio — `null` : rien à composer. */
   readonly composableIndex?: number | null;
+  /**
+   * LE LECTEUR PEUT MODIFIER CE MESSAGE (#10581) — `editOffered`
+   * (`message-edit.ts`), la règle du serveur lue avant le geste. Posé par
+   * l'hôte, qui connaît le lecteur ; absent ⇒ rien n'est offert.
+   */
+  readonly canEdit?: boolean;
+  /**
+   * LE MESSAGE PORTE EXACTEMENT UNE PIÈCE ENREGISTRABLE (#10599) —
+   * `soleSaveablePieceOf` (`message-piece.ts`), posé par l'hôte. Absent ⇒ rien
+   * n'est offert ; un contenu protégé ou qui ne sort pas ne l'offre jamais.
+   */
+  readonly canSave?: boolean;
+  /**
+   * LE MESSAGE EST UN STICKER (#10630) — posé par l'hôte, qui connaît la
+   * bibliothèque du lecteur. Hors bibliothèque, « Ajouter à mes stickers »
+   * s'offre ; déjà rangé, rien (loi 4 : un contrôle existe s'il a un effet).
+   * Un sticker n'offre JAMAIS « Enregistrer » : son image n'est pas une photo.
+   */
+  readonly sticker?: { readonly inLibrary: boolean };
 };
 
 type MenuPiece = { readonly mimeType: string; readonly isBlurred?: boolean; readonly isViewOnce?: boolean; readonly isEncrypted?: boolean; readonly effectFlags?: number | null };
@@ -184,7 +222,8 @@ export function messageDetailExposureOf(
 }
 
 /**
- * `MessageActionResolver.primaryActions` réduit : `select` et `more`
+ * `MessageActionResolver.primaryActions` réduit : `edit` en tête quand le
+ * lecteur peut modifier (`canEdit`, #10581), `select` et `more`
  * inconditionnels, `translate`/`copy` gardés par `hasText` ET `!isProtected`
  * (`translate` de plus par `languageCount > 1`, `copy` par `leaves` — un
  * contenu qui disparaît ne se copie pas, #9573), `forward` gardé par
@@ -194,7 +233,9 @@ export function messageDetailExposureOf(
  */
 export function messageMenuItems(ctx: MessageMenuContext): readonly MessageMenuItem[] {
   if (ctx.isViewOnce === true) return [{ id: 'more', labelKey: MENU_LABEL_KEYS.more, glyph: 'dotsThree' }];
-  const items: MessageMenuItem[] = [{ id: 'select', labelKey: MENU_LABEL_KEYS.select, glyph: 'checkCircle' }];
+  const items: MessageMenuItem[] = [];
+  if (ctx.canEdit === true && ctx.hasText) items.push({ id: 'edit', labelKey: EDIT_LABEL_KEY, glyph: 'pencilSimple' });
+  items.push({ id: 'select', labelKey: MENU_LABEL_KEYS.select, glyph: 'checkCircle' });
   if (ctx.hasText && !ctx.isProtected && ctx.languageCount > 1) {
     items.push({ id: 'translate', labelKey: MENU_LABEL_KEYS.translate, glyph: 'globe' });
   }
@@ -205,6 +246,9 @@ export function messageMenuItems(ctx: MessageMenuContext): readonly MessageMenuI
     items.push({ id: 'forward', labelKey: MENU_LABEL_KEYS.forward, glyph: 'arrowBendUpRight' });
   }
   items.push({ id: 'reply', labelKey: MENU_LABEL_KEYS.reply, glyph: 'magicWand' });
+  if (ctx.sticker?.inLibrary === false && !ctx.isProtected && ctx.leaves !== false) {
+    items.push({ id: 'addSticker', labelKey: ADD_STICKER_LABEL_KEY, glyph: 'downloadSimple' });
+  }
   /* « IMAGER » (#8693, ex « Exporter en image ») — même garde que « Copier » :
      une image est une copie qu'on partage, ce qui ne se copie pas ne se peint
      pas (`lib/export/message-card-subject.ts`). Il tient dans le menu RAPIDE la
@@ -216,6 +260,11 @@ export function messageMenuItems(ctx: MessageMenuContext): readonly MessageMenuI
     if (ctx.hasDefaultExportFormat === true) {
       items.push({ id: 'exportQuick', labelKey: MENU_LABEL_KEYS.exportQuick, glyph: 'lightning' });
     }
+  }
+  /* « ENREGISTRER » (#10599) — juste après « Imager », comme iOS le range
+     après l'export : les gestes qui EMPORTENT le contenu se suivent. */
+  if (ctx.canSave === true && ctx.sticker === undefined && !ctx.isProtected && ctx.leaves !== false) {
+    items.push({ id: 'save', labelKey: MENU_LABEL_KEYS.save, glyph: 'downloadSimple' });
   }
   items.push({ id: 'more', labelKey: MENU_LABEL_KEYS.more, glyph: 'dotsThree' });
   return items;
@@ -287,6 +336,59 @@ export function starrableOf(
   if (message.deletedAt != null) return false;
   if (message.expiresAt != null && new Date(message.expiresAt).getTime() <= input.now) return false;
   return !message.isViewOnce && ((message.effectFlags ?? 0) & MESSAGE_EFFECT_FLAGS.VIEW_ONCE) === 0;
+}
+
+/**
+ * **ÉPINGLER / DÉTACHER, DANS « PLUS… »** (#7558) — miroir de
+ * `MessageActionResolver.moreSections` (`ctx.isPinned ? .unpin : .pin`), la
+ * règle du SERVEUR lue avant le geste (`services/gateway/src/routes/
+ * conversations/messages-pin.ts`) : les deux routes exigent un COMPTE
+ * (`allowAnonymous: false`) et un message connu, non supprimé ; un avis de
+ * capture se refuse. Tout membre l'épingle, auteur ou non — la passerelle ne
+ * demande aucun rôle.
+ *
+ * TROIS RESTRICTIONS de plus, assumées : un message SYSTÈME n'est jamais
+ * offert (l'avis de capture en est un, et aucun autre n'a de contenu à mettre
+ * en avant) ; une VUE UNIQUE non plus (iOS, `viewOnceSections`) ; un éphémère
+ * ÉCHU non plus — il n'est plus là pour personne.
+ *
+ * Mineur dans Meeshy Global : le client ne connaît pas la date de naissance,
+ * le refus 403 revient et se dit (`use-message-pin.ts`).
+ */
+export type MessagePinAction = 'pin' | 'unpin';
+
+type ModeratedMessage = Pick<Message, 'id' | 'senderId' | 'deletedAt' | 'messageType'>;
+
+const knownLiveMessage = (message: ModeratedMessage): boolean =>
+  !message.id.startsWith('cid_') && message.deletedAt == null && message.messageType !== 'system';
+
+const viewOnceOf = (message: Pick<Message, 'isViewOnce' | 'effectFlags'>): boolean =>
+  message.isViewOnce || ((message.effectFlags ?? 0) & MESSAGE_EFFECT_FLAGS.VIEW_ONCE) !== 0;
+
+export function messagePinAction(
+  message: ModeratedMessage & Pick<Message, 'pinnedAt' | 'expiresAt' | 'isViewOnce' | 'effectFlags'>,
+  viewer: { readonly hasAccount: boolean },
+  input: { readonly now: number },
+): MessagePinAction | null {
+  if (!viewer.hasAccount || !knownLiveMessage(message)) return null;
+  if (message.expiresAt != null && new Date(message.expiresAt).getTime() <= input.now) return null;
+  if (viewOnceOf(message)) return null;
+  return message.pinnedAt == null ? 'pin' : 'unpin';
+}
+
+/**
+ * **SIGNALER UN MESSAGE** (#7558) — `POST /reports` avec `reportedType:
+ * 'message'` exige un compte (`fastify.authenticate`) et que le signalant
+ * participe à la conversation, ce que le fil ouvert garantit. On ne signale
+ * JAMAIS son propre message (iOS l'offre sans condition, `moderation([.report])` :
+ * se signaler soi-même n'a aucun sens pour la modération). Une VUE UNIQUE ne
+ * l'offre pas, comme iOS (`viewOnceSections` : Supprimer et Infos seulement).
+ */
+export function reportOffered(
+  message: ModeratedMessage & Pick<Message, 'isViewOnce' | 'effectFlags'>,
+  viewer: { readonly id: string; readonly hasAccount: boolean },
+): boolean {
+  return viewer.hasAccount && knownLiveMessage(message) && !viewOnceOf(message) && message.senderId !== viewer.id;
 }
 
 /** Les 6 réactions rapides par DÉFAUT — miroir `MessageOverlayMenu.swift:99-101`.

@@ -1,0 +1,20 @@
+<?xml version="1.0" encoding="utf-8"?>
+<resources>
+    <!-- #10626 — les widgets d'ecran d'accueil de la coque. -->
+    <string name="widget_unread_name">Ungelesene Nachrichten</string>
+    <string name="widget_unread_description">Behalte deine ungelesenen Unterhaltungen im Blick</string>
+    <string name="widget_recent_name">Letzte Unterhaltungen</string>
+    <string name="widget_recent_description">Deine letzten Unterhaltungen auf einen Blick</string>
+    <string name="widget_quick_reply_name">Schnellantwort</string>
+    <string name="widget_quick_reply_description">Antworte auf die neueste ungelesene Unterhaltung</string>
+    <string name="widget_favorites_name">Lieblingskontakte</string>
+    <string name="widget_favorites_description">Schneller Zugriff auf deine angehefteten Kontakte</string>
+    <string name="widget_unread_label">Ungelesen</string>
+    <string name="widget_all_read">Alles gelesen</string>
+    <string name="widget_signed_out">Öffne Meeshy, um deine Unterhaltungen zu sehen</string>
+    <string name="widget_no_conversations">Noch keine Unterhaltungen</string>
+    <string name="widget_no_favorites">Hefte eine Unterhaltung an, um sie hier zu finden</string>
+    <string name="widget_nothing_to_reply">Keine wartende Nachricht</string>
+    <string name="widget_reply">Antworten</string>
+    <string name="widget_mark_read">Als gelesen markieren</string>
+</resources>

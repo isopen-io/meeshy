@@ -8,4 +8,9 @@
     <string name="playback_pause">Pausa</string>
     <string name="playback_play">Riproduci</string>
     <string name="playback_paused">Audio in pausa</string>
+    <!-- #10624 — la carte de lecture dit le vocal et se pilote, comme iOS. -->
+    <string name="playback_voice_message">Messaggio vocale</string>
+    <string name="playback_protected">Messaggio protetto</string>
+    <string name="playback_back">Indietro di 15 secondi</string>
+    <string name="playback_forward">Avanti di 15 secondi</string>
 </resources>

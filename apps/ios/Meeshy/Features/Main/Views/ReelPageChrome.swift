@@ -92,13 +92,20 @@ struct ReelScrubBar: View {
 
     private var accent: Color { Color(hex: accentColor) }
 
+    /// Le doigt d'abord ; sinon la part jouée de l'élément EN COURS, lue sur
+    /// le lecteur (`liveProgress`, loi `PlaybackProgressLaw`) : au tour de
+    /// boucle elle repart de zéro avec l'image (#10555).
     private var progress: Double {
-        guard manager.duration > 0 else { return 0 }
-        return isSeeking ? seekFraction : manager.currentTime / manager.duration
+        isSeeking ? seekFraction : manager.liveProgress()
     }
 
     var body: some View {
-        track
+        // Rafraîchie par l'affichage tant que le réel joue : `currentTime`
+        // n'est publié que 2 à 5 fois par seconde, et la barre avançait par
+        // à-coups. En pause ou sous le doigt, plus aucun tick.
+        TimelineView(.animation(minimumInterval: 1.0 / 60.0, paused: !manager.isPlaying || isSeeking)) { _ in
+            track
+        }
             .accessibilityElement(children: .ignore)
             .accessibilityLabel(String(localized: "reels.scrub", defaultValue: "Avancer ou reculer", bundle: .main))
             // No on-screen time numbers (Instagram-reels style), but VoiceOver

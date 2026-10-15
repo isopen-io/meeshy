@@ -1,5 +1,5 @@
 import type { GuestTerms, InvitationLimits, SpokenLanguage } from '@/lib/api/link-join';
-import type { GuestKind } from '@/lib/send/guest-attachment-kinds';
+import type { GuestAttachmentKind } from '@meeshy/shared/types/guest-attachment-kind-rules';
 
 /**
  * **LES RÈGLES PURES DE LA PAGE D'ACCUEIL D'INVITATION** (#7796, #7797) — ce
@@ -11,7 +11,7 @@ import type { GuestKind } from '@/lib/send/guest-attachment-kinds';
 export type AnonymousRight = 'messages' | 'images' | 'files' | 'history';
 
 /** Une famille qu'on JOINT comme un fichier — l'image a sa propre ligne. */
-export type FileKind = Exclude<GuestKind, 'image'>;
+export type FileKind = Exclude<GuestAttachmentKind, 'image'>;
 
 export type AnonymousRightRow = {
   readonly right: AnonymousRight;
@@ -20,7 +20,7 @@ export type AnonymousRightRow = {
   readonly kinds?: readonly FileKind[];
 };
 
-const isFileKind = (kind: GuestKind): kind is FileKind => kind !== 'image';
+const isFileKind = (kind: GuestAttachmentKind): kind is FileKind => kind !== 'image';
 
 /** Les deux lignes de pièces jointes : la liste de familles du lien décide SEULE
  * quand elle est servie (#10121, World Wide : texte `.txt` et audio) ; sans

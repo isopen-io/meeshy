@@ -90,6 +90,19 @@ describe('tool.post_reaction — PostReactionService.addReaction', () => {
     ]);
   });
 
+  it('dit le type de ce qu’elle vise, pour que la réaction sur un réel avance la série reaction_reel (#10389)', async () => {
+    const recorder = makeRecorder();
+    const prisma = makePrisma(null);
+    prisma.post.findUnique.mockResolvedValue({ id: POST_ID, deletedAt: null, authorId: AUTHOR_ID, type: 'REEL' });
+    const service = new PostReactionService(prisma as any, recorder);
+
+    await service.addReaction({ postId: POST_ID, userId: READER_ID, emoji: '❤️', through: { id: REPOST_ID, authorId: REPOSTER_ID, type: 'POST' } });
+    await settle();
+
+    expect(prisma.post.findUnique).toHaveBeenCalledWith(expect.objectContaining({ select: expect.objectContaining({ type: true }) }));
+    expect(recorder.recordActivity.mock.calls.map((call) => (call[2] as { postType?: string }).postType)).toEqual(['REEL', 'POST']);
+  });
+
   it('ne crédite rien quand la réaction existait déjà (unchanged)', async () => {
     const recorder = makeRecorder();
     const service = new PostReactionService(makePrisma(reactionRow()) as any, recorder);

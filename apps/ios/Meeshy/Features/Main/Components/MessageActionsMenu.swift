@@ -105,6 +105,7 @@ struct MessageActionsMenu: View {
         case .wholeMessage: return "text.bubble"
         case .replyToPiece: return "arrowshape.turn.up.left"
         case .deletePiece: return "trash"
+        case .addSticker: return "plus.rectangle.on.rectangle"
         }
     }
 
@@ -123,6 +124,7 @@ struct MessageActionsMenu: View {
         case .wholeMessage: return String(localized: "message.piece.wholeMessage", defaultValue: "Tout le message", bundle: .main)
         case .replyToPiece: return String(localized: "action.reply", defaultValue: "Répondre", bundle: .main)
         case .deletePiece: return String(localized: "action.delete_media", defaultValue: "Supprimer le média", bundle: .main)
+        case .addSticker: return String(localized: "message.sticker.add", defaultValue: "Ajouter à mes stickers", bundle: .main)
         }
     }
 }

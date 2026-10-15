@@ -36,6 +36,16 @@ const ptVerifyEmail = {
   'verifyEmail.arrival.lead': 'A preparar as suas conversas…',
   'verifyEmail.arrival.status': 'Endereço confirmado — a iniciar sessão…',
   'emailSent.codeOrLink': 'Introduza o código de 6 dígitos recebido em {email} ou abra o link do mesmo e-mail.',
+  'signInLink.switchAccount.title': 'Abrir OUTRA conta?',
+  'signInLink.switchAccount.lead': 'Você está conectado como @{current}, mas o que você acabou de abrir leva a outra conta:',
+  'signInLink.switchAccount.warning': 'Se você não pediu este link ou código, cancele: sua sessão continua aberta e nada muda.',
+  'signInLink.switchAccount.cancel': 'Cancelar e continuar em @{current}',
+  'signInLink.switchAccount.confirm': 'Abrir esta outra conta',
+  'signInLink.switchAccount.kept': '@{current} continuará nas suas contas neste dispositivo.',
+  'signInLink.switchAccount.busy': 'Um momento…',
+  'signInLink.switchAccount.failed': 'Não é possível abrir esta outra conta agora. Sua sessão continua aberta e o link foi fechado.',
+  'signInLink.switchAccount.expired': 'Este link expirou: peça um novo. Sua sessão continua aberta.',
+  'signInLink.switchAccount.leave': 'Voltar ao início',
 };
 
 export default ptVerifyEmail;

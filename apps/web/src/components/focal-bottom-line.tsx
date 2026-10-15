@@ -51,6 +51,7 @@ export function FocalBottomLine({
   myReactions,
   onPickLanguage,
   onReact,
+  reactorsFor,
 }: {
   readonly mounts: boolean;
   readonly elected: boolean;
@@ -63,6 +64,8 @@ export function FocalBottomLine({
   readonly myReactions?: readonly string[];
   readonly onPickLanguage?: (code: string) => void;
   readonly onReact?: (emoji: string) => void;
+  /** Le message dont une capsule maintenue ouvre « qui a réagi » (#10583). */
+  readonly reactorsFor?: string;
 }) {
   if (!mounts) {
     return elected ? (
@@ -104,7 +107,7 @@ export function FocalBottomLine({
             glyph={glyph}
             count={count}
             mine={mine}
-            {...(mine && onReact !== undefined ? { onToggle: () => onReact(glyph) } : {})}
+            {...(onReact === undefined ? {} : { onToggle: () => onReact(glyph), ...(reactorsFor === undefined ? {} : { reactorsFor }) })}
           />
         );
       })}

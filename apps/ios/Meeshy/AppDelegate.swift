@@ -32,6 +32,10 @@ class AppDelegate: NSObject, UIApplicationDelegate {
         // delivered at next launch from the OS).
         let crashReporter = Self.bootCrashReporting()
 
+        // Les copies brutes que le composeur, la bande récente et les retouches posent dans `tmp` ne sont
+        // retirées par personne quand la publication n'aboutit pas : une semaine plus tard, elles partent.
+        Task.detached(priority: .background) { TemporaryMediaSweeper.sweep() }
+
         // Install the crash & hang observer first so any crash that happens
         // during the rest of `didFinishLaunching` (or at any later point in
         // this session) is captured. MetricKit also delivers diagnostics
@@ -50,6 +54,9 @@ class AppDelegate: NSObject, UIApplicationDelegate {
             CrashDiagnosticsManager.shared.install(crashReporter: crashReporter)
             ProtectedContentSnapshotVeil.shared.install()
             ContentCaptureReporter.shared.install() // #9617 — une capture d'un contenu qui disparaît s'annonce
+            SocialEventsV2Reporter.installHub() // #10499 — les événements v2 émis par le SDK rejoignent la file de l'app
+            AnalyticsConsentStanding.installOnCountingBatches() // #10552 — le lot de comptage déclare le même consentement que le lot v2
+            DeletedAccountRetirement.shared.install() // #10482 — un compte supprimé quitte l'appareil, avec son jeu
             MeeshyMetricsSubscriber.shared.register()
             AnalyticsManager.shared.syncCollectionState()
             // P1.5 — surface DependencyContainer boot diagnostics now that
@@ -616,6 +623,9 @@ enum MeeshyNotificationCategory: String {
     /// #8859 — un vocal dont la piste voyage : la notification DÉPLOYÉE le
     /// fait écouter (`MeeshyNotificationContentExtension`).
     case audio = "MEESHY_AUDIO"
+    /// #7455 — un message éphémère : la notification DÉPLOYÉE montre son
+    /// décompte vivant (`MeeshyNotificationContentExtension`).
+    case ephemeral = "MEESHY_EPHEMERAL"
 }
 
 enum MeeshyNotificationAction: String {
@@ -661,6 +671,10 @@ extension AppDelegate: @preconcurrency UNUserNotificationCenterDelegate {
 
         Task { @MainActor in
             PushNotificationManager.shared.noteMessageActivity(userInfo: userInfo)
+            // #10507 — « affichée » au premier plan.
+            if let displayed = SocialNotificationEvents.event(.displayed, userInfo: userInfo) {
+                SocialEventsV2Reporter.shared.emit(displayed)
+            }
 
             // Trigger real-time sync for foreground notifications so the DB
             // and cache stay fresh even when the socket is lagging or the
@@ -703,7 +717,11 @@ extension AppDelegate: @preconcurrency UNUserNotificationCenterDelegate {
             rawType: userInfo["type"] as? String,
             conversationType: userInfo["conversationType"] as? String,
             conversationId: conversationId,
-            activeConversationId: MessageSocketManager.shared.activeConversationId
+            // iPad multi-fenêtre : une conversation affichée dans N'IMPORTE
+            // QUELLE fenêtre tait sa bannière, pas seulement la plus récente.
+            activeConversationId: conversationId.flatMap {
+                NotificationToastManager.shared.isConversationOpen($0) ? $0 : nil
+            } ?? MessageSocketManager.shared.activeConversationId
         )
 
         // Un push de REMPLACEMENT (édition, réaction changée) annule la bannière d'avant AVANT
@@ -739,6 +757,11 @@ extension AppDelegate: @preconcurrency UNUserNotificationCenterDelegate {
         logger.info("Notification response: action=\(actionIdentifier)")
 
         Task { @MainActor in
+            // #10507 — « ouverte », ou « écartée » sur une catégorie qui le déclare.
+            let action: SocialNotificationEvent.Action = actionIdentifier == UNNotificationDismissActionIdentifier ? .dismissed : .opened
+            if let event = SocialNotificationEvents.event(action, userInfo: userInfo) {
+                SocialEventsV2Reporter.shared.emit(event)
+            }
             await NotificationActionHandler.shared.handle(
                 actionIdentifier: actionIdentifier,
                 userInfo: userInfo,
@@ -750,3 +773,33 @@ extension AppDelegate: @preconcurrency UNUserNotificationCenterDelegate {
 }
 
 
+
+/// Le ménage de `tmp` au lancement : les copies d'ingestion du composeur, de la bande des médias récents et des
+/// retouches, plus vieilles qu'une semaine. Aucun composeur n'est ouvert au lancement, et la file de publication
+/// des stories ne retient pas une copie une semaine — au-delà, le brouillon durable vit ailleurs (autosave,
+/// outbox), et une copie de `tmp` n'est plus que du poids.
+nonisolated enum TemporaryMediaSweeper {
+    static let prefixes = ["composer_camera_", "composer_file_", "composer_photo_", "composer_sound_",
+                           "recent_", "retouche-", "video_look_", "meeshy-imagine-"]
+    static let maximumAge: TimeInterval = 7 * 24 * 3600
+
+    /// Les noms à retirer parmi `entries` (nom, date de modification) à l'instant `now`.
+    static func expired(_ entries: [(name: String, modified: Date)], now: Date) -> [String] {
+        entries.filter { entry in
+            prefixes.contains { entry.name.hasPrefix($0) } && now.timeIntervalSince(entry.modified) > maximumAge
+        }.map(\.name)
+    }
+
+    static func sweep(in directory: URL = FileManager.default.temporaryDirectory, now: Date = Date()) {
+        let fm = FileManager.default
+        let keys: [URLResourceKey] = [.contentModificationDateKey]
+        guard let urls = try? fm.contentsOfDirectory(at: directory, includingPropertiesForKeys: keys) else { return }
+        let entries = urls.map { url in
+            (name: url.lastPathComponent,
+             modified: (try? url.resourceValues(forKeys: Set(keys)).contentModificationDate) ?? now)
+        }
+        for name in expired(entries, now: now) {
+            fm.removeItemLogging(at: directory.appendingPathComponent(name), context: "tmp media sweep")
+        }
+    }
+}

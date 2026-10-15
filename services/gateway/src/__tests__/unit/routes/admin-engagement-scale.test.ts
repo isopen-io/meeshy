@@ -220,3 +220,54 @@ describe('les variantes d’un message texte, par type de conversation (#9666)',
     });
   });
 });
+
+// #10388 — un palier de série rapporte jusqu'à 10 000 000 points, chaque acte a
+// ses paliers, et un ancien écran (sans `streaks`, sans `loyalty`) n'efface plus
+// ce qu'un nouveau a réglé.
+describe('les séries, la fidélité et l’ancien écran (#10388)', () => {
+  const acts = DEFAULT_ENGAGEMENT_SCALE.streaks?.acts;
+  const withStreaks = {
+    ...DEFAULT_ENGAGEMENT_SCALE,
+    streaks: {
+      global: [{ days: 365, points: 100_000, label: 'Un an' }],
+      acts: { ...acts, story: [{ days: 7, points: 50 }] },
+    },
+    loyalty: [{ days: 365, points: 100_000 }],
+  };
+
+  it('enregistre un palier de 100 000 points et le sert, avec sa projection à 1000 pour les anciennes passerelles', async () => {
+    const bundle = makePrisma();
+    const put = await call('BIGBOSS', 'PUT', { scale: withStreaks }, bundle);
+    const get = await call('BIGBOSS', 'GET', undefined, bundle);
+
+    expect(put.res.statusCode).toBe(200);
+    for (const res of [put.res, get.res]) {
+      const { scale } = res.json().data;
+      expect(scale.streaks.global).toEqual([{ days: 365, points: 100_000, label: 'Un an' }]);
+      expect(scale.streaks.acts.story).toEqual([{ days: 7, points: 50 }]);
+      expect(scale.loyalty).toEqual([{ days: 365, points: 100_000 }]);
+      expect(scale.streakBonuses).toEqual([{ days: 365, points: 1000 }]);
+    }
+  });
+
+  it('garde les séries et la fidélité qu’un ancien corps n’envoie pas', async () => {
+    const bundle = makePrisma();
+    await call('ADMIN', 'PUT', { scale: withStreaks }, bundle);
+    const { streaks: _streaks, loyalty: _loyalty, ...legacyBody } = withStreaks;
+
+    const put = await call('ADMIN', 'PUT', { scale: { ...legacyBody, streakBonuses: [{ days: 365, points: 1000 }] } }, bundle);
+
+    const { scale } = put.res.json().data;
+    expect(scale.streaks.global).toEqual([{ days: 365, points: 100_000, label: 'Un an' }]);
+    expect(scale.streaks.acts.story).toEqual([{ days: 7, points: 50 }]);
+    expect(scale.loyalty).toEqual([{ days: 365, points: 100_000 }]);
+  });
+
+  it('refuse un palier au-delà de dix millions sans rien écrire', async () => {
+    const { res, upsert } = await call('ADMIN', 'PUT', {
+      scale: { ...withStreaks, streaks: { ...withStreaks.streaks, global: [{ days: 365, points: 10_000_001 }] } },
+    });
+    expect(res.statusCode).toBe(400);
+    expect(upsert).not.toHaveBeenCalled();
+  });
+});

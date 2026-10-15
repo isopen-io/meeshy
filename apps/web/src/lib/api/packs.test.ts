@@ -65,6 +65,11 @@ describe('les clés de cache des packs', () => {
 });
 
 describe('le décodeur des packs de cadres', () => {
+  test('le prix et la possession servis se lisent ; sans prix, rien n’est inventé', () => {
+    expect(decodeFramePackSummary(frameSummary('a', { price: 25, owned: false }))).toMatchObject({ price: 25, owned: false });
+    expect('price' in (decodeFramePackSummary(frameSummary('a')) ?? {})).toBe(false);
+  });
+
   test('un résumé lisible se lit, son usage et ses noms par langue compris', () => {
     const pack = decodeFramePackSummary(frameSummary('exemple-savane'));
     expect(pack?.slug).toBe('exemple-savane');

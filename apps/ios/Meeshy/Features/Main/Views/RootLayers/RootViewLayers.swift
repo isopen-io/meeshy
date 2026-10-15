@@ -56,6 +56,7 @@ struct RootEnvironmentLayer: ViewModifier {
                     .environmentObject(storyViewerCoordinator)
                     .presentationDetents([.large, .medium])
                     .presentationDragIndicator(.visible)
+                    .closesForConversationOpening(.sheet)
             }
             // Propagate story viewer presentation state down to chrome (sync
             // pill, etc.) so they can skip rendering while a `fullScreenCover`
@@ -82,6 +83,7 @@ struct RootStoryDoorsLayer: ViewModifier {
     /// chargements parallèles. Il reste ÉCRIT dans `RootView`, qui possède
     /// tout ce qu'il touche.
     let onStart: @MainActor () async -> Void
+    @Environment(\.rootNavigationHandoff) private var navigationHandoff
 
     func body(content: Content) -> some View {
         content
@@ -127,6 +129,14 @@ struct RootStoryDoorsLayer: ViewModifier {
             }
             .onAppear {
                 DeviceLayout.activeWindowScene?.title = String(localized: "root.scene_title_default", defaultValue: "Meeshy — Conversations", bundle: .main)
+                // La fenêtre d'iPad vient de passer en largeur compacte : la pile reprend là où la racine iPad
+                // s'est arrêtée (`RootNavigationHandoff`).
+                if router.path.isEmpty, let routes = navigationHandoff?.routes, !routes.isEmpty {
+                    router.path = routes
+                }
+            }
+            .adaptiveOnChange(of: router.path) { _, path in
+                navigationHandoff?.record(path)
             }
             .task { await onStart() }
             .fullScreenCover(item: $storyViewerCoordinator.pendingRequest) { request in
@@ -232,9 +242,9 @@ struct RootChromeLayer: ViewModifier {
                         onItemTap: onSyncPillTap,
                         activeConversationId: activeConversationId
                     )
-                    // Dans la bande de la barre d'état, sous l'îlot, hors du
-                    // contenu — sur tous les écrans, conversation comprise
-                    // (#9680). La position vit dans `SyncPillPlacement`, plus
+                    // Sous la zone sûre, décollée de l'îlot — sur tous les
+                    // écrans, conversation comprise (#10371, qui supplante
+                    // #9680). La position vit dans `SyncPillPlacement`, plus
                     // chez chaque hôte (#5941, #5944, #5835).
                     .inSyncPillBand()
                 }
@@ -351,6 +361,10 @@ struct RootSheetsLayer: ViewModifier {
                     .environmentObject(router)
                     .environmentObject(statusViewModel)
                     .presentationDetents([.medium, .large])
+                    .closesForConversationOpening(.sheet, close: {
+                        router.pendingShareContent = nil
+                        showSharePicker = false
+                    })
                 }
             }
             .adaptiveOnChange(of: router.pendingShareContent != nil) { _, hasContent in
@@ -363,6 +377,7 @@ struct RootSheetsLayer: ViewModifier {
                     .environmentObject(statusViewModel)
                     .presentationDetents([.large])
                     .presentationDragIndicator(.visible)
+                    .closesForConversationOpening(.sheet)
             }
             .adaptiveOnChange(of: router.path) { _, newPath in
                 if !newPath.isEmpty && showFeed {
@@ -410,5 +425,9 @@ struct RootSheetsLayer: ViewModifier {
                     UpgradeGateView(requirement: requirement)
                 }
             }
+            // La fenêtre de ce routeur, posée par la couche la plus EXTERNE :
+            // feuilles et pleins écrans s'y déclarent, et une ouverture ne
+            // referme que ceux de cette fenêtre (#10543).
+            .environment(\.presentedSurfaceScope, router.surfaceScope)
     }
 }

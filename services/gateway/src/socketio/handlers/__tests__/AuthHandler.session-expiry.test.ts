@@ -19,6 +19,7 @@
 
 import { describe, it, expect, beforeEach, afterEach } from '@jest/globals';
 import { AuthHandler } from '../AuthHandler';
+import { LIVE_SID, liveSession } from '../../../services/auth/__tests__/live-session-double';
 import type { Socket } from 'socket.io';
 import type { PrismaClient } from '@meeshy/shared/prisma/client';
 import { StatusService } from '../../../services/StatusService';
@@ -56,7 +57,7 @@ const createMockPrisma = (): PrismaClient => ({
   // porte SANS stubber explicitement cette méthode échoue fermé plutôt que
   // de passer par accident.
   userSession: {
-    findFirst: jest.fn().mockResolvedValue(null)
+    findFirst: jest.fn().mockResolvedValue(liveSession())
   }
 } as unknown as PrismaClient);
 
@@ -97,7 +98,7 @@ describe('AuthHandler — la session nommée par le JWT (`sid`) doit être valid
       userSockets
     });
 
-    jest.spyOn(jwt, 'verify').mockReturnValue({ userId: 'user-123' } as any);
+    jest.spyOn(jwt, 'verify').mockReturnValue({ sid: LIVE_SID, userId: 'aaaaaaaaaaaaaaaaaaaa0123' } as any);
   });
 
   afterEach(() => {
@@ -109,15 +110,15 @@ describe('AuthHandler — la session nommée par le JWT (`sid`) doit être valid
       handshake: { auth: { token: 'valid-jwt-token' } }
     });
 
-    jest.spyOn(jwt, 'verify').mockReturnValue({ userId: 'user-123', sid: 'session-abc' } as any);
-    jest.spyOn(mockPrisma.user, 'findUnique').mockResolvedValue({ id: 'user-123', systemLanguage: 'en' } as any);
-    jest.spyOn((mockPrisma as any).userSession, 'findFirst').mockResolvedValue({ id: 'session-abc' });
+    jest.spyOn(jwt, 'verify').mockReturnValue({ userId: 'aaaaaaaaaaaaaaaaaaaa0123', sid: 'bbbbbbbbbbbbbbbbbbbbbabc' } as any);
+    jest.spyOn(mockPrisma.user, 'findUnique').mockResolvedValue({ id: 'aaaaaaaaaaaaaaaaaaaa0123', systemLanguage: 'en' } as any);
+    jest.spyOn((mockPrisma as any).userSession, 'findFirst').mockResolvedValue({ ...liveSession(), id: 'bbbbbbbbbbbbbbbbbbbbbabc' });
 
     await authHandler.handleTokenAuthentication(mockSocket);
 
     expect((mockPrisma as any).userSession.findFirst).toHaveBeenCalledWith({
-      where: { id: 'session-abc', userId: 'user-123', isValid: true, expiresAt: { gt: expect.any(Date) } },
-      select: { id: true },
+      where: { id: 'bbbbbbbbbbbbbbbbbbbbbabc', userId: 'aaaaaaaaaaaaaaaaaaaa0123' },
+      select: { isValid: true, expiresAt: true, adoptedExpiresAt: true },
     });
     expect(connectedUsers.size).toBe(1);
     expect(mockSocket.emit).toHaveBeenCalledWith('authenticated', expect.objectContaining({ success: true }));
@@ -128,8 +129,8 @@ describe('AuthHandler — la session nommée par le JWT (`sid`) doit être valid
       handshake: { auth: { token: 'valid-jwt-token' } }
     });
 
-    jest.spyOn(jwt, 'verify').mockReturnValue({ userId: 'user-123', sid: 'session-dead' } as any);
-    jest.spyOn(mockPrisma.user, 'findUnique').mockResolvedValue({ id: 'user-123', systemLanguage: 'en' } as any);
+    jest.spyOn(jwt, 'verify').mockReturnValue({ userId: 'aaaaaaaaaaaaaaaaaaaa0123', sid: 'bbbbbbbbbbbbbbbbbbbbdead' } as any);
+    jest.spyOn(mockPrisma.user, 'findUnique').mockResolvedValue({ id: 'aaaaaaaaaaaaaaaaaaaa0123', systemLanguage: 'en' } as any);
     jest.spyOn((mockPrisma as any).userSession, 'findFirst').mockResolvedValue(null);
 
     await authHandler.handleTokenAuthentication(mockSocket);
@@ -143,18 +144,18 @@ describe('AuthHandler — la session nommée par le JWT (`sid`) doit être valid
     expect(socketToUser.size).toBe(0);
   });
 
-  it("n'interroge pas `UserSession` et authentifie normalement quand le JWT ne porte aucun `sid` (jeton hérité, #4264)", async () => {
+  it("refuse, sans lire `UserSession`, un JWT qui ne porte aucun `sid` : le butoir de #4264 est fermé (#10493)", async () => {
     const mockSocket = createMockSocket({
       handshake: { auth: { token: 'valid-jwt-token' } }
     });
 
-    // Le `jwt.verify` par défaut du `beforeEach` ne pose pas `sid`.
-    jest.spyOn(mockPrisma.user, 'findUnique').mockResolvedValue({ id: 'user-123', systemLanguage: 'en' } as any);
+    jest.spyOn(jwt, 'verify').mockReturnValue({ userId: 'aaaaaaaaaaaaaaaaaaaa0123' } as any);
+    jest.spyOn(mockPrisma.user, 'findUnique').mockResolvedValue({ id: 'aaaaaaaaaaaaaaaaaaaa0123', systemLanguage: 'en' } as any);
 
     await authHandler.handleTokenAuthentication(mockSocket);
 
     expect((mockPrisma as any).userSession.findFirst).not.toHaveBeenCalled();
-    expect(connectedUsers.size).toBe(1);
-    expect(mockSocket.emit).toHaveBeenCalledWith('authenticated', expect.objectContaining({ success: true }));
+    expect(connectedUsers.size).toBe(0);
+    expect(mockSocket.emit).toHaveBeenCalledWith('auth:session-revoked', expect.objectContaining({ code: 'session_revoked' }));
   });
 });

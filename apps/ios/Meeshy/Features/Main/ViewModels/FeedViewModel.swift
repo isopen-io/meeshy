@@ -465,7 +465,9 @@ class FeedViewModel: ObservableObject {
 
             // stores-09 — patch every cache key holding this post (detail key,
             // bookmarks…), not just "main-feed" via debouncedCacheSave.
-            let newLikes = posts[index].likes
+            // `post`, pas `posts[index]` : le fil a pu changer pendant l'attente, et l'indice désigner un
+            // autre post — ou plus aucun.
+            let newLikes = post.likes
             Task.detached(priority: .utility) { [feedCache = self.feedCache] in
                 await feedCache.patchEverywhere(itemId: postId) {
                     $0.isLiked = liked
@@ -475,7 +477,7 @@ class FeedViewModel: ObservableObject {
 
             // Sync optimistic like state to GRDB so the feed cache matches.
             if let persistence = feedPersistence {
-                let count = posts[index].likes
+                let count = newLikes
                 Task.detached(priority: .utility) {
                     try? await persistence.updateLikeCount(postId: postId, count: count, isLikedByMe: liked)
                 }
@@ -490,6 +492,16 @@ class FeedViewModel: ObservableObject {
         } catch {
             // Roll back optimistic state if the outbox refuses the row.
             restoreLike(postId: postId, isLiked: wasLiked, likes: priorLikes)
+        }
+    }
+
+    /// Pose en tête le post que l'on vient de publier — ou le REMPLACE si l'écho `post:created` l'a déjà
+    /// inséré pendant l'attente de la réponse : deux cartes du même id se partageaient sinon l'état d'une seule.
+    private func insertPublished(_ feedPost: FeedPost) {
+        if let existing = posts.firstIndex(where: { $0.id == feedPost.id }) {
+            posts[existing] = feedPost
+        } else {
+            posts.insert(feedPost, at: 0)
         }
     }
 
@@ -648,7 +660,7 @@ class FeedViewModel: ObservableObject {
                 discoverabilityPrecision: discoverabilityPrecision
             )
             let feedPost = apiPost.toFeedPost(preferredLanguages: preferredLanguages)
-            posts.insert(feedPost, at: 0)
+            insertPublished(feedPost)
             debouncedCacheSave()
             publishSuccess = true
 
@@ -692,7 +704,7 @@ class FeedViewModel: ObservableObject {
             )
             let apiPost = response.data
             let feedPost = apiPost.toFeedPost(preferredLanguages: preferredLanguages)
-            posts.insert(feedPost, at: 0)
+            insertPublished(feedPost)
             debouncedCacheSave()
             publishSuccess = true
 
@@ -1730,7 +1742,11 @@ class FeedViewModel: ObservableObject {
     /// Prefetch media for posts in the visible window + next 5.
     func prefetchMedia(around index: Int) {
         prefetchTask?.cancel()
-        let slice = Array(posts[max(0, index - 2)..<min(posts.count, index + 7)])
+        // L'indice a pu être pris 150 ms plus tôt : un rafraîchissement qui raccourcit le fil entre-temps
+        // rendait une borne basse au-delà de la haute.
+        let lower = min(max(0, index - 2), posts.count)
+        let upper = min(posts.count, max(lower, index + 7))
+        let slice = Array(posts[lower..<upper])
         prefetchTask = Task(priority: .utility) {
             guard !slice.isEmpty else { return }
 

@@ -4,7 +4,8 @@ import type { EphemeralDeadline } from '@meeshy/shared/utils/ephemeral-deadline'
 import { checkStatusOf, isMineOf, servedRowLanguage, translatedLanguagesOf } from '@/lib/view/message';
 import { badgesOf, editedOf, systemRowOf } from '@/lib/view/message-badges';
 import { bodyKindOf, moodCitationOf, placeOf, storyCitationOf } from '@/lib/view/message-body';
-import { initialsOf, participantAvatarOf, presenceOf } from '@/lib/view/conversation';
+import { initialsOf, participantAvatarOf } from '@/lib/view/conversation';
+import { usePresence } from '@/lib/view/use-presence';
 import type { LocalDelivery } from '@/lib/view/message';
 import type { AuthorStoryRing } from '@/lib/view/author-story-ring';
 import { prismFor, served } from '@/lib/api/prism';
@@ -14,6 +15,7 @@ import { time } from '@/lib/grouping';
 import { languageBand, mountsBottomLine } from '@/lib/reading-mode/meta';
 import { protectionOf } from '@/lib/reading-mode/protection';
 import { BUBBLE_STICKER_SIDE, STICKER_RENDER_SCALE } from '@/lib/reading-mode/metrics';
+import { translate } from '@/lib/i18n-catalog';
 import { currentInterfaceLanguage } from '@/lib/interface-language';
 
 import { hereKeyOf } from '@/lib/view/use-conversation-viewing';
@@ -120,10 +122,9 @@ export function Bubble({
   /** Les emojis que CE lecteur a posés sur CE message — marque `ReactionChip
    * mine` (#5814, T12). */
   myReactions?: readonly string[];
-  /** Retire une réaction MIENNE en tapant sa capsule (#5865) — jamais câblé
-   * sur une capsule d'autrui (`ReactionChip`, `onToggle`). `undefined` ⇒ la
-   * capsule reste un `<span>` inerte (loi 4 : pas de bouton qui promet un
-   * effet qu'il n'a pas). */
+  /** Bascule MA réaction en tapant une capsule : la mienne se retire (#5865),
+   * celle d'autrui pose la même (#10583). `undefined` ⇒ la capsule reste un
+   * `<span>` inerte (loi 4 : pas de bouton qui promet un effet qu'il n'a pas). */
   onReact?: (emoji: string) => void;
   /** Mode sélection ACTIF (`undefined` hors sélection). */
   selected?: boolean;
@@ -186,6 +187,8 @@ export function Bubble({
   const openDetail =
     onOpenDetail === undefined || selected !== undefined ? undefined : () => onOpenDetail(message.id);
   const nowMs = now();
+  /* LA PRÉSENCE VIVANTE DE L'EXPÉDITEUR (#10571) — avant tout retour anticipé. */
+  const senderPresence = usePresence(message.sender, { now });
   const kind = expired ? 'expired' : protectionOf(message, nowMs);
   const isMine = isMineOf(message, viewerId);
   /** L'accusé QUE CETTE PEAU A LE DROIT DE PEINDRE — `null` ⇒ rien
@@ -318,25 +321,41 @@ export function Bubble({
 
   const receivedBg = 'color-mix(in srgb, var(--accent) var(--ios-bubble-other-opacity), transparent)';
   const receivedHairline = 'color-mix(in srgb, var(--accent) var(--ios-bubble-other-hairline-opacity), transparent)';
+  const bubbleSkin = isMine
+    ? { backgroundColor: 'var(--color-bubble-mine)', color: 'var(--color-ios-on-brand)', '--color-karaoke-ink': 'var(--color-ios-on-brand)' }
+    : { backgroundColor: receivedBg, border: `1px solid ${receivedHairline}`, color: 'var(--color-ios-ink)' };
+
+  /* La story citée REMPLACE la citation ordinaire — « une scène ne tient pas
+     dans une bulle » : elle vit HORS de la boîte (voir plus bas, juste sous
+     les badges), donc ni l'une ni l'autre ici. */
+  const quoteBlock =
+    moodCitation !== null ? (
+      <MoodQuote citation={moodCitation} isMine={isMine} language={currentInterfaceLanguage()} now={new Date(nowMs)} />
+    ) : storyCitation === null && message.replyTo ? (
+      <Quote
+        quote={message.replyTo}
+        isMine={isMine}
+        languages={languages}
+        onJump={() => onJumpToMessage(message.replyTo!.id, quotedPieceIdOf(message.replyTo!))}
+        citingId={message.id}
+        now={new Date(nowMs)}
+      />
+    ) : null;
 
   const contentBlock = (
     <>
-      {/* La story citée REMPLACE la citation ordinaire — « une scène ne
-          tient pas dans une bulle » : elle vit HORS de la boîte (voir plus
-          bas, juste sous les badges), donc ni l'une ni l'autre ici. */}
-      {moodCitation !== null ? (
-        <MoodQuote citation={moodCitation} isMine={isMine} language={currentInterfaceLanguage()} now={new Date(nowMs)} />
-      ) : null}
-      {storyCitation === null && moodCitation === null && message.replyTo ? (
-        <Quote
-          quote={message.replyTo}
-          isMine={isMine}
-          languages={languages}
-          onJump={() => onJumpToMessage(message.replyTo!.id, quotedPieceIdOf(message.replyTo!))}
-          citingId={message.id}
-          now={new Date(nowMs)}
-        />
-      ) : null}
+      {/* UN CORPS NU EN RÉPONSE (#10628, `BubbleStandardLayout+EmojiReply
+          .swift`) : seule la carte citée garde la peau de la bulle, en petit
+          — sa peau « mine » est écrite pour le fond indigo et deviendrait du
+          blanc sur blanc sans lui —, l'emoji ou le sticker se pose dessous,
+          en grand et sans boîte. */}
+      {bareBody && quoteBlock !== null ? (
+        <div className="rounded-bubble mb-1 w-fit max-w-full px-3.5 py-2.5" style={bubbleSkin}>
+          {quoteBlock}
+        </div>
+      ) : (
+        quoteBlock
+      )}
       {/* « MODIFIÉ » — INLINE dans le corps, entre la citation et le texte
           (#5936, `BubbleStandardLayout.swift:1064-1066`). `EditedMark` porte
           déjà `aria-hidden` (revue-correction #5936, défaut majeur 8) : le
@@ -502,7 +521,7 @@ export function Bubble({
             >
               {selected ? '✓' : null}
             </span>
-            <span className="offscreen">Sélectionner ce message</span>
+            <span className="offscreen">{translate(currentInterfaceLanguage(), 'thread.select.message')}</span>
           </button>
         ) : null}
         {/* LES BADGES DE TÊTE (#5936) — AU-DESSUS de la bulle, HORS du fond
@@ -554,7 +573,7 @@ export function Bubble({
               />
             ) : null}
             <div className={`flex items-end gap-1.5 ${isMine ? 'justify-end' : 'justify-start'}`}>
-              {protectedContentBlock}
+              <div className={`flex min-w-0 flex-col ${isMine ? 'items-end' : 'items-start'}`}>{protectedContentBlock}</div>
               <div
                 className="flex items-center gap-1 pb-0.5"
                 /* LA MÉTA NEUTRE, QUEL QUE SOIT L'EXPÉDITEUR — `BubbleFooter
@@ -590,9 +609,7 @@ export function Bubble({
             data-effects-surface
             className="rounded-bubble px-3.5 py-2.5 transition-shadow duration-500"
             style={{
-              ...(isMine
-                ? { backgroundColor: 'var(--color-bubble-mine)', color: 'var(--color-ios-on-brand)', '--color-karaoke-ink': 'var(--color-ios-on-brand)' }
-                : { backgroundColor: receivedBg, border: `1px solid ${receivedHairline}`, color: 'var(--color-ios-ink)' }),
+              ...bubbleSkin,
               /* Mise en évidence temporaire après un saut de citation — un
                  anneau plutôt qu'un fond, pour ne jamais menacer le contraste
                  du texte qu'il entoure (#5566 défaut 10). */
@@ -641,11 +658,10 @@ export function Bubble({
                      rangée plate — les deux tenues du même message ne peuvent
                      pas servir deux visages différents. */
                   {...(senderPhoto === undefined ? {} : { src: senderPhoto })}
-                  /* `nowMs`, jamais `Date.now()` — l'horloge de cette bulle est
-                     INJECTABLE (prop `now`, ci-dessus) et `presenceOf` prend la
-                     sienne en paramètre précisément pour que la loi 1/3/5 se
-                     mesure sans dépendre de l'horloge réelle (revue #5935). */
-                  presence={presenceOf(message.sender, nowMs)}
+                  /* L'horloge INJECTABLE de cette bulle (prop `now`) est celle
+                     que `usePresence` reçoit : la loi 1/3/5 se mesure sans
+                     dépendre de l'horloge réelle (revue #5935). */
+                  presence={senderPresence}
                 />
               ) : null}
               <div className="flex min-w-0 flex-1 flex-col gap-0.5">
@@ -737,7 +753,7 @@ export function Bubble({
                   glyph={glyph}
                   count={count}
                   mine={mine}
-                  {...(mine && onReact !== undefined ? { onToggle: () => onReact(glyph) } : {})}
+                  {...(onReact === undefined ? {} : { onToggle: () => onReact(glyph), reactorsFor: message.id })}
                 />
               );
             })}

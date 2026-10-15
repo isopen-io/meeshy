@@ -75,7 +75,7 @@ const jetonSigne = (options: jwt.SignOptions): string =>
 
 /** Une session VIVANTE dont le porteur n'est membre d'aucune conversation. */
 const PRISMA_MEMBRE_INCONNU = {
-  userSession: { findFirst: jest.fn(async () => ({ isValid: true })) },
+  userSession: { findFirst: jest.fn(async () => ({ isValid: true, expiresAt: new Date(Date.now() + 24 * 60 * 60 * 1000) })) },
   user: {
     findUnique: jest.fn(async () => ({
       id: USER_ID,

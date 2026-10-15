@@ -39,6 +39,7 @@
 				<string>MEESHY_AUDIO</string>
 				<string>MEESHY_LOCATION</string>
 				<string>MEESHY_CONTACT</string>
+				<string>MEESHY_EPHEMERAL</string>
 			</array>
 			<key>UNNotificationExtensionDefaultContentHidden</key>
 			<false/>

@@ -7,6 +7,7 @@ import { describe, it, expect, beforeEach, jest } from '@jest/globals';
 import type { PrismaClient } from '@meeshy/shared/prisma/client';
 import { CONTENT_ENGAGEMENT_AXES, CONVERSATION_ENGAGEMENT_AXES } from '@meeshy/shared/types/engagement';
 import { EngagementService } from '../../../../services/engagement/EngagementService';
+import { routeCounterWrites } from '../../../../services/engagement/__tests__/mongoLikeCounters';
 import { getSharedNotificationService } from '../../../../services/notifications/notification-service-registry';
 
 jest.mock('../../../../services/notifications/notification-service-registry');
@@ -40,7 +41,7 @@ function p2002Error() {
 }
 
 function makePrisma(overrides: Partial<{
-  upsert: jest.Mock;
+  counterWrite: jest.Mock;
   create: jest.Mock;
   findUnique: jest.Mock;
   findMany: jest.Mock;
@@ -49,7 +50,6 @@ function makePrisma(overrides: Partial<{
 }> = {}) {
   return {
     engagementCounter: {
-      upsert: overrides.upsert ?? jest.fn(),
       // `findMany` sert désormais DEUX questions, et un mock qui ignore son
       // `where` répondrait la même chose aux deux :
       //  - `hasAllAxes` (succès composés) filtre sur `axisKey` + `count > 0` ;
@@ -86,7 +86,7 @@ function makePrisma(overrides: Partial<{
       update: overrides.userUpdate ?? jest.fn().mockResolvedValue({}),
       updateMany: jest.fn().mockResolvedValue({ count: 1 }),
     },
-    $runCommandRaw: makeRawScore(),
+    $runCommandRaw: routeCounterWrites(overrides.counterWrite ?? jest.fn(), makeRawScore()),
   } as unknown as PrismaClient;
 }
 
@@ -96,10 +96,10 @@ beforeEach(() => {
 
 describe('EngagementService achievements (#5546)', () => {
   it('awards achievement.first_content on the first content-family axis reached, querying only the content axes', async () => {
-    const upsert = jest.fn().mockResolvedValue({ count: 1 }); // 0 -> 1
+    const counterWrite = jest.fn().mockResolvedValue({ count: 1 }); // 0 -> 1
     const create = jest.fn().mockResolvedValue({});
     const findMany = jest.fn().mockResolvedValue([{ axisKey: 'content.text_message' }]); // only this one so far
-    const prisma = makePrisma({ upsert, create, findMany });
+    const prisma = makePrisma({ counterWrite, create, findMany });
     const notificationService = makeSharedNotificationService();
     mockGetSharedNotificationService.mockReturnValue(notificationService);
     const svc = new EngagementService(prisma);
@@ -128,9 +128,9 @@ describe('EngagementService achievements (#5546)', () => {
   });
 
   it('replays achievement.first_content with zero notifications (anti-replay via unique constraint)', async () => {
-    const upsert = jest.fn().mockResolvedValue({ count: 1 });
+    const counterWrite = jest.fn().mockResolvedValue({ count: 1 });
     const create = jest.fn().mockRejectedValue(p2002Error());
-    const prisma = makePrisma({ upsert, create });
+    const prisma = makePrisma({ counterWrite, create });
     const notificationService = makeSharedNotificationService();
     mockGetSharedNotificationService.mockReturnValue(notificationService);
     const svc = new EngagementService(prisma);
@@ -141,10 +141,10 @@ describe('EngagementService achievements (#5546)', () => {
   });
 
   it('awards achievement.all_content_types once every content axis has been reached', async () => {
-    const upsert = jest.fn().mockResolvedValue({ count: 1 }); // 0 -> 1, last of the five
+    const counterWrite = jest.fn().mockResolvedValue({ count: 1 }); // 0 -> 1, last of the five
     const create = jest.fn().mockResolvedValue({});
     const findMany = jest.fn().mockResolvedValue(CONTENT_ENGAGEMENT_AXES.map((axisKey) => ({ axisKey })));
-    const prisma = makePrisma({ upsert, create, findMany });
+    const prisma = makePrisma({ counterWrite, create, findMany });
     mockGetSharedNotificationService.mockReturnValue(makeSharedNotificationService());
     const svc = new EngagementService(prisma);
 
@@ -156,13 +156,13 @@ describe('EngagementService achievements (#5546)', () => {
   });
 
   it('does not award achievement.all_content_types while a content axis is still untouched', async () => {
-    const upsert = jest.fn().mockResolvedValue({ count: 1 });
+    const counterWrite = jest.fn().mockResolvedValue({ count: 1 });
     const create = jest.fn().mockResolvedValue({});
     const findMany = jest.fn().mockResolvedValue([
       { axisKey: 'content.text_message' },
       { axisKey: 'content.post' },
     ]); // only 2 of 5
-    const prisma = makePrisma({ upsert, create, findMany });
+    const prisma = makePrisma({ counterWrite, create, findMany });
     mockGetSharedNotificationService.mockReturnValue(makeSharedNotificationService());
     const svc = new EngagementService(prisma);
 
@@ -176,9 +176,9 @@ describe('EngagementService achievements (#5546)', () => {
   it.each(['content.audio_message', 'comment.audio'] as const)(
     'awards achievement.first_voice on the first %s',
     async (axisKey) => {
-      const upsert = jest.fn().mockResolvedValue({ count: 1 });
+      const counterWrite = jest.fn().mockResolvedValue({ count: 1 });
       const create = jest.fn().mockResolvedValue({});
-      const prisma = makePrisma({ upsert, create });
+      const prisma = makePrisma({ counterWrite, create });
       mockGetSharedNotificationService.mockReturnValue(makeSharedNotificationService());
       const svc = new EngagementService(prisma);
 
@@ -191,9 +191,9 @@ describe('EngagementService achievements (#5546)', () => {
   );
 
   it('does not award achievement.first_voice for a non-audio axis', async () => {
-    const upsert = jest.fn().mockResolvedValue({ count: 1 });
+    const counterWrite = jest.fn().mockResolvedValue({ count: 1 });
     const create = jest.fn().mockResolvedValue({});
-    const prisma = makePrisma({ upsert, create });
+    const prisma = makePrisma({ counterWrite, create });
     mockGetSharedNotificationService.mockReturnValue(makeSharedNotificationService());
     const svc = new EngagementService(prisma);
 
@@ -205,9 +205,9 @@ describe('EngagementService achievements (#5546)', () => {
   });
 
   it('awards achievement.editor on the first in-app edit', async () => {
-    const upsert = jest.fn().mockResolvedValue({ count: 1 });
+    const counterWrite = jest.fn().mockResolvedValue({ count: 1 });
     const create = jest.fn().mockResolvedValue({});
-    const prisma = makePrisma({ upsert, create });
+    const prisma = makePrisma({ counterWrite, create });
     mockGetSharedNotificationService.mockReturnValue(makeSharedNotificationService());
     const svc = new EngagementService(prisma);
 
@@ -219,10 +219,10 @@ describe('EngagementService achievements (#5546)', () => {
   });
 
   it('awards achievement.three_conversation_kinds once every conversation axis has been reached', async () => {
-    const upsert = jest.fn().mockResolvedValue({ count: 1 }); // 0 -> 1, last of the three
+    const counterWrite = jest.fn().mockResolvedValue({ count: 1 }); // 0 -> 1, last of the three
     const create = jest.fn().mockResolvedValue({});
     const findMany = jest.fn().mockResolvedValue(CONVERSATION_ENGAGEMENT_AXES.map((axisKey) => ({ axisKey })));
-    const prisma = makePrisma({ upsert, create, findMany });
+    const prisma = makePrisma({ counterWrite, create, findMany });
     mockGetSharedNotificationService.mockReturnValue(makeSharedNotificationService());
     const svc = new EngagementService(prisma);
 
@@ -234,10 +234,10 @@ describe('EngagementService achievements (#5546)', () => {
   });
 
   it('does not award achievement.three_conversation_kinds while a conversation axis is still untouched', async () => {
-    const upsert = jest.fn().mockResolvedValue({ count: 1 });
+    const counterWrite = jest.fn().mockResolvedValue({ count: 1 });
     const create = jest.fn().mockResolvedValue({});
     const findMany = jest.fn().mockResolvedValue([{ axisKey: 'conversation.private' }]); // only 1 of 3
-    const prisma = makePrisma({ upsert, create, findMany });
+    const prisma = makePrisma({ counterWrite, create, findMany });
     mockGetSharedNotificationService.mockReturnValue(makeSharedNotificationService());
     const svc = new EngagementService(prisma);
 
@@ -249,10 +249,10 @@ describe('EngagementService achievements (#5546)', () => {
   });
 
   it('does not re-evaluate any achievement condition on a non-first increment of the axis', async () => {
-    const upsert = jest.fn().mockResolvedValue({ count: 2 }); // 1 -> 2, not a first touch
+    const counterWrite = jest.fn().mockResolvedValue({ count: 2 }); // 1 -> 2, not a first touch
     const create = jest.fn().mockResolvedValue({});
     const findMany = jest.fn();
-    const prisma = makePrisma({ upsert, create, findMany });
+    const prisma = makePrisma({ counterWrite, create, findMany });
     mockGetSharedNotificationService.mockReturnValue(makeSharedNotificationService());
     const svc = new EngagementService(prisma);
 
@@ -265,10 +265,10 @@ describe('EngagementService achievements (#5546)', () => {
   });
 
   it('does not evaluate any achievement condition for an axis outside all five conditions', async () => {
-    const upsert = jest.fn().mockResolvedValue({ count: 1 });
+    const counterWrite = jest.fn().mockResolvedValue({ count: 1 });
     const create = jest.fn().mockResolvedValue({});
     const findMany = jest.fn();
-    const prisma = makePrisma({ upsert, create, findMany });
+    const prisma = makePrisma({ counterWrite, create, findMany });
     mockGetSharedNotificationService.mockReturnValue(makeSharedNotificationService());
     const svc = new EngagementService(prisma);
 

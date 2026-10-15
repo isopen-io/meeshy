@@ -304,7 +304,7 @@ export function GameSeason(props: GameSeasonProps) {
           </p>
         ) : (
           <>
-            <GameSpendLine concept="season" held={held} cost={season.sealPrice} format={meeshCount} />
+            <GameSpendLine concept="season" held={held} cost={season.sealPrice} format={meeshCount} missing={{ fact: 'spend_missing', line: (missing) => gameText('game.spend.missing.seal', { missing }) }} />
             <button
               type="button"
               data-game-seal-buy=""

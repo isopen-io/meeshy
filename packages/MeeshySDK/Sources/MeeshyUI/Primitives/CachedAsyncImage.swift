@@ -451,6 +451,13 @@ public struct ProgressiveCachedImage<Placeholder: View>: View {
     /// de distinguer « encore en chargement » de « n'arrivera pas » : le
     /// placeholder tournait pour toujours (#8141).
     public let onFullImageFailure: (@MainActor () -> Void)?
+    /// Appelé quand le plein format est RÉSIDENT après sa résolution —
+    /// téléchargé à l'instant ou déjà en cache. Ce composant télécharge par
+    /// son propre chemin (le cache image), qu'aucun téléchargeur de l'hôte
+    /// n'observe : sans ce signal, un hôte qui affiche « télécharger » tant que
+    /// le média n'est pas sur l'appareil ne saurait jamais qu'il l'est
+    /// devenu (#10370).
+    public let onFullImageLoaded: (@MainActor () -> Void)?
     public let placeholder: () -> Placeholder
 
     @State private var thumbHashImage: UIImage?
@@ -477,6 +484,7 @@ public struct ProgressiveCachedImage<Placeholder: View>: View {
         autoLoad: Bool = false,
         targetSize: CGSize? = nil,
         onFullImageFailure: (@MainActor () -> Void)? = nil,
+        onFullImageLoaded: (@MainActor () -> Void)? = nil,
         @ViewBuilder placeholder: @escaping () -> Placeholder
     ) {
         self.thumbHash = thumbHash
@@ -485,6 +493,7 @@ public struct ProgressiveCachedImage<Placeholder: View>: View {
         self.autoLoad = autoLoad
         self.targetSize = targetSize
         self.onFullImageFailure = onFullImageFailure
+        self.onFullImageLoaded = onFullImageLoaded
         self.placeholder = placeholder
 
         // Tier 2: le full image déjà en MÉMOIRE peuple l'état sync — pas de
@@ -644,7 +653,10 @@ public struct ProgressiveCachedImage<Placeholder: View>: View {
             let sizedResident = targetSize.map {
                 DiskCacheStore.cachedImage(for: resolved, maxPixelSize: Self.pixelSize(for: $0)) != nil
             } ?? false
-            if sizedResident || DiskCacheStore.cachedImage(for: resolved) != nil { return }
+            if sizedResident || DiskCacheStore.cachedImage(for: resolved) != nil {
+                onFullImageLoaded?()
+                return
+            }
         }
         // Policy gate (full image): skip network fetch when auto-download is
         // disallowed. ThumbHash + thumbnail (if cached) keep the bubble
@@ -676,5 +688,6 @@ public struct ProgressiveCachedImage<Placeholder: View>: View {
             return
         }
         withAnimation(.easeIn(duration: 0.25)) { fullImage = loaded }
+        onFullImageLoaded?()
     }
 }

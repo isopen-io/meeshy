@@ -15,7 +15,8 @@
 
 import type { FastifyInstance, FastifyReply, FastifyRequest } from 'fastify';
 import { ENGAGEMENT_OPERATIONS } from '@meeshy/shared/types/engagement-operations';
-import { parseEngagementScale } from '@meeshy/shared/types/engagement-scale';
+import { mergeEngagementScaleBody, parseEngagementScale } from '@meeshy/shared/types/engagement-scale';
+import { ENGAGEMENT_STREAK_ACTS } from '@meeshy/shared/types/engagement-act-streaks';
 import { errorResponseSchema } from '@meeshy/shared/types/api-schemas';
 import { requireAdminRank, withAudit } from '../../middleware/authorize';
 import type { UnifiedAuthRequest } from '../../middleware/auth';
@@ -40,6 +41,14 @@ const operationRuleSchema = {
     variantPoints: { type: 'object', additionalProperties: { type: 'integer' } },
   },
 } as const;
+
+/** Un palier de série ou de fidélité (#10388) — le libellé est facultatif. */
+const streakTierSchema = {
+  type: 'object',
+  properties: { days: { type: 'integer' }, points: { type: 'integer' }, label: { type: 'string' } },
+} as const;
+
+const streakTiersSchema = { type: 'array', items: streakTierSchema } as const;
 
 const engagementScaleSchema = {
   type: 'object',
@@ -102,6 +111,20 @@ const engagementScaleSchema = {
         unverifiedMaxPoints: { type: 'integer' },
       },
     },
+    // #10389 — les paliers de la série globale et de chaque acte. Non déclarés,
+    // fast-json-stringify les retirerait et l'écran ne les verrait jamais.
+    streaks: {
+      type: 'object',
+      properties: {
+        global: streakTiersSchema,
+        acts: {
+          type: 'object',
+          properties: Object.fromEntries(ENGAGEMENT_STREAK_ACTS.map((act) => [act, streakTiersSchema])),
+        },
+      },
+    },
+    // #10390 — les paliers de fidélité, en jours depuis la création du compte.
+    loyalty: streakTiersSchema,
   },
 } as const;
 
@@ -171,16 +194,23 @@ export async function engagementScaleAdminRoutes(fastify: FastifyInstance): Prom
     },
     onRequest: [fastify.authenticate, requireAdminRank()],
   }, async (request, reply) => {
-    const scale = parseEngagementScale(request.body?.scale);
-    if (!scale) {
-      return sendBadRequest(reply, 'Invalid engagement scale', { code: 'INVALID_ENGAGEMENT_SCALE' });
-    }
     const adminId = (request as UnifiedAuthRequest).authContext?.userId;
     if (!adminId) {
       return sendUnauthorized(reply, 'Authentication required', { code: 'UNAUTHORIZED' });
     }
 
     try {
+      // #10388 — le corps se FUSIONNE avec le barème stocké : une section qu'un
+      // ancien écran n'envoie pas (séries, fidélité, limites du jour) garde sa
+      // valeur au lieu de retomber sur les défauts.
+      const stored = await fastify.prisma.engagementScaleConfig.findUnique({
+        where: { key: ENGAGEMENT_SCALE_KEY },
+        select: { config: true },
+      });
+      const scale = parseEngagementScale(mergeEngagementScaleBody(stored?.config ?? null, request.body?.scale));
+      if (!scale) {
+        return sendBadRequest(reply, 'Invalid engagement scale', { code: 'INVALID_ENGAGEMENT_SCALE' });
+      }
       const before = await scaleService().document();
       const document = await scaleService().write(scale, adminId);
       await withAudit(request, {

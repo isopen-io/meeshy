@@ -9,10 +9,11 @@
  * jamais dû adresser.
  *
  *  - **actif** (`isActive`) ;
- *  - **jamais banni** : `bannedAt` absent OU nul. Un bannissement écrit bien
- *    `isActive: false`, mais une restauration de compte rallume `isActive` sans
- *    regarder `bannedAt` (`routes/me/delete-account.ts`), et la colonne est
- *    ABSENTE du document de tout participant jamais banni (`utils/prisma-unset.ts`) ;
+ *  - **jamais banni** : `bannedAt` absent OU nul. Une ligne peut être active
+ *    ET bannie (bannie pendant qu'elle était inactive, puis rallumée par
+ *    `restore-for-me` avant #10436 — voir `PARTICIPATION_VIVANTE`), et la
+ *    colonne est ABSENTE du document de tout participant jamais banni
+ *    (`utils/prisma-unset.ts`) ;
  *  - **entré par un lien non échu** : la porte de lecture du fil
  *    (`services/shareLinkReadGate.ts`) — seule la date ferme, un lien
  *    introuvable ne ferme rien ; une lecture de liens qui échoue ferme tous les
