@@ -111,6 +111,78 @@ final class ProfileSheetLoaderTests: XCTestCase {
         XCTAssertTrue(sut.isBlockedByTarget)
     }
 
+    // MARK: - Un profil qui n'a pas pu se charger (#8025)
+
+    func test_open_emptyCacheAndSynchronizationFails_offersARetry() async {
+        let (sut, _) = makeSUT(fetchedProfile: .failure(Offline()))
+
+        await sut.open(userId: "u-bob", username: "bob")
+
+        XCTAssertNil(sut.profile)
+        XCTAssertTrue(sut.profileLoadFailed, "rien à montrer et rien de chargé : l'écran propose de réessayer")
+        XCTAssertFalse(sut.isLoadingProfile)
+        XCTAssertFalse(sut.isBlockedByTarget)
+    }
+
+    func test_open_synchronizationFailsOverACachedProfile_keepsItWithoutARetryState() async {
+        let (sut, _) = makeSUT(
+            cachedProfile: .stale([makeUser(displayName: "Bob en cache")], age: 900),
+            fetchedProfile: .failure(Offline())
+        )
+
+        await sut.open(userId: "u-bob", username: "bob")
+
+        XCTAssertEqual(sut.profile?.displayName, "Bob en cache")
+        XCTAssertFalse(sut.profileLoadFailed, "le cache reste affiché : pas d'état d'erreur par-dessus")
+    }
+
+    func test_retry_afterAFailure_reloadsAndPaintsTheProfile() async {
+        let (sut, data) = makeSUT(fetchedProfile: .failure(Offline()))
+        await sut.open(userId: "u-bob", username: "bob")
+        XCTAssertTrue(sut.profileLoadFailed)
+
+        data.fetchProfileResult = .success(makeUser(displayName: "Bob revenu"))
+        await sut.retry(userId: "u-bob", username: "bob")
+
+        XCTAssertEqual(data.fetchProfileCallCount, 2, "Réessayer relance le chargement")
+        XCTAssertEqual(sut.profile?.displayName, "Bob revenu")
+        XCTAssertFalse(sut.profileLoadFailed)
+        XCTAssertFalse(sut.isLoadingProfile)
+    }
+
+    func test_retry_failingAgain_keepsOfferingTheRetry() async {
+        let (sut, _) = makeSUT(fetchedProfile: .failure(Offline()))
+        await sut.open(userId: "u-bob", username: "bob")
+
+        await sut.retry(userId: "u-bob", username: "bob")
+
+        XCTAssertTrue(sut.profileLoadFailed)
+        XCTAssertFalse(sut.isLoadingProfile)
+    }
+
+    func test_open_profileRefused_offersNoRetry() async {
+        let (sut, _) = makeSUT(fetchedProfile: .failure(MeeshyError.forbidden(reason: nil, body: nil)))
+
+        await sut.open(userId: "u-bob", username: "bob")
+
+        XCTAssertFalse(sut.profileLoadFailed, "un refus n'est pas une panne : réessayer ne changerait rien")
+    }
+
+    func test_userProfileSheet_mountsTheRetryStateOnTheLoaderRetry() throws {
+        let url = URL(fileURLWithPath: #filePath)
+            .deletingLastPathComponent()   // Profile/
+            .deletingLastPathComponent()   // MeeshyUITests/
+            .deletingLastPathComponent()   // Tests/
+            .deletingLastPathComponent()   // MeeshySDK/
+            .appendingPathComponent("Sources/MeeshyUI/Profile/UserProfileSheet.swift")
+        let source = try String(contentsOf: url, encoding: .utf8)
+
+        XCTAssertTrue(source.contains("loader.profileLoadFailed"), "l'état d'erreur du profil est dessiné")
+        XCTAssertTrue(source.contains("loader.retry(userId:"), "le bouton relance le chargement")
+        XCTAssertTrue(source.contains("\"common.retry\""), "le bouton dit « Réessayer »")
+        XCTAssertTrue(source.contains("minHeight: MeeshyControlSize.tapTarget"), "cible de 44 pt")
+    }
+
     func test_open_byUsernameOnColdCache_readsTheStatsOfTheResolvedId() async {
         let (sut, data) = makeSUT(fetchedProfile: .success(makeUser(id: "u-resolved", username: "bob")))
 

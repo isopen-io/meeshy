@@ -134,12 +134,13 @@ export function BackgroundLayer({
   const glowFilter = (
     <MediaGlowFilter id={glowId} glow={adjustments.glow} aspect={boxCrop !== null && ratio !== undefined ? ratio : CARD_RATIO} />
   );
+  const turn = quarterTurnOf(object.transform.rotation);
   const cropped = (media: (style: Record<string, string> | undefined, className: string) => ReactNode): ReactNode =>
-    boxCrop !== null && ratio !== undefined ? (
-      <CroppedBox crop={boxCrop} ratio={ratio} fill={framing !== 'fit'}>
+    (boxCrop !== null && ratio !== undefined) || turn !== 0 ? (
+      <CroppedBox crop={boxCrop ?? FULL_MEDIA} ratio={ratio} fill={framing !== 'fit'} turn={turn}>
         {(cropStyle) => (
           <>
-            {media(cropStyle, 'block max-w-none object-fill')}
+            {media(cropStyle, cropStyle === undefined ? `absolute inset-0 size-full ${fit}` : 'block max-w-none object-fill')}
             {overlays}
           </>
         )}
@@ -323,20 +324,53 @@ function backgroundBlurScale(
   return { designPixelsPerSourcePixel: pick(DESIGN_WIDTH / width, DESIGN_HEIGHT / height) };
 }
 
+/** Le quart de tour d'un fond (#9160, `StoryMediaRotation` iOS, ramené dans
+ * [0, 360)) — 0 pour un fond droit ou un angle qui n'est pas un quart. */
+const quarterTurnOf = (rotation: number): number => [90, 180, 270].find((turn) => turn === ((Math.round(rotation) % 360) + 360) % 360) ?? 0;
+
+const boxAt = (width: number, height: number) => ({ width: `${width}%`, height: `${height}%`, left: `${(100 - width) / 2}%`, top: `${(100 - height) / 2}%` });
+
 /** **Un fond RECADRÉ** (#9136) — la boîte prend le rapport du recadrage, posée
  * ajustée (ou remplie) dans la carte 9:16 comme le média entier l'aurait été ;
- * le média s'y agrandit et s'y décale (`mediaCropStyle`), sans ré-encodage. */
-function CroppedBox({ crop, ratio, fill, children }: { readonly crop: MediaCropRect; readonly ratio: number; readonly fill: boolean; readonly children: (style: Record<string, string>) => ReactNode }) {
-  const shown = effectiveMediaRatio(ratio, crop);
-  const wider = shown > CARD_RATIO;
-  const [width, height] = wider === fill ? [(shown / CARD_RATIO) * 100, 100] : [100, (CARD_RATIO / shown) * 100];
+ * le média s'y agrandit et s'y décale (`mediaCropStyle`), sans ré-encodage.
+ * **PIVOTÉ** (#9160), le rapport montré se couche d'un quart impair et le média
+ * tourne dans une boîte aux côtés échangés ; au rapport inconnu, c'est la
+ * carte entière qui tourne, le média s'y cadrant par son `object-fit`. */
+function CroppedBox({
+  crop,
+  ratio,
+  fill,
+  turn,
+  children,
+}: {
+  readonly crop: MediaCropRect;
+  readonly ratio: number | undefined;
+  readonly fill: boolean;
+  readonly turn: number;
+  readonly children: (style: Record<string, string> | undefined) => ReactNode;
+}) {
+  const upright = ratio === undefined ? CARD_RATIO : effectiveMediaRatio(ratio, crop);
+  const shown = ratio === undefined || turn % 180 === 0 ? upright : 1 / upright;
+  const [width, height] = ratio === undefined ? [100, 100] : shown > CARD_RATIO === fill ? [(shown / CARD_RATIO) * 100, 100] : [100, (CARD_RATIO / shown) * 100];
+  const media = children(ratio === undefined ? undefined : { ...mediaCropStyle(crop), position: 'absolute' });
   return (
     <span
       data-scene-background-crop
+      {...(turn !== 0 ? { 'data-scene-background-rotation': turn } : {})}
       className="absolute block overflow-hidden"
-      style={{ width: `${width}%`, height: `${height}%`, left: `${(100 - width) / 2}%`, top: `${(100 - height) / 2}%` }}
+      style={boxAt(width, height)}
     >
-      {children({ ...mediaCropStyle(crop), position: 'absolute' })}
+      {turn === 0 ? (
+        media
+      ) : (
+        <span
+          data-scene-background-spin
+          className="absolute block overflow-hidden"
+          style={{ ...(turn === 180 ? boxAt(100, 100) : boxAt(100 / shown, shown * 100)), transform: `rotate(${turn}deg)` }}
+        >
+          {media}
+        </span>
+      )}
     </span>
   );
 }

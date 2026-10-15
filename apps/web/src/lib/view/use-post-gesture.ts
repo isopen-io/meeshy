@@ -8,6 +8,12 @@ import type { EditPostOutcome } from '@/lib/api/publication-actions';
 import { sessionStore } from '@/lib/api/session';
 import { draftStore } from '@/lib/send/draft-store';
 import type { PostToggleKind } from '@/lib/feed/interactions';
+import { findCardPost } from '@/lib/api/card-caches';
+import { gestureIsOn } from '@/lib/api/feed-gestures';
+import { appQueryClient } from '@/lib/api/query-client';
+import type { InteractionAction } from '@/lib/api/social-events-v2-types';
+import { interactionOf, negativeOf } from '@/lib/telemetry/card-context';
+import { readingTelemetry } from './reading-telemetry';
 import { translate } from '@/lib/i18n-catalog';
 import { currentInterfaceLanguage } from '@/lib/interface-language';
 import { href, navigate } from '@/routes/route-table';
@@ -72,6 +78,10 @@ import { useLiveAnnouncer } from './use-live-announcer';
  * chunk `reels`, dont le plafond est VERROUILLÉ par le porteur (#6484,
  * `budgets.json`).
  */
+/** Le geste à bascule tel que la télémétrie le nomme (#10502). */
+const toggleActionOf = (kind: PostToggleKind, on: boolean): InteractionAction =>
+  kind === 'like' ? (on ? 'react' : 'unreact') : on ? 'save' : 'unsave';
+
 /** Une UNION LITTÉRALE, jamais le catalogue entier — voir `PostGestureMessageKey`. */
 type MenuNotice =
   | 'feed.post.copied'
@@ -124,9 +134,11 @@ export function usePostGesture(options?: {
 
   const onGesture = useCallback(
     (postId: string, kind: PostToggleKind) => {
+      const turningOn = !gestureIsOn(findCardPost(appQueryClient, postId), kind);
       void postGestureAction(postId, kind).then((result) => {
         if (!result.ok) announce(translate(currentInterfaceLanguage(), result.message));
         else if (result.notice !== undefined) announce(translate(currentInterfaceLanguage(), result.notice));
+        if (result.ok && result.notice === undefined) readingTelemetry.recordV2(interactionOf(postId, toggleActionOf(kind, turningOn)));
       });
     },
     [announce],
@@ -134,9 +146,14 @@ export function usePostGesture(options?: {
 
   /* Le geste vit dans `publication-share.ts` (#8884) : il OUVRE la feuille
      d'envoi commune, dont « Plus d'options… » garde le partage du système. */
-  const onShare = useCallback((postId: string) => openPublicationShare({ postId }), []);
+  const onShare = useCallback(
+    (postId: string) =>
+      openPublicationShare({ postId, onShared: (destination) => readingTelemetry.recordV2(interactionOf(postId, 'share', { destination })) }),
+    [],
+  );
 
   const onComment = useCallback((postId: string) => {
+    readingTelemetry.recordV2(interactionOf(postId, 'comment_open'));
     navigate(withCommentsAnchor(href('post', { post: postId })));
   }, []);
 
@@ -156,6 +173,7 @@ export function usePostGesture(options?: {
     void repostAction(postId).then((result) => {
       if (!result.ok) announce(translate(currentInterfaceLanguage(), result.message));
       else if (result.notice !== undefined) announce(translate(currentInterfaceLanguage(), result.notice));
+      if (result.ok) readingTelemetry.recordV2(interactionOf(postId, 'repost'));
     });
   }, [pendingRepostId, announce]);
 
@@ -197,10 +215,12 @@ export function usePostGesture(options?: {
           if (outcome === 'done') onDeletedRef.current?.(postId);
         });
       },
+      onReportOpen: (postId: string) => readingTelemetry.recordV2(negativeOf(postId, 'report_open')),
       onReport: (postId, reason) => {
-        void reportPostAction(postId, reason).then((outcome) =>
-          say(outcome === 'done' ? 'report.done' : outcome === 'throttled' ? 'report.throttled' : 'report.failed'),
-        );
+        void reportPostAction(postId, reason).then((outcome) => {
+          say(outcome === 'done' ? 'report.done' : outcome === 'throttled' ? 'report.throttled' : 'report.failed');
+          if (outcome === 'done') readingTelemetry.recordV2(negativeOf(postId, 'report_submit', { reasonCode: reason }));
+        });
       },
     };
   }, [viewerId, viewerIsAdministrator, announce]);

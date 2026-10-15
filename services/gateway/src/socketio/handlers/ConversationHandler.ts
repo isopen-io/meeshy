@@ -17,6 +17,7 @@ import { enhancedLogger } from '../../utils/logger-enhanced.js';
 import type { MessageReadStatusService } from '../../services/MessageReadStatusService.js';
 import { getSocketRateLimiter, SOCKET_RATE_LIMITS } from '../../utils/socket-rate-limiter.js';
 import { bridgeComputed } from '../unreadBridgeField.js';
+import { PARTICIPATION_VIVANTE } from '../../routes/conversations/utils/access-control';
 
 const logger = enhancedLogger.child({ module: 'ConversationHandler' });
 
@@ -156,7 +157,7 @@ export class ConversationHandler {
         // Anonymous: verify participant owns this exact conversation
         const participantId = connectedUser.participantId;
         const participant = await this.prisma.participant.findFirst({
-          where: { id: participantId, conversationId: normalizedId, isActive: true },
+          where: { id: participantId, conversationId: normalizedId, ...PARTICIPATION_VIVANTE },
           select: { id: true },
         });
         participantRowId = participant?.id ?? null;

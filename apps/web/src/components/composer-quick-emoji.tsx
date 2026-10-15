@@ -1,4 +1,4 @@
-import { Suspense, lazy, useRef, useState } from 'react';
+import { Suspense, useRef, useState } from 'react';
 
 import { recordEmojiUsage, topEmojis } from '@/lib/emoji-usage';
 import { translate } from '@/lib/i18n-catalog';
@@ -6,9 +6,7 @@ import { currentInterfaceLanguage } from '@/lib/interface-language';
 import { useLongPress } from '@/lib/view/long-press';
 import { QUICK_REACTIONS } from '@/lib/view/message-actions';
 
-const ComposerEmojiSheet = lazy(() =>
-  import('./composer-emoji-sheet').then((m) => ({ default: m.ComposerEmojiSheet })),
-);
+import { ComposerEmojiSheet } from './composer-sheets-lazy';
 
 /**
  * LE CADRE DES EMOJIS RAPIDES (#7980, puis #7985 — miroir `QuickEmojiGrid.swift`

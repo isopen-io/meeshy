@@ -11,24 +11,21 @@ extension StoryComposerViewModel {
     ///
     /// Clones the active `StoryItem` (the slide currently displayed in the viewer) into a
     /// fresh `StorySlide` (the composer's internal type — different from `StoryItem`),
-    /// appends the repost credit chip when — and only when — the source story was
-/// PUBLIC (`StoryRepostCredit`), at the bottom-center of the canvas,
-    /// and triggers an asynchronous media preload via the shared `CacheCoordinator`
-    /// (3-tier cache) so the canvas paints instantly once mounted.
+    /// drops any credit chip the source inherited, and triggers an asynchronous media
+    /// preload via the shared `CacheCoordinator` (3-tier cache) so the canvas paints
+    /// instantly once mounted. No « Reposté de @auteur » chip is added (#10524): the
+    /// credit lives in the viewer header, after the date.
     ///
-    /// - Parameters:
-    ///   - story: The source story (the viewer's `StoryItem`). Carries the repost-chain
-    ///            IDs we need (`id`, `repostOfId`, `originalRepostOfId`) — that is why we
-    ///            do not require an `APIPost` here.
-    ///   - authorHandle: What to render in the badge ("Reposté de @\(authorHandle)") —
-    ///                   typically `currentGroup.username` from the iOS caller.
+    /// - Parameter story: The source story (the viewer's `StoryItem`). Carries the
+    ///   repost-chain IDs we need (`id`, `repostOfId`, `originalRepostOfId`) — that is
+    ///   why we do not require an `APIPost` here.
     ///
     /// The publish flow itself is NOT modified — `StoryComposerViewModel` still does not
     /// call `PostService.create*` directly. Publication is delegated to the
     /// `onPublishSlide` callback (`StoryComposerView.swift`) implemented by the iOS app
     /// caller (Phase C), which reads `vm.repostOfId` and forwards it to
     /// `PostService.create(...)` / `createStory(...)` (B.5c).
-    public convenience init(reposting story: StoryItem, authorHandle: String) {
+    public convenience init(reposting story: StoryItem) {
         self.init()
 
         // Repost chain IDs (root-flatten):
@@ -54,31 +51,11 @@ extension StoryComposerViewModel {
             order: 0
         )
 
-        // **Le crédit n'est DÛ que si l'original était public** (directive
-        // porteur 2026-09-01). La règle, la forme de la pastille et son
-        // libellé localisé vivent dans `StoryRepostCredit` — pures, donc
-        // éprouvables sans monter un canvas.
-        //
-        // Le RETRAIT des crédits hérités, lui, est INCONDITIONNEL : republier
-        // une republication publique vers une audience restreinte garderait
-        // sinon la signature qu'on vient de juger indue. C'est le cas que
-        // l'ancien code ne pouvait pas produire — il ajoutait toujours — et
-        // celui qui apparaît dès que l'ajout devient conditionnel.
-        //
-        // Une note de l'ancien commentaire disparaît avec lui parce qu'elle
-        // était FAUSSE : elle promettait que le composer « skips drag » pour un
-        // objet verrouillé. Aucun geste ne consulte le verrou — ni `handlePan`,
-        // ni la manipulation — et c'est très bien : la directive demande
-        // justement que la pastille se déplace. Le verrou interdit ce qui la
-        // RETIRE ou la DÉNATURE (édition, duplication, suppression, sortie de
-        // scène), jamais ce qui la déplace.
-        var effects = cloned.effects
-        var texts = StoryRepostCredit.stripped(from: effects.textObjects)
-        if let badge = StoryRepostCredit.badge(for: story, authorHandle: authorHandle) {
-            texts.append(badge)
-        }
-        effects.textObjects = texts
-        cloned.effects = effects
+        // **Aucune puce de crédit** (décision porteur 2026-10-13, #10524) : le
+        // crédit vit dans l'en-tête du lecteur, après la date. La puce qu'une
+        // source publiée avant la règle porte encore part avec la copie, sans
+        // jamais toucher le texte éditable de l'auteur.
+        cloned.effects.textObjects = StoryRepostCredit.stripped(from: cloned.effects.textObjects)
 
         self.slides = [cloned]
         self.currentSlideIndex = 0

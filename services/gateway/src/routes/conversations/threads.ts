@@ -10,6 +10,7 @@ import {
 } from '../../services/personalHistoryFilter';
 import { UnifiedAuthRequest } from '../../middleware/auth';
 import { applyHistoryFloor, historyReaderFromAuthContext, loadReaderHistoryFloor } from '../../services/historyFloor';
+import { readerShareLinkHasExpired, refuseExpiredShareLink } from '../../services/shareLinkReadGate';
 import { attachmentMediaSelect, MESSAGE_ATTACHMENT_ORDER } from '../../services/attachments/attachmentIncludes';
 import { sendSuccess, sendNotFound, sendInternalError } from '../../utils/response';
 import { servePostReplyCitations } from '../../services/messaging/servedPostReply';
@@ -301,6 +302,10 @@ export function registerThreadsRoutes(
       });
       if (!conversationId) {
         return;
+      }
+      // #7388 — la porte d'un lien de partage ÉCHU, la même que sur le fil.
+      if (await readerShareLinkHasExpired(prisma, { conversationId, reader: historyReaderFromAuthContext(authContext) })) {
+        return refuseExpiredShareLink(reply);
       }
 
       // La racine du fil est soumise au même masquage que ses réponses : un

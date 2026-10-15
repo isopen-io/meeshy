@@ -387,6 +387,7 @@ final class CaptureShieldCoverageGuardTests: XCTestCase {
         ("Views/ConversationView+ComposerBanners.swift", ".captureShield(reply.quotedCapture(quotedMessage:quoted).shieldsCapture())"),
         ("Views/MediaReplyComposerBar.swift", "citationBanner.captureShield(citation.quotedCapture(quotedMessage:nil).shieldsCapture())"),
         ("Views/ConversationPreviewLine.swift", ".captureShield(preview.icon==.ephemeral)"),
+        ("Views/ConversationView+ViewOnceExit.swift", ".captureShield(item.isCaptureShielded)"),
     ]
 
     func test_everyMessageContentSurface_isShielded() throws {
@@ -394,6 +395,19 @@ final class CaptureShieldCoverageGuardTests: XCTestCase {
             XCTAssertTrue(try code(surface.file).contains(surface.shield),
                           "\(surface.file) : le contenu protégé doit passer par `\(surface.shield)`")
         }
+    }
+
+    /// #9621 — le plein écran d'un lieu ouvert depuis la rangée Focal est
+    /// présenté par la conversation : il porte le verdict de SON message, lu une
+    /// fois, et la conversation le relaie depuis la rangée avec l'identifiant.
+    func test_focalPlaceFullscreen_readsItsMessageVerdict() throws {
+        XCTAssertTrue(try code("Views/ConversationView+ViewOnceExit.swift")
+            .contains("isCaptureShielded=message?.exitOffer.capture.shieldsCapture()??true"))
+        XCTAssertTrue(try code("Views/MessageListViewController.swift")
+            .contains("focalActions.onTapLocation={placeintapLocationHandler?(place,messageId)}"),
+                      "la rangée Focal relaie le message du lieu touché")
+        XCTAssertTrue(try code("Views/ConversationView.swift")
+            .contains("focalFullscreenPlace=makeFocalFullscreenPlace(place,messageId:messageId)"))
     }
 
     func test_theProjections_readTheExitOfferOnce() throws {
@@ -465,6 +479,90 @@ final class CaptureShieldCoverageGuardTests: XCTestCase {
         }
     }
 
+    // MARK: - #9632 — chaque surface, une à une : annoncée OU écrite noire
+
+    /// Les surfaces qui lisent `announcesCapture` (ou la portée du plein écran)
+    /// : elles n'annoncent que montées sous une surface ENREGISTRÉE, et restent
+    /// noires partout ailleurs (aperçu de l'appui long, feuille « Plus »…).
+    private static let announcingReaders: Set<String> = [
+        "Views/ThemedMessageBubble.swift", "Focal/Row/FocalRow.swift",
+        "Views/Bubble/BubbleQuotedReply.swift", "Focal/Row/FocalQuotedReplyView.swift",
+        "Views/ConversationView+MediaGallery.swift", "Views/ConversationMediaGalleryView+Pages.swift",
+    ]
+
+    /// **Les surfaces qui RESTENT NOIRES, chacune nommée par la décision iOS**
+    /// (#9632) : y montrer un contenu n'est pas le LIRE, et poser un accusé de
+    /// lecture à l'instant d'une capture ferait de la capture le déclencheur de
+    /// la lecture — et du décompte d'une flamme après lecture.
+    private static let blackSurfaces: [(file: String, named: String)] = [
+        ("Riviere/View/RiverBubbleView.swift", "Rivière"),
+        ("Views/ConversationPreviewLine.swift", "Aperçu de ligne"),
+        ("Components/MessageMoreSheet.swift", "Feuille « Plus »"),
+        ("Components/ConversationInfoSheet+Pinned.swift", "Épinglés"),
+        ("Views/ThreadView.swift", "Fil de discussion"),
+        ("Components/ForwardPickerSheet.swift", "Aperçu de transfert"),
+        ("Views/ConversationView+ComposerBanners.swift", "Réponse en cours"),
+        ("Views/MediaReplyComposerBar.swift", "Réponse en cours"),
+        ("Components/MediaHub/ConversationMediaHubView.swift", "Hub de médias"),
+        ("Views/ConversationView+ViewOnceExit.swift", "Plein écran d'un lieu"),
+    ]
+
+    private static let decisionFile = URL(fileURLWithPath: #filePath)
+        .deletingLastPathComponent().deletingLastPathComponent().deletingLastPathComponent()
+        .deletingLastPathComponent().deletingLastPathComponent()
+        .appendingPathComponent("decisions/2026-10-07-une-capture-d-un-contenu-qui-disparait-s-annonce-au-fil-cote-ios-9617.md")
+
+    /// Tout fichier qui pose un bouclier est CLASSÉ : il lit la surface qui
+    /// annonce, ou il est une surface noire écrite. Un bouclier neuf ne peut
+    /// pas naître sans dire de quel côté il est.
+    func test_everyShieldingSurface_isAnnouncingOrDeclaredBlack() throws {
+        let enumerator = try XCTUnwrap(FileManager.default.enumerator(at: Self.mainRoot, includingPropertiesForKeys: nil))
+        var shielding: Set<String> = []
+        for case let url as URL in enumerator where url.pathExtension == "swift" {
+            let relative = url.path.replacingOccurrences(of: Self.mainRoot.path + "/", with: "")
+            let text = AppSourceGuard.stripComments(try String(contentsOf: url, encoding: .utf8))
+                .components(separatedBy: .whitespacesAndNewlines).joined()
+            let poses = text.replacingOccurrences(of: "funccaptureShield(", with: "")
+                .replacingOccurrences(of: "funccaptureShieldScope(", with: "")
+            if poses.contains(".captureShield(") || poses.contains(".captureShieldScope(") {
+                shielding.insert(relative)
+            }
+        }
+        let classified = Self.announcingReaders.union(Self.blackSurfaces.map(\.file))
+        XCTAssertGreaterThan(shielding.count, 10, "le témoin ne voit plus les boucliers")
+        XCTAssertEqual(shielding.subtracting(classified), [], "un bouclier non classé : annoncé OU écrit noir (#9632)")
+        XCTAssertEqual(classified.subtracting(shielding), [], "une surface classée ne pose plus de bouclier")
+    }
+
+    /// Une surface noire n'annonce jamais : elle lit la règle fermée par défaut.
+    func test_blackSurfaces_neverAnnounce() throws {
+        for surface in Self.blackSurfaces {
+            let text = try code(surface.file)
+            XCTAssertFalse(text.contains("surfaceAnnounces:"), "\(surface.file) se dit noire et lit l'annonce")
+            XCTAssertFalse(text.contains(".announcesCaptures()"), "\(surface.file) se dit noire et annonce")
+        }
+    }
+
+    /// **La décision est écrite, surface par surface** : le critère de #9632.
+    func test_eachBlackSurface_isNamedByTheDecision() throws {
+        let decision = try String(contentsOf: Self.decisionFile, encoding: .utf8)
+        let section = try XCTUnwrap(decision.range(of: "## #9632").map { String(decision[$0.lowerBound...]) },
+                                    "la décision iOS doit porter la section #9632")
+        for surface in Self.blackSurfaces {
+            XCTAssertTrue(section.contains("**\(surface.named)**"), "la décision ne dit pas pourquoi « \(surface.named) » reste noire")
+        }
+        XCTAssertTrue(section.contains("**Aperçu d'appui long**"))
+    }
+
+    /// **L'aperçu de l'appui long est noir, quel que soit son hôte** : le menu
+    /// natif (iOS 26) est attaché SOUS la valeur d'annonce du fil, et son
+    /// aperçu en hériterait — il la remet à faux, fermé par défaut.
+    func test_longPressPreviews_stayBlack() throws {
+        XCTAssertTrue(try code("Views/MessageListView.swift").contains(".environment(\\.announcesCapture,false)"),
+                      "l'aperçu du menu natif ne doit pas hériter de l'annonce du fil")
+        XCTAssertFalse(try code("Components/MessageOverlayMenu.swift").contains(".announcesCaptures()"))
+    }
+
     /// Le texte jusqu'à la parenthèse qui ferme `captureShield(` — les appels
     /// imbriqués (`quotedCapture(quotedMessage: nil).shieldsCapture()`) en font partie.
     private static func balancedArgument(_ chunk: String) -> String {
@@ -499,5 +597,42 @@ final class CaptureShieldCoverageGuardTests: XCTestCase {
             offenders.append(relative)
         }
         XCTAssertEqual(offenders, [], "ces surfaces rendent le texte d'un message hors de la couche sécurisée")
+    }
+}
+
+// MARK: - #9621 — le plein écran d'un lieu garde la loi de sortie de son message
+
+@MainActor
+final class FocalFullscreenPlaceTests: XCTestCase {
+
+    private let place = SharedPlace(latitude: 48.8566, longitude: 2.3522)
+
+    private func message(viewOnce: Bool = false, flags: MessageEffectFlags = [], duration: Int? = nil) -> Message {
+        var message = Message(id: "m1", conversationId: "c1", senderId: "u2",
+                              content: "", attachments: [], senderName: "Demo", isMe: false)
+        message.effects.flags = flags
+        message.effects.ephemeralDuration = duration
+        message.isViewOnce = viewOnce
+        return message
+    }
+
+    func test_ordinaryMessage_placeIsNotShielded() {
+        XCTAssertFalse(FocalFullscreenPlace(place: place, message: message()).isCaptureShielded)
+    }
+
+    func test_viewOncePlace_isShielded() {
+        XCTAssertTrue(FocalFullscreenPlace(place: place, message: message(viewOnce: true)).isCaptureShielded)
+    }
+
+    /// Le plein écran n'est pas enregistré auprès du détecteur de capture : une
+    /// flamme y reste NOIRE plutôt que capturée en silence (#9617, #9632).
+    func test_flamePlace_onANonAnnouncingSurface_isShielded() {
+        XCTAssertTrue(FocalFullscreenPlace(place: place, message: message(flags: .ephemeral, duration: 30)).isCaptureShielded)
+        XCTAssertTrue(FocalFullscreenPlace(place: place, message: message(flags: [.ephemeral, .ephemeralAfterRead])).isCaptureShielded)
+    }
+
+    /// Fermé par défaut : un lieu dont le message est introuvable reste noir.
+    func test_unknownMessage_isShielded() {
+        XCTAssertTrue(FocalFullscreenPlace(place: place, message: nil).isCaptureShielded)
     }
 }

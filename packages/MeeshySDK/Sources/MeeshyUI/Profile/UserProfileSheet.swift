@@ -245,6 +245,9 @@ public struct UserProfileSheet: View {
         if effectiveIsLoading {
             loadingPlaceholder
                 .padding(.horizontal, MeeshySpacing.xl)
+        } else if loader.profileLoadFailed {
+            profileLoadFailedState
+                .padding(.horizontal, MeeshySpacing.xl)
         } else {
             switch selectedTab {
             case .posts:
@@ -254,6 +257,47 @@ public struct UserProfileSheet: View {
             case .details:
                 detailsTab
             }
+        }
+    }
+
+    // MARK: - Profil non chargé (#8025)
+
+    /// Le profil n'a pas pu se charger et le cache n'a rien à montrer : la
+    /// fiche le dit et propose de réessayer, au lieu d'onglets vides.
+    private var profileLoadFailedState: some View {
+        VStack(spacing: MeeshySpacing.md) {
+            Image(systemName: "wifi.exclamationmark")
+                .font(MeeshyFont.relative(28, weight: .light))
+                .foregroundColor(theme.textMuted)
+                .accessibilityHidden(true)
+            Text(String(localized: "profile.loadFailed.message", defaultValue: "Ce profil n'a pas pu se charger.", bundle: .module))
+                .font(MeeshyFont.relative(MeeshyFont.labelSize, weight: .medium))
+                .foregroundColor(theme.textSecondary)
+                .multilineTextAlignment(.center)
+            Button {
+                HapticFeedback.light()
+                Task { await retryProfile() }
+            } label: {
+                Text(String(localized: "common.retry", defaultValue: "Réessayer", bundle: .module))
+                    .font(MeeshyFont.relative(MeeshyFont.labelSize, weight: .semibold))
+                    .foregroundColor(.white)
+                    .padding(.horizontal, MeeshySpacing.xl)
+                    .frame(minHeight: MeeshyControlSize.tapTarget)
+                    .background(Capsule().fill(Color(hex: resolvedAccent)))
+                    .contentShape(Capsule())
+            }
+            .buttonStyle(.plain)
+            .accessibilityHint(String(localized: "profile.loadFailed.message", defaultValue: "Ce profil n'a pas pu se charger.", bundle: .module))
+        }
+        .frame(maxWidth: .infinity)
+        .padding(.vertical, MeeshySpacing.xl)
+    }
+
+    private func retryProfile() async {
+        await loader.retry(userId: user.userId, username: user.username)
+        resolveConnectionStatus()
+        if internalConversations.isEmpty {
+            await loadConversationsIfNeeded()
         }
     }
 
@@ -329,7 +373,7 @@ public struct UserProfileSheet: View {
             pendingRequestId = request.id
             connectionStatus = .pendingSent(requestId: request.id)
             HapticFeedback.success()
-            postToast(String(localized: "profile.toast.requestSent", defaultValue: "Demande envoyee", bundle: .module), isSuccess: true)
+            postToast(String(localized: "profile.toast.requestSent", defaultValue: "Demande envoyée", bundle: .module), isSuccess: true)
         } catch {
             HapticFeedback.error()
             postToast(String(localized: "profile.toast.requestSendFailed", defaultValue: "Impossible d'envoyer la demande", bundle: .module), isSuccess: false)
@@ -344,7 +388,7 @@ public struct UserProfileSheet: View {
         HapticFeedback.medium()
         do {
             try await FriendService.shared.deleteRequest(requestId: requestId)
-            postToast(String(localized: "profile.toast.requestCancelled", defaultValue: "Demande annulee", bundle: .module), isSuccess: true)
+            postToast(String(localized: "profile.toast.requestCancelled", defaultValue: "Demande annulée", bundle: .module), isSuccess: true)
         } catch {
             FriendshipCache.shared.didSendRequest(to: userId, requestId: requestId)
             resolveConnectionStatus()
@@ -367,7 +411,7 @@ public struct UserProfileSheet: View {
         HapticFeedback.success()
         do {
             let _ = try await FriendService.shared.respond(requestId: requestId, accepted: true)
-            postToast(String(localized: "profile.toast.connectionAccepted", defaultValue: "Connexion acceptee", bundle: .module), isSuccess: true)
+            postToast(String(localized: "profile.toast.connectionAccepted", defaultValue: "Connexion acceptée", bundle: .module), isSuccess: true)
         } catch {
             FriendshipCache.shared.rollbackAccept(senderId: userId, requestId: requestId)
             resolveConnectionStatus()
@@ -384,7 +428,7 @@ public struct UserProfileSheet: View {
         HapticFeedback.medium()
         do {
             let _ = try await FriendService.shared.respond(requestId: requestId, accepted: false)
-            postToast(String(localized: "profile.toast.requestDeclined", defaultValue: "Demande refusee", bundle: .module), isSuccess: true)
+            postToast(String(localized: "profile.toast.requestDeclined", defaultValue: "Demande refusée", bundle: .module), isSuccess: true)
         } catch {
             FriendshipCache.shared.rollbackReject(senderId: userId, requestId: requestId)
             resolveConnectionStatus()
@@ -401,7 +445,7 @@ public struct UserProfileSheet: View {
             try await BlockService.shared.blockUser(userId: userId)
             isBlocked = true
             HapticFeedback.medium()
-            postToast(String(localized: "profile.toast.userBlocked", defaultValue: "Utilisateur bloque", bundle: .module), isSuccess: true)
+            postToast(String(localized: "profile.toast.userBlocked", defaultValue: "Utilisateur bloqué", bundle: .module), isSuccess: true)
         } catch {
             postToast(String(localized: "profile.toast.blockFailed", defaultValue: "Impossible de bloquer", bundle: .module), isSuccess: false)
         }
@@ -414,9 +458,9 @@ public struct UserProfileSheet: View {
             isBlocked = false
             resolveConnectionStatus()
             HapticFeedback.light()
-            postToast(String(localized: "profile.toast.userUnblocked", defaultValue: "Utilisateur debloque", bundle: .module), isSuccess: true)
+            postToast(String(localized: "profile.toast.userUnblocked", defaultValue: "Utilisateur débloqué", bundle: .module), isSuccess: true)
         } catch {
-            postToast(String(localized: "profile.toast.unblockFailed", defaultValue: "Impossible de debloquer", bundle: .module), isSuccess: false)
+            postToast(String(localized: "profile.toast.unblockFailed", defaultValue: "Impossible de débloquer", bundle: .module), isSuccess: false)
         }
     }
 
@@ -593,7 +637,7 @@ public struct UserProfileSheet: View {
 
     private var blockedByMeCard: some View {
         VStack(spacing: MeeshySpacing.md) {
-            Text(String(localized: "profile.blocked.byMe", defaultValue: "Vous avez bloque cet utilisateur", bundle: .module))
+            Text(String(localized: "profile.blocked.byMe", defaultValue: "Vous avez bloqué cet utilisateur", bundle: .module))
                 .font(.system(size: MeeshyFont.labelSize, weight: .medium))
                 .foregroundColor(theme.textSecondary)
 
@@ -601,7 +645,7 @@ public struct UserProfileSheet: View {
                 HapticFeedback.medium()
                 Task { await unblockUser() }
             } label: {
-                Text(String(localized: "profile.blocked.unblock", defaultValue: "Debloquer", bundle: .module))
+                Text(String(localized: "profile.blocked.unblock", defaultValue: "Débloquer", bundle: .module))
                     .font(.system(size: MeeshyFont.labelSize, weight: .semibold))
                     .foregroundColor(.white)
                     .padding(.horizontal, MeeshySpacing.xxl)

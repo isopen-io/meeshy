@@ -1,4 +1,5 @@
 import type { Size } from '../call-montage-shapes';
+import { NO_CHROME_RESERVE, type FrameChromeReserve } from './frame-chrome-reserve';
 import { frameScene, paintBackdrop, paintFaces, paintOverlay, type FrameFace, type FramePaintable, type FrameScene } from './frame-paint';
 import type { Surface2D } from './frame-paint-kit';
 import type { FramePerson, FrameTexts } from './frame-text';
@@ -35,11 +36,11 @@ export const defaultCanvasFactory: CanvasFactory = (size) => {
 
 export type FrameLayers = { readonly scene: FrameScene; readonly backdrop: CanvasImageSource; readonly overlay: CanvasImageSource };
 
-export function renderFrameLayers(frame: FramePaintable, people: readonly FramePerson[], size: Size, texts: FrameTexts, factory: CanvasFactory = defaultCanvasFactory): FrameLayers | null {
+export function renderFrameLayers(frame: FramePaintable, people: readonly FramePerson[], size: Size, texts: FrameTexts, factory: CanvasFactory = defaultCanvasFactory, reserve: FrameChromeReserve = NO_CHROME_RESERVE): FrameLayers | null {
   const backdrop = factory(size);
   const overlay = factory(size);
   if (backdrop === null || overlay === null) return null;
-  const scene = frameScene(frame, people, texts, size);
+  const scene = frameScene(frame, people, texts, size, reserve);
   paintBackdrop(backdrop.context, scene);
   paintOverlay(overlay.context, scene);
   return { scene, backdrop: backdrop.canvas, overlay: overlay.canvas };
@@ -56,25 +57,25 @@ export function composeFrame(context: Surface2D, layers: FrameLayers, faces: rea
 export const FRAME_LAYER_CACHE_SIZE = 24;
 
 /** La clé d'un jeu de couches : tout ce qui change leur peinture, et rien d'autre. */
-export function frameLayersKey(frame: FramePaintable & { readonly id: string }, people: readonly FramePerson[], size: Size, texts: FrameTexts): string {
+export function frameLayersKey(frame: FramePaintable & { readonly id: string }, people: readonly FramePerson[], size: Size, texts: FrameTexts, reserve: FrameChromeReserve = NO_CHROME_RESERVE): string {
   const who = people.map((person) => `${person.id}\u0001${person.name}\u0001${person.handle ?? ''}`).join('\u0002');
   const accent = texts.accent === null ? '' : `${texts.accent.primary}/${texts.accent.secondary}`;
-  return [frame.id, people.length, `${Math.round(size.width)}x${Math.round(size.height)}`, who, texts.isGroup ? 'g' : 'd', texts.groupName ?? '', texts.date, accent].join('\u0003');
+  return [frame.id, people.length, `${Math.round(size.width)}x${Math.round(size.height)}`, who, texts.isGroup ? 'g' : 'd', texts.groupName ?? '', texts.date, accent, `${reserve.top}/${reserve.bottom}`].join('\u0003');
 }
 
 /** Un cache LRU de couches, borné : l'entrée la moins récemment servie sort la première. */
 export function frameLayerCache(factory: CanvasFactory = defaultCanvasFactory, capacity = FRAME_LAYER_CACHE_SIZE) {
   const entries = new Map<string, FrameLayers>();
   return {
-    get(frame: FramePaintable & { readonly id: string }, people: readonly FramePerson[], size: Size, texts: FrameTexts): FrameLayers | null {
-      const key = frameLayersKey(frame, people, size, texts);
+    get(frame: FramePaintable & { readonly id: string }, people: readonly FramePerson[], size: Size, texts: FrameTexts, reserve: FrameChromeReserve = NO_CHROME_RESERVE): FrameLayers | null {
+      const key = frameLayersKey(frame, people, size, texts, reserve);
       const hit = entries.get(key);
       if (hit !== undefined) {
         entries.delete(key);
         entries.set(key, hit);
         return hit;
       }
-      const layers = renderFrameLayers(frame, people, size, texts, factory);
+      const layers = renderFrameLayers(frame, people, size, texts, factory, reserve);
       if (layers === null) return null;
       entries.set(key, layers);
       const oldest = entries.size > capacity ? entries.keys().next().value : undefined;

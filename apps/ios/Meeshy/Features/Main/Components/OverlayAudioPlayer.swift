@@ -53,7 +53,9 @@ final class OverlayAudioPlayer: ObservableObject {
     nonisolated(unsafe) private var endObserver: (any NSObjectProtocol)?
     private var currentURL: String?
 
-    var percentInt: Int { Int(progress * 100) }
+    /// `Int(_:)` trappe sur une valeur non finie : un temps invalide livré pendant un changement d'item ne
+    /// doit pas emporter l'app pour un pourcentage.
+    var percentInt: Int { progress.isFinite ? Int(max(0, min(1, progress)) * 100) : 0 }
 
     func toggle(url: String) {
         if isPlaying {
@@ -201,7 +203,7 @@ final class OverlayAudioPlayer: ObservableObject {
             Task { @MainActor [weak self] in
                 guard let self, let item = self.avPlayer?.currentItem else { return }
                 let total = item.duration.seconds
-                guard total.isFinite && total > 0 else { return }
+                guard total.isFinite && total > 0, time.seconds.isFinite else { return }
                 self.duration = total
                 self.currentTime = time.seconds
                 self.progress = time.seconds / total

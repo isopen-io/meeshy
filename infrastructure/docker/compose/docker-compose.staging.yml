@@ -143,7 +143,8 @@ services:
     networks:
       - meeshy-staging-network
     healthcheck:
-      test: ["CMD-SHELL", "netstat -an | grep :7843 || exit 1"]
+      # `netstat` n'est pas dans l'image (#10425) : `node` y est, il ouvre le port.
+      test: ["CMD", "node", "-e", "require('net').connect(7843, '127.0.0.1').on('connect', () => process.exit(0)).on('error', () => process.exit(1))"]
       interval: 30s
       timeout: 10s
       retries: 3
@@ -199,16 +200,19 @@ services:
     # interne. Sonde : `docker exec meeshy-translator-staging … /health`.
     labels:
       - "traefik.enable=false"
-      # unhealthy déclenche un restart (#5610) — voir le service `autoheal`.
-      - "autoheal=true"
+      # unhealthy déclenche un restart (#5610) — voir le service `autoheal-staging`.
+      # Étiquette PROPRE au staging (#10425) : l'autoheal de production lit `autoheal`.
+      - "autoheal-staging=true"
 
-  # Autoheal — restaure un conteneur `unhealthy` (#5610).
+  # Autoheal — restaure un conteneur `unhealthy` (#5610). Le démon Docker est
+  # PARTAGÉ avec la production (#9232) : il ne lit que l'étiquette du staging,
+  # jamais `autoheal`, celle de la production (#10425).
   autoheal-staging:
     image: willfarrell/autoheal:latest
     container_name: meeshy-autoheal-staging
     restart: unless-stopped
     environment:
-      - AUTOHEAL_CONTAINER_LABEL=autoheal
+      - AUTOHEAL_CONTAINER_LABEL=autoheal-staging
       - AUTOHEAL_INTERVAL=30
       - AUTOHEAL_START_PERIOD=60
       - AUTOHEAL_DEFAULT_STOP_TIMEOUT=10
@@ -306,6 +310,17 @@ services:
       - ATTACHMENT_URL_SIGNING_KEY=${ATTACHMENT_URL_SIGNING_KEY:-}
       - ATTACHMENT_URL_SIGNING_KEY_PREVIOUS=${ATTACHMENT_URL_SIGNING_KEY_PREVIOUS:-}
       - ATTACHMENT_URL_SIGNATURE_ENFORCE=${ATTACHMENT_URL_SIGNATURE_ENFORCE:-false}
+      # #10483 — clé HMAC des lecteurs SANS compte (vues et impressions anonymes) :
+      # seule l'empreinte du jeton est stockée. PROPRE à cet environnement ; sans
+      # elle la passerelle refuse de démarrer (fail-closed). La changer recompte
+      # chaque lecteur anonyme : ne pas la faire tourner.
+      - READER_KEY_HMAC_SECRET=${READER_KEY_HMAC_SECRET:?READER_KEY_HMAC_SECRET absente sur l hote. Generer avec openssl rand -hex 32}
+      # #10499 — clé des EMPREINTES de recherche (searchId scellé AES-256-GCM, clés
+      # dérivées par HKDF). PROPRE à cet environnement. Absente : la passerelle
+      # démarre, la recherche répond, mais aucune empreinte n'est calculée — d'où
+      # `:-` et non `:?`, pour ne pas bloquer un déploiement avant qu'elle soit
+      # posée sur l'hôte. La faire tourner rend les anciennes empreintes muettes.
+      - SEARCH_FINGERPRINT_SECRET=${SEARCH_FINGERPRINT_SECRET:-}
       # L'AGENT de staging (#10269) — `server.ts` n'initialise son client que si
       # `AGENT_HOST` est posée : sans elle, `agent-staging` tourne pour personne
       # (« AGENT_HOST not set — agent service disabled »), sans rien rougir.
@@ -331,10 +346,25 @@ services:
       # « Sauvegardes » de la supervision et contrôlé chaque jour à 5 h, heure de Paris :
       # un échec, une sauvegarde de plus de 26 h ou un verdict absent notifient les
       # ADMIN et BIGBOSS et écrivent au BIGBOSS. Seule la valeur exacte true arme le contrôle.
-      # Staging : aucune sauvegarde n'y tourne ; la recette y POSE un etat.json à la main
-      # et arme le contrôle par BACKUP_STATUS_ALERTS_ENABLED=true dans le .env de l'hôte.
+      # Staging : la sauvegarde tourne chaque nuit à 2 h 30 (meeshy-staging-backup.timer,
+      # #10385) et sur demande d'un BIGBOSS ; le contrôle s'arme par
+      # BACKUP_STATUS_ALERTS_ENABLED=true dans le .env de l'hôte.
       - BACKUP_STATUS_FILE=/backup-status/etat.json
       - BACKUP_STATUS_ALERTS_ENABLED=${BACKUP_STATUS_ALERTS_ENABLED:-false}
+      # #10460 — l'heure du timer de staging : la carte « Sauvegardes » annonce la
+      # prochaine sauvegarde à 2 h 30, pas à minuit (l'heure de la production).
+      - BACKUP_RUN_TIME=02:30
+      # #10384–#10386 — les opérations serveur de l'administration : métriques de l'hôte
+      # (/proc et statfs sur HOST_DISK_PROBE_PATH), et demandes de sauvegarde / purge des
+      # images DÉPOSÉES dans OPS_REQUESTS_DIR pour le runner de l'hôte
+      # (infrastructure/scripts/ops-runner/, installé par son install.sh), qui publie son
+      # état dans OPS_STATE_DIR, monté en lecture seule. La passerelle n'a ni socket Docker
+      # ni systemd. Hôte partagé avec la production : OPS_SHARED_HOST=true.
+      - OPS_ENVIRONMENT=staging
+      - OPS_SHARED_HOST=true
+      - OPS_REQUESTS_DIR=/ops-requests
+      - OPS_STATE_DIR=/ops-state
+      - HOST_DISK_PROBE_PATH=/
       - EMAIL_FROM=${EMAIL_FROM:-noreply@meeshy.me}
       - EMAIL_FROM_NAME=${EMAIL_FROM_NAME:-Meeshy Staging}
       - BREVO_API_KEY=${BREVO_API_KEY:-}
@@ -348,6 +378,10 @@ services:
       # #9668 — le SEUL dossier du verdict de sauvegarde, en lecture seule : la passerelle
       # ne voit jamais les sauvegardes elles-mêmes (/opt/meeshy/backups/nightly).
       - ${BACKUP_STATUS_HOST_DIR:-/opt/meeshy/staging/backup-status}:/backup-status:ro
+      # #10385, #10386 — les demandes d'opérations (écrites par la passerelle, uid 1001)
+      # et l'état publié par le runner de l'hôte (lecture seule).
+      - /opt/meeshy/staging/ops/requests:/ops-requests
+      - /opt/meeshy/staging/ops/state:/ops-state:ro
     depends_on:
       mongo-init-staging:
         condition: service_completed_successfully
@@ -407,6 +441,17 @@ services:
       - "traefik.http.routers.frontend-staging-track-unfurl.service=gateway-staging"
       - "traefik.http.middlewares.track-unfurl-staging-path.replacepathregex.regex=^/l/([A-Za-z0-9_-]{2,50})/?$$"
       - "traefik.http.middlewares.track-unfurl-staging-path.replacepathregex.replacement=/api/v1/tracking-links/$$1/og"
+      # #10559 — les mêmes robots qui déplient un lien d'AFFILIATION /signup/affiliate/<jeton>
+      # reçoivent l'aperçu de celui qui invite (GET /api/v1/affiliate/<jeton>/og) : son nom,
+      # son pseudo, sa bannière sinon son avatar ; un jeton fermé rend l'aperçu générique.
+      - "traefik.http.routers.frontend-staging-affiliate-unfurl.rule=Host(`staging.${DOMAIN:-meeshy.me}`) && PathRegexp(`^/signup/affiliate/[A-Za-z0-9_-]{2,100}/?$$`) && !Query(`open`, `1`) && HeaderRegexp(`User-Agent`, `(?i)(facebookexternalhit|facebot|whatsapp|twitterbot|slackbot|telegrambot|discordbot|linkedinbot|skypeuripreview|embedly|iframely|redditbot|pinterestbot|vkshare|mastodon|bluesky|cardyb|google-pagerenderer|kakaotalk-scrap|bitlybot|mattermost|synapse)`)"
+      - "traefik.http.routers.frontend-staging-affiliate-unfurl.priority=100"
+      - "traefik.http.routers.frontend-staging-affiliate-unfurl.entrypoints=websecure"
+      - "traefik.http.routers.frontend-staging-affiliate-unfurl.tls.certresolver=letsencrypt"
+      - "traefik.http.routers.frontend-staging-affiliate-unfurl.middlewares=affiliate-unfurl-staging-path,rate-limit@file,compress@file"
+      - "traefik.http.routers.frontend-staging-affiliate-unfurl.service=gateway-staging"
+      - "traefik.http.middlewares.affiliate-unfurl-staging-path.replacepathregex.regex=^/signup/affiliate/([A-Za-z0-9_-]{2,100})/?$$"
+      - "traefik.http.middlewares.affiliate-unfurl-staging-path.replacepathregex.replacement=/api/v1/affiliate/$$1/og"
       - "traefik.http.services.gateway-staging.loadbalancer.server.port=3000"
 
   # ===========================================================================

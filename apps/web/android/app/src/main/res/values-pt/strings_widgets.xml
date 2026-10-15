@@ -1,0 +1,20 @@
+<?xml version="1.0" encoding="utf-8"?>
+<resources>
+    <!-- #10626 — les widgets d'ecran d'accueil de la coque. -->
+    <string name="widget_unread_name">Mensagens não lidas</string>
+    <string name="widget_unread_description">Acompanhe as suas conversas não lidas</string>
+    <string name="widget_recent_name">Conversas recentes</string>
+    <string name="widget_recent_description">As suas conversas recentes num relance</string>
+    <string name="widget_quick_reply_name">Resposta rápida</string>
+    <string name="widget_quick_reply_description">Responda à última conversa não lida</string>
+    <string name="widget_favorites_name">Contatos favoritos</string>
+    <string name="widget_favorites_description">Acesso rápido aos seus contatos fixados</string>
+    <string name="widget_unread_label">Não lidas</string>
+    <string name="widget_all_read">Tudo lido</string>
+    <string name="widget_signed_out">Abra o Meeshy para ver as suas conversas</string>
+    <string name="widget_no_conversations">Ainda não há conversas</string>
+    <string name="widget_no_favorites">Fixe uma conversa para encontrá-la aqui</string>
+    <string name="widget_nothing_to_reply">Nenhuma mensagem à espera</string>
+    <string name="widget_reply">Responder</string>
+    <string name="widget_mark_read">Marcar como lida</string>
+</resources>

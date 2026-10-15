@@ -83,6 +83,15 @@ import { openModalLayer } from './modal-layers';
  * (`{ escape: true }`) ne répond à Échap que si elle est au SOMMET de la pile —
  * la même loi que le retour, écrite une fois. Les `<dialog>` (`Sheet`) n'en ont
  * pas besoin : le navigateur leur donne déjà `cancel`.
+ *
+ * **ET TOUTES SE REFERMENT D'UN SEUL APPEL** (#10539). Ouvrir une conversation
+ * depuis une notification doit montrer la conversation, pas la poser sous la
+ * feuille ou la visionneuse en cours : `dismissAllLayers()` rappelle la
+ * fermeture de chaque couche montée, du dessus au dessous. Une couche
+ * `held` n'y répond pas — l'appel en cours et la retouche d'un brouillon ne
+ * se referment que par leur propre geste. L'appelant apprend si l'entrée
+ * courante de l'historique est celle d'une couche refermée : il la REMPLACE
+ * par sa destination plutôt que de l'enterrer dessous (§ #6313).
  */
 let nextMarker = 0;
 
@@ -113,6 +122,24 @@ function isTopOpenLayer(layer: symbol): boolean {
  * adoptée et que la micro-tâche ne l'a pas rendue (#7527). */
 let pendingRelease: string | null = null;
 
+type OpenLayer = { readonly close: () => void; readonly marker: string | null };
+
+/** Les couches MONTÉES que `dismissAllLayers` referme, du dessous au dessus. */
+let dismissible: readonly OpenLayer[] = [];
+
+/** Une couche va SUCCÉDER à celles qu'on referme (l'aperçu tiré de la
+ * bannière, dont le chunk peut arriver après ce commit) : l'entrée laissée
+ * l'attend au lieu d'être rendue par un retour qu'elle prendrait pour le sien. */
+let successorExpected = false;
+
+export function dismissAllLayers(options: { readonly successor?: boolean } = {}): boolean {
+  const closing = [...dismissible].reverse();
+  const onLayerEntry = closing.some((open) => open.marker !== null && carriesMarker(window.history.state, open.marker));
+  successorExpected = onLayerEntry && options.successor === true;
+  closing.forEach((open) => open.close());
+  return onLayerEntry;
+}
+
 function carriesMarker(state: unknown, marker: string): boolean {
   return typeof state === 'object' && state !== null && (state as { readonly backDismiss?: unknown }).backDismiss === marker;
 }
@@ -121,6 +148,11 @@ function leaveEntry(marker: string, layer: symbol): void {
   pendingRelease = marker;
   queueMicrotask(() => {
     if (pendingRelease !== marker) {
+      dropLayer(layer);
+      return;
+    }
+    if (successorExpected) {
+      successorExpected = false;
       dropLayer(layer);
       return;
     }
@@ -137,6 +169,7 @@ function leaveEntry(marker: string, layer: symbol): void {
 /** L'entrée laissée par la couche précédente, si elle est TOUJOURS l'entrée
  * courante — sinon la nouvelle couche pose la sienne. */
 function adoptLeftEntry(): string | null {
+  successorExpected = false;
   if (pendingRelease === null) return null;
   if (!carriesMarker(window.history.state, pendingRelease)) return null;
   const adopted = pendingRelease;
@@ -154,6 +187,8 @@ export type BackDismissOptions = {
    * entrées pour une modale coûteraient deux retours. Lu au montage.
    */
   readonly history?: boolean;
+  /** `true` : `dismissAllLayers` ne la referme pas (#10539). Lu au montage. */
+  readonly held?: boolean;
 };
 
 export function useBackDismiss(onClose: () => void, options: BackDismissOptions = {}): void {
@@ -166,7 +201,17 @@ export function useBackDismiss(onClose: () => void, options: BackDismissOptions 
 
   useLayoutEffect(() => {
     const releaseModalLayer = openModalLayer();
-    if (!withHistory) return releaseModalLayer;
+    const close = () => onCloseRef.current();
+    const declare = (marker: string | null): (() => void) => {
+      if (options.held === true) return releaseModalLayer;
+      const open: OpenLayer = { close, marker };
+      dismissible = [...dismissible, open];
+      return () => {
+        dismissible = dismissible.filter((other) => other !== open);
+        releaseModalLayer();
+      };
+    };
+    if (!withHistory) return declare(null);
     const adopted = adoptLeftEntry();
     let marker = adopted;
     if (marker === null) {
@@ -175,6 +220,7 @@ export function useBackDismiss(onClose: () => void, options: BackDismissOptions 
       window.history.pushState({ backDismiss: marker }, '');
     }
     const ownMarker = marker;
+    const undeclare = declare(ownMarker);
     const layer = Symbol(ownMarker);
     layerStack = [...layerStack, layer];
     let consumedByHistory = false;
@@ -192,7 +238,7 @@ export function useBackDismiss(onClose: () => void, options: BackDismissOptions 
     if (escape) window.addEventListener('keydown', onKeyDown);
 
     return () => {
-      releaseModalLayer();
+      undeclare();
       window.removeEventListener('popstate', onPopState);
       window.removeEventListener('keydown', onKeyDown);
       if (!consumedByHistory && carriesMarker(window.history.state, ownMarker)) {

@@ -86,7 +86,12 @@ struct WelcomeView: View {
                     open()
                 }
             )
+            .feedbackToastOverlay()
         }
+        // #8037 — l'accueil est présenté en `fullScreenCover` par la racine,
+        // qui recouvre son hôte des toasts : un lien de connexion refusé,
+        // ouvert sans compte, se levait derrière lui.
+        .feedbackToastOverlay()
     }
 
     // MARK: - Boutons

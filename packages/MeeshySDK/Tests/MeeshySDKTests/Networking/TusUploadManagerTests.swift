@@ -12,6 +12,29 @@ final class TusUploadManagerTests: XCTestCase {
         XCTAssertNotNil(manager)
     }
 
+    // MARK: - Annulation
+
+    /// L'annulation de l'appelant atteint l'envoi : une tâche déjà annulée ne lance rien et rend la main avec
+    /// `CancellationError`. Avant, l'envoi partait dans une tâche détachée que l'annulation n'atteignait jamais.
+    func test_uploadFile_fromACancelledTask_throwsCancellation_withoutUploading() async throws {
+        let file = FileManager.default.temporaryDirectory.appendingPathComponent("tus-cancel-\(UUID().uuidString).bin")
+        try Data(repeating: 7, count: 64).write(to: file)
+        defer { try? FileManager.default.removeItem(at: file) }
+        let manager = TusUploadManager(baseURL: URL(string: "https://127.0.0.1:9")!)
+        let credential = MeeshyRequestCredential(header: "Authorization", value: "Bearer test")
+
+        let upload = Task {
+            withUnsafeCurrentTask { $0?.cancel() }
+            return try await manager.uploadFile(fileURL: file, mimeType: "application/octet-stream", credential: credential)
+        }
+        do {
+            _ = try await upload.value
+            XCTFail("un envoi annulé ne rend pas de résultat")
+        } catch {
+            XCTAssertTrue(error is CancellationError, "attendu CancellationError, reçu \(error)")
+        }
+    }
+
     // MARK: - Progress Publisher
 
     func test_progressPublisher_exists_andCanSubscribe() async {

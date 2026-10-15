@@ -5,6 +5,8 @@
  * @see ../socketio-events.ts — la façade qui garde l'adresse historique.
  */
 
+import type { ConversationAppearance } from '../conversation-appearance.js';
+
 /**
  * Snapshot complet des préférences user/conversation envoyé dans les
  * événements `USER_PREFERENCES_UPDATED` (scope conversation). Reflète
@@ -25,6 +27,12 @@ export interface ConversationPreferencesPayload {
   /** `ReadingModePreference` (`types/reading-modes.ts`) : `auto` rend la main à l'orchestrateur. */
   readonly readingMode: string;
   readonly clearHistoryBefore: string | null;
+  /**
+   * Additif (#10631) : le fond et l'accent PERSONNELS. Absent = Signature +
+   * accent calculé ; `null` après une remise à zéro. Jamais diffusé hors de
+   * `user:<id>` : un choix du lecteur, pas un réglage partagé.
+   */
+  readonly appearance?: ConversationAppearance | null;
 }
 
 /**

@@ -1,3 +1,6 @@
+import { translate } from '@/lib/i18n-catalog';
+import type { InterfaceLanguage } from '@/lib/interface-language';
+
 /**
  * CE QUE L'INSCRIPTION VA CRÉER, MONTRÉ ET ENVOYÉ (#6479).
  *
@@ -21,6 +24,7 @@
  * l'espace de compte. Le chemin nominal reste ZÉRO geste (dimension 12).
  */
 export function DerivedIdentity({
+  language,
   username,
   displayName,
   onUsernameChange,
@@ -36,6 +40,7 @@ export function DerivedIdentity({
   displayNamePlaceholder,
   framed = true,
 }: {
+  readonly language: InterfaceLanguage;
   /** Ce que la saisie du pseudo AFFICHE — la frappe, ou l'adresse tant qu'on n'a pas touché. */
   username: string;
   /** Ce que la saisie du nom affiché AFFICHE — même règle. */
@@ -64,13 +69,13 @@ export function DerivedIdentity({
     >
       {framed ? (
         <p className="text-caption font-medium" style={{ color: 'var(--color-ios-ink-3)' }}>
-          Votre identité
+          {translate(language, 'signup.identity.title')}
         </p>
       ) : null}
 
       <IdentityInput
         id="signup-display-name"
-        label="Nom affiché"
+        label={translate(language, 'signup.identity.displayName')}
         value={displayName}
         placeholder={displayNamePlaceholder}
         onChange={onDisplayNameChange}
@@ -83,7 +88,7 @@ export function DerivedIdentity({
 
       <IdentityInput
         id="signup-username"
-        label="Pseudo"
+        label={translate(language, 'signup.identity.username')}
         prefix="@"
         value={username}
         placeholder={usernamePlaceholder}

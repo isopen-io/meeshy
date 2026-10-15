@@ -94,6 +94,42 @@ final class MessageForwardServiceTests: XCTestCase {
                      "un transfert ne ré-attache jamais côté client — le serveur copie les attachments de la source")
     }
 
+    /// **Un sticker transféré reste un sticker** (#10630) : la passerelle ne recopie que les
+    /// pièces jointes, donc sans `sticker` dans le corps la copie arrive en image nue.
+    func test_forward_aSticker_carriesItsStickerToTheCopy() async throws {
+        let (sut, api, _, _) = makeSUT()
+        stubSendSuccess(api, target: target)
+        var message = makeMessage(content: "")
+        message.sticker = MessageSticker(emoji: "🎉", stickerId: "6a0ad86a6e21a483b4443d12")
+
+        _ = await sut.forward(message: message, sourceConversationId: sourceConvId, to: target)
+
+        let body = try postedBody(api)
+        let sticker = try XCTUnwrap(body["sticker"] as? [String: Any])
+        XCTAssertEqual(sticker["emoji"] as? String, "🎉")
+        XCTAssertEqual(sticker["stickerId"] as? String, "6a0ad86a6e21a483b4443d12")
+    }
+
+    func test_forward_aPlainMessage_sendsNoStickerKey() async throws {
+        let (sut, api, _, _) = makeSUT()
+        stubSendSuccess(api, target: target)
+
+        _ = await sut.forward(message: makeMessage(content: "hello"), sourceConversationId: sourceConvId, to: target)
+
+        XCTAssertNil(try postedBody(api)["sticker"])
+    }
+
+    func test_forward_aStickerOffline_queuesItWithItsSticker() async throws {
+        let (sut, _, queue, _) = makeSUT(online: false)
+        var message = makeMessage(content: "")
+        message.sticker = MessageSticker(emoji: "🎉")
+
+        _ = await sut.forward(message: message, sourceConversationId: sourceConvId, to: target)
+
+        let queued = await queue.enqueuedItems
+        XCTAssertEqual(queued.first?.sticker?.emoji, "🎉")
+    }
+
     func test_forward_mediaOnly_omitsContent() async throws {
         let (sut, api, _, _) = makeSUT()
         stubSendSuccess(api, target: target)

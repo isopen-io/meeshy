@@ -14,6 +14,7 @@ import { DashSection, type DashContext } from './admin-dashboard-parts';
 import { AgentBlock, HealthBlock, NowBlock, PlatformBlock, UsageBlock } from './admin-dashboard-numbers';
 import { MembersBlock, RankedConversationsChart, RankedMembersChart } from './admin-dashboard-people';
 import { NowSummary, PeopleSummary, PlatformSummary, SystemSummary, TodoBand, TrendsSummary, UsageSummary } from './admin-dashboard-summaries';
+import { MachineBand } from './admin-dashboard-machine';
 import { BroadcastsBlock, ModerationBlock } from './admin-dashboard-todo';
 import { EngagementChart, HourlyChart, LanguagesChart, MessageTypesChart, VolumeChart } from './admin-dashboard-trends';
 
@@ -111,6 +112,8 @@ export function AdminDashboardPanel({
   return (
     <div data-admin-dashboard className="grid gap-6">
       <AdminOfflineNotice language={language} />
+
+      {reach.hasAdminRank ? <MachineBand {...context} /> : null}
 
       {visible.todo ? <TodoBand {...context} moderation={moderation} notifications={notifications} onOpen={opener('todo')} /> : null}
 

@@ -418,7 +418,7 @@ struct CommentRowView: View, Equatable {
                 address: item.place.address,
                 accentColor: accentColor,
                 senderName: comment.author
-            )
+            ).closesForConversationOpening(.place)
         }
         .withStatusBubble()
     }

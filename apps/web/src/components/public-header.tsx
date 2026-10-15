@@ -94,13 +94,21 @@ export function PublicHeader({
   language,
   brand = true,
   leading,
+  languageChoice = !__SHELL__,
 }: {
   readonly language: InterfaceLanguage;
   /** La marque vers l'accueil — tue sur la connexion, qui porte la sienne. */
   readonly brand?: boolean;
   /** Ce que l'écran pose AVANT la marque — la croix qui referme l'inscription (D-72). */
   readonly leading?: ReactNode;
+  /**
+   * Le sélecteur des langues d'interface — celui du SITE. Une coque installée
+   * suit la langue de l'appareil (`inline-interface-language-bootstrap`) : le
+   * porteur l'a jugé inutile sur Android (2026-10-14), il n'y paraît donc pas.
+   */
+  readonly languageChoice?: boolean;
 }) {
+  if (!languageChoice && !brand && leading === undefined) return null;
   return (
     <header data-public-header className="flex w-full shrink-0 items-center gap-1 px-2 pt-1">
       {leading}
@@ -116,7 +124,7 @@ export function PublicHeader({
         </Link>
       ) : null}
       <span className="flex-1" />
-      <InterfaceLanguageSelect language={language} />
+      {languageChoice ? <InterfaceLanguageSelect language={language} /> : null}
     </header>
   );
 }

@@ -1,3 +1,4 @@
+import { isEngagementStreakAct } from '@meeshy/shared/types/engagement-act-streaks';
 import { isEngagementOperationKey } from '@meeshy/shared/types/engagement-operations';
 
 import type { AdminAuditPerson } from '@/lib/api/admin-audit';
@@ -110,9 +111,13 @@ function scaleFieldLabel(field: string, language: AdminLanguage): string | null 
     const said = among(SCALE_VARIANTS, variant) ? translateAdmin(language, `admin.scale.variant.${variant}`) : (variant ?? '');
     return translateAdmin(language, 'admin.scale.variantFor', { operation: name, variant: said });
   }
+  const act = /^streaks\.acts\.([a-z_]+)$/.exec(field)?.[1];
+  if (act !== undefined) return isEngagementStreakAct(act) ? `${t('admin.scale.tab.streaks')} › ${translateAdmin(language, `admin.scale.act.${act}`)}` : null;
   const [section, leaf, ...rest] = field.split('.');
   if (rest.length > 0) return null;
   if (section === 'streakBonuses' && leaf === undefined) return t('admin.scale.streak.title');
+  if (section === 'streaks') return leaf === 'global' ? t('admin.scale.streaks.global.title') : t('admin.scale.tab.streaks');
+  if (section === 'loyalty' && leaf === undefined) return t('admin.scale.loyalty.title');
   if (section === 'multiplier') {
     if (leaf === 'levelCaps') return t('admin.scale.levels.title');
     if (among(SCALE_MULTIPLIER_FIELDS, leaf)) return `${t('admin.scale.multiplier.title')} › ${translateAdmin(language, `admin.scale.field.${leaf}`)}`;

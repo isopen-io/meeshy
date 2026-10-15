@@ -1,5 +1,7 @@
 import { Glyph } from '@/components/glyph';
 import { displayTitle, isAgentTitled, type ConversationEpisode } from '@/lib/summary/types';
+import { translate } from '@/lib/i18n-catalog';
+import { currentInterfaceLanguage } from '@/lib/interface-language';
 
 /**
  * « CE QUI S'EST PASSÉ » — miroir `EpisodeListView.swift` (#5695, étape 8).
@@ -18,9 +20,9 @@ export function EpisodeList({
 }) {
   if (episodes.length === 0) return null;
   return (
-    <section aria-label="Ce qui s'est passé" className="flex flex-col gap-2">
+    <section aria-label={translate(currentInterfaceLanguage(), 'summary.episodes')} className="flex flex-col gap-2">
       <h3 className="text-title font-black" style={{ color: 'var(--color-ios-ink)' }}>
-        Ce qui s&rsquo;est passé
+        {translate(currentInterfaceLanguage(), 'summary.episodes')}
       </h3>
       <ul className="flex flex-col gap-1">
         {episodes.map((episode) => (
@@ -52,7 +54,7 @@ export function EpisodeList({
         ))}
       </ul>
       <span id="episode-hint" hidden>
-        Ouvre les messages de cet épisode
+        {translate(currentInterfaceLanguage(), 'summary.episodes.hint')}
       </span>
     </section>
   );

@@ -25,6 +25,10 @@ final class ProfileSheetLoader: ObservableObject {
     @Published private(set) var isLoadingProfile = false
     @Published private(set) var isLoadingStats = false
     @Published private(set) var isBlockedByTarget = false
+    /// Le profil n'a pas pu se charger et rien du cache ne le remplace : la
+    /// fiche propose « Réessayer » (#8025). Un cache peint n'est jamais
+    /// recouvert d'une erreur, et un refus (403) n'en est pas une.
+    @Published private(set) var profileLoadFailed = false
 
     private let data: ProfileSheetDataProviding
 
@@ -70,6 +74,12 @@ final class ProfileSheetLoader: ObservableObject {
         await synchronizeStats(resolved)
     }
 
+    /// « Réessayer » : rejoue l'ouverture — le cache d'abord, puis la synchronisation.
+    func retry(userId: String?, username: String) async {
+        profileLoadFailed = false
+        await open(userId: userId, username: username)
+    }
+
     /// Le pair s'est renommé ou a changé de photo pendant que sa fiche est ouverte.
     func repaint(_ user: MeeshyUser) {
         profile = user
@@ -80,10 +90,19 @@ final class ProfileSheetLoader: ObservableObject {
         do {
             let fresh = try await data.fetchProfile(handle: key)
             profile = fresh
+            profileLoadFailed = false
             await data.storeProfile(fresh, lookupKey: key)
         } catch let error as APIError {
-            if case .serverError(403, _) = error { isBlockedByTarget = true }
-        } catch {}
+            if case .serverError(403, _) = error {
+                isBlockedByTarget = true
+            } else {
+                profileLoadFailed = profile == nil
+            }
+        } catch MeeshyError.forbidden {
+            // Un refus n'est pas une panne : réessayer ne changerait rien.
+        } catch {
+            profileLoadFailed = profile == nil
+        }
     }
 
     private func synchronizeStats(_ userId: String) async {

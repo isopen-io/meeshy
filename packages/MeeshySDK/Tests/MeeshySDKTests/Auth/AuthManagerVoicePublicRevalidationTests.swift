@@ -96,12 +96,12 @@ final class AuthManagerVoicePublicRevalidationTests: XCTestCase {
     /// Site 1 — token refresh/rotation. `applySession` also runs on a fresh
     /// login, so a self-only session response omitting `voicePublic` must
     /// not clobber a value the local user already holds.
-    func test_applySession_serverUserWithoutVoicePublic_keepsLocalVoicePublic() {
+    func test_applySession_serverUserWithoutVoicePublic_keepsLocalVoicePublic() throws {
         let auth = AuthManager.shared
         auth.currentUser = makeUser(voicePublic: true)
 
         let serverUser = makeUser(voicePublic: nil)
-        auth.applySession(token: "tok-1", sessionToken: nil, user: serverUser)
+        try auth.applySession(token: "tok-1", sessionToken: nil, user: serverUser)
 
         XCTAssertEqual(
             auth.currentUser?.voicePublic, true,
@@ -112,14 +112,14 @@ final class AuthManagerVoicePublicRevalidationTests: XCTestCase {
     /// Site 2 — foreground `/auth/me` revalidation
     /// (`updateUserAfterRevalidation`, reached via the public
     /// `refreshCurrentUserProfile()`). Same amputated response shape.
-    func test_refreshCurrentUserProfile_serverUserWithoutVoicePublic_keepsLocalVoicePublic() async {
+    func test_refreshCurrentUserProfile_serverUserWithoutVoicePublic_keepsLocalVoicePublic() async throws {
         let auth = AuthManager.shared
 
         // Establish an authenticated session (sets isAuthenticated +
         // activeUserId, both required by refreshCurrentUserProfile's guard).
         // The background revalidation this triggers is harmless: it fails
         // (default stub result), so it can't touch currentUser.
-        auth.applySession(token: "tok-2", sessionToken: nil, user: makeUser(voicePublic: true))
+        try auth.applySession(token: "tok-2", sessionToken: nil, user: makeUser(voicePublic: true))
         auth.currentUser = makeUser(voicePublic: true)
 
         mockAuthService.meResult = .success(makeUser(voicePublic: nil))

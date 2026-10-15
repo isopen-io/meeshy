@@ -6,7 +6,6 @@ const enNotificationRow = {
   'notifications.row.kind.story': 'Story',
   'notifications.row.kind.reel': 'Reel',
   'notifications.row.kind.mood': 'Mood',
-  'notifications.row.kind.status': 'Status',
   'notifications.row.kind.post': 'Post',
   'notifications.row.media.photo': '📷 Photo',
   'notifications.row.media.video': '🎥 Video',

@@ -26,6 +26,7 @@ import enSignup from './catalog-en-signup';
 import enGallery from './catalog-en-gallery';
 import enMessageCard from './catalog-en-message-card';
 import enMentions from './catalog-en-mentions';
+import enShellLabels from './catalog-en-shell-labels';
 import enStudioChrome from './catalog-en-studio-chrome';
 import enEphemeral from './catalog-en-ephemeral';
 import enWriteRestriction from './catalog-en-write-restriction';
@@ -40,6 +41,7 @@ import enPhonePrompt from './catalog-en-phone-prompt';
 import enUserProfile from './catalog-en-user-profile';
 import enContentRefused from './catalog-en-content-refused';
 import enPublicEntry from './catalog-en-public-entry';
+import enThreadSearch from './catalog-en-thread-search';
 
 const en = {
   'announce.messageSent': 'Message sent',
@@ -306,6 +308,7 @@ const en = {
   'notFound.title': "This address doesn't exist.",
 
   'pending.back': 'Back to conversations',
+  'pending.screen': 'The screen is on its way',
 
   'linkPage.home': 'Back to Meeshy',
   'linkPage.retry': 'Try again',
@@ -322,8 +325,6 @@ const en = {
   'trackingLink.opening': 'Opening the link…',
   'trackingLink.dead.title': 'This link is no longer available',
   'trackingLink.dead.body': 'It has expired, been disabled, or never existed.',
-  'accountDeletion.incomplete.title': 'Incomplete link',
-  'accountDeletion.incomplete.body': 'This link is missing the information it needs. Sign in to request the deletion of your account.',
   'accountDeletion.confirm.title': 'Confirm the deletion of your account',
   'accountDeletion.confirm.body':
     'Your account will be deactivated after a 30-day grace period. Until then, the “Cancel” link in the email lets you change your mind.',
@@ -880,6 +881,8 @@ const en = {
   'story.action.reply': 'Reply',
   'story.action.forward': 'Send',
   'story.action.repost': 'Repost',
+  'story.viewer.repost': 'Repost',
+  'story.viewer.repostOf': 'Reposted from @{handle}',
   'story.action.views': 'Views',
   'story.action.share': 'Share',
   'story.action.save': 'Save',
@@ -1052,6 +1055,7 @@ const en = {
   'message.detail.language.original': '{language} (original)',
 
   ...enMentions,
+  ...enShellLabels,
   ...enStudioChrome,
   ...enEphemeral,
   ...enWriteRestriction,
@@ -1069,6 +1073,7 @@ const en = {
   ...enUserProfile,
   ...enContentRefused,
   ...enPublicEntry,
+  ...enThreadSearch,
 } satisfies InterfaceCatalog;
 
 export default en;

@@ -6,6 +6,7 @@
 import { describe, it, expect, beforeEach, jest } from '@jest/globals';
 import type { PrismaClient } from '@meeshy/shared/prisma/client';
 import { EngagementService } from '../../../../services/engagement/EngagementService';
+import { routeCounterWrites } from '../../../../services/engagement/__tests__/mongoLikeCounters';
 import { getSharedNotificationService } from '../../../../services/notifications/notification-service-registry';
 
 jest.mock('../../../../services/notifications/notification-service-registry');
@@ -16,13 +17,12 @@ const mockGetSharedNotificationService = getSharedNotificationService as jest.Mo
 >;
 
 function makePrisma(overrides: Partial<{
-  upsert: jest.Mock;
+  counterWrite: jest.Mock;
   conversationCreditCreate: jest.Mock;
   signatureCreditCreate: jest.Mock;
 }> = {}) {
   return {
     engagementCounter: {
-      upsert: overrides.upsert ?? jest.fn(),
       findMany: jest.fn().mockResolvedValue([]),
     },
     engagementMilestone: { create: jest.fn(), findMany: jest.fn().mockResolvedValue([]) },
@@ -40,7 +40,10 @@ function makePrisma(overrides: Partial<{
       update: jest.fn().mockResolvedValue({}),
       updateMany: jest.fn().mockResolvedValue({ count: 1 }),
     },
-    $runCommandRaw: jest.fn().mockResolvedValue({ ok: 1, value: { engagementScore: 0 } }),
+    $runCommandRaw: routeCounterWrites(
+      overrides.counterWrite ?? jest.fn(),
+      jest.fn().mockResolvedValue({ ok: 1, value: { engagementScore: 0 } }),
+    ),
   } as unknown as PrismaClient;
 }
 
@@ -60,8 +63,8 @@ describe('le crédit par ensemble de personnes (#8906)', () => {
   it('une conversation privée avec une personne déjà créditée ne rapporte plus', async () => {
     const conversationCreditCreate = jest.fn().mockResolvedValue({});
     const signatureCreditCreate = jest.fn().mockRejectedValue(p2002Error());
-    const upsert = jest.fn();
-    const prisma = makePrisma({ conversationCreditCreate, signatureCreditCreate, upsert });
+    const counterWrite = jest.fn();
+    const prisma = makePrisma({ conversationCreditCreate, signatureCreditCreate, counterWrite });
     const svc = new EngagementService(prisma);
 
     await svc.recordConversationActivity('user-1', 'conversation.private', 'conv-2', { signature: 'sig-ali' });
@@ -69,18 +72,18 @@ describe('le crédit par ensemble de personnes (#8906)', () => {
     expect(signatureCreditCreate).toHaveBeenCalledWith({
       data: { userId: 'user-1', axisKey: 'conversation.private', signature: 'sig-ali', conversationId: 'conv-2' },
     });
-    expect(upsert).not.toHaveBeenCalled();
+    expect(counterWrite).not.toHaveBeenCalled();
   });
 
   it('une conversation privée avec une nouvelle personne rapporte', async () => {
-    const upsert = jest.fn().mockResolvedValue({ count: 1 });
-    const prisma = makePrisma({ upsert });
+    const counterWrite = jest.fn().mockResolvedValue({ count: 1 });
+    const prisma = makePrisma({ counterWrite });
     mockGetSharedNotificationService.mockReturnValue(makeSharedNotificationService());
     const svc = new EngagementService(prisma);
 
     await svc.recordConversationActivity('user-1', 'conversation.private', 'conv-3', { signature: 'sig-baba' });
 
-    expect(upsert).toHaveBeenCalledTimes(1);
+    expect(counterWrite).toHaveBeenCalledTimes(1);
   });
 
   it('un second message dans la même conversation ne relit pas la signature', async () => {
@@ -100,8 +103,8 @@ describe('le crédit par ensemble de personnes (#8906)', () => {
       .mockResolvedValueOnce({})
       .mockRejectedValueOnce(p2002Error())
       .mockResolvedValueOnce({});
-    const upsert = jest.fn().mockResolvedValue({ count: 1 });
-    const prisma = makePrisma({ signatureCreditCreate, upsert });
+    const counterWrite = jest.fn().mockResolvedValue({ count: 1 });
+    const prisma = makePrisma({ signatureCreditCreate, counterWrite });
     mockGetSharedNotificationService.mockReturnValue(makeSharedNotificationService());
     const svc = new EngagementService(prisma);
 
@@ -112,11 +115,7 @@ describe('le crédit par ensemble de personnes (#8906)', () => {
     const signatures = signatureCreditCreate.mock.calls.map((call) => (call[0] as { data: { signature: string } }).data.signature);
     expect(signatures[0]).toBe(signatures[1]);
     expect(signatures[2]).not.toBe(signatures[0]);
-    expect(upsert).toHaveBeenCalledTimes(2);
-    expect(upsert).toHaveBeenCalledWith(
-      expect.objectContaining({
-        create: { userId: 'me', axisKey: 'conversation.group_created', count: 1, points: 1 },
-      }),
-    );
+    expect(counterWrite).toHaveBeenCalledTimes(2);
+    expect(counterWrite).toHaveBeenCalledWith({ kind: 'credit', userId: 'me', axisKey: 'conversation.group_created', count: 1, points: 1 });
   });
 });

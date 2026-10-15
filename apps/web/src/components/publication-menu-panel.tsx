@@ -119,7 +119,15 @@ export function PostMenuPanel(props: PostMenuPanelProps) {
         case 'delete':
           return { id, label: translate(language, 'feed.post.menu.delete'), icon: <GlyphSvg glyph={NOTIFICATIONS_GLYPHS.trash} size={16} />, run: () => menu.onDelete(postId) };
         case 'report':
-          return { id, label: translate(language, 'report.action'), icon: <Glyph name="warningCircle" size={16} />, run: () => setReporting(true) };
+          return {
+            id,
+            label: translate(language, 'report.action'),
+            icon: <Glyph name="warningCircle" size={16} />,
+            run: () => {
+              menu.onReportOpen?.(postId);
+              setReporting(true);
+            },
+          };
       }
     },
   );

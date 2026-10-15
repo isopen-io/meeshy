@@ -63,7 +63,7 @@ struct ConversationMediaGalleryLayer: ViewModifier {
             // sait rendre que l'image et la vidéo.
             Group {
                 if startAttachment.type == .audio {
-                    audioFullscreen(start: startAttachment)
+                    audioFullscreen(start: startAttachment, actions: audioFullscreenActions)
                         .captureShield(captureScope.shields(startAttachment.id))
                 } else {
                     gallery(start: startAttachment)
@@ -274,6 +274,45 @@ struct ConversationMediaGalleryLayer: ViewModifier {
               let piece = indexe.attachments.first(where: { $0.id == attachment.id }) else { return }
         let bascule = viewModel.toggleAttachmentReaction(outOfWindow: piece, carrierId: indexe.id, emoji: emoji)
         catalog.applyReaction(bascule, toAttachment: attachment.id)
+    }
+
+    /// **Ce qu'on fait d'un vocal depuis son plein écran** (#8916) — les
+    /// chemins de la galerie, jamais des jumeaux : la citation et l'envoi de
+    /// `sendReplyToMedia`, l'armement différé de `armCompose`.
+    ///
+    /// **Réagir vise le MESSAGE**, à la différence de la galerie qui vise la
+    /// pièce (#6084) : la bulle d'un vocal peint les réactions de son message
+    /// et aucune pastille par pièce — une réaction posée sur la pièce n'y
+    /// apparaîtrait nulle part. Le porteur doit donc être dans la fenêtre,
+    /// là où la réaction optimiste se pose.
+    private var audioFullscreenActions: AudioFullscreenActions {
+        AudioFullscreenActions(
+            react: { source, emoji in
+                guard let porteur = carrier(of: source.attachment),
+                      viewModel.messages.contains(where: { $0.id == porteur.id }) else { return }
+                viewModel.toggleReaction(messageId: porteur.id, emoji: emoji)
+            },
+            sendReply: { source, text, language in
+                sendReplyToMedia(source.attachment, text, language)
+            },
+            replyCitation: { source in
+                viewModel.fullscreenReplyCitation(for: source.attachment.id, carrier: carrier(of: source.attachment))
+            },
+            compose: { source in armCompose(source.attachment) },
+            offer: { source in
+                let porteur = carrier(of: source.attachment)
+                let verdict = AudioFullscreenOffer.resolve(
+                    isProtected: ComposableAttachment.isProtected(source.attachment)
+                        || (porteur.map { $0.isViewOnce || $0.isBlurred || $0.isEncrypted } ?? false),
+                    hasCarrier: porteur != nil,
+                    composable: porteur.map(ComposableAttachment.offers(message:)) ?? false
+                )
+                let inWindow = porteur.map { p in viewModel.messages.contains { $0.id == p.id } } ?? false
+                return AudioFullscreenOffer(react: verdict.react && inWindow,
+                                            reply: verdict.reply,
+                                            compose: verdict.compose)
+            }
+        )
     }
 
     /// La galerie est DÉMONTÉE : le meuble peut prendre sa place.

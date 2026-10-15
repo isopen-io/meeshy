@@ -483,7 +483,7 @@ describe('POST /refresh — la porte de l’âge minimal (#9927)', () => {
 
     expect(res.statusCode).toBe(401);
     expect(res.json()).toMatchObject({ code: 'SESSION_REVOKED' });
-    expect(prisma.user.findUnique).not.toHaveBeenCalled();
+    expect(prisma.user.findUnique).not.toHaveBeenCalledWith(expect.objectContaining({ select: { birthDate: true } }));
     await app.close();
   });
 

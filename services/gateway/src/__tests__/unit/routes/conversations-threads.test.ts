@@ -373,3 +373,45 @@ describe('GET /conversations/:id/threads/:messageId — #9646 pièce protégée'
     expect(await servedParentFileUrl(true)).toMatch(new RegExp(`^/api/v1/attachments/signed/${PIECE}\\.${READER}\\.`));
   });
 });
+
+/**
+ * #7388 — le fil de réponses d'un message est une lecture de messages comme les
+ * autres : un lien de partage ÉCHU en ferme la porte, comme sur
+ * `GET .../messages`.
+ */
+describe('GET /conversations/:id/threads/:messageId — lien de partage échu (#7388)', () => {
+  const LINK_ID = '507f1f77bcf86cd7994390aa';
+
+  async function threadWithLink(expiresAt: Date) {
+    mockResolveConversationId.mockResolvedValue(CONV_RESOLVED_ID);
+    mockCanAccessConversation.mockResolvedValue(true);
+    const app = await buildApp({
+      prismaOverrides: {
+        participant: { findFirst: jest.fn<any>().mockResolvedValue({ id: 'reader-part', joinedAt: new Date(0), shareLinkId: LINK_ID }) },
+        conversationShareLink: {
+          findUnique: jest.fn<any>().mockResolvedValue({ id: LINK_ID, allowViewHistory: true, expiresAt }),
+          findFirst: jest.fn<any>().mockResolvedValue({ id: LINK_ID, allowViewHistory: true, expiresAt }),
+        },
+      },
+    });
+    try {
+      return await app.inject({ method: 'GET', url: `/conversations/${CONV_ID}/threads/${MESSAGE_ID}` });
+    } finally {
+      await app.close();
+    }
+  }
+
+  it('refuse 403 SHARE_LINK_EXPIRED et ne sert pas le message parent', async () => {
+    const res = await threadWithLink(new Date('2020-01-01T00:00:00.000Z'));
+    expect(res.statusCode).toBe(403);
+    expect(res.json().success).toBe(false);
+    expect(res.json().data).toBeUndefined();
+    expect(res.payload).not.toContain('Parent message');
+  });
+
+  it('sert le fil quand le lien est vivant', async () => {
+    const res = await threadWithLink(new Date('2999-01-01T00:00:00.000Z'));
+    expect(res.statusCode).toBe(200);
+    expect(res.payload).toContain('Parent message');
+  });
+});

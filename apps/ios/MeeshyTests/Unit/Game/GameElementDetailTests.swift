@@ -101,7 +101,7 @@ final class GameElementDetailTests: XCTestCase {
         ])
         XCTAssertEqual(GameElementKind.families.filter { $0.how == .gives }.map(\.rawValue), ["flame", "mission", "chest", "elan"])
         XCTAssertEqual(GameDetailFactKey.allCases.map(\.rawValue), [
-            "tier", "score", "level_next", "level_record", "tailwind", "mint_price", "mint_missing", "can_mint", "factor",
+            "tier", "score", "convertible", "level_next", "level_record", "tailwind", "mint_price", "mint_missing", "can_mint", "factor",
             "mint_next", "mint_glory", "minted", "glory", "glory_missing", "streak", "streak_record", "flame_state",
             "missions_done", "league_place", "week_points", "league_zone", "league_missing", "league_closes",
             "league_friends", "season", "season_week", "season_steps", "season_stars", "prestige_glory", "elan_families",
@@ -142,7 +142,8 @@ final class GameElementDetailTests: XCTestCase {
         XCTAssertNil(lit.progress, "un badge obtenu n'a pas de jauge")
 
         let out = GameElementDetails.badge(item(lit: false))
-        XCTAssertEqual(out.status, .locked(missing: GameDetailText.missing("4"), progress: item(lit: false).progress))
+        XCTAssertEqual(out.status, .locked(missing: GameBadgeGuideText.imprint(missing: "4"), progress: item(lit: false).progress),
+                       "un badge éteint dit ce qu'il manque POUR LE RALLUMER (#10540)")
         XCTAssertTrue(out.statusLine.contains(GameDetailText.locked))
         XCTAssertNotEqual(lit.id, GameElementDetails.badge(GameBadgeItem(
             axis: .textMessage, threshold: 50, material: GameBadges.material(forThreshold: 50), lit: true, missing: 0, value: 60, nextThreshold: nil
@@ -158,6 +159,9 @@ final class GameElementDetailTests: XCTestCase {
         XCTAssertFalse(detail.isObtained, "aucun palier atteint : le badge est à décrocher")
         XCTAssertEqual(detail.kind, .badge)
         XCTAssertNotNil(detail.progress, "ce qu'il manque a sa jauge")
+        let missing = try XCTUnwrap(axis.scale.remainingToNext)
+        XCTAssertEqual(detail.status, .locked(missing: GameDetailText.badgeMissing(missing: GameCopy.formatCount(missing)), progress: axis.scale.progress),
+                       "le manque nomme sa cible : la première étoile (#10540)")
     }
 
     func test_theDateOfAnElement_isOnlyTheOneServed() {
@@ -184,6 +188,14 @@ final class GameElementDetailTests: XCTestCase {
         XCTAssertEqual(status(.claimed), .obtained(since: nil))
         XCTAssertEqual(status(.ready), .value(ConceptText.chipChestReady, progress: 1))
         XCTAssertEqual(status(.locked), .locked(missing: ConceptText.ratio("0", "3"), progress: 0))
+    }
+
+    /// Le coffre garde son contenu secret (#10567) : ni borne, ni chance, ni montant dans ses précisions.
+    func test_theChest_keepsItsContentsSecret() {
+        for status in [GameBlock.Chest.Status.locked, .ready, .claimed] {
+            let block = GameFixture.game(chestStatus: status)
+            XCTAssertTrue(GameElementDetails.chest(block.chest, missions: block.missions).facts.isEmpty)
+        }
     }
 
     func test_theLeagueGem_saysNothingWithoutAGroup_andNeverMoreThanThePage() throws {
@@ -288,7 +300,7 @@ final class GameElementDetailTests: XCTestCase {
         XCTAssertTrue(identifiants.contains("game.detail.locked"), "« verrouillé » n'est pas dit. Vus : \(identifiants)")
         XCTAssertFalse(identifiants.contains("game.detail.obtained"))
         XCTAssertFalse(identifiants.contains("game.detail.sheet"), "dans la fiche du concept, pas de « Voir la fiche »")
-        XCTAssertTrue(rendu.node("game.detail.locked")?.label?.contains(GameDetailText.missing("4")) ?? false,
+        XCTAssertTrue(rendu.node("game.detail.locked")?.label?.contains(GameBadgeGuideText.imprint(missing: "4")) ?? false,
                       "ce qu'il manque n'est pas dit : « \(rendu.node("game.detail.locked")?.label ?? "") »")
     }
 
@@ -333,6 +345,44 @@ final class GameElementDetailTests: XCTestCase {
         XCTAssertTrue(detail.name.contains(GameCopy.formatCount(345)), detail.name)
     }
 
+    /// L'anneau dit ce qu'il reste AVEC le niveau visé, et nomme les points en poche (#10540).
+    func test_levelRing_saysWhatRemainsForWhichLevel_andNamesThePocket() {
+        let game = GameFixture.game(score: 77_099, levelRecord: 27, minted: 78, debitable: 5_823, held: 3)
+        let detail = GameElementDetails.levelRing(game.level)
+
+        XCTAssertEqual(detail.status, .value(GameCopy.levelToNext(remaining: 1_301, nextLevel: 28), progress: game.level.shown.progress))
+        XCTAssertEqual(detail.facts.first, ProgressionConceptFact(label: ConceptText.factHeld, value: GameCopy.points(77_099)))
+        XCTAssertFalse(detail.facts.contains { $0.label == ConceptText.factNextLevel }, "hors plafond, le reste est dans la valeur")
+    }
+
+    /// La pièce, le rang, la ligue et le trésor : chaque manque porte sa cible.
+    func test_theMissingAmounts_ofTheCoinTheRankTheLeagueAndTheTreasury_nameTheirTarget() throws {
+        let poor = GameFixture.game(score: 77_099, levelRecord: 27, minted: 78, debitable: 5_823, held: 3)
+        XCTAssertEqual(GameElementDetails.coin(poor.mint).status, .locked(
+            missing: ConceptText.spendMissingMint(missing: GameCopy.convertiblePoints(1_839), number: GameCopy.formatCount(79)),
+            progress: Double(5_823) / Double(7_662)
+        ))
+
+        let glory = GameBlock.Glory(glory: 6000, rank: .voix, division: .iii, division5: .v,
+                                    next: GloryStep(rank: .voix, division: .iii, division5: .iv, minGlory: 7800),
+                                    gloryMissing: 1800, progress: 0)
+        let next = GameCopy.rankLabel(.voix, division5: .iv)
+        XCTAssertEqual(GameElementDetails.rank(glory).facts, [
+            ProgressionConceptFact(label: ConceptText.factNextRank, value: next),
+            ProgressionConceptFact(label: ConceptText.missingForRank(rank: next), value: GameCopy.gloryAmount(GameCopy.formatCount(1800))),
+        ])
+
+        let chasing = GameWave2Fixture.league(current: .init(league: .jade, groupId: "g", groupSize: 30, rank: 12, weekPoints: 410,
+                                                             zone: .safe, cup: nil, pointsToPromotion: 120))
+        let gem = try XCTUnwrap(GameElementDetails.leagueGem(chasing))
+        XCTAssertEqual(gem.facts.last, ProgressionConceptFact(label: ConceptText.missingForPromotion, value: GameCopy.points(120)))
+
+        let treasury = GameTreasury.standing(held: 3)
+        let step = try XCTUnwrap(treasury.next)
+        XCTAssertEqual(GameElementDetails.treasuryTier(treasury).facts.first?.value,
+                       GameCopy.treasuryNext(missing: GameCopy.formatCount(step.missing), tier: GameCopy.treasuryName(step.key)))
+    }
+
     func test_levelRing_atTheRankCap_saysWhichRankOpensTheNextLevels() {
         let game = GameFixture.game(score: GameLevels.threshold(of: 700), glory: 100_000)
         XCTAssertTrue(game.level.shown.isMax)
@@ -355,19 +405,67 @@ final class GameElementDetailTests: XCTestCase {
     // MARK: - Ce qu'un geste dépense ou exige, avant le geste (#9705)
 
     func test_theSpendRow_saysWhatIsHeld_whatItCosts_andWhatRemains() {
-        let items = GameSpendRows.spend(GameSpend.preview(held: 5, cost: 3), format: GameCopy.meeshes)
+        let items = GameSpendRows.spend(GameSpend.preview(held: 5, cost: 3), format: GameCopy.meeshes,
+                                        missing: { ConceptText.spendMissingFreeze(missing: $0) })
         XCTAssertEqual(items.map(\.label), [ConceptText.factBalance, ConceptText.factCost, ConceptText.factAfter])
+        XCTAssertFalse(items.contains { $0.sentence != nil }, "rien ne manque : aucune phrase de manque")
         XCTAssertEqual(items.map(\.value), [GameCopy.meeshes(5), GameCopy.meeshes(3), GameCopy.meeshes(2)])
         XCTAssertEqual(items.map(\.detail), [.spendHeld, .spendCost, .spendAfter])
         XCTAssertFalse(items.contains { $0.short })
     }
 
     func test_theSpendRow_saysWhatIsMissing_insteadOfWhatRemains() {
-        let items = GameSpendRows.spend(GameSpend.preview(held: 4, cost: 10), format: GameCopy.meeshes)
-        XCTAssertEqual(items.last?.label, ConceptText.factMissing)
+        let items = GameSpendRows.spend(GameSpend.preview(held: 4, cost: 10), format: GameCopy.meeshes,
+                                        missing: { ConceptText.spendMissingFreeze(missing: $0) })
+        // Le manque est une PHRASE qui nomme son but (#10540) : « Il manque 6 Meeshes pour acheter un gel. »
+        XCTAssertEqual(items.last?.sentence, ConceptText.spendMissingFreeze(missing: GameCopy.meeshes(6)))
         XCTAssertEqual(items.last?.value, GameCopy.meeshes(6))
         XCTAssertEqual(items.last?.short, true)
+        XCTAssertEqual(items.last?.detail, .spendMissing)
         XCTAssertFalse(items.contains { $0.label == ConceptText.factAfter })
+        XCTAssertEqual(items.filter { $0.sentence != nil }.count, 1, "seul le manque est une phrase")
+    }
+
+    /// Les cinq gestes qui dépensent ont chacun LEUR phrase de manque, et chacune dit autre chose que le montant seul.
+    func test_everySpendingGesture_namesWhatTheMissingAmountIsFor() {
+        let amount = GameCopy.meeshes(2)
+        let sentences = [
+            ConceptText.spendMissingFreeze(missing: amount), ConceptText.spendMissingRelight(missing: amount),
+            ConceptText.spendMissingReroll(missing: amount), ConceptText.spendMissingSeal(missing: amount),
+            ConceptText.spendMissingUnlock(missing: amount), ConceptText.spendMissingMint(missing: amount, number: "79"),
+        ]
+        XCTAssertEqual(Set(sentences).count, sentences.count, "deux gestes partagent leur phrase de manque")
+        for sentence in sentences {
+            XCTAssertTrue(sentence.contains(amount), sentence)
+            XCTAssertGreaterThan(sentence.count, amount.count + 8, "« \(sentence) » : un manque sans cible")
+        }
+        XCTAssertTrue(sentences[5].contains("79"), "le manque d'une frappe nomme la pièce : \(sentences[5])")
+    }
+
+    /// Le compte du porteur (#10540) : 77 099 points en poche, 5 823 à convertir, la Meesh n° 79 à 7 662. La rangée
+    /// de la frappe nomme les DEUX soldes, et « il manque 1 839 » dit qu'il vise la Meesh n° 79.
+    func test_theMintRow_namesBothBalances_andTheMissingAmountNamesTheCoin() {
+        let game = GameFixture.game(score: 77_099, levelRecord: 27, minted: 78, debitable: 5_823, held: 3)
+        XCTAssertEqual(game.mint.number, 79)
+        XCTAssertEqual(game.mint.price, 7_662)
+        XCTAssertEqual(game.mint.missingPoints, 1_839)
+        let view = GameMintPreviewView(game: game, convertible: 5_823, online: true, minting: false, error: nil, celebration: nil, onMint: {})
+
+        let items = view.spendItems
+
+        XCTAssertEqual(items.map(\.detail), [.score, .convertible, .spendCost, .mintMissing])
+        XCTAssertEqual(items[0].value, GameCopy.points(77_099))
+        XCTAssertEqual(items[1].label, ConceptText.factToConvert)
+        XCTAssertEqual(items[1].value, GameCopy.points(5_823))
+        XCTAssertEqual(items[2].value, GameCopy.points(7_662))
+        XCTAssertEqual(items[3].sentence, ConceptText.spendMissingMint(missing: GameCopy.convertiblePoints(1_839), number: GameCopy.formatCount(79)))
+
+        // Sans porte-monnaie servi, une frappe impossible DIT le solde (le prix moins le manque) ; possible, il se tait.
+        let bare = GameMintPreviewView(game: game, online: true, minting: false, error: nil, celebration: nil, onMint: {})
+        XCTAssertEqual(bare.spendItems[1].value, GameCopy.points(5_823))
+        let rich = GameMintPreviewView(game: GameFixture.game(score: 5000, debitable: 5000), online: true, minting: false,
+                                       error: nil, celebration: nil, onMint: {})
+        XCTAssertEqual(rich.spendItems.map(\.detail), [.score, .spendCost, .spendAfter], "le solde à convertir n'est jamais deviné depuis le score")
     }
 
     func test_theMintHero_spendsThePocket_butIsPaidByConvertiblePointsOnly() {
@@ -385,8 +483,10 @@ final class GameElementDetailTests: XCTestCase {
 
     func test_theRequirementRow_saysTheGap_andFallsSilentOnceMet() {
         let below = GameSpendRows.requirement(GameSpend.requirement(current: 3, required: GameMissions.minLevel))
-        XCTAssertEqual(below.map(\.label), [ConceptText.name(.level), ConceptText.factRequired, ConceptText.factMissing])
+        XCTAssertEqual(below.prefix(2).map(\.label), [ConceptText.name(.level), ConceptText.factRequired])
         XCTAssertEqual(below.last?.value, GameCopy.levels(GameMissions.minLevel - 3))
+        XCTAssertEqual(below.last?.sentence, ConceptText.spendMissingUnlock(missing: GameCopy.levels(GameMissions.minLevel - 3)),
+                       "ce qu'il manque dit pour quoi : l'ouvrir (#10540)")
 
         let met = GameSpendRows.requirement(GameSpend.requirement(current: 40, required: GameDuo.minLevel), record: true)
         XCTAssertEqual(met.map(\.label), [ConceptText.factRecord, ConceptText.factRequired])
@@ -425,7 +525,9 @@ final class GameElementDetailTests: XCTestCase {
         XCTAssertEqual(detail.kind, .levelStep)
         XCTAssertEqual(detail.name, GameCopy.levelStepLine(step))
         XCTAssertTrue(detail.name.contains(GameCopy.levelStepGoal(step)), detail.name)
-        XCTAssertEqual(detail.status, .locked(missing: ConceptText.ratio(GameCopy.formatCount(0), GameCopy.formatCount(1)), progress: 0))
+        XCTAssertEqual(detail.status, .locked(
+            missing: GameDetailText.levelStepProgress(progress: ConceptText.ratio(GameCopy.formatCount(0), GameCopy.formatCount(1))), progress: 0
+        ))
         XCTAssertEqual(detail.what, GameDetailText.what(.levelStep))
         XCTAssertEqual(detail.how, GameDetailText.how(.levelStep))
         XCTAssertEqual(detail.facts.count, GameLevelSteps.rules.count, "les dix étapes, chacune faite ou à faire")

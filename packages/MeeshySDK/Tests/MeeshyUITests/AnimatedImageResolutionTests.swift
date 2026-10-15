@@ -149,4 +149,45 @@ final class AnimatedImageResolutionTests: XCTestCase {
             XCTAssertLessThanOrEqual(max(frame.width, frame.height), 4)
         }
     }
+
+    // MARK: - La vue décode HORS du fil principal (#9210)
+
+    /// **Une grille de stickers animés défile sans perdre d'image** : la vue
+    /// demandait le décodage depuis sa tâche, isolée au fil principal, et N
+    /// images par case entrante s'y décodaient pendant le geste. Le décodage
+    /// passe par une fonction `@concurrent`, qui rend ce que la règle rend.
+    func test_laVue_decodeParUneFonctionConcurrente_quiRendLeMemeResultat() async throws {
+        let bytes = try makeAnimatedGIF()
+        let rendu = await AnimatedCachedImageDecoding.resolve(
+            urlString: "https://cdn.test/sticker.gif", animates: true, reduceMotion: false,
+            maxPixelSize: 120
+        ) { _ in bytes }
+        XCTAssertFalse(try XCTUnwrap(rendu).decoded.frames.isEmpty)
+
+        let fige = await AnimatedCachedImageDecoding.resolve(
+            urlString: "https://cdn.test/sticker.gif", animates: true, reduceMotion: true,
+            maxPixelSize: 120
+        ) { _ in bytes }
+        XCTAssertNil(fige, "le mouvement réduit ne décode rien")
+
+        let code = try ComposerSourceGuard.source("../Media/AnimatedCachedImage.swift")
+            .components(separatedBy: .whitespacesAndNewlines).joined()
+        XCTAssertTrue(code.contains("@concurrentstaticfuncresolve("),
+                      "le décodage de la vue doit quitter le fil principal")
+        XCTAssertTrue(code.contains("awaitAnimatedCachedImageDecoding.resolve("),
+                      "la vue doit passer par le décodage concurrent")
+    }
+
+    /// **La vignette d'un sticker cinématique JOUE dans la feuille** (#9210) :
+    /// elle s'affichait par `CachedAsyncImage`, qui ne rend que la première
+    /// image. Le film passe par `AnimatedCachedImage`, budgété à la case, et
+    /// la vignette fixe reste son repli.
+    func test_laFeuille_joueLaVignetteDUnStickerCinematique() throws {
+        let code = try ComposerSourceGuard.source("StickerPickerView+Packs.swift")
+            .components(separatedBy: .whitespacesAndNewlines).joined()
+        XCTAssertTrue(code.contains("ifitem.isAnimated{AnimatedCachedImage("),
+                      "un sticker cinématique doit monter le lecteur animé dans sa case")
+        XCTAssertTrue(code.contains("pointSize:Self.meeCellSide"),
+                      "le décodage se borne à la case : jamais N bitmaps pleine résolution")
+    }
 }

@@ -48,7 +48,7 @@ extension View {
         @ViewBuilder content: @escaping () -> Content
     ) -> some View {
         fullScreenCover(isPresented: isPresented, onDismiss: onDismiss) {
-            content().coversConversationViewing()
+            content().coversConversationViewing().closesForConversationOpening(.conversationCover)
         }
     }
 
@@ -58,7 +58,7 @@ extension View {
         @ViewBuilder content: @escaping (Item) -> Content
     ) -> some View {
         fullScreenCover(item: item, onDismiss: onDismiss) { presented in
-            content(presented).coversConversationViewing()
+            content(presented).coversConversationViewing().closesForConversationOpening(.conversationCover)
         }
     }
 }

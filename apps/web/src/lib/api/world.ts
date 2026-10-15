@@ -1,5 +1,5 @@
-import * as z from 'zod/mini';
-import type { WorldEntry } from '@meeshy/shared/types/world';
+import { WORLD_CONVERSATION_TITLE } from '@meeshy/shared/types/world-identity';
+import { worldEntrySchema, type WorldEntry } from '@meeshy/shared/types/world';
 import * as worldEndpoints from '@meeshy/shared/api/endpoints/world';
 
 import type { DataSource } from './config';
@@ -11,35 +11,16 @@ import type { ApiResult, HttpTransport } from './http';
  * jamais écrite en dur, et l'effectif. Un 404 `WORLD_UNAVAILABLE` dit qu'il n'y
  * a pas d'entrée ouverte.
  *
- * `WireWorldEntry` est la JUMELLE `zod/mini` de `worldEntrySchema`
- * (`@meeshy/shared/types/world`), que ce module ne charge pas pour ne pas
- * faire entrer `zod` complet dans le chunk de l'écran ; `world.test.ts` les
- * confronte sur les mêmes charges.
+ * La charge se lit par `worldEntrySchema` lui-même (`@meeshy/shared/types/world`,
+ * écrit en `zod/mini` depuis #10038) : aucune seconde écriture du contrat.
  */
 export type WorldDeps = { readonly source: DataSource; readonly transport: HttpTransport };
 
 export const WORLD_UNAVAILABLE = 'WORLD_UNAVAILABLE';
 
-/** Le titre montré avant que l'entrée servie ne le dise — jumelle gardée de
- * `WORLD_CONVERSATION_TITLE`. Le titre affiché est TOUJOURS celui servi dès
- * qu'il est lu. */
-export const WORLD_FALLBACK_TITLE = 'World Wide';
-
-const WireWorldEntry = z.object({
-  identifier: z.string().check(z.minLength(1)),
-  title: z.string().check(z.minLength(1)),
-  shareLinkIdentifier: z.string().check(z.minLength(1)),
-  memberCount: z.optional(z.number().check(z.int(), z.nonnegative())),
-  memberCountCapped: z.optional(z.literal(true)),
-});
-
-export function decodeWorldEntry(raw: unknown): WorldEntry | null {
-  const parsed = WireWorldEntry.safeParse(raw);
-  if (!parsed.success) return null;
-  const { memberCount, memberCountCapped, ...entry } = parsed.data;
-  const counted = memberCount === undefined ? entry : { ...entry, memberCount };
-  return memberCountCapped === true ? { ...counted, memberCountCapped } : counted;
-}
+/** Le titre montré avant que l'entrée servie ne le dise. Le titre affiché est
+ * TOUJOURS celui servi dès qu'il est lu. */
+export const WORLD_FALLBACK_TITLE = WORLD_CONVERSATION_TITLE;
 
 export async function loadWorldEntry(params: WorldDeps & { readonly signal?: AbortSignal }): Promise<ApiResult<WorldEntry>> {
   if (__FIXTURES__ && params.source === 'fixtures') {
@@ -53,6 +34,6 @@ export async function loadWorldEntry(params: WorldDeps & { readonly signal?: Abo
     ...(params.signal === undefined ? {} : { signal: params.signal }),
   });
   if (!result.ok) return result;
-  const entry = decodeWorldEntry(result.data);
-  return entry === null ? { ok: false, status: 0, error: 'Entrée World Wide illisible', code: 'UNREADABLE_WORLD_ENTRY' } : { ok: true, data: entry };
+  const entry = worldEntrySchema.safeParse(result.data);
+  return entry.success ? { ok: true, data: entry.data } : { ok: false, status: 0, error: 'Entrée World Wide illisible', code: 'UNREADABLE_WORLD_ENTRY' };
 }

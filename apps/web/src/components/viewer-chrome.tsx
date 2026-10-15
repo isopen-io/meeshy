@@ -11,7 +11,8 @@ import '@/styles/viewer-chrome.css';
 import { Avatar } from './avatar';
 import type { SoundCreditControl } from './background-sound-credit';
 import { CHROME_ACTION_HIT_CLASS } from './chrome-action';
-import { Glyph } from './glyph';
+import { Glyph, GlyphSvg } from './glyph';
+import { FEED_GLYPHS } from './glyphs-feed';
 import { PersonName } from './person-name';
 
 const BackgroundSoundCredit = lazy(() => import('./background-sound-credit'));
@@ -68,6 +69,9 @@ export type ViewerIdentityModel = {
   /** Présent ⇒ l'avatar et le nom mènent au profil ; absent (sa propre story) ⇒ rien. */
   readonly profileUsername?: string;
   readonly time?: { readonly iso: string; readonly label: string };
+  /** Une republication (#10524) : son crédit suit la date — icône, « @handle »
+   * quand la source le sert, et `label` pour le lecteur d'écran. */
+  readonly repost?: { readonly handle: string | null; readonly label: string };
 };
 
 /** Avatar 32, nom, heure — sur UNE ligne : l'heure qualifie l'auteur, elle n'est pas un sous-titre. */
@@ -94,6 +98,13 @@ export function ViewerIdentity({
         <time dateTime={identity.time.iso} className="viewer-ink-muted viewer-ink-shadow shrink-0 text-check">
           {identity.time.label}
         </time>
+      )}
+      {identity.repost === undefined ? null : (
+        <span data-viewer-repost="" className="viewer-ink-muted viewer-ink-shadow flex min-w-0 items-center gap-1 self-center text-check">
+          <GlyphSvg glyph={FEED_GLYPHS.arrowsClockwise} size={11} className="shrink-0" />
+          {identity.repost.handle === null ? null : <span aria-hidden="true" className="truncate">@{identity.repost.handle}</span>}
+          <span className="sr-only">{identity.repost.label}</span>
+        </span>
       )}
     </div>
   );
