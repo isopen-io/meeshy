@@ -6,7 +6,8 @@ import { ENGAGEMENT_FAMILY_TOP_POINTS } from '@meeshy/shared/types/engagement-op
 import { axesByFamily, resolveEngagementProgress } from '@meeshy/shared/utils/engagement-progress';
 
 import { ENGAGEMENT_PROGRESS_FIXTURE } from '@/lib/api/engagement-fixture';
-import { ACHIEVEMENT_COPY, AXIS_LABELS, FAMILY_LABELS } from '@/lib/view/progression';
+import { familyName } from '@/lib/view/game-copy';
+import { ACHIEVEMENT_COPY, AXIS_LABELS } from '@/lib/view/progression';
 
 import { progressionConcepts } from '@meeshy/shared/utils/progression-layout';
 import type { EngagementProgress } from '@meeshy/shared/utils/engagement-progress';
@@ -318,7 +319,7 @@ describe('MeeshDetail — le héros des Meeshes (#5743)', () => {
       mintCost: 1221,
     });
     expect(rendu).toContain('Aucune Meesh');
-    expect(rendu).toContain('Encore 1121 points convertibles');
+    expect(rendu).toContain('Encore 1121 points à convertir');
     // Le sort des points de conversation doit être DIT : ils partiront en
     // dernier, sans éteindre de badge (option C, #5743).
     expect(rendu).toContain('1300 points de conversation');
@@ -462,11 +463,11 @@ describe('ElansHero — les chips servent la fenêtre, jamais le score cumulé',
       // `social` — la fenêtre ne retient que `content`.
       activeFamilies: ['content'],
     });
-    expect(rendu).toContain(FAMILY_LABELS.content);
-    expect(rendu).not.toContain(FAMILY_LABELS.comment);
-    expect(rendu).not.toContain(FAMILY_LABELS.conversation);
-    expect(rendu).not.toContain(FAMILY_LABELS.tool);
-    expect(rendu).not.toContain(FAMILY_LABELS.social);
+    expect(rendu).toContain(familyName('content'));
+    expect(rendu).not.toContain(familyName('comment'));
+    expect(rendu).not.toContain(familyName('conversation'));
+    expect(rendu).not.toContain(familyName('tool'));
+    expect(rendu).not.toContain(familyName('social'));
   });
 
   test('aucune chip, jamais le repli sur le cumul, quand la passerelle ne sert pas encore le champ', () => {
@@ -474,7 +475,7 @@ describe('ElansHero — les chips servent la fenêtre, jamais le score cumulé',
     // `activeFamilies` est ABSENT — un serveur antérieur à #5897.
     const rendu = rendreAvecElan({ factor: 3, activeFamilyCount: 3, hasStanding: false, windowDays: 7 });
     expect(rendu).toContain('Élan ×3');
-    for (const label of Object.values(FAMILY_LABELS)) {
+    for (const label of (['content', 'comment', 'conversation', 'tool', 'social'] as const).map((family) => familyName(family))) {
       expect(rendu).not.toContain(label);
     }
   });
@@ -487,7 +488,7 @@ describe('ElansHero — les chips servent la fenêtre, jamais le score cumulé',
       windowDays: 7,
       activeFamilies: ['content', 'famille-du-futur'],
     });
-    expect(rendu).toContain(FAMILY_LABELS.content);
+    expect(rendu).toContain(familyName('content'));
     expect(rendu).not.toContain('famille-du-futur');
   });
 });

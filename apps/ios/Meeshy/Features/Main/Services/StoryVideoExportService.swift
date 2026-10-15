@@ -93,8 +93,10 @@ protocol StoryVideoExportServiceProviding {
     ///     au composer, les bitmaps en mémoire et les sons de session
     ///     (`StoryComposerViewModel.exportInputs(for:)`). `.none` = 🖼️.
     /// - Parameter appendsBrandOutro: la carte de fin est-elle due ? `true`
-    ///   partout sauf pour l'export d'une SCÈNE DE POST (#7052), que le
-    ///   porteur a voulue SANS habillage — ni interlude, ni carte, ni jingle.
+    ///   pour une STORY, `false` pour l'œuvre seule — scène de post (#7052),
+    ///   réel, post (#9681) —, que le porteur a voulue SANS habillage : ni
+    ///   interlude, ni carte, ni jingle. Les appelants ne choisissent ni cette
+    ///   valeur ni `intro` : ils les tiennent de `StoryExportDressing` (#10536).
     ///
     ///   Porté par l'EXIGENCE et non par un relais à défaut : le doc-comment
     ///   du relais ci-dessous dit pourquoi — « pour qu'aucun double de test ne

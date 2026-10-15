@@ -30,8 +30,8 @@ function estSingulier(nombre: number): boolean {
  */
 export function meeshMissing(missingPoints: number, floorPoints: number): string {
   const manque = estSingulier(missingPoints)
-    ? `Encore ${missingPoints} point convertible avant une Meesh.`
-    : `Encore ${missingPoints} points convertibles avant une Meesh.`;
+    ? `Encore ${missingPoints} point à convertir avant une Meesh.`
+    : `Encore ${missingPoints} points à convertir avant une Meesh.`;
 
   if (floorPoints <= 0) return manque;
 

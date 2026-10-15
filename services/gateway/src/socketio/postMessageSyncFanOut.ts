@@ -13,6 +13,7 @@ import { participantUserRoomTargets } from './emitToConversationParticipants';
 import { toIsoOrNull } from './utils/lastMessagePreviewPrism';
 import { resolveLastMessagePreviewGroup } from './utils/lastMessagePreviewGroup';
 import type { QueuedPayloadFor } from './queuedEventContract';
+import { quotedDeathFor } from './quotedEphemeralAudience';
 import { enhancedLogger } from '../utils/logger-enhanced';
 
 const logger = enhancedLogger.child({ module: 'postMessageSyncFanOut' });
@@ -49,6 +50,8 @@ export interface PostMessageSyncFanOutParams {
   readonly resolvedSenderId: string | null | undefined;
   /** #8562 — la variante d'un lecteur que la diffusion commune ne peut pas servir (citation scellée). */
   readonly payloadForReader?: (queueKey: string) => QueuedPayloadFor<'new'>;
+  /** #8686 — par clé de room personnelle, la mort de la chaîne citée : sa ligne de liste part « expirée ». */
+  readonly quotedDeaths?: ReadonlyMap<string, Date>;
 }
 
 /**
@@ -171,7 +174,9 @@ export async function syncConversationListOnNewMessage(
         // Parité avec le chemin WS (`MessageHandler.ts`) et
         // `emitConversationPreviewUpdate.ts` : les trois émetteurs composent le
         // groupe par la MÊME fonction, donc sous la même protection.
-        ...resolveLastMessagePreviewGroup(participant, message)
+        ...resolveLastMessagePreviewGroup(participant, message, new Date(), {
+          quotedDeathAt: quotedDeathFor(params.quotedDeaths, participant),
+        })
       });
     }
 

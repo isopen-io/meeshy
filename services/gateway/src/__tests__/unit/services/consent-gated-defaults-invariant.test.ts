@@ -117,7 +117,7 @@ describe('#4578 — aucune préférence gardée ne vaut `true` par défaut', () 
     expect(fautifs).toEqual([]);
   });
 
-  it('telemetryEnabled et allowAnalytics valent FAUX par défaut — les deux qui n\'ont aucune garde d\'usage', () => {
+  it('telemetryEnabled et allowAnalytics valent FAUX par défaut — aucune garde d\'usage côté passerelle (allowAnalytics est lu côté client, voir #10405)', () => {
     expect(ApplicationPreferenceSchema.parse({}).telemetryEnabled).toBe(false);
     expect(PrivacyPreferenceSchema.parse({}).allowAnalytics).toBe(false);
   });
@@ -145,5 +145,70 @@ describe('#4578 — l\'exception audio n\'est valable QUE tant que sa garde d\'u
 
     expect(source).toContain('canGenerateTranslatedAudio');
     expect(source).toContain('consentStatus.canTranscribeAudio');
+  });
+});
+
+/**
+ * #10405 — `allowAnalytics` A des lecteurs d'usage, côté CLIENT.
+ *
+ * Le lot #4578 a fait passer `allowAnalytics` à `false` par défaut en écrivant,
+ * à deux endroits de la passerelle, qu'il n'avait « AUCUN lecteur d'usage dans
+ * le dépôt ». C'était faux : le traceur d'engagement iOS le lit et s'éteint
+ * quand il vaut `false`. Avec un consentement analytique qu'aucun client
+ * n'écrivait, plus AUCUNE session d'engagement n'est partie depuis le
+ * 2026-09-06 (prod : 9711 en août, 334 en septembre, 0 en octobre), et
+ * `qualifiedViewCount`, `playCount` et l'ouverture d'un réel se sont figés.
+ *
+ * Le témoin balaie les sources CLIENT plutôt que de recopier une liste : une
+ * affirmation sur ce que « le dépôt » lit se mesure sur le dépôt entier.
+ */
+const RACINE_DEPOT = path.join(RACINE_GATEWAY, '../../..');
+
+function fichiersSources(racine: string, extensions: readonly string[]): string[] {
+  if (!fs.existsSync(racine)) return [];
+  return fs.readdirSync(racine, { withFileTypes: true }).flatMap((entree) => {
+    const chemin = path.join(racine, entree.name);
+    if (entree.isDirectory()) {
+      return ['node_modules', 'Tests', '__tests__', 'MeeshyTests', 'build', 'dist'].includes(entree.name)
+        ? []
+        : fichiersSources(chemin, extensions);
+    }
+    return extensions.some((ext) => entree.name.endsWith(ext)) ? [chemin] : [];
+  });
+}
+
+/** Un LECTEUR d'usage : une source qui décide d'agir selon la valeur, pas un modèle qui la déclare. */
+function lecteursClientDeAllowAnalytics(): string[] {
+  const racines = [
+    path.join(RACINE_DEPOT, 'apps/ios/Meeshy'),
+    path.join(RACINE_DEPOT, 'apps/web/src'),
+  ];
+  return racines
+    .flatMap((racine) => fichiersSources(racine, ['.swift', '.ts', '.tsx']))
+    .filter((fichier) => /privacy\??\.allowAnalytics\b(?!\s*[:=,])/.test(fs.readFileSync(fichier, 'utf-8')))
+    .filter((fichier) => !/Settings|Preferences|settings|preferences/.test(path.basename(fichier)))
+    .map((fichier) => path.relative(RACINE_DEPOT, fichier))
+    .sort();
+}
+
+describe('#10405 — allowAnalytics a des lecteurs d\'usage côté client', () => {
+  it('le balayage trouve le traceur d\'engagement iOS — celui que `false` éteint', () => {
+    expect(lecteursClientDeAllowAnalytics()).toEqual(expect.arrayContaining([
+      'apps/ios/Meeshy/Features/Main/Services/EngagementTracker.swift',
+    ]));
+  });
+
+  it('aucun commentaire de la passerelle n\'affirme plus qu\'allowAnalytics n\'a « aucun lecteur d\'usage »', () => {
+    const affirmations = fichiersSources(RACINE_GATEWAY, ['.ts'])
+      .filter((fichier) => !fichier.includes(`${path.sep}__tests__${path.sep}`))
+      .filter((fichier) => {
+        const lignes = fs.readFileSync(fichier, 'utf-8').split('\n');
+        return lignes.some((ligne, i) =>
+          /aucun lecteur d.usage/i.test(ligne)
+          && lignes.slice(Math.max(0, i - 2), i + 3).some((voisine) => voisine.includes('allowAnalytics')));
+      })
+      .map((fichier) => path.relative(RACINE_GATEWAY, fichier));
+
+    expect(affirmations).toEqual([]);
   });
 });

@@ -1,12 +1,13 @@
 import { coverCrop } from '../call-montage';
 import type { Rect, Size } from '../call-montage-shapes';
+import { NO_CHROME_RESERVE, type FrameChromeReserve } from './frame-chrome-reserve';
 import { BRAND_FONT, frameCanvasFont } from './frame-fonts';
-import { frameAreas, frameSlots, type FrameAreas, type FrameSlotBox } from './frame-layout';
+import { frameAreas, frameSlots, leavingRoomBelow, type FrameAreas, type FrameSlotBox } from './frame-layout';
 import { paintBorder, paintPattern } from './frame-paint-decor';
 import { enterSlot, footprint, insetRect, mix, photoRect, rectOf, tint, type OrnamentStage, type Surface2D } from './frame-paint-kit';
 import { paintOrnament } from './frame-paint-ornaments';
 import { slotPath } from './frame-paint-shapes';
-import { paintFrameTexts, textLayout, type TextLayout, type TextScene } from './frame-paint-text';
+import { nameRoom, paintFrameTexts, textLayout, type TextLayout, type TextScene } from './frame-paint-text';
 import type { FrameLook, SlotTone } from './frame-spec';
 import type { FramePerson, FrameTexts } from './frame-text';
 
@@ -38,8 +39,15 @@ export type FrameScene = {
 
 export const MEESHY_ACCENT = { primary: '#6366F1', secondary: '#4338CA' } as const;
 
-export function frameScene(frame: FramePaintable, people: readonly FramePerson[], texts: FrameTexts, size: Size): FrameScene {
-  return { frame, people, texts, size, areas: frameAreas(frame.layout, size), slots: frameSlots(frame, people.length, size) };
+/** Les cases de la scène : celles de la géométrie canonique, et sous chacune la place de ses noms quand ils s'y posent (#10478). */
+export function frameSlotsFor(frame: FramePaintable, people: number, size: Size, reserve: FrameChromeReserve = NO_CHROME_RESERVE): readonly FrameSlotBox[] {
+  const areas = frameAreas(frame.layout, size, reserve);
+  return leavingRoomBelow(frameSlots(frame, people, size, reserve), nameRoom(frame, areas.unit), areas.content.y + areas.content.height);
+}
+
+/** La scène d'un cadre ; sous des contrôles (`reserve`, #10481), aucun texte ni visage ne se pose dans leurs bandes. */
+export function frameScene(frame: FramePaintable, people: readonly FramePerson[], texts: FrameTexts, size: Size, reserve: FrameChromeReserve = NO_CHROME_RESERVE): FrameScene {
+  return { frame, people, texts, size, areas: frameAreas(frame.layout, size, reserve), slots: frameSlotsFor(frame, people.length, size, reserve) };
 }
 
 function paintBackground(context: Surface2D, scene: FrameScene): void {
@@ -94,7 +102,7 @@ export function ornamentStage(scene: FrameScene, front: boolean, text: Pick<Text
   return { size, unit: areas.unit, zones, avoid: scene.slots.map(footprint), top: areas.top, bottom: areas.bottom, inner, slots: scene.slots, front, text: text.boxes, headline: text.headline };
 }
 
-const textSceneOf = (scene: FrameScene): TextScene => ({ look: scene.frame, people: scene.people, texts: scene.texts, size: scene.size, areas: scene.areas, slots: scene.slots });
+export const textSceneOf = (scene: FrameScene): TextScene => ({ look: scene.frame, people: scene.people, texts: scene.texts, size: scene.size, areas: scene.areas, slots: scene.slots });
 
 function paintOrnaments(context: Surface2D, scene: FrameScene, layer: 'back' | 'front', text: TextLayout): void {
   const stage = ornamentStage(scene, layer === 'front', text);

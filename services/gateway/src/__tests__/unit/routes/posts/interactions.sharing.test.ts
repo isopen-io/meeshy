@@ -55,7 +55,6 @@ import {
   mockUnbookmarkPost,
   mockRecordView,
   mockGetPostById,
-  mockRecordAnonymousOpen,
   mockSharePost,
   mockShareWithTrackingLink,
   mockGetPostShareLink,
@@ -308,6 +307,37 @@ describe('GET /posts/:id/interactions — success', () => {
     const res = await app.inject({ method: 'GET', url: `/posts/${POST_ID}/interactions` });
     expect(res.statusCode).toBe(200);
     expect(res.json().success).toBe(true);
+    await app.close();
+  });
+});
+
+describe('« et N visiteurs » — les deux listes servent la part anonyme des vues (#10483)', () => {
+  it('/interactions la porte dans data, à côté des lecteurs nommés', async () => {
+    mockGetPostInteractions.mockResolvedValueOnce({ viewers: [], total: 0, hasMore: false, anonymousViewCount: 4 });
+    const app = await buildApp();
+    const res = await app.inject({ method: 'GET', url: `/posts/${POST_ID}/interactions` });
+    expect(res.json().data).toEqual({ viewers: [], anonymousViewCount: 4 });
+    await app.close();
+  });
+
+  it('/views garde sa liste en data et porte le nombre en meta — un ancien client lit la même liste', async () => {
+    mockGetPostViews.mockResolvedValueOnce({ items: [], total: 0, hasMore: false, anonymousViewCount: 4 });
+    const app = await buildApp();
+    const res = await app.inject({ method: 'GET', url: `/posts/${POST_ID}/views` });
+    expect(res.json().data).toEqual([]);
+    expect(res.json().meta).toEqual({ anonymousViewCount: 4 });
+    await app.close();
+  });
+
+  it('les vues uniques par jeton voyagent à côté, additives (meta de /views, data de /interactions)', async () => {
+    const uniques = { anonymousViewCount: 4, uniqueViewCount: 6, anonymousUniqueViewCount: 2 };
+    mockGetPostViews.mockResolvedValueOnce({ items: [], total: 0, hasMore: false, ...uniques });
+    mockGetPostInteractions.mockResolvedValueOnce({ viewers: [], total: 0, hasMore: false, ...uniques });
+    const app = await buildApp();
+    const views = await app.inject({ method: 'GET', url: `/posts/${POST_ID}/views` });
+    const interactions = await app.inject({ method: 'GET', url: `/posts/${POST_ID}/interactions` });
+    expect(views.json().meta).toEqual(uniques);
+    expect(interactions.json().data).toEqual({ viewers: [], ...uniques });
     await app.close();
   });
 });

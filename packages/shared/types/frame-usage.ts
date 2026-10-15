@@ -23,8 +23,8 @@
 import * as z from 'zod/mini';
 import { ACHIEVEMENT_RARITIES, GLORY_DIVISIONS, GLORY_RANKS, type AchievementRarity, type GloryDivision5, type GloryRankOrMythic } from '../utils/game/glory.js';
 
-/** Les surfaces d'un cadre LIBRE : l'appel vidéo en direct, la photo, la vidéo. */
-export const FREE_FRAME_SURFACES = ['call', 'photo', 'video'] as const;
+/** Les surfaces d'un cadre LIBRE : l'appel vidéo en direct, la photo, la vidéo, et l'avatar (contours de profil, #10632). */
+export const FREE_FRAME_SURFACES = ['call', 'photo', 'video', 'avatar'] as const;
 export type FreeFrameSurface = (typeof FREE_FRAME_SURFACES)[number];
 
 /** Les familles de moments du jeu qu'un cadre de moment peut servir. */
@@ -53,6 +53,7 @@ export type FrameUsage =
 
 export type FrameUseContext =
   | { readonly kind: 'call' }
+  | { readonly kind: 'avatar' }
   | { readonly kind: 'capture'; readonly media: 'photo' | 'video' }
   | { readonly kind: 'rank'; readonly rank: GloryRankOrMythic; readonly division: GloryDivision5 | null }
   | { readonly kind: 'prestige' }
@@ -78,6 +79,7 @@ export const FrameUsageSchema = z.discriminatedUnion('kind', [
 
 export const FrameUseContextSchema = z.discriminatedUnion('kind', [
   z.object({ kind: z.literal('call') }),
+  z.object({ kind: z.literal('avatar') }),
   z.object({ kind: z.literal('capture'), media: z.enum(['photo', 'video']) }),
   z
     .object({ kind: z.literal('rank'), rank: rankSchema, division: z.nullable(divisionSchema) })
@@ -97,6 +99,7 @@ export const parseFrameUsage = (input: unknown): FrameUsage | null => {
  * un cadre de capture seule ne sert JAMAIS l'appel (ressources du direct).
  */
 const freeServes = (surfaces: readonly FreeFrameSurface[], context: FrameUseContext): boolean => {
+  if (context.kind === 'avatar') return surfaces.includes('avatar');
   if (context.kind === 'call') return surfaces.includes('call');
   if (context.kind === 'capture') return surfaces.includes('call') || surfaces.includes(context.media);
   return false;
@@ -134,6 +137,18 @@ export const FRAME_USAGE_LABEL_KEYS = {
 export type FrameUsageLabelKey = (typeof FRAME_USAGE_LABEL_KEYS)[keyof typeof FRAME_USAGE_LABEL_KEYS];
 
 /**
+ * Le libellé « Contour de profil » (#10632) : une clé À PART, additive. Les
+ * catalogues d'interface typés sur `FrameUsageLabelKey` (web, sept langues)
+ * ne la portent pas encore — l'ajouter à l'objet ci-dessus, ou élargir le
+ * type de `describeFrameUsage`, ferait rougir leur typage avant que le lot
+ * « contours » ne les ait traduits. Les clients la lisent par
+ * `describeAvatarUsage` ; le lot contours la fusionne dans
+ * `FRAME_USAGE_LABEL_KEYS` avec ses sept traductions, puis retire cette voie.
+ */
+export const AVATAR_USAGE_LABEL_KEY = 'frame.usage.avatarOnly';
+export type AvatarUsageLabelKey = typeof AVATAR_USAGE_LABEL_KEY;
+
+/**
  * Les paramètres sont des CLÉS (`rank` : clé de rang, `rarity`, `family`) que
  * le client traduit par ses propres libellés ; `division` est déjà en chiffres
  * romains, identiques dans toutes les langues.
@@ -166,6 +181,12 @@ export function describeFrameUsage(usage: FrameUsage): FrameUsageLabel {
       return { key: FRAME_USAGE_LABEL_KEYS.momentOnly, params: { family: usage.family } };
   }
 }
+
+export type AvatarUsageLabel = { readonly key: AvatarUsageLabelKey; readonly params: Readonly<Record<string, string>> };
+
+/** « Contour de profil » pour un usage libre sur la seule surface avatar ; `null` pour tout autre usage. */
+export const describeAvatarUsage = (usage: FrameUsage): AvatarUsageLabel | null =>
+  usage.kind === 'free' && usage.surfaces.length === 1 && usage.surfaces[0] === 'avatar' ? { key: AVATAR_USAGE_LABEL_KEY, params: {} } : null;
 
 /**
  * La projection d'un cadre de capture d'appel : `live` ⇒ appel ET capture,

@@ -65,10 +65,13 @@ public extension AuthServiceProviding {
 public final class AuthService: AuthServiceProviding, @unchecked Sendable {
     public static let shared = AuthService()
     let api: APIClientProviding
+    /// La déconnexion PAR JETON passe par là, jamais par `api` (#10463).
+    let pinned: any PinnedRequesting
     private let logger = Logger(subsystem: "com.meeshy.sdk", category: "auth")
 
-    init(api: APIClientProviding = APIClient.shared) {
+    init(api: APIClientProviding = APIClient.shared, pinned: any PinnedRequesting = APIClient.shared) {
         self.api = api
+        self.pinned = pinned
     }
 
     // MARK: - Login
@@ -246,9 +249,13 @@ public final class AuthService: AuthServiceProviding, @unchecked Sendable {
 
     // MARK: - Change Password
 
-    public func changePassword(currentPassword: String, newPassword: String) async throws {
+    /// `currentPassword` vaut `nil` pour POSER un premier mot de passe (#9186) :
+    /// la clé ne part pas, et la passerelle n'en exige pas d'un compte qui n'en
+    /// a aucun — la session est la preuve (#6424). Elle le lit en base, jamais
+    /// dans la requête : omettre la clé sur un compte qui en a un est refusé.
+    public func changePassword(currentPassword: String?, newPassword: String) async throws {
         struct Body: Encodable {
-            let currentPassword: String
+            let currentPassword: String?
             let newPassword: String
         }
         let body = Body(currentPassword: currentPassword, newPassword: newPassword)
@@ -259,6 +266,23 @@ public final class AuthService: AuthServiceProviding, @unchecked Sendable {
         guard response.success else {
             throw MeeshyError.server(statusCode: 0, message: response.error ?? response.message ?? "Erreur inconnue")
         }
+    }
+
+    /// #9186 — le compte a-t-il déjà un mot de passe ? Un compte né d'une
+    /// inscription par e-mail seul n'en a pas, et Réglages › Sécurité doit
+    /// alors en POSER un sans réclamer d'« actuel ». Lu sur
+    /// `GET /auth/me?expand=security` (`security.hasPassword`, que la passerelle
+    /// dérive du hash sans jamais le servir). `nil` quand la passerelle ne sert
+    /// pas le résumé : l'écran garde alors le formulaire d'un CHANGEMENT.
+    public func hasPassword() async throws -> Bool? {
+        let response: APIResponse<MeSecurityResponseData> = try await api.request(
+            AuthEndpoint.me,
+            queryItems: [
+                URLQueryItem(name: "fields", value: "id"),
+                URLQueryItem(name: "expand", value: "security"),
+            ]
+        )
+        return response.data.user.security?.hasPassword
     }
 
     // MARK: - Email Verification
@@ -310,17 +334,35 @@ public final class AuthService: AuthServiceProviding, @unchecked Sendable {
         let _: APIResponse<[String: Bool]> = try await api.request(AuthEndpoint.logout, method: "POST")
     }
 
-    /// D5.hygiene — sends the explicit `token` as the Authorization header
-    /// via `requestWithHeaders`, instead of relying on `APIClient.shared.authToken`
-    /// (which `AuthManager.logout()` may have already wiped to `nil` by the
-    /// time this retry loop actually sends its request).
+    /// D5.hygiene — ferme la session de `token`, jamais celle du jeton courant
+    /// d'`APIClient.shared` (que la déconnexion a peut-être déjà effacé).
+    ///
+    /// #10463 — par `requestPinned`, pas par `requestWithHeaders` : ce dernier,
+    /// sur un 401, rafraîchit le compte ACTIF et REJOUE en remplaçant
+    /// `Authorization` par son jeton. Une session prouvée refusée, ou le compte
+    /// qu'on quitte, dont la fermeture recevait un 401 faisait alors fermer
+    /// côté serveur la session du compte actif. Un 401 est rendu tel quel.
     public func logoutThrowing(token: String) async throws {
-        let _: APIResponse<[String: Bool]> = try await api.requestWithHeaders(
+        let _: APIResponse<[String: Bool]> = try await pinned.requestPinned(
             AuthEndpoint.logout,
             method: "POST",
             body: nil,
-            queryItems: nil,
-            headers: ["Authorization": "Bearer \(token)"]
+            headers: [:],
+            bearerToken: token
         )
+    }
+}
+
+/// `GET /auth/me?expand=security` — la seule chose que l'écran du mot de passe
+/// en lit (#9186).
+public struct MeSecurityResponseData: Decodable, Sendable {
+    public let user: User
+
+    public struct User: Decodable, Sendable {
+        public let security: Security?
+    }
+
+    public struct Security: Decodable, Sendable {
+        public let hasPassword: Bool?
     }
 }

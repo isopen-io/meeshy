@@ -1,3 +1,5 @@
+import type { MessageSticker } from '@meeshy/shared/types/message-sticker';
+
 import { newClientMessageId } from './client-message-id';
 import type { ConversationsDeps } from './conversations';
 import { sendMessage, type SendMessageBody } from './messages';
@@ -40,7 +42,14 @@ import type { Message } from './types';
  * `maxDurationSeconds` : la source est une flamme à durée, sa copie dure au
  * plus autant (#9573) ; absent pour toute autre source.
  */
-export type ForwardSource = Pick<Message, 'id' | 'content' | 'originalLanguage'> & { readonly maxDurationSeconds?: number };
+export type ForwardSource = Pick<Message, 'id' | 'content' | 'originalLanguage'> & {
+  readonly maxDurationSeconds?: number;
+  /**
+   * LE STICKER DE LA SOURCE (#10630) — la passerelle ne recopie que les pièces
+   * jointes : sans lui, la copie d'un sticker arrivait en image nue (PNG joint).
+   */
+  readonly sticker?: MessageSticker;
+};
 
 export type ForwardResult =
   | { readonly ok: true; readonly count: number }
@@ -75,6 +84,7 @@ export function forwardBodyOf(params: {
     originalLanguage: message.originalLanguage,
     clientMessageId,
     forwardedFromId: message.id,
+    ...(message.sticker === undefined ? {} : { sticker: message.sticker }),
     ...(sourceConversationId === undefined || sourceConversationId === ''
       ? {}
       : { forwardedFromConversationId: sourceConversationId }),

@@ -357,4 +357,132 @@ final class ComposerRailGeometryTests: XCTestCase {
                        "l'écart doit venir de ComposerRailGeometry.entrySpacing")
         XCTAssertFalse(code.contains("VStack(spacing:10)"))
     }
+
+    // MARK: - #10542 · Le rail droit tient dans la hauteur de la scène
+
+    /// Quinze entrées : les sous-outils d'un texte, ses actions, le `(x)` et
+    /// l'historique — la colonne que le porteur a vue déborder (iOS 17.5).
+    private static let colonneDuTexte = ComposerRailGeometry.columnHeight(entries: 15)
+
+    private func bande(zone: CGRect, carte: CGRect,
+                       colonne: CGFloat = ComposerRailGeometryTests.colonneDuTexte) -> ComposerRailBand {
+        ComposerRailGeometry.trailingRailBand(freeZone: zone, card: carte, columnHeight: colonne)
+    }
+
+    func test_columnHeight_quinzeEntrees_688Points() {
+        XCTAssertEqual(ComposerRailGeometry.columnHeight(entries: 15), 15 * 44 + 14 * 2)
+        XCTAssertEqual(ComposerRailGeometry.columnHeight(entries: 0), 0)
+        XCTAssertEqual(ComposerRailGeometry.columnHeight(entries: 3, withSpring: true),
+                       3 * 44 + 4 * ComposerRailGeometry.floatingEntrySpacing,
+                       "Le ressort d'un pied au pouce ajoute son plancher et l'écart qui l'entoure.")
+    }
+
+    /// **Le défaut.** Un outil ouvert retire la barre haute : la scène libre
+    /// remonte alors jusqu'à la zone sûre, AU-DESSUS de la carte, que le calque
+    /// de la scène cadre sur une hauteur constante. Ancré au haut de cette
+    /// zone, le rail posait son premier outil dans la marge du plateau.
+    func test_trailingRailBand_outilOuvert_leRailPartDuHautDeLaCarte() {
+        // Grand téléphone (430 × 932), barre haute retirée.
+        let zone = CGRect(x: 0, y: 63, width: 430, height: 780)
+        let carte = CGRect(x: 10, y: 124, width: 410, height: 729)
+        let rendue = bande(zone: zone, carte: carte)
+        XCTAssertEqual(zone.minY + rendue.top, carte.minY, accuracy: 0.01,
+                       "Le premier outil se pose au bord haut de la carte, jamais dans la marge du plateau.")
+    }
+
+    /// Une colonne courte garde la remontée que les deux rails partagent.
+    func test_trailingRailBand_colonneCourte_gardeLaRemonteeDesRails() {
+        let zone = CGRect(x: 0, y: 63, width: 430, height: 780)
+        let carte = CGRect(x: 10, y: 124, width: 410, height: 729)
+        let rendue = bande(zone: zone, carte: carte, colonne: ComposerRailGeometry.columnHeight(entries: 4))
+        XCTAssertEqual(rendue.bottom, ComposerRailGeometry.floatingBottomInset)
+    }
+
+    /// **Resserrer avant de défiler** : quand les quinze outils ne tiennent pas
+    /// au-dessus de la remontée, le rail la rend — jusqu'au bord bas de la
+    /// carte, jamais au-delà — plutôt que de cacher un outil sous un défilement.
+    func test_trailingRailBand_quinzeOutils_rendentLaRemonteePourTenir() {
+        let zone = CGRect(x: 0, y: 63, width: 430, height: 780)
+        let carte = CGRect(x: 10, y: 124, width: 410, height: 729)
+        let rendue = bande(zone: zone, carte: carte)
+        let place = zone.height - rendue.top - rendue.bottom
+        XCTAssertGreaterThanOrEqual(place, Self.colonneDuTexte, "Les quinze outils tiennent sans défiler.")
+        XCTAssertLessThan(rendue.bottom, ComposerRailGeometry.floatingBottomInset)
+        XCTAssertGreaterThanOrEqual(rendue.bottom, ComposerRailGeometry.gutter)
+        XCTAssertLessThanOrEqual(zone.maxY - rendue.bottom, carte.maxY,
+                                 "Le dernier outil reste dans la carte.")
+    }
+
+    /// **Sur un petit écran, le rail DÉFILE dans la carte — il n'en sort pas.**
+    /// La bande ne dépasse la carte ni en haut ni en bas, et sa hauteur est
+    /// inférieure à celle de la colonne : c'est `ViewThatFits` qui choisit alors
+    /// la variante défilante du rail.
+    func test_trailingRailBand_petitEcran_neSortJamaisDeLaCarte() {
+        // iPhone SE (375 × 667), barre haute retirée, socle au bas.
+        let zone = CGRect(x: 0, y: 24, width: 375, height: 560)
+        let carte = CGRect(x: 43, y: 32, width: 289, height: 514)
+        let rendue = bande(zone: zone, carte: carte)
+        XCTAssertGreaterThanOrEqual(zone.minY + rendue.top, carte.minY)
+        XCTAssertLessThanOrEqual(zone.maxY - rendue.bottom, carte.maxY)
+        XCTAssertGreaterThanOrEqual(rendue.bottom, ComposerRailGeometry.gutter)
+        XCTAssertLessThan(zone.height - rendue.top - rendue.bottom, Self.colonneDuTexte,
+                          "Quinze outils ne tiennent pas sur 514 pt : le rail défile.")
+    }
+
+    /// Une carte COURTE (un post carré) finit au-dessus de la remontée : le
+    /// rail droit garde alors la marge du rail gauche, il ne se resserre pas.
+    func test_trailingRailBand_carteCourte_gardeLaMargeDuRailGauche() {
+        let zone = CGRect(x: 0, y: 63, width: 393, height: 700)
+        let carte = CGRect(x: 10, y: 220, width: 373, height: 373)
+        let rendue = bande(zone: zone, carte: carte)
+        XCTAssertEqual(zone.minY + rendue.top, carte.minY, accuracy: 0.01)
+        XCTAssertEqual(rendue.bottom, ComposerRailGeometry.floatingBottomInset)
+    }
+
+    /// Barre haute montée, la scène libre commence déjà SOUS le haut de la
+    /// carte : la gouttière d'avant tient, rien ne bouge.
+    func test_trailingRailBand_zoneSousLeHautDeLaCarte_gardeLaGouttiere() {
+        let zone = CGRect(x: 0, y: 130, width: 393, height: 600)
+        let carte = CGRect(x: 10, y: 99, width: 373, height: 699)
+        XCTAssertEqual(bande(zone: zone, carte: carte, colonne: 200).top, ComposerRailGeometry.gutter)
+    }
+
+    /// Avant la première passe de mise en page, rien n'est mesuré : les marges
+    /// de repos, jamais une bande absurde.
+    func test_trailingRailBand_sansMesure_margesDeRepos() {
+        let repos = ComposerRailBand(top: ComposerRailGeometry.gutter,
+                                     bottom: ComposerRailGeometry.floatingBottomInset)
+        let zone = CGRect(x: 0, y: 63, width: 393, height: 700)
+        XCTAssertEqual(bande(zone: zone, carte: .null), repos)
+        XCTAssertEqual(bande(zone: .zero, carte: CGRect(x: 0, y: 99, width: 373, height: 699)), repos)
+        XCTAssertEqual(bande(zone: zone, carte: CGRect(x: 0, y: 900, width: 373, height: 699)), repos,
+                       "Une carte hors de la scène libre ne chasse pas le rail de l'écran.")
+    }
+
+    /// **La règle est CONSOMMÉE** : la surface mesure sa scène libre et pose le
+    /// rail droit sur la bande rendue — plus sur la gouttière du haut de la zone.
+    func test_laSurface_poseLeRailDroitSurLaBandeDeLaCarte() throws {
+        let surface = compact(AppSourceGuard.stripComments(try AppSourceGuard.unit(
+            "Meeshy/Features/Main/Composer/ComposerSceneSurface.swift")))
+        XCTAssertGreaterThan(surface.count, 5_000, "Source introuvable — la garde ne mesurerait rien.")
+        XCTAssertTrue(surface.contains("ComposerRailGeometry.trailingRailBand(freeZone:freeZoneFrame,card:sceneCardFrame,"),
+                      "La bande se calcule depuis la scène libre et la carte MESURÉES.")
+        XCTAssertTrue(surface.contains(".padding(.top,trailingBand.top).padding(.trailing,edge).padding(.bottom,trailingBand.bottom)"),
+                      "Le rail droit porte les marges de la bande.")
+        XCTAssertTrue(surface.contains(".onPreferenceChange(ComposerFreeZoneFrameKey.self){freeZoneFrame=$0}"),
+                      "La scène libre se mesure par préférence, jamais par la fenêtre.")
+        XCTAssertTrue(surface.contains("inlinePanel.padding(.top,trailingBand.top-ComposerRailGeometry.gutter)"),
+                      "Le panneau d'options reste aligné sur le haut de la colonne qu'il voisine.")
+    }
+
+    /// Le rail droit garde ses deux variantes — tenir, ou défiler avec la sortie
+    /// et le pied hors du défilement : la bande borne la place, `ViewThatFits`
+    /// choisit.
+    func test_leRailDroit_defileQuandIlNeTientPas_sortieEtPiedEpingles() throws {
+        let rail = compact(AppSourceGuard.stripComments(try AppSourceGuard.unit(
+            "Meeshy/Features/Main/Composer/ComposerTrailingRail.swift")))
+        XCTAssertTrue(rail.contains("ViewThatFits(in:.vertical)"))
+        XCTAssertTrue(rail.contains("ScrollView(.vertical,showsIndicators:false){optionStack}exitStackfootStack"),
+                      "La sortie et l'historique restent hors du défilement.")
+    }
 }

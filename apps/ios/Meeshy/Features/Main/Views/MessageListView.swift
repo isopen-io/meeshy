@@ -432,6 +432,10 @@ struct MessageMenuPreviewContainer<Content: View>: View {
 
     var body: some View {
         content()
+            // **L'aperçu de l'appui long ne s'annonce pas** (#9632) : le menu
+            // natif est attaché sous la valeur d'annonce du fil, dont l'aperçu
+            // hériterait. Fermé par défaut, une flamme y reste noire.
+            .environment(\.announcesCapture, false)
             .background(
                 GeometryReader { proxy in
                     Color.clear.preference(key: MessageMenuPreviewSizeKey.self, value: proxy.size)
@@ -634,7 +638,7 @@ struct MessageListView: UIViewControllerRepresentable {
     /// Open the message detail sheet on the "language / translation" tab.
     var onShowTranslationDetail: ((String) -> Void)?
     /// Lot 3.2 — carte lieu / partage fichier de la rangée plate.
-    var onFocalTapLocation: ((SharedPlace) -> Void)?
+    var onFocalTapLocation: ((SharedPlace, String) -> Void)?
     var onFocalShareFile: ((URL) -> Void)?
     /// Tap on a media attachment — typically pushes a fullscreen viewer.
     var onMediaTap: ((MessageAttachment) -> Void)?

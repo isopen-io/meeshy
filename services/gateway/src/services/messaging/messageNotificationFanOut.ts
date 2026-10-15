@@ -418,6 +418,8 @@ export async function notifyMessageRecipients(params: {
       where: { messageId: message.id },
       orderBy: MESSAGE_ATTACHMENT_ORDER,
       select: {
+        // #10641 — l'identité sur laquelle la coque Android rapporte une écoute faite depuis la notification.
+        id: true,
         mimeType: true, fileName: true, originalName: true, fileSize: true, duration: true,
         width: true, height: true, fileUrl: true, transcription: true,
         // Cycle 123 — les traductions de la TRANSCRIPTION, que la bannière d'un
@@ -483,6 +485,7 @@ export async function notifyMessageRecipients(params: {
           firstAttachmentFilename: first ? bannerAttachmentOf(first).filename ?? undefined : undefined,
           firstAttachmentUrl: first?.fileUrl || undefined,
           firstAttachmentMimeType: first?.mimeType || undefined,
+          firstAttachmentId: first?.id || undefined,
         }
       : {};
 

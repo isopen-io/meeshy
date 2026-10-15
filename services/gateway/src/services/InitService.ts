@@ -1,4 +1,5 @@
 import { PrismaClient } from '@meeshy/shared/prisma/client';
+import { ensureSocialEventIndexes, rawCommandIndexStore } from './social/socialEventIndexes';
 import { AuthService } from './AuthService';
 import { UserRoleEnum } from '@meeshy/shared/types';
 import type { MemberRoleType } from '@meeshy/shared/types/role-types';
@@ -385,6 +386,24 @@ export class InitService {
     } catch (error) {
       logger.error('[INIT] ❌ Erreur lors de la création de l\'index delta UserContact', error);
       throw error;
+    }
+  }
+
+  /**
+   * Les index de la télémétrie v2 (#10510) : unique PARTIEL de la clé
+   * d'événement et TTL de `expiresAt` sur `ContentEvent` et `PostImpression`.
+   * Idempotent (`ensureSocialEventIndexes`). Un échec est JOURNALISÉ sans
+   * arrêter le démarrage : la télémétrie ne doit jamais empêcher la
+   * messagerie de servir — mais sans ces index un rejeu compterait deux fois
+   * et rien n'expirerait, d'où le niveau `error`.
+   */
+  async ensureSocialEventIndexes(): Promise<void> {
+    try {
+      const outcomes = await ensureSocialEventIndexes(rawCommandIndexStore(this.prisma));
+      const changed = Object.entries(outcomes).filter(([, outcome]) => outcome !== 'present');
+      if (changed.length > 0) logger.info(`[INIT] index de télémétrie v2 : ${changed.map(([name, outcome]) => `${name}=${outcome}`).join(', ')}`);
+    } catch (error) {
+      logger.error('[INIT] ❌ Index de télémétrie v2 non posés', error);
     }
   }
 

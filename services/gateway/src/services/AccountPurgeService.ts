@@ -5,11 +5,14 @@ import { hashPassword } from '../utils/password-hash';
 import { clearPendingTwoFactor } from './auth/pending-two-factor';
 import { eraseAddressBookOf } from './ContactDirectoryService';
 import { purgeGameData, type GamePurgeSummary } from './game/GamePurge';
-import {
-  eraseSharedTranslationsOfAccount,
-  type SharedTranslationAccountErasureClient,
-} from './messaging/sharedTranslationErasure';
+import { eraseSharedTranslationsOfAccount } from './messaging/sharedTranslationErasure';
 import { purgePackData, type PackFileStore, type PackPurgeSummary } from './packs/PackPrivacy';
+import {
+  eraseReadingTelemetryOf,
+  type ReadingTelemetryErasure,
+} from './social/readingTelemetryErasure';
+import { deleteShareLinksRevokingGuests } from '../socketio/deleteShareLinksRevokingGuests';
+import type { ShareLinkRevocationLive } from './cleanupExpiredData';
 
 const logger = enhancedLogger.child({ module: 'AccountPurgeService' });
 
@@ -25,11 +28,19 @@ export type AccountPurgeSummary = {
   readonly sharedTranslationsDeleted: number;
   readonly game: GamePurgeSummary;
   readonly packs: PackPurgeSummary;
+  /** Ce que le compte a vu, lu, ouvert, fait défiler ou capturé (#10499, O6). */
+  readonly readingTelemetry: ReadingTelemetryErasure;
 };
 
 export type AccountPurgeOptions = {
   /** Le volume des téléversements vu par la purge des packs ; le disque réel par défaut. */
   readonly packFiles?: PackFileStore;
+  /**
+   * Le vivant que la révocation des invités de ses liens éteint (sockets,
+   * appel, position) — résolu à l'appel. Sans lui, la révocation reste entière
+   * en base et dans les caches (#10492).
+   */
+  readonly shareLinkLive?: ShareLinkRevocationLive;
 };
 
 /**
@@ -74,21 +85,24 @@ export type AccountPurgeOptions = {
  * décision produit sur `Participant.displayName` (#5691, partagée avec #5689).
  */
 export async function purgeAccountIsolatedData(
-  prisma: Pick<
-    PrismaClient,
-    'userSession' | 'userVoiceModel' | 'conversationShareLink' | 'notification' | 'userContact' | 'contactJoinNotice'
-  > &
-    SharedTranslationAccountErasureClient &
-    Parameters<typeof purgeGameData>[0] &
-    Parameters<typeof purgePackData>[0],
+  prisma: PrismaClient,
   userId: string,
   options: AccountPurgeOptions = {},
 ): Promise<AccountPurgeSummary> {
-  const [sessions, voiceProfile, shareLinks, notifications, addressBook, sharedTranslations, game, packs] =
+  const [sessions, voiceProfile, shareLinks, notifications, addressBook, sharedTranslations, game, packs, readingTelemetry] =
     await Promise.all([
       prisma.userSession.deleteMany({ where: { userId } }),
       prisma.userVoiceModel.deleteMany({ where: { userId } }),
-      prisma.conversationShareLink.deleteMany({ where: { createdBy: userId } }),
+      // #10492 — les invités de ses liens sont révoqués AVANT la suppression :
+      // la ligne emportait la marque d'une révocation différée, et ses invités
+      // restaient actifs. Un lien dont la révocation échoue reste, fermé et
+      // marqué pour le balayage horaire, et la panne propage.
+      deleteShareLinksRevokingGuests({
+        prisma,
+        io: options.shareLinkLive?.resolveIO?.() ?? null,
+        manager: options.shareLinkLive?.resolveManager?.() ?? null,
+        where: { createdBy: userId },
+      }),
       prisma.notification.deleteMany({ where: { userId } }),
       eraseAddressBookOf(prisma, userId),
       // Une panne PROPAGE, comme celle de chaque suppression voisine : les deux
@@ -100,6 +114,7 @@ export async function purgeAccountIsolatedData(
       eraseSharedTranslationsOfAccount(prisma, userId),
       purgeGameData(prisma, userId),
       purgePackData(prisma, userId, { files: options.packFiles }),
+      eraseReadingTelemetryOf(prisma, userId),
     ]);
 
   const summary: AccountPurgeSummary = {
@@ -113,6 +128,7 @@ export async function purgeAccountIsolatedData(
     sharedTranslationsDeleted: sharedTranslations,
     game,
     packs,
+    readingTelemetry,
   };
 
   logger.info(
@@ -122,7 +138,9 @@ export async function purgeAccountIsolatedData(
       `arrivalAnnouncements=${summary.arrivalAnnouncementsDeleted} sharedTranslations=${summary.sharedTranslationsDeleted} ` +
       `gameDuos=${summary.game.duosDeleted} ` +
       `packChoices=${packs.choicesDeleted} stickers=${packs.libraryDeleted} packSubmissions=${packs.submissionsDeleted} ` +
-      `packsAnonymized=${packs.publishedAnonymized} packFiles=${packs.filesDeleted}`
+      `packsAnonymized=${packs.publishedAnonymized} packFiles=${packs.filesDeleted} ` +
+      `impressions=${readingTelemetry.impressions} engagements=${readingTelemetry.engagements} ` +
+      `views=${readingTelemetry.views} contentEvents=${readingTelemetry.contentEvents}`
   );
 
   return summary;

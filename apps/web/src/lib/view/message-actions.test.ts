@@ -74,7 +74,7 @@ describe('messageMenuItems — miroir MessageActionResolver.primaryActions, réd
    */
   test('ces clés se SERVENT — anglais puis arabe, jamais une recopie du français', async () => {
     await Promise.all([loadInterfaceCatalog('en'), loadInterfaceCatalog('ar')]);
-    expect(messageMenuItems(ctx()).map((i) => translate('en', i.labelKey))).toEqual([
+    expect(messageMenuItems(ctx()).flatMap((i) => (i.id === 'edit' || i.id === 'addSticker' ? [] : [translate('en', i.labelKey)]))).toEqual([
       'Select',
       'Translate',
       'Copy',
@@ -83,7 +83,7 @@ describe('messageMenuItems — miroir MessageActionResolver.primaryActions, réd
       'Make an image',
       'More…',
     ]);
-    expect(messageMenuItems(ctx()).map((i) => translate('ar', i.labelKey))).toEqual([
+    expect(messageMenuItems(ctx()).flatMap((i) => (i.id === 'edit' || i.id === 'addSticker' ? [] : [translate('ar', i.labelKey)]))).toEqual([
       'تحديد',
       'ترجمة',
       'نسخ',
@@ -364,5 +364,78 @@ describe('forwardMenuItems — le sous-menu de « Transférer » (#9039)', () =>
       expect(translate(language, 'message.menu.exportDiscussion')).not.toBe('message.menu.exportDiscussion');
     }
     expect(translate('fr', 'message.menu.exportDiscussion')).toBe('Imager la discussion');
+  });
+});
+
+describe('« Modifier » — en tête du menu, comme sur iOS (#10581)', () => {
+  test('offert ⇒ « Modifier » précède « Sélectionner »', () => {
+    expect(messageMenuItems(ctx({ canEdit: true })).map((i) => i.id)).toEqual(['edit', 'select', 'translate', 'copy', 'forward', 'reply', 'export', 'more']);
+  });
+
+  test('non offert (défaut) ⇒ absent', () => {
+    expect(messageMenuItems(ctx()).map((i) => i.id)).not.toContain('edit');
+    expect(messageMenuItems(ctx({ canEdit: false })).map((i) => i.id)).not.toContain('edit');
+  });
+
+  test('sans texte, rien à modifier — même offert', () => {
+    expect(messageMenuItems(ctx({ canEdit: true, hasText: false })).map((i) => i.id)).not.toContain('edit');
+  });
+
+  test('une vue unique reste réduite à « Plus… »', () => {
+    expect(messageMenuItems(ctx({ canEdit: true, isViewOnce: true })).map((i) => i.id)).toEqual(['more']);
+  });
+
+  test('son libellé est une clé du catalogue du fil, son glyphe le crayon', () => {
+    expect(messageMenuItems(ctx({ canEdit: true }))[0]).toEqual({ id: 'edit', labelKey: 'message.edit.action', glyph: 'pencilSimple' });
+  });
+});
+
+describe('« Enregistrer » — un message à exactement une pièce enregistrable (#10599)', () => {
+  test('après « Imager », avant « Plus… », comme `primaryActions` d’iOS', () => {
+    expect(messageMenuItems(ctx({ canSave: true })).map((i) => i.id)).toEqual(['select', 'translate', 'copy', 'forward', 'reply', 'export', 'save', 'more']);
+  });
+
+  test('le mot est celui de la visionneuse, le glyphe celui de la pièce', async () => {
+    const save = messageMenuItems(ctx({ canSave: true })).find((i) => i.id === 'save');
+    expect(save).toEqual({ id: 'save', labelKey: 'media.viewer.save', glyph: 'downloadSimple' });
+    await loadInterfaceCatalog('fr');
+    expect(translate('fr', 'media.viewer.save')).toBe('Enregistrer');
+  });
+
+  test('sans pièce enregistrable, pas d’entrée', () => {
+    expect(messageMenuItems(ctx()).map((i) => i.id)).not.toContain('save');
+  });
+
+  test('fail-closed : un contenu protégé ou qui ne sort pas ne l’offre jamais, même si l’hôte le croit', () => {
+    expect(messageMenuItems(ctx({ canSave: true, isProtected: true })).map((i) => i.id)).not.toContain('save');
+    expect(messageMenuItems(ctx({ canSave: true, leaves: false })).map((i) => i.id)).not.toContain('save');
+    expect(messageMenuItems(ctx({ canSave: true, isViewOnce: true })).map((i) => i.id)).toEqual(['more']);
+  });
+});
+
+describe('messageMenuItems — « Ajouter à mes stickers » (#10630)', () => {
+  const sticker = { hasText: false, sticker: { inLibrary: false } } as const;
+
+  test('offert SEULEMENT quand le sticker n’est pas déjà dans la bibliothèque, après « Répondre »', () => {
+    expect(messageMenuItems(ctx(sticker)).map((i) => i.id)).toEqual(['select', 'forward', 'reply', 'addSticker', 'more']);
+    expect(messageMenuItems(ctx({ hasText: false, sticker: { inLibrary: true } })).map((i) => i.id)).not.toContain('addSticker');
+    expect(messageMenuItems(ctx({ hasText: false })).map((i) => i.id)).not.toContain('addSticker');
+  });
+
+  test('son libellé vit dans le catalogue du fil', () => {
+    expect(messageMenuItems(ctx(sticker)).find((i) => i.id === 'addSticker')).toEqual({
+      id: 'addSticker',
+      labelKey: 'message.sticker.add',
+      glyph: 'downloadSimple',
+    });
+  });
+
+  test('jamais « Enregistrer » sur un sticker, rangé ou non, même avec une pièce enregistrable', () => {
+    expect(messageMenuItems(ctx({ ...sticker, canSave: true })).map((i) => i.id)).not.toContain('save');
+    expect(messageMenuItems(ctx({ hasText: false, sticker: { inLibrary: true }, canSave: true })).map((i) => i.id)).not.toContain('save');
+  });
+
+  test('un contenu qui ne sort pas ne s’ajoute pas', () => {
+    expect(messageMenuItems(ctx({ ...sticker, isProtected: true })).map((i) => i.id)).not.toContain('addSticker');
   });
 });

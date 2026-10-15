@@ -87,6 +87,17 @@ public struct MeeshyMoodBadge: View {
         return hushed ? .hush : .breathe
     }
 
+    /// La cible tactile minimale (HIG, WCAG 2.5.5).
+    public nonisolated static let minimumHitTarget: CGFloat = 44
+
+    /// Le diamètre de la zone de toucher (#10528) : la pastille mesure
+    /// 0,42 × l'avatar — 22 pt dans la liste, 9 pt sur une rangée de message —
+    /// et sa cible ne descend jamais sous `minimumHitTarget`. Elle déborde la
+    /// pastille sans rien déplacer : le dessin garde sa place.
+    public nonisolated static func hitDiameter(diameter: CGFloat) -> CGFloat {
+        max(minimumHitTarget, diameter)
+    }
+
     /// L'épaisseur du contour : proportionnelle à la pastille, jamais un filet.
     public nonisolated static func outlineWidth(diameter: CGFloat) -> CGFloat {
         max(1.5, diameter * 0.07)
@@ -119,11 +130,23 @@ public struct MeeshyMoodBadge: View {
             glyph
                 .frame(width: diameter, height: diameter)
                 .scaleEffect(scale)
-                .contentShape(Circle())
-                .onTapGesture {
-                    HapticFeedback.light()
-                    let frame = geo.frame(in: .global)
-                    onTap?(CGPoint(x: frame.midX, y: frame.midY))
+                // Le toucher ne se monte que s'il a un effet (#10528) : sans
+                // gestionnaire, la pastille laisse passer le geste de l'avatar
+                // qu'elle recouvre. Avec, sa cible fait au moins 44 pt.
+                .overlay {
+                    if let onTap {
+                        Color.clear
+                            .frame(
+                                width: Self.hitDiameter(diameter: diameter),
+                                height: Self.hitDiameter(diameter: diameter)
+                            )
+                            .contentShape(Circle())
+                            .onTapGesture {
+                                HapticFeedback.light()
+                                let frame = geo.frame(in: .global)
+                                onTap(CGPoint(x: frame.midX, y: frame.midY))
+                            }
+                    }
                 }
                 // `.task` et non `.onAppear` : une seule séquence par identité
                 // de vue — respirer la fenêtre d'annonce, puis se poser. Un

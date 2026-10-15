@@ -1,17 +1,88 @@
 import { FastifyInstance, FastifyRequest, FastifyReply } from 'fastify';
 import type { PrismaClient } from '@meeshy/shared/prisma/client';
-import { UnifiedAuthRequest } from '../../middleware/auth';
+import { AUTH_REGIME, createUnifiedAuthMiddleware, UnifiedAuthRequest } from '../../middleware/auth';
 import { PostParams } from './types';
 import { enhancedLogger } from '../../utils/logger-enhanced';
 import { sendSuccess, sendUnauthorized, sendNotFound, sendInternalError } from '../../utils/response';
+import { isContentSurface, type ContentSurface } from '@meeshy/shared/types/content-surfaces';
 import { createPostRouteRateLimitConfig } from '../../middleware/rate-limiter';
 import { depreciee } from '../../utils/deprecation';
 import { socialEventsDeprecation } from '../social/deprecation';
 import {
   ingestSocialEvents,
   IMPRESSION_SOURCES,
+  refuseAnonymousBudget,
+  type SocialEventsActor,
   type SocialEventsDeps,
 } from '../social/events';
+import { admitAnonymousEvents, resolveAnonymousReader, sessionTokenOf } from '../social/anonymousReader';
+
+type Hook = (this: unknown, request: FastifyRequest, reply: FastifyReply) => Promise<unknown>;
+type AnyHook = (this: unknown, request: FastifyRequest, reply: FastifyReply, done: (err?: Error) => void) => unknown;
+
+/** Rejoue un hook Fastify, qu'il soit `async` ou à rappel `done`. */
+const runHook = (hook: AnyHook, context: unknown, request: FastifyRequest, reply: FastifyReply): Promise<unknown> =>
+  new Promise((resolve, reject) => {
+    const done = (err?: Error) => (err ? reject(err) : resolve(undefined));
+    try {
+      const result = hook.call(context, request, reply, done);
+      if (result instanceof Promise) result.then(resolve, reject);
+      else if (hook.length < 3) resolve(result);
+    } catch (error) {
+      reject(error);
+    }
+  });
+
+/**
+ * L'authentification des deux alias d'impression depuis #10483 : FACULTATIVE.
+ *
+ * Sans en-tête `Authorization` et avec un X-Session-Token, la requête est celle
+ * d'un lecteur ANONYME — elle passe par le résolveur d'identité facultatif
+ * (un invité de lien y est reconnu). Dans tous les autres cas, la garde
+ * historique s'applique telle quelle : un jeton porteur invalide et une
+ * requête sans aucun des deux en-têtes reçoivent toujours son 401.
+ *
+ * Le régime est DÉCLARÉ (`AUTH_REGIME`, #4489) : ce hook ne refuse pas un
+ * appelant sans compte, et le manifeste des routes ne doit pas l'annoncer
+ * gardé.
+ */
+export function reachAuth(requiredAuth: Hook, optionalAuth: Hook): Hook {
+  const hook: Hook = async function reachAuth(this: unknown, request, reply) {
+    const anonyme = !request.headers.authorization && sessionTokenOf(request) !== undefined;
+    return runHook((anonyme ? optionalAuth : requiredAuth) as AnyHook, this, request, reply);
+  };
+  Object.defineProperty(hook, AUTH_REGIME, { value: { requireAuth: false, allowAnonymous: true }, enumerable: false });
+  return hook;
+}
+
+/**
+ * L'acteur d'un alias d'impression : un compte, ou — sans `Authorization` — un
+ * lecteur anonyme dans son débit, compté en ÉVÉNEMENTS (`events`). `null` ⇒
+ * 401 historique ; `'throttled'` ⇒ 429 ; sinon l'acteur et le nombre
+ * d'événements admis.
+ */
+async function acteurDImpression(
+  fastify: FastifyInstance,
+  prisma: PrismaClient,
+  request: FastifyRequest,
+  events: number,
+): Promise<{ readonly acteur: SocialEventsActor; readonly admis: number } | null | 'throttled'> {
+  const registeredUser = (request as UnifiedAuthRequest).authContext?.registeredUser;
+  if (registeredUser) {
+    return { acteur: { kind: 'user', userId: registeredUser.id, username: registeredUser.username ?? '' }, admis: events };
+  }
+  if (request.headers.authorization) return null;
+  const lecteur = await resolveAnonymousReader(prisma as never, request);
+  if (!lecteur) return null;
+  if (events === 0) return { acteur: lecteur, admis: 0 };
+  const admis = await admitAnonymousEvents(fastify, request, lecteur, events);
+  return admis > 0 ? { acteur: lecteur, admis } : 'throttled';
+}
+
+const surfaceOf = (body: unknown): ContentSurface | undefined => {
+  const surface = (body as { surface?: unknown } | undefined)?.surface;
+  return isContentSurface(surface) ? surface : undefined;
+};
 
 /**
  * Plafond d'ids par appel du lot. UNE source de vérité, référencée par le
@@ -56,8 +127,10 @@ export function registerImpressionRoutes(
   prisma: PrismaClient,
   requiredAuth: any,
   postService: SocialEventsDeps['postService'],
+  optionalAuth: Hook = createUnifiedAuthMiddleware(prisma, { requireAuth: false, allowAnonymous: true }) as Hook,
 ) {
   const deps: SocialEventsDeps = { fastify, prisma, postService };
+  const authFacultative = reachAuth(requiredAuth as Hook, optionalAuth);
 
   // ALIAS de `POST /social/events` — POST /posts/:postId/impression
   fastify.post('/posts/:postId/impression', {
@@ -66,34 +139,38 @@ export function registerImpressionRoutes(
       body: {
         type: 'object',
         properties: {
-          source: { type: 'string', enum: [...IMPRESSION_SOURCES] }
+          source: { type: 'string', enum: [...IMPRESSION_SOURCES] },
+          // Pas d'`enum` : une surface inconnue est IGNORÉE (`surfaceOf`), le
+          // corps passe — un client plus neuf que le serveur garde ses comptes.
+          surface: { type: 'string', maxLength: 32 },
         }
       }
     },
     onRequest: depreciee(socialEventsDeprecation()),
-    preValidation: [requiredAuth],
+    preValidation: [authFacultative],
+    config: { rateLimit: createPostRouteRateLimitConfig('impressionUnit') },
   }, async (request: FastifyRequest<{ Params: PostParams }>, reply: FastifyReply) => {
     try {
-      const authContext = (request as UnifiedAuthRequest).authContext;
-      if (!authContext?.registeredUser) {
+      const admission = await acteurDImpression(fastify, prisma, request, 1);
+      if (admission === 'throttled') return refuseAnonymousBudget(reply);
+      if (!admission) {
         return sendUnauthorized(reply, 'Authentication required', { code: 'UNAUTHORIZED' });
       }
+      const { acteur } = admission;
 
       const { postId } = request.params;
       const source = (request.body as { source?: string } | undefined)?.source ?? 'feed';
 
-      const { recorded } = await ingestSocialEvents(
+      const { rejected } = await ingestSocialEvents(
         deps,
-        [{ type: 'impression', postId, source: source as never }],
-        { kind: 'user', userId: authContext.registeredUser.id, username: authContext.registeredUser.username ?? '' },
+        [{ type: 'impression', postId, source: source as never, surface: surfaceOf(request.body) }],
+        acteur,
       );
 
       // Le 404 historique est conservé — et il ne distingue toujours rien :
       // inconnu, supprimé, hors audience et malformé y sortent tous ensemble.
-      // Le point d'ingestion, lui, répond 200 avec `rejected` ; les deux formes
-      // sont indistinguables au sein de leur propre contrat, ce qui est la
-      // seule propriété qui compte.
-      if (recorded === 0) {
+      // Il se lit sur `rejected` : ce qui a été admis n'est pas « introuvable ».
+      if (rejected > 0) {
         return sendNotFound(reply, 'Post not found', { code: 'POST_NOT_FOUND' });
       }
 
@@ -126,31 +203,35 @@ export function registerImpressionRoutes(
           // pas avoir à le vérifier avant d'appeler — c'est le serveur qui sait
           // répondre « rien à faire », pas l'appelant qui doit le deviner.
           postIds: { type: 'array', items: { type: 'string' }, maxItems: IMPRESSION_BATCH_CAP },
-          source: { type: 'string', enum: [...IMPRESSION_SOURCES] }
+          source: { type: 'string', enum: [...IMPRESSION_SOURCES] },
+          // Pas d'`enum` : une surface inconnue est IGNORÉE (`surfaceOf`), le
+          // corps passe — un client plus neuf que le serveur garde ses comptes.
+          surface: { type: 'string', maxLength: 32 },
         }
       }
     },
     onRequest: depreciee(socialEventsDeprecation()),
-    preValidation: [requiredAuth],
+    preValidation: [authFacultative],
     config: { rateLimit: createPostRouteRateLimitConfig('impression') },
   }, async (request: FastifyRequest, reply: FastifyReply) => {
     try {
-      const authContext = (request as UnifiedAuthRequest).authContext;
-      if (!authContext?.registeredUser) {
+      const { postIds, source = 'feed' } = request.body as { postIds?: unknown; source?: string };
+      const lot = Array.isArray(postIds) ? (postIds as string[]).slice(0, IMPRESSION_BATCH_CAP) : [];
+      const admission = await acteurDImpression(fastify, prisma, request, lot.length);
+      if (admission === 'throttled') return refuseAnonymousBudget(reply);
+      if (!admission) {
         return sendUnauthorized(reply, 'Authentication required', { code: 'UNAUTHORIZED' });
       }
-
-      const { postIds, source = 'feed' } = request.body as { postIds?: unknown; source?: string };
-      if (!Array.isArray(postIds) || postIds.length === 0) {
+      if (lot.length === 0) {
         return sendSuccess(reply, { recorded: 0 });
       }
 
       const { recorded } = await ingestSocialEvents(
         deps,
-        (postIds as string[]).slice(0, IMPRESSION_BATCH_CAP).map((id) => ({
-          type: 'impression' as const, postId: id, source: source as never,
+        lot.slice(0, admission.admis).map((id) => ({
+          type: 'impression' as const, postId: id, source: source as never, surface: surfaceOf(request.body),
         })),
-        { kind: 'user', userId: authContext.registeredUser.id, username: authContext.registeredUser.username ?? '' },
+        admission.acteur,
       );
 
       // `recorded` compte ce qui a RÉELLEMENT été écrit, pas ce qui a été

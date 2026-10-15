@@ -1,11 +1,14 @@
 import { useEffect, useRef, useState } from 'react';
 
 import { auth } from '@/lib/api/auth';
+import { accountReplacementOf, provenSessionOf, type AccountReplacement, type ProvenSessionGestures } from '@/lib/api/proven-session';
+import { heldAccountOf, sessionStore } from '@/lib/api/session';
 import { currentInterfaceLanguage } from '@/lib/interface-language';
 import { placeMagicLinkValidationFailure } from '@/lib/view/auth-feedback';
 import { landingAfterSession } from '@/lib/session-guard';
 import { href, Link, navigate } from '@/routes/route-table';
 
+import { AccountReplacementPrompt, deviceProvenSessions } from './account-replacement-prompt';
 import { AgeBlocked, AuthColumn, isAgeBelowMinimum } from './auth-column';
 import { AUTH_GLYPHS } from './glyphs-auth';
 import { Glyph, GlyphSvg } from './glyph';
@@ -13,26 +16,31 @@ import { Glyph, GlyphSvg } from './glyph';
 /**
  * LA VALIDATION D'UN LIEN MAGIQUE (#5816) — un appel EXACTEMENT une fois
  * (`useRef` gardé, StrictMode monte deux fois en dev), même le jeton
- * ABSENT ne déclenche RIEN. Sur succès : `clearSession()` + connexion sont
- * portées par `auth.validateMagicLink()` lui-même (le P0
- * `MeeshyApp.swift:1019-1034`) — cet écran ne fait que naviguer ensuite.
+ * ABSENT ne déclenche RIEN. Rien n'est purgé avant la preuve (#10451) :
+ * `auth.validateMagicLink()` pose la session prouvée sauf quand elle
+ * appartient à un AUTRE compte que le compte ouvert — l'écran pose alors la
+ * question (`AccountReplacementPrompt`), et un refus laisse la session ouverte
+ * intacte.
  */
 
-type ValidationState = 'validating' | 'invalid' | 'offline' | 'age-blocked' | 'done';
+type ValidationState = 'validating' | 'invalid' | 'offline' | 'age-blocked' | 'confirm' | 'done';
 
 export function MagicLinkValidation({
   token,
   returnUrl,
   validate = auth.validateMagicLink,
   go = navigate,
+  gestures = deviceProvenSessions,
 }: {
   token: string | null;
   returnUrl: string | null;
   validate?: typeof auth.validateMagicLink;
   go?: typeof navigate;
+  gestures?: ProvenSessionGestures;
 }) {
   const [state, setState] = useState<ValidationState>(token === null ? 'invalid' : 'validating');
   const [message, setMessage] = useState<string | null>(null);
+  const [replacement, setReplacement] = useState<AccountReplacement | null>(null);
   const called = useRef(false);
 
   useEffect(() => {
@@ -45,7 +53,14 @@ export function MagicLinkValidation({
       setState('validating');
       const result = await validate(token as string);
       if (result.ok) {
-        if ('requires2FA' in result.data && result.data.requires2FA) {
+        const session = sessionStore.getState().session;
+        const pending = accountReplacementOf(session, provenSessionOf(result.data));
+        if (pending !== null) {
+          setReplacement(pending);
+          setState('confirm');
+          return;
+        }
+        if ('requires2FA' in result.data && result.data.requires2FA && heldAccountOf(session) === null) {
           go(href('login'), true);
           return;
         }
@@ -116,6 +131,16 @@ export function MagicLinkValidation({
             </Link>
           </div>
         </>
+      ) : null}
+
+      {state === 'confirm' && replacement !== null ? (
+        <AccountReplacementPrompt
+          language={currentInterfaceLanguage()}
+          replacement={replacement}
+          gestures={gestures}
+          onAdopted={() => go(replacement.proven.kind === 'second-factor' ? href('login') : landingAfterSession(returnUrl, href('list')), true)}
+          onDiscarded={() => go(href('list'), true)}
+        />
       ) : null}
 
       {state === 'age-blocked' ? <AgeBlocked language={currentInterfaceLanguage()} onConfirm={() => go(href('login'), true)} /> : null}

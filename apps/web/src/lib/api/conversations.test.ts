@@ -1,5 +1,5 @@
 import { QueryClient } from '@tanstack/react-query';
-import { describe, expect, test } from 'bun:test';
+import { beforeEach, describe, expect, test } from 'bun:test';
 
 import {
   CONVERSATIONS_QUERY_KEY,
@@ -69,6 +69,11 @@ const PAGE_BODY = (ids: readonly string[], overrides: Record<string, unknown> = 
 });
 
 describe('loadConversationsPage — source fixtures', () => {
+  /* Le corpus servi porte aussi les conversations qu'un `conversation:new` a fait
+     surgir ; un autre fichier de la même exécution peut en laisser une, et la page 2
+     compterait 16 lignes au lieu de 15 selon l'ordre des fichiers. */
+  beforeEach(resetSurgedConversationsForTests);
+
   test('rend une page mimant pageOfConversations sur le corpus 45', async () => {
     const { impl, calls } = fakeFetch({ status: 200, body: PAGE_BODY(['x']) });
     const transport = createHttpTransport({ base: '', fetchImpl: impl });

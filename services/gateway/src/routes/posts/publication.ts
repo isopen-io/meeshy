@@ -36,7 +36,9 @@
  *
  * Les effets PROPRES au repost (`post:reposted`, notification à l'auteur
  * original) restent chez lui : ils suivent le champ `repostOfId`, pas le corps
- * de la publication.
+ * de la publication. La notification à l'auteur républié a son site unique,
+ * partagé avec `POST /posts { repostOfId }` (`repostedAuthorNotification.ts`,
+ * #10525) ; le noyau n'en sait qu'une chose — qui retirer de l'éventail d'amis.
  */
 
 import type { FastifyInstance, FastifyRequest } from 'fastify';
@@ -287,6 +289,12 @@ export interface PublicationEffectsParams {
    * `tool.direct_publish` (#5543) : absent/`false` ⇒ publication directe.
    */
   readonly editedInApp?: boolean;
+  /**
+   * L'auteur d'un contenu que cette publication REPUBLIE (#10525) : il reçoit
+   * « a republié votre story », qui prime sur « a publié une nouvelle story »
+   * — comme une mention prime sur l'éventail d'amis.
+   */
+  readonly repostedAuthorId?: string | null;
 }
 
 const asOptionalString = (value: unknown): string | undefined =>
@@ -399,7 +407,7 @@ export async function runPublicationEffects(
   const {
     fastify, prisma, request, mentionService, hashtagService,
     post, authorId, postType, submittedContent, storyEffects, declaredMentions,
-    detectedLanguage, porte, engagementService, editedInApp,
+    detectedLanguage, porte, engagementService, editedInApp, repostedAuthorId,
   } = params;
 
   const postId = post.id;
@@ -513,7 +521,7 @@ export async function runPublicationEffects(
   // d'engagement « stories » (#5534) / « réels » (#5535) qui suivent.
   const writtenType = (asOptionalString(post.type) ?? postType) as PublishedPostType;
 
-  // Éventail vers les amis : `user_mentioned` prime (dedup via excludeUserIds).
+  // Éventail vers les amis : `user_mentioned` et `post_repost` priment (dedup via excludeUserIds).
   const notifService = fastify.notificationService;
   if (notifService) {
     notifService.createFriendContentNotificationsBatch({
@@ -523,7 +531,7 @@ export async function runPublicationEffects(
       excerpt: postSignals?.slice(0, 100),
       postCreatedAt: (post.createdAt ?? undefined) as Date | undefined,
       postExpiresAt: (post.expiresAt ?? undefined) as Date | undefined,
-      excludeUserIds: [...createdMentions.mentionedUserIds],
+      excludeUserIds: [...createdMentions.mentionedUserIds, ...(repostedAuthorId ? [repostedAuthorId] : [])],
       visibility,
       visibilityUserIds,
     }).catch((err: unknown) => {

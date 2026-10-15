@@ -22,6 +22,7 @@ import jwt from 'jsonwebtoken';
 import type { Socket } from 'socket.io';
 import type { PrismaClient } from '@meeshy/shared/prisma/client';
 import { AuthHandler } from '../AuthHandler';
+import { liveSession } from '../../../services/auth/__tests__/live-session-double';
 import { SOCKET_SESSION_ID } from '../../disconnectSession';
 import { attestedSocketAddress } from '../../utils/attested-address';
 import { resolveTrustProxy } from '../../../config/trust-proxy';
@@ -49,10 +50,10 @@ const socketFrom = (overrides: Record<string, unknown> = {}): Socket => ({
 
 function handler() {
   const prisma = {
-    user: { findUnique: jest.fn(async () => ({ id: 'user-1', systemLanguage: 'fr' })), update: jest.fn(async () => undefined) },
+    user: { findUnique: jest.fn(async () => ({ id: 'aaaaaaaaaaaaaaaaaaaaaaa1', systemLanguage: 'fr' })), update: jest.fn(async () => undefined) },
     participant: { findFirst: jest.fn(), findUnique: jest.fn(), findMany: jest.fn(async () => []) },
     callParticipant: { findMany: jest.fn(async () => []) },
-    userSession: { findFirst: jest.fn(async () => ({ id: 'sid-du-jwt' })) },
+    userSession: { findFirst: jest.fn(async () => liveSession()) },
   } as unknown as PrismaClient;
   const authHandler = new AuthHandler({
     prisma,
@@ -71,7 +72,7 @@ describe('P3 — le socket porte la session du JWT, et le débit se compte sur l
     process.env.JWT_SECRET = 'test-secret-attested-session';
     process.env.TRUST_PROXY_HOPS = '1';
     mockCheckLimit.mockClear();
-    jest.spyOn(jwt, 'verify').mockReturnValue({ userId: 'user-1', sid: 'sid-du-jwt' } as never);
+    jest.spyOn(jwt, 'verify').mockReturnValue({ userId: 'aaaaaaaaaaaaaaaaaaaaaaa1', sid: 'bbbbbbbbbbbbbbbbbbbbbbbb' } as never);
   });
   afterEach(() => {
     jest.restoreAllMocks();
@@ -84,7 +85,7 @@ describe('P3 — le socket porte la session du JWT, et le débit se compte sur l
 
     await authHandler.handleTokenAuthentication(socket);
 
-    expect((socket.data as Record<string, unknown>)[SOCKET_SESSION_ID]).toBe('sid-du-jwt');
+    expect((socket.data as Record<string, unknown>)[SOCKET_SESSION_ID]).toBe('bbbbbbbbbbbbbbbbbbbbbbbb');
   });
 
   it("deux clients derrière le même Traefik ont deux seaux de débit — ceux de leurs adresses attestées", async () => {

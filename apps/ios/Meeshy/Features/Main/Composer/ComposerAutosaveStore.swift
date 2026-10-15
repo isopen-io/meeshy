@@ -38,6 +38,13 @@ nonisolated final class ComposerAutosaveStore: ComposerAutosaveProviding, @unche
         self.root = root ?? support.appendingPathComponent("ComposerAutosave", isDirectory: true)
         self.sessionRoot = sessionRoot ?? FileManager.default.temporaryDirectory
             .appendingPathComponent(ComposerAutosaveFileName.sessionDirectoryName, isDirectory: true)
+        // Chaque restauration recopie le brouillon dans un dossier de session neuf, que rien ne
+        // retirait : un brouillon vidéo rouvert dix fois pesait dix fois son poids. Aucun composeur
+        // n'est ouvert quand le magasin naît — tout ce qui s'y trouve vient d'un lancement passé.
+        // Un magasin à qui l'on REMET son dossier (tests) le garde tel quel.
+        guard sessionRoot == nil else { return }
+        let sessions = self.sessionRoot
+        queue.async { try? FileManager.default.removeItem(at: sessions) }
     }
 
     func save(_ write: ComposerAutosaveWrite, account: ComposerAutosaveAccount, slot: ComposerAutosaveSlot) {

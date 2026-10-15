@@ -300,6 +300,15 @@ describe('WorldGuestEntry — entrer', () => {
     ]);
   });
 
+  test('la session adopte le pseudo FINAL servi par la passerelle, pas celui saisi (#10602)', async () => {
+    const { deps: d, recorded } = deps({
+      joinGuest: async () => ({ ok: true, data: { ...JOINED, nickname: 'ano_Awa4821' } }),
+    });
+    const host = await mount({ initialName: 'Awa', deps: d });
+    await click(enterButton(host));
+    expect(recorded.adopted.map(([, guest]) => guest.nickname)).toEqual(['ano_Awa4821']);
+  });
+
   test('la langue choisie devient la langue d’interface, puis le fil s’ouvre SUR /world, sans retour vers l’entrée (#10100)', async () => {
     const { deps: d, recorded } = deps();
     const host = await mount({ initialName: 'Awa', deps: d });

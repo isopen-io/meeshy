@@ -6,6 +6,7 @@ import { renderToStaticMarkup } from 'react-dom/server';
 import { MESSAGE_EFFECT_FLAGS } from '@meeshy/shared/types/message-effect-flags';
 
 import { ensureHappyDomRegistered, releaseHappyDomIfRegistered } from '@/test-support/happy-dom-environment';
+import { reactorsSheetStore } from '@/lib/view/reactors-sheet-store';
 import type { EphemeralDeadline } from '@meeshy/shared/utils/ephemeral-deadline';
 
 import { Bubble } from './bubble';
@@ -548,10 +549,8 @@ describe('Bubble — `lang` SUIT la langue servie après une traduction greffée
 /**
  * RETIRER UNE RÉACTION EN TAPANT SA CAPSULE (#5865, suivi de #5814 T12) —
  * iOS le permet déjà (`BubbleReactionsOverlay.swift`), seul le rail du menu
- * du message (appui long) le permettait ici. `onReact` n'est câblé QUE sur
- * les capsules `mine` (`bubble.tsx`) : taper la capsule d'autrui reste un
- * `<span>` inerte, jamais un bouton qui basculerait une réaction qui n'est
- * pas la sienne.
+ * du message (appui long) le permettait ici. Depuis #10583 la capsule
+ * d'autrui est un bouton elle aussi : la toucher pose la même réaction.
  */
 describe('Bubble — retirer une réaction en tapant sa capsule (#5865)', () => {
   const globals = globalThis as typeof globalThis & { IS_REACT_ACT_ENVIRONMENT?: boolean };
@@ -610,9 +609,25 @@ describe('Bubble — retirer une réaction en tapant sa capsule (#5865)', () => 
     expect(seen).toEqual(['👍']);
   });
 
-  test('la capsule ❤️ (pas la mienne) reste un <span> inerte — aucun bouton', () => {
+  test('tap sur la capsule ❤️ d’AUTRUI ⇒ onReact("❤️") : on pose la même réaction d’un geste (#10583)', () => {
+    const seen: string[] = [];
+    const el = mount((emoji) => seen.push(emoji));
+    const theirs = el.querySelector('button[aria-label="Réagir avec ❤️"]') as HTMLButtonElement;
+    expect(theirs).not.toBeNull();
+    act(() => {
+      theirs.click();
+    });
+    expect(seen).toEqual(['❤️']);
+  });
+
+  test('clic droit sur une capsule ⇒ la liste de qui a réagi, pour CE message (#10583)', () => {
     const el = mount(() => {});
-    expect(el.querySelector('button[aria-label*="❤️"]')).toBeNull();
+    const theirs = el.querySelector('button[aria-label="Réagir avec ❤️"]') as HTMLButtonElement;
+    act(() => {
+      theirs.dispatchEvent(new Event('contextmenu', { bubbles: true, cancelable: true }));
+    });
+    expect(reactorsSheetStore.getState().messageId).toBe('m-reactions');
+    reactorsSheetStore.getState().close();
   });
 
   test('la cible tactile de la capsule est étendue (`tap-target-chip`), sans grandir le dessin', () => {

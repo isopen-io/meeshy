@@ -52,7 +52,7 @@ const de = {
   'game.banner.place.one': '{count}.',
   'game.banner.place.other': '{count}.',
   'game.banner.points': '{points} P.',
-  'game.banner.missing': 'noch {points}',
+  'game.banner.missing': 'noch {points} bis Level {level}',
   'game.banner.separator': ', ',
   'game.league.name.quartz': 'Quarz',
   'game.league.name.ambre': 'Bernstein',

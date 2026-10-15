@@ -1,5 +1,6 @@
 import { resolveParticipant, resolveParticipantFromMessage, resolveMembershipDenialReason } from '../participant-resolver';
 import type { SocketUser, ConnectedUserResult } from '../socket-helpers';
+import { PARTICIPATION_VIVANTE } from '../../../routes/conversations/utils/access-control';
 
 jest.mock('../socket-helpers', () => ({
   getConnectedUser: jest.fn(),
@@ -77,7 +78,7 @@ describe('resolveParticipant', () => {
       displayName: 'Guest#42',
     });
     expect(prisma.participant.findFirst).toHaveBeenCalledWith({
-      where: { id: 'part-123', conversationId: 'conv-1', isActive: true },
+      where: { id: 'part-123', conversationId: 'conv-1', ...PARTICIPATION_VIVANTE },
       select: { id: true, displayName: true, nickname: true },
     });
   });
@@ -100,7 +101,7 @@ describe('resolveParticipant', () => {
 
     expect(result).toBeNull();
     expect(prisma.participant.findFirst).toHaveBeenCalledWith({
-      where: { id: 'part-123', conversationId: 'conv-OTHER', isActive: true },
+      where: { id: 'part-123', conversationId: 'conv-OTHER', ...PARTICIPATION_VIVANTE },
       select: { id: true, displayName: true, nickname: true },
     });
   });
@@ -131,7 +132,7 @@ describe('resolveParticipant', () => {
       displayName: 'Anonymous User',
     });
     expect(prisma.participant.findFirst).toHaveBeenCalledWith({
-      where: { id: 'anon-id', conversationId: 'conv-1', isActive: true },
+      where: { id: 'anon-id', conversationId: 'conv-1', ...PARTICIPATION_VIVANTE },
       select: { id: true, displayName: true, nickname: true },
     });
   });
@@ -175,7 +176,7 @@ describe('resolveParticipant', () => {
 
     expect(result).toBeNull();
     expect(prisma.participant.findFirst).toHaveBeenCalledWith({
-      where: { userId: 'user-123', conversationId: 'conv-1', isActive: true },
+      where: { userId: 'user-123', conversationId: 'conv-1', ...PARTICIPATION_VIVANTE },
       select: { id: true, displayName: true, nickname: true },
     });
   });
