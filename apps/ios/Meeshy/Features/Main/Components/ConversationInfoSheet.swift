@@ -605,6 +605,9 @@ struct ConversationInfoSheet: View {
                 presenceState: presence,
                 onMoodTap: participant.userId.flatMap { moodTapResolver?($0) }
             )
+            // LE CONTOUR DU MEMBRE (#10713) — dans l'empreinte de l'avatar, sans rien décaler.
+            .avatarRingWithin(ProfileDecorResolver.ring(participant.profileDecor?.avatarRing),
+                              footprint: AvatarContext.userListItem.size)
 
             VStack(alignment: .leading, spacing: MeeshySpacing.xxs) {
                 HStack(spacing: MeeshySpacing.xsPlus) {
