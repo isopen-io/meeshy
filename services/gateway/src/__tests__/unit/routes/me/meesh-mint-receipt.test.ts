@@ -145,6 +145,17 @@ describe('POST /me/meesh/mint', () => {
     await app.close();
   });
 
+  it('409 MINT_BLOCKED_BY_DEBT, TYPÉ : la dette d\'étincelles à rembourser avant de frapper', async () => {
+    mint.mockResolvedValueOnce({ status: 'blocked-by-debt', sparksDebt: 120 });
+    const app = await buildApp();
+
+    const res = await post(app);
+
+    expect(res.statusCode).toBe(409);
+    expect(res.json()).toMatchObject({ success: false, code: 'MINT_BLOCKED_BY_DEBT', sparksDebt: 120 });
+    await app.close();
+  });
+
   it('409 TREASURY_LOCKED, TYPÉ : la réserve qui barre la pièce et le rang requis (#10848)', async () => {
     mint.mockResolvedValueOnce({
       status: 'treasury-locked',

@@ -22,7 +22,7 @@ const FILE = join(dirname(fileURLToPath(import.meta.url)), '..', '..', 'fixtures
 type Input =
   | { readonly law: 'mint-cost-factor'; readonly level: number }
   | { readonly law: 'mint-price'; readonly number: number; readonly level: number }
-  | { readonly law: 'sparks-of'; readonly engagementScore?: number | null; readonly sparksSincePrestige?: number | null; readonly sparksEarnedLifetime?: number | null }
+  | { readonly law: 'sparks-of'; readonly engagementScore?: number | null; readonly sparksSincePrestige?: number | null; readonly sparksEarnedLifetime?: number | null; readonly sparksDebt?: number | null }
   | {
       readonly law: 'sparks-mint-preview';
       readonly sparks: number;
@@ -31,6 +31,7 @@ type Input =
       readonly held: number;
       readonly glory: number;
       readonly levelCap: number | null;
+      readonly debt?: number;
     }
   | { readonly law: 'treasury-access'; readonly glory: number; readonly mythic?: boolean }
   | { readonly law: 'treasury-lock'; readonly held: number; readonly glory: number };
@@ -70,6 +71,8 @@ const CASES: readonly { readonly _label: string; readonly input: Input }[] = [
   { _label: 'frappe : poche vide, le niveau ne baisse pas', input: { law: 'sparks-mint-preview', sparks: 0, cycle: levelThreshold(9) + 100, mintedLifetime: 0, held: 0, glory: 0, levelCap: 499 } },
   { _label: 'frappe : la 100e pièce entre au Coffre sans le rang', input: { law: 'sparks-mint-preview', sparks: 90_000, cycle: levelThreshold(9), mintedLifetime: 99, held: 99, glory: 500, levelCap: 499 } },
   { _label: 'frappe : la 100e pièce entre au Coffre avec Voix I', input: { law: 'sparks-mint-preview', sparks: 90_000, cycle: levelThreshold(9), mintedLifetime: 99, held: 99, glory: minGlory('voix', 1), levelCap: 499 } },
+  { _label: 'frappe : bloquée par une dette d\'étincelles', input: { law: 'sparks-mint-preview', sparks: 90_000, cycle: levelThreshold(9), mintedLifetime: 0, held: 0, glory: 0, levelCap: 499, debt: 250 } },
+  { _label: 'étincelles avec une dette', input: { law: 'sparks-of', engagementScore: 40, sparksDebt: 250 } },
   { _label: 'frappe : numéro indépendant de la bourse', input: { law: 'sparks-mint-preview', sparks: 90_000, cycle: levelThreshold(9), mintedLifetime: 7, held: 3, glory: 0, levelCap: 499 } },
   { _label: 'réserves sans rang', input: { law: 'treasury-access', glory: 0 } },
   { _label: 'réserves à Voix II (n\'ouvre pas le Coffre)', input: { law: 'treasury-access', glory: minGlory('voix', 2) } },

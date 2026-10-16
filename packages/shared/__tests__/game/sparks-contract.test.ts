@@ -46,7 +46,7 @@ const facts = (over: Partial<GameBlockFacts> = {}): GameBlockFacts => ({
   ...over,
 });
 
-const SPARKS = { pocket: 500, cycle: levelThreshold(34) + 10, lifetime: 9_000_000_000 };
+const SPARKS = { pocket: 500, cycle: levelThreshold(34) + 10, lifetime: 9_000_000_000, debt: 0 };
 
 describe('le bloc game sert les étincelles à côté de l\'ancien score', () => {
   const block = buildGameBlock(facts({ sparks: SPARKS, levelMaxLifetime: 52 }));
@@ -103,6 +103,15 @@ describe('le bloc game sert les étincelles à côté de l\'ancien score', () =>
     });
   });
 
+  it('la dette est servie dans level et mint, et bloque la frappe', () => {
+    const indebted = buildGameBlock(facts({ sparks: { ...SPARKS, pocket: 50_000, debt: 300 } }));
+    expect(indebted.level.sparksDebt).toBe(300);
+    expect(indebted.mint).toMatchObject({ canMint: false, blockedBy: 'debt', sparksDebt: 300, missingPoints: 0 });
+    expect(gameBlockSchema.safeParse(indebted).success).toBe(true);
+    expect(block.level.sparksDebt).toBe(0);
+    expect(block.mint.blockedBy).toBeNull();
+  });
+
   it('mint : une pièce qui entre dans une réserve fermée est annoncée verrouillée, sans manque de points', () => {
     const locked = buildGameBlock(facts({ sparks: { ...SPARKS, pocket: 99_999 }, balance: 99 }));
     expect(locked.mint.canMint).toBe(false);
@@ -120,7 +129,7 @@ describe('le bloc game sert les étincelles à côté de l\'ancien score', () =>
 
   it('après un prestige (cycle vide, niveau max à vie conservé) : niveau 1, tarif réduit, max à vie intact', () => {
     const after = buildGameBlock(
-      facts({ sparks: { pocket: 0, cycle: 0, lifetime: 2_000_000 }, levelRecord: 1, prestige: 1, levelMaxLifetime: 100 }),
+      facts({ sparks: { pocket: 0, cycle: 0, lifetime: 2_000_000, debt: 0 }, levelRecord: 1, prestige: 1, levelMaxLifetime: 100 }),
     );
     expect(after.level.level).toBe(1);
     expect(after.level.sparksLifetime).toBe(2_000_000);
@@ -157,7 +166,7 @@ describe('ADDITIF : sans étincelles, le bloc garde exactement la forme d\'hier'
   });
 
   it('un bloc sans étincelles sert quand même un niveau borné à 100 pour les clients publiés', () => {
-    const big = buildGameBlock(facts({ sparks: { pocket: 0, cycle: levelThreshold(640), lifetime: levelThreshold(640) }, glory: 130_000, missionsDone: 10, flameRecord: 30 }));
+    const big = buildGameBlock(facts({ sparks: { pocket: 0, cycle: levelThreshold(640), lifetime: levelThreshold(640), debt: 0 }, glory: 130_000, missionsDone: 10, flameRecord: 30 }));
     expect(big.level.level).toBe(100);
     expect(big.level.ladder?.level).toBe(640);
     expect(big.level.sparksCycle).toBe(levelThreshold(640));

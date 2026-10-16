@@ -52,21 +52,47 @@ describe('sparkCount — un nombre sûr, jamais un BigInt sur le fil', () => {
   });
 });
 
+describe('la DETTE d\'étincelles (porteur 2026-10-16)', () => {
+  it('sparksOf lit la dette, 0 si absente, et ne la compte pas dans la poche', () => {
+    expect(sparksOf({ engagementScore: 50, sparksDebt: 400n })).toMatchObject({ pocket: 50, debt: 400 });
+    expect(sparksOf({ engagementScore: 50 }).debt).toBe(0);
+    expect(sparksOf({ engagementScore: 50, sparksDebt: -5 }).debt).toBe(0);
+  });
+
+  it('tant qu\'une dette existe, on ne frappe pas — même avec une poche pleine, même sans réserve fermée', () => {
+    const preview = previewSparksMint({ sparks: 90_000, cycle: levelThreshold(9), mintedLifetime: 0, held: 0, glory: 0, levelCap: LEVEL_CAP_BASE, steps: null, debt: 120 });
+    expect(preview.canMint).toBe(false);
+    expect(preview.blockedBy).toBe('debt');
+    expect(preview.sparksDebt).toBe(120);
+    expect(preview.missingPoints).toBe(0);
+    expect(preview.gloryGained).toBe(0);
+  });
+
+  it('sans dette, rien ne bloque', () => {
+    const preview = previewSparksMint({ sparks: 90_000, cycle: levelThreshold(9), mintedLifetime: 0, held: 0, glory: 0, levelCap: LEVEL_CAP_BASE, steps: null });
+    expect(preview.blockedBy).toBeNull();
+    expect(preview.sparksDebt).toBe(0);
+    expect(preview.canMint).toBe(true);
+  });
+});
+
 describe('sparksOf — poche, cycle, total à vie', () => {
   it('lit les trois nombres', () => {
     expect(sparksOf({ engagementScore: 500, sparksSincePrestige: 9000n, sparksEarnedLifetime: 12_000n })).toEqual({
       pocket: 500,
       cycle: 9000,
       lifetime: 12_000,
+      debt: 0,
     });
   });
 
   it('un compte d\'avant le rattrapage (champs absents) se lit sur sa poche : le niveau ne baisse pas', () => {
-    expect(sparksOf({ engagementScore: 800 })).toEqual({ pocket: 800, cycle: 800, lifetime: 800 });
+    expect(sparksOf({ engagementScore: 800 })).toEqual({ pocket: 800, cycle: 800, lifetime: 800, debt: 0 });
     expect(sparksOf({ engagementScore: 800, sparksSincePrestige: null, sparksEarnedLifetime: null })).toEqual({
       pocket: 800,
       cycle: 800,
       lifetime: 800,
+      debt: 0,
     });
   });
 
@@ -75,12 +101,13 @@ describe('sparksOf — poche, cycle, total à vie', () => {
       pocket: 800,
       cycle: 800,
       lifetime: 800,
+      debt: 0,
     });
   });
 
   it('un compte introuvable vaut zéro partout', () => {
-    expect(sparksOf(null)).toEqual({ pocket: 0, cycle: 0, lifetime: 0 });
-    expect(sparksOf(undefined)).toEqual({ pocket: 0, cycle: 0, lifetime: 0 });
+    expect(sparksOf(null)).toEqual({ pocket: 0, cycle: 0, lifetime: 0, debt: 0 });
+    expect(sparksOf(undefined)).toEqual({ pocket: 0, cycle: 0, lifetime: 0, debt: 0 });
   });
 });
 

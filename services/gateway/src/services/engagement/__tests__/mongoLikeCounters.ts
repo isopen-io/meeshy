@@ -41,6 +41,10 @@ export function evaluateExpression(expression: Expression, row: MongoLikeRow): u
     const present = values.filter((value): value is number => typeof value === 'number');
     return present.length === 0 ? null : Math.max(...present);
   }
+  if (operator === '$min') {
+    const present = values.filter((value): value is number => typeof value === 'number');
+    return present.length === 0 ? null : Math.min(...present);
+  }
   if (operator === '$add' || operator === '$subtract') {
     if (!values.every((value): value is number => typeof value === 'number')) return null;
     return operator === '$add' ? values.reduce((sum, value) => sum + value, 0) : values[0]! - values[1]!;

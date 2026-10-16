@@ -75,7 +75,9 @@ export type MeeshMintOutcome =
   | ({ readonly status: 'already-minted'; readonly receipt: MintReceipt | null } & MeeshTotals)
   | { readonly status: 'insufficient'; readonly plan: MeeshMintPlan }
   /** La pièce ferait entrer dans une réserve du trésor que le rang de Gloire n'ouvre pas (#10848). */
-  | { readonly status: 'treasury-locked'; readonly lock: TreasuryLock };
+  | { readonly status: 'treasury-locked'; readonly lock: TreasuryLock }
+  /** Une dette d'étincelles est à rembourser avant de frapper (porteur, 2026-10-16). */
+  | { readonly status: 'blocked-by-debt'; readonly sparksDebt: number };
 
 const EDITIONS: readonly string[] = ['silver', 'gold', 'prism'];
 
@@ -152,6 +154,14 @@ export function mintPlanOf(preview: Pick<SparksMintPreview, 'canMint' | 'missing
   return { debitablePoints: pocket, floorPoints: 0, canMint: preview.canMint, missingPoints: preview.missingPoints, debits: [] };
 }
 
+/** Une dette d'étincelles est apparue entre la lecture et la transaction : annulée en bloc, rendue comme bloquée. */
+class DebtBlocksMint extends Error {
+  constructor(readonly sparksDebt: number) {
+    super('mint blocked by a sparks debt');
+    this.name = 'DebtBlocksMint';
+  }
+}
+
 export class MeeshService {
   constructor(private readonly prisma: PrismaClient) {}
 
@@ -176,6 +186,7 @@ export class MeeshService {
       glory,
       levelCap: levelCapForRank(steps.rank),
       steps,
+      debt: sparks.debt,
     });
     return { totals, sparks, preview };
   }
@@ -224,6 +235,8 @@ export class MeeshService {
     const { totals: avant, sparks, preview } = await this.facts(userId);
     const { number, price } = preview;
     // Le refus de RANG passe avant celui de poche : un compte sans le rang apprend d'abord ce qui le barre.
+    // La dette passe avant tout : tant qu'elle existe, on ne frappe pas.
+    if (preview.blockedBy === 'debt') return { status: 'blocked-by-debt', sparksDebt: preview.sparksDebt };
     if (preview.locked !== null) return { status: 'treasury-locked', lock: preview.locked };
     if (!preview.canMint) return { status: 'insufficient', plan: mintPlanOf(preview, sparks.pocket) };
 
@@ -241,6 +254,7 @@ export class MeeshService {
         // d'être écrasé, et le débit s'écrit en VALEUR (jamais un incrément : leçon #6428).
         const compte = await tx.user.findUnique({ where: { id: userId }, select: SPARKS_USER_SELECT });
         const dans = sparksOf(compte);
+        if (dans.debt > 0) throw new DebtBlocksMint(dans.debt);
         if (dans.pocket < price) throw new ScoreWouldGoNegative();
 
         // La ligne AVANT les colonnes : ce sont les totaux du registre, frappe
@@ -325,6 +339,7 @@ export class MeeshService {
         },
       };
     } catch (err) {
+      if (err instanceof DebtBlocksMint) return { status: 'blocked-by-debt', sparksDebt: err.sparksDebt };
       if (err instanceof ScoreWouldGoNegative) {
         // La poche a bougé entre la lecture et la transaction : refus comme à la première lecture.
         return { status: 'insufficient', plan: mintPlanOf({ canMint: false, missingPoints: Math.max(0, price - sparks.pocket) }, sparks.pocket) };

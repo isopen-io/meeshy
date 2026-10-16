@@ -203,6 +203,34 @@ describe('MeeshService.mint — les réserves du trésor s\'ouvrent par le rang 
   });
 });
 
+describe('MeeshService.mint — la dette d\'étincelles bloque la frappe', () => {
+  it('refuse SANS débit ni écriture tant qu\'une dette existe, même avec une poche pleine, et dit combien', async () => {
+    const db = fakeGameDb();
+    seedUser(db, { engagementScore: 90_000, sparksSincePrestige: 90_000, sparksDebt: 120 });
+
+    const issue = await new MeeshService(db.prisma).mint(USER, 'frappe-dette');
+
+    expect(issue).toEqual({ status: 'blocked-by-debt', sparksDebt: 120 });
+    expect(userRow(db).engagementScore).toBe(90_000);
+    expect(db.meeshLedger.rows).toHaveLength(0);
+  });
+
+  it('la dette passe avant le refus de rang', async () => {
+    const db = fakeGameDb();
+    seedUser(db, { engagementScore: 90_000, sparksSincePrestige: 90_000, sparksDebt: 5 });
+    withMints(db, 99);
+
+    expect((await new MeeshService(db.prisma).mint(USER, 'frappe-dette-rang')).status).toBe('blocked-by-debt');
+  });
+
+  it('une dette remboursée (0) ne bloque plus', async () => {
+    const db = fakeGameDb();
+    seedUser(db, { engagementScore: 90_000, sparksSincePrestige: 90_000, sparksDebt: 0 });
+
+    expect((await new MeeshService(db.prisma).mint(USER, 'frappe-sans-dette')).status).toBe('minted');
+  });
+});
+
 describe('MeeshService.preview — le plan montré avant de confirmer', () => {
   it('lit la poche : tout est débitable, aucun plancher', async () => {
     const db = fakeGameDb();

@@ -39,8 +39,19 @@ réponse reçue, saison, duo). Chaque `$max` relève un cycle en retard sur la p
 
 **Décision : elle réduit le total à vie et le cycle, de ce que ce contenu a rapporté, jamais plus** (`takeBackPoints`). Sans cela,
 « publier, dépenser dans une Meesh, supprimer » garderait les étincelles dans le total et dans le niveau. La poche ne passe
-pas sous zéro. **Résidu assumé** : la Meesh déjà frappée avec ces étincelles reste frappée (avant, la reprise allait chercher le
-reliquat sur d'autres compteurs parce que la frappe les débitait ; elle ne les débite plus).
+pas sous zéro. La Meesh déjà frappée avec ces étincelles reste frappée : c'est la **dette** qui ferme la triche (section suivante).
+
+### La dette d'étincelles (porteur, 2026-10-16)
+
+Quand une reprise ne peut plus être prélevée parce que la **poche est déjà dépensée**, la part manquante devient une **dette**
+(`User.sparksDebt`, `BigInt?`, `sparksDebt` sur le fil) :
+
+- **elle se déduit des prochaines étincelles gagnées**, sur les deux chemins de crédit : seul le reste va en poche ; le cycle et le total à vie,
+  eux, montent du gain **entier** (un gain remboursé reste un gain) ;
+- **tant qu'elle existe, on ne frappe pas** : `POST /me/meesh/mint` → `409 MINT_BLOCKED_BY_DEBT` + `{ sparksDebt }` à la racine ;
+  l'aperçu dit `mint.canMint: false`, `mint.blockedBy: 'debt'`, `mint.sparksDebt` ; la dette passe avant le refus de rang ;
+- exposition additive : `level.sparksDebt` (`/me/engagement` et `game.level`), `meesh.sparksDebt` + `meesh.blockedBy`, `mint.blockedBy` + `mint.sparksDebt` ;
+- le prestige ne la remet pas à zéro ; elle s'additionne d'une reprise à l'autre ; absente = 0 ; une frappe concurrente qui la verrait apparaître est annulée en bloc.
 
 ## 2. Le niveau
 
@@ -56,9 +67,9 @@ conservé pour les clients publiés ; la remise à zéro des paliers `level:` à
 - **Vent arrière** : **éteint**. Il compensait la descente du niveau à la frappe ; le niveau ne descend plus qu'au prestige, où le record
   du cycle repart à 1 avec lui. Le garder après un prestige donnerait +25 % pendant les cent niveaux d'une boucle neuve : incohérent.
   `boosts.tailwind` est servi à `1` ; la loi pure (`tailwindFactor`) reste pour les clients publiés.
-- **Palier 1 à 9** : s'affiche **« Lueur »** (« étincelle » désigne les points). La **clé du fil reste `etincelle`** — les clients publiés la
-  décodent strictement (iOS `LevelTierKey`, une clé inconnue fait tomber tout le bloc). ⚠️ **Collision à trancher par le porteur** : le palier
-  10 à 19 (clé `lueur`) s'appelle déjà « Lueur » à l'écran.
+- **Palier 1 à 9** : s'affiche **« Braise »** (porteur, 2026-10-16 ; « étincelle » désigne les points). Ordre affiché : Braise (1-9), Lueur (10-19),
+  puis la suite inchangée. La **clé du fil reste `etincelle`** — les clients publiés la décodent strictement (iOS `LevelTierKey`, une clé
+  inconnue fait tomber tout le bloc) ; seul le nom AFFICHÉ change (`game.tier.etincelle` dans les catalogues).
 
 ## 3. Le coût d'une frappe
 
@@ -87,7 +98,7 @@ facteur(niveau)          = borné(0,5 + niveau ÷ 200 ; 0,5 ; 1)      — 50 % a
 la marche demandée (`gloryLadder`), jamais sur un numéro de division comparé en entier.
 
 Ce que la règle garde : la **frappe**, seule porte qui fait entrer une Meesh dans le trésor. Une pièce qui ferait entrer dans une réserve fermée est
-refusée : `409 TREASURY_LOCKED` + `{ tier, minHeld, requires: { rank, division, division5 } }` ; l'aperçu (`mint.locked`, `canMint: false`,
+refusée : `409 TREASURY_LOCKED` + `{ tier, minHeld, requires: { rank, division, division5 } }` (interprétation confirmée par le porteur) ; l'aperçu (`mint.locked`, `canMint: false`,
 `missingPoints: 0`) et `treasury.access[]` l'annoncent avant. Un compte qui tenait déjà plus que son rang n'est pas dépossédé : il ne frappe plus
 tant que son rang ne l'a pas rattrapé. Le Mythe a tout ouvert.
 
@@ -124,6 +135,8 @@ regagnaient et se renotifiaient ; les gardes de `recordActivity` ne créditent p
 `points` : soi et les amis acceptés) ; `points` reste servi, aligné sur la poche.
 
 `POST /me/meesh/mint` : le reçu ajoute `basePrice`, `costFactor` ; refus **`409 TREASURY_LOCKED`** (code ajouté à `GAME_ERROR_CODES`).
+
+Refus **`409 MINT_BLOCKED_BY_DEBT`** `{ sparksDebt }` (voir la dette).
 
 Réponses de mission/saison (`score`) : désormais le cycle, comme `level.score`.
 

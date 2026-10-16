@@ -147,7 +147,8 @@
       "expected": {
         "pocket": 200,
         "cycle": 9000,
-        "lifetime": 12000
+        "lifetime": 12000,
+        "debt": 0
       }
     },
     {
@@ -159,7 +160,8 @@
       "expected": {
         "pocket": 800,
         "cycle": 800,
-        "lifetime": 800
+        "lifetime": 800,
+        "debt": 0
       }
     },
     {
@@ -173,7 +175,8 @@
       "expected": {
         "pocket": 10,
         "cycle": 2147483700,
-        "lifetime": 4000000000
+        "lifetime": 4000000000,
+        "debt": 0
       }
     },
     {
@@ -200,7 +203,9 @@
         "levelAfter": 9,
         "levelsLost": 0,
         "gloryGained": 1000,
-        "locked": null
+        "locked": null,
+        "blockedBy": null,
+        "sparksDebt": 0
       }
     },
     {
@@ -227,7 +232,9 @@
         "levelAfter": 9,
         "levelsLost": 0,
         "gloryGained": 0,
-        "locked": null
+        "locked": null,
+        "blockedBy": null,
+        "sparksDebt": 0
       }
     },
     {
@@ -262,7 +269,9 @@
             "division": 1,
             "division5": 1
           }
-        }
+        },
+        "blockedBy": null,
+        "sparksDebt": 0
       }
     },
     {
@@ -289,7 +298,53 @@
         "levelAfter": 9,
         "levelsLost": 0,
         "gloryGained": 1000,
-        "locked": null
+        "locked": null,
+        "blockedBy": null,
+        "sparksDebt": 0
+      }
+    },
+    {
+      "_label": "frappe : bloquée par une dette d'étincelles",
+      "input": {
+        "law": "sparks-mint-preview",
+        "sparks": 90000,
+        "cycle": 8100,
+        "mintedLifetime": 0,
+        "held": 0,
+        "glory": 0,
+        "levelCap": 499,
+        "debt": 250
+      },
+      "expected": {
+        "number": 1,
+        "price": 665,
+        "basePrice": 1221,
+        "costFactor": 0.545,
+        "costLevel": 9,
+        "edition": "silver",
+        "canMint": false,
+        "missingPoints": 0,
+        "levelBefore": 9,
+        "levelAfter": 9,
+        "levelsLost": 0,
+        "gloryGained": 0,
+        "locked": null,
+        "blockedBy": "debt",
+        "sparksDebt": 250
+      }
+    },
+    {
+      "_label": "étincelles avec une dette",
+      "input": {
+        "law": "sparks-of",
+        "engagementScore": 40,
+        "sparksDebt": 250
+      },
+      "expected": {
+        "pocket": 40,
+        "cycle": 40,
+        "lifetime": 40,
+        "debt": 250
       }
     },
     {
@@ -316,7 +371,9 @@
         "levelAfter": 9,
         "levelsLost": 0,
         "gloryGained": 1000,
-        "locked": null
+        "locked": null,
+        "blockedBy": null,
+        "sparksDebt": 0
       }
     },
     {

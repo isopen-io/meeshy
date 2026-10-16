@@ -15,6 +15,7 @@ export const SPARKS_USER_SELECT = {
   engagementScore: true,
   sparksSincePrestige: true,
   sparksEarnedLifetime: true,
+  sparksDebt: true,
   levelRecord: true,
   levelMaxLifetime: true,
 } as const;

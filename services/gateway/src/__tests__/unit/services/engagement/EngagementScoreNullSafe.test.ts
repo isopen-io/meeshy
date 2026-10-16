@@ -74,8 +74,8 @@ function makeMongoLikePrisma(initialScore: number | null | undefined) {
     if (counterWrite !== null) return { ok: 1, value: await counterCredit(counterWrite) };
     // Le pipeline `$ifNull` traite null ET absent comme zéro — c'est tout
     // l'intérêt de cette forme d'écriture.
-    const pipeline = cmd.update as Array<{ $set: { engagementScore: { $add: [unknown, number] } } }>;
-    const added = pipeline[0].$set.engagementScore.$add[1];
+    const pipeline = cmd.update as Array<{ $set: { sparksSincePrestige: { $add: [unknown, number] } } }>;
+    const added = pipeline[0].$set.sparksSincePrestige.$add[1];
     state.engagementScore = (state.engagementScore ?? 0) + added;
     return { ok: 1, value: { engagementScore: state.engagementScore } };
   });

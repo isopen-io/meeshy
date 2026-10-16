@@ -360,6 +360,10 @@ model User {
   /// nombre JSON entier sur le fil, saturé à 2^53 − 1. Absent = lu sur le cycle.
   /// Rattrapage : `score + Σ prix des frappes (MeeshLedger.meta.price)`, borne basse.
   sparksEarnedLifetime BigInt?
+  /// LA DETTE D'ÉTINCELLES (porteur, 2026-10-16) — ce qu'une reprise de contenu supprimé n'a pas pu prélever sur la poche,
+  /// déjà dépensée à la frappe. Déduite des prochaines étincelles gagnées (poche seule : cycle et total à vie montent
+  /// du gain entier) ; tant qu'elle est > 0, la frappe est refusée (`MINT_BLOCKED_BY_DEBT`). Absente = 0. BigInt (`long`).
+  sparksDebt BigInt?
   /// Passages en Prestige (0..5). Absent = 0.
   prestige            Int?
   /// Gels de Flamme en réserve (0..2). Absent = 0.

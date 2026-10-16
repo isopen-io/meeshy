@@ -162,6 +162,8 @@ export const GAME_ERROR_CODES = {
    * porte `details` : `{ tier, minHeld, requires: { rank, division, division5 } }`.
    */
   treasuryLocked: 'TREASURY_LOCKED',
+  /** La frappe est refusée tant qu'une dette d'étincelles existe (porteur, 2026-10-16). Le refus porte `{ sparksDebt }` à la racine. */
+  mintBlockedByDebt: 'MINT_BLOCKED_BY_DEBT',
 } as const;
 
 export type GameErrorCode = (typeof GAME_ERROR_CODES)[keyof typeof GAME_ERROR_CODES];
