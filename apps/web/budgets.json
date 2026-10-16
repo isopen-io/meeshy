@@ -1020,9 +1020,9 @@
       "pattern": "^assets/catalog-mood-compose-(fr|en|es|pt|de|it|ar)-[A-Za-z0-9_-]+\\.js$",
       "dynamic_only": true,
       "kb": {
-        "value": 2,
-        "status": "CIBLE -- MESUREE PAR #10527, NON ARBITREE",
-        "source": "Mesure du 2026-10-13 (`bun run build` puis `node scripts/measure-weight.mjs`, gzip -9, sur un export `git archive`) : 1,15 Ko pour les SEPT catalogues de la creation d une humeur (quatre cles `status.compose.more` et `status.compose.bare.*` : la porte vers les autres emojis et la question « sans un petit mot ? »), charges avec l ecran `/status/new` (`routes/route-table.tsx`) et jamais au demarrage -- les catalogues d interface sont a 189,85 Ko pour un plafond de 190. Arrondi au Ko SUPERIEUR (2)."
+        "value": 3,
+        "status": "CIBLE -- MESUREE PAR #10813, NON ARBITREE",
+        "source": "Mesure du 2026-10-16 (CI run 38910215459, `node scripts/measure-weight.mjs`, gzip -9) : 2,63 Ko pour les SEPT catalogues, depuis que la page de l humeur (#10813, `mood.page.*`, dix cles : etiquette, fermeture, reponse privee et ses etats, humeur disparue, chargement) partage le catalogue de la creation (#10527, 1,15 Ko le 2026-10-13). Toujours charge avec ses ecrans (`/status/new`, `/mood/:id`), jamais au demarrage. Arrondi au Ko SUPERIEUR (3)."
       }
     },
     "interface_catalogs_row_menu": {
