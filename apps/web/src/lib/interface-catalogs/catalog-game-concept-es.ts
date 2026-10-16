@@ -391,7 +391,7 @@ const es = {
   'game.progression.scale_complete': 'Escala completa',
   'game.mascot.minted': '¡Clac! Una Meesh recién acuñada. Tienes {balance}.',
   'game.mascot.level_up': '¡Nivel {level}! Hay que celebrarlo.',
-  'game.mascot.achievement': '¡Logro conseguido: {title}!',
+  'game.mascot.achievement': '¡Logro desbloqueado: {title}!',
   'game.mascot.can_mint.one': 'Tus puntos están listos: ¿acuñamos una Meesh por {count} punto?',
   'game.mascot.can_mint.other': 'Tus puntos están listos: ¿acuñamos una Meesh por {count} puntos?',
   'game.mascot.first_step': '¡Hola, soy Mee! Envía tu primer mensaje y contaré tus puntos.',

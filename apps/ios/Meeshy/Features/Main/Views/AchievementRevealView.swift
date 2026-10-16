@@ -400,7 +400,7 @@ struct AchievementRevealView: View {
                 .fixedSize(horizontal: false, vertical: true)
 
             // « Épique · 4 % des comptes » : le nom de la rareté, lu en toutes lettres sous le liseré.
-            GameRarityLine(entry: rarity)
+            GameRarityLine(entry: rarity, ink: MeeshyColors.indigo200)
         }
         .opacity(apparu ? 1 : 0)
         .offset(y: apparu ? 0 : MeeshySpacing.lg)
