@@ -12,6 +12,7 @@ import { describe, it, expect, jest } from '@jest/globals';
 import {
   reachHarness, sendReach, sendReachV2, visitorHeader, viewEvent, impressionEvent,
 } from '../../../helpers/reach-harness';
+import { accountReaderKeyOf } from '../../../../services/posts/readerKey';
 
 jest.mock('../../../../services/PostService', () => ({ PostService: jest.fn() }));
 jest.mock('../../../../services/MediaService', () => ({ MediaService: jest.fn() }));
@@ -194,16 +195,26 @@ describe('contexte de listing et visibilité MRC sur l’impression (#10501)', (
     visibility: { maxVisibleFraction: viewable ? 0.8 : 0.2, visibleMs: viewable ? 1400 : 300, viewable },
   });
 
-  it('une impression en position 3, visible au sens MRC, porte son rang et sa visibilité sur sa ligne', async () => {
-    const h = await reachHarness([{ id: POST }]);
+  it('avec consentement, une impression en position 3, visible au sens MRC, porte son rang et sa visibilité sur sa ligne', async () => {
+    const h = await reachHarness([{ id: POST }], undefined, { consentedUserIds: [READER] });
     await sendReachV2(h.app, [listed(true)], account, { platform: 'web', appSessionId: '5e1c2b9e-1d2a-4c55-9a1e-0a4b5c6d7e8f' });
 
     expect(h.impressions[0]).toMatchObject({
       position: 3, rankingSource: 'for_you', viewable: true, visibleFraction: 0.8, visibleMs: 1400, platform: 'web',
     });
-    // Sans consentement d'analyse : rien qui relie cette ligne à une page ou à une session.
-    expect(h.impressions[0].feedRequestId).toBeUndefined();
-    expect(h.impressions[0].appSessionId).toBeUndefined();
+    await h.app.close();
+  });
+
+  it('sans consentement d’analyse (#10773), la ligne ne garde que l’empreinte du lecteur : ni compte, ni rang, ni visibilité, ni page, ni session', async () => {
+    const h = await reachHarness([{ id: POST }]);
+    await sendReachV2(h.app, [listed(true)], account, { platform: 'web', appSessionId: '5e1c2b9e-1d2a-4c55-9a1e-0a4b5c6d7e8f' });
+
+    const row = h.impressions[0];
+    expect(row).toMatchObject({ postId: POST, source: 'feed', readerKey: accountReaderKeyOf(READER) });
+    for (const field of ['userId', 'surface', 'position', 'rankingSource', 'viewable', 'visibleFraction', 'visibleMs', 'platform', 'feedRequestId', 'appSessionId']) {
+      expect(row[field]).toBeUndefined();
+    }
+    expect(h.store.read(POST)).toMatchObject({ impressionCount: 1 });
     await h.app.close();
   });
 

@@ -60,3 +60,18 @@ export function readerKeyOf(identity: ReaderIdentity, secret: string = readerKey
 
 /** Une valeur déjà hachée — ce que la migration ne retouche pas. */
 export const isReaderKey = (value: string): boolean => READER_KEY.test(value);
+
+/**
+ * L'EMPREINTE d'un compte sur une ligne de lecture rangée SANS consentement
+ * d'analyse (#10771, #10773) : la même clé secrète, un domaine à part
+ * (`account:`), jamais l'identifiant en clair. Elle sert à dédoublonner (même
+ * lecteur, même post), à exporter et à effacer — rien d'autre ne la recalcule.
+ * C'est une PSEUDONYMISATION (RGPD art. 4(5)) : la ligne reste une donnée
+ * personnelle, couverte par l'export et l'effacement.
+ */
+export const accountReaderKeyOf = (userId: string, secret: string = readerKeySecret()): string =>
+  createHmac('sha256', secret).update(`account:${userId}`).digest('hex');
+
+/** L'empreinte d'une clé de session de lecture rangée sans consentement (#10771). */
+export const engagementSessionKeyOf = (sessionId: string, secret: string = readerKeySecret()): string =>
+  createHmac('sha256', secret).update(`engagement-session:${sessionId}`).digest('hex');

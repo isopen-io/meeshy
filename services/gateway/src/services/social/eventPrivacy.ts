@@ -27,7 +27,13 @@ export const DIGITAL_CONSENT_AGE = 15;
  * C'est la passerelle qui fait foi pour ACCORDER ; le client fait foi pour
  * REFUSER — la règle la plus restrictive s'applique toujours. Un refus ne
  * laisse que la MESURE d'audience du comptage (#10483 : compteurs de vues et
- * d'impressions, ligne `PostImpression` dépouillée de ses colonnes de mesure).
+ * d'impressions).
+ *
+ * Les lignes de COMPTAGE (`PostImpression`, `PostEngagement`) suivent la même
+ * situation (#10771–#10773) : hors `granted`, elles ne gardent que ce que la
+ * déduplication exige — l'empreinte HMAC du compte (`readerKey`, jamais
+ * `userId`), le post, la source d'une impression, les compteurs déjà crédités
+ * d'une session, 8 jours ; ni rang, ni visibilité, ni plateforme, ni durée.
  */
 
 export type AnalyticsStanding = 'granted' | 'not_granted' | 'denied' | 'anonymous';

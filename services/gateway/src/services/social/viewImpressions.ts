@@ -1,7 +1,9 @@
 import type { PrismaClient } from '@meeshy/shared/prisma/client';
 import type { SocialEvent } from '../../routes/social/eventsSchemas';
 import { incrementPostCounters } from '../posts/postCounters';
-import { POST_IMPRESSION_RETENTION_MS } from './contentEvents';
+import { POST_IMPRESSION_RETENTION_MS, UNCONSENTED_READING_RETENTION_MS } from './contentEvents';
+import type { AnalyticsStanding } from './eventPrivacy';
+import { accountReaderKeyOf } from '../posts/readerKey';
 
 /**
  * Une VUE implique une IMPRESSION (#10732) : on ne voit pas ce qui n'a pas été
@@ -30,6 +32,12 @@ type ImpressionEvent = Extract<SocialEvent, { type: 'impression' }>;
 
 type ViewImpressionsPrisma = Pick<PrismaClient, 'postImpression' | '$runCommandRaw'>;
 
+/**
+ * Le même lecteur sous ses DEUX formes (#10773) : nominative (impression
+ * consentie, lignes antérieures) et empreinte (impression sans consentement).
+ */
+const ofReader = (userId: string) => ({ OR: [{ userId }, { readerKey: accountReaderKeyOf(userId) }] });
+
 /** Les impressions que des vues portent, sous LEUR clé — à écrire comme toute impression à clé. */
 export const impressionsCarriedByViews = (views: readonly ViewEvent[]): ImpressionEvent[] =>
   views.flatMap((view) => view.impression
@@ -51,22 +59,29 @@ export const impressionsCarriedByViews = (views: readonly ViewEvent[]): Impressi
  */
 export async function impressionImpliedByView(
   prisma: ViewImpressionsPrisma,
-  params: { readonly postId: string; readonly userId: string; readonly surface?: string },
+  params: { readonly postId: string; readonly userId: string; readonly surface?: string; readonly standing?: AnalyticsStanding },
 ): Promise<boolean> {
   const shown = await prisma.postImpression.findFirst({
-    where: { postId: params.postId, userId: params.userId },
+    where: { postId: params.postId, ...ofReader(params.userId) },
     select: { id: true },
   });
   if (shown) return false;
-  await prisma.postImpression.createMany({
-    data: [{
+  // Sans consentement d'analyse, la forme réduite de `impressionRowOf` (#10773).
+  const row = params.standing === 'granted'
+    ? {
       postId: params.postId,
       userId: params.userId,
       source: VIEW_IMPLIED_IMPRESSION_SOURCE,
       ...(params.surface ? { surface: params.surface } : {}),
       expiresAt: new Date(Date.now() + POST_IMPRESSION_RETENTION_MS),
-    }],
-  });
+    }
+    : {
+      postId: params.postId,
+      readerKey: accountReaderKeyOf(params.userId),
+      source: VIEW_IMPLIED_IMPRESSION_SOURCE,
+      expiresAt: new Date(Date.now() + UNCONSENTED_READING_RETENTION_MS),
+    };
+  await prisma.postImpression.createMany({ data: [row] });
   await incrementPostCounters(prisma, [params.postId], { impressionCount: { increment: 1 } });
   return true;
 }
@@ -84,7 +99,7 @@ export async function consumeImpliedImpressions(
 ): Promise<ReadonlyMap<string, number>> {
   if (postIds.length === 0) return new Map();
   const implied: readonly { id: string; postId: string }[] = await prisma.postImpression.findMany({
-    where: { userId, postId: { in: [...new Set(postIds)] }, source: VIEW_IMPLIED_IMPRESSION_SOURCE },
+    where: { ...ofReader(userId), postId: { in: [...new Set(postIds)] }, source: VIEW_IMPLIED_IMPRESSION_SOURCE },
     select: { id: true, postId: true },
   });
   if (implied.length === 0) return new Map();
