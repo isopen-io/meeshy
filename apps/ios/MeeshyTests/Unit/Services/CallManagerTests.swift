@@ -5931,6 +5931,30 @@ final class LocalTeardownServerReconciliationTests: XCTestCase {
         )
     }
 
+    /// Longue durée : le compteur de réarmements par appel ne se vidait jamais — une entrée par appel à fin
+    /// incertaine, pour toute la vie du processus. Il est borné, et le plafond par appel tient toujours.
+    func test_endReconciliationArmings_isBoundedAcrossManyCalls() {
+        let manager = CallManager.shared
+        let savedPending = manager.pendingEndReconciliations
+        let savedArmings = manager.endReconciliationArmings
+        defer {
+            manager.pendingEndReconciliations = savedPending
+            manager.endReconciliationArmings = savedArmings
+        }
+        manager.endReconciliationArmings.removeAll()
+        let total = CallManager.endReconciliationArmingCapacity + 6
+        for index in 0..<total {
+            manager.armPendingEndReconciliation(callId: "bounded-call-\(index)", reason: nil)
+        }
+        XCTAssertEqual(manager.endReconciliationArmings.count, CallManager.endReconciliationArmingCapacity)
+        XCTAssertNil(manager.endReconciliationArmings["bounded-call-0"], "le plus ancien appel est évincé")
+
+        for _ in 0..<(CallManager.maxEndReconciliationArmings + 2) {
+            manager.armPendingEndReconciliation(callId: "capped-call", reason: nil)
+        }
+        XCTAssertEqual(manager.endReconciliationArmings["capped-call"], CallManager.maxEndReconciliationArmings)
+    }
+
     /// #9111 — failCall informe toujours la passerelle, mais par la politique de
     /// reprise : `call:end` pour un appel jamais décroché, `call:leave` ou rien
     /// pour un appel décroché (`CallResumePolicyTests`).

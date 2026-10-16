@@ -756,9 +756,11 @@ final class CallManager: ObservableObject {
     /// Combien de fois la fin de chaque appel a été armée pour un rejeu. Sans plafond, une fin que la passerelle
     /// refuse (appel déjà clos, `NOT_A_PARTICIPANT`) se réarmait à CHAQUE reconnexion pour toute la vie du
     /// processus : deux émissions par reconnexion, jusqu'à vider le quota de fins d'appel — et refuser le
-    /// raccroché d'un vrai appel.
-    var endReconciliationArmings: [String: Int] = [:]
+    /// raccroché d'un vrai appel. Borné en FIFO : un compteur par appel jamais purgé grossissait à chaque appel
+    /// à fin incertaine, pour toute la vie du processus (iPad laissé ouvert des jours).
+    var endReconciliationArmings = BoundedFIFOMap<String, Int>(capacity: CallManager.endReconciliationArmingCapacity)
     static let maxEndReconciliationArmings = 4
+    static let endReconciliationArmingCapacity = 64
 
     #if canImport(WebRTC)
     /// Paresseux (#7955) : `PiPCallController` monte une vue AVKit à sa naissance.
