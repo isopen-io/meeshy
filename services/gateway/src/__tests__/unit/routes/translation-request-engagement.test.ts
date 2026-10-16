@@ -16,6 +16,12 @@ jest.mock('../../../services/engagement/EngagementService', () => ({
 }));
 
 const mockGetConsentStatus = jest.fn<any>();
+// Le verdict d'accès a ses propres témoins (attachmentReadVerdict) ; ici l'appelant est membre.
+jest.mock('../../../services/attachments/attachmentReadVerdict', () => ({
+  ...jest.requireActual<object>('../../../services/attachments/attachmentReadVerdict'),
+  resolveAttachmentReadVerdict: async () => 'allow',
+}));
+
 jest.mock('../../../services/ConsentValidationService', () => ({
   ConsentValidationService: jest.fn().mockImplementation(() => ({ getConsentStatus: mockGetConsentStatus })),
 }));

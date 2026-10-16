@@ -25,9 +25,10 @@ jest.mock('../../../../services/ConsentValidationService', () => ({
   })),
 }));
 
+let mockVerdict: 'allow' | 'forbidden' = 'allow';
 jest.mock('../../../../services/attachments/attachmentReadVerdict', () => ({
   ...jest.requireActual<object>('../../../../services/attachments/attachmentReadVerdict'),
-  resolveAttachmentReadVerdict: async () => 'allow',
+  resolveAttachmentReadVerdict: async () => mockVerdict,
 }));
 
 import { registerTranslationRoutes } from '../../../../routes/attachments/translation';
@@ -158,5 +159,30 @@ describe('POST /attachments/:id/translate — même garde (#10726)', () => {
     expect(res.statusCode).toBe(200);
     expect(services.translateService.translate).toHaveBeenCalledTimes(1);
     await app.close();
+  });
+});
+
+describe('un appelant sans accès n’apprend rien du chiffrement (#10726)', () => {
+  it.each([
+    ['translate', translate],
+    ['transcribe', transcribe],
+  ] as const)('%s : le refus d’accès précède la lecture du mode, même réponse en clair ou chiffré', async (_route, call) => {
+    mockVerdict = 'forbidden';
+    try {
+      const bodies: string[] = [];
+      for (const carrier of [carrierOf('e2ee', 'e2ee', true), carrierOf(null, null, false)]) {
+        const { app, services } = await buildApp(carrier);
+        const res = await call(app);
+        expect(res.statusCode).toBe(403);
+        expect(String(res.json().code ?? '')).not.toMatch(/^E2EE_/);
+        expect(services.translateService.translate).not.toHaveBeenCalled();
+        expect(services.translationService.transcribeAttachment).not.toHaveBeenCalled();
+        bodies.push(res.body);
+        await app.close();
+      }
+      expect(bodies[0]).toBe(bodies[1]);
+    } finally {
+      mockVerdict = 'allow';
+    }
   });
 });

@@ -189,10 +189,16 @@ export async function registerTranslationRoutes(
           return sendNotFound(reply, 'ATTACHMENT_NOT_FOUND', { message: 'Attachment not found' });
         }
 
+        const verdict = await resolveAttachmentReadVerdict(request, attachment, prisma);
+        if (verdict !== 'allow') {
+          return denyAttachmentRead(reply, verdict, 'Attachment not found');
+        }
+
         const mimeType = attachment.mimeType || '';
 
         // #10726 — un vocal que la passerelle ne lit pas (bout en bout) se
-        // traduit sur l'appareil, jamais ici.
+        // traduit sur l'appareil, jamais ici. Après le verdict d'accès, pour
+        // qu'un étranger n'apprenne rien du mode de chiffrement.
         if (!(await serverReadsAttachmentCarrier(prisma, attachment.messageId))) {
           return sendForbidden(reply, 'E2EE_NOT_TRANSLATABLE', { code: 'E2EE_NOT_TRANSLATABLE', message: 'End-to-end encrypted attachments cannot be translated by the server' });
         }
