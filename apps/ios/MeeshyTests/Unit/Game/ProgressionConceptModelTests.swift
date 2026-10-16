@@ -310,7 +310,7 @@ final class ProgressionConceptModelTests: XCTestCase {
         XCTAssertEqual(ProgressionConceptModel.concept(for: .flame(.braise, days: 7)), .flame)
         XCTAssertEqual(ProgressionConceptModel.concept(for: .meesh(number: 10, edition: .silver)), .meesh)
         XCTAssertEqual(ProgressionConceptModel.concept(for: .leagueUp(.jade)), .league)
-        XCTAssertEqual(ProgressionConceptModel.concept(for: .achievement), .succes)
+        XCTAssertEqual(ProgressionConceptModel.concept(for: .achievement(rarity: nil)), .succes)
     }
 
     // MARK: - Les gestes vivent dans les fiches

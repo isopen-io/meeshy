@@ -29,6 +29,8 @@ struct GameMissionsView: View {
     let onReroll: (String) -> Void
     let onClaim: () -> Void
     var haptics: GameHapticsProviding = GameHaptics.shared
+    /// La fin de mission se photographie (#10816) : présent, une mission personnelle accomplie propose sa carte.
+    var onPhotoMission: ((GameBlock.Mission) -> Void)?
 
     private var theme: ThemeManager { ThemeManager.shared }
     private var missions: GameBlock.Missions { game.missions }
@@ -92,7 +94,8 @@ struct GameMissionsView: View {
                         pending: false,
                         online: online,
                         affordable: rerollSpend.affordable,
-                        onReroll: onReroll
+                        onReroll: onReroll,
+                        onPhoto: onPhotoMission
                     )
                 }
                 if rerollShown() {
@@ -144,6 +147,7 @@ private struct GameMissionRow: View {
     /// Les Meeshes en poche couvrent le prix d'un changement (`GameMissions.rerollPrice`).
     let affordable: Bool
     let onReroll: (String) -> Void
+    var onPhoto: ((GameBlock.Mission) -> Void)?
 
     private var theme: ThemeManager { ThemeManager.shared }
     private var done: Bool { mission.isCompleted }
@@ -207,6 +211,9 @@ private struct GameMissionRow: View {
                 if canReroll && !done && (phase?.allowsAction ?? true) {
                     rerollButton
                 }
+                if personal && done, let onPhoto {
+                    photoButton(onPhoto)
+                }
             }
             if let line = GameCopy.missionTimerLine(phase, window: personal ? window : nil) {
                 Label {
@@ -241,6 +248,23 @@ private struct GameMissionRow: View {
             defaultValue: "\(current) / \(target) · \(reward) · +\(GameCopy.formatCount(mission.glory)) Gloire",
             bundle: .main
         )
+    }
+
+    /// La mission personnelle accomplie se photographie (#10816) : sa carte grave le pseudo gratté.
+    private func photoButton(_ onPhoto: @escaping (GameBlock.Mission) -> Void) -> some View {
+        Button {
+            HapticFeedback.light()
+            onPhoto(mission)
+        } label: {
+            Image(systemName: "camera.fill")
+                .font(MeeshyFont.relative(MeeshyFont.smallSize, weight: .semibold))
+                .foregroundColor(MeeshyColors.brandPrimary)
+                .frame(width: 44, height: 44)
+                .background(Circle().fill(MeeshyColors.brandPrimary.opacity(0.12)))
+        }
+        .buttonStyle(.plain)
+        .accessibilityLabel("\(String(localized: "game.photo.offer.start", defaultValue: "Photographier", bundle: .main)) — \(title)")
+        .accessibilityIdentifier("game.mission.photo")
     }
 
     private var rerollButton: some View {

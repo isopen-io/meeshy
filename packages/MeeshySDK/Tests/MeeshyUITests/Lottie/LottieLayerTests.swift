@@ -57,6 +57,11 @@ final class LottieLayerTests: XCTestCase {
         XCTAssertEqual(LottieLayerPlayback.mode(animates: true, granted: true, systemReduceMotion: false, userForcedReduceMotion: false, sceneActive: true, onScreen: true), .playing(.fromProgress(0, toProgress: 1, loopMode: .loop)))
     }
 
+    func test_playback_aFilmThatDoesNotLoop_playsOnce_andKeepsEveryOtherRule() {
+        XCTAssertEqual(LottieLayerPlayback.mode(animates: true, granted: true, systemReduceMotion: false, userForcedReduceMotion: false, sceneActive: true, onScreen: true, loops: false), .playing(.fromProgress(0, toProgress: 1, loopMode: .playOnce)), "#10816 : une gravure s'explique une fois, puis se tait")
+        XCTAssertEqual(LottieLayerPlayback.mode(animates: true, granted: true, systemReduceMotion: true, userForcedReduceMotion: false, sceneActive: true, onScreen: true, loops: false), .paused(at: .progress(0)))
+    }
+
     func test_engine_isCoreAnimation() {
         XCTAssertEqual(LottieLayerPlayback.configuration.renderingEngine, .coreAnimation)
     }
