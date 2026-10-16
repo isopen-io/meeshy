@@ -1102,7 +1102,7 @@ struct ConversationListView: View {
         AnyView(
         mainContentZStack
             .adaptiveOnChange(of: isScrollingDown) { wasHidden, isHidden in
-                if !wasHidden && isHidden { showSearchOverlay = false }
+                if !wasHidden && isHidden { isSearching = false } // la bande suit le focus (#10841)
             }
             .onAppear {
                 withAnimation(.easeOut(duration: 0.25)) { isScrollingDown = false }

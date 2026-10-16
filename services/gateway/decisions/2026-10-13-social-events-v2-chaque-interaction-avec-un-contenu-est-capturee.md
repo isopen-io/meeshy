@@ -257,7 +257,7 @@ Règle du porteur : « tant que l'information arrive, on compte ; on améliorera
 
 Témoins : `src/__tests__/unit/routes/social/events-counting-never-loses.test.ts`.
 
-## Conservation du brut de lecture (décision porteur du 2026-10-16)
+### Conservation du brut de lecture (décision porteur du 2026-10-16)
 
 Décision : https://github.com/isopen-io/meeshy/issues/10510#issuecomment-6222116672 — elle supplante, pour ces deux tables seulement, les « 90 j » écrits plus haut.
 
