@@ -690,7 +690,7 @@ public final class APIClient: APIClientProviding, @unchecked Sendable {
                         break
                     }
                     logger.warning("Retryable status \(lastStatusCode) on \(method) \(resolved.logLabel), retry \(attempt)/\(Self.maxRetryAttempts) after \(String(format: "%.1f", delay))s")
-                    try await Task.sleep(nanoseconds: UInt64(delay * 1_000_000_000))
+                    try await Task.sleep(for: .seconds(delay))
                     guard !Task.isCancelled else { throw CancellationError() }
                 }
 

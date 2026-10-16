@@ -360,7 +360,7 @@ public final class UserPreferencesManager: ObservableObject {
         pendingCategories.insert(category)
         persistPendingCategories()
         syncTasks[category] = Task {
-            try? await Task.sleep(nanoseconds: 1_000_000_000)
+            try? await Task.sleep(for: .seconds(1))
             guard !Task.isCancelled else { return }
             await syncCategoryToBackend(category)
         }

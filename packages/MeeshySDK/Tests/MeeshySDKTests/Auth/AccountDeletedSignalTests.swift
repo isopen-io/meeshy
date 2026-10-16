@@ -24,6 +24,12 @@ final class AccountDeletedSignalTests: XCTestCase {
     private var originalAuthToken: String?
     private var originalSavedAccounts: [SavedAccount] = []
 
+    /// #10854 — les sockets de cette suite s'arment contre le loopback, dont
+    /// le sondage tombe sous le sceau réseau : aucune ne joint un serveur.
+    override func invokeTest() {
+        SocketConfig.$loopbackOrigin.withValue(URL(string: "http://127.0.0.1:9")) { super.invokeTest() }
+    }
+
     override func setUp() async throws {
         try await super.setUp()
         AccountDeletedStubProtocol.reset()

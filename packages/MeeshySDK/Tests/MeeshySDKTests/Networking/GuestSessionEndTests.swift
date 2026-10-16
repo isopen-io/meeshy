@@ -8,6 +8,12 @@ import XCTest
 /// refus passe sans bruit.
 final class GuestSessionEndTests: XCTestCase {
 
+    /// #10854 — les sockets de cette suite s'arment contre le loopback, dont
+    /// le sondage tombe sous le sceau réseau : aucune ne joint un serveur.
+    override func invokeTest() {
+        SocketConfig.$loopbackOrigin.withValue(URL(string: "http://127.0.0.1:9")) { super.invokeTest() }
+    }
+
     private final class Received: @unchecked Sendable {
         var notifications: [Notification] = []
     }

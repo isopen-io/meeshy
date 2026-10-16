@@ -2833,8 +2833,7 @@ public actor OfflineQueue {
                 // Brief jitter to avoid a thundering-herd on the gateway when
                 // draining a large backlog — kept short so the user sees their
                 // messages confirmed quickly (was 100–500 ms, now 50–150 ms).
-                let jitter = UInt64(Double.random(in: 50...150) * 1_000_000)
-                try? await Task.sleep(nanoseconds: jitter)
+                try? await Task.sleep(for: .milliseconds(Int.random(in: 50...150)))
             }
             if let serverId = await retrySend(item) {
                 successIds.append(item.id)
@@ -2903,7 +2902,7 @@ public actor OfflineQueue {
                     // Brief delay to let the socket handshake complete before
                     // draining the outbox — avoids sending on an unhealthy pipe
                     // while keeping the UX snappy (was 2 000 ms, now 200 ms).
-                    try? await Task.sleep(nanoseconds: 200_000_000)
+                    try? await Task.sleep(for: .milliseconds(200))
                     await self.retryAll()
                 }
             }
@@ -2929,7 +2928,7 @@ public actor OfflineQueue {
                 Task {
                     // Même délai que la voie socket : laisser la pile réseau
                     // se stabiliser avant de réémettre.
-                    try? await Task.sleep(nanoseconds: 200_000_000)
+                    try? await Task.sleep(for: .milliseconds(200))
                     await self.retryAll()
                 }
             }

@@ -44,7 +44,7 @@ public actor ConversationDraftManager {
         let debounce = self.debounce
         let draft = ConversationDraft(conversationId: conversationId, text: text, updatedAt: Date())
         pendingTasks[conversationId] = Task { [cache, logger] in
-            try? await Task.sleep(nanoseconds: UInt64(debounce * 1_000_000_000))
+            try? await Task.sleep(for: .seconds(debounce))
             guard !Task.isCancelled else { return }
             do {
                 try await cache.drafts.save([draft], for: conversationId)
