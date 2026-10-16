@@ -143,6 +143,9 @@ export type FeedPost = {
    * telle quelle (D-14). */
   readonly translations?: unknown;
   readonly author?: FeedAuthor | null;
+  /** L'EMOJI D'UNE HUMEUR (`Post.moodEmoji`, type STATUS) — servi par le
+   * détail (`postScalarSelect`) ; lu par la page de l'humeur (#10813). */
+  readonly moodEmoji?: string | null;
   readonly media?: readonly FeedMedia[] | null;
   /**
    * LE DOCUMENT CANVAS de la publication (#6514) — laissé `unknown` : ce
