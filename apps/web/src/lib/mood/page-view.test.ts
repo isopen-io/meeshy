@@ -58,6 +58,16 @@ describe('moodPageView', () => {
     expect(moodPageView({ postId: 'p-1', post: detail({ id: 'p-1', type: 'POST' }), corpus: undefined, languages: ['fr'] })?.isMood).toBe(false);
   });
 
+  test('le corpus sans nom d’affichage nomme l’auteur par son prénom et son nom', () => {
+    const view = moodPageView({
+      postId: 'st-1',
+      post: undefined,
+      corpus: { ...corpus, author: { id: 'u-ines', username: 'ines', firstName: 'Inès', lastName: 'Baraka' } },
+      languages: ['fr'],
+    });
+    expect(view?.authorName).toBe('Inès Baraka');
+  });
+
   test('sans nom d’affichage, le pseudo nomme l’auteur', () => {
     const view = moodPageView({ postId: 'st-1', post: detail({ author: { id: 'u-nour', username: 'nour', displayName: null } }), corpus: undefined, languages: ['fr'] });
     expect(view?.authorName).toBe('nour');

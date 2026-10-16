@@ -132,7 +132,7 @@ function MoodPlaceholder({ postId, gone, language }: { readonly postId: string; 
       data-mood-state={gone ? 'gone' : 'loading'}
       aria-busy={gone ? undefined : true}
       aria-label={moodComposeText(language, gone ? 'mood.page.gone' : 'mood.page.loading')}
-      className="h-app fixed inset-x-0 top-0 grid place-items-center px-6 text-center"
+      className="h-app fixed inset-x-0 top-0 grid place-items-center px-6 pt-safe text-center"
       style={{ backgroundColor: 'var(--color-ios-surface)', color: 'var(--color-ios-ink)' }}
     >
       {gone ? (

@@ -62,7 +62,7 @@ function fromCorpus(post: StatusMoodPost): Source | null {
     type: 'STATUS',
     authorId,
     username: post.author?.username ?? null,
-    displayName: post.author?.displayName ?? null,
+    displayName: post.author?.displayName ?? fullName(post.author?.firstName, post.author?.lastName),
     avatar: post.author?.avatar ?? null,
     emoji: post.moodEmoji ?? '',
     content: post.content ?? '',
@@ -70,6 +70,11 @@ function fromCorpus(post: StatusMoodPost): Source | null {
     translations: post.translations,
   };
 }
+
+const fullName = (first: string | undefined, last: string | undefined): string | null => {
+  const joined = [first, last].filter((part) => part !== undefined && part.trim() !== '').join(' ');
+  return joined === '' ? null : joined;
+};
 
 export function moodPageView(params: {
   readonly postId: string;

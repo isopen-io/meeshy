@@ -44,14 +44,15 @@ const START_PX = 28;
 /** Où la croissance s'arrête : la moitié de la largeur de la vue. */
 const END_RATIO = 0.5;
 
-const easeOut = (t: number): number => 1 - (1 - t) * (1 - t);
+/** Une croissance douce au départ : l'instance reste lisible avant de s'étendre et de s'effacer. */
+const easeIn = (t: number): number => t * t;
 
 export function rainPose(particle: RainParticle, now: number, viewport: RainViewport): RainPose | null {
   const elapsed = now - particle.bornAt;
   if (elapsed >= particle.lifeMs) return null;
   const t = Math.max(0, elapsed / particle.lifeMs);
   const endPx = Math.max(START_PX, viewport.width * END_RATIO);
-  const growth = easeOut(t);
+  const growth = easeIn(t);
   const sizePx = START_PX + (endPx - START_PX) * growth;
   const opacity = Math.max(0, 1 - growth);
   const wave = Math.sin(2 * Math.PI * particle.swayHz * (elapsed / 1000) + particle.phase);
