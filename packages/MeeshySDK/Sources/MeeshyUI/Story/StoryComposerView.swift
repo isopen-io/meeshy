@@ -117,6 +117,9 @@ public struct StoryComposerView: View {
     /// doit pas re-semer le brouillon déjà publié. Posé UNIQUEMENT si le
     /// hand-off a été accepté (cf. `publishAllSlides`).
     @State var didHandOffPublish = false
+    /// L'auteur a DEMANDÉ la sortie (croix, sortie relayée par le meuble) : le démontage qui suit n'est pas
+    /// une interruption (`teardownKeepsDraft`).
+    @State var didRequestExit = false
 
     // MARK: - Canvas viewport (pinch-to-zoom + drag-to-pan when zoomed)
 
@@ -545,7 +548,19 @@ public struct StoryComposerView: View {
             publishTrigger?.armExit { handleDismiss() }
             publishTrigger?.report(canPublish: canPublish)
         }
-        .onDisappear { publishTrigger?.disarm() }
+        .onDisappear {
+            publishTrigger?.disarm()
+            // Démonté SANS sortie demandée — une fenêtre d'iPad passée de compact à regular reconstruit
+            // toute la hiérarchie, et la racine qui portait le composer avec. Le brouillon s'écrit (même gate
+            // que les autres interruptions) et s'annonce : la racine suivante rouvre le composer dessus.
+            // Un recouvrement par l'une de ses propres feuilles plein écran passe aussi par ici ; il est
+            // inoffensif — l'écriture suit le gate, et le retour du composer efface l'annonce.
+            guard Self.teardownKeepsDraft(didRequestExit: didRequestExit, didHandOffPublish: didHandOffPublish),
+                  mayOverwriteStoredDraft else { return }
+            autoSaveDraftOnInterruption()
+            NotificationCenter.default.post(name: .storyComposerTornDown, object: viewModel.draftId)
+        }
+        .onAppear { NotificationCenter.default.post(name: .storyComposerAppeared, object: viewModel.draftId) }
         // Le gate du bouton se RELAIE, il ne se recopie pas : le meuble ne voit
         // ni `selectedAudioId` ni les traits de dessin, et conclurait « rien à
         // publier » sur une story « fond + musique » parfaitement publiable.

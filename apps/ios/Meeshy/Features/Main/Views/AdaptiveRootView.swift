@@ -20,6 +20,33 @@ final class RootNavigationHandoff {
 
     func record(_ routes: [Route]) { self.routes = routes }
 
+    // MARK: Le composer de story démonté avec sa racine
+
+    /// Le brouillon d'un composer DÉMONTÉ sans sortie demandée (`.storyComposerTornDown`) : la racine qui
+    /// le portait part, son `StoryViewModel` et sa couverture avec. La racine suivante le rouvre dessus.
+    private(set) var tornDownComposerDraftId: String?
+    /// La racine actuellement montée — seule elle peut rouvrir le composer : un rappel de la racine sortante
+    /// qui tournerait encore le consommerait dans une hiérarchie morte.
+    private var mountedRoot: UUID?
+
+    func rootAppeared(_ root: UUID) { mountedRoot = root }
+
+    func rootDisappeared(_ root: UUID) {
+        if mountedRoot == root { mountedRoot = nil }
+    }
+
+    func noteComposerTornDown(draftId: String) { tornDownComposerDraftId = draftId }
+
+    /// Le composer est de nouveau à l'écran (retour d'une de ses feuilles plein écran) : l'annonce ne vaut plus.
+    func composerAppeared() { tornDownComposerDraftId = nil }
+
+    /// Le brouillon à rouvrir, une fois — pour la racine montée qui ne présente pas déjà le composer.
+    func takeComposerToReopen(presentingComposer: Bool, root: UUID) -> String? {
+        guard !presentingComposer, mountedRoot == root, let draftId = tornDownComposerDraftId else { return nil }
+        tornDownComposerDraftId = nil
+        return draftId
+    }
+
     /// La pile que l'iPhone reçoit de l'iPad : le fil, puis la route qui le recouvre (`iPadRightColumn`).
     nonisolated static func stack(conversation: Conversation?, panelRoute: Route?) -> [Route] {
         (conversation.map { [Route.conversation($0)] } ?? []) + (panelRoute.map { [$0] } ?? [])
@@ -75,6 +102,14 @@ struct AdaptiveRootView: View {
             }
         }
         .environment(\.rootNavigationHandoff, navigationHandoff)
+        // Le composer de story démonté avec sa racine (compact ↔ regular) : son brouillon est tenu ICI, au-dessus
+        // des deux racines, jusqu'à ce que la suivante le rouvre (`RootIntentRoutingLayer`).
+        .onReceive(NotificationCenter.default.publisher(for: .storyComposerTornDown)) { note in
+            if let draftId = note.object as? String { navigationHandoff.noteComposerTornDown(draftId: draftId) }
+        }
+        .onReceive(NotificationCenter.default.publisher(for: .storyComposerAppeared)) { _ in
+            navigationHandoff.composerAppeared()
+        }
         // Force-init the shared `ConversationAudioCoordinator` on root mount.
         // Without this, the engine is built lazily on the first audio tap,
         // which means the `@Published var isPlaying` published edge that

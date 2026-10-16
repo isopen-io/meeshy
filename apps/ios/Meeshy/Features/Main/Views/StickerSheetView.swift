@@ -50,8 +50,8 @@ struct StickerSheetView: View {
             Spacer(minLength: 0)
         }
         .frame(maxWidth: .infinity)
-        .padding(.horizontal, 24)
-        .padding(.bottom, 24)
+        .padding(.horizontal, MeeshySpacing.xxl)
+        .padding(.bottom, MeeshySpacing.xxl)
         .task {
             if let favoriteEntry { isFavorite = StickerUsageStore.shared.isFavorite(favoriteEntry) }
             await syncLibraryState()

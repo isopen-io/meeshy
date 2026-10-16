@@ -20,7 +20,9 @@ final class MoodReplySender: MoodReplySending {
     private let injectedPersistence: OptimisticMessagePersisting?
     private let currentUserId: @MainActor () -> String?
     private let injectedPrepareReplyQueue: (@MainActor () async -> Void)?
-    private let composingLanguages: @Sendable () async -> [String]
+    // `@concurrent` écrit : sans isolement, sous NonisolatedNonsendingByDefault ce type devient
+    // `nonisolated(nonsending)`, dont les métadonnées manquent au runtime d'iOS 16 et 17 (#8182).
+    private let composingLanguages: @concurrent @Sendable () async -> [String]
 
     private var messagePersistence: OptimisticMessagePersisting {
         injectedPersistence ?? DependencyContainer.shared.messagePersistence
@@ -40,7 +42,7 @@ final class MoodReplySender: MoodReplySending {
         messagePersistence: OptimisticMessagePersisting? = nil,
         currentUserId: @escaping @MainActor () -> String? = { AuthManager.shared.currentUser?.id },
         prepareReplyQueue: (@MainActor () async -> Void)? = nil,
-        composingLanguages: @escaping @Sendable () async -> [String] = {
+        composingLanguages: @escaping @concurrent @Sendable () async -> [String] = {
             await MainActor.run { AuthManager.shared.currentUser?.preferredContentLanguages ?? [] }
         }
     ) {

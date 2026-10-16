@@ -21,6 +21,8 @@ public enum GameRoutes {
 public enum GameErrorCode: String, CaseIterable, Sendable, Hashable {
     case insufficientPoints = "INSUFFICIENT_POINTS"
     case insufficientMeeshes = "INSUFFICIENT_MEESHES"
+    /// La pièce ferait entrer dans une réserve du trésor que le rang n'ouvre pas encore (#10848).
+    case treasuryLocked = "TREASURY_LOCKED"
     case freezeAtMaximum = "FREEZE_AT_MAXIMUM"
     case relightNotAllowed = "RELIGHT_NOT_ALLOWED"
     case missionNotFound = "MISSION_NOT_FOUND"

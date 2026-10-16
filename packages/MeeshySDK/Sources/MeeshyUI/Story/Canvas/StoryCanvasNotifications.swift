@@ -6,6 +6,12 @@ import Foundation
 /// Previously defined in StoryCanvasReaderView.swift (legacy); moved here after that file
 /// was deleted in the Phase A4 reader migration.
 public extension Notification.Name {
+    /// Le composer a été DÉMONTÉ sans sortie demandée (reconstruction de la hiérarchie : fenêtre d'iPad
+    /// passée de compact à regular) ; son brouillon est écrit. `object` : l'id du brouillon (`String`), sur
+    /// lequel la racine suivante le rouvre.
+    static let storyComposerTornDown = Notification.Name("storyComposerTornDown")
+    /// Le composer est (de nouveau) à l'écran : une annonce de démontage en attente ne vaut plus.
+    static let storyComposerAppeared = Notification.Name("storyComposerAppeared")
     /// Posted by the composer to mute all canvas audio (e.g., while the audio picker is open).
     static let storyComposerMuteCanvas = Notification.Name("storyComposerMuteCanvas")
     /// Posted by the composer to restore canvas audio after muting.

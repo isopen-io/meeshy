@@ -275,6 +275,35 @@ describe('une caméra refusée n’est pas une impasse', () => {
     expect(host.querySelector('[role="alert"]')?.textContent).toContain('Autorise');
   });
 
+  /* #10833 — dans la coque Android, deux refus et Android ne redemande plus :
+     seule la fiche de l'app rend la caméra, comme aux composeurs (#8882, #10824). */
+  test('dans la coque, la caméra refusée offre d’ouvrir les réglages de l’app', async () => {
+    const opened: string[] = [];
+    const { env: e, log } = env({ camera: { ok: false, reason: 'denied' }, openSettings: () => void opened.push('openApp') });
+    const host = await open(rank, e, log);
+    await click(choose(host, 'selfie'));
+    await settle();
+    const settings = by(host, 'data-photo-camera-settings');
+    expect(settings?.textContent).toBe('Ouvrir les réglages');
+    await click(settings);
+    expect(opened).toEqual(['openApp']);
+  });
+
+  test('sans porte vers les réglages (navigateur), ou pour une caméra absente, aucun bouton', async () => {
+    for (const { reason, openSettings } of [
+      { reason: 'denied', openSettings: null },
+      { reason: 'unsupported', openSettings: () => undefined },
+      { reason: 'unavailable', openSettings: () => undefined },
+    ] as const) {
+      const { env: e, log } = env({ camera: { ok: false, reason }, openSettings });
+      const host = await open(rank, e, log);
+      await click(choose(host, 'selfie'));
+      await settle();
+      expect(by(host, 'data-photo-camera-settings')).toBeNull();
+      unmountAll();
+    }
+  });
+
   test('la carte seule reste possible après un refus', async () => {
     const { env: e, log } = refused('denied');
     const host = await open(rank, e, log);

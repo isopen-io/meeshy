@@ -89,8 +89,8 @@ struct MoodSpotlightView: View {
             .accessibilityIdentifier("mood.spotlight.close")
             Spacer()
         }
-        .padding(.horizontal, 16)
-        .padding(.top, 4)
+        .padding(.horizontal, MeeshySpacing.lg)
+        .padding(.top, MeeshySpacing.xs)
     }
 
     // MARK: - Center

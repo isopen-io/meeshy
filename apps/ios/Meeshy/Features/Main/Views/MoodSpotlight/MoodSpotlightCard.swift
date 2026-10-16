@@ -29,7 +29,7 @@ struct MoodSpotlightCard: View, Equatable {
                     .shadow(color: Color(hex: entry.avatarColor).opacity(0.6), radius: 24)
                 Text(entry.moodEmoji)
                     .font(MeeshyFont.emoji(34))
-                    .padding(6)
+                    .padding(MeeshySpacing.xsPlus)
                     .background(.ultraThinMaterial, in: Circle())
                     .offset(x: 8, y: 8)
             }
@@ -49,7 +49,7 @@ struct MoodSpotlightCard: View, Equatable {
                     .foregroundStyle(.white)
                     .multilineTextAlignment(.center)
                     .padding(.horizontal, 22)
-                    .padding(.vertical, 16)
+                    .padding(.vertical, MeeshySpacing.lg)
                     .background(
                         RoundedRectangle(cornerRadius: 26, style: .continuous)
                             .fill(.ultraThinMaterial)
@@ -93,9 +93,9 @@ struct MoodSpotlightReplyBar: View {
             .onSubmit { if canSend { onSend() } }
             .foregroundStyle(.white)
             .tint(.white)
-            .padding(.horizontal, 16)
-            .padding(.vertical, 12)
-            .background(.ultraThinMaterial, in: RoundedRectangle(cornerRadius: 22, style: .continuous))
+            .padding(.horizontal, MeeshySpacing.lg)
+            .padding(.vertical, MeeshySpacing.md)
+            .background(.ultraThinMaterial, in: RoundedRectangle(cornerRadius: MeeshyRadius.xlPlus, style: .continuous))
             .accessibilityIdentifier("mood.spotlight.reply.field")
 
             Button(action: onSend) {
@@ -116,7 +116,7 @@ struct MoodSpotlightReplyBar: View {
             .accessibilityLabel(String(localized: "mood.spotlight.reply.send", defaultValue: "Envoyer la réponse", bundle: .main))
             .accessibilityIdentifier("mood.spotlight.reply.send")
         }
-        .padding(.horizontal, 16)
-        .padding(.vertical, 10)
+        .padding(.horizontal, MeeshySpacing.lg)
+        .padding(.vertical, MeeshySpacing.smPlus)
     }
 }

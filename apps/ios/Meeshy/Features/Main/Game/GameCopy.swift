@@ -494,6 +494,8 @@ enum GameCopy {
             String(localized: "game.error.insufficient_points", defaultValue: "Pas assez de points à convertir pour frapper une Meesh.", bundle: .main)
         case .insufficientMeeshes:
             String(localized: "game.error.insufficient_meeshes", defaultValue: "Il te faut une Meesh de plus pour ça.", bundle: .main)
+        case .treasuryLocked:
+            String(localized: "game.error.treasury_locked", defaultValue: "Cette Meesh entrerait dans une réserve que ton rang n’ouvre pas encore.", bundle: .main)
         case .freezeAtMaximum:
             String(localized: "game.error.freeze_at_maximum", defaultValue: "Tu as déjà deux gels en réserve : c’est le maximum.", bundle: .main)
         case .relightNotAllowed:

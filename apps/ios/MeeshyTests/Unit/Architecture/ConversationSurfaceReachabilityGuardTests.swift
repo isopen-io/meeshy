@@ -1041,10 +1041,23 @@ final class ViewOnceTextConsumedOnExitGuardTests: XCTestCase {
     /// verrouillage d'écran, c'est-à-dire au cas le plus probable.
     func test_lesDeuxSorties_consommentToutesLesDeux() throws {
         let hôte = try source(at: "Features/Main/Views/ConversationView.swift")
+        // La sortie par NAVIGATION passe depuis #10818 par `leaveConversationByNavigation()` (qui consomme,
+        // puis rattrape la lecture quittée depuis le Résumé) ; l'arrière-plan appelle le geste directement.
+        // Les deux portes consomment toujours — c'est ce que la garde tient.
         XCTAssertEqual(
-            hôte.components(separatedBy: "consumeOpenedViewOnceOnExit()").count - 1, 2,
-            "La navigation (`onDisappear`) ET l'arrière-plan (`scenePhase`) doivent consommer."
+            hôte.components(separatedBy: "consumeOpenedViewOnceOnExit()").count - 1, 1,
+            "L'arrière-plan (`scenePhase`) consomme directement."
         )
+        XCTAssertEqual(
+            hôte.components(separatedBy: "leaveConversationByNavigation()").count - 1, 1,
+            "La navigation (`onDisappear`) sort par `leaveConversationByNavigation()`."
+        )
+        let sortie = try source(at: "Features/Main/Views/ConversationView+ViewOnceExit.swift")
+        guard let porte = sortie.range(of: "func leaveConversationByNavigation() {") else {
+            return XCTFail("Impossible de localiser la sortie par navigation.")
+        }
+        XCTAssertTrue(sortie[porte.upperBound...].prefix(120).contains("consumeOpenedViewOnceOnExit()"),
+                      "La sortie par navigation consomme avant tout le reste.")
 
         guard let fond = hôte.range(of: "if phase == .background {") else {
             return XCTFail("Impossible de localiser la sortie par arrière-plan.")

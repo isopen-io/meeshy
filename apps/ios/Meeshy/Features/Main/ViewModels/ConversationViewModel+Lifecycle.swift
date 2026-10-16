@@ -172,6 +172,7 @@ extension ConversationViewModel {
     func start() {
         guard !hasStarted else { return }
         hasStarted = true
+        ExplicitUnreadMarks.clear(conversationId) // rouvrir, c'est relire : la marque d'un « non lu » ne vaut plus
         // Declare this conversation as currently visible so the sync engine
         // forces its `unreadCount` to 0 on every server broadcast (the user
         // IS reading it) and excludes it from the cross-conversation

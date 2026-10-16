@@ -38,7 +38,7 @@ extension BubbleStandardLayout {
                 .offset(x: 20, y: 12)
         }
         .opacity(blurController.fogOpacity)
-        .clipShape(RoundedRectangle(cornerRadius: 18))
+        .clipShape(RoundedRectangle(cornerRadius: MeeshyRadius.lgPlus))
         .allowsHitTesting(false)
     }
 
