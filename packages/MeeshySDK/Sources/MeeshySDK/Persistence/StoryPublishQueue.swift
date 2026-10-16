@@ -608,8 +608,7 @@ public actor StoryPublishQueue {
             // Backoff between consecutive retries within the same processing
             // pass — small jitter to avoid thundering-herd on reconnect.
             if attemptedInSweep > 0 {
-                let jitter = UInt64(Double.random(in: 200...700) * 1_000_000)
-                try? await Task.sleep(nanoseconds: jitter)
+                try? await Task.sleep(for: .milliseconds(Int.random(in: 200...700)))
             }
             attemptedInSweep += 1
 
@@ -769,7 +768,7 @@ public actor StoryPublishQueue {
                 guard let self else { return }
                 Task {
                     // Stabilization delay matches OfflineQueue's pattern.
-                    try? await Task.sleep(nanoseconds: 2_000_000_000)
+                    try? await Task.sleep(for: .seconds(2))
                     await self.processNext()
                 }
             }
