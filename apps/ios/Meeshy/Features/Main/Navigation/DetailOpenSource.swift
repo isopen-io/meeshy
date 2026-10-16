@@ -55,10 +55,16 @@ final class DetailOpenSources: DetailOpenSourceProviding {
         self.clock = clock
     }
 
+    /// Les marques jamais consommées (un tap dont le détail ne s'ouvre pas) restaient pour toute la vie du processus :
+    /// chaque nouvelle marque purge celles qui ont passé `markLifetime`, déjà illisibles par `consumeMarkedEntry`.
     func mark(_ postId: String, entry: ContentEntry) {
         guard !postId.isEmpty else { return }
-        marks[postId] = (entry, clock())
+        let now = clock()
+        marks = marks.filter { now.timeIntervalSince($0.value.at) <= Self.markLifetime }
+        marks[postId] = (entry, now)
     }
+
+    var markCount: Int { marks.count }
 
     func consumeMarkedEntry(for postId: String) -> ContentEntry? {
         defer { marks[postId] = nil }
