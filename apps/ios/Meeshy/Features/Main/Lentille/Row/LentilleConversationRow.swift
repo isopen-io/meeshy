@@ -119,11 +119,20 @@ struct LentilleConversationRow: View {
 
             VStack(alignment: .leading, spacing: MeeshySpacing.xxs) {
                 if let magnification {
-                    LentilleMagnifiedTopLine(
+                    // Chips ENTIÈRES (#10835) : la ligne prend sa largeur
+                    // idéale et, quand la colonne est trop étroite (Split
+                    // View, Slide Over, barre latérale de l'iPad), elle défile
+                    // au lieu de comprimer — puis couper — ses pastilles.
+                    let topLine = LentilleMagnifiedTopLine(
                         conversation: conversation,
                         magnification: magnification,
                         isDark: isDark
                     )
+                    .fixedSize(horizontal: true, vertical: false)
+                    ViewThatFits(in: .horizontal) {
+                        topLine
+                        ScrollView(.horizontal, showsIndicators: false) { topLine }
+                    }
                 }
                 headerLine
                 line2
@@ -347,20 +356,29 @@ struct LentilleConversationRow: View {
             // c'est actuellement, avec la chip du nombre d'utilisateurs qui
             // doit être actionnable » (directive 2026-08-23).
             if let magnification {
-                // Modes de lecture coupés (#6482) ⇒ pas d'encoche : elle
-                // proposerait un mode que l'ouverture ignorerait.
-                if LentilleFeatureFlag.isReadingModesEnabled {
-                    LentilleModePill(
-                        conversation: conversation,
-                        isAnonymous: magnification.isAnonymous,
-                        isDark: isDark
-                    )
+                let chips = HStack(spacing: MeeshySpacing.xs) {
+                    // Modes de lecture coupés (#6482) ⇒ pas d'encoche : elle
+                    // proposerait un mode que l'ouverture ignorerait.
+                    if LentilleFeatureFlag.isReadingModesEnabled {
+                        LentilleModePill(
+                            conversation: conversation,
+                            isAnonymous: magnification.isAnonymous,
+                            isDark: isDark
+                        )
+                    }
+                    if conversation.type != .direct {
+                        LentilleMemberCountChip(
+                            conversation: conversation,
+                            onShowParticipants: magnification.onShowParticipants
+                        )
+                    }
                 }
-                if conversation.type != .direct {
-                    LentilleMemberCountChip(
-                        conversation: conversation,
-                        onShowParticipants: magnification.onShowParticipants
-                    )
+                .fixedSize(horizontal: true, vertical: false)
+                // Même loi que la ligne du haut (#10835) : entières, ou qui
+                // défilent — la date complète, figée à droite, garde sa place.
+                ViewThatFits(in: .horizontal) {
+                    chips
+                    ScrollView(.horizontal, showsIndicators: false) { chips }
                 }
             }
 
