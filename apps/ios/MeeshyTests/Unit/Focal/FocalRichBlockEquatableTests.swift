@@ -110,6 +110,66 @@ final class FocalRichBlockEquatableTests: XCTestCase {
         XCTAssertNotEqual(lhs, rhs)
     }
 
+    // MARK: - FocalAudioBlock — enrichissement en direct (#10731)
+    //
+    // Le bloc lit la transcription et les pistes traduites de CHAQUE vocal
+    // dans `allAudioItems`. Une transcription Whisper qui arrive par le
+    // socket ne change ni `content` ni les identifiants : un portillon qui ne
+    // compare que les ids laisse la rangée sur « Transcrire » jusqu'à la
+    // réouverture de la conversation.
+
+    private func audioAttachment(id: String) -> MeeshyMessageAttachment {
+        MeeshyMessageAttachment(id: id, fileName: "a", originalName: "a", mimeType: "audio/mpeg", fileSize: 1)
+    }
+
+    private func audioItem(
+        id: String,
+        transcription: MessageTranscription? = nil,
+        translatedAudios: [MessageTranslatedAudio] = []
+    ) -> ConversationViewModel.AudioItem {
+        let message = MeeshyMessage(
+            id: "m1", conversationId: "c1", senderId: "u1", content: "",
+            originalLanguage: "fr", createdAt: Date(timeIntervalSince1970: 0),
+            updatedAt: Date(timeIntervalSince1970: 0)
+        )
+        return ConversationViewModel.AudioItem(
+            id: id, attachment: audioAttachment(id: id), message: message,
+            transcription: transcription, translatedAudios: translatedAudios
+        )
+    }
+
+    private func audioBlock(content: BubbleContent, items: [ConversationViewModel.AudioItem]) -> FocalAudioBlock {
+        FocalAudioBlock(content: content, accentHex: "#31B6BA", isDark: false, allAudioItems: items, translatedAudios: [], mentionDisplayNames: [:], conversationName: "Conv")
+    }
+
+    func test_focalAudioBlock_equatable_transcriptionArrivesForOwnAudio_isNotEqual() {
+        let content = makeContent(attachments: .audio([audioAttachment(id: "au1")]))
+        let before = audioBlock(content: content, items: [audioItem(id: "au1")])
+        let after = audioBlock(content: content, items: [audioItem(
+            id: "au1",
+            transcription: MessageTranscription(attachmentId: "au1", text: "Bonjour, ceci est un message vocal de test", language: "fr")
+        )])
+        XCTAssertNotEqual(before, after, "la transcription reçue par le socket doit franchir le portillon et s'afficher sans rouvrir la conversation")
+    }
+
+    func test_focalAudioBlock_equatable_translatedTrackArrivesForOwnAudio_isNotEqual() {
+        let content = makeContent(attachments: .audio([audioAttachment(id: "au1")]))
+        let track = MessageTranslatedAudio(id: "t1", attachmentId: "au1", targetLanguage: "en", url: "https://x/en.mp3", transcription: "Hello", durationMs: 7000, format: "mp3", cloned: false, quality: 0.9, ttsModel: "mms")
+        let before = audioBlock(content: content, items: [audioItem(id: "au1")])
+        let after = audioBlock(content: content, items: [audioItem(id: "au1", translatedAudios: [track])])
+        XCTAssertNotEqual(before, after)
+    }
+
+    func test_focalAudioBlock_equatable_enrichmentOfAnotherMessageAudio_isEqual() {
+        let content = makeContent(attachments: .audio([audioAttachment(id: "au1")]))
+        let before = audioBlock(content: content, items: [audioItem(id: "au1"), audioItem(id: "other")])
+        let after = audioBlock(content: content, items: [audioItem(id: "au1"), audioItem(
+            id: "other",
+            transcription: MessageTranscription(attachmentId: "other", text: "Salut", language: "fr")
+        )])
+        XCTAssertEqual(before, after, "l'enrichissement d'un vocal d'un AUTRE message ne redessine pas cette rangée")
+    }
+
     // MARK: - FocalQuotedReplyView
 
     func test_focalQuotedReplyView_equatable_sameReply_isEqual() {

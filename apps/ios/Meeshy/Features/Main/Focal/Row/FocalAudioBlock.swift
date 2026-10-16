@@ -172,6 +172,7 @@ struct FocalAudioBlock: View, Equatable {
             && lhs.accentHex == rhs.accentHex
             && lhs.isDark == rhs.isDark
             && lhs.allAudioItems.map(\.id) == rhs.allAudioItems.map(\.id)
+            && lhs.ownedAudioEnrichment == rhs.ownedAudioEnrichment
             && lhs.translatedAudios == rhs.translatedAudios
             && lhs.mentionDisplayNames == rhs.mentionDisplayNames
             && lhs.conversationName == rhs.conversationName
@@ -190,6 +191,27 @@ struct FocalAudioBlock: View, Equatable {
     private var mode: FocalAudioMode { FocalAudioRouting.mode(for: content) }
     private var audios: [MessageAttachment] { FocalAudioRouting.audioAttachments(in: content) }
     private var visuals: [MessageAttachment] { FocalAudioRouting.visualAttachments(in: content) }
+
+    /// #10731 — ce que le bloc AFFICHE de chacun de SES vocaux : la
+    /// transcription et les pistes traduites qu'il lit dans `allAudioItems`.
+    /// Whisper et le TTS les enrichissent par le socket sans toucher ni
+    /// `content` ni les identifiants : comparés par id seul, la rangée
+    /// restait sur « Transcrire » jusqu'à la réouverture de la conversation.
+    /// Restreint aux pièces de CE message, comme `audioEnrichmentSignature`
+    /// de la bulle : l'enrichissement d'un autre vocal ne redessine rien ici.
+    private struct AudioEnrichment: Equatable {
+        let id: String
+        let transcription: MessageTranscription?
+        let translatedAudios: [MessageTranslatedAudio]
+    }
+
+    private var ownedAudioEnrichment: [AudioEnrichment] {
+        let owned = Set(audios.map(\.id))
+        guard !owned.isEmpty else { return [] }
+        return allAudioItems
+            .filter { owned.contains($0.id) }
+            .map { AudioEnrichment(id: $0.id, transcription: $0.transcription, translatedAudios: $0.translatedAudios) }
+    }
 
     private func audioItem(for attachmentId: String) -> ConversationViewModel.AudioItem? {
         allAudioItems.first { $0.id == attachmentId }
