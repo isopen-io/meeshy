@@ -5,6 +5,7 @@ import { resolveWireSenderId } from './messageEditedPayload';
 import { stickerFromMetadata } from '../services/stickers/messageSticker';
 import { servedQuotedMessage } from '../services/messaging/servedQuotedMessage';
 import { attachmentReplyToFromMetadata } from '../services/messaging/attachmentReplySnapshot';
+import { authorProfileDecor, type AuthorAccount } from '../services/appearance/authorProfileDecor';
 
 /**
  * Source UNIQUE de la charge utile `message:new`.
@@ -102,6 +103,8 @@ function buildSenderPayload(message: Message) {
       ?? (participant.type === 'anonymous' ? participant.username ?? participant.displayName : undefined),
     firstName: user?.firstName || '',
     lastName: user?.lastName || '',
+    // #10713 — le contour équipé de l'auteur, résolu au registre ; clé absente sans lui.
+    ...authorProfileDecor(user as AuthorAccount),
   };
 }
 

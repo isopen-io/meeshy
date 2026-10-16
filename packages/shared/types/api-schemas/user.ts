@@ -127,6 +127,32 @@ export const userSchema = {
 } as const;
 
 /**
+ * Le contour d'avatar ÉQUIPÉ d'un participant (#10713) — la forme servie par
+ * `/me` et le profil public (`ServedProfileDecor`, `types/profile-decor.ts`),
+ * réduite au contour : c'est lui que les listes et les bulles dessinent.
+ * Il vit ICI, au moyeu des schémas : la fiche de conversation ET l'auteur d'un
+ * message (`messageSchema.sender`) le déclarent, et `message.ts` ne peut pas
+ * importer `conversation.ts` (qui l'importe).
+ * ADDITIVE — absente pour un participant sans contour ou sans compte.
+ */
+export const participantProfileDecorSchema = {
+  type: 'object',
+  description: 'Equipped avatar ring served with the participant (#10713)',
+  properties: {
+    avatarRing: {
+      type: 'object',
+      nullable: true,
+      properties: {
+        pack: { type: 'string' },
+        item: { type: 'string' },
+        origin: { type: 'string' },
+        contract: { type: 'string', nullable: true },
+      },
+    },
+  },
+} as const;
+
+/**
  * Minimal user schema for lists and references
  */
 export const userMinimalSchema = {
