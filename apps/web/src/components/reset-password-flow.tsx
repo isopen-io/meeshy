@@ -1,6 +1,9 @@
 import { useEffect, useRef, useState, type FormEvent } from 'react';
 
 import { auth } from '@/lib/api/auth';
+import { translateRecovery } from '@/lib/i18n-account-recovery-catalog';
+import { translate } from '@/lib/i18n-catalog';
+import { currentInterfaceLanguage } from '@/lib/interface-language';
 import { useOnline } from '@/lib/net/online';
 import { isPasswordValid, PASSWORD_MIN } from '@/lib/signup-form';
 import { resolveResetPasswordOutcome, resolveResetTokenState } from '@/lib/view/auth-feedback';
@@ -40,6 +43,7 @@ const defaultDeps: ResetPasswordFlowDeps = {
 
 export function ResetPasswordFlow({ token, deps = defaultDeps }: { token: string | null; deps?: ResetPasswordFlowDeps }) {
   const online = useOnline();
+  const language = currentInterfaceLanguage();
 
   const [state, setState] = useState<ScreenState>(token === null ? 'invalid' : 'checking');
   const called = useRef(false);
@@ -95,7 +99,7 @@ export function ResetPasswordFlow({ token, deps = defaultDeps }: { token: string
       return;
     }
     if (outcome.kind === 'offline') {
-      setBanner('Pas de connexion. Vérifiez votre réseau et réessayez.');
+      setBanner(translate(language, 'verifyEmail.error.offline'));
       return;
     }
     setBanner(outcome.message);
@@ -103,7 +107,7 @@ export function ResetPasswordFlow({ token, deps = defaultDeps }: { token: string
 
   return (
     <AuthColumn>
-      <AuthColumnBar to="login" title="Nouveau mot de passe" />
+      <AuthColumnBar to="login" title={translateRecovery(language, 'recovery.reset.newPassword')} />
 
       {state === 'checking' ? (
         <div className="grid flex-1 place-items-center gap-4 px-8 text-center">
@@ -111,7 +115,7 @@ export function ResetPasswordFlow({ token, deps = defaultDeps }: { token: string
             <Glyph name="key" size={48} />
           </span>
           <p aria-busy="true" style={{ color: 'var(--color-ios-ink-2)' }}>
-            Vérification du lien…
+            {translate(language, 'verifyEmail.link.checking')}
           </p>
         </div>
       ) : null}
@@ -120,16 +124,16 @@ export function ResetPasswordFlow({ token, deps = defaultDeps }: { token: string
         <div className="grid flex-1 content-center gap-6 px-8 text-center">
           <Glyph name="warningCircle" size={48} className="mx-auto" style={{ color: 'var(--ios-error)' }} />
           <h2 className="text-screen font-bold" style={{ color: 'var(--color-ios-ink)' }}>
-            Lien invalide ou expiré
+            {translateRecovery(language, 'recovery.reset.invalid.title')}
           </h2>
-          <p style={{ color: 'var(--color-ios-ink-2)' }}>Demandez un nouveau lien pour choisir votre mot de passe.</p>
+          <p style={{ color: 'var(--color-ios-ink-2)' }}>{translateRecovery(language, 'recovery.reset.invalid.text')}</p>
           <Link
             to="forgotPassword"
             replace
             className="grid place-items-center rounded-field font-bold text-ios-on-brand"
             style={{ minHeight: 52, background: RESET_TINT }}
           >
-            Demander un nouveau lien
+            {translateRecovery(language, 'recovery.reset.invalid.action')}
           </Link>
         </div>
       ) : null}
@@ -137,7 +141,7 @@ export function ResetPasswordFlow({ token, deps = defaultDeps }: { token: string
       {state === 'offline-check' ? (
         <div className="grid flex-1 content-center gap-4 px-8 text-center">
           <p role="alert" style={{ color: 'var(--ios-error)' }}>
-            Pas de connexion. Vérifiez votre réseau et réessayez.
+            {translate(language, 'verifyEmail.error.offline')}
           </p>
           <button
             type="button"
@@ -145,7 +149,7 @@ export function ResetPasswordFlow({ token, deps = defaultDeps }: { token: string
             className="mx-auto grid place-items-center rounded-field px-6 font-semibold text-ios-on-brand"
             style={{ minHeight: 44, background: RESET_TINT }}
           >
-            Réessayer
+            {translate(language, 'common.retry')}
           </button>
         </div>
       ) : null}
@@ -156,16 +160,16 @@ export function ResetPasswordFlow({ token, deps = defaultDeps }: { token: string
             <Glyph name="checks" size={48} />
           </span>
           <h2 className="text-screen font-bold" style={{ color: 'var(--color-ios-ink)' }}>
-            Mot de passe enregistré
+            {translateRecovery(language, 'recovery.reset.done.title')}
           </h2>
-          <p style={{ color: 'var(--color-ios-ink-2)' }}>Vous pouvez maintenant vous connecter avec votre nouveau mot de passe.</p>
+          <p style={{ color: 'var(--color-ios-ink-2)' }}>{translateRecovery(language, 'recovery.reset.done.text')}</p>
           <Link
             to="login"
             replace
             className="grid w-full place-items-center rounded-field px-8 font-bold text-ios-on-brand"
             style={{ minHeight: 52, background: RESET_TINT }}
           >
-            Se connecter
+            {translate(language, 'login.submit')}
           </Link>
         </div>
       ) : null}
@@ -173,16 +177,18 @@ export function ResetPasswordFlow({ token, deps = defaultDeps }: { token: string
       {state === 'form' ? (
         <form onSubmit={handleSubmit} className="flex flex-1 flex-col content-center justify-center gap-4 px-8" noValidate>
           <p className="text-center text-title" style={{ color: 'var(--color-ios-ink-2)' }}>
-            Choisissez un nouveau mot de passe.
+            {translateRecovery(language, 'recovery.reset.lead')}
           </p>
 
           <Field
             id="reset-password"
-            label="Nouveau mot de passe"
+            label={translateRecovery(language, 'recovery.reset.newPassword')}
             icon="lock"
             tint={RESET_TINT}
             focused={focused === 'password'}
-            error={password.length > 0 && !passwordOk ? `Mot de passe trop court (min ${PASSWORD_MIN} caractères)` : undefined}
+            error={
+              password.length > 0 && !passwordOk ? translateRecovery(language, 'recovery.reset.tooShort', { min: String(PASSWORD_MIN) }) : undefined
+            }
           >
             {({ id, describedBy }) => (
               <PasswordInput
@@ -200,11 +206,11 @@ export function ResetPasswordFlow({ token, deps = defaultDeps }: { token: string
 
           <Field
             id="reset-password-confirm"
-            label="Confirmer le mot de passe"
+            label={translateRecovery(language, 'recovery.reset.confirm')}
             icon="lock"
             tint={RESET_TINT}
             focused={focused === 'confirm'}
-            error={mismatch ? 'Les mots de passe ne correspondent pas' : undefined}
+            error={mismatch ? translateRecovery(language, 'recovery.reset.mismatch') : undefined}
           >
             {({ id, describedBy }) => (
               <PasswordInput
@@ -228,8 +234,8 @@ export function ResetPasswordFlow({ token, deps = defaultDeps }: { token: string
           <AuthSubmitButton
             disabled={!canSubmit}
             isSubmitting={submitting}
-            label="Enregistrer le mot de passe"
-            busyLabel="Enregistrement…"
+            label={translateRecovery(language, 'recovery.reset.submit')}
+            busyLabel={translateRecovery(language, 'recovery.reset.submit.busy')}
             background={RESET_TINT}
           />
         </form>

@@ -59,6 +59,9 @@ const deSignup = {
   'signup.legal.privacy': 'Datenschutzerklärung',
   'signup.haveAccount': 'Schon ein Konto?',
   'signup.signIn': 'Anmelden',
+  'signup.country.title': 'Land',
+  'signup.country.search': 'Land suchen',
+  'signup.country.none': 'Kein Land passt zu „{query}“.',
 };
 
 export default deSignup;

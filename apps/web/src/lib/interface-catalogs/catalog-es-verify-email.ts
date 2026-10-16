@@ -46,6 +46,10 @@ const esVerifyEmail = {
   'signInLink.switchAccount.failed': 'No se puede abrir esta otra cuenta en este momento. Tu sesión sigue abierta y el enlace se ha cerrado.',
   'signInLink.switchAccount.expired': 'Este enlace ha caducado: solicita uno nuevo. Tu sesión sigue abierta.',
   'signInLink.switchAccount.leave': 'Volver al inicio',
+  'emailSent.title': 'Correo enviado',
+  'emailSent.openLink': 'Abre el enlace enviado a {email}',
+  'emailSent.nothingReceived': '¿No has recibido nada?',
+  'emailSent.nothingReceived.text': 'Revisa tu carpeta de spam: el mensaje puede haber llegado allí.',
 };
 
 export default esVerifyEmail;

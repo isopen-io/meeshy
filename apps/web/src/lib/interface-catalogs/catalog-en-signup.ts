@@ -59,6 +59,9 @@ const enSignup = {
   'signup.legal.privacy': 'Privacy Policy',
   'signup.haveAccount': 'Already have an account?',
   'signup.signIn': 'Sign in',
+  'signup.country.title': 'Country',
+  'signup.country.search': 'Search for a country',
+  'signup.country.none': 'No country matches “{query}”.',
 };
 
 export default enSignup;

@@ -59,6 +59,9 @@ const arSignup = {
   'signup.legal.privacy': 'سياسة الخصوصية',
   'signup.haveAccount': 'لديك حساب بالفعل؟',
   'signup.signIn': 'تسجيل الدخول',
+  'signup.country.title': 'البلد',
+  'signup.country.search': 'ابحث عن بلد',
+  'signup.country.none': 'لا يوجد بلد يطابق «{query}».',
 };
 
 export default arSignup;

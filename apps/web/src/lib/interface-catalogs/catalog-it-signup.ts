@@ -59,6 +59,9 @@ const itSignup = {
   'signup.legal.privacy': 'Informativa sulla privacy',
   'signup.haveAccount': 'Hai già un account?',
   'signup.signIn': 'Accedi',
+  'signup.country.title': 'Paese',
+  'signup.country.search': 'Cerca un paese',
+  'signup.country.none': 'Nessun paese corrisponde a «{query}».',
 };
 
 export default itSignup;
