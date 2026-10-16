@@ -893,16 +893,10 @@ struct ConversationView: View {
 
                 await consumePendingHighlightMessage()
 
-                // Ouverture depuis le bouton Recherche de l'aperçu long-press :
-                // active directement la barre de recherche in-conversation.
-                if router.pendingOpenSearch {
-                    router.pendingOpenSearch = false
-                    try? await Task.sleep(for: .milliseconds(250))
-                    guard !Task.isCancelled else { return }
-                    withAnimation(.spring(response: 0.3, dampingFraction: 0.8)) {
-                        headerState.showSearch = true
-                    }
-                }
+                await consumePendingOpenSearch()
+            }
+            .adaptiveOnChange(of: router.pendingOpenSearch) { _, wanted in
+                if wanted { Task { await consumePendingOpenSearch() } }
             }
             // Tap de notification pour la conversation DÉJÀ à l'écran : `path`
             // reçoit le même id, la vue n'est pas recréée et `.task` ne rejoue

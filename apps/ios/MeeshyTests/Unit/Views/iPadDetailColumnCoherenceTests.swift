@@ -41,4 +41,36 @@ final class iPadDetailColumnCoherenceTests: XCTestCase {
         XCTAssertTrue(body.contains("router.pop()"), "le même retour que le bouton de l'en-tête — il referme la colonne iPad")
         XCTAssertTrue(body.contains("if anonymousSession != nil { dismiss() }"), "l'invité, présenté, se ferme")
     }
+
+    // MARK: - Écrans posés en racine du panneau : leur croix ferme le panneau
+
+    /// Une notification « nouvelle humeur » ouvre le projecteur dans le
+    /// panneau ; sa barre est masquée (pas de chevron de repli) et sa croix
+    /// appelait `dismiss()`, no-op là — l'écran ne se fermait plus.
+    func test_moodSpotlight_closesThroughThePanel() throws {
+        let code = AppSourceGuard.stripComments(try AppSourceGuard.unit(
+            "Meeshy/Features/Main/Views/MoodSpotlight/MoodSpotlightView.swift"))
+        XCTAssertTrue(code.contains("PanelBackAction"))
+        XCTAssertFalse(code.contains("HapticFeedback.light()\n                dismiss()"))
+    }
+
+    // MARK: - « Rechercher » sur la conversation déjà ouverte
+
+    /// Sur iPad la liste reste à côté : choisir « Rechercher » sur la
+    /// conversation ouverte ne recrée pas la vue, et le drapeau lu par le seul
+    /// `.task` initial restait levé — la recherche s'ouvrait dans la suivante.
+    func test_openSearch_isConsumedAlsoWhenTheConversationIsAlreadyOpen() throws {
+        let view = AppSourceGuard.stripComments(try AppSourceGuard.unit("Meeshy/Features/Main/Views/ConversationView.swift"))
+        XCTAssertTrue(view.contains(".adaptiveOnChange(of: router.pendingOpenSearch)"))
+        XCTAssertTrue(view.contains("await consumePendingOpenSearch()"))
+    }
+
+    // MARK: - Le compteur de signets se recale sur iPhone comme sur iPad
+
+    func test_iPhoneFeed_reconcilesTheBookmarkDelta_likeTheIPadFeed() throws {
+        let overlay = AppSourceGuard.stripComments(try AppSourceGuard.unit("Meeshy/Features/Main/Views/RootViewComponents.swift"))
+        XCTAssertTrue(overlay.contains(".onReceive(SocialSocketManager.shared.postBookmarked"),
+                      "sans ce recalage, le +1 optimiste s'ajoutait au compteur absolu du serveur")
+        XCTAssertTrue(overlay.contains("postBookmarkDelta[payload.postId] = nil"))
+    }
 }

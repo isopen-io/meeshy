@@ -228,6 +228,21 @@ extension ConversationView {
 
     // MARK: - Search Actions
 
+    /// Ouverture depuis le bouton Recherche de l'aperçu long-press : active la barre de recherche.
+    ///
+    /// Consommée à l'ouverture ET à chaud : sur iPad, la liste reste à côté de la conversation ouverte,
+    /// et choisir « Rechercher » sur CELLE-CI ne recrée pas la vue (même `.id`) — le drapeau, lu par le
+    /// seul `.task` initial, restait levé et ouvrait la recherche dans la conversation suivante.
+    func consumePendingOpenSearch() async {
+        guard router.pendingOpenSearch else { return }
+        router.pendingOpenSearch = false
+        try? await Task.sleep(for: .milliseconds(250))
+        guard !Task.isCancelled else { return }
+        withAnimation(.spring(response: 0.3, dampingFraction: 0.8)) {
+            headerState.showSearch = true
+        }
+    }
+
     func triggerBackendSearch() {
         Task { await viewModel.searchMessages(query: headerState.searchQuery) }
     }

@@ -868,6 +868,13 @@ struct ThemedFeedOverlay: View {
         // delta optimiste local (+1) restait empilé sur le compteur absolu qui
         // inclut déjà notre like : chaque like s'affichait EN DOUBLE (N+1 devenu
         // permanent jusqu'au refetch).
+        // Bookmark : même réconciliation que le fil iPad (`FeedView`). Le modèle a posé le `bookmarkCount`
+        // ABSOLU, qui compte déjà ce signet : garder le +1 optimiste affichait un de trop jusqu'au
+        // rechargement. Sans compteur (vieux gateway), le delta reste.
+        .onReceive(SocialSocketManager.shared.postBookmarked.receive(on: DispatchQueue.main)) { payload in
+            if payload.bookmarkCount != nil { postBookmarkDelta[payload.postId] = nil }
+            if payload.bookmarked { postBookmarkedIds.insert(payload.postId) } else { postBookmarkedIds.remove(payload.postId) }
+        }
         .onReceive(SocialSocketManager.shared.postLiked.receive(on: DispatchQueue.main)) { event in
             postLikeDelta[event.postId] = nil
             if event.userId == AuthManager.shared.currentUser?.id {
