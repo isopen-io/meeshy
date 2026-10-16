@@ -12,6 +12,8 @@ import MeeshySDK
 /// - boucle, moteur Core Animation ;
 /// - Réduire les animations ⇒ première image fixe ;
 /// - pause quand la couche quitte l'écran ou que l'app passe en arrière-plan, reprise au retour ;
+/// - au plus `LottieLiveBudget.maxLiveLayers` films jouent à la fois (#10815) : une couche
+///   sans place montre sa première image, et la reprend quand une place se libère ;
 /// - transparente aux touchers et muette pour VoiceOver : un décor ne change ni la cible
 ///   qu'il couvre ni ce que l'on lit.
 public struct LottieLayerView: View {
@@ -24,6 +26,7 @@ public struct LottieLayerView: View {
     @Environment(\.meeshyForceReduceMotion) private var userForcedReduceMotion
     @Environment(\.scenePhase) private var scenePhase
     @State private var onScreen = false
+    @StateObject private var slot = LottieLiveSlot()
 
     /// - Parameter contentMode: `.fill` pour un fond ou une bannière (le parent rogne), `.fit` pour un contour.
     public init(film: LottieFilmSource, animates: Bool = true, contentMode: ContentMode = .fit) {
@@ -37,6 +40,7 @@ public struct LottieLayerView: View {
             .configuration(LottieLayerPlayback.configuration)
             .playbackMode(LottieLayerPlayback.mode(
                 animates: animates,
+                granted: slot.live,
                 systemReduceMotion: systemReduceMotion,
                 userForcedReduceMotion: userForcedReduceMotion,
                 sceneActive: scenePhase == .active,
@@ -44,10 +48,23 @@ public struct LottieLayerView: View {
             ))
             .resizable()
             .aspectRatio(contentMode: contentMode)
-            .onAppear { onScreen = true }
-            .onDisappear { onScreen = false }
+            .onAppear {
+                onScreen = true
+                slot.wantsToPlay(mayPlay)
+            }
+            .onDisappear {
+                onScreen = false
+                slot.wantsToPlay(false)
+            }
+            .onChange(of: mayPlay) { playable in slot.wantsToPlay(onScreen && playable) }
             .allowsHitTesting(false)
             .accessibilityHidden(true)
+    }
+
+    /// Une couche à l'écran ne prend une place que si elle peut jouer : animée, sans
+    /// « Réduire les animations ». Une image fixe n'occupe jamais le budget.
+    private var mayPlay: Bool {
+        animates && !MeeshyMotion.shouldReduce(system: systemReduceMotion, userForced: userForcedReduceMotion)
     }
 }
 

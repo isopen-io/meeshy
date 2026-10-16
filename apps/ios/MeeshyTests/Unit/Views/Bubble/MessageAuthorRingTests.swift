@@ -5,7 +5,8 @@ import MeeshyUI
 
 /// #10713 — le contour d'avatar équipé de l'auteur se dessine sur son avatar dans le fil :
 /// en bulles (pied de la bulle), en Focal et en Script (en-tête d'identité), dans
-/// l'empreinte de l'avatar — rien ne grandit, et sa couche animée y reste une image fixe.
+/// l'empreinte de l'avatar — rien ne grandit, et sa couche animée y joue (#10815, sous le
+/// plafond des films vivants de `LottieLiveBudget`).
 @MainActor
 final class MessageAuthorRingTests: XCTestCase {
 
@@ -57,11 +58,29 @@ final class MessageAuthorRingTests: XCTestCase {
         XCTAssertTrue(rows.contains("senderRing: isMine ? nil : ProfileDecorResolver.ring(message.senderRing)"))
     }
 
-    /// Une liste en porte des dizaines : le contour de l'auteur ne joue jamais son film dans le fil.
-    func test_guard_threadNeverAnimatesTheAuthorRing() throws {
-        for path in ["Meeshy/Features/Main/Views/Bubble/BubbleFooter.swift", "Meeshy/Features/Main/Focal/Row/FocalIdentityHeader.swift"] {
+    /// Décision porteur 2026-10-16 (#10815) : tout décor animé s'anime partout, listes comprises.
+    /// Le plafond des films vivants (`LottieLiveBudget`) borne ce qui joue ; aucune surface ne
+    /// fige son décor d'elle-même.
+    func test_guard_noDecorSurfaceFreezesItsAnimatedLayer() throws {
+        let surfaces = [
+            "Meeshy/Features/Main/Views/Bubble/BubbleFooter.swift",
+            "Meeshy/Features/Main/Focal/Row/FocalIdentityHeader.swift",
+            "Meeshy/Features/Main/Views/ThemedConversationRow.swift",
+            "Meeshy/Features/Main/Lentille/Row/LentilleConversationRow.swift",
+            "Meeshy/Features/Main/Views/ParticipantsView.swift",
+            "Meeshy/Features/Main/Components/ConversationInfoSheet.swift",
+            "Meeshy/Features/Main/Views/ProfileDecorSheet.swift",
+        ]
+        for path in surfaces {
             let text = try source(path)
-            XCTAssertFalse(text.contains("animates: true"), path)
+            XCTAssertTrue(text.contains("avatarRing"), "\(path) pose un contour")
+            XCTAssertFalse(text.contains("animates: false"), "\(path) ne fige pas son décor (#10815)")
         }
+    }
+
+    /// Les vignettes des fonds du sélecteur d'apparence jouent leur couche, comme le fond lui-même.
+    func test_guard_appearanceThumbnailsMountTheirAnimatedLayer() throws {
+        let sheet = try source("Meeshy/Features/Main/Components/ConversationAppearanceSheet.swift")
+        XCTAssertTrue(sheet.contains("PackLottieLayer(ref: lottie, contentMode: .fill)"))
     }
 }
