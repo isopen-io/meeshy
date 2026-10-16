@@ -4,7 +4,6 @@ import { translateGame } from '@/lib/i18n-game-catalog';
 import { currentInterfaceLanguage, type InterfaceLanguage } from '@/lib/interface-language';
 
 import {
-  actionsLabel,
   daysLabel,
   formatCount,
   levelTierName,
@@ -80,8 +79,6 @@ const ACTION_KEYS: Readonly<Record<GuideAction, ActionKey>> = {
   'see-next-tier': 'game.guide.action.see_next_tier',
   'open-first-mission': 'game.guide.action.open_first_mission',
   'mint-or-climb': 'game.guide.action.mint_or_climb',
-  'regain-levels': 'game.guide.action.regain_levels',
-  'relight-badge': 'game.guide.action.relight_badge',
   'see-mint-preview': 'game.guide.action.see_mint_preview',
   'take-photo': 'game.guide.action.take_photo',
   'keep-or-spend': 'game.guide.action.keep_or_spend',
@@ -150,16 +147,6 @@ export function momentCopy(moment: GuideMoment, language: Language = currentInte
         means: translateGame(language, 'game.guide.moment.first_mint.means'),
         next: translateGame(language, 'game.guide.moment.first_mint.next'),
         short: translateGame(language, 'game.guide.moment.first_mint.short'),
-      });
-    }
-    case 'badge-extinguished': {
-      const { missingActions } = moment.data;
-      const actions = actionsLabel(missingActions, language);
-      return copy(moment.action, language, {
-        what: translateGame(language, 'game.guide.moment.badge_extinguished.what'),
-        means: translateGame(language, 'game.guide.moment.badge_extinguished.means'),
-        next: translateGame(language, 'game.guide.moment.badge_extinguished.next', { actions }),
-        short: translateGame(language, 'game.guide.moment.badge_extinguished.short', { actions }),
       });
     }
     case 'price-rises': {

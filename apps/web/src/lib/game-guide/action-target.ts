@@ -36,8 +36,6 @@ const TARGETS: Readonly<Record<GuideAction | GuideActionV2, GuideTarget>> = {
   'see-next-tier': fiche('level'),
   'open-first-mission': fiche('missions'),
   'mint-or-climb': fiche('meesh'),
-  'regain-levels': fiche('missions'),
-  'relight-badge': fiche('badges'),
   'see-mint-preview': fiche('meesh'),
   'take-photo': { kind: 'photo' },
   'keep-or-spend': fiche('meesh'),
