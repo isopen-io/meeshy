@@ -129,6 +129,10 @@ nonisolated struct SyncPillDockClaims: Equatable {
 /// l'observe ; les écrans ne font qu'y écrire.
 @MainActor
 final class SyncPillDock: ObservableObject {
+    // Une deinit synthétisée isolée au MainActor double-libère au démontage hors d'une tâche (iOS 26.1, #9694).
+    // Corps vide : aucun état isolé n'est touché.
+    nonisolated deinit {}
+
     static let shared = SyncPillDock()
 
     @Published private(set) var claims = SyncPillDockClaims()
