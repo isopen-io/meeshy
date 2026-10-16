@@ -63,6 +63,8 @@ function table(seed: Row[] = [], posts: PostRow[] = [{ id: POST, authorId: 'auth
   const rows: Row[] = seed.map((row) => ({ ...row }));
   let next = rows.length;
   const insert = (data: Row) => {
+    // `sessionId @unique` : une seconde ligne sous la même clé lève P2002, comme la base.
+    if (rows.some((existing) => existing.sessionId === data.sessionId)) throw Object.assign(new Error('P2002'), { code: 'P2002' });
     const row = { id: `row-${(next += 1)}`, createdAt: new Date(), ...withoutUndefined(data) };
     rows.push(row);
     return row;
@@ -284,5 +286,19 @@ describe('une session ne crédite qu’un post que le lecteur PEUT voir et qui n
       expect(rows).toEqual([]);
       expect(counters()).toEqual([]);
     }
+  });
+});
+
+describe('une clé de session connue ne donne aucune prise sur la session d’un AUTRE lecteur (revue adversariale #10771)', () => {
+  it.each(['granted', 'not_granted'] as const)('session de l’autre sous statut %s : sa ligne reste intacte, rien n’est crédité', async (standing) => {
+    const { rows, deps, counters } = table();
+    await recordEngagementBatch(deps as never, [session()], OTHER_READER, standing);
+    const before = JSON.stringify(rows);
+
+    const recorded = await recordEngagementBatch(deps as never, [session(MEASURE)], READER, standing);
+
+    expect(recorded).toBe(0);
+    expect(JSON.stringify(rows)).toBe(before);
+    expect(counters()).toHaveLength(1);
   });
 });

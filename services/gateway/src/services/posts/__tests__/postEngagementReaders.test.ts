@@ -28,8 +28,13 @@ const sources = (dir: string): string[] => readdirSync(dir).flatMap((name) => {
   return /\.ts$/.test(name) && !/\.test\.ts$/.test(name) ? [path] : [];
 });
 
+/**
+ * Retire les lignes de COMMENTAIRE seules (doc-comments, `//` en tête de
+ * ligne) — jamais un fragment de ligne : une chaîne `'**\/*.ts'` ou une URL
+ * `a//b` ne doit pas effacer l'accès qui la suit.
+ */
 const withoutComments = (text: string): string =>
-  text.replace(/\/\*[\s\S]*?\*\//g, '').replace(/(^|[^:'"`])\/\/.*$/gm, '$1');
+  text.split('\n').filter((line) => !/^\s*(\/\/|\/\*|\*)/.test(line)).join('\n');
 
 /** Les trois portes vers la collection : le délégué, la relation, la commande brute. */
 const TOUCHES_POST_ENGAGEMENT = /\bpostEngagements?\b|['"`]PostEngagement['"`]|\bengagements\s*:\s*(true|\{)/;
@@ -45,6 +50,8 @@ describe('garde O5 — la liste des fichiers qui touchent PostEngagement est fer
     expect(touches("prisma.$runCommandRaw({ aggregate: 'PostEngagement', pipeline: [] });")).toBe(true);
     expect(touches('/** Les sessions `PostEngagement` vivent 90 j. */\n// prisma.postEngagement')).toBe(false);
     expect(touches("import { creditPostEngagement } from './postEngagementCredits';")).toBe(false);
+    expect(touches("const glob = '**/*.ts'; await prisma.postEngagement.count();")).toBe(true);
+    expect(touches("const url = 'https://a//b'; await prisma.postEngagement.count();")).toBe(true);
   });
 
   it('seuls le comptage, l’export, l’effacement, le retrait du consentement, la rétention et les index la touchent', () => {
@@ -66,6 +73,25 @@ describe('garde O5 — la liste des fichiers qui touchent PostEngagement est fer
       'services/social/socialEventIndexes.ts',
       // Migration de rétention : pose `expiresAt` sur les lignes antérieures.
       'services/social/socialEventsRetentionMigration.ts',
+    ]);
+  });
+});
+
+describe('garde O5 — l’empreinte d’un compte ne se recalcule que là où le comptage et les droits l’exigent (#10774)', () => {
+  it('seuls le comptage, la déduplication, l’export et l’effacement appellent accountReaderKeyOf', () => {
+    const callers = sources(SRC)
+      .filter((path) => /\baccountReaderKeyOf\s*\(/.test(withoutComments(readFileSync(path, 'utf8'))))
+      .map((path) => path.slice(SRC.length + 1))
+      .sort();
+
+    // Un classement, une recommandation ou une analyse qui recalculerait
+    // l'empreinte relierait les lignes sans consentement à leur compte.
+    expect(callers).toEqual([
+      'routes/me/export-reading.ts',
+      'services/posts/postReach.ts',
+      'services/social/impressionRows.ts',
+      'services/social/readingTelemetryErasure.ts',
+      'services/social/viewImpressions.ts',
     ]);
   });
 });

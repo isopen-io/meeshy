@@ -96,8 +96,10 @@ describe('PostService.recordEngagementBatch — ingestion', () => {
     const n = await service.recordEngagementBatch([mkSession()], 'u1', 'granted');
     expect(n).toBe(1);
     expect(prisma.postEngagement.upsert).toHaveBeenCalledTimes(1);
+    // La clé de session vient du client : la ligne n'est la sienne que sous SON identité.
     expect(upsertArg().where).toEqual({
       sessionId: '11111111-1111-1111-1111-111111111111',
+      userId: 'u1',
     });
   });
 

@@ -277,10 +277,10 @@ async function readableEngagementTarget(
   deps: PostReachDeps,
   postId: string,
   userId: string,
-  visibilityFilter: Prisma.PostWhereInput,
+  audienceOf: () => Promise<Prisma.PostWhereInput>,
 ): Promise<{ readonly id: string; readonly authorId: string } | null> {
   const select = { id: true, authorId: true, type: true, expiresAt: true } as const;
-  const visible = await deps.prisma.post.findFirst({ where: { id: postId, deletedAt: NOT_DELETED, ...visibilityFilter }, select });
+  const visible = await deps.prisma.post.findFirst({ where: { id: postId, deletedAt: NOT_DELETED, ...(await audienceOf()) }, select });
   if (visible) return visible;
   const referenced = await deps.prisma.post.findFirst({ where: { id: postId, deletedAt: NOT_DELETED }, select });
   if (!referenced) return null;
@@ -342,16 +342,18 @@ export async function recordEngagementBatch(
 ): Promise<number> {
   const { prisma } = deps;
   const capped = sessions.slice(0, 50);
-  // Le MÊME filtre d'audience que `recordView`, résolu une fois pour le lot :
-  // une session sur un post que le lecteur ne peut pas voir ne crédite rien et
-  // n'écrit rien — sinon un client gonflerait les compteurs d'un post privé et
-  // apprendrait son existence.
-  const visibilityFilter = await deps.visibilityFilter(userId);
+  // Le MÊME filtre d'audience que `recordView`, résolu au plus une fois par lot,
+  // à la première session (un lot vide n'en coûte aucune) : une session sur un
+  // post que le lecteur ne peut pas voir ne crédite rien et n'écrit rien —
+  // sinon un client gonflerait les compteurs d'un post privé et apprendrait
+  // son existence.
+  let visibilityFilter: Promise<Prisma.PostWhereInput> | undefined;
+  const audienceOf = () => (visibilityFilter ??= deps.visibilityFilter(userId));
   let recorded = 0;
 
   for (const s of capped) {
     try {
-      const post = await readableEngagementTarget(deps, s.postId, userId, visibilityFilter);
+      const post = await readableEngagementTarget(deps, s.postId, userId, audienceOf);
       if (!post) continue; // skip-and-continue: supprimé, hors audience ou inconnu — même porte
 
       const dwellMs = Math.max(0, Math.min(300_000, Math.round(s.dwellMs)));
@@ -375,11 +377,17 @@ export async function recordEngagementBatch(
 
       const receivedAt = new Date();
       const reducedKey = engagementSessionKeyOf(s.sessionId);
+      const readerKey = accountReaderKeyOf(userId);
+      // La clé de session vient du client : la ligne n'est la sienne que sous
+      // SON identité. Celle d'un autre lecteur n'est ni lue, ni mise à jour —
+      // l'écriture qui suit lève sur l'unicité, et la session ne compte pas.
+      const ownRaw = { sessionId: s.sessionId, userId };
+      const ownReduced = { sessionId: reducedKey, readerKey };
       const before = await prisma.postEngagement.findUnique({
-        where: { sessionId: s.sessionId },
+        where: ownRaw,
         select: STORED_ENGAGEMENT_SELECT,
       }) ?? await prisma.postEngagement.findUnique({
-        where: { sessionId: reducedKey },
+        where: ownReduced,
         select: STORED_ENGAGEMENT_SELECT,
       });
       const storedReduced = before !== null && isReducedRow(before);
@@ -409,7 +417,7 @@ export async function recordEngagementBatch(
           watchSamples: session.watchSamples as Prisma.InputJsonValue,
         };
         await prisma.postEngagement.upsert({
-          where: { sessionId: s.sessionId },
+          where: ownRaw,
           update: data,
           // Conservation du brut : 90 j (#10510, O7) — posée à la création, jamais prolongée par un rejeu.
           create: { sessionId: s.sessionId, ...data, createdAt: receivedAt, expiresAt: new Date(Date.now() + POST_ENGAGEMENT_RETENTION_MS) },
@@ -421,7 +429,7 @@ export async function recordEngagementBatch(
           data: {
             ...MEASURE_UNSET,
             sessionId: reducedKey,
-            readerKey: accountReaderKeyOf(userId),
+            readerKey,
             ...creditsOfIncrements(credited),
             expiresAt: earliest(before.expiresAt, new Date(before.createdAt.getTime() + UNCONSENTED_READING_RETENTION_MS)),
           },
@@ -429,12 +437,12 @@ export async function recordEngagementBatch(
       } else {
         const credits = creditsOfIncrements(credited);
         await prisma.postEngagement.upsert({
-          where: { sessionId: reducedKey },
+          where: ownReduced,
           update: credits,
           create: {
             sessionId: reducedKey,
             postId: s.postId,
-            readerKey: accountReaderKeyOf(userId),
+            readerKey,
             ...credits,
             createdAt: receivedAt,
             expiresAt: new Date(receivedAt.getTime() + UNCONSENTED_READING_RETENTION_MS),
