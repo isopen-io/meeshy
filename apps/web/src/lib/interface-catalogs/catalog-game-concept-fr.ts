@@ -387,6 +387,19 @@ const fr = {
   'game.progression.loading': 'Progression en cours de chargement',
   'game.progression.next_badge': 'Encore {missing} avant le palier {goal}',
   'game.progression.scale_complete': 'Échelle complète',
+  'game.mascot.minted': 'Tchak ! Une Meesh toute neuve. Tu en as {balance}.',
+  'game.mascot.level_up': 'Niveau {level} ! On fête ça.',
+  'game.mascot.achievement': 'Succès obtenu : {title} !',
+  'game.mascot.can_mint.one': 'Tes points sont prêts : on frappe une Meesh pour {count} point ?',
+  'game.mascot.can_mint.other': 'Tes points sont prêts : on frappe une Meesh pour {count} points ?',
+  'game.mascot.first_step': 'Salut, je suis Mee ! Envoie ton premier message et je compte tes points.',
+  'game.mascot.streak.one': '{count} jour d’affilée, continue comme ça !',
+  'game.mascot.streak.other': '{count} jours d’affilée, continue comme ça !',
+  'game.mascot.meesh_missing.one': 'Encore {count} point à convertir et je frappe ta prochaine Meesh.',
+  'game.mascot.meesh_missing.other': 'Encore {count} points à convertir et je frappe ta prochaine Meesh.',
+  'game.mascot.level_missing.one': 'Encore {count} point avant le niveau {level}.',
+  'game.mascot.level_missing.other': 'Encore {count} points avant le niveau {level}.',
+  'game.mascot.top_level': 'Tu es au sommet. Bravo !',
 } as const;
 
 export default fr;

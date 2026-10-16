@@ -14,6 +14,8 @@
  *   · `renderingMode(.template)` devient un masque CSS côté consommateur, ce
  *     module ne fait que nommer le fichier gabarit qui le nourrit.
  */
+import { translate } from './i18n-catalog';
+import type { InterfaceLanguage } from './interface-language';
 
 /**
  * Le logo in-app — projection de `MeeshyLogo.imageset` (copie octet pour
@@ -55,10 +57,14 @@ export const BRAND_CREDIT_LINK = {
  * CE QUE LE LIEN FAIT, dit au lecteur d'écran À LA SUITE du texte visible
  * (#10096). Le nom accessible COMMENCE par le crédit lu (WCAG 2.5.3, le libellé
  * dans le nom : « by services.ceo » dicté à la commande vocale l'active), puis
- * annonce la sortie de page. Les pages qui portent ce pied sont en français
- * (institutionnelles et accès) — la phrase l'est aussi.
+ * annonce la sortie de page — dans la langue d'interface (#10827), au
+ * catalogue (`brand.credit.hint`, pendant web de
+ * `brand.signature.credit.accessibilityHint` d'iOS : « dans un nouvel onglet »
+ * plutôt que « dans le navigateur », le visiteur y est déjà).
  */
-export const BRAND_CREDIT_HINT = ' — ouvre la plateforme services.ceo dans un nouvel onglet';
+export function brandCreditHint(language: InterfaceLanguage): string {
+  return ` — ${translate(language, 'brand.credit.hint')}`;
+}
 
 /**
  * LES TROIS TRAITS DE LA MARQUE, dans le repère 1024 de
@@ -88,7 +94,7 @@ export function brandVersionLine(version: string): string {
 /*
  * CE MODULE NE PORTE PAS DE LIBELLÉ D'ACCESSIBILITÉ DU BLOC, et c'est une
  * décision. (Le CRÉDIT, lui, est un lien depuis #10096 : un lien a un rôle, et
- * son nom se complète par `BRAND_CREDIT_HINT`, en texte, jamais en `aria-label`.)
+ * son nom se complète par `brandCreditHint`, en texte, jamais en `aria-label`.)
  *
  * `BrandSignature.swift` combinait ses trois lignes en UN élément
  * d'accessibilité ; depuis que le crédit est un lien (#10096), il en rend

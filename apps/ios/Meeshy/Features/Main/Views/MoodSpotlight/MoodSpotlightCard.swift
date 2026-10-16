@@ -28,7 +28,7 @@ struct MoodSpotlightCard: View, Equatable {
                     .overlay(Circle().stroke(Color.white.opacity(0.9), lineWidth: 3))
                     .shadow(color: Color(hex: entry.avatarColor).opacity(0.6), radius: 24)
                 Text(entry.moodEmoji)
-                    .font(.system(size: 34))
+                    .font(MeeshyFont.emoji(34))
                     .padding(6)
                     .background(.ultraThinMaterial, in: Circle())
                     .offset(x: 8, y: 8)
@@ -104,7 +104,7 @@ struct MoodSpotlightReplyBar: View {
                         ProgressView().tint(.white)
                     } else {
                         Image(systemName: "arrow.up")
-                            .font(.system(size: 17, weight: .bold))
+                            .font(MeeshyFont.relative(17, weight: .bold))
                     }
                 }
                 .foregroundStyle(.white)

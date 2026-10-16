@@ -1,4 +1,5 @@
 import SwiftUI
+import MeeshyUI
 
 /// La pluie de l'emoji d'une humeur (#10814) : un SEUL `Canvas` cadencé par
 /// `TimelineView`, jamais une vue SwiftUI par particule. Le glyphe est résolu
@@ -38,7 +39,7 @@ struct MoodEmojiRainView: View {
                         }
                     } symbols: {
                         Text(emoji)
-                            .font(.system(size: Self.glyphSize))
+                            .font(MeeshyFont.emoji(Self.glyphSize))
                             .tag(Self.glyphTag)
                     }
                 }

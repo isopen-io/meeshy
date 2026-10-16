@@ -1,6 +1,6 @@
 import { describe, expect, test } from 'bun:test';
 
-import { BRAND_CREDIT, BRAND_CREDIT_HINT, BRAND_CREDIT_LINK, BRAND_LOGO_PATH, BRAND_SIGNATURE_MASK_PATH, brandVersionLine } from './brand';
+import { BRAND_CREDIT, BRAND_CREDIT_LINK, brandCreditHint, BRAND_LOGO_PATH, BRAND_SIGNATURE_MASK_PATH, brandVersionLine } from './brand';
 
 /**
  * LE CŒUR DE MARQUE EST UNIQUE ET AGNOSTIQUE DU RUNTIME (#5606).
@@ -30,8 +30,8 @@ describe('src/lib/brand.ts', () => {
     });
   });
 
-  test('BRAND_CREDIT_HINT dit où mène le crédit, à la suite du texte visible (#10096)', () => {
-    expect(BRAND_CREDIT_HINT).toBe(' — ouvre la plateforme services.ceo dans un nouvel onglet');
+  test('brandCreditHint dit où mène le crédit, à la suite du texte visible, dans la langue servie (#10096, #10827)', () => {
+    expect(brandCreditHint('fr')).toBe(' — ouvre la plateforme services.ceo dans un nouvel onglet');
   });
 
   test('brandVersionLine reproduit "Meeshy {version}" (BrandSignature.swift, sans build web)', () => {

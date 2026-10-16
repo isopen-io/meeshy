@@ -93,18 +93,28 @@ struct GamePhotoFlowView: View {
 
     // MARK: - 1. La proposition
 
+    /// La plaque d'auteur du moment (#10816) : présente, la proposition pose la carte qui nomme l'auteur.
+    private var plate: AuthorPlate? { GamePhotoAuthorPlate.plate(for: session.moment.emblem, author: session.author) }
+
     private var offer: some View {
         VStack(spacing: MeeshySpacing.lg) {
             Spacer()
-            MeeStickerFilmView(filmID: "duo-mee-selfie", animated: true, side: 120, animates: true, pixelCap: 240)
-                .frame(width: 120, height: 120)
-                .accessibilityHidden(true)
+            if let plate {
+                GameAuthorCardView(moment: session.moment, plate: plate, dateLabel: GamePhotoComposer.dateLabel(Date()))
+            } else {
+                MeeStickerFilmView(filmID: "duo-mee-selfie", animated: true, side: 120, animates: true, pixelCap: 240)
+                    .frame(width: 120, height: 120)
+                    .accessibilityHidden(true)
+            }
             Text(String(localized: "game.photo.offer.title", defaultValue: "On immortalise ?", bundle: .main))
                 .font(MeeshyFont.relative(26, weight: .bold, design: .rounded))
                 .foregroundColor(.white)
-            Text(session.moment.title)
-                .font(MeeshyFont.relative(MeeshyFont.bodySize, weight: .medium))
-                .foregroundColor(MeeshyColors.indigo200)
+            // La carte posée dit déjà le moment : le titre ne se répète pas sous elle.
+            if plate == nil {
+                Text(session.moment.title)
+                    .font(MeeshyFont.relative(MeeshyFont.bodySize, weight: .medium))
+                    .foregroundColor(MeeshyColors.indigo200)
+            }
             VStack(spacing: MeeshySpacing.sm) {
                 bigButton(String(localized: "game.photo.selfie", defaultValue: "Selfie avec nous", bundle: .main), "camera.fill", primary: true, id: "game.photo.selfie") {
                     Task { await session.chooseSelfie() }
@@ -219,7 +229,7 @@ struct GamePhotoFlowView: View {
             GamePhotoCanvasView(
                 moment: session.moment,
                 dateLabel: GamePhotoComposer.dateLabel(Date()),
-                format: .story, background: .card, referral: nil
+                format: .story, background: .card, referral: nil, author: session.author
             )
             .frame(width: PhotoFormat.story.size.width, height: PhotoFormat.story.size.height)
             .scaleEffect(scale, anchor: .topLeading)
@@ -466,7 +476,7 @@ struct GamePhotoFlowView: View {
         return GamePhotoCanvasView(
             moment: session.moment,
             dateLabel: GamePhotoComposer.dateLabel(Date()),
-            format: format, background: background, strike: strike, referral: session.referral
+            format: format, background: background, strike: strike, referral: session.referral, author: session.author
         )
         .frame(width: format.size.width, height: format.size.height)
         .scaleEffect(scale, anchor: .topLeading)

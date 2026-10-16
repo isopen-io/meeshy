@@ -21,6 +21,7 @@ public struct LottieLayerView: View {
     let film: LottieFilmSource
     let animates: Bool
     let contentMode: ContentMode
+    let loops: Bool
 
     @Environment(\.accessibilityReduceMotion) private var systemReduceMotion
     @Environment(\.meeshyForceReduceMotion) private var userForcedReduceMotion
@@ -29,10 +30,12 @@ public struct LottieLayerView: View {
     @StateObject private var slot = LottieLiveSlot()
 
     /// - Parameter contentMode: `.fill` pour un fond ou une bannière (le parent rogne), `.fit` pour un contour.
-    public init(film: LottieFilmSource, animates: Bool = true, contentMode: ContentMode = .fit) {
+    /// - Parameter loops: `false` ⇒ le film se joue une fois et s'arrête sur sa dernière image (#10816).
+    public init(film: LottieFilmSource, animates: Bool = true, contentMode: ContentMode = .fit, loops: Bool = true) {
         self.film = film
         self.animates = animates
         self.contentMode = contentMode
+        self.loops = loops
     }
 
     public var body: some View {
@@ -44,7 +47,8 @@ public struct LottieLayerView: View {
                 systemReduceMotion: systemReduceMotion,
                 userForcedReduceMotion: userForcedReduceMotion,
                 sceneActive: scenePhase == .active,
-                onScreen: onScreen
+                onScreen: onScreen,
+                loops: loops
             ))
             .resizable()
             .aspectRatio(contentMode: contentMode)
