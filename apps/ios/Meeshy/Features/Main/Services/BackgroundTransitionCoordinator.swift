@@ -28,23 +28,24 @@ final class BackgroundTransitionCoordinator: BackgroundTransitioning {
     static let shared = BackgroundTransitionCoordinator()
 
     private var activeTaskId: UIBackgroundTaskIdentifier = .invalid
-    private var isTransitioning = false
-    /// Avance à chaque entrée ET à chaque reprise. `enterBackground` court sur plusieurs attentes (cache,
-    /// accusés de push par le réseau) : revenu au premier plan avant sa fin, l'utilisateur voyait la tâche
-    /// reprendre APRÈS `resumeFromBackground`, détruire les sockets et suspendre la base d'une app visible —
-    /// plus de temps réel et des écritures refusées jusqu'au cycle suivant.
-    private var transitionGeneration: UInt64 = 0
+    /// `enterBackground` court sur plusieurs attentes (cache, accusés de push par le réseau). Revenue au
+    /// premier plan avant sa fin, l'app ne doit perdre ni ses sockets ni sa base ; REPARTIE en arrière-plan
+    /// avant sa fin, elle doit les suspendre quand même — c'est le registre qui le dit, pas une génération.
+    private var ledger = BackgroundTransitionLedger()
 
     private init() {}
 
     // MARK: - Background entry
 
     func enterBackground() async {
-        guard !isTransitioning else { return }
-        isTransitioning = true
-        defer { isTransitioning = false }
-        transitionGeneration &+= 1
-        let generation = transitionGeneration
+        // Une transition déjà en cours reprend à son compte ce nouveau départ : le registre la marque
+        // « en arrière-plan », et elle suspendra sockets et base à sa fin.
+        guard ledger.enterBackground() == .start else {
+            logger.info("Background re-entry joined the running transition")
+            return
+        }
+        defer { ledger.finishTransition() }
+        var socketsSuspended = false
 
         let taskId = UIApplication.shared.beginBackgroundTask(withName: "meeshy.background.transition") { [weak self] in
             // #7059 — L'OS ANNONCE LA SUSPENSION : c'est exactement l'instant du
@@ -95,11 +96,12 @@ final class BackgroundTransitionCoordinator: BackgroundTransitioning {
             // a genuine transport drop.
             if CallManagerHost.shared.isCallActiveForAudioGuard {
                 logger.info("Skipping socket suspend — call active (keep signaling channel)")
-            } else if generation != transitionGeneration {
+            } else if !ledger.shouldSuspend {
                 logger.info("Skipping socket suspend — app resumed during the transition")
             } else {
                 MessageSocketManager.shared.prepareForBackground()
                 SocialSocketManager.shared.prepareForBackground()
+                socketsSuspended = true
             }
         }
         // BG tasks are only useful for authenticated users — scheduling them
@@ -134,7 +136,13 @@ final class BackgroundTransitionCoordinator: BackgroundTransitioning {
         // plus personne ne prend de verrou sur le fichier — c'est ce qui manquait
         // aux cinq suppressions 0xDEAD10CC mesurées sur l'appareil du porteur,
         // toutes venues d'écrivains que la garde de maintenance ne couvrait pas.
-        if generation == transitionGeneration {
+        if ledger.shouldSuspend {
+            // Repartie en arrière-plan après une reprise survenue pendant la transition : les sockets
+            // n'avaient pas été coupés à leur step — ils le sont ici.
+            if !socketsSuspended && !CallManagerHost.shared.isCallActiveForAudioGuard {
+                MessageSocketManager.shared.prepareForBackground()
+                SocialSocketManager.shared.prepareForBackground()
+            }
             DatabaseSuspension.suspend()
         } else {
             logger.info("Skipping database suspend — app resumed during the transition")
@@ -154,7 +162,7 @@ final class BackgroundTransitionCoordinator: BackgroundTransitioning {
     /// jamais reconstruit : aucun chemin de reconnexion n'existe sans jeton de compte.
     func resumeWithoutSession() {
         logger.info("Foreground resume (no account session)")
-        transitionGeneration &+= 1
+        ledger.resume()
         DatabaseSuspension.resume()
         guard !CallManagerHost.shared.isCallActiveForAudioGuard,
               let guestSession = APIClient.shared.anonymousSessionToken, !guestSession.isEmpty else { return }
@@ -163,7 +171,7 @@ final class BackgroundTransitionCoordinator: BackgroundTransitioning {
 
     func resumeFromBackground() async {
         logger.info("Foreground resume starting")
-        transitionGeneration &+= 1
+        ledger.resume()
         // #7059 — PREMIER GESTE, avant tout ce qui écrit. Les consommateurs
         // ci-dessous gravent en base dès la première ligne ; les laisser tourner
         // sur une base encore suspendue échangerait le plantage contre une
@@ -308,6 +316,33 @@ final class BackgroundTransitionCoordinator: BackgroundTransitioning {
             logger.info("Step \(step, privacy: .public) took \(elapsed, privacy: .public)s")
         }
     }
+}
+
+/// Registre pur de la transition d'arrière-plan : une seule transition court à la fois, et c'est l'état
+/// VOULU de l'app à sa fin — en arrière-plan ou revenue — qui décide de suspendre sockets et base.
+///
+/// Arrière-plan → premier plan → arrière-plan pendant que la première transition attend encore le
+/// réseau : le second départ rejoint la transition en cours (`.joined`), qui suspend à sa fin. Avant ce
+/// registre, il était avalé par une garde de ré-entrée, et la transition en cours, ayant vu la reprise,
+/// sautait la suspension : l'app était gelée la base ouverte (0xDEAD10CC, #7059).
+nonisolated struct BackgroundTransitionLedger: Equatable {
+    enum Entry: Equatable { case start, joined }
+
+    private(set) var isTransitioning = false
+    private(set) var isBackgrounded = false
+
+    mutating func enterBackground() -> Entry {
+        isBackgrounded = true
+        guard !isTransitioning else { return .joined }
+        isTransitioning = true
+        return .start
+    }
+
+    mutating func finishTransition() { isTransitioning = false }
+
+    mutating func resume() { isBackgrounded = false }
+
+    var shouldSuspend: Bool { isBackgrounded }
 }
 
 /// Thin bridge that lets the coordinator (app layer) reach into the SDK

@@ -59,4 +59,37 @@ final class BackgroundTransitionCoordinatorTests: XCTestCase {
         )
     }
 
+
+    // MARK: - Ré-entrée : arrière-plan → premier plan → arrière-plan pendant la transition
+
+    /// Le second passage en arrière-plan arrivait pendant que la première
+    /// transition attendait encore le réseau (accusés de push) : il rentrait
+    /// sur la garde `isTransitioning`, et la première, voyant la reprise entre
+    /// les deux, sautait la suspension des sockets ET de la base. L'app était
+    /// gelée la base ouverte — le motif du kill 0xDEAD10CC (#7059).
+    func test_ledger_secondBackgroundDuringTransition_stillSuspends() {
+        var ledger = BackgroundTransitionLedger()
+        XCTAssertEqual(ledger.enterBackground(), .start)
+        ledger.resume()
+        XCTAssertFalse(ledger.shouldSuspend, "revenue au premier plan : rien ne se suspend")
+        XCTAssertEqual(ledger.enterBackground(), .joined, "une seule transition à la fois")
+        XCTAssertTrue(ledger.shouldSuspend, "repartie en arrière-plan : la transition en cours DOIT suspendre")
+        ledger.finishTransition()
+        XCTAssertEqual(ledger.enterBackground(), .start, "la transition terminée, la suivante repart")
+    }
+
+    func test_ledger_resumeDuringTransition_skipsTheSuspension() {
+        var ledger = BackgroundTransitionLedger()
+        XCTAssertEqual(ledger.enterBackground(), .start)
+        XCTAssertTrue(ledger.shouldSuspend)
+        ledger.resume()
+        XCTAssertFalse(ledger.shouldSuspend, "une app visible ne perd ni ses sockets ni sa base")
+    }
+
+    func test_enterBackground_suspendsThroughTheLedger_notAGenerationEquality() throws {
+        let src = try sourceOf("Meeshy/Features/Main/Services/BackgroundTransitionCoordinator.swift")
+        XCTAssertFalse(src.contains("guard !isTransitioning else { return }"), "la ré-entrée ne s'avale plus en silence")
+        XCTAssertFalse(src.contains("generation == transitionGeneration"), "l'égalité de génération sautait la suspension d'une app repartie")
+        XCTAssertTrue(src.contains("if ledger.shouldSuspend {"))
+    }
 }
