@@ -1715,6 +1715,7 @@ public actor MessagePersistenceActor {
                     existing.stickerJson = stickerJson ?? existing.stickerJson
                     existing.trackedLinksJson = trackedLinksJson ?? existing.trackedLinksJson
                     existing.senderIsAnonymous = api.sender.map(\.isAnonymous) ?? existing.senderIsAnonymous; existing.senderHasAccount = api.sender.map(\.hasAccount) ?? existing.senderHasAccount
+                    existing.senderRingJson = MessageRecord.servedSenderRingJson(api.sender, id: api.id) ?? existing.senderRingJson
                     existing.effectFlags = effectFlags; existing.adoptServedOriginalLanguage(api.originalLanguage)
                     // #7508 — l'horloge d'un éphémère COALESCE. Ses deux
                     // porteurs arrivent par des chemins différents et jamais
@@ -1830,7 +1831,8 @@ public actor MessagePersistenceActor {
                         // #7508 — le seul porteur d'horloge du temps réel.
                         ephemeralDuration: api.ephemeralDuration,
                         trackedLinksJson: trackedLinksJson,
-                        senderIsAnonymous: api.sender.map(\.isAnonymous), senderHasAccount: api.sender.map(\.hasAccount)
+                        senderIsAnonymous: api.sender.map(\.isAnonymous), senderHasAccount: api.sender.map(\.hasAccount),
+                        senderRingJson: MessageRecord.servedSenderRingJson(api.sender, id: api.id) ?? nil
                     )
                     if api.consumedByMe == true {
                         record.sealAsOpenedViewOnce(at: Date())
@@ -2029,87 +2031,6 @@ public actor MessagePersistenceActor {
         if !affectedConvIds.isEmpty {
             postMessageStoreRefresh(conversationIds: affectedConvIds)
         }
-    }
-
-    // MARK: - Retention Policy
-
-    /// Default retention period for locally cached messages.
-    /// Messages older than this are purged on app launch to keep the database
-    /// lean. The server remains the authoritative source — purged messages
-    /// can be re-fetched on demand via pagination.
-    public static let defaultRetentionMonths: Int = 6
-
-    /// Deletes all message records whose `createdAt` is older than
-    /// `retentionMonths` months from now. Also cascades to the child rows
-    /// keyed on those messages — `message_translations`,
-    /// `message_transcriptions`, `message_audio_translations`, `pending_ids`,
-    /// `send_attempts` (grdb-02/grdb-09). `translation_cache` lives in the
-    /// OTHER SQLite file (AppDatabase/meeshy.sqlite, GC au boot par
-    /// `loadTranslationCaches`) and is out of scope here.
-    ///
-    /// Returns the number of message rows deleted so callers can log it.
-    ///
-    /// - Parameter retentionMonths: How many months of history to keep.
-    ///   Defaults to ``defaultRetentionMonths`` (6).
-    @discardableResult
-    public func purgeOldMessages(retentionMonths: Int = defaultRetentionMonths) async throws -> Int {
-        let calendar = Calendar.current
-        guard let cutoff = calendar.date(byAdding: .month, value: -retentionMonths, to: Date()) else {
-            return 0
-        }
-
-        let (deletedCount, affectedConvIds): (Int, Set<String>) = try await dbWriter.write { db in
-            // Collect affected conversation IDs before deleting so we can post
-            // targeted refresh notifications.
-            let affected = try String.fetchSet(db, sql: """
-                SELECT DISTINCT conversationId FROM messages
-                WHERE createdAt < ?
-            """, arguments: [cutoff])
-
-            // Collect message IDs for cascade cleanup of translation tables
-            let expiredIds = try String.fetchAll(db, sql: """
-                SELECT localId FROM messages WHERE createdAt < ?
-            """, arguments: [cutoff])
-
-            if !expiredIds.isEmpty {
-                // grdb-02 — cascade sur la clé RÉELLE (messageLocalId, pas
-                // messageId) et uniquement sur les tables de CETTE base.
-                let placeholders = expiredIds.map { _ in "?" }.joined(separator: ",")
-                try db.execute(
-                    sql: "DELETE FROM message_translations WHERE messageLocalId IN (\(placeholders))",
-                    arguments: StatementArguments(expiredIds)
-                )
-                try db.execute(
-                    sql: "DELETE FROM message_transcriptions WHERE messageLocalId IN (\(placeholders))",
-                    arguments: StatementArguments(expiredIds)
-                )
-                try db.execute(
-                    sql: "DELETE FROM message_audio_translations WHERE messageLocalId IN (\(placeholders))",
-                    arguments: StatementArguments(expiredIds)
-                )
-                try db.execute(
-                    sql: "DELETE FROM pending_ids WHERE localId IN (\(placeholders))",
-                    arguments: StatementArguments(expiredIds)
-                )
-                try db.execute(
-                    sql: "DELETE FROM send_attempts WHERE localId IN (\(placeholders))",
-                    arguments: StatementArguments(expiredIds)
-                )
-            }
-
-            // Delete the messages themselves
-            let count = try MessageRecord
-                .filter(Column("createdAt") < cutoff)
-                .deleteAll(db)
-
-            return (count, affected)
-        }
-
-        if !affectedConvIds.isEmpty {
-            postMessageStoreRefresh(conversationIds: affectedConvIds)
-        }
-
-        return deletedCount
     }
 
     deinit {

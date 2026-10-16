@@ -46,6 +46,10 @@ const frVerifyEmail = {
   'signInLink.switchAccount.failed': 'Impossible d’ouvrir cet autre compte pour le moment. Votre session reste ouverte, et le lien est refermé.',
   'signInLink.switchAccount.expired': 'Ce lien a expiré : demandez-en un nouveau. Votre session reste ouverte.',
   'signInLink.switchAccount.leave': 'Revenir à l’accueil',
+  'emailSent.title': 'E-mail envoyé',
+  'emailSent.openLink': 'Ouvrez le lien reçu à {email}',
+  'emailSent.nothingReceived': 'Rien reçu ?',
+  'emailSent.nothingReceived.text': 'Regardez vos indésirables (spam) : le message peut y être tombé.',
 } as const;
 
 export default frVerifyEmail;

@@ -250,8 +250,13 @@ describe('ROUTES — l’adresse d’une humeur partagée (#7313)', () => {
     });
   });
 
-  test('elle ouvre le MÊME écran que /post et /feeds/post — trois portes, un écran', () => {
-    expect(servedBy('/mood/abc123')[0]!.screen).toBe(ROUTES.post.screen);
+  /* DEPUIS #10813, `/mood/<id>` ouvre la PAGE DE L'HUMEUR — et elle DÉLÈGUE au
+     détail de publication pour un visiteur sans compte ou une publication qui
+     n'est pas une humeur (`routes/mood.tsx`, témoins `mood-page.test.tsx`) :
+     l'adresse partagée sert toujours quelque chose, jamais un écran vide. */
+  test('elle ouvre la page de l’humeur ; /post et /feeds/post restent un seul écran', async () => {
+    const screen = await servedBy('/mood/abc123')[0]!.screen();
+    expect(screen.default.name).toBe('MoodScreen');
     expect(ROUTES.postDeepLink.screen).toBe(ROUTES.post.screen);
   });
 

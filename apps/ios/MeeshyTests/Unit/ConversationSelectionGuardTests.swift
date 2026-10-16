@@ -16,7 +16,7 @@ final class ConversationSelectionGuardTests: XCTestCase {
             .deletingLastPathComponent()   // .../apps/ios
             .appendingPathComponent("Meeshy")
         return AppSourceGuard.stripComments(
-            try String(contentsOf: root.appendingPathComponent(relativePath), encoding: .utf8)
+            try AppSourceGuard.text(at: root.appendingPathComponent(relativePath))
         )
     }
 

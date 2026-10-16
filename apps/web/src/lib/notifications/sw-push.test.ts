@@ -589,10 +589,17 @@ describe('le tap atterrit à l’adresse de la v2, jamais à celle du legacy', (
     expect(worker.opened).toEqual(['/notifications']);
   });
 
+  test('la nouvelle humeur d’un contact ouvre SA page, pas le lecteur de story (#10813)', async () => {
+    const worker = mount();
+    await worker.dispatch('notificationclick', clic({ type: 'friend_new_mood', postId: 'st1', postType: 'STATUS', contentType: 'STATUS' }).event);
+    expect(worker.opened).toEqual(['/mood/st1']);
+  });
+
   test('la table exposée au gate porte les motifs de la table de routes', () => {
     expect(mount().exports.PUSH_ROUTE_PATTERNS).toEqual({
       thread: '/c/$conversation',
       story: '/story/$post',
+      mood: '/mood/$post',
       post: '/post/$post',
       discover: '/discover',
       userProfile: '/u/$username',

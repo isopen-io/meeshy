@@ -78,18 +78,19 @@ describe('garde O5 — la liste des fichiers qui touchent PostEngagement est fer
 });
 
 describe('garde O5 — l’empreinte d’un compte ne se recalcule que là où le comptage et les droits l’exigent (#10774)', () => {
-  it('seuls le comptage, la déduplication, l’export et l’effacement appellent accountReaderKeyOf', () => {
+  it('seuls la déduplication, l’export et l’effacement appellent accountReaderKeyOf — plus aucune écriture depuis #10785', () => {
     const callers = sources(SRC)
       .filter((path) => /\baccountReaderKeyOf\s*\(/.test(withoutComments(readFileSync(path, 'utf8'))))
       .map((path) => path.slice(SRC.length + 1))
       .sort();
 
-    // Un classement, une recommandation ou une analyse qui recalculerait
-    // l'empreinte relierait les lignes sans consentement à leur compte.
+    // L'empreinte ne s'écrit plus (#10785) : elle ne sert qu'à relire les
+    // lignes réduites antérieures jusqu'à leur expiration (8 jours). Un
+    // classement, une recommandation ou une analyse qui la recalculerait
+    // relierait ces lignes à leur compte.
     expect(callers).toEqual([
       'routes/me/export-reading.ts',
       'services/posts/postReach.ts',
-      'services/social/impressionRows.ts',
       'services/social/readingTelemetryErasure.ts',
       'services/social/viewImpressions.ts',
     ]);

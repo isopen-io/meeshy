@@ -52,6 +52,11 @@ final class LottieLayerTests: XCTestCase {
         XCTAssertEqual(LottieLayerPlayback.mode(animates: true, systemReduceMotion: false, userForcedReduceMotion: false, sceneActive: true, onScreen: true), .playing(.fromProgress(0, toProgress: 1, loopMode: .loop)))
     }
 
+    func test_playback_withoutAPlaceInTheBudget_showsTheFirstFrame() {
+        XCTAssertEqual(LottieLayerPlayback.mode(animates: true, granted: false, systemReduceMotion: false, userForcedReduceMotion: false, sceneActive: true, onScreen: true), .paused(at: .progress(0)), "#10815 : sans place, l'image fixe")
+        XCTAssertEqual(LottieLayerPlayback.mode(animates: true, granted: true, systemReduceMotion: false, userForcedReduceMotion: false, sceneActive: true, onScreen: true), .playing(.fromProgress(0, toProgress: 1, loopMode: .loop)))
+    }
+
     func test_engine_isCoreAnimation() {
         XCTAssertEqual(LottieLayerPlayback.configuration.renderingEngine, .coreAnimation)
     }
@@ -77,6 +82,20 @@ final class LottieLayerTests: XCTestCase {
         XCTAssertNotNil(first)
         XCTAssertNotNil(second)
         XCTAssertEqual(fetcher.count, 1, "le fichier de pack est adressé par contenu : il ne se retélécharge pas")
+    }
+
+    func test_film_simultaneousDemandsForTheSameFile_readAndDecodeItOnce() async throws {
+        let data = uniqueData()
+        let store = ContentAddressedStore(directory: tempDirectory(), fetcher: CountingFetcher(data: data, delay: 0.05))
+        let ref = try ref(for: data)
+        let films = await withTaskGroup(of: LottieFilmSource?.self) { group in
+            for _ in 0..<12 { group.addTask { await LottieLayerSource.film(for: ref, store: store) } }
+            var all: [LottieFilmSource?] = []
+            for await film in group { all.append(film) }
+            return all
+        }
+        let first = try XCTUnwrap(films.first ?? nil)
+        XCTAssertTrue(films.allSatisfy { $0 === first }, "#10815 : trente rangées au même contour lisent et décodent le fichier UNE fois")
     }
 
     func test_film_fromAPackAssetWhoseBytesAreNotTheEngagedOnes_isNil() async throws {
@@ -138,13 +157,18 @@ private final class CountingFetcher: PackAssetFetching, @unchecked Sendable {
     private let lock = NSLock()
     private var calls = 0
     private let data: Data
+    private let delay: TimeInterval
 
-    init(data: Data) { self.data = data }
+    init(data: Data, delay: TimeInterval = 0) {
+        self.data = data
+        self.delay = delay
+    }
 
     var count: Int { lock.withLock { calls } }
 
     func fetch(file name: String) async throws -> Data {
         lock.withLock { calls += 1 }
+        if delay > 0 { try await Task.sleep(nanoseconds: UInt64(delay * 1_000_000_000)) }
         return data
     }
 }

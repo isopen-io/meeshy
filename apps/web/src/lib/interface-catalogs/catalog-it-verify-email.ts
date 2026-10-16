@@ -46,6 +46,10 @@ const itVerifyEmail = {
   'signInLink.switchAccount.failed': 'Impossibile aprire questo altro account al momento. Resti connesso e il link è stato chiuso.',
   'signInLink.switchAccount.expired': 'Questo link è scaduto: richiedine uno nuovo. Resti connesso.',
   'signInLink.switchAccount.leave': 'Torna alla home',
+  'emailSent.title': 'Email inviata',
+  'emailSent.openLink': 'Apri il link inviato a {email}',
+  'emailSent.nothingReceived': 'Non hai ricevuto nulla?',
+  'emailSent.nothingReceived.text': 'Controlla la cartella spam: il messaggio potrebbe essere finito lì.',
 };
 
 export default itVerifyEmail;

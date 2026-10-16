@@ -1,4 +1,5 @@
 import XCTest
+import Photos
 @testable import MeeshySDK
 
 /// #10370 — un média n'entre qu'une fois dans l'album Meeshy, et une réinstallation
@@ -217,5 +218,24 @@ final class PhotoLibraryMediaSignatureTests: XCTestCase {
     func test_marque_nomÉtranger_nEstPasUneEmpreinte() {
         XCTAssertNil(PhotoLibraryMediaSignature.parse(markedFileName: "IMG_0042.HEIC"))
         XCTAssertNil(PhotoLibraryMediaSignature.parse(markedFileName: "photo_mxpasdutouthexa.jpg"))
+    }
+}
+
+/// #10805 — enregistrer un média ne demande qu'UNE autorisation. Chercher ou
+/// créer l'album « Meeshy » exige la LECTURE de la photothèque : en accès « ajout
+/// seul », y toucher faisait monter une seconde alerte réclamant l'accès complet.
+final class PhotosAlbumAccessTests: XCTestCase {
+
+    func test_ajoutSeul_nInterrogeJamaisLAlbum() {
+        XCTAssertFalse(PhotosAlbum.isReachable(readWriteStatus: .notDetermined),
+                       "lecture jamais demandée : y toucher la demanderait")
+        XCTAssertFalse(PhotosAlbum.isReachable(readWriteStatus: .denied),
+                       "« Garder l'ajout seul » : l'album reste hors d'atteinte, sans redemander")
+        XCTAssertFalse(PhotosAlbum.isReachable(readWriteStatus: .restricted))
+    }
+
+    func test_accesComplet_rangeDansLAlbum() {
+        XCTAssertTrue(PhotosAlbum.isReachable(readWriteStatus: .authorized))
+        XCTAssertTrue(PhotosAlbum.isReachable(readWriteStatus: .limited))
     }
 }

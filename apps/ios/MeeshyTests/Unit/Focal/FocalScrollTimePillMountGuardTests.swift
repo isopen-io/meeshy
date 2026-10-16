@@ -23,9 +23,10 @@ final class FocalScrollTimePillMountGuardTests: XCTestCase {
     /// La source lue est donc la CONCATÉNATION des fichiers du type. Ajouter
     /// une extension à cette liste est le geste attendu ; l'oublier fait
     /// rougir la garde, ce qui est exactement le bon sens de panne.
+    /// Depuis #10758, `AppSourceGuard.text(at:)` lit l'hôte avec TOUTES ses
+    /// extensions (`+SeenTracking` comprise) : la liste n'en nomme plus qu'un.
     private static let unitFiles = [
         "Meeshy/Features/Main/Views/MessageListViewController.swift",
-        "Meeshy/Features/Main/Views/MessageListViewController+SeenTracking.swift",
     ]
 
     private func source() throws -> String {
@@ -35,7 +36,7 @@ final class FocalScrollTimePillMountGuardTests: XCTestCase {
             .deletingLastPathComponent()   // .../MeeshyTests
             .deletingLastPathComponent()   // .../apps/ios
         return try Self.unitFiles
-            .map { try String(contentsOf: root.appendingPathComponent($0), encoding: .utf8) }
+            .map { try AppSourceGuard.text(at: root.appendingPathComponent($0)) }
             .joined(separator: "\n")
     }
 
@@ -76,7 +77,7 @@ final class FocalScrollTimePillMountGuardTests: XCTestCase {
         // 1. Le démontage est INCONDITIONNEL — décision de `85cf1ec4`, gelée
         //    ici pour qu'un remontage accidentel se signale.
         XCTAssertTrue(
-            code.contains("private func updateScrollTimePillMounting() {\n        teardownScrollTimePillOverlay()\n    }"),
+            code.contains("func updateScrollTimePillMounting() {\n        teardownScrollTimePillOverlay()\n    }"),
             "`updateScrollTimePillMounting` doit se réduire au démontage INCONDITIONNEL — la pilule flottante n'est plus montée nulle part (`85cf1ec4`), et un contrôleur recyclé depuis un mode antérieur ne doit pas en garder une à l'écran."
         )
 
@@ -150,7 +151,7 @@ final class FocalScrollTimePillMountGuardTests: XCTestCase {
     func test_noteScrollTimePillActivity_isGuardedByReadingMode() throws {
         let code = try strippedSource()
         XCTAssertTrue(
-            code.contains("private func noteScrollTimePillActivity() {\n        guard readingMode != .bubbles else { return }"),
+            code.contains("func noteScrollTimePillActivity() {\n        guard readingMode != .bubbles else { return }"),
             "noteScrollTimePillActivity doit garder `readingMode != .bubbles` en tête — sinon la pilule recevrait des événements même drapeau OFF."
         )
     }

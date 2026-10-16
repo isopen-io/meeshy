@@ -481,3 +481,26 @@ describe('le bandeau de parrainage', () => {
     expect(ops).toEqual(['beginPath', 'roundRect', 'fill']);
   });
 });
+
+/** LA PLAQUE D'AUTEUR (#10816) : peinte à sa place, après le texte et avant Mee et Meo ; sans plaque, la carte d'avant. */
+describe('la plaque d’auteur dans l’image', () => {
+  const drawn = (calls: readonly Call[]) => calls.filter((call) => call.op === 'drawImage').map((call) => (call.args[0] as { id: string }).id);
+
+  test('posée dans son emplacement, à la proportion du cartouche', () => {
+    for (const format of ['story', 'square'] as const) {
+      const fake = fakeContext();
+      const layout = photoLayout(format);
+      const plate = { id: 'author', width: 1440, height: 400 } as unknown as CanvasImageSource;
+      paintPhoto(fake.ctx, { layout, moment, dateLabel: '5 octobre 2026', photo: null, art: { ...art(), author: plate }, palette, fontFamily: 'system-ui' });
+      const call = fake.calls.find((entry) => entry.op === 'drawImage' && (entry.args[0] as { id: string }).id === 'author');
+      const placed = (call?.args.slice(1) ?? []) as number[];
+      [layout.author.x, layout.author.y, layout.author.w, layout.author.h].forEach((value, index) => expect(placed[index]).toBeCloseTo(value, 6));
+      expect(drawn(fake.calls)).toEqual(['emblem', 'author', 'mee', 'meo', 'signature']);
+    }
+  });
+
+  test('sans plaque, rien ne change', () => {
+    const { calls } = paint('story', null);
+    expect(drawn(calls)).toEqual(['emblem', 'mee', 'meo', 'signature']);
+  });
+});

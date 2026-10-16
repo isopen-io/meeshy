@@ -20,7 +20,7 @@ final class ConversationLongPressMenuGuardTests: XCTestCase {
             .deletingLastPathComponent()   // .../apps/ios
             .appendingPathComponent("Meeshy")
         return AppSourceGuard.stripComments(
-            try String(contentsOf: root.appendingPathComponent(relativePath), encoding: .utf8)
+            try AppSourceGuard.text(at: root.appendingPathComponent(relativePath))
         )
     }
 
@@ -120,7 +120,7 @@ final class ConversationLongPressMenuGuardTests: XCTestCase {
 
     func test_scrollToMessage_centersVertically() throws {
         let code = try source("Features/Main/Views/MessageListViewController.swift")
-        guard let fn = body(of: "private func beginVerifiedScroll(", in: code) else {
+        guard let fn = body(of: "func beginVerifiedScroll(", in: code) else {
             return XCTFail("`beginVerifiedScroll` introuvable — la garde ne mesurerait rien.")
         }
         XCTAssertTrue(

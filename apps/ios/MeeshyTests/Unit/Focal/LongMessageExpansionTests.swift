@@ -108,7 +108,7 @@ final class LongMessageExpansionTests: XCTestCase {
     }
 
     private func source(_ relativePath: String) throws -> String {
-        let raw = try String(contentsOf: Self.iosRoot.appendingPathComponent(relativePath), encoding: .utf8)
+        let raw = try AppSourceGuard.text(at: Self.iosRoot.appendingPathComponent(relativePath))
         return AppSourceGuard.stripComments(raw)
     }
 

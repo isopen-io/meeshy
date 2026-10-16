@@ -83,6 +83,7 @@ extension Route {
         case .starredMessages: return "StarredMessages"
         case .friendRequests: return "FriendRequests"
         case .storyNotificationTarget: return "StoryNotificationTarget"
+        case .moodSpotlight: return "MoodSpotlight"
         }
     }
 }

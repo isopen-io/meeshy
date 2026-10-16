@@ -1,6 +1,6 @@
 import type { MascotLine } from '@meeshy/shared/utils/mascot';
 
-import { ACHIEVEMENT_COPY } from './progression';
+import { achievementCopy } from './progression';
 
 /**
  * CE QUE DIT LA MASCOTTE (#8907) — une phrase par ligne de la loi partagée
@@ -24,7 +24,7 @@ export function mascotSay(line: MascotLine): string {
     case 'level-up':
       return `Niveau ${line.level} ! On fête ça.`;
     case 'achievement':
-      return `Succès débloqué : ${ACHIEVEMENT_COPY[line.key].title} !`;
+      return `Succès débloqué : ${achievementCopy(line.key, 'fr').title} !`;
     case 'can-mint':
       return `Tes points sont prêts : on frappe une Meesh pour ${points(line.mintCost)} ?`;
     case 'first-step':

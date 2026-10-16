@@ -5,7 +5,8 @@
  *   - `servedProfileDecor` : ce qu'on SERT (`GET /me`, profil public) — tolérant,
  *     un choix qui n'existe plus au registre se sert `null`, jamais une erreur ;
  *   - `validateProfileDecorWrite` : ce qu'on ACCEPTE (`PUT /me/profile-decor`) —
- *     domaine, existence, POSSESSION, puis la loi des cadres pour le contour
+ *     domaine, POSSESSION du pack, existence de l'élément (après la possession :
+ *     aucun oracle sur le contenu d'un pack non possédé), puis la loi des cadres pour le contour
  *     (`canUseFrame(…, { kind: 'avatar' })`).
  */
 import type { PrismaClient } from '@meeshy/shared/prisma/client';
@@ -33,8 +34,11 @@ export const servedProfileDecorItemJsonSchema = {
 export type StoredProfileDecor = { readonly equippedAvatarRing?: string | null; readonly equippedBanner?: string | null };
 
 /** Un pack MASQUÉ se sert en lecture (ce qui est équipé, payé compris, reste porté) ; il ne s'équipe plus. */
+const resolvePack = (index: PackIndex, domain: PackDomain, ref: ProfileDecorRef, use: 'served' | 'equipped'): PackIndexEntry | undefined =>
+  index.entries(domain).find((candidate) => candidate.slug === ref.pack && (use === 'served' || !candidate.hidden));
+
 const resolveEntry = (index: PackIndex, domain: PackDomain, ref: ProfileDecorRef, use: 'served' | 'equipped'): PackIndexEntry | undefined => {
-  const entry = index.entries(domain).find((candidate) => candidate.slug === ref.pack && (use === 'served' || !candidate.hidden));
+  const entry = resolvePack(index, domain, ref, use);
   return entry !== undefined && index.itemKeys(entry).includes(ref.item) ? entry : undefined;
 };
 
@@ -68,6 +72,7 @@ export type ProfileDecorWriteOutcome =
   | { readonly kind: 'ok'; readonly data: StoredProfileDecor }
   | { readonly kind: 'invalid' }
   | { readonly kind: 'not-owned' }
+  | { readonly kind: 'item-not-found' }
   | { readonly kind: 'usage-mismatch' };
 
 type Side = { readonly field: 'equippedAvatarRing' | 'equippedBanner'; readonly key: 'avatarRing' | 'banner'; readonly domain: PackDomain };
@@ -103,10 +108,11 @@ export async function validateProfileDecorWrite({ prisma, index, userId, input }
     }
     const parsed = ProfileDecorRefSchema.safeParse(requested);
     if (!parsed.success) return { kind: 'invalid' };
-    const entry = resolveEntry(index, side.domain, parsed.data, 'equipped');
+    const entry = resolvePack(index, side.domain, parsed.data, 'equipped');
     if (entry === undefined) return { kind: 'not-owned' };
     if (entry.price !== undefined) await loadOwned();
     if (!isPackOwned({ domain: side.domain, slug: entry.slug, price: entry.price }, owned)) return { kind: 'not-owned' };
+    if (!index.itemKeys(entry).includes(parsed.data.item)) return { kind: 'item-not-found' };
     if (side.domain === 'avatar-ring') {
       const usage = frameUsageOf(entry);
       if (usage === null || !canUseFrame(usage, { kind: 'avatar' })) return { kind: 'usage-mismatch' };

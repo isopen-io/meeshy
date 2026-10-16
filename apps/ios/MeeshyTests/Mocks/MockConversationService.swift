@@ -30,6 +30,9 @@ final class MockConversationService: ConversationServiceProviding, @unchecked Se
         {"id":"000000000000000000000001","type":"direct","title":null,"createdAt":"2026-01-01T00:00:00.000Z"}
         """)
     )
+    /// `nil` par défaut : aucune conversation directe existante.
+    var findDirectWithResult: Result<APIConversation?, Error> = .success(nil)
+    var lastFindDirectWithUserId: String?
     var deleteResult: Result<Void, Error> = .success(())
     var markReadResult: Result<Void, Error> = .success(())
     var markAsReceivedResult: Result<Void, Error> = .success(())
@@ -246,7 +249,8 @@ final class MockConversationService: ConversationServiceProviding, @unchecked Se
     }
 
     nonisolated func findDirectWith(userId: String) async throws -> APIConversation? {
-        nil
+        await MainActor.run { lastFindDirectWithUserId = userId }
+        return try findDirectWithResult.get()
     }
 
     nonisolated func removeParticipant(conversationId: String, key: String) async throws {

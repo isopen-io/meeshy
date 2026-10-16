@@ -45,8 +45,13 @@ enum ConversationBackgroundResolution: Equatable {
 
     /// L'accent qui colore les rôles `accent` du modèle : le personnel (gamme) s'il est choisi, sinon l'accent calculé de la conversation.
     static func effectiveAccentHex(_ appearance: ConversationAppearance?, computedHex: String, isDark: Bool, catalog: AppearanceCatalog = .shared) -> String {
-        guard let key = appearance?.accent, let accent = catalog.gamut.accent(key, scheme: isDark ? .dark : .light) else { return computedHex }
-        return accent
+        personalAccentHex(appearance, isDark: isDark, catalog: catalog) ?? computedHex
+    }
+
+    /// L'accent personnel choisi, dans la teinte du schéma ; `nil` pour « Automatique » ou une clé hors gamme.
+    static func personalAccentHex(_ appearance: ConversationAppearance?, isDark: Bool, catalog: AppearanceCatalog = .shared) -> String? {
+        guard let key = appearance?.accent else { return nil }
+        return catalog.gamut.accent(key, scheme: isDark ? .dark : .light)
     }
 }
 

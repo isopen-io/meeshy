@@ -36,7 +36,7 @@ final class FocalBetaPreviewNavigationSourceGuardTests: XCTestCase {
     }
 
     private func source(_ relativePath: String) throws -> String {
-        try String(contentsOf: appRoot().appendingPathComponent(relativePath), encoding: .utf8)
+        try AppSourceGuard.text(at: appRoot().appendingPathComponent(relativePath))
     }
 
     // MARK: - 1. Les deux sites RÉELS lisent le canal éphémère

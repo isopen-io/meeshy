@@ -60,6 +60,9 @@ const frSignup = {
   'signup.legal.privacy': 'Politique de confidentialité',
   'signup.haveAccount': 'Déjà un compte ?',
   'signup.signIn': 'Se connecter',
+  'signup.country.title': 'Pays',
+  'signup.country.search': 'Rechercher un pays',
+  'signup.country.none': 'Aucun pays ne correspond à « {query} ».',
 } as const;
 
 export default frSignup;

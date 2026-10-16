@@ -120,6 +120,10 @@ enum Route: Hashable {
         commentId: String?,
         parentCommentId: String?
     )
+    /// La page plein écran d'une humeur reçue (#10814) : bannière et avatar de
+    /// l'auteur, texte décoré, pluie de son emoji, et un champ qui répond en
+    /// privé. Ouverte par la notification « nouvelle humeur ».
+    case moodSpotlight(statusId: String)
 }
 
 extension Route {
@@ -208,6 +212,8 @@ extension Route {
             return String(localized: "route.title.friend_requests", defaultValue: "Demandes d'amis", bundle: .main)
         case .storyNotificationTarget:
             return String(localized: "route.title.story", defaultValue: "Story", bundle: .main)
+        case .moodSpotlight:
+            return String(localized: "route.title.mood", defaultValue: "Humeur", bundle: .main)
         }
     }
 }

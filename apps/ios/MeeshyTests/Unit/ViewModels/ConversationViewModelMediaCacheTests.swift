@@ -69,4 +69,34 @@ final class ConversationViewModelMediaCacheTests: XCTestCase {
 
         XCTAssertEqual(sut.allAudioItems.map(\.id), ["srv-att-1"])
     }
+
+    // MARK: - #10801 — chaque piste garde SA transcription
+
+    private func transcription(of attachmentId: String, _ text: String) -> MessageTranscription {
+        MessageTranscription(attachmentId: attachmentId, text: text, language: "fr")
+    }
+
+    func test_allAudioItems_threeVoicesOnlyTheFirstTranscribed_servesNoTranscriptionToTheOthers() throws {
+        let sut = try makeSUT()
+        let first = transcription(of: "att-1", "Ceci est le vocal numéro 1")
+        sut.messageTranscriptions = ["msg-3v": first]
+        sut.messageTranscriptionsByAttachment = ["att-1": first]
+        sut.messages = [Message(id: "msg-3v", conversationId: Self.conversationId, senderId: "000000000000000000000d01",
+                                content: "", messageType: .audio, createdAt: Date(timeIntervalSince1970: 1),
+                                attachments: [audio("att-1", url: "https://cdn.example/1.m4a"),
+                                              audio("att-2", url: "https://cdn.example/2.m4a"),
+                                              audio("att-3", url: "https://cdn.example/3.m4a")],
+                                senderName: "Bob")]
+
+        XCTAssertEqual(sut.allAudioItems.map { $0.transcription?.text },
+                       ["Ceci est le vocal numéro 1", nil, nil])
+    }
+
+    func test_allAudioItems_singleVoiceTranscribedOnlyByMessage_keepsItsTranscription() throws {
+        let sut = try makeSUT()
+        sut.messageTranscriptions = ["srv-1": transcription(of: "srv-att-1", "Bonjour")]
+        sut.messages = [voice("srv-1", audio("srv-att-1", url: "https://cdn.example/1.m4a"), at: 1)]
+
+        XCTAssertEqual(sut.allAudioItems.map { $0.transcription?.text }, ["Bonjour"])
+    }
 }

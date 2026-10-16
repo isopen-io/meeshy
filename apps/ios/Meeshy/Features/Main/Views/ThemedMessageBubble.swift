@@ -108,6 +108,7 @@ struct QuickReactionDoubleTap: ViewModifier {
 
 struct ThemedMessageBubble: View {
     @Environment(\.announcesCapture) private var announcesCapture // #9617 — la surface annonce-t-elle sa capture ?
+    @Environment(\.bubbleSkin) private var skin
     // MARK: - Public init API (preserved unchanged for all call sites)
 
     let message: Message
@@ -448,7 +449,7 @@ struct ThemedMessageBubble: View {
             messageId: content.messageId,
             isMe: content.isMe,
             isDark: isDark,
-            accentHex: content.isMe ? MeeshyColors.brandPrimaryHex : otherBubbleColor,
+            accentHex: skin.accentHex(isMe: content.isMe, received: otherBubbleColor),
             timeString: content.meta.timeString,
             // #7365 — statut RÉSOLU (tout-ou-rien pour un groupe), déjà posé
             // par `BubbleContentBuilder` sur `content.meta` ; le brut

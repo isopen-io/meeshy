@@ -248,6 +248,9 @@ final class LocalizationConsistencyTests: XCTestCase {
         // divergentes). C'est la dette de littéraux, pas la traduction, qui
         // borne désormais ce cliquet — la règle A n'en retient que 56.
         "apps/ios/Meeshy/Features/Main/Views/MessageListViewController.swift",  // 15
+        // #10758 — la découpe emporte les clés de date avec leur code (leçon 578).
+        "apps/ios/Meeshy/Features/Main/Views/MessageListViewController+DayOverlays.swift",
+        "apps/ios/Meeshy/Features/Main/Views/MessageListViewController+Rows.swift",
         "apps/ios/Meeshy/Features/Main/ViewModels/ConversationViewModel.swift",  // 7
         "apps/ios/Meeshy/Features/Main/Views/StoryLanguageDetailView.swift",  // 7
         "apps/ios/Meeshy/Features/Main/Riviere/View/RiverBubbleView.swift",  // 6

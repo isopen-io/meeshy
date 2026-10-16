@@ -1,5 +1,7 @@
 import { describe, expect, test } from 'bun:test';
 
+import { loadGameCatalog } from '@/lib/i18n-game-catalog';
+
 import { meeshMissing } from './meesh-copy';
 
 /**
@@ -45,4 +47,19 @@ describe('le point de conversation s’accorde', () => {
 
 describe('le plancher ABSENT ne compose rien', () => {
   test('zéro ⇒ une seule phrase', () => expect(meeshMissing(4, 0)).toBe('Encore 4 points à convertir avant une Meesh.'));
+});
+
+describe('la langue d’interface (#10823)', () => {
+  test('interface en : le manque et le plancher en anglais, avec les valeurs d’iOS', async () => {
+    await loadGameCatalog('en');
+    expect(meeshMissing(1, 0, 'en')).toBe('1 more convertible point before a Meesh.');
+    expect(meeshMissing(4, 3, 'en')).toBe(
+      '4 more convertible points before a Meesh. Your 3 conversation points will be used last, without turning off any badge.',
+    );
+  });
+
+  test('interface ar : la forme duelle du catalogue arabe', async () => {
+    await loadGameCatalog('ar');
+    expect(meeshMissing(2, 0, 'ar')).toBe('لا يزال أمامك نقطتان قابلتان للتحويل قبل الحصول على Meesh.');
+  });
 });

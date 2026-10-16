@@ -1,3 +1,4 @@
+import { loadAccountRecoveryCatalog } from '@/lib/i18n-account-recovery-catalog';
 import { loadInterfaceCatalog } from '@/lib/i18n-catalog';
 import { loadEmojiPickerCatalog } from '@/lib/i18n-emoji-picker-catalog';
 import { loadGameCatalog } from '@/lib/i18n-game-catalog';
@@ -22,3 +23,8 @@ await loadEmojiPickerCatalog(DEFAULT_INTERFACE_LANGUAGE);
    (`route-table.tsx`) ; un témoin qui monte `LensRow` ou `RowActions` hors
    routeur rejoue ce contrat. */
 await loadRowMenuCatalog(DEFAULT_INTERFACE_LANGUAGE);
+
+/* LE MOT DE PASSE OUBLIÉ (`recovery.*`, #10823) : en production il arrive avec
+   `/forgot-password` et `/reset-password` (`route-table.tsx`) ; un témoin qui
+   monte l'un de ces écrans hors routeur rejoue ce contrat. */
+await loadAccountRecoveryCatalog(DEFAULT_INTERFACE_LANGUAGE);

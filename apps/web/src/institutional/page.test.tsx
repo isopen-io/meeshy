@@ -18,17 +18,20 @@ import { InstitutionalPage } from './page';
  * `InstitutionalPage` est le rendu partagé des sept pages : un témoin suffit
  * pour toutes. Ce qu'un lecteur arrivé par un moteur de recherche sur
  * « Confidentialité » doit pouvoir faire sans revenir en arrière : se
- * connecter, entrer sans compte, changer de langue, rejoindre l'aide.
+ * connecter, changer de langue, rejoindre l'aide — et plus « Entrer sans
+ * compte » : l'entrée anonyme ne passe plus que par le QR de la landing (#10784).
  */
 describe('InstitutionalPage — l’en-tête et le pied de meeshy.me (#10071)', () => {
   const html = render(<InstitutionalPage page={PAGE_ABOUT} version="3.1.0" />);
 
-  test('l’en-tête est celui de la landing : la marque, la navigation, se connecter, entrer sans compte', () => {
+  test('l’en-tête est celui de la landing : la marque, la navigation, se connecter, sans porte d’entrée anonyme (#10784)', () => {
     expect(html).toContain('class="ld-header"');
     expect(html).toContain('<img src="/brand/logo.png" alt="" width="36" height="36"/>');
     expect(html).toContain('<span class="ld-wordmark">Meeshy</span>');
     expect(html).toMatch(/<a href="\/login"[^>]*>Se connecter<\/a>/);
-    expect(html).toMatch(/<a href="\/#rejoindre"[^>]*>Entrer sans compte<\/a>/);
+    expect(html).not.toContain('Entrer sans compte');
+    expect(html).not.toContain('#rejoindre');
+    expect(html).toContain('href="/#world"');
     expect(html).toContain('href="/#comment"');
     expect(html).not.toContain('Retour à l’accueil');
   });

@@ -13,7 +13,6 @@ import { describe, it, expect, beforeAll, afterAll, beforeEach, jest } from '@je
 import Fastify, { FastifyInstance } from 'fastify';
 import type { PrismaClient } from '@meeshy/shared/prisma/client';
 import { counterWrite, postCounterWritesOf } from './helpers/posts-counter-writes';
-import { accountReaderKeyOf } from '../services/posts/readerKey';
 
 jest.mock('../services/PostService', () => ({
   PostService: jest.fn().mockImplementation(() => ({})),
@@ -153,9 +152,9 @@ describe('POST /posts/:postId/impression', () => {
     });
     expect(res.statusCode).toBe(200);
     expect(res.json().data.recorded).toBe(true);
-    // La ligne porte sa fin de conservation ; sans consentement d'analyse, l'empreinte du lecteur (8 j, #10773).
+    // La ligne porte le lecteur quel que soit le statut d'analyse (#10785) et sa fin de conservation (90 j, #10510).
     expect(impressionCreateMany).toHaveBeenCalledWith({
-      data: [{ postId: POST_ID, readerKey: accountReaderKeyOf('u1'), source: 'detail', expiresAt: expect.any(Date) }],
+      data: [{ postId: POST_ID, userId: 'u1', source: 'detail', expiresAt: expect.any(Date) }],
     });
     expect(postCounterWritesOf(postCounterCommand)).toContainEqual(counterWrite([POST_ID], { impressionCount: { increment: 1 } }));
     expect(postCounterWritesOf(postCounterCommand)).toContainEqual(counterWrite([POST_ID], { postOpenCount: { increment: 1 } }));

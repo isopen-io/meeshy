@@ -1,11 +1,14 @@
 import { createContext, useContext, useMemo } from 'react';
 
 import type { AvatarRingDesign } from '@meeshy/shared/types/avatar-ring-design';
-import { parseServedProfileDecor, type ServedProfileDecorItem } from '@meeshy/shared/types/profile-decor';
+import type { ServedProfileDecorItem } from '@meeshy/shared/types/profile-decor';
 
 import { hereKeyOf } from '@/lib/view/use-conversation-viewing';
 
+import { recordOf, servedRingOf } from './served-ring';
 import { useDecorDesigns } from './use-decor-designs';
+
+export { servedRingOf };
 
 /**
  * **LE CONTOUR D'UN AUTEUR, HORS PROFIL** (#10713) — la passerelle sert le
@@ -15,16 +18,6 @@ import { useDecorDesigns } from './use-decor-designs';
  * contour. Les dessins se résolvent comme sur le profil (`useDecorDesigns` :
  * builtin au premier rendu, contrat officiel à son arrivée, jamais d'erreur).
  */
-
-const recordOf = (value: unknown): Readonly<Record<string, unknown>> | null => (typeof value === 'object' && value !== null ? (value as Readonly<Record<string, unknown>>) : null);
-
-/** Le contour équipé que porte une personne (un participant, son `user`, ou un auteur) ; `null` si aucun n'est lisible. */
-export function servedRingOf(person: unknown): ServedProfileDecorItem | null {
-  const record = recordOf(person);
-  if (record === null) return null;
-  const own = parseServedProfileDecor(record['profileDecor']).avatarRing;
-  return own ?? parseServedProfileDecor(recordOf(record['user'])?.['profileDecor']).avatarRing;
-}
 
 /** Les contours des participants d'une conversation, sous la clé que l'avatar d'auteur reçoit (`hereKeyOf`). */
 export function ringsByAuthor(participants: readonly unknown[] | undefined): ReadonlyMap<string, ServedProfileDecorItem> {
@@ -48,7 +41,14 @@ export function useRingDesign(item: ServedProfileDecorItem | null): AvatarRingDe
   return useDecorDesigns(decor).ring;
 }
 
-export function useAuthorRing(authorId: string | undefined): AvatarRingDesign | null {
+/**
+ * Le contour d'un auteur du fil : celui des participants de la conversation
+ * d'abord (le plus frais), sinon celui servi AVEC son message
+ * (`sender.profileDecor`, liste et `message:new`) — un auteur hors des
+ * participants chargés (au plus 100 dans la fiche) garde ainsi le sien.
+ */
+export function useAuthorRing(authorId: string | undefined, sender?: unknown): AvatarRingDesign | null {
   const rings = useContext(AuthorRingsContext);
-  return useRingDesign(authorId === undefined ? null : (rings.get(authorId) ?? null));
+  const carried = useMemo(() => servedRingOf(sender), [sender]);
+  return useRingDesign((authorId === undefined ? undefined : rings.get(authorId)) ?? carried);
 }

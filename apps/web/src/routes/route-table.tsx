@@ -192,6 +192,15 @@ const shareLinkArrivalsScreen = () =>
    (pied de contexte, palier nommé, gestes), en parallèle : la bannière in-app
    le charge aussi avec son propre chunk, et `translateNotificationRow` lève
    sur un catalogue non chargé. */
+/* LE MOT DE PASSE OUBLIÉ ET SA RÉINITIALISATION (#10823) — leur chunk ET le
+   catalogue `recovery.*`, en parallèle : le catalogue d'interface est à son
+   plafond, et `translateRecovery` lève sur un catalogue non chargé. */
+const withAccountRecoveryCatalog = <Screen,>(screen: Promise<Screen>) =>
+  Promise.all([
+    screen,
+    import('@/lib/i18n-account-recovery-catalog').then((m) => m.loadAccountRecoveryCatalog(currentInterfaceLanguage())),
+  ]).then(([loaded]) => loaded);
+
 const notificationsScreen = () =>
   Promise.all([import('@/routes/notifications'), loadNotificationRowCatalog(currentInterfaceLanguage())]).then(([screen]) => screen);
 
@@ -385,14 +394,14 @@ export const ROUTES = {
   magicLinkValidate: { pattern: '/auth/magic-link/validate', screen: () => import('@/routes/magic-link-validate') },
   /* MOT DE PASSE OUBLIÉ, flux E-MAIL (#5816) — le flux TÉLÉPHONE reste hors
      tranche (issue compagnon). */
-  forgotPassword: { pattern: '/forgot-password', screen: () => import('@/routes/forgot-password') },
+  forgotPassword: { pattern: '/forgot-password', screen: () => withAccountRecoveryCatalog(import('@/routes/forgot-password')) },
   /* ON FINIT D'ENTRER DANS MEESHY (T-verify/T-reset, #5672) — nomenclature
      legacy reprise (D-5) : `apps/web/app/auth/verify-email`,
      `apps/web/app/reset-password`. L'e-mail et le jeton voyagent en QUERY
      STRING (`?email=`, `?token=`) — un lien reçu par courriel reste valide
      après un rafraîchissement, jamais une navigation en mémoire seule. */
   verifyEmail: { pattern: '/auth/verify-email', screen: () => import('@/routes/verify-email') },
-  resetPassword: { pattern: '/reset-password', screen: () => import('@/routes/reset-password') },
+  resetPassword: { pattern: '/reset-password', screen: () => withAccountRecoveryCatalog(import('@/routes/reset-password')) },
   /* LES LIENS REÇUS (#6714, #6715) — des adresses que la PASSERELLE compose
      et qui circulent déjà : e-mails, messages, publications, Android. Chacune
      garde l'adresse exacte que le legacy servait (D-5) : sinon chaque lien
@@ -477,8 +486,24 @@ export const ROUTES = {
      côté — il « ne distingue que REEL du reste » (`lib/api/feed-pages.ts`), et
      le détail d'une publication n'a aucune branche sur `type`. Une humeur EST
      une publication ; lui écrire un second lecteur en ferait une jumelle à
-     faire diverger. D'où le MÊME `import()` que ses deux sœurs. */
-  mood: { pattern: '/mood/$post', screen: publicationScreen },
+     faire diverger. D'où le MÊME `import()` que ses deux sœurs.
+
+     L'HUMEUR EN GRAND (#10813) — la notification « nouvelle humeur » mène ici,
+     et un compte y lit désormais la page de l'humeur : la bannière de son
+     auteur, son avatar, son mot, la pluie de son emoji et la réponse en privé.
+     L'adresse ne change pas, et ce qu'elle servait non plus pour tout le reste :
+     un visiteur sans compte, ou une publication qui n'est pas une humeur,
+     retombent sur le MÊME détail de publication (`routes/mood.tsx` le délègue,
+     rien n'est réécrit). Le catalogue de l'humeur (sept langues) se charge
+     AVEC l'écran, jamais au démarrage. */
+  mood: {
+    pattern: '/mood/$post',
+    screen: () =>
+      Promise.all([
+        import('@/routes/mood'),
+        import('@/lib/i18n-mood-compose-catalog').then((m) => m.loadMoodComposeCatalog(currentInterfaceLanguage())),
+      ]).then(([screen]) => screen),
+  },
   /* LE PROFIL PUBLIC DE QUELQU'UN et LES PUBLICATIONS D'UN MOT-CLÉ (#7032) —
      les DEUX adresses que le texte enrichi vise, et elles arrivent AVANT les
      liens qui les visent : une mention qui tomberait sur « adresse inconnue »

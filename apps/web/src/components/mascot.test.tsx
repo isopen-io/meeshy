@@ -8,7 +8,7 @@ import type { MascotMood } from '@meeshy/shared/utils/mascot';
 
 import { ENGAGEMENT_PROGRESS_FIXTURE } from '@/lib/api/engagement-fixture';
 import { mascotSay } from '@/lib/view/mascot-copy';
-import { ACHIEVEMENT_COPY } from '@/lib/view/progression';
+import { achievementCopy } from '@/lib/view/progression';
 import { ProgressionBody } from '@/routes/progression';
 
 import { Mascot, MascotCoach } from './mascot';
@@ -37,7 +37,7 @@ describe('mascotSay — la phrase de chaque ligne', () => {
   test('célèbre un niveau et nomme un succès par son titre', () => {
     expect(mascotSay({ kind: 'level-up', level: 3 })).toBe('Niveau 3 ! On fête ça.');
     expect(mascotSay({ kind: 'achievement', key: 'achievement.first_voice' })).toContain(
-      ACHIEVEMENT_COPY['achievement.first_voice'].title,
+      achievementCopy('achievement.first_voice', 'fr').title,
     );
   });
 

@@ -119,6 +119,8 @@ struct MessageOverlayMenu: View {
     // barre d'emojis). Distinct de `bubbleAccentHex` qui, lui, teinte
     // la bulle previsualisee selon l'expediteur.
     private var overlayAccent: Color { Color(hex: contactColor) }
+    /// La peau de la bulle présentée, celle que le fil a résolue (#10753).
+    private var previewSkin: BubbleSkin { BubbleSkinLedger.skin(for: message.conversationId, isDark: isDark) }
 
     // MARK: - Bubble preview helpers (mirror BubbleStandardLayout)
 
@@ -127,7 +129,7 @@ struct MessageOverlayMenu: View {
     /// inside the overlay. Sent messages use the brand primary directly.
     private var bubbleAccentHex: String {
         if message.isMe {
-            return MeeshyColors.brandPrimaryHex
+            return previewSkin.sentFillHex
         }
         let senderHex = message.senderColor ?? contactColor
         return DynamicColorGenerator.blendTwo(
@@ -646,6 +648,7 @@ struct MessageOverlayMenu: View {
             previewSenderHeader
 
             previewContent
+                .environment(\.bubbleSkin, previewSkin)
         }
         // Match the in-conversation bubble cap (BubbleStandardLayout calls
         // the same DeviceLayout helper, a share of the app's WINDOW — not of
@@ -821,7 +824,7 @@ struct MessageOverlayMenu: View {
         return VStack(alignment: message.isMe ? .trailing : .leading, spacing: MeeshySpacing.xs) {
             Text(truncated)
                 .font(MeeshyFont.relative(MeeshyFont.bodySize))
-                .foregroundColor(message.isMe ? .white : theme.textPrimary)
+                .foregroundColor(message.isMe ? previewSkin.ink : theme.textPrimary)
                 .fixedSize(horizontal: false, vertical: true)
                 .padding(.horizontal, MeeshySpacing.mdPlus)
                 .padding(.top, MeeshySpacing.smPlus)

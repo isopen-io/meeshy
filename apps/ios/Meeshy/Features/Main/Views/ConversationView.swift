@@ -279,7 +279,7 @@ struct ConversationView: View {
         let refs = attachmentRefs
             ?? DraftStore.shared.load(for: viewModel.conversationId)?.attachments
         let draft = MessageDraft.composing(
-            text: text,
+            text: composerState.persistedDraftText(composing: text),
             reply: ref,
             selectedLanguage: composerState.selectedLanguage,
             effectFlags: viewModel.pendingEffects.flags.rawValue,
@@ -623,54 +623,10 @@ struct ConversationView: View {
                             defaultValue: "Autorisez la définition de votre profil vocal pour que vos messages vocaux soient transcrits et traduits automatiquement dans la langue de chaque destinataire — y compris avec votre voix.",
                             bundle: .main))
             }
-            .confirmationDialog(
-                String(localized: "conversation.view.delete_message.title", bundle: .main),
-                isPresented: Binding(
-                    get: { overlayState.deleteConfirmMessageId != nil },
-                    set: { if !$0 { overlayState.deleteConfirmMessageId = nil } }
-                ),
-                titleVisibility: .visible,
-                presenting: overlayState.deleteConfirmMessageId
-            ) { msgId in
-                // "Delete for everyone" only if the user authored the
-                // message AND the 2-hour window hasn't elapsed — matches
-                // WhatsApp's "Delete for everyone" gating.
-                if let idx = viewModel.messageIndex(for: msgId),
-                   viewModel.canDeleteForEveryone(viewModel.messages[idx]) {
-                    Button(String(localized: "conversation.view.delete_for_everyone", bundle: .main), role: .destructive) {
-                        Task { await viewModel.deleteMessage(messageId: msgId, mode: .everyone) }
-                        overlayState.deleteConfirmMessageId = nil
-                    }
-                }
-                Button(String(localized: "conversation.view.delete_for_me", bundle: .main), role: .destructive) {
-                    Task { await viewModel.deleteMessage(messageId: msgId, mode: .local) }
-                    overlayState.deleteConfirmMessageId = nil
-                }
-                Button(String(localized: "common.cancel", bundle: .main), role: .cancel) { overlayState.deleteConfirmMessageId = nil }
-            } message: { _ in
-                Text(String(localized: "conversation.view.delete_for_everyone.hint", bundle: .main))
-            }
-            // #4024 — même contrat que la confirmation ci-dessus, sur la
-            // SÉLECTION entière plutôt qu'un seul message : "pour tous"
-            // n'apparaît que si `selectionAllowsDeleteForAll` (TOUS les
-            // messages sélectionnés sont miens ET encore dans la fenêtre).
-            .confirmationDialog(
-                String(localized: "conversation.view.delete_message.title", bundle: .main),
-                isPresented: $overlayState.deleteConfirmSelectionActive,
-                titleVisibility: .visible
-            ) {
-                if selectionAllowsDeleteForAll {
-                    Button(String(localized: "conversation.view.delete_for_everyone", bundle: .main), role: .destructive) {
-                        deleteSelectedMessages(mode: .everyone)
-                    }
-                }
-                Button(String(localized: "conversation.view.delete_for_me", bundle: .main), role: .destructive) {
-                    deleteSelectedMessages(mode: .local)
-                }
-                Button(String(localized: "common.cancel", bundle: .main), role: .cancel) { }
-            } message: {
-                Text(String(localized: "conversation.view.delete_for_everyone.hint", bundle: .main))
-            }
+            // #10806 — les confirmations de suppression s'ancrent DANS la
+            // conversation (`messageDeleteConfirmationAnchor`), jamais sur la
+            // racine : sur iPad, celle-ci devenait un popover posé sur la liste.
+            .overlay { messageDeleteConfirmationAnchor }
             .sheet(item: $overlayState.shareMessage) { msg in
                 ShareSheet(activityItems: [viewModel.preferredTranslation(for: msg.id)?.translatedContent ?? msg.content])
                     .presentationDetents([.medium, .large])
@@ -1102,7 +1058,7 @@ struct ConversationView: View {
                 // #7500 — la sortie par NAVIGATION. Jumelle de celle du passage
                 // en arrière-plan ci-dessus : une vue unique lue ici ne
                 // survivra pas au retour.
-                consumeOpenedViewOnceOnExit()
+                leaveConversationByNavigation()
                 // Rompt le cycle de rétention : `onPersistNeeded` capture une
                 // copie de cette struct, dont le wrapper State retient (via sa
                 // box de stockage) le modèle vivant — soit modèle → closure →

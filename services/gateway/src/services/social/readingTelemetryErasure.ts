@@ -11,8 +11,8 @@ import { accountReaderKeyOf } from '../posts/readerKey';
  * `impressionCount`…) ne bougent pas : ils sont des agrégats sans identité.
  * Les événements v2 rangés SANS acteur (`actorKind = none`) ne portent pas de
  * `userId` : ils n'ont rien à effacer. Les impressions et sessions rangées
- * SANS consentement d'analyse portent l'EMPREINTE du compte (`readerKey`,
- * #10771, #10773) : elles s'effacent par elle, avec les lignes nominatives.
+ * sous la forme RÉDUITE entre #10771 et #10785 portent l'EMPREINTE du compte
+ * (`readerKey`) : elles s'effacent par elle, avec les lignes nominatives.
  *
  * Idempotent (`deleteMany` sur rien ne lève pas). Une panne PROPAGE, comme
  * pour chaque suppression voisine de la purge.

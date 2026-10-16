@@ -126,6 +126,10 @@ public struct MessageRecord: Codable, FetchableRecord, PersistableRecord, Sendab
     /// système (fail-closed).
     public var senderHasAccount: Bool?
 
+    /// Le contour d'avatar équipé de l'auteur (#10713), en `ServedProfileDecorItem` JSON.
+    /// `nil` ⇒ aucun contour (ou ligne antérieure, remplie à la revalidation).
+    public var senderRingJson: String?
+
     /// **L'instant où CE lecteur a ouvert cette vue unique** (#7579) — `nil`
     /// tant qu'il ne l'a pas ouverte. Colonne LOCALE et par personne : ce que
     /// les autres ouvrent n'y touche pas. Non nulle, elle est PERMANENTE : la
@@ -188,7 +192,8 @@ public struct MessageRecord: Codable, FetchableRecord, PersistableRecord, Sendab
         viewOnceOpenedAt: Date? = nil,
         trackedLinksJson: String? = nil,
         senderIsAnonymous: Bool? = nil,
-        senderHasAccount: Bool? = nil
+        senderHasAccount: Bool? = nil,
+        senderRingJson: String? = nil
     ) {
         self.viewOnceOpenedAt = viewOnceOpenedAt
         self.localId = localId
@@ -257,6 +262,7 @@ public struct MessageRecord: Codable, FetchableRecord, PersistableRecord, Sendab
         self.trackedLinksJson = trackedLinksJson
         self.senderIsAnonymous = senderIsAnonymous
         self.senderHasAccount = senderHasAccount
+        self.senderRingJson = senderRingJson
     }
 
     // MARK: - Timestamp pre-compute helper

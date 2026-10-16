@@ -95,6 +95,7 @@ struct BubbleQuotedReply: View, Equatable {
     /// à `large` et à `accessibility3` — et la coupure par mot ne servirait à
     /// rien, `lineLimit` reprenant la main au milieu d'un mot.
     @Environment(\.dynamicTypeSize) private var dynamicTypeSize
+    @Environment(\.bubbleSkin) private var bubbleSkin
 
     /// Cote de l'avatar de la ZONE 1 — la MEME que celle de la rangee plate
     /// (`FocalMetrics.Avatar.size`), sans emprunter le jeton d'une autre peau :
@@ -347,7 +348,7 @@ struct BubbleQuotedReply: View, Equatable {
     /// La teinte des textes secondaires de la citation — celle de l'aperçu,
     /// que l'aperçu d'un vocal cité reprend.
     private var quotePreviewColor: Color {
-        parentIsMe ? .white.opacity(MeeshyOpacity.heavy) : theme.textMuted
+        parentIsMe ? bubbleSkin.ink(MeeshyOpacity.heavy) : theme.textMuted
     }
 
     /// ZONE 1 — l'avatar de l'auteur cite, seule porte vers son profil. Le NOM
@@ -567,17 +568,17 @@ struct BubbleQuotedReply: View, Equatable {
     private var quotedBody: some View {
         let accentBarColor = Color(hex: reply.isMe ? accentHex : reply.authorColor)
         let nameColor: Color = parentIsMe
-            ? .white.opacity(MeeshyOpacity.intense)
+            ? bubbleSkin.ink(MeeshyOpacity.intense)
             : Color(hex: reply.isMe ? accentHex : reply.authorColor)
         let previewColor = quotePreviewColor
         let bgColor: Color = parentIsMe
-            ? Color.white.opacity(MeeshyOpacity.light)
+            ? bubbleSkin.ink(MeeshyOpacity.light)
             : MeeshyColors.surfaceFill(isDark: isDark)
 
         let contentBody = HStack(spacing: 0) {
             // Left accent bar
             RoundedRectangle(cornerRadius: 2)
-                .fill(parentIsMe ? Color.white.opacity(MeeshyOpacity.heavy) : accentBarColor)
+                .fill(parentIsMe ? bubbleSkin.ink(MeeshyOpacity.heavy) : accentBarColor)
                 .frame(width: 4)
 
             HStack(spacing: 8) {

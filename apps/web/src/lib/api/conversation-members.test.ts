@@ -57,6 +57,16 @@ describe('decodeConversationMember — la forme aplatie de la passerelle (#7829)
     expect(member?.role).toBe('member');
   });
 
+  test('le contour équipé servi avec la ligne voyage avec le membre (#10713)', () => {
+    const avatarRing = { pack: 'contours-essentiels', item: 'filet', origin: 'builtin', contract: null };
+    expect(decodeConversationMember(wireMember({ profileDecor: { avatarRing } }))?.ring).toEqual(avatarRing);
+  });
+
+  test('sans contour, ou un contour illisible : aucun contour, jamais d’erreur (#10713)', () => {
+    expect(decodeConversationMember(wireMember())?.ring).toBeUndefined();
+    expect(decodeConversationMember(wireMember({ profileDecor: { avatarRing: { pack: 3 } } }))?.ring).toBeUndefined();
+  });
+
   test('une ligne sans identifiant est écartée', () => {
     expect(decodeConversationMember({ displayName: 'x' })).toBeNull();
   });
@@ -122,5 +132,26 @@ describe('memberFromParticipant — les participants DÉJÀ en cache, peints ava
       avatar: 'a.png',
       role: 'moderator',
     });
+  });
+});
+
+describe('memberFromParticipant — le contour équipé déjà en cache (#10713)', () => {
+  test('le contour servi avec le participant de la conversation passe au membre', () => {
+    const avatarRing = { pack: 'contours-essentiels', item: 'filet', origin: 'builtin', contract: null };
+    const participant = {
+      id: 'p-nour',
+      conversationId: 'c1',
+      userId: 'u-nour',
+      type: 'user',
+      displayName: 'Nour Haddad',
+      role: 'member',
+      language: 'fr',
+      isActive: true,
+      isOnline: false,
+      joinedAt: new Date('2026-01-01'),
+      user: { id: 'u-nour', username: 'nour' },
+      profileDecor: { avatarRing },
+    } as unknown as Participant;
+    expect(memberFromParticipant(participant).ring).toEqual(avatarRing);
   });
 });

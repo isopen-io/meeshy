@@ -40,6 +40,7 @@ import { LIVE_MESSAGE_MARK } from './liveMessage';
 import { unsetOrNull } from '../../utils/prisma-unset';
 import { mapWithConcurrency } from '@meeshy/shared/utils/concurrency';
 import { findExistingMessage, findContentWindowDuplicate } from './messageDedupProjection';
+import { MESSAGE_AUTHOR_USER_SELECT } from './messageAuthorSelect';
 import type { SocketAttachmentRow } from '../../socketio/serializeAttachmentForSocket';
 
 // Logger dédié pour MessageProcessor
@@ -485,16 +486,7 @@ export class MessageProcessor {
                 nickname: true,
                 userId: true,
                 ...ANONYMOUS_SENDER_NAME_SELECT,
-                user: {
-                  select: {
-                    id: true,
-                    username: true,
-                    displayName: true,
-                    firstName: true,
-                    lastName: true,
-                    avatar: true
-                  }
-                }
+                user: { select: MESSAGE_AUTHOR_USER_SELECT }
               }
             },
             attachments: { orderBy: MESSAGE_ATTACHMENT_ORDER },

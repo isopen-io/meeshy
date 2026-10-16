@@ -548,3 +548,30 @@ describe('la carte montre d’abord ce qui demande une action', () => {
     expect(cards(hub(ready))).toEqual(cards(hub(calm)));
   });
 });
+
+/** LA FIN DE MISSION SE PHOTOGRAPHIE (#10816) : la fiche des missions remet sa mission personnelle accomplie à l'hôte de la photo. */
+describe('la fiche des missions et la photo de fin de mission', () => {
+  test('une mission personnelle accomplie propose sa photo quand l’hôte la sait prendre', () => {
+    const game = gameBlockWithExtrasFixture();
+    const personal = {
+      id: 'm-perso',
+      difficulty: 'easy' as const,
+      templateKey: 'send-texts',
+      signal: 'axis:chat.message',
+      prism: false,
+      target: 5,
+      progress: 5,
+      reward: 40,
+      glory: 0,
+      completedAt: `${GAME_EXTRAS_TODAY}T09:00:00.000Z`,
+      startsAt: `${GAME_EXTRAS_TODAY}T08:00:00.000Z`,
+      endsAt: `${GAME_EXTRAS_TODAY}T09:30:00.000Z`,
+      state: 'completed' as const,
+    };
+    const progress: EngagementWithGame = { ...playing, game: { ...game, missions: { ...game.missions, unlocked: true, personal } } };
+    const render = (onPhotoMission?: () => void) =>
+      dom(renderToStaticMarkup(<ConceptFiche concept="missions" progress={progress} host={{ actions: idle, online: true, ...(onPhotoMission === undefined ? {} : { onPhotoMission }) }} now={NOW} />));
+    expect(render(() => undefined).querySelector('[data-mission-photo="m-perso"]')).not.toBeNull();
+    expect(render().querySelector('[data-mission-photo]')).toBeNull();
+  });
+});

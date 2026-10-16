@@ -1,6 +1,7 @@
 import { act } from 'react';
 import { afterAll, afterEach, beforeAll, beforeEach, describe, expect, test } from 'bun:test';
 
+import { createLottieBudget } from '@/lib/lottie/budget';
 import type { LottieHandle, LottiePlayer } from '@/lib/lottie/engine';
 import { createActMounter } from '@/test-support/act-mount';
 import { createFakeIntersectionObservers } from '@/test-support/fake-intersection-observer';
@@ -206,5 +207,84 @@ describe('la couche animée Lottie', () => {
     await mounter.mount(<LottieLayer sourceKey="vide" load={async () => null} player={fakeEngine(state)} />);
     await becomeVisible();
     expect(state).toMatchObject({ engineLoads: 0, created: 0 });
+  });
+});
+
+describe('le plafond des films vivants dans une liste longue (#10815)', () => {
+  const emitOne = async (index: number, visible: boolean): Promise<void> => {
+    await act(async () => {
+      const slot = observers.live()[index];
+      slot?.callback([...slot.nodes].map((target) => ({ target, isIntersecting: visible, intersectionRatio: visible ? 1 : 0 })));
+    });
+    await mounter.settle();
+  };
+
+  const mountRow = async (state: Probe, budget: ReturnType<typeof createLottieBudget>, keys: readonly string[]) =>
+    mounter.mount(
+      <div>
+        {keys.map((key) => (
+          <LottieLayer key={key} sourceKey={key} load={async () => bytesOf(animation)} player={fakeEngine(state)} budget={budget} />
+        ))}
+      </div>,
+    );
+
+  test('au-delà du plafond, une couche visible garde son image fixe : aucun film de plus', async () => {
+    const state = probe();
+    const budget = createLottieBudget(2);
+    await mountRow(state, budget, ['a', 'b', 'c']);
+    await becomeVisible();
+    expect(state.created).toBe(2);
+    expect(budget.holders()).toBe(2);
+  });
+
+  test('la couche qui sort de l’écran cède sa place sous pression : son film est détruit, celui qui entre se monte', async () => {
+    const state = probe();
+    const budget = createLottieBudget(1);
+    const host = await mountRow(state, budget, ['a', 'b']);
+    await emitOne(0, true);
+    expect(state.created).toBe(1);
+    await emitOne(1, true);
+    expect(state.created).toBe(1);
+    await emitOne(0, false);
+    expect(state.destroys).toBe(1);
+    expect(state.created).toBe(2);
+    expect(host.querySelector('[data-lottie-layer="a"]')?.childNodes.length).toBe(0);
+  });
+
+  test('une couche évincée qui revient à l’écran remonte son film', async () => {
+    const state = probe();
+    const budget = createLottieBudget(1);
+    await mountRow(state, budget, ['a', 'b']);
+    await emitOne(0, true);
+    await emitOne(0, false);
+    await emitOne(1, true);
+    await emitOne(1, false);
+    await emitOne(0, true);
+    expect(state.created).toBe(3);
+    expect(state.destroys).toBe(2);
+  });
+
+  test('une couche sans octets lisibles rend sa place à la suivante', async () => {
+    const state = probe();
+    const budget = createLottieBudget(1);
+    await mounter.mount(
+      <div>
+        <LottieLayer sourceKey="vide" load={async () => null} player={fakeEngine(state)} budget={budget} />
+        <LottieLayer sourceKey="plein" load={async () => bytesOf(animation)} player={fakeEngine(state)} budget={budget} />
+      </div>,
+    );
+    await becomeVisible();
+    await mounter.settle();
+    expect(state.created).toBe(1);
+    expect(budget.holders()).toBe(1);
+  });
+
+  test('le démontage rend la place au budget', async () => {
+    const state = probe();
+    const budget = createLottieBudget(2);
+    await mountRow(state, budget, ['a', 'b']);
+    await becomeVisible();
+    mounter.unmountAll();
+    expect(budget.holders()).toBe(0);
   });
 });

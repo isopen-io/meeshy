@@ -402,5 +402,14 @@ public enum MessageDatabaseMigrations {
                 t.add(column: "cancelRequestedAt", .datetime)
             }
         }
+
+        // **Le contour d'avatar de l'auteur** (#10713), servi avec le message
+        // (`sender.profileDecor.avatarRing`) : le fil le peint dès le cache. JSON
+        // de `ServedProfileDecorItem` ; NULL ⇒ aucun contour.
+        migrator.registerMigration("messages_sender_ring") { db in
+            try db.alter(table: "messages") { t in
+                t.add(column: "senderRingJson", .text)
+            }
+        }
     }
 }

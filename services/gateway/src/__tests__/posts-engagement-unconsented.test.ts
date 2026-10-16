@@ -1,13 +1,11 @@
 /**
- * Une session de lecture SANS consentement d'analyse ne laisse que ce que le
- * compteur exige (#10771, #10772 — analyse de conformité #10770).
- *
- * Sous un statut autre que `granted`, la ligne `PostEngagement` ne garde que
- * l'empreinte de la session, le post, l'empreinte du lecteur, l'heure de
- * réception, les trois compteurs déjà crédités et une fin de conservation à
- * 8 jours. Les durées servent au calcul à la réception, puis sont jetées. La
- * fusion premier contact → mesure et la déduplication à 10 s marchent sur
- * cette forme ; l'export et l'effacement la retrouvent par l'empreinte.
+ * Une session de lecture est NOMINATIVE quel que soit le statut d'analyse
+ * (décision du porteur, #10785) : « qui a vu » est une fonctionnalité de la
+ * plateforme, sa base est l'exécution du service. Hors `granted`, seule la
+ * télémétrie sans fonctionnalité visible part : micro-actions (`actions`) et
+ * échantillons de lecture (`watchSamples`). Le serveur décide du statut
+ * (#10772). Les lignes réduites écrites entre 111c74768d et #10785 (empreinte
+ * `readerKey`, 8 jours) restent lues, dédupliquées, exportées et effacées.
  *
  * Le double est une TABLE qui évalue ses `where` : un témoin de fusion ou de
  * déduplication contre un `mockResolvedValue` passerait avec une requête fausse.
@@ -16,7 +14,7 @@
  */
 import { describe, it, expect, jest } from '@jest/globals';
 import { recordEngagementBatch } from '../services/posts/postReach';
-import { accountReaderKeyOf } from '../services/posts/readerKey';
+import { accountReaderKeyOf, engagementSessionKeyOf } from '../services/posts/readerKey';
 import { eraseReadingTelemetryOf } from '../services/social/readingTelemetryErasure';
 import { exportReadingActivity } from '../routes/me/export-reading';
 import { detachBehaviourOf } from '../services/social/consentWithdrawal';
@@ -125,36 +123,46 @@ function table(seed: Row[] = [], posts: PostRow[] = [{ id: POST, authorId: 'auth
   return { rows, prisma, deps, counters: () => postCounterWritesOf($runCommandRaw).map((write) => write.data) };
 }
 
-const REDUCED_KEYS = ['createdAt', 'creditedOpen', 'creditedPlay', 'creditedQualified', 'expiresAt', 'id', 'postId', 'readerKey', 'sessionId'];
-const HEX64 = /^[0-9a-f]{64}$/;
+/** Une ligne réduite écrite par 111c74768d (staging, 8 jours) : elle doit rester lue, dédupliquée, exportée, effacée. */
+const legacyReducedRow = (over: Row = {}): Row => ({
+  id: 'reduite',
+  sessionId: engagementSessionKeyOf(SESSION),
+  postId: POST,
+  readerKey: accountReaderKeyOf(READER),
+  creditedOpen: true,
+  createdAt: new Date(Date.now() - 2000),
+  expiresAt: new Date(Date.now() + 8 * DAY_MS),
+  ...over,
+});
 
-describe('#10771 — une session sans consentement ne laisse que trois drapeaux et une empreinte, 8 jours', () => {
-  it.each(['not_granted', 'denied'] as const)('statut %s : la ligne écrite ne porte ni compte, ni durée, ni surface, ni trace', async (standing) => {
-    const { rows, prisma, deps, counters } = table();
+describe('#10785 — une session sans consentement garde son lecteur (« qui a vu »), sans micro-actions ni échantillons', () => {
+  it.each(['not_granted', 'denied'] as const)('statut %s : la ligne porte le compte, la mesure, les drapeaux crédités, 90 jours — ni actions, ni échantillons', async (standing) => {
+    const { rows, deps, counters } = table();
     const before = Date.now();
 
     await recordEngagementBatch(deps as never, [session(MEASURE)], READER, standing);
 
     expect(rows).toHaveLength(1);
     const [row] = rows;
-    expect(Object.keys(row).sort()).toEqual(REDUCED_KEYS);
-    expect(row.sessionId).toMatch(HEX64);
-    expect(row.sessionId).not.toBe(SESSION);
-    expect(row.readerKey).toBe(accountReaderKeyOf(READER));
-    expect(JSON.stringify(row)).not.toContain(READER);
-    expect(row).toMatchObject({ postId: POST, creditedOpen: true, creditedPlay: true, creditedQualified: true });
-    expect(Math.round(((row.expiresAt as Date).getTime() - before) / DAY_MS)).toBe(8);
+    expect(row).toMatchObject({
+      sessionId: SESSION, postId: POST, userId: READER, contentType: 'REEL', surface: 'reels',
+      dwellMs: 9000, watchMs: 9000, mediaDurationMs: 9000, completed: true,
+      actions: [], watchSamples: [], consent: standing,
+      creditedOpen: true, creditedPlay: true, creditedQualified: true,
+    });
+    expect(row).not.toHaveProperty('readerKey');
+    expect(Math.round(((row.expiresAt as Date).getTime() - before) / DAY_MS)).toBe(90);
     expect(counters()).toEqual([{ postOpenCount: { increment: 1 }, playCount: { increment: 1 }, qualifiedViewCount: { increment: 1 } }]);
   });
 
-  it('le premier contact puis la mesure : une seule ligne réduite, l’ouverture une fois, la lecture et la vue qualifiée à la mesure', async () => {
-    const { rows, prisma, deps, counters } = table();
+  it('le premier contact puis la mesure : une seule ligne nominative, l’ouverture une fois, la lecture et la vue qualifiée à la mesure', async () => {
+    const { rows, deps, counters } = table();
 
     await recordEngagementBatch(deps as never, [session()], READER, 'not_granted');
     await recordEngagementBatch(deps as never, [session(MEASURE)], READER, 'not_granted');
 
     expect(rows).toHaveLength(1);
-    expect(Object.keys(rows[0]).sort()).toEqual(REDUCED_KEYS);
+    expect(rows[0]).toMatchObject({ sessionId: SESSION, userId: READER, dwellMs: 9000, actions: [], watchSamples: [] });
     expect(counters()).toEqual([
       { postOpenCount: { increment: 1 } },
       { playCount: { increment: 1 }, qualifiedViewCount: { increment: 1 } },
@@ -162,101 +170,112 @@ describe('#10771 — une session sans consentement ne laisse que trois drapeaux 
   });
 
   it('un premier contact rejoué après la mesure ne crédite rien et ne fait pas reculer les drapeaux', async () => {
-    const { rows, prisma, deps, counters } = table();
+    const { rows, deps, counters } = table();
 
     await recordEngagementBatch(deps as never, [session(MEASURE)], READER, 'not_granted');
     await recordEngagementBatch(deps as never, [session()], READER, 'not_granted');
 
     expect(counters()).toHaveLength(1);
-    expect(rows[0]).toMatchObject({ creditedOpen: true, creditedPlay: true, creditedQualified: true });
+    expect(rows[0]).toMatchObject({ creditedOpen: true, creditedPlay: true, creditedQualified: true, dwellMs: 9000 });
   });
 
-  it('une session neuve du même lecteur sur le même post dans les 10 s ne crédite rien, qu’elle suive une ligne réduite ou une ligne nominative', async () => {
-    const reduced = table();
-    await recordEngagementBatch(reduced.deps as never, [session(MEASURE)], READER, 'not_granted');
-    reduced.rows[0].createdAt = new Date(Date.now() - 2000);
-    await recordEngagementBatch(reduced.deps as never, [session({ ...MEASURE, sessionId: '22222222-2222-2222-2222-222222222222' })], READER, 'not_granted');
-    expect(reduced.counters()).toHaveLength(1);
+  it('une session neuve du même lecteur sur le même post dans les 10 s ne crédite rien, qu’elle suive une ligne nominative ou une ligne réduite antérieure', async () => {
+    const nominative = table();
+    await recordEngagementBatch(nominative.deps as never, [session(MEASURE)], READER, 'not_granted');
+    nominative.rows[0].createdAt = new Date(Date.now() - 2000);
+    await recordEngagementBatch(nominative.deps as never, [session({ ...MEASURE, sessionId: '22222222-2222-2222-2222-222222222222' })], READER, 'not_granted');
+    expect(nominative.counters()).toHaveLength(1);
 
-    const legacy = table([{ id: 'legacy', sessionId: 'ancienne', postId: POST, userId: READER, createdAt: new Date(Date.now() - 2000), dwellMs: 1 }]);
-    await recordEngagementBatch(legacy.deps as never, [session(MEASURE)], READER, 'not_granted');
-    expect(legacy.counters()).toEqual([]);
+    const reduced = table([legacyReducedRow()]);
+    await recordEngagementBatch(reduced.deps as never, [session({ ...MEASURE, sessionId: '33333333-3333-3333-3333-333333333333' })], READER, 'not_granted');
+    expect(reduced.counters()).toEqual([]);
   });
 
   it('la session d’un AUTRE lecteur dans la fenêtre ne la rend pas muette', async () => {
-    const { rows, prisma, deps, counters } = table();
+    const { rows, deps, counters } = table();
     await recordEngagementBatch(deps as never, [session(MEASURE)], OTHER_READER, 'not_granted');
     rows[0].createdAt = new Date(Date.now() - 2000);
     await recordEngagementBatch(deps as never, [session({ ...MEASURE, sessionId: '33333333-3333-3333-3333-333333333333' })], READER, 'not_granted');
     expect(counters()).toHaveLength(2);
   });
 
-  it('statut granted : régime inchangé — ligne nominative, mesure complète, 90 jours', async () => {
-    const { rows, prisma, deps, counters } = table();
+  it('statut granted : régime inchangé — ligne nominative, mesure complète avec actions et échantillons, 90 jours', async () => {
+    const { rows, deps, counters } = table();
     const before = Date.now();
 
     await recordEngagementBatch(deps as never, [session(MEASURE)], READER, 'granted');
 
-    expect(rows[0]).toMatchObject({ sessionId: SESSION, userId: READER, dwellMs: 9000, watchMs: 9000, completed: true, actions: MEASURE.actions, watchSamples: MEASURE.watchSamples });
+    expect(rows[0]).toMatchObject({
+      sessionId: SESSION, userId: READER, dwellMs: 9000, watchMs: 9000, completed: true, consent: 'granted',
+      actions: MEASURE.actions, watchSamples: MEASURE.watchSamples,
+    });
     expect(rows[0]).not.toHaveProperty('readerKey');
     expect(Math.round(((rows[0].expiresAt as Date).getTime() - before) / DAY_MS)).toBe(90);
     expect(counters()).toHaveLength(1);
   });
 
-  it('une ligne nominative dont la mesure arrive après le retrait est réduite, et ne recrédite pas l’ouverture', async () => {
-    const { rows, prisma, deps, counters } = table();
-    await recordEngagementBatch(deps as never, [session()], READER, 'granted');
+  it('une ligne consentie dont la mesure arrive après le retrait garde son lecteur, perd sa trace, et ne recrédite pas l’ouverture', async () => {
+    const { rows, deps, counters } = table();
+    await recordEngagementBatch(deps as never, [session({ actions: [{ type: 'like', atMs: 1 }] })], READER, 'granted');
     await recordEngagementBatch(deps as never, [session(MEASURE)], READER, 'denied');
 
     expect(rows).toHaveLength(1);
-    expect(Object.keys(rows[0]).filter((key) => rows[0][key] !== null && rows[0][key] !== undefined).sort()).toEqual(REDUCED_KEYS);
+    expect(rows[0]).toMatchObject({ sessionId: SESSION, userId: READER, dwellMs: 9000, actions: [], watchSamples: [], consent: 'denied' });
+    expect(rows[0]).not.toHaveProperty('readerKey');
     expect(counters()).toEqual([
       { postOpenCount: { increment: 1 } },
       { playCount: { increment: 1 }, qualifiedViewCount: { increment: 1 } },
     ]);
   });
 
-  it('une ligne réduite ne redevient pas nominative quand le consentement arrive en cours de session', async () => {
-    const { rows, prisma, deps, counters } = table();
-    await recordEngagementBatch(deps as never, [session()], READER, 'not_granted');
-    await recordEngagementBatch(deps as never, [session(MEASURE)], READER, 'granted');
+  it('compatibilité : la mesure d’une session dont le premier contact a laissé une ligne réduite la rend nominative, sans recréditer l’ouverture', async () => {
+    const { rows, deps, counters } = table([legacyReducedRow()]);
+
+    await recordEngagementBatch(deps as never, [session(MEASURE)], READER, 'not_granted');
 
     expect(rows).toHaveLength(1);
-    expect(Object.keys(rows[0]).sort()).toEqual(REDUCED_KEYS);
-    expect(counters()).toHaveLength(2);
+    expect(rows[0]).toMatchObject({ id: 'reduite', sessionId: SESSION, userId: READER, dwellMs: 9000, creditedOpen: true, creditedPlay: true });
+    expect(rows[0]).not.toHaveProperty('readerKey');
+    expect(counters()).toEqual([{ playCount: { increment: 1 }, qualifiedViewCount: { increment: 1 } }]);
   });
 
-  it('l’export retrouve les lignes réduites du compte, l’effacement les retire, rien d’un autre lecteur', async () => {
-    const { rows, prisma, deps } = table();
+  it('l’export rend les lignes du compte (nominatives et réduites antérieures), l’effacement les retire, rien d’un autre lecteur', async () => {
+    const { rows, prisma, deps } = table([legacyReducedRow({ sessionId: 'f'.repeat(64) })]);
     await recordEngagementBatch(deps as never, [session(MEASURE)], READER, 'not_granted');
     await recordEngagementBatch(deps as never, [session({ ...MEASURE, sessionId: '44444444-4444-4444-4444-444444444444' })], OTHER_READER, 'not_granted');
 
     const exported = await exportReadingActivity(prisma as never, READER, { limit: 10, offset: 0 } as never);
-    expect(exported.engagements).toEqual([expect.objectContaining({ postId: POST, creditedOpen: true, creditedPlay: true, creditedQualified: true })]);
+    expect(exported.engagements).toHaveLength(2);
+    expect(exported.engagements).toEqual(expect.arrayContaining([
+      expect.objectContaining({ postId: POST, dwellMs: 9000 }),
+      expect.objectContaining({ postId: POST, creditedOpen: true }),
+    ]));
 
     const erased = await eraseReadingTelemetryOf(prisma as never, READER);
-    expect(erased.engagements).toBe(1);
-    expect(rows.map((row) => row.readerKey)).toEqual([accountReaderKeyOf(OTHER_READER)]);
+    expect(erased.engagements).toBe(2);
+    expect(rows.map((row) => row.userId)).toEqual([OTHER_READER]);
   });
 });
 
 describe('#10772 — le refus s’applique côté passerelle, quel que soit le client', () => {
-  it('un client qui déclare consent « denied » sous un statut serveur granted laisse une ligne réduite', async () => {
-    const { rows, prisma, deps } = table();
+  it('un client qui déclare consent « denied » sous un statut serveur granted laisse une ligne sans trace', async () => {
+    const { rows, deps } = table();
     await recordEngagementBatch(deps as never, [session({ ...MEASURE, consent: 'denied' })], READER, 'granted');
-    expect(Object.keys(rows[0]).sort()).toEqual(REDUCED_KEYS);
+    expect(rows[0]).toMatchObject({ userId: READER, actions: [], watchSamples: [], consent: 'denied' });
   });
 
   it('le consentement rangé est celui que la passerelle a établi, jamais la valeur déclarée par le client', async () => {
-    const { rows, prisma, deps } = table();
+    const { rows, deps } = table();
     await recordEngagementBatch(deps as never, [session({ ...MEASURE, consent: 'granted-by-me' })], READER, 'granted');
     expect(rows[0].consent).toBe('granted');
+    await recordEngagementBatch(deps as never, [session({ ...MEASURE, sessionId: '55555555-5555-5555-5555-555555555555', consent: 'granted' })], READER, 'not_granted');
+    expect(rows[1]).toMatchObject({ consent: 'not_granted', actions: [], watchSamples: [] });
   });
 
   it('sans statut fourni, la lecture la plus restrictive s’applique : aucune trace', async () => {
-    const { rows, prisma, deps } = table();
+    const { rows, deps } = table();
     await recordEngagementBatch(deps as never, [session(MEASURE)], READER);
-    expect(Object.keys(rows[0]).sort()).toEqual(REDUCED_KEYS);
+    expect(rows[0]).toMatchObject({ userId: READER, actions: [], watchSamples: [] });
   });
 
   it('le retrait de l’analyse vide les traces déjà rangées des sessions du compte', async () => {

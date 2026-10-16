@@ -306,6 +306,8 @@ struct iPadPanelDestination: View {
                 parentCommentId: parentCommentId
             )
             .navigationBarHidden(true)
+        case .moodSpotlight(let statusId):
+            MoodSpotlightView(statusId: statusId)
         }
     }
 }

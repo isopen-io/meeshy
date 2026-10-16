@@ -1,6 +1,8 @@
 import { useState } from 'react';
 
 import { COUNTRIES, countryName, type Country } from '@/lib/countries';
+import { translate } from '@/lib/i18n-catalog';
+import { currentInterfaceLanguage } from '@/lib/interface-language';
 
 import { Sheet, SheetEmpty } from './sheet';
 
@@ -15,6 +17,7 @@ import { Sheet, SheetEmpty } from './sheet';
  */
 export function CountrySheet({ onSelect, onClose }: { onSelect: (country: Country) => void; onClose: () => void }) {
   const [search, setSearch] = useState('');
+  const language = currentInterfaceLanguage();
   const locale = typeof document === 'object' ? document.documentElement.lang || 'fr' : 'fr';
 
   const needle = search.trim().toLowerCase();
@@ -30,9 +33,9 @@ export function CountrySheet({ onSelect, onClose }: { onSelect: (country: Countr
 
   return (
     <Sheet
-      title="Pays"
-      searchLabel="Rechercher un pays"
-      searchPlaceholder="Rechercher un pays"
+      title={translate(language, 'signup.country.title')}
+      searchLabel={translate(language, 'signup.country.search')}
+      searchPlaceholder={translate(language, 'signup.country.search')}
       search={search}
       onSearchChange={setSearch}
       onClose={onClose}
@@ -55,7 +58,7 @@ export function CountrySheet({ onSelect, onClose }: { onSelect: (country: Countr
           </button>
         </li>
       ))}
-      {filtered.length === 0 ? <SheetEmpty label={`Aucun pays ne correspond à « ${search} ».`} /> : null}
+      {filtered.length === 0 ? <SheetEmpty label={translate(language, 'signup.country.none', { query: search })} /> : null}
     </Sheet>
   );
 }

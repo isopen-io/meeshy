@@ -262,7 +262,7 @@ struct FocalRow: View {
                     senderIsHere: input.senderIsHere,
                     senderStoryRing: input.senderStoryRing,
                     senderMoodEmoji: input.senderMoodEmoji,
-                    senderIsAnonymous: input.senderIsAnonymous,
+                    senderIsAnonymous: input.senderIsAnonymous, senderRing: input.senderRing,
                     profileUser: input.profileSheetUser,
                     isDark: input.isDark,
                     // WS-10 (F-089) : `input.showsAgentGrammar` PORTE DÉJÀ la
@@ -1088,7 +1088,7 @@ struct FocalRow: View {
                 senderIsHere: input.senderIsHere,
                 senderStoryRing: input.senderStoryRing,
                 senderMoodEmoji: input.senderMoodEmoji,
-                senderIsAnonymous: input.senderIsAnonymous,
+                senderIsAnonymous: input.senderIsAnonymous, senderRing: input.senderRing,
                 profileUser: input.profileSheetUser,
             isDark: input.isDark,
                 agentStyle: AgentAuthoredStyle.resolve(

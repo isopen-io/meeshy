@@ -32,13 +32,6 @@ export const CONTENT_EVENT_RECEIPT_RETENTION_MS = 30 * DAY_MS;
 export const POST_IMPRESSION_RETENTION_MS = 90 * DAY_MS;
 /** Les sessions de lecture `PostEngagement` (dwell) vivent 90 j (O7) : leurs agrégats sont déjà sur le post. */
 export const POST_ENGAGEMENT_RETENTION_MS = 90 * DAY_MS;
-/**
- * Une ligne de lecture rangée SANS consentement d'analyse (`PostEngagement`
- * réduite, `PostImpression` réduite — #10771, #10773) vit 8 jours : le temps
- * qu'une mesure finale encore en file sur l'appareil (outbox iOS purgée à 7 j)
- * fusionne avec son premier contact, et que la déduplication s'applique.
- */
-export const UNCONSENTED_READING_RETENTION_MS = 8 * DAY_MS;
 
 const SHORT_LIVED: ReadonlySet<string> = new Set(SAMPLEABLE_V2_TYPES);
 

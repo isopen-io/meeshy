@@ -120,7 +120,6 @@ const monte = async (options: {
     <ThreadModes
       mode={options.mode ?? 'bubbles'}
       viewer={VIEWER}
-      readerLocale="fr"
       placed={placed}
       virtualizer={virtualizerOf(placed.length)}
       scene={SCENE}

@@ -46,6 +46,10 @@ const enVerifyEmail = {
   'signInLink.switchAccount.failed': 'This other account can’t be opened right now. You stay signed in, and the link has been closed.',
   'signInLink.switchAccount.expired': 'This link has expired: request a new one. You stay signed in.',
   'signInLink.switchAccount.leave': 'Back to home',
+  'emailSent.title': 'Email sent',
+  'emailSent.openLink': 'Open the link sent to {email}',
+  'emailSent.nothingReceived': 'Nothing received?',
+  'emailSent.nothingReceived.text': 'Check your spam folder: the message may have landed there.',
 };
 
 export default enVerifyEmail;

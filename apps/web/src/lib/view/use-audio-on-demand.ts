@@ -27,10 +27,13 @@ export type AudioOnDemandNotice = 'media.audio.transcribe_failed' | 'media.audio
  * LE PLAFOND D'UNE DEMANDE MISE EN FILE (#10629) — la passerelle répond
  * `processing` et le résultat n'arrive que par le temps réel. S'il n'arrive
  * pas (traducteur arrêté, socket coupée), l'attente se lève au lieu de figer
- * le bouton, et la demande se refait. 20 s : le plafond d'iOS
- * (`AudioFullscreenPage.requestServerTranscription`).
+ * le bouton, et la demande se refait. 90 s (#10759) : un plafond de SILENCE
+ * réel, jamais de latence — Whisper met ~25 s sur staging pour un vocal de
+ * 4 s, et l'ancien plafond de 20 s rendait « Transcrire » pendant que la tâche
+ * tournait encore. L'arrivée du résultat (`audio:transcription-ready`, greffé
+ * sur la pièce) lève l'attente dès qu'elle arrive.
  */
-export const ON_DEMAND_STALL_MS = 20_000;
+export const ON_DEMAND_STALL_MS = 90_000;
 
 export type AudioOnDemand = {
   readonly served: Attachment;

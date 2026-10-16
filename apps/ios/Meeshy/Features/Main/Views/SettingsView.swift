@@ -434,12 +434,12 @@ struct SettingsView: View {
         return locale.localizedString(forIdentifier: code)?.capitalized ?? code
     }
 
-    /// Enregistre le choix et prévient : `AppleLanguages` n'est relu qu'au
-    /// démarrage, donc l'écran courant reste dans l'ancienne langue.
+    /// Enregistre le choix et prévient : il s'applique au relancement
+    /// (`MeeshyLaunch.main()`). Écrire `AppleLanguages` maintenant basculerait
+    /// les dates et les vues système sans le reste de l'écran (#10804).
     private func selectInterfaceLanguage(_ code: String?) {
         HapticFeedback.light()
         UILanguageOverride.explicitChoice = code
-        UILanguageOverride.applyIfNeeded()
         UILanguageOverride.refreshNotificationLanguage()
         interfaceLanguageChoice = code
         showInterfaceLanguageRestartHint = true

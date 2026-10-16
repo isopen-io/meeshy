@@ -1,9 +1,7 @@
 import type { ParsedSocialEventsContext } from '../../routes/social/eventsV2Schemas';
 import type { SocialEvent } from '../../routes/social/eventsSchemas';
-import { accountReaderKeyOf } from '../posts/readerKey';
 import {
   POST_IMPRESSION_RETENTION_MS,
-  UNCONSENTED_READING_RETENTION_MS,
   compact,
   ejsonDate,
   ejsonObjectId,
@@ -25,18 +23,18 @@ import { storedListingOf, type AnalyticsStanding } from './eventPrivacy';
  * de fil et la session d'application RELIENT des événements entre eux et ne
  * sont rangés que si l'analyse est consentie.
  *
- * Sans consentement d'analyse (`not_granted`, `denied` — #10773), la ligne ne
- * garde que ce que la déduplication exige : le post, l'EMPREINTE du compte
- * (`readerKey`, jamais `userId`), la source (une impression déduite d'une vue
- * se remplace), la clé de rejeu et 8 jours de conservation.
+ * La ligne porte le COMPTE quel que soit le statut (#10785, décision du
+ * porteur) : « qui a vu » est une fonctionnalité de la plateforme, sa base est
+ * l'exécution du service, pas le consentement d'analyse. Les lignes réduites
+ * écrites entre #10773 et #10785 (`readerKey`, sans `userId`) ne sont plus
+ * produites ; elles restent lues jusqu'à leur expiration (8 jours).
  */
 
 export type ImpressionEvent = Extract<SocialEvent, { type: 'impression' }>;
 
 export type ImpressionRow = {
   readonly postId: string;
-  readonly userId?: string;
-  readonly readerKey?: string;
+  readonly userId: string;
   readonly source: string;
   readonly surface?: string;
   readonly createdAt?: Date;
@@ -61,18 +59,9 @@ export function impressionRowOf(params: {
   readonly receivedAt: Date;
 }): ImpressionRow {
   const { event, standing } = params;
-  if (standing !== 'granted') {
-    return compact({
-      postId: event.postId,
-      readerKey: accountReaderKeyOf(params.userId),
-      source: event.source,
-      createdAt: params.derivedAt,
-      expiresAt: new Date((params.derivedAt ?? params.receivedAt).getTime() + UNCONSENTED_READING_RETENTION_MS),
-      eventKey: event.eventId ? eventKeyOf(event.eventId) : undefined,
-    }) as ImpressionRow;
-  }
   const listing = storedListingOf(event.listing, standing);
-  const visibility = event.visibility;
+  const measured = standing !== 'denied';
+  const visibility = measured ? event.visibility : undefined;
   return compact({
     postId: event.postId,
     userId: params.userId,
@@ -87,15 +76,15 @@ export function impressionRowOf(params: {
     viewable: visibility?.viewable,
     visibleFraction: visibility?.maxVisibleFraction,
     visibleMs: visibility?.visibleMs,
-    appSessionId: params.context.appSessionId,
-    platform: params.context.platform,
+    appSessionId: standing === 'granted' ? params.context.appSessionId : undefined,
+    platform: measured ? params.context.platform : undefined,
   }) as ImpressionRow;
 }
 
 const toExtendedJson = (row: ImpressionRow): Record<string, unknown> => ({
   ...row,
   postId: ejsonObjectId(row.postId),
-  ...(row.userId ? { userId: ejsonObjectId(row.userId) } : {}),
+  userId: ejsonObjectId(row.userId),
   createdAt: ejsonDate(row.createdAt ?? new Date()),
   expiresAt: ejsonDate(row.expiresAt),
 });

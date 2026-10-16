@@ -150,7 +150,6 @@ export function AdminConversationPanel({ language, conversationId, deps = apiDep
         /* AUCUN membre administré ici : le prisme est celui du LECTEUR, et le bandeau « prisme du membre » n'a donc rien à annoncer. */
         prisme="lecteur"
         readerLanguages={reader.languages}
-        readerLocale={reader.locale}
         viewer={viewer}
         deps={deps}
         layout="bounded"

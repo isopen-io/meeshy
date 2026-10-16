@@ -138,56 +138,57 @@ body {
   line-height: 1.55;
   color: var(--ios-ink-2);
 }
-.ld-form {
-  max-width: 520px;
-}
-.ld-step {
-  display: flex;
-  gap: 10px;
-  flex-wrap: wrap;
-  margin: 0;
-  padding: 0;
-  border: 0;
-  min-width: 0;
-}
-.ld-step .ld-field {
-  flex-basis: 100%;
-}
-/* LA LANGUE DE LECTURE (#10098) — la liste déroulante de l'en-tête, posée
- * entre le nom et « Rejoindre », à la hauteur du champ et du bouton. */
-.ld-form .ld-language {
-  height: 52px;
-}
-.ld-error {
-  color: var(--ios-error);
-}
 .ld-return {
   margin-bottom: 18px;
 }
-.ld-field {
-  flex: 1 1 240px;
+/* LE QR VERS /world (#10784) — le seul chemin d'entrée sans compte depuis la
+ * landing. Le fond BLANC est dans le SVG et dans son cadre : tout lecteur le
+ * lit, thème sombre compris. Une image, jamais un lien. */
+.ld-qr {
+  margin: 0;
+  display: inline-flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 10px;
+  max-width: 100%;
+  font-size: 14px;
+  font-weight: 600;
+  text-align: center;
+  color: var(--ios-ink-2);
+}
+.ld-qr img {
+  display: block;
+  max-width: 100%;
+  height: auto;
+  padding: 6px;
+  border-radius: 16px;
+  background: #ffffff;
+  border: 0.5px solid var(--ios-edge);
+}
+/* Le lien de partage en clair sous le QR (#10811) : une adresse discrète, pas
+ * un bouton. Sur écran tactile, il reste seul (voir `pointer: coarse`). */
+.ld-qr figcaption {
   display: flex;
   flex-direction: column;
-  gap: 6px;
-  font-size: 14px;
+  gap: 4px;
+}
+.ld-qr-share {
+  font-size: 13px;
+  font-weight: 400;
   color: var(--ios-ink-3);
 }
-.ld-field input {
-  height: 52px;
-  padding: 0 16px;
-  border-radius: 14px;
-  border: 1px solid color-mix(in srgb, var(--ios-indigo-300) 30%, transparent);
-  background: var(--ios-surface-card);
-  color: var(--ios-ink);
-  font: inherit;
-  font-size: 16px;
+.ld-qr-link {
+  color: inherit;
+  text-decoration: underline;
+  text-underline-offset: 2px;
+  unicode-bidi: isolate;
+  direction: ltr;
 }
-.ld-field input::placeholder {
-  color: var(--ios-ink-3);
-}
-.ld-form .ld-btn {
-  flex: 1 1 auto;
-  align-self: flex-end;
+@media (pointer: coarse) {
+  .ld-qr img,
+  .ld-qr-scan {
+    display: none;
+  }
 }
 .ld-note {
   margin: 12px 0 0;

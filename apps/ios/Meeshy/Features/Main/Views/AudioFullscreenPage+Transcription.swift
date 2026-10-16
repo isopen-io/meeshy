@@ -224,13 +224,18 @@ extension AudioFullscreenPage {
         guard !isRequestingTranscription else { return }
         isRequestingTranscription = true
         HapticFeedback.light()
+        let requestedAt = Date()
         Task {
             do {
                 try await AttachmentService.shared.requestTranscription(attachmentId: attachment.id)
-                // Le résultat arrive via l'abonnement socket ; garde le spinner
-                // le temps du traitement serveur, avec un plafond de sécurité.
-                try? await Task.sleep(nanoseconds: 20_000_000_000)
-                await MainActor.run { if localTranscription == nil { isRequestingTranscription = false } }
+                // Le résultat arrive via l'abonnement socket et lève l'attente
+                // (`applyServerTranscription`) ; le plafond ne vaut que pour le
+                // silence réel (#10759).
+                try? await Task.sleep(nanoseconds: UInt64(ServerTranscriptionWait.silenceCeiling * 1_000_000_000))
+                await MainActor.run {
+                    guard !ServerTranscriptionWait.isWaiting(requestedAt: requestedAt, now: Date(), hasArrived: localTranscription != nil) else { return }
+                    isRequestingTranscription = false
+                }
             } catch {
                 await MainActor.run { isRequestingTranscription = false; HapticFeedback.error() }
             }

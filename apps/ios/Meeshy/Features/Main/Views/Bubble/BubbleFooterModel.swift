@@ -28,6 +28,8 @@ struct SenderIdentity: Equatable, Sendable {
     let storyRing: StoryRingState
     /// L'auteur a l'écran de cette conversation ouvert (#8892).
     var isHere: ConversationHere = .absent
+    /// Le contour d'avatar équipé de l'auteur (#10713), dessiné dans l'empreinte de l'avatar.
+    var ring: AvatarRingDesign? = nil
 
     /// « @pseudo » — ou rien. Le fil sert un pseudo VIDE pour un participant
     /// anonyme, et un « @ » nu sous le nom n'est pas une identité.

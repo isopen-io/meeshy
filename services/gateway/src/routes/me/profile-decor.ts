@@ -2,7 +2,8 @@
  * `PUT /api/v1/me/profile-decor` (#10632, § 10.2) — équiper un contour d'avatar
  * et/ou une bannière de design. `{ avatarRing?, banner? }` : champ absent =
  * inchangé, `null` = retiré. Validation par `validateProfileDecorWrite`
- * (domaine, existence, possession → 403 `PACK_NOT_OWNED`, loi des cadres →
+ * (domaine, possession → 403 `PACK_NOT_OWNED`, élément absent d'un pack
+ * possédé → 404 `DECOR_ITEM_NOT_FOUND`, loi des cadres →
  * 403 `FRAME_USAGE_MISMATCH`). Diffusé en `profile:decor-updated` sur `user:<id>`
  * (mes autres appareils). La lecture se fait par `GET /me` et le profil public.
  */
@@ -16,8 +17,10 @@ import { servedProfileDecor, servedProfileDecorItemJsonSchema, validateProfileDe
 import { startupPackIndex, type PackIndex } from '../../services/packs/PackIndex';
 import { AUTH_ERROR_CODES } from '../../utils/auth-error-codes';
 import { logError } from '../../utils/logger';
-import { sendError, sendForbidden, sendInternalError, sendSuccess, sendUnauthorized } from '../../utils/response.js';
+import { sendError, sendForbidden, sendInternalError, sendNotFound, sendSuccess, sendUnauthorized } from '../../utils/response.js';
 import { broadcastToUser } from '../../utils/socket-broadcast';
+
+export const DECOR_ITEM_NOT_FOUND_CODE = 'DECOR_ITEM_NOT_FOUND';
 
 export type ProfileDecorRoutesOptions = { readonly index?: PackIndex };
 
@@ -52,6 +55,7 @@ export default async function profileDecorRoutes(fastify: FastifyInstance, optio
           400: errorResponseSchema,
           401: errorResponseSchema,
           403: errorResponseSchema,
+          404: errorResponseSchema,
           500: errorResponseSchema,
         },
       },
@@ -65,6 +69,7 @@ export default async function profileDecorRoutes(fastify: FastifyInstance, optio
         const outcome = await validateProfileDecorWrite({ prisma: fastify.prisma, index, userId, input: request.body ?? {} });
         if (outcome.kind === 'invalid') return sendError(reply, 400, 'Invalid profile decor', { code: 'INVALID_PROFILE_DECOR' });
         if (outcome.kind === 'not-owned') return sendForbidden(reply, 'Pack not owned', { code: PACK_NOT_OWNED_CODE });
+        if (outcome.kind === 'item-not-found') return sendNotFound(reply, 'Decor item not found', { code: DECOR_ITEM_NOT_FOUND_CODE });
         if (outcome.kind === 'usage-mismatch') return sendForbidden(reply, 'This frame cannot be used on an avatar', { code: 'FRAME_USAGE_MISMATCH' });
 
         const row = await fastify.prisma.user.update({

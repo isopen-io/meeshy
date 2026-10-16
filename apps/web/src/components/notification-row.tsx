@@ -112,6 +112,9 @@ export function TargetLink({ target, onClick, ...rest }: SurfaceProps & { readon
       /* `?from=notification` (#10483) — le détail compte son impression en
          `notification`, pas en `detail`. */
       return <Link to="post" params={target.params} search={{ from: 'notification' }} {...surface} />;
+    case 'mood':
+      /* LA PAGE DE L'HUMEUR (#10813) — plein écran, réponse en privé. */
+      return <Link to="mood" params={target.params} {...surface} />;
     case 'discover':
       /* L'onglet « Demandes » voyage en `search` : la destination le PORTE
          (#7173), la ligne ne le reconstruit pas. */

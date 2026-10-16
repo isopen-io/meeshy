@@ -11,34 +11,11 @@
 
 import { messageMinimalSchema } from './message.js';
 import { activeCallSchema, lastReactionSchema } from './conversation-preview.js';
-import { userMinimalSchema } from './user.js';
+import { participantProfileDecorSchema, userMinimalSchema } from './user.js';
 
 // =============================================================================
 // CONVERSATION SCHEMAS
 // =============================================================================
-
-/**
- * Le contour d'avatar ÉQUIPÉ d'un participant (#10713) — la forme servie par
- * `/me` et le profil public (`ServedProfileDecor`, `types/profile-decor.ts`),
- * réduite au contour : c'est lui que les listes et les bulles dessinent.
- * ADDITIVE — absente pour un participant sans contour ou sans compte.
- */
-export const participantProfileDecorSchema = {
-  type: 'object',
-  description: 'Equipped avatar ring served with the participant (#10713)',
-  properties: {
-    avatarRing: {
-      type: 'object',
-      nullable: true,
-      properties: {
-        pack: { type: 'string' },
-        item: { type: 'string' },
-        origin: { type: 'string' },
-        contract: { type: 'string', nullable: true },
-      },
-    },
-  },
-} as const;
 
 /**
  * Conversation participant schema with full user information

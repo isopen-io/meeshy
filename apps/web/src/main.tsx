@@ -122,10 +122,16 @@ function InterfaceLanguageRoot({ children }: { children: ReactNode }) {
   return <Fragment key={language}>{children}</Fragment>;
 }
 
-/* LA COQUE DÉMARRE SUR LA LISTE (#10353) — `navigate`, pas un `replaceState`
-   nu : le routeur a lu l'adresse à l'import et ne verrait pas la réécriture. */
+/* LA COQUE DÉMARRE SUR LA LISTE (#10353), OU SUR LA CONNEXION SANS COMPTE
+   (#10784) — la session est restaurée plus haut, de façon synchrone.
+   `navigate`, pas un `replaceState` nu : le routeur a lu l'adresse à l'import
+   et ne verrait pas la réécriture. */
 if (__SHELL__) {
-  const start = shellStartHref(window.location, href('list'));
+  const start = shellStartHref(window.location, {
+    listHref: href('list'),
+    loginHref: href('login'),
+    authenticated: sessionStore.getState().session.status === 'authenticated',
+  });
   if (start !== null) navigate(start, true);
 }
 

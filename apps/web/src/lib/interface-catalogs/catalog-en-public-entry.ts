@@ -4,9 +4,6 @@ import type frPublicEntry from './catalog-fr-public-entry';
 const enPublicEntry = {
   'publicHeader.home': 'Meeshy home',
   'publicHeader.language': 'Language',
-  'login.world.title': 'Enter {title}',
-  'login.world.subtitle': 'No account · your name and your language',
-  'login.world.or': 'or with your account',
   'login.offline': 'Offline — signing in isn’t possible right now.',
   'login.twoFactor.title': 'Two-factor authentication',
   'login.twoFactor.lead': 'Enter the code from your authenticator app.',

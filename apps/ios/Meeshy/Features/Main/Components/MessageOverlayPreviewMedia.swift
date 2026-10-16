@@ -169,6 +169,7 @@ struct OverlayProtectedPreview: View {
     let message: Message
     let isDark: Bool
     let accentHex: String
+    @Environment(\.bubbleSkin) private var skin
 
     var body: some View {
         switch form {
@@ -205,7 +206,7 @@ struct OverlayProtectedPreview: View {
     private var blurredBubble: some View {
         Text(verbatim: String(repeating: "▆ ", count: max(3, min(24, message.content.count / 3))))
             .font(MeeshyFont.relative(MeeshyFont.bodySize))
-            .foregroundColor(message.isMe ? .white : (isDark ? .white : .black))
+            .foregroundColor(message.isMe ? skin.ink : (isDark ? .white : .black))
             .blur(radius: 6)
             .padding(.horizontal, MeeshySpacing.mdPlus)
             .padding(.vertical, MeeshySpacing.smPlus)
@@ -214,7 +215,7 @@ struct OverlayProtectedPreview: View {
             .overlay {
                 Image(systemName: MessageProtectionSymbols.blurredFilled)
                     .font(MeeshyFont.relative(15, weight: .semibold))
-                    .foregroundStyle(message.isMe ? .white : (isDark ? .white : .black))
+                    .foregroundStyle(message.isMe ? skin.ink : (isDark ? .white : .black))
             }
             .accessibilityHidden(true)
     }

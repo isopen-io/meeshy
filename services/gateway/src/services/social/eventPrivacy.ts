@@ -29,11 +29,13 @@ export const DIGITAL_CONSENT_AGE = 15;
  * laisse que la MESURE d'audience du comptage (#10483 : compteurs de vues et
  * d'impressions).
  *
- * Les lignes de COMPTAGE (`PostImpression`, `PostEngagement`) suivent la même
- * situation (#10771–#10773) : hors `granted`, elles ne gardent que ce que la
- * déduplication exige — l'empreinte HMAC du compte (`readerKey`, jamais
- * `userId`), le post, la source d'une impression, les compteurs déjà crédités
- * d'une session, 8 jours ; ni rang, ni visibilité, ni plateforme, ni durée.
+ * Les lignes de COMPTAGE (`PostImpression`, `PostEngagement`) gardent le
+ * COMPTE quel que soit le statut (#10785, décision du porteur) : « qui a vu »
+ * est une fonctionnalité de la plateforme, sa base est l'exécution du service.
+ * Le statut n'y gouverne que la MESURE rangée à côté : hors `granted`, ni
+ * session d'application d'une impression, ni micro-actions ni échantillons de
+ * lecture d'une session ; sous refus, ni visibilité ni plateforme d'une
+ * impression.
  */
 
 export type AnalyticsStanding = 'granted' | 'not_granted' | 'denied' | 'anonymous';

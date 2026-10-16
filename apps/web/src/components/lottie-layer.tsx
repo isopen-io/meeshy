@@ -1,6 +1,7 @@
 import { useEffect, useRef } from 'react';
 
 import { decodeLottie } from '@/lib/lottie/decode';
+import { sharedLottieBudget, type LottieBudget } from '@/lib/lottie/budget';
 import { loadLottiePlayer, type LottieHandle, type LottiePlayerLoader } from '@/lib/lottie/engine';
 import type { LottieBytesLoader } from '@/lib/lottie/sources';
 import { usePrefersReducedMotion } from '@/lib/lottie/use-reduced-motion';
@@ -14,7 +15,10 @@ import { usePrefersReducedMotion } from '@/lib/lottie/use-reduced-motion';
  * - le moteur et les octets ne se chargent qu'à la PREMIÈRE visibilité réelle
  *   (jamais sur le chemin du premier rendu) ;
  * - la lecture est en pause hors écran et quand l'onglet est caché ;
- * - le démontage détruit l'animation et ses observateurs : aucune fuite.
+ * - le démontage détruit l'animation et ses observateurs : aucune fuite ;
+ * - les films VIVANTS sont plafonnés (`budget`, #10815) : dans une liste
+ *   longue, la couche sortie de l'écran depuis le plus longtemps rend sa place
+ *   à celle qui entre — son film est détruit, son dessin statique reste.
  *
  * Décorative (`aria-hidden`, non cliquable) ; l'hôte lui donne sa place.
  * `sourceKey` identifie la source : `load` peut changer d'identité sans relancer.
@@ -25,26 +29,29 @@ export function LottieLayer({
   loop = true,
   className,
   player = loadLottiePlayer,
+  budget = sharedLottieBudget,
 }: {
   readonly sourceKey: string;
   readonly load: LottieBytesLoader;
   readonly loop?: boolean;
   readonly className?: string;
   readonly player?: LottiePlayerLoader;
+  readonly budget?: LottieBudget;
 }) {
   const host = useRef<HTMLSpanElement>(null);
   const loadRef = useRef(load);
   const playerRef = useRef(player);
   loadRef.current = load;
   playerRef.current = player;
+  const budgetRef = useRef(budget);
   const reduced = usePrefersReducedMotion();
 
   useEffect(() => {
     const node = host.current;
     if (reduced || node === null) return undefined;
     let live = true;
-    let started = false;
-    let visible = typeof IntersectionObserver === 'undefined';
+    let generation = 0;
+    let visible = false;
     let handle: LottieHandle | null = null;
 
     const sync = (): void => {
@@ -53,14 +60,30 @@ export function LottieLayer({
       else handle.pause();
     };
 
+    const drop = (): void => {
+      generation += 1;
+      handle?.destroy();
+      handle = null;
+      node.replaceChildren();
+    };
+
     const start = async (): Promise<void> => {
+      const run = generation;
+      const current = (): boolean => live && run === generation;
+      const giveUp = (): void => {
+        if (!current()) return;
+        drop();
+        slot.release();
+      };
       try {
         const bytes = await loadRef.current();
-        if (bytes === null || !live) return;
+        if (!current()) return;
+        if (bytes === null) return giveUp();
         const decoded = await decodeLottie(bytes);
-        if (!decoded.ok || !live) return;
+        if (!current()) return;
+        if (!decoded.ok) return giveUp();
         const engine = await playerRef.current();
-        if (!live) return;
+        if (!current()) return;
         handle = engine.loadAnimation({
           container: node,
           renderer: 'svg',
@@ -71,34 +94,31 @@ export function LottieLayer({
         });
         sync();
       } catch {
-        handle?.destroy();
-        handle = null;
-        node.replaceChildren();
+        giveUp();
       }
     };
 
-    const begin = (): void => {
-      if (started) return;
-      started = true;
-      void start();
+    const slot = budgetRef.current.claim({ grant: () => void start(), evict: drop });
+
+    const see = (seen: boolean): void => {
+      visible = seen;
+      slot.setVisible(seen);
+      sync();
     };
 
     const observer =
       typeof IntersectionObserver === 'undefined'
         ? null
-        : new IntersectionObserver((entries) => {
-            visible = entries.some((entry) => entry.isIntersecting);
-            if (visible) begin();
-            sync();
-          });
+        : new IntersectionObserver((entries) => see(entries.some((entry) => entry.isIntersecting)));
     observer?.observe(node);
-    if (observer === null) begin();
+    if (observer === null) see(true);
     document.addEventListener('visibilitychange', sync);
 
     return () => {
       live = false;
       observer?.disconnect();
       document.removeEventListener('visibilitychange', sync);
+      slot.release();
       handle?.destroy();
       handle = null;
     };

@@ -101,7 +101,6 @@ export function ThreadMessageSheets({
   messageMenu,
   messages,
   readerLanguages,
-  readerLocale,
   conversationId,
   viewerId,
   viewerName,
@@ -112,7 +111,6 @@ export function ThreadMessageSheets({
   readonly messageMenu: ThreadSheetsMenu;
   readonly messages: readonly Message[];
   readonly readerLanguages: readonly string[];
-  readonly readerLocale: string;
   readonly conversationId: string;
   readonly viewerId: string;
   /** Le nom de qui exporte : il nomme ses propres messages sur la carte. */
@@ -228,7 +226,7 @@ export function ThreadMessageSheets({
               reactions={reactionEntries(detailMessage.reactionSummary)}
               sentAt={new Date(detailMessage.createdAt)}
               delivery={isMineOf(detailMessage, viewerId) ? deliveryStatusOf(detailMessage) : null}
-              locale={readerLocale}
+              locale={currentInterfaceLanguage()}
               conversationId={conversationId}
               messageId={detailMessage.id}
               attachments={exposed ? (detailMessage.attachments ?? []) : []}

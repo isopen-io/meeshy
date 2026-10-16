@@ -2,6 +2,9 @@ import type { LandingCopy } from './landing-copy';
 import type { LandingLanguage } from './landing-languages';
 import { GlobeIcon, LanguageSelect, SiteFooter, SiteHeader } from './site-chrome';
 
+/** L'image versionnée du QR (`public/world-qr.svg`, `scripts/generate-world-qr.mjs`). */
+export const WORLD_QR_PATH = '/world-qr.svg';
+
 /**
  * LA LANDING DE meeshy.me (#10002, planche « Main »).
  *
@@ -16,6 +19,13 @@ import { GlobeIcon, LanguageSelect, SiteFooter, SiteHeader } from './site-chrome
  * Les adresses sont celles de l'application : `/login`, `/signup`, `/chats`, et
  * les pages statiques `/help`, `/faq`, `/privacy`, `/terms`, `/download`. Son
  * en-tête et son pied sont ceux de tout meeshy.me (`site-chrome.tsx`, #10071).
+ *
+ * On n'entre plus dans World Wide sans compte d'un clic depuis la landing
+ * (#10784, directive porteur du 2026-10-16) : ni formulaire, ni « Entrer sans
+ * compte ». Le héros et la section World Wide portent un QR code vers
+ * `https://meeshy.me/world`, qu'on FLASHE avec un téléphone, et son lien de
+ * partage en clair pour qui lit la page sur ce téléphone (#10811) — que le
+ * script masque quand `GET /world` dit l'entrée fermée (`data-world-entry`).
  */
 export type LandingPageProps = {
   readonly language: LandingLanguage;
@@ -43,22 +53,8 @@ export function LandingPage({ language, copy }: LandingPageProps) {
             <a href="/chats" className="ld-btn ld-btn--primary ld-btn--large ld-return" data-world-return hidden>
               {copy.returnToWorld}
             </a>
-            <form id="rejoindre" className="ld-form" aria-label={copy.formLabel} data-world-form data-world-entry>
-              <div className="ld-step">
-                <label className="ld-field">
-                  {copy.nameLabel}
-                  <input type="text" name="name" required maxLength={40} autoComplete="nickname" placeholder={copy.namePlaceholder} />
-                </label>
-                <LanguageSelect language={language} label={copy.languageTitle} purpose="reading" describedBy="ld-join-note" />
-                <button type="submit" className="ld-btn ld-btn--primary ld-btn--large">
-                  {copy.join}
-                </button>
-              </div>
-              <p className="ld-note ld-error" role="alert" data-world-error hidden>
-                {copy.entryFailed}
-              </p>
-            </form>
-            <p id="ld-join-note" className="ld-note" data-world-entry>
+            <WorldQr copy={copy} placement="hero" />
+            <p className="ld-note" data-world-entry>
               {copy.joinNote}
             </p>
             <p className="ld-note" data-world-unavailable hidden>
@@ -139,9 +135,7 @@ export function LandingPage({ language, copy }: LandingPageProps) {
               <p>{copy.worldText}</p>
             </div>
             <div className="ld-world-actions">
-              <a href="#rejoindre" className="ld-btn ld-btn--primary ld-btn--large" data-world-entry data-world-cta>
-                {copy.enterWithoutAccount}
-              </a>
+              <WorldQr copy={copy} placement="world" />
               <a href="/signup" className="ld-btn ld-btn--ghost ld-btn--large" data-session-visitor>
                 {copy.createAccount}
               </a>
@@ -166,5 +160,30 @@ export function LandingPage({ language, copy }: LandingPageProps) {
 
       <SiteFooter language={language} copy={copy} onLanding />
     </div>
+  );
+}
+
+/**
+ * LE QR VERS /world (#10784) — une IMAGE, jamais un lien : le parcours invité
+ * s'ouvre sur le téléphone qui flashe, pas d'un clic sur la page.
+ *
+ * Dessous, le lien de partage EN CLAIR (#10811) : qui lit meeshy.me sur son
+ * téléphone ne peut pas flasher son propre écran. Une adresse, pas un bouton ;
+ * sur écran tactile, le QR et sa consigne s'effacent et elle reste seule.
+ */
+function WorldQr({ copy, placement }: { readonly copy: LandingCopy; readonly placement: 'hero' | 'world' }) {
+  return (
+    <figure className="ld-qr" data-world-qr data-world-entry>
+      <img src={WORLD_QR_PATH} alt={copy.worldQrAlt} width={placement === 'hero' ? 168 : 144} height={placement === 'hero' ? 168 : 144} decoding="async" />
+      <figcaption>
+        <span className="ld-qr-scan">{copy.worldQrCaption}</span>
+        <span className="ld-qr-share">
+          {copy.worldLinkLead}{' '}
+          <a href="/world" className="ld-qr-link" data-world-link>
+            meeshy.me/world
+          </a>
+        </span>
+      </figcaption>
+    </figure>
   );
 }

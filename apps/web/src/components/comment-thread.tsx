@@ -424,12 +424,12 @@ export function CommentThread({
         onToggle={() => toggleReplies(comment.id)}
         language={language}
         preferredLanguages={reader.languages}
-        locale={reader.locale}
+        locale={language}
         now={now}
         {...(gestures === undefined ? {} : { gestures })}
       />
     ),
-    [postId, expanded, toggleReplies, language, reader.languages, reader.locale, now, gestures],
+    [postId, expanded, toggleReplies, language, reader.languages, now, gestures],
   );
 
   /* LES TAPS D'IDENTITÉ DES RANGÉES (#10502) — un écouteur pour tout le fil. */
@@ -467,7 +467,7 @@ export function CommentThread({
           }}
           language={language}
           preferredLanguages={reader.languages}
-          locale={reader.locale}
+          locale={language}
           now={now}
           onRetry={() => void query.refetch()}
           onMore={() => void query.fetchNextPage()}

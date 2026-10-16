@@ -195,6 +195,22 @@ describe('segmentEpisodes — les deux cas web (rang du cadrage, leçon 261)', (
     expect(fr).not.toBe(en);
   });
 
+  test('title_countSuffix_speaksTheInterfaceLanguage (#10822)', () => {
+    const one = [msg('m1', 'u1', BASE)];
+    const two = [msg('m1', 'u1', BASE), msg('m2', 'u2', BASE + 60_000)];
+    const suffix = (messages: EpisodeInputMessage[], locale: string): string =>
+      (segmentEpisodes(messages, { locale, timeZone: 'UTC' })[0]?.deterministicTitle ?? '').split(' · ')[1] ?? '';
+    expect(suffix(one, 'fr')).toBe('1 message');
+    expect(suffix(two, 'fr')).toBe('2 messages');
+    expect(suffix(two, 'en')).toBe('2 messages');
+    expect(suffix(one, 'de')).toBe('1 Nachricht');
+    expect(suffix(two, 'de')).toBe('2 Nachrichten');
+    expect(suffix(two, 'es')).toBe('2 mensajes');
+    expect(suffix(two, 'pt')).toBe('2 mensagens');
+    expect(suffix(one, 'it')).toBe('1 messaggio');
+    expect(suffix(two, 'ar')).toBe('2 رسائل');
+  });
+
   test('title_usesEpisodeEndAsNow_neverWallClock', () => {
     const messages = [msg('m1', 'u1', BASE), msg('m2', 'u2', BASE + 60_000)];
     const withOptionsA = segmentEpisodes(messages, opts)[0]?.deterministicTitle;

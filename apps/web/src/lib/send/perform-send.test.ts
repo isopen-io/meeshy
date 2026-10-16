@@ -233,6 +233,49 @@ describe('performSend', () => {
   });
 
   /**
+   * RÉPONDRE À UNE HUMEUR, C'EST LA CITER (#10813) — `storyReplyToId` part
+   * dans le corps (la passerelle y gèle l'instantané `postReplyTo`,
+   * `storyReplyAdmission.ts`) ET reste sur la bulle optimiste, pour qu'elle
+   * porte sa citation avant tout accusé.
+   */
+  test('un brouillon qui cite une humeur part avec `storyReplyToId`, et la bulle locale le porte', async () => {
+    const outbox = createOutboxStore();
+    const fetched = fakeFetch({ status: 200, body: { success: true, data: { id: 'srv-1', conversationId: 'c-a', createdAt: '2026-10-16T10:00:00.000Z' } } });
+    await performSend({
+      conversationId: 'c-a',
+      draft: { content: 'Trop bien !', originalLanguage: 'fr', storyReplyToId: 'st-1' },
+      viewerId: 'u-viewer',
+      deps: { source: 'gateway', transport: createHttpTransport({ base: '', fetchImpl: fetched.impl }), queryClient: seededClient(), outbox, online: true },
+    });
+    const body = JSON.parse(String(fetched.calls[0]?.init.body)) as Record<string, unknown>;
+    expect(body.storyReplyToId).toBe('st-1');
+    expect(body.content).toBe('Trop bien !');
+    expect(body.replyToId).toBeUndefined();
+  });
+
+  test('sans humeur citée, aucune clé `storyReplyToId` ne part', async () => {
+    const fetched = fakeFetch({ status: 200, body: { success: true, data: { id: 'srv-2', conversationId: 'c-a', createdAt: '2026-10-16T10:00:00.000Z' } } });
+    await performSend({
+      conversationId: 'c-a',
+      draft: { content: 'salut', originalLanguage: 'fr' },
+      viewerId: 'u-viewer',
+      deps: { source: 'gateway', transport: createHttpTransport({ base: '', fetchImpl: fetched.impl }), queryClient: seededClient(), outbox: createOutboxStore(), online: true },
+    });
+    expect('storyReplyToId' in (JSON.parse(String(fetched.calls[0]?.init.body)) as object)).toBe(false);
+  });
+
+  test('la bulle optimiste porte l’humeur citée avant tout accusé', async () => {
+    const outbox = createOutboxStore();
+    await performSend({
+      conversationId: 'c-a',
+      draft: { content: 'Trop bien !', originalLanguage: 'fr', storyReplyToId: 'st-1' },
+      viewerId: 'u-viewer',
+      deps: { source: 'gateway', transport: createHttpTransport({ base: '', fetchImpl: fakeFetch({ status: 200 }).impl }), queryClient: seededClient(), outbox, online: false },
+    });
+    expect(entriesOf(outbox.getState(), 'c-a')[0]?.message.storyReplyToId).toBe('st-1');
+  });
+
+  /**
    * #9262 — l'intitulé disait « REMPLACÉ » et le site FUSIONNE depuis
    * `mergedThreadRow` (`api/messages.ts`). Ce qu'il mesurait n'a pas changé —
    * l'identifiant SERVEUR gagne, la rangée reste UNIQUE — mais il dit

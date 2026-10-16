@@ -10,8 +10,7 @@ import { medalOfAxis } from '@/lib/game/medal';
 import { suspendForGameCatalog } from '@/lib/i18n-game-catalog';
 import { currentInterfaceLanguage } from '@/lib/interface-language';
 import { BADGES_GUIDE_LINK, badgeGuideView } from '@/lib/view/badge-guide-view';
-import { gameText, medalLabel } from '@/lib/view/game-copy';
-import { FAMILY_LABELS } from '@/lib/view/progression';
+import { familyName, gameText, medalLabel } from '@/lib/view/game-copy';
 import { ProgressionPage } from '@/routes/progression-page';
 import { AxisRow, BRAND, INK_2 } from '@/routes/progression-parts';
 import { Link } from '@/routes/route-table';
@@ -47,7 +46,7 @@ export function BadgesBody({ progress }: { readonly progress: EngagementProgress
       {groups.map((group) => (
         <section key={group.family} aria-labelledby={`badges-${group.family}`} className="flex flex-col gap-2">
           <h2 id={`badges-${group.family}`} className="text-check font-semibold uppercase tracking-wide" style={{ color: INK_2 }}>
-            {FAMILY_LABELS[group.family]}
+            {familyName(group.family)}
           </h2>
           <ul className="flex flex-col rounded-card px-1" style={{ backgroundColor: 'var(--color-ios-card)' }}>
             {group.guides.map((guide) => {

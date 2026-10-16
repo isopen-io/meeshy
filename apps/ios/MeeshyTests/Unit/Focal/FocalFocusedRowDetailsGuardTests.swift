@@ -17,11 +17,13 @@ final class FocalFocusedRowDetailsGuardTests: XCTestCase {
             .deletingLastPathComponent()
     }
 
-    /// L'hôte et ses extensions : la scène Focal vit dans
-    /// `MessageListViewController+FocalScene.swift` depuis #7624.
+    /// L'hôte et toutes ses extensions (`+FocalScene` depuis #7624, `+Rows`
+    /// depuis #10758), lus comme une unité.
     private func normalizedController() throws -> String {
-        try normalized("Meeshy/Features/Main/Views/MessageListViewController.swift")
-            + " " + normalized("Meeshy/Features/Main/Views/MessageListViewController+FocalScene.swift")
+        AppSourceGuard.stripComments(try AppSourceGuard.unit("Meeshy/Features/Main/Views/MessageListViewController.swift"))
+            .components(separatedBy: .whitespacesAndNewlines)
+            .filter { !$0.isEmpty }
+            .joined(separator: " ")
     }
 
     private func normalized(_ relativePath: String) throws -> String {
