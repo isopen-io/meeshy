@@ -1,5 +1,5 @@
 import type { Prisma, PrismaClient } from '@meeshy/shared/prisma/client';
-import { POST_ENGAGEMENT_RETENTION_MS } from '../social/contentEvents';
+import { rawReadingRetentionMs } from '../../config/raw-reading-retention';
 import type { AnalyticsStanding } from '../social/eventPrivacy';
 import { accountReaderKeyOf, engagementSessionKeyOf } from './readerKey';
 import { NOT_DELETED } from './postIncludes';
@@ -420,15 +420,15 @@ export async function recordEngagementBatch(
             ...data,
             sessionId: s.sessionId,
             readerKey: UNSET,
-            expiresAt: new Date(before.createdAt.getTime() + POST_ENGAGEMENT_RETENTION_MS),
+            expiresAt: new Date(before.createdAt.getTime() + rawReadingRetentionMs()),
           },
         });
       } else {
         await prisma.postEngagement.upsert({
           where: ownRaw,
           update: data,
-          // Conservation du brut : 90 j (#10510, O7) — posée à la création, jamais prolongée par un rejeu.
-          create: { sessionId: s.sessionId, ...data, createdAt: receivedAt, expiresAt: new Date(receivedAt.getTime() + POST_ENGAGEMENT_RETENTION_MS) },
+          // Conservation du brut : `RAW_READING_RETENTION_DAYS`, 25 mois par défaut (#10510) — posée à la création, jamais prolongée par un rejeu.
+          create: { sessionId: s.sessionId, ...data, createdAt: receivedAt, expiresAt: new Date(receivedAt.getTime() + rawReadingRetentionMs()) },
         });
       }
 

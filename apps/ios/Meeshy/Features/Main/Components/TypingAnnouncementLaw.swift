@@ -32,12 +32,16 @@ nonisolated enum TypingAnnouncementLaw {
 
     /// **De combien la pastille enfle au début d'une frappe.**
     ///
-    /// `1.18` et non `1.5` (la valeur de #4018, qui avait motivé deux des trois
-    /// reprises) : la pastille vit sous la Dynamic Island, dans un couloir
-    /// étroit, et une capsule qui grandit de moitié y touche les bords sur les
-    /// petits écrans. L'emphase doit se REMARQUER, pas déplacer la mise en
-    /// page — c'est un accent, pas un changement de taille.
-    static let emphasisScale: CGFloat = 1.18
+    /// `1.1` (#10840, retour porteur 2026-10-16) : « préserver la taille
+    /// initiale et l'augmenter juste par ×1,1 par rapport à la taille initiale
+    /// lorsqu'on a de la frappe ». Avant lui `1.18` (#6188), et `1.5` (#4018),
+    /// qui avait motivé deux des trois reprises. La pastille se pose désormais
+    /// au-dessus de la barre de composition (`SyncPillPlacement`) : une capsule
+    /// qui enflerait davantage y couvrirait la dernière bulle du fil. L'emphase
+    /// doit se REMARQUER, pas déplacer la mise en page — c'est un accent, pas un
+    /// changement de taille, et c'est le SEUL changement de taille permis
+    /// pendant une frappe (`SyncPillActivityDots` tient la largeur).
+    static let emphasisScale: CGFloat = 1.1
 
     /// Montée, palier, retour. Trois durées plutôt qu'un aller-retour
     /// symétrique : sans palier, l'œil qui regarde ailleurs au mauvais moment

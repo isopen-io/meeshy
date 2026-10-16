@@ -220,3 +220,57 @@ struct OverlayProtectedPreview: View {
             .accessibilityHidden(true)
     }
 }
+
+// MARK: - Le texte de l'aperçu est celui de la cellule (#9838)
+
+/// Ce que l'aperçu de l'appui long recopie de la cellule pressée.
+struct OverlayPreviewServedText: Equatable {
+    let text: String
+    let flags: [String]
+    let activeFlag: String?
+}
+
+extension MessageOverlayMenu {
+
+    /// **Le texte et les drapeaux de la cellule pressée** (#9838).
+    ///
+    /// L'aperçu rendait `message.content` — l'ORIGINAL — pendant que la cellule
+    /// servait la traduction du Prisme : le fil disait « Plus que 12 jours ❤️ »,
+    /// l'appui long « 이제 12일만 기다리면 돼 ❤️ ». Les deux se lisent désormais
+    /// dans la MÊME source (`BubbleContent`), avec les mêmes entrées que la
+    /// cellule : traduction préférée (override manuel compris), drapeau basculé
+    /// dans le fil, langues secondaires. La bande suit la forme de la cellule :
+    /// une bulle montre les AUTRES langues (l'active soulignée seulement quand
+    /// elle est secondaire), une rangée plate (Focal, Script) y ajoute la langue
+    /// affichée, marquée active (`FocalRow.focusFlagCodes`).
+    static func previewServedText(
+        message: Message,
+        textTranslations: [MessageTranslation],
+        translatedAudios: [MessageTranslatedAudio],
+        preferredTranslation: MessageTranslation?,
+        userLanguages: (regional: String?, custom: String?),
+        selection: ConversationViewModel.BubbleLanguageSelection?,
+        usesFlatRow: Bool = false,
+        preferredAudioLangCode: String?,
+        currentUserId: String
+    ) -> OverlayPreviewServedText {
+        let cell = BubbleContent(
+            message: message, translations: textTranslations, preferredTranslation: preferredTranslation,
+            translatedAudios: translatedAudios, userLanguages: userLanguages,
+            secondaryLangCode: selection?.secondaryLangCode,
+            activeDisplayLangCode: selection?.activeDisplayLangCode,
+            preferredAudioLangCode: preferredAudioLangCode, currentUserId: currentUserId)
+        let text = cell.text?.raw ?? message.content
+        guard let translation = cell.translation else {
+            return OverlayPreviewServedText(text: text, flags: [], activeFlag: nil)
+        }
+        guard usesFlatRow else {
+            return OverlayPreviewServedText(text: text, flags: translation.availableFlags,
+                                            activeFlag: selection?.secondaryLangCode)
+        }
+        let flags = FocalRow.focusFlagCodes(
+            originalLangCode: translation.originalLangCode, availableFlags: translation.availableFlags,
+            activeLangCode: translation.activeLangCode, limit: FocalMetrics.FocusStrip.flagLimitPlain)
+        return OverlayPreviewServedText(text: text, flags: flags, activeFlag: translation.activeLangCode)
+    }
+}

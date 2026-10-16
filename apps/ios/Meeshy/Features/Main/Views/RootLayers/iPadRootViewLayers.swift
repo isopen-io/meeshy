@@ -367,14 +367,14 @@ struct iPadCoversAndChromeLayer: ViewModifier {
                 .meeshyConversationList(conversationViewModel)
                 .environmentObject(storyViewModel)
             }
-            .overlay(alignment: .top) {
+            .overlay(alignment: .bottom) {
                 ConnectionBanner(
                     conversationListViewModel: conversationViewModel,
                     isStoryViewerPresenting: storyViewerCoordinator.pendingRequest != nil,
                     onItemTap: onSyncPillTap,
                     activeConversationId: activeConversationIdForBanner
                 )
-                // Au centre de la barre d'état, libre sur iPad (#9680).
+                // Au-dessus du chrome bas, comme sur iPhone (#10840).
                 .inSyncPillBand()
             }
             .modifier(CallPresentationLayer(

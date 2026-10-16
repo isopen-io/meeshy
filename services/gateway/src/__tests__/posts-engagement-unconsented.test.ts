@@ -136,7 +136,7 @@ const legacyReducedRow = (over: Row = {}): Row => ({
 });
 
 describe('#10785 — une session sans consentement garde son lecteur (« qui a vu »), sans micro-actions ni échantillons', () => {
-  it.each(['not_granted', 'denied'] as const)('statut %s : la ligne porte le compte, la mesure, les drapeaux crédités, 90 jours — ni actions, ni échantillons', async (standing) => {
+  it.each(['not_granted', 'denied'] as const)('statut %s : la ligne porte le compte, la mesure, les drapeaux crédités, 760 jours — ni actions, ni échantillons', async (standing) => {
     const { rows, deps, counters } = table();
     const before = Date.now();
 
@@ -151,7 +151,7 @@ describe('#10785 — une session sans consentement garde son lecteur (« qui a v
       creditedOpen: true, creditedPlay: true, creditedQualified: true,
     });
     expect(row).not.toHaveProperty('readerKey');
-    expect(Math.round(((row.expiresAt as Date).getTime() - before) / DAY_MS)).toBe(90);
+    expect(Math.round(((row.expiresAt as Date).getTime() - before) / DAY_MS)).toBe(760);
     expect(counters()).toEqual([{ postOpenCount: { increment: 1 }, playCount: { increment: 1 }, qualifiedViewCount: { increment: 1 } }]);
   });
 
@@ -199,7 +199,7 @@ describe('#10785 — une session sans consentement garde son lecteur (« qui a v
     expect(counters()).toHaveLength(2);
   });
 
-  it('statut granted : régime inchangé — ligne nominative, mesure complète avec actions et échantillons, 90 jours', async () => {
+  it('statut granted : régime inchangé — ligne nominative, mesure complète avec actions et échantillons, 760 jours', async () => {
     const { rows, deps, counters } = table();
     const before = Date.now();
 
@@ -210,7 +210,7 @@ describe('#10785 — une session sans consentement garde son lecteur (« qui a v
       actions: MEASURE.actions, watchSamples: MEASURE.watchSamples,
     });
     expect(rows[0]).not.toHaveProperty('readerKey');
-    expect(Math.round(((rows[0].expiresAt as Date).getTime() - before) / DAY_MS)).toBe(90);
+    expect(Math.round(((rows[0].expiresAt as Date).getTime() - before) / DAY_MS)).toBe(760);
     expect(counters()).toHaveLength(1);
   });
 

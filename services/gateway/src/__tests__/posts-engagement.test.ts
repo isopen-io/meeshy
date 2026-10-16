@@ -103,15 +103,37 @@ describe('PostService.recordEngagementBatch — ingestion', () => {
     });
   });
 
-  it('une session de lecture a une durée de conservation : 90 jours (revue de conformité O7, #10510)', async () => {
-    const before = Date.now();
-    await service.recordEngagementBatch([mkSession()], 'u1', 'granted');
-    const expiresAt = upsertArg().create.expiresAt as Date;
+  it('une session de lecture a une durée de conservation : 25 mois (760 jours) par défaut (décision porteur, #10510)', async () => {
+    const saved = process.env.RAW_READING_RETENTION_DAYS;
+    delete process.env.RAW_READING_RETENTION_DAYS;
+    try {
+      const before = Date.now();
+      await service.recordEngagementBatch([mkSession()], 'u1', 'granted');
+      const expiresAt = upsertArg().create.expiresAt as Date;
 
-    expect(expiresAt).toBeInstanceOf(Date);
-    expect(Math.round((expiresAt.getTime() - before) / 86_400_000)).toBe(90);
-    // Une mise à jour (rejeu d'un ACK perdu) ne prolonge pas la conservation.
-    expect(upsertArg().update.expiresAt).toBeUndefined();
+      expect(expiresAt).toBeInstanceOf(Date);
+      expect(Math.round((expiresAt.getTime() - before) / 86_400_000)).toBe(760);
+      // Une mise à jour (rejeu d'un ACK perdu) ne prolonge pas la conservation.
+      expect(upsertArg().update.expiresAt).toBeUndefined();
+    } finally {
+      if (saved === undefined) delete process.env.RAW_READING_RETENTION_DAYS;
+      else process.env.RAW_READING_RETENTION_DAYS = saved;
+    }
+  });
+
+  it('la durée de conservation d’une session suit RAW_READING_RETENTION_DAYS', async () => {
+    const saved = process.env.RAW_READING_RETENTION_DAYS;
+    process.env.RAW_READING_RETENTION_DAYS = '120';
+    try {
+      const before = Date.now();
+      await service.recordEngagementBatch([mkSession()], 'u1', 'granted');
+      const expiresAt = upsertArg().create.expiresAt as Date;
+
+      expect(Math.round((expiresAt.getTime() - before) / 86_400_000)).toBe(120);
+    } finally {
+      if (saved === undefined) delete process.env.RAW_READING_RETENTION_DAYS;
+      else process.env.RAW_READING_RETENTION_DAYS = saved;
+    }
   });
 
   it('persists the route userId, never the client-supplied userId', async () => {

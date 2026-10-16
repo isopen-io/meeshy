@@ -152,7 +152,7 @@ describe('POST /posts/:postId/impression', () => {
     });
     expect(res.statusCode).toBe(200);
     expect(res.json().data.recorded).toBe(true);
-    // La ligne porte le lecteur quel que soit le statut d'analyse (#10785) et sa fin de conservation (90 j, #10510).
+    // La ligne porte le lecteur quel que soit le statut d'analyse (#10785) et sa fin de conservation (RAW_READING_RETENTION_DAYS, #10510).
     expect(impressionCreateMany).toHaveBeenCalledWith({
       data: [{ postId: POST_ID, userId: 'u1', source: 'detail', expiresAt: expect.any(Date) }],
     });
