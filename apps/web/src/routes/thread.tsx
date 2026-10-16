@@ -600,6 +600,8 @@ export default function ThreadScreen({ preview, focus }: ThreadScreenProps = {})
     /* Une fenêtre détachée du présent n'accuse rien (#7420, `windowIsAtTip` iOS). */
     lastMessageId: threadData.detached ? undefined : lastConfirmedMessageId,
     enabled: placed.length > 0,
+    /* Le Résumé ne monte aucune sentinelle : il accuse en partant (#10812). */
+    summaryShown: reading.readingDecision.mode === 'summary',
     onMark: onMarkCaughtUp,
   });
 
