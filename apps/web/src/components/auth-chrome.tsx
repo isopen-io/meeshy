@@ -1,6 +1,7 @@
 import { Glyph } from './glyph';
 import { BrandMark } from './brand-mark';
-import { BRAND_CREDIT, BRAND_CREDIT_HINT, BRAND_CREDIT_LINK, BRAND_SIGNATURE_MASK_PATH, brandVersionLine } from '@/lib/brand';
+import { useInterfaceLanguage } from './public-header';
+import { BRAND_CREDIT, BRAND_CREDIT_LINK, BRAND_SIGNATURE_MASK_PATH, brandCreditHint, brandVersionLine } from '@/lib/brand';
 
 /**
  * LE CHROME PARTAGÉ DES ÉCRANS D'AUTHENTIFICATION (#5816, E1) — extrait de
@@ -69,6 +70,7 @@ export function AuthTitle({ gradient }: { gradient: 'login' | 'brand' }) {
  * DÉCRIT une directive ne doit jamais pouvoir EN ÊTRE une.
  */
 export function AuthBrandFooter() {
+  const language = useInterfaceLanguage();
   /* La respiration au-dessus du pied (24 px) cède sous 724 px de haut, et
      disparaît à 700 : sur un téléphone, c'est elle qui faisait défiler la
      connexion par mot de passe (#8418). */
@@ -85,7 +87,7 @@ export function AuthBrandFooter() {
         style={{ color: 'var(--color-ios-ink-3)' }}
       >
         {BRAND_CREDIT}
-        <span className="sr-only">{BRAND_CREDIT_HINT}</span>
+        <span className="sr-only">{brandCreditHint(language)}</span>
       </a>
       <span
         aria-hidden="true"

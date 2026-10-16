@@ -1,4 +1,5 @@
-import { BRAND_CREDIT, BRAND_CREDIT_HINT, BRAND_CREDIT_LINK, BRAND_SIGNATURE_MASK_PATH, brandVersionLine } from '../lib/brand';
+import { BRAND_CREDIT, BRAND_CREDIT_LINK, BRAND_SIGNATURE_MASK_PATH, brandCreditHint, brandVersionLine } from '../lib/brand';
+import type { InterfaceLanguage } from '../lib/interface-language';
 
 /**
  * LE PIED DE MARQUE — miroir de `BrandSignature.swift`
@@ -49,11 +50,11 @@ import { BRAND_CREDIT, BRAND_CREDIT_HINT, BRAND_CREDIT_LINK, BRAND_SIGNATURE_MAS
  * le rôle `generic`, que `<div>` porte. La première version en posait un : il
  * avait la FORME d'une conformité sans en avoir l'EFFET. Le crédit, devenu un
  * lien (#10096), a un rôle et donc un nom : son texte, suivi d'une phrase
- * réservée au lecteur d'écran (`BRAND_CREDIT_HINT`, `sr-only`) qui dit où il
+ * réservée au lecteur d'écran (`brandCreditHint`, `sr-only`, dans la langue de la page) qui dit où il
  * mène — le pendant de l'`accessibilityHint` d'iOS. Seul le glyphe, décoratif,
  * est masqué.
  */
-export function BrandSignature({ version }: { version: string }) {
+export function BrandSignature({ version, language }: { version: string; language: InterfaceLanguage }) {
   return (
     <div className="mt-6 flex flex-col items-center gap-1 text-center text-sm">
       <p style={{ color: 'var(--color-ios-ink-2)' }}>{brandVersionLine(version)}</p>
@@ -67,7 +68,7 @@ export function BrandSignature({ version }: { version: string }) {
         style={{ color: 'var(--color-ios-ink-3)' }}
       >
         {BRAND_CREDIT}
-        <span className="sr-only">{BRAND_CREDIT_HINT}</span>
+        <span className="sr-only">{brandCreditHint(language)}</span>
       </a>
       <span
         aria-hidden="true"

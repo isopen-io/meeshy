@@ -4,6 +4,7 @@ import type frPublicEntry from './catalog-fr-public-entry';
 const dePublicEntry = {
   'publicHeader.home': 'Meeshy-Startseite',
   'publicHeader.language': 'Sprache',
+  'brand.credit.hint': 'öffnet die Plattform services.ceo in einem neuen Tab',
   'login.offline': 'Offline – eine Anmeldung ist gerade nicht möglich.',
   'login.twoFactor.title': 'Zwei-Faktor-Authentifizierung',
   'login.twoFactor.lead': 'Gib den Code aus deiner Authentifizierungs-App ein.',
