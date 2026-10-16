@@ -60,6 +60,32 @@ const unregisterDeviceTokenSchema = z.object({
   deviceId: z.string().max(255).optional(),
 });
 
+/**
+ * Clients that send no `deviceId` (iOS up to 2026-10, #10856) leave one row per
+ * install: every reinstall, simulator run or test host mints a fresh token, and
+ * APNs keeps accepting pushes to most of them. A user carries a handful of real
+ * devices, so only the most recently REGISTERED tokens of a type stay active —
+ * `registeredAt`, not `updatedAt`, which every successful send bumps.
+ */
+export const MAX_ACTIVE_PUSH_TOKENS_PER_TYPE = 5;
+
+async function retireSurplusTokens(
+  fastify: FastifyInstance,
+  { userId, type, keepId }: { userId: string; type: string; keepId: string }
+): Promise<void> {
+  const surplus = await fastify.prisma.pushToken.findMany({
+    where: { userId, type, isActive: true, id: { not: keepId } },
+    orderBy: [{ registeredAt: 'desc' }, { createdAt: 'desc' }],
+    skip: MAX_ACTIVE_PUSH_TOKENS_PER_TYPE - 1,
+    select: { id: true },
+  });
+  if (surplus.length === 0) return;
+  await fastify.prisma.pushToken.updateMany({
+    where: { id: { in: surplus.map(({ id }) => id) }, userId },
+    data: { isActive: false },
+  });
+}
+
 // ============================================
 // ROUTES
 // ============================================
@@ -173,6 +199,8 @@ export async function pushTokenRoutes(fastify: FastifyInstance) {
 
       fastify.log.info(`[PUSH_TOKEN] Registering ${tokenType} token for user ${userId} on ${body.platform} (apnsEnv=${apnsEnvironment ?? 'n/a'})`);
 
+      const registeredAt = new Date();
+
       // Upsert the token (create or update if exists)
       const pushToken = await fastify.prisma.pushToken.upsert({
         where: {
@@ -192,7 +220,8 @@ export async function pushTokenRoutes(fastify: FastifyInstance) {
           isActive: true,
           failedAttempts: 0, // Reset failed attempts on re-registration
           lastError: null,
-          updatedAt: new Date()
+          registeredAt,
+          updatedAt: registeredAt
         },
         create: {
           userId,
@@ -204,7 +233,8 @@ export async function pushTokenRoutes(fastify: FastifyInstance) {
           appVersion: body.appVersion,
           bundleId: body.bundleId,
           apnsEnvironment,
-          isActive: true
+          isActive: true,
+          registeredAt
         },
         select: {
           id: true,
@@ -232,6 +262,8 @@ export async function pushTokenRoutes(fastify: FastifyInstance) {
         },
         data: { isActive: false }
       });
+
+      await retireSurplusTokens(fastify, { userId, type: tokenType, keepId: pushToken.id });
 
       // Determine if this was a new registration or update
       const isNew = pushToken.createdAt.getTime() === pushToken.updatedAt.getTime();

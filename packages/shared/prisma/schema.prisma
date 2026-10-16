@@ -3685,6 +3685,11 @@ model PushToken {
   /// Last time this token was successfully used to send a notification
   lastUsedAt DateTime?
 
+  /// Last time the device (re)registered this token — clients register at every
+  /// launch. Unlike `updatedAt`, a successful send does not touch it, so it says
+  /// which installs are still alive. Null on rows older than #10856.
+  registeredAt DateTime?
+
   /// Number of consecutive failed delivery attempts (for cleanup)
   failedAttempts Int @default(0)
 
