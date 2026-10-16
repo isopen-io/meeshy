@@ -52,11 +52,14 @@ public struct GameMintPreview: Codable, Sendable, Equatable {
     public let locked: GameMintLock?
     /// La dette d'étincelles qui bloque la frappe — `nil` ou `0` : aucune (contrat en cours côté passerelle).
     public let sparksDebt: Int?
+    /// Ce qui bloque la frappe hors prix et rang : `.debt` tant qu'une dette d'étincelles existe (409 `MINT_BLOCKED_BY_DEBT`).
+    public let blockedBy: GameSparks.MintBlock?
 
     public init(number: Int, price: Int, edition: MeeshEdition, canMint: Bool, missingPoints: Int,
                 levelBefore: Int, levelAfter: Int, levelsLost: Int, gloryGained: Int, ladder: GameMintLadder? = nil,
                 basePrice: Int? = nil, costFactor: Double? = nil, costLevel: Int? = nil,
-                locked: GameMintLock? = nil, sparksDebt: Int? = nil) {
+                locked: GameMintLock? = nil, sparksDebt: Int? = nil, blockedBy: GameSparks.MintBlock? = nil) {
+        self.blockedBy = blockedBy
         self.basePrice = basePrice
         self.costFactor = costFactor
         self.costLevel = costLevel
@@ -76,7 +79,7 @@ public struct GameMintPreview: Codable, Sendable, Equatable {
 
     private enum CodingKeys: String, CodingKey {
         case number, price, edition, canMint, missingPoints, levelBefore, levelAfter, levelsLost, gloryGained, ladder
-        case basePrice, costFactor, costLevel, locked, sparksDebt
+        case basePrice, costFactor, costLevel, locked, sparksDebt, blockedBy
     }
 
     /// Les champs d'hier restent STRICTS ; ceux des étincelles se taisent s'ils sont illisibles (une réserve ajoutée
@@ -98,6 +101,7 @@ public struct GameMintPreview: Codable, Sendable, Equatable {
         costLevel = GameSparks.count(c, .costLevel)
         locked = (try? c.decodeIfPresent(GameMintLock.self, forKey: .locked)) ?? nil
         sparksDebt = GameSparks.count(c, .sparksDebt)
+        blockedBy = GameSparks.mintBlock(c, .blockedBy)
     }
 
     /// Ce qui empêche la frappe, dans l'ordre où l'écran doit le dire — `nil` : rien ne l'empêche.
@@ -110,7 +114,7 @@ public struct GameMintPreview: Codable, Sendable, Equatable {
     }
 
     public var blocker: Blocker? {
-        if let debt = sparksDebt, debt > 0 { return .sparksDebt(debt) }
+        if blockedBy == .debt || (sparksDebt ?? 0) > 0 { return .sparksDebt(sparksDebt ?? 0) }
         if let locked { return .treasuryLocked(locked) }
         if missingPoints > 0 { return .missingSparks(missingPoints) }
         return nil

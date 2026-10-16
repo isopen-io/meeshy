@@ -56,14 +56,13 @@ final class GameGuideEventsTests: XCTestCase {
         XCTAssertEqual(keys(events), [.newRank])
     }
 
-    /// Les étincelles (#10846) : le troisième champ (nom de la loi partagée, `tailwindUntilLevel`) porte le niveau
-    /// ACTUEL, qui ne baisse plus à la frappe — plus la cible d'un Vent arrière éteint.
-    func test_transitions_theFirstMint_namesTheLevelsBeforeAndAfter_andTheCurrentLevel() {
+    /// Les étincelles (#10846, 17b1041c2c) : la première frappe n'a plus de niveaux à citer — la loi partagée a retiré
+    /// ses champs, et le moment mène à la progression.
+    func test_transitions_theFirstMint_isAnnounced_withoutLevels() {
         let before = GameFixture.game(score: 121_800, minted: 0)
         let after = GameFixture.game(score: 108_860, levelRecord: 34, minted: 1)
         let events = GameGuideEvents.transitions(from: before, to: after)
-        XCTAssertTrue(events.contains(.firstMint(levelBefore: 34, levelAfter: after.level.shown.level,
-                                                 tailwindUntilLevel: after.level.shown.level)))
+        XCTAssertTrue(events.contains(.firstMint))
     }
 
     func test_transitions_theFlameGoingOut_isToldOnlyAtTheCrossing() {
@@ -88,7 +87,7 @@ final class GameGuideEventsTests: XCTestCase {
     func test_transitions_aMint_neverAnnouncesABadgeGoingOut() {
         let before = GameFixture.game(score: 121_800, minted: 12)
         let after = GameFixture.game(score: 108_860, levelRecord: 34, minted: 13)
-        XCTAssertFalse(keys(GameGuideEvents.transitions(from: before, to: after)).contains(.badgeExtinguished))
+        XCTAssertFalse(keys(GameGuideEvents.transitions(from: before, to: after)).map(\.rawValue).contains("badge-extinguished"))
     }
 
     /// L'écu ne MONTE que sur une marche gagnée : une frappe refusée restaure la Gloire

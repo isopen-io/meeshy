@@ -13,6 +13,23 @@ import Foundation
 
 public enum GameSparks {
 
+    /// Ce qui bloque la frappe hors prix et rang (`mint.blockedBy`, `meesh.blockedBy`) — une valeur inconnue se tait.
+    public enum MintBlock: String, Codable, Sendable, Hashable {
+        case debt
+        /// Une raison ajoutée côté serveur avant la mise à jour de l'app : elle ne bloque rien ici, et ne fait jamais
+        /// tomber le bloc qui la porte.
+        case unknown
+
+        public init(from decoder: Decoder) throws {
+            self = MintBlock(rawValue: try decoder.singleValueContainer().decode(String.self)) ?? .unknown
+        }
+    }
+
+    static func mintBlock<K: CodingKey>(_ container: KeyedDecodingContainer<K>, _ key: K) -> MintBlock? {
+        ((try? container.decodeIfPresent(String.self, forKey: key)) ?? nil).flatMap(MintBlock.init(rawValue:))
+            .flatMap { $0 == .unknown ? nil : $0 }
+    }
+
     public struct Facts: Equatable, Sendable {
         public let pocket: Int
         public let cycle: Int

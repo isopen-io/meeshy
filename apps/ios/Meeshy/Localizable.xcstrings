@@ -23457,7 +23457,7 @@
               "many": {
                 "stringUnit": {
                   "state": "translated",
-                  "value": "+%lld شرارة · أول رسالة"
+                  "value": "+%lld شرارةً · أول رسالة"
                 }
               },
               "other": {
@@ -24975,7 +24975,7 @@
               "many": {
                 "stringUnit": {
                   "state": "translated",
-                  "value": "تم كسب %lld شرارة"
+                  "value": "تم كسب %lld شرارةً"
                 }
               },
               "other": {
@@ -25130,7 +25130,7 @@
               "many": {
                 "stringUnit": {
                   "state": "translated",
-                  "value": "%lld شرارة"
+                  "value": "%lld شرارةً"
                 }
               },
               "other": {
@@ -25802,7 +25802,7 @@
               "many": {
                 "stringUnit": {
                   "state": "translated",
-                  "value": "زائد %lld شرارة"
+                  "value": "زائد %lld شرارةً"
                 }
               },
               "other": {
@@ -26427,7 +26427,7 @@
               "many": {
                 "stringUnit": {
                   "state": "translated",
-                  "value": "+%lld شرارة · أول قصة"
+                  "value": "+%lld شرارةً · أول قصة"
                 }
               },
               "other": {
@@ -237130,218 +237130,6 @@
         }
       }
     },
-    "game.points.one": {
-      "extractionState": "manual",
-      "localizations": {
-        "ar": {
-          "stringUnit": {
-            "state": "translated",
-            "value": "%@ شرارة"
-          }
-        },
-        "de": {
-          "stringUnit": {
-            "state": "translated",
-            "value": "%@ Funke"
-          }
-        },
-        "en": {
-          "stringUnit": {
-            "state": "translated",
-            "value": "%@ spark"
-          }
-        },
-        "es": {
-          "stringUnit": {
-            "state": "translated",
-            "value": "%@ chispa"
-          }
-        },
-        "fr": {
-          "stringUnit": {
-            "state": "translated",
-            "value": "%@ étincelle"
-          }
-        },
-        "it": {
-          "stringUnit": {
-            "state": "translated",
-            "value": "%@ scintilla"
-          }
-        },
-        "pt-BR": {
-          "stringUnit": {
-            "state": "translated",
-            "value": "%@ faísca"
-          }
-        }
-      }
-    },
-    "game.points.other": {
-      "extractionState": "manual",
-      "localizations": {
-        "ar": {
-          "stringUnit": {
-            "state": "translated",
-            "value": "%@ شرارة"
-          }
-        },
-        "de": {
-          "stringUnit": {
-            "state": "translated",
-            "value": "%@ Funken"
-          }
-        },
-        "en": {
-          "stringUnit": {
-            "state": "translated",
-            "value": "%@ sparks"
-          }
-        },
-        "es": {
-          "stringUnit": {
-            "state": "translated",
-            "value": "%@ chispas"
-          }
-        },
-        "fr": {
-          "stringUnit": {
-            "state": "translated",
-            "value": "%@ étincelles"
-          }
-        },
-        "it": {
-          "stringUnit": {
-            "state": "translated",
-            "value": "%@ scintille"
-          }
-        },
-        "pt-BR": {
-          "stringUnit": {
-            "state": "translated",
-            "value": "%@ faíscas"
-          }
-        }
-      }
-    },
-    "game.sparks.one": {
-      "extractionState": "manual",
-      "localizations": {
-        "ar": {
-          "stringUnit": {
-            "state": "translated",
-            "value": "%@ شرارة"
-          }
-        },
-        "de": {
-          "stringUnit": {
-            "state": "translated",
-            "value": "%@ Funke"
-          }
-        },
-        "en": {
-          "stringUnit": {
-            "state": "translated",
-            "value": "%@ spark"
-          }
-        },
-        "es": {
-          "stringUnit": {
-            "state": "translated",
-            "value": "%@ chispa"
-          }
-        },
-        "fr": {
-          "stringUnit": {
-            "state": "translated",
-            "value": "%@ étincelle"
-          }
-        },
-        "it": {
-          "stringUnit": {
-            "state": "translated",
-            "value": "%@ scintilla"
-          }
-        },
-        "pt": {
-          "stringUnit": {
-            "state": "translated",
-            "value": "%@ faísca"
-          }
-        },
-        "pt-BR": {
-          "stringUnit": {
-            "state": "translated",
-            "value": "%@ faísca"
-          }
-        },
-        "zh-Hans": {
-          "stringUnit": {
-            "state": "translated",
-            "value": "%@ 火花"
-          }
-        }
-      }
-    },
-    "game.sparks.other": {
-      "extractionState": "manual",
-      "localizations": {
-        "ar": {
-          "stringUnit": {
-            "state": "translated",
-            "value": "%@ شرارة"
-          }
-        },
-        "de": {
-          "stringUnit": {
-            "state": "translated",
-            "value": "%@ Funken"
-          }
-        },
-        "en": {
-          "stringUnit": {
-            "state": "translated",
-            "value": "%@ sparks"
-          }
-        },
-        "es": {
-          "stringUnit": {
-            "state": "translated",
-            "value": "%@ chispas"
-          }
-        },
-        "fr": {
-          "stringUnit": {
-            "state": "translated",
-            "value": "%@ étincelles"
-          }
-        },
-        "it": {
-          "stringUnit": {
-            "state": "translated",
-            "value": "%@ scintille"
-          }
-        },
-        "pt": {
-          "stringUnit": {
-            "state": "translated",
-            "value": "%@ faíscas"
-          }
-        },
-        "pt-BR": {
-          "stringUnit": {
-            "state": "translated",
-            "value": "%@ faíscas"
-          }
-        },
-        "zh-Hans": {
-          "stringUnit": {
-            "state": "translated",
-            "value": "%@ 火花"
-          }
-        }
-      }
-    },
     "game.sparks.banner.pocket": {
       "extractionState": "manual",
       "localizations": {
@@ -237397,6 +237185,376 @@
           "stringUnit": {
             "state": "translated",
             "value": "%@ ✦"
+          }
+        }
+      }
+    },
+    "game.sparks.convertible.count": {
+      "extractionState": "manual",
+      "localizations": {
+        "fr": {
+          "variations": {
+            "plural": {
+              "one": {
+                "stringUnit": {
+                  "state": "translated",
+                  "value": "%lld étincelle convertible"
+                }
+              },
+              "other": {
+                "stringUnit": {
+                  "state": "translated",
+                  "value": "%lld étincelles convertibles"
+                }
+              }
+            }
+          }
+        },
+        "en": {
+          "variations": {
+            "plural": {
+              "one": {
+                "stringUnit": {
+                  "state": "translated",
+                  "value": "%lld convertible spark"
+                }
+              },
+              "other": {
+                "stringUnit": {
+                  "state": "translated",
+                  "value": "%lld convertible sparks"
+                }
+              }
+            }
+          }
+        },
+        "es": {
+          "variations": {
+            "plural": {
+              "one": {
+                "stringUnit": {
+                  "state": "translated",
+                  "value": "%lld chispa convertible"
+                }
+              },
+              "other": {
+                "stringUnit": {
+                  "state": "translated",
+                  "value": "%lld chispas convertibles"
+                }
+              }
+            }
+          }
+        },
+        "de": {
+          "variations": {
+            "plural": {
+              "one": {
+                "stringUnit": {
+                  "state": "translated",
+                  "value": "%lld umwandelbarer Funke"
+                }
+              },
+              "other": {
+                "stringUnit": {
+                  "state": "translated",
+                  "value": "%lld umwandelbare Funken"
+                }
+              }
+            }
+          }
+        },
+        "it": {
+          "variations": {
+            "plural": {
+              "one": {
+                "stringUnit": {
+                  "state": "translated",
+                  "value": "%lld scintilla convertibile"
+                }
+              },
+              "other": {
+                "stringUnit": {
+                  "state": "translated",
+                  "value": "%lld scintille convertibili"
+                }
+              }
+            }
+          }
+        },
+        "pt": {
+          "variations": {
+            "plural": {
+              "one": {
+                "stringUnit": {
+                  "state": "translated",
+                  "value": "%lld faísca conversível"
+                }
+              },
+              "other": {
+                "stringUnit": {
+                  "state": "translated",
+                  "value": "%lld faíscas conversíveis"
+                }
+              }
+            }
+          }
+        },
+        "pt-BR": {
+          "variations": {
+            "plural": {
+              "one": {
+                "stringUnit": {
+                  "state": "translated",
+                  "value": "%lld faísca conversível"
+                }
+              },
+              "other": {
+                "stringUnit": {
+                  "state": "translated",
+                  "value": "%lld faíscas conversíveis"
+                }
+              }
+            }
+          }
+        },
+        "ar": {
+          "variations": {
+            "plural": {
+              "zero": {
+                "stringUnit": {
+                  "state": "translated",
+                  "value": "%lld شرارة قابلة للتحويل"
+                }
+              },
+              "one": {
+                "stringUnit": {
+                  "state": "translated",
+                  "value": "شرارة واحدة قابلة للتحويل"
+                }
+              },
+              "two": {
+                "stringUnit": {
+                  "state": "translated",
+                  "value": "شرارتان قابلتان للتحويل"
+                }
+              },
+              "few": {
+                "stringUnit": {
+                  "state": "translated",
+                  "value": "%lld شرارات قابلة للتحويل"
+                }
+              },
+              "many": {
+                "stringUnit": {
+                  "state": "translated",
+                  "value": "%lld شرارةً قابلة للتحويل"
+                }
+              },
+              "other": {
+                "stringUnit": {
+                  "state": "translated",
+                  "value": "%lld شرارة قابلة للتحويل"
+                }
+              }
+            }
+          }
+        },
+        "zh-Hans": {
+          "variations": {
+            "plural": {
+              "other": {
+                "stringUnit": {
+                  "state": "translated",
+                  "value": "%lld 可兑换火花"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "game.sparks.count": {
+      "extractionState": "manual",
+      "localizations": {
+        "fr": {
+          "variations": {
+            "plural": {
+              "one": {
+                "stringUnit": {
+                  "state": "translated",
+                  "value": "%lld étincelle"
+                }
+              },
+              "other": {
+                "stringUnit": {
+                  "state": "translated",
+                  "value": "%lld étincelles"
+                }
+              }
+            }
+          }
+        },
+        "en": {
+          "variations": {
+            "plural": {
+              "one": {
+                "stringUnit": {
+                  "state": "translated",
+                  "value": "%lld spark"
+                }
+              },
+              "other": {
+                "stringUnit": {
+                  "state": "translated",
+                  "value": "%lld sparks"
+                }
+              }
+            }
+          }
+        },
+        "es": {
+          "variations": {
+            "plural": {
+              "one": {
+                "stringUnit": {
+                  "state": "translated",
+                  "value": "%lld chispa"
+                }
+              },
+              "other": {
+                "stringUnit": {
+                  "state": "translated",
+                  "value": "%lld chispas"
+                }
+              }
+            }
+          }
+        },
+        "de": {
+          "variations": {
+            "plural": {
+              "one": {
+                "stringUnit": {
+                  "state": "translated",
+                  "value": "%lld Funke"
+                }
+              },
+              "other": {
+                "stringUnit": {
+                  "state": "translated",
+                  "value": "%lld Funken"
+                }
+              }
+            }
+          }
+        },
+        "it": {
+          "variations": {
+            "plural": {
+              "one": {
+                "stringUnit": {
+                  "state": "translated",
+                  "value": "%lld scintilla"
+                }
+              },
+              "other": {
+                "stringUnit": {
+                  "state": "translated",
+                  "value": "%lld scintille"
+                }
+              }
+            }
+          }
+        },
+        "pt": {
+          "variations": {
+            "plural": {
+              "one": {
+                "stringUnit": {
+                  "state": "translated",
+                  "value": "%lld faísca"
+                }
+              },
+              "other": {
+                "stringUnit": {
+                  "state": "translated",
+                  "value": "%lld faíscas"
+                }
+              }
+            }
+          }
+        },
+        "pt-BR": {
+          "variations": {
+            "plural": {
+              "one": {
+                "stringUnit": {
+                  "state": "translated",
+                  "value": "%lld faísca"
+                }
+              },
+              "other": {
+                "stringUnit": {
+                  "state": "translated",
+                  "value": "%lld faíscas"
+                }
+              }
+            }
+          }
+        },
+        "ar": {
+          "variations": {
+            "plural": {
+              "zero": {
+                "stringUnit": {
+                  "state": "translated",
+                  "value": "%lld شرارة"
+                }
+              },
+              "one": {
+                "stringUnit": {
+                  "state": "translated",
+                  "value": "شرارة واحدة"
+                }
+              },
+              "two": {
+                "stringUnit": {
+                  "state": "translated",
+                  "value": "شرارتان"
+                }
+              },
+              "few": {
+                "stringUnit": {
+                  "state": "translated",
+                  "value": "%lld شرارات"
+                }
+              },
+              "many": {
+                "stringUnit": {
+                  "state": "translated",
+                  "value": "%lld شرارةً"
+                }
+              },
+              "other": {
+                "stringUnit": {
+                  "state": "translated",
+                  "value": "%lld شرارة"
+                }
+              }
+            }
+          }
+        },
+        "zh-Hans": {
+          "variations": {
+            "plural": {
+              "other": {
+                "stringUnit": {
+                  "state": "translated",
+                  "value": "%lld 火花"
+                }
+              }
+            }
           }
         }
       }
@@ -237869,100 +238027,6 @@
           "stringUnit": {
             "state": "translated",
             "value": "历史最高"
-          }
-        }
-      }
-    },
-    "game.points.convertible.one": {
-      "extractionState": "manual",
-      "localizations": {
-        "ar": {
-          "stringUnit": {
-            "state": "translated",
-            "value": "%@ شرارة قابلة للتحويل"
-          }
-        },
-        "de": {
-          "stringUnit": {
-            "state": "translated",
-            "value": "%@ umwandelbarer Funke"
-          }
-        },
-        "en": {
-          "stringUnit": {
-            "state": "translated",
-            "value": "%@ convertible spark"
-          }
-        },
-        "es": {
-          "stringUnit": {
-            "state": "translated",
-            "value": "%@ chispa convertible"
-          }
-        },
-        "fr": {
-          "stringUnit": {
-            "state": "translated",
-            "value": "%@ étincelle convertible"
-          }
-        },
-        "it": {
-          "stringUnit": {
-            "state": "translated",
-            "value": "%@ scintilla convertibile"
-          }
-        },
-        "pt-BR": {
-          "stringUnit": {
-            "state": "translated",
-            "value": "%@ faísca conversível"
-          }
-        }
-      }
-    },
-    "game.points.convertible.other": {
-      "extractionState": "manual",
-      "localizations": {
-        "ar": {
-          "stringUnit": {
-            "state": "translated",
-            "value": "%@ شرارة قابلة للتحويل"
-          }
-        },
-        "de": {
-          "stringUnit": {
-            "state": "translated",
-            "value": "%@ umwandelbare Funken"
-          }
-        },
-        "en": {
-          "stringUnit": {
-            "state": "translated",
-            "value": "%@ convertible sparks"
-          }
-        },
-        "es": {
-          "stringUnit": {
-            "state": "translated",
-            "value": "%@ chispas convertibles"
-          }
-        },
-        "fr": {
-          "stringUnit": {
-            "state": "translated",
-            "value": "%@ étincelles convertibles"
-          }
-        },
-        "it": {
-          "stringUnit": {
-            "state": "translated",
-            "value": "%@ scintille convertibili"
-          }
-        },
-        "pt-BR": {
-          "stringUnit": {
-            "state": "translated",
-            "value": "%@ faíscas conversíveis"
           }
         }
       }
@@ -243290,53 +243354,6 @@
         }
       }
     },
-    "game.level.record": {
-      "extractionState": "manual",
-      "localizations": {
-        "ar": {
-          "stringUnit": {
-            "state": "translated",
-            "value": "الرقم القياسي: المستوى %@"
-          }
-        },
-        "de": {
-          "stringUnit": {
-            "state": "translated",
-            "value": "Rekord: Level %@"
-          }
-        },
-        "en": {
-          "stringUnit": {
-            "state": "translated",
-            "value": "Record: level %@"
-          }
-        },
-        "es": {
-          "stringUnit": {
-            "state": "translated",
-            "value": "Récord: nivel %@"
-          }
-        },
-        "fr": {
-          "stringUnit": {
-            "state": "translated",
-            "value": "Record : niveau %@"
-          }
-        },
-        "it": {
-          "stringUnit": {
-            "state": "translated",
-            "value": "Record: livello %@"
-          }
-        },
-        "pt-BR": {
-          "stringUnit": {
-            "state": "translated",
-            "value": "Recorde: nível %@"
-          }
-        }
-      }
-    },
     "game.rank.glory": {
       "extractionState": "manual",
       "localizations": {
@@ -244982,53 +244999,6 @@
         }
       }
     },
-    "game.guide.action.relight_badge": {
-      "extractionState": "manual",
-      "localizations": {
-        "ar": {
-          "stringUnit": {
-            "state": "translated",
-            "value": "عرض أوسمتي"
-          }
-        },
-        "de": {
-          "stringUnit": {
-            "state": "translated",
-            "value": "Meine Abzeichen ansehen"
-          }
-        },
-        "en": {
-          "stringUnit": {
-            "state": "translated",
-            "value": "See my badges"
-          }
-        },
-        "es": {
-          "stringUnit": {
-            "state": "translated",
-            "value": "Ver mis insignias"
-          }
-        },
-        "fr": {
-          "stringUnit": {
-            "state": "translated",
-            "value": "Voir mes badges"
-          }
-        },
-        "it": {
-          "stringUnit": {
-            "state": "translated",
-            "value": "Vedi i miei badge"
-          }
-        },
-        "pt-BR": {
-          "stringUnit": {
-            "state": "translated",
-            "value": "Ver meus selos"
-          }
-        }
-      }
-    },
     "game.guide.action.see_mint_preview": {
       "extractionState": "manual",
       "localizations": {
@@ -246210,43 +246180,43 @@
         "ar": {
           "stringUnit": {
             "state": "translated",
-            "value": "المستوى قبل السكّ: %@، وبعده: %@. لم يعد السكّ يخفض مستواك."
+            "value": "لم يعد السكّ يخفض مستواك: الشرارات التي كسبتها تبقى لك."
           }
         },
         "de": {
           "stringUnit": {
             "state": "translated",
-            "value": "Level vor der Prägung: %@, danach: %@. Prägen senkt dein Level nicht mehr."
+            "value": "Prägen senkt dein Level nicht mehr: deine verdienten Funken bleiben dir."
           }
         },
         "en": {
           "stringUnit": {
             "state": "translated",
-            "value": "Level before the mint: %@, after: %@. Minting no longer lowers your level."
+            "value": "Minting no longer lowers your level: the sparks you have earned stay earned."
           }
         },
         "es": {
           "stringUnit": {
             "state": "translated",
-            "value": "Nivel antes de la acuñación: %@, después: %@. Acuñar ya no baja tu nivel."
+            "value": "Acuñar ya no baja tu nivel: las chispas que ganaste siguen siendo tuyas."
           }
         },
         "fr": {
           "stringUnit": {
             "state": "translated",
-            "value": "Niveau avant la frappe : %@, après : %@. La frappe ne fait plus baisser ton niveau."
+            "value": "La frappe ne fait plus baisser ton niveau : tes étincelles déjà gagnées restent acquises."
           }
         },
         "it": {
           "stringUnit": {
             "state": "translated",
-            "value": "Livello prima del conio: %@, dopo: %@. Coniare non abbassa più il tuo livello."
+            "value": "Coniare non abbassa più il tuo livello: le scintille guadagnate restano tue."
           }
         },
         "pt-BR": {
           "stringUnit": {
             "state": "translated",
-            "value": "Nível antes da cunhagem: %@, depois: %@. Cunhar não baixa mais o seu nível."
+            "value": "Cunhar não baixa mais o seu nível: as faíscas que você ganhou continuam suas."
           }
         }
       }
@@ -246257,43 +246227,43 @@
         "ar": {
           "stringUnit": {
             "state": "translated",
-            "value": "لا شيء لتستعيده: تبقى في المستوى %@، وشراراتك القادمة ترفعك أكثر."
+            "value": "شراراتك القادمة ترفعك أكثر: ألقِ نظرة على تقدّمك."
           }
         },
         "de": {
           "stringUnit": {
             "state": "translated",
-            "value": "Nichts zurückzuholen: Du bleibst auf Level %@, und deine nächsten Funken bringen dich höher."
+            "value": "Deine nächsten Funken bringen dich höher: sieh dir deinen Fortschritt an."
           }
         },
         "en": {
           "stringUnit": {
             "state": "translated",
-            "value": "Nothing to win back: you stay at level %@, and your next sparks take you higher."
+            "value": "Your next sparks take you higher: take a look at your progress."
           }
         },
         "es": {
           "stringUnit": {
             "state": "translated",
-            "value": "Nada que recuperar: sigues en el nivel %@, y tus próximas chispas te hacen subir."
+            "value": "Tus próximas chispas te hacen subir: mira tu progreso."
           }
         },
         "fr": {
           "stringUnit": {
             "state": "translated",
-            "value": "Rien à reprendre : tu restes au niveau %@, et tes prochaines étincelles te font monter."
+            "value": "Tes prochaines étincelles te font monter : regarde ta progression."
           }
         },
         "it": {
           "stringUnit": {
             "state": "translated",
-            "value": "Niente da riprendere: resti al livello %@, e le tue prossime scintille ti fanno salire."
+            "value": "Le tue prossime scintille ti fanno salire: guarda i tuoi progressi."
           }
         },
         "pt-BR": {
           "stringUnit": {
             "state": "translated",
-            "value": "Nada a recuperar: você continua no nível %@, e suas próximas faíscas fazem você subir."
+            "value": "Suas próximas faíscas fazem você subir: veja seu progresso."
           }
         }
       }
@@ -246304,231 +246274,43 @@
         "ar": {
           "stringUnit": {
             "state": "translated",
-            "value": "المستوى %@ → %@: لم يعد السكّ يُنزِلك (المستوى الحالي: %@)."
+            "value": "سُكّت أول Meesh: يبقى مستواك كما هو."
           }
         },
         "de": {
           "stringUnit": {
             "state": "translated",
-            "value": "Level %@ → %@: Prägen lässt dich nicht mehr absteigen (aktuelles Level: %@)."
+            "value": "Erste Meesh geprägt: dein Level bleibt."
           }
         },
         "en": {
           "stringUnit": {
             "state": "translated",
-            "value": "Level %@ → %@: minting no longer brings you down (current level: %@)."
+            "value": "First Meesh minted: your level stays put."
           }
         },
         "es": {
           "stringUnit": {
             "state": "translated",
-            "value": "Nivel %@ → %@: acuñar ya no te hace bajar (nivel actual: %@)."
+            "value": "Primera Meesh acuñada: tu nivel se mantiene."
           }
         },
         "fr": {
           "stringUnit": {
             "state": "translated",
-            "value": "Niveau %@ → %@ : la frappe ne te fait plus descendre (niveau actuel : %@)."
+            "value": "Première Meesh frappée : ton niveau reste acquis."
           }
         },
         "it": {
           "stringUnit": {
             "state": "translated",
-            "value": "Livello %@ → %@: coniare non ti fa più scendere (livello attuale: %@)."
+            "value": "Prima Meesh coniata: il tuo livello resta."
           }
         },
         "pt-BR": {
           "stringUnit": {
             "state": "translated",
-            "value": "Nível %@ → %@: cunhar não faz mais você descer (nível atual: %@)."
-          }
-        }
-      }
-    },
-    "game.guide.moment.badge_extinguished.what": {
-      "extractionState": "manual",
-      "localizations": {
-        "ar": {
-          "stringUnit": {
-            "state": "translated",
-            "value": "انطفأ وسام."
-          }
-        },
-        "de": {
-          "stringUnit": {
-            "state": "translated",
-            "value": "Ein Abzeichen ist erloschen."
-          }
-        },
-        "en": {
-          "stringUnit": {
-            "state": "translated",
-            "value": "A badge went out."
-          }
-        },
-        "es": {
-          "stringUnit": {
-            "state": "translated",
-            "value": "Una insignia se ha apagado."
-          }
-        },
-        "fr": {
-          "stringUnit": {
-            "state": "translated",
-            "value": "Un badge s’est éteint."
-          }
-        },
-        "it": {
-          "stringUnit": {
-            "state": "translated",
-            "value": "Un badge si è spento."
-          }
-        },
-        "pt-BR": {
-          "stringUnit": {
-            "state": "translated",
-            "value": "Um selo se apagou."
-          }
-        }
-      }
-    },
-    "game.guide.moment.badge_extinguished.means": {
-      "extractionState": "manual",
-      "localizations": {
-        "ar": {
-          "stringUnit": {
-            "state": "translated",
-            "value": "تحوّل إلى أثر: لا شيء يضيع إلى الأبد."
-          }
-        },
-        "de": {
-          "stringUnit": {
-            "state": "translated",
-            "value": "Es ist zu einem Abdruck geworden: Nichts ist für immer verloren."
-          }
-        },
-        "en": {
-          "stringUnit": {
-            "state": "translated",
-            "value": "It became an imprint: nothing is lost for good."
-          }
-        },
-        "es": {
-          "stringUnit": {
-            "state": "translated",
-            "value": "Se ha convertido en una huella: nada se pierde para siempre."
-          }
-        },
-        "fr": {
-          "stringUnit": {
-            "state": "translated",
-            "value": "Il est devenu une empreinte : rien n’est perdu pour toujours."
-          }
-        },
-        "it": {
-          "stringUnit": {
-            "state": "translated",
-            "value": "È diventato un’impronta: niente è perso per sempre."
-          }
-        },
-        "pt-BR": {
-          "stringUnit": {
-            "state": "translated",
-            "value": "Ele virou uma marca: nada se perde para sempre."
-          }
-        }
-      }
-    },
-    "game.guide.moment.badge_extinguished.next": {
-      "extractionState": "manual",
-      "localizations": {
-        "ar": {
-          "stringUnit": {
-            "state": "translated",
-            "value": "بقي %@ لإعادة إشعاله."
-          }
-        },
-        "de": {
-          "stringUnit": {
-            "state": "translated",
-            "value": "Noch %@, um es neu zu entzünden."
-          }
-        },
-        "en": {
-          "stringUnit": {
-            "state": "translated",
-            "value": "%@ more to relight it."
-          }
-        },
-        "es": {
-          "stringUnit": {
-            "state": "translated",
-            "value": "Faltan %@ para volver a encenderla."
-          }
-        },
-        "fr": {
-          "stringUnit": {
-            "state": "translated",
-            "value": "Encore %@ pour le rallumer."
-          }
-        },
-        "it": {
-          "stringUnit": {
-            "state": "translated",
-            "value": "Ancora %@ per riaccenderlo."
-          }
-        },
-        "pt-BR": {
-          "stringUnit": {
-            "state": "translated",
-            "value": "Mais %@ para reacendê-lo."
-          }
-        }
-      }
-    },
-    "game.guide.moment.badge_extinguished.short": {
-      "extractionState": "manual",
-      "localizations": {
-        "ar": {
-          "stringUnit": {
-            "state": "translated",
-            "value": "انطفأ وسام: %@ لإعادة إشعاله."
-          }
-        },
-        "de": {
-          "stringUnit": {
-            "state": "translated",
-            "value": "Ein Abzeichen ist erloschen: %@, um es neu zu entzünden."
-          }
-        },
-        "en": {
-          "stringUnit": {
-            "state": "translated",
-            "value": "A badge went out: %@ to relight it."
-          }
-        },
-        "es": {
-          "stringUnit": {
-            "state": "translated",
-            "value": "Una insignia se apagó: %@ para volver a encenderla."
-          }
-        },
-        "fr": {
-          "stringUnit": {
-            "state": "translated",
-            "value": "Un badge s’est éteint : %@ pour le rallumer."
-          }
-        },
-        "it": {
-          "stringUnit": {
-            "state": "translated",
-            "value": "Un badge si è spento: %@ per riaccenderlo."
-          }
-        },
-        "pt-BR": {
-          "stringUnit": {
-            "state": "translated",
-            "value": "Um selo se apagou: %@ para reacendê-lo."
+            "value": "Primeira Meesh cunhada: seu nível continua."
           }
         }
       }
@@ -255389,6 +255171,65 @@
           "stringUnit": {
             "state": "translated",
             "value": "你还欠 %@ 火花：还清后即可继续铸造。"
+          }
+        }
+      }
+    },
+    "game.mint.blocked.debt_plain": {
+      "extractionState": "manual",
+      "localizations": {
+        "fr": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Une dette d’étincelles bloque la frappe : tes prochains gains la règlent d’abord."
+          }
+        },
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "A spark debt is blocking minting: your next earnings settle it first."
+          }
+        },
+        "es": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Una deuda de chispas bloquea la acuñación: tus próximas ganancias la saldan primero."
+          }
+        },
+        "de": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Eine Funken-Schuld blockiert das Prägen: deine nächsten Gewinne begleichen sie zuerst."
+          }
+        },
+        "it": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Un debito di scintille blocca il conio: i tuoi prossimi guadagni lo saldano per primi."
+          }
+        },
+        "pt": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Uma dívida de faíscas bloqueia a cunhagem: os teus próximos ganhos saldam-na primeiro."
+          }
+        },
+        "pt-BR": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Uma dívida de faíscas bloqueia a cunhagem: seus próximos ganhos a quitam primeiro."
+          }
+        },
+        "ar": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "دَين من الشرارات يمنع السكّ: مكاسبك القادمة تسدّده أولًا."
+          }
+        },
+        "zh-Hans": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "火花欠款阻止了铸造：你接下来的收益会先偿还它。"
           }
         }
       }
@@ -277385,7 +277226,7 @@
         "fr": {
           "stringUnit": {
             "state": "translated",
-            "value": "Tes étincelles remplissent l’anneau : plein, il te fait monter d’un niveau."
+            "value": "Tes étincelles remplissent l’anneau : plein, tu montes d’un niveau."
           }
         },
         "it": {
@@ -277555,37 +277396,37 @@
         "de": {
           "stringUnit": {
             "state": "translated",
-            "value": "Gesammelt machen sie dein Level. Im Besitz lassen sich alle umwandeln: Sie bezahlen deine Meeshes."
+            "value": "Gesammelt machen sie dein Level; im Besitz bezahlen sie deine Meeshes."
           }
         },
         "en": {
           "stringUnit": {
             "state": "translated",
-            "value": "Earned, they make your level. In hand, all of them can be converted: they pay for your Meeshes."
+            "value": "Earned, they make your level; in hand, they pay for your Meeshes."
           }
         },
         "es": {
           "stringUnit": {
             "state": "translated",
-            "value": "Ganadas, hacen tu nivel. En mano, todas se pueden convertir: pagan tus Meeshes."
+            "value": "Ganadas, hacen tu nivel; en mano, pagan tus Meeshes."
           }
         },
         "fr": {
           "stringUnit": {
             "state": "translated",
-            "value": "Gagnées, elles font ton niveau. En poche, toutes sont convertibles : elles paient tes Meeshes."
+            "value": "Gagnées, elles font ton niveau ; en poche, elles paient tes Meeshes."
           }
         },
         "it": {
           "stringUnit": {
             "state": "translated",
-            "value": "Guadagnate, fanno il tuo livello. In tasca, sono tutte convertibili: pagano le tue Meesh."
+            "value": "Guadagnate, fanno il tuo livello; in tasca, pagano le tue Meesh."
           }
         },
         "pt-BR": {
           "stringUnit": {
             "state": "translated",
-            "value": "Ganhas, formam o seu nível. Em mãos, todas podem ser convertidas: pagam suas Meeshes."
+            "value": "Ganhas, formam o seu nível; em mãos, pagam suas Meeshes."
           }
         }
       }
@@ -277831,43 +277672,43 @@
         "ar": {
           "stringUnit": {
             "state": "translated",
-            "value": "تسكّها بالشرارات التي في حوزتك، وكلها قابلة للتحويل. ويرتفع ثمنها على مراحل."
+            "value": "تسكّها بشراراتك التي في حوزتك. ويرتفع ثمنها على مراحل."
           }
         },
         "de": {
           "stringUnit": {
             "state": "translated",
-            "value": "Du prägst sie mit deinen Funken im Besitz, die sich alle umwandeln lassen. Ihr Preis steigt in Stufen."
+            "value": "Du prägst sie mit deinen Funken. Ihr Preis steigt in Stufen."
           }
         },
         "en": {
           "stringUnit": {
             "state": "translated",
-            "value": "You mint it with your sparks in hand, all of them convertible. Its price rises in steps."
+            "value": "You mint it with your sparks in hand. Its price rises in steps."
           }
         },
         "es": {
           "stringUnit": {
             "state": "translated",
-            "value": "La acuñas con tus chispas en mano, todas convertibles. Su precio sube por tramos."
+            "value": "La acuñas con tus chispas en mano. Su precio sube por tramos."
           }
         },
         "fr": {
           "stringUnit": {
             "state": "translated",
-            "value": "Tu la frappes avec tes étincelles en poche, toutes convertibles. Son prix monte par paliers."
+            "value": "Tu la frappes avec tes étincelles en poche. Son prix monte par paliers."
           }
         },
         "it": {
           "stringUnit": {
             "state": "translated",
-            "value": "La conii con le tue scintille in tasca, tutte convertibili. Il prezzo sale a scatti."
+            "value": "La conii con le scintille in tasca. Il prezzo sale a scatti."
           }
         },
         "pt-BR": {
           "stringUnit": {
             "state": "translated",
-            "value": "Você a cunha com suas faíscas em mãos, todas conversíveis. O preço sobe em degraus."
+            "value": "Você a cunha com suas faíscas em mãos. O preço sobe em degraus."
           }
         }
       }
@@ -278795,13 +278636,13 @@
         "fr": {
           "stringUnit": {
             "state": "translated",
-            "value": "Tes étincelles de la semaine font ton rang. Les premiers montent de ligue."
+            "value": "Tes étincelles de la semaine font ton rang ; les premiers montent."
           }
         },
         "it": {
           "stringUnit": {
             "state": "translated",
-            "value": "Le scintille della settimana fanno la tua posizione. I primi salgono di lega."
+            "value": "Le scintille della settimana fanno la posizione; i primi salgono."
           }
         },
         "pt-BR": {

@@ -43,6 +43,29 @@ final class GameMintCostCopyTests: XCTestCase {
         XCTAssertNil(GameMintCostCopy.blockerMessage(mint()))
     }
 
+    // MARK: - Le refus de la passerelle (ffbc396c92)
+
+    func test_theDebtRefusal_saysTheDebt_withItsAmountWhenKnown() {
+        XCTAssertEqual(GameMintCostCopy.mintFailureMessage(code: .mintBlockedByDebt, debt: 250), GameMintCostCopy.debtText(250))
+        XCTAssertEqual(GameMintCostCopy.mintFailureMessage(code: .mintBlockedByDebt, debt: nil), GameMintCostCopy.debtText(0))
+    }
+
+    /// `blockedBy: 'debt'` sans montant servi : la phrase dit la dette sans inventer de nombre.
+    func test_aDebtWithoutAmount_saysItWithoutANumber() {
+        XCTAssertFalse(GameMintCostCopy.debtText(0).contains("0"))
+        XCTAssertTrue(GameMintCostCopy.debtText(250).contains(GameCopy.formatCount(250)))
+    }
+
+    func test_otherRefusals_keepTheirOwnMessage() {
+        XCTAssertEqual(GameMintCostCopy.mintFailureMessage(code: .treasuryLocked, debt: nil), GameCopy.errorMessage(for: .treasuryLocked))
+        XCTAssertEqual(GameMintCostCopy.mintFailureMessage(code: nil, debt: nil), GameMintCostCopy.genericFailure)
+    }
+
+    func test_theViewModel_saysTheRefusal() throws {
+        let vm = AppSourceGuard.stripComments(try AppSourceGuard.unit("Meeshy/Features/Main/ViewModels/ProgressionViewModel.swift"))
+        XCTAssertTrue(vm.contains("GameMintCostCopy.mintFailureMessage(code: refusal"))
+    }
+
     func test_theMintHero_showsTheCostLine_andTheBlocker() throws {
         let hero = AppSourceGuard.stripComments(try AppSourceGuard.unit("Meeshy/Features/Main/Game/GameMintPreviewView.swift"))
         XCTAssertTrue(hero.contains("GameMintCostCopy.costLine(mint)"))

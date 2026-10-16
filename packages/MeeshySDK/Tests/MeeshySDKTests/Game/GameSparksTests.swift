@@ -143,6 +143,46 @@ final class GameSparksTests: XCTestCase {
         XCTAssertEqual(standing.sparksLifetime, 90000)
     }
 
+    // MARK: - La dette (ffbc396c92) : blockedBy, sparksDebt sur level, refus MINT_BLOCKED_BY_DEBT
+
+    func test_mint_blockedByDebt_isTheBlocker_evenWithoutAnAmount() throws {
+        let preview = try decode(GameMintPreview.self, """
+        {"number": 4, "price": 900, "edition": "silver", "canMint": false, "missingPoints": 0,
+         "levelBefore": 20, "levelAfter": 20, "levelsLost": 0, "gloryGained": 0, "blockedBy": "debt"}
+        """)
+        XCTAssertEqual(preview.blockedBy, .debt)
+        XCTAssertEqual(preview.blocker, .sparksDebt(0), "la dette bloque, même quand son montant n'est pas servi ici")
+    }
+
+    func test_blockedBy_null_orUnknown_doesNotBlock_andDoesNotDropTheBlock() throws {
+        let preview = try decode(GameMintPreview.self, """
+        {"number": 4, "price": 900, "edition": "silver", "canMint": true, "missingPoints": 0,
+         "levelBefore": 20, "levelAfter": 20, "levelsLost": 0, "gloryGained": 0, "blockedBy": "something-new"}
+        """)
+        XCTAssertNil(preview.blockedBy)
+        XCTAssertNil(preview.blocker)
+    }
+
+    func test_meesh_and_level_carryTheDebt() throws {
+        let meesh = try decode(APIEngagementProgress.Meesh.self, """
+        {"balance": 0, "mintedLifetime": 1, "debitablePoints": 0, "floorPoints": 0, "missingPoints": 0, "mintCost": 600,
+         "blockedBy": "debt", "sparksDebt": 250}
+        """)
+        XCTAssertEqual(meesh.blockedBy, .debt)
+        XCTAssertEqual(meesh.sparksDebt, 250)
+        let level = try decode(GameBlock.Level.self, """
+        {"level": 9, "tier": "etincelle", "score": 8200, "floorScore": 8100, "nextThreshold": 10000, "pointsToNext": 1800,
+         "progress": 0.05, "record": 9, "prestige": 0, "canPrestige": false, "sparksDebt": 250}
+        """)
+        XCTAssertEqual(level.sparksDebt, 250)
+        let engagementLevel = try decode(APIEngagementProgress.Level.self, #"{"engagementScore": 0, "sparksDebt": 250}"#)
+        XCTAssertEqual(engagementLevel.sparksDebt, 250)
+    }
+
+    func test_theDebtRefusal_isAKnownErrorCode() {
+        XCTAssertEqual(GameErrorCode(rawValue: "MINT_BLOCKED_BY_DEBT"), .mintBlockedByDebt)
+    }
+
     // MARK: - La loi du coût (packages/shared/fixtures/reading-modes/sparks.vectors.json)
 
     private static var vectorsURL: URL {
@@ -179,6 +219,8 @@ final class GameSparksTests: XCTestCase {
                 continue
             }
         }
-        XCTAssertEqual(replayed, 16, "8 facteurs, 5 prix, 3 lectures d'étincelles — le fichier entier pour ces trois lois")
+        let expected = vectors.filter { ["mint-cost-factor", "mint-price", "sparks-of"].contains(($0["input"] as? [String: Any])?["law"] as? String ?? "") }.count
+        XCTAssertGreaterThanOrEqual(replayed, 16)
+        XCTAssertEqual(replayed, expected, "le fichier entier pour ces trois lois, sans en sauter un")
     }
 }

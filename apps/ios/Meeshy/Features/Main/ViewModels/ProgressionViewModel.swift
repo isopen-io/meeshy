@@ -213,12 +213,11 @@ final class ProgressionViewModel: ObservableObject {
             await load(forceNetwork: true)
         } catch {
             restore(before)
-            if GameService.refusal(of: error) == .requestIdConflict { mintRequestId = UUID().uuidString }
-            mintError = String(
-                localized: "progression.meesh.mint_error",
-                defaultValue: "La frappe n'a pas abouti — réessayez",
-                bundle: .main
-            )
+            let refusal = GameService.refusal(of: error)
+            if refusal == .requestIdConflict { mintRequestId = UUID().uuidString }
+            // La dette (ffbc396c92) et la réserve fermée se DISENT ; la relecture montre ensuite le blocage à l'écran.
+            mintError = GameMintCostCopy.mintFailureMessage(code: refusal, debt: game?.mint.sparksDebt ?? game?.level.sparksDebt)
+            if refusal == .mintBlockedByDebt || refusal == .treasuryLocked { await load(forceNetwork: true) }
         }
         endGesture()
         isMinting = false

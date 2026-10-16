@@ -10,7 +10,8 @@ final class GameGuideTargetTests: XCTestCase {
         for action in GuideAction.allCases {
             _ = GameGuideTarget.target(for: action)
         }
-        XCTAssertEqual(GuideAction.allCases.count, 21)
+        // 19 depuis 17b1041c2c : `regain-levels` et `relight-badge` ont quitté la loi partagée avec les étincelles.
+        XCTAssertEqual(GuideAction.allCases.count, 19)
     }
 
     func test_thePhotoActionsOpenThePhoto() {
@@ -23,9 +24,6 @@ final class GameGuideTargetTests: XCTestCase {
         XCTAssertEqual(GameGuideTarget.target(for: .earnFirstPoints), .conversations)
     }
 
-    func test_badgesOpenTheBadgeDoor() {
-        XCTAssertEqual(GameGuideTarget.target(for: .relightBadge), .badges)
-    }
 
     func test_theOtherActionsScrollToTheCardTheyName() {
         XCTAssertEqual(GameGuideTarget.target(for: .seeLevel), .scroll(.level))

@@ -5228,6 +5228,44 @@
       }
     },
     {
+      "_label": "guide « first-mint » la première fois",
+      "input": {
+        "law": "guide",
+        "event": {
+          "kind": "first-mint"
+        },
+        "seen": []
+      },
+      "expected": {
+        "key": "first-mint",
+        "speaker": "duo",
+        "mood": "minting",
+        "action": "see-progress",
+        "data": {},
+        "presentation": "full"
+      }
+    },
+    {
+      "_label": "guide « first-mint » déjà vu",
+      "input": {
+        "law": "guide",
+        "event": {
+          "kind": "first-mint"
+        },
+        "seen": [
+          "first-mint"
+        ]
+      },
+      "expected": {
+        "key": "first-mint",
+        "speaker": "duo",
+        "mood": "minting",
+        "action": "see-progress",
+        "data": {},
+        "presentation": "short"
+      }
+    },
+    {
       "_label": "guide « price-rises » la première fois",
       "input": {
         "law": "guide",
