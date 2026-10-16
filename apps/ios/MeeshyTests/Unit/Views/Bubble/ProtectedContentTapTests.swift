@@ -456,6 +456,9 @@ final class CaptureShieldCoverageGuardTests: XCTestCase {
     /// auprès du détecteur — sinon sa flamme serait en clair ET muette.
     private static let announcingSurfaces: [(file: String, registrationFile: String, registration: String)] = [
         ("Views/MessageListViewController.swift", "Views/MessageListView.swift", "ContentCaptureReporter.shared.register(vc)"),
+        // Extension du MÊME contrôleur (la construction des rangées en est sortie au découpage de budget,
+        // 54d5b6871e) : même surface, même enregistrement.
+        ("Views/MessageListViewController+Rows.swift", "Views/MessageListView.swift", "ContentCaptureReporter.shared.register(vc)"),
         ("Views/ConversationView+MediaGallery.swift", "Views/ConversationView+MediaGallery.swift", "ContentCaptureReporter.shared.register(surface)"),
     ]
 

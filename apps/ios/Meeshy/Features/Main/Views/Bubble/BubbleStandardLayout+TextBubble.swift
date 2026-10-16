@@ -151,7 +151,7 @@ extension BubbleStandardLayout {
                     .frame(width: Self.retryBandWidth)
             }
         }
-        .clipShape(RoundedRectangle(cornerRadius: 18))
+        .clipShape(RoundedRectangle(cornerRadius: MeeshyRadius.lgPlus))
         // Simplification forte : plus d'ombre portée par bulle. Une `.shadow`
         // teintée par cellule force un rendu offscreen à chaque frame de scroll
         // (classique tueur de FPS). Les bulles sont désormais plates et nettes.
