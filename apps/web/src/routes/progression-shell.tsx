@@ -5,6 +5,8 @@ import { PRESS } from '@/components/game-press';
 import { GlassBack } from '@/components/glass-surface';
 import { Glyph } from '@/components/glyph';
 import { chainBelow, gameScreenOf, parentOf, upMove, type GameScreen, type HistoryEntry, type NavTarget } from '@/lib/game/progression-nav';
+import { translate } from '@/lib/i18n-catalog';
+import { currentInterfaceLanguage } from '@/lib/interface-language';
 import { currentHistory, reelsExitOf } from '@/lib/reels/exit';
 import { gameText } from '@/lib/view/game-copy';
 import { useOptionalRoute } from '@/lib/router';
@@ -110,7 +112,7 @@ const BRAND = 'var(--color-ios-brand)';
 
 function BackLink({ screen }: { readonly screen: GameScreen | null }) {
   const parent: NavTarget = screen === null ? { to: 'progression' } : parentOf(screen);
-  const label = parent.to === 'list' ? 'Retour' : gameText('game.page.back');
+  const label = parent.to === 'list' ? translate(currentInterfaceLanguage(), 'common.back') : gameText('game.page.back');
   const onClick = (event: MouseEvent<HTMLAnchorElement>): void => {
     event.preventDefault();
     goUp(screen);
