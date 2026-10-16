@@ -50,7 +50,7 @@ struct MoodSpotlightView: View {
             }
         }
         .navigationBarHidden(true)
-        .preferredColorScheme(.dark)
+        .environment(\.colorScheme, .dark)
         .task { await viewModel.load() }
         .onChange(of: viewModel.replyState) { state in
             switch state {
@@ -141,7 +141,7 @@ private struct MoodSpotlightBackdrop: View {
                         .clipped()
                 }
                 LinearGradient(
-                    colors: [.black.opacity(0.35), .black.opacity(0.15), .black.opacity(0.55)],
+                    colors: [.black.opacity(0.5), .black.opacity(0.35), .black.opacity(0.7)],
                     startPoint: .top,
                     endPoint: .bottom
                 )
