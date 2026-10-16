@@ -347,17 +347,14 @@ final class ProgressionConceptGuardTests: XCTestCase {
         }
     }
 
-    /// Les deux soldes ont deux noms stables : « à convertir » ne se dit plus « convertible », nulle part.
-    func test_theConvertibleBalance_hasOneName() throws {
+    /// Les étincelles (#10846) : un SEUL solde, la poche, toute convertible — « à convertir » ne se dit plus nulle part.
+    func test_theSingleBalance_isAllConvertible() throws {
         let table = try catalog(prefix: "game.")
-        for key in ["game.points.convertible.one", "game.points.convertible.other", "game.error.insufficient_points",
-                    "game.concept.fact.convertible", "game.fact.to_convert"] {
+        for key in ["game.error.insufficient_points", "game.concept.fact.convertible", "game.fact.to_convert"] {
             let french = try XCTUnwrap(table[key]?["fr"], "\(key) : absente du catalogue")
-            XCTAssertTrue(french.localizedCaseInsensitiveContains("à convertir"), "\(key) : le solde ne dit pas « à convertir » — « \(french) »")
-            XCTAssertFalse(french.contains("convertible"), "\(key) : l'ancien nom du solde — « \(french) »")
+            XCTAssertFalse(french.localizedCaseInsensitiveContains("à convertir"), "\(key) : l'ancien second solde — « \(french) »")
         }
-        XCTAssertEqual(table["game.concept.fact.held"]?["fr"], "Points en poche")
-        XCTAssertEqual(table["game.concept.fact.convertible"]?["fr"], "Points à convertir")
+        XCTAssertEqual(table["game.concept.fact.held"]?["fr"], "Étincelles en poche")
     }
 
     /// Le « + » des gains par famille est retiré (« Contenu jusqu’à 16 », plus « jusqu’à +16 ») — dans le code et

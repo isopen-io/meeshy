@@ -37,7 +37,7 @@ enum ConceptText {
     static func why(_ concept: ProgressionConcept) -> String {
         switch concept {
         case .level: String(localized: "game.concept.level.why", defaultValue: "Ton niveau montre le chemin que tu as parcouru sur Meeshy.", bundle: .main)
-        case .points: String(localized: "game.concept.points.why", defaultValue: "En poche, ils font ton niveau. À convertir, ils paient tes Meeshes.", bundle: .main)
+        case .points: String(localized: "game.concept.points.why", defaultValue: "Gagnées, elles font ton niveau ; en poche, elles paient tes Meeshes.", bundle: .main)
         case .meesh: String(localized: "game.concept.meesh.why", defaultValue: "La Meesh est la pièce rare de Meeshy : elle se garde ou se dépense.", bundle: .main)
         case .glory: String(localized: "game.concept.glory.why", defaultValue: "La Gloire donne ton rang, et ton rang ne baisse jamais.", bundle: .main)
         case .flame: String(localized: "game.concept.flame.why", defaultValue: "Ta Flamme compte tes jours d’affilée et augmente tes gains de mission.", bundle: .main)
@@ -57,13 +57,13 @@ enum ConceptText {
     /// Comment ça marche — UNE phrase. La carte la dit, la fiche la reprend à la suite du pourquoi.
     static func how(_ concept: ProgressionConcept) -> String {
         switch concept {
-        case .level: String(localized: "game.concept.level.how", defaultValue: "Tes points remplissent l’anneau : plein, il te fait monter d’un niveau.", bundle: .main)
+        case .level: String(localized: "game.concept.level.how", defaultValue: "Tes étincelles remplissent l’anneau : plein, tu montes d’un niveau.", bundle: .main)
         case .points: String(localized: "game.concept.points.how", defaultValue: "Chaque geste utile en rapporte : écrire, parler, publier, réagir.", bundle: .main)
-        case .meesh: String(localized: "game.concept.meesh.how", defaultValue: "Tu la frappes avec tes points à convertir. Son prix monte par paliers.", bundle: .main)
+        case .meesh: String(localized: "game.concept.meesh.how", defaultValue: "Tu la frappes avec tes étincelles en poche. Son prix monte par paliers.", bundle: .main)
         case .glory: String(localized: "game.concept.glory.how", defaultValue: "Chaque frappe, chaque record et chaque succès en ajoute.", bundle: .main)
         case .flame: String(localized: "game.concept.flame.how", defaultValue: "Un geste par jour la fait grandir. Un gel couvre un jour manqué.", bundle: .main)
         case .missions: String(localized: "game.concept.missions.how", defaultValue: "Trois missions par jour. Quand elles sont faites, tu ouvres le coffre.", bundle: .main)
-        case .league: String(localized: "game.concept.league.how", defaultValue: "Tes points de la semaine font ton rang. Les premiers montent de ligue.", bundle: .main)
+        case .league: String(localized: "game.concept.league.how", defaultValue: "Tes étincelles de la semaine font ton rang ; les premiers montent.", bundle: .main)
         case .season: String(localized: "game.concept.season.how", defaultValue: "Les missions et le duo donnent des étoiles, qui ouvrent les étapes.", bundle: .main)
         case .prestige: String(localized: "game.concept.prestige.how", defaultValue: "Ton niveau repart à 1. Tu gagnes une étoile, un trophée et de la Gloire.", bundle: .main)
         case .elans: String(localized: "game.concept.elans.how", defaultValue: "Fais des gestes de plusieurs familles ces jours-ci pour le déclencher.", bundle: .main)

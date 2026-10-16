@@ -116,8 +116,7 @@ enum GameGuideEvents {
             events.append(.missionsUnlocked)
         }
         if before.mint.number == 1 && after.mint.number == 2 {
-            events.append(.firstMint(levelBefore: shownBefore.level, levelAfter: shownAfter.level,
-                                     tailwindUntilLevel: shownAfter.level))
+            events.append(.firstMint)
         }
         if after.mint.price > before.mint.price {
             events.append(.priceRises(nextPrice: after.mint.price))

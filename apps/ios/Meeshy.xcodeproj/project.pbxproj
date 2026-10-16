@@ -2776,6 +2776,7 @@
 		D6B7BAB4FF4AE3B507645F90 /* ConversationViewModelWriteRestrictionTests.swift in Sources */ = {isa = PBXBuildFile; fileRef = 4195E026F00446630DFFFAA1 /* ConversationViewModelWriteRestrictionTests.swift */; };
 		D6DE00786438B8011CBA939F /* ConversationTypingRosterHost.swift in Sources */ = {isa = PBXBuildFile; fileRef = 85CFF6D06421A728A34EEA9D /* ConversationTypingRosterHost.swift */; };
 		D6E3450982CD52E47EB918F4 /* FocalRowSourceGuardTests.swift in Sources */ = {isa = PBXBuildFile; fileRef = 3CC571146D71A1811BDB1AD5 /* FocalRowSourceGuardTests.swift */; };
+		D6E74016B653424B77154F44 /* GameSparksPluralTests.swift in Sources */ = {isa = PBXBuildFile; fileRef = B806B11E06B3B19073B74825 /* GameSparksPluralTests.swift */; };
 		D70680C8D255E137064FA717 /* FramePackShelfLoader.swift in Sources */ = {isa = PBXBuildFile; fileRef = 29EB40F4B8F008A5CDD3C1B8 /* FramePackShelfLoader.swift */; };
 		D73A0B04A7E5A28191A6E23C /* GameReferralCardTests.swift in Sources */ = {isa = PBXBuildFile; fileRef = A6B7B0BC3212DAEC4518EE2F /* GameReferralCardTests.swift */; };
 		D7413CD7DECA29108748AF90 /* ComposerSocleSilentRefusalGuardTests.swift in Sources */ = {isa = PBXBuildFile; fileRef = ACD5345049A8396355546325 /* ComposerSocleSilentRefusalGuardTests.swift */; };
@@ -5790,6 +5791,7 @@
 		B7D804DF21808394C1157C6E /* DeepLinkRouterHashtagTests.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = DeepLinkRouterHashtagTests.swift; sourceTree = "<group>"; };
 		B803946083E6625AC8A3912C /* VideoFiltersPanel.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = VideoFiltersPanel.swift; sourceTree = "<group>"; };
 		B8051E2AB72CC70F9D0FF5BD /* ReelAudioBackdrop.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = ReelAudioBackdrop.swift; sourceTree = "<group>"; };
+		B806B11E06B3B19073B74825 /* GameSparksPluralTests.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = GameSparksPluralTests.swift; sourceTree = "<group>"; };
 		B8089B38E042C9E140121BB1 /* AvatarMoodCoverageTests.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = AvatarMoodCoverageTests.swift; sourceTree = "<group>"; };
 		B823D56D5CB9482217242820 /* StoryCommentPrismeSingleResolverTests.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = StoryCommentPrismeSingleResolverTests.swift; sourceTree = "<group>"; };
 		B84504CD9B6405BEBE32E76E /* CameraCaptureSaveRuntimeTests.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = CameraCaptureSaveRuntimeTests.swift; sourceTree = "<group>"; };
@@ -7962,6 +7964,7 @@
 				4BBB40E4EC630836BF440E71 /* GameShowcaseRulesTests.swift */,
 				E7DB9D761952B1922671E1C7 /* GameSourceGuardTests.swift */,
 				9984B15600793C69EE2FBE8A /* GameSparkPairsTests.swift */,
+				B806B11E06B3B19073B74825 /* GameSparksPluralTests.swift */,
 				12EDD52B249754E2B3F79A80 /* GameTimelineTests.swift */,
 				919D90721BE938C7C86EBB1A /* GameWave2CatalogGuardTests.swift */,
 				78512869157D3AB932BF65E9 /* GameWave2Fixture.swift */,
@@ -13875,6 +13878,7 @@
 				83C64098B6064D966C52C10C /* GameShowcaseRulesTests.swift in Sources */,
 				95E00FB7A6C0128F9224D87E /* GameSourceGuardTests.swift in Sources */,
 				1A7BABD1BE48D94E6C223626 /* GameSparkPairsTests.swift in Sources */,
+				D6E74016B653424B77154F44 /* GameSparksPluralTests.swift in Sources */,
 				F35727AA62D96D25734FB6AD /* GameTimelineTests.swift in Sources */,
 				441E59A368069B41BEC2EC6E /* GameWave2CatalogGuardTests.swift in Sources */,
 				1E618A477B94758F3C5D6D6A /* GameWave2Fixture.swift in Sources */,

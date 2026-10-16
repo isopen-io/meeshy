@@ -172,10 +172,6 @@ struct GameHeroView: View {
                 if let step = level.step {
                     GameLevelStepRow(step: step, facts: game.levelStepFacts)
                 }
-                if level.record > level.level {
-                    // Le record du cycle, seul : le Vent arrière est éteint depuis les étincelles (#10846).
-                    GameChip(text: recordText, tint: MeeshyColors.warning)
-                }
             }
         }
         .id(GameAnchor.level)
@@ -204,14 +200,6 @@ struct GameHeroView: View {
         return level.nextThreshold == nil
             ? GameCopy.levelTop(cap: level.cap)
             : GameCopy.levelToNext(remaining: level.pointsToNext, nextLevel: level.level + 1)
-    }
-
-    private var recordText: String {
-        String(
-            localized: "game.level.record",
-            defaultValue: "Record : niveau \(GameCopy.formatCount(level.record))",
-            bundle: .main
-        )
     }
 
     // MARK: - Le blason et la division

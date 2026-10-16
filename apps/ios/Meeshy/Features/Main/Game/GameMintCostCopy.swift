@@ -36,11 +36,30 @@ enum GameMintCostCopy {
         }
     }
 
-    /// « Tu dois encore 300 étincelles : la frappe reprendra une fois la dette réglée. »
+    /// « Tu dois encore 300 étincelles : la frappe reprendra une fois la dette réglée. » — sans montant servi
+    /// (`blockedBy: 'debt'` seul), la phrase dit la dette sans inventer de nombre.
     static func debtText(_ debt: Int) -> String {
-        String(localized: "game.mint.blocked.debt",
-               defaultValue: "Tu dois encore \(GameCopy.formatCount(debt)) étincelles : la frappe reprendra une fois la dette réglée.",
-               bundle: .main)
+        guard debt > 0 else {
+            return String(localized: "game.mint.blocked.debt_plain",
+                          defaultValue: "Une dette d’étincelles bloque la frappe : tes prochains gains la règlent d’abord.",
+                          bundle: .main)
+        }
+        return String(localized: "game.mint.blocked.debt",
+                      defaultValue: "Tu dois encore \(GameCopy.formatCount(debt)) étincelles : la frappe reprendra une fois la dette réglée.",
+                      bundle: .main)
+    }
+
+    /// Le message d'une frappe REFUSÉE : la dette (son montant quand il est connu), la réserve fermée, sinon le repli.
+    static func mintFailureMessage(code: GameErrorCode?, debt: Int?) -> String {
+        switch code {
+        case .mintBlockedByDebt: debtText(debt ?? 0)
+        case .treasuryLocked: GameCopy.errorMessage(for: .treasuryLocked)
+        default: genericFailure
+        }
+    }
+
+    static var genericFailure: String {
+        String(localized: "progression.meesh.mint_error", defaultValue: "La frappe n'a pas abouti — réessayez", bundle: .main)
     }
 
     /// « Cette Meesh ouvrirait le Coffre : il faut le rang Voix I. »

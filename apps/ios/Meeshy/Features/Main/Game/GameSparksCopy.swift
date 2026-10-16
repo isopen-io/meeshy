@@ -6,10 +6,7 @@ enum GameSparksCopy {
 
     /// « 976 étincelles » — la poche, lue par VoiceOver.
     static func sparks(_ count: Int) -> String {
-        let number = GameCopy.formatCount(count)
-        return GameCopy.isSingular(count)
-            ? String(localized: "game.sparks.one", defaultValue: "\(number) étincelle", bundle: .main)
-            : String(localized: "game.sparks.other", defaultValue: "\(number) étincelles", bundle: .main)
+        GameCopy.points(count)
     }
 
     /// La poche, en grand sur la bannière d'une fiche : « 976 ✦ ».
