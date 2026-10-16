@@ -399,7 +399,7 @@ const ar = {
   'game.progression.floor.many': 'سيتم استخدام {count} نقطة محادثتك أخيرًا، دون إطفاء أي وسام.',
   'game.mascot.minted': 'طَق! Meesh جديدة تمامًا. لديك {balance}.',
   'game.mascot.level_up': 'المستوى {level}! لنحتفل.',
-  'game.mascot.achievement': 'إنجاز محقَّق: {title}!',
+  'game.mascot.achievement': 'تم فتح الإنجاز: {title}!',
   'game.mascot.can_mint.one': 'نقاطك جاهزة: هل نسكّ Meesh مقابل نقطة واحدة؟',
   'game.mascot.can_mint.other': 'نقاطك جاهزة: هل نسكّ Meesh مقابل {count} نقطة؟',
   'game.mascot.first_step': 'مرحبًا، أنا مي! أرسل رسالتك الأولى وسأحسب نقاطك.',

@@ -59,7 +59,7 @@ describe('la mascotte, interface en', () => {
     expect(mascotSay({ kind: 'meesh-minted', balance: 3 })).toBe('Clack! A brand-new Meesh. You have 3.');
     expect(mascotSay({ kind: 'level-up', level: 3 })).toBe('Level 3! Let’s celebrate.');
     expect(mascotSay({ kind: 'achievement', key: 'achievement.first_voice' })).toBe(
-      `Achievement earned: ${achievementCopy('achievement.first_voice', 'en').title}!`,
+      `Achievement unlocked: ${achievementCopy('achievement.first_voice', 'en').title}!`,
     );
     expect(mascotSay({ kind: 'can-mint', mintCost: 1221 })).toBe('Your points are ready: shall we mint a Meesh for 1,221 points?');
     expect(mascotSay({ kind: 'first-step' })).toBe('Hi, I’m Mee! Send your first message and I’ll count your points.');
