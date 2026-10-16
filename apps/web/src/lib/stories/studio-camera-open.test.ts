@@ -48,6 +48,66 @@ describe('acquireCamera — la première ouverture', () => {
   });
 });
 
+/**
+ * #10850 — **UN MICRO REFUSÉ N'ÉTEINT PAS LA CAMÉRA** : la coque Android pose
+ * deux dialogues (caméra, micro) et refuse la demande ENTIÈRE dès qu'un seul
+ * l'est. La caméra accordée s'ouvre alors seule, sans son.
+ */
+describe('acquireCamera — le micro refusé à la première ouverture', () => {
+  const notAllowed = (): Error => Object.assign(new Error('denied'), { name: 'NotAllowedError' });
+
+  test('un refus de caméra + micro redemande la caméra seule, qui s’ouvre sans son', async () => {
+    const journal: Journal = [];
+    const asked: MediaStreamConstraints[] = [];
+    const video = stream([track('video', 'back', journal)]);
+    const result = await acquireCamera({
+      facing: 'environment',
+      request: async (constraints) => {
+        asked.push(constraints);
+        if (constraints.audio === true) throw notAllowed();
+        return video;
+      },
+      assemble: stream,
+    });
+    expect(result).toBe(video);
+    expect(asked.map((c) => c.audio)).toEqual([true, false]);
+    expect(asked[1]?.video).toEqual({ facingMode: 'environment', width: { ideal: 1080 }, height: { ideal: 1920 } });
+  });
+
+  test('la caméra seule refusée elle aussi : le refus remonte', async () => {
+    const denied = notAllowed();
+    const caught = await acquireCamera({
+      facing: 'environment',
+      request: async () => {
+        throw denied;
+      },
+      assemble: stream,
+    }).then(
+      () => null,
+      (error: unknown) => error,
+    );
+    expect(caught).toBe(denied);
+  });
+
+  test('une autre erreur (aucune caméra) remonte sans seconde demande', async () => {
+    const asked: MediaStreamConstraints[] = [];
+    const missing = Object.assign(new Error('none'), { name: 'NotFoundError' });
+    const caught = await acquireCamera({
+      facing: 'environment',
+      request: async (constraints) => {
+        asked.push(constraints);
+        throw missing;
+      },
+      assemble: stream,
+    }).then(
+      () => null,
+      (error: unknown) => error,
+    );
+    expect(caught).toBe(missing);
+    expect(asked).toHaveLength(1);
+  });
+});
+
 describe('acquireCamera — la bascule', () => {
   test('la piste vidéo précédente s’arrête AVANT la demande, le micro reste ouvert et rejoint le nouveau flux', async () => {
     const journal: Journal = [];
