@@ -7,6 +7,8 @@
 import { describe, it, expect } from 'vitest';
 import {
   MINT_COST_FULL_PRICE_LEVEL,
+  currentLevelOf,
+  unlockLevelOf,
   effectiveMeeshPrice,
   mintCostFactor,
   mintCostFactorPermille,
@@ -293,5 +295,36 @@ describe('les réserves du trésor s\'ouvrent par le rang (#10848)', () => {
 
   it('un compte DÉJÀ au-dessus de son rang (avant la règle) ne frappe plus tant que le rang ne le rattrape pas', () => {
     expect(treasuryLockFor({ held: 150, glory: 0 })?.tier).toBe('coffre');
+  });
+});
+
+describe('le niveau d\'un compte se lit sur le CYCLE, jamais sur la poche', () => {
+  it('currentLevelOf : une poche presque vide ne baisse pas le niveau', () => {
+    const row = { engagementScore: 3, sparksSincePrestige: levelThreshold(34), sparksEarnedLifetime: levelThreshold(34), levelRecord: 34 };
+    expect(currentLevelOf(row)).toBe(34);
+  });
+
+  it('currentLevelOf : un compte d\'avant le rattrapage (sans cycle) se lit sur sa poche', () => {
+    expect(currentLevelOf({ engagementScore: levelThreshold(12), levelRecord: 12 })).toBe(12);
+  });
+
+  it('currentLevelOf : après un prestige (cycle vide) le niveau est 1, quel que soit le max à vie', () => {
+    expect(currentLevelOf({ engagementScore: 0, sparksSincePrestige: 0, sparksEarnedLifetime: 3_000_000, levelRecord: 1, levelMaxLifetime: 100 })).toBe(1);
+  });
+
+  it('currentLevelOf : les étapes faites (max à vie) ne retiennent pas le cycle neuf', () => {
+    // Le record du cycle est à 1 (prestige) : sans le max à vie, l\'étape du 10 le retiendrait à 9.
+    const row = { engagementScore: 0, sparksSincePrestige: levelThreshold(25), levelRecord: 1, levelMaxLifetime: 100 };
+    expect(currentLevelOf(row)).toBe(25);
+  });
+
+  it('unlockLevelOf : le max à vie ouvre ligues et duo même après un prestige (G-5)', () => {
+    expect(unlockLevelOf({ engagementScore: 0, sparksSincePrestige: 0, levelRecord: 1, levelMaxLifetime: 100 })).toBe(100);
+    expect(unlockLevelOf({ engagementScore: 0, levelRecord: null, levelMaxLifetime: null })).toBe(1);
+  });
+
+  it('unlockLevelOf : jamais sous le record du cycle ni sous le niveau courant', () => {
+    expect(unlockLevelOf({ engagementScore: levelThreshold(8), levelRecord: 30 })).toBe(30);
+    expect(unlockLevelOf({ engagementScore: 0, sparksSincePrestige: levelThreshold(40), levelRecord: 40 })).toBe(40);
   });
 });

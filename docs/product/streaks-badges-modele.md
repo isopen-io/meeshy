@@ -16,11 +16,16 @@
 |---|---|---|---|
 | `BADGE_EARNED` | un **compteur d'axe** franchit un seuil de sa propre échelle | par axe (§ 2) | un badge par (axe, palier) |
 | `STREAK_MILESTONE` | une **série de jours consécutifs** avec au moins une activité qualifiante franchit un palier | globale (tous axes confondus) | un jalon par palier de série |
-| `LEVEL_UP` | un **score agrégé**, somme pondérée de tous les axes, franchit un palier de niveau | globale | un niveau, monotone croissant |
+| `LEVEL_UP` | les **étincelles du cycle** (somme pondérée de tous les axes, depuis le dernier prestige) franchissent un palier de niveau | globale | un niveau ; la frappe ne le fait plus baisser (voir [les étincelles](etincelles-economie.md)) |
 | `ACHIEVEMENT_UNLOCKED` | une **condition composée**, sur un ou plusieurs axes, se satisfait pour la première fois | croisée | un succès nommé, non répétable |
 
 Les quatre partagent la même mécanique de bas niveau (§ 3, § 4) et ne
 diffèrent que par la fonction qui décide « ce seuil est-il franchi ? ».
+
+> **Étincelles (2026-10-16, #10845, #10846).** `User.engagementScore` est la **poche** d'étincelles, pas un total monotone : la frappe d'une
+> Meesh la débite, le prestige la vide. Le niveau se lit sur le **cycle** (`sparksSincePrestige`) et le total accumulé sur `sparksEarnedLifetime` ;
+> la frappe **ne débite plus `count`** et **n'éteint aucun badge** : un badge d'axe dit le total réel et ne se renotifie jamais. Détail, contrat et
+> axes dont l'historique se reconstruit : [etincelles-economie.md](etincelles-economie.md).
 
 ### Ce qui se CÉLÈBRE et ce qui se NOTIFIE (directive porteur 2026-09-09, #5847)
 

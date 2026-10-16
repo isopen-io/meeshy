@@ -41,7 +41,7 @@
 
 import { GLORY_POINTS, gloryStanding, levelCapForRank } from './glory.js';
 import { levelStepGate, type LevelStepFacts } from './level-steps.js';
-import { GAME_LEVEL_MIN, levelFromScore, tighterLevelCap, type LevelCap } from './levels.js';
+import { GAME_LEVEL_MIN, levelForUnlocks, levelFromScore, tighterLevelCap, type LevelCap } from './levels.js';
 import { meeshEdition, meeshPrice, type MintPreview } from './mint.js';
 import { treasuryLockFor, type TreasuryLock } from './treasury.js';
 
@@ -94,6 +94,31 @@ export function sparksOf(row: SparksRow | null | undefined): SparksFacts {
   const lifetime = Math.max(cycle, sparkCount(row?.sparksEarnedLifetime));
   return { pocket, cycle, lifetime };
 }
+
+/** Les colonnes du compte que lisent les décisions de niveau : les étincelles, le record du cycle, le max à vie. */
+export type LevelFactsRow = SparksRow & {
+  readonly levelRecord?: number | null;
+  readonly levelMaxLifetime?: number | null;
+};
+
+const levelColumn = (value: number | null | undefined): number => (typeof value === 'number' && Number.isFinite(value) ? Math.max(0, Math.trunc(value)) : 0);
+
+/**
+ * Le niveau ACTUEL d'un compte, pour une décision (ouverture des missions, effort, duo, Prestige) : la courbe lue sur le
+ * CYCLE d'étincelles (jamais sur la poche : la frappe ne le fait plus baisser). Les étapes (#9706) ne se défont jamais :
+ * le plus haut des deux records, du cycle et à vie, prouve les étapes faites — un prestige ne les referme pas.
+ */
+export function currentLevelOf(row: LevelFactsRow | null | undefined): number {
+  const proof = Math.max(levelColumn(row?.levelRecord), levelColumn(row?.levelMaxLifetime));
+  return levelForUnlocks({ score: sparksOf(row).cycle, levelRecord: proof === 0 ? null : proof });
+}
+
+/**
+ * Le niveau qui OUVRE les accès (ligues au 10, duo au 20) : le plus haut du niveau actuel, du record du cycle et du
+ * niveau MAX À VIE. Le max à vie survit au prestige (décision du porteur, 2026-10-16) : un prestige ne ferme plus rien.
+ */
+export const unlockLevelOf = (row: LevelFactsRow | null | undefined): number =>
+  Math.max(currentLevelOf(row), levelColumn(row?.levelRecord), levelColumn(row?.levelMaxLifetime), GAME_LEVEL_MIN);
 
 // ---------------------------------------------------------------------------
 // Le coût selon le niveau actuel

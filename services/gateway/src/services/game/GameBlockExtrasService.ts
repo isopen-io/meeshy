@@ -37,6 +37,8 @@ export type ExtrasBase = {
   readonly userId: string;
   readonly score: number;
   readonly levelRecord: number | null;
+  /** Le niveau max à vie (#10846) : il ouvre ligues et duo après un Prestige. */
+  readonly levelMaxLifetime?: number | null;
   readonly prestige: number;
   readonly flameDays: number;
   readonly balance: number;
@@ -129,6 +131,7 @@ export class GameBlockExtrasService {
         minuteOfDay: minuteOfDayInTimezone(now, base.timezone),
         score: base.score,
         levelRecord: base.levelRecord,
+        levelMaxLifetime: base.levelMaxLifetime ?? null,
         prestige: base.prestige,
         flameDays: base.flameDays,
         balance: base.balance,

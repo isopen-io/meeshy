@@ -63,17 +63,16 @@ const missionsAwaitOtherGestures = (db: FakeGameDb) =>
     })),
   );
 
-describe('Vent arrière — +25 % tant que le niveau est sous le niveau record', () => {
-  it('un geste sous le niveau record crédite 25 % de plus, au compteur ET au score (même montant)', async () => {
+describe('Vent arrière — ÉTEINT depuis les étincelles (#10846)', () => {
+  it('un compte sous son niveau record ne crédite plus 25 % de plus : le montant est celui du barème, au compteur ET au score', async () => {
     const db = fakeGameDb();
     seedUser(db, { engagementScore: 10 * 10 * 10, levelRecord: 15 });
     missionsAwaitOtherGestures(db);
 
     await service(db).recordActivity(USER, 'content.text_message');
 
-    const boosted = Math.round(TEXT_POINTS * 1.25);
-    expect(counter(db)?.points).toBe(boosted);
-    expect(db.user.rows[0]?.engagementScore).toBe(1000 + boosted);
+    expect(counter(db)?.points).toBe(TEXT_POINTS);
+    expect(db.user.rows[0]?.engagementScore).toBe(1000 + TEXT_POINTS);
   });
 
   it('au niveau record, aucun bonus', async () => {

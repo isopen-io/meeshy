@@ -28,12 +28,13 @@
 import type { Prisma, PrismaClient } from '@meeshy/shared/prisma/client';
 import { FLAME_RECORD_GLORY, gloryForLevel, gloryStanding } from '@meeshy/shared/utils/game/glory';
 import { levelCapWithSteps } from '@meeshy/shared/utils/game/level-steps';
-import { levelFromScore, newLevelsReached, recordLevel, type LevelCap } from '@meeshy/shared/utils/game/levels';
+import { GAME_LEVEL_MIN, levelFromScore, newLevelsReached, recordLevel, type LevelCap } from '@meeshy/shared/utils/game/levels';
 import type { AchievementRarity } from '@meeshy/shared/utils/game/glory';
 import { achievementGloryAtEarning } from '@meeshy/shared/utils/game/rarity';
 import { enhancedLogger } from '../../utils/logger-enhanced';
 import { MythicSeatService } from './MythicSeatService';
 import { LEVEL_STEP_USER_SELECT, countMissionsDone, levelStepFactsOf } from './LevelStepFacts';
+import { SPARKS_USER_SELECT, sparksOf } from './SparksFacts';
 
 const log = enhancedLogger.child({ module: 'GloryService' });
 
@@ -148,9 +149,15 @@ export class GloryService {
    */
   async openLevels(userId: string): Promise<number> {
     try {
-      const account = await this.prisma.user.findUnique({ where: { id: userId }, select: { engagementScore: true, levelRecord: true } });
+      const account = await this.prisma.user.findUnique({ where: { id: userId }, select: SPARKS_USER_SELECT });
       if (account === null) return 0;
-      return await this.creditLevelProgress({ userId, score: account.engagementScore ?? 0, previousRecord: account.levelRecord ?? null });
+      // Le niveau se lit sur le CYCLE d'étincelles (#10846), jamais sur la poche que la frappe débite.
+      return await this.creditLevelProgress({
+        userId,
+        score: sparksOf(account).cycle,
+        previousRecord: account.levelRecord ?? null,
+        previousMax: account.levelMaxLifetime ?? null,
+      });
     } catch (error) {
       log.warn('level opening after a step failed, the next gesture will catch up', {
         userId,
@@ -188,7 +195,7 @@ export class GloryService {
   }
 
   /**
-   * La Gloire du PREMIER passage de chaque niveau, et la hausse du record.
+   * La Gloire du PREMIER passage de chaque niveau, et la hausse des records.
    *
    * Le niveau se lit sous le plafond que le rang ouvre (#9688) : 499 sous
    * Ambassadeur, 1000 pour Ambassadeur et Orateur, sans limite à partir
@@ -196,9 +203,13 @@ export class GloryService {
    * dizaine, il attend juste en dessous. Une ligne par niveau qui paie (`level:<n>`, `gloryForLevel` :
    * chacun jusqu'à 100, puis chaque dizaine) : le registre dit lui-même quels
    * niveaux ont payé, et une montée concurrente ou rejouée ne paie pas deux
-   * fois. Le record ne fait que monter (`levelRecord < nouveau`, ou absent) :
-   * redescendre par une frappe ne l'abaisse pas, c'est lui qui règle le Vent
-   * arrière.
+   * fois.
+   *
+   * `score` est le CYCLE d'étincelles (#10846) — jamais la poche. Deux records montent, sans jamais
+   * redescendre : celui du CYCLE (`levelRecord`, remis à 1 par le prestige) et le MAX À VIE
+   * (`levelMaxLifetime`, qui survit au prestige). La Gloire du premier passage suit le plus haut des
+   * deux : un niveau déjà gagné dans un cycle d'avant ne se re-paie pas. `previousMax` absent (appelant
+   * d'avant les étincelles) : le max à vie n'est ni lu ni écrit.
    *
    * @returns la Gloire effectivement gravée par CET appel.
    */
@@ -206,13 +217,14 @@ export class GloryService {
     readonly userId: string;
     readonly score: number;
     readonly previousRecord: number | null;
+    readonly previousMax?: number | null;
   }): Promise<number> {
     const level = levelFromScore(params.score, await this.servedLevelCap(params.userId));
-    const reached = newLevelsReached({ level, previousRecord: params.previousRecord });
-    if (reached.count === 0) return 0;
+    const gloryBase = Math.max(params.previousRecord ?? 0, params.previousMax ?? 0);
+    const reached = newLevelsReached({ level, previousRecord: gloryBase === 0 ? null : gloryBase });
 
     let gained = 0;
-    for (let n = reached.from; n <= reached.to; n += 1) {
+    for (let n = reached.from; reached.count > 0 && n <= reached.to; n += 1) {
       const delta = gloryForLevel(n);
       if (delta === 0) continue;
       const written = await this.credit({ userId: params.userId, delta, reason: 'level', requestId: `level:${n}` });
@@ -220,15 +232,29 @@ export class GloryService {
     }
 
     const record = recordLevel({ level, previousRecord: params.previousRecord });
-    await this.prisma.user.updateMany({
-      // `isSet: false` : sur MongoDB, `{ levelRecord: null }` n'atteint PAS un
-      // champ ABSENT — celui de tous les comptes d'avant le jeu (leçon 318).
-      where: {
-        id: params.userId,
-        OR: [{ levelRecord: null }, { levelRecord: { isSet: false } }, { levelRecord: { lt: record } }],
-      },
-      data: { levelRecord: record },
-    });
+    if (record > (params.previousRecord ?? GAME_LEVEL_MIN)) {
+      await this.prisma.user.updateMany({
+        // `isSet: false` : sur MongoDB, `{ levelRecord: null }` n'atteint PAS un
+        // champ ABSENT — celui de tous les comptes d'avant le jeu (leçon 318).
+        where: {
+          id: params.userId,
+          OR: [{ levelRecord: null }, { levelRecord: { isSet: false } }, { levelRecord: { lt: record } }],
+        },
+        data: { levelRecord: record },
+      });
+    }
+    if (params.previousMax !== undefined) {
+      const maxLifetime = recordLevel({ level, previousRecord: Math.max(params.previousMax ?? 0, params.previousRecord ?? 0) || null });
+      if (maxLifetime > (params.previousMax ?? 0)) {
+        await this.prisma.user.updateMany({
+          where: {
+            id: params.userId,
+            OR: [{ levelMaxLifetime: null }, { levelMaxLifetime: { isSet: false } }, { levelMaxLifetime: { lt: maxLifetime } }],
+          },
+          data: { levelMaxLifetime: maxLifetime },
+        });
+      }
+    }
     // La Gloire de ces niveaux a pu faire franchir Ambassadeur ou Oracle : le plafond qu'elle lève s'ouvre aussitôt.
     if (gained > 0) await this.openLevelsIfRankRose(params.userId, gained);
     return gained;

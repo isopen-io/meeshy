@@ -13,12 +13,8 @@
  */
 
 import type { PrismaClient } from '@meeshy/shared/prisma/client';
-import type { EngagementAxisKey } from '@meeshy/shared/types/engagement';
-import { ENGAGEMENT_AXES } from '@meeshy/shared/types/engagement';
 import { parseGameBlock, type GameBlock } from '@meeshy/shared/types/game';
 import { buildGameBlock } from '@meeshy/shared/utils/game/game-block';
-import { meeshPrice } from '@meeshy/shared/utils/game/mint';
-import { computeMeeshMintPlan } from '@meeshy/shared/utils/meesh';
 import { enhancedLogger } from '../../utils/logger-enhanced';
 import { meeshTotalsFromLedger } from '../meesh/MeeshService';
 import { FLAME_USER_SELECT, brokenFlame, flameFactsOf } from './FlameService';
@@ -29,12 +25,13 @@ import { MythicSeatService } from './MythicSeatService';
 import { chestRewardOf, toGameMission, type MissionService } from './MissionService';
 import { countMissionsDone } from './LevelStepFacts';
 import { starFragmentsOf } from './StarFragments';
+import { SPARKS_USER_SELECT, sparksOf } from './SparksFacts';
 
 const log = enhancedLogger.child({ module: 'GameBlockService' });
 
 export const GUIDE_SEEN_MAX = 200;
 
-const GAME_USER_SELECT = { ...FLAME_USER_SELECT, engagementScore: true, levelRecord: true, prestige: true, guideSeen: true } as const;
+const GAME_USER_SELECT = { ...FLAME_USER_SELECT, ...SPARKS_USER_SELECT, prestige: true, guideSeen: true } as const;
 
 export type AxisRow = { readonly axisKey: string; readonly count: number; readonly points: number };
 
@@ -60,7 +57,7 @@ export class GameBlockService {
   }
 
   /**
-   * Le bloc, ou `null` s'il ne tient pas le contrat. `counters` : les lignes que
+   * Le bloc, ou `null` s'il ne tient pas le contrat. `counters` (ignoré depuis les étincelles, #10846 : tout est convertible, aucun plan par axe) : les lignes que
    * la route a déjà lues — une relecture ne servirait qu'à payer deux fois.
    */
   async build(params: { readonly userId: string; readonly now?: Date; readonly counters?: readonly AxisRow[] }): Promise<GameBlock | null> {
@@ -68,13 +65,11 @@ export class GameBlockService {
     const now = params.now ?? new Date();
 
     const user = await this.prisma.user.findUnique({ where: { id: userId }, select: GAME_USER_SELECT });
-    const [totals, glory, missionsDone, counters, starFragments] = await Promise.all([
+    const [totals, glory, missionsDone, starFragments] = await Promise.all([
       meeshTotalsFromLedger(this.prisma, userId),
       gloryTotalFromLedger(this.prisma, userId),
       // Les missions du jour accomplies à vie, que jugent les étapes des niveaux (#9706).
       countMissionsDone(this.prisma, userId),
-      params.counters ??
-        this.prisma.engagementCounter.findMany({ where: { userId }, select: { axisKey: true, count: true, points: true }, take: 100 }),
       // Les fragments d'étoile collectés (#10011) : un appoint — une lecture qui tombe ne retient pas le bloc.
       starFragmentsOf(this.prisma, userId).catch(() => undefined),
     ]);
@@ -103,18 +98,17 @@ export class GameBlockService {
       log.warn('mythic seat unavailable, rank served from glory', { userId, error: error instanceof Error ? error.message : String(error) });
       return null;
     });
-    const plan = computeMeeshMintPlan(
-      counters
-        .filter((c) => (ENGAGEMENT_AXES as readonly string[]).includes(c.axisKey))
-        .map((c) => ({ axisKey: c.axisKey as EngagementAxisKey, count: c.count, points: c.points })),
-      { mintCost: meeshPrice(totals.mintedLifetime + 1) },
-    );
+    // Les étincelles (#10846) : la poche que la frappe dépense, le cycle que lit le niveau, le total à vie. Tout est
+    // convertible — plus de plancher inaliénable ni de débit par axe : `debitablePoints` est la poche entière.
+    const sparks = sparksOf(user);
 
     const block = buildGameBlock({
       userId,
       today: day.dayKey,
       flameToday: facts.today,
-      score: user?.engagementScore ?? 0,
+      score: sparks.pocket,
+      sparks,
+      levelMaxLifetime: user?.levelMaxLifetime ?? null,
       levelRecord: user?.levelRecord ?? null,
       prestige: user?.prestige ?? 0,
       glory,
@@ -125,7 +119,7 @@ export class GameBlockService {
       chestMintBase: chestMintBase ?? null,
       missionsDone,
       flameRecord: facts.longest,
-      debitablePoints: plan.debitablePoints,
+      debitablePoints: sparks.pocket,
       balance: totals.balance,
       streak: facts.streak,
       lastActiveDay: facts.lastActiveDay,
@@ -152,8 +146,9 @@ export class GameBlockService {
 
     const extensions = await this.extras.build({
       userId,
-      score: user?.engagementScore ?? 0,
+      score: sparks.cycle,
       levelRecord: user?.levelRecord ?? null,
+      levelMaxLifetime: user?.levelMaxLifetime ?? null,
       prestige: user?.prestige ?? 0,
       flameDays: facts.streak,
       balance: totals.balance,

@@ -401,6 +401,21 @@ export const meeshMintResponseSchema = z.object({
   levelAfter: legacyLevel.optional(),
   /** Les niveaux ouverts par le rang (#9688) : les deux champs voisins restent bornés à 100. */
   ladder: z.object({ levelBefore: level, levelAfter: level }).optional(),
+  /** Le prix de rang de la pièce, avant le facteur du niveau actuel (#10847) — absent d'un serveur antérieur. */
+  basePrice: z.number().int().min(1).optional(),
+  /** Le facteur du niveau actuel appliqué, de 0,5 à 1 (#10847). */
+  costFactor: z.number().min(0).max(1).optional(),
+});
+
+/**
+ * Le refus `409 TREASURY_LOCKED` de la frappe (#10848) : la réserve du trésor que le rang n'ouvre pas encore. Les champs
+ * partent à la RACINE de la réponse, à côté de `code`.
+ */
+export const treasuryLockedResponseSchema = z.object({
+  code: z.literal('TREASURY_LOCKED'),
+  tier: treasuryKeys,
+  minHeld: nonNegativeInt,
+  requires: treasuryRankRequirementSchema,
 });
 
 /**
