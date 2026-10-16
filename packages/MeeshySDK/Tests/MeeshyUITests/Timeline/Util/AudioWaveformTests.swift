@@ -44,4 +44,9 @@ final class AudioWaveformTests: XCTestCase {
         XCTAssertEqual(out[1], 1.0, accuracy: 0.001)
         XCTAssertEqual(out[0], 0.25, accuracy: 0.001)
     }
+
+    func test_memoryCache_isBounded() {
+        XCTAssertEqual(AudioWaveform.memoryCacheCountLimit, AudioWaveform.memoryCountLimit)
+        XCTAssertGreaterThan(AudioWaveform.memoryCountLimit, 0)
+    }
 }
