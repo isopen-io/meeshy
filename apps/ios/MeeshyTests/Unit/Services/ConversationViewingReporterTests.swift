@@ -426,6 +426,30 @@ final class ConversationViewingReporterTests: XCTestCase {
         XCTAssertEqual(emitter.calls, [.start("conv-a"), .focus("conv-a"), .activity("conv-a")])
     }
 
+    func test_lastConversationClosed_underAnOrphanCover_releasesTheCover() {
+        let (sut, emitter, _) = makeSUT()
+        sut.conversationOpened("conv-a")
+        sut.coverBegan()
+
+        sut.conversationClosed("conv-a")
+
+        XCTAssertFalse(sut.isCovered, "plus aucun écran de conversation : aucune couverture ne peut subsister")
+        sut.conversationOpened("conv-b")
+        sut.coverBegan()
+        XCTAssertEqual(emitter.calls.last, .focus("conv-b"), "la couverture suivante repart de zéro")
+    }
+
+    func test_conversationClosed_whileAnotherStaysOpen_keepsItsCover() {
+        let (sut, _, _) = makeSUT()
+        sut.conversationOpened("conv-a")
+        sut.conversationOpened("conv-b")
+        sut.coverBegan()
+
+        sut.conversationClosed("conv-a")
+
+        XCTAssertTrue(sut.isCovered)
+    }
+
     func test_coverEnded_withoutBegan_neverGoesBelowZero() {
         let (sut, emitter, _) = makeSUT()
         sut.coverEnded()
