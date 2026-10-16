@@ -134,6 +134,13 @@ struct iPadRootView: View {
 
                     rightColumn
                         .frame(maxWidth: .infinity)
+                        .background(GeometryReader { column in
+                            Color.clear
+                                .onAppear { DeviceLayout.conversationColumnWidth = column.size.width }
+                                .adaptiveOnChange(of: column.size.width) { _, width in
+                                    DeviceLayout.conversationColumnWidth = width
+                                }
+                        })
                 }
             }
 
@@ -199,6 +206,12 @@ struct iPadRootView: View {
             onSendMessageToUser: handleSendMessageToUser,
             onPushNavigateToRoute: handlePushNavigateToRoute
         ))
+        // La conversation ouverte quitte la liste (masquée, supprimée, quittée, retirée) : la colonne de
+        // détail se referme, comme l'iPhone revient à la liste — jamais un fil mort où l'on écrit encore.
+        .onReceive(conversationViewModel.conversationRemoved) { removedId in
+            guard iPadSelectionRule.closesDetail(activeConversationId: activeConversation?.id, removedId: removedId) else { return }
+            withAnimation(.spring(response: 0.35, dampingFraction: 0.85)) { activeConversation = nil }
+        }
         // `initial: true` covers the cold-launch race where a Universal Link
         // sets `pendingDeepLink` from AppDelegate.continue:userActivity: BEFORE
         // this view mounts. `consumePendingDeepLink` returns nil for the typical
@@ -295,6 +308,8 @@ struct iPadRootView: View {
     }
 
     private func uninstallRouterCallbacks() {
+        // La racine iPad part (fenêtre redevenue compacte) : les bulles se mesurent de nouveau à la fenêtre.
+        DeviceLayout.conversationColumnWidth = nil
         router.onRouteRequested = nil
         router.onPopRequested = nil
     }

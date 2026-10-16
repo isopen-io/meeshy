@@ -143,6 +143,16 @@ final class PresenceManagerSeedTests: XCTestCase {
 
     // MARK: - Fabriques
 
+    // MARK: - Un instantané serveur qui répète un utilisateur ne plante pas
+
+    func test_ingestSnapshot_duplicateUser_keepsTheLatestEntry() {
+        sut.ingestSnapshot([
+            masked("dup"),
+            UserStatusEvent(userId: "dup", username: "dup", isOnline: true, lastActiveAt: nil)
+        ])
+        XCTAssertEqual(sut.presenceMap["dup"]?.isOnline, true, "le dernier relevé d'un même utilisateur l'emporte")
+    }
+
     private func masked(_ userId: String) -> UserStatusEvent {
         UserStatusEvent(userId: userId, username: userId, isOnline: false, lastActiveAt: nil)
     }

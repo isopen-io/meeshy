@@ -505,13 +505,12 @@ final class Router: ObservableObject {
         pendingHighlightMessageId = highlightMessageId
         pendingHighlightConversationId = highlightMessageId == nil ? nil : conversation.id
 
-        // iPad deux colonnes : les routes sont forwardees via `onRouteRequested`
-        // (pas de NavigationStack `path`) — comportement inchange.
+        // iPad deux colonnes : la route est remise d'UN geste à `onRouteRequested`, qui pose la
+        // conversation dans la colonne de détail. L'ancien `popToRoot()` + `push` différé y remettait
+        // d'abord `activeConversation` à nil : 50 ms de fil d'actualité et de liste, leurs chargements
+        // relancés, et la conversation déjà ouverte démontée au lieu d'atterrir en place.
         if onRouteRequested != nil {
-            popToRoot()
-            DispatchQueue.main.asyncAfter(deadline: .now() + 0.05) {
-                self.push(.conversation(conversation))
-            }
+            place(.conversation(conversation))
             return
         }
 

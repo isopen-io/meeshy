@@ -237,14 +237,16 @@ struct FocalAudioBlock: View, Equatable {
         // les pistes d'`audios` appartiennent au MÊME message.
         if let message = audioItem(for: audios.first?.id ?? "")?.message {
             let perPageTranscriptions = Dictionary(
-                uniqueKeysWithValues: audios.compactMap { att in
+                audios.compactMap { att in
                     audioItem(for: att.id)?.transcription.map { (att.id, $0) }
-                }
+                },
+                uniquingKeysWith: { first, _ in first }
             )
             let perPageTranslatedAudios = Dictionary(
-                uniqueKeysWithValues: audios.map { att in
+                audios.map { att in
                     (att.id, audioItem(for: att.id)?.translatedAudios ?? [])
-                }
+                },
+                uniquingKeysWith: { first, _ in first }
             )
             AudioStackView(
                 items: audios,

@@ -116,6 +116,7 @@ struct StoryViewerView: View {
     static let heartEmoji = MeeshyQuickReactions.heart
 
     @State var currentStoryIndex = 0 // internal for cross-file extension access
+    @State private var postRoomLedger = StoryPostRoomLedger()
     /// La progression vit dans une horloge que SEULE la barre observe (#9859) :
     /// tenue par référence, jamais observée ici, elle ne réévalue pas le lecteur.
     @State var progressClock = StoryPlaybackProgressClock() // internal for cross-file extension access
@@ -576,8 +577,8 @@ struct StoryViewerView: View {
                 appear = StoryViewerAppearance(scale: 1.0, cornerRadius: 0)
             }
             triggerInitialActionIfNeeded()
+            holdPostRoom(of: currentStory)
             if let story = currentStory {
-                SocialSocketManager.shared.joinPostRoom(postId: story.id)
                 EngagementTracker.shared.begin(postId: story.id, contentType: .story, surface: .storyViewer)
             }
         }
@@ -607,8 +608,8 @@ struct StoryViewerView: View {
             // is a registered external player, so `stopAll()` reaches it
             // without the viewer needing a direct reference.
             PlaybackCoordinator.shared.stopAll()
+            holdPostRoom(of: nil)
             if let story = currentStory {
-                SocialSocketManager.shared.leavePostRoom(postId: story.id)
                 // Relâche la déclaration de contenu actif — conditionnelle à
                 // l'identité pour rester correcte si un autre écran a déjà
                 // déclaré le sien entre-temps.
@@ -681,10 +682,7 @@ struct StoryViewerView: View {
             skipUnplayableStoriesIfNeeded()
             isContentReady = false
             refreshPrefetchWindowAndTimer()
-            let previousStory = currentGroup.flatMap { group in
-                group.stories.indices.contains(oldValue) ? group.stories[oldValue] : nil
-            }
-            transitionPostRoom(from: previousStory, to: currentStory)
+            holdPostRoom(of: currentStory)
             transitionEngagement(to: currentStory)
         }
         // Interstitiel d'identité inter-groupes — au-dessus du canvas ET des
@@ -773,11 +771,7 @@ struct StoryViewerView: View {
             skipUnplayableStoriesIfNeeded()
             isContentReady = false
             refreshPrefetchWindowAndTimer()
-            let previousStory: StoryItem? = (oldValue >= 0 && oldValue < groups.count &&
-                groups[oldValue].stories.indices.contains(currentStoryIndex))
-                ? groups[oldValue].stories[currentStoryIndex]
-                : nil
-            transitionPostRoom(from: previousStory, to: currentStory)
+            holdPostRoom(of: currentStory)
             transitionEngagement(to: currentStory)
             presentGroupIntroIfNeeded()
             // APRÈS la décision d'interlude : si un interlude s'affiche, la
@@ -1221,16 +1215,12 @@ struct StoryViewerView: View {
     }
 
     /// composer — fires `PostService.repost` immediately with no content and
-    /// Transitions the Socket.IO post room subscription from `oldStory` to `newStory`.
-    /// The old.id != new.id check makes redundant calls (e.g. double-fire from both
-    /// onChange handlers at a group boundary) idempotent.
-    private func transitionPostRoom(from oldStory: StoryItem?, to newStory: StoryItem?) {
-        if let old = oldStory, old.id != newStory?.id {
-            SocialSocketManager.shared.leavePostRoom(postId: old.id)
-        }
-        if let new = newStory, new.id != oldStory?.id {
-            SocialSocketManager.shared.joinPostRoom(postId: new.id)
-        }
+    /// Tient la salle de la story affichée, et elle seule (`StoryPostRoomLedger`) : quitter, c'est quitter
+    /// la salle réellement rejointe — jamais une story « précédente » recalculée d'un index.
+    private func holdPostRoom(of story: StoryItem?) {
+        let move = postRoomLedger.hold(story?.id)
+        if let leave = move.leave { SocialSocketManager.shared.leavePostRoom(postId: leave) }
+        if let join = move.join { SocialSocketManager.shared.joinPostRoom(postId: join) }
     }
 
     /// Finalizes the open `.storyViewer` engagement session and begins one for

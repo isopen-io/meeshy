@@ -320,10 +320,13 @@ final class PresenceManager: ObservableObject {
     /// (closes the "stale online forever" failure mode).
     func ingestSnapshot(_ users: [UserStatusEvent]) {
         guard !users.isEmpty else { return }
+        // Le DERNIER relevé d'un même utilisateur l'emporte ; un doublon dans l'instantané du serveur
+        // ne fait plus planter l'app (`uniqueKeysWithValues` piège sur une clé répétée).
         let updates = Dictionary(
-            uniqueKeysWithValues: users.map { entry in
+            users.map { entry in
                 (entry.userId, UserPresence(isOnline: entry.isOnline, lastActiveAt: entry.lastActiveAt))
-            }
+            },
+            uniquingKeysWith: { _, latest in latest }
         )
         presenceMap.merge(updates) { _, newEntry in newEntry }
     }

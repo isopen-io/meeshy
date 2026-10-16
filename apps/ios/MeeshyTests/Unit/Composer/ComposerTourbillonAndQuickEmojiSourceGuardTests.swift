@@ -190,12 +190,31 @@ final class ComposerTourbillonAndQuickEmojiSourceGuardTests: XCTestCase {
 
     // MARK: - Emojis rapides : source, envoi direct, enregistrement d'usage
 
-    func test_quickSendEmojis_sourcesTopFiveFromEmojiUsageTracker() throws {
+    /// #10842 — la rangée sert les DERNIERS émojis utilisés, plus les plus
+    /// fréquents : l'historique récent vit À CÔTÉ du compteur des réactions,
+    /// dont la sémantique ne change pas.
+    func test_quickSendEmojis_sourcesTheRecentHistory() throws {
         let block = try Self.propertyBlock(anchor: "var quickSendEmojis: [String] {")
         XCTAssertTrue(
-            block.contains("EmojiUsageTracker.topEmojis(count: QuickEmojiGrid.count"),
-            "les emojis rapides viennent du tracker partagé des réactions, autant que la grille en montre (#7931)"
+            block.contains("RecentEmojiHistory.row(history: RecentEmojiStore.load()"),
+            "les emojis rapides viennent de l'historique récent (#10842)"
         )
+        XCTAssertFalse(block.contains("EmojiUsageTracker.topEmojis"), "plus le compteur de fréquence")
+    }
+
+    /// #10842 — « utilisé » = envoyé depuis la rangée, contenu dans un message
+    /// composé et envoyé : `handleSend()` est le seul passage de ces deux
+    /// envois (l'émoji rapide y passe aussi), il enregistre l'historique AVANT
+    /// de rendre la main à l'hôte.
+    func test_handleSend_recordsTheEmojisOfTheSentText() throws {
+        let source = try Self.strippedSource()
+        guard let start = source.range(of: "func handleSend() {"),
+              let custom = source.range(of: "if let onCustomSend", range: start.upperBound..<source.endIndex) else {
+            return XCTFail("`handleSend()` introuvable")
+        }
+        let head = String(source[start.upperBound..<custom.lowerBound])
+        XCTAssertTrue(head.contains("RecentEmojiStore.record(RecentEmojiHistory.emojis(in: text))"),
+                      "l'envoi enregistre les émojis du texte envoyé dans l'historique récent")
     }
 
     func test_sendQuickEmoji_recordsUsageAndReusesHandleSend() throws {

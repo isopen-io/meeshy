@@ -141,6 +141,7 @@ extension MessageListViewController {
                   // que la collection view a INGÉRÉ — même garde que
                   // `beginVerifiedScroll` : viser un item pas encore
                   // matérialisé lève une NSInternalInconsistencyException.
+                  self.collectionView.numberOfSections > 0,
                   indexPath.item < self.collectionView.numberOfItems(inSection: 0)
             else {
                 self.endUnreadSeparatorReveal()

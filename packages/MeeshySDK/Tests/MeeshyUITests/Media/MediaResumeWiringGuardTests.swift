@@ -104,4 +104,20 @@ final class MediaResumeWiringGuardTests: XCTestCase {
         }
         return found
     }
+
+    /// Vocal A sur réseau lent, puis vocal B : la tâche de A est annulée, mais
+    /// son téléchargement (`cancelsWithCaller: false`) continue. Quand il
+    /// échouait, le `catch` remettait `isLoading` à faux POUR B et annonçait la
+    /// fin de lecture : la file retirait B, le marquait écouté et passait au
+    /// suivant. Un chargement remplacé ne parle plus au nom du suivant.
+    func test_aReplacedLoad_failingLate_neverFinishesTheNextTrack() throws {
+        let text = try source("Sources/MeeshyUI/Media/AudioPlaybackManager.swift")
+        let start = try XCTUnwrap(text.range(of: "public func play(urlString: String) {"))
+        let end = try XCTUnwrap(text.range(of: "public func playLocal(url: URL) {"))
+        let play = String(text[start.upperBound..<end.lowerBound])
+        let catchRange = try XCTUnwrap(play.range(of: "} catch {"))
+        let finished = try XCTUnwrap(play.range(of: "onPlaybackFinished?()"))
+        let afterCatch = String(play[catchRange.upperBound..<finished.lowerBound])
+        XCTAssertTrue(afterCatch.contains("guard !Task.isCancelled else { return }"))
+    }
 }

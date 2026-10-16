@@ -57,6 +57,27 @@ final class MessageDraftMediaStoreTests: XCTestCase {
         XCTAssertEqual(try String(contentsOf: restoredURL, encoding: .utf8), "jpeg-payload")
     }
 
+    /// Un brouillon restauré vit DANS le dossier du brouillon : le persister de
+    /// nouveau (sortie de la conversation, passage en arrière-plan) effaçait le
+    /// dossier avant d'y copier — chaque pièce disparaissait, sources comprises.
+    func test_persistingARestoredDraftAgain_keepsEveryFile() throws {
+        let source = try makeTempFile(named: "b.jpg", contents: "kept-payload")
+        let attachment = makeAttachment(id: "att-2")
+        let refs = MessageDraftMediaStore.persist(
+            attachments: [attachment], files: ["att-2": source],
+            userId: userId, conversationId: conversationId)
+        let restored = MessageDraftMediaStore.restore(refs: refs, userId: userId, conversationId: conversationId)
+
+        let again = MessageDraftMediaStore.persist(
+            attachments: restored.attachments, files: restored.files,
+            userId: userId, conversationId: conversationId)
+
+        XCTAssertEqual(again.map(\.attachmentId), ["att-2"])
+        let liveURL = try XCTUnwrap(restored.files["att-2"])
+        XCTAssertEqual(try String(contentsOf: liveURL, encoding: .utf8), "kept-payload",
+                       "le plateau garde ses fichiers : mêmes chemins, mêmes octets")
+    }
+
     func test_restore_skipsMissingFileSilently() throws {
         let source = try makeTempFile(named: "b.m4a")
         let refs = MessageDraftMediaStore.persist(

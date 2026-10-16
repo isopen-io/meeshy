@@ -238,6 +238,7 @@ struct ConversationView: View {
     /// looks up the target message's frame here at gesture fire time and
     /// passes it to `MessageOverlayMenu` as the source frame.
     @State var frameTracker = MessageFrameBox()
+    @State var searchDebounce = SearchDebounceBox()
 
     /// Publisher stable (référence identique à chaque body eval) : l'inline
     /// dans scrollToBottomButton reconstruisait l'abonnement au coordinator à
@@ -892,16 +893,10 @@ struct ConversationView: View {
 
                 await consumePendingHighlightMessage()
 
-                // Ouverture depuis le bouton Recherche de l'aperçu long-press :
-                // active directement la barre de recherche in-conversation.
-                if router.pendingOpenSearch {
-                    router.pendingOpenSearch = false
-                    try? await Task.sleep(for: .milliseconds(250))
-                    guard !Task.isCancelled else { return }
-                    withAnimation(.spring(response: 0.3, dampingFraction: 0.8)) {
-                        headerState.showSearch = true
-                    }
-                }
+                await consumePendingOpenSearch()
+            }
+            .adaptiveOnChange(of: router.pendingOpenSearch) { _, wanted in
+                if wanted { Task { await consumePendingOpenSearch() } }
             }
             // Tap de notification pour la conversation DÉJÀ à l'écran : `path`
             // reçoit le même id, la vue n'est pas recréée et `.task` ne rejoue
@@ -1043,7 +1038,7 @@ struct ConversationView: View {
                 // surface a toast so the user knows why.
                 guard revoked else { return }
                 FeedbackToastManager.shared.showError(viewModel.error ?? String(localized: "conversation.accessRevoked", bundle: .main))
-                dismiss()
+                if anonymousSession != nil { dismiss() } else { router.pop() } // iPad : `dismiss()` y est un no-op
             }
             .observingKeyboardTransition($keyboardTransition)
             .onReceive(NotificationCenter.default.publisher(for: UIApplication.willResignActiveNotification)) { _ in
@@ -1055,6 +1050,7 @@ struct ConversationView: View {
             }
             .onDisappear {
                 composerText.flushPendingChange()
+                persistDraftAttachmentsForBackground() // iPad : un panneau REMPLACE la vue, le plateau n'y survivait pas
                 // #7500 — la sortie par NAVIGATION. Jumelle de celle du passage
                 // en arrière-plan ci-dessus : une vue unique lue ici ne
                 // survivra pas au retour.
@@ -1071,8 +1067,7 @@ struct ConversationView: View {
                 composerText.onPersistNeeded = nil
                 // Arrêt déterministe du player local (preview d'audio en attente) :
                 // sans lui, l'audio continuait jusqu'au dealloc du @StateObject et
-                // la session restait acquise (refcount) le temps de la libération.
-                // Idempotent.
+                // la session restait acquise (refcount) le temps de la libération. Idempotent.
                 pendingAudioPlayer.stop()
                 if audioRecorder.isRecording {
                     audioRecorder.cancelRecording()

@@ -10,7 +10,9 @@ extension MessageListViewController {
     // MARK: - Scroll to Bottom
 
     func scrollToBottom(animated: Bool = true) {
-        guard collectionView.numberOfItems(inSection: 0) > 0 else { return }
+        // Avant le premier instantané (fil en attente), la liste n'a AUCUNE section : interroger la
+        // section 0 y est une incohérence que UIKit refuse. Les deux gardes, dans cet ordre.
+        guard collectionView.numberOfSections > 0, collectionView.numberOfItems(inSection: 0) > 0 else { return }
         // Scroll VOULU : le verrou de scène doit le laisser passer (sans ce
         // drapeau, l'ancre annulait chaque frame de l'animation — le bouton
         // « aller au dernier message » ne fonctionnait plus, user 2026-08-18).
@@ -245,9 +247,15 @@ extension MessageListViewController {
         let flashAlpha: CGFloat = strong ? 0.2 : 0.4
         let flashDuration: TimeInterval = strong ? 0.15 : 0.18
         let recoverDuration: TimeInterval = strong ? 0.25 : 0.22
+        // L'éclair vise un MESSAGE, pas une position : une arrivée ou l'indicateur de frappe inséré en tête
+        // pendant le délai décalent les rangs, et l'IndexPath capturé éclairait alors un autre message.
+        // L'élément est relevé maintenant, sa position relue au moment de l'éclair.
+        let target = dataSource?.itemIdentifier(for: indexPath)
 
         DispatchQueue.main.asyncAfter(deadline: .now() + delay) { [weak self] in
-            guard let cell = self?.collectionView.cellForItem(at: indexPath) else { return }
+            guard let self else { return }
+            let resolved = target.flatMap { self.dataSource?.indexPath(for: $0) } ?? (target == nil ? indexPath : nil)
+            guard let resolved, let cell = self.collectionView.cellForItem(at: resolved) else { return }
             // Scale bounce for strong flash
             if strong {
                 cell.transform = CGAffineTransform(scaleX: 1.02, y: 1.02)

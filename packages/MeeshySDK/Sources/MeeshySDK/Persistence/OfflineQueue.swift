@@ -749,6 +749,17 @@ public actor OfflineQueue {
         }
     }
 
+    /// Termine, SANS outcome, les observateurs d'une mutation qui n'en aura jamais : sa ligne a été
+    /// retirée de la file (annulation, déconnexion). Leur `for await` se termine — sinon chaque
+    /// observateur gardait sa tâche, sa continuation et sa closure de rollback pour la vie du processus.
+    func endOutcomeObservers(for cmid: String) {
+        guard let observers = outcomeContinuations.removeValue(forKey: cmid) else { return }
+        for continuation in observers.values { continuation.finish() }
+    }
+
+    /// Nombre de mutations encore observées — témoin de la purge (tests).
+    var observedOutcomeCount: Int { outcomeContinuations.count }
+
     /// Internal: removes the single continuation identified by `token` after
     /// its consumer cancelled (Task cancellation, scope exit). Idempotent —
     /// if the slot was already cleared by `publishOutcome`, this is a no-op.
@@ -876,6 +887,8 @@ public actor OfflineQueue {
         } catch {
             logger.error("cancelPendingSend failed: \(error.localizedDescription, privacy: .public)")
         }
+        // Le message annulé ne publiera jamais d'outcome : ses observateurs se terminent.
+        endOutcomeObservers(for: cmid)
         // Le miroir mémoire suit la ligne : `retryAll()` rejoue `items` sans relire l'outbox, et un message
         // annulé ou supprimé y restait — il repartait à la reconnexion suivante.
         items.removeAll { $0.clientMessageId == cmid }
@@ -2931,6 +2944,9 @@ public actor OfflineQueue {
         // Wipe complet (logout, tests) : les tombstones d'une session ne
         // doivent pas pouvoir rejouer un outcome dans la suivante.
         outcomeTombstones.removeAll()
+        // … et ses observateurs ne recevront jamais d'outcome : ils se terminent ici au lieu d'attendre
+        // à vie (une mention, un abonnement, un blocage hors ligne puis la déconnexion).
+        for cmid in Array(outcomeContinuations.keys) { endOutcomeObservers(for: cmid) }
         guard let pool = outboxPool else {
             await refreshPendingCount()
             return

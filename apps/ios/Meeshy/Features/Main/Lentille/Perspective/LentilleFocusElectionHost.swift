@@ -98,11 +98,58 @@ struct LentilleFocusElectionHost: View {
         offsetFromTop: CGFloat,
         currentId: String?
     ) -> String? {
-        FocalFocusCurve.electFocusRow(
+        let lawWinner = FocalFocusCurve.electFocusRow(
             candidates: candidates,
             focusY: LentilleFocusBand.centerY(viewportTop: viewportTop, viewportBottom: viewportBottom, offsetFromTop: offsetFromTop),
             currentId: currentId,
             hysteresis: FocalFocusCurve.focusBandHalfHeight
         )
+        return holdingCurrent(
+            lawWinner: lawWinner,
+            currentId: currentId,
+            candidates: candidates,
+            focusY: LentilleFocusBand.centerY(viewportTop: viewportTop, viewportBottom: viewportBottom, offsetFromTop: offsetFromTop)
+        )
+    }
+
+    // MARK: - Zone morte (liste qui tremblait, 2026-10-16)
+
+    /// Avance qu'une rangée doit prendre sur l'élu, en distance au foyer,
+    /// pour le détrôner : une demi-rangée.
+    ///
+    /// **Pourquoi la loi seule ne suffit pas ici.** L'hystérésis du miroir garde
+    /// le courant tant qu'il est à `focusBandHalfHeight` du foyer. Elle n'a de
+    /// zone morte que si deux fois cette demi-bande DÉPASSE le pas des rangées.
+    /// Or la liste Lentille rend ses rangées à `Row.height` + l'espacement de
+    /// sa `LazyVStack` (`MeeshySpacing.xsPlus`) : 90 pt de pas, exactement deux
+    /// demi-bandes. La bascule avant et la bascule arrière tombaient au même
+    /// point, et un tremblement d'un point autour de la frontière changeait
+    /// l'élu à chaque tick — la magnification sautait d'une rangée à sa voisine
+    /// en boucle, deux états superposés en fondu (vidéo du 2026-10-16). Près du
+    /// haut de liste, la rampe de `LentilleFocusBand.centerY` déplace le foyer
+    /// avec le contenu : la distance varie deux fois plus vite que le doigt.
+    ///
+    /// La loi gelée n'est pas réécrite : elle désigne toujours le gagnant, et
+    /// cette garde ne fait que refuser un changement d'élu qui ne rapporte pas
+    /// une demi-rangée. Une cote de PEAU (la rangée), jamais une cote de loi.
+    nonisolated static var switchMargin: CGFloat { LentilleMetrics.Row.height / 2 }
+
+    /// Garde le courant si le gagnant de la loi n'est pas plus proche du foyer
+    /// que lui d'au moins `margin`. Un courant sorti des candidats (rangée
+    /// défilée hors écran) ou l'absence de courant laissent la loi décider.
+    nonisolated static func holdingCurrent(
+        lawWinner: String?,
+        currentId: String?,
+        candidates: [FocalFocusCurve.RowCandidate],
+        focusY: CGFloat,
+        margin: CGFloat = switchMargin
+    ) -> String? {
+        guard let lawWinner, let currentId, lawWinner != currentId,
+              let current = candidates.first(where: { $0.id == currentId }),
+              let challenger = candidates.first(where: { $0.id == lawWinner }) else {
+            return lawWinner
+        }
+        let gain = abs(current.midY - focusY) - abs(challenger.midY - focusY)
+        return gain < margin ? currentId : lawWinner
     }
 }

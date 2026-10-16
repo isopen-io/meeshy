@@ -214,6 +214,10 @@ public class AudioPlaybackManager: NSObject, ObservableObject {
                 guard !Task.isCancelled else { return }
                 await playData(data)
             } catch {
+                // Chargement REMPLACÉ (un autre vocal a été choisi) : son téléchargement continue
+                // (`cancelsWithCaller: false`) et peut échouer bien plus tard — il ne parle plus au nom
+                // du suivant, ni `isLoading` ni fin de lecture (la file sautait le vocal choisi).
+                guard !Task.isCancelled else { return }
                 Self.log.error("play(urlString) cache fetch echec (\(resolved, privacy: .public)): \(error.localizedDescription, privacy: .public)")
                 isLoading = false
                 // B5 fix — notify the parent (coordinator / autoplay registry)
