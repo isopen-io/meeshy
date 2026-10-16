@@ -536,16 +536,19 @@ final class ReelsViewModel: ObservableObject {
     /// `removeDeletedReel` (même logique d'avancement du pager que l'événement
     /// temps réel `post:deleted`) pour ne pas dupliquer la règle d'avancement.
     func deletePost(_ postId: String) async {
-        guard reels.contains(where: { $0.id == postId }) else { return }
-        let snapshot = reels
+        guard let removedIndex = reels.firstIndex(where: { $0.id == postId }) else { return }
+        let removedReel = reels[removedIndex]
         let snapshotCurrentId = currentId
         removeDeletedReel(postId)
+        let advancedTo = currentId
         do {
             try await service.delete(postId: postId)
             FeedbackToastManager.shared.showSuccess(String(localized: "feed.post.deleted", defaultValue: "Publication supprimée", bundle: .main))
         } catch {
-            reels = snapshot
-            currentId = snapshotCurrentId
+            // Remet CE réel à sa place — la page chargée pendant l'appel reste — et ne ramène le pager
+            // dessus que si l'utilisateur n'a pas bougé depuis (`OptimisticRollback`).
+            reels = OptimisticRollback.restoring(removedReel, at: removedIndex, into: reels)
+            if currentId == advancedTo { currentId = snapshotCurrentId }
             FeedbackToastManager.shared.showError(String(localized: "feed.post.deleteError", defaultValue: "Erreur lors de la suppression", bundle: .main))
         }
     }

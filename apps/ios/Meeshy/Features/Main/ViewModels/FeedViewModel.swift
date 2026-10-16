@@ -1095,8 +1095,6 @@ class FeedViewModel: ObservableObject {
         // server comment reconciles via `comment:added` / a feed refresh.
         // Mirrors PostDetailViewModel.sendComment.
         let cmid = ClientMutationId.generate()
-        let snapshot = posts[index].comments
-        let snapshotCount = posts[index].commentCount
         let currentUser = AuthManager.shared.currentUser
         let optimistic = FeedComment(
             id: cmid,
@@ -1126,17 +1124,12 @@ class FeedViewModel: ObservableObject {
             // below only covers an enqueue refusal; without this observer a
             // permanently-failing comment stays in the feed forever.
             observeOutcome(cmid: cmid, rollback: { [weak self] in
-                guard let self, let i = self.posts.firstIndex(where: { $0.id == postId }) else { return }
-                self.posts[i].comments = snapshot
-                self.posts[i].commentCount = snapshotCount
+                self?.withdrawOptimisticComment(cmid, fromPost: postId)
             }, toast: String(localized: "feed.comment.sendError", defaultValue: "Impossible d'envoyer le commentaire", bundle: .main))
         } catch {
             // Roll back the optimistic comment if the outbox refuses the row
             // (re-resolve the index — the feed may have mutated during the await).
-            if let i = posts.firstIndex(where: { $0.id == postId }) {
-                posts[i].comments = snapshot
-                posts[i].commentCount = snapshotCount
-            }
+            withdrawOptimisticComment(cmid, fromPost: postId)
             FeedbackToastManager.shared.showError(String(localized: "feed.comment.sendError", defaultValue: "Impossible d'envoyer le commentaire", bundle: .main))
         }
     }
@@ -1221,8 +1214,8 @@ class FeedViewModel: ObservableObject {
 
     func deletePost(_ postId: String) async {
         guard !ClientMutationId.isValid(postId) else { return await withdrawPendingPublication(postId) }
-        let snapshot = posts
-        posts.removeAll { $0.id == postId }
+        guard let removedIndex = posts.firstIndex(where: { $0.id == postId }) else { return }
+        let removedPost = posts.remove(at: removedIndex)
 
         do {
             try await postService.delete(postId: postId)
@@ -1237,7 +1230,8 @@ class FeedViewModel: ObservableObject {
 
             FeedbackToastManager.shared.showSuccess(String(localized: "feed.post.deleted", defaultValue: "Publication supprimée", bundle: .main))
         } catch {
-            posts = snapshot
+            // Remet CE post à sa place — ce qui a été chargé pendant l'appel reste (`OptimisticRollback`).
+            posts = OptimisticRollback.restoring(removedPost, at: removedIndex, into: posts)
             FeedbackToastManager.shared.showError(String(localized: "feed.post.deleteError", defaultValue: "Erreur lors de la suppression", bundle: .main))
         }
     }
