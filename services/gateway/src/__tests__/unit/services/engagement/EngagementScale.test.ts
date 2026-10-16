@@ -201,8 +201,8 @@ describe('le crédit applique le barème', () => {
     await new EngagementService(prisma, { scale: fixedScale(scale) }).recordActivity('u-1', 'tool.sticker');
 
     expect(creditedPoints(counterWrite)).toBe(7);
-    const cmd = runCommandRaw.mock.calls[0][0] as { update: Array<{ $set: { engagementScore: { $add: [unknown, number] } } }> };
-    expect(cmd.update[0].$set.engagementScore.$add[1]).toBe(7);
+    const cmd = runCommandRaw.mock.calls[0][0] as { update: Array<{ $set: { sparksSincePrestige: { $add: [unknown, number] } } }> };
+    expect(cmd.update[0].$set.sparksSincePrestige.$add[1]).toBe(7);
   });
 
   it('le plafond de facteur du NIVEAU borne l\'élan', async () => {

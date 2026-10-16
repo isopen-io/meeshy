@@ -63,6 +63,8 @@ struct GameHeroView: View {
         VStack(alignment: .leading, spacing: MeeshySpacing.lg) {
             if let cornerLine { corner(cornerLine) }
             levelRow
+            // Les deux paires des étincelles (#10846), TOUJOURS : poche / total à vie, niveau / max à vie.
+            GameSparkPairsRow(pairs: GameSparkPairs(game.level))
             rankRow
             GameHeroEarn(elan: elan)
         }
@@ -171,12 +173,8 @@ struct GameHeroView: View {
                     GameLevelStepRow(step: step, facts: game.levelStepFacts)
                 }
                 if level.record > level.level {
-                    // DEUX pastilles, jamais une longue (#9564) : « Record : niveau 100 · Vent arrière ×1,25 » tenait
-                    // sur deux lignes, puis — une fois interdite de passer à la ligne — poussait le héro hors de l'écran.
-                    FlowLayout(spacing: MeeshySpacing.xs) {
-                        GameChip(text: recordText, tint: MeeshyColors.warning)
-                        if let tailwindText { GameChip(text: tailwindText, tint: MeeshyColors.warning) }
-                    }
+                    // Le record du cycle, seul : le Vent arrière est éteint depuis les étincelles (#10846).
+                    GameChip(text: recordText, tint: MeeshyColors.warning)
                 }
             }
         }
@@ -214,12 +212,6 @@ struct GameHeroView: View {
             defaultValue: "Record : niveau \(GameCopy.formatCount(level.record))",
             bundle: .main
         )
-    }
-
-    /// Le Vent arrière, quand il souffle : il a sa propre pastille.
-    private var tailwindText: String? {
-        guard game.boosts.tailwind > 1 else { return nil }
-        return ConceptText.chipTailwind(GameCopy.factor(game.boosts.tailwind))
     }
 
     // MARK: - Le blason et la division

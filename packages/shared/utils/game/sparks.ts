@@ -74,6 +74,11 @@ export type SparksFacts = {
   readonly cycle: number;
   /** Accumulées à vie. */
   readonly lifetime: number;
+  /**
+   * La DETTE (porteur, 2026-10-16) : ce qu'une reprise de contenu supprimé n'a pas pu prélever sur la poche, déjà dépensée.
+   * Elle se déduit des prochaines étincelles gagnées ; tant qu'elle existe, on ne frappe pas.
+   */
+  readonly debt: number;
 };
 
 /** Les colonnes du compte que la loi lit — toutes optionnelles : un compte d'avant le rattrapage ne les a pas. */
@@ -81,6 +86,7 @@ export type SparksRow = {
   readonly engagementScore?: unknown;
   readonly sparksSincePrestige?: unknown;
   readonly sparksEarnedLifetime?: unknown;
+  readonly sparksDebt?: unknown;
 };
 
 /**
@@ -92,7 +98,7 @@ export function sparksOf(row: SparksRow | null | undefined): SparksFacts {
   const pocket = sparkCount(row?.engagementScore);
   const cycle = Math.max(pocket, sparkCount(row?.sparksSincePrestige));
   const lifetime = Math.max(cycle, sparkCount(row?.sparksEarnedLifetime));
-  return { pocket, cycle, lifetime };
+  return { pocket, cycle, lifetime, debt: sparkCount(row?.sparksDebt) };
 }
 
 /** Les colonnes du compte que lisent les décisions de niveau : les étincelles, le record du cycle, le max à vie. */
@@ -164,6 +170,10 @@ export type SparksMintPreview = MintPreview & {
   readonly costLevel: number;
   /** La réserve du trésor que la rang ne rouvre pas et qui barre la pièce — `null` : libre. */
   readonly locked: TreasuryLock | null;
+  /** Ce qui empêche la frappe en dehors du prix et du rang : `'debt'` tant qu'une dette d'étincelles existe. */
+  readonly blockedBy: 'debt' | null;
+  /** La dette d'étincelles à rembourser avant de frapper (0 : aucune). */
+  readonly sparksDebt: number;
 };
 
 const count = (value: number): number => (Number.isFinite(value) ? Math.max(0, Math.trunc(value)) : 0);
@@ -203,6 +213,8 @@ export function previewSparksMint(params: {
   readonly levelCap: LevelCap;
   /** Les faits des étapes (#9706), le compte de Meeshes lu sur `mintedLifetime` — `null` : sans étapes. */
   readonly steps: Omit<LevelStepFacts, 'minted'> | null;
+  /** La dette d'étincelles (porteur, 2026-10-16) : tant qu'elle dure, aucune frappe. Absente : aucune dette. */
+  readonly debt?: number;
 }): SparksMintPreview {
   const pocket = count(params.sparks);
   const cycle = count(params.cycle);
@@ -216,8 +228,9 @@ export function previewSparksMint(params: {
   const costLevel = Math.max(GAME_LEVEL_MIN, levelBefore);
   const price = effectiveMeeshPrice(number, costLevel);
   const locked = treasuryLockFor({ held: params.held, glory: params.glory, ...(params.mythic === true ? { mythic: true } : {}) });
+  const debt = count(params.debt ?? 0);
   const affordable = pocket >= price;
-  const canMint = affordable && locked === null;
+  const canMint = affordable && locked === null && debt === 0;
   return {
     number,
     price,
@@ -233,5 +246,7 @@ export function previewSparksMint(params: {
     levelsLost: 0,
     gloryGained: canMint ? GLORY_POINTS.mint : 0,
     locked,
+    blockedBy: debt > 0 ? 'debt' : null,
+    sparksDebt: debt,
   };
 }

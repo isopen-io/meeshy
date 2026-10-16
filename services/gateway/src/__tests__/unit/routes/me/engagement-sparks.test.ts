@@ -85,6 +85,7 @@ describe('GET /me/engagement — les étincelles', () => {
       sparks: 300,
       sparksCycle: 9000,
       sparksLifetime: 5_000_000_000,
+      sparksDebt: 0,
       levelMaxLifetime: 52,
     });
     await app.close();
@@ -105,6 +106,27 @@ describe('GET /me/engagement — les étincelles', () => {
       missingPoints: game.mint.price - 300,
     });
     expect(data.meesh.mintCost).toBeLessThan(data.meesh.baseMintCost);
+    await app.close();
+  });
+
+  it('sert la dette d\'étincelles dans level et meesh, et la frappe y est bloquée', async () => {
+    const db = fakeGameDb();
+    seedUser(db, { engagementScore: 90_000, sparksSincePrestige: 90_000, sparksDebt: 70 });
+    const missions = new MissionService(db.prisma, { creditPoints: async () => undefined });
+    const block = (await new GameBlockService(db.prisma, { missions }).build({ userId: USER }))!;
+    const app = Fastify({ logger: false, ajv: { customOptions: { strict: false } } });
+    app.decorate('prisma', makePrisma({ ...ACCOUNT, engagementScore: 90_000, sparksSincePrestige: 90_000n, sparksDebt: 70n }));
+    app.decorate('authenticate', async (req: FastifyRequest) => {
+      (req as any).auth = { userId: USER, isAuthenticated: true };
+    });
+    await app.register(meEngagementRoutes, { prefix: '/api/v1/me', gameBlock: async () => block });
+    await app.ready();
+
+    const { data } = (await get(app)).json();
+
+    expect(data.level.sparksDebt).toBe(70);
+    expect(data.meesh).toMatchObject({ sparksDebt: 70, blockedBy: 'debt' });
+    expect(data.game.mint).toMatchObject({ canMint: false, blockedBy: 'debt', sparksDebt: 70 });
     await app.close();
   });
 

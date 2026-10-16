@@ -70,8 +70,8 @@ describe('les phrases de palier', () => {
 
   test('singulier et pluriel', () => {
     expect(levelTitle(3)).toBe('Niveau 3');
-    expect(pointsLabel(1)).toBe('1 point');
-    expect(pointsLabel(350)).toBe('350 points');
+    expect(pointsLabel(1)).toBe('1 étincelle');
+    expect(pointsLabel(350)).toBe('350 étincelles');
   });
 
   test('une date gravée se lit « Obtenu le … » ; sans trace, rien — jamais une date inventée', () => {

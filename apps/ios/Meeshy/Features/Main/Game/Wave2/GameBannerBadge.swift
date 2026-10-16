@@ -23,40 +23,33 @@ struct GameBannerBadgeModel: Equatable {
     let rank: GloryRank
     let division: GloryDivision5?
     let mythic: MythicSeatRef?
-    /// Les points acquis — `nil` quand le serveur ne les sert pas à ce lecteur.
-    let points: Int?
+    /// La poche d'étincelles (#10846) — `sparks` servi, sinon `points` (même nombre devant un serveur antérieur) ;
+    /// `nil` quand le serveur ne les sert pas à ce lecteur (#9541 : soi et les amis).
+    let pocket: Int?
+    /// Le total d'étincelles gagnées à vie — `nil` devant un serveur antérieur : il ne s'invente pas.
+    let lifetime: Int?
+    /// Le niveau max à vie, qui survit au prestige — jamais sous le niveau montré.
+    let levelMax: Int
 
     var levelName: String { GameCopy.tierName(tier) }
     var rankName: String { GameCopy.rankLabel(rank, division5: division, mythic: mythic) }
 
-    /// Ce qu'il reste vers le niveau suivant (seuil 100 × N²) — `nil` sans points, ou quand le rang ou une étape
-    /// retient le niveau : ses points ouvrent déjà la suite, et « encore 0 » ne dirait rien de juste.
-    var pointsToNext: Int? {
-        guard let points else { return nil }
-        let remaining = GameLevels.threshold(of: level + 1) - points
-        return remaining > 0 ? remaining : nil
-    }
+    /// Le cercle reste PLEIN : le niveau se lit sur le CYCLE d'étincelles, que la fiche ne reçoit pas — la poche
+    /// (servie) n'en est pas la base, et en tirer une progression la ferait mentir dès la première frappe.
+    var levelProgress: Double { 1 }
 
-    /// La part du niveau suivant déjà gagnée ; le cercle reste plein quand rien ne la mesure.
-    var levelProgress: Double {
-        guard let points, pointsToNext != nil else { return 1 }
-        let floor = level <= GameLevels.minLevel ? 0 : GameLevels.threshold(of: level)
-        let span = GameLevels.threshold(of: level + 1) - floor
-        guard span > 0 else { return 1 }
-        return min(1, max(0, Double(points - floor) / Double(span)))
-    }
+    var pocketText: String? { pocket.map(GameSparksCopy.bannerPocket) }
+    var lifetimeText: String? { lifetime.map(GameSparksCopy.bannerLifetime) }
+    /// TOUJOURS montré, même égal au niveau (décision porteur 2026-10-16).
+    var levelMaxText: String { GameSparksCopy.bannerLevelMax(levelMax) }
 
-    var pointsText: String? { points.map { GameText.bannerPoints(points: GameCopy.formatCount($0)) } }
-    var missingText: String? {
-        pointsToNext.map { GameText.bannerMissing(points: GameCopy.formatCount($0), level: GameCopy.formatCount(level + 1)) }
-    }
-
-    /// « Niveau 3, palier Étincelle, premier palier, 976 points, Encore 624 points avant le niveau 4 ».
+    /// « Niveau 3, palier Braise, premier palier, Niveau max à vie 40, 976 étincelles, 12 000 étincelles gagnées à vie ».
     var levelAccessibilityLabel: String {
         let parts: [String?] = [
             GameCopy.levelRingAccessibility(level: level, tier: tier),
-            points.map { GameCopy.points($0) },
-            pointsToNext.map { GameCopy.levelToNext(remaining: $0, nextLevel: level + 1) },
+            GameSparksCopy.levelMaxAccessibility(levelMax),
+            pocket.map(GameSparksCopy.sparks),
+            lifetime.map(GameSparksCopy.lifetimeAccessibility),
         ]
         return parts.compactMap { $0 }.joined(separator: GameText.bannerSeparator)
     }
@@ -71,7 +64,9 @@ struct GameBannerBadgeModel: Equatable {
         guard let standing = content?.standing else { return nil }
         return GameBannerBadgeModel(
             userId: userId, level: standing.shownLevel, tier: standing.shownTier, prestige: standing.prestige,
-            rank: standing.rank, division: standing.shownDivision, mythic: standing.mythic, points: standing.points
+            rank: standing.rank, division: standing.shownDivision, mythic: standing.mythic,
+            pocket: standing.sparks ?? standing.points, lifetime: standing.sparksLifetime,
+            levelMax: max(standing.levelMaxLifetime ?? standing.ladder?.levelMaxLifetime ?? standing.shownLevel, standing.shownLevel)
         )
     }
 }
@@ -111,12 +106,13 @@ struct GameBannerBadge: View {
 }
 
 /// Les deux groupes, chacun sur son verre, aux deux angles BAS de la bannière (#10601, directive porteur 2026-10-14) : le
-/// niveau et ses points à l'angle bas du DÉBUT, le rang à l'angle bas de la FIN. Chaque cadre a les coins HAUTS arrondis
-/// et les coins BAS carrés, posés sur le bord bas de la bannière : il en épouse la limite. Le fond est un voile léger,
-/// sans matière floutée — la bannière et ses dessins se voient au travers ; une ombre de texte tient la lecture sur une
-/// bannière claire. La vue occupe tout le cadre que l'hôte lui donne (la bannière) ; un `HStack` suit le sens de
-/// lecture, le RTL inverse donc les deux angles sans rien de plus. L'avatar chevauche le MILIEU du bas de la bannière :
-/// chaque groupe s'arrête avant lui (`centerClearance`).
+/// niveau et ses étincelles à l'angle bas du DÉBUT, le rang à l'angle bas de la FIN. Chaque cadre est collé à son bord de
+/// la bannière : il n'a d'arrondi QU'au coin haut tourné vers le milieu — aucun au bord de DÉBUT pour les étincelles, aucun
+/// au bord de FIN pour le rang (décision porteur 2026-10-16) ; ses coins bas sont carrés, posés sur le bord bas. Le fond
+/// est un voile léger, sans matière floutée — la bannière et ses dessins se voient au travers ; une ombre de texte tient
+/// la lecture sur une bannière claire. Un `HStack` suit le sens de lecture et place les GROUPES ; leurs COINS, eux, sont
+/// des coins physiques (`UIRectCorner`) que `roundedCorners(for:direction:)` relit selon le sens — le RTL ne les inverse
+/// pas tout seul. L'avatar chevauche le MILIEU du bas de la bannière : chaque groupe s'arrête avant lui (`centerClearance`).
 struct GameBannerBadgeView: View {
     let model: GameBannerBadgeModel
     /// La largeur réservée au milieu du bas de la bannière : l'avatar (90 pt et son liseré de 4) et 4 pt de jour de
@@ -126,21 +122,31 @@ struct GameBannerBadgeView: View {
     static let avatarClearance: CGFloat = 106
     /// Les coins hauts de chaque cadre ; les coins bas restent carrés, sur le bord de la bannière.
     static let cornerRadius: CGFloat = MeeshyRadius.md
-    static let roundedCorners: UIRectCorner = [.topLeft, .topRight]
+    enum Group { case level, rank }
+
+    /// Le seul coin arrondi d'un groupe : le coin HAUT tourné vers le milieu de la bannière. Les étincelles sont au
+    /// DÉBUT (leur coin haut de FIN s'arrondit), le rang à la FIN (son coin haut de DÉBUT) — physique selon le sens.
+    static func roundedCorners(for group: Group, direction: LayoutDirection) -> UIRectCorner {
+        let towardsTheMiddleIsRight = (group == .level) == (direction == .leftToRight)
+        return towardsTheMiddleIsRight ? [.topRight] : [.topLeft]
+    }
     /// Le voile : assez pour détacher le groupe, assez peu pour laisser voir la bannière.
     static let veilOpacity: Double = 0.24
 
     @ScaledMetric(relativeTo: .caption) private var emblemSize: CGFloat = 36
+    @Environment(\.layoutDirection) private var layoutDirection
 
     var body: some View {
         GeometryReader { proxy in
             let side = max(0, (proxy.size.width - centerClearance) / 2)
             HStack(alignment: .bottom, spacing: 0) {
+                // Chaque groupe s'ANCRE à son angle bas : de hauteurs différentes (le niveau porte son max à vie),
+                // ils restent tous deux posés sur le bord bas de la bannière.
                 levelGroup
-                    .frame(maxWidth: side, alignment: .leading)
+                    .frame(maxWidth: side, maxHeight: .infinity, alignment: .bottomLeading)
                 Spacer(minLength: 0)
                 rankGroup
-                    .frame(maxWidth: side, alignment: .trailing)
+                    .frame(maxWidth: side, maxHeight: .infinity, alignment: .bottomTrailing)
             }
             .frame(width: proxy.size.width, height: proxy.size.height, alignment: .bottom)
         }
@@ -148,28 +154,29 @@ struct GameBannerBadgeView: View {
         .dynamicTypeSize(...DynamicTypeSize.xxLarge)
     }
 
-    /// Le nom du niveau au-dessus de son cercle, et à côté les points acquis puis ce qu'il reste.
+    /// Le nom du niveau au-dessus de son cercle et le niveau max à vie dessous ; à côté, la poche d'étincelles en grand
+    /// et le total à vie en petit.
     private var levelGroup: some View {
         VStack(alignment: .leading, spacing: MeeshySpacing.xxs) {
             caption(model.levelName)
             HStack(alignment: .center, spacing: MeeshySpacing.xs) {
-                LevelRingView(
-                    level: model.level, progress: model.levelProgress, tier: model.tier, prestige: model.prestige,
-                    trackColor: Color.white.opacity(MeeshyOpacity.light), inkColor: .black, accessibilityLabel: nil
-                )
-                .frame(width: emblemSize, height: model.prestige > 0 ? emblemSize * 66 / 56 : emblemSize)
-                if let pointsText = model.pointsText {
+                VStack(spacing: 0) {
+                    LevelRingView(
+                        level: model.level, progress: model.levelProgress, tier: model.tier, prestige: model.prestige,
+                        trackColor: Color.white.opacity(MeeshyOpacity.light), inkColor: .black, accessibilityLabel: nil
+                    )
+                    .frame(width: emblemSize, height: model.prestige > 0 ? emblemSize * 66 / 56 : emblemSize)
+                    small(model.levelMaxText)
+                }
+                if let pocketText = model.pocketText {
                     VStack(alignment: .leading, spacing: 0) {
-                        Text(pointsText)
-                            .font(MeeshyFont.relative(MeeshyFont.footnoteSize, weight: .bold))
+                        Text(pocketText)
+                            .font(MeeshyFont.relative(MeeshyFont.bodySize, weight: .bold))
                             .foregroundColor(.white)
                             .lineLimit(1)
-                            .minimumScaleFactor(0.8)
-                        if let missingText = model.missingText {
-                            Text(missingText)
-                                .font(MeeshyFont.relative(MeeshyFont.captionSize, weight: .medium))
-                                .foregroundColor(.white.opacity(0.92))
-                                .lineLimit(2)
+                            .minimumScaleFactor(0.7)
+                        if let lifetimeText = model.lifetimeText {
+                            small(lifetimeText)
                         }
                     }
                     .bannerTextShadow()
@@ -180,7 +187,7 @@ struct GameBannerBadgeView: View {
                 }
             }
         }
-        .glassGroup()
+        .glassGroup(corners: Self.roundedCorners(for: .level, direction: layoutDirection))
         .accessibilityElement(children: .ignore)
         .accessibilityLabel(model.levelAccessibilityLabel)
         .accessibilityIdentifier("profile.banner.game.level")
@@ -194,10 +201,19 @@ struct GameBannerBadgeView: View {
                 .frame(width: emblemSize * 1.1, height: emblemSize * 1.1 * 0.93)
             caption(model.rankName)
         }
-        .glassGroup()
+        .glassGroup(corners: Self.roundedCorners(for: .rank, direction: layoutDirection))
         .accessibilityElement(children: .ignore)
         .accessibilityLabel(model.rankAccessibilityLabel)
         .accessibilityIdentifier("profile.banner.game.rank")
+    }
+
+    private func small(_ text: String) -> some View {
+        Text(text)
+            .font(MeeshyFont.relative(MeeshyFont.captionSize, weight: .medium))
+            .foregroundColor(.white.opacity(0.92))
+            .lineLimit(1)
+            .minimumScaleFactor(0.8)
+            .bannerTextShadow()
     }
 
     private func caption(_ text: String) -> some View {
@@ -211,13 +227,14 @@ struct GameBannerBadgeView: View {
 }
 
 private extension View {
-    /// Le cadre d'un groupe : coins hauts arrondis, coins bas carrés posés sur le bord bas de la bannière, voile léger.
-    func glassGroup() -> some View {
+    /// Le cadre d'un groupe : seul le coin haut tourné vers le milieu s'arrondit (`corners`), les autres sont carrés,
+    /// collés aux bords de la bannière ; voile léger.
+    func glassGroup(corners: UIRectCorner) -> some View {
         padding(.horizontal, MeeshySpacing.xs)
             .padding(.top, MeeshySpacing.xs)
             .padding(.bottom, MeeshySpacing.xsPlus)
             .background(
-                RoundedCorner(radius: GameBannerBadgeView.cornerRadius, corners: GameBannerBadgeView.roundedCorners)
+                RoundedCorner(radius: GameBannerBadgeView.cornerRadius, corners: corners)
                     .fill(Color.black.opacity(GameBannerBadgeView.veilOpacity))
             )
     }

@@ -6,7 +6,7 @@ import { ALL_LEVEL_STEPS, gameBlockFixture, gameBlockWithExtrasFixture, gameExtr
 import { loadGameCatalog } from '@/lib/i18n-game-catalog';
 import { SUPPORTED_INTERFACE_LANGUAGES } from '@/lib/inline-interface-language-bootstrap.js';
 
-import { isLargeText, playerBannerLabel, playerBannerModel } from './player-banner';
+import { isLargeText, playerBannerLabel, playerBannerModel, playerBannerPieceLabels } from './player-banner';
 
 /**
  * LA BANNIÈRE DU JOUEUR (#9494) — SEULEMENT CE QUI EXISTE. Le modèle ne pose
@@ -121,17 +121,17 @@ describe('seulement ce qui a du sens (#9536)', () => {
 describe('ce que lit le lecteur d’écran — une phrase complète', () => {
   test('fr : le nouveau joueur, son niveau, son palier et sa marche vers le suivant', () => {
     const model = shown(NEWCOMER);
-    expect(playerBannerLabel(model, 'fr')).toMatch(/^Niveau \d+, Étincelle, \d+ % vers le \d+$/);
+    expect(playerBannerLabel(model, 'fr')).toMatch(/^Niveau \d+, Braise, \d+ % vers le \d+$/);
   });
 
   test('fr : au niveau 1, le total de points est dit — il n’y a pas de niveau à lire', () => {
     const model = shown({ ...ZERO, score: 12, debitablePoints: 12 });
-    expect(playerBannerLabel(model, 'fr')).toMatch(/^12 points$/);
+    expect(playerBannerLabel(model, 'fr')).toMatch(/^12 étincelles$/);
   });
 
   test('fr : tout ce qui existe, dans l’ordre de la bannière', () => {
     const model = shownExtras({ balance: 12, streak: 23, glory: 620 });
-    expect(playerBannerLabel(model, 'fr')).toMatch(/^Niveau \d+, \p{L}+, \d+ % vers le \d+, 12 Meeshes, [\p{L} ]+, ligue Jade \d+(re|e), Flamme 23 jours$/u);
+    expect(playerBannerLabel(model, 'fr')).toMatch(/^Niveau \d+, \p{L}+, \d+ % vers le \d+, 12 Meeshes, [\p{L} ]+, ligue Jade \d+(re|e), Flamme 23 jours, Trophées : \d+, Missions du jour : \d+ sur \d+, Saison : \d+ étoiles$/u);
   });
 
   test('le rang : la division V..I et la place du Mythe, dites et dessinées (#9636)', () => {
@@ -145,7 +145,7 @@ describe('ce que lit le lecteur d’écran — une phrase complète', () => {
 
   test('en : l’ordinal anglais de la place', () => {
     const model = shownExtras({ balance: 12, streak: 23 });
-    expect(playerBannerLabel(model, 'en')).toMatch(/^Level \d+, .*, Jade league \d+(st|nd|rd|th), Flame 23 days$/);
+    expect(playerBannerLabel(model, 'en')).toMatch(/^Level \d+, .*, Jade league \d+(st|nd|rd|th), Flame 23 days, Trophies: \d+, Daily missions: \d+ of \d+, Season: \d+ stars$/);
   });
 
   test('aucune langue ne laisse une clé nue, un paramètre en clair ou un « undefined »', () => {
@@ -187,5 +187,83 @@ describe('isLargeText', () => {
   test('une taille illisible ne casse rien : disposition ordinaire', () => {
     expect(isLargeText(Number.NaN)).toBe(false);
     expect(isLargeText(0)).toBe(false);
+  });
+});
+
+/**
+ * LES PIÈCES DU BANDEAU (porteur 2026-10-16) : s'ajoutent les trophées, la mission du jour et la saison — SEULEMENT quand
+ * ils existent. Et les points du bandeau sont la POCHE d'étincelles, pas la base du niveau.
+ */
+describe('les étincelles du bandeau sont la poche', () => {
+  test('avec les étincelles servies, le total montré est la poche — le niveau, lui, se lit sur le cycle', () => {
+    const model = shown({ ...ZERO, score: 0, debitablePoints: 0, glory: 2000, sparks: { pocket: 40, cycle: 5000, lifetime: 9000, debt: 0 } });
+    expect(model.points).toBe(40);
+    expect(model.level?.level).toBeGreaterThan(1);
+  });
+
+  test('sans les étincelles (ancien serveur), l\'ancien score fait foi', () => {
+    expect(shown({ ...ZERO, score: 12, debitablePoints: 12 }).points).toBe(12);
+  });
+});
+
+describe('trophées, mission du jour et saison', () => {
+  test('rien à zéro : aucune de ces trois pièces', () => {
+    const model = shown(NEWCOMER);
+    expect(model.trophies).toBeNull();
+    expect(model.missions).toBeNull();
+    expect(model.season).toBeNull();
+  });
+
+  test('des trophées : leur nombre', () => {
+    const game = gameBlockWithExtrasFixture(NEWCOMER, { trophies: [{ key: 'trophy.prestige.1', awardedAt: '2026-11-01T00:00:00.000Z' }] });
+    expect(playerBannerModel(game)?.trophies).toBe(game.trophies?.items.length);
+    expect((playerBannerModel(game)?.trophies ?? 0) > 0).toBe(true);
+  });
+
+  test('des missions du jour ouvertes : combien sont faites sur combien', () => {
+    const game = gameBlockWithExtrasFixture({ ...NEWCOMER, levelRecord: 9 });
+    const model = playerBannerModel(game);
+    expect(game.missions.unlocked).toBe(true);
+    expect(model?.missions).toEqual({ done: game.missions.items.filter((m) => m.completedAt !== null).length, total: game.missions.items.length });
+  });
+
+  test('missions verrouillées : pas de pièce', () => {
+    const game = gameBlockFixture({ ...ZERO, score: 12, debitablePoints: 12 });
+    expect(game.missions.unlocked).toBe(false);
+    expect(playerBannerModel(game)?.missions ?? null).toBeNull();
+  });
+
+  test('une saison ouverte : les étoiles gagnées', () => {
+    const game = gameBlockWithExtrasFixture(NEWCOMER, { season: { stars: 25, claimedSteps: [1], sealOwned: false } });
+    expect(game.season).not.toBeNull();
+    expect(playerBannerModel(game)?.season).toEqual({ stars: game.season?.stars ?? 0 });
+  });
+
+  test('l\'étiquette lue dit chacune de ces pièces', () => {
+    const game = gameBlockWithExtrasFixture({ ...NEWCOMER, levelRecord: 9 }, { trophies: [{ key: 'trophy.prestige.1', awardedAt: '2026-11-01T00:00:00.000Z' }], season: { stars: 25, claimedSteps: [], sealOwned: false } });
+    const model = playerBannerModel(game);
+    expect(model).not.toBeNull();
+    const label = playerBannerLabel(model!, 'fr');
+    expect(label).toContain('Trophées');
+    expect(label).toContain('Saison');
+  });
+});
+
+describe('un nom accessible par pièce', () => {
+  test('chaque pièce présente a son nom ; une pièce absente n\'en a pas', () => {
+    const game = gameBlockWithExtrasFixture({ ...NEWCOMER, glory: 2000, levelRecord: 9, balance: 12, streak: 23 }, { trophies: [{ key: 'trophy.prestige.1', awardedAt: '2026-11-01T00:00:00.000Z' }] });
+    const labels = playerBannerPieceLabels(playerBannerModel(game)!, 'fr');
+    expect(Object.entries(labels).filter(([piece, label]) => ['level', 'sparks', 'meesh', 'rank', 'trophies', 'missions'].includes(piece) && (label ?? '').length === 0).map(([piece]) => piece)).toEqual([]);
+    const bare = playerBannerPieceLabels(playerBannerModel(gameBlockFixture(NEWCOMER))!, 'fr');
+    expect(bare.meesh).toBeNull();
+    expect(bare.rank).toBeNull();
+    expect(bare.trophies).toBeNull();
+  });
+
+  test('les noms disent la pièce : le niveau et son palier, les étincelles et la marche vers le suivant', () => {
+    const labels = playerBannerPieceLabels(playerBannerModel(gameBlockFixture(NEWCOMER))!, 'fr');
+    expect(labels.level).toMatch(/^Niveau \d+, /);
+    expect(labels.sparks).toContain('Étincelles');
+    expect(labels.sparks).toMatch(/vers le/);
   });
 });

@@ -162,8 +162,9 @@ final class GameBannerBadgeLoadingTests: XCTestCase {
         XCTAssertEqual(rank.maxY, banner.maxY, accuracy: 0.5)
     }
 
-    /// Le cadre se lit au PIXEL sur une bannière blanche : son angle bas est voilé jusqu'au coin (coin carré), son angle
-    /// haut laisse passer le blanc (coin arrondi), et le voile reste léger — la bannière se voit au travers.
+    /// Le cadre se lit au PIXEL sur une bannière blanche : ses angles bas sont voilés jusqu'au coin (coins carrés) ; en
+    /// haut, seul le coin tourné vers le MILIEU laisse passer le blanc (arrondi) — aucun arrondi au bord de DÉBUT des
+    /// étincelles ni au bord de FIN du rang (décision porteur 2026-10-16) ; le voile reste léger.
     func test_badge_frames_squareBottomCorners_roundedTopCorners_lightVeil() throws {
         let (banner, levelOnScreen, rankOnScreen) = try mount()
         let level = levelOnScreen.offsetBy(dx: -banner.minX, dy: -banner.minY)
@@ -174,8 +175,10 @@ final class GameBannerBadgeLoadingTests: XCTestCase {
         XCTAssertEqual(pixels.size.height, Self.banner.height * pixels.scale, accuracy: 1)
         XCTAssertLessThan(pixels.luma(level.minX + 0.5, Self.banner.height - 0.5), white - 20, "coin bas du DÉBUT carré : voilé jusqu'au bord")
         XCTAssertLessThan(pixels.luma(rank.maxX - 0.5, Self.banner.height - 0.5), white - 20, "coin bas de la FIN carré : voilé jusqu'au bord")
-        XCTAssertGreaterThan(pixels.luma(level.minX + 0.5, level.minY + 0.5), white - 8, "coin haut du niveau arrondi")
-        XCTAssertGreaterThan(pixels.luma(rank.maxX - 0.5, rank.minY + 0.5), white - 8, "coin haut du rang arrondi")
+        XCTAssertLessThan(pixels.luma(level.minX + 0.5, level.minY + 0.5), white - 20, "coin haut du DÉBUT des étincelles carré")
+        XCTAssertGreaterThan(pixels.luma(level.maxX - 0.5, level.minY + 0.5), white - 8, "coin haut vers le milieu arrondi")
+        XCTAssertLessThan(pixels.luma(rank.maxX - 0.5, rank.minY + 0.5), white - 20, "coin haut de la FIN du rang carré")
+        XCTAssertGreaterThan(pixels.luma(rank.minX + 0.5, rank.minY + 0.5), white - 8, "coin haut vers le milieu arrondi")
         XCTAssertGreaterThan(pixels.luma(level.minX + 2, Self.banner.height - 2), white * 0.66, "le voile reste léger : la bannière se voit")
     }
 

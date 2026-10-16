@@ -6,13 +6,13 @@
 const arEngagement = {
   'engagement.pill.streak.one': 'سلسلة {count} يوم',
   'engagement.pill.streak.other': 'سلسلة {count} أيام',
-  'engagement.pill.points.one': '{total} نقطة، منها {today} اليوم',
-  'engagement.pill.points.other': '{total} نقاط، منها {today} اليوم',
-  'engagement.pill.total.one': '{total} نقطة مكتسبة في هذه المحادثة',
-  'engagement.pill.total.other': '{total} نقاط مكتسبة في هذه المحادثة',
+  'engagement.pill.points.one': '{total} شرارة، منها {today} اليوم',
+  'engagement.pill.points.other': '{total} شرارات، منها {today} اليوم',
+  'engagement.pill.total.one': '{total} شرارة مكتسبة في هذه المحادثة',
+  'engagement.pill.total.other': '{total} شرارات مكتسبة في هذه المحادثة',
   'engagement.pill.join': '{streak}، {points}',
-  'engagement.post.points.one': 'منحك هذا المنشور {count} نقطة',
-  'engagement.post.points.other': 'منحك هذا المنشور {count} نقاط',
+  'engagement.post.points.one': 'منحك هذا المنشور {count} شرارة',
+  'engagement.post.points.other': 'منحك هذا المنشور {count} شرارات',
 } as const;
 
 export default arEngagement;

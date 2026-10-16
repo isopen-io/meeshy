@@ -291,7 +291,9 @@ type ErrorKey =
   | 'game.error.season_step_already_claimed'
   | 'game.error.seal_already_owned'
   | 'game.error.prestige_level_too_low'
-  | 'game.error.prestige_at_maximum';
+  | 'game.error.prestige_at_maximum'
+  | 'game.error.treasury_locked'
+  | 'game.error.mint_blocked_by_debt';
 
 const ERRORS: Readonly<Record<string, ErrorKey>> = {
   [GAME_ERROR_CODES.insufficientPoints]: 'game.error.insufficient_points',
@@ -322,6 +324,9 @@ const ERRORS: Readonly<Record<string, ErrorKey>> = {
   [GAME_ERROR_CODES.sealAlreadyOwned]: 'game.error.seal_already_owned',
   [GAME_ERROR_CODES.prestigeLevelTooLow]: 'game.error.prestige_level_too_low',
   [GAME_ERROR_CODES.prestigeAtMaximum]: 'game.error.prestige_at_maximum',
+  // La frappe fermée par le RANG (une réserve du trésor) ou par une DETTE d'étincelles (porteur, 2026-10-16).
+  [GAME_ERROR_CODES.treasuryLocked]: 'game.error.treasury_locked',
+  [GAME_ERROR_CODES.mintBlockedByDebt]: 'game.error.mint_blocked_by_debt',
 };
 
 export function gameErrorMessage(code: string | undefined, language: Language = currentInterfaceLanguage()): string {

@@ -21,13 +21,13 @@ import { Mascot, MascotCoach } from './mascot';
  */
 
 describe('mascotSay — la phrase de chaque ligne', () => {
-  test('compte les points avant la prochaine Meesh, accordés', () => {
-    expect(mascotSay({ kind: 'meesh-missing', missing: 821 })).toBe('Encore 821 points à convertir et je frappe ta prochaine Meesh.');
-    expect(mascotSay({ kind: 'meesh-missing', missing: 1 })).toBe('Encore 1 point à convertir et je frappe ta prochaine Meesh.');
+  test('compte les étincelles avant la prochaine Meesh, accordés', () => {
+    expect(mascotSay({ kind: 'meesh-missing', missing: 821 })).toBe('Encore 821 étincelles et je frappe ta prochaine Meesh.');
+    expect(mascotSay({ kind: 'meesh-missing', missing: 1 })).toBe('Encore 1 étincelle et je frappe ta prochaine Meesh.');
   });
 
   test('invite à frapper en disant le prix', () => {
-    expect(mascotSay({ kind: 'can-mint', mintCost: 1221 })).toBe(`Tes points sont prêts : on frappe une Meesh pour ${formatGameNumber('fr', 1221)} points ?`);
+    expect(mascotSay({ kind: 'can-mint', mintCost: 1221 })).toBe(`Tes étincelles sont prêtes : on frappe une Meesh pour ${formatGameNumber('fr', 1221)} étincelles ?`);
   });
 
   test('célèbre une frappe avec le nouveau solde', () => {
@@ -43,9 +43,9 @@ describe('mascotSay — la phrase de chaque ligne', () => {
   });
 
   test('guide, salue la série, compte vers le niveau et encourage au sommet', () => {
-    expect(mascotSay({ kind: 'first-step' })).toBe('Salut, je suis Mee ! Envoie ton premier message et je compte tes points.');
+    expect(mascotSay({ kind: 'first-step' })).toBe('Salut, je suis Mee ! Envoie ton premier message et je compte tes étincelles.');
     expect(mascotSay({ kind: 'streak', days: 4 })).toBe('4 jours d’affilée, continue comme ça !');
-    expect(mascotSay({ kind: 'level-missing', missing: 90, nextLevel: 3 })).toBe('Encore 90 points avant le niveau 3.');
+    expect(mascotSay({ kind: 'level-missing', missing: 90, nextLevel: 3 })).toBe('Encore 90 étincelles avant le niveau 3.');
     expect(mascotSay({ kind: 'top-level' })).toBe('Tu es au sommet. Bravo !');
   });
 });
@@ -129,7 +129,7 @@ describe('MascotCoach — la mascotte et sa bulle', () => {
     const html = renderToStaticMarkup(<MascotCoach moment={{ mood: 'ready', line: { kind: 'can-mint', mintCost: 50 } }} />);
     expect(html).toContain('role="status"');
     expect(html).toContain('aria-live="polite"');
-    expect(html).toContain('on frappe une Meesh pour 50 points');
+    expect(html).toContain('on frappe une Meesh pour 50 étincelles');
   });
 });
 

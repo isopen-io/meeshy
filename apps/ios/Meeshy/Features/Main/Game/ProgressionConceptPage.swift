@@ -391,7 +391,7 @@ struct ProgressionConceptGestures: View {
                 // LE héro de frappe — le SEUL du jeu (#9537).
                 GameMintPreviewView(
                     game: game, convertible: progress.meesh?.debitablePoints,
-                    badgesLost: viewModel.mintBadgeImpact?.lost, online: viewModel.isOnline,
+                    online: viewModel.isOnline,
                     minting: viewModel.isMinting, error: viewModel.mintError,
                     celebration: viewModel.celebration, onMint: { Task { await viewModel.mint() } }
                 )

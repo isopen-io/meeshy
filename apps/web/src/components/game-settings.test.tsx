@@ -65,7 +65,7 @@ describe('« Jeu masqué »', () => {
     const t = text(renderToStaticMarkup(<GameSettings {...props()} />));
     expect(t).toContain('Masque le jeu partout sur cet appareil');
     expect(t).toContain('te retire de la ligue publique');
-    expect(t).toContain('Tes points et tes trophées sont gardés');
+    expect(t).toContain('Tes étincelles et tes trophées sont gardés');
   });
 
   test('l’interrupteur envoie son nouvel état ; masqué, il rappelle que réafficher ne rouvre rien', async () => {

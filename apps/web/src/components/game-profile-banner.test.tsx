@@ -6,6 +6,8 @@ import type { InterfaceLanguage } from '@/lib/interface-language';
 import { createActMounter } from '@/test-support/act-mount';
 import { ensureHappyDomRegistered, releaseHappyDomIfRegistered } from '@/test-support/happy-dom-environment';
 
+import { formatCount } from '@/lib/view/game-copy';
+
 import { AVATAR_CLEARANCE, GameProfileBanner, type BannerStanding } from './game-profile-banner';
 
 /**
@@ -42,6 +44,8 @@ const standing = (over: Partial<BannerStanding> = {}): BannerStanding => ({
   prestige: 0,
   progress: 0.61,
   points: 976,
+  sparksLifetime: 41_250,
+  levelMax: 12,
   pointsToNext: 624,
   rank: 'murmure',
   division: 5,
@@ -56,9 +60,9 @@ describe('le niveau et ses points au début de la bannière', () => {
   test('le nom du niveau, le cercle, les points acquis et le reste vers le suivant', async () => {
     const host = await mount(<GameProfileBanner standing={standing()} />);
     const start = host.querySelector('[data-profile-banner-level]');
-    expect(words(start?.querySelector('[data-profile-banner-level-name]'))).toBe('Étincelle');
+    expect(words(start?.querySelector('[data-profile-banner-level-name]'))).toBe('Braise');
     expect(start?.querySelector('[data-game-level="12"]') !== null).toBe(true);
-    expect(words(start?.querySelector('[data-profile-banner-points]'))).toBe('976 pts');
+    expect(words(start?.querySelector('[data-profile-banner-points]'))).toBe('976 étincelles');
     expect(words(start?.querySelector('[data-profile-banner-missing]'))).toBe('encore 624 vers le 13');
   });
 
@@ -76,12 +80,12 @@ describe('le niveau et ses points au début de la bannière', () => {
     const host = await mount(<GameProfileBanner standing={standing({ points: null, pointsToNext: null, progress: null })} />);
     expect(host.querySelector('[data-profile-banner-points]') === null).toBe(true);
     expect(host.querySelector('[data-profile-banner-missing]') === null).toBe(true);
-    expect(words(host.querySelector('[data-profile-banner-level-name]'))).toBe('Étincelle');
+    expect(words(host.querySelector('[data-profile-banner-level-name]'))).toBe('Braise');
   });
 
   test('au plafond : le total reste, le reste disparaît', async () => {
     const host = await mount(<GameProfileBanner standing={standing({ pointsToNext: null, progress: 1 })} />);
-    expect(words(host.querySelector('[data-profile-banner-points]'))).toBe('976 pts');
+    expect(words(host.querySelector('[data-profile-banner-points]'))).toBe('976 étincelles');
     expect(host.querySelector('[data-profile-banner-missing]') === null).toBe(true);
   });
 });
@@ -100,6 +104,44 @@ describe('le rang à la fin de la bannière', () => {
   });
 });
 
+describe('la paire poche / total et niveau / max (porteur 2026-10-16)', () => {
+  test('la poche en grand, le total à vie en petit dessous', async () => {
+    const host = await mount(<GameProfileBanner standing={standing()} />);
+    const pocket = host.querySelector('[data-profile-banner-points]');
+    const lifetime = host.querySelector('[data-profile-banner-lifetime]');
+    expect(words(pocket)).toBe('976 étincelles');
+    expect(words(lifetime)).toBe(`${formatCount(41_250, 'fr')} au total`.replace(/\s+/g, ' '));
+    expect(pocket?.compareDocumentPosition(lifetime as Node) ? true : false).toBe(true);
+    // Plus grande que le total : la poche porte `font-bold`, le total est plus petit et plus discret.
+    expect((pocket?.getAttribute('class') ?? '')).toContain('font-bold');
+    expect((lifetime?.getAttribute('class') ?? '')).not.toContain('font-bold');
+  });
+
+  test('le niveau actuel avec le niveau max à vie dessous — toujours, même quand le max égale le niveau', async () => {
+    const host = await mount(<GameProfileBanner standing={standing({ levelMax: 12 })} />);
+    expect(words(host.querySelector('[data-profile-banner-level-now]'))).toBe('Niveau 12');
+    expect(words(host.querySelector('[data-profile-banner-level-max]'))).toBe('max 12');
+  });
+
+  test('un niveau max plus haut que le niveau (après un Prestige)', async () => {
+    const host = await mount(<GameProfileBanner standing={standing({ level: 1, levelMax: 100 })} />);
+    expect(words(host.querySelector('[data-profile-banner-level-now]'))).toBe('Niveau 1');
+    expect(words(host.querySelector('[data-profile-banner-level-max]'))).toBe('max 100');
+  });
+
+  test('sur la fiche d\'un autre : le niveau max suit le rang, les étincelles ne sont pas servies — rien ne se dessine à leur place', async () => {
+    const host = await mount(<GameProfileBanner standing={standing({ points: null, sparksLifetime: null, pointsToNext: null, progress: null })} />);
+    expect(host.querySelector('[data-profile-banner-points]') === null).toBe(true);
+    expect(host.querySelector('[data-profile-banner-lifetime]') === null).toBe(true);
+    expect(words(host.querySelector('[data-profile-banner-level-max]'))).toBe('max 12');
+  });
+
+  test('un serveur antérieur (niveau max non servi) : pas de ligne « max », jamais un zéro', async () => {
+    const host = await mount(<GameProfileBanner standing={standing({ levelMax: null })} />);
+    expect(host.querySelector('[data-profile-banner-level-max]') === null).toBe(true);
+  });
+});
+
 describe('un libellé par groupe, lisible dans les sept langues', () => {
   test('chaque groupe est UNE image nommée ; ce qu’il contient se tait', async () => {
     const host = await mount(<GameProfileBanner standing={standing()} />);
@@ -110,8 +152,10 @@ describe('un libellé par groupe, lisible dans les sept langues', () => {
       expect(node?.querySelectorAll('[role="img"]').length).toBe(0);
     }
     const level = host.querySelector('[data-profile-banner-level]')?.getAttribute('aria-label') ?? '';
-    expect(level.startsWith('Niveau 12, palier Étincelle')).toBe(true);
-    expect(level.endsWith(', 976 pts, encore 624 vers le 13')).toBe(true);
+    expect(level.startsWith('Niveau 12, palier Braise')).toBe(true);
+    expect(level).toContain('976 étincelles');
+    expect(level).toContain(`${formatCount(41_250, 'fr')} au total`);
+    expect(level.endsWith(', encore 624 vers le 13')).toBe(true);
     expect(host.querySelector('[data-profile-banner-rank]')?.getAttribute('aria-label')).toBe('Murmure V');
   });
 
@@ -152,12 +196,18 @@ describe('les deux cadres aux angles bas de la bannière', () => {
     expect(classes(host, '[data-profile-banner-game]')).toContain('items-end');
   });
 
-  test('chaque cadre : coins hauts arrondis, coins bas carrés', async () => {
+  test('chaque cadre : coins bas carrés ; le bord de DÉBUT du niveau et le bord de FIN du rang ne sont plus arrondis (coins logiques, RTL compris)', async () => {
+    const host = await mount(<GameProfileBanner standing={standing()} />);
+    // Le niveau (étincelles) : seul son coin haut de FIN est arrondi.
+    expect(classes(host, '[data-profile-banner-level]').filter((name) => /^rounded(-|$)/.test(name))).toEqual(['rounded-se-card']);
+    // Le rang : seul son coin haut de DÉBUT est arrondi.
+    expect(classes(host, '[data-profile-banner-rank]').filter((name) => /^rounded(-|$)/.test(name))).toEqual(['rounded-ss-card']);
+  });
+
+  test('aucune classe physique (gauche/droite) : tout est logique', async () => {
     const host = await mount(<GameProfileBanner standing={standing()} />);
     for (const group of ['level', 'rank'] as const) {
-      const names = classes(host, `[data-profile-banner-${group}]`);
-      expect(names).toContain('rounded-t-card');
-      expect(names.filter((name) => /^rounded(-|$)/.test(name) && name !== 'rounded-t-card')).toEqual([]);
+      expect(classes(host, `[data-profile-banner-${group}]`).filter((name) => /^rounded-(t|b|l|r|tl|tr|bl|br)(-|$)/.test(name))).toEqual([]);
     }
   });
 

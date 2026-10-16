@@ -56,6 +56,46 @@ public struct GamePlayerBanner: Equatable, Sendable {
         }
     }
 
+    /// La mission du jour : combien sont faites sur combien.
+    public struct DailyMission: Equatable, Sendable {
+        public let done: Int
+        public let total: Int
+
+        public init(done: Int, total: Int) {
+            self.done = done
+            self.total = total
+        }
+    }
+
+    /// La saison en cours.
+    public struct Season: Equatable, Sendable {
+        public let number: Int
+
+        public init(number: Int) {
+            self.number = number
+        }
+    }
+
+    /// Une pièce du bandeau — chacune est SON bouton vers SA fiche (#10846, décision porteur 2026-10-16).
+    public enum Piece: String, CaseIterable, Hashable, Sendable {
+        case level, sparks, meesh, rank, league, flame, trophies, mission, season
+
+        /// La fiche que la pièce ouvre.
+        public var concept: ProgressionConcept {
+            switch self {
+            case .level: .level
+            case .sparks: .points
+            case .meesh: .meesh
+            case .rank: .glory
+            case .league: .league
+            case .flame: .flame
+            case .trophies: .showcase
+            case .mission: .missions
+            case .season: .season
+            }
+        }
+    }
+
     public let level: Int
     public let tier: LevelTierKey
     /// La part parcourue vers le niveau suivant, de 0 à 1 ; 1 au sommet.
@@ -71,9 +111,19 @@ public struct GamePlayerBanner: Equatable, Sendable {
     public let rank: Rank?
     public let league: League?
     public let flame: Flame?
+    /// Les trophées gagnés — `nil` sans trophée.
+    public let trophies: Int?
+    /// La mission du jour — `nil` tant que les missions ne sont pas ouvertes.
+    public let dailyMission: DailyMission?
+    /// La saison en cours — `nil` hors saison.
+    public let season: Season?
 
     public init(level: Int, tier: LevelTierKey, progress: Double, prestige: Int = 0, score: Int, nextLevel: Int?, pointsToNext: Int?,
-                levelCap: Int? = nil, meeshes: Int? = nil, rank: Rank? = nil, league: League? = nil, flame: Flame? = nil) {
+                levelCap: Int? = nil, meeshes: Int? = nil, rank: Rank? = nil, league: League? = nil, flame: Flame? = nil,
+                trophies: Int? = nil, dailyMission: DailyMission? = nil, season: Season? = nil) {
+        self.trophies = trophies
+        self.dailyMission = dailyMission
+        self.season = season
         self.level = level
         self.tier = tier
         self.progress = Self.bounded(progress)
@@ -99,7 +149,8 @@ public struct GamePlayerBanner: Equatable, Sendable {
         self.tier = level.tier
         self.progress = atTop ? 1 : Self.bounded(level.progress)
         self.prestige = game.level.prestige
-        self.score = game.level.score
+        // Le total montré est la POCHE d'étincelles (#10846) — `score` lit désormais le CYCLE, la base du niveau.
+        self.score = game.level.sparkFacts.pocket
         self.nextLevel = atTop ? nil : level.level + 1
         self.pointsToNext = atTop ? nil : level.pointsToNext
         self.levelCap = level.isMax ? level.cap : nil
@@ -115,6 +166,27 @@ public struct GamePlayerBanner: Equatable, Sendable {
         } else {
             self.flame = nil
         }
+        let trophyCount = game.trophies?.items.count ?? 0
+        self.trophies = trophyCount > 0 ? trophyCount : nil
+        let missions = game.missions
+        self.dailyMission = missions.unlocked && !missions.items.isEmpty
+            ? DailyMission(done: missions.items.filter(\.isCompleted).count, total: missions.items.count) : nil
+        self.season = game.season.map { Season(number: $0.number) }
+    }
+
+    /// Les pièces qui existent, dans l'ordre du bandeau : le niveau, les étincelles, puis le reste.
+    public var pieces: [Piece] {
+        var shown: [Piece] = []
+        if showsLevel { shown.append(.level) }
+        if showsScore { shown.append(.sparks) }
+        if meeshes != nil { shown.append(.meesh) }
+        if rank != nil { shown.append(.rank) }
+        if league != nil { shown.append(.league) }
+        if flame != nil { shown.append(.flame) }
+        if trophies != nil { shown.append(.trophies) }
+        if dailyMission != nil { shown.append(.mission) }
+        if season != nil { shown.append(.season) }
+        return shown
     }
 
     /// LA décision : le bandeau du joueur, ou `nil` quand rien n'a de sens à dire — un joueur qui n'a encore rien
@@ -133,7 +205,9 @@ public struct GamePlayerBanner: Equatable, Sendable {
 
     /// Au moins un morceau a quelque chose à dire.
     public var hasAnythingToSay: Bool {
-        showsLevel || showsScore || meeshes != nil || rank != nil || league != nil || flame != nil
+        // La mission du jour et la saison existent pour TOUT compte : elles accompagnent un bandeau qui a déjà quelque
+        // chose à dire, elles n'en font jamais naître un (#9536 : un joueur qui n'a rien fait n'a pas de bandeau).
+        showsLevel || showsScore || meeshes != nil || rank != nil || league != nil || flame != nil || trophies != nil
     }
 
     /// Un `NaN` ou une valeur hors de [0, 1] ne casse jamais la jauge.

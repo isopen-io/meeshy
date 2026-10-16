@@ -74,6 +74,7 @@ export function levelOnTheWire(params: {
           sparks: params.sparks.pocket,
           sparksCycle: params.sparks.cycle,
           sparksLifetime: params.sparks.lifetime,
+          sparksDebt: params.sparks.debt,
           levelMaxLifetime: maxLifetime,
         }),
     ladder: {

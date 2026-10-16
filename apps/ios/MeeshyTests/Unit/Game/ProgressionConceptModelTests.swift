@@ -365,6 +365,22 @@ final class ProgressionConceptModelTests: XCTestCase {
         ))
     }
 
+    /// Les étincelles (#10846) : UN seul solde — la poche, toute convertible. La phrase ne redit plus deux fois le
+    /// même nombre, et lit la POCHE, jamais le cycle (`score`).
+    func test_state_points_underSparks_saysTheSinglePocket() {
+        let base = jcnm
+        let level = GameBlock.Level(level: base.level.level, tier: base.level.tier, score: 77_099, floorScore: base.level.floorScore,
+                                    nextThreshold: base.level.nextThreshold, pointsToNext: base.level.pointsToNext,
+                                    progress: base.level.progress, record: base.level.record, prestige: 0, canPrestige: false,
+                                    ladder: base.level.ladder, sparks: 5_823, sparksCycle: 77_099, sparksLifetime: 90_000)
+        let sparked = GameBlock(level: level, glory: base.glory, treasury: base.treasury, mint: base.mint, missions: base.missions,
+                                chest: base.chest, flame: base.flame, boosts: base.boosts, guideSeen: base.guideSeen,
+                                wave2: base.wave2)
+        XCTAssertEqual(state(.points, sparked, meesh: jcnmWallet), ConceptText.statePointsMissingPlain(
+            held: GameCopy.points(5_823), number: n(79), price: GameCopy.points(7_662), missing: GameCopy.points(1_839)
+        ))
+    }
+
     func test_state_meesh_saysWhatIsKept_whatWasMinted_andWhatTheNextAsks() {
         let kept = ConceptText.stateMeeshKept(balance: GameCopy.meeshes(3), minted: n(78))
         let next = ConceptText.stateMeeshNextMissing(number: n(79), price: GameCopy.points(7_662), missing: GameCopy.convertiblePoints(1_839))

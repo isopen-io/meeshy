@@ -10,13 +10,13 @@
 const frEngagement = {
   'engagement.pill.streak.one': 'Série de {count} jour',
   'engagement.pill.streak.other': 'Série de {count} jours',
-  'engagement.pill.points.one': '{total} point dont {today} aujourd’hui',
-  'engagement.pill.points.other': '{total} points dont {today} aujourd’hui',
-  'engagement.pill.total.one': '{total} point gagné dans cette conversation',
-  'engagement.pill.total.other': '{total} points gagnés dans cette conversation',
+  'engagement.pill.points.one': '{total} étincelle dont {today} aujourd’hui',
+  'engagement.pill.points.other': '{total} étincelles dont {today} aujourd’hui',
+  'engagement.pill.total.one': '{total} étincelle gagnée dans cette conversation',
+  'engagement.pill.total.other': '{total} étincelles gagnées dans cette conversation',
   'engagement.pill.join': '{streak}, {points}',
-  'engagement.post.points.one': 'Ce post t’a rapporté {count} point',
-  'engagement.post.points.other': 'Ce post t’a rapporté {count} points',
+  'engagement.post.points.one': 'Ce post t’a rapporté {count} étincelle',
+  'engagement.post.points.other': 'Ce post t’a rapporté {count} étincelles',
 } as const;
 
 export default frEngagement;

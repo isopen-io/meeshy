@@ -78,7 +78,7 @@ describe('les noms du jeu couvrent tout le catalogue partagé, dans les sept lan
   });
 
   test('les noms sont traduits, pas recopiés du français', () => {
-    expect(levelTierName('etincelle', 'en')).toBe('Spark');
+    expect(levelTierName('etincelle', 'en')).toBe('Ember');
     expect(rankName('voix', 'es')).toBe('Voz');
     expect(treasuryName('coffre', 'de')).not.toBe(treasuryName('coffre', 'fr'));
     expect(flameFormName('soleil', 'ar')).not.toBe(flameFormName('soleil', 'fr'));
@@ -86,23 +86,23 @@ describe('les noms du jeu couvrent tout le catalogue partagé, dans les sept lan
 });
 
 describe('les nombres s’accordent', () => {
-  test('1 point, 0 point, 2 points', () => {
-    expect(pointsLabel(1, 'fr')).toBe('1 point');
-    expect(pointsLabel(0, 'fr')).toBe('0 point');
-    expect(pointsLabel(2, 'fr')).toBe('2 points');
+  test('1 étincelle, 0 étincelle, 2 étincelles', () => {
+    expect(pointsLabel(1, 'fr')).toBe('1 étincelle');
+    expect(pointsLabel(0, 'fr')).toBe('0 étincelle');
+    expect(pointsLabel(2, 'fr')).toBe('2 étincelles');
   });
   test('l’anglais met zéro au pluriel', () => {
-    expect(pointsLabel(0, 'en')).toBe('0 points');
-    expect(pointsLabel(1, 'en')).toBe('1 point');
+    expect(pointsLabel(0, 'en')).toBe('0 sparks');
+    expect(pointsLabel(1, 'en')).toBe('1 spark');
   });
   test('les milliers se lisent avec une espace', () => {
-    expect(pointsLabel(1294, 'fr').replace(/\s/g, ' ')).toBe('1 294 points');
-    expect(pointsLabel(1294, 'en')).toBe('1,294 points');
+    expect(pointsLabel(1294, 'fr').replace(/\s/g, ' ')).toBe('1 294 étincelles');
+    expect(pointsLabel(1294, 'en')).toBe('1,294 sparks');
     expect(formatCount(1221, 'de')).toBe('1.221');
   });
-  test('points à convertir : le nom stable du solde qui paie une Meesh (#10540)', () => {
-    expect(convertiblePointsLabel(1, 'fr')).toBe('1 point à convertir');
-    expect(convertiblePointsLabel(621, 'fr')).toBe('621 points à convertir');
+  test('plus de « points à convertir » : le solde qui paie une Meesh est l’unique poche d’étincelles (#10540)', () => {
+    expect(convertiblePointsLabel(1, 'fr')).toBe('1 étincelle');
+    expect(convertiblePointsLabel(621, 'fr')).toBe('621 étincelles');
   });
   test('Meeshes', () => {
     expect(meeshCount(0, 'fr')).toBe('Aucune Meesh');
@@ -165,6 +165,11 @@ describe('les refus du serveur se disent', () => {
   test('un code connu a sa phrase, un code inconnu une phrase neutre qui invite à réessayer', () => {
     expect(gameErrorMessage('INSUFFICIENT_MEESHES', 'fr')).toContain('Meesh');
     expect(gameErrorMessage('FREEZE_AT_MAXIMUM', 'fr')).toContain('gel');
+    // Les deux refus de la frappe d'aujourd'hui (porteur 2026-10-16) : un message clair, jamais le « réessaie » générique.
+    expect(gameErrorMessage('TREASURY_LOCKED', 'fr')).toContain('rang');
+    expect(gameErrorMessage('TREASURY_LOCKED', 'fr')).not.toContain('réessaie');
+    expect(gameErrorMessage('MINT_BLOCKED_BY_DEBT', 'fr')).toContain('dette');
+    expect(gameErrorMessage('MINT_BLOCKED_BY_DEBT', 'fr')).not.toContain('réessaie');
     expect(gameErrorMessage('???', 'fr')).toContain('réessaie');
     expect(gameErrorMessage(undefined, 'fr')).toContain('réessaie');
   });
@@ -289,6 +294,6 @@ describe('les étapes des niveaux se disent dans les sept langues (#9706)', () =
       'tenir une Flamme de 30 jours',
       'atteindre le rang Passeur',
     ]);
-    expect(levelHeldLine(steps[0]!, 'fr')).toBe('Tes points ouvrent déjà la suite : frapper ta première Meesh pour passer le niveau 10.');
+    expect(levelHeldLine(steps[0]!, 'fr')).toBe('Tes étincelles ouvrent déjà la suite : frapper ta première Meesh pour passer le niveau 10.');
   });
 });

@@ -120,7 +120,7 @@ describe('un « +N » dans une phrase ne tombe jamais seul en fin de ligne', () 
 describe('translateOnboarding', () => {
   test('interpole les paramètres', async () => {
     await loadOnboardingCatalog('en');
-    expect(translateOnboarding('en', 'onboarding.points.gauge', { points: '0', target: '10' })).toBe('0 / 10 pts to your level 1');
+    expect(translateOnboarding('en', 'onboarding.points.gauge', { points: '0', target: '10' })).toBe('0 / 10 sparks to your level 1');
   });
 
   test('l’arabe rend de l’arabe', async () => {

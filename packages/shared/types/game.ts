@@ -122,6 +122,8 @@ export const gameLevelSchema = z.object({
   sparksCycle: nonNegativeInt.optional(),
   /** Accumulées à vie : ne baisse ni à la frappe ni au prestige (seule la reprise d'un contenu retiré la réduit). */
   sparksLifetime: nonNegativeInt.optional(),
+  /** La dette d'étincelles (reprise d'un contenu supprimé non prélevable sur une poche dépensée) : déduite des prochains gains, bloque la frappe. */
+  sparksDebt: nonNegativeInt.optional(),
   /** Le niveau max à vie, sans la borne de 100 des champs d'hier : le même nombre que `ladder.levelMaxLifetime`. */
   levelMaxLifetime: level.optional(),
 });
@@ -195,6 +197,9 @@ export const mintPreviewSchema = z.object({
   costFactor: z.number().min(0).max(1).optional(),
   /** Le niveau ACTUEL dont le facteur est lu. */
   costLevel: level.optional(),
+  /** Ce qui bloque la frappe hors prix et rang : `debt` tant qu'une dette d'étincelles existe (409 `MINT_BLOCKED_BY_DEBT`). */
+  blockedBy: z.enum(['debt']).nullable().optional(),
+  sparksDebt: nonNegativeInt.optional(),
   /** La réserve du trésor que le rang n'ouvre pas et qui barre cette pièce (#10848) — `null` : libre. */
   locked: z
     .object({ tier: treasuryKeys, minHeld: nonNegativeInt, requires: treasuryRankRequirementSchema })

@@ -61,7 +61,7 @@ describe('une carte pour un moment', () => {
     expect(card.speaker).toBe('duo');
     expect(card.presentation).toBe('full');
     expect(card.action).toBe('regain-levels');
-    expect(card.copy.means).toContain('de 14 à 9');
+    expect(card.copy.means).toContain('ton niveau ne bouge pas');
     expect(card.step).toBeUndefined();
   });
 

@@ -137,7 +137,7 @@ describe('les étapes des niveaux (#9706)', () => {
   test('les points sont là, l’étape manque : le niveau attend, et la ligne dit pourquoi au lieu de « encore 0 point »', () => {
     const page = html({ score: 100 * 15 * 15, mintedLifetime: 0, levelRecord: 9 });
     expect(page).toContain('data-game-level-held=""');
-    expect(text(page)).toContain('Tes points ouvrent déjà la suite : frapper ta première Meesh pour passer le niveau 10.');
+    expect(text(page)).toContain('Tes étincelles ouvrent déjà la suite : frapper ta première Meesh pour passer le niveau 10.');
     expect(text(page)).not.toContain('Encore 0');
   });
 
@@ -235,5 +235,52 @@ describe('les étoiles de Prestige sur l’anneau du héros (#9389)', () => {
 
   test('sans Prestige : aucune étoile', () => {
     expect(html()).not.toContain('data-game-prestige-star');
+  });
+});
+
+/**
+ * LA PAIRE POCHE / TOTAL ET NIVEAU / MAX (porteur 2026-10-16) — sur la page Progression, TOUJOURS affichée : les
+ * étincelles en poche en grand avec le total à vie dessous ; le niveau actuel avec le niveau max à vie dessous, même
+ * quand le max égale le niveau.
+ */
+describe('la paire poche / total et niveau / max', () => {
+  const sparks = { pocket: 976, cycle: 40_000, lifetime: 41_250, debt: 0 } as const;
+
+  test('la poche en grand, le total à vie en petit dessous', () => {
+    const shown = html({ score: 0, debitablePoints: 976, sparks, levelMaxLifetime: 52 });
+    expect(shown).toMatch(/data-game-sparks="976"/);
+    expect(text(shown)).toContain('976 étincelles');
+    expect(shown).toMatch(/data-game-sparks-lifetime="41250"/);
+    expect(text(shown)).toMatch(/Total à vie\s*:\s*41\s?250/);
+    expect(shown.indexOf('data-game-sparks=')).toBeLessThan(shown.indexOf('data-game-sparks-lifetime='));
+  });
+
+  test('le niveau actuel, le niveau max à vie dessous', () => {
+    const shown = html({ score: 0, debitablePoints: 976, sparks, levelMaxLifetime: 52 });
+    expect(shown).toMatch(/data-game-level-max="52"/);
+    expect(text(shown)).toContain('Niveau max : 52');
+    expect(shown.indexOf('data-game-level-now=')).toBeLessThan(shown.indexOf('data-game-level-max='));
+  });
+
+  test('TOUJOURS affichée : le niveau max est dit même quand il égale le niveau', () => {
+    const shown = html({ score: 0, debitablePoints: 976, sparks, levelMaxLifetime: 20, levelRecord: 20 });
+    expect(shown).toMatch(/data-game-level-max="/);
+  });
+
+  test('devant un serveur antérieur : la poche est l\'ancien score, le total à vie n\'est pas inventé, le niveau max est lu sur le record', () => {
+    const shown = html();
+    expect(shown).toMatch(/data-game-sparks="/);
+    expect(shown).not.toContain('data-game-sparks-lifetime');
+    expect(shown).toMatch(/data-game-level-max="/);
+  });
+
+  test('une dette se dit, avec le sens : elle se déduit des prochains gains', () => {
+    const shown = html({ score: 0, debitablePoints: 0, sparks: { ...sparks, debt: 120 }, levelMaxLifetime: 52 });
+    expect(shown).toMatch(/data-game-sparks-debt="120"/);
+    expect(text(shown)).toContain('Dette : 120');
+  });
+
+  test('sans dette, aucune ligne de dette', () => {
+    expect(html({ score: 0, debitablePoints: 976, sparks, levelMaxLifetime: 52 })).not.toContain('data-game-sparks-debt');
   });
 });

@@ -53,7 +53,7 @@ describe('les missions du jour', () => {
     expect(page).toContain('Publier 2 posts');
     expect(page).toContain('5 / 5');
     expect(page).toContain('1 / 3');
-    expect(page).toContain('+36 points');
+    expect(page).toContain('+36 étincelles');
   });
 
   test('une mission faite se dit faite', () => {
@@ -160,7 +160,7 @@ describe('le coffre', () => {
       <GameMissions {...done({ chestClaimed: true, chestReward: { points: 120, fragment: true, freeze: true } })} />,
     );
     expect(html.match(/data-game-reward/g)).toHaveLength(3);
-    expect(text(html)).toContain('+120 points');
+    expect(text(html)).toContain('+120 étincelles');
     expect(html).not.toContain('data-game-chest-open');
   });
 
@@ -185,8 +185,8 @@ describe('le coffre', () => {
     expect(html.match(/data-game-reward/g)).toHaveLength(5);
     const page = text(html);
     expect(page).toContain('+208 Gloire');
-    expect(page).toMatch(/\+2[  ]?083 points/);
-    expect(page).toMatch(/Prime\s:\s\+244\spoints, un cinquième de Meesh/);
+    expect(page).toMatch(/\+2[  ]?083 étincelles/);
+    expect(page).toMatch(/Prime\s:\s\+244\sétincelles, un cinquième de Meesh/);
     expect(page).toContain('Un fragment d’étoile');
     expect(html).not.toContain('data-game-chest-today');
   });
@@ -322,7 +322,7 @@ describe('la mission personnelle du jour', () => {
     const html = view('2026-10-06T18:30:00.000Z');
     expect(html).toContain('Envoyer 5 messages');
     expect(html).toContain('2 / 5');
-    expect(html).toContain('+40 points');
+    expect(html).toContain('+40 étincelles');
   });
 
   test('c’est une carte de plus dans la liste, jamais une mission du jour de moins', () => {

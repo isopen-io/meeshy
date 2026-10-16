@@ -159,10 +159,6 @@ enum ConceptText {
         String(localized: "game.concept.chip.record_level", defaultValue: "Record : niveau \(a)", bundle: .main)
     }
 
-    static func chipTailwind(_ a: String) -> String {
-        String(localized: "game.concept.chip.tailwind", defaultValue: "Vent arrière ×\(a)", bundle: .main)
-    }
-
     static var chipMintReady: String { String(localized: "game.concept.chip.mint_ready", defaultValue: "Prête à frapper", bundle: .main) }
 
     static func chipMinted(_ a: String) -> String {
@@ -222,8 +218,6 @@ enum ConceptText {
     static var factNextLevel: String { String(localized: "game.concept.fact.next_level", defaultValue: "Prochain niveau", bundle: .main) }
 
     static var factRecord: String { String(localized: "game.concept.fact.record", defaultValue: "Record", bundle: .main) }
-
-    static var factTailwind: String { String(localized: "game.concept.fact.tailwind", defaultValue: "Vent arrière", bundle: .main) }
 
     static var factPrismHour: String { String(localized: "game.concept.fact.prism_hour", defaultValue: "Heure Prisme", bundle: .main) }
 
@@ -447,6 +441,13 @@ enum ConceptText {
 
     static func statePointsReady(held: String, convertible: String, number: String, price: String) -> String {
         String(localized: "game.state.points.ready", defaultValue: "Tu as \(held) en poche et \(convertible) : assez pour la Meesh n° \(number), qui coûte \(price).", bundle: .main)
+    }
+
+    /// Les étincelles (#10846) : la poche seule, toute convertible, et ce qui manque pour la pièce visée.
+    static func statePointsMissingPlain(held: String, number: String, price: String, missing: String) -> String {
+        String(localized: "game.state.points.missing_plain",
+               defaultValue: "Tu as \(held) en poche, toutes convertibles. La Meesh n° \(number) coûte \(price) : il manque \(missing).",
+               bundle: .main)
     }
 
     static func statePointsReadyPlain(held: String, number: String, price: String) -> String {
