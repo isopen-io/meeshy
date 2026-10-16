@@ -168,7 +168,7 @@ export function LandingPage({ language, copy }: LandingPageProps) {
  */
 function WorldQr({ copy, placement }: { readonly copy: LandingCopy; readonly placement: 'hero' | 'world' }) {
   return (
-    <figure className={`ld-qr ld-qr--${placement}`} data-world-qr data-world-entry>
+    <figure className="ld-qr" data-world-qr data-world-entry>
       <img src={WORLD_QR_PATH} alt={copy.worldQrAlt} width={placement === 'hero' ? 168 : 144} height={placement === 'hero' ? 168 : 144} decoding="async" />
       <figcaption>{copy.worldQrCaption}</figcaption>
     </figure>
