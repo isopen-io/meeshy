@@ -429,6 +429,19 @@ extension MessageListViewController {
                     )
                 )
             }()
+            // Les rappels faibles sont formés HORS de `makeThemedBubble` : une
+            // capture `[weak self]` imbriquée oblige la fermeture englobante à
+            // retenir `self` en fort, et l'aperçu du menu la stocke (#10853).
+            let quotedAuthorTapHandler: (ReplyReference) -> Void = { [weak self] ref in
+                self?.openQuotedAuthorProfile(ref)
+            }
+            let quotedMediaTapHandler: (ReplyReference) -> Void = { [weak self] ref in
+                self?.openQuotedMedia(ref)
+            }
+            let playAudioHandler: (String) -> Void = { [weak self] attachmentId in
+                self?.conversationViewModel?.playAudio(attachmentId: attachmentId)
+            }
+            let consentNoticeHandler: () -> Void = { [weak self] in self?.router.push(.settings) }
             let makeThemedBubble: (Bool) -> ThemedMessageBubble = { standalone in
                 ThemedMessageBubble(
                         message: message,
@@ -464,19 +477,13 @@ extension MessageListViewController {
                         // gestionnaires que la rangee plate, montes ici sur la
                         // peau BULLE, celle que voit tout le monde tant que le
                         // programme beta reste eteint (defaut OFF).
-                        onQuotedAuthorTap: { [weak self] ref in
-                            self?.openQuotedAuthorProfile(ref)
-                        },
-                        onQuotedMediaTap: { [weak self] ref in
-                            self?.openQuotedMedia(ref)
-                        },
+                        onQuotedAuthorTap: quotedAuthorTapHandler,
+                        onQuotedMediaTap: quotedMediaTapHandler,
                         onConsumeViewOnce: consumeViewOnceHandler,
                         onReactToAttachment: { attId, emoji in attachmentReactionHandler?(attId, messageId, emoji) },
                         onRequestTranslation: requestTranslationHandler,
                         onShowTranslationDetail: showTranslationHandler,
-                        onPlayAudio: { [weak self] attachmentId in
-                            self?.conversationViewModel?.playAudio(attachmentId: attachmentId)
-                        },
+                        onPlayAudio: playAudioHandler,
                         allAudioItems: allAudioItems, messageAudioItems: audioIndex[message.id] ?? [],
                         conversationName: conversationName,
                         audioQueueTailProvider: audioQueueTailProvider,
@@ -504,7 +511,7 @@ extension MessageListViewController {
                         onOpenProfile: openProfileHandler,
                         onOpenParticipantProfile: openParticipantProfileHandler,
                         voiceConsentMissing: vm?.voiceConsentMissing ?? false,
-                        onTapConsentNotice: { [weak self] in self?.router.push(.settings) },
+                        onTapConsentNotice: consentNoticeHandler,
                         standalone: standalone
                 )
             }
@@ -710,6 +717,14 @@ extension MessageListViewController {
             cell.contentView.clipsToBounds = false
             cell.layer.zPosition = isFocusedCell ? 1 : 0
 
+            // #10853 — le contenu de `BubbleSwipeContainer` et l'aperçu du menu
+            // sont des fermetures STOCKÉES par la cellule : y lire `self`
+            // capturait le contrôleur en fort (contrôleur → collection →
+            // cellule → fermeture → contrôleur), et le cycle gardait en vie,
+            // à chaque fermeture d'écran, le modèle et son handler de socket.
+            // Elles ne reçoivent que des valeurs résolues ici.
+            let longMessageExpansion = self.longMessageExpansion(for: localId)
+            let timestampReveal = self.timestampReveal
             cell.contentConfiguration = UIHostingConfiguration {
                 BubbleSwipeContainer(
                     isMine: isMine,
@@ -755,7 +770,7 @@ extension MessageListViewController {
                     if let focalRow {
                         focalRow.equatable()
                     } else {
-                        messageBubble.longMessageFocus(self.longMessageExpansion(for: localId))
+                        messageBubble.longMessageFocus(longMessageExpansion)
                     }
                 }
                 .environmentObject(host)
@@ -791,7 +806,7 @@ extension MessageListViewController {
                                 .environmentObject(stories)
                                 .environmentObject(statuses)
                                 .conversationListObject(convList)
-                                .environmentObject(self.timestampReveal)
+                                .environmentObject(timestampReveal)
                         } else {
                             makeThemedBubble(true)
                                 .environment(\.bubbleSkin, skin)
