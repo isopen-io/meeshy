@@ -159,10 +159,6 @@ enum ConceptText {
         String(localized: "game.concept.chip.record_level", defaultValue: "Record : niveau \(a)", bundle: .main)
     }
 
-    static func chipTailwind(_ a: String) -> String {
-        String(localized: "game.concept.chip.tailwind", defaultValue: "Vent arrière ×\(a)", bundle: .main)
-    }
-
     static var chipMintReady: String { String(localized: "game.concept.chip.mint_ready", defaultValue: "Prête à frapper", bundle: .main) }
 
     static func chipMinted(_ a: String) -> String {
@@ -222,8 +218,6 @@ enum ConceptText {
     static var factNextLevel: String { String(localized: "game.concept.fact.next_level", defaultValue: "Prochain niveau", bundle: .main) }
 
     static var factRecord: String { String(localized: "game.concept.fact.record", defaultValue: "Record", bundle: .main) }
-
-    static var factTailwind: String { String(localized: "game.concept.fact.tailwind", defaultValue: "Vent arrière", bundle: .main) }
 
     static var factPrismHour: String { String(localized: "game.concept.fact.prism_hour", defaultValue: "Heure Prisme", bundle: .main) }
 

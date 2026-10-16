@@ -588,7 +588,6 @@ enum ProgressionConceptModel {
             // ici, et seulement ici (règle n° 1).
             guard let boosts = game?.boosts else { return [] }
             rows = [
-                boosts.tailwind > 1 ? fact(ConceptText.factTailwind, ConceptText.valueFactor(GameCopy.factor(boosts.tailwind)), .tailwind) : nil,
                 boosts.prismHour.map { fact(ConceptText.factPrismHour, ConceptText.valueFactor(GameCopy.factor($0.multiplier))) },
             ]
         case .badges:
