@@ -39,11 +39,14 @@ public struct GameBlock: Codable, Sendable, Equatable {
         public let sparksLifetime: Int?
         /// Le niveau max à vie, sans la borne de 100 — survit au prestige.
         public let levelMaxLifetime: Int?
+        /// La dette d'étincelles : déduite des prochains gains, elle bloque la frappe.
+        public let sparksDebt: Int?
 
         public init(level: Int, tier: LevelTierKey, score: Int, floorScore: Int, nextThreshold: Int?,
                     pointsToNext: Int, progress: Double, record: Int, prestige: Int, canPrestige: Bool,
                     ladder: Ladder? = nil, sparks: Int? = nil, sparksCycle: Int? = nil,
-                    sparksLifetime: Int? = nil, levelMaxLifetime: Int? = nil) {
+                    sparksLifetime: Int? = nil, levelMaxLifetime: Int? = nil, sparksDebt: Int? = nil) {
+            self.sparksDebt = sparksDebt
             self.sparks = sparks
             self.sparksCycle = sparksCycle
             self.sparksLifetime = sparksLifetime
@@ -129,7 +132,7 @@ public struct GameBlock: Codable, Sendable, Equatable {
 
         private enum CodingKeys: String, CodingKey {
             case level, tier, score, floorScore, nextThreshold, pointsToNext, progress, record, prestige, canPrestige, ladder
-            case sparks, sparksCycle, sparksLifetime, levelMaxLifetime
+            case sparks, sparksCycle, sparksLifetime, levelMaxLifetime, sparksDebt
         }
 
         public init(from decoder: Decoder) throws {
@@ -149,6 +152,7 @@ public struct GameBlock: Codable, Sendable, Equatable {
             sparksCycle = GameSparks.count(c, .sparksCycle)
             sparksLifetime = GameSparks.count(c, .sparksLifetime)
             levelMaxLifetime = GameSparks.count(c, .levelMaxLifetime)
+            sparksDebt = GameSparks.count(c, .sparksDebt)
         }
 
         /// Le niveau max à vie à MONTRER : servi, sinon relu sur le record — jamais sous le niveau montré.

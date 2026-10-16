@@ -72,9 +72,12 @@ public struct APIEngagementProgress: Codable, Sendable, Equatable, CacheIdentifi
         public let sparksLifetime: Int?
         /// Le niveau max à vie, qui survit au prestige.
         public let levelMaxLifetime: Int?
+        /// La dette d'étincelles : déduite des prochains gains, elle bloque la frappe.
+        public let sparksDebt: Int?
 
         public init(engagementScore: Int, sparks: Int? = nil, sparksCycle: Int? = nil,
-                    sparksLifetime: Int? = nil, levelMaxLifetime: Int? = nil) {
+                    sparksLifetime: Int? = nil, levelMaxLifetime: Int? = nil, sparksDebt: Int? = nil) {
+            self.sparksDebt = sparksDebt
             self.engagementScore = engagementScore
             self.sparks = sparks
             self.sparksCycle = sparksCycle
@@ -83,7 +86,7 @@ public struct APIEngagementProgress: Codable, Sendable, Equatable, CacheIdentifi
         }
 
         private enum CodingKeys: String, CodingKey {
-            case engagementScore, sparks, sparksCycle, sparksLifetime, levelMaxLifetime
+            case engagementScore, sparks, sparksCycle, sparksLifetime, levelMaxLifetime, sparksDebt
         }
 
         public init(from decoder: Decoder) throws {
@@ -93,6 +96,7 @@ public struct APIEngagementProgress: Codable, Sendable, Equatable, CacheIdentifi
             sparksCycle = GameSparks.count(c, .sparksCycle)
             sparksLifetime = GameSparks.count(c, .sparksLifetime)
             levelMaxLifetime = GameSparks.count(c, .levelMaxLifetime)
+            sparksDebt = GameSparks.count(c, .sparksDebt)
         }
 
         /// La poche : `sparks` servi, sinon `engagementScore` (même nombre, nom d'hier).
@@ -151,6 +155,8 @@ public struct APIEngagementProgress: Codable, Sendable, Equatable, CacheIdentifi
         public let costFactor: Double?
         /// La dette d'étincelles qui bloque la frappe — `nil` ou `0` : aucune (contrat en cours côté passerelle).
         public let sparksDebt: Int?
+        /// Ce qui bloque la frappe hors prix et rang : `.debt` tant qu'une dette existe.
+        public let blockedBy: GameSparks.MintBlock?
         /// ISO 8601 des BORNES du registre de frappe (#5839) — la première et
         /// la dernière, `nil` quand il n'y en a eu aucune.
         ///
@@ -173,8 +179,10 @@ public struct APIEngagementProgress: Codable, Sendable, Equatable, CacheIdentifi
             lastMintedAt: String? = nil,
             baseMintCost: Int? = nil,
             costFactor: Double? = nil,
-            sparksDebt: Int? = nil
+            sparksDebt: Int? = nil,
+            blockedBy: GameSparks.MintBlock? = nil
         ) {
+            self.blockedBy = blockedBy
             self.baseMintCost = baseMintCost
             self.costFactor = costFactor
             self.sparksDebt = sparksDebt

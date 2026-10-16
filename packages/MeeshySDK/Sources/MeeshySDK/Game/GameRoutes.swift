@@ -23,6 +23,8 @@ public enum GameErrorCode: String, CaseIterable, Sendable, Hashable {
     case insufficientMeeshes = "INSUFFICIENT_MEESHES"
     /// La pièce ferait entrer dans une réserve du trésor que le rang n'ouvre pas encore (#10848).
     case treasuryLocked = "TREASURY_LOCKED"
+    /// La frappe est refusée tant qu'une dette d'étincelles existe — le refus porte `{ sparksDebt }` à la racine.
+    case mintBlockedByDebt = "MINT_BLOCKED_BY_DEBT"
     case freezeAtMaximum = "FREEZE_AT_MAXIMUM"
     case relightNotAllowed = "RELIGHT_NOT_ALLOWED"
     case missionNotFound = "MISSION_NOT_FOUND"
