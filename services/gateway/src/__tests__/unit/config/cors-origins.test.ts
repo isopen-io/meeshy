@@ -426,6 +426,11 @@ describe('le WebSocket natif iOS passe la porte, quel que soit le rang (#10838)'
     expect(verdictSocketIo(env, 'ws://localhost:3000')).toBe('accepte');
   });
 
+  it('QUEL QUE SOIT L\'HÔTE — aucun navigateur ne porte ce schéma, et restreindre l\'hôte ne protège de rien (un client hors navigateur forge l\'hôte ou omet Origin)', () => {
+    const env = envAvecListe('production', LISTE_DE_PRODUCTION);
+    expect(verdictSocketIo(env, 'wss://evil.example')).toBe('accepte');
+  });
+
   it('variables absentes (défauts) — `wss://` est servi', () => {
     expect(originIsAllowed('wss://gate.meeshy.me', { NODE_ENV: 'production' })).toBe(true);
   });
