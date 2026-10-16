@@ -583,6 +583,9 @@ extension ConversationViewModel {
     // MARK: - Reconnection Sync (called by ConversationSocketHandler)
 
     func syncMissedMessages() async {
+        // #10830 — un écran QUITTÉ ne rattrape plus : son modèle peut survivre
+        // à la navigation, et chaque survivant rejouait la reprise de socket.
+        guard ConversationCatchUpGate.shared.isPresent(self) else { return }
         // The high-water mark is the newest SERVER-TIMESTAMPED message we already
         // hold. Optimistic own-sends still in flight carry a LOCAL device-clock
         // `createdAt`; if the clock runs ahead of the server they would poison the
@@ -595,42 +598,24 @@ extension ConversationViewModel {
         await syncMissedMessages(after: newestLocal)
     }
 
+    /// L'écran de cette conversation est quitté par navigation (#10830).
+    func noteScreenLeft() {
+        ConversationCatchUpGate.shared.depart(self)
+    }
+
     /// Le rattrapage `after` à partir d'un curseur donné : la reconnexion part
     /// de ce qui est détenu maintenant, l'ouverture de ce qui l'était AVANT
-    /// son refresh.
+    /// son refresh. Un rattrapage déjà en vol pour la conversation se rejoint
+    /// (`ConversationCatchUpGate`, #10830).
     func syncMissedMessages(after newestLocal: Date) async {
-        // Page size and total cap mirror the contiguous-backfill contract: a
-        // missed-message gap of any size is filled by paging forward, not just
-        // the most recent `limit` messages (the bug in the old offset:0 fetch,
-        // which could never recover a gap larger than one page).
-        let pageSize = 100
-        let maxTotal = 1000
-
-        // Back the watermark off by a sub-millisecond so a missed message that
-        // shares the newest local message's exact instant is not excluded by
-        // the gateway's strict `createdAt > after`; the boundary message simply
-        // re-surfaces and is deduped by id on merge.
-        var cursor = newestLocal.addingTimeInterval(-0.001)
-        var collected: [APIMessage] = []
-
+        let service = messageService
+        let convId = conversationId
         do {
-            while collected.count < maxTotal {
-                let response = try await messageService.listAfter(
-                    conversationId: conversationId, after: cursor, limit: pageSize,
-                    includeReplies: true, includeTranslations: true, languages: nil
-                )
-                let page = response.data  // ascending (oldest-after-watermark first), per gateway contract
-                guard !page.isEmpty else { break }
-
-                collected.append(contentsOf: page)
-
-                // Advance the watermark to the newest instant in this page.
-                guard let pageNewest = page.compactMap(\.createdAt).max() else { break }
-                cursor = pageNewest
-
-                if page.count < pageSize { break }  // last (partial) page → gap filled
+            let collected = try await ConversationCatchUpGate.shared.pages(
+                conversationId: convId, after: newestLocal
+            ) {
+                try await Self.fetchMissedPages(service: service, conversationId: convId, after: newestLocal)
             }
-
             guard !collected.isEmpty else { return }
 
             // Upsert backfilled messages to GRDB; store observation surfaces them automatically.
@@ -671,6 +656,42 @@ extension ConversationViewModel {
         } catch {
             Logger.socket.error("Failed to sync missed messages: \(error)")
         }
+    }
+
+    /// Les pages `listAfter` depuis un curseur, jusqu'au trou comblé.
+    nonisolated static func fetchMissedPages(
+        service: MessageServiceProviding, conversationId: String, after newestLocal: Date
+    ) async throws -> [APIMessage] {
+        // Page size and total cap mirror the contiguous-backfill contract: a
+        // missed-message gap of any size is filled by paging forward, not just
+        // the most recent `limit` messages (the bug in the old offset:0 fetch,
+        // which could never recover a gap larger than one page).
+        let pageSize = 100
+        let maxTotal = 1000
+
+        // Back the watermark off by a sub-millisecond so a missed message that
+        // shares the newest local message's exact instant is not excluded by
+        // the gateway's strict `createdAt > after`; the boundary message simply
+        // re-surfaces and is deduped by id on merge.
+        var cursor = newestLocal.addingTimeInterval(-0.001)
+        var collected: [APIMessage] = []
+        while collected.count < maxTotal {
+            let response = try await service.listAfter(
+                conversationId: conversationId, after: cursor, limit: pageSize,
+                includeReplies: true, includeTranslations: true, languages: nil
+            )
+            let page = response.data  // ascending (oldest-after-watermark first), per gateway contract
+            guard !page.isEmpty else { break }
+
+            collected.append(contentsOf: page)
+
+            // Advance the watermark to the newest instant in this page.
+            guard let pageNewest = page.compactMap(\.createdAt).max() else { break }
+            cursor = pageNewest
+
+            if page.count < pageSize { break }  // last (partial) page → gap filled
+        }
+        return collected
     }
 
     /// `message:restored-for-me` — un message que ce lecteur avait masqué pour
