@@ -119,6 +119,7 @@ extension ConversationView {
         let messageId = message.id
         return MessageOverlayMenu.ThreadLanguage(
             selection: viewModel.bubbleLanguageSelections[messageId],
+            usesFlatRow: readingModeController.mode.usesFlatRow,
             servedAudioTracks: viewModel.servedAudioTracks(of: message),
             onSetActiveDisplayLanguage: { viewModel.setBubbleActiveDisplayLanguage($0, for: messageId) },
             onSetSecondaryLanguage: { viewModel.setBubbleSecondaryLanguage($0, for: messageId) }

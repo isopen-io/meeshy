@@ -140,23 +140,19 @@ struct MessageOverlayMenu: View {
         )
     }
 
-    /// Language flags for the inline meta row (original + each translated
-    /// target language, deduped). Capped at 3 to match the legacy bubble
-    /// strip. Returning an empty array suppresses the flag cluster.
-    private var previewFlags: [String] {
-        var seen: Set<String> = []
-        var ordered: [String] = []
-        let original = message.originalLanguage.lowercased()
-        if !original.isEmpty, seen.insert(original).inserted {
-            ordered.append(original)
-        }
-        for translation in textTranslations {
-            let code = translation.targetLanguage.lowercased()
-            if !code.isEmpty, seen.insert(code).inserted {
-                ordered.append(code)
-            }
-        }
-        return Array(ordered.prefix(3))
+    /// Ce que la cellule pressée affiche (#9838).
+    private var previewServed: OverlayPreviewServedText {
+        Self.previewServedText(
+            message: message, textTranslations: textTranslations, translatedAudios: translatedAudios,
+            preferredTranslation: preferredTranslation,
+            userLanguages: (regional: userRegionalLanguage, custom: userCustomDestinationLanguage),
+            selection: threadLanguage.selection,
+            usesFlatRow: threadLanguage.usesFlatRow,
+            preferredAudioLangCode: AudioTrackLanguageResolver.resolve(
+                manualOverride: nil, originalLanguage: message.originalLanguage,
+                preferredLanguages: ConversationLanguagePreferences(user: AuthManager.shared.currentUser).resolved,
+                translatedAudios: translatedAudios),
+            currentUserId: currentUserId)
     }
 
     /// Aggregated reaction pills, computed from the message's raw
@@ -814,10 +810,11 @@ struct MessageOverlayMenu: View {
     /// nil and the row is wrapped in `.allowsHitTesting(false)` so the
     /// metaRow does not steal taps from the dismiss handler.
     private var previewTextBubble: some View {
-        let truncated = message.content.count > previewCharLimit
-            ? String(message.content.prefix(previewCharLimit)) + "..."
-            : message.content
-        let hasFlags = !previewFlags.isEmpty
+        let served = previewServed
+        let truncated = served.text.count > previewCharLimit
+            ? String(served.text.prefix(previewCharLimit)) + "..."
+            : served.text
+        let hasFlags = !served.flags.isEmpty
         let showDelivery = message.isMe
         let shouldRenderMeta = hasFlags || showDelivery
 
@@ -834,8 +831,8 @@ struct MessageOverlayMenu: View {
                 UserIdentityBar.metaRow(
                     time: "",
                     delivery: showDelivery ? message.deliveryStatus : nil,
-                    flags: previewFlags,
-                    activeFlag: nil,
+                    flags: served.flags,
+                    activeFlag: served.activeFlag,
                     onFlagTap: nil,
                     onTranslateTap: nil,
                     isMe: message.isMe
@@ -940,6 +937,9 @@ extension MessageOverlayMenu {
     /// jamais recopiés dans un état de l'overlay.
     struct ThreadLanguage {
         var selection: ConversationViewModel.BubbleLanguageSelection? = nil
+        /// Le fil se lit en rangées plates (Focal, Script) : sa bande de drapeaux
+        /// porte aussi la langue affichée (`FocalRow.focusFlagCodes`, #9838).
+        var usesFlatRow: Bool = false
         var servedAudioTracks: [String: ServedAudioTrack] = [:]
         var onSetActiveDisplayLanguage: ((String?) -> Void)? = nil
         var onSetSecondaryLanguage: ((String?) -> Void)? = nil
