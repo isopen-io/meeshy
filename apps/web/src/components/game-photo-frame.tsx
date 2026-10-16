@@ -49,7 +49,7 @@ const trophyMaterialOf = (emblem: PhotoEmblem): GameMaterial => {
 
 const percent = (value: number, of: number): string => `${((value / of) * 100).toFixed(2)}%`;
 
-function PhotoEmblemDrawing({ emblem }: { readonly emblem: PhotoEmblem }) {
+export function PhotoEmblemDrawing({ emblem }: { readonly emblem: PhotoEmblem }) {
   switch (emblem.kind) {
     case 'start':
       return <Signature size={512} color="var(--ios-on-brand)" mode="struck" />;

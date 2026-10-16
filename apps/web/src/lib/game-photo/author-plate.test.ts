@@ -5,7 +5,7 @@ import { ACHIEVEMENT_RARITIES } from '@meeshy/shared/utils/game/glory';
 import { blasonDesign } from '@/lib/game/ranks';
 import { loadGameCatalog } from '@/lib/i18n-game-catalog';
 
-import { authorPlateOf, engravedHandle, monogramOf, plateStyleOf, type PhotoAuthor } from './author-plate';
+import { authorPlateOf, engravedHandle, monogramOf, photoAuthorOf, plateStyleOf, type PhotoAuthor } from './author-plate';
 import type { PhotoEmblem } from './moments';
 
 /**
@@ -91,5 +91,14 @@ describe('la plaque complète', () => {
     expect(authorPlateOf(achievement(), { handle: 'atabeth', avatar: 'https://x/a.jpg' }, 'fr')?.avatar).toBe('https://x/a.jpg');
     expect(authorPlateOf(achievement(), author('atabeth'), 'fr')?.avatar).toBeUndefined();
     expect(Object.keys(authorPlateOf(achievement(), author('atabeth'), 'fr') ?? {})).not.toContain('avatar');
+  });
+});
+
+describe('l’auteur, depuis le lecteur', () => {
+  test('un compte inscrit : son pseudo et sa photo ; un invité ou un visiteur : personne', () => {
+    expect(photoAuthorOf({ id: 'u1', handle: 'atabeth', displayName: 'Ata Beth', isAnonymous: false, avatar: 'https://x/a.jpg' })).toEqual({ handle: 'atabeth', avatar: 'https://x/a.jpg' });
+    expect(photoAuthorOf({ id: 'u1', handle: 'atabeth', displayName: 'Ata Beth', isAnonymous: false })).toEqual({ handle: 'atabeth' });
+    expect(photoAuthorOf({ id: 'p1', handle: null, displayName: 'Invité', isAnonymous: true })).toBeNull();
+    expect(photoAuthorOf({ id: null, handle: null, displayName: '', isAnonymous: true })).toBeNull();
   });
 });

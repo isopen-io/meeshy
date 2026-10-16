@@ -2,6 +2,7 @@ import type { AchievementRarity } from '@meeshy/shared/utils/game/glory';
 
 import { blasonDesign } from '@/lib/game/ranks';
 import type { GamePaint } from '@/lib/game/materials';
+import type { Viewer } from '@/lib/api/viewer';
 import { translateGame } from '@/lib/i18n-game-catalog';
 import { currentInterfaceLanguage, type InterfaceLanguage } from '@/lib/interface-language';
 
@@ -101,3 +102,7 @@ export function authorPlateOf(emblem: PhotoEmblem, author: PhotoAuthor | null, l
     ...(author.avatar === undefined ? {} : { avatar: author.avatar }),
   };
 }
+
+/** L'auteur d'une photo, depuis le lecteur : un compte inscrit a un pseudo public ; un invité ou un visiteur, non. */
+export const photoAuthorOf = (viewer: Viewer): PhotoAuthor | null =>
+  viewer.isAnonymous || viewer.handle === null ? null : { handle: viewer.handle, ...(viewer.avatar === undefined ? {} : { avatar: viewer.avatar }) };

@@ -395,3 +395,46 @@ describe('la mission personnelle du jour', () => {
     });
   });
 });
+
+/** LA FIN DE MISSION SE PHOTOGRAPHIE (#10816) : une mission personnelle accomplie propose sa carte, gravée au pseudo. */
+describe('la photo de fin de mission', () => {
+  const done = (onPhotoMission?: (mission: { readonly id: string; readonly templateKey: string; readonly target: number }) => void) => {
+    const base = props();
+    const personal = {
+      id: 'm-perso',
+      difficulty: 'easy' as const,
+      templateKey: 'send-texts',
+      signal: 'axis:chat.message',
+      prism: false,
+      target: 5,
+      progress: 5,
+      reward: 40,
+      glory: 0,
+      completedAt: '2026-10-06T18:40:00.000Z',
+      startsAt: '2026-10-06T18:00:00.000Z',
+      endsAt: '2026-10-06T20:00:00.000Z',
+      state: 'completed' as const,
+    };
+    return { ...base, missions: { ...base.missions, personal }, ...(onPhotoMission === undefined ? {} : { onPhotoMission }) };
+  };
+
+  test('accomplie : un bouton « Photographier » nommé par la mission', () => {
+    const html = renderToStaticMarkup(<GameMissions {...done(() => undefined)} now={new Date('2026-10-06T19:00:00.000Z')} />);
+    expect(html).toContain('data-mission-photo="m-perso"');
+    expect(html).toMatch(/aria-label="Photographier — [^"]+"/);
+  });
+
+  test('sans hôte de photo, ou pas encore accomplie : aucun bouton', () => {
+    expect(renderToStaticMarkup(<GameMissions {...done()} now={new Date('2026-10-06T19:00:00.000Z')} />)).not.toContain('data-mission-photo');
+    const base = done(() => undefined);
+    const pending = { ...base, missions: { ...base.missions, personal: { ...base.missions.personal, completedAt: null, progress: 2, state: 'active' as const } } };
+    expect(renderToStaticMarkup(<GameMissions {...pending} now={new Date('2026-10-06T19:00:00.000Z')} />)).not.toContain('data-mission-photo');
+  });
+
+  test('le toucher remet la mission à l’hôte', async () => {
+    const taken: string[] = [];
+    const host = await mount(<GameMissions {...done((mission) => taken.push(`${mission.id}:${mission.templateKey}:${mission.target}`))} now={new Date('2026-10-06T19:00:00.000Z')} />);
+    await click(host.querySelector<HTMLElement>('[data-mission-photo]'));
+    expect(taken).toEqual(['m-perso:send-texts:5']);
+  });
+});
