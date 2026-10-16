@@ -796,6 +796,7 @@ extension StoryComposerView {
     /// Le terme lu reste `exitPrompt`, pas `composerHasContent` : la story
     /// « fond + musique » n'a rien de visuel et partait sinon en silence.
     func handleDismiss() {
+        didRequestExit = true
         switch Self.exitAction(exitPrompt) {
         case .saveDraft:
             saveDraftAndDismiss()
@@ -805,7 +806,14 @@ extension StoryComposerView {
         }
     }
 
+    /// Un démontage garde le brouillon — et le composer se rouvre dessus — sauf si l'auteur a demandé la
+    /// sortie (la croix a déjà écrit, et il ne veut plus du composer) ou si la story est partie.
+    nonisolated static func teardownKeepsDraft(didRequestExit: Bool, didHandOffPublish: Bool) -> Bool {
+        !didRequestExit && !didHandOffPublish
+    }
+
     func saveDraftAndDismiss() {
+        didRequestExit = true
         saveDraft()
         onDismiss()
     }

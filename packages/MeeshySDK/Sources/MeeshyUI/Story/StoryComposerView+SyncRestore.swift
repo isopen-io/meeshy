@@ -312,8 +312,10 @@ extension StoryComposerView {
     /// Écriture silencieuse d'une session INTERROMPUE — deux entrées, un seul
     /// chemin :
     /// - **D1**, le passage en background : la story en cours survit au kill de
-    ///   l'app. JAMAIS sur onDisappear — le discard fire onDisappear et
-    ///   re-persisterait le brouillon que l'utilisateur vient de jeter ;
+    ///   l'app. Le simple onDisappear n'en est PAS une — la sortie demandée
+    ///   (croix, abandon d'une page blanche) le déclenche aussi, et
+    ///   re-persisterait ce que l'utilisateur vient de jeter ; seul le
+    ///   DÉMONTAGE sans sortie demandée (`teardownKeepsDraft`) y écrit ;
     /// - **C6b**, le 426 : le binaire est périmé, une porte bloquante va
     ///   recouvrir le composer. Perdre le travail parce que la version a
     ///   expiré serait une double peine.
