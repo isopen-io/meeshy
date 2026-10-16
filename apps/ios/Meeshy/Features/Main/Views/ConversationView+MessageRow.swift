@@ -3,7 +3,25 @@ import SwiftUI
 import MeeshySDK
 import MeeshyUI
 
-nonisolated(unsafe) private var searchDebounceKey: UInt8 = 0
+/// Le debounce de la recherche dans la conversation, tenu par une RÉFÉRENCE que la vue garde en `@State`.
+///
+/// Il était rangé en objet associé sur `self` — or `ConversationView` est une struct : chaque accès
+/// emballait une copie neuve, le getter rendait toujours nil, et ni la frappe suivante ni la fermeture
+/// de la recherche n'annulaient rien. Chaque frappe lançait sa recherche, dans le désordre, et une
+/// recherche fermée dans les 400 ms filtrait quand même la conversation, interface de recherche partie.
+final class SearchDebounceBox {
+    private(set) var task: Task<Void, Never>?
+
+    /// Remplace la recherche en attente, en annulant la précédente.
+    func replace(with task: Task<Void, Never>?) {
+        self.task?.cancel()
+        self.task = task
+    }
+
+    func cancel() { replace(with: nil) }
+
+    nonisolated deinit { task?.cancel() }
+}
 
 // MARK: - Message Row, Reactions & Search
 extension ConversationView {
@@ -214,15 +232,9 @@ extension ConversationView {
         Task { await viewModel.searchMessages(query: headerState.searchQuery) }
     }
 
-    private var searchDebounceTask: Task<Void, Never>? {
-        get { objc_getAssociatedObject(self, &searchDebounceKey) as? Task<Void, Never> }
-        nonmutating set { objc_setAssociatedObject(self, &searchDebounceKey, newValue, .OBJC_ASSOCIATION_RETAIN) }
-    }
-
     func debounceSearch() {
-        searchDebounceTask?.cancel()
         let query = headerState.searchQuery
-        searchDebounceTask = Task {
+        searchDebounce.replace(with: Task {
             try? await Task.sleep(nanoseconds: 400_000_000)
             guard !Task.isCancelled else { return }
             if query.count >= 2 {
@@ -232,13 +244,13 @@ extension ConversationView {
                 // full conversation comes back.
                 await viewModel.endSearch()
             }
-        }
+        })
     }
 
     func dismissSearch() {
         // Cancel any pending debounce so a stale `endSearch` / `searchMessages`
         // can't fire after the search UI has been dismissed.
-        searchDebounceTask?.cancel()
+        searchDebounce.cancel()
         withAnimation(.spring(response: 0.3, dampingFraction: 0.8)) {
             headerState.showSearch = false
             headerState.searchQuery = ""
