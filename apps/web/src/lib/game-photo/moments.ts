@@ -15,7 +15,7 @@ import { TREASURY_TIERS, type TreasuryTierKey } from '@meeshy/shared/utils/game/
 import type { EngagementWithGame } from '@/lib/api/engagement';
 import { transitionGuideEventsV2 } from '@/lib/game-guide/events-v2';
 import { currentInterfaceLanguage, type InterfaceLanguage } from '@/lib/interface-language';
-import { editionName, formatCount, levelTierName, standingLabel, treasuryName, shownRank } from '@/lib/view/game-copy';
+import { editionName, formatCount, levelTierName, missionTitle, standingLabel, treasuryName, shownRank } from '@/lib/view/game-copy';
 import { leagueName, rarityName, trophyView } from '@/lib/view/game-copy-v2';
 import { translateGame } from '@/lib/i18n-game-catalog';
 
@@ -52,7 +52,9 @@ export type PhotoEmblem =
   | { readonly kind: 'trophy'; readonly trophyKey: string }
   | { readonly kind: 'league-up'; readonly league: LeagueKey; readonly weekKey: string }
   | { readonly kind: 'season'; readonly season: number }
-  | { readonly kind: 'prestige'; readonly number: number };
+  | { readonly kind: 'prestige'; readonly number: number }
+  /* LA FIN DE MISSION (#10816) : la mission personnelle accomplie se photographie, son pseudo gratté sur la plaque. */
+  | { readonly kind: 'mission'; readonly templateKey: string; readonly target: number };
 
 export type PhotoMoment = {
   readonly id: string;
@@ -125,6 +127,8 @@ export function momentLines(
       return { kicker: translateGame(language, 'game.photo.kicker.season'), title: translateGame(language, 'game.door.season', { number: formatCount(emblem.season, language) }) };
     case 'prestige':
       return { kicker: translateGame(language, 'game.photo.kicker.prestige'), title: translateGame(language, 'game.photo.title.prestige', { count: formatCount(emblem.number, language) }) };
+    case 'mission':
+      return { kicker: translateGame(language, 'game.photo.kicker.mission'), title: missionTitle(emblem.templateKey, emblem.target, language) };
   }
 }
 
@@ -165,6 +169,10 @@ export const photoMomentOfEmblemV2 = (emblem: PhotoMomentEmblemV2): PhotoMoment 
       return moment(id, { kind: 'prestige', number: emblem.number });
   }
 };
+
+/** Une mission personnelle accomplie (#10816) : une identité par mission, jamais deux photos proposées pour la même. */
+export const missionMoment = (params: { readonly id: string; readonly templateKey: string; readonly target: number }): PhotoMoment =>
+  moment(`mission:${params.id}`, { kind: 'mission', templateKey: params.templateKey, target: params.target });
 
 export const treasuryMoment = (tier: TreasuryTierKey): PhotoMoment => moment(`treasury:${tier}`, { kind: 'treasury', tier });
 
