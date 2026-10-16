@@ -17,6 +17,9 @@ import Foundation
 /// - si toutes les places sont à l'écran, la nouvelle venue montre son image fixe et
 ///   attend son tour, qu'elle perd si elle ressort avant.
 public final class LottieLiveBudget {
+    // iOS 26 : deinit synthétisée ISOLÉE au MainActor → double-free au démontage hors d'une tâche (#9694).
+    nonisolated deinit {}
+
 
     /// Le budget de la session : huit films vivants, toutes surfaces confondues.
     public static let maxLiveLayers = 8

@@ -115,6 +115,9 @@ nonisolated enum MoodEmojiRain {
 /// rendu déclenché par lui) : c'est l'horloge de `TimelineView` qui cadence, et
 /// `reset()` vide tout quand la page disparaît.
 final class MoodEmojiRainEngine {
+    // iOS 26 : deinit synthétisée ISOLÉE au MainActor → double-free au démontage hors d'une tâche (#9694).
+    nonisolated deinit {}
+
     private(set) var state = MoodEmojiRainState.empty
     private var generator = SystemRandomNumberGenerator()
 

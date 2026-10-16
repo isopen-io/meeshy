@@ -373,8 +373,13 @@ const REFERENCE_LITERAL_COLOR_COUNT = 145;
 // couleur d'un trait d'ornement. Un contour se voit des AUTRES et garde des couleurs FIXES, identiques
 // pour tous (spec § 5.2) : la couleur est la DONNÉE du contour, l'accent de conversation la trahirait.
 // La feuille de décor (`ProfileDecorSheet.swift`) prend `MeeshyColors.indigo500`, sans `Color(hex:)`.
-// Valeur MESURÉE le 2026-10-15 en local.
-const REFERENCE_UNKNOWN_VARIABLE_COLOR_COUNT = 471;
+// 471 -> 477 (2026-10-16, peau des bulles et page de l'humeur) : `BubbleSkin` (3) DÉRIVE ses teintes de l'accent de
+// la conversation (`receivedFillHex(accentHex:)`, `sentFillHex`, l'encre lisible d'un fond) — c'est l'accent, calculé ;
+// la bulle reçue d'un contact peint SA couleur (`contactColor`) ; la page de l'humeur (`MoodSpotlight`, 2) éclaire
+// l'avatar de l'auteur de sa couleur d'identité (`entry.avatarColor`), et la carte retombe sur la couleur de repli de
+// l'auteur (`fallbackHex`). Couleurs d'IDENTITÉ ou dérivées de l'accent : les remplacer par accentColor les trahirait.
+// Valeur MESURÉE le 2026-10-16 en local.
+const REFERENCE_UNKNOWN_VARIABLE_COLOR_COUNT = 477;
 
 import { readFileSync, readdirSync, statSync, realpathSync } from 'node:fs';
 import { join, dirname } from 'node:path';
