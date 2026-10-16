@@ -43,6 +43,7 @@ jest.mock('../../../../services/PresenceVisibilityService', () => ({
 }));
 
 jest.mock('@meeshy/shared/types/api-schemas', () => ({
+  ...jest.requireActual<object>('@meeshy/shared/types/api-schemas'),
   conversationListResponseSchema: { type: 'object' },
   conversationResponseSchema: { type: 'object' },
   errorResponseSchema: { type: 'object' },

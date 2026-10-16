@@ -319,6 +319,17 @@ describe('Le cache conditionnel', () => {
     await anonyme.close();
     await connecte.close();
   });
+
+  it('un connecté revalide à chaque lecture : un blocage posé entre deux lectures n’est jamais resservi depuis le cache du navigateur (#10755)', async () => {
+    const connecte = await monter(TIERS);
+
+    const cC = (await lire(connecte)).headers['cache-control'] as string;
+
+    expect(cC).toContain('no-cache');
+    expect(cC).not.toMatch(/max-age=[1-9]/);
+    expect(cC).not.toContain('stale-while-revalidate');
+    await connecte.close();
+  });
 });
 
 describe('`fields` ne peut que RESTREINDRE', () => {

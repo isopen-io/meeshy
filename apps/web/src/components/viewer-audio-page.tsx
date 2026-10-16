@@ -12,7 +12,7 @@ import { spokenLanguageName } from '@/lib/view/language-name';
 import { electAudio } from '@/lib/view/media';
 import { formatMediaTime, keyboardSeekTarget, PLAYBACK_SPEEDS, SEEK_STEP_SECONDS, seekFraction, speedLabel } from '@/lib/view/media-transport';
 import { waveformOf } from '@/lib/view/message';
-import { karaokeSegments, karaokeTone, segmentSeekTarget, type KaraokeTone } from '@/lib/view/transcript-karaoke';
+import { karaokeSegments, karaokeTone, rovingSegmentIndex, segmentSeekTarget, type KaraokeTone } from '@/lib/view/transcript-karaoke';
 import { useKaraokeIndex } from '@/lib/view/use-karaoke';
 import { useAudioOnDemand } from '@/lib/view/use-audio-on-demand';
 import { useMediaPlayback } from '@/lib/view/use-media-playback';
@@ -211,6 +211,28 @@ export default function ViewerAudioPage({
     [hasTranscript, attachment.transcription, attachment.translations, described.text, described.language, track.language, totalSeconds],
   );
   const activeSegment = useKaraokeIndex(audioElement, segments, isPlaying);
+  const [rovingIndex, setRovingIndex] = useState<number | null>(null);
+  const segmentCount = segments?.length ?? 0;
+  const tabStop = Math.min(Math.max(0, segmentCount - 1), rovingIndex ?? activeSegment ?? 0);
+  const onTranscriptKey = (event: ReactKeyboardEvent<HTMLParagraphElement>): void => {
+    if (segments === undefined) return;
+    const words = [...event.currentTarget.querySelectorAll<HTMLElement>('[data-karaoke]')];
+    const focused = words.indexOf(event.target as HTMLElement);
+    const from = focused === -1 ? tabStop : focused;
+    if (event.key === 'Enter' || event.key === ' ') {
+      event.preventDefault();
+      event.stopPropagation();
+      const target = segmentSeekTarget(segments, from);
+      if (target !== null) seek(target);
+      return;
+    }
+    const next = rovingSegmentIndex({ key: event.key, index: from, count: segments.length, rtl: getComputedStyle(event.currentTarget).direction === 'rtl' });
+    if (next === null) return;
+    event.preventDefault();
+    event.stopPropagation();
+    setRovingIndex(next);
+    words[next]?.focus();
+  };
   const waves = useMemo(() => waveformOf(attachment, WAVE_BARS), [attachment]);
 
   const seekAt = (event: ReactPointerEvent<HTMLElement>): void => {
@@ -396,6 +418,7 @@ export default function ViewerAudioPage({
             className="overflow-y-auto text-body"
             style={{ maxHeight: TRANSCRIPT_MAX_PX }}
             onClick={contain}
+            onKeyDown={onTranscriptKey}
             {...(described.language !== '' ? { lang: described.language } : {})}
           >
             {segments === undefined
@@ -404,6 +427,8 @@ export default function ViewerAudioPage({
                   <Fragment key={`${segment.startMs}-${index}`}>
                     <span
                       data-karaoke={karaokeTone(index, activeSegment)}
+                      tabIndex={index === tabStop ? 0 : -1}
+                      onFocus={() => setRovingIndex(index)}
                       className="cursor-pointer"
                       style={KARAOKE_STYLE[karaokeTone(index, activeSegment)]}
                       onClick={() => {

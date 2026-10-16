@@ -361,11 +361,15 @@ export async function directoryPersonRoutes(fastify: FastifyInstance) {
       // de LUI (présence gatée, compteurs intimes, relation), et un cache
       // partagé la servirait à quelqu'un d'autre. `Vary: Authorization` le dit
       // aussi aux intermédiaires qui, eux, ne lisent pas ce commentaire.
+      // `no-cache` pour le connecté (#10755) : sa charge porte la RELATION, et un
+      // blocage posé entre deux lectures doit atteindre l'écran — un `max-age`
+      // resservait la fiche d'avant le blocage sans jamais nous redemander.
+      // L'ETag garde la revalidation bon marché (304).
       reply.header('Vary', 'Authorization');
       reply.header(
         'Cache-Control',
         viewerId
-          ? 'private, max-age=60, stale-while-revalidate=600'
+          ? 'private, no-cache'
           : 'public, max-age=60, stale-while-revalidate=600'
       );
 

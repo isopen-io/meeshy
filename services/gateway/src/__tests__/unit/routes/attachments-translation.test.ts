@@ -277,7 +277,7 @@ describe('POST /attachments/:attachmentId/translate', () => {
     // Non-audio mime type: consent checks for audio should be skipped entirely
     mockGetConsentStatus.mockResolvedValue({ ...DEFAULT_CONSENT, canTranscribeAudio: false, canTranslateAudio: false });
     const app = await buildApp({
-      prisma: makePrisma({ attachment: { mimeType: 'image/jpeg' } }),
+      prisma: makePrisma({ attachment: { ...DEFAULT_ATTACHMENT, mimeType: 'image/jpeg' } }),
     });
     const res = await injectTranslate(app);
     // Should not get 403 for audio consent; service returns 200 or service-specific response
