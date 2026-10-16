@@ -78,7 +78,7 @@ final class ThreadRowGestureParityTests: XCTestCase {
     }
 
     private func source(_ chemin: String) throws -> String {
-        try String(contentsOf: racine().appendingPathComponent(chemin), encoding: .utf8)
+        try AppSourceGuard.text(at: racine().appendingPathComponent(chemin))
     }
 
     private func sourceDuConteneur() throws -> String {

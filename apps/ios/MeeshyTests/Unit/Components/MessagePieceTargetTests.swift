@@ -134,7 +134,7 @@ final class MessagePieceTargetTests: XCTestCase {
         let root = URL(fileURLWithPath: #filePath)
             .deletingLastPathComponent().deletingLastPathComponent()
             .deletingLastPathComponent().deletingLastPathComponent()
-        return try String(contentsOf: root.appendingPathComponent(relativePath), encoding: .utf8)
+        return try AppSourceGuard.text(at: root.appendingPathComponent(relativePath))
     }
 
     func test_everyTileSurface_longPressOpensThePiecePreview() throws {

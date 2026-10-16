@@ -93,7 +93,7 @@ final class KeyboardFirstScrollTests: XCTestCase {
     }
 
     private func normalized(_ relativePath: String) throws -> String {
-        AppSourceGuard.stripComments(try String(contentsOf: Self.iosRoot.appendingPathComponent(relativePath), encoding: .utf8))
+        AppSourceGuard.stripComments(try AppSourceGuard.text(at: Self.iosRoot.appendingPathComponent(relativePath)))
             .components(separatedBy: .whitespacesAndNewlines).filter { !$0.isEmpty }.joined(separator: " ")
     }
 
