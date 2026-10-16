@@ -102,6 +102,8 @@ struct FocalRowInput: Equatable {
     /// `Participant.type`). Porté en primitif jusqu'à la feuille pour que la
     /// rangée reste Equatable et ne se réévalue que sur changement réel.
     let senderIsAnonymous: Bool
+    /// Le contour d'avatar équipé de l'auteur, déjà résolu (#10713) ; `nil` sans contour.
+    let senderRing: AvatarRingDesign?
 
     /// L'auteur, prêt à être présenté — construit ICI, dans `Focal/Core/`.
     ///
@@ -205,6 +207,7 @@ struct FocalRowInput: Equatable {
         senderStoryRing: StoryRingState,
         senderMoodEmoji: String?,
         senderIsAnonymous: Bool = false,
+        senderRing: AvatarRingDesign? = nil,
         accentHex: String,
         isDark: Bool,
         isDirect: Bool,
@@ -247,6 +250,7 @@ struct FocalRowInput: Equatable {
         self.senderStoryRing = senderStoryRing
         self.senderMoodEmoji = senderMoodEmoji
         self.senderIsAnonymous = senderIsAnonymous
+        self.senderRing = senderRing
         self.accentHex = accentHex
         self.isDark = isDark
         self.isDirect = isDirect
@@ -297,6 +301,7 @@ struct FocalRowInput: Equatable {
             && lhs.senderPresence == rhs.senderPresence
             && lhs.senderIsHere == rhs.senderIsHere
             && lhs.senderIsAnonymous == rhs.senderIsAnonymous
+            && lhs.senderRing == rhs.senderRing
             && lhs.senderStoryRing == rhs.senderStoryRing
             && lhs.senderMoodEmoji == rhs.senderMoodEmoji
             && lhs.accentHex == rhs.accentHex

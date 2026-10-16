@@ -108,6 +108,8 @@ struct BubbleFooter: View, Equatable {
                     onMoodTap: senderMoodTap,
                     contextMenuItems: avatarMenu(sender: sender)
                 )
+                .avatarRingWithin(sender.ring, footprint: AvatarContext.messageBubble.size,
+                                  storyRingSize: sender.storyRing == .none ? nil : AvatarContext.messageBubble.ringSize)
                 VStack(alignment: .leading, spacing: MeeshySpacing.xxs) {
                     HStack(spacing: MeeshySpacing.xs) {
                         // Nom borné à 16 caractères (directive user 2026-07-30) :

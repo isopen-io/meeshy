@@ -9,6 +9,12 @@ extension MessageRecord {
             .flatMap { String(data: $0, encoding: .utf8) }
     }
 
+    /// Le contour d'avatar servi avec l'auteur (#10713) : `.some(nil)` quand l'auteur est servi
+    /// SANS contour (retiré), `nil` quand l'écho ne porte pas d'auteur — la ligne garde alors le sien.
+    static func servedSenderRingJson(_ sender: APIMessageSender?, id: String) -> String?? {
+        sender.map { encodeJSONText($0.profileDecor?.avatarRing, field: "senderRingJson", id: id) }
+    }
+
     static func decodeJSONText<T: Decodable>(_ type: T.Type, _ json: String?, field: String, id: String) -> T? {
         json.flatMap { $0.data(using: .utf8) }
             .flatMap { JSONDecoder().decodeOrLog(type, from: $0, field: field, id: id) }

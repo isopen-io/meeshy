@@ -34,7 +34,8 @@ extension BubbleStandardLayout {
             moodEmoji: senderMoodEmoji,
             presence: presenceState,
             storyRing: senderStoryRingState,
-            isHere: senderIsHere
+            isHere: senderIsHere,
+            ring: ProfileDecorResolver.ring(message.senderRing)
         ) : nil
 
         // #7365 — statut RÉSOLU (tout-ou-rien en groupe), jamais le brut.
