@@ -3,6 +3,9 @@ import { ENGAGEMENT_ACHIEVEMENT_LABELS, ENGAGEMENT_AXIS_LABELS } from '@meeshy/s
 import type { EngagementScaleProgress } from '@meeshy/shared/utils/engagement-progress';
 import { achievementLabel } from '@meeshy/shared/utils/achievement-labels';
 import type { AchievementFamily, AchievementSection } from '@meeshy/shared/types/achievement-catalog';
+import { translateGame } from '@/lib/i18n-game-catalog';
+import { currentInterfaceLanguage, type InterfaceLanguage } from '@/lib/interface-language';
+import { awardedDate } from '@/lib/view/game-copy-v2';
 
 /**
  * CE QUE L'ÉCRAN « PROGRESSION » DIT (#5547) — les libellés, les glyphes et les
@@ -140,12 +143,14 @@ export const BADGE_UNIT = { singular: '', plural: '', goal: 'le palier' } as con
 export const LEVEL_UNIT = { singular: 'point', plural: 'points', goal: 'le niveau' } as const;
 export const STREAK_UNIT = { singular: 'jour', plural: 'jours', goal: 'le jalon de' } as const;
 
-/** « Obtenu le 3 septembre 2026 », ou `null` quand aucune trace gravée ne date le palier. */
-export function reachedAtLabel(reachedAt: string | null): string | null {
+/**
+ * « Obtenu le 3 septembre 2026 » (« Earned on September 3, 2026 »), dans la
+ * langue d'INTERFACE (#10822), ou `null` quand aucune trace gravée ne date le palier.
+ */
+export function reachedAtLabel(reachedAt: string | null, language: InterfaceLanguage = currentInterfaceLanguage()): string | null {
   if (reachedAt === null) return null;
-  const date = new Date(reachedAt);
-  if (Number.isNaN(date.getTime())) return null;
-  return `Obtenu le ${date.toLocaleDateString('fr-FR', { day: 'numeric', month: 'long', year: 'numeric' })}`;
+  if (Number.isNaN(new Date(reachedAt).getTime())) return null;
+  return translateGame(language, 'game.detail.earned_on', { date: awardedDate(reachedAt, language) });
 }
 
 /**

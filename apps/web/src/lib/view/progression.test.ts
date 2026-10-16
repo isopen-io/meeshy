@@ -4,6 +4,7 @@ import { BADGE_THRESHOLDS, ENGAGEMENT_ACHIEVEMENT_KEYS, ENGAGEMENT_AXES, ENGAGEM
 import { resolveEngagementProgress } from '@meeshy/shared/utils/engagement-progress';
 
 import { ENGAGEMENT_PROGRESS_FIXTURE } from '@/lib/api/engagement-fixture';
+import { loadGameCatalog } from '@/lib/i18n-game-catalog';
 import {
   ACHIEVEMENT_COPY,
   AXIS_GLYPHS,
@@ -93,5 +94,11 @@ describe('les phrases de palier', () => {
     expect(reachedAtLabel('2026-09-03T12:00:00.000Z')).toMatch(/^Obtenu le \d{1,2} septembre 2026$/);
     expect(reachedAtLabel(null)).toBeNull();
     expect(reachedAtLabel('pas une date')).toBeNull();
+  });
+
+  test('interface en : la date gravée parle anglais, plus « Obtenu le » ni un mois français (#10822)', async () => {
+    await loadGameCatalog('en');
+    const label = reachedAtLabel('2026-09-03T12:00:00.000Z', 'en');
+    expect(label).toMatch(/^Earned on September \d{1,2}, 2026$/);
   });
 });

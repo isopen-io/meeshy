@@ -12,6 +12,7 @@ import {
   scoreLabel,
 } from '@/lib/view/progression';
 import { familyName, formatCount, gameText } from '@/lib/view/game-copy';
+import { awardedDate } from '@/lib/view/game-copy-v2';
 import { meeshMissing } from '@/lib/view/meesh-copy';
 import { BRAND, CARD, INK, INK_2, MEESH_TINT, UNLOCKED_TINT } from '@/routes/progression-parts';
 
@@ -29,8 +30,7 @@ import { earnRules } from '@/lib/game/earn-rules';
  * était dit l'est toujours, un geste plus loin.
  */
 
-const dateCourte = (iso: string): string =>
-  new Date(iso).toLocaleDateString('fr-FR', { day: 'numeric', month: 'long', year: 'numeric' });
+const dateCourte = (iso: string): string => awardedDate(iso);
 
 /** Le libellé du dernier succès, quelle que soit sa provenance. */
 function libelleDernierSucces(progress: EngagementProgress): { titre: string; quand: string } | null {
