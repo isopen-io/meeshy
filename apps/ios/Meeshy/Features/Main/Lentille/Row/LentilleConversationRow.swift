@@ -674,6 +674,13 @@ private struct LentilleRowAvatar: View {
             onMoodTap: onMoodBadgeTap,
             contextMenuItems: isDirect ? directContextMenuItems : groupContextMenuItems
         )
+        // LE CONTOUR DU PAIR (#10757) — même loi que `ThemedConversationRow` : dans
+        // l'empreinte de l'avatar, l'anneau de story concentrique à l'intérieur (#10714).
+        .avatarRingWithin(
+            isDirect ? ProfileDecorResolver.ring(conversation.participantRing) : nil,
+            footprint: LentilleMetrics.Avatar.context.size,
+            storyRingSize: storyRingState == .none ? nil : LentilleMetrics.Avatar.context.ringSize
+        )
     }
 }
 

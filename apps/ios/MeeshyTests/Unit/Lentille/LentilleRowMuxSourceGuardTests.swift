@@ -43,6 +43,23 @@ final class LentilleRowMuxSourceGuardTests: XCTestCase {
         haystack.components(separatedBy: needle).count - 1
     }
 
+    // MARK: - #10757 — les DEUX rangs portent le contour du pair
+
+    /// Le contour équipé du pair d'une directe (#10713, #10714) n'était posé que
+    /// par `ThemedConversationRow` ; drapeau Lentille actif, la liste rend
+    /// `LentilleConversationRow`, et la directe restait sans contour (#10757).
+    /// Les deux rangs doivent lire LA même donnée, au même endroit de l'avatar.
+    func test_bothRows_drawThePeerRing_inTheAvatarFootprint() throws {
+        let rows = [
+            "Meeshy/Features/Main/Views/ThemedConversationRow.swift",
+            "Meeshy/Features/Main/Lentille/Row/LentilleConversationRow.swift",
+        ]
+        for path in rows {
+            let code = normalizedCode(try source(at: path))
+            XCTAssertTrue(code.contains(".avatarRingWithin( isDirect ? ProfileDecorResolver.ring(conversation.participantRing) : nil"), "\(path) doit poser le contour du pair d'une directe dans l'empreinte de l'avatar")
+        }
+    }
+
     // MARK: - Le mux existe, gardé par LE drapeau Lentille
 
     func test_rowCore_isGatedByLentilleFeatureFlag() throws {
