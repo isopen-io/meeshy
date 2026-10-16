@@ -77,14 +77,14 @@ final class TestHarnessNetworkSealTests: XCTestCase {
                                file: StaticString = #filePath, line: UInt = #line) async throws {
         var request = URLRequest(url: try XCTUnwrap(URL(string: url)))
         request.httpMethod = method
-        let before = TestHarnessRequestRefusal.refusedCount
+        let before = NetworkTransportSeal.refusedCount
         do {
             _ = try await session.data(for: request)
             XCTFail("\(method) \(url) est parti sur le réseau", file: file, line: line)
         } catch let error as URLError {
             XCTAssertEqual(error.code, .notConnectedToInternet, file: file, line: line)
         }
-        XCTAssertGreaterThan(TestHarnessRequestRefusal.refusedCount, before, file: file, line: line)
+        XCTAssertGreaterThan(NetworkTransportSeal.refusedCount, before, file: file, line: line)
     }
 }
 

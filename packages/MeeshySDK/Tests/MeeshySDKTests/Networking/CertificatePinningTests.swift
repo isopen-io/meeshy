@@ -167,7 +167,11 @@ final class CertificatePinningDelegateInitTests: XCTestCase {
         // default init as the REST URLSession. For the pin set to cover WebSocket
         // connections, the socket host must equal the API host (verified here).
         let apiHost = URL(string: MeeshyConfig.shared.apiBaseURL)?.host
-        let socketHost = SocketConfig.baseURL?.host
+        // Bundle scellé (#10854) : `SocketConfig.baseURL` y est nil — on lit
+        // l'origine configurée, transport ouvert.
+        let socketHost = SocketConfig.baseURL(
+            socketBaseURL: MeeshyConfig.shared.socketBaseURL, isTransportSealed: false
+        )?.host
         XCTAssertNotNil(apiHost, "apiBaseURL must contain a resolvable host")
         XCTAssertNotNil(socketHost, "socketBaseURL must contain a resolvable host")
         XCTAssertEqual(apiHost, socketHost,
