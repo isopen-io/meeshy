@@ -6,6 +6,15 @@
 # Routing: Traefik PROD route le trafic via le réseau partagé meeshy-network
 # Prérequis: Le compose prod doit tourner (Traefik sur ports 80/443)
 # =============================================================================
+# #10855 — journaux applicatifs dans journald : ils survivent à la recréation
+# du conteneur (chaque promotion recrée la passerelle, et json-file part avec
+# elle). Durée bornée par /etc/systemd/journald.conf.d/meeshy-retention.conf.
+# Lecture : journalctl CONTAINER_NAME=<conteneur> --since "7 days ago"
+x-journald-logging: &journald-logging
+  driver: journald
+  options:
+    tag: "{{.Name}}"
+
 
 services:
   # ===========================================================================
@@ -157,6 +166,7 @@ services:
     image: ${TRANSLATOR_IMAGE:-isopen/meeshy-translator:staging}
     container_name: meeshy-translator-staging
     restart: unless-stopped
+    logging: *journald-logging
     environment:
       - DATABASE_TYPE=${DATABASE_TYPE:-MONGODB}
       - DATABASE_URL=mongodb://database-staging:27017/${MONGODB_DATABASE:-meeshy}?replicaSet=rs0&directConnection=true
@@ -226,6 +236,7 @@ services:
     image: ${GATEWAY_IMAGE:-isopen/meeshy-gateway:staging}
     container_name: meeshy-gateway-staging
     restart: unless-stopped
+    logging: *journald-logging
     environment:
       - DATABASE_TYPE=${DATABASE_TYPE:-MONGODB}
       - DATABASE_URL=mongodb://database-staging:27017/${MONGODB_DATABASE:-meeshy}?replicaSet=rs0&directConnection=true
@@ -515,6 +526,7 @@ services:
     image: ${FRONTEND_IMAGE:-isopen/meeshy-webapp:staging}
     container_name: meeshy-frontend-staging
     restart: unless-stopped
+    logging: *journald-logging
     # PAS de `depends_on: gateway-staging`. Le legacy en avait besoin : son
     # rendu serveur appelait la passerelle au démarrage. nginx sert des
     # fichiers — l'y attacher rendrait l'interface indisponible chaque fois que
@@ -548,6 +560,7 @@ services:
     image: ${AGENT_IMAGE:-isopen/meeshy-agent:staging}
     container_name: meeshy-agent-staging
     restart: unless-stopped
+    logging: *journald-logging
     environment:
       - DATABASE_URL=mongodb://database-staging:27017/${MONGODB_DATABASE:-meeshy}?replicaSet=rs0&directConnection=true
       - REDIS_URL=redis://redis-staging:6379
