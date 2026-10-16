@@ -18,7 +18,7 @@
     },
     "apps/web": {
       "name": "@meeshy/web",
-      "version": "2.13.0",
+      "version": "2.18.0",
       "dependencies": {
         "@capacitor-community/media": "9.1.0",
         "@capacitor/push-notifications": "8.1.2",
@@ -52,7 +52,7 @@
         "@capacitor/android": "8.5.3",
         "@capacitor/cli": "8.5.1",
         "@capacitor/core": "8.5.1",
-        "@capacitor/ios": "8.5.2",
+        "@capacitor/ios": "8.5.3",
       },
     },
     "packages/design-tokens": {
@@ -61,7 +61,7 @@
     },
     "packages/shared": {
       "name": "@meeshy/shared",
-      "version": "1.33.0",
+      "version": "1.38.0",
       "dependencies": {
         "@prisma/client": "^6.15.0",
         "zod": "^4.4.3",
@@ -79,7 +79,7 @@
     },
     "services/agent": {
       "name": "@meeshy/agent",
-      "version": "1.0.61",
+      "version": "1.0.66",
       "dependencies": {
         "@langchain/core": "^1.2.17",
         "@langchain/langgraph": "^1.4.12",
@@ -88,7 +88,7 @@
         "dotenv": "^17.4.2",
         "fastify": "^5.12.3",
         "ioredis": "^6.0.0",
-        "jsonrepair": "^3.14.0",
+        "jsonrepair": "^3.15.0",
         "mustache": "^4.2.0",
         "openai": "^6.46.0",
         "pino": "^10.3.1",
@@ -110,12 +110,12 @@
     },
     "services/gateway": {
       "name": "@meeshy/gateway",
-      "version": "1.79.0",
+      "version": "1.84.0",
       "dependencies": {
         "@fastify/cors": "^11.3.0",
-        "@fastify/helmet": "^13.1.1",
+        "@fastify/helmet": "^13.1.2",
         "@fastify/jwt": "^10.2.2",
-        "@fastify/multipart": "^10.1.1",
+        "@fastify/multipart": "^10.1.3",
         "@fastify/rate-limit": "^11.2.0",
         "@fastify/sensible": "^6.0.7",
         "@fastify/static": "^10.1.3",
@@ -195,7 +195,7 @@
     },
     "services/translator": {
       "name": "@meeshy/translator",
-      "version": "1.78.0",
+      "version": "1.83.0",
     },
   },
   "overrides": {
@@ -454,7 +454,7 @@
 
     "@capacitor/core": ["@capacitor/core@8.5.1", "", { "dependencies": { "tslib": "^2.1.0" } }, "sha512-IOQ7ynG1qgrJ/RLuCO3WgyRGmkmmG/cdStRR4ftU2dWEN1FdtLrnI/XpZmZuUsOEHEnzBRJY/PmRH8eTLiXfhA=="],
 
-    "@capacitor/ios": ["@capacitor/ios@8.5.2", "", { "peerDependencies": { "@capacitor/core": "^8.5.0" } }, "sha512-eOT2S67AfTFG7KN0T3oxwAajrJz4rSye+ODfvChiwrk0F/+kWufFM1qU6cDjGJUOfwdAoeuEpZyWHSwZlu4GFg=="],
+    "@capacitor/ios": ["@capacitor/ios@8.5.3", "", { "peerDependencies": { "@capacitor/core": "^8.5.0" } }, "sha512-HnnV92Jl8+3x0JUloXUMjFcUsQI8wHFVsKwkLn72DfRZXYGZW11tQbmNOWOnRTljaU18FdI1b9ipT09SzzPDNw=="],
 
     "@capacitor/push-notifications": ["@capacitor/push-notifications@8.1.2", "", { "peerDependencies": { "@capacitor/core": ">=8.0.0" } }, "sha512-TQl4XxqJfNF+KbSYBFMXYYT5WXUaleVKXlByhh/8+KySMVNjp+l5OqAUoGe/sY1IAnGXEuUeCjA/WLZEVvGwrA=="],
 
