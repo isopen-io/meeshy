@@ -22,7 +22,7 @@ afterAll(async () => {
 });
 afterEach(unmountAll);
 
-const firstMint: GuideEvent = { kind: 'first-mint', levelBefore: 14, levelAfter: 9, tailwindUntilLevel: 14 };
+const firstMint: GuideEvent = { kind: 'first-mint' };
 const rank: GuideEvent = { kind: 'new-rank', rank: 'voix', division: 2, glory: 1700, gloryMissing: 300 };
 const atRisk: GuideEvent = { kind: 'flame-at-risk', days: 6 };
 
@@ -52,7 +52,7 @@ describe('la première fois : la version complète', () => {
   });
 
   test('un bouton qui y mène, avec son libellé', () => {
-    expect(page).toContain('Voir mon niveau');
+    expect(page).toContain('Voir ma progression');
   });
 
   test('qui parle : Mee et Meo ensemble pour un grand moment', () => {

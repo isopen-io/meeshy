@@ -30,8 +30,7 @@ const EVENTS: Readonly<Record<GuideMomentKey, GuideEvent>> = {
   'new-tier': { kind: 'new-tier', tier: 'lueur', nextTierLevel: 20 },
   'missions-unlocked': { kind: 'missions-unlocked' },
   'first-mint-possible': { kind: 'first-mint-possible', price: 1221, levelsLost: 5, gloryGain: 100 },
-  'first-mint': { kind: 'first-mint', levelBefore: 14, levelAfter: 9, tailwindUntilLevel: 14 },
-  'badge-extinguished': { kind: 'badge-extinguished', missingActions: 37 },
+  'first-mint': { kind: 'first-mint' },
   'price-rises': { kind: 'price-rises', nextPrice: 1294 },
   'new-rank': { kind: 'new-rank', rank: 'voix', division: 2, glory: 1700, gloryMissing: 300 },
   'treasury-tier': { kind: 'treasury-tier', tier: 'escarcelle', nextTierMissing: 40 },
@@ -84,12 +83,6 @@ describe('les chiffres du moment se disent', () => {
     expect(copy.means).toContain('ton niveau ne bouge pas');
     expect(copy.means).not.toContain('Vent arrière');
     expect(copy.means).not.toContain('de 14 à 9');
-  });
-  test('un badge éteint : la distance pour le rallumer', () => {
-    expect(copyOf('badge-extinguished').next).toContain('37 actions');
-  });
-  test('un seul pas pour rallumer', () => {
-    expect(momentCopy(guideMoment({ kind: 'badge-extinguished', missingActions: 1 }, []), 'fr').next).toContain('1 action ');
   });
   test('le prix monte : la prochaine', () => {
     expect(copyOf('price-rises').next).toContain('1 294 étincelles');

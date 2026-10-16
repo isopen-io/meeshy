@@ -109,7 +109,6 @@ export const GUIDE_MOMENT_PRIORITY_ALL: readonly (GuideMomentKey | GuideMomentKe
   'new-tier',
   'season-start',
   'treasury-tier',
-  'badge-extinguished',
   'price-rises',
   'atlas-stamp',
   'league-first',
