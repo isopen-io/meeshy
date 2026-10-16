@@ -279,7 +279,7 @@ struct ConversationView: View {
         let refs = attachmentRefs
             ?? DraftStore.shared.load(for: viewModel.conversationId)?.attachments
         let draft = MessageDraft.composing(
-            text: text,
+            text: composerState.persistedDraftText(composing: text),
             reply: ref,
             selectedLanguage: composerState.selectedLanguage,
             effectFlags: viewModel.pendingEffects.flags.rawValue,

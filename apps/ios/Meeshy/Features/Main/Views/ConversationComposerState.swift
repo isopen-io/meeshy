@@ -145,6 +145,14 @@ extension ConversationComposerState {
         openingConversation ? 0.45 : 0
     }
 
+    /// **Ce que la conversation garde comme brouillon** (#10807). En édition, le
+    /// champ porte le message MODIFIÉ, qui n'est pas un brouillon : le persister
+    /// affichait « Brouillon : … » dans la liste. Ce qui se garde alors est ce
+    /// que l'auteur composait avant d'entrer en édition — rien s'il n'avait rien.
+    func persistedDraftText(composing text: String) -> String {
+        editingMessageId == nil ? text : (draftBeforeEdit ?? "")
+    }
+
     /// Les pièces de la zone d'attachement, prêtes puis en préparation.
     var liveAttachmentIds: [String] {
         pendingAttachments.map(\.id) + preparingAttachments.map(\.id)
