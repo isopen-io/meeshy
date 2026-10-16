@@ -14,6 +14,7 @@
 import { describe, it, expect, jest } from '@jest/globals';
 import { purgeAccountIsolatedData, anonymizeUserIdentity } from '../../../services/AccountPurgeService';
 import { GAME_PURGED_MODELS } from '../../../services/game/GamePurge';
+import { accountReaderKeyOf } from '../../../services/posts/readerKey';
 import { sharedTranslationRow, sharedTranslationTable } from '../../helpers/shared-translation-table';
 import { fakeFileStore, fakePackDb } from './pack-privacy.fakes';
 
@@ -112,7 +113,11 @@ describe('purgeAccountIsolatedData', () => {
     });
     const summary = await purgeAccountIsolatedData(prisma, USER_ID, NO_FILES);
 
-    for (const model of ['postImpression', 'postEngagement', 'postView', 'contentEvent']) {
+    // Les lignes sans consentement portent l'empreinte du compte (#10771, #10773) : elles partent avec lui.
+    for (const model of ['postImpression', 'postEngagement']) {
+      expect(prisma[model].deleteMany).toHaveBeenCalledWith({ where: { OR: [{ userId: USER_ID }, { readerKey: accountReaderKeyOf(USER_ID) }] } });
+    }
+    for (const model of ['postView', 'contentEvent']) {
       expect(prisma[model].deleteMany).toHaveBeenCalledWith({ where: { userId: USER_ID } });
     }
     expect(summary.readingTelemetry).toEqual({ impressions: 40, engagements: 7, views: 5, contentEvents: 12 });

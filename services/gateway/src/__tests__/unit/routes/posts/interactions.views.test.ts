@@ -309,7 +309,7 @@ describe('POST /posts/:id/impression — on a repost, credits the root impressio
   it('résout les racines en UNE passe par lot (aucun findUnique) et crédite la racine une fois', async () => {
     const ROOT_ID = '507f1f77bcf86cd799439077';
     const prisma = {
-      postImpression: { createMany: jest.fn<any>().mockResolvedValue({ count: 1 }) },
+      postImpression: { findFirst: async () => null, findMany: async () => [], deleteMany: async () => ({ count: 0 }), createMany: jest.fn<any>().mockResolvedValue({ count: 1 }) },
       post: {
         updateMany: jest.fn<any>().mockResolvedValue({ count: 1 }),
         findUnique: jest.fn<any>(),
@@ -333,7 +333,7 @@ describe('POST /posts/:id/impression — on a repost, credits the root impressio
 
   it('non-repost post: no root credit attempted, no standalone findUnique either', async () => {
     const prisma = {
-      postImpression: { createMany: jest.fn<any>().mockResolvedValue({ count: 1 }) },
+      postImpression: { findFirst: async () => null, findMany: async () => [], deleteMany: async () => ({ count: 0 }), createMany: jest.fn<any>().mockResolvedValue({ count: 1 }) },
       post: {
         updateMany: jest.fn<any>().mockResolvedValue({ count: 0 }),
         findUnique: jest.fn<any>(),
@@ -355,7 +355,7 @@ describe('POST /posts/:id/impression — on a repost, credits the root impressio
 describe('POST /posts/:id/impression — service error', () => {
   it('returns 500 when prisma.postImpression.create throws', async () => {
     const prisma = {
-      postImpression: { create: jest.fn<any>().mockRejectedValue(new Error('DB error')) },
+      postImpression: { findFirst: async () => null, findMany: async () => [], deleteMany: async () => ({ count: 0 }), create: jest.fn<any>().mockRejectedValue(new Error('DB error')) },
       post: { update: jest.fn<any>().mockResolvedValue({}), findFirst: aclAwareFindFirst() },
     };
     const app = await buildApp({ prisma });
@@ -402,7 +402,7 @@ describe('POST /posts/impressions/batch — 2 reposts of the same original credi
     const REPOST_A = '507f1f77bcf86cd799439078';
     const REPOST_B = '507f1f77bcf86cd799439079';
     const prisma = {
-      postImpression: { createMany: jest.fn<any>().mockResolvedValue({ count: 2 }) },
+      postImpression: { findFirst: async () => null, findMany: async () => [], deleteMany: async () => ({ count: 0 }), createMany: jest.fn<any>().mockResolvedValue({ count: 2 }) },
       post: {
         updateMany: jest.fn<any>().mockResolvedValue({ count: 1 }),
         findMany: aclAwareFindMany([
@@ -457,7 +457,7 @@ describe('POST /posts/impressions/batch — sous le plafond, rien ne se perd', (
   it('enregistre les SOIXANTE entrées d’un lot que le schéma accepte', async () => {
     const postIds = Array.from({ length: 60 }, (_, i) => `507f1f77bcf86cd7994390${i.toString().padStart(2, '0')}`);
     const prisma = {
-      postImpression: {
+      postImpression: { findFirst: async () => null, findMany: async () => [], deleteMany: async () => ({ count: 0 }),
         createMany: jest.fn<any>().mockResolvedValue({ count: 60 }),
       },
       post: {
@@ -476,7 +476,7 @@ describe('POST /posts/impressions/batch — sous le plafond, rien ne se perd', (
 describe('POST /posts/impressions/batch — service error', () => {
   it('returns 500 when createMany throws', async () => {
     const prisma = {
-      postImpression: { createMany: jest.fn<any>().mockRejectedValue(new Error('DB error')) },
+      postImpression: { findFirst: async () => null, findMany: async () => [], deleteMany: async () => ({ count: 0 }), createMany: jest.fn<any>().mockRejectedValue(new Error('DB error')) },
       post: {
         updateMany: jest.fn<any>().mockResolvedValue({ count: 0 }),
         findMany: aclAwareFindMany(),
@@ -562,7 +562,7 @@ describe('POST /posts/:id/view — STORY viewer has no username uses ?? empty st
     mockGetPostById.mockResolvedValueOnce({ id: POST_ID, type: 'STORY', authorId: 'other-author', viewCount: 3 });
     const app = Fastify({ logger: false });
     const prisma = {
-      postImpression: { create: jest.fn<any>().mockResolvedValue({}), createMany: jest.fn<any>().mockResolvedValue({ count: 0 }) },
+      postImpression: { findFirst: async () => null, findMany: async () => [], deleteMany: async () => ({ count: 0 }), create: jest.fn<any>().mockResolvedValue({}), createMany: jest.fn<any>().mockResolvedValue({ count: 0 }) },
       // Audience déclarée PUBLIC (cf. `interactions-audience.test.ts`).
       post: {
         update: jest.fn<any>().mockResolvedValue({}),
@@ -680,7 +680,7 @@ describe('POST /posts/impressions/batch — caps at IMPRESSION_BATCH_CAP (100) e
   // lot au-delà de 100 (que le schéma refuserait s'il l'atteignait) est borné à
   // 100 ; en deçà, chaque id admis est enregistré.
   const makePrismaDouble = () => ({
-    postImpression: { createMany: jest.fn<any>().mockResolvedValue({ count: 100 }) },
+    postImpression: { findFirst: async () => null, findMany: async () => [], deleteMany: async () => ({ count: 0 }), createMany: jest.fn<any>().mockResolvedValue({ count: 100 }) },
     post: {
       updateMany: jest.fn<any>().mockResolvedValue({ count: 100 }),
       findMany: aclAwareFindMany(),

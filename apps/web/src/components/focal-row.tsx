@@ -712,7 +712,7 @@ export const FocalRow = memo(function FocalRow({
         ) : head ? (
           <span className="relative inline-flex">
           <AuthorAvatar
-            {...(isMine ? {} : { authorId: hereKeyOf(message.sender), participant: { id: message.senderId, name: senderAvatarName } })}
+            {...(isMine ? {} : { authorId: hereKeyOf(message.sender), sender: message.sender, participant: { id: message.senderId, name: senderAvatarName } })}
             initials={initialsOf(senderAvatarName)}
             color="var(--accent)"
             size={AVATAR_SIZE}

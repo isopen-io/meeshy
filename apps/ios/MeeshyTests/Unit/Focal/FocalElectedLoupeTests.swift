@@ -178,7 +178,7 @@ final class FocalElectedLoupeTests: XCTestCase {
         let root = URL(fileURLWithPath: #filePath)
             .deletingLastPathComponent().deletingLastPathComponent()
             .deletingLastPathComponent().deletingLastPathComponent()
-        let source = try String(contentsOf: root.appendingPathComponent(relativePath), encoding: .utf8)
+        let source = try AppSourceGuard.text(at: root.appendingPathComponent(relativePath))
         return AppSourceGuard.stripComments(source)
             .components(separatedBy: .whitespacesAndNewlines).filter { !$0.isEmpty }.joined(separator: " ")
     }

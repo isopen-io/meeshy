@@ -176,3 +176,31 @@ final class ConversationComposerStateTests: XCTestCase {
                        "la tête de la file des vidéos se retire sans supposer qu'elle existe")
     }
 }
+
+/// #10807 — modifier un message envoyé n'est pas écrire un brouillon. Le champ
+/// porte le texte du message en modification ; ce que la conversation garde
+/// comme brouillon, c'est ce que l'auteur composait AVANT d'entrer en édition.
+@MainActor
+final class ConversationComposerEditDraftTests: XCTestCase {
+
+    private func editing(draftBeforeEdit: String?) -> ConversationComposerState {
+        var state = ConversationComposerState()
+        state.editingMessageId = "message-1"
+        state.editingOriginalContent = "Bonjour depuis le simulateur"
+        state.draftBeforeEdit = draftBeforeEdit
+        return state
+    }
+
+    func test_enEdition_sansBrouillon_rienNeSePersiste() {
+        XCTAssertEqual(editing(draftBeforeEdit: nil).persistedDraftText(composing: "Bonjour depuis le si"), "")
+        XCTAssertEqual(editing(draftBeforeEdit: "").persistedDraftText(composing: "Bonjour depuis le si"), "")
+    }
+
+    func test_enEdition_leBrouillonDAvantSurvit() {
+        XCTAssertEqual(editing(draftBeforeEdit: "à finir").persistedDraftText(composing: "Bonjour depuis le si"), "à finir")
+    }
+
+    func test_horsEdition_leChampEstLeBrouillon() {
+        XCTAssertEqual(ConversationComposerState().persistedDraftText(composing: "à finir"), "à finir")
+    }
+}

@@ -60,6 +60,9 @@ public struct APIMessageSender: Decodable, Sendable {
     public let firstName: String?
     public let lastName: String?
     public let user: APIMessageSenderUser?
+    /// Le contour d'avatar équipé de l'auteur (#10713), servi avec le message. Additif et
+    /// tolérant : absent (ancien serveur, aucun contour) ou illisible ⇒ `nil`.
+    public var profileDecor: ServedProfileDecor? = nil
 
     public var name: String {
         nonEmpty(displayName) ?? nonEmpty(user?.displayName) ?? nonEmpty(username) ?? nonEmpty(user?.username) ?? id
@@ -1040,6 +1043,7 @@ extension APIMessage {
             senderAvatarURL: sender?.resolvedAvatar, senderUserId: sender?.resolvedUserId,
             senderIsAnonymous: sender?.isAnonymous ?? false,
             senderHasAccount: sender.map(\.hasAccount) ?? (isMe || msgSource != .user),
+            senderRing: sender?.profileDecor?.avatarRing,
             deliveryStatus: computedDeliveryStatus,
             isMe: isMe,
             deliveredToAllAt: deliveredToAllAt, readByAllAt: readByAllAt,

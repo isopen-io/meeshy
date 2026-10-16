@@ -33,6 +33,10 @@ import { claimCountingReceipts, releaseCountingReceipts, type CountingReceipts }
 import { readAnalyticsStanding, type AnalyticsStanding } from '../../services/social/eventPrivacy';
 import { impressionRowOf, insertKeyedImpressions, removeKeyedImpressions } from '../../services/social/impressionRows';
 import { ingestSocialEventsV2 } from '../../services/social/socialEventsV2';
+import {
+  consumeImpliedImpressions,
+  impressionsCarriedByViews,
+} from '../../services/social/viewImpressions';
 export { SOCIAL_EVENTS_SUCCESSEUR, socialEventsDeprecation } from './deprecation';
 import {
   SOCIAL_EVENTS_BATCH_CAP,
@@ -107,6 +111,13 @@ export {
  * produit que des vues et des impressions. Il est désigné par sa CLÉ DE
  * LECTEUR (`readerKeyOf`, HMAC), jamais par la valeur de X-Session-Token.
  */
+/**
+ * Les types dont la MESURE rangée dépend du statut d'analyse du compte (#10501,
+ * #10772, #10785) : la mesure d'une impression (une vue peut porter la sienne),
+ * la trace d'une session de lecture. Le lecteur, lui, est rangé quel que soit le statut.
+ */
+const STANDING_TYPES: ReadonlySet<SocialEvent['type']> = new Set(['impression', 'view', 'dwell', 'dwell-start']);
+
 export type SocialEventsActor =
   | { readonly kind: 'user'; readonly userId: string; readonly username: string }
   | { readonly kind: 'anonymous'; readonly readerKey: string };
@@ -163,6 +174,7 @@ async function applyViews(
   events: readonly Extract<SocialEvent, { type: 'view' }>[],
   actor: Extract<SocialEventsActor, { kind: 'user' }>,
   counted: (events: readonly SocialEvent[]) => void = () => undefined,
+  alreadyShown: ReadonlySet<string> = new Set(),
 ): Promise<number> {
   if (events.length === 0) return 0;
 
@@ -172,6 +184,7 @@ async function applyViews(
       surface: event.surface,
       provenance: event.provenance,
       origin: event.origin,
+      impliesImpression: !event.impression && !alreadyShown.has(event.postId),
     });
     recorded += 1;
     counted([event]);
@@ -272,7 +285,11 @@ async function applyImpressions(
   const events = [...plain, ...keyed.filter((_, index) => inserted.has(index))];
   const written = keyedRows.filter((_, index) => inserted.has(index));
 
-  const impressions = compterParId(events.map((event) => event.postId));
+  // #10732 — une vraie impression prend la place de celle qu'une vue sans clé avait déduite.
+  const remplacees = await consumeImpliedImpressions(deps.prisma, userId, events.map((event) => event.postId));
+  const impressions = new Map([...compterParId(events.map((event) => event.postId))]
+    .map(([id, n]) => [id, n - (remplacees.get(id) ?? 0)] as const)
+    .filter(([, n]) => n > 0));
   const ouvertures = compterParId(events.filter(isDetailOpen).map((event) => event.postId));
 
   const racines = await resoudreRacinesDeRepost(deps.prisma, [...impressions.keys()]);
@@ -408,14 +425,26 @@ export async function ingestSocialEvents(
   const parType = <T extends SocialEvent['type']>(type: T) =>
     admis.filter((event): event is Extract<SocialEvent, { type: T }> => event.type === type);
 
+  // #10772, #10785 — la MESURE qu'une ligne de lecture garde dépend du statut d'analyse
+  // que la PASSERELLE établit (le client fait foi pour refuser, elle pour
+  // accorder). Les alias historiques ne le passent pas : il se lit ici.
+  const standing = options.standing ?? (admis.some((event) => STANDING_TYPES.has(event.type))
+    ? await readAnalyticsStanding(deps.prisma as never, actor.userId, options.context?.consent)
+    : 'not_granted');
+  const situated = { ...options, standing };
+
   return orReleaseReceipts(deps, recus, async (counted) => {
-    const vues = await applyViews(deps, parType('view'), actor, counted);
+    // #10732 — une vue implique son impression : sous sa clé si elle la porte
+    // (écrite avec les impressions ci-dessous), déduite par `recordView` sinon —
+    // jamais pour un post dont le lot porte déjà l'impression.
+    const montres = new Set(parType('impression').map((event) => event.postId));
+    const vues = await applyViews(deps, parType('view'), actor, counted, montres);
 
     const [ouvertures, impressions, telechargements, sessions] = await Promise.all([
       applyOpens(deps, parType('open'), actor.userId).then((n) => { counted(parType('open')); return n; }),
-      applyImpressions(deps, parType('impression'), actor.userId, options),
+      applyImpressions(deps, [...parType('impression'), ...impressionsCarriedByViews(parType('view'))], actor.userId, situated),
       applyDownloads(deps, parType('download'), actor.userId),
-      applyDwell(deps, parType('dwell'), actor.userId),
+      applyDwell(deps, [...parType('dwell'), ...parType('dwell-start')], actor.userId, standing),
     ]);
 
     return {
@@ -568,14 +597,16 @@ async function applyDownloads(
  */
 async function applyDwell(
   deps: SocialEventsDeps,
-  events: readonly Extract<SocialEvent, { type: 'dwell' }>[],
+  events: readonly Extract<SocialEvent, { type: 'dwell' | 'dwell-start' }>[],
   userId: string,
+  standing: AnalyticsStanding,
 ): Promise<number> {
   if (events.length === 0) return 0;
   const sessions = events.map(({ type: _type, ...session }) => session);
   return deps.postService.recordEngagementBatch(
     sessions as Parameters<PostService['recordEngagementBatch']>[0],
     userId,
+    standing,
   );
 }
 
@@ -712,14 +743,14 @@ export function registerSocialEventRoutes(
 
       const comptage = lot.counting.slice(0, comptageAdmis);
       const v2Admis = v2.slice(0, v2Quota);
-      // Le consentement ne se lit que si une écriture en dépend (une impression
-      // ou un événement v2) : un lot de vues d'un ancien client n'en coûte aucune.
-      const consentCompte = v2Admis.length > 0 || comptage.some(({ event }) => event.type === 'impression');
-      const standing: AnalyticsStanding = acteur.kind === 'anonymous'
+      // Le consentement ne se lit que si une écriture en dépend (une impression,
+      // une vue qui en déduit une, une session de lecture, un événement v2).
+      const consentCompte = v2Admis.length > 0 || comptage.some(({ event }) => STANDING_TYPES.has(event.type));
+      const standing: AnalyticsStanding | undefined = acteur.kind === 'anonymous'
         ? 'anonymous'
         : consentCompte
           ? await readAnalyticsStanding(prisma as never, acteur.userId, lot.context.consent)
-          : 'not_granted';
+          : undefined;
 
       const comptes = await ingestSocialEvents(deps, comptage.map(({ event }) => event), acteur, {
         context: lot.context,
@@ -729,7 +760,7 @@ export function registerSocialEventRoutes(
       });
       const v2Comptes = await ingestSocialEventsV2(prisma as never, v2Admis, {
         actor: acteur.kind === 'user' ? { kind: 'user', userId: acteur.userId } : { kind: 'anonymous' },
-        standing,
+        standing: standing ?? 'not_granted',
         context: lot.context,
         receivedAt,
       });

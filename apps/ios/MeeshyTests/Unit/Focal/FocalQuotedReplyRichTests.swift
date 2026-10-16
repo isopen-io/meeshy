@@ -66,7 +66,7 @@ final class FocalQuotedReplyRichTests: XCTestCase {
             .deletingLastPathComponent()   // .../MeeshyTests
             .deletingLastPathComponent()   // .../apps/ios
             .appendingPathComponent(path)
-        return AppSourceGuard.stripComments(try String(contentsOf: url, encoding: .utf8))
+        return AppSourceGuard.stripComments(try AppSourceGuard.text(at: url))
     }
 
     private func quotedReplySource() throws -> String {

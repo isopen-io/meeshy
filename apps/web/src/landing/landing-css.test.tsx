@@ -14,8 +14,15 @@ const topLevelRuleCount = (selector: string): number =>
   css.split('\n').filter((line) => line.trim() === `${selector} {`).length;
 
 describe('la feuille de la landing ne déclare pas deux fois la même classe', () => {
-  test('le conteneur des étapes du formulaire (.ld-step) a une seule règle de premier niveau', () => {
-    expect(topLevelRuleCount('.ld-step')).toBe(1);
+  test('le formulaire d’entrée sans compte a quitté la page, ses règles aussi (#10784)', () => {
+    for (const selector of ['.ld-form', '.ld-step', '.ld-field', '.ld-error']) expect(css).not.toMatch(new RegExp(`^\\${selector}[ {]`, 'm'));
+  });
+
+  test('le QR vers /world a une seule règle, et garde son fond blanc quel que soit le thème (#10784)', () => {
+    expect(topLevelRuleCount('.ld-qr')).toBe(1);
+    expect(topLevelRuleCount('.ld-qr img')).toBe(1);
+    const html = renderToStaticMarkup(<LandingPage language="fr" copy={LANDING_COPY.fr} />);
+    expect(html.match(/class="ld-qr[^"]*"/g)?.length).toBe(2);
   });
 
   test('la pastille numérotée des cartes « Trois gestes » porte sa propre classe', () => {

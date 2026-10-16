@@ -11,11 +11,14 @@
  *    n'est lié à personne et n'en fait pas partie.
  *
  * Rien d'un autre compte : chaque ligne est filtrée par le `userId` du
- * demandeur. Chaque liste est bornée par la page de la requête.
+ * demandeur — ou, pour une impression ou une session RÉDUITE écrite entre
+ * #10771 et #10785, par l'EMPREINTE de son compte (`readerKey`).
+ * Chaque liste est bornée par la page de la requête.
  */
 
 import type { PrismaClient } from '@meeshy/shared/prisma/client';
 import type { ExportPage } from './export-sections';
+import { accountReaderKeyOf } from '../../services/posts/readerKey';
 
 type Row = Record<string, unknown>;
 
@@ -32,18 +35,20 @@ export async function exportReadingActivity(prisma: ReadingExportPrisma | Prisma
   const db = prisma as unknown as ReadingExportPrisma;
   const take = page.limit + 1;
   const skip = page.offset;
-  const read = (model: keyof ReadingExportPrisma, select: Row, orderBy: Row) =>
-    db[model].findMany({ where: { userId }, select, orderBy, take, skip } as never);
+  const ofAccount = { OR: [{ userId }, { readerKey: accountReaderKeyOf(userId) }] };
+  const read = (model: keyof ReadingExportPrisma, select: Row, orderBy: Row, where: Row = { userId }) =>
+    db[model].findMany({ where, select, orderBy, take, skip } as never);
 
   const [impressions, engagements, views, contentEvents] = await Promise.all([
     read('postImpression', {
       postId: true, source: true, surface: true, position: true, rankingSource: true,
       viewable: true, visibleFraction: true, visibleMs: true, platform: true, createdAt: true,
-    }, { createdAt: 'desc' }),
+    }, { createdAt: 'desc' }, ofAccount),
     read('postEngagement', {
       postId: true, contentType: true, surface: true, startedAt: true, dwellMs: true, watchMs: true,
       mediaDurationMs: true, completed: true, actions: true,
-    }, { startedAt: 'desc' }),
+      creditedOpen: true, creditedPlay: true, creditedQualified: true, createdAt: true,
+    }, { createdAt: 'desc' }, ofAccount),
     read('postView', { postId: true, viewedAt: true, duration: true, surface: true, provenance: true, origin: true }, { viewedAt: 'desc' }),
     read('contentEvent', {
       type: true, action: true, targetKind: true, targetId: true, parentKind: true, parentId: true, surface: true,

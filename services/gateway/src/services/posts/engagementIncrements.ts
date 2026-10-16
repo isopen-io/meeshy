@@ -80,3 +80,64 @@ export function engagementAggregateIncrements(s: EngagementSession): PostCounter
 
   return increments;
 }
+
+/** La part d'une session que la fusion compare — ce que la ligne stockée en garde. */
+export type MergeableEngagement = {
+  readonly dwellMs: number;
+  readonly watchMs?: number;
+  readonly mediaDurationMs?: number;
+  readonly completed: boolean;
+  readonly actions: unknown[];
+  readonly watchSamples: unknown[];
+};
+
+const longest = (stored: unknown[], incoming: unknown[]): unknown[] =>
+  incoming.length >= stored.length ? incoming : stored;
+
+const maxOptional = (a: number | undefined, b: number | undefined): number | undefined =>
+  a === undefined ? b : b === undefined ? a : Math.max(a, b);
+
+/**
+ * La MÊME session reçue deux fois (#10764) — le premier contact puis la mesure,
+ * ou un rejeu dans le désordre. La fusion ne recule jamais : durées au maximum,
+ * complétion acquise, la plus longue trace d'actions et d'échantillons. Un
+ * premier contact rejoué après la mesure ne rétrograde donc pas la ligne.
+ */
+export function mergeEngagementSessions<T extends MergeableEngagement>(stored: MergeableEngagement, incoming: T): T {
+  return {
+    ...incoming,
+    dwellMs: Math.max(stored.dwellMs, incoming.dwellMs),
+    watchMs: maxOptional(stored.watchMs, incoming.watchMs),
+    mediaDurationMs: incoming.mediaDurationMs ?? stored.mediaDurationMs,
+    completed: stored.completed || incoming.completed,
+    actions: longest(stored.actions, incoming.actions),
+    watchSamples: longest(stored.watchSamples, incoming.watchSamples),
+  };
+}
+
+/**
+ * Les trois compteurs qu'une session peut créditer, en DRAPEAUX, rangés sur
+ * chaque ligne (#10771, #10785) : la fusion premier contact → mesure ne
+ * recrédite jamais ce qu'une réception précédente a déjà crédité.
+ */
+export type EngagementCredits = {
+  readonly creditedOpen: boolean;
+  readonly creditedPlay: boolean;
+  readonly creditedQualified: boolean;
+};
+
+export const creditsOfIncrements = (increments: PostCounterIncrements): EngagementCredits => ({
+  creditedOpen: 'postOpenCount' in increments,
+  creditedPlay: 'playCount' in increments,
+  creditedQualified: 'qualifiedViewCount' in increments,
+});
+
+export const incrementsOfCredits = (credits: Partial<Record<keyof EngagementCredits, boolean | null>>): PostCounterIncrements => ({
+  ...(credits.creditedOpen ? { postOpenCount: { increment: 1 } } : {}),
+  ...(credits.creditedPlay ? { playCount: { increment: 1 } } : {}),
+  ...(credits.creditedQualified ? { qualifiedViewCount: { increment: 1 } } : {}),
+});
+
+/** Ce que `now` crédite et que `already` n'avait pas — chaque compteur à UN par session. */
+export const incrementsNotYetCredited = (already: PostCounterIncrements, now: PostCounterIncrements): PostCounterIncrements =>
+  Object.fromEntries(Object.entries(now).filter(([counter]) => !(counter in already)));

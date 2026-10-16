@@ -134,7 +134,7 @@ final class MessagePieceTargetTests: XCTestCase {
         let root = URL(fileURLWithPath: #filePath)
             .deletingLastPathComponent().deletingLastPathComponent()
             .deletingLastPathComponent().deletingLastPathComponent()
-        return try String(contentsOf: root.appendingPathComponent(relativePath), encoding: .utf8)
+        return try AppSourceGuard.text(at: root.appendingPathComponent(relativePath))
     }
 
     func test_everyTileSurface_longPressOpensThePiecePreview() throws {
@@ -400,5 +400,34 @@ final class MessagePieceTargetTests: XCTestCase {
     func test_piece_clearMessage_stillOpensThePiecePreview() {
         XCTAssertFalse(MessagePieceTarget.messageIsProtected(lotOfFive))
         XCTAssertEqual(MessagePieceTarget.piece("p2", in: lotOfFive)?.id, "p2")
+    }
+
+    // MARK: - #10800 — le simple toucher d'une tuile ouvre son plein écran
+
+    /// Un appui long posé en `highPriorityGesture` sur la tuile ne laissait
+    /// JAMAIS partir son `onTapGesture` (mesuré au simulateur iOS 17.5 : la
+    /// case d'un lot de quatre photos restait inerte, l'image seule s'ouvrait).
+    /// L'appui de la tuile est SIMULTANÉ, et il part AVANT celui de la rangée.
+    func test_pieceLongPress_neverOutranksTheTileTap() throws {
+        let modifier = try source("Meeshy/Features/Main/Views/Bubble/MessagePieceLongPress.swift")
+        XCTAssertFalse(modifier.contains(".highPriorityGesture("))
+        XCTAssertTrue(modifier.contains(".simultaneousGesture("))
+    }
+
+    func test_pressClaim_pieceFiresBeforeTheRow_andSilencesIt() {
+        XCTAssertLessThan(MessagePressClaim.pieceMinimumDuration, MessagePressClaim.rowMinimumDuration)
+        let pressedAt = Date(timeIntervalSince1970: 1_000)
+        MessagePressClaim.claim(at: pressedAt.addingTimeInterval(MessagePressClaim.pieceMinimumDuration))
+
+        XCTAssertTrue(MessagePressClaim.isClaimed(at: pressedAt.addingTimeInterval(MessagePressClaim.rowMinimumDuration)),
+                      "l'appui de la rangée, qui suit celui de la tuile, ne rouvre pas le menu du message")
+    }
+
+    func test_pressClaim_expires_soTheNextRowPressOpensTheMessageMenu() {
+        let claimedAt = Date(timeIntervalSince1970: 2_000)
+        MessagePressClaim.claim(at: claimedAt)
+
+        XCTAssertFalse(MessagePressClaim.isClaimed(at: claimedAt.addingTimeInterval(1)))
+        XCTAssertFalse(MessagePressClaim.isClaimed(at: claimedAt.addingTimeInterval(-1)))
     }
 }

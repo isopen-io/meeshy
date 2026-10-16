@@ -40,10 +40,7 @@ final class ConversationTopChromeFadeTests: XCTestCase {
     }
 
     private func messageListControllerSource() throws -> String {
-        try String(
-            contentsOf: viewsDirectory().appendingPathComponent("MessageListViewController.swift"),
-            encoding: .utf8
-        )
+        try AppSourceGuard.text(at: viewsDirectory().appendingPathComponent("MessageListViewController.swift"))
     }
 
     // MARK: - Pas de scrim status bar

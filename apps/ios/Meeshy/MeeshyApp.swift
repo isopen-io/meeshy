@@ -5,7 +5,6 @@ import MeeshySDK
 import MeeshyUI
 import os
 
-@main
 struct MeeshyApp: App {
     @UIApplicationDelegateAdaptor(AppDelegate.self) var appDelegate
     private let dependencies = DependencyContainer.shared
@@ -44,16 +43,9 @@ struct MeeshyApp: App {
     private static var nearCapacityCancellable: AnyCancellable?
 
     init() {
-        // Prisme Linguistique — l'utilisateur consomme TOUT dans sa langue
-        // préférée, y compris le chrome de l'app (menus, boutons, libellés
-        // système). Applique l'override de langue UI (mis en cache au dernier
-        // login/refresh) le plus TÔT possible, avant la 1re vue. iOS lit
-        // `AppleLanguages` une SEULE fois au démarrage du process → l'override
-        // prend effet au (re)lancement, ce qui est acceptable (l'app est
-        // relancée aux tests). Garde-fous stricts dans `applyIfNeeded` : no-op
-        // si le cache est nil/vide/non-supporté (iOS garde alors la locale
-        // appareil), ne crashe jamais.
-        UILanguageOverride.applyIfNeeded()
+        // Prisme Linguistique — l'override de langue UI est écrit AVANT
+        // `UIApplicationMain`, par `MeeshyLaunch.main()` (#10804) : ici, il
+        // arrivait après que le bundle eut figé sa localisation.
 
         // #8951 — les extensions de notification tournent dans leur propre
         // processus : elles lisent cette langue dans le groupe d'app, et les
@@ -61,9 +53,8 @@ struct MeeshyApp: App {
         UILanguageOverride.publishInterfaceLanguage()
 
         // Le mot qui me désigne dans le préfixe d'auteur d'une ligne de liste
-        // (#6921). Posé APRÈS `applyIfNeeded()`, jamais avant : c'est cette
-        // ligne-là qui décide dans quelle langue le catalogue va répondre, et
-        // lire la chaîne plus tôt la figerait dans la locale appareil.
+        // (#6921). Lu APRÈS l'override de `MeeshyLaunch.main()` : c'est lui
+        // qui décide dans quelle langue le catalogue va répondre.
         //
         // Le SDK ne lit pas le catalogue de l'app ; il reçoit ce mot une fois,
         // et ses chemins (pont socket, moteur de synchro) le relaient.

@@ -124,4 +124,18 @@ final class ConversationEditDraftGuardTests: XCTestCase {
                 + "exactement le site cassé d'origine."
         )
     }
+
+    // MARK: - #10807 — la persistance lit le brouillon d'AVANT l'édition
+
+    func test_persistDraft_neverPersistsTheMessageBeingEdited() throws {
+        let code = try source("Features/Main/Views/ConversationView.swift")
+        guard let fn = body(of: "private func persistDraft(", in: code) else {
+            return XCTFail("`persistDraft` introuvable — la garde ne mesurerait rien.")
+        }
+        XCTAssertTrue(
+            fn.contains("composerState.persistedDraftText(composing: text)"),
+            "Pendant une édition, le champ porte le message modifié : le persister l'affiche « Brouillon » dans la liste."
+        )
+    }
 }
+

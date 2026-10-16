@@ -169,6 +169,21 @@ struct SocialEventsDwellTests {
         #expect(requests.first == [.dwell(session())])
         #expect(SocialEvent.dwell(session()).postId == "p1")
     }
+
+    /// #10764 — le premier contact part sous le type `dwell-start`, avec le
+    /// corps et la clé de session de la mesure qui suivra ; son identifiant de
+    /// rejeu est stable mais distinct de celui de la mesure.
+    @Test func dwellStart_carriesTheSessionUnderItsOwnType_andItsOwnStableEventId() throws {
+        let stamped = StampedSocialEvent.stamping(.dwellStart(session()), at: Date())
+        let body = try #require(try JSONSerialization.jsonObject(with: JSONEncoder().encode(stamped)) as? [String: Any])
+
+        #expect(body["type"] as? String == "dwell-start")
+        #expect(body["sessionId"] as? String == "11111111-2222-3333-4444-555555555555")
+        #expect(body["surface"] as? String == "reels")
+        #expect(stamped.stamp == StampedSocialEvent.stamping(.dwellStart(session()), at: Date()).stamp)
+        #expect(stamped.stamp.eventId != StampedSocialEvent.stamping(.dwell(session()), at: Date()).stamp.eventId)
+        #expect(try JSONDecoder().decode(SocialEvent.self, from: JSONEncoder().encode(SocialEvent.dwellStart(session()))) == .dwellStart(session()))
+    }
 }
 
 @Suite("ReachImpressionCollector — les affichages d'une surface du SDK")

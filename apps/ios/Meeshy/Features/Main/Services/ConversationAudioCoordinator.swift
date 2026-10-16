@@ -155,6 +155,8 @@ public final class ConversationAudioCoordinator: ObservableObject {
         // without the SDK ever depending on CallManager.
         if let manager = engine as? AudioPlaybackManager {
             manager.sessionProfile = .content
+            // La fin d'une piste n'avance que la file du coordinateur (#10730).
+            manager.relaysEndToAutoplayRegistry = false
             manager.playbackPermissionGuard = { !CallManagerHost.shared.isCallActiveForAudioGuard }
         }
         wireEngineForwarding()

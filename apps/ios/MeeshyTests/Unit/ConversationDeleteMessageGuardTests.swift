@@ -105,4 +105,26 @@ final class ConversationDeleteMessageGuardTests: XCTestCase {
             "la feuille « Plus… » doit appeler `requestDeleteMessage(_:)`."
         )
     }
+
+    // MARK: - #10806 — sur iPad, la confirmation s'ancre dans la conversation
+
+    /// Posée sur la RACINE de l'écran, la confirmation devenait sur iPad un
+    /// popover ancré au cadre ENTIER de la colonne : UIKit le présentait sur la
+    /// liste des conversations voisine, flèche pointée vers le séparateur. Elle
+    /// s'ancre désormais sur un point au centre de la conversation.
+    func test_deleteConfirmations_anchorInsideTheConversation() throws {
+        let conversationView = try source("Features/Main/Views/ConversationView.swift")
+        let menu = try source("Features/Main/Views/ConversationView+LongPressMenu.swift")
+        XCTAssertFalse(
+            conversationView.contains("conversation.view.delete_message.title"),
+            "aucune confirmation de suppression ne reste posée sur la racine de l'écran"
+        )
+        XCTAssertTrue(conversationView.contains(".overlay { messageDeleteConfirmationAnchor }"))
+        let anchor = try XCTUnwrap(body(of: "var messageDeleteConfirmationAnchor: some View", in: menu))
+        XCTAssertEqual(anchor.components(separatedBy: ".confirmationDialog(").count - 1, 2,
+                       "le message seul ET la sélection")
+        XCTAssertTrue(anchor.contains(".frame(width: 1, height: 1)"),
+                      "un POINT au centre de la conversation, jamais le cadre de la colonne")
+    }
 }
+

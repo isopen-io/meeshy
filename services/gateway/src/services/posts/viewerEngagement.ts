@@ -11,6 +11,7 @@ import { NOT_DELETED } from './softDelete';
 import { filterConsumablePostIds, type PostConsumptionPrisma } from '../../routes/posts/postConsumptionGate';
 import { getBlockedUserIdsAmong } from '../../utils/blocking';
 import { enhancedLogger } from '../../utils/logger-enhanced';
+import { errorIdentity } from '../../utils/error-identity';
 
 const logger = enhancedLogger.child({ module: 'viewerEngagement' });
 
@@ -236,7 +237,7 @@ async function openViewerList(
     logger.error('[viewerEngagement] trace d’audit non écrite — lecture administrateur refusée', {
       postId: post.id,
       adminId: reader.id,
-      error,
+      error: errorIdentity(error),
     });
     throw new Error('AUDIT_UNAVAILABLE');
   }
@@ -343,7 +344,7 @@ async function visibleRestrictedReposts(
       .filter((repost) => visible.has(repost.id))
       .reduce<Counts>((acc, repost) => new Map(acc).set(repost.authorId, (acc.get(repost.authorId) ?? 0) + 1), new Map());
   } catch (error: unknown) {
-    logger.warn('[viewerEngagement] republications restreintes non conclues — non comptées', { postId, error });
+    logger.warn('[viewerEngagement] republications restreintes non conclues — non comptées', { postId, error: errorIdentity(error) });
     return new Map();
   }
 }
@@ -493,7 +494,7 @@ export async function readViewerEngagementPage(
     gates,
     activityDisclosureFloor(post.type, disclosedSince),
   ).catch((error: unknown) => {
-    logger.warn('[viewerEngagement] lecture des engagements refusée faute de conclure', { postId: post.id, error });
+    logger.warn('[viewerEngagement] lecture des engagements refusée faute de conclure', { postId: post.id, error: errorIdentity(error) });
     return null;
   });
 

@@ -34,7 +34,8 @@ extension BubbleStandardLayout {
             moodEmoji: senderMoodEmoji,
             presence: presenceState,
             storyRing: senderStoryRingState,
-            isHere: senderIsHere
+            isHere: senderIsHere,
+            ring: ProfileDecorResolver.ring(message.senderRing)
         ) : nil
 
         // #7365 — statut RÉSOLU (tout-ou-rien en groupe), jamais le brut.
@@ -108,7 +109,7 @@ extension BubbleStandardLayout {
     // MARK: - Expandable text
 
     private var linkTint: Color {
-        content.isMe ? .white.opacity(MeeshyOpacity.intense) : Color(hex: contactColor)
+        content.isMe ? skin.ink(MeeshyOpacity.intense) : Color(hex: contactColor)
     }
 
     /// Distinct des liens URL — et THÉMATISÉ : l'`indigo400` figé d'avant ne

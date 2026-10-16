@@ -1,16 +1,12 @@
 /**
  * L'ENTRÉE PUBLIQUE — tranche du catalogue `catalog-fr.ts`, extraite pour tenir le
  * budget de taille (CLAUDE.md) : le catalogue la RÉPAND (#10007). L'en-tête des
- * pages publiques (marque, sélecteur de langue), la carte World Wide de
- * la connexion, l'écran de connexion et la saisie du lien par e-mail. `{title}`
- * reçoit le titre SERVI par `GET /world`.
+ * pages publiques (marque, sélecteur de langue), l'écran de connexion et la
+ * saisie du lien par e-mail.
  */
 const frPublicEntry = {
   'publicHeader.home': 'Accueil de Meeshy',
   'publicHeader.language': 'Langue',
-  'login.world.title': 'Entrer dans {title}',
-  'login.world.subtitle': 'Sans compte · votre nom et votre langue',
-  'login.world.or': 'ou avec votre compte',
   'login.offline': 'Hors ligne — la connexion n’est pas possible pour l’instant.',
   'login.twoFactor.title': 'Double authentification',
   'login.twoFactor.lead': 'Entrez le code de votre application d’authentification.',

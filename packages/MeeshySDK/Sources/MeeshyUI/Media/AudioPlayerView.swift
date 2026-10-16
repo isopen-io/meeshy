@@ -363,10 +363,11 @@ public struct AudioPlayerView: View {
             // queue is the single source of auto-advance (`advanceQueue`).
             // Registering here would make the registry stomp the coordinator's
             // next head after a track finishes (double auto-advance → wrong
-            // track plays). Gate registration on `!usesExternalPlayer` so the
-            // two mechanisms never co-drive the same engine. Unregistration in
-            // `onDisappear` is gated symmetrically.
-            if !usesExternalPlayer {
+            // track plays). An INACTIVE parent-routed bubble has no external
+            // engine yet still belongs to the coordinator: it must not register
+            // either (`joinsLegacyAutoplay`, #10730). Unregistration by id in
+            // `onDisappear` is harmless for a view that never registered.
+            if Self.joinsLegacyAutoplay(usesExternalPlayer: usesExternalPlayer, routesPlayToParent: onPlayRequest != nil) {
                 let autoplayUrl = attachment.fileUrl
                 // Capture weak en défense : la closure vit dans un registre
                 // STATIQUE — une entrée orpheline ne doit pas retenir le moteur.
@@ -605,6 +606,16 @@ public struct AudioPlayerView: View {
     /// playing (mini-player + background continuation), so it must NOT be
     /// stopped here. Extracted as a `nonisolated static` so the lifecycle
     /// contract is unit-testable without a SwiftUI render lifecycle.
+    /// Le registre statique d'autoplay n'enchaîne que les lecteurs AUTONOMES.
+    /// Une vue dont le parent route le tap (`onPlayRequest`) appartient à un
+    /// coordinateur qui possède la lecture ET l'enchaînement, même quand elle
+    /// est inactive (pas de moteur externe) : l'inscrire faisait repartir, à
+    /// la fin d'une piste, la bulle apparue avant elle — en remontant le fil,
+    /// sans regarder l'auteur (#10730).
+    nonisolated internal static func joinsLegacyAutoplay(usesExternalPlayer: Bool, routesPlayToParent: Bool) -> Bool {
+        !usesExternalPlayer && !routesPlayToParent
+    }
+
     nonisolated internal static func shouldStopOwnedEngineOnDisappear(usesExternalPlayer: Bool) -> Bool {
         !usesExternalPlayer
     }

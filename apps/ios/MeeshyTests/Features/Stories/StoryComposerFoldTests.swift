@@ -124,6 +124,27 @@ final class StoryComposerFoldTests: XCTestCase {
         XCTAssertTrue(bar.contains("offersFold: resolvedFoldControl != nil"), "La barre lit aussi le repli confié par l'environnement.")
     }
 
+    /// **Le repli ne rogne pas la barre** (#10802). Sur iPad, un `.clipped()`
+    /// posé autour de la barre dépliée plaçait le champ de saisie dans un
+    /// conteneur UIKit de découpe que SwiftUI recréait pendant la montée du
+    /// clavier : le champ, déplacé dans un conteneur hors fenêtre, perdait le
+    /// premier répondeur ~0,5 s après le toucher. Replié, la barre est déjà à
+    /// hauteur nulle, invisible, sans toucher ni VoiceOver : rien à rogner.
+    func test_theFold_neverClipsTheComposer() throws {
+        let root = URL(fileURLWithPath: #filePath)
+            .deletingLastPathComponent().deletingLastPathComponent()
+            .deletingLastPathComponent().deletingLastPathComponent()
+        let fold = AppSourceGuard.stripComments(try String(contentsOf: root.appendingPathComponent(
+            "Meeshy/Features/Main/Components/CommentComposerFold.swift"), encoding: .utf8))
+        let modifier = try XCTUnwrap(fold.range(of: "struct CommentComposerFoldModifier"))
+        let body = fold[modifier.lowerBound...]
+        for clip in [".clipped(", ".clipShape(", ".mask"] {
+            XCTAssertFalse(body.contains(clip), "\(clip) autour de la barre arrache le clavier au champ sur iPad")
+        }
+        XCTAssertTrue(body.contains(".opacity(isFolded ? 0 : 1)"))
+        XCTAssertTrue(body.contains(".allowsHitTesting(!isFolded)"))
+    }
+
     /// **Le ⌄ vit DANS la plaque de verre, angle intérieur haut-droit** (#8642,
     /// porteur 2026-09-29). Il flottait au-dessus de la plaque, hors du verre :
     /// la barre le reçoit désormais et le pose au bout de sa rangée d'outils —

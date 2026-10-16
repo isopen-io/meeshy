@@ -4,9 +4,6 @@ import type frPublicEntry from './catalog-fr-public-entry';
 const esPublicEntry = {
   'publicHeader.home': 'Inicio de Meeshy',
   'publicHeader.language': 'Idioma',
-  'login.world.title': 'Entrar en {title}',
-  'login.world.subtitle': 'Sin cuenta · tu nombre y tu idioma',
-  'login.world.or': 'o con tu cuenta',
   'login.offline': 'Sin conexión: no es posible iniciar sesión por ahora.',
   'login.twoFactor.title': 'Autenticación en dos pasos',
   'login.twoFactor.lead': 'Introduce el código de tu aplicación de autenticación.',

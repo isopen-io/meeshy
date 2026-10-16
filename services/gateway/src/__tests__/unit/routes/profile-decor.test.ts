@@ -100,11 +100,35 @@ describe('PUT /me/profile-decor', () => {
     expect(accepted.json().data.avatarRing).toMatchObject({ origin: 'official', contract: ref('e', 'json').src });
   });
 
-  it('refuse un modèle d’un AUTRE domaine ou inexistant (403) : un pack de fonds ne se porte pas en bannière', async () => {
+  it('refuse un modèle d’un AUTRE domaine (403) : un pack de fonds ne se porte pas en bannière', async () => {
     expect((await put({ banner: { pack: 'essentiels', item: 'aurore' } })).statusCode).toBe(403);
     expect((await put({ avatarRing: { pack: 'bannieres', item: 'aurore' } })).statusCode).toBe(403);
-    expect((await put({ avatarRing: { pack: 'contours', item: 'fantome' } })).statusCode).toBe(403);
     expect(env.user.equippedAvatarRing).toBeNull();
+  });
+
+  it('un élément absent d’un pack POSSÉDÉ répond 404 DECOR_ITEM_NOT_FOUND, jamais PACK_NOT_OWNED (#10763)', async () => {
+    const free = await put({ avatarRing: { pack: 'contours', item: 'fantome' } });
+    expect([free.statusCode, free.json().code]).toEqual([404, 'DECOR_ITEM_NOT_FOUND']);
+
+    await env.app.close();
+    await boot({ owns: ['avatar-ring.contours-rares'] });
+    const paid = await put({ avatarRing: { pack: 'contours-rares', item: 'fantome' } });
+    expect([paid.statusCode, paid.json().code]).toEqual([404, 'DECOR_ITEM_NOT_FOUND']);
+    expect(env.user.equippedAvatarRing).toBeNull();
+  });
+
+  it('un pack NON possédé répond PACK_NOT_OWNED que l’élément existe ou non : aucun oracle sur son contenu (#10763)', async () => {
+    const existing = await put({ avatarRing: { pack: 'contours-rares', item: 'laurier' } });
+    const missing = await put({ avatarRing: { pack: 'contours-rares', item: 'fantome' } });
+
+    expect([existing.statusCode, existing.json().code]).toEqual([403, 'PACK_NOT_OWNED']);
+    expect([missing.statusCode, missing.json().code]).toEqual([403, 'PACK_NOT_OWNED']);
+    expect(missing.json().error).toBe(existing.json().error);
+  });
+
+  it('un pack inconnu reste 403 PACK_NOT_OWNED', async () => {
+    const response = await put({ avatarRing: { pack: 'inconnu', item: 'filet' } });
+    expect([response.statusCode, response.json().code]).toEqual([403, 'PACK_NOT_OWNED']);
   });
 
   it('applique la loi des cadres : un contour dont l’usage ne couvre pas l’avatar est refusé (403 FRAME_USAGE_MISMATCH)', async () => {

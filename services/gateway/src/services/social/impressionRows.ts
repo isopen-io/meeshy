@@ -22,6 +22,12 @@ import { storedListingOf, type AnalyticsStanding } from './eventPrivacy';
  * visibilité sont de la MESURE (rangées sauf refus) ; l'identifiant de page
  * de fil et la session d'application RELIENT des événements entre eux et ne
  * sont rangés que si l'analyse est consentie.
+ *
+ * La ligne porte le COMPTE quel que soit le statut (#10785, décision du
+ * porteur) : « qui a vu » est une fonctionnalité de la plateforme, sa base est
+ * l'exécution du service, pas le consentement d'analyse. Les lignes réduites
+ * écrites entre #10773 et #10785 (`readerKey`, sans `userId`) ne sont plus
+ * produites ; elles restent lues jusqu'à leur expiration (8 jours).
  */
 
 export type ImpressionEvent = Extract<SocialEvent, { type: 'impression' }>;

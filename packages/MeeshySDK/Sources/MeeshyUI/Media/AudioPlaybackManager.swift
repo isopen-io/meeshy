@@ -460,7 +460,7 @@ public class AudioPlaybackManager: NSObject, ObservableObject {
         listenStartTime = nil
         onPlaybackFinished?()
         if let url = finishedUrl {
-            Self.triggerAutoplayNext(afterUrl: url)
+            relayEndToAutoplayRegistry(finishedUrl: url)
         }
         currentUrl = nil
     }
@@ -652,6 +652,18 @@ public class AudioPlaybackManager: NSObject, ObservableObject {
 
     public static func unregisterAutoplay(id: String) {
         autoplayRegistry.removeAll { $0.id == id }
+    }
+
+    /// Faux pour un moteur dont le PROPRIÉTAIRE enchaîne lui-même les pistes
+    /// (le coordinateur d'une conversation, qui suit sa file). Le registre
+    /// statique ne connaît que l'ordre d'apparition des bulles : relayer la fin
+    /// d'une piste du coordinateur y faisait repartir la bulle apparue AVANT
+    /// elle, en remontant le fil, sans regarder l'auteur (#10730).
+    public var relaysEndToAutoplayRegistry = true
+
+    func relayEndToAutoplayRegistry(finishedUrl: String) {
+        guard relaysEndToAutoplayRegistry else { return }
+        Self.triggerAutoplayNext(afterUrl: finishedUrl)
     }
 
     private static func triggerAutoplayNext(afterUrl: String) {

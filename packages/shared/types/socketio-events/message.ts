@@ -8,6 +8,7 @@
 
 // Import unified Participant types
 import type { ParticipantType } from '../participant.js';
+import type { ServedProfileDecorItem } from '../profile-decor.js';
 import type { MessageSticker } from '../message-sticker.js';
 import type { LastMessageSystemEvent } from '../conversation-preview.js';
 
@@ -502,6 +503,8 @@ export interface SocketIOMessageSender {
   readonly username?: string;
   readonly firstName?: string;
   readonly lastName?: string;
+  /** Le contour d'avatar ÉQUIPÉ (#10713), la forme de `/me` réduite au contour ; absent sans contour ou sans compte. */
+  readonly profileDecor?: { readonly avatarRing: ServedProfileDecorItem };
 }
 
 /**

@@ -147,12 +147,16 @@ enum AppSourceGuard {
         return [principal] + parties
     }
 
-    /// Lit un fichier ; `BubbleStandardLayout.swift` se lit comme son UNITÉ
-    /// (`BubbleStandardLayout+*.swift`, #10678), par le même glob que
+    /// Les types découpés par responsabilité qu'une garde lit comme leur unité :
+    /// `BubbleStandardLayout` (#10678) et `MessageListViewController` (#10758).
+    static let splitUnits: Set<String> = ["BubbleStandardLayout.swift", "MessageListViewController.swift"]
+
+    /// Lit un fichier ; un type de `splitUnits` se lit comme son UNITÉ
+    /// (`<Type>+*.swift`), par le même glob que
     /// `unit(_:)` : le type a été découpé par responsabilité et une garde ne
     /// doit ni rougir ni verdir parce que du code a changé de fichier.
     static func text(at url: URL) throws -> String {
-        let urls = url.lastPathComponent == "BubbleStandardLayout.swift" ? familyURLs(of: url) : [url]
+        let urls = Self.splitUnits.contains(url.lastPathComponent) ? familyURLs(of: url) : [url]
         return try urls
             .map { try String(contentsOf: $0, encoding: .utf8) }
             .joined(separator: "\n")

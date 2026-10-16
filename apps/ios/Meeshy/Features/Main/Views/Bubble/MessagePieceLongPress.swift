@@ -25,9 +25,15 @@ extension EnvironmentValues {
     }
 }
 
-/// **L'appui long d'une tuile.** Prioritaire sur celui de la bulle — qui, lui,
+/// **L'appui long d'une tuile.** Il passe avant celui de la bulle — qui, lui,
 /// ouvre l'aperçu du message entier — seulement quand `enabled` : une pièce
 /// seule ou protégée laisse la pression à son hôte.
+///
+/// **Simultané, jamais `highPriorityGesture`** (#10800) : prioritaire, il
+/// retenait le simple toucher de la tuile, qui n'ouvrait plus son plein écran
+/// (mesuré au simulateur iOS 17.5). Il passe avant la rangée par sa DURÉE,
+/// plus courte, et par la réservation `MessagePressClaim`, que l'appui de la
+/// rangée lit avant de rien faire.
 ///
 /// La même porte est offerte à VoiceOver par une action nommée : sans elle,
 /// l'aperçu d'une pièce serait réservé à qui peut presser une tuile.
@@ -39,8 +45,9 @@ struct MessagePieceLongPress: ViewModifier {
     func body(content: Content) -> some View {
         if enabled, let open {
             content
-                .highPriorityGesture(
-                    LongPressGesture(minimumDuration: 0.4).onEnded { _ in
+                .simultaneousGesture(
+                    LongPressGesture(minimumDuration: MessagePressClaim.pieceMinimumDuration).onEnded { _ in
+                        MessagePressClaim.claim()
                         HapticFeedback.medium()
                         open(attachmentId)
                     }
@@ -51,5 +58,32 @@ struct MessagePieceLongPress: ViewModifier {
         } else {
             content
         }
+    }
+}
+
+/// **Qui possède la pression en cours : la tuile ou la rangée** (#10800).
+///
+/// Les deux appuis longs sont simultanés — c'est ce qui laisse passer le
+/// simple toucher. La tuile part la première (durée plus courte) et réserve
+/// la pression ; la rangée, qui part un instant après sur le MÊME doigt, lit
+/// la réservation et s'efface : un seul aperçu, une seule vibration.
+@MainActor
+enum MessagePressClaim {
+    static let pieceMinimumDuration: TimeInterval = 0.3
+    static let rowMinimumDuration: TimeInterval = 0.35
+    /// Assez pour couvrir l'écart des deux durées, trop court pour avaler
+    /// l'appui suivant.
+    static let window: TimeInterval = 0.3
+
+    private static var claimedAt: Date?
+
+    static func claim(at now: Date = Date()) {
+        claimedAt = now
+    }
+
+    static func isClaimed(at now: Date = Date()) -> Bool {
+        guard let claimedAt else { return false }
+        let elapsed = now.timeIntervalSince(claimedAt)
+        return elapsed >= 0 && elapsed < window
     }
 }

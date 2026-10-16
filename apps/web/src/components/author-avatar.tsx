@@ -24,8 +24,12 @@ import { AvatarMenuTrigger, ConversationDetailsContext } from './avatar-menu';
 export function AuthorAvatar({
   authorId,
   participant,
+  sender,
   ...props
 }: ComponentProps<typeof Avatar> & {
+  /** L'auteur tel que le MESSAGE le sert (`message.sender`) : son contour
+   * équipé (#10713) s'y lit quand les participants chargés ne le portent pas. */
+  readonly sender?: unknown;
   /** La clé de l'auteur (`hereKeyOf`) : présent dans la conversation, son avatar
    * porte le point indigo (#8892). */
   readonly authorId?: string | undefined;
@@ -42,7 +46,7 @@ export function AuthorAvatar({
   const moodPostId = useAuthorMoodPostId(authorId);
   /* DANS LE FIL, L'HUMEUR NE BOUGE PAS (#10528) — une pastille par message,
      et des dizaines à l'écran. */
-  const ring = useAuthorRing(authorId);
+  const ring = useAuthorRing(authorId, sender);
   const still = {
     ...(mood === undefined ? {} : { mood, moodStill: true, ...(moodPostId === undefined ? {} : { moodPostId }) }),
     /* LE CONTOUR ÉQUIPÉ (#10713) — servi avec le participant ; sans lui, l'avatar d'avant, à l'octet. */

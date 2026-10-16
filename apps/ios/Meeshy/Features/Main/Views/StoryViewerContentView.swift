@@ -44,6 +44,19 @@ struct StoryViewerContentView: View {
     /// `StoryViewerView` so the card receives the view's `@State` bindings.
     let makeStoryCard: (GeometryProxy) -> StoryCardView
 
+    /// L'angle d'une face du cube pour son décalage écran, BORNÉ à
+    /// ±`cubeEdgeDegrees`. En fin de course la face arrive à `±largeur`, et
+    /// au-delà sous le ressort : 90° pile donnait une projection SINGULIÈRE
+    /// (`m11 = cos 90° = 0`, « ignoring singular matrix ») juste avant le
+    /// plantage du passage d'un auteur à l'autre (#10803). À 89,5° la face est
+    /// déjà de profil : rien ne change à l'œil.
+    static func cubeFaceDegrees(offsetX: CGFloat, width: CGFloat) -> Double {
+        let degrees = Double(offsetX / max(width, 1)) * 90.0
+        return min(max(degrees, -cubeEdgeDegrees), cubeEdgeDegrees)
+    }
+
+    static let cubeEdgeDegrees = 89.5
+
     var body: some View {
         ZStack {
             // Opaque black base — prevents any white frame bleed
@@ -77,7 +90,7 @@ struct StoryViewerContentView: View {
                         .opacity(cardOpacity)
                         .offset(x: totalSlideX, y: cardOffsetY)
                         .rotation3DEffect(
-                            .degrees(Double(totalSlideX / cubeWidth) * 90.0),
+                            .degrees(Self.cubeFaceDegrees(offsetX: totalSlideX, width: cubeWidth)),
                             axis: (x: 0, y: 1, z: 0),
                             anchor: totalSlideX > 0 ? .leading : .trailing,
                             perspective: 0.5
@@ -102,7 +115,7 @@ struct StoryViewerContentView: View {
                             .clipShape(RoundedRectangle(cornerRadius: cardCornerRadius + slideProgress * 16, style: .continuous))
                             .offset(x: incomingX, y: cardOffsetY)
                             .rotation3DEffect(
-                                .degrees(Double(incomingX / cubeWidth) * 90.0),
+                                .degrees(Self.cubeFaceDegrees(offsetX: incomingX, width: cubeWidth)),
                                 axis: (x: 0, y: 1, z: 0),
                                 anchor: incomingX > 0 ? .leading : .trailing,
                                 perspective: 0.5

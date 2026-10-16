@@ -40,6 +40,8 @@ export type IndexOutcome = 'created' | 'present' | 'replaced';
 
 /** Seules les lignes qui PORTENT une clé d'événement sont uniques : les anciennes n'en ont pas. */
 const KEYED = { eventKey: { $type: 'string' } } as const;
+/** `$exists` et non `$type` : une égalité sur la clé implique `$exists`, le planificateur prend l’index. Seules les lignes réduites écrites entre #10771 et #10785 portent l'empreinte du lecteur (relues jusqu'à leur expiration, 8 j). */
+const FINGERPRINTED = { readerKey: { $exists: true } } as const;
 
 export const CONTENT_EVENT_EVENT_KEY_INDEX = 'ContentEvent_eventKey_unique';
 export const CONTENT_EVENT_TTL_INDEX = 'ContentEvent_expiresAt_ttl';
@@ -56,6 +58,9 @@ export const SOCIAL_EVENT_INDEXES: readonly IndexSpec[] = [
   { collection: 'PostImpression', name: POST_IMPRESSION_EVENT_KEY_INDEX, key: { eventKey: 1 }, unique: true, partialFilterExpression: KEYED },
   { collection: 'PostImpression', name: POST_IMPRESSION_TTL_INDEX, key: { expiresAt: 1 }, expireAfterSeconds: 0 },
   { collection: 'PostEngagement', name: POST_ENGAGEMENT_TTL_INDEX, key: { expiresAt: 1 }, expireAfterSeconds: 0 },
+  // Déduplication (même lecteur, même post), export et effacement d'une ligne réduite antérieure à #10785.
+  { collection: 'PostImpression', name: 'PostImpression_readerKey_post', key: { readerKey: 1, postId: 1 }, partialFilterExpression: FINGERPRINTED },
+  { collection: 'PostEngagement', name: 'PostEngagement_readerKey_post', key: { readerKey: 1, postId: 1 }, partialFilterExpression: FINGERPRINTED },
 ];
 
 const canonical = (value: unknown): string => JSON.stringify(value ?? null);

@@ -197,7 +197,9 @@ extension ConversationViewModel {
                         id: att.id,
                         attachment: att,
                         message: msg,
-                        transcription: messageTranscriptionsByAttachment[att.id] ?? messageTranscriptions[msg.id],
+                        // #10801 — la transcription de CETTE piste : celle du
+                        // message n'appartient qu'à la pièce qu'elle nomme.
+                        transcription: originalTranscription(for: att, messageId: msg.id),
                         translatedAudios: messageTranslatedAudiosByAttachment[att.id]
                             ?? (messageTranslatedAudios[msg.id] ?? []).filter { $0.attachmentId == att.id }
                     )

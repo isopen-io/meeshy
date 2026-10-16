@@ -24,7 +24,7 @@ final class FocalMatrixWiringGuardTests: XCTestCase {
             .deletingLastPathComponent()   // MeeshyTests
             .deletingLastPathComponent()   // apps/ios
             .appendingPathComponent(relativePath)
-        return try String(contentsOf: url, encoding: .utf8)
+        return try AppSourceGuard.text(at: url)
     }
 
     private func stripped(_ relativePath: String) throws -> String {
@@ -280,7 +280,7 @@ final class FocalMatrixWiringGuardTests: XCTestCase {
 
     func test_targetedReconfigure_isDeferredDuringGesture() throws {
         let code = try stripped(hostPath)
-        guard let start = code.range(of: "private func reconfigureMessages(serverIds: Set<String>) {") else {
+        guard let start = code.range(of: "func reconfigureMessages(serverIds: Set<String>) {") else {
             return XCTFail("reconfigureMessages introuvable")
         }
         let body = String(code[start.lowerBound...].prefix(1200))
@@ -320,20 +320,20 @@ final class FocalMatrixWiringGuardTests: XCTestCase {
             "le chemin GLOBAL ne retient que les conditions de MOUVEMENT"
         )
 
-        let targeted = try Self.block(after: "private func reconfigureMessages(serverIds: Set<String>) {", in: host)
+        let targeted = try Self.block(after: "func reconfigureMessages(serverIds: Set<String>) {", in: host)
         XCTAssertTrue(
             Self.deferralIsModeAgnostic(targeted),
             "volet CIBLÉ : le report doit se décider sur le geste seul. Corps lu : \(targeted.prefix(240))"
         )
 
-        let global = try Self.block(after: "private func reconfigureVisibleCells() {", in: host)
+        let global = try Self.block(after: "func reconfigureVisibleCells() {", in: host)
         XCTAssertTrue(
             Self.deferralIsModeAgnostic(global),
             "chemin des cellules visibles : inchangé, et toujours mode-agnostique. Corps lu : \(global.prefix(240))"
         )
 
         // Ce qui REND le report sûr : la reprise ne connaît aucun mode.
-        let settle = try Self.block(after: "private func settleAtRest() {", in: host)
+        let settle = try Self.block(after: "func settleAtRest() {", in: host)
         XCTAssertTrue(
             settle.contains("flushDeferredReconfigureAtSettle()"),
             "la pose rejoue le report — inconditionnellement"

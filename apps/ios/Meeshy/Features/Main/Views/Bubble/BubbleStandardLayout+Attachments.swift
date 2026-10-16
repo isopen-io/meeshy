@@ -89,7 +89,7 @@ extension BubbleStandardLayout {
         // get the blended `otherBubbleColor`. Passing `contactColor` (the
         // raw conversation color) made every bubble's pills look like
         // they belonged to the same generic surface.
-        let bubbleAccent = content.isMe ? MeeshyColors.brandPrimaryHex : otherBubbleColor
+        let bubbleAccent = skin.accentHex(isMe: content.isMe, received: otherBubbleColor)
 
         BubbleReactionsOverlay(
             messageId: content.messageId,
@@ -139,10 +139,10 @@ extension BubbleStandardLayout {
             AudioMediaView(
                 attachment: attachment,
                 message: message,
-                contactColor: isMe ? MeeshyColors.brandPrimaryHex : otherBubbleColor,
+                contactColor: skin.accentHex(isMe: isMe, received: otherBubbleColor),
                 visualAttachments: visualAttachments,
                 isDark: isDark,
-                accentColor: isMe ? MeeshyColors.brandPrimaryHex : otherBubbleColor,
+                accentColor: skin.accentHex(isMe: isMe, received: otherBubbleColor),
                 transcription: transcription,
                 translatedAudios: translatedAudios.filter { $0.attachmentId == attachment.id },
                 textTranslations: textTranslations,

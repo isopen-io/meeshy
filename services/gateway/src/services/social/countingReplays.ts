@@ -8,6 +8,7 @@ import {
   type RawCommandPrisma,
 } from './contentEvents';
 import { enhancedLogger } from '../../utils/logger-enhanced';
+import { errorIdentity } from '../../utils/error-identity';
 
 /**
  * Les REJEUX des types de comptage (#10500) — un `eventId` déjà vu ne compte
@@ -72,7 +73,7 @@ export async function claimCountingReceipts<T>(
       claimed: new Map([...inserted].map((index) => [candidates[index].item, keys[index]] as const)),
     };
   } catch (error) {
-    enhancedLogger.warn('[countingReplays] reçus non écrits — le lot est compté sans déduplication', { error });
+    enhancedLogger.warn('[countingReplays] reçus non écrits — le lot est compté sans déduplication', { error: errorIdentity(error) });
     return { replays: new Set(), claimed: new Map() };
   }
 }
@@ -84,5 +85,5 @@ export async function releaseCountingReceipts(prisma: RawCommandPrisma, claimed:
     delete: CONTENT_EVENT_COLLECTION,
     deletes: [{ q: { eventKey: { $in: [...claimed] }, action: 'receipt' }, limit: 0 }],
   }).catch((error: unknown) =>
-    enhancedLogger.warn('[countingReplays] reçus non rendus après un échec de comptage', { error }));
+    enhancedLogger.warn('[countingReplays] reçus non rendus après un échec de comptage', { error: errorIdentity(error) }));
 }

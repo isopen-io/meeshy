@@ -194,16 +194,26 @@ describe('contexte de listing et visibilité MRC sur l’impression (#10501)', (
     visibility: { maxVisibleFraction: viewable ? 0.8 : 0.2, visibleMs: viewable ? 1400 : 300, viewable },
   });
 
-  it('une impression en position 3, visible au sens MRC, porte son rang et sa visibilité sur sa ligne', async () => {
-    const h = await reachHarness([{ id: POST }]);
+  it('avec consentement, une impression en position 3, visible au sens MRC, porte son rang et sa visibilité sur sa ligne', async () => {
+    const h = await reachHarness([{ id: POST }], undefined, { consentedUserIds: [READER] });
     await sendReachV2(h.app, [listed(true)], account, { platform: 'web', appSessionId: '5e1c2b9e-1d2a-4c55-9a1e-0a4b5c6d7e8f' });
 
     expect(h.impressions[0]).toMatchObject({
       position: 3, rankingSource: 'for_you', viewable: true, visibleFraction: 0.8, visibleMs: 1400, platform: 'web',
     });
-    // Sans consentement d'analyse : rien qui relie cette ligne à une page ou à une session.
-    expect(h.impressions[0].feedRequestId).toBeUndefined();
-    expect(h.impressions[0].appSessionId).toBeUndefined();
+    await h.app.close();
+  });
+
+  it('sans consentement d’analyse, la ligne garde son lecteur et sa mesure (#10785) — rien qui la relie à une page ou à une session', async () => {
+    const h = await reachHarness([{ id: POST }]);
+    await sendReachV2(h.app, [listed(true)], account, { platform: 'web', appSessionId: '5e1c2b9e-1d2a-4c55-9a1e-0a4b5c6d7e8f' });
+
+    const row = h.impressions[0];
+    expect(row).toMatchObject({ postId: POST, source: 'feed', userId: READER, position: 3, viewable: true, platform: 'web' });
+    for (const field of ['readerKey', 'feedRequestId', 'appSessionId']) {
+      expect(row[field]).toBeUndefined();
+    }
+    expect(h.store.read(POST)).toMatchObject({ impressionCount: 1 });
     await h.app.close();
   });
 

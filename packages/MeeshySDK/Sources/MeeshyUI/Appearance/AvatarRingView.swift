@@ -167,7 +167,8 @@ public extension View {
     /// liste, bulle) : le contour occupe la cote `footprint`, l'avatar (anneau de story
     /// compris, #10714) se réduit à son trou. Rien ne grandit, rien ne se décale, et le
     /// contour se pose sans perte d'image quand il arrive. Immobile par défaut : une
-    /// liste en porte des dizaines.
+    /// liste en porte des dizaines, et sa couche animée y montre sa PREMIÈRE IMAGE FIXE
+    /// (la même que sous « Réduire les animations »), jamais un film qui joue par cellule.
     @ViewBuilder
     func avatarRingWithin(_ design: AvatarRingDesign?, footprint: CGFloat, storyRingSize: CGFloat? = nil, animates: Bool = false) -> some View {
         if let design {
@@ -176,7 +177,7 @@ public extension View {
                 ZStack {
                     AvatarRingView(design: design)
                         .equatable()
-                    if animates, let lottie = design.lottie {
+                    if let lottie = design.lottie {
                         PackLottieLayer(ref: lottie, animates: animates)
                     }
                 }
