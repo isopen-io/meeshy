@@ -1,5 +1,7 @@
 ## Une lecture sans consentement d'analyse ne laisse qu'une empreinte et ce que le comptage exige, 8 jours (2026-10-16, #10771, #10772, #10773, #10774)
 
+> **Supplantée en partie le 2026-10-16 par [#10785](2026-10-16-qui-a-vu-est-une-fonctionnalite-la-lecture-garde-son-lecteur-10785.md)** (décision du porteur) : les lignes de lecture gardent le compte quel que soit le statut ; les points 3, 4 et 5 ci-dessous ne gouvernent plus les écritures.
+
 **Contexte.**
 
 #10764 a fait compter l'ouverture, la lecture et la vue qualifiée d'un réel même sans consentement d'analyse : ce sont des compteurs de PORTÉE. L'analyse de conformité #10770 a relevé que la passerelle rangeait pour cela, 90 jours, une ligne `PostEngagement` NOMINATIVE (compte, temps passé, temps regardé, durée du média, surface, début), qu'elle se fiait au client pour retirer la trace, et que les impressions sans consentement (dont celles qu'une vue déduit) restaient nominatives elles aussi.

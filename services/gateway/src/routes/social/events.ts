@@ -111,7 +111,11 @@ export {
  * produit que des vues et des impressions. Il est désigné par sa CLÉ DE
  * LECTEUR (`readerKeyOf`, HMAC), jamais par la valeur de X-Session-Token.
  */
-/** Les types dont l'écriture dépend du statut d'analyse du compte (#10501, #10772, #10773). */
+/**
+ * Les types dont la MESURE rangée dépend du statut d'analyse du compte (#10501,
+ * #10772, #10785) : la mesure d'une impression (une vue peut porter la sienne),
+ * la trace d'une session de lecture. Le lecteur, lui, est rangé quel que soit le statut.
+ */
 const STANDING_TYPES: ReadonlySet<SocialEvent['type']> = new Set(['impression', 'view', 'dwell', 'dwell-start']);
 
 export type SocialEventsActor =
@@ -171,7 +175,6 @@ async function applyViews(
   actor: Extract<SocialEventsActor, { kind: 'user' }>,
   counted: (events: readonly SocialEvent[]) => void = () => undefined,
   alreadyShown: ReadonlySet<string> = new Set(),
-  standing: AnalyticsStanding = 'not_granted',
 ): Promise<number> {
   if (events.length === 0) return 0;
 
@@ -182,7 +185,6 @@ async function applyViews(
       provenance: event.provenance,
       origin: event.origin,
       impliesImpression: !event.impression && !alreadyShown.has(event.postId),
-      standing,
     });
     recorded += 1;
     counted([event]);
@@ -423,7 +425,7 @@ export async function ingestSocialEvents(
   const parType = <T extends SocialEvent['type']>(type: T) =>
     admis.filter((event): event is Extract<SocialEvent, { type: T }> => event.type === type);
 
-  // #10772, #10773 — ce qu'une ligne de lecture garde dépend du statut d'analyse
+  // #10772, #10785 — la MESURE qu'une ligne de lecture garde dépend du statut d'analyse
   // que la PASSERELLE établit (le client fait foi pour refuser, elle pour
   // accorder). Les alias historiques ne le passent pas : il se lit ici.
   const standing = options.standing ?? (admis.some((event) => STANDING_TYPES.has(event.type))
@@ -436,7 +438,7 @@ export async function ingestSocialEvents(
     // (écrite avec les impressions ci-dessous), déduite par `recordView` sinon —
     // jamais pour un post dont le lot porte déjà l'impression.
     const montres = new Set(parType('impression').map((event) => event.postId));
-    const vues = await applyViews(deps, parType('view'), actor, counted, montres, standing);
+    const vues = await applyViews(deps, parType('view'), actor, counted, montres);
 
     const [ouvertures, impressions, telechargements, sessions] = await Promise.all([
       applyOpens(deps, parType('open'), actor.userId).then((n) => { counted(parType('open')); return n; }),

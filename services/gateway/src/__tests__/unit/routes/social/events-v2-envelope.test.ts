@@ -12,7 +12,6 @@ import { describe, it, expect, jest } from '@jest/globals';
 import {
   reachHarness, sendReach, sendReachV2, visitorHeader, viewEvent, impressionEvent,
 } from '../../../helpers/reach-harness';
-import { accountReaderKeyOf } from '../../../../services/posts/readerKey';
 
 jest.mock('../../../../services/PostService', () => ({ PostService: jest.fn() }));
 jest.mock('../../../../services/MediaService', () => ({ MediaService: jest.fn() }));
@@ -205,13 +204,13 @@ describe('contexte de listing et visibilité MRC sur l’impression (#10501)', (
     await h.app.close();
   });
 
-  it('sans consentement d’analyse (#10773), la ligne ne garde que l’empreinte du lecteur : ni compte, ni rang, ni visibilité, ni page, ni session', async () => {
+  it('sans consentement d’analyse, la ligne garde son lecteur et sa mesure (#10785) — rien qui la relie à une page ou à une session', async () => {
     const h = await reachHarness([{ id: POST }]);
     await sendReachV2(h.app, [listed(true)], account, { platform: 'web', appSessionId: '5e1c2b9e-1d2a-4c55-9a1e-0a4b5c6d7e8f' });
 
     const row = h.impressions[0];
-    expect(row).toMatchObject({ postId: POST, source: 'feed', readerKey: accountReaderKeyOf(READER) });
-    for (const field of ['userId', 'surface', 'position', 'rankingSource', 'viewable', 'visibleFraction', 'visibleMs', 'platform', 'feedRequestId', 'appSessionId']) {
+    expect(row).toMatchObject({ postId: POST, source: 'feed', userId: READER, position: 3, viewable: true, platform: 'web' });
+    for (const field of ['readerKey', 'feedRequestId', 'appSessionId']) {
       expect(row[field]).toBeUndefined();
     }
     expect(h.store.read(POST)).toMatchObject({ impressionCount: 1 });

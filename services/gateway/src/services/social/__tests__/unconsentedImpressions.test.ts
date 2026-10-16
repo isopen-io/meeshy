@@ -1,12 +1,13 @@
 /**
  * @jest-environment node
  *
- * #10773 — une impression sans consentement d'analyse ne garde que ce que la
- * déduplication exige : le post, l'EMPREINTE du lecteur (jamais son compte),
- * la source (une impression déduite d'une vue se remplace), la clé de rejeu,
- * et 8 jours. La déduction « une vue implique son impression » (#10732) et son
- * remplacement par la première vraie impression marchent sur cette forme ;
- * l'export et l'effacement la retrouvent par l'empreinte.
+ * #10785 — une impression est NOMINATIVE quel que soit le statut d'analyse
+ * (décision du porteur : « qui a vu » est une fonctionnalité de la
+ * plateforme). Le statut ne gouverne que la MESURE rangée à côté : session
+ * d'application sous consentement seulement, ni visibilité ni plateforme sous
+ * refus (#10483). Les impressions réduites écrites entre 111c74768d et #10785
+ * (empreinte `readerKey`, 8 jours) restent dédupliquées, remplacées, exportées
+ * et effacées.
  */
 import { describe, it, expect, jest } from '@jest/globals';
 import { impressionRowOf } from '../impressionRows';
@@ -74,15 +75,26 @@ function table(seed: Row[] = []) {
   };
 }
 
-describe('#10773 — la ligne d’une impression sans consentement', () => {
-  it.each(['not_granted', 'denied'] as const)('statut %s : ni compte, ni rang, ni visibilité, ni plateforme — l’empreinte, la source, la clé de rejeu, 8 jours', (standing) => {
+const legacyReduced = (userId: string, over: Row = {}): Row => ({
+  id: `reduite-${userId}`, postId: POST, readerKey: accountReaderKeyOf(userId), source: 'view',
+  createdAt: new Date(Date.now() - 60_000), expiresAt: new Date(Date.now() + 8 * DAY_MS), ...over,
+});
+
+describe('#10785 — la ligne d’une impression garde son lecteur quel que soit le statut', () => {
+  it.each(['not_granted', 'denied'] as const)('statut %s : le compte, la source, la surface, la clé de rejeu, 90 jours — jamais d’empreinte', (standing) => {
     const before = Date.now();
     const row = rowOf(standing) as Row;
 
-    expect(Object.keys(row).sort()).toEqual(['eventKey', 'expiresAt', 'postId', 'readerKey', 'source']);
-    expect(row.readerKey).toBe(accountReaderKeyOf(READER));
-    expect(JSON.stringify(row)).not.toContain(READER);
-    expect(Math.round(((row.expiresAt as Date).getTime() - before) / DAY_MS)).toBe(8);
+    expect(row).toMatchObject({ postId: POST, userId: READER, source: 'feed', surface: 'feed' });
+    expect(row).not.toHaveProperty('readerKey');
+    expect(row).not.toHaveProperty('appSessionId');
+    expect(Math.round(((row.expiresAt as Date).getTime() - before) / DAY_MS)).toBe(90);
+  });
+
+  it('statut denied : ni visibilité ni plateforme ; not_granted : la mesure sans la session d’application', () => {
+    expect(rowOf('denied')).not.toHaveProperty('viewable');
+    expect(rowOf('denied')).not.toHaveProperty('platform');
+    expect(rowOf('not_granted')).toMatchObject({ viewable: true, platform: 'ios', position: 3 });
   });
 
   it('statut granted : régime inchangé — compte, mesure, contexte, 90 jours', () => {
@@ -98,37 +110,29 @@ describe('#10773 — la ligne d’une impression sans consentement', () => {
   });
 });
 
-describe('#10773 — une vue sans clé déduit une impression réduite, sans jamais compter deux fois', () => {
-  it('sans consentement : l’impression déduite est réduite, et une seconde vue n’en déduit pas d’autre', async () => {
+describe('#10785 — une vue sans clé déduit une impression nominative, sans jamais compter deux fois', () => {
+  it('l’impression déduite porte le lecteur, et une seconde vue n’en déduit pas d’autre', async () => {
     const { rows, prisma, impressionCredits } = table();
 
-    await impressionImpliedByView(prisma as never, { postId: POST, userId: READER, surface: 'story', standing: 'not_granted' });
-    await impressionImpliedByView(prisma as never, { postId: POST, userId: READER, surface: 'story', standing: 'not_granted' });
+    await impressionImpliedByView(prisma as never, { postId: POST, userId: READER, surface: 'story' });
+    await impressionImpliedByView(prisma as never, { postId: POST, userId: READER, surface: 'story' });
 
     expect(rows).toHaveLength(1);
-    expect(rows[0]).toMatchObject({ postId: POST, readerKey: accountReaderKeyOf(READER), source: 'view' });
-    expect(rows[0]).not.toHaveProperty('userId');
-    expect(rows[0]).not.toHaveProperty('surface');
+    expect(rows[0]).toMatchObject({ postId: POST, userId: READER, source: 'view', surface: 'story' });
+    expect(rows[0]).not.toHaveProperty('readerKey');
     expect(impressionCredits()).toHaveLength(1);
   });
 
-  it('une impression nominative antérieure du même lecteur suffit : rien n’est déduit', async () => {
-    const { rows, prisma, impressionCredits } = table([{ id: 'ancienne', postId: POST, userId: READER, source: 'feed' }]);
-    await impressionImpliedByView(prisma as never, { postId: POST, userId: READER, standing: 'not_granted' });
+  it('une impression réduite antérieure du même lecteur suffit : rien n’est déduit', async () => {
+    const { rows, prisma, impressionCredits } = table([legacyReduced(READER)]);
+    await impressionImpliedByView(prisma as never, { postId: POST, userId: READER });
     expect(rows).toHaveLength(1);
     expect(impressionCredits()).toEqual([]);
   });
 
-  it('avec consentement : l’impression déduite reste nominative', async () => {
-    const { rows, prisma } = table();
-    await impressionImpliedByView(prisma as never, { postId: POST, userId: READER, surface: 'story', standing: 'granted' });
-    expect(rows[0]).toMatchObject({ postId: POST, userId: READER, source: 'view', surface: 'story' });
-  });
-
-  it('la première vraie impression remplace l’impression déduite réduite du même lecteur — pas celle d’un autre', async () => {
-    const { rows, prisma } = table();
-    await impressionImpliedByView(prisma as never, { postId: POST, userId: READER, standing: 'not_granted' });
-    await impressionImpliedByView(prisma as never, { postId: POST, userId: OTHER, standing: 'not_granted' });
+  it('la première vraie impression remplace l’impression déduite du même lecteur — nominative ou réduite antérieure — pas celle d’un autre', async () => {
+    const { rows, prisma } = table([legacyReduced(READER), legacyReduced(OTHER)]);
+    await impressionImpliedByView(prisma as never, { postId: POST, userId: OTHER });
 
     const replaced = await consumeImpliedImpressions(prisma as never, READER, [POST]);
 
@@ -137,17 +141,17 @@ describe('#10773 — une vue sans clé déduit une impression réduite, sans jam
   });
 });
 
-describe('#10773 — export et effacement retrouvent les impressions réduites par l’empreinte', () => {
-  it('l’export rend l’impression réduite du compte, l’effacement la retire, rien d’un autre lecteur', async () => {
-    const { rows, prisma } = table();
-    await impressionImpliedByView(prisma as never, { postId: POST, userId: READER, standing: 'not_granted' });
-    await impressionImpliedByView(prisma as never, { postId: POST, userId: OTHER, standing: 'not_granted' });
+describe('#10785 — export et effacement : les lignes nominatives et les réduites antérieures du compte', () => {
+  it('l’export rend les impressions du compte, l’effacement les retire, rien d’un autre lecteur', async () => {
+    const { rows, prisma } = table([legacyReduced(READER, { postId: '507f1f77bcf86cd7994390ff' })]);
+    await impressionImpliedByView(prisma as never, { postId: POST, userId: READER });
+    await impressionImpliedByView(prisma as never, { postId: POST, userId: OTHER });
 
     const exported = await exportReadingActivity(prisma as never, READER, { limit: 10, offset: 0 } as never);
-    expect(exported.impressions).toEqual([expect.objectContaining({ postId: POST, source: 'view' })]);
+    expect(exported.impressions).toHaveLength(2);
 
     const erased = await eraseReadingTelemetryOf(prisma as never, READER);
-    expect(erased.impressions).toBe(1);
-    expect(rows.map((row) => row.readerKey)).toEqual([accountReaderKeyOf(OTHER)]);
+    expect(erased.impressions).toBe(2);
+    expect(rows.map((row) => row.userId)).toEqual([OTHER]);
   });
 });

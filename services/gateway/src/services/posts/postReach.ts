@@ -1,5 +1,5 @@
 import type { Prisma, PrismaClient } from '@meeshy/shared/prisma/client';
-import { POST_ENGAGEMENT_RETENTION_MS, UNCONSENTED_READING_RETENTION_MS } from '../social/contentEvents';
+import { POST_ENGAGEMENT_RETENTION_MS } from '../social/contentEvents';
 import type { AnalyticsStanding } from '../social/eventPrivacy';
 import { accountReaderKeyOf, engagementSessionKeyOf } from './readerKey';
 import { NOT_DELETED } from './postIncludes';
@@ -69,8 +69,8 @@ async function engagementSessionCounts(
   },
 ): Promise<boolean> {
   if (params.authorId === params.userId) return false;
-  // Le même lecteur sous ses DEUX formes : nominative (session consentie, lignes
-  // antérieures) et empreinte (session sans consentement, #10771).
+  // Le même lecteur sous ses DEUX formes : nominative, et l'empreinte des lignes
+  // réduites écrites entre #10771 et #10785 (lues jusqu'à leur expiration, 8 j).
   const sibling = await prisma.postEngagement.findFirst({
     where: {
       postId: params.postId,
@@ -160,7 +160,7 @@ export async function recordView(
   postId: string,
   userId: string,
   duration?: number,
-  context: ViewContext & { readonly impliesImpression?: boolean; readonly standing?: AnalyticsStanding } = {},
+  context: ViewContext & { readonly impliesImpression?: boolean } = {},
 ): Promise<boolean> {
   try {
     // Enforce visibility before recording — without this, any authenticated
@@ -226,7 +226,7 @@ export async function recordView(
       : await creditPostView(deps.prisma, { postId, userId, durationMs: safeDuration, ...context });
     creditStoryViewed(deps.prisma, { viewerId: userId, story: target, isNewView, durationMs: safeDuration });
     if (context.impliesImpression && target.authorId !== userId) {
-      await impressionImpliedByView(deps.prisma, { postId, userId, surface: context.surface, standing: context.standing }).catch((error: unknown) =>
+      await impressionImpliedByView(deps.prisma, { postId, userId, surface: context.surface }).catch((error: unknown) =>
         log.warn('recordView: impression implied by the view not written', {
           postId,
           error: error instanceof Error ? error.message : String(error),
@@ -296,17 +296,10 @@ async function readableEngagementTarget(
 const sessionStandingOf = (clientConsent: string | undefined, standing: AnalyticsStanding): AnalyticsStanding =>
   clientConsent === 'denied' ? 'denied' : standing;
 
+/** Une ligne réduite écrite entre #10771 et #10785 : empreinte du lecteur, sans compte ni mesure. */
 const isReducedRow = (row: StoredEngagementRow): boolean => typeof row.readerKey === 'string';
 
 const UNSET = { unset: true } as const;
-
-/** Ce qu'une ligne nominative perd en devenant réduite (retrait en cours de session, #10771). */
-const MEASURE_UNSET = {
-  userId: UNSET, contentType: UNSET, surface: UNSET, startedAt: UNSET, dwellMs: UNSET, watchMs: UNSET,
-  mediaDurationMs: UNSET, completed: UNSET, truncated: UNSET, consent: UNSET, actions: null, watchSamples: null,
-} as const;
-
-const earliest = (a: Date | null | undefined, b: Date): Date => (a && a.getTime() < b.getTime() ? a : b);
 
 /**
  * Ingestion append-only des sessions d'engagement (LOT 4 + agrégation LOT 5).
@@ -323,14 +316,13 @@ const earliest = (a: Date | null | undefined, b: Date): Date => (a && a.getTime(
  *   jamais reculer, et seuls les compteurs que la fusion gagne sont montés —
  *   un rejeu idempotent n'ajoute rien. N'altère NI `viewCount` NI `PostView`.
  *
- * Deux formes de ligne, choisies par le statut d'analyse (#10771, #10772) :
- *  - `granted` : la mesure complète, nominative, 90 jours ;
- *  - tout autre statut (et l'absence de statut) : la forme RÉDUITE — empreinte
- *    de la session, post, empreinte du lecteur, heure de réception, les trois
- *    compteurs déjà crédités, 8 jours. Durées, surface, actions et
- *    échantillons servent au calcul des crédits à la réception, puis sont
- *    jetés. Une ligne réduite ne redevient jamais nominative ; une ligne
- *    nominative dont la mesure arrive après un retrait est réduite.
+ * La ligne est NOMINATIVE quel que soit le statut d'analyse (#10785, décision
+ * du porteur) : « qui a vu » est une fonctionnalité de la plateforme. Le
+ * statut que la passerelle établit (#10772) ne gouverne que la télémétrie sans
+ * fonctionnalité visible : hors `granted`, ni micro-actions (`actions`) ni
+ * échantillons de lecture (`watchSamples`). Les trois compteurs déjà crédités
+ * sont rangés en drapeaux. Une ligne réduite antérieure (#10771 : empreinte,
+ * sans compte) que la suite de sa session retrouve redevient nominative.
  *
  * Retourne le nombre de sessions persistées (insert ou update).
  */
@@ -379,7 +371,8 @@ export async function recordEngagementBatch(
       const reducedKey = engagementSessionKeyOf(s.sessionId);
       const readerKey = accountReaderKeyOf(userId);
       // La clé de session vient du client : la ligne n'est la sienne que sous
-      // SON identité. Celle d'un autre lecteur n'est ni lue, ni mise à jour —
+      // SON identité (compte, ou empreinte d'une ligne réduite antérieure à
+      // #10785). Celle d'un autre lecteur n'est ni lue, ni mise à jour —
       // l'écriture qui suit lève sur l'unicité, et la session ne compte pas.
       const ownRaw = { sessionId: s.sessionId, userId };
       const ownReduced = { sessionId: reducedKey, readerKey };
@@ -392,61 +385,49 @@ export async function recordEngagementBatch(
       });
       const storedReduced = before !== null && isReducedRow(before);
       const stored = before && !storedReduced ? storedEngagementOf(before, received) : undefined;
+      const sessionStanding = sessionStandingOf(s.consent, batchStanding);
+      const traced = sessionStanding === 'granted';
       const session = stored ? mergeEngagementSessions(stored, received) : received;
 
-      const already = stored ? engagementAggregateIncrements(stored) : before ? incrementsOfCredits(before) : {};
-      const credited = storedReduced
-        ? { ...already, ...engagementAggregateIncrements(received) }
-        : engagementAggregateIncrements(session);
+      const already = {
+        ...(before ? incrementsOfCredits(before) : {}),
+        ...(stored ? engagementAggregateIncrements(stored) : {}),
+      };
+      const credited = { ...already, ...engagementAggregateIncrements(session) };
 
-      const granted = sessionStandingOf(s.consent, batchStanding) === 'granted';
-      if (granted && !storedReduced) {
-        const data = {
-          postId: s.postId,
-          userId,
-          contentType: s.contentType,
-          surface: s.surface,
-          startedAt: new Date(s.startedAt),
-          dwellMs: session.dwellMs,
-          watchMs: session.watchMs,
-          mediaDurationMs: session.mediaDurationMs,
-          completed: session.completed,
-          truncated: s.truncated === true,
-          consent: 'granted',
-          actions: session.actions as Prisma.InputJsonValue,
-          watchSamples: session.watchSamples as Prisma.InputJsonValue,
-        };
+      const data = {
+        postId: s.postId,
+        userId,
+        contentType: s.contentType,
+        surface: s.surface,
+        startedAt: new Date(s.startedAt),
+        dwellMs: session.dwellMs,
+        watchMs: session.watchMs,
+        mediaDurationMs: session.mediaDurationMs,
+        completed: session.completed,
+        truncated: s.truncated === true,
+        consent: sessionStanding,
+        actions: (traced ? session.actions : []) as Prisma.InputJsonValue,
+        watchSamples: (traced ? session.watchSamples : []) as Prisma.InputJsonValue,
+        ...creditsOfIncrements(credited),
+      };
+
+      if (before && storedReduced) {
+        await prisma.postEngagement.update({
+          where: { id: before.id },
+          data: {
+            ...data,
+            sessionId: s.sessionId,
+            readerKey: UNSET,
+            expiresAt: new Date(before.createdAt.getTime() + POST_ENGAGEMENT_RETENTION_MS),
+          },
+        });
+      } else {
         await prisma.postEngagement.upsert({
           where: ownRaw,
           update: data,
           // Conservation du brut : 90 j (#10510, O7) — posée à la création, jamais prolongée par un rejeu.
-          create: { sessionId: s.sessionId, ...data, createdAt: receivedAt, expiresAt: new Date(Date.now() + POST_ENGAGEMENT_RETENTION_MS) },
-        });
-      } else if (before && !storedReduced) {
-        // Une ligne nominative dont la suite arrive sans consentement (retrait en cours de session) est réduite.
-        await prisma.postEngagement.update({
-          where: { id: before.id },
-          data: {
-            ...MEASURE_UNSET,
-            sessionId: reducedKey,
-            readerKey,
-            ...creditsOfIncrements(credited),
-            expiresAt: earliest(before.expiresAt, new Date(before.createdAt.getTime() + UNCONSENTED_READING_RETENTION_MS)),
-          },
-        });
-      } else {
-        const credits = creditsOfIncrements(credited);
-        await prisma.postEngagement.upsert({
-          where: ownReduced,
-          update: credits,
-          create: {
-            sessionId: reducedKey,
-            postId: s.postId,
-            readerKey,
-            ...credits,
-            createdAt: receivedAt,
-            expiresAt: new Date(receivedAt.getTime() + UNCONSENTED_READING_RETENTION_MS),
-          },
+          create: { sessionId: s.sessionId, ...data, createdAt: receivedAt, expiresAt: new Date(receivedAt.getTime() + POST_ENGAGEMENT_RETENTION_MS) },
         });
       }
 

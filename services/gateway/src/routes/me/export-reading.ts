@@ -11,8 +11,8 @@
  *    n'est lié à personne et n'en fait pas partie.
  *
  * Rien d'un autre compte : chaque ligne est filtrée par le `userId` du
- * demandeur — ou, pour une impression ou une session rangée SANS consentement
- * d'analyse (#10771, #10773), par l'EMPREINTE de son compte (`readerKey`).
+ * demandeur — ou, pour une impression ou une session RÉDUITE écrite entre
+ * #10771 et #10785, par l'EMPREINTE de son compte (`readerKey`).
  * Chaque liste est bornée par la page de la requête.
  */
 

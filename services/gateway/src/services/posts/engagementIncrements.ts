@@ -116,9 +116,9 @@ export function mergeEngagementSessions<T extends MergeableEngagement>(stored: M
 }
 
 /**
- * Les trois compteurs qu'une session peut créditer, en DRAPEAUX : ce qu'une
- * ligne rangée sans consentement d'analyse garde à la place de sa mesure
- * (#10771). La mesure sert à les calculer à la réception, puis est jetée.
+ * Les trois compteurs qu'une session peut créditer, en DRAPEAUX, rangés sur
+ * chaque ligne (#10771, #10785) : la fusion premier contact → mesure ne
+ * recrédite jamais ce qu'une réception précédente a déjà crédité.
  */
 export type EngagementCredits = {
   readonly creditedOpen: boolean;

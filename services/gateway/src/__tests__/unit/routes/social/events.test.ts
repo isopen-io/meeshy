@@ -66,7 +66,6 @@ import {
   socialEventsRateLimitKey,
   SOCIAL_EVENTS_BATCH_CAP,
 } from '../../../../routes/social/events';
-import { accountReaderKeyOf } from '../../../../services/posts/readerKey';
 
 // ─── Constantes ───────────────────────────────────────────────────────────────
 
@@ -715,11 +714,12 @@ describe('#10772 — une session de lecture passe par le statut d’analyse que 
     await app.close();
   });
 
-  it('une vue sans clé d’impression transmet le statut à l’impression qu’elle déduit (#10773)', async () => {
+  it('une vue sans clé d’impression demande l’impression déduite, sans statut : elle est nominative quel que soit le consentement (#10785)', async () => {
     const app = await buildApp({ prisma: withUser({ analyticsConsentAt: null, dataProcessingConsentAt: null }) });
     await post(app, { events: [{ type: 'view', postId: VISIBLE_ID }] });
     const [, , , context] = mockRecordView.mock.calls[0] as any;
-    expect(context).toMatchObject({ impliesImpression: true, standing: 'not_granted' });
+    expect(context).toMatchObject({ impliesImpression: true });
+    expect(context).not.toHaveProperty('standing');
     await app.close();
   });
 });
@@ -821,10 +821,10 @@ describe('#10732 — une vue compte son impression quand elle manque, jamais deu
 
     const insertion = commandes(prisma).find((c) => c.insert === 'PostImpression');
     expect(insertion?.documents).toEqual([expect.objectContaining({
-      // Sans consentement d'analyse, l'empreinte du lecteur et non son compte (#10773).
-      postId: { $oid: VISIBLE_ID }, readerKey: accountReaderKeyOf(USER_ID), source: 'story', eventKey: expect.any(String),
+      // Le compte du lecteur quel que soit le statut d'analyse (#10785).
+      postId: { $oid: VISIBLE_ID }, userId: { $oid: USER_ID }, source: 'story', eventKey: expect.any(String),
     })]);
-    expect(insertion?.documents[0]).not.toHaveProperty('userId');
+    expect(insertion?.documents[0]).not.toHaveProperty('readerKey');
     expect(impressionsCreditees(prisma)).toEqual([{ ids: [VISIBLE_ID], increment: 1 }]);
   });
 

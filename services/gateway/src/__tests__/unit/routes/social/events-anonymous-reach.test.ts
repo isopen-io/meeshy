@@ -282,11 +282,10 @@ describe('G8 — le champ surface', () => {
     await h.app.close();
   });
 
-  it('la surface d’un compte qui consent à l’analyse est persistée dans PostImpression — sans consentement, elle ne l’est pas (#10773)', async () => {
+  it('la surface d’un compte est persistée dans PostImpression, qu’il consente à l’analyse ou non (#10785)', async () => {
     const h = await harness([{ id: POST }]);
     await send(h.app, [impression(POST, { surface: 'reels' }), view(POST)], { authorization: `Bearer ${READER}` });
-    expect(h.impressions).toEqual([expect.objectContaining({ postId: POST, source: 'feed' })]);
-    expect(h.impressions[0].surface).toBeUndefined();
+    expect(h.impressions).toEqual([expect.objectContaining({ postId: POST, source: 'feed', surface: 'reels' })]);
     await h.app.close();
 
     const consenting = await harness([{ id: POST }], [GUEST], { consentedUserIds: [READER] });
