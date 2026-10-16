@@ -157,6 +157,11 @@ export const GAME_ERROR_CODES = {
   sealAlreadyOwned: 'SEAL_ALREADY_OWNED',
   prestigeLevelTooLow: 'PRESTIGE_LEVEL_TOO_LOW',
   prestigeAtMaximum: 'PRESTIGE_AT_MAXIMUM',
+  /**
+   * La frappe ferait entrer dans une réserve du trésor que le rang de Gloire n'ouvre pas encore (#10848). Le refus
+   * porte `details` : `{ tier, minHeld, requires: { rank, division, division5 } }`.
+   */
+  treasuryLocked: 'TREASURY_LOCKED',
 } as const;
 
 export type GameErrorCode = (typeof GAME_ERROR_CODES)[keyof typeof GAME_ERROR_CODES];
