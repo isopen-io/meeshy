@@ -9,14 +9,13 @@ import { manageText, type ConversationManageCatalogKey } from '@/lib/i18n-conver
 import { translate } from '@/lib/i18n-catalog';
 import type { InterfaceLanguage } from '@/lib/interface-language';
 import { avatarMenuEntries } from '@/lib/view/avatar-menu';
-import { initialsOf } from '@/lib/view/conversation';
 import { managementOf, memberActionsFor, type MemberAction, type MemberActionKind } from '@/lib/view/conversation-management';
 import { peekProfileOnClick } from '@/lib/view/profile-peek';
 import type { StoryRingOf } from '@/lib/view/use-author-story-rings';
 import { Link } from '@/routes/route-table';
 
-import { Avatar } from './avatar';
 import { AvatarMenuTrigger } from './avatar-menu';
+import { MemberAvatar } from './member-avatar';
 import { ConfirmDialog } from './confirm-dialog';
 import { Glyph } from './glyph';
 import { Sheet } from './sheet';
@@ -381,7 +380,7 @@ function MemberRow({
 
   const contenu = (
     <>
-      <Avatar initials={initialsOf(member.displayName)} color={accent} size={MEMBER_AVATAR} {...(member.avatar === undefined ? {} : { src: member.avatar })} />
+      <MemberAvatar member={member} accent={accent} size={MEMBER_AVATAR} />
       <span className="flex min-w-0 flex-1 flex-col">
         <span className="truncate text-body font-medium" style={{ color: 'var(--color-ios-ink)' }}>
           {member.displayName}

@@ -649,6 +649,7 @@ export function Bubble({
               {showsIdentity ? (
                 <AuthorAvatar
                   authorId={hereKeyOf(message.sender)}
+                  sender={message.sender}
                   participant={{ id: message.senderId, name: message.sender?.displayName ?? '' }}
                   initials={initialsOf(message.sender?.displayName ?? '')}
                   color="var(--accent)"
