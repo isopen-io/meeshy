@@ -12,6 +12,8 @@ import SwiftUI
 @MainActor
 enum MeeshyLaunch {
     static func main() {
+        // #10854 — AVANT toute session ou socket : sous XCTest, rien ne part.
+        TestHarnessNetworkSeal.installIfUnderTestHarness()
         UILanguageOverride.applyIfNeeded()
         MeeshyApp.main()
     }
