@@ -85,4 +85,24 @@ final class StoryViewerNeighborEntryTests: XCTestCase {
             "Aucune story non-vue → repli sur la première story non-expirée (même vue)."
         )
     }
+
+    // MARK: - #10803 — l'arête du cube n'atteint jamais 90°
+
+    /// En fin de transition la face sortante arrive à `±largeur` : 90° pile
+    /// rendait une projection SINGULIÈRE (« ignoring singular matrix »,
+    /// m11 = cos 90° = 0) juste avant le plantage du passage d'un auteur à
+    /// l'autre. La face reste de profil, jamais dégénérée.
+    func test_cubeFaceDegrees_atAndBeyondTheEdge_staysShortOfNinetyDegrees() {
+        let width: CGFloat = 1024
+        for offset in [width, -width, width * 1.08, -width * 1.08] {
+            let degrees = StoryViewerContentView.cubeFaceDegrees(offsetX: offset, width: width)
+            XCTAssertLessThan(abs(degrees), 90, "offset \(offset)")
+            XCTAssertGreaterThan(abs(degrees), 89, "offset \(offset)")
+        }
+    }
+
+    func test_cubeFaceDegrees_midCourse_followsTheFinger() {
+        XCTAssertEqual(StoryViewerContentView.cubeFaceDegrees(offsetX: 512, width: 1024), 45, accuracy: 0.0001)
+        XCTAssertEqual(StoryViewerContentView.cubeFaceDegrees(offsetX: 0, width: 0), 0)
+    }
 }
