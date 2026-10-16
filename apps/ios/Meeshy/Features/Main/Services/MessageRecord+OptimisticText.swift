@@ -15,7 +15,7 @@ extension MessageRecord {
             messageType: "text", messageSource: "user", contentType: "text",
             state: .sending, retryCount: 0, lastError: nil,
             isEncrypted: false, encryptionMode: nil, encryptedPayload: nil,
-            replyToId: replyToId, storyReplyToId: nil,
+            replyToId: replyToId, storyReplyToId: item.storyReplyToId,
             forwardedFromId: nil, forwardedFromConversationId: nil,
             replyToJson: nil, forwardedFromJson: nil,
             expiresAt: nil, effectFlags: 0,

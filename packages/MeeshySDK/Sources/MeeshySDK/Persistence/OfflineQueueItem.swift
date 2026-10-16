@@ -29,6 +29,9 @@ public struct OfflineQueueItem: Codable, Identifiable, Sendable {
     public let content: String
     public let originalLanguage: String?
     public let replyToId: String?
+    /// La story ou l'humeur que ce message cite (#10820) : une réponse mise
+    /// en file la garde au rejeu. Absente des lignes écrites avant elle.
+    public let storyReplyToId: String?
     public let forwardedFromId: String?
     public let forwardedFromConversationId: String?
     public let attachmentIds: [String]?
@@ -149,6 +152,7 @@ public struct OfflineQueueItem: Codable, Identifiable, Sendable {
         clientMessageId: String? = nil,
         originalLanguage: String? = nil,
         replyToId: String? = nil,
+        storyReplyToId: String? = nil,
         forwardedFromId: String? = nil,
         forwardedFromConversationId: String? = nil,
         attachmentIds: [String]? = nil,
@@ -171,6 +175,7 @@ public struct OfflineQueueItem: Codable, Identifiable, Sendable {
         self.content = content
         self.originalLanguage = originalLanguage
         self.replyToId = replyToId
+        self.storyReplyToId = storyReplyToId
         self.forwardedFromId = forwardedFromId
         self.forwardedFromConversationId = forwardedFromConversationId
         self.attachmentIds = attachmentIds
@@ -195,6 +200,7 @@ public struct OfflineQueueItem: Codable, Identifiable, Sendable {
         content: String,
         originalLanguage: String?,
         replyToId: String?,
+        storyReplyToId: String? = nil,
         forwardedFromId: String?,
         forwardedFromConversationId: String?,
         attachmentIds: [String]?,
@@ -219,6 +225,7 @@ public struct OfflineQueueItem: Codable, Identifiable, Sendable {
         self.content = content
         self.originalLanguage = originalLanguage
         self.replyToId = replyToId
+        self.storyReplyToId = storyReplyToId
         self.forwardedFromId = forwardedFromId
         self.forwardedFromConversationId = forwardedFromConversationId
         self.attachmentIds = attachmentIds
@@ -241,6 +248,7 @@ public struct OfflineQueueItem: Codable, Identifiable, Sendable {
         case content
         case originalLanguage
         case replyToId
+        case storyReplyToId
         case forwardedFromId
         case forwardedFromConversationId
         case attachmentIds
@@ -266,6 +274,7 @@ public struct OfflineQueueItem: Codable, Identifiable, Sendable {
         self.content = try c.decode(String.self, forKey: .content)
         self.originalLanguage = try c.decodeIfPresent(String.self, forKey: .originalLanguage) ?? nil
         self.replyToId = try c.decodeIfPresent(String.self, forKey: .replyToId) ?? nil
+        self.storyReplyToId = try c.decodeIfPresent(String.self, forKey: .storyReplyToId)
         self.forwardedFromId = try c.decodeIfPresent(String.self, forKey: .forwardedFromId) ?? nil
         self.forwardedFromConversationId = try c.decodeIfPresent(String.self, forKey: .forwardedFromConversationId) ?? nil
         self.attachmentIds = try c.decodeIfPresent([String].self, forKey: .attachmentIds) ?? nil
@@ -294,6 +303,7 @@ public struct OfflineQueueItem: Codable, Identifiable, Sendable {
         try c.encode(content, forKey: .content)
         try c.encodeIfPresent(originalLanguage, forKey: .originalLanguage)
         try c.encodeIfPresent(replyToId, forKey: .replyToId)
+        try c.encodeIfPresent(storyReplyToId, forKey: .storyReplyToId)
         try c.encodeIfPresent(forwardedFromId, forKey: .forwardedFromId)
         try c.encodeIfPresent(forwardedFromConversationId, forKey: .forwardedFromConversationId)
         try c.encodeIfPresent(attachmentIds, forKey: .attachmentIds)
