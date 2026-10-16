@@ -39,16 +39,51 @@ public struct TreasuryStanding: Codable, Sendable, Equatable {
         }
     }
 
+    /// L'état d'une réserve pour CE compte : fermée ou ouverte par son rang (#10848).
+    public struct Access: Codable, Sendable, Equatable {
+        public let key: TreasuryTierKey
+        public let minHeld: Int
+        public let locked: Bool
+        /// `nil` : ouverte à tous.
+        public let requires: GameRankRequirement?
+
+        public init(key: TreasuryTierKey, minHeld: Int, locked: Bool, requires: GameRankRequirement?) {
+            self.key = key
+            self.minHeld = minHeld
+            self.locked = locked
+            self.requires = requires
+        }
+    }
+
     public let held: Int
     /// `nil` sans Meesh gardée.
     public let tier: TreasuryTierKey?
     /// Le palier suivant et ce qu'il manque, `nil` à la réserve.
     public let next: Next?
+    /// Pour chaque réserve, son état et le rang requis (#10848) — `nil` devant un serveur antérieur. Une entrée
+    /// illisible (réserve inconnue) est sautée, jamais la liste entière.
+    public let access: [Access]?
 
-    public init(held: Int, tier: TreasuryTierKey?, next: Next?) {
+    public init(held: Int, tier: TreasuryTierKey?, next: Next?, access: [Access]? = nil) {
         self.held = held
         self.tier = tier
         self.next = next
+        self.access = access
+    }
+
+    private enum CodingKeys: String, CodingKey { case held, tier, next, access }
+
+    private struct Lenient<T: Decodable>: Decodable {
+        let value: T?
+        init(from decoder: Decoder) throws { value = try? T(from: decoder) }
+    }
+
+    public init(from decoder: Decoder) throws {
+        let c = try decoder.container(keyedBy: CodingKeys.self)
+        held = try c.decode(Int.self, forKey: .held)
+        tier = try c.decodeIfPresent(TreasuryTierKey.self, forKey: .tier)
+        next = try c.decodeIfPresent(Next.self, forKey: .next)
+        access = ((try? c.decodeIfPresent([Lenient<Access>].self, forKey: .access)) ?? nil)?.compactMap(\.value)
     }
 }
 

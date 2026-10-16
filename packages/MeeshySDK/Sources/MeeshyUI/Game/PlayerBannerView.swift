@@ -38,13 +38,27 @@ public struct PlayerBannerView: View {
         public let place: String?
         /// « 23 » (les jours de la Flamme).
         public let flameDays: String?
+        /// « 4 » (les trophées).
+        public let trophies: String?
+        /// « 1/3 » (la mission du jour).
+        public let mission: String?
+        /// « S1 » (la saison).
+        public let season: String?
+        /// La phrase de lecteur d'écran de CHAQUE pièce quand elles sont des boutons (`onSelect`).
+        public let pieceLabels: [GamePlayerBanner.Piece: String]
 
-        public init(points: String, missing: String? = nil, meeshes: String? = nil, place: String? = nil, flameDays: String? = nil) {
+        public init(points: String, missing: String? = nil, meeshes: String? = nil, place: String? = nil, flameDays: String? = nil,
+                    trophies: String? = nil, mission: String? = nil, season: String? = nil,
+                    pieceLabels: [GamePlayerBanner.Piece: String] = [:]) {
             self.points = points
             self.missing = missing
             self.meeshes = meeshes
             self.place = place
             self.flameDays = flameDays
+            self.trophies = trophies
+            self.mission = mission
+            self.season = season
+            self.pieceLabels = pieceLabels
         }
     }
 
@@ -75,6 +89,12 @@ public struct PlayerBannerView: View {
     private let sheen: Double
     private let backdrop: String?
     private let accessibilityLabel: String?
+    /// Quand l'hôte le pose, CHAQUE pièce est son propre bouton vers sa fiche (#10846) : un élément de lecteur
+    /// d'écran par pièce, une cible d'au moins 44 pt, et le bandeau s'élargit en hauteur plutôt que de les serrer.
+    private let onSelect: ((GamePlayerBanner.Piece) -> Void)?
+
+    /// La cible tactile minimale d'une pièce.
+    public static let pieceTarget: CGFloat = 44
 
     @Environment(\.dynamicTypeSize) private var typeSize
     @Environment(\.accessibilityReduceMotion) private var reduceMotion
@@ -90,7 +110,8 @@ public struct PlayerBannerView: View {
     ///     `nil` ou vide ⇒ l'aplat seul.
     ///   - accessibilityLabel: `nil` ⇒ décorative ; l'hôte dit la phrase complète.
     public init(model: GamePlayerBanner, texts: Texts, palette: Palette, sheen: Double = 0, backdrop: String? = nil,
-                accessibilityLabel: String? = nil) {
+                accessibilityLabel: String? = nil, onSelect: ((GamePlayerBanner.Piece) -> Void)? = nil) {
+        self.onSelect = onSelect
         self.model = model
         self.texts = texts
         self.palette = palette
@@ -118,7 +139,9 @@ public struct PlayerBannerView: View {
         // disposition se choisit sur la taille du texte, et la ligne tient sur 320 pt en laissant ses textes
         // se réduire.
         Group {
-            if stacked {
+            if onSelect != nil {
+                selectableLayout
+            } else if stacked {
                 stackedLayout
             } else {
                 singleRow
@@ -142,7 +165,83 @@ public struct PlayerBannerView: View {
         .overlay(alignment: .bottom) {
             Rectangle().fill(palette.ink.opacity(0.08)).frame(height: 0.5)
         }
-        .modifier(BannerAccessibility(label: accessibilityLabel))
+        .modifier(BannerAccessibility(label: onSelect == nil ? accessibilityLabel : nil, contains: onSelect != nil))
+    }
+
+    // MARK: Les pièces-boutons (#10846)
+
+    /// L'anneau et la jauge en haut — chacun son bouton —, puis les autres pièces qui passent à la ligne : sur iPhone
+    /// comme sur iPad, aucune cible ne descend sous 44 pt, le bandeau prend la hauteur qu'il faut.
+    private var selectableLayout: some View {
+        VStack(alignment: .leading, spacing: 6) {
+            if model.showsLevel || model.showsScore {
+                HStack(spacing: 10) {
+                    if model.showsLevel { select(.level) { ring } }
+                    if model.showsScore {
+                        select(.sparks) { model.showsLevel ? AnyView(gauge) : AnyView(scoreOnly) }
+                    }
+                }
+            }
+            let rest = model.pieces.filter { $0 != .level && $0 != .sparks }
+            if !rest.isEmpty {
+                FlowLayout(spacing: 8) {
+                    ForEach(rest, id: \.self) { kind in
+                        select(kind) { pieceContent(kind) }
+                    }
+                }
+            }
+        }
+    }
+
+    private func select<Content: View>(_ piece: GamePlayerBanner.Piece, @ViewBuilder content: () -> Content) -> some View {
+        Button {
+            onSelect?(piece)
+        } label: {
+            content()
+                .frame(minWidth: Self.pieceTarget, minHeight: Self.pieceTarget)
+                .contentShape(Rectangle())
+        }
+        .buttonStyle(.plain)
+        .accessibilityElement(children: .ignore)
+        .accessibilityLabel(texts.pieceLabels[piece] ?? "")
+        .accessibilityAddTraits(.isButton)
+        .accessibilityIdentifier("game.player_banner.\(piece.rawValue)")
+    }
+
+    @ViewBuilder
+    private func pieceContent(_ kind: GamePlayerBanner.Piece) -> some View {
+        switch kind {
+        case .meesh:
+            piece(text: texts.meeshes) { MeeshCoinView(face: .obverse, edition: .silver, figures: nil).frame(width: 22, height: 22) }
+        case .rank:
+            if let rank = model.rank {
+                RankBlasonView(rank: rank.rank, division5: rank.division, mythic: rank.mythic, figures: nil).frame(width: 34)
+            }
+        case .league:
+            if let league = model.league {
+                piece(text: texts.place) { LeagueGemView(league: league.league).frame(width: 22, height: 22) }
+            }
+        case .flame:
+            if let form = model.flame?.form {
+                piece(text: texts.flameDays) { FlameView(form: form, flickers: false).frame(width: 22, height: 22) }
+            }
+        case .trophies:
+            piece(text: texts.trophies) { symbol("trophy.fill") }
+        case .mission:
+            piece(text: texts.mission) { symbol("target") }
+        case .season:
+            piece(text: texts.season) { symbol("calendar") }
+        case .level, .sparks:
+            EmptyView()
+        }
+    }
+
+    private func symbol(_ name: String) -> some View {
+        Image(systemName: name)
+            .font(.system(size: 16, weight: .semibold))
+            .foregroundColor(palette.ink)
+            .frame(width: 22, height: 22)
+            .accessibilityHidden(true)
     }
 
     // MARK: La bannière de profil, en translucide
@@ -320,10 +419,14 @@ private struct GaugeBar: View {
 /// Sans phrase, la brique est décorative.
 private struct BannerAccessibility: ViewModifier {
     let label: String?
+    /// Les pièces sont des boutons : le bandeau CONTIENT leurs éléments, il n'en est pas un.
+    var contains = false
 
     @ViewBuilder
     func body(content: Content) -> some View {
-        if let label {
+        if contains {
+            content.accessibilityElement(children: .contain)
+        } else if let label {
             content.accessibilityElement(children: .ignore).accessibilityLabel(label)
         } else {
             content.accessibilityHidden(true)
