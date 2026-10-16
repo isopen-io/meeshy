@@ -7,6 +7,9 @@ import { resolveSyncMembership } from './membership';
 import { trimToByteBudget, SYNC_MAX_PAGE_BYTES, MAX_ITEMS_PER_COLLECTION } from './budget';
 import { makeSyncCollectionSchema, type SyncCollectionResult } from './schema-shared';
 import { selectForFields, restrictFields, type ColumnPlan, type FieldSet } from '../../utils/sparse-fieldset';
+import { participantProfileDecor } from '../../services/appearance/profileDecor';
+import { startupPackIndex } from '../../services/packs/PackIndex';
+import { participantProfileDecorSchema } from '@meeshy/shared/types/api-schemas';
 
 /**
  * Collection `conversations` de `/sync` (issue #4171, critère 1) — même forme
@@ -48,6 +51,8 @@ const syncConversationOtherParticipantSelect = {
         username: true,
         displayName: true,
         avatar: true,
+        // #10757 — chargé, jamais servi tel quel : composé en `profileDecor`.
+        equippedAvatarRing: true,
       },
     },
   },
@@ -149,6 +154,10 @@ const syncConversationSchema = {
           userId: { type: 'string', nullable: true },
           displayName: { type: 'string', nullable: true },
           avatar: { type: 'string', nullable: true },
+          // #10757 — le contour équipé du pair, comme `GET /conversations` : la
+          // liste iOS se synchronise par ce chemin, et sans lui `toConversation`
+          // effaçait le contour que la liste venait de recevoir.
+          profileDecor: participantProfileDecorSchema,
           user: {
             type: 'object',
             nullable: true,
@@ -317,10 +326,17 @@ export async function syncConversations(opts: {
   // `selectForFields`) — un type déclaré ne garantit pas la présence RUNTIME.
   // #10205 — un invité (sans compte) ne reçoit ni effectif ni membres.
   const viewerIsGuest = identity.kind === 'anonymous';
+  const decorated = (participants: SyncConversation['participants']): SyncConversation['participants'] =>
+    participants.map((p) => {
+      const profileDecor = participantProfileDecor(startupPackIndex(), p.user);
+      return profileDecor === undefined ? p : { ...p, profileDecor };
+    });
   const changedRows = changedRowsRaw.map((row) => {
-    const scoped = (row.type === 'direct' && !viewerIsGuest) || row.participants === undefined
+    const scoped = row.participants === undefined
       ? row
-      : { ...row, participants: [] as typeof row.participants };
+      : row.type === 'direct' && !viewerIsGuest
+        ? { ...row, participants: decorated(row.participants) }
+        : { ...row, participants: [] as typeof row.participants };
     if (!viewerIsGuest) return scoped;
     const { memberCount: _memberCount, ...withoutCount } = scoped;
     return withoutCount as typeof scoped;

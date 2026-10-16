@@ -284,7 +284,7 @@ struct ProfileView: View {
 
             // Avatar overlapping banner
             ZStack(alignment: .bottomTrailing) {
-                ProfileOwnAvatar(user: user, accentColor: accentColor, isEditing: isEditing)
+                ProfileOwnAvatar(user: user, accentColor: user?.profileAccentHex ?? accentColor, isEditing: isEditing)
                 .overlay(
                     Circle()
                         .stroke(theme.backgroundGradient, lineWidth: 4)
@@ -334,7 +334,7 @@ struct ProfileView: View {
     }
 
     private var bannerImage: some View {
-        ProfileOwnBanner(user: user, accentColor: accentColor, isDark: theme.mode.isDark)
+        ProfileOwnBanner(user: user, accentColor: user?.profileAccentHex ?? accentColor, isDark: theme.mode.isDark)
     }
 
     // MARK: - Identity Section

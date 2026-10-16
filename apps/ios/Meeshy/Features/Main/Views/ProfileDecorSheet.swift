@@ -123,16 +123,19 @@ struct ProfileDecorSheet: View {
     @StateObject private var model: ProfileDecorModel
     let avatarURL: String?
     let name: String
+    /// La couleur du profil (#10754) : le sélecteur peint l'avatar et les bannières comme la fiche.
+    let accentHex: String
     let onOpenShop: (PackDomain) -> Void
 
     @Environment(\.dismiss) private var dismiss
     private var theme: ThemeManager { ThemeManager.shared }
     private var language: String { AuthManager.shared.currentUser?.systemLanguage ?? "fr" }
 
-    init(decor: ServedProfileDecor?, avatarURL: String?, name: String, onOpenShop: @escaping (PackDomain) -> Void) {
+    init(decor: ServedProfileDecor?, avatarURL: String?, name: String, accentHex: String = MeeshyColors.brandPrimaryHex, onOpenShop: @escaping (PackDomain) -> Void) {
         _model = StateObject(wrappedValue: ProfileDecorModel(decor: decor))
         self.avatarURL = avatarURL
         self.name = name
+        self.accentHex = accentHex
         self.onOpenShop = onOpenShop
     }
 
@@ -194,7 +197,7 @@ struct ProfileDecorSheet: View {
             Task { await model.equip(ref, side: .avatarRing) }
         } label: {
             VStack(spacing: MeeshySpacing.xs) {
-                MeeshyAvatar(name: name, context: .custom(56), accentColor: MeeshyColors.brandPrimaryHex, avatarURL: avatarURL)
+                MeeshyAvatar(name: name, context: .custom(56), accentColor: accentHex, avatarURL: avatarURL)
                     .avatarRing(design, avatarSize: 56, animates: false)
                     .frame(width: 68, height: 68)
                 Text(label)
@@ -237,7 +240,7 @@ struct ProfileDecorSheet: View {
             VStack(spacing: MeeshySpacing.xs) {
                 Group {
                     if let design {
-                        BannerDesignView(design: design, isDark: theme.mode.isDark, accentHex: MeeshyColors.brandPrimaryHex, animates: false)
+                        BannerDesignView(design: design, isDark: theme.mode.isDark, accentHex: accentHex, animates: false)
                     } else {
                         MeeshyColors.indigo500.opacity(0.12)
                     }
@@ -358,6 +361,7 @@ struct ProfileDecorEntry: View {
                 decor: user?.profileDecor,
                 avatarURL: user?.avatar,
                 name: user?.displayName ?? user?.username ?? "?",
+                accentHex: user?.profileAccentHex ?? MeeshyColors.brandPrimaryHex,
                 onOpenShop: { domain in
                     showSheet = false
                     onOpenShop(domain)

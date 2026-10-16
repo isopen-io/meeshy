@@ -236,6 +236,15 @@ public struct DynamicColorGenerator {
         return vibrantPalette[index]
     }
 
+    /// LA couleur d'un profil (#10754) — avatar sans photo, bannière de design — pareille sur
+    /// ma fiche, sur celle que voient les autres et dans le sélecteur de décor. Graine =
+    /// l'identifiant d'utilisateur, le nom seulement à défaut : miroir d'`authorAccentColor`
+    /// (`packages/shared/utils/conversation-colors.ts`), même palette, même hachage.
+    public static func profileAccentHex(userId: String?, name: String) -> String {
+        guard let userId, !userId.isEmpty else { return colorForName(name) }
+        return colorForName(userId)
+    }
+
     // Adapt a hex color for text readability in the given theme mode.
     // Dark mode: boosts brightness so colored text pops on near-black backgrounds.
     // Light mode: reduces brightness so colored text stays readable on white backgrounds.
@@ -398,5 +407,12 @@ public struct ConversationColorPalette: Sendable {
     /// `#e0604e` → `E0604E` : la forme des hex de la palette (sans dièse, majuscules).
     public static func bareHex(_ hex: String) -> String {
         (hex.hasPrefix("#") ? String(hex.dropFirst()) : hex).uppercased()
+    }
+}
+
+public extension MeeshyUser {
+    /// La couleur de ce profil (#10754) : `DynamicColorGenerator.profileAccentHex`, graine = l'identifiant.
+    var profileAccentHex: String {
+        DynamicColorGenerator.profileAccentHex(userId: id, name: displayName ?? username)
     }
 }

@@ -104,6 +104,12 @@ public struct UserProfileSheet: View {
         user.accentColor
     }
 
+    /// La couleur du PROFIL (#10754) — avatar sans photo, bannière de design — et non
+    /// l'accent de l'écran d'où la fiche s'ouvre : la même source que ma propre fiche.
+    var profileAccent: String {
+        DynamicColorGenerator.profileAccentHex(userId: displayUser.userId, name: displayUser.resolvedDisplayName)
+    }
+
     var isBlockedByTarget: Bool {
         loader.isBlockedByTarget
     }

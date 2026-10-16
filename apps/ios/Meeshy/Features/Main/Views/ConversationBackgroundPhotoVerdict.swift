@@ -57,9 +57,9 @@ nonisolated struct ConversationBackgroundPhotoProbe: Sendable {
     }
 
     /// Rend `isEncrypted` de la pièce ; lève l'erreur du réseau telle quelle.
-    private let fetchIsEncrypted: @Sendable (String) async throws -> Bool
+    private let fetchIsEncrypted: @Sendable @concurrent (String) async throws -> Bool
 
-    init(fetchIsEncrypted: @escaping @Sendable (String) async throws -> Bool) {
+    init(fetchIsEncrypted: @escaping @Sendable @concurrent (String) async throws -> Bool) {
         self.fetchIsEncrypted = fetchIsEncrypted
     }
 
