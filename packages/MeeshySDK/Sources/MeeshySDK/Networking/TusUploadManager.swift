@@ -244,7 +244,7 @@ public actor TusUploadManager {
     private func cancelUpload(fileId: String) {
         if let index = queue.firstIndex(where: { $0.0 == fileId }) {
             let pending = queue.remove(at: index)
-            markFileFailed(fileName: pending.1.lastPathComponent, error: CancellationError())
+            markFileFailed(fileId: fileId, error: CancellationError())
             pending.8.resume(throwing: CancellationError())
             return
         }
@@ -273,7 +273,7 @@ public actor TusUploadManager {
             activeTasks[fileId] = Task {
                 do {
                     let result = try await withBackgroundTask(named: "tus-upload-\(fileURL.lastPathComponent)") {
-                        try await self.performTusUpload(fileURL: fileURL, mimeType: mimeType, credential: credential, uploadContext: uploadContext, thumbHash: thumbHash, transcription: transcription, capturedInApp: capturedInApp)
+                        try await self.performTusUpload(fileURL: fileURL, mimeType: mimeType, credential: credential, uploadContext: uploadContext, thumbHash: thumbHash, transcription: transcription, capturedInApp: capturedInApp, progressFileId: fileId)
                     }
                     // Local-first : copie le fichier qu'on vient d'uploader dans le
                     // cache média typé, sous la clé de rendu (`renderCacheKey`). L'auteur
@@ -291,7 +291,7 @@ public actor TusUploadManager {
                     // Mark the failed file `.error` so it stops being surfaced as an
                     // in-flight `.uploading` file forever (stale "Envoi…" indicator)
                     // and is excluded from the batch aggregates by `emitProgress`.
-                    markFileFailed(fileName: fileURL.lastPathComponent, error: error)
+                    markFileFailed(fileId: fileId, error: error)
                     continuation.resume(throwing: error)
                     processQueue()
                 }
@@ -372,12 +372,15 @@ public actor TusUploadManager {
     /// state machine directly — the same rationale as `sha256Hex` below:
     /// a pure-enough I/O sequence exercised without going through
     /// `uploadFile`'s queue/background-task ceremony.
-    func performTusUpload(fileURL: URL, mimeType: String, credential: MeeshyRequestCredential, uploadContext: String? = nil, thumbHash: String? = nil, transcription: TusUploadTranscriptionMetadata? = nil, capturedInApp: Bool = false) async throws -> TusUploadResult {
+    func performTusUpload(fileURL: URL, mimeType: String, credential: MeeshyRequestCredential, uploadContext: String? = nil, thumbHash: String? = nil, transcription: TusUploadTranscriptionMetadata? = nil, capturedInApp: Bool = false, progressFileId: String? = nil) async throws -> TusUploadResult {
         var credential = credential
         let fileName = fileURL.lastPathComponent
         let attrs = try FileManager.default.attributesOfItem(atPath: fileURL.path)
         let fileSize = (attrs[.size] as? Int64) ?? 0
-        let fileId = progressMap.first(where: { $0.value.fileName == fileName })?.key ?? UUID().uuidString
+        // La ligne de progression de CET envoi, remise par la file. Chercher par nom de fichier tombait sur
+        // celle d'un autre envoi du même fichier — la pré-montée du composer puis la publication montent le
+        // même — : la progression de l'un s'écrivait sur la ligne de l'autre, qui restait « en file » à vie.
+        let fileId = progressFileId ?? progressMap.first(where: { $0.value.fileName == fileName })?.key ?? UUID().uuidString
 
         // Compute the bytewise checkpoint key once. Same source file +
         // same compression settings → same bytes → same key, so a queue
@@ -744,9 +747,8 @@ public actor TusUploadManager {
     /// last bytes/percentage, and re-emit. Resolves the row by `fileName` (the
     /// same lookup `performTusUpload` uses) since the dispatch queue item only
     /// carries the URL. No-op if the row is already gone.
-    private func markFileFailed(fileName: String, error: Error) {
-        guard let fileId = progressMap.first(where: { $0.value.fileName == fileName })?.key,
-              let prev = progressMap[fileId] else { return }
+    private func markFileFailed(fileId: String, error: Error) {
+        guard let prev = progressMap[fileId] else { return }
         progressMap[fileId] = FileUploadProgress(
             fileId: prev.fileId, fileName: prev.fileName, fileSize: prev.fileSize,
             status: .error, percentage: prev.percentage, bytesUploaded: prev.bytesUploaded,

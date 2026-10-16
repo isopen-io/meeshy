@@ -22,4 +22,16 @@ final class TusUploadCancellationPropagationTests: XCTestCase {
         let value = try await TusUploadManager.awaitPropagatingCancellation(work)
         XCTAssertEqual(value, 42)
     }
+
+    /// La pré-montée du composer puis la publication montent le MÊME fichier :
+    /// chaque envoi écrit sa progression sur SA ligne, jamais sur celle de
+    /// l'autre (qui restait sinon « en file » à vie).
+    func test_eachUpload_writesItsOwnProgressRow() throws {
+        let url = URL(fileURLWithPath: #filePath)
+            .deletingLastPathComponent().deletingLastPathComponent().deletingLastPathComponent().deletingLastPathComponent()
+            .appendingPathComponent("Sources/MeeshySDK/Networking/TusUploadManager.swift")
+        let code = try String(contentsOf: url, encoding: .utf8)
+        XCTAssertTrue(code.contains("progressFileId: fileId)"), "la file remet sa ligne à l'envoi")
+        XCTAssertFalse(code.contains("markFileFailed(fileName:"), "l'échec vise la ligne de l'envoi, pas un homonyme")
+    }
 }
