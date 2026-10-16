@@ -11,16 +11,32 @@ import { readdirSync, readFileSync, statSync } from 'fs';
 import { join } from 'path';
 import { readSeenCounts } from '../seenCounts';
 
-const prismaWith = (consentedAt: Date | null) => {
+type Row = {
+  readonly analyticsConsentAt: Date | null;
+  readonly dataProcessingConsentAt: Date | null;
+  readonly analyticsConsentWithdrawnAt?: Date | null;
+  readonly birthDate?: Date | null;
+};
+
+/** Le double honore le `select` : un champ que la lecture ne demande pas n'existe pas. */
+const prismaWithRow = (row: Row) => {
   const groupBy = jest.fn(async () => [{ postId: 'p1', _count: { postId: 3 } }]);
   return {
     groupBy,
     prisma: {
-      user: { findUnique: jest.fn(async () => ({ analyticsConsentAt: consentedAt, dataProcessingConsentAt: consentedAt })) },
+      user: {
+        findUnique: jest.fn(async ({ select }: { select: Record<string, true> }) =>
+          Object.fromEntries(Object.keys(select).map((key) => [key, (row as Record<string, Date | null | undefined>)[key] ?? null]))),
+      },
       postImpression: { groupBy },
     },
   };
 };
+
+const prismaWith = (consentedAt: Date | null) =>
+  prismaWithRow({ analyticsConsentAt: consentedAt, dataProcessingConsentAt: consentedAt });
+
+const yearsAgo = (years: number) => new Date(Date.now() - years * 365.25 * 24 * 3600 * 1000);
 
 describe('readSeenCounts', () => {
   it('sans consentement d’analyse : aucune lecture de PostImpression, aucune pénalité', async () => {
@@ -33,6 +49,38 @@ describe('readSeenCounts', () => {
 
   it('avec consentement : la fatigue d’impression est lue', async () => {
     const { prisma } = prismaWith(new Date('2026-01-01'));
+    const counts = await readSeenCounts(prisma as never, 'u1', ['p1']);
+
+    expect(counts.get('p1')).toBe(3);
+  });
+
+  it('#10780 — un MINEUR (moins de 15 ans) consentant n’est pas personnalisé : aucune lecture', async () => {
+    const consented = new Date('2026-01-01');
+    const { prisma, groupBy } = prismaWithRow({
+      analyticsConsentAt: consented, dataProcessingConsentAt: consented, birthDate: yearsAgo(13),
+    });
+    const counts = await readSeenCounts(prisma as never, 'u1', ['p1']);
+
+    expect(counts.size).toBe(0);
+    expect(groupBy).not.toHaveBeenCalled();
+  });
+
+  it('#10780 — un RETRAIT serveur de l’analyse coupe la lecture, même consentement posé', async () => {
+    const consented = new Date('2026-01-01');
+    const { prisma, groupBy } = prismaWithRow({
+      analyticsConsentAt: consented, dataProcessingConsentAt: consented, analyticsConsentWithdrawnAt: new Date('2026-02-01'),
+    });
+    const counts = await readSeenCounts(prisma as never, 'u1', ['p1']);
+
+    expect(counts.size).toBe(0);
+    expect(groupBy).not.toHaveBeenCalled();
+  });
+
+  it('#10780 — un adulte consentant est personnalisé', async () => {
+    const consented = new Date('2026-01-01');
+    const { prisma } = prismaWithRow({
+      analyticsConsentAt: consented, dataProcessingConsentAt: consented, birthDate: yearsAgo(30),
+    });
     const counts = await readSeenCounts(prisma as never, 'u1', ['p1']);
 
     expect(counts.get('p1')).toBe(3);
