@@ -13,11 +13,16 @@ struct BubbleEditedIndicator: View, Equatable {
     let isSaving: Bool
     let hasEditHistory: Bool
     let isDark: Bool
+    @Environment(\.bubbleSkin) private var skin
+
+    static func == (lhs: Self, rhs: Self) -> Bool {
+        lhs.isMe == rhs.isMe && lhs.isSaving == rhs.isSaving && lhs.hasEditHistory == rhs.hasEditHistory && lhs.isDark == rhs.isDark
+    }
 
     var body: some View {
         let theme = ThemeManager.shared
         let metaColor: Color = isMe
-            ? Color.white.opacity(0.6)
+            ? skin.ink(0.6)
             : theme.textSecondary.opacity(MeeshyOpacity.strong)
 
         return HStack(spacing: MeeshySpacing.xxs) {

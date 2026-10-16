@@ -108,7 +108,7 @@ extension BubbleStandardLayout {
     // MARK: - Expandable text
 
     private var linkTint: Color {
-        content.isMe ? .white.opacity(MeeshyOpacity.intense) : Color(hex: contactColor)
+        content.isMe ? skin.ink(MeeshyOpacity.intense) : Color(hex: contactColor)
     }
 
     /// Distinct des liens URL — et THÉMATISÉ : l'`indigo400` figé d'avant ne

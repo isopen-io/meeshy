@@ -97,6 +97,7 @@ struct BubbleExpandableText: View, Equatable {
     @SwiftUI.State private var localExpanded = false
     @Environment(\.longMessageExpansion) private var hostExpansion
     @Environment(\.accessibilityReduceMotion) private var reduceMotion
+    @Environment(\.bubbleSkin) private var skin
 
     static func == (lhs: Self, rhs: Self) -> Bool {
         lhs.content == rhs.content &&
@@ -121,7 +122,7 @@ struct BubbleExpandableText: View, Equatable {
 
     var body: some View {
         let state = state
-        let textColor = isMe ? Color.white : MeeshyColors.textPrimary(isDark: isDark)
+        let textColor = isMe ? skin.ink : MeeshyColors.textPrimary(isDark: isDark)
 
         VStack(alignment: .leading, spacing: MeeshySpacing.xs) {
             MessageTextRenderer.render(state.displayedText, fontSize: fontSize, color: textColor, mentionColor: mentionTint, hashtagColor: hashtagTint, accentColor: linkTint, mentionDisplayNames: mentionDisplayNames.isEmpty ? nil : mentionDisplayNames, highlightTerm: highlightTerm, trackedLinks: trackedLinks.isEmpty ? nil : trackedLinks, linksAreInert: linksAreInert)

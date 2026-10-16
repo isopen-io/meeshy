@@ -156,6 +156,7 @@ struct BubbleStandardLayout: View {
     // MARK: - Adaptive sizing (iPad regular size class needs a tighter cap)
 
     @Environment(\.horizontalSizeClass) private var horizontalSizeClass
+    @Environment(\.bubbleSkin) var skin
 
     // MARK: - Layout constants
 
@@ -748,9 +749,9 @@ struct BubbleStandardLayout: View {
                 AudioStackView(
                     items: auds,
                     message: message,
-                    contactColor: content.isMe ? MeeshyColors.brandPrimaryHex : otherBubbleColor,
+                    contactColor: skin.accentHex(isMe: content.isMe, received: otherBubbleColor),
                     isDark: isDark,
-                    accentColor: content.isMe ? MeeshyColors.brandPrimaryHex : otherBubbleColor,
+                    accentColor: skin.accentHex(isMe: content.isMe, received: otherBubbleColor),
                     transcriptions: perPageTranscriptions,
                     translatedAudios: perPageTranslatedAudios,
                     textTranslations: textTranslations,

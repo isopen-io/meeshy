@@ -351,6 +351,10 @@ final class MessageListViewController: UIViewController {
     /// abonnement doublerait chaque re-snapshot ; le témoin le garde.
     var conversationViewModelObservationCount = 0
 
+    /// L'apparence choisie pour la conversation et la peau des bulles qui s'en déduit (#10753, `+Appearance`).
+    var conversationAppearance: ConversationAppearance?
+    var bubbleSkin: BubbleSkin = .brand
+
     // MARK: - Mode de lecture rendu (Script/bulles)
 
     /// Mode de lecture réellement rendu. Décision de l'orchestrateur,
@@ -563,6 +567,7 @@ final class MessageListViewController: UIViewController {
         if self.isDark != isDark { self.isDark = isDark; changed = true }
         if self.accentColor != accentColor { self.accentColor = accentColor; changed = true }
         if changed {
+            bubbleSkin = BubbleSkin.resolve(conversationAppearance, isDark: isDark)
             stickyDayState.isDark = isDark
             // F-086bis (WS-2) : la pilule jour·heure suit le même thème.
             scrollTimePillState.isDark = isDark

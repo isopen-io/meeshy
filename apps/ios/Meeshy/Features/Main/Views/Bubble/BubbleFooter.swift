@@ -29,6 +29,7 @@ struct BubbleFooter: View, Equatable {
     let style: BubbleFooterStyle
     let isDark: Bool
     @Environment(\.bubbleSenderMoodTap) private var senderMoodTap
+    @Environment(\.bubbleSkin) private var skin
 
     static func == (lhs: BubbleFooter, rhs: BubbleFooter) -> Bool {
         lhs.model == rhs.model && lhs.style == rhs.style && lhs.isDark == rhs.isDark
@@ -311,7 +312,7 @@ struct BubbleFooter: View, Equatable {
     }
 
     private var metaColor: Color {
-        model.isMe ? .white.opacity(MeeshyOpacity.heavy) : MeeshyColors.textMuted(isDark: isDark)
+        model.isMe ? skin.ink(MeeshyOpacity.heavy) : MeeshyColors.textMuted(isDark: isDark)
     }
 
     private var readColor: Color {

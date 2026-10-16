@@ -49,6 +49,7 @@ extension MessageListViewController {
         // them change and lets the body re-run).
         observePerMessageDictionary(vm.$bubbleLanguageSelections, initial: vm.bubbleLanguageSelections)
         observeVisitState(vm)
+        observeConversationAppearance(vm)
 
         // Séparateur de premier non-lu (D-L1..3, #7222) — voir
         // `MessageListViewController+UnreadSeparator.swift`.

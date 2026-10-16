@@ -7,13 +7,14 @@ import os
 // Construction des rangées du fil : bulle, rangée plate Focal/Script, séparateurs et indicateur de frappe (#10758).
 
 /// Ce que TOUTE rangée d'une conversation reçoit de son fil : le point d'entrée
-/// unique d'une donnée par conversation vers les cellules (#10758). L'apparence
-/// choisie (#10753) et la table des contours des auteurs (#10713) s'y ajoutent.
+/// unique d'une donnée par conversation vers les cellules (#10758) — dont la
+/// peau des bulles tirée de l'apparence choisie (#10753).
 struct MessageRowConversationContext: Equatable {
     let accentHex: String
     let isDark: Bool
     let isDirect: Bool
     let currentUserId: String
+    let bubbleSkin: BubbleSkin
 }
 
 extension MessageListViewController {
@@ -23,7 +24,8 @@ extension MessageListViewController {
             accentHex: accentColor,
             isDark: isDark,
             isDirect: isDirect,
-            currentUserId: currentUserId
+            currentUserId: currentUserId,
+            bubbleSkin: bubbleSkin
         )
     }
 
@@ -170,6 +172,7 @@ extension MessageListViewController {
             let dark = row.isDark
             let direct = row.isDirect
             let myId = row.currentUserId
+            let skin = row.bubbleSkin
             let host = self.router
             let stories = self.storyViewModel
             let statuses = self.statusViewModel
@@ -757,6 +760,7 @@ extension MessageListViewController {
                 .environmentObject(host)
                 .environmentObject(stories)
                 .environmentObject(statuses)
+                .environment(\.bubbleSkin, skin)
                 // #9907 — l'appui long d'une tuile vise CETTE pièce ; aucun en sélection.
                 .environment(\.messagePieceLongPress, selectionModeActive ? nil : pieceLongPressHandler)
                 .environment(\.pieceSpotlight, self.pieceSpotlight.eraseToAnyPublisher())
@@ -789,6 +793,7 @@ extension MessageListViewController {
                                 .environmentObject(self.timestampReveal)
                         } else {
                             makeThemedBubble(true)
+                                .environment(\.bubbleSkin, skin)
                                 .environmentObject(host)
                                 .environmentObject(stories)
                                 .environmentObject(statuses)
