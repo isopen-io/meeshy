@@ -8,6 +8,7 @@ import { AttachmentTranslateService } from '../../services/AttachmentTranslateSe
 import { ConsentValidationService } from '../../services/ConsentValidationService';
 import { attachmentTranslateSelect } from '../../services/attachments/attachmentIncludes';
 import { resolveAttachmentReadVerdict, denyAttachmentRead } from '../../services/attachments/attachmentReadVerdict';
+import { serverReadsAttachmentCarrier } from '../../services/attachments/attachmentCarrierServerReadable';
 import { messageAttachmentSchema, errorResponseSchema } from '@meeshy/shared/types/api-schemas';
 import type { AttachmentParams, TranslateBody, TranscribeBody } from './types';
 import { UnifiedAuthRequest } from '../../middleware/auth';
@@ -189,6 +190,12 @@ export async function registerTranslationRoutes(
         }
 
         const mimeType = attachment.mimeType || '';
+
+        // #10726 — un vocal que la passerelle ne lit pas (bout en bout) se
+        // traduit sur l'appareil, jamais ici.
+        if (!(await serverReadsAttachmentCarrier(prisma, attachment.messageId))) {
+          return sendForbidden(reply, 'E2EE_NOT_TRANSLATABLE', { code: 'E2EE_NOT_TRANSLATABLE', message: 'End-to-end encrypted attachments cannot be translated by the server' });
+        }
 
         // Vérifier les consentements de l'utilisateur pour la traduction
         const consentService = new ConsentValidationService(prisma);
@@ -379,6 +386,14 @@ export async function registerTranslationRoutes(
 
         if (!attachment.mimeType?.startsWith('audio/')) {
           return sendBadRequest(reply, 'INVALID_ATTACHMENT_TYPE', { message: 'Only audio attachments can be transcribed' });
+        }
+
+        // #10726 — Whisper ne tourne que sur un vocal que la passerelle lit :
+        // dans une conversation chiffrée de bout en bout, la transcription se
+        // fait sur l'appareil. Après le verdict d'accès, pour qu'un étranger
+        // n'apprenne rien du mode de chiffrement.
+        if (!(await serverReadsAttachmentCarrier(prisma, attachment.messageId))) {
+          return sendForbidden(reply, 'E2EE_NOT_TRANSCRIBABLE', { code: 'E2EE_NOT_TRANSCRIBABLE', message: 'End-to-end encrypted attachments cannot be transcribed by the server' });
         }
 
         // Vérifier les consentements de l'utilisateur pour la transcription audio

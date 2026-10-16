@@ -246,6 +246,10 @@ describe('POST /attachments/:attachmentId/translate', () => {
       messageAttachment: {
         findUnique: jest.fn<any>().mockResolvedValue({ id: ATTACHMENT_ID, mimeType: 'audio/mp4', messageId: MESSAGE_ID }),
       },
+      // #10726 — le message porteur est lu en clair par la passerelle.
+      message: {
+        findUnique: jest.fn<any>().mockResolvedValue({ isEncrypted: false, encryptionMode: null, conversation: { encryptionMode: null } }),
+      },
     } as unknown as PrismaClient;
     const translateService = {
       translate: jest.fn<any>().mockResolvedValue(
