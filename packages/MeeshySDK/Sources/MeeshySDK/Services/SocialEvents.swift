@@ -49,12 +49,17 @@ public enum SocialEvent: Codable, Sendable, Equatable {
     case impression(postId: String, source: String, surface: ReachSurface?, listing: SocialListing? = nil, visibility: SocialVisibility? = nil)
     case open(postId: String, origin: OpenOrigin?)
     case dwell(EngagementSession)
+    /// #10764 — le PREMIER CONTACT d'une session de consommation : le corps
+    /// d'un `dwell`, sous la même clé de session, envoyé dès qu'elle commence.
+    /// Un serveur qui ne sait pas fusionner une session le refuse ; il part
+    /// donc toujours dans une requête à lui.
+    case dwellStart(EngagementSession)
 
     public var postId: String {
         switch self {
         case .view(let postId, _, _, _), .impression(let postId, _, _, _, _), .open(let postId, _):
             return postId
-        case .dwell(let session):
+        case .dwell(let session), .dwellStart(let session):
             return session.postId
         }
     }
@@ -72,6 +77,7 @@ public enum SocialEvent: Codable, Sendable, Equatable {
 
     private enum Kind: String, Codable {
         case view, impression, open, dwell
+        case dwellStart = "dwell-start"
     }
 
     public func encode(to encoder: Encoder) throws {
@@ -97,6 +103,9 @@ public enum SocialEvent: Codable, Sendable, Equatable {
             try container.encodeIfPresent(origin, forKey: .origin)
         case .dwell(let session):
             try container.encode(Kind.dwell, forKey: .type)
+            try session.encode(to: encoder)
+        case .dwellStart(let session):
+            try container.encode(Kind.dwellStart, forKey: .type)
             try session.encode(to: encoder)
         }
     }
@@ -129,6 +138,8 @@ public enum SocialEvent: Codable, Sendable, Equatable {
             self = .open(postId: postId, origin: origin)
         case .dwell:
             self = .dwell(try EngagementSession(from: decoder))
+        case .dwellStart:
+            self = .dwellStart(try EngagementSession(from: decoder))
         }
     }
 }
