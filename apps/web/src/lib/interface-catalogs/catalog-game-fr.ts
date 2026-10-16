@@ -308,6 +308,7 @@ const fr = {
   'game.photo.take.frame': '{title} : prendre la photo avec ce cadre et l’enregistrer dans la galerie',
   'game.photo.take.scene': 'Aperçu de la caméra : toucher deux fois ou maintenir pour prendre la photo sans l’enregistrer dans la galerie',
   'game.photo.camera.denied': 'La caméra est refusée. Autorise-la dans les réglages de ton appareil, ou choisis une photo dans ta galerie.',
+  'game.photo.camera.settings': 'Ouvrir les réglages',
   'game.photo.camera.unsupported': 'Cet appareil ne permet pas la caméra ici. Choisis une photo dans ta galerie, ou garde la carte seule.',
   'game.photo.camera.unavailable': 'La caméra n’est pas disponible (une autre application l’utilise ?). Choisis une photo dans ta galerie, ou garde la carte seule.',
   'game.photo.striking': 'Mee et Meo frappent le moment dans la photo',

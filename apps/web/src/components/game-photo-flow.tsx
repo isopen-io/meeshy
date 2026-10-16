@@ -627,6 +627,11 @@ export function GamePhotoFlow({ moment, env, onClose, flameDays = null, author: 
                 {cameraMessage(state.camera)}
               </p>
             ) : null}
+            {state.camera === 'denied' && env.openSettings ? (
+              <Button attr={{ 'data-photo-camera-settings': '' }} onClick={env.openSettings}>
+                {gameText('game.photo.camera.settings')}
+              </Button>
+            ) : null}
             {galleryError ? (
               <p role="alert" className="text-caption" style={{ color: GAME_ERROR }}>
                 {gameText('game.photo.gallery.unreadable')}

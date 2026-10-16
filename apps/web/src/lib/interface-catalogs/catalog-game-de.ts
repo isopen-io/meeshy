@@ -294,6 +294,7 @@ const de = {
   'game.photo.take.frame': '{title}: Foto mit diesem Rahmen aufnehmen und in der Galerie speichern',
   'game.photo.take.scene': 'Kameravorschau: zweimal tippen oder gedrückt halten, um das Foto aufzunehmen, ohne es in der Galerie zu speichern',
   'game.photo.camera.denied': 'Die Kamera ist verweigert. Erlaube sie in den Geräteeinstellungen oder wähle ein Foto aus deiner Galerie.',
+  'game.photo.camera.settings': 'Einstellungen öffnen',
   'game.photo.camera.unsupported': 'Dieses Gerät erlaubt hier keine Kamera. Wähle ein Foto aus deiner Galerie oder behalte nur die Karte.',
   'game.photo.camera.unavailable': 'Die Kamera ist nicht verfügbar (nutzt sie eine andere App?). Wähle ein Foto aus deiner Galerie oder behalte nur die Karte.',
   'game.photo.striking': 'Mee und Meo prägen den Moment ins Foto',

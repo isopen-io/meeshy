@@ -294,6 +294,7 @@ const it = {
   'game.photo.take.frame': '{title}: scatta la foto con questa cornice e salvala nella galleria',
   'game.photo.take.scene': 'Anteprima della fotocamera: tocca due volte o tieni premuto per scattare la foto senza salvarla nella galleria',
   'game.photo.camera.denied': 'La fotocamera è negata. Consentila nelle impostazioni del dispositivo, oppure scegli una foto dalla galleria.',
+  'game.photo.camera.settings': 'Apri impostazioni',
   'game.photo.camera.unsupported': 'Questo dispositivo non consente la fotocamera qui. Scegli una foto dalla galleria, oppure tieni solo la carta.',
   'game.photo.camera.unavailable': 'La fotocamera non è disponibile (la sta usando un’altra app?). Scegli una foto dalla galleria, oppure tieni solo la carta.',
   'game.photo.striking': 'Mee e Meo coniano il momento nella foto',

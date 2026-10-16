@@ -5,6 +5,7 @@ import { currentGallerySaver } from '@/lib/gallery/gallery-saver';
 import type { PlayOptions } from '@/lib/game/play';
 import { browserFileDeliveryHost } from '@/lib/media/file-delivery-host';
 import { memoriserLienParLecteur } from '@/lib/view/invitation';
+import { appSettingsOpener } from '@/lib/view/settings-recovery';
 
 import { loadArt } from './art';
 import { openFrontCamera, type CameraResult } from './camera';
@@ -32,6 +33,12 @@ import { savePhoto, sharePhoto, type PhotoDoors, type ShareOutcome } from './sha
 
 export type PhotoEnv = {
   readonly openCamera: () => Promise<CameraResult>;
+  /**
+   * La fiche de l'app dans les réglages (#10833, `appSettingsOpener`) : dans la
+   * coque Android, deux refus et la caméra ne se redemande plus. `null` ou
+   * absent (navigateur) : rouvrir le selfie rejoue la demande du navigateur.
+   */
+  readonly openSettings?: (() => void) | null;
   readonly notebook: Notebook;
   /** `text` : le lien de parrainage (#7742), que la feuille de partage redit à côté de l'image. */
   readonly share: (file: File, title: string, text?: string) => Promise<ShareOutcome>;
@@ -195,6 +202,7 @@ export function browserPhotoEnv(): PhotoEnv {
   const notebook = browserNotebook(now);
   return {
     openCamera: () => openFrontCamera(typeof navigator === 'undefined' ? undefined : navigator.mediaDevices),
+    openSettings: appSettingsOpener(),
     notebook,
     share: (file, title, text) => sharePhoto(file, title, doors(), text),
     referral: () => existingReferralLink(currentReader()),
