@@ -78,9 +78,7 @@ private nonisolated func fetchMessageWindow(
             // on very large match sets (deep search pagination), then re-sort
             // the union chronologically. The common case (≤ a page of results)
             // is a single query + a trivial sort.
-            let chunks = stride(from: 0, to: ids.count, by: 900).map {
-                Array(ids[$0 ..< min($0 + 900, ids.count)])
-            }
+            let chunks = MessageStore.searchIdChunks(ids)
             var collected: [MessageRecord] = []
             for chunk in chunks {
                 let rows = try MessageRecord
@@ -663,6 +661,21 @@ public final class MessageStore: ObservableObject {
     /// identity and the send flow's cid tracking survive — matching the
     /// successful-reconcile outcome. Rows without a serverId (un-acked) are
     /// distinct messages and never merged; survivor order is preserved.
+    /// Les ids d'une recherche filtrée, sans doublon, par paquets de `size` (plafond SQLite des `IN`).
+    ///
+    /// Les pages de recherche se recouvrent quand de nouveaux résultats arrivent entre deux curseurs :
+    /// un même id tombé dans DEUX paquets ramenait la même ligne deux fois — même `localId` — et
+    /// `MessageListSnapshotPrep.baseline` comme l'`apply` du diffable plantaient sur l'identifiant
+    /// dupliqué.
+    nonisolated static func searchIdChunks(_ ids: [String], size: Int = 900) -> [[String]] {
+        var seen = Set<String>()
+        let unique = ids.filter { seen.insert($0).inserted }
+        let step = Swift.max(1, size)
+        return stride(from: 0, to: unique.count, by: step).map {
+            Array(unique[$0 ..< Swift.min($0 + step, unique.count)])
+        }
+    }
+
     static func collapsingDuplicateServerIds(_ records: [MessageRecord]) -> [MessageRecord] {
         // Fast path: bail out unless a serverId actually repeats.
         var seen = Set<String>()

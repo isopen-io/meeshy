@@ -102,7 +102,7 @@ nonisolated public enum FaceRampRanking {
             byUser[item.fromUserId] = bucket
         }
 
-        let participantsById = Dictionary(uniqueKeysWithValues: participants.map { ($0.id, $0) })
+        let participantsById = Dictionary(participants.map { ($0.id, $0) }, uniquingKeysWith: { first, _ in first })
 
         return byUser
             .compactMap { userId, bucket -> FaceRampRankingInput? in

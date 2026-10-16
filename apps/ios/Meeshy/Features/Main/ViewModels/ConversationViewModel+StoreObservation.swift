@@ -396,7 +396,7 @@ extension ConversationViewModel {
         guard !payloads.isEmpty else { return }
 
         let results = await decryptionActor.decrypt(payloads)
-        let resultsByMessageId = Dictionary(uniqueKeysWithValues: results.map { ($0.messageId, $0) })
+        let resultsByMessageId = Dictionary(results.map { ($0.messageId, $0) }, uniquingKeysWith: { first, _ in first })
 
         for i in msgs.indices {
             if let plaintext = resultsByMessageId[msgs[i].id]?.plaintext {
