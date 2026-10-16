@@ -33,4 +33,17 @@ final class SocketConfigTests: XCTestCase {
         let scheme = url?.scheme
         XCTAssertTrue(scheme == "https" || scheme == "http")
     }
+
+    // MARK: - Transport seal (#10854)
+
+    func test_baseURL_whenTransportSealed_isNil() {
+        XCTAssertNil(SocketConfig.baseURL(socketBaseURL: "https://gate.meeshy.me", isTransportSealed: true))
+    }
+
+    func test_baseURL_whenTransportOpen_isTheConfiguredOrigin() {
+        XCTAssertEqual(
+            SocketConfig.baseURL(socketBaseURL: "https://gate.meeshy.me", isTransportSealed: false)?.absoluteString,
+            "https://gate.meeshy.me"
+        )
+    }
 }
