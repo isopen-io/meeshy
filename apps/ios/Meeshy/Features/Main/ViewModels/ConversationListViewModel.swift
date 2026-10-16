@@ -6,8 +6,8 @@ import MeeshySDK
 
 @MainActor
 class ConversationListViewModel: ObservableObject {
-    /// Conversation qui QUITTE la liste (supprimée, quittée, retirée) : l'iPad referme sa colonne de détail.
-    let conversationRemoved = PassthroughSubject<String, Never>()
+    /// Conversation qui quitte la liste (supprimée, quittée, retirée) ou marquée non lue : l'iPad la désélectionne.
+    let conversationLeavesDetail = PassthroughSubject<String, Never>()
 
     @Published var conversations: [Conversation] = [] {
         didSet {
@@ -214,7 +214,7 @@ class ConversationListViewModel: ObservableObject {
     private func dropConversationLeftByMe(at index: Int) {
         let conversationId = conversations[index].id
         conversations.remove(at: index)
-        conversationRemoved.send(conversationId)
+        conversationLeavesDetail.send(conversationId)
         schedulePersist()
         Task { await CacheCoordinator.shared.messages.invalidate(for: conversationId) }
     }
@@ -2021,9 +2021,9 @@ class ConversationListViewModel: ObservableObject {
 
     func markAsUnread(conversationId: String) async {
         guard convIndex(for: conversationId) != nil else { return }
-        // Efface la frontière de lecture locale dans le cache : sans ça,
-        // `ConversationSyncEngine.reconcileUnread` reclamperait le compteur à 0
-        // au prochain instantané serveur et le geste serait sans effet.
+        // iPad : la conversation ouverte se DÉSÉLECTIONNE (Mail, Messages) — sa sortie ne rattrape pas.
+        ExplicitUnreadMarks.note(conversationId); conversationLeavesDetail.send(conversationId)
+        // Frontière de lecture locale effacée : sinon `reconcileUnread` reclamperait le compteur à 0.
         await syncEngine.markConversationUnreadLocally(conversationId)
         // Store sets unreadCount ≥ 1 optimistically + dispatches markUnread.
         try? await store.apply(.markAsUnread, for: conversationId)
@@ -2051,7 +2051,7 @@ class ConversationListViewModel: ObservableObject {
         // optimistically + dispatches deleteForMe via the outbox. The row
         // disappears because `filterConversations` hides deletedForUserAt != nil;
         // on a 4xx the store clears deletedForUserAt and the row reappears.
-        do { try await store.apply(.deleteForUser, for: conversationId); conversationRemoved.send(conversationId) } catch {}
+        do { try await store.apply(.deleteForUser, for: conversationId); conversationLeavesDetail.send(conversationId) } catch {}
         await sweepLocalCallTranscripts(forConversation: conversationId)
     }
 

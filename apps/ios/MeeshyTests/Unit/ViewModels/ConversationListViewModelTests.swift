@@ -607,7 +607,7 @@ final class ConversationListViewModelTests: XCTestCase {
         sut.setConversations([makeConversation(id: "conv1"), makeConversation(id: "conv2")])
         await sut.storeHydrationTask?.value
         var removed: [String] = []
-        let token = sut.conversationRemoved.sink { removed.append($0) }
+        let token = sut.conversationLeavesDetail.sink { removed.append($0) }
         defer { token.cancel() }
 
         await sut.deleteConversation(conversationId: "conv1")
@@ -621,7 +621,7 @@ final class ConversationListViewModelTests: XCTestCase {
         sut.setConversations([makeConversation(id: "conv1")])
         await sut.storeHydrationTask?.value
         var removed: [String] = []
-        let token = sut.conversationRemoved.sink { removed.append($0) }
+        let token = sut.conversationLeavesDetail.sink { removed.append($0) }
         defer { token.cancel() }
 
         await sut.deleteConversation(conversationId: "conv1")
@@ -1324,6 +1324,27 @@ final class ConversationListViewModelTests: XCTestCase {
         await drainMainQueue()
 
         XCTAssertEqual(sut.conversations.first(where: { $0.id == "conv1" })?.userState.unreadCount, 1)
+    }
+
+    /// Choix du porteur : « Marquer non lu » sur la conversation OUVERTE sur iPad
+    /// la désélectionne — la colonne de détail revient vide, la pastille reste,
+    /// comme Mail ou Messages. Restée ouverte, la règle « conversation ouverte ⇒
+    /// 0 non lu » effaçait la pastille aussitôt.
+    func test_markAsUnread_deselectsTheConversation_andKeepsItUnreadAcrossTheExit() async throws {
+        let store = Self.makeTestStore()
+        let (sut, _, _, _, _, _, _) = makeSUT(store: store)
+        sut.setConversations([makeConversation(id: "conv1", unreadCount: 0)])
+        await sut.storeHydrationTask?.value
+        var leaving: [String] = []
+        let token = sut.conversationLeavesDetail.sink { leaving.append($0) }
+        defer { token.cancel() }
+
+        await sut.markAsUnread(conversationId: "conv1")
+
+        XCTAssertEqual(leaving, ["conv1"], "la colonne de détail se referme")
+        XCTAssertTrue(ExplicitUnreadMarks.consume("conv1"),
+                      "la sortie du Résumé ne rattrape pas une conversation qu'on vient de marquer non lue")
+        XCTAssertFalse(ExplicitUnreadMarks.consume("conv1"), "la marque ne sert qu'une fois")
     }
 
     func test_markAsUnread_rollsBackOnPermanentFailure() async throws {

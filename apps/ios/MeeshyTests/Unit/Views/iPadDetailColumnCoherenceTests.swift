@@ -21,13 +21,13 @@ final class iPadDetailColumnCoherenceTests: XCTestCase {
     /// composer actif.
     func test_iPadRoot_closesTheDetailColumn_whenItsConversationLeavesTheList() throws {
         let root = AppSourceGuard.stripComments(try AppSourceGuard.unit("Meeshy/Features/Main/Views/iPadRootView.swift"))
-        XCTAssertTrue(root.contains(".onReceive(conversationViewModel.conversationRemoved)"))
+        XCTAssertTrue(root.contains(".onReceive(conversationViewModel.conversationLeavesDetail)"))
         XCTAssertTrue(root.contains("iPadSelectionRule.closesDetail("))
 
         let vm = AppSourceGuard.stripComments(try AppSourceGuard.unit("Meeshy/Features/Main/ViewModels/ConversationListViewModel.swift"))
         let drop = try XCTUnwrap(vm.range(of: "private func dropConversationLeftByMe("))
         XCTAssertTrue(
-            vm[drop.upperBound...].prefix(400).contains("conversationRemoved.send(conversationId)"),
+            vm[drop.upperBound...].prefix(400).contains("conversationLeavesDetail.send(conversationId)"),
             "quitter, être retiré ou banni (socket) referme aussi la colonne"
         )
     }

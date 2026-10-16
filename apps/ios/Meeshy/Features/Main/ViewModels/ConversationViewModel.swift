@@ -1012,6 +1012,8 @@ class ConversationViewModel: ObservableObject {
     /// message que le lecteur n'a pas vu bulle par bulle.
     func markCaughtUpFromSummaryOrRiver() {
         afterReadVisit.noteAll(among: messages)
+        // Marquée non lue à l'instant (iPad, depuis la liste) : la sortie ne rattrape pas — elle effacerait la pastille.
+        guard !ExplicitUnreadMarks.consume(conversationId) else { return }
         guard !hasNewerMessages, let newest = newestServerMessageId() else { return }
         lastCaughtUpMessageId = newest
         sendReadReceipt(messageIds: nil, caughtUpId: newest)
