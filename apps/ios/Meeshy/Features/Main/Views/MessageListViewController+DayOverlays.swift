@@ -168,25 +168,35 @@ extension MessageListViewController {
         }
     }
 
-    /// Recalcule le label de la pill sticky à partir de la cellule la plus
-    /// haute visuellement. Liste inversée : « plus haute » = plus grand index
-    /// dans le snapshot diffable. Si le séparateur natif de ce même jour est
-    /// déjà visible, on cache la sticky pour éviter le doublon visuel.
+    /// Recalcule le label de la pill sticky : le jour de la rangée RÉELLEMENT
+    /// en haut du fil, et rien dès qu'une pastille de section est visible —
+    /// jamais deux dates à l'écran (`MessageDayStickyLaw`, #4602). Les cadres
+    /// sont lus dans le repère de la vue (`convert` défait l'inversion de la
+    /// liste) : la collection court jusqu'au bord de l'écran, et un message
+    /// sorti sous l'en-tête y reste « visible » pour elle.
     /// `visibleIndexPaths` : l'inventaire déjà lu par l'appelant du tour de
     /// frame (`scrollViewDidScroll`) — `nil` ⇒ lecture interne, pour les
     /// appels hors défilement.
     func updateStickyDayLabel(visibleIndexPaths: [IndexPath]? = nil) {
         guard let dataSource else { return }
-        // O(1) : l'item du haut visible = plus grand IndexPath visible, résolu
-        // par `itemIdentifier(for:)`. AVANT : `dataSource.snapshot()` copiait
-        // TOUT le snapshot (O(n) item identifiers) à CHAQUE frame de scroll —
-        // coûteux sur les grandes conversations (jusqu'à 120 fps en ProMotion).
-        guard let topIndexPath = (visibleIndexPaths ?? collectionView.indexPathsForVisibleItems).max(),
-              let topItem = dataSource.itemIdentifier(for: topIndexPath) else {
+        let placed: [(item: MessageListItem, row: MessageDayStickyLaw.Row)] =
+            (visibleIndexPaths ?? collectionView.indexPathsForVisibleItems).compactMap { path in
+                guard let item = dataSource.itemIdentifier(for: path),
+                      let frame = collectionView.layoutAttributesForItem(at: path)?.frame else { return nil }
+                let onScreen = collectionView.convert(frame, to: view)
+                let isDayHeader: Bool = { if case .dayHeader = item { return true }; return false }()
+                return (item, MessageDayStickyLaw.Row(isDayHeader: isDayHeader, minY: onScreen.minY, maxY: onScreen.maxY))
+            }
+        guard let topIndex = MessageDayStickyLaw.stickyRow(
+            rows: placed.map(\.row),
+            readingLine: topInset + MessageDayStickyPlacement.topOffset(headerBandHeight: headerBandHeight),
+            viewportBottom: view.bounds.maxY
+        ) else {
             lastStickyTopItem = nil
-            stickyDayState.label = nil
+            if stickyDayState.label != nil { stickyDayState.label = nil }
             return
         }
+        let topItem = placed[topIndex].item
         // La cellule de tête n'a pas changé depuis le dernier calcul → le label
         // est déjà à jour. Évite un `store.message(for:)` + `toMessage`
         // (jusqu'à 5 décodages JSON) à chaque frame tant qu'on reste dessus.
