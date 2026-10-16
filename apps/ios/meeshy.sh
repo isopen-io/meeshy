@@ -1961,7 +1961,10 @@ do_test() {
     fi
 
     log "Phase 3/3 — connexion finale au compte de test (laisse l'app connectée)..."
+    # Seule phase où le réseau réel est VOULU : sans ce drapeau, l'hôte de
+    # test refuse toute requête (TestHarnessNetworkSeal, #10854).
     TEST_RUNNER_DEMO_USER="$demo_user" TEST_RUNNER_DEMO_PASSWORD="$demo_password" \
+    TEST_RUNNER_MEESHY_TEST_LIVE_NETWORK=1 \
     xcodebuild test-without-building "${common_flags[@]}" \
         -resultBundlePath "$TEST_OUTPUT_DIR/phase3-connected.xcresult" \
         -only-testing:MeeshyTests/$END_STATE_SUITE \

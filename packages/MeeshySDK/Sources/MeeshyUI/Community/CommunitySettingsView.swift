@@ -14,6 +14,9 @@ public struct CommunitySettingsView: View {
     public var onUpdated: ((MeeshyCommunity) -> Void)? = nil
     public var onDeleted: (() -> Void)? = nil
     public var onLeft: (() -> Void)? = nil
+    /// Retour d'« Annuler » quand l'hôte n'est ni une pile ni une feuille — le panneau de droite de l'iPad,
+    /// où `dismiss()` est un no-op. `nil` : `dismiss()`.
+    public var onCancel: (() -> Void)? = nil
 
     // User-content palette: swatches the user picks to colour their own
     // community. Intentionally a vibrant spread (not the Indigo brand chrome) —
@@ -24,11 +27,12 @@ public struct CommunitySettingsView: View {
         "6366F1", "EC4899", "14B8A6", "F97316"
     ]
 
-    public init(community: MeeshyCommunity, onUpdated: ((MeeshyCommunity) -> Void)? = nil, onDeleted: (() -> Void)? = nil, onLeft: (() -> Void)? = nil) {
+    public init(community: MeeshyCommunity, onUpdated: ((MeeshyCommunity) -> Void)? = nil, onDeleted: (() -> Void)? = nil, onLeft: (() -> Void)? = nil, onCancel: (() -> Void)? = nil) {
         _viewModel = StateObject(wrappedValue: CommunitySettingsViewModel(community: community))
         self.onUpdated = onUpdated
         self.onDeleted = onDeleted
         self.onLeft = onLeft
+        self.onCancel = onCancel
     }
 
     public var body: some View {
@@ -91,7 +95,9 @@ public struct CommunitySettingsView: View {
 
     private var settingsHeader: some View {
         HStack {
-            Button(String(localized: "common.cancel", defaultValue: "Annuler", bundle: .module)) { dismiss() }
+            Button(String(localized: "common.cancel", defaultValue: "Annuler", bundle: .module)) {
+                if let onCancel { onCancel() } else { dismiss() }
+            }
                 .font(.system(size: 16, design: .rounded))
                 .foregroundColor(theme.textSecondary)
 

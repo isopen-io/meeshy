@@ -280,26 +280,6 @@ final class ProgressionViewModelGameTests: XCTestCase {
         XCTAssertNil(sut.game)
     }
 
-    // MARK: - Ce que la frappe éteindrait
-
-    func test_mintBadgeImpact_isUnknownWhenTheServedCountersCarryNoPoints() async {
-        let (sut, _, _) = makeSUT()
-        await sut.load(forceNetwork: true)
-        XCTAssertNil(sut.mintBadgeImpact, "la charge de test ne sert pas les points par axe")
-    }
-
-    func test_mintBadgeImpact_isComputedFromTheServedCountersAndThePriceOfThisMint() async {
-        let served = APIEngagementProgress(
-            counters: [.init(axisKey: "content.text_message", count: 60, points: 1_831)],  // 1 587 (prix de la 13e) débite 52 messages sur 60
-            milestones: [], streak: .init(currentStreakDays: 1, longestStreakDays: 1),
-            level: .init(engagementScore: 121_800), meesh: GameFixture.meesh(), game: GameFixture.game()
-        )
-        let (sut, _, _) = makeSUT(snapshot: served)
-        await sut.load(forceNetwork: true)
-        XCTAssertNotNil(sut.mintBadgeImpact)
-        XCTAssertEqual(sut.mintBadgeImpact?.lost, 2)
-    }
-
     // MARK: - Le retour arrière ne défait que ce que le geste a changé (#9383)
 
     func test_reroll_failure_keepsAServedReadingThatLandedWhileTheGestureWasInFlight() async {

@@ -53,8 +53,8 @@ final class GameNotificationRoutingTests: XCTestCase {
         XCTAssertFalse(ipad.contains("rightPanelRoute = .gamePage("), "plus aucune sous-page orpheline ouverte par une notification")
 
         for layers in ["Meeshy/Features/Main/Views/RootLayers/RootViewLayers.swift", "Meeshy/Features/Main/Views/RootLayers/iPadRootViewLayers.swift"] {
-            XCTAssertTrue(try source(layers).contains("onPlayerBannerTap: { router.openGame(at: .progressionConcept(.level)) }"),
-                          "\(layers) : le bandeau du joueur ouvre la fiche du niveau")
+            XCTAssertTrue(try source(layers).contains("onPlayerBannerTap: { router.openGame(at: .progressionConcept($0.concept)) }"),
+                          "\(layers) : chaque pièce du bandeau ouvre SA fiche (#10846)")
         }
         // #10093 — le profil ne porte plus de carte de jeu (donc plus de « Voir la vitrine ») : sa porte reste la rangée
         // Progression, qui ouvre l'écran sans ancre.

@@ -10,7 +10,10 @@ extension ConversationView {
     /// de sa famille (`ConversationView+Sticker`).
     func sendStickerChoice(_ choice: StickerSheetChoice) {
         switch choice {
-        case .emoji(let emoji): sendEmojiSticker(emoji)
+        case .emoji(let emoji):
+            // Choisi dans la feuille : il entre dans la rangée rapide (#10842).
+            RecentEmojiStore.record([emoji])
+            sendEmojiSticker(emoji)
         case .library(let item): sendLibrarySticker(item)
         case .template(let gabarit, let slots): sendTemplateSticker(gabarit, slots: slots)
         case .locationTemplate(let lieu, let gabarit): sendLocationTemplateSticker(place: lieu, template: gabarit)

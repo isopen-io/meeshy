@@ -24,10 +24,11 @@ import {
 import { gloryStanding, levelCapForRank, type MythicSeatRef } from './glory.js';
 import type { LevelStepFacts } from './level-steps.js';
 import { meeshPrice, previewMint } from './mint.js';
+import { previewSparksMint, type SparksFacts } from './sparks.js';
 import { levelOnTheWire, mintOnTheWire } from './level-wire.js';
 import { MISSIONS_MIN_LEVEL, MISSION_REROLL_PER_DAY, MISSION_REROLL_PRICE, isPrismDay } from './missions.js';
 import { personalMissionState } from './personal-mission.js';
-import { treasuryTier } from './treasury.js';
+import { treasuryReserveAccess, treasuryTier } from './treasury.js';
 import { buildGameBlockExtras, type GameBlockExtrasFacts } from './game-block-extras.js';
 import type { GameBlock, GameChestReward, GameMission } from '../../types/game.js';
 
@@ -47,8 +48,20 @@ export type GameBlockFacts = {
    * `today`.
    */
   readonly flameToday?: string;
-  /** Le score en poche (`User.engagementScore`). */
+  /**
+   * Le score en poche (`User.engagementScore`) — la loi d'HIER, où la frappe le débite et le fait baisser le niveau.
+   * Avec `sparks`, il est ignoré.
+   */
   readonly score: number;
+  /**
+   * LES ÉTINCELLES (#10846) : la poche que la frappe dépense, le cycle (depuis le dernier prestige) que lit le
+   * NIVEAU, le total à vie. Présentes, c'est la loi d'aujourd'hui : le niveau se lit sur le cycle, la frappe ne le
+   * fait plus baisser, son prix suit le niveau ACTUEL (#10847), les réserves du trésor s'ouvrent par le rang
+   * (#10848), le Vent arrière est éteint. Absentes, le bloc garde exactement la forme d'hier.
+   */
+  readonly sparks?: SparksFacts;
+  /** Le niveau max à vie (#10846), qui survit au prestige. Lu seulement avec `sparks`. */
+  readonly levelMaxLifetime?: number | null;
   readonly levelRecord: number | null;
   readonly prestige: number;
   readonly glory: number;
@@ -124,7 +137,15 @@ export function buildGameBlock(facts: GameBlockFacts): GameBlock {
     glory: standing.glory,
     rank: standing.rank,
   };
-  const level = levelOnTheWire({ score: facts.score, levelCap, levelRecord: facts.levelRecord, prestige: facts.prestige, steps });
+  const sparks = facts.sparks;
+  const level = levelOnTheWire({
+    score: sparks === undefined ? facts.score : sparks.cycle,
+    levelCap,
+    levelRecord: facts.levelRecord,
+    prestige: facts.prestige,
+    steps,
+    ...(sparks === undefined ? {} : { sparks, levelMaxLifetime: facts.levelMaxLifetime ?? null }),
+  });
   const record = level.ladder?.record ?? level.record;
   const treasury = treasuryTier(facts.balance);
 
@@ -160,15 +181,32 @@ export function buildGameBlock(facts: GameBlockFacts): GameBlock {
       progress: standing.progress,
       mythic: standing.mythic,
     },
-    treasury: { held: treasury.held, tier: treasury.tier, next: treasury.next },
+    treasury: {
+      held: treasury.held,
+      tier: treasury.tier,
+      next: treasury.next,
+      ...(sparks === undefined ? {} : { access: [...treasuryReserveAccess({ glory: standing.glory, mythic: standing.rank === 'mythe' })] }),
+    },
     mint: mintOnTheWire(
-      previewMint({
-        score: facts.score,
-        mintedLifetime: facts.mintedLifetime,
-        debitablePoints: facts.debitablePoints,
-        levelCap,
-        steps,
-      }),
+      sparks === undefined
+        ? previewMint({
+            score: facts.score,
+            mintedLifetime: facts.mintedLifetime,
+            debitablePoints: facts.debitablePoints,
+            levelCap,
+            steps,
+          })
+        : previewSparksMint({
+            sparks: sparks.pocket,
+            cycle: sparks.cycle,
+            mintedLifetime: facts.mintedLifetime,
+            held: facts.balance,
+            glory: standing.glory,
+            mythic: standing.rank === 'mythe',
+            levelCap,
+            steps,
+            debt: sparks.debt,
+          }),
     ),
     missions: {
       dayKey: facts.today,
@@ -217,7 +255,9 @@ export function buildGameBlock(facts: GameBlockFacts): GameBlock {
       canRelight: relight.allowed,
     },
     boosts: {
-      tailwind: tailwindFactor({ level: level.ladder?.level ?? level.level, levelRecord: record }),
+      // Le Vent arrière n'a plus de sens avec les étincelles (#10846) : le niveau ne descend plus sous son record
+      // à la frappe, et après un prestige le record du cycle repart à 1. Il reste servi (`1`) pour les clients publiés.
+      tailwind: sparks === undefined ? tailwindFactor({ level: level.ladder?.level ?? level.level, levelRecord: record }) : 1,
       prismHour: { ...prismHourWindow({ userId: facts.userId, dayKey: facts.today }), multiplier: PRISM_HOUR_MULTIPLIER },
     },
     guideSeen: [...facts.guideSeen],

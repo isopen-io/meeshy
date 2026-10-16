@@ -81,14 +81,14 @@ const legacyReduced = (userId: string, over: Row = {}): Row => ({
 });
 
 describe('#10785 — la ligne d’une impression garde son lecteur quel que soit le statut', () => {
-  it.each(['not_granted', 'denied'] as const)('statut %s : le compte, la source, la surface, la clé de rejeu, 90 jours — jamais d’empreinte', (standing) => {
+  it.each(['not_granted', 'denied'] as const)('statut %s : le compte, la source, la surface, la clé de rejeu, 760 jours — jamais d’empreinte', (standing) => {
     const before = Date.now();
     const row = rowOf(standing) as Row;
 
     expect(row).toMatchObject({ postId: POST, userId: READER, source: 'feed', surface: 'feed' });
     expect(row).not.toHaveProperty('readerKey');
     expect(row).not.toHaveProperty('appSessionId');
-    expect(Math.round(((row.expiresAt as Date).getTime() - before) / DAY_MS)).toBe(90);
+    expect(Math.round(((row.expiresAt as Date).getTime() - before) / DAY_MS)).toBe(760);
   });
 
   it('statut denied : ni visibilité ni plateforme ; not_granted : la mesure sans la session d’application', () => {
@@ -97,7 +97,7 @@ describe('#10785 — la ligne d’une impression garde son lecteur quel que soit
     expect(rowOf('not_granted')).toMatchObject({ viewable: true, platform: 'ios', position: 3 });
   });
 
-  it('statut granted : régime inchangé — compte, mesure, contexte, 90 jours', () => {
+  it('statut granted : régime inchangé — compte, mesure, contexte, 760 jours', () => {
     const before = Date.now();
     const row = rowOf('granted') as Row;
 
@@ -106,7 +106,7 @@ describe('#10785 — la ligne d’une impression garde son lecteur quel que soit
       feedRequestId: 'page-1', viewable: true, appSessionId: 'app-1', platform: 'ios',
     });
     expect(row).not.toHaveProperty('readerKey');
-    expect(Math.round(((row.expiresAt as Date).getTime() - before) / DAY_MS)).toBe(90);
+    expect(Math.round(((row.expiresAt as Date).getTime() - before) / DAY_MS)).toBe(760);
   });
 });
 
@@ -121,6 +121,21 @@ describe('#10785 — une vue sans clé déduit une impression nominative, sans j
     expect(rows[0]).toMatchObject({ postId: POST, userId: READER, source: 'view', surface: 'story' });
     expect(rows[0]).not.toHaveProperty('readerKey');
     expect(impressionCredits()).toHaveLength(1);
+  });
+
+  it('l’impression déduite vit la durée réglée par RAW_READING_RETENTION_DAYS (#10510)', async () => {
+    const saved = process.env.RAW_READING_RETENTION_DAYS;
+    process.env.RAW_READING_RETENTION_DAYS = '45';
+    try {
+      const { rows, prisma } = table();
+      const before = Date.now();
+      await impressionImpliedByView(prisma as never, { postId: POST, userId: READER });
+
+      expect(Math.round(((rows[0].expiresAt as Date).getTime() - before) / DAY_MS)).toBe(45);
+    } finally {
+      if (saved === undefined) delete process.env.RAW_READING_RETENTION_DAYS;
+      else process.env.RAW_READING_RETENTION_DAYS = saved;
+    }
   });
 
   it('une impression réduite antérieure du même lecteur suffit : rien n’est déduit', async () => {

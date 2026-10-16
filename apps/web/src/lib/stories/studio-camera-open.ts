@@ -6,7 +6,8 @@ import type { CameraFacing } from '@/lib/stories/studio-quick-capture';
  * pour être interrogé sans navigateur :
  *
  *  - la PREMIÈRE ouverture demande l'optique voulue (préférence : un portable
- *    sans caméra arrière ouvre la sienne) et le micro, d'un seul geste ;
+ *    sans caméra arrière ouvre la sienne) et le micro, d'un seul geste — un
+ *    refus redemande la caméra seule, qui s'ouvre alors sans son (#10850) ;
  *  - une BASCULE avant ↔ arrière arrête d'abord la piste vidéo en cours — un
  *    téléphone n'ouvre pas deux capteurs à la fois, et la demande suivante
  *    échouait ou rendait l'image figée de l'ancien —, demande l'autre optique
@@ -28,8 +29,11 @@ function constraints(facing: CameraFacing, { exact, audio }: { readonly exact: b
 
 /** `OverconstrainedError` n'hérite pas d'`Error` partout (un `DOMException`
  * ailleurs) : seul son nom fait foi. */
+const named = (error: unknown, name: string): boolean =>
+  typeof error === 'object' && error !== null && 'name' in error && error.name === name;
+
 function overconstrained(error: unknown): boolean {
-  return typeof error === 'object' && error !== null && 'name' in error && error.name === 'OverconstrainedError';
+  return named(error, 'OverconstrainedError');
 }
 
 export async function acquireCamera<T extends CameraTrackLike, S extends CameraStreamLike<T>>({
@@ -45,7 +49,15 @@ export async function acquireCamera<T extends CameraTrackLike, S extends CameraS
   /** Assemble la nouvelle vidéo et le micro gardé en un flux. */
   readonly assemble: (tracks: readonly T[]) => S;
 }): Promise<S> {
-  if (previous === undefined) return request(constraints(facing, { exact: false, audio: true }));
+  /* #10850 — la coque Android refuse la demande ENTIÈRE dès que l'un de ses
+     deux dialogues (caméra, micro) l'est : un micro refusé n'éteint pas la
+     caméra accordée, elle s'ouvre seule, sans son. */
+  if (previous === undefined) {
+    return request(constraints(facing, { exact: false, audio: true })).catch((error: unknown) => {
+      if (!named(error, 'NotAllowedError')) throw error;
+      return request(constraints(facing, { exact: false, audio: false }));
+    });
+  }
   previous.getVideoTracks().forEach((track) => track.stop());
   const video = await request(constraints(facing, { exact: true, audio: false })).catch((error: unknown) => {
     if (!overconstrained(error)) throw error;

@@ -2,10 +2,7 @@ import type { GameMintPreview as MintPreview } from '@meeshy/shared/types/game';
 import type { MeeshEdition } from '@meeshy/shared/utils/game/mint';
 
 import { MintStrike } from '@/components/game-mint-strike';
-import { mintLevels } from '@/lib/game/ladder';
-import { currentInterfaceLanguage } from '@/lib/interface-language';
-import { translateGamePlural } from '@/lib/i18n-game-catalog';
-import { convertiblePointsLabel, editionName, formatCount, gameText, levelsLabel, pointsLabel } from '@/lib/view/game-copy';
+import { divisionLabel, editionName, formatCount, gameText, pointsLabel, rankName } from '@/lib/view/game-copy';
 import { factDetail } from '@/lib/view/game-detail';
 
 import { GAME_BRAND, GAME_ERROR, GAME_INK, GAME_INK_2, GAME_ON_WARM, GAME_WARM, GameCard } from './game-surface';
@@ -45,14 +42,11 @@ export type MintCelebration = {
 
 export type GameMintPreviewProps = {
   readonly mint: MintPreview;
-  /** Les points en poche (le score) : la frappe s'en retranche. */
-  readonly held: number;
   /**
-   * Les points À CONVERTIR, seuls à payer la frappe (#10540). Absents : une frappe impossible les dit
-   * (le prix moins le manque) ; possible, ils restent tus plutôt que devinés depuis le score.
+   * Les ÉTINCELLES en poche : la frappe s'en retranche, TOUTES sont dépensables (porteur, 2026-10-16 — plus de « points à
+   * convertir »). La frappe n'éteint aucun badge et ne fait pas baisser le niveau : rien de cela ne se promet plus.
    */
-  readonly convertible?: number | undefined;
-  readonly badgesLost?: number | undefined;
+  readonly held: number;
   readonly online: boolean;
   readonly minting: boolean;
   readonly error?: string | undefined;
@@ -62,8 +56,28 @@ export type GameMintPreviewProps = {
   readonly onMint: () => void;
 };
 
-const badgesLine = (lost: number): string =>
-  lost === 0 ? gameText('game.mint.badges.none') : translateGamePlural(currentInterfaceLanguage(), 'game.mint.badges', lost);
+/**
+ * Pourquoi la frappe est fermée, quand ce n'est PAS faute d'étincelles (porteur, 2026-10-16) : une DETTE d'étincelles à
+ * rembourser (elle se déduit des prochains gains), ou une réserve du trésor que le rang n'ouvre pas encore.
+ */
+function BlockedLine({ mint }: { readonly mint: MintPreview }) {
+  const debt = mint.sparksDebt ?? 0;
+  if (mint.blockedBy === 'debt' && debt > 0) {
+    return (
+      <p role="status" data-game-mint-blocked="debt" className="text-caption font-semibold" style={{ color: GAME_ERROR }}>
+        {gameText('game.mint.blocked_by_debt', { debt: formatCount(debt) })}
+      </p>
+    );
+  }
+  const lock = mint.locked ?? null;
+  if (lock === null) return null;
+  const rank = `${rankName(lock.requires.rank)} ${divisionLabel(lock.requires.division5)}`;
+  return (
+    <p role="status" data-game-mint-blocked="locked" className="text-caption font-semibold" style={{ color: GAME_ERROR }}>
+      {gameText('game.mint.locked', { tier: gameText(`game.treasury.${lock.tier}`), rank })}
+    </p>
+  );
+}
 
 function Chips({ lines }: { readonly lines: readonly string[] }) {
   return (
@@ -78,13 +92,8 @@ function Chips({ lines }: { readonly lines: readonly string[] }) {
 }
 
 export function GameMintPreview(props: GameMintPreviewProps) {
-  const { mint, held, convertible, badgesLost, online, minting, error, celebration, strikeKey = 0, onMint } = props;
-  const toConvert = convertible ?? (mint.canMint ? null : mint.price - mint.missingPoints);
-  const impact = [
-    mintLevels(mint).levelsLost > 0 ? gameText('game.hero.mint_cost', { levels: levelsLabel(mintLevels(mint).levelsLost) }) : null,
-    gameText('game.hero.mint_glory', { glory: formatCount(mint.gloryGained) }),
-    badgesLost === undefined || badgesLost === 0 ? null : badgesLine(badgesLost),
-  ].filter((line): line is string => line !== null);
+  const { mint, held, online, minting, error, celebration, strikeKey = 0, onMint } = props;
+  const impact = [gameText('game.hero.mint_glory', { glory: formatCount(mint.gloryGained) })];
 
   return (
     <GameCard id="game-mint" labelledBy="game-mint-title" tint={GAME_WARM}>
@@ -117,11 +126,12 @@ export function GameMintPreview(props: GameMintPreviewProps) {
         cost={mint.price}
         spendable={mint.canMint ? mint.price : mint.price - mint.missingPoints}
         format={pointsLabel}
-        formatMissing={convertiblePointsLabel}
+        formatMissing={pointsLabel}
         heldFact="score"
-        {...(toConvert === null ? {} : { between: { fact: 'convertible', label: gameText('game.fact.to_convert'), value: pointsLabel(toConvert) } })}
         missing={{ fact: 'mint_missing', line: (missing) => gameText('game.spend.missing.mint', { missing, number: formatCount(mint.number) }) }}
       />
+
+      <BlockedLine mint={mint} />
 
       {mint.canMint ? (
         <>

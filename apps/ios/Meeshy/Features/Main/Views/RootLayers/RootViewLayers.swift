@@ -234,7 +234,7 @@ struct RootChromeLayer: ViewModifier {
             // Masqué pendant le lecteur de réels immersif (frère de ZStack, pas
             // un fullScreenCover — contrairement au story viewer déjà gated via
             // isStoryViewerPresenting, il n'avait aucune garde équivalente).
-            .overlay(alignment: .top) {
+            .overlay(alignment: .bottom) {
                 if reelsPresenter.launch == nil {
                     ConnectionBanner(
                         conversationListViewModel: conversationViewModel,
@@ -242,10 +242,11 @@ struct RootChromeLayer: ViewModifier {
                         onItemTap: onSyncPillTap,
                         activeConversationId: activeConversationId
                     )
-                    // Sous la zone sûre, décollée de l'îlot — sur tous les
-                    // écrans, conversation comprise (#10371, qui supplante
-                    // #9680). La position vit dans `SyncPillPlacement`, plus
-                    // chez chaque hôte (#5941, #5944, #5835).
+                    // Au-dessus du chrome bas, et sur le clavier avec lui —
+                    // la barre de composition d'une conversation la porte
+                    // (#10840, qui supplante #10371). La position vit dans
+                    // `SyncPillPlacement`, plus chez chaque hôte (#5941,
+                    // #5944, #5835).
                     .inSyncPillBand()
                 }
             }
@@ -267,7 +268,7 @@ struct RootChromeLayer: ViewModifier {
                 // calculée ICI, où le routeur et le lecteur de réels sont observés.
                 playerBannerHosted: PlayerBannerPlacement.hosts(
                     routeIsDeep: router.isDeepRoute, reelsAreOpen: reelsPresenter.launch != nil),
-                onPlayerBannerTap: { router.openGame(at: .progressionConcept(.level)) }
+                onPlayerBannerTap: { router.openGame(at: .progressionConcept($0.concept)) }
             ))
             .animation(.spring(response: 0.4, dampingFraction: 0.85), value: showFeed)
             .animation(.spring(), value: showMenu)

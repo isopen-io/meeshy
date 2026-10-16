@@ -174,7 +174,6 @@ describe('chaque entrée extérieure ouvre l’écran que la carte nomme', () =>
       'prestige-or-stay': 'level',
       'see-missions': 'missions',
       'open-first-mission': 'missions',
-      'regain-levels': 'missions',
       'do-easy-mission-or-freeze': 'missions',
       'do-easiest-mission': 'missions',
       'see-flame': 'flame',
@@ -184,7 +183,6 @@ describe('chaque entrée extérieure ouvre l’écran que la carte nomme', () =>
       'see-mint-preview': 'meesh',
       'keep-or-spend': 'meesh',
       'see-rank': 'glory',
-      'relight-badge': 'badges',
       'see-league': 'league',
       'see-season': 'season',
       'see-trophies': 'showcase',
@@ -202,7 +200,10 @@ describe('chaque entrée extérieure ouvre l’écran que la carte nomme', () =>
   const read = (path: string) => readFileSync(join(APP, path), 'utf8');
 
   test('le bandeau du joueur ouvre la fiche du Niveau', () => {
-    expect(/to="progressionConcept"\s+params=\{\{ concept: 'level' \}\}/.test(read('components/player-banner.tsx'))).toBe(true);
+    // Le bandeau est un groupe de liens : chaque pièce est un `PieceLink` vers sa fiche, et l'anneau porte le concept « level ».
+    const banner = read('components/player-banner.tsx');
+    expect(/<PieceLink concept="level"/.test(banner)).toBe(true);
+    expect(/to="progressionConcept"\s+params=\{\{ concept \}\}\s+data-player-banner-link=\{concept\}/.test(banner)).toBe(true);
   });
 
   test('le retour de chaque écran du jeu vient de la carte : aucune route ne le déclare', () => {

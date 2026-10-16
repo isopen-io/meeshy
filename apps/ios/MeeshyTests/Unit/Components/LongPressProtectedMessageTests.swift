@@ -200,4 +200,76 @@ final class LongPressProtectedMessageTests: XCTestCase {
         XCTAssertEqual(rows[0][0].height, rows[0][1].height, accuracy: 0.001)
         XCTAssertEqual(rows[0][0].width + rows[0][1].width + 3, 260, accuracy: 0.001, "la rangée remplit la largeur")
     }
+
+    // MARK: - L'aperçu dit ce que la cellule dit (#9838)
+
+    private func koreanMessage() -> Message {
+        var message = Message(id: "m9", conversationId: "c1", senderId: "u2",
+                              content: "이제 12일만 기다리면 돼 ❤️", senderName: "Demo")
+        message.originalLanguage = "ko"
+        return message
+    }
+
+    private func translation(_ language: String, _ text: String) -> MessageTranslation {
+        MessageTranslation(id: "m9-\(language)", messageId: "m9", sourceLanguage: "ko",
+                           targetLanguage: language, translatedContent: text,
+                           translationModel: "nllb", confidenceScore: nil)
+    }
+
+    private var koreanTranslations: [MessageTranslation] {
+        [translation("fr", "Plus que 12 jours ❤️"), translation("en", "Only 12 more days ❤️")]
+    }
+
+    private func served(preferred: MessageTranslation?,
+                        selection: ConversationViewModel.BubbleLanguageSelection? = nil,
+                        usesFlatRow: Bool = false) -> OverlayPreviewServedText {
+        MessageOverlayMenu.previewServedText(
+            message: koreanMessage(), textTranslations: koreanTranslations, translatedAudios: [],
+            preferredTranslation: preferred, userLanguages: (regional: "en", custom: nil),
+            selection: selection, usesFlatRow: usesFlatRow, preferredAudioLangCode: nil, currentUserId: "u1")
+    }
+
+    /// Prisme `['fr']`, message coréen, traduction française disponible : le fil
+    /// dit le français, l'aperçu aussi — plus l'original coréen.
+    func test_previewServedText_servesThePrismTranslation_notTheOriginal() {
+        XCTAssertEqual(served(preferred: koreanTranslations[0]).text, "Plus que 12 jours ❤️")
+    }
+
+    /// Override manuel vers l'original (`activeTranslationOverrides[id] = nil`) :
+    /// la cellule rend l'original, l'aperçu aussi.
+    func test_previewServedText_manualOverrideToTheOriginal_servesTheOriginal() {
+        XCTAssertEqual(served(preferred: nil).text, "이제 12일만 기다리면 돼 ❤️")
+    }
+
+    /// Le drapeau basculé dans le fil gouverne la face affichée de l'aperçu.
+    func test_previewServedText_followsTheFlagSelectedInTheThread() {
+        let selection = ConversationViewModel.BubbleLanguageSelection(activeDisplayLangCode: "en", secondaryLangCode: nil)
+        XCTAssertEqual(served(preferred: koreanTranslations[0], selection: selection).text, "Only 12 more days ❤️")
+    }
+
+    /// La bande de drapeaux est celle de la cellule : la même source
+    /// (`BubbleContent`), jamais une liste recomposée par l'aperçu.
+    func test_previewServedText_flags_areTheCellFlags() {
+        let cell = BubbleContent(message: koreanMessage(), translations: koreanTranslations,
+                                 preferredTranslation: koreanTranslations[0],
+                                 userLanguages: (regional: "en", custom: nil), currentUserId: "u1")
+        let preview = served(preferred: koreanTranslations[0])
+
+        XCTAssertEqual(preview.flags, cell.translation?.availableFlags)
+        XCTAssertFalse(preview.flags.contains("fr"), "la langue affichée n'est pas un drapeau de la bande")
+    }
+
+    /// En Focal et en Script, la rangée du fil porte aussi la langue affichée,
+    /// marquée active : l'aperçu reprend CETTE bande, pas celle d'une bulle.
+    func test_previewServedText_inAFlatRowThread_carriesTheDisplayedLanguageAsActive() {
+        let preview = served(preferred: koreanTranslations[0], usesFlatRow: true)
+        let cell = BubbleContent(message: koreanMessage(), translations: koreanTranslations,
+                                 preferredTranslation: koreanTranslations[0],
+                                 userLanguages: (regional: "en", custom: nil), currentUserId: "u1")
+        let row = FocalRow.focusFlagCodes(originalLangCode: "ko", availableFlags: cell.translation?.availableFlags ?? [],
+                                          activeLangCode: "fr", limit: FocalMetrics.FocusStrip.flagLimitPlain)
+
+        XCTAssertEqual(preview.flags, row)
+        XCTAssertEqual(preview.activeFlag, "fr")
+    }
 }

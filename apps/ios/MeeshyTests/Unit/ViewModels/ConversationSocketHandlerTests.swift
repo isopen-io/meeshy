@@ -1965,6 +1965,11 @@ final class ConversationSocketHandlerTests: XCTestCase {
         XCTAssertEqual(rows.first?.localId, cid, "the optimistic row's localId is preserved")
         XCTAssertEqual(rows.first?.serverId, "srv_race_1",
             "applyEvent(.serverAck) must backfill the server id on the optimistic row")
+        // La publication suivante du store rend la ligne sous son id SERVEUR : sans la table
+        // `cid → serverId`, la ligne optimiste n'était ni dans les ids reçus ni marquée
+        // remplacée, et `mergeIntoMessages` gardait les deux bulles.
+        XCTAssertEqual(delegate.pendingServerIds[cid], "srv_race_1",
+            "l'écho qui devance la réponse REST enregistre la correspondance, comme l'envoi")
     }
 
     /// An own-message echo from the REST broadcast path carries NO

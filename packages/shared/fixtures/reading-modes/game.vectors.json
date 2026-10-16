@@ -5232,10 +5232,7 @@
       "input": {
         "law": "guide",
         "event": {
-          "kind": "first-mint",
-          "levelBefore": 14,
-          "levelAfter": 9,
-          "tailwindUntilLevel": 14
+          "kind": "first-mint"
         },
         "seen": []
       },
@@ -5243,12 +5240,8 @@
         "key": "first-mint",
         "speaker": "duo",
         "mood": "minting",
-        "action": "regain-levels",
-        "data": {
-          "levelBefore": 14,
-          "levelAfter": 9,
-          "tailwindUntilLevel": 14
-        },
+        "action": "see-progress",
+        "data": {},
         "presentation": "full"
       }
     },
@@ -5257,10 +5250,7 @@
       "input": {
         "law": "guide",
         "event": {
-          "kind": "first-mint",
-          "levelBefore": 14,
-          "levelAfter": 9,
-          "tailwindUntilLevel": 14
+          "kind": "first-mint"
         },
         "seen": [
           "first-mint"
@@ -5270,56 +5260,8 @@
         "key": "first-mint",
         "speaker": "duo",
         "mood": "minting",
-        "action": "regain-levels",
-        "data": {
-          "levelBefore": 14,
-          "levelAfter": 9,
-          "tailwindUntilLevel": 14
-        },
-        "presentation": "short"
-      }
-    },
-    {
-      "_label": "guide « badge-extinguished » la première fois",
-      "input": {
-        "law": "guide",
-        "event": {
-          "kind": "badge-extinguished",
-          "missingActions": 37
-        },
-        "seen": []
-      },
-      "expected": {
-        "key": "badge-extinguished",
-        "speaker": "meo",
-        "mood": "calm",
-        "action": "relight-badge",
-        "data": {
-          "missingActions": 37
-        },
-        "presentation": "full"
-      }
-    },
-    {
-      "_label": "guide « badge-extinguished » déjà vu",
-      "input": {
-        "law": "guide",
-        "event": {
-          "kind": "badge-extinguished",
-          "missingActions": 37
-        },
-        "seen": [
-          "badge-extinguished"
-        ]
-      },
-      "expected": {
-        "key": "badge-extinguished",
-        "speaker": "meo",
-        "mood": "calm",
-        "action": "relight-badge",
-        "data": {
-          "missingActions": 37
-        },
+        "action": "see-progress",
+        "data": {},
         "presentation": "short"
       }
     },

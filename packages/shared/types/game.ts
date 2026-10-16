@@ -81,6 +81,8 @@ export const gameLevelLadderSchema = z.object({
   pointsToNext: nonNegativeInt,
   progress: fraction,
   record: level,
+  /** Le niveau max à vie (#10846) : il survit au prestige. Absent devant un serveur antérieur. */
+  levelMaxLifetime: level.optional(),
   /** Le plafond que le rang ouvre : 499 sous Ambassadeur, 1000 pour Ambassadeur et Orateur, `null` à partir d'Oracle. */
   cap: level.nullable(),
   /** Le niveau est au plafond : il monte dès que le rang l'ouvre, sans rien regagner. */
@@ -103,12 +105,27 @@ export const gameLevelSchema = z.object({
   nextThreshold: nonNegativeInt.nullable(),
   pointsToNext: nonNegativeInt,
   progress: fraction,
-  /** Le plus haut niveau atteint — il règle le Vent arrière. Ancienne loi : borné à 100. */
+  /** Le plus haut niveau du CYCLE (il règle l'ancien Vent arrière, éteint avec les étincelles). Ancienne loi : borné à 100. */
   record: legacyLevel,
   prestige: z.number().int().min(0).max(5),
   canPrestige: z.boolean(),
   /** La lecture à jour (#9688) — absente devant un serveur antérieur. */
   ladder: gameLevelLadderSchema.optional(),
+  /**
+   * LES ÉTINCELLES (#10846) — absentes devant un serveur antérieur. Des NOMBRES JSON entiers (jamais une chaîne ni
+   * un BigInt) : la colonne est un `long`, le fil sature à 2^53 − 1. `score` ci-dessus lit désormais le CYCLE, la
+   * base du niveau : la frappe ne le fait plus baisser.
+   */
+  /** La poche : ce que la frappe dépense (`User.engagementScore`). */
+  sparks: nonNegativeInt.optional(),
+  /** Accumulées depuis le dernier prestige — la base du niveau. */
+  sparksCycle: nonNegativeInt.optional(),
+  /** Accumulées à vie : ne baisse ni à la frappe ni au prestige (seule la reprise d'un contenu retiré la réduit). */
+  sparksLifetime: nonNegativeInt.optional(),
+  /** La dette d'étincelles (reprise d'un contenu supprimé non prélevable sur une poche dépensée) : déduite des prochains gains, bloque la frappe. */
+  sparksDebt: nonNegativeInt.optional(),
+  /** Le niveau max à vie, sans la borne de 100 des champs d'hier : le même nombre que `ladder.levelMaxLifetime`. */
+  levelMaxLifetime: level.optional(),
 });
 
 const gloryStepSchema = z.object({
@@ -134,10 +151,28 @@ export const gameGlorySchema = z.object({
   mythic: mythicSeatSchema.nullable().optional(),
 });
 
+/** Le rang de Gloire qu'une réserve exige (#10848) : la division héritée (1–3) ET la division à cinq crans. */
+export const treasuryRankRequirementSchema = z.object({
+  rank: enumOf(GLORY_RANKS.map((r) => r.key)),
+  division: legacyDivisionSchema,
+  division5: division5Schema,
+});
+
+/** L'état d'une réserve du trésor pour CE compte : fermée ou ouverte par son rang. */
+export const treasuryReserveAccessSchema = z.object({
+  key: treasuryKeys,
+  minHeld: nonNegativeInt,
+  locked: z.boolean(),
+  /** `null` : ouverte à tous (la Bourse). */
+  requires: treasuryRankRequirementSchema.nullable(),
+});
+
 export const gameTreasurySchema = z.object({
   held: nonNegativeInt,
   tier: treasuryKeys.nullable(),
   next: z.object({ key: treasuryKeys, minHeld: nonNegativeInt, missing: nonNegativeInt }).nullable(),
+  /** Pour chaque réserve, son état et le rang requis (#10848) — absent devant un serveur antérieur. */
+  access: z.array(treasuryReserveAccessSchema).optional(),
 });
 
 export const mintPreviewSchema = z.object({
@@ -153,6 +188,23 @@ export const mintPreviewSchema = z.object({
   gloryGained: nonNegativeInt,
   /** Les niveaux ouverts par le rang (#9688) — absents devant un serveur antérieur. */
   ladder: z.object({ levelBefore: level, levelAfter: level, levelsLost: nonNegativeInt }).optional(),
+  /**
+   * LE COÛT SELON LE NIVEAU ACTUEL (#10847) — absents devant un serveur antérieur. `price` est le coût EFFECTIF :
+   * `basePrice` (le prix de rang de la pièce) × `costFactor` (0,5 au niveau 0, 1 dès le niveau 100). Le serveur
+   * recalcule toujours le prix. `levelsLost` vaut désormais toujours 0 : la frappe ne fait plus baisser le niveau.
+   */
+  basePrice: z.number().int().min(1).optional(),
+  costFactor: z.number().min(0).max(1).optional(),
+  /** Le niveau ACTUEL dont le facteur est lu. */
+  costLevel: level.optional(),
+  /** Ce qui bloque la frappe hors prix et rang : `debt` tant qu'une dette d'étincelles existe (409 `MINT_BLOCKED_BY_DEBT`). */
+  blockedBy: z.enum(['debt']).nullable().optional(),
+  sparksDebt: nonNegativeInt.optional(),
+  /** La réserve du trésor que le rang n'ouvre pas et qui barre cette pièce (#10848) — `null` : libre. */
+  locked: z
+    .object({ tier: treasuryKeys, minHeld: nonNegativeInt, requires: treasuryRankRequirementSchema })
+    .nullable()
+    .optional(),
 });
 
 export const gameMissionSchema = z.object({
@@ -354,6 +406,21 @@ export const meeshMintResponseSchema = z.object({
   levelAfter: legacyLevel.optional(),
   /** Les niveaux ouverts par le rang (#9688) : les deux champs voisins restent bornés à 100. */
   ladder: z.object({ levelBefore: level, levelAfter: level }).optional(),
+  /** Le prix de rang de la pièce, avant le facteur du niveau actuel (#10847) — absent d'un serveur antérieur. */
+  basePrice: z.number().int().min(1).optional(),
+  /** Le facteur du niveau actuel appliqué, de 0,5 à 1 (#10847). */
+  costFactor: z.number().min(0).max(1).optional(),
+});
+
+/**
+ * Le refus `409 TREASURY_LOCKED` de la frappe (#10848) : la réserve du trésor que le rang n'ouvre pas encore. Les champs
+ * partent à la RACINE de la réponse, à côté de `code`.
+ */
+export const treasuryLockedResponseSchema = z.object({
+  code: z.literal('TREASURY_LOCKED'),
+  tier: treasuryKeys,
+  minHeld: nonNegativeInt,
+  requires: treasuryRankRequirementSchema,
 });
 
 /**

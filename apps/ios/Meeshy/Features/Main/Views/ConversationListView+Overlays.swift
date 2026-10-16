@@ -1196,7 +1196,7 @@ struct ConversationListBottomBar: View {
             // `inputBorder` stroke defines the panel edge in both modes.
             if showSearchOverlay {
                 VStack(spacing: 0) {
-                    communitiesSection
+                    ConversationSearchCommunitiesBand(communities: userCommunities) { isSearching.wrappedValue = false }
                         .padding(.vertical, MeeshySpacing.smPlus)
                     categoryFilters
                 }
@@ -1216,70 +1216,8 @@ struct ConversationListBottomBar: View {
                 .transition(.opacity.combined(with: .move(edge: .bottom)))
             }
 
-            // Search bar - always visible (unless scrolled away)
-            themedSearchBar
-        }
-    }
-
-    // MARK: - Communities Section
-    private var communitiesSection: some View {
-        VStack(alignment: .leading, spacing: MeeshySpacing.smPlus) {
-            HStack {
-                Text(String(localized: "communities.title", defaultValue: "Communautés"))
-                    .font(MeeshyFont.relative(MeeshyFont.calloutSize, weight: .bold))
-                    .foregroundStyle(
-                        LinearGradient(
-                            colors: [MeeshyColors.error, MeeshyColors.indigo300],
-                            startPoint: .leading,
-                            endPoint: .trailing
-                        )
-                    )
-                    .accessibilityAddTraits(.isHeader)
-                Spacer()
-
-                HStack(spacing: MeeshySpacing.md) {
-                    Button {
-                        router.push(.communityList)
-                    } label: {
-                        Text(String(localized: "action.see_all", defaultValue: "Voir tout"))
-                            .font(MeeshyFont.relative(MeeshyFont.smallSize, weight: .semibold))
-                            .foregroundColor(MeeshyColors.indigo300)
-                    }
-                    .accessibilityLabel(String(localized: "accessibility.see_all_communities", defaultValue: "Voir toutes les communautés"))
-
-                    Button {
-                        withAnimation(.spring(response: 0.3, dampingFraction: 0.8)) {
-                            showSearchOverlay = false
-                        }
-                        HapticFeedback.light()
-                    } label: {
-                        Image(systemName: "xmark.circle.fill")
-                            .font(MeeshyFont.relative(MeeshyIconSize.lg))
-                            .foregroundStyle(
-                                LinearGradient(
-                                    colors: [MeeshyColors.error, MeeshyColors.error.opacity(MeeshyOpacity.heavy)],
-                                    startPoint: .topLeading,
-                                    endPoint: .bottomTrailing
-                                )
-                            )
-                    }
-                    .accessibilityLabel(String(localized: "accessibility.close_communities", defaultValue: "Fermer les communautés"))
-                }
-            }
-            .padding(.horizontal, MeeshySpacing.lg)
-
-            ScrollView(.horizontal, showsIndicators: false) {
-                HStack(spacing: MeeshySpacing.md) {
-                    ForEach(userCommunities, id: \.id) { community in
-                        ThemedCommunityCard(community: community) {
-                            HapticFeedback.light()
-                            router.push(.communityDetail(community.id))
-                        }
-                        .equatable()
-                    }
-                }
-                .padding(.horizontal, MeeshySpacing.lg)
-            }
+            // Search bar — always visible (unless scrolled away); floor of the sync pill (#10840)
+            themedSearchBar.docksSyncPill(liftAboveEdge: MeeshySpacing.sm)
         }
     }
 
@@ -1315,12 +1253,8 @@ struct ConversationListBottomBar: View {
             // Magnifying glass: tappable to toggle search overlay (communities + filters)
             Button {
                 HapticFeedback.light()
-                withAnimation(.spring(response: 0.3, dampingFraction: 0.8)) {
-                    showSearchOverlay.toggle()
-                    if showSearchOverlay {
-                        isSearching.wrappedValue = true
-                    }
-                }
+                // La bande suit le focus (#10841) : la loupe le donne ou le reprend.
+                isSearching.wrappedValue = !isActive
             } label: {
                 Image(systemName: "magnifyingglass")
                     .font(MeeshyFont.relative(MeeshyIconSize.md, weight: .medium))
@@ -1404,11 +1338,9 @@ struct ConversationListBottomBar: View {
             withAnimation(.spring(response: 0.35, dampingFraction: 0.55)) {
                 searchBounce = newValue
             }
-            if newValue && !showSearchOverlay {
-                withAnimation(.spring(response: 0.3, dampingFraction: 0.8)) {
-                    showSearchOverlay = true
-                }
-            }
+            let shown = ConversationSearchCommunitiesBandLaw.isShown(afterFocusChangeTo: newValue)
+            guard shown != showSearchOverlay else { return }
+            withAnimation(.spring(response: 0.3, dampingFraction: 0.8)) { showSearchOverlay = shown }
         }
         .padding(.horizontal, MeeshySpacing.lg)
         .padding(.bottom, MeeshySpacing.lg)

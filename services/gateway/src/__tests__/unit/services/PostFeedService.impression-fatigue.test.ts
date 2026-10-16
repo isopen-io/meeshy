@@ -17,7 +17,8 @@ type Consent = { analyticsConsentAt: Date | null; dataProcessingConsentAt: Date 
 const GRANTED: Consent = { analyticsConsentAt: new Date('2026-01-01'), dataProcessingConsentAt: new Date('2026-01-01') };
 const WITHHELD: Consent = { analyticsConsentAt: null, dataProcessingConsentAt: null };
 
-const recent = () => new Date(Date.now() - 60_000);
+const AT = new Date(Date.now() - 60_000);
+const recent = () => AT;
 
 const makePost = (id: string, authorId: string) => ({
   id,

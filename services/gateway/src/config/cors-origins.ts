@@ -140,6 +140,27 @@ export const NATIVE_SHELL_ORIGINS: readonly string[] = Object.freeze([
 ]);
 
 /**
+ * Les SCHÉMAS d'origine que seul un client WebSocket natif peut poser (#10838).
+ *
+ * Starscream — le transport du client Socket.IO d'iOS — pose
+ * `Origin: wss://<hôte>` sur la demande de passage en WebSocket. Mesuré en
+ * production le 2026-10-16 : cette origine refusée (526 fois en 6 h) faisait
+ * échouer chaque upgrade en 400, laissait iOS en long-polling, et la plupart de
+ * ses sessions tombaient dans la minute — la pastille « Reconnexion » permanente.
+ *
+ * Aucun navigateur ne peut porter ces schémas : une origine est celle d'un
+ * DOCUMENT, et aucun document n'est servi en `ws:` ou `wss:`. L'accepter ne
+ * donne rien de plus que l'absence d'en-tête, déjà servie plus bas ;
+ * l'autorisation reste portée par le jeton.
+ */
+export const NATIVE_WEBSOCKET_ORIGIN_SCHEMES: readonly string[] = Object.freeze(['ws:', 'wss:']);
+
+function isNativeWebSocketOrigin(origin: string): boolean {
+  const scheme = /^[a-z][a-z0-9+.-]*:/i.exec(origin)?.[0].toLowerCase();
+  return scheme !== undefined && NATIVE_WEBSOCKET_ORIGIN_SCHEMES.includes(scheme) && origin.startsWith(`${scheme}//`);
+}
+
+/**
  * Le court-circuit de développement — `true` fait servir TOUTE origine.
  *
  * L'égalité est stricte et sans normalisation : `'Development'`, `' development '`
@@ -180,6 +201,7 @@ export function originIsAllowed(
   if (everyOriginIsAllowed(env)) return true;
   if (!origin) return true;
   if (NATIVE_SHELL_ORIGINS.includes(origin)) return true;
+  if (isNativeWebSocketOrigin(origin)) return true;
   return resolveAllowedOrigins(env).includes(origin);
 }
 

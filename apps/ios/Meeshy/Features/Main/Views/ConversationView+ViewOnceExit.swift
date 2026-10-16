@@ -67,6 +67,7 @@ extension ConversationView {
     /// seule preuve de lecture. Le passage en arrière-plan n'est pas une
     /// sortie de lecture : il ne rattrape pas.
     func leaveConversationByNavigation() {
+        viewModel.noteScreenLeft()
         consumeOpenedViewOnceOnExit()
         if ConversationCatchUpLaw.exitCatchesUp(mode: readingModeController.mode) {
             viewModel.markCaughtUpFromSummaryOrRiver()

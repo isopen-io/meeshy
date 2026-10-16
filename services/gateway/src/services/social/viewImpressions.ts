@@ -1,7 +1,7 @@
 import type { PrismaClient } from '@meeshy/shared/prisma/client';
 import type { SocialEvent } from '../../routes/social/eventsSchemas';
 import { incrementPostCounters } from '../posts/postCounters';
-import { POST_IMPRESSION_RETENTION_MS } from './contentEvents';
+import { rawReadingRetentionMs } from '../../config/raw-reading-retention';
 import { accountReaderKeyOf } from '../posts/readerKey';
 
 /**
@@ -73,7 +73,7 @@ export async function impressionImpliedByView(
       userId: params.userId,
       source: VIEW_IMPLIED_IMPRESSION_SOURCE,
       ...(params.surface ? { surface: params.surface } : {}),
-      expiresAt: new Date(Date.now() + POST_IMPRESSION_RETENTION_MS),
+      expiresAt: new Date(Date.now() + rawReadingRetentionMs()),
     }],
   });
   await incrementPostCounters(prisma, [params.postId], { impressionCount: { increment: 1 } });

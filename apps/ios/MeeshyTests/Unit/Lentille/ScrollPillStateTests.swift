@@ -82,7 +82,9 @@ final class ScrollPillStateTests: XCTestCase {
             "Un seul observateur d'`isScrollingDown` — celui qui existait."
         )
         XCTAssertTrue(
-            view.contains("adaptiveOnChange(of: isScrollingDown) { wasHidden, isHidden in if !wasHidden && isHidden { showSearchOverlay = false } }"),
+            // #10841 : la barre qui s'escamote rend le FOCUS (la bande des
+            // communautés le suit) au lieu de fermer la bande à côté de lui.
+            view.contains("adaptiveOnChange(of: isScrollingDown) { wasHidden, isHidden in if !wasHidden && isHidden { isSearching = false } }"),
             "Le signal booléen ne pilote PLUS la pilule (arbitrage I-063bis) : il ne bascule " +
             "qu'aux changements de direction, throttlés, et il est remis à false par " +
             "programme (filtre, feed). Le brancher là donnait « une fenêtre après la dernière " +

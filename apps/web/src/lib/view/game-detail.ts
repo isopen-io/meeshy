@@ -25,7 +25,6 @@ import { currentInterfaceLanguage } from '@/lib/interface-language';
 import { badgeGuideView, type BadgeGuideView } from '@/lib/view/badge-guide-view';
 import {
   boundedPercent,
-  convertiblePointsLabel,
   daysLabel,
   difficultyName,
   editionName,
@@ -407,7 +406,7 @@ export function coinDetail(view: EngagementWithGame): ElementDetail | null {
       mint === undefined ? null : row(gameText('game.mint.row.price'), pointsLabel(mint.price)),
       mint === undefined || mint.canMint
         ? null
-        : row(gameText('game.fact.missing_for.meesh', { number: formatCount(mint.number) }), convertiblePointsLabel(mint.missingPoints)),
+        : row(gameText('game.fact.missing_for.meesh', { number: formatCount(mint.number) }), pointsLabel(mint.missingPoints)),
       view.meesh === undefined ? null : row(gameText('game.fact.minted'), formatCount(view.meesh.mintedLifetime)),
     ]),
   });

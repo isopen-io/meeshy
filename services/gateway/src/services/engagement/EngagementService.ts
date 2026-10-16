@@ -53,11 +53,13 @@ import { engagementScaleServiceFor, type EngagementScaleSource } from './Engagem
 import { getEngagementEmitIO } from './engagement-emit-registry';
 import { memberSignature } from './memberSignature';
 import { EngagementQuotas, dayBucket } from './EngagementQuotas';
-import { EngagementGameHooks, applyTailwind, quarterPoints } from '../game/EngagementGameHooks';
+import { EngagementGameHooks, quarterPoints } from '../game/EngagementGameHooks';
+import { SPARKS_USER_SELECT, sparksOf } from '../game/SparksFacts';
 import type { MessageSignalInput } from '../game/MessageGameSignals';
 import { levelForUnlocks } from '@meeshy/shared/utils/game/levels';
 import { withRetry } from '../MessageMediaConsumptionService';
-import { creditEngagementCounter } from './EngagementCounterWrites';
+import { creditEngagementCounter, raiseEngagementCounterCount } from './EngagementCounterWrites';
+import { engraveBadgesSilently, historyCountFor } from './engagementAxisHistory';
 import { rawCommandNumber } from './rawCommandNumber';
 
 import type { EngagementActivityOptions, EngagementLinkVisit } from './engagementActivityTypes';
@@ -97,9 +99,12 @@ type ElanInputs = {
   readonly recentFamilies: readonly EngagementAxisFamily[];
   readonly achievementCount: number;
   readonly badgeThresholds: readonly number[];
+  /** Les étincelles du CYCLE (#10846), la base du niveau — jamais la poche, que la frappe débite. */
   readonly engagementScore: number;
-  /** Le plus haut niveau atteint (#9377) — règle le Vent arrière ; `null` pour un compte antérieur au jeu. */
+  /** Le plus haut niveau du cycle (#9377) ; `null` pour un compte antérieur au jeu. */
   readonly levelRecord: number | null;
+  /** Le niveau max à vie (#10846), qui survit au prestige ; `null` avant son premier relevé. */
+  readonly levelMaxLifetime: number | null;
   readonly timezone: string | null;
   /** Un e-mail ou un téléphone vérifié — ce qui ouvre les gros poids en entier. */
   readonly verified: boolean;
@@ -206,7 +211,7 @@ export class EngagementService {
       }),
       this.prisma.user.findUnique({
         where: { id: userId },
-        select: { engagementScore: true, levelRecord: true, timezone: true, emailVerifiedAt: true, phoneVerifiedAt: true },
+        select: { ...SPARKS_USER_SELECT, timezone: true, emailVerifiedAt: true, phoneVerifiedAt: true },
       }),
     ]);
 
@@ -232,8 +237,9 @@ export class EngagementService {
       recentFamilies: [...familles],
       achievementCount,
       badgeThresholds,
-      engagementScore: typeof compte?.engagementScore === 'number' ? compte.engagementScore : 0,
+      engagementScore: sparksOf(compte).cycle,
       levelRecord: typeof compte?.levelRecord === 'number' ? compte.levelRecord : null,
+      levelMaxLifetime: typeof compte?.levelMaxLifetime === 'number' ? compte.levelMaxLifetime : null,
       timezone: typeof compte?.timezone === 'string' ? compte.timezone : null,
       verified: Boolean(compte?.emailVerifiedAt ?? compte?.phoneVerifiedAt),
       isAccount: Boolean(compte),
@@ -305,9 +311,9 @@ export class EngagementService {
     const earned = pointsForOperation(scale, operationKey, factor, options.variant);
     // Un compte sans contact vérifié ne publie pas au prix fort (#8959).
     const capped = heavy && !inputs.verified ? Math.min(earned, scale.abuse.unverifiedMaxPoints) : earned;
-    // Le Vent arrière (#9377) : +25 % tant que le niveau est sous le niveau
-    // record — le MÊME montant au compteur et au score, l'invariant tient.
-    const boosted = applyTailwind(capped, inputs);
+    // Le Vent arrière (#9377, +25 % sous le niveau record) est ÉTEINT (#10846) : le niveau se lit sur le cycle et ne
+    // baisse plus qu'au prestige, où le record du cycle repart à 1 avec lui. `boosts.ts` dit pourquoi.
+    const boosted = capped;
 
     // Le plafond journalier par conversation se lit AVANT toute écriture :
     // atteint, le geste ne crédite RIEN — ni compteur, ni score, ni série.
@@ -376,7 +382,7 @@ export class EngagementService {
       operationKey,
       dayKey: civilDayKey(today),
       timezone: inputs.timezone,
-      record: Math.max(levelForUnlocks({ score: inputs.engagementScore, levelRecord: inputs.levelRecord ?? null }), inputs.levelRecord ?? 0),
+      record: Math.max(levelForUnlocks({ score: inputs.engagementScore, levelRecord: Math.max(inputs.levelRecord ?? 0, inputs.levelMaxLifetime ?? 0) || null }), inputs.levelRecord ?? 0),
     });
     return true;
   }
@@ -407,19 +413,29 @@ export class EngagementService {
     if (!Number.isInteger(points) || points <= 0) return;
     const written = await withRetry(() =>
       this.prisma.$transaction(async (tx) => {
-        const account = await tx.user.findUnique({
-          where: { id: userId },
-          select: { engagementScore: true, levelRecord: true },
-        });
+        const account = await tx.user.findUnique({ where: { id: userId }, select: SPARKS_USER_SELECT });
         if (!account) return null;
         await creditEngagementCounter(tx, { userId, axisKey, points, count: 0 });
-        const score = (account.engagementScore ?? 0) + points;
-        await tx.user.update({ where: { id: userId }, data: { engagementScore: score } });
-        return { score, levelRecord: account.levelRecord ?? null };
+        // Poche, cycle et total à vie montent du même montant (#10846) ; un compte d'avant le rattrapage les voit
+        // posés sur sa poche (`sparksOf`). Écrits EN VALEUR : un champ absent + incrément rendrait null (leçon #6428).
+        const before = sparksOf(account);
+        const cycle = before.cycle + points;
+        // La DETTE se déduit d'abord du gain (porteur, 2026-10-16) ; cycle et total à vie montent du gain entier.
+        const repaid = Math.min(before.debt, points);
+        await tx.user.update({
+          where: { id: userId },
+          data: {
+            engagementScore: before.pocket + points - repaid,
+            sparksSincePrestige: BigInt(cycle),
+            sparksEarnedLifetime: BigInt(before.lifetime + points),
+            ...(before.debt > 0 ? { sparksDebt: BigInt(before.debt - repaid) } : {}),
+          },
+        });
+        return { cycle, levelRecord: account.levelRecord ?? null, levelMaxLifetime: account.levelMaxLifetime ?? null };
       }),
     );
     if (written === null) return;
-    await this.afterScore(userId, points, written.score, written.levelRecord).catch((error: unknown) =>
+    await this.afterScore(userId, points, written.cycle, written.levelRecord, written.levelMaxLifetime).catch((error: unknown) =>
       log.warn('game points credited, level follow-up failed', {
         userId,
         error: error instanceof Error ? error.message : String(error),
@@ -467,8 +483,15 @@ export class EngagementService {
       const crossedThresholds = BADGE_THRESHOLDS.filter(
         (threshold) => threshold > previousCount && threshold <= newCount,
       );
-      for (const threshold of crossedThresholds) {
-        await this.tryAwardBadge(userId, operationKey, threshold, actorId);
+      // Un badge d'axe dit le TOTAL RÉEL et ne se notifie jamais deux fois (#10845). Au PREMIER crédit d'un axe, ou quand ce
+      // geste franchirait un palier, l'historique est lu : s'il dépasse le compteur (né à 0 le 2026-09-07, sans
+      // rattrapage), le compteur est relevé et les paliers passés sont gravés EN SILENCE — rien n'est annoncé.
+      const history =
+        previousCount === 0 || crossedThresholds.length > 0 ? await this.discoverHistory(userId, operationKey, newCount) : null;
+      if (history === null) {
+        for (const threshold of crossedThresholds) {
+          await this.tryAwardBadge(userId, operationKey, threshold, actorId);
+        }
       }
       await this.tryAwardAchievements(userId, operationKey, previousCount);
     }
@@ -482,6 +505,30 @@ export class EngagementService {
       ...(day.conversationId !== undefined ? { conversationId: day.conversationId } : {}),
     });
     await this.updateEngagementScore(userId, points);
+  }
+
+  /**
+   * Le total RÉEL de l'axe dépasse-t-il le compteur ? Alors le compteur est relevé à l'historique et les paliers qu'il
+   * couvre sont gravés en silence (#10845). Rend le total découvert, ou `null` : rien à rattraper, l'annonce est normale.
+   *
+   * Un échec de lecture ou d'écriture ne retient JAMAIS le crédit déjà écrit : il retombe sur l'annonce d'hier. Si la
+   * relève est devancée par un autre écrivain (`false`), le palier n'est pas annoncé non plus — le rattrapage le grave.
+   */
+  private async discoverHistory(userId: string, axisKey: EngagementAxisKey, newCount: number): Promise<number | null> {
+    try {
+      const history = await historyCountFor(this.prisma, userId, axisKey);
+      if (history === null || history <= newCount) return null;
+      await raiseEngagementCounterCount(this.prisma, { userId, axisKey, from: newCount, to: history });
+      await engraveBadgesSilently(this.prisma, userId, axisKey, history);
+      return history;
+    } catch (error) {
+      log.warn('axis history unavailable, badge announced from the counter', {
+        userId,
+        axisKey,
+        error: error instanceof Error ? error.message : String(error),
+      });
+      return null;
+    }
   }
 
   /**
@@ -812,29 +859,54 @@ export class EngagementService {
    * `$runCommandRaw`, idiome déjà employé dans le dépôt (`routes/posts/nearby.ts`).
    */
   private async updateEngagementScore(userId: string, points: number): Promise<void> {
+    // UNE commande, trois colonnes (#10846) : la poche, le cycle (la base du niveau) et le total à vie montent du même
+    // montant. Le cycle ne passe jamais sous la poche, ni le total à vie sous le cycle (`$max`) : un compte d'avant le
+    // rattrapage — champs absents — les voit posés sur sa poche. Les expressions lisent le document d'AVANT l'étape.
+    const held = (field: string) => ({ $ifNull: [`$${field}`, 0] });
     const result = (await this.prisma.$runCommandRaw({
       findAndModify: 'User',
       query: { _id: { $oid: userId } },
-      update: [{ $set: { engagementScore: { $add: [{ $ifNull: ['$engagementScore', 0] }, points] } } }],
+      update: [
+        {
+          $set: {
+            sparksEarnedLifetime: { $add: [{ $max: [held('sparksEarnedLifetime'), held('sparksSincePrestige'), held('engagementScore')] }, points] },
+            sparksSincePrestige: { $add: [{ $max: [held('sparksSincePrestige'), held('engagementScore')] }, points] },
+            // La DETTE se déduit d'abord des étincelles gagnées (porteur, 2026-10-16) : seul le reste va en poche, alors que le
+            // cycle et le total à vie montent du gain ENTIER. `sparksDebt` s'écrit en dernier : les autres lisent l'ancienne dette.
+            engagementScore: { $add: [held('engagementScore'), { $subtract: [points, { $min: [held('sparksDebt'), points] }] }] },
+            sparksDebt: { $subtract: [held('sparksDebt'), { $min: [held('sparksDebt'), points] }] },
+          },
+        },
+      ],
       new: true,
-      fields: { engagementScore: 1, levelRecord: 1 },
-    } as never)) as unknown as { value?: { engagementScore?: unknown; levelRecord?: unknown } | null };
+      fields: { engagementScore: 1, sparksSincePrestige: 1, levelRecord: 1, levelMaxLifetime: 1 },
+    } as never)) as unknown as {
+      value?: { engagementScore?: unknown; sparksSincePrestige?: unknown; levelRecord?: unknown; levelMaxLifetime?: unknown } | null;
+    };
 
-    // Le score et le record se lisent par `rawCommandNumber` (#10541) : la
-    // colonne est un `long` sur la plupart des comptes, qu'une commande brute
-    // peut rendre en `{ $numberLong }`.
+    // Les valeurs se lisent par `rawCommandNumber` (#10541) : la colonne est un `long` sur la plupart des comptes,
+    // qu'une commande brute peut rendre en `{ $numberLong }`.
     const newScore = rawCommandNumber(result?.value?.engagementScore);
-    // Compte introuvable (supprimé entre l'activité et ce crédit) : rien à
-    // notifier, et surtout pas un palier calculé sur `undefined`.
+    // Compte introuvable (supprimé entre l'activité et ce crédit) : rien à notifier, et surtout pas un palier
+    // calculé sur `undefined`.
     if (newScore === null) return;
-    await this.afterScore(userId, points, newScore, rawCommandNumber(result?.value?.levelRecord));
+    const newCycle = rawCommandNumber(result?.value?.sparksSincePrestige) ?? newScore;
+    await this.afterScore(userId, points, newCycle, rawCommandNumber(result?.value?.levelRecord), rawCommandNumber(result?.value?.levelMaxLifetime));
   }
 
   /** Les paliers que `points` vient de franchir, et la Gloire du premier passage. */
-  private async afterScore(userId: string, points: number, newScore: number, levelRecord: number | null): Promise<void> {
-    const previousScore = newScore - points;
+  private async afterScore(
+    userId: string,
+    points: number,
+    newCycle: number,
+    levelRecord: number | null,
+    levelMaxLifetime: number | null = null,
+  ): Promise<void> {
+    // Le niveau se lit sur le CYCLE d'étincelles (#10846), jamais sur la poche : une frappe ne le fait ni baisser ni
+    // re-franchir (les paliers `level:` gravés ne sont plus éteints par elle, donc plus renotifiés).
+    const previousCycle = newCycle - points;
     const crossedThresholds = LEVEL_THRESHOLDS.filter(
-      (threshold) => threshold > previousScore && threshold <= newScore,
+      (threshold) => threshold > previousCycle && threshold <= newCycle,
     );
 
     for (const threshold of crossedThresholds) {
@@ -842,7 +914,7 @@ export class EngagementService {
     }
     // La Gloire du premier passage de chaque niveau (#9374) : le record rendu
     // par la MÊME commande que le score — aucune lecture de plus sur la voie chaude.
-    await this.game.onScore(userId, newScore, levelRecord);
+    await this.game.onScore(userId, newCycle, levelRecord, levelMaxLifetime);
     // Les points de la SEMAINE (#9384) : le total que les ligues classent.
     await this.game.onPointsGained(userId, points);
   }

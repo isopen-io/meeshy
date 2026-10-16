@@ -8,13 +8,14 @@
 import { canPrestige, legacyLevel, legacyLevelProgress, levelProgress, recordLevel, type LevelCap } from './levels.js';
 import { levelStepGate, nextLevelStep, type LevelStepFacts } from './level-steps.js';
 import type { MintPreview } from './mint.js';
+import type { SparksFacts, SparksMintPreview } from './sparks.js';
 import type { GameLevel, GameMintPreview } from '../../types/game.js';
 
 /**
  * La frappe sur le fil (#9688) : les champs d'hier sous l'ancienne loi (bornés à 100, que les clients
  * publiés décodent strictement), la lecture ouverte par le rang dans `ladder`.
  */
-export const mintOnTheWire = (preview: MintPreview): GameMintPreview => {
+export const mintOnTheWire = (preview: MintPreview | SparksMintPreview): GameMintPreview => {
   const legacyBefore = legacyLevel(preview.levelBefore);
   const legacyAfter = legacyLevel(preview.levelAfter);
   return {
@@ -37,16 +38,25 @@ export const mintOnTheWire = (preview: MintPreview): GameMintPreview => {
  * Sans faits (`steps: null`), rien ne retient : la lecture d'un serveur d'avant les étapes.
  */
 export function levelOnTheWire(params: {
+  /** La base du niveau : le score en poche d'hier, le CYCLE d'étincelles depuis `sparks` (#10846). */
   readonly score: number;
   readonly levelCap: LevelCap;
   readonly levelRecord: number | null;
   readonly prestige: number;
   readonly steps: LevelStepFacts | null;
+  /**
+   * Les étincelles (#10846) : poche, cycle, total à vie. Servies à CÔTÉ — champs neufs, optionnels sur le fil.
+   * Absentes, le niveau garde exactement la forme d'hier.
+   */
+  readonly sparks?: SparksFacts;
+  /** Le niveau max à vie, qui survit au prestige (#10846). Jamais sous le niveau courant ni le record du cycle. */
+  readonly levelMaxLifetime?: number | null;
 }): GameLevel {
   const gate = levelStepGate(params.steps);
   const progress = levelProgress(params.score, params.levelCap, gate);
   const legacy = legacyLevelProgress(params.score, gate);
   const record = recordLevel({ level: progress.level, previousRecord: params.levelRecord });
+  const maxLifetime = params.sparks === undefined ? null : Math.max(record, Math.trunc(params.levelMaxLifetime ?? 0));
   return {
     level: legacy.level,
     tier: legacy.tier,
@@ -58,6 +68,15 @@ export function levelOnTheWire(params: {
     record: legacyLevel(record),
     prestige: params.prestige,
     canPrestige: canPrestige({ level: progress.level, prestige: params.prestige }),
+    ...(params.sparks === undefined || maxLifetime === null
+      ? {}
+      : {
+          sparks: params.sparks.pocket,
+          sparksCycle: params.sparks.cycle,
+          sparksLifetime: params.sparks.lifetime,
+          sparksDebt: params.sparks.debt,
+          levelMaxLifetime: maxLifetime,
+        }),
     ladder: {
       level: progress.level,
       tier: progress.tier,
@@ -69,6 +88,7 @@ export function levelOnTheWire(params: {
       cap: progress.cap,
       isMax: progress.isMax,
       held: progress.held,
+      ...(maxLifetime === null ? {} : { levelMaxLifetime: maxLifetime }),
       step: nextLevelStep(progress.level, params.steps),
       steps:
         params.steps === null

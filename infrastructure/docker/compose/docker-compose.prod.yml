@@ -286,6 +286,9 @@ services:
       # (les stories gardent tout leur historique). La fixer à la date de
       # PROMOTION EN PRODUCTION. Illisible => rien du passé n'est montré.
       - VIEWER_ACTIVITY_DISCLOSED_SINCE=${VIEWER_ACTIVITY_DISCLOSED_SINCE:-2026-10-10T00:00:00.000Z}
+      # Conservation du brut de lecture (PostImpression, PostEngagement), en
+      # jours — décision porteur #10510 : 25 mois par défaut. Illisible => défaut.
+      - RAW_READING_RETENTION_DAYS=${RAW_READING_RETENTION_DAYS:-760}
       # Variables d'initialisation des utilisateurs
       - FORCE_DB_RESET=${FORCE_DB_RESET:-false}
       - ADMIN_PASSWORD=${ADMIN_PASSWORD:?ADMIN_PASSWORD absente sur l hote. Vide, le compte ADMIN naitrait avec le mot de passe public admin123}

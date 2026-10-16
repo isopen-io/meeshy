@@ -18,7 +18,7 @@ extension BubbleStandardLayout {
                     .padding(.horizontal, MeeshySpacing.mdPlus)
                     .padding(.vertical, MeeshySpacing.sm)
                     .background(bubbleBackground)
-                    .clipShape(RoundedRectangle(cornerRadius: 18))
+                    .clipShape(RoundedRectangle(cornerRadius: MeeshyRadius.lgPlus))
                     .onTapGesture { openQuotedTarget(reply) }
             }
             emojiOnlyContent

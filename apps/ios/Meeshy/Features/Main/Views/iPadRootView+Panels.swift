@@ -211,7 +211,9 @@ struct iPadPanelDestination: View {
                 community: community,
                 onUpdated: { _ in rightPanelRoute = .communityDetail(community.id) },
                 onDeleted: { rightPanelRoute = nil },
-                onLeft: { rightPanelRoute = nil }
+                onLeft: { rightPanelRoute = nil },
+                // « Annuler » revient au détail de la communauté, comme le retour de pile sur iPhone.
+                onCancel: { rightPanelRoute = .communityDetail(community.id) }
             )
         case .communityMembers(let communityId):
             CommunityMembersView(

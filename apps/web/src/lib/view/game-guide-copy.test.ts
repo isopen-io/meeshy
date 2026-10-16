@@ -30,8 +30,7 @@ const EVENTS: Readonly<Record<GuideMomentKey, GuideEvent>> = {
   'new-tier': { kind: 'new-tier', tier: 'lueur', nextTierLevel: 20 },
   'missions-unlocked': { kind: 'missions-unlocked' },
   'first-mint-possible': { kind: 'first-mint-possible', price: 1221, levelsLost: 5, gloryGain: 100 },
-  'first-mint': { kind: 'first-mint', levelBefore: 14, levelAfter: 9, tailwindUntilLevel: 14 },
-  'badge-extinguished': { kind: 'badge-extinguished', missingActions: 37 },
+  'first-mint': { kind: 'first-mint' },
   'price-rises': { kind: 'price-rises', nextPrice: 1294 },
   'new-rank': { kind: 'new-rank', rank: 'voix', division: 2, glory: 1700, gloryMissing: 300 },
   'treasury-tier': { kind: 'treasury-tier', tier: 'escarcelle', nextTierMissing: 40 },
@@ -65,33 +64,28 @@ describe('chaque moment du catalogue a ses quatre parties', () => {
 
 describe('les chiffres du moment se disent', () => {
   test('premier niveau : ce qu’il manque pour le suivant', () => {
-    expect(copyOf('first-level').next).toContain('50 points');
+    expect(copyOf('first-level').next).toContain('50 étincelles');
     expect(copyOf('first-level').next).toContain('niveau 3');
   });
   test('première frappe possible : le prix, les niveaux perdus, la Gloire', () => {
     const copy = copyOf('first-mint-possible');
-    expect(copy.means).toContain('1 221 points');
-    expect(copy.means).toContain('5 niveaux');
+    expect(copy.means).toContain('1 221 étincelles');
+    expect(copy.means).toContain('sans baisser ton niveau');
     expect(copy.means).toContain('+100 de Gloire');
   });
-  test('un seul niveau perdu s’accorde au singulier', () => {
+  test('la frappe ne fait plus baisser le niveau : le nombre de niveaux perdus ne se dit plus', () => {
     const moment = guideMoment({ kind: 'first-mint-possible', price: 1221, levelsLost: 1, gloryGain: 100 }, []);
-    expect(momentCopy(moment, 'fr').means).toContain('1 niveau,');
+    expect(momentCopy(moment, 'fr').means).not.toContain('1 niveau,');
+    expect(momentCopy(moment, 'fr').means).toContain('sans baisser ton niveau');
   });
-  test('première frappe : 14 → 9 et le Vent arrière', () => {
+  test('première frappe : la poche seule paie, le niveau ne bouge pas, plus de Vent arrière', () => {
     const copy = copyOf('first-mint');
-    expect(copy.means).toContain('de 14 à 9');
-    expect(copy.means).toContain('Vent arrière');
-    expect(copy.next).toContain('niveau 14');
-  });
-  test('un badge éteint : la distance pour le rallumer', () => {
-    expect(copyOf('badge-extinguished').next).toContain('37 actions');
-  });
-  test('un seul pas pour rallumer', () => {
-    expect(momentCopy(guideMoment({ kind: 'badge-extinguished', missingActions: 1 }, []), 'fr').next).toContain('1 action ');
+    expect(copy.means).toContain('ton niveau ne bouge pas');
+    expect(copy.means).not.toContain('Vent arrière');
+    expect(copy.means).not.toContain('de 14 à 9');
   });
   test('le prix monte : la prochaine', () => {
-    expect(copyOf('price-rises').next).toContain('1 294 points');
+    expect(copyOf('price-rises').next).toContain('1 294 étincelles');
   });
   test('nouveau rang : le nom, la division', () => {
     expect(copyOf('new-rank').what).toContain('Voix II');

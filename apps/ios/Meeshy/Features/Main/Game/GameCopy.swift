@@ -27,20 +27,17 @@ enum GameCopy {
         count.formatted(.number)
     }
 
+    /// « 976 étincelles » — UNE clé aux variations plurielles du catalogue (#10846) : chaque langue y dit ses formes,
+    /// dont les six de l'arabe. Le nombre est un entier, formaté selon la langue.
     static func points(_ count: Int) -> String {
-        let number = formatCount(count)
-        return isSingular(count)
-            ? String(localized: "game.points.one", defaultValue: "\(number) point", bundle: .main)
-            : String(localized: "game.points.other", defaultValue: "\(number) points", bundle: .main)
+        String(localized: "game.sparks.count", defaultValue: "\(count) étincelles", bundle: .main)
     }
 
     /// « 5 823 points à convertir » — le SECOND solde (#10540) : la part des points que la frappe peut reprendre, seule
     /// à payer une Meesh. Les points EN POCHE (`points`) font le niveau ; les deux soldes ont deux noms stables.
+    /// « 976 étincelles convertibles » — même clé plurielle que `points`.
     static func convertiblePoints(_ count: Int) -> String {
-        let number = formatCount(count)
-        return isSingular(count)
-            ? String(localized: "game.points.convertible.one", defaultValue: "\(number) point à convertir", bundle: .main)
-            : String(localized: "game.points.convertible.other", defaultValue: "\(number) points à convertir", bundle: .main)
+        String(localized: "game.sparks.convertible.count", defaultValue: "\(count) étincelles convertibles", bundle: .main)
     }
 
     /// « Gloire 1 800 » — une quantité de Gloire, déjà formatée.
@@ -494,6 +491,10 @@ enum GameCopy {
             String(localized: "game.error.insufficient_points", defaultValue: "Pas assez de points à convertir pour frapper une Meesh.", bundle: .main)
         case .insufficientMeeshes:
             String(localized: "game.error.insufficient_meeshes", defaultValue: "Il te faut une Meesh de plus pour ça.", bundle: .main)
+        case .mintBlockedByDebt:
+            String(localized: "game.mint.blocked.debt_plain", defaultValue: "Une dette d’étincelles bloque la frappe : tes prochains gains la règlent d’abord.", bundle: .main)
+        case .treasuryLocked:
+            String(localized: "game.error.treasury_locked", defaultValue: "Cette Meesh entrerait dans une réserve que ton rang n’ouvre pas encore.", bundle: .main)
         case .freezeAtMaximum:
             String(localized: "game.error.freeze_at_maximum", defaultValue: "Tu as déjà deux gels en réserve : c’est le maximum.", bundle: .main)
         case .relightNotAllowed:

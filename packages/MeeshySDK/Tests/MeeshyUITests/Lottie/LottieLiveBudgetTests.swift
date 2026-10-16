@@ -87,4 +87,40 @@ final class LottieLiveBudgetTests: XCTestCase {
         XCTAssertTrue(next.live)
         XCTAssertEqual(budget.holders, 1)
     }
+
+    // MARK: - La place d'une couche se démonte hors d'une tâche
+
+    /// `LottieLiveSlot` vit et meurt avec chaque anneau d'avatar et chaque décor
+    /// animé qui défile. Sa `deinit` écrite, sans `nonisolated`, était isolée au
+    /// MainActor (SE-0466) : démontée hors d'une tâche — une vue retirée, ce
+    /// test synchrone — elle double-libérait sur iOS 26.1 (#9694, a409c4eaa5
+    /// avait corrigé le budget, pas la place).
+    func test_aSlotDroppedOutsideATask_releasesItsPlace() async {
+        let budget = LottieLiveBudget(max: 1)
+        Self.dropAPlayingSlot(on: budget)
+        for _ in 0..<20 where budget.holders > 0 { await Task.yield() }
+        XCTAssertEqual(budget.holders, 0, "la place rendue sert à la couche suivante")
+    }
+
+    /// Le cas du défaut lui-même : la dernière référence lâchée SANS tâche courante.
+    func test_aSlotDroppedInASynchronousTest_doesNotCrash() {
+        Self.dropAPlayingSlot(on: LottieLiveBudget(max: 1))
+    }
+
+    private static func dropAPlayingSlot(on budget: LottieLiveBudget) {
+        var slot: LottieLiveSlot? = LottieLiveSlot(budget: budget)
+        slot?.wantsToPlay(true)
+        XCTAssertEqual(budget.holders, 1)
+        slot = nil
+    }
+
+    func test_theSlotDeinit_isNonisolated() throws {
+        let url = URL(fileURLWithPath: #filePath)
+            .deletingLastPathComponent().deletingLastPathComponent().deletingLastPathComponent().deletingLastPathComponent()
+            .appendingPathComponent("Sources/MeeshyUI/Lottie/LottieLiveBudget.swift")
+        let code = try String(contentsOf: url, encoding: .utf8)
+        let written = code.components(separatedBy: "deinit {").count - 1
+        let nonisolated = code.components(separatedBy: "nonisolated deinit {").count - 1
+        XCTAssertEqual(written, nonisolated, "toute deinit de ce fichier est nonisolated")
+    }
 }

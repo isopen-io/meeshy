@@ -91,7 +91,6 @@ function surfaces(): Surfaces {
         <GameMintPreview
           mint={game.mint}
           held={game.level.score}
-          badgesLost={2}
           online
           minting={false}
           celebration={null}
@@ -103,7 +102,7 @@ function surfaces(): Surfaces {
     moment: text(
       renderToStaticMarkup(
         <GameGuideCard
-          card={cardOfMoment(guideMoment({ kind: 'first-mint', levelBefore: 14, levelAfter: 9, tailwindUntilLevel: 14 }, []))}
+          card={cardOfMoment(guideMoment({ kind: 'first-mint' }, []))}
           onAction={() => undefined}
           onDismiss={() => undefined}
           onPhoto={() => undefined}

@@ -225,9 +225,28 @@ struct RootIntentRoutingLayer: ViewModifier {
     let isKnownConversation: (String) -> Bool
     let onSendMessageToUser: (Notification) -> Void
     let onPushNavigateToRoute: (Notification) -> Void
+    @Environment(\.rootNavigationHandoff) private var navigationHandoff
+    @State private var rootToken = UUID()
+
+    /// Rouvre le composer de story démonté avec la racine précédente, sur son brouillon (une fois).
+    private func reopenTornDownComposer() {
+        guard let draftId = navigationHandoff?.takeComposerToReopen(
+            presentingComposer: storyViewModel.showStoryComposer, root: rootToken) else { return }
+        storyViewModel.openComposer(resumingDraftId: draftId)
+    }
 
     func body(content: Content) -> some View {
         content
+            .onAppear {
+                navigationHandoff?.rootAppeared(rootToken)
+                reopenTornDownComposer()
+            }
+            .onDisappear { navigationHandoff?.rootDisappeared(rootToken) }
+            // Démontage annoncé APRÈS le montage de cette racine : l'ordre des deux n'est pas garanti.
+            // Différé d'un tour, pour que `AdaptiveRootView` ait noté le brouillon.
+            .onReceive(NotificationCenter.default.publisher(for: .storyComposerTornDown)) { _ in
+                DispatchQueue.main.async { reopenTornDownComposer() }
+            }
             .onReceive(NotificationCenter.default.publisher(for: .navigateToConversation)) { notification in
                 if let conversation = notification.object as? Conversation {
                     onNavigateToConversation(conversation)

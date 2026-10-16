@@ -536,7 +536,7 @@ struct GameLawTests {
         let events: [GuideEvent] = [
             .firstLevel(level: 2, pointsToNext: 50), .newTier(tier: .lueur, nextTierLevel: 20), .missionsUnlocked,
             .firstMintPossible(price: 1221, levelsLost: 5, gloryGain: 100),
-            .firstMint(levelBefore: 14, levelAfter: 9, tailwindUntilLevel: 14), .badgeExtinguished(missingActions: 37),
+            .firstMint,
             .priceRises(nextPrice: 1294), .newRank(rank: .mythe, division: nil, glory: 200_000, gloryMissing: nil),
             .treasuryTier(tier: .escarcelle, nextTierMissing: 40), .flameAtRisk(days: 12),
             .flameOut(lostDays: 12, relightPrice: 3, canRelight: true), .returnAfterAbsence(daysAway: 9),

@@ -361,7 +361,7 @@ struct FocalRow: View {
         // mesuré en recette le 2026-09-23. `.frame(maxWidth:)` ÉTEND, il ne
         // borne pas : tout modificateur visuel monté après lui hérite de
         // l'écran, pas du contenu.
-        .messageEffects(input.effects)
+        .messageEffects(RainbowLetters.rowEffects(input.effects))
         // La bulle prend toute la laisse que la colonne lui laisse : sans cela
         // une rangée courte se rétracterait sur son texte et sa date viendrait
         // se coller au mot, au lieu de tenir la marge droite comme les autres.
@@ -730,7 +730,9 @@ struct FocalRow: View {
                 // `isFocused` (decisions.md 2026-08-22 bis) : seul le
                 // dépliage, geste explicite, change la hauteur — et l'hôte
                 // l'anime sans saut de défilement (#8147).
-                expansion: expansion
+                expansion: expansion,
+                // L'arc-en-ciel de la rangée plate colore les LETTRES (aucune bulle à entourer).
+                rainbowSeed: RainbowLetters.seed(for: input.effects, messageId: input.localId)
             )
             .equatable()
             .lineSpacing(FocalMetrics.Text.lineSpacing(forResolvedFontSize: textSize))

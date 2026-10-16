@@ -115,7 +115,7 @@ describe('seulement ce qui a du sens (#9536)', () => {
 
   test('toujours une phrase lue, y compris au niveau 1', async () => {
     const host = await mount(<PlayerBanner model={level1()} />);
-    expect(host.querySelector('a[data-player-banner]')?.getAttribute('aria-label')).toBe(playerBannerLabel(level1(), 'fr'));
+    expect(host.querySelector('[data-player-banner]')?.getAttribute('aria-label')).toBe(playerBannerLabel(level1(), 'fr'));
   });
 });
 
@@ -148,26 +148,80 @@ describe('le décor', () => {
 });
 
 describe('accessible', () => {
-  test('UN seul élément lu, nommé d’une phrase complète ; tout le reste est caché au lecteur d’écran', async () => {
+  test('le conteneur est un GROUPE nommé d\'une phrase complète — jamais un lien, des liens ne s\'imbriquent pas', async () => {
     const model = modelOf(gameBlockWithExtrasFixture({ balance: 12, streak: 23 }));
     const host = await mount(<PlayerBanner model={model} />);
-    const link = host.querySelector('a[data-player-banner]');
-    expect(link?.getAttribute('aria-label')).toBe(playerBannerLabel(model, 'fr'));
-    for (const child of Array.from(link?.children ?? [])) expect(child.getAttribute('aria-hidden')).toBe('true');
+    const group = host.querySelector('[data-player-banner]');
+    expect(group?.tagName).toBe('DIV');
+    expect(group?.getAttribute('role')).toBe('group');
+    expect(group?.getAttribute('aria-label')).toBe(playerBannerLabel(model, 'fr'));
+    expect(host.querySelectorAll('a a').length).toBe(0);
   });
 
-  test('une cible d’au moins 44 px', () => {
+  test('chaque pièce est UN lien nommé ; ses enfants sont cachés au lecteur d\'écran', async () => {
+    const model = modelOf(gameBlockWithExtrasFixture({ balance: 12, streak: 23 }));
+    const host = await mount(<PlayerBanner model={model} />);
+    const links = Array.from(host.querySelectorAll('a[data-player-banner-link]'));
+    expect(links.length).toBeGreaterThanOrEqual(4);
+    for (const link of links) {
+      expect((link.getAttribute('aria-label') ?? '').length > 0).toBe(true);
+      for (const child of Array.from(link.children)) expect(child.getAttribute('aria-hidden')).toBe('true');
+    }
+  });
+
+  test('une cible d’au moins 44 px : le bandeau (56) et chaque lien', async () => {
     expect(markup(newcomer())).toMatch(/data-player-banner=""[^>]*min-height:(4[4-9]|[5-9]\d)px/);
+    const host = await mount(<PlayerBanner model={modelOf(gameBlockWithExtrasFixture({ balance: 12, streak: 23 }))} />);
+    for (const link of Array.from(host.querySelectorAll('a[data-player-banner-link]'))) {
+      expect(link.getAttribute('style') ?? '').toMatch(/min-height:\s*(4[4-9]|[5-9]\d)px/);
+    }
   });
 });
 
-describe('le toucher', () => {
-  /* Carte de navigation (#9563, amendement n° 4) : une entrée extérieure ouvre la fiche du concept — l'anneau et sa jauge, la fiche du Niveau. */
-  test('un toucher ouvre la fiche du Niveau', async () => {
+describe('le toucher : chaque pièce ouvre SA fiche (porteur 2026-10-16)', () => {
+  /* Carte de navigation (#9563, amendement n° 4) : une entrée extérieure ouvre la fiche du concept. */
+  const hrefOf = (host: ParentNode, concept: string): string | null => host.querySelector(`a[data-player-banner-link="${concept}"]`)?.getAttribute('href') ?? null;
+
+  test('l\'anneau ouvre le Niveau, la jauge et ses étincelles le concept des étincelles (points)', async () => {
     const host = await mount(<PlayerBanner model={newcomer()} />);
-    const link = host.querySelector<HTMLAnchorElement>('a[data-player-banner]');
-    expect(link?.getAttribute('href')).toBe('/me/progression/concept/level');
-    await click(link);
+    expect(hrefOf(host, 'level')).toBe('/me/progression/concept/level');
+    expect(hrefOf(host, 'points')).toBe('/me/progression/concept/points');
+  });
+
+  test('Meeshes → meesh, rang → glory, ligue → league, Flamme → flame', async () => {
+    const model: PlayerBannerModel = {
+      ...newcomer(),
+      meeshes: 3,
+      rank: { rank: 'murmure', division: 3, mythic: null },
+      league: { league: 'jade', place: 4 },
+      flame: { form: 'braise', days: 3 },
+    };
+    const host = await mount(<PlayerBanner model={model} />);
+    expect(hrefOf(host, 'meesh')).toBe('/me/progression/concept/meesh');
+    expect(hrefOf(host, 'glory')).toBe('/me/progression/concept/glory');
+    expect(hrefOf(host, 'league')).toBe('/me/progression/concept/league');
+    expect(hrefOf(host, 'flame')).toBe('/me/progression/concept/flame');
+  });
+
+  test('les trophées → showcase, la mission du jour → missions, la saison → season, avec un nom accessible par pièce', async () => {
+    const model: PlayerBannerModel = { ...newcomer(), trophies: 2, missions: { done: 1, total: 3 }, season: { stars: 25 } };
+    const host = await mount(<PlayerBanner model={model} />);
+    expect(hrefOf(host, 'showcase')).toBe('/me/progression/concept/showcase');
+    expect(hrefOf(host, 'missions')).toBe('/me/progression/concept/missions');
+    expect(hrefOf(host, 'season')).toBe('/me/progression/concept/season');
+    expect(host.querySelector('a[data-player-banner-link="showcase"]')?.getAttribute('aria-label')).toBe('Trophées : 2');
+    expect(host.querySelector('a[data-player-banner-link="missions"]')?.getAttribute('aria-label')).toBe('Missions du jour : 1 sur 3');
+    expect(host.querySelector('a[data-player-banner-link="season"]')?.getAttribute('aria-label')).toBe('Saison : 25 étoiles');
+  });
+
+  test('une pièce absente n\'a pas de lien', async () => {
+    const host = await mount(<PlayerBanner model={newcomer()} />);
+    for (const concept of ['meesh', 'glory', 'league', 'flame', 'showcase', 'missions', 'season']) expect(hrefOf(host, concept)).toBeNull();
+  });
+
+  test('un toucher sur l\'anneau ouvre la fiche du Niveau', async () => {
+    const host = await mount(<PlayerBanner model={newcomer()} />);
+    await click(host.querySelector('a[data-player-banner-link="level"]'));
     expect(window.location.pathname).toBe('/me/progression/concept/level');
   });
 });
@@ -287,10 +341,11 @@ describe('le chiffre qui roule et le reflet d’un niveau', () => {
 });
 
 describe('aux très grandes tailles de texte', () => {
+  /** L'ordre des liens de la rangée : l'anneau (Niveau), puis la jauge (Étincelles). */
   const ordered = (host: ParentNode): readonly string[] =>
-    Array.from(host.querySelectorAll('[data-player-banner] > *'))
-      .map((child) => (child as HTMLElement).dataset)
-      .flatMap((data) => Object.keys(data).filter((key) => /^playerBanner(Ring|Gauge)$/.test(key)));
+    Array.from(host.querySelectorAll('[data-player-banner] > a[data-player-banner-link]'))
+      .map((link) => (link as HTMLElement).dataset.playerBannerLink ?? '')
+      .filter((concept) => concept === 'level' || concept === 'points');
 
   test('la jauge passe sous l’anneau : elle prend toute la ligne, après le reste', async () => {
     const m = motion({ largeText: true });
@@ -298,9 +353,12 @@ describe('aux très grandes tailles de texte', () => {
     const link = host.querySelector('[data-player-banner]');
     expect(link?.getAttribute('data-large-text')).toBe('');
     const gauge = host.querySelector<HTMLElement>('[data-player-banner-gauge]');
+    // Le LIEN de la jauge — l'élément posé dans la rangée — prend toute la ligne et passe en second.
+    const gaugeLink = host.querySelector<HTMLElement>('a[data-player-banner-link="points"]');
+    expect(gaugeLink?.className).toContain('basis-full');
+    expect(gaugeLink?.style.order).toBe('2');
     expect(gauge?.className).toContain('basis-full');
-    expect(gauge?.style.order).toBe('2');
-    expect(ordered(host)).toEqual(['playerBannerRing', 'playerBannerGauge']);
+    expect(ordered(host)).toEqual(['level', 'points']);
   });
 
   test('au texte ordinaire : la jauge reste à côté de l’anneau', async () => {

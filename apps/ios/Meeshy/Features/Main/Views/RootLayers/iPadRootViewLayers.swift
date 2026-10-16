@@ -367,14 +367,14 @@ struct iPadCoversAndChromeLayer: ViewModifier {
                 .meeshyConversationList(conversationViewModel)
                 .environmentObject(storyViewModel)
             }
-            .overlay(alignment: .top) {
+            .overlay(alignment: .bottom) {
                 ConnectionBanner(
                     conversationListViewModel: conversationViewModel,
                     isStoryViewerPresenting: storyViewerCoordinator.pendingRequest != nil,
                     onItemTap: onSyncPillTap,
                     activeConversationId: activeConversationIdForBanner
                 )
-                // Au centre de la barre d'état, libre sur iPad (#9680).
+                // Au-dessus du chrome bas, comme sur iPhone (#10840).
                 .inSyncPillBand()
             }
             .modifier(CallPresentationLayer(
@@ -385,7 +385,7 @@ struct iPadCoversAndChromeLayer: ViewModifier {
                 playerBannerHosted: PlayerBannerPlacement.hostsOnTablet(
                     conversationIsOpen: activeConversationId != nil, panelRoute: rightPanelRoute,
                     reelsAreOpen: reelsPresenter.launch != nil),
-                onPlayerBannerTap: { router.openGame(at: .progressionConcept(.level)) }
+                onPlayerBannerTap: { router.openGame(at: .progressionConcept($0.concept)) }
             ))
             // L'onboarding post-inscription (#7729) — le même hôte que sur
             // iPhone, au même rang : APRÈS la pastille et la présentation

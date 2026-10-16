@@ -109,11 +109,10 @@ final class ConversationInfoSheetLiveConversationTests: XCTestCase {
             "enregistrer."
         )
         XCTAssertTrue(
-            nearLayer.contains("onConversationUpdated: { conversationOverride = $0 }"),
-            "Le site de montage doit stocker la conversation confirmée dans `conversationOverride` " +
-            "— avec `admitPeerUpdate` (le pair d'un direct repeint à `user:updated`, #9359), c'est " +
-            "l'un des deux seuls écrivains de cet état, les deux moments où le serveur dit ce que " +
-            "l'écran doit désormais afficher."
+            nearLayer.contains("onConversationUpdated: { admitRepainted($0) }"),
+            "Le site de montage remet la conversation confirmée à `admitRepainted` — depuis #10751 le " +
+            "SEUL écrivain de `conversationOverride` (`ConversationViewRepaintRevisionGuardTests`), " +
+            "qui avance aussi la révision : un second enregistrement, même id, ne redessinait rien."
         )
 
         let nearSheet = try vicinity(after: "ConversationInfoSheet(", in: layer, span: 300)
@@ -135,7 +134,8 @@ final class ConversationInfoSheetLiveConversationTests: XCTestCase {
             "d'un écran dont le paramètre `conversation` est figé à la navigation."
         )
         XCTAssertTrue(
-            view.contains("var liveConversation: Conversation? { conversationOverride ?? conversation }"),
+            view.contains("var liveConversation: Conversation? {")
+                && view.contains("return conversationOverride ?? conversation }"),
             "`liveConversation` résout l'override D'ABORD, la valeur figée ensuite, et reste " +
             "`internal` : l'extension `ConversationView+Header` vit dans un autre fichier, où un " +
             "`private` serait inaccessible."

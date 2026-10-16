@@ -136,7 +136,11 @@ public struct SwipeableRow<Content: View>: View {
                 )
                 .simultaneousGesture(swipeGesture)
         }
-        .clipped()
+        // Rognage HORIZONTAL seulement (#10835) : il masque les fonds d'action
+        // qui glissent sous la rangée, jamais ce qu'une rangée dessine au-dessus
+        // ou au-dessous de sa hauteur de layout (la rangée en focus de la liste
+        // y pose ses chips de catégorie, d'étiquettes, de mode et d'effectif).
+        .clipShape(SwipeableRowClip())
         .background { if openOffset != 0 { openFrameReader } }
         .onPreferenceChange(SwipeOpenRowFrameKey.self) { frame in
             MainActor.assumeIsolated { coordinator.rowFrameDidChange(rowID, frame: frame) }
@@ -300,5 +304,21 @@ private struct SwipeOpenRowFrameKey: PreferenceKey {
     static func reduce(value: inout CGRect, nextValue: () -> CGRect) {
         let next = nextValue()
         if !next.isNull { value = next }
+    }
+}
+
+// MARK: - Rognage de la rangée (#10835)
+
+/// Le rectangle de la rangée, prolongé loin au-dessus et au-dessous : il
+/// rogne sur l'axe du glissement (les fonds d'action ne débordent pas sur les
+/// côtés) et laisse la rangée dessiner hors de sa hauteur de layout.
+nonisolated public struct SwipeableRowClip: Shape {
+    /// Assez pour toute rangée de liste, quelle que soit la taille de texte.
+    static let verticalReach: CGFloat = 10_000
+
+    public init() {}
+
+    public func path(in rect: CGRect) -> Path {
+        Path(rect.insetBy(dx: 0, dy: -Self.verticalReach))
     }
 }

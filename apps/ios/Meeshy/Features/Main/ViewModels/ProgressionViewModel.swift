@@ -213,12 +213,11 @@ final class ProgressionViewModel: ObservableObject {
             await load(forceNetwork: true)
         } catch {
             restore(before)
-            if GameService.refusal(of: error) == .requestIdConflict { mintRequestId = UUID().uuidString }
-            mintError = String(
-                localized: "progression.meesh.mint_error",
-                defaultValue: "La frappe n'a pas abouti — réessayez",
-                bundle: .main
-            )
+            let refusal = GameService.refusal(of: error)
+            if refusal == .requestIdConflict { mintRequestId = UUID().uuidString }
+            // La dette (ffbc396c92) et la réserve fermée se DISENT ; la relecture montre ensuite le blocage à l'écran.
+            mintError = GameMintCostCopy.mintFailureMessage(code: refusal, debt: game?.mint.sparksDebt ?? game?.level.sparksDebt)
+            if refusal == .mintBlockedByDebt || refusal == .treasuryLocked { await load(forceNetwork: true) }
         }
         endGesture()
         isMinting = false
@@ -282,17 +281,10 @@ final class ProgressionViewModel: ObservableObject {
         commit(state, over: undo.before)
     }
 
-    /// Ce que la prochaine frappe éteindrait, calculé sur les compteurs servis avec le prix de CETTE
-    /// frappe ; `nil` quand le serveur ne sert pas les points par axe — « inconnu » ne se dit pas « aucun ».
-    var mintBadgeImpact: MintBadgeImpact? {
-        guard let snapshot, let game else { return nil }
-        return GameMintBadgeImpact.impact(counters: snapshot.counters, price: game.mint.price)
-    }
-
     /// Le guide et les propositions de photo lisent le jeu, mais seulement RÉGLÉ.
     func observeGame() {
         guard let game else { return }
-        guide.observe(game: game, settled: isSettled, badgeImpact: mintBadgeImpact)
+        guide.observe(game: game, settled: isSettled)
         photos.observe(game: game, settled: isSettled)
     }
 

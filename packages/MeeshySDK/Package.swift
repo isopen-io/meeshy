@@ -69,9 +69,22 @@ let package = Package(
             ],
             swiftSettings: uiSwiftSettings
         ),
+        // #10854 — le sceau réseau de CHAQUE bundle de test du package. Cible
+        // de support : dépendance des seules cibles de test, jamais d'un
+        // produit livré. Le chargeur C pose un constructeur qui s'exécute au
+        // chargement du bundle, avant la première classe de test.
+        .target(
+            name: "MeeshyTestSupportLoader",
+            path: "Sources/MeeshyTestSupportLoader"
+        ),
+        .target(
+            name: "MeeshyTestSupport",
+            dependencies: ["MeeshySDK", "MeeshyTestSupportLoader"],
+            swiftSettings: coreSwiftSettings
+        ),
         .testTarget(
             name: "MeeshySDKTests",
-            dependencies: ["MeeshySDK"],
+            dependencies: ["MeeshySDK", "MeeshyTestSupport"],
             swiftSettings: coreSwiftSettings
         ),
         .testTarget(
@@ -79,6 +92,7 @@ let package = Package(
             dependencies: [
                 "MeeshyUI",
                 "MeeshySDK",
+                "MeeshyTestSupport",
                 .product(name: "SnapshotTesting", package: "swift-snapshot-testing"),
             ],
             exclude: ["__Snapshots__"],

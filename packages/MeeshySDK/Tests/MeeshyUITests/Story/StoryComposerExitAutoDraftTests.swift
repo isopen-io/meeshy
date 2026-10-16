@@ -161,8 +161,9 @@ final class StoryComposerExitAutoDraftTests: XCTestCase {
         let view = try ComposerSourceGuard.source("StoryComposerView.swift")
 
         XCTAssertEqual(
-            ComposerSourceGuard.occurrences(of: "autoSaveDraftOnInterruption()", in: view), 2,
-            "Deux entrées — le background (D1) et le 426 (C6b) — un seul appel chacune."
+            ComposerSourceGuard.occurrences(of: "autoSaveDraftOnInterruption()", in: view), 3,
+            "Trois entrées — le background (D1), le 426 (C6b) et le démontage sans sortie demandée "
+            + "(fenêtre d'iPad compact ↔ regular, `teardownKeepsDraft`) — un seul appel chacune."
         )
         for bypass in ["persistDraft()", "saveDraft()", "StoryDraftStore"] {
             XCTAssertEqual(

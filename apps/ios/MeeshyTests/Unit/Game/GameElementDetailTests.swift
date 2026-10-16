@@ -351,7 +351,8 @@ final class GameElementDetailTests: XCTestCase {
         let detail = GameElementDetails.levelRing(game.level)
 
         XCTAssertEqual(detail.status, .value(GameCopy.levelToNext(remaining: 1_301, nextLevel: 28), progress: game.level.shown.progress))
-        XCTAssertEqual(detail.facts.first, ProgressionConceptFact(label: ConceptText.factHeld, value: GameCopy.points(77_099)))
+        // La poche (#10846) : sans étincelles servies (fixture d'un serveur antérieur), elle se lit sur `score`.
+        XCTAssertEqual(detail.facts.first, ProgressionConceptFact(label: GameSparksCopy.pocketLabel, value: GameCopy.points(77_099)))
         XCTAssertFalse(detail.facts.contains { $0.label == ConceptText.factNextLevel }, "hors plafond, le reste est dans la valeur")
     }
 

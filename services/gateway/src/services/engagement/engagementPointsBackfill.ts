@@ -1,6 +1,10 @@
 /**
  * LE REMPLISSAGE DES POINTS HISTORIQUES — #6434, option B du porteur (2026-09-14).
  *
+ * ⚠️ NE PLUS LANCER depuis les étincelles (#10846, 2026-10-16). Ce passage rétablit `engagementScore == Σ points`, un invariant
+ * que la frappe ne tient plus : elle dépense la poche seule et ne débite plus les compteurs par axe, qui disent désormais ce que
+ * chaque axe a rapporté. Relancé, il ABAISSERAIT des compteurs ou ALIGNERAIT le score sur eux. Conservé pour l'histoire et ses témoins.
+ *
  * ## Le défaut
  *
  * La frappe d'une Meesh se décide sur `Σ EngagementCounter.points` ; l'écran

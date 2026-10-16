@@ -184,13 +184,19 @@ extension UniversalComposerBar {
     private static let quickSendDefaultEmojis = ["😂", "❤️", "👍", "😮", "😢", "🔥"]
 
     private var quickSendEmojis: [String] {
-        EmojiUsageTracker.topEmojis(count: QuickEmojiGrid.count, defaults: Self.quickSendDefaultEmojis)
+        RecentEmojiHistory.row(history: RecentEmojiStore.load(), defaults: Self.quickSendDefaultEmojis)
     }
 
     @ViewBuilder
     private var quickEmojiButtons: some View {
+        // Trois et demi visibles, le reste au défilement (#10842). Défilement
+        // MAIN — mesuré au simulateur, un `ScrollView` posé ici ne défilait
+        // pas dans la conversation (les glissés arrivaient, la vue ne bougeait
+        // pas). Le glissé est prioritaire dès 8 pt : un émoji survolé au
+        // relâcher ne part jamais.
+        let emojis = QuickEmojiGrid.row(quickSendEmojis)
         HStack(spacing: QuickEmojiGrid.spacing) {
-            ForEach(QuickEmojiGrid.row(quickSendEmojis), id: \.self) { emoji in
+            ForEach(emojis, id: \.self) { emoji in
                 Button {
                     guard QuickEmojiArrivalGuard.acceptsTap(arrivedAt: quickEmojiArrivedAt, now: Date()) else { return }
                     sendQuickEmoji(emoji)
@@ -221,11 +227,29 @@ extension UniversalComposerBar {
                 .accessibilityIdentifier(MeeshyA11yID.composerQuickEmoji)
             }
         }
-        .frame(width: QuickEmojiGrid.frameWidth, height: QuickEmojiGrid.rowHeight)
+        .padding(.horizontal, QuickEmojiGrid.inset)
+        .fixedSize()
+        .offset(x: QuickEmojiGrid.clampedScroll(quickEmojiScroll + quickEmojiDrag, itemCount: emojis.count))
+        .frame(width: QuickEmojiGrid.frameWidth, height: QuickEmojiGrid.rowHeight, alignment: .leading)
+        .clipShape(RoundedRectangle(cornerRadius: MeeshyRadius.lg, style: .continuous))
+        .contentShape(Rectangle())
+        .highPriorityGesture(
+            DragGesture(minimumDistance: 8)
+                .onChanged { quickEmojiDrag = $0.translation.width }
+                .onEnded { value in
+                    let landing = QuickEmojiGrid.clampedScroll(quickEmojiScroll + value.predictedEndTranslation.width,
+                                                               itemCount: emojis.count)
+                    withAnimation(.spring(response: 0.35, dampingFraction: 0.85)) {
+                        quickEmojiScroll = landing
+                        quickEmojiDrag = 0
+                    }
+                }
+        )
         .adaptiveLiquidGlass(in: RoundedRectangle(cornerRadius: MeeshyRadius.lg, style: .continuous))
         // La rangée revient à l'emplacement même du bouton d'envoi : le second
         // appui d'un double appui sur « Envoyer » tombe sur elle (#7985).
-        .onAppear { quickEmojiArrivedAt = Date() }
+        // …et elle revient au DÉBUT : le dernier émoji employé est le premier.
+        .onAppear { quickEmojiArrivedAt = Date(); quickEmojiScroll = 0 }
     }
 
     /// Envoi direct d'un emoji : pose `text` puis réutilise `handleSend()` —
@@ -254,6 +278,7 @@ extension UniversalComposerBar {
     /// au prochain rendu, donc ce second `onChange` ne se déclenche jamais.
     private func sendQuickEmoji(_ emoji: String) {
         EmojiUsageTracker.recordUsage(emoji: emoji)
+        quickEmojiScroll = 0
         text = emoji
         textBinding?.wrappedValue = emoji
         handleSend()
@@ -340,6 +365,7 @@ extension UniversalComposerBar {
 
     func handleSend() {
         onAnyInteraction?()
+        RecentEmojiStore.record(RecentEmojiHistory.emojis(in: text))
 
         // Custom send (edit mode, recording, or parent-managed send)
         if let onCustomSend {

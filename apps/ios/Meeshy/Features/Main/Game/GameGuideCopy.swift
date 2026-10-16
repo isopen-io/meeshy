@@ -42,8 +42,6 @@ enum GameGuideCopy {
         case .seeNextTier: String(localized: "game.guide.action.see_next_tier", defaultValue: "Voir le palier suivant", bundle: .main)
         case .openFirstMission: String(localized: "game.guide.action.open_first_mission", defaultValue: "Ouvrir ma première mission", bundle: .main)
         case .mintOrClimb: String(localized: "game.guide.action.mint_or_climb", defaultValue: "Voir l’aperçu de frappe", bundle: .main)
-        case .regainLevels: String(localized: "game.guide.action.regain_levels", defaultValue: "Reprendre mes niveaux", bundle: .main)
-        case .relightBadge: String(localized: "game.guide.action.relight_badge", defaultValue: "Voir mes badges", bundle: .main)
         case .seeMintPreview: String(localized: "game.guide.action.see_mint_preview", defaultValue: "Voir l’aperçu de frappe", bundle: .main)
         case .takePhoto: String(localized: "game.guide.action.take_photo", defaultValue: "Immortaliser ce moment", bundle: .main)
         case .keepOrSpend: String(localized: "game.guide.action.keep_or_spend", defaultValue: "Voir mon trésor", bundle: .main)
@@ -91,9 +89,9 @@ enum GameGuideCopy {
         case .firstMintPossible(let price, let levelsLost, let gloryGain):
             let cost = GameCopy.points(price)
             let glory = GameCopy.formatCount(gloryGain)
-            let means = levelsLost == 0
-                ? String(localized: "game.guide.moment.first_mint_possible.means_free", defaultValue: "Frapper coûte \(cost), sans te faire perdre un niveau, et rapporte +\(glory) de Gloire.", bundle: .main)
-                : String(localized: "game.guide.moment.first_mint_possible.means", defaultValue: "Frapper coûte \(cost), soit \(GameCopy.levels(levelsLost)), et rapporte +\(glory) de Gloire.", bundle: .main)
+            // La frappe ne fait plus perdre de niveau (#10846) : `levelsLost`, conservé par la loi partagée, vaut 0.
+            _ = levelsLost
+            let means = String(localized: "game.guide.moment.first_mint_possible.means_free", defaultValue: "Frapper coûte \(cost), sans te faire perdre un niveau, et rapporte +\(glory) de Gloire.", bundle: .main)
             return GuideCopy(
                 what: String(localized: "game.guide.moment.first_mint_possible.what", defaultValue: "Tu peux frapper ta première Meesh.", bundle: .main),
                 means: means,
@@ -101,24 +99,14 @@ enum GameGuideCopy {
                 short: String(localized: "game.guide.moment.first_mint_possible.short", defaultValue: "Une Meesh se frappe pour \(cost).", bundle: .main),
                 action: action
             )
-        case .firstMint(let levelBefore, let levelAfter, let tailwindUntilLevel):
-            let before = GameCopy.formatCount(levelBefore)
-            let after = GameCopy.formatCount(levelAfter)
-            let until = GameCopy.formatCount(tailwindUntilLevel)
+        // La première frappe (#10846) : elle ne fait plus baisser le niveau ni n'ouvre de Vent arrière — le moment n'a
+        // plus de niveaux à citer, et mène à la progression.
+        case .firstMint:
             return GuideCopy(
                 what: String(localized: "game.guide.moment.first_mint.what", defaultValue: "Tchak ! Ta première Meesh est frappée.", bundle: .main),
-                means: String(localized: "game.guide.moment.first_mint.means", defaultValue: "Ton niveau est passé de \(before) à \(after) : c’est la règle. Le Vent arrière est actif.", bundle: .main),
-                next: String(localized: "game.guide.moment.first_mint.next", defaultValue: "Reprends tes niveaux plus vite : tes points comptent 25 % de plus jusqu’au niveau \(until).", bundle: .main),
-                short: String(localized: "game.guide.moment.first_mint.short", defaultValue: "Niveau \(before) → \(after). Le Vent arrière t’aide jusqu’au niveau \(until).", bundle: .main),
-                action: action
-            )
-        case .badgeExtinguished(let missingActions):
-            let count = GameCopy.actions(missingActions)
-            return GuideCopy(
-                what: String(localized: "game.guide.moment.badge_extinguished.what", defaultValue: "Un badge s’est éteint.", bundle: .main),
-                means: String(localized: "game.guide.moment.badge_extinguished.means", defaultValue: "Il est devenu une empreinte : rien n’est perdu pour toujours.", bundle: .main),
-                next: String(localized: "game.guide.moment.badge_extinguished.next", defaultValue: "Encore \(count) pour le rallumer.", bundle: .main),
-                short: String(localized: "game.guide.moment.badge_extinguished.short", defaultValue: "Un badge s’est éteint : \(count) pour le rallumer.", bundle: .main),
+                means: String(localized: "game.guide.moment.first_mint.means", defaultValue: "La frappe ne fait plus baisser ton niveau : tes étincelles déjà gagnées restent acquises.", bundle: .main),
+                next: String(localized: "game.guide.moment.first_mint.next", defaultValue: "Tes prochaines étincelles te font monter : regarde ta progression.", bundle: .main),
+                short: String(localized: "game.guide.moment.first_mint.short", defaultValue: "Première Meesh frappée : ton niveau reste acquis.", bundle: .main),
                 action: action
             )
         case .priceRises(let nextPrice):

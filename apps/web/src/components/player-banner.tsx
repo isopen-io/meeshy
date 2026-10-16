@@ -18,9 +18,10 @@ import { tierTint } from '@/lib/game/tier-emblem';
 import { loadGameScreenCatalog, suspendForGameCatalog, translateGame } from '@/lib/i18n-game-catalog';
 import { currentInterfaceLanguage } from '@/lib/interface-language';
 import { formatCount } from '@/lib/view/game-copy';
-import { isLargeText, leaguePlace, playerBannerLabel, playerBannerModel, type PlayerBannerLevel, type PlayerBannerModel } from '@/lib/view/player-banner';
+import { isLargeText, leaguePlace, playerBannerLabel, playerBannerModel, playerBannerPieceLabels, type PlayerBannerLevel, type PlayerBannerModel } from '@/lib/view/player-banner';
 import { playerBannerVisitStore, reportPlayerBannerShown } from '@/lib/view/player-banner-visit';
 import { Link } from '@/routes/route-table';
+import type { ProgressionConcept } from '@meeshy/shared/utils/progression-layout';
 
 import { Flame } from './game/flame';
 import { GameEffectLayer } from './game/game-effect-layer';
@@ -29,6 +30,7 @@ import { LevelRing } from './game/level-ring';
 import { MeeshCoin } from './game/meesh-coin';
 import { RankBlason } from './game/rank-blason';
 import { Signature } from './game/signature';
+import { Trophy } from './game/trophy';
 import { useChoreography } from './game/use-choreography';
 import { useRollingNumber, type RollEnv } from './game/use-rolling-number';
 
@@ -54,12 +56,13 @@ import '@/styles/player-banner.css';
  * `prefers-reduced-motion`. Aux très grandes tailles de texte (au-delà de XXL)
  * la jauge passe sous l'anneau.
  *
- * UN seul élément lu par le lecteur d'écran : le lien vers la fiche du Niveau
- * (carte de navigation de #9563 : une entrée extérieure ouvre la fiche du
- * concept, ici l'anneau et sa jauge, jamais la racine), nommé
- * d'une phrase complète (`playerBannerLabel`) ; ses enfants sont des dessins
- * et des chiffres cachés (`aria-hidden`), puisque la phrase dit tout. Cible de
- * 56 px de haut.
+ * CHAQUE PIÈCE EST UN LIEN vers sa fiche (porteur, 2026-10-16 ; carte de navigation de #9563 : une entrée extérieure
+ * ouvre la fiche du concept, jamais la racine) : l'anneau → le Niveau, la jauge et ses étincelles → les Étincelles (`points`),
+ * les Meeshes → la Meesh, le blason → la Gloire, la gemme → la Ligue, la Flamme → la Flamme, et — nouvelles pièces — les
+ * trophées → la Vitrine (`showcase`), la mission du jour → les Missions, la saison → la Saison. Chaque lien porte son NOM
+ * accessible (`playerBannerPieceLabels`) ; ses enfants sont des dessins et des chiffres cachés (`aria-hidden`). Le conteneur est
+ * un groupe nommé d'une phrase complète (`playerBannerLabel`) — jamais un lien, puisque des liens ne s'imbriquent pas.
+ * Chaque cible fait au moins 44 px de haut ; le bandeau, 56.
  */
 const INK = 'var(--color-ios-ink)';
 const INK_2 = 'var(--color-ios-ink-2)';
@@ -103,6 +106,35 @@ function useLargeText(): boolean {
   return large;
 }
 
+/** Un lien vers la fiche d'un concept, nommé par la pièce qu'il contient : ses enfants sont des dessins cachés. */
+function PieceLink({
+  concept,
+  label,
+  style,
+  className = '',
+  children,
+}: {
+  readonly concept: ProgressionConcept;
+  readonly label: string | null;
+  readonly style?: React.CSSProperties | undefined;
+  readonly className?: string;
+  readonly children: React.ReactNode;
+}) {
+  if (label === null) return null;
+  return (
+    <Link
+      to="progressionConcept"
+      params={{ concept }}
+      data-player-banner-link={concept}
+      aria-label={label}
+      className={`pointer-events-auto flex shrink-0 items-center rounded-card focus-visible:outline-2 focus-visible:outline-offset-2 ${className}`}
+      style={{ minHeight: 44, ...style }}
+    >
+      {children}
+    </Link>
+  );
+}
+
 function Gauge({ model, level, tint, roll, large }: { readonly model: PlayerBannerModel; readonly level: PlayerBannerLevel; readonly tint: string; readonly roll: RollEnv | undefined; readonly large: boolean }) {
   const language = currentInterfaceLanguage();
   const { points } = model;
@@ -135,7 +167,7 @@ function Gauge({ model, level, tint, roll, large }: { readonly model: PlayerBann
 
 function Piece({ name, value, children }: { readonly name: string; readonly value: string | number; readonly children: React.ReactNode }) {
   return (
-    <span aria-hidden="true" {...{ [`data-player-banner-${name}`]: value }} className="flex shrink-0 items-center gap-1 text-check font-bold tabular-nums" style={{ color: INK }}>
+    <span aria-hidden="true" {...{ [`data-player-banner-${name}`]: value }} className="flex shrink-0 items-center gap-1 px-1 text-check font-bold tabular-nums" style={{ color: INK }}>
       {children}
     </span>
   );
@@ -167,15 +199,16 @@ export function PlayerBanner({ model, motion = {}, backdrop = null }: { readonly
     stopGlint.current = schedule(() => setGlint(0), GLINT_MS);
   }, [level?.level]);
 
+  const names = playerBannerPieceLabels(model, language);
+
   return (
     <div className="pointer-events-none flex w-full justify-center">
-      <Link
-        to="progressionConcept"
-        params={{ concept: 'level' }}
+      <div
+        role="group"
         data-player-banner=""
         aria-label={playerBannerLabel(model, language)}
         {...(large ? { 'data-large-text': '' } : {})}
-        className={`player-banner pointer-events-auto relative isolate flex w-full items-center gap-2.5 overflow-hidden rounded-card py-1 pe-3 ps-1 shadow-lg focus-visible:outline-2 focus-visible:outline-offset-2${large ? ' flex-wrap' : ''}`}
+        className={`player-banner pointer-events-none relative isolate flex w-full items-center gap-2.5 overflow-hidden rounded-card py-1 pe-3 ps-1 shadow-lg${large ? ' flex-wrap' : ''}`}
         style={{
           minHeight: 56,
           maxWidth: 560,
@@ -200,42 +233,80 @@ export function PlayerBanner({ model, motion = {}, backdrop = null }: { readonly
         </span>
         {level === null ? null : (
           <>
-            <span ref={ring.ref} aria-hidden="true" data-player-banner-ring={level.level} className="relative shrink-0">
-              <LevelRing level={level.level} tier={model.tier} progress={level.progress} size={48} prestige={level.prestige} />
-              {glint === 0 ? null : <GameEffectLayer key={glint} effect="sheen" circle passes={1} immediate {...(motion.createEnv === undefined ? {} : { createEnv: motion.createEnv })} />}
-            </span>
-            <Gauge model={model} level={level} tint={tint} roll={motion.roll} large={large} />
+            <PieceLink concept="level" label={names.level}>
+              <span ref={ring.ref} aria-hidden="true" data-player-banner-ring={level.level} className="relative shrink-0">
+                <LevelRing level={level.level} tier={model.tier} progress={level.progress} size={48} prestige={level.prestige} />
+                {glint === 0 ? null : <GameEffectLayer key={glint} effect="sheen" circle passes={1} immediate {...(motion.createEnv === undefined ? {} : { createEnv: motion.createEnv })} />}
+              </span>
+            </PieceLink>
+            <PieceLink concept="points" label={names.sparks} className={large ? 'w-full basis-full' : 'min-w-16 flex-1'} style={large ? { order: 2 } : undefined}>
+              <Gauge model={model} level={level} tint={tint} roll={motion.roll} large={large} />
+            </PieceLink>
           </>
         )}
         {level !== null || model.points === null ? null : (
-          <Piece name="points" value={model.points}>
-            {translateGame(language, 'game.banner.points', { points: formatCount(model.points, language) })}
-          </Piece>
+          <PieceLink concept="points" label={names.sparks}>
+            <Piece name="points" value={model.points}>
+              {translateGame(language, 'game.banner.points', { points: formatCount(model.points, language) })}
+            </Piece>
+          </PieceLink>
         )}
         {model.meeshes === null ? null : (
-          <Piece name="meeshes" value={model.meeshes}>
-            <MeeshCoin side="obverse" size={22} />
-            {formatCount(model.meeshes, language)}
-          </Piece>
+          <PieceLink concept="meesh" label={names.meesh}>
+            <Piece name="meeshes" value={model.meeshes}>
+              <MeeshCoin side="obverse" size={22} />
+              {formatCount(model.meeshes, language)}
+            </Piece>
+          </PieceLink>
         )}
         {model.rank === null ? null : (
-          <Piece name="rank" value={`${model.rank.rank}/${model.rank.division ?? 0}/${model.rank.mythic?.edition ?? 0}`}>
-            <RankBlason rank={model.rank.rank} division={model.rank.division} mythic={model.rank.mythic} size={34} />
-          </Piece>
+          <PieceLink concept="glory" label={names.rank}>
+            <Piece name="rank" value={`${model.rank.rank}/${model.rank.division ?? 0}/${model.rank.mythic?.edition ?? 0}`}>
+              <RankBlason rank={model.rank.rank} division={model.rank.division} mythic={model.rank.mythic} size={34} />
+            </Piece>
+          </PieceLink>
         )}
         {model.league === null ? null : (
-          <Piece name="league" value={`${model.league.league}/${model.league.place}`}>
-            <LeagueGem league={model.league.league} size={22} />
-            {leaguePlace(model.league.place, language)}
-          </Piece>
+          <PieceLink concept="league" label={names.league}>
+            <Piece name="league" value={`${model.league.league}/${model.league.place}`}>
+              <LeagueGem league={model.league.league} size={22} />
+              {leaguePlace(model.league.place, language)}
+            </Piece>
+          </PieceLink>
         )}
         {model.flame === null ? null : (
-          <Piece name="flame" value={model.flame.days}>
-            <Flame form={model.flame.form} size={22} />
-            {formatCount(model.flame.days, language)}
-          </Piece>
+          <PieceLink concept="flame" label={names.flame}>
+            <Piece name="flame" value={model.flame.days}>
+              <Flame form={model.flame.form} size={22} />
+              {formatCount(model.flame.days, language)}
+            </Piece>
+          </PieceLink>
         )}
-      </Link>
+        {model.trophies === null ? null : (
+          <PieceLink concept="showcase" label={names.trophies}>
+            <Piece name="trophies" value={model.trophies}>
+              <Trophy kind="league" size={22} />
+              {formatCount(model.trophies, language)}
+            </Piece>
+          </PieceLink>
+        )}
+        {model.missions === null ? null : (
+          <PieceLink concept="missions" label={names.missions}>
+            <Piece name="missions" value={`${model.missions.done}/${model.missions.total}`}>
+              <span aria-hidden="true">✓</span>
+              {formatCount(model.missions.done, language)}/{formatCount(model.missions.total, language)}
+            </Piece>
+          </PieceLink>
+        )}
+        {model.season === null ? null : (
+          <PieceLink concept="season" label={names.season}>
+            <Piece name="season" value={model.season.stars}>
+              <Trophy kind="season" size={22} />
+              {formatCount(model.season.stars, language)}
+            </Piece>
+          </PieceLink>
+        )}
+      </div>
     </div>
   );
 }

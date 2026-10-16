@@ -28,6 +28,7 @@ import { broadcastReactionMutation } from '../socketio/broadcastReactionMutation
 import { captureNoticeWithheldFrom } from '../services/messaging/captureNoticeVisibility.js';
 import { historyReaderFromAuthContext } from '../services/historyFloor.js';
 import { EMOJI_MAX_LENGTH } from '@meeshy/shared/types/reaction';
+import { OBJECT_ID_PATTERN } from '@meeshy/shared/utils/object-id';
 import {
   reactionSchema,
   reactionSummarySchema,
@@ -83,7 +84,7 @@ export default async function reactionRoutes(fastify: FastifyInstance) {
         type: 'object',
         required: ['messageId', 'emoji'],
         properties: {
-          messageId: { type: 'string', description: 'Message ID to react to' },
+          messageId: { type: 'string', pattern: OBJECT_ID_PATTERN, description: 'Message ID to react to (ObjectId)' },
           emoji: {
             type: 'string',
             minLength: 1,
@@ -293,7 +294,7 @@ export default async function reactionRoutes(fastify: FastifyInstance) {
         type: 'object',
         required: ['messageId', 'emoji'],
         properties: {
-          messageId: { type: 'string', description: 'Message ID' },
+          messageId: { type: 'string', pattern: OBJECT_ID_PATTERN, description: 'Message ID (ObjectId)' },
           emoji: { type: 'string', description: 'URL-encoded emoji character to remove' }
         }
       },
@@ -447,7 +448,7 @@ export default async function reactionRoutes(fastify: FastifyInstance) {
         type: 'object',
         required: ['messageId'],
         properties: {
-          messageId: { type: 'string', description: 'Message ID' }
+          messageId: { type: 'string', pattern: OBJECT_ID_PATTERN, description: 'Message ID (ObjectId)' }
         }
       },
       response: {

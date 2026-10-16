@@ -254,7 +254,18 @@ export type EngagementProgressPayload = {
     readonly longestStreakDays: number;
   };
   readonly level: {
+    /** Les étincelles en poche (`User.engagementScore`) — ce que la frappe dépense (#10846). */
     readonly engagementScore: number;
+    /** Les étincelles en poche, sous leur nom d'aujourd'hui — égal à `engagementScore`. Optionnel : un serveur antérieur ne le sert pas. */
+    readonly sparks?: number;
+    /** Accumulées depuis le dernier prestige — la base du niveau (#10846). */
+    readonly sparksCycle?: number;
+    /** Accumulées à vie (#10846) — un nombre JSON entier, saturé à 2^53 − 1. */
+    readonly sparksLifetime?: number;
+    /** La dette d'étincelles — déduite des prochains gains, bloque la frappe. */
+    readonly sparksDebt?: number;
+    /** Le niveau max à vie (#10846), qui survit au prestige. */
+    readonly levelMaxLifetime?: number;
   };
   /**
    * LA CARTE D'ATTEIGNABILITÉ des succès (#5759) — OPTIONNELLE.
@@ -303,14 +314,24 @@ export type EngagementProgressPayload = {
     readonly balance: number;
     /** Frappées à vie — monotone, c'est elle que le rang interroge (#5744). */
     readonly mintedLifetime: number;
-    /** Points repris à des axes débitables — jamais les conversations. */
+    /**
+     * Les étincelles dépensables (#10846) : TOUTE la poche — il n'y a plus de « points à convertir ». Avant, les
+     * points repris à des axes débitables, jamais les conversations.
+     */
     readonly debitablePoints: number;
-    /** Points du plancher inaliénable, montrés mais jamais dépensables. */
+    /** Toujours `0` depuis les étincelles (#10846) : plus aucun plancher inaliénable. Conservé pour les clients publiés. */
     readonly floorPoints: number;
     /** Points manquants pour frapper — `0` quand la frappe est possible. */
     readonly missingPoints: number;
-    /** Le prix d'une frappe, servi par le serveur pour qu'aucun client ne le code en dur. */
+    /**
+     * Le prix EFFECTIF d'une frappe (#10847) : le prix de rang × le facteur du niveau actuel, servi par le serveur
+     * pour qu'aucun client ne le code en dur.
+     */
     readonly mintCost: number;
+    /** Le prix de rang de la pièce, avant le facteur du niveau actuel (#10847). */
+    readonly baseMintCost?: number;
+    /** Le facteur du niveau actuel appliqué, de 0,5 à 1 (#10847). */
+    readonly costFactor?: number;
     /**
      * PREMIÈRE et DERNIÈRE frappe (#5839) — ISO 8601, `null` si rien n'a été
      * frappé.

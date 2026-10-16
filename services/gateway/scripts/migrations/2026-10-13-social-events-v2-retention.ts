@@ -4,23 +4,32 @@
  *  - pose les index nommés de la v2 (unique PARTIEL de `eventKey` sur
  *    `ContentEvent` et `PostImpression`, TTL de `expiresAt` sur `ContentEvent`,
  *    `PostImpression` et `PostEngagement`, index de lecture de `ContentEvent`) ;
- *  - donne `expiresAt = createdAt + 90 j` aux lignes `PostImpression` et
- *    `PostEngagement` écrites avant la v2.
+ *  - donne `expiresAt = createdAt + durée` aux lignes `PostImpression` et
+ *    `PostEngagement` qui n'ont pas d'échéance OU dont l'échéance tombe avant
+ *    `createdAt + durée` — ce qui RALLONGE les lignes datées à 90 j par la
+ *    première version de cette migration (staging les a reçues).
  *
- * ⚠ Une ligne de plus de 90 jours EXPIRE au passage suivant du moniteur TTL :
- * l'historique de fatigue d'impression et les sessions de lecture anciennes
- * disparaissent (les compteurs des posts restent). En autonomie sur staging ;
- * en production SEULEMENT après feu vert du porteur et sauvegarde vérifiée.
+ * La durée est `RAW_READING_RETENTION_DAYS` (25 mois / 760 j par défaut —
+ * décision porteur, commentaire 6222116672 de #10510), la MÊME source que les
+ * lignes neuves (`src/config/raw-reading-retention.ts`). Lancer la migration
+ * avec la valeur que la passerelle de l'environnement visé utilise.
+ *
+ * ⚠ Une ligne plus ancienne que la durée EXPIRE au passage suivant du moniteur
+ * TTL (au défaut : plus de 25 mois). La migration ne RACCOURCIT jamais une
+ * échéance. En autonomie sur staging ; en production SEULEMENT après feu vert
+ * du porteur et sauvegarde vérifiée.
  *
  * FAÇADE MINCE : la logique vit dans
  * `src/services/social/socialEventsRetentionMigration.ts` (témoins :
  * `socialEventsRetentionMigration.test.ts`, `socialEventIndexes.test.ts`).
- * Idempotente : rejouée, elle ne trouve plus rien. Jamais `prisma db push`.
+ * Idempotente : rejouée avec la même durée, elle ne trouve plus rien. Jamais
+ * `prisma db push`.
  *
  * Usage :
  *   cd services/gateway
  *   DRY_RUN=1 bunx tsx scripts/migrations/2026-10-13-social-events-v2-retention.ts
  *   bunx tsx scripts/migrations/2026-10-13-social-events-v2-retention.ts
+ *   RAW_READING_RETENTION_DAYS=400 bunx tsx scripts/migrations/2026-10-13-social-events-v2-retention.ts
  */
 import { MongoClient, MongoServerError } from 'mongodb';
 import type { ExistingIndex } from '../../src/services/social/socialEventIndexes';
@@ -30,7 +39,13 @@ import {
 } from '../../src/services/social/socialEventsRetentionMigration';
 
 const DRY_RUN = process.env.DRY_RUN === '1';
-const MISSING_EXPIRY = { $or: [{ expiresAt: { $exists: false } }, { expiresAt: null }] };
+const dueForExpiry = (retentionMs: number) => ({
+  $or: [
+    { expiresAt: { $exists: false } },
+    { expiresAt: null },
+    { $expr: { $lt: ['$expiresAt', { $add: ['$createdAt', retentionMs] }] } },
+  ],
+});
 
 function mongoStore(client: MongoClient): RetentionStore {
   const db = client.db();
@@ -50,11 +65,11 @@ function mongoStore(client: MongoClient): RetentionStore {
     async drop(collection, name) {
       await db.collection(collection).dropIndex(name);
     },
-    async countWithoutExpiry(collection) {
-      return db.collection(collection).countDocuments(MISSING_EXPIRY);
+    async countToBackfill(collection, retentionMs) {
+      return db.collection(collection).countDocuments(dueForExpiry(retentionMs));
     },
     async backfillExpiry(collection, retentionMs) {
-      const result = await db.collection(collection).updateMany(MISSING_EXPIRY, [
+      const result = await db.collection(collection).updateMany(dueForExpiry(retentionMs), [
         { $set: { expiresAt: { $add: [{ $ifNull: ['$createdAt', '$$NOW'] }, retentionMs] } } },
       ]);
       return result.modifiedCount;
@@ -72,8 +87,9 @@ async function main(): Promise<void> {
   try {
     await client.connect();
     const report = await migrateSocialEventsRetention(mongoStore(client), { dryRun: DRY_RUN });
+    console.log(`  durée : ${report.retentionMs / 86_400_000} j (RAW_READING_RETENTION_DAYS)`);
     for (const [collection, count] of Object.entries(report.backfilled)) {
-      console.log(`  ${collection} sans échéance : ${count}`);
+      console.log(`  ${collection} sans échéance ou datées plus court : ${count}`);
     }
     for (const [name, outcome] of Object.entries(report.indexes)) {
       console.log(`  index ${name} : ${outcome}`);

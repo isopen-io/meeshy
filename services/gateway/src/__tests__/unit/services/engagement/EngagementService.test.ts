@@ -702,9 +702,29 @@ describe('EngagementService level tracking (#5545)', () => {
     expect(runCommandRaw).toHaveBeenCalledWith({
       findAndModify: 'User',
       query: { _id: { $oid: 'user-1' } },
-      update: [{ $set: { engagementScore: { $add: [{ $ifNull: ['$engagementScore', 0] }, attendu] } } }],
+      // Poche, cycle et total à vie montent du même montant, null-safely (#10846).
+      update: [
+        {
+          $set: {
+            sparksEarnedLifetime: {
+              $add: [
+                { $max: [{ $ifNull: ['$sparksEarnedLifetime', 0] }, { $ifNull: ['$sparksSincePrestige', 0] }, { $ifNull: ['$engagementScore', 0] }] },
+                attendu,
+              ],
+            },
+            sparksSincePrestige: {
+              $add: [{ $max: [{ $ifNull: ['$sparksSincePrestige', 0] }, { $ifNull: ['$engagementScore', 0] }] }, attendu],
+            },
+            // La dette se déduit d'abord du gain : seul le reste va en poche (porteur, 2026-10-16).
+            engagementScore: {
+              $add: [{ $ifNull: ['$engagementScore', 0] }, { $subtract: [attendu, { $min: [{ $ifNull: ['$sparksDebt', 0] }, attendu] }] }],
+            },
+            sparksDebt: { $subtract: [{ $ifNull: ['$sparksDebt', 0] }, { $min: [{ $ifNull: ['$sparksDebt', 0] }, attendu] }] },
+          },
+        },
+      ],
       new: true,
-      fields: { engagementScore: 1, levelRecord: 1 },
+      fields: { engagementScore: 1, sparksSincePrestige: 1, levelRecord: 1, levelMaxLifetime: 1 },
     });
   });
 
@@ -734,9 +754,9 @@ describe('EngagementService level tracking (#5545)', () => {
     await svc.recordActivity('user-1', 'tool.sticker');
 
     const command = runCommandRaw.mock.calls[0][0] as {
-      update: Array<{ $set: { engagementScore: { $add: [unknown, number] } } }>;
+      update: Array<{ $set: { sparksSincePrestige: { $add: [unknown, number] } } }>;
     };
-    expect(command.update[0].$set.engagementScore.$add[1]).toBe(1);
+    expect(command.update[0].$set.sparksSincePrestige.$add[1]).toBe(1);
   });
 
   it('does not create a level milestone or notify when the increment crosses no level threshold', async () => {

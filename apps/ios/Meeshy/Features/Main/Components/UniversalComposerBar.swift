@@ -344,6 +344,9 @@ struct UniversalComposerBar: View {
     /// L'instant où la rangée des emojis rapides est revenue — la garde
     /// d'arrivée (`QuickEmojiArrivalGuard`) s'y mesure (#7985).
     @State var quickEmojiArrivedAt: Date?
+    /// Le défilement de la rangée des emojis rapides : posé, et en cours (#10842).
+    @State var quickEmojiScroll: CGFloat = 0
+    @State var quickEmojiDrag: CGFloat = 0
 
     @FocusState var isFocused: Bool
     @State var sendBounce = false

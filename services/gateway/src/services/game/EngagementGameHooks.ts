@@ -11,8 +11,7 @@
 
 import type { PrismaClient } from '@meeshy/shared/prisma/client';
 import type { EngagementAxisKey } from '@meeshy/shared/types/engagement';
-import { tailwindFactor } from '@meeshy/shared/utils/game/boosts';
-import { NO_LEVEL_CAP, levelForUnlocks, levelFromScore } from '@meeshy/shared/utils/game/levels';
+import { NO_LEVEL_CAP, levelFromScore } from '@meeshy/shared/utils/game/levels';
 import { DUO_TEMPLATES } from '@meeshy/shared/utils/game/duo';
 import { LEVEL_STEPS } from '@meeshy/shared/utils/game/level-steps';
 import { MISSION_TEMPLATES } from '@meeshy/shared/utils/game/missions';
@@ -45,12 +44,6 @@ export { quarterPoints };
 
 /** Les records de Flamme que jugent les étapes des niveaux (#9706) : 7 et 30 jours. */
 const FLAME_STEP_DAYS: readonly number[] = LEVEL_STEPS.flatMap((rule) => (rule.kind === 'flame' ? [rule.target] : []));
-
-/** Le Vent arrière : ×1,25 tant que le niveau est sous le niveau record. Entier. */
-export function applyTailwind(points: number, account: { readonly engagementScore: number; readonly levelRecord: number | null }): number {
-  const factor = tailwindFactor({ level: levelForUnlocks({ score: account.engagementScore, levelRecord: account.levelRecord }), levelRecord: account.levelRecord ?? 0 });
-  return factor > 1 ? Math.round(points * factor) : points;
-}
 
 export class EngagementGameHooks {
   readonly glory: GloryService;
@@ -142,15 +135,20 @@ export class EngagementGameHooks {
   }
 
   /**
-   * Le score vient de changer : la Gloire du premier passage de chaque niveau. Le tri se fait sans
+   * Le CYCLE d'étincelles vient de changer (#10846) : la Gloire du premier passage de chaque niveau. Le tri se fait sans
    * plafond de rang ni étapes (#9688, #9706) : la lecture brute majore la lecture servie, donc un score
    * qui ne la porte pas au-dessus du record n'a rien ouvert — `creditLevelProgress` applique ensuite le
    * plafond du rang et le palier des étapes.
    */
-  async onScore(userId: string, score: number, levelRecord: number | null): Promise<void> {
+  async onScore(userId: string, score: number, levelRecord: number | null, levelMaxLifetime: number | null = null): Promise<void> {
     await this.markPhotoMoment(userId);
-    if (levelFromScore(score, NO_LEVEL_CAP) <= (levelRecord ?? 1)) return;
-    await this.isolated('level glory', () => this.glory.creditLevelProgress({ userId, score, previousRecord: levelRecord }).then(() => undefined));
+    // `score` est le CYCLE d'étincelles (#10846), jamais la poche : la frappe ne fait pas baisser le niveau. Rien à graver
+    // tant que le niveau lu ne dépasse ni le record du cycle ni le niveau max à vie (qui reste à poser sur un compte d'avant).
+    const level = levelFromScore(score, NO_LEVEL_CAP);
+    if (level <= (levelRecord ?? 1) && level <= (levelMaxLifetime ?? 0)) return;
+    await this.isolated('level glory', () =>
+      this.glory.creditLevelProgress({ userId, score, previousRecord: levelRecord, previousMax: levelMaxLifetime }).then(() => undefined),
+    );
   }
 
   /**

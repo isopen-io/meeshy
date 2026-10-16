@@ -194,7 +194,7 @@ struct MediaHubSkeleton: View {
                 VStack(spacing: MeeshySpacing.md) {
                     ForEach(0..<5, id: \.self) { _ in
                         HStack(spacing: MeeshySpacing.md) {
-                            SkeletonShape(width: 44, height: 44, cornerRadius: 10)
+                            SkeletonShape(width: 44, height: 44, cornerRadius: MeeshyRadius.sm)
                             VStack(alignment: .leading, spacing: MeeshySpacing.xsPlus) {
                                 SkeletonShape(height: 12)
                                 SkeletonShape(width: 120, height: 10)

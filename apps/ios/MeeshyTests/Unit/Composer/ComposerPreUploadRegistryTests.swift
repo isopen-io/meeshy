@@ -147,6 +147,40 @@ final class ComposerPreUploadRegistryTests: XCTestCase {
 
     // MARK: - Les deux arrêts
 
+    /// Retirer un média puis le reposer (annuler, re-choisir le même fichier) :
+    /// la montée annulée, en se dénouant, effaçait la tâche et l'état de la
+    /// montée relancée — qui n'était plus ni suivie ni annulable.
+    func test_oublierPuisReposer_laMonteeAnnuleeNEffacePasLaNouvelle() async {
+        let registre = sut(MonteurFactice(laisserPasser: false))
+        let a = url("reprise.jpg")
+        registre.begin(url: a, mimeType: "image/jpeg", fileSize: gros, alreadyRemote: false)
+        registre.forget(url: a)
+        registre.begin(url: a, mimeType: "image/jpeg", fileSize: gros, alreadyRemote: false)
+        try? await Task.sleep(nanoseconds: 60_000_000)
+        XCTAssertTrue(registre.state(for: a).showsProgress, "la montée relancée reste suivie")
+        try? await Task.sleep(nanoseconds: 400_000_000)
+        XCTAssertTrue(registre.state(for: a).isReady)
+    }
+
+    /// La publication arrête deux montées, puis l'auteur pose trois fichiers :
+    /// les deux montées annulées, en se dénouant, ne libèrent pas de place
+    /// qu'elles ne tiennent plus — la troisième attend.
+    func test_apresLaPublication_lesMonteesAnnuleesNeLiberentPasDePlaceFantome() async {
+        let monteur = MonteurFactice(laisserPasser: false)
+        let registre = sut(monteur)
+        for n in ["p1.jpg", "p2.jpg"] {
+            registre.begin(url: url(n), mimeType: "image/jpeg", fileSize: gros, alreadyRemote: false)
+        }
+        try? await Task.sleep(nanoseconds: 20_000_000)
+        registre.stopForPublication()
+        for n in ["q1.jpg", "q2.jpg", "q3.jpg"] {
+            registre.begin(url: url(n), mimeType: "image/jpeg", fileSize: gros, alreadyRemote: false)
+        }
+        try? await Task.sleep(nanoseconds: 60_000_000)
+        XCTAssertFalse(monteur.appels.contains(url("q3.jpg")), "deux à la fois, pas plus")
+        registre.stopForPublication()
+    }
+
     func test_oublier_retireLAssetDuRegistre() {
         let registre = sut(MonteurFactice(laisserPasser: false))
         registre.begin(url: url("k.jpg"), mimeType: "image/jpeg", fileSize: gros, alreadyRemote: false)

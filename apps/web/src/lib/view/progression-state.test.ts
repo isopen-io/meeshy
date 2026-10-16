@@ -61,23 +61,23 @@ const inLanguage = (language: InterfaceLanguage): void => {
 
 describe('le compte du porteur : trois chiffres, trois phrases', () => {
   test('le niveau dit ce qui est fait dans CE niveau, et ce qu’il reste pour le suivant', () => {
-    expect(state('level')).toBe('Niveau 27 : tu as fait 4 199 points sur les 5 500 de ce niveau. Il en reste 1 301 pour le niveau 28.');
+    expect(state('level')).toBe('Niveau 27 : tu as fait 4 199 étincelles sur les 5 500 de ce niveau. Il en reste 1 301 pour le niveau 28.');
   });
 
-  test('les points nomment leurs deux soldes, et « il manque » vise la Meesh, pas le niveau', () => {
+  test('les étincelles n’ont plus qu’une poche, et « il manque » vise la Meesh, pas le niveau', () => {
     expect(state('points')).toBe(
-      'Tu as 77 099 points en poche et 5 823 points à convertir. La Meesh n° 79 coûte 7 662 points : il manque 1 839 points à convertir.',
+      'Tu as 77 099 étincelles en poche. La Meesh n° 79 coûte 7 662 étincelles : il manque 1 839 étincelles.',
     );
   });
 
   test('les Meeshes disent le solde gardé, les frappes faites et ce que la prochaine demande', () => {
-    expect(state('meesh')).toBe('Tu gardes 3 Meeshes. Depuis le début, tu en as frappé 78. La Meesh n° 79 coûte 7 662 points : il te manque 1 839 points à convertir.');
+    expect(state('meesh')).toBe('Tu gardes 3 Meeshes. Depuis le début, tu en as frappé 78. La Meesh n° 79 coûte 7 662 étincelles : il te manque 1 839 étincelles.');
   });
 
   test('1 301 et 1 839 ne se confondent plus : chacun porte sa cible', () => {
     expect(state('level')).toContain('1 301 pour le niveau 28');
     expect(state('level')).not.toContain('1 839');
-    expect(state('points')).toContain('1 839 points à convertir');
+    expect(state('points')).toContain('1 839 étincelles');
     expect(state('points')).not.toContain('1 301');
   });
 });
@@ -99,12 +99,14 @@ describe('le niveau', () => {
 describe('les points', () => {
   test('assez pour frapper : la phrase le dit, sans « il manque »', () => {
     const rich: EngagementWithGame = { ...playing, meesh: { ...wallet, debitablePoints: 1_244 } };
-    expect(state('points', rich)).toBe('Tu as 12 440 points en poche et 1 244 points à convertir : assez pour la Meesh n° 4, qui coûte 1 221 points.');
+    expect(state('points', rich)).toBe('Tu as 12 440 étincelles en poche : assez pour la Meesh n° 4, qui coûte 1 221 étincelles.');
   });
 
-  test('sans porte-monnaie servi, le solde à convertir se déduit du prix et du manque, jamais du score', () => {
+  test('sans porte-monnaie servi, plus aucun solde « à convertir » : une seule poche, le manque vise la Meesh', () => {
     const { meesh: _meesh, ...bare } = jcnm;
-    expect(state('points', bare)).toContain('5 823 points à convertir');
+    expect(state('points', bare)).toContain('il manque 1 839 étincelles');
+    expect(state('points', bare)).not.toContain('à convertir');
+    expect(state('points', bare)).not.toContain('5 823');
   });
 });
 
@@ -136,7 +138,7 @@ describe('la Flamme, les missions, la ligue, la saison : l’étape où l’on e
     if (current === null || current === undefined) throw new Error('la fixture est placée en ligue');
     const line = state('league', playing);
     expect(line).toContain(`rang ${current.rank} sur ${current.groupSize}`);
-    expect(line).toContain('410 points cette semaine');
+    expect(line).toContain('410 étincelles cette semaine');
     expect(line).toMatch(/zone de montée/);
   });
 

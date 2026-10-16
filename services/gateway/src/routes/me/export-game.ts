@@ -16,6 +16,7 @@
 
 import type { PrismaClient } from '@meeshy/shared/prisma/client';
 import type { ExportPage } from './export-sections';
+import { SPARKS_USER_SELECT, sparksOf } from '../../services/game/SparksFacts';
 
 const asIso = (value: Date | null | undefined): string | null => (value ? value.toISOString() : null);
 
@@ -29,8 +30,7 @@ export async function exportGame(prisma: PrismaClient, userId: string, page: Exp
       prisma.user.findUnique({
         where: { id: userId },
         select: {
-          engagementScore: true,
-          levelRecord: true,
+          ...SPARKS_USER_SELECT,
           prestige: true,
           flameFreezes: true,
           lastRelightDay: true,
@@ -106,7 +106,26 @@ export async function exportGame(prisma: PrismaClient, userId: string, page: Exp
   };
 
   return {
-    progress: account,
+    // Les colonnes `BigInt` ne partent jamais telles quelles (JSON.stringify les refuse) : des nombres entiers (#10846).
+    progress: account
+      ? (() => {
+          const sparks = sparksOf(account);
+          return {
+            engagementScore: account.engagementScore,
+            sparks: sparks.pocket,
+            sparksCycle: sparks.cycle,
+            sparksLifetime: sparks.lifetime,
+            levelRecord: account.levelRecord,
+            levelMaxLifetime: account.levelMaxLifetime ?? null,
+            prestige: account.prestige,
+            flameFreezes: account.flameFreezes,
+            lastRelightDay: account.lastRelightDay,
+            guideSeen: account.guideSeen,
+            publicLeagueConsentAt: account.publicLeagueConsentAt,
+            publicLeagueConsentVersion: account.publicLeagueConsentVersion,
+          };
+        })()
+      : account,
     settings: settings
       ? {
           showcaseVisibility: settings.showcaseVisibility ?? null,

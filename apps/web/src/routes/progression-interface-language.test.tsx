@@ -82,14 +82,14 @@ describe('Progression, interface en', () => {
     expect(html).toContain('First achievement');
     expect(html).toContain('Unlocked on');
     expect(html).toContain(`Level ${fixture.level.level}`);
-    expect(html).toContain('How to earn points');
+    expect(html).toContain('How to earn sparks');
     expect(html).toContain('Progress toward the next level');
     expect(html).toContain('No Meesh');
     expect(html).toContain('2 Meeshes');
     expect(html).toContain('5 minted all-time');
     expect(html).toContain('No mint yet.');
-    expect(html).toContain('Convert 1,221 points into a Meesh');
-    expect(html).toContain('convertible points before a Meesh.');
+    expect(html).toContain('Mint a Meesh for 1,221 sparks');
+    expect(html).toContain('more sparks before a Meesh.');
     expect(html).not.toMatch(FRENCH);
   });
 

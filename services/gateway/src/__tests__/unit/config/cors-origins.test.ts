@@ -404,6 +404,46 @@ describe('les coques Capacitor joignent TOUT rang, sans réglage d\'hôte (2.13.
 });
 
 /**
+ * Le client Socket.IO natif d'iOS (Starscream) pose `Origin: wss://<hôte>` sur
+ * la demande de passage en WebSocket (#10838). Mesuré en production le
+ * 2026-10-16 : 526 refus `CORS rejected origin: "wss://gate.meeshy.me"` en 6 h,
+ * autant de 400 sur l'upgrade, et 511 des 538 sessions iOS restées en
+ * long-polling — dont l'immense majorité tombait dans la minute, d'où la
+ * pastille « Reconnexion » permanente.
+ *
+ * Aucun navigateur ne peut se présenter avec une origine `ws:` ou `wss:` : une
+ * origine est celle d'un DOCUMENT, et aucun document n'est servi par ces
+ * schémas. Une telle origine est donc celle d'un client natif — servi sans
+ * `Origin` comme curl, et l'autorisation reste portée par le jeton.
+ */
+describe('le WebSocket natif iOS passe la porte, quel que soit le rang (#10838)', () => {
+  const LISTE_DE_PRODUCTION = 'https://meeshy.me,https://www.meeshy.me,https://gate.meeshy.me,https://ml.meeshy.me';
+
+  it.each(RANGS_QUI_DECIDENT)('rang %s — `wss://` de la passerelle et du staging sont acceptés par Socket.IO', (nodeEnv) => {
+    const env = envAvecListe(nodeEnv, LISTE_DE_PRODUCTION);
+    expect(verdictSocketIo(env, 'wss://gate.meeshy.me')).toBe('accepte');
+    expect(verdictSocketIo(env, 'wss://gate.staging.meeshy.me')).toBe('accepte');
+    expect(verdictSocketIo(env, 'ws://localhost:3000')).toBe('accepte');
+  });
+
+  it('QUEL QUE SOIT L\'HÔTE — aucun navigateur ne porte ce schéma, et restreindre l\'hôte ne protège de rien (un client hors navigateur forge l\'hôte ou omet Origin)', () => {
+    const env = envAvecListe('production', LISTE_DE_PRODUCTION);
+    expect(verdictSocketIo(env, 'wss://evil.example')).toBe('accepte');
+  });
+
+  it('variables absentes (défauts) — `wss://` est servi', () => {
+    expect(originIsAllowed('wss://gate.meeshy.me', { NODE_ENV: 'production' })).toBe(true);
+  });
+
+  it('seul le SCHÉMA ws/wss ouvre — ni une origine https inconnue, ni un schéma qui le contient', () => {
+    const env = envAvecListe('production', LISTE_DE_PRODUCTION);
+    for (const intruse of ['https://evil.example', 'http://gate.meeshy.me', 'wssx://gate.meeshy.me', 'https://wss.evil.example', 'null']) {
+      expect(verdictSocketIo(env, intruse)).toBe('refuse');
+    }
+  });
+});
+
+/**
  * Un refus CORS n'est pas une panne serveur (#6591).
  *
  * Mesuré en production le 2026-09-14 : une origine absente de `CORS_ORIGINS`

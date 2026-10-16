@@ -426,7 +426,7 @@ final class GlobalSearchViewModel: ObservableObject {
         case .expired, .empty:
             cached = []
         }
-        let byId = Dictionary(uniqueKeysWithValues: cached.map { ($0.id, $0) })
+        let byId = Dictionary(cached.map { ($0.id, $0) }, uniquingKeysWith: { first, _ in first })
         let preferred = preferredContentLanguages
 
         return ids.compactMap { id -> GlobalSearchConversationResult? in
@@ -658,7 +658,7 @@ final class GlobalSearchViewModel: ObservableObject {
         let conversationsById: [String: MeeshyConversation]
         switch cachedConvs {
         case .fresh(let v, _), .stale(let v, _):
-            conversationsById = Dictionary(uniqueKeysWithValues: v.map { ($0.id, $0) })
+            conversationsById = Dictionary(v.map { ($0.id, $0) }, uniquingKeysWith: { first, _ in first })
         case .expired, .empty:
             conversationsById = [:]
         }

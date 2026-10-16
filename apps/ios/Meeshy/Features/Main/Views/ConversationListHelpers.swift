@@ -437,7 +437,7 @@ struct ThemedCommunityCard: View, Equatable {
             CachedBannerImage(
                 urlString: community.banner,
                 fallbackColor: displayColor,
-                height: 110
+                height: CommunityCardMetrics.height
             )
 
             // Dark overlay for text readability over any banner
@@ -447,35 +447,18 @@ struct ThemedCommunityCard: View, Equatable {
                 endPoint: .bottom
             )
 
-            // Content
-            VStack(alignment: .leading, spacing: MeeshySpacing.xxs) {
-                Text(community.name)
-                    .font(.caption.weight(.bold))
-                    .foregroundColor(.white)
-                    .lineLimit(3)
-                    .minimumScaleFactor(0.8)
-                    .fixedSize(horizontal: false, vertical: true)
-
-                HStack(spacing: MeeshySpacing.xsPlus) {
-                    HStack(spacing: MeeshySpacing.xxs) {
-                        Image(systemName: "person.2.fill")
-                            .font(.caption2)
-                        Text(CompactCountLabel.text(community.memberCount))
-                            .font(.caption2.weight(.semibold))
-                    }
-                    HStack(spacing: MeeshySpacing.xxs) {
-                        Image(systemName: "bubble.left.fill")
-                            .font(.caption2)
-                        Text(CompactCountLabel.text(community.conversationCount))
-                            .font(.caption2.weight(.semibold))
-                    }
-                }
-                .foregroundColor(.white.opacity(MeeshyOpacity.intense))
-            }
-            .padding(MeeshySpacing.sm)
+            // Le nom seul, sur deux lignes : à la moitié de la taille d'avant
+            // (#10841) les compteurs ne tiennent plus ; ils restent dans le
+            // libellé d'accessibilité.
+            Text(community.name)
+                .font(MeeshyFont.relative(CommunityCardMetrics.nameSize, weight: .bold))
+                .foregroundColor(.white)
+                .lineLimit(2)
+                .minimumScaleFactor(0.85)
+                .padding(CommunityCardMetrics.padding)
         }
-        .frame(width: 130, height: 110)
-        .clipShape(RoundedRectangle(cornerRadius: MeeshyRadius.lg))
+        .frame(width: CommunityCardMetrics.width, height: CommunityCardMetrics.height)
+        .clipShape(RoundedRectangle(cornerRadius: MeeshyRadius.sm))
         .scaleEffect(isPressed ? 0.95 : 1)
         .contentShape(Rectangle())
         .onTapGesture {

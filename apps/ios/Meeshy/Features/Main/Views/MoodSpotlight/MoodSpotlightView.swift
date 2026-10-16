@@ -10,6 +10,11 @@ import MeeshyUI
 struct MoodSpotlightView: View {
     @StateObject private var viewModel: MoodSpotlightViewModel
     @Environment(\.dismiss) private var dismiss
+    // iPad : posée en racine du panneau de droite, où `dismiss()` est un no-op — et la barre masquée
+    // cache aussi le chevron de repli du panneau. Sans ce relais, la croix ne fermait rien.
+    @Environment(\.isPresented) private var isPresented
+    @Environment(\.meeshyPanelDismiss) private var panelDismiss
+    private var close: PanelBackAction { .init(isPresented: isPresented, dismiss: dismiss, panelDismiss: panelDismiss) }
     @FocusState private var replyFocused: Bool
 
     init(statusId: String) {
@@ -72,7 +77,7 @@ struct MoodSpotlightView: View {
         HStack {
             Button {
                 HapticFeedback.light()
-                dismiss()
+                close()
             } label: {
                 Image(systemName: "xmark")
                     .font(MeeshyFont.relative(16, weight: .bold))
@@ -84,8 +89,8 @@ struct MoodSpotlightView: View {
             .accessibilityIdentifier("mood.spotlight.close")
             Spacer()
         }
-        .padding(.horizontal, 16)
-        .padding(.top, 4)
+        .padding(.horizontal, MeeshySpacing.lg)
+        .padding(.top, MeeshySpacing.xs)
     }
 
     // MARK: - Center

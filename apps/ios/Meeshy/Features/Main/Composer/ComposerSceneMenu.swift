@@ -137,7 +137,7 @@ struct ComposerSceneContextMenu: View {
         }
         .padding(.vertical, MeeshySpacing.xs)
         .frame(width: ComposerSceneMenu.width)
-        .adaptiveGlass(in: RoundedRectangle(cornerRadius: 20, style: .continuous),
+        .adaptiveGlass(in: RoundedRectangle(cornerRadius: MeeshyRadius.xl, style: .continuous),
                        tint: plateauTint.opacity(0.55))
         .environment(\.colorScheme, .dark)
         .accessibilityElement(children: .contain)

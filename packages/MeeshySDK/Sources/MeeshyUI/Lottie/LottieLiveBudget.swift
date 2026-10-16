@@ -124,7 +124,9 @@ final class LottieLiveSlot: ObservableObject {
         budget.setVisible(ticket, wants)
     }
 
-    deinit {
+    // iOS 26 : une deinit écrite sans `nonisolated` est isolée au MainActor → double-free au démontage
+    // hors d'une tâche (#9694). Le corps ne lit que des valeurs Sendable et poste la libération.
+    nonisolated deinit {
         guard let ticket else { return }
         let budget = self.budget
         Task { @MainActor in budget.release(ticket) }

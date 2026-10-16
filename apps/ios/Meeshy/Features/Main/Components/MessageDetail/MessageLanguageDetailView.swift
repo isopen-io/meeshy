@@ -438,7 +438,8 @@ struct MessageLanguageDetailView: View {
         attachmentId: String
     ) -> [MessageTranslatedAudio] {
         var byLang: [String: MessageTranslatedAudio] = Dictionary(
-            uniqueKeysWithValues: existing.map { ($0.targetLanguage.lowercased(), $0) }
+            existing.map { ($0.targetLanguage.lowercased(), $0) },
+            uniquingKeysWith: { first, _ in first }
         )
         for result in incoming {
             let key = result.targetLanguage.lowercased()

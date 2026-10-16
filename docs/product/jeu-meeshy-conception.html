@@ -209,7 +209,7 @@ ul.tight li,ol.tight li{margin:3px 0}
   <p>Les poids existants restent : contenu ×9, lien social ×7, conversation ×5, commentaire ×3, outil ×1, avec les plafonds quotidiens déjà en place.</p>
   <div class="grid g3">
     <div class="card"><span class="tag">existant</span><h3>Élan</h3><p>Multiplicateur ×1 à ×5 selon le nombre de familles d'actions tenues en même temps. Inchangé.</p></div>
-    <div class="card"><span class="tag new">nouveau</span><h3>Vent arrière</h3><p>Après une frappe, +25 % sur les points jusqu'à revenir au niveau record.</p></div>
+    <div class="card"><span class="tag">éteint</span><h3>Vent arrière</h3><p>Éteint le 16 octobre : la frappe ne fait plus baisser le niveau, le bonus n'a plus de raison d'être. Voir <i>les étincelles</i>.</p></div>
     <div class="card"><span class="tag new">nouveau</span><h3>Réponse reçue</h3><p>+3 points à l'auteur quand une autre personne lui répond dans l'heure.</p></div>
     <div class="card"><span class="tag new">nouveau</span><h3>Bonus de Flamme</h3><p>+2 % sur les récompenses de mission par jour de série, jusqu'à +50 % à 25 jours.</p></div>
     <div class="card"><span class="tag new">nouveau</span><h3>Heure du Prisme</h3><p>Une heure par jour, tirée entre 9 h et 21 h : les missions comptent double. Une notification au plus, désactivable.</p></div>
@@ -220,6 +220,7 @@ ul.tight li,ol.tight li{margin:3px 0}
 <section id="niveaux">
   <div class="eyebrow">II.2 · peut redescendre</div>
   <h2>Les niveaux</h2>
+  <p class="note"><b>Mis à jour le 16 octobre (les étincelles, #10846) :</b> le niveau se lit désormais sur les étincelles accumulées <b>depuis le dernier prestige</b>, plus sur la poche : la frappe ne le fait plus jamais baisser. Le texte ci-dessous décrit la loi d'origine ; la loi courante est dans <code>docs/product/etincelles-economie.md</code>.</p>
   <p>Le niveau se lit sur le score <b>en poche</b>, celui que la frappe débite.</p>
   <div class="formula">seuil(N) = 10 × N²     ·     niveau = ⌊ √(score ÷ 10) ⌋     ·     écart(N) = 10 × (2N − 1)</div>
   <p>Une frappe de 1 221 points coûte 5 niveaux au niveau 15, 3 au niveau 30, un seul au niveau 100. La décision centrale : grimper avant de frapper.</p>
@@ -241,7 +242,8 @@ ul.tight li,ol.tight li{margin:3px 0}
   <p class="muted" style="font-size:13.5px">* à 500 points par jour, sans frappe.</p>
   <h3>Niveau record et Prestige</h3>
   <p>Le niveau le plus haut atteint reste marqué sur la barre : il règle le Vent arrière et donne de la Gloire la première fois qu'on atteint chaque niveau. Au niveau 100, on peut passer en Prestige : niveau à 1, une étoile sur l'anneau (5 au plus), +1 000 de Gloire, un Trophée de Prestige.</p>
-  <p class="note"><b>Décidé le 5 octobre au soir :</b> le Prestige remet aussi le niveau record à 1. La ligue (dès le niveau 10) et la mission en duo (dès le niveau 20) se referment donc jusqu'à ce qu'on remonte. Avant de valider, l'écran de confirmation le dit en clair, et Meo l'explique.</p>
+  <p class="note"><b>Remplacé le 16 octobre (#10846) :</b> le niveau max à vie survit au Prestige, et la ligue et le duo restent ouverts. Le record du cycle repart à 1, le total accumulé à vie ne bouge pas. Voir <code>etincelles-economie.md</code>.</p>
+  <p class="note"><b>Décidé le 5 octobre au soir (remplacé ci-dessus) :</b> le Prestige remet aussi le niveau record à 1. La ligue (dès le niveau 10) et la mission en duo (dès le niveau 20) se referment donc jusqu'à ce qu'on remonte. Avant de valider, l'écran de confirmation le dit en clair, et Meo l'explique.</p>
 </section>
 
 <section id="meeshes">
@@ -250,6 +252,7 @@ ul.tight li,ol.tight li{margin:3px 0}
   <p>Toujours frappée à la main, avec l'aperçu du prix avant de confirmer et une ligne au registre. Le prix monte avec le nombre de Meeshes déjà frappées.</p>
   <div class="formula">prix(n) = 1 221 × 1,3<sup>⌊(n − 1) ÷ 10⌋</sup>, plafonné à 16 556</div>
   <p class="muted">Les 10 premières coûtent 1 221 points, de la 11e à la 20e 1 587, la 50e 3 487, la 100e (or) 12 948 ; le plafond de 16 556 tombe dès la 101e (porteur, 2026-10-10, #10011 — l'ancienne courbe, +6 % plafonné à 4 884, aurait mis 451 frappes à l'atteindre).</p>
+  <p class="note"><b>Le 16 octobre (#10847, #10848) :</b> le prix de rang est multiplié par un facteur du niveau <b>actuel</b> (50 % au niveau 0, plein tarif dès le 100), et le Coffre, le Trésor et la Réserve s'ouvrent par le rang de Gloire. Voir <code>etincelles-economie.md</code>.</p>
   <h3>Toujours en points</h3>
   <p>Une Meesh ne se frappe qu'en débitant des points, au prix de son rang (porteur, 2026-10-10, #10011). Il n'existe aucun autre chemin : ni fragment, ni frappe gratuite, ni conversion de points ou de quoi que ce soit en Meesh. Le coffre peut donner une prime en points au cours de la Meesh, jamais une Meesh.</p>
   <h3>Chaque Meesh est numérotée</h3>

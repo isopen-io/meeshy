@@ -217,8 +217,7 @@ final class GameCopyTests: XCTestCase {
             .missionsUnlocked,
             .firstMintPossible(price: 1221, levelsLost: 2, gloryGain: 100),
             .firstMintPossible(price: 1221, levelsLost: 0, gloryGain: 100),
-            .firstMint(levelBefore: 14, levelAfter: 9, tailwindUntilLevel: 14),
-            .badgeExtinguished(missingActions: 37),
+            .firstMint,
             .priceRises(nextPrice: 1294),
             .newRank(rank: .voix, division: .ii, glory: 1700, gloryMissing: 466),
             .newRank(rank: .legende, division: .i, glory: 160_000, gloryMissing: nil),
@@ -240,11 +239,14 @@ final class GameCopyTests: XCTestCase {
         }
     }
 
-    func test_theFirstMintCard_citesTheLevelsBeforeAndAfter() {
-        let moment = GameGuide.moment(for: .firstMint(levelBefore: 14, levelAfter: 9, tailwindUntilLevel: 14), seen: [])
-        let means = GameGuideCopy.moment(moment).means
-        XCTAssertTrue(means.contains(GameCopy.formatCount(14)))
-        XCTAssertTrue(means.contains(GameCopy.formatCount(9)))
+    /// Les étincelles (#10846) : la première frappe ne fait plus baisser le niveau — la carte ne cite plus de niveaux,
+    /// elle dit que rien n'est perdu et mène à la progression.
+    func test_theFirstMintCard_saysTheLevelStays_andLeadsToProgress() {
+        let moment = GameGuide.moment(for: .firstMint, seen: [])
+        XCTAssertEqual(moment.action, .seeProgress)
+        let copy = GameGuideCopy.moment(moment)
+        XCTAssertFalse(copy.means.isEmpty)
+        XCTAssertFalse(copy.means.contains(where: \.isNumber), "plus aucun « de 14 à 9 »")
     }
 
     // MARK: - Le minuteur d'une mission (#9539)

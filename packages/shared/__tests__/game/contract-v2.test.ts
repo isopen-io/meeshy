@@ -440,3 +440,21 @@ describe('« Jeu masqué » et l’opposition à la ligue Amis', () => {
     expect(gamePrivacyRequestSchema.safeParse({ requestId, friendsLeagueOptOut: false }).success).toBe(true);
   });
 });
+
+describe('le niveau MAX À VIE ouvre ligues et duo après un Prestige (#10846)', () => {
+  const afterPrestige = { score: 0, levelRecord: 1, prestige: 1 } as const;
+
+  it('sans le max à vie, un compte au cycle vide referme la ligue (la loi d\'hier)', () => {
+    expect(buildGameBlockExtras(extrasFacts(afterPrestige)).league.unlocked).toBe(false);
+  });
+
+  it('avec le max à vie, la ligue et le duo restent ouverts', () => {
+    const block = buildGameBlockExtras(extrasFacts({ ...afterPrestige, levelMaxLifetime: 100 }));
+    expect(block.league.unlocked).toBe(true);
+    expect(block.duo.unlocked).toBe(true);
+  });
+
+  it('mais le Prestige suivant se juge sur le CYCLE : le max à vie ne le rouvre pas', () => {
+    expect(buildGameBlockExtras(extrasFacts({ ...afterPrestige, levelMaxLifetime: 100 })).prestige.canPrestige).toBe(false);
+  });
+});
