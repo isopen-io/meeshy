@@ -1,10 +1,19 @@
 import type { Prisma, PrismaClient } from '@meeshy/shared/prisma/client';
-import { POST_ENGAGEMENT_RETENTION_MS } from '../social/contentEvents';
+import { POST_ENGAGEMENT_RETENTION_MS, UNCONSENTED_READING_RETENTION_MS } from '../social/contentEvents';
+import type { AnalyticsStanding } from '../social/eventPrivacy';
+import { accountReaderKeyOf, engagementSessionKeyOf } from './readerKey';
 import { NOT_DELETED } from './postIncludes';
 import { creditPostView } from './postViewCredit';
 import type { ViewContext } from './viewProvenance';
 import { incrementPostCounters } from './postCounters';
-import { engagementIncrementsAdded, mergeEngagementSessions, type MergeableEngagement } from './engagementIncrements';
+import {
+  creditsOfIncrements,
+  engagementAggregateIncrements,
+  incrementsNotYetCredited,
+  incrementsOfCredits,
+  mergeEngagementSessions,
+  type MergeableEngagement,
+} from './engagementIncrements';
 import { consumeReferenceView, resolveReferenceAccess } from './referenceAccess';
 import { creditStoryViewed } from './postEngagementCredits';
 import { impressionImpliedByView } from '../social/viewImpressions';
@@ -33,8 +42,9 @@ export type PostReachDeps = {
 
 /** Ce que la fusion relit de la ligne déjà stockée (#10764). */
 const STORED_ENGAGEMENT_SELECT = {
-  id: true, surface: true, contentType: true, dwellMs: true, watchMs: true,
-  mediaDurationMs: true, completed: true, actions: true, watchSamples: true, createdAt: true,
+  id: true, readerKey: true, surface: true, contentType: true, dwellMs: true, watchMs: true,
+  mediaDurationMs: true, completed: true, actions: true, watchSamples: true, createdAt: true, expiresAt: true,
+  creditedOpen: true, creditedPlay: true, creditedQualified: true,
 } as const;
 
 /**
@@ -53,14 +63,19 @@ export const ENGAGEMENT_SESSION_DEDUP_WINDOW_MS = 10_000;
  */
 async function engagementSessionCounts(
   prisma: PrismaClient,
-  params: { readonly sessionId: string; readonly postId: string; readonly userId: string; readonly authorId: string; readonly receivedAt: Date },
+  params: {
+    readonly sessionKeys: readonly string[]; readonly postId: string; readonly userId: string;
+    readonly authorId: string; readonly receivedAt: Date;
+  },
 ): Promise<boolean> {
   if (params.authorId === params.userId) return false;
+  // Le même lecteur sous ses DEUX formes : nominative (session consentie, lignes
+  // antérieures) et empreinte (session sans consentement, #10771).
   const sibling = await prisma.postEngagement.findFirst({
     where: {
-      userId: params.userId,
       postId: params.postId,
-      sessionId: { not: params.sessionId },
+      OR: [{ userId: params.userId }, { readerKey: accountReaderKeyOf(params.userId) }],
+      NOT: { sessionId: { in: [...params.sessionKeys] } },
       createdAt: {
         gte: new Date(params.receivedAt.getTime() - ENGAGEMENT_SESSION_DEDUP_WINDOW_MS),
         lt: params.receivedAt,
@@ -72,6 +87,10 @@ async function engagementSessionCounts(
 }
 
 type StoredEngagementRow = {
+  readonly readerKey?: string | null;
+  readonly creditedOpen?: boolean | null;
+  readonly creditedPlay?: boolean | null;
+  readonly creditedQualified?: boolean | null;
   readonly surface?: string | null;
   readonly contentType?: string | null;
   readonly dwellMs?: number | null;
@@ -141,7 +160,7 @@ export async function recordView(
   postId: string,
   userId: string,
   duration?: number,
-  context: ViewContext & { readonly impliesImpression?: boolean } = {},
+  context: ViewContext & { readonly impliesImpression?: boolean; readonly standing?: AnalyticsStanding } = {},
 ): Promise<boolean> {
   try {
     // Enforce visibility before recording — without this, any authenticated
@@ -207,7 +226,7 @@ export async function recordView(
       : await creditPostView(deps.prisma, { postId, userId, durationMs: safeDuration, ...context });
     creditStoryViewed(deps.prisma, { viewerId: userId, story: target, isNewView, durationMs: safeDuration });
     if (context.impliesImpression && target.authorId !== userId) {
-      await impressionImpliedByView(deps.prisma, { postId, userId, surface: context.surface }).catch((error: unknown) =>
+      await impressionImpliedByView(deps.prisma, { postId, userId, surface: context.surface, standing: context.standing }).catch((error: unknown) =>
         log.warn('recordView: impression implied by the view not written', {
           postId,
           error: error instanceof Error ? error.message : String(error),
@@ -249,6 +268,47 @@ export async function recordView(
 }
 
 /**
+ * Le post qu'une session de ce lecteur a le droit de créditer : vivant, et dans
+ * son audience — ou ouvert par une RÉFÉRENCE encore valable (`granted`), comme
+ * pour `recordView`. Une session ne DÉPENSE jamais une référence : seule la vue
+ * déclarée le fait.
+ */
+async function readableEngagementTarget(
+  deps: PostReachDeps,
+  postId: string,
+  userId: string,
+  audienceOf: () => Promise<Prisma.PostWhereInput>,
+): Promise<{ readonly id: string; readonly authorId: string } | null> {
+  const select = { id: true, authorId: true, type: true, expiresAt: true } as const;
+  const visible = await deps.prisma.post.findFirst({ where: { id: postId, deletedAt: NOT_DELETED, ...(await audienceOf()) }, select });
+  if (visible) return visible;
+  const referenced = await deps.prisma.post.findFirst({ where: { id: postId, deletedAt: NOT_DELETED }, select });
+  if (!referenced) return null;
+  const access = await resolveReferenceAccess({ prisma: deps.prisma, post: referenced, viewerId: userId, now: new Date() });
+  return access === 'granted' ? referenced : null;
+}
+
+/**
+ * Le statut d'analyse d'UNE session (#10772) : le client fait foi pour REFUSER
+ * (`consent: 'denied'` sur la session), la passerelle pour ACCORDER — une
+ * session qui se dit `granted` sous un statut serveur autre n'accorde rien.
+ */
+const sessionStandingOf = (clientConsent: string | undefined, standing: AnalyticsStanding): AnalyticsStanding =>
+  clientConsent === 'denied' ? 'denied' : standing;
+
+const isReducedRow = (row: StoredEngagementRow): boolean => typeof row.readerKey === 'string';
+
+const UNSET = { unset: true } as const;
+
+/** Ce qu'une ligne nominative perd en devenant réduite (retrait en cours de session, #10771). */
+const MEASURE_UNSET = {
+  userId: UNSET, contentType: UNSET, surface: UNSET, startedAt: UNSET, dwellMs: UNSET, watchMs: UNSET,
+  mediaDurationMs: UNSET, completed: UNSET, truncated: UNSET, consent: UNSET, actions: null, watchSamples: null,
+} as const;
+
+const earliest = (a: Date | null | undefined, b: Date): Date => (a && a.getTime() < b.getTime() ? a : b);
+
+/**
  * Ingestion append-only des sessions d'engagement (LOT 4 + agrégation LOT 5).
  *
  * - Upsert sur `sessionId` → idempotent : rejouer un ACK perdu après un 200 est
@@ -263,23 +323,38 @@ export async function recordView(
  *   jamais reculer, et seuls les compteurs que la fusion gagne sont montés —
  *   un rejeu idempotent n'ajoute rien. N'altère NI `viewCount` NI `PostView`.
  *
+ * Deux formes de ligne, choisies par le statut d'analyse (#10771, #10772) :
+ *  - `granted` : la mesure complète, nominative, 90 jours ;
+ *  - tout autre statut (et l'absence de statut) : la forme RÉDUITE — empreinte
+ *    de la session, post, empreinte du lecteur, heure de réception, les trois
+ *    compteurs déjà crédités, 8 jours. Durées, surface, actions et
+ *    échantillons servent au calcul des crédits à la réception, puis sont
+ *    jetés. Une ligne réduite ne redevient jamais nominative ; une ligne
+ *    nominative dont la mesure arrive après un retrait est réduite.
+ *
  * Retourne le nombre de sessions persistées (insert ou update).
  */
 export async function recordEngagementBatch(
-  prisma: PrismaClient,
+  deps: PostReachDeps,
   sessions: readonly EngagementSessionInput[],
   userId: string,
+  batchStanding: AnalyticsStanding = 'not_granted',
 ): Promise<number> {
+  const { prisma } = deps;
   const capped = sessions.slice(0, 50);
+  // Le MÊME filtre d'audience que `recordView`, résolu au plus une fois par lot,
+  // à la première session (un lot vide n'en coûte aucune) : une session sur un
+  // post que le lecteur ne peut pas voir ne crédite rien et n'écrit rien —
+  // sinon un client gonflerait les compteurs d'un post privé et apprendrait
+  // son existence.
+  let visibilityFilter: Promise<Prisma.PostWhereInput> | undefined;
+  const audienceOf = () => (visibilityFilter ??= deps.visibilityFilter(userId));
   let recorded = 0;
 
   for (const s of capped) {
     try {
-      const post = await prisma.post.findFirst({
-        where: { id: s.postId, deletedAt: NOT_DELETED },
-        select: { id: true, authorId: true },
-      });
-      if (!post) continue; // skip-and-continue: post deleted between begin and flush
+      const post = await readableEngagementTarget(deps, s.postId, userId, audienceOf);
+      if (!post) continue; // skip-and-continue: supprimé, hors audience ou inconnu — même porte
 
       const dwellMs = Math.max(0, Math.min(300_000, Math.round(s.dwellMs)));
       const watchMs = s.watchMs !== undefined
@@ -301,44 +376,88 @@ export async function recordEngagementBatch(
       };
 
       const receivedAt = new Date();
+      const reducedKey = engagementSessionKeyOf(s.sessionId);
+      const readerKey = accountReaderKeyOf(userId);
+      // La clé de session vient du client : la ligne n'est la sienne que sous
+      // SON identité. Celle d'un autre lecteur n'est ni lue, ni mise à jour —
+      // l'écriture qui suit lève sur l'unicité, et la session ne compte pas.
+      const ownRaw = { sessionId: s.sessionId, userId };
+      const ownReduced = { sessionId: reducedKey, readerKey };
       const before = await prisma.postEngagement.findUnique({
-        where: { sessionId: s.sessionId },
+        where: ownRaw,
+        select: STORED_ENGAGEMENT_SELECT,
+      }) ?? await prisma.postEngagement.findUnique({
+        where: ownReduced,
         select: STORED_ENGAGEMENT_SELECT,
       });
-      const stored = before ? storedEngagementOf(before, received) : undefined;
+      const storedReduced = before !== null && isReducedRow(before);
+      const stored = before && !storedReduced ? storedEngagementOf(before, received) : undefined;
       const session = stored ? mergeEngagementSessions(stored, received) : received;
 
-      const data = {
-        postId: s.postId,
-        userId,
-        contentType: s.contentType,
-        surface: s.surface,
-        startedAt: new Date(s.startedAt),
-        dwellMs: session.dwellMs,
-        watchMs: session.watchMs,
-        mediaDurationMs: session.mediaDurationMs,
-        completed: session.completed,
-        truncated: s.truncated === true,
-        consent: s.consent,
-        actions: session.actions as Prisma.InputJsonValue,
-        watchSamples: session.watchSamples as Prisma.InputJsonValue,
-      };
+      const already = stored ? engagementAggregateIncrements(stored) : before ? incrementsOfCredits(before) : {};
+      const credited = storedReduced
+        ? { ...already, ...engagementAggregateIncrements(received) }
+        : engagementAggregateIncrements(session);
 
-      await prisma.postEngagement.upsert({
-        where: { sessionId: s.sessionId },
-        update: data,
-        // Conservation du brut : 90 j (#10510, O7) — posée à la création, jamais prolongée par un rejeu.
-        create: { sessionId: s.sessionId, ...data, createdAt: receivedAt, expiresAt: new Date(Date.now() + POST_ENGAGEMENT_RETENTION_MS) },
-      });
+      const granted = sessionStandingOf(s.consent, batchStanding) === 'granted';
+      if (granted && !storedReduced) {
+        const data = {
+          postId: s.postId,
+          userId,
+          contentType: s.contentType,
+          surface: s.surface,
+          startedAt: new Date(s.startedAt),
+          dwellMs: session.dwellMs,
+          watchMs: session.watchMs,
+          mediaDurationMs: session.mediaDurationMs,
+          completed: session.completed,
+          truncated: s.truncated === true,
+          consent: 'granted',
+          actions: session.actions as Prisma.InputJsonValue,
+          watchSamples: session.watchSamples as Prisma.InputJsonValue,
+        };
+        await prisma.postEngagement.upsert({
+          where: ownRaw,
+          update: data,
+          // Conservation du brut : 90 j (#10510, O7) — posée à la création, jamais prolongée par un rejeu.
+          create: { sessionId: s.sessionId, ...data, createdAt: receivedAt, expiresAt: new Date(Date.now() + POST_ENGAGEMENT_RETENTION_MS) },
+        });
+      } else if (before && !storedReduced) {
+        // Une ligne nominative dont la suite arrive sans consentement (retrait en cours de session) est réduite.
+        await prisma.postEngagement.update({
+          where: { id: before.id },
+          data: {
+            ...MEASURE_UNSET,
+            sessionId: reducedKey,
+            readerKey,
+            ...creditsOfIncrements(credited),
+            expiresAt: earliest(before.expiresAt, new Date(before.createdAt.getTime() + UNCONSENTED_READING_RETENTION_MS)),
+          },
+        });
+      } else {
+        const credits = creditsOfIncrements(credited);
+        await prisma.postEngagement.upsert({
+          where: ownReduced,
+          update: credits,
+          create: {
+            sessionId: reducedKey,
+            postId: s.postId,
+            readerKey,
+            ...credits,
+            createdAt: receivedAt,
+            expiresAt: new Date(receivedAt.getTime() + UNCONSENTED_READING_RETENTION_MS),
+          },
+        });
+      }
 
       const counts = await engagementSessionCounts(prisma, {
-        sessionId: s.sessionId,
+        sessionKeys: [s.sessionId, reducedKey],
         postId: s.postId,
         userId,
         authorId: post.authorId,
         receivedAt: before?.createdAt ?? receivedAt,
       });
-      const added = counts ? engagementIncrementsAdded(stored, session) : {};
+      const added = counts ? incrementsNotYetCredited(already, credited) : {};
       if (Object.keys(added).length > 0) {
         await incrementPostCounters(prisma, [s.postId], added);
       }

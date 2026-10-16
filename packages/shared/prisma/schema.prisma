@@ -4295,7 +4295,12 @@ model PostView {
 model PostImpression {
   id        String   @id @default(auto()) @map("_id") @db.ObjectId
   postId    String   @db.ObjectId
-  userId    String   @db.ObjectId
+  /// Le lecteur, sur une impression CONSENTIE (et sur les lignes antérieures à
+  /// #10773). Absent d'une impression sans consentement, qui porte `readerKey`.
+  userId    String?  @db.ObjectId
+  /// Empreinte HMAC du compte (`accountReaderKeyOf`) d'une impression rangée
+  /// SANS consentement d'analyse (#10773) : déduplication, export et effacement.
+  readerKey String?
   source    String   @default("feed")
   /// Écran d'affichage déclaré par le client (`CONTENT_SURFACES`, #10483) —
   /// facultatif : un ancien client ne l'envoie pas.
@@ -4320,13 +4325,13 @@ model PostImpression {
   /// Session d'application — rangée seulement si l'analyse est consentie.
   appSessionId    String?
   platform        String?
-  /// Fin de conservation (90 j, index TTL `PostImpression_expiresAt_ttl`).
+  /// Fin de conservation (90 j, 8 j sans consentement — index TTL `PostImpression_expiresAt_ttl`, #10773).
   /// Les lignes antérieures la reçoivent par la migration nommée
   /// `2026-10-13-social-events-v2-retention.ts` (feu vert du porteur en production).
   expiresAt       DateTime?
 
   post Post @relation(fields: [postId], references: [id], onDelete: Cascade)
-  user User @relation("UserPostImpressions", fields: [userId], references: [id], onDelete: Cascade)
+  user User? @relation("UserPostImpressions", fields: [userId], references: [id], onDelete: Cascade)
 
   @@index([postId])
   @@index([userId])
@@ -4387,28 +4392,46 @@ model ContentEvent {
 /// Idempotence garantie par `sessionId @unique` (rejouer un ACK perdu = no-op via upsert).
 model PostEngagement {
   id              String   @id @default(auto()) @map("_id") @db.ObjectId
+  /// La clé de session du client — ou, pour une session rangée SANS
+  /// consentement d'analyse, son empreinte HMAC (`engagementSessionKeyOf`, #10771).
   sessionId       String   @unique
   postId          String   @db.ObjectId
-  userId          String   @db.ObjectId
-  contentType     String
-  surface         String
-  startedAt       DateTime
-  dwellMs         Int
+  /// Le lecteur, sur une session CONSENTIE (et sur les lignes antérieures à
+  /// #10771). Absent d'une session sans consentement, qui porte `readerKey`.
+  userId          String?  @db.ObjectId
+  /// Empreinte HMAC du compte (`accountReaderKeyOf`) d'une session rangée SANS
+  /// consentement d'analyse (#10771) : déduplication, export et effacement.
+  readerKey       String?
+  /// Mesure de la session — rangée seulement si l'analyse est consentie : sans
+  /// consentement, elle sert au calcul des crédits à la réception, puis est jetée.
+  contentType     String?
+  surface         String?
+  startedAt       DateTime?
+  dwellMs         Int?
   watchMs         Int?
   mediaDurationMs Int?
-  completed       Boolean  @default(false)
-  truncated       Boolean  @default(false)
+  completed       Boolean?
+  truncated       Boolean?
+  /// Le statut d'analyse ÉTABLI par la passerelle (`granted`), jamais la valeur
+  /// déclarée par le client (#10772). Les lignes antérieures portent la valeur client.
   consent         String?
-  actions         Json     @default("[]")
-  watchSamples    Json     @default("[]")
+  actions         Json?
+  watchSamples    Json?
+  /// Les compteurs du post que la session a déjà crédités (ouverture, lecture,
+  /// vue qualifiée) — ce qu'une session sans consentement garde pour fusionner
+  /// son premier contact et sa mesure sans recompter (#10771).
+  creditedOpen      Boolean?
+  creditedPlay      Boolean?
+  creditedQualified Boolean?
   createdAt       DateTime @default(now())
-  /// Fin de conservation (90 j, index TTL `PostEngagement_expiresAt_ttl`, #10510).
+  /// Fin de conservation (90 j, 8 j sans consentement — index TTL
+  /// `PostEngagement_expiresAt_ttl`, #10510, #10771).
   /// Les lignes antérieures la reçoivent par la migration nommée
   /// `2026-10-13-social-events-v2-retention.ts` (feu vert du porteur en production).
   expiresAt       DateTime?
 
   post Post @relation(fields: [postId], references: [id], onDelete: Cascade)
-  user User @relation("UserPostEngagements", fields: [userId], references: [id])
+  user User? @relation("UserPostEngagements", fields: [userId], references: [id])
 
   @@index([postId])
   @@index([userId])

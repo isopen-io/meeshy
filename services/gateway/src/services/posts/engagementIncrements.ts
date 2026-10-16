@@ -116,17 +116,28 @@ export function mergeEngagementSessions<T extends MergeableEngagement>(stored: M
 }
 
 /**
- * Ce que la session ajoute aux compteurs (#10764) : les incréments de l'état
- * fusionné que l'état stocké n'avait pas déjà valus. Sans état stocké (première
- * réception), tout. Chaque compteur reste à UN par session, quel que soit le
- * nombre de réceptions ou leur ordre.
+ * Les trois compteurs qu'une session peut créditer, en DRAPEAUX : ce qu'une
+ * ligne rangée sans consentement d'analyse garde à la place de sa mesure
+ * (#10771). La mesure sert à les calculer à la réception, puis est jetée.
  */
-export function engagementIncrementsAdded(
-  stored: EngagementSession | undefined,
-  merged: EngagementSession,
-): PostCounterIncrements {
-  const next = engagementAggregateIncrements(merged);
-  if (stored === undefined) return next;
-  const already = engagementAggregateIncrements(stored);
-  return Object.fromEntries(Object.entries(next).filter(([counter]) => !(counter in already)));
-}
+export type EngagementCredits = {
+  readonly creditedOpen: boolean;
+  readonly creditedPlay: boolean;
+  readonly creditedQualified: boolean;
+};
+
+export const creditsOfIncrements = (increments: PostCounterIncrements): EngagementCredits => ({
+  creditedOpen: 'postOpenCount' in increments,
+  creditedPlay: 'playCount' in increments,
+  creditedQualified: 'qualifiedViewCount' in increments,
+});
+
+export const incrementsOfCredits = (credits: Partial<Record<keyof EngagementCredits, boolean | null>>): PostCounterIncrements => ({
+  ...(credits.creditedOpen ? { postOpenCount: { increment: 1 } } : {}),
+  ...(credits.creditedPlay ? { playCount: { increment: 1 } } : {}),
+  ...(credits.creditedQualified ? { qualifiedViewCount: { increment: 1 } } : {}),
+});
+
+/** Ce que `now` crédite et que `already` n'avait pas — chaque compteur à UN par session. */
+export const incrementsNotYetCredited = (already: PostCounterIncrements, now: PostCounterIncrements): PostCounterIncrements =>
+  Object.fromEntries(Object.entries(now).filter(([counter]) => !(counter in already)));

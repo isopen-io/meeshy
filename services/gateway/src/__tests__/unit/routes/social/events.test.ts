@@ -66,6 +66,7 @@ import {
   socialEventsRateLimitKey,
   SOCIAL_EVENTS_BATCH_CAP,
 } from '../../../../routes/social/events';
+import { accountReaderKeyOf } from '../../../../services/posts/readerKey';
 
 // ─── Constantes ───────────────────────────────────────────────────────────────
 
@@ -661,6 +662,69 @@ describe('critère 3 — `download` et `dwell` gardent leur effet propre', () =>
 });
 
 // ─────────────────────────────────────────────────────────────────────────────
+// #10772 — le refus d'analyse s'applique aux sessions de lecture côté passerelle
+// ─────────────────────────────────────────────────────────────────────────────
+
+describe('#10772 — une session de lecture passe par le statut d’analyse que la passerelle établit', () => {
+  const DWELL = {
+    type: 'dwell',
+    sessionId: '3f2504e0-4f89-11d3-9a0c-0305e82c3310',
+    postId: VISIBLE_ID,
+    contentType: 'REEL',
+    surface: 'reels',
+    startedAt: new Date().toISOString(),
+    dwellMs: 9000,
+    actions: [{ type: 'like', atMs: 10 }],
+  };
+  const withUser = (row: Record<string, unknown> | null) => ({
+    ...makePrisma(),
+    user: { findUnique: jest.fn<any>().mockResolvedValue(row) },
+  });
+  const standingSent = () => (mockRecordEngagementBatch.mock.calls[0] as any)[2];
+  const post = (app: FastifyInstance, payload: Record<string, unknown>) =>
+    app.inject({ method: 'POST', url: '/social/events', headers: { authorization: 'Bearer jeton' }, payload });
+
+  it('un retrait côté serveur (analyticsConsentWithdrawnAt) refuse la session, même si le client ne dit rien', async () => {
+    const consented = new Date('2026-01-01');
+    const app = await buildApp({ prisma: withUser({ analyticsConsentAt: consented, dataProcessingConsentAt: consented, analyticsConsentWithdrawnAt: new Date() }) });
+    await post(app, { events: [DWELL] });
+    expect(standingSent()).toBe('denied');
+    await app.close();
+  });
+
+  it('un compte qui n’a rien consenti : la session est rangée sous not_granted', async () => {
+    const app = await buildApp({ prisma: withUser({ analyticsConsentAt: null, dataProcessingConsentAt: null }) });
+    await post(app, { events: [{ ...DWELL, type: 'dwell-start' }] });
+    expect(standingSent()).toBe('not_granted');
+    await app.close();
+  });
+
+  it('seule la passerelle accorde : un compte consentant sous un lot qui dit « denied » est refusé', async () => {
+    const consented = new Date('2026-01-01');
+    const app = await buildApp({ prisma: withUser({ analyticsConsentAt: consented, dataProcessingConsentAt: consented }) });
+    await post(app, { context: { consent: 'denied' }, events: [DWELL] });
+    expect(standingSent()).toBe('denied');
+    await app.close();
+  });
+
+  it('un compte consentant : la session garde le régime complet', async () => {
+    const consented = new Date('2026-01-01');
+    const app = await buildApp({ prisma: withUser({ analyticsConsentAt: consented, dataProcessingConsentAt: consented }) });
+    await post(app, { events: [DWELL] });
+    expect(standingSent()).toBe('granted');
+    await app.close();
+  });
+
+  it('une vue sans clé d’impression transmet le statut à l’impression qu’elle déduit (#10773)', async () => {
+    const app = await buildApp({ prisma: withUser({ analyticsConsentAt: null, dataProcessingConsentAt: null }) });
+    await post(app, { events: [{ type: 'view', postId: VISIBLE_ID }] });
+    const [, , , context] = mockRecordView.mock.calls[0] as any;
+    expect(context).toMatchObject({ impliesImpression: true, standing: 'not_granted' });
+    await app.close();
+  });
+});
+
+// ─────────────────────────────────────────────────────────────────────────────
 // La variante ANONYME — même route, sans jeton porteur
 // ─────────────────────────────────────────────────────────────────────────────
 
@@ -757,8 +821,10 @@ describe('#10732 — une vue compte son impression quand elle manque, jamais deu
 
     const insertion = commandes(prisma).find((c) => c.insert === 'PostImpression');
     expect(insertion?.documents).toEqual([expect.objectContaining({
-      postId: { $oid: VISIBLE_ID }, userId: { $oid: USER_ID }, source: 'story', eventKey: expect.any(String),
+      // Sans consentement d'analyse, l'empreinte du lecteur et non son compte (#10773).
+      postId: { $oid: VISIBLE_ID }, readerKey: accountReaderKeyOf(USER_ID), source: 'story', eventKey: expect.any(String),
     })]);
+    expect(insertion?.documents[0]).not.toHaveProperty('userId');
     expect(impressionsCreditees(prisma)).toEqual([{ ids: [VISIBLE_ID], increment: 1 }]);
   });
 

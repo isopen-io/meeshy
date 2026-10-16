@@ -93,17 +93,19 @@ describe('PostService.recordEngagementBatch — ingestion', () => {
     };
 
   it('upserts each session by sessionId', async () => {
-    const n = await service.recordEngagementBatch([mkSession()], 'u1');
+    const n = await service.recordEngagementBatch([mkSession()], 'u1', 'granted');
     expect(n).toBe(1);
     expect(prisma.postEngagement.upsert).toHaveBeenCalledTimes(1);
+    // La clé de session vient du client : la ligne n'est la sienne que sous SON identité.
     expect(upsertArg().where).toEqual({
       sessionId: '11111111-1111-1111-1111-111111111111',
+      userId: 'u1',
     });
   });
 
   it('une session de lecture a une durée de conservation : 90 jours (revue de conformité O7, #10510)', async () => {
     const before = Date.now();
-    await service.recordEngagementBatch([mkSession()], 'u1');
+    await service.recordEngagementBatch([mkSession()], 'u1', 'granted');
     const expiresAt = upsertArg().create.expiresAt as Date;
 
     expect(expiresAt).toBeInstanceOf(Date);
@@ -113,7 +115,7 @@ describe('PostService.recordEngagementBatch — ingestion', () => {
   });
 
   it('persists the route userId, never the client-supplied userId', async () => {
-    await service.recordEngagementBatch([mkSession({ userId: 'spoofed' })], 'u1');
+    await service.recordEngagementBatch([mkSession({ userId: 'spoofed' })], 'u1', 'granted');
     const arg = upsertArg();
     expect(arg.create.userId).toBe('u1');
     expect(arg.update.userId).toBe('u1');
@@ -127,18 +129,19 @@ describe('PostService.recordEngagementBatch — ingestion', () => {
       [mkSession({ sessionId: 'a', postId: POST_A }),
        mkSession({ sessionId: 'b', postId: POST_B })],
       'u1',
+      'granted',
     );
     expect(n).toBe(1);
     expect(prisma.postEngagement.upsert).toHaveBeenCalledTimes(1);
   });
 
   it('caps dwellMs at 300000 defensively', async () => {
-    await service.recordEngagementBatch([mkSession({ dwellMs: 999999 })], 'u1');
+    await service.recordEngagementBatch([mkSession({ dwellMs: 999999 })], 'u1', 'granted');
     expect(upsertArg().create.dwellMs).toBe(300000);
   });
 
   it('caps watchMs at 300000 defensively', async () => {
-    await service.recordEngagementBatch([mkSession({ watchMs: 999999 })], 'u1');
+    await service.recordEngagementBatch([mkSession({ watchMs: 999999 })], 'u1', 'granted');
     expect(upsertArg().create.watchMs).toBe(300000);
   });
 
@@ -149,6 +152,7 @@ describe('PostService.recordEngagementBatch — ingestion', () => {
     const n = await service.recordEngagementBatch(
       [mkSession({ sessionId: 'a' }), mkSession({ sessionId: 'b', postId: POST_B })],
       'u1',
+      'granted',
     );
     expect(n).toBe(1);
   });
@@ -172,6 +176,7 @@ describe('PostService.recordEngagementBatch — agrégation dénormalisée (INSE
     await service.recordEngagementBatch(
       [mkSession({ contentType: 'REEL', surface: 'reels', dwellMs: 1000 })],
       'u1',
+      'granted',
     );
     expect(lastUpdateData()).toMatchObject({ postOpenCount: { increment: 1 } });
   });
@@ -180,6 +185,7 @@ describe('PostService.recordEngagementBatch — agrégation dénormalisée (INSE
     await service.recordEngagementBatch(
       [mkSession({ surface: 'detail', dwellMs: 1000 })],
       'u1',
+      'granted',
     );
     // dwell < 2.5s → no qualified view either → no counters touched at all.
     const data = lastUpdateData() ?? {};
@@ -190,6 +196,7 @@ describe('PostService.recordEngagementBatch — agrégation dénormalisée (INSE
     await service.recordEngagementBatch(
       [mkSession({ surface: 'detail', dwellMs: 4000 })],
       'u1',
+      'granted',
     );
     const data = lastUpdateData() ?? {};
     expect(data).toMatchObject({ qualifiedViewCount: { increment: 1 } });
@@ -200,6 +207,7 @@ describe('PostService.recordEngagementBatch — agrégation dénormalisée (INSE
     await service.recordEngagementBatch(
       [mkSession({ contentType: 'STORY', surface: 'storyViewer', dwellMs: 1000 })],
       'u1',
+      'granted',
     );
     const data = lastUpdateData() ?? {};
     expect(data).not.toHaveProperty('postOpenCount');
@@ -209,7 +217,7 @@ describe('PostService.recordEngagementBatch — agrégation dénormalisée (INSE
     // findUnique returns the row already stored → the session already landed → UPDATE path.
     const session = mkSession({ contentType: 'REEL', surface: 'reels' });
     prisma.postEngagement.findUnique.mockResolvedValueOnce({ id: 'existing', ...storedRowOf(session) });
-    await service.recordEngagementBatch([session], 'u1');
+    await service.recordEngagementBatch([session], 'u1', 'granted');
     expect(prisma.$runCommandRaw).not.toHaveBeenCalled();
   });
 
@@ -217,6 +225,7 @@ describe('PostService.recordEngagementBatch — agrégation dénormalisée (INSE
     await service.recordEngagementBatch(
       [mkSession({ contentType: 'REEL', surface: 'reels', completed: true })],
       'u1',
+      'granted',
     );
     expect(lastUpdateData()).toMatchObject({ playCount: { increment: 1 } });
   });
@@ -225,6 +234,7 @@ describe('PostService.recordEngagementBatch — agrégation dénormalisée (INSE
     await service.recordEngagementBatch(
       [mkSession({ contentType: 'REEL', surface: 'reels', watchMs: 2500, mediaDurationMs: 60000, dwellMs: 0 })],
       'u1',
+      'granted',
     );
     expect(lastUpdateData()).toMatchObject({ qualifiedViewCount: { increment: 1 } });
   });
@@ -237,6 +247,7 @@ describe('PostService.recordEngagementBatch — agrégation dénormalisée (INSE
         watchSamples: [{ positionMs: 6000, atMs: 1000 }],
       })],
       'u1',
+      'granted',
     );
     expect(lastUpdateData()).toMatchObject({ qualifiedViewCount: { increment: 1 } });
   });
@@ -249,6 +260,7 @@ describe('PostService.recordEngagementBatch — agrégation dénormalisée (INSE
         watchSamples: [{ positionMs: 4000, atMs: 1000 }],
       })],
       'u1',
+      'granted',
     );
     const data = lastUpdateData() ?? {};
     expect(data).not.toHaveProperty('qualifiedViewCount');
@@ -262,6 +274,7 @@ describe('PostService.recordEngagementBatch — agrégation dénormalisée (INSE
         watchSamples: [{ positionMs: 4600, atMs: 1000 }],
       })],
       'u1',
+      'granted',
     );
     expect(lastUpdateData()).toMatchObject({ qualifiedViewCount: { increment: 1 } });
   });
@@ -270,6 +283,7 @@ describe('PostService.recordEngagementBatch — agrégation dénormalisée (INSE
     await service.recordEngagementBatch(
       [mkSession({ contentType: 'POST', surface: 'detail', dwellMs: 2500 })],
       'u1',
+      'granted',
     );
     expect(lastUpdateData()).toMatchObject({ qualifiedViewCount: { increment: 1 } });
   });
@@ -278,6 +292,7 @@ describe('PostService.recordEngagementBatch — agrégation dénormalisée (INSE
     await service.recordEngagementBatch(
       [mkSession({ contentType: 'POST', surface: 'detail', dwellMs: 2000 })],
       'u1',
+      'granted',
     );
     const data = lastUpdateData() ?? {};
     expect(data).not.toHaveProperty('qualifiedViewCount');
@@ -302,7 +317,7 @@ describe('PostService.recordEngagementBatch — premier contact puis mesure (#10
 
   it('le premier contact d’un réel compte son ouverture tout de suite', async () => {
     const prisma = buildPrisma();
-    await new PostService(prisma).recordEngagementBatch([REEL_START], 'u1');
+    await new PostService(prisma).recordEngagementBatch([REEL_START], 'u1', 'granted');
 
     expect(counterWrites(prisma)).toEqual([{ postOpenCount: { increment: 1 } }]);
   });
@@ -311,7 +326,7 @@ describe('PostService.recordEngagementBatch — premier contact puis mesure (#10
     const prisma = buildPrisma();
     prisma.postEngagement.findUnique.mockResolvedValueOnce({ id: 'existing', ...storedRowOf(REEL_START) });
 
-    await new PostService(prisma).recordEngagementBatch([REEL_END], 'u1');
+    await new PostService(prisma).recordEngagementBatch([REEL_END], 'u1', 'granted');
 
     expect(counterWrites(prisma)).toEqual([{ playCount: { increment: 1 }, qualifiedViewCount: { increment: 1 } }]);
   });
@@ -320,7 +335,7 @@ describe('PostService.recordEngagementBatch — premier contact puis mesure (#10
     const prisma = buildPrisma();
     prisma.postEngagement.findUnique.mockResolvedValueOnce({ id: 'existing', ...storedRowOf(REEL_END) });
 
-    await new PostService(prisma).recordEngagementBatch([REEL_START], 'u1');
+    await new PostService(prisma).recordEngagementBatch([REEL_START], 'u1', 'granted');
 
     expect(counterWrites(prisma)).toEqual([]);
     const update = (prisma.postEngagement.upsert.mock.calls[0][0] as { update: Record<string, unknown> }).update;
@@ -341,24 +356,25 @@ describe('PostService.recordEngagementBatch — une clé de session neuve ne reg
 
   it('l’auteur qui regarde son propre réel ne crédite aucun compteur', async () => {
     const prisma = buildPrisma();
-    await new PostService(prisma).recordEngagementBatch([REEL], 'author');
+    await new PostService(prisma).recordEngagementBatch([REEL], 'author', 'granted');
     expect(counterWrites(prisma)).toEqual([]);
   });
 
   it('une session neuve du même lecteur sur le même post dans la fenêtre ne crédite rien', async () => {
     const prisma = buildPrisma();
     prisma.postEngagement.findFirst.mockResolvedValue({ id: 'session-precedente' });
-    await new PostService(prisma).recordEngagementBatch([REEL], 'u1');
+    await new PostService(prisma).recordEngagementBatch([REEL], 'u1', 'granted');
 
     expect(counterWrites(prisma)).toEqual([]);
     const where = (prisma.postEngagement.findFirst.mock.calls[0][0] as { where: Record<string, any> }).where;
-    expect(where).toMatchObject({ userId: 'u1', postId: POST_A, sessionId: { not: REEL.sessionId } });
+    expect(where).toMatchObject({ postId: POST_A, OR: [{ userId: 'u1' }, { readerKey: expect.stringMatching(/^[0-9a-f]{64}$/) }] });
+    expect(where.NOT.sessionId.in).toContain(REEL.sessionId);
     expect(where.createdAt.lt.getTime() - where.createdAt.gte.getTime()).toBe(10_000);
   });
 
   it('la session elle-même compte quand aucune autre ne la précède dans la fenêtre', async () => {
     const prisma = buildPrisma();
-    await new PostService(prisma).recordEngagementBatch([REEL], 'u1');
+    await new PostService(prisma).recordEngagementBatch([REEL], 'u1', 'granted');
     expect(counterWrites(prisma)).toEqual([{
       postOpenCount: { increment: 1 }, playCount: { increment: 1 }, qualifiedViewCount: { increment: 1 },
     }]);

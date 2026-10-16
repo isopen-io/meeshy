@@ -138,3 +138,13 @@ describe('bootstrapDatabase — les index v2 sont un invariant de CHAQUE démarr
     expect(calls.indexOf('social-events')).toBeLessThan(calls.indexOf('gate'));
   });
 });
+
+describe('#10771, #10773 — l’empreinte du lecteur est indexée là où une ligne sans consentement la porte', () => {
+  it.each(['PostImpression', 'PostEngagement'])('%s : (readerKey, postId), sur les seules lignes qui portent une empreinte', (collection) => {
+    expect(SOCIAL_EVENT_INDEXES).toContainEqual(expect.objectContaining({
+      collection,
+      key: { readerKey: 1, postId: 1 },
+      partialFilterExpression: { readerKey: { $exists: true } },
+    }));
+  });
+});
