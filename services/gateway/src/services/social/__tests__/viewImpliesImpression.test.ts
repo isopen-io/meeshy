@@ -42,7 +42,7 @@ const impressionCredits = (prisma: ReturnType<typeof buildDeps>['prisma']) =>
 describe('recordView — la vue sans clé implique son impression (#10732)', () => {
   it('un lecteur sans impression du post en reçoit une, déduite, et le compteur monte d’un', async () => {
     const { prisma, deps } = buildDeps();
-    await recordView(deps, POST, READER, undefined, { surface: 'story', impliesImpression: true, standing: 'granted' });
+    await recordView(deps, POST, READER, undefined, { surface: 'story', impliesImpression: true });
 
     expect(prisma.postImpression.createMany).toHaveBeenCalledWith({
       data: [expect.objectContaining({ postId: POST, userId: READER, source: 'view', surface: 'story' })],
