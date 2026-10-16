@@ -12,7 +12,7 @@ import { GamePhotoFlow } from '@/components/game-photo-flow';
 import { GAME_BRAND, GAME_CARD, GAME_INK, GAME_INK_2 } from '@/components/game-surface';
 import { GameTouch } from '@/components/game-touch';
 import { ConceptEmblem, ConceptFacts, ConceptGauge, ProgressionRow, RowEmblem } from '@/components/progression-concept';
-import { shownLevelOf } from '@/lib/game/ladder';
+import { shownLevelOf, sparksReading } from '@/lib/game/ladder';
 import type { EngagementWithGame } from '@/lib/api/engagement';
 import { appPhotoEnv } from '@/lib/game-photo/app-env';
 import { missionMoment, type PhotoMoment } from '@/lib/game-photo/moments';
@@ -130,9 +130,7 @@ function pieceOf(concept: ProgressionConcept, view: EngagementWithGame, host: Fi
         return (
           <GameMintPreview
             mint={game.mint}
-            held={game.level.score}
-            convertible={view.meesh?.debitablePoints}
-            badgesLost={view.mintBadgeLoss}
+            held={sparksReading(game.level).pocket}
             online={online}
             minting={actions.pending.mint}
             error={actions.errors.mint}

@@ -80,11 +80,11 @@ describe('le catalogue : aucun « Il manque » sans cible', () => {
 });
 
 describe('les deux soldes ont deux noms stables, dans les sept langues', () => {
-  test('« Points en poche » et « Points à convertir » en français', async () => {
+  test('« Étincelles en poche » et « Étincelles » en français', async () => {
     const french = await catalogOf('fr');
-    expect(french['game.concept.fact.held']).toBe('Points en poche');
-    expect(french['game.concept.fact.convertible']).toBe('Points à convertir');
-    expect(french['game.points.convertible.other']).toBe('{count} points à convertir');
+    expect(french['game.concept.fact.held']).toBe('Étincelles en poche');
+    expect(french['game.concept.fact.convertible']).toBe('Étincelles');
+    expect(french['game.points.convertible.other']).toBe('{count} étincelles');
   });
 
   test('chaque langue nomme les deux soldes différemment l’un de l’autre', async () => {
@@ -121,19 +121,16 @@ describe('les données d’un concept : chaque manque est une ligne qui nomme sa
   const facts = (concept: Parameters<typeof conceptView>[0], view: EngagementWithGame): readonly (readonly [string, string])[] =>
     conceptView(concept, view, NOW).facts.map((fact) => [fact.label, plain(fact.value)] as const);
 
-  test('Points : le solde à convertir, puis ce qu’il manque POUR LA MEESH', () => {
-    expect(facts('points', jcnm)).toEqual([
-      ['Points à convertir', '5 823 points'],
-      ['Il manque pour la Meesh n° 79', '1 839 points à convertir'],
-    ]);
+  test('Points : ce qu’il manque POUR LA MEESH — une seule poche, plus de second solde « à convertir »', () => {
+    expect(facts('points', jcnm)).toEqual([['Il manque pour la Meesh n° 79', '1 839 étincelles']]);
   });
 
-  test('Points : les pastilles disent le solde à convertir et la Meesh visée', () => {
-    expect(conceptView('points', jcnm, NOW).chips.map((chip) => plain(chip.text))).toEqual(['5 823 points à convertir', 'Meesh n° 79 : il manque 1 839']);
+  test('Points : les pastilles disent la Meesh visée', () => {
+    expect(conceptView('points', jcnm, NOW).chips.map((chip) => plain(chip.text))).toEqual(['Meesh n° 79 : il manque 1 839']);
   });
 
   test('Niveau : la pastille dit le niveau visé', () => {
-    expect(conceptView('level', jcnm, NOW).chips.map((chip) => plain(chip.text))).toContain('Niveau 28 dans 1 301 points');
+    expect(conceptView('level', jcnm, NOW).chips.map((chip) => plain(chip.text))).toContain('Niveau 28 dans 1 301 étincelles');
   });
 
   test('Niveau, devant un ancien serveur : la ligne nomme le niveau visé', () => {
@@ -174,9 +171,9 @@ describe('les précisions d’un élément', () => {
     expect(labels).toContain('Il manque pour la zone de montée');
   });
 
-  test('la pièce : ce qu’il manque nomme la Meesh et se dit en points à convertir', () => {
+  test('la pièce : ce qu’il manque nomme la Meesh et se dit en étincelles', () => {
     const rows = coinDetail(jcnm)?.facts.map((fact) => [fact.label, plain(fact.value)]);
-    expect(rows).toContainEqual(['Il manque pour la Meesh n° 79', '1 839 points à convertir']);
+    expect(rows).toContainEqual(['Il manque pour la Meesh n° 79', '1 839 étincelles']);
   });
 });
 
@@ -191,20 +188,22 @@ describe('avant un geste : ce qu’il manque est une phrase, avec son but', () =
     expect(text(renderToStaticMarkup(<GameRequirementLine concept="league" current={8} required={10} record />))).toContain('Il manque 2 niveaux pour l’ouvrir.');
   });
 
-  test('la frappe : en poche, à convertir, le prix — et le manque vise la Meesh, en points à convertir', () => {
+  test('la frappe : en poche, le prix — et le manque vise la Meesh, en étincelles, sans solde à convertir', () => {
     const page = text(
       renderToStaticMarkup(
-        <GameMintPreview mint={jcnmGame.mint} held={jcnmGame.level.score} convertible={5_823} online minting={false} celebration={null} onMint={() => undefined} />,
+        <GameMintPreview mint={jcnmGame.mint} held={jcnmGame.level.score} online minting={false} celebration={null} onMint={() => undefined} />,
       ),
     );
-    expect(page).toContain('En poche 77 099 points');
-    expect(page).toContain('À convertir 5 823 points');
-    expect(page).toContain('Coûte 7 662 points');
-    expect(page).toContain('Il manque 1 839 points à convertir pour la Meesh n° 79.');
+    expect(page).toContain('En poche 77 099 étincelles');
+    expect(page).not.toContain('À convertir');
+    expect(page).toContain('Coûte 7 662 étincelles');
+    expect(page).toContain('Il manque 1 839 étincelles pour la Meesh n° 79.');
   });
 
-  test('la frappe, sans solde à convertir servi : il se déduit du prix et du manque', () => {
+  test('la frappe : une seule poche, aucun solde « à convertir » n’est plus déduit', () => {
     const page = text(renderToStaticMarkup(<GameMintPreview mint={jcnmGame.mint} held={jcnmGame.level.score} online minting={false} celebration={null} onMint={() => undefined} />));
-    expect(page).toContain('À convertir 5 823 points');
+    expect(page).toContain('En poche 77 099 étincelles');
+    expect(page).not.toContain('À convertir');
+    expect(page).not.toContain('5 823');
   });
 });

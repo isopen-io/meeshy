@@ -262,6 +262,8 @@ export type EngagementProgressPayload = {
     readonly sparksCycle?: number;
     /** Accumulées à vie (#10846) — un nombre JSON entier, saturé à 2^53 − 1. */
     readonly sparksLifetime?: number;
+    /** La dette d'étincelles — déduite des prochains gains, bloque la frappe. */
+    readonly sparksDebt?: number;
     /** Le niveau max à vie (#10846), qui survit au prestige. */
     readonly levelMaxLifetime?: number;
   };

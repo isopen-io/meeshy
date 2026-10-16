@@ -205,6 +205,7 @@ export function buildGameBlock(facts: GameBlockFacts): GameBlock {
             mythic: standing.rank === 'mythe',
             levelCap,
             steps,
+            debt: sparks.debt,
           }),
     ),
     missions: {

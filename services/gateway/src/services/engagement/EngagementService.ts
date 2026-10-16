@@ -420,12 +420,15 @@ export class EngagementService {
         // posés sur sa poche (`sparksOf`). Écrits EN VALEUR : un champ absent + incrément rendrait null (leçon #6428).
         const before = sparksOf(account);
         const cycle = before.cycle + points;
+        // La DETTE se déduit d'abord du gain (porteur, 2026-10-16) ; cycle et total à vie montent du gain entier.
+        const repaid = Math.min(before.debt, points);
         await tx.user.update({
           where: { id: userId },
           data: {
-            engagementScore: before.pocket + points,
+            engagementScore: before.pocket + points - repaid,
             sparksSincePrestige: BigInt(cycle),
             sparksEarnedLifetime: BigInt(before.lifetime + points),
+            ...(before.debt > 0 ? { sparksDebt: BigInt(before.debt - repaid) } : {}),
           },
         });
         return { cycle, levelRecord: account.levelRecord ?? null, levelMaxLifetime: account.levelMaxLifetime ?? null };
@@ -868,7 +871,10 @@ export class EngagementService {
           $set: {
             sparksEarnedLifetime: { $add: [{ $max: [held('sparksEarnedLifetime'), held('sparksSincePrestige'), held('engagementScore')] }, points] },
             sparksSincePrestige: { $add: [{ $max: [held('sparksSincePrestige'), held('engagementScore')] }, points] },
-            engagementScore: { $add: [held('engagementScore'), points] },
+            // La DETTE se déduit d'abord des étincelles gagnées (porteur, 2026-10-16) : seul le reste va en poche, alors que le
+            // cycle et le total à vie montent du gain ENTIER. `sparksDebt` s'écrit en dernier : les autres lisent l'ancienne dette.
+            engagementScore: { $add: [held('engagementScore'), { $subtract: [points, { $min: [held('sparksDebt'), points] }] }] },
+            sparksDebt: { $subtract: [held('sparksDebt'), { $min: [held('sparksDebt'), points] }] },
           },
         },
       ],

@@ -88,7 +88,7 @@ describe('une ligue ouverte', () => {
 
   test('l’écart à la montée se dit, et au sommet des ligues on le tait', () => {
     const near = league({ current: { ...(league().current as NonNullable<GameLeagueBlock['current']>), pointsToPromotion: 42, zone: 'safe' } });
-    expect(text(renderToStaticMarkup(<GameLeague {...props({ league: near })} />))).toContain('Encore 42 points pour monter');
+    expect(text(renderToStaticMarkup(<GameLeague {...props({ league: near })} />))).toContain('Encore 42 étincelles pour monter');
     const top = league({ current: { ...(league().current as NonNullable<GameLeagueBlock['current']>), pointsToPromotion: null, league: 'prisme' } });
     expect(text(renderToStaticMarkup(<GameLeague {...props({ league: top })} />))).toContain('Tu es au sommet des ligues.');
   });

@@ -155,7 +155,7 @@ describe('la frappe', () => {
     await settle();
     expect(gameOf(cached()).level.score).toBe(gameOf(before).level.score);
     expect(gameOf(cached()).treasury.held).toBe(gameOf(before).treasury.held);
-    expect(actions().errors.mint).toContain('points');
+    expect(actions().errors.mint).toContain('étincelles');
     expect(actions().celebration).toBeNull();
   });
 

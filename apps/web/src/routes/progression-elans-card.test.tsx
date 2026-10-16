@@ -85,13 +85,13 @@ const HINT: Readonly<Record<InterfaceLanguage, string>> = {
 };
 
 const EMPTY: Readonly<Record<InterfaceLanguage, string>> = {
-  fr: 'Publiez une story, un post, un réel ou lancez une conversation : chaque famille tenue en même temps multiplie vos points.',
-  en: 'Post a story, a post, a reel or start a conversation: every family you keep going at once multiplies your points.',
-  es: 'Publica una historia, una publicación, un reel o inicia una conversación: cada familia que mantienes a la vez multiplica tus puntos.',
-  pt: 'Publique um story, um post, um reel ou inicie uma conversa: cada família mantida ao mesmo tempo multiplica os seus pontos.',
-  de: 'Poste eine Story, einen Beitrag, ein Reel oder starte eine Unterhaltung: Jede Familie, die du gleichzeitig hältst, vervielfacht deine Punkte.',
-  it: 'Pubblica una storia, un post, un reel o avvia una conversazione: ogni famiglia portata avanti insieme moltiplica i tuoi punti.',
-  ar: 'انشر قصة أو منشورًا أو مقطعًا أو ابدأ محادثة: كل عائلة تحافظ عليها في الوقت نفسه تضاعف نقاطك.',
+  fr: 'Publiez une story, un post, un réel ou lancez une conversation : chaque famille tenue en même temps multiplie vos étincelles.',
+  en: 'Post a story, a post, a reel or start a conversation: every family you keep going at once multiplies your sparks.',
+  es: 'Publica una historia, una publicación, un reel o inicia una conversación: cada familia que mantienes a la vez multiplica tus chispas.',
+  pt: 'Publique um story, um post, um reel ou inicie uma conversa: cada família mantida ao mesmo tempo multiplica as suas faíscas.',
+  de: 'Poste eine Story, einen Beitrag, ein Reel oder starte eine Unterhaltung: Jede Familie, die du gleichzeitig hältst, vervielfacht deine Funken.',
+  it: 'Pubblica una storia, un post, un reel o avvia una conversazione: ogni famiglia portata avanti insieme moltiplica le tue scintille.',
+  ar: 'انشر قصة أو منشورًا أو مقطعًا أو ابدأ محادثة: كل عائلة تحافظ عليها في الوقت نفسه تضاعف شراراتك.',
 };
 
 const CHIPS: Readonly<Record<InterfaceLanguage, readonly string[]>> = {

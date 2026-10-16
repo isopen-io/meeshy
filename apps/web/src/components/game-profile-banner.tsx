@@ -43,8 +43,12 @@ export type BannerStanding = ShownRank & {
   readonly prestige: number;
   /** La part du niveau suivant déjà gagnée (0..1) ; `null` : non servie, le cercle est plein. */
   readonly progress: number | null;
-  /** Les points acquis ; `null` : non servis (ou aucun). */
+  /** Les ÉTINCELLES en poche ; `null` : non servies (ou aucune). */
   readonly points: number | null;
+  /** Le total d'étincelles accumulé à vie, en petit sous la poche ; `null` : non servi (autre que soi et ses amis, ou ancien serveur). */
+  readonly sparksLifetime: number | null;
+  /** Le niveau MAX à vie, sous le niveau actuel ; `null` : non servi (ancien serveur). Il survit au Prestige. */
+  readonly levelMax: number | null;
   /** Ce qu'il reste vers le niveau suivant ; `null` : au plafond, ou non servi. */
   readonly pointsToNext: number | null;
 };
@@ -54,21 +58,38 @@ export const AVATAR_CLEARANCE = 106;
 /** Le voile (24 %) laisse voir la bannière ; un liseré d'ombre serré autour de chaque lettre tient le texte blanc
  *  lisible sur une bannière claire, là où un fond épais la cacherait. */
 const GROUP =
-  'flex min-w-0 rounded-t-card bg-[color-mix(in_srgb,var(--color-media-backdrop)_24%,transparent)] px-2 pb-1.5 pt-1 text-on-media [text-shadow:0_0_1px_var(--color-scrim-strong),0_0_3px_var(--color-scrim),0_1px_2px_var(--color-scrim)]';
+  'flex min-w-0 bg-[color-mix(in_srgb,var(--color-media-backdrop)_24%,transparent)] px-2 pb-1.5 pt-1 text-on-media [text-shadow:0_0_1px_var(--color-scrim-strong),0_0_3px_var(--color-scrim),0_1px_2px_var(--color-scrim)]';
+/**
+ * Les coins HAUTS, en propriétés LOGIQUES (RTL compris) : le cadre du niveau (étincelles) n'est plus arrondi à son bord de
+ * DÉBUT, celui du rang à son bord de FIN — les deux n'arrondissent que le coin qui regarde l'avatar. Les coins bas restent carrés.
+ */
+const LEVEL_CORNERS = 'rounded-se-card';
+const RANK_CORNERS = 'rounded-ss-card';
 const GROUP_STYLE = { maxWidth: `calc((100% - ${AVATAR_CLEARANCE}px) / 2)` } as const;
 
 const pointsLine = (points: number, language: InterfaceLanguage): string =>
   translateGame(language, 'game.banner.points', { points: formatCount(points, language) });
+
+const lifetimeLine = (total: number, language: InterfaceLanguage): string =>
+  translateGame(language, 'game.banner.lifetime', { total: formatCount(total, language) });
+
+const levelNowLine = (level: number, language: InterfaceLanguage): string =>
+  translateGame(language, 'game.banner.level', { level: formatCount(level, language) });
+
+const levelMaxLine = (level: number, language: InterfaceLanguage): string =>
+  translateGame(language, 'game.banner.level_max', { level: formatCount(level, language) });
 
 /** Ce qu'il reste nomme le niveau visé (#10540) : « encore 1 301 vers le 28 », jamais « encore 1 301 » à côté d'un total de points. */
 const missingLine = (points: number, nextLevel: number, language: InterfaceLanguage): string =>
   translateGame(language, 'game.banner.missing', { points: formatCount(points, language), level: formatCount(nextLevel, language) });
 
 function levelLabel(standing: BannerStanding, language: InterfaceLanguage): string {
-  const { level, tier, prestige, points, pointsToNext } = standing;
+  const { level, tier, prestige, points, pointsToNext, sparksLifetime, levelMax } = standing;
   const parts: readonly (string | null)[] = [
     levelRingLabelWithPrestige(level, tier, prestige, language),
     points === null ? null : pointsLine(points, language),
+    sparksLifetime === null ? null : lifetimeLine(sparksLifetime, language),
+    levelMax === null ? null : translateGame(language, 'game.banner.level_max_a11y', { level: formatCount(levelMax, language) }),
     pointsToNext === null ? null : missingLine(pointsToNext, level + 1, language),
   ];
   return parts.filter((part): part is string => part !== null).join(translateGame(language, 'game.banner.separator'));
@@ -76,7 +97,7 @@ function levelLabel(standing: BannerStanding, language: InterfaceLanguage): stri
 
 export function GameProfileBanner({ standing }: { readonly standing: BannerStanding }) {
   const language = currentInterfaceLanguage();
-  const { level, tier, prestige, progress, points, pointsToNext, rank, division, mythic } = standing;
+  const { level, tier, prestige, progress, points, pointsToNext, sparksLifetime, levelMax, rank, division, mythic } = standing;
   const rankLine = standingLabel(standing, language);
   return (
     <div
@@ -84,18 +105,33 @@ export function GameProfileBanner({ standing }: { readonly standing: BannerStand
       className="@container pointer-events-none absolute flex items-end justify-between"
       style={{ insetInlineStart: 0, insetInlineEnd: 0, bottom: 0 }}
     >
-      <div data-profile-banner-level="" role="img" aria-label={levelLabel(standing, language)} className={`${GROUP} items-center gap-1.5 @max-[340px]:flex-col @max-[340px]:items-start @max-[340px]:gap-0.5`} style={GROUP_STYLE}>
+      <div data-profile-banner-level="" role="img" aria-label={levelLabel(standing, language)} className={`${GROUP} ${LEVEL_CORNERS} items-center gap-1.5 @max-[340px]:flex-col @max-[340px]:items-start @max-[340px]:gap-0.5`} style={GROUP_STYLE}>
         <span aria-hidden="true" className="flex shrink-0 flex-col items-center">
           <span data-profile-banner-level-name="" className="text-check font-semibold">
             {levelTierName(tier, language)}
           </span>
           <LevelRing level={level} tier={tier} progress={progress} size={36} prestige={prestige} />
         </span>
-        {points === null && pointsToNext === null ? null : (
+        {points === null && pointsToNext === null && levelMax === null ? null : (
           <span aria-hidden="true" className="flex min-w-0 flex-col leading-tight tabular-nums">
+            {/* La POCHE en grand, le TOTAL à vie en petit dessous (porteur, 2026-10-16). */}
             {points === null ? null : (
-              <span data-profile-banner-points={points} className="truncate text-check font-bold">
+              <span data-profile-banner-points={points} className="truncate text-body font-bold">
                 {pointsLine(points, language)}
+              </span>
+            )}
+            {sparksLifetime === null ? null : (
+              <span data-profile-banner-lifetime={sparksLifetime} className="truncate text-check font-medium opacity-90">
+                {lifetimeLine(sparksLifetime, language)}
+              </span>
+            )}
+            {/* Le NIVEAU actuel, le niveau MAX à vie dessous — toujours, même quand le max égale le niveau. */}
+            <span data-profile-banner-level-now={level} className="truncate text-check font-semibold">
+              {levelNowLine(level, language)}
+            </span>
+            {levelMax === null ? null : (
+              <span data-profile-banner-level-max={levelMax} className="truncate text-check font-medium opacity-90">
+                {levelMaxLine(levelMax, language)}
               </span>
             )}
             {pointsToNext === null ? null : (
@@ -106,7 +142,7 @@ export function GameProfileBanner({ standing }: { readonly standing: BannerStand
           </span>
         )}
       </div>
-      <div data-profile-banner-rank="" role="img" aria-label={rankLine} className={`${GROUP} flex-col items-center`} style={GROUP_STYLE}>
+      <div data-profile-banner-rank="" role="img" aria-label={rankLine} className={`${GROUP} ${RANK_CORNERS} flex-col items-center`} style={GROUP_STYLE}>
         <RankBlason rank={rank} division={division} mythic={mythic} level={level} size={34} label={rankName(rank, language)} />
         <span aria-hidden="true" data-profile-banner-rank-name="" className="truncate text-check font-semibold">
           {rankLine}

@@ -43,7 +43,7 @@ describe('les huit moments, dans les sept langues', () => {
     expect(promoted.what).toBe('Tu montes en ligue Saphir !');
     expect(promoted.means).toContain('place 3');
     expect(promoted.means).toContain('ligue Jade');
-    expect(momentCopyV2(guideMomentV2(EVENTS['league-first'], []), 'fr').next).toBe('Encore 12 points pour monter cette semaine.');
+    expect(momentCopyV2(guideMomentV2(EVENTS['league-first'], []), 'fr').next).toBe('Encore 12 étincelles pour monter cette semaine.');
   });
 
   test('une fin de saison terminée ne dit pas la même chose qu’une fin inachevée', () => {
@@ -69,7 +69,7 @@ describe('les huit moments, dans les sept langues', () => {
 
   test('une descente sans écart connu : la phrase sans nombre', () => {
     const far = momentCopyV2(guideMomentV2({ kind: 'league-relegated', from: 'jade', to: 'ambre', pointsToPromotion: null, weekKey: '2026-11-02' }, []), 'fr');
-    expect(far.next).toContain('chaque point compte');
+    expect(far.next).toContain('chaque étincelle compte');
   });
 
   test('les boutons : quatre nouveaux, et « voir mon niveau » pour le Prestige', () => {

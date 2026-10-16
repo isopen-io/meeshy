@@ -1,4 +1,5 @@
 import { LEAGUE_MIN_LEVEL } from '@meeshy/shared/utils/game/league';
+import { sparksReading } from '@/lib/game/ladder';
 import { MISSIONS_MIN_LEVEL } from '@meeshy/shared/utils/game/missions';
 import { SHOWCASE_DEFAULT_VISIBILITY } from '@meeshy/shared/utils/game/trophies';
 import { progressionConcepts, type ProgressionConcept } from '@meeshy/shared/utils/progression-layout';
@@ -12,7 +13,6 @@ import { SUBPAGE_CONCEPT, subpageOf } from '@/lib/game/progression-nav';
 import { translateGamePlural } from '@/lib/i18n-game-catalog';
 import { currentInterfaceLanguage } from '@/lib/interface-language';
 import {
-  convertiblePointsLabel,
   daysLabel,
   editionName,
   familyName,
@@ -30,7 +30,7 @@ import {
   shownRank,
 } from '@/lib/view/game-copy';
 import { leagueName, remainingLabel, timerLabel, visibilityLabel, zoneLabel } from '@/lib/view/game-copy-v2';
-import { conceptState, convertiblePointsOf } from '@/lib/view/progression-state';
+import { conceptState } from '@/lib/view/progression-state';
 
 /**
  * CE QUE CHAQUE CONCEPT DE « PROGRESSION » DIT (#9563) — écrit UNE fois, lu par
@@ -208,18 +208,19 @@ function points(view: EngagementWithGame): Body {
   const game = view.game;
   if (game === undefined) return { ...EMPTY, value: pointsLabel(view.level.value) };
   const { level: served, mint } = game;
-  const convertible = convertiblePointsOf(view);
+  // UNE poche d'étincelles (tout est dépensable) et, dessous, le total accumulé à vie quand il est servi (porteur, 2026-10-16).
+  const sparks = sparksReading(served);
   return {
-    value: pointsLabel(served.score),
+    value: pointsLabel(sparks.pocket),
     chips: present([
-      convertible === null ? null : chip(convertiblePointsLabel(convertible), about('convertible')),
+      sparks.lifetime === null ? null : chip(gameText('game.sparks.lifetime', { total: formatCount(sparks.lifetime) }), about('score')),
+      sparks.debt > 0 ? chip(gameText('game.sparks.debt', { debt: formatCount(sparks.debt) }), about('mint_missing')) : null,
       mint.canMint ? chip(gameText('game.concept.chip.mint_covered'), about('score')) : chip(toMeesh(mint.missingPoints, mint.number), about('mint_missing')),
     ]),
     gauge: mint.canMint ? 1 : ratio(mint.price - mint.missingPoints, mint.price),
     primary: about('score'),
     facts: present([
-      convertible === null ? null : fact(gameText('game.concept.fact.convertible'), pointsLabel(convertible), about('convertible')),
-      mint.canMint ? null : fact(missingForMeesh(mint.number), convertiblePointsLabel(mint.missingPoints), about('mint_missing')),
+      mint.canMint ? null : fact(missingForMeesh(mint.number), pointsLabel(mint.missingPoints), about('mint_missing')),
     ]),
   };
 }
@@ -242,7 +243,7 @@ function meesh(view: EngagementWithGame): Body {
       facts: present([
         fact(gameText('game.fact.balance'), meeshCount(wallet.balance), about('minted')),
         fact(gameText('game.mint.row.price'), pointsLabel(wallet.mintCost), about('mint_price')),
-        wallet.canMint ? null : fact(missingForMeesh(wallet.mintedLifetime + 1), convertiblePointsLabel(wallet.missingPoints), about('mint_missing')),
+        wallet.canMint ? null : fact(missingForMeesh(wallet.mintedLifetime + 1), pointsLabel(wallet.missingPoints), about('mint_missing')),
         minted,
       ]),
     };

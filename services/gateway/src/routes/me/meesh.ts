@@ -123,6 +123,7 @@ export async function meMeeshRoutes(fastify: FastifyInstance) {
               ...errorResponseSchema.properties,
               missingPoints: { type: 'number' },
               // Le refus de RANG (#10848) : la réserve fermée et le rang qu'elle exige, à la racine, à côté de `code`.
+              sparksDebt: { type: 'number' },
               tier: { type: 'string' },
               minHeld: { type: 'number' },
               requires: {
@@ -151,6 +152,12 @@ export async function meMeeshRoutes(fastify: FastifyInstance) {
 
       try {
         const outcome = await new MeeshService(fastify.prisma).mint(userId, request.body.requestId);
+
+        if (outcome.status === 'blocked-by-debt') {
+          // 409 TYPÉ (porteur, 2026-10-16) : une reprise de contenu supprimé n'a pas pu être prélevée sur une poche déjà
+          // dépensée ; la dette se déduit des prochaines étincelles et bloque la frappe jusqu'à son remboursement.
+          return sendError(reply, 409, 'MINT_BLOCKED_BY_DEBT', { code: 'MINT_BLOCKED_BY_DEBT', details: { sparksDebt: outcome.sparksDebt } });
+        }
 
         if (outcome.status === 'treasury-locked') {
           // 409 TYPÉ (#10848) : la pièce ferait entrer dans une réserve que le rang de Gloire n'ouvre pas encore. Le rang

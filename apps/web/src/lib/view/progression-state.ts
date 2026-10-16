@@ -1,4 +1,5 @@
 import { LEAGUE_MIN_LEVEL } from '@meeshy/shared/utils/game/league';
+import { sparksReading } from '@/lib/game/ladder';
 import { SEASON_WEEKS } from '@meeshy/shared/utils/game/season';
 import { SHOWCASE_DEFAULT_VISIBILITY } from '@meeshy/shared/utils/game/trophies';
 import type { ProgressionConcept } from '@meeshy/shared/utils/progression-layout';
@@ -9,7 +10,6 @@ import { translateGamePlural } from '@/lib/i18n-game-catalog';
 import { currentInterfaceLanguage } from '@/lib/interface-language';
 import {
   boundedPercent,
-  convertiblePointsLabel,
   daysLabel,
   formatCount,
   gameText,
@@ -64,34 +64,16 @@ function level(view: EngagementWithGame): string | null {
   });
 }
 
-/**
- * Le solde à convertir : celui du porte-monnaie servi ; sans lui, une frappe impossible le DIT (le prix
- * moins le manque) ; possible, il reste inconnu — jamais déduit du score.
- */
-export const convertiblePointsOf = (view: EngagementWithGame): number | null => {
-  const served = view.meesh?.debitablePoints;
-  if (served !== undefined) return served;
-  const mint = view.game?.mint;
-  return mint === undefined || mint.canMint ? null : Math.max(0, mint.price - mint.missingPoints);
-};
-
 function points(view: EngagementWithGame): string | null {
   const game = view.game;
   if (game === undefined) return null;
   const { mint } = game;
-  const convertible = convertiblePointsOf(view);
-  const held = pointsLabel(game.level.score);
+  // UNE seule poche, tout est dépensable (porteur, 2026-10-16) : plus de solde « à convertir ».
+  const held = pointsLabel(sparksReading(game.level).pocket);
   const number = count(mint.number);
   const price = pointsLabel(mint.price);
-  if (convertible === null) return gameText('game.state.points.ready_plain', { held, number, price });
-  if (mint.canMint) return gameText('game.state.points.ready', { held, convertible: convertiblePointsLabel(convertible), number, price });
-  return gameText('game.state.points.missing', {
-    held,
-    convertible: convertiblePointsLabel(convertible),
-    number,
-    price,
-    missing: convertiblePointsLabel(mint.missingPoints),
-  });
+  if (mint.canMint) return gameText('game.state.points.ready', { held, number, price });
+  return gameText('game.state.points.missing', { held, number, price, missing: pointsLabel(mint.missingPoints) });
 }
 
 function meesh(view: EngagementWithGame): string | null {
@@ -108,7 +90,7 @@ function meesh(view: EngagementWithGame): string | null {
   const price = pointsLabel(mint.price);
   const next = mint.canMint
     ? gameText('game.state.meesh.next_ready', { number, price })
-    : gameText('game.state.meesh.next_missing', { number, price, missing: convertiblePointsLabel(mint.missingPoints) });
+    : gameText('game.state.meesh.next_missing', { number, price, missing: pointsLabel(mint.missingPoints) });
   return sentences(kept, next);
 }
 

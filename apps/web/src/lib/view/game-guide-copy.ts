@@ -8,7 +8,6 @@ import {
   daysLabel,
   formatCount,
   levelTierName,
-  levelsLabel,
   meeshCount,
   pointsLabel,
   rankLabel,
@@ -135,29 +134,22 @@ export function momentCopy(moment: GuideMoment, language: Language = currentInte
         short: translateGame(language, 'game.guide.moment.missions_unlocked.short'),
       });
     case 'first-mint-possible': {
-      const { price, levelsLost, gloryGain } = moment.data;
+      // La frappe ne fait plus baisser le niveau (porteur, 2026-10-16) : plus de niveaux perdus à dire.
+      const { price, gloryGain } = moment.data;
       return copy(moment.action, language, {
         what: translateGame(language, 'game.guide.moment.first_mint_possible.what'),
-        means:
-          levelsLost === 0
-            ? translateGame(language, 'game.guide.moment.first_mint_possible.means_free', { price: points(price), glory: number(gloryGain) })
-            : translateGame(language, 'game.guide.moment.first_mint_possible.means', {
-                price: points(price),
-                levels: levelsLabel(levelsLost, language),
-                glory: number(gloryGain),
-              }),
+        means: translateGame(language, 'game.guide.moment.first_mint_possible.means', { price: points(price), glory: number(gloryGain) }),
         next: translateGame(language, 'game.guide.moment.first_mint_possible.next'),
         short: translateGame(language, 'game.guide.moment.first_mint_possible.short', { price: points(price) }),
       });
     }
     case 'first-mint': {
-      const { levelBefore, levelAfter, tailwindUntilLevel } = moment.data;
-      const flow = { from: number(levelBefore), to: number(levelAfter) };
+      // Ni « de 14 à 9 » ni Vent arrière : le niveau ne bouge pas à la frappe.
       return copy(moment.action, language, {
         what: translateGame(language, 'game.guide.moment.first_mint.what'),
-        means: translateGame(language, 'game.guide.moment.first_mint.means', flow),
-        next: translateGame(language, 'game.guide.moment.first_mint.next', { level: number(tailwindUntilLevel) }),
-        short: translateGame(language, 'game.guide.moment.first_mint.short', { ...flow, level: number(tailwindUntilLevel) }),
+        means: translateGame(language, 'game.guide.moment.first_mint.means'),
+        next: translateGame(language, 'game.guide.moment.first_mint.next'),
+        short: translateGame(language, 'game.guide.moment.first_mint.short'),
       });
     }
     case 'badge-extinguished': {

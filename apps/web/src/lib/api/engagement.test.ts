@@ -127,14 +127,14 @@ describe('loadEngagementProgress — le bloc `game` voyage avec la progression (
     expect(result.ok && 'game' in result.data).toBe(false);
   });
 
-  test('les badges que la frappe éteindrait se calculent sur les compteurs servis', async () => {
+  test('la frappe n’éteint plus aucun badge : la perte vaut 0, même avec des compteurs servis', async () => {
     const counters = [{ axisKey: 'content.text_message', count: 100, points: 2000 }];
     const transport = transportServing({
       success: true,
       data: { ...ENGAGEMENT_PROGRESS_FIXTURE, counters, game: gameBlockFixture() },
     });
     const result = await loadEngagementProgress({ source: 'gateway', transport });
-    expect(result.ok && result.data.mintBadgeLoss).toBeGreaterThan(0);
+    expect(result.ok && result.data.mintBadgeLoss).toBe(0);
   });
 
   test("source 'fixtures' : le bloc de démonstration, sans réseau", async () => {

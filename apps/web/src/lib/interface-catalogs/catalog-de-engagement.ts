@@ -6,13 +6,13 @@
 const deEngagement = {
   'engagement.pill.streak.one': 'Serie von {count} Tag',
   'engagement.pill.streak.other': 'Serie von {count} Tagen',
-  'engagement.pill.points.one': '{total} Punkt, davon {today} heute',
-  'engagement.pill.points.other': '{total} Punkte, davon {today} heute',
-  'engagement.pill.total.one': '{total} Punkt in dieser Unterhaltung gesammelt',
-  'engagement.pill.total.other': '{total} Punkte in dieser Unterhaltung gesammelt',
+  'engagement.pill.points.one': '{total} Funke, davon {today} heute',
+  'engagement.pill.points.other': '{total} Funken, davon {today} heute',
+  'engagement.pill.total.one': '{total} Funke in dieser Unterhaltung gesammelt',
+  'engagement.pill.total.other': '{total} Funken in dieser Unterhaltung gesammelt',
   'engagement.pill.join': '{streak}, {points}',
-  'engagement.post.points.one': 'Dieser Beitrag hat dir {count} Punkt eingebracht',
-  'engagement.post.points.other': 'Dieser Beitrag hat dir {count} Punkte eingebracht',
+  'engagement.post.points.one': 'Dieser Beitrag hat dir {count} Funke eingebracht',
+  'engagement.post.points.other': 'Dieser Beitrag hat dir {count} Funken eingebracht',
 } as const;
 
 export default deEngagement;

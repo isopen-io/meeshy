@@ -120,6 +120,49 @@ describe('creditGamePoints — missions, coffre, réponse reçue', () => {
   });
 });
 
+describe('la DETTE se déduit des prochaines étincelles gagnées (porteur 2026-10-16)', () => {
+  it('recordActivity : le gain rembourse d\'abord la dette, seul le reste va en poche ; cycle et total à vie montent du gain entier', async () => {
+    const db = fakeGameDb();
+    seedUser(db, { engagementScore: 0, sparksSincePrestige: 5000, sparksEarnedLifetime: 8000, sparksDebt: 3 });
+    missionsAwaitOtherGestures(db);
+
+    await service(db).recordActivity(USER, 'content.text_message');
+
+    const gain = (db.engagementCounter.rows.find((r) => r.axisKey === 'content.text_message')?.points as number) ?? 0;
+    expect(gain).toBeGreaterThan(3);
+    expect(row(db)).toMatchObject({ engagementScore: gain - 3, sparksDebt: 0, sparksSincePrestige: 5000 + gain, sparksEarnedLifetime: 8000 + gain });
+  });
+
+  it('une dette plus grande que le gain absorbe tout le gain : la poche ne monte pas', async () => {
+    const db = fakeGameDb();
+    seedUser(db, { engagementScore: 0, sparksSincePrestige: 5000, sparksEarnedLifetime: 8000, sparksDebt: 100_000 });
+    missionsAwaitOtherGestures(db);
+
+    await service(db).recordActivity(USER, 'content.text_message');
+
+    const gain = db.engagementCounter.rows.find((r) => r.axisKey === 'content.text_message')?.points as number;
+    expect(row(db)).toMatchObject({ engagementScore: 0, sparksDebt: 100_000 - gain, sparksSincePrestige: 5000 + gain });
+  });
+
+  it('creditGamePoints : même règle', async () => {
+    const db = fakeGameDb();
+    seedUser(db, { engagementScore: 0, sparksSincePrestige: 5000, sparksEarnedLifetime: 8000, sparksDebt: 40 });
+
+    await service(db).creditGamePoints(USER, 100, 'content.text_message');
+
+    expect(row(db)).toMatchObject({ engagementScore: 60, sparksDebt: 0, sparksSincePrestige: 5100, sparksEarnedLifetime: 8100 });
+  });
+
+  it('creditGamePoints : une dette de 300 sur un gain de 100 reste à 200', async () => {
+    const db = fakeGameDb();
+    seedUser(db, { engagementScore: 0, sparksSincePrestige: 5000, sparksEarnedLifetime: 8000, sparksDebt: 300 });
+
+    await service(db).creditGamePoints(USER, 100, 'content.text_message');
+
+    expect(row(db)).toMatchObject({ engagementScore: 0, sparksDebt: 200 });
+  });
+});
+
 describe('le NIVEAU se lit sur le cycle', () => {
   it('une poche presque vide ne retient pas un niveau gagné : franchir le seuil du CYCLE grave la Gloire et le record', async () => {
     const db = fakeGameDb();
@@ -176,7 +219,28 @@ describe('la reprise d\'un contenu retiré réduit le total à vie, dans la limi
 
     await takeBackPoints(db.prisma, USER, 'content.post', 500);
 
-    expect(row(db)).toMatchObject({ engagementScore: 0, sparksSincePrestige: 4500, sparksEarnedLifetime: 7500 });
+    // La part que la poche ne pouvait plus rendre (500 − 100) devient une DETTE.
+    expect(row(db)).toMatchObject({ engagementScore: 0, sparksSincePrestige: 4500, sparksEarnedLifetime: 7500, sparksDebt: 400 });
+  });
+
+  it('une reprise entièrement prélevée sur la poche ne crée aucune dette', async () => {
+    const db = fakeGameDb();
+    seedUser(db, { engagementScore: 700, sparksSincePrestige: 5000, sparksEarnedLifetime: 8000 });
+    db.engagementCounter.rows.push({ id: 'c', userId: USER, axisKey: 'content.post', count: 3, points: 900 });
+
+    await takeBackPoints(db.prisma, USER, 'content.post', 500);
+
+    expect(row(db).sparksDebt ?? 0).toBe(0);
+  });
+
+  it('les dettes s\'additionnent d\'une reprise à l\'autre', async () => {
+    const db = fakeGameDb();
+    seedUser(db, { engagementScore: 0, sparksSincePrestige: 5000, sparksEarnedLifetime: 8000, sparksDebt: 100 });
+    db.engagementCounter.rows.push({ id: 'c', userId: USER, axisKey: 'content.post', count: 3, points: 900 });
+
+    await takeBackPoints(db.prisma, USER, 'content.post', 250);
+
+    expect(row(db).sparksDebt).toBe(350);
   });
 
   it('ne reprend rien quand le compteur ne rend rien', async () => {

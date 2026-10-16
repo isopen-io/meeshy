@@ -148,7 +148,7 @@ describe('les autres états', () => {
   test('réussi : la récompense doublée se dit', () => {
     const done = duo({ status: 'completed', progress: { mine: 40, partner: 40, common: 80, mineDone: true, partnerDone: true, bothDone: true }, reward: { points: 600, doubled: true } });
     const t = text(renderToStaticMarkup(<GameDuo {...props({ duo: done })} />));
-    expect(t).toContain('Récompense doublée : 600 points');
+    expect(t).toContain('Récompense doublée : 600 étincelles');
     expect(t).toContain('Duo réussi cette semaine.');
   });
 

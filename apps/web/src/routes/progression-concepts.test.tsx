@@ -411,7 +411,7 @@ describe('règle 1 — une donnée appartient à un seul concept', () => {
 
   test('le score est à Points, le multiplicateur à Élans, les étoiles à Prestige, le prix de la Meesh à Meeshes', () => {
     expect(owners(windy, 'score')).toEqual(['points']);
-    expect(owners(windy, 'convertible')).toEqual(['points']);
+    expect(owners(windy, 'convertible')).toEqual([]);
     expect(owners(windy, 'factor')).toEqual(['elans']);
     expect(owners(windy, 'tailwind')).toEqual(['elans']);
     expect(owners(windy, 'element:star')).toEqual(['prestige']);
@@ -573,5 +573,28 @@ describe('la fiche des missions et la photo de fin de mission', () => {
       dom(renderToStaticMarkup(<ConceptFiche concept="missions" progress={progress} host={{ actions: idle, online: true, ...(onPhotoMission === undefined ? {} : { onPhotoMission }) }} now={NOW} />));
     expect(render(() => undefined).querySelector('[data-mission-photo="m-perso"]')).not.toBeNull();
     expect(render().querySelector('[data-mission-photo]')).toBeNull();
+  });
+});
+
+/**
+ * LE CONCEPT « ÉTINCELLES » (clé `points`, porteur 2026-10-16) : la POCHE en valeur, le total à vie en pastille quand il est
+ * servi, la dette quand il y en a une — jamais un second solde « à convertir ».
+ */
+describe('le concept des étincelles : la poche, le total à vie, la dette', () => {
+  const sparky = (level: Record<string, unknown>) => withGame((game) => ({ ...game, level: { ...game.level, ...level } as typeof game.level }));
+  const chipsOf = (view: EngagementWithGame): readonly string[] => conceptView('points', view, NOW).chips.map((chip) => chip.text.replace(/\s+/g, ' '));
+
+  test('la valeur est la poche (sparks), pas la base du niveau', () => {
+    const view = sparky({ score: 90_000, sparks: 300 });
+    expect(conceptView('points', view, NOW).value).toContain('300');
+  });
+
+  test('le total à vie paraît en pastille quand il est servi, et seulement alors', () => {
+    expect(chipsOf(sparky({ sparks: 300, sparksLifetime: 5_000 })).some((text) => /Total à vie/.test(text))).toBe(true);
+    expect(chipsOf(sparky({ sparks: 300 })).some((text) => /Total à vie/.test(text))).toBe(false);
+  });
+
+  test('une dette se dit en pastille', () => {
+    expect(chipsOf(sparky({ sparks: 0, sparksDebt: 40 })).some((text) => /Dette : 40/.test(text))).toBe(true);
   });
 });

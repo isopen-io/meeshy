@@ -28,7 +28,6 @@ const props = (patch: Parameters<typeof gameBlockFixture>[0] = {}, extra: Partia
   return {
     mint: game.mint,
     held: game.level.score,
-    badgesLost: 2,
     online: true,
     minting: false,
     celebration: null,
@@ -53,8 +52,8 @@ describe('une frappe possible', () => {
     expect(page).toContain('Prochaine Meesh · n° 4');
   });
 
-  test('un chiffre fort : le prix en points', () => {
-    expect(html).toMatch(/data-game-mint-price=""[^>]*>1\s221\spoints</);
+  test('un chiffre fort : le prix en étincelles', () => {
+    expect(html).toMatch(/data-game-mint-price=""[^>]*>1\s221\sétincelles</);
   });
 
   test('une action, un seul bouton, qui nomme Mee et Meo', () => {
@@ -62,12 +61,11 @@ describe('une frappe possible', () => {
     expect(page).toContain('Frapper avec Mee et Meo');
   });
 
-  test('ce que le geste coûte et rapporte tient en puces : niveaux perdus, Gloire, badges', () => {
+  test('ce que le geste rapporte tient en une puce : la Gloire — il ne coûte ni niveau ni badge (porteur 2026-10-16)', () => {
     const impact = /data-game-mint-impact=""[^>]*>([\s\S]*?)<\/ul>/.exec(html)?.[1] ?? '';
     const lines = Array.from(impact.matchAll(/<li[^>]*>([^<]*)<\/li>/g)).map((m) => m[1]);
-    expect(lines.some((line) => /niveaux?/.test(line ?? ''))).toBe(true);
-    expect(lines).toContain(`+${formatCount(GLORY_POINTS.mint, 'fr')} Gloire`);
-    expect(lines).toContain('2 badges redescendent');
+    expect(lines).toEqual([`+${formatCount(GLORY_POINTS.mint, 'fr')} Gloire`]);
+    expect(text(html)).not.toMatch(/badge|niveaux?\s+perdu/i);
   });
 
   test('aucun paragraphe : ni tableau de lignes, ni phrase d’explication', () => {
@@ -103,19 +101,6 @@ describe('une frappe possible', () => {
     expect(text(offline)).toContain('Hors ligne');
   });
 
-  test('badges inconnus (serveur sans points par axe) : aucune promesse, ni dans un sens ni dans l’autre', () => {
-    const { badgesLost: _lost, ...inconnu } = props();
-    expect(text(renderToStaticMarkup(<GameMintPreview {...inconnu} />))).not.toContain('badge');
-  });
-
-  test('aucun badge ne tombe : rien à dire, rien de dit', () => {
-    expect(text(renderToStaticMarkup(<GameMintPreview {...props({}, { badgesLost: 0 })} />))).not.toContain('badge');
-  });
-
-  test('un seul badge, au singulier', () => {
-    expect(text(renderToStaticMarkup(<GameMintPreview {...props({}, { badgesLost: 1 })} />))).toContain('1 badge redescend');
-  });
-
   test('l’échec se lit sous le bouton', () => {
     expect(renderToStaticMarkup(<GameMintPreview {...props({}, { error: 'La frappe n’a pas abouti.' })} />)).toContain('role="alert"');
   });
@@ -124,16 +109,16 @@ describe('une frappe possible', () => {
 describe('avant le geste, ce que la frappe dépense (#9705)', () => {
   test('les points en poche, le prix, et ce qui restera', () => {
     const page = text(renderToStaticMarkup(<GameMintPreview {...props({ score: 5000, debitablePoints: 5000 })} />));
-    expect(page).toContain('En poche 5 000 points');
-    expect(page).toContain('Coûte 1 221 points');
-    expect(page).toContain('Restera 3 779 points');
+    expect(page).toContain('En poche 5 000 étincelles');
+    expect(page).toContain('Coûte 1 221 étincelles');
+    expect(page).toContain('Restera 3 779 étincelles');
   });
 
-  test('des points en poche qui ne sont pas à convertir ne paient pas la frappe : le manque se dit en points à convertir, pour SA Meesh', () => {
-    const page = text(renderToStaticMarkup(<GameMintPreview {...props({ score: 5000, debitablePoints: 900 })} />));
-    expect(page).toContain('En poche 5 000 points');
-    expect(page).toContain('À convertir 900 points');
-    expect(page).toContain('Il manque 321 points à convertir pour la Meesh n° 4.');
+  test('TOUT est dépensable (porteur 2026-10-16) : plus de « points à convertir », une seule poche — le manque se dit en étincelles, pour SA Meesh', () => {
+    const page = text(renderToStaticMarkup(<GameMintPreview {...props({ score: 600, debitablePoints: 600 })} />));
+    expect(page).toContain('En poche 600 étincelles');
+    expect(page).not.toMatch(/convertir/i);
+    expect(page).toContain('Il manque 621 étincelles pour la Meesh n° 4.');
   });
 });
 
@@ -145,9 +130,9 @@ describe('une frappe pas encore possible : pas de bouton grisé', () => {
   });
 
   test('ce qu’il manque, en une ligne, et le prix de la prochaine', () => {
-    expect(text(html)).toContain('Il manque 621 points à convertir pour la Meesh n° 4.');
+    expect(text(html)).toContain('Il manque 621 étincelles pour la Meesh n° 4.');
     expect(text(html)).not.toContain('Restera');
-    expect(html).toMatch(/data-game-mint-price=""[^>]*>1\s221\spoints</);
+    expect(html).toMatch(/data-game-mint-price=""[^>]*>1\s221\sétincelles</);
   });
 
   test('aucune puce de coût ne se promet', () => {
@@ -159,7 +144,7 @@ describe('la dixième Meesh : le prix monte', () => {
   test('la 11e coûte plus, et le héros le dit', () => {
     const page = text(renderToStaticMarkup(<GameMintPreview {...props({ mintedLifetime: 10, score: 3000, debitablePoints: 3000 })} />));
     expect(page).toContain('n° 11');
-    expect(page).toContain('1 587 points');
+    expect(page).toContain('1 587 étincelles');
   });
 
   test('la centième est en or', () => {
@@ -194,5 +179,44 @@ describe('après la frappe', () => {
     expect(scene()).toContain('N° 4');
     await act(async () => set({ strikeKey: 2, next: 5, confirmed: 4 }));
     expect(scene()).toContain('N° 5');
+  });
+});
+
+/**
+ * LA FRAPPE FERMÉE POUR UNE AUTRE RAISON QUE LE PRIX (porteur 2026-10-16) : une DETTE d'étincelles à rembourser, ou une
+ * réserve du trésor que le rang n'ouvre pas encore. Un message clair, jamais un bouton grisé muet.
+ */
+describe('une frappe fermée par une dette ou par un rang', () => {
+  const closed = (patch: Record<string, unknown>) => {
+    const game = gameBlockFixture({ score: 90_000, debitablePoints: 90_000 });
+    return { ...props({ score: 90_000, debitablePoints: 90_000 }), mint: { ...game.mint, canMint: false, missingPoints: 0, ...patch } } as Parameters<typeof GameMintPreview>[0];
+  };
+
+  test('une dette : le message dit combien, et que les prochains gains la remboursent ; aucun bouton', () => {
+    const html = renderToStaticMarkup(<GameMintPreview {...closed({ blockedBy: 'debt', sparksDebt: 120 })} />);
+    expect(html).toContain('data-game-mint-blocked="debt"');
+    expect(text(html)).toContain('120 étincelles');
+    expect(text(html)).toMatch(/remboursent/);
+    expect(html).not.toContain('data-game-mint-action');
+  });
+
+  test('une réserve fermée : le message nomme la réserve et le rang requis ; aucun bouton', () => {
+    const html = renderToStaticMarkup(<GameMintPreview {...closed({ locked: { tier: 'coffre', minHeld: 100, requires: { rank: 'voix', division: 1, division5: 1 } } })} />);
+    expect(html).toContain('data-game-mint-blocked="locked"');
+    expect(text(html)).toContain('Coffre');
+    expect(text(html)).toContain('Voix I');
+    expect(html).not.toContain('data-game-mint-action');
+  });
+
+  test('la dette passe avant le rang', () => {
+    const html = renderToStaticMarkup(
+      <GameMintPreview {...closed({ blockedBy: 'debt', sparksDebt: 5, locked: { tier: 'coffre', minHeld: 100, requires: { rank: 'voix', division: 1, division5: 1 } } })} />,
+    );
+    expect(html).toContain('data-game-mint-blocked="debt"');
+    expect(html).not.toContain('data-game-mint-blocked="locked"');
+  });
+
+  test('sans dette ni verrou : aucun message de blocage', () => {
+    expect(renderToStaticMarkup(<GameMintPreview {...props()} />)).not.toContain('data-game-mint-blocked');
   });
 });

@@ -32,7 +32,7 @@ describe('les neuf familles sont dessinées', () => {
   test('les vingt paliers : vingt anneaux et leur niveau d’entrée (#9688)', () => {
     const html = section('levels');
     expect(count(/data-game-ring-sweep=/g, html)).toBe(20);
-    expect(html).toContain('Étincelle');
+    expect(html).toContain('Braise');
     expect(html).toContain('Galaxie');
     expect(html).toContain('Niveau 90');
     expect(html).toContain('Nébuleuse');

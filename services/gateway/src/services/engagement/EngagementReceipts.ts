@@ -99,6 +99,9 @@ export async function takeBackPoints(prisma: ReceiptPrisma, userId: string, oper
           $set: {
             sparksEarnedLifetime: { $max: [0, { $subtract: [{ $max: [held('sparksEarnedLifetime'), held('sparksSincePrestige'), held('engagementScore')] }, taken] }] },
             sparksSincePrestige: { $max: [0, { $subtract: [{ $max: [held('sparksSincePrestige'), held('engagementScore')] }, taken] }] },
+            // Ce que la poche ne peut plus rendre (déjà dépensée) devient une DETTE, déduite des prochains gains et qui
+            // bloque la frappe (porteur, 2026-10-16). `sparksDebt` d'abord : il lit la poche d'avant.
+            sparksDebt: { $add: [held('sparksDebt'), { $subtract: [taken, { $min: [held('engagementScore'), taken] }] }] },
             engagementScore: { $max: [0, { $subtract: [held('engagementScore'), taken] }] },
           },
         },
