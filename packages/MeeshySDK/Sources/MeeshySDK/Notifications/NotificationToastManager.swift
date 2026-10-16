@@ -413,6 +413,21 @@ public final class NotificationToastManager: ObservableObject {
 
     /// Même gate que `markConversationNotificationsRead` : au plus un POST par
     /// post et par fenêtre, jamais deux en vol.
+    private func stampPostRead(_ postId: String) {
+        lastPostReadAt = Self.stampingCooldown(lastPostReadAt, key: postId, at: Date(), window: Self.conversationReadMinInterval)
+    }
+
+    /// Pose l'horodatage de `key` et oublie ceux dont la fenêtre est passée : ils ne bloquent plus rien.
+    /// Sans cet élagage, chaque conversation et chaque post jamais ouverts gardaient leur entrée jusqu'à la
+    /// déconnexion — des milliers sur une session de plusieurs jours.
+    nonisolated static func stampingCooldown(
+        _ stamps: [String: Date], key: String, at now: Date, window: TimeInterval
+    ) -> [String: Date] {
+        var kept = stamps.filter { now.timeIntervalSince($0.value) < window }
+        kept[key] = now
+        return kept
+    }
+
     private func markPostNotificationsRead(_ postId: String) {
         guard postReadTasks[postId] == nil else { return }
         if let last = lastPostReadAt[postId],
@@ -432,7 +447,7 @@ public final class NotificationToastManager: ObservableObject {
             // ce post, il n'y a rien à marquer. Cache vide ou inconnu → on
             // appelle quand même, le serveur fait autorité.
             if await Self.hasNoKnownUnreadNotification(forPost: postId) {
-                self?.lastPostReadAt[postId] = Date()
+                self?.stampPostRead(postId)
                 self?.postReadTasks[postId] = nil
                 return
             }
@@ -442,7 +457,7 @@ public final class NotificationToastManager: ObservableObject {
                 logger.error("Failed to mark post \(postId) read: \(error.localizedDescription)")
             }
             await self?.refreshUnreadCount()
-            self?.lastPostReadAt[postId] = Date()
+            self?.stampPostRead(postId)
             self?.postReadTasks[postId] = nil
         }
     }
@@ -627,7 +642,10 @@ public final class NotificationToastManager: ObservableObject {
                 logger.error("Failed to mark conversation \(conversationId) read: \(error.localizedDescription)")
             }
             await self?.refreshUnreadCount()
-            self?.lastConversationReadAt[conversationId] = Date()
+            if let self {
+                self.lastConversationReadAt = Self.stampingCooldown(
+                    self.lastConversationReadAt, key: conversationId, at: Date(), window: Self.conversationReadMinInterval)
+            }
             self?.conversationReadTasks[conversationId] = nil
         }
     }
