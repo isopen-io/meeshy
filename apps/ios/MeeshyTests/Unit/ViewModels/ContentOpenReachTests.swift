@@ -86,6 +86,19 @@ final class ContentOpenReachTests: XCTestCase {
         XCTAssertEqual(service.recordedImpressionSources.last, "notification")
     }
 
+    func test_marks_expiredUnconsumedOnesArePurgedOnTheNextMark() {
+        var now = Date(timeIntervalSince1970: 1_000)
+        let sources = DetailOpenSources(clock: { now })
+        for index in 0..<50 { sources.mark("never-opened-\(index)", entry: .listing(.feed)) }
+        XCTAssertEqual(sources.markCount, 50)
+
+        now = now.addingTimeInterval(DetailOpenSources.markLifetime + 1)
+        sources.mark("fresh", entry: .listing(.feed))
+
+        XCTAssertEqual(sources.markCount, 1, "les marques jamais consommées et expirées sont retirées")
+        XCTAssertEqual(sources.consumeMarkedEntry(for: "fresh"), .listing(.feed))
+    }
+
     func test_registerDetailOpen_withoutNotification_keepsTheDetailSource() async {
         let service = MockPostService()
         let sut = makeDetail(postService: service)

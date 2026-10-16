@@ -123,6 +123,10 @@ final class ConversationViewingReporter: ConversationViewingReporting {
         guard remaining <= 0 else { return false }
         let before = announced
         visibleScreens[conversationId] = nil
+        // Une couverture ne se pose que depuis un écran de conversation : quand il n'en reste plus aucun, aucune ne
+        // peut être montée. Une fenêtre iPad fermée sous une visionneuse ne rendait pas toujours son `onDisappear`, et
+        // le compteur restait coincé — `focus` et capture masquée pour toutes les conversations suivantes.
+        if openings.isEmpty { covers = 0 }
         if viewingConversationId == conversationId { viewingConversationId = nil }
         transition(from: before)
         return true
