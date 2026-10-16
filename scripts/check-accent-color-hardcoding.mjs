@@ -379,7 +379,13 @@ const REFERENCE_LITERAL_COLOR_COUNT = 145;
 // l'avatar de l'auteur de sa couleur d'identité (`entry.avatarColor`), et la carte retombe sur la couleur de repli de
 // l'auteur (`fallbackHex`). Couleurs d'IDENTITÉ ou dérivées de l'accent : les remplacer par accentColor les trahirait.
 // Valeur MESURÉE le 2026-10-16 en local.
-const REFERENCE_UNKNOWN_VARIABLE_COLOR_COUNT = 477;
+// 477 -> 478 (2026-10-16, 61e92078cb, l'arc-en-ciel du mode Script) : `RainbowLetters.swift` (1) colore chaque LETTRE
+// d'un message arc-en-ciel d'une teinte tirée d'une palette FIXE de six, choisie pour la lecture (4,5:1 contre le fond
+// de chaque thème, `RainbowLettersTests`). C'est le CONTENU de l'effet que l'auteur a choisi pour son message, pas une
+// couleur d'interface : l'accent de conversation n'a qu'une teinte, il effacerait l'effet. Le thème n'a pas ces six
+// nuances (et `Color(red:green:blue:)` relèverait le cliquet RVB des littéraux de design) : la palette reste en hexa.
+// Valeur MESURÉE le 2026-10-16 en local.
+const REFERENCE_UNKNOWN_VARIABLE_COLOR_COUNT = 478;
 
 import { readFileSync, readdirSync, statSync, realpathSync } from 'node:fs';
 import { join, dirname } from 'node:path';
