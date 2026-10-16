@@ -51,7 +51,7 @@ extension UserProfileSheet {
         ZStack(alignment: .bottom) {
             if let design = shownBannerDesign {
                 // #10632 — une bannière de design PRIME sur l'image `banner` ; décorative, rien ne s'ouvre en plein écran.
-                BannerDesignView(design: design, isDark: theme.mode.isDark, accentHex: resolvedAccent)
+                BannerDesignView(design: design, isDark: theme.mode.isDark, accentHex: profileAccent)
                     .frame(height: ProfileHeaderMetrics.expandedBanner)
                     .accessibilityHidden(true)
             } else if let bannerURL = displayUser.bannerURL, !bannerURL.isEmpty {
@@ -190,7 +190,7 @@ extension UserProfileSheet {
         MeeshyAvatar(
             name: avatarName,
             context: .profileSheet,
-            accentColor: isBlockedByTarget ? MeeshyColors.blockedNeutralHex : resolvedAccent,
+            accentColor: isBlockedByTarget ? MeeshyColors.blockedNeutralHex : profileAccent,
             avatarURL: displayUser.avatarURL,
             storyState: ringState,
             moodEmoji: shownMoodEmoji,
@@ -337,7 +337,7 @@ extension UserProfileSheet {
             MeeshyAvatar(
                 name: displayUser.resolvedDisplayName,
                 context: .custom(32),
-                accentColor: isBlockedByTarget ? MeeshyColors.blockedNeutralHex : resolvedAccent,
+                accentColor: isBlockedByTarget ? MeeshyColors.blockedNeutralHex : profileAccent,
                 avatarURL: displayUser.avatarURL,
                 storyState: .none,
                 moodEmoji: shownMoodEmoji,
