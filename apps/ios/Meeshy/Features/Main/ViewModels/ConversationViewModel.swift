@@ -700,7 +700,8 @@ class ConversationViewModel: ObservableObject {
         )
         let handler = ConversationSocketHandler(
             conversationId: conversationId,
-            currentUserId: authManager.currentUser?.id ?? ""
+            currentUserId: authManager.currentUser?.id ?? "",
+            messageSocket: messageSocket
         )
         handler.delegate = self
         handler.persistence = dependencies.persistence

@@ -2231,11 +2231,11 @@ final class ConversationViewModelTests: XCTestCase {
         // change. We assert the row remains in GRDB (count == 1).
         sut.removeFailedMessage(messageId: "sent-msg")
 
-        try? await Task.sleep(nanoseconds: 200_000_000)
-        let row = try await MessageStoreObservationHelper.fetchRecord(
+        let row = await MessageStoreObservationHelper.awaitRecord(
             localId: "sent-msg", from: pool
-        )
+        ) { $0.deletedAt != nil }
         XCTAssertNotNil(row, "Row must still exist (markDeleted is a soft delete)")
+        XCTAssertNotNil(row?.deletedAt, "the soft delete must land")
     }
 
     // MARK: - reportMessage Tests
