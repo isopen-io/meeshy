@@ -282,18 +282,10 @@ final class ProgressionViewModel: ObservableObject {
         commit(state, over: undo.before)
     }
 
-    /// Ce que la prochaine frappe éteindrait, calculé sur les compteurs servis avec le prix de CETTE
-    /// frappe ; `nil` quand le serveur ne sert pas les points par axe — « inconnu » ne se dit pas « aucun ».
-    var mintBadgeImpact: MintBadgeImpact? {
-        guard let snapshot, let game else { return nil }
-        return GameMintBadgeImpact.impact(counters: snapshot.counters, price: game.mint.price,
-                                          sparksEconomy: game.level.sparks != nil)
-    }
-
     /// Le guide et les propositions de photo lisent le jeu, mais seulement RÉGLÉ.
     func observeGame() {
         guard let game else { return }
-        guide.observe(game: game, settled: isSettled, badgeImpact: mintBadgeImpact)
+        guide.observe(game: game, settled: isSettled)
         photos.observe(game: game, settled: isSettled)
     }
 
