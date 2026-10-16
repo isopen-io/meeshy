@@ -1216,8 +1216,8 @@ struct ConversationListBottomBar: View {
                 .transition(.opacity.combined(with: .move(edge: .bottom)))
             }
 
-            // Search bar - always visible (unless scrolled away)
-            themedSearchBar
+            // Search bar — always visible (unless scrolled away); floor of the sync pill (#10840)
+            themedSearchBar.docksSyncPill(liftAboveEdge: MeeshySpacing.sm)
         }
     }
 

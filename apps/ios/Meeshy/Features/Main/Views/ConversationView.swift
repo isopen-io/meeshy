@@ -1784,13 +1784,10 @@ struct ConversationView: View {
                 // (`.ultraThinMaterial`/`.regularMaterial`), donc aucun n'en
                 // dépend plus ici.
                 .ignoresSafeArea(.container, edges: .bottom)
-                .background(
-                    GeometryReader { geo in
-                        Color.clear
-                            .onAppear { updateComposerHeight(geo.size.height) }
-                            .adaptiveOnChange(of: geo.size.height) { _, h in updateComposerHeight(h) }
-                    }
-                )
+                // La barre est le sol de la pastille de synchronisation, qui la
+                // suit sur le clavier (#10840) ; sa hauteur brute sert toujours
+                // la réserve basse du fil.
+                .docksSyncPill(onHeightChange: updateComposerHeight)
             }
             // R-7 (2026-08-22) : en Rivière, le composeur passe AU-DESSUS du
             // pane (80) — le pane lui réserve sa hauteur (`bottomInset`) et

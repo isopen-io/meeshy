@@ -26,8 +26,12 @@ enum SyncPillDotStyle: Equatable, Sendable {
 /// when `source != nil`.
 /// Métriques partagées de la pastille — la hauteur qu'elle occupe. Sa POSITION
 /// ne vit pas ici : c'est `SyncPillPlacement` qui la décide, pour tous ses
-/// points de montage (#9680).
+/// points de montage (#10840).
 enum SyncPillMetrics {
+    /// Hauteur de la capsule AVANT #10371 — l'unité dans laquelle le porteur a
+    /// exprimé l'agrandissement.
+    nonisolated static let formerHeight: CGFloat = 22
+
     /// Hauteur rendue de la capsule, à la taille de texte par défaut : ligne de
     /// `labelSize` (~18 pt) + `verticalPadding` des deux côtés. 1,6 × les 22 pt
     /// d'avant (#10371, retour porteur 2026-10-12 : « augmenter sa taille
@@ -212,7 +216,7 @@ struct SyncPill: View {
     // same connected publisher instance is preserved across re-renders.
     @State private var dotTimer = Timer.publish(every: 0.5, on: .main, in: .common).autoconnect()
 
-    /// Largeur mesurée du `label` SEUL (jamais `label + animatedDots` — voir
+    /// Largeur mesurée du `label` SEUL (jamais avec ses points d’activité — voir
     /// doc `SyncPillMarquee`). Alimentée par la mesure `GeometryReader` en
     /// fond du `Text` du label.
     @State private var measuredLabelWidth: CGFloat = 0
@@ -290,9 +294,6 @@ struct SyncPill: View {
     /// only thing carrying "syncing" at a glance.
     private var pulseOpacity: Double { reduceMotion ? 1.0 : (dotPhase % 2 == 0 ? 1.0 : 0.4) }
 
-    private var animatedDots: String {
-        String(repeating: ".", count: (dotPhase % 3) + 1)
-    }
 
     var body: some View {
         Group {
@@ -412,12 +413,12 @@ struct SyncPill: View {
                 .shadow(color: Color.black.opacity(isDark ? 0.35 : 0.12), radius: 6, x: 0, y: 2)
         )
         // **La pastille enfle au début d'une frappe, puis redescend** (#6188,
-        // directive porteur 2026-09-12).
+        // directive porteur 2026-09-12 ; amplitude ×1,1 depuis #10840).
         //
         // Cinquième révision du même geste : accent ×1.5 (#4018), lié à la
         // durée du signal (#4026), fenêtre réarmable (#4050), retiré au profit
         // d'`IslandEmergingBanner` (#4066, `960f7d1df0`, 2026-08-28), rendu ici
-        // ce jour. Le commentaire est TENU À JOUR plutôt que retiré : c'est lui
+        // le 2026-09-12 ; ramené de ×1,18 à ×1,1 le 2026-10-16 (#10840). Le commentaire est TENU À JOUR plutôt que retiré : c'est lui
         // qui a permis, à chaque reprise, de savoir que l'argument adverse
         // (« une capsule de STATUT n'est pas le porteur d'une annonce ») avait
         // déjà été tenu — et tranché dans l'autre sens par le porteur.
@@ -476,7 +477,7 @@ struct SyncPill: View {
     private var labelText: some View {
         let label = visibleEntry?.label ?? ""
         let showsDots = visibleEntry?.showsActivityDots == true
-        // La mesure porte sur `label` SEUL — jamais `label + animatedDots`,
+        // La mesure porte sur `label` SEUL — jamais avec les points d’activité,
         // qui change 2×/s et ferait osciller la décision de défilement.
         let scrolls = !reduceMotion && SyncPillMarquee.shouldScroll(textWidth: measuredLabelWidth, availableWidth: Self.maxTextWidth)
 
@@ -498,10 +499,23 @@ struct SyncPill: View {
                 // taille naturelle (comportement pré-existant), la borne de
                 // `maxTextWidth` n'est qu'un plafond qui ne mord que si le texte
                 // défile.
-                Text(label + (showsDots ? animatedDots : ""))
-                    .font(MeeshyFont.relative(SyncPillMetrics.labelSize, weight: .medium))
-                    .foregroundStyle(textColor)
-                    .lineLimit(1)
+                // Les points d'activité vivent dans une place RÉSERVÉE à la
+                // largeur de « ... » : concaténés au libellé, ils faisaient
+                // respirer la capsule deux fois par seconde pendant toute une
+                // frappe (#10840 — « préserver la taille initiale »).
+                HStack(spacing: 0) {
+                    Text(label)
+                    if showsDots {
+                        Text(SyncPillActivityDots.reserved)
+                            .hidden()
+                            .overlay(alignment: .leading) {
+                                Text(SyncPillActivityDots.visible(phase: dotPhase))
+                            }
+                    }
+                }
+                .font(MeeshyFont.relative(SyncPillMetrics.labelSize, weight: .medium))
+                .foregroundStyle(textColor)
+                .lineLimit(1)
             }
         }
         .background(
@@ -662,6 +676,20 @@ struct SyncPill: View {
             return entry.label
         }
         return String(localized: "sync.pill.a11y.multiple", defaultValue: "\(entries.count) signaux. Actif : \(entry.label).", bundle: .main)
+    }
+}
+
+/// **Les points d'activité « . .. ... » d'une entrée en cours** (#10840).
+///
+/// Leur place est RÉSERVÉE à la largeur de trois points : seuls les points
+/// visibles changent au tic, jamais la largeur de la capsule. Une frappe
+/// entrante garde ainsi la taille de repos de la pastille — l'accent de
+/// `TypingAnnouncementLaw` est le seul changement de taille permis.
+nonisolated enum SyncPillActivityDots {
+    static let reserved = "..."
+
+    static func visible(phase: Int) -> String {
+        String(repeating: ".", count: (abs(phase) % reserved.count) + 1)
     }
 }
 
