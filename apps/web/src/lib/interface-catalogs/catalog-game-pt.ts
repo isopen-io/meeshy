@@ -294,6 +294,7 @@ const pt = {
   'game.photo.take.frame': '{title}: tirar a foto com esta moldura e guardá-la na galeria',
   'game.photo.take.scene': 'Pré-visualização da câmara: toca duas vezes ou mantém premido para tirar a foto sem a guardar na galeria',
   'game.photo.camera.denied': 'A câmera foi negada. Permita-a nos ajustes do aparelho, ou escolha uma foto da galeria.',
+  'game.photo.camera.settings': 'Abrir ajustes',
   'game.photo.camera.unsupported': 'Este aparelho não permite a câmera aqui. Escolha uma foto da galeria, ou fique só com o cartão.',
   'game.photo.camera.unavailable': 'A câmera não está disponível (outro app a está usando?). Escolha uma foto da galeria, ou fique só com o cartão.',
   'game.photo.striking': 'Mee e Meo cunham o momento na foto',
