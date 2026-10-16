@@ -2872,6 +2872,7 @@
 		E115E463A87D77202E5656F6 /* MessageListCellSizingTests.swift in Sources */ = {isa = PBXBuildFile; fileRef = 84927ED20177448B659D3ACD /* MessageListCellSizingTests.swift */; };
 		E1324AD3AFCB59F6CC324819 /* ProgressionSectionNavigationTests.swift in Sources */ = {isa = PBXBuildFile; fileRef = E989EA58504695253C7EBC54 /* ProgressionSectionNavigationTests.swift */; };
 		E151248F06D65CD03E5C945C /* MeeshyApp+VisitorContent.swift in Sources */ = {isa = PBXBuildFile; fileRef = EBBC2ED2F1AB3BC4DF812B17 /* MeeshyApp+VisitorContent.swift */; };
+		681F346D77D92981CE5A9C07 /* MeeshyLaunch.swift in Sources */ = {isa = PBXBuildFile; fileRef = C41353503442A1120BD237C9 /* MeeshyLaunch.swift */; };
 		E165A30F6B8FB87610E6DA15 /* CallReconnectPolicyTests.swift in Sources */ = {isa = PBXBuildFile; fileRef = 46F810BC30FF467339460377 /* CallReconnectPolicyTests.swift */; };
 		E18BB0325414A0FCAA3218DA /* MockSessionService.swift in Sources */ = {isa = PBXBuildFile; fileRef = B320C124734DB3BAFF392B4A /* MockSessionService.swift */; };
 		E19661E7A1CB1D44B5B6A44D /* ComposerDocumentDurablePublisher.swift in Sources */ = {isa = PBXBuildFile; fileRef = E973848FDCDCB019DCD1D204 /* ComposerDocumentDurablePublisher.swift */; };
@@ -6270,6 +6271,7 @@
 		EB7EF20E03E9BD245BAC704A /* AnyCodable.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = AnyCodable.swift; sourceTree = "<group>"; };
 		EB9AE4FF52C09DE338D672D4 /* MockShareLinkManager.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = MockShareLinkManager.swift; sourceTree = "<group>"; };
 		EBBC2ED2F1AB3BC4DF812B17 /* MeeshyApp+VisitorContent.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = "MeeshyApp+VisitorContent.swift"; sourceTree = "<group>"; };
+		C41353503442A1120BD237C9 /* MeeshyLaunch.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = MeeshyLaunch.swift; sourceTree = "<group>"; };
 		EBDEFAE5B1206FE8BE50AAD3 /* MessageDayStickyOverlay.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = MessageDayStickyOverlay.swift; sourceTree = "<group>"; };
 		EBE5E4716393B6BD6CA63EE8 /* PushPermissionDeferral.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = PushPermissionDeferral.swift; sourceTree = "<group>"; };
 		EBE8B1E19AF0CA974105F6AE /* ModePreferenceRoundTripTests.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = ModePreferenceRoundTripTests.swift; sourceTree = "<group>"; };
@@ -8171,6 +8173,7 @@
 				467B3BA1305D0EA5CEFF3EEE /* Meeshy.entitlements */,
 				BC091A1BD89E4244D04EAED9 /* MeeshyApp.swift */,
 				EBBC2ED2F1AB3BC4DF812B17 /* MeeshyApp+VisitorContent.swift */,
+				C41353503442A1120BD237C9 /* MeeshyLaunch.swift */,
 				3CC68D4AFFD66F583FE85A6B /* MeeshyUIExports.swift */,
 				375D9BFF5525BD182EBEE637 /* PrivacyInfo.xcprivacy */,
 				1461A198C99B7F6EB39E7DDB /* Core */,
@@ -12236,6 +12239,7 @@
 				80F92699256F66AEC482BE0E /* MediaSaveFlowHost.swift in Sources */,
 				A9D93E28027CC2CD7983042A /* MediaStageVeil.swift in Sources */,
 				E151248F06D65CD03E5C945C /* MeeshyApp+VisitorContent.swift in Sources */,
+				681F346D77D92981CE5A9C07 /* MeeshyLaunch.swift in Sources */,
 				470F5AC07EAF99E5F119C3E6 /* MeeshyApp.swift in Sources */,
 				9CE1CCE130E382DE4607B484 /* MeeshyAppIntents.swift in Sources */,
 				E36B9BDDE6BED3F21A085B93 /* MeeshyComposerHost+Animated.swift in Sources */,

@@ -56,4 +56,39 @@ final class UILanguageOverrideResolutionTests: XCTestCase {
                             "\(code) est proposé aux Réglages mais n'est pas affichable")
         }
     }
+
+    // MARK: - Une session, une langue (#10804)
+
+    private func code(_ path: String) throws -> String {
+        AppSourceGuard.stripComments(try AppSourceGuard.unit(path))
+    }
+
+    /// `AppleLanguages` écrit dans `MeeshyApp.init()` arrivait APRÈS que
+    /// UIKit eut figé la localisation du bundle, mais AVANT que `Locale.current`
+    /// et les vues système (sélecteur de photos) ne la relisent : la session
+    /// d'après la connexion affichait une interface anglaise avec des dates et
+    /// des « Annuler » français. L'override s'écrit désormais avant
+    /// `UIApplicationMain`, dans le point d'entrée du processus — bundle, locale
+    /// et vues système lisent alors la même langue dès la première image.
+    func test_theOverrideIsWrittenBeforeTheApplicationStarts() throws {
+        let launch = try code("Meeshy/MeeshyLaunch.swift")
+        XCTAssertTrue(launch.contains("@main"))
+        let apply = try XCTUnwrap(launch.range(of: "UILanguageOverride.applyIfNeeded()"))
+        let start = try XCTUnwrap(launch.range(of: "MeeshyApp.main()"))
+        XCTAssertLessThan(apply.lowerBound, start.lowerBound)
+        let app = try code("Meeshy/MeeshyApp.swift")
+        XCTAssertFalse(app.contains("@main"), "le point d'entrée est MeeshyLaunch")
+        XCTAssertFalse(app.contains("UILanguageOverride.applyIfNeeded()"),
+                       "écrit dans init(), l'override panache la session")
+    }
+
+    /// Écrit en cours de session, `AppleLanguages` bascule `Locale.current` et
+    /// les vues système sans toucher au bundle : le choix des Réglages attend
+    /// le relancement, comme l'alerte le dit déjà.
+    func test_noScreenRewritesTheLanguageDuringASession() throws {
+        let settings = try code("Meeshy/Features/Main/Views/SettingsView.swift")
+        XCTAssertFalse(settings.contains("UILanguageOverride.applyIfNeeded()"))
+        XCTAssertTrue(settings.contains("UILanguageOverride.explicitChoice = code"))
+    }
 }
+
