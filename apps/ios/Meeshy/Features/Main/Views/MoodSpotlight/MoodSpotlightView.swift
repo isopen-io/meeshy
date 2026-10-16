@@ -75,7 +75,7 @@ struct MoodSpotlightView: View {
                 dismiss()
             } label: {
                 Image(systemName: "xmark")
-                    .font(.system(size: 16, weight: .bold))
+                    .font(MeeshyFont.relative(16, weight: .bold))
                     .foregroundStyle(.white)
                     .frame(width: 44, height: 44)
                     .background(.ultraThinMaterial, in: Circle())
@@ -107,7 +107,7 @@ struct MoodSpotlightView: View {
             )
         case .unavailable:
             VStack(spacing: 12) {
-                Text(verbatim: "🌙").font(.system(size: 56)).accessibilityHidden(true)
+                Text(verbatim: "🌙").font(MeeshyFont.emoji(56)).accessibilityHidden(true)
                 Text(String(localized: "mood.spotlight.unavailable", defaultValue: "Cette humeur n'est plus disponible", bundle: .main))
                     .font(.headline)
                     .foregroundStyle(.white)
