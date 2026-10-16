@@ -251,7 +251,7 @@ function carrierIdentity(carrier: MediaCarrier | undefined): ViewerIdentityModel
     ...(carrier.sender.avatarUrl === null ? {} : { avatarSrc: carrier.sender.avatarUrl }),
     time: {
       iso: carrier.sentAt,
-      label: new Date(carrier.sentAt).toLocaleString(READER_LOCALE, { day: 'numeric', month: 'short', hour: '2-digit', minute: '2-digit' }),
+      label: new Date(carrier.sentAt).toLocaleString(currentInterfaceLanguage(), { day: 'numeric', month: 'short', hour: '2-digit', minute: '2-digit' }),
     },
   };
 }

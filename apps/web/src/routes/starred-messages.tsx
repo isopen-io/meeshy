@@ -258,7 +258,7 @@ export default function StarredMessagesScreen() {
   useScrollportMemory(frame);
   const language = currentInterfaceLanguage();
   const online = useOnline();
-  const { languages: readerLanguages, locale } = useReaderLanguages();
+  const { languages: readerLanguages } = useReaderLanguages();
   const { text: announcement, announce } = useLiveAnnouncer();
   const preferencesOf = useConversationPreferences();
 
@@ -269,8 +269,8 @@ export default function StarredMessagesScreen() {
   const paginationState = paginationStateOf(corpus);
 
   const models = useMemo(
-    () => items.map((item) => starredRowModel(item, { preferredLanguages: readerLanguages, locale, preferencesOf })),
-    [items, readerLanguages, locale, preferencesOf],
+    () => items.map((item) => starredRowModel(item, { preferredLanguages: readerLanguages, locale: language, preferencesOf })),
+    [items, readerLanguages, language, preferencesOf],
   );
 
   const onRemove = useCallback(
