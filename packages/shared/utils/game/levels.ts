@@ -1,10 +1,25 @@
 /**
  * LES NIVEAUX du Jeu Meeshy (#9373, ouverts par le rang depuis #9688) — seuil(N) = 100 × N² (#9706).
  *
- * `docs/product/jeu-meeshy-conception.html` § II.2. Le niveau se lit sur le
- * score EN POCHE (`User.engagementScore`), celui que la frappe d'une Meesh
- * débite : il peut donc redescendre. Le niveau RECORD, lui, ne redescend
- * jamais ; il règle le Vent arrière et la Gloire du premier passage.
+ * `docs/product/jeu-meeshy-conception.html` § II.2.
+ *
+ * ## Le niveau se lit sur les étincelles DU CYCLE (#10846, porteur 2026-10-16)
+ *
+ * Hier, le niveau se lisait sur le score EN POCHE, que la frappe d'une Meesh débite : il pouvait
+ * redescendre. Désormais il se lit sur les étincelles accumulées DEPUIS LE DERNIER PRESTIGE
+ * (`User.sparksSincePrestige`, `sparks.ts`), que la frappe ne touche pas : le niveau ne baisse plus
+ * qu'au prestige. Les fonctions de ce fichier restent PURES sur « un score » — c'est l'appelant
+ * qui leur passe le cycle. Le niveau RECORD (`levelRecord`) est celui du cycle ; le niveau MAX À VIE
+ * (`levelMaxLifetime`) survit au prestige. Le Vent arrière, qui supposait un niveau sous son record,
+ * n'a plus de sens : éteint côté serveur (`boosts.ts`).
+ *
+ * ## Les noms des paliers (#10849)
+ *
+ * Les CLÉS ci-dessous sont l'identifiant stable du fil : les clients publiés les décodent strictement
+ * (iOS `LevelTierKey`, un cas inconnu fait tomber le bloc entier). Le palier 1 à 9 s'appelle désormais
+ * « Lueur » à l'écran (« étincelle » désigne les points) mais garde la clé `etincelle` ; le palier 10
+ * à 19, clé `lueur`, porte déjà ce nom : la collision est signalée au porteur (le nom affiché se règle
+ * dans les clients, jamais ici).
  *
  * ## Un million de points pour le niveau 100, une étape tous les dix niveaux (#9706, porteur 2026-10-08)
  *
@@ -64,7 +79,10 @@ export type LevelCap = number | null;
 /** Aucune limite : la lecture brute de la courbe (Oracle et au-delà). */
 export const NO_LEVEL_CAP: LevelCap = null;
 
-/** Les dix paliers d'hier — 1 à 100 —, les seuls que lisent les clients publiés. */
+/**
+ * Les dix paliers d'hier — 1 à 100 —, les seuls que lisent les clients publiés. IDENTIFIANTS STABLES du fil :
+ * `etincelle` (niveaux 1 à 9) s'affiche « Lueur » (#10849) mais ne se renomme jamais ici.
+ */
 export const LEGACY_LEVEL_TIER_KEYS = [
   'etincelle',
   'lueur',

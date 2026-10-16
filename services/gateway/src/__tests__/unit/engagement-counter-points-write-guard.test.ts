@@ -60,11 +60,6 @@ const PRISMA_ALLOWLIST: Readonly<Record<string, string>> = {
     'LIT le compteur (`findMany`) pour planifier la reprise #6434 ; ses écritures Prisma visent les paliers (`engagementMilestone`), et sa commande brute est déclarée dans `RAW_ALLOWLIST`',
   'services/engagement/engagementScoreBackfill.ts':
     'LIT le compteur (`findMany`) pour recalculer un score ; écrit `User`, jamais le compteur',
-  'services/game/GameBlockService.ts': 'LIT le compteur (`findMany`) pour le bloc du jeu ; son `update` vise un autre modèle',
-  'services/game/PrestigeService.ts':
-    'ÉCRIT le compteur EN VALEUR (`updateMany … data: { points: 0 }`, #9675) : poser un nombre ne fabrique jamais `null`',
-  'services/meesh/MeeshService.ts':
-    'LIT le compteur (`findMany` : le plan de frappe) ; le débit passe par `debitEngagementCounter`, ses écritures Prisma visent le registre, les paliers et le compte',
   'services/onboarding/OnboardingService.ts': 'LIT le compteur (`findMany`, `findUnique`) ; son `update` vise un autre modèle',
 };
 

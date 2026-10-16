@@ -32,6 +32,7 @@ import { flameForm, flameStatus } from '@meeshy/shared/utils/game/flame';
 import { gloryStanding, levelCapForRank } from '@meeshy/shared/utils/game/glory';
 import { GAME_PRESTIGE_MAX, legacyLevel, legacyLevelTierKey, levelFromScore, levelStepCeiling, levelTierKey, tighterLevelCap } from '@meeshy/shared/utils/game/levels';
 import { treasuryTier } from '@meeshy/shared/utils/game/treasury';
+import { SPARKS_USER_SELECT, sparksOf } from './SparksFacts';
 import { meeshTotalsFromLedger } from '../meesh/MeeshService';
 import type { PresenceViewer } from '../PresenceVisibilityService';
 import { FLAME_USER_SELECT, flameFactsOf } from './FlameService';
@@ -46,7 +47,7 @@ const CLOSED: UserGameProfileResponse = { visible: false, standing: null, treasu
 const isIntimate = (kind: Awaited<ReturnType<GameProfileService['viewerKind']>>): boolean =>
   kind === 'self' || kind === 'friend' || kind === 'admin';
 
-const STANDING_USER_SELECT = { ...FLAME_USER_SELECT, engagementScore: true, levelRecord: true, prestige: true } as const;
+const STANDING_USER_SELECT = { ...FLAME_USER_SELECT, ...SPARKS_USER_SELECT, prestige: true } as const;
 
 export class GameStandingService {
   private readonly profile: GameProfileService;
@@ -90,7 +91,7 @@ export class GameStandingService {
    */
   private async standing(
     userId: string,
-    user: { readonly engagementScore?: number | null; readonly levelRecord?: number | null; readonly prestige?: number | null } & Parameters<typeof flameFactsOf>[0],
+    user: Parameters<typeof sparksOf>[0] & { readonly levelRecord?: number | null; readonly levelMaxLifetime?: number | null; readonly prestige?: number | null } & Parameters<typeof flameFactsOf>[0],
     now: Date,
     reader: { readonly intimate: boolean; readonly trophies: boolean; readonly self: boolean },
   ): Promise<GameStanding> {
@@ -104,15 +105,21 @@ export class GameStandingService {
           ? this.prisma.gameTrophy.count({ where: { userId } })
           : this.prisma.gameTrophy.count({ where: { userId, awardedAt: { lt: visitorTrophyBound(now) } } }),
     ]);
-    const score = Math.max(0, Math.trunc(user.engagementScore ?? 0));
+    // Le niveau se lit sur le CYCLE d'étincelles (#10846) ; la poche (`points`, `sparks`) n'est servie qu'aux proches.
+    const sparks = sparksOf(user);
     const rank = gloryStanding({ glory, mythicSeat });
     // Le niveau s'ouvre selon le rang (#9688) et les étapes (#9706), lues sur le RECORD du membre — gravé étape
     // faite, sans relire ses Meeshes ni ses missions ; les champs d'hier gardent l'ancienne loi pour les clients publiés.
-    const level = levelFromScore(score, tighterLevelCap(levelCapForRank(rank.rank), levelStepCeiling(user.levelRecord ?? null)));
+    const level = levelFromScore(
+      sparks.cycle,
+      tighterLevelCap(levelCapForRank(rank.rank), levelStepCeiling(Math.max(user.levelRecord ?? 0, user.levelMaxLifetime ?? 0) || null)),
+    );
+    const levelMax = Math.max(level, user.levelRecord ?? 0, user.levelMaxLifetime ?? 0);
     return {
       level: legacyLevel(level),
       tier: legacyLevelTierKey(level),
-      ladder: { level, tier: levelTierKey(level) },
+      ladder: { level, tier: levelTierKey(level), levelMaxLifetime: levelMax },
+      levelMaxLifetime: levelMax,
       prestige: Math.min(GAME_PRESTIGE_MAX, Math.max(0, Math.trunc(user.prestige ?? 0))),
       flame: reader.intimate ? shownFlame(user, now) : null,
       rank: rank.rank,
@@ -120,7 +127,8 @@ export class GameStandingService {
       division5: rank.division5,
       mythic: rank.mythic,
       // Les clés sont ABSENTES, jamais nulles, pour un lecteur qui n'y a pas droit : rien à lire, rien à deviner.
-      ...(reader.intimate ? { points: score } : {}),
+      // `points` reste servi, aligné sur la poche ; `sparks` et `sparksLifetime` sont additifs, même visibilité (#10846).
+      ...(reader.intimate ? { points: sparks.pocket, sparks: sparks.pocket, sparksLifetime: sparks.lifetime } : {}),
       ...(trophyCount === null ? {} : { trophyCount }),
     };
   }

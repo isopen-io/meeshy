@@ -5,7 +5,16 @@
 
 import { seededRng } from './day-prng.js';
 
-/** +25 % sur les points tant que le niveau est sous le niveau record. */
+/**
+ * +25 % sur les points tant que le niveau est sous le niveau record.
+ *
+ * ⚠️ ÉTEINT côté serveur depuis les étincelles (#10846, porteur 2026-10-16). Le Vent arrière compensait la
+ * descente du niveau à la frappe ; le niveau ne descend plus qu'au prestige, où le record de CYCLE repart à 1
+ * avec lui — la condition « niveau sous le record » ne se rejoue jamais. Garder +25 % pendant les cent
+ * niveaux d'une boucle neuve ne serait pas cohérent. La passerelle n'applique plus le facteur et sert
+ * `boosts.tailwind: 1` ; cette loi pure reste pour les clients publiés (vecteurs `tailwind`) et sera
+ * retirée avec eux.
+ */
 export const TAILWIND_FACTOR = 1.25;
 
 export const tailwindFactor = (params: { readonly level: number; readonly levelRecord: number }): number =>

@@ -2,6 +2,8 @@
 /**
  * REMPLISSAGE DES POINTS HISTORIQUES — #6434, option B du porteur (2026-09-14).
  *
+ * ⚠️ NE PLUS LANCER depuis les étincelles (#10846) : voir l'en-tête de `engagementPointsBackfill.ts`.
+ *
  * La loi et ses gardes vivent dans la passerelle, où la CI les teste :
  * `services/gateway/src/services/engagement/engagementPointsBackfill.ts`. Ce
  * script ne fait que les servir et imprimer le rapport.

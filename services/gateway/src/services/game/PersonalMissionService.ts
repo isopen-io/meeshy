@@ -16,7 +16,7 @@
 
 import type { DailyMission, PrismaClient } from '@meeshy/shared/prisma/client';
 import { flameStatus } from '@meeshy/shared/utils/game/flame';
-import { levelForUnlocks } from '@meeshy/shared/utils/game/levels';
+import { SPARKS_USER_SELECT, currentLevelOf } from './SparksFacts';
 import { isMissionStillPossible, type MissionDifficulty, type MissionSignal } from '@meeshy/shared/utils/game/missions';
 import { PERSONAL_MISSION_SLOT, drawPersonalMission, personalWindowStillFits } from '@meeshy/shared/utils/game/personal-mission';
 import { enhancedLogger } from '../../utils/logger-enhanced';
@@ -31,8 +31,7 @@ const log = enhancedLogger.child({ module: 'PersonalMissionService' });
 const USER_SELECT = {
   ...FLAME_USER_SELECT,
   ...MISSION_PROFILE_USER_SELECT,
-  engagementScore: true,
-  levelRecord: true,
+  ...SPARKS_USER_SELECT,
   systemLanguage: true,
   regionalLanguage: true,
   customDestinationLanguage: true,
@@ -77,7 +76,7 @@ export class PersonalMissionService {
 
     const user = await this.prisma.user.findUnique({ where: { id: userId }, select: USER_SELECT });
     if (!user) return existing;
-    const level = levelForUnlocks({ score: user.engagementScore ?? 0, levelRecord: user.levelRecord ?? null });
+    const level = currentLevelOf(user);
     const facts = flameFactsOf(user, now);
     const status = flameStatus({ lastActiveDay: facts.lastActiveDay, today: today.dayKey, streak: facts.streak, freezes: facts.freezes });
     const flameDays = status === 'out' ? 0 : facts.streak;

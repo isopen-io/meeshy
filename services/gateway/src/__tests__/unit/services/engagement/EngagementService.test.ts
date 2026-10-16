@@ -702,9 +702,25 @@ describe('EngagementService level tracking (#5545)', () => {
     expect(runCommandRaw).toHaveBeenCalledWith({
       findAndModify: 'User',
       query: { _id: { $oid: 'user-1' } },
-      update: [{ $set: { engagementScore: { $add: [{ $ifNull: ['$engagementScore', 0] }, attendu] } } }],
+      // Poche, cycle et total à vie montent du même montant, null-safely (#10846).
+      update: [
+        {
+          $set: {
+            sparksEarnedLifetime: {
+              $add: [
+                { $max: [{ $ifNull: ['$sparksEarnedLifetime', 0] }, { $ifNull: ['$sparksSincePrestige', 0] }, { $ifNull: ['$engagementScore', 0] }] },
+                attendu,
+              ],
+            },
+            sparksSincePrestige: {
+              $add: [{ $max: [{ $ifNull: ['$sparksSincePrestige', 0] }, { $ifNull: ['$engagementScore', 0] }] }, attendu],
+            },
+            engagementScore: { $add: [{ $ifNull: ['$engagementScore', 0] }, attendu] },
+          },
+        },
+      ],
       new: true,
-      fields: { engagementScore: 1, levelRecord: 1 },
+      fields: { engagementScore: 1, sparksSincePrestige: 1, levelRecord: 1, levelMaxLifetime: 1 },
     });
   });
 

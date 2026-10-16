@@ -28,7 +28,7 @@ import { PRISM_HOUR_MULTIPLIER, isInPrismHour, prismHourWindow } from '@meeshy/s
 import { chestPriceCutoff, dailyChest, dayEffort, type DailyChest } from '@meeshy/shared/utils/game/chest';
 import { meeshPrice } from '@meeshy/shared/utils/game/mint';
 import { FLAME_FREEZE_MAX, flameStatus } from '@meeshy/shared/utils/game/flame';
-import { levelForUnlocks } from '@meeshy/shared/utils/game/levels';
+import { SPARKS_USER_SELECT, currentLevelOf, sparksOf, unlockLevelOf } from './SparksFacts';
 import {
   MISSIONS_MIN_LEVEL,
   MISSION_DIFFICULTIES,
@@ -66,7 +66,7 @@ export const GAME_BONUS_AXIS: EngagementAxisKey = 'content.text_message';
 /** Trois missions par jour : facile, moyenne, difficile (ou Or). */
 export const DAILY_MISSION_SLOTS = 3;
 
-const USER_GAME_SELECT = { ...FLAME_USER_SELECT, ...MISSION_PROFILE_USER_SELECT, engagementScore: true, levelRecord: true } as const;
+const USER_GAME_SELECT = { ...FLAME_USER_SELECT, ...MISSION_PROFILE_USER_SELECT, ...SPARKS_USER_SELECT } as const;
 
 /**
  * Les trois missions du JOUR, à l'exclusion de la mission personnelle (#9539, emplacement 3) : le coffre,
@@ -301,8 +301,9 @@ export class MissionService {
     const user = await this.userRow(userId);
     const recent = await this.recentMissions(userId);
     const dayKey = resolveGameDayKey({ candidate: dayKeyOf(now, user?.timezone), latest: latestOpenedDay(recent), now });
-    const level = levelForUnlocks({ score: user?.engagementScore ?? 0, levelRecord: user?.levelRecord ?? null });
-    const record = Math.max(level, user?.levelRecord ?? 0);
+    // Le niveau se lit sur le CYCLE d'étincelles ; l'ouverture des missions, sur le max à vie (#10846).
+    const level = currentLevelOf(user);
+    const record = unlockLevelOf(user);
     const unlocked = record >= MISSIONS_MIN_LEVEL;
 
     const facts = flameFactsOf(user ?? {}, now);
@@ -506,7 +507,7 @@ export class MissionService {
       // La mission personnelle (#9539) est la SIENNE : tirée sur ses usages et sa plage, elle ne se change pas.
       if (row.slot === PERSONAL_MISSION_SLOT) throw new GameRefusal('MISSION_REROLL_UNAVAILABLE');
       const account = await db.user.findUnique({ where: { id: userId }, select: USER_GAME_SELECT });
-      const record = Math.max(levelForUnlocks({ score: account?.engagementScore ?? 0, levelRecord: account?.levelRecord ?? null }), account?.levelRecord ?? 0);
+      const record = unlockLevelOf(account);
       if (record < MISSIONS_MIN_LEVEL) throw new GameRefusal('MISSIONS_LOCKED');
       if (row.completedAt !== null) throw new GameRefusal('MISSION_REROLL_UNAVAILABLE');
       const day = await db.gameDay.findUnique({ where: { userId_dayKey: { userId, dayKey } }, select: { rerollCount: true } });
@@ -533,7 +534,7 @@ export class MissionService {
           profile,
           userId,
           dayKey,
-          level: levelForUnlocks({ score: account?.engagementScore ?? 0, levelRecord: account?.levelRecord ?? null }),
+          level: currentLevelOf(account),
           flameDays: status === 'out' ? 0 : facts.streak,
           missions: all.map(drawnOf),
           index: row.slot,
@@ -648,7 +649,7 @@ export class MissionService {
         bonus: chest.bonus,
         bonusPoints: chest.bonusPoints,
       },
-      score: (await this.userRow(userId))?.engagementScore ?? 0,
+      score: sparksOf(await this.userRow(userId)).cycle,
       ...(await this.starFragmentsServed(userId)),
     };
   }
@@ -709,7 +710,7 @@ export class MissionService {
     return {
       status: 'already-claimed',
       reward: chestRewardOf(day),
-      score: (await this.userRow(userId))?.engagementScore ?? 0,
+      score: sparksOf(await this.userRow(userId)).cycle,
       ...(await this.starFragmentsServed(userId)),
     };
   }

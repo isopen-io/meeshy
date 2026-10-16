@@ -71,6 +71,13 @@ const TAKE_BACK_FALLBACK_AXES: readonly string[] = MEESH_DEBIT_ORDER.flat();
  * des points convertibles que le score ne porte pas.
  *
  * Rend les points réellement repris.
+ *
+ * ## Le total à vie et le cycle suivent (#10846)
+ *
+ * Décision : la reprise d'un contenu supprimé RÉDUIT le total à vie et le cycle, mais seulement de ce que ce
+ * contenu a rapporté (`taken`, borné par le reçu de crédit) — jamais de la frappe ni du prestige. Sans cela,
+ * « publier, dépenser dans une Meesh, supprimer » garderait les étincelles dans le total et le niveau.
+ * Résidu assumé : la Meesh déjà frappée avec ces étincelles reste frappée (la poche ne passe pas sous zéro).
  */
 export async function takeBackPoints(prisma: ReceiptPrisma, userId: string, operationKey: string, points: number): Promise<number> {
   const { taken, failure } = await takeBackAcrossEngagementCounters(prisma, {
@@ -80,10 +87,22 @@ export async function takeBackPoints(prisma: ReceiptPrisma, userId: string, oper
     fallbackAxes: TAKE_BACK_FALLBACK_AXES,
   });
   if (taken > 0) {
+    // La reprise réduit la poche (sans passer sous zéro : la frappe a pu la dépenser), le CYCLE et le TOTAL À VIE de ce
+    // que le contenu a rapporté, jamais plus (#10846) : c'est ce qui ferme la triche « publier puis supprimer ». Le
+    // cycle ne passe pas sous la poche, ni le total à vie sous le cycle (poche ≤ cycle ≤ total à vie).
+    const held = (field: string) => ({ $ifNull: [`$${field}`, 0] });
     await prisma.$runCommandRaw({
       findAndModify: 'User',
       query: { _id: { $oid: userId } },
-      update: [{ $set: { engagementScore: { $max: [0, { $subtract: [{ $ifNull: ['$engagementScore', 0] }, taken] }] } } }],
+      update: [
+        {
+          $set: {
+            sparksEarnedLifetime: { $max: [0, { $subtract: [{ $max: [held('sparksEarnedLifetime'), held('sparksSincePrestige'), held('engagementScore')] }, taken] }] },
+            sparksSincePrestige: { $max: [0, { $subtract: [{ $max: [held('sparksSincePrestige'), held('engagementScore')] }, taken] }] },
+            engagementScore: { $max: [0, { $subtract: [held('engagementScore'), taken] }] },
+          },
+        },
+      ],
       new: true,
       fields: { engagementScore: 1 },
     } as never);

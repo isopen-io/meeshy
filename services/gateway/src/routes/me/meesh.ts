@@ -84,6 +84,9 @@ const mintResponseSchema = {
         // Ancienne loi : bornés à 100 pour les clients publiés ; les niveaux ouverts par le rang dans `ladder` (#9688).
         levelBefore: { type: 'number' },
         levelAfter: { type: 'number' },
+        // Le prix de rang et le facteur du niveau actuel (#10847) — ajoutés à côté du prix effectif (`price`).
+        basePrice: { type: 'number' },
+        costFactor: { type: 'number' },
         ladder: {
           type: 'object',
           properties: { levelBefore: { type: 'number' }, levelAfter: { type: 'number' } },
@@ -101,9 +104,10 @@ export async function meMeeshRoutes(fastify: FastifyInstance) {
       config: { rateLimit: mintRateLimitConfig() },
       schema: {
         description:
-          'Frappe une Meesh au prix de sa rareté (1221 points pour les dix premières, #5743, #9374). Action MANUELLE ' +
-          'et idempotente par `requestId`. Les axes de conversation ne sont jamais ' +
-          'débités — ils forment le plancher inaliénable du niveau.',
+          'Frappe une Meesh au prix de sa rareté (1221 pour les dix premières, #5743, #9374) × le facteur du niveau ' +
+          'ACTUEL (#10847). Action MANUELLE et idempotente par `requestId`. Elle dépense la poche d\'étincelles ' +
+          'et ne fait baisser ni le niveau ni aucun badge (#10846). 409 TREASURY_LOCKED si le rang n\'ouvre pas ' +
+          'la réserve où la pièce entrerait (#10848).',
         tags: ['me', 'meesh'],
         summary: 'Mint a Meesh',
         body: mintBodySchema,
@@ -115,7 +119,17 @@ export async function meMeeshRoutes(fastify: FastifyInstance) {
           // devait relire toute la progression pour le dire.
           409: {
             ...errorResponseSchema,
-            properties: { ...errorResponseSchema.properties, missingPoints: { type: 'number' } },
+            properties: {
+              ...errorResponseSchema.properties,
+              missingPoints: { type: 'number' },
+              // Le refus de RANG (#10848) : la réserve fermée et le rang qu'elle exige, à la racine, à côté de `code`.
+              tier: { type: 'string' },
+              minHeld: { type: 'number' },
+              requires: {
+                type: 'object',
+                properties: { rank: { type: 'string' }, division: { type: 'number' }, division5: { type: 'number' } },
+              },
+            },
           },
           429: errorResponseSchema,
           500: errorResponseSchema,
@@ -137,6 +151,15 @@ export async function meMeeshRoutes(fastify: FastifyInstance) {
 
       try {
         const outcome = await new MeeshService(fastify.prisma).mint(userId, request.body.requestId);
+
+        if (outcome.status === 'treasury-locked') {
+          // 409 TYPÉ (#10848) : la pièce ferait entrer dans une réserve que le rang de Gloire n'ouvre pas encore. Le rang
+          // exigé est servi pour que l'écran le dise sans relire toute la progression.
+          return sendError(reply, 409, 'TREASURY_LOCKED', {
+            code: 'TREASURY_LOCKED',
+            details: { tier: outcome.lock.tier, minHeld: outcome.lock.minHeld, requires: outcome.lock.requires },
+          });
+        }
 
         if (outcome.status === 'insufficient') {
           // 409 et non 400 : la requête est bien formée, c'est l'ÉTAT du compte

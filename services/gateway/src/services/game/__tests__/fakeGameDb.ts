@@ -72,7 +72,9 @@ const applyData = (row: Row, data: Record<string, unknown>): void => {
       row[key] = before + ((value.increment as number | undefined) ?? 0) - ((value.decrement as number | undefined) ?? 0);
       continue;
     }
-    row[key] = value;
+    // Mongo n'a pas de BigInt : une colonne `long` écrite par Prisma se relit en nombre par les commandes brutes
+    // (`$add`, `$max`) — le faux range donc un BigInt en nombre, comme la base le rend à la couche brute.
+    row[key] = typeof value === 'bigint' ? Number(value) : value;
   }
 };
 

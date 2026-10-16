@@ -127,4 +127,41 @@ describe('POST /me/meesh/mint', () => {
     expect(res.json()).toMatchObject({ success: false, code: 'INSUFFICIENT_POINTS', missingPoints: 73 });
     await app.close();
   });
+
+  it('sert le prix de rang et le facteur du niveau actuel à côté du prix effectif (#10847), et reste valide au schéma partagé', async () => {
+    mint.mockResolvedValueOnce({
+      status: 'minted',
+      balance: 1,
+      mintedLifetime: 1,
+      plan: {},
+      receipt: { number: 1, edition: 'silver', price: 653, gloryGained: 1000, levelBefore: 7, levelAfter: 7, basePrice: 1221, costFactor: 0.535 },
+    });
+    const app = await buildApp();
+
+    const { data } = (await post(app)).json();
+
+    expect(data).toMatchObject({ price: 653, basePrice: 1221, costFactor: 0.535 });
+    expect(meeshMintResponseSchema.safeParse(data).success).toBe(true);
+    await app.close();
+  });
+
+  it('409 TREASURY_LOCKED, TYPÉ : la réserve qui barre la pièce et le rang requis (#10848)', async () => {
+    mint.mockResolvedValueOnce({
+      status: 'treasury-locked',
+      lock: { tier: 'coffre', minHeld: 100, requires: { rank: 'voix', division: 1, division5: 1 } },
+    });
+    const app = await buildApp();
+
+    const res = await post(app);
+
+    expect(res.statusCode).toBe(409);
+    expect(res.json()).toMatchObject({
+      success: false,
+      code: 'TREASURY_LOCKED',
+      tier: 'coffre',
+      minHeld: 100,
+      requires: { rank: 'voix', division: 1, division5: 1 },
+    });
+    await app.close();
+  });
 });
