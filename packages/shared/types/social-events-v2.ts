@@ -22,7 +22,15 @@
 export const SOCIAL_EVENTS_SCHEMA_VERSION = 2 as const;
 export const SOCIAL_EVENTS_VERSION_HEADER = 'X-Social-Events-Version';
 
-export const COUNTING_EVENT_TYPES = ['impression', 'open', 'view', 'dwell', 'download'] as const;
+/**
+ * `dwell-start` (#10764) : le PREMIER CONTACT d'une session de consommation,
+ * envoyé dès qu'elle commence, sous la clé de session que la mesure finale
+ * reprendra. Type à part — jamais un `dwell` incomplet — parce qu'un serveur
+ * qui ne sait pas FUSIONNER une session doit le refuser : il compterait le
+ * premier contact puis ignorerait la mesure (mise à jour d'une ligne déjà
+ * créée). Les clients l'envoient dans une requête à lui.
+ */
+export const COUNTING_EVENT_TYPES = ['impression', 'open', 'view', 'dwell', 'dwell-start', 'download'] as const;
 export type CountingEventType = (typeof COUNTING_EVENT_TYPES)[number];
 
 export const SOCIAL_EVENT_V2_TYPES = [
@@ -227,6 +235,7 @@ export const MEASUREMENT_EVENT_TYPES = [
   'view',
   'download',
   'dwell',
+  'dwell-start',
   'visibility',
   'playback',
   'notification',

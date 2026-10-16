@@ -4,7 +4,7 @@ import { NOT_DELETED } from './postIncludes';
 import { creditPostView } from './postViewCredit';
 import type { ViewContext } from './viewProvenance';
 import { incrementPostCounters } from './postCounters';
-import { engagementAggregateIncrements } from './engagementIncrements';
+import { engagementIncrementsAdded, mergeEngagementSessions, type MergeableEngagement } from './engagementIncrements';
 import { consumeReferenceView, resolveReferenceAccess } from './referenceAccess';
 import { creditStoryViewed } from './postEngagementCredits';
 import { enhancedLogger } from '../../utils/logger-enhanced';
@@ -29,6 +29,37 @@ export type PostReachDeps = {
    */
   readonly visibilityFilter: (viewerUserId?: string) => Promise<Prisma.PostWhereInput>;
 };
+
+/** Ce que la fusion relit de la ligne déjà stockée (#10764). */
+const STORED_ENGAGEMENT_SELECT = {
+  id: true, surface: true, contentType: true, dwellMs: true, watchMs: true,
+  mediaDurationMs: true, completed: true, actions: true, watchSamples: true,
+} as const;
+
+type StoredEngagementRow = {
+  readonly surface?: string | null;
+  readonly contentType?: string | null;
+  readonly dwellMs?: number | null;
+  readonly watchMs?: number | null;
+  readonly mediaDurationMs?: number | null;
+  readonly completed?: boolean | null;
+  readonly actions?: unknown;
+  readonly watchSamples?: unknown;
+};
+
+const storedEngagementOf = (
+  row: StoredEngagementRow,
+  received: { readonly surface: string; readonly contentType: string },
+): MergeableEngagement & { readonly surface: string; readonly contentType: string } => ({
+  surface: row.surface ?? received.surface,
+  contentType: row.contentType ?? received.contentType,
+  dwellMs: row.dwellMs ?? 0,
+  watchMs: row.watchMs ?? undefined,
+  mediaDurationMs: row.mediaDurationMs ?? undefined,
+  completed: row.completed === true,
+  actions: Array.isArray(row.actions) ? row.actions : [],
+  watchSamples: Array.isArray(row.watchSamples) ? row.watchSamples : [],
+});
 
 export type EngagementSessionInput = {
   sessionId: string; userId?: string; postId: string; contentType: string; surface: string;
@@ -184,9 +215,11 @@ export async function recordView(
  *   sans faire échouer le reste du batch.
  * - Caps défensifs (300 s) sur `dwellMs`/`watchMs`.
  * - `userId` provient de la route (jamais du client) — anti spoofing.
- * - Agrégation dénormalisée alimentée UNIQUEMENT à l'INSERT d'une nouvelle ligne
- *   (jamais aux updates/retries idempotents) : `postOpenCount`, `playCount`,
- *   `qualifiedViewCount`. N'altère NI `viewCount` NI `PostView`.
+ * - Agrégation dénormalisée (`postOpenCount`, `playCount`, `qualifiedViewCount`)
+ *   créditée par ce que la session AJOUTE (#10764) : le premier contact puis la
+ *   mesure arrivent sous la même clé, la ligne stockée est fusionnée sans
+ *   jamais reculer, et seuls les compteurs que la fusion gagne sont montés —
+ *   un rejeu idempotent n'ajoute rien. N'altère NI `viewCount` NI `PostView`.
  *
  * Retourne le nombre de sessions persistées (insert ou update).
  */
@@ -214,28 +247,39 @@ export async function recordEngagementBatch(
         ? Math.max(0, Math.round(s.mediaDurationMs))
         : undefined;
 
-      const completed = s.completed === true;
+      const received = {
+        surface: s.surface,
+        contentType: s.contentType,
+        dwellMs,
+        watchMs,
+        mediaDurationMs,
+        completed: s.completed === true,
+        actions: s.actions ?? [],
+        watchSamples: s.watchSamples ?? [],
+      };
+
+      const before = await prisma.postEngagement.findUnique({
+        where: { sessionId: s.sessionId },
+        select: STORED_ENGAGEMENT_SELECT,
+      });
+      const stored = before ? storedEngagementOf(before, received) : undefined;
+      const session = stored ? mergeEngagementSessions(stored, received) : received;
+
       const data = {
         postId: s.postId,
         userId,
         contentType: s.contentType,
         surface: s.surface,
         startedAt: new Date(s.startedAt),
-        dwellMs,
-        watchMs,
-        mediaDurationMs,
-        completed,
+        dwellMs: session.dwellMs,
+        watchMs: session.watchMs,
+        mediaDurationMs: session.mediaDurationMs,
+        completed: session.completed,
         truncated: s.truncated === true,
         consent: s.consent,
-        actions: (s.actions ?? []) as Prisma.InputJsonValue,
-        watchSamples: (s.watchSamples ?? []) as Prisma.InputJsonValue,
+        actions: session.actions as Prisma.InputJsonValue,
+        watchSamples: session.watchSamples as Prisma.InputJsonValue,
       };
-
-      const before = await prisma.postEngagement.findUnique({
-        where: { sessionId: s.sessionId },
-        select: { id: true },
-      });
-      const isInsert = !before;
 
       await prisma.postEngagement.upsert({
         where: { sessionId: s.sessionId },
@@ -244,16 +288,9 @@ export async function recordEngagementBatch(
         create: { sessionId: s.sessionId, ...data, expiresAt: new Date(Date.now() + POST_ENGAGEMENT_RETENTION_MS) },
       });
 
-      if (isInsert) {
-        await incrementPostCounters(prisma, [s.postId], engagementAggregateIncrements({
-          surface: s.surface,
-          contentType: s.contentType,
-          dwellMs,
-          watchMs,
-          mediaDurationMs,
-          completed,
-          watchSamples: s.watchSamples ?? [],
-        }));
+      const added = engagementIncrementsAdded(stored, session);
+      if (Object.keys(added).length > 0) {
+        await incrementPostCounters(prisma, [s.postId], added);
       }
       recorded += 1;
     } catch (error) {

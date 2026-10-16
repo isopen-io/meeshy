@@ -415,7 +415,7 @@ export async function ingestSocialEvents(
       applyOpens(deps, parType('open'), actor.userId).then((n) => { counted(parType('open')); return n; }),
       applyImpressions(deps, parType('impression'), actor.userId, options),
       applyDownloads(deps, parType('download'), actor.userId),
-      applyDwell(deps, parType('dwell'), actor.userId),
+      applyDwell(deps, [...parType('dwell'), ...parType('dwell-start')], actor.userId),
     ]);
 
     return {
@@ -568,7 +568,7 @@ async function applyDownloads(
  */
 async function applyDwell(
   deps: SocialEventsDeps,
-  events: readonly Extract<SocialEvent, { type: 'dwell' }>[],
+  events: readonly Extract<SocialEvent, { type: 'dwell' | 'dwell-start' }>[],
   userId: string,
 ): Promise<number> {
   if (events.length === 0) return 0;

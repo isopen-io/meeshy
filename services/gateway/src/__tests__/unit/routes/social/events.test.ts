@@ -627,6 +627,32 @@ describe('critère 3 — `download` et `dwell` gardent leur effet propre', () =>
     expect((mockRecordEngagementBatch.mock.calls[0] as any)[0]).toHaveLength(2);
     await app.close();
   });
+
+  it('un `dwell-start` (premier contact, #10764) rejoint le MÊME lot de sessions que `dwell`, sous sa clé de session', async () => {
+    const app = await buildApp();
+    const debut = {
+      type: 'dwell-start',
+      sessionId: '3f2504e0-4f89-11d3-9a0c-0305e82c3303',
+      postId: VISIBLE_ID,
+      contentType: 'REEL',
+      surface: 'reels',
+      startedAt: new Date().toISOString(),
+      dwellMs: 1000,
+    };
+    const res = await app.inject({
+      method: 'POST',
+      url: '/social/events',
+      headers: { authorization: 'Bearer jeton' },
+      payload: { events: [debut] },
+    });
+    expect(res.statusCode).toBe(200);
+    expect(res.json().data.accepts).toContain('dwell-start');
+    expect(mockRecordEngagementBatch).toHaveBeenCalledTimes(1);
+    const [sessions] = mockRecordEngagementBatch.mock.calls[0] as any;
+    expect(sessions).toEqual([expect.objectContaining({ sessionId: debut.sessionId, surface: 'reels', dwellMs: 1000 })]);
+    expect(sessions[0]).not.toHaveProperty('type');
+    await app.close();
+  });
 });
 
 // ─────────────────────────────────────────────────────────────────────────────

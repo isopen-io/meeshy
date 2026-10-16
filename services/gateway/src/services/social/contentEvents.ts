@@ -1,5 +1,6 @@
 import { createHmac } from 'crypto';
 import {
+  COUNTING_EVENT_TYPES,
   SAMPLEABLE_V2_TYPES,
   SOCIAL_EVENT_V2_TYPES,
   type SocialEventV2Type,
@@ -77,7 +78,7 @@ export function socialEventsV2Settings(env: Env = process.env): SocialEventsV2Se
 }
 
 export const acceptedEventTypes = (settings: SocialEventsV2Settings): readonly string[] => [
-  'impression', 'open', 'view', 'dwell', 'download',
+  ...COUNTING_EVENT_TYPES,
   ...(settings.enabled ? SOCIAL_EVENT_V2_TYPES : []),
 ];
 

@@ -32,6 +32,18 @@ const mkSession = (over: Partial<Record<string, unknown>> = {}) => ({
 
 type UpsertResult = { created: boolean };
 
+/** La ligne `PostEngagement` telle que la base la rend après l'écriture de `session`. */
+const storedRowOf = (session: ReturnType<typeof mkSession>) => ({
+  surface: session.surface,
+  contentType: session.contentType,
+  dwellMs: session.dwellMs,
+  watchMs: (session as { watchMs?: number }).watchMs ?? null,
+  mediaDurationMs: (session as { mediaDurationMs?: number }).mediaDurationMs ?? null,
+  completed: session.completed,
+  actions: session.actions,
+  watchSamples: session.watchSamples,
+});
+
 const buildPrisma = (overrides: Partial<Record<string, unknown>> = {}) => {
   const post = {
     findFirst: jest.fn<(arg?: unknown) => Promise<{ id: string; authorId: string } | null>>()
@@ -42,7 +54,7 @@ const buildPrisma = (overrides: Partial<Record<string, unknown>> = {}) => {
   // non-null = UPDATE (lost-ACK retry, no counter change).
   const postEngagement = {
     upsert: jest.fn<(arg?: unknown) => Promise<UpsertResult>>().mockResolvedValue({ created: true }),
-    findUnique: jest.fn<(arg?: unknown) => Promise<{ id: string } | null>>().mockResolvedValue(null),
+    findUnique: jest.fn<(arg?: unknown) => Promise<({ id: string } & Record<string, unknown>) | null>>().mockResolvedValue(null),
   };
   const $runCommandRaw = jest.fn<(arg?: unknown) => Promise<unknown>>().mockResolvedValue({ ok: 1 });
   const prisma = {
@@ -192,12 +204,10 @@ describe('PostService.recordEngagementBatch — agrégation dénormalisée (INSE
   });
 
   it('does NOT increment any counter on an UPDATE (lost-ACK retry)', async () => {
-    // findUnique returns an existing row → the session already landed → UPDATE path.
-    prisma.postEngagement.findUnique.mockResolvedValueOnce({ id: 'existing' });
-    await service.recordEngagementBatch(
-      [mkSession({ contentType: 'REEL', surface: 'reels' })],
-      'u1',
-    );
+    // findUnique returns the row already stored → the session already landed → UPDATE path.
+    const session = mkSession({ contentType: 'REEL', surface: 'reels' });
+    prisma.postEngagement.findUnique.mockResolvedValueOnce({ id: 'existing', ...storedRowOf(session) });
+    await service.recordEngagementBatch([session], 'u1');
     expect(prisma.$runCommandRaw).not.toHaveBeenCalled();
   });
 
@@ -269,5 +279,50 @@ describe('PostService.recordEngagementBatch — agrégation dénormalisée (INSE
     );
     const data = lastUpdateData() ?? {};
     expect(data).not.toHaveProperty('qualifiedViewCount');
+  });
+});
+
+/**
+ * #10764 — le PREMIER CONTACT part tout de suite, la MESURE RICHE ensuite, sous
+ * la MÊME clé de session. La passerelle fusionne (jamais en dessous de ce
+ * qu'elle a déjà) et ne crédite que ce que la fusion ajoute : chaque compteur
+ * une fois par session, quel que soit l'ordre d'arrivée.
+ */
+describe('PostService.recordEngagementBatch — premier contact puis mesure (#10764)', () => {
+  const REEL_START = mkSession({ contentType: 'REEL', surface: 'reels', dwellMs: 0 });
+  const REEL_END = mkSession({
+    contentType: 'REEL', surface: 'reels', dwellMs: 9000, watchMs: 9000, mediaDurationMs: 9000, completed: true,
+    watchSamples: [{ positionMs: 8800, atMs: 8800 }],
+  });
+
+  const counterWrites = (prisma: ReturnType<typeof buildPrisma>) =>
+    postCounterWritesOf(prisma.$runCommandRaw).map((write) => write.data);
+
+  it('le premier contact d’un réel compte son ouverture tout de suite', async () => {
+    const prisma = buildPrisma();
+    await new PostService(prisma).recordEngagementBatch([REEL_START], 'u1');
+
+    expect(counterWrites(prisma)).toEqual([{ postOpenCount: { increment: 1 } }]);
+  });
+
+  it('la mesure qui suit le premier contact crédite la lecture et la vue qualifiée, jamais une seconde ouverture', async () => {
+    const prisma = buildPrisma();
+    prisma.postEngagement.findUnique.mockResolvedValueOnce({ id: 'existing', ...storedRowOf(REEL_START) });
+
+    await new PostService(prisma).recordEngagementBatch([REEL_END], 'u1');
+
+    expect(counterWrites(prisma)).toEqual([{ playCount: { increment: 1 }, qualifiedViewCount: { increment: 1 } }]);
+  });
+
+  it('un premier contact rejoué APRÈS la mesure ne crédite rien et ne fait pas reculer la ligne', async () => {
+    const prisma = buildPrisma();
+    prisma.postEngagement.findUnique.mockResolvedValueOnce({ id: 'existing', ...storedRowOf(REEL_END) });
+
+    await new PostService(prisma).recordEngagementBatch([REEL_START], 'u1');
+
+    expect(counterWrites(prisma)).toEqual([]);
+    const update = (prisma.postEngagement.upsert.mock.calls[0][0] as { update: Record<string, unknown> }).update;
+    expect(update).toMatchObject({ dwellMs: 9000, watchMs: 9000, completed: true });
+    expect(update.watchSamples).toEqual([{ positionMs: 8800, atMs: 8800 }]);
   });
 });

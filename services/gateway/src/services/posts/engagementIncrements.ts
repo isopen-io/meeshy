@@ -80,3 +80,53 @@ export function engagementAggregateIncrements(s: EngagementSession): PostCounter
 
   return increments;
 }
+
+/** La part d'une session que la fusion compare — ce que la ligne stockée en garde. */
+export type MergeableEngagement = {
+  readonly dwellMs: number;
+  readonly watchMs?: number;
+  readonly mediaDurationMs?: number;
+  readonly completed: boolean;
+  readonly actions: unknown[];
+  readonly watchSamples: unknown[];
+};
+
+const longest = (stored: unknown[], incoming: unknown[]): unknown[] =>
+  incoming.length >= stored.length ? incoming : stored;
+
+const maxOptional = (a: number | undefined, b: number | undefined): number | undefined =>
+  a === undefined ? b : b === undefined ? a : Math.max(a, b);
+
+/**
+ * La MÊME session reçue deux fois (#10764) — le premier contact puis la mesure,
+ * ou un rejeu dans le désordre. La fusion ne recule jamais : durées au maximum,
+ * complétion acquise, la plus longue trace d'actions et d'échantillons. Un
+ * premier contact rejoué après la mesure ne rétrograde donc pas la ligne.
+ */
+export function mergeEngagementSessions<T extends MergeableEngagement>(stored: MergeableEngagement, incoming: T): T {
+  return {
+    ...incoming,
+    dwellMs: Math.max(stored.dwellMs, incoming.dwellMs),
+    watchMs: maxOptional(stored.watchMs, incoming.watchMs),
+    mediaDurationMs: incoming.mediaDurationMs ?? stored.mediaDurationMs,
+    completed: stored.completed || incoming.completed,
+    actions: longest(stored.actions, incoming.actions),
+    watchSamples: longest(stored.watchSamples, incoming.watchSamples),
+  };
+}
+
+/**
+ * Ce que la session ajoute aux compteurs (#10764) : les incréments de l'état
+ * fusionné que l'état stocké n'avait pas déjà valus. Sans état stocké (première
+ * réception), tout. Chaque compteur reste à UN par session, quel que soit le
+ * nombre de réceptions ou leur ordre.
+ */
+export function engagementIncrementsAdded(
+  stored: EngagementSession | undefined,
+  merged: EngagementSession,
+): PostCounterIncrements {
+  const next = engagementAggregateIncrements(merged);
+  if (stored === undefined) return next;
+  const already = engagementAggregateIncrements(stored);
+  return Object.fromEntries(Object.entries(next).filter(([counter]) => !(counter in already)));
+}
