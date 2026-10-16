@@ -156,6 +156,7 @@ struct BubbleStandardLayout: View {
     // MARK: - Adaptive sizing (iPad regular size class needs a tighter cap)
 
     @Environment(\.horizontalSizeClass) private var horizontalSizeClass
+    @Environment(\.bubbleContainerWidth) private var bubbleContainerWidth
     @Environment(\.bubbleSkin) var skin
 
     // MARK: - Layout constants
@@ -512,7 +513,7 @@ struct BubbleStandardLayout: View {
             // (UserIdentityBar's greedy Spacer is collapsed via
             // `.fixedSize(horizontal: true, vertical: false)` on the bar
             // inside `textBubbleContent`).
-            .frame(maxWidth: DeviceLayout.bubbleMaxWidth(sizeClass: horizontalSizeClass), alignment: isMe ? .trailing : .leading)
+            .frame(maxWidth: DeviceLayout.bubbleMaxWidth(sizeClass: horizontalSizeClass, containerWidth: bubbleContainerWidth), alignment: isMe ? .trailing : .leading)
             // Standalone (aperçu) : hug jusqu'au cap. `.fixedSize(horizontal:)`
             // fait remonter la largeur idéale du contenu (clampée au cap par le
             // `.frame(maxWidth:)` ci-dessus) → une bulle courte n'occupe plus

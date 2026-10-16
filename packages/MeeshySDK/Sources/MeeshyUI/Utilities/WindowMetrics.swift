@@ -12,7 +12,14 @@ import UIKit
 /// `connectedScenes.first`: `connectedScenes` is an unordered `Set`, so
 /// `.first` routinely hands back a background scene under multi-window.
 enum WindowMetrics {
+    /// Miroir de `DeviceLayout.activeWindowScene` : deux scènes au premier plan (fenêtre détachée) — celle qui tient la
+    /// fenêtre clé l'emporte.
     private static var activeWindowScene: UIWindowScene? {
+        for scene in UIApplication.shared.connectedScenes {
+            guard let windowScene = scene as? UIWindowScene, windowScene.activationState == .foregroundActive,
+                  windowScene.keyWindow != nil else { continue }
+            return windowScene
+        }
         for scene in UIApplication.shared.connectedScenes {
             guard let windowScene = scene as? UIWindowScene,
                   windowScene.activationState == .foregroundActive else { continue }

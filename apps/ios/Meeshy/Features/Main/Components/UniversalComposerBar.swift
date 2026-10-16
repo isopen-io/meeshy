@@ -329,6 +329,8 @@ struct UniversalComposerBar: View {
     // MARK: - State (internal for cross-file extension access)
 
     @State var text = ""
+    /// Clavier matériel : le prochain saut de ligne vient de Maj+Retour / Option+Retour (iOS 17+) — il ne doit pas envoyer.
+    @State var literalNewlinePending = false
     /// La sélection du champ (`TextSelection`, iOS 18+), rangée en `Any?`
     /// parce qu'une propriété stockée ne peut pas être `@available` (#7849).
     @State var formatSelectionStorage: Any? = nil

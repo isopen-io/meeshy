@@ -2,31 +2,30 @@ import XCTest
 import SwiftUI
 @testable import Meeshy
 
-/// Sur iPad, les bulles se mesurent à la colonne de la conversation, pas à la
-/// fenêtre : l'écart qui distingue envoyé et reçu reste celui de l'iPhone.
+/// Les bulles se mesurent à la LISTE qui les porte — la colonne de l'iPad, une fenêtre détachée —, jamais à la
+/// fenêtre principale : l'écart qui distingue envoyé et reçu reste celui de l'iPhone, dans chaque fenêtre.
 @MainActor
 final class ConversationColumnBubbleWidthTests: XCTestCase {
 
-    override func tearDown() {
-        DeviceLayout.conversationColumnWidth = nil
-        super.tearDown()
+    /// 820 pt de fenêtre en portrait : 508 pt mesurés à la fenêtre débordaient une colonne de ~488 pt.
+    func test_theListWidth_capsTheBubble() {
+        XCTAssertEqual(DeviceLayout.bubbleMaxWidth(sizeClass: .regular, containerWidth: 488), 488 * 0.62, accuracy: 0.5)
+        XCTAssertEqual(DeviceLayout.bubbleMaxWidth(sizeClass: .compact, containerWidth: 320), 320 * 0.70, accuracy: 0.5)
     }
 
-    func test_iPadColumn_capsBubblesAgainstTheColumn() {
-        DeviceLayout.conversationColumnWidth = 488
-        XCTAssertEqual(DeviceLayout.bubbleMaxWidth(sizeClass: .regular), 488 * 0.62, accuracy: 0.5,
-                       "820 pt de fenêtre en portrait : 508 pt mesurés à la fenêtre débordaient la colonne")
-    }
-
-    func test_withoutAColumn_bubblesMeasureTheWindow() {
-        DeviceLayout.conversationColumnWidth = nil
+    func test_withoutAList_bubblesMeasureTheWindow() {
         XCTAssertEqual(DeviceLayout.bubbleMaxWidth(sizeClass: .compact),
                        DeviceLayout.bubbleMaxWidth(containerWidth: DeviceLayout.windowSize.width, sizeClass: .compact))
     }
 
-    func test_theIPadRoot_publishesAndWithdrawsItsColumnWidth() throws {
-        let root = AppSourceGuard.stripComments(try AppSourceGuard.unit("Meeshy/Features/Main/Views/iPadRootView.swift"))
-        XCTAssertTrue(root.contains("DeviceLayout.conversationColumnWidth = width"))
-        XCTAssertTrue(root.contains("DeviceLayout.conversationColumnWidth = nil"))
+    /// Une valeur GLOBALE posée par la fenêtre principale s'appliquait aussi aux bulles d'une fenêtre détachée, plus
+    /// étroite : chaque cellule pose désormais la largeur de SA liste.
+    func test_eachListHandsItsOwnWidth_noGlobalColumnWidth() throws {
+        let rows = AppSourceGuard.stripComments(try AppSourceGuard.unit("Meeshy/Features/Main/Views/MessageListViewController+Rows.swift"))
+        XCTAssertTrue(rows.contains(".environment(\\.bubbleContainerWidth, self.collectionView.bounds.width"))
+        let bubble = AppSourceGuard.stripComments(try AppSourceGuard.unit("Meeshy/Features/Main/Views/Bubble/BubbleStandardLayout.swift"))
+        XCTAssertTrue(bubble.contains("containerWidth: bubbleContainerWidth"))
+        let layout = AppSourceGuard.stripComments(try AppSourceGuard.unit("Meeshy/Core/DeviceLayout.swift"))
+        XCTAssertFalse(layout.contains("conversationColumnWidth"))
     }
 }
