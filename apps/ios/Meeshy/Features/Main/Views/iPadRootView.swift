@@ -199,6 +199,12 @@ struct iPadRootView: View {
             onSendMessageToUser: handleSendMessageToUser,
             onPushNavigateToRoute: handlePushNavigateToRoute
         ))
+        // La conversation ouverte quitte la liste (masquée, supprimée, quittée, retirée) : la colonne de
+        // détail se referme, comme l'iPhone revient à la liste — jamais un fil mort où l'on écrit encore.
+        .onReceive(conversationViewModel.conversationRemoved) { removedId in
+            guard iPadSelectionRule.closesDetail(activeConversationId: activeConversation?.id, removedId: removedId) else { return }
+            withAnimation(.spring(response: 0.35, dampingFraction: 0.85)) { activeConversation = nil }
+        }
         // `initial: true` covers the cold-launch race where a Universal Link
         // sets `pendingDeepLink` from AppDelegate.continue:userActivity: BEFORE
         // this view mounts. `consumePendingDeepLink` returns nil for the typical

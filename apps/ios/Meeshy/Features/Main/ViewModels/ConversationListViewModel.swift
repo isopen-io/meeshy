@@ -6,6 +6,9 @@ import MeeshySDK
 
 @MainActor
 class ConversationListViewModel: ObservableObject {
+    /// Conversation qui QUITTE la liste (supprimée, quittée, retirée) : l'iPad referme sa colonne de détail.
+    let conversationRemoved = PassthroughSubject<String, Never>()
+
     @Published var conversations: [Conversation] = [] {
         didSet {
             _convIdIndex = nil
@@ -211,6 +214,7 @@ class ConversationListViewModel: ObservableObject {
     private func dropConversationLeftByMe(at index: Int) {
         let conversationId = conversations[index].id
         conversations.remove(at: index)
+        conversationRemoved.send(conversationId)
         schedulePersist()
         Task { await CacheCoordinator.shared.messages.invalidate(for: conversationId) }
     }
@@ -2047,7 +2051,7 @@ class ConversationListViewModel: ObservableObject {
         // optimistically + dispatches deleteForMe via the outbox. The row
         // disappears because `filterConversations` hides deletedForUserAt != nil;
         // on a 4xx the store clears deletedForUserAt and the row reappears.
-        try? await store.apply(.deleteForUser, for: conversationId)
+        do { try await store.apply(.deleteForUser, for: conversationId); conversationRemoved.send(conversationId) } catch {}
         await sweepLocalCallTranscripts(forConversation: conversationId)
     }
 

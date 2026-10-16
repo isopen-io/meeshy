@@ -1043,7 +1043,7 @@ struct ConversationView: View {
                 // surface a toast so the user knows why.
                 guard revoked else { return }
                 FeedbackToastManager.shared.showError(viewModel.error ?? String(localized: "conversation.accessRevoked", bundle: .main))
-                dismiss()
+                if anonymousSession != nil { dismiss() } else { router.pop() } // iPad : `dismiss()` y est un no-op
             }
             .observingKeyboardTransition($keyboardTransition)
             .onReceive(NotificationCenter.default.publisher(for: UIApplication.willResignActiveNotification)) { _ in

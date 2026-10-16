@@ -2,6 +2,15 @@ import SwiftUI
 import MeeshySDK
 import os
 
+// MARK: - Sélection de la colonne de détail
+
+/// Règle pure : la colonne de détail se referme quand la conversation qu'elle montre quitte la liste.
+nonisolated enum iPadSelectionRule {
+    static func closesDetail(activeConversationId: String?, removedId: String) -> Bool {
+        activeConversationId == removedId
+    }
+}
+
 // MARK: - iPad Root View Navigation Helpers
 
 extension iPadRootView {
