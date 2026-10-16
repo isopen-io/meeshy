@@ -710,7 +710,7 @@ export default function StoryScreen() {
           ...(!group.isMine && typeof authorUsername === 'string' && authorUsername !== '' ? { profileUsername: authorUsername } : {}),
           time: {
             iso: new Date(currentStory.createdAt).toISOString(),
-            label: shortRelativeTime(new Date(currentStory.createdAt), new Date(), reader.locale),
+            label: shortRelativeTime(new Date(currentStory.createdAt), new Date(), currentInterfaceLanguage()),
           },
           ...(repostCredit === null
             ? {}

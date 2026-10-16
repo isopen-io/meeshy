@@ -46,6 +46,10 @@ const ptVerifyEmail = {
   'signInLink.switchAccount.failed': 'Não é possível abrir esta outra conta agora. Sua sessão continua aberta e o link foi fechado.',
   'signInLink.switchAccount.expired': 'Este link expirou: peça um novo. Sua sessão continua aberta.',
   'signInLink.switchAccount.leave': 'Voltar ao início',
+  'emailSent.title': 'E-mail enviado',
+  'emailSent.openLink': 'Abra o link enviado para {email}',
+  'emailSent.nothingReceived': 'Não recebeu nada?',
+  'emailSent.nothingReceived.text': 'Verifique sua pasta de spam: a mensagem pode ter ido parar lá.',
 };
 
 export default ptVerifyEmail;

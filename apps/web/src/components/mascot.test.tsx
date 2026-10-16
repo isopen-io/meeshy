@@ -7,8 +7,9 @@ import { resolveEngagementProgress } from '@meeshy/shared/utils/engagement-progr
 import type { MascotMood } from '@meeshy/shared/utils/mascot';
 
 import { ENGAGEMENT_PROGRESS_FIXTURE } from '@/lib/api/engagement-fixture';
+import { formatGameNumber } from '@/lib/i18n-game-catalog';
 import { mascotSay } from '@/lib/view/mascot-copy';
-import { ACHIEVEMENT_COPY } from '@/lib/view/progression';
+import { achievementCopy } from '@/lib/view/progression';
 import { ProgressionBody } from '@/routes/progression';
 
 import { Mascot, MascotCoach } from './mascot';
@@ -26,7 +27,7 @@ describe('mascotSay — la phrase de chaque ligne', () => {
   });
 
   test('invite à frapper en disant le prix', () => {
-    expect(mascotSay({ kind: 'can-mint', mintCost: 1221 })).toBe('Tes points sont prêts : on frappe une Meesh pour 1221 points ?');
+    expect(mascotSay({ kind: 'can-mint', mintCost: 1221 })).toBe(`Tes points sont prêts : on frappe une Meesh pour ${formatGameNumber('fr', 1221)} points ?`);
   });
 
   test('célèbre une frappe avec le nouveau solde', () => {
@@ -37,7 +38,7 @@ describe('mascotSay — la phrase de chaque ligne', () => {
   test('célèbre un niveau et nomme un succès par son titre', () => {
     expect(mascotSay({ kind: 'level-up', level: 3 })).toBe('Niveau 3 ! On fête ça.');
     expect(mascotSay({ kind: 'achievement', key: 'achievement.first_voice' })).toContain(
-      ACHIEVEMENT_COPY['achievement.first_voice'].title,
+      achievementCopy('achievement.first_voice', 'fr').title,
     );
   });
 

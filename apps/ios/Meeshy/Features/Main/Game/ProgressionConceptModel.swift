@@ -659,6 +659,7 @@ enum ProgressionConceptModel {
         case .meesh, .treasury: .meesh
         case .flame: .flame
         case .achievement: .succes
+        case .mission: .missions
         case .trophy: .showcase
         case .leagueUp: .league
         case .season: .season

@@ -1,4 +1,4 @@
-import { useLayoutEffect, useRef, type ReactNode, type RefObject } from 'react';
+import { useLayoutEffect, useRef, useState, type ReactNode, type RefObject } from 'react';
 
 import type { ProgressionConcept } from '@meeshy/shared/utils/progression-layout';
 
@@ -7,12 +7,15 @@ import { GameHero } from '@/components/game-hero';
 import { GameHiddenCard } from '@/components/game-hidden-card';
 import { GameLeagueSummary } from '@/components/game-league-summary';
 import { GameMintPreview } from '@/components/game-mint-preview';
-import { GameMissions } from '@/components/game-missions';
+import { GameMissions, type MissionPhotoRef } from '@/components/game-missions';
+import { GamePhotoFlow } from '@/components/game-photo-flow';
 import { GAME_BRAND, GAME_CARD, GAME_INK, GAME_INK_2 } from '@/components/game-surface';
 import { GameTouch } from '@/components/game-touch';
 import { ConceptEmblem, ConceptFacts, ConceptGauge, ProgressionRow, RowEmblem } from '@/components/progression-concept';
 import { shownLevelOf } from '@/lib/game/ladder';
 import type { EngagementWithGame } from '@/lib/api/engagement';
+import { appPhotoEnv } from '@/lib/game-photo/app-env';
+import { missionMoment, type PhotoMoment } from '@/lib/game-photo/moments';
 import { useGamePrefs } from '@/lib/game/preferences';
 import { suspendForGameCatalog } from '@/lib/i18n-game-catalog';
 import { currentInterfaceLanguage } from '@/lib/interface-language';
@@ -56,6 +59,8 @@ import { ProgressionPage } from '@/routes/progression-page';
 export type FicheHost = {
   readonly actions: GameActions;
   readonly online: boolean;
+  /** La fin de mission se photographie (#10816) : absent, la fiche ne le propose pas. */
+  readonly onPhotoMission?: (mission: MissionPhotoRef) => void;
 };
 
 function FicheSection({ id, title, children }: { readonly id: string; readonly title: string; readonly children: ReactNode }) {
@@ -171,6 +176,7 @@ function gesturesOf(concept: ProgressionConcept, view: EngagementWithGame, host:
           onReroll={actions.reroll}
           onClaim={actions.claimChest}
           errors={{ reroll: actions.errors.reroll, chest: actions.errors.chest }}
+          onPhotoMission={host.onPhotoMission}
         />
       );
     case 'flame':
@@ -304,7 +310,14 @@ export function ConceptFiche({
 function FicheScreenBody({ concept, progress }: { readonly concept: ProgressionConcept; readonly progress: EngagementWithGame }) {
   const online = useOnline();
   const actions = useGameActions();
-  return <ConceptFiche concept={concept} progress={progress} host={{ actions, online }} />;
+  /* Le moment est construit UNE fois au toucher : le déroulé de la photo en dépend, il ne se relance pas à chaque rendu. */
+  const [taking, setTaking] = useState<PhotoMoment | null>(null);
+  return (
+    <>
+      <ConceptFiche concept={concept} progress={progress} host={{ actions, online, onPhotoMission: (mission) => setTaking(missionMoment(mission)) }} />
+      {taking === null ? null : <GamePhotoFlow moment={taking} env={appPhotoEnv()} flameDays={progress.game?.flame.days ?? null} onClose={() => setTaking(null)} />}
+    </>
+  );
 }
 
 export default function ProgressionConceptScreen() {

@@ -490,6 +490,9 @@ export type SendMessageBody = {
   readonly replyToId?: string;
   /** La pièce NOMMÉE d'une réponse (#6303, #6164) — `messages-send.ts:70`, vérifiée côté passerelle. */
   readonly attachmentReplyTo?: { readonly attachmentId: string };
+  /** LA STORY OU L'HUMEUR CITÉE (#10813) — `messages-send.ts:74`, admise par
+   * `admitStoryReply` dans la seule conversation directe avec son auteur. */
+  readonly storyReplyToId?: string;
   /**
    * LE TRANSFERT (#5866) — `messages-send.ts:71-72`. Aucune route dédiée :
    * un transfert EST un envoi qui désigne sa source, et la passerelle copie

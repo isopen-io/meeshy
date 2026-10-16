@@ -45,9 +45,11 @@ import { ThreadModes } from '@/routes/thread-modes';
  *
  * ## LE PRISME EST CELUI DU MEMBRE, PAS CELUI DE L'ADMINISTRATEUR
  *
- * `readerLanguages` et `readerLocale` arrivent EN PROP. C'est déjà comme ça
- * que `ThreadModes` fonctionne — aucun composant de rendu du fil ne lit la
- * session — et c'est ce qui rend ce lot possible sans toucher une seule peau.
+ * `readerLanguages` arrive EN PROP. C'est déjà comme ça que `ThreadModes`
+ * fonctionne — aucun composant de rendu du fil ne lit la session — et c'est ce
+ * qui rend ce lot possible sans toucher une seule peau. Le Prisme du membre ne
+ * gouverne que le CONTENU : les dates du chrome parlent la langue d'interface
+ * de l'administrateur (`language`, #10817).
  * Leur construction vit dans `lib/admin/prisme-membre.ts`, qui porte la raison
  * pour laquelle le rang 4 (la locale de l'appareil) y est DÉLIBÉRÉMENT omis.
  *
@@ -118,7 +120,6 @@ export function AdminConversationReading({
   language,
   prisme,
   readerLanguages,
-  readerLocale,
   viewer,
   deps = apiDeps,
   layout = 'fill',
@@ -149,7 +150,6 @@ export function AdminConversationReading({
   /** LE PRISME DU MEMBRE (ou de l'administrateur hors fiche membre) — face CONTENU. */
   readonly readerLanguages: readonly string[];
   /** La face CADRAGE du même prisme : libellés de jour, dates relatives. */
-  readonly readerLocale: string;
   /**
    * QUI EST « MOI » DANS CE FIL. Sur la fiche d'un membre, c'est LE MEMBRE :
    * la conversation s'affiche de son point de vue, ses prises de parole du
@@ -212,7 +212,7 @@ export function AdminConversationReading({
      identité neuve à chaque fois — la mémoïsation du fil ne tiendrait plus
      rien (« Zero Unnecessary Re-render », CLAUDE.md), même discipline que
      `routes/thread.tsx`. */
-  const placed = useMemo(() => place(messages, { locale: readerLocale }), [messages, readerLocale]);
+  const placed = useMemo(() => place(messages, { locale: language }), [messages, language]);
 
   const scroller = useRef<HTMLElement | null>(null);
   /**
@@ -395,11 +395,10 @@ export function AdminConversationReading({
           sectionnante en `HTMLElement`, le type même qu'attendent
           `useThreadScene` et `Virtualizer<HTMLElement, Element>` — la MÊME
           raison qui fait du fil un `<main ref={scroller}>`. */}
-      <section ref={scroller} className="flex min-h-0 flex-1 flex-col overflow-y-auto" lang={readerLocale}>
+      <section ref={scroller} className="flex min-h-0 flex-1 flex-col overflow-y-auto" lang={language}>
         <ThreadModes
           mode={MODE_DE_LECTURE}
           viewer={viewer}
-          readerLocale={readerLocale}
           placed={placed}
           virtualizer={virtualizer}
           scene={scene}

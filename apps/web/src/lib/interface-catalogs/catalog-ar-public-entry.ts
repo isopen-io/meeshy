@@ -4,6 +4,7 @@ import type frPublicEntry from './catalog-fr-public-entry';
 const arPublicEntry = {
   'publicHeader.home': 'الصفحة الرئيسية لـ Meeshy',
   'publicHeader.language': 'اللغة',
+  'brand.credit.hint': 'يفتح منصة services.ceo في علامة تبويب جديدة',
   'login.offline': 'غير متصل — لا يمكن تسجيل الدخول حاليًا.',
   'login.twoFactor.title': 'المصادقة الثنائية',
   'login.twoFactor.lead': 'أدخل الرمز من تطبيق المصادقة لديك.',

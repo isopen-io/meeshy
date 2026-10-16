@@ -86,7 +86,7 @@ final class GameReferralCardTests: XCTestCase {
 
     private func compose(_ referral: ReferralCard?) throws -> ComposedPhoto {
         try XCTUnwrap(GamePhotoComposer().compose(
-            moment: GamePhotoMoments.rank(.voix, division: .ii), source: nil, mode: .card, date: now, referral: referral
+            moment: GamePhotoMoments.rank(.voix, division: .ii), source: nil, mode: .card, date: now, referral: referral, author: nil
         ))
     }
 

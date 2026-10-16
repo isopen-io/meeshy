@@ -843,12 +843,9 @@ struct RootView: View {
             // screen, which redirects into the viewer (comments overlay /
             // reactions sheet) or surfaces the expired empty state when the
             // content is gone.
-            router.push(.storyNotificationTarget(
-                storyId: postId,
-                intent: ctx.storyIntent,
-                context: ctx.storyContext,
-                commentId: ctx.commentId,
-                parentCommentId: ctx.parentCommentId
+            router.push(NotificationContentRouter.ephemeralRoute(
+                postId: postId, notificationType: ctx.type, context: ctx.storyContext,
+                commentId: ctx.commentId, parentCommentId: ctx.parentCommentId
             ))
 
         case .post:

@@ -165,6 +165,31 @@ body {
   background: #ffffff;
   border: 0.5px solid var(--ios-edge);
 }
+/* Le lien de partage en clair sous le QR (#10811) : une adresse discrète, pas
+ * un bouton. Sur écran tactile, il reste seul (voir `pointer: coarse`). */
+.ld-qr figcaption {
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+}
+.ld-qr-share {
+  font-size: 13px;
+  font-weight: 400;
+  color: var(--ios-ink-3);
+}
+.ld-qr-link {
+  color: inherit;
+  text-decoration: underline;
+  text-underline-offset: 2px;
+  unicode-bidi: isolate;
+  direction: ltr;
+}
+@media (pointer: coarse) {
+  .ld-qr img,
+  .ld-qr-scan {
+    display: none;
+  }
+}
 .ld-note {
   margin: 12px 0 0;
   font-size: 13px;

@@ -4,6 +4,7 @@ import type frPublicEntry from './catalog-fr-public-entry';
 const itPublicEntry = {
   'publicHeader.home': 'Home di Meeshy',
   'publicHeader.language': 'Lingua',
+  'brand.credit.hint': 'apre la piattaforma services.ceo in una nuova scheda',
   'login.offline': 'Offline: al momento non è possibile accedere.',
   'login.twoFactor.title': 'Autenticazione a due fattori',
   'login.twoFactor.lead': 'Inserisci il codice della tua app di autenticazione.',

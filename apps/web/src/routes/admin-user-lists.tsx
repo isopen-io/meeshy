@@ -412,7 +412,6 @@ export function AdminUserConversationsSection({
               language={language}
               prisme="membre"
               readerLanguages={prisme.languages}
-              readerLocale={prisme.locale}
               viewer={viewerDuMembre(membre, language)}
               deps={deps}
             />

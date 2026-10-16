@@ -1,0 +1,285 @@
+<!doctype html>
+<html lang="fr">
+<head>
+<meta charset="utf-8" />
+<meta name="viewport" content="width=device-width, initial-scale=1" />
+<title>Cadres d'auteur</title>
+<style>
+  :root {
+    --ink: #1e1b4b; --ink-2: #4c4f7a; --paper: #f6f5fb; --card: #ffffff; --line: #e4e2f1;
+    --indigo-950: #1e1b4b; --indigo-900: #312e81; --indigo-500: #6366f1; --indigo-200: #c7d2fe;
+    --bronze-0: #e7c08d; --bronze-1: #8a5a24; --bronze-ink: #4a3010;
+    --silver-0: #f4f6fa; --silver-1: #8e98a8; --silver-ink: #3f4858;
+    --gold-0: #fde68a; --gold-1: #b7791f; --gold-ink: #6b4610;
+    --platinum-0: #e0f2fe; --platinum-1: #5b7c99; --platinum-ink: #2c4459;
+    --obsidian-0: #55527a; --obsidian-1: #0e0d1a; --obsidian-ink: #d7d4f2;
+    --prism-0: #f87171; --prism-1: #fbbf24; --prism-2: #34d399; --prism-3: #60a5fa; --prism-4: #a855f7; --prism-ink: #1e1b4b;
+    --indigo-0: #6366f1; --indigo-1: #312e81; --indigo-ink: #ffffff;
+    --glint: #ffffff;
+    font-family: -apple-system, BlinkMacSystemFont, "SF Pro Text", "Segoe UI", Roboto, sans-serif;
+  }
+  @media (prefers-color-scheme: dark) {
+    :root { --ink: #eceaff; --ink-2: #a9a7cf; --paper: #0f0e1f; --card: #1a1934; --line: #2d2b50; }
+  }
+  * { box-sizing: border-box; }
+  body { margin: 0; background: var(--paper); color: var(--ink); }
+  main { max-width: 1240px; margin: 0 auto; padding: 40px 24px 80px; }
+  h1 { font-size: 30px; margin: 0 0 6px; letter-spacing: -0.01em; }
+  h2 { font-size: 21px; margin: 48px 0 6px; }
+  h3 { font-size: 15px; margin: 0 0 8px; }
+  p, li { line-height: 1.55; color: var(--ink-2); max-width: 78ch; }
+  .lede { font-size: 16px; }
+  .tag { display: inline-block; font-size: 11px; font-weight: 700; letter-spacing: .08em; text-transform: uppercase; padding: 3px 8px; border-radius: 999px; background: color-mix(in srgb, var(--indigo-500) 14%, transparent); color: var(--indigo-500); }
+  .grid { display: grid; gap: 22px; grid-template-columns: repeat(auto-fill, minmax(260px, 1fr)); margin-top: 18px; }
+  .cell { background: var(--card); border: 1px solid var(--line); border-radius: 18px; padding: 16px; }
+  .cell figcaption { font-size: 13px; color: var(--ink-2); margin-top: 10px; line-height: 1.45; }
+  .cell figcaption b { color: var(--ink); }
+  figure { margin: 0; }
+  .plate svg { width: 100%; height: auto; display: block; }
+  .row { display: flex; gap: 28px; flex-wrap: wrap; align-items: flex-start; margin-top: 18px; }
+  .before { display: flex; gap: 18px; flex-wrap: wrap; }
+  .before .shot { width: 250px; border-radius: 22px; border: 1px solid var(--line); background: #6e6c86; padding: 10px; color: #fff; font-size: 12px; }
+  .table { border-collapse: collapse; width: 100%; margin-top: 14px; font-size: 14px; }
+  .table th, .table td { border-bottom: 1px solid var(--line); text-align: left; padding: 9px 10px; vertical-align: top; }
+  .table th { font-size: 12px; text-transform: uppercase; letter-spacing: .06em; color: var(--ink-2); }
+  code { font-size: 12.5px; background: color-mix(in srgb, var(--indigo-500) 10%, transparent); padding: 1px 5px; border-radius: 5px; }
+
+  /* La carte POSÉE : jamais plein écran, inclinée d'un degré, une ombre de table. */
+  .table-top { position: relative; border-radius: 26px; padding: 34px 18px; display: grid; place-items: center; background: radial-gradient(120% 90% at 50% 0%, color-mix(in srgb, var(--indigo-500) 35%, #0d0c1d) 0%, #0d0c1d 70%); min-height: 520px; }
+  .phone { width: 300px; height: 620px; border-radius: 42px; border: 10px solid #0b0a16; position: relative; overflow: hidden; background: #f6f5fb; }
+  .phone .screen-bg { position: absolute; inset: 0; background: linear-gradient(#f6f5fb, #ebe9f7); }
+  .phone .dim { position: absolute; inset: 0; background: rgba(15, 14, 31, .55); }
+  .posed { position: absolute; left: 50%; top: 50%; transform: translate(-50%, -54%) rotate(-1.5deg); width: 236px; border-radius: 22px; overflow: hidden; box-shadow: 0 30px 50px -18px rgba(0,0,0,.65), 0 2px 0 rgba(255,255,255,.25) inset; }
+  .phone .actions { position: absolute; left: 16px; right: 16px; bottom: 22px; display: grid; gap: 8px; }
+  .btn { height: 40px; border-radius: 999px; display: grid; place-items: center; font-weight: 700; font-size: 14px; }
+  .btn.primary { background: var(--indigo-500); color: #fff; }
+  .btn.ghost { background: rgba(255,255,255,.14); color: #fff; }
+  .card-svg { display: block; width: 100%; height: auto; }
+  .fmt { display: flex; gap: 22px; align-items: flex-end; flex-wrap: wrap; }
+  .fmt .story { width: 220px; }
+  .fmt .square { width: 260px; }
+  .fmt svg { border-radius: 14px; box-shadow: 0 18px 36px -20px rgba(0,0,0,.6); }
+
+  /* Les animations DÉCRITES sont aussi JOUÉES ici, pour qu'on les juge : CSS, sous prefers-reduced-motion elles s'éteignent. */
+  .anim .sheen { animation: sheen 2.6s ease-in-out infinite; }
+  .anim .burin { animation: burin 2.6s ease-in-out infinite; }
+  .anim .reveal { animation: reveal 2.6s ease-in-out infinite; }
+  .anim .stamp { animation: stamp 2.6s cubic-bezier(.2,.9,.25,1.2) infinite; transform-origin: 50% 50%; transform-box: fill-box; }
+  .anim .coin { animation: coin 2.6s ease-in-out infinite; }
+  @keyframes sheen { 0%, 35% { transform: translateX(-140px); opacity: 0; } 45% { opacity: .9; } 75%, 100% { transform: translateX(400px); opacity: 0; } }
+  @keyframes burin { 0% { stroke-dashoffset: 260; } 60%, 100% { stroke-dashoffset: 0; } }
+  @keyframes reveal { 0%, 10% { opacity: 1; } 70%, 100% { opacity: 0; } }
+  @keyframes stamp { 0% { transform: translateY(-10px) scale(1.06); opacity: .0; } 18% { transform: translateY(0) scale(1); opacity: 1; } 100% { transform: none; opacity: 1; } }
+  @keyframes coin { 0% { transform: translate(110px, 40px); opacity: 0; } 8% { opacity: 1; } 25% { transform: translate(300px, 52px); } 42% { transform: translate(130px, 62px); } 60% { transform: translate(300px, 72px); opacity: 1; } 70%, 100% { transform: translate(300px, 72px); opacity: 0; } }
+  @media (prefers-reduced-motion: reduce) {
+    .anim .sheen, .anim .burin, .anim .reveal, .anim .stamp, .anim .coin { animation: none; }
+    .anim .reveal, .anim .coin, .anim .sheen { opacity: 0; }
+  }
+</style>
+</head>
+<body>
+<main>
+  <span class="tag">Brouillon de design · #10816 · 2026-10-16</span>
+  <h1>Le cadre grave le nom de son auteur</h1>
+  <p class="lede">Constat du porteur : « le cadre du premier achievement est moche, prend tout l'écran et ne dit rien sur l'auteur ». Cette planche propose une <b>carte posée</b> (jamais plein écran) qui porte, dans son ornement, le <b>pseudo de l'auteur</b> — gravé, estampé à l'or ou révélé au grattage — pour les trois familles : <b>succès</b> (par rareté), <b>rang</b>, <b>fin de mission</b>. Chaque variante existe fixe et animée ; l'image exportée (9:16, 1:1) porte la même plaque.</p>
+
+  <h2>1. Ce qui s'affiche aujourd'hui (mesuré le 2026-10-16)</h2>
+  <div class="row">
+    <div>
+      <h3>Web — <code>/me/progression/succes</code> → « Immortaliser »</h3>
+      <ul>
+        <li>Une feuille qui monte du bas sur toute la largeur, puis une image 9:16 haute de 62 % de l'écran (<code>GamePhotoFlow</code>).</li>
+        <li>L'emblème est <b>le même trophée de ligue en or pour TOUS les succès</b> (<code>game-photo-frame.tsx</code>, <code>case 'achievement'</code>) : la rareté mesurée ne se voit pas sur l'image.</li>
+        <li>Le texte : « Succès débloqué / Premier pas / date ». <b>Aucun nom, aucun avatar</b> : une image partagée n'appartient à personne.</li>
+      </ul>
+      <h3>iOS — <code>EngagementRevealHost</code></h3>
+      <ul>
+        <li><code>AchievementRevealView</code> en <code>fullScreenCover</code> : fond plein, médaille, « Succès débloqué », boutons.</li>
+        <li>« Immortaliser » ouvre <code>GamePhotoFlowView</code> ; <code>GamePhotoCanvasView</code> dessine <code>TrophyView(material: .gold)</code> pour tout succès. Aucun pseudo.</li>
+        <li>Pas de photo de fin de mission, ni sur web ni sur iOS.</li>
+      </ul>
+    </div>
+  </div>
+
+  <h2>2. La plaque d'auteur — la pièce commune</h2>
+  <p>Un cartouche à bouts entaillés, dans le métal de l'étape. À gauche, le médaillon de l'auteur (sa photo dans la carte posée, ses initiales sur l'image exportée — une image autonome ne charge rien d'extérieur). À droite, en petites capitales, la formule de la famille (« Succès de », « Rang atteint par », « Mission menée par ») puis le <b>@pseudo</b> — jamais le nom d'affichage, qui peut être un vrai nom.</p>
+  <div class="grid" id="finishes"></div>
+
+  <h2>3. Les succès, par rareté</h2>
+  <p>La rareté est celle qu'on a le DROIT de montrer (<code>visibleRarity</code> : 20 titulaires, 1 000 comptes). Sans rareté servie : la plaque <b>neutre</b>, jamais une rareté supposée. Le trophée prend le même métal que la plaque.</p>
+  <div class="grid" id="rarities"></div>
+
+  <h2>4. Les rangs et la fin de mission</h2>
+  <p>Un rang estampe le pseudo dans le métal du blason (<code>blasonDesign(rank).material</code>) ; le Mythe passe au prisme. Une mission accomplie se <b>gratte</b> comme un ticket : la couche argent s'en va et le nom doré apparaît.</p>
+  <div class="grid" id="others"></div>
+
+  <h2>5. La carte posée (célébration)</h2>
+  <p>La carte se pose au centre, inclinée d'un degré et demi, avec une ombre de table ; l'écran derrière reste visible et assombri. Largeur : <code>min(86vw, 340px)</code>, jamais plus de 60 % de la hauteur. Deux gestes sous elle : « Immortaliser » (le déroulé photo existant) et « Plus tard ». Toucher la carte rejoue l'animation.</p>
+  <div class="row">
+    <div class="table-top"><div class="phone"><div class="screen-bg"></div><div class="dim"></div><div class="posed anim" id="posed1"></div><div class="actions"><div class="btn primary">Immortaliser</div><div class="btn ghost">Plus tard</div></div></div></div>
+    <div class="table-top"><div class="phone"><div class="screen-bg"></div><div class="dim"></div><div class="posed anim" id="posed2"></div><div class="actions"><div class="btn primary">Immortaliser</div><div class="btn ghost">Plus tard</div></div></div></div>
+    <div class="table-top"><div class="phone"><div class="screen-bg"></div><div class="dim"></div><div class="posed anim" id="posed3"></div><div class="actions"><div class="btn primary">Immortaliser</div><div class="btn ghost">Plus tard</div></div></div></div>
+  </div>
+
+  <h2>6. L'image exportée — 9:16 et 1:1</h2>
+  <p>La plaque prend une place à elle dans la mise en page (<code>layout.ts</code>) : sous la date en 9:16, entre Mee et Meo en 1:1. Elle est fixe dans l'image (une image ne s'anime pas) ; le bandeau de parrainage reste au pied, inchangé.</p>
+  <div class="fmt" id="formats"></div>
+
+  <h2>7. Les animations</h2>
+  <table class="table">
+    <thead><tr><th>Fini</th><th>Ce qui se joue (Lottie, une fois, ~1,2 s)</th><th>Sous « Réduire les animations »</th></tr></thead>
+    <tbody>
+      <tr><td><b>Gravure</b></td><td>Le burin : un point de lumière suit la ligne de base du pseudo de gauche à droite (0,9 s), puis un lustre blanc traverse la plaque en diagonale (0,6 s).</td><td>La plaque gravée, fixe. Rien ne bouge.</td></tr>
+      <tr><td><b>Estampage doré</b></td><td>La frappe : le pseudo s'enfonce (échelle 1,06 → 1, 220 ms, ressort), puis une onde dorée balaie les lettres (0,7 s).</td><td>Les lettres dorées, fixes.</td></tr>
+      <tr><td><b>Grattage révélé</b></td><td>Une pièce gratte en trois passes en zigzag (1,1 s) ; des paillettes argent tombent ; le nom doré brille une fois.</td><td>Le nom déjà révélé, quelques éclats d'argent sur les bords.</td></tr>
+    </tbody>
+  </table>
+  <p>Le moteur est le seul que l'app embarque : <code>LottieLayer</code> (lottie-web, chargé à la première visibilité, en pause hors écran, détruit au démontage). L'animation est une <b>donnée</b> générée depuis la plaque (aucun fichier dessiné à la main par variante) et passe le validateur partagé <code>validateLottie</code>. Si quoi que ce soit échoue, la plaque fixe reste — l'état final, jamais un nom caché.</p>
+
+  <h2>8. Les règles</h2>
+  <ul>
+    <li><b>Le pseudo, pas le nom.</b> <code>@username</code>, NFC, coupé à 18 graphèmes avec « … ». Un invité sans compte n'a pas de plaque (il n'a pas de pseudo public).</li>
+    <li><b>Décoratif pour les lecteurs d'écran</b> : la plaque est <code>aria-hidden</code> ; le dialogue dit « Succès débloqué par @atabeth : Premier pas ».</li>
+    <li><b>Sept langues</b> pour la formule (« Succès de », « Rang atteint par », « Mission menée par ») ; le pseudo ne se traduit pas et s'isole de gauche à droite en arabe.</li>
+    <li><b>Aucune couleur écrite</b> dans le code : les métaux sont les jetons <code>--game-&lt;métal&gt;-*</code> déjà déclarés, résolus à la composition.</li>
+    <li><b>Rétrocompatible</b> : le carnet garde ses entrées ; une photo gardée avant ce lot se relit sans plaque.</li>
+  </ul>
+</main>
+<script>
+(() => {
+  const METALS = {
+    bronze: ['--bronze-0', '--bronze-1', '--bronze-ink'],
+    silver: ['--silver-0', '--silver-1', '--silver-ink'],
+    gold: ['--gold-0', '--gold-1', '--gold-ink'],
+    platinum: ['--platinum-0', '--platinum-1', '--platinum-ink'],
+    obsidian: ['--obsidian-0', '--obsidian-1', '--obsidian-ink'],
+    indigo: ['--indigo-0', '--indigo-1', '--indigo-ink'],
+    prism: ['--prism-0', '--prism-4', '--prism-ink'],
+  };
+  const v = (n) => `var(${n})`;
+  let uid = 0;
+  const metalDefs = (id, metal) => {
+    if (metal === 'prism') return `<linearGradient id="${id}" x1="0" y1="0" x2="1" y2="1">${[0, 1, 2, 3, 4].map((i) => `<stop offset="${i / 4}" stop-color="${v('--prism-' + i)}"/>`).join('')}</linearGradient>`;
+    const [a, b] = METALS[metal];
+    return `<linearGradient id="${id}" x1="0" y1="0" x2="1" y2="1"><stop offset="0" stop-color="${v(a)}"/><stop offset="1" stop-color="${v(b)}"/></linearGradient>`;
+  };
+  const goldDefs = (id) => `<linearGradient id="${id}" x1="0" y1="0" x2="0" y2="1"><stop offset="0" stop-color="var(--gold-0)"/><stop offset=".55" stop-color="var(--gold-1)"/><stop offset="1" stop-color="var(--gold-0)"/></linearGradient>`;
+
+  // La plaque : viewBox 360×100. Les mêmes coordonnées que `author-plate.tsx`.
+  function plate({ metal, finish, caption, pseudo, initials, photo = false, animated = false }) {
+    const id = `p${uid++}`;
+    const ink = metal === 'prism' ? 'var(--prism-ink)' : v(METALS[metal][2]);
+    const body = 'M22 8 H338 L352 50 L338 92 H22 L8 50 Z';
+    const inner = 'M27 15 H333 L344 50 L333 85 H27 L16 50 Z';
+    const nameX = 214, nameY = 70;
+    const nameAttrs = `x="${nameX}" y="${nameY}" text-anchor="middle" font-size="27" font-weight="800" letter-spacing="0.5"`;
+    let name = '';
+    if (finish === 'engrave') {
+      name = `<text ${nameAttrs} fill="var(--glint)" fill-opacity=".55" transform="translate(0 1.2)">${pseudo}</text><text ${nameAttrs} fill="${ink}">${pseudo}</text>`;
+      if (animated) name += `<path class="burin" d="M128 74 H300" stroke="var(--glint)" stroke-width="2.4" stroke-linecap="round" stroke-dasharray="260" stroke-dashoffset="260" opacity=".9"/>`;
+    } else if (finish === 'emboss') {
+      // Le champ creusé : un panneau sombre serti dans le métal, sur lequel la feuille d'or se lit sur toute plaque.
+      name = `<rect x="104" y="47" width="220" height="34" rx="7" fill="var(--indigo-950)" stroke="${ink}" stroke-opacity=".5" stroke-width="1.2"/>
+        <g class="${animated ? 'stamp' : ''}"><text ${nameAttrs} font-size="24" y="72" fill="#000" fill-opacity=".55" transform="translate(0 1.4)">${pseudo}</text><text ${nameAttrs} font-size="24" y="72" fill="url(#${id}g)" stroke="var(--glint)" stroke-opacity=".35" stroke-width=".5">${pseudo}</text></g>`;
+    } else {
+      // Grattage : le nom doré, et la couche argent qui en reste (masquée par les passes de la pièce).
+      name = `<text ${nameAttrs} fill="url(#${id}g)" stroke="${ink}" stroke-opacity=".35" stroke-width=".6">${pseudo}</text>
+        <rect x="112" y="40" width="204" height="40" rx="6" fill="url(#${id}s)" mask="url(#${id}m)"/>`;
+      if (animated) name += `<rect class="reveal" x="112" y="40" width="204" height="40" rx="6" fill="url(#${id}s)"/><circle class="coin" cx="0" cy="0" r="9" fill="url(#${id}g)" stroke="${ink}" stroke-width="1"/>`;
+    }
+    const medal = photo
+      ? `<clipPath id="${id}c"><circle cx="58" cy="50" r="31"/></clipPath><g clip-path="url(#${id}c)"><rect x="27" y="19" width="62" height="62" fill="#f9a8d4"/><circle cx="58" cy="44" r="13" fill="#7f1d1d" opacity=".75"/><ellipse cx="58" cy="78" rx="22" ry="16" fill="#7f1d1d" opacity=".75"/></g>`
+      : `<circle cx="58" cy="50" r="31" fill="var(--indigo-950)"/><text x="58" y="59" text-anchor="middle" font-size="25" font-weight="800" fill="var(--glint)">${initials}</text>`;
+    return `<svg viewBox="0 0 360 100" aria-hidden="true">
+      <defs>${metalDefs(id + 'b', metal)}${goldDefs(id + 'g')}
+        <linearGradient id="${id}s" x1="0" y1="0" x2="1" y2="1"><stop offset="0" stop-color="var(--silver-0)"/><stop offset="1" stop-color="var(--silver-1)"/></linearGradient>
+        <mask id="${id}m"><rect x="0" y="0" width="360" height="100" fill="#fff"/><path d="M118 46 L310 50 L120 58 L312 62 L118 70 L310 76" stroke="#000" stroke-width="11" stroke-linejoin="round" fill="none"/></mask>
+        <linearGradient id="${id}h" x1="0" y1="0" x2="1" y2="0"><stop offset="0" stop-color="var(--glint)" stop-opacity="0"/><stop offset=".5" stop-color="var(--glint)" stop-opacity=".75"/><stop offset="1" stop-color="var(--glint)" stop-opacity="0"/></linearGradient>
+        <clipPath id="${id}k"><path d="${body}"/></clipPath>
+      </defs>
+      <path d="${body}" fill="url(#${id}b)"/>
+      <path d="${inner}" fill="none" stroke="${ink}" stroke-opacity=".35" stroke-width="1.2"/>
+      <circle cx="16" cy="50" r="2.6" fill="${ink}" fill-opacity=".45"/><circle cx="344" cy="50" r="2.6" fill="${ink}" fill-opacity=".45"/>
+      <circle cx="58" cy="50" r="35" fill="url(#${id}b)" stroke="${ink}" stroke-opacity=".4" stroke-width="1.2"/>
+      ${medal}
+      <text x="${nameX}" y="38" text-anchor="middle" font-size="10.5" font-weight="700" letter-spacing="2.6" fill="${ink}" fill-opacity=".75">${caption}</text>
+      ${name}
+      ${animated ? `<g clip-path="url(#${id}k)"><rect class="sheen" x="0" y="-20" width="70" height="140" fill="url(#${id}h)" transform="skewX(-18)"/></g>` : ''}
+    </svg>`;
+  }
+
+  const EMBLEM = (metal) => {
+    const id = `e${uid++}`;
+    return `<defs>${metalDefs(id, metal)}</defs>
+      <path d="M-46 -40 H46 V-6 C46 26 22 44 0 44 C-22 44 -46 26 -46 -6 Z" fill="url(#${id})" stroke="rgba(0,0,0,.2)"/>
+      <path d="M-46 -30 C-70 -30 -70 6 -40 12" fill="none" stroke="url(#${id})" stroke-width="7"/><path d="M46 -30 C70 -30 70 6 40 12" fill="none" stroke="url(#${id})" stroke-width="7"/>
+      <rect x="-8" y="44" width="16" height="22" fill="url(#${id})"/><rect x="-34" y="66" width="68" height="14" rx="3" fill="url(#${id})"/>`;
+  };
+
+  function card({ w, h, metal, kicker, title, finish, caption, pseudo, animated = false, photo = false }) {
+    const plateW = w === h ? 0.46 * w : 0.7 * w;
+    const plateH = plateW / 3.6;
+    const plateY = w === h ? h * 0.71 : h * 0.54;
+    const emblemY = w === h ? h * 0.07 : h * 0.1;
+    const scale = w / 300;
+    const textY = w === h ? h * 0.47 : h * 0.4;
+    const bird = (x, y, s, flip) => `<g transform="translate(${x} ${y}) scale(${flip ? -s : s} ${s})"><ellipse cx="0" cy="0" rx="22" ry="20" fill="#5eead4"/><circle cx="-7" cy="-4" r="4" fill="#1e1b4b"/><circle cx="7" cy="-4" r="4" fill="#1e1b4b"/><path d="M-3 4 L3 4 L0 10 Z" fill="#fb923c"/></g>`;
+    const birdY = w === h ? plateY + plateH / 2 : h * 0.86;
+    const birdX = w === h ? 0.12 : 0.16;
+    return `<svg class="card-svg" viewBox="0 0 ${w} ${h}">
+      <defs><linearGradient id="bg${uid}" x1="0" y1="0" x2="0" y2="1"><stop offset="0" stop-color="var(--indigo-950)"/><stop offset="1" stop-color="var(--indigo-500)"/></linearGradient></defs>
+      <rect width="${w}" height="${h}" fill="url(#bg${uid++})"/>
+      <g transform="translate(${w / 2} ${emblemY + 34 * scale * (w === h ? 0.75 : 0.95)}) scale(${scale * (w === h ? 0.75 : 0.95)})">${EMBLEM(metal)}</g>
+      <text x="${w / 2}" y="${textY}" text-anchor="middle" font-size="${11 * scale}" font-weight="600" letter-spacing="1" fill="var(--indigo-200)">${kicker.toUpperCase()}</text>
+      <text x="${w / 2}" y="${textY + 26 * scale}" text-anchor="middle" font-size="${22 * scale}" font-weight="700" fill="#fff">${title}</text>
+      <text x="${w / 2}" y="${textY + 46 * scale}" text-anchor="middle" font-size="${10 * scale}" fill="var(--indigo-200)">16 octobre 2026</text>
+      <svg x="${(w - plateW) / 2}" y="${plateY}" width="${plateW}" height="${plateH}" viewBox="0 0 360 100">${plate({ metal, finish, caption, pseudo, initials: 'AT', animated, photo }).replace(/^<svg[^>]*>|<\/svg>$/g, '')}</svg>
+      ${bird(w * birdX, birdY, scale * 1.2, false)}${bird(w * (1 - birdX), birdY, scale * 1.2, true)}
+    </svg>`;
+  }
+
+  const cell = (svg, caption) => `<figure class="cell"><div class="plate">${svg}</div><figcaption>${caption}</figcaption></figure>`;
+  const P = '@atabeth';
+
+  document.getElementById('finishes').innerHTML = [
+    cell(plate({ metal: 'silver', finish: 'engrave', caption: 'SUCCÈS DE', pseudo: P, initials: 'AT' }), '<b>Gravure</b> — les lettres creusées dans le métal : encre du métal, arête claire décalée d’un pixel vers le bas.'),
+    cell(plate({ metal: 'gold', finish: 'emboss', caption: 'SUCCÈS DE', pseudo: P, initials: 'AT' }), '<b>Estampage doré</b> — les lettres en relief, dorées à la feuille, une ombre portée de l’encre.'),
+    cell(plate({ metal: 'obsidian', finish: 'scratch', caption: 'MISSION MENÉE PAR', pseudo: P, initials: 'AT' }), '<b>Grattage révélé</b> — le nom doré sous une couche argent grattée en trois passes ; des éclats restent sur les bords.'),
+    cell('<div class="anim">' + plate({ metal: 'silver', finish: 'engrave', caption: 'SUCCÈS DE', pseudo: P, initials: 'AT', animated: true }) + '</div>', '<b>Gravure animée</b> — le burin suit la ligne de base, puis le lustre.'),
+    cell('<div class="anim">' + plate({ metal: 'gold', finish: 'emboss', caption: 'SUCCÈS DE', pseudo: P, initials: 'AT', animated: true }) + '</div>', '<b>Estampage animé</b> — la frappe, puis l’onde dorée.'),
+    cell('<div class="anim">' + plate({ metal: 'obsidian', finish: 'scratch', caption: 'MISSION MENÉE PAR', pseudo: P, initials: 'AT', animated: true }) + '</div>', '<b>Grattage animé</b> — la pièce passe, l’argent s’en va.'),
+    cell(plate({ metal: 'gold', finish: 'emboss', caption: 'SUCCÈS DE', pseudo: P, initials: 'AT', photo: true }), '<b>Avec la photo de profil</b> — dans la carte posée, le médaillon montre l’avatar ; l’image exportée garde les initiales.'),
+    cell(plate({ metal: 'silver', finish: 'engrave', caption: 'SUCCÈS DE', pseudo: '@constantinople_…', initials: 'CO' }), '<b>Pseudo long</b> — coupé à 18 graphèmes avec « … », jamais rétréci sous la taille lisible.'),
+    cell(plate({ metal: 'gold', finish: 'emboss', caption: 'إنجاز', pseudo: '@atabeth', initials: 'AT' }), '<b>Arabe</b> — la formule se traduit, le pseudo reste en caractères latins, isolé de gauche à droite.'),
+  ].join('');
+
+  const RARITIES = [
+    ['common', 'bronze', 'engrave', 'Commun — bronze gravé'],
+    ['rare', 'silver', 'engrave', 'Rare — argent gravé'],
+    ['epic', 'platinum', 'emboss', 'Épique — platine estampé'],
+    ['legendary', 'gold', 'emboss', 'Légendaire — or estampé'],
+    ['mythic', 'prism', 'emboss', 'Mythique — prisme estampé'],
+    ['neutral', 'indigo', 'engrave', 'Rareté non servie — indigo gravé (neutre)'],
+  ];
+  document.getElementById('rarities').innerHTML = RARITIES.map(([, metal, finish, label]) =>
+    cell(card({ w: 300, h: 300, metal, kicker: 'Succès débloqué', title: 'Premier pas', finish, caption: 'SUCCÈS DE', pseudo: P }), `<b>${label}</b>`)).join('');
+
+  document.getElementById('others').innerHTML = [
+    cell(card({ w: 300, h: 300, metal: 'silver', kicker: 'Nouveau rang', title: 'Voix II', finish: 'emboss', caption: 'RANG ATTEINT PAR', pseudo: P }), '<b>Rang</b> — Voix : argent estampé.'),
+    cell(card({ w: 300, h: 300, metal: 'gold', kicker: 'Nouveau rang', title: 'Légende', finish: 'emboss', caption: 'RANG ATTEINT PAR', pseudo: P }), '<b>Rang</b> — Légende : or estampé.'),
+    cell(card({ w: 300, h: 300, metal: 'prism', kicker: 'Nouveau rang', title: 'Mythe nº 42', finish: 'emboss', caption: 'RANG ATTEINT PAR', pseudo: P }), '<b>Rang</b> — Mythe : prisme estampé.'),
+    cell(card({ w: 300, h: 300, metal: 'obsidian', kicker: 'Mission accomplie', title: 'Envoyer 3 vocaux', finish: 'scratch', caption: 'MISSION MENÉE PAR', pseudo: P }), '<b>Fin de mission</b> — obsidienne, nom gratté.'),
+  ].join('');
+
+  document.getElementById('posed1').innerHTML = card({ w: 300, h: 375, metal: 'bronze', kicker: 'Succès débloqué', title: 'Premier pas', finish: 'engrave', caption: 'SUCCÈS DE', pseudo: P, animated: true, photo: true });
+  document.getElementById('posed2').innerHTML = card({ w: 300, h: 375, metal: 'gold', kicker: 'Nouveau rang', title: 'Légende', finish: 'emboss', caption: 'RANG ATTEINT PAR', pseudo: P, animated: true, photo: true });
+  document.getElementById('posed3').innerHTML = card({ w: 300, h: 375, metal: 'obsidian', kicker: 'Mission accomplie', title: 'Envoyer 3 vocaux', finish: 'scratch', caption: 'MISSION MENÉE PAR', pseudo: P, animated: true, photo: true });
+
+  document.getElementById('formats').innerHTML = [
+    `<figure><div class="story">${card({ w: 1080 / 4, h: 1920 / 4, metal: 'gold', kicker: 'Succès débloqué', title: 'Premier pas', finish: 'emboss', caption: 'SUCCÈS DE', pseudo: P })}</div><figcaption>9:16 · story</figcaption></figure>`,
+    `<figure><div class="square">${card({ w: 300, h: 300, metal: 'gold', kicker: 'Succès débloqué', title: 'Premier pas', finish: 'emboss', caption: 'SUCCÈS DE', pseudo: P })}</div><figcaption>1:1 · profil</figcaption></figure>`,
+  ].join('');
+})();
+</script>
+</body>
+</html>

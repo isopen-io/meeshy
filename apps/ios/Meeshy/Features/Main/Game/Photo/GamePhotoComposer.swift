@@ -21,7 +21,8 @@ struct ComposedPhoto {
 @MainActor
 protocol GamePhotoComposing: AnyObject {
     /// `referral` : le lien de parrainage et la Flamme du bandeau (#7742) ; `nil` ⇒ la carte part sans lien.
-    func compose(moment: PhotoMoment, source: UIImage?, mode: PhotoMode, date: Date, referral: ReferralCard?) -> ComposedPhoto?
+    /// `author` (#10816) : le pseudo gravé sur la plaque d'un succès, d'un rang ou d'une fin de mission.
+    func compose(moment: PhotoMoment, source: UIImage?, mode: PhotoMode, date: Date, referral: ReferralCard?, author: PhotoAuthor?) -> ComposedPhoto?
 }
 
 @MainActor
@@ -30,7 +31,7 @@ final class GamePhotoComposer: GamePhotoComposing {
 
     static let jpegQuality: CGFloat = 0.9
 
-    func compose(moment: PhotoMoment, source: UIImage?, mode: PhotoMode, date: Date, referral: ReferralCard?) -> ComposedPhoto? {
+    func compose(moment: PhotoMoment, source: UIImage?, mode: PhotoMode, date: Date, referral: ReferralCard?, author: PhotoAuthor?) -> ComposedPhoto? {
         let background: GamePhotoCanvasView.Background
         if let source {
             // Un selfie est retourné, comme dans l'aperçu (le miroir qu'on attend d'une
@@ -40,17 +41,17 @@ final class GamePhotoComposer: GamePhotoComposing {
             background = .card
         }
         let label = Self.dateLabel(date)
-        guard let story = render(moment: moment, label: label, format: .story, background: background, referral: referral),
-              let square = render(moment: moment, label: label, format: .square, background: background, referral: referral),
+        guard let story = render(moment: moment, label: label, format: .story, background: background, referral: referral, author: author),
+              let square = render(moment: moment, label: label, format: .square, background: background, referral: referral, author: author),
               let storyData = story.jpegData(compressionQuality: Self.jpegQuality),
               let squareData = square.jpegData(compressionQuality: Self.jpegQuality) else { return nil }
         return ComposedPhoto(story: story, square: square, storyData: storyData, squareData: squareData, mode: mode)
     }
 
     private func render(moment: PhotoMoment, label: String, format: PhotoFormat,
-                        background: GamePhotoCanvasView.Background, referral: ReferralCard?) -> UIImage? {
+                        background: GamePhotoCanvasView.Background, referral: ReferralCard?, author: PhotoAuthor?) -> UIImage? {
         let renderer = ImageRenderer(
-            content: GamePhotoCanvasView(moment: moment, dateLabel: label, format: format, background: background, referral: referral)
+            content: GamePhotoCanvasView(moment: moment, dateLabel: label, format: format, background: background, referral: referral, author: author)
         )
         renderer.scale = 1
         renderer.proposedSize = ProposedViewSize(width: format.size.width, height: format.size.height)

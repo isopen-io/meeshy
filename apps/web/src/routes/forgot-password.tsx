@@ -8,6 +8,9 @@ import { GlyphSvg } from '@/components/glyph';
 import { AUTH_GLYPHS } from '@/components/glyphs-auth';
 import { InfoHintButton, InfoHintText, useInfoHint, type InfoHint } from '@/components/info-hint';
 import { auth } from '@/lib/api/auth';
+import { translateRecovery } from '@/lib/i18n-account-recovery-catalog';
+import { translate } from '@/lib/i18n-catalog';
+import { currentInterfaceLanguage, type InterfaceLanguage } from '@/lib/interface-language';
 import { useOnline } from '@/lib/net/online';
 import { isEmailValid } from '@/lib/signup-form';
 import { resolveForgotPasswordOutcome, type ForgotPasswordOutcome } from '@/lib/view/auth-feedback';
@@ -55,12 +58,12 @@ const FORGOT_PASSWORD_TINT = 'var(--color-ios-brand)';
 /** Le libellé se LIT à côté du glyphe (`showsLabel`) : c'est la question que
  * se pose exactement la personne à qui la note s'adresse, et un (i) muet sous
  * une phrase qui parle d'un « nouveau » mot de passe ne lui dirait pas que
- * l'écran la concerne. */
-const NEVER_HAD_A_PASSWORD: InfoHint = {
-  label: 'Jamais eu de mot de passe ?',
-  text: 'Ce même lien vous permet d’en créer un.',
+ * l'écran la concerne. Dans la langue d'interface (#10823). */
+const neverHadAPassword = (language: InterfaceLanguage): InfoHint => ({
+  label: translateRecovery(language, 'recovery.forgot.neverHad'),
+  text: translateRecovery(language, 'recovery.forgot.neverHad.text'),
   glyph: AUTH_GLYPHS.info,
-};
+});
 
 /** Ce que l'écran DEMANDE — injecté pour que le témoin atteigne l'état
  * « envoyé » sans parler à une passerelle, comme `MagicLinkPanel` depuis
@@ -88,6 +91,9 @@ export default function ForgotPasswordScreen({
   const [submitting, setSubmitting] = useState(false);
   const [outcome, setOutcome] = useState<ForgotPasswordOutcome | null>(null);
   const neverHadOne = useInfoHint();
+  const language = currentInterfaceLanguage();
+  const neverHadAPasswordHint = neverHadAPassword(language);
+  const backToLogin = translate(language, 'verifyEmail.backToLogin');
 
   async function handleSubmit(event: FormEvent) {
     event.preventDefault();
@@ -100,10 +106,10 @@ export default function ForgotPasswordScreen({
   }
 
   const sent = outcome?.kind === 'sent';
-  const fieldError = outcome?.kind === 'invalid-email' ? 'Adresse e-mail invalide' : undefined;
+  const fieldError = outcome?.kind === 'invalid-email' ? translate(language, 'magicLink.email.invalid') : undefined;
   const banner =
     outcome?.kind === 'offline'
-      ? 'Pas de connexion. Vérifiez votre réseau et réessayez.'
+      ? translate(language, 'verifyEmail.error.offline')
       : outcome?.kind === 'failed'
         ? outcome.message
         : null;
@@ -122,7 +128,7 @@ export default function ForgotPasswordScreen({
               color: 'var(--color-ios-ink)',
             }}
           >
-            Retour à la connexion
+            {backToLogin}
           </Link>
         </EmailSentNotice>
       ) : (
@@ -136,10 +142,10 @@ export default function ForgotPasswordScreen({
 
           <div className="grid justify-items-center gap-1 text-center">
             <p className="text-title" style={{ color: 'var(--color-ios-ink-2)' }}>
-              Recevez par e-mail un lien pour choisir un nouveau mot de passe.
+              {translateRecovery(language, 'recovery.forgot.lead')}
             </p>
-            <InfoHintButton hint={NEVER_HAD_A_PASSWORD} state={neverHadOne} showsLabel />
-            <InfoHintText hint={NEVER_HAD_A_PASSWORD} state={neverHadOne} />
+            <InfoHintButton hint={neverHadAPasswordHint} state={neverHadOne} showsLabel />
+            <InfoHintText hint={neverHadAPasswordHint} state={neverHadOne} />
           </div>
 
           <Field
@@ -153,7 +159,7 @@ export default function ForgotPasswordScreen({
               <input
                 id={id}
                 aria-describedby={describedBy}
-                aria-label="Adresse e-mail"
+                aria-label={translate(language, 'signup.email.label')}
                 type="email"
                 inputMode="email"
                 autoComplete="email"
@@ -164,7 +170,7 @@ export default function ForgotPasswordScreen({
                 onInput={(e) => setEmail(e.currentTarget.value)}
                 onFocus={() => setFocused(true)}
                 onBlur={() => setFocused(false)}
-                placeholder="nom@exemple.com"
+                placeholder={translate(language, 'magicLink.email.placeholder')}
                 className="w-full bg-transparent py-3 text-input outline-none"
                 style={{ color: 'var(--color-ios-ink)' }}
               />
@@ -180,8 +186,8 @@ export default function ForgotPasswordScreen({
           <AuthSubmitButton
             disabled={!isEmailValid(email) || !online}
             isSubmitting={submitting}
-            label="Recevoir le lien"
-            busyLabel="Envoi…"
+            label={translate(language, 'magicLink.submit')}
+            busyLabel={translate(language, 'magicLink.submit.busy')}
             background={FORGOT_PASSWORD_TINT}
           />
 
@@ -193,7 +199,7 @@ export default function ForgotPasswordScreen({
             className="inline-flex items-center justify-self-center font-medium text-title"
             style={{ minHeight: 44, color: 'var(--color-ios-ink-2)' }}
           >
-            Retour à la connexion
+            {backToLogin}
           </Link>
         </form>
       )}

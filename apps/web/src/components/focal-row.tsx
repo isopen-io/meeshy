@@ -984,7 +984,7 @@ export const FocalRow = memo(function FocalRow({
                 sentAt={new Date(message.createdAt)}
                 now={nowMoment}
                 timeString={time(message.createdAt)}
-                locale={languages[0] ?? 'fr'}
+                locale={currentInterfaceLanguage()}
                 delivery={delivery}
                 isMine={isMine}
                 {...(sendStartedAt === undefined ? {} : { sendStartedAt })}

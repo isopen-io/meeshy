@@ -120,7 +120,14 @@ struct ConversationAppearanceSheet: View {
                             label: catalog.designName(design.key, language: language) ?? design.key,
                             selected: appearance.background == .design(pack: pack.slug, design: design.key)
                         ) {
-                            AppearanceDesignView(design: design, isDark: isDark, accentHex: effectiveAccent).equatable()
+                            AppearanceDesignView(design: design, isDark: isDark, accentHex: effectiveAccent)
+                                .equatable()
+                                .overlay {
+                                    if let lottie = design.lottie {
+                                        PackLottieLayer(ref: lottie, contentMode: .fill)
+                                    }
+                                }
+                                .clipped()
                         } action: { viewModel.selectDesign(pack: pack.slug, design: design.key) }
                     }
                 }

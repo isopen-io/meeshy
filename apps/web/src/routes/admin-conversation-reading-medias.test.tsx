@@ -358,7 +358,6 @@ async function lire() {
         language="fr"
         prisme="membre"
         readerLanguages={['fr']}
-        readerLocale="fr"
         viewer={VIEWER}
         deps={{ source: 'gateway', transport: transportSouverain() }}
       />

@@ -15,7 +15,16 @@ import ImageIO
 /// Cache à deux niveaux, mémoire puis disque, keyé URL+count.
 public enum AudioWaveform {
 
-    private nonisolated(unsafe) static let cache = NSCache<NSString, NSArray>()
+    private nonisolated(unsafe) static let cache: NSCache<NSString, NSArray> = {
+        let cache = NSCache<NSString, NSArray>()
+        // Une entrée par piste × palier (jusqu'à 2048 RMS en `NSNumber`) : sans borne, une longue séance de montage
+        // gardait toutes les pistes ouvertes depuis le lancement. Le disque reste le second niveau.
+        cache.countLimit = memoryCountLimit
+        return cache
+    }()
+
+    nonisolated static let memoryCountLimit = 48
+    nonisolated static var memoryCacheCountLimit: Int { cache.countLimit }
 
     /// Paliers de résolution.
     ///

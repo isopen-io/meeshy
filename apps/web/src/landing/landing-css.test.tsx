@@ -22,7 +22,13 @@ describe('la feuille de la landing ne déclare pas deux fois la même classe', (
     expect(topLevelRuleCount('.ld-qr')).toBe(1);
     expect(topLevelRuleCount('.ld-qr img')).toBe(1);
     const html = renderToStaticMarkup(<LandingPage language="fr" copy={LANDING_COPY.fr} />);
-    expect(html.match(/class="ld-qr[^"]*"/g)?.length).toBe(2);
+    expect(html.match(/class="ld-qr"/g)?.length).toBe(2);
+  });
+
+  test('sur un écran tactile, le QR et sa consigne s’effacent devant le lien : on ne flashe pas son propre écran (#10811)', () => {
+    const coarse = /@media \(pointer: coarse\) \{([\s\S]*?)\n\}/.exec(css)?.[1] ?? '';
+    expect(coarse).toMatch(/\.ld-qr img,\s*\.ld-qr-scan \{\s*display: none;/);
+    expect(topLevelRuleCount('.ld-qr-link')).toBe(1);
   });
 
   test('la pastille numérotée des cartes « Trois gestes » porte sa propre classe', () => {

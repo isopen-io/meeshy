@@ -33,17 +33,8 @@ extension Router {
         let currentUserId = AuthManager.shared.currentUser?.id ?? ""
         Task { @MainActor in
             do {
-                let conv: Conversation
-                if let existingApi = try await ConversationService.shared.findDirectWith(userId: authId) {
-                    conv = existingApi.toConversation(currentUserId: currentUserId)
-                } else {
-                    let created = try await ConversationService.shared.create(
-                        type: "direct",
-                        participantIds: [authId]
-                    )
-                    let apiConv = try await ConversationService.shared.getById(created.id)
-                    conv = apiConv.toConversation(currentUserId: currentUserId)
-                }
+                let conv = try await DirectConversationResolver.resolve(with: authId)
+                    .toConversation(currentUserId: currentUserId)
                 pendingReplyContext = context
                 navigateToConversation(conv)
             } catch {

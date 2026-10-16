@@ -42,6 +42,8 @@ export function shellPushUrl(target: PushTapTarget): string {
       return href('story', target.params);
     case 'post':
       return href('post', target.params);
+    case 'mood':
+      return href('mood', target.params);
     case 'discover':
       return href('discover', undefined, target.search);
     case 'userProfile':

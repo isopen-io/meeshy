@@ -148,7 +148,6 @@ export type ThreadSummaryCapability = {
 export function ThreadModes({
   mode,
   viewer,
-  readerLocale,
   summary,
   placed,
   virtualizer,
@@ -192,7 +191,6 @@ export function ThreadModes({
 }: {
   readonly mode: ConversationReadingMode;
   readonly viewer: Viewer;
-  readonly readerLocale: string;
   /**
    * LE RÉSUMÉ VIVANT (#5695), en UNE capacité — ses sept valeurs n'ont aucun
    * sens séparément, et les déclarer une à une obligeait tout hôte à en
@@ -409,6 +407,16 @@ export function ThreadModes({
    */
   const renderNow = Date.now();
 
+  /* LA LANGUE D'INTERFACE, UNE FOIS PAR RENDU DE LISTE (#7337) — jamais une
+     fois par rangée : `composeMessageLabel` en a besoin pour ses tombstones et
+     son badge de transfert, et une virtualisation en rend des dizaines. C'est
+     une lecture de `document.documentElement.lang`, pas un abonnement — la
+     racine redessine déjà l'arbre quand la langue change. Elle cadre AUSSI
+     les dates du chrome (séparateurs, résumé, glissé) : une seule langue
+     d'interface, le Prisme ne gouverne que le contenu (#10817). Déclarée
+     avant le retour anticipé du mode Résumé, qui la lit aussi. */
+  const interfaceLanguage = currentInterfaceLanguage();
+
   if (mode === 'summary' && summary !== undefined) {
     /**
      * **UN ÉPHÉMÈRE N'Y SURVIT PAS À SON ÉCHÉANCE** (#7454, la moitié de la
@@ -447,7 +455,7 @@ export function ThreadModes({
           participants={summary.conversation.participants}
           viewer={viewer}
           windowCoversUnread={summary.windowCoversUnread}
-          locale={readerLocale}
+          locale={interfaceLanguage}
           {...(summary.lang !== undefined ? { lang: summary.lang } : {})}
           onReplyToPerson={summary.onReplyToPerson}
           onOpenEpisode={summary.onOpenEpisode}
@@ -457,12 +465,6 @@ export function ThreadModes({
     );
   }
 
-  /* LA LANGUE D'INTERFACE, UNE FOIS PAR RENDU DE LISTE (#7337) — jamais une
-     fois par rangée : `composeMessageLabel` en a besoin pour ses tombstones et
-     son badge de transfert, et une virtualisation en rend des dizaines. C'est
-     une lecture de `document.documentElement.lang`, pas un abonnement — la
-     racine redessine déjà l'arbre quand la langue change. */
-  const interfaceLanguage = currentInterfaceLanguage();
 
   return (
     <HighlightedPieceContext.Provider value={highlightedPieceId}>
@@ -672,7 +674,7 @@ export function ThreadModes({
                         border: '0.5px solid var(--color-day-hairline)',
                       }}
                     >
-                      {dayLabel(p.message.createdAt, { locale: readerLocale })}
+                      {dayLabel(p.message.createdAt, { locale: interfaceLanguage })}
                     </span>
                   </div>
                 ) : null}
@@ -779,7 +781,7 @@ export function ThreadModes({
                     isMine={rowIsMine}
                     attachments={p.message.attachments}
                     createdAt={p.message.createdAt}
-                    locale={readerLocale}
+                    locale={interfaceLanguage}
                   >
                   <UnfoldStage messageId={p.message.id}>
                     <MessageEffectsHost effectFlags={p.message.effectFlags}>

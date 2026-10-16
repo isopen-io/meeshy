@@ -1,4 +1,6 @@
 import { dayLabel, sameLocalDay, type DayLabels } from '@/lib/grouping';
+import type { InterfaceLanguage } from '@/lib/interface-language';
+import { interfaceLanguageOf } from '@/lib/relative-time';
 
 import type { ConversationEpisode, EpisodeInputMessage } from './types';
 
@@ -147,8 +149,20 @@ function capGroups(
 
 // MARK: - Titre déterministe
 
-function messagesSuffix(count: number): string {
-  return count === 1 ? '1 message' : `${count} messages`;
+/** `focal.summary.episode.messages_one` / `_other` du catalogue iOS (#10822). */
+const MESSAGES_SUFFIX: Readonly<Record<InterfaceLanguage, readonly [one: string, other: string]>> = {
+  fr: ['message', 'messages'],
+  en: ['message', 'messages'],
+  es: ['mensaje', 'mensajes'],
+  pt: ['mensagem', 'mensagens'],
+  de: ['Nachricht', 'Nachrichten'],
+  it: ['messaggio', 'messaggi'],
+  ar: ['رسالة', 'رسائل'],
+};
+
+function messagesSuffix(count: number, locale: string): string {
+  const [one, other] = MESSAGES_SUFFIX[interfaceLanguageOf(locale)];
+  return `${count} ${count === 1 ? one : other}`;
 }
 
 function makeEpisode(group: readonly EpisodeInputMessage[], options: SegmentEpisodesOptions): ConversationEpisode {
@@ -166,7 +180,7 @@ function makeEpisode(group: readonly EpisodeInputMessage[], options: SegmentEpis
     ? startLabel
     : `${startLabel}–${dayLabel(new Date(end), labelOptions)}`;
 
-  const title = `${dayPart} · ${messagesSuffix(group.length)}`;
+  const title = `${dayPart} · ${messagesSuffix(group.length, options.locale)}`;
 
   return {
     id: `${(group[0] as EpisodeInputMessage).id}_${(group[group.length - 1] as EpisodeInputMessage).id}`,

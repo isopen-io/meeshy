@@ -6,8 +6,8 @@ import { ENGAGEMENT_FAMILY_TOP_POINTS } from '@meeshy/shared/types/engagement-op
 import { axesByFamily, resolveEngagementProgress } from '@meeshy/shared/utils/engagement-progress';
 
 import { ENGAGEMENT_PROGRESS_FIXTURE } from '@/lib/api/engagement-fixture';
-import { familyName } from '@/lib/view/game-copy';
-import { ACHIEVEMENT_COPY, AXIS_LABELS } from '@/lib/view/progression';
+import { familyName, formatCount } from '@/lib/view/game-copy';
+import { achievementCopy, axisLabel } from '@/lib/view/progression';
 
 import { progressionConcepts } from '@meeshy/shared/utils/progression-layout';
 import type { EngagementProgress } from '@meeshy/shared/utils/engagement-progress';
@@ -109,7 +109,7 @@ describe('le hub — un utilisateur à mi-chemin', () => {
    */
   test('le hero du niveau dit le rang et le score', () => {
     expect(html).toContain(`Niveau ${fixture.level.level}`);
-    expect(html).toContain(`${fixture.level.value} points`);
+    expect(html).toContain(`${formatCount(fixture.level.value)} points`);
   });
 
   /**
@@ -127,7 +127,7 @@ describe('le hub — un utilisateur à mi-chemin', () => {
 
   test('la carte de niveau nomme le RANG suivant, jamais le seuil de points', () => {
     const manque = (fixture.level.nextThreshold ?? 0) - fixture.level.value;
-    expect(html).toContain(`Encore ${manque} points avant le niveau ${fixture.level.level + 1}`);
+    expect(html).toContain(`Encore ${formatCount(manque)} points avant le niveau ${fixture.level.level + 1}`);
     expect(html).not.toContain(`niveau ${fixture.level.nextThreshold}`);
   });
 
@@ -138,11 +138,11 @@ describe('le hub — un utilisateur à mi-chemin', () => {
    */
   test('le hero du niveau ÉNUMÈRE comment gagner, avec les points du catalogue', () => {
     expect(html).toContain('Comment gagner des points');
-    for (const p of Object.values(ENGAGEMENT_FAMILY_TOP_POINTS)) expect(html).toContain(`jusqu’à\u00a0+${p}`);
+    for (const p of Object.values(ENGAGEMENT_FAMILY_TOP_POINTS)) expect(html).toContain(`jusqu’à\u00a0+${formatCount(p)}`);
   });
 
   test('le hero du niveau dit le prix d\'une Meesh, servi par le serveur', () => {
-    expect(html).toContain(`${fixture.meesh?.mintCost} points se convertissent en une Meesh`);
+    expect(html).toContain(`${formatCount(fixture.meesh?.mintCost ?? 0)} points se convertissent en une Meesh`);
   });
 
   test('les barres sont des `progressbar` NOMMÉES, avec leur valeur', () => {
@@ -187,7 +187,7 @@ describe('la page des badges', () => {
   );
 
   test('rend les axes du catalogue ENTIER — y compris ceux à zéro', () => {
-    for (const key of ENGAGEMENT_AXES) expect(htmlBadges).toContain(AXIS_LABELS[key]);
+    for (const key of ENGAGEMENT_AXES) expect(htmlBadges).toContain(axisLabel(key));
     expect(htmlBadges).toContain('Encore 1 avant le palier 1');
   });
 
@@ -206,8 +206,8 @@ describe('la page des succès', () => {
 
   test('quatre débloqués et datés, un verrouillé avec sa condition', () => {
     expect(htmlSucces).toContain('4 / 5');
-    for (const key of ENGAGEMENT_ACHIEVEMENT_KEYS) expect(htmlSucces).toContain(ACHIEVEMENT_COPY[key].title);
-    expect(htmlSucces).toContain(ACHIEVEMENT_COPY['achievement.all_content_types'].condition);
+    for (const key of ENGAGEMENT_ACHIEVEMENT_KEYS) expect(htmlSucces).toContain(achievementCopy(key).title);
+    expect(htmlSucces).toContain(achievementCopy('achievement.all_content_types').condition);
     expect(htmlSucces.match(/Obtenu le /g)?.length).toBe(4);
   });
 });
@@ -319,10 +319,10 @@ describe('MeeshDetail — le héros des Meeshes (#5743)', () => {
       mintCost: 1221,
     });
     expect(rendu).toContain('Aucune Meesh');
-    expect(rendu).toContain('Encore 1121 points à convertir');
+    expect(rendu).toContain(`Encore ${formatCount(1121)} points à convertir`);
     // Le sort des points de conversation doit être DIT : ils partiront en
     // dernier, sans éteindre de badge (option C, #5743).
-    expect(rendu).toContain('1300 points de conversation');
+    expect(rendu).toContain(`${formatCount(1300)} points de conversation`);
     expect(rendu).toContain('sans éteindre aucun badge');
     expect(rendu).not.toContain('<button');
   });
@@ -338,7 +338,7 @@ describe('MeeshDetail — le héros des Meeshes (#5743)', () => {
     });
     expect(rendu).toContain('2 Meeshes');
     expect(rendu).toContain('5 frappées depuis toujours');
-    expect(rendu).toContain('Convertir 1221 points en une Meesh');
+    expect(rendu).toContain(`Convertir ${formatCount(1221)} points en une Meesh`);
     expect(rendu).toContain('<button');
   });
 

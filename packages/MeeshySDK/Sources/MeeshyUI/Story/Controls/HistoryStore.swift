@@ -28,6 +28,10 @@ public nonisolated struct HistoryStore<S: Equatable & Sendable>: Sendable {
         self.cap = max(2, cap)
     }
 
+    /// Toute la trajectoire encore joignable par undo/redo — ce que la purge des
+    /// ressources mises de côté doit encore pouvoir ressusciter.
+    public var states: [S] { entries }
+
     public var canUndo: Bool { index > 0 }
     public var canRedo: Bool { index >= 0 && index < entries.count - 1 }
 

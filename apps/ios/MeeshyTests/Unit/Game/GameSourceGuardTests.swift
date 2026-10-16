@@ -167,7 +167,7 @@ final class GameSourceGuardTests: XCTestCase {
         "game.constellation.title", "game.constellation.kind.halo",
         "game.chest.reward.points", "game.points.one", "game.points.other", "game.meeshes.one", "game.meeshes.other",
         "game.actions.one", "game.actions.other", "game.tier.constellation", "game.rank.oracle",
-        "game.guide.speaker.mee", "game.guide.speaker.meo", "game.mission.progress", "game.photo.format.story",
+        "game.guide.speaker.mee", "game.guide.speaker.meo", "game.mission.progress", "game.photo.format.story", "game.photo.trophy.mission",
         "game.photo.title.prestige", "game.mint.row.badges", "game.material.bronze",
         "game.concept.points.name", "game.concept.meesh.name", "game.concept.prestige.name", "game.concept.badges.name",
         "game.concept.atlas.name", "game.concept.card.a11y", "game.concept.ratio", "game.concept.value.factor",

@@ -11,6 +11,7 @@ import type { InterfaceLanguage } from '@/lib/interface-language';
 import type { ColorScheme } from '@/lib/scheme';
 
 import { ChoiceGroup, PickerSection, type ChoiceItem } from './appearance-picker-parts';
+import { PackLottieLayer } from './pack-lottie-layer';
 
 /**
  * **LES RANGÉES DU SÉLECTEUR** (#10631, § 9) : Signature et les modèles des
@@ -31,8 +32,13 @@ const swatch = (color: string): ReactElement => (
   <span aria-hidden className="block rounded-full" style={{ width: SWATCH, height: SWATCH, backgroundColor: color, boxShadow: 'inset 0 0 0 1px color-mix(in srgb, currentColor 22%, transparent)' }} />
 );
 
+/** La vignette d'un modèle ; un modèle animé y joue déjà sa couche (#10815), sous le même budget que le reste. */
 function DesignThumb({ pack, design, scheme, accent }: { readonly pack: string; readonly design: AppearanceDesign; readonly scheme: ColorScheme; readonly accent: string }) {
-  return <span aria-hidden className="block rounded-chip" style={{ width: 52, height: 68, ...designStyle({ pack, design, scheme, accent }) }} />;
+  return (
+    <span aria-hidden data-appearance-thumb className="relative block overflow-hidden rounded-chip" style={{ width: 52, height: 68, ...designStyle({ pack, design, scheme, accent }) }}>
+      <PackLottieLayer lottie={design.lottie} />
+    </span>
+  );
 }
 
 export function BackgroundSection({

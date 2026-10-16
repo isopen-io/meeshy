@@ -44,6 +44,7 @@ import { PAGE_TERMS } from '../src/institutional/terms';
 import type { ContentPage } from '../src/institutional/type';
 import { meeViewFiles } from '../src/institutional/mee-views';
 import { INLINE_SCHEME_BOOTSTRAP } from '../src/lib/inline-scheme-bootstrap.js';
+import { loadInterfaceCatalog } from '../src/lib/i18n-catalog';
 import { resolveDistDir } from './lib/resolve-dist-dir.mjs';
 
 const HERE = dirname(fileURLToPath(import.meta.url));
@@ -64,6 +65,10 @@ const DIST = resolveDistDir(HERE, process.argv);
  * l'application, au SEUL point de build qui compose ces pages (#5606, § E3).
  */
 const VERSION = packageJson.version;
+
+/* Les pages sont des documents FRANÇAIS : le pied de marque lit l'annonce de
+   son lien au catalogue d'interface (`brand.credit.hint`, #10827). */
+await loadInterfaceCatalog('fr');
 
 /**
  * LE PLAFOND PAR PAGE (revue de #5606, défaut 3) — jusqu'ici gzip était

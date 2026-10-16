@@ -21,14 +21,13 @@ import { PROGRESSION_GLYPHS } from '@/components/glyphs-progression';
 import { milestoneGlyph } from '@/components/milestone-glyph';
 import { medalOfAxis } from '@/lib/game/medal';
 import { rarityRim, visibleRarity, type AchievementRarityMap } from '@/lib/game/rarity';
-import { gameText } from '@/lib/view/game-copy';
+import { formatCount, gameText } from '@/lib/view/game-copy';
 import { badgeDetail, defiDetail, succesDetail } from '@/lib/view/game-detail';
 import {
-  ACHIEVEMENT_COPY,
-  ACHIEVEMENT_SECTION_TITLES,
+  achievementCopy,
+  achievementSectionTitle,
+  axisLabel,
   generatedAchievementLabel,
-  AXIS_LABELS,
-  BADGE_UNIT,
   nextStepLabel,
   reachedAtLabel,
   type ProgressionGlyph,
@@ -147,7 +146,7 @@ export function TierDots({ tiers, tint, axisLabel }: { tiers: readonly Engagemen
  * (« Messages texte, Or, 100 sur 500 vers Platine »).
  */
 export function AxisRow({ axis, medalLabel }: { axis: EngagementAxisProgress; medalLabel?: string }) {
-  const label = AXIS_LABELS[axis.axisKey];
+  const label = axisLabel(axis.axisKey);
   const medal = medalOfAxis(axis);
   return (
     <li>
@@ -176,7 +175,7 @@ export function AxisRow({ axis, medalLabel }: { axis: EngagementAxisProgress; me
         <div className="flex items-center justify-between gap-2">
           <TierDots tiers={axis.tiers} tint={BRAND} axisLabel={label} />
           <span className="truncate text-check" style={{ color: INK_2 }}>
-            {nextStepLabel(axis, BADGE_UNIT)}
+            {nextStepLabel(axis)}
           </span>
         </div>
       </div>
@@ -202,14 +201,14 @@ export function AchievementsSection({
       <SectionTitle
         id="progression-achievements"
         glyph={GLYPHS.trophy}
-        title="Succès"
+        title={gameText('game.concept.succes.name')}
         tint={UNLOCKED_TINT}
         trailing={`${unlocked} / ${progress.achievements.length}`}
       />
       <Card tint={UNLOCKED_TINT} className="py-1">
         <ul className="divide-y" style={{ borderColor: 'color-mix(in srgb, var(--color-ios-ink-3) 30%, transparent)' }}>
           {progress.achievements.map((achievement) => {
-            const copy = ACHIEVEMENT_COPY[achievement.key];
+            const copy = achievementCopy(achievement.key);
             const dated = reachedAtLabel(achievement.reachedAt);
             const entry = rarities?.[achievement.key];
             const shown = visibleRarity(entry);
@@ -237,7 +236,7 @@ export function AchievementsSection({
                     {copy.title}
                   </span>
                   <span className="text-check" style={{ color: INK_2 }}>
-                    {achievement.unlocked ? (dated ?? 'Débloqué') : copy.condition}
+                    {achievement.unlocked ? (dated ?? gameText('game.progression.unlocked')) : copy.condition}
                   </span>
                   <GameRarityLine entry={entry} />
                 </div>
@@ -294,14 +293,14 @@ export function GeneratedAchievements({ sections }: { sections: readonly Achieve
       <SectionTitle
         id="progression-generated"
         glyph={PROGRESSION_GLYPHS.medal}
-        title="Défis"
+        title={gameText('game.concept.defis.name')}
         tint={BRAND}
       />
       {sections.map((vue) => (
         <div key={vue.section} className="flex flex-col gap-2">
           <div className="flex items-baseline justify-between">
             <h3 className="text-caption font-semibold" style={{ color: INK }}>
-              {ACHIEVEMENT_SECTION_TITLES[vue.section]}
+              {achievementSectionTitle(vue.section)}
             </h3>
             <span className="text-check" style={{ color: INK_2 }}>
               {vue.unlockedCount} / {vue.attainableCount}
@@ -309,7 +308,11 @@ export function GeneratedAchievements({ sections }: { sections: readonly Achieve
           </div>
           <ul
             className="grid grid-cols-2 gap-2 sm:grid-cols-3"
-            aria-label={`${ACHIEVEMENT_SECTION_TITLES[vue.section]} — ${vue.unlockedCount} sur ${vue.attainableCount}`}
+            aria-label={gameText('game.progression.section_count', {
+              section: achievementSectionTitle(vue.section),
+              done: formatCount(vue.unlockedCount),
+              total: formatCount(vue.attainableCount),
+            })}
           >
             {vue.entries.map((entry) => (
               <li key={entry.key} className="flex min-w-0">
@@ -334,7 +337,7 @@ export function GeneratedAchievements({ sections }: { sections: readonly Achieve
                 </span>
                 {entry.unlocked ? (
                   <span className="text-check" style={{ color: INK_2 }}>
-                    Obtenu
+                    {gameText('game.detail.earned')}
                   </span>
                 ) : null}
               </GameTouch>
@@ -351,7 +354,7 @@ export function GeneratedAchievements({ sections }: { sections: readonly Achieve
 
 export function ProgressionSkeleton() {
   return (
-    <div className="flex flex-col gap-5 px-4 py-3" aria-busy="true" aria-label="Progression en cours de chargement">
+    <div className="flex flex-col gap-5 px-4 py-3" aria-busy="true" aria-label={gameText('game.progression.loading')}>
       <div className="grid grid-cols-2 gap-3">
         {[0, 1].map((i) => (
           <div key={i} className="h-28 rounded-card" style={{ backgroundColor: CARD }} />
@@ -372,10 +375,10 @@ export function ProgressionError({ message, online, onRetry }: { message: string
         <Glyph name="warningCircle" size={28} />
       </span>
       <p className="text-body font-semibold" style={{ color: INK }}>
-        {online ? 'La progression n’a pas pu être chargée' : 'Hors ligne — aucune progression en mémoire'}
+        {gameText(online ? 'game.progression.load_error' : 'game.progression.offline_title')}
       </p>
       <p className="text-caption" style={{ color: INK_2 }}>
-        {online ? message : 'Elle s’affichera à la reconnexion.'}
+        {online ? message : gameText('game.progression.offline_hint')}
       </p>
       <button
         type="button"
@@ -383,7 +386,7 @@ export function ProgressionError({ message, online, onRetry }: { message: string
         className="grid place-items-center rounded-chip px-5 text-body font-semibold text-ios-on-brand"
         style={{ backgroundColor: BRAND, minHeight: 44 }}
       >
-        Réessayer
+        {gameText('game.retry')}
       </button>
     </div>
   );

@@ -9,6 +9,7 @@ import { personalMissionClock } from '@/lib/game/personal-mission-clock';
 import { timerLabel } from '@/lib/view/game-copy-v2';
 
 import { Chest, useChoreography } from '@/components/game';
+import { Glyph } from '@/components/glyph';
 import { ProgressBar } from '@/components/progress-bar';
 import { difficultyName, formatCount, gameText, meeshCount, missionTitle, pointsLabel } from '@/lib/view/game-copy';
 import { chestRewardLines, starFragmentsLabel } from '@/lib/view/game-chest-copy';
@@ -55,7 +56,12 @@ export type GameMissionsProps = {
   readonly errors?: { readonly reroll?: string | undefined; readonly chest?: string | undefined };
   /** L'horloge des minuteurs (#9539) ; absente, les cartes lisent l'heure et se mettent à jour d'elles-mêmes. */
   readonly now?: Date | undefined;
+  /** La fin de mission se photographie (#10816) : présent, une mission personnelle accomplie propose sa carte. */
+  readonly onPhotoMission?: ((mission: MissionPhotoRef) => void) | undefined;
 };
+
+/** Ce que la photo d'une fin de mission retient d'elle : son identité, son modèle et sa cible (le titre s'en déduit). */
+export type MissionPhotoRef = { readonly id: string; readonly templateKey: string; readonly target: number };
 
 const clock = (minute: number): string =>
   `${String(Math.floor(minute / 60)).padStart(2, '0')}:${String(minute % 60).padStart(2, '0')}`;
@@ -185,7 +191,15 @@ function useClockNow(fixed: Date | undefined, end: number): Date {
  * venir) puis jusqu'à la FIN (en cours) ; passée la fin, la carte dit « Terminée » ou « Manquée », sans
  * décompte. Elle ne se change pas : le tirage est le sien, une fois par jour.
  */
-function PersonalMissionRow({ mission, now }: { readonly mission: NonNullable<GameMissionsBlock['personal']>; readonly now: Date }) {
+function PersonalMissionRow({
+  mission,
+  now,
+  onPhoto,
+}: {
+  readonly mission: NonNullable<GameMissionsBlock['personal']>;
+  readonly now: Date;
+  readonly onPhoto?: ((mission: MissionPhotoRef) => void) | undefined;
+}) {
   const clock = personalMissionClock({ startsAt: mission.startsAt, endsAt: mission.endsAt, completedAt: mission.completedAt, now });
   const done = clock.phase === 'completed';
   const title = missionTitle(mission.templateKey, mission.target);
@@ -203,6 +217,18 @@ function PersonalMissionRow({ mission, now }: { readonly mission: NonNullable<Ga
       <div className="flex flex-wrap items-center gap-1.5">
         <GameChip tint={GAME_BRAND}>{gameText('game.mission.personal.chip')}</GameChip>
         <GameChip tint={done ? GAME_GOOD : clock.phase === 'missed' ? GAME_INK_2 : GAME_WARM}>{status}</GameChip>
+        {done && onPhoto !== undefined ? (
+          <button
+            type="button"
+            data-mission-photo={mission.id}
+            aria-label={`${gameText('game.photo.offer.start')} — ${title}`}
+            onClick={() => onPhoto({ id: mission.id, templateKey: mission.templateKey, target: mission.target })}
+            className="ms-auto grid size-11 shrink-0 place-items-center rounded-chip"
+            style={{ color: GAME_BRAND }}
+          >
+            <Glyph name="image" size={18} />
+          </button>
+        ) : null}
       </div>
       <p className="text-body font-semibold" style={{ color: GAME_INK }}>
         {title}
@@ -331,7 +357,7 @@ function lastWindowEnd(missions: GameMissionsBlock): number {
 }
 
 export function GameMissions(props: GameMissionsProps) {
-  const { missions, chest, starFragments, held, level, prismHour, online, pendingRerollId, chestOpening, onReroll, onClaim, errors } = props;
+  const { missions, chest, starFragments, held, level, prismHour, online, pendingRerollId, chestOpening, onReroll, onClaim, errors, onPhotoMission } = props;
   const now = useClockNow(props.now, missions.unlocked ? lastWindowEnd(missions) : 0);
 
   if (!missions.unlocked) {
@@ -383,7 +409,7 @@ export function GameMissions(props: GameMissionsProps) {
             onReroll={onReroll}
           />
         ))}
-        {missions.personal == null ? null : <PersonalMissionRow mission={missions.personal} now={now} />}
+        {missions.personal == null ? null : <PersonalMissionRow mission={missions.personal} now={now} onPhoto={onPhotoMission} />}
       </ul>
       {/* Le prix d'un changement, avant le geste (#9705) : une ligne pour la liste, pas une par mission. */}
       {rerollShown ? (

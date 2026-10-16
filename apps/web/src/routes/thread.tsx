@@ -37,6 +37,7 @@ import { conversationStore } from '@/lib/conversation-store';
 import { isGroup, titleOf, unreadOf } from '@/lib/view/conversation';
 import { useOptionalRoute } from '@/lib/router';
 import { mergeTimeline, place } from '@/lib/grouping';
+import { currentInterfaceLanguage } from '@/lib/interface-language';
 import { useReaderLanguages } from '@/lib/view/use-reader';
 import { useDeviceTranslation } from '@/lib/device-translation/use-device-translation';
 import { useSharedTranslations } from '@/lib/device-translation/use-shared-translations';
@@ -321,7 +322,10 @@ export default function ThreadScreen({ preview, focus }: ThreadScreenProps = {})
   const conversationEncryptionMode = conversation?.encryptionMode ?? null;
   useDeviceTranslation({ messages: threadData.messages, readerLanguages, viewerId: viewer.id ?? '', conversationEncryptionMode });
   useSharedTranslations({ conversationId, messages: threadData.messages, readerLanguages, viewerId: viewer.id ?? '', conversationEncryptionMode });
-  const placed = useMemo(() => place(messages, { locale: readerLocale }), [messages, readerLocale]);
+  /* Les séparateurs de jour sont du CHROME : ils parlent la langue
+     d'interface, jamais celle du Prisme (#10817). */
+  const interfaceLanguage = currentInterfaceLanguage();
+  const placed = useMemo(() => place(messages, { locale: interfaceLanguage }), [messages, interfaceLanguage]);
   const group = conversation !== undefined && isGroup(conversation);
   /** LES TROIS QUI PARLENT LE PLUS dans ce qui est chargé (#7830) — groupe seulement. */
   const activeMembers = useMemo(() => (group ? topActiveMembers(messages, viewer.id ?? '') : []), [group, messages, viewer.id]);
@@ -600,6 +604,8 @@ export default function ThreadScreen({ preview, focus }: ThreadScreenProps = {})
     /* Une fenêtre détachée du présent n'accuse rien (#7420, `windowIsAtTip` iOS). */
     lastMessageId: threadData.detached ? undefined : lastConfirmedMessageId,
     enabled: placed.length > 0,
+    /* Le Résumé ne monte aucune sentinelle : il accuse en partant (#10812). */
+    summaryShown: reading.readingDecision.mode === 'summary',
     onMark: onMarkCaughtUp,
   });
 
@@ -663,15 +669,6 @@ export default function ThreadScreen({ preview, focus }: ThreadScreenProps = {})
    * avec « qui lit ». Calculé plus haut (`viewerParticipant`, avant les
    * retours anticipés) : `useSend` (#5813) en a besoin AVANT que `conversation`
    * ne soit narrowée non-optionnelle ici. */
-
-  /**
-   * LE CADRAGE DES DATES DU RÉSUMÉ (#5695, étape 11) — `lang` est RÉSOLU
-   * UNE FOIS ici, jamais une lecture DOM par nœud (`episode-list.tsx`,
-   * `living-summary.tsx` le reçoivent en prop). `undefined` quand la locale
-   * de cadrage EST celle du document — aucun `lang` superflu posé.
-   */
-  const summaryLang =
-    typeof document === 'object' && readerLocale !== document.documentElement.lang ? readerLocale : undefined;
 
   return (
     /* `h-app` (`100dvh` moins le clavier qui recouvre, #10005) +
@@ -815,13 +812,11 @@ export default function ThreadScreen({ preview, focus }: ThreadScreenProps = {})
           <ThreadModes
             mode={reading.readingDecision.mode}
             viewer={viewer}
-            readerLocale={readerLocale}
             summary={{
               conversation, messages, windowCoversUnread,
               onReplyToPerson: exits.onReplyToPerson,
               onOpenEpisode: exits.onOpenEpisode,
               onResumeThread: exits.onResumeThread,
-              ...(summaryLang !== undefined ? { lang: summaryLang } : {}),
             }}
             placed={placed}
             virtualizer={virtualizer}
@@ -980,7 +975,6 @@ export default function ThreadScreen({ preview, focus }: ThreadScreenProps = {})
         messageMenu={messageMenu}
         messages={messages}
         readerLanguages={readerLanguages}
-        readerLocale={readerLocale}
         conversationId={conversationId}
         viewerId={viewer.id ?? ''}
         viewerName={viewer.displayName}

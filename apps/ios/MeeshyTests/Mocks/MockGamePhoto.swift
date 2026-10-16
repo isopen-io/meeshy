@@ -49,8 +49,11 @@ final class MockGamePhotoComposer: GamePhotoComposing {
     var succeeds = true
     private(set) var composed: [(moment: PhotoMoment, hadSource: Bool, mode: PhotoMode, referral: ReferralCard?)] = []
 
-    func compose(moment: PhotoMoment, source: UIImage?, mode: PhotoMode, date: Date, referral: ReferralCard?) -> ComposedPhoto? {
+    private(set) var authors: [PhotoAuthor?] = []
+
+    func compose(moment: PhotoMoment, source: UIImage?, mode: PhotoMode, date: Date, referral: ReferralCard?, author: PhotoAuthor?) -> ComposedPhoto? {
         composed.append((moment, source != nil, mode, referral))
+        authors.append(author)
         guard succeeds else { return nil }
         let image = MockGamePhotoCamera.pixel()
         return ComposedPhoto(

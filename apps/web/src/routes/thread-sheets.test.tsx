@@ -123,7 +123,6 @@ const mountSheets = async (menu: ThreadSheetsMenu, messages: readonly Message[])
         messageMenu={menu}
         messages={messages}
         readerLanguages={['en']}
-        readerLocale="fr-FR"
         conversationId="c-deploiement"
         viewerId={VIEWER_ID}
         viewerName="Jacques"
@@ -153,7 +152,6 @@ describe('ThreadMessageSheets — les feuilles du message (#7429, extrait de rou
         messageMenu={menuOf()}
         messages={[]}
         readerLanguages={['fr']}
-        readerLocale="fr-FR"
         conversationId="c-1"
         viewerId={VIEWER_ID}
         viewerName="Jacques"
@@ -171,7 +169,6 @@ describe('ThreadMessageSheets — les feuilles du message (#7429, extrait de rou
         messageMenu={menuOf({ detailFor: 'ghost' })}
         messages={[]}
         readerLanguages={['fr']}
-        readerLocale="fr-FR"
         conversationId="c-1"
         viewerId={VIEWER_ID}
         viewerName="Jacques"
@@ -200,6 +197,19 @@ describe('ThreadMessageSheets — les feuilles du message (#7429, extrait de rou
     const host = await mountSheets(menuOf({ detailFor: SERVER_MESSAGE_ID }), [ownMessage({ senderId: 'u-other' })]);
     expect(offersLanguage(host, 'Français (original)')).toBe(true);
     expect(has(host, '[data-message-receipts-title]')).toBe(false);
+  });
+
+  test('la date de la fiche suit la langue d’INTERFACE, jamais le Prisme du lecteur (#10817)', async () => {
+    const previous = document.documentElement.lang;
+    document.documentElement.lang = 'en';
+    try {
+      const sentAt = new Date('2026-09-24T10:00:00.000Z');
+      const host = await mountSheets(menuOf({ detailFor: SERVER_MESSAGE_ID }), [ownMessage({ createdAt: sentAt })]);
+      const english = new Intl.DateTimeFormat('en', { dateStyle: 'full', timeStyle: 'short' }).format(sentAt);
+      expect(host.textContent?.includes(english) ?? false).toBe(true);
+    } finally {
+      document.documentElement.lang = previous;
+    }
   });
 
   test('choisir une langue depuis la fiche la sert PUIS referme la fiche', async () => {

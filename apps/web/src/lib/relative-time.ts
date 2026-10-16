@@ -6,14 +6,40 @@
  *
  * Loi PURE : `now` est TOUJOURS injecté par l'appelant (jamais `Date.now()`
  * lu ici) — même discipline que `conversation-sections.ts` et `lens/law.ts`.
- * Les libellés d'UNITÉ (`s`, `min`, `h`, `j`, `sem`, `mois`, `maintenant`)
- * sont la prose FRANÇAISE fixe du dépôt (D-13) — iOS les tire d'un catalogue
- * dont le `defaultValue` français est CE texte ; la v3.1 n'a pas encore de
- * catalogue de traduction pour son chrome (`docs/product` § i18n), donc rien
- * ne serait gagné à réinventer une clé qu'aucun catalogue ne résout encore.
- * Seule la date ABSOLUE (au-delà de trois mois) suit la locale du lecteur,
- * via `Intl.DateTimeFormat` — le même levier que `Locale.current` côté Swift.
+ * Les libellés d'UNITÉ suivent la LANGUE D'INTERFACE (#10822, une seule
+ * langue d'interface) avec les valeurs du catalogue iOS (`time.short.*`,
+ * `apps/ios/Meeshy/Localizable.xcstrings`). La table vit ici, synchrone, parce
+ * que ces libellés se composent dans des lois pures (Lentille, fil, citations)
+ * appelées hors de tout écran ; la date ABSOLUE (au-delà de trois mois) suit
+ * `Intl.DateTimeFormat`, le même levier que `Locale.current` côté Swift.
  */
+import { resolveInterfaceLanguageCode } from './inline-interface-language-bootstrap.js';
+import { currentInterfaceLanguage, type InterfaceLanguage } from './interface-language';
+
+type ShortUnits = {
+  readonly now: string;
+  readonly seconds: (n: number) => string;
+  readonly minutes: (n: number) => string;
+  readonly hours: (n: number) => string;
+  readonly days: (n: number) => string;
+  readonly weeks: (n: number) => string;
+  readonly months: (n: number) => string;
+};
+
+const SHORT_UNITS: Readonly<Record<InterfaceLanguage, ShortUnits>> = {
+  fr: { now: 'maintenant', seconds: (n) => `${n}s`, minutes: (n) => `${n} min`, hours: (n) => `${n}h`, days: (n) => `${n}j`, weeks: (n) => `${n}sem`, months: (n) => `${n} mois` },
+  en: { now: 'now', seconds: (n) => `${n}s`, minutes: (n) => `${n} min`, hours: (n) => `${n}h`, days: (n) => `${n}d`, weeks: (n) => `${n}w`, months: (n) => `${n}mo` },
+  es: { now: 'ahora', seconds: (n) => `${n}s`, minutes: (n) => `${n} min`, hours: (n) => `${n}h`, days: (n) => `${n}d`, weeks: (n) => `${n}sem`, months: (n) => `${n}m` },
+  pt: { now: 'agora', seconds: (n) => `${n}s`, minutes: (n) => `${n} min`, hours: (n) => `${n}h`, days: (n) => `${n}d`, weeks: (n) => `${n}sem`, months: (n) => `${n}m` },
+  de: { now: 'jetzt', seconds: (n) => `${n} Sek.`, minutes: (n) => `${n} Min.`, hours: (n) => `${n} Std.`, days: (n) => `${n} T.`, weeks: (n) => `${n} Wo.`, months: (n) => `${n} Mon.` },
+  it: { now: 'adesso', seconds: (n) => `${n}s`, minutes: (n) => `${n} min`, hours: (n) => `${n}h`, days: (n) => `${n}g`, weeks: (n) => `${n}sett`, months: (n) => `${n} mesi` },
+  ar: { now: 'الآن', seconds: (n) => `${n} ث`, minutes: (n) => `${n} د`, hours: (n) => `${n} س`, days: (n) => `${n} ي`, weeks: (n) => `${n} أ`, months: (n) => `${n} ش` },
+};
+
+/** `en-US` → `en`, `pt-BR` → `pt` ; une langue hors des sept → la langue par défaut. */
+export function interfaceLanguageOf(locale: string): InterfaceLanguage {
+  return resolveInterfaceLanguageCode(null, [locale]) as InterfaceLanguage;
+}
 
 export type RelativeTimeUnit =
   | { readonly kind: 'now' }
@@ -84,27 +110,28 @@ function absoluteDate(target: Date, now: Date, locale: string): string {
 
 /**
  * `shortRelativeTime` — dense, pour la Lentille : « maintenant » / « 45s » /
- * « 5 min » / « 2h » / « 3j » / « 2sem » / « 2 mois » / date absolue.
- * `locale` ne pilote QUE la date absolue (miroir `Locale.current`) — les
- * libellés d'unité restent la prose française fixe du dépôt.
+ * « 5 min » / « 2h » / « 3j » / « 2sem » / « 2 mois » / date absolue (en
+ * français ; « now » / « 3d » / « 2w » / « 2mo » en anglais…). `locale` est
+ * la langue d'INTERFACE : elle pilote les unités ET la date absolue.
  */
-export function shortRelativeTime(target: Date, now: Date, locale = 'fr-FR'): string {
+export function shortRelativeTime(target: Date, now: Date, locale: string = currentInterfaceLanguage()): string {
   const unit = classifyRelativeTime(target, now);
+  const units = SHORT_UNITS[interfaceLanguageOf(locale)];
   switch (unit.kind) {
     case 'now':
-      return 'maintenant';
+      return units.now;
     case 'seconds':
-      return `${unit.value}s`;
+      return units.seconds(unit.value);
     case 'minutes':
-      return `${unit.value} min`;
+      return units.minutes(unit.value);
     case 'hours':
-      return `${unit.value}h`;
+      return units.hours(unit.value);
     case 'days':
-      return `${unit.value}j`;
+      return units.days(unit.value);
     case 'weeks':
-      return `${unit.value}sem`;
+      return units.weeks(unit.value);
     case 'months':
-      return `${unit.value} mois`;
+      return units.months(unit.value);
     case 'date':
       return absoluteDate(unit.value, now, locale);
   }

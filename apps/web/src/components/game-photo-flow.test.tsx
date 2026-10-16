@@ -1110,3 +1110,38 @@ describe('aucun jeton de parrainage ne se crée sans geste', () => {
     expect(made.log.texts).toEqual([`Rejoins-moi sur Meeshy : ${LINK}`]);
   });
 });
+
+/**
+ * LA CARTE QUI NOMME SON AUTEUR (#10816) — la proposition montre la carte
+ * posée du moment, gravée au pseudo de l'auteur ; et la plaque part dans
+ * l'image (le cadre de la scène la porte, la composition la relit).
+ */
+describe('la carte d’auteur', () => {
+  const author = { handle: 'atabeth' };
+  const openWith = (moment: PhotoMoment, e: PhotoEnv, log: Log, who: { handle: string } | null) =>
+    mount(<GamePhotoFlow moment={moment} env={e} author={who} onClose={(result) => log.closed.push(result)} />);
+
+  test('la proposition pose la carte du moment, gravée au pseudo', async () => {
+    const { env: e, log } = env();
+    const host = await openWith(rank, e, log, author);
+    const card = by(host, 'data-author-card');
+    expect(card?.getAttribute('aria-label')).toContain('@atabeth');
+    expect(card?.textContent).toContain('@atabeth');
+    expect(choose(host, 'selfie')).not.toBeNull();
+  });
+
+  test('sans auteur (invité) : la proposition d’avant, sans carte', async () => {
+    const { env: e, log } = env();
+    const host = await openWith(rank, e, log, null);
+    expect(by(host, 'data-author-card')).toBeNull();
+    expect(host.textContent).toContain('On immortalise ?');
+  });
+
+  test('la carte seule : le cadre de la scène porte la plaque que la composition relira', async () => {
+    const { env: e, log } = env({ render: async () => new Promise<PhotoFiles | null>(() => undefined) });
+    const host = await openWith(rank, e, log, author);
+    await click(choose(host, 'card'));
+    await settle();
+    expect(host.querySelector('[data-photo-stage] [data-photo-art="author"] svg')).not.toBeNull();
+  });
+});

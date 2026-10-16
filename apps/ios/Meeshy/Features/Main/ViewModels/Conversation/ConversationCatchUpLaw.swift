@@ -81,4 +81,16 @@ nonisolated enum ConversationCatchUpLaw {
         if visible.contains(newest) { return newest }
         return memoized == newest ? newest : nil
     }
+
+    /// **Quitter la conversation rattrape-t-il ?** (#10818)
+    ///
+    /// Oui depuis le Résumé, et seulement de là. Le Résumé ne rend aucune
+    /// bulle, donc aucun lot `seen` : sans cette porte, un retour direct à la
+    /// liste (sans « Reprendre le fil ») laissait la conversation non lue et la
+    /// rouvrait en Résumé — badge « 99+ » à vie. Même règle que le web
+    /// (`use-read-tracking.ts`, #10812). La Rivière, elle, ne rattrape qu'en
+    /// atteignant le présent : la quitter en route ne prouve rien.
+    static func exitCatchesUp(mode: ConversationReadingMode) -> Bool {
+        mode == .summary
+    }
 }

@@ -19,14 +19,18 @@ nonisolated enum PhotoEmblem: Equatable, Codable, Sendable {
     case meesh(number: Int, edition: MeeshEdition)
     case treasury(TreasuryTierKey)
     case flame(FlameFormKey, days: Int)
-    /// Un succès révélé (#7742) : la coupe d'or, la Signature frappée sur la panse.
-    case achievement
+    /// Un succès révélé (#7742) : la coupe, la Signature frappée sur la panse. `rarity` (#10816) : la rareté
+    /// VISIBLE du succès, qui donne son métal à la coupe et à la plaque d'auteur ; `nil` — rareté non servie,
+    /// ou entrée du carnet d'avant #10816, dont la clé est absente — garde la plaque neutre.
+    case achievement(rarity: GameGlory.AchievementRarity?)
     // La vague 2 (#9481) : le trophée qui vient d'arriver, la gemme de la ligue gagnée, la coupe de la saison
     // terminée, le trophée numéroté du Prestige.
     case trophy(key: String)
     case leagueUp(LeagueKey)
     case season(Int)
     case prestige(number: Int)
+    /// LA FIN DE MISSION (#10816) : la mission personnelle accomplie se photographie, son pseudo gratté sur la plaque.
+    case mission(templateKey: String, target: Int)
 }
 
 nonisolated struct PhotoMoment: Equatable, Identifiable, Codable, Sendable {
@@ -54,12 +58,22 @@ enum GamePhotoMoments {
     /// Le succès qu'on vient de révéler : la même carte se propose à la révélation (#7742). L'identité
     /// porte la clé du succès (`EngagementReveal.id`, déjà préfixée « achievement: ») — le même succès
     /// n'est jamais proposé deux fois au carnet.
-    static func achievement(id: String, title: String) -> PhotoMoment {
+    static func achievement(id: String, title: String, rarity: GameGlory.AchievementRarity? = nil) -> PhotoMoment {
         PhotoMoment(
             id: id.hasPrefix("achievement:") ? id : "achievement:\(id)",
-            emblem: .achievement,
+            emblem: .achievement(rarity: rarity),
             kicker: String(localized: "game.photo.kicker.achievement", defaultValue: "Succès", bundle: .main),
             title: title
+        )
+    }
+
+    /// Une mission personnelle accomplie (#10816) : une identité par mission, jamais deux photos proposées pour la même.
+    static func mission(id: String, templateKey: String, target: Int) -> PhotoMoment {
+        PhotoMoment(
+            id: "mission:\(id)",
+            emblem: .mission(templateKey: templateKey, target: target),
+            kicker: String(localized: "game.photo.kicker.mission", defaultValue: "Mission accomplie", bundle: .main),
+            title: GameCopy.missionTitle(templateKey: templateKey, target: target)
         )
     }
 

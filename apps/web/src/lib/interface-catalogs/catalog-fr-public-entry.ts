@@ -7,6 +7,7 @@
 const frPublicEntry = {
   'publicHeader.home': 'Accueil de Meeshy',
   'publicHeader.language': 'Langue',
+  'brand.credit.hint': 'ouvre la plateforme services.ceo dans un nouvel onglet',
   'login.offline': 'Hors ligne — la connexion n’est pas possible pour l’instant.',
   'login.twoFactor.title': 'Double authentification',
   'login.twoFactor.lead': 'Entrez le code de votre application d’authentification.',

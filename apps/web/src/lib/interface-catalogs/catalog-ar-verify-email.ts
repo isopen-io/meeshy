@@ -46,6 +46,10 @@ const arVerifyEmail = {
   'signInLink.switchAccount.failed': 'تعذّر فتح هذا الحساب الآخر حاليًا. تبقى جلستك مفتوحة، وقد أُغلق الرابط.',
   'signInLink.switchAccount.expired': 'انتهت صلاحية هذا الرابط: اطلب رابطًا جديدًا. تبقى جلستك مفتوحة.',
   'signInLink.switchAccount.leave': 'العودة إلى الصفحة الرئيسية',
+  'emailSent.title': 'تم إرسال البريد الإلكتروني',
+  'emailSent.openLink': 'افتح الرابط المُرسَل إلى {email}',
+  'emailSent.nothingReceived': 'لم يصلك شيء؟',
+  'emailSent.nothingReceived.text': 'تحقّق من مجلد الرسائل غير المرغوب فيها (spam): قد تكون الرسالة وصلت إليه.',
 };
 
 export default arVerifyEmail;
