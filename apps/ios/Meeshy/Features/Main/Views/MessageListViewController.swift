@@ -967,7 +967,8 @@ final class MessageListViewController: UIViewController {
         // vol) : `scrollToItem` sur un index pas encore matérialisé lève une
         // NSInternalInconsistencyException. Le trigger parent re-visera une
         // fois la fenêtre posée — même contrat que la cible absente.
-        guard indexPath.item < collectionView.numberOfItems(inSection: 0) else { return }
+        guard collectionView.numberOfSections > 0,
+              indexPath.item < collectionView.numberOfItems(inSection: 0) else { return }
         isIntentionalProgrammaticScroll = true
         scrollSettleTarget = ScrollToMessageSettleLaw.PendingTarget(localId: localId, strong: strong)
         collectionView.scrollToItem(at: indexPath, at: .centeredVertically, animated: true)
