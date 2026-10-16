@@ -328,7 +328,7 @@ async function runScheme(colorScheme) {
      */
     const reachableCloseButton = () =>
       page.evaluate(() => {
-        const closeButton = document.querySelector('button[aria-label="Fermer"]');
+        const closeButton = document.querySelector('button[data-viewer-exit="close"]');
         if (closeButton === null) return { mounted: false, reachable: null };
         document.body.focus();
         closeButton.focus();
@@ -1032,7 +1032,7 @@ async function runAuthorRail(colorScheme) {
   await page.addStyleTag({ content: ':root{--safe-top:47px;--safe-bottom:34px}' });
   await page.waitForSelector('[role="alert"]', { timeout: 8000 });
 
-  const porte = await confinementDe(page, 'button[aria-label="Fermer"]', { nom: "la croix de l'état « Story introuvable »" });
+  const porte = await confinementDe(page, 'button[data-viewer-exit="close"]', { nom: "la croix de l'état « Story introuvable »" });
   check(porte.ok, `#7040 : sous une encoche de 47, ${porte.message}`);
   await context.close();
 }
