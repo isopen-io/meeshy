@@ -16,6 +16,7 @@ import type { InterfaceLanguage } from '@/lib/interface-language';
 import { releasePreviewUrl } from '@/lib/send/attachment-preview-url';
 import { removePendingAttachment, replacePendingAttachment, type PendingAttachment } from '@/lib/send/attachments';
 import { withReplyMention, type CommentReplyTarget } from '@/lib/view/comment-reply-target';
+import { appSettingsOpener } from '@/lib/view/settings-recovery';
 import type { CameraEngine } from '@/lib/stories/studio-camera-engine';
 import type { StudioRetouchDeps } from '@/lib/stories/studio-retouch';
 import type { MentionSource } from '@/lib/view/mention-source';
@@ -216,6 +217,9 @@ export function CommentComposer({
   const canRecord = recording !== undefined || recordingSupported();
   const isRecording = recorder.state.status === 'recording';
   const micNotice = MIC_NOTICE[recorder.state.status];
+  /* UN REFUS DÉFINITIF MÈNE AUX RÉGLAGES DE L'APP (#10824, comme #8882) —
+     dans la coque Android, deux refus et le micro ne se redemande plus. */
+  const openAppSettings = recorder.state.status === 'refused' ? appSettingsOpener() : null;
 
   /* RENDRE LA LECTURE (un envoi réussi chez un hôte `foldOnSend`, ou le ⌄) :
      le focus quitte le composeur pour le FIL qui le porte (sa racine
@@ -631,6 +635,17 @@ export function CommentComposer({
           {shownNotice.text}
         </p>
       )}
+      {notice === null && openAppSettings !== null ? (
+        <button
+          type="button"
+          data-comment-open-settings=""
+          onClick={openAppSettings}
+          className="text-caption font-semibold self-start"
+          style={{ color: 'var(--color-ios-brand)', minHeight: 44 }}
+        >
+          {translate(language, 'composer.openSettings')}
+        </button>
+      ) : null}
       </div>
     </form>
   );
