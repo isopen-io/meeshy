@@ -35,6 +35,36 @@ final class OfflineQueueOutcomeTests: XCTestCase {
         try await super.tearDown()
     }
 
+    // MARK: - Observateurs sans outcome possible : ils se terminent
+
+    /// Déconnexion avec une mutation encore en file : l'outcome ne viendra
+    /// jamais. L'observateur attendait à vie, sa tâche et son rollback retenus.
+    func test_clearAll_endsTheObserversOfQueuedMutations() async throws {
+        let cmid = "cid_logout_\(UUID().uuidString)"
+        let stream = await queue.outcomeStream(for: cmid)
+        let ended = Task { () -> Bool in
+            for await _ in stream { return false }
+            return true
+        }
+        await queue.clearAll()
+        let endedWithoutOutcome = await ended.value
+        XCTAssertTrue(endedWithoutOutcome, "le flux se termine, sans outcome inventé")
+        let observed = await queue.observedOutcomeCount
+        XCTAssertEqual(observed, 0)
+    }
+
+    func test_cancelPendingSend_endsTheObserversOfTheCancelledMessage() async throws {
+        let cmid = "cid_cancel_\(UUID().uuidString)"
+        let stream = await queue.outcomeStream(for: cmid)
+        let ended = Task { () -> Bool in
+            for await _ in stream { return false }
+            return true
+        }
+        await queue.cancelPendingSend(clientMessageId: cmid)
+        let endedWithoutOutcome = await ended.value
+        XCTAssertTrue(endedWithoutOutcome)
+    }
+
     // MARK: - outcomeStream — applied
 
     func test_outcomeStream_emitsAppliedWhenItemRemoved() async throws {
