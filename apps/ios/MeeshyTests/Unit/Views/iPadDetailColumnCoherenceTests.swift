@@ -73,4 +73,11 @@ final class iPadDetailColumnCoherenceTests: XCTestCase {
                       "sans ce recalage, le +1 optimiste s'ajoutait au compteur absolu du serveur")
         XCTAssertTrue(overlay.contains("postBookmarkDelta[payload.postId] = nil"))
     }
+
+    /// Réglages d'une communauté dans le panneau : « Annuler » appelait
+    /// `dismiss()`, no-op là ; il revient désormais au détail, comme sur iPhone.
+    func test_communitySettingsCancel_returnsToTheDetailOnIPad() throws {
+        let panels = AppSourceGuard.stripComments(try AppSourceGuard.unit("Meeshy/Features/Main/Views/iPadRootView+Panels.swift"))
+        XCTAssertTrue(panels.contains("onCancel: { rightPanelRoute = .communityDetail(community.id) }"))
+    }
 }
