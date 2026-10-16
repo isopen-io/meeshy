@@ -129,7 +129,7 @@ describe('les sites d\'appel réels comptent un post antérieur aux colonnes', (
           where.repostOfId !== undefined ? [] : where.id.in.map((id) => ({ ...store.read(id), expiresAt: null })),
         updateMany: store.updateMany,
       },
-      postImpression: { createMany: async () => ({ count: 1 }) },
+      postImpression: { findFirst: async () => null, findMany: async () => [], deleteMany: async () => ({ count: 0 }), createMany: async () => ({ count: 1 }) },
       $runCommandRaw: store.runCommandRaw,
     } as unknown as PrismaClient;
     const deps = { fastify: {}, prisma, postService: {} } as unknown as SocialEventsDeps;
@@ -151,6 +151,7 @@ describe('les sites d\'appel réels comptent un post antérieur aux colonnes', (
         update: store.update,
       },
       postEngagement: {
+        findFirst: async () => null,
         findUnique: async () => null,
         upsert: async () => ({}),
       },

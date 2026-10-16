@@ -143,6 +143,17 @@ const ViewEventSchema = z.object({
   surface,
   provenance,
   origin,
+  /**
+   * L'IMPRESSION de l'affichage que cette vue constate (#10732) — sa clé et sa
+   * source, celles que le client range aussi dans son lot d'impressions. Une
+   * vue implique son impression : la passerelle l'écrit sous cette clé si elle
+   * manque encore, et le lot qui la porte plus tard est un rejeu. Facultative
+   * (un ancien client ne l'envoie pas) ; malformée, elle est ôtée.
+   */
+  impression: z.object({
+    eventId: z.guid(),
+    source: z.enum(IMPRESSION_SOURCES),
+  }).optional().catch(undefined),
 });
 
 /**

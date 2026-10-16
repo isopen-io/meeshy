@@ -33,6 +33,10 @@ import { claimCountingReceipts, releaseCountingReceipts, type CountingReceipts }
 import { readAnalyticsStanding, type AnalyticsStanding } from '../../services/social/eventPrivacy';
 import { impressionRowOf, insertKeyedImpressions, removeKeyedImpressions } from '../../services/social/impressionRows';
 import { ingestSocialEventsV2 } from '../../services/social/socialEventsV2';
+import {
+  consumeImpliedImpressions,
+  impressionsCarriedByViews,
+} from '../../services/social/viewImpressions';
 export { SOCIAL_EVENTS_SUCCESSEUR, socialEventsDeprecation } from './deprecation';
 import {
   SOCIAL_EVENTS_BATCH_CAP,
@@ -163,6 +167,7 @@ async function applyViews(
   events: readonly Extract<SocialEvent, { type: 'view' }>[],
   actor: Extract<SocialEventsActor, { kind: 'user' }>,
   counted: (events: readonly SocialEvent[]) => void = () => undefined,
+  alreadyShown: ReadonlySet<string> = new Set(),
 ): Promise<number> {
   if (events.length === 0) return 0;
 
@@ -172,6 +177,7 @@ async function applyViews(
       surface: event.surface,
       provenance: event.provenance,
       origin: event.origin,
+      impliesImpression: !event.impression && !alreadyShown.has(event.postId),
     });
     recorded += 1;
     counted([event]);
@@ -272,7 +278,11 @@ async function applyImpressions(
   const events = [...plain, ...keyed.filter((_, index) => inserted.has(index))];
   const written = keyedRows.filter((_, index) => inserted.has(index));
 
-  const impressions = compterParId(events.map((event) => event.postId));
+  // #10732 — une vraie impression prend la place de celle qu'une vue sans clé avait déduite.
+  const remplacees = await consumeImpliedImpressions(deps.prisma, userId, events.map((event) => event.postId));
+  const impressions = new Map([...compterParId(events.map((event) => event.postId))]
+    .map(([id, n]) => [id, n - (remplacees.get(id) ?? 0)] as const)
+    .filter(([, n]) => n > 0));
   const ouvertures = compterParId(events.filter(isDetailOpen).map((event) => event.postId));
 
   const racines = await resoudreRacinesDeRepost(deps.prisma, [...impressions.keys()]);
@@ -409,11 +419,15 @@ export async function ingestSocialEvents(
     admis.filter((event): event is Extract<SocialEvent, { type: T }> => event.type === type);
 
   return orReleaseReceipts(deps, recus, async (counted) => {
-    const vues = await applyViews(deps, parType('view'), actor, counted);
+    // #10732 — une vue implique son impression : sous sa clé si elle la porte
+    // (écrite avec les impressions ci-dessous), déduite par `recordView` sinon —
+    // jamais pour un post dont le lot porte déjà l'impression.
+    const montres = new Set(parType('impression').map((event) => event.postId));
+    const vues = await applyViews(deps, parType('view'), actor, counted, montres);
 
     const [ouvertures, impressions, telechargements, sessions] = await Promise.all([
       applyOpens(deps, parType('open'), actor.userId).then((n) => { counted(parType('open')); return n; }),
-      applyImpressions(deps, parType('impression'), actor.userId, options),
+      applyImpressions(deps, [...parType('impression'), ...impressionsCarriedByViews(parType('view'))], actor.userId, options),
       applyDownloads(deps, parType('download'), actor.userId),
       applyDwell(deps, [...parType('dwell'), ...parType('dwell-start')], actor.userId),
     ]);

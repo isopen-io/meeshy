@@ -55,6 +55,8 @@ const buildPrisma = (overrides: Partial<Record<string, unknown>> = {}) => {
   const postEngagement = {
     upsert: jest.fn<(arg?: unknown) => Promise<UpsertResult>>().mockResolvedValue({ created: true }),
     findUnique: jest.fn<(arg?: unknown) => Promise<({ id: string } & Record<string, unknown>) | null>>().mockResolvedValue(null),
+    // Une AUTRE session du même lecteur sur le même post, créée juste avant — aucune par défaut.
+    findFirst: jest.fn<(arg?: unknown) => Promise<{ id: string } | null>>().mockResolvedValue(null),
   };
   const $runCommandRaw = jest.fn<(arg?: unknown) => Promise<unknown>>().mockResolvedValue({ ok: 1 });
   const prisma = {
@@ -324,5 +326,41 @@ describe('PostService.recordEngagementBatch — premier contact puis mesure (#10
     const update = (prisma.postEngagement.upsert.mock.calls[0][0] as { update: Record<string, unknown> }).update;
     expect(update).toMatchObject({ dwellMs: 9000, watchMs: 9000, completed: true });
     expect(update.watchSamples).toEqual([{ positionMs: 8800, atMs: 8800 }]);
+  });
+});
+
+/**
+ * Revue de sécurité du lot #10764 — une clé de session est fournie par le
+ * client : en changer ne doit pas permettre de faire monter les compteurs à
+ * volonté, et l'auteur ne compte jamais sa propre lecture.
+ */
+describe('PostService.recordEngagementBatch — une clé de session neuve ne regonfle pas les compteurs', () => {
+  const REEL = mkSession({ contentType: 'REEL', surface: 'reels', dwellMs: 9000, watchMs: 9000, completed: true });
+  const counterWrites = (prisma: ReturnType<typeof buildPrisma>) =>
+    postCounterWritesOf(prisma.$runCommandRaw).map((write) => write.data);
+
+  it('l’auteur qui regarde son propre réel ne crédite aucun compteur', async () => {
+    const prisma = buildPrisma();
+    await new PostService(prisma).recordEngagementBatch([REEL], 'author');
+    expect(counterWrites(prisma)).toEqual([]);
+  });
+
+  it('une session neuve du même lecteur sur le même post dans la fenêtre ne crédite rien', async () => {
+    const prisma = buildPrisma();
+    prisma.postEngagement.findFirst.mockResolvedValue({ id: 'session-precedente' });
+    await new PostService(prisma).recordEngagementBatch([REEL], 'u1');
+
+    expect(counterWrites(prisma)).toEqual([]);
+    const where = (prisma.postEngagement.findFirst.mock.calls[0][0] as { where: Record<string, any> }).where;
+    expect(where).toMatchObject({ userId: 'u1', postId: POST_A, sessionId: { not: REEL.sessionId } });
+    expect(where.createdAt.lt.getTime() - where.createdAt.gte.getTime()).toBe(10_000);
+  });
+
+  it('la session elle-même compte quand aucune autre ne la précède dans la fenêtre', async () => {
+    const prisma = buildPrisma();
+    await new PostService(prisma).recordEngagementBatch([REEL], 'u1');
+    expect(counterWrites(prisma)).toEqual([{
+      postOpenCount: { increment: 1 }, playCount: { increment: 1 }, qualifiedViewCount: { increment: 1 },
+    }]);
   });
 });

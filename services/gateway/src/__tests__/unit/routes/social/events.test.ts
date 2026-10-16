@@ -139,6 +139,11 @@ function makePrisma() {
     postImpression: {
       create: journalise('postImpression', 'create', {}),
       createMany: journalise('postImpression', 'createMany', { count: 1 }),
+      /** La dernière impression du lecteur sur un post — aucune par défaut. */
+      findFirst: jest.fn<any>().mockResolvedValue(null),
+      /** Les impressions DÉDUITES d'une vue que le lecteur porte encore — aucune par défaut. */
+      findMany: jest.fn<any>().mockResolvedValue([]),
+      deleteMany: journalise('postImpression', 'deleteMany', { count: 1 }),
     },
     anonymousPostOpen: {
       create: journalise('anonymousPostOpen', 'create', {}),
@@ -714,5 +719,89 @@ describe('critère 4 — la variante anonyme est la MÊME route', () => {
     expect(res.statusCode).toBe(403);
     expect(mockRecordMediaDownloads).not.toHaveBeenCalled();
     await app.close();
+  });
+});
+
+// ─────────────────────────────────────────────────────────────────────────────
+// #10732 — une vue IMPLIQUE son impression, sans jamais la compter deux fois
+// ─────────────────────────────────────────────────────────────────────────────
+
+describe('#10732 — une vue compte son impression quand elle manque, jamais deux fois', () => {
+  type Prisma = ReturnType<typeof makePrisma>;
+  const commandes = (prisma: Prisma) => prisma.ecritures
+    .filter((e) => e.op === 'runCommandRaw')
+    .map((e) => e.args as Record<string, any>);
+  const impressionsCreditees = (prisma: Prisma) => commandes(prisma)
+    .filter((c) => c.update === 'Post')
+    .flatMap((c) => c.updates.map((u: any) => ({
+      ids: u.q._id.$in.map((id: any) => id.$oid),
+      increment: u.u[0].$set.impressionCount?.$add[1],
+    })))
+    .filter((w: { increment?: number }) => w.increment !== undefined);
+  const envoyer = async (prisma: Prisma, events: unknown[]) => {
+    const app = await buildApp({ prisma });
+    const res = await app.inject({
+      method: 'POST', url: '/social/events', headers: { authorization: 'Bearer jeton' }, payload: { events },
+    });
+    await app.close();
+    return res;
+  };
+  const IMPRESSION_EVENT_ID = '3f2504e0-4f89-41d3-9a0c-0305e82c3310';
+
+  it('une vue qui porte la clé de son impression écrit cette impression à clé et la compte', async () => {
+    const prisma = makePrisma();
+    await envoyer(prisma, [{
+      type: 'view', postId: VISIBLE_ID, surface: 'story',
+      impression: { eventId: IMPRESSION_EVENT_ID, source: 'story' },
+    }]);
+
+    const insertion = commandes(prisma).find((c) => c.insert === 'PostImpression');
+    expect(insertion?.documents).toEqual([expect.objectContaining({
+      postId: { $oid: VISIBLE_ID }, userId: { $oid: USER_ID }, source: 'story', eventKey: expect.any(String),
+    })]);
+    expect(impressionsCreditees(prisma)).toEqual([{ ids: [VISIBLE_ID], increment: 1 }]);
+  });
+
+  const impliesImpression = () => (mockRecordView.mock.calls as any[]).map((call) => call[3]?.impliesImpression);
+
+  it('une vue sans clé demande à `recordView` de déduire son impression', async () => {
+    await envoyer(makePrisma(), [{ type: 'view', postId: VISIBLE_ID }]);
+    expect(impliesImpression()).toEqual([true]);
+  });
+
+  it('une vue qui porte sa clé ne déduit rien : son impression s’écrit sous sa clé', async () => {
+    await envoyer(makePrisma(), [{
+      type: 'view', postId: VISIBLE_ID, impression: { eventId: IMPRESSION_EVENT_ID, source: 'story' },
+    }]);
+    expect(impliesImpression()).toEqual([false]);
+  });
+
+  it('une vue et son impression dans le MÊME lot ne comptent qu’une impression', async () => {
+    const prisma = makePrisma();
+    await envoyer(prisma, [
+      { type: 'impression', postId: VISIBLE_ID, source: 'detail', surface: 'detail' },
+      { type: 'view', postId: VISIBLE_ID, surface: 'detail' },
+    ]);
+
+    expect(impliesImpression()).toEqual([false]);
+    expect(impressionsCreditees(prisma)).toEqual([{ ids: [VISIBLE_ID], increment: 1 }]);
+  });
+
+  it('la vue d’un post hors audience n’atteint pas `recordView` et ne déduit aucune impression', async () => {
+    const prisma = makePrisma();
+    await envoyer(prisma, [{ type: 'view', postId: HIDDEN_ID }, { type: 'view', postId: MISSING_ID }]);
+    expect(mockRecordView).not.toHaveBeenCalled();
+    expect(prisma.ecritures.filter((e) => e.modele === 'postImpression')).toEqual([]);
+    expect(impressionsCreditees(prisma)).toEqual([]);
+  });
+
+  it('l’impression qui arrive APRÈS une vue sans clé remplace celle que la vue avait déduite, sans recompter', async () => {
+    const prisma = makePrisma();
+    prisma.postImpression.findMany.mockResolvedValue([{ id: 'deduite-1', postId: VISIBLE_ID }]);
+    await envoyer(prisma, [{ type: 'impression', postId: VISIBLE_ID, source: 'story', surface: 'story' }]);
+
+    const retraits = prisma.ecritures.filter((e) => e.modele === 'postImpression' && e.op === 'deleteMany');
+    expect(retraits.map((e) => e.args.where)).toEqual([{ id: { in: ['deduite-1'] } }]);
+    expect(impressionsCreditees(prisma)).toEqual([]);
   });
 });

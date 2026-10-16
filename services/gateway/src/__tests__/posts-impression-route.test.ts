@@ -104,7 +104,7 @@ const buildAuthMiddleware = (userId?: string) =>
 async function buildApp(authenticated: boolean): Promise<FastifyInstance> {
   const app = Fastify({ logger: false });
   const prisma = {
-    postImpression: { createMany: impressionCreateMany },
+    postImpression: { findFirst: async () => null, findMany: async () => [], deleteMany: async () => ({ count: 0 }), createMany: impressionCreateMany },
     // #4146 puis #4150 — la route consulte l'audience du post AVANT de compter
     // une impression, désormais par la passe de LOT (`post.findMany`).
     $runCommandRaw: postCounterCommand,

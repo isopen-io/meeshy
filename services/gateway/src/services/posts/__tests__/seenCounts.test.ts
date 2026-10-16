@@ -54,6 +54,11 @@ describe('garde O5 — personne d’autre ne lit PostImpression par compte', () 
       return /postImpression\.(groupBy|findMany|findFirst|count|aggregate)\(\s*\{[\s\S]{0,200}userId/.test(text);
     }).map((path) => path.slice(SRC.length + 1));
 
-    expect(readers).toEqual(['services/posts/seenCounts.ts']);
+    // `viewImpressions.ts` (#10732) lit par compte pour l'INTÉGRITÉ du
+    // compteur, jamais pour classer : « ce lecteur a-t-il déjà une impression
+    // de CE post ? » (une vue implique son impression) et « porte-t-il encore
+    // une impression déduite à remplacer ? ». La réponse ne quitte pas la
+    // requête, ne touche aucun ordre de fil et ne nourrit aucune personnalisation.
+    expect(readers).toEqual(['services/posts/seenCounts.ts', 'services/social/viewImpressions.ts']);
   });
 });

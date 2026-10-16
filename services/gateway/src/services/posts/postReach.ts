@@ -7,6 +7,7 @@ import { incrementPostCounters } from './postCounters';
 import { engagementIncrementsAdded, mergeEngagementSessions, type MergeableEngagement } from './engagementIncrements';
 import { consumeReferenceView, resolveReferenceAccess } from './referenceAccess';
 import { creditStoryViewed } from './postEngagementCredits';
+import { impressionImpliedByView } from '../social/viewImpressions';
 import { enhancedLogger } from '../../utils/logger-enhanced';
 
 /**
@@ -33,8 +34,42 @@ export type PostReachDeps = {
 /** Ce que la fusion relit de la ligne déjà stockée (#10764). */
 const STORED_ENGAGEMENT_SELECT = {
   id: true, surface: true, contentType: true, dwellMs: true, watchMs: true,
-  mediaDurationMs: true, completed: true, actions: true, watchSamples: true,
+  mediaDurationMs: true, completed: true, actions: true, watchSamples: true, createdAt: true,
 } as const;
+
+/**
+ * La fenêtre dans laquelle une AUTRE session du même lecteur sur le même post
+ * rend une session muette (revue de sécurité #10764). La clé de session vient
+ * du client : sans cette borne, en changer à chaque envoi ferait monter
+ * ouverture, lecture et vue qualifiée autant de fois qu'on le voudrait.
+ */
+export const ENGAGEMENT_SESSION_DEDUP_WINDOW_MS = 10_000;
+
+/**
+ * Une session compte-t-elle ? Jamais pour l'auteur ; et pas si une autre session
+ * du même lecteur sur le même post a été REÇUE (heure serveur) dans la fenêtre
+ * qui précède la sienne. La réponse est stable d'une réception à l'autre : elle
+ * ne dépend que de l'heure de création de la ligne et de ce qui l'a précédée.
+ */
+async function engagementSessionCounts(
+  prisma: PrismaClient,
+  params: { readonly sessionId: string; readonly postId: string; readonly userId: string; readonly authorId: string; readonly receivedAt: Date },
+): Promise<boolean> {
+  if (params.authorId === params.userId) return false;
+  const sibling = await prisma.postEngagement.findFirst({
+    where: {
+      userId: params.userId,
+      postId: params.postId,
+      sessionId: { not: params.sessionId },
+      createdAt: {
+        gte: new Date(params.receivedAt.getTime() - ENGAGEMENT_SESSION_DEDUP_WINDOW_MS),
+        lt: params.receivedAt,
+      },
+    },
+    select: { id: true },
+  });
+  return !sibling;
+}
 
 type StoredEngagementRow = {
   readonly surface?: string | null;
@@ -106,7 +141,7 @@ export async function recordView(
   postId: string,
   userId: string,
   duration?: number,
-  context: ViewContext = {},
+  context: ViewContext & { readonly impliesImpression?: boolean } = {},
 ): Promise<boolean> {
   try {
     // Enforce visibility before recording — without this, any authenticated
@@ -171,6 +206,13 @@ export async function recordView(
       ? false
       : await creditPostView(deps.prisma, { postId, userId, durationMs: safeDuration, ...context });
     creditStoryViewed(deps.prisma, { viewerId: userId, story: target, isNewView, durationMs: safeDuration });
+    if (context.impliesImpression && target.authorId !== userId) {
+      await impressionImpliedByView(deps.prisma, { postId, userId, surface: context.surface }).catch((error: unknown) =>
+        log.warn('recordView: impression implied by the view not written', {
+          postId,
+          error: error instanceof Error ? error.message : String(error),
+        }));
+    }
 
     const rootId = target.originalRepostOfId ?? target.repostOfId;
     if (rootId && rootId !== postId) {
@@ -258,6 +300,7 @@ export async function recordEngagementBatch(
         watchSamples: s.watchSamples ?? [],
       };
 
+      const receivedAt = new Date();
       const before = await prisma.postEngagement.findUnique({
         where: { sessionId: s.sessionId },
         select: STORED_ENGAGEMENT_SELECT,
@@ -285,10 +328,17 @@ export async function recordEngagementBatch(
         where: { sessionId: s.sessionId },
         update: data,
         // Conservation du brut : 90 j (#10510, O7) — posée à la création, jamais prolongée par un rejeu.
-        create: { sessionId: s.sessionId, ...data, expiresAt: new Date(Date.now() + POST_ENGAGEMENT_RETENTION_MS) },
+        create: { sessionId: s.sessionId, ...data, createdAt: receivedAt, expiresAt: new Date(Date.now() + POST_ENGAGEMENT_RETENTION_MS) },
       });
 
-      const added = engagementIncrementsAdded(stored, session);
+      const counts = await engagementSessionCounts(prisma, {
+        sessionId: s.sessionId,
+        postId: s.postId,
+        userId,
+        authorId: post.authorId,
+        receivedAt: before?.createdAt ?? receivedAt,
+      });
+      const added = counts ? engagementIncrementsAdded(stored, session) : {};
       if (Object.keys(added).length > 0) {
         await incrementPostCounters(prisma, [s.postId], added);
       }
