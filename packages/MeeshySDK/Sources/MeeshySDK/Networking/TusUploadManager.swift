@@ -346,13 +346,25 @@ public actor TusUploadManager {
         let work = Task { try await operation() }
         await lease.cancelOnExpiration { work.cancel() }
         do {
-            let result = try await work.value
+            let result = try await Self.awaitPropagatingCancellation(work)
             await lease.end()
             return result
         } catch {
             let expired = await lease.end()
             if expired { throw TusUploadSuspendedError() }
             throw error
+        }
+    }
+
+    /// Attend `work` en lui transmettant l'annulation de l'appelant. `await work.value` ne la transmet
+    /// pas : `cancelUpload` annulait la tâche de `activeTasks`, mais le téléversement réel, détaché ici,
+    /// allait jusqu'au bout — octets gaspillés, et la publication renvoyait le même fichier en parallèle
+    /// de la pré-émission que `stopForPublication` croyait arrêter.
+    static func awaitPropagatingCancellation<T: Sendable>(_ work: Task<T, Error>) async throws -> T {
+        try await withTaskCancellationHandler {
+            try await work.value
+        } onCancel: {
+            work.cancel()
         }
     }
 
