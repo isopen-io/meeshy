@@ -54,7 +54,10 @@ nonisolated enum GameMintBadgeImpact {
         (2 * numerator + denominator) / (2 * denominator)
     }
 
-    static func impact(counters: [APIEngagementProgress.Counter], price: Int) -> MintBadgeImpact? {
+    /// `sparksEconomy` : le serveur sert les étincelles (#10846) — la frappe y paie avec la poche seule, ne débite
+    /// aucun compteur et n'éteint aucun badge (#10845). Rien ne redescend : l'aperçu ne doit plus le prédire.
+    static func impact(counters: [APIEngagementProgress.Counter], price: Int, sparksEconomy: Bool = false) -> MintBadgeImpact? {
+        if sparksEconomy { return MintBadgeImpact(lost: 0, regain: 0) }
         guard counters.allSatisfy({ $0.points != nil }) else { return nil }
         let known = Set(EngagementAxisKey.allCases.map(\.rawValue))
         var axes: [String: Axis] = [:]

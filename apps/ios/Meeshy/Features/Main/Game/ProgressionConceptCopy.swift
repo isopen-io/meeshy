@@ -449,6 +449,13 @@ enum ConceptText {
         String(localized: "game.state.points.ready", defaultValue: "Tu as \(held) en poche et \(convertible) : assez pour la Meesh n° \(number), qui coûte \(price).", bundle: .main)
     }
 
+    /// Les étincelles (#10846) : la poche seule, toute convertible, et ce qui manque pour la pièce visée.
+    static func statePointsMissingPlain(held: String, number: String, price: String, missing: String) -> String {
+        String(localized: "game.state.points.missing_plain",
+               defaultValue: "Tu as \(held) en poche, toutes convertibles. La Meesh n° \(number) coûte \(price) : il manque \(missing).",
+               bundle: .main)
+    }
+
     static func statePointsReadyPlain(held: String, number: String, price: String) -> String {
         String(localized: "game.state.points.ready_plain", defaultValue: "Tu as \(held) en poche. Tes points à convertir couvrent la Meesh n° \(number), qui coûte \(price).", bundle: .main)
     }

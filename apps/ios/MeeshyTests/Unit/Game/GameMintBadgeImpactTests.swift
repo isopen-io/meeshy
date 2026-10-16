@@ -68,6 +68,14 @@ final class GameMintBadgeImpactTests: XCTestCase {
         let impact = GameMintBadgeImpact.impact(counters: counters, price: 1_221)
         XCTAssertEqual(impact, MintBadgeImpact(lost: 0, regain: 0), "3 − 2 = 1 : le palier 1 tient encore")
     }
+
+    /// Les étincelles (#10845, #10846) : la frappe ne débite plus aucun compteur et n'éteint plus aucun badge. Devant
+    /// un serveur qui parle ce contrat, l'aperçu ne prédit donc plus aucune perte.
+    func test_sparksEconomy_mintingExtinguishesNoBadge() {
+        let counters = [APIEngagementProgress.Counter(axisKey: "content.text_message", count: 10, points: 10)]
+        XCTAssertEqual(GameMintBadgeImpact.impact(counters: counters, price: 5_000, sparksEconomy: true),
+                       MintBadgeImpact(lost: 0, regain: 0))
+    }
 }
 
 /// L'étagère des badges d'accumulation (#9380) : ce qui se montre, dans quelle matière,

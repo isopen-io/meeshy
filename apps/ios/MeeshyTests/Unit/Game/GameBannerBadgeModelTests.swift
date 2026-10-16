@@ -38,48 +38,69 @@ final class GameBannerBadgeModelTests: XCTestCase {
         XCTAssertFalse((model.levelAccessibilityLabel + model.rankAccessibilityLabel).contains(GameCopy.flameFormName(.brasier)))
     }
 
-    // MARK: - #10231 — les points à gauche : acquis, et ce qu'il reste vers le niveau suivant
+    // MARK: - Les étincelles (#10846) : la poche en grand, le total à vie dessous ; le niveau, le max à vie dessous
 
-    /// Niveau 3 (seuil 900), 976 points : le niveau 4 s'ouvre à 1 600 — encore 624.
-    private func pointed(points: Int?, level: Int = 3) -> GameBannerBadgeModel? {
+    private func sparked(points: Int? = nil, sparks: Int? = nil, lifetime: Int? = nil, level: Int = 3,
+                         levelMax: Int? = nil) -> GameBannerBadgeModel? {
         let served = GameStanding(level: level, tier: .etincelle, prestige: 0, flame: nil, rank: .murmure, division: .iii,
-                                  division5: .v, ladder: GameStandingLadder(level: level, tier: .etincelle), points: points)
+                                  division5: .v, ladder: GameStandingLadder(level: level, tier: .etincelle), points: points,
+                                  levelMaxLifetime: levelMax, sparks: sparks, sparksLifetime: lifetime)
         return GameBannerBadgeModel.of(GameStandingContent(standing: served, treasuryTier: nil), userId: "u1")
     }
 
-    func test_of_servedPoints_saysThePointsAndWhatRemainsToTheNextLevel() throws {
-        let model = try XCTUnwrap(pointed(points: 976))
+    func test_servedSparks_showThePocket_andTheLifetimeTotalBelow() throws {
+        let model = try XCTUnwrap(sparked(points: 976, sparks: 976, lifetime: 12_000))
 
-        XCTAssertEqual(model.points, 976)
-        XCTAssertEqual(model.pointsToNext, 624)
-        XCTAssertEqual(model.pointsText, GameText.bannerPoints(points: GameCopy.formatCount(976)))
-        XCTAssertEqual(model.missingText, GameText.bannerMissing(points: GameCopy.formatCount(624), level: GameCopy.formatCount(4)),
-                       "ce qu'il reste nomme le niveau visé (#10540)")
-        XCTAssertEqual(model.levelProgress, Double(976 - 900) / Double(1600 - 900), accuracy: 0.0001)
+        XCTAssertEqual(model.pocket, 976)
+        XCTAssertEqual(model.pocketText, GameSparksCopy.bannerPocket(976))
+        XCTAssertEqual(model.lifetimeText, GameSparksCopy.bannerLifetime(12_000))
     }
 
-    func test_of_noPointsServed_saysNoPoints_andTheRingStaysFull() throws {
-        let model = try XCTUnwrap(pointed(points: nil))
+    /// Un serveur d'avant les étincelles : la poche se lit sur `points`, et aucun total à vie ne s'invente.
+    func test_olderServer_readsThePocketOnPoints_withoutInventingALifetime() throws {
+        let model = try XCTUnwrap(sparked(points: 976))
 
-        XCTAssertNil(model.pointsText)
-        XCTAssertNil(model.missingText)
-        XCTAssertEqual(model.levelProgress, 1)
+        XCTAssertEqual(model.pocket, 976)
+        XCTAssertNil(model.lifetimeText)
     }
 
-    func test_of_levelHeldByRankOrStep_saysThePointsWithoutAMissingCount() throws {
-        let model = try XCTUnwrap(pointed(points: 2_000))
+    func test_noSparksServed_saysNoSparks() throws {
+        let model = try XCTUnwrap(sparked())
 
-        XCTAssertNotNil(model.pointsText)
-        XCTAssertNil(model.pointsToNext, "un niveau retenu ne dit pas « encore 0 »")
-        XCTAssertNil(model.missingText)
-        XCTAssertEqual(model.levelProgress, 1)
+        XCTAssertNil(model.pocketText)
+        XCTAssertNil(model.lifetimeText)
     }
 
-    func test_levelAccessibilityLabel_readsThePointsAndTheNextLevel() throws {
-        let model = try XCTUnwrap(pointed(points: 976))
+    /// Le niveau max à vie se montre TOUJOURS sous le niveau, même égal à lui.
+    func test_theLifetimeMaxLevel_isAlwaysShown_evenWhenEqualToTheLevel() throws {
+        XCTAssertEqual(try XCTUnwrap(sparked(level: 12, levelMax: 40)).levelMaxText, GameSparksCopy.bannerLevelMax(40))
+        XCTAssertEqual(try XCTUnwrap(sparked(level: 12, levelMax: 12)).levelMaxText, GameSparksCopy.bannerLevelMax(12))
+        XCTAssertEqual(try XCTUnwrap(sparked(level: 12)).levelMaxText, GameSparksCopy.bannerLevelMax(12),
+                       "devant un serveur antérieur, le max à vie ne passe jamais sous le niveau")
+    }
 
-        XCTAssertTrue(model.levelAccessibilityLabel.contains(GameCopy.points(976)))
-        XCTAssertTrue(model.levelAccessibilityLabel.contains(GameCopy.levelToNext(remaining: 624, nextLevel: 4)))
+    /// La poche n'est pas la base du niveau (c'est le CYCLE, que la fiche ne reçoit pas) : le cercle ne prétend
+    /// plus mesurer une progression qu'il ne connaît pas.
+    func test_theRing_staysFull_theCycleIsNotServed() throws {
+        XCTAssertEqual(try XCTUnwrap(sparked(points: 976, sparks: 976)).levelProgress, 1)
+    }
+
+    func test_levelAccessibilityLabel_readsPocketLifetimeAndLifetimeMax() throws {
+        let model = try XCTUnwrap(sparked(points: 976, sparks: 976, lifetime: 12_000, level: 3, levelMax: 40))
+
+        XCTAssertTrue(model.levelAccessibilityLabel.contains(GameSparksCopy.sparks(976)))
+        XCTAssertTrue(model.levelAccessibilityLabel.contains(GameSparksCopy.lifetimeAccessibility(12_000)))
+        XCTAssertTrue(model.levelAccessibilityLabel.contains(GameSparksCopy.levelMaxAccessibility(40)))
+    }
+
+    // MARK: - Coins LOGIQUES : aucun arrondi au bord de début des étincelles ni au bord de fin des rangs
+
+    func test_corners_followTheReadingDirection() {
+        XCTAssertEqual(GameBannerBadgeView.roundedCorners(for: .level, direction: .leftToRight), [.topRight])
+        XCTAssertEqual(GameBannerBadgeView.roundedCorners(for: .level, direction: .rightToLeft), [.topLeft],
+                       "en RTL la pastille des étincelles est à droite : son bord de début est le droit, carré")
+        XCTAssertEqual(GameBannerBadgeView.roundedCorners(for: .rank, direction: .leftToRight), [.topLeft])
+        XCTAssertEqual(GameBannerBadgeView.roundedCorners(for: .rank, direction: .rightToLeft), [.topRight])
     }
 
     func test_standingAccessibilityLabel_servedFlame_isNeverRead() {

@@ -286,7 +286,8 @@ final class ProgressionViewModel: ObservableObject {
     /// frappe ; `nil` quand le serveur ne sert pas les points par axe — « inconnu » ne se dit pas « aucun ».
     var mintBadgeImpact: MintBadgeImpact? {
         guard let snapshot, let game else { return nil }
-        return GameMintBadgeImpact.impact(counters: snapshot.counters, price: game.mint.price)
+        return GameMintBadgeImpact.impact(counters: snapshot.counters, price: game.mint.price,
+                                          sparksEconomy: game.level.sparks != nil)
     }
 
     /// Le guide et les propositions de photo lisent le jeu, mais seulement RÉGLÉ.

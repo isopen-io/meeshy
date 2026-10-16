@@ -732,9 +732,17 @@ extension ProgressionConceptModel {
     private static func pointsState(_ progress: EngagementProgress, _ game: GameBlock?) -> String? {
         guard let game else { return nil }
         let mint = game.mint
-        let held = GameCopy.points(game.level.score)
         let number = count(mint.number)
         let price = GameCopy.points(mint.price)
+        // Les étincelles (#10846) : UN seul solde, la poche, toute convertible — jamais le cycle (`score`).
+        if game.level.sparks != nil {
+            let pocket = GameCopy.points(game.level.sparkFacts.pocket)
+            return mint.canMint
+                ? ConceptText.statePointsReadyPlain(held: pocket, number: number, price: price)
+                : ConceptText.statePointsMissingPlain(held: pocket, number: number, price: price,
+                                                      missing: GameCopy.points(mint.missingPoints))
+        }
+        let held = GameCopy.points(game.level.score)
         guard let convertible = convertiblePoints(progress: progress, game: game) else {
             return ConceptText.statePointsReadyPlain(held: held, number: number, price: price)
         }
