@@ -25,6 +25,40 @@ final class MessagePersistenceActorTests: XCTestCase {
         XCTAssertEqual(fetched[0].state, .sending)
     }
 
+    // MARK: - Un message « own » se vise par son id serveur
+
+    /// Un message envoyé de cet appareil garde sa ligne optimiste `cid_*` ;
+    /// l'interface et les événements socket le désignent par son id SERVEUR.
+    /// Épingler, rétablir une suppression ou rafraîchir ses pièces jointes ne
+    /// visaient que `localId` : l'écriture ne touchait aucune ligne.
+    private func insertOwnAckedMessage() async throws {
+        try await actor.insertOptimistic(MessageRecordFactory.make(localId: "cid_own_pin", conversationId: "conv_own"))
+        _ = try await actor.applyEvent(localId: "cid_own_pin", event: .serverAck(serverId: "srv_own_pin", at: Date()))
+    }
+
+    func test_updatePinned_byServerId_reachesTheOwnOptimisticRow() async throws {
+        try await insertOwnAckedMessage()
+        try await actor.updatePinned(localId: "srv_own_pin", pinnedAt: Date(), pinnedBy: "me")
+        let row = try XCTUnwrap(try actor.messages(for: "conv_own", limit: 10).first)
+        XCTAssertNotNil(row.pinnedAt, "l'épingle d'un autre appareil se voit sur mon propre message")
+    }
+
+    func test_markUndeleted_byServerId_reachesTheOwnOptimisticRow() async throws {
+        try await insertOwnAckedMessage()
+        try await actor.markDeleted(localId: "srv_own_pin", deletedAt: Date())
+        try await actor.markUndeleted(localId: "srv_own_pin")
+        let row = try XCTUnwrap(try actor.messages(for: "conv_own", limit: 10).first)
+        XCTAssertNil(row.deletedAt, "une suppression refusée par le serveur se rétablit")
+    }
+
+    func test_updateAttachmentsJson_byServerId_reachesTheOwnOptimisticRow() async throws {
+        try await insertOwnAckedMessage()
+        let json = Data("[]".utf8)
+        try await actor.updateAttachmentsJson(localId: "srv_own_pin", attachmentsJson: json)
+        let row = try XCTUnwrap(try actor.messages(for: "conv_own", limit: 10).first)
+        XCTAssertEqual(row.attachmentsJson, json)
+    }
+
     // MARK: - Apply Event
 
     func test_applyEvent_serverAck_updatesStateAndPersists() async throws {

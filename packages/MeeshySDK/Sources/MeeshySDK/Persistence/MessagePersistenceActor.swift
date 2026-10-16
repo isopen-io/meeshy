@@ -805,18 +805,20 @@ public actor MessagePersistenceActor {
 
     /// Undo a soft-delete, restoring the message to a non-deleted state.
     /// Used as the optimistic rollback when a delete network call fails.
+    // `localId` OU `serverId` (comme les mutateurs socket plus haut) : l'interface désigne un message
+    // « own » par son id serveur, et sa ligne garde son `cid_*` — viser `localId` seul n'écrivait rien.
     public func markUndeleted(localId: String) throws {
         var affectedConversationId: String?
         try dbWriter.write { db in
             affectedConversationId = try MessageRecord
-                .filter(Column("localId") == localId)
+                .filter(Column("localId") == localId || Column("serverId") == localId)
                 .fetchOne(db)?.conversationId
             try db.execute(
                 sql: """
                     UPDATE messages SET deletedAt = NULL,
-                    updatedAt = ?, changeVersion = changeVersion + 1 WHERE localId = ?
+                    updatedAt = ?, changeVersion = changeVersion + 1 WHERE localId = ? OR serverId = ?
                     """,
-                arguments: [Date(), localId]
+                arguments: [Date(), localId, localId]
             )
         }
         if let convId = affectedConversationId {
@@ -830,14 +832,14 @@ public actor MessagePersistenceActor {
         var affectedConversationId: String?
         try dbWriter.write { db in
             affectedConversationId = try MessageRecord
-                .filter(Column("localId") == localId)
+                .filter(Column("localId") == localId || Column("serverId") == localId)
                 .fetchOne(db)?.conversationId
             try db.execute(
                 sql: """
                     UPDATE messages SET pinnedAt = ?, pinnedBy = ?,
-                    updatedAt = ?, changeVersion = changeVersion + 1 WHERE localId = ?
+                    updatedAt = ?, changeVersion = changeVersion + 1 WHERE localId = ? OR serverId = ?
                     """,
-                arguments: [pinnedAt, pinnedBy, Date(), localId]
+                arguments: [pinnedAt, pinnedBy, Date(), localId, localId]
             )
         }
         if let convId = affectedConversationId {
@@ -1058,15 +1060,15 @@ public actor MessagePersistenceActor {
         var affectedConversationId: String?
         try dbWriter.write { db in
             affectedConversationId = try MessageRecord
-                .filter(Column("localId") == localId)
+                .filter(Column("localId") == localId || Column("serverId") == localId)
                 .fetchOne(db)?.conversationId
             try db.execute(
                 sql: """
                     UPDATE messages SET attachmentsJson = ?,
                     updatedAt = ?, changeVersion = changeVersion + 1
-                    WHERE localId = ?
+                    WHERE localId = ? OR serverId = ?
                     """,
-                arguments: [attachmentsJson, Date(), localId]
+                arguments: [attachmentsJson, Date(), localId, localId]
             )
         }
         if let convId = affectedConversationId {

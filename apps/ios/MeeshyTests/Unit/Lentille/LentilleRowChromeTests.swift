@@ -244,4 +244,35 @@ final class LentilleRowChromeTests: XCTestCase {
         )
     }
 
+
+    // MARK: - Chips entières en colonne étroite (#10835)
+
+    /// Capture iPad du porteur : dans une colonne de Split View, de Slide
+    /// Over ou de barre latérale, les chips de la rangée en focus (catégorie,
+    /// étiquettes, mode, effectif) étaient comprimées par leur `HStack` et
+    /// coupées. Chaque ligne de chips prend désormais sa largeur IDÉALE, et
+    /// défile horizontalement quand la colonne ne la loge pas — une chip n'est
+    /// plus jamais rognée.
+    func test_magnifiedChipLines_neverCompressTheirChips_inANarrowColumn() throws {
+        let code = try rowSource()
+        let body = try block("var body: some View {", in: code)
+        let date = try viewBlock("dateLine", in: code)
+        for (name, line) in [("ligne du haut", body), ("ligne de date", date)] {
+            XCTAssertTrue(line.contains("ViewThatFits(in: .horizontal)"), "\(name) : la version entière d'abord, si elle tient")
+            XCTAssertTrue(line.contains(".fixedSize(horizontal: true, vertical: false)"), "\(name) : les chips gardent leur largeur idéale")
+            XCTAssertTrue(line.contains("ScrollView(.horizontal, showsIndicators: false)"), "\(name) : sinon elles défilent, jamais rognées")
+        }
+    }
+
+    /// Le rognage de la rangée de liste ne vise que l'axe du glissement : la
+    /// rangée en focus dessine au-dessus et au-dessous de sa hauteur de layout.
+    func test_swipeableRow_clipsOnlyHorizontally() throws {
+        let sdk = try String(
+            contentsOf: Self.iosRoot.deletingLastPathComponent().deletingLastPathComponent()
+                .appendingPathComponent("packages/MeeshySDK/Sources/MeeshyUI/Primitives/SwipeableRow.swift"),
+            encoding: .utf8
+        )
+        XCTAssertFalse(sdk.contains("        .clipped()\n"), "un `.clipped()` rectangulaire coupait les chips en haut et en bas")
+        XCTAssertTrue(sdk.contains(".clipShape(SwipeableRowClip())"))
+    }
 }

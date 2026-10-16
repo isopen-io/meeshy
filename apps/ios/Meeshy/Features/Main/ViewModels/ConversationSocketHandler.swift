@@ -444,6 +444,11 @@ final class ConversationSocketHandler {
                         let reconciledContent: String? = (apiMsg.isEncrypted == true)
                             ? optimisticContent
                             : serverMsg.content
+                        // La correspondance `cid → serverId` AVANT l'écriture, comme l'envoi REST : la
+                        // publication suivante du store rend la ligne sous son id serveur, et sans elle
+                        // `mergeIntoMessages` gardait la ligne optimiste à côté — deux bulles pour un
+                        // message, jusqu'à la réponse REST (ou pour la session si elle échouait).
+                        delegate.pendingServerIds[tempId] = apiMsg.id
                         // Persist server ACK (state machine) via actor — store
                         // observation will surface the delivery-status change.
                         if let persistence = self.persistence {

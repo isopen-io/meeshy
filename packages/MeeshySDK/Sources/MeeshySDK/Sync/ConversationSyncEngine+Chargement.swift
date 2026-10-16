@@ -453,7 +453,7 @@ extension ConversationSyncEngine {
 
         let userId = await currentUserId()
         let baseline = await cache.conversations.load(for: "list").snapshot() ?? []
-        let parId = Dictionary(uniqueKeysWithValues: baseline.map { ($0.id, $0) })
+        let parId = Dictionary(baseline.map { ($0.id, $0) }, uniquingKeysWith: { first, _ in first })
 
         var servies: [MeeshyConversation] = []
         var idsServis = Set<String>()
@@ -782,7 +782,7 @@ extension ConversationSyncEngine {
             let supprimees = collection?.deleted ?? []
 
             let existing = await cache.conversations.load(for: "list").snapshot() ?? []
-            let parId = Dictionary(uniqueKeysWithValues: existing.map { ($0.id, $0) })
+            let parId = Dictionary(existing.map { ($0.id, $0) }, uniquingKeysWith: { first, _ in first })
 
             let userId = await currentUserId()
             let mappees = await Self.mapConversationsOffMain(recues, userId: userId)

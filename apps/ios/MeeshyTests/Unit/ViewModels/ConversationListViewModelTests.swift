@@ -599,6 +599,36 @@ final class ConversationListViewModelTests: XCTestCase {
         XCTAssertNil(sut.conversations.first(where: { $0.id == "conv2" })?.userState.deletedForUserAt)
     }
 
+    // MARK: - deleteConversation : la conversation QUITTE la liste (colonne de détail iPad)
+
+    func test_deleteConversation_success_announcesTheRemoval() async throws {
+        let store = Self.makeTestStore()
+        let (sut, _, _, _, _, _, _) = makeSUT(store: store)
+        sut.setConversations([makeConversation(id: "conv1"), makeConversation(id: "conv2")])
+        await sut.storeHydrationTask?.value
+        var removed: [String] = []
+        let token = sut.conversationRemoved.sink { removed.append($0) }
+        defer { token.cancel() }
+
+        await sut.deleteConversation(conversationId: "conv1")
+
+        XCTAssertEqual(removed, ["conv1"], "l'iPad referme la colonne de détail qui montrait conv1")
+    }
+
+    func test_deleteConversation_permanentFailure_announcesNothing() async throws {
+        let store = Self.makeTestStore(lifecycleError: MeeshyError.server(statusCode: 422, message: "bad"))
+        let (sut, _, _, _, _, _, _) = makeSUT(store: store)
+        sut.setConversations([makeConversation(id: "conv1")])
+        await sut.storeHydrationTask?.value
+        var removed: [String] = []
+        let token = sut.conversationRemoved.sink { removed.append($0) }
+        defer { token.cancel() }
+
+        await sut.deleteConversation(conversationId: "conv1")
+
+        XCTAssertEqual(removed, [], "la ligne est rétablie : la conversation reste ouverte")
+    }
+
     // MARK: - deleteConversation: Failure (restore)
 
     func test_deleteConversation_rollsBackOnPermanentFailure() async throws {

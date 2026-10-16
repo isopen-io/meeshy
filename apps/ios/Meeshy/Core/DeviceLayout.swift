@@ -151,8 +151,16 @@ enum DeviceLayout {
     /// screen. Callers that can measure their own container should keep using
     /// `bubbleMaxWidth(containerWidth:sizeClass:)`.
     static func bubbleMaxWidth(sizeClass: UserInterfaceSizeClass?) -> CGFloat {
-        bubbleMaxWidth(containerWidth: windowSize.width, sizeClass: sizeClass)
+        bubbleMaxWidth(containerWidth: conversationColumnWidth ?? windowSize.width, sizeClass: sizeClass)
     }
+
+    /// Largeur de la colonne qui héberge la conversation sur iPad — posée par `iPadRootView`, `nil` ailleurs.
+    ///
+    /// Sur iPad, la conversation n'occupe pas la fenêtre : la liste en prend ~38 %. Mesurées contre la
+    /// fenêtre, les bulles s'étiraient jusqu'au `Spacer(minLength:)` de la rangée — 86–91 % de la colonne
+    /// au lieu de 62 %, et l'écart qui sépare envoyé et reçu disparaissait. Une valeur et non un
+    /// environnement : les bulles vivent dans des cellules UIKit, que l'environnement SwiftUI n'atteint pas.
+    static var conversationColumnWidth: CGFloat?
 }
 
 /// The bottom safe-area inset as the LAYOUT measures it, for views rendered
