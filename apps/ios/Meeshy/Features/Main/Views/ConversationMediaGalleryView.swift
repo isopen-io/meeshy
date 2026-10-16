@@ -411,6 +411,9 @@ struct ConversationMediaGalleryView: View {
         }
         .task(id: playPauseFade) { await fadePlayPauseAfterDelay() }
         .sheet(isPresented: $showFullEmojiPicker) { fullEmojiPickerSheet }
+        // #10729 — présentée en `fullScreenCover`, la galerie recouvre l'hôte
+        // des toasts de la racine : « Enregistrer » se taisait à l'écran.
+        .feedbackToastOverlay()
     }
 
     /// L'animation de l'état d'immersion est portée ICI et non sur la racine :
