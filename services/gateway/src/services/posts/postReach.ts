@@ -18,6 +18,7 @@ import { consumeReferenceView, resolveReferenceAccess } from './referenceAccess'
 import { creditStoryViewed } from './postEngagementCredits';
 import { impressionImpliedByView } from '../social/viewImpressions';
 import { enhancedLogger } from '../../utils/logger-enhanced';
+import { errorIdentity } from '../../utils/error-identity';
 
 /**
  * La PORTÉE d'un post — ce qui compte qu'un contenu a été vu (#10483).
@@ -229,7 +230,7 @@ export async function recordView(
       await impressionImpliedByView(deps.prisma, { postId, userId, surface: context.surface }).catch((error: unknown) =>
         log.warn('recordView: impression implied by the view not written', {
           postId,
-          error: error instanceof Error ? error.message : String(error),
+          error: errorIdentity(error),
         }));
     }
 
@@ -260,7 +261,7 @@ export async function recordView(
     // masquer une vraie panne sur ce chemin (initiative 6cd1a3c47).
     log.warn('recordView failed', {
       postId,
-      error: error instanceof Error ? error.message : String(error),
+      error: errorIdentity(error),
     });
     return false;
   }
@@ -448,7 +449,7 @@ export async function recordEngagementBatch(
       // dans `recorded` (#10402) ; le lot continue, et l'échec se dit.
       log.warn('recordEngagementBatch: session not recorded', {
         postId: s.postId,
-        error: error instanceof Error ? error.message : String(error),
+        error: errorIdentity(error),
       });
     }
   }

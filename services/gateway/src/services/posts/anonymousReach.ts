@@ -2,6 +2,7 @@ import type { PrismaClient } from '@meeshy/shared/prisma/client';
 import { incrementPostCounters } from './postCounters';
 import { readServableToAnonymous, type AnonymousPostBatchPrisma } from '../../routes/posts/anonymousPostGate';
 import { enhancedLogger } from '../../utils/logger-enhanced';
+import { errorIdentity } from '../../utils/error-identity';
 import { isExitOfCountedOpen, noteCountedOpen, sharedViewOpenLedger, type ViewOpenLedger } from './viewOpenLedger';
 import { viewBreakdowns, viewProvenanceRow, type ViewContext } from './viewProvenance';
 import { creditOpens } from './contentOpens';
@@ -156,7 +157,7 @@ export async function creditAnonymousViews(
     } catch (error) {
       log.warn('anonymous view not recorded', {
         postId: view.postId,
-        error: error instanceof Error ? error.message : String(error),
+        error: errorIdentity(error),
       });
     }
   }
@@ -181,7 +182,7 @@ export async function recordAnonymousView(
   } catch (error) {
     log.warn('recordAnonymousView failed', {
       postId: params.postId,
-      error: error instanceof Error ? error.message : String(error),
+      error: errorIdentity(error),
     });
     return false;
   }
