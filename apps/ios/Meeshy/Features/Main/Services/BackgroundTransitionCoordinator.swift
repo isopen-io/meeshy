@@ -171,23 +171,26 @@ final class BackgroundTransitionCoordinator: BackgroundTransitioning {
 
     func resumeFromBackground() async {
         logger.info("Foreground resume starting")
-        ledger.resume()
+        // Deux retours rapprochés lançaient deux reprises concurrentes (deux `forceReconnect`, deux
+        // vidages de l'outbox) ; un départ pendant la reprise la laissait reconstruire les sockets et
+        // écrire dans une base déjà suspendue. Chaque step vérifie désormais que SA reprise est la courante.
+        let epoch = ledger.resume()
         // #7059 — PREMIER GESTE, avant tout ce qui écrit. Les consommateurs
         // ci-dessous gravent en base dès la première ligne ; les laisser tourner
         // sur une base encore suspendue échangerait le plantage contre une
         // application muette au réveil, ce qui se diagnostique bien plus mal.
         DatabaseSuspension.resume()
-        await withBudget("nse.consumePending") {
+        await resumeStep(epoch, "nse.consumePending") {
             await NSEPendingMessageConsumer.shared.consumeAll()
         }
-        await withBudget("nse.consumePendingPosts") {
+        await resumeStep(epoch, "nse.consumePendingPosts") {
             await NSEPendingPostConsumer.shared.consumeAll()
         }
         // Partages que l'extension n'a pas pu envoyer (hors-ligne, jeton
         // périmé) : ils rejoignent l'outbox, qui les rejouera. Republier
         // l'environnement au passage garde l'extension alignée si l'utilisateur
         // a changé de gateway pendant la session.
-        await withBudget("share.consumePendingSends") {
+        await resumeStep(epoch, "share.consumePendingSends") {
             WidgetDataManager.shared.publishAPIBaseURL()
             await SharePendingSendConsumer.shared.consumeAll()
             // #5056 — même réveil, même raison : la fiche de composition
@@ -195,7 +198,7 @@ final class BackgroundTransitionCoordinator: BackgroundTransitioning {
             // l'ouverture, qui n'est qu'un raccourci faillible.
             await ShareComposeHandoffConsumer.shared.consumeNext()
         }
-        await withBudget("sockets.resume") {
+        await resumeStep(epoch, "sockets.resume") {
             // CALL-FIX 2026-06-05 — if a call kept the sockets alive (see the
             // enterBackground guard), do NOT force-reconnect on resume: that would
             // tear down and rebuild the very socket carrying the live call's
@@ -207,20 +210,20 @@ final class BackgroundTransitionCoordinator: BackgroundTransitioning {
                 SocialSocketManager.shared.resumeFromBackground()
             }
         }
-        await withBudget("audio.resume") {
+        await resumeStep(epoch, "audio.resume") {
             await MediaLifecycleBridge.shared.resumeFromBackground()
         }
-        await withBudget("sync.conversations") {
+        await resumeStep(epoch, "sync.conversations") {
             await ConversationSyncEngine.shared.syncSinceLastCheckpoint()
         }
-        await withBudget("media.autosavePushed") {
+        await resumeStep(epoch, "media.autosavePushed") {
             // #8358 — ce que les pushs ont synchronisé app suspendue rejoint l'album.
             await PushedMediaAutoSaveQueue.shared.drain()
         }
-        await withBudget("conversationStore.flushOutbox") {
+        await resumeStep(epoch, "conversationStore.flushOutbox") {
             await ConversationStore.shared.flushOutbox()
         }
-        await withBudget("push.retryPending") {
+        await resumeStep(epoch, "push.retryPending") {
             await PushDeliveryReceiptService.shared.flushPending()
             // PendingStatusQueue is also flushed on socket reconnect via
             // ConversationSocketHandler.triggerSyncIfNeeded(), but that observer
@@ -228,7 +231,7 @@ final class BackgroundTransitionCoordinator: BackgroundTransitioning {
             // case where the user returns to the foreground on the list screen.
             await PendingStatusQueue.shared.flush()
         }
-        await withBudget("outbox.recovery") {
+        await resumeStep(epoch, "outbox.recovery") {
             // Récupère les records orphelins laissés en `.inflight` si le
             // process a été tué pendant un dispatch. `bootRecovery()` ne
             // tournait qu'au cold start : un retour de background « warm »
@@ -244,7 +247,7 @@ final class BackgroundTransitionCoordinator: BackgroundTransitioning {
                 Logger.backgroundTransition.error("Boot recovery failed on background transition: \(error.localizedDescription, privacy: .public)")
             }
         }
-        await withBudget("outbox.flush") {
+        await resumeStep(epoch, "outbox.flush") {
             let pool = DependencyContainer.shared.dbPool
             let flusher = OutboxFlusher(
                 pool: pool,
@@ -260,7 +263,7 @@ final class BackgroundTransitionCoordinator: BackgroundTransitioning {
             let nextRetry = await flusher.flush()
             OutboxRetryScheduler.shared.schedule(at: nextRetry)
         }
-        await withBudget("engagement.flush") {
+        await resumeStep(epoch, "engagement.flush") {
             // Engagement rows are durable (SQLite) and retried by
             // EngagementRetryScheduler + the network-reconnect observer, so this
             // flush is NON-critical. Bound it: a slow network (serial dispatch +
@@ -308,6 +311,15 @@ final class BackgroundTransitionCoordinator: BackgroundTransitioning {
         logger.info("Background transition ended (task=\(taskId.rawValue, privacy: .public))")
     }
 
+    /// Un step de reprise ne s'exécute que si sa reprise est encore la courante.
+    private func resumeStep(_ epoch: UInt64, _ step: String, _ work: () async -> Void) async {
+        guard ledger.isCurrentResume(epoch) else {
+            logger.info("Step \(step, privacy: .public) skipped — resume superseded or app backgrounded")
+            return
+        }
+        await withBudget(step, work)
+    }
+
     private func withBudget(_ step: String, _ work: () async -> Void) async {
         let start = Date()
         await work()
@@ -330,9 +342,13 @@ nonisolated struct BackgroundTransitionLedger: Equatable {
 
     private(set) var isTransitioning = false
     private(set) var isBackgrounded = false
+    /// Avance à chaque reprise ET à chaque départ : une reprise dont l'époque n'est plus la courante
+    /// (une reprise plus récente l'a doublée, ou l'app est repartie en arrière-plan) s'arrête.
+    private(set) var resumeEpoch: UInt64 = 0
 
     mutating func enterBackground() -> Entry {
         isBackgrounded = true
+        resumeEpoch &+= 1
         guard !isTransitioning else { return .joined }
         isTransitioning = true
         return .start
@@ -340,7 +356,15 @@ nonisolated struct BackgroundTransitionLedger: Equatable {
 
     mutating func finishTransition() { isTransitioning = false }
 
-    mutating func resume() { isBackgrounded = false }
+    @discardableResult
+    mutating func resume() -> UInt64 {
+        isBackgrounded = false
+        resumeEpoch &+= 1
+        return resumeEpoch
+    }
+
+    /// La reprise d'époque `epoch` peut-elle encore agir ?
+    func isCurrentResume(_ epoch: UInt64) -> Bool { !isBackgrounded && epoch == resumeEpoch }
 
     var shouldSuspend: Bool { isBackgrounded }
 }

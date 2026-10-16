@@ -86,6 +86,37 @@ final class BackgroundTransitionCoordinatorTests: XCTestCase {
         XCTAssertFalse(ledger.shouldSuspend, "une app visible ne perd ni ses sockets ni sa base")
     }
 
+    // MARK: - Reprise : une seule à la fois, et jamais en arrière-plan
+
+    /// Deux retours au premier plan rapprochés : la première reprise s'arrête
+    /// au step suivant, la seconde seule reconstruit sockets et outbox.
+    func test_ledger_aNewerResume_supersedesTheRunningOne() {
+        var ledger = BackgroundTransitionLedger()
+        let first = ledger.resume()
+        XCTAssertTrue(ledger.isCurrentResume(first))
+        let second = ledger.resume()
+        XCTAssertFalse(ledger.isCurrentResume(first), "deux forceReconnect se démolissaient l'un l'autre")
+        XCTAssertTrue(ledger.isCurrentResume(second))
+    }
+
+    /// Reparti en arrière-plan pendant la reprise : elle ne reconstruit plus
+    /// les sockets et n'écrit plus dans une base que la transition va suspendre.
+    func test_ledger_goingBackground_stopsTheRunningResume() {
+        var ledger = BackgroundTransitionLedger()
+        let epoch = ledger.resume()
+        _ = ledger.enterBackground()
+        XCTAssertFalse(ledger.isCurrentResume(epoch))
+    }
+
+    func test_resumeFromBackground_gatesEveryStepOnItsEpoch() throws {
+        let src = try sourceOf("Meeshy/Features/Main/Services/BackgroundTransitionCoordinator.swift")
+        let start = try XCTUnwrap(src.range(of: "func resumeFromBackground() async {"))
+        let end = try XCTUnwrap(src.range(of: "private static let engagementFlushBudget"))
+        let resume = String(src[start.upperBound..<end.lowerBound])
+        XCTAssertFalse(resume.contains("await withBudget(\""), "chaque step de reprise passe par resumeStep")
+        XCTAssertTrue(resume.contains("await resumeStep(epoch, \"sockets.resume\")"))
+    }
+
     func test_enterBackground_suspendsThroughTheLedger_notAGenerationEquality() throws {
         let src = try sourceOf("Meeshy/Features/Main/Services/BackgroundTransitionCoordinator.swift")
         XCTAssertFalse(src.contains("guard !isTransitioning else { return }"), "la ré-entrée ne s'avale plus en silence")
