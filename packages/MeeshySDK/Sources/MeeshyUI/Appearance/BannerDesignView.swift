@@ -26,14 +26,17 @@ public struct BannerDesignView: View, Equatable {
         lhs.design == rhs.design && lhs.isDark == rhs.isDark && lhs.accentHex == rhs.accentHex && lhs.animates == rhs.animates
     }
 
+    /// La couche animée est en SURIMPRESSION (#10756) : le design seul fixe la taille. Dans
+    /// un `ZStack`, un film en `.fill` imposait sa hauteur (un film carré rendait la
+    /// bannière carrée) — `.clipped()` rogne le dessin, jamais la mise en page.
     public var body: some View {
-        ZStack {
-            AppearanceDesignView(design: design, isDark: isDark, accentHex: accentHex)
-                .equatable()
-            if let lottie = design.lottie {
-                PackLottieLayer(ref: lottie, animates: animates, contentMode: .fill)
+        AppearanceDesignView(design: design, isDark: isDark, accentHex: accentHex)
+            .equatable()
+            .overlay {
+                if let lottie = design.lottie {
+                    PackLottieLayer(ref: lottie, animates: animates, contentMode: .fill)
+                }
             }
-        }
-        .clipped()
+            .clipped()
     }
 }
