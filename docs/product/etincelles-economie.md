@@ -148,3 +148,15 @@ Schémas : `packages/shared/types/game.ts`, `game-v2.ts`, `engagement.ts`. Vecte
 `bun scripts/backfill-engagement-sparks.ts` (à blanc), `--apply` pour écrire, `--only=counts|sparks`. **Borne basse** :
 total à vie ≥ poche + Σ prix des frappes ; cycle ≥ poche + Σ prix des frappes depuis le dernier prestige ; niveau max à vie ≥ record du cycle.
 Ne se reconstruisent pas : les points repris par la suppression d'un contenu, ceux effacés par un prestige passé. Voir l'en-tête de `engagementSparksBackfill.ts`.
+
+## 8. Le lot web (porteur, 2026-10-16)
+
+- **Vocabulaire** : « points » devient « étincelles » dans les textes affichés du Jeu, de l'onboarding, de l'engagement et du bandeau, sur les sept langues
+  (`catalog-game-*`, `catalog-*-engagement`, `catalog-onboarding-*`). La notion « points à convertir » disparaît (une poche, tout est dépensable) ; le palier 1-9
+  s'affiche **Braise** (en Ember, es Brasa, de Glut, it Brace, pt Brasa, ar جمرة) ; le Vent arrière, la perte de niveau et l'extinction des badges à la frappe ne se disent plus.
+- **Profil** (`game-profile-banner.tsx`) : la poche en grand, le total à vie en petit dessous ; le niveau actuel, le niveau max à vie dessous. Plus d'arrondi au bord de DÉBUT
+  de la pastille des étincelles ni au bord de FIN de celle des rangs (`rounded-se-card` / `rounded-ss-card`, coins logiques, RTL compris).
+- **Progression** (`game-hero.tsx`, fiche Étincelles) : la même paire, TOUJOURS affichée, même quand le max égale le niveau.
+- **Bandeau d'ouverture** (`player-banner.tsx`) : un groupe de liens, chacun vers sa fiche — étincelles → `points`, rang → `glory`, niveau → `level`, Meesh → `meesh`, flamme → `flame`,
+  ligue → `league`, et les trois pièces neuves : trophées → `showcase`, mission du jour → `missions`, saison → `season` —, chacun avec son nom accessible (`playerBannerPieceLabels`).
+- **Frappe fermée** : `409 TREASURY_LOCKED` (la réserve et le rang requis) et `409 MINT_BLOCKED_BY_DEBT` (la dette) se disent clairement, dans l'aperçu (`data-game-mint-blocked`) comme dans le message d'erreur.

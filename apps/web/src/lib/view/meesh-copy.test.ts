@@ -16,13 +16,13 @@ function motAccorde(rendu: string): string {
   return rendu.replace(/\d+/g, '').replace(/\s+/g, ' ').trim();
 }
 
-describe('le point à convertir s’accorde', () => {
+describe('l’étincelle s’accorde', () => {
   test('à 1 et à 2, le mot change', () =>
     expect(motAccorde(meeshMissing(1, 0))).not.toBe(motAccorde(meeshMissing(2, 0))));
-  test('« point à convertir » au singulier', () =>
-    expect(meeshMissing(1, 0)).toBe('Encore 1 point à convertir avant une Meesh.'));
-  test('« points à convertir » au pluriel', () =>
-    expect(meeshMissing(2, 0)).toBe('Encore 2 points à convertir avant une Meesh.'));
+  test('« étincelle » au singulier', () =>
+    expect(meeshMissing(1, 0)).toBe('Encore 1 étincelle avant une Meesh.'));
+  test('« étincelles » au pluriel', () =>
+    expect(meeshMissing(2, 0)).toBe('Encore 2 étincelles avant une Meesh.'));
 });
 
 describe('le point de conversation s’accorde', () => {
@@ -37,29 +37,29 @@ describe('le point de conversation s’accorde', () => {
 
   test('à UN, aucun chiffre n’accompagne le plancher', () => {
     const seconde = meeshMissing(5, 1).replace(meeshMissing(5, 0), '').trim();
-    expect(seconde).toBe('Votre point de conversation sera repris en dernier, sans éteindre aucun badge.');
+    expect(seconde).toBe('Votre étincelle de conversation sera reprise en dernier, sans éteindre aucun badge.');
     expect(seconde).not.toContain('1');
   });
 
   test('au-delà, le chiffre revient', () =>
-    expect(meeshMissing(5, 3)).toContain('Vos 3 points de conversation'));
+    expect(meeshMissing(5, 3)).toContain('Vos 3 étincelles de conversation'));
 });
 
 describe('le plancher ABSENT ne compose rien', () => {
-  test('zéro ⇒ une seule phrase', () => expect(meeshMissing(4, 0)).toBe('Encore 4 points à convertir avant une Meesh.'));
+  test('zéro ⇒ une seule phrase', () => expect(meeshMissing(4, 0)).toBe('Encore 4 étincelles avant une Meesh.'));
 });
 
 describe('la langue d’interface (#10823)', () => {
   test('interface en : le manque et le plancher en anglais, avec les valeurs d’iOS', async () => {
     await loadGameCatalog('en');
-    expect(meeshMissing(1, 0, 'en')).toBe('1 more convertible point before a Meesh.');
+    expect(meeshMissing(1, 0, 'en')).toBe('1 more spark before a Meesh.');
     expect(meeshMissing(4, 3, 'en')).toBe(
-      '4 more convertible points before a Meesh. Your 3 conversation points will be used last, without turning off any badge.',
+      '4 more sparks before a Meesh. Your 3 conversation sparks will be used last, without turning off any badge.',
     );
   });
 
   test('interface ar : la forme duelle du catalogue arabe', async () => {
     await loadGameCatalog('ar');
-    expect(meeshMissing(2, 0, 'ar')).toBe('لا يزال أمامك نقطتان قابلتان للتحويل قبل الحصول على Meesh.');
+    expect(meeshMissing(2, 0, 'ar')).toBe('لا يزال أمامك شرارتان قبل الحصول على Meesh.');
   });
 });

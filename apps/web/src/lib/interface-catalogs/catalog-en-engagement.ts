@@ -6,13 +6,13 @@
 const enEngagement = {
   'engagement.pill.streak.one': '{count}-day streak',
   'engagement.pill.streak.other': '{count}-day streak',
-  'engagement.pill.points.one': '{total} point, {today} today',
-  'engagement.pill.points.other': '{total} points, {today} today',
-  'engagement.pill.total.one': '{total} point earned in this conversation',
-  'engagement.pill.total.other': '{total} points earned in this conversation',
+  'engagement.pill.points.one': '{total} spark, {today} today',
+  'engagement.pill.points.other': '{total} sparks, {today} today',
+  'engagement.pill.total.one': '{total} spark earned in this conversation',
+  'engagement.pill.total.other': '{total} sparks earned in this conversation',
   'engagement.pill.join': '{streak}, {points}',
-  'engagement.post.points.one': 'This post earned you {count} point',
-  'engagement.post.points.other': 'This post earned you {count} points',
+  'engagement.post.points.one': 'This post earned you {count} spark',
+  'engagement.post.points.other': 'This post earned you {count} sparks',
 } as const;
 
 export default enEngagement;

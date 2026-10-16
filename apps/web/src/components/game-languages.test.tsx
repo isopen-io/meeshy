@@ -91,7 +91,6 @@ function surfaces(): Surfaces {
         <GameMintPreview
           mint={game.mint}
           held={game.level.score}
-          badgesLost={2}
           online
           minting={false}
           celebration={null}

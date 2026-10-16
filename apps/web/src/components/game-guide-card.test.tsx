@@ -46,13 +46,13 @@ describe('la première fois : la version complète', () => {
   const page = text(renderToStaticMarkup(<GameGuideCard card={full(firstMint)} {...handlers} />));
 
   test('les trois parties, dans l’ordre', () => {
-    const order = ['Ta première Meesh est frappée', 'de 14 à 9', 'niveau 14'].map((part) => page.indexOf(part));
+    const order = ['Ta première Meesh est frappée', 'la frappe dépense la poche seule', 'Ton niveau et ton rang ne baissent pas'].map((part) => page.indexOf(part));
     expect(order.every((i) => i >= 0)).toBe(true);
     expect([...order].sort((a, b) => a - b)).toEqual(order);
   });
 
   test('un bouton qui y mène, avec son libellé', () => {
-    expect(page).toContain('Reprendre mes niveaux');
+    expect(page).toContain('Voir mon niveau');
   });
 
   test('qui parle : Mee et Meo ensemble pour un grand moment', () => {

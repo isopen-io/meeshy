@@ -79,8 +79,9 @@ describe('la carte : la valeur est suivie de sa phrase d’état', () => {
   test('le porteur lit ses trois chiffres avec leur cible, sur la première page', () => {
     const page = hub(jcnm);
     expect(plain(page.querySelector('[data-concept-card="level"]')?.textContent)).toContain('Il en reste 1 301 pour le niveau 28.');
-    expect(plain(page.querySelector('[data-concept-card="points"]')?.textContent)).toContain('il manque 1 839 points à convertir');
-    expect(plain(page.querySelector('[data-concept-card="points"]')?.textContent)).toContain('5 823 points à convertir');
+    expect(plain(page.querySelector('[data-concept-card="points"]')?.textContent)).toContain('il manque 1 839 étincelles');
+    // UNE poche : plus de second solde « à convertir » à côté de la poche (porteur, 2026-10-16).
+    expect(plain(page.querySelector('[data-concept-card="points"]')?.textContent)).not.toContain('5 823');
   });
 
   test('une carte sans phrase (ancien serveur) ne rend pas de ligne vide', () => {
@@ -117,10 +118,10 @@ describe('la fiche : quatre questions, et l’état avant les données', () => {
     });
   }
 
-  test('la fiche des Meeshes passe le solde à convertir à la pièce de frappe', () => {
+  test('la fiche des Meeshes passe la poche à la pièce de frappe', () => {
     const page = plain(fiche('meesh', jcnm).querySelector('#game-mint')?.textContent);
-    expect(page).toContain('À convertir 5 823 points');
-    expect(page).toContain('Il manque 1 839 points à convertir pour la Meesh n° 79.');
+    expect(page).toContain('En poche 77 099 étincelles');
+    expect(page).toContain('Il manque 1 839 étincelles pour la Meesh n° 79.');
   });
 });
 

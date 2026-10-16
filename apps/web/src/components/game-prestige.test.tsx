@@ -35,7 +35,7 @@ const props = (score = levelThreshold(100) + 40, prestige = 1, patch: Partial<Ga
 
 /**
  * LE PRESTIGE (#9389) — proposition, explication par Mee et Meo, confirmation
- * qui dit ce qui repart ET la perte d’accès à la ligue et au duo, passage. Pas
+ * qui dit ce qui repart ET que la ligue et le duo restent ouverts, passage. Pas
  * de passage sans confirmation.
  */
 describe('la proposition au niveau 100', () => {
@@ -44,7 +44,7 @@ describe('la proposition au niveau 100', () => {
   test('Mee et Meo expliquent : ce qui repart, ce qu’on gagne', () => {
     const t = text(html);
     expect(t).toContain('tu peux passer en Prestige, ou continuer à monter');
-    expect(t).toContain('Ton niveau repart à 1');
+    expect(t).toContain('Ton niveau actuel repart à 1 et ta poche d’étincelles est vidée ; ton total à vie et ton niveau max sont conservés');
     expect(t).toContain(`${formatCount(GLORY_POINTS.prestige, 'fr').replace(/\s/g, ' ')} de Gloire`);
     expect(html).toContain('data-game-bird="meeGuide"');
     expect(html).toContain('data-game-bird="meoGuide"');
@@ -66,22 +66,22 @@ describe('la proposition au niveau 100', () => {
     expect(host.querySelector('[data-game-prestige-confirm]')).not.toBeNull();
   });
 
-  test('la confirmation dit ce qui repart, ce qui reste, et la perte de la ligue et du duo', async () => {
+  test('la confirmation dit ce qui repart, ce qui reste, et que la ligue et le duo restent ouverts', async () => {
     const host = await mount(<GamePrestige {...props()} />);
     await click(host.querySelector('[data-game-prestige-go]'));
     const t = host.textContent ?? '';
     expect(t).toContain('Passer en Prestige 2 ?');
     expect(t).toContain('Ce qui repart');
     expect(t).toContain('Ce qui reste');
-    expect(t).toContain('ligue (niveau 10) et ton duo (niveau 20) se referment');
+    expect(t).toContain('ligue (niveau 10) et ton duo (niveau 20) restent ouverts, car ils lisent ton niveau max à vie');
   });
 
-  test('la confirmation donne les VALEURS avant → après : points en poche, niveau, record, étoiles, Gloire (#9705)', async () => {
+  test('la confirmation donne les VALEURS avant → après : étincelles en poche, niveau, record, étoiles, Gloire (#9705)', async () => {
     const host = await mount(<GamePrestige {...props()} />);
     await click(host.querySelector('[data-game-prestige-go]'));
     const plain = (value: string): string => value.replace(/\s/g, ' ');
     const rows = plain(text(host.querySelector('[data-game-prestige-values]')?.innerHTML ?? ''));
-    expect(rows).toContain(plain(`En poche ${formatCount(props().score, 'fr')} points → 0 point`));
+    expect(rows).toContain(plain(`En poche ${formatCount(props().score, 'fr')} étincelles → 0 étincelle`));
     expect(rows).toContain('Niveau 100 → 1');
     expect(rows).toContain('Étoiles 1 → 2');
     expect(rows).toContain(plain(`Gloire +${formatCount(GLORY_POINTS.prestige, 'fr')}`));
@@ -90,7 +90,7 @@ describe('la proposition au niveau 100', () => {
   test('la confirmation dit que le consentement à la ligue publique reste enregistré', async () => {
     const host = await mount(<GamePrestige {...props()} />);
     await click(host.querySelector('[data-game-prestige-go]'));
-    expect(host.textContent ?? '').toContain('Ton consentement à la ligue publique reste enregistré : tu retrouves ta ligue au niveau 10.');
+    expect(host.textContent ?? '').toContain('Ton consentement à la ligue publique reste enregistré.');
   });
 
   test('confirmer envoie UN passage, et l’écran annonce la nouvelle étoile', async () => {

@@ -65,3 +65,22 @@ type ServedStanding = NonNullable<UserGameProfileResponse['standing']>;
 /** Le profil d'un autre membre tel que l'écran le montre : son niveau et son palier ouverts par le rang. */
 export const shownStanding = (standing: ServedStanding | null): (Omit<ServedStanding, 'tier'> & { readonly tier: LevelTierKey }) | null =>
   standing === null ? null : { ...standing, level: standing.ladder?.level ?? standing.level, tier: standing.ladder?.tier ?? standing.tier };
+
+/**
+ * LES ÉTINCELLES, TELLES QUE L'ÉCRAN LES LIT (porteur, 2026-10-16) : la POCHE en grand (`sparks`, ce que la frappe
+ * dépense), le TOTAL à vie en petit dessous (`sparksLifetime`), la dette à rembourser. Devant un serveur antérieur, la
+ * poche est l'ancien score (`score`), le total à vie n'est pas inventé (`null`) et il n'y a pas de dette.
+ */
+export type SparksReading = { readonly pocket: number; readonly lifetime: number | null; readonly debt: number };
+
+export const sparksReading = (level: GameBlock['level']): SparksReading => ({
+  pocket: level.sparks ?? level.score,
+  lifetime: level.sparksLifetime ?? null,
+  debt: level.sparksDebt ?? 0,
+});
+
+/** Le niveau MAX À VIE (il survit au Prestige) : jamais sous le niveau actuel, le record en repli devant un ancien serveur. */
+export const levelMaxReading = (level: GameBlock['level']): number => {
+  const reading = levelReading(level);
+  return Math.max(reading.level, level.ladder?.levelMaxLifetime ?? level.levelMaxLifetime ?? reading.record);
+};

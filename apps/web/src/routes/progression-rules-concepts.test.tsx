@@ -64,20 +64,19 @@ describe('aucun concept affiché n’est absent des règles', () => {
   });
 });
 
-describe('les règles disent les deux soldes de points', () => {
-  test('le niveau se lit sur les points en poche, la frappe se paie en points à convertir', () => {
+describe('les règles disent la poche unique d’étincelles', () => {
+  test('le niveau se lit sur les étincelles accumulées, la frappe se paie avec les étincelles de la poche', () => {
     const rules = gameRules('fr');
-    expect(rules[1]?.body).toContain('points en poche');
-    expect(rules[2]?.body).toContain('points à convertir');
+    expect(rules[1]?.body).toContain('étincelles accumulées');
+    expect(rules[2]?.body).toContain('étincelles de ta poche');
     expect(rules[2]?.body).toContain('30 %');
-    expect(rules[3]?.body).toContain('niveau record');
+    expect(rules[3]?.body).toContain('Ton niveau, ton rang et tes badges ne baissent pas');
   });
 
-  test('l’entrée Points nomme les deux soldes et dit qu’ils peuvent différer, sans en inventer la cause', () => {
+  test('l’entrée Étincelles dit qu’il n’y a qu’une poche, que tout est dépensable et que la frappe ne baisse pas le niveau', () => {
     const points = rulesGlossary('fr').find((entry) => entry.key === 'points')?.body ?? '';
-    expect(points).toContain('points en poche');
-    expect(points).toContain('points à convertir');
-    expect(points).toContain('ils peuvent être différents');
+    expect(points).toContain('Une seule poche, et tout est dépensable');
+    expect(points).toContain('la frappe dépense la poche, sans baisser ton niveau');
   });
 });
 

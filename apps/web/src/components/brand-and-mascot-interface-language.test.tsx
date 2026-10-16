@@ -51,7 +51,7 @@ describe('le pied de marque des écrans d’accès', () => {
   });
 });
 
-const FRENCH = /Tchak|toute neuve|Tu en as|Niveau|On fête|Succès débloqué|Tes points|frappe|Salut|je suis|jours d’affilée|Encore|avant le niveau|sommet/u;
+const FRENCH = /Tchak|toute neuve|Tu en as|Niveau|On fête|Succès débloqué|Tes étincelles|frappe|Salut|je suis|jours d’affilée|Encore|avant le niveau|sommet/u;
 
 describe('la mascotte, interface en', () => {
   test('chaque ligne parle anglais, accordée au nombre', () => {
@@ -61,12 +61,12 @@ describe('la mascotte, interface en', () => {
     expect(mascotSay({ kind: 'achievement', key: 'achievement.first_voice' })).toBe(
       `Achievement unlocked: ${achievementCopy('achievement.first_voice', 'en').title}!`,
     );
-    expect(mascotSay({ kind: 'can-mint', mintCost: 1221 })).toBe('Your points are ready: shall we mint a Meesh for 1,221 points?');
-    expect(mascotSay({ kind: 'first-step' })).toBe('Hi, I’m Mee! Send your first message and I’ll count your points.');
+    expect(mascotSay({ kind: 'can-mint', mintCost: 1221 })).toBe('Your sparks are ready: shall we mint a Meesh for 1,221 sparks?');
+    expect(mascotSay({ kind: 'first-step' })).toBe('Hi, I’m Mee! Send your first message and I’ll count your sparks.');
     expect(mascotSay({ kind: 'streak', days: 4 })).toBe('4 days in a row, keep it up!');
-    expect(mascotSay({ kind: 'meesh-missing', missing: 1 })).toBe('1 more point to convert and I’ll mint your next Meesh.');
-    expect(mascotSay({ kind: 'meesh-missing', missing: 821 })).toBe('821 more points to convert and I’ll mint your next Meesh.');
-    expect(mascotSay({ kind: 'level-missing', missing: 90, nextLevel: 3 })).toBe('90 more points before level 3.');
+    expect(mascotSay({ kind: 'meesh-missing', missing: 1 })).toBe('1 more spark and I’ll mint your next Meesh.');
+    expect(mascotSay({ kind: 'meesh-missing', missing: 821 })).toBe('821 more sparks and I’ll mint your next Meesh.');
+    expect(mascotSay({ kind: 'level-missing', missing: 90, nextLevel: 3 })).toBe('90 more sparks before level 3.');
     expect(mascotSay({ kind: 'top-level' })).toBe('You’re at the top. Well done!');
   });
 
