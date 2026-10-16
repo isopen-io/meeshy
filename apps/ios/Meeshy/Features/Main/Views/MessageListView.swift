@@ -361,8 +361,10 @@ private struct ConditionalBubbleLongPress: ViewModifier {
     func body(content: Content) -> some View {
         if enabled {
             content.simultaneousGesture(
-                LongPressGesture(minimumDuration: 0.35, maximumDistance: 6)
+                LongPressGesture(minimumDuration: MessagePressClaim.rowMinimumDuration, maximumDistance: 6)
                     .onEnded { _ in
+                        // La tuile d'un lot a déjà ouvert l'aperçu de SA pièce (#10800).
+                        guard !MessagePressClaim.isClaimed() else { return }
                         HapticFeedback.medium()
                         // Le menu de ce chemin s'ouvre en SURCOUCHE : clavier
                         // levé, il paraît derrière lui. La fermeture est ici, et
