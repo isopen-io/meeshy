@@ -1050,6 +1050,7 @@ struct ConversationView: View {
             }
             .onDisappear {
                 composerText.flushPendingChange()
+                persistDraftAttachmentsForBackground() // iPad : un panneau REMPLACE la vue, le plateau n'y survivait pas
                 // #7500 — la sortie par NAVIGATION. Jumelle de celle du passage
                 // en arrière-plan ci-dessus : une vue unique lue ici ne
                 // survivra pas au retour.
@@ -1066,8 +1067,7 @@ struct ConversationView: View {
                 composerText.onPersistNeeded = nil
                 // Arrêt déterministe du player local (preview d'audio en attente) :
                 // sans lui, l'audio continuait jusqu'au dealloc du @StateObject et
-                // la session restait acquise (refcount) le temps de la libération.
-                // Idempotent.
+                // la session restait acquise (refcount) le temps de la libération. Idempotent.
                 pendingAudioPlayer.stop()
                 if audioRecorder.isRecording {
                     audioRecorder.cancelRecording()

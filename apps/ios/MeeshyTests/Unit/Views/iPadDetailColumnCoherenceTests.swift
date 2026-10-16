@@ -80,4 +80,14 @@ final class iPadDetailColumnCoherenceTests: XCTestCase {
         let panels = AppSourceGuard.stripComments(try AppSourceGuard.unit("Meeshy/Features/Main/Views/iPadRootView+Panels.swift"))
         XCTAssertTrue(panels.contains("onCancel: { rightPanelRoute = .communityDetail(community.id) }"))
     }
+
+    /// Sur iPad, une page du panneau (cloche, réglages, lien) REMPLACE la
+    /// conversation au lieu de la couvrir : la vue est détruite, et le plateau
+    /// des pièces jointes — écrit au brouillon seulement en arrière-plan —
+    /// disparaissait en silence.
+    func test_leavingTheConversation_savesTheTrayToTheDraft() throws {
+        let view = AppSourceGuard.stripComments(try AppSourceGuard.unit("Meeshy/Features/Main/Views/ConversationView.swift"))
+        let leave = try XCTUnwrap(view.range(of: ".onDisappear {\n                composerText.flushPendingChange()\n"))
+        XCTAssertTrue(view[leave.upperBound...].prefix(200).contains("persistDraftAttachmentsForBackground()"))
+    }
 }
