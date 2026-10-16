@@ -28,10 +28,6 @@ export const CONTENT_EVENT_RETENTION_MS = 90 * DAY_MS;
  * après les 72 h d'autrefois. Passé ce délai, un renvoi recompte.
  */
 export const CONTENT_EVENT_RECEIPT_RETENTION_MS = 30 * DAY_MS;
-/** Les lignes `PostImpression` neuves vivent 90 j (#10510, O7). */
-export const POST_IMPRESSION_RETENTION_MS = 90 * DAY_MS;
-/** Les sessions de lecture `PostEngagement` (dwell) vivent 90 j (O7) : leurs agrégats sont déjà sur le post. */
-export const POST_ENGAGEMENT_RETENTION_MS = 90 * DAY_MS;
 
 const SHORT_LIVED: ReadonlySet<string> = new Set(SAMPLEABLE_V2_TYPES);
 

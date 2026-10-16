@@ -1,7 +1,7 @@
 import type { ParsedSocialEventsContext } from '../../routes/social/eventsV2Schemas';
 import type { SocialEvent } from '../../routes/social/eventsSchemas';
+import { rawReadingRetentionMs } from '../../config/raw-reading-retention';
 import {
-  POST_IMPRESSION_RETENTION_MS,
   compact,
   ejsonDate,
   ejsonObjectId,
@@ -68,7 +68,7 @@ export function impressionRowOf(params: {
     source: event.source,
     surface: event.surface,
     createdAt: params.derivedAt,
-    expiresAt: new Date((params.derivedAt ?? params.receivedAt).getTime() + POST_IMPRESSION_RETENTION_MS),
+    expiresAt: new Date((params.derivedAt ?? params.receivedAt).getTime() + rawReadingRetentionMs()),
     eventKey: event.eventId ? eventKeyOf(event.eventId) : undefined,
     position: listing?.position,
     rankingSource: listing?.rankingSource,
