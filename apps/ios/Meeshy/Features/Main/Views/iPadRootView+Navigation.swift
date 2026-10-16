@@ -545,12 +545,9 @@ extension iPadRootView {
     ) {
         switch surface {
         case .story:
-            router.push(.storyNotificationTarget(
-                storyId: postId,
-                intent: NotificationContentRouter.intent(for: type),
-                context: storyContext,
-                commentId: commentId,
-                parentCommentId: parentCommentId
+            router.push(NotificationContentRouter.ephemeralRoute(
+                postId: postId, notificationType: type, context: storyContext,
+                commentId: commentId, parentCommentId: parentCommentId
             ))
         case .reel:
             openReel(postId: postId, commentId: commentId, parentCommentId: parentCommentId)
