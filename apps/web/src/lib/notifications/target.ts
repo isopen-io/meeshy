@@ -46,7 +46,7 @@ import type { NotificationRecord } from './record';
  */
 export type NotificationTarget =
   | { readonly route: 'thread'; readonly params: { readonly conversation: string } }
-  | { readonly route: 'story' | 'post'; readonly params: { readonly post: string } }
+  | { readonly route: 'story' | 'post' | 'mood'; readonly params: { readonly post: string } }
   | { readonly route: 'discover'; readonly search: Readonly<Record<string, string>> }
   | { readonly route: 'userProfile'; readonly params: { readonly username: string } }
   | { readonly route: 'progression'; readonly search?: Readonly<Record<string, string>> }
@@ -106,6 +106,15 @@ const EPHEMERAL_ONLY_TYPES: ReadonlySet<string> = new Set([
   'friend_new_story',
   'friend_new_mood',
 ]);
+
+/**
+ * LA NOUVELLE HUMEUR D'UN CONTACT (#10813) — sa page plein écran (`/mood/$post`) :
+ * bannière, avatar, pluie de l'emoji, réponse en privé. Le TYPE suffit ici, et
+ * c'est l'exception à « le type n'est pas un discriminant d'entité » : la
+ * passerelle n'émet `friend_new_mood` que pour une humeur PUBLIÉE (STATUS ou
+ * MOOD), jamais pour un commentaire ou une réaction sur elle.
+ */
+const MOOD_TYPES: ReadonlySet<string> = new Set(['friend_new_mood']);
 
 /**
  * Les types qui ANNONCENT une demande en attente — donc ceux dont la réponse
@@ -209,6 +218,7 @@ function hinted(route: string): PushTapTarget | null {
  */
 export function resolveTarget(input: NotificationTargetInput): PushTapTarget | null {
   const postId = present(input.postId);
+  if (postId !== '' && MOOD_TYPES.has(present(input.type))) return { route: 'mood', params: { post: postId } };
   if (postId !== '') return { route: socialSurface(input), params: { post: postId } };
 
   const conversationId = present(input.conversationId);

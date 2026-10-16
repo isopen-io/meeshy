@@ -40,6 +40,12 @@ export type Draft = {
    * pour que la bulle optimiste affiche sa citation avant tout accusé. */
   readonly replyTo?: Message;
   /**
+   * L'HUMEUR (ou la story) À LAQUELLE ON RÉPOND (#10813) — sa citation se gèle
+   * côté passerelle (`metadata.postReplyTo`) ; elle n'est admise que dans la
+   * conversation DIRECTE avec son auteur (`storyReplyAdmission.ts`).
+   */
+  readonly storyReplyToId?: string;
+  /**
    * LA SÉLECTION DU COMPOSEUR (#5668) — `undefined`/liste vide pour un envoi
    * texte pur (comportement INCHANGÉ, tous les témoins historiques de ce
    * module continuent de passer sans cette clé). Non vide ⇒ `performSend`
@@ -116,6 +122,7 @@ function bodyOf(message: LocalMessage, attachmentIds: readonly string[]): SendMe
     ...(declared === undefined ? {} : { messageType: declared }),
     ...(attachmentIds.length > 0 ? { attachmentIds } : {}),
     ...(message.replyToId === undefined ? {} : { replyToId: message.replyToId }),
+    ...(message.storyReplyToId === undefined ? {} : { storyReplyToId: message.storyReplyToId }),
     /* LA PIÈCE NOMMÉE (#6303) — relue sur le message CITÉ, comme la bande et la
        bulle optimiste : la passerelle la range dans `metadata.attachmentReplyTo`
        et la ressert sur `replyTo.attachmentReplyTo`. */
@@ -343,6 +350,7 @@ export async function performSend(params: {
     messageType,
     ...(draft.replyToId === undefined ? {} : { replyToId: draft.replyToId }),
     ...(draft.replyTo === undefined ? {} : { replyTo: draft.replyTo }),
+    ...(draft.storyReplyToId === undefined ? {} : { storyReplyToId: draft.storyReplyToId }),
     ...(draft.attachments === undefined || draft.attachments.length === 0 ? {} : { attachments: draft.attachments }),
     ...(draft.protection === undefined ? {} : { protection: draft.protection }),
     ...(draft.place === undefined ? {} : { place: draft.place }),

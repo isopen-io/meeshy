@@ -19,7 +19,23 @@ describe('le catalogue de la création d’une humeur', () => {
   test('les sept langues portent exactement les clés du français', async () => {
     const french = sorted(Object.keys(await loadMoodComposeCatalog('fr')));
     expect(french).toEqual(
-      sorted(['status.compose.more', 'status.compose.bare.ask', 'status.compose.bare.add', 'status.compose.bare.publish']),
+      sorted([
+        'status.compose.more',
+        'status.compose.bare.ask',
+        'status.compose.bare.add',
+        'status.compose.bare.publish',
+        /* LA PAGE D'UNE HUMEUR REÇUE (#10813) — chargées avec `/mood/$post`. */
+        'mood.page.label',
+        'mood.page.close',
+        'mood.page.reply.placeholder',
+        'mood.page.reply.send',
+        'mood.page.reply.sent',
+        'mood.page.reply.open',
+        'mood.page.reply.failed',
+        'mood.page.reply.offline',
+        'mood.page.gone',
+        'mood.page.loading',
+      ]),
     );
     const all = await loadAll();
     expect(all.length).toBe(7);
