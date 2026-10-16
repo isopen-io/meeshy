@@ -107,7 +107,7 @@ transformers==5.17.0
 
 # Cache et base de données
 redis==8.1.0
-asyncpg==0.31.0
+asyncpg==0.32.0
 aiosqlite==0.20.0
 dnspython==2.8.0
 
