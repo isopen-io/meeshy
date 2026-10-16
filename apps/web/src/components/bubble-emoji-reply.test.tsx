@@ -104,6 +104,13 @@ describe('Bulles — un emoji seul en réponse (#10628)', () => {
     expect(precedes(quote!, emoji!)).toBe(true);
   });
 
+  test('ENVOYÉ : l’encre de marque de TOUT le contenu de la bulle suit l’accent personnel (#10734)', () => {
+    const root = renderBubble(emojiReply({ senderId: 'u-viewer' }));
+    const style = root.querySelector('[data-quote-card]')!.closest('.rounded-bubble')!.getAttribute('style') ?? '';
+    expect(style).toContain('--color-ios-on-brand:var(--bubble-mine-personal-ink, var(--ios-on-brand))');
+    expect(style).toContain('--color-meta-mine:var(--bubble-mine-personal-meta, var(--ios-bubble-meta-mine))');
+  });
+
   test('REÇU : la carte citée est boîtée dans la peau reçue (teinte d’accent), jamais la peau de marque', () => {
     const root = renderBubble(emojiReply());
     const quoteBox = root.querySelector('[data-quote-card]')!.closest('.rounded-bubble');

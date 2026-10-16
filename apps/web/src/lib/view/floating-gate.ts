@@ -73,3 +73,14 @@ export function floatingMenusHost(frame: {
   if (splitPaneOf(frame) !== null) return 'list-column';
   return showsFloatingMenus(frame.routeKey) ? 'screen' : null;
 }
+
+/**
+ * **UN VOLET DES RÉGLAGES EST UN ÉCRAN PROFOND** (#10748) — `/settings?volet=…`
+ * (packs, sécurité…) porte son propre en-tête et son retour ; les deux disques
+ * y recouvraient la ligne de solde de la vitrine à 390 px. Même doctrine que
+ * le fil (`Router.swift:274-276`) : un bouton flottant qui masque le contenu
+ * qu'il commande est un obstacle. La clé rendue sort de la liste fermée.
+ */
+export function floatingMenusRouteKey(route: { readonly key: string; readonly search: { get(name: string): string | null } }): string {
+  return route.key === 'settings' && route.search.get('volet') !== null ? 'settings:volet' : route.key;
+}

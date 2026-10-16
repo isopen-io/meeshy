@@ -151,6 +151,21 @@ describe('forwardRequestOf — la sélection admise devient une demande d’envo
     expect(messagesPayload(request).messages).toEqual([{ id: 'm3', content: '', originalLanguage: 'fr', sticker: { stickerId: 's-1' } }]);
   });
 
+  test('l’aperçu d’un STICKER est un sticker (« Sticker »), avec une vignette résolue par la passerelle, jamais une photo à chemin relatif (#10747)', () => {
+    const piece = fileOf({ id: 'att-s', mimeType: 'image/webp', fileUrl: '/c/2026/10/s/sticker_1.webp', thumbnailUrl: '/c/2026/10/s/sticker_1_thumb.webp' });
+    const sticker = sourceOf({ id: 'm3', content: '', metadata: { sticker: { stickerId: 's-1' } }, attachments: [piece] });
+    const preview = messagesPayload(forwardRequestOf({ conversationId: 'c-src', messages: [sticker], now: NOW })).preview;
+    expect(preview.kind).toBe('sticker');
+    expect(preview.thumbUrl).toMatch(/^https?:\/\/.+\/c\/2026\/10\/s\/sticker_1_thumb\.webp$/);
+    expect(preview.thumbUrl).not.toContain('staging.meeshy.me/c/');
+  });
+
+  test('une photo ordinaire garde sa vignette et son genre', () => {
+    const photo = sourceOf({ content: '', attachments: [fileOf()] });
+    const preview = messagesPayload(forwardRequestOf({ conversationId: 'c-src', messages: [photo], now: NOW })).preview;
+    expect(preview).toEqual({ kind: 'image', thumbUrl: 'https://cdn.test/photo-thumb.jpg' });
+  });
+
   test('une flamme à durée part avec SA borne ; un message ordinaire n’en porte aucune', () => {
     const flame = sourceOf({ id: 'm2', effectFlags: MESSAGE_EFFECT_FLAGS.EPHEMERAL, ephemeralDuration: 300 });
     const request = forwardRequestOf({ conversationId: 'c-src', messages: [sourceOf(), flame], now: NOW });

@@ -43,6 +43,7 @@ const ar = {
   'sendSheet.announce.sent': 'تم الإرسال إلى {count}',
   'sendSheet.preview.messages': '{count} رسالة',
   'sendSheet.preview.photo': 'صورة',
+  'sendSheet.preview.sticker': 'ملصق',
   'sendSheet.preview.video': 'فيديو',
   'sendSheet.preview.voice': 'رسالة صوتية',
   'sendSheet.preview.file': 'ملف',

@@ -88,6 +88,20 @@ describe('ce que le sélecteur propose', () => {
     expect(ringOptions({ installed: [savane], contracts: new Map() }).map((group) => group.pack)).toEqual([]);
   });
 
+  test('un pack TIERS (community) possédé et installé se choisit et se peint depuis son contrat — contour et bannière (#10737, #10709)', () => {
+    const contract = { src: 'fedcba9876543210.json', bytes: 1, sha256: 'b'.repeat(64) };
+    const ring = summary('halo-tiers', { origin: 'community', builtin: false, price: 20, owned: true, contract });
+    const ringGroups = ringOptions({ installed: [ring], contracts: new Map([[contract.src, ringContract('halo')]]) });
+    expect(ringGroups.map((group) => [group.pack, group.origin, group.contract])).toEqual([['halo-tiers', 'community', contract.src]]);
+    expect(resolveRing({ pack: 'halo-tiers', item: 'halo', origin: 'community', contract: contract.src }, new Map([[contract.src, ringContract('halo')]]))?.key).toBe('halo');
+
+    const design = BUILTIN_BANNER_PACKS[0]!.items[0]!;
+    const banner = summary('aube-tiers', { domain: 'banner', origin: 'community', builtin: false, price: 20, owned: true, contract });
+    const bannerContracts = new Map([[contract.src, { domain: 'banner', designs: [design] }]]);
+    expect(bannerOptions({ installed: [banner], contracts: bannerContracts }).map((group) => group.pack)).toEqual(['aube-tiers']);
+    expect(resolveBanner({ pack: 'aube-tiers', item: design.key, origin: 'community', contract: contract.src }, bannerContracts)?.key).toBe(design.key);
+  });
+
   test('un pack builtin retirable que l’utilisateur a désinstallé disparaît', () => {
     expect(ringOptions({ installed: [], contracts: new Map() })).toEqual([]);
   });

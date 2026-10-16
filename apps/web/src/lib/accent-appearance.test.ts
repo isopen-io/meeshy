@@ -37,4 +37,10 @@ describe('la bulle envoyée suit l’accent personnel (#10734)', () => {
     expect(vars['--bubble-mine-personal']!.toLowerCase()).toBe(APPEARANCE_GAMUT.corail.dark.accent.toLowerCase());
     expect(vars['--bubble-mine-personal-ink']).toMatch(/^#(000000|FFFFFF)$/);
   });
+
+  test('la méta de la bulle envoyée suit l’encre choisie, jamais le blanc de marque', () => {
+    const vars = personalBubbleVars(chosen('moutarde') as never) as Record<string, string>;
+    const ink = vars['--bubble-mine-personal-ink']!;
+    expect(vars['--bubble-mine-personal-meta']).toBe(`color-mix(in srgb, ${ink} 70%, transparent)`);
+  });
 });

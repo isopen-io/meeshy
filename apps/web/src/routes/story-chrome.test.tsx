@@ -161,6 +161,12 @@ describe('la barre haute de la story est la barre commune des plein écrans', ()
     />
   );
 
+  test('la croix est nommée dans la langue de l’interface, jamais en français pour tous (#10748)', async () => {
+    await loadInterfaceCatalog('en');
+    const el = mount(topBar({ language: 'en' }));
+    expect(el.querySelector('[data-viewer-exit]')?.getAttribute('aria-label')).toBe('Close');
+  });
+
   test('fermer : la croix commune, EN FIN de barre, appelle la fermeture existante', () => {
     const calls: string[] = [];
     const el = mount(topBar({ onClose: () => calls.push('close') }));

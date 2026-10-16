@@ -1,5 +1,6 @@
 import { contentExitOf, mediaLeaves, type ExitForwardRefusal, type ExitMessage } from '@/lib/view/content-exit';
 import type { Message } from '@/lib/api/types';
+import { attachmentSrc } from '@/lib/api/media-url';
 import type { ForwardSource } from '@/lib/api/forward';
 import type { SendPreview, SoleMedia } from '@/lib/send/send-sheet-plan';
 import type { SendSheetRequest } from '@/lib/send/send-sheet-store';
@@ -84,8 +85,10 @@ const previewOfMessages = (messages: readonly Message[], now: number): SendPrevi
   if (only.content.trim() !== '') return { kind: 'text', text: only.content };
   const piece = only.attachments?.length === 1 ? only.attachments[0] : undefined;
   if (piece === undefined || !mediaLeaves({ message: only, piece, now })) return { kind: 'messages', count: 1 };
-  const kind = kindOfMime(piece.mimeType);
-  const thumbUrl = piece.thumbnailUrl ?? (kind === 'image' ? piece.fileUrl : undefined);
+  const kind = stickerOf(only) === null ? kindOfMime(piece.mimeType) : 'sticker';
+  const source = piece.thumbnailUrl ?? (kind === 'image' || kind === 'sticker' ? piece.fileUrl : undefined);
+  /* La vignette est résolue par la PASSERELLE (`attachmentSrc`), jamais contre l'origine du web (#10747). */
+  const thumbUrl = source === undefined || source === '' ? undefined : attachmentSrc(source);
   return { kind, ...(thumbUrl === undefined ? {} : { thumbUrl }) };
 };
 

@@ -33,12 +33,14 @@ import { useAudioOnDemand } from '@/lib/view/use-audio-on-demand';
 import { useVoiceNowPlaying } from '@/lib/view/use-voice-now-playing';
 import { translate } from '@/lib/i18n-catalog';
 import { currentInterfaceLanguage } from '@/lib/interface-language';
+import { fileWeightLabel } from '@/lib/view/file-weight';
 import { TRANSCRIPT_TEXT_OPACITY } from '@/lib/reading-mode/metrics';
 
 import { Glyph, GlyphSvg } from './glyph';
 import { MEDIA_GLYPHS } from './glyphs-media';
 import { MaskedAttachment } from './masked-attachment';
 import { MediaGrid } from './media-grid';
+import { AttachmentReactionBadge } from './attachment-reaction-badge';
 import { VoiceFileName, VoiceTranscribeZone } from './voice-bubble-parts';
 import { VeilRevealContext, revealedAttachment, useAttachmentMasked } from './view-once-opened';
 
@@ -422,6 +424,8 @@ function VoiceAttachment({
       </div>
 
       <VoiceFileName originalName={attachment.originalName ?? ''} />
+      {/* LES RÉACTIONS DE LA PISTE (#10745) — la pastille partagée, au coin bas-gauche de la carte, comme sur une photo (`FocalAttachmentBlock.reactionsBadge`, toutes natures). */}
+      <AttachmentReactionBadge attachment={attachment} />
       {onDemand.canTranscribe ? (
         <VoiceTranscribeZone language={uiLanguage} busy={onDemand.transcribing} notice={onDemand.notice} onTranscribe={onDemand.transcribe} />
       ) : null}
@@ -541,7 +545,7 @@ function FileAttachmentRow({
         {badge}
       </span>
       <span className="min-w-0 flex-1 truncate text-title font-semibold">{name}</span>
-      <span className="text-time opacity-70">{Math.round(attachment.fileSize / 1024)} Ko</span>
+      {attachment.fileSize > 0 ? <span className="text-time opacity-70">{fileWeightLabel(attachment.fileSize, currentInterfaceLanguage())}</span> : null}
     </a>
   );
 }

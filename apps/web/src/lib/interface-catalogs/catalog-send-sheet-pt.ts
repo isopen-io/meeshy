@@ -43,6 +43,7 @@ const pt = {
   'sendSheet.announce.sent': 'Enviado para {count}',
   'sendSheet.preview.messages': '{count} mensagens',
   'sendSheet.preview.photo': 'Foto',
+  'sendSheet.preview.sticker': 'Sticker',
   'sendSheet.preview.video': 'Vídeo',
   'sendSheet.preview.voice': 'Mensagem de voz',
   'sendSheet.preview.file': 'Arquivo',

@@ -943,3 +943,31 @@ describe('MessageMenu — le rail suit l’usage des emojis', () => {
     expect(document.body.textContent).not.toContain('Ajouter une réaction');
   });
 });
+
+describe('MessageMenu — la peau personnelle de la bulle envoyée traverse le portail (#10734)', () => {
+  test('l’aperçu d’une bulle envoyée garde l’accent personnel et son encre, posés par le fil', () => {
+    const el = mount({ isMine: true });
+    /* happy-dom n'hérite pas les propriétés personnalisées : elles se posent sur l'ancre, que le menu lit. */
+    row(el).style.setProperty('--accent', '#F38B7B');
+    row(el).style.setProperty('--bubble-mine-personal', '#F38B7B');
+    row(el).style.setProperty('--bubble-mine-personal-ink', '#000000');
+    row(el).style.setProperty('--bubble-mine-personal-meta', 'color-mix(in srgb, #000000 70%, transparent)');
+    act(() => {
+      row(el).dispatchEvent(new MouseEvent('contextmenu', { bubbles: true, cancelable: true }));
+    });
+    const backdrop = document.querySelector('.message-menu-backdrop') as HTMLElement;
+    expect(backdrop.style.getPropertyValue('--accent')).toBe('#F38B7B');
+    expect(backdrop.style.getPropertyValue('--bubble-mine-personal')).toBe('#F38B7B');
+    expect(backdrop.style.getPropertyValue('--bubble-mine-personal-ink')).toBe('#000000');
+    expect(backdrop.style.getPropertyValue('--bubble-mine-personal-meta')).toContain('#000000');
+  });
+
+  test('sans accent personnel, le portail ne pose aucune peau de bulle', () => {
+    const el = mount({ isMine: true });
+    act(() => {
+      row(el).dispatchEvent(new MouseEvent('contextmenu', { bubbles: true, cancelable: true }));
+    });
+    const backdrop = document.querySelector('.message-menu-backdrop') as HTMLElement;
+    expect(backdrop.style.getPropertyValue('--bubble-mine-personal')).toBe('');
+  });
+});

@@ -34,7 +34,7 @@ export const MAX_PUBLISH_CAPTION = 5000;
 /** L'aperçu de ce qu'on envoie — tout ce que la feuille montre, déjà composé
  * par l'entrée qui l'ouvre (jamais recalculé par la feuille). */
 export type SendPreview = {
-  readonly kind: 'text' | 'image' | 'video' | 'audio' | 'file' | 'publication' | 'messages';
+  readonly kind: 'text' | 'image' | 'video' | 'audio' | 'file' | 'publication' | 'messages' | 'sticker';
   readonly text?: string;
   readonly thumbUrl?: string;
   readonly count?: number;
