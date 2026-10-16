@@ -31,6 +31,8 @@ export type LandingCopy = {
   readonly worldQrCaption: string;
   /** Le texte de remplacement du QR : ce qu'il contient et ce qu'on en fait. */
   readonly worldQrAlt: string;
+  /** Ce qui précède l'adresse en clair sous le QR (#10811) : le lien qu'on se partage, pour qui lit meeshy.me sur son téléphone. */
+  readonly worldLinkLead: string;
   readonly previewLabel: string;
   readonly previewSubtitle: string;
   readonly previewKenji: string;
@@ -77,6 +79,7 @@ const fr: LandingCopy = {
   joinNote: 'Sans compte, sans e-mail. Tout ce que vous lirez y arrivera dans la langue choisie.',
   worldQrCaption: 'Flashez pour entrer dans World Wide',
   worldQrAlt: "Code QR vers meeshy.me/world : flashez-le avec l'appareil photo de votre téléphone pour entrer dans World Wide",
+  worldLinkLead: 'Le lien de partage :',
   previewLabel: 'Aperçu de World Wide',
   previewSubtitle: 'Traduit pour vous',
   previewKenji: "Bonjour à tous ! Quelqu'un ici apprend le japonais ?",
@@ -133,6 +136,7 @@ const en: LandingCopy = {
   joinNote: 'No account, no e-mail. Everything you read there will arrive in the language you pick.',
   worldQrCaption: 'Scan to enter World Wide',
   worldQrAlt: 'QR code to meeshy.me/world: scan it with your phone camera to enter World Wide',
+  worldLinkLead: 'The share link:',
   previewLabel: 'World Wide preview',
   previewSubtitle: 'Translated for you',
   previewKenji: 'Hello everyone! Is anyone here learning Japanese?',
@@ -189,6 +193,7 @@ const es: LandingCopy = {
   joinNote: 'Sin cuenta, sin correo. Todo lo que leas llegará en el idioma que elijas.',
   worldQrCaption: 'Escanea para entrar en World Wide',
   worldQrAlt: 'Código QR hacia meeshy.me/world: escanéalo con la cámara de tu teléfono para entrar en World Wide',
+  worldLinkLead: 'El enlace para compartir:',
   previewLabel: 'Vista previa de World Wide',
   previewSubtitle: 'Traducido para ti',
   previewKenji: '¡Hola a todos! ¿Alguien aquí aprende japonés?',
@@ -245,6 +250,7 @@ const pt: LandingCopy = {
   joinNote: 'Sem conta, sem e-mail. Tudo o que você ler chegará no idioma escolhido.',
   worldQrCaption: 'Escaneie para entrar no World Wide',
   worldQrAlt: 'Código QR para meeshy.me/world: escaneie com a câmera do celular para entrar no World Wide',
+  worldLinkLead: 'O link de compartilhamento:',
   previewLabel: 'Prévia do World Wide',
   previewSubtitle: 'Traduzido para você',
   previewKenji: 'Olá a todos! Alguém aqui está aprendendo japonês?',
@@ -301,6 +307,7 @@ const de: LandingCopy = {
   joinNote: 'Ohne Konto, ohne E-Mail. Alles, was du dort liest, kommt in der gewählten Sprache an.',
   worldQrCaption: 'Scannen, um World Wide zu betreten',
   worldQrAlt: 'QR-Code zu meeshy.me/world: Scanne ihn mit der Handykamera, um World Wide zu betreten',
+  worldLinkLead: 'Der Link zum Teilen:',
   previewLabel: 'Vorschau von World Wide',
   previewSubtitle: 'Für dich übersetzt',
   previewKenji: 'Hallo zusammen! Lernt hier jemand Japanisch?',
@@ -357,6 +364,7 @@ const it: LandingCopy = {
   joinNote: 'Senza account, senza e-mail. Tutto ciò che leggerai arriverà nella lingua scelta.',
   worldQrCaption: 'Inquadra per entrare in World Wide',
   worldQrAlt: 'Codice QR verso meeshy.me/world: inquadralo con la fotocamera del telefono per entrare in World Wide',
+  worldLinkLead: 'Il link da condividere:',
   previewLabel: 'Anteprima di World Wide',
   previewSubtitle: 'Tradotto per te',
   previewKenji: 'Ciao a tutti! Qualcuno qui studia il giapponese?',
@@ -413,6 +421,7 @@ const ar: LandingCopy = {
   joinNote: 'دون حساب ودون بريد إلكتروني. كل ما تقرؤه هناك سيصلك باللغة التي تختارها.',
   worldQrCaption: 'امسح الرمز للدخول إلى World Wide',
   worldQrAlt: 'رمز QR إلى meeshy.me/world: امسحه بكاميرا هاتفك للدخول إلى World Wide',
+  worldLinkLead: 'رابط المشاركة:',
   previewLabel: 'معاينة World Wide',
   previewSubtitle: 'مترجم لك',
   previewKenji: 'مرحبًا بالجميع! هل يتعلم أحد هنا اليابانية؟',

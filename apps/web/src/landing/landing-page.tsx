@@ -23,8 +23,9 @@ export const WORLD_QR_PATH = '/world-qr.svg';
  * On n'entre plus dans World Wide sans compte d'un clic depuis la landing
  * (#10784, directive porteur du 2026-10-16) : ni formulaire, ni « Entrer sans
  * compte ». Le héros et la section World Wide portent un QR code vers
- * `https://meeshy.me/world`, qu'on FLASHE avec un téléphone — et que le script
- * masque quand `GET /world` dit l'entrée fermée (`data-world-entry`).
+ * `https://meeshy.me/world`, qu'on FLASHE avec un téléphone, et son lien de
+ * partage en clair pour qui lit la page sur ce téléphone (#10811) — que le
+ * script masque quand `GET /world` dit l'entrée fermée (`data-world-entry`).
  */
 export type LandingPageProps = {
   readonly language: LandingLanguage;
@@ -165,12 +166,24 @@ export function LandingPage({ language, copy }: LandingPageProps) {
 /**
  * LE QR VERS /world (#10784) — une IMAGE, jamais un lien : le parcours invité
  * s'ouvre sur le téléphone qui flashe, pas d'un clic sur la page.
+ *
+ * Dessous, le lien de partage EN CLAIR (#10811) : qui lit meeshy.me sur son
+ * téléphone ne peut pas flasher son propre écran. Une adresse, pas un bouton ;
+ * sur écran tactile, le QR et sa consigne s'effacent et elle reste seule.
  */
 function WorldQr({ copy, placement }: { readonly copy: LandingCopy; readonly placement: 'hero' | 'world' }) {
   return (
     <figure className="ld-qr" data-world-qr data-world-entry>
       <img src={WORLD_QR_PATH} alt={copy.worldQrAlt} width={placement === 'hero' ? 168 : 144} height={placement === 'hero' ? 168 : 144} decoding="async" />
-      <figcaption>{copy.worldQrCaption}</figcaption>
+      <figcaption>
+        <span className="ld-qr-scan">{copy.worldQrCaption}</span>
+        <span className="ld-qr-share">
+          {copy.worldLinkLead}{' '}
+          <a href="/world" className="ld-qr-link" data-world-link>
+            meeshy.me/world
+          </a>
+        </span>
+      </figcaption>
     </figure>
   );
 }

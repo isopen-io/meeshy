@@ -135,10 +135,22 @@ describe('le document prérendu, par langue (#10002)', () => {
           expect(figure).toMatch(/<img[^>]*src="\/world-qr\.svg"/);
           expect(figure).toContain(`alt="${escapeAttribute(copy.worldQrAlt)}"`);
           expect(figure).toContain(escapeAttribute(copy.worldQrCaption));
-          expect(figure).not.toContain('<a ');
+          expect(figure).not.toMatch(/<a[^>]*>\s*<img/);
         }
         expect(body.indexOf('data-world-qr')).toBeLessThan(body.indexOf('id="world"'));
         expect(body.lastIndexOf('data-world-qr')).toBeGreaterThan(body.indexOf('id="world"'));
+      });
+
+      test('sous chaque QR, le lien de partage en clair vers /world — un lien texte, jamais un bouton (#10811)', () => {
+        const figures = [...body.matchAll(/<figure[^>]*data-world-qr[^>]*>[\s\S]*?<\/figure>/g)].map((m) => m[0]);
+        for (const figure of figures) {
+          const link = /<a[^>]*data-world-link[^>]*>([\s\S]*?)<\/a>/.exec(figure);
+          expect(link?.[0]).toContain('href="/world"');
+          expect(link?.[0]).not.toContain('ld-btn');
+          expect(link?.[1]).toBe('meeshy.me/world');
+          expect(figure).toContain(escapeAttribute(copy.worldLinkLead));
+        }
+        if (language !== 'fr') expect(copy.worldLinkLead).not.toBe(LANDING_COPY.fr.worldLinkLead);
       });
 
       test('la légende et la description du QR sont propres à la langue', () => {
