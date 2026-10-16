@@ -1058,7 +1058,7 @@ struct ConversationView: View {
                 // #7500 — la sortie par NAVIGATION. Jumelle de celle du passage
                 // en arrière-plan ci-dessus : une vue unique lue ici ne
                 // survivra pas au retour.
-                consumeOpenedViewOnceOnExit()
+                leaveConversationByNavigation()
                 // Rompt le cycle de rétention : `onPersistNeeded` capture une
                 // copie de cette struct, dont le wrapper State retient (via sa
                 // box de stockage) le modèle vivant — soit modèle → closure →
