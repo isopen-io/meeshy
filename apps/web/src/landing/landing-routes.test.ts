@@ -25,6 +25,11 @@ describe('routes — / est la landing, /chats la liste (#10002)', () => {
     expect(href('home')).toBe('/');
   });
 
+  test('le QR de la landing vise /world, que la table des routes sert (#10784)', () => {
+    expect(href('world')).toBe('/world');
+    expect(match(compile(ROUTES.world.pattern), '/world')).toEqual({});
+  });
+
   test('les adresses de fil existantes ne changent pas', () => {
     expect(href('thread', { conversation: 'abc' })).toBe('/c/abc');
   });

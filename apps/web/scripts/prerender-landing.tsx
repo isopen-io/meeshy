@@ -28,7 +28,7 @@ import budgets from '../budgets.json';
 import { LANDING_COPY } from '../src/landing/landing-copy';
 import { landingBootConfig, landingBootScript, landingDocument, landingOgImagePath } from '../src/landing/landing-document';
 import { LANDING_APP_PATH, LANDING_LANGUAGES, landingFiles, landingPath } from '../src/landing/landing-languages';
-import { WORLD_GUEST_ENTRY_TEMPLATE, WORLD_GUEST_THREAD_TEMPLATE } from '../src/landing/world-entry';
+import { WORLD_GUEST_THREAD_TEMPLATE } from '../src/landing/world-entry';
 import { resolveApiConfig } from '../src/lib/api/config';
 import { SESSION_STORAGE_KEY } from '../src/lib/api/session';
 import { INTERFACE_LANGUAGE_KEY } from '../src/lib/inline-interface-language-bootstrap.js';
@@ -125,7 +125,6 @@ const boot = {
   worldPath: worldEndpoints.root,
   sessionKey: SESSION_STORAGE_KEY,
   languageKey: INTERFACE_LANGUAGE_KEY,
-  entryTemplate: WORLD_GUEST_ENTRY_TEMPLATE,
   threadTemplate: WORLD_GUEST_THREAD_TEMPLATE,
   appPath: LANDING_APP_PATH,
 };
