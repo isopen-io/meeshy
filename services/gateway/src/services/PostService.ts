@@ -1760,7 +1760,7 @@ export class PostService {
 
   /** Sessions d'engagement d'un compte — corps : `posts/postReach.ts`. */
   async recordEngagementBatch(sessions: readonly EngagementSessionInput[], userId: string, standing?: Parameters<typeof recordEngagementBatch>[3]): Promise<number> {
-    return recordEngagementBatch(this.prisma, sessions, userId, standing);
+    return recordEngagementBatch({ prisma: this.prisma, visibilityFilter: (viewer) => this.buildVisibilityFilter(viewer) }, sessions, userId, standing);
   }
 
   // `userId`/`platform` : pas de table de partage par utilisateur/plateforme

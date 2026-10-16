@@ -268,6 +268,27 @@ export async function recordView(
 }
 
 /**
+ * Le post qu'une session de ce lecteur a le droit de créditer : vivant, et dans
+ * son audience — ou ouvert par une RÉFÉRENCE encore valable (`granted`), comme
+ * pour `recordView`. Une session ne DÉPENSE jamais une référence : seule la vue
+ * déclarée le fait.
+ */
+async function readableEngagementTarget(
+  deps: PostReachDeps,
+  postId: string,
+  userId: string,
+  visibilityFilter: Prisma.PostWhereInput,
+): Promise<{ readonly id: string; readonly authorId: string } | null> {
+  const select = { id: true, authorId: true, type: true, expiresAt: true } as const;
+  const visible = await deps.prisma.post.findFirst({ where: { id: postId, deletedAt: NOT_DELETED, ...visibilityFilter }, select });
+  if (visible) return visible;
+  const referenced = await deps.prisma.post.findFirst({ where: { id: postId, deletedAt: NOT_DELETED }, select });
+  if (!referenced) return null;
+  const access = await resolveReferenceAccess({ prisma: deps.prisma, post: referenced, viewerId: userId, now: new Date() });
+  return access === 'granted' ? referenced : null;
+}
+
+/**
  * Le statut d'analyse d'UNE session (#10772) : le client fait foi pour REFUSER
  * (`consent: 'denied'` sur la session), la passerelle pour ACCORDER — une
  * session qui se dit `granted` sous un statut serveur autre n'accorde rien.
@@ -314,21 +335,24 @@ const earliest = (a: Date | null | undefined, b: Date): Date => (a && a.getTime(
  * Retourne le nombre de sessions persistées (insert ou update).
  */
 export async function recordEngagementBatch(
-  prisma: PrismaClient,
+  deps: PostReachDeps,
   sessions: readonly EngagementSessionInput[],
   userId: string,
   batchStanding: AnalyticsStanding = 'not_granted',
 ): Promise<number> {
+  const { prisma } = deps;
   const capped = sessions.slice(0, 50);
+  // Le MÊME filtre d'audience que `recordView`, résolu une fois pour le lot :
+  // une session sur un post que le lecteur ne peut pas voir ne crédite rien et
+  // n'écrit rien — sinon un client gonflerait les compteurs d'un post privé et
+  // apprendrait son existence.
+  const visibilityFilter = await deps.visibilityFilter(userId);
   let recorded = 0;
 
   for (const s of capped) {
     try {
-      const post = await prisma.post.findFirst({
-        where: { id: s.postId, deletedAt: NOT_DELETED },
-        select: { id: true, authorId: true },
-      });
-      if (!post) continue; // skip-and-continue: post deleted between begin and flush
+      const post = await readableEngagementTarget(deps, s.postId, userId, visibilityFilter);
+      if (!post) continue; // skip-and-continue: supprimé, hors audience ou inconnu — même porte
 
       const dwellMs = Math.max(0, Math.min(300_000, Math.round(s.dwellMs)));
       const watchMs = s.watchMs !== undefined
