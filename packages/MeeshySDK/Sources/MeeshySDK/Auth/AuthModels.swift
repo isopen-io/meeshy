@@ -314,10 +314,17 @@ public struct ForgotPasswordRequest: Encodable {
 public struct ResetPasswordRequest: Encodable {
     public let token: String
     public let newPassword: String
+    /// Exigé par la passerelle (`resetPasswordSchema`) — sans lui, l'envoi
+    /// partait en 400 `Invalid request data`.
+    public let confirmPassword: String
+    /// Le code 2FA d'un compte protégé (#10867) — omis du corps quand `nil`.
+    public let twoFactorCode: String?
 
-    public init(token: String, newPassword: String) {
+    public init(token: String, newPassword: String, confirmPassword: String? = nil, twoFactorCode: String? = nil) {
         self.token = token
         self.newPassword = newPassword
+        self.confirmPassword = confirmPassword ?? newPassword
+        self.twoFactorCode = twoFactorCode
     }
 }
 
