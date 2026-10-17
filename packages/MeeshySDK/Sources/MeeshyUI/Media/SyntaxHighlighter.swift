@@ -644,7 +644,10 @@ public struct SyntaxHighlighter {
                 // Words (identifiers, keywords, types)
                 if line[i].isLetter || line[i] == "_" || line[i] == "@" || line[i] == "$" {
                     let start = i
-                    if line[i] == "@" { i = line.index(after: i) }
+                    // `$` ouvre le mot comme `@` (`$HOME`, `$x`, `$(`) : il doit être
+                    // consommé, sinon `i` ne bouge plus et la boucle tourne pour
+                    // toujours sur le fil principal (conversation figée).
+                    if line[i] == "@" || line[i] == "$" { i = line.index(after: i) }
                     while i < line.endIndex && (line[i].isLetter || line[i].isNumber || line[i] == "_" || line[i] == "?" || line[i] == "!") {
                         i = line.index(after: i)
                     }

@@ -359,6 +359,23 @@ final class RequestsViewModelTests: XCTestCase {
         XCTAssertEqual(collected, [.exhausted(cmid: cmid)])
     }
 
+    /// Accepter A puis B ; la file refuse A plus tard. L'instantané pris avant
+    /// A ramenait B — déjà acceptée — à côté de A.
+    func test_accept_lateExhaustedOutcome_restoresOnlyThatRequest() async throws {
+        let (sut, _, queue) = makeSUTWithQueue()
+        sut.receivedRequests = ["A", "B", "C"].map { FriendRequestFixture.make(id: $0, status: "pending") }
+
+        await sut.accept(requestId: "A")
+        let cmidA = try XCTUnwrap((queue.lastPayload as? RespondFriendRequestPayload)?.clientMutationId)
+        await sut.accept(requestId: "B")
+        try await waitForCondition(timeout: 2) { queue.outcomeContinuations[cmidA] != nil }
+
+        queue.emitOutcome(.exhausted(cmid: cmidA), for: cmidA)
+        try await waitForCondition(timeout: 2) { sut.receivedRequests.contains { $0.id == "A" } }
+
+        XCTAssertEqual(sut.receivedRequests.map(\.id), ["A", "C"])
+    }
+
     // MARK: - Pagination
 
     func test_loadMoreReceived_appendsResults() async {

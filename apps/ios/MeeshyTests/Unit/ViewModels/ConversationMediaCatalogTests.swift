@@ -306,6 +306,25 @@ final class GalleryPagePinningTests: XCTestCase {
         XCTAssertNil(GalleryPagePinning.pageToRestore(pinned: "att-9", among: ["att-1", "att-2"]))
     }
 
+    /// La pièce regardée quitte la source (supprimée pour tous, éphémère
+    /// expiré) : la page passe à sa voisine, pas à la première pièce — sur
+    /// laquelle « Partager » ou « Enregistrer » agissaient.
+    func test_pageAfterRemoval_theViewedPieceLeaves_movesToItsSurvivingNeighbour() {
+        let previous = ["a", "b", "c", "d"]
+        XCTAssertEqual(GalleryPagePinning.pageAfterRemoval(pinned: "c", previous: previous, now: ["a", "b", "d"]), "d")
+        XCTAssertEqual(GalleryPagePinning.pageAfterRemoval(pinned: "d", previous: previous, now: ["a", "b", "c"]), "c")
+        XCTAssertEqual(GalleryPagePinning.pageAfterRemoval(pinned: "c", previous: previous, now: ["a", "b"]), "b")
+        XCTAssertNil(GalleryPagePinning.pageAfterRemoval(pinned: "c", previous: previous, now: previous))
+        XCTAssertNil(GalleryPagePinning.pageAfterRemoval(pinned: "c", previous: previous, now: []))
+    }
+
+    /// Sans page, pas de position : la galerie rendait 0, donc la première pièce.
+    func test_currentIndex_withoutItsPage_isOutOfBounds_notTheFirstPiece() throws {
+        let source = try AppSourceGuard.unit("Meeshy/Features/Main/Views/ConversationMediaGalleryView.swift")
+        XCTAssertTrue(source.contains("let index = indexByID[currentPageID] else { return allAttachments.count }"))
+        XCTAssertFalse(source.contains("let index = indexByID[currentPageID] else { return 0 }"))
+    }
+
     func test_signature_growthAtTheHead_changesTheSignature() {
         let before = [MeeshyMessageAttachment(id: "att-5"), MeeshyMessageAttachment(id: "att-6")]
         let after = [MeeshyMessageAttachment(id: "att-1")] + before

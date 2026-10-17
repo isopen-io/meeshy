@@ -200,6 +200,9 @@ struct ConversationMediaGalleryView: View {
     /// `+Geometry.swift`, et `private` est une portée de FICHIER. Même prix que
     /// celui payé par les pages au #4014, et pour la même raison.
     @State var currentPageID: String?
+    /// Les pages de la source au dernier suivi : de quoi trouver la VOISINE
+    /// d'une pièce retirée (`GalleryPagePinning.pageAfterRemoval`).
+    @State var lastPageIDs: [String]
     /// **L'état d'immersion, un seul** (#6142, spec § 3.2). Il a remplacé
     /// `showControls` : un booléen ne pouvait pas porter la RAISON de l'entrée,
     /// et sans elle l'appui long et le glissement rendaient le même écran. Il ne
@@ -310,6 +313,7 @@ struct ConversationMediaGalleryView: View {
             uniquingKeysWith: { first, _ in first }
         )
         self.indexByID = positions
+        _lastPageIDs = State(initialValue: allAttachments.map(\.id))
         _currentPageID = State(
             initialValue: positions[startAttachmentId] != nil
                 ? startAttachmentId
@@ -320,8 +324,15 @@ struct ConversationMediaGalleryView: View {
     /// Position courante, DÉRIVÉE de `currentPageID` — plus de `@State`
     /// miroir à tenir synchronisé (et donc plus d'écriture d'état, donc plus
     /// d'invalidation racine, à chaque page traversée).
+    ///
+    /// Une page qui n'est plus dans la source (message supprimé pour tous,
+    /// éphémère expiré) n'a PAS de position : rendre 0 faisait réagir,
+    /// répondre, enregistrer ou PARTAGER la première pièce à la place de celle
+    /// regardée. La position rendue est alors hors bornes, et chaque lecteur
+    /// (`currentIndex < allAttachments.count`) s'abstient le temps que
+    /// `keepCurrentPageAcrossGrowth` épingle la voisine.
     var currentIndex: Int {
-        guard let currentPageID, let index = indexByID[currentPageID] else { return 0 }
+        guard let currentPageID, let index = indexByID[currentPageID] else { return allAttachments.count }
         return index
     }
 

@@ -583,13 +583,7 @@ extension StoryComposerViewModel {
         // PhotosPicker started on slide 0 and the user switched to slide 1 mid-load),
         // honour it — without this guard, the new media object would be appended to
         // whichever slide happened to be active when the async task resolved.
-        let targetSlideIndex: Int = {
-            if let id = toSlideId, let idx = slides.firstIndex(where: { $0.id == id }) {
-                return idx
-            }
-            return currentSlideIndex
-        }()
-        guard slides.indices.contains(targetSlideIndex) else { return nil }
+        guard let targetSlideIndex = slideIndex(pinnedTo: toSlideId) else { return nil }
 
         // La slide CIBLE, pas la courante : ce site peut poser sur une autre
         // slide, et cascader d'après les objets de la mauvaise donnerait un
@@ -667,13 +661,7 @@ extension StoryComposerViewModel {
     /// visibility window matches the actual playback length. Idempotent: a
     /// later trim from the timeline editor overwrites this baseline.
     func setMediaDuration(id: String, duration: Float, slideId: String? = nil) {
-        let targetIndex: Int = {
-            if let slideId, let idx = slides.firstIndex(where: { $0.id == slideId }) {
-                return idx
-            }
-            return currentSlideIndex
-        }()
-        guard slides.indices.contains(targetIndex) else { return }
+        guard let targetIndex = slideIndex(pinnedTo: slideId) else { return }
         var effects = slides[targetIndex].effects
         guard var medias = effects.mediaObjects,
               let mediaIdx = medias.firstIndex(where: { $0.id == id }) else { return }
@@ -695,13 +683,7 @@ extension StoryComposerViewModel {
     /// Without this bridge the media object's `mediaURL` stays `nil` and the
     /// layer renders a black rectangle.
     func setMediaURL(id: String, url: String, slideId: String? = nil) {
-        let targetIndex: Int = {
-            if let slideId, let idx = slides.firstIndex(where: { $0.id == slideId }) {
-                return idx
-            }
-            return currentSlideIndex
-        }()
-        guard slides.indices.contains(targetIndex) else { return }
+        guard let targetIndex = slideIndex(pinnedTo: slideId) else { return }
         var effects = slides[targetIndex].effects
         guard var medias = effects.mediaObjects,
               let mediaIdx = medias.firstIndex(where: { $0.id == id }) else { return }
@@ -717,13 +699,7 @@ extension StoryComposerViewModel {
     /// la layer est rendue en carré 540x540 (cf. `baseMediaDesignSize`).
     func setMediaAspectRatio(id: String, aspectRatio: Double, slideId: String? = nil) {
         guard aspectRatio.isFinite, aspectRatio > 0 else { return }
-        let targetIndex: Int = {
-            if let slideId, let idx = slides.firstIndex(where: { $0.id == slideId }) {
-                return idx
-            }
-            return currentSlideIndex
-        }()
-        guard slides.indices.contains(targetIndex) else { return }
+        guard let targetIndex = slideIndex(pinnedTo: slideId) else { return }
         var effects = slides[targetIndex].effects
         guard var medias = effects.mediaObjects,
               let mediaIdx = medias.firstIndex(where: { $0.id == id }) else { return }

@@ -212,8 +212,9 @@ struct AudioFullscreenView: View {
 
     private var coordinator: ConversationAudioCoordinator { .sharedForTesting }
     private var ids: [String] { allAudioItems.map(\.id) }
+    /// Par IDENTITÉ : la pièce regardée, jamais « celle qui occupe son ancien rang ».
     private var currentSource: AudioFullscreenSource? {
-        allAudioItems.indices.contains(currentIndex) ? allAudioItems[currentIndex] : nil
+        AudioFullscreenPaging.index(of: currentPageID, in: ids).map { allAudioItems[$0] }
     }
 
     var body: some View {
@@ -232,6 +233,10 @@ struct AudioFullscreenView: View {
                 .modifier(AudioFullscreenDismissDrag(offset: $dragOffset, onDismiss: dismissDownward))
                 .opacity(isDismissing ? 0 : 1)
                 .ignoresSafeArea(.keyboard, edges: .bottom)
+                // La liste a bougé sous l'écran : la position suit la page regardée.
+                .adaptiveOnChange(of: ids) { _, newIds in
+                    if let idx = AudioFullscreenPaging.index(of: currentPageID, in: newIds), idx != currentIndex { currentIndex = idx }
+                }
                 .adaptiveOnChange(of: currentPageID) { _, newID in
                     guard let newID,
                           let newIdx = allAudioItems.firstIndex(where: { $0.id == newID })

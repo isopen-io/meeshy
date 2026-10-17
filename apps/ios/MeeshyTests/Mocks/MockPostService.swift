@@ -667,10 +667,15 @@ final class MockPostService: PostServiceProviding, @unchecked Sendable {
         return try getBookmarksResult.get()
     }
 
+    /// Joué PENDANT l'appel : ce qui arrive à l'écran le temps de la réponse.
+    var onRemoveBookmark: (@MainActor (String) async -> Void)?
+
     func removeBookmark(postId: String) async throws {
         removeBookmarkCallCount += 1
         lastRemoveBookmarkPostId = postId
-        try removeBookmarkResult.get()
+        let result = removeBookmarkResult
+        if let onRemoveBookmark { await onRemoveBookmark(postId) }
+        try result.get()
     }
 
     func getPost(postId: String) async throws -> APIPost {

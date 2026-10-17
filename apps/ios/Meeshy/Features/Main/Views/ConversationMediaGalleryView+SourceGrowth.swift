@@ -40,6 +40,18 @@ enum GalleryPagePinning {
         return pinned
     }
 
+    /// La pièce regardée a QUITTÉ la source (supprimée pour tous, éphémère
+    /// expiré) : la page passe à sa voisine survivante — la suivante, sinon la
+    /// précédente —, jamais à la première pièce venue.
+    static func pageAfterRemoval(pinned: String?, previous: [String], now ids: [String]) -> String? {
+        guard let pinned, !ids.contains(pinned) else { return nil }
+        let survivors = Set(ids)
+        guard let position = previous.firstIndex(of: pinned) else { return ids.first }
+        if let next = previous[(position + 1)...].first(where: survivors.contains) { return next }
+        if let before = previous[..<position].last(where: survivors.contains) { return before }
+        return ids.first
+    }
+
     /// Sa position dans la nouvelle source.
     static func position(of id: String, among ids: [String]) -> Int? {
         ids.firstIndex(of: id)
@@ -51,7 +63,10 @@ extension ConversationMediaGalleryView {
     /// Réaffirme la page regardée après une extension de la source.
     func keepCurrentPageAcrossGrowth() {
         let ids = allAttachments.map(\.id)
-        guard let pinned = GalleryPagePinning.pageToRestore(pinned: currentPageID, among: ids) else { return }
+        let previous = lastPageIDs
+        lastPageIDs = ids
+        guard let pinned = GalleryPagePinning.pageToRestore(pinned: currentPageID, among: ids)
+            ?? GalleryPagePinning.pageAfterRemoval(pinned: currentPageID, previous: previous, now: ids) else { return }
         DispatchQueue.main.async {
             if currentPageID != pinned { currentPageID = pinned }
         }
