@@ -203,7 +203,7 @@ final class ConversationStoreUnreadTests: XCTestCase {
                 store: store,
                 categoryStore: UserCategoryStore(service: MockCategoryWriter()),
                 currentUserId: { "me" },
-                openConversationId: { openConversationId }
+                isConversationOpen: { $0 == openConversationId }
             )
             bridge.activate(
                 conversationUpdated: conversationUpdated.eraseToAnyPublisher(),

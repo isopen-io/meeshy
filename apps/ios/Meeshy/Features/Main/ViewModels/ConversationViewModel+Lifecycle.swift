@@ -190,7 +190,9 @@ extension ConversationViewModel {
         // que le serveur disait 94 (recette 2026-09-21). La frontière n'est
         // plus posée que par une lecture COMPLÈTE (`sendReadReceipt`, lot qui
         // contient le message le plus récent) ou un geste explicite.
-        syncEngine.setCurrentlyOpenConversation(conversationId)
+        // Multi-fenêtre : une scène = une ouverture, équilibrée par la fermeture de `deinit`. Le moteur tient
+        // l'ENSEMBLE — deux fenêtres, deux conversations lues, aucune ne remplace l'autre.
+        syncEngine.openConversation(conversationId)
         // Open side-effects (socket room join + active-conversation publish to
         // the notification singletons). Lives here — NOT in the handler's init
         // — so the throwaway VMs SwiftUI allocates on every parent

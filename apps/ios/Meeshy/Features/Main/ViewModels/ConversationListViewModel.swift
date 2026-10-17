@@ -291,7 +291,7 @@ class ConversationListViewModel: ObservableObject {
         let reconciled = ConversationSyncEngine.reconcileUnread(
             incoming: merged,
             existing: conversations,
-            openConversationId: syncEngine.currentlyOpenConversationId
+            openConversationIds: syncEngine.openConversationIds
         )
         let drafts = draftSummaries
         let sorted = reconciled.sorted { Self.conversationsAreInOrder($0, $1, draftSummaries: drafts) }

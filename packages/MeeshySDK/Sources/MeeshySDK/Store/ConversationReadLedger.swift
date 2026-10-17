@@ -105,6 +105,8 @@ public enum ConversationReadEvent: Sendable, Hashable {
     case serverReceipt(conversationId: String, unreadCount: Int, lastReadAt: Date)
     /// L'écran de conversation s'ouvre (`conversationId`) ou se ferme (`nil`).
     case localOpen(conversationId: String?)
+    /// Multi-fenêtre : l'ENSEMBLE des conversations qu'une scène affiche (vide : aucune).
+    case localOpenSet(conversationIds: Set<String>)
     /// Geste « marquer comme lu », rattrapage du présent : optimistic update.
     /// Jamais la simple ouverture (#7350) — ouvrir n'est pas lire.
     case localMarkRead(conversationId: String)
@@ -194,7 +196,7 @@ public enum ConversationReadPrecedence {
             next.serverLastReadAt = nil
             next.unreadCount = max(1, current.unreadCount)
 
-        case .localOpen, .snapshot, .forget:
+        case .localOpen, .localOpenSet, .snapshot, .forget:
             return current
         }
         return next
@@ -217,7 +219,7 @@ public final class ConversationReadLedger: @unchecked Sendable {
 
     private let stateQueue = DispatchQueue(label: "me.meeshy.read-ledger.state")
     private var entries: [String: ConversationReadEntry] = [:]
-    private var _openConversationId: String?
+    private var _openConversationIds: Set<String> = []
     private let _changes = CurrentValueSubject<Void, Never>(())
 
     public init() {}
@@ -228,8 +230,15 @@ public final class ConversationReadLedger: @unchecked Sendable {
     /// `MessageSocketManager.activeConversationId` en tenaient chacun un, et
     /// ils divergeaient — d'où deux réponses à « la conversation est-elle
     /// ouverte ? » selon le porteur interrogé.
+    ///
+    /// Fenêtre unique : la conversation affichée. Plusieurs fenêtres : `nil` — lire `openConversationIds`.
     public var openConversationId: String? {
-        stateQueue.sync { _openConversationId }
+        stateQueue.sync { _openConversationIds.count == 1 ? _openConversationIds.first : nil }
+    }
+
+    /// Toutes les conversations qu'une scène affiche (iPad multi-fenêtre).
+    public var openConversationIds: Set<String> {
+        stateQueue.sync { _openConversationIds }
     }
 
     /// Émet à l'abonnement (sémantique `CurrentValueSubject`) puis à chaque
@@ -246,7 +255,7 @@ public final class ConversationReadLedger: @unchecked Sendable {
                 unreadCount: entry.unreadCount,
                 serverLastReadAt: entry.serverLastReadAt,
                 isMuted: entry.isMuted,
-                isOpen: conversationId == _openConversationId
+                isOpen: _openConversationIds.contains(conversationId)
             )
         }
     }
@@ -258,9 +267,9 @@ public final class ConversationReadLedger: @unchecked Sendable {
     /// (rang 1) ; son entrée garde ce qui lui reste à lire.
     public func counts() -> [String: Int] {
         stateQueue.sync {
-            let openId = _openConversationId
+            let openIds = _openConversationIds
             return Dictionary(uniqueKeysWithValues: entries.map { id, entry in
-                (id, id == openId ? 0 : max(0, entry.unreadCount))
+                (id, openIds.contains(id) ? 0 : max(0, entry.unreadCount))
             })
         }
     }
@@ -282,9 +291,9 @@ public final class ConversationReadLedger: @unchecked Sendable {
     ///   sourdine pour faire taire.
     public func total(excludingOpen: Bool, excludingMuted: Bool) -> Int {
         stateQueue.sync {
-            let openId = _openConversationId
+            let openIds = _openConversationIds
             return entries.reduce(0) { acc, element in
-                if excludingOpen, element.key == openId { return acc }
+                if excludingOpen, openIds.contains(element.key) { return acc }
                 if excludingMuted, element.value.isMuted { return acc }
                 return acc + max(0, element.value.unreadCount)
             }
@@ -315,9 +324,9 @@ public final class ConversationReadLedger: @unchecked Sendable {
     /// la fermeture : l'entrée a gardé ce que le serveur a servi (#7350).
     public func conversationUnreadTotal(excludingOpen: Bool) -> Int {
         stateQueue.sync {
-            let openId = _openConversationId
+            let openIds = _openConversationIds
             return entries.reduce(0) { acc, element in
-                if excludingOpen, element.key == openId { return acc }
+                if excludingOpen, openIds.contains(element.key) { return acc }
                 if element.value.isMuted { return acc }
                 return element.value.unreadCount > 0 ? acc + 1 : acc
             }
@@ -348,7 +357,11 @@ public final class ConversationReadLedger: @unchecked Sendable {
                 // pendant l'affichage. La refermer rend ce compte — rien
                 // d'inventé : la lecture, elle, passe par `localMarkRead` ou
                 // par le serveur.
-                _openConversationId = conversationId
+                _openConversationIds = conversationId.map { [$0] } ?? []
+                return nil
+
+            case .localOpenSet(let conversationIds):
+                _openConversationIds = conversationIds
                 return nil
 
             case .snapshot(let rows, let source):
@@ -357,7 +370,7 @@ public final class ConversationReadLedger: @unchecked Sendable {
 
             case .forget(let conversationId):
                 let before = entries.removeValue(forKey: conversationId)
-                if _openConversationId == conversationId { _openConversationId = nil }
+                _openConversationIds.remove(conversationId)
                 return before
 
             case .serverUnread(let conversationId, _),
@@ -377,7 +390,7 @@ public final class ConversationReadLedger: @unchecked Sendable {
     public func reset() {
         stateQueue.sync {
             entries.removeAll()
-            _openConversationId = nil
+            _openConversationIds = []
         }
         _changes.send(())
     }
