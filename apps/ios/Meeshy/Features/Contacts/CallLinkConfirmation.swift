@@ -12,7 +12,10 @@ import MeeshyUI
 /// Les barrières (mise à jour forcée, âge) passent AVANT ; un contact inconnu,
 /// une conversation de groupe ou un contact bloqué donnent un refus propre.
 
-/// Ce que la feuille montre, et ce que « Appeler » composera.
+/// Ce que la feuille montre, et EXACTEMENT ce que « Appeler » composera :
+/// valeur immuable figée à l'affichage — contact résolu, mode, compte connecté,
+/// et un jeton propre à CETTE confirmation. Rien n'est relu depuis un état
+/// mutable au moment du tap.
 struct CallLinkTarget: Identifiable, Equatable {
     let conversationId: String
     let userId: String
@@ -20,8 +23,25 @@ struct CallLinkTarget: Identifiable, Equatable {
     let username: String?
     let avatarURL: String?
     let isVideo: Bool
+    /// Le compte connecté quand la feuille s'est affichée.
+    let accountId: String?
+    /// Une confirmation = un jeton : deux liens identiques donnent deux feuilles
+    /// distinctes, et un tap sur l'ancienne ne vaut jamais pour la nouvelle.
+    let token: UUID
 
-    var id: String { "\(conversationId)|\(isVideo ? "video" : "audio")" }
+    init(conversationId: String, userId: String, displayName: String, username: String?,
+         avatarURL: String?, isVideo: Bool, accountId: String?, token: UUID = UUID()) {
+        self.conversationId = conversationId
+        self.userId = userId
+        self.displayName = displayName
+        self.username = username
+        self.avatarURL = avatarURL
+        self.isVideo = isVideo
+        self.accountId = accountId
+        self.token = token
+    }
+
+    var id: UUID { token }
 
     /// `@pseudo` quand on le connaît, le nom sinon.
     var handle: String {
@@ -52,7 +72,10 @@ final class CallLinkConfirmationController: ObservableObject {
 
     private let resolveConversation: @MainActor (String) async -> MeeshyConversation?
     private let isBlocked: @MainActor (String) -> Bool
+    private let currentAccountId: @MainActor () -> String?
     private let dial: @MainActor (CallLinkTarget) -> Void
+    /// Les barrières de la confirmation AFFICHÉE, relues au tap.
+    private var gatesOpen: @MainActor () -> Bool = { false }
     private let showRefusal: @MainActor (CallLinkRefusal) -> Void
 
     init(
@@ -63,6 +86,7 @@ final class CallLinkConfirmationController: ObservableObject {
             return fetched.toConversation(currentUserId: currentUserId)
         },
         isBlocked: @escaping @MainActor (String) -> Bool = { BlockService.shared.isBlocked(userId: $0) },
+        currentAccountId: @escaping @MainActor () -> String? = { AuthManager.shared.currentUser?.id },
         dial: @escaping @MainActor (CallLinkTarget) -> Void = { target in
             CallBackDialer.shared.dial(CallBackRequest(
                 userId: target.userId,
@@ -84,14 +108,17 @@ final class CallLinkConfirmationController: ObservableObject {
     ) {
         self.resolveConversation = resolveConversation
         self.isBlocked = isBlocked
+        self.currentAccountId = currentAccountId
         self.dial = dial
         self.showRefusal = showRefusal
     }
 
     /// Prépare la confirmation. `gatesOpen` : aucune barrière (mise à jour
-    /// forcée, âge) n'est levée — sinon le lien ne montre RIEN.
-    func request(conversationId: String, isVideo: Bool, gatesOpen: Bool) async {
-        guard gatesOpen else { return }
+    /// forcée, âge) n'est levée — sinon le lien ne montre RIEN ; relu au tap.
+    /// Un second lien REMPLACE la feuille ouverte (nouveau jeton).
+    func request(conversationId: String, isVideo: Bool, gatesOpen: @escaping @MainActor () -> Bool) async {
+        guard gatesOpen() else { return }
+        let account = currentAccountId()
         guard let conversation = await resolveConversation(conversationId),
               conversation.type == .direct,
               let userId = conversation.participantUserId, !userId.isEmpty else {
@@ -102,25 +129,43 @@ final class CallLinkConfirmationController: ObservableObject {
             showRefusal(.blocked)
             return
         }
+        // Le compte a pu changer pendant la résolution : rien ne s'affiche.
+        guard currentAccountId() == account else { return }
+        self.gatesOpen = gatesOpen
         pending = CallLinkTarget(
             conversationId: conversationId,
             userId: userId,
             displayName: conversation.displayName,
             username: conversation.participantUsername,
             avatarURL: conversation.participantAvatarURL,
-            isVideo: isVideo
+            isVideo: isVideo,
+            accountId: account
         )
     }
 
-    /// Le SEUL chemin qui compose : le geste « Appeler ».
-    func confirm() {
-        guard let target = pending else { return }
+    /// Le SEUL chemin qui compose : le geste « Appeler » sur la feuille qui
+    /// montrait `shown`. Compose EXACTEMENT `shown` — jamais l'état courant —
+    /// et seulement si cette feuille est toujours celle affichée et que ni le
+    /// compte, ni le blocage, ni les barrières n'ont changé ; sinon rien ne part
+    /// et la feuille se ferme (une feuille remplacée laisse sa remplaçante).
+    func confirm(_ shown: CallLinkTarget) {
+        guard pending == shown else { return }
         pending = nil
-        dial(target)
+        guard currentAccountId() == shown.accountId,
+              !isBlocked(shown.userId),
+              gatesOpen() else { return }
+        dial(shown)
     }
 
     func cancel() {
         pending = nil
+    }
+
+    /// La feuille qui montrait `shown` s'est fermée (Annuler, glisser vers le
+    /// bas). Une feuille REMPLACÉE par un second lien ne referme pas sa
+    /// remplaçante.
+    func dismissed(_ shown: CallLinkTarget) {
+        if pending == shown { pending = nil }
     }
 }
 
@@ -180,15 +225,19 @@ private struct CallLinkConfirmationHost: ViewModifier {
     @ObservedObject private var controller = CallLinkConfirmationController.shared
 
     func body(content: Content) -> some View {
+        // Le setter n'efface rien : pendant un remplacement (second lien) SwiftUI
+        // y écrit `nil` pour la feuille sortante — c'est `dismissed(_:)`, propre
+        // à CHAQUE feuille, qui referme.
         content.sheet(item: Binding(
             get: { controller.pending },
-            set: { if $0 == nil { controller.cancel() } }
+            set: { _ in }
         )) { target in
             CallLinkConfirmationSheet(
                 target: target,
-                onCall: { controller.confirm() },
-                onCancel: { controller.cancel() }
+                onCall: { controller.confirm(target) },
+                onCancel: { controller.dismissed(target) }
             )
+            .onDisappear { controller.dismissed(target) }
         }
     }
 }

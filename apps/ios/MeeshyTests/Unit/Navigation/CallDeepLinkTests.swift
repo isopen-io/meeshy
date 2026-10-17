@@ -120,27 +120,43 @@ final class CallLinkConfirmationControllerTests: XCTestCase {
                            participantAvatarURL: "https://x/a.jpg")
     }
 
-    private func makeSUT(
-        conversation: MeeshyConversation? = nil,
-        blocked: Set<String> = [],
-        gatesOpen: Bool = true
-    ) -> (CallLinkConfirmationController, () -> [CallLinkTarget], () -> [CallLinkRefusal]) {
+    private final class World {
+        var account: String? = "me"
+        var blocked: Set<String> = []
+        var gatesOpen = true
         var dialed: [CallLinkTarget] = []
         var refusals: [CallLinkRefusal] = []
-        let found = conversation
+    }
+
+    private func makeSUT(
+        conversation: MeeshyConversation? = nil,
+        conversations: [String: MeeshyConversation] = [:],
+        blocked: Set<String> = []
+    ) -> (CallLinkConfirmationController, () -> [CallLinkTarget], () -> [CallLinkRefusal]) {
+        let (sut, world) = makeWorld(conversation: conversation, conversations: conversations)
+        world.blocked = blocked
+        return (sut, { world.dialed }, { world.refusals })
+    }
+
+    private func makeWorld(
+        conversation: MeeshyConversation? = nil,
+        conversations: [String: MeeshyConversation] = [:]
+    ) -> (CallLinkConfirmationController, World) {
+        let world = World()
         let sut = CallLinkConfirmationController(
-            resolveConversation: { _ in found },
-            isBlocked: { blocked.contains($0) },
-            dial: { dialed.append($0) },
-            showRefusal: { refusals.append($0) }
+            resolveConversation: { id in conversations[id] ?? conversation },
+            isBlocked: { world.blocked.contains($0) },
+            currentAccountId: { world.account },
+            dial: { world.dialed.append($0) },
+            showRefusal: { world.refusals.append($0) }
         )
-        return (sut, { dialed }, { refusals })
+        return (sut, world)
     }
 
     func test_request_showsTheConfirmation_andDialsNothing() async {
         let (sut, dialed, _) = makeSUT(conversation: conversation())
 
-        await sut.request(conversationId: "conv1", isVideo: true, gatesOpen: true)
+        await sut.request(conversationId: "conv1", isVideo: true, gatesOpen: { true })
 
         XCTAssertEqual(sut.pending?.userId, "u1")
         XCTAssertEqual(sut.pending?.username, "awa")
@@ -150,14 +166,15 @@ final class CallLinkConfirmationControllerTests: XCTestCase {
 
     func test_confirm_dialsOnce_cancel_dialsNothing() async {
         let (sut, dialed, _) = makeSUT(conversation: conversation())
-        await sut.request(conversationId: "conv1", isVideo: false, gatesOpen: true)
+        await sut.request(conversationId: "conv1", isVideo: false, gatesOpen: { true })
         sut.cancel()
         XCTAssertNil(sut.pending)
         XCTAssertTrue(dialed().isEmpty)
 
-        await sut.request(conversationId: "conv1", isVideo: false, gatesOpen: true)
-        sut.confirm()
-        sut.confirm()
+        await sut.request(conversationId: "conv1", isVideo: false, gatesOpen: { true })
+        let shown = sut.pending!
+        sut.confirm(shown)
+        sut.confirm(shown)
         XCTAssertEqual(dialed().map(\.conversationId), ["conv1"])
         XCTAssertNil(sut.pending)
     }
@@ -166,7 +183,7 @@ final class CallLinkConfirmationControllerTests: XCTestCase {
     func test_request_whileAGateIsUp_showsNothing() async {
         let (sut, dialed, refusals) = makeSUT(conversation: conversation())
 
-        await sut.request(conversationId: "conv1", isVideo: true, gatesOpen: false)
+        await sut.request(conversationId: "conv1", isVideo: true, gatesOpen: { false })
 
         XCTAssertNil(sut.pending)
         XCTAssertTrue(dialed().isEmpty)
@@ -176,7 +193,7 @@ final class CallLinkConfirmationControllerTests: XCTestCase {
     func test_request_blockedContact_isRefused() async {
         let (sut, dialed, refusals) = makeSUT(conversation: conversation(), blocked: ["u1"])
 
-        await sut.request(conversationId: "conv1", isVideo: true, gatesOpen: true)
+        await sut.request(conversationId: "conv1", isVideo: true, gatesOpen: { true })
 
         XCTAssertNil(sut.pending)
         XCTAssertTrue(dialed().isEmpty)
@@ -186,7 +203,7 @@ final class CallLinkConfirmationControllerTests: XCTestCase {
     func test_request_unknownConversation_isRefused() async {
         let (sut, dialed, refusals) = makeSUT(conversation: nil)
 
-        await sut.request(conversationId: "nope", isVideo: true, gatesOpen: true)
+        await sut.request(conversationId: "nope", isVideo: true, gatesOpen: { true })
 
         XCTAssertNil(sut.pending)
         XCTAssertTrue(dialed().isEmpty)
@@ -196,15 +213,103 @@ final class CallLinkConfirmationControllerTests: XCTestCase {
     func test_request_groupConversation_isRefused() async {
         let (sut, _, refusals) = makeSUT(conversation: conversation(type: .group))
 
-        await sut.request(conversationId: "conv1", isVideo: true, gatesOpen: true)
+        await sut.request(conversationId: "conv1", isVideo: true, gatesOpen: { true })
 
         XCTAssertNil(sut.pending)
         XCTAssertEqual(refusals(), [.unknownContact])
     }
 
+    // MARK: - Ce qui est confirmé est ce qui est composé (revue sécurité)
+
+    /// Un second lien B arrivé pendant que la feuille A est affichée : le tap sur
+    /// « Appeler » de A ne doit lancer NI B (relu depuis l'état courant) NI A.
+    func test_secondLinkWhileShowing_staleTapDialsNothing() async {
+        let b = MeeshyConversation(id: "convB", identifier: "convB", type: .direct, title: "Bob",
+                                   participantUserId: "uB", participantUsername: "bob")
+        let (sut, world) = makeWorld(conversation: conversation(), conversations: ["convB": b])
+        await sut.request(conversationId: "conv1", isVideo: false, gatesOpen: { true })
+        let shownA = sut.pending!
+
+        await sut.request(conversationId: "convB", isVideo: true, gatesOpen: { true })
+        let shownB = sut.pending!
+        XCTAssertNotEqual(shownA.id, shownB.id, "la feuille B REMPLACE la feuille A")
+
+        sut.confirm(shownA)
+
+        XCTAssertTrue(world.dialed.isEmpty)
+        XCTAssertEqual(sut.pending, shownB, "la feuille affichée reste B")
+
+        sut.confirm(shownB)
+        XCTAssertEqual(world.dialed.map(\.conversationId), ["convB"])
+        XCTAssertEqual(world.dialed.map(\.isVideo), [true])
+    }
+
+    /// Le même lien relu deux fois donne deux confirmations DISTINCTES : un tap
+    /// sur l'ancienne ne vaut pas pour la nouvelle.
+    func test_sameLinkTwice_eachConfirmationIsItsOwn() async {
+        let (sut, world) = makeWorld(conversation: conversation())
+        await sut.request(conversationId: "conv1", isVideo: true, gatesOpen: { true })
+        let first = sut.pending!
+        await sut.request(conversationId: "conv1", isVideo: true, gatesOpen: { true })
+
+        sut.confirm(first)
+
+        XCTAssertTrue(world.dialed.isEmpty)
+    }
+
+    /// La feuille A sortante (remplacée par B) ne referme pas B en partant.
+    func test_replacedSheetDisappearing_keepsTheNewOne() async {
+        let b = MeeshyConversation(id: "convB", identifier: "convB", type: .direct, title: "Bob",
+                                   participantUserId: "uB", participantUsername: "bob")
+        let (sut, _) = makeWorld(conversation: conversation(), conversations: ["convB": b])
+        await sut.request(conversationId: "conv1", isVideo: false, gatesOpen: { true })
+        let shownA = sut.pending!
+        await sut.request(conversationId: "convB", isVideo: false, gatesOpen: { true })
+
+        sut.dismissed(shownA)
+
+        XCTAssertEqual(sut.pending?.conversationId, "convB")
+    }
+
+    func test_accountChangedBeforeTheTap_dialsNothing_andCloses() async {
+        let (sut, world) = makeWorld(conversation: conversation())
+        await sut.request(conversationId: "conv1", isVideo: true, gatesOpen: { true })
+        let shown = sut.pending!
+
+        world.account = "someone-else"
+        sut.confirm(shown)
+
+        XCTAssertTrue(world.dialed.isEmpty)
+        XCTAssertNil(sut.pending)
+    }
+
+    func test_contactBlockedBeforeTheTap_dialsNothing_andCloses() async {
+        let (sut, world) = makeWorld(conversation: conversation())
+        await sut.request(conversationId: "conv1", isVideo: true, gatesOpen: { true })
+        let shown = sut.pending!
+
+        world.blocked = ["u1"]
+        sut.confirm(shown)
+
+        XCTAssertTrue(world.dialed.isEmpty)
+        XCTAssertNil(sut.pending)
+    }
+
+    func test_gateRaisedBeforeTheTap_dialsNothing_andCloses() async {
+        let (sut, world) = makeWorld(conversation: conversation())
+        await sut.request(conversationId: "conv1", isVideo: true, gatesOpen: { world.gatesOpen })
+        let shown = sut.pending!
+
+        world.gatesOpen = false
+        sut.confirm(shown)
+
+        XCTAssertTrue(world.dialed.isEmpty)
+        XCTAssertNil(sut.pending)
+    }
+
     func test_title_namesTheContactAndTheMode() {
-        let video = CallLinkTarget(conversationId: "c", userId: "u", displayName: "Awa", username: "awa", avatarURL: nil, isVideo: true)
-        let audio = CallLinkTarget(conversationId: "c", userId: "u", displayName: "Awa", username: nil, avatarURL: nil, isVideo: false)
+        let video = CallLinkTarget(conversationId: "c", userId: "u", displayName: "Awa", username: "awa", avatarURL: nil, isVideo: true, accountId: "me")
+        let audio = CallLinkTarget(conversationId: "c", userId: "u", displayName: "Awa", username: nil, avatarURL: nil, isVideo: false, accountId: "me")
         XCTAssertTrue(video.title.contains("@awa"))
         XCTAssertTrue(audio.title.contains("Awa"))
         XCTAssertNotEqual(video.title.replacingOccurrences(of: "@awa", with: ""), audio.title.replacingOccurrences(of: "Awa", with: ""))
