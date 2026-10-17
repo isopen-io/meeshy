@@ -4,7 +4,7 @@ import { fileURLToPath } from 'node:url';
 
 import { describe, expect, test } from 'bun:test';
 
-import { EMAIL_LINK_ALIASES, EMAIL_LINK_PATHS, emailLinkSecret, liftEmailLinkSecret, type EmailLinkWindow } from './email-link-secret';
+import { EMAIL_LINK_ALIASES, EMAIL_LINK_PATHS, emailLinkSecret, forgetEmailLinkSecret, liftEmailLinkSecret, type EmailLinkWindow } from './email-link-secret';
 
 /**
  * LE SECRET D'UN LIEN D'E-MAIL QUITTE LA BARRE D'ADRESSE DÈS L'OUVERTURE (#10859).
@@ -131,6 +131,30 @@ describe('liftEmailLinkSecret — le fragment quitte l’adresse', () => {
         '/settings/verify-email-change',
       ].sort(),
     );
+  });
+});
+
+describe('forgetEmailLinkSecret — un jeton servi ne reste pas dans l’historique (#10864)', () => {
+  test('après usage, l’entrée d’historique ne porte plus le jeton : un retour arrière ne le relit pas', () => {
+    const win = fakeWindow('/reset-password?via=email#token=r1', { backDismiss: 'x' });
+    liftEmailLinkSecret(win);
+    forgetEmailLinkSecret(win);
+    expect(emailLinkSecret(win)).toEqual({});
+    expect(JSON.stringify(win.history.state)).not.toContain('r1');
+  });
+
+  test('l’adresse et le reste de l’état d’historique demeurent', () => {
+    const win = fakeWindow('/auth/verify-email?next=%2Fc%2F1&via=email#token=t0k&email=ada%40x.io', { backDismiss: 'x' });
+    liftEmailLinkSecret(win);
+    forgetEmailLinkSecret(win);
+    expect(win.writes.at(-1)?.url).toBe('/auth/verify-email?next=%2Fc%2F1');
+    expect(win.history.state).toEqual({ backDismiss: 'x' });
+  });
+
+  test('sans secret dans l’entrée, rien ne s’écrit', () => {
+    const win = fakeWindow('/reset-password', { backDismiss: 'x' });
+    forgetEmailLinkSecret(win);
+    expect(win.writes).toEqual([]);
   });
 });
 

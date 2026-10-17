@@ -3,6 +3,7 @@ import { useEffect, useRef, useState } from 'react';
 import { auth } from '@/lib/api/auth';
 import { accountReplacementOf, provenSessionOf, type AccountReplacement, type ProvenSessionGestures } from '@/lib/api/proven-session';
 import { heldAccountOf, sessionStore } from '@/lib/api/session';
+import { forgetEmailLinkSecret } from '@/lib/links/email-link-secret';
 import { currentInterfaceLanguage } from '@/lib/interface-language';
 import { placeMagicLinkValidationFailure } from '@/lib/view/auth-feedback';
 import { landingAfterSession } from '@/lib/session-guard';
@@ -53,6 +54,7 @@ export function MagicLinkValidation({
       setState('validating');
       const result = await validate(token as string);
       if (result.ok) {
+        forgetEmailLinkSecret();
         const session = sessionStore.getState().session;
         const pending = accountReplacementOf(session, provenSessionOf(result.data));
         if (pending !== null) {
@@ -69,6 +71,7 @@ export function MagicLinkValidation({
         return;
       }
       if (isAgeBelowMinimum(result)) {
+        forgetEmailLinkSecret();
         setState('age-blocked');
         return;
       }
@@ -77,6 +80,7 @@ export function MagicLinkValidation({
         setMessage(placeMagicLinkValidationFailure(result).message);
         return;
       }
+      if (result.status === 400) forgetEmailLinkSecret();
       setState('invalid');
     }
   }, [token]);

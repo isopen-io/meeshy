@@ -4,6 +4,7 @@ import type { ApiFailure, ApiResult } from '@/lib/api/http';
 import type { RevokeSessionsResult } from '@/lib/api/revoke-sessions';
 import { loadInterfaceCatalog, translate } from '@/lib/i18n-catalog';
 import { buttonNamed, createActMounter } from '@/test-support/act-mount';
+import { arriveByEmailLink, leaveEmailLink, tokenInHistory } from '@/test-support/email-link-arrival';
 import { ensureHappyDomRegistered, releaseHappyDomIfRegistered } from '@/test-support/happy-dom-environment';
 
 import { REVOKE_SESSIONS_KEYS, RevokeSessionsPage, type RevokeSessionsPageDeps } from './revoke-sessions';
@@ -20,7 +21,7 @@ const { mount, unmountAll, click } = createActMounter();
 
 beforeAll(async () => {
   await loadInterfaceCatalog('en');
-  ensureHappyDomRegistered();
+  ensureHappyDomRegistered({ url: 'http://localhost/' });
   globals.IS_REACT_ACT_ENVIRONMENT = true;
 });
 
@@ -96,5 +97,30 @@ describe('le lien « ce n’était pas moi »', () => {
       expect({ language, empty: texts.filter((text) => text.trim() === '' || REVOKE_SESSIONS_KEYS.includes(text as never)) }).toEqual({ language, empty: [] });
       expect({ language, same: REVOKE_SESSIONS_KEYS.filter((key) => translate(language, key) === translate('fr', key)) }).toEqual({ language, same: [] });
     }
+  });
+});
+
+describe('le jeton quitte l’historique une fois servi (#10864)', () => {
+  afterEach(leaveEmailLink);
+
+  test('sessions fermées : l’entrée ne porte plus le jeton', async () => {
+    arriveByEmailLink('/auth/revoke-sessions', 'jwt.done');
+    const host = await mount(<RevokeSessionsPage token="jwt.done" online language="fr" deps={scripted({ ok: true, data: { revokedCount: 1 } }).deps} />);
+    await click(buttonNamed(host, translate('fr', 'revokeSessions.action')));
+    expect(tokenInHistory()).toBeNull();
+  });
+
+  test('lien refusé pour de bon : l’entrée ne porte plus le jeton', async () => {
+    arriveByEmailLink('/auth/revoke-sessions', 'jwt.dead');
+    const host = await mount(<RevokeSessionsPage token="jwt.dead" online language="fr" deps={scripted(refused(400, 'INVALID_OR_EXPIRED_LINK')).deps} />);
+    await click(buttonNamed(host, translate('fr', 'revokeSessions.action')));
+    expect(tokenInHistory()).toBeNull();
+  });
+
+  test('une panne le garde : réessayer en a besoin', async () => {
+    arriveByEmailLink('/auth/revoke-sessions', 'jwt.retry');
+    const host = await mount(<RevokeSessionsPage token="jwt.retry" online language="fr" deps={scripted(refused(503)).deps} />);
+    await click(buttonNamed(host, translate('fr', 'revokeSessions.action')));
+    expect(tokenInHistory()).toBe('jwt.retry');
   });
 });

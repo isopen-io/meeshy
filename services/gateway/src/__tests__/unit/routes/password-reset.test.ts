@@ -64,6 +64,8 @@ jest.mock('../../../utils/rate-limiter.js', () => ({
   createPhoneResetIdentityRateLimiter: jest.fn(() => ({ middleware: () => mockPhoneResetMiddleware() })),
   createPhoneResetCodeRateLimiter: jest.fn(() => ({ middleware: () => mockPhoneResetMiddleware() })),
   createPhoneResetResendRateLimiter: jest.fn(() => ({ middleware: () => mockPhoneResetMiddleware() })),
+  createResetTokenVerifyIpRateLimiter: jest.fn(() => ({ middleware: () => mockPhoneResetMiddleware() })),
+  createResetTokenVerifyTokenRateLimiter: jest.fn(() => ({ middleware: () => mockPhoneResetMiddleware() })),
 }));
 
 jest.mock('@meeshy/shared/types', () => ({
