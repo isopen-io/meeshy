@@ -34,7 +34,7 @@ import { AchievementReachService } from '../../services/achievements/Achievement
 import { GlobalAchievements } from '../../services/achievements/GlobalAchievements';
 import { meeshTotalsFromLedger } from '../../services/meesh/MeeshService';
 import { SPARKS_USER_SELECT, currentLevelOf, sparksOf } from '../../services/game/SparksFacts';
-import { effectiveMeeshPrice } from '@meeshy/shared/utils/game/sparks';
+import { effectiveMeeshPrice, levelSparksOf } from '@meeshy/shared/utils/game/sparks';
 import { GameBlockService, type AxisRow } from '../../services/game/GameBlockService';
 import { knowsGameWave2, milestonesServedTo } from '../../services/game/clientCapabilities';
 import { MissionService, READ_ONLY_CREDIT } from '../../services/game/MissionService';
@@ -348,12 +348,12 @@ export async function meEngagementRoutes(fastify: FastifyInstance, options: Enga
           counters,
           milestones,
           familyOf: (axisKey) => (isEngagementAxisKey(axisKey) ? engagementAxisFamily(axisKey) : null),
-          engagementScore: sparks.cycle,
+          engagementScore: levelSparksOf(sparks),
         });
 
         // Le prix EFFECTIF de la prochaine pièce (#9374, #10847) : le prix de rang × le facteur du niveau ACTUEL. Le bloc
         // `game` le sert déjà tel que la frappe le recalculera (étapes et rang compris) ; sans lui, repli sur le niveau lu
-        // sur le cycle seul. Les anciens clients lisent `mintCost` et `missingPoints`, qui doivent dire vrai.
+        // sur la poche seule (#10892). Les anciens clients lisent `mintCost` et `missingPoints`, qui doivent dire vrai.
         const baseMintCost = meeshPrice(totauxMeesh.mintedLifetime + 1);
         const fallbackPrice = effectiveMeeshPrice(totauxMeesh.mintedLifetime + 1, currentLevelOf(streakUser));
 

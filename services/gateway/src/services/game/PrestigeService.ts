@@ -27,7 +27,7 @@ import { prestigeTransition } from '@meeshy/shared/utils/game/prestige';
 import { GLORY_POINTS } from '@meeshy/shared/utils/game/glory';
 import { prestigeTrophy, trophyKey } from '@meeshy/shared/utils/game/trophies';
 import { EngagementQuotas } from '../engagement/EngagementQuotas';
-import { SPARKS_USER_SELECT, currentLevelOf, sparksOf } from './SparksFacts';
+import { SPARKS_USER_SELECT, currentLevelOf, levelSparksOf, sparksOf } from './SparksFacts';
 import { GAME_LEVEL_MIN } from '@meeshy/shared/utils/game/levels';
 import { GameRefusal } from './GameRefusal';
 import { GloryService } from './GloryService';
@@ -73,10 +73,9 @@ export class PrestigeService {
       const account = await this.account(userId);
       const stars = account?.prestige ?? 0;
       const sparks = sparksOf(account);
-      // Le niveau 100 se lit sur le CYCLE d'étincelles (#10846), jamais sur la poche ; les étapes faites (le plus haut
-      // des deux records) ne se défont pas.
+      // Le niveau 100 se lit sur la POCHE (#10892) ; les étapes faites (le plus haut des deux records) ne se défont pas.
       const proof = Math.max(account?.levelRecord ?? 0, account?.levelMaxLifetime ?? 0);
-      const verdict = prestigeTransition({ score: sparks.cycle, prestige: stars, levelRecord: proof === 0 ? null : proof });
+      const verdict = prestigeTransition({ score: levelSparksOf(sparks), prestige: stars, levelRecord: proof === 0 ? null : proof });
       if (verdict.allowed === false) {
         throw new GameRefusal(verdict.reason === 'at-maximum' ? 'PRESTIGE_AT_MAXIMUM' : 'PRESTIGE_LEVEL_TOO_LOW');
       }

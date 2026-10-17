@@ -180,7 +180,6 @@ export class MeeshService {
     const steps = levelStepFactsOf({ row: { ...row, meeshMintedLifetime: totals.mintedLifetime }, missionsDone, glory });
     const preview = previewSparksMint({
       sparks: sparks.pocket,
-      cycle: sparks.cycle,
       mintedLifetime: totals.mintedLifetime,
       held: totals.balance,
       glory,
@@ -291,7 +290,7 @@ export class MeeshService {
             meeshBalance: apres.balance,
             meeshMintedLifetime: apres.mintedLifetime,
             // Un compte d'avant le rattrapage n'a ni cycle ni total à vie : on les pose sur sa poche AVANT le
-            // débit, sinon le niveau (lu sur le cycle) tomberait avec elle. Jamais écrit pour un compte à jour.
+            // débit, sinon ces indicateurs tomberaient avec elle. Jamais écrit pour un compte à jour.
             ...(sparkCount(compte?.sparksSincePrestige) < dans.cycle ? { sparksSincePrestige: BigInt(dans.cycle) } : {}),
             ...(sparkCount(compte?.sparksEarnedLifetime) < dans.lifetime ? { sparksEarnedLifetime: BigInt(dans.lifetime) } : {}),
           },

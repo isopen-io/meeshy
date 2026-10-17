@@ -1,6 +1,6 @@
 /**
- * LES CRÉDITS D'ÉTINCELLES (#10846) — tous les chemins de crédit incrémentent le TOTAL À VIE et le CYCLE avec la poche,
- * et le NIVEAU se lit sur le cycle, jamais sur la poche.
+ * LES CRÉDITS D'ÉTINCELLES (#10846, #10892) — tous les chemins de crédit incrémentent le TOTAL À VIE et le CYCLE avec la
+ * poche, et le NIVEAU se lit sur la poche ; cycle et total à vie sont indicatifs.
  *
  * Deux chemins créditent : `recordActivity` → `updateEngagementScore` (commande brute), et `creditGamePoints`
  * (transaction : missions, coffre, réponse reçue, saison, duo). Les deux écrivent poche, cycle et total à vie du même
@@ -163,11 +163,11 @@ describe('la DETTE se déduit des prochaines étincelles gagnées (porteur 2026-
   });
 });
 
-describe('le NIVEAU se lit sur le cycle', () => {
-  it('une poche presque vide ne retient pas un niveau gagné : franchir le seuil du CYCLE grave la Gloire et le record', async () => {
+describe('le NIVEAU se lit sur la poche (#10892)', () => {
+  it('franchir le seuil avec la POCHE grave la Gloire et le record, quel que soit le cumul', async () => {
     const db = fakeGameDb();
-    // Cycle à 1 point du niveau 2 (400), poche à 0 après une frappe : un crédit de 5 franchit le niveau 2.
-    seedUser(db, { engagementScore: 0, sparksSincePrestige: 399, sparksEarnedLifetime: 399, levelRecord: 1, levelMaxLifetime: 1 });
+    // Poche à 1 point du niveau 2 (400), cycle bien plus haut : un crédit de 5 franchit le niveau 2.
+    seedUser(db, { engagementScore: 399, sparksSincePrestige: 9000, sparksEarnedLifetime: 9000, levelRecord: 1, levelMaxLifetime: 1 });
 
     await service(db).creditGamePoints(USER, 5, 'content.text_message');
 
@@ -177,12 +177,12 @@ describe('le NIVEAU se lit sur le cycle', () => {
 
   it('un niveau gagné ne se re-paie pas après un prestige : le max à vie tient la Gloire du premier passage', async () => {
     const db = fakeGameDb();
-    seedUser(db, { engagementScore: 0, sparksSincePrestige: 399, sparksEarnedLifetime: 3_000_000, levelRecord: 1, levelMaxLifetime: 100, prestige: 1 });
+    seedUser(db, { engagementScore: 399, sparksSincePrestige: 399, sparksEarnedLifetime: 3_000_000, levelRecord: 1, levelMaxLifetime: 100, prestige: 1 });
 
     await service(db).creditGamePoints(USER, 5, 'content.text_message');
 
     expect(db.gloryLedger.rows.filter((r) => r.reason === 'level')).toHaveLength(0);
-    // Le record du CYCLE, lui, remonte avec le cycle.
+    // Le record depuis le prestige, lui, remonte avec la poche.
     expect(row(db)).toMatchObject({ levelRecord: 2, levelMaxLifetime: 100 });
   });
 });

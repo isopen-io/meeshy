@@ -29,6 +29,31 @@ final class GameOptimisticTests: XCTestCase {
         XCTAssertEqual(next.meesh?.mintedLifetime, 13)
     }
 
+    /// La poche fait le niveau (#10892) : la frappe retire son prix de la POCHE, et le niveau d'après se lit sur elle —
+    /// jamais sur le cycle, qui reste tel quel, indicatif, comme le total à vie.
+    func test_afterMint_readsTheLevelOnThePocket_andKeepsTheIndicativeCycleAndLifetime() {
+        let pocket = Self.scoreJustAboveLevel34
+        let cycle = GameLevels.threshold(of: 60)
+        let served = GameFixture.game(score: cycle, held: 9)
+        let l = served.level
+        let sparked = served.replacing(level: GameBlock.Level(
+            level: l.level, tier: l.tier, score: l.score, floorScore: l.floorScore, nextThreshold: l.nextThreshold,
+            pointsToNext: l.pointsToNext, progress: l.progress, record: l.record, prestige: l.prestige,
+            canPrestige: l.canPrestige, ladder: l.ladder, sparks: pocket, sparksCycle: cycle, sparksLifetime: cycle + 500,
+            levelMaxLifetime: 60, sparksDebt: nil
+        ))
+        let state = GameFixture.state(sparked, meesh: GameFixture.meesh(balance: 9, minted: 12, debitable: pocket))
+        let price = state.game.mint.price
+
+        let next = GameOptimistic.afterMint(state)
+
+        XCTAssertEqual(next.game.level.shown.level, GameLevels.level(forScore: pocket - price, cap: GameLevels.capBase))
+        XCTAssertEqual(next.game.level.sparkFacts.pocket, pocket - price)
+        XCTAssertEqual(next.game.level.sparksCycle, cycle, "le cycle est indicatif : la frappe ne le touche pas")
+        XCTAssertEqual(next.game.level.sparksLifetime, cycle + 500)
+        XCTAssertEqual(next.game.level.levelMaxLifetime, 60, "le niveau max à vie garde ce qui a été atteint")
+    }
+
     func test_afterMint_addsTheGloryTheMintPromised() {
         let state = GameFixture.state()
         let next = GameOptimistic.afterMint(state)

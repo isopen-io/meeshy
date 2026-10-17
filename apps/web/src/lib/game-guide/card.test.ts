@@ -61,7 +61,7 @@ describe('une carte pour un moment', () => {
     expect(card.speaker).toBe('duo');
     expect(card.presentation).toBe('full');
     expect(card.action).toBe('see-progress');
-    expect(card.copy.means).toContain('ton niveau ne bouge pas');
+    expect(card.copy.means).toContain('ton niveau a baissé d’autant');
     expect(card.step).toBeUndefined();
   });
 

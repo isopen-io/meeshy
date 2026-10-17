@@ -142,8 +142,8 @@ export class EngagementGameHooks {
    */
   async onScore(userId: string, score: number, levelRecord: number | null, levelMaxLifetime: number | null = null): Promise<void> {
     await this.markPhotoMoment(userId);
-    // `score` est le CYCLE d'étincelles (#10846), jamais la poche : la frappe ne fait pas baisser le niveau. Rien à graver
-    // tant que le niveau lu ne dépasse ni le record du cycle ni le niveau max à vie (qui reste à poser sur un compte d'avant).
+    // `score` est la POCHE (#10892). Rien à graver tant que le niveau lu ne dépasse ni le record du cycle ni le niveau max
+    // à vie : remonter après une frappe ne rapporte pas une seconde fois la Gloire d'un niveau déjà passé.
     const level = levelFromScore(score, NO_LEVEL_CAP);
     if (level <= (levelRecord ?? 1) && level <= (levelMaxLifetime ?? 0)) return;
     await this.isolated('level glory', () =>

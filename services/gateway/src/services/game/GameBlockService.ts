@@ -25,7 +25,7 @@ import { MythicSeatService } from './MythicSeatService';
 import { chestRewardOf, toGameMission, type MissionService } from './MissionService';
 import { countMissionsDone } from './LevelStepFacts';
 import { starFragmentsOf } from './StarFragments';
-import { SPARKS_USER_SELECT, sparksOf } from './SparksFacts';
+import { SPARKS_USER_SELECT, levelSparksOf, sparksOf } from './SparksFacts';
 
 const log = enhancedLogger.child({ module: 'GameBlockService' });
 
@@ -146,7 +146,7 @@ export class GameBlockService {
 
     const extensions = await this.extras.build({
       userId,
-      score: sparks.cycle,
+      score: levelSparksOf(sparks),
       levelRecord: user?.levelRecord ?? null,
       levelMaxLifetime: user?.levelMaxLifetime ?? null,
       prestige: user?.prestige ?? 0,

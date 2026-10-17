@@ -26,7 +26,6 @@ type Input =
   | {
       readonly law: 'sparks-mint-preview';
       readonly sparks: number;
-      readonly cycle: number;
       readonly mintedLifetime: number;
       readonly held: number;
       readonly glory: number;
@@ -67,13 +66,13 @@ const CASES: readonly { readonly _label: string; readonly input: Input }[] = [
   { _label: 'étincelles d\'un compte à jour', input: { law: 'sparks-of', engagementScore: 200, sparksSincePrestige: 9000, sparksEarnedLifetime: 12_000 } },
   { _label: 'étincelles d\'un compte d\'avant le rattrapage', input: { law: 'sparks-of', engagementScore: 800 } },
   { _label: 'étincelles au-delà d\'un Int32', input: { law: 'sparks-of', engagementScore: 10, sparksSincePrestige: 2_147_483_700, sparksEarnedLifetime: 4_000_000_000 } },
-  { _label: 'frappe : poche suffisante, niveau 9', input: { law: 'sparks-mint-preview', sparks: 5000, cycle: levelThreshold(9) + 100, mintedLifetime: 0, held: 0, glory: 0, levelCap: 499 } },
-  { _label: 'frappe : poche vide, le niveau ne baisse pas', input: { law: 'sparks-mint-preview', sparks: 0, cycle: levelThreshold(9) + 100, mintedLifetime: 0, held: 0, glory: 0, levelCap: 499 } },
-  { _label: 'frappe : la 100e pièce entre au Coffre sans le rang', input: { law: 'sparks-mint-preview', sparks: 90_000, cycle: levelThreshold(9), mintedLifetime: 99, held: 99, glory: 500, levelCap: 499 } },
-  { _label: 'frappe : la 100e pièce entre au Coffre avec Voix I', input: { law: 'sparks-mint-preview', sparks: 90_000, cycle: levelThreshold(9), mintedLifetime: 99, held: 99, glory: minGlory('voix', 1), levelCap: 499 } },
-  { _label: 'frappe : bloquée par une dette d\'étincelles', input: { law: 'sparks-mint-preview', sparks: 90_000, cycle: levelThreshold(9), mintedLifetime: 0, held: 0, glory: 0, levelCap: 499, debt: 250 } },
+  { _label: 'frappe : poche au niveau 9, la frappe le fait baisser', input: { law: 'sparks-mint-preview', sparks: levelThreshold(9) + 100, mintedLifetime: 0, held: 0, glory: 0, levelCap: 499 } },
+  { _label: 'frappe : poche vide, niveau 1', input: { law: 'sparks-mint-preview', sparks: 0, mintedLifetime: 0, held: 0, glory: 0, levelCap: 499 } },
+  { _label: 'frappe : la 100e pièce entre au Coffre sans le rang', input: { law: 'sparks-mint-preview', sparks: 90_000, mintedLifetime: 99, held: 99, glory: 500, levelCap: 499 } },
+  { _label: 'frappe : la 100e pièce entre au Coffre avec Voix I', input: { law: 'sparks-mint-preview', sparks: 90_000, mintedLifetime: 99, held: 99, glory: minGlory('voix', 1), levelCap: 499 } },
+  { _label: 'frappe : bloquée par une dette d\'étincelles', input: { law: 'sparks-mint-preview', sparks: 90_000, mintedLifetime: 0, held: 0, glory: 0, levelCap: 499, debt: 250 } },
   { _label: 'étincelles avec une dette', input: { law: 'sparks-of', engagementScore: 40, sparksDebt: 250 } },
-  { _label: 'frappe : numéro indépendant de la bourse', input: { law: 'sparks-mint-preview', sparks: 90_000, cycle: levelThreshold(9), mintedLifetime: 7, held: 3, glory: 0, levelCap: 499 } },
+  { _label: 'frappe : numéro indépendant de la bourse', input: { law: 'sparks-mint-preview', sparks: 90_000, mintedLifetime: 7, held: 3, glory: 0, levelCap: 499 } },
   { _label: 'réserves sans rang', input: { law: 'treasury-access', glory: 0 } },
   { _label: 'réserves à Voix II (n\'ouvre pas le Coffre)', input: { law: 'treasury-access', glory: minGlory('voix', 2) } },
   { _label: 'réserves à Voix I (ouvre le Coffre)', input: { law: 'treasury-access', glory: minGlory('voix', 1) } },

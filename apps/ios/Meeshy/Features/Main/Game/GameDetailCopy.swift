@@ -91,7 +91,7 @@ enum GameDetailText {
         case .mission: String(localized: "game.detail.mission.what", defaultValue: "Une mission est un petit but à atteindre aujourd’hui.", bundle: .main)
         case .chest: String(localized: "game.detail.chest.what", defaultValue: "Le coffre du jour s’ouvre quand tes missions sont faites.", bundle: .main)
         case .coin: String(localized: "game.detail.coin.what", defaultValue: "La Meesh est la pièce rare de Meeshy. Chaque pièce porte son numéro.", bundle: .main)
-        case .levelRing: String(localized: "game.detail.ring.what", defaultValue: "L’anneau montre ton niveau : il se remplit avec tes points en poche.", bundle: .main)
+        case .levelRing: String(localized: "game.detail.ring.what", defaultValue: "L’anneau montre ton niveau : il se remplit avec tes étincelles convertibles.", bundle: .main)
         case .treasuryTier: String(localized: "game.detail.treasury.what", defaultValue: "Ton trésor grandit avec les Meeshes que tu gardes.", bundle: .main)
         case .elanFamily: String(localized: "game.detail.elan.what", defaultValue: "Une famille regroupe des gestes qui se ressemblent.", bundle: .main)
         case .levelStep: String(localized: "game.detail.levelstep.what", defaultValue: "De 10 à 100, chaque dizaine de niveaux demande une étape simple.", bundle: .main)
@@ -133,11 +133,11 @@ enum GameDetailText {
     static func fact(_ key: GameDetailFactKey) -> String {
         switch key {
         case .tier: String(localized: "game.detail.fact.tier", defaultValue: "Dix niveaux font un palier. Chaque palier a son nom et sa couleur.", bundle: .main)
-        case .score: String(localized: "game.detail.fact.score", defaultValue: "Ce sont tous tes points du moment. Ils font ton niveau. Une frappe en retire le prix.", bundle: .main)
+        case .score: String(localized: "game.detail.fact.score", defaultValue: "Ce sont toutes tes étincelles du moment, celles que la frappe dépense. Elles font ton niveau : une frappe en retire le prix, et ton niveau baisse d’autant.", bundle: .main)
         case .convertible: String(localized: "game.detail.fact.convertible", defaultValue: "C’est la part de tes points que la frappe peut reprendre. Elle seule paie une Meesh.", bundle: .main)
         case .levelNext: String(localized: "game.detail.fact.level_next", defaultValue: "Ce sont les points en poche qu’il te manque pour monter d’un niveau.", bundle: .main)
         case .levelRecord: String(localized: "game.detail.fact.level_record", defaultValue: "C’est le plus haut niveau que tu as atteint.", bundle: .main)
-        case .tailwind: String(localized: "game.detail.fact.tailwind", defaultValue: "Après une frappe, tes points comptent plus jusqu’à ton niveau record.", bundle: .main)
+        case .tailwind: String(localized: "game.detail.fact.tailwind", defaultValue: "Le Vent arrière est éteint.", bundle: .main)
         case .mintPrice: String(localized: "game.detail.fact.mint_price", defaultValue: "C’est le prix de ta prochaine Meesh, en points à convertir. Il monte toutes les dix frappes.", bundle: .main)
         case .mintMissing: String(localized: "game.detail.fact.mint_missing", defaultValue: "Ce sont les points à convertir qu’il te manque pour frapper ta prochaine Meesh.", bundle: .main)
         case .canMint: String(localized: "game.detail.fact.can_mint", defaultValue: "Tu as assez de points à convertir : tu peux frapper une Meesh dans sa fiche.", bundle: .main)

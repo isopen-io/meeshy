@@ -733,7 +733,7 @@ extension ProgressionConceptModel {
         let mint = game.mint
         let number = count(mint.number)
         let price = GameCopy.points(mint.price)
-        // Les étincelles (#10846) : UN seul solde, la poche, toute convertible — jamais le cycle (`score`).
+        // Les étincelles (#10846) : UN seul solde, la poche, toute convertible — jamais le cycle, indicatif (#10892).
         if game.level.sparks != nil {
             let pocket = GameCopy.points(game.level.sparkFacts.pocket)
             return mint.canMint

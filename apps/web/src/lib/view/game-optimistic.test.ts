@@ -74,6 +74,28 @@ describe('afterMint — la pièce tombe, le niveau redescend, le trésor monte',
   });
 });
 
+describe('afterMint avec les étincelles (#10892) — la poche paie et fait le niveau, le cumul reste', () => {
+  const sparks = { pocket: 40_000, cycle: 90_000, lifetime: 250_000, debt: 0 };
+  const before = view({ score: sparks.pocket, debitablePoints: sparks.pocket, sparks, levelMaxLifetime: 30 });
+  const after = afterMint(before);
+
+  test('la poche perd le prix, le niveau se relit sur elle', () => {
+    expect(gameOf(after).level.sparks).toBe(sparks.pocket - gameOf(before).mint.price);
+    expect(gameOf(after).level.score).toBe(sparks.pocket - gameOf(before).mint.price);
+    expect(gameOf(after).level.ladder?.level).toBeLessThan(gameOf(before).level.ladder?.level ?? 0);
+  });
+
+  test('le cumul depuis le Prestige, le total à vie et le niveau max à vie restent', () => {
+    expect(gameOf(after).level.sparksCycle).toBe(sparks.cycle);
+    expect(gameOf(after).level.sparksLifetime).toBe(sparks.lifetime);
+    expect(gameOf(after).level.levelMaxLifetime).toBe(30);
+  });
+
+  test('le Vent arrière reste éteint', () => {
+    expect(gameOf(after).boosts.tailwind).toBe(1);
+  });
+});
+
 describe('le gel et le changement de mission coûtent une Meesh', () => {
   test('un gel : un de plus en réserve, une Meesh de moins', () => {
     const before = view();
