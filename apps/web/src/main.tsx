@@ -292,6 +292,16 @@ if (__SHELL__) {
 }
 
 /**
+ * ET DANS LE NAVIGATEUR, LA NOTIFICATION D'UN VOCAL DIT QUI PARLE ET SE PILOTE
+ * (#10890) — la même carte que la coque, par la Media Session API : l'auteur,
+ * la conversation, la date, l'avatar, la barre et les ±15 s. Un navigateur
+ * sans Media Session garde sa carte générique et ne charge rien.
+ */
+if (!__SHELL__ && 'mediaSession' in navigator) {
+  void import('@/lib/view/web-now-playing').then(({ startWebNowPlaying }) => startWebNowPlaying());
+}
+
+/**
  * LA COQUE ANDROID REÇOIT SES PUSHS PAR FCM NATIF (#7307). La WebView n'a ni
  * Push API ni service worker : le jeton vient de `@capacitor/push-notifications`
  * et s'enregistre par le même port qu'iOS. Derrière `__SHELL__`, ce module et

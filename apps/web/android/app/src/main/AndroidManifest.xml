@@ -344,5 +344,10 @@
         <intent>
             <action android:name="android.speech.RecognitionService" />
         </intent>
+        <!-- #10888 — le navigateur des Custom Tabs, que MeeshyLinksPlugin préchauffe :
+             sans cette requête, Android 11+ le cache à la coque. -->
+        <intent>
+            <action android:name="android.support.customtabs.action.CustomTabsService" />
+        </intent>
     </queries>
 </manifest>
