@@ -1,3 +1,5 @@
+import { carriesEmailLinkSecret, decodeEmailLinkPath } from '@meeshy/shared/utils/email-link-secret';
+
 import type { ApiFailure, ApiResult } from '../api/http';
 
 /**
@@ -90,25 +92,66 @@ const isWhitespaceOrControl = (character: string): boolean => {
   return character.trim() === '' || code < 0x20 || code === 0x7f;
 };
 
+const PATH_BASE = new URL('https://return-path.meeshy.invalid');
+
+const parsePath = (raw: string): URL | null => {
+  try {
+    return new URL(raw, PATH_BASE);
+  } catch {
+    return null;
+  }
+};
+
+const ABSOLUTE_PREFIX = /^[a-z][a-z0-9+.-]*:\/\/[^/\\]*/i;
+
+/**
+ * Le chemin mène-t-il à une page à JETON d'e-mail (#10877) ? La règle est
+ * `carriesEmailLinkSecret` (`@meeshy/shared`), lue sur l'adresse DÉCODÉE et
+ * sur chaque morceau qui y désigne un chemin ou une adresse : la route du
+ * fragment et tout paramètre (`next`, `returnUrl`, …), à toute profondeur. Un
+ * encodage plus profond que le décodage (`%2F` résiduel) ⇒ oui.
+ */
+const leadsToEmailLinkSecret = (raw: string): boolean => {
+  const decoded = decodeEmailLinkPath(raw);
+  if (/%(?:25)*(?:2f|5c)/i.test(decoded)) return true;
+  return decoded.split(/[?&=#]/).some((piece) => {
+    const path = piece.trim().replace(ABSOLUTE_PREFIX, '');
+    return (path.startsWith('/') || path.startsWith('\\')) && carriesEmailLinkSecret(path);
+  });
+};
+
 /**
  * Clampe `returnUrl` à un chemin MÊME-ORIGINE, jamais une URL absolue ni un
  * schéma alternatif — même doctrine que le legacy
  * (`apps/web/app/auth/magic-link/validate/page.tsx:94-97` : « returnUrl is
- * attacker-controlled … clamp it to a same-origin path »). Un `returnUrl`
- * suspect rend `'/'`, jamais l'entrée telle quelle.
+ * attacker-controlled … clamp it to a same-origin path »). `null` ⇒ refusé.
  *
  * Rejette aussi les blancs et caractères de contrôle (#6743) : le parseur
  * d'URL les RETIRE, si bien que `/\t/evil.com` devient `//evil.com` — et
- * `history.replaceState` LÈVE sur une adresse d'une autre origine. Cette
- * garde est la SEULE — `safeNextPath` (`session-guard.ts`) la réemploie
+ * `history.replaceState` LÈVE sur une adresse d'une autre origine.
+ *
+ * Rejette enfin toute page à jeton d'e-mail (#10877) : collée dans un `next`,
+ * elle mènerait la session qui s'ouvre au jeton d'un AUTRE compte. Ce qui est
+ * rendu est la forme NORMALISÉE (WHATWG : segments `.` et `..` résolus) — la
+ * forme jugée est la forme servie, et une normalisation qui en ferait
+ * `//hôte` est refusée.
+ *
+ * Cette garde est la SEULE — `safeNextPath` (`session-guard.ts`) la réemploie
  * plutôt que de la recopier : deux clampages d'une même valeur hostile
  * divergeraient au premier correctif.
  */
+export function clampReturnPath(raw: string | null | undefined): string | null {
+  if (raw === null || raw === undefined || raw === '') return null;
+  if (!raw.startsWith('/') || raw.startsWith('//') || raw.includes('\\')) return null;
+  if ([...raw].some(isWhitespaceOrControl)) return null;
+  const url = parsePath(raw);
+  if (url === null || url.origin !== PATH_BASE.origin) return null;
+  const served = `${url.pathname}${url.search}${url.hash}`;
+  if (served.startsWith('//')) return null;
+  return leadsToEmailLinkSecret(raw) || leadsToEmailLinkSecret(served) ? null : served;
+}
+
+/** `returnUrl` clampé — `'/'` quand il est refusé, jamais l'entrée telle quelle. */
 export function safeReturnPath(raw: string | null | undefined): string {
-  if (raw === null || raw === undefined || raw === '') return '/';
-  if (!raw.startsWith('/')) return '/';
-  if (raw.startsWith('//')) return '/';
-  if (raw.includes('\\')) return '/';
-  if ([...raw].some(isWhitespaceOrControl)) return '/';
-  return raw;
+  return clampReturnPath(raw) ?? '/';
 }

@@ -2,6 +2,7 @@ import { describe, expect, test } from 'bun:test';
 
 import { ROUTES } from '@/routes/route-table';
 import { landingAfterSession, resolveRouteAccess, safeNextPath, type RouteKey } from './session-guard';
+import { SECRET_RETURN_PATHS } from '../test-support/email-link-secret-paths';
 
 /**
  * LA PORTE (#5555, T7) — pure. Fixtures ⇒ toujours `allow` (les captures et le
@@ -489,6 +490,24 @@ describe('safeNextPath — un chemin INTERNE, ou rien', () => {
     for (const hostile of ['/\t/evil.com', '/\n/evil.com', '/\r/evil.com', '/chat/x ', `/chat/x${String.fromCharCode(0)}`, `/chat/x${String.fromCharCode(127)}`]) {
       expect({ hostile: JSON.stringify(hostile), next: safeNextPath(hostile) }).toEqual({ hostile: JSON.stringify(hostile), next: null });
     }
+  });
+});
+
+describe('safeNextPath — jamais une page à jeton d’e-mail (#10877)', () => {
+  test('toute forme d’un chemin à secret ⇒ rien', () => {
+    for (const hostile of SECRET_RETURN_PATHS) {
+      expect({ hostile: JSON.stringify(hostile), next: safeNextPath(hostile) }).toEqual({ hostile: JSON.stringify(hostile), next: null });
+    }
+  });
+
+  test('la forme normalisée est servie, jamais l’entrée brute', () => {
+    expect(safeNextPath('/c/./abc')).toBe('/c/abc');
+    expect(safeNextPath('/x/../chats')).toBe('/chats');
+  });
+
+  test('ni la page à jeton ni la landing ne survivent à `landingAfterSession`', () => {
+    expect(landingAfterSession('/auth/magic-link?token=t', '/chats')).toBe('/chats');
+    expect(landingAfterSession('/x/%2e%2e/reset-password', '/chats')).toBe('/chats');
   });
 });
 
