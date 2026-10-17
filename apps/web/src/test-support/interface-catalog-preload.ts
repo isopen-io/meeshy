@@ -1,4 +1,5 @@
 import { loadAccountRecoveryCatalog } from '@/lib/i18n-account-recovery-catalog';
+import { loadSignInLinkCatalog } from '@/lib/i18n-sign-in-link-catalog';
 import { loadInterfaceCatalog } from '@/lib/i18n-catalog';
 import { loadEmojiPickerCatalog } from '@/lib/i18n-emoji-picker-catalog';
 import { loadGameCatalog } from '@/lib/i18n-game-catalog';
@@ -28,3 +29,7 @@ await loadRowMenuCatalog(DEFAULT_INTERFACE_LANGUAGE);
    `/forgot-password` et `/reset-password` (`route-table.tsx`) ; un témoin qui
    monte l'un de ces écrans hors routeur rejoue ce contrat. */
 await loadAccountRecoveryCatalog(DEFAULT_INTERFACE_LANGUAGE);
+
+/* LA CONFIRMATION D'UN LIEN DE CONNEXION (`signInLink.confirm.*`) : en production elle arrive avec le lien magique
+   et la vérification d'adresse (`route-table.tsx`) ; un témoin qui monte ces écrans hors routeur rejoue ce contrat. */
+await loadSignInLinkCatalog(DEFAULT_INTERFACE_LANGUAGE);

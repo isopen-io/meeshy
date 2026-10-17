@@ -50,11 +50,6 @@ const ptVerifyEmail = {
   'emailSent.openLink': 'Abra o link enviado para {email}',
   'emailSent.nothingReceived': 'Não recebeu nada?',
   'emailSent.nothingReceived.text': 'Verifique sua pasta de spam: a mensagem pode ter ido parar lá.',
-  'signInLink.confirm.title': 'Entrar como @{username}?',
-  'signInLink.confirm.lead': 'Este link não foi pedido a partir deste dispositivo. Continue apenas se esta conta for sua.',
-  'signInLink.confirm.leadSignedIn': 'Você está conectado como @{current}. Este link abriria a conta abaixo no lugar dela; @{current} continuará nas suas contas neste dispositivo.',
-  'signInLink.confirm.accept': 'Entrar',
-  'signInLink.confirm.cancel': 'Cancelar',
 };
 
 export default ptVerifyEmail;

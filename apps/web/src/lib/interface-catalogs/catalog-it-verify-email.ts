@@ -50,11 +50,6 @@ const itVerifyEmail = {
   'emailSent.openLink': 'Apri il link inviato a {email}',
   'emailSent.nothingReceived': 'Non hai ricevuto nulla?',
   'emailSent.nothingReceived.text': 'Controlla la cartella spam: il messaggio potrebbe essere finito lì.',
-  'signInLink.confirm.title': 'Accedere come @{username}?',
-  'signInLink.confirm.lead': 'Questo link non è stato richiesto da questo dispositivo. Continua solo se questo account è tuo.',
-  'signInLink.confirm.leadSignedIn': 'Hai effettuato l’accesso come @{current}. Questo link aprirebbe al suo posto l’account qui sotto; @{current} resterà tra i tuoi account su questo dispositivo.',
-  'signInLink.confirm.accept': 'Accedi',
-  'signInLink.confirm.cancel': 'Annulla',
 };
 
 export default itVerifyEmail;

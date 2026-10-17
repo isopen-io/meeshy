@@ -50,11 +50,6 @@ const arVerifyEmail = {
   'emailSent.openLink': 'افتح الرابط المُرسَل إلى {email}',
   'emailSent.nothingReceived': 'لم يصلك شيء؟',
   'emailSent.nothingReceived.text': 'تحقّق من مجلد الرسائل غير المرغوب فيها (spam): قد تكون الرسالة وصلت إليه.',
-  'signInLink.confirm.title': 'تسجيل الدخول باسم ‎@{username}؟',
-  'signInLink.confirm.lead': 'لم يُطلب هذا الرابط من هذا الجهاز. لا تتابع إلا إذا كان هذا الحساب حسابك.',
-  'signInLink.confirm.leadSignedIn': 'أنت مسجّل الدخول باسم ‎@{current}. سيفتح هذا الرابط الحساب أدناه بدلًا منه، وسيبقى ‎@{current} ضمن حساباتك على هذا الجهاز.',
-  'signInLink.confirm.accept': 'تسجيل الدخول',
-  'signInLink.confirm.cancel': 'إلغاء',
 };
 
 export default arVerifyEmail;

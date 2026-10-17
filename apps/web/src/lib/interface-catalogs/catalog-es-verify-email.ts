@@ -50,11 +50,6 @@ const esVerifyEmail = {
   'emailSent.openLink': 'Abre el enlace enviado a {email}',
   'emailSent.nothingReceived': '¿No has recibido nada?',
   'emailSent.nothingReceived.text': 'Revisa tu carpeta de spam: el mensaje puede haber llegado allí.',
-  'signInLink.confirm.title': '¿Iniciar sesión como @{username}?',
-  'signInLink.confirm.lead': 'Este enlace no se solicitó desde este dispositivo. Continúa solo si esta cuenta es tuya.',
-  'signInLink.confirm.leadSignedIn': 'Has iniciado sesión como @{current}. Este enlace abriría la cuenta de abajo en su lugar; @{current} seguirá en tus cuentas en este dispositivo.',
-  'signInLink.confirm.accept': 'Iniciar sesión',
-  'signInLink.confirm.cancel': 'Cancelar',
 };
 
 export default esVerifyEmail;
