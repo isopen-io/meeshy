@@ -176,6 +176,9 @@ final class GameSourceGuardTests: XCTestCase {
         "game.concept.fact.zone",
         // Les paliers ouverts au-delà de 100 (#9688) : des noms d'astronomie que l'anglais écrit comme le français.
         "game.tier.pulsar", "game.tier.quasar", "game.tier.supernova", "game.tier.cosmos",
+        // « 4 200 / 12 000 » (#10860, 9275039845) : deux nombres et une barre — rien à traduire, aucune langue ne
+        // l'écrit autrement.
+        "game.sparks.cumul.value",
     ]
 
     private func gameCatalogEntries() throws -> [String: [String: String]] {
