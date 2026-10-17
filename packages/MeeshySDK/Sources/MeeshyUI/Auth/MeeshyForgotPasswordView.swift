@@ -198,8 +198,10 @@ public struct MeeshyForgotPasswordView: View {
                 title: String(localized: "auth.magiclink.send", defaultValue: "Recevoir le lien", bundle: .main),
                 isLoading: isLoading
             ) {
+                guard ForgotPasswordInput.canRequestLink(email: email) else { return }
                 isLoading = true
                 errorMessage = nil
+                email = ForgotPasswordInput.submittedEmail(email)
                 let sent = await authManager.requestPasswordReset(email: email)
                 isLoading = false
                 if sent {
@@ -209,6 +211,7 @@ public struct MeeshyForgotPasswordView: View {
                     errorMessage = authManager.errorMessage
                 }
             }
+            .disabled(!ForgotPasswordInput.canRequestLink(email: email))
             .accessibilityIdentifier("auth.forgotPassword.submit")
         }
     }
@@ -278,6 +281,7 @@ public struct MeeshyForgotPasswordView: View {
                 ) {
                     await phoneLookup()
                 }
+                .disabled(!ForgotPasswordInput.canLookUp(phoneNumber: phoneNumber))
             }
 
         case .verifyIdentity:
@@ -321,6 +325,7 @@ public struct MeeshyForgotPasswordView: View {
                 ) {
                     await phoneVerifyIdentity()
                 }
+                .disabled(!ForgotPasswordInput.canVerifyIdentity(fullUsername: fullUsername, fullEmail: fullEmail))
             }
 
         case .verifyCode:
@@ -341,6 +346,7 @@ public struct MeeshyForgotPasswordView: View {
                 ) {
                     await phoneVerifyCode()
                 }
+                .disabled(!ForgotPasswordInput.canConfirm(code: verificationCode))
             }
         }
     }
@@ -360,6 +366,7 @@ public struct MeeshyForgotPasswordView: View {
     // MARK: - API Calls
 
     private func phoneLookup() async {
+        guard ForgotPasswordInput.canLookUp(phoneNumber: phoneNumber) else { return }
         isLoading = true; errorMessage = nil
         do {
             struct LookupReq: Encodable { let phoneNumber: String; let countryCode: String }
@@ -390,6 +397,7 @@ public struct MeeshyForgotPasswordView: View {
     }
 
     private func phoneVerifyIdentity() async {
+        guard ForgotPasswordInput.canVerifyIdentity(fullUsername: fullUsername, fullEmail: fullEmail) else { return }
         isLoading = true; errorMessage = nil
         do {
             struct VerifyReq: Encodable { let tokenId: String; let fullUsername: String; let fullEmail: String }
@@ -397,7 +405,11 @@ public struct MeeshyForgotPasswordView: View {
 
             let _: APIResponse<VerifyRes> = try await APIClient.shared.post(
                 AuthEndpoint.forgotPasswordPhoneVerifyIdentity,
-                body: VerifyReq(tokenId: tokenId, fullUsername: fullUsername, fullEmail: fullEmail)
+                body: VerifyReq(
+                    tokenId: tokenId,
+                    fullUsername: fullUsername.trimmingCharacters(in: .whitespacesAndNewlines),
+                    fullEmail: ForgotPasswordInput.submittedEmail(fullEmail)
+                )
             )
             phoneStep = .verifyCode
         } catch {
@@ -407,6 +419,7 @@ public struct MeeshyForgotPasswordView: View {
     }
 
     private func phoneVerifyCode() async {
+        guard ForgotPasswordInput.canConfirm(code: verificationCode) else { return }
         isLoading = true; errorMessage = nil
         do {
             struct CodeReq: Encodable { let tokenId: String; let code: String }
@@ -414,7 +427,7 @@ public struct MeeshyForgotPasswordView: View {
 
             let res: APIResponse<CodeRes> = try await APIClient.shared.post(
                 AuthEndpoint.forgotPasswordPhoneVerifyCode,
-                body: CodeReq(tokenId: tokenId, code: verificationCode)
+                body: CodeReq(tokenId: tokenId, code: ForgotPasswordInput.submittedCode(verificationCode))
             )
             resetToken = res.data.resetToken
             showResetPassword = true
