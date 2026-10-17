@@ -22,7 +22,7 @@ import {
   type DecodedPerson,
 } from './call-decode';
 import { analyticsPayload, createTelemetry, markCaptions, markConnected, markEffects, markNegotiating, markNetworkChange, markReconnecting, qualityReport, withCodec, withSample } from './call-analytics';
-import { mediaFailureOf, stopStream, type Facing } from './call-media';
+import { mediaFailureOf, stopStream, type Facing, type MediaFailure } from './call-media';
 import {
   callStore,
   isCallLive,
@@ -105,7 +105,7 @@ export type CallEngineDeps = {
   readonly transport: () => CallTransport | null;
   readonly viewerId: () => string;
   readonly fetchActiveCallId: (conversationId: string) => Promise<string | null>;
-  readonly acquireMedia: (options: { readonly video: boolean; readonly facing: Facing }) => Promise<MediaStream>;
+  readonly acquireMedia: (options: { readonly video: boolean; readonly facing: Facing; readonly onCameraFailed?: (failure: MediaFailure) => void }) => Promise<MediaStream>;
   readonly acquireCamera: (facing: Facing) => Promise<MediaStreamTrack>;
   /** Une caméra EXIGÉE par son identifiant (#9094, `acquireChosenInput`). */
   readonly acquireCameraDevice: (deviceId: string) => Promise<MediaStreamTrack>;
@@ -488,7 +488,7 @@ export function createCallEngine(deps: CallEngineDeps): CallEngine {
 
   const acquire = async (video: boolean, facing: Facing): Promise<MediaStream | null> => {
     try {
-      const stream = await deps.acquireMedia({ video, facing });
+      const stream = await deps.acquireMedia({ video, facing, onCameraFailed: (failure) => showNotice(controlState.notices, { kind: 'camera-failed', failure }) });
       for (const track of stream.getAudioTracks()) track.enabled = !micMuted();
       for (const camera of stream.getVideoTracks()) swapTrack(stream, camera, await withEffects(camera));
       localStream = stream;

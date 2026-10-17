@@ -5,6 +5,7 @@ import { controlNoticeText, noticeRole } from '@/lib/calls/call-control-text';
 import { callNoticeStore, callReactionStore, dismissNotice, REACTION_LIFETIME_MS, type CallReactionBurst } from '@/lib/calls/call-control-state';
 import { translateCallControls as t } from '@/lib/i18n-call-controls-catalog';
 import type { InterfaceLanguage } from '@/lib/interface-language';
+import { appSettingsOpener } from '@/lib/view/settings-recovery';
 
 /**
  * **CE QUE LES CONTRÔLES D'UN APPEL MONTRENT PAR-DESSUS LA SCÈNE** (#8439,
@@ -15,7 +16,9 @@ import type { InterfaceLanguage } from '@/lib/interface-language';
  * `prefers-reduced-motion`, elle apparaît et s'efface sur place. Le nombre
  * affiché à la fois est borné par le magasin (`REACTION_MAX_SHOWN`). Chacune
  * est dite au lecteur d'écran (« Nadia a réagi 👍 ») par une région polie.
- * Le mot d'un contrôle s'efface seul après `NOTICE_MS`.
+ * Le mot d'un contrôle s'efface seul après `NOTICE_MS`. Une caméra refusée
+ * porte « Réglages » dans la coque Android (#10862) : deux refus y suffisent
+ * pour qu'elle ne se redemande plus (`appSettingsOpener`, nul sur le web).
  *
  * Chunk à part (`budgets.json` › `call_control_feedback`), posé par
  * `call-control-slots.tsx` ; il n'importe rien de `call_overlay`.
@@ -59,11 +62,17 @@ export function CallControlToast({ language, nameOf }: { readonly language: Inte
     return () => clearTimeout(timer);
   }, [notice, seq]);
   if (notice === null) return null;
+  const openSettings = notice.kind === 'camera-failed' && notice.failure === 'permission' ? appSettingsOpener() : null;
   return (
-    <div className="pointer-events-none absolute inset-x-4 z-30 flex justify-center" style={{ top: 'calc(env(safe-area-inset-top) + 4.5rem)' }}>
+    <div className="pointer-events-none absolute inset-x-4 z-30 flex flex-col items-center gap-2" style={{ top: 'calc(env(safe-area-inset-top) + 4.5rem)' }}>
       <p role={noticeRole(notice)} className="glass-call-prominent max-w-sm rounded-full px-4 py-2 text-center text-mini font-semibold text-on-media" data-call-control-notice={notice.kind}>
         {controlNoticeText(language, notice, nameOf)}
       </p>
+      {openSettings !== null ? (
+        <button type="button" data-call-camera-settings="" onClick={openSettings} className="glass-call-prominent pointer-events-auto rounded-full px-4 text-mini font-semibold text-on-media" style={{ minHeight: 44 }}>
+          {t(language, 'callControls.camera.settings')}
+        </button>
+      ) : null}
     </div>
   );
 }
