@@ -523,8 +523,10 @@ public final class SocialSocketManager: ObservableObject, SocialSocketProviding,
         let tokenExpired = Self.isJWTExpired(token)
         if tokenExpired {
             Logger.socket.warning("SocialSocket: JWT expired, triggering refresh instead of connecting")
+            // #10904 — au nom du jeton lu ici : il ne rafraîchit rien s'il
+            // n'est plus celui du compte actif quand la tâche s'exécute.
             Task { @MainActor in
-                AuthManager.shared.handleUnauthorized()
+                AuthManager.shared.handleUnauthorized(presentedToken: token)
             }
             return .notArmed
         }
