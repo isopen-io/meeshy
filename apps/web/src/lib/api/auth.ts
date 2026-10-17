@@ -2,6 +2,8 @@ import * as authEndpoints from '@meeshy/shared/api/endpoints/auth';
 
 import { httpTransport } from './client';
 import type { ApiResult, HttpRequest, HttpTransport } from './http';
+import { linkDeviceSecrets as browserLinkDeviceSecrets, type LinkDeviceSecrets } from '../links/link-device-secret';
+import { linkConfirmationOf, type LinkConfirmationRequired } from './link-confirmation';
 import { accountReplacementOf, admitProvenSession, provenSessionOf } from './proven-session';
 import type { PendingUser, SessionStoreApi, SessionUser } from './session';
 import { sessionStore } from './session';
@@ -192,6 +194,8 @@ export type AuthTransport = Pick<HttpTransport, 'request'>;
 export type AuthDeps = {
   readonly transport: AuthTransport;
   readonly store: SessionStoreApi;
+  /** #10872 — le secret qui lie un lien de connexion à ce navigateur. */
+  readonly linkSecrets?: LinkDeviceSecrets;
 };
 
 /**
@@ -273,7 +277,14 @@ export type VerifyResetTokenData = {
  * (`disconnectRevokedSessions`), il n'en établit aucune côté client. */
 export type ResetPasswordData = { readonly message: string };
 
-export function createAuthClient({ transport, store }: AuthDeps) {
+export function createAuthClient({ transport, store, linkSecrets = browserLinkDeviceSecrets }: AuthDeps) {
+  /** #10872 — le secret ne sert plus dès que l'issue du lien est DÉFINITIVE :
+   * une session (ou un défi) rendue, ou un refus du jeton. La question, elle,
+   * rejoue la requête : le secret reste. */
+  function settleLinkSecret(result: ApiResult<object>): void {
+    if (result.ok && linkConfirmationOf(result.data) === null) linkSecrets.forget();
+  }
+
   async function login(request: LoginRequest): Promise<ApiResult<LoginResponseData>> {
     // Corps composé d'un seul tenant — `rememberDevice` est OPTIONNEL au
     // schéma (`AuthSchemas.login`), et l'omettre n'est pas la même chose que
@@ -313,10 +324,12 @@ export function createAuthClient({ transport, store }: AuthDeps) {
     readonly rememberDevice?: boolean;
     readonly returnUrl?: string;
   }): Promise<ApiResult<MagicLinkRequestData>> {
+    const linkDeviceHash = await linkSecrets.issue();
     const body = {
       email: request.email,
       ...(request.rememberDevice !== undefined ? { rememberDevice: request.rememberDevice } : {}),
       ...(request.returnUrl !== undefined ? { returnUrl: request.returnUrl } : {}),
+      ...(linkDeviceHash !== null ? { linkDeviceHash } : {}),
     };
     return transport.request<MagicLinkRequestData>({ method: 'POST', path: authEndpoints.magicLinkRequest, body });
   }
@@ -335,15 +348,26 @@ export function createAuthClient({ transport, store }: AuthDeps) {
     admitProvenSession(store, proven);
   }
 
-  /** `POST /auth/magic-link/validate` (T3b) — la MÊME union que `login()`. */
-  async function validateMagicLink(token: string): Promise<ApiResult<LoginResponseData>> {
-    const result = await transport.request<LoginResponseData>({
+  /** `POST /auth/magic-link/validate` (T3b) — la MÊME union que `login()`,
+   * plus la question d'un lien ouvert ailleurs (#10872) : rien n'est posé
+   * avant le « oui », que l'écran rejoue avec `confirm`. */
+  async function validateMagicLink(
+    token: string,
+    options: { readonly confirm?: boolean } = {},
+  ): Promise<ApiResult<LoginResponseData | LinkConfirmationRequired>> {
+    const linkDeviceSecret = linkSecrets.presented();
+    const result = await transport.request<LoginResponseData | LinkConfirmationRequired>({
       method: 'POST',
       path: authEndpoints.magicLinkValidate,
-      body: { token },
+      body: {
+        token,
+        ...(linkDeviceSecret !== null ? { linkDeviceSecret } : {}),
+        ...(options.confirm === true ? { confirm: true } : {}),
+      },
       credential: null,
     });
-    if (!result.ok) return result;
+    settleLinkSecret(result);
+    if (!result.ok || linkConfirmationOf(result.data) !== null) return result;
 
     admitUnlessReplacing(result.data);
     return result;
@@ -412,13 +436,15 @@ export function createAuthClient({ transport, store }: AuthDeps) {
    * compte ouvert n'est pas posée sans la question, et un défi de second
    * facteur ouvre la saisie du code (#10474), comme au lien magique. */
   async function verifyEmail(request: VerifyEmailRequest): Promise<ApiResult<VerifyEmailData>> {
+    const byLink = 'token' in request;
     const result = await transport.request<VerifyEmailData>({
       method: 'POST',
       path: authEndpoints.verifyEmail,
-      body: verifyEmailBody(request),
+      body: verifyEmailBody(request, byLink ? linkSecrets.presented() : null),
       credential: null,
     });
-    if (!result.ok) return result;
+    if (byLink) settleLinkSecret(result);
+    if (!result.ok || linkConfirmationOf(result.data) !== null) return result;
 
     admitUnlessReplacing(result.data);
     return result;

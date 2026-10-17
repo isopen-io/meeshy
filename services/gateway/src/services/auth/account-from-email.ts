@@ -86,6 +86,11 @@ export type AccountFromEmailInput = {
   readonly requestContext?: RequestContext;
   /** Rang 4 du Prisme pour un compte à créer : `X-Device-Locale` ou `Accept-Language`. */
   readonly deviceLocale?: string;
+  /**
+   * #10872 — l'empreinte du secret de l'appareil demandeur (`link-device-binding`),
+   * attachée à la paire émise : son lien ne se conclut sans question que là.
+   */
+  readonly linkDeviceHash?: string | null;
 };
 
 export type AccountCodeMailer = {
@@ -186,8 +191,13 @@ type AccountRow = {
  * vérifié reçoit un code de CONNEXION — même paire, autre mot : on ne souhaite
  * pas la bienvenue à quelqu'un qui est là depuis un an.
  */
-async function sendCodeToAccount(deps: AccountFromEmailDeps, account: AccountRow, ttlMinutes: number): Promise<void> {
-  const pair = mintEmailCodePair(ttlMinutes);
+async function sendCodeToAccount(
+  deps: AccountFromEmailDeps,
+  account: AccountRow,
+  ttlMinutes: number,
+  linkDeviceHash: string | null,
+): Promise<void> {
+  const pair = mintEmailCodePair(ttlMinutes, new Date(), { linkDeviceHash });
   await deps.prisma.user.update({ where: { id: account.id }, data: { ...pair.columns } });
 
   const link = emailCodeLink(deps.frontendUrl, pair.rawToken, account.email);
@@ -234,6 +244,7 @@ export async function startAccountFromEmail(
   const email = normalizeEmail(input.email);
   const ip = input.requestContext?.ip || 'unknown';
   const ttlMinutes = ttlFor(input.door);
+  const linkDeviceHash = input.linkDeviceHash ?? null;
 
   if (input.door === 'email-only' && !(await consumeSend(deps.throttle, email, ip))) {
     return { kind: 'rate-limited' };
@@ -264,12 +275,16 @@ export async function startAccountFromEmail(
   }
 
   if (account) {
-    await sendCodeToAccount(deps, account, ttlMinutes);
+    await sendCodeToAccount(deps, account, ttlMinutes, linkDeviceHash);
     return { kind: 'verification-required', accountCreated: false, email };
   }
 
   try {
-    await deps.register({ email, deviceLocale: input.deviceLocale }, input.requestContext, ttlMinutes);
+    await deps.register(
+      { email, deviceLocale: input.deviceLocale, ...(linkDeviceHash ? { linkDeviceHash } : {}) },
+      input.requestContext,
+      ttlMinutes,
+    );
   } catch (error) {
     // La course entre deux demandes simultanées pour la même adresse : la
     // seconde trouve la ligne que la première vient d'écrire. Le compte existe,

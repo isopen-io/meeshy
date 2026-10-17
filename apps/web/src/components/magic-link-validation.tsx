@@ -1,9 +1,11 @@
 import { useEffect, useRef, useState } from 'react';
 
 import { auth } from '@/lib/api/auth';
+import { confirmsSilently, linkConfirmationOf, type LinkAccount } from '@/lib/api/link-confirmation';
 import { accountReplacementOf, provenSessionOf, type AccountReplacement, type ProvenSessionGestures } from '@/lib/api/proven-session';
 import { heldAccountOf, sessionStore } from '@/lib/api/session';
 import { forgetEmailLinkSecret } from '@/lib/links/email-link-secret';
+import { linkDeviceSecrets } from '@/lib/links/link-device-secret';
 import { currentInterfaceLanguage } from '@/lib/interface-language';
 import { placeMagicLinkValidationFailure } from '@/lib/view/auth-feedback';
 import { landingAfterSession } from '@/lib/session-guard';
@@ -11,6 +13,7 @@ import { href, Link, navigate } from '@/routes/route-table';
 
 import { AccountReplacementPrompt, deviceProvenSessions } from './account-replacement-prompt';
 import { AgeBlocked, AuthColumn, isAgeBelowMinimum } from './auth-column';
+import { LinkSignInConfirmation } from './link-sign-in-confirmation';
 import { AUTH_GLYPHS } from './glyphs-auth';
 import { Glyph, GlyphSvg } from './glyph';
 
@@ -22,9 +25,15 @@ import { Glyph, GlyphSvg } from './glyph';
  * appartient à un AUTRE compte que le compte ouvert — l'écran pose alors la
  * question (`AccountReplacementPrompt`), et un refus laisse la session ouverte
  * intacte.
+ *
+ * Un lien ouvert ailleurs que dans le navigateur qui l'a demandé (#10872) —
+ * dont tout lien du digest — ne pose RIEN : la passerelle rend le compte
+ * visé, l'écran demande « Se connecter en tant que @x ? », et seul le « oui »
+ * rejoue la validation avec `confirm`. Le même compte déjà ouvert se confirme
+ * sans question.
  */
 
-type ValidationState = 'validating' | 'invalid' | 'offline' | 'age-blocked' | 'confirm' | 'done';
+type ValidationState = 'validating' | 'invalid' | 'offline' | 'age-blocked' | 'ask' | 'confirm' | 'done';
 
 export function MagicLinkValidation({
   token,
@@ -42,48 +51,67 @@ export function MagicLinkValidation({
   const [state, setState] = useState<ValidationState>(token === null ? 'invalid' : 'validating');
   const [message, setMessage] = useState<string | null>(null);
   const [replacement, setReplacement] = useState<AccountReplacement | null>(null);
+  const [asked, setAsked] = useState<LinkAccount | null>(null);
+  const [confirmed, setConfirmed] = useState(false);
   const called = useRef(false);
 
   useEffect(() => {
     if (token === null) return;
     if (called.current) return;
     called.current = true;
-    void run();
-
-    async function run() {
-      setState('validating');
-      const result = await validate(token as string);
-      if (result.ok) {
-        forgetEmailLinkSecret();
-        const session = sessionStore.getState().session;
-        const pending = accountReplacementOf(session, provenSessionOf(result.data));
-        if (pending !== null) {
-          setReplacement(pending);
-          setState('confirm');
-          return;
-        }
-        if ('requires2FA' in result.data && result.data.requires2FA && heldAccountOf(session) === null) {
-          go(href('login'), true);
-          return;
-        }
-        setState('done');
-        go(landingAfterSession(returnUrl, href('list')), true);
-        return;
-      }
-      if (isAgeBelowMinimum(result)) {
-        forgetEmailLinkSecret();
-        setState('age-blocked');
-        return;
-      }
-      if (result.status === 0) {
-        setState('offline');
-        setMessage(placeMagicLinkValidationFailure(result).message);
-        return;
-      }
-      if (result.status === 400) forgetEmailLinkSecret();
-      setState('invalid');
-    }
+    void run(false);
   }, [token]);
+
+  async function run(confirm: boolean) {
+    setState('validating');
+    const result = await validate(token as string, confirm ? { confirm } : {});
+    const question = result.ok ? linkConfirmationOf(result.data) : null;
+    if (question !== null) {
+      if (!confirm && confirmsSilently(sessionStore.getState().session, question)) {
+        setConfirmed(true);
+        void run(true);
+        return;
+      }
+      setAsked(question);
+      setState('ask');
+      return;
+    }
+    if (result.ok) {
+      forgetEmailLinkSecret();
+      const session = sessionStore.getState().session;
+      const pending = accountReplacementOf(session, provenSessionOf(result.data));
+      if (pending !== null) {
+        setReplacement(pending);
+        setState('confirm');
+        return;
+      }
+      if ('requires2FA' in result.data && result.data.requires2FA && heldAccountOf(session) === null) {
+        go(href('login'), true);
+        return;
+      }
+      setState('done');
+      go(landingAfterSession(returnUrl, href('list')), true);
+      return;
+    }
+    if (isAgeBelowMinimum(result)) {
+      forgetEmailLinkSecret();
+      setState('age-blocked');
+      return;
+    }
+    if (result.status === 0) {
+      setState('offline');
+      setMessage(placeMagicLinkValidationFailure(result).message);
+      return;
+    }
+    if (result.status === 400) forgetEmailLinkSecret();
+    setState('invalid');
+  }
+
+  function decline() {
+    forgetEmailLinkSecret();
+    linkDeviceSecrets.forget();
+    go(href(sessionStore.getState().session.status === 'authenticated' ? 'list' : 'login'), true);
+  }
 
   function retry() {
     called.current = false;
@@ -137,11 +165,25 @@ export function MagicLinkValidation({
         </>
       ) : null}
 
+      {state === 'ask' && asked !== null ? (
+        <LinkSignInConfirmation
+          language={currentInterfaceLanguage()}
+          account={asked}
+          current={heldAccountOf(sessionStore.getState().session)?.user ?? null}
+          onConfirm={() => {
+            setConfirmed(true);
+            void run(true);
+          }}
+          onCancel={decline}
+        />
+      ) : null}
+
       {state === 'confirm' && replacement !== null ? (
         <AccountReplacementPrompt
           language={currentInterfaceLanguage()}
           replacement={replacement}
           gestures={gestures}
+          alreadyConfirmed={confirmed}
           onAdopted={() => go(replacement.proven.kind === 'second-factor' ? href('login') : landingAfterSession(returnUrl, href('list')), true)}
           onDiscarded={() => go(href('list'), true)}
         />

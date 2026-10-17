@@ -7,6 +7,9 @@ public protocol AuthServiceProviding: Sendable {
     func register(request: RegisterRequest) async throws -> LoginResponseData
     func requestMagicLink(email: String, deviceFingerprint: String?) async throws -> Int
     func validateMagicLink(token: String) async throws -> LoginResponseData
+    /// #10872 — `confirmed` : l'utilisateur a dit « oui » au compte que le lien
+    /// ouvre. Le secret de l'appareil voyage toujours avec le jeton.
+    func validateMagicLink(token: String, confirmed: Bool) async throws -> LoginResponseData
     func requestPasswordReset(email: String) async throws
     func resetPassword(token: String, newPassword: String) async throws
     func sendPhoneCode(phoneNumber: String) async throws
@@ -38,6 +41,11 @@ public protocol AuthServiceProviding: Sendable {
 }
 
 public extension AuthServiceProviding {
+    /// Repli des doubles qui ne connaissent pas la confirmation (#10872).
+    func validateMagicLink(token: String, confirmed: Bool) async throws -> LoginResponseData {
+        try await validateMagicLink(token: token)
+    }
+
     /// Default fallback for conformers that haven't implemented the
     /// throwing variant yet: best-effort, swallows errors. New tests
     /// (`AuthLogoutRetryTests`) override this on a mock to assert the
@@ -67,11 +75,18 @@ public final class AuthService: AuthServiceProviding, PasswordResetProviding, @u
     let api: APIClientProviding
     /// La déconnexion PAR JETON passe par là, jamais par `api` (#10463).
     let pinned: any PinnedRequesting
+    /// Le secret qui lie un lien de connexion à cet appareil (#10872).
+    let linkDevice: any LinkDeviceBindingProviding
     private let logger = Logger(subsystem: "com.meeshy.sdk", category: "auth")
 
-    init(api: APIClientProviding = APIClient.shared, pinned: any PinnedRequesting = APIClient.shared) {
+    init(
+        api: APIClientProviding = APIClient.shared,
+        pinned: any PinnedRequesting = APIClient.shared,
+        linkDevice: any LinkDeviceBindingProviding = KeychainLinkDeviceBinding()
+    ) {
         self.api = api
         self.pinned = pinned
+        self.linkDevice = linkDevice
     }
 
     // MARK: - Login
@@ -103,7 +118,7 @@ public final class AuthService: AuthServiceProviding, PasswordResetProviding, @u
 
     @discardableResult
     public func requestMagicLink(email: String, deviceFingerprint: String? = nil) async throws -> Int {
-        let body = MagicLinkRequest(email: email, deviceFingerprint: deviceFingerprint)
+        let body = MagicLinkRequest(email: email, deviceFingerprint: deviceFingerprint, linkDeviceHash: linkDevice.issueHash())
         let data = try JSONEncoder().encode(body)
         let response: MagicLinkResponse = try await api.request(
             AuthEndpoint.magicLinkRequest, method: "POST", body: data
@@ -115,9 +130,25 @@ public final class AuthService: AuthServiceProviding, PasswordResetProviding, @u
     }
 
     public func validateMagicLink(token: String) async throws -> LoginResponseData {
-        let body = MagicLinkValidateRequest(token: token)
+        try await validateMagicLink(token: token, confirmed: false)
+    }
+
+    public func validateMagicLink(token: String, confirmed: Bool) async throws -> LoginResponseData {
+        let body = MagicLinkValidateRequest(
+            token: token, linkDeviceSecret: linkDevice.presentedSecret(), confirm: confirmed ? true : nil
+        )
         let response: APIResponse<LoginResponseData> = try await api.post(AuthEndpoint.magicLinkValidate, body: body)
+        forgetLinkSecretIfSettled(response.data)
         return response.data
+    }
+
+    /// #10872 — le secret ne sert qu'une fois : il s'oublie dès que la preuve
+    /// a rendu une session ou un défi de second facteur. Une demande de
+    /// confirmation le garde (le jeton n'est pas consommé) ; un refus aussi,
+    /// car un lien plus ancien qui échoue ne doit pas délier le lien en cours.
+    private func forgetLinkSecretIfSettled(_ data: LoginResponseData) {
+        guard data.requiresConfirmation != true, data.token != nil || data.requires2FA == true else { return }
+        linkDevice.forget()
     }
 
     // MARK: - Forgot Password
@@ -203,7 +234,10 @@ public final class AuthService: AuthServiceProviding, PasswordResetProviding, @u
     }
 
     public func confirmEmail(_ request: EmailVerificationRequest) async throws -> LoginResponseData {
-        let response: APIResponse<LoginResponseData> = try await api.post(AuthEndpoint.verifyEmail, body: request)
+        let byLink = request.token != nil
+        let sent = byLink ? request.presenting(linkDeviceSecret: linkDevice.presentedSecret()) : request
+        let response: APIResponse<LoginResponseData> = try await api.post(AuthEndpoint.verifyEmail, body: sent)
+        if byLink { forgetLinkSecretIfSettled(response.data) }
         return response.data
     }
 

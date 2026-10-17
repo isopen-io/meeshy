@@ -88,7 +88,7 @@ function makePrisma(row: MongoDocument) {
 }
 
 const requestContext = { ip: '203.0.113.7', userAgent: 'TestAgent/1.0', geoData: null, deviceInfo: null } as unknown as RequestContext;
-const validation: MagicLinkValidation = { token: 'raw-token', requestContext };
+const validation: MagicLinkValidation = { token: 'raw-token', requestContext, confirmed: true };
 const cache = { get: jest.fn(), set: jest.fn(), del: jest.fn() } as any;
 
 function makeService(prisma: unknown) {

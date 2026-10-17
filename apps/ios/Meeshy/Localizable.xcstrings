@@ -298052,6 +298052,194 @@
           }
         }
       }
+    },
+    "signInLink.deviceConfirm.confirm": {
+      "extractionState": "manual",
+      "localizations": {
+        "ar": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "تسجيل الدخول"
+          }
+        },
+        "de": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Anmelden"
+          }
+        },
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Sign in"
+          }
+        },
+        "es": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Iniciar sesión"
+          }
+        },
+        "fr": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Se connecter"
+          }
+        },
+        "it": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Accedi"
+          }
+        },
+        "pt-BR": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Entrar"
+          }
+        }
+      }
+    },
+    "signInLink.deviceConfirm.message": {
+      "extractionState": "manual",
+      "localizations": {
+        "ar": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "لم يُطلب رابط تسجيل الدخول هذا من هذا الجهاز. إنه يفتح الحساب %@.\n\nلا تتابع إلا إذا كان هذا الحساب ملكك."
+          }
+        },
+        "de": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Dieser Anmeldelink wurde nicht von diesem Gerät angefordert. Er öffnet das Konto %@.\n\nFahre nur fort, wenn dieses Konto dir gehört."
+          }
+        },
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "This sign-in link was not requested from this device. It opens the account %@.\n\nOnly continue if this account belongs to you."
+          }
+        },
+        "es": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Este enlace de inicio de sesión no se solicitó desde este dispositivo. Abre la cuenta %@.\n\nContinúa solo si esta cuenta te pertenece."
+          }
+        },
+        "fr": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Ce lien de connexion n'a pas été demandé depuis cet appareil. Il ouvre le compte %@.\n\nNe continuez que si ce compte vous appartient."
+          }
+        },
+        "it": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Questo link di accesso non è stato richiesto da questo dispositivo. Apre l'account %@.\n\nContinua solo se questo account è tuo."
+          }
+        },
+        "pt-BR": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Este link de acesso não foi solicitado neste aparelho. Ele abre a conta %@.\n\nSó continue se esta conta for sua."
+          }
+        }
+      }
+    },
+    "signInLink.deviceConfirm.messageReplacing": {
+      "extractionState": "manual",
+      "localizations": {
+        "ar": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "لم يُطلب رابط تسجيل الدخول هذا من هذا الجهاز. إنه يفتح الحساب %1$@ بدلًا من %2$@ المفتوح (سيبقى في محدد الحسابات).\n\nلا تتابع إلا إذا كان هذا الحساب ملكك."
+          }
+        },
+        "de": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Dieser Anmeldelink wurde nicht von diesem Gerät angefordert. Er öffnet das Konto %1$@ anstelle von %2$@, das angemeldet ist (es bleibt in der Kontoauswahl).\n\nFahre nur fort, wenn dieses Konto dir gehört."
+          }
+        },
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "This sign-in link was not requested from this device. It opens the account %1$@ instead of %2$@, which is signed in (it stays in the account switcher).\n\nOnly continue if this account belongs to you."
+          }
+        },
+        "es": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Este enlace de inicio de sesión no se solicitó desde este dispositivo. Abre la cuenta %1$@ en lugar de %2$@, que está abierta (seguirá en el selector de cuentas).\n\nContinúa solo si esta cuenta te pertenece."
+          }
+        },
+        "fr": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Ce lien de connexion n'a pas été demandé depuis cet appareil. Il ouvre le compte %1$@, à la place de %2$@ qui est ouvert (il restera au sélecteur de comptes).\n\nNe continuez que si ce compte vous appartient."
+          }
+        },
+        "it": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Questo link di accesso non è stato richiesto da questo dispositivo. Apre l'account %1$@ al posto di %2$@, che è aperto (resterà nel selettore di account).\n\nContinua solo se questo account è tuo."
+          }
+        },
+        "pt-BR": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Este link de acesso não foi solicitado neste aparelho. Ele abre a conta %1$@ no lugar de %2$@, que está conectada (ela continua no seletor de contas).\n\nSó continue se esta conta for sua."
+          }
+        }
+      }
+    },
+    "signInLink.deviceConfirm.title": {
+      "extractionState": "manual",
+      "localizations": {
+        "ar": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "تسجيل الدخول باسم %@؟"
+          }
+        },
+        "de": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Als %@ anmelden?"
+          }
+        },
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Sign in as %@?"
+          }
+        },
+        "es": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "¿Iniciar sesión como %@?"
+          }
+        },
+        "fr": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Se connecter en tant que %@ ?"
+          }
+        },
+        "it": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Accedere come %@?"
+          }
+        },
+        "pt-BR": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Entrar como %@?"
+          }
+        }
+      }
     }
   },
   "version": "1.1"

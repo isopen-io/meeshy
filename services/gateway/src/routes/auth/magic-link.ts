@@ -407,7 +407,7 @@ export function registerMagicLinkRoutes(context: AuthRouteContext) {
     preHandler: [verifyEmailIpLimiter.middleware(), verifyEmailAddressLimiter.middleware()]
   }, async (request: FastifyRequest, reply: FastifyReply) => {
     try {
-      const { token, code, email, password } = validateSchema(AuthSchemas.verifyEmail, request.body, 'verify-email');
+      const { token, code, email, password, linkDeviceSecret, confirm } = validateSchema(AuthSchemas.verifyEmail, request.body, 'verify-email');
 
       if (password !== undefined) {
         const strength = validatePasswordStrength(password);
@@ -418,7 +418,14 @@ export function registerMagicLinkRoutes(context: AuthRouteContext) {
 
       logger.info(`[AUTH] Vérification email (method=${code ? 'code' : 'token'})`);
 
-      const result = await authService.verifyEmail({ email, code, token, password });
+      const result = await authService.verifyEmail({ email, code, token, password, linkDeviceSecret, confirmed: confirm === true });
+
+      // #10872 — lien ouvert ailleurs que sur l'appareil demandeur, sans le oui :
+      // rien n'est consommé, aucune session ; le client montre le compte cible.
+      if (result.success === false && result.reason === 'confirmation-required') {
+        logger.info('[AUTH] Lien présenté hors de l’appareil demandeur — confirmation requise');
+        return sendSuccess(reply, { requiresConfirmation: true, account: result.account });
+      }
 
       if (result.success === false) {
         logger.warn(`[AUTH] ❌ Échec de vérification email: ${result.reason}`);
