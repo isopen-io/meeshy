@@ -1,6 +1,7 @@
 import { describe, expect, it } from 'vitest';
 
-import { EMAIL_LINK_ALIASES, EMAIL_LINK_PATHS, carriesEmailLinkSecret, servedTrackingTarget, urlCarriesEmailLinkSecret } from './email-link-secret';
+import { EMAIL_LINK_ALIASES, EMAIL_LINK_PATHS, carriesEmailLinkSecret } from './email-link-secret';
+import { servedTrackingTarget, urlCarriesEmailLinkSecret } from './email-link-url';
 
 /**
  * UN LIEN À JETON D'E-MAIL N'ENTRE QUE PAR L'E-MAIL (#10870, #10871). La règle
