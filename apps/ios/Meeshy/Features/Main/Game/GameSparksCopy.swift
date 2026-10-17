@@ -15,9 +15,9 @@ enum GameSparksCopy {
         String(localized: "game.sparks.banner.pocket", defaultValue: "\(GameCopy.formatCount(count)) ✦", bundle: .main)
     }
 
-    /// Le record d'étincelles, en petit sous la poche : « 12 000 au total ».
+    /// Le record d’étincelles, en petit sous la poche : « record 12 000 ».
     static func bannerLifetime(_ count: Int) -> String {
-        String(localized: "game.sparks.banner.lifetime", defaultValue: "\(GameCopy.formatCount(count)) au total", bundle: .main)
+        String(localized: "game.sparks.banner.lifetime", defaultValue: "record \(GameCopy.formatCount(count))", bundle: .main)
     }
 
     /// Le record de niveau, en petit sous le niveau : « record 40 ».

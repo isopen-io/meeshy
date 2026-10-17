@@ -237978,55 +237978,55 @@
         "ar": {
           "stringUnit": {
             "state": "translated",
-            "value": "%@ في المجموع"
+            "value": "القياسي %@"
           }
         },
         "de": {
           "stringUnit": {
             "state": "translated",
-            "value": "%@ insgesamt"
+            "value": "Rekord %@"
           }
         },
         "en": {
           "stringUnit": {
             "state": "translated",
-            "value": "%@ in total"
+            "value": "record %@"
           }
         },
         "es": {
           "stringUnit": {
             "state": "translated",
-            "value": "%@ en total"
+            "value": "récord %@"
           }
         },
         "fr": {
           "stringUnit": {
             "state": "translated",
-            "value": "%@ au total"
+            "value": "record %@"
           }
         },
         "it": {
           "stringUnit": {
             "state": "translated",
-            "value": "%@ in tutto"
+            "value": "record %@"
           }
         },
         "pt": {
           "stringUnit": {
             "state": "translated",
-            "value": "%@ no total"
+            "value": "recorde %@"
           }
         },
         "pt-BR": {
           "stringUnit": {
             "state": "translated",
-            "value": "%@ no total"
+            "value": "recorde %@"
           }
         },
         "zh-Hans": {
           "stringUnit": {
             "state": "translated",
-            "value": "累计 %@"
+            "value": "纪录 %@"
           }
         }
       }
