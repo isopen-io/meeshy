@@ -1,4 +1,4 @@
-# Un synonyme n'est pas une dette
+## Un synonyme n'est pas une dette
 
 **Contexte** (#10860) : le porteur a demandé que seules les étincelles convertibles comptent comme valeur réelle. Le libellé est passé de « En poche » à « Convertibles », puis le rapport de clôture a listé comme restes les endroits qui disaient encore « poche ».
 
