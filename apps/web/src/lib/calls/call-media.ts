@@ -67,15 +67,20 @@ function devices(): MediaDevicesLike | null {
  */
 export type InputChoice = { readonly microphoneId?: string | null; readonly cameraId?: string | null; readonly profile?: DataProfile };
 
-export async function acquireCallMedia(options: { readonly video: boolean; readonly facing: Facing; readonly mediaDevices?: MediaDevicesLike | null } & InputChoice): Promise<MediaStream> {
+/** `onCameraFailed` : la caméra n'a pas suivi et l'appel repart en voix seule (#10876) — la raison réelle, pour que l'écran le dise. */
+export async function acquireCallMedia(
+  options: { readonly video: boolean; readonly facing: Facing; readonly mediaDevices?: MediaDevicesLike | null; readonly onCameraFailed?: (failure: MediaFailure) => void } & InputChoice,
+): Promise<MediaStream> {
   const source = options.mediaDevices === undefined ? devices() : options.mediaDevices;
   if (source === null) throw Object.assign(new Error('media-devices-missing'), { name: 'NotFoundError' });
   const audio = audioInputConstraints(options.microphoneId ?? null);
   if (!options.video) return source.getUserMedia({ audio, video: false });
   try {
     return await source.getUserMedia({ audio, video: videoInputConstraints(options.facing, options.cameraId ?? null, options.profile) });
-  } catch {
-    return source.getUserMedia({ audio, video: false });
+  } catch (error) {
+    const voice = await source.getUserMedia({ audio, video: false });
+    options.onCameraFailed?.(mediaFailureOf(error));
+    return voice;
   }
 }
 
