@@ -6,6 +6,7 @@ import type { ReachFailure } from '@/lib/api/link-failure';
 import { revokeAllSessionsFromLink, revokeFailureOf, type RevokeSessionsResult } from '@/lib/api/revoke-sessions';
 import { translate, type InterfaceCatalogKey } from '@/lib/i18n-catalog';
 import { currentInterfaceLanguage, type InterfaceLanguage } from '@/lib/interface-language';
+import { forgetEmailLinkSecret } from '@/lib/links/email-link-secret';
 import { useEmailLinkSearch } from '@/lib/links/email-link-search';
 import { useOnline } from '@/lib/net/online';
 
@@ -64,10 +65,12 @@ export function RevokeSessionsPage({
     setState({ phase: 'working' });
     const result = await deps.revoke(token);
     if (result.ok) {
+      forgetEmailLinkSecret();
       setState({ phase: 'done' });
       return;
     }
     const failure = revokeFailureOf(result);
+    if (failure === 'invalid') forgetEmailLinkSecret();
     setState(failure === 'invalid' ? { phase: 'invalid' } : { phase: 'ready', failure });
   }
 

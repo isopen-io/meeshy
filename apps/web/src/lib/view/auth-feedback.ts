@@ -355,22 +355,78 @@ export function resolveResetTokenState(result: ApiResult<VerifyResetTokenData>):
   return result.data.valid ? 'valid' : 'invalid';
 }
 
+/**
+ * LE JETON EXIGE-T-IL LE CODE 2FA ? (#10866) — `requires2FA` de la
+ * vérification, sur un jeton VALIDE seulement. Le formulaire montre alors la
+ * saisie du code d'emblée, au lieu d'échouer une première fois à l'envoi.
+ */
+export function resetTokenRequiresSecondFactor(result: ApiResult<VerifyResetTokenData>): boolean {
+  return result.ok && result.data.valid && result.data.requires2FA === true;
+}
+
 export type ResetPasswordOutcome =
   | { readonly kind: 'reset' }
   | { readonly kind: 'invalid-token' }
+  | { readonly kind: 'attempts-exhausted' }
+  | { readonly kind: 'weak-password' }
+  | { readonly kind: 'reused-password' }
+  | { readonly kind: 'second-factor-required' }
+  | { readonly kind: 'second-factor-invalid' }
+  | { readonly kind: 'account-locked' }
+  | { readonly kind: 'rate-limited' }
   | { readonly kind: 'offline' }
   | { readonly kind: 'failed'; readonly message: string };
 
+type ResetRefusalKind = Exclude<ResetPasswordOutcome['kind'], 'reset' | 'rate-limited' | 'offline' | 'failed'>;
+
 /**
- * Un 400 sur `POST /reset-password` couvre en pratique le jeton
- * invalide/expiré (mot de passe trop court ou dépareillé étant déjà bloqués
- * côté client par `isPasswordValid` + l'égalité des deux champs) — l'écran
- * en tire la même sortie que `verifyResetToken` invalide : retour vers
- * `/forgot-password`.
+ * Les refus de `POST /auth/reset-password` (#10866) : le `code` de la
+ * passerelle (`PasswordResetService`) d'abord, puis le texte historique, que
+ * la passerelle sert inchangé — une passerelle plus ancienne que l'écran ne
+ * sert pas encore de `code`, et ses refus doivent garder leur raison.
+ */
+const RESET_REFUSALS: ReadonlyArray<{ readonly code: string; readonly text: RegExp; readonly kind: ResetRefusalKind }> = [
+  { code: 'RESET_TOKEN_INVALID', text: /invalid or expired reset token/i, kind: 'invalid-token' },
+  { code: 'TWO_FACTOR_ATTEMPTS_EXHAUSTED', text: /too many invalid 2fa codes/i, kind: 'attempts-exhausted' },
+  { code: 'RESET_PASSWORD_WEAK', text: /^password requirements/i, kind: 'weak-password' },
+  { code: 'RESET_PASSWORD_REUSED', text: /password was used recently/i, kind: 'reused-password' },
+  { code: 'TWO_FACTOR_REQUIRED', text: /2fa code required/i, kind: 'second-factor-required' },
+  { code: 'TWO_FACTOR_INVALID', text: /invalid 2fa code/i, kind: 'second-factor-invalid' },
+  { code: 'ACCOUNT_LOCKED', text: /account is locked/i, kind: 'account-locked' },
+];
+
+function resetRefusalOf(failure: { readonly error: string; readonly code?: string }): ResetRefusalKind | null {
+  const byCode = RESET_REFUSALS.find((refusal) => refusal.code === failure.code);
+  if (byCode !== undefined) return byCode.kind;
+  return RESET_REFUSALS.find((refusal) => refusal.text.test(failure.error))?.kind ?? null;
+}
+
+/**
+ * Un 400 de `POST /reset-password` n'est « lien invalide » que s'il NOMME le
+ * jeton (#10866) : un mot de passe refusé, un code 2FA manquant ou faux
+ * laissent l'écran sur le formulaire, avec leur raison. Un lien désactivé par
+ * trop de codes faux a son propre texte.
  */
 export function resolveResetPasswordOutcome(result: ApiResult<ResetPasswordData>): ResetPasswordOutcome {
   if (result.ok) return { kind: 'reset' };
   if (result.status === 0) return { kind: 'offline' };
-  if (result.status === 400) return { kind: 'invalid-token' };
+  if (result.status === 429) return { kind: 'rate-limited' };
+  const refusal = result.status === 400 ? resetRefusalOf(result) : null;
+  if (refusal !== null) return { kind: refusal };
   return { kind: 'failed', message: `${AUTH_GENERIC_FAILURE_MESSAGE} (${result.code ?? result.status})` };
+}
+
+/**
+ * LE JETON DE RÉINITIALISATION EST-IL PROUVÉ MORT ? (#10864) — seule preuve :
+ * `valid:false` servi en 200 par la vérification, ou le 400 de l'envoi qui
+ * nomme le jeton (`PasswordResetService` : « Invalid or expired reset token »)
+ * ou sa révocation après trop de codes 2FA faux (#10866). Un débit dépassé,
+ * une panne, un mot de passe refusé ou un code 2FA manquant ou faux laissent
+ * le jeton intact : l'écran le garde pour un rechargement.
+ */
+export function resetTokenProvenSpent(result: ApiResult<VerifyResetTokenData | ResetPasswordData>): boolean {
+  if (result.ok) return 'valid' in result.data && !result.data.valid;
+  if (result.status !== 400) return false;
+  const refusal = resetRefusalOf(result);
+  return refusal === 'invalid-token' || refusal === 'attempts-exhausted';
 }

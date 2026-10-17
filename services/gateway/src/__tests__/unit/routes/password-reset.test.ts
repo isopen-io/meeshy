@@ -64,6 +64,8 @@ jest.mock('../../../utils/rate-limiter.js', () => ({
   createPhoneResetIdentityRateLimiter: jest.fn(() => ({ middleware: () => mockPhoneResetMiddleware() })),
   createPhoneResetCodeRateLimiter: jest.fn(() => ({ middleware: () => mockPhoneResetMiddleware() })),
   createPhoneResetResendRateLimiter: jest.fn(() => ({ middleware: () => mockPhoneResetMiddleware() })),
+  createResetTokenVerifyIpRateLimiter: jest.fn(() => ({ middleware: () => mockPhoneResetMiddleware() })),
+  createResetTokenVerifyTokenRateLimiter: jest.fn(() => ({ middleware: () => mockPhoneResetMiddleware() })),
 }));
 
 jest.mock('@meeshy/shared/types', () => ({
@@ -590,7 +592,7 @@ describe('POST /reset-password/verify-token — le jeton voyage dans le corps (#
       expiresAt: future,
       usedAt: null,
       isRevoked: false,
-      user: { id: 'user-1', twoFactorSecret: 'secret' },
+      user: { id: 'user-1', twoFactorEnabledAt: new Date('2026-02-01T00:00:00.000Z') },
     });
     const app = await buildApp({ prisma: makePrisma({ passwordResetToken: { findUnique } }) });
     const res = await app.inject({ method: 'POST', url: '/reset-password/verify-token', payload: { token: TOKEN } });
@@ -598,6 +600,21 @@ describe('POST /reset-password/verify-token — le jeton voyage dans le corps (#
     expect(res.json()).toEqual({ success: true, data: { valid: true, requires2FA: true, expiresAt: future.toISOString() } });
     const sha256 = createHash('sha256').update(TOKEN).digest('hex');
     expect(findUnique.mock.calls[0]?.[0]).toMatchObject({ where: { tokenHash: sha256 } });
+    await app.close();
+  });
+
+  it('requires2FA suit `twoFactorEnabledAt`, le prédicat de l’envoi — un secret d’activation inachevée n’exige rien (#10866)', async () => {
+    const findUnique = jest.fn<any>().mockResolvedValue({
+      tokenHash: TOKEN_HASH,
+      expiresAt: new Date(Date.now() + 3600000),
+      usedAt: null,
+      isRevoked: false,
+      user: { id: 'user-1', twoFactorEnabledAt: null },
+    });
+    const app = await buildApp({ prisma: makePrisma({ passwordResetToken: { findUnique } }) });
+    const res = await app.inject({ method: 'POST', url: '/reset-password/verify-token', payload: { token: TOKEN } });
+    expect(res.json().data.requires2FA).toBe(false);
+    expect(findUnique.mock.calls[0]?.[0]?.include?.user?.select).toEqual({ id: true, twoFactorEnabledAt: true });
     await app.close();
   });
 

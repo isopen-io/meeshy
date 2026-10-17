@@ -5,7 +5,7 @@
 
 import type { FastifyInstance, FastifyRequest, FastifyReply } from 'fastify';
 import { z } from 'zod';
-import { sendSuccess, sendInternalError, sendBadRequest } from '../utils/response';
+import { sendSuccess, sendInternalError, sendBadRequest, sendError } from '../utils/response';
 import { PasswordResetService } from '../services/PasswordResetService';
 import { PhonePasswordResetService } from '../services/PhonePasswordResetService';
 import { getCacheStore } from '../services/CacheStore';
@@ -19,10 +19,13 @@ import {
   createPhoneResetLookupRateLimiter,
   createPhoneResetIdentityRateLimiter,
   createPhoneResetCodeRateLimiter,
-  createPhoneResetResendRateLimiter
+  createPhoneResetResendRateLimiter,
+  createResetTokenVerifyIpRateLimiter,
+  createResetTokenVerifyTokenRateLimiter
 } from '../utils/rate-limiter.js';
 import { errorResponseSchema, validationErrorResponseSchema } from '@meeshy/shared/types';
 import { disconnectRevokedSessions } from '../socketio/disconnectRevokedSessions';
+import { createResetSecondFactorAttempts } from '../services/auth/reset-second-factor-attempts';
 import { PASSWORD_MIN_LENGTH } from '@meeshy/shared/utils/validation';
 import { logError, logWarn } from '../utils/logger.js';
 
@@ -87,7 +90,7 @@ async function replyWithResetTokenState(fastify: FastifyInstance, token: string,
         user: {
           select: {
             id: true,
-            twoFactorSecret: true
+            twoFactorEnabledAt: true
           }
         }
       }
@@ -114,7 +117,10 @@ async function replyWithResetTokenState(fastify: FastifyInstance, token: string,
 
     return sendSuccess(reply, {
       valid: true,
-      requires2FA: !!resetToken.user.twoFactorSecret,
+      // Le MÊME prédicat que l'envoi (`completePasswordReset` exige le code dès
+      // `twoFactorEnabledAt`) : un secret posé par une activation inachevée
+      // n'oblige à rien, et l'écran ne doit pas demander un code inutile.
+      requires2FA: !!resetToken.user.twoFactorEnabledAt,
       expiresAt: resetToken.expiresAt.toISOString()
     });
 
@@ -145,12 +151,22 @@ export async function passwordResetRoutes(fastify: FastifyInstance) {
   const phoneResetCodeRateLimiter = createPhoneResetCodeRateLimiter(redis);
   const phoneResetResendRateLimiter = createPhoneResetResendRateLimiter(redis);
 
+  // #10864 — la vérification d'un jeton est un oracle : bornée par adresse ET
+  // par jeton, le GET historique et le POST du lot #10859 dans les mêmes seaux.
+  // #10866 — l'ENVOI (`POST /reset-password`) puise dans ces mêmes seaux :
+  // sonder un jeton et le soumettre partagent un seul quota.
+  const resetTokenVerifyPreHandler = [
+    createResetTokenVerifyIpRateLimiter(redis).middleware(),
+    createResetTokenVerifyTokenRateLimiter(redis).middleware()
+  ];
+
   const passwordResetService = new PasswordResetService(
     fastify.prisma,
     cacheStore,
     emailService,
     geoIPService,
-    process.env.HCAPTCHA_SECRET || '' // Optional now - rate limiting provides protection
+    process.env.HCAPTCHA_SECRET || '', // Optional now - rate limiting provides protection
+    createResetSecondFactorAttempts({ redis })
   );
 
   // Phone password reset service
@@ -344,10 +360,20 @@ export async function passwordResetRoutes(fastify: FastifyInstance) {
           }
         },
         401: errorResponseSchema,
+        503: errorResponseSchema,
+        429: {
+          description: 'Too many reset attempts for this address or this link',
+          ...errorResponseSchema,
+          properties: {
+            ...errorResponseSchema.properties,
+            retryAfter: { type: 'number' },
+          }
+        },
         500: errorResponseSchema
       },
       security: []
-    }
+    },
+    preHandler: resetTokenVerifyPreHandler
   }, async (request: FastifyRequest, reply: FastifyReply) => {
     try {
       // Validate request body
@@ -382,7 +408,12 @@ export async function passwordResetRoutes(fastify: FastifyInstance) {
         });
         return sendSuccess(reply, { message: result.message });
       } else {
-        return sendBadRequest(reply, result.error);
+        // Un refus qui ne dit rien de la saisie (panne) n'est pas un 400 : un
+        // ancien client lirait « lien invalide » (#10866).
+        if (result.code === 'RESET_UNAVAILABLE') {
+          return sendError(reply, 503, result.error, { code: result.code });
+        }
+        return sendBadRequest(reply, result.error, { code: result.code });
       }
 
     } catch (error) {
@@ -470,7 +501,8 @@ export async function passwordResetRoutes(fastify: FastifyInstance) {
         }
       },
       security: []
-    }
+    },
+    preHandler: resetTokenVerifyPreHandler
   }, async (request: FastifyRequest, reply: FastifyReply) => {
     const { token } = request.query as { token: string };
     return replyWithResetTokenState(fastify, token, reply);
@@ -547,7 +579,8 @@ export async function passwordResetRoutes(fastify: FastifyInstance) {
         }
       },
       security: []
-    }
+    },
+    preHandler: resetTokenVerifyPreHandler
   }, async (request: FastifyRequest, reply: FastifyReply) => {
     const token = (request.body as { token?: string } | undefined)?.token ?? '';
     return replyWithResetTokenState(fastify, token, reply);

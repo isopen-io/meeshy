@@ -480,7 +480,9 @@ export const callersIn = (contents, nsNames) => {
 // fonds, les contours et les bannières, `…BySlugContract`, `…BySlugReview`, `…Pending` et `…Submissions` —
 // 12 entrées. Prématurées : la passerelle les sert, aucun client n'a encore l'écran de modération ni de dépôt
 // d'un pack vendeur. Valeur MESURÉE le 2026-10-15 en local sur 79129ae28f.
-const BASELINE_DEAD_ENTRIES = 277;
+// 277 -> 276 (2026-10-17) : une entrée de plus a trouvé son appelant sur dev. Valeur MESURÉE en CI
+// (run 38990820855, « AMÉLIORATION NON ENREGISTRÉE ») et en local sur origin/dev.
+const BASELINE_DEAD_ENTRIES = 276;
 
 export const readWorld = (root) => {
   const groupFiles = readdirSync(join(root, GROUPS_DIR)).filter((name) => name.endsWith('.ts')).sort();

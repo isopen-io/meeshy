@@ -17,6 +17,16 @@ const en = {
   'recovery.reset.invalid.action': 'Request a new link',
   'recovery.reset.done.title': 'Password saved',
   'recovery.reset.done.text': 'You can now sign in with your new password.',
+  'recovery.reset.code': 'Verification code',
+  'recovery.reset.code.lead': 'Enter the 6-digit code from your authenticator app.',
+  'recovery.reset.error.codeRequired': 'This account is protected: enter the verification code from your authenticator app.',
+  'recovery.reset.error.codeInvalid': 'Incorrect verification code.',
+  'recovery.reset.error.weak': 'This password is too easy to guess. Choose a longer or less predictable one.',
+  'recovery.reset.error.reused': 'You used this password recently. Choose a different one.',
+  'recovery.reset.error.rateLimited': 'Too many attempts. Wait a few minutes before trying again.',
+  'recovery.reset.error.locked': 'This account is temporarily locked. Contact support.',
+  'recovery.reset.exhausted.title': 'Too many incorrect codes',
+  'recovery.reset.exhausted.text': 'For your security, this link has been disabled. Request a new one.',
 } satisfies AccountRecoveryCatalog;
 
 export default en;

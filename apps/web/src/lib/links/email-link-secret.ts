@@ -84,3 +84,18 @@ export function emailLinkSecret(win: EmailLinkWindow): EmailLinkSecret {
   const stored = objectOf(win.history.state)[STATE_KEY] as Stored | undefined;
   return stored !== undefined && stored.path === pathOf(win.location.pathname) ? stored.secret : {};
 }
+
+/**
+ * UN JETON SERVI NE RESTE PAS DANS L'HISTORIQUE (#10864) — l'écran l'appelle
+ * dès que le lien a été utilisé avec succès ou refusé pour de bon : l'entrée
+ * d'historique perd le secret, garde son adresse et le reste de son état. Un
+ * retour arrière ou un rechargement ne le relit plus. Une issue PASSAGÈRE (hors
+ * ligne, passerelle injoignable) ne l'appelle pas : réessayer en a besoin.
+ */
+export function forgetEmailLinkSecret(win: EmailLinkWindow | undefined = typeof window === 'undefined' ? undefined : window): void {
+  if (win === undefined) return;
+  const state = objectOf(win.history.state);
+  if (!(STATE_KEY in state)) return;
+  const kept = Object.fromEntries(Object.entries(state).filter(([key]) => key !== STATE_KEY));
+  win.history.replaceState(kept, '', `${win.location.pathname}${win.location.search}${win.location.hash}`);
+}

@@ -1,12 +1,19 @@
 import { useEffect, useRef, useState, type FormEvent } from 'react';
 
 import { auth } from '@/lib/api/auth';
+import { forgetEmailLinkSecret } from '@/lib/links/email-link-secret';
 import { translateRecovery } from '@/lib/i18n-account-recovery-catalog';
 import { translate } from '@/lib/i18n-catalog';
 import { currentInterfaceLanguage } from '@/lib/interface-language';
 import { useOnline } from '@/lib/net/online';
 import { isPasswordValid, PASSWORD_MIN } from '@/lib/signup-form';
-import { resolveResetPasswordOutcome, resolveResetTokenState } from '@/lib/view/auth-feedback';
+import {
+  resetTokenProvenSpent,
+  resetTokenRequiresSecondFactor,
+  resolveResetPasswordOutcome,
+  resolveResetTokenState,
+  type ResetPasswordOutcome,
+} from '@/lib/view/auth-feedback';
 import { Link } from '@/routes/route-table';
 
 import { AuthBrandFooter, AuthSubmitButton } from './auth-chrome';
@@ -27,9 +34,29 @@ import { PasswordInput } from './password-input';
  * même dispositif que `MagicLinkValidation`.
  */
 
-type ScreenState = 'checking' | 'invalid' | 'offline-check' | 'form' | 'done';
+type ScreenState = 'checking' | 'invalid' | 'exhausted' | 'offline-check' | 'form' | 'done';
 
 const RESET_TINT = 'var(--color-ios-brand)';
+
+const SECOND_FACTOR_LENGTH = 6;
+
+type BannerKey =
+  | 'recovery.reset.error.weak'
+  | 'recovery.reset.error.reused'
+  | 'recovery.reset.error.codeRequired'
+  | 'recovery.reset.error.codeInvalid'
+  | 'recovery.reset.error.locked'
+  | 'recovery.reset.error.rateLimited';
+
+/** Le texte d'un refus qui laisse l'écran sur le formulaire (#10866). */
+const BANNER_OF: Partial<Record<ResetPasswordOutcome['kind'], BannerKey>> = {
+  'weak-password': 'recovery.reset.error.weak',
+  'reused-password': 'recovery.reset.error.reused',
+  'second-factor-required': 'recovery.reset.error.codeRequired',
+  'second-factor-invalid': 'recovery.reset.error.codeInvalid',
+  'account-locked': 'recovery.reset.error.locked',
+  'rate-limited': 'recovery.reset.error.rateLimited',
+};
 
 export type ResetPasswordFlowDeps = {
   readonly verifyResetToken: typeof auth.verifyResetToken;
@@ -58,6 +85,8 @@ export function ResetPasswordFlow({ token, deps = defaultDeps }: { token: string
       setState('checking');
       const result = await deps.verifyResetToken(token as string);
       const tokenState = resolveResetTokenState(result);
+      if (resetTokenProvenSpent(result)) forgetEmailLinkSecret();
+      setNeedsSecondFactor(resetTokenRequiresSecondFactor(result));
       if (tokenState === 'valid') setState('form');
       else if (tokenState === 'offline') setState('offline-check');
       else setState('invalid');
@@ -74,35 +103,44 @@ export function ResetPasswordFlow({ token, deps = defaultDeps }: { token: string
 
   const [password, setPassword] = useState('');
   const [confirm, setConfirm] = useState('');
-  const [focused, setFocused] = useState<'password' | 'confirm' | null>(null);
+  const [secondFactorCode, setSecondFactorCode] = useState('');
+  const [needsSecondFactor, setNeedsSecondFactor] = useState(false);
+  const [focused, setFocused] = useState<'password' | 'confirm' | 'code' | null>(null);
   const [submitting, setSubmitting] = useState(false);
   const [banner, setBanner] = useState<string | null>(null);
 
   const passwordOk = isPasswordValid(password);
   const mismatch = confirm.length > 0 && confirm !== password;
-  const canSubmit = passwordOk && confirm === password && !submitting && online;
+  const codeOk = !needsSecondFactor || secondFactorCode.length === SECOND_FACTOR_LENGTH;
+  const canSubmit = passwordOk && confirm === password && codeOk && !submitting && online;
 
   async function handleSubmit(event: FormEvent) {
     event.preventDefault();
     if (!canSubmit || token === null) return;
     setSubmitting(true);
     setBanner(null);
-    const result = await deps.resetPassword({ token, newPassword: password, confirmPassword: confirm });
+    const result = await deps.resetPassword({
+      token,
+      newPassword: password,
+      confirmPassword: confirm,
+      ...(needsSecondFactor ? { twoFactorCode: secondFactorCode } : {}),
+    });
     setSubmitting(false);
     const outcome = resolveResetPasswordOutcome(result);
-    if (outcome.kind === 'reset') {
-      setState('done');
-      return;
-    }
-    if (outcome.kind === 'invalid-token') {
-      setState('invalid');
-      return;
-    }
-    if (outcome.kind === 'offline') {
-      setBanner(translate(language, 'verifyEmail.error.offline'));
-      return;
-    }
-    setBanner(outcome.message);
+    if (outcome.kind === 'reset' || resetTokenProvenSpent(result)) forgetEmailLinkSecret();
+    showOutcome(outcome);
+  }
+
+  function showOutcome(outcome: ResetPasswordOutcome) {
+    if (outcome.kind === 'reset') return setState('done');
+    if (outcome.kind === 'invalid-token') return setState('invalid');
+    if (outcome.kind === 'attempts-exhausted') return setState('exhausted');
+    if (outcome.kind === 'offline') return setBanner(translate(language, 'verifyEmail.error.offline'));
+    if (outcome.kind === 'failed') return setBanner(outcome.message);
+    if (outcome.kind === 'second-factor-required') setNeedsSecondFactor(true);
+    if (outcome.kind === 'second-factor-invalid') setSecondFactorCode('');
+    const key = BANNER_OF[outcome.kind];
+    if (key !== undefined) setBanner(translateRecovery(language, key));
   }
 
   return (
@@ -120,13 +158,15 @@ export function ResetPasswordFlow({ token, deps = defaultDeps }: { token: string
         </div>
       ) : null}
 
-      {state === 'invalid' ? (
+      {state === 'invalid' || state === 'exhausted' ? (
         <div className="grid flex-1 content-center gap-6 px-8 text-center">
           <Glyph name="warningCircle" size={48} className="mx-auto" style={{ color: 'var(--ios-error)' }} />
           <h2 className="text-screen font-bold" style={{ color: 'var(--color-ios-ink)' }}>
-            {translateRecovery(language, 'recovery.reset.invalid.title')}
+            {translateRecovery(language, state === 'exhausted' ? 'recovery.reset.exhausted.title' : 'recovery.reset.invalid.title')}
           </h2>
-          <p style={{ color: 'var(--color-ios-ink-2)' }}>{translateRecovery(language, 'recovery.reset.invalid.text')}</p>
+          <p style={{ color: 'var(--color-ios-ink-2)' }}>
+            {translateRecovery(language, state === 'exhausted' ? 'recovery.reset.exhausted.text' : 'recovery.reset.invalid.text')}
+          </p>
           <Link
             to="forgotPassword"
             replace
@@ -224,6 +264,32 @@ export function ResetPasswordFlow({ token, deps = defaultDeps }: { token: string
               />
             )}
           </Field>
+
+          {needsSecondFactor ? (
+            <Field id="reset-2fa-code" label={translateRecovery(language, 'recovery.reset.code')} icon="key" tint={RESET_TINT} focused={focused === 'code'}>
+              {({ id, describedBy }) => (
+                <input
+                  id={id}
+                  aria-describedby={[describedBy, 'reset-2fa-code-lead'].filter(Boolean).join(' ')}
+                  type="text"
+                  inputMode="numeric"
+                  autoComplete="one-time-code"
+                  maxLength={SECOND_FACTOR_LENGTH}
+                  value={secondFactorCode}
+                  onInput={(e) => setSecondFactorCode(e.currentTarget.value.replace(/\D/g, '').slice(0, SECOND_FACTOR_LENGTH))}
+                  onFocus={() => setFocused('code')}
+                  onBlur={() => setFocused(null)}
+                  className="w-full bg-transparent py-3 text-input outline-none"
+                  style={{ color: 'var(--color-ios-ink)' }}
+                />
+              )}
+            </Field>
+          ) : null}
+          {needsSecondFactor ? (
+            <p id="reset-2fa-code-lead" className="text-center text-caption" style={{ color: 'var(--color-ios-ink-2)' }}>
+              {translateRecovery(language, 'recovery.reset.code.lead')}
+            </p>
+          ) : null}
 
           {banner !== null ? (
             <p role="alert" className="text-center text-caption" style={{ color: 'var(--ios-error)' }}>
