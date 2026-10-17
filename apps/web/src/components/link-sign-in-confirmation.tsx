@@ -3,6 +3,7 @@ import { useState } from 'react';
 import type { LinkAccount } from '@/lib/api/link-confirmation';
 import type { SessionUser } from '@/lib/api/session';
 import { translate } from '@/lib/i18n-catalog';
+import { translateSignInLink } from '@/lib/i18n-sign-in-link-catalog';
 import type { InterfaceLanguage } from '@/lib/interface-language';
 import { initialsOf } from '@/lib/view/conversation';
 
@@ -44,12 +45,12 @@ export function LinkSignInConfirmation({
     <section role="alertdialog" aria-modal="false" aria-labelledby="link-sign-in-title" aria-describedby="link-sign-in-lead" className="grid gap-5 text-center">
       <Glyph name="warningCircle" size={44} className="mx-auto" style={{ color: 'var(--ios-warning)' }} />
       <h1 id="link-sign-in-title" className="text-screen font-bold" style={{ color: 'var(--color-ios-ink)' }}>
-        {translate(language, 'signInLink.confirm.title', { username: account.username })}
+        {translateSignInLink(language, 'signInLink.confirm.title', { username: account.username })}
       </h1>
       <p id="link-sign-in-lead" style={{ color: 'var(--color-ios-ink-2)' }}>
         {current === null
-          ? translate(language, 'signInLink.confirm.lead')
-          : translate(language, 'signInLink.confirm.leadSignedIn', { current: current.username })}
+          ? translateSignInLink(language, 'signInLink.confirm.lead')
+          : translateSignInLink(language, 'signInLink.confirm.leadSignedIn', { current: current.username })}
       </p>
 
       <div
@@ -79,7 +80,7 @@ export function LinkSignInConfirmation({
           className="grid place-items-center rounded-field px-6 font-bold text-ios-on-brand focus-visible:outline-2"
           style={{ minHeight: 52, background: 'linear-gradient(90deg, var(--ios-indigo-600), var(--ios-indigo-400))', outlineColor: 'var(--color-ios-brand)' }}
         >
-          {busy ? translate(language, 'signInLink.switchAccount.busy') : translate(language, 'signInLink.confirm.accept')}
+          {busy ? translate(language, 'signInLink.switchAccount.busy') : translateSignInLink(language, 'signInLink.confirm.accept')}
         </button>
         <button
           type="button"
@@ -95,7 +96,7 @@ export function LinkSignInConfirmation({
             outlineColor: 'var(--color-ios-brand)',
           }}
         >
-          {translate(language, 'signInLink.confirm.cancel')}
+          {translateSignInLink(language, 'signInLink.confirm.cancel')}
         </button>
       </div>
     </section>

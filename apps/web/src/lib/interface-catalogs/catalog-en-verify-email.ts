@@ -50,11 +50,6 @@ const enVerifyEmail = {
   'emailSent.openLink': 'Open the link sent to {email}',
   'emailSent.nothingReceived': 'Nothing received?',
   'emailSent.nothingReceived.text': 'Check your spam folder: the message may have landed there.',
-  'signInLink.confirm.title': 'Sign in as @{username}?',
-  'signInLink.confirm.lead': 'This link wasn’t requested from this device. Only continue if this account is yours.',
-  'signInLink.confirm.leadSignedIn': 'You’re signed in as @{current}. This link would open the account below instead; @{current} will stay in your accounts on this device.',
-  'signInLink.confirm.accept': 'Sign in',
-  'signInLink.confirm.cancel': 'Cancel',
 };
 
 export default enVerifyEmail;

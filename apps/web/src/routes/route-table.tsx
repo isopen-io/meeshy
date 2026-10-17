@@ -201,6 +201,15 @@ const withAccountRecoveryCatalog = <Screen,>(screen: Promise<Screen>) =>
     import('@/lib/i18n-account-recovery-catalog').then((m) => m.loadAccountRecoveryCatalog(currentInterfaceLanguage())),
   ]).then(([loaded]) => loaded);
 
+/* LA CONFIRMATION D'UN LIEN DE CONNEXION (« Se connecter en tant que @x ? », 8da83d255f) — le lien magique et la
+   vérification d'adresse la montrent : leur chunk ET le catalogue `signInLink.confirm.*`, en parallèle — le
+   catalogue d'interface est à son plafond, et `translateSignInLink` lève sur un catalogue non chargé. */
+const withSignInLinkCatalog = <Screen,>(screen: Promise<Screen>) =>
+  Promise.all([
+    screen,
+    import('@/lib/i18n-sign-in-link-catalog').then((m) => m.loadSignInLinkCatalog(currentInterfaceLanguage())),
+  ]).then(([loaded]) => loaded);
+
 const notificationsScreen = () =>
   Promise.all([import('@/routes/notifications'), loadNotificationRowCatalog(currentInterfaceLanguage())]).then(([screen]) => screen);
 
@@ -390,8 +399,8 @@ export const ROUTES = {
      les deux au montage. `magicLinkValidate` est l'adresse du DIGEST
      (`jobs/notification-digest.ts:50`, `?token=&returnUrl=`) — même écran de
      validation, adresse SÉPARÉE. */
-  magicLink: { pattern: '/auth/magic-link', screen: () => import('@/routes/magic-link') },
-  magicLinkValidate: { pattern: '/auth/magic-link/validate', screen: () => import('@/routes/magic-link-validate') },
+  magicLink: { pattern: '/auth/magic-link', screen: () => withSignInLinkCatalog(import('@/routes/magic-link')) },
+  magicLinkValidate: { pattern: '/auth/magic-link/validate', screen: () => withSignInLinkCatalog(import('@/routes/magic-link-validate')) },
   /* MOT DE PASSE OUBLIÉ, flux E-MAIL (#5816) — le flux TÉLÉPHONE reste hors
      tranche (issue compagnon). */
   forgotPassword: { pattern: '/forgot-password', screen: () => withAccountRecoveryCatalog(import('@/routes/forgot-password')) },
@@ -401,7 +410,7 @@ export const ROUTES = {
      lien d'e-mail voyagent dans le FRAGMENT, relevés puis rangés dans l'entrée
      d'historique (`lib/links/email-link-secret.ts`) — un rafraîchissement les
      retrouve, aucun journal d'accès ne les voit. */
-  verifyEmail: { pattern: '/auth/verify-email', screen: () => import('@/routes/verify-email') },
+  verifyEmail: { pattern: '/auth/verify-email', screen: () => withSignInLinkCatalog(import('@/routes/verify-email')) },
   resetPassword: { pattern: '/reset-password', screen: () => withAccountRecoveryCatalog(import('@/routes/reset-password')) },
   /* LES LIENS REÇUS (#6714, #6715) — des adresses que la PASSERELLE compose
      et qui circulent déjà : e-mails, messages, publications, Android. Chacune

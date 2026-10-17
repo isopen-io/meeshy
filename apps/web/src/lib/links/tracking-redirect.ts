@@ -1,6 +1,6 @@
 import type { ApiResult } from '@/lib/api/http';
 import { isUnreachable } from '@/lib/api/link-failure';
-import { servedTrackingTarget } from '@meeshy/shared/utils/email-link-secret';
+import { servedTrackingTarget } from '@meeshy/shared/utils/email-link-url';
 
 /**
  * **OÙ MÈNE UN LIEN SUIVI `/l/:token`** (#6714) — une loi PURE : les deux

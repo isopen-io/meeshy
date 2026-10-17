@@ -83,9 +83,9 @@ final class PasswordResetLinkPresenter: ObservableObject {
     }
 
     private static func topViewController() -> UIViewController? {
-        let scenes = UIApplication.shared.connectedScenes.compactMap { $0 as? UIWindowScene }
-        let window = scenes.flatMap(\.windows).first(where: \.isKeyWindow) ?? scenes.first?.windows.first
-        var top = window?.rootViewController
+        // Le résolveur UNIQUE de la scène active (`DeviceLayout`) : `connectedScenes` est un ensemble non ordonné,
+        // `.first` y désigne une scène d'arrière-plan sous multi-fenêtre — la feuille partirait sur une fenêtre cachée.
+        var top = DeviceLayout.activeWindow?.rootViewController
         while let presented = top?.presentedViewController, !presented.isBeingDismissed {
             top = presented
         }

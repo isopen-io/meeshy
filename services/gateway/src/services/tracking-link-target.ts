@@ -1,4 +1,4 @@
-import { servedTrackingTarget } from '@meeshy/shared/utils/email-link-secret';
+import { servedTrackingTarget } from '@meeshy/shared/utils/email-link-url';
 
 /**
  * UN LIEN SUIVI NE VISE JAMAIS UN LIEN À JETON D'E-MAIL (#10871). Connexion
