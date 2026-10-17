@@ -1,7 +1,7 @@
 import { useEffect, useRef, useState } from 'react';
 
 import { auth } from '@/lib/api/auth';
-import { confirmsSilently, linkConfirmationOf, type LinkAccount } from '@/lib/api/link-confirmation';
+import { confirmsSilently, linkConfirmationOf, type LinkQuestion } from '@/lib/api/link-confirmation';
 import { accountReplacementOf, provenSessionOf, type AccountReplacement, type ProvenSessionGestures } from '@/lib/api/proven-session';
 import { heldAccountOf, sessionStore } from '@/lib/api/session';
 import { forgetEmailLinkSecret } from '@/lib/links/email-link-secret';
@@ -51,7 +51,7 @@ export function MagicLinkValidation({
   const [state, setState] = useState<ValidationState>(token === null ? 'invalid' : 'validating');
   const [message, setMessage] = useState<string | null>(null);
   const [replacement, setReplacement] = useState<AccountReplacement | null>(null);
-  const [asked, setAsked] = useState<LinkAccount | null>(null);
+  const [asked, setAsked] = useState<LinkQuestion | null>(null);
   const [confirmed, setConfirmed] = useState(false);
   const called = useRef(false);
 
@@ -67,7 +67,7 @@ export function MagicLinkValidation({
     const result = await validate(token as string, confirm ? { confirm } : {});
     const question = result.ok ? linkConfirmationOf(result.data) : null;
     if (question !== null) {
-      if (!confirm && confirmsSilently(sessionStore.getState().session, question)) {
+      if (!confirm && confirmsSilently(sessionStore.getState().session, question.account)) {
         setConfirmed(true);
         void run(true);
         return;
@@ -168,7 +168,7 @@ export function MagicLinkValidation({
       {state === 'ask' && asked !== null ? (
         <LinkSignInConfirmation
           language={currentInterfaceLanguage()}
-          account={asked}
+          question={asked}
           current={heldAccountOf(sessionStore.getState().session)?.user ?? null}
           onConfirm={() => {
             setConfirmed(true);

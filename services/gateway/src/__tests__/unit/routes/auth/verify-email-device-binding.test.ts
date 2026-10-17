@@ -113,7 +113,8 @@ afterEach(() => {
 
 const SECRET = 'c2VjcmV0LWRlLWNldC1hcHBhcmVpbC0zMi1vY3RldHM';
 const COMPTE = { id: UTILISATEUR.id, username: 'marie', displayName: 'Marie', avatar: null };
-const confirmation = async () => ({ success: false, reason: 'confirmation-required', error: 'Confirmez.', account: COMPTE });
+const QUESTION = { account: COMPTE, intent: 'claim-email', maskedEmail: 'ma....e@e*****om' };
+const confirmation = async () => ({ success: false, reason: 'confirmation-required', error: 'Confirmez.', ...QUESTION });
 
 describe('#10872 — la confirmation du compte cible', () => {
   it('lien ouvert ailleurs : 200 `requiresConfirmation` + le compte, ni session ni jeton', async () => {
@@ -121,7 +122,7 @@ describe('#10872 — la confirmation du compte cible', () => {
     const res = await verifier(app, { email: 'marie@example.com', token: 'jeton-brut' });
 
     expect(res.statusCode).toBe(200);
-    expect(res.json()).toEqual({ success: true, data: { requiresConfirmation: true, account: COMPTE } });
+    expect(res.json()).toEqual({ success: true, data: { requiresConfirmation: true, ...QUESTION } });
     expect(mockCreateSession).not.toHaveBeenCalled();
     expect(authService.generateToken).not.toHaveBeenCalled();
     await app.close();
@@ -203,7 +204,7 @@ describe('#10878 — la transition mesurée : seul un ANCIEN client iOS garde la
     const res = await verifier(app, { email: 'marie@example.com', token: 'jeton-brut' });
 
     expect(verifyEmail).toHaveBeenCalledWith(expect.objectContaining({ confirmed: false }));
-    expect(res.json()).toEqual({ success: true, data: { requiresConfirmation: true, account: COMPTE } });
+    expect(res.json()).toEqual({ success: true, data: { requiresConfirmation: true, ...QUESTION } });
     expect(mockLegacyRecord).not.toHaveBeenCalled();
     await app.close();
   });

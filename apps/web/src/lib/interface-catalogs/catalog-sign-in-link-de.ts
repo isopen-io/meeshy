@@ -7,6 +7,8 @@ const de = {
   'signInLink.confirm.leadSignedIn': 'Du bist als @{current} angemeldet. Dieser Link würde stattdessen das Konto unten öffnen; @{current} bleibt in deinen Konten auf diesem Gerät.',
   'signInLink.confirm.accept': 'Anmelden',
   'signInLink.confirm.cancel': 'Abbrechen',
+  'signInLink.confirm.claim': 'Diese Adresse wird @{username} zugeordnet und aus jedem anderen Meeshy-Konto entfernt.',
+  'signInLink.confirm.acceptClaim': 'Adresse zuordnen und anmelden',
   'verifyEmail.bar.title': 'E-Mail-Bestätigung',
   'verifyEmail.noAddress': 'Dieser Link enthält keine zu bestätigende E-Mail-Adresse. Öffne ihn aus der E-Mail, die Meeshy dir geschickt hat.',
   'verifyEmail.continue': 'Weiter',

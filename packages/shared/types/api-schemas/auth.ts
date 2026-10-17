@@ -397,6 +397,15 @@ export const linkConfirmationProperties = {
       displayName: { type: ['string', 'null'] },
       avatar: { type: ['string', 'null'] }
     }
+  },
+  intent: {
+    type: 'string',
+    enum: ['sign-in', 'claim-email'],
+    description: 'OPTIONAL (#10879). What the yes does: `sign-in` opens `account`; `claim-email` opens `account` AND attaches the claimed email address to it (#8214) — the screen must say so. Absent from servers before #10879: read as `sign-in`.'
+  },
+  maskedEmail: {
+    type: 'string',
+    description: 'OPTIONAL (#10879). The email address at stake (the account address, or the claimed one), masked by the server (`ma....e@e*****om`) — never the full address.'
   }
 } as const;
 

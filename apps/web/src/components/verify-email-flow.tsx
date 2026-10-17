@@ -2,7 +2,7 @@ import { useEffect, useRef, useState } from 'react';
 import { useStore } from 'zustand/react';
 
 import { auth } from '@/lib/api/auth';
-import { confirmsSilently, linkConfirmationOf, type LinkAccount } from '@/lib/api/link-confirmation';
+import { confirmsSilently, linkConfirmationOf, type LinkQuestion } from '@/lib/api/link-confirmation';
 import { accountReplacementOf, provenSessionOf, type AccountReplacement, type ProvenSessionGestures } from '@/lib/api/proven-session';
 import type { ArrivalDeps } from '@/lib/arrival/arrival';
 import { heldAccountOf, sessionStore } from '@/lib/api/session';
@@ -142,7 +142,7 @@ export function VerifyEmailFlow({
   );
   const [linkError, setLinkError] = useState<string | null>(null);
   const [replacement, setReplacement] = useState<AccountReplacement | null>(null);
-  const [asked, setAsked] = useState<LinkAccount | null>(null);
+  const [asked, setAsked] = useState<LinkQuestion | null>(null);
   const [confirmed, setConfirmed] = useState(false);
   const linkConsumed = useRef(false);
   const handedOff = useRef(false);
@@ -174,7 +174,7 @@ export function VerifyEmailFlow({
     void deps.verifyEmail({ email: address, token: linkToken, ...(confirm ? { confirm } : {}) }).then((result) => {
       const question = result.ok ? linkConfirmationOf(result.data) : null;
       if (question !== null) {
-        if (!confirm && confirmsSilently(sessionStore.getState().session, question)) {
+        if (!confirm && confirmsSilently(sessionStore.getState().session, question.account)) {
           setConfirmed(true);
           consumeLink(address, linkToken, true);
           return;
@@ -262,7 +262,7 @@ export function VerifyEmailFlow({
         <div className="flex flex-1 flex-col justify-center px-8">
           <LinkSignInConfirmation
             language={language}
-            account={asked}
+            question={asked}
             current={heldAccountOf(session)?.user ?? null}
             onConfirm={() => {
               setConfirmed(true);

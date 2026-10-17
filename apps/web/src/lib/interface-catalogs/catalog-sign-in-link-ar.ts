@@ -7,6 +7,8 @@ const ar = {
   'signInLink.confirm.leadSignedIn': 'أنت مسجّل الدخول باسم ‎@{current}. سيفتح هذا الرابط الحساب أدناه بدلًا منه، وسيبقى ‎@{current} ضمن حساباتك على هذا الجهاز.',
   'signInLink.confirm.accept': 'تسجيل الدخول',
   'signInLink.confirm.cancel': 'إلغاء',
+  'signInLink.confirm.claim': 'سيُربط هذا العنوان بـ ‎@{username}‎ ويُزال من أي حساب Meeshy آخر.',
+  'signInLink.confirm.acceptClaim': 'ربط العنوان وتسجيل الدخول',
   'verifyEmail.bar.title': 'التحقق من البريد الإلكتروني',
   'verifyEmail.noAddress': 'لا يحتوي هذا الرابط على أي عنوان بريد إلكتروني للتحقق منه. افتحه من البريد الذي أرسلته إليك Meeshy.',
   'verifyEmail.continue': 'متابعة',

@@ -9,6 +9,8 @@ const fr = {
   'signInLink.confirm.leadSignedIn': 'Vous êtes connecté avec @{current}. Ce lien ouvrirait le compte ci-dessous à sa place ; @{current} restera dans vos comptes sur cet appareil.',
   'signInLink.confirm.accept': 'Se connecter',
   'signInLink.confirm.cancel': 'Annuler',
+  'signInLink.confirm.claim': 'Cette adresse sera rattachée à @{username} et retirée de tout autre compte Meeshy.',
+  'signInLink.confirm.acceptClaim': 'Rattacher l’adresse et se connecter',
   'verifyEmail.bar.title': 'Vérification de l’e-mail',
   'verifyEmail.noAddress': 'Ce lien ne porte aucune adresse e-mail à vérifier. Ouvrez-le depuis l’e-mail que Meeshy vous a envoyé.',
   'verifyEmail.continue': 'Continuer',

@@ -7,6 +7,8 @@ const es = {
   'signInLink.confirm.leadSignedIn': 'Has iniciado sesión como @{current}. Este enlace abriría la cuenta de abajo en su lugar; @{current} seguirá en tus cuentas en este dispositivo.',
   'signInLink.confirm.accept': 'Iniciar sesión',
   'signInLink.confirm.cancel': 'Cancelar',
+  'signInLink.confirm.claim': 'Esta dirección se vinculará a @{username} y se retirará de cualquier otra cuenta de Meeshy.',
+  'signInLink.confirm.acceptClaim': 'Vincular la dirección e iniciar sesión',
   'verifyEmail.bar.title': 'Verificación del correo',
   'verifyEmail.noAddress': 'Este enlace no incluye ninguna dirección de correo que verificar. Ábrelo desde el correo que te envió Meeshy.',
   'verifyEmail.continue': 'Continuar',

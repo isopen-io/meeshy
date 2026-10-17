@@ -1,4 +1,4 @@
-import type { LinkAccount } from './link-confirmation';
+import type { LinkAccount, LinkIntent } from './link-confirmation';
 import type { SessionUser } from './session';
 
 /**
@@ -36,6 +36,9 @@ export type VerifyEmailData = {
    * session, le jeton reste valable, et `account` dit quel compte s'ouvrirait. */
   readonly requiresConfirmation?: boolean;
   readonly account?: LinkAccount;
+  /** #10879 — ce que le oui fera, et l'adresse en jeu MASQUÉE par la passerelle. */
+  readonly intent?: LinkIntent;
+  readonly maskedEmail?: string;
 };
 
 export type VerifiedSession = VerifyEmailData & { readonly token: string; readonly sessionToken: string; readonly user: SessionUser };

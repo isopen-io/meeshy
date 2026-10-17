@@ -259,3 +259,54 @@ describe('Lien de vérification (#10872)', () => {
     expect(sessionStore.getState().session.status).toBe('authenticated');
   });
 });
+
+/**
+ * #10879 — le oui d'un lien de REVENDICATION (#8214) ne fait pas que connecter :
+ * il rattache l'adresse au compte revendiquant. L'écran le DIT, et montre
+ * l'adresse MASQUÉE par la passerelle — jamais l'adresse complète.
+ */
+describe('Lien de revendication d’adresse (#10879)', () => {
+  const CLAIM = { ...QUESTION, intent: 'claim-email', maskedEmail: 'ma....y@m*****le' };
+
+  test('la question dit que l’adresse passe au compte, avec l’adresse masquée, jamais en clair', async () => {
+    const { client } = realAuth([{ ok: true, status: 200, data: CLAIM }]);
+    const el = mountInto(<VerifyEmailFlow email="mallory@meeshy.example" token="tok" deps={verifyDeps(client)} />);
+    await settle();
+
+    expect(text(el)).toContain('Cette adresse sera rattachée à @mallory et retirée de tout autre compte Meeshy.');
+    expect(el.querySelector('[data-link-email]')?.textContent).toBe('ma....y@m*****le');
+    expect(text(el)).not.toContain('mallory@meeshy.example');
+    expect(button(el, 'confirm')?.textContent).toBe('Rattacher l’adresse et se connecter');
+  });
+
+  test('une connexion simple montre l’adresse masquée, sans la phrase de rattachement', async () => {
+    const { client } = realAuth([{ ok: true, status: 200, data: { ...QUESTION, intent: 'sign-in', maskedEmail: 'ma....y@m*****le' } }]);
+    const el = mountInto(<MagicLinkValidation token="tok" returnUrl={null} validate={client.validateMagicLink} go={() => undefined} />);
+    await settle();
+
+    expect(el.querySelector('[data-link-email]')?.textContent).toBe('ma....y@m*****le');
+    expect(text(el)).not.toContain('rattachée');
+    expect(button(el, 'confirm')?.textContent).toBe('Se connecter');
+  });
+
+  test('une passerelle d’avant #10879 (ni nature ni adresse) : la question d’hier, sans ligne vide', async () => {
+    const { client } = realAuth([{ ok: true, status: 200, data: QUESTION }]);
+    const el = mountInto(<MagicLinkValidation token="tok" returnUrl={null} validate={client.validateMagicLink} go={() => undefined} />);
+    await settle();
+
+    expect(text(el)).toContain('Se connecter en tant que @mallory ?');
+    expect(el.querySelector('[data-link-email]')).toBeNull();
+    expect(text(el)).not.toContain('rattachée');
+  });
+
+  test('« Annuler » une revendication : aucun second appel, aucune session', async () => {
+    const { client, calls } = realAuth([{ ok: true, status: 200, data: CLAIM }]);
+    const el = mountInto(<VerifyEmailFlow email="mallory@meeshy.example" token="tok" deps={verifyDeps(client)} />);
+    await settle();
+
+    await click(button(el, 'cancel'));
+
+    expect(calls).toHaveLength(1);
+    expect(sessionStore.getState().session.status).toBe('anonymous');
+  });
+});

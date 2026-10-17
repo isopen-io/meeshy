@@ -7,6 +7,8 @@ const it = {
   'signInLink.confirm.leadSignedIn': 'Hai effettuato l’accesso come @{current}. Questo link aprirebbe al suo posto l’account qui sotto; @{current} resterà tra i tuoi account su questo dispositivo.',
   'signInLink.confirm.accept': 'Accedi',
   'signInLink.confirm.cancel': 'Annulla',
+  'signInLink.confirm.claim': 'Questo indirizzo sarà collegato a @{username} e rimosso da qualsiasi altro account Meeshy.',
+  'signInLink.confirm.acceptClaim': 'Collega l’indirizzo e accedi',
   'verifyEmail.bar.title': 'Verifica dell’e-mail',
   'verifyEmail.noAddress': 'Questo link non contiene alcun indirizzo e-mail da verificare. Aprilo dall’e-mail che Meeshy ti ha inviato.',
   'verifyEmail.continue': 'Continua',

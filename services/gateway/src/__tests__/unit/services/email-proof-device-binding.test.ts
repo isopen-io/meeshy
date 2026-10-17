@@ -61,7 +61,10 @@ describe('#10872 — la preuve par lien est liée à l’appareil', () => {
       reason: 'confirmation-required',
       error: expect.any(String),
       account: { id: 'marie', username: 'marie', displayName: 'Marie Martin', avatar: 'https://cdn.meeshy.test/marie.png' },
+      intent: 'sign-in',
+      maskedEmail: 'ma....e@e*****om',
     });
+    expect(JSON.stringify(resultat)).not.toContain(ADRESSE);
     expect(store.state.users[0].emailVerificationToken).toBe(sha256('jeton-du-lien'));
   });
 
@@ -155,6 +158,15 @@ describe('#10872 — la REVENDICATION d’une adresse suit la même règle', () 
 
     expect(resultat).toMatchObject({ reason: 'confirmation-required', account: { id: 'revendiquant', username: 'marie_vraie' } });
     expect(store.byId('revendiquant')).toMatchObject({ isActive: false, emailVerificationToken: sha256('jeton-du-lien') });
+  });
+
+  it('#10879 — la question DIT la revendication : nature `claim-email` et adresse MASQUÉE, jamais en clair', async () => {
+    const store = emailClaimStore([detenteur, revendiquant]);
+
+    const resultat = await verifyEmailProof(store.prisma as never, parLien({ email: 'Marie@Example.com' }), { engagement });
+
+    expect(resultat).toMatchObject({ reason: 'confirmation-required', intent: 'claim-email', maskedEmail: 'ma....e@e*****om' });
+    expect(JSON.stringify(resultat).toLowerCase()).not.toContain(ADRESSE);
   });
 });
 

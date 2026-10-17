@@ -187,12 +187,12 @@ describe('#10872 — lien magique lié à l’appareil', () => {
 
   it('sans le oui : 200 `requiresConfirmation` + le compte, ni session ni jeton', async () => {
     const account = { id: 'user-abc-123', username: 'testuser', displayName: 'Test', avatar: null };
-    mockValidateMagicLink.mockResolvedValue({ success: false, requiresConfirmation: true, account, error: 'Confirm.' });
+    mockValidateMagicLink.mockResolvedValue({ success: false, requiresConfirmation: true, account, intent: 'sign-in', maskedEmail: 'te....r@e*****om', error: 'Confirm.' });
 
     const response = await app.inject({ method: 'POST', url: '/magic-link/validate', payload: { token: 'tok' } });
 
     expect(response.statusCode).toBe(200);
-    expect(response.json()).toEqual({ success: true, data: { requiresConfirmation: true, account } });
+    expect(response.json()).toEqual({ success: true, data: { requiresConfirmation: true, account, intent: 'sign-in', maskedEmail: 'te....r@e*****om' } });
     expect(mockMarkSessionTrusted).not.toHaveBeenCalled();
     expect(mockValidateMagicLink).toHaveBeenCalledWith(expect.objectContaining({ linkDeviceSecret: undefined, confirmed: false }));
   });

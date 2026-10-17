@@ -50,9 +50,9 @@ import { proveEmailClaim } from './email-claim';
 import { creditContactProof, type ContactProofRecorder } from './contact-proof-engagement';
 import {
   LINK_ACCOUNT_IDENTITY_SELECT,
-  linkAccountIdentity,
+  linkConfirmation,
   linkDeviceVerdict,
-  type LinkAccountIdentity,
+  type LinkConfirmation,
 } from './link-device-binding';
 
 const logger = enhancedLogger.child({ module: 'EmailProof' });
@@ -80,23 +80,23 @@ export type EmailProofResult =
       readonly secondFactor: SecondFactorState;
     }
   | { readonly success: false; readonly reason: 'invalid' | 'expired' | 'error'; readonly error: string }
-  | {
+  | ({
       readonly success: false;
       readonly reason: 'confirmation-required';
       readonly error: string;
-      /** Le compte que le lien ouvrirait — l'écran le montre avant le oui. Rien n'est consommé. */
-      readonly account: LinkAccountIdentity;
-    };
+    } & LinkConfirmation);
 
 /**
  * #10872 — un lien présenté ailleurs que sur l'appareil qui l'a demandé, sans
  * le oui de l'utilisateur : la preuve s'arrête AVANT toute écriture.
  */
-export const confirmationRequired = (account: LinkAccountIdentity): EmailProofResult => ({
+export const confirmationRequired = (question: LinkConfirmation): EmailProofResult => ({
   success: false,
   reason: 'confirmation-required',
   error: 'Confirmez le compte avant de vous connecter.',
-  account,
+  account: question.account,
+  intent: question.intent,
+  maskedEmail: question.maskedEmail,
 });
 
 const REFUS = {
@@ -133,7 +133,7 @@ async function preuveDeRevendication(
 ): Promise<EmailProofResult> {
   const issue = await proveEmailClaim(deps.prisma, proof);
   if (issue.kind === 'expired') return parCode ? REFUS.codeExpire : REFUS.lienExpire;
-  if (issue.kind === 'confirmation-required') return confirmationRequired(issue.account);
+  if (issue.kind === 'confirmation-required') return confirmationRequired(issue);
   if (issue.kind !== 'proven') return parCode ? REFUS.codeInvalide : REFUS.lienInvalide;
   // Le compte revendiquant reçoit une adresse qu'il vient de prouver : c'est
   // son geste, et c'est sa première adresse vérifiée (#8959).
@@ -198,7 +198,7 @@ export async function verifyEmailProof(
         confirmed: proof.confirmed === true,
       }) === 'confirmation-required'
     ) {
-      return confirmationRequired(linkAccountIdentity(ligne));
+      return confirmationRequired(linkConfirmation(ligne, { intent: 'sign-in', email: normalizeEmail(proof.email) }));
     }
 
     const maintenant = new Date();

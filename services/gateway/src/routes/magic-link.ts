@@ -315,7 +315,7 @@ export async function magicLinkRoutes(fastify: FastifyInstance) {
       // #10872 — rien n'est consommé, aucune session : le client montre le
       // compte cible et rejoue avec `confirm: true` si l'utilisateur dit oui.
       if (result.requiresConfirmation && result.account) {
-        return sendSuccess(reply, { requiresConfirmation: true, account: result.account });
+        return sendSuccess(reply, { requiresConfirmation: true, account: result.account, intent: result.intent, maskedEmail: result.maskedEmail });
       }
 
       if (!result.success) {

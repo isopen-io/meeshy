@@ -30,7 +30,7 @@ import { getJwtSecret } from '../utils/secrets';
 import { RECIPIENT_LANG_SELECT, recipientLanguage, type RecipientLanguagePrefs } from '../utils/recipient-language';
 import { AUTO_TRANSLATE_PREFERENCE_SELECT, resolveAutoTranslateEnabled } from '../utils/auto-translate-preference';
 import { EMAIL_LINK_PATHS, emailSecretLink } from '../utils/email-secret-link';
-import { linkAccountIdentity, linkDeviceVerdict, type LinkAccountIdentity } from './auth/link-device-binding';
+import { linkConfirmation, linkDeviceVerdict, type LinkAccountIdentity, type LinkConfirmationIntent } from './auth/link-device-binding';
 
 const logger = enhancedLogger.child({ module: 'MagicLinkService' });
 
@@ -332,6 +332,9 @@ export class MagicLinkService {
      */
     requiresConfirmation?: boolean;
     account?: LinkAccountIdentity;
+    /** #10879 — ce que le oui fera, et l'adresse du compte, MASQUÉE. */
+    intent?: LinkConfirmationIntent;
+    maskedEmail?: string;
   }> {
     const { token, requestContext } = validation;
 
@@ -428,7 +431,7 @@ export class MagicLinkService {
         return {
           success: false,
           requiresConfirmation: true,
-          account: linkAccountIdentity(user),
+          ...linkConfirmation(user, { intent: 'sign-in', email: user.email }),
           error: 'Confirm the account before signing in.'
         };
       }

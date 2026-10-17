@@ -61,7 +61,7 @@ import { revokePasswordResetTokensForEmailChange } from '../../utils/password-re
 import { enhancedLogger } from '../../utils/logger-enhanced';
 import { emailCodeMatches, emailTokenMatches } from './email-code';
 import { markEmailVerificationWatchesProven } from './email-verification-watch';
-import { linkAccountIdentity, linkDeviceVerdict, type LinkAccountIdentity } from './link-device-binding';
+import { linkConfirmation, linkDeviceVerdict, type LinkConfirmation } from './link-device-binding';
 import type { EmailOwner } from './registration-refusal';
 
 const logger = enhancedLogger.child({ module: 'EmailClaim' });
@@ -167,7 +167,7 @@ export type EmailClaimOutcome =
   | { readonly kind: 'none' }
   | { readonly kind: 'expired' }
   | { readonly kind: 'lost' }
-  | { readonly kind: 'confirmation-required'; readonly account: LinkAccountIdentity }
+  | ({ readonly kind: 'confirmation-required' } & LinkConfirmation)
   | { readonly kind: 'proven'; readonly userId: string; readonly verifiedAt: Date; readonly passwordSet: boolean };
 
 type ClaimantRow = {
@@ -328,7 +328,7 @@ export async function proveEmailClaim(store: EmailClaimStore, proof: EmailClaimP
       confirmed: proof.confirmed === true,
     }) === 'confirmation-required'
   ) {
-    return { kind: 'confirmation-required', account: linkAccountIdentity(claimant) };
+    return { kind: 'confirmation-required', ...linkConfirmation(claimant, { intent: 'claim-email', email }) };
   }
 
   const setsPassword = byCode && typeof proof.password === 'string' && claimant.password === null;

@@ -29,6 +29,8 @@
 
 import crypto from 'crypto';
 
+import { maskEmail } from '../PhonePasswordResetService';
+
 export type LinkDeviceVerdict = 'same-device' | 'confirmed' | 'confirmation-required';
 
 const HASH_PATTERN = /^[0-9a-f]{64}$/;
@@ -97,4 +99,33 @@ export const linkAccountIdentity = (row: {
   username: row.username,
   displayName: row.displayName ?? null,
   avatar: row.avatar ?? null,
+});
+
+/**
+ * CE QUE LE OUI FERA (#10879). `sign-in` : il ouvre le compte. `claim-email` :
+ * il ouvre le compte ET lui rattache l'adresse revendiquée (#8214) — l'écran
+ * doit le dire, sinon un tiers fait revendiquer l'adresse d'une victime par
+ * un clic qu'elle croit être une connexion.
+ */
+export type LinkConfirmationIntent = 'sign-in' | 'claim-email';
+
+/**
+ * La question complète : le compte, la nature du oui, et l'adresse en jeu —
+ * MASQUÉE ici, côté serveur (`maskEmail`), jamais en clair. Le masque est un
+ * repère, pas une preuve (une adresse au même masque s'enregistre) : ce qui
+ * identifie le compte reste son `@username`.
+ */
+export type LinkConfirmation = {
+  readonly account: LinkAccountIdentity;
+  readonly intent: LinkConfirmationIntent;
+  readonly maskedEmail: string;
+};
+
+export const linkConfirmation = (
+  row: Parameters<typeof linkAccountIdentity>[0],
+  question: { readonly intent: LinkConfirmationIntent; readonly email: string },
+): LinkConfirmation => ({
+  account: linkAccountIdentity(row),
+  intent: question.intent,
+  maskedEmail: maskEmail(question.email),
 });

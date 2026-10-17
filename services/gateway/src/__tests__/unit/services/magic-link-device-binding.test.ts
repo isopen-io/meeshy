@@ -102,7 +102,10 @@ describe('validateMagicLink — confirmation du compte cible (#10872)', () => {
       success: false,
       requiresConfirmation: true,
       account: { id: user.id, username: 'alice', displayName: 'Alice', avatar: null },
+      intent: 'sign-in',
+      maskedEmail: 'al....e@e*****om',
     });
+    expect(JSON.stringify(result)).not.toContain('alice@example.com');
     expect(result.token).toBeUndefined();
     expect(row.usedAt).toBeUndefined();
     expect(mockCreateSession).not.toHaveBeenCalled();

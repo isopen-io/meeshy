@@ -430,7 +430,7 @@ export function registerMagicLinkRoutes(context: AuthRouteContext) {
       // rien n'est consommé, aucune session ; le client montre le compte cible.
       if (result.success === false && result.reason === 'confirmation-required') {
         logger.info('[AUTH] Lien présenté hors de l’appareil demandeur — confirmation requise');
-        return sendSuccess(reply, { requiresConfirmation: true, account: result.account });
+        return sendSuccess(reply, { requiresConfirmation: true, account: result.account, intent: result.intent, maskedEmail: result.maskedEmail });
       }
 
       if (result.success === false) {

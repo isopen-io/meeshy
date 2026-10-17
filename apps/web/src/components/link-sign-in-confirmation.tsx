@@ -1,6 +1,6 @@
 import { useState } from 'react';
 
-import type { LinkAccount } from '@/lib/api/link-confirmation';
+import type { LinkQuestion } from '@/lib/api/link-confirmation';
 import type { SessionUser } from '@/lib/api/session';
 import { translate } from '@/lib/i18n-catalog';
 import { translateSignInLink } from '@/lib/i18n-sign-in-link-catalog';
@@ -17,21 +17,28 @@ import { Glyph } from './glyph';
  * c'est lui qui a le focus — un lien qu'on n'a pas demandé se refuse d'une
  * touche. Si un autre compte est ouvert, la question le dit : y répondre « oui »
  * vaut aussi le choix de le quitter.
+ *
+ * #10879 — l'adresse en jeu s'affiche MASQUÉE par la passerelle (deux comptes
+ * qui imitent le même nom ne partagent pas l'adresse) ; et le oui d'une
+ * REVENDICATION (#8214), qui rattache cette adresse au compte, le dit en
+ * toutes lettres — bouton compris.
  */
 export function LinkSignInConfirmation({
   language,
-  account,
+  question,
   current,
   onConfirm,
   onCancel,
 }: {
   readonly language: InterfaceLanguage;
-  readonly account: LinkAccount;
+  readonly question: LinkQuestion;
   readonly current: SessionUser | null;
   readonly onConfirm: () => void;
   readonly onCancel: () => void;
 }) {
   const [busy, setBusy] = useState(false);
+  const { account, maskedEmail } = question;
+  const claims = question.intent === 'claim-email';
   const shownName = account.displayName?.trim() ?? '';
 
   function answer(confirm: boolean) {
@@ -42,7 +49,7 @@ export function LinkSignInConfirmation({
   }
 
   return (
-    <section role="alertdialog" aria-modal="false" aria-labelledby="link-sign-in-title" aria-describedby="link-sign-in-lead" className="grid gap-5 text-center">
+    <section role="alertdialog" aria-modal="false" aria-labelledby="link-sign-in-title" aria-describedby={claims ? 'link-sign-in-lead link-sign-in-claim' : 'link-sign-in-lead'} className="grid gap-5 text-center">
       <Glyph name="warningCircle" size={44} className="mx-auto" style={{ color: 'var(--ios-warning)' }} />
       <h1 id="link-sign-in-title" className="text-screen font-bold" style={{ color: 'var(--color-ios-ink)' }}>
         {translateSignInLink(language, 'signInLink.confirm.title', { username: account.username })}
@@ -68,8 +75,19 @@ export function LinkSignInConfirmation({
               {shownName}
             </span>
           )}
+          {maskedEmail === null ? null : (
+            <span data-link-email dir="ltr" className="truncate text-caption" style={{ color: 'var(--color-ios-ink-2)' }}>
+              {maskedEmail}
+            </span>
+          )}
         </span>
       </div>
+
+      {claims ? (
+        <p id="link-sign-in-claim" data-link-claim className="font-semibold" style={{ color: 'var(--color-ios-ink)' }}>
+          {translateSignInLink(language, 'signInLink.confirm.claim', { username: account.username })}
+        </p>
+      ) : null}
 
       <div className="grid gap-3">
         <button
@@ -80,7 +98,7 @@ export function LinkSignInConfirmation({
           className="grid place-items-center rounded-field px-6 font-bold text-ios-on-brand focus-visible:outline-2"
           style={{ minHeight: 52, background: 'linear-gradient(90deg, var(--ios-indigo-600), var(--ios-indigo-400))', outlineColor: 'var(--color-ios-brand)' }}
         >
-          {busy ? translate(language, 'signInLink.switchAccount.busy') : translateSignInLink(language, 'signInLink.confirm.accept')}
+          {busy ? translate(language, 'signInLink.switchAccount.busy') : translateSignInLink(language, claims ? 'signInLink.confirm.acceptClaim' : 'signInLink.confirm.accept')}
         </button>
         <button
           type="button"

@@ -7,6 +7,8 @@ const en = {
   'signInLink.confirm.leadSignedIn': 'You’re signed in as @{current}. This link would open the account below instead; @{current} will stay in your accounts on this device.',
   'signInLink.confirm.accept': 'Sign in',
   'signInLink.confirm.cancel': 'Cancel',
+  'signInLink.confirm.claim': 'This address will be attached to @{username} and removed from any other Meeshy account.',
+  'signInLink.confirm.acceptClaim': 'Attach the address and sign in',
   'verifyEmail.bar.title': 'Email verification',
   'verifyEmail.noAddress': 'This link doesn’t include an email address to verify. Open it from the email Meeshy sent you.',
   'verifyEmail.continue': 'Continue',
