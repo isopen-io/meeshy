@@ -27,10 +27,6 @@ jest.mock('../../../utils/logger-enhanced', () => {
   const child = { error: jest.fn(), warn: jest.fn(), info: jest.fn(), debug: jest.fn() };
   return { enhancedLogger: { ...child, child: () => child } };
 });
-jest.mock('@meeshy/shared/types', () => ({
-  errorResponseSchema: { type: 'object', properties: {} },
-  validationErrorResponseSchema: { type: 'object', properties: {} },
-}));
 
 import { createHash } from 'crypto';
 import type { FastifyRequest } from 'fastify';

@@ -1038,9 +1038,9 @@
       "pattern": "^assets/catalog-account-recovery-(fr|en|es|pt|de|it|ar)-[A-Za-z0-9_-]+\\.js$",
       "dynamic_only": true,
       "kb": {
-        "value": 4,
-        "status": "CIBLE -- MESUREE PAR #10823, NON ARBITREE",
-        "source": "Mesure du 2026-10-16 (`bun run build` puis `node scripts/measure-weight.mjs`, gzip -9) : 2,88 Ko pour les SEPT catalogues du mot de passe oublie et de sa reinitialisation (quinze cles `recovery.*` : la phrase et le (i) de `/forgot-password`, le titre, les champs, les erreurs, le bouton, le lien invalide et le succes de `/reset-password`, valeurs d iOS `auth.forgotPassword.*`), charges avec ces deux routes (`routes/route-table.tsx`) et jamais au demarrage -- les catalogues d interface sont a 209,17 Ko pour un plafond de 210. Ce que l ecran partage avec la connexion (adresse, envoi, hors ligne, retour, « E-mail envoye ») reste au catalogue d interface. Arrondi au Ko SUPERIEUR (3) + 1 Ko de marge."
+        "value": 7,
+        "status": "CIBLE -- MESUREE PAR #10823, REMESUREE PAR #10866, NON ARBITREE",
+        "source": "Mesure du 2026-10-16 (`bun run build` puis `node scripts/measure-weight.mjs`, gzip -9) : 2,88 Ko pour les SEPT catalogues du mot de passe oublie et de sa reinitialisation (quinze cles `recovery.*` : la phrase et le (i) de `/forgot-password`, le titre, les champs, les erreurs, le bouton, le lien invalide et le succes de `/reset-password`, valeurs d iOS `auth.forgotPassword.*`), charges avec ces deux routes (`routes/route-table.tsx`) et jamais au demarrage -- les catalogues d interface sont a 209,17 Ko pour un plafond de 210. Ce que l ecran partage avec la connexion (adresse, envoi, hors ligne, retour, « E-mail envoye ») reste au catalogue d interface. Arrondi au Ko SUPERIEUR (3) + 1 Ko de marge. -- Remesure du 2026-10-17 (#10866, meme methode) : 5,05 Ko apres dix cles de plus (`recovery.reset.code*`, `recovery.reset.error.*` : code 2FA, mot de passe trop faible ou deja utilise, code faux, trop de tentatives, compte verrouille, et l ecran `recovery.reset.exhausted.*` du lien desactive apres trop de codes faux). Toujours charges avec ces deux routes seulement. Arrondi au Ko SUPERIEUR (6) + 1 Ko de marge."
       }
     },
     "interface_catalogs_profile_decor": {
