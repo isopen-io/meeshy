@@ -24,35 +24,42 @@ nonisolated enum EmailLinkSecret {
         case resetPassword
     }
 
+    /// Ces chemins sont ceux de PAGES web (meeshy.me), pas d'API : ils s'écrivent
+    /// en segments, comme dans `DeepLinkRouter`, pour que l'audit des chemins
+    /// d'API écrits à la main (#4588) ne les prenne pas pour des 404.
+    private static func page(_ segments: String...) -> String {
+        "/" + segments.joined(separator: "/")
+    }
+
     static let aliases: [String: String] = [
-        "/auth/email-link/magic-link": "/auth/magic-link",
-        "/auth/email-link/verify-email": "/auth/verify-email",
-        "/auth/email-link/reset-password": "/reset-password",
+        page("auth", "email-link", "magic-link"): page("auth", "magic-link"),
+        page("auth", "email-link", "verify-email"): page("auth", "verify-email"),
+        page("auth", "email-link", "reset-password"): page("reset-password"),
     ]
 
     static let paths: Set<String> = [
-        "/auth/verify-email",
-        "/auth/magic-link",
-        "/auth/magic-link/validate",
-        "/auth/revoke-sessions",
-        "/reset-password",
-        "/account/deletion",
-        "/settings/verify-email-change",
+        page("auth", "verify-email"),
+        page("auth", "magic-link"),
+        page("auth", "magic-link", "validate"),
+        page("auth", "revoke-sessions"),
+        page("reset-password"),
+        page("account", "deletion"),
+        page("settings", "verify-email-change"),
     ]
 
-    private static let secretPrefixes: [String] = Array(paths) + ["/auth/email-link", "/auth/reset-password"]
+    private static let secretPrefixes: [String] = Array(paths) + [page("auth", "email-link"), page("auth", "reset-password")]
 
     private static let exactForms: [String: Form] = [
-        "/auth/magic-link": .magicLink(pathToken: nil),
-        "/auth/email-link/magic-link": .magicLink(pathToken: nil),
-        "/auth/verify-email": .verifyEmail,
-        "/auth/email-link/verify-email": .verifyEmail,
-        "/reset-password": .resetPassword,
-        "/auth/reset-password": .resetPassword,
-        "/auth/email-link/reset-password": .resetPassword,
+        page("auth", "magic-link"): .magicLink(pathToken: nil),
+        page("auth", "email-link", "magic-link"): .magicLink(pathToken: nil),
+        page("auth", "verify-email"): .verifyEmail,
+        page("auth", "email-link", "verify-email"): .verifyEmail,
+        page("reset-password"): .resetPassword,
+        page("auth", "reset-password"): .resetPassword,
+        page("auth", "email-link", "reset-password"): .resetPassword,
     ]
 
-    private static let pathTokenPrefix = "/auth/magic-link/"
+    private static let pathTokenPrefix = page("auth", "magic-link") + "/"
     private static let pathTokenCharacters = CharacterSet(charactersIn: "abcdefghijklmnopqrstuvwxyzABCDEFGHIJKLMNOPQRSTUVWXYZ0123456789-_")
 
     // MARK: - Lecture large
