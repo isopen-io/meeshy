@@ -6,7 +6,7 @@
  * ne servent qu'à la passerelle et à la route `/l/:jeton`. Dans un même module, le découpage du web les rangeait
  * dans la première peinture (module partagé par l'entrée et une route paresseuse) : 91,19 Ko pour 91.
  */
-import { carriesEmailLinkSecret, decodeEmailLinkPath as decodePath } from './email-link-secret';
+import { carriesEmailLinkSecret, decodeEmailLinkPath as decodePath } from './email-link-secret.js';
 
 const hashRoutePath = (hash: string): string | null => {
   const route = hash.replace(/^#/, '').split('?')[0] ?? '';
