@@ -1469,6 +1469,18 @@ final class PostDetailViewModelTests: XCTestCase {
         XCTAssertEqual(sut.repliesMap["root"]?.first?.translatedContent, "Hi")
     }
 
+    /// Cycle 4 — la traduction d'une langue non préférée est gardée : un
+    /// changement de langue la sert sans re-fetch.
+    func test_applyCommentTranslationUpdate_nonPreferredLanguage_isKeptForALanguageChange() {
+        let (sut, _) = makeSUT(preferredLanguages: ["en"])
+        sut.comments = [FeedComment(id: "c1", author: "bob", content: "Salut", originalLanguage: "fr")]
+
+        sut.applyCommentTranslationUpdate(commentId: "c1", language: "es", text: "Hola")
+
+        XCTAssertNil(sut.comments.first?.translatedContent)
+        XCTAssertEqual(sut.comments.first?.resolved(preferredLanguages: ["es"]).displayContent, "Hola")
+    }
+
     // MARK: - subscribeToSocket → post:translation-updated (#6531)
 
     /// Deuxième reproduction de l'issue : l'écran de DÉTAIL a son propre sink

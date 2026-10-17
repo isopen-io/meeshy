@@ -135,15 +135,19 @@ final class FeedTranslationPatchTests: XCTestCase {
         XCTAssertEqual(post.comments.first?.translatedContent, "Hi")
     }
 
-    func test_applyCommentTranslation_nonPreferredLanguage_isANoOp() {
+    /// Une langue non préférée ne change pas l'affichage, mais la traduction
+    /// est GARDÉE : elle servira après un changement de langue du lecteur.
+    func test_applyCommentTranslation_nonPreferredLanguage_isKeptForLater_withoutChangingTheDisplay() {
         var post = makePost(comments: [makeComment(id: "c1")])
 
         let changed = FeedViewModel.applyCommentTranslation(
             "Hi", commentId: "c1", language: "en", preferredLanguages: ["fr"], to: &post
         )
 
-        XCTAssertFalse(changed)
+        XCTAssertTrue(changed, "le dictionnaire a changé : l'exemplaire en cache doit le recevoir")
         XCTAssertNil(post.comments.first?.translatedContent)
+        XCTAssertEqual(post.comments.first?.translations?["en"]?.text, "Hi")
+        XCTAssertEqual(post.resolved(preferredLanguages: ["en"]).comments.first?.translatedContent, "Hi")
     }
 
     func test_applyCommentTranslation_unknownComment_isANoOp() {
@@ -166,7 +170,7 @@ final class FeedTranslationPatchTests: XCTestCase {
             "Hi", commentId: "c1", language: "en", preferredLanguages: ["fr", "en"], to: &post
         )
 
-        XCTAssertFalse(changed)
+        XCTAssertTrue(changed, "gardée pour plus tard, sans détrôner l'original")
         XCTAssertNil(post.comments.first?.translatedContent)
     }
 
