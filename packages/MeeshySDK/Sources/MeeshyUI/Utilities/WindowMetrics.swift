@@ -43,6 +43,12 @@ enum WindowMetrics {
         activeWindow?.bounds.size ?? UIScreen.main.bounds.size
     }
 
+    /// Trame de la fenêtre active en coordonnées d'ÉCRAN — l'espace des trames de clavier. `nil` sans fenêtre.
+    static var activeWindowFrameInScreen: CGRect? {
+        guard let window = activeWindow else { return nil }
+        return window.convert(window.bounds, to: window.screen.coordinateSpace)
+    }
+
     /// Safe-area insets of the window the app is actually rendered in. `.zero`
     /// is the correct last resort rather than a screen-derived guess: it is
     /// the honest value on a device with no home indicator/notch, and when no

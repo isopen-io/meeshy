@@ -1,6 +1,7 @@
 import SwiftUI
 import UIKit
 import os
+import Combine
 import PhotosUI
 import UniformTypeIdentifiers
 import AVFoundation
@@ -244,12 +245,19 @@ extension StoryComposerView {
         // each toolbar mutation. Five separate `.onChange` modifiers tipped
         // the type-checker over the time-out threshold, so we collapse them
         // into a single extension modifier to maintain performance in O(1).
-        .onReceive(NotificationCenter.default.publisher(
-            for: UIResponder.keyboardWillShowNotification)) { note in
+        // La part de la fenêtre que le clavier RECOUVRE, pas la hauteur brute de sa trame : sur iPad le clavier
+        // flotte, se scinde, ou passe sous une fenêtre Stage Manager. Détacher / recoller le clavier n'annonce
+        // qu'un changement de trame — d'où l'écoute de `keyboardWillChangeFrame` en plus de l'apparition.
+        .onReceive(NotificationCenter.default.publisher(for: UIResponder.keyboardWillShowNotification)
+            .merge(with: NotificationCenter.default.publisher(for: UIResponder.keyboardWillChangeFrameNotification))) { note in
             let frame = (note.userInfo?[UIResponder.keyboardFrameEndUserInfoKey]
                 as? NSValue)?.cgRectValue ?? .zero
-            keyboardHeight = frame.height
-            recomputeCanvasShift()
+            let lift = StoryKeyboardOverlap.height(keyboardEndFrame: frame,
+                                                   windowFrame: WindowMetrics.activeWindowFrameInScreen,
+                                                   current: keyboardHeight)
+            guard lift != keyboardHeight else { return }
+            keyboardHeight = lift
+            if lift == 0 { canvasEditShift = 0 } else { recomputeCanvasShift() }
         }
         .onReceive(NotificationCenter.default.publisher(
             for: UIResponder.keyboardWillHideNotification)) { _ in
