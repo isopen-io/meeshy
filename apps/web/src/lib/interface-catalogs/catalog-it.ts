@@ -5,6 +5,7 @@ import itMediaHub from './catalog-it-media-hub';
 import itMediaViewer from './catalog-it-media-viewer';
 import itActivation from './catalog-it-activation';
 import itVerifyEmail from './catalog-it-verify-email';
+import itRevokeSessions from './catalog-it-revoke-sessions';
 import itDevicePush from './catalog-it-device-push';
 import itPassword from './catalog-it-password';
 import itAccounts from './catalog-it-accounts';
@@ -217,6 +218,7 @@ const it = {
   ...itMediaHub,
   ...itMediaViewer,
   ...itVerifyEmail,
+  ...itRevokeSessions,
   ...itActivation,
   ...itPassword,
   ...itDevicePush,

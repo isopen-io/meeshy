@@ -22,7 +22,7 @@ import { sessionStore } from '@/lib/api/session';
 import { translate, type InterfaceCatalogKey } from '@/lib/i18n-catalog';
 import { currentInterfaceLanguage, type InterfaceLanguage } from '@/lib/interface-language';
 import { useOnline } from '@/lib/net/online';
-import { useSearch } from '@/lib/router';
+import { useEmailLinkSearch } from '@/lib/links/email-link-search';
 
 import { DeletionGuidePage } from './account-deletion-guide';
 import { ActionButton, ActionLink, LinkAlert, LinkPage, LinkText, REACH_FAILURE_BODY, type ActionTone } from './link-page-parts';
@@ -75,7 +75,7 @@ export function AccountDeletionPage({
 }
 
 export default function AccountDeletionScreen() {
-  const [search] = useSearch();
+  const search = useEmailLinkSearch();
   const online = useOnline();
   const signedIn = useStore(sessionStore, (state) => state.session.status === 'authenticated');
   return (

@@ -129,6 +129,20 @@ enum DeepLinkParser {
         return (trimmed?.isEmpty == false) ? trimmed : nil
     }
 
+    /// #10859 — un lien d'e-mail porte son secret dans le FRAGMENT
+    /// (`…?via=email#token=…&email=…`) : le navigateur ne l'envoie jamais au
+    /// serveur, aucun journal d'accès ne le garde. Le fragment prime ; la
+    /// requête reste lue pour les e-mails partis avant, jusqu'à leur expiration.
+    static func linkSecret(_ name: String, in url: URL) -> String? {
+        let raw = url.fragment.flatMap { fragment -> String? in
+            var carrier = URLComponents()
+            carrier.percentEncodedQuery = fragment
+            return carrier.queryItems?.first(where: { $0.name == name })?.value
+        }
+        let trimmed = raw?.trimmingCharacters(in: .whitespacesAndNewlines)
+        return (trimmed?.isEmpty == false) ? trimmed : queryValue(name, in: url)
+    }
+
     /// Parse any URL into a deep link destination.
     ///
     /// Universal Links (https://meeshy.me/...):
@@ -224,16 +238,23 @@ enum DeepLinkParser {
     }
 
     /// `/auth/magic-link?token=…` ou `/auth/magic-link/<token>` ;
-    /// `/auth/verify-email?token=…&email=…` (#8035). Un jeton ou une adresse
+    /// `/auth/verify-email?token=…&email=…` (#8035) — et, depuis #10859, les
+    /// mêmes avec le secret dans le fragment (`?via=email#token=…`). Un jeton ou une adresse
     /// vide n'ouvre rien : la validation échouerait, après avoir déconnecté.
     private static func authLink(id: String?, components: [String], url: URL) -> DeepLinkDestination? {
         switch id {
         case "magic-link":
-            return (identifier(components, 2) ?? queryValue("token", in: url)).map { .magicLink(token: $0) }
+            return (identifier(components, 2) ?? linkSecret("token", in: url)).map { .magicLink(token: $0) }
         case "verify-email":
-            guard let token = queryValue("token", in: url),
-                  let email = queryValue("email", in: url) else { return nil }
+            guard let token = linkSecret("token", in: url),
+                  let email = linkSecret("email", in: url) else { return nil }
             return .emailVerificationLink(token: token, email: email)
+        // #10859 — les ALIAS des liens neufs (`/auth/email-link/magic-link`,
+        // `/auth/email-link/verify-email`), qu'aucune version publiée ne
+        // revendique. Lus dès maintenant ; l'AASA ne les revendiquera qu'après
+        // une version minimale (#10861).
+        case "email-link" where components.count == 3:
+            return authLink(id: components[2], components: [], url: url)
         default:
             return nil
         }

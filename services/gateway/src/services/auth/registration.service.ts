@@ -64,6 +64,7 @@ import { passwordSettingsUrl, profileEditUrl } from '../email/account-identity-b
 import { RegistrationRefusal } from './registration-refusal';
 import { claimPlaceholderEmail, maskedEmailOwner, retireEarlierClaims } from './email-claim';
 import { hashEmailCode, verificationTtlMinutes } from './email-code';
+import { EMAIL_LINK_PATHS, emailSecretLink } from '../../utils/email-secret-link';
 
 const logger = enhancedLogger.child({ module: 'RegistrationService' });
 
@@ -537,7 +538,7 @@ export async function registerAccount(
   // sera émis, et l'utilisateur peut en redemander un. Le faire attendre à la
   // requête ajoutait un aller-retour SMTP au chemin d'entrée du produit.
   await aCote(async () => {
-    const verificationLink = `${deps.frontendUrl}/auth/verify-email?token=${verificationToken}&email=${encodeURIComponent(normalizedEmail)}`;
+    const verificationLink = emailSecretLink({ base: deps.frontendUrl, path: EMAIL_LINK_PATHS.verifyEmail, secret: { token: verificationToken, email: normalizedEmail } });
 
     const resultat = await deps.emailService.sendEmailVerification({
       to: normalizedEmail,

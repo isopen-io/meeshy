@@ -288,7 +288,7 @@ describe('POST /users/me/change-email (initiateEmailChange)', () => {
       expect.objectContaining({
         to: 'new@example.com',
         name: 'John Doe',
-        verificationLink: expect.stringContaining('verify-email-change?token='),
+        verificationLink: expect.stringMatching(/\/settings\/verify-email-change\?via=email&token=#token=/),
         expiryHours: 24,
         language: 'fr',
       })

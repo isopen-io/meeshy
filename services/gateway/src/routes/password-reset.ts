@@ -66,6 +66,64 @@ const phoneResendCodeSchema = z.object({
   tokenId: z.string().min(1, 'Token ID is required')
 });
 
+/**
+ * Le verdict sur un jeton de réinitialisation, sans le consommer — partagé par
+ * le `GET` (clients déjà déployés) et le `POST` (#10859, jeton dans le corps).
+ */
+async function replyWithResetTokenState(fastify: FastifyInstance, token: string, reply: FastifyReply) {
+  try {
+    if (!token) {
+      return sendBadRequest(reply, 'Token is required');
+    }
+
+    // Hash the token to lookup in database
+    const crypto = await import('crypto');
+    const tokenHash = crypto.createHash('sha256').update(token).digest('hex');
+
+    // Find token in database
+    const resetToken = await fastify.prisma.passwordResetToken.findUnique({
+      where: { tokenHash },
+      include: {
+        user: {
+          select: {
+            id: true,
+            twoFactorSecret: true
+          }
+        }
+      }
+    });
+
+    if (!resetToken) {
+      return sendSuccess(reply, { valid: false, requires2FA: false });
+    }
+
+    // Check if token is expired
+    if (resetToken.expiresAt < new Date()) {
+      return sendSuccess(reply, { valid: false, requires2FA: false });
+    }
+
+    // Check if token was already used
+    if (resetToken.usedAt) {
+      return sendSuccess(reply, { valid: false, requires2FA: false });
+    }
+
+    // Check if token is revoked
+    if (resetToken.isRevoked) {
+      return sendSuccess(reply, { valid: false, requires2FA: false });
+    }
+
+    return sendSuccess(reply, {
+      valid: true,
+      requires2FA: !!resetToken.user.twoFactorSecret,
+      expiresAt: resetToken.expiresAt.toISOString()
+    });
+
+  } catch (error) {
+    logError(fastify.log, '[PasswordReset] Error verifying token', error);
+    return sendInternalError(reply, 'Error verifying token');
+  }
+}
+
 export async function passwordResetRoutes(fastify: FastifyInstance) {
   // Use shared singleton instance to avoid multiple Redis connections
   const cacheStore = getCacheStore();
@@ -414,59 +472,85 @@ export async function passwordResetRoutes(fastify: FastifyInstance) {
       security: []
     }
   }, async (request: FastifyRequest, reply: FastifyReply) => {
-    try {
-      const { token } = request.query as { token: string };
+    const { token } = request.query as { token: string };
+    return replyWithResetTokenState(fastify, token, reply);
+  });
 
-      if (!token) {
-        return sendBadRequest(reply, 'Token is required');
-      }
-
-      // Hash the token to lookup in database
-      const crypto = await import('crypto');
-      const tokenHash = crypto.createHash('sha256').update(token).digest('hex');
-
-      // Find token in database
-      const resetToken = await fastify.prisma.passwordResetToken.findUnique({
-        where: { tokenHash },
-        include: {
-          user: {
-            select: {
-              id: true,
-              twoFactorSecret: true
+  /**
+   * POST /auth/reset-password/verify-token (#10859)
+   * Même verdict que le GET, le jeton dans le CORPS : la page web le lit dans
+   * le fragment de son lien et ne le met plus jamais dans une adresse qu'un
+   * journal d'accès garde. Le GET reste pour les clients déjà déployés.
+   */
+  fastify.post('/reset-password/verify-token', {
+    schema: {
+      description: 'Verify if a password reset token is valid without consuming it (token in the body, never in a logged URL).',
+      tags: ['auth'],
+      summary: 'Verify reset token (body)',
+      body: {
+        type: 'object',
+        required: ['token'],
+        properties: {
+          token: { type: 'string', minLength: 1, description: 'Password reset token to verify (from the email link fragment)' }
+        }
+      },
+      response: {
+        // Enveloppe `sendSuccess`. Declaree a plat, cette reponse partait
+        // litteralement a `{}` : le front ne pouvait pas distinguer un jeton
+        // valide d'un jeton perime, `valid` etant indiscernable de `undefined`
+        // (#4139).
+        200: {
+          description: 'Token verification result with validity status and additional information',
+          type: 'object',
+          properties: {
+            success: { type: 'boolean' },
+            data: {
+              type: 'object',
+              properties: {
+                valid: {
+                  type: 'boolean',
+                  description: 'Whether the token is valid and can be used for password reset',
+                  example: true
+                },
+                requires2FA: {
+                  type: 'boolean',
+                  description: 'Whether the user has 2FA enabled and will need to provide a code during reset',
+                  example: false
+                },
+                expiresAt: {
+                  type: 'string',
+                  format: 'date-time',
+                  description: 'Token expiration timestamp (ISO 8601 format)',
+                  example: '2026-01-11T15:30:00.000Z'
+                }
+              }
             }
           }
+        },
+        400: {
+          description: 'Bad request - missing token parameter',
+          ...errorResponseSchema,
+          properties: {
+            ...errorResponseSchema.properties,
+            valid: { type: 'boolean', example: false },
+            error: { type: 'string', example: 'Token is required' },
+          }
+        },
+        500: {
+          description: 'Internal server error during token verification',
+          ...errorResponseSchema,
+          properties: {
+            ...errorResponseSchema.properties,
+            valid: { type: 'boolean', example: false },
+            error: { type: 'string', example: 'Error verifying token' },
+          }
         }
-      });
-
-      if (!resetToken) {
-        return sendSuccess(reply, { valid: false, requires2FA: false });
-      }
-
-      // Check if token is expired
-      if (resetToken.expiresAt < new Date()) {
-        return sendSuccess(reply, { valid: false, requires2FA: false });
-      }
-
-      // Check if token was already used
-      if (resetToken.usedAt) {
-        return sendSuccess(reply, { valid: false, requires2FA: false });
-      }
-
-      // Check if token is revoked
-      if (resetToken.isRevoked) {
-        return sendSuccess(reply, { valid: false, requires2FA: false });
-      }
-
-      return sendSuccess(reply, {
-        valid: true,
-        requires2FA: !!resetToken.user.twoFactorSecret,
-        expiresAt: resetToken.expiresAt.toISOString()
-      });
-
-    } catch (error) {
-      logError(fastify.log, '[PasswordReset] Error verifying token', error);
-      return sendInternalError(reply, 'Error verifying token');
+      },
+      security: []
     }
+  }, async (request: FastifyRequest, reply: FastifyReply) => {
+    const token = (request.body as { token?: string } | undefined)?.token ?? '';
+    return replyWithResetTokenState(fastify, token, reply);
   });
 
   // ============================================

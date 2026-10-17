@@ -33,13 +33,28 @@ export type HandoffDevice = {
 
 const insideShell = (shell: CoqueNative | undefined): boolean => (shell?.getPlatform?.() ?? 'web') !== 'web';
 
-export function appHandoffUrl(pageUrl: string, device: HandoffDevice): string | null {
+/**
+ * `secret` (#10859) : le jeton et l'adresse que la page a déjà retirés de sa
+ * barre d'adresse (`email-link-secret.ts`). Vers l'app, ils voyagent dans la
+ * requête de l'intent — une adresse que seul l'appareil lit, jamais un
+ * serveur ; vers le repli du navigateur, dans le FRAGMENT, comme le lien
+ * d'origine.
+ */
+export function appHandoffUrl(pageUrl: string, device: HandoffDevice, secret: Readonly<Record<string, string>> = {}): string | null {
   if (insideShell(device.shell) || !/Android/i.test(device.userAgent)) return null;
   const page = new URL(pageUrl);
   if (page.searchParams.get(MARKER) === MARKER_BROWSER) return null;
+  const secrets = Object.entries(secret);
   const fallback = new URL(page.href);
   fallback.searchParams.set(MARKER, MARKER_BROWSER);
-  const target = `${page.pathname.replace(/^\/+/, '')}${page.search}`;
+  if (secrets.length > 0) {
+    fallback.searchParams.set('via', 'email');
+    fallback.hash = new URLSearchParams(secrets).toString();
+  }
+  const intentQuery = new URLSearchParams(page.search);
+  secrets.forEach(([key, value]) => intentQuery.set(key, value));
+  const query = intentQuery.toString();
+  const target = `${page.pathname.replace(/^\/+/, '')}${query === '' ? '' : `?${query}`}`;
   return `intent://${target}#Intent;scheme=meeshy;package=${ANDROID_APP_PACKAGE};S.browser_fallback_url=${encodeURIComponent(fallback.href)};end`;
 }
 
@@ -82,17 +97,18 @@ export function watchForAppOpening(view: HandoffView): HandoffWatch {
 }
 
 export type AppHandoff = {
-  /** L'adresse qui remet la page courante à l'app, ou `null` : rien à remettre. */
-  readonly target: () => string | null;
+  /** L'adresse qui remet la page courante à l'app, ou `null` : rien à remettre.
+   * `secret` : ce que la page a retiré de son adresse (#10859). */
+  readonly target: (secret?: Readonly<Record<string, string>>) => string | null;
   readonly open: (url: string) => void;
   readonly watch: HandoffWatch;
 };
 
 export const browserAppHandoff: AppHandoff = {
-  target: () =>
+  target: (secret) =>
     typeof window === 'undefined'
       ? null
-      : appHandoffUrl(window.location.href, { userAgent: window.navigator.userAgent, shell: coqueCourante() }),
+      : appHandoffUrl(window.location.href, { userAgent: window.navigator.userAgent, shell: coqueCourante() }, secret),
   open: (url) => window.location.assign(url),
   watch: (waitMs, done) => watchForAppOpening(window)(waitMs, done),
 };

@@ -32,6 +32,34 @@ final class EmailVerificationLinkTests: XCTestCase {
         XCTAssertEqual(DeepLinkParser.parse(url), .magicLink(token: "abc"))
     }
 
+    // MARK: - #10859 — le secret voyage dans le FRAGMENT, jamais dans la requête
+
+    func test_parse_verifyEmail_fragmentLink_returnsTokenAndEmail() {
+        let url = URL(string: "https://meeshy.me/auth/verify-email?via=email#token=tok123&email=nouveau%2Btest%40exemple.com")!
+
+        XCTAssertEqual(DeepLinkParser.parse(url), .emailVerificationLink(token: "tok123", email: "nouveau+test@exemple.com"))
+    }
+
+    func test_parse_magicLink_fragmentLink_returnsToken() {
+        let url = URL(string: "https://meeshy.me/auth/magic-link?returnUrl=%2Fc%2F1&via=email#token=abc")!
+
+        XCTAssertEqual(DeepLinkParser.parse(url), .magicLink(token: "abc"))
+    }
+
+    func test_parse_aliasPaths_readTheFragment() {
+        let magic = URL(string: "https://meeshy.me/auth/email-link/magic-link?via=email&token=#token=abc")!
+        let verify = URL(string: "https://meeshy.me/auth/email-link/verify-email?via=email&token=#token=t1&email=a%40b.co")!
+
+        XCTAssertEqual(DeepLinkParser.parse(magic), .magicLink(token: "abc"))
+        XCTAssertEqual(DeepLinkParser.parse(verify), .emailVerificationLink(token: "t1", email: "a@b.co"))
+    }
+
+    func test_parse_fragmentWins_overAQueryValue() {
+        let url = URL(string: "https://meeshy.me/auth/magic-link?token=old#token=new")!
+
+        XCTAssertEqual(DeepLinkParser.parse(url), .magicLink(token: "new"))
+    }
+
     func test_verifyEmailLink_isClaimedAndDoesNotWaitForSignIn() {
         let link = DeepLinkRouter.link(for: .emailVerificationLink(token: "t", email: "a@b.co"))
 

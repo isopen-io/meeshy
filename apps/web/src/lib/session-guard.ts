@@ -270,6 +270,7 @@ export type RouteKey =
   | 'trackingLink'
   | 'trackingLinkExpired'
   | 'accountDeletion'
+  | 'revokeSessions'
   | 'verifyEmailChange'
   | 'settingsNotifications';
 
