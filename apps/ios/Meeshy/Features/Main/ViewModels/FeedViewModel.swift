@@ -82,6 +82,11 @@ class FeedViewModel: ObservableObject {
     private let languageProvider: LanguageProviding
     private var cacheSaveTask: Task<Void, Never>?
     private var isFeedLoadInProgress = false
+    /// Avance quand la liste repart de la page 1 (tirer pour rafraîchir,
+    /// premier chargement). Une page « suivante » demandée AVANT et revenue
+    /// APRÈS est jetée : collée derrière la nouvelle page 1, elle sautait les
+    /// pages du milieu pour toujours.
+    private var feedGeneration = 0
     /// rts-01 — distingue le PREMIER armement de `subscribeToSocketEvents()`
     /// (la vue appelle déjà `loadFeed()` dans son `.task` si `posts.isEmpty`,
     /// pas de fetch redondant) d'un RÉ-armement après
@@ -166,6 +171,19 @@ class FeedViewModel: ObservableObject {
     /// bypass the cache read entirely and always fetch from the network — the
     /// fetch's write-back save then overwrites the cache with fresh data.
     func loadFeed(forceRefresh: Bool = false) async {
+        await loadFeed(forceRefresh: forceRefresh, keepingLoadedPages: false)
+    }
+
+    /// La relecture SILENCIEUSE de la tête (retour sur l'écran, reconnexion du
+    /// socket) garde les pages déjà chargées derrière la page 1 relue, et leur
+    /// curseur. Elle remplaçait la liste : revenir sur le fil après trois pages
+    /// rendait 20 posts, la carte lue disparaissait, le défilement sautait.
+    /// Seul « tirer pour rafraîchir » repart d'une liste courte.
+    func refreshHeadKeepingLoadedPages() async {
+        await loadFeed(forceRefresh: true, keepingLoadedPages: true)
+    }
+
+    private func loadFeed(forceRefresh: Bool, keepingLoadedPages: Bool) async {
         guard !isFeedLoadInProgress else { return }
         isFeedLoadInProgress = true
         defer { isFeedLoadInProgress = false }
@@ -198,12 +216,15 @@ class FeedViewModel: ObservableObject {
             }
         }
 
-        await fetchFeedFromNetwork(showLoading: posts.isEmpty)
+        await fetchFeedFromNetwork(showLoading: posts.isEmpty, keepingLoadedPages: keepingLoadedPages)
     }
 
-    private func fetchFeedFromNetwork(showLoading: Bool) async {
+    private func fetchFeedFromNetwork(showLoading: Bool, keepingLoadedPages: Bool = false) async {
         if showLoading {
             isLoading = true
+        }
+        if !keepingLoadedPages {
+            feedGeneration &+= 1
         }
 
         do {
@@ -231,7 +252,14 @@ class FeedViewModel: ObservableObject {
                 // then vanishes). Preserve only real-time posts strictly newer
                 // than the server head so server-side deletions within the
                 // fetched range still take effect.
-                posts = Self.mergePreservingRealtimeHead(fetched: fetched, existing: posts)
+                let head = Self.mergePreservingRealtimeHead(fetched: fetched, existing: posts)
+                let merged = keepingLoadedPages
+                    ? Self.mergePreservingLoadedPages(fetched: fetched, existing: posts)
+                    : head
+                // Des pages déjà chargées restent derrière la tête relue : leur
+                // curseur reste le bon, celui de la page 1 les redemanderait.
+                let keepsLoadedTail = merged.count > head.count
+                posts = merged
                 // grdb-03 (volet mémoire) — réappliquer les likes encore en
                 // attente d'outbox par-dessus le snapshot serveur périmé.
                 if let persistence = feedPersistence {
@@ -240,8 +268,10 @@ class FeedViewModel: ObservableObject {
                         posts = Self.reapplyPendingLikes(posts: posts, pendingLikes: pendingLikes)
                     }
                 }
-                nextCursor = response.pagination?.nextCursor
-                hasMore = response.pagination?.hasMore ?? false
+                if !keepsLoadedTail {
+                    nextCursor = response.pagination?.nextCursor
+                    hasMore = response.pagination?.hasMore ?? false
+                }
                 prefetchMedia(around: 0)
 
                 // Attendue EN LIGNE, après la publication de `posts` (l'UI est déjà
@@ -298,6 +328,19 @@ class FeedViewModel: ObservableObject {
         }
     }
 
+    /// La tête relue, plus les pages déjà chargées PLUS ANCIENNES que la page
+    /// relue : la relecture silencieuse ne tronque plus la liste. Les posts
+    /// supprimés dans la plage relue disparaissent toujours.
+    static func mergePreservingLoadedPages(fetched: [FeedPost], existing: [FeedPost]) -> [FeedPost] {
+        let head = mergePreservingRealtimeHead(fetched: fetched, existing: existing)
+        guard let oldestFetched = fetched.last else { return head }
+        let headIds = Set(head.map(\.id))
+        let loadedTail = existing.filter {
+            $0.timestamp < oldestFetched.timestamp && !headIds.contains($0.id)
+        }
+        return loadedTail.isEmpty ? head : head + loadedTail
+    }
+
     static func mergePreservingRealtimeHead(fetched: [FeedPost], existing: [FeedPost]) -> [FeedPost] {
         guard let newestFetched = fetched.first else { return fetched }
         let fetchedIds = Set(fetched.map(\.id))
@@ -328,6 +371,7 @@ class FeedViewModel: ObservableObject {
               !isLoadingMore else { return }
 
         isLoadingMore = true
+        let generation = feedGeneration
 
         do {
             let response: PaginatedAPIResponse<[APIPost]> = try await api.paginatedRequest(
@@ -335,6 +379,13 @@ class FeedViewModel: ObservableObject {
                 cursor: nextCursor,
                 limit: limit
             )
+
+            // La liste est repartie de la page 1 pendant le vol : cette page
+            // suivait une liste qui n'existe plus.
+            guard generation == feedGeneration else {
+                isLoadingMore = false
+                return
+            }
 
             if response.success {
                 // Map off the main actor (see loadFeed) — toFeedPost decode is CPU-bound.
@@ -368,7 +419,7 @@ class FeedViewModel: ObservableObject {
             // d'échouer en silence — le mapping PostRecord→FeedPost partage la
             // résolution Prisme du chemin réseau ; dédup par id, l'ordre
             // createdAt desc du store prolonge la timeline affichée.
-            if let feedStore {
+            if let feedStore, generation == feedGeneration {
                 if feedStore.posts.isEmpty { await feedStore.loadInitial() }
                 _ = await feedStore.loadOlder()
                 let preferred = preferredLanguages
@@ -1377,7 +1428,7 @@ class FeedViewModel: ObservableObject {
             // couvre que le flap) : gardé par isFeedLoadInProgress, silencieux
             // (showLoading: posts.isEmpty), et mergePreservingRealtimeHead
             // protège les posts insérés par un sink pendant le vol.
-            Task { await self.loadFeed(forceRefresh: true) }
+            Task { await self.refreshHeadKeepingLoadedPages() }
         }
 
         // --- didReconnect → backfill du feed ---
@@ -1389,7 +1440,7 @@ class FeedViewModel: ObservableObject {
             .receive(on: DispatchQueue.main)
             .sink { [weak self] in
                 guard let self else { return }
-                Task { await self.loadFeed(forceRefresh: true) }
+                Task { await self.refreshHeadKeepingLoadedPages() }
             }
             .store(in: &socketCancellables)
 

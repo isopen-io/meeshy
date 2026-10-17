@@ -134,8 +134,10 @@ final class GatewayBridgeProviderCompositionGuardTests: XCTestCase {
 
     // MARK: - 3. Composition root — préférence serveur (MeeshyApp.swift)
 
+    /// L'ouverture de session vit dans `MeeshyApp+Lifecycle.swift` depuis qu'elle
+    /// a quitté la fenêtre principale (iPad : fermer cette fenêtre l'emportait).
     private func appSource() throws -> String {
-        try source(at: "Meeshy/MeeshyApp.swift")
+        try source(at: "Meeshy/MeeshyApp.swift") + "\n" + source(at: "Meeshy/MeeshyApp+Lifecycle.swift")
     }
 
     func test_meeshyApp_wiresOnReadingModePreferenceChanged() throws {
