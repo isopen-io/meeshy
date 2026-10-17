@@ -670,9 +670,23 @@ extension ConversationSyncEngine {
             participantId: event.participantId,
             emoji: event.emoji
         )
+        // MÊME loi que la base (`ReactionLedger`, #7927) : ma réaction s'écrit sous mon `User.id`, la clé que teste la
+        // pastille « c'est moi » — l'écho de ma propre réaction optimiste ne double plus.
+        let me = await currentUserId()
+        let currentUserId: String? = me.isEmpty ? nil : me
+        let reactionId = reaction.id
+        let messageId = event.messageId
+        let emoji = event.emoji
+        let participantId = event.participantId
+        let ownerUserId = event.userId
+        let maxCount = event.aggregation?.count
         await cache.messages.upsertPatch(for: convId, itemId: event.messageId) { msg in
-            if !msg.reactions.contains(where: { $0.emoji == reaction.emoji && $0.participantId == reaction.participantId }) {
-                msg.reactions.append(reaction)
+            if let next = ReactionLedger.appending(
+                msg.reactions, reactionId: reactionId, messageId: messageId, emoji: emoji,
+                participantId: participantId, ownerUserId: ownerUserId,
+                currentUserId: currentUserId, maxCount: maxCount
+            ) {
+                msg.reactions = next
             }
         }
         await realtimeMessagePersistor?(.reactionAdded(
@@ -688,8 +702,19 @@ extension ConversationSyncEngine {
 
     private func handleReactionRemoved(_ event: ReactionUpdateEvent) async {
         guard let convId = event.conversationId else { return }
+        let me = await currentUserId()
+        let currentUserId: String? = me.isEmpty ? nil : me
+        let emoji = event.emoji
+        let participantId = event.participantId
+        let ownerUserId = event.userId
+        let aggregate = event.aggregation.map { ReactionLedger.Aggregate(count: $0.count, participantIds: $0.participantIds) }
         await cache.messages.upsertPatch(for: convId, itemId: event.messageId) { msg in
-            msg.reactions.removeAll { $0.emoji == event.emoji && $0.participantId == event.participantId }
+            if let next = ReactionLedger.removing(
+                msg.reactions, emoji: emoji, participantId: participantId,
+                ownerUserId: ownerUserId, currentUserId: currentUserId, aggregate: aggregate
+            ) {
+                msg.reactions = next
+            }
         }
         await realtimeMessagePersistor?(.reactionRemoved(
             messageId: event.messageId,

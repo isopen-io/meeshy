@@ -47,7 +47,7 @@ final class AccessScreensFormWidthTests: XCTestCase {
 
     func test_newPassword_holdsItsColumnAtTheCentre() {
         assertCentredColumn(identifier: "auth.newPassword.submit") {
-            MeeshyNewPasswordView(resetToken: "reset-token", onSignIn: {})
+            MeeshyNewPasswordView(resetToken: "reset-token", initialFlow: PasswordResetFlow(), onSignIn: {})
         }
     }
 

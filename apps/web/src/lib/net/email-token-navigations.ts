@@ -26,7 +26,7 @@
  * applications publiées) sont ramenés à leur adresse canonique par la page.
  */
 const EMAIL_TOKEN_PAGES =
-  'auth\\/verify-email|auth\\/magic-link(?:\\/validate)?|auth\\/email-link\\/(?:magic-link|verify-email)|auth\\/revoke-sessions|reset-password|account\\/deletion|settings\\/verify-email-change';
+  'auth\\/verify-email|auth\\/magic-link(?:\\/validate)?|auth\\/email-link\\/(?:magic-link|verify-email|reset-password)|auth\\/revoke-sessions|reset-password|account\\/deletion|settings\\/verify-email-change';
 
 export const EMAIL_TOKEN_NAVIGATIONS: readonly RegExp[] = [
   new RegExp(`^\\/(?:${EMAIL_TOKEN_PAGES})\\/?\\?(?:[^#]*&)?(?:token=|via=email(?:&|#|$))`),

@@ -20,6 +20,13 @@ final class AvatarRingViewTests: XCTestCase {
         XCTAssertEqual(AvatarRingView.lerpHex("#000000", "#FFFFFF", 0.5), "#808080")
     }
 
+    /// Une couleur courte ou illisible ne sort plus de la chaîne (plantage du dessin de l'avatar d'un autre).
+    func test_lerpHex_neverReadsPastAShortOrMalformedColour() {
+        XCTAssertEqual(AvatarRingView.lerpHex("#FFF", "#FFFFFF", 0), "#FFFFFF", "#RGB s'étend")
+        XCTAssertEqual(AvatarRingView.lerpHex("red", "#000000", 0), "#000000", "illisible : noir, pas de plantage")
+        XCTAssertEqual(AvatarRingView.lerpHex("#11223344", "#112233", 0), "#112233", "l'alpha est ignoré")
+    }
+
     func test_equality_followsTheDesign() throws {
         let filet = try XCTUnwrap(AvatarRingCatalog.shared.ring(pack: "contours-essentiels", item: "filet"))
         let perle = try XCTUnwrap(AvatarRingCatalog.shared.ring(pack: "contours-essentiels", item: "perle"))

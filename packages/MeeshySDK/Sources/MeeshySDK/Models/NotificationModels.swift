@@ -9,17 +9,28 @@ public struct RegisterDeviceTokenRequest: Encodable {
     /// "development" for sandbox APNs (debug builds), "production" for App Store/TestFlight.
     /// Optional — gateway defaults to "production" when omitted.
     public let apnsEnvironment: String?
+    /// L'appareil (#10858) : la passerelle désactive les jetons précédents du
+    /// même `(userId, deviceId, type)`. Absents ⇒ clés omises, comme avant.
+    public let deviceId: String?
+    public let deviceName: String?
+    public let appVersion: String?
+    public let bundleId: String?
 
     public init(
         token: String,
         platform: String = "ios",
         type: String = "apns",
-        apnsEnvironment: String? = nil
+        apnsEnvironment: String? = nil,
+        device: PushDeviceIdentity? = nil
     ) {
         self.token = token
         self.platform = platform
         self.type = type
         self.apnsEnvironment = apnsEnvironment
+        self.deviceId = device?.deviceId
+        self.deviceName = device?.deviceName
+        self.appVersion = device?.appVersion
+        self.bundleId = device?.bundleId
     }
 }
 

@@ -14,6 +14,7 @@ import { startShellPush, type ShellPushPlugin } from './shell-push';
 /** Le pont de la coque : l'écran système des notifications, et l'état de FCM (#8477). */
 type ShellNotificationBridge = NotificationSettingsBridge & {
   fcmStatus(): Promise<{ readonly configured: boolean }>;
+  deviceIdentity(): Promise<unknown>;
 };
 
 const notificationBridge = (): ShellNotificationBridge =>
@@ -78,6 +79,7 @@ export async function startShellPushInShell(): Promise<void> {
     navigate: openNotificationTarget,
     urlOf: shellPushUrl,
     appVersion: __APP_VERSION__,
+    deviceIdentity: () => notificationBridge().deviceIdentity(),
   });
 }
 

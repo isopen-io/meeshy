@@ -402,12 +402,13 @@ final class LentilleChromeSourceGuardTests: XCTestCase {
         )
     }
 
-    func test_hardLawLiteral520_matchesTheOneKnownUnrelatedOccurrence_inConversationListView() throws {
+    /// Le seul « 520 » connu de la vue — `min(windowWidth * 0.42, 520)`, sans rapport avec la loi — est parti dans
+    /// `ConversationRowWidthLaw` (repli d'avant la première mesure de la colonne) : la vue n'en porte plus aucun.
+    func test_hardLawLiteral520_neverAppearsInConversationListView() throws {
         let (name, code) = try listViewSource()
         XCTAssertEqual(
-            occurrences(of: "520", in: code), 1,
-            "\(name) : le compte de « 520 » a changé par rapport au repère connu (1 — " +
-            "`min(windowWidth * 0.42, 520)`, sans rapport avec la loi). Si ce changement AJOUTE " +
+            occurrences(of: "520", in: code), 0,
+            "\(name) : un « 520 » est réapparu dans la vue (le repère connu est désormais 0). Si ce changement AJOUTE " +
             "une seconde occurrence, vérifier qu'elle n'est pas `FOCUS_CURVE_CONSTANTS.list." +
             "maxDistance` recopiée en dur avant de faire quoi que ce soit d'autre."
         )

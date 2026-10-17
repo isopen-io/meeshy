@@ -62,7 +62,7 @@ public extension AuthServiceProviding {
 }
 
 /// Stateless auth API calls. All state management is in AuthManager.
-public final class AuthService: AuthServiceProviding, @unchecked Sendable {
+public final class AuthService: AuthServiceProviding, PasswordResetProviding, @unchecked Sendable {
     public static let shared = AuthService()
     let api: APIClientProviding
     /// La déconnexion PAR JETON passe par là, jamais par `api` (#10463).
@@ -134,7 +134,14 @@ public final class AuthService: AuthServiceProviding, @unchecked Sendable {
     }
 
     public func resetPassword(token: String, newPassword: String) async throws {
-        let body = ResetPasswordRequest(token: token, newPassword: newPassword)
+        try await submitPasswordReset(token: token, newPassword: newPassword, twoFactorCode: nil)
+    }
+
+    /// #10867 — le code 2FA voyage avec le mot de passe ; un refus arrive TYPÉ
+    /// (`MeeshyError.rejected`, `AuthEndpoint.resetPassword` est `.structured`)
+    /// et se lit par `PasswordResetOutcome(error:)`.
+    public func submitPasswordReset(token: String, newPassword: String, twoFactorCode: String?) async throws {
+        let body = ResetPasswordRequest(token: token, newPassword: newPassword, twoFactorCode: twoFactorCode)
         let data = try JSONEncoder().encode(body)
         let response: SimpleAPIResponse = try await api.request(
             AuthEndpoint.resetPassword, method: "POST", body: data
@@ -142,6 +149,14 @@ public final class AuthService: AuthServiceProviding, @unchecked Sendable {
         guard response.success else {
             throw MeeshyError.server(statusCode: 0, message: response.error ?? response.message ?? "Erreur inconnue")
         }
+    }
+
+    /// Le jeton voyage dans le CORPS (#10859), jamais dans une adresse journalisée.
+    public func verifyResetToken(_ token: String) async throws -> ResetTokenVerification {
+        let response: APIResponse<ResetTokenVerification> = try await api.post(
+            AuthEndpoint.resetPasswordVerifyToken, body: ResetTokenVerificationRequest(token: token)
+        )
+        return response.data
     }
 
     // MARK: - Phone Verification

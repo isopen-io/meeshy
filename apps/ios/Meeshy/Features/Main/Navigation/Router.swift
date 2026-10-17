@@ -606,6 +606,9 @@ final class Router: ObservableObject {
                     Task { await SignInLinkOpener.open(link) }
                 }
 
+            case .passwordResetLink(let token):
+                PasswordResetLinkPresenter.shared.present(token: token)
+
             case .share(let text, let urlString):
                 Self.logger.info("Deep link share received")
                 handleShareDeepLink(text: text, urlString: urlString)

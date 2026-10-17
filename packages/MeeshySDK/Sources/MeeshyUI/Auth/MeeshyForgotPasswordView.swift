@@ -112,7 +112,13 @@ public struct MeeshyForgotPasswordView: View {
                 }
             }
             .sheet(isPresented: $showResetPassword) {
-                MeeshyNewPasswordView(resetToken: resetToken) {
+                MeeshyNewPasswordView(resetToken: resetToken, onRequestNewLink: {
+                    // #10867 — lien mort ou désactivé : on reprend la recherche par téléphone.
+                    showResetPassword = false
+                    resetToken = ""
+                    verificationCode = ""
+                    phoneStep = .lookup
+                }) {
                     showResetPassword = false
                     dismiss()
                 }

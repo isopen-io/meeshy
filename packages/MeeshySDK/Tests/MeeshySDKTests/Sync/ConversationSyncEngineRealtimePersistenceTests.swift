@@ -389,6 +389,46 @@ final class ConversationSyncEngineRealtimePersistenceTests: XCTestCase {
         XCTAssertEqual(mutation, .starred(messageId: "m", conversationId: "c", starredAt: now))
     }
 
+    /// Le cache MÉMOIRE des messages suit la même loi que la base (`ReactionLedger`) : ma réaction s'écrit sous mon
+    /// `User.id`. L'écho de ma propre réaction optimiste (keyée `u-me`) arrivait sous mon `Participant.id` et
+    /// s'ajoutait en double ; son retrait ne retirait que le double, et ma ligne restait.
+    func test_myReactionEcho_inTheMessageCache_neitherDuplicatesNorSticks() async throws {
+        let db = try DatabaseQueue()
+        try AppDatabase.runMigrations(on: db)
+        let socket = MockMessageSocket()
+        let cache = CacheCoordinator(messageSocket: socket, socialSocket: MockSocialSocket(), db: db)
+        let engine = ConversationSyncEngine(
+            cache: cache, conversationService: MockConversationService(), messageService: MockMessageService(),
+            messageSocket: socket, socialSocket: MockSocialSocket(), api: MockAPIClient(), syncDelta: MockSyncDeltaMuet(),
+            currentUserId: { "u-me" }
+        )
+        var cached = TestFactories.makeMessage(id: "m-echo", conversationId: "c-echo")
+        cached.reactions = [MeeshyReaction(messageId: "m-echo", participantId: "u-me", emoji: "🔥")]
+        try await cache.messages.save([cached], for: "c-echo")
+        await engine.startSocketRelay()
+
+        socket.reactionAdded.send(ReactionUpdateEvent(
+            messageId: "m-echo", conversationId: "c-echo", participantId: "p-me", userId: "u-me",
+            emoji: "🔥", action: "added",
+            aggregation: ReactionAggregationEvent(emoji: "🔥", count: 1, participantIds: nil, hasCurrentUser: nil),
+            timestamp: nil
+        ))
+        try? await Task.sleep(nanoseconds: 200_000_000)
+        let afterEcho = await cache.messages.load(for: "c-echo").snapshot()?.first { $0.id == "m-echo" }
+        XCTAssertEqual(afterEcho?.reactions.map(\.participantId), ["u-me"], "l'écho ne double pas ma réaction")
+
+        socket.reactionRemoved.send(ReactionUpdateEvent(
+            messageId: "m-echo", conversationId: "c-echo", participantId: "p-me", userId: "u-me",
+            emoji: "🔥", action: "removed",
+            aggregation: ReactionAggregationEvent(emoji: "🔥", count: 0, participantIds: [], hasCurrentUser: nil),
+            timestamp: nil
+        ))
+        let cleared = await waitUntil {
+            await cache.messages.load(for: "c-echo").snapshot()?.first { $0.id == "m-echo" }?.reactions.isEmpty == true
+        }
+        XCTAssertTrue(cleared, "retirer ma réaction retire MA ligne")
+    }
+
     /// #7927 — `message:edited` ne porte que le texte : remplacer le message
     /// en cache mémoire par la charge perdait ses réactions.
     func test_messageEditedRelay_keepsReactionsOfTheCachedMessage() async throws {

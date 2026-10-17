@@ -192,6 +192,7 @@ struct ConversationListView: View {
     @FocusState var isSearching: Bool
     @State var showSearchOverlay: Bool = false
     @State private var expandedSections: Set<String> = ConversationListSectionMemory.shared.initial
+    @State private var listColumnWidth: CGFloat = 0
     /// Pendant le glisser d'une conversation : les catégories dépliées AVANT, rendues au dépôt ou à l'annulation.
     @State private var sectionsBeforeDrag: Set<String>?
     /// Le glisser en cours : son jeton et la catégorie d'où il part. Posé dès le soulèvement — qui précède aussi
@@ -720,22 +721,10 @@ struct ConversationListView: View {
         passContext: ConversationRowPassContext,
         trackedSectionId: String? = nil
     ) -> some View {
-        // rowWidth derives from the actual containing column width (iPad
-        // left column is much narrower than the window) minus
-        // innerPadding(32) + avatar(52) + badge(28) + spacing(24).
-        // On iPad the column ratio is roughly 0.38 of the window, so we
-        // clamp to that floor explicitly to avoid text overflow.
-        //
-        // Measured against the window, not `UIScreen.main.bounds`: the ratio
-        // is meant to approximate a *column of the app*, and taken against the
-        // display it described a column of space the app does not own in Split
-        // View — the row then budgeted more width than it had and the text it
-        // was sized to protect overflowed anyway.
-        let windowWidth = DeviceLayout.windowSize.width
-        let baseWidth = horizontalSizeClass == .regular
-            ? min(windowWidth * 0.42, 520)
-            : windowWidth - 32
-        let rowWidth = max(120, baseWidth - 32 - 52 - 28 - 24)
+        // Depuis la colonne MESURÉE (`listColumnWidth`) — redimensionnable sur iPad —, la fenêtre en repli.
+        let rowWidth = ConversationRowWidthLaw.textWidth(
+            listWidth: listColumnWidth, windowWidth: DeviceLayout.windowSize.width,
+            isRegular: horizontalSizeClass == .regular)
         // Drapeau résolu UNE fois par section, jamais par rang : `LentilleFeatureFlag`
         // relit `ProcessInfo.environment` (et réalloue donc son dictionnaire) à chaque
         // appel — même règle que `tracksVisibleSection` (I-063bis), un cran plus bas
@@ -1827,6 +1816,7 @@ struct ConversationListView: View {
             } action: { visibleTop in
                 sectionPositionRegistry.registerPinLine(visibleTop + stickyHeaderInset)
             }
+            .onGeometryChange(for: CGFloat.self) { $0.size.width } action: { listColumnWidth = $0 }
             .scrollDismissesKeyboard(.interactively)
             // ÉLECTION DE LA FOCUS CARD (LWS-8/I-070). Posé sur le conteneur,
             // APRÈS l'inset sticky : l'hôte mesure le bas de la région visible du
