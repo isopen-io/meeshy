@@ -59,6 +59,7 @@ const it = {
   'callControls.journal.original': 'Originale',
   'callControls.camera.denied': 'L’accesso alla fotocamera è negato',
   'callControls.camera.failed': 'Impossibile aprire la fotocamera',
+  'callControls.camera.settings': 'Impostazioni',
   'callControls.cameraPicker': 'Fotocamera',
   'callControls.cameraPicker.label': 'Scegli la fotocamera',
   'callControls.cameraPicker.unnamed': 'Fotocamera {n}',

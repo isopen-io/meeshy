@@ -301,3 +301,58 @@ describe('les réactions qui montent et le mot d’un contrôle', () => {
     view.done();
   });
 });
+
+/**
+ * #10862 — **UNE CAMÉRA REFUSÉE PENDANT L'APPEL MÈNE AUX RÉGLAGES** : dans la
+ * coque Android, deux refus suffisent pour qu'elle ne se redemande plus ; le
+ * mot de l'échec porte donc la sortie, comme l'appel coupé faute de micro
+ * (#9033). Dans un navigateur, la demande se rejoue : aucun bouton.
+ */
+describe('la caméra refusée pendant l’appel', () => {
+  type NativeCall = { readonly plugin: string; readonly method: string };
+  const shell = globalThis as typeof globalThis & { Capacitor?: unknown };
+
+  const androidShell = (): NativeCall[] => {
+    const calls: NativeCall[] = [];
+    shell.Capacitor = {
+      getPlatform: () => 'android',
+      PluginHeaders: [{ name: 'MeeshyNotificationSettings', methods: [{ name: 'openApp' }] }],
+      nativePromise: (plugin: string, method: string) => {
+        calls.push({ plugin, method });
+        return Promise.resolve({});
+      },
+    };
+    return calls;
+  };
+
+  afterEach(() => {
+    delete shell.Capacitor;
+  });
+
+  test('dans la coque Android ⇒ « Réglages » sous le mot ouvre la fiche de l’app', async () => {
+    const calls = androidShell();
+    const view = mount(<CallScreen call={call()} canShare />);
+    await settle(() => import('./call-control-overlays'));
+    act(() => callNoticeStore.setState({ notice: { kind: 'camera-failed', failure: 'permission' }, seq: 1 }));
+    expect(view.find('[data-call-camera-settings]')?.textContent).toBe('Réglages');
+    view.press('[data-call-camera-settings]');
+    expect(calls).toEqual([{ plugin: 'MeeshyNotificationSettings', method: 'openApp' }]);
+    view.done();
+  });
+
+  test('dans un navigateur, ou pour une caméra seulement indisponible ⇒ aucun bouton', async () => {
+    const browser = mount(<CallScreen call={call()} canShare />);
+    await settle(() => import('./call-control-overlays'));
+    act(() => callNoticeStore.setState({ notice: { kind: 'camera-failed', failure: 'permission' }, seq: 1 }));
+    expect(browser.find('[data-call-control-notice="camera-failed"]')).not.toBeNull();
+    expect(browser.find('[data-call-camera-settings]')).toBeNull();
+    browser.done();
+
+    androidShell();
+    const unavailable = mount(<CallScreen call={call()} canShare />);
+    act(() => callNoticeStore.setState({ notice: { kind: 'camera-failed', failure: 'unavailable' }, seq: 2 }));
+    expect(unavailable.find('[data-call-control-notice="camera-failed"]')).not.toBeNull();
+    expect(unavailable.find('[data-call-camera-settings]')).toBeNull();
+    unavailable.done();
+  });
+});

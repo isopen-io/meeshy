@@ -50,6 +50,15 @@
                 <data android:pathPrefix="/story/" />
                 <data android:pathPrefix="/reel/" />
                 <data android:pathPrefix="/communities/" />
+                <!-- #10881 — les anciennes adresses que l'AASA réclame, et que nginx.conf
+                     redirige en 308 : la coque les lit sous leur forme canonique
+                     (src/lib/links/legacy-paths.ts), comme DeepLinkRouter.swift. -->
+                <data android:pathPrefix="/join/" />
+                <data android:pathPrefix="/conversation/" />
+                <data android:pathPrefix="/users/" />
+                <data android:pathPrefix="/p/" />
+                <data android:pathPrefix="/s/" />
+                <data android:path="/share" />
                 <!-- #10100 — World Wide, l'entrée sans compte et le fil de l'invité en focus. -->
                 <data android:path="/world" />
                 <!-- #9468 — le lien d'invitation, réclamé par l'AASA depuis #8075 :

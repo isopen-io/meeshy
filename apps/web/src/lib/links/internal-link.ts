@@ -10,8 +10,11 @@
  * staging, l'origine publique de l'environnement, l'origine de la page) ET
  * que son CHEMIN est servi par la table des routes. Un chemin inconnu (une
  * page statique, `/privacy`) reste un lien sortant : l'app n'a pas d'écran à
- * lui donner.
+ * lui donner. Une ancienne adresse (`/join/<id>`, `/p/<id>`…) se lit sous
+ * sa forme canonique, celle où le site la redirige (#10881).
  */
+
+import { canonicalAppPath } from './legacy-paths';
 
 const MEESHY_HOSTS = ['meeshy.me', 'www.meeshy.me', 'staging.meeshy.me'] as const;
 
@@ -48,6 +51,7 @@ export function internalPathOf(href: string, context: InternalLinkContext): stri
     }),
   ]);
   if (!hosts.has(parsed.host.toLowerCase())) return null;
-  if (!context.isAppPath(parsed.pathname)) return null;
-  return `${parsed.pathname}${parsed.search}${parsed.hash}`;
+  const path = canonicalAppPath(parsed.pathname);
+  if (!context.isAppPath(path)) return null;
+  return `${path}${parsed.search}${parsed.hash}`;
 }
