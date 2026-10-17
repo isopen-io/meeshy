@@ -96,7 +96,7 @@ enum SignInLinkOpener {
         sessionGate: SessionOpeningGate = .shared,
         celebration: ArrivalCelebrating = ArrivalCelebrationController.shared,
         confirmation: AccountReplacementConfirming = AccountReplacementAlert.shared,
-        signInConfirmation: LinkSignInConfirming = AccountReplacementAlert.shared
+        signInConfirmation: LinkSignInConfirming = LinkSignInConfirmationSheet.shared
     ) async {
         let proof: LinkProof
         do {
@@ -267,7 +267,7 @@ nonisolated enum AccountReplacementDecision: Equatable, Sendable {
 /// Une question restée sans réponse gardait la session prouvée en mémoire et
 /// ouverte au serveur.
 @MainActor
-final class AccountReplacementAlert: AccountReplacementConfirming, LinkSignInConfirming {
+final class AccountReplacementAlert: AccountReplacementConfirming {
     nonisolated deinit {}
     static let shared = AccountReplacementAlert()
 
@@ -281,28 +281,6 @@ final class AccountReplacementAlert: AccountReplacementConfirming, LinkSignInCon
             message: Self.message(signedIn: current, incoming: incoming),
             confirmTitle: String(localized: "signInLink.switchAccount.confirm", defaultValue: "Ouvrir ce compte", bundle: .main)
         )
-    }
-
-    func confirmSignIn(as account: LinkSignInAccount, signedIn current: MeeshyUser?) async -> AccountReplacementDecision {
-        await ask(
-            title: Self.signInTitle(account),
-            message: Self.signInMessage(account, signedIn: current),
-            confirmTitle: String(localized: "signInLink.deviceConfirm.confirm", defaultValue: "Se connecter", bundle: .main)
-        )
-    }
-
-    nonisolated static func signInTitle(_ account: LinkSignInAccount) -> String {
-        let handle = "@\(account.username)"
-        return String(localized: "signInLink.deviceConfirm.title", defaultValue: "Se connecter en tant que \(handle) ?", bundle: .main)
-    }
-
-    nonisolated static func signInMessage(_ account: LinkSignInAccount, signedIn current: MeeshyUser?) -> String {
-        let incomingLabel = label(displayName: account.displayName, username: account.username)
-        guard let current, !current.username.isEmpty else {
-            return String(localized: "signInLink.deviceConfirm.message", defaultValue: "Ce lien de connexion n'a pas été demandé depuis cet appareil. Il ouvre le compte \(incomingLabel).\n\nNe continuez que si ce compte vous appartient.", bundle: .main)
-        }
-        let currentLabel = label(displayName: current.displayName, username: current.username)
-        return String(localized: "signInLink.deviceConfirm.messageReplacing", defaultValue: "Ce lien de connexion n'a pas été demandé depuis cet appareil. Il ouvre le compte \(incomingLabel), à la place de \(currentLabel) qui est ouvert (il restera au sélecteur de comptes).\n\nNe continuez que si ce compte vous appartient.", bundle: .main)
     }
 
     /// Une question à deux réponses, « Annuler » mis en avant.

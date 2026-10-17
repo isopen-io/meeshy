@@ -100,8 +100,8 @@ final class SignInLinkDeviceConfirmationTests: XCTestCase {
     }
 
     func test_questionText_namesTheLinkAccount_andTheOpenOne() {
-        XCTAssertTrue(AccountReplacementAlert.signInTitle(Self.attacker).contains("@mallory"))
-        let replacing = AccountReplacementAlert.signInMessage(Self.attacker, signedIn: MeeshyUser(id: "me", username: "moi", displayName: "Moi"))
+        XCTAssertTrue(LinkSignInConfirmationContent(account: Self.attacker, signedIn: nil).title.contains("@mallory"))
+        let replacing = LinkSignInConfirmationContent(account: Self.attacker, signedIn: MeeshyUser(id: "me", username: "moi", displayName: "Moi")).message
         XCTAssertTrue(replacing.contains("Mallory (@mallory)"))
         XCTAssertTrue(replacing.contains("Moi (@moi)"))
     }

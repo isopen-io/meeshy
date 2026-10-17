@@ -194,6 +194,9 @@ struct MeeshyApp: App {
                     if ResetPasswordPreviewLaunch.isActive {
                         ResetPasswordPreviewScreen().zIndex(2)
                     }
+                    if LinkSignInConfirmationPreviewLaunch.isActive {
+                        LinkSignInConfirmationPreviewScreen().zIndex(2)
+                    }
                     #endif
                 }
                 .meeshyAnimation(.easeInOut(duration: 0.35), value: arrivalCelebration.isShowing)
