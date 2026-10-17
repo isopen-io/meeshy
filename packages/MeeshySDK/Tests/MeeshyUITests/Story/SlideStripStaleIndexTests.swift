@@ -16,8 +16,9 @@ final class SlideStripStaleIndexTests: XCTestCase {
 
     func test_thumbActions_neverSubscriptSlidesUnchecked() throws {
         let code = try String(contentsOf: Self.sourceURL, encoding: .utf8)
-        XCTAssertFalse(code.contains("viewModel.slides[index]"),
-                       "lecture non gardée d'un index capturé au rendu")
-        XCTAssertTrue(code.contains("viewModel.slides[safe: index]"))
+        let reads = code.components(separatedBy: "viewModel.slides[index]").count - 1
+        let guards = code.components(separatedBy: "guard viewModel.slides.indices.contains(index) else { return }").count - 1
+        XCTAssertEqual(reads, 2, "le tap et « Éditer le fond » lisent la slide")
+        XCTAssertEqual(guards, reads, "chaque lecture d'un index capturé au rendu est gardée en tête d'action")
     }
 }

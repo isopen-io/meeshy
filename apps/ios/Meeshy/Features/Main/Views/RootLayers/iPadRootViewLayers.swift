@@ -407,6 +407,8 @@ struct iPadCoversAndChromeLayer: ViewModifier {
             // La fenêtre de ce routeur, posée par la couche la plus EXTERNE :
             // feuilles et pleins écrans s'y déclarent, et une ouverture ne
             // referme que ceux de cette fenêtre (#10543).
+            // La demande d'un lien d'appel : confirmée ici, dans la fenêtre principale.
+            .callLinkConfirmationSheet()
             .environment(\.presentedSurfaceScope, router.surfaceScope)
     }
 }

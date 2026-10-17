@@ -149,6 +149,9 @@ struct MeeshyApp: App {
                                     PendingLinkNotice(isVisible: deepLinkRouter.pendingDeepLink?.opensAfterSignIn == true)
                                 }
                                 .animation(.easeOut(duration: 0.25), value: deepLinkRouter.pendingDeepLink)
+                                // Un lien d'appel reçu avant que la session soit relue
+                                // n'attend pas la connexion : se connecter ne relance rien.
+                                .onAppear { deepLinkRouter.discardPendingCallRequest() }
                                 // #9612 — la fermeture prononcée par le serveur s'explique AVANT la reconnexion.
                                 .sheet(item: Binding(
                                     get: { authManager.sessionRevocationNotice },

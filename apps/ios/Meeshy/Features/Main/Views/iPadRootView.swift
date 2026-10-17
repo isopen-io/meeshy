@@ -111,7 +111,7 @@ struct iPadRootView: View {
     /// G6 : l'iPad a sa racine PROPRE. Sans cette observation-là, un iPad prend
     /// des 426 bruts en pleine publication et ne voit JAMAIS l'écran de mise à
     /// jour — les deux racines ne partagent pas une ligne.
-    @StateObject private var upgradeGate = UpgradeGateController()
+    @StateObject var upgradeGate = UpgradeGateController()
 
     private var isConversationOpen: Bool {
         activeConversation != nil
