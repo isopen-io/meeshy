@@ -8,6 +8,7 @@ import { sessionStore } from '@/lib/api/session';
 import { translate } from '@/lib/i18n-catalog';
 import { currentInterfaceLanguage } from '@/lib/interface-language';
 import { APP_HANDOFF_WAIT_MS, browserAppHandoff, type AppHandoff } from '@/lib/links/app-handoff';
+import { forgetEmailLinkSecret } from '@/lib/links/email-link-secret';
 import { useOnline } from '@/lib/net/online';
 import { waiveNextOnboardingOffer } from '@/lib/onboarding/landing-waiver';
 import { forgetPendingVerification, pendingVerificationFor } from '@/lib/pending-verification';
@@ -105,6 +106,13 @@ const defaultDeps: VerifyEmailFlowDeps = {
 
 type LinkPhase = 'idle' | 'handoff' | 'in-app' | 'checking' | 'confirm' | 'celebrating' | 'refused';
 
+const LINK_SPENT_OUTCOMES: ReadonlySet<ReturnType<typeof resolveVerifyEmailOutcome>['kind']> = new Set([
+  'signed-in',
+  'second-factor',
+  'verified',
+  'invalid-code',
+]);
+
 export function VerifyEmailFlow({
   email,
   token = null,
@@ -155,12 +163,13 @@ export function VerifyEmailFlow({
     linkConsumed.current = true;
     void deps.verifyEmail({ email, token }).then((result) => {
       const pending = result.ok ? accountReplacementOf(sessionStore.getState().session, provenSessionOf(result.data)) : null;
+      const outcome = resolveVerifyEmailOutcome(result);
+      if (pending !== null || LINK_SPENT_OUTCOMES.has(outcome.kind)) forgetEmailLinkSecret();
       if (pending !== null) {
         setReplacement(pending);
         setLinkPhase('confirm');
         return;
       }
-      const outcome = resolveVerifyEmailOutcome(result);
       if (outcome.kind === 'second-factor' && awaitsSecondFactor()) {
         goToSecondFactor();
         return;

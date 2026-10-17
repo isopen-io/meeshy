@@ -374,3 +374,17 @@ export function resolveResetPasswordOutcome(result: ApiResult<ResetPasswordData>
   if (result.status === 400) return { kind: 'invalid-token' };
   return { kind: 'failed', message: `${AUTH_GENERIC_FAILURE_MESSAGE} (${result.code ?? result.status})` };
 }
+
+const RESET_TOKEN_REFUSAL = /invalid or expired reset token/i;
+
+/**
+ * LE JETON DE RÉINITIALISATION EST-IL PROUVÉ MORT ? (#10864) — seule preuve :
+ * `valid:false` servi en 200 par la vérification, ou le 400 de l'envoi qui
+ * nomme le jeton (`PasswordResetService` : « Invalid or expired reset token »).
+ * Un débit dépassé, une panne, un mot de passe refusé ou un code 2FA manquant
+ * laissent le jeton intact : l'écran le garde pour un rechargement.
+ */
+export function resetTokenProvenSpent(result: ApiResult<VerifyResetTokenData | ResetPasswordData>): boolean {
+  if (result.ok) return 'valid' in result.data && !result.data.valid;
+  return result.status === 400 && RESET_TOKEN_REFUSAL.test(result.error);
+}

@@ -19,7 +19,9 @@ import {
   createPhoneResetLookupRateLimiter,
   createPhoneResetIdentityRateLimiter,
   createPhoneResetCodeRateLimiter,
-  createPhoneResetResendRateLimiter
+  createPhoneResetResendRateLimiter,
+  createResetTokenVerifyIpRateLimiter,
+  createResetTokenVerifyTokenRateLimiter
 } from '../utils/rate-limiter.js';
 import { errorResponseSchema, validationErrorResponseSchema } from '@meeshy/shared/types';
 import { disconnectRevokedSessions } from '../socketio/disconnectRevokedSessions';
@@ -144,6 +146,13 @@ export async function passwordResetRoutes(fastify: FastifyInstance) {
   const phoneResetIdentityRateLimiter = createPhoneResetIdentityRateLimiter(redis);
   const phoneResetCodeRateLimiter = createPhoneResetCodeRateLimiter(redis);
   const phoneResetResendRateLimiter = createPhoneResetResendRateLimiter(redis);
+
+  // #10864 — la vérification d'un jeton est un oracle : bornée par adresse ET
+  // par jeton, le GET historique et le POST du lot #10859 dans les mêmes seaux.
+  const resetTokenVerifyPreHandler = [
+    createResetTokenVerifyIpRateLimiter(redis).middleware(),
+    createResetTokenVerifyTokenRateLimiter(redis).middleware()
+  ];
 
   const passwordResetService = new PasswordResetService(
     fastify.prisma,
@@ -470,7 +479,8 @@ export async function passwordResetRoutes(fastify: FastifyInstance) {
         }
       },
       security: []
-    }
+    },
+    preHandler: resetTokenVerifyPreHandler
   }, async (request: FastifyRequest, reply: FastifyReply) => {
     const { token } = request.query as { token: string };
     return replyWithResetTokenState(fastify, token, reply);
@@ -547,7 +557,8 @@ export async function passwordResetRoutes(fastify: FastifyInstance) {
         }
       },
       security: []
-    }
+    },
+    preHandler: resetTokenVerifyPreHandler
   }, async (request: FastifyRequest, reply: FastifyReply) => {
     const token = (request.body as { token?: string } | undefined)?.token ?? '';
     return replyWithResetTokenState(fastify, token, reply);

@@ -1,12 +1,13 @@
 import { useEffect, useRef, useState, type FormEvent } from 'react';
 
 import { auth } from '@/lib/api/auth';
+import { forgetEmailLinkSecret } from '@/lib/links/email-link-secret';
 import { translateRecovery } from '@/lib/i18n-account-recovery-catalog';
 import { translate } from '@/lib/i18n-catalog';
 import { currentInterfaceLanguage } from '@/lib/interface-language';
 import { useOnline } from '@/lib/net/online';
 import { isPasswordValid, PASSWORD_MIN } from '@/lib/signup-form';
-import { resolveResetPasswordOutcome, resolveResetTokenState } from '@/lib/view/auth-feedback';
+import { resetTokenProvenSpent, resolveResetPasswordOutcome, resolveResetTokenState } from '@/lib/view/auth-feedback';
 import { Link } from '@/routes/route-table';
 
 import { AuthBrandFooter, AuthSubmitButton } from './auth-chrome';
@@ -58,6 +59,7 @@ export function ResetPasswordFlow({ token, deps = defaultDeps }: { token: string
       setState('checking');
       const result = await deps.verifyResetToken(token as string);
       const tokenState = resolveResetTokenState(result);
+      if (resetTokenProvenSpent(result)) forgetEmailLinkSecret();
       if (tokenState === 'valid') setState('form');
       else if (tokenState === 'offline') setState('offline-check');
       else setState('invalid');
@@ -90,6 +92,7 @@ export function ResetPasswordFlow({ token, deps = defaultDeps }: { token: string
     const result = await deps.resetPassword({ token, newPassword: password, confirmPassword: confirm });
     setSubmitting(false);
     const outcome = resolveResetPasswordOutcome(result);
+    if (outcome.kind === 'reset' || resetTokenProvenSpent(result)) forgetEmailLinkSecret();
     if (outcome.kind === 'reset') {
       setState('done');
       return;

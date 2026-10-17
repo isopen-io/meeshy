@@ -3,6 +3,7 @@ import { createRoot, type Root } from 'react-dom/client';
 import { afterAll, afterEach, beforeAll, describe, expect, test } from 'bun:test';
 
 import { authColumnIn, strayFromAuthColumn } from '@/test-support/auth-column';
+import { arriveByEmailLink, leaveEmailLink, tokenInHistory } from '@/test-support/email-link-arrival';
 import { ensureHappyDomRegistered, releaseHappyDomIfRegistered } from '@/test-support/happy-dom-environment';
 import { perceivableText } from '@/test-support/perceivable-text';
 import type { ApiResult } from '@/lib/api/http';
@@ -275,5 +276,76 @@ describe('ResetPasswordFlow parle la langue d’interface', () => {
     const el = await mount('abc123', valid());
     expect(el.querySelector('h1')?.textContent).toBe('Nuova password');
     expect(el.querySelector('button[type="submit"]')?.textContent).toBe('Salva password');
+  });
+});
+
+describe('ResetPasswordFlow — le jeton quitte l’historique une fois servi (#10864)', () => {
+  afterEach(leaveEmailLink);
+
+  test('jeton valide, formulaire ouvert : l’entrée le garde (un rechargement doit pouvoir le reprendre)', async () => {
+    arriveByEmailLink('/reset-password', 'tok-form');
+    const verify = verifyTokenStub({ ok: true, data: { valid: true }, status: 200 });
+    await mount('tok-form', { verifyResetToken: verify.verifyResetToken, resetPassword: resetStub([]).resetPassword });
+    expect(tokenInHistory()).toBe('tok-form');
+  });
+
+  test('mot de passe enregistré : l’entrée ne porte plus le jeton', async () => {
+    arriveByEmailLink('/reset-password', 'tok-done');
+    const verify = verifyTokenStub({ ok: true, data: { valid: true }, status: 200 });
+    const reset = resetStub([{ ok: true, data: { message: 'ok' }, status: 200 }]);
+    const el = await mount('tok-done', { verifyResetToken: verify.verifyResetToken, resetPassword: reset.resetPassword });
+    fill(el, 'reset-password', 'Sup3r!Secret1');
+    fill(el, 'reset-password-confirm', 'Sup3r!Secret1');
+    await act(async () => {
+      submit(el);
+      await Promise.resolve();
+    });
+    expect(el.querySelector('h2')?.textContent).toBe('Mot de passe enregistré');
+    expect(tokenInHistory()).toBeNull();
+  });
+
+  test('jeton refusé à la vérification : l’entrée ne le porte plus', async () => {
+    arriveByEmailLink('/reset-password', 'tok-dead');
+    const verify = verifyTokenStub({ ok: true, data: { valid: false }, status: 200 });
+    await mount('tok-dead', { verifyResetToken: verify.verifyResetToken, resetPassword: resetStub([]).resetPassword });
+    expect(tokenInHistory()).toBeNull();
+  });
+
+  for (const status of [429, 500]) {
+    test(`vérification refusée en ${status} (débit, panne) : le jeton n’est pas prouvé mort, l’entrée le garde`, async () => {
+      arriveByEmailLink('/reset-password', `tok-${status}`);
+      const verify = verifyTokenStub({ ok: false, status, error: 'Too many requests' });
+      await mount(`tok-${status}`, { verifyResetToken: verify.verifyResetToken, resetPassword: resetStub([]).resetPassword });
+      expect(tokenInHistory()).toBe(`tok-${status}`);
+    });
+  }
+
+  async function submitWith(token: string, reply: ApiResult<ResetData>) {
+    arriveByEmailLink('/reset-password', token);
+    const verify = verifyTokenStub({ ok: true, data: { valid: true }, status: 200 });
+    const el = await mount(token, { verifyResetToken: verify.verifyResetToken, resetPassword: resetStub([reply]).resetPassword });
+    fill(el, 'reset-password', 'Sup3r!Secret1');
+    fill(el, 'reset-password-confirm', 'Sup3r!Secret1');
+    await act(async () => {
+      submit(el);
+      await Promise.resolve();
+    });
+  }
+
+  test('envoi refusé pour le JETON : l’entrée ne le porte plus', async () => {
+    await submitWith('tok-spent', { ok: false, status: 400, error: 'Invalid or expired reset token' });
+    expect(tokenInHistory()).toBeNull();
+  });
+
+  test('envoi refusé pour le MOT DE PASSE (le jeton n’a pas servi) : l’entrée le garde', async () => {
+    await submitWith('tok-weak', { ok: false, status: 400, error: 'Password requirements: too guessable' });
+    expect(tokenInHistory()).toBe('tok-weak');
+  });
+
+  test('hors ligne à la vérification : l’entrée le garde, « Réessayer » en a besoin', async () => {
+    arriveByEmailLink('/reset-password', 'tok-offline');
+    const verify = verifyTokenStub({ ok: false, status: 0, error: 'Failed to fetch' });
+    await mount('tok-offline', { verifyResetToken: verify.verifyResetToken, resetPassword: resetStub([]).resetPassword });
+    expect(tokenInHistory()).toBe('tok-offline');
   });
 });
