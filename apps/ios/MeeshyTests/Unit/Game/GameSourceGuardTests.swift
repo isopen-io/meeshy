@@ -168,6 +168,7 @@ final class GameSourceGuardTests: XCTestCase {
         "game.chest.reward.points", "game.meeshes.one",
         // « record 40 » et « 976 ✦ » s'écrivent pareil en anglais (#10846, #10899).
         "game.sparks.banner.levelMax", "game.sparks.banner.pocket", "game.meeshes.other",
+        "game.sparks.banner.lifetime",
         "game.actions.one", "game.actions.other", "game.tier.constellation", "game.rank.oracle",
         "game.guide.speaker.mee", "game.guide.speaker.meo", "game.mission.progress", "game.photo.format.story", "game.photo.trophy.mission",
         "game.photo.title.prestige", "game.mint.row.badges", "game.material.bronze",
