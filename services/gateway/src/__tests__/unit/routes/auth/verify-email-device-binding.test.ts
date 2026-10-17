@@ -36,6 +36,12 @@ jest.mock('../../../../services/SessionService', () => ({
   generateSessionToken: jest.fn(() => 'session-token-neuf'),
 }));
 
+const mockLegacyRecord = jest.fn(async (_entry: unknown) => {});
+jest.mock('../../../../services/auth/legacy-link-client', () => ({
+  ...jest.requireActual<typeof import('../../../../services/auth/legacy-link-client')>('../../../../services/auth/legacy-link-client'),
+  getLegacyLinkLoginCounter: () => ({ record: mockLegacyRecord }),
+}));
+
 import { registerMagicLinkRoutes } from '../../../../routes/auth/magic-link';
 
 const UTILISATEUR = {
@@ -86,8 +92,15 @@ const construire = async (options: { verifyEmail?: (p: Preuve) => Promise<unknow
   return { app, verifyEmail, authService, userUpdate };
 };
 
-const verifier = (app: Awaited<ReturnType<typeof construire>>['app'], payload: Preuve) =>
-  app.inject({ method: 'POST', url: '/verify-email', payload });
+const verifier = (app: Awaited<ReturnType<typeof construire>>['app'], payload: Preuve, headers: Record<string, string> = {}) =>
+  app.inject({ method: 'POST', url: '/verify-email', payload, headers });
+
+const iosAnnonce = (version: string) => ({
+  'x-meeshy-platform': 'ios',
+  'x-meeshy-version': version,
+  'x-app-platform': 'ios',
+  'x-app-version': version,
+});
 
 const envAvant = { ...process.env };
 beforeEach(() => {
@@ -144,6 +157,72 @@ describe('#10872 — la confirmation du compte cible', () => {
     await verifier(app, { email: 'marie@example.com', code: '123456', linkDeviceSecret: SECRET, confirm: true });
 
     expect(verifyEmail).toHaveBeenCalledWith(expect.objectContaining({ code: '123456', linkDeviceSecret: undefined, confirmed: false }));
+    await app.close();
+  });
+});
+
+describe('#10878 — la transition mesurée : seul un ANCIEN client iOS garde la connexion directe', () => {
+  it('iOS 1.1.3 (publié avant #10872), lien sans oui : le service reçoit le oui implicite, et le passage est compté', async () => {
+    const { app, verifyEmail } = await construire();
+    await verifier(app, { email: 'marie@example.com', token: 'jeton-brut' }, iosAnnonce('1.1.3'));
+
+    expect(verifyEmail).toHaveBeenCalledWith(expect.objectContaining({ confirmed: true }));
+    expect(mockLegacyRecord).toHaveBeenCalledWith({ route: 'verify-email', client: { platform: 'ios', version: '1.1.3' } });
+    await app.close();
+  });
+
+  it('iOS 1.1.3 qui DÉCLARE link-device-binding (build portant #10872) : la liaison s’applique', async () => {
+    const { app, verifyEmail } = await construire();
+    await verifier(app, { email: 'marie@example.com', token: 'jeton-brut' }, { ...iosAnnonce('1.1.3'), 'x-meeshy-capabilities': 'onboarding-age,link-device-binding' });
+
+    expect(verifyEmail).toHaveBeenCalledWith(expect.objectContaining({ confirmed: false }));
+    expect(mockLegacyRecord).not.toHaveBeenCalled();
+    await app.close();
+  });
+
+  it('ancien client iOS, jeton INVALIDE : rien de compté — la mesure ne se gonfle pas', async () => {
+    const { app } = await construire({ verifyEmail: async () => ({ success: false, reason: 'invalid', error: 'Lien invalide.' }) });
+    const res = await verifier(app, { email: 'marie@example.com', token: 'jeton-bidon' }, iosAnnonce('1.1.3'));
+
+    expect(res.statusCode).toBe(400);
+    expect(mockLegacyRecord).not.toHaveBeenCalled();
+    await app.close();
+  });
+
+  it('iOS 1.1.4 (sait confirmer) : aucune exception, rien de compté', async () => {
+    const { app, verifyEmail } = await construire();
+    await verifier(app, { email: 'marie@example.com', token: 'jeton-brut' }, iosAnnonce('1.1.4'));
+
+    expect(verifyEmail).toHaveBeenCalledWith(expect.objectContaining({ confirmed: false }));
+    expect(mockLegacyRecord).not.toHaveBeenCalled();
+    await app.close();
+  });
+
+  it('client inconnu (aucun en-tête) : la liaison s’applique (fail-closed)', async () => {
+    const { app, verifyEmail } = await construire({ verifyEmail: confirmation });
+    const res = await verifier(app, { email: 'marie@example.com', token: 'jeton-brut' });
+
+    expect(verifyEmail).toHaveBeenCalledWith(expect.objectContaining({ confirmed: false }));
+    expect(res.json()).toEqual({ success: true, data: { requiresConfirmation: true, account: COMPTE } });
+    expect(mockLegacyRecord).not.toHaveBeenCalled();
+    await app.close();
+  });
+
+  it('le web qui s’annonce : la liaison s’applique', async () => {
+    const { app, verifyEmail } = await construire();
+    await verifier(app, { email: 'marie@example.com', token: 'jeton-brut' }, { 'x-meeshy-platform': 'web', 'x-meeshy-version': '1.0.0' });
+
+    expect(verifyEmail).toHaveBeenCalledWith(expect.objectContaining({ confirmed: false }));
+    expect(mockLegacyRecord).not.toHaveBeenCalled();
+    await app.close();
+  });
+
+  it('avec le CODE : le chemin hérité n’est ni pris ni compté', async () => {
+    const { app, verifyEmail } = await construire();
+    await verifier(app, { email: 'marie@example.com', code: '123456' }, iosAnnonce('1.1.2'));
+
+    expect(verifyEmail).toHaveBeenCalledWith(expect.objectContaining({ confirmed: false }));
+    expect(mockLegacyRecord).not.toHaveBeenCalled();
     await app.close();
   });
 });
