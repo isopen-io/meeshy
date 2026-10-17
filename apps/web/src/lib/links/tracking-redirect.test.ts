@@ -79,6 +79,9 @@ describe('decideTrackingRedirect — le clic compté, la cible ouverte', () => {
       'https://staging.meeshy.me/auth/verify-email?token=x&email=a%40b.co',
       'https://meeshy.me/AUTH//Magic-Link/?token=x',
       'https://meeshy.me/reset-password#token=x',
+      'https://evil.example\\@meeshy.me/auth/magic-link?token=x',
+      'https://meeshy.me/auth/magic-link;x=1?token=x',
+      'https://meeshy.me/auth/verify-email/x?token=x&email=a%40b.co',
     ]) {
       expect({ cible, issue: decideTrackingRedirect({ token: TOKEN, click: clicked(cible), resolution: resolved({ originalUrl: cible }) }) }).toEqual({
         cible,
