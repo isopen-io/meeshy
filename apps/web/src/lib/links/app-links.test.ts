@@ -53,7 +53,7 @@ describe('App Links de la coque Android', () => {
   });
 
   test('les anciennes adresses que l’iPhone réclame ouvrent aussi la coque, chacune sur son écran (#10881)', () => {
-    expect(cheminsReclames()).toEqual(expect.arrayContaining(['/join/x', '/conversation/x', '/users/x', '/p/x', '/s/x', '/share']));
+    expect(['/join/x', '/conversation/x', '/users/x', '/p/x', '/s/x', '/share'].filter((chemin) => !cheminsReclames().includes(chemin))).toEqual([]);
     expect(cheminDuLienEntrant('https://meeshy.me/join/mshy_abc', isAppPath)).toBe('/chat/mshy_abc');
     expect(cheminDuLienEntrant('https://meeshy.me/p/post-1', isAppPath)).toBe('/feeds/post/post-1');
   });
