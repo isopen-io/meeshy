@@ -64,19 +64,21 @@ describe('aucun concept affiché n’est absent des règles', () => {
   });
 });
 
-describe('les règles disent les étincelles convertibles (porteur 2026-10-17)', () => {
-  test('le niveau se lit sur les étincelles accumulées, la frappe se paie avec les étincelles convertibles', () => {
+describe('les règles disent que la poche fait le niveau (porteur 2026-10-17, #10892)', () => {
+  test('le niveau se lit sur les étincelles convertibles, la frappe le fait baisser, le rang ne baisse pas', () => {
     const rules = gameRules('fr');
-    expect(rules[1]?.body).toContain('étincelles accumulées');
+    expect(rules[1]?.body).toContain('Le niveau se lit sur tes étincelles convertibles');
+    expect(rules[1]?.body).toContain('Une frappe le fait baisser');
     expect(rules[2]?.body).toContain('tes étincelles convertibles');
     expect(rules[2]?.body).toContain('30 %');
-    expect(rules[3]?.body).toContain('Ton niveau, ton rang et tes badges ne baissent pas');
+    expect(rules[3]?.body).toContain('ton niveau baisse d’autant');
+    expect(rules[3]?.body).toContain('Ton rang et tes badges ne baissent pas');
   });
 
-  test('l’entrée Étincelles dit que les convertibles sont la seule valeur réelle et que la frappe ne baisse pas le niveau', () => {
+  test('l’entrée Étincelles dit que les convertibles font le niveau et que les cumulées sont indicatives', () => {
     const points = rulesGlossary('fr').find((entry) => entry.key === 'points')?.body ?? '';
-    expect(points).toContain('Les convertibles sont ta seule valeur réelle');
-    expect(points).toContain('la frappe ne le fait pas baisser');
+    expect(points).toContain('Les convertibles sont ta seule valeur réelle : elles font ton niveau');
+    expect(points).toContain('Les cumulées disent ton potentiel, à titre indicatif');
   });
 });
 

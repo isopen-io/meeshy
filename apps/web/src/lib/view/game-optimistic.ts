@@ -5,6 +5,7 @@ import { levelOnTheWire, mintOnTheWire } from '@meeshy/shared/utils/game/level-w
 import type { LevelStepFacts } from '@meeshy/shared/utils/game/level-steps';
 import { tailwindFactor } from '@meeshy/shared/utils/game/boosts';
 import { previewMint } from '@meeshy/shared/utils/game/mint';
+import { previewSparksMint, type SparksFacts } from '@meeshy/shared/utils/game/sparks';
 import { treasuryTier } from '@meeshy/shared/utils/game/treasury';
 
 import type { EngagementWithGame } from '@/lib/api/engagement';
@@ -65,18 +66,37 @@ const shiftBalance = (view: EngagementWithGame, delta: number): EngagementWithGa
     : { ...next, meesh: { ...next.meesh, balance: Math.max(0, next.meesh.balance + delta) } };
 };
 
+/**
+ * Les étincelles d'après la frappe (#10892) : la poche paie, le cycle et le total à vie — indicatifs — ne bougent pas.
+ * `undefined` devant un serveur d'avant les étincelles : le niveau garde alors la forme d'hier.
+ */
+const sparksAfterMint = (level: GameBlock['level'], pocket: number): SparksFacts | undefined => {
+  if (level.sparks === undefined) return undefined;
+  const cycle = Math.max(pocket, level.sparksCycle ?? level.sparks);
+  return { pocket, cycle, lifetime: Math.max(cycle, level.sparksLifetime ?? cycle), debt: level.sparksDebt ?? 0 };
+};
+
 export function afterMint(view: EngagementWithGame): EngagementWithGame {
   const game = view.game;
   if (game === undefined || !game.mint.canMint) return view;
   const price = game.mint.price;
   const score = Math.max(0, game.level.score - price);
+  const sparks = sparksAfterMint(game.level, score);
   const debitable = Math.max(0, (view.meesh?.debitablePoints ?? game.level.score) - price);
   const standing = gloryStanding({ glory: game.glory.glory + game.mint.gloryGained, mythic: game.glory.rank === 'mythe', mythicSeat: game.glory.mythic ?? null });
   // Les niveaux s'ouvrent selon le rang (#9688) : le plafond se relit sur le rang d'APRÈS la frappe.
   const levelCap = levelCapForRank(standing.rank);
   // La frappe compte pour les étapes (#9706) : une Meesh de plus, sous la Gloire d'après.
   const steps = stepFactsOf(game.level, standing, { minted: game.mint.number });
-  const level = levelOnTheWire({ score, levelCap, levelRecord: recordOf(game.level), prestige: game.level.prestige, steps });
+  const level = levelOnTheWire({
+    score,
+    levelCap,
+    levelRecord: recordOf(game.level),
+    prestige: game.level.prestige,
+    steps,
+    ...(sparks === undefined ? {} : { sparks, levelMaxLifetime: game.level.levelMaxLifetime ?? null }),
+  });
+  const held = game.treasury.held + 1;
   const next = onGame(view, (current) => ({
     ...current,
     level,
@@ -90,8 +110,13 @@ export function afterMint(view: EngagementWithGame): EngagementWithGame {
       progress: standing.progress,
       mythic: standing.mythic,
     },
-    mint: mintOnTheWire(previewMint({ score, mintedLifetime: current.mint.number, debitablePoints: debitable, levelCap, steps })),
-    boosts: { ...current.boosts, tailwind: tailwindFactor({ level: shownLevel(level), levelRecord: recordOf(level) }) },
+    mint: mintOnTheWire(
+      sparks === undefined
+        ? previewMint({ score, mintedLifetime: current.mint.number, debitablePoints: debitable, levelCap, steps })
+        : previewSparksMint({ sparks: sparks.pocket, mintedLifetime: current.mint.number, held, glory: standing.glory, mythic: standing.rank === 'mythe', levelCap, steps, debt: sparks.debt }),
+    ),
+    // Le Vent arrière est éteint avec les étincelles (#10846) : seul un serveur d'avant le sert encore.
+    boosts: { ...current.boosts, tailwind: sparks === undefined ? tailwindFactor({ level: shownLevel(level), levelRecord: recordOf(level) }) : 1 },
   }));
   const withMeesh = shiftBalance(next, 1);
   return withMeesh.meesh === undefined
