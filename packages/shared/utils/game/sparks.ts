@@ -133,6 +133,43 @@ export const unlockLevelOf = (row: LevelFactsRow | null | undefined): number =>
   Math.max(currentLevelOf(row), levelColumn(row?.levelRecord), levelColumn(row?.levelMaxLifetime), GAME_LEVEL_MIN);
 
 // ---------------------------------------------------------------------------
+// Ce qu'un gain et un Prestige font aux étincelles
+// ---------------------------------------------------------------------------
+
+/**
+ * Un GAIN de `points` étincelles (#10846) — la loi que `writeEngagementScore` écrit en une commande Mongo, ici en pur pour
+ * que les clients la rejouent en optimiste (#10902). La dette se rembourse d'abord : seul le reste va en poche, alors que le
+ * cycle et le total à vie montent du gain ENTIER. Ni l'un ni l'autre ne repart sous la poche (compte d'avant le rattrapage).
+ */
+export function sparksAfterCredit(facts: SparksFacts, points: number): SparksFacts {
+  const gained = sparkCount(points);
+  const debt = sparkCount(facts.debt);
+  const repaid = Math.min(debt, gained);
+  const pocket = sparkCount(facts.pocket);
+  const cycle = Math.max(sparkCount(facts.cycle), pocket);
+  return {
+    pocket: pocket + gained - repaid,
+    cycle: cycle + gained,
+    lifetime: Math.max(sparkCount(facts.lifetime), cycle) + gained,
+    debt: debt - repaid,
+  };
+}
+
+/**
+ * Le PASSAGE en Prestige (#10846) : la poche et le cycle repartent de zéro ; le total à vie, indicatif et monotone, et la
+ * dette, qui n'est pas remboursée par un passage, restent — ce que `PrestigeService.pass` écrit.
+ */
+export function sparksAfterPrestige(facts: SparksFacts): SparksFacts {
+  const pocket = sparkCount(facts.pocket);
+  return {
+    pocket: 0,
+    cycle: 0,
+    lifetime: Math.max(sparkCount(facts.lifetime), sparkCount(facts.cycle), pocket),
+    debt: sparkCount(facts.debt),
+  };
+}
+
+// ---------------------------------------------------------------------------
 // Le coût selon le niveau actuel
 // ---------------------------------------------------------------------------
 
