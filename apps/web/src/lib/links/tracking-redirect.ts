@@ -1,5 +1,6 @@
 import type { ApiResult } from '@/lib/api/http';
 import { isUnreachable } from '@/lib/api/link-failure';
+import { carriesEmailLinkSecret } from '@/lib/links/email-link-secret';
 
 /**
  * **OÙ MÈNE UN LIEN SUIVI `/l/:token`** (#6714) — une loi PURE : les deux
@@ -17,7 +18,9 @@ import { isUnreachable } from '@/lib/api/link-failure';
  * parseur WHATWG décide du schéma, jamais un préfixe de chaîne : il retire
  * tabulations, retours et espaces de bord AVANT de lire le schéma, et
  * `java\tscript:` est un `javascript:` pour lui. Une cible refusée est un lien
- * MORT — la page ne propose aucun « continuer quand même ».
+ * MORT — la page ne propose aucun « continuer quand même ». Il en va de même
+ * d'une cible qui est un lien à JETON d'e-mail (#10870) : son créateur y
+ * mettrait son propre jeton, et le lecteur serait connecté à SON compte.
  *
  * **Un lien désactivé ne rouvre pas sa destination.** Le legacy offrait
  * « Continuer vers la destination » sur un lien expiré. Or la passerelle
@@ -69,7 +72,7 @@ export function safeExternalTarget(raw: unknown): string | null {
   if (typeof raw !== 'string' || raw.trim() === '') return null;
   try {
     const parsed = new URL(raw);
-    return WEB_PROTOCOLS.has(parsed.protocol) ? parsed.href : null;
+    return WEB_PROTOCOLS.has(parsed.protocol) && !carriesEmailLinkSecret(parsed.pathname) ? parsed.href : null;
   } catch {
     return null;
   }

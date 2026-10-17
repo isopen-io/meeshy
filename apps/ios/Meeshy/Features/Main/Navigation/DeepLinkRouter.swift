@@ -158,7 +158,7 @@ enum DeepLinkParser {
     /// - `/post/{id}` or `/p/{id}`               -> post detail (short)
     /// - `/story/{id}`, `/stories/{id}`, `/s/{id}` -> story detail
     /// - `/share?text=...&url=...`               -> share content
-    /// - `/auth/magic-link?token=...`            -> passwordless auth
+    /// - `/auth/magic-link?token=...`            -> passwordless auth (https ONLY, #10870)
     ///
     /// Custom scheme (meeshy://...):
     /// - `meeshy://me`, `meeshy://links`
@@ -171,7 +171,10 @@ enum DeepLinkParser {
     /// - `meeshy://feeds/post/{id}`, `meeshy://feeds/p/{id}`
     /// - `meeshy://story/{id}`, `meeshy://stories/{id}`, `meeshy://s/{id}`
     /// - `meeshy://share?text=...&url=...`
-    /// - `meeshy://auth/magic-link?token=...`
+    ///
+    /// Never under `meeshy://` (#10868, #10870): a link that CONNECTS
+    /// (magic-link, verify-email) or resets a password. Any page or app opens
+    /// that scheme, and would hand the app a third party's token.
     ///
     /// Everything else -> `.external` (caller opens in Safari).
     static func parse(_ url: URL, environmentWebOrigin: String = MeeshyConfig.shared.webOrigin) -> DeepLinkDestination {
@@ -245,11 +248,16 @@ enum DeepLinkParser {
     /// `/auth/verify-email?token=…&email=…` (#8035) — et, depuis #10859, les
     /// mêmes avec le secret dans le fragment (`?via=email#token=…`). Un jeton ou une adresse
     /// vide n'ouvre rien : la validation échouerait, après avoir déconnecté.
+    ///
+    /// Jamais par `meeshy://` (#10870) : n'importe quelle page ou app ouvre ce
+    /// schéma, et y présenterait le jeton d'un TIERS — la victime serait
+    /// connectée au compte de l'attaquant et y écrirait. Seul le lien universel
+    /// https, que l'AASA réserve à notre domaine, porte un lien qui connecte.
     private static func authLink(id: String?, components: [String], url: URL, customScheme: Bool) -> DeepLinkDestination? {
         switch id {
-        case "magic-link":
+        case "magic-link" where !customScheme:
             return (identifier(components, 2) ?? linkSecret("token", in: url)).map { .magicLink(token: $0) }
-        case "verify-email":
+        case "verify-email" where !customScheme:
             guard let token = linkSecret("token", in: url),
                   let email = linkSecret("email", in: url) else { return nil }
             return .emailVerificationLink(token: token, email: email)
@@ -661,8 +669,13 @@ final class DeepLinkRouter: ObservableObject {
     /// Reparse l'`originalUrl` d'un lien de suivi avec le MÊME analyseur que les
     /// Universal Links, pour qu'une URL Meeshy atterrisse in-app plutôt que dans
     /// Safari. `nil` quand l'URL n'ouvre rien (schéma non web, forme vide).
+    ///
+    /// Jamais un lien qui CONNECTE ou réinitialise (#10870) : la cible d'un lien
+    /// suivi est choisie par son créateur, qui y mettrait son propre jeton.
     static func destination(forOriginalURL url: URL) -> DeepLink? {
         switch DeepLinkParser.parse(url) {
+        case .magicLink, .emailVerificationLink, .passwordResetLink:
+            return nil
         case .external(let target):
             // Seul le web s'ouvre. Un `javascript:` ou un schéma inconnu remonté
             // par un lien de suivi ne doit jamais être passé à `UIApplication`.

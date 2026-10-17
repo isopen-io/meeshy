@@ -9,9 +9,12 @@ import { coqueCourante, type CoqueNative } from '@/lib/native-shell';
  * l'app est installée doit donc arriver À L'APP, et le navigateur ne doit PAS
  * consommer le jeton avant (usage unique : l'app n'aurait plus rien à valider).
  *
- * - **Android (navigateur)** : un `intent://` vers le schéma court de la coque
- *   (`meeshy://`, `AndroidManifest.xml`), même chemin, même requête — la coque
- *   le relaie au routeur (`shell-deep-links.ts`), qui sert `/auth/verify-email`.
+ * - **Android (navigateur)** : un `intent://` vers l'App Link https de
+ *   meeshy.me, adressé au paquet de la coque (`AndroidManifest.xml`), même
+ *   chemin, même requête — la coque le relaie au routeur (`shell-deep-links.ts`),
+ *   qui sert `/auth/verify-email`. Jamais par le schéma court `meeshy://`
+ *   (#10870) : la coque y refuse tout lien à jeton, que n'importe quelle page
+ *   ou app peut ouvrir.
  *   Sans l'app, Chrome suit `S.browser_fallback_url` : CETTE page, marquée
  *   `handoff=browser`, qui valide alors dans le navigateur — jamais le Play Store.
  * - **iPhone** : AUCUNE tentative par schéma — Safari afficherait « adresse
@@ -23,6 +26,7 @@ import { coqueCourante, type CoqueNative } from '@/lib/native-shell';
 
 export const ANDROID_APP_PACKAGE = 'me.meeshy.app';
 export const APP_HANDOFF_WAIT_MS = 1_500;
+const APP_LINK_HOST = 'meeshy.me';
 const MARKER = 'handoff';
 const MARKER_BROWSER = 'browser';
 
@@ -55,7 +59,7 @@ export function appHandoffUrl(pageUrl: string, device: HandoffDevice, secret: Re
   secrets.forEach(([key, value]) => intentQuery.set(key, value));
   const query = intentQuery.toString();
   const target = `${page.pathname.replace(/^\/+/, '')}${query === '' ? '' : `?${query}`}`;
-  return `intent://${target}#Intent;scheme=meeshy;package=${ANDROID_APP_PACKAGE};S.browser_fallback_url=${encodeURIComponent(fallback.href)};end`;
+  return `intent://${APP_LINK_HOST}/${target}#Intent;scheme=https;package=${ANDROID_APP_PACKAGE};S.browser_fallback_url=${encodeURIComponent(fallback.href)};end`;
 }
 
 /** Le verdict, rendu une fois après `waitMs` : `true` si la page est passée en

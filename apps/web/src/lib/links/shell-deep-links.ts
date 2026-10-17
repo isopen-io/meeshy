@@ -11,6 +11,7 @@
  * touchés dans un message (`internal-link.ts`, #7849) : un chemin que l'app
  * ne sert pas ne navigue pas.
  */
+import { carriesEmailLinkSecret } from '@/lib/links/email-link-secret';
 import { internalPathOf } from '@/lib/links/internal-link';
 import type { CoqueNative } from '@/lib/native-shell';
 
@@ -39,7 +40,9 @@ const lire = (href: string): URL | null => {
 const cheminDuSchemaCourt = (href: string, isAppPath: (path: string) => boolean): string | null => {
   const reste = href.slice(SCHEMA_COURT.length).replace(/^\/+/, '');
   const url = lire(`https://lien.invalid/${reste}`);
-  if (url === null) return null;
+  // Un lien à jeton d'e-mail n'entre jamais par `meeshy://` (#10870, miroir de
+  // `DeepLinkRouter.swift`) : n'importe quelle page ou app ouvre ce schéma.
+  if (url === null || carriesEmailLinkSecret(url.pathname)) return null;
   return isAppPath(url.pathname) ? `${url.pathname}${url.search}${url.hash}` : null;
 };
 

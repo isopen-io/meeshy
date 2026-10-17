@@ -5,6 +5,7 @@ import { fileURLToPath } from 'node:url';
 
 import { isAppPath } from '@/routes/app-paths';
 
+import { appHandoffUrl } from './app-handoff';
 import { cheminDuLienEntrant } from './shell-deep-links';
 
 /**
@@ -56,14 +57,22 @@ describe('App Links de la coque Android', () => {
     expect(cheminDuLienEntrant('meeshy://c/c-deploiement', isAppPath)).toBe('/c/c-deploiement');
   });
 
-  test('le lien de vérification d’e-mail ouvert sur le téléphone arrive à la coque, jeton compris (#8083)', () => {
+  test('le lien de vérification d’e-mail ouvert sur le téléphone arrive à la coque, jeton compris (#8083) — par l’App Link https seul (#10870)', () => {
     expect(cheminsReclames()).toContain('/auth/verify-email');
     expect(cheminDuLienEntrant('https://meeshy.me/auth/verify-email?token=t-1&email=a%40x.io', isAppPath)).toBe(
       '/auth/verify-email?token=t-1&email=a%40x.io',
     );
-    expect(cheminDuLienEntrant('meeshy://auth/verify-email?token=t-1&email=a%40x.io', isAppPath)).toBe(
-      '/auth/verify-email?token=t-1&email=a%40x.io',
-    );
+    expect(cheminDuLienEntrant('meeshy://auth/verify-email?token=t-1&email=a%40x.io', isAppPath)).toBeNull();
+  });
+
+  test('la remise du navigateur Android (#8083) arrive à la coque par l’App Link, jeton compris (#10870)', () => {
+    const intent = appHandoffUrl('https://meeshy.me/auth/verify-email?token=t-1&email=a%40x.io', {
+      userAgent: 'Mozilla/5.0 (Linux; Android 14; Pixel 8) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/129.0 Mobile Safari/537.36',
+      shell: undefined,
+    }) ?? '';
+    const [, cible = '', options = ''] = /^intent:\/\/([^#]*)#Intent;(.*)$/.exec(intent) ?? [];
+    const schema = /(?:^|;)scheme=([^;]+)/.exec(options)?.[1];
+    expect(cheminDuLienEntrant(`${schema}://${cible}`, isAppPath)).toBe('/auth/verify-email?token=t-1&email=a%40x.io');
   });
 
   test('le lien d’invitation ouvre la coque installée, comme sur iPhone, et y garde son code (#9468)', () => {

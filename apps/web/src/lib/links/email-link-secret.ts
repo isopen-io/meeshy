@@ -40,6 +40,34 @@ export const EMAIL_LINK_PATHS: ReadonlySet<string> = new Set([
   '/settings/verify-email-change',
 ]);
 
+const decodePath = (pathname: string): string => {
+  try {
+    return decodeURIComponent(pathname);
+  } catch {
+    return pathname;
+  }
+};
+
+/**
+ * Le chemin est-il celui d'un lien à JETON d'e-mail (connexion, vérification,
+ * réinitialisation, révocation, suppression) ? Ces liens n'entrent que par
+ * l'adresse https que l'e-mail porte — jamais par `meeshy://`, ni au bout d'un
+ * lien suivi qu'un autre utilisateur a créé (#10870) : l'un comme l'autre
+ * présenterait le jeton d'un TIERS, et le lecteur serait connecté chez lui.
+ * Lu sur une forme normalisée (casse, barres doublées, encodage) : aucune
+ * variante qu'un routeur accepterait ne passe.
+ */
+export function carriesEmailLinkSecret(pathname: string): boolean {
+  const path = decodePath(pathname).toLowerCase().replace(/\/{2,}/g, '/').replace(/\/+$/, '') || '/';
+  const canonical = EMAIL_LINK_ALIASES[path] ?? path;
+  return (
+    EMAIL_LINK_PATHS.has(canonical) ||
+    canonical.startsWith('/auth/magic-link/') ||
+    canonical.startsWith('/auth/email-link/') ||
+    canonical === '/auth/reset-password'
+  );
+}
+
 const LIFTED_KEYS = ['token', 'email'] as const;
 const MARKER_KEY = 'via';
 const STATE_KEY = 'meeshyEmailLinkSecret';
