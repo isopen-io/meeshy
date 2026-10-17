@@ -18,10 +18,12 @@
  * - `generic` — tout le reste : lien mort, inconnu, cible illisible ou qui n'est
  *   pas une adresse web, adresse web porteuse d'identifiants, et toute AUTRE
  *   adresse Meeshy (une conversation, un post, un profil), dont l'aperçu dirait
- *   ce qu'un lien ne doit pas dire.
+ *   ce qu'un lien ne doit pas dire — et toute adresse porteuse d'un lien à
+ *   jeton d'e-mail, quel que soit son hôte (#10871).
  */
 
 import type { PrismaClient } from '@meeshy/shared/prisma/client';
+import { isServableTrackingTarget } from '../tracking-link-target';
 
 export type TrackingLinkUnfurlSource = {
   /** `EXTERNAL` seul désigne une adresse hors de Meeshy ; un partage de contenu (`POST`, `STORY`…) n'est jamais redirigé. */
@@ -81,6 +83,7 @@ export function decideTrackingLinkUnfurl(params: {
   if (!isTrackingToken(token)) return GENERIC;
   if (tracking === null) return { kind: 'invitation', identifier: token };
   if (!tracking.isActive || (tracking.expiresAt !== null && tracking.expiresAt.getTime() <= now.getTime())) return GENERIC;
+  if (!isServableTrackingTarget(tracking.originalUrl)) return GENERIC;
   const target = parseWebUrl(tracking.originalUrl);
   if (target === null) return GENERIC;
   if (!isAppAddress(target, origin)) return tracking.targetType === 'EXTERNAL' ? { kind: 'redirect', location: target.href } : GENERIC;

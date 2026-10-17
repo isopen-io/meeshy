@@ -2,6 +2,7 @@ import { FastifyInstance, FastifyReply } from 'fastify';
 import { z } from 'zod';
 import { mayManageTrackingLink } from './link-ownership';
 import { TrackingLinkService } from '../../services/TrackingLinkService';
+import { isServableTrackingTarget } from '../../services/tracking-link-target';
 import { clickGeo } from './click-geo';
 import { logError } from '../../utils/logger';
 import {
@@ -112,6 +113,11 @@ export async function registerTrackingRoutes(fastify: FastifyInstance) {
 
       if (trackingLink.expiresAt && new Date() > trackingLink.expiresAt) {
         return sendError(reply, 410, 'LINK_EXPIRED', { message: 'Ce lien a expiré' });
+      }
+
+      // Un lien déjà créé vers un lien à jeton d'e-mail est un lien MORT (#10871).
+      if (!isServableTrackingTarget(trackingLink.originalUrl)) {
+        return sendError(reply, 410, 'LINK_INACTIVE', { message: 'Ce lien n\'est plus actif' });
       }
 
       const ipAddress = (request.headers['x-forwarded-for'] as string)?.split(',')[0].trim() ||

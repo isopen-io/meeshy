@@ -24,49 +24,14 @@
  * ne lise l'adresse, pour que le premier rendu parte de l'adresse nettoyée.
  */
 
-export const EMAIL_LINK_ALIASES: Readonly<Record<string, string>> = {
-  '/auth/email-link/magic-link': '/auth/magic-link',
-  '/auth/email-link/verify-email': '/auth/verify-email',
-  '/auth/email-link/reset-password': '/reset-password',
-};
-
-export const EMAIL_LINK_PATHS: ReadonlySet<string> = new Set([
-  '/auth/verify-email',
-  '/auth/magic-link',
-  '/auth/magic-link/validate',
-  '/auth/revoke-sessions',
-  '/reset-password',
-  '/account/deletion',
-  '/settings/verify-email-change',
-]);
-
-const decodePath = (pathname: string): string => {
-  try {
-    return decodeURIComponent(pathname);
-  } catch {
-    return pathname;
-  }
-};
+import { EMAIL_LINK_ALIASES, EMAIL_LINK_PATHS } from '@meeshy/shared/utils/email-link-secret';
 
 /**
- * Le chemin est-il celui d'un lien à JETON d'e-mail (connexion, vérification,
- * réinitialisation, révocation, suppression) ? Ces liens n'entrent que par
- * l'adresse https que l'e-mail porte — jamais par `meeshy://`, ni au bout d'un
- * lien suivi qu'un autre utilisateur a créé (#10870) : l'un comme l'autre
- * présenterait le jeton d'un TIERS, et le lecteur serait connecté chez lui.
- * Lu sur une forme normalisée (casse, barres doublées, encodage) : aucune
- * variante qu'un routeur accepterait ne passe.
+ * La règle « ce chemin porte-t-il le jeton d'un lien d'e-mail ? » est UNE, et
+ * la passerelle la lit aussi à la création et au service d'un lien suivi
+ * (#10871) : elle vit dans `@meeshy/shared/utils/email-link-secret`.
  */
-export function carriesEmailLinkSecret(pathname: string): boolean {
-  const path = decodePath(pathname).toLowerCase().replace(/\/{2,}/g, '/').replace(/\/+$/, '') || '/';
-  const canonical = EMAIL_LINK_ALIASES[path] ?? path;
-  return (
-    EMAIL_LINK_PATHS.has(canonical) ||
-    canonical.startsWith('/auth/magic-link/') ||
-    canonical.startsWith('/auth/email-link/') ||
-    canonical === '/auth/reset-password'
-  );
-}
+export { EMAIL_LINK_ALIASES, EMAIL_LINK_PATHS, carriesEmailLinkSecret } from '@meeshy/shared/utils/email-link-secret';
 
 const LIFTED_KEYS = ['token', 'email'] as const;
 const MARKER_KEY = 'via';
