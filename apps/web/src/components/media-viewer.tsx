@@ -547,6 +547,17 @@ export default function MediaViewer({
     if (index < NEAR_END_PAGES) onNearStartRef.current?.();
   }, [index, items.length]);
 
+  /* Paginer rend la page quittée INERTE (#10744) : le focus qu'elle tenait sortait de la visionneuse, et Échap,
+     les Flèches et Espace — écoutés sur elle — ne répondaient plus. La visionneuse (`tabIndex={-1}`) le reprend. */
+  useEffect(() => {
+    const dialog = dialogRef.current;
+    if (dialog === null) return;
+    const active = document.activeElement;
+    if (active !== null && dialog.contains(active) && active.closest('[inert]') === null) return;
+    if (active !== null && active !== document.body && !dialog.contains(active)) return;
+    dialog.focus({ preventScroll: true });
+  }, [index]);
+
   const goTo = (next: number): void => {
     const at = clampIndex(next, items.length);
     setPinned({ id: items[at]?.id, index: at });

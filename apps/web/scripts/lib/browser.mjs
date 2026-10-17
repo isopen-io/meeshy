@@ -135,6 +135,10 @@ export const launchChromium = async (options = {}) => {
   for (const signal of ['uncaughtException', 'unhandledRejection']) {
     process.on(signal, (cause) => {
       console.error(`\n  ${signal} : ${cause instanceof Error ? cause.message : String(cause)}`);
+      // L'attente qui a expiré, nommée : sans ses lignes de témoin, « Timeout 5000ms exceeded » ne désigne aucune
+      // des dizaines d'attentes d'un gate — la CI rendait un rouge qu'on ne pouvait pas localiser.
+      const frames = cause instanceof Error ? (cause.stack ?? '').split('\n').filter((line) => line.includes('/scripts/')) : [];
+      for (const frame of frames.slice(0, 4)) console.error(`    ${frame.trim()}`);
       reportOpenPages();
       process.exit(1);
     });

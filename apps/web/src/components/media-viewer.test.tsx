@@ -136,6 +136,31 @@ describe('MediaViewer — seule la page affichée est atteignable (#10744)', () 
   });
 });
 
+describe('MediaViewer — paginer au clavier garde le clavier (#10744)', () => {
+  /* La page quittée devient INERTE : le focus qu'elle tenait sortait de la visionneuse, et Échap, Flèches et
+     Espace — écoutés sur la visionneuse — ne répondaient plus. Gate « états du fil » : Échap après ArrowRight ne
+     fermait pas, une fois sur deux selon le moment où le navigateur déplaçait le focus. */
+  test('après ArrowRight, le focus reste DANS la visionneuse et hors des pages inertes', () => {
+    const items = attachmentsOf(MEDIA_GRID_QUAD_WITNESS_ID);
+    const body = mount({ items, startIndex: 1, onClose: () => {} });
+    const dialog = body.querySelector<HTMLElement>('[data-media-viewer]')!;
+    const leaving = currentPage(body);
+    leaving.tabIndex = 0;
+    act(() => {
+      leaving.focus();
+    });
+    expect(document.activeElement).toBe(leaving);
+
+    act(() => {
+      dialog.dispatchEvent(new KeyboardEvent('keydown', { bubbles: true, key: 'ArrowRight' }));
+    });
+    expect(leaving.hasAttribute('inert')).toBe(true);
+    const active = document.activeElement as HTMLElement | null;
+    expect(active !== null && dialog.contains(active)).toBe(true);
+    expect(active?.closest('[inert]') ?? null).toBeNull();
+  });
+});
+
 describe('MediaViewer — le portail reprend l’accent de la conversation (#10743)', () => {
   test('`--accent` de l’écran de conversation est reposée sur la couche, sinon la partie jouée de la forme d’onde est transparente', () => {
     const thread = document.createElement('div');
