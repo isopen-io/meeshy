@@ -2576,6 +2576,7 @@
 		C5F152B8AB9D4EB9E52BC1A2 /* RiverLaneVectorTests.swift in Sources */ = {isa = PBXBuildFile; fileRef = 8B3A6D9D05C8305B550BF497 /* RiverLaneVectorTests.swift */; };
 		C5F210884D4BDF53053A8B06 /* CallTranscriptJournal.swift in Sources */ = {isa = PBXBuildFile; fileRef = F44D2F24232CE375610DC018 /* CallTranscriptJournal.swift */; };
 		C6096E47F2D2710FF4AA1FB4 /* StoryPublishServiceTests.swift in Sources */ = {isa = PBXBuildFile; fileRef = 810493FD644618DE44BFFA9E /* StoryPublishServiceTests.swift */; };
+		C6225E223F58524AF7064DC7 /* SignInLinkDeviceConfirmationTests.swift in Sources */ = {isa = PBXBuildFile; fileRef = A2A3F077279BF971961A6F2A /* SignInLinkDeviceConfirmationTests.swift */; };
 		C64BBE0C9C8A597D7F025684 /* StoryViewerContentView.swift in Sources */ = {isa = PBXBuildFile; fileRef = 7959E702950EAFB81F623CEC /* StoryViewerContentView.swift */; };
 		C66433088AB4CABAF9BFAAAB /* ConversationImageSceneDoor.swift in Sources */ = {isa = PBXBuildFile; fileRef = 64A5DB7DA23C324CE6BF4E69 /* ConversationImageSceneDoor.swift */; };
 		C6650CE5AD8301192812A94A /* TrackingLinkDetailView.swift in Sources */ = {isa = PBXBuildFile; fileRef = 68025CDF57252AFD88899B60 /* TrackingLinkDetailView.swift */; };
@@ -5576,6 +5577,7 @@
 		A26A2A0F575B1CF12190E52F /* AccountSwitcherSheet.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = AccountSwitcherSheet.swift; sourceTree = "<group>"; };
 		A290E5FB7A94CCB7CD726ABF /* MediaChromeSchemeTests.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = MediaChromeSchemeTests.swift; sourceTree = "<group>"; };
 		A2A3D19CB4977884BCA48A5E /* NSEAPIRequest.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = NSEAPIRequest.swift; sourceTree = "<group>"; };
+		A2A3F077279BF971961A6F2A /* SignInLinkDeviceConfirmationTests.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = SignInLinkDeviceConfirmationTests.swift; sourceTree = "<group>"; };
 		A2D3E0B7A182458F1E52395B /* MetaSeparator.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = MetaSeparator.swift; sourceTree = "<group>"; };
 		A2D40B468949F5655240122D /* EditPostSheet.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = EditPostSheet.swift; sourceTree = "<group>"; };
 		A2E5B4D973A2F4BFA092AF6B /* A11yLabelComposerTests.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = A11yLabelComposerTests.swift; sourceTree = "<group>"; };
@@ -10003,6 +10005,7 @@
 				C20D23507955CFF9872C7900 /* RouterTests.swift */,
 				F282E30FE8530879DF9B348A /* ShareLinkAccountReplayTests.swift */,
 				80A6931F6BCF56B490F08E08 /* ShareLinkEntryResolverTests.swift */,
+				A2A3F077279BF971961A6F2A /* SignInLinkDeviceConfirmationTests.swift */,
 				40FDFE7A45C913DCE2C9B374 /* SignInLinkDuringPresentationTests.swift */,
 				B5D212DC1F77D5AFDC78CB1D /* SilentDoorsTests.swift */,
 				3E64E3844478EB0E69145869 /* StoryDoorTests.swift */,
@@ -14502,6 +14505,7 @@
 				589BF41242218858AD4F463D /* ShareTusClientTests.swift in Sources */,
 				E4A94ACC66A79D945E23AF7A /* SheetEnvironmentObjectGuardTests.swift in Sources */,
 				0E5DABA726AC26FB8D87DF9D /* SheetToolbarSemanticsTests.swift in Sources */,
+				C6225E223F58524AF7064DC7 /* SignInLinkDeviceConfirmationTests.swift in Sources */,
 				B42D0F034E4B298961B68777 /* SignInLinkDuringPresentationTests.swift in Sources */,
 				F968EE0657A81A40518D429D /* SignupCloseBarZoneTests.swift in Sources */,
 				92E77AC3E1E9A82EB2DB2A46 /* SignupPhasesTests.swift in Sources */,
