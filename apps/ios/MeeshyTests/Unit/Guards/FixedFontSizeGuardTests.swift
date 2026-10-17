@@ -202,7 +202,12 @@ final class FixedFontSizeGuardTests: XCTestCase {
         "Features/Main/Views/ConversationAnimatedBackground.swift",
         "Features/Main/Views/ConversationBackgroundComponents.swift",
         "Features/Main/Views/ConversationHelperViews.swift",
-        "Features/Main/Views/ConversationListView+Overlays.swift",
+        // RELOCALISATION pure (colonne iPad étroite, 5681d91a66) : les actions
+        // de l'en-tête de la liste quittent `ConversationListView+Overlays`
+        // pour leur propre fichier, avec leurs glyphes en CADRE FIXE (icônes
+        // `MeeshyIconSize.lg`, chiffre de la pastille). Ni `totalCeiling` ni
+        // `textCeiling` — seul le NOM change.
+        "Features/Main/Views/ConversationListHeaderActions.swift",
         "Features/Main/Views/ConversationMediaFilmstrip.swift",
         // #4014 — RELOCALISATION pure, même forme qu'au #4102 : la galerie est
         // découpée (1259 lignes ⇒ racine / `+Rules` / `+Pages`), et quatre de
