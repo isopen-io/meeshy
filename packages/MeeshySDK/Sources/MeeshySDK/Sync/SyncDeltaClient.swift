@@ -241,15 +241,28 @@ private struct EnveloppeDeRefus: Decodable {
 /// LE TRANSPORT DE PRODUCTION — une session SANS cache : `/sync` répond
 /// `Cache-Control: no-store`, et c'est le client qui porte la revalidation
 /// (`if-none-match` ci-dessus), jamais `URLCache`.
+///
+/// UNE session pour tout le processus : le moteur construit un `SyncDeltaClient`
+/// à chaque synchronisation (premier plan, reconnexion, rafraîchissement), et
+/// une session neuve par client — jamais invalidée — payait une poignée de main
+/// TCP/TLS à chaque fois et accumulait des sessions vivantes au fil d'une
+/// longue session d'usage.
 public struct URLSessionSyncDeltaTransport: SyncDeltaTransporting {
     private let session: URLSession
 
-    public init() {
+    private static let sharedSession: URLSession = {
         let config = URLSessionConfiguration.ephemeral
         config.urlCache = nil
         config.timeoutIntervalForRequest = 15
-        self.session = URLSession(configuration: config)
+        return URLSession(configuration: config)
+    }()
+
+    public init() {
+        self.session = Self.sharedSession
     }
+
+    /// Identité de la session sous-jacente (tests).
+    var sessionIdentity: ObjectIdentifier { ObjectIdentifier(session) }
 
     public func executer(_ requete: URLRequest) async throws -> (Data, HTTPURLResponse) {
         let (octets, reponse) = try await session.data(for: requete)

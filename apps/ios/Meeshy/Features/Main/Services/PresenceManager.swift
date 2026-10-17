@@ -252,6 +252,17 @@ final class PresenceManager: ObservableObject {
         }
     }
 
+    /// Déconnexion : la présence observée appartient au compte sortant. Le
+    /// fichier n'a pas de compte dans son nom ; il est réécrit vide tout de
+    /// suite, pas après le délai de regroupement, pour qu'un arrêt de l'app
+    /// juste après ne rende pas au compte suivant la carte du précédent.
+    func resetForLogout() {
+        presenceMap = [:]
+        persistTask?.cancel()
+        persistToDisk()
+        clearConversationViewers()
+    }
+
     func clearConversationViewers() {
         cancelRestTasks()
         conversationViewers = ConversationViewers()

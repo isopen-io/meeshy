@@ -502,6 +502,9 @@ final class DependencyContainer {
                     await SocialEventsV2Outbox.shared.purgeAll()
                     SocialNotificationInbox.shared.purge()
                     await MainActor.run { RecentDisplayCaptureSource.shared.reset() }
+                    // La présence vue (carte + fichier sans compte) appartient au
+                    // compte sortant : le suivant ne la reçoit jamais du serveur.
+                    await MainActor.run { PresenceManager.shared.resetForLogout() }
                     await PendingStatusQueue.shared.clearAll()
                     // #8656 — les brouillons de commentaire sont rangés par post,
                     // sans compte : un post vu des deux comptes rendait au
