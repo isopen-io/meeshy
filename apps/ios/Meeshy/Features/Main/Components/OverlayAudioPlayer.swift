@@ -65,7 +65,7 @@ final class OverlayAudioPlayer: ObservableObject {
         activateSession: @escaping () -> Void = { MediaSessionCoordinator.shared.activatePlaybackSync(options: []) },
         releaseSession: @escaping () -> Void = {
             // `setActive(false)` est un aller-retour HAL bloquant : hors du fil principal.
-            DispatchQueue.global(qos: .utility).async { MediaSessionCoordinator.shared.deactivatePlaybackSync() }
+            MediaSessionCoordinator.shared.deactivatePlaybackDeferred()
         }
     ) {
         self.activateSession = activateSession

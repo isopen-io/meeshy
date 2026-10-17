@@ -13,11 +13,9 @@ import Testing
 struct MediaSessionCoordinatorHoldBalanceTests {
 
     @Test func failedRequest_stillCountsAsAHold_soItsReleaseDoesNotStealAnotherHolder() async {
-        let coordinator = MediaSessionCoordinator.shared
-        await coordinator.resetHoldsForTesting()
+        let coordinator = MediaSessionCoordinator.makeForTesting()
         let probe = MediaSessionCoordinatorTestProbe()
         coordinator.testProbe = probe
-        defer { coordinator.testProbe = nil }
 
         // Détenteur A : la lecture du canevas de story, activation réussie.
         try? await coordinator.request(role: .playback)

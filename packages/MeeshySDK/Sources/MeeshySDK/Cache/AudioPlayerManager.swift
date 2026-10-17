@@ -220,7 +220,7 @@ public class AudioPlayerManager: ObservableObject {
     /// Rend la session de lecture (call-aware) — par défaut au coordinateur, injectable pour les témoins.
     /// Hors du fil principal : `setActive(false)` est un aller-retour HAL bloquant.
     var sessionReleaser: () -> Void = {
-        DispatchQueue.global(qos: .utility).async { MediaSessionCoordinator.shared.deactivatePlaybackSync() }
+        MediaSessionCoordinator.shared.deactivatePlaybackDeferred()
     }
 
     /// Arrête la lecture ET rend la session `.playback` si une lecture la tenait : la musique d'une autre app,
