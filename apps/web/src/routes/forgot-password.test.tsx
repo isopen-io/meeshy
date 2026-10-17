@@ -103,6 +103,31 @@ describe('/forgot-password prend la forme de /login', () => {
     expect(el.querySelector('button[type="submit"]')?.textContent).toBe('Recevoir le lien');
   });
 
+  test('champ vide ou adresse incomplète : le bouton est désactivé et rien ne part (#10885)', async () => {
+    const { calls, deps } = acceptedRequest();
+    const el = mount(deps);
+    const bouton = el.querySelector('button[type="submit"]') as HTMLButtonElement;
+    expect(bouton.disabled).toBe(true);
+    await act(async () => {
+      (el.querySelector('form') as HTMLFormElement).requestSubmit();
+    });
+    const champ = el.querySelector('#forgot-email') as HTMLInputElement;
+    act(() => {
+      champ.value = 'ada@meeshy';
+      champ.dispatchEvent(new Event('input', { bubbles: true }));
+    });
+    expect(bouton.disabled).toBe(true);
+    await act(async () => {
+      (el.querySelector('form') as HTMLFormElement).requestSubmit();
+    });
+    expect(calls).toEqual([]);
+    act(() => {
+      champ.value = EMAIL;
+      champ.dispatchEvent(new Event('input', { bubbles: true }));
+    });
+    expect(bouton.disabled).toBe(false);
+  });
+
   test('le retour vers la connexion est une ANCRE, dès la première seconde', () => {
     const el = mount();
     expect([...el.querySelectorAll('a')].some((a) => a.getAttribute('href') === '/login')).toBe(true);

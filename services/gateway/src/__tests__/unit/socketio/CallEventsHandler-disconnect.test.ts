@@ -167,6 +167,9 @@ function makePrisma(): PrismaClient & {
   });
 
   return {
+    participant: {
+      findMany: jest.fn<any>().mockResolvedValue([{ id: MEMBERSHIP_ID }]),
+    },
     callParticipant: {
       findMany: jest.fn<any>().mockResolvedValue([makeActiveParticipation()]),
       // CALL-RESILIENCE — grace-expiry re-check: participant still present, call
@@ -588,14 +591,29 @@ describe('CallEventsHandler — disconnect handler force-cleanup', () => {
       await handlers['disconnect']();
       await jest.advanceTimersByTimeAsync(GRACE_EXPIRY_MS);
 
+      expect((prisma as any).participant.findMany).toHaveBeenCalledWith({ where: { userId: USER_ID }, select: { id: true } });
       expect(prisma.callParticipant.findMany).toHaveBeenCalledWith(
         expect.objectContaining({
-          where: expect.objectContaining({
+          where: {
             OR: [{ leftAt: null }, { leftAt: { isSet: false } }],
-            participant: { userId: USER_ID }
-          })
+            participantId: { in: [MEMBERSHIP_ID] }
+          }
         })
       );
+    });
+
+    it('reads no call participation when the account holds no Participant row', async () => {
+      const prisma = makePrisma();
+      (prisma as any).participant.findMany.mockResolvedValue([]);
+      const { socket, handlers } = makeSocket();
+      const { io } = makeIo();
+
+      const handler = new CallEventsHandler(prisma);
+      handler.setupCallEvents(socket as any, io, () => USER_ID);
+      await handlers['disconnect']();
+
+      expect(prisma.callParticipant.findMany).not.toHaveBeenCalled();
+      expect(mockLeaveCallDc).not.toHaveBeenCalled();
     });
 
     it('force-cleanup counts remaining participants matching leftAt null OR unset', async () => {

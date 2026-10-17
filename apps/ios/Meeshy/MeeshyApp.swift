@@ -194,6 +194,9 @@ struct MeeshyApp: App {
                     if ResetPasswordPreviewLaunch.isActive {
                         ResetPasswordPreviewScreen().zIndex(2)
                     }
+                    if ForgotPasswordPreviewLaunch.isActive {
+                        ForgotPasswordPreviewScreen().zIndex(2)
+                    }
                     if LinkSignInConfirmationPreviewLaunch.isActive {
                         LinkSignInConfirmationPreviewScreen().zIndex(2)
                     }

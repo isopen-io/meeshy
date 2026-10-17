@@ -56,4 +56,34 @@ nonisolated private final class PreviewPasswordResetService: PasswordResetProvid
         throw MeeshyError.rejected(APIRejection(statusCode: 400, code: "TWO_FACTOR_INVALID", message: "Invalid 2FA code"))
     }
 }
+
+/// **Aperçu DEBUG de « Mot de passe oublié »** (#10885), sans réseau — pour
+/// vérifier au simulateur que le bouton reste désactivé tant que la saisie est
+/// incomplète.
+///
+/// ```
+/// xcrun simctl launch <udid> me.meeshy.app -MeeshyForgotPasswordPreview
+/// xcrun simctl launch <udid> me.meeshy.app -MeeshyForgotPasswordPreview ada@meeshy.me
+/// ```
+enum ForgotPasswordPreviewLaunch {
+    static let argument = "-MeeshyForgotPasswordPreview"
+
+    static var isActive: Bool {
+        ProcessInfo.processInfo.arguments.contains(argument)
+    }
+
+    static var prefilledEmail: String {
+        let arguments = ProcessInfo.processInfo.arguments
+        guard let value = arguments.firstIndex(of: argument)
+            .flatMap({ arguments.indices.contains($0 + 1) ? arguments[$0 + 1] : nil }),
+              !value.hasPrefix("-") else { return "" }
+        return value
+    }
+}
+
+struct ForgotPasswordPreviewScreen: View {
+    var body: some View {
+        MeeshyForgotPasswordView(prefilledEmail: ForgotPasswordPreviewLaunch.prefilledEmail)
+    }
+}
 #endif

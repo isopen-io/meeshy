@@ -122,6 +122,7 @@ function makeActiveParticipation() {
 
 function makePrisma(): PrismaClient {
   return {
+    participant: { findMany: jest.fn<any>().mockResolvedValue([{ id: 'membership-of-user' }]) },
     callParticipant: {
       findMany: jest.fn<any>().mockResolvedValue([makeActiveParticipation()]),
       // CALL-RESILIENCE — grace-expiry re-check: participant still present,
