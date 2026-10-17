@@ -367,7 +367,7 @@ enum ConceptText {
 
     static var ficheUse: String { String(localized: "game.fiche.use", defaultValue: "Comment m’en servir", bundle: .main) }
 
-    static var factHeld: String { String(localized: "game.concept.fact.held", defaultValue: "Points en poche", bundle: .main) }
+    static var factHeld: String { String(localized: "game.concept.fact.held", defaultValue: "Étincelles convertibles", bundle: .main) }
 
     static var factToConvert: String { String(localized: "game.fact.to_convert", defaultValue: "À convertir", bundle: .main) }
 

@@ -1214,8 +1214,10 @@ class FeedViewModel: ObservableObject {
 
     func deletePost(_ postId: String) async {
         guard !ClientMutationId.isValid(postId) else { return await withdrawPendingPublication(postId) }
-        guard let removedIndex = posts.firstIndex(where: { $0.id == postId }) else { return }
-        let removedPost = posts.remove(at: removedIndex)
+        // Un post absent du fil chargé (ouvert par un lien, depuis un profil, ou sorti de la fenêtre paginée) se
+        // supprime quand même : seul le retrait optimiste — et donc son retour en arrière — n'a rien à faire.
+        let removedIndex = posts.firstIndex(where: { $0.id == postId })
+        let removedPost = removedIndex.map { posts.remove(at: $0) }
 
         do {
             try await postService.delete(postId: postId)
@@ -1231,7 +1233,9 @@ class FeedViewModel: ObservableObject {
             FeedbackToastManager.shared.showSuccess(String(localized: "feed.post.deleted", defaultValue: "Publication supprimée", bundle: .main))
         } catch {
             // Remet CE post à sa place — ce qui a été chargé pendant l'appel reste (`OptimisticRollback`).
-            posts = OptimisticRollback.restoring(removedPost, at: removedIndex, into: posts)
+            if let removedPost, let removedIndex {
+                posts = OptimisticRollback.restoring(removedPost, at: removedIndex, into: posts)
+            }
             FeedbackToastManager.shared.showError(String(localized: "feed.post.deleteError", defaultValue: "Erreur lors de la suppression", bundle: .main))
         }
     }

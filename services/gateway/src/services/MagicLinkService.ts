@@ -29,6 +29,7 @@ import { unsetOrNull } from '../utils/prisma-unset';
 import { getJwtSecret } from '../utils/secrets';
 import { RECIPIENT_LANG_SELECT, recipientLanguage, type RecipientLanguagePrefs } from '../utils/recipient-language';
 import { AUTO_TRANSLATE_PREFERENCE_SELECT, resolveAutoTranslateEnabled } from '../utils/auto-translate-preference';
+import { EMAIL_LINK_PATHS, emailSecretLink } from '../utils/email-secret-link';
 
 const logger = enhancedLogger.child({ module: 'MagicLinkService' });
 
@@ -643,8 +644,7 @@ export class MagicLinkService {
     returnUrl?: string,
   ): Promise<void> {
     const baseUrl = process.env.FRONTEND_URL || 'https://meeshy.me';
-    const returnUrlParam = returnUrl ? `&returnUrl=${encodeURIComponent(returnUrl)}` : '';
-    const magicLinkUrl = `${baseUrl}/auth/magic-link?token=${encodeURIComponent(token)}${returnUrlParam}`;
+    const magicLinkUrl = emailSecretLink({ base: baseUrl, path: EMAIL_LINK_PATHS.magicLink, secret: { token }, query: returnUrl ? { returnUrl } : {} });
 
     await this.emailService.sendMagicLinkEmail({
       to: user.email,

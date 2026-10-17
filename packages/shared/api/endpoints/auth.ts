@@ -102,10 +102,10 @@ export const resendVerification = '/api/v1/auth/resend-verification';
 /** POST /api/v1/auth/reset-password */
 export const resetPassword = '/api/v1/auth/reset-password';
 
-/** GET /api/v1/auth/reset-password/verify-token */
+/** GET · POST /api/v1/auth/reset-password/verify-token */
 export const resetPasswordVerifyToken = '/api/v1/auth/reset-password/verify-token';
 
-/** GET /api/v1/auth/revoke-all-sessions */
+/** GET · POST /api/v1/auth/revoke-all-sessions */
 export const revokeAllSessions = '/api/v1/auth/revoke-all-sessions';
 
 /** POST /api/v1/auth/send-phone-code */

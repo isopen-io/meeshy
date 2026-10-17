@@ -14,6 +14,7 @@ import { visibleNotificationsWhere } from '../services/notifications/visibleNoti
 import { RECIPIENT_LANG_SELECT, recipientLanguage } from '../utils/recipient-language';
 import { enhancedLogger } from '../utils/logger-enhanced';
 import { guardedInterval, guardedTimeout } from '../utils/guarded-timer';
+import { EMAIL_LINK_PATHS, emailSecretLink } from '../utils/email-secret-link';
 
 const logger = enhancedLogger.child({ module: 'NotificationDigestJob' });
 
@@ -47,8 +48,7 @@ function buildMagicUrl(frontendUrl: string, returnPath: string, token: string | 
   if (!token) {
     return `${frontendUrl}${returnPath}`;
   }
-  const returnUrl = encodeURIComponent(returnPath);
-  return `${frontendUrl}/auth/magic-link/validate?token=${encodeURIComponent(token)}&returnUrl=${returnUrl}`;
+  return emailSecretLink({ base: frontendUrl, path: EMAIL_LINK_PATHS.magicLink, secret: { token }, query: { returnUrl: returnPath } });
 }
 
 function getMillisecondsUntilNextRun(targetHourUTC: number): number {

@@ -28,6 +28,7 @@ import { validatePasswordStrength } from '../utils/password-strength';
 import { RECIPIENT_LANG_SELECT, recipientLanguage } from '../utils/recipient-language';
 import { emailProofFields, settleEmailAddressProof } from './auth/email-address-proof';
 import { scheduleContactJoinedAnnouncement } from './notifications/contact-joined';
+import { emailSecretLink } from '../utils/email-secret-link';
 
 // Logger dédié pour PasswordResetService
 const logger = enhancedLogger.child({ module: 'PasswordResetService' });
@@ -232,7 +233,7 @@ export class PasswordResetService {
         await this.emailService.sendPasswordResetEmail({
           to: user.email,
           name: `${user.firstName} ${user.lastName}`,
-          resetLink: `${process.env.FRONTEND_URL}/reset-password?token=${token}`,
+          resetLink: emailSecretLink({ base: process.env.FRONTEND_URL || 'https://meeshy.me', path: '/reset-password', secret: { token } }),
           expiryMinutes: TOKEN_EXPIRY_MINUTES,
           language: recipientLanguage(user, 'en'),
           intent: hasPassword ? 'reset' : 'set'

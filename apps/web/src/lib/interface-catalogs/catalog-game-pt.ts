@@ -4,8 +4,9 @@ import type { GameCoreCatalog } from '@/lib/i18n-game-catalog';
 const pt = {
   'game.points.convertible.one': '{count} faísca',
   'game.points.convertible.other': '{count} faíscas',
-  'game.sparks.pocket_label': 'No bolso',
-  'game.sparks.lifetime': 'Total de todos os tempos: {total}',
+  'game.sparks.pocket_label': 'conversíveis',
+  'game.sparks.lifetime': '{total} acumuladas',
+  'game.sparks.cumul_of': '{cycle} / {total} acumuladas',
   'game.sparks.debt': 'Dívida: {debt}',
   'game.actions.one': '{count} ação',
   'game.actions.other': '{count} ações',

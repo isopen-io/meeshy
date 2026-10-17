@@ -26,6 +26,7 @@ import {
 } from './contact-change';
 import { revokePasswordResetTokensForEmailChange } from '../../utils/password-reset-revocation';
 import { creditContactProof } from '../../services/auth/contact-proof-engagement';
+import { emailSecretLink } from '../../utils/email-secret-link';
 
 /**
  * `POST /users/me/contact-changes` et ses deux gestes satellites (#4341).
@@ -186,7 +187,7 @@ export async function initiateContactChange(fastify: FastifyInstance) {
         const { EmailService } = await import('../../services/EmailService');
         const emailService = new EmailService();
         const frontendUrl = process.env.FRONTEND_URL || 'http://localhost:3000';
-        const verificationLink = `${frontendUrl}/settings/verify-email-change?token=${verificationToken}`;
+        const verificationLink = emailSecretLink({ base: frontendUrl, path: '/settings/verify-email-change', secret: { token: verificationToken } });
         await emailService.sendEmailChangeVerification({
           to: newEmail,
           name: user.displayName || `${user.firstName} ${user.lastName}`,
@@ -516,7 +517,7 @@ export async function resendContactChangeVerification(fastify: FastifyInstance) 
         const { EmailService } = await import('../../services/EmailService');
         const emailService = new EmailService();
         const frontendUrl = process.env.FRONTEND_URL || 'http://localhost:3000';
-        const verificationLink = `${frontendUrl}/settings/verify-email-change?token=${verificationToken}`;
+        const verificationLink = emailSecretLink({ base: frontendUrl, path: '/settings/verify-email-change', secret: { token: verificationToken } });
         await emailService.sendEmailChangeVerification({
           to: user.pendingEmail,
           name: user.displayName || `${user.firstName} ${user.lastName}`,

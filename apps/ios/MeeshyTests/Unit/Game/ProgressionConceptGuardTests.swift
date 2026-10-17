@@ -354,7 +354,7 @@ final class ProgressionConceptGuardTests: XCTestCase {
             let french = try XCTUnwrap(table[key]?["fr"], "\(key) : absente du catalogue")
             XCTAssertFalse(french.localizedCaseInsensitiveContains("à convertir"), "\(key) : l'ancien second solde — « \(french) »")
         }
-        XCTAssertEqual(table["game.concept.fact.held"]?["fr"], "Étincelles en poche")
+        XCTAssertEqual(table["game.concept.fact.held"]?["fr"], "Étincelles convertibles")
     }
 
     /// Le « + » des gains par famille est retiré (« Contenu jusqu’à 16 », plus « jusqu’à +16 ») — dans le code et

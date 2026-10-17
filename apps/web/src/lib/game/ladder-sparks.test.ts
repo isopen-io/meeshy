@@ -26,11 +26,11 @@ const level = (over: Partial<GameBlock['level']> = {}): GameBlock['level'] =>
 
 describe('sparksReading', () => {
   test('lit la poche, le total à vie et la dette servis', () => {
-    expect(sparksReading(level({ sparks: 300, sparksCycle: 9000, sparksLifetime: 5_000_000_000, sparksDebt: 40 }))).toEqual({ pocket: 300, lifetime: 5_000_000_000, debt: 40 });
+    expect(sparksReading(level({ sparks: 300, sparksCycle: 9000, sparksLifetime: 5_000_000_000, sparksDebt: 40 }))).toEqual({ pocket: 300, cycle: 9000, lifetime: 5_000_000_000, debt: 40 });
   });
 
   test('devant un serveur antérieur : la poche est l\'ancien score, le total à vie n\'est pas inventé, aucune dette', () => {
-    expect(sparksReading(level())).toEqual({ pocket: 9000, lifetime: null, debt: 0 });
+    expect(sparksReading(level())).toEqual({ pocket: 9000, cycle: null, lifetime: null, debt: 0 });
   });
 });
 

@@ -124,7 +124,7 @@ export function VerifyEmailFlow({
 
   const [verified, setVerified] = useState(false);
   const appHandoff = deps.appHandoff ?? browserAppHandoff;
-  const [handoffUrl] = useState<string | null>(() => (email !== null && token !== null && token !== '' ? appHandoff.target() : null));
+  const [handoffUrl] = useState<string | null>(() => (email !== null && token !== null && token !== '' ? appHandoff.target({ token, email }) : null));
   const [linkPhase, setLinkPhase] = useState<LinkPhase>(
     email === null || token === null || token === '' ? 'idle' : handoffUrl !== null ? 'handoff' : 'checking',
   );

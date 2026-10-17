@@ -484,7 +484,7 @@ struct MessageOverlayMenu: View {
         // (ignore la conversation derrière) ; le geste d'échappement (scrub
         // 2 doigts) le ferme, comme un `.contextMenu` natif.
         .accessibilityAddTraits(.isModal)
-        .accessibilityAction(.escape) { dismiss() }
+        .dismissOnEscape { dismiss() }
         .onAppear {
             HapticFeedback.medium()
             // Entree spring — courbe de reponse de qualite iMessage. La

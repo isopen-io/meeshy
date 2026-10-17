@@ -237801,55 +237801,55 @@
         "ar": {
           "stringUnit": {
             "state": "translated",
-            "value": "في حوزتك"
+            "value": "قابلة للتحويل"
           }
         },
         "de": {
           "stringUnit": {
             "state": "translated",
-            "value": "Im Besitz"
+            "value": "Umwandelbar"
           }
         },
         "en": {
           "stringUnit": {
             "state": "translated",
-            "value": "In hand"
+            "value": "Convertible"
           }
         },
         "es": {
           "stringUnit": {
             "state": "translated",
-            "value": "En mano"
+            "value": "Convertibles"
           }
         },
         "fr": {
           "stringUnit": {
             "state": "translated",
-            "value": "En poche"
+            "value": "Convertibles"
           }
         },
         "it": {
           "stringUnit": {
             "state": "translated",
-            "value": "In tasca"
+            "value": "Convertibili"
           }
         },
         "pt": {
           "stringUnit": {
             "state": "translated",
-            "value": "Em mãos"
+            "value": "Conversíveis"
           }
         },
         "pt-BR": {
           "stringUnit": {
             "state": "translated",
-            "value": "Em mãos"
+            "value": "Conversíveis"
           }
         },
         "zh-Hans": {
           "stringUnit": {
             "state": "translated",
-            "value": "可用"
+            "value": "可兑换"
           }
         }
       }
@@ -237860,55 +237860,55 @@
         "ar": {
           "stringUnit": {
             "state": "translated",
-            "value": "المكتسبة مدى الحياة"
+            "value": "المتراكمة"
           }
         },
         "de": {
           "stringUnit": {
             "state": "translated",
-            "value": "Insgesamt gesammelt"
+            "value": "Gesammelt"
           }
         },
         "en": {
           "stringUnit": {
             "state": "translated",
-            "value": "Earned in total"
+            "value": "Earned"
           }
         },
         "es": {
           "stringUnit": {
             "state": "translated",
-            "value": "Ganadas en total"
+            "value": "Acumuladas"
           }
         },
         "fr": {
           "stringUnit": {
             "state": "translated",
-            "value": "Gagnées à vie"
+            "value": "Cumulées"
           }
         },
         "it": {
           "stringUnit": {
             "state": "translated",
-            "value": "Guadagnate in tutto"
+            "value": "Accumulate"
           }
         },
         "pt": {
           "stringUnit": {
             "state": "translated",
-            "value": "Ganhas no total"
+            "value": "Acumuladas"
           }
         },
         "pt-BR": {
           "stringUnit": {
             "state": "translated",
-            "value": "Ganhas no total"
+            "value": "Acumuladas"
           }
         },
         "zh-Hans": {
           "stringUnit": {
             "state": "translated",
-            "value": "累计获得"
+            "value": "累计"
           }
         }
       }
@@ -249118,7 +249118,7 @@
         "fr": {
           "stringUnit": {
             "state": "translated",
-            "value": "Une Meesh se frappe à la main, avec tes étincelles en poche : elles sont toutes convertibles. Les dix premières coûtent 1 221 étincelles, puis le prix monte de 30 % toutes les dix frappes."
+            "value": "Une Meesh se frappe à la main, avec tes étincelles convertibles. Les dix premières coûtent 1 221 étincelles, puis le prix monte de 30 % toutes les dix frappes."
           }
         },
         "it": {
@@ -249212,7 +249212,7 @@
         "fr": {
           "stringUnit": {
             "state": "translated",
-            "value": "Le prix sort de tes étincelles en poche, et de là seulement. Ton niveau ne baisse pas : il se lit sur les étincelles gagnées depuis ton dernier Prestige, et seul le Prestige le remet à 1. Aucun badge ne s’éteint ni ne redescend."
+            "value": "Le prix sort de tes étincelles convertibles, et de là seulement. Ton niveau ne baisse pas : il se lit sur les étincelles cumulées depuis ton dernier Prestige, et seul le Prestige le remet à 1. Aucun badge ne s’éteint ni ne redescend."
           }
         },
         "it": {
@@ -264724,7 +264724,7 @@
         "fr": {
           "stringUnit": {
             "state": "translated",
-            "value": "Ce qui repart : ton niveau (à 1) et tes étincelles en poche (à 0)."
+            "value": "Ce qui repart : ton niveau (à 1) et tes étincelles convertibles (à 0)."
           }
         },
         "it": {
@@ -264818,7 +264818,7 @@
         "fr": {
           "stringUnit": {
             "state": "translated",
-            "value": "Ton niveau repart à 1 et tes étincelles en poche à 0. En échange : une étoile sur ton anneau, un trophée numéroté et %@ de Gloire. Ton rang ne baisse jamais."
+            "value": "Ton niveau repart à 1 et tes étincelles convertibles à 0. En échange : une étoile sur ton anneau, un trophée numéroté et %@ de Gloire. Ton rang ne baisse jamais."
           }
         },
         "it": {
@@ -277414,7 +277414,7 @@
         "fr": {
           "stringUnit": {
             "state": "translated",
-            "value": "Gagnées, elles font ton niveau ; en poche, elles paient tes Meeshes."
+            "value": "Cumulées, elles font ton niveau ; convertibles, elles se dépensent."
           }
         },
         "it": {
@@ -277696,7 +277696,7 @@
         "fr": {
           "stringUnit": {
             "state": "translated",
-            "value": "Tu la frappes avec tes étincelles en poche. Son prix monte par paliers."
+            "value": "Tu la frappes avec tes convertibles. Son prix monte par paliers."
           }
         },
         "it": {
@@ -283007,7 +283007,7 @@
         "fr": {
           "stringUnit": {
             "state": "translated",
-            "value": "Frappe-la avec tes étincelles en poche dès que tu en as assez."
+            "value": "Frappe-la avec tes étincelles convertibles dès que tu en as assez."
           }
         },
         "it": {
@@ -291608,7 +291608,7 @@
         "fr": {
           "stringUnit": {
             "state": "translated",
-            "value": "Tu as %1$@ en poche, soit %2$@. La Meesh n° %3$@ coûte %4$@ : il manque %5$@."
+            "value": "Tu as %1$@ convertibles, soit %2$@. La Meesh n° %3$@ coûte %4$@ : il manque %5$@."
           }
         },
         "it": {
@@ -291655,7 +291655,7 @@
         "fr": {
           "stringUnit": {
             "state": "translated",
-            "value": "Tu as %1$@ en poche, soit %2$@ : assez pour la Meesh n° %3$@, qui coûte %4$@."
+            "value": "Tu as %1$@ convertibles, soit %2$@ : assez pour la Meesh n° %3$@, qui coûte %4$@."
           }
         },
         "it": {
@@ -291702,7 +291702,7 @@
         "fr": {
           "stringUnit": {
             "state": "translated",
-            "value": "Tu as %1$@ en poche, toutes convertibles : elles couvrent la Meesh n° %2$@, qui coûte %3$@."
+            "value": "Tu as %1$@ convertibles : elles couvrent la Meesh n° %2$@, qui coûte %3$@."
           }
         },
         "it": {
@@ -291749,7 +291749,7 @@
         "fr": {
           "stringUnit": {
             "state": "translated",
-            "value": "Tu as %1$@ en poche, toutes convertibles. La Meesh n° %2$@ coûte %3$@ : il manque %4$@."
+            "value": "Tu as %1$@ convertibles. La Meesh n° %2$@ coûte %3$@ : il manque %4$@."
           }
         },
         "it": {
@@ -293265,7 +293265,7 @@
         "fr": {
           "stringUnit": {
             "state": "translated",
-            "value": "Étincelles en poche"
+            "value": "Étincelles convertibles"
           }
         },
         "it": {
@@ -294111,7 +294111,7 @@
         "fr": {
           "stringUnit": {
             "state": "translated",
-            "value": "Toutes tes étincelles en poche sont convertibles. Toutes paient une Meesh."
+            "value": "Tes étincelles convertibles sont ta seule valeur réelle : ce sont elles qui paient une Meesh."
           }
         },
         "it": {
@@ -294346,7 +294346,7 @@
         "fr": {
           "stringUnit": {
             "state": "translated",
-            "value": "Tu as un seul solde : tes étincelles en poche, ton total du moment. Elles sont toutes convertibles : la frappe y prend son prix."
+            "value": "Tes étincelles convertibles sont ta seule valeur réelle : la frappe y prend son prix. Les cumulées, elles, font ton niveau."
           }
         },
         "it": {
@@ -294393,7 +294393,7 @@
         "fr": {
           "stringUnit": {
             "state": "translated",
-            "value": "Pour frapper une Meesh, regarde tes étincelles en poche : ce sont elles qui doivent atteindre le prix, et toutes sont convertibles. Une frappe en retire son prix, sans faire baisser ton niveau."
+            "value": "Pour frapper une Meesh, regarde tes étincelles convertibles : ce sont elles qui doivent atteindre le prix. Une frappe en retire son prix, sans faire baisser ton niveau."
           }
         },
         "it": {
@@ -295051,7 +295051,7 @@
         "fr": {
           "stringUnit": {
             "state": "translated",
-            "value": "Au niveau 100, choisis : passer en Prestige, ou continuer à monter. Passer remet ton niveau à 1 et tes étincelles en poche à 0. Tu gardes ton rang, ta Gloire, tes Meeshes, ta Flamme et tes trophées."
+            "value": "Au niveau 100, choisis : passer en Prestige, ou continuer à monter. Passer remet ton niveau à 1 et tes étincelles convertibles à 0. Tu gardes ton rang, ta Gloire, tes Meeshes, ta Flamme et tes trophées."
           }
         },
         "it": {
@@ -295709,7 +295709,7 @@
         "fr": {
           "stringUnit": {
             "state": "translated",
-            "value": "Un seul solde à dépenser. Tes étincelles en poche sont toutes convertibles : ce sont elles qui paient une Meesh. Ton niveau, lui, se lit sur les étincelles gagnées depuis ton dernier Prestige. Chaque geste utile en rapporte."
+            "value": "Tes étincelles convertibles sont ta seule valeur réelle : ce sont elles qui paient une Meesh. Ton niveau, lui, se lit sur les étincelles cumulées depuis ton dernier Prestige. Chaque geste utile en rapporte."
           }
         },
         "it": {
@@ -295756,7 +295756,7 @@
         "fr": {
           "stringUnit": {
             "state": "translated",
-            "value": "La pièce rare de Meeshy, numérotée, que tu frappes avec tes étincelles en poche. Garde-la pour remplir ton trésor, ou dépense-la : gel de Flamme, mission à changer, Sceau de saison. Le prix monte de 30 % toutes les dix frappes."
+            "value": "La pièce rare de Meeshy, numérotée, que tu frappes avec tes étincelles convertibles. Garde-la pour remplir ton trésor, ou dépense-la : gel de Flamme, mission à changer, Sceau de saison. Le prix monte de 30 % toutes les dix frappes."
           }
         },
         "it": {
@@ -296038,7 +296038,7 @@
         "fr": {
           "stringUnit": {
             "state": "translated",
-            "value": "Un nouveau tour, facultatif, offert au niveau 100, cinq fois au plus. Ton niveau repart à 1 et tes étincelles en poche à 0. Tu gagnes une étoile sur ton anneau, un trophée numéroté et de la Gloire. Ton rang, tes Meeshes et ta Flamme restent."
+            "value": "Un nouveau tour, facultatif, offert au niveau 100, cinq fois au plus. Ton niveau repart à 1 et tes étincelles convertibles à 0. Tu gagnes une étoile sur ton anneau, un trophée numéroté et de la Gloire. Ton rang, tes Meeshes et ta Flamme restent."
           }
         },
         "it": {
@@ -297931,6 +297931,124 @@
           "stringUnit": {
             "state": "translated",
             "value": "A resposta não foi enviada"
+          }
+        }
+      }
+    },
+    "game.sparks.cumul.value": {
+      "extractionState": "manual",
+      "localizations": {
+        "ar": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "⁦%1$@ / %2$@⁩"
+          }
+        },
+        "de": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "%1$@ / %2$@"
+          }
+        },
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "%1$@ / %2$@"
+          }
+        },
+        "es": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "%1$@ / %2$@"
+          }
+        },
+        "fr": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "%1$@ / %2$@"
+          }
+        },
+        "it": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "%1$@ / %2$@"
+          }
+        },
+        "pt": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "%1$@ / %2$@"
+          }
+        },
+        "pt-BR": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "%1$@ / %2$@"
+          }
+        },
+        "zh-Hans": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "%1$@ / %2$@"
+          }
+        }
+      }
+    },
+    "game.sparks.cumul.line": {
+      "extractionState": "manual",
+      "localizations": {
+        "ar": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "المتراكمة: %@"
+          }
+        },
+        "de": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "%@ gesammelt"
+          }
+        },
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "%@ earned"
+          }
+        },
+        "es": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "%@ acumuladas"
+          }
+        },
+        "fr": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "%@ cumulées"
+          }
+        },
+        "it": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "%@ accumulate"
+          }
+        },
+        "pt": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "%@ acumuladas"
+          }
+        },
+        "pt-BR": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "%@ acumuladas"
+          }
+        },
+        "zh-Hans": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "累计 %@"
           }
         }
       }

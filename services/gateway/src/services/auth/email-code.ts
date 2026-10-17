@@ -24,6 +24,7 @@
 
 import crypto from 'crypto';
 import { generateNumericCode } from '../../utils/verification-code';
+import { EMAIL_LINK_PATHS, emailSecretLink } from '../../utils/email-secret-link';
 
 /** Durée de vie d'une paire émise pour une CONNEXION (porte « e-mail seul »). */
 export const LOGIN_CODE_TTL_MINUTES = 15;
@@ -98,7 +99,7 @@ export function mintEmailCodePair(ttlMinutes: number, now: Date = new Date()): E
   };
 }
 
-/** Le lien que l'e-mail porte — `${FRONTEND_URL}/auth/verify-email?token=…&email=…`. */
+/** Le lien que l'e-mail porte — `${FRONTEND_URL}/auth/email-link/verify-email?via=email&token=#token=…&email=…` (#10859 : le secret dans le fragment, sous un alias qu'aucune application publiée n'intercepte). */
 export function emailCodeLink(frontendUrl: string, rawToken: string, email: string): string {
-  return `${frontendUrl}/auth/verify-email?token=${rawToken}&email=${encodeURIComponent(email)}`;
+  return emailSecretLink({ base: frontendUrl, path: EMAIL_LINK_PATHS.verifyEmail, secret: { token: rawToken, email } });
 }

@@ -87,7 +87,8 @@ public final class ConversationStoreSocketBridge {
     /// si (c'est le défaut nommé par #6998).
     ///
     /// Injecté pour que le pont se teste sans le singleton du moteur.
-    private let openConversationId: @Sendable () -> String?
+    /// Multi-fenêtre : TOUTE conversation qu'une scène affiche, pas seulement la dernière ouverte.
+    private let isConversationOpen: @Sendable (String) -> Bool
 
     public init(
         store: ConversationStore = .shared,
@@ -97,13 +98,13 @@ public final class ConversationStoreSocketBridge {
             guard let api = try? await ConversationService.shared.getById(conversationId) else { return nil }
             return api.toConversation(currentUserId: me)
         },
-        openConversationId: @escaping @Sendable () -> String? = { ConversationSyncEngine.shared.currentlyOpenConversationId }
+        isConversationOpen: @escaping @Sendable (String) -> Bool = { ConversationSyncEngine.shared.isConversationOpen($0) }
     ) {
         self.store = store
         self.categoryStore = categoryStore
         self.currentUserId = currentUserId
         self.fetchConversation = fetchConversation
-        self.openConversationId = openConversationId
+        self.isConversationOpen = isConversationOpen
     }
 
     /// Wire the shared socket manager's broadcasts to the stores.
@@ -289,9 +290,9 @@ public final class ConversationStoreSocketBridge {
         // zéro. Il est lu à l'arrivée de l'événement, jamais capturé à
         // l'abonnement — le pont vit toute la session, l'écran visible change
         // à chaque navigation.
-        let openConversationId = self.openConversationId
+        let isConversationOpen = self.isConversationOpen
         unreadUpdated.sink { event in
-            let served = event.conversationId == openConversationId() ? 0 : event.unreadCount
+            let served = isConversationOpen(event.conversationId) ? 0 : event.unreadCount
             Task {
                 await store.applyServerUnread(ConversationUnreadEvent(
                     conversationId: event.conversationId,

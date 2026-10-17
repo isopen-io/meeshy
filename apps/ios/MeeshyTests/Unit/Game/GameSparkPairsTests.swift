@@ -2,8 +2,9 @@ import XCTest
 @testable import Meeshy
 import MeeshySDK
 
-/// Page Progression (#10846) : la paire POCHE / TOTAL À VIE et la paire NIVEAU / MAX À VIE sont TOUJOURS affichées,
-/// même quand le max égale le niveau (décision porteur 2026-10-16).
+/// Page Progression (#10846, #10860) : la paire CONVERTIBLES / CUMUL et la paire NIVEAU / MAX À VIE sont TOUJOURS
+/// affichées, même quand le max égale le niveau (décision porteur 2026-10-16) ; le cumul rapporte le cycle au total à vie
+/// (porteur 2026-10-17).
 @MainActor
 final class GameSparkPairsTests: XCTestCase {
 
@@ -17,6 +18,7 @@ final class GameSparkPairsTests: XCTestCase {
     func test_pairs_readThePocketTheLifetimeTheLevelAndItsMax() {
         let pairs = GameSparkPairs(level(sparks: 5_000, cycle: 8_200, lifetime: 12_000, levelMax: 40))
         XCTAssertEqual(pairs.pocket, 5_000)
+        XCTAssertEqual(pairs.cycle, 8_200)
         XCTAssertEqual(pairs.lifetime, 12_000)
         XCTAssertEqual(pairs.level, 9)
         XCTAssertEqual(pairs.levelMax, 40)
@@ -34,6 +36,26 @@ final class GameSparkPairsTests: XCTestCase {
         XCTAssertEqual(pairs.pocket, 8_200)
         XCTAssertEqual(pairs.lifetime, 8_200)
         XCTAssertEqual(pairs.levelMax, 11)
+    }
+
+    /// Les convertibles sont la seule valeur réelle : la poche ne se nomme plus « En poche ».
+    func test_pocketLabel_saysConvertibles() {
+        XCTAssertEqual(GameSparksCopy.pocketLabel, "Convertibles")
+    }
+
+    /// Après un Prestige : le cycle rapporté au total à vie.
+    func test_cumul_afterAPrestige_readsTheCycleOverTheLifetime() {
+        let pairs = GameSparkPairs(level(sparks: 5_000, cycle: 8_200, lifetime: 12_000, levelMax: 40))
+        XCTAssertEqual(pairs.cumulLine, GameSparksCopy.cumulLine(cycle: 8_200, lifetime: 12_000))
+        XCTAssertTrue(pairs.cumulLine.contains(" / "))
+        XCTAssertTrue(pairs.cumulLine.hasSuffix("cumulées"))
+    }
+
+    /// Sans Prestige, le cycle égale le total à vie : un seul nombre.
+    func test_cumul_withoutPrestige_saysOneNumber() {
+        let line = GameSparkPairs(level(sparks: 5_000, cycle: 12_000, lifetime: 12_000, levelMax: 40)).cumulLine
+        XCTAssertFalse(line.contains(" / "))
+        XCTAssertEqual(line, GameSparksCopy.cumulLine(cycle: 12_000, lifetime: 12_000))
     }
 
     func test_facts_namePocketLifetimeLevelAndMax_inThatOrder() {

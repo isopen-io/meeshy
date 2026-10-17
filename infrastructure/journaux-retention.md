@@ -32,8 +32,10 @@ conteneur courant ; journald garde les conteneurs précédents.
 - **Aucun en-tête n'est journalisé, sauf `User-Agent`** (version du client,
   utile au diagnostic) : `Authorization`, `Cookie`, `X-Session-Token`, `Referer`
   restent hors du fichier. Aucun corps de requête.
-- Les liens d'e-mail portent leur jeton en `?token=…` (lien magique,
-  réinitialisation, vérification). Le compresseur
+- Depuis #10859, les liens d'e-mail portent leur jeton dans le FRAGMENT
+  (`…?via=email#token=…`), que le navigateur n'envoie jamais : il n'atteint
+  plus aucun journal. Les e-mails partis avant portent encore `?token=…`
+  (lien magique, réinitialisation, vérification, avec `&email=…`). Le compresseur
   `/usr/local/sbin/meeshy-accesslog-redact-gzip`
   (`infrastructure/scripts/accesslog-redact-gzip.sh`, témoin
   `accesslog-redact-gzip.test.sh`) en masque la valeur à la rotation : le

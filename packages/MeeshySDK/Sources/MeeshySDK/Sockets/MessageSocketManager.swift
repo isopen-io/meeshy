@@ -1706,6 +1706,10 @@ public final class MessageSocketManager: ObservableObject, MessageSocketProvidin
     // The currently active (foreground) conversation for priority re-join
     public var activeConversationId: String?
 
+    /// Multi-fenêtre : TOUTES les conversations qu'une scène affiche — rejointes en tête à la reconnexion, la plus
+    /// récente (`activeConversationId`) d'abord. Tenu par `NotificationToastManager`, seul porteur des ouvertures.
+    public var openConversationIds: Set<String> = []
+
     private var manager: SocketManager?
     /// Interne (plus `private`) : l'émission des messages vit dans
     /// `MessageSocketManager+Send.swift`, extension d'un autre fichier, qui
@@ -1973,6 +1977,7 @@ public final class MessageSocketManager: ObservableObject, MessageSocketProvidin
         // no stale room re-joins under a different account).
         joinedConversations.removeAll()
         activeConversationId = nil
+        openConversationIds = []
         hadPreviousConnection = false
     }
 
@@ -2076,7 +2081,11 @@ public final class MessageSocketManager: ObservableObject, MessageSocketProvidin
         if let activeId = activeConversationId, joinedConversations.contains(activeId) {
             rooms.append(activeId)
         }
-        for convId in joinedConversations where convId != activeConversationId {
+        // Les autres fenêtres ensuite — ordre stable, pour qu'une reconnexion se rejoue à l'identique.
+        for convId in openConversationIds.sorted() where convId != activeConversationId && joinedConversations.contains(convId) {
+            rooms.append(convId)
+        }
+        for convId in joinedConversations where convId != activeConversationId && !openConversationIds.contains(convId) {
             rooms.append(convId)
         }
         return rooms

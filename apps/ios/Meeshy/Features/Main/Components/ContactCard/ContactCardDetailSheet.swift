@@ -46,7 +46,7 @@ struct ContactCardDetailSheet: View {
                 isVisible = true
             }
         }
-        .accessibilityAction(.escape) { close() }
+        .dismissOnEscape { close() }
         .feedbackToastOverlay()
         .sheet(isPresented: $isShowingAddToContacts) {
             if let card = model.card {

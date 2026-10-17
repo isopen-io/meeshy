@@ -1,3 +1,4 @@
+import '@/lib/links/email-link-boot';
 import { QueryClientProvider } from '@tanstack/react-query';
 import { Fragment, StrictMode, useEffect, useSyncExternalStore, type ReactNode } from 'react';
 import { createRoot } from 'react-dom/client';

@@ -246,13 +246,20 @@ describe('les étoiles de Prestige sur l’anneau du héros (#9389)', () => {
 describe('la paire poche / total et niveau / max', () => {
   const sparks = { pocket: 976, cycle: 40_000, lifetime: 41_250, debt: 0 } as const;
 
-  test('la poche en grand, le total à vie en petit dessous', () => {
+  test('les étincelles CONVERTIBLES en grand, le cumul du cycle rapporté au total à vie en petit dessous (porteur 2026-10-17)', () => {
     const shown = html({ score: 0, debitablePoints: 976, sparks, levelMaxLifetime: 52 });
     expect(shown).toMatch(/data-game-sparks="976"/);
-    expect(text(shown)).toContain('976 étincelles');
+    expect(text(shown)).toMatch(/976 étincelles\s*convertibles/);
+    expect(text(shown)).not.toContain('En poche');
     expect(shown).toMatch(/data-game-sparks-lifetime="41250"/);
-    expect(text(shown)).toMatch(/Total à vie\s*:\s*41\s?250/);
+    expect(text(shown)).toMatch(/40\s?000 \/ 41\s?250 cumulées/);
     expect(shown.indexOf('data-game-sparks=')).toBeLessThan(shown.indexOf('data-game-sparks-lifetime='));
+  });
+
+  test('sans Prestige, le cycle égale le total à vie : un seul nombre cumulé', () => {
+    const shown = html({ score: 0, debitablePoints: 976, sparks: { ...sparks, cycle: 41_250 }, levelMaxLifetime: 52 });
+    expect(text(shown)).toMatch(/41\s?250 cumulées/);
+    expect(text(shown)).not.toContain(' / ');
   });
 
   test('le niveau actuel, le niveau max à vie dessous', () => {

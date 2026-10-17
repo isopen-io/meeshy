@@ -743,7 +743,7 @@ extension ConversationSyncEngine {
         // lui, la liste redisait 0 pendant que le badge, qui suit le serveur,
         // comptait la conversation. Ignoré si elle n'est pas ouverte.
         noteUnreadRemaining(event.conversationId, event.unreadCount)
-        let effectiveUnread = (event.conversationId == currentlyOpenConversationId)
+        let effectiveUnread = isConversationOpen(event.conversationId)
             ? 0
             : event.unreadCount
         await cache.conversations.update(for: "list") { conversations in

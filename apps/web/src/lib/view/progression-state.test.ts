@@ -66,7 +66,7 @@ describe('le compte du porteur : trois chiffres, trois phrases', () => {
 
   test('les étincelles n’ont plus qu’une poche, et « il manque » vise la Meesh, pas le niveau', () => {
     expect(state('points')).toBe(
-      'Tu as 77 099 étincelles en poche. La Meesh n° 79 coûte 7 662 étincelles : il manque 1 839 étincelles.',
+      'Tu as 77 099 étincelles convertibles. La Meesh n° 79 coûte 7 662 étincelles : il manque 1 839 étincelles.',
     );
   });
 
@@ -99,7 +99,7 @@ describe('le niveau', () => {
 describe('les points', () => {
   test('assez pour frapper : la phrase le dit, sans « il manque »', () => {
     const rich: EngagementWithGame = { ...playing, meesh: { ...wallet, debitablePoints: 1_244 } };
-    expect(state('points', rich)).toBe('Tu as 12 440 étincelles en poche : assez pour la Meesh n° 4, qui coûte 1 221 étincelles.');
+    expect(state('points', rich)).toBe('Tu as 12 440 étincelles convertibles : assez pour la Meesh n° 4, qui coûte 1 221 étincelles.');
   });
 
   test('sans porte-monnaie servi, plus aucun solde « à convertir » : une seule poche, le manque vise la Meesh', () => {

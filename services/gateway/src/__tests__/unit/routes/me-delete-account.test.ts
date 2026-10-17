@@ -285,8 +285,9 @@ describe('DELETE /delete-account — Initiate account deletion', () => {
         name: 'Test User',
         // Les liens visent la PAGE, plus les `GET` du gateway : c'est le CLIC
         // humain qui déclenche le `POST`, donc plus aucun pré-chargeur de lien
-        // ne peut confirmer une suppression (#4183).
-        confirmLink: expect.stringContaining('/account/deletion?token='),
+        // ne peut confirmer une suppression (#4183). Le jeton voyage dans le
+        // FRAGMENT, jamais dans une adresse journalisée (#10859).
+        confirmLink: expect.stringMatching(/\/account\/deletion\?action=confirm&via=email&token=#token=[^&]+$/),
         cancelLink: expect.stringContaining('action=cancel'),
         language: 'fr',
       })
