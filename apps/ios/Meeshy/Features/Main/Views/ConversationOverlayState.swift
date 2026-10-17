@@ -61,6 +61,10 @@ struct ConversationOverlayState {
     var storyViewerUserId: String? = nil
     var storyViewerGroupIndex: Int = 0
     var storyViewerSlideIndex: Int = 0
+    /// La story EXACTE visée (réponse à une story) : le lecteur la retrouve par
+    /// son id. La position seule retombait sur la première story vivante quand
+    /// la story citée avait expiré, ou glissait si le plateau avait bougé.
+    var storyViewerPostId: String? = nil
     /// `true` quand le viewer est ouvert depuis l'avatar d'un expéditeur
     /// (première non-vue) ; `false` quand une story-reply cible une slide
     /// précise via `storyViewerSlideIndex`.
