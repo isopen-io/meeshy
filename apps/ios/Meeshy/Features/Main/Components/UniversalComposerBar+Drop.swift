@@ -97,7 +97,13 @@ struct ComposerDropTargetModifier: ViewModifier {
     /// rappelle hors du main ; ici `await` ne fait que suspendre.
     ///
     /// Renvoie `true` si au moins un provider est réclamable.
+    /// Un glisser de rangée de conversation n'est jamais un contenu à poser dans le message (iPad : la liste est à côté).
+    static func carriesAConversationRow(_ providers: [NSItemProvider]) -> Bool {
+        providers.contains { $0.hasItemConformingToTypeIdentifier(ConversationDragItemProvider.markerType) }
+    }
+
     private func handleDrop(_ providers: [NSItemProvider]) -> Bool {
+        guard !Self.carriesAConversationRow(providers) else { return false }
         let claimable = providers.contains { provider in
             Self.acceptedTypes.contains { provider.hasItemConformingToTypeIdentifier($0.identifier) }
         }

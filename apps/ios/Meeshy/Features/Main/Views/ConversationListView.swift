@@ -191,7 +191,7 @@ struct ConversationListView: View {
     // Search and Filters
     @FocusState var isSearching: Bool
     @State var showSearchOverlay: Bool = false
-    @State private var expandedSections: Set<String> = ["pinned", "other"]
+    @State private var expandedSections: Set<String> = ConversationListSectionMemory.shared.initial
     /// Pendant le glisser d'une conversation : les catégories dépliées AVANT, rendues au dépôt ou à l'annulation.
     @State private var sectionsBeforeDrag: Set<String>?
     /// Le glisser en cours : son jeton et la catégorie d'où il part. Posé dès le soulèvement — qui précède aussi
@@ -1118,9 +1118,12 @@ struct ConversationListView: View {
                     conversationViewModel.handleForegroundReactivation()
                 }
             }
-            .adaptiveOnChange(of: conversationViewModel.userCategories) { _, categories in
+            // iPad : la liste se REMONTE à chaque changement de colonne — au montage aussi, les catégories persistées
+            // se déplient, et les sections suivent la mémoire de session (`ConversationListSectionMemory`).
+            .adaptiveOnChange(of: conversationViewModel.userCategories, initial: true) { _, categories in
                 for cat in categories where cat.isExpanded { expandedSections.insert(cat.id) }
             }
+            .adaptiveOnChange(of: expandedSections) { _, sections in ConversationListSectionMemory.shared.remember(sections) }
             .adaptiveOnChange(of: conversationViewModel.groupedConversations.isEmpty) { _, isEmpty in
                 if isEmpty && isScrollingDown {
                     withAnimation(.easeOut(duration: 0.25)) { isScrollingDown = false }
@@ -1182,48 +1185,9 @@ struct ConversationListView: View {
                     .environmentObject(conversationViewModel)
                     .environmentObject(router)
             }
-            .confirmationDialog(
-                String(localized: "block.confirm.title"),
-                isPresented: $showBlockConfirmation,
-                titleVisibility: .visible
-            ) {
-                Button(String(localized: "action.block"), role: .destructive) {
-                    guard let conv = sheetTargets.blockTarget,
-                          let targetUserId = conv.participantUserId else { return }
-                    Task {
-                        await BlockActionCoordinator.shared.block(userId: targetUserId)
-                        await conversationViewModel.archiveConversation(conversationId: conv.id)
-                        HapticFeedback.success()
-                    }
-                }
-                Button(String(localized: "action.cancel"), role: .cancel) {}
-            } message: {
-                Text(String(localized: "block.confirm.message"))
-            }
-            // Suppression = callback destructif → TOUJOURS confirmée par le
-            // dialog système (rendu natif de l'OS courant, Liquid Glass sur
-            // iOS 26), déclenchée depuis le menu custom ET le swipe « hide ».
-            .confirmationDialog(
-                String(localized: "conversation.delete.confirm.title", defaultValue: "Supprimer la conversation ?", bundle: .main),
-                isPresented: Binding(
-                    get: { sheetTargets.deleteTarget != nil },
-                    set: { if !$0 { sheetTargets.deleteTarget = nil } }
-                ),
-                titleVisibility: .visible,
-                presenting: sheetTargets.deleteTarget
-            ) { conversation in
-                Button(String(localized: "common.delete", defaultValue: "Supprimer", bundle: .main), role: .destructive) {
-                    HapticFeedback.heavy()
-                    Task { await conversationViewModel.deleteConversation(conversationId: conversation.id) }
-                }
-                Button(String(localized: "common.cancel", bundle: .main), role: .cancel) {}
-            } message: { conversation in
-                Text(String(
-                    localized: "conversation.delete.confirm.message",
-                    defaultValue: "« \(conversation.name) » sera masquée pour vous. Les autres participants la conservent.",
-                    bundle: .main
-                ))
-            }
+            // Les confirmations s'ancrent sur un POINT de la liste (`listConfirmationAnchor`) : posées sur la vue
+            // entière, elles devenaient sur iPad un popover ancré à la colonne, présenté sur la conversation voisine.
+            .overlay { listConfirmationAnchor }
         )
     }
 

@@ -22,9 +22,16 @@ enum DeviceLayout {
     /// allocation-free on the nominal path, per the repo's "keep body pure and
     /// fast" rule.
     static var activeWindowScene: UIWindowScene? {
-        for windowScene in windowScenes where windowScene.activationState == .foregroundActive {
-            return windowScene
-        }
+        pickActive(windowScenes, isForeground: { $0.activationState == .foregroundActive }, holdsKey: { $0.keyWindow != nil })
+    }
+
+    /// Quelle scène est « la » scène active. Avec une fenêtre détachée, DEUX scènes de l'app peuvent être au premier
+    /// plan à la fois (Split View, Stage Manager) : celle qui tient la fenêtre CLÉ est celle où l'utilisateur agit — une
+    /// feuille présentée, une mesure prise, vont là. À défaut, la première au premier plan. Deux passes sans allocation.
+    static func pickActive<S: Sequence>(_ scenes: S, isForeground: (S.Element) -> Bool,
+                                        holdsKey: (S.Element) -> Bool) -> S.Element? {
+        for scene in scenes where isForeground(scene) && holdsKey(scene) { return scene }
+        for scene in scenes where isForeground(scene) { return scene }
         return nil
     }
 
@@ -34,6 +41,9 @@ enum DeviceLayout {
     private static var windowScenes: some Sequence<UIWindowScene> {
         UIApplication.shared.connectedScenes.lazy.compactMap { $0 as? UIWindowScene }
     }
+
+    /// Plus d'une scène connectée : une fenêtre détachée existe, la principale peut ne pas être devant.
+    static var hasSeveralScenes: Bool { windowScenes.dropFirst().contains { _ in true } }
 
     /// Every visible window of every connected scene.
     ///
@@ -150,17 +160,9 @@ enum DeviceLayout {
     /// row's `Spacer(minLength:)` as soon as the window is narrower than the
     /// screen. Callers that can measure their own container should keep using
     /// `bubbleMaxWidth(containerWidth:sizeClass:)`.
-    static func bubbleMaxWidth(sizeClass: UserInterfaceSizeClass?) -> CGFloat {
-        bubbleMaxWidth(containerWidth: conversationColumnWidth ?? windowSize.width, sizeClass: sizeClass)
+    static func bubbleMaxWidth(sizeClass: UserInterfaceSizeClass?, containerWidth: CGFloat? = nil) -> CGFloat {
+        bubbleMaxWidth(containerWidth: containerWidth ?? windowSize.width, sizeClass: sizeClass)
     }
-
-    /// Largeur de la colonne qui héberge la conversation sur iPad — posée par `iPadRootView`, `nil` ailleurs.
-    ///
-    /// Sur iPad, la conversation n'occupe pas la fenêtre : la liste en prend ~38 %. Mesurées contre la
-    /// fenêtre, les bulles s'étiraient jusqu'au `Spacer(minLength:)` de la rangée — 86–91 % de la colonne
-    /// au lieu de 62 %, et l'écart qui sépare envoyé et reçu disparaissait. Une valeur et non un
-    /// environnement : les bulles vivent dans des cellules UIKit, que l'environnement SwiftUI n'atteint pas.
-    static var conversationColumnWidth: CGFloat?
 }
 
 /// The bottom safe-area inset as the LAYOUT measures it, for views rendered
@@ -191,5 +193,22 @@ extension View {
         .onPreferenceChange(BottomSafeAreaInsetKey.self) { measured in
             if inset.wrappedValue != measured { inset.wrappedValue = measured }
         }
+    }
+}
+
+// MARK: - La largeur de la liste qui porte la bulle
+
+/// La largeur RÉELLE de la liste de messages, posée par sa cellule (`MessageListViewController`) : la bulle se mesure à
+/// elle — la colonne de l'iPad, une fenêtre détachée, Split View. Mesurées contre la fenêtre (ou contre la colonne de la
+/// fenêtre PRINCIPALE, quand une fenêtre détachée était plus étroite), les bulles s'étiraient jusqu'au `Spacer` de la
+/// rangée et l'écart qui sépare envoyé et reçu disparaissait. `nil` hors d'une liste : la fenêtre.
+private struct BubbleContainerWidthKey: EnvironmentKey {
+    static let defaultValue: CGFloat? = nil
+}
+
+extension EnvironmentValues {
+    var bubbleContainerWidth: CGFloat? {
+        get { self[BubbleContainerWidthKey.self] }
+        set { self[BubbleContainerWidthKey.self] = newValue }
     }
 }

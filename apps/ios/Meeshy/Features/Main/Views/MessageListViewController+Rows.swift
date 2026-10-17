@@ -777,6 +777,8 @@ extension MessageListViewController {
                 .environmentObject(stories)
                 .environmentObject(statuses)
                 .environment(\.bubbleSkin, skin)
+                // La bulle se mesure à CETTE liste — colonne d'iPad, fenêtre détachée —, jamais à la fenêtre principale.
+                .environment(\.bubbleContainerWidth, self.collectionView.bounds.width > 0 ? self.collectionView.bounds.width : nil)
                 // #9907 — l'appui long d'une tuile vise CETTE pièce ; aucun en sélection.
                 .environment(\.messagePieceLongPress, selectionModeActive ? nil : pieceLongPressHandler)
                 .environment(\.pieceSpotlight, self.pieceSpotlight.eraseToAnyPublisher())

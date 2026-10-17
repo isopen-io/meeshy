@@ -220,13 +220,10 @@ struct ReelFeedCard: View, Equatable {
 
     var body: some View {
         GeometryReader { proxy in
+            // La hauteur vient du rapport d'aspect posé sur le conteneur (ci-dessous) : la carte et son contenu
+            // se mesurent à la MÊME largeur réelle — celle de la colonne, jamais celle de la fenêtre.
             let width = proxy.size.width
-            // Hauteur dérivée de la MÊME base que le frame extérieur (l.124) pour que
-            // le ZStack remplisse EXACTEMENT son conteneur. Sinon hauteur intérieure
-            // (depuis la largeur réelle) ≠ hauteur extérieure (depuis l'estimation),
-            // le ZStack déborde le GeometryReader et chevauche la carte suivante
-            // (entremêlement). Le média est aspect-fill → aucune déformation visible.
-            let height = reelCardHeight(mediaWidth: media?.width, mediaHeight: media?.height, cardWidth: cardWidthEstimate)
+            let height = proxy.size.height
             ZStack(alignment: .bottom) {
                 background(width: width, height: height)
                 bottomOverlay
@@ -238,7 +235,7 @@ struct ReelFeedCard: View, Equatable {
             .contentShape(RoundedRectangle(cornerRadius: MeeshyRadius.lgPlus, style: .continuous))
             .onTapGesture { onTapMedia() }
         }
-        .frame(height: reelCardHeight(mediaWidth: media?.width, mediaHeight: media?.height, cardWidth: cardWidthEstimate))
+        .aspectRatio(reelCardAspectRatio(mediaWidth: media?.width, mediaHeight: media?.height), contentMode: .fit)
         .reportReelFrame(id: post.id, kind: kind)
         .accessibilityElement(children: .contain)
         .accessibilityLabel(String(localized: "feed.reel.card.a11y", defaultValue: "Réel de \(displayAuthor)", bundle: .main))
@@ -257,12 +254,6 @@ struct ReelFeedCard: View, Equatable {
         .mediaSaveFlow(mediaSaveCoordinator)
     }
 
-    // Largeur de contenu du feed (le GeometryReader donne la vraie ; estimation
-    // pour fixer la hauteur du conteneur avant mesure). Mesurée sur la FENÊTRE
-    // et non sur le display : en Split View l'estimation prise sur `UIScreen`
-    // valait plusieurs fois la largeur réelle, et la hauteur dérivée du ratio
-    // d'aspect sautait à la première mesure du GeometryReader.
-    private var cardWidthEstimate: CGFloat { DeviceLayout.windowSize.width - 32 }
 
     // MARK: - Background média (aspect-fill)
 

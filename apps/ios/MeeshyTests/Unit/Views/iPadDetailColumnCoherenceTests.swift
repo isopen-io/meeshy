@@ -90,4 +90,48 @@ final class iPadDetailColumnCoherenceTests: XCTestCase {
         let leave = try XCTUnwrap(view.range(of: ".onDisappear {\n                composerText.flushPendingChange()\n"))
         XCTAssertTrue(view[leave.upperBound...].prefix(200).contains("persistDraftAttachmentsForBackground()"))
     }
+
+    /// Bloquer, supprimer depuis la liste : la confirmation s'ancre sur un POINT de la liste — posée sur la liste
+    /// entière, elle devenait sur iPad un popover présenté sur la conversation voisine, « Annuler » caché.
+    func test_listConfirmations_areAnchoredOnAPoint() throws {
+        // L'unité réunit la vue et ses extensions : toutes ses confirmations doivent être celles de l'ancre.
+        let list = AppSourceGuard.stripComments(try AppSourceGuard.unit("Meeshy/Features/Main/Views/ConversationListView.swift"))
+        XCTAssertTrue(list.contains(".overlay { listConfirmationAnchor }"))
+        let anchor = AppSourceGuard.stripComments(try String(contentsOf: try XCTUnwrap(
+            AppSourceGuard.unitURLs("Meeshy/Features/Main/Views/ConversationListView.swift")
+                .first { $0.lastPathComponent == "ConversationListView+ConfirmationAnchor.swift" }), encoding: .utf8))
+        XCTAssertTrue(anchor.contains(".frame(width: 1, height: 1)"))
+        XCTAssertEqual(anchor.components(separatedBy: ".confirmationDialog(").count - 1, 2)
+        XCTAssertEqual(list.components(separatedBy: ".confirmationDialog(").count - 1, 2, "aucune confirmation posée sur la liste entière")
+    }
+
+    /// Glisser une rangée de conversation un peu trop loin, sur le composer d'à côté : l'identifiant brut ne se pose
+    /// plus dans le message — la rangée porte une marque que le composer refuse.
+    func test_aConversationRowDrag_isRefusedByTheComposer() {
+        let row = ConversationDragItemProvider(conversationId: "65f0a1b2c3d4e5f6a7b8c9d0", title: "Alice", opensWindow: false)
+        XCTAssertTrue(ComposerDropTargetModifier.carriesAConversationRow([row]))
+        XCTAssertFalse(ComposerDropTargetModifier.carriesAConversationRow([NSItemProvider(object: "bonjour" as NSString)]))
+    }
+
+    /// Fenêtre principale et fenêtre détachée au premier plan à la fois : la scène qui tient la fenêtre CLÉ — celle où
+    /// l'utilisateur agit — reçoit les feuilles et les mesures, jamais une scène prise au hasard de l'ensemble.
+    @MainActor
+    func test_twoForegroundScenes_theOneHoldingTheKeyWindowWins() {
+        struct Scene { let name: String; let foreground: Bool; let key: Bool }
+        let scenes = [Scene(name: "main", foreground: true, key: false), Scene(name: "detached", foreground: true, key: true),
+                      Scene(name: "bg", foreground: false, key: false)]
+        XCTAssertEqual(DeviceLayout.pickActive(scenes, isForeground: \.foreground, holdsKey: \.key)?.name, "detached")
+        let noKey = [Scene(name: "bg", foreground: false, key: true), Scene(name: "main", foreground: true, key: false)]
+        XCTAssertEqual(DeviceLayout.pickActive(noKey, isForeground: \.foreground, holdsKey: \.key)?.name, "main")
+    }
+
+    /// Une notification touchée pendant qu'une fenêtre détachée est devant : la fenêtre principale, où la navigation
+    /// a lieu, revient d'abord — sinon la cible s'ouvrait dans une fenêtre invisible.
+    func test_aTappedPush_bringsTheMainWindowForward_whenItIsNotInFront() throws {
+        XCTAssertTrue(MainWindowRegistry.needsActivation(.background))
+        XCTAssertTrue(MainWindowRegistry.needsActivation(.foregroundInactive))
+        XCTAssertFalse(MainWindowRegistry.needsActivation(.foregroundActive))
+        let handler = AppSourceGuard.stripComments(try AppSourceGuard.unit("Meeshy/Features/Main/Services/NotificationActionHandler.swift"))
+        XCTAssertTrue(handler.contains("MainWindowRegistry.shared.bringPrimaryForwardIfHidden()"))
+    }
 }

@@ -209,6 +209,8 @@ final class NotificationActionHandler: NotificationActionHandling {
             return user.isAnonymous != true
         },
         openNotification: @escaping @MainActor ([AnyHashable: Any]) -> Void = {
+            // iPad, fenêtre détachée devant : la cible s'ouvre dans la fenêtre principale — qui revient d'abord.
+            MainWindowRegistry.shared.bringPrimaryForwardIfHidden()
             PushNotificationManager.shared.handleNotification(userInfo: $0)
         },
         dialCallBack: @escaping @MainActor (CallBackRequest) -> Void = { request in

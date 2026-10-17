@@ -75,7 +75,7 @@ extension StoryCardView {
               let block = composerBlockHeight else { return nil }
         return SyncPillPlacement.dockedHeight(
             chromeTopFromScreenBottom: composerBottomPadding(geometry) + block,
-            safeAreaBottom: DeviceLayout.safeAreaBottom,
+            safeAreaBottom: windowBottomInset,
             keyboardHeight: keyboard.isVisible ? keyboard.height : 0)
     }
 

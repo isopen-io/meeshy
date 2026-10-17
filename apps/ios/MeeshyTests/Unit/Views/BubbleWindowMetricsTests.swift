@@ -140,8 +140,8 @@ final class BubbleWindowMetricsTests: XCTestCase {
         let code = codeLines(try source(Self.bubbleStandardLayout))
 
         XCTAssertTrue(
-            code.contains("DeviceLayout.bubbleMaxWidth(sizeClass: horizontalSizeClass)"),
-            "The conversation bubble must cap against the app's window."
+            code.contains("DeviceLayout.bubbleMaxWidth(sizeClass: horizontalSizeClass, containerWidth: bubbleContainerWidth)"),
+            "The conversation bubble caps against its own list, falling back on the app's window — never the screen."
         )
         XCTAssertFalse(
             code.contains("bubbleMaxWidth(containerWidth: UIScreen"),
