@@ -10,10 +10,33 @@ public struct MentionedUser: Codable, Sendable {
 public final class UserDisplayNameCache: @unchecked Sendable {
     public static let shared = UserDisplayNameCache()
 
+    /// Borne de la table : au-delà, les plus anciennes entrées partent. Les
+    /// noms vus pendant des heures dans de grands groupes s'accumulaient sans
+    /// fin, et `allMappings()` recopie toute la table à chaque reconstruction.
+    public static let defaultCapacity = 2_000
+
     private let lock = NSLock()
     private var cache: [String: String] = [:]
+    /// Ordre d'arrivée des clés, pour l'éviction.
+    private var order: [String] = []
+    private let capacity: Int
 
-    private init() {}
+    init(capacity: Int = UserDisplayNameCache.defaultCapacity) {
+        self.capacity = max(1, capacity)
+    }
+
+    /// Range une entrée — verrou TENU par l'appelant.
+    private func storeLocked(_ key: String, _ value: String) {
+        if cache.updateValue(value, forKey: key) == nil {
+            order.append(key)
+            if cache.count > capacity {
+                // Évince par paquet (un quart) pour amortir le décalage du tableau.
+                let overflow = cache.count - capacity + capacity / 4
+                for old in order.prefix(overflow) { cache.removeValue(forKey: old) }
+                order.removeFirst(min(overflow, order.count))
+            }
+        }
+    }
 
     // MARK: - Lookup
 
@@ -39,7 +62,7 @@ public final class UserDisplayNameCache: @unchecked Sendable {
         let key = username.lowercased()
         guard !username.isEmpty, !displayName.isEmpty, displayName != username else { return }
         lock.lock()
-        cache[key] = displayName
+        storeLocked(key, displayName)
         lock.unlock()
     }
 
@@ -59,7 +82,7 @@ public final class UserDisplayNameCache: @unchecked Sendable {
                   let displayName = msg.senderName,
                   !username.isEmpty, !displayName.isEmpty,
                   displayName != username else { continue }
-            cache[username.lowercased()] = displayName
+            storeLocked(username.lowercased(), displayName)
         }
         lock.unlock()
     }
@@ -92,7 +115,7 @@ public final class UserDisplayNameCache: @unchecked Sendable {
             guard let displayName = s.displayName,
                   !s.username.isEmpty, !displayName.isEmpty,
                   displayName != s.username else { continue }
-            cache[s.username.lowercased()] = displayName
+            storeLocked(s.username.lowercased(), displayName)
         }
         lock.unlock()
     }
@@ -110,7 +133,7 @@ public final class UserDisplayNameCache: @unchecked Sendable {
                   let displayName = p.displayName,
                   !username.isEmpty, !displayName.isEmpty,
                   displayName != username else { continue }
-            cache[username.lowercased()] = displayName
+            storeLocked(username.lowercased(), displayName)
         }
         lock.unlock()
     }
@@ -121,7 +144,7 @@ public final class UserDisplayNameCache: @unchecked Sendable {
             guard let displayName = u.displayName,
                   !u.username.isEmpty, !displayName.isEmpty,
                   displayName != u.username else { continue }
-            cache[u.username.lowercased()] = displayName
+            storeLocked(u.username.lowercased(), displayName)
         }
         lock.unlock()
     }
@@ -131,6 +154,7 @@ public final class UserDisplayNameCache: @unchecked Sendable {
     public func clear() {
         lock.lock()
         cache.removeAll()
+        order.removeAll()
         lock.unlock()
     }
 }

@@ -84,6 +84,20 @@ final class ArrivalCelebrationController: ObservableObject, ArrivalCelebrating {
         isShowing = false
     }
 
+    /// Déconnexion : la fête s'arrête, le préchargement en vol est annulé (il
+    /// écrirait le fil du compte sortant dans le cache du suivant), et la
+    /// mémoire « déjà préchargé » se vide — les caches viennent de l'être.
+    func resetForLogout() {
+        holdTask?.cancel()
+        holdTask = nil
+        isShowing = false
+        prefetchTask?.cancel()
+        prefetchedUserIds.removeAll()
+    }
+
+    /// Le préchargement courant a-t-il été annulé ? (tests)
+    var isPrefetchCancelled: Bool { prefetchTask?.isCancelled ?? false }
+
     func awaitHold() async {
         await holdTask?.value
     }
