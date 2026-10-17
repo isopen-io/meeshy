@@ -698,6 +698,13 @@ private struct AttachmentBlurOverlayView: View {
 
 struct BubbleCarouselView: View {
     let items: [MessageAttachment]
+
+    /// La page `index` bornée aux pages existantes ; `nil` quand le message n'a
+    /// plus aucun visuel (le carrousel peut rester monté un instant de plus).
+    nonisolated static func currentAttachment(at index: Int, in items: [MessageAttachment]) -> MessageAttachment? {
+        guard !items.isEmpty else { return nil }
+        return items[max(0, min(index, items.count - 1))]
+    }
     @Binding var carouselIndex: Int
     @Binding var showCarousel: Bool
     @Binding var fullscreenAttachment: MessageAttachment?
@@ -748,9 +755,8 @@ struct BubbleCarouselView: View {
                 .padding(MeeshySpacing.sm)
         }
         .onAppear {
-            guard !items.isEmpty else { return }
-            let startIndex = max(0, min(carouselIndex, items.count - 1))
-            currentPageID = items[startIndex].id
+            guard let start = Self.currentAttachment(at: carouselIndex, in: items) else { return }
+            currentPageID = start.id
         }
         .adaptiveOnChange(of: currentPageID) { _, newID in
             guard let newID,
@@ -781,8 +787,8 @@ struct BubbleCarouselView: View {
         HStack(spacing: 0) {
             Button {
                 // BUG E fix : libère le player de la slide active (URL-gated).
-                let current = items[max(0, min(carouselIndex, items.count - 1))]
-                if current.type == .video {
+                if let current = Self.currentAttachment(at: carouselIndex, in: items),
+                   current.type == .video {
                     SharedAVPlayerManager.shared.release(urlString: current.fileUrl)
                 }
                 withAnimation(.spring(response: 0.3, dampingFraction: 0.8)) {

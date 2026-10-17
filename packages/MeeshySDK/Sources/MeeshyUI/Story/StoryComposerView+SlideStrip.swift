@@ -77,7 +77,7 @@ extension StoryComposerView {
         return Button {
             syncCurrentSlideEffects()
             withAnimation(.spring(response: 0.25)) { viewModel.selectSlide(at: index) }
-            restoreCanvas(from: viewModel.slides[index])
+            if let tapped = viewModel.slides[safe: index] { restoreCanvas(from: tapped) }
             HapticFeedback.light()
         } label: {
             SlideMiniPreview(
@@ -121,7 +121,7 @@ extension StoryComposerView {
                     // même slide.
                     syncCurrentSlideEffects()
                     withAnimation(.spring(response: 0.25)) { viewModel.selectSlide(at: index) }
-                    restoreCanvas(from: viewModel.slides[index])
+                    if let tapped = viewModel.slides[safe: index] { restoreCanvas(from: tapped) }
                     onEditSceneObject?(fondId)
                     HapticFeedback.light()
                 } label: {
