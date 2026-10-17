@@ -430,6 +430,9 @@ enum DeepLink: Equatable {
     /// désactivé, et chaque story de plus de 24 h (son expiration désactive ses
     /// liens de suivi, cf. `deactivatePostTrackingLinks` côté gateway).
     case unresolvedTrackedLink(token: String)
+    /// `meeshy://call?contactId=…&type=…` : une DEMANDE d'appel, que la racine
+    /// présente en confirmation. Le lien ne compose jamais lui-même.
+    case callRequest(conversationId: String, isVideo: Bool)
 
     /// **Reçu sans compte, ce lien attend-il la connexion ?** (#7811)
     ///
@@ -440,7 +443,7 @@ enum DeepLink: Equatable {
     /// lien non résolu n'a rien à promettre.
     var opensAfterSignIn: Bool {
         switch self {
-        case .joinLink, .chatLink, .magicLink, .emailVerificationLink, .externalLink, .unresolvedTrackedLink:
+        case .joinLink, .chatLink, .magicLink, .emailVerificationLink, .externalLink, .unresolvedTrackedLink, .callRequest:
             return false
         case .trackedLink, .conversation, .postDetail, .storyDetail, .reel, .community,
              .recentConversation, .unreadConversations, .userProfile, .ownProfile, .userLinks, .hashtag, .game, .packShop:
@@ -533,7 +536,6 @@ final class DeepLinkRouter: ObservableObject {
     private let referrals: PendingReferralStoreProviding
     private let isAuthenticated: @MainActor () -> Bool
     private let hasResolvedSession: @MainActor () -> Bool
-    private let dialConversationCall: @MainActor (String, Bool) -> Void
     /// #10483 — la porte qui amène un contenu en détail le MARQUE de son
     /// entrée : lien de suivi, lien `?via=`, lien venu d'ailleurs, ou rien.
     private let entries: DetailOpenSourceProviding
@@ -545,9 +547,6 @@ final class DeepLinkRouter: ObservableObject {
         referrals: PendingReferralStoreProviding = PendingReferralStore.shared,
         isAuthenticated: @escaping @MainActor () -> Bool = { AuthManager.shared.isAuthenticated },
         hasResolvedSession: @escaping @MainActor () -> Bool = { AuthManager.shared.hasResolvedStoredSession },
-        dialConversationCall: @escaping @MainActor (String, Bool) -> Void = { conversationId, isVideo in
-            Task { await CallBackDialer.shared.dialConversation(id: conversationId, isVideo: isVideo) }
-        },
         entries: DetailOpenSourceProviding = DetailOpenSources.shared,
         passwordReset: PasswordResetLinkPresenter = .shared
     ) {
@@ -557,7 +556,6 @@ final class DeepLinkRouter: ObservableObject {
         self.referrals = referrals
         self.isAuthenticated = isAuthenticated
         self.hasResolvedSession = hasResolvedSession
-        self.dialConversationCall = dialConversationCall
     }
 
     // MARK: - Tracked link (`/l/<token>`) async resolution
@@ -725,11 +723,15 @@ final class DeepLinkRouter: ObservableObject {
         case .referral(let code):
             return captureReferral(code)
         case .call(let conversationId, let isVideo):
-            guard CallDialReadinessSnapshot.mayQueueDial(
+            // Le lien ne compose JAMAIS : il dépose une demande que la racine
+            // (fenêtre principale, session ouverte) présente en confirmation.
+            // Sans session, il ouvre l'app sur la connexion et ne garde rien.
+            if CallDialReadinessSnapshot.mayQueueDial(
                 sessionResolved: hasResolvedSession(),
                 authenticated: isAuthenticated()
-            ) else { return false }
-            dialConversationCall(conversationId, isVideo)
+            ) {
+                pendingDeepLink = .callRequest(conversationId: conversationId, isVideo: isVideo)
+            }
             return true
         case .passwordResetLink(let token):
             passwordReset.present(token: token)
@@ -789,6 +791,12 @@ final class DeepLinkRouter: ObservableObject {
     // MARK: - Consume
 
     @discardableResult
+    /// L'écran de connexion est affiché : une demande d'appel en attente est
+    /// oubliée — se connecter ne relance rien.
+    func discardPendingCallRequest() {
+        if case .callRequest = pendingDeepLink { pendingDeepLink = nil }
+    }
+
     func consumePendingDeepLink() -> DeepLink? {
         let link = pendingDeepLink
         pendingDeepLink = nil

@@ -188,8 +188,7 @@ final class DeepLinkSurfaceRoutingGuardTests: XCTestCase {
             let defaults = UserDefaults(suiteName: "DeepLinkSurfaceRoutingGuard.\(UUID().uuidString)")!
             let router = DeepLinkRouter(
                 drafts: DraftStore(userDefaults: defaults, userIdProvider: { "guard" }),
-                isAuthenticated: { true },
-                dialConversationCall: { _, _ in }
+                isAuthenticated: { true }
             )
             XCTAssertTrue(
                 router.handle(url: url),

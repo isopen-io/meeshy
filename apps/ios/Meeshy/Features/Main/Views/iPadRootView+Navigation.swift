@@ -114,6 +114,14 @@ extension iPadRootView {
 
     private func showDeepLink(_ deepLink: DeepLink) {
         switch deepLink {
+        case .callRequest(let conversationId, let isVideo):
+            // Le lien d'appel ne compose pas : il DEMANDE (feuille de
+            // confirmation). Mise à jour forcée et barrière d'âge passent avant.
+            let gatesOpen = !upgradeGate.isBlocked && !AgeGateController.shared.isShowing
+            Task { @MainActor in
+                await CallLinkConfirmationController.shared.request(
+                    conversationId: conversationId, isVideo: isVideo, gatesOpen: gatesOpen)
+            }
         case .trackedLink(let token):
             // `/l/<token>` resolved async by targetType (re-sets pendingDeepLink).
             deepLinkRouter.resolveTrackedLink(token)
