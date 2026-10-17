@@ -680,15 +680,17 @@ final class BubbleQuotedReplyZoneLawTests: XCTestCase {
 
         let host = try anchored(
             "Meeshy/Features/Main/Views/MessageListViewController.swift",
-            "onQuotedMediaTap: { [weak self] ref in", floor: 50_000
+            "let quotedMediaTapHandler: (ReplyReference) -> Void = { [weak self] ref in", floor: 50_000
         )
         XCTAssertTrue(
-            host.contains("onQuotedAuthorTap: { [weak self] ref in"),
+            host.contains("onQuotedAuthorTap: quotedAuthorTapHandler,") && host.contains("let quotedAuthorTapHandler"),
             "le contrôleur doit monter la zone 1 sur la peau BULLE — c'est la peau servie par défaut " +
             "(programme bêta OFF ⇒ `readingModes` OFF ⇒ `.bubbles`), donc celle où le câblage compte le plus."
         )
         XCTAssertTrue(
-            host.contains("onQuotedMediaTap: { [weak self] ref in"),
+            // La fermeture est sortie de la cellule (cycle contrôleur → cellule → fermeture, c97e31e6ca) : la rangée
+            // reçoit le gestionnaire faible, jamais une fermeture qui capture le contrôleur.
+            host.contains("onQuotedMediaTap: quotedMediaTapHandler,"),
             "le contrôleur doit monter la zone 2 sur la peau BULLE."
         )
     }

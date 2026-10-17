@@ -1541,6 +1541,7 @@ struct StoryViewerView: View {
                 try await ReportService.shared.reportStory(storyId: storyId, reportType: reportType, reason: reason)
             },
             composerBottomPadding: { composerBottomPadding(geometry: $0) },
+            windowBottomInset: windowBottomInset,
             makeCommentsOverlay: { storyCommentsOverlayHost() }
         )
     }

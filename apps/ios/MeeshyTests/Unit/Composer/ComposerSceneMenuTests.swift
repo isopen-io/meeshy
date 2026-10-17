@@ -72,7 +72,7 @@ final class ComposerSceneMenuTests: XCTestCase {
 
     func test_leMenu_estPeintParAdaptiveGlass() throws {
         let code = try AppSourceGuard.unit("Meeshy/Features/Main/Composer/ComposerSceneMenu.swift")
-        XCTAssertTrue(AppSourceGuard.stripComments(code).contains(".adaptiveGlass(in: RoundedRectangle(cornerRadius: 20"),
+        XCTAssertTrue(AppSourceGuard.stripComments(code).contains(".adaptiveGlass(in: RoundedRectangle(cornerRadius: MeeshyRadius.xl"),
                       "le verre du menu passe par l'unique implémentation du dépôt")
         XCTAssertTrue(code.contains(".accessibilityAction(.escape)"), "VoiceOver doit pouvoir le refermer")
     }

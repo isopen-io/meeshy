@@ -916,6 +916,8 @@ struct StoryCardView: View {
     let dismissViewer: () -> Void
     let reportStory: @MainActor (_ storyId: String, _ reportType: String, _ reason: String?) async throws -> Void
     let composerBottomPadding: (GeometryProxy) -> CGFloat
+    /// L'encart bas MESURÉ par le lecteur (`measuringBottomSafeArea`) — jamais lu sur la fenêtre pendant un `body`.
+    let windowBottomInset: CGFloat
 
     /// Builds the Instagram-style floating comments overlay. Conditional on
     /// `showCommentsOverlay`. Placed in the ZStack BEFORE the controls
