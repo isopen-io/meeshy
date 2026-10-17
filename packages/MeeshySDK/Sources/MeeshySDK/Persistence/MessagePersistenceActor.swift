@@ -45,8 +45,7 @@ public actor MessagePersistenceActor {
     private let writeContinuation: AsyncStream<WriteOperation>.Continuation
     private var processorTask: Task<Void, Never>?
 
-    /// `MessagePersistenceActor+EditDelete.swift` — suppressions, modifications
-    /// et réactions arrivées avant leur message.
+    /// `+EditDelete.swift` — suppressions, modifications, réactions arrivées avant leur message.
     var pendingRowEvents: [String: PendingRowEvents] = [:]
     var pendingRowEventOrder: [String] = []
 
