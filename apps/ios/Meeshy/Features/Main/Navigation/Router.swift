@@ -535,10 +535,10 @@ final class Router: ObservableObject {
     /// unchanged. Also lands on the target directly instead of flashing root.
     func replaceStack(with route: Route) {
         if onRouteRequested != nil {
-            popToRoot()
-            DispatchQueue.main.asyncAfter(deadline: .now() + 0.05) {
-                self.push(route)
-            }
+            // iPad : la route REMPLACE le panneau, comme le même lien venu de
+            // l'extérieur. `popToRoot()` y retire un niveau — le panneau, ou à
+            // défaut la conversation ouverte, qu'un lien interne fermait.
+            push(route)
             return
         }
         path = [route]

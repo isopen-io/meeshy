@@ -150,6 +150,24 @@ final class RouterTests: XCTestCase {
         XCTAssertTrue(router.path.isEmpty, "iPad forwards via the callback, never the NavigationStack path")
     }
 
+    /// iPad : `replaceStack` passait par `popToRoot()`, qui sur iPad retire UN
+    /// niveau — le panneau, ou à défaut la CONVERSATION ouverte. Un lien interne
+    /// vers son profil (ou la boutique) fermait la conversation, quand le même
+    /// lien venu de l'extérieur ne remplaçait que le panneau. Aucun retour :
+    /// la route remplace le panneau.
+    func test_replaceStack_iPad_neverPopsTheOpenConversation() {
+        let router = Router()
+        var routed: [Route] = []
+        var pops = 0
+        router.onRouteRequested = { routed.append($0); return true }
+        router.onPopRequested = { pops += 1 }
+
+        router.replaceStack(with: .links)
+
+        XCTAssertEqual(pops, 0, "aucun retour : il fermerait la conversation ouverte")
+        XCTAssertEqual(routed, [.links])
+    }
+
     func test_isHubRoute_afterPushProfile_returnsTrue() {
         let router = Router()
         router.push(.profile)
