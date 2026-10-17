@@ -95,6 +95,17 @@ public final class DefaultSDKAudioRecorder: ObservableObject, AudioRecordingProv
         // l'uplink micro de l'appel).
         guard MediaSessionCoordinator.shared.activateRecordingSync() else { return }
 
+        // Second démarrage sans arrêt (double appui, relance après le prompt
+        // micro) : arrêter l'enregistrement précédent et son minuteur 20 Hz,
+        // sinon celui-ci reste au run loop jusqu'à la fin du processus.
+        timer?.invalidate()
+        timer = nil
+        if let previous = recorder {
+            previous.stop()
+            FileManager.default.removeItemLogging(at: previous.url, context: "superseded recording")
+            recorder = nil
+        }
+
         let fileName = "voice_\(Int(Date().timeIntervalSince1970)).\(settings.codec.fileExtension)"
         let url = FileManager.default.temporaryDirectory.appendingPathComponent(fileName)
 
@@ -108,6 +119,10 @@ public final class DefaultSDKAudioRecorder: ObservableObject, AudioRecordingProv
             recorder?.record()
             recordedFileURL = url
         } catch {
+            // Rendre la session activée juste au-dessus : sans cela le micro
+            // reste réservé et l'indicateur orange allumé.
+            recorder = nil
+            MediaSessionCoordinator.shared.deactivatePlaybackSync()
             return
         }
 

@@ -175,7 +175,12 @@ extension CallManager {
             callController.request(transaction) { [weak self] error in
                 if let error {
                     Logger.calls.error("CallKit start call failed: \(error.localizedDescription)")
-                    Task { @MainActor [weak self] in self?.endCallInternal(reason: .failed("CallKit error")) }
+                    Task { @MainActor [weak self] in
+                        // Erreur asynchrone : n'achever que l'appel qu'elle concerne,
+                        // jamais un appel raccroché entre-temps ou un suivant.
+                        guard let self, self.activeCallUUID == uuid, self.callState.isActive else { return }
+                        self.endCallInternal(reason: .failed("CallKit error"))
+                    }
                 } else {
                     let update = CXCallUpdate()
                     update.remoteHandle = CXHandle(type: .generic, value: userId)

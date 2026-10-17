@@ -318,10 +318,21 @@ public actor MediaSessionCoordinator {
     ) async throws {
         installSystemObserversIfNeeded()
         playbackLeaseHeld = false
+        // Le compteur compte des DÉTENTEURS, pas des activations réussies :
+        // chaque appelant pose son drapeau avant `try? await request` et rendra
+        // sa prise par `release()` même si l'activation jette. Compter après le
+        // `try` faisait retirer à ce `release()` la prise d'un autre détenteur.
+        activationCount += 1
         // Never reconfigure the shared session while a VoIP call owns it (would
         // mute the mic). The refcount still tracks holders so balancing across
         // the call boundary stays coherent.
         if Self.shouldManageSession(callActive: callActive) {
+            #if DEBUG
+            if let probe = testProbe, probe.failNextRequest {
+                probe.failNextRequest = false
+                throw MediaSessionCoordinatorTestProbe.SimulatedFailure()
+            }
+            #endif
             let session = AVAudioSession.sharedInstance()
             switch role {
             case .playback:
@@ -338,7 +349,6 @@ public actor MediaSessionCoordinator {
             }
             try session.setActive(true)
         }
-        activationCount += 1
     }
 
     /// Libère la session si personne d'autre ne l'utilise.
@@ -465,7 +475,18 @@ public actor MediaSessionCoordinator {
 /// test that owns the probe.
 public final class MediaSessionCoordinatorTestProbe: @unchecked Sendable {
     public var deactivateCount: Int = 0
+    /// Fait jeter le prochain `request(role:)` comme un `setCategory` /
+    /// `setActive` refusé par le système.
+    public var failNextRequest = false
+    public struct SimulatedFailure: Error {}
     public init() {}
+}
+
+extension MediaSessionCoordinator {
+    /// Nombre de détenteurs de la session (DEBUG, tests seulement).
+    var holdCountForTesting: Int { activationCount }
+    /// Remet le compteur à zéro entre deux tests du singleton.
+    func resetHoldsForTesting() { activationCount = 0 }
 }
 #endif
 #endif

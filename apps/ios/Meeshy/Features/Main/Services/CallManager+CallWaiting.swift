@@ -98,6 +98,11 @@ extension CallManager {
                 iceServers: pending.iceServers,
                 conversationId: pending.conversationId
             )
+            // La passation remet l'appel à sonner ; l'utilisateur a déjà choisi
+            // de répondre — y répondre, sans second appui sur Accepter.
+            guard self.currentCallId == pending.callId,
+                  case .ringing(isOutgoing: false) = self.callState else { return }
+            self.answerCall()
         }
     }
 
