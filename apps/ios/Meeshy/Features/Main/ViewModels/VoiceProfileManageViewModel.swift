@@ -51,17 +51,29 @@ final class VoiceProfileManageViewModel: ObservableObject {
         }
     }
 
+    /// Le dernier basculement demandé, par réglage. Trois bascules rapides
+    /// partent ensemble ; la réponse d'un basculement DÉPASSÉ ne décide plus
+    /// rien : son échec tardif ramenait le réglage à une valeur que le serveur
+    /// n'a plus, et son succès tardif écrivait une visibilité périmée dans
+    /// `currentUser`.
+    private var latestVisibilityRequest = 0
+    private var latestCloningRequest = 0
+
     func toggleVoicePublic(enabled: Bool) async {
         let previous = isVoicePublic
         isVoicePublic = enabled
+        latestVisibilityRequest += 1
+        let request = latestVisibilityRequest
 
         do {
             _ = try await userService.updateProfile(UpdateProfileRequest(voicePublic: enabled))
+            guard request == latestVisibilityRequest else { return }
             // Refléter le changement confirmé sur currentUser : sinon une réouverture
             // (loadProfile lit authManager.currentUser?.voicePublic) restaurerait la
             // valeur stale et le toggle « sauterait » en arrière.
             authManager.applyLocalVoicePublicChange(enabled)
         } catch {
+            guard request == latestVisibilityRequest else { return }
             isVoicePublic = previous
             self.error = String(localized: "voice.profile.error.visibility", defaultValue: "Erreur lors du changement de visibilité du profil vocal.", bundle: .main)
         }
@@ -70,10 +82,13 @@ final class VoiceProfileManageViewModel: ObservableObject {
     func toggleCloning(enabled: Bool) async {
         let previous = isCloningEnabled
         isCloningEnabled = enabled
+        latestCloningRequest += 1
+        let request = latestCloningRequest
 
         do {
             try await service.toggleVoiceCloning(enabled: enabled)
         } catch {
+            guard request == latestCloningRequest else { return }
             isCloningEnabled = previous
             self.error = String(localized: "voice.profile.error.cloning", defaultValue: "Erreur lors du changement de statut du clonage.", bundle: .main)
         }

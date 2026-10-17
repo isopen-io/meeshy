@@ -567,27 +567,38 @@ extension ConversationSyncEngine {
     /// jusqu'au modèle web — chantier de contrat, pas garde de fusion.
     private func deltaSyncCore() async -> DeltaOutcome {
         let owner = await currentUserId()
+        // Une synchro est déjà en vol : un rattrapage de reconnexion demandé
+        // reste posé, et c'est elle qui le rejoue (boucle plus bas).
         guard claimSync(for: owner) else { return .complete }
-        defer { releaseSync(for: owner) }
+        var catchUp = takeReconnectCatchUp()
         // Throttle bursts: when several signals (socket reconnect,
         // foreground return, cache-stale revalidate) fire within the
         // same window, only the first one hits the network. Returning
         // `.complete` is intentional — from the caller's perspective the
-        // delta is "fresh enough" since a recent one just landed.
-        let now = Date()
-        if now.timeIntervalSince(lastDeltaSyncAt) < deltaSyncCooldown {
+        // delta is "fresh enough" since a recent one just landed. A socket
+        // RECONNECT is not throttled: it is evidence of a gap.
+        if !catchUp, Date().timeIntervalSince(lastDeltaSyncAt) < deltaSyncCooldown {
+            releaseSync(for: owner)
             return .complete
         }
-        lastDeltaSyncAt = now
-
-        let outcome = await Self.$syncOwner.withValue(owner) {
-            await self.deltaSansGarde()
-        }
-        // Un ÉCHEC ne compte pas dans l'anti-rafale : au réveil, le premier
-        // essai tombe souvent sur un réseau pas encore rétabli, et le signal
-        // suivant (reconnexion du socket, coordinateur de premier plan) doit
-        // retenter au lieu d'être absorbé pendant `deltaSyncCooldown` (#7787).
-        if !outcome.succeeded { lastDeltaSyncAt = .distantPast }
+        var outcome = DeltaOutcome.complete
+        var passes = 0
+        repeat {
+            lastDeltaSyncAt = Date()
+            outcome = await Self.$syncOwner.withValue(owner) {
+                await self.deltaSansGarde()
+            }
+            // Un ÉCHEC ne compte pas dans l'anti-rafale : au réveil, le premier
+            // essai tombe souvent sur un réseau pas encore rétabli, et le signal
+            // suivant (reconnexion du socket, coordinateur de premier plan) doit
+            // retenter au lieu d'être absorbé pendant `deltaSyncCooldown` (#7787).
+            if !outcome.succeeded { lastDeltaSyncAt = .distantPast }
+            passes += 1
+            catchUp = takeReconnectCatchUp()
+        } while catchUp && passes < 3
+        releaseSync(for: owner)
+        // Demandé entre la dernière vérification et la libération : rejoué.
+        if hasReconnectCatchUpPending { return await deltaSyncCore() }
         return outcome
     }
 
