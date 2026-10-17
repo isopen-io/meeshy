@@ -358,7 +358,7 @@ public actor MediaSessionCoordinator {
         bumpActivationGeneration()
         playbackLeaseHeld = false
         // Le compteur compte des DÉTENTEURS, pas des activations réussies :
-        // chaque appelant pose son drapeau avant `try? await request` et rendra
+        // chaque appelant pose son drapeau avant d'attendre `request` (erreur ignorée) et rendra
         // sa prise par `release()` même si l'activation jette. Compter après le
         // `try` faisait retirer à ce `release()` la prise d'un autre détenteur.
         activationCount += 1
