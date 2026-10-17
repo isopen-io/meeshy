@@ -323,6 +323,25 @@ public final class ConversationSyncEngine: ConversationSyncEngineProviding, @unc
     }
     /* partagé entre les fichiers du moteur (#4172) */ let deltaSyncCooldown: TimeInterval = 3
 
+    /// Une reconnexion du socket demande un rattrapage qui ne s'absorbe NI dans
+    /// l'anti-rafale NI dans une synchro déjà en vol : celle du retour au
+    /// premier plan part avant que le socket ait rejoint ses salles, et ce qui
+    /// arrive entre son instantané et le retour des salles n'était relu par
+    /// personne. La demande reste posée jusqu'à ce qu'une passe la consomme.
+    private var _reconnectCatchUpPending = false
+    /* partagé entre les fichiers du moteur (#4172) */ func requestReconnectCatchUp() {
+        stateQueue.sync { _reconnectCatchUpPending = true }
+    }
+    /* partagé entre les fichiers du moteur (#4172) */ func takeReconnectCatchUp() -> Bool {
+        stateQueue.sync {
+            defer { _reconnectCatchUpPending = false }
+            return _reconnectCatchUpPending
+        }
+    }
+    /* partagé entre les fichiers du moteur (#4172) */ var hasReconnectCatchUpPending: Bool {
+        stateQueue.sync { _reconnectCatchUpPending }
+    }
+
     // Dependencies
     /* partagé entre les fichiers du moteur (#4172) */ let cache: CacheCoordinator
     /* partagé entre les fichiers du moteur (#4172) */ let conversationService: ConversationServiceProviding
