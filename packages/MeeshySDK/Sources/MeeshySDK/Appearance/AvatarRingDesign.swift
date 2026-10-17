@@ -20,6 +20,12 @@ public struct AvatarRingStroke: Codable, Hashable, Sendable {
     /// Fraction du diamètre.
     public let width: Double
     public let colors: [String]
+
+    /// `#RGB`, `#RRGGBB` ou `#RRGGBBAA`, dièse facultatif — rien d'autre ne se dessine.
+    public static func isWellFormedHex(_ value: String) -> Bool {
+        let digits = value.hasPrefix("#") ? value.dropFirst() : Substring(value)
+        return [3, 6, 8].contains(digits.count) && digits.allSatisfy(\.isHexDigit)
+    }
 }
 
 public struct AvatarRingOrnamentPath: Codable, Hashable, Sendable {
@@ -59,6 +65,10 @@ public struct AvatarRingDesign: Codable, Hashable, Sendable, Identifiable {
         stroke = try c.decode(AvatarRingStroke.self, forKey: .stroke)
         guard (1...4).contains(stroke.colors.count) else {
             throw DecodingError.dataCorruptedError(forKey: .stroke, in: c, debugDescription: "un contour porte de 1 à 4 couleurs")
+        }
+        // Données d'un pack, parfois d'un vendeur tiers : une couleur illisible ferait planter le dessin.
+        guard stroke.colors.allSatisfy(AvatarRingStroke.isWellFormedHex) else {
+            throw DecodingError.dataCorruptedError(forKey: .stroke, in: c, debugDescription: "une couleur n'est pas un hexadécimal")
         }
         let nested = try? c.nestedContainer(keyedBy: OrnamentKeys.self, forKey: .ornament)
         ornament = try nested?.decode([AvatarRingOrnamentPath].self, forKey: .paths) ?? []

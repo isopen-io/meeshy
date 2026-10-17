@@ -644,7 +644,7 @@ struct ConversationDashboardView: View {
             let stats = participants.prefix(10)
             let maxCount = stats.first?.messageCount ?? 1
 
-            ForEach(Array(stats.enumerated()), id: \.element.name) { index, stat in
+            ForEach(Array(stats.enumerated()), id: \.element.id) { index, stat in
                 HStack(spacing: MeeshySpacing.smPlus) {
                     if index < 3 {
                         Text("#\(index + 1)")
@@ -998,6 +998,7 @@ struct ConversationDashboardView: View {
     // MARK: - Participant Stats
 
     private struct ParticipantStat {
+        let id: String
         let name: String
         let messageCount: Int
         let wordCount: Int
@@ -1006,11 +1007,11 @@ struct ConversationDashboardView: View {
     private var participantStats: [ParticipantStat] {
         if let serverParticipants = serverStats?.participantStats, !serverParticipants.isEmpty {
             return serverParticipants
-                .map { ParticipantStat(name: $0.name ?? $0.userId, messageCount: $0.messageCount, wordCount: $0.wordCount) }
+                .map { ParticipantStat(id: $0.userId, name: $0.name ?? $0.userId, messageCount: $0.messageCount, wordCount: $0.wordCount) }
                 .sorted { $0.messageCount > $1.messageCount }
         }
         return (clientStats?.participantStats ?? []).map {
-            ParticipantStat(name: $0.name, messageCount: $0.messageCount, wordCount: $0.wordCount)
+            ParticipantStat(id: $0.id, name: $0.name, messageCount: $0.messageCount, wordCount: $0.wordCount)
         }
     }
 

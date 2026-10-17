@@ -506,7 +506,7 @@ public struct SyntaxHighlighter {
             var tokens: [SyntaxToken] = []
             var i = line.startIndex
 
-            while i < line.endIndex {
+            scanning: while i < line.endIndex {
                 // Multi-line comment continuation
                 if inMultiLineComment {
                     if let endStr = def.multiLineCommentEnd,
@@ -561,7 +561,9 @@ public struct SyntaxHighlighter {
                                 tokens.append(SyntaxToken(String(remaining), .string))
                                 i = line.endIndex
                             }
-                            continue
+                            // La LIGNE reprend après la chaîne : un `continue` nu relançait la boucle des délimiteurs,
+                            // puis lisait `line[i]` avec `i == endIndex` (plantage).
+                            continue scanning
                         }
                     }
                 }

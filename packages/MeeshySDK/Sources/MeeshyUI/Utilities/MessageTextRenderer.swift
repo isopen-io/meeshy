@@ -629,7 +629,7 @@ public enum MessageTextRenderer {
                 if styles.contains(.strikethrough) { attr.strikethroughStyle = .single }
                 if styles.contains(.underline) { attr.underlineStyle = .single }
                 applyHighlight(to: &attr, segmentText: str, charOffset: charOffset, ranges: highlightRanges)
-                charOffset += str.count
+                charOffset += str.utf16.count
                 result.append(attr)
 
             case .code(let str, let styles):
@@ -639,7 +639,7 @@ public enum MessageTextRenderer {
                 attr.backgroundColor = color.opacity(0.12)
                 if styles.contains(.strikethrough) { attr.strikethroughStyle = .single }
                 if styles.contains(.underline) { attr.underlineStyle = .single }
-                charOffset += str.count
+                charOffset += str.utf16.count
                 result.append(attr)
 
             case .mentionLink(let display, let url, let username):
@@ -653,7 +653,7 @@ public enum MessageTextRenderer {
                 if let mentionColor {
                     attr.foregroundColor = mentionColor
                 }
-                charOffset += display.count
+                charOffset += display.utf16.count
                 result.append(attr)
 
             case .hashtagLink(let display, let url, _):
@@ -664,13 +664,13 @@ public enum MessageTextRenderer {
                 if let hashtagColor {
                     attr.foregroundColor = hashtagColor
                 }
-                charOffset += display.count
+                charOffset += display.utf16.count
                 result.append(attr)
 
             case .link(let written):
                 charOffset += written.sourceCount
                 if context.linksAreInert {
-                    charOffset += written.inertText.count - written.sourceCount
+                    charOffset += written.inertText.utf16.count - written.sourceCount
                     var plain = AttributedString(written.inertText)
                     plain.font = Self.font(fontSize, .regular, relative: usesRelativeFont)
                     plain.foregroundColor = color
@@ -711,14 +711,17 @@ public enum MessageTextRenderer {
         ranges: [NSRange]
     ) {
         guard !ranges.isEmpty else { return }
-        let segmentRange = NSRange(location: charOffset, length: segmentText.count)
+        // Tout en UTF-16 — l'unité des `NSRange` de `highlightRanges` et de `charOffset` —, ramené en CARACTÈRES
+        // seulement pour indexer l'`AttributedString` : un émoji compte deux unités, une famille bien plus.
+        let segmentRange = NSRange(location: charOffset, length: segmentText.utf16.count)
         for hlRange in ranges {
             let intersection = NSIntersectionRange(segmentRange, hlRange)
             guard intersection.length > 0 else { continue }
-            let localStart = intersection.location - charOffset
-            let localNS = NSRange(location: localStart, length: intersection.length)
-            guard Range(localNS, in: segmentText) != nil else { continue }
-            let attrRange = attr.index(attr.startIndex, offsetByCharacters: localStart)..<attr.index(attr.startIndex, offsetByCharacters: localStart + intersection.length)
+            let localNS = NSRange(location: intersection.location - charOffset, length: intersection.length)
+            guard let local = Range(localNS, in: segmentText) else { continue }
+            let start = segmentText.distance(from: segmentText.startIndex, to: local.lowerBound)
+            let length = segmentText.distance(from: local.lowerBound, to: local.upperBound)
+            let attrRange = attr.index(attr.startIndex, offsetByCharacters: start)..<attr.index(attr.startIndex, offsetByCharacters: start + length)
             attr[attrRange].backgroundColor = Color.yellow.opacity(0.4)
         }
     }
@@ -735,7 +738,8 @@ private extension WrittenLink {
         }
     }
 
-    var sourceCount: Int { sourceText.count }
+    /// En unités UTF-16 — celle des `NSRange` du surlignage.
+    var sourceCount: Int { sourceText.utf16.count }
 
     /// #10286 — what an author without an account typed, the notation kept:
     /// `[label](url)` keeps its address visible (a label alone would hide the

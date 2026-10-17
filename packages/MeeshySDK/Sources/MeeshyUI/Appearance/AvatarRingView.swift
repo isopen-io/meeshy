@@ -100,13 +100,13 @@ public struct AvatarRingView: View, Equatable {
     }
 
     nonisolated static func lerpHex(_ from: String, _ to: String, _ t: Double) -> String {
+        // Bornée quelle que soit l'entrée : `#RGB` s'étend, `#RRGGBBAA` perd son alpha, le reste se lit noir —
+        // jamais un indice hors de la chaîne (le décodage refuse déjà ces couleurs ; ceci tient la ligne de dessin).
         func channels(_ hex: String) -> [Double] {
-            let digits = hex.hasPrefix("#") ? String(hex.dropFirst()) : hex
-            return (0..<3).map { i in
-                let start = digits.index(digits.startIndex, offsetBy: i * 2)
-                let end = digits.index(start, offsetBy: 2)
-                return Double(Int(digits[start..<end], radix: 16) ?? 0)
-            }
+            var digits = Array(hex.hasPrefix("#") ? hex.dropFirst() : Substring(hex))
+            if digits.count == 3 { digits = digits.flatMap { [$0, $0] } }
+            guard digits.count >= 6, digits.allSatisfy(\.isHexDigit) else { return [0, 0, 0] }
+            return (0..<3).map { i in Double(Int(String(digits[(i * 2)..<(i * 2 + 2)]), radix: 16) ?? 0) }
         }
         let a = channels(from), b = channels(to)
         let mixed = (0..<3).map { i in Int((a[i] + (b[i] - a[i]) * t).rounded()) }

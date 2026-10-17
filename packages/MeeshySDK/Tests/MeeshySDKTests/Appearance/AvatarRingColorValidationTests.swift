@@ -1,0 +1,33 @@
+import XCTest
+@testable import MeeshySDK
+
+/// Un contour vient d'un pack — parfois d'un VENDEUR TIERS (#10709) : ce sont des données non fiables. Une couleur
+/// qui n'est pas un hexadécimal à 3, 6 ou 8 chiffres (« #FFF » mal servi, « red ») faisait sortir `lerpHex` de sa
+/// chaîne et planter le dessin de l'avatar d'un AUTRE utilisateur. Le décodage échoue fermé, comme pour un trait
+/// qui désigne une couleur absente.
+final class AvatarRingColorValidationTests: XCTestCase {
+
+    private func ring(_ colors: [String]) throws -> AvatarRingDesign {
+        let list = colors.map { "\"\($0)\"" }.joined(separator: ",")
+        let json = #"{"key":"k","stroke":{"style":"gradient","width":0.06,"colors":[\#(list)]}}"#
+        return try JSONDecoder().decode(AvatarRingDesign.self, from: Data(json.utf8))
+    }
+
+    func test_wellFormedHexColours_decode() {
+        XCTAssertNoThrow(try ring(["#2DD4BF", "7C3AED", "#FFF", "#11223344"]))
+    }
+
+    func test_aColourThatIsNotHex_failsClosed() {
+        XCTAssertThrowsError(try ring(["#2DD4BF", "red"]))
+        XCTAssertThrowsError(try ring(["#2DD4"]))
+        XCTAssertThrowsError(try ring(["#GGGGGG"]))
+        XCTAssertThrowsError(try ring([""]))
+    }
+
+    func test_theRule_isPure() {
+        XCTAssertTrue(AvatarRingStroke.isWellFormedHex("#abc"))
+        XCTAssertTrue(AvatarRingStroke.isWellFormedHex("A1B2C3"))
+        XCTAssertFalse(AvatarRingStroke.isWellFormedHex("#12345"))
+        XCTAssertFalse(AvatarRingStroke.isWellFormedHex("##123456"))
+    }
+}
