@@ -62,4 +62,24 @@ final class StoryViewerPositionTests: XCTestCase {
             XCTAssertFalse(source.contains("currentGroupIndex -= 1"), path)
         }
     }
+
+    /// Le groupe qui a ouvert le lecteur disparaît pendant qu'on regarde un
+    /// autre auteur : le conteneur tombait sur un spinner que rien ne relançait.
+    func test_container_closesWhenItsGroupVanishesAfterPresenting() throws {
+        let source = AppSourceGuard.stripComments(try AppSourceGuard.unit("Meeshy/Features/Main/Views/StoryViewerContainer.swift"))
+        XCTAssertTrue(source.contains(".onAppear { hasPresentedViewer = true }"))
+        XCTAssertTrue(source.contains("} else if hasPresentedViewer {"))
+    }
+
+    /// Une notification de story ouvre CETTE story, sur iPhone comme sur iPad —
+    /// pas la première non vue de l'auteur.
+    func test_pushedStoryRoute_opensTheExactPost_onIPhoneAndIPad() throws {
+        for path in ["Meeshy/Features/Main/Views/RootView.swift", "Meeshy/Features/Main/Views/iPadRootView+Navigation.swift"] {
+            let source = AppSourceGuard.stripComments(try String(contentsOf: try XCTUnwrap(
+                AppSourceGuard.unitURLs(path).first), encoding: .utf8))
+            let route = try XCTUnwrap(source.range(of: "routeName.hasPrefix(\"storyDetail:\")"), path)
+            let tail = String(source[route.upperBound...].prefix(600))
+            XCTAssertTrue(tail.contains("postId: postId"), path)
+        }
+    }
 }

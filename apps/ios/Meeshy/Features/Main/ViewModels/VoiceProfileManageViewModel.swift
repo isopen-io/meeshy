@@ -80,13 +80,15 @@ final class VoiceProfileManageViewModel: ObservableObject {
     }
 
     func deleteSample(id: String) async {
-        let snapshot = samples
-        samples.removeAll { $0.id == id }
+        guard let index = samples.firstIndex(where: { $0.id == id }) else { return }
+        let removed = samples.remove(at: index)
 
         do {
             try await service.deleteSample(sampleId: id)
         } catch {
-            samples = snapshot
+            // Défaire CE retrait : un autre échantillon supprimé avec succès
+            // pendant l'attente ne revient pas avec lui.
+            samples = OptimisticRollback.restoring(removed, at: index, into: samples)
             self.error = String(localized: "voice.profile.error.deleteSample", defaultValue: "Erreur lors de la suppression de l'échantillon.", bundle: .main)
         }
     }

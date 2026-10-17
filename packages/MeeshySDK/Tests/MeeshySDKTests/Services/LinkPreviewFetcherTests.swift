@@ -121,4 +121,12 @@ final class LinkPreviewFetcherTests: XCTestCase {
         let text = "See https://first.com and https://second.com"
         XCTAssertEqual(LinkPreviewFetcher.firstURL(in: text), "https://first.com")
     }
+
+    // MARK: - Entités numériques, remplacées dans l'unité de leurs plages
+
+    func test_trimmedDecoded_numericEntityThenCombiningMark_decodesBoth() {
+        XCTAssertEqual("&#65;&#x301;".trimmedDecoded, "A\u{301}")
+        XCTAssertEqual("caf&#xE9; &#x1F600; &#38;".trimmedDecoded, "café 😀 &")
+        XCTAssertEqual("&#xD800;x".trimmedDecoded, "&#xD800;x", "un scalaire invalide reste tel quel")
+    }
 }
