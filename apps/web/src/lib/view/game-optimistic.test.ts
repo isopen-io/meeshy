@@ -10,6 +10,7 @@ import {
   afterChestOpening,
   afterFreeze,
   afterMint,
+  afterMintUnlessServed,
   afterRelight,
   afterReroll,
   withChestReward,
@@ -91,8 +92,37 @@ describe('afterMint avec les étincelles (#10892) — la poche paie et fait le n
     expect(gameOf(after).level.levelMaxLifetime).toBe(30);
   });
 
-  test('le Vent arrière reste éteint', () => {
-    expect(gameOf(after).boosts.tailwind).toBe(1);
+  test('le Vent arrière suit la loi des étincelles : 7 niveaux ou plus sous le record (#10896)', () => {
+    const level = gameOf(after).level;
+    const gap = (level.ladder?.record ?? level.record) - (level.ladder?.level ?? level.level);
+    expect(gameOf(after).boosts.tailwind).toBe(gap >= 7 ? 1.25 : 1);
+  });
+
+  test('le prix suivant porte le facteur du niveau d’après, jamais le prix de rang nu (#10898)', () => {
+    const next = gameOf(after).mint;
+    expect(next.basePrice).toBe(1221);
+    expect(next.price).toBeLessThan(1221);
+    expect(next.price).toBe(Math.round((1221 * Math.round((next.costFactor ?? 0) * 1000)) / 1000));
+  });
+
+  test('le compteur de Meeshes lit le même prix suivant que le héro de frappe (#10898)', () => {
+    expect(after.meesh?.mintCost).toBe(gameOf(after).mint.price);
+    expect(after.meesh?.missingPoints).toBe(gameOf(after).mint.missingPoints);
+  });
+});
+
+describe('afterMintUnlessServed — une frappe ne se débite qu’une fois (#10898)', () => {
+  const sparks = { pocket: 40_000, cycle: 40_000, lifetime: 40_000, debt: 0 };
+  const before = view({ score: sparks.pocket, debitablePoints: sparks.pocket, sparks });
+  const numberBefore = gameOf(before).mint.number;
+
+  test('sur la lecture d’avant la frappe, la frappe s’applique', () => {
+    expect(afterMintUnlessServed(before, numberBefore)).toEqual(afterMint(before));
+  });
+
+  test('sur une relecture servie qui la porte déjà, rien ne bouge : la poche ne paie pas deux fois', () => {
+    const served = afterMint(before);
+    expect(afterMintUnlessServed(served, numberBefore)).toBe(served);
   });
 });
 

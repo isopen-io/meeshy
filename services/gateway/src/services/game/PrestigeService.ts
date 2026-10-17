@@ -85,7 +85,7 @@ export class PrestigeService {
       // que le cycle ne soit vidé — un compte d'avant le rattrapage n'a pas encore ces champs, et les perdrait. Les
       // compteurs par axe ne bougent plus : la frappe ne les débite plus.
       const maxLifetime = Math.max(account?.levelMaxLifetime ?? 0, account?.levelRecord ?? 0, currentLevelOf(account), GAME_LEVEL_MIN);
-      const written = await this.prisma.user.updateMany({
+      const written = await this.writePassage(userId, bucket, {
         where: { id: userId, engagementScore: account?.engagementScore ?? 0, ...(stars === 0 ? NO_PRESTIGE : { prestige: stars }) },
         data: {
           prestige: verdict.prestigeAfter,
@@ -105,6 +105,19 @@ export class PrestigeService {
       return { status: 'passed', prestige: verdict.prestigeAfter, score: 0, level: 1, gloryGained, trophyKey: verdict.trophyKey };
     }
     throw new Error('prestige contended');
+  }
+
+  /**
+   * L'écriture conditionnelle du passage. Une écriture qui TOMBE (réseau, base) rend la réservation de la demande avant de
+   * relancer (#10895) : sans cela, la demande restait « en cours » à jamais et son rejeu échouait sans fin.
+   */
+  private async writePassage(userId: string, bucket: string, args: Parameters<PrismaClient['user']['updateMany']>[0]): Promise<{ count: number }> {
+    try {
+      return await this.prisma.user.updateMany(args);
+    } catch (error) {
+      await this.prisma.engagementQuota.deleteMany({ where: { userId, operationKey: REQUEST_OPERATION, bucket } });
+      throw error;
+    }
   }
 
   /** La Gloire et le trophée, par clé : rejouables, jamais payés deux fois. */

@@ -25,12 +25,12 @@
  *    convertible, elle ne lit ni ne débite aucun compteur d'axe (`EngagementCounter`),
  *    ne retire aucune action (`count`) et n'éteint ni badge ni palier de niveau.
  *    Un badge d'axe dit le TOTAL réel et ne se renotifie jamais (#10845) ;
- *  - le NIVEAU se lit sur le cycle d'étincelles (`sparksSincePrestige`), que la
- *    frappe ne touche pas : il ne baisse plus. Le total à vie ne bouge pas non plus ;
+ *  - le NIVEAU se lit sur la POCHE (#10892, `levelSparksOf`) : la frappe le fait donc baisser du montant
+ *    dépensé. Le cycle (`sparksSincePrestige`) et le total à vie, indicatifs, ne bougent pas ;
  *  - le PRIX est celui de la pièce (`meeshPrice(n)`) × le facteur du niveau ACTUEL
  *    (`effectiveMeeshPrice`) ; le serveur le recalcule toujours ;
  *  - une pièce qui ferait entrer dans une réserve du trésor que le rang de Gloire
- *    n'ouvre pas (`treasuryLockFor`) est REFUSÉE, avec le rang requis ;
+ *    n'ouvre pas (`treasuryLockFor`) est REFUSÉE, avec le rang requis — le Mythe les ouvre toutes ;
  *  - un compte d'avant le rattrapage (cycle et total à vie absents) les voit posés sur
  *    sa poche AVANT le débit : sans cela, le niveau tomberait avec la poche.
  */
@@ -40,12 +40,13 @@ import type { MeeshMintPlan } from '@meeshy/shared/utils/meesh';
 import { GLORY_POINTS, levelCapForRank } from '@meeshy/shared/utils/game/glory';
 import { legacyLevel } from '@meeshy/shared/utils/game/levels';
 import { type MeeshEdition } from '@meeshy/shared/utils/game/mint';
-import { previewSparksMint, sparkCount, sparksOf, type SparksMintPreview } from '@meeshy/shared/utils/game/sparks';
+import { previewSparksMint, sparkCount, sparksOf, type SparksFacts, type SparksMintPreview } from '@meeshy/shared/utils/game/sparks';
 import type { TreasuryLock } from '@meeshy/shared/utils/game/treasury';
 import { enhancedLogger } from '../../utils/logger-enhanced';
 import { withRetry } from '../MessageMediaConsumptionService';
 import { GloryService, gloryTotalFromLedger } from '../game/GloryService';
 import { GamePhotoService } from '../game/GamePhotoService';
+import { MythicSeatService } from '../game/MythicSeatService';
 import { LEVEL_STEP_USER_SELECT, countMissionsDone, levelStepFactsOf } from '../game/LevelStepFacts';
 import { SPARKS_USER_SELECT } from '../game/SparksFacts';
 
@@ -143,9 +144,17 @@ export async function meeshTotalsFromLedger(
 
 /** Une frappe qui ferait passer le score sous zéro (#9675) : annulée en bloc, rendue comme insuffisante. */
 class ScoreWouldGoNegative extends Error {
-  constructor() {
+  constructor(readonly preview: Pick<SparksMintPreview, 'canMint' | 'missingPoints'> & { readonly sparksPocket: number }) {
     super('mint would take the score below zero');
     this.name = 'ScoreWouldGoNegative';
+  }
+}
+
+/** Une réserve du trésor s'est fermée entre l'aperçu et la transaction (un don, un octroi) : annulée en bloc. */
+class TreasuryLockedInTransaction extends Error {
+  constructor(readonly lock: TreasuryLock) {
+    super('mint would enter a treasury reserve the rank does not open');
+    this.name = 'TreasuryLockedInTransaction';
   }
 }
 
@@ -170,24 +179,31 @@ export class MeeshService {
    * Gloire et les Meeshes gardées. Trois lectures indexées en parallèle, jamais une par règle.
    */
   private async facts(userId: string) {
-    const [totals, row, missionsDone, glory] = await Promise.all([
+    const [totals, row, missionsDone, glory, seat] = await Promise.all([
       meeshTotalsFromLedger(this.prisma, userId),
       this.prisma.user.findUnique({ where: { id: userId }, select: { ...SPARKS_USER_SELECT, ...LEVEL_STEP_USER_SELECT } }),
       countMissionsDone(this.prisma, userId),
       gloryTotalFromLedger(this.prisma, userId),
+      // Comme le bloc `game` : une lecture de la place qui tombe rend le rang sur la Gloire, jamais la frappe entière.
+      new MythicSeatService(this.prisma).seatOf(userId).catch(() => null),
     ]);
     const sparks = sparksOf(row);
-    const steps = levelStepFactsOf({ row: { ...row, meeshMintedLifetime: totals.mintedLifetime }, missionsDone, glory });
-    const preview = previewSparksMint({
-      sparks: sparks.pocket,
-      mintedLifetime: totals.mintedLifetime,
-      held: totals.balance,
-      glory,
-      levelCap: levelCapForRank(steps.rank),
-      steps,
-      debt: sparks.debt,
-    });
-    return { totals, sparks, preview };
+    // Le Mythe, que le bloc `game` sert (#10894) : sans lui, l'aperçu disait « frappable » et la frappe « réserve fermée ».
+    const mythic = seat !== null;
+    const steps = levelStepFactsOf({ row: { ...row, meeshMintedLifetime: totals.mintedLifetime }, missionsDone, glory, mythic });
+    // Tout ce que le prix lit, sauf la poche et la dette : la frappe le rejuge sur la ligne relue DANS sa transaction.
+    const previewAt = (pocketFacts: SparksFacts): SparksMintPreview =>
+      previewSparksMint({
+        sparks: pocketFacts.pocket,
+        mintedLifetime: totals.mintedLifetime,
+        held: totals.balance,
+        glory,
+        mythic,
+        levelCap: levelCapForRank(steps.rank),
+        steps,
+        debt: pocketFacts.debt,
+      });
+    return { totals, sparks, preview: previewAt(sparks), previewAt };
   }
 
   /**
@@ -202,8 +218,8 @@ export class MeeshService {
   /**
    * Frappe une Meesh au prix de sa rareté et de son niveau actuel (`effectiveMeeshPrice`, #9374, #10847).
    *
-   * Le prix est recalculé DANS la mise à jour : celui qu'a vu l'écran a pu
-   * vieillir entre l'affichage et le tap.
+   * Le prix, le niveau d'avant et celui d'après sont rejugés DANS la transaction, sur la poche qu'elle relit
+   * (#10895) : ceux qu'a vus l'écran — et ceux de la lecture d'avant la transaction — ont pu vieillir.
    *
    * **Un conflit d'écriture se rejoue (#6467).** D'autres écrivains touchent le
    * document `User` pendant la transaction (activité, locale, pays) : MongoDB
@@ -231,30 +247,32 @@ export class MeeshService {
 
     // Le PRIX est celui de CETTE pièce, au niveau ACTUEL du compte : le serveur le recalcule, aucun client n'en
     // est cru (un ancien client qui croit encore à 1 221 est refusé sans débit quand sa poche ne couvre pas le vrai prix).
-    const { totals: avant, sparks, preview } = await this.facts(userId);
-    const { number, price } = preview;
+    const { totals: avant, sparks, preview, previewAt } = await this.facts(userId);
+    const { number } = preview;
     // Le refus de RANG passe avant celui de poche : un compte sans le rang apprend d'abord ce qui le barre.
     // La dette passe avant tout : tant qu'elle existe, on ne frappe pas.
     if (preview.blockedBy === 'debt') return { status: 'blocked-by-debt', sparksDebt: preview.sparksDebt };
     if (preview.locked !== null) return { status: 'treasury-locked', lock: preview.locked };
     if (!preview.canMint) return { status: 'insufficient', plan: mintPlanOf(preview, sparks.pocket) };
 
-    const { levelBefore, levelAfter } = preview;
-    const edition = preview.edition;
-
     try {
-      const totaux = await this.prisma.$transaction(async (tx) => {
+      const gravee = await this.prisma.$transaction(async (tx) => {
         // Le numéro, lui, doit être celui que le prix a supposé : une frappe
         // concurrente l'aurait décalé. L'annulation est rejouée en bloc.
         const concurrentes = await tx.meeshLedger.count({ where: { userId, reason: 'mint' } });
         if (concurrentes !== avant.mintedLifetime) throw Object.assign(new Error('mint number moved'), { code: 'P2034' });
 
         // La poche se lit DANS la transaction : un crédit concurrent fait annuler la tentative (P2034) au lieu
-        // d'être écrasé, et le débit s'écrit en VALEUR (jamais un incrément : leçon #6428).
+        // d'être écrasé, et le débit s'écrit en VALEUR (jamais un incrément : leçon #6428). Le PRIX, le niveau
+        // d'avant et celui d'après se rejugent sur CETTE lecture (#10895) : le niveau se lit sur la poche (#10892),
+        // donc une poche qui a bougé depuis l'aperçu change le facteur — le reçu dit ce qui a été débité.
         const compte = await tx.user.findUnique({ where: { id: userId }, select: SPARKS_USER_SELECT });
         const dans = sparksOf(compte);
-        if (dans.debt > 0) throw new DebtBlocksMint(dans.debt);
-        if (dans.pocket < price) throw new ScoreWouldGoNegative();
+        const jugee = previewAt(dans);
+        if (jugee.blockedBy === 'debt') throw new DebtBlocksMint(jugee.sparksDebt);
+        if (jugee.locked !== null) throw new TreasuryLockedInTransaction(jugee.locked);
+        if (!jugee.canMint) throw new ScoreWouldGoNegative({ ...jugee, sparksPocket: dans.pocket });
+        const { price, levelBefore, levelAfter, edition } = jugee;
 
         // La ligne AVANT les colonnes : ce sont les totaux du registre, frappe
         // comprise, qui s'écrivent — jamais un incrément de la colonne.
@@ -273,8 +291,8 @@ export class MeeshService {
               number,
               edition,
               price,
-              basePrice: preview.basePrice,
-              costFactor: preview.costFactor,
+              basePrice: jugee.basePrice,
+              costFactor: jugee.costFactor,
               gloryGained,
               levelBefore,
               levelAfter,
@@ -308,8 +326,10 @@ export class MeeshService {
           },
         });
 
-        return apres;
+        return { apres, debite: jugee };
       });
+      const { apres: totaux, debite } = gravee;
+      const { price, levelBefore, levelAfter, edition } = debite;
 
       // La frappe a pu faire une étape des niveaux (#9706) : le niveau qui attendait monte d'un coup.
       await new GloryService(this.prisma).openLevels(userId);
@@ -333,15 +353,16 @@ export class MeeshService {
           gloryGained: GLORY_POINTS.mint,
           levelBefore,
           levelAfter,
-          basePrice: preview.basePrice,
-          costFactor: preview.costFactor,
+          basePrice: debite.basePrice,
+          costFactor: debite.costFactor,
         },
       };
     } catch (err) {
       if (err instanceof DebtBlocksMint) return { status: 'blocked-by-debt', sparksDebt: err.sparksDebt };
+      if (err instanceof TreasuryLockedInTransaction) return { status: 'treasury-locked', lock: err.lock };
       if (err instanceof ScoreWouldGoNegative) {
-        // La poche a bougé entre la lecture et la transaction : refus comme à la première lecture.
-        return { status: 'insufficient', plan: mintPlanOf({ canMint: false, missingPoints: Math.max(0, price - sparks.pocket) }, sparks.pocket) };
+        // La poche a bougé entre la lecture et la transaction : refus jugé sur la poche relue.
+        return { status: 'insufficient', plan: mintPlanOf(err.preview, err.preview.sparksPocket) };
       }
       // P2002 sur `(userId, requestId)` : deux frappes concurrentes portant le
       // même identifiant — l'index unique a fait son office, la première a

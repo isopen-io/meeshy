@@ -66,8 +66,6 @@ const PRISMA_ALLOWLIST: Readonly<Record<string, string>> = {
 /** Les fichiers qui nomment la collection ET émettent une commande brute. */
 const RAW_ALLOWLIST: Readonly<Record<string, string>> = {
   [SOLE_WRITER]: 'le site unique : crédit, débit et reprise par pipeline `$ifNull`',
-  'services/engagement/EngagementService.ts':
-    'sa commande brute vise `User` (`updateEngagementScore`) ; le compteur n’y est nommé qu’en prose',
   'services/engagement/engagementPointsBackfill.ts':
     'la reprise #6434 : pose une VALEUR calculée hors ligne (`$set` littéral), sous garde de la valeur lue — jamais un incrément',
 };

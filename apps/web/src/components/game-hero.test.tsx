@@ -93,9 +93,11 @@ describe('où j’en suis', () => {
     expect(page).toMatch(/data-game-hero-watermark=""[^>]*aria-hidden="true"|aria-hidden="true"[^>]*data-game-hero-watermark=""/);
   });
 
-  test('sous le record : le record et le Vent arrière se disent', () => {
-    expect(text(html({ score: 23, levelRecord: 14 }))).toContain('Record : niveau 14');
-    expect(html()).not.toContain('Record :');
+  test('quand le Vent arrière souffle, la puce le dit — le record se lit une seule fois, dans la paire (#10896)', () => {
+    const below = text(html({ score: 23, levelRecord: 14 }));
+    expect(below).toContain('Vent arrière ×1,25');
+    expect(below.match(/Record de niveau : 14/g)).toHaveLength(1);
+    expect(text(html())).not.toContain('Vent arrière');
   });
 
   test('le niveau 100 n’est plus un sommet : la marche continue (#9688)', () => {
@@ -252,20 +254,20 @@ describe('la paire poche / total et niveau / max', () => {
     expect(text(shown)).toMatch(/976 étincelles\s*convertibles/);
     expect(text(shown)).not.toContain('En poche');
     expect(shown).toMatch(/data-game-sparks-lifetime="41250"/);
-    expect(text(shown)).toMatch(/40\s?000 \/ 41\s?250 cumulées/);
+    expect(text(shown)).toMatch(/40\s?000 cumulées · record 41\s?250/);
     expect(shown.indexOf('data-game-sparks=')).toBeLessThan(shown.indexOf('data-game-sparks-lifetime='));
   });
 
   test('sans Prestige, le cycle égale le total à vie : un seul nombre cumulé', () => {
     const shown = html({ score: 0, debitablePoints: 976, sparks: { ...sparks, cycle: 41_250 }, levelMaxLifetime: 52 });
-    expect(text(shown)).toMatch(/41\s?250 cumulées/);
+    expect(text(shown)).toMatch(/Record d’étincelles : 41\s?250/);
     expect(text(shown)).not.toContain(' / ');
   });
 
-  test('le niveau actuel, le niveau max à vie dessous', () => {
+  test('le niveau actuel, le record de niveau dessous (#10899)', () => {
     const shown = html({ score: 0, debitablePoints: 976, sparks, levelMaxLifetime: 52 });
     expect(shown).toMatch(/data-game-level-max="52"/);
-    expect(text(shown)).toContain('Niveau max : 52');
+    expect(text(shown)).toContain('Record de niveau : 52');
     expect(shown.indexOf('data-game-level-now=')).toBeLessThan(shown.indexOf('data-game-level-max='));
   });
 

@@ -60,7 +60,7 @@ import { levelForUnlocks } from '@meeshy/shared/utils/game/levels';
 import { withRetry } from '../MessageMediaConsumptionService';
 import { creditEngagementCounter, raiseEngagementCounterCount } from './EngagementCounterWrites';
 import { engraveBadgesSilently, historyCountFor } from './engagementAxisHistory';
-import { rawCommandNumber } from './rawCommandNumber';
+import { writeEngagementScore, type ScoreWritten } from './EngagementScoreWrite';
 
 import type { EngagementActivityOptions, EngagementLinkVisit } from './engagementActivityTypes';
 import { EngagementStreaks } from './EngagementStreaks';
@@ -99,7 +99,7 @@ type ElanInputs = {
   readonly recentFamilies: readonly EngagementAxisFamily[];
   readonly achievementCount: number;
   readonly badgeThresholds: readonly number[];
-  /** Les étincelles du CYCLE (#10846), la base du niveau — jamais la poche, que la frappe débite. */
+  /** Les étincelles en POCHE, la base du niveau (#10892, `levelSparksOf`) — la frappe le fait baisser. */
   readonly engagementScore: number;
   /** Le plus haut niveau du cycle (#9377) ; `null` pour un compte antérieur au jeu. */
   readonly levelRecord: number | null;
@@ -171,7 +171,9 @@ export class EngagementService {
     this.conversationRecorder = new ConversationEngagementRecorder(prisma, deps.emitIO ?? getEngagementEmitIO);
     this.postRecorder = new PostPointsRecorder(prisma, deps.emitIO ?? getEngagementEmitIO);
     this.quotas = new EngagementQuotas(prisma);
-    this.receipts = new EngagementReceipts(prisma, this.quotas, this.postRecorder, this.scale);
+    this.receipts = new EngagementReceipts(prisma, this.quotas, this.postRecorder, this.scale, {
+      onPointsTakenBack: (userId, points, creditedAt) => this.game.onPointsTakenBack(userId, points, creditedAt),
+    });
     this.game = deps.game ?? new EngagementGameHooks(prisma, (userId, points, axisKey) => this.creditGamePoints(userId, points, axisKey));
     this.streaks = new EngagementStreaks(prisma, this.quotas, this.game, (userId, points) => this.updateEngagementScore(userId, points));
   }
@@ -296,8 +298,8 @@ export class EngagementService {
     // UN SEUL élan pour ce geste, résolu avant toute écriture et partagé par le
     // compteur et le score : deux résolutions indépendantes pourraient tomber
     // de part et d'autre de la péremption du cache et créditer deux montants
-    // différents pour un même geste, ce qui romprait l'invariant
-    // `engagementScore == Σ(points)` de façon indétectable.
+    // différents pour un même geste au compteur et à la poche, de façon
+    // indétectable.
     //
     // Les points viennent du BARÈME (#8906) : ceux de l'opération (ou de sa
     // variante), multipliés par l'élan si l'opération l'est, l'élan lui-même
@@ -391,8 +393,8 @@ export class EngagementService {
    * Les points du JEU (missions, coffre, réponse reçue) : ils montent le score
    * et les points d'un axe — débitables comme ceux de cet axe — sans compter une
    * action de plus ni passer par l'élan, le Vent arrière ou les plafonds : ils
-   * sont DÉJÀ le résultat d'un geste admis. Même invariant que `credit` :
-   * `engagementScore == Σ(EngagementCounter.points)`.
+   * sont DÉJÀ le résultat d'un geste admis. Même règle que `credit` : le
+   * compteur et la poche reçoivent le même montant.
    *
    * **Atomique et rejouable.** Le compteur et le score s'écrivent dans UNE
    * transaction : l'appelant (une mission, un coffre) rend sa réclamation quand
@@ -413,7 +415,7 @@ export class EngagementService {
     if (!Number.isInteger(points) || points <= 0) return;
     const written = await withRetry(() =>
       this.prisma.$transaction(async (tx) => {
-        const account = await tx.user.findUnique({ where: { id: userId }, select: SPARKS_USER_SELECT });
+        const account = await tx.user.findUnique({ where: { id: userId }, select: { ...SPARKS_USER_SELECT, prestige: true } });
         if (!account) return null;
         await creditEngagementCounter(tx, { userId, axisKey, points, count: 0 });
         // Poche, cycle et total à vie montent du même montant (#10846) ; un compte d'avant le rattrapage les voit
@@ -432,11 +434,11 @@ export class EngagementService {
             ...(before.debt > 0 ? { sparksDebt: BigInt(before.debt - repaid) } : {}),
           },
         });
-        return { pocket, levelRecord: account.levelRecord ?? null, levelMaxLifetime: account.levelMaxLifetime ?? null };
+        return { pocket, levelRecord: account.levelRecord ?? null, levelMaxLifetime: account.levelMaxLifetime ?? null, prestige: account.prestige ?? 0 };
       }),
     );
     if (written === null) return;
-    await this.afterScore(userId, points, written.pocket, written.levelRecord, written.levelMaxLifetime).catch((error: unknown) =>
+    await this.afterScore(userId, points, written).catch((error: unknown) =>
       log.warn('game points credited, level follow-up failed', {
         userId,
         error: error instanceof Error ? error.message : String(error),
@@ -460,13 +462,24 @@ export class EngagementService {
   }
 
   /**
-   * Écrit un crédit DÉJÀ admis : compteur de l'opération, badges et succès si
-   * l'opération est un axe de « Progression », série, score.
+   * Écrit un crédit DÉJÀ admis : compteur de l'opération, puis poche, cycle et
+   * total à vie, puis les SUITES — badges et succès si l'opération est un axe de
+   * « Progression », série, paliers de niveau, Gloire, ligue.
    *
    * Le compteur et le score reçoivent le MÊME montant par le même idiome
-   * (`$ifNull`) : `creditEngagementCounter` ici, `updateEngagementScore` plus
+   * (`$ifNull`) : `creditEngagementCounter` ici, `writeEngagementScore` plus
    * bas. Tant que le compteur s'écrivait par `{ increment }`, une ligne à
    * `points: null` laissait le score monter seul (#10541).
+   *
+   * **Le crédit d'abord, les suites ensuite (#10895).** La poche s'écrivait en
+   * DERNIER, après les badges et la série : une panne au milieu laissait le
+   * compteur crédité et la poche intacte — un crédit perdu à moitié. Les deux
+   * écritures sont désormais adjacentes, et les suites, idempotentes (gardées
+   * par la contrainte unique des jalons), ne retiennent jamais un crédit déjà
+   * écrit : leur échec se journalise, comme dans `creditGamePoints`.
+   *
+   * L'invariant de la poche (#10892) n'est PAS `engagementScore == Σ(points)` : la frappe débite la poche et jamais
+   * un compteur (#10846). Ce qui tient est `sparksEarnedLifetime − engagementScore + sparksDebt == Σ(prix des frappes au registre) + Σ(poches vidées au Prestige)`.
    */
   private async credit(
     scale: EngagementScale,
@@ -477,8 +490,27 @@ export class EngagementService {
     actorId?: string,
   ): Promise<void> {
     const counter = await creditEngagementCounter(this.prisma, { userId, axisKey: operationKey, points, count: 1 });
+    const written = await writeEngagementScore(this.prisma, userId, points);
 
-    const newCount = counter.count;
+    await this.followCredit(scale, userId, operationKey, counter.count, day, actorId).catch((error: unknown) =>
+      log.warn('engagement credited, badge or streak follow-up failed', {
+        userId,
+        operationKey,
+        error: error instanceof Error ? error.message : String(error),
+      }),
+    );
+    if (written !== null) await this.afterScoreSilently(userId, points, written);
+  }
+
+  /** Les suites d'un crédit déjà écrit : badges, succès, série. Chacune est rejouable sans double effet. */
+  private async followCredit(
+    scale: EngagementScale,
+    userId: string,
+    operationKey: EngagementOperationKey,
+    newCount: number,
+    day: CreditDay,
+    actorId?: string,
+  ): Promise<void> {
     const previousCount = newCount - 1;
     if (isEngagementAxisKey(operationKey)) {
       const crossedThresholds = BADGE_THRESHOLDS.filter(
@@ -505,7 +537,6 @@ export class EngagementService {
       ...(day.postType !== undefined ? { postType: day.postType } : {}),
       ...(day.conversationId !== undefined ? { conversationId: day.conversationId } : {}),
     });
-    await this.updateEngagementScore(userId, points);
   }
 
   /**
@@ -816,92 +847,25 @@ export class EngagementService {
     }
   }
 
-  /**
-   * Ajoute `points` au score agrégé `User.engagementScore` et notifie chaque
-   * palier `LEVEL_THRESHOLDS` franchi par CET incrément précis — même
-   * mécanique que le compteur d'axe (§ 5, § 7).
-   *
-   * `points` est le poids de l'axe DÉJÀ multiplié par l'élan (#5749), calculé
-   * une fois par `recordActivity` et partagé avec le compteur : c'est ce qui
-   * tient l'invariant `engagementScore == Σ(EngagementCounter.points)`. La
-   * méthode ne recalcule donc RIEN — lui passer un axe l'obligerait à
-   * re-résoudre l'élan, avec le risque de tomber de l'autre côté de la
-   * péremption du cache et de créditer deux montants pour un même geste.
-   *
-   * ## Pourquoi une commande brute et non `increment` (#5742)
-   *
-   * La version précédente écrivait par `{ increment: weight }`, en s'appuyant
-   * sur ce doc-comment : « un `User` créé avant cette migration a le champ
-   * ABSENT (pas à zéro), et Mongo traite `$inc` sur un champ absent comme un
-   * départ à zéro ». L'affirmation est juste de `$inc`, mais **Prisma n'envoie
-   * pas `$inc` sur MongoDB** : il traduit l'incrément en pipeline
-   * `$set: { champ: { $add: ['$champ', n] } }` (journal de requêtes, base
-   * jetable, 2026-09-14, #6428). Et `$add` rend `null` dès qu'un opérande est
-   * absent ou `null` :
-   *
-   *     champ ABSENT + increment  ->  null en base, relu 0 par Prisma
-   *     champ NULL   + increment  ->  null en base, relu 0 par Prisma
-   *     champ 0      + increment  ->  1
-   *
-   * Mesuré en production le 2026-09-08 : `engagementScore` valait `null` sur
-   * les 9 comptes ayant une activité, la somme pondérée de leurs compteurs
-   * allant de 8 à 140. Chaque crédit se perdait en silence : l'écriture
-   * RÉUSSISSAIT et laissait `null`, que la lecture rendait zéro. Aucune ligne
-   * d'erreur, trois mois de score mort, et un écran « Progression » annonçant
-   * « Niveau 0 · 0 point » à un compte qui avait produit 140 points. La même
-   * cause a fait disparaître la première frappe de Meesh (#6428).
-   *
-   * Le pipeline d'agrégation `$ifNull` traite `null` ET l'absence comme zéro,
-   * en UNE écriture atomique — strictement mieux qu'une normalisation suivie
-   * d'un `$inc`, qui en demanderait deux. `findAndModify` rend en prime la
-   * valeur NEUVE, nécessaire pour savoir quels paliers cet incrément franchit.
-   *
-   * Prisma ne sait pas exprimer une mise à jour par pipeline : d'où
-   * `$runCommandRaw`, idiome déjà employé dans le dépôt (`routes/posts/nearby.ts`).
-   */
+  /** Crédite la poche (`writeEngagementScore`), puis ses paliers et sa Gloire, sans retenir le crédit. */
   private async updateEngagementScore(userId: string, points: number): Promise<void> {
-    // UNE commande, trois colonnes (#10846) : la poche (la base du niveau, #10892), le cycle et le total à vie montent du même
-    // montant. Le cycle ne passe jamais sous la poche, ni le total à vie sous le cycle (`$max`) : un compte d'avant le
-    // rattrapage — champs absents — les voit posés sur sa poche. Les expressions lisent le document d'AVANT l'étape.
-    const held = (field: string) => ({ $ifNull: [`$${field}`, 0] });
-    const result = (await this.prisma.$runCommandRaw({
-      findAndModify: 'User',
-      query: { _id: { $oid: userId } },
-      update: [
-        {
-          $set: {
-            sparksEarnedLifetime: { $add: [{ $max: [held('sparksEarnedLifetime'), held('sparksSincePrestige'), held('engagementScore')] }, points] },
-            sparksSincePrestige: { $add: [{ $max: [held('sparksSincePrestige'), held('engagementScore')] }, points] },
-            // La DETTE se déduit d'abord des étincelles gagnées (porteur, 2026-10-16) : seul le reste va en poche, alors que le
-            // cycle et le total à vie montent du gain ENTIER. `sparksDebt` s'écrit en dernier : les autres lisent l'ancienne dette.
-            engagementScore: { $add: [held('engagementScore'), { $subtract: [points, { $min: [held('sparksDebt'), points] }] }] },
-            sparksDebt: { $subtract: [held('sparksDebt'), { $min: [held('sparksDebt'), points] }] },
-          },
-        },
-      ],
-      new: true,
-      fields: { engagementScore: 1, levelRecord: 1, levelMaxLifetime: 1 },
-    } as never)) as unknown as {
-      value?: { engagementScore?: unknown; levelRecord?: unknown; levelMaxLifetime?: unknown } | null;
-    };
+    const written = await writeEngagementScore(this.prisma, userId, points);
+    if (written !== null) await this.afterScoreSilently(userId, points, written);
+  }
 
-    // Les valeurs se lisent par `rawCommandNumber` (#10541) : la colonne est un `long` sur la plupart des comptes,
-    // qu'une commande brute peut rendre en `{ $numberLong }`.
-    const newScore = rawCommandNumber(result?.value?.engagementScore);
-    // Compte introuvable (supprimé entre l'activité et ce crédit) : rien à notifier, et surtout pas un palier
-    // calculé sur `undefined`.
-    if (newScore === null) return;
-    await this.afterScore(userId, points, newScore, rawCommandNumber(result?.value?.levelRecord), rawCommandNumber(result?.value?.levelMaxLifetime));
+  /** Les paliers et la Gloire d'un score déjà écrit : leur échec ne retient jamais le crédit. */
+  private async afterScoreSilently(userId: string, points: number, written: ScoreWritten): Promise<void> {
+    await this.afterScore(userId, points, written).catch((error: unknown) =>
+      log.warn('engagement credited, level follow-up failed', {
+        userId,
+        error: error instanceof Error ? error.message : String(error),
+      }),
+    );
   }
 
   /** Les paliers que `points` vient de franchir, et la Gloire du premier passage. */
-  private async afterScore(
-    userId: string,
-    points: number,
-    newPocket: number,
-    levelRecord: number | null,
-    levelMaxLifetime: number | null = null,
-  ): Promise<void> {
+  private async afterScore(userId: string, points: number, written: ScoreWritten): Promise<void> {
+    const { pocket: newPocket, levelRecord, levelMaxLifetime, prestige } = written;
     // Le niveau se lit sur la POCHE (#10892). Un palier re-franchi après une frappe n'est pas renotifié : les paliers
     // `level:` gravés ne s'éteignent plus, et `tryAwardLevelUp` est gardé par la contrainte unique du jalon.
     const previousPocket = newPocket - points;
@@ -914,7 +878,7 @@ export class EngagementService {
     }
     // La Gloire du premier passage de chaque niveau (#9374) : le record rendu
     // par la MÊME commande que le score — aucune lecture de plus sur la voie chaude.
-    await this.game.onScore(userId, newPocket, levelRecord, levelMaxLifetime);
+    await this.game.onScore(userId, newPocket, levelRecord, levelMaxLifetime, prestige);
     // Les points de la SEMAINE (#9384) : le total que les ligues classent.
     await this.game.onPointsGained(userId, points);
   }

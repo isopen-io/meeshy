@@ -337,7 +337,7 @@ describe('MeeshDetail — le héros des Meeshes (#5743)', () => {
       mintCost: 1221,
     });
     expect(rendu).toContain('2 Meeshes');
-    expect(rendu).toContain('5 frappées depuis toujours');
+    expect(rendu).toContain('Record de Meeshes : 5');
     expect(rendu).toContain(`Frapper une Meesh pour ${formatCount(1221)} étincelles`);
     expect(rendu).toContain('<button');
   });
@@ -352,7 +352,7 @@ describe('MeeshDetail — le héros des Meeshes (#5743)', () => {
       mintCost: 1221,
     });
     expect(rendu).toContain('>1 Meesh<');
-    expect(rendu).toContain('1 frappée depuis toujours');
+    expect(rendu).toContain('Record de Meeshes : 1');
   });
 });
 

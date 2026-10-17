@@ -67,6 +67,10 @@ function isP2002(err: unknown): boolean {
   return typeof err === 'object' && err !== null && (err as { code?: string }).code === 'P2002';
 }
 
+/** Le compte porte encore `stars` étoiles — zéro couvre aussi le champ absent ou `null` (leçon 318). */
+const sameStars = (stars: number | null) =>
+  (stars ?? 0) === 0 ? { OR: [{ prestige: null }, { prestige: { isSet: false } }, { prestige: 0 }] } : { prestige: stars };
+
 /** Le total de Gloire — le seul endroit qui le calcule. */
 export async function gloryTotalFromLedger(db: GloryDb, userId: string): Promise<number> {
   const somme = await db.gloryLedger.aggregate({ where: { userId }, _sum: { delta: true } });
@@ -149,7 +153,7 @@ export class GloryService {
    */
   async openLevels(userId: string): Promise<number> {
     try {
-      const account = await this.prisma.user.findUnique({ where: { id: userId }, select: SPARKS_USER_SELECT });
+      const account = await this.prisma.user.findUnique({ where: { id: userId }, select: { ...SPARKS_USER_SELECT, prestige: true } });
       if (account === null) return 0;
       // Le niveau se lit sur la POCHE (#10892).
       return await this.creditLevelProgress({
@@ -157,6 +161,7 @@ export class GloryService {
         score: levelSparksOf(sparksOf(account)),
         previousRecord: account.levelRecord ?? null,
         previousMax: account.levelMaxLifetime ?? null,
+        prestige: account.prestige ?? 0,
       });
     } catch (error) {
       log.warn('level opening after a step failed, the next gesture will catch up', {
@@ -205,7 +210,7 @@ export class GloryService {
    * niveaux ont payé, et une montée concurrente ou rejouée ne paie pas deux
    * fois.
    *
-   * `score` est le CYCLE d'étincelles (#10846) — jamais la poche. Deux records montent, sans jamais
+   * `score` est la POCHE d'étincelles (#10892, `levelSparksOf`) — la base du niveau. Deux records montent, sans jamais
    * redescendre : celui du CYCLE (`levelRecord`, remis à 1 par le prestige) et le MAX À VIE
    * (`levelMaxLifetime`, qui survit au prestige). La Gloire du premier passage suit le plus haut des
    * deux : un niveau déjà gagné dans un cycle d'avant ne se re-paie pas. `previousMax` absent (appelant
@@ -218,6 +223,11 @@ export class GloryService {
     readonly score: number;
     readonly previousRecord: number | null;
     readonly previousMax?: number | null;
+    /**
+     * Les étoiles lues AVEC le score (#10895). Le record du CYCLE ne s'écrit que si le compte en porte encore autant : un
+     * score en retard, lu avant un Prestige, ne relève pas le record du cycle neuf. Absent : non vérifié.
+     */
+    readonly prestige?: number | null;
   }): Promise<number> {
     const level = levelFromScore(params.score, await this.servedLevelCap(params.userId));
     const gloryBase = Math.max(params.previousRecord ?? 0, params.previousMax ?? 0);
@@ -238,7 +248,10 @@ export class GloryService {
         // champ ABSENT — celui de tous les comptes d'avant le jeu (leçon 318).
         where: {
           id: params.userId,
-          OR: [{ levelRecord: null }, { levelRecord: { isSet: false } }, { levelRecord: { lt: record } }],
+          AND: [
+            { OR: [{ levelRecord: null }, { levelRecord: { isSet: false } }, { levelRecord: { lt: record } }] },
+            ...(params.prestige === undefined ? [] : [sameStars(params.prestige)]),
+          ],
         },
         data: { levelRecord: record },
       });

@@ -75,10 +75,10 @@ describe('les règles disent que la poche fait le niveau (porteur 2026-10-17, #1
     expect(rules[3]?.body).toContain('Ton rang et tes badges ne baissent pas');
   });
 
-  test('l’entrée Étincelles dit que les convertibles font le niveau et que les cumulées sont indicatives', () => {
+  test('l’entrée Étincelles dit que les convertibles font le niveau et que le record d’étincelles dit le potentiel', () => {
     const points = rulesGlossary('fr').find((entry) => entry.key === 'points')?.body ?? '';
     expect(points).toContain('Les convertibles sont ta seule valeur réelle : elles font ton niveau');
-    expect(points).toContain('Les cumulées disent ton potentiel, à titre indicatif');
+    expect(points).toContain('Ton record d’étincelles, tout ce que tu as cumulé, dit ton potentiel');
   });
 });
 

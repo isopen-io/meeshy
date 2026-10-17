@@ -81,7 +81,6 @@ describe('Vent arrière — 7 niveaux ou plus sous le record (#10896)', () => {
     missionsAwaitOtherGestures(db);
 
     await service(db).recordActivity(USER, 'content.text_message');
-    console.log('DBG', JSON.stringify(db.engagementCounter.rows), JSON.stringify(db.engagementMilestone.rows), JSON.stringify(db.user.rows[0]));
 
     expect(counter(db)?.points).toBe(TEXT_POINTS);
   });
