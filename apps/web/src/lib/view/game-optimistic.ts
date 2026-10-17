@@ -3,7 +3,7 @@ import { flameBonusPercent, flameForm } from '@meeshy/shared/utils/game/flame';
 import { gloryStanding, levelCapForRank } from '@meeshy/shared/utils/game/glory';
 import { levelOnTheWire, mintOnTheWire } from '@meeshy/shared/utils/game/level-wire';
 import type { LevelStepFacts } from '@meeshy/shared/utils/game/level-steps';
-import { tailwindFactor } from '@meeshy/shared/utils/game/boosts';
+import { sparksTailwindFactor, tailwindFactor } from '@meeshy/shared/utils/game/boosts';
 import { previewMint } from '@meeshy/shared/utils/game/mint';
 import { previewSparksMint, type SparksFacts } from '@meeshy/shared/utils/game/sparks';
 import { treasuryTier } from '@meeshy/shared/utils/game/treasury';
@@ -115,16 +115,35 @@ export function afterMint(view: EngagementWithGame): EngagementWithGame {
         ? previewMint({ score, mintedLifetime: current.mint.number, debitablePoints: debitable, levelCap, steps })
         : previewSparksMint({ sparks: sparks.pocket, mintedLifetime: current.mint.number, held, glory: standing.glory, mythic: standing.rank === 'mythe', levelCap, steps, debt: sparks.debt }),
     ),
-    // Le Vent arrière est éteint avec les étincelles (#10846) : seul un serveur d'avant le sert encore.
-    boosts: { ...current.boosts, tailwind: sparks === undefined ? tailwindFactor({ level: shownLevel(level), levelRecord: recordOf(level) }) : 1 },
+    // Avec les étincelles, le Vent arrière souffle à 7 niveaux ou plus sous le record (#10896) ; sans, la loi d'hier.
+    boosts: { ...current.boosts, tailwind: (sparks === undefined ? tailwindFactor : sparksTailwindFactor)({ level: shownLevel(level), levelRecord: recordOf(level) }) },
   }));
   const withMeesh = shiftBalance(next, 1);
-  return withMeesh.meesh === undefined
+  // Le compteur de Meeshes lit le MÊME prix suivant que le héro de frappe (#10898) — jamais celui d'avant la frappe.
+  const following = next.game?.mint;
+  return withMeesh.meesh === undefined || following === undefined
     ? withMeesh
     : {
         ...withMeesh,
-        meesh: { ...withMeesh.meesh, mintedLifetime: withMeesh.meesh.mintedLifetime + 1, debitablePoints: debitable },
+        meesh: {
+          ...withMeesh.meesh,
+          mintedLifetime: withMeesh.meesh.mintedLifetime + 1,
+          debitablePoints: debitable,
+          mintCost: following.price,
+          missingPoints: following.missingPoints,
+          canMint: following.canMint,
+          progress: following.price === 0 ? 0 : Math.min(1, debitable / following.price),
+        },
       };
+}
+
+/**
+ * La frappe optimiste, posée UNE fois (#10898). Elle s'applique à l'ouverture de la porte de l'animation, sur ce que le
+ * cache contient alors : si une relecture servie y a déjà posé la frappe — la prochaine pièce n'est plus celle d'avant
+ * le geste —, la rejouer débiterait la poche deux fois et annoncerait le prix d'une pièce de plus.
+ */
+export function afterMintUnlessServed(view: EngagementWithGame, numberBefore: number): EngagementWithGame {
+  return view.game?.mint.number === numberBefore ? afterMint(view) : view;
 }
 
 export function afterFreeze(view: EngagementWithGame): EngagementWithGame {
