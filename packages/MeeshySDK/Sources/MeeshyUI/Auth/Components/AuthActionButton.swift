@@ -40,7 +40,7 @@ struct AuthActionButton: View {
             }
             .frame(maxWidth: .infinity)
             .padding(.vertical, MeeshySpacing.lg)
-            .background(Color(hex: appearance.fillHex))
+            .background(appearance.fill)
             .clipShape(RoundedRectangle(cornerRadius: MeeshyRadius.md))
             .foregroundStyle(.white)
         }
@@ -54,10 +54,16 @@ struct AuthActionButton: View {
 /// Le style de `AuthActionButton` selon que son hôte l'autorise ou non.
 /// L'envoi en cours n'y entre pas : l'action est LANCÉE, pas refusée — elle
 /// garde la couleur de marque.
+/// Le fond est le jeton de la charte (`MeeshyColors`), jamais un `Color(hex:)`
+/// reconstruit ; `fillHex` reste son jumeau hexadécimal pour le contrôle du
+/// contraste AA.
 nonisolated struct AuthActionButtonAppearance: Equatable, Sendable {
+    let fill: Color
     let fillHex: String
 
     static func resolve(isEnabled: Bool) -> AuthActionButtonAppearance {
-        AuthActionButtonAppearance(fillHex: isEnabled ? MeeshyColors.brandPrimaryHex : MeeshyColors.neutral500Hex)
+        isEnabled
+            ? AuthActionButtonAppearance(fill: MeeshyColors.brandPrimary, fillHex: MeeshyColors.brandPrimaryHex)
+            : AuthActionButtonAppearance(fill: MeeshyColors.neutral500, fillHex: MeeshyColors.neutral500Hex)
     }
 }
