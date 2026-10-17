@@ -5,9 +5,10 @@
  * une déclaration `@@index` ne devient réelle qu'au `db push`, que le
  * déploiement n'exécute pas.
  *
- * Appelée à CHAQUE démarrage (`InitService.ensureSocialEventIndexes`) et par
- * la migration `scripts/migrations/2026-10-13-social-events-v2-retention.ts`.
- * Rejouée, elle ne touche rien : un index présent sous son nom avec la même
+ * Au DÉMARRAGE, `ensureSocialEventIndexesByCommand` (sans lecture d'index,
+ * conflit signalé, jamais retiré — #10851) ; par la migration
+ * `scripts/migrations/2026-10-13-social-events-v2-retention.ts`,
+ * `ensureSocialEventIndexes` sur le pilote `mongodb`. Rejouée, elle ne touche rien : un index présent sous son nom avec la même
  * définition est laissé tel quel ; sous son nom avec une AUTRE définition
  * (posé par un `db push` égaré, sans TTL ni filtre), il est remplacé.
  */
@@ -103,38 +104,56 @@ export async function ensureSocialEventIndexes(
 
 type RawCommandRunner = { $runCommandRaw(command: Record<string, unknown>): Promise<unknown> };
 
-const NAMESPACE_NOT_FOUND = 26;
+/** Le document d'index que `createIndexes` reçoit — sans clé indéfinie. */
+export function createIndexSpec(spec: IndexSpec): Record<string, unknown> {
+  return Object.fromEntries(Object.entries({
+    key: spec.key,
+    name: spec.name,
+    unique: spec.unique,
+    expireAfterSeconds: spec.expireAfterSeconds,
+    partialFilterExpression: spec.partialFilterExpression,
+  }).filter(([, value]) => value !== undefined));
+}
 
-const isNamespaceNotFound = (error: unknown): boolean =>
-  typeof error === 'object' && error !== null &&
-  ((error as { code?: unknown }).code === NAMESPACE_NOT_FOUND || /ns does not exist|NamespaceNotFound/i.test(String((error as Error).message)));
+export type BootIndexOutcome =
+  | { readonly outcome: 'created' | 'present' }
+  | { readonly outcome: 'conflict'; readonly reason: string };
 
-/** Le magasin d'index par `$runCommandRaw` — celui du démarrage. */
-export function rawCommandIndexStore(prisma: RawCommandRunner): IndexStore {
-  return {
-    async list(collection) {
-      try {
-        const result = await prisma.$runCommandRaw({ listIndexes: collection }) as { cursor?: { firstBatch?: ExistingIndex[] } };
-        return result.cursor?.firstBatch ?? [];
-      } catch (error) {
-        if (isNamespaceNotFound(error)) return [];
-        throw error;
-      }
-    },
-    async create(spec) {
-      await prisma.$runCommandRaw({
-        createIndexes: spec.collection,
-        indexes: [Object.fromEntries(Object.entries({
-          key: spec.key,
-          name: spec.name,
-          unique: spec.unique,
-          expireAfterSeconds: spec.expireAfterSeconds,
-          partialFilterExpression: spec.partialFilterExpression,
-        }).filter(([, value]) => value !== undefined))],
-      });
-    },
-    async drop(collection, name) {
-      await prisma.$runCommandRaw({ dropIndexes: collection, index: name });
-    },
-  };
+/** 85 IndexOptionsConflict, 86 IndexKeySpecsConflict — tels que Prisma les rend dans P2010. */
+const INDEX_CONFLICT = /Error code (85|86)\b[^:]*/;
+
+const conflictReason = (error: unknown): string | null => {
+  const meta = (error as { meta?: { message?: unknown } } | null)?.meta;
+  const text = `${typeof meta?.message === 'string' ? meta.message : ''} ${error instanceof Error ? error.message : ''}`;
+  return INDEX_CONFLICT.exec(text)?.[0] ?? null;
+};
+
+type CreateIndexesReply = { readonly numIndexesBefore?: unknown; readonly numIndexesAfter?: unknown };
+
+/**
+ * Le chemin du DÉMARRAGE (#10851). Il ne LIT jamais `listIndexes` par
+ * `$runCommandRaw` : Prisma décode toute réponse dont un objet porte un
+ * `$type` textuel comme une valeur étiquetée, et un filtre partiel
+ * `{ eventKey: { $type: 'string' } }` lui fait lever « Unknown tagged value »
+ * — dès le premier index posé, plus aucun ne l'était. `createIndexes` est
+ * idempotent côté Mongo et ne renvoie aucune définition : il dit « créé »
+ * (`numIndexesAfter > numIndexesBefore`), « présent » (même définition), ou
+ * lève 85/86 si un index du même nom ou de la même clé diffère — SIGNALÉ,
+ * jamais retiré : remplacer reste l'affaire de la migration nommée.
+ */
+export async function ensureSocialEventIndexesByCommand(
+  prisma: RawCommandRunner,
+): Promise<Readonly<Record<string, BootIndexOutcome>>> {
+  const outcomes: Record<string, BootIndexOutcome> = {};
+  for (const spec of SOCIAL_EVENT_INDEXES) {
+    try {
+      const reply = await prisma.$runCommandRaw({ createIndexes: spec.collection, indexes: [createIndexSpec(spec)] }) as CreateIndexesReply;
+      outcomes[spec.name] = { outcome: Number(reply.numIndexesAfter) > Number(reply.numIndexesBefore) ? 'created' : 'present' };
+    } catch (error) {
+      const reason = conflictReason(error);
+      if (reason === null) throw error;
+      outcomes[spec.name] = { outcome: 'conflict', reason };
+    }
+  }
+  return outcomes;
 }
