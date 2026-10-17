@@ -50,4 +50,13 @@ final class ComposerTextFormatTests: XCTestCase {
     func test_toggle_emojiText_countsCharacters() {
         XCTAssertEqual(toggle("👋🏽 salut", "salut", .bold).text, "👋🏽 **salut**")
     }
+
+    /// Retirer `**` autour d'une voyelle coréenne soude le jamo d'avant et la
+    /// voyelle en UN caractère : la fin rendue (2) dépassait le texte (1), et
+    /// la sélection posée là plantait.
+    func test_toggle_markersRemovedBetweenJoiningScalars_keepsTheSelectionInsideTheText() {
+        let result = ComposerTextFormat.toggle(text: "\u{1100}**\u{1161}**", start: 3, end: 4, style: .bold)
+        XCTAssertLessThanOrEqual(result.start, result.end)
+        XCTAssertLessThanOrEqual(result.end, result.text.count)
+    }
 }

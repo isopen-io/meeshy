@@ -32,7 +32,7 @@ import { flameForm, flameStatus } from '@meeshy/shared/utils/game/flame';
 import { gloryStanding, levelCapForRank } from '@meeshy/shared/utils/game/glory';
 import { GAME_PRESTIGE_MAX, legacyLevel, legacyLevelTierKey, levelFromScore, levelStepCeiling, levelTierKey, tighterLevelCap } from '@meeshy/shared/utils/game/levels';
 import { treasuryTier } from '@meeshy/shared/utils/game/treasury';
-import { SPARKS_USER_SELECT, sparksOf } from './SparksFacts';
+import { SPARKS_USER_SELECT, levelSparksOf, sparksOf } from './SparksFacts';
 import { meeshTotalsFromLedger } from '../meesh/MeeshService';
 import type { PresenceViewer } from '../PresenceVisibilityService';
 import { FLAME_USER_SELECT, flameFactsOf } from './FlameService';
@@ -105,13 +105,13 @@ export class GameStandingService {
           ? this.prisma.gameTrophy.count({ where: { userId } })
           : this.prisma.gameTrophy.count({ where: { userId, awardedAt: { lt: visitorTrophyBound(now) } } }),
     ]);
-    // Le niveau se lit sur le CYCLE d'étincelles (#10846) ; la poche (`points`, `sparks`) n'est servie qu'aux proches.
+    // Le niveau se lit sur la POCHE (#10892) ; son nombre exact (`points`, `sparks`) n'est servie qu'aux proches.
     const sparks = sparksOf(user);
     const rank = gloryStanding({ glory, mythicSeat });
     // Le niveau s'ouvre selon le rang (#9688) et les étapes (#9706), lues sur le RECORD du membre — gravé étape
     // faite, sans relire ses Meeshes ni ses missions ; les champs d'hier gardent l'ancienne loi pour les clients publiés.
     const level = levelFromScore(
-      sparks.cycle,
+      levelSparksOf(sparks),
       tighterLevelCap(levelCapForRank(rank.rank), levelStepCeiling(Math.max(user.levelRecord ?? 0, user.levelMaxLifetime ?? 0) || null)),
     );
     const levelMax = Math.max(level, user.levelRecord ?? 0, user.levelMaxLifetime ?? 0);

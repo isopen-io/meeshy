@@ -38,7 +38,7 @@ export const mintOnTheWire = (preview: MintPreview | SparksMintPreview): GameMin
  * Sans faits (`steps: null`), rien ne retient : la lecture d'un serveur d'avant les étapes.
  */
 export function levelOnTheWire(params: {
-  /** La base du niveau : le score en poche d'hier, le CYCLE d'étincelles depuis `sparks` (#10846). */
+  /** La base du niveau : les étincelles en poche (`levelSparksOf`, #10892). */
   readonly score: number;
   readonly levelCap: LevelCap;
   readonly levelRecord: number | null;

@@ -3,11 +3,12 @@ import Foundation
 // MARK: - Les étincelles (#10846)
 //
 // MIROIR de `packages/shared/utils/game/sparks.ts`. « Étincelle » est le nom des POINTS ; la monnaie reste la
-// Meesh. Trois nombres, un seul dépensable :
+// Meesh. Trois nombres, un seul dépensable — et c'est lui qui fait le niveau (porteur 2026-10-17, #10892) :
 //
-//   - la POCHE  (`sparks`, ex-`engagementScore`) : ce que la frappe dépense — tout est convertible ;
-//   - le CYCLE  (`sparksCycle`) : accumulé depuis le dernier prestige — le niveau se lit sur lui ;
-//   - le TOTAL À VIE (`sparksLifetime`) : ne baisse ni à la frappe ni au prestige.
+//   - la POCHE  (`sparks`, ex-`engagementScore`) : ce que la frappe dépense — tout est convertible — et ce que le
+//     NIVEAU lit : frapper fait donc baisser le niveau du montant dépensé, regagner le fait remonter ;
+//   - le CYCLE  (`sparksCycle`) : accumulé depuis le dernier prestige — INDICATIF, le potentiel du profil ;
+//   - le TOTAL À VIE (`sparksLifetime`) : ne baisse ni à la frappe ni au prestige — INDICATIF lui aussi.
 //
 // Invariant : poche ≤ cycle ≤ total à vie. Un champ absent se lit sur le plus bas minorant sûr.
 
@@ -31,6 +32,7 @@ public enum GameSparks {
     }
 
     public struct Facts: Equatable, Sendable {
+        /// La base du niveau (`levelSparksOf`, #10892) : jamais le cycle.
         public let pocket: Int
         public let cycle: Int
         public let lifetime: Int

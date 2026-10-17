@@ -1,5 +1,7 @@
 /**
- * LE PRESTIGE ET LA FRAPPE DEPUIS LES ÉTINCELLES (#10846, porteur 2026-10-16).
+ * LE PRESTIGE ET LA FRAPPE DEPUIS LES ÉTINCELLES (#10846, porteur 2026-10-16 ; #10892, porteur 2026-10-17).
+ *
+ * Le niveau 100 qui ouvre le Prestige se lit sur la POCHE (#10892), comme tout niveau.
  *
  * Le prestige VIDE la poche et le cycle (le niveau actuel retombe à 1) ; le TOTAL À VIE et le NIVEAU MAX À VIE ne bougent
  * pas. Les compteurs par axe ne sont plus remis à zéro (la frappe ne les débite plus, ils disent ce que chaque axe a
@@ -19,6 +21,7 @@ jest.mock('../../../utils/logger-enhanced', () => ({
 }));
 
 const LEVEL_100 = 100 * 100 * 100;
+const AT_LEVEL_100 = LEVEL_100 + 3000;
 
 const account = (pocket: number, extra: Record<string, unknown> = {}) => {
   const db = fakeGameDb();
@@ -42,8 +45,8 @@ const account = (pocket: number, extra: Record<string, unknown> = {}) => {
 const user = (db: FakeGameDb) => db.user.rows[0]!;
 
 describe('le Prestige vide la poche et le cycle, jamais le total à vie ni le niveau max', () => {
-  it('poche et cycle à 0, niveau du cycle à 1, étoile posée', async () => {
-    const db = account(3000);
+  it('poche et cycle à 0, niveau à 1, étoile posée', async () => {
+    const db = account(AT_LEVEL_100);
 
     const result = await new PrestigeService(db.prisma).pass({ userId: USER, requestId: 'prestige-01' });
 
@@ -52,7 +55,7 @@ describe('le Prestige vide la poche et le cycle, jamais le total à vie ni le ni
   });
 
   it('le total à vie et le niveau max à vie ne bougent pas', async () => {
-    const db = account(3000);
+    const db = account(AT_LEVEL_100);
 
     await new PrestigeService(db.prisma).pass({ userId: USER, requestId: 'prestige-01' });
 
@@ -68,22 +71,20 @@ describe('le Prestige vide la poche et le cycle, jamais le total à vie ni le ni
   });
 
   it('les compteurs par axe ne sont pas remis à zéro : ni points ni actions', async () => {
-    const db = account(3000);
+    const db = account(AT_LEVEL_100);
 
     await new PrestigeService(db.prisma).pass({ userId: USER, requestId: 'prestige-01' });
 
     expect(db.engagementCounter.rows.map((r) => [r.count, r.points])).toEqual([[40_000, 900_000], [500, 1000]]);
   });
 
-  it('le cycle seul fait le niveau 100 : une poche presque vide ne ferme pas le Prestige', async () => {
+  it('la poche fait le niveau 100 : une poche presque vide ferme le Prestige, même avec un cycle au 100', async () => {
     const db = account(10);
 
-    const result = await new PrestigeService(db.prisma).pass({ userId: USER, requestId: 'prestige-01' });
-
-    expect(result.status).toBe('passed');
+    await expect(new PrestigeService(db.prisma).pass({ userId: USER, requestId: 'prestige-01' })).rejects.toMatchObject({ code: 'PRESTIGE_LEVEL_TOO_LOW' });
   });
 
-  it('un cycle sous le niveau 100 refuse le Prestige, même avec le max à vie à 100', async () => {
+  it('une poche sous le niveau 100 refuse le Prestige, même avec le max à vie à 100', async () => {
     const db = account(900_000, { sparksSincePrestige: 5000, levelRecord: 1 });
 
     await expect(new PrestigeService(db.prisma).pass({ userId: USER, requestId: 'prestige-01' })).rejects.toMatchObject({ code: 'PRESTIGE_LEVEL_TOO_LOW' });
@@ -92,7 +93,7 @@ describe('le Prestige vide la poche et le cycle, jamais le total à vie ni le ni
 
 describe('la frappe et le Prestige ne dépensent jamais deux fois les mêmes étincelles', () => {
   it('Prestige puis frappe : la poche est vide, rien à frapper, jamais négatif', async () => {
-    const db = account(3000);
+    const db = account(AT_LEVEL_100);
 
     await new PrestigeService(db.prisma).pass({ userId: USER, requestId: 'prestige-01' });
     const mint = await new MeeshService(db.prisma).mint(USER, 'mint-after-prestige');
@@ -115,7 +116,7 @@ describe('la frappe et le Prestige ne dépensent jamais deux fois les mêmes ét
   });
 
   it('après le Prestige, le niveau ACTUEL est 1 : la frappe se paie au tarif réduit, quel que soit le max à vie', async () => {
-    const db = account(0);
+    const db = account(AT_LEVEL_100);
     await new PrestigeService(db.prisma).pass({ userId: USER, requestId: 'prestige-01' });
     // Quelques étincelles gagnées dans le cycle neuf (niveau 2, 400 ≤ 700 < 900) : de quoi payer, au tarif du niveau 2.
     Object.assign(user(db), { engagementScore: 700, sparksSincePrestige: 700 });

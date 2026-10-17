@@ -3,20 +3,20 @@
  *
  * « Étincelle » est le NOM DES POINTS. La monnaie reste la Meesh.
  *
- * ## Trois nombres, un seul solde dépensable
+ * ## Trois nombres, un seul solde dépensable — et c'est lui qui fait le niveau
  *
  *  - la **poche** (`User.engagementScore`, `sparks` sur le fil) : tout est convertible, la frappe
- *    dépense n'importe quelles étincelles en poche. Il n'y a plus de « points à convertir » ;
+ *    dépense n'importe quelles étincelles en poche. C'est elle que le NIVEAU lit (porteur 2026-10-17,
+ *    #10892) : la frappe fait donc baisser le niveau du montant dépensé ;
  *  - le **cycle** (`User.sparksSincePrestige`, `sparksCycle`) : les étincelles accumulées depuis le
- *    dernier prestige. C'est lui que le NIVEAU lit — la frappe ne le touche jamais, donc ne fait plus
- *    baisser le niveau ;
+ *    dernier prestige. INDICATIF, comme le total à vie : le potentiel du profil, quel que soit le niveau ;
  *  - le **total à vie** (`User.sparksEarnedLifetime`, `sparksLifetime`) : monotone côté joueur. Il
  *    ne baisse ni à la frappe ni au prestige. Seule la reprise d'un contenu retiré le réduit, dans la
  *    limite de ce que ce contenu a rapporté (ferme la triche « publier puis supprimer »).
  *
  * Invariant : poche ≤ cycle ≤ total à vie (la frappe retire de la poche seule, le prestige vide la
  * poche et le cycle seuls). Un compte d'avant le rattrapage n'a pas les deux derniers champs : ils se
- * lisent alors sur la poche (`sparksOf`), jamais sous elle — le niveau ne baisse pas.
+ * lisent alors sur la poche (`sparksOf`), jamais sous elle.
  *
  * ## Type numérique, et pourquoi
  *
@@ -68,11 +68,11 @@ export function sparkCount(value: unknown): number {
 }
 
 export type SparksFacts = {
-  /** Les étincelles en poche — ce que la frappe dépense. */
+  /** Les étincelles en poche — ce que la frappe dépense, et ce que le niveau lit. */
   readonly pocket: number;
-  /** Accumulées depuis le dernier prestige — ce que le niveau lit. */
+  /** Accumulées depuis le dernier prestige — indicatif. */
   readonly cycle: number;
-  /** Accumulées à vie. */
+  /** Accumulées à vie — indicatif. */
   readonly lifetime: number;
   /**
    * La DETTE (porteur, 2026-10-16) : ce qu'une reprise de contenu supprimé n'a pas pu prélever sur la poche, déjà dépensée.
@@ -92,7 +92,7 @@ export type SparksRow = {
 /**
  * Poche, cycle et total à vie d'un compte. Le cycle n'est jamais sous la poche, le total à vie jamais
  * sous le cycle : un champ absent, ou en retard sur un écrivain concurrent, se lit sur le plus bas
- * minorant sûr — le niveau ne baisse donc jamais faute d'un champ.
+ * minorant sûr.
  */
 export function sparksOf(row: SparksRow | null | undefined): SparksFacts {
   const pocket = sparkCount(row?.engagementScore);
@@ -100,6 +100,12 @@ export function sparksOf(row: SparksRow | null | undefined): SparksFacts {
   const lifetime = Math.max(cycle, sparkCount(row?.sparksEarnedLifetime));
   return { pocket, cycle, lifetime, debt: sparkCount(row?.sparksDebt) };
 }
+
+/**
+ * La BASE DU NIVEAU (porteur 2026-10-17, #10892) : les étincelles en POCHE. Le cycle et le total à vie ne sont
+ * qu'indicatifs. Le seul site qui le dit : tout lecteur du niveau passe par ici, jamais par `.cycle`.
+ */
+export const levelSparksOf = (sparks: SparksFacts): number => sparks.pocket;
 
 /** Les colonnes du compte que lisent les décisions de niveau : les étincelles, le record du cycle, le max à vie. */
 export type LevelFactsRow = SparksRow & {
@@ -110,13 +116,13 @@ export type LevelFactsRow = SparksRow & {
 const levelColumn = (value: number | null | undefined): number => (typeof value === 'number' && Number.isFinite(value) ? Math.max(0, Math.trunc(value)) : 0);
 
 /**
- * Le niveau ACTUEL d'un compte, pour une décision (ouverture des missions, effort, duo, Prestige) : la courbe lue sur le
- * CYCLE d'étincelles (jamais sur la poche : la frappe ne le fait plus baisser). Les étapes (#9706) ne se défont jamais :
+ * Le niveau ACTUEL d'un compte, pour une décision (ouverture des missions, effort, duo, Prestige) : la courbe lue sur la
+ * POCHE (`levelSparksOf`) — la frappe le fait baisser. Les étapes (#9706) ne se défont jamais :
  * le plus haut des deux records, du cycle et à vie, prouve les étapes faites — un prestige ne les referme pas.
  */
 export function currentLevelOf(row: LevelFactsRow | null | undefined): number {
   const proof = Math.max(levelColumn(row?.levelRecord), levelColumn(row?.levelMaxLifetime));
-  return levelForUnlocks({ score: sparksOf(row).cycle, levelRecord: proof === 0 ? null : proof });
+  return levelForUnlocks({ score: levelSparksOf(sparksOf(row)), levelRecord: proof === 0 ? null : proof });
 }
 
 /**
@@ -193,17 +199,15 @@ const stepsAfterMint = (steps: LevelStepFacts): LevelStepFacts => {
  * Ce que la frappe coûterait et rapporterait, avant confirmation — la loi des étincelles. Pur : le
  * serveur le rejoue à l'écriture, les clients le montrent avant.
  *
- *  - la poche paie (`sparks`), le niveau se lit sur le CYCLE (`cycle`) que la frappe ne touche pas :
- *    `levelsLost` vaut toujours 0 (champ conservé pour les clients publiés) ;
- *  - le niveau d'après peut MONTER (la frappe fait une étape, #9706) ;
+ *  - la poche paie (`sparks`) et fait le niveau (#10892) : le niveau d'après se lit sur la poche moins le prix,
+ *    `levelsLost` dit ce que la frappe fait perdre ;
+ *  - l'étape que la frappe fait (#9706) peut relever le plafond du niveau d'après ;
  *  - le numéro de la pièce est `mintedLifetime + 1`, indépendamment du solde de la bourse ou des coffres ;
  *  - une pièce qui ferait entrer dans une réserve fermée par le rang n'est pas frappable (`locked`).
  */
 export function previewSparksMint(params: {
-  /** La poche. */
+  /** La poche — ce que la frappe dépense, et la base du niveau. */
   readonly sparks: number;
-  /** Les étincelles du cycle — la base du niveau. */
-  readonly cycle: number;
   readonly mintedLifetime: number;
   /** Les Meeshes gardées (le trésor) — jugent la réserve d'arrivée. */
   readonly held: number;
@@ -217,20 +221,20 @@ export function previewSparksMint(params: {
   readonly debt?: number;
 }): SparksMintPreview {
   const pocket = count(params.sparks);
-  const cycle = count(params.cycle);
   const number = count(params.mintedLifetime) + 1;
   const steps = params.steps === null ? null : { ...params.steps, minted: count(params.mintedLifetime) };
   const after = steps === null ? null : stepsAfterMint(steps);
   const capBefore = tighterLevelCap(params.levelCap, levelStepGate(steps));
   const capAfter = after === null ? capBefore : tighterLevelCap(levelCapForRank(after.rank), levelStepGate(after));
 
-  const levelBefore = levelFromScore(cycle, capBefore);
+  const levelBefore = levelFromScore(pocket, capBefore);
   const costLevel = Math.max(GAME_LEVEL_MIN, levelBefore);
   const price = effectiveMeeshPrice(number, costLevel);
   const locked = treasuryLockFor({ held: params.held, glory: params.glory, ...(params.mythic === true ? { mythic: true } : {}) });
   const debt = count(params.debt ?? 0);
   const affordable = pocket >= price;
   const canMint = affordable && locked === null && debt === 0;
+  const levelAfter = canMint ? levelFromScore(pocket - price, capAfter) : levelBefore;
   return {
     number,
     price,
@@ -241,9 +245,8 @@ export function previewSparksMint(params: {
     canMint,
     missingPoints: affordable ? 0 : price - pocket,
     levelBefore,
-    // La frappe ne retire rien au cycle : le niveau ne baisse jamais ; il monte si l'étape qu'elle fait l'ouvre.
-    levelAfter: canMint ? levelFromScore(cycle, capAfter) : levelBefore,
-    levelsLost: 0,
+    levelAfter,
+    levelsLost: Math.max(0, levelBefore - levelAfter),
     gloryGained: canMint ? GLORY_POINTS.mint : 0,
     locked,
     blockedBy: debt > 0 ? 'debt' : null,

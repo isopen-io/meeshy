@@ -14,6 +14,32 @@ final class GameMintCostCopyTests: XCTestCase {
                         basePrice: base, costFactor: factor, costLevel: level, locked: locked, sparksDebt: debt)
     }
 
+    // MARK: - Le niveau que la frappe coûte (#10892) : la poche fait le niveau, la frappe le fait baisser
+
+    private func dropping(before: Int, after: Int, ladder: GameMintLadder? = nil) -> GameMintPreview {
+        GameMintPreview(number: 1, price: 665, edition: .silver, canMint: true, missingPoints: 0, levelBefore: before,
+                        levelAfter: after, levelsLost: max(0, before - after), gloryGained: 1_000, ladder: ladder)
+    }
+
+    func test_aMintThatLowersTheLevel_saysThePassage() throws {
+        let passage = try XCTUnwrap(GameMintCostCopy.levelPassage(dropping(before: 9, after: 8)))
+        XCTAssertEqual(passage.text, GameMintCostCopy.levelPassageText(before: 9, after: 8))
+        XCTAssertTrue(passage.text.contains("9 → 8"), passage.text)
+        XCTAssertEqual(passage.accessibilityLabel, GameMintCostCopy.levelPassageSpoken(before: 9, after: 8))
+        XCTAssertFalse(passage.accessibilityLabel.contains("→"), "VoiceOver lit une phrase, pas une flèche")
+    }
+
+    /// Au-delà de 100, les champs d'hier mentent : la lecture ouverte (`ladder`) fait foi.
+    func test_thePassage_readsTheOpenedLadder_whenServed() throws {
+        let mint = dropping(before: 100, after: 100, ladder: GameMintLadder(levelBefore: 140, levelAfter: 137, levelsLost: 3))
+        XCTAssertEqual(try XCTUnwrap(GameMintCostCopy.levelPassage(mint)).text, GameMintCostCopy.levelPassageText(before: 140, after: 137))
+    }
+
+    func test_aMintThatCostsNoLevel_saysNoPassage() {
+        XCTAssertNil(GameMintCostCopy.levelPassage(dropping(before: 9, after: 9)))
+        XCTAssertNil(GameMintCostCopy.levelPassage(dropping(before: 9, after: 10)))
+    }
+
     func test_aDiscountedCost_namesTheBasePriceAndTheLevelFactor() {
         XCTAssertEqual(GameMintCostCopy.costLine(mint()),
                        GameMintCostCopy.costLineText(base: 1_221, percent: 54.5, level: 9))

@@ -89,6 +89,12 @@ final class ProgressionViewModel: ObservableObject {
     /// affiché alors est l'optimiste, et le cache ne garde jamais une valeur que le geste,
     /// s'il échoue, rendra fausse (#9383).
     private var persistDeferred = false
+    /// Un geste a échoué pendant qu'un autre était en vol : son instantané
+    /// « d'avant » portait déjà l'optimiste de l'autre (ou l'autre portait le
+    /// sien). Défaire l'un effaçait l'autre ; défaire l'autre, dans le désordre,
+    /// ressuscitait le premier échec à côté de son message d'erreur. Aucun
+    /// défait local alors : la lecture du serveur, une fois tout posé.
+    private var reconcilesWhenSettled = false
     /// Incrémenté à chaque lecture SERVIE qui remplace la charge : un retour arrière ne
     /// défait que ce que son geste a changé, jamais une lecture arrivée entre-temps.
     private var snapshotGeneration = 0
@@ -244,6 +250,10 @@ final class ProgressionViewModel: ObservableObject {
 
     func endGesture() {
         gesturesInFlight = max(0, gesturesInFlight - 1)
+        if isSettled, reconcilesWhenSettled {
+            reconcilesWhenSettled = false
+            Task { [weak self] in await self?.load(forceNetwork: true) }
+        }
         observeGame()
         guard isSettled, persistDeferred else { return }
         persistDeferred = false
@@ -275,6 +285,10 @@ final class ProgressionViewModel: ObservableObject {
     /// (elles ne dépendent pas du geste).
     func restore(_ undo: GestureUndo?) {
         guard let undo, undo.generation == snapshotGeneration else { return }
+        guard gesturesInFlight <= 1, !reconcilesWhenSettled else {
+            reconcilesWhenSettled = true
+            return
+        }
         let seenSince = snapshot?.game?.guideSeen ?? []
         guard let game = undo.before.game else { return }
         let state = GameOptimistic.withGuideSeen(GameState(game: game, meesh: undo.before.meesh), keys: seenSince)

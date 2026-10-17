@@ -195,10 +195,10 @@ describe('isLargeText', () => {
  * ils existent. Et les points du bandeau sont la POCHE d'étincelles, pas la base du niveau.
  */
 describe('les étincelles du bandeau sont la poche', () => {
-  test('avec les étincelles servies, le total montré est la poche — le niveau, lui, se lit sur le cycle', () => {
-    const model = shown({ ...ZERO, score: 0, debitablePoints: 0, glory: 2000, sparks: { pocket: 40, cycle: 5000, lifetime: 9000, debt: 0 } });
-    expect(model.points).toBe(40);
-    expect(model.level?.level).toBeGreaterThan(1);
+  test('avec les étincelles servies, le total montré est la poche — et le niveau se lit sur elle (#10892)', () => {
+    const model = shown({ ...ZERO, score: 0, debitablePoints: 0, glory: 2000, sparks: { pocket: 900, cycle: 10_000, lifetime: 12_000, debt: 0 } });
+    expect(model.points).toBe(900);
+    expect(model.level?.level).toBe(3);
   });
 
   test('sans les étincelles (ancien serveur), l\'ancien score fait foi', () => {

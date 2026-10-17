@@ -30,12 +30,12 @@ public struct GameBlock: Codable, Sendable, Equatable {
         /// La lecture ouverte par le rang (#9688) — `nil` devant un serveur antérieur. Les champs voisins
         /// gardent l'ANCIENNE loi sur le fil (niveau borné à 100, dix paliers) pour les clients publiés.
         public let ladder: Ladder?
-        /// LES ÉTINCELLES (#10846) — `nil` devant un serveur antérieur. `score` lit désormais le CYCLE.
-        /// La poche : ce que la frappe dépense.
+        /// LES ÉTINCELLES (#10846) — `nil` devant un serveur antérieur. `score` lit la POCHE (#10892).
+        /// La poche : ce que la frappe dépense, et la base du niveau — la frappe le fait baisser.
         public let sparks: Int?
-        /// Accumulées depuis le dernier prestige — la base du niveau.
+        /// Accumulées depuis le dernier prestige — indicatif (#10892), jamais la base du niveau.
         public let sparksCycle: Int?
-        /// Accumulées à vie.
+        /// Accumulées à vie — indicatif.
         public let sparksLifetime: Int?
         /// Le niveau max à vie, sans la borne de 100 — survit au prestige.
         public let levelMaxLifetime: Int?

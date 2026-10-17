@@ -284,14 +284,15 @@ describe('EngagementService.recordActivity', () => {
     expect(notificationService.createNotification).not.toHaveBeenCalled();
   });
 
-  it('propagates a milestone create error that is not a unique-constraint conflict', async () => {
+  it('a milestone create error that is not a unique-constraint conflict never takes back the credit already written (#10895)', async () => {
     const counterWrite = jest.fn().mockResolvedValue({ count: 1 });
     const create = jest.fn().mockRejectedValue(new Error('connection lost'));
     const prisma = makePrisma({ counterWrite, create });
     mockGetSharedNotificationService.mockReturnValue(makeSharedNotificationService());
     const svc = new EngagementService(prisma);
 
-    await expect(svc.recordActivity('user-1', 'tool.sticker')).rejects.toThrow('connection lost');
+    await expect(svc.recordActivity('user-1', 'tool.sticker')).resolves.toBe(true);
+    expect(counterWrite).toHaveBeenCalledTimes(1);
   });
 
   it('resolves two concurrent calls on the same threshold with a single milestone and notification', async () => {
@@ -724,7 +725,7 @@ describe('EngagementService level tracking (#5545)', () => {
         },
       ],
       new: true,
-      fields: { engagementScore: 1, sparksSincePrestige: 1, levelRecord: 1, levelMaxLifetime: 1 },
+      fields: { engagementScore: 1, levelRecord: 1, levelMaxLifetime: 1, prestige: 1 },
     });
   });
 

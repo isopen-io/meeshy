@@ -580,6 +580,7 @@ struct ConversationView: View {
                         router.navigateToStoryReply(replyContext, conversationList: conversationListViewModel)
                     },
                     singleGroup: true,
+                    postId: overlayState.storyViewerPostId,
                     initialStoryIndex: overlayState.storyViewerSlideIndex,
                     startAtFirstUnviewed: overlayState.storyViewerStartAtFirstUnviewed,
                     presentationSource: "ConversationView.overlay"
@@ -1255,6 +1256,7 @@ struct ConversationView: View {
                     overlayState.storyViewerUserId = group.id
                     overlayState.storyViewerGroupIndex = groupIdx
                     overlayState.storyViewerSlideIndex = slideIdx
+                    overlayState.storyViewerPostId = storyId
                     overlayState.storyViewerStartAtFirstUnviewed = false
                     overlayState.showStoryViewer = true
                 },
@@ -1262,7 +1264,7 @@ struct ConversationView: View {
                     // Anneau story d'un avatar de bulle (conversations de
                     // groupe) → story de CET expéditeur, première non-vue.
                     overlayState.storyViewerUserId = userId
-                    overlayState.storyViewerSlideIndex = 0
+                    overlayState.storyViewerSlideIndex = 0; overlayState.storyViewerPostId = nil
                     overlayState.storyViewerStartAtFirstUnviewed = true
                     overlayState.showStoryViewer = true
                 },
@@ -1541,7 +1543,7 @@ struct ConversationView: View {
                     },
                     onViewStory: { userId in
                         overlayState.storyViewerUserId = userId
-                        overlayState.storyViewerSlideIndex = 0
+                        overlayState.storyViewerSlideIndex = 0; overlayState.storyViewerPostId = nil
                         overlayState.storyViewerStartAtFirstUnviewed = true
                         overlayState.showStoryViewer = true
                     },

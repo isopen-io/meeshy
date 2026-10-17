@@ -14,7 +14,7 @@ import { gameErrorMessage } from '@/lib/view/game-copy';
 import {
   afterChestOpening,
   afterFreeze,
-  afterMint,
+  afterMintUnlessServed,
   afterRelight,
   afterReroll,
   withChestReward,
@@ -141,10 +141,11 @@ export function useGameActions(
       await client.cancelQueries({ queryKey: ENGAGEMENT_PROGRESS_QUERY_KEY });
       const snapshot = read();
       const attempt = { failed: false, applied: false };
+      const numberBefore = snapshot?.game?.mint.number;
       void gate.opened().then(() => {
-        if (attempt.failed) return;
+        if (attempt.failed || numberBefore === undefined) return;
         attempt.applied = true;
-        write(afterMint);
+        write((view) => afterMintUnlessServed(view, numberBefore));
       });
       return { snapshot, preview, attempt };
     },

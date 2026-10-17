@@ -123,3 +123,23 @@ describe('PrestigeService.pass', () => {
     expect(db.gloryLedger.rows.map((r) => r.requestId)).toEqual(['prestige:2']);
   });
 });
+
+describe('PrestigeService.pass — une écriture qui tombe ne laisse pas la demande « en cours » à jamais (#10895)', () => {
+  it('le passage dont l\'écriture échoue rend sa réservation : la même demande, rejouée, passe', async () => {
+    const { db, service } = setup();
+    const updateMany = db.user.updateMany.bind(db.user);
+    let failed = false;
+    (db.user as unknown as { updateMany: typeof updateMany }).updateMany = (async (args: Parameters<typeof updateMany>[0]) => {
+      if (!failed) {
+        failed = true;
+        throw new Error('connection reset');
+      }
+      return updateMany(args);
+    }) as typeof updateMany;
+
+    await expect(service.pass({ userId: USER, requestId: 'prestige-01' })).rejects.toThrow('connection reset');
+    const again = await service.pass({ userId: USER, requestId: 'prestige-01' });
+
+    expect(again).toMatchObject({ status: 'passed', prestige: 1 });
+  });
+});

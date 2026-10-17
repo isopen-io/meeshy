@@ -357,6 +357,32 @@ final class ProgressionConceptGuardTests: XCTestCase {
         XCTAssertEqual(table["game.concept.fact.held"]?["fr"], "Étincelles convertibles")
     }
 
+    /// La poche fait le niveau (#10892) : aucune phrase ne promet plus que la frappe épargne le niveau, ni que le niveau
+    /// se lit sur les étincelles cumulées depuis le Prestige. Le rang et la Gloire, eux, ne baissent toujours jamais.
+    func test_theLevel_readsTheConvertibles_andTheMintLowersIt_inEveryLanguage() throws {
+        let table = try catalog(prefix: "game")
+        let stale = ["ne fait plus baisser", "sans faire baisser", "sans toucher à ton niveau", "jamais de ton niveau",
+                     "ne le fait jamais baisser", "depuis ton dernier Prestige", "font ton niveau ;", "reste acquis",
+                     "Frapper ne fait plus redescendre", "pas ton niveau", "ne baisse pas : il se lit",
+                     "elles, font ton niveau"]
+        for (key, entry) in table {
+            let french = entry["fr"] ?? ""
+            for phrase in stale {
+                XCTAssertFalse(french.contains(phrase), "\(key) : l'ancienne loi du niveau — « \(french) »")
+            }
+        }
+        XCTAssertEqual(table["game.concept.points.why"]?["fr"],
+                       "Convertibles, elles font ton niveau et paient ; cumulées, ton potentiel.")
+        XCTAssertEqual(table["game.rules.concept.tailwind.body"]?["fr"], "Le Vent arrière est éteint.")
+        XCTAssertTrue((table["game.concept.level.what"]?["fr"] ?? "").contains("étincelles convertibles"))
+        XCTAssertTrue((table["game.rules.4.body"]?["fr"] ?? "").contains("ton niveau baisse d’autant"))
+        for key in ["game.rules.2.body", "game.rules.4.body", "game.concept.level.what", "game.concept.points.why",
+                    "game.guide.moment.first_mint.means", "game.mint.chip.level_a11y",
+                    "game.guide.moment.first_mint_possible.means_drop"] {
+            for locale in locales { XCTAssertFalse((table[key]?[locale] ?? "").isEmpty, "\(key) : pas de \(locale)") }
+        }
+    }
+
     /// Le « + » des gains par famille est retiré (« Contenu jusqu’à 16 », plus « jusqu’à +16 ») — dans le code et
     /// dans les sept langues. Les « + » de mission, de Gloire, de pourcentage et de coffre restent.
     func test_theEarnChip_hasNoPlusSign() throws {

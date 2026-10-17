@@ -5315,9 +5315,11 @@ model EngagementCounter {
   /// avec un multiplicateur ×5, ce qui viderait toute comparaison entre
   /// comptes de son sens.
   ///
-  /// L'invariant tenu par le service est `User.engagementScore == Σ(points)`.
-  /// Il remplace `Σ(count × poids)`, que l'accélérateur d'élan (#5749) rendra
-  /// faux dès qu'un point sera crédité à un facteur autre que 1.
+  /// Un crédit écrit le même montant ici et à la poche (`User.engagementScore`),
+  /// une reprise les débite ensemble ; la frappe débite la poche SEULE (#10846).
+  /// `engagementScore == Σ(points)` n'est donc plus un invariant. Celui de la
+  /// poche (#10892) : `sparksEarnedLifetime − engagementScore + sparksDebt ==
+  /// Σ(prix des frappes) + Σ(poches vidées au Prestige)`.
   points    Int      @default(0)
   updatedAt DateTime @updatedAt
 

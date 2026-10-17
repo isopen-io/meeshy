@@ -109,8 +109,8 @@ public enum GuideEvent: Sendable, Equatable {
     case newTier(tier: LevelTierKey, nextTierLevel: Int?)
     case missionsUnlocked
     case firstMintPossible(price: Int, levelsLost: Int, gloryGain: Int)
-    /// La première frappe (#10846) : la frappe ne fait plus baisser le niveau ni n'ouvre de Vent arrière — le moment
-    /// n'a plus de niveaux à citer.
+    /// La première frappe (#10892) : elle fait baisser le niveau du montant dépensé et n'ouvre aucun Vent arrière — le
+    /// moment ne cite pas de niveaux.
     case firstMint
     case priceRises(nextPrice: Int)
     case newRank(rank: GloryRank, division: GloryDivision5?, glory: Int, gloryMissing: Int?)

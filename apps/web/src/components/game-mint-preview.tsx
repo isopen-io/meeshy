@@ -2,6 +2,7 @@ import type { GameMintPreview as MintPreview } from '@meeshy/shared/types/game';
 import type { MeeshEdition } from '@meeshy/shared/utils/game/mint';
 
 import { MintStrike } from '@/components/game-mint-strike';
+import { mintLevels } from '@/lib/game/ladder';
 import { divisionLabel, editionName, formatCount, gameText, pointsLabel, rankName } from '@/lib/view/game-copy';
 import { factDetail } from '@/lib/view/game-detail';
 
@@ -79,6 +80,13 @@ function BlockedLine({ mint }: { readonly mint: MintPreview }) {
   );
 }
 
+/** Le niveau d'après la frappe (#10892) : la poche paie et fait le niveau. Rien quand la frappe n'en fait perdre aucun. */
+const levelDrop = (mint: MintPreview): readonly string[] => {
+  const { levelBefore, levelAfter, levelsLost } = mintLevels(mint);
+  if (levelsLost <= 0) return [];
+  return [`${gameText('game.mint.row.level')} ${gameText('game.fmt.from_to', { from: formatCount(levelBefore), to: formatCount(levelAfter) })}`];
+};
+
 function Chips({ lines }: { readonly lines: readonly string[] }) {
   return (
     <ul data-game-mint-impact="" className="flex flex-wrap gap-1.5">
@@ -93,7 +101,7 @@ function Chips({ lines }: { readonly lines: readonly string[] }) {
 
 export function GameMintPreview(props: GameMintPreviewProps) {
   const { mint, held, online, minting, error, celebration, strikeKey = 0, onMint } = props;
-  const impact = [gameText('game.hero.mint_glory', { glory: formatCount(mint.gloryGained) })];
+  const impact = [gameText('game.hero.mint_glory', { glory: formatCount(mint.gloryGained) }), ...levelDrop(mint)];
 
   return (
     <GameCard id="game-mint" labelledBy="game-mint-title" tint={GAME_WARM}>

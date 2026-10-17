@@ -590,12 +590,12 @@ describe('le concept des étincelles : la poche, le total à vie, la dette', () 
   });
 
   test('le cumul paraît en pastille quand le total à vie est servi, et seulement alors', () => {
-    expect(chipsOf(sparky({ sparks: 300, sparksLifetime: 5_000 })).some((text) => /5 000 cumulées/.test(text))).toBe(true);
-    expect(chipsOf(sparky({ sparks: 300 })).some((text) => /cumulées/.test(text))).toBe(false);
+    expect(chipsOf(sparky({ sparks: 300, sparksLifetime: 5_000 })).some((text) => /Record d’étincelles : 5 000/.test(text))).toBe(true);
+    expect(chipsOf(sparky({ sparks: 300 })).some((text) => /Record d’étincelles|cumulées/.test(text))).toBe(false);
   });
 
   test('après un Prestige, le cumul rapporte le cycle au total à vie (porteur 2026-10-17)', () => {
-    expect(chipsOf(sparky({ sparks: 300, sparksCycle: 1_200, sparksLifetime: 5_000 })).some((text) => /1 200 \/ 5 000 cumulées/.test(text))).toBe(true);
+    expect(chipsOf(sparky({ sparks: 300, sparksCycle: 1_200, sparksLifetime: 5_000 })).some((text) => /1 200 cumulées · record 5 000/.test(text))).toBe(true);
   });
 
   test('une dette se dit en pastille', () => {

@@ -1,8 +1,8 @@
 import Foundation
 
 /// Les mots des ÉTINCELLES (#10846) — le nom des points du Jeu. Trois nombres : les CONVERTIBLES (la poche, toute
-/// dépensable — la seule valeur réelle, #10860), le CYCLE (la base du niveau), le TOTAL À VIE ; et le niveau max à vie,
-/// qui survit au prestige.
+/// dépensable — la seule valeur réelle, #10860, et la base du niveau, #10892), le CYCLE et le TOTAL À VIE (indicatifs) ;
+/// et le niveau max à vie, qui survit au prestige.
 enum GameSparksCopy {
 
     /// « 976 étincelles » — la poche, lue par VoiceOver.

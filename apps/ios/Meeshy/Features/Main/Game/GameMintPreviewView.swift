@@ -6,10 +6,10 @@ import MeeshyUI
 /// l'aperçu bavard ET le bloc « Comment frapper » du héro de niveau, qui disaient deux fois la même chose.
 ///
 /// Conception, partie VII : « la frappe garde son aperçu » — mais court. Le prix est LE chiffre ; les deux
-/// conséquences qu'on ne peut pas ignorer tiennent en pastilles (le niveau avant → après, la Gloire gagnée et le rang
-/// qui change), plus les badges qui redescendent QUAND il y en a. La frappe fait redescendre, c'est la règle, et une règle
-/// qu'on découvre après coup est un piège. Le reste — le trésor, le Vent arrière, les chances — est au carnet des
-/// règles (la porte « ? »). Miroir de `apps/web/src/components/game-mint-preview.tsx`.
+/// conséquences qu'on ne peut pas ignorer tiennent en pastilles (le niveau avant → après QUAND la frappe en coûte — la
+/// poche fait le niveau, #10892 —, la Gloire gagnée et le rang qui change). La frappe fait baisser le niveau, c'est la
+/// règle, et une règle qu'on découvre après coup est un piège. Le reste — le trésor, le Vent arrière, les chances — est
+/// au carnet des règles (la porte « ? »). Miroir de `apps/web/src/components/game-mint-preview.tsx`.
 ///
 /// Quand la frappe n'est pas possible : aucun bouton grisé (directive du porteur,
 /// `EngagementMeeshProgress.canMint`), seulement ce qui manque et le prix de la
@@ -166,13 +166,15 @@ struct GameMintPreviewView: View {
 
     // MARK: - Ce que le geste coûte, en pastilles
 
-    /// Le niveau avant → après, la Gloire gagnée (et le rang qui change), les badges qui redescendent — jamais un tableau.
+    /// Le niveau que la frappe fait perdre (la poche fait le niveau, #10892), la Gloire gagnée et le rang qui change —
+    /// jamais un tableau.
     private var consequences: some View {
         FlowLayout(spacing: MeeshySpacing.xs) {
-            GameChip(
-                text: String(localized: "game.mint.chip.level", defaultValue: "Niveau \(levelValue)", bundle: .main),
-                tint: MeeshyColors.brandPrimary
-            )
+            if let passage = GameMintCostCopy.levelPassage(mint) {
+                GameChip(text: passage.text, tint: MeeshyColors.brandPrimary)
+                    .accessibilityLabel(passage.accessibilityLabel)
+                    .accessibilityIdentifier("game.mint.level")
+            }
             GameChip(
                 text: String(localized: "game.mint.chip.glory", defaultValue: "+\(GameCopy.formatCount(mint.gloryGained)) Gloire", bundle: .main),
                 tint: MeeshyColors.success
@@ -186,12 +188,5 @@ struct GameMintPreviewView: View {
         }
         .accessibilityElement(children: .contain)
         .accessibilityIdentifier("game.mint.consequences")
-    }
-
-    /// Les niveaux de la frappe lus sur la VÉRITÉ (`shownLevels`, #9688) : au-delà de 100, les champs d'hier mentiraient.
-    private var levelValue: String {
-        let levels = mint.shownLevels
-        let base = "\(GameCopy.formatCount(levels.levelBefore)) → \(GameCopy.formatCount(levels.levelAfter))"
-        return levels.levelsLost > 0 ? base + " (−\(GameCopy.formatCount(levels.levelsLost)))" : base
     }
 }

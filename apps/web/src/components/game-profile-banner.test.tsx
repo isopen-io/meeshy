@@ -120,20 +120,20 @@ describe('la paire poche / total et niveau / max (porteur 2026-10-16)', () => {
   test('le niveau actuel avec le niveau max à vie dessous — toujours, même quand le max égale le niveau', async () => {
     const host = await mount(<GameProfileBanner standing={standing({ levelMax: 12 })} />);
     expect(words(host.querySelector('[data-profile-banner-level-now]'))).toBe('Niveau 12');
-    expect(words(host.querySelector('[data-profile-banner-level-max]'))).toBe('max 12');
+    expect(words(host.querySelector('[data-profile-banner-level-max]'))).toBe('record 12');
   });
 
   test('un niveau max plus haut que le niveau (après un Prestige)', async () => {
     const host = await mount(<GameProfileBanner standing={standing({ level: 1, levelMax: 100 })} />);
     expect(words(host.querySelector('[data-profile-banner-level-now]'))).toBe('Niveau 1');
-    expect(words(host.querySelector('[data-profile-banner-level-max]'))).toBe('max 100');
+    expect(words(host.querySelector('[data-profile-banner-level-max]'))).toBe('record 100');
   });
 
   test('sur la fiche d\'un autre : le niveau max suit le rang, les étincelles ne sont pas servies — rien ne se dessine à leur place', async () => {
     const host = await mount(<GameProfileBanner standing={standing({ points: null, sparksLifetime: null, pointsToNext: null, progress: null })} />);
     expect(host.querySelector('[data-profile-banner-points]') === null).toBe(true);
     expect(host.querySelector('[data-profile-banner-lifetime]') === null).toBe(true);
-    expect(words(host.querySelector('[data-profile-banner-level-max]'))).toBe('max 12');
+    expect(words(host.querySelector('[data-profile-banner-level-max]'))).toBe('record 12');
   });
 
   test('un serveur antérieur (niveau max non servi) : pas de ligne « max », jamais un zéro', async () => {

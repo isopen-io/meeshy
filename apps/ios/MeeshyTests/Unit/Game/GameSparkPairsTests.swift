@@ -53,7 +53,7 @@ final class GameSparkPairsTests: XCTestCase {
         XCTAssertEqual(pairs.cumulLine, GameSparksCopy.cumulLine(cycle: 8_200, lifetime: 12_000))
         XCTAssertTrue(pairs.cumulLine.contains(" / "))
         XCTAssertTrue(pairs.cumulLine.contains(GameSparksCopy.cumulValue(cycle: 8_200, lifetime: 12_000)))
-        XCTAssertEqual(try catalogValue("game.sparks.cumul.line", "fr"), "%@ cumulées", "« cumulées » pour ce qui fait le niveau")
+        XCTAssertEqual(try catalogValue("game.sparks.cumul.line", "fr"), "%@ cumulées", "« cumulées » pour le potentiel, indicatif (#10892)")
         let format = try catalogValue("game.sparks.cumul.line", Self.runningLanguage)
         XCTAssertEqual(pairs.cumulLine, format.replacingOccurrences(of: "%@", with: GameSparksCopy.cumulValue(cycle: 8_200, lifetime: 12_000)))
     }
