@@ -53,6 +53,8 @@ final class NotificationVoiceBanner {
         "type", "conversationId", "conversationTitle", "messageId", "senderDisplayName", "senderUsername",
         "attachmentUrl", "attachmentMimeType", "attachmentDurationMs", "attachmentId", "attachmentLanguage",
         "notificationLocKey", "encryptedContent", "gcm.notification.tag", "gcm.n.tag", KEY_ORIGIN,
+        // #10891 — « Repondre » se repose a chaque bascule Ecouter ⇄ Pause.
+        "replyActionLabel",
     };
 
     private NotificationVoiceBanner() {}
@@ -81,13 +83,19 @@ final class NotificationVoiceBanner {
         return bundle;
     }
 
-    /** Apres l'affichage par FCM : pose « Ecouter » si ce push est un vocal ecoutable. */
+    /**
+     * Apres l'affichage par FCM : pose « Ecouter » si ce push est un vocal
+     * ecoutable, avec « Repondre » a cote ; tout autre message ne recoit que
+     * « Repondre » (#10891).
+     */
     static void offer(Context context, Map<String, String> data) {
         NotificationVoiceRules.Voice voice = NotificationVoiceRules.listenable(
             data, CallShellStore.apiBase(context), debuggable(context));
-        if (voice == null || voice.tag.isEmpty()) return;
-        String origin = CallShellStore.voiceOrigin(context);
-        if (origin == null) return;
+        String origin = voice == null || voice.tag.isEmpty() ? null : CallShellStore.voiceOrigin(context);
+        if (origin == null) {
+            NotificationReplyAction.offer(context, data);
+            return;
+        }
         // Jamais lue de la charge : la coque la pose, elle ne la recoit pas.
         Map<String, String> stamped = new HashMap<>(data);
         stamped.put(KEY_ORIGIN, origin);
@@ -134,7 +142,9 @@ final class NotificationVoiceBanner {
             Bundle extras = new Bundle();
             extras.putString(EXTRA_MESSAGE_ID, voice.messageId);
             builder.addExtras(extras);
-            builder.setActions(action(context, data, playing));
+            Notification.Action reply = NotificationReplyAction.of(context, data);
+            if (reply == null) builder.setActions(action(context, data, playing));
+            else builder.setActions(action(context, data, playing), reply);
             builder.setOnlyAlertOnce(true);
             String sub = note != null ? note : NotificationVoiceRules.duration(voice.durationMs);
             if (!sub.isEmpty()) builder.setSubText(sub);
@@ -145,7 +155,7 @@ final class NotificationVoiceBanner {
         return true;
     }
 
-    private static Notification find(NotificationManager manager, String tag) {
+    static Notification find(NotificationManager manager, String tag) {
         for (StatusBarNotification active : manager.getActiveNotifications()) {
             if (active.getId() == 0 && tag.equals(active.getTag())) return active.getNotification();
         }
