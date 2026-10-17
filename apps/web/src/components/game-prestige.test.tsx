@@ -44,7 +44,7 @@ describe('la proposition au niveau 100', () => {
   test('Mee et Meo expliquent : ce qui repart, ce qu’on gagne', () => {
     const t = text(html);
     expect(t).toContain('tu peux passer en Prestige, ou continuer à monter');
-    expect(t).toContain('Ton niveau actuel repart à 1 et tes étincelles convertibles à 0 ; ton total à vie et ton niveau max sont conservés');
+    expect(t).toContain('Ton niveau actuel repart à 1 et tes étincelles convertibles à 0 ; ton record d’étincelles et ton record de niveau sont conservés');
     expect(t).toContain(`${formatCount(GLORY_POINTS.prestige, 'fr').replace(/\s/g, ' ')} de Gloire`);
     expect(html).toContain('data-game-bird="meeGuide"');
     expect(html).toContain('data-game-bird="meoGuide"');
@@ -73,7 +73,7 @@ describe('la proposition au niveau 100', () => {
     expect(t).toContain('Passer en Prestige 2 ?');
     expect(t).toContain('Ce qui repart');
     expect(t).toContain('Ce qui reste');
-    expect(t).toContain('ligue (niveau 10) et ton duo (niveau 20) restent ouverts, car ils lisent ton niveau max à vie');
+    expect(t).toContain('ligue (niveau 10) et ton duo (niveau 20) restent ouverts, car ils lisent ton record de niveau');
   });
 
   test('la confirmation donne les VALEURS avant → après : étincelles convertibles, niveau, record, étoiles, Gloire (#9705)', async () => {

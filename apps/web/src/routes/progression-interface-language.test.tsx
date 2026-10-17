@@ -86,7 +86,7 @@ describe('Progression, interface en', () => {
     expect(html).toContain('Progress toward the next level');
     expect(html).toContain('No Meesh');
     expect(html).toContain('2 Meeshes');
-    expect(html).toContain('5 minted all-time');
+    expect(html).toContain('Meesh record: 5');
     expect(html).toContain('No mint yet.');
     expect(html).toContain('Mint a Meesh for 1,221 sparks');
     expect(html).toContain('more sparks before a Meesh.');
