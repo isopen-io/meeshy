@@ -112,6 +112,12 @@ export type RegisterData = {
    * l'adresse n'est détenue par personne.
    */
   readonly claimEmail?: boolean;
+  /**
+   * #10872 — l'empreinte du secret de l'appareil qui a demandé le lien (porte
+   * « e-mail seul »). Posée par le serveur, jamais lue d'un corps
+   * d'inscription ; absente ⇒ le lien naît non lié et exigera une confirmation.
+   */
+  readonly linkDeviceHash?: string;
 };
 
 /**
@@ -504,6 +510,7 @@ export async function registerAccount(
       // L'EMPREINTE du code, jamais le code : depuis #8033 il ouvre une session.
       emailVerificationCode: hashEmailCode(verificationCode),
       emailVerificationExpiry: verificationExpiry,
+      emailVerificationDeviceHash: data.linkDeviceHash ?? null,
       registrationIp: requestContext?.ip || null,
       registrationLocation: requestContext?.geoData?.location || null,
       registrationDevice: requestContext?.userAgent || null,

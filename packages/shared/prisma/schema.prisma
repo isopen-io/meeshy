@@ -207,6 +207,8 @@ model User {
   emailVerificationToken  String? // Token de vérification email (hash SHA-256)
   emailVerificationCode   String? // Code OTP 6 chiffres pour vérification mobile
   emailVerificationExpiry DateTime? // Expiration du token (24h par défaut)
+  /// #10872 — empreinte SHA-256 du secret de l'appareil qui a DEMANDÉ le lien ; null ⇒ lien non lié (confirmation exigée)
+  emailVerificationDeviceHash String?
   phoneVerifiedAt         DateTime?
   phoneVerificationCode   String? // Code SMS 6 chiffres (hashé)
   phoneVerificationExpiry DateTime? // Expiration du code (10 min par défaut)

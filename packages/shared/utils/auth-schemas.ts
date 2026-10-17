@@ -125,12 +125,18 @@ export const AuthSchemas = {
     code: z.string().length(6).regex(/^[0-9]{6}$/).optional(),
     email: z.email(),
     password: z.string().min(PASSWORD_MIN_LENGTH, passwordTooShort).optional(),
+    /** #10872 — avec le LIEN seulement : le secret de l'appareil demandeur, et le oui de l'utilisateur. */
+    linkDeviceSecret: z.string().regex(/^[A-Za-z0-9_-]{22,256}$/).optional(),
+    confirm: z.boolean().optional(),
   }).refine(
     (data) => !!data.token || !!data.code,
     { message: 'Either token or code must be provided' }
   ).refine(
     (data) => data.password === undefined || !!data.code,
     { message: 'A password can only be set together with the code', path: ['password'] }
+  ).refine(
+    (data) => (data.linkDeviceSecret === undefined && data.confirm === undefined) || !!data.token,
+    { message: 'A device secret or a confirmation goes with the link token only', path: ['linkDeviceSecret'] }
   ),
 
   // Resend verification

@@ -240,6 +240,7 @@ export async function anonymizeUserIdentity(
       emailVerificationToken: null,
       emailVerificationCode: null,
       emailVerificationExpiry: null,
+      emailVerificationDeviceHash: null,
       phoneVerificationCode: null,
       phoneVerificationExpiry: null,
       lastLoginIp: null,
