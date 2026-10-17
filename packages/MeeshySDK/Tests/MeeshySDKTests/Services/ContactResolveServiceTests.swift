@@ -146,4 +146,18 @@ final class ContactResolveServiceTests: XCTestCase {
 
         XCTAssertEqual(service.cachedAccounts(for: makeRequest())?.first?.relation, .requestSent)
     }
+
+    /// Les relations résolues (« vous », « ami ») appartiennent au compte qui
+    /// les a demandées : après déconnexion, la fiche contact du suivant les
+    /// affichait sans délai de fraîcheur.
+    func test_purge_forgetsResolvedAccounts() async {
+        let (service, mock) = makeSUT()
+        stubAccounts(mock, [makeAccount()])
+        _ = await service.resolve(makeRequest())
+        XCTAssertNotNil(service.cachedAccounts(for: makeRequest()))
+
+        service.purge()
+
+        XCTAssertNil(service.cachedAccounts(for: makeRequest()))
+    }
 }

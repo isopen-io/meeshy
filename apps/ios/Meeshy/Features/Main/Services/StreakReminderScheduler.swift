@@ -43,6 +43,12 @@ final class StreakReminderScheduler {
         }
     }
 
+    /// Déconnexion : les rappels posés portent la série du compte sortant et
+    /// ouvriraient la progression du suivant.
+    func annulerTout() {
+        centre.removePendingNotificationRequests(withIdentifiers: identifiantsPossibles)
+    }
+
     /// Replanifie les rappels du jour depuis l'état de progression.
     ///
     /// Appelée à chaque fois que la progression est relue — ouverture de

@@ -508,7 +508,15 @@ final class DependencyContainer {
                         PresenceManager.shared.resetForLogout()
                         // Les contours de story (commenté, envoyé, republié) aussi.
                         StoryViewerParticipationStore.shared.resetForLogout()
+                        // Le reste de l'état « par compte » tenu hors des bases :
+                        // amis du `@`, relations des fiches contact, citation du
+                        // brouillon de commentaire, rappels de série, protections armées.
+                        MentionContactsStore.shared.resetForLogout()
+                        CommentQuotationStore.shared.clearAll()
+                        StreakReminderScheduler.shared.annulerTout()
+                        ConversationProtectionPreferenceStore.shared.purgeAll()
                     }
+                    ContactResolveService.shared.purge()
                     await PendingStatusQueue.shared.clearAll()
                     // #8656 — les brouillons de commentaire sont rangés par post,
                     // sans compte : un post vu des deux comptes rendait au
