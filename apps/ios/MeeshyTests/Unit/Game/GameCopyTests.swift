@@ -239,9 +239,18 @@ final class GameCopyTests: XCTestCase {
         }
     }
 
-    /// Les étincelles (#10846) : la première frappe ne fait plus baisser le niveau — la carte ne cite plus de niveaux,
-    /// elle dit que rien n'est perdu et mène à la progression.
-    func test_theFirstMintCard_saysTheLevelStays_andLeadsToProgress() {
+    /// La poche fait le niveau (#10892) : une première frappe qui coûte des niveaux le DIT avant le geste ; sans perte,
+    /// la phrase d'hier reste vraie.
+    func test_theFirstMintPossibleCard_saysTheLevelDrop_onlyWhenThereIsOne() {
+        let dropping = GameGuideCopy.moment(GameGuide.moment(for: .firstMintPossible(price: 1221, levelsLost: 2, gloryGain: 100), seen: []))
+        let free = GameGuideCopy.moment(GameGuide.moment(for: .firstMintPossible(price: 1221, levelsLost: 0, gloryGain: 100), seen: []))
+        XCTAssertNotEqual(dropping.means, free.means)
+        XCTAssertEqual(dropping.means, GameGuideCopy.firstMintPossibleDrop(cost: GameCopy.points(1221), glory: GameCopy.formatCount(100)))
+    }
+
+    /// La première frappe (#10892) : la carte dit que le niveau baisse d'autant et le rang jamais — sans citer de
+    /// niveaux — et mène à la progression.
+    func test_theFirstMintCard_saysTheLevelDrops_andLeadsToProgress() {
         let moment = GameGuide.moment(for: .firstMint, seen: [])
         XCTAssertEqual(moment.action, .seeProgress)
         let copy = GameGuideCopy.moment(moment)

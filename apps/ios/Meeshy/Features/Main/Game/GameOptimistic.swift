@@ -59,8 +59,10 @@ enum GameOptimistic {
         let game = state.game
         guard game.mint.canMint else { return state }
         let price = game.mint.price
-        let score = max(0, game.level.score - price)
-        let debitable = max(0, (state.meesh?.debitablePoints ?? game.level.score) - price)
+        // La poche fait le niveau (#10892) : la frappe retire son prix de la POCHE, et le niveau d'après se lit sur elle.
+        let pocket = game.level.sparkFacts.pocket
+        let score = max(0, pocket - price)
+        let debitable = max(0, (state.meesh?.debitablePoints ?? pocket) - price)
         let glory = game.glory.atGlory(game.glory.glory + game.mint.gloryGained)
         // Les niveaux s'ouvrent selon le rang (#9688) : le plafond se relit sur le rang d'APRÈS la frappe.
         let levelCap = GameGlory.levelCap(forRank: glory.rank)
@@ -71,6 +73,7 @@ enum GameOptimistic {
         }
         let level = GameLevelWire.level(score: score, levelCap: levelCap, levelRecord: game.level.shown.record,
                                          prestige: game.level.prestige, steps: steps)
+            .carryingSparks(of: game.level, pocket: score)
         let preview = GameLevelWire.mint(
             GameMint.preview(score: score, mintedLifetime: game.mint.number, debitablePoints: debitable, levelCap: levelCap,
                              steps: steps)

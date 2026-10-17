@@ -246534,43 +246534,43 @@
         "ar": {
           "stringUnit": {
             "state": "translated",
-            "value": "لم يعد السكّ يخفض مستواك: الشرارات التي كسبتها تبقى لك."
+            "value": "أنفق السكّ شراراتك القابلة للتحويل: ينخفض مستواك بقدرها، ورتبتك لا تنخفض أبدًا."
           }
         },
         "de": {
           "stringUnit": {
             "state": "translated",
-            "value": "Prägen senkt dein Level nicht mehr: deine verdienten Funken bleiben dir."
+            "value": "Die Prägung hat deine umwandelbaren Funken ausgegeben: Dein Level sinkt entsprechend, dein Rang nie."
           }
         },
         "en": {
           "stringUnit": {
             "state": "translated",
-            "value": "Minting no longer lowers your level: the sparks you have earned stay earned."
+            "value": "The mint spent your convertible sparks: your level drops by as much, your rank never does."
           }
         },
         "es": {
           "stringUnit": {
             "state": "translated",
-            "value": "Acuñar ya no baja tu nivel: las chispas que ganaste siguen siendo tuyas."
+            "value": "La acuñación gastó tus chispas convertibles: tu nivel baja en la misma medida, tu rango nunca."
           }
         },
         "fr": {
           "stringUnit": {
             "state": "translated",
-            "value": "La frappe ne fait plus baisser ton niveau : tes étincelles déjà gagnées restent acquises."
+            "value": "La frappe a dépensé tes étincelles convertibles : ton niveau baisse d’autant, ton rang jamais."
           }
         },
         "it": {
           "stringUnit": {
             "state": "translated",
-            "value": "Coniare non abbassa più il tuo livello: le scintille guadagnate restano tue."
+            "value": "Il conio ha speso le tue scintille convertibili: il tuo livello scende di altrettanto, il tuo rango mai."
           }
         },
         "pt-BR": {
           "stringUnit": {
             "state": "translated",
-            "value": "Cunhar não baixa mais o seu nível: as faíscas que você ganhou continuam suas."
+            "value": "A cunhagem gastou suas faíscas conversíveis: seu nível cai na mesma medida, seu rank nunca."
           }
         }
       }
@@ -246628,43 +246628,43 @@
         "ar": {
           "stringUnit": {
             "state": "translated",
-            "value": "سُكّت أول Meesh: يبقى مستواك كما هو."
+            "value": "سُكّت أول Meesh: مجدك يكبر."
           }
         },
         "de": {
           "stringUnit": {
             "state": "translated",
-            "value": "Erste Meesh geprägt: dein Level bleibt."
+            "value": "Erste Meesh geprägt: Dein Ruhm wächst."
           }
         },
         "en": {
           "stringUnit": {
             "state": "translated",
-            "value": "First Meesh minted: your level stays put."
+            "value": "First Meesh minted: your Glory grows."
           }
         },
         "es": {
           "stringUnit": {
             "state": "translated",
-            "value": "Primera Meesh acuñada: tu nivel se mantiene."
+            "value": "Primera Meesh acuñada: tu Gloria crece."
           }
         },
         "fr": {
           "stringUnit": {
             "state": "translated",
-            "value": "Première Meesh frappée : ton niveau reste acquis."
+            "value": "Première Meesh frappée : ta Gloire grandit."
           }
         },
         "it": {
           "stringUnit": {
             "state": "translated",
-            "value": "Prima Meesh coniata: il tuo livello resta."
+            "value": "Prima Meesh coniata: la tua Gloria cresce."
           }
         },
         "pt-BR": {
           "stringUnit": {
             "state": "translated",
-            "value": "Primeira Meesh cunhada: seu nível continua."
+            "value": "Primeira Meesh cunhada: sua Glória cresce."
           }
         }
       }
@@ -248978,43 +248978,43 @@
         "ar": {
           "stringUnit": {
             "state": "translated",
-            "value": "تغادر الشرارات المنفقة حوزتك لا مستواك، ورتبتك لا تنخفض أبدًا: كل سكّ يضيف مجدًا."
+            "value": "السكّ يُنفق شرارات قابلة للتحويل: ينخفض مستواك بقدرها، ورتبتك لا تنخفض أبدًا، وكل سكّ يضيف مجدًا."
           }
         },
         "de": {
           "stringUnit": {
             "state": "translated",
-            "value": "Ausgegebene Funken verlassen deinen Besitz, nicht dein Level, und dein Rang sinkt nie: Jede Prägung bringt Ruhm."
+            "value": "Eine Prägung gibt umwandelbare Funken aus: Dein Level sinkt entsprechend, dein Rang nie, und jede Prägung bringt Ruhm."
           }
         },
         "en": {
           "stringUnit": {
             "state": "translated",
-            "value": "Spent sparks leave your pocket, not your level, and your rank never drops: every mint adds Glory."
+            "value": "Minting spends convertible sparks: your level drops by as much, your rank never does, and every mint adds Glory."
           }
         },
         "es": {
           "stringUnit": {
             "state": "translated",
-            "value": "Las chispas gastadas salen de tu bolsillo, no de tu nivel, y tu rango nunca baja: cada acuñación suma Gloria."
+            "value": "Acuñar gasta chispas convertibles: tu nivel baja en la misma medida, tu rango nunca, y cada acuñación suma Gloria."
           }
         },
         "fr": {
           "stringUnit": {
             "state": "translated",
-            "value": "Les étincelles dépensées quittent ta poche, pas ton niveau, et ton rang ne baisse jamais : chaque frappe ajoute de la Gloire."
+            "value": "La frappe dépense des étincelles convertibles : ton niveau baisse d’autant, ton rang jamais, et chaque frappe ajoute de la Gloire."
           }
         },
         "it": {
           "stringUnit": {
             "state": "translated",
-            "value": "Le scintille spese escono dalla tua tasca, non dal tuo livello, e il tuo rango non scende mai: ogni conio aggiunge Gloria."
+            "value": "Il conio spende scintille convertibili: il tuo livello scende di altrettanto, il tuo rango mai, e ogni conio aggiunge Gloria."
           }
         },
         "pt-BR": {
           "stringUnit": {
             "state": "translated",
-            "value": "As faíscas gastas saem das suas mãos, não do seu nível, e seu rank nunca cai: cada cunhagem soma Glória."
+            "value": "Cunhar gasta faíscas conversíveis: seu nível cai na mesma medida, seu rank nunca, e cada cunhagem soma Glória."
           }
         }
       }
@@ -249354,43 +249354,43 @@
         "ar": {
           "stringUnit": {
             "state": "translated",
-            "value": "يُقرأ مستواك من الشرارات التي كسبتها منذ آخر تميّز. مليون شرارة للمستوى 100، وخطوة كل عشرة مستويات: من دونها ينتظر المستوى. عشرون مرحلة. ترتفع المستويات حتى 499؛ وتفتحها رتبة سفير حتى 1000، ورتبة عرّاف بلا حدّ. يتطلّب كل مستوى أكثر قليلًا من الذي قبله."
+            "value": "يُقرأ مستواك من شراراتك القابلة للتحويل: السكّ يُنفقها، فيُخفض مستواك. مليون شرارة للمستوى 100، وخطوة كل عشرة مستويات: من دونها ينتظر المستوى. عشرون مرحلة. ترتفع المستويات حتى 499؛ وتفتحها رتبة سفير حتى 1000، ورتبة عرّاف بلا حدّ. يتطلّب كل مستوى أكثر قليلًا من الذي قبله."
           }
         },
         "de": {
           "stringUnit": {
             "state": "translated",
-            "value": "Dein Level ergibt sich aus den seit deinem letzten Prestige gesammelten Funken. Eine Million Funken für Level 100 und ein Schritt je zehn Level: ohne ihn wartet das Level. Zwanzig Stufen. Die Level steigen bis 499; der Rang Botschafter öffnet sie bis 1.000, der Rang Orakel ohne Grenze. Jedes Level verlangt etwas mehr als das vorherige."
+            "value": "Dein Level ergibt sich aus deinen umwandelbaren Funken: Eine Prägung gibt sie aus und senkt es damit. Eine Million Funken für Level 100 und ein Schritt je zehn Level: ohne ihn wartet das Level. Zwanzig Stufen. Die Level steigen bis 499; der Rang Botschafter öffnet sie bis 1.000, der Rang Orakel ohne Grenze. Jedes Level verlangt etwas mehr als das vorherige."
           }
         },
         "en": {
           "stringUnit": {
             "state": "translated",
-            "value": "Your level is read from the sparks earned since your last Prestige. A million sparks for level 100, and one step every ten levels: without it, the level waits. Twenty tiers. Levels climb up to 499; the Ambassador rank opens them up to 1,000, and the Oracle rank opens them without limit. Each level asks for a little more than the one before."
+            "value": "Your level is read from your convertible sparks: minting spends them, so it lowers your level. A million sparks for level 100, and one step every ten levels: without it, the level waits. Twenty tiers. Levels climb up to 499; the Ambassador rank opens them up to 1,000, and the Oracle rank opens them without limit. Each level asks for a little more than the one before."
           }
         },
         "es": {
           "stringUnit": {
             "state": "translated",
-            "value": "Tu nivel se lee en las chispas ganadas desde tu último Prestigio. Un millón de chispas para el nivel 100 y un paso por decena: sin él, el nivel espera. Veinte tramos. Los niveles suben hasta 499; el rango Embajador los abre hasta 1000, y el rango Oráculo, sin límite. Cada nivel pide un poco más que el anterior."
+            "value": "Tu nivel se lee en tus chispas convertibles: acuñar las gasta, así que lo baja. Un millón de chispas para el nivel 100 y un paso por decena: sin él, el nivel espera. Veinte tramos. Los niveles suben hasta 499; el rango Embajador los abre hasta 1000, y el rango Oráculo, sin límite. Cada nivel pide un poco más que el anterior."
           }
         },
         "fr": {
           "stringUnit": {
             "state": "translated",
-            "value": "Le niveau se lit sur les étincelles gagnées depuis ton dernier Prestige. Un million d’étincelles pour le niveau 100, et une étape par dizaine : sans elle, le niveau attend. Vingt paliers. Les niveaux montent jusqu’à 499 ; le rang Ambassadeur ouvre jusqu’à 1 000, et le rang Oracle les ouvre sans limite. Chaque niveau demande un peu plus que le précédent."
+            "value": "Ton niveau se lit sur tes étincelles convertibles : la frappe les dépense, donc le fait baisser. Un million d’étincelles pour le niveau 100, et une étape par dizaine : sans elle, le niveau attend. Vingt paliers. Les niveaux montent jusqu’à 499 ; le rang Ambassadeur ouvre jusqu’à 1 000, et le rang Oracle les ouvre sans limite. Chaque niveau demande un peu plus que le précédent."
           }
         },
         "it": {
           "stringUnit": {
             "state": "translated",
-            "value": "Il livello si legge sulle scintille guadagnate dall’ultimo Prestigio. Un milione di scintille per il livello 100 e un passo ogni dieci livelli: senza, il livello aspetta. Venti fasce. I livelli salgono fino a 499; il rango Ambasciatore li apre fino a 1000, il rango Oracolo senza limite. Ogni livello richiede un po’ più del precedente."
+            "value": "Il livello si legge sulle tue scintille convertibili: il conio le spende, quindi lo abbassa. Un milione di scintille per il livello 100 e un passo ogni dieci livelli: senza, il livello aspetta. Venti fasce. I livelli salgono fino a 499; il rango Ambasciatore li apre fino a 1000, il rango Oracolo senza limite. Ogni livello richiede un po’ più del precedente."
           }
         },
         "pt-BR": {
           "stringUnit": {
             "state": "translated",
-            "value": "Seu nível se lê nas faíscas ganhas desde o seu último Prestígio. Um milhão de faíscas para o nível 100 e uma etapa por dezena: sem ela, o nível espera. Vinte faixas. Os níveis vão até 499; a patente Embaixador os abre até 1.000, e a patente Oráculo, sem limite. Cada nível pede um pouco mais do que o anterior."
+            "value": "Seu nível se lê nas suas faíscas conversíveis: cunhar as gasta, então o baixa. Um milhão de faíscas para o nível 100 e uma etapa por dezena: sem ela, o nível espera. Vinte faixas. Os níveis vão até 499; a patente Embaixador os abre até 1.000, e a patente Oráculo, sem limite. Cada nível pede um pouco mais do que o anterior."
           }
         }
       }
@@ -249495,43 +249495,43 @@
         "ar": {
           "stringUnit": {
             "state": "translated",
-            "value": "السكّ لم يعد يُنزِلك"
+            "value": "السكّ يُخفض مستواك"
           }
         },
         "de": {
           "stringUnit": {
             "state": "translated",
-            "value": "Prägen lässt dich nicht mehr absteigen"
+            "value": "Prägen senkt dein Level"
           }
         },
         "en": {
           "stringUnit": {
             "state": "translated",
-            "value": "Minting no longer brings you down"
+            "value": "Minting lowers your level"
           }
         },
         "es": {
           "stringUnit": {
             "state": "translated",
-            "value": "Acuñar ya no hace bajar"
+            "value": "Acuñar baja tu nivel"
           }
         },
         "fr": {
           "stringUnit": {
             "state": "translated",
-            "value": "Frapper ne fait plus redescendre"
+            "value": "Frapper fait baisser le niveau"
           }
         },
         "it": {
           "stringUnit": {
             "state": "translated",
-            "value": "Coniare non fa più scendere"
+            "value": "Coniare abbassa il livello"
           }
         },
         "pt-BR": {
           "stringUnit": {
             "state": "translated",
-            "value": "Cunhar não faz mais descer"
+            "value": "Cunhar baixa o seu nível"
           }
         }
       }
@@ -249542,43 +249542,43 @@
         "ar": {
           "stringUnit": {
             "state": "translated",
-            "value": "يخرج الثمن من الشرارات التي في حوزتك، ومنها وحدها. لا ينخفض مستواك: يُقرأ من الشرارات التي كسبتها منذ آخر تميّز، والتميّز وحده يعيده إلى 1. ولا ينطفئ أي وسام ولا ينخفض."
+            "value": "السكّ يُنفق شرارات قابلة للتحويل: ينخفض مستواك بقدرها، ورتبتك لا تنخفض أبدًا، وكل سكّ يضيف مجدًا. شراراتك المتراكمة تبقى، على سبيل الإشارة. ولا ينطفئ أي وسام ولا ينخفض."
           }
         },
         "de": {
           "stringUnit": {
             "state": "translated",
-            "value": "Der Preis geht von deinen Funken im Besitz ab, und nur von dort. Dein Level sinkt nicht: Es ergibt sich aus den seit deinem letzten Prestige gesammelten Funken, und nur das Prestige setzt es auf 1 zurück. Kein Abzeichen erlischt oder steigt ab."
+            "value": "Eine Prägung gibt umwandelbare Funken aus: Dein Level sinkt entsprechend, dein Rang nie, und jede Prägung bringt Ruhm. Deine gesammelten Funken bleiben, als Richtwert. Kein Abzeichen erlischt oder steigt ab."
           }
         },
         "en": {
           "stringUnit": {
             "state": "translated",
-            "value": "The price comes out of your sparks in hand, and from there only. Your level does not drop: it is read from the sparks earned since your last Prestige, and only Prestige sets it back to 1. No badge goes out or drops."
+            "value": "Minting spends convertible sparks: your level drops by as much, your rank never does, and every mint adds Glory. Your earned sparks stay, as an indication. No badge goes out or drops."
           }
         },
         "es": {
           "stringUnit": {
             "state": "translated",
-            "value": "El precio sale de tus chispas en mano, y solo de ahí. Tu nivel no baja: se lee en las chispas ganadas desde tu último Prestigio, y solo el Prestigio lo devuelve a 1. Ninguna insignia se apaga ni baja."
+            "value": "Acuñar gasta chispas convertibles: tu nivel baja en la misma medida, tu rango nunca, y cada acuñación suma Gloria. Tus chispas acumuladas se quedan, a título indicativo. Ninguna insignia se apaga ni baja."
           }
         },
         "fr": {
           "stringUnit": {
             "state": "translated",
-            "value": "Le prix sort de tes étincelles convertibles, et de là seulement. Ton niveau ne baisse pas : il se lit sur les étincelles cumulées depuis ton dernier Prestige, et seul le Prestige le remet à 1. Aucun badge ne s’éteint ni ne redescend."
+            "value": "La frappe dépense des étincelles convertibles : ton niveau baisse d’autant, ton rang jamais, et chaque frappe ajoute de la Gloire. Tes étincelles cumulées restent, à titre indicatif. Aucun badge ne s’éteint ni ne redescend."
           }
         },
         "it": {
           "stringUnit": {
             "state": "translated",
-            "value": "Il prezzo esce dalle tue scintille in tasca, e solo da lì. Il tuo livello non scende: si legge sulle scintille guadagnate dall’ultimo Prestigio, e solo il Prestigio lo riporta a 1. Nessun badge si spegne né scende."
+            "value": "Il conio spende scintille convertibili: il tuo livello scende di altrettanto, il tuo rango mai, e ogni conio aggiunge Gloria. Le scintille accumulate restano, a titolo indicativo. Nessun badge si spegne né scende."
           }
         },
         "pt-BR": {
           "stringUnit": {
             "state": "translated",
-            "value": "O preço sai das suas faíscas em mãos, e só delas. Seu nível não cai: ele se lê nas faíscas ganhas desde o seu último Prestígio, e só o Prestígio o leva de volta a 1. Nenhum selo se apaga nem desce."
+            "value": "Cunhar gasta faíscas conversíveis: seu nível cai na mesma medida, seu rank nunca, e cada cunhagem soma Glória. Suas faíscas acumuladas ficam, a título indicativo. Nenhum selo se apaga nem desce."
           }
         }
       }
@@ -277744,43 +277744,43 @@
         "ar": {
           "stringUnit": {
             "state": "translated",
-            "value": "حين تكسبها تصنع مستواك. وفي حوزتك كلها قابلة للتحويل: تدفع ثمن Meesh."
+            "value": "القابلة للتحويل تصنع مستواك وتدفع؛ والمتراكمة تقول إمكاناتك."
           }
         },
         "de": {
           "stringUnit": {
             "state": "translated",
-            "value": "Gesammelt machen sie dein Level; im Besitz bezahlen sie deine Meeshes."
+            "value": "Umwandelbar machen sie dein Level und zahlen; gesammelt dein Potenzial."
           }
         },
         "en": {
           "stringUnit": {
             "state": "translated",
-            "value": "Earned, they make your level; in hand, they pay for your Meeshes."
+            "value": "Convertible, they make your level and pay; earned, your potential."
           }
         },
         "es": {
           "stringUnit": {
             "state": "translated",
-            "value": "Ganadas, hacen tu nivel; en mano, pagan tus Meeshes."
+            "value": "Convertibles, hacen tu nivel y pagan; acumuladas, tu potencial."
           }
         },
         "fr": {
           "stringUnit": {
             "state": "translated",
-            "value": "Cumulées, elles font ton niveau ; convertibles, elles se dépensent."
+            "value": "Convertibles, elles font ton niveau et paient ; cumulées, ton potentiel."
           }
         },
         "it": {
           "stringUnit": {
             "state": "translated",
-            "value": "Guadagnate, fanno il tuo livello; in tasca, pagano le tue Meesh."
+            "value": "Convertibili, fanno il tuo livello e pagano; accumulate, il potenziale."
           }
         },
         "pt-BR": {
           "stringUnit": {
             "state": "translated",
-            "value": "Ganhas, formam o seu nível; em mãos, pagam suas Meeshes."
+            "value": "Conversíveis, fazem seu nível e pagam; acumuladas, seu potencial."
           }
         }
       }
@@ -283384,43 +283384,43 @@
         "ar": {
           "stringUnit": {
             "state": "translated",
-            "value": "الحلقة تُظهر مستواك: تمتلئ بالشرارات التي كسبتها منذ آخر تميّز."
+            "value": "الحلقة تُظهر مستواك: تمتلئ بشراراتك القابلة للتحويل."
           }
         },
         "de": {
           "stringUnit": {
             "state": "translated",
-            "value": "Der Ring zeigt dein Level: Er füllt sich mit den seit deinem letzten Prestige gesammelten Funken."
+            "value": "Der Ring zeigt dein Level: Er füllt sich mit deinen umwandelbaren Funken."
           }
         },
         "en": {
           "stringUnit": {
             "state": "translated",
-            "value": "The ring shows your level: it fills up with the sparks earned since your last Prestige."
+            "value": "The ring shows your level: it fills up with your convertible sparks."
           }
         },
         "es": {
           "stringUnit": {
             "state": "translated",
-            "value": "El anillo muestra tu nivel: se llena con las chispas ganadas desde tu último Prestigio."
+            "value": "El anillo muestra tu nivel: se llena con tus chispas convertibles."
           }
         },
         "fr": {
           "stringUnit": {
             "state": "translated",
-            "value": "L’anneau montre ton niveau : il se remplit avec les étincelles gagnées depuis ton dernier Prestige."
+            "value": "L’anneau montre ton niveau : il se remplit avec tes étincelles convertibles."
           }
         },
         "it": {
           "stringUnit": {
             "state": "translated",
-            "value": "L’anello mostra il tuo livello: si riempie con le scintille guadagnate dall’ultimo Prestigio."
+            "value": "L’anello mostra il tuo livello: si riempie con le tue scintille convertibili."
           }
         },
         "pt-BR": {
           "stringUnit": {
             "state": "translated",
-            "value": "O anel mostra o seu nível: ele se enche com as faíscas ganhas desde o seu último Prestígio."
+            "value": "O anel mostra o seu nível: ele se enche com as suas faíscas conversíveis."
           }
         }
       }
@@ -283713,43 +283713,43 @@
         "ar": {
           "stringUnit": {
             "state": "translated",
-            "value": "هذه كل شراراتك الآن، وهي التي يُنفقها السكّ. والسكّ يخصم ثمنه منها دون أن يمسّ مستواك."
+            "value": "هذه كل شراراتك الآن، وهي التي يُنفقها السكّ. وهي التي تصنع مستواك: السكّ يخصم ثمنه منها، فينخفض مستواك بقدره."
           }
         },
         "de": {
           "stringUnit": {
             "state": "translated",
-            "value": "Das sind alle Funken, die du gerade hast – die, die eine Prägung ausgibt. Eine Prägung zieht ihren Preis ab, ohne dein Level zu berühren."
+            "value": "Das sind alle Funken, die du gerade hast – die, die eine Prägung ausgibt. Sie machen dein Level: Eine Prägung zieht ihren Preis ab, und dein Level sinkt entsprechend."
           }
         },
         "en": {
           "stringUnit": {
             "state": "translated",
-            "value": "These are all the sparks you hold right now, the ones a mint spends. A mint takes its price out, without touching your level."
+            "value": "These are all the sparks you hold right now, the ones a mint spends. They make your level: a mint takes its price out, and your level drops by as much."
           }
         },
         "es": {
           "stringUnit": {
             "state": "translated",
-            "value": "Son todas tus chispas de ahora, las que gasta la acuñación. Una acuñación les resta su precio, sin tocar tu nivel."
+            "value": "Son todas tus chispas de ahora, las que gasta la acuñación. Hacen tu nivel: una acuñación les resta su precio, y tu nivel baja en la misma medida."
           }
         },
         "fr": {
           "stringUnit": {
             "state": "translated",
-            "value": "Ce sont toutes tes étincelles du moment, celles que la frappe dépense. Une frappe en retire le prix, sans toucher à ton niveau."
+            "value": "Ce sont toutes tes étincelles du moment, celles que la frappe dépense. Elles font ton niveau : une frappe en retire le prix, et ton niveau baisse d’autant."
           }
         },
         "it": {
           "stringUnit": {
             "state": "translated",
-            "value": "Sono tutte le scintille che hai adesso, quelle che il conio spende. Un conio ne toglie il prezzo, senza toccare il tuo livello."
+            "value": "Sono tutte le scintille che hai adesso, quelle che il conio spende. Fanno il tuo livello: un conio ne toglie il prezzo, e il tuo livello scende di altrettanto."
           }
         },
         "pt-BR": {
           "stringUnit": {
             "state": "translated",
-            "value": "São todas as suas faíscas de agora, as que a cunhagem gasta. Uma cunhagem tira delas o preço, sem mexer no seu nível."
+            "value": "São todas as suas faíscas de agora, as que a cunhagem gasta. Elas fazem o seu nível: uma cunhagem tira delas o preço, e o seu nível cai na mesma medida."
           }
         }
       }
@@ -283854,43 +283854,43 @@
         "ar": {
           "stringUnit": {
             "state": "translated",
-            "value": "لم تعد الرياح المواتية فعّالة: لم يعد السكّ يخفض مستواك."
+            "value": "الرياح المواتية متوقّفة."
           }
         },
         "de": {
           "stringUnit": {
             "state": "translated",
-            "value": "Der Rückenwind ist nicht mehr aktiv: Eine Prägung senkt dein Level nicht mehr."
+            "value": "Der Rückenwind ist ausgeschaltet."
           }
         },
         "en": {
           "stringUnit": {
             "state": "translated",
-            "value": "The Tailwind is no longer active: a mint no longer lowers your level."
+            "value": "The Tailwind is switched off."
           }
         },
         "es": {
           "stringUnit": {
             "state": "translated",
-            "value": "El Viento de cola ya no está activo: una acuñación ya no baja tu nivel."
+            "value": "El Viento de cola está apagado."
           }
         },
         "fr": {
           "stringUnit": {
             "state": "translated",
-            "value": "Le Vent arrière n’est plus actif : une frappe ne fait plus baisser ton niveau."
+            "value": "Le Vent arrière est éteint."
           }
         },
         "it": {
           "stringUnit": {
             "state": "translated",
-            "value": "Il Vento in poppa non è più attivo: un conio non abbassa più il tuo livello."
+            "value": "Il Vento in poppa è spento."
           }
         },
         "pt-BR": {
           "stringUnit": {
             "state": "translated",
-            "value": "O Vento a favor não está mais ativo: uma cunhagem não baixa mais o seu nível."
+            "value": "O Vento a favor está desligado."
           }
         }
       }
@@ -294582,43 +294582,43 @@
         "ar": {
           "stringUnit": {
             "state": "translated",
-            "value": "مستواك هو الرقم في وسط حلقتك. يُقرأ من الشرارات التي كسبتها منذ آخر تميّز: 10٬000 شرارة للمستوى 10، ومليون للمستوى 100."
+            "value": "مستواك هو الرقم في وسط حلقتك. يُقرأ من شراراتك القابلة للتحويل: 10٬000 للمستوى 10، ومليون للمستوى 100. سكّ Meesh يُنفقها، فيُخفض مستواك؛ وشراراتك المتراكمة تبقى، على سبيل الإشارة."
           }
         },
         "de": {
           "stringUnit": {
             "state": "translated",
-            "value": "Dein Level ist die Zahl in der Mitte deines Rings. Es ergibt sich aus den seit deinem letzten Prestige gesammelten Funken: 10.000 Funken für Level 10, eine Million für Level 100."
+            "value": "Dein Level ist die Zahl in der Mitte deines Rings. Es ergibt sich aus deinen umwandelbaren Funken: 10.000 für Level 10, eine Million für Level 100. Eine Meesh zu prägen gibt sie aus und senkt damit dein Level; deine gesammelten Funken bleiben, als Richtwert."
           }
         },
         "en": {
           "stringUnit": {
             "state": "translated",
-            "value": "Your level is the number at the centre of your ring. It is read from the sparks earned since your last Prestige: 10,000 sparks for level 10, a million for level 100."
+            "value": "Your level is the number at the centre of your ring. It is read from your convertible sparks: 10,000 for level 10, a million for level 100. Minting a Meesh spends them, so it lowers your level; your earned sparks stay, as an indication."
           }
         },
         "es": {
           "stringUnit": {
             "state": "translated",
-            "value": "Tu nivel es la cifra del centro de tu anillo. Se lee en las chispas ganadas desde tu último Prestigio: 10.000 chispas para el nivel 10, un millón para el nivel 100."
+            "value": "Tu nivel es la cifra del centro de tu anillo. Se lee en tus chispas convertibles: 10.000 para el nivel 10, un millón para el nivel 100. Acuñar una Meesh las gasta, así que baja tu nivel; tus chispas acumuladas se quedan, a título indicativo."
           }
         },
         "fr": {
           "stringUnit": {
             "state": "translated",
-            "value": "Ton niveau est le chiffre au centre de ton anneau. Il se lit sur les étincelles gagnées depuis ton dernier Prestige : 10 000 étincelles pour le niveau 10, un million pour le niveau 100."
+            "value": "Ton niveau est le chiffre au centre de ton anneau. Il se lit sur tes étincelles convertibles : 10 000 pour le niveau 10, un million pour le niveau 100. Frapper une Meesh les dépense, donc fait baisser ton niveau ; tes étincelles cumulées restent, à titre indicatif."
           }
         },
         "it": {
           "stringUnit": {
             "state": "translated",
-            "value": "Il tuo livello è il numero al centro dell’anello. Si legge sulle scintille guadagnate dall’ultimo Prestigio: 10.000 scintille per il livello 10, un milione per il livello 100."
+            "value": "Il tuo livello è il numero al centro dell’anello. Si legge sulle tue scintille convertibili: 10.000 per il livello 10, un milione per il livello 100. Coniare una Meesh le spende, quindi abbassa il tuo livello; le scintille accumulate restano, a titolo indicativo."
           }
         },
         "pt-BR": {
           "stringUnit": {
             "state": "translated",
-            "value": "Seu nível é o número no centro do seu anel. Ele se lê nas faíscas ganhas desde o seu último Prestígio: 10.000 faíscas para o nível 10, um milhão para o nível 100."
+            "value": "Seu nível é o número no centro do seu anel. Ele se lê nas suas faíscas conversíveis: 10.000 para o nível 10, um milhão para o nível 100. Cunhar uma Meesh as gasta, então baixa o seu nível; suas faíscas acumuladas ficam, a título indicativo."
           }
         }
       }
@@ -294629,43 +294629,43 @@
         "ar": {
           "stringUnit": {
             "state": "translated",
-            "value": "يفتح المهام عند المستوى 5، والدوري عند 10، والثنائي عند 20، والتميّز عند 100. من 10 إلى 100 تطلب كل عشرة مستويات خطوة أيضًا. سكّ Meesh يخصم من الشرارات التي في حوزتك، لا من مستواك أبدًا: التميّز وحده يعيده إلى 1."
+            "value": "يفتح المهام عند المستوى 5، والدوري عند 10، والثنائي عند 20، والتميّز عند 100. من 10 إلى 100 تطلب كل عشرة مستويات خطوة أيضًا. سكّ Meesh يُخفض مستواك، لكن الدوري والثنائي يبقيان مفتوحين متى فُتحا."
           }
         },
         "de": {
           "stringUnit": {
             "state": "translated",
-            "value": "Es öffnet die Missionen ab Level 5, die Liga ab 10, das Duo ab 20 und das Prestige ab 100. Von 10 bis 100 verlangt jede Zehnerstufe zusätzlich einen Schritt. Eine Meesh zu prägen nimmt Funken aus deinem Besitz, nie aus deinem Level: Nur das Prestige setzt es auf 1 zurück."
+            "value": "Es öffnet die Missionen ab Level 5, die Liga ab 10, das Duo ab 20 und das Prestige ab 100. Von 10 bis 100 verlangt jede Zehnerstufe zusätzlich einen Schritt. Eine Meesh zu prägen senkt dein Level, aber Liga und Duo bleiben offen, wenn sie einmal offen sind."
           }
         },
         "en": {
           "stringUnit": {
             "state": "translated",
-            "value": "It opens missions at level 5, the league at 10, the duo at 20 and Prestige at 100. From 10 to 100, every ten levels also ask for a step. Minting a Meesh takes sparks out of your pocket, never out of your level: only Prestige sets it back to 1."
+            "value": "It opens missions at level 5, the league at 10, the duo at 20 and Prestige at 100. From 10 to 100, every ten levels also ask for a step. Minting a Meesh lowers your level, but the league and the duo, once open, stay open."
           }
         },
         "es": {
           "stringUnit": {
             "state": "translated",
-            "value": "Abre las misiones en el nivel 5, la liga en el 10, el dúo en el 20 y el Prestigio en el 100. De 10 a 100, cada decena pide además un paso. Acuñar una Meesh resta chispas de tu bolsillo, nunca de tu nivel: solo el Prestigio lo devuelve a 1."
+            "value": "Abre las misiones en el nivel 5, la liga en el 10, el dúo en el 20 y el Prestigio en el 100. De 10 a 100, cada decena pide además un paso. Acuñar una Meesh baja tu nivel, pero la liga y el dúo, una vez abiertos, siguen abiertos."
           }
         },
         "fr": {
           "stringUnit": {
             "state": "translated",
-            "value": "Il ouvre les missions au niveau 5, la ligue au 10, le duo au 20 et le Prestige au 100. De 10 à 100, chaque dizaine demande aussi une étape. Frapper une Meesh retire des étincelles de ta poche, jamais de ton niveau : seul le Prestige le remet à 1."
+            "value": "Il ouvre les missions au niveau 5, la ligue au 10, le duo au 20 et le Prestige au 100. De 10 à 100, chaque dizaine demande aussi une étape. Frapper une Meesh fait baisser ton niveau, mais la ligue et le duo, une fois ouverts, le restent."
           }
         },
         "it": {
           "stringUnit": {
             "state": "translated",
-            "value": "Apre le missioni al livello 5, la lega al 10, la coppia al 20 e il Prestigio al 100. Da 10 a 100, ogni decina chiede anche un passo. Coniare una Meesh toglie scintille dalla tasca, mai dal livello: solo il Prestigio lo riporta a 1."
+            "value": "Apre le missioni al livello 5, la lega al 10, la coppia al 20 e il Prestigio al 100. Da 10 a 100, ogni decina chiede anche un passo. Coniare una Meesh abbassa il tuo livello, ma la lega e la coppia, una volta aperte, restano aperte."
           }
         },
         "pt-BR": {
           "stringUnit": {
             "state": "translated",
-            "value": "Ele abre as missões no nível 5, a liga no 10, a dupla no 20 e o Prestígio no 100. De 10 a 100, cada dezena pede também uma etapa. Cunhar uma Meesh tira faíscas das suas mãos, nunca do seu nível: só o Prestígio o leva de volta a 1."
+            "value": "Ele abre as missões no nível 5, a liga no 10, a dupla no 20 e o Prestígio no 100. De 10 a 100, cada dezena pede também uma etapa. Cunhar uma Meesh baixa o seu nível, mas a liga e a dupla, uma vez abertas, continuam abertas."
           }
         }
       }
@@ -294676,43 +294676,43 @@
         "ar": {
           "stringUnit": {
             "state": "translated",
-            "value": "لديك رصيد واحد: الشرارات التي في حوزتك، وهي مجموعك الآن. وكلها قابلة للتحويل: يأخذ السكّ ثمنه منها."
+            "value": "شراراتك القابلة للتحويل هي قيمتك الحقيقية الوحيدة: تصنع مستواك، ويأخذ السكّ ثمنه منها. أما المتراكمة فتقول إمكاناتك."
           }
         },
         "de": {
           "stringUnit": {
             "state": "translated",
-            "value": "Du hast ein einziges Guthaben: deine Funken im Besitz, dein aktueller Gesamtstand. Alle lassen sich umwandeln: Eine Prägung nimmt ihren Preis daraus."
+            "value": "Deine umwandelbaren Funken sind dein einziger echter Wert: Sie machen dein Level, und eine Prägung nimmt ihren Preis daraus. Die gesammelten zeigen dein Potenzial."
           }
         },
         "en": {
           "stringUnit": {
             "state": "translated",
-            "value": "You have a single balance: your sparks in hand, your total right now. All of them can be converted: a mint takes its price from them."
+            "value": "Your convertible sparks are your only real value: they make your level, and a mint takes its price from them. Your earned sparks tell your potential."
           }
         },
         "es": {
           "stringUnit": {
             "state": "translated",
-            "value": "Tienes un solo saldo: tus chispas en mano, tu total de ahora. Todas se pueden convertir: la acuñación toma de ellas su precio."
+            "value": "Tus chispas convertibles son tu único valor real: hacen tu nivel, y la acuñación toma de ellas su precio. Las acumuladas dicen tu potencial."
           }
         },
         "fr": {
           "stringUnit": {
             "state": "translated",
-            "value": "Tes étincelles convertibles sont ta seule valeur réelle : la frappe y prend son prix. Les cumulées, elles, font ton niveau."
+            "value": "Tes étincelles convertibles sont ta seule valeur réelle : elles font ton niveau, et la frappe y prend son prix. Les cumulées disent ton potentiel."
           }
         },
         "it": {
           "stringUnit": {
             "state": "translated",
-            "value": "Hai un solo saldo: le scintille in tasca, il tuo totale di adesso. Sono tutte convertibili: il conio ne prende il prezzo."
+            "value": "Le tue scintille convertibili sono il tuo unico valore reale: fanno il tuo livello, e il conio ne prende il prezzo. Le accumulate dicono il tuo potenziale."
           }
         },
         "pt-BR": {
           "stringUnit": {
             "state": "translated",
-            "value": "Você tem um único saldo: suas faíscas em mãos, o seu total de agora. Todas podem ser convertidas: a cunhagem tira delas o preço."
+            "value": "Suas faíscas conversíveis são o seu único valor real: fazem o seu nível, e a cunhagem tira delas o preço. As acumuladas dizem o seu potencial."
           }
         }
       }
@@ -294723,43 +294723,43 @@
         "ar": {
           "stringUnit": {
             "state": "translated",
-            "value": "لتسكّ Meesh، انظر إلى الشرارات التي في حوزتك: هي التي يجب أن تبلغ الثمن، وكلها قابلة للتحويل. والسكّ يخصم ثمنه منها دون أن يخفض مستواك."
+            "value": "لتسكّ Meesh، انظر إلى شراراتك القابلة للتحويل: هي التي يجب أن تبلغ الثمن. والسكّ يخصم ثمنه منها، فينخفض مستواك بقدره."
           }
         },
         "de": {
           "stringUnit": {
             "state": "translated",
-            "value": "Für eine Meesh zählen deine Funken im Besitz: Sie müssen den Preis erreichen, und alle lassen sich umwandeln. Eine Prägung zieht ihren Preis davon ab, ohne dein Level zu senken."
+            "value": "Für eine Meesh zählen deine umwandelbaren Funken: Sie müssen den Preis erreichen. Eine Prägung zieht ihren Preis davon ab, und dein Level sinkt entsprechend."
           }
         },
         "en": {
           "stringUnit": {
             "state": "translated",
-            "value": "To mint a Meesh, look at your sparks in hand: they must reach the price, and all of them can be converted. A mint takes its price out of them without lowering your level."
+            "value": "To mint a Meesh, look at your convertible sparks: they must reach the price. A mint takes its price out of them, and your level drops by as much."
           }
         },
         "es": {
           "stringUnit": {
             "state": "translated",
-            "value": "Para acuñar una Meesh, mira tus chispas en mano: son ellas las que deben alcanzar el precio, y todas se pueden convertir. Una acuñación les resta su precio sin bajar tu nivel."
+            "value": "Para acuñar una Meesh, mira tus chispas convertibles: son ellas las que deben alcanzar el precio. Una acuñación les resta su precio, y tu nivel baja en la misma medida."
           }
         },
         "fr": {
           "stringUnit": {
             "state": "translated",
-            "value": "Pour frapper une Meesh, regarde tes étincelles convertibles : ce sont elles qui doivent atteindre le prix. Une frappe en retire son prix, sans faire baisser ton niveau."
+            "value": "Pour frapper une Meesh, regarde tes étincelles convertibles : ce sont elles qui doivent atteindre le prix. Une frappe en retire son prix, et ton niveau baisse d’autant."
           }
         },
         "it": {
           "stringUnit": {
             "state": "translated",
-            "value": "Per coniare una Meesh, guarda le scintille in tasca: sono loro che devono raggiungere il prezzo, e sono tutte convertibili. Un conio ne toglie il prezzo senza abbassare il tuo livello."
+            "value": "Per coniare una Meesh, guarda le tue scintille convertibili: sono loro che devono raggiungere il prezzo. Un conio ne toglie il prezzo, e il tuo livello scende di altrettanto."
           }
         },
         "pt-BR": {
           "stringUnit": {
             "state": "translated",
-            "value": "Para cunhar uma Meesh, olhe suas faíscas em mãos: são elas que precisam alcançar o preço, e todas podem ser convertidas. Uma cunhagem tira delas o preço sem baixar o seu nível."
+            "value": "Para cunhar uma Meesh, olhe suas faíscas conversíveis: são elas que precisam alcançar o preço. Uma cunhagem tira delas o preço, e o seu nível cai na mesma medida."
           }
         }
       }
@@ -295992,43 +295992,43 @@
         "ar": {
           "stringUnit": {
             "state": "translated",
-            "value": "الرقم على حلقتك، ويُقرأ من الشرارات التي كسبتها منذ آخر تميّز. يفتح المهام (المستوى 5) والدوري (10) والثنائي (20) والتميّز (100). يرتفع حين تبلغ هذه الشرارات العتبة التالية. لا يخفضه السكّ أبدًا: التميّز وحده يعيده إلى 1."
+            "value": "الرقم على حلقتك، ويُقرأ من شراراتك القابلة للتحويل. يفتح المهام (المستوى 5) والدوري (10) والثنائي (20) والتميّز (100). يرتفع حين تبلغ هذه الشرارات العتبة التالية، وينخفض حين يُنفقها السكّ. والتميّز يعيده إلى 1."
           }
         },
         "de": {
           "stringUnit": {
             "state": "translated",
-            "value": "Die Zahl auf deinem Ring, abgelesen an den seit deinem letzten Prestige gesammelten Funken. Es öffnet die Missionen (Level 5), die Liga (10), das Duo (20) und das Prestige (100). Es steigt, wenn diese Funken die nächste Schwelle erreichen. Eine Prägung senkt es nie: Nur das Prestige setzt es auf 1 zurück."
+            "value": "Die Zahl auf deinem Ring, abgelesen an deinen umwandelbaren Funken. Es öffnet die Missionen (Level 5), die Liga (10), das Duo (20) und das Prestige (100). Es steigt, wenn diese Funken die nächste Schwelle erreichen, und sinkt, wenn eine Prägung sie ausgibt. Das Prestige setzt es auf 1 zurück."
           }
         },
         "en": {
           "stringUnit": {
             "state": "translated",
-            "value": "The number on your ring, read from the sparks earned since your last Prestige. It opens missions (level 5), the league (10), the duo (20) and Prestige (100). It goes up when those sparks reach the next threshold. A mint never lowers it: only Prestige sets it back to 1."
+            "value": "The number on your ring, read from your convertible sparks. It opens missions (level 5), the league (10), the duo (20) and Prestige (100). It goes up when those sparks reach the next threshold, and drops when a mint spends them. Prestige sets it back to 1."
           }
         },
         "es": {
           "stringUnit": {
             "state": "translated",
-            "value": "La cifra de tu anillo, leída en las chispas ganadas desde tu último Prestigio. Abre las misiones (nivel 5), la liga (10), el dúo (20) y el Prestigio (100). Sube cuando esas chispas alcanzan el umbral siguiente. Una acuñación nunca lo baja: solo el Prestigio lo devuelve a 1."
+            "value": "La cifra de tu anillo, leída en tus chispas convertibles. Abre las misiones (nivel 5), la liga (10), el dúo (20) y el Prestigio (100). Sube cuando esas chispas alcanzan el umbral siguiente, y baja cuando una acuñación las gasta. El Prestigio lo devuelve a 1."
           }
         },
         "fr": {
           "stringUnit": {
             "state": "translated",
-            "value": "Le chiffre de ton anneau, lu sur les étincelles gagnées depuis ton dernier Prestige. Il ouvre les missions (niveau 5), la ligue (10), le duo (20) et le Prestige (100). Il monte quand ces étincelles atteignent le seuil suivant. Une frappe ne le fait jamais baisser : seul le Prestige le remet à 1."
+            "value": "Le chiffre de ton anneau, lu sur tes étincelles convertibles. Il ouvre les missions (niveau 5), la ligue (10), le duo (20) et le Prestige (100). Il monte quand ces étincelles atteignent le seuil suivant, et baisse quand une frappe les dépense. Le Prestige le remet à 1."
           }
         },
         "it": {
           "stringUnit": {
             "state": "translated",
-            "value": "Il numero del tuo anello, letto sulle scintille guadagnate dall’ultimo Prestigio. Apre le missioni (livello 5), la lega (10), la coppia (20) e il Prestigio (100). Sale quando quelle scintille raggiungono la soglia successiva. Un conio non lo fa mai scendere: solo il Prestigio lo riporta a 1."
+            "value": "Il numero del tuo anello, letto sulle tue scintille convertibili. Apre le missioni (livello 5), la lega (10), la coppia (20) e il Prestigio (100). Sale quando quelle scintille raggiungono la soglia successiva, e scende quando un conio le spende. Il Prestigio lo riporta a 1."
           }
         },
         "pt-BR": {
           "stringUnit": {
             "state": "translated",
-            "value": "O número do seu anel, lido nas faíscas ganhas desde o seu último Prestígio. Ele abre as missões (nível 5), a liga (10), a dupla (20) e o Prestígio (100). Sobe quando essas faíscas alcançam o próximo limite. Uma cunhagem nunca o baixa: só o Prestígio o leva de volta a 1."
+            "value": "O número do seu anel, lido nas suas faíscas conversíveis. Ele abre as missões (nível 5), a liga (10), a dupla (20) e o Prestígio (100). Sobe quando essas faíscas alcançam o próximo limite, e cai quando uma cunhagem as gasta. O Prestígio o leva de volta a 1."
           }
         }
       }
@@ -296039,43 +296039,43 @@
         "ar": {
           "stringUnit": {
             "state": "translated",
-            "value": "رصيد واحد للإنفاق. الشرارات التي في حوزتك كلها قابلة للتحويل: هي التي تدفع ثمن Meesh. أما مستواك فيُقرأ من الشرارات التي كسبتها منذ آخر تميّز. كل إجراء مفيد يمنحك شرارات."
+            "value": "شراراتك القابلة للتحويل هي قيمتك الحقيقية الوحيدة: تصنع مستواك وتدفع ثمن Meesh. أما شراراتك المتراكمة فتقول إمكاناتك، على سبيل الإشارة. كل إجراء مفيد يمنحك شرارات."
           }
         },
         "de": {
           "stringUnit": {
             "state": "translated",
-            "value": "Ein einziges Guthaben zum Ausgeben. Deine Funken im Besitz lassen sich alle umwandeln: Sie bezahlen eine Meesh. Dein Level ergibt sich aus den seit deinem letzten Prestige gesammelten Funken. Jede nützliche Aktion bringt Funken."
+            "value": "Deine umwandelbaren Funken sind dein einziger echter Wert: Sie machen dein Level und bezahlen eine Meesh. Deine gesammelten Funken zeigen dein Potenzial, als Richtwert. Jede nützliche Aktion bringt Funken."
           }
         },
         "en": {
           "stringUnit": {
             "state": "translated",
-            "value": "A single balance to spend. Your sparks in hand can all be converted: they pay for a Meesh. Your level is read from the sparks earned since your last Prestige. Every useful action earns some."
+            "value": "Your convertible sparks are your only real value: they make your level and pay for a Meesh. Your earned sparks tell your potential, as an indication. Every useful action earns some."
           }
         },
         "es": {
           "stringUnit": {
             "state": "translated",
-            "value": "Un solo saldo para gastar. Tus chispas en mano se pueden convertir todas: pagan una Meesh. Tu nivel se lee en las chispas ganadas desde tu último Prestigio. Cada gesto útil da chispas."
+            "value": "Tus chispas convertibles son tu único valor real: hacen tu nivel y pagan una Meesh. Tus chispas acumuladas dicen tu potencial, a título indicativo. Cada gesto útil da chispas."
           }
         },
         "fr": {
           "stringUnit": {
             "state": "translated",
-            "value": "Tes étincelles convertibles sont ta seule valeur réelle : ce sont elles qui paient une Meesh. Ton niveau, lui, se lit sur les étincelles cumulées depuis ton dernier Prestige. Chaque geste utile en rapporte."
+            "value": "Tes étincelles convertibles sont ta seule valeur réelle : elles font ton niveau et paient une Meesh. Tes étincelles cumulées disent ton potentiel, à titre indicatif. Chaque geste utile en rapporte."
           }
         },
         "it": {
           "stringUnit": {
             "state": "translated",
-            "value": "Un solo saldo da spendere. Le scintille in tasca sono tutte convertibili: pagano una Meesh. Il tuo livello si legge sulle scintille guadagnate dall’ultimo Prestigio. Ogni gesto utile ne dà."
+            "value": "Le tue scintille convertibili sono il tuo unico valore reale: fanno il tuo livello e pagano una Meesh. Le scintille accumulate dicono il tuo potenziale, a titolo indicativo. Ogni gesto utile ne dà."
           }
         },
         "pt-BR": {
           "stringUnit": {
             "state": "translated",
-            "value": "Um único saldo para gastar. Suas faíscas em mãos podem ser todas convertidas: pagam uma Meesh. Seu nível se lê nas faíscas ganhas desde o seu último Prestígio. Cada gesto útil dá faíscas."
+            "value": "Suas faíscas conversíveis são o seu único valor real: fazem o seu nível e pagam uma Meesh. Suas faíscas acumuladas dizem o seu potencial, a título indicativo. Cada gesto útil dá faíscas."
           }
         }
       }
@@ -296838,43 +296838,43 @@
         "ar": {
           "stringUnit": {
             "state": "translated",
-            "value": "لم تعد الرياح المواتية فعّالة: لم يعد السكّ يخفض مستواك، فلم يبقَ ما تستعيده."
+            "value": "الرياح المواتية متوقّفة."
           }
         },
         "de": {
           "stringUnit": {
             "state": "translated",
-            "value": "Der Rückenwind ist nicht mehr aktiv: Prägen senkt dein Level nicht mehr, es gibt also nichts mehr aufzuholen."
+            "value": "Der Rückenwind ist ausgeschaltet."
           }
         },
         "en": {
           "stringUnit": {
             "state": "translated",
-            "value": "The Tailwind is no longer active: minting no longer lowers your level, so there is nothing left to catch up."
+            "value": "The Tailwind is switched off."
           }
         },
         "es": {
           "stringUnit": {
             "state": "translated",
-            "value": "El Viento de cola ya no está activo: acuñar ya no baja tu nivel, así que no queda nada que recuperar."
+            "value": "El Viento de cola está apagado."
           }
         },
         "fr": {
           "stringUnit": {
             "state": "translated",
-            "value": "Le Vent arrière n’est plus actif : la frappe ne fait plus baisser ton niveau, il n’y a donc plus rien à rattraper."
+            "value": "Le Vent arrière est éteint."
           }
         },
         "it": {
           "stringUnit": {
             "state": "translated",
-            "value": "Il Vento in poppa non è più attivo: coniare non abbassa più il tuo livello, quindi non c’è più niente da recuperare."
+            "value": "Il Vento in poppa è spento."
           }
         },
         "pt-BR": {
           "stringUnit": {
             "state": "translated",
-            "value": "O Vento a favor não está mais ativo: cunhar não baixa mais o seu nível, então não há mais nada a recuperar."
+            "value": "O Vento a favor está desligado."
           }
         }
       }
@@ -298685,6 +298685,100 @@
           "stringUnit": {
             "state": "translated",
             "value": "Entrar como %@?"
+          }
+        }
+      }
+    },
+    "game.guide.moment.first_mint_possible.means_drop": {
+      "extractionState": "manual",
+      "localizations": {
+        "fr": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Frapper coûte %@ : ton niveau baisse d’autant, et tu gagnes +%@ de Gloire."
+          }
+        },
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Minting costs %@: your level drops by as much, and you earn +%@ Glory."
+          }
+        },
+        "es": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Acuñar cuesta %@: tu nivel baja en la misma medida, y ganas +%@ de Gloria."
+          }
+        },
+        "de": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Prägen kostet %@: Dein Level sinkt entsprechend, und du bekommst +%@ Ruhm."
+          }
+        },
+        "it": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Coniare costa %@: il tuo livello scende di altrettanto, e guadagni +%@ di Gloria."
+          }
+        },
+        "pt-BR": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Cunhar custa %@: seu nível cai na mesma medida, e você ganha +%@ de Glória."
+          }
+        },
+        "ar": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "يكلّف السكّ %@: ينخفض مستواك بقدره، وتكسب +%@ من المجد."
+          }
+        }
+      }
+    },
+    "game.mint.chip.level_a11y": {
+      "extractionState": "manual",
+      "localizations": {
+        "fr": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Ton niveau passera de %@ à %@"
+          }
+        },
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Your level will go from %@ to %@"
+          }
+        },
+        "es": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Tu nivel pasará de %@ a %@"
+          }
+        },
+        "de": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Dein Level geht von %@ auf %@"
+          }
+        },
+        "it": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Il tuo livello passerà da %@ a %@"
+          }
+        },
+        "pt-BR": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Seu nível passará de %@ para %@"
+          }
+        },
+        "ar": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "سينتقل مستواك من %@ إلى %@"
           }
         }
       }

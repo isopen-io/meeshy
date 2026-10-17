@@ -3,7 +3,8 @@ import MeeshySDK
 import MeeshyUI
 
 /// Les deux PAIRES des étincelles (#10846, #10860) — les CONVERTIBLES (la poche, ce que la frappe dépense, la seule
-/// valeur réelle) et, en petit, le cycle rapporté au total à vie (porteur 2026-10-17) ; le niveau
+/// valeur réelle, et la base du niveau, #10892) et, en petit, le cycle rapporté au total à vie, indicatif (porteur
+/// 2026-10-17) ; le niveau
 /// actuel et le niveau max à vie, qui survit au prestige. TOUJOURS montrées, même quand le max égale le niveau
 /// (décision porteur 2026-10-16) : une paire qui disparaît quand ses deux nombres se rejoignent laisse croire que
 /// l'un d'eux n'existe pas.

@@ -37,7 +37,7 @@ enum ConceptText {
     static func why(_ concept: ProgressionConcept) -> String {
         switch concept {
         case .level: String(localized: "game.concept.level.why", defaultValue: "Ton niveau montre le chemin que tu as parcouru sur Meeshy.", bundle: .main)
-        case .points: String(localized: "game.concept.points.why", defaultValue: "Gagnées, elles font ton niveau ; en poche, elles paient tes Meeshes.", bundle: .main)
+        case .points: String(localized: "game.concept.points.why", defaultValue: "Convertibles, elles font ton niveau et paient ; cumulées, ton potentiel.", bundle: .main)
         case .meesh: String(localized: "game.concept.meesh.why", defaultValue: "La Meesh est la pièce rare de Meeshy : elle se garde ou se dépense.", bundle: .main)
         case .glory: String(localized: "game.concept.glory.why", defaultValue: "La Gloire donne ton rang, et ton rang ne baisse jamais.", bundle: .main)
         case .flame: String(localized: "game.concept.flame.why", defaultValue: "Ta Flamme compte tes jours d’affilée et augmente tes gains de mission.", bundle: .main)
@@ -326,8 +326,8 @@ enum ConceptText {
     /// Ce que c’est — la première phrase de « C’est quoi ? ».
     static func what(_ concept: ProgressionConcept) -> String {
         switch concept {
-        case .level: String(localized: "game.concept.level.what", defaultValue: "Ton niveau est le chiffre au centre de ton anneau. Il se lit sur tes points en poche : 10 000 points pour le niveau 10, un million pour le niveau 100.", bundle: .main)
-        case .points: String(localized: "game.concept.points.what", defaultValue: "Tu as deux soldes. Tes points en poche sont ton total du moment. Tes points à convertir sont la part de ce total que la frappe peut reprendre. Les deux sont comptés à part : ils peuvent être différents.", bundle: .main)
+        case .level: String(localized: "game.concept.level.what", defaultValue: "Ton niveau est le chiffre au centre de ton anneau. Il se lit sur tes étincelles convertibles : 10 000 pour le niveau 10, un million pour le niveau 100. Frapper une Meesh les dépense, donc fait baisser ton niveau ; tes étincelles cumulées restent, à titre indicatif.", bundle: .main)
+        case .points: String(localized: "game.concept.points.what", defaultValue: "Tes étincelles convertibles sont ta seule valeur réelle : elles font ton niveau, et la frappe y prend son prix. Les cumulées disent ton potentiel.", bundle: .main)
         case .meesh: String(localized: "game.concept.meesh.what", defaultValue: "Une Meesh est une pièce que tu frappes toi-même. Chaque pièce porte son numéro : une sur cent est en or, une sur mille en prisme.", bundle: .main)
         case .glory: String(localized: "game.concept.glory.what", defaultValue: "La Gloire est un compteur qui ne redescend jamais. Elle donne ton rang, parmi onze.", bundle: .main)
         case .flame: String(localized: "game.concept.flame.what", defaultValue: "Ta Flamme est ta série de jours : elle grandit chaque jour où tu fais au moins un geste, et change de forme en grandissant.", bundle: .main)
@@ -347,8 +347,8 @@ enum ConceptText {
     /// Comment s’en servir — la section « Comment m’en servir » de la fiche.
     static func use(_ concept: ProgressionConcept) -> String {
         switch concept {
-        case .level: String(localized: "game.concept.level.use", defaultValue: "Il ouvre les missions au niveau 5, la ligue au 10, le duo au 20 et le Prestige au 100. De 10 à 100, chaque dizaine demande aussi une étape. Frapper une Meesh retire des points en poche : ton niveau peut baisser, ton niveau record jamais.", bundle: .main)
-        case .points: String(localized: "game.concept.points.use", defaultValue: "Pour monter de niveau, regarde tes points en poche. Pour frapper une Meesh, regarde tes points à convertir : c’est ce solde qui doit atteindre le prix. Une frappe retire son prix des deux soldes.", bundle: .main)
+        case .level: String(localized: "game.concept.level.use", defaultValue: "Il ouvre les missions au niveau 5, la ligue au 10, le duo au 20 et le Prestige au 100. De 10 à 100, chaque dizaine demande aussi une étape. Frapper une Meesh fait baisser ton niveau, mais la ligue et le duo, une fois ouverts, le restent.", bundle: .main)
+        case .points: String(localized: "game.concept.points.use", defaultValue: "Pour frapper une Meesh, regarde tes étincelles convertibles : ce sont elles qui doivent atteindre le prix. Une frappe en retire son prix, et ton niveau baisse d’autant.", bundle: .main)
         case .meesh: String(localized: "game.concept.meesh.use", defaultValue: "Garde tes Meeshes : elles remplissent ton trésor, visible sur ton profil. Ou dépense-les : un gel pour ta Flamme, une mission à changer, le Sceau de la saison. Chaque frappe ajoute aussi de la Gloire.", bundle: .main)
         case .glory: String(localized: "game.concept.glory.use", defaultValue: "Ton rang se montre sur ton blason et sur ton profil. Il ouvre aussi les niveaux : jusqu’à 499 sous Ambassadeur, 1000 dès Ambassadeur, sans limite dès Oracle.", bundle: .main)
         case .flame: String(localized: "game.concept.flame.use", defaultValue: "Chaque jour de série ajoute 2 % à tes récompenses de mission, jusqu’à 50 %. Un gel couvre un jour manqué. Éteinte, elle se rallume avec des Meeshes pendant 48 h.", bundle: .main)
