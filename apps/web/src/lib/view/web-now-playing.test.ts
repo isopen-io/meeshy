@@ -1,9 +1,12 @@
 import { readFileSync } from 'node:fs';
-import { join } from 'node:path';
+import { dirname, join } from 'node:path';
+import { fileURLToPath } from 'node:url';
 import { describe, expect, test } from 'bun:test';
 
 import type { NowPlayingState } from './shell-playback';
 import { webPlaybackHold, type MediaSessionPort, type NowPlayingWording } from './web-now-playing';
+
+const HERE = dirname(fileURLToPath(import.meta.url));
 
 /**
  * **DANS LE NAVIGATEUR, LA NOTIFICATION D'UN VOCAL DIT QUI PARLE ET SE PILOTE**
@@ -152,11 +155,12 @@ describe('la carte de lecture du navigateur (#10890)', () => {
         throw new TypeError('position hors durée');
       },
     };
-    expect(() => holdOn(refuse).update(state({ durationMs: 0 }))).not.toThrow();
+    expect(() => holdOn(refuse).update(state())).not.toThrow();
+    expect(refuse.metadata).not.toBeNull();
   });
 
   test('le navigateur démarre la carte au lancement, hors coque ; la coque garde la sienne', () => {
-    const main = readFileSync(join(import.meta.dir, '..', '..', 'main.tsx'), 'utf8');
+    const main = readFileSync(join(HERE, '..', '..', 'main.tsx'), 'utf8');
     const debut = main.indexOf("import('@/lib/view/web-now-playing')");
     expect(debut).toBeGreaterThan(-1);
     const garde = main.lastIndexOf('if (', debut);
@@ -165,7 +169,7 @@ describe('la carte de lecture du navigateur (#10890)', () => {
   });
 
   test('la bulle d’un vocal se décrit aussi dans un navigateur qui sert la Media Session', () => {
-    const hook = readFileSync(join(import.meta.dir, 'use-voice-now-playing.ts'), 'utf8');
+    const hook = readFileSync(join(HERE, 'use-voice-now-playing.ts'), 'utf8');
     expect(hook).toMatch(/__SHELL__ \|\| .*mediaSession/);
   });
 });
