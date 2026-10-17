@@ -50,6 +50,11 @@ const deVerifyEmail = {
   'emailSent.openLink': 'Öffne den Link, gesendet an {email}',
   'emailSent.nothingReceived': 'Nichts erhalten?',
   'emailSent.nothingReceived.text': 'Sieh in deinem Spam-Ordner nach: Die Nachricht könnte dort gelandet sein.',
+  'signInLink.confirm.title': 'Als @{username} anmelden?',
+  'signInLink.confirm.lead': 'Dieser Link wurde nicht auf diesem Gerät angefordert. Fahre nur fort, wenn dieses Konto dir gehört.',
+  'signInLink.confirm.leadSignedIn': 'Du bist als @{current} angemeldet. Dieser Link würde stattdessen das Konto unten öffnen; @{current} bleibt in deinen Konten auf diesem Gerät.',
+  'signInLink.confirm.accept': 'Anmelden',
+  'signInLink.confirm.cancel': 'Abbrechen',
 };
 
 export default deVerifyEmail;

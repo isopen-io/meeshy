@@ -2,13 +2,15 @@ import { useEffect, useRef, useState } from 'react';
 import { useStore } from 'zustand/react';
 
 import { auth } from '@/lib/api/auth';
+import { confirmsSilently, linkConfirmationOf, type LinkAccount } from '@/lib/api/link-confirmation';
 import { accountReplacementOf, provenSessionOf, type AccountReplacement, type ProvenSessionGestures } from '@/lib/api/proven-session';
 import type { ArrivalDeps } from '@/lib/arrival/arrival';
-import { sessionStore } from '@/lib/api/session';
+import { heldAccountOf, sessionStore } from '@/lib/api/session';
 import { translate } from '@/lib/i18n-catalog';
 import { currentInterfaceLanguage } from '@/lib/interface-language';
 import { APP_HANDOFF_WAIT_MS, browserAppHandoff, type AppHandoff } from '@/lib/links/app-handoff';
 import { forgetEmailLinkSecret } from '@/lib/links/email-link-secret';
+import { linkDeviceSecrets } from '@/lib/links/link-device-secret';
 import { useOnline } from '@/lib/net/online';
 import { waiveNextOnboardingOffer } from '@/lib/onboarding/landing-waiver';
 import { forgetPendingVerification, pendingVerificationFor } from '@/lib/pending-verification';
@@ -26,6 +28,7 @@ import { AuthBrandFooter } from './auth-chrome';
 import { AuthColumn, AuthColumnBar } from './auth-column';
 import { awaitsSecondFactor, EmailCodeForm, goToSecondFactor, verifyEmailErrorText, withStrongEmail } from './email-code-form';
 import { Glyph } from './glyph';
+import { LinkSignInConfirmation } from './link-sign-in-confirmation';
 
 /**
  * LE FLUX DE VÉRIFICATION D'E-MAIL (T-verify, #5672) — anatomie de
@@ -104,7 +107,7 @@ const defaultDeps: VerifyEmailFlowDeps = {
   now: () => Date.now(),
 };
 
-type LinkPhase = 'idle' | 'handoff' | 'in-app' | 'checking' | 'confirm' | 'celebrating' | 'refused';
+type LinkPhase = 'idle' | 'handoff' | 'in-app' | 'checking' | 'ask' | 'confirm' | 'celebrating' | 'refused';
 
 const LINK_SPENT_OUTCOMES: ReadonlySet<ReturnType<typeof resolveVerifyEmailOutcome>['kind']> = new Set([
   'signed-in',
@@ -138,6 +141,8 @@ export function VerifyEmailFlow({
   );
   const [linkError, setLinkError] = useState<string | null>(null);
   const [replacement, setReplacement] = useState<AccountReplacement | null>(null);
+  const [asked, setAsked] = useState<LinkAccount | null>(null);
+  const [confirmed, setConfirmed] = useState(false);
   const linkConsumed = useRef(false);
   const handedOff = useRef(false);
 
@@ -161,7 +166,22 @@ export function VerifyEmailFlow({
   useEffect(() => {
     if (linkPhase !== 'checking' || email === null || token === null || linkConsumed.current) return;
     linkConsumed.current = true;
-    void deps.verifyEmail({ email, token }).then((result) => {
+    consumeLink(email, token, false);
+  }, [linkPhase, email, token, next, deps, language]);
+
+  function consumeLink(address: string, linkToken: string, confirm: boolean): void {
+    void deps.verifyEmail({ email: address, token: linkToken, ...(confirm ? { confirm } : {}) }).then((result) => {
+      const question = result.ok ? linkConfirmationOf(result.data) : null;
+      if (question !== null) {
+        if (!confirm && confirmsSilently(sessionStore.getState().session, question)) {
+          setConfirmed(true);
+          consumeLink(address, linkToken, true);
+          return;
+        }
+        setAsked(question);
+        setLinkPhase('ask');
+        return;
+      }
       const pending = result.ok ? accountReplacementOf(sessionStore.getState().session, provenSessionOf(result.data)) : null;
       const outcome = resolveVerifyEmailOutcome(result);
       if (pending !== null || LINK_SPENT_OUTCOMES.has(outcome.kind)) forgetEmailLinkSecret();
@@ -186,7 +206,14 @@ export function VerifyEmailFlow({
       setLinkError(outcome.kind === 'invalid-code' ? translate(language, 'verifyEmail.link.invalid') : verifyEmailErrorText(outcome));
       setLinkPhase('refused');
     });
-  }, [linkPhase, email, token, next, deps, language]);
+  }
+
+  function declineLink(): void {
+    forgetEmailLinkSecret();
+    linkDeviceSecrets.forget();
+    forgetPendingVerification();
+    navigate(href(sessionStore.getState().session.status === 'authenticated' ? 'list' : 'login'), true);
+  }
 
   async function handleResend() {
     if (email === null || resendSending || resendLocked || !online) return;
@@ -230,11 +257,26 @@ export function VerifyEmailFlow({
     <AuthColumn>
       <AuthColumnBar to={closeTarget} title={translate(language, 'verifyEmail.bar.title')} />
 
-      {linkPhase === 'confirm' && replacement !== null ? (
+      {linkPhase === 'ask' && asked !== null && token !== null ? (
+        <div className="flex flex-1 flex-col justify-center px-8">
+          <LinkSignInConfirmation
+            language={language}
+            account={asked}
+            current={heldAccountOf(session)?.user ?? null}
+            onConfirm={() => {
+              setConfirmed(true);
+              setLinkPhase('checking');
+              consumeLink(email, token, true);
+            }}
+            onCancel={declineLink}
+          />
+        </div>
+      ) : linkPhase === 'confirm' && replacement !== null ? (
         <div className="flex flex-1 flex-col justify-center px-8">
           <AccountReplacementPrompt
             language={language}
             replacement={replacement}
+            alreadyConfirmed={confirmed}
             {...(deps.accountGestures === undefined ? {} : { gestures: deps.accountGestures })}
             onAdopted={() => (replacement.proven.kind === 'second-factor' ? goToSecondFactor() : setLinkPhase('celebrating'))}
             onDiscarded={() => {
