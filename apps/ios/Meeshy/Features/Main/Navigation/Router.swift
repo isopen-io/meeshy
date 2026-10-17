@@ -598,16 +598,13 @@ final class Router: ObservableObject {
                     await self?.handleConversationDeepLink(id, draftText: draftText)
                 }
 
-            case .magicLink, .emailVerificationLink:
-                // Tapé in-app, donc déjà connecté (#8035) : `SignInLinkOpener`
-                // décide s'il faut d'abord déconnecter le compte courant.
-                Self.logger.info("Deep link sign-in link received")
-                if let link = SignInLink(destination) {
-                    Task { await SignInLinkOpener.open(link) }
-                }
-
-            case .passwordResetLink(let token):
-                PasswordResetLinkPresenter.shared.present(token: token)
+            case .magicLink, .emailVerificationLink, .passwordResetLink:
+                // Voie IN-APP (#10874) : un lien d'e-mail touché dans un contenu
+                // n'ouvre ni session ni écran de réinitialisation — il part au
+                // navigateur intégré. `InAppLinks` l'y envoie déjà ; ce cas en
+                // est le second verrou, pour tout appelant qui l'oublierait.
+                Self.logger.info("In-app email link sent to the browser")
+                EmailLinkBrowser.present(url)
 
             case .share(let text, let urlString):
                 Self.logger.info("Deep link share received")

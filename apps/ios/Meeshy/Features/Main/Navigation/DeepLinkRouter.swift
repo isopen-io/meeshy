@@ -224,9 +224,14 @@ enum DeepLinkParser {
         return destination(for: components, url: url, customScheme: true) ?? .external(url)
     }
 
-    // Un chemin meeshy.me inconnu (ex. /settings) part dans Safari.
+    // Un chemin meeshy.me inconnu (ex. /settings) part dans Safari. Un chemin
+    // de lien à jeton d'e-mail ne se lit QUE sur sa forme exacte (#10875) :
+    // toute variante part, elle aussi, dans Safari.
     private static func parseMeeshyWeb(_ url: URL) -> DeepLinkDestination {
-        destination(for: segments(of: url), url: url, customScheme: false) ?? .external(url)
+        if EmailLinkSecret.carriesSecret(url) {
+            return emailLink(url) ?? .external(url)
+        }
+        return destination(for: segments(of: url), url: url, customScheme: false) ?? .external(url)
     }
 
     /// Segments de chemin sans vide ni `/` : `//join/X` et `/./join/X` ont la
@@ -245,42 +250,28 @@ enum DeepLinkParser {
     }
 
     /// `/auth/magic-link?token=…` ou `/auth/magic-link/<token>` ;
-    /// `/auth/verify-email?token=…&email=…` (#8035) — et, depuis #10859, les
-    /// mêmes avec le secret dans le fragment (`?via=email#token=…`). Un jeton ou une adresse
-    /// vide n'ouvre rien : la validation échouerait, après avoir déconnecté.
+    /// `/auth/verify-email?token=…&email=…` (#8035) ; `/reset-password` et
+    /// `/auth/reset-password` ; les alias `/auth/email-link/…` (#10859, #10868)
+    /// — et, depuis #10859, le secret dans le fragment (`?via=email#token=…`).
+    /// La forme se juge par `EmailLinkSecret.exactForm` (#10875) ; un jeton ou
+    /// une adresse vide n'ouvre rien.
     ///
     /// Jamais par `meeshy://` (#10870) : n'importe quelle page ou app ouvre ce
-    /// schéma, et y présenterait le jeton d'un TIERS — la victime serait
-    /// connectée au compte de l'attaquant et y écrirait. Seul le lien universel
-    /// https, que l'AASA réserve à notre domaine, porte un lien qui connecte.
-    private static func authLink(id: String?, components: [String], url: URL, customScheme: Bool) -> DeepLinkDestination? {
-        switch id {
-        case "magic-link" where !customScheme:
-            return (identifier(components, 2) ?? linkSecret("token", in: url)).map { .magicLink(token: $0) }
-        case "verify-email" where !customScheme:
+    /// schéma, et y présenterait le jeton d'un TIERS. Seul le lien universel
+    /// https, que l'AASA réserve à notre domaine, porte un lien d'e-mail.
+    private static func emailLink(_ url: URL) -> DeepLinkDestination? {
+        switch EmailLinkSecret.exactForm(url) {
+        case .magicLink(let pathToken)?:
+            return (pathToken ?? linkSecret("token", in: url)).map { .magicLink(token: $0) }
+        case .verifyEmail?:
             guard let token = linkSecret("token", in: url),
                   let email = linkSecret("email", in: url) else { return nil }
             return .emailVerificationLink(token: token, email: email)
-        case "reset-password" where components.count <= 2 && !customScheme:
-            return passwordResetLink(url)
-        // #10859 — les ALIAS des liens neufs (`/auth/email-link/magic-link`,
-        // `/auth/email-link/verify-email`, `/auth/email-link/reset-password`
-        // depuis #10868), qu'aucune version publiée ne
-        // revendique. Lus dès maintenant ; l'AASA ne les revendiquera qu'après
-        // une version minimale (#10861).
-        case "email-link" where components.count == 3:
-            return authLink(id: components[2], components: [], url: url, customScheme: customScheme)
-        default:
+        case .resetPassword?:
+            return linkSecret("token", in: url).map { .passwordResetLink(token: $0) }
+        case nil:
             return nil
         }
-    }
-
-    /// `/reset-password` (l'adresse de l'e-mail), `/auth/reset-password` et
-    /// l'alias `/auth/email-link/reset-password` (#10868). Le jeton se lit dans
-    /// le fragment, puis dans la requête des e-mails partis avant #10859 ; un
-    /// jeton vide n'ouvre rien.
-    private static func passwordResetLink(_ url: URL) -> DeepLinkDestination? {
-        linkSecret("token", in: url).map { .passwordResetLink(token: $0) }
     }
 
     /// **La seule table des formes de lien Meeshy** (#7815), pour le web et le
@@ -296,10 +287,7 @@ enum DeepLinkParser {
         case "me": return GameLinkParser.link(from: components).map { .game($0) } ?? .ownProfile
         case "links": return .userLinks
         case "share": return parseShareQuery(url)
-        case "auth": return authLink(id: id, components: components, url: url, customScheme: customScheme)
-        // Jamais par `meeshy://` (#10868, audit) : n'importe quelle page ou app
-        // ouvre ce schéma, et y présenterait le jeton d'un TIERS.
-        case "reset-password" where components.count == 1 && !customScheme: return passwordResetLink(url)
+        // Les liens d'e-mail ne passent pas par cette table (`emailLink`, #10875).
         case "signup": return referralCode(components: components, url: url).map { .referral(code: $0) }
         case "hashtag": return id.map { .hashtag(tag: $0) }
         // Invitation de conversation — `/join/<id>` (canonique).

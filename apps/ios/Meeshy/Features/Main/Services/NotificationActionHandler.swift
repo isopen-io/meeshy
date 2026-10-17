@@ -444,9 +444,19 @@ final class NotificationActionHandler: NotificationActionHandling {
             openNotification(userInfo)
             presentNewContact(card)
         case (MeeshyNotificationAction.joinInvite.rawValue, .invite(let invite)?):
+            // Une invitation ne mène qu'à une jointure : un lien d'e-mail
+            // glissé à sa place n'entre jamais par la voie système (#10874).
+            guard Self.isInvitation(invite.url) else { return openNotification(userInfo) }
             openDeepLink(invite.url)
         default:
             openNotification(userInfo)
+        }
+    }
+
+    static func isInvitation(_ url: URL) -> Bool {
+        switch DeepLinkParser.parse(url) {
+        case .joinLink, .chatLink: return true
+        default: return false
         }
     }
 
