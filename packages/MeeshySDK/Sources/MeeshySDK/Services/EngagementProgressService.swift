@@ -79,6 +79,17 @@ public protocol EngagementProgressProviding: Sendable {
     /// fois par INTENTION de frappe, jamais par requête — sinon un retry
     /// deviendrait une seconde frappe, ce que cet identifiant empêche.
     func mintMeesh(requestId: String) async throws -> APIMeeshMintResult
+
+    /// La frappe avec sa GARDE DE PRIX (#10903) : `maxPrice` est le prix que l'écran a montré. Au-delà, la passerelle
+    /// refuse en 409 `PRICE_CHANGED` sans rien débiter. `nil` : sans garde, comme hier.
+    func mintMeesh(requestId: String, maxPrice: Int?) async throws -> APIMeeshMintResult
+}
+
+public extension EngagementProgressProviding {
+    /// Une source qui ne connaît pas la garde (aperçu, vitrine) frappe sans elle.
+    func mintMeesh(requestId: String, maxPrice: Int?) async throws -> APIMeeshMintResult {
+        try await mintMeesh(requestId: requestId)
+    }
 }
 
 public final class EngagementProgressService: EngagementProgressProviding, @unchecked Sendable {
@@ -95,12 +106,16 @@ public final class EngagementProgressService: EngagementProgressProviding, @unch
     }
 
     public func mintMeesh(requestId: String) async throws -> APIMeeshMintResult {
+        try await mintMeesh(requestId: requestId, maxPrice: nil)
+    }
+
+    public func mintMeesh(requestId: String, maxPrice: Int?) async throws -> APIMeeshMintResult {
         // `post` encode le corps et pose la méthode : `request` prend une `Data`
         // déjà sérialisée, ce qui obligerait à refaire ici ce que le client sait
         // faire.
         let response: APIResponse<APIMeeshMintResult> = try await api.post(
             MeEndpoint.meeshMint,
-            body: MintRequest(requestId: requestId)
+            body: MintRequest(requestId: requestId, maxPrice: maxPrice.flatMap { $0 > 0 ? $0 : nil })
         )
         return response.data
     }
@@ -110,5 +125,7 @@ public final class EngagementProgressService: EngagementProgressProviding, @unch
     /// dériver sans qu'aucun compilateur ne le remarque.
     private struct MintRequest: Encodable {
         let requestId: String
+        /// Absent du corps quand `nil` (`encodeIfPresent` synthétisé) : une passerelle antérieure ne le connaît pas.
+        let maxPrice: Int?
     }
 }

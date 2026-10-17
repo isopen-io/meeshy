@@ -304,7 +304,8 @@ type ErrorKey =
   | 'game.error.prestige_level_too_low'
   | 'game.error.prestige_at_maximum'
   | 'game.error.treasury_locked'
-  | 'game.error.mint_blocked_by_debt';
+  | 'game.error.mint_blocked_by_debt'
+  | 'game.error.price_changed';
 
 const ERRORS: Readonly<Record<string, ErrorKey>> = {
   [GAME_ERROR_CODES.insufficientPoints]: 'game.error.insufficient_points',
@@ -338,6 +339,8 @@ const ERRORS: Readonly<Record<string, ErrorKey>> = {
   // La frappe fermée par le RANG (une réserve du trésor) ou par une DETTE d'étincelles (porteur, 2026-10-16).
   [GAME_ERROR_CODES.treasuryLocked]: 'game.error.treasury_locked',
   [GAME_ERROR_CODES.mintBlockedByDebt]: 'game.error.mint_blocked_by_debt',
+  // Le prix a bougé entre l'affichage et la frappe (#10903) : rien n'est débité, le nouveau prix se relit.
+  [GAME_ERROR_CODES.priceChanged]: 'game.error.price_changed',
 };
 
 export function gameErrorMessage(code: string | undefined, language: Language = currentInterfaceLanguage()): string {

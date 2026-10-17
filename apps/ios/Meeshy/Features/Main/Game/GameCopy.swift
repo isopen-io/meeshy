@@ -547,6 +547,8 @@ enum GameCopy {
             String(localized: "game.error.prestige_level_too_low", defaultValue: "Le Prestige s’ouvre au niveau 100.", bundle: .main)
         case .prestigeAtMaximum:
             String(localized: "game.error.prestige_at_maximum", defaultValue: "Tu as déjà posé les cinq étoiles du Prestige.", bundle: .main)
+        case .priceChanged:
+            String(localized: "game.error.price_changed", defaultValue: "Le prix a changé depuis l’affichage : rien n’a été dépensé. Vérifie le nouveau prix, puis frappe à nouveau.", bundle: .main)
         case nil:
             String(localized: "game.error.generic", defaultValue: "Ça n’a pas abouti — vérifie ta connexion et réessaie.", bundle: .main)
         }

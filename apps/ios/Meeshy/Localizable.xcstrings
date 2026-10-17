@@ -260383,6 +260383,53 @@
         }
       }
     },
+    "game.error.price_changed": {
+      "extractionState": "manual",
+      "localizations": {
+        "ar": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "تغيّر السعر منذ عرضه: لم يُنفَق شيء. تحقّق من السعر الجديد ثم اسكك من جديد."
+          }
+        },
+        "de": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Der Preis hat sich seit der Anzeige geändert: Nichts wurde ausgegeben. Prüfe den neuen Preis und präge erneut."
+          }
+        },
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "The price changed since it was shown: nothing was spent. Check the new price, then mint again."
+          }
+        },
+        "es": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "El precio cambió desde que se mostró: no se gastó nada. Revisa el nuevo precio y vuelve a acuñar."
+          }
+        },
+        "fr": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Le prix a changé depuis l’affichage : rien n’a été dépensé. Vérifie le nouveau prix, puis frappe à nouveau."
+          }
+        },
+        "it": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Il prezzo è cambiato da quando è stato mostrato: non è stato speso nulla. Controlla il nuovo prezzo e conia di nuovo."
+          }
+        },
+        "pt-BR": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "O preço mudou desde que foi mostrado: nada foi gasto. Confira o novo preço e cunhe de novo."
+          }
+        }
+      }
+    },
     "game2.settings.friends_league.switch": {
       "extractionState": "manual",
       "localizations": {

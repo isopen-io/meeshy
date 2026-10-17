@@ -91,6 +91,7 @@ const ar = {
   'game.error.insufficient_points': 'شرارات جيبك لا تكفي لسكّ Meesh.',
   'game.error.treasury_locked': 'يُفتح هذا المستوى من الكنز برتبة أعلى.',
   'game.error.mint_blocked_by_debt': 'عليك دَين من الشرارات يجب سداده قبل السكّ: أرباحك القادمة تسدّده.',
+  'game.error.price_changed': 'تغيّر السعر منذ عرضه: لم يُنفَق شيء. تحقّق من السعر الجديد ثم اسكك من جديد.',
   'game.error.insufficient_meeshes': 'تحتاج إلى Meesh إضافية لذلك.',
   'game.error.freeze_at_maximum': 'لديك بالفعل تجميدان في الاحتياط: هذا هو الحد الأقصى.',
   'game.error.relight_not_allowed': 'لا يمكن إعادة إشعال اللهب الآن.',

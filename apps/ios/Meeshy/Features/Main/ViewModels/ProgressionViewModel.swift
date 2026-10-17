@@ -70,6 +70,8 @@ final class ProgressionViewModel: ObservableObject {
     private let userId: String
     private var revalidationTask: Task<Void, Never>?
     private var connectivity: AnyCancellable?
+    /// `game:updated` (#10900) — l'état du Jeu changé ailleurs.
+    private var gameUpdates: AnyCancellable?
 
     /// La charge servie, telle que le cache la garde : c'est sur elle que les
     /// mises à jour optimistes travaillent, `progress` et `game` en sont dérivés.
@@ -143,6 +145,10 @@ final class ProgressionViewModel: ObservableObject {
         self.connectivity = networkMonitor.isOfflinePublisher
             .receive(on: DispatchQueue.main)
             .sink { [weak self] offline in self?.isOnline = !offline }
+        self.gameUpdates = NotificationCenter.default.publisher(for: .gameStateUpdated)
+            .compactMap { $0.object as? GameUpdatedEvent }
+            .receive(on: DispatchQueue.main)
+            .sink { [weak self] event in self?.receive(event) }
         if let known = Self.lastKnown[cacheKey] { _ = adopt(known) }
     }
 
@@ -222,7 +228,8 @@ final class ProgressionViewModel: ObservableObject {
         let preview = game?.mint
         let before = beginGesture(GameOptimistic.afterMint)
         do {
-            let result = try await service.mintMeesh(requestId: mintRequestId)
+            // Le prix que l'écran montrait part avec la frappe (#10903) : au-delà, la passerelle refuse sans débiter.
+            let result = try await service.mintMeesh(requestId: mintRequestId, maxPrice: preview?.price)
             mintRequestId = UUID().uuidString
             confirm(revision: result.gameRevision, minted: result.mintedLifetime)
             celebrate(result, preview: preview)
@@ -233,7 +240,8 @@ final class ProgressionViewModel: ObservableObject {
             if refusal == .requestIdConflict { mintRequestId = UUID().uuidString }
             // La dette (ffbc396c92) et la réserve fermée se DISENT ; la relecture montre ensuite le blocage à l'écran.
             mintError = GameMintCostCopy.mintFailureMessage(code: refusal, debt: game?.mint.sparksDebt ?? game?.level.sparksDebt)
-            if refusal == .mintBlockedByDebt || refusal == .treasuryLocked { await load(forceNetwork: true) }
+            // Un refus d'ÉTAT dit que l'écran était périmé : il se relit — le nouveau prix, la dette, la réserve fermée.
+            if refusal == .mintBlockedByDebt || refusal == .treasuryLocked || refusal == .priceChanged { await load(forceNetwork: true) }
         }
         endGesture()
         isMinting = false
@@ -279,6 +287,19 @@ final class ProgressionViewModel: ObservableObject {
             servedRevision: served.gameRevision, servedMinted: served.meesh?.mintedLifetime,
             confirmed: Self.confirmed[cacheKey] ?? GameReadOrder.Confirmed()
         )
+    }
+
+    /// `game:updated` (#10900) — une frappe, un gain, une reprise faits AILLEURS. Un état plus ancien que ce qui est
+    /// confirmé est ignoré ; sinon il relève le plancher, se pose aussitôt quand aucun geste n'est en vol (un geste en vol
+    /// relit lui-même), et la progression entière (solde, compteurs) se relit derrière, en silence.
+    func receive(_ event: GameUpdatedEvent) {
+        let floor = Self.confirmed[cacheKey] ?? GameReadOrder.Confirmed()
+        guard GameReadOrder.isCurrent(servedRevision: event.gameRevision, servedMinted: nil, confirmed: floor) else { return }
+        confirm(revision: event.gameRevision, minted: nil)
+        if isSettled, let game = event.game, let snapshot {
+            commit(GameState(game: game, meesh: snapshot.meesh), over: snapshot)
+        }
+        Task { await load(forceNetwork: true) }
     }
 
     /// Ce que la passerelle confirme — une frappe, une lecture posée — relève le plancher : rien d'antérieur ne le défait.

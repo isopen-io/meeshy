@@ -105,6 +105,7 @@ const fr = {
   'game.error.insufficient_points': 'Pas assez d’étincelles convertibles pour frapper une Meesh.',
   'game.error.treasury_locked': 'Cette réserve du trésor s’ouvre avec un rang plus haut.',
   'game.error.mint_blocked_by_debt': 'Une dette d’étincelles est à rembourser avant de frapper : tes prochains gains la remboursent.',
+  'game.error.price_changed': 'Le prix a changé depuis l’affichage : rien n’a été dépensé. Vérifie le nouveau prix, puis frappe à nouveau.',
   'game.error.insufficient_meeshes': 'Il te faut une Meesh de plus pour ça.',
   'game.error.freeze_at_maximum': 'Tu as déjà deux gels en réserve : c’est le maximum.',
   'game.error.relight_not_allowed': 'La Flamme ne peut pas être rallumée maintenant.',

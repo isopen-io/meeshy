@@ -8,6 +8,7 @@ import { mintBadgeImpact, type MintBadgeImpact } from '@/lib/view/game-mint';
 
 import type { DataSource } from './config';
 import { readGameBlock } from './game';
+import { servedGameRevision } from './game-state-order';
 import type { ApiResult, HttpTransport } from './http';
 
 /**
@@ -36,7 +37,7 @@ import type { ApiResult, HttpTransport } from './http';
  */
 export const ENGAGEMENT_PROGRESS_PATH = meEndpoints.engagement;
 
-export const ENGAGEMENT_PROGRESS_QUERY_KEY = ['me', 'engagement'] as const;
+export { ENGAGEMENT_PROGRESS_QUERY_KEY } from './game-state-order';
 
 export async function fetchEngagementProgress(
   transport: HttpTransport,
@@ -72,6 +73,8 @@ export type EngagementWithGame = EngagementProgress & {
   readonly mintBadgeLoss?: number;
   /** Actions à refaire pour rallumer le badge le plus proche de ceux qu'une frappe éteindrait. */
   readonly mintBadgeRegain?: number;
+  /** Le marqueur d'ordre de l'état du jeu (#10900) — absent devant une passerelle antérieure (`game-state-order.ts`). */
+  readonly gameRevision?: number;
 };
 
 const withGame = (progress: EngagementProgress, game: GameBlockV2 | null, impact: MintBadgeImpact | null): EngagementWithGame =>
@@ -100,14 +103,13 @@ export async function loadEngagementProgress(params: {
   const result = await fetchEngagementProgress(params.transport, params.signal);
   if (!result.ok) return result;
   const game = readGameBlock(Reflect.get(result.data, 'game'));
-  return {
-    ok: true,
-    data: withGame(
-      resolveEngagementProgress(result.data),
-      game,
-      game === null ? null : mintBadgeImpact(result.data.counters, game.mint.price),
-    ),
-  };
+  const revision = servedGameRevision(result.data);
+  const view = withGame(
+    resolveEngagementProgress(result.data),
+    game,
+    game === null ? null : mintBadgeImpact(result.data.counters, game.mint.price),
+  );
+  return { ok: true, data: revision === undefined ? view : { ...view, gameRevision: revision } };
 }
 
 /**
@@ -136,17 +138,23 @@ export type MeeshMintResult = {
   readonly gloryGained?: number;
   readonly levelBefore?: number;
   readonly levelAfter?: number;
+  /** Le marqueur d'ordre de l'état du jeu APRÈS la frappe (#10900) : toute lecture partie avant elle porte un marqueur plus petit. */
+  readonly gameRevision?: number;
 };
 
+/**
+ * `maxPrice` (#10903) : le prix que l'écran a MONTRÉ. Si le prix rejugé par la passerelle le dépasse, elle refuse en
+ * 409 `PRICE_CHANGED` sans rien débiter — jamais un débit que l'utilisateur n'a pas vu.
+ */
 export async function mintMeesh(
   transport: HttpTransport,
   requestId: string,
-  signal?: AbortSignal,
+  options: { readonly maxPrice?: number; readonly signal?: AbortSignal } = {},
 ): Promise<ApiResult<MeeshMintResult>> {
   return transport.request<MeeshMintResult>({
     method: 'POST',
     path: MEESH_MINT_PATH,
-    body: { requestId },
-    ...(signal !== undefined ? { signal } : {}),
+    body: options.maxPrice === undefined ? { requestId } : { requestId, maxPrice: options.maxPrice },
+    ...(options.signal !== undefined ? { signal: options.signal } : {}),
   });
 }

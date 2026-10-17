@@ -37,6 +37,21 @@ final class EngagementProgressServiceTests: XCTestCase {
         XCTAssertEqual(mine, payload)
     }
 
+    /// La garde de prix (#10903) voyage dans le corps de la frappe ; sans elle, le corps reste celui d'hier.
+    func test_mintMeesh_sendsTheShownPriceAsMaxPrice_andOmitsItWithoutOne() async throws {
+        mock.stub("/me/meesh/mint", result: APIResponse<APIMeeshMintResult>(
+            success: true, data: APIMeeshMintResult(status: "minted", balance: 1, mintedLifetime: 1, gameRevision: 42), error: nil
+        ))
+
+        let guarded = try await service.mintMeesh(requestId: "req-1", maxPrice: 629)
+        XCTAssertEqual(mock.lastRequest?.bodyJSON?["maxPrice"] as? Int, 629)
+        XCTAssertEqual(guarded.gameRevision, 42)
+
+        _ = try await service.mintMeesh(requestId: "req-2")
+        XCTAssertNil(mock.lastRequest?.bodyJSON?["maxPrice"])
+        XCTAssertEqual(mock.lastRequest?.bodyJSON?["requestId"] as? String, "req-2")
+    }
+
     func test_decode_exactGatewayShape() throws {
         let json = """
         {"counters":[{"axisKey":"content.text_message","count":12}],
