@@ -37,6 +37,7 @@ const FRAGMENT_LINKS = [
   /* services/gateway/src/utils/email-secret-link.ts — emailSecretLink */
   '/auth/email-link/verify-email?via=email&token=',
   '/auth/email-link/magic-link?via=email&token=',
+  '/auth/email-link/reset-password?via=email',
   '/auth/email-link/magic-link?returnUrl=%2Fc%2F1&via=email&token=',
   '/reset-password?via=email&token=',
   '/account/deletion?action=confirm&via=email&token=',

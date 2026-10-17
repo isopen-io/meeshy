@@ -83,6 +83,13 @@ describe('liftEmailLinkSecret — le fragment quitte l’adresse', () => {
     expect(emailLinkSecret(win)).toEqual({ token: 'v1', email: 'ada@x.io' });
   });
 
+  test('alias de la réinitialisation (#10868) : ramené à `/reset-password`, jeton retenu', () => {
+    const win = fakeWindow('/auth/email-link/reset-password?via=email#token=r1');
+    liftEmailLinkSecret(win);
+    expect(win.writes.map((w) => w.url)).toEqual(['/reset-password']);
+    expect(emailLinkSecret(win)).toEqual({ token: 'r1' });
+  });
+
   test('alias sans jeton : ramené à l’adresse canonique quand même, jamais une page introuvable', () => {
     const win = fakeWindow('/auth/email-link/magic-link');
     liftEmailLinkSecret(win);
@@ -161,13 +168,13 @@ describe('forgetEmailLinkSecret — un jeton servi ne reste pas dans l’histori
 describe('les alias ne sont revendiqués par AUCUNE application publiée (#10859)', () => {
   const here = dirname(fileURLToPath(import.meta.url));
 
-  test('l’AASA ne revendique pas les alias', () => {
+  test('l’AASA ne revendique pas les alias, ni la réinitialisation que les versions publiées avaleraient (#10868)', () => {
     const aasa = JSON.parse(readFileSync(join(here, '../../../public/.well-known/apple-app-site-association'), 'utf8')) as {
       readonly applinks: { readonly details: ReadonlyArray<{ readonly components: ReadonlyArray<Record<string, unknown>> }> };
     };
     const claimed = aasa.applinks.details.flatMap((detail) => detail.components).filter((c) => c['exclude'] !== true).map((c) => String(c['/']));
     const claims = (path: string) => claimed.some((pattern) => new RegExp(`^${pattern.replace(/\*/g, '.*').replace(/\?/g, '.')}$`).test(path));
-    expect(Object.keys(EMAIL_LINK_ALIASES).filter(claims)).toEqual([]);
+    expect([...Object.keys(EMAIL_LINK_ALIASES), '/reset-password', '/auth/reset-password'].filter(claims)).toEqual([]);
   });
 
   for (const [name, manifestPath] of [

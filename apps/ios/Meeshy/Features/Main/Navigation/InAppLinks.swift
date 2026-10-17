@@ -12,7 +12,10 @@ enum InAppLinks {
         switch DeepLinkParser.parse(url) {
         // Une invitation touchée dans l'app l'est par un compte connecté : elle
         // n'a rien à y ouvrir et part dans le navigateur, comme avant (#8075).
-        case .external, .referral: return false
+        // Un lien de réinitialisation touché dans un message part au navigateur :
+        // il n'est pas une destination, et l'app ne présente que celui que le
+        // système lui remet (#10868).
+        case .external, .referral, .passwordResetLink: return false
         default: return true
         }
     }

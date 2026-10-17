@@ -32,6 +32,10 @@ enum DeepLinkDestination: Equatable {
     /// `/auth/verify-email?token=…&email=…` — le lien de l'e-mail « code +
     /// lien » (#8035) : il vérifie l'adresse et ouvre la session.
     case emailVerificationLink(token: String, email: String)
+    /// `/reset-password?via=email#token=…` — le lien de « Mot de passe
+    /// oublié » (#10868). Pas un lieu de l'app : il présente « Nouveau mot de
+    /// passe », connecté ou non, et rien n'attend la connexion.
+    case passwordResetLink(token: String)
     case share(text: String?, url: String?)
     case userLinks
     case postDetail(postId: String)
@@ -241,7 +245,7 @@ enum DeepLinkParser {
     /// `/auth/verify-email?token=…&email=…` (#8035) — et, depuis #10859, les
     /// mêmes avec le secret dans le fragment (`?via=email#token=…`). Un jeton ou une adresse
     /// vide n'ouvre rien : la validation échouerait, après avoir déconnecté.
-    private static func authLink(id: String?, components: [String], url: URL) -> DeepLinkDestination? {
+    private static func authLink(id: String?, components: [String], url: URL, customScheme: Bool) -> DeepLinkDestination? {
         switch id {
         case "magic-link":
             return (identifier(components, 2) ?? linkSecret("token", in: url)).map { .magicLink(token: $0) }
@@ -249,15 +253,26 @@ enum DeepLinkParser {
             guard let token = linkSecret("token", in: url),
                   let email = linkSecret("email", in: url) else { return nil }
             return .emailVerificationLink(token: token, email: email)
+        case "reset-password" where components.count <= 2 && !customScheme:
+            return passwordResetLink(url)
         // #10859 — les ALIAS des liens neufs (`/auth/email-link/magic-link`,
-        // `/auth/email-link/verify-email`), qu'aucune version publiée ne
+        // `/auth/email-link/verify-email`, `/auth/email-link/reset-password`
+        // depuis #10868), qu'aucune version publiée ne
         // revendique. Lus dès maintenant ; l'AASA ne les revendiquera qu'après
         // une version minimale (#10861).
         case "email-link" where components.count == 3:
-            return authLink(id: components[2], components: [], url: url)
+            return authLink(id: components[2], components: [], url: url, customScheme: customScheme)
         default:
             return nil
         }
+    }
+
+    /// `/reset-password` (l'adresse de l'e-mail), `/auth/reset-password` et
+    /// l'alias `/auth/email-link/reset-password` (#10868). Le jeton se lit dans
+    /// le fragment, puis dans la requête des e-mails partis avant #10859 ; un
+    /// jeton vide n'ouvre rien.
+    private static func passwordResetLink(_ url: URL) -> DeepLinkDestination? {
+        linkSecret("token", in: url).map { .passwordResetLink(token: $0) }
     }
 
     /// **La seule table des formes de lien Meeshy** (#7815), pour le web et le
@@ -273,7 +288,10 @@ enum DeepLinkParser {
         case "me": return GameLinkParser.link(from: components).map { .game($0) } ?? .ownProfile
         case "links": return .userLinks
         case "share": return parseShareQuery(url)
-        case "auth": return authLink(id: id, components: components, url: url)
+        case "auth": return authLink(id: id, components: components, url: url, customScheme: customScheme)
+        // Jamais par `meeshy://` (#10868, audit) : n'importe quelle page ou app
+        // ouvre ce schéma, et y présenterait le jeton d'un TIERS.
+        case "reset-password" where components.count == 1 && !customScheme: return passwordResetLink(url)
         case "signup": return referralCode(components: components, url: url).map { .referral(code: $0) }
         case "hashtag": return id.map { .hashtag(tag: $0) }
         // Invitation de conversation — `/join/<id>` (canonique).
@@ -523,6 +541,8 @@ final class DeepLinkRouter: ObservableObject {
     /// #10483 — la porte qui amène un contenu en détail le MARQUE de son
     /// entrée : lien de suivi, lien `?via=`, lien venu d'ailleurs, ou rien.
     private let entries: DetailOpenSourceProviding
+    /// #10868 — « Nouveau mot de passe », présenté à la racine de l'app.
+    private let passwordReset: PasswordResetLinkPresenter
 
     init(
         drafts: DraftStore = .shared,
@@ -532,9 +552,11 @@ final class DeepLinkRouter: ObservableObject {
         dialConversationCall: @escaping @MainActor (String, Bool) -> Void = { conversationId, isVideo in
             Task { await CallBackDialer.shared.dialConversation(id: conversationId, isVideo: isVideo) }
         },
-        entries: DetailOpenSourceProviding = DetailOpenSources.shared
+        entries: DetailOpenSourceProviding = DetailOpenSources.shared,
+        passwordReset: PasswordResetLinkPresenter = .shared
     ) {
         self.entries = entries
+        self.passwordReset = passwordReset
         self.drafts = drafts
         self.referrals = referrals
         self.isAuthenticated = isAuthenticated
@@ -676,7 +698,7 @@ final class DeepLinkRouter: ObservableObject {
         case .chatLink(let identifier):   return .chatLink(identifier: identifier)
         case .magicLink(let token):       return .magicLink(token: token)
         case .emailVerificationLink(let token, let email): return .emailVerificationLink(token: token, email: email)
-        case .trackedLink, .share, .referral, .call, .external: return nil
+        case .trackedLink, .share, .referral, .call, .passwordResetLink, .external: return nil
         }
     }
 
@@ -707,6 +729,9 @@ final class DeepLinkRouter: ObservableObject {
                 authenticated: isAuthenticated()
             ) else { return false }
             dialConversationCall(conversationId, isVideo)
+            return true
+        case .passwordResetLink(let token):
+            passwordReset.present(token: token)
             return true
         case .share, .external:
             return false

@@ -14,7 +14,8 @@
  * déjà vus, mais l'historique et le `Referer` ne les gardent plus.
  *
  * Les liens magiques et de vérification visent des ALIAS
- * (`/auth/email-link/magic-link`, `/auth/email-link/verify-email`) : les
+ * (`/auth/email-link/magic-link`, `/auth/email-link/verify-email` ; et
+ * `/auth/email-link/reset-password` depuis #10868, que l'app iOS lit déjà) : les
  * applications déjà publiées interceptent les adresses canoniques et n'y lisent
  * que la requête. La page ramène l'alias à l'adresse canonique, dans la même
  * entrée d'historique — le reste de l'application ne connaît que celle-ci.
@@ -26,6 +27,7 @@
 export const EMAIL_LINK_ALIASES: Readonly<Record<string, string>> = {
   '/auth/email-link/magic-link': '/auth/magic-link',
   '/auth/email-link/verify-email': '/auth/verify-email',
+  '/auth/email-link/reset-password': '/reset-password',
 };
 
 export const EMAIL_LINK_PATHS: ReadonlySet<string> = new Set([
