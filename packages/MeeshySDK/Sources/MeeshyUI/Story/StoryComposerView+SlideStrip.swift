@@ -75,9 +75,12 @@ extension StoryComposerView {
         let drawData = isCurrent ? viewModel.drawingData : slide.effects.drawingData
 
         return Button {
+            // L'index est capturé au rendu : une slide retirée entre-temps le
+            // rend périmé. Vérifié AVANT tout geste, la suite reste synchrone.
+            guard viewModel.slides.indices.contains(index) else { return }
             syncCurrentSlideEffects()
             withAnimation(.spring(response: 0.25)) { viewModel.selectSlide(at: index) }
-            if let tapped = viewModel.slides[safe: index] { restoreCanvas(from: tapped) }
+            restoreCanvas(from: viewModel.slides[index])
             HapticFeedback.light()
         } label: {
             SlideMiniPreview(
@@ -107,6 +110,7 @@ extension StoryComposerView {
             if let fondId = SlideThumbEditAffordance.editableBackgroundId(
                 in: slide.effects, hostServesEditor: onEditSceneObject != nil) {
                 Button {
+                    guard viewModel.slides.indices.contains(index) else { return }
                     // **Sélectionner AVANT d'ouvrir, et dans cet ordre.**
                     //
                     // L'éditeur d'objet lit `viewModel.currentSlide` pour trouver
@@ -121,7 +125,7 @@ extension StoryComposerView {
                     // même slide.
                     syncCurrentSlideEffects()
                     withAnimation(.spring(response: 0.25)) { viewModel.selectSlide(at: index) }
-                    if let tapped = viewModel.slides[safe: index] { restoreCanvas(from: tapped) }
+                    restoreCanvas(from: viewModel.slides[index])
                     onEditSceneObject?(fondId)
                     HapticFeedback.light()
                 } label: {

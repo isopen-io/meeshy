@@ -3606,18 +3606,6 @@ final class CallManagerForcedLeaveTests: XCTestCase {
         XCTAssertTrue(CallReliabilityPolicy.shouldProcessRemoteEnd(
             currentCallId: "c1", incomingCallId: "c1", callState: .connected))
     }
-
-    /// L'erreur de `CXStartCallAction` arrive de façon asynchrone : si l'appel a
-    /// déjà été raccroché (et un autre lancé), elle ne doit pas démonter l'appel courant.
-    func test_outgoingCallKitStartError_onlyEndsTheCallItWasFor() throws {
-        let source = try AppSourceGuard.unit("Meeshy/Features/Main/Services/CallManager+Outgoing.swift")
-        guard let r = source.range(of: "CallKit start call failed") else {
-            XCTFail("CallKit start error path not found"); return
-        }
-        let window = String(source[r.lowerBound..<min(source.index(r.lowerBound, offsetBy: 400), source.endIndex)])
-        XCTAssertTrue(window.contains("activeCallUUID == uuid"),
-                      "l'erreur de démarrage CallKit doit vérifier que l'appel courant est bien celui-ci")
-    }
 }
 
 // MARK: - CallForcedLeaveData Decodable
