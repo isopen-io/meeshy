@@ -44,6 +44,28 @@ final class UserPreferencesManagerTests: XCTestCase {
         super.tearDown()
     }
 
+    // MARK: - Un changement plus récent garde sa protection
+
+    /// A part au serveur ; B est posé pendant l'aller-retour. La fin de A levait
+    /// la protection de la catégorie : une relecture du serveur écrasait B,
+    /// qui partait ensuite sous sa forme écrasée.
+    func test_sync_aNewerChangeDuringTheRoundTrip_keepsTheCategoryPending() async {
+        manager.updateNotification { $0.soundEnabled = false }
+        var posedNewerChange = false
+        manager.isAuthenticatedOverride = { [manager] in
+            if !posedNewerChange {
+                posedNewerChange = true
+                manager?.updateNotification { $0.vibrationEnabled = false }
+            }
+            return false
+        }
+
+        await manager.resumeOrphanedPendingSyncs([.notification])
+
+        XCTAssertTrue(manager.pendingCategories.contains(.notification),
+                      "B attend encore sa synchro : la catégorie reste protégée de la relecture du serveur")
+    }
+
     // MARK: - resetToDefaults
 
     func test_resetToDefaults_restoresAllCategories() {

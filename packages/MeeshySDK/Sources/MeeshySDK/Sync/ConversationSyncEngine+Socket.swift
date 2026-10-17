@@ -271,6 +271,7 @@ extension ConversationSyncEngine {
         messageSocket.didReconnect
             .sink { [weak self] in
                 guard let self else { return }
+                self.requestReconnectCatchUp()
                 Task { await self.syncSinceLastCheckpoint() }
             }
             .store(in: &socketSubscriptions)
