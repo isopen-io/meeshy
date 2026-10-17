@@ -98,7 +98,7 @@ export class GameBlockService {
       log.warn('mythic seat unavailable, rank served from glory', { userId, error: error instanceof Error ? error.message : String(error) });
       return null;
     });
-    // Les étincelles (#10846) : la poche que la frappe dépense, le cycle que lit le niveau, le total à vie. Tout est
+    // Les étincelles (#10846) : la poche que la frappe dépense et que lit le niveau (#10892), le cycle et le total à vie. Tout est
     // convertible — plus de plancher inaliénable ni de débit par axe : `debitablePoints` est la poche entière.
     const sparks = sparksOf(user);
 

@@ -34,7 +34,7 @@ import { AchievementReachService } from '../../services/achievements/Achievement
 import { GlobalAchievements } from '../../services/achievements/GlobalAchievements';
 import { meeshTotalsFromLedger } from '../../services/meesh/MeeshService';
 import { SPARKS_USER_SELECT, currentLevelOf, sparksOf } from '../../services/game/SparksFacts';
-import { effectiveMeeshPrice, levelSparksOf } from '@meeshy/shared/utils/game/sparks';
+import { effectiveMeeshPrice, levelSparksOf, mintCostFactor } from '@meeshy/shared/utils/game/sparks';
 import { GameBlockService, type AxisRow } from '../../services/game/GameBlockService';
 import { knowsGameWave2, milestonesServedTo } from '../../services/game/clientCapabilities';
 import { MissionService, READ_ONLY_CREDIT } from '../../services/game/MissionService';
@@ -334,7 +334,7 @@ export async function meEngagementRoutes(fastify: FastifyInstance, options: Enga
 
         const streakUser = user as UserEngagementColumns;
 
-        // Les ÉTINCELLES (#10846) : la poche que la frappe dépense, le cycle que lit le niveau, le total à vie. TOUT est
+        // Les ÉTINCELLES (#10846) : la poche que la frappe dépense et que lit le niveau (#10892), le cycle et le total à vie. TOUT est
         // convertible : plus de plancher inaliénable ni de débit par axe — `debitablePoints` est la poche entière,
         // `floorPoints` vaut 0 (champs conservés pour les clients publiés).
         const sparks = sparksOf(streakUser);
@@ -355,7 +355,8 @@ export async function meEngagementRoutes(fastify: FastifyInstance, options: Enga
         // `game` le sert déjà tel que la frappe le recalculera (étapes et rang compris) ; sans lui, repli sur le niveau lu
         // sur la poche seule (#10892). Les anciens clients lisent `mintCost` et `missingPoints`, qui doivent dire vrai.
         const baseMintCost = meeshPrice(totauxMeesh.mintedLifetime + 1);
-        const fallbackPrice = effectiveMeeshPrice(totauxMeesh.mintedLifetime + 1, currentLevelOf(streakUser));
+        const fallbackLevel = currentLevelOf(streakUser);
+        const fallbackPrice = effectiveMeeshPrice(totauxMeesh.mintedLifetime + 1, fallbackLevel);
 
         const counterRows = counters.map((c: { axisKey: string; count: number; points: number }) => ({
           axisKey: c.axisKey,
@@ -410,7 +411,7 @@ export async function meEngagementRoutes(fastify: FastifyInstance, options: Enga
             blockedBy: sparks.debt > 0 ? 'debt' : null,
             mintCost,
             baseMintCost: game?.mint.basePrice ?? baseMintCost,
-            costFactor: game?.mint.costFactor ?? mintCost / baseMintCost,
+            costFactor: game?.mint.costFactor ?? mintCostFactor(fallbackLevel),
             firstMintedAt: frappes._min.createdAt?.toISOString() ?? null,
             lastMintedAt: frappes._max.createdAt?.toISOString() ?? null,
           },

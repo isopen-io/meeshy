@@ -12,7 +12,7 @@ import { describe, expect, it } from 'vitest';
 import { readFileSync, writeFileSync } from 'node:fs';
 import { dirname, join } from 'node:path';
 import { fileURLToPath } from 'node:url';
-import { gloryLadder } from '../../utils/game/glory.js';
+import { gloryLadder, type GloryRankOrMythic } from '../../utils/game/glory.js';
 import { levelThreshold } from '../../utils/game/levels.js';
 import { effectiveMeeshPrice, mintCostFactorPermille, previewSparksMint, sparksOf } from '../../utils/game/sparks.js';
 import { treasuryLockFor, treasuryReserveAccess } from '../../utils/game/treasury.js';
@@ -31,9 +31,11 @@ type Input =
       readonly glory: number;
       readonly levelCap: number | null;
       readonly debt?: number;
+      readonly mythic?: boolean;
+      readonly steps?: { readonly missionsDone: number; readonly flameRecord: number; readonly glory: number; readonly rank: GloryRankOrMythic };
     }
   | { readonly law: 'treasury-access'; readonly glory: number; readonly mythic?: boolean }
-  | { readonly law: 'treasury-lock'; readonly held: number; readonly glory: number };
+  | { readonly law: 'treasury-lock'; readonly held: number; readonly glory: number; readonly mythic?: boolean };
 
 const evaluate = (input: Input): unknown => {
   switch (input.law) {
@@ -44,8 +46,8 @@ const evaluate = (input: Input): unknown => {
     case 'sparks-of':
       return sparksOf(input);
     case 'sparks-mint-preview': {
-      const { levelCap, ...rest } = input;
-      return previewSparksMint({ ...rest, levelCap, steps: null });
+      const { levelCap, steps, ...rest } = input;
+      return previewSparksMint({ ...rest, levelCap, steps: steps ?? null });
     }
     case 'treasury-access':
       return treasuryReserveAccess(input);
@@ -85,6 +87,24 @@ const CASES: readonly { readonly _label: string; readonly input: Input }[] = [
   { _label: 'verrou : la 500e sous Polyglotte III', input: { law: 'treasury-lock', held: 499, glory: minGlory('voix', 1) } },
   { _label: 'verrou : la 1000e sous Ambassadeur III', input: { law: 'treasury-lock', held: 999, glory: minGlory('polyglotte', 3) } },
   { _label: 'verrou : la 1000e avec Ambassadeur III', input: { law: 'treasury-lock', held: 999, glory: minGlory('ambassadeur', 3) } },
+  { _label: 'verrou : le Mythe ouvre toutes les réserves', input: { law: 'treasury-lock', held: 999, glory: 0, mythic: true } },
+  { _label: 'verrou : déjà au Coffre sans le rang, la 101e reste barrée', input: { law: 'treasury-lock', held: 100, glory: 0 } },
+  {
+    _label: 'frappe : l\'étape retient au 9, la 1re Meesh la fait et le niveau d\'après MONTE',
+    input: { law: 'sparks-mint-preview', sparks: levelThreshold(13), mintedLifetime: 0, held: 0, glory: 0, levelCap: 499, steps: { missionsDone: 0, flameRecord: 0, glory: 0, rank: 'murmure' } },
+  },
+  {
+    _label: 'frappe : étapes faites jusqu\'au 19, le niveau d\'après se lit sous le même palier',
+    input: { law: 'sparks-mint-preview', sparks: levelThreshold(25), mintedLifetime: 3, held: 3, glory: 0, levelCap: 499, steps: { missionsDone: 0, flameRecord: 0, glory: 0, rank: 'murmure' } },
+  },
+  {
+    _label: 'frappe : la Gloire de la frappe fait passer Écho, et rouvre le palier du 30',
+    input: { law: 'sparks-mint-preview', sparks: levelThreshold(35), mintedLifetime: 3, held: 3, glory: minGlory('echo', 5) - 1, levelCap: 499, steps: { missionsDone: 1, flameRecord: 0, glory: minGlory('echo', 5) - 1, rank: 'murmure' } },
+  },
+  { _label: 'frappe : la poche (niveau 2) couvre juste le prix', input: { law: 'sparks-mint-preview', sparks: 623, mintedLifetime: 0, held: 0, glory: 0, levelCap: 499 } },
+  { _label: 'frappe : il manque une étincelle', input: { law: 'sparks-mint-preview', sparks: 622, mintedLifetime: 0, held: 0, glory: 0, levelCap: 499 } },
+  { _label: 'frappe : plein tarif au-delà du niveau 100, sous le plafond d\'Oracle', input: { law: 'sparks-mint-preview', sparks: levelThreshold(150) + 7, mintedLifetime: 120, held: 40, glory: minGlory('oracle', 5), levelCap: null } },
+  { _label: 'frappe : le Mythe frappe la 1000e', input: { law: 'sparks-mint-preview', sparks: levelThreshold(200), mintedLifetime: 999, held: 999, glory: 0, levelCap: null, mythic: true } },
 ];
 
 const FORMAT = '{ law, ...paramètres } — la loi des étincelles (mint-cost-factor, mint-price, sparks-of, sparks-mint-preview, treasury-access, treasury-lock). `expected` est la sortie de la loi TypeScript (utils/game/sparks.ts, treasury.ts).';

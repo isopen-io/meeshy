@@ -848,6 +848,252 @@
       "expected": {
         "lock": null
       }
+    },
+    {
+      "_label": "verrou : le Mythe ouvre toutes les réserves",
+      "input": {
+        "law": "treasury-lock",
+        "held": 999,
+        "glory": 0,
+        "mythic": true
+      },
+      "expected": {
+        "lock": null
+      }
+    },
+    {
+      "_label": "verrou : déjà au Coffre sans le rang, la 101e reste barrée",
+      "input": {
+        "law": "treasury-lock",
+        "held": 100,
+        "glory": 0
+      },
+      "expected": {
+        "lock": {
+          "tier": "coffre",
+          "minHeld": 100,
+          "requires": {
+            "rank": "voix",
+            "division": 1,
+            "division5": 1
+          }
+        }
+      }
+    },
+    {
+      "_label": "frappe : l'étape retient au 9, la 1re Meesh la fait et le niveau d'après MONTE",
+      "input": {
+        "law": "sparks-mint-preview",
+        "sparks": 16900,
+        "mintedLifetime": 0,
+        "held": 0,
+        "glory": 0,
+        "levelCap": 499,
+        "steps": {
+          "missionsDone": 0,
+          "flameRecord": 0,
+          "glory": 0,
+          "rank": "murmure"
+        }
+      },
+      "expected": {
+        "number": 1,
+        "price": 665,
+        "basePrice": 1221,
+        "costFactor": 0.545,
+        "costLevel": 9,
+        "edition": "silver",
+        "canMint": true,
+        "missingPoints": 0,
+        "levelBefore": 9,
+        "levelAfter": 12,
+        "levelsLost": 0,
+        "gloryGained": 1000,
+        "locked": null,
+        "blockedBy": null,
+        "sparksDebt": 0
+      }
+    },
+    {
+      "_label": "frappe : étapes faites jusqu'au 19, le niveau d'après se lit sous le même palier",
+      "input": {
+        "law": "sparks-mint-preview",
+        "sparks": 62500,
+        "mintedLifetime": 3,
+        "held": 3,
+        "glory": 0,
+        "levelCap": 499,
+        "steps": {
+          "missionsDone": 0,
+          "flameRecord": 0,
+          "glory": 0,
+          "rank": "murmure"
+        }
+      },
+      "expected": {
+        "number": 4,
+        "price": 726,
+        "basePrice": 1221,
+        "costFactor": 0.595,
+        "costLevel": 19,
+        "edition": "silver",
+        "canMint": true,
+        "missingPoints": 0,
+        "levelBefore": 19,
+        "levelAfter": 19,
+        "levelsLost": 0,
+        "gloryGained": 1000,
+        "locked": null,
+        "blockedBy": null,
+        "sparksDebt": 0
+      }
+    },
+    {
+      "_label": "frappe : la Gloire de la frappe fait passer Écho, et rouvre le palier du 30",
+      "input": {
+        "law": "sparks-mint-preview",
+        "sparks": 122500,
+        "mintedLifetime": 3,
+        "held": 3,
+        "glory": 1999,
+        "levelCap": 499,
+        "steps": {
+          "missionsDone": 1,
+          "flameRecord": 0,
+          "glory": 1999,
+          "rank": "murmure"
+        }
+      },
+      "expected": {
+        "number": 4,
+        "price": 788,
+        "basePrice": 1221,
+        "costFactor": 0.645,
+        "costLevel": 29,
+        "edition": "silver",
+        "canMint": true,
+        "missingPoints": 0,
+        "levelBefore": 29,
+        "levelAfter": 34,
+        "levelsLost": 0,
+        "gloryGained": 1000,
+        "locked": null,
+        "blockedBy": null,
+        "sparksDebt": 0
+      }
+    },
+    {
+      "_label": "frappe : la poche (niveau 2) couvre juste le prix",
+      "input": {
+        "law": "sparks-mint-preview",
+        "sparks": 623,
+        "mintedLifetime": 0,
+        "held": 0,
+        "glory": 0,
+        "levelCap": 499
+      },
+      "expected": {
+        "number": 1,
+        "price": 623,
+        "basePrice": 1221,
+        "costFactor": 0.51,
+        "costLevel": 2,
+        "edition": "silver",
+        "canMint": true,
+        "missingPoints": 0,
+        "levelBefore": 2,
+        "levelAfter": 1,
+        "levelsLost": 1,
+        "gloryGained": 1000,
+        "locked": null,
+        "blockedBy": null,
+        "sparksDebt": 0
+      }
+    },
+    {
+      "_label": "frappe : il manque une étincelle",
+      "input": {
+        "law": "sparks-mint-preview",
+        "sparks": 622,
+        "mintedLifetime": 0,
+        "held": 0,
+        "glory": 0,
+        "levelCap": 499
+      },
+      "expected": {
+        "number": 1,
+        "price": 623,
+        "basePrice": 1221,
+        "costFactor": 0.51,
+        "costLevel": 2,
+        "edition": "silver",
+        "canMint": false,
+        "missingPoints": 1,
+        "levelBefore": 2,
+        "levelAfter": 2,
+        "levelsLost": 0,
+        "gloryGained": 0,
+        "locked": null,
+        "blockedBy": null,
+        "sparksDebt": 0
+      }
+    },
+    {
+      "_label": "frappe : plein tarif au-delà du niveau 100, sous le plafond d'Oracle",
+      "input": {
+        "law": "sparks-mint-preview",
+        "sparks": 2250007,
+        "mintedLifetime": 120,
+        "held": 40,
+        "glory": 380000,
+        "levelCap": null
+      },
+      "expected": {
+        "number": 121,
+        "price": 16556,
+        "basePrice": 16556,
+        "costFactor": 1,
+        "costLevel": 150,
+        "edition": "silver",
+        "canMint": true,
+        "missingPoints": 0,
+        "levelBefore": 150,
+        "levelAfter": 149,
+        "levelsLost": 1,
+        "gloryGained": 1000,
+        "locked": null,
+        "blockedBy": null,
+        "sparksDebt": 0
+      }
+    },
+    {
+      "_label": "frappe : le Mythe frappe la 1000e",
+      "input": {
+        "law": "sparks-mint-preview",
+        "sparks": 4000000,
+        "mintedLifetime": 999,
+        "held": 999,
+        "glory": 0,
+        "levelCap": null,
+        "mythic": true
+      },
+      "expected": {
+        "number": 1000,
+        "price": 16556,
+        "basePrice": 16556,
+        "costFactor": 1,
+        "costLevel": 200,
+        "edition": "prism",
+        "canMint": true,
+        "missingPoints": 0,
+        "levelBefore": 200,
+        "levelAfter": 199,
+        "levelsLost": 1,
+        "gloryGained": 1000,
+        "locked": null,
+        "blockedBy": null,
+        "sparksDebt": 0
+      }
     }
   ]
 }
