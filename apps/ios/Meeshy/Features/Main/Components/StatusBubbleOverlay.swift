@@ -106,7 +106,7 @@ struct StatusBubbleOverlay: View {
             // Geste d'échappement VoiceOver (scrub à deux doigts) : la bulle est un overlay ZStack,
             // pas une sheet système — sans ceci, un utilisateur VoiceOver n'a aucun moyen standard
             // de la fermer (le tap-to-dismiss extérieur est un `Color.clear` non focalisable).
-            .accessibilityAction(.escape) { dismiss() }
+            .dismissOnEscape { dismiss() }
         }
         .onAppear {
             appearAnimation = true

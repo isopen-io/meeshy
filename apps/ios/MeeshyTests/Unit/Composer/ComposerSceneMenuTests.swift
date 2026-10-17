@@ -74,7 +74,7 @@ final class ComposerSceneMenuTests: XCTestCase {
         let code = try AppSourceGuard.unit("Meeshy/Features/Main/Composer/ComposerSceneMenu.swift")
         XCTAssertTrue(AppSourceGuard.stripComments(code).contains(".adaptiveGlass(in: RoundedRectangle(cornerRadius: MeeshyRadius.xl"),
                       "le verre du menu passe par l'unique implémentation du dépôt")
-        XCTAssertTrue(code.contains(".accessibilityAction(.escape)"), "VoiceOver doit pouvoir le refermer")
+        XCTAssertTrue(code.contains(".dismissOnEscape { onDismiss() }"), "VoiceOver et la touche Échap doivent pouvoir le refermer")
     }
 
     func test_leFond_nePresentePlusDeDialogueSysteme() throws {

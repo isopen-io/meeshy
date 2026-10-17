@@ -142,7 +142,7 @@ struct ComposerSceneContextMenu: View {
         .environment(\.colorScheme, .dark)
         .accessibilityElement(children: .contain)
         .accessibilityAddTraits(.isModal)
-        .accessibilityAction(.escape) { onDismiss() }
+        .dismissOnEscape { onDismiss() }
     }
 }
 
