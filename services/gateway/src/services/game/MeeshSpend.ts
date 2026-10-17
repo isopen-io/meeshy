@@ -22,6 +22,7 @@ import type { Prisma, PrismaClient } from '@meeshy/shared/prisma/client';
 import { withRetry } from '../MessageMediaConsumptionService';
 import { meeshTotalsFromLedger } from '../meesh/MeeshService';
 import { GameRefusal } from './GameRefusal';
+import { announceGameState } from './GameStateBroadcast';
 
 export type SpendKind = 'flame-freeze' | 'flame-relight' | 'mission-reroll' | 'season-seal' | 'pack-purchase';
 
@@ -93,7 +94,7 @@ export class MeeshSpend {
     await request.guard?.();
 
     try {
-      return await this.prisma.$transaction(async (tx): Promise<SpendOutcome<T>> => {
+      const outcome = await this.prisma.$transaction(async (tx): Promise<SpendOutcome<T>> => {
         const avant = await meeshTotalsFromLedger(tx, userId);
         if (avant.balance < price) return { status: 'insufficient', balance: avant.balance };
 
@@ -114,6 +115,9 @@ export class MeeshSpend {
         });
         return { status: 'spent', balance: apres.balance, result };
       });
+      // Le trésor a baissé : les appareils du compte le voient sans attendre (#10900).
+      if (outcome.status === 'spent') announceGameState(userId, 'spend');
+      return outcome;
     } catch (err) {
       // Deux requêtes de même identifiant : l'index unique a tranché, la
       // première a gagné — on rend SON résultat plutôt qu'une erreur.

@@ -36,6 +36,7 @@ import { meeshTotalsFromLedger } from '../../services/meesh/MeeshService';
 import { SPARKS_USER_SELECT, currentLevelOf, sparksOf } from '../../services/game/SparksFacts';
 import { effectiveMeeshPrice, levelSparksOf, mintCostFactor } from '@meeshy/shared/utils/game/sparks';
 import { GameBlockService, type AxisRow } from '../../services/game/GameBlockService';
+import { gameRevisionNow } from '../../services/game/GameStateBroadcast';
 import { knowsGameWave2, milestonesServedTo } from '../../services/game/clientCapabilities';
 import { MissionService, READ_ONLY_CREDIT } from '../../services/game/MissionService';
 import { PersonalMissionService } from '../../services/game/PersonalMissionService';
@@ -179,6 +180,9 @@ const engagementResponseSchema = {
         // l'ignore. `additionalProperties` parce que la forme est tenue par le
         // schéma Zod partagé (`gameBlockSchema`), validé avant de partir.
         game: { type: 'object', additionalProperties: true },
+        // Le marqueur d'ordre de l'état servi (#10900, `types/game-sync.ts`) : toute écriture du jeu terminée avant lui est
+        // dans cette charge. Un client ignore une source dont le marqueur est plus petit que celui qu'il a déjà appliqué.
+        gameRevision: { type: 'number' },
         // Les séries PAR ACTE (#10389) — additif : un ancien client l'ignore,
         // `streak` reste la série globale. `currentDays` est l'état écrit au
         // dernier jour compté (`lastDay`) : un client le fait retomber à 0
@@ -262,6 +266,9 @@ export async function meEngagementRoutes(fastify: FastifyInstance, options: Enga
         // par contrainte unique) et best-effort — un échec ici ne doit pas
         // fermer un écran de consultation.
         await new GlobalAchievements(fastify.prisma).sweep(userId).catch(() => undefined);
+        // Le marqueur d'ordre (#10900) est pris AVANT toute lecture : ce qui s'écrit après peut y être, ce qui s'est écrit
+        // avant y est forcément.
+        const gameRevision = gameRevisionNow();
 
         const [user, counters, milestones, frappes, totauxMeesh, reach, scale, actStreaks] = await Promise.all([
           fastify.prisma.user.findUnique({ where: { id: userId }, select: USER_ENGAGEMENT_SELECT }),
@@ -416,6 +423,7 @@ export async function meEngagementRoutes(fastify: FastifyInstance, options: Enga
             lastMintedAt: frappes._max.createdAt?.toISOString() ?? null,
           },
           ...(game ? { game } : {}),
+          gameRevision,
           ...(actStreaks ? { actStreaks } : {}),
         });
       } catch (error) {

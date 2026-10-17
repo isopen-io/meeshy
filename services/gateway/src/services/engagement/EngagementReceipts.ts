@@ -30,6 +30,7 @@ import { takeBackAcrossEngagementCounters } from './EngagementCounterWrites';
 import type { EngagementQuotas } from './EngagementQuotas';
 import type { EngagementScaleSource } from './EngagementScaleService';
 import type { PostPointsRecorder } from './PostPointsRecorder';
+import { announceGameState } from '../game/GameStateBroadcast';
 
 const NO_POST = '-';
 
@@ -137,7 +138,11 @@ export class EngagementReceipts {
    */
   private async takeBack(userId: string, operationKey: string, points: number, creditedAt?: Date): Promise<number> {
     const taken = await takeBackPoints(this.prisma, userId, operationKey, points);
-    if (taken > 0) await this.league.onPointsTakenBack(userId, taken, creditedAt);
+    if (taken > 0) {
+      await this.league.onPointsTakenBack(userId, taken, creditedAt);
+      // La poche, la dette et le niveau ont bougé : les appareils du compte le voient sans attendre (#10900).
+      announceGameState(userId, 'reclaim');
+    }
     return taken;
   }
 
