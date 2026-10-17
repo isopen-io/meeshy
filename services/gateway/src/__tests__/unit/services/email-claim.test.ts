@@ -219,7 +219,7 @@ describe('la preuve — le transfert, en UNE transaction', () => {
     const { codes, liens } = await revendiquer(store);
     const resultat = await verifyEmailProof(
       store.prisma as never,
-      preuve === 'code' ? { email: ADRESSE, code: codes[0] } : { email: ADRESSE, token: liens[0] },
+      preuve === 'code' ? { email: ADRESSE, code: codes[0] } : { email: ADRESSE, token: liens[0], confirmed: true },
     );
     const nouveau = store.state.users.find((u) => u.username === 'marie_vraie');
     return { store, resultat, nouveau, ancien: store.byId('ancien') };
@@ -368,7 +368,7 @@ describe('la course', () => {
 
     const [a, b] = await Promise.all([
       verifyEmailProof(store.prisma as never, { email: ADRESSE, code: codes[0] }),
-      verifyEmailProof(store.prisma as never, { email: ADRESSE, token: liens[0] }),
+      verifyEmailProof(store.prisma as never, { email: ADRESSE, token: liens[0], confirmed: true }),
     ]);
 
     expect([a.success, b.success].filter(Boolean)).toHaveLength(1);

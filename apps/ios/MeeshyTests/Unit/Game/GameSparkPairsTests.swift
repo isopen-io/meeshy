@@ -39,16 +39,39 @@ final class GameSparkPairsTests: XCTestCase {
     }
 
     /// Les convertibles sont la seule valeur réelle : la poche ne se nomme plus « En poche ».
-    func test_pocketLabel_saysConvertibles() {
-        XCTAssertEqual(GameSparksCopy.pocketLabel, "Convertibles")
+    /// Retour porteur du 2026-10-17 (#10860, 9275039845) : la poche dit « Convertibles ». Le témoin lisait le
+    /// libellé RÉSOLU et le comparait au français : la CI tourne en anglais (« Convertible ») et rougissait sans
+    /// défaut. Le mot du porteur se vérifie au CATALOGUE ; l'écran, dans la langue où tournent les témoins.
+    func test_pocketLabel_saysConvertibles() throws {
+        XCTAssertEqual(try catalogValue("game.sparks.pocket.label", "fr"), "Convertibles")
+        XCTAssertEqual(GameSparksCopy.pocketLabel, try catalogValue("game.sparks.pocket.label", Self.runningLanguage))
     }
 
     /// Après un Prestige : le cycle rapporté au total à vie.
-    func test_cumul_afterAPrestige_readsTheCycleOverTheLifetime() {
+    func test_cumul_afterAPrestige_readsTheCycleOverTheLifetime() throws {
         let pairs = GameSparkPairs(level(sparks: 5_000, cycle: 8_200, lifetime: 12_000, levelMax: 40))
         XCTAssertEqual(pairs.cumulLine, GameSparksCopy.cumulLine(cycle: 8_200, lifetime: 12_000))
         XCTAssertTrue(pairs.cumulLine.contains(" / "))
-        XCTAssertTrue(pairs.cumulLine.hasSuffix("cumulées"))
+        XCTAssertTrue(pairs.cumulLine.contains(GameSparksCopy.cumulValue(cycle: 8_200, lifetime: 12_000)))
+        XCTAssertEqual(try catalogValue("game.sparks.cumul.line", "fr"), "%@ cumulées", "« cumulées » pour ce qui fait le niveau")
+        let format = try catalogValue("game.sparks.cumul.line", Self.runningLanguage)
+        XCTAssertEqual(pairs.cumulLine, format.replacingOccurrences(of: "%@", with: GameSparksCopy.cumulValue(cycle: 8_200, lifetime: 12_000)))
+    }
+
+    /// La langue dans laquelle l'app hôte résout ses chaînes (la CI tourne en anglais, un poste peut être en français).
+    private static var runningLanguage: String {
+        let language = Bundle.main.preferredLocalizations.first ?? "en"
+        return String(language.prefix(2))
+    }
+
+    private func catalogValue(_ key: String, _ locale: String) throws -> String {
+        let url = URL(fileURLWithPath: #filePath)
+            .deletingLastPathComponent().deletingLastPathComponent().deletingLastPathComponent().deletingLastPathComponent()
+            .appendingPathComponent("Meeshy/Localizable.xcstrings")
+        let json = try XCTUnwrap(JSONSerialization.jsonObject(with: Data(contentsOf: url)) as? [String: Any])
+        let entry = try XCTUnwrap((json["strings"] as? [String: Any])?[key] as? [String: Any])
+        let unit = try XCTUnwrap(((entry["localizations"] as? [String: Any])?[locale] as? [String: Any])?["stringUnit"] as? [String: Any])
+        return try XCTUnwrap(unit["value"] as? String)
     }
 
     /// Sans Prestige, le cycle égale le total à vie : un seul nombre.

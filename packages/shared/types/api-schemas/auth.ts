@@ -355,6 +355,52 @@ export const refreshTokenRequestSchema = {
 } as const;
 
 /**
+ * #10872 — le lien de connexion est LIÉ À L'APPAREIL qui l'a demandé
+ * (`services/gateway/src/services/auth/link-device-binding.ts`). À la demande,
+ * l'appareil envoie l'EMPREINTE d'un secret qu'il garde ; à la consommation, il
+ * présente le secret. Sans correspondance et sans `confirm`, la passerelle
+ * n'ouvre AUCUNE session : elle rend `requiresConfirmation` et le compte cible.
+ */
+export const linkDeviceHashProperty = {
+  type: 'string',
+  pattern: '^[0-9a-fA-F]{64}$',
+  description: 'OPTIONAL (#10872). Lowercase hex SHA-256 of a random secret (>= 128 bits) this device keeps. The link sent by email signs in without a question only when that secret is presented back.'
+} as const;
+
+export const linkDeviceSecretProperty = {
+  type: 'string',
+  pattern: '^[A-Za-z0-9_-]{22,256}$',
+  description: 'OPTIONAL (#10872). The secret whose SHA-256 was sent when the link was requested. Matches ⇒ direct sign-in; absent or wrong ⇒ `requiresConfirmation`, no session.'
+} as const;
+
+export const linkConfirmProperty = {
+  type: 'boolean',
+  description: 'OPTIONAL (#10872). The user saw the target account (`requiresConfirmation` branch) and said yes: the link is consumed and the session opened.'
+} as const;
+
+/**
+ * La branche « confirmez le compte » (#10872) — EXCLUSIVE : ni session, ni
+ * jeton, ni défi ; le lien n'a pas été consommé. Le client montre le compte et
+ * rejoue la requête avec `confirm: true` si l'utilisateur dit oui.
+ */
+export const linkConfirmationProperties = {
+  requiresConfirmation: {
+    type: 'boolean',
+    description: 'True when the link was opened on another device than the one that requested it (or the link is not device-bound): NO session was opened and the link was NOT consumed. Show `account`, then resend with `confirm: true` on yes.'
+  },
+  account: {
+    type: 'object',
+    description: 'The account the link would sign in to — shown before the yes.',
+    properties: {
+      id: { type: 'string' },
+      username: { type: 'string' },
+      displayName: { type: ['string', 'null'] },
+      avatar: { type: ['string', 'null'] }
+    }
+  }
+} as const;
+
+/**
  * Verify email request body schema
  */
 export const verifyEmailRequestSchema = {
@@ -372,7 +418,9 @@ export const verifyEmailRequestSchema = {
           type: 'string',
           format: 'email',
           description: 'Email address to verify'
-        }
+        },
+        linkDeviceSecret: linkDeviceSecretProperty,
+        confirm: linkConfirmProperty
       },
       additionalProperties: false
     },
@@ -492,7 +540,8 @@ export const verifyEmailResponseSchema = {
         passwordSet: { type: 'boolean', description: 'True when the optional password was applied' },
         requires2FA: { type: 'boolean' },
         twoFactorToken: { type: 'string', description: 'Present it to POST /login/2fa with the second-factor code' },
-        adoptWithinSeconds: adoptWithinSecondsProperty
+        adoptWithinSeconds: adoptWithinSecondsProperty,
+        ...linkConfirmationProperties
       }
     }
   }

@@ -1,9 +1,8 @@
 /**
- * LE LIEN « CE N'ÉTAIT PAS MOI » — tranche du catalogue `catalog-fr.ts`, que le
- * catalogue RÉPAND. `/auth/revoke-sessions` (#10859) : la page que l'alerte de
- * nouvelle connexion ouvre, et qui ferme toutes les sessions au clic.
+ * LE LIEN « CE N'ÉTAIT PAS MOI » (`/auth/revoke-sessions`, #10859) — la source des clés `revokeSessions.*`. Chargée AVEC
+ * la page (`lib/i18n-revoke-sessions-catalog.ts`), jamais au démarrage.
  */
-const frRevokeSessions = {
+const fr = {
   'revokeSessions.title': 'Ce n’était pas vous ?',
   'revokeSessions.body': 'Déconnectez votre compte de tous les appareils, y compris celui qui vient de se connecter. Il faudra ensuite vous reconnecter.',
   'revokeSessions.action': 'Déconnecter tous les appareils',
@@ -14,4 +13,4 @@ const frRevokeSessions = {
   'revokeSessions.dismiss': 'C’était bien moi',
 } as const;
 
-export default frRevokeSessions;
+export default fr;

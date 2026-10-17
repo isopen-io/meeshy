@@ -1881,7 +1881,8 @@ describe('AuthService - resendVerificationEmail', () => {
       data: {
         emailVerificationToken: expect.any(String),
         emailVerificationCode: expect.any(String),
-        emailVerificationExpiry: expect.any(Date)
+        emailVerificationExpiry: expect.any(Date),
+        emailVerificationDeviceHash: null
       }
     });
   });

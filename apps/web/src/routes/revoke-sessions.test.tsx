@@ -2,7 +2,7 @@ import { afterAll, afterEach, beforeAll, describe, expect, test } from 'bun:test
 
 import type { ApiFailure, ApiResult } from '@/lib/api/http';
 import type { RevokeSessionsResult } from '@/lib/api/revoke-sessions';
-import { loadInterfaceCatalog, translate } from '@/lib/i18n-catalog';
+import { loadRevokeSessionsCatalog, translateRevokeSessions as translate } from '@/lib/i18n-revoke-sessions-catalog';
 import { buttonNamed, createActMounter } from '@/test-support/act-mount';
 import { arriveByEmailLink, leaveEmailLink, tokenInHistory } from '@/test-support/email-link-arrival';
 import { ensureHappyDomRegistered, releaseHappyDomIfRegistered } from '@/test-support/happy-dom-environment';
@@ -20,7 +20,8 @@ const globals = globalThis as typeof globalThis & { IS_REACT_ACT_ENVIRONMENT?: b
 const { mount, unmountAll, click } = createActMounter();
 
 beforeAll(async () => {
-  await loadInterfaceCatalog('en');
+  await loadRevokeSessionsCatalog('en');
+  await loadRevokeSessionsCatalog('fr');
   ensureHappyDomRegistered({ url: 'http://localhost/' });
   globals.IS_REACT_ACT_ENVIRONMENT = true;
 });
@@ -92,7 +93,7 @@ describe('le lien « ce n’était pas moi »', () => {
 
   test('les sept langues ont chacune leur texte, jamais une recopie du français', async () => {
     for (const language of ['en', 'es', 'pt', 'de', 'it', 'ar'] as const) {
-      await loadInterfaceCatalog(language);
+      await loadRevokeSessionsCatalog(language);
       const texts = REVOKE_SESSIONS_KEYS.map((key) => translate(language, key));
       expect({ language, empty: texts.filter((text) => text.trim() === '' || REVOKE_SESSIONS_KEYS.includes(text as never)) }).toEqual({ language, empty: [] });
       expect({ language, same: REVOKE_SESSIONS_KEYS.filter((key) => translate(language, key) === translate('fr', key)) }).toEqual({ language, same: [] });

@@ -167,6 +167,14 @@ final class ClientInfoProviderTests: XCTestCase {
         XCTAssertTrue(declared.contains("onboarding-age"))
     }
 
+    /// #10878 — sans cette capacité, la passerelle prend un binaire 1.1.3 pour
+    /// un client d'avant #10872 et ouvre la session d'un lien sans la question.
+    func test_buildHeaders_declaresTheLinkDeviceBindingCapability() async {
+        let headers = await ClientInfoProvider.shared.buildHeaders()
+        let declared = headers["X-Meeshy-Capabilities"]?.split(separator: ",").map(String.init) ?? []
+        XCTAssertTrue(declared.contains("link-device-binding"))
+    }
+
     func test_identityHeaders_declareTheSameCapabilitiesForExtensions() {
         XCTAssertEqual(ClientInfoProvider.identityHeaders()["X-Meeshy-Capabilities"], ClientCapabilities.headerValue())
     }

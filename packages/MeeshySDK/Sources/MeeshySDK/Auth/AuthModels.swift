@@ -51,10 +51,16 @@ public struct LoginResponseData: Decodable, Sendable {
     /// échouer le décodage d'une réponse dont la preuve est déjà consommée.
     public let adoptWithinSeconds: Int?
 
+    /// #10872 — le lien n'a pas été demandé par cet appareil : AUCUNE session
+    /// n'est servie, seulement l'identité du compte qu'il ouvrirait. Lus en
+    /// tolérance : un champ illisible se lit absent.
+    public let requiresConfirmation: Bool?
+    public let account: LinkSignInAccount?
+
     private enum CodingKeys: String, CodingKey {
         case user, token, sessionToken, expiresIn, requires2FA, twoFactorToken
         case phoneOwnershipConflict, status, accountCreated, email, pendingSessionToken
-        case adoptWithinSeconds
+        case adoptWithinSeconds, requiresConfirmation, account
     }
 
     public init(from decoder: Decoder) throws {
@@ -71,6 +77,8 @@ public struct LoginResponseData: Decodable, Sendable {
         email = try container.decodeIfPresent(String.self, forKey: .email)
         pendingSessionToken = try container.decodeIfPresent(String.self, forKey: .pendingSessionToken)
         adoptWithinSeconds = try? container.decodeIfPresent(Int.self, forKey: .adoptWithinSeconds)
+        requiresConfirmation = (try? container.decodeIfPresent(Bool.self, forKey: .requiresConfirmation)) ?? nil
+        account = (try? container.decodeIfPresent(LinkSignInAccount.self, forKey: .account)) ?? nil
     }
 
     public init(
@@ -85,7 +93,9 @@ public struct LoginResponseData: Decodable, Sendable {
         accountCreated: Bool? = nil,
         email: String? = nil,
         pendingSessionToken: String? = nil,
-        adoptWithinSeconds: Int? = nil
+        adoptWithinSeconds: Int? = nil,
+        requiresConfirmation: Bool? = nil,
+        account: LinkSignInAccount? = nil
     ) {
         self.user = user
         self.token = token
@@ -99,6 +109,8 @@ public struct LoginResponseData: Decodable, Sendable {
         self.email = email
         self.pendingSessionToken = pendingSessionToken
         self.adoptWithinSeconds = adoptWithinSeconds
+        self.requiresConfirmation = requiresConfirmation
+        self.account = account
     }
 }
 
@@ -279,10 +291,13 @@ public enum SessionOrigin: String, Sendable, Equatable {
 public struct MagicLinkRequest: Encodable {
     public let email: String
     public let deviceFingerprint: String?
+    /// #10872 — l'empreinte du secret que cet appareil garde ; omise si `nil`.
+    public let linkDeviceHash: String?
 
-    public init(email: String, deviceFingerprint: String? = nil) {
+    public init(email: String, deviceFingerprint: String? = nil, linkDeviceHash: String? = nil) {
         self.email = email
         self.deviceFingerprint = deviceFingerprint
+        self.linkDeviceHash = linkDeviceHash
     }
 }
 
@@ -295,9 +310,15 @@ public struct MagicLinkResponse: Decodable {
 
 public struct MagicLinkValidateRequest: Encodable {
     public let token: String
+    /// #10872 — le secret gardé à la demande, et le « oui » explicite de
+    /// l'utilisateur ; tous deux omis du corps quand `nil`.
+    public let linkDeviceSecret: String?
+    public let confirm: Bool?
 
-    public init(token: String) {
+    public init(token: String, linkDeviceSecret: String? = nil, confirm: Bool? = nil) {
         self.token = token
+        self.linkDeviceSecret = linkDeviceSecret
+        self.confirm = confirm
     }
 }
 

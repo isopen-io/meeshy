@@ -2,6 +2,12 @@ import { FastifyInstance, FastifyReply } from 'fastify';
 import { z } from 'zod';
 import { mayManageTrackingLink } from './link-ownership';
 import { TrackingLinkService } from '../../services/TrackingLinkService';
+import {
+  TRACKING_TARGET_CARRIES_EMAIL_SECRET,
+  TrackingTargetCarriesEmailSecretError,
+  isServableTrackingTarget,
+  servedTrackingLinkTarget
+} from '../../services/tracking-link-target';
 import { logError } from '../../utils/logger';
 import {
   createUnifiedAuthMiddleware,
@@ -34,6 +40,16 @@ import { UserRoleEnum } from '@meeshy/shared/types';
  * — et son schéma ne déclare que `200 · 201 · 400 · 500` : Fastify sérialise
  * donc ses refus SANS schéma, corps complet (le défaut de #4689). MESURÉ.
  */
+/**
+ * Une cible porteuse d'un secret de lien d'e-mail (connexion, vérification,
+ * réinitialisation…) est refusée en 400 typé (#10871). La réponse ne recopie
+ * jamais l'adresse : elle porte le jeton.
+ */
+const refuserCibleSecrete = (reply: FastifyReply) =>
+  sendBadRequest(reply, 'Cette adresse ne peut pas être la cible d\'un lien suivi', {
+    code: TRACKING_TARGET_CARRIES_EMAIL_SECRET
+  });
+
 const REFUS_DE_RATTACHEMENT: MessagesDeRefusDAcces = {
   sansSession: 'Authentication required to attach a tracking link to this conversation'
 };
@@ -194,6 +210,10 @@ export async function registerCreationRoutes(fastify: FastifyInstance) {
 
       const body = createTrackingLinkSchema.parse(request.body);
 
+      if (!isServableTrackingTarget(body.originalUrl)) {
+        return refuserCibleSecrete(reply);
+      }
+
       const createdBy = request.authContext.registeredUser!.id;
       // La MATRICE, jamais une liste (#4153). Un compte privilégié échappe à
       // la longueur minimale d'un jeton personnalisé — c'est une dispense, et
@@ -260,6 +280,9 @@ export async function registerCreationRoutes(fastify: FastifyInstance) {
     } catch (error) {
       if (error instanceof z.ZodError) {
         return sendBadRequest(reply, 'Données invalides');
+      }
+      if (error instanceof TrackingTargetCarriesEmailSecretError) {
+        return refuserCibleSecrete(reply);
       }
       if (error instanceof Error && error.message === 'Token already exists') {
         return sendConflict(reply, 'Ce token existe déjà');
@@ -357,8 +380,11 @@ export async function registerCreationRoutes(fastify: FastifyInstance) {
         }
       }
 
+      // Sans propriétaire, la ligne se lit par tous : elle sert la forme jugée (#10871).
       return sendSuccess(reply, {
-        trackingLink
+        trackingLink: trackingLink.createdBy
+          ? trackingLink
+          : { ...trackingLink, originalUrl: servedTrackingLinkTarget(trackingLink.originalUrl) }
       });
 
     } catch (error) {
@@ -910,6 +936,9 @@ export async function registerCreationRoutes(fastify: FastifyInstance) {
       if (body.originalUrl && !isHttpUrl(body.originalUrl)) {
         return sendBadRequest(reply, 'URL invalide : http(s) uniquement');
       }
+      if (body.originalUrl !== undefined && !isServableTrackingTarget(body.originalUrl)) {
+        return refuserCibleSecrete(reply);
+      }
 
       const updatedLink = await trackingLinkService.updateTrackingLink({
         token,
@@ -922,6 +951,9 @@ export async function registerCreationRoutes(fastify: FastifyInstance) {
       return sendSuccess(reply, { trackingLink: enrichTrackingLink(updatedLink) }, { message: 'Lien mis à jour avec succès' });
 
     } catch (error) {
+      if (error instanceof TrackingTargetCarriesEmailSecretError) {
+        return refuserCibleSecrete(reply);
+      }
       if (error instanceof Error) {
         if (error.message === 'Tracking link not found') {
           return sendNotFound(reply, 'Lien de tracking non trouvé');
