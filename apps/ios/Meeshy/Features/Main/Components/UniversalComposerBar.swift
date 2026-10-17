@@ -385,6 +385,7 @@ struct UniversalComposerBar: View {
     @State var typeWave: Bool = false
 
     @Environment(\.colorScheme) var colorScheme
+    @Environment(\.horizontalSizeClass) var horizontalSizeClass
     var isDark: Bool { colorScheme == .dark }
     var theme: ThemeManager { ThemeManager.shared }
 
@@ -417,9 +418,9 @@ struct UniversalComposerBar: View {
     /// composer leaves the screen (`ComposerPanelHeightLaw`, #8869).
     var attachmentPanelHeight: CGFloat {
         let keyboard = max(ownKeyboard.lastKnownHeight(host: hostKeyboard), 260)
-        // iPad / macOS gets a taller floor so the roomy recent-media grid has
-        // breathing room; iPhone keeps a floor that shows two rows of the grid.
-        let recentFloor: CGFloat = DeviceLayout.isPad ? 460 : 324
+        // Une largeur « regular » a un plancher plus haut pour la grille aérée des médias récents ; une largeur
+        // compacte — iPhone, ou iPad en Slide Over / Split View étroit — garde celui qui montre deux rangées.
+        let recentFloor = ComposerPanelHeightLaw.recentMediaFloor(horizontalSizeClass: horizontalSizeClass)
         let contentFloor: CGFloat = onRecentMediaSelected != nil ? recentFloor : 150
         let resting = ComposerPanelHeightLaw.restingHeight(
             lastKeyboardHeight: keyboard,
