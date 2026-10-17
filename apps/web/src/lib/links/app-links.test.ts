@@ -48,8 +48,14 @@ describe('App Links de la coque Android', () => {
     expect(cheminsReclames().length).toBeGreaterThan(0);
   });
 
-  test('chaque chemin réclamé est servi par le routeur', () => {
-    expect(cheminsReclames().filter((chemin) => !isAppPath(chemin))).toEqual([]);
+  test('chaque chemin réclamé mène à un écran de l’app — directement ou par son ancienne adresse (#10881)', () => {
+    expect(cheminsReclames().filter((chemin) => cheminDuLienEntrant(`https://meeshy.me${chemin}`, isAppPath) === null)).toEqual([]);
+  });
+
+  test('les anciennes adresses que l’iPhone réclame ouvrent aussi la coque, chacune sur son écran (#10881)', () => {
+    expect(cheminsReclames()).toEqual(expect.arrayContaining(['/join/x', '/conversation/x', '/users/x', '/p/x', '/s/x', '/share']));
+    expect(cheminDuLienEntrant('https://meeshy.me/join/mshy_abc', isAppPath)).toBe('/chat/mshy_abc');
+    expect(cheminDuLienEntrant('https://meeshy.me/p/post-1', isAppPath)).toBe('/feeds/post/post-1');
   });
 
   test('le fil — le lien le plus partagé — arrive à son écran', () => {
