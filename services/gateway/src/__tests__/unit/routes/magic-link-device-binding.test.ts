@@ -67,6 +67,12 @@ jest.mock('../../../utils/logger-enhanced.js', () => ({
   },
 }));
 
+const mockLegacyRecord = jest.fn(async (_entry: unknown) => {});
+jest.mock('../../../services/auth/legacy-link-client', () => ({
+  ...jest.requireActual<typeof import('../../../services/auth/legacy-link-client')>('../../../services/auth/legacy-link-client'),
+  getLegacyLinkLoginCounter: () => ({ record: mockLegacyRecord }),
+}));
+
 // ─── Import route under test ──────────────────────────────────────────────────
 
 import { magicLinkRoutes } from '../../../routes/magic-link';
@@ -196,5 +202,59 @@ describe('#10872 — lien magique lié à l’appareil', () => {
 
     expect(response.statusCode).toBe(400);
     expect(mockValidateMagicLink).not.toHaveBeenCalled();
+  });
+
+  describe('#10878 — la transition mesurée', () => {
+    const iosAnnonce = (version: string) => ({
+      'x-meeshy-platform': 'ios',
+      'x-meeshy-version': version,
+      'x-app-platform': 'ios',
+      'x-app-version': version,
+    });
+
+    it('ancien client iOS (1.1.3) : oui implicite au service, passage compté', async () => {
+      mockValidateMagicLink.mockResolvedValue(makeValidateResult());
+
+      await app.inject({ method: 'POST', url: '/magic-link/validate', payload: { token: 'tok' }, headers: iosAnnonce('1.1.3') });
+
+      expect(mockValidateMagicLink).toHaveBeenCalledWith(expect.objectContaining({ confirmed: true }));
+      expect(mockLegacyRecord).toHaveBeenCalledWith({ route: 'magic-link-validate', client: { platform: 'ios', version: '1.1.3' } });
+    });
+
+    it('ancien client iOS, jeton INVALIDE : rien de compté', async () => {
+      mockValidateMagicLink.mockResolvedValue({ success: false, error: 'Invalid or expired magic link' });
+
+      const response = await app.inject({ method: 'POST', url: '/magic-link/validate', payload: { token: 'bidon' }, headers: iosAnnonce('1.1.3') });
+
+      expect(response.statusCode).toBe(400);
+      expect(mockLegacyRecord).not.toHaveBeenCalled();
+    });
+
+    it('iOS 1.1.3 qui déclare link-device-binding : confirmation demandée', async () => {
+      mockValidateMagicLink.mockResolvedValue(makeValidateResult());
+
+      await app.inject({ method: 'POST', url: '/magic-link/validate', payload: { token: 'tok' }, headers: { ...iosAnnonce('1.1.3'), 'x-meeshy-capabilities': 'link-device-binding' } });
+
+      expect(mockValidateMagicLink).toHaveBeenCalledWith(expect.objectContaining({ confirmed: false }));
+      expect(mockLegacyRecord).not.toHaveBeenCalled();
+    });
+
+    it('nouveau client iOS (1.1.4) : confirmation demandée, rien de compté', async () => {
+      mockValidateMagicLink.mockResolvedValue(makeValidateResult());
+
+      await app.inject({ method: 'POST', url: '/magic-link/validate', payload: { token: 'tok' }, headers: iosAnnonce('1.1.4') });
+
+      expect(mockValidateMagicLink).toHaveBeenCalledWith(expect.objectContaining({ confirmed: false }));
+      expect(mockLegacyRecord).not.toHaveBeenCalled();
+    });
+
+    it('client inconnu : confirmation demandée (fail-closed), rien de compté', async () => {
+      mockValidateMagicLink.mockResolvedValue(makeValidateResult());
+
+      await app.inject({ method: 'POST', url: '/magic-link/validate', payload: { token: 'tok' } });
+
+      expect(mockValidateMagicLink).toHaveBeenCalledWith(expect.objectContaining({ confirmed: false }));
+      expect(mockLegacyRecord).not.toHaveBeenCalled();
+    });
   });
 });

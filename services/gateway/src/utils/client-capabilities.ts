@@ -20,6 +20,8 @@ export const CLIENT_CAPABILITIES_HEADER = 'x-meeshy-capabilities';
 export const CLIENT_CAPABILITIES = {
   /** #9927 — l'étape `age` de l'onboarding et `viewerWriteRestriction` dans son état. */
   onboardingAge: 'onboarding-age',
+  /** #10872/#10878 — ce binaire présente le secret de liaison et sait demander « Se connecter en tant que @x ? ». */
+  linkDeviceBinding: 'link-device-binding',
 } as const;
 
 export type ClientCapability = (typeof CLIENT_CAPABILITIES)[keyof typeof CLIENT_CAPABILITIES];

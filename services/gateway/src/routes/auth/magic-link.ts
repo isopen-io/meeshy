@@ -38,6 +38,7 @@ import { openSession } from './open-session';
 import { GEOLOCATION_ATTRIBUTION, readClientSessionHeaders } from '@meeshy/shared/utils/client-session';
 import { recordSessionClientInfo } from '../../services/auth/session-client-info';
 import { currentSessionOf } from '../../services/auth/current-session';
+import { countLegacyLinkLogin, getLegacyLinkLoginCounter, linkLoginConsent } from '../../services/auth/legacy-link-client';
 import { adoptProvenSession, provenSessionAdoption } from '../../services/auth/session-adoption';
 
 // Logger dédié pour magic-link
@@ -418,7 +419,12 @@ export function registerMagicLinkRoutes(context: AuthRouteContext) {
 
       logger.info(`[AUTH] Vérification email (method=${code ? 'code' : 'token'})`);
 
-      const result = await authService.verifyEmail({ email, code, token, password, linkDeviceSecret, confirmed: confirm === true });
+      // #10878 — un ancien binaire iOS (avant #10872) garde la connexion directe, comptée.
+      const consent = code === undefined && token !== undefined
+        ? linkLoginConsent({ headers: request.headers, confirm, linkDeviceSecret })
+        : { confirmed: confirm === true, legacyClient: null };
+
+      const result = await authService.verifyEmail({ email, code, token, password, linkDeviceSecret, confirmed: consent.confirmed });
 
       // #10872 — lien ouvert ailleurs que sur l'appareil demandeur, sans le oui :
       // rien n'est consommé, aucune session ; le client montre le compte cible.
@@ -432,6 +438,8 @@ export function registerMagicLinkRoutes(context: AuthRouteContext) {
         if (result.reason === 'error') return sendInternalError(reply, result.error);
         return sendBadRequest(reply, result.error, { code: result.reason === 'expired' ? 'VERIFICATION_EXPIRED' : 'INVALID_VERIFICATION' });
       }
+
+      countLegacyLinkLogin({ route: 'verify-email', consent, counter: getLegacyLinkLoginCounter() });
 
       // Une adresse NEUVEMENT prouvée peut annoncer une arrivée aux carnets
       // qui la contiennent (#8105) — après la réponse, jamais en ligne.
