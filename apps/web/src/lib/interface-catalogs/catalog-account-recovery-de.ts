@@ -17,6 +17,16 @@ const de = {
   'recovery.reset.invalid.action': 'Neuen Link anfordern',
   'recovery.reset.done.title': 'Passwort gespeichert',
   'recovery.reset.done.text': 'Du kannst dich jetzt mit deinem neuen Passwort anmelden.',
+  'recovery.reset.code': 'Bestätigungscode',
+  'recovery.reset.code.lead': 'Gib den 6-stelligen Code aus deiner Authenticator-App ein.',
+  'recovery.reset.error.codeRequired': 'Dieses Konto ist geschützt: Gib den Bestätigungscode aus deiner Authenticator-App ein.',
+  'recovery.reset.error.codeInvalid': 'Falscher Bestätigungscode.',
+  'recovery.reset.error.weak': 'Dieses Passwort ist zu leicht zu erraten. Wähle ein längeres oder weniger vorhersehbares.',
+  'recovery.reset.error.reused': 'Du hast dieses Passwort kürzlich verwendet. Wähle ein anderes.',
+  'recovery.reset.error.rateLimited': 'Zu viele Versuche. Warte ein paar Minuten, bevor du es erneut versuchst.',
+  'recovery.reset.error.locked': 'Dieses Konto ist vorübergehend gesperrt. Wende dich an den Support.',
+  'recovery.reset.exhausted.title': 'Zu viele falsche Codes',
+  'recovery.reset.exhausted.text': 'Zu deiner Sicherheit wurde dieser Link deaktiviert. Fordere einen neuen an.',
 } satisfies AccountRecoveryCatalog;
 
 export default de;

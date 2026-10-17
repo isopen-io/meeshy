@@ -343,7 +343,7 @@ describe('un jeton de réinitialisation ne sert qu’une fois, même présenté 
 
     const resultat = await definir(harness, jetonDuLien(harness));
 
-    expect(resultat).toEqual({ success: false, error: 'Invalid or expired reset token' });
+    expect(resultat).toEqual({ success: false, error: 'Invalid or expired reset token', code: 'RESET_TOKEN_INVALID' });
     expect(harness.email.sendPasswordChangedEmail).not.toHaveBeenCalled();
   });
 });
