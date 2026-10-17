@@ -44,7 +44,7 @@ describe('la proposition au niveau 100', () => {
   test('Mee et Meo expliquent : ce qui repart, ce qu’on gagne', () => {
     const t = text(html);
     expect(t).toContain('tu peux passer en Prestige, ou continuer à monter');
-    expect(t).toContain('Ton niveau actuel repart à 1 et ta poche d’étincelles est vidée ; ton total à vie et ton niveau max sont conservés');
+    expect(t).toContain('Ton niveau actuel repart à 1 et tes étincelles convertibles à 0 ; ton total à vie et ton niveau max sont conservés');
     expect(t).toContain(`${formatCount(GLORY_POINTS.prestige, 'fr').replace(/\s/g, ' ')} de Gloire`);
     expect(html).toContain('data-game-bird="meeGuide"');
     expect(html).toContain('data-game-bird="meoGuide"');
@@ -76,12 +76,12 @@ describe('la proposition au niveau 100', () => {
     expect(t).toContain('ligue (niveau 10) et ton duo (niveau 20) restent ouverts, car ils lisent ton niveau max à vie');
   });
 
-  test('la confirmation donne les VALEURS avant → après : étincelles en poche, niveau, record, étoiles, Gloire (#9705)', async () => {
+  test('la confirmation donne les VALEURS avant → après : étincelles convertibles, niveau, record, étoiles, Gloire (#9705)', async () => {
     const host = await mount(<GamePrestige {...props()} />);
     await click(host.querySelector('[data-game-prestige-go]'));
     const plain = (value: string): string => value.replace(/\s/g, ' ');
     const rows = plain(text(host.querySelector('[data-game-prestige-values]')?.innerHTML ?? ''));
-    expect(rows).toContain(plain(`En poche ${formatCount(props().score, 'fr')} étincelles → 0 étincelle`));
+    expect(rows).toContain(plain(`Convertibles ${formatCount(props().score, 'fr')} étincelles → 0 étincelle`));
     expect(rows).toContain('Niveau 100 → 1');
     expect(rows).toContain('Étoiles 1 → 2');
     expect(rows).toContain(plain(`Gloire +${formatCount(GLORY_POINTS.prestige, 'fr')}`));

@@ -8,7 +8,7 @@ import { earnRules, type EarnRule } from '@/lib/game/earn-rules';
 import { levelMaxReading, levelReading, shownLevelOf, sparksReading } from '@/lib/game/ladder';
 import { enamelToken } from '@/lib/game/medal';
 import { tierTint } from '@/lib/game/tier-emblem';
-import { familyName, formatCount, gameText, levelTierName, levelTopLine, pointsLabel, rankName, standingLabel, shownRank } from '@/lib/view/game-copy';
+import { familyName, formatCount, gameText, levelTierName, levelTopLine, pointsLabel, rankName, sparksCumulLine, standingLabel, shownRank } from '@/lib/view/game-copy';
 import { levelHeldLine, levelStepLine } from '@/lib/view/level-step-copy';
 import { levelRingLabelWithPrestige } from '@/lib/view/game-copy-v2';
 import { elanDetail, levelStepDetail, rankDetail, ringDetail } from '@/lib/view/game-detail';
@@ -103,22 +103,29 @@ function LevelStepChip({ game }: { readonly game: GameBlock }) {
 }
 
 /**
- * LA PAIRE POCHE / TOTAL ET NIVEAU / MAX (porteur, 2026-10-16) — TOUJOURS affichée : les étincelles en poche en grand, le
- * total accumulé à vie en petit dessous ; le niveau actuel, le niveau max à vie dessous (même quand il égale le niveau).
- * Le total à vie n'est pas inventé devant un serveur antérieur. Une dette d'étincelles se dit, elle bloque la frappe.
+ * LA PAIRE CONVERTIBLES / CUMUL ET NIVEAU / MAX (porteur, 2026-10-16 puis 2026-10-17) — TOUJOURS affichée : les étincelles
+ * CONVERTIBLES en grand (la seule valeur réelle), le cycle rapporté au total à vie en petit dessous ; le niveau actuel, le
+ * niveau max à vie dessous (même quand il égale le niveau). Le cumul n'est pas inventé devant un serveur antérieur. Une
+ * dette d'étincelles se dit, elle bloque la frappe.
  */
 function SparksPair({ game }: { readonly game: GameBlock }) {
   const sparks = sparksReading(game.level);
+  const cumul = sparksCumulLine(sparks);
   const level = shownLevelOf(game.level);
   return (
     <div className="flex flex-wrap gap-x-5 gap-y-1" data-game-pair="">
       <div className="flex min-w-0 flex-col">
-        <span data-game-sparks={sparks.pocket} className="text-title font-bold tabular-nums" style={{ color: GAME_INK }}>
-          {pointsLabel(sparks.pocket)}
+        <span className="flex flex-wrap items-baseline gap-x-1.5">
+          <span data-game-sparks={sparks.pocket} className="text-title font-bold tabular-nums" style={{ color: GAME_INK }}>
+            {pointsLabel(sparks.pocket)}
+          </span>
+          <span className="text-caption font-semibold" style={{ color: GAME_INK_2 }}>
+            {gameText('game.sparks.pocket_label')}
+          </span>
         </span>
-        {sparks.lifetime === null ? null : (
+        {cumul === null ? null : (
           <span data-game-sparks-lifetime={sparks.lifetime} className="text-caption tabular-nums" style={{ color: GAME_INK_2 }}>
-            {gameText('game.sparks.lifetime', { total: formatCount(sparks.lifetime) })}
+            {cumul}
           </span>
         )}
         {sparks.debt > 0 ? (
