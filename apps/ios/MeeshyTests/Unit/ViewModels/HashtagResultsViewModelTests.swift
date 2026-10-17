@@ -121,4 +121,38 @@ final class HashtagResultsViewModelTests: XCTestCase {
             .impression(postId: "p1", source: "search", surface: .hashtag),
         ], "Revoir un résultat le recompte : aucun dédoublonnage.")
     }
+
+    /// Le serveur pagine par décalage : un post publié entre deux pages fait
+    /// revenir le dernier montré en tête de la suivante. Un id en double dans
+    /// `ForEach(posts)` rend l'identité des cellules indéfinie.
+    func test_loadMore_whenThePageOverlapsTheShownOne_appendsEachPostOnce() async {
+        let service = MockPostService()
+        service.getPostsByHashtagResult = .success(Self.makePaginatedResponse(
+            posts: ["p1", "p2", "p3"].map { Self.makeAPIPost(id: $0) }, hasMore: true, nextCursor: "3"))
+        let sut = HashtagResultsViewModel(tag: "paris", service: service)
+        await sut.load()
+
+        service.getPostsByHashtagResult = .success(Self.makePaginatedResponse(
+            posts: ["p3", "p4"].map { Self.makeAPIPost(id: $0) }, hasMore: false))
+        await sut.loadMore()
+
+        XCTAssertEqual(sut.posts.map(\.id), ["p1", "p2", "p3", "p4"])
+    }
+
+    /// Une requête perdue n'arrête pas le défilement infini pour toute la visite.
+    func test_loadMore_afterATransientFailure_triesAgainOnTheNextScroll() async {
+        let service = MockPostService()
+        service.getPostsByHashtagResult = .success(Self.makePaginatedResponse(
+            posts: [Self.makeAPIPost(id: "p1")], hasMore: true, nextCursor: "1"))
+        let sut = HashtagResultsViewModel(tag: "paris", service: service)
+        await sut.load()
+
+        service.getPostsByHashtagResult = .failure(URLError(.networkConnectionLost))
+        await sut.loadMore()
+        service.getPostsByHashtagResult = .success(Self.makePaginatedResponse(
+            posts: [Self.makeAPIPost(id: "p2")], hasMore: false))
+        await sut.loadMore()
+
+        XCTAssertEqual(sut.posts.map(\.id), ["p1", "p2"])
+    }
 }

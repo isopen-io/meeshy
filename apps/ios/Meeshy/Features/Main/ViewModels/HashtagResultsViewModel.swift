@@ -109,11 +109,21 @@ final class HashtagResultsViewModel: ObservableObject {
         let preferred = languageProvider.preferredLanguages
         do {
             let response = try await service.getPostsByHashtag(tag: tag, cursor: nextCursor, limit: 20)
-            posts.append(contentsOf: response.data.map { $0.toFeedPost(preferredLanguages: preferred) })
+            // Le serveur pagine par DÉCALAGE (`skip`) : un post publié sous ce
+            // hashtag entre deux pages repousse la liste d'un rang, et le dernier
+            // post de la page déjà montrée revient en tête de la suivante. Deux
+            // fois le même id dans `ForEach(posts)`, c'est une identité SwiftUI
+            // indéfinie (cellule qui montre l'autre, état croisé).
+            let shown = Set(posts.map(\.id))
+            let fresh = response.data
+                .map { $0.toFeedPost(preferredLanguages: preferred) }
+                .filter { !shown.contains($0.id) }
+            posts.append(contentsOf: fresh)
             nextCursor = response.pagination?.nextCursor
             hasMore = response.pagination?.hasMore ?? false
         } catch {
-            hasMore = false
+            // Une requête perdue n'est pas la fin de la liste : le prochain
+            // défilement la redemande (comme `ReelsViewModel`).
         }
     }
 }

@@ -459,4 +459,15 @@ final class NewConversationViewModelTests: XCTestCase {
         XCTAssertFalse(sut.isLoadingContacts,
                        "A failed contacts fetch must clear the loading flag so the empty state can render")
     }
+
+    /// La frappe suivante annule la recherche en vol : l'annulation n'est pas
+    /// une panne. Elle vidait la liste et montrait l'échec à chaque lettre.
+    func test_performSearch_cancelledByTheNextKeystroke_isNotAFailure() async {
+        let (sut, api) = makeSUT()
+        api.errorToThrow = CancellationError()
+
+        await sut.performSearch(query: "ab")
+
+        XCTAssertFalse(sut.searchFailed)
+    }
 }
