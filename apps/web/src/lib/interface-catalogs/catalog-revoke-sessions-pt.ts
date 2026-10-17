@@ -1,9 +1,7 @@
-/**
- * LE LIEN « CE N'ÉTAIT PAS MOI » — tranche du catalogue `catalog-pt.ts`, que le
- * catalogue RÉPAND. `/auth/revoke-sessions` (#10859) : la page que l'alerte de
- * nouvelle connexion ouvre, et qui ferme toutes les sessions au clic.
- */
-const ptRevokeSessions = {
+import type { RevokeSessionsCatalog } from '@/lib/i18n-revoke-sessions-catalog';
+
+/** Le lien « ce n'était pas moi » — voir `catalog-revoke-sessions-fr.ts`. */
+const pt = {
   'revokeSessions.title': 'Não foi você?',
   'revokeSessions.body': 'Encerre a sessão da sua conta em todos os dispositivos, incluindo o que acabou de entrar. Depois, será preciso entrar novamente.',
   'revokeSessions.action': 'Sair de todos os dispositivos',
@@ -12,6 +10,6 @@ const ptRevokeSessions = {
   'revokeSessions.done.body': 'Altere sua senha na próxima vez que entrar.',
   'revokeSessions.invalid': 'Este link de segurança expirou ou já foi usado. Entre para gerenciar suas sessões.',
   'revokeSessions.dismiss': 'Fui eu',
-} as const;
+} as const satisfies RevokeSessionsCatalog;
 
-export default ptRevokeSessions;
+export default pt;

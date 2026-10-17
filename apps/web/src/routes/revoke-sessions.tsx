@@ -4,7 +4,8 @@ import { apiDeps } from '@/lib/api/deps';
 import type { ApiResult } from '@/lib/api/http';
 import type { ReachFailure } from '@/lib/api/link-failure';
 import { revokeAllSessionsFromLink, revokeFailureOf, type RevokeSessionsResult } from '@/lib/api/revoke-sessions';
-import { translate, type InterfaceCatalogKey } from '@/lib/i18n-catalog';
+import { translate } from '@/lib/i18n-catalog';
+import { translateRevokeSessions } from '@/lib/i18n-revoke-sessions-catalog';
 import { currentInterfaceLanguage, type InterfaceLanguage } from '@/lib/interface-language';
 import { forgetEmailLinkSecret } from '@/lib/links/email-link-secret';
 import { useEmailLinkSearch } from '@/lib/links/email-link-search';
@@ -33,7 +34,7 @@ export const REVOKE_SESSIONS_KEYS = [
   'revokeSessions.done.body',
   'revokeSessions.invalid',
   'revokeSessions.dismiss',
-] as const satisfies readonly InterfaceCatalogKey[];
+] as const;
 
 export type RevokeSessionsPageDeps = {
   readonly revoke: (token: string) => Promise<ApiResult<RevokeSessionsResult>>;
@@ -79,8 +80,8 @@ export function RevokeSessionsPage({
       <LinkPage
         glyph="check"
         tone="success"
-        title={translate(language, 'revokeSessions.done.title')}
-        body={<LinkText>{translate(language, 'revokeSessions.done.body')}</LinkText>}
+        title={translateRevokeSessions(language, 'revokeSessions.done.title')}
+        body={<LinkText>{translateRevokeSessions(language, 'revokeSessions.done.body')}</LinkText>}
       >
         <ActionLink to="login" tone="primary">
           {translate(language, 'linkPage.signIn')}
@@ -95,7 +96,7 @@ export function RevokeSessionsPage({
         glyph="warningCircle"
         tone="danger"
         title={translate(language, 'accountDeletion.closed.title')}
-        body={<LinkText>{translate(language, 'revokeSessions.invalid')}</LinkText>}
+        body={<LinkText>{translateRevokeSessions(language, 'revokeSessions.invalid')}</LinkText>}
       >
         <ActionLink to="login" tone="primary">
           {translate(language, 'linkPage.signIn')}
@@ -110,20 +111,20 @@ export function RevokeSessionsPage({
     <LinkPage
       glyph="warningCircle"
       tone="danger"
-      title={translate(language, 'revokeSessions.title')}
+      title={translateRevokeSessions(language, 'revokeSessions.title')}
       body={
         <>
-          <LinkText>{translate(language, 'revokeSessions.body')}</LinkText>
+          <LinkText>{translateRevokeSessions(language, 'revokeSessions.body')}</LinkText>
           {online ? null : <LinkAlert>{translate(language, 'linkPage.offline.body')}</LinkAlert>}
           {failure === null ? null : <LinkAlert>{translate(language, REACH_FAILURE_BODY[failure])}</LinkAlert>}
         </>
       }
     >
       <ActionButton tone="danger" disabled={working || !online} onClick={() => void revoke()}>
-        {translate(language, working ? 'revokeSessions.working' : 'revokeSessions.action')}
+        {translateRevokeSessions(language, working ? 'revokeSessions.working' : 'revokeSessions.action')}
       </ActionButton>
       <ActionLink to="list" tone="secondary">
-        {translate(language, 'revokeSessions.dismiss')}
+        {translateRevokeSessions(language, 'revokeSessions.dismiss')}
       </ActionLink>
     </LinkPage>
   );

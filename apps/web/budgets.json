@@ -1047,9 +1047,18 @@
       "pattern": "^assets/catalog-sign-in-link-(fr|en|es|pt|de|it|ar)-[A-Za-z0-9_-]+\\.js$",
       "dynamic_only": true,
       "kb": {
+        "value": 6,
+        "status": "CIBLE -- MESUREE LE 2026-10-17, NON ARBITREE",
+        "source": "Mesure du 2026-10-17 (`bun run build` puis gzip -9 des sept fichiers) : 2,17 Ko pour les SEPT catalogues de la confirmation d un lien de connexion (cinq cles `signInLink.confirm.*` de 8da83d255f : titre, deux chapeaux, Se connecter, Annuler), charges avec le lien magique et la verification d adresse (`routes/route-table.tsx`) et jamais au demarrage. Sorties du coeur parce que, laissees dans `catalog-<l>-verify-email.ts`, elles portaient les catalogues d interface a 211,48 Ko pour un plafond de 211 (Quality rouge) ; apres le deplacement : 210,75 Ko. Arrondi au Ko SUPERIEUR (3). -- Remesure du 2026-10-17 : 5,58 Ko apres l arrivee des dix-neuf cles `verifyEmail.*` propres a l ecran `/auth/verify-email` (barre, adresse absente, titre et sous-titres, renvoi du code, lien invalide, passage a l app, celebration d arrivee), sorties du coeur des catalogues d interface (206,97 Ko, plafond 211 inchange) ; ce que ces ecrans partagent avec la connexion, le mot de passe oublie ou le lien magique (`verifyEmail.verified`, `.backToLogin`, `.code.*`, `.submit*`, `.error.*`, `.link.checking`, `.proven`, `emailSent.*`, `signInLink.switchAccount.*`) y reste. Arrondi au Ko SUPERIEUR (6)."
+      }
+    },
+    "interface_catalogs_revoke_sessions": {
+      "pattern": "^assets/catalog-revoke-sessions-(fr|en|es|pt|de|it|ar)-[A-Za-z0-9_-]+\\.js$",
+      "dynamic_only": true,
+      "kb": {
         "value": 3,
         "status": "CIBLE -- MESUREE LE 2026-10-17, NON ARBITREE",
-        "source": "Mesure du 2026-10-17 (`bun run build` puis gzip -9 des sept fichiers) : 2,17 Ko pour les SEPT catalogues de la confirmation d un lien de connexion (cinq cles `signInLink.confirm.*` de 8da83d255f : titre, deux chapeaux, Se connecter, Annuler), charges avec le lien magique et la verification d adresse (`routes/route-table.tsx`) et jamais au demarrage. Sorties du coeur parce que, laissees dans `catalog-<l>-verify-email.ts`, elles portaient les catalogues d interface a 211,48 Ko pour un plafond de 211 (Quality rouge) ; apres le deplacement : 210,75 Ko. Arrondi au Ko SUPERIEUR (3)."
+        "source": "Mesure du 2026-10-17 (`bun run build` puis `node scripts/measure-weight.mjs`) : 2,41 Ko. Les huit cles `revokeSessions.*` du lien « ce n etait pas moi » (/auth/revoke-sessions, #10859) pour les SEPT langues, sorties du coeur (209,45 Ko pour un plafond de 211) des catalogues d interface (plafonds `interface_catalogs` et `first_paint` inchanges) et chargees avec leur page (`routes/route-table.tsx`), jamais au demarrage."
       }
     },
     "interface_catalogs_profile_decor": {
