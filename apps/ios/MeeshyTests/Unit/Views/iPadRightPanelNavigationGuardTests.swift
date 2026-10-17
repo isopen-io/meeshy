@@ -189,6 +189,19 @@ final class iPadRightPanelNavigationGuardTests: XCTestCase {
         XCTAssertTrue(scene.contains("meeshyForceReduceMotion"))
     }
 
+    /// Un lien (post, tag, communauté, profil, boutique…) reçu pendant qu'une
+    /// story, un réel ou une feuille est présenté s'ouvrait DESSOUS : seules
+    /// les conversations refermaient les surfaces. Les deux racines referment
+    /// d'abord, comme pour un tap de notification (#10543).
+    func test_deepLinks_closePresentedSurfacesFirst_onBothRoots() throws {
+        for file in ["RootView.swift", "iPadRootView+Navigation.swift"] {
+            let code = try source(of: file)
+            let start = try XCTUnwrap(code.range(of: "func handleDeepLink(_ deepLink: DeepLink?) {"), file)
+            let body = String(code[start.upperBound...].prefix(500))
+            XCTAssertTrue(body.contains("router.clearPresentedSurfaces { _ in showDeepLink(deepLink) }"), file)
+        }
+    }
+
     func test_storyNotificationScreens_closeThePanelOnIPad() throws {
         let stories = URL(fileURLWithPath: "\(#filePath)")
             .deletingLastPathComponent().deletingLastPathComponent()

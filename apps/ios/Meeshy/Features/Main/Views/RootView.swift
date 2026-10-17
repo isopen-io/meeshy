@@ -555,7 +555,14 @@ struct RootView: View {
 
     private func handleDeepLink(_ deepLink: DeepLink?) {
         guard let deepLink = deepLinkRouter.consumePendingDeepLink() else { return }
+        // Story, réel, composer ou feuille en cours : refermés d'ABORD, comme
+        // pour un tap de notification (#10543). Seules les conversations le
+        // faisaient ; un lien vers un post, un tag, une communauté ou un profil
+        // s'ouvrait SOUS la couverture, et le tap semblait sans effet.
+        router.clearPresentedSurfaces { _ in showDeepLink(deepLink) }
+    }
 
+    private func showDeepLink(_ deepLink: DeepLink) {
         switch deepLink {
         case .trackedLink(let token):
             // `/l/<token>` resolved async by targetType (re-sets pendingDeepLink).
@@ -919,7 +926,7 @@ struct RootView: View {
                 }
                 return
             }
-            CallManager.shared.handleIncomingCallNotification(
+            CallManager.shared.handleIncomingCallAlertTap(
                 callId: callId,
                 fromUserId: ctx.callerUserId ?? "",
                 fromUsername: ctx.callerName ?? ctx.senderUsername ?? "",
