@@ -75,17 +75,17 @@ private final class TusAuthRetryStubURLProtocol: URLProtocol {
     override nonisolated func stopLoading() {}
 }
 
-/// Thread-safe spy standing in for `AuthManager.refreshSession(force:)`.
+/// Thread-safe spy standing in for `AuthManager.refreshSession(presentedToken:stillInstalled:force:)`.
 /// `TusUploadManager` calls the injected closure from its own actor
 /// isolation, so the spy must be safe to call across that boundary.
 private final class RefreshSpy: @unchecked Sendable {
     private let lock = NSLock()
     private var _callCount = 0
-    private var _forceParams: [Bool] = []
+    private var _presentedTokens: [String] = []
     var result: Result<String, Error> = .success("fresh-token")
 
     var callCount: Int { withLock { _callCount } }
-    var forceParams: [Bool] { withLock { _forceParams } }
+    var presentedTokens: [String] { withLock { _presentedTokens } }
 
     /// `NSLock.lock()`/`.unlock()` are `@_unavailableFromAsync` — calling them
     /// directly inside an `async` closure body doesn't compile. Routing
@@ -96,11 +96,11 @@ private final class RefreshSpy: @unchecked Sendable {
         return body()
     }
 
-    func closure() -> @Sendable (Bool) async throws -> String {
-        { [self] force in
+    func closure() -> @Sendable (String) async throws -> String {
+        { [self] presentedToken in
             let outcome: Result<String, Error> = withLock {
                 _callCount += 1
-                _forceParams.append(force)
+                _presentedTokens.append(presentedToken)
                 return result
             }
             switch outcome {
@@ -221,7 +221,8 @@ final class TusUploadManager_AuthRetryTests: XCTestCase {
         XCTAssertEqual(TusAuthRetryStubURLProtocol.headers[3]["Authorization"], "Bearer fresh-token-A",
             "the retried PATCH must carry the REFRESHED token, not the one that got refused")
         XCTAssertEqual(refresh.callCount, 1)
-        XCTAssertEqual(refresh.forceParams, [true])
+        XCTAssertEqual(refresh.presentedTokens, ["stale-token"],
+            "le rafraîchissement reçoit le jeton PRÉSENTÉ par la montée (#10904)")
     }
 
     // MARK: - En-têtes d'identification client
@@ -417,6 +418,35 @@ final class TusUploadManager_AuthRetryTests: XCTestCase {
             "no HEAD, no second PATCH — a failed refresh must not attempt to recover an offset that was never granted")
         XCTAssertEqual(refresh.callCount, 1,
             "the refresh must be attempted exactly once — its own failure must never trigger a second attempt")
+    }
+
+    /// #10904 — le rafraîchissement ABANDONNÉ (le compte qui a lancé la montée
+    /// n'est plus le compte actif, ou sa session a changé) n'est pas un refus :
+    /// la montée s'arrête là, sans rejeu, et sans « session expirée » qui
+    /// ferait croire au compte actif que c'est le sien qui a expiré.
+    func test_patch401_refreshAbandonedForAnotherAccount_stopsTheUpload_asACancellation_noRetry() async throws {
+        let file = try writeFile(bytes: 128)
+        let refresh = RefreshSpy()
+        refresh.result = .failure(CancellationError())
+        let manager = try makeManager(refresh: refresh)
+
+        TusAuthRetryStubURLProtocol.exchanges = [
+            .init(status: 201, headers: ["Location": "https://stub.meeshy.test/api/v1/uploads/x"], body: Data()),
+            .init(status: 401, headers: [:], body: Data())
+        ]
+
+        do {
+            _ = try await manager.performTusUpload(
+                fileURL: file, mimeType: "application/octet-stream",
+                credential: .bearer("token-of-account-a")
+            )
+            XCTFail("une montée dont le compte n'est plus actif ne se poursuit pas")
+        } catch {
+            XCTAssertTrue(error is CancellationError, "attendu : l'abandon tel quel, reçu \(error)")
+        }
+
+        XCTAssertEqual(TusAuthRetryStubURLProtocol.methods, ["POST", "PATCH"], "aucun HEAD, aucun rejeu")
+        XCTAssertEqual(refresh.callCount, 1)
     }
 
     // MARK: - Retry budget is per-UPLOAD, not per-CHUNK

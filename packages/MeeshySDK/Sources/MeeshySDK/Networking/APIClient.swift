@@ -320,11 +320,27 @@ public final class APIClient: APIClientProviding, @unchecked Sendable {
     // (protocole APIClientProviding inchangé), setTokens/currentTokens
     // offrent la lecture/écriture atomique du couple. Prior art du pattern :
     // CallManager.isCallActiveFlag.
-    private let tokenLock = OSAllocatedUnfairLock<(auth: String?, anon: String?)>(initialState: (nil, nil))
+    private let tokenLock = OSAllocatedUnfairLock<InstalledTokens>(initialState: InstalledTokens())
+
+    /// La paire, et la GÉNÉRATION du jeton installé (#10904) : elle change à
+    /// chaque fois que le jeton de compte change de valeur. Une requête la
+    /// capture avec le jeton qu'elle présente ; au retour d'un 401, une
+    /// génération inchangée dit que ce jeton est TOUJOURS celui du client —
+    /// même un aller-retour A → B → A, qui réinstalle le même jeton, la change.
+    struct InstalledTokens {
+        var auth: String?
+        var anon: String?
+        var generation: UInt64 = 0
+
+        mutating func setAuth(_ value: String?) {
+            if auth != value { generation &+= 1 }
+            auth = value
+        }
+    }
 
     public var authToken: String? {
         get { tokenLock.withLock { $0.auth } }
-        set { tokenLock.withLock { $0.auth = newValue } }
+        set { tokenLock.withLock { $0.setAuth(newValue) } }
     }
 
     public var anonymousSessionToken: String? {
@@ -363,28 +379,57 @@ public final class APIClient: APIClientProviding, @unchecked Sendable {
     /// cette supposition (`fix(web)` du 2026-08-18) — tout appel d'un visiteur
     /// sans compte partait sans identifiant utilisable.
     public var requestCredential: MeeshyRequestCredential? {
+        presentedCredential().credential
+    }
+
+    /// #10904 — ce qu'une requête PRÉSENTE, lu d'un seul tenant : l'identité,
+    /// et, pour un compte, son jeton et la génération de ce jeton.
+    func presentedCredential() -> (credential: MeeshyRequestCredential?, bearer: PresentedBearer?) {
         let pair = tokenLock.withLock { $0 }
         if let auth = pair.auth {
-            return .bearer(auth)
+            return (.bearer(auth), PresentedBearer(token: auth, generation: pair.generation))
         }
         if let anon = pair.anon {
-            return .anonymousSession(anon)
+            return (.anonymousSession(anon), nil)
         }
-        return nil
+        return (nil, nil)
+    }
+
+    /// #10904 — le jeton de compte qu'une requête a mis sur le fil, et la
+    /// génération du client à ce moment-là.
+    struct PresentedBearer {
+        let token: String
+        /// `nil` : ce jeton n'a jamais été celui du client (un jeton rafraîchi
+        /// pour un autre client) — il ne rafraîchit rien de lui-même.
+        let generation: UInt64?
+    }
+
+    /// Après un rafraîchissement, la requête porte `freshToken` : sa génération
+    /// est celle du client s'il l'a installé, aucune sinon.
+    func presentedBearerAfterRefresh(_ freshToken: String) -> PresentedBearer {
+        let pair = tokenLock.withLock { $0 }
+        return PresentedBearer(token: freshToken, generation: pair.auth == freshToken ? pair.generation : nil)
+    }
+
+    /// #10904 — le jeton de compte présenté sous `generation` est-il encore
+    /// celui du client ?
+    func isBearerStillInstalled(_ bearer: PresentedBearer) -> Bool {
+        guard let generation = bearer.generation else { return false }
+        return tokenLock.withLock { $0.generation == generation && $0.auth == bearer.token }
     }
 
     /// Écriture atomique de la paire — à préférer aux deux setters séparés
     /// quand les deux tokens changent ensemble (switch de compte).
     public func setTokens(auth: String?, anonymous: String?) {
         tokenLock.withLock { pair in
-            pair.auth = auth
+            pair.setAuth(auth)
             pair.anon = anonymous
         }
     }
 
     /// Lecture atomique de la paire — jamais un mélange de deux écritures.
     public func currentTokens() -> (auth: String?, anon: String?) {
-        tokenLock.withLock { $0 }
+        tokenLock.withLock { ($0.auth, $0.anon) }
     }
 
     private convenience init() {
@@ -638,14 +683,24 @@ public final class APIClient: APIClientProviding, @unchecked Sendable {
 
         // Une seule autorité pour « qui suis-je et sous quel en-tête » — la
         // même que la couche d'upload et que le siège de test ci-dessous.
-        if let credential = requestCredential {
+        // #10904 — l'identité est CAPTURÉE ici, avec la génération de son
+        // jeton : le rafraîchissement et le rejeu d'un 401 se décident sur
+        // elle, jamais sur le compte actif au moment du retour.
+        let presented = presentedCredential()
+        if let credential = presented.credential {
             urlRequest.setValue(credential.value, forHTTPHeaderField: credential.header)
         }
+        var presentedBearer = presented.bearer
 
-        if let token = authToken, shouldAttemptRefresh && AuthManager.isTokenExpired(token, now: Date()) {
+        if let bearer = presentedBearer, shouldAttemptRefresh && AuthManager.isTokenExpired(bearer.token, now: Date()) {
             do {
-                let freshToken = try await AuthManager.shared.refreshSession()
+                let freshToken = try await AuthManager.shared.refreshSession(
+                    presentedToken: bearer.token,
+                    stillInstalled: isBearerStillInstalled(bearer),
+                    force: false
+                )
                 urlRequest.setValue("Bearer \(freshToken)", forHTTPHeaderField: "Authorization")
+                presentedBearer = presentedBearerAfterRefresh(freshToken)
             } catch let abandoned as CancellationError {
                 // #10463 — rafraîchissement ABANDONNÉ (sortie de session en
                 // cours, session remplacée) : rien n'a été refusé, et une
@@ -767,10 +822,24 @@ public final class APIClient: APIClientProviding, @unchecked Sendable {
                             // exists) and must NOT show "Session expirée".
                             throw MeeshyError.auth(.invalidCredentialsWithMessage(message))
                         }
+                        // #10904 — une requête partie sans jeton de compte n'a
+                        // aucune session à rafraîchir : surtout pas celle du
+                        // compte actif au moment de la réponse.
+                        guard let bearer = presentedBearer else {
+                            throw MeeshyError.auth(.sessionExpired)
+                        }
                         if shouldAttemptRefresh && !hasRefreshedOn401 {
                             hasRefreshedOn401 = true
                             do {
-                                let freshToken = try await AuthManager.shared.refreshSession(force: true)
+                                // #10904 — rafraîchie et rejouée au nom du jeton
+                                // PRÉSENTÉ : un 401 tardif d'un compte quitté
+                                // est abandonné, celui d'un jeton déjà renouvelé
+                                // se rejoue sans rien rafraîchir.
+                                let freshToken = try await AuthManager.shared.refreshSession(
+                                    presentedToken: bearer.token,
+                                    stillInstalled: isBearerStillInstalled(bearer),
+                                    force: true
+                                )
                                 urlRequest.setValue("Bearer \(freshToken)", forHTTPHeaderField: "Authorization")
                                 let (retryData, retryResponse) = try await session.data(for: urlRequest)
                                 guard let retryHTTPResponse = retryResponse as? HTTPURLResponse else {
@@ -782,7 +851,7 @@ public final class APIClient: APIClientProviding, @unchecked Sendable {
                                     return result
                                 } else {
                                     if retryStatusCode == 401 {
-                                        await AuthManager.shared.handleUnauthorized()
+                                        await AuthManager.shared.handleUnauthorized(presentedToken: freshToken)
                                         throw MeeshyError.auth(.sessionExpired)
                                     }
                                     let retryErrBody = try? decoder.decode(ErrorBody.self, from: retryData)
@@ -800,11 +869,11 @@ public final class APIClient: APIClientProviding, @unchecked Sendable {
                                 // Même règle que le rafraîchissement préventif : une erreur serveur ou
                                 // réseau du second passage n'est pas un refus d'authentification.
                                 guard case .auth = refused else { throw refused }
-                                await AuthManager.shared.handleUnauthorized()
+                                await AuthManager.shared.handleUnauthorized(presentedToken: bearer.token)
                                 throw MeeshyError.auth(.sessionExpired)
                             }
                         } else {
-                            await AuthManager.shared.handleUnauthorized()
+                            await AuthManager.shared.handleUnauthorized(presentedToken: bearer.token)
                             throw MeeshyError.auth(.sessionExpired)
                         }
                     }
