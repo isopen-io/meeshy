@@ -144,4 +144,31 @@ final class AudioRecorderManagerTests: XCTestCase {
         XCTAssertFalse(sut.isRecording)
         XCTAssertNil(sut.recordedFileURL)
     }
+
+    /// Cycle 4 — un second démarrage pendant une prise écrasait le recorder en
+    /// cours (fichier orphelin, micro tenu) ou relançait une demande de
+    /// permission : il ne fait plus rien.
+    func test_startRecording_whileAlreadyRecording_startsNothing() {
+        let sut = makeSUT()
+        sut.isRecording = true
+
+        sut.startRecording()
+
+        XCTAssertNil(sut.recordedFileURL, "aucune seconde prise")
+        XCTAssertFalse(sut.awaitsMicrophonePermission, "aucune demande de permission")
+        sut.isRecording = false
+    }
+
+    /// Cycle 4 (iPad) — la vue conversation démontée par la mise en page
+    /// (panneau, fenêtre redimensionnée) jetait le vocal en cours. Il rejoint
+    /// le plateau AVANT que le brouillon ne soit persisté.
+    func test_conversationDisappearing_keepsTheRecordingInTheTray() throws {
+        let source = try AppSourceGuard.unit("Meeshy/Features/Main/Views/ConversationView.swift")
+        let start = try XCTUnwrap(source.range(of: ".onDisappear {\n                composerText.flushPendingChange()"))
+        let block = String(source[start.upperBound...].prefix(2_500))
+        let keep = try XCTUnwrap(block.range(of: "if audioRecorder.isRecording { _ = stopRecordingToAttachment() }"))
+        let persist = try XCTUnwrap(block.range(of: "persistDraftAttachmentsForBackground()"))
+        XCTAssertLessThan(keep.lowerBound, persist.lowerBound, "le vocal rejoint le plateau avant la persistance du brouillon")
+        XCTAssertFalse(block.contains("audioRecorder.cancelRecording()"), "le démontage ne jette plus le vocal")
+    }
 }
