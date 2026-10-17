@@ -15,6 +15,16 @@ class AppDelegate: NSObject, UIApplicationDelegate {
     // Garde : MainActorDeinitSourceGuardTests / MeeshyUIDeinitSourceGuardTests.
     nonisolated deinit {}
 
+    /// Un réveil en arrière-plan (push silencieux, app tuée) ne passe jamais par
+    /// `checkExistingSession` : `APIClient` n'a pas de jeton alors que le
+    /// Keychain en tient un valide. Le jeton de la session restaurée l'amorce ;
+    /// un jeton déjà posé n'est pas remplacé par un nil.
+    @MainActor
+    static func primeAPITokenFromSession() {
+        guard let token = AuthManager.shared.authToken else { return }
+        APIClient.shared.authToken = token
+    }
+
     // MARK: - Application Lifecycle
 
     func application(
@@ -214,7 +224,7 @@ class AppDelegate: NSObject, UIApplicationDelegate {
                 // reste nil malgré un jeton Keychain valide — et
                 // `applyServerRevocation` en a besoin pour son GET
                 // `/notifications/unread-count`.
-                APIClient.shared.authToken = AuthManager.shared.authToken
+                Self.primeAPITokenFromSession()
                 await NotificationActionHandler.shared.revokeDeliveredBanners(notificationIds: revocation.notificationIds)
                 await NotificationToastManager.shared.applyServerRevocation(notificationIds: revocation.notificationIds)
                 completionHandler(.noData)
@@ -250,6 +260,10 @@ class AppDelegate: NSObject, UIApplicationDelegate {
                 Task { @MainActor in state.expire() }
             }
             state.attach(taskId: taskId)
+            // Lancement à froid en arrière-plan : aucun `checkExistingSession`,
+            // `APIClient` sans jeton — synchro, accusé et préchargement
+            // partaient en 401. Même amorce que la branche révocation.
+            Self.primeAPITokenFromSession()
 
             if let unreadTotal {
                 NotificationCoordinator.shared.setInAppNotificationUnread(unreadTotal)
