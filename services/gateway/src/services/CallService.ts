@@ -42,6 +42,7 @@ import { assertCallableConversationType, assertViewerMayStartCall } from './call
 import { commitCallEnd } from './calls/endCallRetry';
 import { callEngagementCrediter } from './calls/callEngagementCredits';
 import { guardedTimeout } from '../utils/guarded-timer';
+import { accountParticipantIds, LIVE_CALL_PARTICIPATION } from './calls/liveCallParticipations';
 
 /** Floor a finite, non-negative byte counter; anything else → null. */
 const clampNonNegativeInt = (value?: number | null): number | null =>
@@ -1053,12 +1054,11 @@ export class CallService {
     // device. Clearing the initiator's phantoms here guarantees a fresh start on
     // every call. We end the WHOLE stale session (all remaining participants
     // marked left + status ended) so it can never block the conversation either.
-    const initiatorStaleParticipations = await this.prisma.callParticipant.findMany({
+    const initiatorParticipantIds = await accountParticipantIds(this.prisma, initiatorId);
+    const initiatorStaleParticipations = initiatorParticipantIds.length === 0 ? [] : await this.prisma.callParticipant.findMany({
       where: {
-        // Audit C5 (2026-07-02) — `{leftAt: null}` alone misses Mongo docs
-        // whose leftAt field was never written (pre-C5 participants).
-        OR: [{ leftAt: null }, { leftAt: { isSet: false } }],
-        participant: { userId: initiatorId },
+        ...LIVE_CALL_PARTICIPATION,
+        participantId: { in: initiatorParticipantIds },
         callSession: {
           status: { in: ACTIVE_STATUSES },
           // P0 fix (2026-07-06) — never let this cross-conversation sweep
