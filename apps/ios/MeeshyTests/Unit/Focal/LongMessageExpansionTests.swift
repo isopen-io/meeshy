@@ -144,7 +144,12 @@ final class LongMessageExpansionTests: XCTestCase {
         let row = try source("Meeshy/Features/Main/Focal/Row/FocalRow.swift")
         XCTAssertTrue(row.contains("expansion: expansion"), "Script/Focal : la rangée plate déplie en place")
         let host = try source("Meeshy/Features/Main/Views/MessageListViewController.swift")
-        XCTAssertTrue(host.contains("messageBubble.longMessageFocus(self.longMessageExpansion(for: localId))"), "Bulles : la bulle reçoit l'état de l'hôte")
+        // L'état est lu AVANT la fermeture stockée de la cellule (c97e31e6ca) : la lire dedans capturait le contrôleur
+        // en fort — contrôleur → collection → cellule → fermeture → contrôleur.
+        XCTAssertTrue(host.contains("let longMessageExpansion = self.longMessageExpansion(for: localId)")
+                      && host.contains("messageBubble.longMessageFocus(longMessageExpansion)"), "Bulles : la bulle reçoit l'état de l'hôte")
+        XCTAssertFalse(host.contains("messageBubble.longMessageFocus(self.longMessageExpansion("),
+                       "jamais lu sur `self` dans la fermeture de la cellule")
         XCTAssertTrue(host.contains("focalActions.onToggleExpanded"), "Script/Focal : la rangée remonte le geste à l'hôte")
         let river = try source("Meeshy/Features/Main/Riviere/View/RiverStreamHost.swift")
         XCTAssertTrue(river.contains(".longMessageFocus(expansion(for: bubble.messageId)"), "Rivière : même dépliage, même effet")
