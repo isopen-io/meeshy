@@ -102,7 +102,15 @@ const buildPrisma = (initial: Row[] = []) => {
     update: jest.fn(async ({ where, data }: { where: { token?: string; id?: string }; data: Row }) => {
       const row = rows.find((r) => r.token === where.token || r.id === where.id);
       if (!row) throw new Error('not found');
-      Object.assign(row, data);
+      const applied = Object.fromEntries(
+        Object.entries(data)
+          .filter(([, value]) => value !== undefined)
+          .map(([key, value]) => {
+            const increment = (value as { increment?: number } | null)?.increment;
+            return [key, typeof increment === 'number' ? Number(row[key] ?? 0) + increment : value];
+          }),
+      );
+      Object.assign(row, applied);
       return row;
     }),
   };
@@ -138,6 +146,7 @@ const SECRET_TARGETS = [
   'https://meeshy.me/auth/magic-link%20?token=abc',
   'https://meeshy.me/auth/%E3%80%80magic-link?token=abc',
   'https://meeshy.me/auth/verify-email/x?token=abc&email=a%40b.c',
+  'https://meeshy.me/auth/magic-link;x=1?token=abc',
 ];
 
 describe('POST /tracking-links — une cible porteuse d’un secret d’e-mail est refusée (#10871)', () => {
@@ -162,6 +171,17 @@ describe('POST /tracking-links — une cible porteuse d’un secret d’e-mail e
     expect(JSON.stringify(body)).not.toContain('abc');
     expect(JSON.stringify(body)).not.toContain('attacker-secret');
     expect(prisma.trackingLink.create).not.toHaveBeenCalled();
+    expect(prisma.trackingLink.rows).toHaveLength(0);
+  });
+
+  it('refuse une adresse que Foundation et WHATWG lisent sur deux hôtes (\\@), sans rien écrire', async () => {
+    const response = await app.inject({
+      method: 'POST', url: '/tracking-links', headers: { 'x-test-as': 'mallory' },
+      payload: { originalUrl: 'https://evil.example\\@meeshy.me/auth/magic-link?token=attacker-secret' },
+    });
+
+    expect(response.statusCode).toBe(400);
+    expect(response.body).not.toContain('attacker-secret');
     expect(prisma.trackingLink.rows).toHaveLength(0);
   });
 
@@ -233,6 +253,53 @@ describe('un lien DÉJÀ créé vers un lien à jeton n’est plus servi (#10871
     expect(response.body).not.toContain('attacker-secret');
   });
 
+  it('un lien dont Foundation lit l’hôte autrement que WHATWG est mort (\\@)', async () => {
+    prisma.trackingLink.rows.push(linkRow({
+      id: 'link-3', token: 'differ1', originalUrl: 'https://evil.example\\@meeshy.me/auth/magic-link?token=attacker-secret',
+    }));
+
+    const redirect = await app.inject({ method: 'GET', url: '/l/differ1' });
+    const resolved = await app.inject({ method: 'GET', url: '/tracking-links/differ1/resolve' });
+
+    expect(redirect.statusCode).toBe(410);
+    expect(resolved.json().data.isActive).toBe(false);
+    expect(resolved.body).not.toContain('attacker-secret');
+  });
+
+  it('la forme SERVIE est la forme JUGÉE : la sérialisation WHATWG, jamais l’adresse brute', async () => {
+    prisma.trackingLink.rows.push(linkRow({ id: 'link-4', token: 'canon01', originalUrl: 'https://evil.example\\@meeshy.me/x y' }));
+
+    const redirect = await app.inject({ method: 'GET', url: '/l/canon01' });
+    const resolved = await app.inject({ method: 'GET', url: '/tracking-links/canon01/resolve' });
+    const click = await app.inject({ method: 'POST', url: '/tracking-links/canon01/click', payload: {} });
+
+    expect(redirect.statusCode).toBe(302);
+    expect(redirect.headers.location).toBe('https://evil.example/@meeshy.me/x%20y');
+    expect(resolved.json().data.originalUrl).toBe('https://evil.example/@meeshy.me/x%20y');
+    expect(click.json().data.originalUrl).toBe('https://evil.example/@meeshy.me/x%20y');
+    expect(click.json().data.trackingLink.originalUrl).toBe('https://evil.example/@meeshy.me/x%20y');
+  });
+
+  it('GET /tracking-links/:token d’un lien SANS propriétaire ne rend pas la cible secrète', async () => {
+    prisma.trackingLink.rows.push(linkRow({ id: 'link-5', token: 'orphan1', createdBy: null }));
+
+    const response = await app.inject({ method: 'GET', url: '/tracking-links/orphan1' });
+
+    expect(response.statusCode).toBe(200);
+    expect(response.body).not.toContain('attacker-secret');
+  });
+
+  it('un lien suivi vers /login?next=<page à jeton> est mort', async () => {
+    prisma.trackingLink.rows.push(linkRow({
+      id: 'link-6', token: 'nextto1', originalUrl: 'https://meeshy.me/login?next=%2Fauth%2Fmagic-link%3Ftoken%3Dattacker-secret',
+    }));
+
+    const response = await app.inject({ method: 'GET', url: '/l/nextto1' });
+
+    expect(response.statusCode).toBe(410);
+    expect(response.body).not.toContain('attacker-secret');
+  });
+
   it('un lien ordinaire reste servi (redirection 302)', async () => {
     prisma.trackingLink.rows.push(linkRow({ id: 'link-2', token: 'normal1', originalUrl: 'https://example.com/a' }));
 
@@ -270,7 +337,7 @@ describe('TrackingLinkService — aucun chemin de création ne mint ces cibles (
     const service = new TrackingLinkService(prisma as any);
 
     const { trackingLinks } = await service.processExplicitLinksInContent({
-      content: `<${MAGIC}>`, conversationId: '507f1f77bcf86cd799439011', createdBy: 'mallory',
+      content: `<${MAGIC}> <https://evil.example\\@meeshy.me/auth/magic-link?token=x>`, conversationId: '507f1f77bcf86cd799439011', createdBy: 'mallory',
     });
 
     expect(trackingLinks).toHaveLength(0);

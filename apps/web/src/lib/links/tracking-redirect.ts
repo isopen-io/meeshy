@@ -1,6 +1,6 @@
 import type { ApiResult } from '@/lib/api/http';
 import { isUnreachable } from '@/lib/api/link-failure';
-import { carriesEmailLinkSecret } from '@/lib/links/email-link-secret';
+import { servedTrackingTarget } from '@meeshy/shared/utils/email-link-secret';
 
 /**
  * **OÙ MÈNE UN LIEN SUIVI `/l/:token`** (#6714) — une loi PURE : les deux
@@ -66,16 +66,9 @@ const TRACKING_TOKEN = /^[a-zA-Z0-9_-]{2,50}$/;
 
 export const isTrackingToken = (token: string): boolean => TRACKING_TOKEN.test(token);
 
-const WEB_PROTOCOLS: ReadonlySet<string> = new Set(['http:', 'https:']);
-
 export function safeExternalTarget(raw: unknown): string | null {
   if (typeof raw !== 'string' || raw.trim() === '') return null;
-  try {
-    const parsed = new URL(raw);
-    return WEB_PROTOCOLS.has(parsed.protocol) && !carriesEmailLinkSecret(parsed.pathname) ? parsed.href : null;
-  } catch {
-    return null;
-  }
+  return servedTrackingTarget(raw);
 }
 
 const DEAD: TrackingOutcome = { kind: 'dead' };

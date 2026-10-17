@@ -1,7 +1,7 @@
 import { randomInt } from 'crypto';
 import { PrismaClient } from '@meeshy/shared/prisma/client';
 import { TrackingLink, TrackingLinkClick } from '@meeshy/shared/types/tracking-link';
-import { TrackingTargetCarriesEmailSecretError, isServableTrackingTarget } from './tracking-link-target';
+import { TrackingTargetCarriesEmailSecretError, isServableTrackingTarget, servedTrackingLinkTarget } from './tracking-link-target';
 import { enhancedLogger } from '../utils/logger-enhanced';
 import { EngagementService } from './engagement/EngagementService';
 import type { LinkVisitor, LinkVisitRecorder } from '../routes/links/utils/link-visitor';
@@ -286,7 +286,7 @@ export class TrackingLinkService {
         kind: 'tracking',
         targetType: link.targetType,
         targetId: link.targetId ?? null,
-        originalUrl: servable ? link.originalUrl ?? null : null,
+        originalUrl: servedTrackingLinkTarget(link.originalUrl),
         sharerId: link.createdBy ?? null,
         isActive: servable && this.isLinkActive(link.isActive, link.expiresAt ?? null),
         expiresAt: link.expiresAt ?? null,

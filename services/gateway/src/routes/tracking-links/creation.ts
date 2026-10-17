@@ -5,7 +5,8 @@ import { TrackingLinkService } from '../../services/TrackingLinkService';
 import {
   TRACKING_TARGET_CARRIES_EMAIL_SECRET,
   TrackingTargetCarriesEmailSecretError,
-  isServableTrackingTarget
+  isServableTrackingTarget,
+  servedTrackingLinkTarget
 } from '../../services/tracking-link-target';
 import { logError } from '../../utils/logger';
 import {
@@ -379,8 +380,11 @@ export async function registerCreationRoutes(fastify: FastifyInstance) {
         }
       }
 
+      // Sans propriétaire, la ligne se lit par tous : elle sert la forme jugée (#10871).
       return sendSuccess(reply, {
-        trackingLink
+        trackingLink: trackingLink.createdBy
+          ? trackingLink
+          : { ...trackingLink, originalUrl: servedTrackingLinkTarget(trackingLink.originalUrl) }
       });
 
     } catch (error) {
