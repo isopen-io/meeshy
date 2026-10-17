@@ -45,9 +45,10 @@ public actor MessagePersistenceActor {
     private let writeContinuation: AsyncStream<WriteOperation>.Continuation
     private var processorTask: Task<Void, Never>?
 
-    /// `MessagePersistenceActor+EditDelete.swift` — suppressions arrivées avant leur message.
-    var pendingTombstones: [String: PendingTombstone] = [:]
-    var pendingTombstoneOrder: [String] = []
+    /// `MessagePersistenceActor+EditDelete.swift` — suppressions, modifications
+    /// et réactions arrivées avant leur message.
+    var pendingRowEvents: [String: PendingRowEvents] = [:]
+    var pendingRowEventOrder: [String] = []
 
     /// The authenticated user's id. The on-device DB has no userId column and
     /// the aggregated reaction payload only flags WHICH emojis the current user
@@ -199,6 +200,7 @@ public actor MessagePersistenceActor {
                     if !changed.isEmpty {
                         postMessageStoreRefresh(conversationIds: changed)
                     }
+                    await self.replayPendingRowEvents(for: messages.map(\.id))
                 case .upsertAPIMessages(let messages, let preferredLanguages):
                     guard !messages.isEmpty else { continue }
                     // `upsertFromAPIMessages` posts its own refresh, scoped to
@@ -206,7 +208,7 @@ public actor MessagePersistenceActor {
                     // here or observers refresh twice.
                     do {
                         try await self.upsertFromAPIMessages(messages, preferredLanguages: preferredLanguages)
-                        await self.replayPendingTombstones(for: messages.map(\.id))
+                        await self.replayPendingRowEvents(for: messages.map(\.id))
                     } catch {
                         Logger.messages.error("upsertFromAPIMessages dropped \(messages.count, privacy: .public) message(s): \(error.localizedDescription, privacy: .public)")
                     }
