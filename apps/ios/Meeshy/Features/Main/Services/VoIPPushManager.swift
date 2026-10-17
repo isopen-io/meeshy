@@ -73,6 +73,7 @@ final class VoIPPushManager: NSObject, ObservableObject {
     /// `APIClient.shared` for both.
     private let tokenRegistrar: VoIPTokenRegistering
     private let authTokenAvailable: @MainActor () -> Bool
+    private let deviceIdentity: @MainActor () -> PushDeviceIdentity
 
     /// Cached snapshot of the last registered record so the cooldown check
     /// stays synchronous — the keychain read is performed asynchronously in
@@ -86,11 +87,13 @@ final class VoIPPushManager: NSObject, ObservableObject {
     init(
         tokenStore: VoIPTokenStoring,
         registrar: VoIPTokenRegistering = APIVoIPTokenRegistrar(),
-        authTokenAvailable: @escaping @MainActor () -> Bool = { APIClient.shared.authToken != nil }
+        authTokenAvailable: @escaping @MainActor () -> Bool = { APIClient.shared.authToken != nil },
+        deviceIdentity: @escaping @MainActor () -> PushDeviceIdentity = { PushDeviceIdentity.current() }
     ) {
         self.tokenStore = tokenStore
         self.tokenRegistrar = registrar
         self.authTokenAvailable = authTokenAvailable
+        self.deviceIdentity = deviceIdentity
         super.init()
         // Audit P2-CC-1 — observe AuthManager.isAuthenticated transitions
         // false→true so a VoIP token that arrived pre-login can be retried.
@@ -492,7 +495,8 @@ extension VoIPPushManager: PKPushRegistryDelegate {
             token: token,
             platform: "ios",
             type: "voip",
-            apnsEnvironment: PushNotificationManager.apnsEnvironment
+            apnsEnvironment: PushNotificationManager.apnsEnvironment,
+            device: deviceIdentity()
         )
 
         do {

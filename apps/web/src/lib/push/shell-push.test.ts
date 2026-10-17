@@ -63,7 +63,11 @@ const authenticated = (id: string): SessionState => ({
 
 const anonymous: SessionState = { status: 'anonymous' };
 
-function harness(session: SessionState, pluginOptions: Parameters<typeof fakePlugin>[0] = {}) {
+function harness(
+  session: SessionState,
+  pluginOptions: Parameters<typeof fakePlugin>[0] = {},
+  deviceIdentity: () => Promise<unknown> = async () => ({}),
+) {
   const fake = fakePlugin(pluginOptions);
   const store = createStore<{ session: SessionState }>(() => ({ session }));
   const requests: HttpRequest[] = [];
@@ -80,6 +84,7 @@ function harness(session: SessionState, pluginOptions: Parameters<typeof fakePlu
     navigate: (url: string) => visited.push(url),
     urlOf: (target: PushTapTarget) => `${target.route}:${JSON.stringify('params' in target ? target.params : 'search' in target ? target.search : {})}`,
     appVersion: '2.0.12',
+    deviceIdentity,
   };
   return { ...fake, store, requests, visited, start: () => startShellPush(env) };
 }
@@ -159,6 +164,41 @@ describe('startShellPush — le jeton FCM de la coque part sous le compte couran
     const tokens = h.requests.map((request) => (request.body as { token: string }).token);
     expect(tokens).toEqual(['fcm-token-1-xxxxxxxx', 'fcm-token-2-xxxxxxxx']);
     expect(h.calls).toEqual(['register', 'unregister', 'register']);
+  });
+});
+
+describe('le jeton part avec l’identité de l’appareil (#10858)', () => {
+  const registeredBody = async (deviceIdentity: () => Promise<unknown>) => {
+    const h = harness(authenticated('u1'), {}, deviceIdentity);
+    await h.start();
+    await flush();
+    return h.requests.map((request) => request.body);
+  };
+
+  test('l’identifiant stable de l’appareil accompagne le jeton, pour que la passerelle retire l’ancien', async () => {
+    const bodies = await registeredBody(async () => ({ deviceId: 'a1b2c3d4e5f60718', deviceName: 'Pixel 8' }));
+    expect(bodies).toEqual([
+      {
+        token: 'fcm-token-1-xxxxxxxx',
+        platform: 'android',
+        type: 'fcm',
+        appVersion: '2.0.12',
+        deviceId: 'a1b2c3d4e5f60718',
+        deviceName: 'Pixel 8',
+      },
+    ]);
+  });
+
+  test('une coque sans le pont d’identité enregistre quand même son jeton', async () => {
+    const bodies = await registeredBody(async () => {
+      throw new Error('not implemented');
+    });
+    expect(bodies).toEqual([{ token: 'fcm-token-1-xxxxxxxx', platform: 'android', type: 'fcm', appVersion: '2.0.12' }]);
+  });
+
+  test('ce que le pont rend d’inattendu ne part pas', async () => {
+    const bodies = await registeredBody(async () => ({ deviceId: '', deviceName: 42, extra: 'x' }));
+    expect(bodies).toEqual([{ token: 'fcm-token-1-xxxxxxxx', platform: 'android', type: 'fcm', appVersion: '2.0.12' }]);
   });
 });
 

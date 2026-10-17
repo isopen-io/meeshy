@@ -318,7 +318,8 @@ public final class PushNotificationManager: NSObject, ObservableObject {
             token: token,
             platform: "ios",
             type: "apns",
-            apnsEnvironment: Self.apnsEnvironment
+            apnsEnvironment: Self.apnsEnvironment,
+            device: PushDeviceIdentity.current(keychain: keychainStore)
         )
 
         do {
