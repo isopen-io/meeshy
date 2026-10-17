@@ -386,6 +386,65 @@ final class ProgressionViewModelGameTests: XCTestCase {
         XCTAssertEqual(try JSONDecoder().decode(APIMeeshMintResult.self, from: mint).gameRevision, 1_792_000_000_456)
     }
 
+    // MARK: - La garde de prix (#10903) et l'état venu d'ailleurs (#10900)
+
+    func test_mint_sendsThePriceTheScreenShowed() async {
+        let (sut, engagement, _) = makeSUT()
+        await sut.load(forceNetwork: true)
+        let shown = sut.game?.mint.price
+
+        await sut.mint()
+
+        XCTAssertEqual(engagement.mintMaxPrices, [shown])
+    }
+
+    func test_mint_priceChanged_restoresSaysItAndRereadsTheNewPrice() async {
+        let (sut, engagement, _) = makeSUT()
+        await sut.load(forceNetwork: true)
+        let before = sut.game
+        let reads = engagement.fetchProgressCallCount
+        engagement.mintResult = .failure(refusal(.priceChanged))
+
+        await sut.mint()
+
+        XCTAssertEqual(sut.game?.mint, before?.mint, "rien n'a été débité")
+        XCTAssertEqual(sut.game?.treasury, before?.treasury)
+        XCTAssertEqual(sut.mintError, GameCopy.errorMessage(for: .priceChanged))
+        XCTAssertEqual(engagement.fetchProgressCallCount, reads + 1, "le nouveau prix se relit")
+    }
+
+    func test_gameUpdated_fromElsewhere_posesTheServedBlock_andRereads() async {
+        let (sut, engagement, _) = makeSUT()
+        await sut.load(forceNetwork: true)
+        let elsewhere = GameFixture.game(minted: 13, held: 10)
+        engagement.fetchProgressResult = .success(GameFixture.snapshot(elsewhere, meesh: GameFixture.meesh(balance: 10, minted: 13)))
+
+        sut.receive(GameUpdatedEvent(gameRevision: 500, reason: "mint", game: elsewhere))
+
+        XCTAssertEqual(sut.game?.mint, elsewhere.mint, "le bloc servi se pose sans attendre")
+    }
+
+    func test_gameUpdated_olderThanTheConfirmedState_isIgnored() async {
+        let (sut, engagement, _) = makeSUT()
+        await sut.load(forceNetwork: true)
+        engagement.mintResult = .success(APIMeeshMintResult(status: "minted", balance: 10, mintedLifetime: 13, gameRevision: 900))
+        await sut.mint()
+        let shown = sut.game
+        let reads = engagement.fetchProgressCallCount
+
+        sut.receive(GameUpdatedEvent(gameRevision: 800, reason: "credit", game: GameFixture.game(minted: 12)))
+
+        XCTAssertEqual(sut.game, shown)
+        XCTAssertEqual(engagement.fetchProgressCallCount, reads, "un état périmé ne déclenche rien")
+    }
+
+    func test_gameUpdated_isDecodedFromTheSocketPayload_toleratingAnUnreadableBlock() throws {
+        let data = Data(#"{"gameRevision":1792000000789,"reason":"credit","game":{"unexpected":true}}"#.utf8)
+        let event = try JSONDecoder().decode(GameUpdatedEvent.self, from: data)
+        XCTAssertEqual(event.gameRevision, 1_792_000_000_789)
+        XCTAssertNil(event.game, "un bloc illisible se lit nil : la progression se relit")
+    }
+
     func test_mint_alreadyMinted_isNotACelebration() async {
         let (sut, engagement, _) = makeSUT()
         await sut.load(forceNetwork: true)
