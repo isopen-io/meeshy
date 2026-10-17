@@ -1,6 +1,6 @@
-# 2026-10-17 : Chaque bundle de test du package est scellé au réseau dès son chargement (#10854)
+## 2026-10-17 : Chaque bundle de test du package est scellé au réseau dès son chargement (#10854)
 
-## Contexte
+**Contexte**
 
 L'app scelle son hôte de test (`TestHarnessNetworkSeal`, b75466f822). Les bundles
 `MeeshySDKTests` et `MeeshyUITests` tournent dans un autre hôte (xctest) et ne
@@ -11,7 +11,7 @@ boucles de reconnexion), des `GET /directory/blocks`, `/me/consents`,
 `/me/preferences`, `/notifications/unread-count`, six
 `POST /notifications/…/read` vers la production, et des médias de fixture.
 
-## Décision
+**Décision**
 
 - Le MÉCANISME vit dans le SDK : `NetworkTransportSeal.install(onRefusal:)`
   (`URLProtocol` refusant sur `URLSession.shared`, échange des constructeurs
