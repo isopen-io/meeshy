@@ -254,4 +254,35 @@ final class GameOptimisticTests: XCTestCase {
         let state = GameFixture.state(GameFixture.game(guideSeen: ["new-rank"]))
         XCTAssertEqual(GameOptimistic.withGuideSeen(state, keys: ["new-rank"]), state)
     }
+
+    // MARK: - Vent arrière des étincelles (#10896)
+
+    /// Un état servi par une passerelle des étincelles : la poche porte le niveau, le record de niveau est `levelRecord`.
+    private func tailwindState(levelRecord: Int?) -> GameState {
+        let pocket = Self.scoreJustAboveLevel34
+        let served = GameFixture.game(score: pocket, levelRecord: levelRecord)
+        let l = served.level
+        let sparked = served.replacing(level: GameBlock.Level(
+            level: l.level, tier: l.tier, score: l.score, floorScore: l.floorScore, nextThreshold: l.nextThreshold,
+            pointsToNext: l.pointsToNext, progress: l.progress, record: l.record, prestige: l.prestige,
+            canPrestige: l.canPrestige, ladder: l.ladder, sparks: pocket, sparksCycle: pocket, sparksLifetime: pocket,
+            levelMaxLifetime: nil, sparksDebt: 0
+        ))
+        return GameFixture.state(sparked, meesh: GameFixture.meesh(debitable: pocket))
+    }
+
+    /// Le niveau que la frappe laisse — celui dont le Vent arrière mesure l'écart au record.
+    private var levelAfterMint: Int { GameOptimistic.afterMint(tailwindState(levelRecord: nil)).game.level.shown.level }
+
+    func test_afterMint_onASparksServer_keepsTheTailwindOff_sixLevelsBelowTheRecord() {
+        let next = GameOptimistic.afterMint(tailwindState(levelRecord: levelAfterMint + 6))
+        XCTAssertEqual(next.game.level.shown.record - next.game.level.shown.level, 6)
+        XCTAssertEqual(next.game.boosts.tailwind, 1, "à 6 niveaux du record, le Vent arrière ne souffle pas")
+    }
+
+    func test_afterMint_onASparksServer_turnsTheTailwindOn_sevenLevelsBelowTheRecord() {
+        let next = GameOptimistic.afterMint(tailwindState(levelRecord: levelAfterMint + 7))
+        XCTAssertEqual(next.game.level.shown.record - next.game.level.shown.level, 7)
+        XCTAssertEqual(next.game.boosts.tailwind, GameBoosts.tailwindFactor, "à 7 niveaux du record, il souffle")
+    }
 }

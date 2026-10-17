@@ -585,4 +585,20 @@ final class ProgressionConceptModelTests: XCTestCase {
         XCTAssertEqual(glory.first { $0.detail == .gloryMissing }?.label,
                        jcnm.glory.next.map { ConceptText.missingForRank(rank: GameCopy.rankLabel($0.rank, division5: $0.shownDivision)) })
     }
+
+    // MARK: - Le Vent arrière (#10896)
+
+    /// Le Vent arrière ne se dit aux Élans que quand il souffle : la passerelle sert `tailwind > 1` à 7 niveaux ou plus
+    /// sous le record de niveau, et 1 sinon — un « ×1 » ne se montre jamais.
+    func test_theTailwind_isSaidByTheElans_onlyWhileItBlows() {
+        let game = GameFixture.game()
+        func tailwind(_ factor: Double) -> ProgressionConceptFact? {
+            let windy = game.replacing(boosts: game.boosts.replacing(tailwind: factor))
+            return ProgressionConceptModel.facts(.elans, progress: progress(windy), game: windy).first { $0.detail == .tailwind }
+        }
+        XCTAssertNil(tailwind(1), "le Vent arrière éteint ne se dit pas")
+        let blowing = try? XCTUnwrap(tailwind(1.25))
+        XCTAssertEqual(blowing?.label, GameRulesGlossary.name(.tailwind))
+        XCTAssertEqual(blowing?.value, ConceptText.valueFactor(GameCopy.factor(1.25)))
+    }
 }

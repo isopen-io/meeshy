@@ -82,8 +82,11 @@ enum GameOptimistic {
             level: level,
             glory: glory,
             mint: preview,
+            // Avec les étincelles, le Vent arrière souffle à 7 niveaux ou plus sous le record (#10896) ; sans, la loi d'hier.
             boosts: game.boosts.replacing(
-                tailwind: GameBoosts.tailwind(level: level.shown.level, levelRecord: level.shown.record)
+                tailwind: game.level.sparks == nil
+                    ? GameBoosts.tailwind(level: level.shown.level, levelRecord: level.shown.record)
+                    : GameBoosts.sparksTailwind(level: level.shown.level, levelRecord: level.shown.record)
             )
         )
         let shifted = shiftBalance(
