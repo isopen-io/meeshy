@@ -187,16 +187,28 @@ describe('le NIVEAU se lit sur la poche (#10892)', () => {
   });
 });
 
-describe('le Vent arrière est éteint', () => {
-  it('un compte dont le niveau est sous son record (ancienne frappe) ne reçoit plus +25 %', async () => {
+describe('le Vent arrière souffle à 7 niveaux ou plus sous le record (#10896)', () => {
+  const gesture = async (pocket: number, levelRecord: number) => {
     const db = fakeGameDb();
-    seedUser(db, { engagementScore: 1000, sparksSincePrestige: 1000, sparksEarnedLifetime: 1000, levelRecord: 15 });
+    seedUser(db, { engagementScore: pocket, sparksSincePrestige: 400_000, sparksEarnedLifetime: 400_000, levelRecord });
     missionsAwaitOtherGestures(db);
-
     await service(db).recordActivity(USER, 'content.text_message');
+    return {
+      counter: db.engagementCounter.rows.find((r) => r.axisKey === 'content.text_message')?.points,
+      gained: (row(db).engagementScore as number) - pocket,
+    };
+  };
+  const base = DEFAULT_ENGAGEMENT_SCALE.operations['content.text_message'].points;
 
-    const base = DEFAULT_ENGAGEMENT_SCALE.operations['content.text_message'].points;
-    expect(db.engagementCounter.rows.find((r) => r.axisKey === 'content.text_message')?.points).toBe(base);
+  it('niveau 3 pour un record à 15 : +25 %, le même montant au compteur et à la poche', async () => {
+    const { counter, gained } = await gesture(1000, 15);
+    expect(counter).toBe(Math.round(base * 1.25));
+    expect(gained).toBe(Math.round(base * 1.25));
+  });
+
+  it('niveau 9 pour un record à 15 (écart de 6) : rien de plus', async () => {
+    const { counter } = await gesture(8100, 15);
+    expect(counter).toBe(base);
   });
 });
 

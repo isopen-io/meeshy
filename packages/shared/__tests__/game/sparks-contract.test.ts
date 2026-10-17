@@ -123,8 +123,11 @@ describe('le bloc game sert les étincelles à côté de l\'ancien score', () =>
     expect(open.mint.locked).toBeNull();
   });
 
-  it('le Vent arrière reste éteint (#10846) — le rallumer serait une décision produit', () => {
+  it('le Vent arrière ne souffle pas à 2 niveaux du record, il souffle à 7 ou plus (#10896)', () => {
     expect(block.boosts.tailwind).toBe(1);
+    const fallen = buildGameBlock(facts({ sparks: { ...SPARKS, pocket: levelThreshold(29) }, levelRecord: 36 }));
+    expect(fallen.level.ladder?.level).toBe(29);
+    expect(fallen.boosts.tailwind).toBe(1.25);
   });
 
   it('après un prestige (cycle vide, niveau max à vie conservé) : niveau 1, tarif réduit, max à vie intact', () => {

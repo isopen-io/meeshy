@@ -10,7 +10,7 @@
  * ne sont qu'indicatives (le potentiel du profil). Du 2026-10-16 au 2026-10-17 (#10846), le niveau se
  * lisait sur le cycle. Les fonctions de ce fichier restent PURES sur « un score » — c'est l'appelant qui
  * leur passe la poche. Le niveau RECORD (`levelRecord`) est le plus haut atteint depuis le prestige ; le
- * niveau MAX À VIE (`levelMaxLifetime`) survit au prestige. Le Vent arrière reste éteint (`boosts.ts`).
+ * niveau MAX À VIE (`levelMaxLifetime`) survit au prestige. Le Vent arrière souffle à 7 niveaux ou plus sous le record (`boosts.ts`).
  *
  * ## Les noms des paliers (#10849, porteur 2026-10-16)
  *

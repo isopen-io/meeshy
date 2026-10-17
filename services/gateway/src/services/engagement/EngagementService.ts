@@ -53,7 +53,7 @@ import { engagementScaleServiceFor, type EngagementScaleSource } from './Engagem
 import { getEngagementEmitIO } from './engagement-emit-registry';
 import { memberSignature } from './memberSignature';
 import { EngagementQuotas, dayBucket } from './EngagementQuotas';
-import { EngagementGameHooks, quarterPoints } from '../game/EngagementGameHooks';
+import { EngagementGameHooks, applyTailwind, quarterPoints } from '../game/EngagementGameHooks';
 import { SPARKS_USER_SELECT, levelSparksOf, sparksOf } from '../game/SparksFacts';
 import type { MessageSignalInput } from '../game/MessageGameSignals';
 import { levelForUnlocks } from '@meeshy/shared/utils/game/levels';
@@ -311,9 +311,9 @@ export class EngagementService {
     const earned = pointsForOperation(scale, operationKey, factor, options.variant);
     // Un compte sans contact vérifié ne publie pas au prix fort (#8959).
     const capped = heavy && !inputs.verified ? Math.min(earned, scale.abuse.unverifiedMaxPoints) : earned;
-    // Le Vent arrière (#9377, +25 % sous le niveau record) est ÉTEINT (#10846) : le niveau se lit sur le cycle et ne
-    // baisse plus qu'au prestige, où le record du cycle repart à 1 avec lui. `boosts.ts` dit pourquoi.
-    const boosted = capped;
+    // Le Vent arrière (#10896) : +25 % tant que le niveau, lu sur la poche, est 7 niveaux ou plus sous le record du cycle —
+    // le MÊME montant au compteur et à la poche, l'invariant tient.
+    const boosted = applyTailwind(capped, inputs);
 
     // Le plafond journalier par conversation se lit AVANT toute écriture :
     // atteint, le geste ne crédite RIEN — ni compteur, ni score, ni série.

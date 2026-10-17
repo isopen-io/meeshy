@@ -11,7 +11,8 @@
 
 import type { PrismaClient } from '@meeshy/shared/prisma/client';
 import type { EngagementAxisKey } from '@meeshy/shared/types/engagement';
-import { NO_LEVEL_CAP, levelFromScore } from '@meeshy/shared/utils/game/levels';
+import { NO_LEVEL_CAP, levelForUnlocks, levelFromScore } from '@meeshy/shared/utils/game/levels';
+import { sparksTailwindFactor } from '@meeshy/shared/utils/game/boosts';
 import { DUO_TEMPLATES } from '@meeshy/shared/utils/game/duo';
 import { LEVEL_STEPS } from '@meeshy/shared/utils/game/level-steps';
 import { MISSION_TEMPLATES } from '@meeshy/shared/utils/game/missions';
@@ -41,6 +42,20 @@ const MISSION_AXIS_SIGNALS: ReadonlySet<string> = new Set(
 );
 
 export { quarterPoints };
+
+/**
+ * Le Vent arrière (#10896) : ×1,25 tant que le niveau — lu sur la POCHE, étapes faites comprises — est 7 niveaux ou plus
+ * sous le record du cycle. Entier. Le record du cycle repart à 1 au Prestige : un Prestige ne l'allume pas.
+ */
+export function applyTailwind(
+  points: number,
+  account: { readonly engagementScore: number; readonly levelRecord: number | null; readonly levelMaxLifetime: number | null },
+): number {
+  const proof = Math.max(account.levelRecord ?? 0, account.levelMaxLifetime ?? 0);
+  const level = levelForUnlocks({ score: account.engagementScore, levelRecord: proof === 0 ? null : proof });
+  const factor = sparksTailwindFactor({ level, levelRecord: account.levelRecord ?? 0 });
+  return factor > 1 ? Math.round(points * factor) : points;
+}
 
 /** Les records de Flamme que jugent les étapes des niveaux (#9706) : 7 et 30 jours. */
 const FLAME_STEP_DAYS: readonly number[] = LEVEL_STEPS.flatMap((rule) => (rule.kind === 'flame' ? [rule.target] : []));

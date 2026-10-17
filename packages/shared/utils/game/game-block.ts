@@ -11,7 +11,7 @@
  */
 
 import { CHEST_ODDS, chestContentForEffort, dayEffort } from './chest.js';
-import { prismHourWindow, PRISM_HOUR_MULTIPLIER, tailwindFactor } from './boosts.js';
+import { prismHourWindow, PRISM_HOUR_MULTIPLIER, sparksTailwindFactor, tailwindFactor } from './boosts.js';
 import {
   FLAME_FREEZE_MAX,
   FLAME_FREEZE_PRICE,
@@ -56,7 +56,8 @@ export type GameBlockFacts = {
   /**
    * LES ÉTINCELLES (#10846) : la poche que la frappe dépense et que lit le NIVEAU (#10892), le cycle (depuis le
    * dernier prestige) et le total à vie, indicatifs. Présentes, c'est la loi d'aujourd'hui : le prix de la frappe suit
-   * le niveau ACTUEL (#10847), les réserves du trésor s'ouvrent par le rang (#10848), le Vent arrière est éteint.
+   * le niveau ACTUEL (#10847), les réserves du trésor s'ouvrent par le rang (#10848), le Vent arrière souffle à 7 niveaux
+   * ou plus sous le record (#10896).
    * Absentes, le bloc garde exactement la forme d'hier.
    */
   readonly sparks?: SparksFacts;
@@ -254,9 +255,8 @@ export function buildGameBlock(facts: GameBlockFacts): GameBlock {
       canRelight: relight.allowed,
     },
     boosts: {
-      // Le Vent arrière est éteint depuis les étincelles (#10846) ; le niveau redescend pourtant à la frappe depuis
-      // #10892 — sa remise en service est une décision produit, pas une conséquence. Servi `1` pour les clients publiés.
-      tailwind: sparks === undefined ? tailwindFactor({ level: level.ladder?.level ?? level.level, levelRecord: record }) : 1,
+      // Avec les étincelles, le Vent arrière souffle à 7 niveaux ou plus sous le record (#10896) ; sans, la loi d'hier.
+      tailwind: (sparks === undefined ? tailwindFactor : sparksTailwindFactor)({ level: level.ladder?.level ?? level.level, levelRecord: record }),
       prismHour: { ...prismHourWindow({ userId: facts.userId, dayKey: facts.today }), multiplier: PRISM_HOUR_MULTIPLIER },
     },
     guideSeen: [...facts.guideSeen],
