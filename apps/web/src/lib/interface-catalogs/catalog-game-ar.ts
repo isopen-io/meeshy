@@ -4,8 +4,9 @@ import type { GameCoreCatalog } from '@/lib/i18n-game-catalog';
 const ar = {
   'game.points.convertible.one': '{count} شرارة',
   'game.points.convertible.other': '{count} شرارة',
-  'game.sparks.pocket_label': 'في جيبك',
-  'game.sparks.lifetime': 'الإجمالي مدى الحياة: {total}',
+  'game.sparks.pocket_label': 'قابلة للتحويل',
+  'game.sparks.lifetime': 'المتراكمة: \u2066{total}\u2069',
+  'game.sparks.cumul_of': 'المتراكمة: \u2066{cycle} / {total}\u2069',
   'game.sparks.debt': 'دَين: {debt}',
   'game.actions.one': '{count} إجراء',
   'game.actions.other': '{count} إجراءً',

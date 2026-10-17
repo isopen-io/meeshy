@@ -28,6 +28,7 @@ import {
   treasuryName,
   servedDivision,
   shownRank,
+  sparksCumulLine,
 } from '@/lib/view/game-copy';
 import { leagueName, remainingLabel, timerLabel, visibilityLabel, zoneLabel } from '@/lib/view/game-copy-v2';
 import { conceptState } from '@/lib/view/progression-state';
@@ -208,12 +209,14 @@ function points(view: EngagementWithGame): Body {
   const game = view.game;
   if (game === undefined) return { ...EMPTY, value: pointsLabel(view.level.value) };
   const { level: served, mint } = game;
-  // UNE poche d'étincelles (tout est dépensable) et, dessous, le total accumulé à vie quand il est servi (porteur, 2026-10-16).
+  // Les CONVERTIBLES en valeur (toute la poche, la seule valeur réelle) et, en pastille, le cycle rapporté au total à vie
+  // quand il est servi (porteur, 2026-10-16 puis 2026-10-17).
   const sparks = sparksReading(served);
+  const cumul = sparksCumulLine(sparks);
   return {
     value: pointsLabel(sparks.pocket),
     chips: present([
-      sparks.lifetime === null ? null : chip(gameText('game.sparks.lifetime', { total: formatCount(sparks.lifetime) }), about('score')),
+      cumul === null ? null : chip(cumul, about('score')),
       sparks.debt > 0 ? chip(gameText('game.sparks.debt', { debt: formatCount(sparks.debt) }), about('mint_missing')) : null,
       mint.canMint ? chip(gameText('game.concept.chip.mint_covered'), about('score')) : chip(toMeesh(mint.missingPoints, mint.number), about('mint_missing')),
     ]),

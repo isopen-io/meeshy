@@ -4,8 +4,9 @@ import type { GameCoreCatalog } from '@/lib/i18n-game-catalog';
 const en = {
   'game.points.convertible.one': '{count} spark',
   'game.points.convertible.other': '{count} sparks',
-  'game.sparks.pocket_label': 'In your pocket',
-  'game.sparks.lifetime': 'Lifetime total: {total}',
+  'game.sparks.pocket_label': 'convertible',
+  'game.sparks.lifetime': '{total} earned',
+  'game.sparks.cumul_of': '{cycle} / {total} earned',
   'game.sparks.debt': 'Debt: {debt}',
   'game.actions.one': '{count} action',
   'game.actions.other': '{count} actions',
