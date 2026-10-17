@@ -73,6 +73,12 @@ struct StoryViewerContainer: View {
     /// regarde garde sa barre, sinon l'index courant glisserait sur sa voisine
     /// (#7887).
     @State private var presentedAt = Date()
+    /// Le lecteur a été monté une fois. Si le groupe qui l'a ouvert disparaît
+    /// ensuite (toutes ses stories supprimées ou expirées pendant qu'on regarde
+    /// un autre auteur), `groupIndex(forUserId:)` rend `nil` : le conteneur
+    /// tombait sur le spinner de chargement, que rien ne relançait — l'écran
+    /// restait bloqué avec le seul bouton Fermer. Il se referme.
+    @State private var hasPresentedViewer = false
 
     private var uid: String { userId ?? "" }
 
@@ -138,6 +144,7 @@ struct StoryViewerContainer: View {
                     targetParentCommentId: targetParentCommentId
                 )
                 .transition(.identity)
+                .onAppear { hasPresentedViewer = true }
                 // **La porte « Composer » est PRÉSENTÉE ICI** (#6085), et pas
                 // dans l'en-tête qui porte son entrée de menu.
                 //
@@ -153,6 +160,8 @@ struct StoryViewerContainer: View {
                 //     s'ouvrait. Ce conteneur, lui, est la racine STABLE du
                 //     cover : il tient l'état, l'en-tête ne fait que DEMANDER.
                 .environment(\.meeshyComposeSeedRequest, { composeSeedTarget = $0 })
+            } else if hasPresentedViewer {
+                Color.clear.onAppear { isPresented = false }
             } else if timedOut {
                 notFoundOverlay
             } else {

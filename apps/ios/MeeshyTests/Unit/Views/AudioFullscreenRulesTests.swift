@@ -345,4 +345,21 @@ final class AudioFullscreenRulesTests: XCTestCase {
         let offer = AudioFullscreenOffer.resolve(isProtected: false, hasCarrier: true, composable: false)
         XCTAssertEqual(offer, AudioFullscreenOffer(react: true, reply: true, compose: false))
     }
+
+    // MARK: - La position suit la page regardée
+
+    /// Vocal n°3 sur 5 ; le n°1 expire. La position gardée (2) visait l'ancien
+    /// n°4, qui recevait la réaction.
+    func test_index_afterAnEarlierItemLeaves_followsTheViewedPage() {
+        XCTAssertEqual(AudioFullscreenPaging.index(of: "c", in: ["a", "b", "c", "d", "e"]), 2)
+        XCTAssertEqual(AudioFullscreenPaging.index(of: "c", in: ["b", "c", "d", "e"]), 1)
+        XCTAssertNil(AudioFullscreenPaging.index(of: "c", in: ["a", "b", "d"]))
+        XCTAssertNil(AudioFullscreenPaging.index(of: nil, in: ["a"]))
+    }
+
+    func test_audioFullscreen_resolvesTheCurrentSourceByIdentity() throws {
+        let source = try AppSourceGuard.unit("Meeshy/Features/Main/Views/AudioFullscreenView.swift")
+        XCTAssertTrue(source.contains("AudioFullscreenPaging.index(of: currentPageID, in: ids).map { allAudioItems[$0] }"))
+        XCTAssertTrue(source.contains(".adaptiveOnChange(of: ids)"))
+    }
 }

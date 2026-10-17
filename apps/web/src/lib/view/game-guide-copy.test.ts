@@ -67,20 +67,19 @@ describe('les chiffres du moment se disent', () => {
     expect(copyOf('first-level').next).toContain('50 étincelles');
     expect(copyOf('first-level').next).toContain('niveau 3');
   });
-  test('première frappe possible : le prix, les niveaux perdus, la Gloire', () => {
+  test('première frappe possible : le prix, la baisse du niveau, la Gloire (#10892)', () => {
     const copy = copyOf('first-mint-possible');
     expect(copy.means).toContain('1 221 étincelles');
-    expect(copy.means).toContain('sans baisser ton niveau');
+    expect(copy.means).toContain('fait baisser ton niveau');
     expect(copy.means).toContain('+100 de Gloire');
   });
-  test('la frappe ne fait plus baisser le niveau : le nombre de niveaux perdus ne se dit plus', () => {
+  test('la phrase ne promet plus que le niveau tient : la frappe le fait baisser', () => {
     const moment = guideMoment({ kind: 'first-mint-possible', price: 1221, levelsLost: 1, gloryGain: 100 }, []);
-    expect(momentCopy(moment, 'fr').means).not.toContain('1 niveau,');
-    expect(momentCopy(moment, 'fr').means).toContain('sans baisser ton niveau');
+    expect(momentCopy(moment, 'fr').means).not.toContain('sans baisser ton niveau');
   });
-  test('première frappe : la poche seule paie, le niveau ne bouge pas, plus de Vent arrière', () => {
+  test('première frappe : la poche paie, le niveau baisse d’autant, le rang non, plus de Vent arrière', () => {
     const copy = copyOf('first-mint');
-    expect(copy.means).toContain('ton niveau ne bouge pas');
+    expect(copy.means).toContain('ton niveau a baissé d’autant, ton rang non');
     expect(copy.means).not.toContain('Vent arrière');
     expect(copy.means).not.toContain('de 14 à 9');
   });

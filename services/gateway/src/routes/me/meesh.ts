@@ -23,7 +23,7 @@ import { MeeshService, receiptOnTheWire } from '../../services/meesh/MeeshServic
 /**
  * Débit par COMPTE, strict — la frappe ÉCRIT, et elle est irréversible. Un
  * plafond bas est ici une protection, pas une gêne : personne ne frappe
- * légitimement plus de quelques Meeshes par minute (il en coûte 1221 points).
+ * légitimement plus de quelques Meeshes par minute (il en coûte des centaines d'étincelles).
  */
 function mintRateLimitConfig() {
   return {
@@ -106,7 +106,7 @@ export async function meMeeshRoutes(fastify: FastifyInstance) {
         description:
           'Frappe une Meesh au prix de sa rareté (1221 pour les dix premières, #5743, #9374) × le facteur du niveau ' +
           'ACTUEL (#10847). Action MANUELLE et idempotente par `requestId`. Elle dépense la poche d\'étincelles ' +
-          'et ne fait baisser ni le niveau ni aucun badge (#10846). 409 TREASURY_LOCKED si le rang n\'ouvre pas ' +
+          'et fait baisser le niveau du montant dépensé (#10892), jamais un badge (#10845). 409 TREASURY_LOCKED si le rang n\'ouvre pas ' +
           'la réserve où la pièce entrerait (#10848).',
         tags: ['me', 'meesh'],
         summary: 'Mint a Meesh',

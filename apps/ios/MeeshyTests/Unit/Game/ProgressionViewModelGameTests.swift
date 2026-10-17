@@ -204,6 +204,25 @@ final class ProgressionViewModelGameTests: XCTestCase {
         XCTAssertNotNil(sut.gameErrors.freeze)
     }
 
+    /// Deux gestes en vol qui échouent dans le désordre. Chacun restaurait
+    /// l'instantané pris à son départ : le premier effaçait l'optimiste du
+    /// second, puis le second ressuscitait le premier échec. Aucun défait local
+    /// tant que l'autre vole ; la vérité revient du serveur une fois tout posé.
+    func test_twoGesturesInFlight_failingOutOfOrder_neverResurrectsAFailedChange() async throws {
+        let (sut, engagement, _) = makeSUT(snapshot: GameFixture.snapshot(GameFixture.game(held: 9, freezes: 0), meesh: GameFixture.meesh(balance: 9)))
+        await sut.load(forceNetwork: true)
+        let loadsBefore = engagement.fetchProgressCallCount
+
+        let first = sut.beginGesture(GameOptimistic.afterFreeze)
+        let second = sut.beginGesture(GameOptimistic.afterFreeze)
+        sut.restore(first); sut.endGesture()
+        sut.restore(second); sut.endGesture()
+
+        try await waitForCondition(timeout: 3) { engagement.fetchProgressCallCount > loadsBefore }
+        try await waitForCondition(timeout: 3) { sut.game?.flame.freezes == 0 }
+        XCTAssertEqual(sut.game?.flame.freezes, 0, "les deux achats ont échoué : aucun gel ne reste")
+    }
+
     func test_relight_success_takesTheServedStreak() async {
         let out = GameFixture.game(held: 5, flameDays: 0, flameStatus: .out, canRelight: true)
         let (sut, engagement, service) = makeSUT(snapshot: GameFixture.snapshot(out, meesh: GameFixture.meesh(balance: 5)))

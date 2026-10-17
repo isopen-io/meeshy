@@ -37,7 +37,7 @@ import { GloryService } from './GloryService';
 import { MeeshSpend } from './MeeshSpend';
 import { GAME_BONUS_AXIS } from './MissionService';
 import { TrophyService } from './TrophyService';
-import { SPARKS_USER_SELECT, sparksOf } from './SparksFacts';
+import { SPARKS_USER_SELECT, levelSparksOf, sparksOf } from './SparksFacts';
 import { dayKeyOf, minuteOfDayInTimezone } from './gameClock';
 import type { EngagementAxisKey } from '@meeshy/shared/types/engagement';
 
@@ -139,8 +139,8 @@ export class SeasonService {
   }
 
   private async score(userId: string): Promise<number> {
-    // Le « score » servi est la base du niveau (#10846) : le cycle d'étincelles, comme `level.score`.
-    return sparksOf(await this.prisma.user.findUnique({ where: { id: userId }, select: SPARKS_USER_SELECT })).cycle;
+    // Le « score » servi est la base du niveau : la poche (#10892), comme `level.score`.
+    return levelSparksOf(sparksOf(await this.prisma.user.findUnique({ where: { id: userId }, select: SPARKS_USER_SELECT })));
   }
 
   /** Réclame la récompense d'une étape atteinte. */

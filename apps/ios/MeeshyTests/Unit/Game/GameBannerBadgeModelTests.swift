@@ -79,10 +79,17 @@ final class GameBannerBadgeModelTests: XCTestCase {
                        "devant un serveur antérieur, le max à vie ne passe jamais sous le niveau")
     }
 
-    /// La poche n'est pas la base du niveau (c'est le CYCLE, que la fiche ne reçoit pas) : le cercle ne prétend
-    /// plus mesurer une progression qu'il ne connaît pas.
-    func test_theRing_staysFull_theCycleIsNotServed() throws {
-        XCTAssertEqual(try XCTUnwrap(sparked(points: 976, sparks: 976)).levelProgress, 1)
+    /// La poche est la base du niveau (#10892) : le cercle se remplit de ce qu'elle a passé du seuil du niveau.
+    func test_theRing_fillsWithThePocket() throws {
+        let progress = try XCTUnwrap(sparked(points: 976, sparks: 976, level: 3)).levelProgress
+        XCTAssertEqual(progress, Double(976 - 900) / Double(1_600 - 900), accuracy: 0.0001)
+    }
+
+    /// Une poche qui ne porte pas le niveau servi (retenu par une étape, ou un serveur antérieur) : le cercle reste
+    /// plein plutôt que de mentir.
+    func test_theRing_staysFull_whenThePocketDoesNotCarryTheServedLevel() throws {
+        XCTAssertEqual(try XCTUnwrap(sparked(points: 976, sparks: 976, level: 9)).levelProgress, 1)
+        XCTAssertEqual(try XCTUnwrap(sparked(level: 3)).levelProgress, 1)
     }
 
     func test_levelAccessibilityLabel_readsPocketLifetimeAndLifetimeMax() throws {

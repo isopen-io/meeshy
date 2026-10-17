@@ -1,5 +1,6 @@
 import Foundation
 import GRDB
+import os
 
 // Extrait de `MessagePersistenceActor.swift` (hors budget 1000-1200 — un
 // fichier hors budget est interdit d'ajout) pour #7927 : une modification et
@@ -122,6 +123,14 @@ extension MessagePersistenceActor {
     ///   (`message:expired`) : les citations se scellent alors « expirées »
     ///   et se lisent « Message éphémère expiré », pas « supprimé » (#8631).
     public func markDeleted(localId: String, deletedAt: Date, sparingOpenedViewOnce: Bool = false, expired: Bool = false) throws {
+        let exists = try dbWriter.read { db in
+            try MessageRecord.filter(Column("localId") == localId || Column("serverId") == localId).fetchCount(db) > 0
+        }
+        guard exists else {
+            rememberPendingTombstone(localId, PendingTombstone(
+                deletedAt: deletedAt, sparingOpenedViewOnce: sparingOpenedViewOnce, expired: expired))
+            return
+        }
         let affectedConversationId: String? = try dbWriter.write { db -> String? in
             guard var record = try MessageRecord
                 .filter(Column("localId") == localId || Column("serverId") == localId)
@@ -148,6 +157,47 @@ extension MessagePersistenceActor {
         }
         if let convId = affectedConversationId {
             postMessageStoreRefresh(conversationIds: [convId])
+        }
+    }
+
+    // MARK: - Suppressions arrivées avant leur message
+    //
+    // Un `message:new` passe par le flux d'écriture ; un `message:deleted`
+    // s'écrit tout de suite. La suppression trouvait la table sans la ligne, ne
+    // faisait rien, puis l'insertion posait le message intact : un message
+    // « supprimé pour tous » restait lisible. La suppression est gardée et
+    // rejouée quand la ligne arrive. Bornée : celle d'un message qu'on ne
+    // recevra jamais ne s'accumule pas.
+
+    static let pendingTombstoneCap = 512
+
+    struct PendingTombstone: Sendable {
+        let deletedAt: Date
+        let sparingOpenedViewOnce: Bool
+        let expired: Bool
+    }
+
+    func rememberPendingTombstone(_ id: String, _ tombstone: PendingTombstone) {
+        if pendingTombstones.updateValue(tombstone, forKey: id) == nil {
+            pendingTombstoneOrder.append(id)
+        }
+        while pendingTombstoneOrder.count > Self.pendingTombstoneCap {
+            pendingTombstones.removeValue(forKey: pendingTombstoneOrder.removeFirst())
+        }
+    }
+
+    /// Le message visé vient d'être écrit : sa suppression, arrivée avant lui, s'applique.
+    func replayPendingTombstones(for ids: [String]) {
+        guard !pendingTombstones.isEmpty else { return }
+        for id in ids {
+            guard let tombstone = pendingTombstones.removeValue(forKey: id) else { continue }
+            pendingTombstoneOrder.removeAll { $0 == id }
+            do {
+                try markDeleted(localId: id, deletedAt: tombstone.deletedAt,
+                                sparingOpenedViewOnce: tombstone.sparingOpenedViewOnce, expired: tombstone.expired)
+            } catch {
+                Logger.messages.error("replayPendingTombstones failed for \(id, privacy: .public): \(error.localizedDescription, privacy: .public)")
+            }
         }
     }
 

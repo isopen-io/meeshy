@@ -199,12 +199,10 @@ function WhereIAm({ game }: { readonly game: GameBlock }) {
         </p>
         <SparksPair game={game} />
         <LevelStepChip game={game} />
-        {level.record > level.level ? (
+        {/* Le record de niveau se lit dans la paire ; la puce ne dit que le Vent arrière, quand il souffle (#10896). */}
+        {boosts.tailwind > 1 ? (
           <span className="mt-1 self-start">
-            <GameChip tint="var(--color-warn)">
-              {gameText('game.level.record', { level: formatCount(level.record) })}
-              {boosts.tailwind > 1 ? gameText('game.level.tailwind', { factor: formatCount(boosts.tailwind) }) : ''}
-            </GameChip>
+            <GameChip tint="var(--color-warn)">{gameText('game.level.tailwind', { factor: formatCount(boosts.tailwind) })}</GameChip>
           </span>
         ) : null}
       </div>

@@ -917,8 +917,8 @@ final class ProfileUserPostsViewModel: ObservableObject {
     // MARK: - Options « … » (parité avec FeedViewModel — menu de la carte poste/réel)
 
     func deletePost(_ postId: String) async {
-        let snapshot = posts
-        posts.removeAll { $0.id == postId }
+        guard let index = posts.firstIndex(where: { $0.id == postId }) else { return }
+        let removed = posts.remove(at: index)
         do {
             try await postService.delete(postId: postId)
             // Le cache vit sous PLUSIEURS clés (`user:<id>`, main-feed, la clé
@@ -927,7 +927,10 @@ final class ProfileUserPostsViewModel: ObservableObject {
             await CacheCoordinator.shared.feed.removeEverywhere(itemId: postId)
             FeedbackToastManager.shared.showSuccess(String(localized: "feed.post.deleted", defaultValue: "Publication supprimée", bundle: .main))
         } catch {
-            posts = snapshot
+            // Défaire CE retrait (`OptimisticRollback`) : un post supprimé par
+            // socket ou une page chargée pendant l'attente survivaient mal à
+            // l'instantané.
+            posts = OptimisticRollback.restoring(removed, at: index, into: posts)
             FeedbackToastManager.shared.showError(String(localized: "feed.post.deleteError", defaultValue: "Erreur lors de la suppression", bundle: .main))
         }
     }

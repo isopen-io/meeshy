@@ -71,8 +71,15 @@ extension StoryComposerViewModel {
             refreshHistoryFlags()
             return false
         }
+        // La slide éditée garde la main par son ID : l'index seul glissait
+        // (supprimer A sous C, puis annuler, montrait B).
+        let editedSlideId = slides.indices.contains(currentSlideIndex) ? slides[currentSlideIndex].id : nil
         slides = decoded
-        if currentSlideIndex >= slides.count { currentSlideIndex = slides.count - 1 }
+        if let editedSlideId, let restored = slides.firstIndex(where: { $0.id == editedSlideId }) {
+            currentSlideIndex = restored
+        } else {
+            currentSlideIndex = min(max(0, currentSlideIndex), slides.count - 1)
+        }
         // Sélection/format panel réinitialisés — simple et sûr (plan §Risques) ;
         // le View reset le band via ses hooks existants au changement d'état.
         selectedElementId = nil

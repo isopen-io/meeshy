@@ -131,7 +131,7 @@ export function momentCopy(moment: GuideMoment, language: Language = currentInte
         short: translateGame(language, 'game.guide.moment.missions_unlocked.short'),
       });
     case 'first-mint-possible': {
-      // La frappe ne fait plus baisser le niveau (porteur, 2026-10-16) : plus de niveaux perdus à dire.
+      // La frappe fait baisser le niveau (#10892) : la phrase le dit, la puce de l'aperçu dit de combien.
       const { price, gloryGain } = moment.data;
       return copy(moment.action, language, {
         what: translateGame(language, 'game.guide.moment.first_mint_possible.what'),
@@ -141,7 +141,7 @@ export function momentCopy(moment: GuideMoment, language: Language = currentInte
       });
     }
     case 'first-mint': {
-      // Ni « de 14 à 9 » ni Vent arrière : le niveau ne bouge pas à la frappe.
+      // Pas de Vent arrière (éteint) : la phrase dit que la poche, donc le niveau, remonte avec les gains.
       return copy(moment.action, language, {
         what: translateGame(language, 'game.guide.moment.first_mint.what'),
         means: translateGame(language, 'game.guide.moment.first_mint.means'),

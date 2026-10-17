@@ -34,9 +34,12 @@ struct GameBannerBadgeModel: Equatable {
     var levelName: String { GameCopy.tierName(tier) }
     var rankName: String { GameCopy.rankLabel(rank, division5: division, mythic: mythic) }
 
-    /// Le cercle reste PLEIN : le niveau se lit sur le CYCLE d'étincelles, que la fiche ne reçoit pas — la poche
-    /// (servie) n'en est pas la base, et en tirer une progression la ferait mentir dès la première frappe.
-    var levelProgress: Double { 1 }
+    /// Le cercle se remplit de la POCHE, base du niveau (#10892). Quand elle ne porte pas le niveau servi (retenu par une
+    /// étape, borné par le rang, ou un serveur antérieur), il reste PLEIN plutôt que de mentir.
+    var levelProgress: Double {
+        guard let pocket, GameLevels.level(forScore: pocket, cap: nil) == level else { return 1 }
+        return GameLevels.progress(forScore: pocket, cap: nil).progress
+    }
 
     var pocketText: String? { pocket.map(GameSparksCopy.bannerPocket) }
     var lifetimeText: String? { lifetime.map(GameSparksCopy.bannerLifetime) }

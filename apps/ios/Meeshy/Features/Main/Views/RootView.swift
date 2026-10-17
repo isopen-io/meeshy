@@ -498,7 +498,7 @@ struct RootView: View {
             if let groupIdx = storyViewModel.groupIndex(forStoryId: postId) {
                 storyViewerCoordinator.present(StoryViewerRequest(
                     id: storyViewModel.storyGroups[groupIdx].id,
-                    startAtFirstUnviewed: true
+                    postId: postId
                 ))
             } else {
                 router.push(.postDetail(postId))

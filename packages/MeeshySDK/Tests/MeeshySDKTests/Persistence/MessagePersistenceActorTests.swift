@@ -1554,6 +1554,26 @@ final class MessagePersistenceActorTests: XCTestCase {
         XCTAssertEqual(rows.first?.content, "Buffered")
     }
 
+    /// `message:new` part dans le flux d'écriture, `message:deleted` s'écrit
+    /// tout de suite : la suppression trouvait la table sans la ligne et le
+    /// message arrivait ensuite intact — « supprimé pour tous », il restait lisible.
+    func test_markDeleted_beforeItsBufferedMessageLands_stillDeletesIt() async throws {
+        let apiMsg = makeAPIMessage(id: "srv_race_1", conversationId: "conv_race", content: "secret")
+        await actor.bufferIncomingAPIMessages([apiMsg], preferredLanguages: ["fr"])
+        try await actor.markDeleted(localId: "srv_race_1", deletedAt: Date())
+        await actor.start()
+
+        var rows: [MessageRecord] = []
+        for _ in 0..<60 {
+            rows = try actor.messages(for: "conv_race", limit: 10)
+            if rows.first?.deletedAt != nil { break }
+            try await Task.sleep(nanoseconds: 25_000_000)
+        }
+        XCTAssertEqual(rows.count, 1)
+        XCTAssertNotNil(rows.first?.deletedAt, "la suppression arrivée avant la ligne s'applique à son arrivée")
+        XCTAssertNil(rows.first?.content)
+    }
+
     // MARK: - Socket mutators resolve own messages by serverId
 
     // Socket `message:edited` / `message:deleted` / `reaction:*` events carry

@@ -230,6 +230,22 @@ final class StatusViewModelTests: XCTestCase {
         XCTAssertEqual(mockStatusService.createCallCount, 1)
     }
 
+    /// L'écho socket de SA propre humeur arrive avant la réponse REST : elle
+    /// était insérée deux fois, deux lignes au même id.
+    func test_setStatus_ownEchoArrivingFirst_keepsASingleRow() async {
+        let createdPost = Self.makeStatusAPIPost(id: "new-status", content: "New mood", moodEmoji: "\u{1F525}", authorId: "me")
+        mockStatusService.createResult = .success(createdPost)
+        sut.subscribeToSocketEvents()
+        mockStatusService.onCreate = { [mockSocket] in
+            mockSocket?.statusCreated.send(createdPost)
+            await withCheckedContinuation { continuation in DispatchQueue.main.async { continuation.resume() } }
+        }
+
+        await sut.setStatus(emoji: "\u{1F525}", content: "New mood")
+
+        XCTAssertEqual(sut.statuses.filter { $0.id == "new-status" }.count, 1)
+    }
+
     func test_setStatus_failure_doesNotCreateLocalEntry() async {
         mockStatusService.createResult = .failure(APIError.networkError(URLError(.timedOut)))
 

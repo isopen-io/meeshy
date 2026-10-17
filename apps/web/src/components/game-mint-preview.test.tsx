@@ -3,6 +3,7 @@ import { act, useState } from 'react';
 import { renderToStaticMarkup } from 'react-dom/server';
 
 import { gameBlockFixture } from '@/lib/api/game-fixture';
+import { mintLevels } from '@/lib/game/ladder';
 import { createActMounter } from '@/test-support/act-mount';
 import { ensureHappyDomRegistered, releaseHappyDomIfRegistered } from '@/test-support/happy-dom-environment';
 
@@ -37,6 +38,10 @@ const props = (patch: Parameters<typeof gameBlockFixture>[0] = {}, extra: Partia
 };
 
 const text = (html: string): string => html.replace(/<[^>]+>/g, ' ').replace(/\s+/g, ' ');
+const impactLines = (html: string): readonly (string | undefined)[] => {
+  const impact = /data-game-mint-impact=""[^>]*>([\s\S]*?)<\/ul>/.exec(html)?.[1] ?? '';
+  return Array.from(impact.matchAll(/<li[^>]*>([^<]*)<\/li>/g)).map((m) => m[1]);
+};
 
 /**
  * LE HÉROS DE FRAPPE (#9537) — la SEULE section de frappe, et elle est courte :
@@ -61,18 +66,30 @@ describe('une frappe possible', () => {
     expect(page).toContain('Frapper avec Mee et Meo');
   });
 
-  test('ce que le geste rapporte tient en une puce : la Gloire — il ne coûte ni niveau ni badge (porteur 2026-10-16)', () => {
-    const impact = /data-game-mint-impact=""[^>]*>([\s\S]*?)<\/ul>/.exec(html)?.[1] ?? '';
-    const lines = Array.from(impact.matchAll(/<li[^>]*>([^<]*)<\/li>/g)).map((m) => m[1]);
-    expect(lines).toEqual([`+${formatCount(GLORY_POINTS.mint, 'fr')} Gloire`]);
-    expect(text(html)).not.toMatch(/badge|niveaux?\s+perdu/i);
+  test('ce que le geste rapporte et coûte tient en puces : la Gloire, puis le niveau d’après (#10892) — jamais de badge', () => {
+    const sparks = { pocket: 40_000, cycle: 90_000, lifetime: 250_000, debt: 0 };
+    const spending = renderToStaticMarkup(<GameMintPreview {...props({ score: sparks.pocket, debitablePoints: sparks.pocket, sparks })} />);
+    const levels = mintLevels(gameBlockFixture({ score: sparks.pocket, debitablePoints: sparks.pocket, sparks }).mint);
+    expect(levels.levelsLost).toBeGreaterThan(0);
+    expect(impactLines(spending)).toEqual([
+      `+${formatCount(GLORY_POINTS.mint, 'fr')} Gloire`,
+      `Niveau ${formatCount(levels.levelBefore, 'fr')} → ${formatCount(levels.levelAfter, 'fr')}`,
+    ]);
+    expect(text(spending)).not.toMatch(/badge/i);
+  });
+
+  test('une frappe qui ne fait perdre aucun niveau ne promet que la Gloire', () => {
+    const sparks = { pocket: 90_000, cycle: 90_000, lifetime: 90_000, debt: 0 };
+    const game = gameBlockFixture({ score: sparks.pocket, debitablePoints: sparks.pocket, sparks });
+    const steady = renderToStaticMarkup(<GameMintPreview {...props({}, { mint: { ...game.mint, levelsLost: 0, levelAfter: game.mint.levelBefore, ladder: undefined } })} />);
+    expect(impactLines(steady)).toEqual([`+${formatCount(GLORY_POINTS.mint, 'fr')} Gloire`]);
   });
 
   test('aucun paragraphe : ni tableau de lignes, ni phrase d’explication', () => {
     expect(html).not.toContain('<dl');
     expect(html).not.toContain('<p class="text-caption"');
     expect(page).not.toContain('Vent arrière');
-    expect(page).not.toContain('→');
+    expect(text(html.replace(/<ul data-game-mint-impact[\s\S]*?<\/ul>/, ''))).not.toContain('→');
   });
 
   test('Mee et Meo sont sur la scène de frappe', () => {

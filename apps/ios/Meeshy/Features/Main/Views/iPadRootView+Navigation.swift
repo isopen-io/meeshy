@@ -271,7 +271,7 @@ extension iPadRootView {
                 // chemin pouvait présenter le lecteur avant que l'uid ne soit posé — « Story introuvable ».
                 storyViewerCoordinator.present(StoryViewerRequest(
                     id: storyViewModel.storyGroups[groupIdx].id,
-                    startAtFirstUnviewed: true
+                    postId: postId
                 ))
             } else {
                 rightPanelRoute = .postDetail(postId)

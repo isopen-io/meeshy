@@ -217,4 +217,12 @@ final class FeedPostCardCarouselGuardTests: XCTestCase {
         XCTAssertGreaterThan(try source("Meeshy/Features/Main/Views/FeedPostCard+Media.swift").count, 3_000)
         XCTAssertGreaterThan(try source("Meeshy/Features/Main/Views/FeedPostCard.swift").count, 20_000)
     }
+
+    /// Un post qui perd un média sous la carte ramène la page dans les bornes.
+    func test_page_clampedToAShrunkenMediaList() {
+        XCTAssertEqual(FeedCarouselLayout.page(2, clampedTo: 2), 1)
+        XCTAssertEqual(FeedCarouselLayout.page(1, clampedTo: 3), 1)
+        XCTAssertEqual(FeedCarouselLayout.page(4, clampedTo: 0), 0)
+        XCTAssertEqual(FeedCarouselLayout.page(-1, clampedTo: 3), 0)
+    }
 }

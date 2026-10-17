@@ -102,6 +102,26 @@ const seedMissionsDone = (db: ReturnType<typeof fakeGameDb>, count: number) =>
 /** Les dix étapes faites (#9706), sauf le rang — que chaque témoin pose par sa Gloire. */
 const stepsDone = { meeshMintedLifetime: 5, longestStreakDays: 30 };
 
+describe('GloryService.creditLevelProgress — un score lu sous une autre étoile (#10895)', () => {
+  it('un score en retard, lu AVANT un Prestige, ne relève pas le record du cycle neuf', async () => {
+    const db = fakeGameDb();
+    seedUser(db, { prestige: 1, levelRecord: 1, levelMaxLifetime: 100, engagementScore: 0 });
+
+    await new GloryService(db.prisma).creditLevelProgress({ userId: USER, score: 100 * 6 * 6, previousRecord: 3, previousMax: 100, prestige: 0 });
+
+    expect(db.user.rows[0]?.levelRecord).toBe(1);
+  });
+
+  it('le même score lu sous l\'étoile courante relève le record du cycle', async () => {
+    const db = fakeGameDb();
+    seedUser(db, { prestige: 1, levelRecord: 1, levelMaxLifetime: 100, engagementScore: 100 * 6 * 6 });
+
+    await new GloryService(db.prisma).creditLevelProgress({ userId: USER, score: 100 * 6 * 6, previousRecord: 1, previousMax: 100, prestige: 1 });
+
+    expect(db.user.rows[0]?.levelRecord).toBe(6);
+  });
+});
+
 describe('GloryService.creditLevelProgress — les niveaux s\'ouvrent selon le rang (#9688)', () => {
 
   it('sous Ambassadeur, le score lit 499 au plus : 100 par niveau jusqu\'à 100, puis 1 000 par dizaine', async () => {

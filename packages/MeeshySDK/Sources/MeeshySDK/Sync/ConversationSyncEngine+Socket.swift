@@ -271,6 +271,7 @@ extension ConversationSyncEngine {
         messageSocket.didReconnect
             .sink { [weak self] in
                 guard let self else { return }
+                self.requestReconnectCatchUp()
                 Task { await self.syncSinceLastCheckpoint() }
             }
             .store(in: &socketSubscriptions)
@@ -727,6 +728,22 @@ extension ConversationSyncEngine {
         _messagesDidChange.send(convId)
     }
 
+    /// Une réaction par unité de compte, chacune portant son participant quand
+    /// le serveur le nomme. Un compte négatif servi par le serveur faisait
+    /// planter la plage `0..<count` : il est borné comme dans `ReactionLedger`.
+    nonisolated static func expandedReactions(messageId: String, aggregations: [ReactionAggregationEvent]) -> [MeeshyReaction] {
+        aggregations.flatMap { agg in
+            let pids = agg.participantIds ?? []
+            return (0..<min(max(0, agg.count), 10_000)).map { index in
+                MeeshyReaction(
+                    messageId: messageId,
+                    participantId: index < pids.count ? pids[index] : nil,
+                    emoji: agg.emoji
+                )
+            }
+        }
+    }
+
     private func handleReactionSynced(_ event: ReactionSyncEvent) async {
         let messageId = event.messageId
         let reactions = event.reactions
@@ -736,17 +753,7 @@ extension ConversationSyncEngine {
                 existing.map { msg in
                     guard msg.id == messageId else { return msg }
                     var updated = msg
-                    updated.reactions = reactions.flatMap { agg in
-                        let pids = agg.participantIds ?? []
-                        return (0..<agg.count).map { index in
-                            let pid: String? = index < pids.count ? pids[index] : nil
-                            return MeeshyReaction(
-                                messageId: messageId,
-                                participantId: pid,
-                                emoji: agg.emoji
-                            )
-                        }
-                    }
+                    updated.reactions = Self.expandedReactions(messageId: messageId, aggregations: reactions)
                     return updated
                 }
             }

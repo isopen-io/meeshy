@@ -27,4 +27,11 @@ final class MessageTextHighlightOffsetTests: XCTestCase {
     func test_twoMatchesAroundEmojis_areBothExact() {
         XCTAssertEqual(highlighted("chat 🐱 chat", "chat"), "chatchat")
     }
+
+    /// Les marqueurs Markdown sont retirés à l'affichage : les plages prises sur
+    /// le texte brut décalaient le surlignage de leur longueur.
+    func test_markdownMarkersBeforeTheTerm_doNotShiftTheHighlight() {
+        XCTAssertEqual(highlighted("**a** foo bar", "oo"), "oo")
+        XCTAssertEqual(highlighted("_x_ ~~y~~ salut", "salut"), "salut")
+    }
 }

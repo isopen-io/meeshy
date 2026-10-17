@@ -15,7 +15,7 @@
 | nom | colonne | sur le fil | ce qu'il fait |
 |---|---|---|---|
 | la **poche** | `User.engagementScore` | `sparks` (et `engagementScore`, `debitablePoints`, `points`) | ce que la frappe dépense. **Tout est convertible** : plus de « points à convertir », plus de plancher inaliénable |
-| le **cycle** | `User.sparksSincePrestige` (`BigInt`) | `sparksCycle` (et `level.score`) | les étincelles accumulées depuis le dernier prestige. **Le niveau se lit sur lui** |
+| le **cycle** | `User.sparksSincePrestige` (`BigInt`) | `sparksCycle` (et `level.score`) | les étincelles accumulées depuis le dernier prestige. **Indicatif** depuis #10892 (le potentiel du profil) |
 | le **total à vie** | `User.sparksEarnedLifetime` (`BigInt`) | `sparksLifetime` | tout ce qu'un compte a gagné. Ne baisse ni à la frappe ni au prestige |
 
 Invariant : **poche ≤ cycle ≤ total à vie.** La frappe retire de la poche seule ; le prestige vide la poche et le cycle seuls.
@@ -33,7 +33,7 @@ n'approche. Les clients décodent un `Int64`/`number`.
 
 Deux seulement créditent le score, et les deux écrivent poche, cycle et total à vie **du même montant** :
 `EngagementService.updateEngagementScore` (commande brute, `$ifNull` + `$max`) et `creditGamePoints` (transaction : missions, coffre,
-réponse reçue, saison, duo). Chaque `$max` relève un cycle en retard sur la poche : le niveau ne baisse jamais faute d'un champ.
+réponse reçue, saison, duo). Chaque `$max` relève un cycle en retard sur la poche.
 
 ### La reprise d'un contenu retiré
 
@@ -55,7 +55,13 @@ Quand une reprise ne peut plus être prélevée parce que la **poche est déjà 
 
 ## 2. Le niveau
 
-Le niveau se calcule sur le **cycle**. La frappe ne le fait donc **plus jamais baisser** (`levelsLost` vaut toujours 0, champ
+> **Décision du porteur du 2026-10-17 ([#10892](https://github.com/isopen-io/meeshy/issues/10892)), qui remplace celle du 2026-10-16 :**
+> le niveau se calcule sur la **POCHE** (`levelSparksOf`, `sparks.ts`). La frappe le fait donc **baisser du montant dépensé** ;
+> regagner des étincelles le fait remonter. Le cycle et le total à vie ne sont plus qu'**indicatifs** : ils disent le potentiel
+> réel du profil, quel que soit le niveau affiché. `levelsLost` redit ce que la frappe fait perdre. Le paragraphe qui suit est
+> l'état du 2026-10-16, conservé pour l'histoire.
+
+Le niveau se calculait sur le **cycle**. La frappe ne le faisait donc **plus jamais baisser** (`levelsLost` valait toujours 0, champ
 conservé pour les clients publiés ; la remise à zéro des paliers `level:` à la frappe est supprimée).
 
 - **Niveau max à vie** (`User.levelMaxLifetime`, `levelMaxLifetime`) : il **survit au prestige**. Il ouvre les ligues (niveau 10) et le
@@ -66,6 +72,7 @@ conservé pour les clients publiés ; la remise à zéro des paliers `level:` à
   par axe ne sont plus remis à zéro.
 - **Vent arrière** : **éteint**. Il compensait la descente du niveau à la frappe ; le niveau ne descend plus qu'au prestige, où le record
   du cycle repart à 1 avec lui. Le garder après un prestige donnerait +25 % pendant les cent niveaux d'une boucle neuve : incohérent.
+  Depuis #10892, la frappe refait descendre le niveau : rallumer le Vent arrière est une décision produit à part, non prise.
   `boosts.tailwind` est servi à `1` ; la loi pure (`tailwindFactor`) reste pour les clients publiés.
 - **Palier 1 à 9** : s'affiche **« Braise »** (porteur, 2026-10-16 ; « étincelle » désigne les points). Ordre affiché : Braise (1-9), Lueur (10-19),
   puis la suite inchangée. La **clé du fil reste `etincelle`** — les clients publiés la décodent strictement (iOS `LevelTierKey`, une clé
@@ -79,7 +86,7 @@ facteur(niveau)          = borné(0,5 + niveau ÷ 200 ; 0,5 ; 1)      — 50 % a
 ```
 
 - `prix(n)` est celui du **numéro de la Meesh** (`mint.ts` : 1 221 × 1,3^⌊(n−1)÷10⌋, plafonné à 16 556) ; le facteur lit le **niveau ACTUEL**
-  (celui du cycle, après étapes et rang), jamais le niveau max historique : un compte qui vient de passer en prestige paie le tarif réduit.
+  (celui de la poche depuis #10892, après étapes et rang), jamais le niveau max historique : un compte qui vient de passer en prestige paie le tarif réduit.
 - **Réglable** : `MINT_COST_FACTOR_AT_LEVEL_ZERO_PERMILLE` (500) et `MINT_COST_FULL_PRICE_LEVEL` (100), dans `sparks.ts`. Tout est en
   millièmes entiers (`mintCostFactorPermille`) : iOS rejoue la loi sans flottant. Le serveur recalcule toujours le prix.
 - L'aperçu annonce le numéro de la **prochaine pièce** (`meeshMintedLifetime + 1`), indépendamment du solde de la bourse ou des coffres.
@@ -125,7 +132,7 @@ regagnaient et se renotifiaient ; les gardes de `recordActivity` ne créditent p
 
 - `level` : `engagementScore` (poche, inchangé), **`sparks`**, **`sparksCycle`**, **`sparksLifetime`**, **`levelMaxLifetime`**.
 - `meesh` : `debitablePoints` = la poche entière, `floorPoints` = 0, `mintCost` = le prix **effectif**, **`baseMintCost`**, **`costFactor`**, `missingPoints`.
-- `game.level` : `score` = le **cycle** (la base du niveau, jamais la poche), **`sparks`**, **`sparksCycle`**, **`sparksLifetime`**, **`levelMaxLifetime`**,
+- `game.level` : `score` = la **poche** depuis #10892 (la base du niveau ; le cycle jusqu'au 2026-10-17), **`sparks`**, **`sparksCycle`**, **`sparksLifetime`**, **`levelMaxLifetime`**,
   `ladder.levelMaxLifetime`. `record` = record du cycle.
 - `game.mint` : `price` effectif, **`basePrice`**, **`costFactor`**, **`costLevel`**, **`locked`** (`{ tier, minHeld, requires }` ou `null`), `levelsLost: 0`.
 - `game.treasury.access[]` : `{ key, minHeld, locked, requires: { rank, division, division5 } | null }` pour les six réserves.
@@ -138,7 +145,7 @@ regagnaient et se renotifiaient ; les gardes de `recordActivity` ne créditent p
 
 Refus **`409 MINT_BLOCKED_BY_DEBT`** `{ sparksDebt }` (voir la dette).
 
-Réponses de mission/saison (`score`) : désormais le cycle, comme `level.score`.
+Réponses de mission/saison (`score`) : la poche depuis #10892, comme `level.score`.
 
 Schémas : `packages/shared/types/game.ts`, `game-v2.ts`, `engagement.ts`. Vecteurs : `packages/shared/fixtures/reading-modes/sparks.vectors.json`
 (fichier à part : `game.vectors.json` est rejoué à l'identique par iOS, dont le test exige la liste exacte de ses lois — il ne bouge pas tant que le lot iOS n'a pas livré ses miroirs).
