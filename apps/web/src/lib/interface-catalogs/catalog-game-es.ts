@@ -91,6 +91,7 @@ const es = {
   'game.error.insufficient_points': 'No tienes suficientes chispas para acuñar una Meesh.',
   'game.error.treasury_locked': 'Esta reserva del tesoro se abre con un rango más alto.',
   'game.error.mint_blocked_by_debt': 'Hay una deuda de chispas por devolver antes de acuñar: tus próximas ganancias la saldan.',
+  'game.error.price_changed': 'El precio cambió desde que se mostró: no se gastó nada. Revisa el nuevo precio y vuelve a acuñar.',
   'game.error.insufficient_meeshes': 'Necesitas una Meesh más para eso.',
   'game.error.freeze_at_maximum': 'Ya tienes dos congelaciones en reserva: es el máximo.',
   'game.error.relight_not_allowed': 'La Llama no se puede volver a encender ahora.',

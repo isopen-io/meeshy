@@ -86,6 +86,8 @@ const messageOf = (error: unknown): string => gameErrorMessage(error instanceof 
 /** Un identifiant que la passerelle dit déjà pris par UNE AUTRE écriture ne sert plus : le prochain geste en génère un neuf. */
 const isIdConflict = (error: unknown): boolean => error instanceof ApiError && error.code === GAME_ERROR_CODES.requestIdConflict;
 
+const withShownPrice = (price: number | undefined): { readonly maxPrice?: number } => (price !== undefined && price > 0 ? { maxPrice: price } : {});
+
 type MintContext = Snapshot & { readonly preview: GameMintPreview | undefined; readonly attempt: { failed: boolean; applied: boolean } };
 
 export function useGameActions(
@@ -135,7 +137,8 @@ export function useGameActions(
 
   const mint = useMutation<MeeshMintResult, Error, void, MintContext>({
     mutationKey: GAME_MUTATION_KEY,
-    mutationFn: async () => unwrap(await mintMeesh(transport, idFor('mint'))),
+    // Le prix que l'écran montre part avec la frappe (#10903) : au-delà, la passerelle refuse sans débiter.
+    mutationFn: async () => unwrap(await mintMeesh(transport, idFor('mint'), withShownPrice(read()?.game?.mint.price))),
     onMutate: async () => {
       const preview = read()?.game?.mint;
       await client.cancelQueries({ queryKey: ENGAGEMENT_PROGRESS_QUERY_KEY });
@@ -158,6 +161,9 @@ export function useGameActions(
     onSuccess: async (result, _vars, context) => {
       spent('mint');
       await gate.opened();
+      // La frappe confirmée relève la révision en cache (#10900) : aucune lecture partie avant elle ne la repeint.
+      const confirmed = result.gameRevision;
+      if (confirmed !== undefined) write((view) => (view.gameRevision !== undefined && view.gameRevision >= confirmed ? view : { ...view, gameRevision: confirmed }));
       options.onMinted?.(result);
       if (result.status === 'minted') {
         celebrations.current += 1;

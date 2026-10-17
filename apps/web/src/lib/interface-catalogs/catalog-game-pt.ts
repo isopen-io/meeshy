@@ -91,6 +91,7 @@ const pt = {
   'game.error.insufficient_points': 'Faíscas insuficientes no bolso para cunhar uma Meesh.',
   'game.error.treasury_locked': 'Esta reserva do tesouro abre com um rank mais alto.',
   'game.error.mint_blocked_by_debt': 'Há uma dívida de faíscas a pagar antes de cunhar: seus próximos ganhos a pagam.',
+  'game.error.price_changed': 'O preço mudou desde que foi mostrado: nada foi gasto. Confira o novo preço e cunhe de novo.',
   'game.error.insufficient_meeshes': 'Você precisa de mais uma Meesh para isso.',
   'game.error.freeze_at_maximum': 'Você já tem dois congelamentos em reserva: é o máximo.',
   'game.error.relight_not_allowed': 'A Chama não pode ser reacendida agora.',

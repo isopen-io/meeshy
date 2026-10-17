@@ -91,6 +91,7 @@ const it = {
   'game.error.insufficient_points': 'Non hai abbastanza scintille in tasca per coniare una Meesh.',
   'game.error.treasury_locked': 'Questa riserva del tesoro si apre con un rango più alto.',
   'game.error.mint_blocked_by_debt': 'Un debito di scintille va ripagato prima di coniare: i tuoi prossimi guadagni lo ripagano.',
+  'game.error.price_changed': 'Il prezzo è cambiato da quando è stato mostrato: non è stato speso nulla. Controlla il nuovo prezzo e conia di nuovo.',
   'game.error.insufficient_meeshes': 'Per questo ti serve una Meesh in più.',
   'game.error.freeze_at_maximum': 'Hai già due congelamenti di riserva: è il massimo.',
   'game.error.relight_not_allowed': 'La Fiamma non può essere riaccesa adesso.',

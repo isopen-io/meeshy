@@ -91,6 +91,7 @@ const en = {
   'game.error.insufficient_points': 'Not enough sparks in your pocket to mint a Meesh.',
   'game.error.treasury_locked': 'This treasury reserve opens with a higher rank.',
   'game.error.mint_blocked_by_debt': 'A debt of sparks has to be paid off before minting: your next earnings repay it.',
+  'game.error.price_changed': 'The price changed since it was shown: nothing was spent. Check the new price, then mint again.',
   'game.error.insufficient_meeshes': 'You need one more Meesh for that.',
   'game.error.freeze_at_maximum': 'You already have two freezes in reserve: that is the maximum.',
   'game.error.relight_not_allowed': 'The Flame cannot be relit right now.',
