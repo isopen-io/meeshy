@@ -131,6 +131,9 @@ final class CallManager: ObservableObject {
                 // lirait déjà `false` — d'où ce push synchrone.
                 ConversationAudioCoordinator.shared.suspendForSystemCall()
                 PlaybackCoordinator.shared.stopAll()
+                // Les ENREGISTREURS aussi : un vocal en cours capturait l'appel
+                // (arrivé par le socket, sans interruption système).
+                RecorderCallGuard.shared.stopAllForCall()
             }
 
             // Retour au repos : rendre les surfaces système au lecteur de vocaux.
