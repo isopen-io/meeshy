@@ -59,6 +59,7 @@ const ar = {
   'callControls.journal.original': 'الأصل',
   'callControls.camera.denied': 'تم رفض الوصول إلى الكاميرا',
   'callControls.camera.failed': 'تعذّر فتح الكاميرا',
+  'callControls.camera.settings': 'الإعدادات',
   'callControls.cameraPicker': 'الكاميرا',
   'callControls.cameraPicker.label': 'اختيار الكاميرا',
   'callControls.cameraPicker.unnamed': 'الكاميرا {n}',
