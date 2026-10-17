@@ -9,9 +9,8 @@ import { seededRng } from './day-prng.js';
  * +25 % sur les points tant que le niveau est sous le niveau record.
  *
  * ⚠️ ÉTEINT côté serveur depuis les étincelles (#10846, porteur 2026-10-16). Le Vent arrière compensait la
- * descente du niveau à la frappe ; le niveau ne descend plus qu'au prestige, où le record de CYCLE repart à 1
- * avec lui — la condition « niveau sous le record » ne se rejoue jamais. Garder +25 % pendant les cent
- * niveaux d'une boucle neuve ne serait pas cohérent. La passerelle n'applique plus le facteur et sert
+ * descente du niveau à la frappe ; cette descente est revenue avec #10892 (le niveau se lit sur la poche),
+ * mais rallumer le Vent arrière est une décision produit à part. La passerelle n'applique plus le facteur et sert
  * `boosts.tailwind: 1` ; cette loi pure reste pour les clients publiés (vecteurs `tailwind`) et sera
  * retirée avec eux.
  */

@@ -24,7 +24,7 @@ import {
 import { gloryStanding, levelCapForRank, type MythicSeatRef } from './glory.js';
 import type { LevelStepFacts } from './level-steps.js';
 import { meeshPrice, previewMint } from './mint.js';
-import { previewSparksMint, type SparksFacts } from './sparks.js';
+import { levelSparksOf, previewSparksMint, type SparksFacts } from './sparks.js';
 import { levelOnTheWire, mintOnTheWire } from './level-wire.js';
 import { MISSIONS_MIN_LEVEL, MISSION_REROLL_PER_DAY, MISSION_REROLL_PRICE, isPrismDay } from './missions.js';
 import { personalMissionState } from './personal-mission.js';
@@ -54,10 +54,10 @@ export type GameBlockFacts = {
    */
   readonly score: number;
   /**
-   * LES ÉTINCELLES (#10846) : la poche que la frappe dépense, le cycle (depuis le dernier prestige) que lit le
-   * NIVEAU, le total à vie. Présentes, c'est la loi d'aujourd'hui : le niveau se lit sur le cycle, la frappe ne le
-   * fait plus baisser, son prix suit le niveau ACTUEL (#10847), les réserves du trésor s'ouvrent par le rang
-   * (#10848), le Vent arrière est éteint. Absentes, le bloc garde exactement la forme d'hier.
+   * LES ÉTINCELLES (#10846) : la poche que la frappe dépense et que lit le NIVEAU (#10892), le cycle (depuis le
+   * dernier prestige) et le total à vie, indicatifs. Présentes, c'est la loi d'aujourd'hui : le prix de la frappe suit
+   * le niveau ACTUEL (#10847), les réserves du trésor s'ouvrent par le rang (#10848), le Vent arrière est éteint.
+   * Absentes, le bloc garde exactement la forme d'hier.
    */
   readonly sparks?: SparksFacts;
   /** Le niveau max à vie (#10846), qui survit au prestige. Lu seulement avec `sparks`. */
@@ -139,7 +139,7 @@ export function buildGameBlock(facts: GameBlockFacts): GameBlock {
   };
   const sparks = facts.sparks;
   const level = levelOnTheWire({
-    score: sparks === undefined ? facts.score : sparks.cycle,
+    score: sparks === undefined ? facts.score : levelSparksOf(sparks),
     levelCap,
     levelRecord: facts.levelRecord,
     prestige: facts.prestige,
@@ -198,7 +198,6 @@ export function buildGameBlock(facts: GameBlockFacts): GameBlock {
           })
         : previewSparksMint({
             sparks: sparks.pocket,
-            cycle: sparks.cycle,
             mintedLifetime: facts.mintedLifetime,
             held: facts.balance,
             glory: standing.glory,
@@ -255,8 +254,8 @@ export function buildGameBlock(facts: GameBlockFacts): GameBlock {
       canRelight: relight.allowed,
     },
     boosts: {
-      // Le Vent arrière n'a plus de sens avec les étincelles (#10846) : le niveau ne descend plus sous son record
-      // à la frappe, et après un prestige le record du cycle repart à 1. Il reste servi (`1`) pour les clients publiés.
+      // Le Vent arrière est éteint depuis les étincelles (#10846) ; le niveau redescend pourtant à la frappe depuis
+      // #10892 — sa remise en service est une décision produit, pas une conséquence. Servi `1` pour les clients publiés.
       tailwind: sparks === undefined ? tailwindFactor({ level: level.ladder?.level ?? level.level, levelRecord: record }) : 1,
       prismHour: { ...prismHourWindow({ userId: facts.userId, dayKey: facts.today }), multiplier: PRISM_HOUR_MULTIPLIER },
     },

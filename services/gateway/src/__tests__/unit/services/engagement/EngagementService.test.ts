@@ -724,7 +724,7 @@ describe('EngagementService level tracking (#5545)', () => {
         },
       ],
       new: true,
-      fields: { engagementScore: 1, sparksSincePrestige: 1, levelRecord: 1, levelMaxLifetime: 1 },
+      fields: { engagementScore: 1, levelRecord: 1, levelMaxLifetime: 1 },
     });
   });
 

@@ -34,7 +34,7 @@ import { achievementGloryAtEarning } from '@meeshy/shared/utils/game/rarity';
 import { enhancedLogger } from '../../utils/logger-enhanced';
 import { MythicSeatService } from './MythicSeatService';
 import { LEVEL_STEP_USER_SELECT, countMissionsDone, levelStepFactsOf } from './LevelStepFacts';
-import { SPARKS_USER_SELECT, sparksOf } from './SparksFacts';
+import { SPARKS_USER_SELECT, levelSparksOf, sparksOf } from './SparksFacts';
 
 const log = enhancedLogger.child({ module: 'GloryService' });
 
@@ -151,10 +151,10 @@ export class GloryService {
     try {
       const account = await this.prisma.user.findUnique({ where: { id: userId }, select: SPARKS_USER_SELECT });
       if (account === null) return 0;
-      // Le niveau se lit sur le CYCLE d'étincelles (#10846), jamais sur la poche que la frappe débite.
+      // Le niveau se lit sur la POCHE (#10892).
       return await this.creditLevelProgress({
         userId,
-        score: sparksOf(account).cycle,
+        score: levelSparksOf(sparksOf(account)),
         previousRecord: account.levelRecord ?? null,
         previousMax: account.levelMaxLifetime ?? null,
       });

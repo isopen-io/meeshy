@@ -54,7 +54,7 @@ import { getEngagementEmitIO } from './engagement-emit-registry';
 import { memberSignature } from './memberSignature';
 import { EngagementQuotas, dayBucket } from './EngagementQuotas';
 import { EngagementGameHooks, quarterPoints } from '../game/EngagementGameHooks';
-import { SPARKS_USER_SELECT, sparksOf } from '../game/SparksFacts';
+import { SPARKS_USER_SELECT, levelSparksOf, sparksOf } from '../game/SparksFacts';
 import type { MessageSignalInput } from '../game/MessageGameSignals';
 import { levelForUnlocks } from '@meeshy/shared/utils/game/levels';
 import { withRetry } from '../MessageMediaConsumptionService';
@@ -237,7 +237,7 @@ export class EngagementService {
       recentFamilies: [...familles],
       achievementCount,
       badgeThresholds,
-      engagementScore: sparksOf(compte).cycle,
+      engagementScore: levelSparksOf(sparksOf(compte)),
       levelRecord: typeof compte?.levelRecord === 'number' ? compte.levelRecord : null,
       levelMaxLifetime: typeof compte?.levelMaxLifetime === 'number' ? compte.levelMaxLifetime : null,
       timezone: typeof compte?.timezone === 'string' ? compte.timezone : null,
@@ -422,20 +422,21 @@ export class EngagementService {
         const cycle = before.cycle + points;
         // La DETTE se déduit d'abord du gain (porteur, 2026-10-16) ; cycle et total à vie montent du gain entier.
         const repaid = Math.min(before.debt, points);
+        const pocket = before.pocket + points - repaid;
         await tx.user.update({
           where: { id: userId },
           data: {
-            engagementScore: before.pocket + points - repaid,
+            engagementScore: pocket,
             sparksSincePrestige: BigInt(cycle),
             sparksEarnedLifetime: BigInt(before.lifetime + points),
             ...(before.debt > 0 ? { sparksDebt: BigInt(before.debt - repaid) } : {}),
           },
         });
-        return { cycle, levelRecord: account.levelRecord ?? null, levelMaxLifetime: account.levelMaxLifetime ?? null };
+        return { pocket, levelRecord: account.levelRecord ?? null, levelMaxLifetime: account.levelMaxLifetime ?? null };
       }),
     );
     if (written === null) return;
-    await this.afterScore(userId, points, written.cycle, written.levelRecord, written.levelMaxLifetime).catch((error: unknown) =>
+    await this.afterScore(userId, points, written.pocket, written.levelRecord, written.levelMaxLifetime).catch((error: unknown) =>
       log.warn('game points credited, level follow-up failed', {
         userId,
         error: error instanceof Error ? error.message : String(error),
@@ -859,7 +860,7 @@ export class EngagementService {
    * `$runCommandRaw`, idiome déjà employé dans le dépôt (`routes/posts/nearby.ts`).
    */
   private async updateEngagementScore(userId: string, points: number): Promise<void> {
-    // UNE commande, trois colonnes (#10846) : la poche, le cycle (la base du niveau) et le total à vie montent du même
+    // UNE commande, trois colonnes (#10846) : la poche (la base du niveau, #10892), le cycle et le total à vie montent du même
     // montant. Le cycle ne passe jamais sous la poche, ni le total à vie sous le cycle (`$max`) : un compte d'avant le
     // rattrapage — champs absents — les voit posés sur sa poche. Les expressions lisent le document d'AVANT l'étape.
     const held = (field: string) => ({ $ifNull: [`$${field}`, 0] });
@@ -879,9 +880,9 @@ export class EngagementService {
         },
       ],
       new: true,
-      fields: { engagementScore: 1, sparksSincePrestige: 1, levelRecord: 1, levelMaxLifetime: 1 },
+      fields: { engagementScore: 1, levelRecord: 1, levelMaxLifetime: 1 },
     } as never)) as unknown as {
-      value?: { engagementScore?: unknown; sparksSincePrestige?: unknown; levelRecord?: unknown; levelMaxLifetime?: unknown } | null;
+      value?: { engagementScore?: unknown; levelRecord?: unknown; levelMaxLifetime?: unknown } | null;
     };
 
     // Les valeurs se lisent par `rawCommandNumber` (#10541) : la colonne est un `long` sur la plupart des comptes,
@@ -890,23 +891,22 @@ export class EngagementService {
     // Compte introuvable (supprimé entre l'activité et ce crédit) : rien à notifier, et surtout pas un palier
     // calculé sur `undefined`.
     if (newScore === null) return;
-    const newCycle = rawCommandNumber(result?.value?.sparksSincePrestige) ?? newScore;
-    await this.afterScore(userId, points, newCycle, rawCommandNumber(result?.value?.levelRecord), rawCommandNumber(result?.value?.levelMaxLifetime));
+    await this.afterScore(userId, points, newScore, rawCommandNumber(result?.value?.levelRecord), rawCommandNumber(result?.value?.levelMaxLifetime));
   }
 
   /** Les paliers que `points` vient de franchir, et la Gloire du premier passage. */
   private async afterScore(
     userId: string,
     points: number,
-    newCycle: number,
+    newPocket: number,
     levelRecord: number | null,
     levelMaxLifetime: number | null = null,
   ): Promise<void> {
-    // Le niveau se lit sur le CYCLE d'étincelles (#10846), jamais sur la poche : une frappe ne le fait ni baisser ni
-    // re-franchir (les paliers `level:` gravés ne sont plus éteints par elle, donc plus renotifiés).
-    const previousCycle = newCycle - points;
+    // Le niveau se lit sur la POCHE (#10892). Un palier re-franchi après une frappe n'est pas renotifié : les paliers
+    // `level:` gravés ne s'éteignent plus, et `tryAwardLevelUp` est gardé par la contrainte unique du jalon.
+    const previousPocket = newPocket - points;
     const crossedThresholds = LEVEL_THRESHOLDS.filter(
-      (threshold) => threshold > previousCycle && threshold <= newCycle,
+      (threshold) => threshold > previousPocket && threshold <= newPocket,
     );
 
     for (const threshold of crossedThresholds) {
@@ -914,7 +914,7 @@ export class EngagementService {
     }
     // La Gloire du premier passage de chaque niveau (#9374) : le record rendu
     // par la MÊME commande que le score — aucune lecture de plus sur la voie chaude.
-    await this.game.onScore(userId, newCycle, levelRecord, levelMaxLifetime);
+    await this.game.onScore(userId, newPocket, levelRecord, levelMaxLifetime);
     // Les points de la SEMAINE (#9384) : le total que les ligues classent.
     await this.game.onPointsGained(userId, points);
   }

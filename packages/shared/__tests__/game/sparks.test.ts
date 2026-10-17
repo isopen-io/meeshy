@@ -1,13 +1,13 @@
 /**
- * LES ÉTINCELLES (#10846, #10847, #10848) — la poche, le total à vie, le niveau
- * qui ne baisse plus à la frappe, le coût selon le niveau actuel, les réserves
- * ouvertes par le rang.
+ * LES ÉTINCELLES (#10846, #10847, #10848, #10892) — la poche, qui fait le niveau ; le cycle et le
+ * total à vie, indicatifs ; le coût selon le niveau actuel ; les réserves ouvertes par le rang.
  */
 
 import { describe, it, expect } from 'vitest';
 import {
   MINT_COST_FULL_PRICE_LEVEL,
   currentLevelOf,
+  levelSparksOf,
   unlockLevelOf,
   effectiveMeeshPrice,
   mintCostFactor,
@@ -18,7 +18,7 @@ import {
 } from '../../utils/game/sparks.js';
 import { meeshPrice } from '../../utils/game/mint.js';
 import { GLORY_RANKS, gloryLadder } from '../../utils/game/glory.js';
-import { levelThreshold, LEVEL_CAP_BASE } from '../../utils/game/levels.js';
+import { levelFromScore, levelThreshold, LEVEL_CAP_BASE } from '../../utils/game/levels.js';
 import {
   TREASURY_RANK_REQUIREMENTS,
   treasuryLockFor,
@@ -60,7 +60,7 @@ describe('la DETTE d\'étincelles (porteur 2026-10-16)', () => {
   });
 
   it('tant qu\'une dette existe, on ne frappe pas — même avec une poche pleine, même sans réserve fermée', () => {
-    const preview = previewSparksMint({ sparks: 90_000, cycle: levelThreshold(9), mintedLifetime: 0, held: 0, glory: 0, levelCap: LEVEL_CAP_BASE, steps: null, debt: 120 });
+    const preview = previewSparksMint({ sparks: 90_000, mintedLifetime: 0, held: 0, glory: 0, levelCap: LEVEL_CAP_BASE, steps: null, debt: 120 });
     expect(preview.canMint).toBe(false);
     expect(preview.blockedBy).toBe('debt');
     expect(preview.sparksDebt).toBe(120);
@@ -69,7 +69,7 @@ describe('la DETTE d\'étincelles (porteur 2026-10-16)', () => {
   });
 
   it('sans dette, rien ne bloque', () => {
-    const preview = previewSparksMint({ sparks: 90_000, cycle: levelThreshold(9), mintedLifetime: 0, held: 0, glory: 0, levelCap: LEVEL_CAP_BASE, steps: null });
+    const preview = previewSparksMint({ sparks: 90_000, mintedLifetime: 0, held: 0, glory: 0, levelCap: LEVEL_CAP_BASE, steps: null });
     expect(preview.blockedBy).toBeNull();
     expect(preview.sparksDebt).toBe(0);
     expect(preview.canMint).toBe(true);
@@ -166,7 +166,7 @@ describe('effectiveMeeshPrice — le prix de rang × le facteur du niveau actuel
 
 const NO_STEPS = null;
 
-describe('previewSparksMint — la frappe dépense la poche, jamais le niveau', () => {
+describe('previewSparksMint — la frappe dépense la poche, et la poche fait le niveau', () => {
   const base = {
     mintedLifetime: 0,
     held: 0,
@@ -177,8 +177,7 @@ describe('previewSparksMint — la frappe dépense la poche, jamais le niveau', 
   } as const;
 
   it('annonce le numéro de la PROCHAINE pièce, le prix effectif et le facteur appliqué', () => {
-    const cycle = levelThreshold(10); // niveau 10
-    const preview = previewSparksMint({ ...base, sparks: 5000, cycle, mintedLifetime: 4 });
+    const preview = previewSparksMint({ ...base, sparks: levelThreshold(10), mintedLifetime: 4 }); // niveau 10
     expect(preview.number).toBe(5);
     expect(preview.basePrice).toBe(1221);
     expect(preview.costLevel).toBe(10);
@@ -188,45 +187,49 @@ describe('previewSparksMint — la frappe dépense la poche, jamais le niveau', 
     expect(preview.missingPoints).toBe(0);
   });
 
-  it('le niveau ne baisse PAS : levelAfter == levelBefore, levelsLost == 0, même poche vidée', () => {
-    const cycle = levelThreshold(20);
-    const preview = previewSparksMint({ ...base, sparks: 700, cycle });
+  it('la frappe fait BAISSER le niveau du montant dépensé (porteur 2026-10-17, #10892)', () => {
+    const preview = previewSparksMint({ ...base, sparks: levelThreshold(20) });
     expect(preview.levelBefore).toBe(20);
+    expect(preview.levelAfter).toBe(levelFromScore(levelThreshold(20) - preview.price, LEVEL_CAP_BASE));
+    expect(preview.levelAfter).toBeLessThan(20);
+    expect(preview.levelsLost).toBe(20 - preview.levelAfter);
+  });
+
+  it('une frappe refusée ne change pas le niveau annoncé', () => {
+    const preview = previewSparksMint({ ...base, sparks: levelThreshold(20), debt: 10 });
     expect(preview.levelAfter).toBe(20);
     expect(preview.levelsLost).toBe(0);
   });
 
   it('dit ce qui manque quand la poche ne couvre pas le prix', () => {
-    const cycle = levelThreshold(10);
-    const preview = previewSparksMint({ ...base, sparks: 100, cycle });
+    const preview = previewSparksMint({ ...base, sparks: 100 });
     expect(preview.canMint).toBe(false);
     expect(preview.missingPoints).toBe(preview.price - 100);
     expect(preview.gloryGained).toBe(0);
   });
 
   it('le numéro de la pièce ne dépend NI de la bourse NI des coffres', () => {
-    const cycle = levelThreshold(10);
-    const a = previewSparksMint({ ...base, sparks: 99_999, cycle, mintedLifetime: 7, held: 0 });
-    const b = previewSparksMint({ ...base, sparks: 99_999, cycle, mintedLifetime: 7, held: 3 });
+    const a = previewSparksMint({ ...base, sparks: 99_999, mintedLifetime: 7, held: 0 });
+    const b = previewSparksMint({ ...base, sparks: 99_999, mintedLifetime: 7, held: 3 });
     expect(a.number).toBe(8);
     expect(b.number).toBe(8);
   });
 
   it('un niveau bas coûte moins qu\'un niveau haut, pour la même pièce', () => {
-    const low = previewSparksMint({ ...base, sparks: 99_999, cycle: levelThreshold(5) });
-    const high = previewSparksMint({ ...base, sparks: 99_999, cycle: levelThreshold(80) });
+    const low = previewSparksMint({ ...base, sparks: levelThreshold(5) });
+    const high = previewSparksMint({ ...base, sparks: levelThreshold(80) });
     expect(low.price).toBeLessThan(high.price);
   });
 
-  it('un compte à haut total à vie mais au niveau ACTUEL bas (après prestige) paie le tarif réduit', () => {
-    const afterPrestige = previewSparksMint({ ...base, sparks: 99_999, cycle: 0 });
+  it('une poche basse (niveau ACTUEL bas) paie le tarif réduit, quel que soit le total à vie', () => {
+    const afterPrestige = previewSparksMint({ ...base, sparks: 99 });
     expect(afterPrestige.costLevel).toBe(1);
     expect(afterPrestige.costFactor).toBe(0.505);
   });
 
   it('refuse la pièce qui ferait entrer dans une réserve verrouillée, avec le rang requis', () => {
     // 99 gardées : la 100e est le Coffre — fermé sous Voix I.
-    const closed = previewSparksMint({ ...base, sparks: 99_999, cycle: levelThreshold(10), held: 99, glory: 0 });
+    const closed = previewSparksMint({ ...base, sparks: 99_999, held: 99, glory: 0 });
     expect(closed.canMint).toBe(false);
     expect(closed.missingPoints).toBe(0);
     expect(closed.locked).toEqual({
@@ -238,7 +241,7 @@ describe('previewSparksMint — la frappe dépense la poche, jamais le niveau', 
 
   it('laisse frapper quand le rang ouvre la réserve', () => {
     const voixI = gloryLadder().find((step) => step.rank === 'voix' && step.division5 === 1)!;
-    const open = previewSparksMint({ ...base, sparks: 99_999, cycle: levelThreshold(10), held: 99, glory: voixI.minGlory });
+    const open = previewSparksMint({ ...base, sparks: 99_999, held: 99, glory: voixI.minGlory });
     expect(open.locked).toBeNull();
     expect(open.canMint).toBe(true);
   });
@@ -325,23 +328,27 @@ describe('les réserves du trésor s\'ouvrent par le rang (#10848)', () => {
   });
 });
 
-describe('le niveau d\'un compte se lit sur le CYCLE, jamais sur la poche', () => {
-  it('currentLevelOf : une poche presque vide ne baisse pas le niveau', () => {
-    const row = { engagementScore: 3, sparksSincePrestige: levelThreshold(34), sparksEarnedLifetime: levelThreshold(34), levelRecord: 34 };
-    expect(currentLevelOf(row)).toBe(34);
+describe('le niveau d\'un compte se lit sur la POCHE ; cycle et total à vie sont indicatifs (#10892)', () => {
+  it('levelSparksOf : la base du niveau est la poche', () => {
+    expect(levelSparksOf(sparksOf({ engagementScore: 3, sparksSincePrestige: 9000, sparksEarnedLifetime: 12_000 }))).toBe(3);
   });
 
-  it('currentLevelOf : un compte d\'avant le rattrapage (sans cycle) se lit sur sa poche', () => {
+  it('currentLevelOf : une poche presque vide fait un niveau bas, quel que soit le cumul', () => {
+    const row = { engagementScore: 3, sparksSincePrestige: levelThreshold(34), sparksEarnedLifetime: levelThreshold(34), levelRecord: 34 };
+    expect(currentLevelOf(row)).toBe(1);
+  });
+
+  it('currentLevelOf : un compte d\'avant le rattrapage se lit sur sa poche', () => {
     expect(currentLevelOf({ engagementScore: levelThreshold(12), levelRecord: 12 })).toBe(12);
   });
 
-  it('currentLevelOf : après un prestige (cycle vide) le niveau est 1, quel que soit le max à vie', () => {
+  it('currentLevelOf : après un prestige (poche vide) le niveau est 1, quel que soit le max à vie', () => {
     expect(currentLevelOf({ engagementScore: 0, sparksSincePrestige: 0, sparksEarnedLifetime: 3_000_000, levelRecord: 1, levelMaxLifetime: 100 })).toBe(1);
   });
 
-  it('currentLevelOf : les étapes faites (max à vie) ne retiennent pas le cycle neuf', () => {
+  it('currentLevelOf : les étapes faites (max à vie) ne retiennent pas la poche', () => {
     // Le record du cycle est à 1 (prestige) : sans le max à vie, l\'étape du 10 le retiendrait à 9.
-    const row = { engagementScore: 0, sparksSincePrestige: levelThreshold(25), levelRecord: 1, levelMaxLifetime: 100 };
+    const row = { engagementScore: levelThreshold(25), levelRecord: 1, levelMaxLifetime: 100 };
     expect(currentLevelOf(row)).toBe(25);
   });
 
@@ -352,6 +359,6 @@ describe('le niveau d\'un compte se lit sur le CYCLE, jamais sur la poche', () =
 
   it('unlockLevelOf : jamais sous le record du cycle ni sous le niveau courant', () => {
     expect(unlockLevelOf({ engagementScore: levelThreshold(8), levelRecord: 30 })).toBe(30);
-    expect(unlockLevelOf({ engagementScore: 0, sparksSincePrestige: levelThreshold(40), levelRecord: 40 })).toBe(40);
+    expect(unlockLevelOf({ engagementScore: levelThreshold(40), levelRecord: 40 })).toBe(40);
   });
 });
