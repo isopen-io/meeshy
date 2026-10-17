@@ -21,6 +21,7 @@ import {
   linkConfirmationProperties
 } from '@meeshy/shared/types/api-schemas';
 import { parseLinkDeviceHash } from '../services/auth/link-device-binding';
+import { countLegacyLinkLogin, getLegacyLinkLoginCounter, linkLoginConsent } from '../services/auth/legacy-link-client';
 import { provenChallengeAdoption } from '../services/auth/pending-two-factor';
 import { provenSessionAdoption, servedSession } from '../services/auth/session-adoption';
 import { pendingSessionTokenFor } from '../services/auth/email-verification-watch';
@@ -300,12 +301,15 @@ export async function magicLinkRoutes(fastify: FastifyInstance) {
       // Get request context
       const requestContext = await getRequestContext(request);
 
+      // #10878 — un ancien binaire iOS (avant #10872) garde la connexion directe, comptée.
+      const consent = linkLoginConsent({ headers: request.headers, confirm, linkDeviceSecret });
+
       // Validate magic link
       const result = await magicLinkService.validateMagicLink({
         token,
         requestContext,
         linkDeviceSecret,
-        confirmed: confirm === true
+        confirmed: consent.confirmed
       });
 
       // #10872 — rien n'est consommé, aucune session : le client montre le
@@ -317,6 +321,8 @@ export async function magicLinkRoutes(fastify: FastifyInstance) {
       if (!result.success) {
         return sendBadRequest(reply, result.error);
       }
+
+      countLegacyLinkLogin({ route: 'magic-link-validate', consent, counter: getLegacyLinkLoginCounter() });
 
       // Second facteur attendu : aucune session n'existe, il n'y a donc rien à
       // marquer de confiance — seulement à RETENIR (#4534). Depuis #4471 la

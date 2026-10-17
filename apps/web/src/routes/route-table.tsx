@@ -210,6 +210,14 @@ const withSignInLinkCatalog = <Screen,>(screen: Promise<Screen>) =>
     import('@/lib/i18n-sign-in-link-catalog').then((m) => m.loadSignInLinkCatalog(currentInterfaceLanguage())),
   ]).then(([loaded]) => loaded);
 
+/* LE LIEN « CE N'ÉTAIT PAS MOI » — la page et son catalogue `revokeSessions.*` en parallèle ; `translateRevokeSessions`
+   lève sur un catalogue non chargé. */
+const withRevokeSessionsCatalog = <Screen,>(screen: Promise<Screen>) =>
+  Promise.all([
+    screen,
+    import('@/lib/i18n-revoke-sessions-catalog').then((m) => m.loadRevokeSessionsCatalog(currentInterfaceLanguage())),
+  ]).then(([loaded]) => loaded);
+
 const notificationsScreen = () =>
   Promise.all([import('@/routes/notifications'), loadNotificationRowCatalog(currentInterfaceLanguage())]).then(([screen]) => screen);
 
@@ -432,7 +440,7 @@ export const ROUTES = {
   /* « CE N'ÉTAIT PAS MOI » (#10859) — le lien de l'alerte de nouvelle connexion
      (`revokeAllSessionsPageUrl`, `utils/email-secret-link.ts`), jeton dans le
      fragment ; PUBLIC, comme la suppression de compte. */
-  revokeSessions: { pattern: '/auth/revoke-sessions', screen: () => import('@/routes/revoke-sessions') },
+  revokeSessions: { pattern: '/auth/revoke-sessions', screen: () => withRevokeSessionsCatalog(import('@/routes/revoke-sessions')) },
   verifyEmailChange: { pattern: '/settings/verify-email-change', screen: () => import('@/routes/verify-email-change') },
   settingsNotifications: { pattern: '/settings/notifications', screen: () => import('@/routes/settings-notifications') },
   /* L'EXPORT DE DONNÉES (#6725) — la rangée « Exporter mes données » des

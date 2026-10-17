@@ -3,7 +3,7 @@
  * « Se connecter en tant que @x ? » (`components/link-sign-in-confirmation.tsx`), montrée par le lien magique et la
  * vérification d'adresse. Un `import()` par langue, chargé AVEC ces routes (`routes/route-table.tsx`) et jamais au
  * démarrage : le catalogue d'interface est à son plafond (`budgets.json` › `interface_catalogs`, 211,48 Ko pour 211
- * avec ces cinq clés au cœur). Ce que l'écran partage avec la bascule de compte (`signInLink.switchAccount.*`) reste
+ * avec ces cinq clés au cœur). Elle porte aussi les `verifyEmail.*` propres à `/auth/verify-email` (`components/verify-email-flow.tsx`, `arrival-celebration.tsx`). Ce que l'écran partage avec la bascule de compte (`signInLink.switchAccount.*`) reste
  * au catalogue d'interface.
  *
  * Aucun repli : une clé absente d'une langue est une erreur de compilation (`satisfies SignInLinkCatalog`) et un
