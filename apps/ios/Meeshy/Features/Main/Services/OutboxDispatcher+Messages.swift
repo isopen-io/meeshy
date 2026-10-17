@@ -204,17 +204,9 @@ extension OutboxDispatcher {
                     }
                 }
 
-                guard !uploadedIds.isEmpty else {
-                    // Rien n'est monté : l'erreur d'ORIGINE remonte. Remplacée par un 503 maison, le flusher
-                    // n'y reconnaissait ni coupure ni refus d'authentification, épuisait la ligne en trente
-                    // secondes et supprimait les fichiers — un vocal n'existe nulle part ailleurs.
-                    if let firstUploadErrorAudio { throw firstUploadErrorAudio }
-                    throw NSError(
-                        domain: "OutboxDispatcher",
-                        code: 503,
-                        userInfo: [NSLocalizedDescriptionKey: "No audio track uploaded for offline audio dispatch"]
-                    )
-                }
+                try Self.requireCompleteUpload(
+                    uploadedIds: uploadedIds, firstUploadError: firstUploadErrorAudio,
+                    emptyDescription: "No audio track uploaded for offline audio dispatch")
 
                 let serverId = try await replayUploadedAttachments(item, uploadedIds: uploadedIds, kind: "audio")
 
@@ -284,17 +276,9 @@ extension OutboxDispatcher {
                     }
                 }
 
-                guard !uploadedIds.isEmpty else {
-                    // Rien n'est monté : l'erreur d'ORIGINE remonte. Remplacée par un 503 maison, le flusher
-                    // n'y reconnaissait ni coupure ni refus d'authentification, épuisait la ligne en trente
-                    // secondes et supprimait les fichiers — un vocal n'existe nulle part ailleurs.
-                    if let firstUploadErrorMedia { throw firstUploadErrorMedia }
-                    throw NSError(
-                        domain: "OutboxDispatcher",
-                        code: 503,
-                        userInfo: [NSLocalizedDescriptionKey: "No media uploaded for offline media dispatch"]
-                    )
-                }
+                try Self.requireCompleteUpload(
+                    uploadedIds: uploadedIds, firstUploadError: firstUploadErrorMedia,
+                    emptyDescription: "No media uploaded for offline media dispatch")
 
                 let serverId = try await replayUploadedAttachments(item, uploadedIds: uploadedIds, kind: "media")
 
@@ -318,37 +302,8 @@ extension OutboxDispatcher {
             // source> » au destinataire (décision user, invariant produit).
             let copyAttachmentsFromMessageId = try await resolveCopyAttachmentsFromMessageId(for: item)
 
-            // La protection armée à l'envoi (#8303) — flou, vue unique, durée
-            // et flamme-œil. Le rejeu la perdait : un envoi protégé mis en file
-            // repartait en clair.
-            let protection = item.replayProtection
-            let request = SendMessageRequest(
-                content: item.content,
-                replyToId: item.replyToId,
-                storyReplyToId: item.storyReplyToId,
-                forwardedFromId: item.forwardedFromId,
-                forwardedFromConversationId: item.forwardedFromConversationId,
-                attachmentIds: item.attachmentIds,
-                ephemeralDuration: protection.ephemeralDurationSeconds,
-                isViewOnce: protection.wireIsViewOnce,
-                isBlurred: protection.wireIsBlurred,
-                effectFlags: protection.wireEffectFlags.isEmpty ? nil : protection.wireEffectFlags.rawValue,
-                clientMessageId: item.clientMessageId,
-                // Lieu partagé rejoué au renvoi, comme pour un post et un
-                // commentaire : clé top-level `location`, omise quand nil.
-                location: item.location,
-                copyAttachmentsFromMessageId: copyAttachmentsFromMessageId,
-                // Sticker (#4823) rejoué sous la même clé `sticker` que
-                // l'envoi direct — omis quand nil.
-                sticker: item.sticker,
-                // L'ANCRE de la pièce citée (#6164) rejouée telle quelle. Le
-                // rejeu passe TOUJOURS par ce POST : `sendMessage` déclare un
-                // envoi porteur d'ancre inéligible au canal socket, qui ne la
-                // transporte pas — sans cette ligne, un échec réseau suffisait
-                // à faire citer la première photo d'un carrousel à une réponse
-                // composée sur la troisième.
-                attachmentReplyTo: QuotedAttachmentSend(anchor: item.attachmentReplyTo)
-            )
+            let request = Self.textReplayRequest(
+                for: item, copyAttachmentsFromMessageId: copyAttachmentsFromMessageId)
             let response = try await MessageService.shared.send(
                 conversationId: item.conversationId, request: request
             )
@@ -410,6 +365,61 @@ extension OutboxDispatcher {
     }
 
     // MARK: - Rejeu des pièces téléversées (#8350)
+
+    /// Un envoi média ne part que COMPLET. Un échec de téléversement sur une des
+    /// pièces faisait partir le message avec les autres, puis le flusher
+    /// supprimait la ligne et `cleanupLocalFiles` effaçait le fichier manquant —
+    /// qui n'existait nulle part ailleurs. L'erreur d'ORIGINE remonte : le
+    /// flusher y reconnaît coupure ou refus d'authentification et réessaie ;
+    /// le reprise TUS (même clé) ne retéléverse pas ce qui est déjà monté.
+    static func requireCompleteUpload(uploadedIds: [String], firstUploadError: Error?, emptyDescription: String) throws {
+        if let firstUploadError { throw firstUploadError }
+        guard !uploadedIds.isEmpty else {
+            throw NSError(
+                domain: "OutboxDispatcher",
+                code: 503,
+                userInfo: [NSLocalizedDescriptionKey: emptyDescription]
+            )
+        }
+    }
+
+    /// La requête du rejeu TEXTE d'une ligne `sendMessage` (sans fichier local).
+    static func textReplayRequest(for item: OfflineQueueItem, copyAttachmentsFromMessageId: String?) -> SendMessageRequest {
+        // La protection armée à l'envoi (#8303) — flou, vue unique, durée
+        // et flamme-œil. Le rejeu la perdait : un envoi protégé mis en file
+        // repartait en clair.
+        let protection = item.replayProtection
+        return SendMessageRequest(
+            content: item.content,
+            // La langue d'origine voyage comme dans les rejeux média, protégé
+            // et socket : sans elle le serveur redevinait la langue du message.
+            originalLanguage: item.originalLanguage,
+            replyToId: item.replyToId,
+            storyReplyToId: item.storyReplyToId,
+            forwardedFromId: item.forwardedFromId,
+            forwardedFromConversationId: item.forwardedFromConversationId,
+            attachmentIds: item.attachmentIds,
+            ephemeralDuration: protection.ephemeralDurationSeconds,
+            isViewOnce: protection.wireIsViewOnce,
+            isBlurred: protection.wireIsBlurred,
+            effectFlags: protection.wireEffectFlags.isEmpty ? nil : protection.wireEffectFlags.rawValue,
+            clientMessageId: item.clientMessageId,
+            // Lieu partagé rejoué au renvoi, comme pour un post et un
+            // commentaire : clé top-level `location`, omise quand nil.
+            location: item.location,
+            copyAttachmentsFromMessageId: copyAttachmentsFromMessageId,
+            // Sticker (#4823) rejoué sous la même clé `sticker` que
+            // l'envoi direct — omis quand nil.
+            sticker: item.sticker,
+            // L'ANCRE de la pièce citée (#6164) rejouée telle quelle. Le
+            // rejeu passe TOUJOURS par ce POST : `sendMessage` déclare un
+            // envoi porteur d'ancre inéligible au canal socket, qui ne la
+            // transporte pas — sans cette ligne, un échec réseau suffisait
+            // à faire citer la première photo d'un carrousel à une réponse
+            // composée sur la troisième.
+            attachmentReplyTo: QuotedAttachmentSend(anchor: item.attachmentReplyTo)
+        )
+    }
 
     /// Le corps REST d'un média PROTÉGÉ rejoué depuis la file — `nil` pour un
     /// média non protégé, qui garde le canal socket.

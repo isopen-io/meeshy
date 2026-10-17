@@ -625,6 +625,22 @@ public actor OfflineQueue {
     /// depuis plus de `OutboxFlusher.staleInflightReclaimSeconds` : un gros envoi en cours pendant un aller-retour
     /// d'arrière-plan repartait sinon en double, et le premier fini supprimait les fichiers sous l'autre.
     private var hasRecoveredThisProcess = false
+
+    /// Instant de lancement du processus (noyau). Une ligne `.inflight` mise à
+    /// jour après lui a été réclamée par CE processus — elle n'est pas orpheline.
+    /// Si le noyau ne répond pas, `distantFuture` : toute ligne en vol est alors
+    /// reprise, comme avant.
+    static let processLaunchDate: Date = {
+        var info = kinfo_proc()
+        var size = MemoryLayout<kinfo_proc>.stride
+        var mib: [Int32] = [CTL_KERN, KERN_PROC, KERN_PROC_PID, getpid()]
+        guard sysctl(&mib, u_int(mib.count), &info, &size, nil, 0) == 0, size > 0 else { return .distantFuture }
+        let start = info.kp_proc.p_starttime
+        return Date(timeIntervalSince1970: TimeInterval(start.tv_sec) + TimeInterval(start.tv_usec) / 1_000_000)
+    }()
+
+    /// Rend à la prochaine récupération son caractère « premier lancement » (tests).
+    func resetRecoveryForTesting() { hasRecoveredThisProcess = false }
     private var isRetrying = false
     private var cancellables = Set<AnyCancellable>()
     let logger = Logger(subsystem: "com.meeshy.sdk", category: "offlinequeue")
@@ -738,6 +754,10 @@ public actor OfflineQueue {
         // reste figé sur sa valeur du boot et le bandeau « Synchronisation… »
         // ne se referme jamais une fois la file vidée.
         Task { await self.refreshPendingCount() }
+
+        // Le miroir mémoire suit la ligne : appliquée ou épuisée par le flusher,
+        // elle n'a plus rien à rejouer.
+        items.removeAll { $0.clientMessageId == outcome.cmid }
 
         outcomeTombstones[outcome.cmid] = outcome
         guard let observers = outcomeContinuations.removeValue(forKey: outcome.cmid) else {
@@ -2634,6 +2654,11 @@ public actor OfflineQueue {
                     .filter(Column("status") == OutboxStatus.inflight.rawValue)
                 if warm {
                     inflightQuery = inflightQuery.filter(Column("updatedAt") < staleCutoff)
+                } else {
+                    // Premier passage, en tâche détachée de basse priorité : un
+                    // flush a pu réclamer sa ligne AVANT lui. Seules les lignes
+                    // réclamées avant le lancement du processus sont orphelines.
+                    inflightQuery = inflightQuery.filter(Column("updatedAt") < Self.processLaunchDate)
                 }
                 let inflight = try inflightQuery.fetchAll(db)
                 for record in inflight {
@@ -2807,6 +2832,16 @@ public actor OfflineQueue {
 
     public func retryAll() async {
         guard !isRetrying, !items.isEmpty else { return }
+        // Avec une outbox, le flusher est l'UNIQUE émetteur. Ce chemin hérité
+        // courait en parallèle sans réclamer la ligne, et sa requête (contenu,
+        // langue, réponse, pièces) perdait la protection, l'autocollant, la
+        // réponse à une story et la copie des pièces d'un partage multiple : un
+        // message vue unique écrit hors ligne partait permanent. Il ne fait
+        // plus que retirer du miroir mémoire les lignes que l'outbox n'a plus.
+        if let pool = outboxPool {
+            await dropItemsWithoutOutboxRow(pool)
+            return
+        }
         guard let retrySend = onRetrySend else {
             logger.warning("No retry handler set, skipping retry")
             return
@@ -2885,6 +2920,26 @@ public actor OfflineQueue {
         if !successIds.isEmpty {
             logger.info("Successfully retried \(successIds.count) messages, \(self.items.count) remaining")
         }
+        await refreshPendingCount()
+    }
+
+    private func dropItemsWithoutOutboxRow(_ pool: any DatabaseWriter) async {
+        // Par `clientMessageId` : les envois avec média ont des lignes `ofqm_…`
+        // ou à identifiant aléatoire, pas `ofq_<item.id>`.
+        let cmids = items.map(\.clientMessageId)
+        let live: Set<String>
+        do {
+            live = try await pool.read { db in
+                Set(try String.fetchAll(db, OutboxRecord
+                    .select(Column("clientMessageId"))
+                    .filter(Column("kind") == OutboxKind.sendMessage.rawValue)
+                    .filter(cmids.contains(Column("clientMessageId")))))
+            }
+        } catch {
+            logger.error("retryAll: outbox read failed — memory mirror kept: \(error.localizedDescription, privacy: .public)")
+            return
+        }
+        items.removeAll { !live.contains($0.clientMessageId) }
         await refreshPendingCount()
     }
 

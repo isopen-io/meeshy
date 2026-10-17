@@ -78,10 +78,9 @@ final class OfflineQueueOutcomeTests: XCTestCase {
 
         let stream = await queue.outcomeStream(for: cmid)
 
-        await queue.setRetrySend { @Sendable _ in
-            return "server-applied-1"
-        }
-        await queue.retryAll()
+        // Le flusher (seul émetteur depuis que `retryAll` lui laisse l'outbox)
+        // publie l'outcome de la ligne qu'il a appliquée.
+        await queue.publishOutcome(.applied(cmid: cmid))
 
         var iterator = stream.makeAsyncIterator()
         let event = await iterator.next()

@@ -585,6 +585,9 @@ struct MeeshyApp: App {
                         // comment), instead of leaving it `.pending` until the
                         // next incidental lifecycle event.
                         await OutboxRetryScheduler.shared.startObservingMutationEnqueued()
+                        // Reprise du socket sans changement réseau : le flusher,
+                        // seul émetteur de l'outbox, repart aussi.
+                        await OutboxRetryScheduler.shared.startObservingSocketReconnect()
                     }
 
                     // Engagement outbox boot: recover orphan .open sessions
