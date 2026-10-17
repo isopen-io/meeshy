@@ -52,6 +52,37 @@ celle de la production. Le plan refuse une image webapp antérieure (sans l'entr
 - **Retour arrière, une commande** : `gh workflow run promote-production.yml --ref dev -f action=rollback -f gateway=rollback -f agent=rollback`.
   Sans GitHub, en root sur l'hôte : `meeshy-promote-production.sh rollback gateway agent`.
 
+## Migrations de données — depuis l'image passerelle (#10865)
+
+Une migration s'exécute depuis l'image de la passerelle, sans `scp`, sans `tsx` et sans dépôt sur l'hôte.
+L'image embarque les deux familles, et sa construction échoue si l'une manque
+(`RUN node dist/src/migrations/named/cli.js verify-image`, `services/gateway/Dockerfile`).
+En production, une écriture n'a lieu qu'après le **feu vert du porteur** et une **sauvegarde vérifiée**.
+Sur staging, ajouter `-staging` aux noms de conteneurs.
+
+- **Inventaire, avec la commande exacte de chaque migration** :
+  `docker exec meeshy-gateway node dist/src/migrations/named/cli.js list` (`list --staging` pour les noms de staging).
+- **Migrations nommées** (`services/gateway/src/migrations/named/`) : elles s'exécutent par `node`, avec le pilote
+  `mongodb` (dépendance de production). Elles lisent `DATABASE_URL` et les secrets (`READER_KEY_HMAC_SECRET`,
+  `RAW_READING_RETENTION_DAYS`) dans l'environnement du conteneur, sans rien recopier ni afficher.
+  - à blanc (défaut) : `docker exec meeshy-gateway node dist/src/migrations/named/cli.js <nom>`.
+    La base qu'elles reçoivent refuse alors toute écriture.
+  - écriture : `docker exec meeshy-gateway node dist/src/migrations/named/cli.js <nom> --apply`
+- **Migrations mongosh** (`packages/shared/prisma/migrations/*.mongodb.js`, embarquées sous
+  `/app/packages/shared/prisma/migrations`) : le conteneur passerelle les lit, le `mongosh` du conteneur base les exécute.
+  ```
+  URI=$(docker exec meeshy-gateway printenv DATABASE_URL)
+  docker exec meeshy-gateway cat /app/packages/shared/prisma/migrations/<fichier> \
+    | docker exec -i [-e APPLY=1 | -e DRY_RUN=1] meeshy-database mongosh "$URI" --quiet
+  ```
+  **Les conventions diffèrent d'un script à l'autre.** La plupart sont à blanc par défaut (`APPLY=1` pour écrire),
+  d'autres écrivent par défaut (`DRY_RUN=1` pour simuler), et les plus anciennes n'ont pas de mode à blanc.
+  `list` lit la convention dans chaque script et affiche les deux commandes.
+
+Une migration nommée neuve s'ajoute dans `src/migrations/named/` et dans `registry.ts`. C'est ce qui la rend
+exécutable depuis l'image. Les scripts `services/gateway/scripts/migrations/*.ts` ne sont plus que des façades de
+développement (`bunx tsx`, `DRY_RUN=1`).
+
 ## Avant la première promotion
 
 `dev` contient `packages/shared/prisma/migrations/2026-10-01-schema-indexes.mongodb.js` et deux migrations
