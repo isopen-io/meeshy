@@ -54,7 +54,7 @@ struct AuthActionButton: View {
 /// Le style de `AuthActionButton` selon que son hôte l'autorise ou non.
 /// L'envoi en cours n'y entre pas : l'action est LANCÉE, pas refusée — elle
 /// garde la couleur de marque.
-/// Le fond est le jeton de la charte (`MeeshyColors`), jamais un `Color(hex:)`
+/// Le fond est le jeton de la charte (`MeeshyColors`), jamais une couleur hexadécimale en dur
 /// reconstruit ; `fillHex` reste son jumeau hexadécimal pour le contrôle du
 /// contraste AA.
 nonisolated struct AuthActionButtonAppearance: Equatable, Sendable {
