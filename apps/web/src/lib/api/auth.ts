@@ -258,7 +258,7 @@ export type ForgotPasswordData = { readonly message?: string } | undefined;
  * générique, même garde de non-révélation que `forgotPassword`. */
 export type ResendVerificationData = { readonly message: string };
 
-/** `GET /auth/reset-password/verify-token` (`password-reset.ts:341-...`) —
+/** `POST /auth/reset-password/verify-token` (`password-reset.ts`, #10859) —
  * un jeton invalide/expiré rend `valid:false` en 200, PAS une erreur HTTP :
  * la route existe pour que l'écran distingue ce cas AVANT de montrer le
  * formulaire (§ description de la route). */
@@ -440,9 +440,18 @@ export function createAuthClient({ transport, store }: AuthDeps) {
     return transport.request<ResendVerificationData>({ method: 'POST', path: authEndpoints.resendVerification, body: { email } });
   }
 
-  /** `GET /auth/reset-password/verify-token` (T-reset) — le jeton voyage en
-   * QUERY STRING (méthode GET), jamais dans un corps. */
+  /** `POST /auth/reset-password/verify-token` (T-reset, #10859) — le jeton
+   * voyage dans le CORPS, jamais dans une adresse qu'un journal d'accès garde.
+   * Une passerelle d'avant #10859 ne connaît que le `GET` : sur son 404, et
+   * sur lui seul, l'ancien appel reprend — rétrocompatibilité (#9223) tant que
+   * l'application web peut être promue avant la passerelle. */
   async function verifyResetToken(token: string): Promise<ApiResult<VerifyResetTokenData>> {
+    const result = await transport.request<VerifyResetTokenData>({
+      method: 'POST',
+      path: authEndpoints.resetPasswordVerifyToken,
+      body: { token },
+    });
+    if (result.ok || result.status !== 404) return result;
     return transport.request<VerifyResetTokenData>({
       method: 'GET',
       path: `${authEndpoints.resetPasswordVerifyToken}?token=${encodeURIComponent(token)}`,

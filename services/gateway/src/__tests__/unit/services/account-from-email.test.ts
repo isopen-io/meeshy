@@ -157,7 +157,7 @@ describe('connexion par mot de passe, adresse INCONNUE', () => {
     const courriel = mockSendEmailVerification.mock.calls[0]?.[0] as Record<string, string>;
 
     expect(courriel.verificationCode).toMatch(/^[0-9]{6}$/);
-    expect(courriel.verificationLink).toMatch(/\/auth\/verify-email\?token=[0-9a-f]{64}&email=nouvelle%40example\.com$/);
+    expect(courriel.verificationLink).toMatch(/\/auth\/email-link\/verify-email\?via=email&token=#token=[0-9a-f]{64}&email=nouvelle%40example\.com$/);
     expect(ligne?.emailVerificationCode).toBe(sha256(courriel.verificationCode));
     expect(ligne?.emailVerificationCode).not.toBe(courriel.verificationCode);
   });
@@ -319,7 +319,7 @@ describe('porte « e-mail seul »', () => {
 
     expect(issue).toEqual({ kind: 'verification-required', accountCreated: false, email: 'attente@example.com' });
     expect(courriel.code).toMatch(/^[0-9]{6}$/);
-    expect(courriel.link).toMatch(/\/auth\/verify-email\?token=[0-9a-f]{64}&email=attente%40example\.com$/);
+    expect(courriel.link).toMatch(/\/auth\/email-link\/verify-email\?via=email&token=#token=[0-9a-f]{64}&email=attente%40example\.com$/);
     expect(courriel.expiryMinutes).toBe(15);
     expect(miseAJour?.emailVerificationCode).toBe(sha256(courriel.code as string));
     expect(miseAJour).not.toHaveProperty('emailVerifiedAt');

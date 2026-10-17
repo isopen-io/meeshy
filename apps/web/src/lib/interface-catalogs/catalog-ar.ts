@@ -5,6 +5,7 @@ import arMediaHub from './catalog-ar-media-hub';
 import arMediaViewer from './catalog-ar-media-viewer';
 import arActivation from './catalog-ar-activation';
 import arVerifyEmail from './catalog-ar-verify-email';
+import arRevokeSessions from './catalog-ar-revoke-sessions';
 import arDevicePush from './catalog-ar-device-push';
 import arPassword from './catalog-ar-password';
 import arAccounts from './catalog-ar-accounts';
@@ -217,6 +218,7 @@ const ar = {
   ...arMediaHub,
   ...arMediaViewer,
   ...arVerifyEmail,
+  ...arRevokeSessions,
   ...arActivation,
   ...arPassword,
   ...arDevicePush,

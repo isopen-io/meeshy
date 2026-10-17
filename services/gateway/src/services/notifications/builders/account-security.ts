@@ -24,6 +24,7 @@ import {
 } from '../../../utils/recipient-language';
 import type { NotificationBuilderDependencies } from './dependencies';
 import { formatInTimeZone, safeTimeZone } from '../../../utils/time-zone-format';
+import { revokeAllSessionsPageUrl } from '../../../utils/email-secret-link';
 
 
 export async function createPasswordChangedNotification(
@@ -103,10 +104,9 @@ export async function createLoginNewDeviceNotification(
     : null;
   const location = geo?.location || [geo?.city, geo?.countryName].filter(Boolean).join(', ') || null;
 
-  const apiBase = process.env.API_PUBLIC_URL || 'https://gate.meeshy.me';
   const revokeAllUrl = params.revokeToken
-    ? `${apiBase}/api/v1/auth/revoke-all-sessions?token=${params.revokeToken}`
-    : `${apiBase}`;
+    ? revokeAllSessionsPageUrl(params.revokeToken)
+    : process.env.FRONTEND_URL || 'https://meeshy.me';
 
   let previousDeviceName: string | null = null;
   let previousLocation: string | null = null;

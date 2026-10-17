@@ -397,9 +397,10 @@ export const ROUTES = {
   forgotPassword: { pattern: '/forgot-password', screen: () => withAccountRecoveryCatalog(import('@/routes/forgot-password')) },
   /* ON FINIT D'ENTRER DANS MEESHY (T-verify/T-reset, #5672) — nomenclature
      legacy reprise (D-5) : `apps/web/app/auth/verify-email`,
-     `apps/web/app/reset-password`. L'e-mail et le jeton voyagent en QUERY
-     STRING (`?email=`, `?token=`) — un lien reçu par courriel reste valide
-     après un rafraîchissement, jamais une navigation en mémoire seule. */
+     `apps/web/app/reset-password`. Depuis #10859 le jeton (et l'adresse) d'un
+     lien d'e-mail voyagent dans le FRAGMENT, relevés puis rangés dans l'entrée
+     d'historique (`lib/links/email-link-secret.ts`) — un rafraîchissement les
+     retrouve, aucun journal d'accès ne les voit. */
   verifyEmail: { pattern: '/auth/verify-email', screen: () => import('@/routes/verify-email') },
   resetPassword: { pattern: '/reset-password', screen: () => withAccountRecoveryCatalog(import('@/routes/reset-password')) },
   /* LES LIENS REÇUS (#6714, #6715) — des adresses que la PASSERELLE compose
@@ -419,6 +420,10 @@ export const ROUTES = {
   trackingLink: { pattern: '/l/$token', screen: () => import('@/routes/tracking-link') },
   trackingLinkExpired: { pattern: '/l/$token/expired', screen: () => import('@/routes/tracking-link-expired') },
   accountDeletion: { pattern: '/account/deletion', screen: () => import('@/routes/account-deletion') },
+  /* « CE N'ÉTAIT PAS MOI » (#10859) — le lien de l'alerte de nouvelle connexion
+     (`revokeAllSessionsPageUrl`, `utils/email-secret-link.ts`), jeton dans le
+     fragment ; PUBLIC, comme la suppression de compte. */
+  revokeSessions: { pattern: '/auth/revoke-sessions', screen: () => import('@/routes/revoke-sessions') },
   verifyEmailChange: { pattern: '/settings/verify-email-change', screen: () => import('@/routes/verify-email-change') },
   settingsNotifications: { pattern: '/settings/notifications', screen: () => import('@/routes/settings-notifications') },
   /* L'EXPORT DE DONNÉES (#6725) — la rangée « Exporter mes données » des

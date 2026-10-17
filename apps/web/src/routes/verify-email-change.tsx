@@ -7,7 +7,7 @@ import type { ApiResult } from '@/lib/api/http';
 import { sessionStore } from '@/lib/api/session';
 import { translate } from '@/lib/i18n-catalog';
 import { currentInterfaceLanguage, type InterfaceLanguage } from '@/lib/interface-language';
-import { useSearch } from '@/lib/router';
+import { useEmailLinkSearch } from '@/lib/links/email-link-search';
 
 import { ActionLink, LinkPage, LinkText, ReachFailurePage, SignedOutPage } from './link-page-parts';
 
@@ -51,7 +51,7 @@ export function VerifyEmailChangePage({
 }
 
 export default function VerifyEmailChangeScreen() {
-  const [search] = useSearch();
+  const search = useEmailLinkSearch();
   const signedIn = useStore(sessionStore, (state) => state.session.status === 'authenticated');
   return <VerifyEmailChangePage token={search.get('token')} signedIn={signedIn} language={currentInterfaceLanguage()} deps={GATEWAY_DEPS} />;
 }

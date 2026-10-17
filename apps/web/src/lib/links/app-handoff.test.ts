@@ -37,6 +37,20 @@ describe('appHandoffUrl — à qui remettre le lien', () => {
     expect(appHandoffUrl(back.href, { userAgent: ANDROID_CHROME, shell: undefined })).toBeNull();
   });
 
+  test('lien à fragment (#10859) : la page a déjà retiré le secret de son adresse — il voyage vers l’app dans l’intent, vers le repli dans le FRAGMENT', () => {
+    const page = 'https://meeshy.me/auth/verify-email?next=%2Fc%2F1';
+    const url = appHandoffUrl(page, { userAgent: ANDROID_CHROME, shell: undefined }, { token: 'tok-1', email: 'ada@x.io' }) ?? '';
+    expect(url.startsWith('intent://auth/verify-email?next=%2Fc%2F1&token=tok-1&email=ada%40x.io#Intent;')).toBe(true);
+    const back = new URL(decodeURIComponent(/S\.browser_fallback_url=([^;]+);/.exec(url)?.[1] ?? ''));
+    expect(back.searchParams.get('token')).toBeNull();
+    expect(back.searchParams.get('email')).toBeNull();
+    expect(back.searchParams.get('handoff')).toBe('browser');
+    expect(back.searchParams.get('via')).toBe('email');
+    const fragment = new URLSearchParams(back.hash.slice(1));
+    expect(fragment.get('token')).toBe('tok-1');
+    expect(fragment.get('email')).toBe('ada@x.io');
+  });
+
   test('ordinateur : rien à remettre, le navigateur se connecte', () => {
     expect(appHandoffUrl(PAGE, { userAgent: MAC_CHROME, shell: undefined })).toBeNull();
   });
