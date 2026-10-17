@@ -9,8 +9,9 @@ import MeeshySDK
 /// xcrun simctl launch <udid> me.meeshy.app -MeeshyLinkSignInConfirmationPreview replacing
 /// ```
 ///
-/// États : `fresh` (aucun compte ouvert, par défaut) et `replacing` (un autre
-/// compte est ouvert). Les réponses ne font rien.
+/// États : `fresh` (aucun compte ouvert, par défaut), `replacing` (un autre
+/// compte est ouvert) et `claim` (le lien revendique une adresse, #10883). Les
+/// réponses ne font rien.
 enum LinkSignInConfirmationPreviewLaunch {
     static let argument = "-MeeshyLinkSignInConfirmationPreview"
 
@@ -18,11 +19,21 @@ enum LinkSignInConfirmationPreviewLaunch {
         ProcessInfo.processInfo.arguments.contains(argument)
     }
 
-    static var signedIn: MeeshyUser? {
+    private static var state: String? {
         let arguments = ProcessInfo.processInfo.arguments
-        let value = arguments.firstIndex(of: argument)
+        return arguments.firstIndex(of: argument)
             .flatMap { arguments.indices.contains($0 + 1) ? arguments[$0 + 1] : nil }
-        return value == "replacing" ? MeeshyUser(id: "preview-me", username: "awa", displayName: "Awa Diallo") : nil
+    }
+
+    static var signedIn: MeeshyUser? {
+        state == "replacing" ? MeeshyUser(id: "preview-me", username: "awa", displayName: "Awa Diallo") : nil
+    }
+
+    static var question: LinkConfirmationRequired {
+        let account = LinkSignInAccount(id: "preview-link", username: "mallory", displayName: "Mallory Martin")
+        return state == "claim"
+            ? LinkConfirmationRequired(account: account, intent: .claimEmail, maskedEmail: "ma....e@e*****om")
+            : LinkConfirmationRequired(account: account, maskedEmail: "ma....y@e*****om")
     }
 }
 
@@ -32,7 +43,7 @@ struct LinkSignInConfirmationPreviewScreen: View {
             Color.black.opacity(0.35).ignoresSafeArea()
             LinkSignInConfirmationView(
                 content: LinkSignInConfirmationContent(
-                    account: LinkSignInAccount(id: "preview-link", username: "mallory", displayName: "Mallory Martin"),
+                    question: LinkSignInConfirmationPreviewLaunch.question,
                     signedIn: LinkSignInConfirmationPreviewLaunch.signedIn
                 ),
                 onAnswer: { _ in }

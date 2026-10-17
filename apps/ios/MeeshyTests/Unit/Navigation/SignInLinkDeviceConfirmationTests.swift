@@ -55,6 +55,17 @@ final class SignInLinkDeviceConfirmationTests: XCTestCase {
         XCTAssertEqual(sut.auth.openedSessions, ["jwt-mallory"])
     }
 
+    func test_aClaimQuestion_reachesTheSheet_withWhatTheYesDoes_andTheMaskedAddress() async {
+        let sut = makeSUT(decision: .declined)
+        let claim = LinkConfirmationRequired(account: Self.attacker, intent: .claimEmail, maskedEmail: "ma....e@e*****om")
+        sut.auth.pendingQuestion = claim
+
+        await open(.emailVerification(token: "t", email: "marie@example.com"), sut)
+
+        XCTAssertEqual(sut.signIn.questions, [claim])
+        XCTAssertEqual(sut.auth.openedSessions, [])
+    }
+
     func test_questionUnavailable_saysSo_andOpensNothing() async {
         let sut = makeSUT(decision: .unavailable)
 
@@ -113,6 +124,7 @@ private final class ConfirmingAuthorizer: SignInLinkAuthorizing {
     var isAuthenticated = false
     var currentUser: MeeshyUser?
     var requiresConfirmationUnlessConfirmed = true
+    var pendingQuestion = LinkConfirmationRequired(account: LinkSignInAccount(id: "attacker", username: "mallory", displayName: "Mallory"))
     private(set) var confirmations: [Bool] = []
     private(set) var openedSessions: [String] = []
     private(set) var switchedSessions: [String] = []
@@ -120,7 +132,7 @@ private final class ConfirmingAuthorizer: SignInLinkAuthorizing {
     private func prove(confirmed: Bool) throws -> EmailProvenSession {
         confirmations.append(confirmed)
         if requiresConfirmationUnlessConfirmed && !confirmed {
-            throw LinkConfirmationRequired(account: LinkSignInAccount(id: "attacker", username: "mallory", displayName: "Mallory"))
+            throw pendingQuestion
         }
         return EmailProvenSession(token: "jwt-mallory", sessionToken: nil, user: MeeshyUser(id: "attacker", username: "mallory"))
     }
@@ -153,12 +165,14 @@ private final class MockLinkSignInConfirmation: LinkSignInConfirming {
     nonisolated deinit {}
     let decision: AccountReplacementDecision
     private(set) var asked: [String] = []
+    private(set) var questions: [LinkConfirmationRequired] = []
     private(set) var signedIn: [String] = []
 
     init(decision: AccountReplacementDecision) { self.decision = decision }
 
-    func confirmSignIn(as account: LinkSignInAccount, signedIn current: MeeshyUser?) async -> AccountReplacementDecision {
-        asked.append(account.username)
+    func confirmSignIn(_ question: LinkConfirmationRequired, signedIn current: MeeshyUser?) async -> AccountReplacementDecision {
+        asked.append(question.account.username)
+        questions.append(question)
         if let current { signedIn.append(current.username) }
         return decision
     }

@@ -298053,6 +298053,53 @@
         }
       }
     },
+    "signInLink.deviceConfirm.claim": {
+      "extractionState": "manual",
+      "localizations": {
+        "ar": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "سيُربط هذا العنوان بـ ‎%@‎ ويُزال من أي حساب Meeshy آخر."
+          }
+        },
+        "de": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Diese Adresse wird %@ zugeordnet und aus jedem anderen Meeshy-Konto entfernt."
+          }
+        },
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "This address will be attached to %@ and removed from any other Meeshy account."
+          }
+        },
+        "es": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Esta dirección se vinculará a %@ y se retirará de cualquier otra cuenta de Meeshy."
+          }
+        },
+        "fr": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Cette adresse sera rattachée à %@ et retirée de tout autre compte Meeshy."
+          }
+        },
+        "it": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Questo indirizzo sarà collegato a %@ e rimosso da qualsiasi altro account Meeshy."
+          }
+        },
+        "pt-BR": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Este endereço será associado a %@ e removido de qualquer outra conta Meeshy."
+          }
+        }
+      }
+    },
     "signInLink.deviceConfirm.confirm": {
       "extractionState": "manual",
       "localizations": {
@@ -298096,6 +298143,53 @@
           "stringUnit": {
             "state": "translated",
             "value": "Entrar"
+          }
+        }
+      }
+    },
+    "signInLink.deviceConfirm.confirmClaim": {
+      "extractionState": "manual",
+      "localizations": {
+        "ar": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "ربط العنوان وتسجيل الدخول"
+          }
+        },
+        "de": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Adresse zuordnen und anmelden"
+          }
+        },
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Attach the address and sign in"
+          }
+        },
+        "es": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Vincular la dirección e iniciar sesión"
+          }
+        },
+        "fr": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Rattacher l’adresse et se connecter"
+          }
+        },
+        "it": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Collega l’indirizzo e accedi"
+          }
+        },
+        "pt-BR": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Associar o endereço e entrar"
           }
         }
       }

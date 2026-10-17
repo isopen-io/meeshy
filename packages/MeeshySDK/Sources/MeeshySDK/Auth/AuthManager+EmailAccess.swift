@@ -398,7 +398,7 @@ public struct EmailProvenSession: Sendable {
     /// rien ouvert, elle attend que l'utilisateur confirme le compte.
     static func served(by data: LoginResponseData, receivedAt: Date = Date()) throws -> EmailProvenSession? {
         if data.requiresConfirmation == true, let account = data.account {
-            throw LinkConfirmationRequired(account: account)
+            throw LinkConfirmationRequired(account: account, intent: data.linkIntent, maskedEmail: data.maskedEmail)
         }
         if data.requires2FA == true {
             throw SecondFactorRequired(

@@ -56,11 +56,16 @@ public struct LoginResponseData: Decodable, Sendable {
     /// tolérance : un champ illisible se lit absent.
     public let requiresConfirmation: Bool?
     public let account: LinkSignInAccount?
+    /// #10883 — ce que fera le oui (`intent` du fil) et l'adresse en jeu,
+    /// masquée par la passerelle. Lus en tolérance, comme les deux ci-dessus.
+    public let linkIntent: LinkSignInIntent
+    public let maskedEmail: String?
 
     private enum CodingKeys: String, CodingKey {
         case user, token, sessionToken, expiresIn, requires2FA, twoFactorToken
         case phoneOwnershipConflict, status, accountCreated, email, pendingSessionToken
         case adoptWithinSeconds, requiresConfirmation, account
+        case linkIntent = "intent", maskedEmail
     }
 
     public init(from decoder: Decoder) throws {
@@ -79,6 +84,8 @@ public struct LoginResponseData: Decodable, Sendable {
         adoptWithinSeconds = try? container.decodeIfPresent(Int.self, forKey: .adoptWithinSeconds)
         requiresConfirmation = (try? container.decodeIfPresent(Bool.self, forKey: .requiresConfirmation)) ?? nil
         account = (try? container.decodeIfPresent(LinkSignInAccount.self, forKey: .account)) ?? nil
+        linkIntent = LinkSignInIntent(served: (try? container.decodeIfPresent(String.self, forKey: .linkIntent)) ?? nil)
+        maskedEmail = (try? container.decodeIfPresent(String.self, forKey: .maskedEmail)) ?? nil
     }
 
     public init(
@@ -95,7 +102,9 @@ public struct LoginResponseData: Decodable, Sendable {
         pendingSessionToken: String? = nil,
         adoptWithinSeconds: Int? = nil,
         requiresConfirmation: Bool? = nil,
-        account: LinkSignInAccount? = nil
+        account: LinkSignInAccount? = nil,
+        linkIntent: LinkSignInIntent = .signIn,
+        maskedEmail: String? = nil
     ) {
         self.user = user
         self.token = token
@@ -111,6 +120,8 @@ public struct LoginResponseData: Decodable, Sendable {
         self.adoptWithinSeconds = adoptWithinSeconds
         self.requiresConfirmation = requiresConfirmation
         self.account = account
+        self.linkIntent = linkIntent
+        self.maskedEmail = maskedEmail
     }
 }
 

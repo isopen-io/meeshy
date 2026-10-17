@@ -85,13 +85,34 @@ public struct LinkSignInAccount: Decodable, Equatable, Sendable {
     }
 }
 
+/// Ce que fera le « oui » à la question d'un lien (#10879, #10883).
+public enum LinkSignInIntent: String, Equatable, Sendable {
+    /// Le oui ouvre le compte.
+    case signIn = "sign-in"
+    /// Le oui ouvre le compte ET lui rattache l'adresse revendiquée (#8214) :
+    /// elle quitte le compte qui la porte aujourd'hui.
+    case claimEmail = "claim-email"
+
+    /// Absent (passerelle d'avant #10879), inconnu ou illisible ⇒ `signIn`.
+    public init(served raw: String?) {
+        self = raw.flatMap(LinkSignInIntent.init(rawValue:)) ?? .signIn
+    }
+}
+
 /// La passerelle n'a ouvert AUCUNE session : le lien n'a pas été demandé par
 /// cet appareil (ou a été forgé), et elle attend que l'utilisateur confirme le
 /// compte qu'il ouvrirait (#10872). Le jeton n'est pas consommé.
 public struct LinkConfirmationRequired: Error, Equatable, Sendable {
     public let account: LinkSignInAccount
+    /// #10883 — ce que fera le oui.
+    public let intent: LinkSignInIntent
+    /// #10883 — l'adresse en jeu, MASQUÉE par la passerelle ; `nil` sur une
+    /// passerelle d'avant #10879.
+    public let maskedEmail: String?
 
-    public init(account: LinkSignInAccount) {
+    public init(account: LinkSignInAccount, intent: LinkSignInIntent = .signIn, maskedEmail: String? = nil) {
         self.account = account
+        self.intent = intent
+        self.maskedEmail = maskedEmail
     }
 }

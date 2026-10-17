@@ -16,18 +16,45 @@ nonisolated struct LinkSignInConfirmationContent: Equatable {
     let avatarURL: String?
     let avatarName: String
     let accountAccessibilityLabel: String
+    /// #10883 — l'adresse en jeu, masquée PAR LA PASSERELLE ; `nil` quand
+    /// elle manque (passerelle d'avant #10879) ou est blanche.
+    let maskedEmail: String?
+    /// #10883 — la phrase d'une REVENDICATION : l'adresse passe à ce compte et
+    /// quitte celui qui la porte. `nil` pour une simple connexion.
+    let claimNotice: String?
+    let confirmLabel: String
 
-    init(account: LinkSignInAccount, signedIn current: MeeshyUser?) {
+    init(
+        account: LinkSignInAccount,
+        intent: LinkSignInIntent = .signIn,
+        maskedEmail: String? = nil,
+        signedIn current: MeeshyUser?
+    ) {
         let handle = "@\(account.username)"
         let name = account.displayName?.trimmingCharacters(in: .whitespacesAndNewlines) ?? ""
         let avatar = account.avatar?.trimmingCharacters(in: .whitespacesAndNewlines) ?? ""
+        let email = maskedEmail?.trimmingCharacters(in: .whitespacesAndNewlines) ?? ""
+        let accountLabel = AccountReplacementAlert.label(displayName: account.displayName, username: account.username)
         self.handle = handle
         self.displayName = name.isEmpty || name == account.username ? nil : name
         self.avatarURL = Self.isMeeshyHosted(avatar) ? avatar : nil
         self.avatarName = self.displayName ?? account.username
-        self.accountAccessibilityLabel = AccountReplacementAlert.label(displayName: account.displayName, username: account.username)
+        self.maskedEmail = email.isEmpty ? nil : email
+        self.accountAccessibilityLabel = self.maskedEmail.map { "\(accountLabel), \($0)" } ?? accountLabel
         self.title = String(localized: "signInLink.deviceConfirm.title", defaultValue: "Se connecter en tant que \(handle) ?", bundle: .main)
-        self.message = Self.message(incomingLabel: accountAccessibilityLabel, signedIn: current)
+        self.message = Self.message(incomingLabel: accountLabel, signedIn: current)
+        switch intent {
+        case .signIn:
+            self.claimNotice = nil
+            self.confirmLabel = String(localized: "signInLink.deviceConfirm.confirm", defaultValue: "Se connecter", bundle: .main)
+        case .claimEmail:
+            self.claimNotice = String(localized: "signInLink.deviceConfirm.claim", defaultValue: "Cette adresse sera rattachée à \(handle) et retirée de tout autre compte Meeshy.", bundle: .main)
+            self.confirmLabel = String(localized: "signInLink.deviceConfirm.confirmClaim", defaultValue: "Rattacher l’adresse et se connecter", bundle: .main)
+        }
+    }
+
+    init(question: LinkConfirmationRequired, signedIn current: MeeshyUser?) {
+        self.init(account: question.account, intent: question.intent, maskedEmail: question.maskedEmail, signedIn: current)
     }
 
     /// L'avatar est choisi par le compte du lien : il ne se charge que depuis
@@ -82,6 +109,14 @@ struct LinkSignInConfirmationView: View {
 
                 accountCard
 
+                if let claimNotice = content.claimNotice {
+                    Text(claimNotice)
+                        .font(.subheadline.weight(.semibold))
+                        .multilineTextAlignment(.center)
+                        .fixedSize(horizontal: false, vertical: true)
+                        .accessibilityIdentifier("signInLink.confirmation.claim")
+                }
+
                 Text(content.message)
                     .font(.subheadline)
                     .foregroundStyle(.secondary)
@@ -121,6 +156,14 @@ struct LinkSignInConfirmationView: View {
                         .foregroundStyle(.secondary)
                         .lineLimit(1)
                 }
+                if let maskedEmail = content.maskedEmail {
+                    Text(verbatim: maskedEmail)
+                        .font(.footnote)
+                        .foregroundStyle(.secondary)
+                        .lineLimit(1)
+                        .environment(\.layoutDirection, .leftToRight)
+                        .accessibilityIdentifier("signInLink.confirmation.email")
+                }
             }
             Spacer(minLength: 0)
         }
@@ -149,7 +192,7 @@ struct LinkSignInConfirmationView: View {
             .accessibilityIdentifier("signInLink.confirmation.cancel")
 
             Button { onAnswer(true) } label: {
-                Text(String(localized: "signInLink.deviceConfirm.confirm", defaultValue: "Se connecter", bundle: .main))
+                Text(content.confirmLabel)
                     .font(.body.weight(.semibold))
                     .foregroundStyle(.primary)
                     .frame(maxWidth: .infinity, minHeight: 44)
@@ -181,9 +224,9 @@ final class LinkSignInConfirmationSheet: LinkSignInConfirming {
 
     private static let unansweredDismissalGrace: Duration = .milliseconds(500)
 
-    func confirmSignIn(as account: LinkSignInAccount, signedIn current: MeeshyUser?) async -> AccountReplacementDecision {
+    func confirmSignIn(_ question: LinkConfirmationRequired, signedIn current: MeeshyUser?) async -> AccountReplacementDecision {
         guard let top = Self.topMostController() else { return .unavailable }
-        let content = LinkSignInConfirmationContent(account: account, signedIn: current)
+        let content = LinkSignInConfirmationContent(question: question, signedIn: current)
         return await withCheckedContinuation { continuation in
             let answer = AccountReplacementAnswer(continuation)
             let presented = PresentedSheet()

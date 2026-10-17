@@ -157,6 +157,51 @@ final class LinkDeviceBindingTests: XCTestCase {
         XCTAssertNil(data.requiresConfirmation)
         XCTAssertNil(data.account)
     }
+
+    // MARK: - #10883 — ce que le oui fera, et l'adresse en jeu
+
+    private func question(_ json: String) throws -> LinkConfirmationRequired? {
+        let data = try JSONDecoder().decode(LoginResponseData.self, from: Data(json.utf8))
+        do {
+            _ = try EmailProvenSession.served(by: data)
+            return nil
+        } catch let pending as LinkConfirmationRequired {
+            return pending
+        }
+    }
+
+    func test_aClaimQuestion_carriesItsIntent_andTheMaskedAddress() throws {
+        let pending = try question(#"{"requiresConfirmation":true,"account":{"id":"u9","username":"mallory"},"intent":"claim-email","maskedEmail":"ma....e@e*****om"}"#)
+
+        XCTAssertEqual(pending, LinkConfirmationRequired(
+            account: LinkSignInAccount(id: "u9", username: "mallory"),
+            intent: .claimEmail,
+            maskedEmail: "ma....e@e*****om"))
+    }
+
+    func test_aSignInQuestion_carriesItsIntent_andTheMaskedAddress() throws {
+        let pending = try question(#"{"requiresConfirmation":true,"account":{"id":"u9","username":"mallory"},"intent":"sign-in","maskedEmail":"te....r@e*****om"}"#)
+
+        XCTAssertEqual(pending?.intent, .signIn)
+        XCTAssertEqual(pending?.maskedEmail, "te....r@e*****om")
+    }
+
+    func test_aGatewayBefore10879_withoutIntentNorAddress_asksASimpleSignIn() throws {
+        let pending = try question(#"{"requiresConfirmation":true,"account":{"id":"u9","username":"mallory"}}"#)
+
+        XCTAssertEqual(pending, LinkConfirmationRequired(account: LinkSignInAccount(id: "u9", username: "mallory")))
+        XCTAssertEqual(pending?.intent, .signIn)
+        XCTAssertNil(pending?.maskedEmail)
+    }
+
+    func test_anUnknownOrIllegibleIntent_readsSignIn_neverFailsTheDecoding() throws {
+        let unknown = try question(#"{"requiresConfirmation":true,"account":{"id":"u9","username":"mallory"},"intent":"merge","maskedEmail":4}"#)
+        let illegible = try question(#"{"requiresConfirmation":true,"account":{"id":"u9","username":"mallory"},"intent":7}"#)
+
+        XCTAssertEqual(unknown?.intent, .signIn)
+        XCTAssertNil(unknown?.maskedEmail)
+        XCTAssertEqual(illegible?.intent, .signIn)
+    }
 }
 
 final class InMemoryLinkKeychain: KeychainStoring, @unchecked Sendable {

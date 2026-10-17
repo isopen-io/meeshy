@@ -204,7 +204,7 @@ enum SignInLinkOpener {
             if let signedIn, signedIn.id == pending.account.id {
                 return .proven(try await prove(link, confirmed: true, auth: auth), consentedAccountId: nil)
             }
-            switch await signInConfirmation.confirmSignIn(as: pending.account, signedIn: signedIn) {
+            switch await signInConfirmation.confirmSignIn(pending, signedIn: signedIn) {
             case .accepted:
                 return .proven(try await prove(link, confirmed: true, auth: auth), consentedAccountId: pending.account.id)
             case .declined:
@@ -240,10 +240,11 @@ protocol AccountReplacementConfirming: AnyObject {
 
 /// #10872 — la question posée avant qu'un lien que cet appareil n'a PAS
 /// demandé n'ouvre un compte : « Se connecter en tant que @x ? ». Elle nomme
-/// le compte du lien, et celui qui est ouvert s'il y en a un.
+/// le compte du lien, et celui qui est ouvert s'il y en a un — et, pour une
+/// revendication d'adresse (#10883), dit que l'adresse passe à ce compte.
 @MainActor
 protocol LinkSignInConfirming: AnyObject {
-    func confirmSignIn(as account: LinkSignInAccount, signedIn current: MeeshyUser?) async -> AccountReplacementDecision
+    func confirmSignIn(_ question: LinkConfirmationRequired, signedIn current: MeeshyUser?) async -> AccountReplacementDecision
 }
 
 /// Ce que rend la question (#10463) : la réponse de l'utilisateur, ou le
