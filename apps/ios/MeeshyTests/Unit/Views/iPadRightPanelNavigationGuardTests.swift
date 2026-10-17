@@ -162,6 +162,55 @@ final class iPadRightPanelNavigationGuardTests: XCTestCase {
         XCTAssertTrue(layer.contains("DeviceLayout.activeWindowScene?.title"), "la fenêtre iPad porte le titre de ce qu'elle montre")
     }
 
+    /// La fenêtre DÉTACHÉE (conversation ou réels à côté de la principale) :
+    /// - sans portée de surfaces, ses feuilles s'inscrivaient avec une portée
+    ///   `nil` — « joignable de toute fenêtre » : ouvrir une conversation dans la
+    ///   fenêtre principale refermait sa galerie ou sa story, et un composer qui
+    ///   retient y bloquait l'ouverture dans la principale ;
+    /// - sans barrière de mise à jour ni d'âge, elle restait utilisable après un
+    ///   426 ou un blocage d'âge que la principale, elle, imposait ;
+    /// - sans « réduire les animations » de l'app, elle l'ignorait.
+    func test_detachedWindow_carriesTheSameScopeAndGatesAsTheMainWindow() throws {
+        let detached = try source(of: "AdaptiveRootView.swift")
+        let start = try XCTUnwrap(detached.range(of: "struct DetachedWindowView"))
+        let body = String(detached[start.lowerBound...])
+        XCTAssertTrue(body.contains(".environment(\\.presentedSurfaceScope, router.surfaceScope)"))
+        XCTAssertTrue(body.contains("UpgradeGateController()"))
+        XCTAssertTrue(body.contains("UpgradeGateView(requirement:"))
+
+        let appRoot = URL(fileURLWithPath: "\(#filePath)")
+            .deletingLastPathComponent().deletingLastPathComponent()
+            .deletingLastPathComponent().deletingLastPathComponent()
+            .appendingPathComponent("Meeshy/MeeshyApp.swift")
+        let app = try String(contentsOf: appRoot, encoding: .utf8)
+        let group = try XCTUnwrap(app.range(of: "DetachedWindowView(content: content)"))
+        let scene = String(app[group.upperBound...].prefix(700))
+        XCTAssertTrue(scene.contains(".ageGateOverlay()"))
+        XCTAssertTrue(scene.contains("meeshyForceReduceMotion"))
+    }
+
+    /// Un lien (post, tag, communauté, profil, boutique…) reçu pendant qu'une
+    /// story, un réel ou une feuille est présenté s'ouvrait DESSOUS : seules
+    /// les conversations refermaient les surfaces. Les deux racines referment
+    /// d'abord, comme pour un tap de notification (#10543).
+    func test_deepLinks_closePresentedSurfacesFirst_onBothRoots() throws {
+        for file in ["RootView.swift", "iPadRootView+Navigation.swift"] {
+            let code = try source(of: file)
+            let start = try XCTUnwrap(code.range(of: "func handleDeepLink(_ deepLink: DeepLink?) {"), file)
+            let body = String(code[start.upperBound...].prefix(500))
+            XCTAssertTrue(body.contains("router.clearPresentedSurfaces { _ in showDeepLink(deepLink) }"), file)
+        }
+    }
+
+    /// Lien à froid vers une conversation en cache : le rafraîchissement de
+    /// fond réécrivait la liste depuis l'instantané lu AVANT l'aller-retour,
+    /// écrasant la liste plus récente que la synchro avait posée entre-temps.
+    func test_coldConversationLink_mergesIntoTheCurrentList() throws {
+        let code = try source(of: "RootView.swift")
+        XCTAssertFalse(code.contains("conversations.save(merged, for: \"list\")"))
+        XCTAssertTrue(code.contains("conversations.mergeUpdate(for: \"list\")"))
+    }
+
     func test_storyNotificationScreens_closeThePanelOnIPad() throws {
         let stories = URL(fileURLWithPath: "\(#filePath)")
             .deletingLastPathComponent().deletingLastPathComponent()

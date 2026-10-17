@@ -4,7 +4,7 @@ import MeeshySDK
 import os
 
 @MainActor
-final class AudioRecorderManager: ObservableObject, AudioRecordingProviding {
+final class AudioRecorderManager: ObservableObject, AudioRecordingProviding, CallInterruptibleRecorder {
     static let shared = AudioRecorderManager()
 
     @Published var isRecording = false
@@ -127,6 +127,7 @@ final class AudioRecorderManager: ObservableObject, AudioRecordingProviding {
         duration = 0
         levelHistory = Array(repeating: 0, count: 15)
         audioLevels = levelHistory
+        RecorderCallGuard.shared.register(self)
 
         // Un second démarrage sans arrêt entre les deux laissait l'ancien minuteur tourner à 20 Hz
         // jusqu'à la fin du processus.
@@ -165,6 +166,18 @@ final class AudioRecorderManager: ObservableObject, AudioRecordingProviding {
         // tear down a session owned by the WebRTC stack.
         guard !CallManagerHost.shared.isCallActiveForAudioGuard else { return }
         deactivateSharedAudioSession()
+    }
+
+    /// Un appel commence : la CAPTURE s'arrête (micro rendu à l'appel, plus
+    /// rien de l'appel n'entre dans le vocal), mais l'enregistrement reste
+    /// « en cours » pour le composer : son interface, figée à la durée atteinte,
+    /// garde ses gestes — envoyer ou joindre passent par `stopRecording()`, qui
+    /// rend le fichier ; annuler le supprime. La session reste à l'appel.
+    func stopForCall() {
+        guard isRecording, let recorder, recorder.isRecording else { return }
+        timer?.invalidate()
+        timer = nil
+        recorder.stop()
     }
 
     @discardableResult

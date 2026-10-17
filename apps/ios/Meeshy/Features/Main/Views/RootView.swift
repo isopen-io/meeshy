@@ -555,7 +555,14 @@ struct RootView: View {
 
     private func handleDeepLink(_ deepLink: DeepLink?) {
         guard let deepLink = deepLinkRouter.consumePendingDeepLink() else { return }
+        // Story, réel, composer ou feuille en cours : refermés d'ABORD, comme
+        // pour un tap de notification (#10543). Seules les conversations le
+        // faisaient ; un lien vers un post, un tag, une communauté ou un profil
+        // s'ouvrait SOUS la couverture, et le tap semblait sans effet.
+        router.clearPresentedSurfaces { _ in showDeepLink(deepLink) }
+    }
 
+    private func showDeepLink(_ deepLink: DeepLink) {
         switch deepLink {
         case .trackedLink(let token):
             // `/l/<token>` resolved async by targetType (re-sets pendingDeepLink).
@@ -919,7 +926,7 @@ struct RootView: View {
                 }
                 return
             }
-            CallManager.shared.handleIncomingCallNotification(
+            CallManager.shared.handleIncomingCallAlertTap(
                 callId: callId,
                 fromUserId: ctx.callerUserId ?? "",
                 fromUsername: ctx.callerName ?? ctx.senderUsername ?? "",
@@ -1040,13 +1047,19 @@ struct RootView: View {
                     let currentUserId = await AuthManager.shared.currentUser?.id ?? ""
                     if let apiConv = try? await ConversationService.shared.getById(conversationId) {
                         let refreshed = apiConv.toConversation(currentUserId: currentUserId)
-                        var merged = cachedConversations ?? []
-                        if let i = merged.firstIndex(where: { $0.id == refreshed.id }) {
-                            merged[i] = refreshed
-                        } else {
-                            merged.insert(refreshed, at: 0)
+                        // Fusion sur la liste DU MOMENT, pas sur l'instantané lu
+                        // avant l'aller-retour : la synchro de la liste a pu en
+                        // écrire une plus récente entre-temps, que ce `save`
+                        // écrasait (conversations neuves et non-lus perdus).
+                        await CacheCoordinator.shared.conversations.mergeUpdate(for: "list") { current in
+                            var merged = current
+                            if let i = merged.firstIndex(where: { $0.id == refreshed.id }) {
+                                merged[i] = refreshed
+                            } else {
+                                merged.insert(refreshed, at: 0)
+                            }
+                            return merged
                         }
-                        try? await CacheCoordinator.shared.conversations.save(merged, for: "list")
                         await SearchIndex.shared.indexConversations([refreshed])
                     }
                 }

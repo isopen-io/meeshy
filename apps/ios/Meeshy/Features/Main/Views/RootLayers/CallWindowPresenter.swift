@@ -39,6 +39,9 @@ protocol CallWindowHosting: AnyObject {
     /// l'activation de la scène.
     func show(_ manager: CallManager) -> Bool
     func hide()
+    /// La scène `scene` s'est déconnectée : si elle portait la fenêtre
+    /// d'appel, celle-ci est relâchée et la réponse est `true`.
+    func releaseIfHosted(on scene: UIScene) -> Bool
 }
 
 /// Suit la pile d'appel et monte / retire la fenêtre selon
@@ -53,7 +56,10 @@ final class CallWindowPresenter {
     private let viewing: ConversationViewingReporting
     private var subscription: AnyCancellable?
     private var activation: AnyCancellable?
+    private var disconnection: AnyCancellable?
     private weak var pendingManager: CallManager?
+    /// La pile dont l'écran est monté — pour le remonter si sa scène disparaît.
+    private weak var shownManager: CallManager?
     private(set) var isShowing = false
 
     /// `viewing` : l'écran d'appel en grand fait quitter la conversation
@@ -89,6 +95,26 @@ final class CallWindowPresenter {
         activation = NotificationCenter.default
             .publisher(for: UIScene.didActivateNotification)
             .sink { [weak self] _ in self?.retryPendingShow() }
+        // iPad : la fenêtre principale fermée en plein appel emportait l'écran
+        // d'appel avec sa scène, `isShowing` restant vrai — l'appel continuait
+        // sans écran. Il se remonte sur une scène restante.
+        disconnection = NotificationCenter.default
+            .publisher(for: UIScene.didDisconnectNotification)
+            .sink { [weak self] note in
+                guard let self, let scene = note.object as? UIScene,
+                      self.isShowing, self.hosting.releaseIfHosted(on: scene) else { return }
+                self.overlayLost()
+            }
+    }
+
+    /// La fenêtre d'appel a perdu sa scène alors que l'appel la demandait
+    /// encore : on la remonte ailleurs, ou à la prochaine activation de scène.
+    func overlayLost() {
+        guard isShowing else { return }
+        isShowing = false
+        guard let manager = shownManager else { return }
+        pendingManager = manager
+        retryPendingShow()
     }
 
     func retryPendingShow() {
@@ -100,6 +126,7 @@ final class CallWindowPresenter {
         viewing.setCallScreenShown(manager != nil && visible)
         guard let manager, visible else {
             pendingManager = nil
+            shownManager = nil
             guard isShowing else { return }
             isShowing = false
             hosting.hide()
@@ -107,6 +134,7 @@ final class CallWindowPresenter {
         }
         guard !isShowing else { return }
         isShowing = hosting.show(manager)
+        shownManager = manager
         pendingManager = isShowing ? nil : manager
     }
 }
@@ -145,6 +173,15 @@ final class CallOverlayWindowHost: CallWindowHosting {
         overlay.makeKeyAndVisible()
         guard animated else { return true }
         UIView.animate(withDuration: 0.22, delay: 0, options: [.curveEaseOut]) { overlay.alpha = 1 }
+        return true
+    }
+
+    func releaseIfHosted(on scene: UIScene) -> Bool {
+        guard let overlay = window, overlay.windowScene == nil || overlay.windowScene === scene else { return false }
+        window = nil
+        previousKeyWindow = nil
+        overlay.isHidden = true
+        overlay.rootViewController = nil
         return true
     }
 
@@ -299,6 +336,8 @@ protocol CallReturnPointHosting: AnyObject {
     func hide()
     /// Recopie la barre d'état de l'écran d'en dessous.
     func refreshAppearance()
+    /// Voir `CallWindowHosting.releaseIfHosted(on:)`.
+    func releaseIfHosted(on scene: UIScene) -> Bool
 }
 
 /// Le contrôleur de la fenêtre passe-plat ne décide pas de la barre d'état :
@@ -338,7 +377,9 @@ final class CallReturnPointPresenter {
     private var subscription: AnyCancellable?
     private var activation: AnyCancellable?
     private var polling: AnyCancellable?
+    private var disconnection: AnyCancellable?
     private weak var pendingManager: CallManager?
+    private weak var shownManager: CallManager?
     private(set) var isShowing = false
 
     init(
@@ -373,6 +414,13 @@ final class CallReturnPointPresenter {
         activation = NotificationCenter.default
             .publisher(for: UIScene.didActivateNotification)
             .sink { [weak self] _ in self?.retryPendingShow() }
+        disconnection = NotificationCenter.default
+            .publisher(for: UIScene.didDisconnectNotification)
+            .sink { [weak self] note in
+                guard let self, let scene = note.object as? UIScene,
+                      self.isShowing, self.hosting.releaseIfHosted(on: scene) else { return }
+                self.overlayLost()
+            }
     }
 
     func retryPendingShow() {
@@ -380,9 +428,20 @@ final class CallReturnPointPresenter {
         apply(manager: manager, needed: true)
     }
 
+    /// La bulle a perdu sa scène (fenêtre fermée sur iPad) : remontée ailleurs.
+    func overlayLost() {
+        guard isShowing else { return }
+        isShowing = false
+        polling = nil
+        guard let manager = shownManager else { return }
+        pendingManager = manager
+        retryPendingShow()
+    }
+
     func apply(manager: CallManager?, needed: Bool) {
         guard let manager, needed else {
             pendingManager = nil
+            shownManager = nil
             guard isShowing else { return }
             isShowing = false
             polling = nil
@@ -392,6 +451,7 @@ final class CallReturnPointPresenter {
         }
         guard !isShowing else { return }
         isShowing = hosting.show(manager, coverage: coverage)
+        shownManager = manager
         pendingManager = isShowing ? nil : manager
         guard isShowing else { return }
         refreshCoverage()
@@ -439,6 +499,12 @@ final class CallReturnPointWindowHost: CallReturnPointHosting {
         window = nil
         overlay.isHidden = true
         overlay.rootViewController = nil
+    }
+
+    func releaseIfHosted(on scene: UIScene) -> Bool {
+        guard let overlay = window, overlay.windowScene == nil || overlay.windowScene === scene else { return false }
+        hide()
+        return true
     }
 }
 

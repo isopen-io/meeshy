@@ -68,7 +68,24 @@ final class OutboxRetryScheduler {
     private var networkCancellable: AnyCancellable?
     private var mutationCancellable: AnyCancellable?
     private var socketCancellable: AnyCancellable?
+    /// L'échéance du minuteur armé, `nil` sans minuteur.
+    private(set) var pendingRetryDate: Date?
     private init() {}
+
+    #if DEBUG
+    /// Retire le minuteur (tests : le planificateur est un singleton).
+    func cancelForTesting() {
+        timer?.cancel()
+        timer = nil
+        pendingRetryDate = nil
+    }
+    #endif
+
+    private func timerFired(for date: Date) {
+        guard pendingRetryDate == date else { return }
+        pendingRetryDate = nil
+        timer = nil
+    }
 
     /// Réveille le flusher à chaque transition réseau offline→online.
     ///
@@ -129,16 +146,23 @@ final class OutboxRetryScheduler {
     /// Seule l'ATTENTE est annulable : le flush part dans sa propre tâche. Lancé
     /// dans celle du minuteur, il était annulé par le `schedule` de tout flush
     /// concurrent — requête ou upload TUS coupés en vol, ligne repoussée de 30 s.
+    ///
+    /// Plusieurs flushs se chevauchent (minuteur, reconnexion, mise en file) et
+    /// chacun appelle `schedule` avec SA vue de la file : celui qui ne voit rien
+    /// de différé (`nil`) annulait le minuteur qu'un autre venait d'armer pour
+    /// une ligne en backoff, qui attendait alors un évènement de cycle de vie.
+    /// Désormais `nil` ne retire rien (un minuteur de trop ne coûte qu'un flush
+    /// vide), et l'échéance la plus PROCHE l'emporte.
     func schedule(
         at date: Date?,
         flush: @escaping @MainActor () async -> Void = { await OutboxFlushTrigger.flushNow() }
     ) {
+        guard let date else { return }
+        if timer != nil, let pending = pendingRetryDate, pending <= date { return }
         timer?.cancel()
-        guard let date else {
-            timer = nil
-            return
-        }
-        timer = Task {
+        pendingRetryDate = date
+        timer = Task { [weak self] in
+            defer { self?.timerFired(for: date) }
             // Cap à 1 h : au-delà, un évènement de cycle de vie aura de toute
             // façon redéclenché un flush entre-temps.
             let delay = min(max(0, date.timeIntervalSinceNow), 3600)

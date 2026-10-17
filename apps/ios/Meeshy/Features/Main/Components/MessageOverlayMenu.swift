@@ -339,7 +339,7 @@ struct MessageOverlayMenu: View {
                         // source frame.
                         HStack(spacing: 0) {
                             if message.isMe { Spacer(minLength: 44) }
-                            messagePreview
+                            messagePreview(containerWidth: geometry.size.width)
                             if !message.isMe { Spacer(minLength: 44) }
                         }
                         .fixedSize(horizontal: false, vertical: true)
@@ -639,7 +639,10 @@ struct MessageOverlayMenu: View {
 
     // MARK: - Message Preview (aligned left/right)
 
-    private var messagePreview: some View {
+    /// `containerWidth` : la largeur de CET overlay — la colonne de la
+    /// conversation sur iPad, pas la fenêtre — la même mesure que la bulle
+    /// réelle (`bubbleContainerWidth`, largeur de la liste).
+    private func messagePreview(containerWidth: CGFloat) -> some View {
         VStack(alignment: message.isMe ? .trailing : .leading, spacing: MeeshySpacing.xsPlus) {
             previewSenderHeader
 
@@ -655,7 +658,9 @@ struct MessageOverlayMenu: View {
         // bubble's native edge inside the frame, working in tandem
         // with the parent HStack's Spacer(minLength: 44).
         .frame(
-            maxWidth: DeviceLayout.bubbleMaxWidth(sizeClass: horizontalSizeClass),
+            maxWidth: DeviceLayout.bubbleMaxWidth(
+                sizeClass: horizontalSizeClass,
+                containerWidth: containerWidth > 0 ? containerWidth : nil),
             alignment: message.isMe ? .trailing : .leading
         )
         .padding(.horizontal, MeeshySpacing.sm)

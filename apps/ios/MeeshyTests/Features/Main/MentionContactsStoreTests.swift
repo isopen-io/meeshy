@@ -136,4 +136,33 @@ final class MentionContactsStoreTests: XCTestCase {
 
         XCTAssertEqual(spy.fetchCount, 0)
     }
+
+    // MARK: - Changement de compte
+
+    /// La liste d'amis du `@` restait en mémoire : après un changement de
+    /// compte, le suivant voyait les amis du précédent jusqu'à dix minutes.
+    func test_resetForLogout_forgetsTheSnapshot_andRereadsTheStore() async {
+        let (sut, spy) = makeSUT()
+        spy.cache = .fresh([friend("c1", "zoe")], age: 1)
+        _ = await sut.refreshIfNeeded()
+        XCTAssertFalse(sut.snapshot.isEmpty)
+
+        sut.resetForLogout()
+
+        XCTAssertTrue(sut.snapshot.isEmpty)
+        spy.cache = .fresh([friend("c2", "awa")], age: 1)
+        let served = await sut.loadCached()
+        XCTAssertEqual(served.map(\.username), ["awa"])
+    }
+
+    func test_logoutTeardown_resetsEveryPerAccountStore() throws {
+        let source = try AppSourceGuard.unit("Meeshy/Core/DependencyContainer.swift")
+        for call in ["MentionContactsStore.shared.resetForLogout()",
+                     "CommentQuotationStore.shared.clearAll()",
+                     "StreakReminderScheduler.shared.annulerTout()",
+                     "ConversationProtectionPreferenceStore.shared.purgeAll()",
+                     "ContactResolveService.shared.purge()"] {
+            XCTAssertTrue(source.contains(call), call)
+        }
+    }
 }

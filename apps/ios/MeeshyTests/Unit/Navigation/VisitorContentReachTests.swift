@@ -134,6 +134,21 @@ final class VisitorContentReachTests: XCTestCase {
         )
     }
 
+    /// Même défaut que la file des impressions : sans plafond, une longue
+    /// panne la faisait grossir sans fin, chaque événement réécrivant tout le
+    /// tableau dans `UserDefaults`.
+    func test_failedFlushes_keepAtMostTheCap() async {
+        let service = MockPostService()
+        service.recordSocialEventsResult = .failure(NSError(domain: "net", code: -1009))
+        let sut = makeReporter(service: service)
+        let total = VisitorReachReporter.pendingCap + 30
+        sut.record((0..<total).map { .impression(postId: "p\($0)", source: "detail", surface: .visitor) })
+        await sut.flushNow()
+        sut.record([.impression(postId: "last", source: "detail", surface: .visitor)])
+
+        XCTAssertEqual(sut.pendingEvents.count, VisitorReachReporter.pendingCap)
+    }
+
     func test_flush_sendsViewsAndImpressionsInTwoRequests_underTheVisitorToken() async {
         let service = MockPostService()
         let sut = makeReporter(service: service)

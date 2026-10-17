@@ -76,6 +76,15 @@ final class ConversationProtectionPreferenceStore: ConversationProtectionPrefere
         defaults.set(entries, forKey: Self.key)
     }
 
+    /// Déconnexion : les protections armées sont rangées par conversation, sans
+    /// compte. Un second compte membre de la même conversation recevait celles
+    /// du premier (vue unique, flou, éphémère) sans les avoir choisies.
+    func purgeAll() {
+        lock.lock()
+        defaults.removeObject(forKey: Self.key)
+        lock.unlock()
+    }
+
     private func table() -> [String: Data] {
         defaults.dictionary(forKey: Self.key) as? [String: Data] ?? [:]
     }

@@ -399,6 +399,9 @@ struct DetachedWindowView: View {
     @StateObject private var conversationVMOwner = ConversationListVMOwner()
     @StateObject private var storyViewerCoordinator = StoryViewerCoordinator()
     @StateObject private var notifications = RootNotificationSource()
+    /// Même barrière que les racines : un 426 ou un plancher de version bloque
+    /// AUSSI la fenêtre détachée.
+    @StateObject private var upgradeGate = UpgradeGateController()
     @ObservedObject private var theme = ThemeManager.shared
     @State private var scene: UIWindowScene?
     @State private var conversation: Conversation?
@@ -515,11 +518,20 @@ struct DetachedWindowView: View {
             .meeshyConversationList(conversationVMOwner.viewModel)
             .environment(\.isStoryViewerPresenting, true)
         }
+        .fullScreenCover(isPresented: .constant(upgradeGate.isBlocked)) {
+            if let requirement = upgradeGate.requirement {
+                UpgradeGateView(requirement: requirement)
+            }
+        }
         .onAppear {
             // Le retour du premier écran ferme la fenêtre : il n'y a rien dessous.
             router.onPopRequested = { closeWindow() }
         }
         .onDisappear { router.onPopRequested = nil }
+        // La portée de CETTE fenêtre, posée le plus à l'extérieur comme dans les
+        // racines (#10543) : sans elle ses feuilles s'inscrivaient « de toute
+        // fenêtre », et la principale les refermait en ouvrant une conversation.
+        .environment(\.presentedSurfaceScope, router.surfaceScope)
     }
 
     // MARK: - Conversation

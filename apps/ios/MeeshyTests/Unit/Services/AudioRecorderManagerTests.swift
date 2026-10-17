@@ -120,4 +120,28 @@ final class AudioRecorderManagerTests: XCTestCase {
         sut.deactivateAudioSessionAfterFailure()
         XCTAssertFalse(sut.isRecording)
     }
+
+    // MARK: - Un appel arrête l'enregistrement
+
+    /// Au début d'un appel, seuls les lecteurs s'arrêtaient : un vocal en cours
+    /// d'enregistrement capturait l'appel (arrivé par le socket, au premier plan,
+    /// sans interruption système) et disputait le micro à WebRTC.
+    func test_callStart_stopsTheRecordersToo() throws {
+        let source = try AppSourceGuard.unit("Meeshy/Features/Main/Services/CallManager.swift")
+        let start = try XCTUnwrap(source.range(of: "if active && !oldValue.isActive {"))
+        let block = String(source[start.upperBound...].prefix(900))
+        XCTAssertTrue(block.contains("RecorderCallGuard.shared.stopAllForCall()"))
+    }
+
+    func test_startRecording_registersWithTheCallGuard() throws {
+        let source = try AppSourceGuard.unit("Meeshy/Features/Main/Services/AudioRecorderManager.swift")
+        XCTAssertTrue(source.contains("RecorderCallGuard.shared.register(self)"))
+    }
+
+    func test_stopForCall_whenIdle_keepsTheRecorderIdle() {
+        let sut = makeSUT()
+        sut.stopForCall()
+        XCTAssertFalse(sut.isRecording)
+        XCTAssertNil(sut.recordedFileURL)
+    }
 }

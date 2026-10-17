@@ -960,6 +960,9 @@ struct MeeshyApp: App {
             DetachedWindowView(content: content)
                 .environment(\.mentionContactsProvider, MentionContactsAudienceBridge())
                 .feedbackToastOverlay()
+                // Mêmes barrière d'âge et préférence d'animation que la fenêtre principale.
+                .ageGateOverlay()
+                .environment(\.meeshyForceReduceMotion, a11yPrefs.reduceMotion)
                 .environmentObject(authManager)
                 .environmentObject(deepLinkRouter)
                 .preferredColorScheme(theme.preferredColorScheme)

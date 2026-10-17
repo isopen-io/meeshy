@@ -137,13 +137,17 @@ final class VisitorReachReporter: VisitorReachReporting {
 
     var pendingEvents: [PendingVisitorEvent] { pending }
 
+    /// Plafond de la file (même règle qu'`ImpressionBatcher.pendingCap`) : au-delà,
+    /// les plus anciens événements sont abandonnés.
+    static let pendingCap = 500
+
     func record(_ events: [SocialEvent]) {
         guard !events.isEmpty else { return }
         let identity = PendingVisitorEvent.identity(of: token())
         let now = clock()
-        pending.append(contentsOf: events.map {
+        pending = Array((pending + events.map {
             PendingVisitorEvent(stamped: .stamping($0, at: now), identity: identity)
-        })
+        }).suffix(Self.pendingCap))
         persist()
         scheduleFlush()
     }
@@ -174,7 +178,7 @@ final class VisitorReachReporter: VisitorReachReporting {
             }
         }
         guard !kept.isEmpty else { return }
-        pending.insert(contentsOf: kept, at: 0)
+        pending = Array((kept + pending).suffix(Self.pendingCap))
         persist()
     }
 
