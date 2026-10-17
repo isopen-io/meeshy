@@ -74,10 +74,8 @@ enum GameOptimistic {
         let level = GameLevelWire.level(score: score, levelCap: levelCap, levelRecord: game.level.shown.record,
                                          prestige: game.level.prestige, steps: steps)
             .carryingSparks(of: game.level, pocket: score)
-        let preview = GameLevelWire.mint(
-            GameMint.preview(score: score, mintedLifetime: game.mint.number, debitablePoints: debitable, levelCap: levelCap,
-                             steps: steps)
-        )
+        let preview = GameLevelWire.mint(nextPreview(after: game, pocket: score, debitable: debitable, glory: glory,
+                                                     levelCap: levelCap, steps: steps))
         let minted = game.replacing(
             level: level,
             glory: glory,
@@ -104,6 +102,22 @@ enum GameOptimistic {
             by: 1
         )
         return shifted
+    }
+
+    /// L'aperçu de la frappe SUIVANTE, par la loi que la passerelle servira (#10898) : devant un serveur des étincelles,
+    /// `previewSparksMint` — prix de rang × facteur du niveau d'APRÈS, dette et réserve comprises ; devant un serveur
+    /// antérieur, la loi d'avant. Rejouer la seconde devant le premier annonçait 1 221 pendant le vol, puis la relecture
+    /// remettait le vrai prix, à quelques étincelles de l'ancien.
+    private static func nextPreview(after game: GameBlock, pocket: Int, debitable: Int, glory: GameBlock.Glory,
+                                    levelCap: Int?, steps: GameLevelStepFacts?) -> GameMintPreview {
+        guard game.level.sparks != nil else {
+            return GameMint.preview(score: pocket, mintedLifetime: game.mint.number, debitablePoints: debitable,
+                                    levelCap: levelCap, steps: steps)
+        }
+        return GameMint.sparksPreview(
+            sparks: pocket, mintedLifetime: game.mint.number, held: game.treasury.held + 1, glory: glory.glory,
+            mythic: glory.rank == .mythe, levelCap: levelCap, steps: steps, debt: game.level.sparksDebt ?? 0
+        )
     }
 
     // MARK: - Gel
@@ -199,5 +213,64 @@ enum GameOptimistic {
         let merged = state.game.guideSeen + keys.filter { !state.game.guideSeen.contains($0) }
         guard merged != state.game.guideSeen else { return state }
         return GameState(game: state.game.replacing(guideSeen: merged), meesh: state.meesh)
+    }
+}
+
+/// L'ORDRE DES LECTURES SERVIES (#10898) — la machine d'état du jeu reste MONOTONE : une lecture qui a quitté le client
+/// AVANT une autre, ou avant le dernier geste, a lu un état plus ancien que celui que l'écran montre déjà ; elle ne le
+/// repeint jamais. La relecture que le geste lance lui-même, partie après lui, rend la vérité.
+///
+/// Le web tient la même loi par son cache de requêtes : la frappe annule les lectures en vol, sa relecture remplace
+/// toute lecture partie avant elle, et `afterMintUnlessServed` ne débite jamais deux fois une frappe déjà servie.
+struct GameReadOrder: Equatable, Sendable {
+    struct Ticket: Equatable, Sendable {
+        fileprivate let number: Int
+        fileprivate let era: Int
+    }
+
+    private var issued = 0
+    private var era = 0
+    private var latestPosed = 0
+
+    /// Le ticket d'une lecture, pris à son DÉPART.
+    mutating func issue() -> Ticket {
+        issued += 1
+        return Ticket(number: issued, era: era)
+    }
+
+    /// Un geste commence : toute lecture partie avant lui a lu l'état d'avant.
+    mutating func beginGesture() {
+        era += 1
+    }
+
+    /// Vrai si la lecture peut se poser — et la retient alors comme la plus récente posée. Une même lecture peut se
+    /// poser deux fois (le cache, puis le réseau, sous le même ticket).
+    mutating func admits(_ ticket: Ticket) -> Bool {
+        guard ticket.era == era, ticket.number >= latestPosed else { return false }
+        latestPosed = ticket.number
+        return true
+    }
+
+    /// Ce que la passerelle a CONFIRMÉ — par une frappe ou une lecture posée : la plus haute révision de l'état du jeu
+    /// (#10900) et le plus grand nombre de Meeshes frappées. Ni l'un ni l'autre ne redescend.
+    struct Confirmed: Equatable, Sendable {
+        var revision: Int?
+        var minted = 0
+
+        func raised(revision served: Int?, minted servedMinted: Int?) -> Confirmed {
+            Confirmed(
+                revision: [revision, served].compactMap { $0 }.max(),
+                minted: max(minted, servedMinted ?? 0)
+            )
+        }
+    }
+
+    /// Une charge servie est à jour si elle n'est pas EN RETARD sur ce qui a été confirmé : sa révision, quand la
+    /// passerelle la sert (`shouldApplyGameState`, `packages/shared/types/game-sync.ts`) ; sinon ses Meeshes frappées. Un
+    /// serveur qui ne sert ni l'une ni les autres n'est jamais déclaré en retard.
+    static func isCurrent(servedRevision: Int?, servedMinted: Int?, confirmed: Confirmed) -> Bool {
+        if let servedRevision, let known = confirmed.revision, servedRevision < known { return false }
+        guard let servedMinted else { return true }
+        return servedMinted >= confirmed.minted
     }
 }

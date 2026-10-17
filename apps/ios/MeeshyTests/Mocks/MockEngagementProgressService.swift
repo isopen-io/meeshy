@@ -8,11 +8,16 @@ final class MockEngagementProgressService: EngagementProgressProviding, @uncheck
     /// — pour qu'un témoin décrive « avant le geste » puis « après le geste ».
     var fetchProgressSequence: [Result<APIEngagementProgress, Error>] = []
     var fetchProgressCallCount = 0
+    /// Retient une lecture EN VOL (#10898) : appelée avec le rang de l'appel, APRÈS que la réponse a été choisie —
+    /// la lecture a donc « lu » l'état du moment de son départ, et n'atterrit qu'à la sortie de cette fermeture.
+    var fetchSuspension: (@MainActor @Sendable (Int) async -> Void)?
 
     func fetchProgress() async throws -> APIEngagementProgress {
         fetchProgressCallCount += 1
-        guard fetchProgressSequence.isEmpty else { return try fetchProgressSequence.removeFirst().get() }
-        return try fetchProgressResult.get()
+        let call = fetchProgressCallCount
+        let answer = fetchProgressSequence.isEmpty ? fetchProgressResult : fetchProgressSequence.removeFirst()
+        await fetchSuspension?(call)
+        return try answer.get()
     }
 
     /// La frappe (#5743). `mintRequestIds` retient les identifiants REÇUS et non
@@ -23,9 +28,12 @@ final class MockEngagementProgressService: EngagementProgressProviding, @uncheck
         APIMeeshMintResult(status: "minted", balance: 1, mintedLifetime: 1)
     )
     private(set) var mintRequestIds: [String] = []
+    /// Ce qui se passe PENDANT que la frappe est en vol, avant sa réponse.
+    var duringMint: (@MainActor @Sendable () async -> Void)?
 
     func mintMeesh(requestId: String) async throws -> APIMeeshMintResult {
         mintRequestIds.append(requestId)
+        await duringMint?()
         return try mintResult.get()
     }
 
@@ -35,5 +43,7 @@ final class MockEngagementProgressService: EngagementProgressProviding, @uncheck
         fetchProgressCallCount = 0
         mintResult = .success(APIMeeshMintResult(status: "minted", balance: 1, mintedLifetime: 1))
         mintRequestIds = []
+        fetchSuspension = nil
+        duringMint = nil
     }
 }

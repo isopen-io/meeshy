@@ -54,6 +54,35 @@ final class GameOptimisticTests: XCTestCase {
         XCTAssertEqual(next.game.level.levelMaxLifetime, 60, "le niveau max à vie garde ce qui a été atteint")
     }
 
+    /// Le prix de la frappe SUIVANTE que l'optimiste annonce est celui que la passerelle servira (#10898) : prix de rang
+    /// × facteur du niveau d'APRÈS. La loi d'avant les étincelles annonçait 1 221 pendant le vol, puis la relecture
+    /// remettait le vrai prix — à quelques étincelles de l'ancien : le porteur voyait « l'ancien prix revenir ».
+    func test_afterMint_onASparksServer_announcesTheNextPriceTheGatewayServes_withTheLevelFactor() {
+        let pocket = 20_000
+        let served = GameFixture.game(score: pocket, minted: 4, held: 4)
+        let l = served.level
+        let sparked = served.replacing(level: GameBlock.Level(
+            level: l.level, tier: l.tier, score: l.score, floorScore: l.floorScore, nextThreshold: l.nextThreshold,
+            pointsToNext: l.pointsToNext, progress: l.progress, record: l.record, prestige: l.prestige,
+            canPrestige: l.canPrestige, ladder: l.ladder, sparks: pocket, sparksCycle: pocket, sparksLifetime: pocket,
+            levelMaxLifetime: nil, sparksDebt: 0
+        ))
+        let state = GameFixture.state(sparked, meesh: GameFixture.meesh(balance: 4, minted: 4, debitable: pocket))
+        let paid = state.game.mint.price
+
+        let next = GameOptimistic.afterMint(state)
+
+        let cap = GameGlory.levelCap(forRank: next.game.glory.rank)
+        let levelAfter = max(GameLevels.minLevel, GameLevels.level(forScore: pocket - paid, cap: cap))
+        let served6 = GameMint.effectivePrice(forNumber: 6, level: levelAfter)
+        XCTAssertEqual(next.game.mint.number, 6)
+        XCTAssertEqual(next.game.mint.price, served6, "le prix suivant porte le facteur du niveau d'après")
+        XCTAssertLessThan(next.game.mint.price, GameMint.price(forNumber: 6), "jamais le prix de rang nu")
+        XCTAssertEqual(next.game.mint.basePrice, GameMint.price(forNumber: 6))
+        XCTAssertEqual(next.game.mint.costLevel, levelAfter)
+        XCTAssertEqual(next.meesh?.mintCost, served6, "le compteur de Meeshes lit le même prix")
+    }
+
     func test_afterMint_addsTheGloryTheMintPromised() {
         let state = GameFixture.state()
         let next = GameOptimistic.afterMint(state)

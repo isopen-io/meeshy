@@ -23,6 +23,8 @@ public struct APIMeeshMintResult: Codable, Sendable, Equatable {
     public let gloryGained: Int?
     public let levelBefore: Int?
     public let levelAfter: Int?
+    /// Le marqueur d'ORDRE de l'état du jeu après la frappe (#10900) — `nil` devant une passerelle antérieure.
+    public let gameRevision: Int?
 
     public init(
         status: String,
@@ -33,7 +35,8 @@ public struct APIMeeshMintResult: Codable, Sendable, Equatable {
         price: Int? = nil,
         gloryGained: Int? = nil,
         levelBefore: Int? = nil,
-        levelAfter: Int? = nil
+        levelAfter: Int? = nil,
+        gameRevision: Int? = nil
     ) {
         self.status = status
         self.balance = balance
@@ -44,6 +47,7 @@ public struct APIMeeshMintResult: Codable, Sendable, Equatable {
         self.gloryGained = gloryGained
         self.levelBefore = levelBefore
         self.levelAfter = levelAfter
+        self.gameRevision = gameRevision
     }
 
     /// Une matière ajoutée par le serveur avant la mise à jour de l'app ne doit
@@ -60,10 +64,11 @@ public struct APIMeeshMintResult: Codable, Sendable, Equatable {
         gloryGained = try container.decodeIfPresent(Int.self, forKey: .gloryGained)
         levelBefore = try container.decodeIfPresent(Int.self, forKey: .levelBefore)
         levelAfter = try container.decodeIfPresent(Int.self, forKey: .levelAfter)
+        gameRevision = (try? container.decodeIfPresent(Int.self, forKey: .gameRevision)) ?? nil
     }
 
     private enum CodingKeys: String, CodingKey {
-        case status, balance, mintedLifetime, number, edition, price, gloryGained, levelBefore, levelAfter
+        case status, balance, mintedLifetime, number, edition, price, gloryGained, levelBefore, levelAfter, gameRevision
     }
 }
 

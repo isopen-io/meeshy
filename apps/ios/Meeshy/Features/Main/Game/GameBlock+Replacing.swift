@@ -116,7 +116,15 @@ nonisolated enum GameLevelWire {
             levelAfter: after,
             levelsLost: max(0, before - after),
             gloryGained: preview.gloryGained,
-            ladder: GameMintLadder(levelBefore: preview.levelBefore, levelAfter: preview.levelAfter, levelsLost: preview.levelsLost)
+            ladder: GameMintLadder(levelBefore: preview.levelBefore, levelAfter: preview.levelAfter, levelsLost: preview.levelsLost),
+            // Ce que les étincelles ajoutent (#10847, #10848) voyage avec l'aperçu : sans eux, la ligne « prix de rang ×
+            // facteur » et la réserve fermée disparaissaient de l'optimiste (#10898).
+            basePrice: preview.basePrice,
+            costFactor: preview.costFactor,
+            costLevel: preview.costLevel,
+            locked: preview.locked,
+            sparksDebt: preview.sparksDebt,
+            blockedBy: preview.blockedBy
         )
     }
 }
@@ -257,7 +265,8 @@ extension APIEngagementProgress {
             meesh: meesh ?? self.meesh,
             elan: elan,
             achievementReach: achievementReach,
-            game: game ?? self.game
+            game: game ?? self.game,
+            gameRevision: gameRevision
         )
     }
 }
