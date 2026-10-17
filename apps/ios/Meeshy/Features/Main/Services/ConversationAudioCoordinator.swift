@@ -638,6 +638,12 @@ public final class ConversationAudioCoordinator: ObservableObject {
             .store(in: &cancellables)
     }
 
+    /// Un message porte une entrée de file PAR pièce audio (`AudioQueueBuilder`) : le supprimer les retire TOUTES.
+    /// N'en retirer que la première laissait la lecture enchaînée jouer le reste d'un message effacé.
+    nonisolated static func queue(_ queue: [QueuedAudio], afterDeleting messageId: String) -> [QueuedAudio] {
+        queue.filter { $0.messageId != messageId }
+    }
+
     private func wireSocketLifecycleHooks() {
         SocialSocketManager.shared.conversationDeleted
             .receive(on: DispatchQueue.main)
@@ -654,9 +660,11 @@ public final class ConversationAudioCoordinator: ObservableObject {
                 let messageId = event.messageId
                 if self.activeContext?.messageId == messageId {
                     self.close()
-                } else if let idx = self.queue.firstIndex(where: { $0.messageId == messageId }) {
-                    self.queue.remove(at: idx)
-                    self.queueCount = self.queue.count
+                } else {
+                    let remaining = Self.queue(self.queue, afterDeleting: messageId)
+                    guard remaining.count != self.queue.count else { return }
+                    self.queue = remaining
+                    self.queueCount = remaining.count
                 }
             }
             .store(in: &cancellables)
