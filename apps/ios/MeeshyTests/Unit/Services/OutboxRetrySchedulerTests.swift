@@ -153,11 +153,35 @@ final class OutboxRetrySchedulerTests: XCTestCase {
 
     // MARK: - schedule(at:) with future date can be cancelled with nil
 
-    func test_schedule_cancelExistingTimerWithNil() {
+    /// Un flush concurrent qui ne voit rien de différé (`nil`) annulait le
+    /// minuteur qu'un autre venait d'armer pour une ligne en backoff : elle
+    /// attendait alors un évènement de cycle de vie. `nil` ne retire plus rien.
+    func test_schedule_nilFromAConcurrentFlush_keepsTheArmedTimer() {
+        let scheduler = OutboxRetryScheduler.shared
+        scheduler.cancelForTesting()
+        defer { scheduler.cancelForTesting() }
         let futureDate = Date().addingTimeInterval(3600)
-        OutboxRetryScheduler.shared.schedule(at: futureDate)
-        // Immediately cancel — should not crash
-        OutboxRetryScheduler.shared.schedule(at: nil)
+        scheduler.schedule(at: futureDate, flush: { @MainActor in })
+
+        scheduler.schedule(at: nil)
+
+        XCTAssertEqual(scheduler.pendingRetryDate, futureDate)
+    }
+
+    /// L'échéance la plus proche l'emporte : un flush qui voit une ligne plus
+    /// lointaine ne repousse pas celle d'une ligne plus proche.
+    func test_schedule_laterDate_keepsTheEarlierDeadline() {
+        let scheduler = OutboxRetryScheduler.shared
+        scheduler.cancelForTesting()
+        defer { scheduler.cancelForTesting() }
+        let soon = Date().addingTimeInterval(600)
+        scheduler.schedule(at: soon, flush: { @MainActor in })
+        scheduler.schedule(at: Date().addingTimeInterval(3000), flush: { @MainActor in })
+        XCTAssertEqual(scheduler.pendingRetryDate, soon)
+
+        let sooner = Date().addingTimeInterval(60)
+        scheduler.schedule(at: sooner, flush: { @MainActor in })
+        XCTAssertEqual(scheduler.pendingRetryDate, sooner)
     }
 
     // MARK: - startObservingMutationEnqueued (outbox-04)
@@ -264,6 +288,8 @@ final class OutboxRetrySchedulerTests: XCTestCase {
     /// `schedule` concurrent (fin d'un autre flush) l'annulait, ce qui coupait
     /// la requête ou l'upload TUS en vol et repoussait la ligne de 30 s.
     func test_reschedule_whileTimerFlushRuns_doesNotCancelIt() async {
+        OutboxRetryScheduler.shared.cancelForTesting()
+        defer { OutboxRetryScheduler.shared.cancelForTesting() }
         let started = expectation(description: "timer flush started")
         let finished = expectation(description: "timer flush finished")
         var sawCancellation = true
@@ -277,6 +303,5 @@ final class OutboxRetrySchedulerTests: XCTestCase {
         OutboxRetryScheduler.shared.schedule(at: Date().addingTimeInterval(3600), flush: { @MainActor in })
         await fulfillment(of: [finished], timeout: 2.0)
         XCTAssertFalse(sawCancellation)
-        OutboxRetryScheduler.shared.schedule(at: nil)
     }
 }
