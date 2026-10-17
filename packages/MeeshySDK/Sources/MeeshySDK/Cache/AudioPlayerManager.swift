@@ -78,7 +78,8 @@ public class AudioPlayerManager: ObservableObject {
     // MARK: - Play from URL string
 
     public func play(urlString: String) {
-        stop()
+        // Enchaîner : la session `.playback` reste tenue, elle est reprise juste en dessous.
+        halt()
 
         guard !urlString.isEmpty else { return }
 
@@ -88,6 +89,7 @@ public class AudioPlayerManager: ObservableObject {
         // VoIP actif (sinon micro coupé). Options [] = pas de ducking (parité avec le
         // comportement preview historique de ce player du composer story).
         MediaSessionCoordinator.shared.activatePlaybackSync(options: [])
+        holdsPlaybackSession = true
 
         let resolved = MeeshyConfig.resolveMediaURL(urlString)?.absoluteString ?? urlString
 
@@ -197,11 +199,12 @@ public class AudioPlayerManager: ObservableObject {
     // MARK: - Play from local file URL
 
     public func playLocalFile(url: URL) {
-        stop()
+        halt()
         onWillPlay?()
 
         // Session de lecture via la source UNIQUE (call-aware) — cf. play(urlString:).
         MediaSessionCoordinator.shared.activatePlaybackSync(options: [])
+        holdsPlaybackSession = true
 
         do {
             let data = try Data(contentsOf: url)
@@ -214,7 +217,27 @@ public class AudioPlayerManager: ObservableObject {
 
     // MARK: - Controls
 
+    /// Rend la session de lecture (call-aware) — par défaut au coordinateur, injectable pour les témoins.
+    /// Hors du fil principal : `setActive(false)` est un aller-retour HAL bloquant.
+    var sessionReleaser: () -> Void = {
+        DispatchQueue.global(qos: .utility).async { MediaSessionCoordinator.shared.deactivatePlaybackSync() }
+    }
+
+    /// Arrête la lecture ET rend la session `.playback` si une lecture la tenait : la musique d'une autre app,
+    /// interrompue par notre session non mixable, reprend (`.notifyOthersOnDeactivation`).
     public func stop() {
+        halt()
+        guard holdsPlaybackSession else { return }
+        holdsPlaybackSession = false
+        sessionReleaser()
+    }
+
+    /// Vrai depuis qu'une lecture a pris la session `.playback` — y compris quand son chargement a échoué avant
+    /// qu'un lecteur n'existe : c'est la session, pas le lecteur, qu'il faut rendre.
+    private var holdsPlaybackSession = false
+
+    /// Arrête la lecture SANS rendre la session — pour enchaîner une autre lecture.
+    private func halt() {
         localPlayer?.stop()
         localPlayer = nil
 

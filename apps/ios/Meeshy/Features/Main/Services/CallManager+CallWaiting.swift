@@ -59,12 +59,15 @@ extension CallManager {
     /// the banner lingers until its 15s auto-dismiss and "End & Answer" would
     /// end the healthy active call to join one already torn down server-side.
     func clearPendingIncomingCall(ifMatching callId: String) {
+        // PENDANT la passation de « Raccrocher et répondre », `pendingIncomingCall` est déjà vide : seul le jeton
+        // nomme l'appel. Le lever AVANT le garde du bandeau — sinon la passation sonnait pour un appel raccroché.
+        if answeringPendingCallId == callId {
+            answeringPendingCallId = nil
+            Logger.calls.info("Waiting call ended remotely during the handoff — answer cancelled (callId=\(callId))")
+        }
         guard pendingIncomingCall?.callId == callId else { return }
         pendingIncomingCall = nil
         showCallWaitingBanner = false
-        if answeringPendingCallId == callId {
-            answeringPendingCallId = nil
-        }
         Logger.calls.info("Waiting call ended remotely — call-waiting banner dismissed (callId=\(callId))")
     }
 

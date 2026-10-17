@@ -647,6 +647,11 @@ public actor StoryPublishQueue {
                     draftId: item.draftId
                 ))
                 consecutiveRetryableFailures = 0
+            } catch is StoryPublishDeferredError {
+                // Pas un ESSAI : personne pour publier (exécuteur démonté). Aucun budget consommé, et la passe
+                // s'arrête — les items suivants n'ont pas plus d'exécuteur que celui-ci.
+                logger.info("Story publication deferred — no executor; kept without charging its retry budget")
+                break
             } catch {
                 // Échec retryable : on charge le budget de CET item puis on
                 // poursuit sur les suivants — ils sont indépendants et
@@ -853,6 +858,13 @@ public actor StoryPublishQueue {
 /// Throw this from the `onPublish` handler to mark a publish failure as
 /// permanent (4xx HTTP, validation rejected, story expired) so the queue
 /// stops retrying and surfaces the failure to the user via `publishFailed`.
+/// La publication n'a PAS été tentée : rien ne peut publier pour l'instant (l'exécuteur de l'app — le
+/// `StoryViewModel` racine — est démonté). La file garde l'item SANS consommer son budget de retry et arrête la
+/// passe ; la prochaine reprise (reconnexion, retour au premier plan, exécuteur remonté) la relance.
+public struct StoryPublishDeferredError: Error, Sendable {
+    public init() {}
+}
+
 public struct StoryPublishUnrecoverableError: Error, Sendable {
     public let message: String
 
