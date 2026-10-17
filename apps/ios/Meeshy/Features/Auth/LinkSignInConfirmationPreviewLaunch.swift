@@ -1,6 +1,7 @@
 #if DEBUG
 import SwiftUI
 import MeeshySDK
+import MeeshyUI
 
 /// **Aperçu DEBUG de « Se connecter en tant que @x ? »** (#10880), sans lien ni
 /// réseau — pour vérifier la feuille au simulateur.
@@ -48,7 +49,7 @@ struct LinkSignInConfirmationPreviewScreen: View {
                 ),
                 onAnswer: { _ in }
             )
-            .background(Color(uiColor: .systemBackground), in: RoundedRectangle(cornerRadius: 28, style: .continuous))
+            .background(Color(uiColor: .systemBackground), in: RoundedRectangle(cornerRadius: MeeshyRadius.xxl, style: .continuous))
             .frame(maxHeight: 560)
         }
         .ignoresSafeArea(edges: .bottom)

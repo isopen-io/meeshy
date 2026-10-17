@@ -96,10 +96,11 @@ struct LinkSignInConfirmationView: View {
         ScrollView {
             VStack(spacing: 20) {
                 Image(systemName: "exclamationmark.shield.fill")
-                    .font(.system(size: 44))
+                    .font(MeeshyFont.relative(MeeshyFont.largeTitleSize))
+                    .imageScale(.large)
                     .foregroundStyle(MeeshyColors.warning)
                     .accessibilityHidden(true)
-                    .padding(.top, 8)
+                    .padding(.top, MeeshySpacing.sm)
 
                 Text(content.title)
                     .font(.title3.bold())
@@ -125,8 +126,8 @@ struct LinkSignInConfirmationView: View {
 
                 answers
             }
-            .padding(.horizontal, 24)
-            .padding(.vertical, 24)
+            .padding(.horizontal, MeeshySpacing.xxl)
+            .padding(.vertical, MeeshySpacing.xxl)
         }
         .accessibilityIdentifier("signInLink.confirmation")
         .onAppear { titleFocused = true }
@@ -167,10 +168,10 @@ struct LinkSignInConfirmationView: View {
             }
             Spacer(minLength: 0)
         }
-        .padding(.horizontal, 16)
-        .padding(.vertical, 12)
+        .padding(.horizontal, MeeshySpacing.lg)
+        .padding(.vertical, MeeshySpacing.md)
         .background(
-            RoundedRectangle(cornerRadius: 14, style: .continuous)
+            RoundedRectangle(cornerRadius: MeeshyRadius.md, style: .continuous)
                 .fill(Color(uiColor: .secondarySystemBackground))
         )
         .accessibilityElement(children: .ignore)
@@ -185,7 +186,7 @@ struct LinkSignInConfirmationView: View {
                     .font(.body.bold())
                     .foregroundStyle(.white)
                     .frame(maxWidth: .infinity, minHeight: 52)
-                    .background(MeeshyColors.brandGradient, in: RoundedRectangle(cornerRadius: 14, style: .continuous))
+                    .background(MeeshyColors.brandGradient, in: RoundedRectangle(cornerRadius: MeeshyRadius.md, style: .continuous))
             }
             .buttonStyle(.plain)
             .keyboardShortcut(.defaultAction)
@@ -197,7 +198,7 @@ struct LinkSignInConfirmationView: View {
                     .foregroundStyle(.primary)
                     .frame(maxWidth: .infinity, minHeight: 44)
                     .overlay(
-                        RoundedRectangle(cornerRadius: 14, style: .continuous)
+                        RoundedRectangle(cornerRadius: MeeshyRadius.md, style: .continuous)
                             .strokeBorder(Color.secondary.opacity(0.5), lineWidth: 1)
                     )
                     .contentShape(Rectangle())
