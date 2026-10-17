@@ -61,6 +61,7 @@ import { withRetry } from '../MessageMediaConsumptionService';
 import { creditEngagementCounter, raiseEngagementCounterCount } from './EngagementCounterWrites';
 import { engraveBadgesSilently, historyCountFor } from './engagementAxisHistory';
 import { writeEngagementScore, type ScoreWritten } from './EngagementScoreWrite';
+import { announceGameState } from '../game/GameStateBroadcast';
 
 import type { EngagementActivityOptions, EngagementLinkVisit } from './engagementActivityTypes';
 import { EngagementStreaks } from './EngagementStreaks';
@@ -127,12 +128,6 @@ type CreditDay = {
   readonly postType?: EngagementStreakPostType;
   readonly conversationId?: string;
 };
-
-/** Le rang d'un seuil de score dans l'échelle des niveaux — « niveau 3 » pour le palier 150. */
-export function levelIndexOf(threshold: number): number {
-  const index = LEVEL_THRESHOLDS.indexOf(threshold as (typeof LEVEL_THRESHOLDS)[number]);
-  return index === -1 ? 0 : index + 1;
-}
 
 export type { EngagementActivityOptions, EngagementLinkVisit } from './engagementActivityTypes';
 
@@ -861,6 +856,8 @@ export class EngagementService {
         error: error instanceof Error ? error.message : String(error),
       }),
     );
+    // Les autres appareils voient le gain sans attendre, coalescé (#10900).
+    announceGameState(userId, 'credit');
   }
 
   /** Les paliers que `points` vient de franchir, et la Gloire du premier passage. */
@@ -884,8 +881,9 @@ export class EngagementService {
   }
 
   /**
-   * Même garde anti-rejeu que `tryAwardBadge`/`tryAwardStreakMilestone`
-   * (§ 4), portée par la contrainte unique `EngagementMilestone`.
+   * Le palier de SCORE se grave (la liste des paliers servis le montre), sans jamais pousser : « Niveau N atteint » dit
+   * le niveau du JEU et ne part que quand le record du cycle monte (`GloryService.creditLevelProgress`, #10901). Même
+   * garde anti-rejeu que `tryAwardBadge`/`tryAwardStreakMilestone` (§ 4), portée par la contrainte unique.
    */
   private async tryAwardLevelUp(userId: string, threshold: number): Promise<void> {
     try {
@@ -899,34 +897,6 @@ export class EngagementService {
     } catch (err) {
       if (isP2002(err)) return;
       throw err;
-    }
-
-    try {
-      const user = await this.prisma.user.findUnique({ where: { id: userId }, select: RECIPIENT_LANG_SELECT });
-      const lang = recipientLanguage(user, 'fr');
-      const notificationService = getSharedNotificationService() ?? new NotificationService(this.prisma);
-      // Le NIVEAU, jamais le seuil de score : « Niveau 150 atteint » (le
-      // palier de points) se lisait comme un cent-cinquantième niveau. Le
-      // niveau est le RANG du palier dans l'échelle (§ 7) — le même que
-      // l'écran « Progression » affiche (`EngagementLevelProgress.level`).
-      // #10298 — et le corps dit ce qui l'a fait atteindre : les points.
-      const banner = tierReachedNotification(lang, { kind: 'level', threshold });
-      if (banner === null) return;
-      await notificationService.createNotification({
-        userId,
-        type: 'level_up',
-        priority: 'normal',
-        title: banner.title,
-        content: banner.body,
-        context: {},
-        metadata: { action: 'view_details', route: ENGAGEMENT_ROUTE, threshold, level: levelIndexOf(threshold), tierRank: banner.rank, value: banner.value },
-      });
-    } catch (err) {
-      log.warn('level_up notification failed after milestone was recorded', {
-        userId,
-        threshold,
-        error: err instanceof Error ? err.message : String(err),
-      });
     }
   }
 }

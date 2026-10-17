@@ -774,7 +774,7 @@ describe('EngagementService level tracking (#5545)', () => {
     expect(notificationService.createNotification).not.toHaveBeenCalled();
   });
 
-  it('awards LEVEL_UP and notifies exactly once when the increment lands on a threshold', async () => {
+  it('records the score milestone but never pushes a score-tier « level » (the game level is announced by GloryService, #10901)', async () => {
     const create = jest.fn().mockResolvedValue({});
     const runCommandRaw = makeRawScore(10); // 5 -> 10, crosses threshold 10
     const prisma = makeLevelPrisma({ create, runCommandRaw });
@@ -787,17 +787,7 @@ describe('EngagementService level tracking (#5545)', () => {
     expect(create).toHaveBeenCalledWith({
       data: { userId: 'user-1', milestoneType: 'level', milestoneKey: 'level:10' },
     });
-    expect(notificationService.createNotification).toHaveBeenCalledWith({
-      userId: 'user-1',
-      type: 'level_up',
-      priority: 'normal',
-      // Le RANG du palier (niveau 1), jamais le seuil de score (10 points) :
-      // « Niveau 150 atteint » se lisait comme un cent-cinquantième niveau.
-      title: '⭐ Niveau 1 atteint !',
-      content: '10 points — bravo, vous êtes au niveau 1 !',
-      context: {},
-      metadata: { action: 'view_details', route: 'progression', threshold: 10, level: 1, tierRank: 1, value: 10 },
-    });
+    expect(notificationService.createNotification).not.toHaveBeenCalledWith(expect.objectContaining({ type: 'level_up', metadata: expect.objectContaining({ threshold: 10 }) }));
   });
 
   it.each([

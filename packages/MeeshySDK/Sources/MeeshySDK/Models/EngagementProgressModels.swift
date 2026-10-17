@@ -215,6 +215,9 @@ public struct APIEngagementProgress: Codable, Sendable, Equatable, CacheIdentifi
     /// progression ENTIÈRE. `nil` ⇒ aucun élément du jeu n'est montré, jamais un
     /// niveau peint depuis un bloc à moitié lu.
     public let game: GameBlock?
+    /// Le marqueur d'ORDRE de l'état du jeu (#10900) — millisecondes serveur, croissant pour un même compte : toute
+    /// écriture du jeu terminée avant lui est reflétée dans cette charge. `nil` devant une passerelle antérieure.
+    public let gameRevision: Int?
 
     public init(
         counters: [Counter],
@@ -224,7 +227,8 @@ public struct APIEngagementProgress: Codable, Sendable, Equatable, CacheIdentifi
         meesh: Meesh? = nil,
         elan: Elan? = nil,
         achievementReach: [String: Int]? = nil,
-        game: GameBlock? = nil
+        game: GameBlock? = nil,
+        gameRevision: Int? = nil
     ) {
         self.counters = counters
         self.milestones = milestones
@@ -234,6 +238,7 @@ public struct APIEngagementProgress: Codable, Sendable, Equatable, CacheIdentifi
         self.elan = elan
         self.achievementReach = achievementReach
         self.game = game
+        self.gameRevision = gameRevision
     }
 
     public init(from decoder: Decoder) throws {
@@ -246,6 +251,7 @@ public struct APIEngagementProgress: Codable, Sendable, Equatable, CacheIdentifi
         elan = try container.decodeIfPresent(Elan.self, forKey: .elan)
         achievementReach = try container.decodeIfPresent([String: Int].self, forKey: .achievementReach)
         game = (try? container.decodeIfPresent(GameBlock.self, forKey: .game)) ?? nil
+        gameRevision = (try? container.decodeIfPresent(Int.self, forKey: .gameRevision)) ?? nil
     }
 
     /// Aucune activité — la charge qu'un compte neuf reçoit.
@@ -257,6 +263,6 @@ public struct APIEngagementProgress: Codable, Sendable, Equatable, CacheIdentifi
     )
 
     private enum CodingKeys: String, CodingKey {
-        case counters, milestones, streak, level, meesh, elan, achievementReach, game
+        case counters, milestones, streak, level, meesh, elan, achievementReach, game, gameRevision
     }
 }

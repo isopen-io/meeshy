@@ -35,6 +35,9 @@ import { enhancedLogger } from '../../utils/logger-enhanced';
 import { MythicSeatService } from './MythicSeatService';
 import { LEVEL_STEP_USER_SELECT, countMissionsDone, levelStepFactsOf } from './LevelStepFacts';
 import { SPARKS_USER_SELECT, levelSparksOf, sparksOf } from './SparksFacts';
+import { gameLevelUpNotifier, type LevelReached } from './GameLevelUpNotifier';
+
+export type { LevelReached };
 
 const log = enhancedLogger.child({ module: 'GloryService' });
 
@@ -80,11 +83,22 @@ export async function gloryTotalFromLedger(db: GloryDb, userId: string): Promise
 export class GloryService {
   private readonly seats: Pick<MythicSeatService, 'claimIfEligible'>;
 
+  private readonly seatReader: Pick<MythicSeatService, 'seatOf'>;
+
+  private readonly onLevelReached: (event: LevelReached) => Promise<void>;
+
   constructor(
     private readonly prisma: PrismaClient,
-    deps: { readonly seats?: Pick<MythicSeatService, 'claimIfEligible'> } = {},
+    deps: {
+      readonly seats?: Pick<MythicSeatService, 'claimIfEligible'> & Partial<Pick<MythicSeatService, 'seatOf'>>;
+      /** « Niveau N atteint » (#10901) : par défaut le push `level_up` ; remplaçable en test. */
+      readonly onLevelReached?: (event: LevelReached) => Promise<void>;
+    } = {},
   ) {
-    this.seats = deps.seats ?? new MythicSeatService(prisma);
+    const seats = new MythicSeatService(prisma);
+    this.seats = deps.seats ?? seats;
+    this.seatReader = deps.seats?.seatOf !== undefined ? { seatOf: (userId) => deps.seats!.seatOf!(userId) } : seats;
+    this.onLevelReached = deps.onLevelReached ?? gameLevelUpNotifier(prisma);
   }
 
   async total(userId: string): Promise<number> {
@@ -173,17 +187,18 @@ export class GloryService {
   }
 
   /**
-   * Le plafond du niveau SERVI (#9688, #9706) : le rang lu sur la Gloire, et les dix étapes — Meeshes
-   * frappées et record de Flamme sur la ligne du compte, missions du jour comptées. Trois lectures
-   * indexées, en parallèle.
+   * Le plafond du niveau SERVI (#9688, #9706) : le rang lu sur la Gloire ET le Mythe (#10903, comme le bloc `game` et la
+   * frappe), et les dix étapes — Meeshes frappées et record de Flamme sur la ligne du compte, missions du jour comptées.
+   * Quatre lectures indexées, en parallèle ; une place illisible rend le rang sur la Gloire, jamais le crédit entier.
    */
   private async servedLevelCap(userId: string): Promise<LevelCap> {
-    const [row, missionsDone, glory] = await Promise.all([
+    const [row, missionsDone, glory, seat] = await Promise.all([
       this.prisma.user.findUnique({ where: { id: userId }, select: LEVEL_STEP_USER_SELECT }),
       countMissionsDone(this.prisma, userId),
       this.total(userId),
+      this.seatReader.seatOf(userId).catch(() => null),
     ]);
-    const steps = levelStepFactsOf({ row, missionsDone, glory });
+    const steps = levelStepFactsOf({ row, missionsDone, glory, mythic: seat !== null });
     return levelCapWithSteps({ rank: steps.rank, steps });
   }
 
@@ -243,7 +258,7 @@ export class GloryService {
 
     const record = recordLevel({ level, previousRecord: params.previousRecord });
     if (record > (params.previousRecord ?? GAME_LEVEL_MIN)) {
-      await this.prisma.user.updateMany({
+      const raised = await this.prisma.user.updateMany({
         // `isSet: false` : sur MongoDB, `{ levelRecord: null }` n'atteint PAS un
         // champ ABSENT — celui de tous les comptes d'avant le jeu (leçon 318).
         where: {
@@ -255,6 +270,9 @@ export class GloryService {
         },
         data: { levelRecord: record },
       });
+      // « Niveau N atteint » (#10901) : seulement si CETTE écriture a monté le record du cycle — une remontée après une
+      // frappe reste sous le record, et une montée concurrente ne gagne l'écriture qu'une fois.
+      if (raised.count > 0) await this.announceLevelReached({ userId: params.userId, level: record, sparks: params.score });
     }
     if (params.previousMax !== undefined) {
       const maxLifetime = recordLevel({ level, previousRecord: Math.max(params.previousMax ?? 0, params.previousRecord ?? 0) || null });
@@ -271,6 +289,16 @@ export class GloryService {
     // La Gloire de ces niveaux a pu faire franchir Ambassadeur ou Oracle : le plafond qu'elle lève s'ouvre aussitôt.
     if (gained > 0) await this.openLevelsIfRankRose(params.userId, gained);
     return gained;
+  }
+
+  private async announceLevelReached(event: LevelReached): Promise<void> {
+    await this.onLevelReached(event).catch((error: unknown) =>
+      log.warn('level reached announcement failed, the record stands', {
+        userId: event.userId,
+        level: event.level,
+        error: error instanceof Error ? error.message : String(error),
+      }),
+    );
   }
 
   /** La Gloire des records de Flamme franchis par cette série — une ligne par record. */

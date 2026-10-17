@@ -11,6 +11,7 @@
 
 import type { AdminMetricsSubscribeAck, HostMetricsSample } from '../admin-ops.js';
 import type { ConversationEngagementSnapshot, PostEngagementSnapshot } from '../engagement-scale.js';
+import type { GameUpdatedEventData } from '../game-sync.js';
 import type { ContentCaptureAck, ContentCaptureReportInput } from '../content-capture.js';
 // Import pour les événements sociaux (posts, stories, statuts, commentaires)
 import type {
@@ -265,6 +266,7 @@ export interface ServerToClientEvents {
   [SERVER_EVENTS.ADMIN_METRICS_SAMPLE]: (sample: HostMetricsSample) => void;
   [SERVER_EVENTS.ENGAGEMENT_CONVERSATION_UPDATED]: (data: ConversationEngagementSnapshot) => void;
   [SERVER_EVENTS.ENGAGEMENT_POST_UPDATED]: (data: PostEngagementSnapshot) => void;
+  [SERVER_EVENTS.GAME_UPDATED]: (data: GameUpdatedEventData) => void;
   [SERVER_EVENTS.USER_STATUS]: (data: UserStatusEvent) => void;
   [SERVER_EVENTS.PRESENCE_SNAPSHOT]: (data: PresenceSnapshotEventData) => void;
   [SERVER_EVENTS.CONVERSATION_JOINED]: (data: ConversationParticipationEventData) => void;

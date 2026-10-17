@@ -2,9 +2,9 @@ import XCTest
 @testable import Meeshy
 import MeeshySDK
 
-/// Page Progression (#10846, #10860) : la paire CONVERTIBLES / CUMUL et la paire NIVEAU / MAX À VIE sont TOUJOURS
-/// affichées, même quand le max égale le niveau (décision porteur 2026-10-16) ; le cumul rapporte le cycle au total à vie
-/// (porteur 2026-10-17).
+/// Page Progression (#10846, #10860) : la paire CONVERTIBLES / RECORD D'ÉTINCELLES et la paire NIVEAU / RECORD DE
+/// NIVEAU sont TOUJOURS affichées, même quand le record égale le niveau (décision porteur 2026-10-16) ; vocabulaire des
+/// trois records (porteur 2026-10-17, #10899).
 @MainActor
 final class GameSparkPairsTests: XCTestCase {
 
@@ -47,15 +47,24 @@ final class GameSparkPairsTests: XCTestCase {
         XCTAssertEqual(GameSparksCopy.pocketLabel, try catalogValue("game.sparks.pocket.label", Self.runningLanguage))
     }
 
-    /// Après un Prestige : le cycle rapporté au total à vie.
-    func test_cumul_afterAPrestige_readsTheCycleOverTheLifetime() throws {
+    /// Après un Prestige : le cycle d'abord, puis le record d'étincelles — « 8 200 cumulées · record 12 000 » (#10899).
+    func test_cumul_afterAPrestige_readsTheCycleThenTheSparkRecord() throws {
         let pairs = GameSparkPairs(level(sparks: 5_000, cycle: 8_200, lifetime: 12_000, levelMax: 40))
-        XCTAssertEqual(pairs.cumulLine, GameSparksCopy.cumulLine(cycle: 8_200, lifetime: 12_000))
-        XCTAssertTrue(pairs.cumulLine.contains(" / "))
-        XCTAssertTrue(pairs.cumulLine.contains(GameSparksCopy.cumulValue(cycle: 8_200, lifetime: 12_000)))
-        XCTAssertEqual(try catalogValue("game.sparks.cumul.line", "fr"), "%@ cumulées", "« cumulées » pour le potentiel, indicatif (#10892)")
-        let format = try catalogValue("game.sparks.cumul.line", Self.runningLanguage)
-        XCTAssertEqual(pairs.cumulLine, format.replacingOccurrences(of: "%@", with: GameSparksCopy.cumulValue(cycle: 8_200, lifetime: 12_000)))
+        XCTAssertEqual(try catalogValue("game.sparks.cumul.record", "fr"), "%1$@ cumulées · record %2$@")
+        let format = try catalogValue("game.sparks.cumul.record", Self.runningLanguage)
+        let expected = format.replacingOccurrences(of: "%1$@", with: GameCopy.formatCount(8_200))
+            .replacingOccurrences(of: "%2$@", with: GameCopy.formatCount(12_000))
+        XCTAssertEqual(pairs.cumulLine, expected)
+        XCTAssertEqual(pairs.facts[1].value, expected, "la fiche dit le même cycle et le même record")
+    }
+
+    /// Sous le niveau : le record de niveau, nommé — « Record de niveau : 40 » (#10899).
+    func test_levelLine_saysTheLevelRecord() throws {
+        XCTAssertEqual(try catalogValue("game.sparks.levelRecord.line", "fr"), "Record de niveau : %@")
+        let format = try catalogValue("game.sparks.levelRecord.line", Self.runningLanguage)
+        XCTAssertEqual(GameSparksCopy.levelRecordLine(40), format.replacingOccurrences(of: "%@", with: GameCopy.formatCount(40)))
+        let row = try AppSourceGuard.unit("Meeshy/Features/Main/Game/GameSparkPairs.swift")
+        XCTAssertTrue(row.contains("small: GameSparksCopy.levelRecordLine(pairs.levelMax)"), "la paire du niveau dit son record")
     }
 
     /// La langue dans laquelle l'app hôte résout ses chaînes (la CI tourne en anglais, un poste peut être en français).
@@ -74,11 +83,13 @@ final class GameSparkPairsTests: XCTestCase {
         return try XCTUnwrap(unit["value"] as? String)
     }
 
-    /// Sans Prestige, le cycle égale le total à vie : un seul nombre.
-    func test_cumul_withoutPrestige_saysOneNumber() {
-        let line = GameSparkPairs(level(sparks: 5_000, cycle: 12_000, lifetime: 12_000, levelMax: 40)).cumulLine
-        XCTAssertFalse(line.contains(" / "))
-        XCTAssertEqual(line, GameSparksCopy.cumulLine(cycle: 12_000, lifetime: 12_000))
+    /// Sans Prestige, le cycle égale le record : « Record d’étincelles : 12 000 », un seul nombre (#10899).
+    func test_cumul_withoutPrestige_saysTheSparkRecord() throws {
+        let pairs = GameSparkPairs(level(sparks: 5_000, cycle: 12_000, lifetime: 12_000, levelMax: 40))
+        XCTAssertEqual(try catalogValue("game.sparks.record.line", "fr"), "Record d’étincelles : %@")
+        let format = try catalogValue("game.sparks.record.line", Self.runningLanguage)
+        XCTAssertEqual(pairs.cumulLine, format.replacingOccurrences(of: "%@", with: GameCopy.formatCount(12_000)))
+        XCTAssertEqual(pairs.facts[1].value, GameCopy.formatCount(12_000))
     }
 
     func test_facts_namePocketLifetimeLevelAndMax_inThatOrder() {

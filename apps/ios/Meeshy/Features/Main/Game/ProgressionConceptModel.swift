@@ -587,7 +587,11 @@ enum ProgressionConceptModel {
             // La pièce (les Élans) dit le multiplicateur, les familles et la fenêtre ; les multiplicateurs du jeu sont
             // ici, et seulement ici (règle n° 1).
             guard let boosts = game?.boosts else { return [] }
+            // Le Vent arrière ne se dit que quand il souffle (#10896) : à 7 niveaux ou plus sous le record de niveau.
             rows = [
+                boosts.tailwind > 1
+                    ? fact(GameRulesGlossary.name(.tailwind), ConceptText.valueFactor(GameCopy.factor(boosts.tailwind)), .tailwind)
+                    : nil,
                 boosts.prismHour.map { fact(ConceptText.factPrismHour, ConceptText.valueFactor(GameCopy.factor($0.multiplier))) },
             ]
         case .badges:

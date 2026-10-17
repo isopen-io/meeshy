@@ -26,9 +26,9 @@ struct GameBannerBadgeModel: Equatable {
     /// La poche d'étincelles (#10846) — `sparks` servi, sinon `points` (même nombre devant un serveur antérieur) ;
     /// `nil` quand le serveur ne les sert pas à ce lecteur (#9541 : soi et les amis).
     let pocket: Int?
-    /// Le total d'étincelles gagnées à vie — `nil` devant un serveur antérieur : il ne s'invente pas.
+    /// Le record d'étincelles (le total cumulé à vie) — `nil` devant un serveur antérieur : il ne s'invente pas.
     let lifetime: Int?
-    /// Le niveau max à vie, qui survit au prestige — jamais sous le niveau montré.
+    /// Le record de niveau, qui survit au prestige — jamais sous le niveau montré.
     let levelMax: Int
 
     var levelName: String { GameCopy.tierName(tier) }
@@ -46,7 +46,7 @@ struct GameBannerBadgeModel: Equatable {
     /// TOUJOURS montré, même égal au niveau (décision porteur 2026-10-16).
     var levelMaxText: String { GameSparksCopy.bannerLevelMax(levelMax) }
 
-    /// « Niveau 3, palier Braise, premier palier, Niveau max à vie 40, 976 étincelles, 12 000 étincelles gagnées à vie ».
+    /// « Niveau 3, palier Braise, premier palier, Record de niveau 40, 976 étincelles, Record d’étincelles : 12 000 ».
     var levelAccessibilityLabel: String {
         let parts: [String?] = [
             GameCopy.levelRingAccessibility(level: level, tier: tier),
@@ -143,7 +143,7 @@ struct GameBannerBadgeView: View {
         GeometryReader { proxy in
             let side = max(0, (proxy.size.width - centerClearance) / 2)
             HStack(alignment: .bottom, spacing: 0) {
-                // Chaque groupe s'ANCRE à son angle bas : de hauteurs différentes (le niveau porte son max à vie),
+                // Chaque groupe s'ANCRE à son angle bas : de hauteurs différentes (le niveau porte son record),
                 // ils restent tous deux posés sur le bord bas de la bannière.
                 levelGroup
                     .frame(maxWidth: side, maxHeight: .infinity, alignment: .bottomLeading)
@@ -157,8 +157,8 @@ struct GameBannerBadgeView: View {
         .dynamicTypeSize(...DynamicTypeSize.xxLarge)
     }
 
-    /// Le nom du niveau au-dessus de son cercle et le niveau max à vie dessous ; à côté, la poche d'étincelles en grand
-    /// et le total à vie en petit.
+    /// Le nom du niveau au-dessus de son cercle et le record de niveau dessous ; à côté, la poche d'étincelles en grand
+    /// et le record d'étincelles en petit.
     private var levelGroup: some View {
         VStack(alignment: .leading, spacing: MeeshySpacing.xxs) {
             caption(model.levelName)

@@ -98,6 +98,13 @@ final class ProgressionViewModel: ObservableObject {
     /// Incrémenté à chaque lecture SERVIE qui remplace la charge : un retour arrière ne
     /// défait que ce que son geste a changé, jamais une lecture arrivée entre-temps.
     private var snapshotGeneration = 0
+    /// L'ORDRE DES LECTURES (#10898) : chaque lecture reçoit son ticket au DÉPART, et ne pose jamais une charge plus
+    /// ancienne que celle déjà posée, ni une charge partie avant le dernier geste.
+    private var readOrder = GameReadOrder()
+    /// Ce que la passerelle a CONFIRMÉ (révision de l'état du jeu, Meeshes frappées), par clé de cache et pour tout le
+    /// processus : une page poussée et celle d'en dessous lisent la même charge, et aucune ne repeint un état d'avant une
+    /// frappe que l'autre a vue confirmée.
+    private static var confirmed: [String: GameReadOrder.Confirmed] = [:]
     var celebrations = 0
     /// Une clé d'idempotence par INTENTION (frappe, coffre, gel, rallumage, changement de mission) ;
     /// elle ne se renouvelle qu'après un SUCCÈS.
@@ -160,6 +167,7 @@ final class ProgressionViewModel: ObservableObject {
         revalidationTask?.cancel()
 
         let fetch: @Sendable () async throws -> [APIEngagementProgress] = { [try await service.fetchProgress()] }
+        let ticket = readOrder.issue()
         let setLoadState: @MainActor @Sendable (LoadState) -> Void = { [weak self] state in
             guard let self else { return }
             switch state {
@@ -172,7 +180,8 @@ final class ProgressionViewModel: ObservableObject {
             }
         }
         let apply: @MainActor @Sendable ([APIEngagementProgress]) -> Void = { [weak self] snapshots in
-            guard let self, let snapshot = snapshots.first else { return }
+            guard let self, let snapshot = snapshots.first, self.admits(snapshot, ticket: ticket) else { return }
+            self.confirm(revision: snapshot.gameRevision, minted: snapshot.meesh?.mintedLifetime)
             let resolu = self.adopt(snapshot)
             self.observeGame()
             // Les rappels de série se REPLANIFIENT à chaque lecture de la
@@ -215,6 +224,7 @@ final class ProgressionViewModel: ObservableObject {
         do {
             let result = try await service.mintMeesh(requestId: mintRequestId)
             mintRequestId = UUID().uuidString
+            confirm(revision: result.gameRevision, minted: result.mintedLifetime)
             celebrate(result, preview: preview)
             await load(forceNetwork: true)
         } catch {
@@ -243,6 +253,7 @@ final class ProgressionViewModel: ObservableObject {
     /// Rend l'instantané À RESTAURER — `nil` quand il n'y a pas de bloc `game` (ancien serveur).
     func beginGesture(_ apply: (GameState) -> GameState) -> GestureUndo? {
         gesturesInFlight += 1
+        readOrder.beginGesture()
         guard let snapshot, let game = snapshot.game else { return nil }
         commit(apply(GameState(game: game, meesh: snapshot.meesh)), over: snapshot)
         return GestureUndo(before: snapshot, generation: snapshotGeneration)
@@ -258,6 +269,21 @@ final class ProgressionViewModel: ObservableObject {
         guard isSettled, persistDeferred else { return }
         persistDeferred = false
         persistSnapshot()
+    }
+
+    /// Une lecture servie se pose si elle n'est ni DÉPASSÉE (une lecture partie après elle, ou un geste commencé après
+    /// son départ) ni EN RETARD sur une frappe confirmée (#10898).
+    private func admits(_ served: APIEngagementProgress, ticket: GameReadOrder.Ticket) -> Bool {
+        guard readOrder.admits(ticket) else { return false }
+        return GameReadOrder.isCurrent(
+            servedRevision: served.gameRevision, servedMinted: served.meesh?.mintedLifetime,
+            confirmed: Self.confirmed[cacheKey] ?? GameReadOrder.Confirmed()
+        )
+    }
+
+    /// Ce que la passerelle confirme — une frappe, une lecture posée — relève le plancher : rien d'antérieur ne le défait.
+    private func confirm(revision: Int?, minted: Int?) {
+        Self.confirmed[cacheKey] = (Self.confirmed[cacheKey] ?? GameReadOrder.Confirmed()).raised(revision: revision, minted: minted)
     }
 
     /// Pose une lecture SERVIE (réseau ou cache) comme la charge affichée.

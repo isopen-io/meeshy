@@ -436,6 +436,16 @@ struct GameLawTests {
         #expect(GameBoosts.tailwind(level: 36, levelRecord: 36) == 1)
     }
 
+    @Test("avec les étincelles, le Vent arrière souffle à 7 niveaux ou plus sous le record, et s'arrête à 6 (#10896)")
+    func sparksTailwind() {
+        #expect(GameBoosts.tailwindLevelGap == 7)
+        #expect(GameBoosts.sparksTailwind(level: 29, levelRecord: 36) == 1.25)
+        #expect(GameBoosts.sparksTailwind(level: 12, levelRecord: 36) == 1.25)
+        #expect(GameBoosts.sparksTailwind(level: 30, levelRecord: 36) == 1)
+        #expect(GameBoosts.sparksTailwind(level: 36, levelRecord: 36) == 1)
+        #expect(GameBoosts.sparksTailwind(level: 1, levelRecord: 1) == 1, "un Prestige ne l'allume pas")
+    }
+
     @Test("l'Heure du Prisme tient dans 9 h – 21 h, sur un quart d'heure")
     func prismHourWindow() {
         for day in 1...28 {

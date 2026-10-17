@@ -147,6 +147,12 @@ export const SERVER_EVENTS = {
    * jamais dans la room du post ni à son audience.
    */
   ENGAGEMENT_POST_UPDATED: 'engagement:post-updated',
+  /**
+   * L'état du JEU de l'utilisateur a bougé (#10900) — frappe, gain, reprise, prestige, dépense de Meesh.
+   * `GameUpdatedEventData` (`types/game-sync.ts`) : le bloc `game` servi et son marqueur d'ordre `gameRevision`,
+   * émis dans la room `user:<id>` du seul compte concerné, jamais ailleurs.
+   */
+  GAME_UPDATED: 'game:updated',
   USER_STATUS: 'user:status',
   /**
    * Snapshot émis à l'authentification socket : liste des userIds actuellement
