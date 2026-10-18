@@ -43,9 +43,12 @@ describe('qui est un sticker', () => {
     expect(isStickerMedia(png(0, 0))).toBe(false);
   });
 
-  test('le drapeau du porteur suffit, quelles que soient la taille et la nature', () => {
-    expect(isStickerMedia({ kind: 'image', width: 0, height: 0, sticker: true })).toBe(true);
-    expect(isStickerMedia({ kind: 'video', width: 100, height: 100, sticker: true })).toBe(false);
+  test('le drapeau du porteur dispense de la taille, jamais du format à transparence (miroir de `MessageCardSticker.isSticker`)', () => {
+    expect(isStickerMedia({ kind: 'image', width: 0, height: 0, mimeType: 'image/png', sticker: true })).toBe(true);
+    expect(isStickerMedia({ kind: 'image', width: 2048, height: 2048, mimeType: 'image/webp', sticker: true })).toBe(true);
+    expect(isStickerMedia({ kind: 'image', width: 0, height: 0, sticker: true })).toBe(false);
+    expect(isStickerMedia({ kind: 'image', width: 300, height: 300, mimeType: 'image/jpeg', sticker: true })).toBe(false);
+    expect(isStickerMedia({ kind: 'video', width: 100, height: 100, mimeType: 'image/png', sticker: true })).toBe(false);
   });
 
   test('cardMediaOf transmet le type de fichier à la carte', () => {

@@ -9,10 +9,13 @@ import type { CardMedia, CardVisualMedia } from './message-card-media';
  * le clip arrondi mord son alpha. Il se pose donc AJUSTÉ (« contain ») dans un
  * cadre au RAPPORT du sticker, centré, sans clip ni fond.
  *
- * Est un sticker : une pièce que son porteur déclare telle (`sticker`), ou à
- * défaut un PNG / WebP (les formats à alpha) dont les deux côtés connus ne
- * dépassent pas 512 px (`STICKER_MAX_SIDE`, la borne de la bibliothèque). Un
- * côté inconnu n'est pas un sticker : sans la déclaration, on ne devine pas.
+ * Est un sticker : une image dans un format à alpha (PNG / WebP / APNG) — ce
+ * format est REQUIS, déclaration comprise : un JPEG n'a pas de détourage à
+ * protéger (miroir de `MessageCardSticker.isSticker` iOS). Parmi elles, une
+ * pièce que son porteur déclare telle (`sticker`), quelle que soit sa taille,
+ * ou à défaut celle dont les deux côtés connus ne dépassent pas 512 px
+ * (`STICKER_MAX_SIDE`, la borne de la bibliothèque). Un côté inconnu n'est pas
+ * un sticker : sans la déclaration, on ne devine pas.
  */
 
 export const STICKER_MAX_SIDE = 512;
@@ -24,9 +27,9 @@ export type StickerProbe = Pick<CardVisualMedia, 'kind' | 'width' | 'height'> & 
 
 export function isStickerMedia(media: CardMedia | StickerProbe): boolean {
   if (media.kind !== 'image') return false;
-  if (media.sticker === true) return true;
   const mime = (media.mimeType ?? '').toLowerCase();
   if (!STICKER_MIMES.some((known) => known === mime)) return false;
+  if (media.sticker === true) return true;
   return media.width > 0 && media.height > 0 && Math.max(media.width, media.height) <= STICKER_MAX_SIDE;
 }
 
