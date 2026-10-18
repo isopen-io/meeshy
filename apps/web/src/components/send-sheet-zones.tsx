@@ -52,8 +52,6 @@ function useObjectUrls(files: readonly File[]): readonly (string | undefined)[] 
   return urls;
 }
 
-const sizeLabelOf = (bytes: number): string => (bytes >= 1024 * 1024 ? `${Math.round(bytes / (1024 * 1024))} Mo` : `${Math.max(1, Math.round(bytes / 1024))} Ko`);
-
 /**
  * LES PIÈCES, DANS L'ORDRE D'ENVOI — la croix retire, « Avancer » / « Reculer »
  * réordonnent sans glisser (accessibilité). En RTL, la rangée se lit de droite
@@ -61,6 +59,7 @@ const sizeLabelOf = (bytes: number): string => (bytes >= 1024 * 1024 ? `${Math.r
  */
 export function PieceStrip({
   files,
+  sizeLabel,
   overflowFrom,
   labels,
   disabled,
@@ -68,6 +67,8 @@ export function PieceStrip({
   onMove,
 }: {
   readonly files: readonly File[];
+  /** Le poids d'une pièce, dans la langue du lecteur. */
+  readonly sizeLabel: (bytes: number) => string;
   /** Index de la première pièce qui dépasse les plafonds ; `files.length` si tout tient. */
   readonly overflowFrom: number;
   readonly labels: PieceLabels;
@@ -93,7 +94,7 @@ export function PieceStrip({
               {url === undefined ? <Glyph name={file.type.startsWith('audio/') ? 'microphone' : 'file'} size={GLYPH_SIZE.lg} /> : null}
             </span>
             <span className="absolute bottom-0.5 start-1 rounded-chip px-1 text-chip font-semibold" style={{ backgroundColor: 'var(--color-ios-card)', color: 'var(--color-ios-ink)' }} aria-hidden="true">
-              {over ? sizeLabelOf(file.size) : index + 1}
+              {over ? sizeLabel(file.size) : index + 1}
             </span>
             <button
               type="button"

@@ -16,7 +16,7 @@ import { ensureHappyDomRegistered, releaseHappyDomIfRegistered } from '@/test-su
 
 import { createSendQueue, memorySendQueueStorage, type SendQueue } from '@/lib/send/send-queue';
 
-import { SEND_SHEET_SUCCESS_HOLD_MS, SendSheet, type SendSheetPlatform } from './send-sheet';
+import { SEND_SHEET_SUCCESS_HOLD_MS, SendSheet, sizeIn, type SendSheetPlatform } from './send-sheet';
 import type { SendSheetDirectory } from './send-sheet-directory';
 import { SEND_SHEET_EXIT_MS } from './send-sheet-frame';
 
@@ -614,5 +614,14 @@ describe('SendSheet — le partage est COMPTÉ quand il est parti (#8884)', () =
     await mounter.click(buttonNamed(host, 'Copier le lien'));
     await mounter.settle();
     expect(counted).toBe(1);
+  });
+});
+
+describe('sizeIn — le poids se dit dans la langue du lecteur', () => {
+  test('français : Mo ; anglais : MB ; sous un mébioctet, des kilo-octets', () => {
+    const plain = (text: string) => text.replace(/\s/gu, ' ');
+    expect(plain(sizeIn('fr', 500 * 1024 * 1024))).toBe('500 Mo');
+    expect(plain(sizeIn('en', 500 * 1024 * 1024))).toBe('500 MB');
+    expect(plain(sizeIn('fr', 2048))).toBe('2 ko');
   });
 });

@@ -94,7 +94,13 @@ function useRunState(run: SendRun | null): SendRunState | null {
   return useSyncExternalStore(run?.subscribe ?? subscribeNothing, run?.getState ?? nothing, run?.getState ?? nothing);
 }
 
-const mebibytes = (bytes: number): string => `${Math.round(bytes / (1024 * 1024))} Mo`;
+/** Un poids dans la langue du lecteur (« 500 Mo », « 500 MB ») — jamais une unité écrite en dur. */
+export const sizeIn = (language: InterfaceLanguage, bytes: number): string => {
+  const mega = bytes >= 1024 * 1024;
+  return new Intl.NumberFormat(language, { style: 'unit', unit: mega ? 'megabyte' : 'kilobyte', unitDisplay: 'short', maximumFractionDigits: 0 }).format(
+    Math.max(1, Math.round(bytes / (mega ? 1024 * 1024 : 1024))),
+  );
+};
 
 /** Les textes que la sélection donne à copier (« Copier le texte ») — ceux que la loi a laissé lire. */
 const copyableTextOf = (payload: SendPayload, kept: readonly string[]): string => {
@@ -474,6 +480,7 @@ export function SendSheet({
         ) : (
           <PieceStrip
             files={files}
+            sizeLabel={(bytes) => sizeIn(language, bytes)}
             overflowFrom={overflowFrom}
             disabled={started}
             labels={{
@@ -488,7 +495,7 @@ export function SendSheet({
         )}
         {files !== null && plan.limits.trimCount > 0 && !started ? (
           <OverLimitBanner
-            text={say('sendSheet.limit.banner', { files: String(files.length), size: mebibytes(plan.limits.bytes), maxFiles: String(SHARE_LIMITS.maxFiles), maxSize: mebibytes(SHARE_LIMITS.maxTotalBytes) })}
+            text={say('sendSheet.limit.banner', { files: String(files.length), size: sizeIn(language, plan.limits.bytes), maxFiles: String(SHARE_LIMITS.maxFiles), maxSize: sizeIn(language, SHARE_LIMITS.maxTotalBytes) })}
             trimLabel={say('sendSheet.limit.trim', { count: String(plan.limits.trimCount) })}
             onTrim={() => editFiles(files.slice(0, overflowFrom))}
           />
