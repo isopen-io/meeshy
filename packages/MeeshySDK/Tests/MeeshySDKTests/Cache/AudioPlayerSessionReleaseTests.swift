@@ -54,6 +54,28 @@ final class AudioPlayerSessionReleaseTests: XCTestCase {
         XCTAssertEqual(releases, 1)
     }
 
+    /// À la fin NATURELLE d'une piste locale, `AVAudioPlayer.isPlaying` repasse à faux et `currentTime` revient
+    /// à 0 : le tick sortait sur sa garde avant d'atteindre `>= 1.0`. L'aperçu restait « en lecture » pour
+    /// toujours, le Timer 10 Hz tournait sans fin et la session `.playback` n'était jamais rendue.
+    func test_aLocalPlaybackThatReachesItsEnd_stopsAndReleasesTheSession() {
+        let manager = makeManager()
+        manager.playLocalFile(url: file)
+        XCTAssertTrue(manager.isPlaying, "précondition : la lecture a démarré")
+
+        let ended = expectation(description: "fin de piste constatée")
+        var poll: Timer?
+        poll = Timer.scheduledTimer(withTimeInterval: 0.05, repeats: true) { _ in
+            MainActor.assumeIsolated {
+                if !manager.isPlaying { poll?.invalidate(); ended.fulfill() }
+            }
+        }
+        wait(for: [ended], timeout: 3)
+        poll?.invalidate()
+
+        XCTAssertFalse(manager.isPlaying)
+        XCTAssertEqual(releases, 1, "la session doit être rendue à la fin de la piste")
+    }
+
     /// 0,2 s de silence PCM 16 bits mono 8 kHz.
     private static func silentWAV() -> Data {
         let samples = 1_600, dataSize = samples * 2

@@ -681,7 +681,12 @@ public class AudioPlaybackManager: NSObject, ObservableObject {
 // MARK: - AVAudioPlayerDelegate
 extension AudioPlaybackManager: AVAudioPlayerDelegate {
     nonisolated public func audioPlayerDidFinishPlaying(_ player: AVAudioPlayer, successfully flag: Bool) {
+        // La fin d'un lecteur REMPLACÉ entre-temps (vocal B lancé avant ce saut
+        // sur le MainActor) ne termine pas B, n'avance pas la file et ne grave
+        // pas B « écouté en entier ».
+        let finished = ObjectIdentifier(player)
         Task { @MainActor in
+            guard let current = self.player, ObjectIdentifier(current) == finished else { return }
             self.handlePlaybackFinished()
         }
     }

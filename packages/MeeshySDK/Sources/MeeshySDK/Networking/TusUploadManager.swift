@@ -416,8 +416,16 @@ public actor TusUploadManager {
             Self.logger.info("TUS checkpoint \(checkpointKey, privacy: .public) older than \(Int(checkpointMaxAge), privacy: .public)s — restarting upload")
             await store.delete(checkpointKey: checkpointKey)
         }
+        // Une session dont tous les octets sont partis mais dont l'issue (la pièce
+        // jointe) s'est perdue ne se reprend pas : aucun PATCH ne la redonnerait,
+        // et chaque tentative levait sans une requête. Repartir d'une session neuve.
+        let isFinishLost = !isCheckpointStale && (resumed.map { $0.byteOffset >= fileSize } ?? false)
+        if isFinishLost {
+            Self.logger.warning("TUS checkpoint \(checkpointKey, privacy: .public) fully sent but its finish was lost — restarting upload")
+            await store.delete(checkpointKey: checkpointKey)
+        }
 
-        if !isCheckpointStale,
+        if !isCheckpointStale, !isFinishLost,
            let cp = resumed,
            let url = URL(string: cp.uploadURL, relativeTo: baseURL),
            cp.fileSize == fileSize {
@@ -609,6 +617,9 @@ public actor TusUploadManager {
             }
         }
 
+        // Tout est parti sans issue lisible (409 → HEAD == fileSize, corps final
+        // indécodable) : la session ne peut plus rendre sa pièce jointe.
+        await store.delete(checkpointKey: checkpointKey)
         throw URLError(.cannotParseResponse)
     }
 
