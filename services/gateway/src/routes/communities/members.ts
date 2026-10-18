@@ -15,6 +15,7 @@ import { getPresenceVisibilityService } from '../../services/PresenceVisibilityS
 import { applyPresenceVisibilityAsOffline } from '@meeshy/shared/utils/presence-visibility';
 import { viewerFromRequest } from '../users/presence-gate';
 import { gateCoMemberPresence, type MemberUser } from './member-presence';
+import { AVATAR_RING_COLUMN, servedPerson } from '../../services/appearance/authorProfileDecor';
 
 const logger = enhancedLogger.child({ module: 'CommunityMembersRoutes' });
 import {
@@ -152,7 +153,9 @@ const community = await fastify.prisma.community.findFirst({
                 displayName: true,
                 avatar: true,
                 isOnline: true,
-                lastActiveAt: true
+                lastActiveAt: true,
+                // #10945 — le contour équipé, résolu en `profileDecor` à la sortie.
+                ...AVATAR_RING_COLUMN
               }
             }
           },
@@ -185,7 +188,7 @@ const community = await fastify.prisma.community.findFirst({
 
       const gatedMembers = members.map((m: { user?: MemberUser | null }) =>
         m.user
-          ? { ...m, user: applyPresenceVisibilityAsOffline(m.user, presenceVis.get(m.user.id)) }
+          ? { ...m, user: servedPerson(applyPresenceVisibilityAsOffline(m.user, presenceVis.get(m.user.id))) }
           : m
       );
 
