@@ -143,6 +143,18 @@ final class GameSparksTests: XCTestCase {
         XCTAssertEqual(standing.sparksLifetime, 90000)
     }
 
+    /// #10913 : la Gloire totale, servie à soi et aux amis — absente devant un ancien serveur ou un non-ami.
+    func test_standing_decodesTheGlory_andAbsentStaysAbsent() throws {
+        let served = try decode(GameStanding.self, """
+        {"level": 20, "tier": "lueur", "prestige": 1, "flame": null, "rank": "voix", "division": 2, "glory": 16000}
+        """)
+        XCTAssertEqual(served.glory, 16000)
+        let withheld = try decode(GameStanding.self, """
+        {"level": 20, "tier": "lueur", "prestige": 1, "flame": null, "rank": "voix", "division": 2}
+        """)
+        XCTAssertNil(withheld.glory)
+    }
+
     // MARK: - La dette (ffbc396c92) : blockedBy, sparksDebt sur level, refus MINT_BLOCKED_BY_DEBT
 
     func test_mint_blockedByDebt_isTheBlocker_evenWithoutAnAmount() throws {

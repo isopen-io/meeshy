@@ -54,13 +54,17 @@ public struct GameStanding: Codable, Sendable, Equatable {
     /// Ses étincelles (#10846) — même visibilité que `points` : la poche, et le total à vie.
     public let sparks: Int?
     public let sparksLifetime: Int?
+    /// Sa Gloire totale (#10913) — même visibilité que `points` (soi et les amis). `nil` devant un serveur antérieur.
+    public let glory: Int?
 
     public init(level: Int, tier: LevelTierKey, prestige: Int, flame: FlameFormKey?, rank: GloryRank, division: GloryDivision?,
                 division5: GloryDivision5? = nil, mythic: MythicSeatRef? = nil, ladder: GameStandingLadder? = nil,
-                points: Int? = nil, levelMaxLifetime: Int? = nil, sparks: Int? = nil, sparksLifetime: Int? = nil) {
+                points: Int? = nil, levelMaxLifetime: Int? = nil, sparks: Int? = nil, sparksLifetime: Int? = nil,
+                glory: Int? = nil) {
         self.levelMaxLifetime = levelMaxLifetime
         self.sparks = sparks
         self.sparksLifetime = sparksLifetime
+        self.glory = glory
         self.level = level
         self.tier = tier
         self.prestige = prestige
@@ -75,7 +79,7 @@ public struct GameStanding: Codable, Sendable, Equatable {
 
     private enum CodingKeys: String, CodingKey {
         case level, tier, prestige, flame, rank, division, division5, mythic, ladder, points
-        case levelMaxLifetime, sparks, sparksLifetime
+        case levelMaxLifetime, sparks, sparksLifetime, glory
     }
 
     public init(from decoder: Decoder) throws {
@@ -94,6 +98,7 @@ public struct GameStanding: Codable, Sendable, Equatable {
         levelMaxLifetime = GameSparks.count(container, .levelMaxLifetime)
         sparks = GameSparks.count(container, .sparks)
         sparksLifetime = GameSparks.count(container, .sparksLifetime)
+        glory = GameSparks.count(container, .glory)
     }
 
     /// Le niveau que l'écran montre : celui ouvert par le rang, ou celui d'hier devant un serveur antérieur.
