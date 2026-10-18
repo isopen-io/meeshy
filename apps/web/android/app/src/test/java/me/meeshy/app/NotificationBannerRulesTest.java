@@ -6,6 +6,7 @@ import static org.junit.Assert.assertNull;
 import static org.junit.Assert.assertTrue;
 
 import java.util.HashMap;
+import java.util.List;
 import java.util.Map;
 import org.junit.Test;
 
@@ -145,5 +146,108 @@ public class NotificationBannerRulesTest {
         Map<String, String> both = place("1", "2", null);
         both.put("inviteUrl", "https://meeshy.me/chat/k1");
         assertEquals("geo:1.00000,2.00000?q=1.00000,2.00000", NotificationBannerRules.contentOf(both).link);
+    }
+
+    private static Map<String, String> missedCall() {
+        Map<String, String> data = new HashMap<>();
+        data.put("type", "missed_call");
+        data.put("conversationId", "65f0c0ffee0000000000abcd");
+        data.put("conversationType", "direct");
+        data.put("senderDisplayName", "Nour");
+        data.put("senderUsername", "nour");
+        data.put("callType", "audio");
+        data.put("callBackLabel", "Rappeler");
+        data.put("gcm.notification.tag", "conv-65f0c0ffee0000000000abcd");
+        return data;
+    }
+
+    private static Map<String, String> missed(String key, String value) {
+        Map<String, String> data = missedCall();
+        if (value == null) data.remove(key);
+        else data.put(key, value);
+        return data;
+    }
+
+    @Test
+    public void aMissedCallBannerCallsBackInItsConversation() {
+        NotificationBannerRules.Action back = NotificationBannerRules.callBackOf(missedCall());
+        assertEquals("Rappeler", back.label);
+        assertEquals("meeshy://c/65f0c0ffee0000000000abcd?rappeler=audio&appelant=Nour", back.link);
+        assertEquals("conv-65f0c0ffee0000000000abcd", back.tag);
+        assertTrue(back.inApp);
+    }
+
+    @Test
+    public void aMissedGroupVideoCallCallsTheGroupBackInVideo() {
+        Map<String, String> group = missed("callType", "video");
+        group.put("conversationType", "group");
+        group.put("conversationTitle", "Famille Diallo & co");
+        assertEquals(
+            "meeshy://c/65f0c0ffee0000000000abcd?rappeler=video&appelant=Famille%20Diallo%20%26%20co&groupe=1",
+            NotificationBannerRules.callBackOf(group).link);
+    }
+
+    @Test
+    public void theCallerIsNamedByTheirUsernameWithoutADisplayNameAndOmittedWhenUnknown() {
+        assertEquals("meeshy://c/65f0c0ffee0000000000abcd?rappeler=audio&appelant=nour",
+            NotificationBannerRules.callBackOf(missed("senderDisplayName", null)).link);
+        Map<String, String> anonymous = missed("senderDisplayName", null);
+        anonymous.remove("senderUsername");
+        assertEquals("meeshy://c/65f0c0ffee0000000000abcd?rappeler=audio", NotificationBannerRules.callBackOf(anonymous).link);
+    }
+
+    @Test
+    public void everyCallBackTypeOffersItAndNoOtherDoes() {
+        for (String type : new String[] {"missed_call", "CALL_MISSED", "call_declined"}) {
+            assertEquals(type, "Rappeler", NotificationBannerRules.callBackOf(missed("type", type)).label);
+        }
+        assertNull(NotificationBannerRules.callBackOf(missed("type", "call")));
+        assertNull(NotificationBannerRules.callBackOf(missed("type", "new_message")));
+    }
+
+    @Test
+    public void withoutTheLocalizedLabelTheConversationOrTheTagThereIsNoCallBack() {
+        assertNull(NotificationBannerRules.callBackOf(missed("callBackLabel", null)));
+        assertNull(NotificationBannerRules.callBackOf(missed("callBackLabel", " ")));
+        assertNull(NotificationBannerRules.callBackOf(missed("conversationId", "../x")));
+        assertNull(NotificationBannerRules.callBackOf(missed("gcm.notification.tag", null)));
+        assertNull(NotificationBannerRules.callBackOf(null));
+    }
+
+    @Test
+    public void aCallBackIsTheOnlyActionLikeOnTheWeb() {
+        Map<String, String> data = missedCall();
+        data.put("replyActionLabel", "Répondre");
+        List<NotificationBannerRules.Action> actions = NotificationBannerRules.actionsOf(data);
+        assertEquals(1, actions.size());
+        assertEquals("Rappeler", actions.get(0).label);
+    }
+
+    @Test
+    public void theTouchedLinkGivesBackTheCallToCompose() {
+        Map<String, String> group = missed("callType", "video");
+        group.put("conversationType", "group");
+        group.put("conversationTitle", "Famille Diallo & co");
+        NotificationBannerRules.CallBack request =
+            NotificationBannerRules.callBackRequest(NotificationBannerRules.callBackOf(group).link);
+        assertEquals("65f0c0ffee0000000000abcd", request.conversationId);
+        assertEquals("video", request.media);
+        assertEquals("Famille Diallo & co", request.title);
+        assertTrue(request.isGroup);
+        NotificationBannerRules.CallBack direct =
+            NotificationBannerRules.callBackRequest("meeshy://c/abc?rappeler=audio");
+        assertEquals("", direct.title);
+        assertFalse(direct.isGroup);
+    }
+
+    @Test
+    public void anyOtherLinkIsNoCallBack() {
+        assertNull(NotificationBannerRules.callBackRequest(WidgetActionRules.replyLink("abc")));
+        assertNull(NotificationBannerRules.callBackRequest("meeshy://c/abc?rappeler=fax"));
+        assertNull(NotificationBannerRules.callBackRequest("meeshy://c/../x?rappeler=audio"));
+        assertNull(NotificationBannerRules.callBackRequest("https://meeshy.me/c/abc?rappeler=audio"));
+        assertNull(NotificationBannerRules.callBackRequest("meeshy://chat/abc?rappeler=audio"));
+        assertNull(NotificationBannerRules.callBackRequest("::"));
+        assertNull(NotificationBannerRules.callBackRequest(null));
     }
 }

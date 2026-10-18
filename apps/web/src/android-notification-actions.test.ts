@@ -73,3 +73,26 @@ describe('« Répondre » sur la bannière d’un message (#10891)', () => {
     for (const cle of ['"contentActionLabel"', '"locationLat"', '"locationLon"', '"locationName"', '"inviteUrl"']) expect(banniere).toContain(cle);
   });
 });
+
+describe('« Rappeler » sur la bannière d’un appel manqué (#10908)', () => {
+  const MAIN = join(dirname(fileURLToPath(import.meta.url)), 'main.tsx');
+
+  test('la charge retenue garde ce que « Rappeler » lit', () => {
+    const banniere = lire('NotificationVoiceBanner.java');
+    for (const cle of ['"callBackLabel"', '"callType"', '"conversationType"']) expect(banniere).toContain(cle);
+  });
+
+  test('le toucher signale l’appel à composer, retenu pour un lancement à froid, après avoir retiré la bannière', () => {
+    const intent = corpsDe(lire('MeeshyWidgetsPlugin.java'), 'protected void handleOnNewIntent(');
+    expect(intent).toContain('NotificationBannerRules.callBackRequest(');
+    expect(intent).toMatch(/notifyListeners\("callBackRequested", [a-zA-Z]+, true\)/);
+    expect(intent.indexOf('NotificationBannerActions.dismiss(')).toBeLessThan(intent.indexOf('callBackRequest('));
+  });
+
+  test('la page de la coque compose l’appel signalé', () => {
+    const main = readFileSync(MAIN, 'utf8');
+    const appel = main.indexOf('listenCallBackIntentsInShell');
+    expect(appel).toBeGreaterThan(-1);
+    expect(main.slice(main.lastIndexOf('if (', appel), appel)).toContain('__SHELL__');
+  });
+});
