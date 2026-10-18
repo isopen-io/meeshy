@@ -791,6 +791,7 @@ export default function MediaViewer({
             longPress.onPointerMove(e);
           }}
           onPointerUp={(e: ReactPointerEvent<HTMLDivElement>) => {
+            if (heldOpenAtRef.current !== null) heldOpenAtRef.current = performance.now();
             swipe.handlers.onPointerUp(e);
             longPress.onPointerUp();
           }}

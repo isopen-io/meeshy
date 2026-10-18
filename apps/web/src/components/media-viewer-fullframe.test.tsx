@@ -147,6 +147,32 @@ describe('MediaViewer — appui long', () => {
     click(frame);
     expect(topBar(dialog).getAttribute('data-chrome-yields')).toBe('shown');
   });
+
+  test('un appui long TENU au-delà de la fenêtre avale encore le clic de son relâchement', async () => {
+    const dialog = await mount([photo('a'), photo('b')]);
+    const frame = frameOf(dialog);
+    act(() => void frame.dispatchEvent(pointer('pointerdown')));
+    await act(async () => {
+      await new Promise((resolve) => setTimeout(resolve, 1400));
+    });
+    act(() => void frame.dispatchEvent(pointer('pointerup')));
+    click(frame);
+    expect(topBar(dialog).getAttribute('data-chrome-yields')).toBe('hidden');
+  });
+
+  test('un vrai tap après un appui long bascule bien (le nouvel appui oublie le précédent)', async () => {
+    const dialog = await mount([photo('a'), photo('b')]);
+    const frame = frameOf(dialog);
+    act(() => void frame.dispatchEvent(pointer('pointerdown')));
+    await act(async () => {
+      await new Promise((resolve) => setTimeout(resolve, 560));
+    });
+    act(() => void frame.dispatchEvent(pointer('pointerup')));
+    act(() => void frame.dispatchEvent(pointer('pointerdown')));
+    act(() => void frame.dispatchEvent(pointer('pointerup')));
+    click(frame);
+    expect(topBar(dialog).getAttribute('data-chrome-yields')).toBe('shown');
+  });
 });
 
 describe('MediaViewer — clavier', () => {
