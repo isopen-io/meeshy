@@ -62,4 +62,15 @@ final class CallAwaitingOfferPolicyTests: XCTestCase {
         XCTAssertTrue(branch.contains("sdpOfferTimeoutTask?.cancel()") && branch.contains("sdpOfferTimeoutTask = nil"),
                       "l'offre tardive doit désarmer le minuteur d'offre")
     }
+
+    /// `answerCall` vérifie l'appel AVANT `await emitCallAnswer`, puis effaçait l'offre en attente APRÈS sans
+    /// revérifier : si l'appel se terminait et qu'un nouvel appel entrant mettait son offre en attente pendant
+    /// cet accusé, c'est l'offre du NOUVEL appel qui disparaissait (échec au bout du délai d'offre).
+    func test_answeringABufferedOffer_onlyClearsTheOfferOfItsOwnCall() throws {
+        let source = try AppSourceGuard.unit("Meeshy/Features/Main/Services/CallManager+Answer.swift")
+        XCTAssertTrue(
+            source.contains("if self.currentCallId == callId { self.pendingRemoteOffer = nil }"),
+            "l'offre en attente ne s'efface que si elle appartient encore à l'appel répondu"
+        )
+    }
 }

@@ -98,7 +98,8 @@ extension CallManager {
                     return
                 }
                 await self.emitCallAnswer(callId: callId, toUserId: userId, sdp: answer)
-                self.pendingRemoteOffer = nil
+                // L'accusé a pu laisser finir cet appel et en faire sonner un autre : son offre n'est pas la nôtre.
+                if self.currentCallId == callId { self.pendingRemoteOffer = nil }
                 Logger.calls.info("Call answered with buffered SDP offer: \(callId)")
             }
         } else {
