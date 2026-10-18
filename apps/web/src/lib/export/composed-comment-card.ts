@@ -34,7 +34,7 @@ export type PostCommentCardEntry = { readonly kind: MessageCardMediaItem['card']
 
 export type PostCommentSource = PostCommentCardSource<PostCommentCardEntry>;
 
-export type PostCommentCardLabels = { /** Plus lu : le fil n'est plus aplati sous un titre, chaque commentaire garde son niveau. */ readonly title?: string; readonly folded: (count: number) => string };
+export type PostCommentCardLabels = { readonly folded: (count: number) => string };
 
 export type PostCommentCardInput = {
   readonly post: FeedPost | null;
@@ -128,11 +128,14 @@ export function composingPostOf(post: FeedPost | null | undefined, now: number =
   if (post === undefined || post === null) return null;
   const type = post.type.toUpperCase();
   if (type !== 'STORY' && type !== 'STATUS') return post;
-  const expiresAt = (post as { readonly expiresAt?: string | Date | null }).expiresAt;
-  if (expiresAt !== undefined && expiresAt !== null && timeOf(expiresAt) <= now) return null;
+  if (post.expiresAt !== undefined && post.expiresAt !== null && timeOf(post.expiresAt) <= now) return null;
   if (post.storyEffects !== undefined && post.storyEffects !== null) {
-    const thumbnail = (post.media ?? []).map((piece) => piece.thumbnailUrl).find((url): url is string => typeof url === 'string' && url.trim() !== '');
-    return thumbnail === undefined ? null : { ...post, media: [{ id: `${post.id}-thumbnail`, fileUrl: thumbnail, mimeType: 'image/jpeg' }] };
+    const visual = entriesOf(post.media, null).find((entry) => entry.kind === 'image' || entry.kind === 'video');
+    const piece = visual === undefined ? undefined : (post.media ?? []).find((item) => item.id === visual.item.id);
+    const thumbnail = piece?.thumbnailUrl?.trim() ?? '';
+    return piece === undefined || thumbnail === ''
+      ? null
+      : { ...post, media: [{ id: `${post.id}-thumbnail`, fileUrl: thumbnail, mimeType: 'image/jpeg', width: piece.width ?? null, height: piece.height ?? null }] };
   }
   return entriesOf(post.media, null).some((entry) => entry.kind === 'image' || entry.kind === 'video') ? post : null;
 }

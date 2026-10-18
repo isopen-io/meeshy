@@ -23,7 +23,7 @@ import {
  * médias peignables, et la projection sur `MessageCardSubject`.
  */
 
-const labels: PostCommentCardLabels = { title: 'Fil de commentaires', folded: (count) => `+${count} réponses` };
+const labels: PostCommentCardLabels = { folded: (count) => `+${count} réponses` };
 const viewer = { id: 'me', displayName: 'Moi' };
 
 const post = (overrides: Partial<FeedPost> = {}): FeedPost => ({
@@ -135,12 +135,15 @@ describe('qui compose, et quand « Imager » s’offre', () => {
 
   test('une story échue n’est jamais support ; une story à canvas ne montre que sa vignette', () => {
     const media = [{ id: 'sm', fileUrl: '/s.jpg', mimeType: 'image/jpeg' }];
-    const expired = { ...post({ type: 'STORY', media }), expiresAt: '2020-01-01T00:00:00.000Z' } as FeedPost;
-    expect(composingPostOf(expired)).toBeNull();
-    expect(composingPostOf({ ...expired, expiresAt: '2999-01-01T00:00:00.000Z' } as FeedPost)?.id).toBe('p-1');
+    expect(composingPostOf(post({ type: 'STORY', media, expiresAt: '2020-01-01T00:00:00.000Z' }))).toBeNull();
+    expect(composingPostOf(post({ type: 'STORY', media, expiresAt: '2999-01-01T00:00:00.000Z' }))?.id).toBe('p-1');
     expect(composingPostOf(post({ type: 'STORY', media, storyEffects: { layers: [] } }))).toBeNull();
-    const withThumb = composingPostOf(post({ type: 'STORY', storyEffects: { layers: [] }, media: [{ id: 'sm', fileUrl: '/s.mp4', mimeType: 'video/mp4', thumbnailUrl: '/t.jpg' }] }));
-    expect(withThumb?.media?.map((piece) => [piece.fileUrl, piece.mimeType])).toEqual([['/t.jpg', 'image/jpeg']]);
+    const withThumb = composingPostOf(
+      post({ type: 'STORY', storyEffects: { layers: [] }, media: [{ id: 'sm', fileUrl: '/s.mp4', mimeType: 'video/mp4', thumbnailUrl: '/t.jpg', width: 1080, height: 1920 }] }),
+    );
+    expect(withThumb?.media?.map((piece) => [piece.fileUrl, piece.mimeType, piece.width, piece.height])).toEqual([['/t.jpg', 'image/jpeg', 1080, 1920]]);
+    const audioThumb = [{ id: 'a', fileUrl: '/a.m4a', mimeType: 'audio/mp4', thumbnailUrl: '/cover.jpg' }];
+    expect(composingPostOf(post({ type: 'STORY', storyEffects: { layers: [] }, media: audioThumb }))).toBeNull();
     expect(composingPostOf(undefined)).toBeNull();
   });
 
