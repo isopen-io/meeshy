@@ -221,6 +221,10 @@ public struct MessageCardDisposition: Equatable, Sendable {
     /// Le visuel que « une seule » et « en fond » montrent — `nil` : le premier.
     /// Propre à un contenu : il ne s'enregistre pas avec le format (#9235).
     public var featuredMediaID: String?
+    /// Le visuel du SUPPORT posé en HERO au sommet de la carte (#10915) : grand,
+    /// pleine largeur, avant tout texte. `nil` : pas de hero. Propre à un contenu
+    /// (le sujet le pose) : il ne s'enregistre pas avec le format.
+    public var heroMediaID: String?
     /// Le nom de qui a posté chaque visuel, hors fond — mis en forme comme les autres noms (#9235).
     public var showsMediaAuthor: Bool
     public var audioStyle: MessageCardAudioStyle
@@ -243,6 +247,7 @@ public struct MessageCardDisposition: Equatable, Sendable {
         mediaLayout: MessageCardMediaLayout = .above,
         mediaArrangement: MessageCardMediaArrangement = .single,
         featuredMediaID: String? = nil,
+        heroMediaID: String? = nil,
         showsMediaAuthor: Bool = false,
         audioStyle: MessageCardAudioStyle = .wave,
         showsTranscript: Bool = true,
@@ -258,6 +263,7 @@ public struct MessageCardDisposition: Equatable, Sendable {
         self.mediaLayout = mediaLayout
         self.mediaArrangement = mediaArrangement
         self.featuredMediaID = featuredMediaID
+        self.heroMediaID = heroMediaID
         self.showsMediaAuthor = showsMediaAuthor
         self.audioStyle = audioStyle
         self.showsTranscript = showsTranscript
@@ -279,7 +285,19 @@ public extension MessageCardDisposition {
     /// Une seule image et le fond montrent le visuel CHOISI (le premier à
     /// défaut) ; la grille et les dispositions de post, les quatre premiers.
     func paintedVisuals(of media: [MessageCardMedia]) -> [MessageCardMedia] {
-        let visuals = media.filter { $0.kind.isVisual }
+        (heroVisual(of: media).map { [$0] } ?? []) + bodyVisuals(of: media)
+    }
+
+    /// Le visuel du support posé en hero — `nil` : aucun, ou il n'est pas dans la carte.
+    func heroVisual(of media: [MessageCardMedia]) -> MessageCardMedia? {
+        heroMediaID.flatMap { id in media.first { $0.id == id && $0.kind.isVisual } }
+    }
+
+    /// Les visuels du CORPS de la carte — ceux d'avant le hero (#9235) : le hero
+    /// n'y compte pas, il a sa place à lui.
+    func bodyVisuals(of media: [MessageCardMedia]) -> [MessageCardMedia] {
+        let hero = heroVisual(of: media)?.id
+        let visuals = media.filter { $0.kind.isVisual && $0.id != hero }
         guard visuals.count > 1 else { return visuals }
         if mediaLayout == .backdrop || mediaArrangement == .single {
             let featured = featuredMediaID.flatMap { id in visuals.first { $0.id == id } } ?? visuals[0]

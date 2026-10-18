@@ -71,10 +71,20 @@ extension StoryViewerView {
             },
             root: comment.parentId.flatMap { parentId in storyComments.first { $0.id == parentId } },
             loadedReplies: comment.parentId == nil ? (storyCommentRepliesMap[comment.id] ?? []) : [],
+            story: commentCardStory,
             onCommitEdit: { text in
                 Task { await editStoryComment(comment, content: text) }
             }
         )
+    }
+
+    /// **Le support d'« Imager »** (#10915) : la story ouverte, son auteur, son visuel — la
+    /// carte la met en HERO. `nil` hors story. Les gardes (échue, canvas sans vignette)
+    /// sont celles de `PostCommentCardStory`.
+    var commentCardStory: PostCommentCardStory? {
+        guard let story = currentStory else { return nil }
+        let group = currentGroup
+        return PostCommentCardStory(story: story, author: group?.username ?? "", authorId: group?.id ?? "", authorUsername: group?.username)
     }
 
     /// **L'auteur édite son commentaire de story** — remplacement optimiste EN

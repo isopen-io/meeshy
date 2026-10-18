@@ -182,6 +182,15 @@ function threadAccent(): string | undefined {
 /** À combien de pages du bout l'hôte est prié d'étendre la liste. */
 export const NEAR_END_PAGES = 3;
 
+const CLICK_AFTER_HOLD_MS = 700;
+
+const SPACE_OWNERS = 'button, a[href], input, textarea, select, [role="slider"], [role="checkbox"], [role="button"], [contenteditable="true"]';
+
+/** Un contrôle focalisé garde Espace pour son activation native : la lecture ne bascule que depuis la scène. */
+function ownsSpace(target: EventTarget | null): boolean {
+  return target instanceof Element && target.closest(SPACE_OWNERS) !== null;
+}
+
 function clampIndex(index: number, count: number): number {
   return Math.max(0, Math.min(count - 1, index));
 }
@@ -449,6 +458,7 @@ export default function MediaViewer({
   const closeButtonRef = useRef<HTMLButtonElement | null>(null);
   const previouslyFocusedRef = useRef<HTMLElement | null>(null);
   const activePlayToggleRef = useRef<(() => void) | null>(null);
+  const heldOpenAtRef = useRef<number | null>(null);
   const trackRef = useRef<HTMLDivElement | null>(null);
 
   useBackDismiss(onClose);
@@ -559,6 +569,7 @@ export default function MediaViewer({
   }, [index]);
 
   const goTo = (next: number): void => {
+    heldOpenAtRef.current = null;
     const at = clampIndex(next, items.length);
     setPinned({ id: items[at]?.id, index: at });
     setPresentation(CARDED_STAGE);
@@ -570,17 +581,14 @@ export default function MediaViewer({
       onClose();
       return;
     }
-    if (e.key === 'ArrowRight') {
+    if (e.key === 'ArrowRight' || e.key === 'ArrowLeft') {
       e.preventDefault();
-      goTo(index + 1);
-      return;
-    }
-    if (e.key === 'ArrowLeft') {
-      e.preventDefault();
-      goTo(index - 1);
+      const forward = (e.key === 'ArrowRight') !== (document.dir === 'rtl');
+      goTo(forward ? index + 1 : index - 1);
       return;
     }
     if (e.key === ' ') {
+      if (ownsSpace(e.target)) return;
       if (activePlayToggleRef.current !== null) {
         e.preventDefault();
         activePlayToggleRef.current();
@@ -606,6 +614,7 @@ export default function MediaViewer({
   const [audioPlaying, setAudioPlaying] = useState(false);
   const longPress = useLongPress({
     onOpen: () => {
+      heldOpenAtRef.current = performance.now();
       if (!audioPage) setPresentation(() => stageAfter(CARDED_STAGE, 'longPress'));
     },
   });
@@ -631,6 +640,9 @@ export default function MediaViewer({
   // eux-mêmes leurs événements (`viewer-chrome.tsx`) : le tap sur une action
   // réelle ne bascule rien. Un toucher qui a glissé n'est pas un tap.
   const onStageClick = (): void => {
+    const heldAt = heldOpenAtRef.current;
+    heldOpenAtRef.current = null;
+    if (heldAt !== null && performance.now() - heldAt < CLICK_AFTER_HOLD_MS) return;
     if (swipe.wasDrag() || audioPage) return;
     setPresentation((p) => stageAfter(p, 'tap'));
   };
@@ -649,6 +661,8 @@ export default function MediaViewer({
       setOverlay((now) => ({ ...(now.attachmentId === attachmentId ? now : { attachmentId, rail: false, menu: false }), [slot]: open }));
   const overlayHeld = overlay.attachmentId === current?.id && (overlay.rail || overlay.menu);
   const chromeIdle = useIdleChrome({ active: audioPage && audioPlaying, held: overlayHeld });
+  const coversViewport = presentation.kind === 'full' && !audioPage && currentSceneEntry === undefined;
+  const corridorPlacement = coversViewport ? 'floating' : 'corridor';
   const chromeHidden = presentation.kind === 'full' || (zoomedId !== null && zoomedId === current?.id) || chromeIdle;
   /* Un chrome effacé est INERTE : le focus qu'il tenait (la croix, posée à
      l'ouverture) tomberait au `<body>`, hors de la visionneuse — Échap n'y
@@ -725,7 +739,7 @@ export default function MediaViewer({
           qui ne voit rien. Au-dessus d'une page scène en plein viewport
           (`z-10`, #6902). */}
       <ViewerTopBar
-        placement="corridor"
+        placement={corridorPlacement}
         hidden={chromeHidden}
         exit={{ kind: 'close', label: translate(language, 'common.close'), onExit: onClose, buttonRef: closeButtonRef }}
         {...(identity !== undefined ? { identity } : {})}
@@ -776,6 +790,7 @@ export default function MediaViewer({
               longPress.onPointerCancel();
               return;
             }
+            heldOpenAtRef.current = null;
             swipe.handlers.onPointerDown(e);
             longPress.onPointerDown(e);
           }}
@@ -784,6 +799,7 @@ export default function MediaViewer({
             longPress.onPointerMove(e);
           }}
           onPointerUp={(e: ReactPointerEvent<HTMLDivElement>) => {
+            if (heldOpenAtRef.current !== null) heldOpenAtRef.current = performance.now();
             swipe.handlers.onPointerUp(e);
             longPress.onPointerUp();
           }}
@@ -913,7 +929,7 @@ export default function MediaViewer({
           scène, jamais sur le noir du plateau), légende et colonne sur une même
           rangée, comme sous un vocal. */}
       {floatsRail ? (
-        <ViewerBottomBar placement="corridor" hidden={chromeHidden} probe={{ 'data-viewer-footer': '' }}>
+        <ViewerBottomBar placement={corridorPlacement} hidden={chromeHidden} probe={{ 'data-viewer-footer': '' }}>
           <div ref={setTransportSlot} data-viewer-transport-slot />
           {playsVideo ? (
             <div ref={setInfoSlot} data-viewer-info-slot="" />
@@ -934,7 +950,7 @@ export default function MediaViewer({
         </ViewerBottomBar>
       ) : (
         <ViewerBottomBar
-          placement={currentSceneEntry !== undefined ? 'overlay' : 'corridor'}
+          placement={currentSceneEntry !== undefined ? 'overlay' : corridorPlacement}
           hidden={chromeHidden}
           probe={{ 'data-viewer-footer': '' }}
           {...(footer !== undefined ? { caption: footer } : {})}

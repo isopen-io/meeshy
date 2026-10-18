@@ -134,7 +134,6 @@ const en = {
   'export.card.compose.chosenReplies': 'Choose replies',
   'export.card.compose.post': 'Post on top',
   'export.card.compose.replies': 'Replies on the card',
-  'export.card.compose.thread': 'Comment thread',
   'export.card.compose.folded': '+{count} replies',
 } satisfies ExportCardCatalog;
 
