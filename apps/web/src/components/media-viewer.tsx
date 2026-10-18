@@ -41,6 +41,7 @@ import { useViewerPinch } from '@/lib/view/use-viewer-pinch';
 import { translate } from '@/lib/i18n-catalog';
 import { currentInterfaceLanguage, type InterfaceLanguage } from '@/lib/interface-language';
 import { READER_LOCALE } from '@/lib/reader';
+import { useMediaSystemBars } from '@/lib/use-media-system-bars';
 
 import '@/styles/media-viewer.css';
 
@@ -430,6 +431,7 @@ export default function MediaViewer({
   shareMedia,
   container,
 }: MediaViewerProps) {
+  useMediaSystemBars();
   /* LA PAGE SE SUIT PAR SON IDENTITÉ (#6303), miroir `GalleryPagePinning`
      (`+SourceGrowth.swift`) : la liste peut GRANDIR par le début (pages plus
      anciennes) pendant qu'on regarde — une position figée glisserait alors sur

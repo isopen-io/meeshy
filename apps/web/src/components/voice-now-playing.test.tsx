@@ -15,8 +15,9 @@ import { Attachments } from './attachment-blocks';
  * **LA BULLE D'UN VOCAL DÉCRIT CE VOCAL À LA CARTE DE LECTURE** (#10624) —
  * l'`<audio>` porte l'id de sa pièce, et, DANS LA COQUE, la bulle enregistre
  * son auteur, sa conversation, sa date et l'avatar : la coque les relit quand
- * il joue. Un navigateur ne télécharge ni le registre ni sa loi (#10624, poids
- * du chunk des pièces jointes) : sous le build web, rien ne s'enregistre.
+ * il joue, et le navigateur qui sert la Media Session aussi (#10890). Un
+ * navigateur sans elle ne télécharge ni le registre ni sa loi (#10624, poids
+ * du chunk des pièces jointes) : rien ne s'enregistre.
  */
 
 const globals = globalThis as typeof globalThis & { IS_REACT_ACT_ENVIRONMENT?: boolean };
@@ -53,7 +54,7 @@ const settle = async (): Promise<void> => {
 };
 
 describe('la bulle vocale décrit son vocal (#10624)', () => {
-  test('dans le navigateur : l’`<audio>` porte l’id de sa pièce, et le registre de la coque reste vide', async () => {
+  test('dans un navigateur sans Media Session : l’`<audio>` porte l’id de sa pièce, et le registre reste vide', async () => {
     const { message, voice } = voiceWitness();
     const container = document.createElement('div');
     document.body.appendChild(container);

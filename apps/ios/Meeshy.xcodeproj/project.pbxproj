@@ -2783,6 +2783,7 @@
 		D448EA2D67766B58F972D33D /* PostStatAccessibility.swift in Sources */ = {isa = PBXBuildFile; fileRef = 11FAE9EB16137C7A7AA46971 /* PostStatAccessibility.swift */; };
 		D461F689FF374CB2EE1C25E7 /* GameOptimisticTests.swift in Sources */ = {isa = PBXBuildFile; fileRef = D7D33FBF284658DC94D7BA4B /* GameOptimisticTests.swift */; };
 		D4CB409856ACDDED158D654A /* DeviceTranslationEngine.swift in Sources */ = {isa = PBXBuildFile; fileRef = 2C2C4893D28C3A50D1C55D97 /* DeviceTranslationEngine.swift */; };
+		D4D5A083A15BF3A3A2B99B01 /* SceneWindowSizeCoverTests.swift in Sources */ = {isa = PBXBuildFile; fileRef = 298C569FA8FD7AE3795BE433 /* SceneWindowSizeCoverTests.swift */; };
 		D4E5AECC197E5251791FD71A /* IOS18OnlyStoredTypeGuardTests.swift in Sources */ = {isa = PBXBuildFile; fileRef = 7FAA6B08B4B4014C4285AEA1 /* IOS18OnlyStoredTypeGuardTests.swift */; };
 		D4F4D0C2A2C6A1C658CF90ED /* GamePhotoOfferView.swift in Sources */ = {isa = PBXBuildFile; fileRef = 0CE97CDC0D9E967CE21E8D1B /* GamePhotoOfferView.swift */; };
 		D55870C50D1A8622396EA84B /* OutboxUploadContextGuardTests.swift in Sources */ = {isa = PBXBuildFile; fileRef = 09E17F90D5A64A9194C0E474 /* OutboxUploadContextGuardTests.swift */; };
@@ -3985,6 +3986,7 @@
 		297D2959D2F0CD3978035385 /* GameHeroView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = GameHeroView.swift; sourceTree = "<group>"; };
 		298928DB9C8976D9B6ACB52B /* ComposerAutosaveController.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = ComposerAutosaveController.swift; sourceTree = "<group>"; };
 		298ACE429235453C2DDF16A3 /* ComposerFormatDenialReasonTests.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = ComposerFormatDenialReasonTests.swift; sourceTree = "<group>"; };
+		298C569FA8FD7AE3795BE433 /* SceneWindowSizeCoverTests.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = SceneWindowSizeCoverTests.swift; sourceTree = "<group>"; };
 		29928EC698DD6E841A5250AB /* AssetWriterStartWritingGuardTests.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = AssetWriterStartWritingGuardTests.swift; sourceTree = "<group>"; };
 		29B0F626F11D3BCD5122FAD2 /* ComposerAudienceAndHashtagTests.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = ComposerAudienceAndHashtagTests.swift; sourceTree = "<group>"; };
 		29D7914A11B18AC008F6B364 /* StoryPlaybackProgressClockTests.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = StoryPlaybackProgressClockTests.swift; sourceTree = "<group>"; };
@@ -9387,6 +9389,7 @@
 				8C53F5538E90BB0F0B92E719 /* PerpetualMotionGuardTests.swift */,
 				AC04B8137BFE23D653DB2C5D /* ReadingDirectionGuardTests.swift */,
 				27D6EA8593DC79F061952167 /* SceneFloorIsTheSceneGuardTests.swift */,
+				298C569FA8FD7AE3795BE433 /* SceneWindowSizeCoverTests.swift */,
 				C8392B7AEE139A7F2A41B72E /* SceneWindowSizeWiringGuardTests.swift */,
 				49E2C1EAF126C1930923572A /* SkeletonColdStartGuardTests.swift */,
 				40743F60A001DEADAB035464 /* SkeletonLoadMoreGuardTests.swift */,
@@ -14548,6 +14551,7 @@
 				E90F39A4C1302CE6A5B4D174 /* SceneFullscreenCaptionTranslationGuardTests.swift in Sources */,
 				98AAC5F7DB2A5EDF3114BCF7 /* SceneScrubStateTests.swift in Sources */,
 				5E01182A4A82CB902680B64B /* SceneStickerPoseTests.swift in Sources */,
+				D4D5A083A15BF3A3A2B99B01 /* SceneWindowSizeCoverTests.swift in Sources */,
 				B71D9166A6620C090ACD759F /* SceneWindowSizeWiringGuardTests.swift in Sources */,
 				922FDD9E53F8BCEC6451D4E3 /* ScreenShareWireTests.swift in Sources */,
 				D7C1FACA15C1B3CEB6B81426 /* ScrollActivityVectorTests.swift in Sources */,
