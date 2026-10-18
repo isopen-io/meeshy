@@ -63,6 +63,29 @@ final class StoryViewerPositionTests: XCTestCase {
         }
     }
 
+    /// Passage à l'auteur SUIVANT : la garde `currentGroupIndex < groups.count - 1` se lisait au tap, la closure
+    /// tournait 0,38 s plus tard (fin de l'animation) sur la copie de `groups` du tap avec l'index VIVANT — qu'un
+    /// `story:created` venu se trier devant avait recalé (`reanchorPosition`). `groups[currentGroupIndex]` après
+    /// `+= 1` sortait du tableau : plantage.
+    func test_nextGroupIndex_staysInsideTheListTheTransitionHolds() {
+        XCTAssertEqual(StoryViewerPosition.nextGroupIndex(after: 0, groupCount: 3), 1)
+        XCTAssertEqual(StoryViewerPosition.nextGroupIndex(after: 1, groupCount: 3), 2)
+        XCTAssertNil(StoryViewerPosition.nextGroupIndex(after: 2, groupCount: 3), "recalé sur le dernier : rien après")
+        XCTAssertNil(StoryViewerPosition.nextGroupIndex(after: 5, groupCount: 3), "recalé hors de la liste tenue")
+        XCTAssertNil(StoryViewerPosition.nextGroupIndex(after: 0, groupCount: 0))
+    }
+
+    /// Plus aucun `groups[currentGroupIndex]` après un `+= 1` : les deux sites (tap / avance auto, fin de
+    /// balayage) atterrissent par `landOnNextGroup()`, borné.
+    func test_storyViewer_noLongerSubscriptsAfterIncrementingTheGroup() throws {
+        for path in ["Meeshy/Features/Main/Views/StoryViewerView.swift",
+                     "Meeshy/Features/Main/Views/StoryViewerView+Navigation.swift",
+                     "Meeshy/Features/Main/Views/StoryViewerView+Content.swift"] {
+            let source = AppSourceGuard.stripComments(try AppSourceGuard.unit(path))
+            XCTAssertFalse(source.contains("currentGroupIndex += 1"), path)
+        }
+    }
+
     /// Le groupe qui a ouvert le lecteur disparaît pendant qu'on regarde un
     /// autre auteur : le conteneur tombait sur un spinner que rien ne relançait.
     func test_container_closesWhenItsGroupVanishesAfterPresenting() throws {

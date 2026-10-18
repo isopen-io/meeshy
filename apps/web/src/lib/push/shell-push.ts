@@ -3,7 +3,9 @@ import * as usersEndpoints from '@meeshy/shared/api/endpoints/users';
 
 import type { Credential, HttpTransport } from '@/lib/api/http';
 import { heldAccountOf, type SessionState } from '@/lib/api/session';
+import type { SocialEventV2Input } from '@/lib/api/social-events-v2-types';
 import { DELIVERY_RECEIPT_TYPES } from '@/lib/notifications/delivery-receipt-types';
+import { notificationEventOf } from '@/lib/notifications/notification-telemetry';
 import { pushTapTarget, type NotificationTargetInput, type PushTapTarget } from '@/lib/notifications/target';
 
 /**
@@ -73,6 +75,8 @@ export type ShellPushEnvironment = {
   readonly appVersion: string;
   /** L'appareil, par le pont natif (`MeeshyNotificationSettings.deviceIdentity`) — #10858. */
   readonly deviceIdentity: () => Promise<unknown>;
+  /** L'entonnoir des notifications (#10507, #10910) : la file v2 de la télémétrie. */
+  readonly record: (event: SocialEventV2Input) => void;
 };
 
 export type ShellDeviceIdentity = { readonly deviceId?: string; readonly deviceName?: string };
@@ -187,11 +191,18 @@ export async function startShellPush(env: ShellPushEnvironment): Promise<void> {
   });
   await plugin.addListener('registrationError', () => undefined);
 
+  const note = (data: unknown, action: 'received' | 'opened'): void => {
+    const event = notificationEventOf(data, action, 'fcm');
+    if (event !== null) env.record(event);
+  };
+
   await plugin.addListener('pushNotificationActionPerformed', ({ notification }) => {
+    note(notification.data, 'opened');
     env.navigate(env.urlOf(pushTapTarget(shellPushTargetInput(notification.data))));
   });
 
   await plugin.addListener('pushNotificationReceived', ({ data }) => {
+    note(data, 'received');
     const delivered = deliveredMessageOf(data);
     const credential = account();
     if (delivered === null || activeUser === null || credential === null) return;

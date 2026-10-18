@@ -37,6 +37,7 @@ import { currentInterfaceLanguage } from '@/lib/interface-language';
 import { prefersReducedMotion } from '@/lib/view/reduced-motion';
 import { appSettingsOpener } from '@/lib/view/settings-recovery';
 import { blurCapable, browserColorSupport, cameraSourceOf, effectsOffered, effectsUsedOf, videoEffectsStore } from '@/lib/calls/video-effects';
+import { useMediaSystemBars } from '@/lib/use-media-system-bars';
 
 import type { EffectsCompanion } from './call-effects-companions';
 
@@ -335,6 +336,7 @@ type CallScreenProps = {
 };
 
 export function CallScreen({ call, canShare = browserCanShare(), initiallyExpanded = false, effectsSupport }: CallScreenProps) {
+  useMediaSystemBars();
   const language = currentInterfaceLanguage();
   const t = (key: PlainCallKey): string => translate(language, key);
   const [layer, setLayer] = useState<CallScreenLayer>(initiallyExpanded ? { kind: 'menu' } : IDLE);

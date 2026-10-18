@@ -56,6 +56,8 @@ final class ConversationMediaFilmstripHostingTests: XCTestCase {
     private struct Harness: View {
         let attachments: [MessageAttachment]
         @ObservedObject var pager: PagerStandIn
+        /// La largeur que la galerie remet : celle de la fenêtre, ou d'une colonne plus étroite.
+        var containerWidth: CGFloat = ConversationMediaFilmstripHostingTests.window.width
 
         var body: some View {
             VStack(spacing: 0) {
@@ -63,9 +65,12 @@ final class ConversationMediaFilmstripHostingTests: XCTestCase {
                 ConversationMediaFilmstrip(
                     attachments: attachments,
                     currentPageID: $pager.pageID,
-                    accentColor: "6366F1"
+                    accentColor: "6366F1",
+                    containerWidth: containerWidth
                 )
+                .frame(width: containerWidth)
             }
+            .frame(maxWidth: .infinity, alignment: .leading)
         }
     }
 
@@ -93,13 +98,30 @@ final class ConversationMediaFilmstripHostingTests: XCTestCase {
             for current in Self.openingIndices(count: count) {
                 let attachments = Self.attachments(count: count)
                 let pager = PagerStandIn(pageID: attachments[current].id)
-                // La racine de la fenêtre a publié sa taille bien avant l'ouverture de la galerie.
-                let screen = RenderedScreen(Harness(attachments: attachments, pager: pager)
-                    .environment(\.sceneWindowSize, narrow), size: narrow)
+                let screen = RenderedScreen(Harness(attachments: attachments, pager: pager, containerWidth: narrow.width),
+                                            size: narrow)
                 defer { screen.dismount() }
 
                 assertPlayhead(on: current, count: count, in: screen,
                                context: "fenêtre de 320 pt, ouverture sur \(current + 1)/\(count)", width: narrow.width)
+            }
+        }
+    }
+
+    /// iPad : la galerie peut vivre dans une COLONNE plus étroite que sa fenêtre. La marge de tête se calcule sur la
+    /// largeur que la galerie a mesurée pour elle, pas sur la fenêtre — sinon la tête de lecture tombe hors colonne.
+    func test_opening_inAColumnNarrowerThanItsWindow_showsTheCurrentThumbnailUnderItsPlayhead() {
+        let column: CGFloat = 300
+        for count in [5, 40] {
+            for current in Self.openingIndices(count: count) {
+                let attachments = Self.attachments(count: count)
+                let pager = PagerStandIn(pageID: attachments[current].id)
+                let screen = RenderedScreen(Harness(attachments: attachments, pager: pager, containerWidth: column),
+                                            size: Self.window)
+                defer { screen.dismount() }
+
+                assertPlayhead(on: current, count: count, in: screen,
+                               context: "colonne de 300 pt, ouverture sur \(current + 1)/\(count)", width: column)
             }
         }
     }

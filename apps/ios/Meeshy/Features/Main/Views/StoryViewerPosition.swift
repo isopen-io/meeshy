@@ -68,6 +68,13 @@ nonisolated enum StoryViewerPosition {
         return Landing(group: target, story: max(0, storyCounts[target] - 1))
     }
 
+    /// L'auteur SUIVANT, s'il existe dans la liste que la transition tient en main.
+    static func nextGroupIndex(after groupIndex: Int, groupCount: Int) -> Int? {
+        let next = groupIndex + 1
+        guard next >= 0, next < groupCount else { return nil }
+        return next
+    }
+
     static func storyId(at position: Landing, in groups: [GroupShape]) -> String? {
         guard groups.indices.contains(position.group),
               groups[position.group].storyIds.indices.contains(position.story) else { return nil }

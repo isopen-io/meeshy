@@ -21,21 +21,24 @@ export function absoluteMediaUrl(url: string): string {
  * — l'auteur, la conversation, la date et l'avatar, enregistrés par id de
  * pièce : la coque les relit sur l'`<audio>` qui joue (`data-np-attachment`).
  *
- * Seule la coque lit ce registre (`shell-playback.ts`, chargé derrière
- * `__SHELL__`). Le registre et la loi des étiquettes (`now-playing.ts`)
- * arrivent donc par `import()` et dans la coque SEULEMENT : un navigateur ne
- * les télécharge jamais, et le chunk des pièces jointes ne les porte pas.
+ * La coque lit ce registre (`shell-playback.ts`), et le navigateur aussi
+ * quand il sert la Media Session API (`web-now-playing.ts`, #10890). Le
+ * registre et la loi des étiquettes (`now-playing.ts`) arrivent par
+ * `import()` : le chunk des pièces jointes ne les porte pas, et un navigateur
+ * sans carte de lecture ne les télécharge jamais.
  */
-export function useVoiceNowPlaying(attachmentId: string, facts: VoiceNowPlayingFacts, inShell: boolean = __SHELL__): void {
+export const nowPlayingCardShown = (): boolean => __SHELL__ || (typeof navigator !== 'undefined' && 'mediaSession' in navigator);
+
+export function useVoiceNowPlaying(attachmentId: string, facts: VoiceNowPlayingFacts, described: boolean = nowPlayingCardShown()): void {
   const { carrier, conversationTitle, conversationAvatarUrl, message, attachment } = facts;
   useEffect(() => {
-    if (!inShell) return;
+    if (!described) return;
     void import('./now-playing').then(({ registerNowPlaying, voiceNowPlayingTags }) =>
       registerNowPlaying(attachmentId, voiceNowPlayingTags({ ...facts, resolve: absoluteMediaUrl })),
     );
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [
-    inShell,
+    described,
     attachmentId,
     carrier?.sender?.displayName,
     carrier?.sender?.avatarUrl,

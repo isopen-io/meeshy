@@ -220,7 +220,11 @@ class KeyboardObserver: ObservableObject {
 
     private var cancellables = Set<AnyCancellable>()
 
-    init() {
+    /// La hauteur de la fenêtre contre laquelle le clavier se mesure — injectable pour les témoins.
+    private let windowHeight: () -> CGFloat
+
+    init(windowHeight: @escaping () -> CGFloat = { DeviceLayout.windowSize.height }) {
+        self.windowHeight = windowHeight
         NotificationCenter.default.publisher(for: UIResponder.keyboardWillChangeFrameNotification)
             .receive(on: DispatchQueue.main)
             .sink { [weak self] notification in
@@ -235,7 +239,7 @@ class KeyboardObserver: ObservableObject {
                 // A degenerate or floating end frame is not a measurement
                 // (#8869): it docks nothing, and it must never become the
                 // height the attachment panel reopens at.
-                let windowHeight = DeviceLayout.windowSize.height
+                let windowHeight = self.windowHeight()
                 let measured = ComposerPanelHeightLaw.keyboardHeight(
                     endFrame: endFrame,
                     windowHeight: windowHeight

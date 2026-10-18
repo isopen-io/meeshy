@@ -80,6 +80,9 @@ export async function startShellPushInShell(): Promise<void> {
     urlOf: shellPushUrl,
     appVersion: __APP_VERSION__,
     deviceIdentity: () => notificationBridge().deviceIdentity(),
+    record: (event) => {
+      void import('@/lib/view/reading-telemetry').then(({ readingTelemetry }) => readingTelemetry.recordV2(event));
+    },
   });
 }
 

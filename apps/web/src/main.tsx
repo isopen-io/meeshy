@@ -259,6 +259,19 @@ if (__SHELL__) {
 }
 
 /**
+ * ET « RAPPELER » SUR LA BANNIÈRE D'UN APPEL MANQUÉ COMPOSE L'APPEL (#10908) —
+ * le jumeau, dans la coque, de l'écoute que le web monte avec son worker ;
+ * après la première peinture, le signal natif étant retenu jusque-là.
+ */
+if (__SHELL__) {
+  const ecouterRappels = (): void => {
+    void import('@/lib/calls/call-back-intent').then(({ listenCallBackIntentsInShell }) => listenCallBackIntentsInShell());
+  };
+  if (document.readyState === 'complete') ecouterRappels();
+  else window.addEventListener('load', ecouterRappels, { once: true });
+}
+
+/**
  * UNE IMAGE, UNE VIDÉO OU UN LIEN PARTAGÉ DEPUIS UNE AUTRE APPLICATION OUVRE LA
  * FEUILLE D'ENVOI (#8884) — l'intent `SEND` de la coque Android est copié par
  * `MeeshyShareIntentPlugin`, lu ici ; le partage d'un lancement à froid attend
@@ -289,6 +302,16 @@ if (__SHELL__) {
     holdWhileAudioPlays(document, shellPlaybackHold());
     pauseVideosWhenNoisy(document, shellNoisy());
   });
+}
+
+/**
+ * ET DANS LE NAVIGATEUR, LA NOTIFICATION D'UN VOCAL DIT QUI PARLE ET SE PILOTE
+ * (#10890) — la même carte que la coque, par la Media Session API : l'auteur,
+ * la conversation, la date, l'avatar, la barre et les ±15 s. Un navigateur
+ * sans Media Session garde sa carte générique et ne charge rien.
+ */
+if (!__SHELL__ && 'mediaSession' in navigator) {
+  void import('@/lib/view/web-now-playing').then(({ startWebNowPlaying }) => startWebNowPlaying());
 }
 
 /**
