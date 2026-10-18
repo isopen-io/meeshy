@@ -1032,6 +1032,9 @@ public struct StoryGroup: Identifiable, Codable, Sendable, CacheIdentifiable {
     /// raffiner avec le PresenceManager temps réel quand une entrée existe.
     /// Optionnel → migration douce des caches GRDB et payloads antérieurs.
     public let authorPresence: UserPresence?
+    /// Le contour équipé de l'auteur (#10946), servi avec lui (#10945) ; `nil` sans contour ni
+    /// sur un cache antérieur (décodage additif).
+    public let authorRing: ServedProfileDecorItem?
 
     public var hasUnviewed: Bool { stories.contains { !$0.isViewed } }
     public var latestStory: StoryItem? { stories.last }
@@ -1047,14 +1050,14 @@ public struct StoryGroup: Identifiable, Codable, Sendable, CacheIdentifiable {
     }
 
     public init(id: String, username: String, avatarColor: String, avatarURL: String? = nil,
-                stories: [StoryItem], authorPresence: UserPresence? = nil) {
+                stories: [StoryItem], authorPresence: UserPresence? = nil, authorRing: ServedProfileDecorItem? = nil) {
         self.id = id; self.username = username; self.avatarColor = avatarColor; self.avatarURL = avatarURL
-        self.stories = stories; self.authorPresence = authorPresence
+        self.stories = stories; self.authorPresence = authorPresence; self.authorRing = authorRing
     }
 
     public func with(stories: [StoryItem]) -> StoryGroup {
         StoryGroup(id: id, username: username, avatarColor: avatarColor, avatarURL: avatarURL,
-                   stories: stories, authorPresence: authorPresence)
+                   stories: stories, authorPresence: authorPresence, authorRing: authorRing)
     }
 }
 

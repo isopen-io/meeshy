@@ -577,7 +577,7 @@ extension APIPost {
             if let username = c.author.username {
                 UserDisplayNameCache.shared.track(username: username, displayName: c.author.name)
             }
-            return FeedComment(id: c.id, author: c.author.name, authorId: c.author.id,
+            var comment = FeedComment(id: c.id, author: c.author.name, authorId: c.author.id,
                         authorUsername: c.author.username,
                         authorAvatarURL: c.author.avatar,
                         content: c.content,
@@ -593,6 +593,8 @@ extension APIPost {
                         location: c.location,
                         quotedMedia: c.quotedCitation,
                         trackedLinkMap: c.trackedLinkMap)
+            comment.authorRing = c.author.avatarRing
+            return comment
         }
 
         let repost: RepostContent? = repostOf?.toRepostContent()
@@ -651,6 +653,7 @@ extension APIPost {
         feedPost.visibility = visibility
         feedPost.visibilityUserIds = visibilityUserIds
         feedPost.viewerPoints = viewerPoints
+        feedPost.authorRing = author.avatarRing
         return feedPost
     }
 
@@ -699,7 +702,7 @@ extension APIRepostOf {
         let repostTranslations: [String: PostTranslation]? = translations?.mapValues { entry in
             PostTranslation(text: entry.text, translationModel: entry.translationModel, confidenceScore: entry.confidenceScore)
         }
-        return RepostContent(id: id, author: author.name, authorId: author.id,
+        var repost = RepostContent(id: id, author: author.name, authorId: author.id,
                              authorUsername: author.username,
                              authorAvatarURL: author.avatar,
                              content: content ?? "",
@@ -717,5 +720,7 @@ extension APIRepostOf {
                              expiresAt: nil,
                              location: location,
                              mentions: mentions)
+        repost.authorRing = author.avatarRing
+        return repost
     }
 }

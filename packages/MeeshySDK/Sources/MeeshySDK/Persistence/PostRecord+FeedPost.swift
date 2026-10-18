@@ -52,6 +52,7 @@ public extension PostRecord {
         feedPost.location = location
         feedPost.visibility = visibility
         feedPost.visibilityUserIds = visibilityUserIds
+        feedPost.authorRing = authorRing
         return feedPost
     }
 }

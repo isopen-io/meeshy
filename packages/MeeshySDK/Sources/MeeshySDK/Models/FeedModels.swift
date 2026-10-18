@@ -280,6 +280,8 @@ public struct RepostContent: Identifiable, Sendable {
     public let authorUsername: String?
     public let authorColor: String
     public let authorAvatarURL: String?
+    /// Le contour équipé de l'auteur original (#10946), servi avec lui (#10945) ; `nil` sans contour.
+    public var authorRing: ServedProfileDecorItem? = nil
     public let content: String
     public let timestamp: Date
     public var likes: Int
@@ -353,7 +355,7 @@ extension RepostContent: Codable {
     enum CodingKeys: String, CodingKey {
         case id, author, authorId, authorUsername, authorAvatarURL, content, timestamp, likes, isQuote
         case type, originalLanguage, audioUrl, moodEmoji, storyEffects, media, translations
-        case originalRepostOfId, visibility, expiresAt, location, mentions
+        case originalRepostOfId, visibility, expiresAt, location, mentions, authorRing
     }
 
     public init(from decoder: Decoder) throws {
@@ -387,6 +389,7 @@ extension RepostContent: Codable {
         expiresAt = try c.decodeIfPresent(Date.self, forKey: .expiresAt)
         location = try c.decodeIfPresent(SharedPlace.self, forKey: .location)
         mentions = try c.decodeIfPresent([PostReference].self, forKey: .mentions)
+        authorRing = try? c.decodeIfPresent(ServedProfileDecorItem.self, forKey: .authorRing)
         authorColor = DynamicColorGenerator.colorForName(authorId.isEmpty ? author : authorId)
     }
 
@@ -413,6 +416,7 @@ extension RepostContent: Codable {
         try c.encodeIfPresent(expiresAt, forKey: .expiresAt)
         try c.encodeIfPresent(location, forKey: .location)
         try c.encodeIfPresent(mentions, forKey: .mentions)
+        try c.encodeIfPresent(authorRing, forKey: .authorRing)
     }
 }
 
@@ -445,6 +449,8 @@ public struct FeedComment: Identifiable, Sendable {
     public let authorUsername: String?
     public let authorColor: String
     public let authorAvatarURL: String?
+    /// Le contour équipé de l'auteur du commentaire (#10946) ; `nil` sans contour.
+    public var authorRing: ServedProfileDecorItem? = nil
     public let parentId: String?
     public let content: String
     public let timestamp: Date
@@ -522,7 +528,7 @@ public struct FeedComment: Identifiable, Sendable {
     /// décrivaient l'ancien texte ; le pipeline serveur régénère et les vues se
     /// mettent à jour via `comment:translation-updated`.
     public func withEditedContent(_ newContent: String, effectFlags newFlags: Int) -> FeedComment {
-        FeedComment(
+        var edited = FeedComment(
             id: id, author: author, authorId: authorId, authorUsername: authorUsername,
             authorAvatarURL: authorAvatarURL,
             content: newContent, timestamp: timestamp, likes: likes, replies: replies,
@@ -536,6 +542,8 @@ public struct FeedComment: Identifiable, Sendable {
             quotedMedia: quotedMedia,
             trackedLinkMap: trackedLinkMap
         )
+        edited.authorRing = authorRing
+        return edited
     }
 
     public init(id: String = UUID().uuidString, author: String, authorId: String = "", authorUsername: String? = nil,
@@ -568,7 +576,7 @@ extension FeedComment: Codable {
     enum CodingKeys: String, CodingKey {
         case id, author, authorId, authorUsername, authorAvatarURL, parentId, content, timestamp, likes, replies
         case effectFlags, originalLanguage, translatedContent, currentUserReactions, media, location
-        case quotedMedia, trackedLinkMap, translations
+        case quotedMedia, trackedLinkMap, translations, authorRing
     }
 
     public init(from decoder: Decoder) throws {
@@ -595,6 +603,7 @@ extension FeedComment: Codable {
         // relisent sans perte — un commentaire d'avant #6578 ne cite rien.
         quotedMedia = try c.decodeIfPresent(CommentQuotedMedia.self, forKey: .quotedMedia)
         trackedLinkMap = try c.decodeIfPresent([String: String].self, forKey: .trackedLinkMap) ?? [:]
+        authorRing = try? c.decodeIfPresent(ServedProfileDecorItem.self, forKey: .authorRing)
         authorColor = DynamicColorGenerator.colorForName(authorId.isEmpty ? author : authorId)
     }
 
@@ -614,6 +623,7 @@ extension FeedComment: Codable {
         try c.encodeIfPresent(originalLanguage, forKey: .originalLanguage)
         try c.encodeIfPresent(translatedContent, forKey: .translatedContent)
         try c.encodeIfPresent(translations, forKey: .translations)
+        try c.encodeIfPresent(authorRing, forKey: .authorRing)
         try c.encodeIfPresent(currentUserReactions, forKey: .currentUserReactions)
         if !media.isEmpty {
             try c.encode(media, forKey: .media)
@@ -632,6 +642,8 @@ public struct FeedPost: Identifiable, Sendable {
     public let authorUsername: String?
     public let authorColor: String
     public let authorAvatarURL: String?
+    /// Le contour équipé de l'auteur (#10946), servi avec lui (#10945) ; `nil` sans contour.
+    public var authorRing: ServedProfileDecorItem? = nil
     public let type: String?
     /// Mutable so optimistic edit flows (FeedViewModel.updatePost) can
     /// rewrite the body without reconstructing the whole struct. All
@@ -865,7 +877,7 @@ extension FeedPost: Codable {
         case repost, repostAuthor, isQuote, media
         case originalLanguage, translations, translatedContent
         case storyEffects, audioUrl, location, mentions
-        case visibility, visibilityUserIds, trackedLinkMap, viewerPoints
+        case visibility, visibilityUserIds, trackedLinkMap, viewerPoints, authorRing
     }
 
     public init(from decoder: Decoder) throws {
@@ -923,6 +935,7 @@ extension FeedPost: Codable {
         mentions = try c.decodeIfPresent([PostReference].self, forKey: .mentions)
         trackedLinkMap = try c.decodeIfPresent([String: String].self, forKey: .trackedLinkMap) ?? [:]
         viewerPoints = try? c.decodeIfPresent(Int.self, forKey: .viewerPoints)
+        authorRing = try? c.decodeIfPresent(ServedProfileDecorItem.self, forKey: .authorRing)
         let stableId = authorId.isEmpty ? author : authorId
         authorColor = DynamicColorGenerator.colorForPost(authorId: stableId, type: type, originalLanguage: originalLanguage)
     }
@@ -969,6 +982,7 @@ extension FeedPost: Codable {
         try c.encodeIfPresent(mentions, forKey: .mentions)
         if !trackedLinkMap.isEmpty { try c.encode(trackedLinkMap, forKey: .trackedLinkMap) }
         try c.encodeIfPresent(viewerPoints, forKey: .viewerPoints)
+        try c.encodeIfPresent(authorRing, forKey: .authorRing)
     }
 }
 
