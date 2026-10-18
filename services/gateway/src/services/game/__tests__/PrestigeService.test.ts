@@ -142,4 +142,21 @@ describe('PrestigeService.pass — une écriture qui tombe ne laisse pas la dema
 
     expect(again).toMatchObject({ status: 'passed', prestige: 1 });
   });
+
+  it('grave le record du cycle qu’il clôt, une seule fois par passage, rejoué ou concurrent (#10911)', async () => {
+    const { db, service } = setup({ levelRecord: 130, levelMaxLifetime: 130, prestige: 1, prestigeLevelRecords: [150] });
+
+    await service.pass({ userId: USER, requestId: 'prestige-02' });
+    await service.pass({ userId: USER, requestId: 'prestige-02' });
+
+    expect(db.user.rows[0]).toMatchObject({ prestige: 2, prestigeLevelRecords: [150, 130] });
+  });
+
+  it('un compte sans records de cycle (antérieur) commence la liste à ce passage (#10911)', async () => {
+    const { db, service } = setup();
+
+    await service.pass({ userId: USER, requestId: 'prestige-01' });
+
+    expect(db.user.rows[0]).toMatchObject({ prestige: 1, prestigeLevelRecords: [100] });
+  });
 });

@@ -62,6 +62,7 @@ import { creditEngagementCounter, raiseEngagementCounterCount } from './Engageme
 import { engraveBadgesSilently, historyCountFor } from './engagementAxisHistory';
 import { writeEngagementScore, type ScoreWritten } from './EngagementScoreWrite';
 import { announceGameState } from '../game/GameStateBroadcast';
+import { gameRevisionColumn, gameRevisionValue, nextGameRevision } from '../game/GameRevision';
 
 import type { EngagementActivityOptions, EngagementLinkVisit } from './engagementActivityTypes';
 import { EngagementStreaks } from './EngagementStreaks';
@@ -410,7 +411,7 @@ export class EngagementService {
     if (!Number.isInteger(points) || points <= 0) return;
     const written = await withRetry(() =>
       this.prisma.$transaction(async (tx) => {
-        const account = await tx.user.findUnique({ where: { id: userId }, select: { ...SPARKS_USER_SELECT, prestige: true } });
+        const account = await tx.user.findUnique({ where: { id: userId }, select: { ...SPARKS_USER_SELECT, prestige: true, gameRevision: true } });
         if (!account) return null;
         await creditEngagementCounter(tx, { userId, axisKey, points, count: 0 });
         // Poche, cycle et total à vie montent du même montant (#10846) ; un compte d'avant le rattrapage les voit
@@ -423,6 +424,8 @@ export class EngagementService {
         await tx.user.update({
           where: { id: userId },
           data: {
+            // La révision de l'état du jeu (#10912), gravée avec la poche, lue dans la même transaction.
+            gameRevision: gameRevisionColumn(nextGameRevision(gameRevisionValue(account.gameRevision), Date.now())),
             engagementScore: pocket,
             sparksSincePrestige: BigInt(cycle),
             sparksEarnedLifetime: BigInt(before.lifetime + points),

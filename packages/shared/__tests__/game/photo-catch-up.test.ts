@@ -4,9 +4,11 @@
 
 import { describe, it, expect } from 'vitest';
 import {
+  levelReachCount,
   photoCatchUp,
   photoOfferFor,
   photoStepsReached,
+  photoTierStepId,
   photoTrackOf,
   type PhotoCatchUpStanding,
 } from '../../utils/game/photo-catch-up.js';
@@ -60,7 +62,7 @@ describe('les étapes franchies', () => {
   it('les paliers de niveau suivent le record, avec leur premier niveau', () => {
     const tiers = photoStepsReached(standing({ levelRecord: 34 })).filter((step) => step.track === 'tier');
     expect(ids(tiers)).toEqual(['tier:lueur', 'tier:lumiere', 'tier:eclat']);
-    expect(tiers[2]?.emblem).toEqual({ kind: 'tier', tier: 'eclat', level: 30 });
+    expect(tiers[2]?.emblem).toEqual({ kind: 'tier', tier: 'eclat', level: 30, prestige: 0, times: 1 });
   });
 
   it('le sommet puis chaque Prestige', () => {
@@ -129,5 +131,48 @@ describe('une seule proposition à la fois', () => {
     expect(photoTrackOf('level-100:0')).toBe('summit');
     expect(photoTrackOf('prestige:3')).toBe('summit');
     expect(photoTrackOf('league-up:2026-W40:or')).toBeNull();
+  });
+});
+
+describe('un palier atteint de nouveau dans un cycle neuf redevient un moment de photo (#10911)', () => {
+  const tiers = (s: PhotoCatchUpStanding) => photoStepsReached(s).filter((step) => step.track === 'tier');
+
+  it('au premier cycle, l’identité d’hier, atteinte une fois', () => {
+    const reached = tiers(standing({ levelRecord: 34 }));
+    expect(ids(reached)).toEqual(['tier:lueur', 'tier:lumiere', 'tier:eclat']);
+    expect(reached[2]?.emblem).toEqual({ kind: 'tier', tier: 'eclat', level: 30, prestige: 0, times: 1 });
+  });
+
+  it('après un Prestige, une identité par cycle, et le nombre de fois que le palier a été atteint', () => {
+    const reached = tiers(standing({ levelRecord: 34, prestige: 1 }));
+    expect(ids(reached)).toEqual(['tier:lueur:1', 'tier:lumiere:1', 'tier:eclat:1']);
+    expect(reached[2]?.emblem).toEqual({ kind: 'tier', tier: 'eclat', level: 30, prestige: 1, times: 2 });
+  });
+
+  it('la photo du palier gardée au cycle d’avant ne vaut pas pour le cycle neuf : le rattrapage la redemande', () => {
+    const entries = photoCatchUp(standing({ levelRecord: 34, prestige: 1 }), ['start', 'tier:lueur', 'tier:lumiere', 'tier:eclat']);
+    expect(entries.filter((entry) => entry.track === 'tier').map(({ id, state }) => ({ id, state }))).toEqual([
+      { id: 'tier:lueur:1', state: 'open' },
+      { id: 'tier:lumiere:1', state: 'locked' },
+      { id: 'tier:eclat:1', state: 'locked' },
+    ]);
+  });
+
+  it('au-delà du niveau 100, le compte se lit sur le record de chaque cycle clos', () => {
+    const reached = tiers(standing({ levelRecord: 120, prestige: 2, pastCycleRecords: [150, 100] }));
+    expect(reached.find((step) => step.id === 'tier:nebuleuse:2')?.emblem).toMatchObject({ prestige: 2, times: 2 });
+    expect(reached.find((step) => step.id === 'tier:galaxie:2')?.emblem).toMatchObject({ times: 3 });
+  });
+
+  it('un cycle clos sans record servi a atteint au moins le niveau du Prestige (100), jamais au-delà', () => {
+    expect(levelReachCount(standing({ levelRecord: 34, prestige: 2 }), 30)).toBe(3);
+    expect(levelReachCount(standing({ levelRecord: 120, prestige: 2 }), 101)).toBe(1);
+    expect(levelReachCount(standing({ levelRecord: 120, prestige: 2, pastCycleRecords: [130] }), 101)).toBe(2);
+  });
+
+  it('l’identité d’un palier ne dépend que du palier et du cycle', () => {
+    expect(photoTierStepId('lueur', 0)).toBe('tier:lueur');
+    expect(photoTierStepId('lueur', 3)).toBe('tier:lueur:3');
+    expect(photoTrackOf('tier:lueur:3')).toBe('tier');
   });
 });

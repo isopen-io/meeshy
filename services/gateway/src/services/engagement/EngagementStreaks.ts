@@ -35,6 +35,7 @@ import { RECIPIENT_LANG_SELECT, recipientLanguage } from '../../utils/recipient-
 import { enhancedLogger } from '../../utils/logger-enhanced';
 import type { EngagementGameHooks } from '../game/EngagementGameHooks';
 import { writeStreak } from '../game/FlameService';
+import { stampGameRevisionAfterWrite } from '../game/GameRevision';
 import { ActStreakRecorder } from './ActStreakRecorder';
 import { dueLoyaltyTiers, loyaltyBucket } from './LoyaltyBonus';
 import { creditEngagementCounter } from './EngagementCounterWrites';
@@ -111,6 +112,8 @@ export class EngagementStreaks {
     // s'éteint — la série perdue est gardée pour le rallumage de 48 h.
     const written = await writeStreak(this.prisma, userId, new Date());
     if (written === null) return false;
+    // La Flamme est servie dans le bloc : son écriture conditionnelle fait monter la révision de l'état du jeu (#10912).
+    await stampGameRevisionAfterWrite(this.prisma, userId);
     const { plan, previousStreak } = written;
 
     const crossedThresholds = STREAK_THRESHOLDS.filter(

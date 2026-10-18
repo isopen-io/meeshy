@@ -3,7 +3,7 @@ import { sparksTailwindFactor, tailwindFactor } from '@meeshy/shared/utils/game/
 import { gloryStanding, levelCapForRank } from '@meeshy/shared/utils/game/glory';
 import { levelOnTheWire, mintOnTheWire } from '@meeshy/shared/utils/game/level-wire';
 import { previewMint } from '@meeshy/shared/utils/game/mint';
-import { prestigeTransition } from '@meeshy/shared/utils/game/prestige';
+import { pastCycleRecordsAfterPrestige, prestigeTransition } from '@meeshy/shared/utils/game/prestige';
 import { seasonStepReward } from '@meeshy/shared/utils/game/season';
 import { previewSparksMint, sparksAfterPrestige } from '@meeshy/shared/utils/game/sparks';
 
@@ -144,6 +144,12 @@ export const afterPrestige = (view: EngagementWithGame): EngagementWithGame => {
   const standing = gloryStanding({ glory: game.glory.glory + transition.gloryGained, mythic: game.glory.rank === 'mythe', mythicSeat: game.glory.mythic ?? null });
   const levelCap = levelCapForRank(standing.rank);
   const steps = stepFactsOf(game.level, standing);
+  // Le cycle que le passage clôt rejoint la liste, comme l'écrit la passerelle (#10911).
+  const pastCycleRecords = pastCycleRecordsAfterPrestige({
+    pastCycleRecords: game.level.ladder?.pastCycleRecords,
+    levelRecord: recordOf(game.level),
+    level: shownLevel(game.level),
+  });
   const level = levelOnTheWire({
     score: transition.scoreAfter,
     levelCap,
@@ -151,6 +157,7 @@ export const afterPrestige = (view: EngagementWithGame): EngagementWithGame => {
     prestige: transition.prestigeAfter,
     steps,
     ...(sparks === undefined ? {} : { sparks, levelMaxLifetime: Math.max(proof, shownLevel(game.level)) }),
+    ...(pastCycleRecords === undefined ? {} : { pastCycleRecords }),
   });
   const mintedLifetime = Math.max(0, game.mint.number - 1);
   const trophies = game.trophies;

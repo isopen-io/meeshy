@@ -251,7 +251,11 @@ enum GameWave2Optimistic {
         }
         let level = GameLevelWire.level(score: passage.scoreAfter, levelCap: levelCap,
                                          levelRecord: passage.levelRecordAfter, prestige: passage.prestigeAfter, steps: steps,
-                                         sparks: sparks, levelMaxLifetime: sparks.map { _ in max(proof, game.level.shown.level) })
+                                         sparks: sparks, levelMaxLifetime: sparks.map { _ in max(proof, game.level.shown.level) },
+                                         // Le cycle que le passage clôt rejoint la liste, comme l'écrit la passerelle (#10911).
+                                         pastCycleRecords: GamePrestige.pastCycleRecordsAfterPrestige(
+                                            game.level.ladder?.pastCycleRecords,
+                                            levelRecord: game.level.shown.record, level: game.level.shown.level))
         let mintedLifetime = max(0, game.mint.number - 1)
         let preview = sparks.map {
             GameMint.sparksPreview(sparks: $0.pocket, mintedLifetime: mintedLifetime, held: game.treasury.held,

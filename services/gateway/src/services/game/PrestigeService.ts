@@ -23,7 +23,7 @@
 
 import type { PrismaClient } from '@meeshy/shared/prisma/client';
 import type { PrestigeResponse } from '@meeshy/shared/types/game';
-import { prestigeTransition } from '@meeshy/shared/utils/game/prestige';
+import { closedCycleRecord, prestigeTransition } from '@meeshy/shared/utils/game/prestige';
 import { GLORY_POINTS } from '@meeshy/shared/utils/game/glory';
 import { prestigeTrophy, trophyKey } from '@meeshy/shared/utils/game/trophies';
 import { EngagementQuotas } from '../engagement/EngagementQuotas';
@@ -33,6 +33,7 @@ import { GameRefusal } from './GameRefusal';
 import { GloryService } from './GloryService';
 import { TrophyService } from './TrophyService';
 import { announceGameState } from './GameStateBroadcast';
+import { stampGameRevisionAfterWrite } from './GameRevision';
 
 const REQUEST_OPERATION = 'game.prestige';
 const WRITE_ATTEMPTS = 3;
@@ -95,6 +96,8 @@ export class PrestigeService {
           sparksEarnedLifetime: BigInt(sparks.lifetime),
           levelMaxLifetime: maxLifetime,
           levelRecord: verdict.levelRecordAfter,
+          // Le record du cycle que ce passage clôt (#10911) — dans la même écriture conditionnelle : une fois par Prestige.
+          prestigeLevelRecords: { push: closedCycleRecord({ levelRecord: account?.levelRecord ?? null, level: currentLevelOf(account) }) },
         },
       });
       if (written.count === 0) {
@@ -102,6 +105,8 @@ export class PrestigeService {
         await this.prisma.engagementQuota.deleteMany({ where: { userId, operationKey: REQUEST_OPERATION, bucket } });
         continue;
       }
+      // L'écriture du passage est conditionnelle (`updateMany`) : la révision (#10912) se grave juste après, atomiquement.
+      await stampGameRevisionAfterWrite(this.prisma, userId);
       const gloryGained = await this.followUps(userId, verdict.prestigeAfter, verdict.gloryGained, now);
       announceGameState(userId, 'prestige');
       return { status: 'passed', prestige: verdict.prestigeAfter, score: 0, level: 1, gloryGained, trophyKey: verdict.trophyKey };

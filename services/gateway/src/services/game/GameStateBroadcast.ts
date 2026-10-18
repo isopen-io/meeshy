@@ -5,8 +5,9 @@
  *
  * Quatre propriétés :
  *
- *  - **le marqueur est pris AVANT la lecture** : toute écriture terminée avant lui est dans le bloc ; un client qui a
- *    déjà appliqué plus récent ignore celui-ci (`shouldApplyGameState`) ;
+ *  - **le marqueur est la révision GRAVÉE (#10912), lue AVANT le bloc** : toute écriture gravée avant elle est dans le
+ *    bloc, quelle que soit l'horloge de la passerelle qui émet ; un client qui a déjà appliqué plus récent ignore
+ *    celui-ci (`shouldApplyGameState`). Compte sans révision gravée : l'instant, comme avant ;
  *  - **une seule lecture en vol par compte** : une écriture qui tombe pendant une lecture en commande UNE autre, après —
  *    les marqueurs d'un même compte croissent donc toujours ;
  *  - **les gains sont coalescés** (`creditWindowMs`) : un compte qui gagne dix fois en une seconde ne relit qu'une fois ;
@@ -30,7 +31,7 @@ const log = enhancedLogger.child({ module: 'GameStateBroadcast' });
 /** La fenêtre de coalescence des gains : au plus une relecture par compte toutes les deux secondes. */
 export const GAME_CREDIT_WINDOW_MS = 2_000;
 
-/** Le marqueur d'ordre d'un état servi : l'instant serveur, en millisecondes. */
+/** Le repli du marqueur d'ordre — un compte sans révision gravée (#10912) : l'instant serveur, en millisecondes. */
 export const gameRevisionNow = (): number => Date.now();
 
 type Cancel = () => void;
@@ -38,6 +39,8 @@ type Cancel = () => void;
 export type GameStateBroadcastDeps = {
   readonly io: () => ServerEmitIO | undefined;
   readonly build: (userId: string) => Promise<GameBlock | null>;
+  /** La révision GRAVÉE du compte (#10912) ; `null` (ou absente, tests) : l'instant `now`. */
+  readonly revision?: (userId: string) => Promise<number | null>;
   readonly now?: () => number;
   readonly schedule?: (fn: () => void, ms: number) => Cancel;
   readonly creditWindowMs?: number;
@@ -139,7 +142,10 @@ export class GameStateBroadcast {
   }
 
   private async publish(userId: string, reason: GameUpdateReason): Promise<void> {
-    const gameRevision = this.now();
+    // Le repli (compte sans révision gravée) est pris AVANT toute lecture, comme la révision gravée.
+    const takenAt = this.now();
+    const graved = this.deps.revision === undefined ? null : await this.deps.revision(userId).catch(() => null);
+    const gameRevision = graved ?? takenAt;
     const game = await this.deps.build(userId).catch((error: unknown) => {
       log.warn('game block unavailable, game:updated sent as a pure invalidation', {
         userId,

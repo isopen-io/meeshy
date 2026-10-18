@@ -794,9 +794,6 @@ struct StoryCardView: View {
     @Binding var isComposerEngaged: Bool
     @Binding var hasComposerContent: Bool
     @Binding var sharedContentWrapper: SharedContentWrapper?
-    /// Republication en STORY — voir la présentation dans `StoryViewerView`.
-    @Binding var republishStorySource: RepostPostSourceWrapper?
-    @Binding var editAndRepostAsPostSource: RepostPostSourceWrapper?
     /// Lieu ouvert plein écran au tap d'une pastille de position (Layer 6.6).
     @Binding var readerFullscreenPlace: StoryReaderPlaceWrapper?
     @Binding var isPresented: Bool
@@ -912,7 +909,6 @@ struct StoryCardView: View {
     let toggleStoryCommentThread: @MainActor (String) async -> Void
     let makeStoryExternalShareURL: (String) -> URL?
     let deleteCurrentStory: () -> Void
-    let repostAsPostDirect: () -> Void
     let dismissViewer: () -> Void
     let reportStory: @MainActor (_ storyId: String, _ reportType: String, _ reason: String?) async throws -> Void
     let composerBottomPadding: (GeometryProxy) -> CGFloat
@@ -1595,13 +1591,11 @@ struct StoryCardView: View {
                     hasAudioTranscript: storyHasAudioTranscript,
                     showAudioTranscript: $showAudioTranscript,
                     selectedProfileUser: $selectedProfileUser,
-                    editAndRepostAsPostSource: $editAndRepostAsPostSource,
                     showReportSheet: $showReportSheet,
                     sharedContentWrapper: $sharedContentWrapper,
                     showExportShareSheet: $showExportShareSheet,
                     makeStoryExternalShareURL: makeStoryExternalShareURL,
                     deleteCurrentStory: deleteCurrentStory,
-                    repostAsPostDirect: repostAsPostDirect,
                     pauseTimer: pauseTimer,
                     dismissViewer: dismissViewer,
                     reportStory: reportStory,
@@ -1729,7 +1723,6 @@ struct StoryCardView: View {
                     showViewersSheet: $showViewersSheet,
                     isGlobalMutedBinding: $isGlobalMutedBinding,
                     sharedContentWrapper: $sharedContentWrapper,
-                    republishStorySource: $republishStorySource,
                     isPresented: $isPresented,
                     reactionStripOwnsDrag: $reactionStripOwnsDrag,
                     triggerStoryReaction: triggerStoryReaction,

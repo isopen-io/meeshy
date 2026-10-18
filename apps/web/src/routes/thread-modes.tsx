@@ -747,7 +747,13 @@ export function ThreadModes({
                   {...(rowServed.language === '' ? {} : { lang: rowServed.language })}
                   {...(rowSelected === undefined || onRowTap === undefined
                     ? {}
-                    : { onClick: () => onRowTap(p.message.id) })}
+                    : {
+                        onClickCapture: (event: { preventDefault: () => void; stopPropagation: () => void }) => {
+                          event.preventDefault();
+                          event.stopPropagation();
+                          onRowTap(p.message.id);
+                        },
+                      })}
                 >
                   {/* LES EFFETS S'EXÉCUTENT ICI (#7596), sur le nœud qui enveloppe
                       LES DEUX peaux — même raison que la destruction ci-dessus :

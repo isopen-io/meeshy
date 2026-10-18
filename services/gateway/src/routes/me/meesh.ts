@@ -19,7 +19,6 @@ import { sendSuccess, sendUnauthorized, sendError, sendInternalError } from '../
 import { AUTH_ERROR_CODES } from '../../utils/auth-error-codes';
 import { logError } from '../../utils/logger';
 import { MeeshService, receiptOnTheWire } from '../../services/meesh/MeeshService';
-import { gameRevisionNow } from '../../services/game/GameStateBroadcast';
 
 /**
  * Débit par COMPTE, strict — la frappe ÉCRIT, et elle est irréversible. Un
@@ -207,8 +206,9 @@ export async function meMeeshRoutes(fastify: FastifyInstance) {
           balance: outcome.balance,
           mintedLifetime: outcome.mintedLifetime,
           ...(outcome.receipt === null ? {} : receiptOnTheWire(outcome.receipt)),
-          // Pris APRÈS la frappe (#10900) : toute lecture partie avant elle porte un marqueur plus petit.
-          gameRevision: gameRevisionNow(),
+          // La révision GRAVÉE par la frappe (#10912), jamais l'heure de la réponse : toute lecture partie avant elle porte
+          // une révision plus petite, quelle que soit l'horloge de la passerelle qui la sert.
+          gameRevision: outcome.gameRevision,
         });
       } catch (error) {
         logError(fastify.log, 'Error minting a Meesh', error);

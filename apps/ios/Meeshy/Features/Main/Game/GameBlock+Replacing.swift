@@ -56,7 +56,7 @@ nonisolated enum GameLevelWire {
     /// niveau garde exactement la forme d'hier.
     static func level(score: Int, levelCap: Int?, levelRecord: Int?, prestige: Int,
                       steps: GameLevelStepFacts? = nil, sparks: GameSparks.Ledger? = nil,
-                      levelMaxLifetime: Int? = nil) -> GameBlock.Level {
+                      levelMaxLifetime: Int? = nil, pastCycleRecords: [Int]? = nil) -> GameBlock.Level {
         let gate = GameLevelSteps.gate(steps)
         let progress = GameLevels.progress(forScore: score, cap: levelCap, gate: gate)
         let legacy = GameLevels.legacyProgress(forScore: score, gate: gate)
@@ -86,7 +86,8 @@ nonisolated enum GameLevelWire {
                 held: progress.held,
                 step: GameLevelSteps.next(after: progress.level, facts: steps),
                 steps: steps?.counts,
-                levelMaxLifetime: maxLifetime
+                levelMaxLifetime: maxLifetime,
+                pastCycleRecords: pastCycleRecords
             ),
             sparks: sparks?.pocket,
             sparksCycle: sparks?.cycle,

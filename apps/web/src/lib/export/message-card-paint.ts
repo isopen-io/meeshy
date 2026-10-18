@@ -1,6 +1,7 @@
 import '@/styles/story-fonts.css';
 
 import { layoutMessageCard, type CardLayout, type CardOp, type CardRegion, type MessageCardInput } from './message-card-layout';
+import { measuredInput } from './message-card-sticker';
 import { MEESHY_PNG_METADATA, withPngMetadata } from './png-metadata';
 import { canvasFont, templateFonts, templateOf, type CardPalette, type MessageCardTemplate } from './message-card-templates';
 
@@ -131,6 +132,10 @@ function sizeOf(source: CardSource): { readonly width: number; readonly height: 
 
 /** Pose une source en « cover » dans son cadre arrondi : elle le remplit, centrée, sans jamais se déformer. */
 function paintMedia(ctx: Paintable, op: Extract<CardOp, { kind: 'media' }>, source: CardSource | null): void {
+  if (op.contain === true) {
+    paintContained(ctx, op, source);
+    return;
+  }
   ctx.save();
   ctx.beginPath();
   ctx.roundRect(op.x, op.y, op.width, op.height, op.radius);
@@ -145,6 +150,16 @@ function paintMedia(ctx: Paintable, op: Extract<CardOp, { kind: 'media' }>, sour
     ctx.drawImage(source, op.x + (op.width - width) / 2, op.y + (op.height - height) / 2, width, height);
   }
   ctx.restore();
+}
+
+/** Pose un sticker AJUSTÉ (« contain ») : tout le dessin, centré dans son cadre, sans clip arrondi ni fond — son alpha reste transparent. */
+function paintContained(ctx: Paintable, op: Extract<CardOp, { kind: 'media' }>, source: CardSource | null): void {
+  const size = source === null ? null : sizeOf(source);
+  if (source === null || size === null || size.width <= 0 || size.height <= 0) return;
+  const scale = Math.min(op.width / size.width, op.height / size.height);
+  const width = size.width * scale;
+  const height = size.height * scale;
+  ctx.drawImage(source, op.x + (op.width - width) / 2, op.y + (op.height - height) / 2, width, height);
 }
 
 function paintWave(ctx: Paintable, op: Extract<CardOp, { kind: 'wave' }>, progress: number | null): void {
@@ -314,7 +329,7 @@ async function paintCard(input: MessageCardInput, doc: Document, width: number |
   const canvas = doc.createElement('canvas');
   const ctx = canvas.getContext('2d');
   if (ctx === null) return null;
-  const layout = layoutMessageCard(input, (text, font) => {
+  const layout = layoutMessageCard(measuredInput(input, sources), (text, font) => {
     ctx.font = font;
     return ctx.measureText(text).width;
   });

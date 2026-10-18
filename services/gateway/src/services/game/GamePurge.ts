@@ -229,6 +229,7 @@ export async function purgeGameData(prisma: PurgeDb, userId: string, deps: GameP
       guideSeen: [],
       levelRecord: null,
       prestige: null,
+      prestigeLevelRecords: [],
       flameFreezes: null,
       lastRelightDay: null,
       brokenStreakDays: null,

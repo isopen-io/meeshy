@@ -51,6 +51,7 @@ import { dayKeyOf, minuteOfDayInTimezone } from './gameClock';
 import { MISSION_PROFILE_USER_SELECT, missionProfileOf } from './MissionHabits';
 import { meeshTotalsFromLedger } from '../meesh/MeeshService';
 import { starFragmentsOf } from './StarFragments';
+import { stampGameRevisionAfterWrite } from './GameRevision';
 import { enhancedLogger } from '../../utils/logger-enhanced';
 
 const log = enhancedLogger.child({ module: 'MissionService' });
@@ -401,14 +402,20 @@ export class MissionService {
     const reachable = (row: DailyMission): boolean =>
       row.slot !== PERSONAL_MISSION_SLOT ||
       (row.startsAt != null && row.endsAt != null && isPersonalMissionOpen({ startsAt: row.startsAt, endsAt: row.endsAt, now }));
+    let advanced = false;
     for (const row of rows.filter((r) => r.signal === signal && r.completedAt === null && reachable(r))) {
       const progress = options.key !== undefined
         ? await this.advanceDistinct(row, options.key)
         : await this.advanceCounted(row, options.amount ?? 1);
-      if (progress !== null && progress >= row.target) {
+      if (progress === null) continue;
+      advanced = true;
+      if (progress >= row.target) {
         await this.complete(row, now, timezone ?? (await this.userRow(userId))?.timezone ?? null);
       }
     }
+    // La progression d'une mission est servie dans le bloc : la révision de l'état du jeu monte (#10912), après toutes
+    // les écritures du geste.
+    if (advanced) await stampGameRevisionAfterWrite(this.prisma, userId);
   }
 
   private async advanceCounted(row: DailyMission, amount: number): Promise<number> {
@@ -669,7 +676,10 @@ export class MissionService {
         where: { id: userId, ...flameFreezesUnchanged(row.flameFreezes) },
         data: { flameFreezes: freezes + 1 },
       });
-      if (written.count === 1) return;
+      if (written.count === 1) {
+        await stampGameRevisionAfterWrite(this.prisma, userId);
+        return;
+      }
     }
     throw new Error('chest freeze contended');
   }

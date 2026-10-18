@@ -154,6 +154,8 @@ export type FeedPost = {
    * n'est servi que si la requête annonce `CANVAS_CAPS_HEADERS` (ci-dessous).
    */
   readonly storyEffects?: unknown;
+  /** L'ÉCHÉANCE d'une story ou d'un statut (`Post.expiresAt`, servie par `postScalarSelect`) — absente : le post ne s'éteint pas. */
+  readonly expiresAt?: string | Date | null;
   readonly repostOf?: FeedRepostOf | null;
   /**
    * LES PERSONNES QUE LE SERVEUR A RÉSOLUES (#7032) — `PostReference[]` aplati

@@ -46,7 +46,7 @@ export const VIEWER_GLASS = 'glass-call';
 /** Ce que le rail réserve au bord de fin : 44 de cible + 8 de marge + 8 de respiration. */
 export const VIEWER_RAIL_CORRIDOR = 60;
 
-type Placement = 'overlay' | 'corridor';
+type Placement = 'overlay' | 'corridor' | 'floating';
 
 /** Les PRISES qu'un gate tape déjà (`data-story-action`, `data-reel-gesture`…) — posées telles quelles sur le contrôle. */
 export type ViewerProbe = Readonly<Record<`data-${string}`, string>>;
@@ -349,14 +349,14 @@ export function ViewerTopBar({
   readonly placement?: Placement;
 }) {
   const chrome = useYield(hidden);
-  const overlay = placement === 'overlay';
+  const placed = { overlay: 'viewer-scrim-top absolute inset-x-0 top-0 z-10 pb-11', floating: 'absolute inset-x-0 top-0 z-10 pb-1', corridor: 'relative z-10 pb-1' }[placement];
   return (
     <div
       {...probe}
       data-viewer-top-bar=""
       data-chrome-yields={chrome['data-chrome-yields']}
       inert={chrome.inert}
-      className={`viewer-chrome pointer-events-none flex flex-col gap-2 px-3 ${overlay ? 'viewer-scrim-top absolute inset-x-0 top-0 z-10 pb-11' : 'relative z-10 pb-1'}`}
+      className={`viewer-chrome pointer-events-none flex flex-col gap-2 px-3 ${placed}`}
       style={{ paddingTop: 'calc(var(--safe-top, 0px) + 8px)', ...chrome.style }}
     >
       {above}
@@ -430,14 +430,18 @@ export function ViewerBottomBar({
   const onReply = held ? undefined : reply?.onReply;
   const hasRow = caption !== undefined || rail !== undefined;
   if (!hasRow && onReply === undefined && children === undefined) return null;
-  const overlay = placement === 'overlay';
+  const placed = {
+    overlay: `${SCRIM_CLASS[scrim]} absolute inset-x-0 bottom-0 z-10 pt-10`,
+    floating: 'absolute inset-x-0 bottom-0 z-10',
+    corridor: 'relative z-10',
+  }[placement];
   return (
     <div
       {...probe}
       data-viewer-bottom-bar=""
       data-chrome-yields={chrome['data-chrome-yields']}
       inert={chrome.inert}
-      className={`viewer-chrome pointer-events-none flex flex-col gap-3 ${overlay ? `${SCRIM_CLASS[scrim]} absolute inset-x-0 bottom-0 z-10 pt-10` : 'relative z-10'}`}
+      className={`viewer-chrome pointer-events-none flex flex-col gap-3 ${placed}`}
       style={{ paddingBottom: 'calc(var(--safe-bottom, 0px) + 12px)', ...chrome.style }}
     >
       {hasRow ? (

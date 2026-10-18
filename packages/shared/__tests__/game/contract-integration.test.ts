@@ -154,11 +154,11 @@ describe('le profil de jeu d’un autre membre', () => {
   it('retire, par construction, tout champ que le contrat ne déclare pas', () => {
     const leaky = {
       visible: true,
-      standing: { level: 3, tier: 'etincelle', prestige: 0, flame: null, rank: 'murmure', division: 3, glory: 4321, streak: 12 },
+      standing: { level: 3, tier: 'etincelle', prestige: 0, flame: null, rank: 'murmure', division: 3, lastSeenAt: '2026-10-18T09:00:00Z', streak: 12 },
       treasury: { tier: null, held: 77 },
     };
     const parsed = userGameProfileResponseSchema.parse(leaky);
-    expect(parsed.standing).not.toHaveProperty('glory');
+    expect(parsed.standing).not.toHaveProperty('lastSeenAt');
     expect(parsed.standing).not.toHaveProperty('streak');
     expect(parsed.treasury).not.toHaveProperty('held');
   });

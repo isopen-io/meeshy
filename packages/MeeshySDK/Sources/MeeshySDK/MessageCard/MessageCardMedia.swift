@@ -33,9 +33,16 @@ public struct MessageCardMedia: Equatable, Sendable {
     /// Le nom de qui l'a posté, tel qu'il se peint — déjà anonymisé ou mis en
     /// @pseudo par l'appelant (#9235) ; `nil` : la carte ne le dit pas.
     public let credit: String?
+    /// Un STICKER (#10915) : découpage à fond transparent, jamais recadré ni arrondi
+    /// (`MessageCardSticker.isSticker`) — il s'inscrit en entier dans un cadre à son rapport.
+    public let isSticker: Bool
+    /// Le rapport est-il CONNU (côtés déclarés) ? Faux : `aspect` n'est qu'un carré
+    /// d'attente, que les pixels chargés corrigent (`with(pixelWidth:pixelHeight:)`).
+    public let aspectKnown: Bool
 
     public init(id: String, kind: MessageCardMediaKind, aspect: Double = 1, duration: Double? = nil, name: String? = nil,
-                samples: [Double] = [], transcript: MessageCardTranscript? = nil, credit: String? = nil) {
+                samples: [Double] = [], transcript: MessageCardTranscript? = nil, credit: String? = nil,
+                isSticker: Bool = false, aspectKnown: Bool = true) {
         self.id = id
         self.kind = kind
         self.aspect = aspect.isFinite && aspect > 0.2 && aspect < 5 ? aspect : 1
@@ -44,20 +51,34 @@ public struct MessageCardMedia: Equatable, Sendable {
         self.samples = samples.map { $0.isFinite ? min(1, max(0, $0)) : 0 }
         self.transcript = kind == .audio ? transcript : nil
         self.credit = MessageCardText.nonBlank(credit)
+        self.isSticker = isSticker && kind == .image
+        self.aspectKnown = aspectKnown
     }
 
     public func with(samples: [Double]) -> MessageCardMedia {
-        MessageCardMedia(id: id, kind: kind, aspect: aspect, duration: duration, name: name, samples: samples, transcript: transcript, credit: credit)
+        MessageCardMedia(id: id, kind: kind, aspect: aspect, duration: duration, name: name, samples: samples, transcript: transcript, credit: credit,
+                         isSticker: isSticker, aspectKnown: aspectKnown)
     }
 
     /// Le même média, sa durée lue dans le fichier quand le message ne la disait pas.
     public func with(duration: Double?) -> MessageCardMedia {
-        MessageCardMedia(id: id, kind: kind, aspect: aspect, duration: duration ?? self.duration, name: name, samples: samples, transcript: transcript, credit: credit)
+        MessageCardMedia(id: id, kind: kind, aspect: aspect, duration: duration ?? self.duration, name: name, samples: samples, transcript: transcript, credit: credit,
+                         isSticker: isSticker, aspectKnown: aspectKnown)
     }
 
     /// Le même média, signé du nom de qui l'a posté — `nil` : sans signature.
     public func with(credit: String?) -> MessageCardMedia {
-        MessageCardMedia(id: id, kind: kind, aspect: aspect, duration: duration, name: name, samples: samples, transcript: transcript, credit: credit)
+        MessageCardMedia(id: id, kind: kind, aspect: aspect, duration: duration, name: name, samples: samples, transcript: transcript, credit: credit,
+                         isSticker: isSticker, aspectKnown: aspectKnown)
+    }
+
+    /// Le même média, son rapport LU SUR LES PIXELS quand le message ne le
+    /// déclarait pas : jamais un carré par défaut pour un sticker (#10915).
+    /// Un rapport déjà connu, ou des pixels illisibles, ne changent rien.
+    public func with(pixelWidth: Int, pixelHeight: Int) -> MessageCardMedia {
+        guard !aspectKnown, let measured = MessageCardSticker.aspect(pixelWidth: pixelWidth, pixelHeight: pixelHeight) else { return self }
+        return MessageCardMedia(id: id, kind: kind, aspect: measured, duration: duration, name: name, samples: samples, transcript: transcript, credit: credit,
+                                isSticker: isSticker, aspectKnown: true)
     }
 
     /// Les amplitudes de l'extrait `clip` — toutes, sans extrait ou sans durée connue.

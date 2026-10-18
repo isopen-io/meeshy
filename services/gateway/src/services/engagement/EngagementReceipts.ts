@@ -31,6 +31,7 @@ import type { EngagementQuotas } from './EngagementQuotas';
 import type { EngagementScaleSource } from './EngagementScaleService';
 import type { PostPointsRecorder } from './PostPointsRecorder';
 import { announceGameState } from '../game/GameStateBroadcast';
+import { gameRevisionPipelineSet } from '../game/GameRevision';
 
 const NO_POST = '-';
 
@@ -105,6 +106,8 @@ export async function takeBackPoints(prisma: ReceiptPrisma, userId: string, oper
             // bloque la frappe (porteur, 2026-10-16). `sparksDebt` d'abord : il lit la poche d'avant.
             sparksDebt: { $add: [held('sparksDebt'), { $subtract: [taken, { $min: [held('engagementScore'), taken] }] }] },
             engagementScore: { $max: [0, { $subtract: [held('engagementScore'), taken] }] },
+            // La révision de l'état du jeu (#10912), dans la MÊME commande atomique que la poche.
+            ...gameRevisionPipelineSet(Date.now()),
           },
         },
       ],

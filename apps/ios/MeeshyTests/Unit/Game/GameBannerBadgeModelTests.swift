@@ -38,37 +38,44 @@ final class GameBannerBadgeModelTests: XCTestCase {
         XCTAssertFalse((model.levelAccessibilityLabel + model.rankAccessibilityLabel).contains(GameCopy.flameFormName(.brasier)))
     }
 
-    // MARK: - Les étincelles (#10846) : la poche en grand, le total à vie dessous ; le niveau, le max à vie dessous
+    // MARK: - La poche en grand, la Gloire totale dessous (#10846, #10913) ; le niveau, le max à vie dessous
 
-    private func sparked(points: Int? = nil, sparks: Int? = nil, lifetime: Int? = nil, level: Int = 3,
+    private func sparked(points: Int? = nil, sparks: Int? = nil, lifetime: Int? = nil, glory: Int? = nil, level: Int = 3,
                          levelMax: Int? = nil) -> GameBannerBadgeModel? {
         let served = GameStanding(level: level, tier: .etincelle, prestige: 0, flame: nil, rank: .murmure, division: .iii,
                                   division5: .v, ladder: GameStandingLadder(level: level, tier: .etincelle), points: points,
-                                  levelMaxLifetime: levelMax, sparks: sparks, sparksLifetime: lifetime)
+                                  levelMaxLifetime: levelMax, sparks: sparks, sparksLifetime: lifetime, glory: glory)
         return GameBannerBadgeModel.of(GameStandingContent(standing: served, treasuryTier: nil), userId: "u1")
     }
 
-    func test_servedSparks_showThePocket_andTheLifetimeTotalBelow() throws {
-        let model = try XCTUnwrap(sparked(points: 976, sparks: 976, lifetime: 12_000))
+    /// Soi ou un ami : la Gloire totale sous la poche, à la place du record d'étincelles (porteur 2026-10-18).
+    func test_servedGlory_showsThePocket_andTheGloryBelow_neverTheLifetimeSparks() throws {
+        let model = try XCTUnwrap(sparked(points: 976, sparks: 976, lifetime: 12_000, glory: 16_000))
 
         XCTAssertEqual(model.pocket, 976)
         XCTAssertEqual(model.pocketText, GameSparksCopy.bannerPocket(976))
-        XCTAssertEqual(model.lifetimeText, GameSparksCopy.bannerLifetime(12_000))
+        XCTAssertEqual(model.gloryText, GameCopy.gloryAmount(GameCopy.formatCount(16_000)))
+        XCTAssertFalse(model.levelAccessibilityLabel.contains(GameCopy.formatCount(12_000)))
     }
 
-    /// Un serveur d'avant les étincelles : la poche se lit sur `points`, et aucun total à vie ne s'invente.
-    func test_olderServer_readsThePocketOnPoints_withoutInventingALifetime() throws {
-        let model = try XCTUnwrap(sparked(points: 976))
+    /// Un non-ami (ou un serveur antérieur) : la Gloire n'est pas servie, aucune ligne ne s'invente — même devant un
+    /// record d'étincelles servi.
+    func test_withheldGlory_drawsNoGloryLine() throws {
+        let model = try XCTUnwrap(sparked(points: 976, lifetime: 12_000))
 
         XCTAssertEqual(model.pocket, 976)
-        XCTAssertNil(model.lifetimeText)
+        XCTAssertNil(model.gloryText)
+    }
+
+    func test_zeroGlory_drawsNoGloryLine() throws {
+        XCTAssertNil(try XCTUnwrap(sparked(points: 976, glory: 0)).gloryText)
     }
 
     func test_noSparksServed_saysNoSparks() throws {
         let model = try XCTUnwrap(sparked())
 
         XCTAssertNil(model.pocketText)
-        XCTAssertNil(model.lifetimeText)
+        XCTAssertNil(model.gloryText)
     }
 
     /// Le niveau max à vie se montre TOUJOURS sous le niveau, même égal à lui.
@@ -92,11 +99,11 @@ final class GameBannerBadgeModelTests: XCTestCase {
         XCTAssertEqual(try XCTUnwrap(sparked(level: 3)).levelProgress, 1)
     }
 
-    func test_levelAccessibilityLabel_readsPocketLifetimeAndLifetimeMax() throws {
-        let model = try XCTUnwrap(sparked(points: 976, sparks: 976, lifetime: 12_000, level: 3, levelMax: 40))
+    func test_levelAccessibilityLabel_readsPocketGloryAndLifetimeMax() throws {
+        let model = try XCTUnwrap(sparked(points: 976, sparks: 976, lifetime: 12_000, glory: 16_000, level: 3, levelMax: 40))
 
         XCTAssertTrue(model.levelAccessibilityLabel.contains(GameSparksCopy.sparks(976)))
-        XCTAssertTrue(model.levelAccessibilityLabel.contains(GameSparksCopy.lifetimeAccessibility(12_000)))
+        XCTAssertTrue(model.levelAccessibilityLabel.contains(GameCopy.gloryAmount(GameCopy.formatCount(16_000))))
         XCTAssertTrue(model.levelAccessibilityLabel.contains(GameSparksCopy.levelMaxAccessibility(40)))
     }
 

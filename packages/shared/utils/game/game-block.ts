@@ -63,6 +63,8 @@ export type GameBlockFacts = {
   readonly sparks?: SparksFacts;
   /** Le niveau max à vie (#10846), qui survit au prestige. Lu seulement avec `sparks`. */
   readonly levelMaxLifetime?: number | null;
+  /** Le record de chaque cycle clos par un Prestige (#10911, `User.prestigeLevelRecords`). Absent : le champ ne part pas. */
+  readonly pastCycleRecords?: readonly number[];
   readonly levelRecord: number | null;
   readonly prestige: number;
   readonly glory: number;
@@ -146,6 +148,7 @@ export function buildGameBlock(facts: GameBlockFacts): GameBlock {
     prestige: facts.prestige,
     steps,
     ...(sparks === undefined ? {} : { sparks, levelMaxLifetime: facts.levelMaxLifetime ?? null }),
+    ...(facts.pastCycleRecords === undefined ? {} : { pastCycleRecords: facts.pastCycleRecords }),
   });
   const record = level.ladder?.record ?? level.record;
   const treasury = treasuryTier(facts.balance);

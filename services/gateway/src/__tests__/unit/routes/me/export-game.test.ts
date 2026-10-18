@@ -91,6 +91,16 @@ describe('exportGame', () => {
     expect(() => JSON.stringify(game)).not.toThrow();
   });
 
+  it('exporte le record de chaque cycle clos par un Prestige (#10911) — une liste vide pour un compte qui n’en a pas', async () => {
+    const db = fakeGameDb();
+    seed(db);
+    Object.assign(db.user.rows[0]!, { prestige: 2, prestigeLevelRecords: [150, 100] });
+
+    const game = await exportGame(db.prisma, USER, PAGE);
+
+    expect(game.progress).toMatchObject({ prestige: 2, prestigeLevelRecords: [150, 100] });
+  });
+
   it('rend les réglages, le pseudonyme et chaque liste du compte', async () => {
     const db = fakeGameDb();
     seed(db);

@@ -13,6 +13,7 @@ import { logger } from '../utils/logger';
 import { socketIOAdminRoutes } from './socketio-admin-routes';
 import { setEngagementEmitIOProvider } from '../services/engagement/engagement-emit-registry';
 import { GameStateBroadcast, setGameStateBroadcast } from '../services/game/GameStateBroadcast';
+import { gravedGameRevision } from '../services/game/GameRevision';
 import { GameBlockService } from '../services/game/GameBlockService';
 import { MissionService, READ_ONLY_CREDIT } from '../services/game/MissionService';
 import { PersonalMissionService } from '../services/game/PersonalMissionService';
@@ -48,7 +49,12 @@ export class MeeshySocketIOHandler {
     setEngagementEmitIOProvider(() => this.socketIOManager?.getIO());
     // L'état du jeu se propage aux appareils du compte après chaque écriture (#10900).
     setGameStateBroadcast(
-      new GameStateBroadcast({ io: () => this.socketIOManager?.getIO() ?? undefined, build: gameBlockBuilder(this.prisma) }),
+      new GameStateBroadcast({
+        io: () => this.socketIOManager?.getIO() ?? undefined,
+        build: gameBlockBuilder(this.prisma),
+        // La révision GRAVÉE du compte (#10912), lue avant le bloc : jamais l'heure de l'émission.
+        revision: (userId) => gravedGameRevision(this.prisma, userId),
+      }),
     );
 
     // Les deux gestes d'administration vivent dans `socketio-admin-routes.ts`

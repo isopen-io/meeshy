@@ -26,8 +26,8 @@ struct GameBannerBadgeModel: Equatable {
     /// La poche d'étincelles (#10846) — `sparks` servi, sinon `points` (même nombre devant un serveur antérieur) ;
     /// `nil` quand le serveur ne les sert pas à ce lecteur (#9541 : soi et les amis).
     let pocket: Int?
-    /// Le record d'étincelles (le total cumulé à vie) — `nil` devant un serveur antérieur : il ne s'invente pas.
-    let lifetime: Int?
+    /// La Gloire totale (#10913) — `nil` quand le serveur ne la sert pas à ce lecteur (soi et les amis), ou nulle.
+    let glory: Int?
     /// Le record de niveau, qui survit au prestige — jamais sous le niveau montré.
     let levelMax: Int
 
@@ -42,17 +42,17 @@ struct GameBannerBadgeModel: Equatable {
     }
 
     var pocketText: String? { pocket.map(GameSparksCopy.bannerPocket) }
-    var lifetimeText: String? { lifetime.map(GameSparksCopy.bannerLifetime) }
+    var gloryText: String? { glory.map { GameCopy.gloryAmount(GameCopy.formatCount($0)) } }
     /// TOUJOURS montré, même égal au niveau (décision porteur 2026-10-16).
     var levelMaxText: String { GameSparksCopy.bannerLevelMax(levelMax) }
 
-    /// « Niveau 3, palier Braise, premier palier, Record de niveau 40, 976 étincelles, Record d’étincelles : 12 000 ».
+    /// « Niveau 3, palier Braise, premier palier, Record de niveau 40, 976 étincelles, Gloire 16 000 ».
     var levelAccessibilityLabel: String {
         let parts: [String?] = [
             GameCopy.levelRingAccessibility(level: level, tier: tier),
             GameSparksCopy.levelMaxAccessibility(levelMax),
             pocket.map(GameSparksCopy.sparks),
-            lifetime.map(GameSparksCopy.lifetimeAccessibility),
+            gloryText,
         ]
         return parts.compactMap { $0 }.joined(separator: GameText.bannerSeparator)
     }
@@ -68,7 +68,7 @@ struct GameBannerBadgeModel: Equatable {
         return GameBannerBadgeModel(
             userId: userId, level: standing.shownLevel, tier: standing.shownTier, prestige: standing.prestige,
             rank: standing.rank, division: standing.shownDivision, mythic: standing.mythic,
-            pocket: standing.sparks ?? standing.points, lifetime: standing.sparksLifetime,
+            pocket: standing.sparks ?? standing.points, glory: standing.glory.flatMap { $0 > 0 ? $0 : nil },
             levelMax: max(standing.levelMaxLifetime ?? standing.ladder?.levelMaxLifetime ?? standing.shownLevel, standing.shownLevel)
         )
     }
@@ -158,7 +158,7 @@ struct GameBannerBadgeView: View {
     }
 
     /// Le nom du niveau au-dessus de son cercle et le record de niveau dessous ; à côté, la poche d'étincelles en grand
-    /// et le record d'étincelles en petit.
+    /// et la Gloire totale en petit (#10913).
     private var levelGroup: some View {
         VStack(alignment: .leading, spacing: MeeshySpacing.xxs) {
             caption(model.levelName)
@@ -171,15 +171,17 @@ struct GameBannerBadgeView: View {
                     .frame(width: emblemSize, height: model.prestige > 0 ? emblemSize * 66 / 56 : emblemSize)
                     small(model.levelMaxText)
                 }
-                if let pocketText = model.pocketText {
+                if model.pocketText != nil || model.gloryText != nil {
                     VStack(alignment: .leading, spacing: 0) {
-                        Text(pocketText)
-                            .font(MeeshyFont.relative(MeeshyFont.bodySize, weight: .bold))
-                            .foregroundColor(.white)
-                            .lineLimit(1)
-                            .minimumScaleFactor(0.7)
-                        if let lifetimeText = model.lifetimeText {
-                            small(lifetimeText)
+                        if let pocketText = model.pocketText {
+                            Text(pocketText)
+                                .font(MeeshyFont.relative(MeeshyFont.bodySize, weight: .bold))
+                                .foregroundColor(.white)
+                                .lineLimit(1)
+                                .minimumScaleFactor(0.7)
+                        }
+                        if let gloryText = model.gloryText {
+                            small(gloryText)
                         }
                     }
                     .bannerTextShadow()

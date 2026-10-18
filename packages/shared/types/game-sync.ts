@@ -9,10 +9,12 @@
  *  - l'événement `game:updated`, poussé dans la room `user:<id>` après une frappe, un gain, une reprise, un prestige
  *    ou une dépense de Meesh.
  *
- * Chacune porte `gameRevision` : l'instant SERVEUR (millisecondes depuis l'époque) avant lequel toute écriture du jeu
- * terminée est reflétée dans ce qu'elle sert. Un client garde la plus haute révision appliquée et IGNORE toute source
- * dont la révision est strictement plus petite (`shouldApplyGameState`). Une source sans révision (un serveur d'avant)
- * s'applique comme hier.
+ * Chacune porte `gameRevision` : la révision de l'état du jeu GRAVÉE sur le compte (#10912) — une horloge logique
+ * hybride, `max(instant de la passerelle, révision lue + 1)` posée par chaque écriture du jeu dans la même écriture —
+ * lue AVANT l'état servi : toute écriture gravée avant elle y est reflétée. Elle ne recule jamais pour un compte, quelles
+ * que soient les horloges des passerelles. Un compte sans révision gravée sert l'instant serveur, comme avant. Un client
+ * garde la plus haute révision appliquée et IGNORE toute source dont la révision est strictement plus petite
+ * (`shouldApplyGameState`). Une source sans révision (un serveur d'avant) s'applique comme hier.
  */
 
 import { z } from 'zod';
@@ -26,7 +28,7 @@ export { shouldApplyGameState };
 export const GAME_UPDATE_REASONS = ['mint', 'credit', 'reclaim', 'prestige', 'spend'] as const;
 export type GameUpdateReason = (typeof GAME_UPDATE_REASONS)[number];
 
-/** Le marqueur d'ordre : millisecondes serveur, croissant pour un même compte. */
+/** Le marqueur d'ordre : la révision gravée du compte (millisecondes, horloge logique hybride, #10912), croissante pour un même compte. */
 export const gameRevisionSchema = nonNegativeInt;
 
 /**

@@ -86,6 +86,8 @@ export type CardMediaOp = {
   readonly height: number;
   readonly radius: number;
   readonly video: boolean;
+  /** Un STICKER : posé ajusté dans son cadre, sans clip ni fond — jamais coupé. */
+  readonly contain?: true;
 };
 
 /**

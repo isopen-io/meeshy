@@ -45,6 +45,10 @@ public enum PostCommentCardBlock: Equatable, Sendable {
 /// (la racine et ses réponses, dans n'importe quel ordre).
 public struct PostCommentCardSource: Sendable {
     public let post: FeedPost?
+    /// Le support quand le commentaire est celui d'une STORY (#10915) — `post` est alors `nil`.
+    public let story: PostCommentCardStory?
+    /// L'instant que la composition tient pour « maintenant » (une story échue ne s'image pas).
+    public let now: Date
     public let target: FeedComment
     public let thread: [FeedComment]
     public let viewer: MessageCardSubject.Viewer
@@ -57,8 +61,11 @@ public struct PostCommentCardSource: Sendable {
     public let readable: [String: String]
 
     public init(post: FeedPost?, target: FeedComment, thread: [FeedComment], viewer: MessageCardSubject.Viewer,
-                showOriginal: Bool = false, readable: [String: String] = [:]) {
+                showOriginal: Bool = false, readable: [String: String] = [:],
+                story: PostCommentCardStory? = nil, now: Date = Date()) {
         self.post = post
+        self.story = story
+        self.now = now
         self.target = target
         self.thread = thread
         self.viewer = viewer
@@ -81,7 +88,8 @@ public struct PostCommentCardSource: Sendable {
 /// est protégé ne s'image dans aucun mode : elle le cite, et la peindre sans
 /// lui serait un fil troué (la loi de la discussion, #9573). Une réponse
 /// voisine protégée ou vide, elle, n'entre simplement pas dans le fil. Un post
-/// qui disparaît (story, statut) ou sans rien à montrer ne se met pas en tête.
+/// qui disparaît (story, statut), sans rien à montrer ou dont l'audience n'est
+/// pas `PUBLIC` ne se met pas en tête.
 ///
 /// BORNES : le texte du post s'arrête à `maxPostLines` lignes et
 /// `maxPostCharacters` caractères ; la carte compte au plus `maxBlocks` blocs —
@@ -107,6 +115,15 @@ public enum PostCommentCardComposition {
         if postHead(of: source) != nil { offered.append(.postRootAndReply) }
         if choosable(of: source).count >= 2 { offered.append(.chosenReplies) }
         return offered
+    }
+
+    /// **Le repli « commentaire seul »** : aucun mode ne compose parce que le fil
+    /// de la réponse n'est pas chargé (sa racine manque), mais elle est peignable
+    /// et aucun ancêtre CONNU n'est protégé — la carte du commentaire seul s'offre,
+    /// comme avant la composition.
+    public static func fallsBackToCommentAlone(_ source: PostCommentCardSource) -> Bool {
+        guard source.target.parentId != nil, isPaintable(source.target), modes(of: source).isEmpty else { return false }
+        return !knownAncestors(of: source).contains(where: isProtected)
     }
 
     /// Le mode d'ouverture : « Post + commentaire » ou « Fil jusqu'ici ».
@@ -163,29 +180,54 @@ public enum PostCommentCardComposition {
     /// premier reste la citation et les suivants s'écrivent comme une
     /// discussion, « Auteur : texte », sous `title` ; le pli dit `foldedLabel`.
     /// - Parameter audioLanguages: la piste SERVIE de chaque son, par identifiant de pièce.
+    /// - Parameter heroSupport: le visuel du support en HERO (défaut) ; `false` : la vignette d'avant #10915.
+    ///
+    /// **HERO** (#10915) : avec `heroSupport`, le premier visuel du support (post,
+    /// réel, story) n'est plus une vignette posée entre la citation et la réponse
+    /// mais le HERO de la carte (`MessageCardSubject.heroID`) : grand, pleine
+    /// largeur, avant tout texte. La citation devient la ligne du support : son
+    /// auteur et un extrait court (`MessageCardHero.excerptLines/Characters`), ou le
+    /// symbole du média quand le support n'a pas de texte.
+    ///
+    /// **FIL** (#10915) : plusieurs commentaires ne s'aplatissent plus, chacun
+    /// garde son niveau (`MessageCardPart.thread`) — la racine à 0, ses réponses à
+    /// 1 (au plus `MessageCardThread.maxLevel`), mesuré depuis le premier commentaire montré.
     public static func subject(of source: PostCommentCardSource, mode: PostCommentCardMode, showsPost: Bool,
                                chosen: Set<String> = [], title: String, foldedLabel: (Int) -> String,
-                               audioLanguages: [String: String] = [:]) -> MessageCardSubject? {
+                               audioLanguages: [String: String] = [:], heroSupport: Bool = true) -> MessageCardSubject? {
         let composed = Self.blocks(of: source, mode: mode, showsPost: showsPost, chosen: chosen)
         guard let first = composed.first, let last = composed.last else { return nil }
-        let quoted = composed.count > 1 ? part(of: first) : nil
+        let media = Self.media(of: composed, source: source, audioLanguages: audioLanguages, heroSupport: heroSupport)
+        let heroID = heroSupport ? media.hero?.media.id : nil
+        var quoted = composed.count > 1 ? part(of: first) : nil
+        if heroID != nil, case .post(let head) = first, composed.count > 1 {
+            quoted = heroLine(head, media: media.hero)
+        }
         let rest = composed.count > 1 ? Array(composed.dropFirst()) : composed
         let reply: MessageCardPart
         if rest.count == 1, let only = part(of: last) {
             reply = only
         } else {
-            let lines = rest.map { block -> String in
-                guard case .folded(let count) = block else { return part(of: block).map { "\($0.author) : \($0.text)" } ?? "" }
-                return foldedLabel(count)
+            let baseline = composed.compactMap { block -> Int? in
+                guard case .comment(let id, _) = block else { return nil }
+                return depth(of: id, source: source)
+            }.first ?? 0
+            let entries = rest.map { block -> MessageCardThreadLine in
+                guard case .folded(let count) = block else {
+                    let level = commentID(of: block).map { depth(of: $0, source: source) - baseline } ?? 0
+                    return MessageCardThreadLine(text: part(of: block).map { "\($0.author) : \($0.text)" } ?? "", level: level)
+                }
+                return MessageCardThreadLine(text: foldedLabel(count), level: 1)
             }
-            reply = MessageCardPart(author: title, text: lines.joined(separator: "\n"))
+            reply = MessageCardPart(author: title, text: entries.map(\.text).joined(separator: "\n"), thread: entries)
         }
         return MessageCardSubject(
             quoted: quoted,
             reply: reply,
             sentAt: source.target.timestamp,
             quotedAt: quoted == nil ? nil : time(of: first, source: source),
-            media: media(of: composed, source: source, audioLanguages: audioLanguages)
+            media: media.items,
+            heroID: heroID
         )
     }
 
@@ -212,6 +254,19 @@ public enum PostCommentCardComposition {
         while let id = next {
             guard let parent = known[id], !chain.contains(where: { $0.id == id }), id != source.target.id else { return nil }
             chain.insert(parent, at: 0)
+            next = parent.parentId
+        }
+        return chain
+    }
+
+    /// Les ancêtres qu'on connaît, du parent direct vers la racine, jusqu'au premier maillon manquant.
+    private static func knownAncestors(of source: PostCommentCardSource) -> [FeedComment] {
+        let known = byId(source.thread)
+        var chain: [FeedComment] = []
+        var seen: Set<String> = [source.target.id]
+        var next = source.target.parentId
+        while let id = next, seen.insert(id).inserted, let parent = known[id] {
+            chain.append(parent)
             next = parent.parentId
         }
         return chain
@@ -264,17 +319,61 @@ public enum PostCommentCardComposition {
 
     // MARK: - Les parties
 
-    /// Le post en tête : son auteur et son texte servi, tronqué — `nil` quand il ne se met pas en tête.
-    static func postHead(of source: PostCommentCardSource) -> MessageCardPart? {
-        guard let post = source.post, !disappears(post) else { return nil }
-        let text = MessageCardText.nonBlank(source.read(post.displayContent)).map(excerpt)
-        guard text != nil || !postMedia(of: post).isEmpty else { return nil }
-        let isViewer = !source.viewer.id.isEmpty && post.authorId == source.viewer.id
-        return MessageCardPart(
-            author: MessageCardSubject.author(isViewer: isViewer, names: [post.author, post.authorUsername], viewer: source.viewer),
-            text: text ?? "",
-            handle: post.authorUsername
+    /// Le support (post, réel ou story) tel que la carte le lit : son auteur, son texte, son visuel.
+    struct Support {
+        let author: String
+        let authorId: String
+        let username: String?
+        let text: String?
+        let timestamp: Date
+        let media: [MessageCardSubjectMedia]
+    }
+
+    /// **L'audience du support** : seul un support `PUBLIC` se fige sur une carte qui part
+    /// hors de Meeshy — absente ou restreinte (`FRIENDS`, `COMMUNITY`, `PRIVATE`, `EXCEPT`,
+    /// `ONLY`), elle le retient (fail-closed). Jumelle de `isPublicAudience` (shared, web).
+    static func isPublicAudience(_ visibility: String?) -> Bool {
+        (visibility ?? "").uppercased() == "PUBLIC"
+    }
+
+    static func support(of source: PostCommentCardSource) -> Support? {
+        if let post = source.post {
+            guard isPublicAudience(post.visibility), !disappears(post) else { return nil }
+            return Support(
+                author: post.author, authorId: post.authorId, username: post.authorUsername,
+                text: MessageCardText.nonBlank(source.read(post.displayContent)).map { excerpt($0) },
+                timestamp: post.timestamp, media: postMedia(of: post)
+            )
+        }
+        guard let story = source.story, isPublicAudience(story.visibility),
+              !StoryItem.isExpired(createdAt: story.timestamp, expiresAt: story.expiresAt, at: source.now) else { return nil }
+        // Une story à canvas sans vignette ne s'image pas : le garde d'avant #10915 tient.
+        if story.hasCanvas, story.heroMedia(now: source.now) == nil { return nil }
+        return Support(
+            author: story.author, authorId: story.authorId, username: story.authorUsername,
+            text: MessageCardText.nonBlank(story.text.map(source.read)).map { excerpt($0) },
+            timestamp: story.timestamp, media: story.heroMedia(now: source.now).map { [$0] } ?? []
         )
+    }
+
+    /// Le support en tête : son auteur et son texte servi, tronqué — `nil` quand il ne se met pas en tête.
+    static func postHead(of source: PostCommentCardSource) -> MessageCardPart? {
+        guard let support = support(of: source) else { return nil }
+        guard support.text != nil || !support.media.isEmpty else { return nil }
+        let isViewer = !source.viewer.id.isEmpty && support.authorId == source.viewer.id
+        return MessageCardPart(
+            author: MessageCardSubject.author(isViewer: isViewer, names: [support.author, support.username], viewer: source.viewer),
+            text: support.text ?? "",
+            handle: support.username
+        )
+    }
+
+    /// **La ligne du support sous son hero** (#10915) : son auteur et un extrait COURT ;
+    /// sans texte, le symbole de son média — la citation vide disparaîtrait avec son auteur.
+    static func heroLine(_ head: MessageCardPart, media: MessageCardSubjectMedia?) -> MessageCardPart {
+        let short = MessageCardText.nonBlank(head.text).map { excerpt($0, lines: MessageCardHero.excerptLines, characters: MessageCardHero.excerptCharacters) }
+        let text = short ?? media.map { symbol(of: $0.media.kind) } ?? ""
+        return MessageCardPart(author: head.author, text: text, handle: head.handle)
     }
 
     /// Une story ou un statut disparaît : il ne se fige pas en tête d'une image.
@@ -284,12 +383,12 @@ public enum PostCommentCardComposition {
     }
 
     /// Le texte du post, lisible : `maxPostLines` lignes, `maxPostCharacters` caractères, coupé à un mot.
-    static func excerpt(_ text: String) -> String {
+    static func excerpt(_ text: String, lines maxLines: Int = maxPostLines, characters maxCharacters: Int = maxPostCharacters) -> String {
         let lines = text.trimmingCharacters(in: .whitespacesAndNewlines).components(separatedBy: "\n")
-        var kept = lines.prefix(maxPostLines).joined(separator: "\n")
-        var cut = lines.count > maxPostLines
-        if kept.count > maxPostCharacters {
-            let prefix = String(kept.prefix(maxPostCharacters))
+        var kept = lines.prefix(maxLines).joined(separator: "\n")
+        var cut = lines.count > maxLines
+        if kept.count > maxCharacters {
+            let prefix = String(kept.prefix(maxCharacters))
             let boundary = prefix.lastIndex(where: { $0 == " " || $0 == "\n" })
             kept = boundary.map { String(prefix[..<$0]) } ?? prefix
             cut = true
@@ -317,7 +416,7 @@ public enum PostCommentCardComposition {
 
     private static func time(of block: PostCommentCardBlock, source: PostCommentCardSource) -> Date? {
         switch block {
-        case .post: return source.post?.timestamp
+        case .post: return support(of: source)?.timestamp
         case .comment(let id, _): return id == source.target.id ? source.target.timestamp : byId(source.thread)[id]?.timestamp
         case .folded: return nil
         }
@@ -333,14 +432,16 @@ public enum PostCommentCardComposition {
 
     // MARK: - Les médias
 
-    /// La vignette du post : sa première photo ou vidéo.
+    /// Le visuel du post : sa première photo ou vidéo.
     private static func postMedia(of post: FeedPost) -> [MessageCardSubjectMedia] {
         Array(MessageCardSubject.paintableMedia(of: post.media).filter { $0.media.kind.isVisual }.prefix(1))
     }
 
-    /// La vignette du post en tête, puis les médias des commentaires peints — les plus récents.
+    /// Le visuel du support en tête, puis les médias des commentaires peints — les plus récents.
+    /// Le visuel du support devient le HERO de la carte quand `heroSupport` : il compte dans le
+    /// plafond `maxMedia`, mais ne porte pas d'auteur (c'est le support).
     private static func media(of blocks: [PostCommentCardBlock], source: PostCommentCardSource,
-                              audioLanguages: [String: String]) -> [MessageCardSubjectMedia] {
+                              audioLanguages: [String: String], heroSupport: Bool) -> (items: [MessageCardSubjectMedia], hero: MessageCardSubjectMedia?) {
         let known = byId(source.thread + [source.target])
         let quotes = blocks.count > 1
         let painted = blocks.enumerated().map { (index, block) -> [MessageCardSubjectMedia] in
@@ -348,7 +449,7 @@ public enum PostCommentCardComposition {
             switch block {
             case .post(let part):
                 let author = MessageCardMediaAuthor(name: part.author, handle: part.handle, isQuoted: isQuoted)
-                return (source.post.map(postMedia(of:)) ?? []).map { $0.by(author) }
+                return (support(of: source)?.media ?? []).map { $0.by(author) }
             case .comment(let id, let part):
                 guard let comment = known[id] else { return [] }
                 let author = MessageCardMediaAuthor(name: part.author, handle: part.handle, isQuoted: isQuoted)
@@ -362,6 +463,29 @@ public enum PostCommentCardComposition {
             return painted[0]
         } ?? []
         let rest = Array(painted.dropFirst(head.isEmpty ? 0 : 1).joined())
-        return head + rest.suffix(max(0, maxMedia - head.count))
+        guard heroSupport, let hero = head.first(where: { $0.media.kind.isVisual })?.by(nil) else {
+            return (head + rest.suffix(max(0, maxMedia - head.count)), nil)
+        }
+        return ([hero] + rest.suffix(max(0, maxMedia - 1)), hero)
+    }
+
+    // MARK: - L'imbrication
+
+    /// La profondeur d'un commentaire dans l'arbre : le nombre de ses ancêtres connus.
+    static func depth(of id: String, source: PostCommentCardSource) -> Int {
+        let known = byId(source.thread + [source.target])
+        var seen: Set<String> = [id]
+        var depth = 0
+        var next = known[id]?.parentId
+        while let parent = next, known[parent] != nil, seen.insert(parent).inserted {
+            depth += 1
+            next = known[parent]?.parentId
+        }
+        return depth
+    }
+
+    private static func commentID(of block: PostCommentCardBlock) -> String? {
+        guard case .comment(let id, _) = block else { return nil }
+        return id
     }
 }

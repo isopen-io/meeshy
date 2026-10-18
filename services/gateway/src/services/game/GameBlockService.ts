@@ -26,12 +26,13 @@ import { chestRewardOf, toGameMission, type MissionService } from './MissionServ
 import { countMissionsDone } from './LevelStepFacts';
 import { starFragmentsOf } from './StarFragments';
 import { SPARKS_USER_SELECT, levelSparksOf, sparksOf } from './SparksFacts';
+import { stampGameRevisionAfterWrite } from './GameRevision';
 
 const log = enhancedLogger.child({ module: 'GameBlockService' });
 
 export const GUIDE_SEEN_MAX = 200;
 
-const GAME_USER_SELECT = { ...FLAME_USER_SELECT, ...SPARKS_USER_SELECT, prestige: true, guideSeen: true } as const;
+const GAME_USER_SELECT = { ...FLAME_USER_SELECT, ...SPARKS_USER_SELECT, prestige: true, prestigeLevelRecords: true, guideSeen: true } as const;
 
 export type AxisRow = { readonly axisKey: string; readonly count: number; readonly points: number };
 
@@ -162,6 +163,8 @@ export class GameBlockService {
       levelMaxLifetime: user?.levelMaxLifetime ?? null,
       levelRecord: user?.levelRecord ?? null,
       prestige: user?.prestige ?? 0,
+      // Le record de chaque cycle clos (#10911) : combien de fois un palier a été atteint, pour la photo refaite.
+      pastCycleRecords: user?.prestigeLevelRecords ?? [],
       glory,
       // La place du Mythe, définitive : celle de CE compte, jamais une liste globale (conformité A-13).
       mythic: mythicSeat !== null,
@@ -234,6 +237,8 @@ export class GameBlockService {
     if (merged.length === known.length) return [...known];
     const kept = merged.slice(-GUIDE_SEEN_MAX);
     await this.prisma.user.update({ where: { id: userId }, data: { guideSeen: kept } });
+    // Les clés de guide sont servies dans le bloc : la révision de l'état du jeu monte (#10912).
+    await stampGameRevisionAfterWrite(this.prisma, userId);
     return kept;
   }
 }
