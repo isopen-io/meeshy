@@ -373,6 +373,12 @@ model User {
   /// déjà dépensée à la frappe. Déduite des prochaines étincelles gagnées (poche seule : cycle et total à vie montent
   /// du gain entier) ; tant qu'elle est > 0, la frappe est refusée (`MINT_BLOCKED_BY_DEBT`). Absente = 0. BigInt (`long`).
   sparksDebt BigInt?
+  /// LA RÉVISION DE L'ÉTAT DU JEU (#10912) — horloge logique hybride PAR COMPTE, gravée avec l'état : chaque écriture du
+  /// jeu (frappe, crédit, reprise, Prestige, dépense de Meesh, Gloire…) y pose `max(maintenant, révision lue + 1)` dans la
+  /// même écriture, donc elle ne recule jamais, quelles que soient les horloges des passerelles. Les lectures servent
+  /// celle-ci (`gameRevision` sur le fil), jamais l'heure de la réponse. Absente : la lecture sert l'instant, comme avant.
+  /// BigInt (`long`) : des millisecondes depuis l'époque.
+  gameRevision BigInt?
   /// Passages en Prestige (0..5). Absent = 0.
   prestige            Int?
   /// Gels de Flamme en réserve (0..2). Absent = 0.

@@ -21,6 +21,8 @@ jest.mock('../../../../utils/logger', () => ({ logError: jest.fn() }));
 import { meMeeshRoutes } from '../../../../routes/me/meesh';
 
 const USER_ID = '68a000000000000000000001';
+/** La révision gravée par la frappe (#10912) : une heure dans le passé, pour qu'aucune horloge ne la reproduise. */
+const REVISION = Date.now() - 3_600_000;
 
 async function buildApp(): Promise<FastifyInstance> {
   const app = Fastify({ logger: false, ajv: { customOptions: { strict: false } } });
@@ -48,7 +50,7 @@ describe('POST /me/meesh/mint — aucune Meesh sans débit de points (#10011)', 
 
   it('frappe en points quand le client le dit, comme quand il ne dit rien', async () => {
     mint.mockClear();
-    mint.mockResolvedValue({ status: 'minted', balance: 1, mintedLifetime: 1, plan: {}, receipt: null });
+    mint.mockResolvedValue({ status: 'minted', balance: 1, mintedLifetime: 1, plan: {}, receipt: null, gameRevision: REVISION });
     const app = await buildApp();
     const res = await app.inject({ method: 'POST', url: '/api/v1/me/meesh/mint', payload: { requestId: 'frappe-route-03', payWith: 'points' } });
     expect(res.statusCode).toBe(200);
@@ -66,6 +68,7 @@ describe('POST /me/meesh/mint', () => {
       mintedLifetime: 3,
       plan: {},
       receipt: { number: 3, edition: 'silver', price: 1221, gloryGained: 100, levelBefore: 20, levelAfter: 16 },
+      gameRevision: REVISION,
     });
     const app = await buildApp();
 
@@ -84,7 +87,7 @@ describe('POST /me/meesh/mint', () => {
       levelBefore: 20,
       levelAfter: 16,
       ladder: { levelBefore: 20, levelAfter: 16 },
-      gameRevision: expect.any(Number),
+      gameRevision: REVISION,
     });
     expect(meeshMintResponseSchema.safeParse(data).success).toBe(true);
     await app.close();
@@ -97,6 +100,7 @@ describe('POST /me/meesh/mint', () => {
       mintedLifetime: 41,
       plan: {},
       receipt: { number: 41, edition: 'silver', price: 1541, gloryGained: 1000, levelBefore: 640, levelAfter: 639 },
+      gameRevision: REVISION,
     });
     const app = await buildApp();
 
@@ -108,12 +112,12 @@ describe('POST /me/meesh/mint', () => {
   });
 
   it('un rejeu d’une frappe d’avant le jeu (sans reçu) garde la forme ANCIENNE, toujours valide', async () => {
-    mint.mockResolvedValueOnce({ status: 'already-minted', balance: 1, mintedLifetime: 1, receipt: null });
+    mint.mockResolvedValueOnce({ status: 'already-minted', balance: 1, mintedLifetime: 1, receipt: null, gameRevision: REVISION });
     const app = await buildApp();
 
     const { data } = (await post(app)).json();
 
-    expect(data).toEqual({ status: 'already-minted', balance: 1, mintedLifetime: 1, gameRevision: expect.any(Number) });
+    expect(data).toEqual({ status: 'already-minted', balance: 1, mintedLifetime: 1, gameRevision: REVISION });
     expect(meeshMintResponseSchema.safeParse(data).success).toBe(true);
     await app.close();
   });
@@ -202,15 +206,13 @@ describe('POST /me/meesh/mint', () => {
     await app.close();
   });
 
-  it('sert `gameRevision`, l\'instant serveur pris APRÈS la frappe, et reste valide au schéma partagé (#10900)', async () => {
-    mint.mockResolvedValueOnce({ status: 'minted', balance: 1, mintedLifetime: 1, plan: {}, receipt: null });
+  it('sert `gameRevision`, la révision que la frappe a GRAVÉE — jamais l\'heure de la réponse (#10900, #10912)', async () => {
+    mint.mockResolvedValueOnce({ status: 'minted', balance: 1, mintedLifetime: 1, plan: {}, receipt: null, gameRevision: REVISION });
     const app = await buildApp();
-    const before = Date.now();
 
     const { data } = (await post(app)).json();
 
-    expect(data.gameRevision).toBeGreaterThanOrEqual(before);
-    expect(data.gameRevision).toBeLessThanOrEqual(Date.now());
+    expect(data.gameRevision).toBe(REVISION);
     expect(meeshMintResponseSchema.safeParse(data).success).toBe(true);
     await app.close();
   });

@@ -23,6 +23,7 @@ import { withRetry } from '../MessageMediaConsumptionService';
 import { meeshTotalsFromLedger } from '../meesh/MeeshService';
 import { GameRefusal } from './GameRefusal';
 import { announceGameState } from './GameStateBroadcast';
+import { gameRevisionColumn, gameRevisionValue, nextGameRevision } from './GameRevision';
 
 export type SpendKind = 'flame-freeze' | 'flame-relight' | 'mission-reroll' | 'season-seal' | 'pack-purchase';
 
@@ -109,9 +110,15 @@ export class MeeshSpend {
           },
         });
         const apres = await meeshTotalsFromLedger(tx, userId);
+        // La révision de l'état du jeu (#10912), lue et gravée DANS la transaction qui débite : elle ne recule jamais.
+        const compte = await tx.user.findUnique({ where: { id: userId }, select: { gameRevision: true } });
         await tx.user.update({
           where: { id: userId },
-          data: { meeshBalance: apres.balance, meeshMintedLifetime: apres.mintedLifetime },
+          data: {
+            meeshBalance: apres.balance,
+            meeshMintedLifetime: apres.mintedLifetime,
+            gameRevision: gameRevisionColumn(nextGameRevision(gameRevisionValue(compte?.gameRevision), Date.now())),
+          },
         });
         return { status: 'spent', balance: apres.balance, result };
       });

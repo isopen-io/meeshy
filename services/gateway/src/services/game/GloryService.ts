@@ -36,6 +36,7 @@ import { MythicSeatService } from './MythicSeatService';
 import { LEVEL_STEP_USER_SELECT, countMissionsDone, levelStepFactsOf } from './LevelStepFacts';
 import { SPARKS_USER_SELECT, levelSparksOf, sparksOf } from './SparksFacts';
 import { gameLevelUpNotifier, type LevelReached } from './GameLevelUpNotifier';
+import { stampGameRevisionAfterWrite } from './GameRevision';
 
 export type { LevelReached };
 
@@ -145,6 +146,8 @@ export class GloryService {
       if (isP2002(err)) return false;
       throw err;
     }
+    // La Gloire change le rang servi : la révision de l'état du jeu monte (#10912) — jamais au rejeu d'une clé gravée.
+    await stampGameRevisionAfterWrite(this.prisma, entry.userId);
     return true;
   }
 
@@ -285,6 +288,7 @@ export class GloryService {
         },
         data: { levelRecord: record },
       });
+      if (raised.count > 0) await stampGameRevisionAfterWrite(this.prisma, params.userId);
       // « Niveau N atteint » (#10901) : seulement si CETTE écriture a monté le record du cycle — une remontée après une
       // frappe reste sous le record, et une montée concurrente ne gagne l'écriture qu'une fois.
       if (raised.count > 0 && announce) await this.announceLevelReached({ userId: params.userId, level: record, sparks: params.score });
@@ -292,13 +296,14 @@ export class GloryService {
     if (params.previousMax !== undefined) {
       const maxLifetime = recordLevel({ level, previousRecord: Math.max(params.previousMax ?? 0, params.previousRecord ?? 0) || null });
       if (maxLifetime > (params.previousMax ?? 0)) {
-        await this.prisma.user.updateMany({
+        const raisedMax = await this.prisma.user.updateMany({
           where: {
             id: params.userId,
             OR: [{ levelMaxLifetime: null }, { levelMaxLifetime: { isSet: false } }, { levelMaxLifetime: { lt: maxLifetime } }],
           },
           data: { levelMaxLifetime: maxLifetime },
         });
+        if (raisedMax.count > 0) await stampGameRevisionAfterWrite(this.prisma, params.userId);
       }
     }
     // La Gloire de ces niveaux a pu faire franchir Ambassadeur ou Oracle : le plafond qu'elle lève s'ouvre aussitôt.

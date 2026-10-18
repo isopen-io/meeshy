@@ -1,4 +1,5 @@
 import { rawCommandNumber } from './rawCommandNumber';
+import { gameRevisionPipelineSet } from '../game/GameRevision';
 
 /** Ce que la commande du score rend : la poche neuve et les records, pour les paliers et la Gloire. */
 export type ScoreWritten = {
@@ -70,6 +71,8 @@ export async function writeEngagementScore(prisma: ScoreDb, userId: string, poin
           // cycle et le total à vie montent du gain ENTIER. `sparksDebt` s'écrit en dernier : les autres lisent l'ancienne dette.
           engagementScore: { $add: [held('engagementScore'), { $subtract: [points, { $min: [held('sparksDebt'), points] }] }] },
           sparksDebt: { $subtract: [held('sparksDebt'), { $min: [held('sparksDebt'), points] }] },
+          // La révision de l'état du jeu (#10912), dans la MÊME commande atomique que la poche.
+          ...gameRevisionPipelineSet(Date.now()),
         },
       },
     ],

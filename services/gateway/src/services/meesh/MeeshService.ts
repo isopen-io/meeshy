@@ -50,6 +50,7 @@ import { MythicSeatService } from '../game/MythicSeatService';
 import { LEVEL_STEP_USER_SELECT, countMissionsDone, levelStepFactsOf } from '../game/LevelStepFacts';
 import { SPARKS_USER_SELECT } from '../game/SparksFacts';
 import { announceGameState } from '../game/GameStateBroadcast';
+import { gameRevisionColumn, gameRevisionToServe, gameRevisionValue, nextGameRevision } from '../game/GameRevision';
 
 const log = enhancedLogger.child({ module: 'MeeshService' });
 
@@ -72,9 +73,12 @@ export type MintReceipt = {
   readonly costFactor?: number;
 };
 
+/** La révision de l'état du jeu que la frappe a GRAVÉE (#10912) — celle que sert sa réponse, jamais l'heure de répondre. */
+export type MintRevision = { readonly gameRevision: number };
+
 export type MeeshMintOutcome =
-  | ({ readonly status: 'minted'; readonly plan: MeeshMintPlan; readonly receipt: MintReceipt } & MeeshTotals)
-  | ({ readonly status: 'already-minted'; readonly receipt: MintReceipt | null } & MeeshTotals)
+  | ({ readonly status: 'minted'; readonly plan: MeeshMintPlan; readonly receipt: MintReceipt } & MeeshTotals & MintRevision)
+  | ({ readonly status: 'already-minted'; readonly receipt: MintReceipt | null } & MeeshTotals & MintRevision)
   | { readonly status: 'insufficient'; readonly plan: MeeshMintPlan }
   /** La pièce ferait entrer dans une réserve du trésor que le rang de Gloire n'ouvre pas (#10848). */
   | { readonly status: 'treasury-locked'; readonly lock: TreasuryLock }
@@ -286,13 +290,7 @@ export class MeeshService {
       where: { userId_requestId: { userId, requestId } },
       select: { id: true, meta: true },
     });
-    if (dejaFrappe) {
-      return {
-        status: 'already-minted',
-        receipt: receiptFromMeta(dejaFrappe.meta),
-        ...(await meeshTotalsFromLedger(this.prisma, userId)),
-      };
-    }
+    if (dejaFrappe) return this.alreadyMinted(userId, dejaFrappe.meta);
 
     // Le PRIX est celui de CETTE pièce, au niveau ACTUEL du compte : le serveur le recalcule, aucun client n'en
     // est cru (un ancien client qui croit encore à 1 221 est refusé sans débit quand sa poche ne couvre pas le vrai prix).
@@ -319,7 +317,7 @@ export class MeeshService {
         // d'être écrasé, et le débit s'écrit en VALEUR (jamais un incrément : leçon #6428). Le PRIX, le niveau
         // d'avant et celui d'après se rejugent sur CETTE lecture (#10895) : le niveau se lit sur la poche (#10892),
         // donc une poche qui a bougé depuis l'aperçu change le facteur — le reçu dit ce qui a été débité.
-        const compte = await tx.user.findUnique({ where: { id: userId }, select: SPARKS_USER_SELECT });
+        const compte = await tx.user.findUnique({ where: { id: userId }, select: { ...SPARKS_USER_SELECT, gameRevision: true } });
         const dans = sparksOf(compte);
         const jugee = previewAt(dans);
         if (jugee.blockedBy === 'debt') throw new DebtBlocksMint(jugee.sparksDebt);
@@ -355,9 +353,13 @@ export class MeeshService {
         });
 
         const apres = await meeshTotalsFromLedger(tx, userId);
+        // La révision de l'état du jeu (#10912), gravée DANS la transaction qui écrit l'état : lue avec la poche, elle ne
+        // recule jamais — un écrivain concurrent fait annuler la tentative, rejouée depuis la lecture.
+        const gameRevision = nextGameRevision(gameRevisionValue(compte?.gameRevision), Date.now());
         await tx.user.update({
           where: { id: userId },
           data: {
+            gameRevision: gameRevisionColumn(gameRevision),
             engagementScore: dans.pocket - price,
             meeshBalance: apres.balance,
             meeshMintedLifetime: apres.mintedLifetime,
@@ -380,9 +382,9 @@ export class MeeshService {
           },
         });
 
-        return { apres, debite: jugee };
+        return { apres, debite: jugee, gameRevision };
       });
-      const { apres: totaux, debite } = gravee;
+      const { apres: totaux, debite, gameRevision } = gravee;
       const { price, levelBefore, levelAfter, edition } = debite;
 
       // La frappe a pu faire une étape des niveaux (#9706) : le niveau qui attendait monte d'un coup.
@@ -401,6 +403,7 @@ export class MeeshService {
       return {
         status: 'minted',
         ...totaux,
+        gameRevision,
         plan: mintPlanOf({ canMint: true, missingPoints: 0 }, sparks.pocket - price),
         receipt: {
           number,
@@ -429,13 +432,18 @@ export class MeeshService {
           where: { userId_requestId: { userId, requestId } },
           select: { id: true, meta: true },
         });
-        return {
-          status: 'already-minted',
-          receipt: receiptFromMeta(gravee?.meta),
-          ...(await meeshTotalsFromLedger(this.prisma, userId)),
-        };
+        return this.alreadyMinted(userId, gravee?.meta);
       }
       throw err;
     }
+  }
+
+  /**
+   * Le REJEU d'une frappe faite : le même reçu, les totaux courants et la révision GRAVÉE (#10912), lue AVANT les
+   * totaux — un rejeu ne fait jamais monter la révision.
+   */
+  private async alreadyMinted(userId: string, meta: unknown): Promise<MeeshMintOutcome> {
+    const gameRevision = await gameRevisionToServe(this.prisma, userId);
+    return { status: 'already-minted', receipt: receiptFromMeta(meta), ...(await meeshTotalsFromLedger(this.prisma, userId)), gameRevision };
   }
 }

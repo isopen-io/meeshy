@@ -216,7 +216,7 @@ describe('MeeshService.mint — le solde se lit au REGISTRE', () => {
 
     const issue = await new MeeshService(prisma).mint(USER_ID, 'frappe-0003');
 
-    expect(issue).toEqual({ status: 'already-minted', balance: 1, mintedLifetime: 1, receipt: null });
+    expect(issue).toEqual({ status: 'already-minted', balance: 1, mintedLifetime: 1, receipt: null, gameRevision: expect.any(Number) });
   });
 
   it('un compte sain ne compte pas deux fois la frappe qu’il vient d’écrire', async () => {

@@ -26,6 +26,7 @@ import { chestRewardOf, toGameMission, type MissionService } from './MissionServ
 import { countMissionsDone } from './LevelStepFacts';
 import { starFragmentsOf } from './StarFragments';
 import { SPARKS_USER_SELECT, levelSparksOf, sparksOf } from './SparksFacts';
+import { stampGameRevisionAfterWrite } from './GameRevision';
 
 const log = enhancedLogger.child({ module: 'GameBlockService' });
 
@@ -236,6 +237,8 @@ export class GameBlockService {
     if (merged.length === known.length) return [...known];
     const kept = merged.slice(-GUIDE_SEEN_MAX);
     await this.prisma.user.update({ where: { id: userId }, data: { guideSeen: kept } });
+    // Les clés de guide sont servies dans le bloc : la révision de l'état du jeu monte (#10912).
+    await stampGameRevisionAfterWrite(this.prisma, userId);
     return kept;
   }
 }
