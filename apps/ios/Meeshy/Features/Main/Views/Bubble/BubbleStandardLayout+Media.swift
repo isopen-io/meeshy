@@ -698,6 +698,28 @@ private struct AttachmentBlurOverlayView: View {
 
 struct BubbleCarouselView: View {
     let items: [MessageAttachment]
+
+    /// La page `index` bornée aux pages existantes ; `nil` quand le message n'a
+    /// plus aucun visuel (le carrousel peut rester monté un instant de plus).
+    nonisolated static func currentAttachment(at index: Int, in items: [MessageAttachment]) -> MessageAttachment? {
+        guard !items.isEmpty else { return nil }
+        return items[max(0, min(index, items.count - 1))]
+    }
+
+    /// La page à montrer quand la liste a bougé sous le carrousel (une pièce
+    /// retirée, ajoutée, réordonnée) : la pièce MONTRÉE si elle y est encore,
+    /// à son nouveau rang — sinon la page voisine, bornée. L'indice seul
+    /// désignait une autre pièce et l'indicateur disait « 3 / 2 ».
+    nonisolated static func reanchoredPage(
+        shownId: String?, index: Int, in items: [MessageAttachment]
+    ) -> (id: String, index: Int)? {
+        if let shownId, let kept = items.firstIndex(where: { $0.id == shownId }) {
+            return (shownId, kept)
+        }
+        guard let fallback = currentAttachment(at: index, in: items),
+              let at = items.firstIndex(where: { $0.id == fallback.id }) else { return nil }
+        return (fallback.id, at)
+    }
     @Binding var carouselIndex: Int
     @Binding var showCarousel: Bool
     @Binding var fullscreenAttachment: MessageAttachment?
@@ -708,6 +730,9 @@ struct BubbleCarouselView: View {
     var containerWidth: CGFloat = 260
 
     @State private var currentPageID: String?
+    /// L'URL de la vidéo de la page montrée : c'est ELLE qu'on libère en la
+    /// quittant, même si la pièce a quitté la liste entre-temps.
+    @State private var shownVideoURL: String?
     /// Les images du carrousel arrivées sur l'appareil : leur badge
     /// « télécharger » se tait (#10370).
     @State private var landedImageIds: Set<String> = []
@@ -748,30 +773,36 @@ struct BubbleCarouselView: View {
                 .padding(MeeshySpacing.sm)
         }
         .onAppear {
-            guard !items.isEmpty else { return }
-            let startIndex = max(0, min(carouselIndex, items.count - 1))
-            currentPageID = items[startIndex].id
+            guard let start = Self.currentAttachment(at: carouselIndex, in: items) else { return }
+            currentPageID = start.id
+            shownVideoURL = start.type == .video ? start.fileUrl : nil
         }
-        .adaptiveOnChange(of: currentPageID) { _, newID in
+        .adaptiveOnChange(of: currentPageID) { oldID, newID in
             guard let newID,
                   let newIndex = items.firstIndex(where: { $0.id == newID })
             else { return }
 
-            let oldIndex = carouselIndex
             carouselIndex = newIndex
+            let shown = items[newIndex]
 
-            if oldIndex != newIndex {
-                // Une pièce retirée entre-temps laisse l'ancien indice au-delà de la liste.
-                if items.indices.contains(oldIndex), items[oldIndex].type == .video {
-                    let oldAttachment = items[oldIndex]
-                    // BUG E fix : release (URL-gated) plutôt que pause sur
-                    // swipe-away — le player ne traîne pas en mémoire.
-                    SharedAVPlayerManager.shared.release(urlString: oldAttachment.fileUrl)
+            if oldID != newID {
+                // BUG E fix : release (URL-gated) plutôt que pause sur
+                // swipe-away — le player ne traîne pas en mémoire. La vidéo
+                // QUITTÉE, par son URL : son ancien rang peut désigner une
+                // autre pièce si la liste a bougé.
+                if let leaving = shownVideoURL, leaving != shown.fileUrl {
+                    SharedAVPlayerManager.shared.release(urlString: leaving)
                 }
                 HapticFeedback.light()
             }
+            shownVideoURL = shown.type == .video ? shown.fileUrl : nil
 
             prefetchAdjacentPages(around: newIndex)
+        }
+        .adaptiveOnChange(of: items.map(\.id)) { _, _ in
+            guard let landing = Self.reanchoredPage(shownId: currentPageID, index: carouselIndex, in: items) else { return }
+            carouselIndex = landing.index
+            if currentPageID != landing.id { currentPageID = landing.id }
         }
     }
 
@@ -781,8 +812,8 @@ struct BubbleCarouselView: View {
         HStack(spacing: 0) {
             Button {
                 // BUG E fix : libère le player de la slide active (URL-gated).
-                let current = items[max(0, min(carouselIndex, items.count - 1))]
-                if current.type == .video {
+                if let current = Self.currentAttachment(at: carouselIndex, in: items),
+                   current.type == .video {
                     SharedAVPlayerManager.shared.release(urlString: current.fileUrl)
                 }
                 withAnimation(.spring(response: 0.3, dampingFraction: 0.8)) {

@@ -752,6 +752,21 @@ final class FeedViewModelTests: XCTestCase {
         XCTAssertEqual(sut.posts[0].id, "p1")
     }
 
+    /// Un post ouvert par un lien ou depuis un profil n'est pas dans le fil chargé : sa suppression part quand même,
+    /// et un refus du serveur ne glisse rien dans le fil.
+    func test_deletePost_outsideTheLoadedFeed_stillDeletes_andAFailureLeavesTheFeedAlone() async {
+        let (sut, api, _, postService) = makeSUT()
+        api.stub("/posts/feed", result: Self.makePaginatedResponse(posts: [Self.makeAPIPost(id: "p1")]))
+        await sut.loadFeed(forceRefresh: true)
+
+        await sut.deletePost("p-elsewhere")
+        XCTAssertEqual(postService.deleteCallCount, 1)
+
+        postService.deleteResult = .failure(APIError.networkError(URLError(.timedOut)))
+        await sut.deletePost("p-elsewhere-2")
+        XCTAssertEqual(sut.posts.map(\.id), ["p1"])
+    }
+
     // MARK: - createPost() — U1 ST3: text-only routes through the durable outbox
 
     func test_createPost_textOnly_enqueuesCreatePostAndInsertsOptimisticPost() async {

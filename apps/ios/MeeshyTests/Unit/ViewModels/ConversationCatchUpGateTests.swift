@@ -132,6 +132,30 @@ final class ConversationCatchUpGateTests: XCTestCase {
 
     // MARK: - La porte seule
 
+    /// `depart` gardait l'`ObjectIdentifier` de chaque lecteur parti, sans
+    /// jamais l'oublier à sa libération : l'ensemble grossissait d'une entrée par
+    /// conversation quittée, et un nouveau modèle alloué à la même adresse
+    /// passait pour « parti » — son rattrapage de reconnexion était sauté.
+    func test_depart_forgetsReadersOnceReleased() {
+        let gate = ConversationCatchUpGate()
+        for _ in 0..<50 {
+            let gone = NSObject()
+            gate.depart(gone)
+        }
+        let stillHere = NSObject()
+        gate.depart(stillHere)
+        XCTAssertEqual(gate.departedCount, 1, "seul le lecteur encore vivant reste marqué parti")
+        XCTAssertFalse(gate.isPresent(stillHere))
+        gate.arrive(stillHere)
+        XCTAssertTrue(gate.isPresent(stillHere))
+        XCTAssertEqual(gate.departedCount, 0)
+    }
+
+    func test_isPresent_aFreshReaderNeverDeparted_isPresent() {
+        let gate = ConversationCatchUpGate()
+        XCTAssertTrue(gate.isPresent(NSObject()))
+    }
+
     func test_pages_aCursorOlderThanTheFlight_isNotJoined() async throws {
         let gate = ConversationCatchUpGate()
         var fetches = 0

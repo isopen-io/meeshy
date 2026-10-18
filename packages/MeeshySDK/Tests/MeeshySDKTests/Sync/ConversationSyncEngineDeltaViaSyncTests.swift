@@ -268,6 +268,26 @@ final class ConversationSyncEngineDeltaViaSyncTests: XCTestCase {
             "un trou de séquence doit déclencher la resynchronisation /sync — le socket ne rejouera rien")
     }
 
+    // MARK: - La reconnexion n'est pas absorbée par l'anti-rafale
+
+    /// Le retour au premier plan lance un delta AVANT que le socket ait rejoint
+    /// ses salles ; la reconnexion, une seconde plus tard, tombait dans les 3 s
+    /// d'anti-rafale et rendait « fait » sans rien relire. Ce qui arrivait entre
+    /// les deux restait invisible jusqu'à la synchro suivante.
+    func test_reconnectWithinTheCooldown_stillRunsItsCatchUpDelta() async {
+        _ = await semeLeCache()
+        mockSync.scripte = .inchange
+
+        await engine.syncSinceLastCheckpoint()
+        await engine.syncSinceLastCheckpoint()
+        XCTAssertEqual(mockSync.demandes.count, 1, "deux signaux ordinaires dans la fenêtre : un seul delta")
+
+        engine.requestReconnectCatchUp()
+        await engine.syncSinceLastCheckpoint()
+        XCTAssertEqual(mockSync.demandes.count, 2, "la reconnexion relit, anti-rafale ou non")
+        XCTAssertFalse(engine.hasReconnectCatchUpPending)
+    }
+
     // MARK: - La fusion, à l'unité
 
     func test_fusionneLigneDeSync_ligneNeuve_passeTelleQuelle() {

@@ -30,6 +30,10 @@ public struct StoryComposerView: View {
 
     @Environment(\.colorScheme) var colorScheme
     @Environment(\.scenePhase) var scenePhase
+    /// La taille de la fenêtre qui porte le composer, publiée par sa racine (Stage Manager, Split View).
+    @Environment(\.sceneWindowSize) var sceneWindowSize
+    /// Les marges sûres de la fenêtre qui porte le composer, mesurées par sa racine.
+    @Environment(\.sceneSafeAreaInsets) var sceneSafeAreaInsets
 
     /// **L'accessoire *leading* de la rangée haute, fourni par l'app** (#4124).
     /// `nil` ⇒ rien n'est peint — aucun emplacement réservé, aucun fond.

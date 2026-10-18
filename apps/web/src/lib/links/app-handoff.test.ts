@@ -17,11 +17,12 @@ const MAC_CHROME = 'Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) AppleWebKit/
 const coque = (platform: string): CoqueNative => ({ getPlatform: () => platform });
 
 describe('appHandoffUrl — à qui remettre le lien', () => {
-  test('Android, navigateur : intent vers meeshy://, même chemin, même jeton, paquet de la coque', () => {
+  test('Android, navigateur : intent vers l’App Link https de meeshy.me (jamais meeshy://, #10870), même chemin, même jeton, paquet de la coque', () => {
     const url = appHandoffUrl(PAGE, { userAgent: ANDROID_CHROME, shell: undefined });
     expect(url).not.toBeNull();
-    expect(url?.startsWith('intent://auth/verify-email?token=tok-1&email=ada%40x.io#Intent;')).toBe(true);
-    expect(url).toContain(';scheme=meeshy;');
+    expect(url?.startsWith('intent://meeshy.me/auth/verify-email?token=tok-1&email=ada%40x.io#Intent;')).toBe(true);
+    expect(url).toContain(';scheme=https;');
+    expect(url).not.toContain('scheme=meeshy');
     expect(url).toContain(';package=me.meeshy.app;');
     expect(url?.endsWith(';end')).toBe(true);
   });
@@ -35,6 +36,20 @@ describe('appHandoffUrl — à qui remettre le lien', () => {
     expect(back.searchParams.get('token')).toBe('tok-1');
     expect(back.searchParams.get('email')).toBe('ada@x.io');
     expect(appHandoffUrl(back.href, { userAgent: ANDROID_CHROME, shell: undefined })).toBeNull();
+  });
+
+  test('lien à fragment (#10859) : la page a déjà retiré le secret de son adresse — il voyage vers l’app dans l’intent, vers le repli dans le FRAGMENT', () => {
+    const page = 'https://meeshy.me/auth/verify-email?next=%2Fc%2F1';
+    const url = appHandoffUrl(page, { userAgent: ANDROID_CHROME, shell: undefined }, { token: 'tok-1', email: 'ada@x.io' }) ?? '';
+    expect(url.startsWith('intent://meeshy.me/auth/verify-email?next=%2Fc%2F1&token=tok-1&email=ada%40x.io#Intent;')).toBe(true);
+    const back = new URL(decodeURIComponent(/S\.browser_fallback_url=([^;]+);/.exec(url)?.[1] ?? ''));
+    expect(back.searchParams.get('token')).toBeNull();
+    expect(back.searchParams.get('email')).toBeNull();
+    expect(back.searchParams.get('handoff')).toBe('browser');
+    expect(back.searchParams.get('via')).toBe('email');
+    const fragment = new URLSearchParams(back.hash.slice(1));
+    expect(fragment.get('token')).toBe('tok-1');
+    expect(fragment.get('email')).toBe('ada@x.io');
   });
 
   test('ordinateur : rien à remettre, le navigateur se connecte', () => {

@@ -1,6 +1,6 @@
 import { useEffect, useRef, useState, type ComponentType } from 'react';
 
-import { translate } from '@/lib/i18n-catalog';
+import { translateSignInLink } from '@/lib/i18n-sign-in-link-catalog';
 import type { InterfaceLanguage } from '@/lib/interface-language';
 import { arrivalReady, type ArrivalDeps } from '@/lib/arrival/arrival';
 
@@ -97,13 +97,13 @@ export function ArrivalCelebration({
         <Glyph name="checks" size={48} />
       </span>
       <h2 className="relative text-screen font-bold" style={{ color: 'var(--color-ios-ink)' }}>
-        {translate(language, 'verifyEmail.arrival.title')}
+        {translateSignInLink(language, 'verifyEmail.arrival.title')}
       </h2>
       <p className="relative" style={{ color: 'var(--color-ios-ink-2)' }}>
-        {translate(language, 'verifyEmail.arrival.lead')}
+        {translateSignInLink(language, 'verifyEmail.arrival.lead')}
       </p>
       <p role="status" aria-live="polite" className="sr-only">
-        {translate(language, 'verifyEmail.arrival.status')}
+        {translateSignInLink(language, 'verifyEmail.arrival.status')}
       </p>
     </div>
   );

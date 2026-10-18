@@ -19,6 +19,25 @@ final class PresenceManagerTests: XCTestCase {
         sut = nil
     }
 
+    // MARK: - Déconnexion
+
+    /// La carte de présence (et son fichier `meeshy_cache/presence_map.json`,
+    /// sans compte dans son nom) survivait à la déconnexion : le compte suivant
+    /// voyait la présence des amis du compte sortant — que la loi de visibilité
+    /// ne lui sert jamais.
+    func test_resetForLogout_forgetsEveryPresence() {
+        sut.presenceMap["friend-of-A"] = AppUserPresence(isOnline: true, lastActiveAt: Date())
+        sut.resetForLogout()
+        XCTAssertTrue(sut.presenceMap.isEmpty)
+        XCTAssertEqual(sut.conversationViewers, ConversationViewers())
+    }
+
+    func test_logoutTeardown_resetsPresence() throws {
+        let source = try AppSourceGuard.unit("Meeshy/Core/DependencyContainer.swift")
+        XCTAssertTrue(source.contains("PresenceManager.shared.resetForLogout()"),
+                      "la purge de déconnexion doit vider la présence du compte sortant")
+    }
+
     // MARK: - UserPresence.state computed property
 
     func test_state_whenOffline_returnsOffline() {

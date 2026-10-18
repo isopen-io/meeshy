@@ -16,8 +16,14 @@ extension MessageListViewController {
     /// est de toute façon à l'écran ou presque).
     func verifyScrollSettleTarget() {
         guard var target = scrollSettleTarget else { return }
+        // L'index vient de l'INSTANTANÉ, qui peut devancer ce que la collection
+        // a ingéré (fenêtre appliquée pendant l'animation) : `scrollToItem` sur
+        // un index pas encore matérialisé lève une exception. Même garde que
+        // `beginVerifiedScroll`.
         guard let dataSource,
               let indexPath = dataSource.indexPath(for: .message(localId: target.localId)),
+              collectionView.numberOfSections > 0,
+              indexPath.item < collectionView.numberOfItems(inSection: 0),
               let attrs = collectionView.layoutAttributesForItem(at: indexPath)
         else {
             // Cible sortie du snapshot (changement de fenêtre) — le chemin

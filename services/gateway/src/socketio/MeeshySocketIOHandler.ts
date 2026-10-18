@@ -8,9 +8,22 @@ import { Server as HTTPServer } from 'http';
 import { MeeshySocketIOManager } from './MeeshySocketIOManager';
 import { MessageTranslationService } from '../services/message-translation/MessageTranslationService';
 import { PrismaClient } from '@meeshy/shared/prisma/client';
+import type { GameBlock } from '@meeshy/shared/types/game';
 import { logger } from '../utils/logger';
 import { socketIOAdminRoutes } from './socketio-admin-routes';
 import { setEngagementEmitIOProvider } from '../services/engagement/engagement-emit-registry';
+import { GameStateBroadcast, setGameStateBroadcast } from '../services/game/GameStateBroadcast';
+import { gravedGameRevision } from '../services/game/GameRevision';
+import { GameBlockService } from '../services/game/GameBlockService';
+import { MissionService, READ_ONLY_CREDIT } from '../services/game/MissionService';
+import { PersonalMissionService } from '../services/game/PersonalMissionService';
+
+/** Le bloc `game` tel que `GET /me/engagement` le compose : la lecture ne crédite rien (`READ_ONLY_CREDIT`). */
+function gameBlockBuilder(prisma: PrismaClient): (userId: string) => Promise<GameBlock | null> {
+  const missions = new MissionService(prisma, { creditPoints: READ_ONLY_CREDIT });
+  const blocks = new GameBlockService(prisma, { missions, personal: new PersonalMissionService(prisma, { missions }) });
+  return (userId) => blocks.build({ userId });
+}
 
 export class MeeshySocketIOHandler {
   private socketIOManager: MeeshySocketIOManager | null = null;
@@ -34,6 +47,15 @@ export class MeeshySocketIOHandler {
     await this.socketIOManager.initialize();
     // Les crédits d'engagement annoncent « N (M) 🔥 » au crédité (#8906).
     setEngagementEmitIOProvider(() => this.socketIOManager?.getIO());
+    // L'état du jeu se propage aux appareils du compte après chaque écriture (#10900).
+    setGameStateBroadcast(
+      new GameStateBroadcast({
+        io: () => this.socketIOManager?.getIO() ?? undefined,
+        build: gameBlockBuilder(this.prisma),
+        // La révision GRAVÉE du compte (#10912), lue avant le bloc : jamais l'heure de l'émission.
+        revision: (userId) => gravedGameRevision(this.prisma, userId),
+      }),
+    );
 
     // Les deux gestes d'administration vivent dans `socketio-admin-routes.ts`
     // et se MONTENT ici, plutôt que d'être déclarés en ligne. La raison n'est

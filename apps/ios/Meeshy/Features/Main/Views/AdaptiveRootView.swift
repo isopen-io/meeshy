@@ -200,8 +200,16 @@ nonisolated final class ConversationDragItemProvider: NSItemProvider, @unchecked
     /// que le système aurait relâché en retard.
     let token = UUID()
 
+    /// Marque PRIVÉE d'un glisser de rangée de conversation : une cible qui accepte du texte (le composer) la refuse —
+    /// sur iPad la liste et le composer sont côte à côte, et un glisser un peu trop long y déposait l'identifiant brut.
+    static let markerType = "me.meeshy.conversation-row"
+
     init(conversationId: String, title: String, opensWindow: Bool) {
         super.init()
+        registerDataRepresentation(forTypeIdentifier: Self.markerType, visibility: .ownProcess) { completion in
+            completion(Data(conversationId.utf8), nil)
+            return nil
+        }
         registerObject(conversationId as NSString, visibility: .all)
         if opensWindow {
             let activity = NSUserActivity(activityType: DetachedWindowOpener.conversationActivityType)
@@ -254,6 +262,20 @@ final class MainWindowRegistry: ObservableObject {
 
     /// La scène de la fenêtre principale — celle où se montrent toujours les appels.
     var primaryWindowScene: UIWindowScene? { primaryScene }
+
+    /// La navigation d'une notification touchée se fait dans la fenêtre PRINCIPALE : si une fenêtre détachée est
+    /// devant (hors Stage Manager, la principale est alors en arrière-plan), la principale revient d'abord — sinon le
+    /// toucher ouvrait sa cible dans une fenêtre invisible, et rien ne semblait se passer.
+    func bringPrimaryForwardIfHidden() {
+        // Une seule fenêtre (iPhone, iPad sans fenêtre détachée) : le système l'active déjà pour le toucher.
+        guard DeviceLayout.hasSeveralScenes,
+              let scene = primaryScene, Self.needsActivation(scene.activationState) else { return }
+        UIApplication.shared.requestSceneSessionActivation(scene.session, userActivity: nil, options: nil)
+    }
+
+    nonisolated static func needsActivation(_ state: UIScene.ActivationState) -> Bool {
+        state != .foregroundActive
+    }
 
     private func sceneDidDisconnect(_ gone: ObjectIdentifier?) {
         guard let gone, gone == primary else { return }
@@ -377,6 +399,9 @@ struct DetachedWindowView: View {
     @StateObject private var conversationVMOwner = ConversationListVMOwner()
     @StateObject private var storyViewerCoordinator = StoryViewerCoordinator()
     @StateObject private var notifications = RootNotificationSource()
+    /// Même barrière que les racines : un 426 ou un plancher de version bloque
+    /// AUSSI la fenêtre détachée.
+    @StateObject private var upgradeGate = UpgradeGateController()
     @ObservedObject private var theme = ThemeManager.shared
     @State private var scene: UIWindowScene?
     @State private var conversation: Conversation?
@@ -493,11 +518,20 @@ struct DetachedWindowView: View {
             .meeshyConversationList(conversationVMOwner.viewModel)
             .environment(\.isStoryViewerPresenting, true)
         }
+        .fullScreenCover(isPresented: .constant(upgradeGate.isBlocked)) {
+            if let requirement = upgradeGate.requirement {
+                UpgradeGateView(requirement: requirement)
+            }
+        }
         .onAppear {
             // Le retour du premier écran ferme la fenêtre : il n'y a rien dessous.
             router.onPopRequested = { closeWindow() }
         }
         .onDisappear { router.onPopRequested = nil }
+        // La portée de CETTE fenêtre, posée le plus à l'extérieur comme dans les
+        // racines (#10543) : sans elle ses feuilles s'inscrivaient « de toute
+        // fenêtre », et la principale les refermait en ouvrant une conversation.
+        .environment(\.presentedSurfaceScope, router.surfaceScope)
     }
 
     // MARK: - Conversation

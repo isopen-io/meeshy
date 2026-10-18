@@ -3,6 +3,7 @@ import Combine
 import QuartzCore
 import SwiftUI
 import MeeshySDK
+import MeeshyUI
 #if canImport(UIKit)
 import UIKit
 #endif
@@ -171,9 +172,12 @@ struct ListedImpressionModifier: ViewModifier {
     let position: @MainActor () -> Int?
 
     @State private var probe = ListedCellProbe()
+    /// La fenêtre qui PORTE la carte (Stage Manager, fenêtre détachée) ; `ListingViewport.screen` (la fenêtre clé)
+    /// n'est que le repli, avant la première mesure.
+    @Environment(\.sceneWindowSize) private var sceneWindowSize
 
     func body(content: Content) -> some View {
-        let viewport = ListingViewport.screen
+        let viewport = CGRect(origin: .zero, size: SceneWindowSize.resolve(sceneWindowSize, fallback: ListingViewport.screen.size))
         return content
             .onAppear {
                 guard !postId.isEmpty else { return }

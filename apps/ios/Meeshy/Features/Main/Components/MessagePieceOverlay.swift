@@ -110,7 +110,7 @@ struct MessagePieceOverlay: View {
         }
         .ignoresSafeArea()
         .accessibilityAddTraits(.isModal)
-        .accessibilityAction(.escape) { dismiss() }
+        .dismissOnEscape { dismiss() }
         .adaptiveOnChange(of: selection) { _, newValue in
             focusedPieceId = newValue
         }

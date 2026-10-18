@@ -15,6 +15,7 @@ import { bindConversationViewing, viewingStore } from './conversation-viewing';
 import { bindConversationEngagement, engagementStore } from './conversation-engagement';
 import { bindPostEngagement } from './publication-engagement';
 import { bindProfileDecorSync } from '../profile-decor/equip';
+import { bindGameStateSync } from './game-state-live';
 import { bindAppearanceLiveLazily } from './appearance-live';
 import { bindPresenceLive } from './presence-live';
 import { presenceStore } from './presence-store';
@@ -120,6 +121,8 @@ function bridgeCalls(next: RealtimeConnection | null): void {
   const unengagePosts = bindPostEngagement({ socket: next.socket, queryClient: appQueryClient });
   /* `profile:decor-updated` (#10632) : le contour et la bannière équipés sur un autre de mes appareils. */
   const undecor = bindProfileDecorSync({ socket: next.socket, queryClient: appQueryClient });
+  /* `game:updated` (#10900) : une frappe ou un gain faits ailleurs mettent le Jeu à jour, jamais avec un état plus ancien. */
+  const ungame = bindGameStateSync({ socket: next.socket, queryClient: appQueryClient });
   /* `user:preferences-updated` (#10663) : le fond et l'accent changés ailleurs repeignent la liste sans fil ouvert. */
   const unappearance = bindAppearanceLiveLazily({ socket: next.socket, queryClient: appQueryClient });
   /* La présence vivante (#10571) : `user:status`, `presence:snapshot` et la frappe tiennent chaque pastille à jour. */
@@ -133,6 +136,7 @@ function bridgeCalls(next: RealtimeConnection | null): void {
     unengage();
     unengagePosts();
     undecor();
+    ungame();
     unappearance();
     unpresence();
     unrevoke();

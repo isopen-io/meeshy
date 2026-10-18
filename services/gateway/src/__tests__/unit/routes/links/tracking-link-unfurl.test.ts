@@ -148,6 +148,7 @@ describe('Une cible qui n’est pas publique, ou un lien mort, rend le génériq
     ['une conversation Meeshy sous www.', { suivi: suivi({ originalUrl: `https://www.staging.meeshy.me/c/${CONVERSATION_ID}` }) }],
     ['une invitation fermée', { suivi: suivi({ originalUrl: `${ORIGIN}/chat/${SHARE_ID}` }), partage: partage({ isActive: false }) }],
     ['une invitation bornée à des plages d’adresses', { suivi: suivi({ originalUrl: `${ORIGIN}/chat/${SHARE_ID}` }), partage: partage({ allowedIpRanges: ['10.0.0.0/8'] }) }],
+    ['un lien à jeton d’e-mail sur un autre hôte (#10871)', { suivi: suivi({ originalUrl: 'https://exemple.org/auth/magic-link?token=secret' }) }],
     ['jeton inconnu', { suivi: null, partage: null }],
   ];
 

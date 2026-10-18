@@ -468,7 +468,7 @@ describe('MagicLinkService', () => {
   describe('validateMagicLink', () => {
     const validValidation: MagicLinkValidation = {
       token: 'valid-raw-token',
-      requestContext: mockRequestContext
+      requestContext: mockRequestContext, confirmed: true
     };
 
     describe('Token Not Found', () => {
@@ -988,7 +988,7 @@ describe('MagicLinkService - Edge Cases', () => {
     mockPrisma.magicLinkToken.findUnique.mockResolvedValue(mockMagicLinkToken);
 
     const validationWithNullGeo: MagicLinkValidation = {
-      token: 'valid-raw-token',
+      token: 'valid-raw-token', confirmed: true,
       requestContext: {
         ip: '192.168.1.1',
         geoData: null,
@@ -1108,7 +1108,7 @@ describe('MagicLinkService - Security Tests', () => {
 
     const result = await service.validateMagicLink({
       token: 'reused-token',
-      requestContext: mockRequestContext
+      requestContext: mockRequestContext, confirmed: true
     });
 
     expect(result.success).toBe(false);

@@ -7,7 +7,8 @@ import type { ApiResult } from '@/lib/api/http';
 import { sessionStore } from '@/lib/api/session';
 import { translate } from '@/lib/i18n-catalog';
 import { currentInterfaceLanguage, type InterfaceLanguage } from '@/lib/interface-language';
-import { useSearch } from '@/lib/router';
+import { forgetEmailLinkSecret } from '@/lib/links/email-link-secret';
+import { useEmailLinkSearch } from '@/lib/links/email-link-search';
 
 import { ActionLink, LinkPage, LinkText, ReachFailurePage, SignedOutPage } from './link-page-parts';
 
@@ -51,7 +52,7 @@ export function VerifyEmailChangePage({
 }
 
 export default function VerifyEmailChangeScreen() {
-  const [search] = useSearch();
+  const search = useEmailLinkSearch();
   const signedIn = useStore(sessionStore, (state) => state.session.status === 'authenticated');
   return <VerifyEmailChangePage token={search.get('token')} signedIn={signedIn} language={currentInterfaceLanguage()} deps={GATEWAY_DEPS} />;
 }
@@ -60,6 +61,8 @@ type VerifyState =
   | { readonly phase: 'verifying' }
   | { readonly phase: 'done'; readonly email: string | null }
   | { readonly phase: 'failed'; readonly failure: EmailChangeFailure };
+
+const SPENT_LINK_FAILURES: ReadonlySet<EmailChangeFailure> = new Set(['expired', 'invalid', 'taken']);
 
 const REFUSAL_COPY = {
   expired: 'linkPage.expired',
@@ -89,7 +92,9 @@ function EmailChangeVerification({
 
     async function verify() {
       const result = await deps.verify(token);
-      setState(result.ok ? { phase: 'done', email: result.data.email } : { phase: 'failed', failure: emailChangeFailureOf(result) });
+      const next: VerifyState = result.ok ? { phase: 'done', email: result.data.email } : { phase: 'failed', failure: emailChangeFailureOf(result) };
+      if (next.phase === 'done' || SPENT_LINK_FAILURES.has(next.failure)) forgetEmailLinkSecret();
+      setState(next);
     }
   }, [token, attempt]);
 

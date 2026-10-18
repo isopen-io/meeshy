@@ -29,6 +29,8 @@ import { unsetOrNull } from '../utils/prisma-unset';
 import { getJwtSecret } from '../utils/secrets';
 import { RECIPIENT_LANG_SELECT, recipientLanguage, type RecipientLanguagePrefs } from '../utils/recipient-language';
 import { AUTO_TRANSLATE_PREFERENCE_SELECT, resolveAutoTranslateEnabled } from '../utils/auto-translate-preference';
+import { EMAIL_LINK_PATHS, emailSecretLink } from '../utils/email-secret-link';
+import { linkConfirmation, linkDeviceVerdict, type LinkAccountIdentity, type LinkConfirmationIntent } from './auth/link-device-binding';
 
 const logger = enhancedLogger.child({ module: 'MagicLinkService' });
 
@@ -104,6 +106,10 @@ export function clampMagicLinkReturnUrl(raw: string | null | undefined): string 
 export interface MagicLinkValidation {
   token: string;
   requestContext: RequestContext;
+  /** #10872 — le secret de l'appareil qui présente le lien. */
+  linkDeviceSecret?: string;
+  /** #10872 — l'utilisateur a vu le compte cible et dit oui. */
+  confirmed?: boolean;
 }
 
 export interface IssueLoginTokenOptions {
@@ -320,6 +326,15 @@ export class MagicLinkService {
     requires2FA?: boolean;
     /** Jeton d'étape 2, à présenter à `POST /auth/login/2fa` avec le code. */
     twoFactorToken?: string;
+    /**
+     * #10872 — branche EXCLUSIVE : le lien n'a pas été consommé, aucune
+     * session n'existe ; `account` est le compte que le oui ouvrirait.
+     */
+    requiresConfirmation?: boolean;
+    account?: LinkAccountIdentity;
+    /** #10879 — ce que le oui fera, et l'adresse du compte, MASQUÉE. */
+    intent?: LinkConfirmationIntent;
+    maskedEmail?: string;
   }> {
     const { token, requestContext } = validation;
 
@@ -402,6 +417,23 @@ export class MagicLinkService {
           ipAddress: requestContext.ip
         });
         return { success: false, error: 'This link is no longer valid. Please request a new one.' };
+      }
+
+      // 6 bis. #10872 — le lien du digest n'est lié à aucun appareil : il ne
+      // se consomme qu'après le oui de l'utilisateur, à qui l'on a montré le
+      // compte cible. Avant, RIEN n'est écrit (Login CSRF).
+      const verdict = linkDeviceVerdict({
+        boundHash: null,
+        presentedSecret: validation.linkDeviceSecret,
+        confirmed: validation.confirmed === true,
+      });
+      if (verdict === 'confirmation-required') {
+        return {
+          success: false,
+          requiresConfirmation: true,
+          ...linkConfirmation(user, { intent: 'sign-in', email: user.email }),
+          error: 'Confirm the account before signing in.'
+        };
       }
 
       // 7. Mark token as used — par une écriture CONDITIONNELLE (#10475) : la
@@ -643,8 +675,7 @@ export class MagicLinkService {
     returnUrl?: string,
   ): Promise<void> {
     const baseUrl = process.env.FRONTEND_URL || 'https://meeshy.me';
-    const returnUrlParam = returnUrl ? `&returnUrl=${encodeURIComponent(returnUrl)}` : '';
-    const magicLinkUrl = `${baseUrl}/auth/magic-link?token=${encodeURIComponent(token)}${returnUrlParam}`;
+    const magicLinkUrl = emailSecretLink({ base: baseUrl, path: EMAIL_LINK_PATHS.magicLink, secret: { token }, query: returnUrl ? { returnUrl } : {} });
 
     await this.emailService.sendMagicLinkEmail({
       to: user.email,

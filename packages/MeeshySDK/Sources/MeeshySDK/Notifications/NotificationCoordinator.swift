@@ -113,7 +113,8 @@ public final class NotificationCoordinator: ObservableObject {
     /// tests ; défaut = la conversation active du socket messages (posée par
     /// `NotificationToastManager.onConversationOpened`, nettoyée à la
     /// fermeture).
-    private let openConversationIdProvider: @MainActor () -> String?
+    /// Multi-fenêtre : toutes les conversations qu'une scène affiche.
+    private let openConversationIdsProvider: @MainActor () -> Set<String>
 
     /// **Le registre de lecture** — la source unique du non-lu de conversation
     /// (#6998). Injecté : la production partage `.shared` avec les autres
@@ -147,7 +148,7 @@ public final class NotificationCoordinator: ObservableObject {
         currentUserIdProvider: @escaping @MainActor () -> String? = { AuthManager.shared.currentUser?.id },
         badgeEnabledProvider: @escaping @MainActor () -> Bool = { UserPreferencesManager.shared.notification.notificationBadgeEnabled },
         badgeEnabledChanges: AnyPublisher<Bool, Never>? = nil,
-        openConversationIdProvider: @escaping @MainActor () -> String? = { MessageSocketManager.shared.activeConversationId },
+        openConversationIdsProvider: @escaping @MainActor () -> Set<String> = { NotificationToastManager.shared.openConversationIds },
         ledger: ConversationReadLedger = .shared
     ) {
         self.badgeWriter = badgeWriter
@@ -155,7 +156,7 @@ public final class NotificationCoordinator: ObservableObject {
         self.currentUserIdProvider = currentUserIdProvider
         self.badgeEnabledProvider = badgeEnabledProvider
         self.badgeEnabledChanges = badgeEnabledChanges
-        self.openConversationIdProvider = openConversationIdProvider
+        self.openConversationIdsProvider = openConversationIdsProvider
         self.ledger = ledger
     }
 
@@ -395,7 +396,7 @@ public final class NotificationCoordinator: ObservableObject {
     /// registre pour rien.
     ///
     /// Le coordinateur reste, pour l'instant, le seul à alimenter ce curseur,
-    /// depuis son `openConversationIdProvider`. Unifier les TROIS producteurs
+    /// depuis son `openConversationIdsProvider`. Unifier les TROIS producteurs
     /// de « conversation ouverte » (`ConversationSyncEngine`,
     /// `MessageSocketManager.activeConversationId`,
     /// `NotificationToastManager.onConversationOpened`) reste à faire — c'est
@@ -403,9 +404,9 @@ public final class NotificationCoordinator: ObservableObject {
     /// autant qu'il en est déjà le seul à le STOCKER.
     @discardableResult
     private func syncOpenConversation() -> Bool {
-        let visible = openConversationIdProvider()
-        guard ledger.openConversationId != visible else { return false }
-        ledger.apply(.localOpen(conversationId: visible))
+        let visible = openConversationIdsProvider()
+        guard ledger.openConversationIds != visible else { return false }
+        ledger.apply(.localOpenSet(conversationIds: visible))
         return true
     }
 

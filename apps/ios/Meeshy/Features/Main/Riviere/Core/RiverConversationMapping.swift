@@ -186,7 +186,9 @@ nonisolated enum RiverConversationMapping {
     /// SUIVANT n'ouvre pas de groupe. Un avis système ouvre toujours un groupe
     /// (la loi ne le rattache à personne), donc il coupe celui qui le précède.
     static func groupPositions(bubbles: [RiverLaneResolver.RiverBubble]) -> [String: RiverGroupPosition] {
-        Dictionary(uniqueKeysWithValues: bubbles.enumerated().map { index, bubble in
+        // `uniquingKeysWith`, comme `contents` : un identifiant en double (écho socket et REST d'un même message)
+        // trappait ici quand `contents`, plus bas, le tolérait. La première position fait foi.
+        Dictionary(bubbles.enumerated().map { index, bubble in
             let next = bubbles.indices.contains(index + 1) ? bubbles[index + 1] : nil
             let isFollowed = next.map { !$0.isFirstInGroup && !$0.isSystem } ?? false
             let position: RiverGroupPosition
@@ -197,7 +199,7 @@ nonisolated enum RiverConversationMapping {
             case (false, false): position = .tail
             }
             return (bubble.messageId, position)
-        })
+        }, uniquingKeysWith: { first, _ in first })
     }
 
     /// Ce que le lecteur voit dans chaque bulle — texte PRISME (résolu par

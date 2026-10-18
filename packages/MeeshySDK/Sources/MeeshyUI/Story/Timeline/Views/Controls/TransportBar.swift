@@ -134,9 +134,9 @@ public struct TransportBar: View {
         .frame(minHeight: 44)
         .background(rowBackground)
         // MARK: - Keyboard Shortcuts (iPad / external keyboard)
-        // Space — play/pause
-        .keyboardShortcut(" ", modifiers: [])
-        // ← / → — step backward / forward by 1 frame (handled via the scrub callback)
+        // Space — play/pause, porté par le SEUL bouton invisible de l'overlay. Posé aussi sur le `HStack`, le raccourci
+        // s'appliquait à CHAQUE bouton de la rangée (lecture, annuler, refaire, aimant, zoom, son) : l'action de la
+        // barre d'espace dépendait de l'ordre de résolution de SwiftUI.
         .background(keyboardShortcutOverlay)
     }
 

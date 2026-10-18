@@ -1,4 +1,13 @@
 name: meeshy
+# #10855 — journaux applicatifs dans journald : ils survivent à la recréation
+# du conteneur (chaque promotion recrée la passerelle, et json-file part avec
+# elle). Durée bornée par /etc/systemd/journald.conf.d/meeshy-retention.conf.
+# Lecture : journalctl CONTAINER_NAME=<conteneur> --since "7 days ago"
+x-journald-logging: &journald-logging
+  driver: journald
+  options:
+    tag: "{{.Name}}"
+
 services:
   # Traefik Reverse Proxy with automatic SSL
   traefik:
@@ -28,6 +37,21 @@ services:
       - "--entrypoints.web.http.redirections.entrypoint.permanent=true"
       - "--log.level=INFO"
       - "--accesslog=true"
+      # #10855 — journal d'accès dans un FICHIER JSON tourné chaque jour par
+      # logrotate (infrastructure/config/logging/logrotate-meeshy-traefik),
+      # 14 jours gardés, chaînes de requête secrètes masquées à la compression.
+      # Aucun en-tête journalisé sauf User-Agent : Authorization, Cookie et
+      # X-Session-Token ne quittent jamais la requête.
+      - "--accesslog.filepath=/var/log/traefik/access.log"
+      - "--accesslog.format=json"
+      - "--accesslog.fields.defaultmode=keep"
+      - "--accesslog.fields.names.StartLocal=drop"
+      - "--accesslog.fields.names.ClientUsername=drop"
+      - "--accesslog.fields.headers.defaultmode=drop"
+      - "--accesslog.fields.headers.names.User-Agent=keep"
+      - "--accesslog.fields.headers.names.Authorization=drop"
+      - "--accesslog.fields.headers.names.Cookie=drop"
+      - "--accesslog.fields.headers.names.X-Session-Token=drop"
     ports:
       - "80:80"
       - "443:443"
@@ -38,6 +62,7 @@ services:
       - /var/run/docker.sock:/var/run/docker.sock:ro
       - traefik_certs:/letsencrypt
       - ./config/dynamic.yaml:/dynamic.yaml:ro
+      - /var/log/meeshy/traefik:/var/log/traefik
     networks:
       - meeshy-network
     labels:
@@ -152,6 +177,7 @@ services:
     image: ${TRANSLATOR_IMAGE:-isopen/meeshy-translator:latest}
     container_name: meeshy-translator
     restart: unless-stopped
+    logging: *journald-logging
     environment:
       - DATABASE_TYPE=${DATABASE_TYPE:-MONGODB}
       - DATABASE_URL=${DATABASE_URL}
@@ -223,6 +249,7 @@ services:
     image: ${GATEWAY_IMAGE:-isopen/meeshy-gateway:latest}
     container_name: meeshy-gateway
     restart: unless-stopped
+    logging: *journald-logging
     environment:
       - DATABASE_TYPE=${DATABASE_TYPE:-MONGODB}
       - DATABASE_URL=${DATABASE_URL}
@@ -493,6 +520,7 @@ services:
     image: ${FRONTEND_IMAGE:-isopen/meeshy-webapp:latest}
     container_name: meeshy-frontend
     restart: unless-stopped
+    logging: *journald-logging
     volumes:
       - frontend_uploads:/srv/legacy-uploads/u:ro
     networks:
@@ -518,6 +546,7 @@ services:
     image: ${AGENT_IMAGE:-isopen/meeshy-agent:latest}
     container_name: meeshy-agent
     restart: unless-stopped
+    logging: *journald-logging
     environment:
       - DATABASE_URL=mongodb://database:27017/meeshy?replicaSet=rs0
       - REDIS_URL=redis://redis:6379

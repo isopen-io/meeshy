@@ -231,6 +231,14 @@ RUN chmod +x /app/docker-entrypoint.sh || true
 # Copy package.json for runtime metadata
 COPY --chown=gateway:nodejs services/gateway/package.json ./
 
+# Témoin des migrations embarquées (#10865) : les migrations nommées
+# (`dist/src/migrations/named/`, pilote `mongodb` en dépendance de production)
+# et les scripts mongosh (`packages/shared/prisma/migrations/*.mongodb.js`)
+# doivent être exécutables DEPUIS cette image. La construction échoue si l'un
+# manque — le 2026-10-16, il avait fallu les porter à la main en mongosh.
+# Mode d'emploi : `node dist/src/migrations/named/cli.js list`.
+RUN node dist/src/migrations/named/cli.js verify-image
+
 USER gateway
 
 EXPOSE ${FASTIFY_PORT}

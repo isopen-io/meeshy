@@ -324,11 +324,7 @@ extension StoryViewerView {
                     } else if (dx > 60 || predicted > 150) && currentGroupIndex > 0 {
                         // Swipe right -> prev group
                         HapticFeedback.light()
-                        groupTransition(forward: false) {
-                            currentGroupIndex -= 1
-                            currentStoryIndex = max(0, groups[currentGroupIndex].stories.count - 1)
-                            progressClock.reset()
-                        }
+                        groupTransition(forward: false) { landOnPreviousGroup() }
                     } else {
                         // Snap back — animate groupSlide to 0. La face du cube
                         // reste montée pendant le retour (elle sort de l'écran

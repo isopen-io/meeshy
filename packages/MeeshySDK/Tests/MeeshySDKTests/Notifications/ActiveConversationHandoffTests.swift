@@ -96,18 +96,23 @@ final class ActiveConversationHandoffTests: XCTestCase {
     /// affichée — pas à « nulle part ».
     func test_fermerLaFenetreDetachee_rendLaMainALaConversationRestante() {
         let m = neuf()
+        // Les deux écrans déclarent leur conversation au moteur, chacun la sienne : il n'a plus besoin que les toasts
+        // le relancent sur celle qui reste — il ne l'a jamais quittée.
         let engine = ConversationSyncEngine.shared
-        let engineBefore = engine.currentlyOpenConversationId
-        defer { engine.setCurrentlyOpenConversation(engineBefore) }
-        engine.setCurrentlyOpenConversation(nil)   // l'écran de B vient de lâcher le curseur
+        engine.openConversation("A")
+        engine.openConversation("B")
+        defer { engine.closeConversation("A") }
         m.onConversationOpened("A")
         m.onConversationOpened("B")
         m.onConversationClosed("B")
+        engine.closeConversation("B")
 
-        XCTAssertEqual(engine.currentlyOpenConversationId, "A",
-                       "A est à l'écran : le moteur ne doit pas recompter ses messages comme non lus.")
+        XCTAssertTrue(engine.isConversationOpen("A"),
+                      "A est à l'écran : le moteur ne doit pas recompter ses messages comme non lus.")
+        XCTAssertFalse(engine.isConversationOpen("B"))
         XCTAssertEqual(m.activeConversationId, "A")
         XCTAssertEqual(MessageSocketManager.shared.activeConversationId, "A")
+        XCTAssertEqual(MessageSocketManager.shared.openConversationIds, ["A"])
         XCTAssertFalse(m.isConversationOpen("B"))
     }
 

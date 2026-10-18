@@ -71,6 +71,25 @@ describe('decideTrackingRedirect — le clic compté, la cible ouverte', () => {
     });
   });
 
+  test('un lien suivi ne mène JAMAIS à un lien à jeton d’e-mail — il connecterait le lecteur au compte de son créateur (#10870)', () => {
+    for (const cible of [
+      'https://meeshy.me/auth/magic-link?token=x',
+      'https://meeshy.me/auth/magic-link/validate?returnUrl=%2F#token=x',
+      'https://www.meeshy.me/auth/email-link/magic-link#token=x',
+      'https://staging.meeshy.me/auth/verify-email?token=x&email=a%40b.co',
+      'https://meeshy.me/AUTH//Magic-Link/?token=x',
+      'https://meeshy.me/reset-password#token=x',
+      'https://evil.example\\@meeshy.me/auth/magic-link?token=x',
+      'https://meeshy.me/auth/magic-link;x=1?token=x',
+      'https://meeshy.me/auth/verify-email/x?token=x&email=a%40b.co',
+    ]) {
+      expect({ cible, issue: decideTrackingRedirect({ token: TOKEN, click: clicked(cible), resolution: resolved({ originalUrl: cible }) }) }).toEqual({
+        cible,
+        issue: { kind: 'dead' },
+      });
+    }
+  });
+
   test('javascript: est refusé et traité comme un lien mort', () => {
     const resolution = resolved({ originalUrl: 'javascript:alert(document.cookie)' });
     expect(decideTrackingRedirect({ token: TOKEN, click: clicked('javascript:alert(document.cookie)'), resolution })).toEqual({ kind: 'dead' });

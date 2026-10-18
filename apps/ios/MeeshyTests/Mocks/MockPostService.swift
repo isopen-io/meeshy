@@ -277,8 +277,14 @@ final class MockPostService: PostServiceProviding, @unchecked Sendable {
         return try (getReelsResult ?? getFeedResult).get()
     }
 
+    /// Une réponse par curseur, servie après ce que le témoin fait PENDANT l'appel.
+    var getPostsByHashtagByCursor: [String: PaginatedAPIResponse<[APIPost]>] = [:]
+    var duringGetPostsByHashtag: (@MainActor (_ cursor: String?) async -> Void)?
+
     func getPostsByHashtag(tag: String, cursor: String?, limit: Int) async throws -> PaginatedAPIResponse<[APIPost]> {
         getPostsByHashtagCallCount += 1
+        await duringGetPostsByHashtag?(cursor)
+        if let served = getPostsByHashtagByCursor[cursor ?? ""] { return served }
         return try getPostsByHashtagResult.get()
     }
 
@@ -667,10 +673,15 @@ final class MockPostService: PostServiceProviding, @unchecked Sendable {
         return try getBookmarksResult.get()
     }
 
+    /// Joué PENDANT l'appel : ce qui arrive à l'écran le temps de la réponse.
+    var onRemoveBookmark: (@MainActor (String) async -> Void)?
+
     func removeBookmark(postId: String) async throws {
         removeBookmarkCallCount += 1
         lastRemoveBookmarkPostId = postId
-        try removeBookmarkResult.get()
+        let result = removeBookmarkResult
+        if let onRemoveBookmark { await onRemoveBookmark(postId) }
+        try result.get()
     }
 
     func getPost(postId: String) async throws -> APIPost {

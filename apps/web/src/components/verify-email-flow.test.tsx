@@ -3,6 +3,7 @@ import { createRoot, type Root } from 'react-dom/client';
 import { afterAll, afterEach, beforeAll, describe, expect, test } from 'bun:test';
 
 import { authColumnIn, strayFromAuthColumn } from '@/test-support/auth-column';
+import { arriveByEmailLink, tokenInHistory } from '@/test-support/email-link-arrival';
 import { ensureHappyDomRegistered, releaseHappyDomIfRegistered } from '@/test-support/happy-dom-environment';
 import type { ApiResult } from '@/lib/api/http';
 import type { VerifyEmailData, VerifyEmailRequest } from '@/lib/api/verify-email';
@@ -436,5 +437,39 @@ describe('VerifyEmailFlow — ce que l’écran DIT de l’e-mail reçu (#8034)'
     const { clock, now } = fakeClock();
     const el = mount('ada@meeshy.example', { verifyEmail: verifyStub([]).verifyEmail, resendVerification: resendStub().resendVerification, clock, now });
     expect(lead(el)).toContain('Entrez le code à 6 chiffres envoyé à ada@meeshy.example');
+  });
+});
+
+describe('VerifyEmailFlow — le jeton du lien quitte l’historique une fois servi (#10864)', () => {
+  const HELD_ARRIVAL: ArrivalDeps = { prefetch: async () => undefined, wait: () => new Promise<void>(() => undefined), reducedMotion: () => true };
+
+  async function verifyFrom(token: string, reply: ApiResult<VerifyEmailData>) {
+    arriveByEmailLink('/auth/verify-email', token);
+    const { clock, now } = fakeClock();
+    await act(async () => {
+      mount('neuf@meeshy.example', { verifyEmail: verifyStub([reply]).verifyEmail, resendVerification: resendStub().resendVerification, clock, now, arrival: HELD_ARRIVAL }, { token });
+      await landed();
+    });
+  }
+
+  test('session ouverte : l’entrée ne porte plus le jeton', async () => {
+    await verifyFrom('v-ok', { ok: true, data: SESSION_DATA, status: 200 });
+    expect(here()).toBe('/auth/verify-email');
+    expect(tokenInHistory()).toBeNull();
+  });
+
+  test('ancienne passerelle, adresse vérifiée : l’entrée ne porte plus le jeton', async () => {
+    await verifyFrom('v-old', { ok: true, data: { message: 'ok' }, status: 200 });
+    expect(tokenInHistory()).toBeNull();
+  });
+
+  test('lien refusé : l’entrée ne porte plus le jeton', async () => {
+    await verifyFrom('v-dead', { ok: false, status: 400, error: 'Invalid token' });
+    expect(tokenInHistory()).toBeNull();
+  });
+
+  test('hors ligne : l’entrée le garde', async () => {
+    await verifyFrom('v-offline', { ok: false, status: 0, error: 'Failed to fetch' });
+    expect(tokenInHistory()).toBe('v-offline');
   });
 });

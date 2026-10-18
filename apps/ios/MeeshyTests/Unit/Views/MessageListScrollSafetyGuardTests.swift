@@ -43,4 +43,18 @@ final class MessageListScrollSafetyGuardTests: XCTestCase {
             XCTAssertGreaterThanOrEqual(guards, queries, path)
         }
     }
+
+    /// La re-visée de fin de passe (`.correct`) appelait `scrollToItem` sur un
+    /// index tiré de l'INSTANTANÉ, sans la garde « déjà ingéré » que portent
+    /// `beginVerifiedScroll` et le séparateur de non-lus : une fenêtre appliquée
+    /// pendant l'animation faisait lever `NSInternalInconsistencyException`.
+    func test_settleReaim_checksTheItemIsIngestedBeforeScrolling() throws {
+        let code = AppSourceGuard.stripComments(try AppSourceGuard.unit(
+            "Meeshy/Features/Main/Views/MessageListViewController+ScrollSettle.swift"))
+        let start = try XCTUnwrap(code.range(of: "func verifyScrollSettleTarget()"))
+        let scroll = try XCTUnwrap(code.range(of: "collectionView.scrollToItem(", range: start.upperBound..<code.endIndex))
+        let before = String(code[start.upperBound..<scroll.lowerBound])
+        XCTAssertTrue(before.contains("indexPath.item < collectionView.numberOfItems(inSection: 0)"))
+        XCTAssertTrue(before.contains("collectionView.numberOfSections > 0"))
+    }
 }

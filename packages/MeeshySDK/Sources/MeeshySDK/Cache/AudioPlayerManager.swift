@@ -78,7 +78,8 @@ public class AudioPlayerManager: ObservableObject {
     // MARK: - Play from URL string
 
     public func play(urlString: String) {
-        stop()
+        // Enchaîner : la session `.playback` reste tenue, elle est reprise juste en dessous.
+        halt()
 
         guard !urlString.isEmpty else { return }
 
@@ -88,6 +89,7 @@ public class AudioPlayerManager: ObservableObject {
         // VoIP actif (sinon micro coupé). Options [] = pas de ducking (parité avec le
         // comportement preview historique de ce player du composer story).
         MediaSessionCoordinator.shared.activatePlaybackSync(options: [])
+        holdsPlaybackSession = true
 
         let resolved = MeeshyConfig.resolveMediaURL(urlString)?.absoluteString ?? urlString
 
@@ -197,11 +199,12 @@ public class AudioPlayerManager: ObservableObject {
     // MARK: - Play from local file URL
 
     public func playLocalFile(url: URL) {
-        stop()
+        halt()
         onWillPlay?()
 
         // Session de lecture via la source UNIQUE (call-aware) — cf. play(urlString:).
         MediaSessionCoordinator.shared.activatePlaybackSync(options: [])
+        holdsPlaybackSession = true
 
         do {
             let data = try Data(contentsOf: url)
@@ -214,7 +217,27 @@ public class AudioPlayerManager: ObservableObject {
 
     // MARK: - Controls
 
+    /// Rend la session de lecture (call-aware) — par défaut au coordinateur, injectable pour les témoins.
+    /// Hors du fil principal : `setActive(false)` est un aller-retour HAL bloquant.
+    var sessionReleaser: () -> Void = {
+        MediaSessionCoordinator.shared.deactivatePlaybackDeferred()
+    }
+
+    /// Arrête la lecture ET rend la session `.playback` si une lecture la tenait : la musique d'une autre app,
+    /// interrompue par notre session non mixable, reprend (`.notifyOthersOnDeactivation`).
     public func stop() {
+        halt()
+        guard holdsPlaybackSession else { return }
+        holdsPlaybackSession = false
+        sessionReleaser()
+    }
+
+    /// Vrai depuis qu'une lecture a pris la session `.playback` — y compris quand son chargement a échoué avant
+    /// qu'un lecteur n'existe : c'est la session, pas le lecteur, qu'il faut rendre.
+    private var holdsPlaybackSession = false
+
+    /// Arrête la lecture SANS rendre la session — pour enchaîner une autre lecture.
+    private func halt() {
         localPlayer?.stop()
         localPlayer = nil
 
@@ -262,11 +285,12 @@ public class AudioPlayerManager: ObservableObject {
 
     // MARK: - Progress Timer (local player only)
     //
-    // 10 Hz tick (2026-05-28) — see `progressTickInterval` doc. The
-    // `>= 1.0` end-of-playback guard tolerates the lower poll rate
-    // because `AVAudioPlayer` invokes the delegate path at natural
-    // playback end anyway; this guard is the secondary belt for the
-    // rare cases where rate / seek pushes `currentTime` past `duration`.
+    // 10 Hz tick (2026-05-28) — see `progressTickInterval` doc. Aucun délégué
+    // n'est posé sur l'`AVAudioPlayer` : c'est CE tick qui constate la fin. À la
+    // fin naturelle, `isPlaying` repasse à faux et `currentTime` revient à 0 —
+    // le seuil `>= 1.0` n'est donc jamais atteint, et un lecteur qui ne joue plus
+    // alors que le Timer tourne (la pause l'invalide) est une piste terminée ou
+    // interrompue par le système : on arrête et on rend la session.
 
     fileprivate static let progressTickInterval: TimeInterval = 0.1
     fileprivate static let progressWriteThreshold: Double = 0.002
@@ -282,7 +306,11 @@ public class AudioPlayerManager: ObservableObject {
     }
 
     private func publishLocalProgressTick() {
-        guard let player = localPlayer, player.isPlaying else { return }
+        guard let player = localPlayer else { return }
+        guard player.isPlaying else {
+            stop()
+            return
+        }
         let newProgress = player.duration > 0 ? player.currentTime / player.duration : 0
         if newProgress >= 1.0 {
             stop()

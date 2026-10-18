@@ -111,7 +111,7 @@ struct iPadRootView: View {
     /// G6 : l'iPad a sa racine PROPRE. Sans cette observation-là, un iPad prend
     /// des 426 bruts en pleine publication et ne voit JAMAIS l'écran de mise à
     /// jour — les deux racines ne partagent pas une ligne.
-    @StateObject private var upgradeGate = UpgradeGateController()
+    @StateObject var upgradeGate = UpgradeGateController()
 
     private var isConversationOpen: Bool {
         activeConversation != nil
@@ -134,13 +134,6 @@ struct iPadRootView: View {
 
                     rightColumn
                         .frame(maxWidth: .infinity)
-                        .background(GeometryReader { column in
-                            Color.clear
-                                .onAppear { DeviceLayout.conversationColumnWidth = column.size.width }
-                                .adaptiveOnChange(of: column.size.width) { _, width in
-                                    DeviceLayout.conversationColumnWidth = width
-                                }
-                        })
                 }
             }
 
@@ -308,8 +301,6 @@ struct iPadRootView: View {
     }
 
     private func uninstallRouterCallbacks() {
-        // La racine iPad part (fenêtre redevenue compacte) : les bulles se mesurent de nouveau à la fenêtre.
-        DeviceLayout.conversationColumnWidth = nil
         router.onRouteRequested = nil
         router.onPopRequested = nil
     }

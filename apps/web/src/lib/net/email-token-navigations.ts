@@ -15,7 +15,19 @@
  *
  * Workbox confronte chaque motif à `pathname + search` ; aucun motif ne porte
  * `g` ni `y` (Workbox rejoue `test` sur la même instance).
+ *
+ * #10859 — les liens neufs portent leur jeton dans le FRAGMENT, que Workbox ne
+ * voit pas : la passerelle y joint `via=email`, sans rien de secret, et c'est
+ * ce marqueur qui envoie la page au réseau. Une coquille précachée d'avant ce
+ * lot ne saurait pas lire le fragment. `token=` reste reconnu pour les e-mails
+ * déjà partis — et pour le `token=` VIDE que les liens neufs portent à
+ * l'intention d'un service worker d'avant ce lot encore actif. Les ALIAS
+ * `/auth/email-link/…` (liens magiques et de vérification, hors de portée des
+ * applications publiées) sont ramenés à leur adresse canonique par la page.
  */
+const EMAIL_TOKEN_PAGES =
+  'auth\\/verify-email|auth\\/magic-link(?:\\/validate)?|auth\\/email-link\\/(?:magic-link|verify-email|reset-password)|auth\\/revoke-sessions|reset-password|account\\/deletion|settings\\/verify-email-change';
+
 export const EMAIL_TOKEN_NAVIGATIONS: readonly RegExp[] = [
-  /^\/(?:auth\/verify-email|auth\/magic-link(?:\/validate)?|reset-password|account\/deletion|settings\/verify-email-change)\/?\?(?:[^#]*&)?token=/,
+  new RegExp(`^\\/(?:${EMAIL_TOKEN_PAGES})\\/?\\?(?:[^#]*&)?(?:token=|via=email(?:&|#|$))`),
 ];

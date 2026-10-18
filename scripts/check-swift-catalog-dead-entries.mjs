@@ -525,7 +525,9 @@ const EXCLUDED_DIR_NAMES = new Set(['Tests', 'MeeshyTests', 'MeeshyUIDeviceTests
 // MESURÉE le 2026-10-15 en local sur 79129ae28f.
 // 326 -> 325 (2026-10-15) : une entrée de la vitrine gagne son appelant iOS (91e38008e2). Valeur MESURÉE en local
 // sur e13e8be719.
-const BASELINE_DEAD_ENTRIES = 325;
+// 325 -> 324 (2026-10-17) : une entrée du catalogue Swift a trouvé son appelant sur dev (lien de réinitialisation
+// ouvert dans l'app, ceb0b1572a). Valeur MESURÉE en CI (Quality, run du 89160f284c) et en local sur origin/dev.
+const BASELINE_DEAD_ENTRIES = 324;
 
 const CATALOG_ENUM_RE = /public enum ([A-Za-z0-9_]+)\s*:\s*MeeshyEndpoint\b/;
 // Une déclaration de cas n'a jamais de point après `case` ; une branche de

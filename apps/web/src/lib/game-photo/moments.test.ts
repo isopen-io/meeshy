@@ -249,3 +249,27 @@ describe('les moments photo de la vague 2', () => {
     expect(moment.emblem).toEqual({ kind: 'prestige', number: 3 });
   });
 });
+
+describe('un palier atteint de nouveau après un Prestige se photographie de nouveau (#10911)', () => {
+  test('au premier cycle, l’identité d’hier et le titre sans compte', () => {
+    const moment = tierMoment({ tier: 'lueur', level: 10 });
+    expect(moment.id).toBe('tier:lueur');
+    expect(moment.title).not.toContain('×');
+  });
+
+  test('dans un cycle neuf, une identité par cycle et le nombre de fois que le palier a été atteint', () => {
+    const moment = tierMoment({ tier: 'lueur', level: 10, prestige: 2, times: 3 });
+    expect(moment.id).toBe('tier:lueur:2');
+    expect(moment.emblem).toEqual({ kind: 'tier', tier: 'lueur', level: 10, prestige: 2, times: 3 });
+    expect(moment.title).toBe(`${tierMoment({ tier: 'lueur', level: 10 }).title} ×3`);
+  });
+
+  test('la carte du guide et la transition nomment le palier du cycle en cours', () => {
+    const after = view({ ...ALL_LEVEL_STEPS, score: 100 * 10 * 10, levelRecord: 9, prestige: 1, pastCycleRecords: [100] });
+    expect(photoMomentFromCard('new-tier', gameOf(after))?.id).toBe('tier:lueur:1');
+    expect(photoMomentFromCard('new-tier', gameOf(after))?.title).toContain('×2');
+    const before = view({ ...ALL_LEVEL_STEPS, score: 100 * 9 * 9 + 5, levelRecord: 9, prestige: 1, pastCycleRecords: [100] });
+    expect(photoMomentsOfTransition(before, after).map((m) => m.id)).toContain('tier:lueur:1');
+  });
+});
+

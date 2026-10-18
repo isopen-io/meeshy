@@ -67,7 +67,25 @@ final class OutboxRetryScheduler {
     private var timer: Task<Void, Never>?
     private var networkCancellable: AnyCancellable?
     private var mutationCancellable: AnyCancellable?
+    private var socketCancellable: AnyCancellable?
+    /// L'échéance du minuteur armé, `nil` sans minuteur.
+    private(set) var pendingRetryDate: Date?
     private init() {}
+
+    #if DEBUG
+    /// Retire le minuteur (tests : le planificateur est un singleton).
+    func cancelForTesting() {
+        timer?.cancel()
+        timer = nil
+        pendingRetryDate = nil
+    }
+    #endif
+
+    private func timerFired(for date: Date) {
+        guard pendingRetryDate == date else { return }
+        pendingRetryDate = nil
+        timer = nil
+    }
 
     /// Réveille le flusher à chaque transition réseau offline→online.
     ///
@@ -107,21 +125,50 @@ final class OutboxRetryScheduler {
             .sink { _ in Task { @MainActor in await flush() } }
     }
 
+    /// Réveille le flusher à chaque reprise du socket. Une reprise sans
+    /// changement de chemin réseau (redémarrage du serveur) ne le réveillait que
+    /// si un écran de conversation était ouvert (`ConversationSocketHandler`) ;
+    /// or `OfflineQueue.retryAll` laisse désormais l'outbox au seul flusher.
+    func startObservingSocketReconnect(
+        connectedPublisher: AnyPublisher<Bool, Never> = MessageSocketManager.shared.$isConnected.eraseToAnyPublisher(),
+        flush: @escaping @MainActor () async -> Void = { await OutboxFlushTrigger.flushNow() }
+    ) {
+        socketCancellable = connectedPublisher
+            .removeDuplicates()
+            .dropFirst()
+            .filter { $0 }
+            .sink { _ in Task { @MainActor in await flush() } }
+    }
+
     /// (Ré)arme le timer pour rejouer un flush à `date`. `nil` annule le
     /// timer en attente (plus rien n'est différé).
-    func schedule(at date: Date?) {
+    ///
+    /// Seule l'ATTENTE est annulable : le flush part dans sa propre tâche. Lancé
+    /// dans celle du minuteur, il était annulé par le `schedule` de tout flush
+    /// concurrent — requête ou upload TUS coupés en vol, ligne repoussée de 30 s.
+    ///
+    /// Plusieurs flushs se chevauchent (minuteur, reconnexion, mise en file) et
+    /// chacun appelle `schedule` avec SA vue de la file : celui qui ne voit rien
+    /// de différé (`nil`) annulait le minuteur qu'un autre venait d'armer pour
+    /// une ligne en backoff, qui attendait alors un évènement de cycle de vie.
+    /// Désormais `nil` ne retire rien (un minuteur de trop ne coûte qu'un flush
+    /// vide), et l'échéance la plus PROCHE l'emporte.
+    func schedule(
+        at date: Date?,
+        flush: @escaping @MainActor () async -> Void = { await OutboxFlushTrigger.flushNow() }
+    ) {
+        guard let date else { return }
+        if timer != nil, let pending = pendingRetryDate, pending <= date { return }
         timer?.cancel()
-        guard let date else {
-            timer = nil
-            return
-        }
-        timer = Task {
+        pendingRetryDate = date
+        timer = Task { [weak self] in
+            defer { self?.timerFired(for: date) }
             // Cap à 1 h : au-delà, un évènement de cycle de vie aura de toute
             // façon redéclenché un flush entre-temps.
             let delay = min(max(0, date.timeIntervalSinceNow), 3600)
             try? await Task.sleep(nanoseconds: UInt64(delay * 1_000_000_000))
             guard !Task.isCancelled else { return }
-            await OutboxFlushTrigger.flushNow()
+            Task { @MainActor in await flush() }
         }
     }
 }

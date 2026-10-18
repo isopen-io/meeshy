@@ -58,6 +58,23 @@ public class MeeshyNotificationSettingsPlugin extends Plugin {
         }
     }
 
+    /**
+     * #10858 — l'identite de l'appareil qui enregistre son jeton FCM : la
+     * passerelle ne garde qu'un jeton actif par (compte, appareil, type).
+     * ANDROID_ID est propre a la cle de signature de l'app et a l'utilisateur,
+     * et survit a une reinstallation ; ce n'est pas l'identifiant publicitaire.
+     */
+    @PluginMethod
+    public void deviceIdentity(PluginCall call) {
+        JSObject result = new JSObject();
+        String androidId = Settings.Secure.getString(getContext().getContentResolver(), Settings.Secure.ANDROID_ID);
+        if (androidId != null && !androidId.isEmpty()) {
+            result.put("deviceId", androidId);
+        }
+        result.put("deviceName", Build.MODEL);
+        call.resolve(result);
+    }
+
     @PluginMethod
     public void fcmStatus(PluginCall call) {
         JSObject result = new JSObject();

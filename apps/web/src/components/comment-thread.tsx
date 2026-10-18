@@ -17,7 +17,7 @@ import { appQueryClient } from '@/lib/api/query-client';
 import { commentDrafts, type CommentDraft } from '@/lib/comments/comment-draft';
 import { browserCommentUploadFor, forgetUploadedCommentMedia, uploadCommentMedia, type CommentMediaUpload } from '@/lib/comments/comment-media';
 import { unsentComments, unsentOf } from '@/lib/comments/unsent-comments';
-import { composingPostOf, postCommentImageable } from '@/lib/export/composed-comment-card';
+import { composingPostOf, postCommentImagingOf } from '@/lib/export/composed-comment-card';
 import { commentInteractionOf, commentNegativeOf, interactionOf } from '@/lib/telemetry/card-context';
 import { commentTapOf } from '@/lib/telemetry/content-taps';
 import { readingTelemetry } from '@/lib/view/reading-telemetry';
@@ -192,11 +192,16 @@ export function CommentThread({
       setImaging((current) => (current === request ? { ...request, composition: { ...composition, thread: [root, ...replies] } } : current)),
     );
   };
+  /* `composed` : la carte composée ; `alone` : le fil n'est pas chargé, la carte du commentaire seul (`null` côté menu : sa propre règle). */
+  const postImagingOf = (post: FeedPost, comment: PostComment, servedText: string) => {
+    const root = rootOf(comment);
+    return postCommentImagingOf({ post, target: comment, targetText: servedText, thread: root === undefined ? [] : [root], readerLanguages: reader.languages, viewer: viewerOfCard });
+  };
   const postImageableOf = (comment: PostComment, servedText: string): boolean | null => {
     const post = composingPost;
     if (post === null) return null;
-    const root = rootOf(comment);
-    return postCommentImageable({ post, target: comment, targetText: servedText, thread: root === undefined ? [] : [root], readerLanguages: reader.languages, viewer: viewerOfCard });
+    const imaging = postImagingOf(post, comment, servedText);
+    return imaging === 'alone' ? null : imaging === 'composed';
   };
   /**
    * « IMAGER AVEC LES RÉPONSES » (#8734) — l'atelier s'ouvre TOUT DE SUITE sur
@@ -389,7 +394,7 @@ export function CommentThread({
             onImage: (comment, servedText, options) => {
               const post = composingPost;
               const showsOriginal = options.showsOriginal === true;
-              if (post !== null) imageComposed(post, comment, servedText, showsOriginal);
+              if (post !== null && postImagingOf(post, comment, servedText) === 'composed') imageComposed(post, comment, servedText, showsOriginal);
               else if (options.withReplies) imageWithReplies(comment, servedText, showsOriginal);
               else setImaging(imageRequestOf(comment, servedText, showsOriginal));
             },

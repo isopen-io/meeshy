@@ -151,7 +151,7 @@ final class WindowMetricsSSOTTests: XCTestCase {
         let code = codeLines(try source(Self.deviceLayout))
 
         XCTAssertTrue(
-            code.contains("windowScene.activationState == .foregroundActive"),
+            code.contains("isForeground: { $0.activationState == .foregroundActive }"),
             "The scene must be picked by activation state, never by position in an unordered Set."
         )
         XCTAssertTrue(

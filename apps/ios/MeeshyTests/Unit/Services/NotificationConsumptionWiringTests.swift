@@ -89,6 +89,82 @@ final class NotificationConsumptionWiringTests: XCTestCase {
         XCTAssertEqual(ctx.openedNotifications(), 1, "la consommation ne remplace pas la navigation")
     }
 
+    /// Le tap attendait le `markAsRead` REST (jusqu'au délai de 60 s de
+    /// l'`APIClient`) AVANT de naviguer : sur un réseau lent, toucher la
+    /// bannière ne faisait rien. La navigation part d'abord ; la consommation
+    /// (optimiste, puis réseau) suit.
+    func test_defaultTap_navigatesBeforeTheReadReceiptRoundTrip() async {
+        var order: [String] = []
+        let sut = NotificationActionHandler(
+            friendService: MockFriendService(),
+            backgroundTasks: NoopBackgroundTasks(),
+            authTokenProvider: { "jwt-token" },
+            applyAuthToken: { _ in },
+            currentUserId: { "user1" },
+            preferredLanguage: { "fr" },
+            isRegisteredUser: { true },
+            openNotification: { _ in order.append("open") },
+            localMarkRead: { _ in },
+            consume: { _ in order.append("consume") },
+            removeDeliveredForConversation: { _ in },
+            removeDeliveredForPost: { _ in },
+            removeDeliveredForNotificationIds: { _ in }
+        )
+
+        await sut.handle(
+            actionIdentifier: UNNotificationDefaultActionIdentifier,
+            userInfo: ["type": "security_alert", "notificationId": "n-1"],
+            replyText: nil
+        )
+
+        XCTAssertEqual(order, ["open", "consume"])
+    }
+
+    // MARK: - Plusieurs comptes : la notification s'adresse à UN compte
+
+    /// Une réponse rapide à un push du compte A, touchée pendant que B est
+    /// actif, partait sous l'identité de B (403, ou message signé B si B est
+    /// aussi membre). Même règle que la réponse à un commentaire (#9743).
+    func test_reply_toANotificationAddressedToAnotherAccount_sendsNothing() async {
+        let messageService = MockMessageService()
+        let sut = NotificationActionHandler(
+            messageService: messageService,
+            friendService: MockFriendService(),
+            backgroundTasks: NoopBackgroundTasks(),
+            authTokenProvider: { "jwt-token" },
+            applyAuthToken: { _ in },
+            currentUserId: { "000000000000000000000bbb" },
+            preferredLanguage: { "fr" },
+            isRegisteredUser: { true },
+            openNotification: { _ in },
+            localMarkRead: { _ in },
+            consume: { _ in },
+            removeDeliveredForConversation: { _ in },
+            removeDeliveredForPost: { _ in },
+            removeDeliveredForNotificationIds: { _ in }
+        )
+
+        await sut.handle(
+            actionIdentifier: MeeshyNotificationAction.reply.rawValue,
+            userInfo: ["type": "new_message", "conversationId": "c-1", "messageId": "m-1",
+                       "recipientUserId": "000000000000000000000aaa"],
+            replyText: "Salut"
+        )
+
+        XCTAssertEqual(messageService.sendCallCount, 0)
+    }
+
+    func test_isAddressed_payloadWithoutRecipient_trustsTheActiveAccount() {
+        XCTAssertTrue(NotificationReplyFailure.isAddressed(to: "u1", userInfo: ["type": "new_message"]))
+    }
+
+    func test_isAddressed_recipientMustBeTheActiveAccount() {
+        let id = "000000000000000000000aaa"
+        XCTAssertTrue(NotificationReplyFailure.isAddressed(to: id, userInfo: ["recipientId": id]))
+        XCTAssertFalse(NotificationReplyFailure.isAddressed(to: "000000000000000000000bbb", userInfo: ["recipientId": id]))
+        XCTAssertFalse(NotificationReplyFailure.isAddressed(to: nil, userInfo: ["recipientUserId": id]))
+    }
+
     func test_viewAction_consumesTheTappedNotification() async {
         let ctx = makeSUT()
 

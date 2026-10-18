@@ -337,15 +337,40 @@ final class ConversationSurfaceReachabilityGuardTests: XCTestCase {
     /// signifie : rien, nulle part, ne nomme cette fonction hors de sa propre
     /// signature.
     private func referenceCount(of name: String, in corpus: String) -> Int {
-        let uses = Self.occurrences(of: #"\b\#(name)\b"#, in: corpus)
-        let declarations = Self.occurrences(of: #"\bfunc\s+\#(name)\b"#, in: corpus)
-        return uses - declarations
+        referenceCount(of: name, in: Census(corpus))
     }
 
-    private static func occurrences(of pattern: String, in text: String) -> Int {
-        guard let regex = try? NSRegularExpression(pattern: pattern) else { return 0 }
-        return regex.numberOfMatches(in: text, range: NSRange(text.startIndex..., in: text))
+    private func referenceCount(of name: String, in census: Census) -> Int {
+        census.uses[name, default: 0] - census.declarations[name, default: 0]
     }
+
+    /// Le recensement d'un corpus, en UNE passe : chaque mot (`\w+` maximal) et
+    /// chaque `func <nom>` comptés une fois. Un mot maximal égal à `name` est
+    /// exactement une occurrence de `\bname\b` — même verdict qu'un balayage
+    /// du corpus entier par fonction, qui en faisait deux par nom (≈ 1 000 noms
+    /// × 32 Mio) et dépassait les 3 minutes allouées au test en CI.
+    private struct Census {
+        let uses: [String: Int]
+        let declarations: [String: Int]
+
+        init(_ text: String) {
+            uses = Census.tally(#"(\w+)"#, in: text)
+            declarations = Census.tally(#"\bfunc\s+(\w+)"#, in: text)
+        }
+
+        private static func tally(_ pattern: String, in text: String) -> [String: Int] {
+            guard let regex = try? NSRegularExpression(pattern: pattern) else { return [:] }
+            var counts: [String: Int] = [:]
+            for match in regex.matches(in: text, range: NSRange(text.startIndex..., in: text)) {
+                guard let r = Range(match.range(at: 1), in: text) else { continue }
+                counts[String(text[r]), default: 0] += 1
+            }
+            return counts
+        }
+    }
+
+    /// Le recensement du corpus, fait une fois pour la classe.
+    private static let corpusCensus = Census(sourceCorpus)
 
     // MARK: - Le versant atteignabilité
 
@@ -358,7 +383,7 @@ final class ConversationSurfaceReachabilityGuardTests: XCTestCase {
             for name in declaredFunctionNames(in: file.code).sorted() {
                 guard !Self.unreachableAllowlist.contains(name),
                       !Self.frameworkInvoked.contains(name) else { continue }
-                if referenceCount(of: name, in: corpus) == 0 {
+                if referenceCount(of: name, in: Self.corpusCensus) == 0 {
                     unreachable.append("\(file.name) → \(name)")
                 }
             }

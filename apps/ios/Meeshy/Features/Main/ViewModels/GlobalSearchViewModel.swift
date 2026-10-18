@@ -383,7 +383,16 @@ final class GlobalSearchViewModel: ObservableObject {
     func retryLastSearch() async {
         let trimmed = lastQuery.trimmingCharacters(in: .whitespacesAndNewlines)
         guard trimmed.count >= 2 else { return }
-        await performSearch(query: lastQuery)
+        // Le réessai passe par LA tâche de recherche, comme une frappe : une
+        // frappe qui suit l'annule, et lui ne peut plus revenir après elle pour
+        // remettre les résultats de l'ancienne requête.
+        let query = lastQuery
+        searchTask?.cancel()
+        let task = Task<Void, Never> { [weak self] in
+            await self?.performSearch(query: query)
+        }
+        searchTask = task
+        await task.value
     }
 
     // MARK: - Search Conversations (FTS5-first, network fallback)

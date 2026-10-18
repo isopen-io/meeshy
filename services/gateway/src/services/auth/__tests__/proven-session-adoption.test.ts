@@ -367,7 +367,7 @@ describe('le VRAI `validateMagicLink` remet l’échéance de la ligne à la rou
     const cache = { get: jest.fn(async (_key: string) => null), set: jest.fn(async (_key: string) => undefined), del: jest.fn(async (_key: string) => undefined) };
     const service = new MagicLinkService(prisma as never, cache as never, {} as never, {} as never);
     initSessionService(prisma as never);
-    const result = await service.validateMagicLink({ token: 'raw-token', requestContext: browser });
+    const result = await service.validateMagicLink({ token: 'raw-token', requestContext: browser, confirmed: true });
     return { result, rows: table.rows };
   }
 

@@ -17,6 +17,16 @@ const es = {
   'recovery.reset.invalid.action': 'Solicitar un nuevo enlace',
   'recovery.reset.done.title': 'Contraseña guardada',
   'recovery.reset.done.text': 'Ya puedes iniciar sesión con tu nueva contraseña.',
+  'recovery.reset.code': 'Código de verificación',
+  'recovery.reset.code.lead': 'Introduce el código de 6 dígitos de tu aplicación de autenticación.',
+  'recovery.reset.error.codeRequired': 'Esta cuenta está protegida: introduce el código de verificación de tu aplicación de autenticación.',
+  'recovery.reset.error.codeInvalid': 'Código de verificación incorrecto.',
+  'recovery.reset.error.weak': 'Esta contraseña es demasiado fácil de adivinar. Elige una más larga o menos previsible.',
+  'recovery.reset.error.reused': 'Ya usaste esta contraseña recientemente. Elige otra.',
+  'recovery.reset.error.rateLimited': 'Demasiados intentos. Espera unos minutos antes de volver a intentarlo.',
+  'recovery.reset.error.locked': 'Esta cuenta está bloqueada temporalmente. Contacta con el soporte.',
+  'recovery.reset.exhausted.title': 'Demasiados códigos incorrectos',
+  'recovery.reset.exhausted.text': 'Por seguridad, este enlace se ha desactivado. Solicita uno nuevo.',
 } satisfies AccountRecoveryCatalog;
 
 export default es;

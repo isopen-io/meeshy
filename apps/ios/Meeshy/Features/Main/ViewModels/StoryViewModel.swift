@@ -492,7 +492,7 @@ class StoryViewModel: ObservableObject, StoryPublishExecutor {
 
     func deleteStory(storyId: String) async -> Bool {
         do {
-            try await storyService.delete(storyId: storyId)
+            try await Self.deleteRemotely(storyId: storyId, with: storyService)
             // Même chemin que les tombstones et l'event socket. Une suppression
             // explicite l'emporte sur l'exception accordée à l'auteur pour ses
             // propres stories expirées : c'est une volonté, pas un délai.
@@ -502,6 +502,34 @@ class StoryViewModel: ObservableObject, StoryPublishExecutor {
             return false
         }
     }
+
+    /// **La suppression part par une frontière `@concurrent`, et ce n'est pas
+    /// décoratif** (plantage TestFlight build 1890, « j'ai supprimé une story
+    /// ça a planté »).
+    ///
+    /// Le rapport montre `deleteStory` REPRIS sur un fil coopératif (thread 7,
+    /// le main étant dans sa runloop), puis `purgeDeadStories` trapper à la
+    /// vérification d'exécuteur de la fermeture `.filter { deadIds.contains }`
+    /// (`_dispatch_assert_queue_fail`). `storyService.delete` est
+    /// `nonisolated(nonsending)` (SE-0461, actif dans le SDK) : l'appelant
+    /// FAIT CONFIANCE à la chaîne appelée pour lui rendre la main sur son
+    /// exécuteur, et n'émet AUCUN saut de retour. Quand un maillon de cette
+    /// chaîne (décodage hors main par continuation, client API) reprend
+    /// ailleurs, la suite du view model s'exécute hors du main — mutation de
+    /// `@Published` comprise.
+    ///
+    /// Un appel `@concurrent`, lui, se termine toujours par un saut EXPLICITE
+    /// vers le MainActor (`swift_task_switch`, décidé à l'exécution sur
+    /// l'exécuteur réellement courant) : la purge retombe sur le main quoi que
+    /// fasse la chaîne réseau.
+    @concurrent
+    nonisolated static func deleteRemotely(
+        storyId: String,
+        with service: any StoryServiceProviding
+    ) async throws {
+        try await service.delete(storyId: storyId)
+    }
+
     // MARK: - Socket.IO Real-Time Updates
 
     /// Mimics the sort applied by `Array<APIPost>.toStoryGroups(currentUserId:)`

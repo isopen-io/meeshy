@@ -4,7 +4,7 @@
  */
 
 import { describe, it, expect } from 'vitest';
-import { prestigeTransition } from '../../utils/game/prestige.js';
+import { closedCycleRecord, pastCycleRecordsAfterPrestige, prestigeTransition } from '../../utils/game/prestige.js';
 import { GLORY_POINTS } from '../../utils/game/glory.js';
 import { levelThreshold } from '../../utils/game/levels.js';
 
@@ -50,5 +50,18 @@ describe('le passage en Prestige', () => {
 
   it('lit une étoile illisible comme zéro', () => {
     expect(prestigeTransition({ score: AT_100, prestige: Number.NaN, levelRecord: 100 })).toMatchObject({ allowed: true, prestigeAfter: 1 });
+  });
+});
+
+describe('le record du cycle que le Prestige clôt (#10911)', () => {
+  it('le plus haut du record gravé et du niveau, jamais sous le niveau du Prestige', () => {
+    expect(closedCycleRecord({ levelRecord: 130, level: 110 })).toBe(130);
+    expect(closedCycleRecord({ levelRecord: 90, level: 120 })).toBe(120);
+    expect(closedCycleRecord({ levelRecord: null, level: 1 })).toBe(100);
+  });
+
+  it('s’ajoute aux cycles déjà clos ; devant un serveur qui ne les sert pas, rien ne s’invente', () => {
+    expect(pastCycleRecordsAfterPrestige({ pastCycleRecords: [150], levelRecord: 110, level: 100 })).toEqual([150, 110]);
+    expect(pastCycleRecordsAfterPrestige({ pastCycleRecords: undefined, levelRecord: 110, level: 100 })).toBeUndefined();
   });
 });

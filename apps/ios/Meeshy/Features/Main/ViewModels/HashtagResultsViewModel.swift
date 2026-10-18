@@ -19,6 +19,10 @@ final class HashtagResultsViewModel: ObservableObject {
     let impressions: ReachImpressionRecording
     private var nextCursor: String?
     private var hasMore = true
+    /// Chaque `load()` ouvre une génération : une page de `loadMore` (ou un
+    /// `load` plus ancien) qui revient après n'écrit plus rien — elle
+    /// collerait la page 2 de l'ANCIENNE liste à la nouvelle, et son curseur.
+    private var generation = 0
 
     init(
         tag: String,
@@ -57,15 +61,19 @@ final class HashtagResultsViewModel: ObservableObject {
     /// méthode qui résout la traduction affichée selon les langues préférées
     /// de l'utilisateur (`FeedModels.swift`).
     func load() async {
+        generation += 1
+        let current = generation
         isLoading = true
-        defer { isLoading = false }
+        defer { if current == generation { isLoading = false } }
         let preferred = languageProvider.preferredLanguages
         do {
             let response = try await service.getPostsByHashtag(tag: tag, cursor: nil, limit: 20)
+            guard current == generation else { return }
             posts = response.data.map { $0.toFeedPost(preferredLanguages: preferred) }
             nextCursor = response.pagination?.nextCursor
             hasMore = response.pagination?.hasMore ?? false
         } catch {
+            guard current == generation else { return }
             // Échec silencieux : liste vide plutôt qu'un crash, même
             // invariant que le reste du feed sur perte réseau.
             posts = []
@@ -104,16 +112,28 @@ final class HashtagResultsViewModel: ObservableObject {
 
     func loadMore() async {
         guard hasMore, !isLoading else { return }
+        let current = generation
         isLoading = true
-        defer { isLoading = false }
+        defer { if current == generation { isLoading = false } }
         let preferred = languageProvider.preferredLanguages
         do {
             let response = try await service.getPostsByHashtag(tag: tag, cursor: nextCursor, limit: 20)
-            posts.append(contentsOf: response.data.map { $0.toFeedPost(preferredLanguages: preferred) })
+            guard current == generation else { return }
+            // Le serveur pagine par DÉCALAGE (`skip`) : un post publié sous ce
+            // hashtag entre deux pages repousse la liste d'un rang, et le dernier
+            // post de la page déjà montrée revient en tête de la suivante. Deux
+            // fois le même id dans `ForEach(posts)`, c'est une identité SwiftUI
+            // indéfinie (cellule qui montre l'autre, état croisé).
+            let shown = Set(posts.map(\.id))
+            let fresh = response.data
+                .map { $0.toFeedPost(preferredLanguages: preferred) }
+                .filter { !shown.contains($0.id) }
+            posts.append(contentsOf: fresh)
             nextCursor = response.pagination?.nextCursor
             hasMore = response.pagination?.hasMore ?? false
         } catch {
-            hasMore = false
+            // Une requête perdue n'est pas la fin de la liste : le prochain
+            // défilement la redemande (comme `ReelsViewModel`).
         }
     }
 }

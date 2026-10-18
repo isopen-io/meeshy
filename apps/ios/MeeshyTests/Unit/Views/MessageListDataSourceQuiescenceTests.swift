@@ -272,4 +272,24 @@ final class MessageListDataSourceQuiescenceTests: XCTestCase {
         await store.refreshFromDB()
         return store
     }
+
+    // MARK: - La largeur change sous la liste (cycle 4, iPad)
+
+    /// Fenêtre redimensionnée, rotation, colonnes : les cellules à l'écran
+    /// gardaient la largeur max de leur configuration. Une largeur NOUVELLE
+    /// et mesurée les re-héberge ; ni la largeur nulle d'avant le premier
+    /// layout, ni un écart sous le point.
+    func test_widthChangeRehostsBubbles_onlyForANewMeasuredWidth() {
+        XCTAssertTrue(MessageListViewController.widthChangeRehostsBubbles(from: 0, to: 390), "premier layout mesuré")
+        XCTAssertTrue(MessageListViewController.widthChangeRehostsBubbles(from: 700, to: 420), "fenêtre rétrécie")
+        XCTAssertTrue(MessageListViewController.widthChangeRehostsBubbles(from: 420, to: 980), "fenêtre élargie")
+        XCTAssertFalse(MessageListViewController.widthChangeRehostsBubbles(from: 390, to: 0), "pas encore mesurée")
+        XCTAssertFalse(MessageListViewController.widthChangeRehostsBubbles(from: 390, to: 390.4), "même largeur")
+    }
+
+    func test_viewDidLayoutSubviews_reconfiguresTheVisibleCells_whenTheWidthChanges() throws {
+        let host = try Self.stripped("Meeshy/Features/Main/Views/MessageListViewController.swift")
+        let start = try XCTUnwrap(host.range(of: "override func viewDidLayoutSubviews() {"))
+        XCTAssertTrue(String(host[start.upperBound...].prefix(200)).contains("reconfigureVisibleCellsIfWidthChanged()"))
+    }
 }

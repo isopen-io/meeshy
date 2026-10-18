@@ -1,6 +1,7 @@
 import SwiftUI
 import UIKit
 import os
+import Combine
 import PhotosUI
 import UniformTypeIdentifiers
 import AVFoundation
@@ -244,12 +245,19 @@ extension StoryComposerView {
         // each toolbar mutation. Five separate `.onChange` modifiers tipped
         // the type-checker over the time-out threshold, so we collapse them
         // into a single extension modifier to maintain performance in O(1).
-        .onReceive(NotificationCenter.default.publisher(
-            for: UIResponder.keyboardWillShowNotification)) { note in
+        // La part de la fenêtre que le clavier RECOUVRE, pas la hauteur brute de sa trame : sur iPad le clavier
+        // flotte, se scinde, ou passe sous une fenêtre Stage Manager. Détacher / recoller le clavier n'annonce
+        // qu'un changement de trame — d'où l'écoute de `keyboardWillChangeFrame` en plus de l'apparition.
+        .onReceive(NotificationCenter.default.publisher(for: UIResponder.keyboardWillShowNotification)
+            .merge(with: NotificationCenter.default.publisher(for: UIResponder.keyboardWillChangeFrameNotification))) { note in
             let frame = (note.userInfo?[UIResponder.keyboardFrameEndUserInfoKey]
                 as? NSValue)?.cgRectValue ?? .zero
-            keyboardHeight = frame.height
-            recomputeCanvasShift()
+            let lift = StoryKeyboardOverlap.height(keyboardEndFrame: frame,
+                                                   windowFrame: WindowMetrics.activeWindowFrameInScreen,
+                                                   current: keyboardHeight)
+            guard lift != keyboardHeight else { return }
+            keyboardHeight = lift
+            if lift == 0 { canvasEditShift = 0 } else { recomputeCanvasShift() }
         }
         .onReceive(NotificationCenter.default.publisher(
             for: UIResponder.keyboardWillHideNotification)) { _ in
@@ -1201,14 +1209,11 @@ extension StoryComposerView {
         return viewModel.loadedImages[bgId]
     }
 
-    /// Hauteur de la fenêtre active (et non `UIScreen.main.bounds`) — identique au
-    /// calcul de `recomputeCanvasShift`, pour respecter split-screen / Stage Manager.
-    /// Délègue à `WindowMetrics`, le SSOT du module : l'implémentation locale
-    /// choisissait la scène par `.first` sur un `Set` non ordonné (donc
-    /// potentiellement une scène en arrière-plan), quand `WindowMetrics` la
-    /// résout par `activationState == .foregroundActive`.
+    /// Hauteur de la fenêtre qui PORTE le composer (publiée par sa racine) — pas la fenêtre clé, qui sous Stage
+    /// Manager ou avec une fenêtre détachée peut être l'autre. `WindowMetrics` (scène au premier plan, fenêtre clé)
+    /// n'est que le repli, avant la première mesure.
     var composerScreenHeight: CGFloat {
-        WindowMetrics.windowSize.height
+        SceneWindowSize.resolve(sceneWindowSize, fallback: WindowMetrics.windowSize).height
     }
 
     /// Ce qui DÉTACHE le canvas de son plateau, hors mode dessin plein écran.
@@ -1736,7 +1741,7 @@ extension StoryComposerView {
     }
 
     var safeAreaBottomInset: CGFloat {
-        WindowMetrics.safeAreaInsets.bottom
+        SceneWindowSize.resolveInsets(sceneSafeAreaInsets, fallback: WindowMetrics.safeAreaEdgeInsets).bottom
     }
 
     func textObjectBinding(for id: String) -> Binding<StoryTextObject>? {

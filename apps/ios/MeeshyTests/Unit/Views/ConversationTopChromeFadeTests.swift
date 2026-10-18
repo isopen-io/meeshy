@@ -106,7 +106,7 @@ final class ConversationTopChromeFadeTests: XCTestCase {
             "Bords déclarés : `\(edges.trimmingCharacters(in: .whitespacesAndNewlines))`."
         )
         XCTAssertTrue(
-            listBlock.contains("topInset: previewMode ? 0 : DeviceLayout.safeAreaTop"),
+            listBlock.contains("topInset: previewMode ? 0 : windowInsets.top"),
             "Sous `ignoresSafeArea`, ni le GeometryReader ni le contrôleur " +
             "hébergé ne connaissent l'inset haut : il doit venir de la fenêtre."
         )

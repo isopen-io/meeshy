@@ -79,4 +79,47 @@ final class OutboxProtectedMediaReplayTests: XCTestCase {
         let hits = regex.numberOfMatches(in: source, range: NSRange(source.startIndex..., in: source))
         XCTAssertEqual(hits, 4, "les quatre mises en file média (hors ligne et échec en ligne, audio et visuel) portent l'intention")
     }
+
+    // MARK: - Rejeu texte : la langue d'origine voyage
+
+    /// Le rejeu TEXTE du flusher omettait `originalLanguage` (les rejeux média,
+    /// protégé et socket la portent) : tout message écrit hors ligne ou après
+    /// un échec d'envoi arrivait sans langue, et le serveur la redevinait.
+    func test_textReplayRequest_carriesTheOriginalLanguage() throws {
+        let item = OfflineQueueItem(conversationId: "conv-1", content: "Bonjour",
+                                    clientMessageId: "cid_text", originalLanguage: "fr")
+        let body = try json(OutboxDispatcher.textReplayRequest(for: item, copyAttachmentsFromMessageId: nil))
+        XCTAssertEqual(body["originalLanguage"] as? String, "fr")
+        XCTAssertEqual(body["content"] as? String, "Bonjour")
+        XCTAssertEqual(body["clientMessageId"] as? String, "cid_text")
+    }
+
+    func test_textReplayRequest_keepsTheProtection() throws {
+        let item = OfflineQueueItem(conversationId: "conv-1", content: "secret", clientMessageId: "cid_vo",
+                                    protection: MessageProtectionIntent(ephemeral: nil, isViewOnce: true))
+        let body = try json(OutboxDispatcher.textReplayRequest(for: item, copyAttachmentsFromMessageId: "m-src"))
+        XCTAssertEqual(body["isViewOnce"] as? Bool, true)
+        XCTAssertEqual(body["copyAttachmentsFromMessageId"] as? String, "m-src")
+    }
+
+    // MARK: - Un envoi média ne part que complet
+
+    func test_requireCompleteUpload_oneOfThreeFailed_throwsTheOriginalError() {
+        let cut = URLError(.networkConnectionLost)
+        XCTAssertThrowsError(try OutboxDispatcher.requireCompleteUpload(
+            uploadedIds: ["up1", "up2"], firstUploadError: cut, emptyDescription: "none")) { error in
+            XCTAssertEqual((error as? URLError)?.code, .networkConnectionLost,
+                           "un envoi partiel ferait perdre la troisième photo")
+        }
+    }
+
+    func test_requireCompleteUpload_nothingUploaded_throws() {
+        XCTAssertThrowsError(try OutboxDispatcher.requireCompleteUpload(
+            uploadedIds: [], firstUploadError: nil, emptyDescription: "none"))
+    }
+
+    func test_requireCompleteUpload_allUploaded_passes() {
+        XCTAssertNoThrow(try OutboxDispatcher.requireCompleteUpload(
+            uploadedIds: ["up1"], firstUploadError: nil, emptyDescription: "none"))
+    }
 }

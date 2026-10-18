@@ -195,7 +195,7 @@ enum GameWave2Optimistic {
         let owned = on(state, state.game.wave2.replacing(season: .some(season.replacing(sealOwned: true))))
         let held = max(0, state.game.treasury.held - season.sealPrice)
         return GameState(
-            game: owned.game.replacing(treasury: GameTreasury.standing(held: held)),
+            game: owned.game.replacing(treasury: owned.game.treasuryAt(held: held)),
             meesh: state.meesh.map { $0.replacing(balance: max(0, $0.balance - season.sealPrice)) }
         )
     }
@@ -222,19 +222,27 @@ enum GameWave2Optimistic {
 
     // MARK: - Le Prestige
 
-    /// Le passage en Prestige, par la MÊME loi que la passerelle (`GamePrestige.transition`) : le niveau et
-    /// le score repartent à 1 et à 0, l'étoile se pose, la Gloire monte, le trophée numéroté entre dans la
-    /// vitrine. Le niveau RECORD retombe à 1 avec le niveau : la ligue (10) et le duo (20) se referment
-    /// tant qu'il n'y est pas revenu — la confirmation l'annonce avant le geste (conformité G-5).
+    /// Le passage en Prestige, par la MÊME loi que la passerelle (`GamePrestige.transition`, `PrestigeService.pass`) : le
+    /// niveau et la poche repartent à 1 et à 0, l'étoile se pose, la Gloire monte, le trophée numéroté entre dans la vitrine.
+    ///
+    /// Devant une passerelle des étincelles (#10846), le cycle repart à 0, le total à vie et la dette restent
+    /// (`GameSparks.afterPrestige`), et le niveau MAX À VIE survit : la ligue (10) et le duo (20), qui le lisent, RESTENT
+    /// ouverts — gardés tels que servis. Le record du cycle retombe à 1, le Vent arrière ne souffle pas, le prix suivant est
+    /// celui de la pièce suivante au facteur du niveau 1, les réserves du trésor se relisent sur la Gloire d'après. Devant
+    /// un serveur antérieur, la loi d'hier : le record retombé referme la ligue et le duo (conformité G-5).
     ///
     /// Refusé (même valeur) sans proposition ouverte, ou au maximum.
     static func afterPrestige(_ state: GameState, now: Date = Date()) -> GameState {
         let game = state.game
+        let served = game.level.sparkLedger
+        // Les étapes faites ne se défont pas : le plus haut des deux records les prouve, comme la passerelle les lit.
+        let proof = max(game.level.shown.record, game.level.levelMaxLifetime ?? 0)
         guard let prestige = game.prestige, prestige.canPrestige,
-              case .allowed(let passage) = GamePrestige.transition(score: game.level.score, prestige: game.level.prestige,
-                                                                   levelRecord: game.level.shown.record)
+              case .allowed(let passage) = GamePrestige.transition(score: served?.pocket ?? game.level.score,
+                                                                   prestige: game.level.prestige, levelRecord: proof)
         else { return state }
 
+        let sparks = served.map(GameSparks.afterPrestige)
         let glory = game.glory.atGlory(game.glory.glory + passage.gloryGained)
         // Le plafond se relit sur le rang d'APRÈS le passage : la Gloire du Prestige peut l'ouvrir (#9688).
         let levelCap = GameGlory.levelCap(forRank: glory.rank)
@@ -242,7 +250,19 @@ enum GameWave2Optimistic {
             GameLevelStepFacts(counts: $0.counts, glory: glory.glory, rank: glory.rank)
         }
         let level = GameLevelWire.level(score: passage.scoreAfter, levelCap: levelCap,
-                                         levelRecord: passage.levelRecordAfter, prestige: passage.prestigeAfter, steps: steps)
+                                         levelRecord: passage.levelRecordAfter, prestige: passage.prestigeAfter, steps: steps,
+                                         sparks: sparks, levelMaxLifetime: sparks.map { _ in max(proof, game.level.shown.level) },
+                                         // Le cycle que le passage clôt rejoint la liste, comme l'écrit la passerelle (#10911).
+                                         pastCycleRecords: GamePrestige.pastCycleRecordsAfterPrestige(
+                                            game.level.ladder?.pastCycleRecords,
+                                            levelRecord: game.level.shown.record, level: game.level.shown.level))
+        let mintedLifetime = max(0, game.mint.number - 1)
+        let preview = sparks.map {
+            GameMint.sparksPreview(sparks: $0.pocket, mintedLifetime: mintedLifetime, held: game.treasury.held,
+                                   glory: glory.glory, mythic: glory.rank == .mythe, levelCap: levelCap, steps: steps,
+                                   debt: $0.debt)
+        } ?? GameMint.preview(score: passage.scoreAfter, mintedLifetime: mintedLifetime, debitablePoints: 0,
+                              levelCap: levelCap, steps: steps)
         let trophies = game.trophies.map { block -> GameTrophiesBlock in
             let stamp = ISO8601DateFormatter().string(from: now)
             return GameTrophiesBlock(
@@ -250,22 +270,23 @@ enum GameWave2Optimistic {
                 order: [passage.trophyKey] + block.order
             )
         }
+        let closesAccess = sparks == nil
         let wave2 = game.wave2.replacing(
-            league: .some(game.league?.replacing(unlocked: false, access: .locked, current: .some(nil))),
-            duo: .some(game.duo?.replacing(unlocked: false)),
+            league: closesAccess ? .some(game.league?.replacing(unlocked: false, access: .locked, current: .some(nil))) : nil,
+            duo: closesAccess ? .some(game.duo?.replacing(unlocked: false)) : nil,
             trophies: .some(trophies),
             prestige: .some(prestige.replacing(stars: passage.prestigeAfter, canPrestige: false))
         )
-        let passed = game.replacing(
+        let risen = game.replacing(glory: glory)
+        let passed = risen.replacing(
             level: level,
-            glory: glory,
-            mint: GameLevelWire.mint(
-                GameMint.preview(score: passage.scoreAfter, mintedLifetime: game.mint.number, debitablePoints: 0, levelCap: levelCap,
-                                 steps: steps)
-            ),
-            boosts: game.boosts.replacing(tailwind: GameBoosts.tailwind(level: passage.levelAfter, levelRecord: passage.levelRecordAfter)),
+            treasury: risen.treasuryAt(held: game.treasury.held),
+            mint: GameLevelWire.mint(preview),
+            boosts: game.boosts.replacing(tailwind: sparks == nil
+                ? GameBoosts.tailwind(level: passage.levelAfter, levelRecord: passage.levelRecordAfter)
+                : GameBoosts.sparksTailwind(level: passage.levelAfter, levelRecord: passage.levelRecordAfter)),
             wave2: wave2
         )
-        return GameState(game: passed, meesh: state.meesh)
+        return GameOptimistic.withMintCounters(GameState(game: passed, meesh: state.meesh), debitable: 0)
     }
 }

@@ -136,6 +136,12 @@ final class StoryViewerParticipationStore: ObservableObject, StoryViewerParticip
         marks[storyId, default: []].insert(mark)
     }
 
+    /// Déconnexion : les gestes notés appartiennent au compte sortant.
+    func resetForLogout() {
+        guard !marks.isEmpty else { return }
+        marks = [:]
+    }
+
     func participation(for storyId: String?, hasReacted: Bool) -> StoryViewerParticipation {
         StoryViewerParticipation(marks: storyId.flatMap { marks[$0] } ?? [], hasReacted: hasReacted)
     }

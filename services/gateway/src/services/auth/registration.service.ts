@@ -64,6 +64,7 @@ import { passwordSettingsUrl, profileEditUrl } from '../email/account-identity-b
 import { RegistrationRefusal } from './registration-refusal';
 import { claimPlaceholderEmail, maskedEmailOwner, retireEarlierClaims } from './email-claim';
 import { hashEmailCode, verificationTtlMinutes } from './email-code';
+import { EMAIL_LINK_PATHS, emailSecretLink } from '../../utils/email-secret-link';
 
 const logger = enhancedLogger.child({ module: 'RegistrationService' });
 
@@ -111,6 +112,12 @@ export type RegisterData = {
    * l'adresse n'est détenue par personne.
    */
   readonly claimEmail?: boolean;
+  /**
+   * #10872 — l'empreinte du secret de l'appareil qui a demandé le lien (porte
+   * « e-mail seul »). Posée par le serveur, jamais lue d'un corps
+   * d'inscription ; absente ⇒ le lien naît non lié et exigera une confirmation.
+   */
+  readonly linkDeviceHash?: string;
 };
 
 /**
@@ -503,6 +510,7 @@ export async function registerAccount(
       // L'EMPREINTE du code, jamais le code : depuis #8033 il ouvre une session.
       emailVerificationCode: hashEmailCode(verificationCode),
       emailVerificationExpiry: verificationExpiry,
+      emailVerificationDeviceHash: data.linkDeviceHash ?? null,
       registrationIp: requestContext?.ip || null,
       registrationLocation: requestContext?.geoData?.location || null,
       registrationDevice: requestContext?.userAgent || null,
@@ -537,7 +545,7 @@ export async function registerAccount(
   // sera émis, et l'utilisateur peut en redemander un. Le faire attendre à la
   // requête ajoutait un aller-retour SMTP au chemin d'entrée du produit.
   await aCote(async () => {
-    const verificationLink = `${deps.frontendUrl}/auth/verify-email?token=${verificationToken}&email=${encodeURIComponent(normalizedEmail)}`;
+    const verificationLink = emailSecretLink({ base: deps.frontendUrl, path: EMAIL_LINK_PATHS.verifyEmail, secret: { token: verificationToken, email: normalizedEmail } });
 
     const resultat = await deps.emailService.sendEmailVerification({
       to: normalizedEmail,

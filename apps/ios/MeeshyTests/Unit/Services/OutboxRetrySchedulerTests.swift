@@ -153,11 +153,35 @@ final class OutboxRetrySchedulerTests: XCTestCase {
 
     // MARK: - schedule(at:) with future date can be cancelled with nil
 
-    func test_schedule_cancelExistingTimerWithNil() {
+    /// Un flush concurrent qui ne voit rien de différé (`nil`) annulait le
+    /// minuteur qu'un autre venait d'armer pour une ligne en backoff : elle
+    /// attendait alors un évènement de cycle de vie. `nil` ne retire plus rien.
+    func test_schedule_nilFromAConcurrentFlush_keepsTheArmedTimer() {
+        let scheduler = OutboxRetryScheduler.shared
+        scheduler.cancelForTesting()
+        defer { scheduler.cancelForTesting() }
         let futureDate = Date().addingTimeInterval(3600)
-        OutboxRetryScheduler.shared.schedule(at: futureDate)
-        // Immediately cancel — should not crash
-        OutboxRetryScheduler.shared.schedule(at: nil)
+        scheduler.schedule(at: futureDate, flush: { @MainActor in })
+
+        scheduler.schedule(at: nil)
+
+        XCTAssertEqual(scheduler.pendingRetryDate, futureDate)
+    }
+
+    /// L'échéance la plus proche l'emporte : un flush qui voit une ligne plus
+    /// lointaine ne repousse pas celle d'une ligne plus proche.
+    func test_schedule_laterDate_keepsTheEarlierDeadline() {
+        let scheduler = OutboxRetryScheduler.shared
+        scheduler.cancelForTesting()
+        defer { scheduler.cancelForTesting() }
+        let soon = Date().addingTimeInterval(600)
+        scheduler.schedule(at: soon, flush: { @MainActor in })
+        scheduler.schedule(at: Date().addingTimeInterval(3000), flush: { @MainActor in })
+        XCTAssertEqual(scheduler.pendingRetryDate, soon)
+
+        let sooner = Date().addingTimeInterval(60)
+        scheduler.schedule(at: sooner, flush: { @MainActor in })
+        XCTAssertEqual(scheduler.pendingRetryDate, sooner)
     }
 
     // MARK: - startObservingMutationEnqueued (outbox-04)
@@ -232,5 +256,52 @@ final class OutboxRetrySchedulerTests: XCTestCase {
         await fulfillment(of: [exp], timeout: 2.0)
         XCTAssertEqual(firstCount, 0, "la première souscription doit être annulée par la seconde")
         XCTAssertEqual(secondCount, 1)
+    }
+
+    // MARK: - Reconnexion du socket (globale)
+
+    /// Une reprise du socket sans changement de chemin réseau (redémarrage du
+    /// serveur) ne réveillait le flusher que si un écran de conversation était
+    /// ouvert (`ConversationSocketHandler`). Depuis que `retryAll` laisse
+    /// l'outbox au flusher, ce réveil doit être global.
+    func test_socketReconnect_risingEdge_callsFlush() async {
+        let subject = PassthroughSubject<Bool, Never>()
+        var count = 0
+        let exp = expectation(description: "flush on socket reconnect")
+        OutboxRetryScheduler.shared.startObservingSocketReconnect(
+            connectedPublisher: subject.eraseToAnyPublisher(),
+            flush: { @MainActor in
+                count += 1
+                exp.fulfill()
+            }
+        )
+        subject.send(true)   // valeur courante, ignorée
+        subject.send(false)
+        subject.send(true)   // reconnexion
+        await fulfillment(of: [exp], timeout: 1.0)
+        XCTAssertEqual(count, 1)
+    }
+
+    // MARK: - Un réarmement n'annule pas un flush en cours
+
+    /// Le flush lancé par le minuteur courait DANS la tâche du minuteur : tout
+    /// `schedule` concurrent (fin d'un autre flush) l'annulait, ce qui coupait
+    /// la requête ou l'upload TUS en vol et repoussait la ligne de 30 s.
+    func test_reschedule_whileTimerFlushRuns_doesNotCancelIt() async {
+        OutboxRetryScheduler.shared.cancelForTesting()
+        defer { OutboxRetryScheduler.shared.cancelForTesting() }
+        let started = expectation(description: "timer flush started")
+        let finished = expectation(description: "timer flush finished")
+        var sawCancellation = true
+        OutboxRetryScheduler.shared.schedule(at: Date(), flush: { @MainActor in
+            started.fulfill()
+            try? await Task.sleep(nanoseconds: 200_000_000)
+            sawCancellation = Task.isCancelled
+            finished.fulfill()
+        })
+        await fulfillment(of: [started], timeout: 1.0)
+        OutboxRetryScheduler.shared.schedule(at: Date().addingTimeInterval(3600), flush: { @MainActor in })
+        await fulfillment(of: [finished], timeout: 2.0)
+        XCTAssertFalse(sawCancellation)
     }
 }

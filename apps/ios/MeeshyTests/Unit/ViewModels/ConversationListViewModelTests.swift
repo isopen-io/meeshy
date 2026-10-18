@@ -4212,6 +4212,107 @@ final class ConversationListViewModelTests: XCTestCase {
 
         XCTAssertEqual(sut.typingUsers, ["conv1": "alice", "conv2": "bob"])
     }
+
+    // MARK: - Aperçu d'appui long : relu à chaque appui
+
+    private func previewPage(conversationId: String, content: String) -> MessagesAPIResponse {
+        JSONStub.decode("""
+        {"success":true,"data":[{"id":"aa00000000000000000000\(content.count)","conversationId":"\(conversationId)","senderId":"u-other","content":"\(content)","createdAt":"2026-10-18T08:00:00.000Z"}],"pagination":null,"cursorPagination":null,"hasNewer":null}
+        """)
+    }
+
+    /// L'aperçu ne se chargeait qu'UNE fois par conversation pour toute la vie du VM (des heures) : un message
+    /// modifié — ou supprimé pour tous — restait lisible à chaque appui long suivant.
+    func test_aLongPress_refreshesAPreviewLoadedEarlier() async {
+        let conversationId = String(UUID().uuidString.replacingOccurrences(of: "-", with: "").prefix(24)).lowercased()
+        let service = MockMessageService()
+        service.listResult = .success(previewPage(conversationId: conversationId, content: "avant"))
+        let (sut, _, _, _, _, _, _) = makeSUT(messageService: service)
+
+        await sut.loadPreviewMessages(for: conversationId)
+        XCTAssertEqual(sut.previewMessages[conversationId]?.map(\.content), ["avant"], "précondition")
+
+        service.listResult = .success(previewPage(conversationId: conversationId, content: "corrigé"))
+        await sut.loadPreviewMessages(for: conversationId, refresh: true)
+
+        XCTAssertEqual(sut.previewMessages[conversationId]?.map(\.content), ["corrigé"])
+    }
+
+    func test_anAutoPreviewLoad_doesNotRefetchAPreviewAlreadyLoaded() async {
+        let conversationId = String(UUID().uuidString.replacingOccurrences(of: "-", with: "").prefix(24)).lowercased()
+        let service = MockMessageService()
+        service.listResult = .success(previewPage(conversationId: conversationId, content: "avant"))
+        let (sut, _, _, _, _, _, _) = makeSUT(messageService: service)
+
+        await sut.loadPreviewMessages(for: conversationId)
+        await sut.loadPreviewMessages(for: conversationId)
+
+        XCTAssertEqual(service.listCallCount, 1, "le préchargement opportuniste reste idempotent")
+    }
+
+    // MARK: - Une seule liste vivante, partagée par ses fenêtres
+
+    /// iPad : une fenêtre détachée, ou la racine qui remplace l'autre au passage compact ↔ regular (Stage
+    /// Manager, Split View), créait un SECOND `ConversationListViewModel` complet — abonnements socket, push et
+    /// lus doublés, un GET par push pour une conversation absente de sa liste vide. Un propriétaire réutilise
+    /// la liste déjà vivante.
+    func test_aSecondOwner_sharesTheLiveListViewModel() {
+        let (made, _, _, _, _, _, _) = makeSUT()
+        let first = ConversationListVMOwner(make: { made })
+        let second = ConversationListVMOwner(make: {
+            XCTFail("une liste vivante existe : aucune seconde ne doit naître")
+            return made
+        })
+
+        XCTAssertTrue(first.viewModel === second.viewModel)
+    }
+
+    // MARK: - Widget : une liste jamais chargée ne s'y publie pas
+
+    /// iPad multi-fenêtre : `DetachedWindowView` possède son propre `ConversationListViewModel`, qui ne
+    /// charge JAMAIS la liste. Son `[]` initial traversait le debounce et partait vers
+    /// `NotificationCoordinator.registerConversations([])` : widget, destinations de l'extension de
+    /// partage et noms locaux des notifications effacés 200 ms après chaque fenêtre détachée.
+    func test_aListThatNeverLoaded_publishesNothingToTheWidget() async throws {
+        let spy = ConvListWidgetSinkSpy()
+        let previous = NotificationCoordinator.shared.widgetSink
+        NotificationCoordinator.shared.widgetSink = spy
+        defer { NotificationCoordinator.shared.widgetSink = previous }
+        let (sut, _, _, _, _, _, _) = makeSUT()
+
+        try await Task.sleep(nanoseconds: 450_000_000)
+
+        XCTAssertEqual(sut.loadState, .idle, "précondition : la liste n'a jamais été chargée")
+        XCTAssertFalse(spy.publishedConversations.contains { $0.isEmpty },
+                       "un VM qui n'a rien chargé ne doit pas vider le widget")
+    }
+
+    func test_aLoadedList_isPublishedToTheWidget() async throws {
+        let conversation = makeConversation(id: "000000000000000000000077")
+        try await CacheCoordinator.shared.conversations.save([conversation], for: "list")
+        let spy = ConvListWidgetSinkSpy()
+        let previous = NotificationCoordinator.shared.widgetSink
+        NotificationCoordinator.shared.widgetSink = spy
+        defer { NotificationCoordinator.shared.widgetSink = previous }
+        let syncEngine = MockConversationSyncEngine()
+        syncEngine.fullSyncResult = true
+        let (sut, _, _, _, _, _, _) = makeSUT(syncEngine: syncEngine)
+
+        await sut.loadConversations()
+        try await Task.sleep(nanoseconds: 450_000_000)
+
+        XCTAssertTrue(spy.publishedConversations.contains { $0.map(\.id).contains(conversation.id) },
+                      "une liste chargée doit toujours atteindre le widget")
+    }
+}
+
+private final class ConvListWidgetSinkSpy: NotificationWidgetSink {
+    var publishedConversations: [[MeeshyConversation]] = []
+    func publishConversations(_ conversations: [MeeshyConversation]) { publishedConversations.append(conversations) }
+    func publishUnreadCount(_ count: Int) {}
+    func publishFavoriteContacts(_ conversations: [MeeshyConversation]) {}
+    func reloadTimelines() {}
+    func wipeAll() {}
 }
 
 // MARK: - ConversationUpdatedEvent factory

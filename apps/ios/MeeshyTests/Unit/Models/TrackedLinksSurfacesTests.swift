@@ -109,6 +109,19 @@ final class TrackedLinksSurfacesTests: XCTestCase {
         XCTAssertEqual(FeedComment(api: api, preferredLanguages: []).trackedLinkMap, Self.carte)
     }
 
+    /// Cycle 4 — le site UNIQUE de projection garde aussi TOUTES les
+    /// traductions : un changement de langue re-résout le commentaire.
+    func test_commentaire_REST_gardeToutesSesTraductions() throws {
+        let api = try decode(APIPostComment.self, commentaireJSON(
+            extra: #","originalLanguage":"fr","translations":{"en":{"text":"Hi"},"es":{"text":"Hola"}}"#))
+
+        let comment = FeedComment(api: api, preferredLanguages: ["en"])
+
+        XCTAssertEqual(comment.translatedContent, "Hi")
+        XCTAssertEqual(comment.translations?.count, 2)
+        XCTAssertEqual(comment.resolved(preferredLanguages: ["es"]).translatedContent, "Hola")
+    }
+
     func test_commentaire_metadataIllisible_neFaitPasTomberLeCommentaire() throws {
         let api = try decode(APIPostComment.self,
                              commentaireJSON(extra: ",\"metadata\":{\"trackingLinks\":\"oops\"}"))

@@ -271,6 +271,7 @@ extension ConversationSyncEngine {
         messageSocket.didReconnect
             .sink { [weak self] in
                 guard let self else { return }
+                self.requestReconnectCatchUp()
                 Task { await self.syncSinceLastCheckpoint() }
             }
             .store(in: &socketSubscriptions)
@@ -670,9 +671,23 @@ extension ConversationSyncEngine {
             participantId: event.participantId,
             emoji: event.emoji
         )
+        // MÊME loi que la base (`ReactionLedger`, #7927) : ma réaction s'écrit sous mon `User.id`, la clé que teste la
+        // pastille « c'est moi » — l'écho de ma propre réaction optimiste ne double plus.
+        let me = await currentUserId()
+        let currentUserId: String? = me.isEmpty ? nil : me
+        let reactionId = reaction.id
+        let messageId = event.messageId
+        let emoji = event.emoji
+        let participantId = event.participantId
+        let ownerUserId = event.userId
+        let maxCount = event.aggregation?.count
         await cache.messages.upsertPatch(for: convId, itemId: event.messageId) { msg in
-            if !msg.reactions.contains(where: { $0.emoji == reaction.emoji && $0.participantId == reaction.participantId }) {
-                msg.reactions.append(reaction)
+            if let next = ReactionLedger.appending(
+                msg.reactions, reactionId: reactionId, messageId: messageId, emoji: emoji,
+                participantId: participantId, ownerUserId: ownerUserId,
+                currentUserId: currentUserId, maxCount: maxCount
+            ) {
+                msg.reactions = next
             }
         }
         await realtimeMessagePersistor?(.reactionAdded(
@@ -688,8 +703,19 @@ extension ConversationSyncEngine {
 
     private func handleReactionRemoved(_ event: ReactionUpdateEvent) async {
         guard let convId = event.conversationId else { return }
+        let me = await currentUserId()
+        let currentUserId: String? = me.isEmpty ? nil : me
+        let emoji = event.emoji
+        let participantId = event.participantId
+        let ownerUserId = event.userId
+        let aggregate = event.aggregation.map { ReactionLedger.Aggregate(count: $0.count, participantIds: $0.participantIds) }
         await cache.messages.upsertPatch(for: convId, itemId: event.messageId) { msg in
-            msg.reactions.removeAll { $0.emoji == event.emoji && $0.participantId == event.participantId }
+            if let next = ReactionLedger.removing(
+                msg.reactions, emoji: emoji, participantId: participantId,
+                ownerUserId: ownerUserId, currentUserId: currentUserId, aggregate: aggregate
+            ) {
+                msg.reactions = next
+            }
         }
         await realtimeMessagePersistor?(.reactionRemoved(
             messageId: event.messageId,
@@ -702,6 +728,22 @@ extension ConversationSyncEngine {
         _messagesDidChange.send(convId)
     }
 
+    /// Une réaction par unité de compte, chacune portant son participant quand
+    /// le serveur le nomme. Un compte négatif servi par le serveur faisait
+    /// planter la plage `0..<count` : il est borné comme dans `ReactionLedger`.
+    nonisolated static func expandedReactions(messageId: String, aggregations: [ReactionAggregationEvent]) -> [MeeshyReaction] {
+        aggregations.flatMap { agg in
+            let pids = agg.participantIds ?? []
+            return (0..<min(max(0, agg.count), 10_000)).map { index in
+                MeeshyReaction(
+                    messageId: messageId,
+                    participantId: index < pids.count ? pids[index] : nil,
+                    emoji: agg.emoji
+                )
+            }
+        }
+    }
+
     private func handleReactionSynced(_ event: ReactionSyncEvent) async {
         let messageId = event.messageId
         let reactions = event.reactions
@@ -711,17 +753,7 @@ extension ConversationSyncEngine {
                 existing.map { msg in
                     guard msg.id == messageId else { return msg }
                     var updated = msg
-                    updated.reactions = reactions.flatMap { agg in
-                        let pids = agg.participantIds ?? []
-                        return (0..<agg.count).map { index in
-                            let pid: String? = index < pids.count ? pids[index] : nil
-                            return MeeshyReaction(
-                                messageId: messageId,
-                                participantId: pid,
-                                emoji: agg.emoji
-                            )
-                        }
-                    }
+                    updated.reactions = Self.expandedReactions(messageId: messageId, aggregations: reactions)
                     return updated
                 }
             }
@@ -743,7 +775,7 @@ extension ConversationSyncEngine {
         // lui, la liste redisait 0 pendant que le badge, qui suit le serveur,
         // comptait la conversation. Ignoré si elle n'est pas ouverte.
         noteUnreadRemaining(event.conversationId, event.unreadCount)
-        let effectiveUnread = (event.conversationId == currentlyOpenConversationId)
+        let effectiveUnread = isConversationOpen(event.conversationId)
             ? 0
             : event.unreadCount
         await cache.conversations.update(for: "list") { conversations in

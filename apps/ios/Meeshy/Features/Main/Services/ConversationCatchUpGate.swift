@@ -31,22 +31,36 @@ final class ConversationCatchUpGate {
         let task: Task<[APIMessage], Error>
     }
 
+    /// Référence FAIBLE au lecteur parti : sa libération l'efface d'elle-même.
+    /// Un `ObjectIdentifier` seul survivait au modèle — l'ensemble grossissait
+    /// d'une entrée par conversation quittée, et un modèle neuf alloué à la
+    /// même adresse passait pour « parti » (rattrapage de reconnexion sauté).
+    private final class DepartedReader {
+        nonisolated deinit {}
+        weak var reader: AnyObject?
+        init(_ reader: AnyObject) { self.reader = reader }
+    }
+
     private var flights: [String: Flight] = [:]
-    private var departed: Set<ObjectIdentifier> = []
+    private var departed: [ObjectIdentifier: DepartedReader] = [:]
 
     nonisolated deinit {}
 
     func depart(_ reader: AnyObject) {
-        departed.insert(ObjectIdentifier(reader))
+        departed = departed.filter { $0.value.reader != nil }
+        departed[ObjectIdentifier(reader)] = DepartedReader(reader)
     }
 
     func arrive(_ reader: AnyObject) {
-        departed.remove(ObjectIdentifier(reader))
+        departed[ObjectIdentifier(reader)] = nil
     }
 
     func isPresent(_ reader: AnyObject) -> Bool {
-        !departed.contains(ObjectIdentifier(reader))
+        departed[ObjectIdentifier(reader)]?.reader !== reader
     }
+
+    /// Lecteurs encore vivants marqués partis (tests).
+    var departedCount: Int { departed.values.filter { $0.reader != nil }.count }
 
     func pages(
         conversationId: String,

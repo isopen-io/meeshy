@@ -191,7 +191,8 @@ struct ConversationListView: View {
     // Search and Filters
     @FocusState var isSearching: Bool
     @State var showSearchOverlay: Bool = false
-    @State private var expandedSections: Set<String> = ["pinned", "other"]
+    @State private var expandedSections: Set<String> = ConversationListSectionMemory.shared.initial
+    @State private var listColumnSize: CGSize = .zero
     /// Pendant le glisser d'une conversation : les catégories dépliées AVANT, rendues au dépôt ou à l'annulation.
     @State private var sectionsBeforeDrag: Set<String>?
     /// Le glisser en cours : son jeton et la catégorie d'où il part. Posé dès le soulèvement — qui précède aussi
@@ -720,22 +721,10 @@ struct ConversationListView: View {
         passContext: ConversationRowPassContext,
         trackedSectionId: String? = nil
     ) -> some View {
-        // rowWidth derives from the actual containing column width (iPad
-        // left column is much narrower than the window) minus
-        // innerPadding(32) + avatar(52) + badge(28) + spacing(24).
-        // On iPad the column ratio is roughly 0.38 of the window, so we
-        // clamp to that floor explicitly to avoid text overflow.
-        //
-        // Measured against the window, not `UIScreen.main.bounds`: the ratio
-        // is meant to approximate a *column of the app*, and taken against the
-        // display it described a column of space the app does not own in Split
-        // View — the row then budgeted more width than it had and the text it
-        // was sized to protect overflowed anyway.
-        let windowWidth = DeviceLayout.windowSize.width
-        let baseWidth = horizontalSizeClass == .regular
-            ? min(windowWidth * 0.42, 520)
-            : windowWidth - 32
-        let rowWidth = max(120, baseWidth - 32 - 52 - 28 - 24)
+        // Depuis la colonne MESURÉE (`listColumnSize`) — redimensionnable sur iPad —, la fenêtre en repli.
+        let rowWidth = ConversationRowWidthLaw.textWidth(
+            listWidth: listColumnSize.width, windowWidth: DeviceLayout.windowSize.width,
+            isRegular: horizontalSizeClass == .regular)
         // Drapeau résolu UNE fois par section, jamais par rang : `LentilleFeatureFlag`
         // relit `ProcessInfo.environment` (et réalloue donc son dictionnaire) à chaque
         // appel — même règle que `tracksVisibleSection` (I-063bis), un cran plus bas
@@ -826,7 +815,7 @@ struct ConversationListView: View {
             },
             enableAutoPreviewLoad: passContext.autoPreviewIds.contains(conversation.id),
             onLongPress: { sourceFrame in
-                Task { await conversationViewModel.loadPreviewMessages(for: conversation.id) }
+                Task { await conversationViewModel.loadPreviewMessages(for: conversation.id, refresh: true) }
                 // Montage au REPOS invisible (scale 1, offset 0, opacité 0) :
                 // le GeometryReader de l'overlay mesure la frame de repos de
                 // la carte, puis `runContextMenuEmergence` place la carte sur
@@ -1118,9 +1107,12 @@ struct ConversationListView: View {
                     conversationViewModel.handleForegroundReactivation()
                 }
             }
-            .adaptiveOnChange(of: conversationViewModel.userCategories) { _, categories in
+            // iPad : la liste se REMONTE à chaque changement de colonne — au montage aussi, les catégories persistées
+            // se déplient, et les sections suivent la mémoire de session (`ConversationListSectionMemory`).
+            .adaptiveOnChange(of: conversationViewModel.userCategories, initial: true) { _, categories in
                 for cat in categories where cat.isExpanded { expandedSections.insert(cat.id) }
             }
+            .adaptiveOnChange(of: expandedSections) { _, sections in ConversationListSectionMemory.shared.remember(sections) }
             .adaptiveOnChange(of: conversationViewModel.groupedConversations.isEmpty) { _, isEmpty in
                 if isEmpty && isScrollingDown {
                     withAnimation(.easeOut(duration: 0.25)) { isScrollingDown = false }
@@ -1182,48 +1174,9 @@ struct ConversationListView: View {
                     .environmentObject(conversationViewModel)
                     .environmentObject(router)
             }
-            .confirmationDialog(
-                String(localized: "block.confirm.title"),
-                isPresented: $showBlockConfirmation,
-                titleVisibility: .visible
-            ) {
-                Button(String(localized: "action.block"), role: .destructive) {
-                    guard let conv = sheetTargets.blockTarget,
-                          let targetUserId = conv.participantUserId else { return }
-                    Task {
-                        await BlockActionCoordinator.shared.block(userId: targetUserId)
-                        await conversationViewModel.archiveConversation(conversationId: conv.id)
-                        HapticFeedback.success()
-                    }
-                }
-                Button(String(localized: "action.cancel"), role: .cancel) {}
-            } message: {
-                Text(String(localized: "block.confirm.message"))
-            }
-            // Suppression = callback destructif → TOUJOURS confirmée par le
-            // dialog système (rendu natif de l'OS courant, Liquid Glass sur
-            // iOS 26), déclenchée depuis le menu custom ET le swipe « hide ».
-            .confirmationDialog(
-                String(localized: "conversation.delete.confirm.title", defaultValue: "Supprimer la conversation ?", bundle: .main),
-                isPresented: Binding(
-                    get: { sheetTargets.deleteTarget != nil },
-                    set: { if !$0 { sheetTargets.deleteTarget = nil } }
-                ),
-                titleVisibility: .visible,
-                presenting: sheetTargets.deleteTarget
-            ) { conversation in
-                Button(String(localized: "common.delete", defaultValue: "Supprimer", bundle: .main), role: .destructive) {
-                    HapticFeedback.heavy()
-                    Task { await conversationViewModel.deleteConversation(conversationId: conversation.id) }
-                }
-                Button(String(localized: "common.cancel", bundle: .main), role: .cancel) {}
-            } message: { conversation in
-                Text(String(
-                    localized: "conversation.delete.confirm.message",
-                    defaultValue: "« \(conversation.name) » sera masquée pour vous. Les autres participants la conservent.",
-                    bundle: .main
-                ))
-            }
+            // Les confirmations s'ancrent sur un POINT de la liste (`listConfirmationAnchor`) : posées sur la vue
+            // entière, elles devenaient sur iPad un popover ancré à la colonne, présenté sur la conversation voisine.
+            .overlay { listConfirmationAnchor }
         )
     }
 
@@ -1546,7 +1499,7 @@ struct ConversationListView: View {
     /// Hauteur de queue : une DEMI-région visible, pour que la dernière
     /// rangée puisse rejoindre la bande de focus au centre.
     private var listTailMinHeight: CGFloat {
-        DeviceLayout.windowSize.height / 2
+        SceneWindowSize.resolve(listColumnSize, fallback: DeviceLayout.windowSize).height / 2
     }
 
     @ViewBuilder
@@ -1863,6 +1816,7 @@ struct ConversationListView: View {
             } action: { visibleTop in
                 sectionPositionRegistry.registerPinLine(visibleTop + stickyHeaderInset)
             }
+            .onGeometryChange(for: CGSize.self) { $0.size } action: { listColumnSize = $0 }
             .scrollDismissesKeyboard(.interactively)
             // ÉLECTION DE LA FOCUS CARD (LWS-8/I-070). Posé sur le conteneur,
             // APRÈS l'inset sticky : l'hôte mesure le bas de la région visible du

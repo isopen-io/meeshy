@@ -22,7 +22,8 @@ import { sessionStore } from '@/lib/api/session';
 import { translate, type InterfaceCatalogKey } from '@/lib/i18n-catalog';
 import { currentInterfaceLanguage, type InterfaceLanguage } from '@/lib/interface-language';
 import { useOnline } from '@/lib/net/online';
-import { useSearch } from '@/lib/router';
+import { forgetEmailLinkSecret } from '@/lib/links/email-link-secret';
+import { useEmailLinkSearch } from '@/lib/links/email-link-search';
 
 import { DeletionGuidePage } from './account-deletion-guide';
 import { ActionButton, ActionLink, LinkAlert, LinkPage, LinkText, REACH_FAILURE_BODY, type ActionTone } from './link-page-parts';
@@ -75,7 +76,7 @@ export function AccountDeletionPage({
 }
 
 export default function AccountDeletionScreen() {
-  const [search] = useSearch();
+  const search = useEmailLinkSearch();
   const online = useOnline();
   const signedIn = useStore(sessionStore, (state) => state.session.status === 'authenticated');
   return (
@@ -111,11 +112,17 @@ function DeletionLinkPage({ link, online, language, deps }: PageProps & { readon
     setState({ phase: 'working' });
     const result = await deps.resolve(link);
     if (result.ok) {
+      forgetEmailLinkSecret();
       setState({ phase: 'done', resolution: result.data });
       return;
     }
     const failure = deletionFailureOf(result);
-    setState(failure === 'expired' || failure === 'invalid' ? { phase: 'closed', reason: failure } : { phase: 'ready', failure });
+    if (failure === 'expired' || failure === 'invalid') {
+      forgetEmailLinkSecret();
+      setState({ phase: 'closed', reason: failure });
+      return;
+    }
+    setState({ phase: 'ready', failure });
   }
 
   if (state.phase === 'done') return <DeletionDone resolution={state.resolution} language={language} />;

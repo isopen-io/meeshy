@@ -41,6 +41,34 @@ describe('cheminDuLienEntrant', () => {
     expect(cheminDuLienEntrant('meeshy://inconnu', isAppPath)).toBeNull();
   });
 
+  test('un lien à jeton d’e-mail n’entre JAMAIS par meeshy:// — une page ou une app tierce y pousserait le jeton d’un autre compte (#10870)', () => {
+    const tout = (): boolean => true;
+    [
+      'meeshy://auth/magic-link?token=x',
+      'meeshy://auth/magic-link?via=email#token=x',
+      'meeshy://auth/magic-link/validate#token=x',
+      'meeshy://auth/magic-link/x',
+      'meeshy://auth/email-link/magic-link#token=x',
+      'meeshy://AUTH/Magic-Link?token=x',
+      'meeshy://auth//magic-link/?token=x',
+      'meeshy:///auth/magic-link?token=x',
+      'meeshy://auth/magic%2Dlink?token=x',
+      'meeshy://auth/verify-email?token=x&email=a%40b.co',
+      'meeshy://auth/email-link/verify-email#token=x&email=a%40b.co',
+      'meeshy://reset-password#token=x',
+      'meeshy://auth/reset-password#token=x',
+      'meeshy://auth/email-link/reset-password#token=x',
+      'meeshy://auth/revoke-sessions#token=x',
+      'meeshy://account/deletion#token=x',
+      'meeshy://settings/verify-email-change#token=x',
+    ].forEach((lien) => expect(cheminDuLienEntrant(lien, tout)).toBeNull());
+  });
+
+  test('le même lien à jeton reste ouvert par l’App Link https de meeshy.me', () => {
+    const tout = (): boolean => true;
+    expect(cheminDuLienEntrant('https://meeshy.me/auth/magic-link?via=email#token=x', tout)).toBe('/auth/magic-link?via=email#token=x');
+  });
+
   test('un hôte étranger ou une adresse illisible ne navigue pas', () => {
     expect(cheminDuLienEntrant('https://evil.example/c/abc', isAppPath)).toBeNull();
     expect(cheminDuLienEntrant('pas une url', isAppPath)).toBeNull();

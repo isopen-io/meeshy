@@ -1,3 +1,4 @@
+import type { LinkAccount, LinkIntent } from './link-confirmation';
 import type { SessionUser } from './session';
 
 /**
@@ -10,7 +11,7 @@ import type { SessionUser } from './session';
  */
 export type VerifyEmailRequest =
   | { readonly email: string; readonly code: string; readonly password?: string }
-  | { readonly email: string; readonly token: string };
+  | { readonly email: string; readonly token: string; readonly confirm?: boolean };
 
 /**
  * La réponse. `alreadyVerified` + `verifiedAt` : la branche « déjà vérifié »,
@@ -31,6 +32,13 @@ export type VerifyEmailData = {
    * (contrat de `POST /auth/verify-email`) : la saisie du code attend. */
   readonly requires2FA?: boolean;
   readonly twoFactorToken?: string;
+  /** #10872 — lien ouvert ailleurs que sur l'appareil demandeur : aucune
+   * session, le jeton reste valable, et `account` dit quel compte s'ouvrirait. */
+  readonly requiresConfirmation?: boolean;
+  readonly account?: LinkAccount;
+  /** #10879 — ce que le oui fera, et l'adresse en jeu MASQUÉE par la passerelle. */
+  readonly intent?: LinkIntent;
+  readonly maskedEmail?: string;
 };
 
 export type VerifiedSession = VerifyEmailData & { readonly token: string; readonly sessionToken: string; readonly user: SessionUser };
@@ -39,8 +47,15 @@ export function verificationOpensSession(data: VerifyEmailData): data is Verifie
   return typeof data.token === 'string' && typeof data.sessionToken === 'string' && data.user !== undefined;
 }
 
-export function verifyEmailBody(request: VerifyEmailRequest): Record<string, string> {
-  if ('token' in request) return { email: request.email, token: request.token };
+export function verifyEmailBody(request: VerifyEmailRequest, linkDeviceSecret: string | null = null): Record<string, string | boolean> {
+  if ('token' in request) {
+    return {
+      email: request.email,
+      token: request.token,
+      ...(linkDeviceSecret !== null ? { linkDeviceSecret } : {}),
+      ...(request.confirm === true ? { confirm: true } : {}),
+    };
+  }
   const password = request.password ?? '';
   return { email: request.email, code: request.code, ...(password !== '' ? { password } : {}) };
 }

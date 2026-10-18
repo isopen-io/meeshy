@@ -6,7 +6,7 @@ import Combine
 /// Default implementation of AudioRecordingProviding for use within the SDK.
 /// When no external recorder is injected, views can fall back to this.
 @MainActor
-public final class DefaultSDKAudioRecorder: ObservableObject, AudioRecordingProviding {
+public final class DefaultSDKAudioRecorder: ObservableObject, AudioRecordingProviding, CallInterruptibleRecorder {
     @Published public var isRecording = false
     @Published public var duration: TimeInterval = 0
     @Published public var audioLevels: [CGFloat] = Array(repeating: 0, count: 15)
@@ -95,6 +95,17 @@ public final class DefaultSDKAudioRecorder: ObservableObject, AudioRecordingProv
         // l'uplink micro de l'appel).
         guard MediaSessionCoordinator.shared.activateRecordingSync() else { return }
 
+        // Second démarrage sans arrêt (double appui, relance après le prompt
+        // micro) : arrêter l'enregistrement précédent et son minuteur 20 Hz,
+        // sinon celui-ci reste au run loop jusqu'à la fin du processus.
+        timer?.invalidate()
+        timer = nil
+        if let previous = recorder {
+            previous.stop()
+            FileManager.default.removeItemLogging(at: previous.url, context: "superseded recording")
+            recorder = nil
+        }
+
         let fileName = "voice_\(Int(Date().timeIntervalSince1970)).\(settings.codec.fileExtension)"
         let url = FileManager.default.temporaryDirectory.appendingPathComponent(fileName)
 
@@ -108,6 +119,10 @@ public final class DefaultSDKAudioRecorder: ObservableObject, AudioRecordingProv
             recorder?.record()
             recordedFileURL = url
         } catch {
+            // Rendre la session activée juste au-dessus : sans cela le micro
+            // reste réservé et l'indicateur orange allumé.
+            recorder = nil
+            MediaSessionCoordinator.shared.deactivatePlaybackSync()
             return
         }
 
@@ -115,10 +130,23 @@ public final class DefaultSDKAudioRecorder: ObservableObject, AudioRecordingProv
         duration = 0
         levelHistory = Array(repeating: 0, count: 15)
         audioLevels = levelHistory
+        RecorderCallGuard.shared.register(self)
 
         timer = Timer.scheduledTimer(withTimeInterval: 0.05, repeats: true) { [weak self] _ in
             Task { @MainActor in self?.updateMetering() }
         }
+    }
+
+    /// Un appel commence : la CAPTURE s'arrête (micro rendu à l'appel, plus
+    /// rien de l'appel n'entre dans le vocal), mais l'enregistrement reste
+    /// « en cours » pour le composer : son interface, figée à la durée atteinte,
+    /// garde ses gestes — envoyer ou joindre passent par `stopRecording()`, qui
+    /// rend le fichier ; annuler le supprime. La session reste à l'appel.
+    public func stopForCall() {
+        guard isRecording, let recorder, recorder.isRecording else { return }
+        timer?.invalidate()
+        timer = nil
+        recorder.stop()
     }
 
     @discardableResult

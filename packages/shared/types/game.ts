@@ -83,6 +83,12 @@ export const gameLevelLadderSchema = z.object({
   record: level,
   /** Le niveau max à vie (#10846) : il survit au prestige. Absent devant un serveur antérieur. */
   levelMaxLifetime: level.optional(),
+  /**
+   * Le record de niveau de chaque cycle CLOS par un Prestige, le plus ancien d'abord (#10911) : il dit combien de fois
+   * un niveau a été atteint, tous cycles confondus. Absent devant un serveur antérieur ; plus court que `prestige` pour
+   * un compte passé en Prestige avant qu'on le garde (chaque cycle manquant a atteint au moins le niveau 100).
+   */
+  pastCycleRecords: z.array(level).max(5).optional(),
   /** Le plafond que le rang ouvre : 499 sous Ambassadeur, 1000 pour Ambassadeur et Orateur, `null` à partir d'Oracle. */
   cap: level.nullable(),
   /** Le niveau est au plafond : il monte dès que le rang l'ouvre, sans rien regagner. */
@@ -410,6 +416,20 @@ export const meeshMintResponseSchema = z.object({
   basePrice: z.number().int().min(1).optional(),
   /** Le facteur du niveau actuel appliqué, de 0,5 à 1 (#10847). */
   costFactor: z.number().min(0).max(1).optional(),
+  /** Le marqueur d'ordre de l'état servi (#10900, `game-sync.ts`) — absent d'un serveur antérieur. */
+  gameRevision: nonNegativeInt.optional(),
+});
+
+/**
+ * Le refus `409 PRICE_CHANGED` de la frappe (#10903) : le prix rejugé dépasse la garde `maxPrice` que l'écran a envoyée.
+ * Le prix COURANT part à la racine, à côté de `code`, pour que l'écran le montre et redemande la confirmation.
+ */
+export const priceChangedResponseSchema = z.object({
+  code: z.literal('PRICE_CHANGED'),
+  number: z.number().int().min(1),
+  price: z.number().int().min(1),
+  basePrice: z.number().int().min(1),
+  costFactor: z.number().min(0).max(1),
 });
 
 /**
@@ -427,7 +447,14 @@ export const treasuryLockedResponseSchema = z.object({
  * Le corps de `POST /me/meesh/mint`. Une frappe ne se paie QU'EN POINTS (porteur, 2026-10-10, #10011) : `payWith`
  * n'admet que `points` — un client qui demanderait un autre moyen est refusé à la lecture, sans aucune écriture.
  */
-export const meeshMintRequestSchema = writeRequest.extend({ payWith: z.literal('points').optional() });
+export const meeshMintRequestSchema = writeRequest.extend({
+  payWith: z.literal('points').optional(),
+  /**
+   * La garde de prix (#10903) : le prix que l'écran a montré. Au-delà, la frappe est refusée en `409 PRICE_CHANGED`
+   * avec le prix courant (`priceChangedResponseSchema`), sans rien débiter. Absente : la frappe se comporte comme avant.
+   */
+  maxPrice: z.number().int().min(1).optional(),
+});
 export type MeeshMintRequest = z.infer<typeof meeshMintRequestSchema>;
 
 export type MissionRerollRequest = z.infer<typeof missionRerollRequestSchema>;

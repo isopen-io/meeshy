@@ -54,6 +54,18 @@ public final class ContactResolveService: ContactResolveServiceProviding, @unche
         self.now = now
     }
 
+    /// Déconnexion / changement de compte : les relations résolues (« vous »,
+    /// « ami », « demande envoyée ») sont celles du compte sortant.
+    public func purge() {
+        lock.lock()
+        let pending = Array(inFlight.values)
+        entries.removeAll()
+        failures.removeAll()
+        inFlight.removeAll()
+        lock.unlock()
+        pending.forEach { $0.cancel() }
+    }
+
     public func cachedAccounts(for request: ContactResolveRequest) -> [PublicContactAccount]? {
         lock.withLock { entries[request]?.accounts }
     }

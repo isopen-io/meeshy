@@ -497,7 +497,7 @@ final class GameElementDetailTests: XCTestCase {
         let game = GameWave2Fixture.atLevel100(prestige: 1)
         let values = GamePrestigeScreen.passValues(game: game)
         XCTAssertEqual(values.map(\.label), [
-            ConceptText.factBalance, ConceptText.name(.level), ConceptText.factRecord, ConceptText.factStars, ConceptText.name(.glory),
+            GameSparksCopy.pocketLabel, ConceptText.name(.level), ConceptText.factRecord, ConceptText.factStars, ConceptText.name(.glory),
         ])
         XCTAssertEqual(values.first?.value, "\(GameCopy.points(game.level.score)) → \(GameCopy.points(0))")
         XCTAssertEqual(values[3].value, "\(GameCopy.formatCount(1)) → \(GameCopy.formatCount(2))")

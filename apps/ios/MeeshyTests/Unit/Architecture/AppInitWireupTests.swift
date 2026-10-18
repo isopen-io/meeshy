@@ -437,6 +437,21 @@ final class AppInitWireupTests: XCTestCase {
             .joined(separator: "\n")
     }
 
+    /// Un push silencieux qui réveille l'app tuée passe par un lancement en
+    /// arrière-plan sans `checkExistingSession` : `APIClient.shared.authToken`
+    /// reste nil malgré un jeton Keychain valide. Seule la branche « révocation »
+    /// l'amorçait — la synchro, l'accusé de réception et le préchargement du
+    /// message partaient sans jeton (401), ce qui annulait le réveil.
+    func test_silentMessagePush_primesTheAPITokenBeforeItsNetworkCalls() throws {
+        let source = try appSource("Meeshy/AppDelegate.swift")
+        let start = try XCTUnwrap(source.range(of: "\"meeshy.silent-push\""))
+        let sync = try XCTUnwrap(source.range(of: "NotificationCoordinator.shared.syncNow()",
+                                              range: start.upperBound..<source.endIndex))
+        let window = String(source[start.upperBound..<sync.lowerBound])
+        XCTAssertTrue(window.contains("primeAPITokenFromSession()"),
+                      "le jeton doit être amorcé avant la synchro du réveil silencieux")
+    }
+
     func test_reelSwitchIntervals_reachMetricKit() throws {
         let source = try appSource("Meeshy/Features/Main/Views/ReelInstantSwitch.swift")
 

@@ -1,6 +1,6 @@
 import { ADMIN_ROUTE_KEYS, type AdminFicheRouteKey, type AdminListRouteKey } from './admin/admin-routes';
 import type { SessionState } from './api/session';
-import { safeReturnPath } from './view/magic-link';
+import { clampReturnPath } from './view/magic-link';
 
 /**
  * LA GARDE DE ROUTE (#5555, E6) — pure. Elle décide, elle ne navigue pas :
@@ -270,6 +270,7 @@ export type RouteKey =
   | 'trackingLink'
   | 'trackingLinkExpired'
   | 'accountDeletion'
+  | 'revokeSessions'
   | 'verifyEmailChange'
   | 'settingsNotifications';
 
@@ -460,7 +461,7 @@ export function resolveRouteAccess(input: {
  * de même origine — y compris le refus des blancs et caractères de contrôle
  * que le parseur d'URL efface (#6743 : `/\t/evil.com` devient `//evil.com`,
  * et `history.replaceState` LÈVE sur une autre origine, faisant tomber
- * `SessionGate`, `main.tsx`) — est celle de `safeReturnPath`
+ * `SessionGate`, `main.tsx`) — est celle de `clampReturnPath`
  * (`view/magic-link.ts`, le retour d'un lien magique) : UNE SEULE garde,
  * réemployée, jamais recopiée. Deux clampages d'une même valeur hostile
  * divergeraient au premier correctif.
@@ -469,8 +470,7 @@ export function resolveRouteAccess(input: {
  * transmettre (le lien « Créer un compte » ne porte pas un `next=/` inventé).
  */
 export function safeNextPath(raw: string | null): string | null {
-  if (raw === null || raw === '') return null;
-  return safeReturnPath(raw) === raw ? raw : null;
+  return clampReturnPath(raw);
 }
 
 /**

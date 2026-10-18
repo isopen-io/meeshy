@@ -40,27 +40,6 @@ struct StoryViewerRequest: Identifiable, Equatable {
     var targetParentCommentId: String? = nil
 }
 
-/// Détient un `ConversationListViewModel` sans JAMAIS republier.
-///
-/// `RootView`/`iPadRootView` doivent POSSÉDER le VM (durée de vie + injection
-/// `.environmentObject` vers la liste) mais ne doivent PAS se ré-évaluer à chaque
-/// churn du VM — presence refresh, `reloadFromCache` (count=100) répété, unread
-/// counts. Or `RootView.body` ne lit AUCUN @Published du VM (seulement des
-/// `.environmentObject()` + des accès dans des closures) : l'observation venait
-/// uniquement du `@StateObject`, générant des re-render inutiles à l'idle (Instant
-/// App Principles : « Zero Unnecessary Re-render »). Ce owner n'a pas de
-/// @Published → son `objectWillChange` ne fire jamais → RootView ne re-render
-/// jamais à cause de lui. Les vues enfants observent le VM via `@EnvironmentObject`.
-@MainActor
-final class ConversationListVMOwner: ObservableObject {
-    // iOS 26.1 : deinit synthétisée ISOLÉE (SE-0466, isolation MainActor par
-    // défaut) → double-free `pointer being freed was not allocated` (abrt)
-    // au démontage hors d'une tâche (test XCTest synchrone, vue démontée).
-    // Garde : MainActorDeinitSourceGuardTests / MeeshyUIDeinitSourceGuardTests.
-    nonisolated deinit {}
-    let viewModel = ConversationListViewModel()
-}
-
 struct RootView: View {
     @StateObject private var theme = ThemeManager.shared
     @StateObject private var storyViewModel = StoryViewModel()
@@ -498,7 +477,7 @@ struct RootView: View {
             if let groupIdx = storyViewModel.groupIndex(forStoryId: postId) {
                 storyViewerCoordinator.present(StoryViewerRequest(
                     id: storyViewModel.storyGroups[groupIdx].id,
-                    startAtFirstUnviewed: true
+                    postId: postId
                 ))
             } else {
                 router.push(.postDetail(postId))
@@ -555,8 +534,26 @@ struct RootView: View {
 
     private func handleDeepLink(_ deepLink: DeepLink?) {
         guard let deepLink = deepLinkRouter.consumePendingDeepLink() else { return }
+        // Story, réel, composer ou feuille en cours : refermés d'ABORD, comme
+        // pour un tap de notification (#10543). Seules les conversations le
+        // faisaient ; un lien vers un post, un tag, une communauté ou un profil
+        // s'ouvrait SOUS la couverture, et le tap semblait sans effet.
+        router.clearPresentedSurfaces { _ in showDeepLink(deepLink) }
+    }
 
+    private func showDeepLink(_ deepLink: DeepLink) {
         switch deepLink {
+        case .callRequest(let conversationId, let isVideo):
+            // Le lien d'appel ne compose pas : il DEMANDE (feuille de
+            // confirmation). Mise à jour forcée et barrière d'âge passent avant.
+            let upgradeGate = self.upgradeGate
+            let gatesOpen: @MainActor () -> Bool = {
+                !upgradeGate.isBlocked && !AgeGateController.shared.isShowing
+            }
+            Task { @MainActor in
+                await CallLinkConfirmationController.shared.request(
+                    conversationId: conversationId, isVideo: isVideo, gatesOpen: gatesOpen)
+            }
         case .trackedLink(let token):
             // `/l/<token>` resolved async by targetType (re-sets pendingDeepLink).
             deepLinkRouter.resolveTrackedLink(token)
@@ -919,7 +916,7 @@ struct RootView: View {
                 }
                 return
             }
-            CallManager.shared.handleIncomingCallNotification(
+            CallManager.shared.handleIncomingCallAlertTap(
                 callId: callId,
                 fromUserId: ctx.callerUserId ?? "",
                 fromUsername: ctx.callerName ?? ctx.senderUsername ?? "",
@@ -1040,13 +1037,19 @@ struct RootView: View {
                     let currentUserId = await AuthManager.shared.currentUser?.id ?? ""
                     if let apiConv = try? await ConversationService.shared.getById(conversationId) {
                         let refreshed = apiConv.toConversation(currentUserId: currentUserId)
-                        var merged = cachedConversations ?? []
-                        if let i = merged.firstIndex(where: { $0.id == refreshed.id }) {
-                            merged[i] = refreshed
-                        } else {
-                            merged.insert(refreshed, at: 0)
+                        // Fusion sur la liste DU MOMENT, pas sur l'instantané lu
+                        // avant l'aller-retour : la synchro de la liste a pu en
+                        // écrire une plus récente entre-temps, que ce `save`
+                        // écrasait (conversations neuves et non-lus perdus).
+                        await CacheCoordinator.shared.conversations.mergeUpdate(for: "list") { current in
+                            var merged = current
+                            if let i = merged.firstIndex(where: { $0.id == refreshed.id }) {
+                                merged[i] = refreshed
+                            } else {
+                                merged.insert(refreshed, at: 0)
+                            }
+                            return merged
                         }
-                        try? await CacheCoordinator.shared.conversations.save(merged, for: "list")
                         await SearchIndex.shared.indexConversations([refreshed])
                     }
                 }

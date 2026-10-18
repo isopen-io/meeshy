@@ -2,6 +2,7 @@ import { describe, expect, test } from 'bun:test';
 import { createStore } from 'zustand/vanilla';
 
 import type { HttpRequest } from '@/lib/api/http';
+import type { SocialEventV2Input } from '@/lib/api/social-events-v2-types';
 import type { SessionState } from '@/lib/api/session';
 import { pushTapTarget, type PushTapTarget } from '@/lib/notifications/target';
 
@@ -63,11 +64,16 @@ const authenticated = (id: string): SessionState => ({
 
 const anonymous: SessionState = { status: 'anonymous' };
 
-function harness(session: SessionState, pluginOptions: Parameters<typeof fakePlugin>[0] = {}) {
+function harness(
+  session: SessionState,
+  pluginOptions: Parameters<typeof fakePlugin>[0] = {},
+  deviceIdentity: () => Promise<unknown> = async () => ({}),
+) {
   const fake = fakePlugin(pluginOptions);
   const store = createStore<{ session: SessionState }>(() => ({ session }));
   const requests: HttpRequest[] = [];
   const visited: string[] = [];
+  const recorded: SocialEventV2Input[] = [];
   const env = {
     plugin: fake.plugin,
     sessionStore: store,
@@ -80,8 +86,10 @@ function harness(session: SessionState, pluginOptions: Parameters<typeof fakePlu
     navigate: (url: string) => visited.push(url),
     urlOf: (target: PushTapTarget) => `${target.route}:${JSON.stringify('params' in target ? target.params : 'search' in target ? target.search : {})}`,
     appVersion: '2.0.12',
+    deviceIdentity,
+    record: (event: SocialEventV2Input) => recorded.push(event),
   };
-  return { ...fake, store, requests, visited, start: () => startShellPush(env) };
+  return { ...fake, store, requests, visited, recorded, start: () => startShellPush(env) };
 }
 
 const flush = () => new Promise((resolve) => setTimeout(resolve, 0));
@@ -159,6 +167,41 @@ describe('startShellPush — le jeton FCM de la coque part sous le compte couran
     const tokens = h.requests.map((request) => (request.body as { token: string }).token);
     expect(tokens).toEqual(['fcm-token-1-xxxxxxxx', 'fcm-token-2-xxxxxxxx']);
     expect(h.calls).toEqual(['register', 'unregister', 'register']);
+  });
+});
+
+describe('le jeton part avec l’identité de l’appareil (#10858)', () => {
+  const registeredBody = async (deviceIdentity: () => Promise<unknown>) => {
+    const h = harness(authenticated('u1'), {}, deviceIdentity);
+    await h.start();
+    await flush();
+    return h.requests.map((request) => request.body);
+  };
+
+  test('l’identifiant stable de l’appareil accompagne le jeton, pour que la passerelle retire l’ancien', async () => {
+    const bodies = await registeredBody(async () => ({ deviceId: 'a1b2c3d4e5f60718', deviceName: 'Pixel 8' }));
+    expect(bodies).toEqual([
+      {
+        token: 'fcm-token-1-xxxxxxxx',
+        platform: 'android',
+        type: 'fcm',
+        appVersion: '2.0.12',
+        deviceId: 'a1b2c3d4e5f60718',
+        deviceName: 'Pixel 8',
+      },
+    ]);
+  });
+
+  test('une coque sans le pont d’identité enregistre quand même son jeton', async () => {
+    const bodies = await registeredBody(async () => {
+      throw new Error('not implemented');
+    });
+    expect(bodies).toEqual([{ token: 'fcm-token-1-xxxxxxxx', platform: 'android', type: 'fcm', appVersion: '2.0.12' }]);
+  });
+
+  test('ce que le pont rend d’inattendu ne part pas', async () => {
+    const bodies = await registeredBody(async () => ({ deviceId: '', deviceName: 42, extra: 'x' }));
+    expect(bodies).toEqual([{ token: 'fcm-token-1-xxxxxxxx', platform: 'android', type: 'fcm', appVersion: '2.0.12' }]);
   });
 });
 
@@ -275,5 +318,56 @@ describe('ce que la coque lit de la charge', () => {
   test('une remise sans message ni conversation n’est pas une remise', () => {
     expect(deliveredMessageOf({ type: 'new_message', conversationId: 'c1', messageId: '' })).toBeNull();
     expect(deliveredMessageOf(null)).toBeNull();
+  });
+});
+
+describe('startShellPush — l’entonnoir des notifications compte la coque (#10910)', () => {
+  const NOTIFICATION_ID = '65f0c0ffee0000000000abcd';
+  const POST_ID = '65f0c0ffee0000000000beef';
+
+  test('toucher une bannière note « opened » sur le canal fcm, comme le worker web sur webpush', async () => {
+    const h = harness(authenticated('u1'));
+    await h.start();
+    h.fire('pushNotificationActionPerformed', {
+      actionId: 'tap',
+      notification: { data: { notificationId: NOTIFICATION_ID, type: 'post_like', postId: POST_ID, title: 'Nour aime', body: 'secret' } },
+    });
+    expect(h.recorded).toEqual([
+      {
+        type: 'notification',
+        action: 'opened',
+        target: { kind: 'notification', id: NOTIFICATION_ID, parent: { kind: 'post', id: POST_ID } },
+        surface: 'notifications',
+        channel: 'fcm',
+        notificationType: 'post_like',
+      },
+    ]);
+  });
+
+  test('un push reçu app ouverte note « received »', async () => {
+    const h = harness(authenticated('u1'));
+    await h.start();
+    h.fire('pushNotificationReceived', { data: { notificationId: NOTIFICATION_ID, type: 'new_message', conversationId: 'c1', messageId: 'm1' } });
+    expect(h.recorded).toEqual([
+      {
+        type: 'notification',
+        action: 'received',
+        target: { kind: 'notification', id: NOTIFICATION_ID },
+        surface: 'notifications',
+        channel: 'fcm',
+        notificationType: 'new_message',
+      },
+    ]);
+  });
+
+  test('sans identifiant de notification valide, rien n’est noté ; un type illisible ne part pas', async () => {
+    const h = harness(authenticated('u1'));
+    await h.start();
+    h.fire('pushNotificationActionPerformed', { actionId: 'tap', notification: { data: { notificationId: 'pas-un-id', type: 'post_like' } } });
+    h.fire('pushNotificationReceived', { data: {} });
+    h.fire('pushNotificationActionPerformed', { actionId: 'tap', notification: { data: { notificationId: NOTIFICATION_ID, type: 'type avec espaces' } } });
+    expect(h.recorded).toEqual([
+      { type: 'notification', action: 'opened', target: { kind: 'notification', id: NOTIFICATION_ID }, surface: 'notifications', channel: 'fcm' },
+    ]);
   });
 });

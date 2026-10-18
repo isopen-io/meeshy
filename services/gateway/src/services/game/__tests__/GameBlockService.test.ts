@@ -317,3 +317,23 @@ describe('GameBlockService.build — la mission personnelle (#9539)', () => {
     expect(block!.missions.personal).toBeUndefined();
   });
 });
+
+describe('GameBlockService.build — le record de chaque cycle clos (#10911)', () => {
+  it('sert les records gardés par les Prestiges, dans l’ordre, sur l’échelle ouverte', async () => {
+    const db = fakeGameDb();
+    seedUser(db, { engagementScore: 100 * 12 * 12, levelRecord: 12, levelMaxLifetime: 150, prestige: 2, prestigeLevelRecords: [150, 100] });
+
+    const block = await build(db);
+
+    expect(block.level.ladder?.pastCycleRecords).toEqual([150, 100]);
+  });
+
+  it('un compte qui n’en a aucun sert une liste vide, jamais un record inventé', async () => {
+    const db = fakeGameDb();
+    seedUser(db, { engagementScore: 100 * 12 * 12, levelRecord: 12 });
+
+    const block = await build(db);
+
+    expect(block.level.ladder?.pastCycleRecords).toEqual([]);
+  });
+});

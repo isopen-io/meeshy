@@ -143,6 +143,18 @@ final class GameSparksTests: XCTestCase {
         XCTAssertEqual(standing.sparksLifetime, 90000)
     }
 
+    /// #10913 : la Gloire totale, servie à soi et aux amis — absente devant un ancien serveur ou un non-ami.
+    func test_standing_decodesTheGlory_andAbsentStaysAbsent() throws {
+        let served = try decode(GameStanding.self, """
+        {"level": 20, "tier": "lueur", "prestige": 1, "flame": null, "rank": "voix", "division": 2, "glory": 16000}
+        """)
+        XCTAssertEqual(served.glory, 16000)
+        let withheld = try decode(GameStanding.self, """
+        {"level": 20, "tier": "lueur", "prestige": 1, "flame": null, "rank": "voix", "division": 2}
+        """)
+        XCTAssertNil(withheld.glory)
+    }
+
     // MARK: - La dette (ffbc396c92) : blockedBy, sparksDebt sur level, refus MINT_BLOCKED_BY_DEBT
 
     func test_mint_blockedByDebt_isTheBlocker_evenWithoutAnAmount() throws {
@@ -222,5 +234,108 @@ final class GameSparksTests: XCTestCase {
         let expected = vectors.filter { ["mint-cost-factor", "mint-price", "sparks-of"].contains(($0["input"] as? [String: Any])?["law"] as? String ?? "") }.count
         XCTAssertGreaterThanOrEqual(replayed, 16)
         XCTAssertEqual(replayed, expected, "le fichier entier pour ces trois lois, sans en sauter un")
+    }
+
+    // MARK: - La frappe et les réserves (#10894) — les trois lois que l'optimiste rejoue
+
+    private static func lockJSON(_ lock: GameMintLock?) -> [String: Any]? {
+        lock.map { ["tier": $0.tier.rawValue, "minHeld": $0.minHeld,
+                    "requires": ["rank": $0.requires.rank.rawValue, "division": $0.requires.division,
+                                 "division5": $0.requires.division5]] }
+    }
+
+    private static func same(_ a: Any?, _ b: Any?) -> Bool {
+        switch (a, b) {
+        case (nil, nil), (nil, is NSNull), (is NSNull, nil), (is NSNull, is NSNull): return true
+        case let (x as [String: Any], y as [String: Any]): return NSDictionary(dictionary: x).isEqual(to: y)
+        default: return false
+        }
+    }
+
+    private static func steps(_ json: [String: Any]?) -> GameLevelStepFacts? {
+        guard let json else { return nil }
+        return GameLevelStepFacts(minted: 0, missionsDone: json["missionsDone"] as! Int, flameRecord: json["flameRecord"] as! Int,
+                                  glory: json["glory"] as! Int, rank: GloryRank(rawValue: json["rank"] as! String)!)
+    }
+
+    func test_mintAndTreasuryLaws_replayTheSharedVectors() throws {
+        let root = try JSONSerialization.jsonObject(with: Data(contentsOf: Self.vectorsURL)) as? [String: Any]
+        let vectors = try XCTUnwrap(root?["vectors"] as? [[String: Any]])
+        let laws = ["sparks-mint-preview", "treasury-access", "treasury-lock"]
+        var replayed = 0
+        for vector in vectors {
+            let input = try XCTUnwrap(vector["input"] as? [String: Any])
+            let label = vector["_label"] as? String ?? "?"
+            let mythic = input["mythic"] as? Bool ?? false
+            switch input["law"] as? String {
+            case "sparks-mint-preview":
+                let e = try XCTUnwrap(vector["expected"] as? [String: Any])
+                let p = GameMint.sparksPreview(
+                    sparks: input["sparks"] as! Int, mintedLifetime: input["mintedLifetime"] as! Int, held: input["held"] as! Int,
+                    glory: input["glory"] as! Int, mythic: mythic, levelCap: input["levelCap"] as? Int,
+                    steps: Self.steps(input["steps"] as? [String: Any]), debt: input["debt"] as? Int ?? 0)
+                XCTAssertEqual(p.number, e["number"] as? Int, label)
+                XCTAssertEqual(p.price, e["price"] as? Int, label)
+                XCTAssertEqual(p.basePrice, e["basePrice"] as? Int, label)
+                XCTAssertEqual(p.costFactor, e["costFactor"] as? Double, label)
+                XCTAssertEqual(p.costLevel, e["costLevel"] as? Int, label)
+                XCTAssertEqual(p.edition.rawValue, e["edition"] as? String, label)
+                XCTAssertEqual(p.canMint, e["canMint"] as? Bool, label)
+                XCTAssertEqual(p.missingPoints, e["missingPoints"] as? Int, label)
+                XCTAssertEqual(p.levelBefore, e["levelBefore"] as? Int, label)
+                XCTAssertEqual(p.levelAfter, e["levelAfter"] as? Int, label)
+                XCTAssertEqual(p.levelsLost, e["levelsLost"] as? Int, label)
+                XCTAssertEqual(p.gloryGained, e["gloryGained"] as? Int, label)
+                XCTAssertEqual(p.sparksDebt, e["sparksDebt"] as? Int, label)
+                XCTAssertEqual(p.blockedBy?.rawValue, e["blockedBy"] as? String, label)
+                XCTAssertTrue(Self.same(Self.lockJSON(p.locked), e["locked"]), label)
+            case "treasury-access":
+                let e = try XCTUnwrap(vector["expected"] as? [[String: Any]])
+                let access = GameTreasury.reserveAccess(glory: input["glory"] as! Int, mythic: mythic)
+                XCTAssertEqual(access.map(\.key.rawValue), e.map { $0["key"] as? String ?? "" }, label)
+                XCTAssertEqual(access.map(\.minHeld), e.map { $0["minHeld"] as? Int ?? -1 }, label)
+                XCTAssertEqual(access.map(\.locked), e.map { $0["locked"] as? Bool ?? false }, label)
+                for (a, x) in zip(access, e) {
+                    let requires = a.requires.map { ["rank": $0.rank.rawValue, "division": $0.division, "division5": $0.division5] as [String: Any] }
+                    XCTAssertTrue(Self.same(requires, x["requires"]), label)
+                }
+            case "treasury-lock":
+                let e = try XCTUnwrap(vector["expected"] as? [String: Any])
+                let lock = GameTreasury.lock(held: input["held"] as! Int, glory: input["glory"] as! Int, mythic: mythic)
+                XCTAssertTrue(Self.same(Self.lockJSON(lock), e["lock"]), label)
+            default:
+                continue
+            }
+            replayed += 1
+        }
+        let expected = vectors.filter { laws.contains(($0["input"] as? [String: Any])?["law"] as? String ?? "") }.count
+        XCTAssertGreaterThanOrEqual(replayed, 25)
+        XCTAssertEqual(replayed, expected, "le fichier entier pour ces trois lois, sans en sauter un")
+    }
+
+    // MARK: - Le gain et le Prestige (#10902) — ce que l'optimiste du coffre et du Prestige rejoue
+
+    func test_creditAndPrestigeLaws_replayTheSharedVectors() throws {
+        let root = try JSONSerialization.jsonObject(with: Data(contentsOf: Self.vectorsURL)) as? [String: Any]
+        let vectors = try XCTUnwrap(root?["vectors"] as? [[String: Any]])
+        let laws = ["sparks-credit", "sparks-prestige"]
+        var replayed = 0
+        for vector in vectors {
+            let input = try XCTUnwrap(vector["input"] as? [String: Any])
+            guard let law = input["law"] as? String, laws.contains(law) else { continue }
+            let label = vector["_label"] as? String ?? "?"
+            let e = try XCTUnwrap(vector["expected"] as? [String: Any])
+            let ledger = GameSparks.Ledger(pocket: input["pocket"] as! Int, cycle: input["cycle"] as! Int,
+                                           lifetime: input["lifetime"] as! Int, debt: input["debt"] as! Int)
+            let after = law == "sparks-credit"
+                ? GameSparks.afterCredit(ledger, points: input["points"] as! Int)
+                : GameSparks.afterPrestige(ledger)
+            XCTAssertEqual(after.pocket, e["pocket"] as? Int, label)
+            XCTAssertEqual(after.cycle, e["cycle"] as? Int, label)
+            XCTAssertEqual(after.lifetime, e["lifetime"] as? Int, label)
+            XCTAssertEqual(after.debt, e["debt"] as? Int, label)
+            replayed += 1
+        }
+        XCTAssertGreaterThanOrEqual(replayed, 6)
     }
 }

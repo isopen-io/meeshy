@@ -58,7 +58,7 @@ export type GameBlockExtrasFacts = {
   readonly today: string;
   readonly minuteOfDay: number;
   /** Le score en poche, le niveau record et les étoiles de Prestige. */
-  /** Avec les étincelles (#10846), le CYCLE d'étincelles — la base du niveau —, jamais la poche. */
+  /** Avec les étincelles, la POCHE — la base du niveau (#10892, `levelSparksOf`). */
   readonly score: number;
   readonly levelRecord: number | null;
   /** Le niveau max à vie (#10846), qui survit au prestige : il ouvre les ligues et le duo. Absent : le record du cycle. */

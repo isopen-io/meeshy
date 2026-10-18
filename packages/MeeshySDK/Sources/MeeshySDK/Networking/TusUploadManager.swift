@@ -134,7 +134,46 @@ public struct TusUploadTranscriptionMetadata: Codable, Sendable, Equatable {
     }
 }
 
+/// Les envois TUS EN VOL dans ce processus, par clé de checkpoint. Un manager naît par envoi : sans ce
+/// registre commun, deux envois des mêmes octets reprenaient la même session et croisaient leurs PATCH.
+final class TusUploadLeases: @unchecked Sendable {
+    static let shared = TusUploadLeases()
+    private let lock = NSLock()
+    private var held = Set<String>()
+
+    /// Vrai si la clé était libre — l'appelant la tient jusqu'à `release`.
+    func claim(_ key: String) -> Bool {
+        lock.lock(); defer { lock.unlock() }
+        return held.insert(key).inserted
+    }
+
+    func release(_ key: String) {
+        lock.lock(); defer { lock.unlock() }
+        held.remove(key)
+    }
+}
+
 public actor TusUploadManager {
+    /// Les contextes qui créent un `PostMedia` côté serveur — miroir de `POST_MEDIA_UPLOAD_CONTEXTS`
+    /// (`packages/shared/types/attachment.ts`). Le contexte précis ne s'y conserve pas.
+    static let postMediaUploadContexts: Set<String> = ["post", "story", "status", "comment"]
+
+    /// Une session TUS naît avec ce que son POST déclare : l'OBJET serveur qu'elle créera (`PostMedia` pour
+    /// story/post/statut/commentaire, `MessageAttachment` sans contexte) et ses métadonnées (aperçu flou,
+    /// transcription, capture dans l'app). Elle ne se reprend que par un envoi qui la créerait identique : une
+    /// pré-montée « story » sert un post des mêmes octets, une pièce de message jamais, et un vocal ne perd plus sa
+    /// transcription dans une session ouverte sans elle. Sans contexte ni métadonnée, la clé reste l'empreinte seule.
+    static func checkpointKey(digest: String, uploadContext: String?, thumbHash: String? = nil,
+                              transcription: TusUploadTranscriptionMetadata? = nil, capturedInApp: Bool = false) -> String {
+        let kind = uploadContext.map { postMediaUploadContexts.contains($0) ? "postMedia" : $0 }
+        let metadata = [thumbHash ?? "", transcription?.uploadMetadataValue() ?? "", capturedInApp ? "inApp" : ""]
+        let fingerprint: String? = metadata.allSatisfy(\.isEmpty) ? nil
+            : SHA256.hash(data: Data(metadata.joined(separator: "\u{1F}").utf8)).prefix(8)
+                .map { String(format: "%02x", $0) }.joined()
+        guard kind != nil || fingerprint != nil else { return digest }
+        return "\(digest)|\(kind ?? "-")|\(fingerprint ?? "-")"
+    }
+
     private let baseURL: URL
     private let chunkSize: Int = 10 * 1024 * 1024 // 10 MB
     private let maxConcurrent: Int = 3
@@ -152,7 +191,12 @@ public actor TusUploadManager {
     /// (`AuthManager.refreshSession(force:)`) rather than reimplementing it —
     /// injectable so tests can stub success/failure without touching the
     /// real `AuthManager.shared` singleton.
-    private let refreshAuthSession: @Sendable @concurrent (_ force: Bool) async throws -> String
+    ///
+    /// #10904 — il reçoit le jeton PRÉSENTÉ par la montée : la session
+    /// rafraîchie est la sienne, ou rien. Un compte devenu actif entre-temps
+    /// n'est jamais rafraîchi pour elle, et la montée est abandonnée
+    /// (`CancellationError`).
+    private let refreshAuthSession: @Sendable @concurrent (_ presentedToken: String) async throws -> String
     private let backgroundTasks: any BackgroundTaskProviding
     private let digestMemo: FileDigestMemo
 
@@ -164,8 +208,12 @@ public actor TusUploadManager {
         baseURL: URL,
         urlSession: URLSession = .shared,
         checkpointStore: TusUploadCheckpointStore = .shared,
-        refreshAuthSession: @escaping @Sendable (_ force: Bool) async throws -> String = { force in
-            try await AuthManager.shared.refreshSession(force: force)
+        refreshAuthSession: @escaping @Sendable (_ presentedToken: String) async throws -> String = { presentedToken in
+            try await AuthManager.shared.refreshSession(
+                presentedToken: presentedToken,
+                stillInstalled: APIClient.shared.authToken == presentedToken,
+                force: true
+            )
         },
         backgroundTasks: any BackgroundTaskProviding = UIApplicationBackgroundTaskProvider()
     ) {
@@ -180,7 +228,7 @@ public actor TusUploadManager {
         baseURL: URL,
         urlSession: URLSession,
         checkpointStore: TusUploadCheckpointStore,
-        refreshAuthSession: @escaping @Sendable (_ force: Bool) async throws -> String,
+        refreshAuthSession: @escaping @Sendable (_ presentedToken: String) async throws -> String,
         backgroundTasks: any BackgroundTaskProviding,
         digestMemo: FileDigestMemo
     ) {
@@ -385,7 +433,14 @@ public actor TusUploadManager {
         // Compute the bytewise checkpoint key once. Same source file +
         // same compression settings → same bytes → same key, so a queue
         // retry after kill matches the previous session's checkpoint.
-        let checkpointKey = try digestMemo.digest(of: fileURL, computing: Self.sha256Hex(of:))
+        let digest = try digestMemo.digest(of: fileURL, computing: Self.sha256Hex(of:))
+        let scopedKey = Self.checkpointKey(digest: digest, uploadContext: uploadContext, thumbHash: thumbHash,
+                                           transcription: transcription, capturedInApp: capturedInApp)
+        // Un envoi des mêmes octets déjà en vol tient cette session : celui-ci ouvre la sienne, sous une clé
+        // à lui (jamais reprise, purgée comme tout checkpoint périmé si l'envoi échoue).
+        let leased = TusUploadLeases.shared.claim(scopedKey)
+        defer { if leased { TusUploadLeases.shared.release(scopedKey) } }
+        let checkpointKey = leased ? scopedKey : "\(scopedKey)|\(UUID().uuidString)"
         let store = checkpointStore
 
         // Step 1: Resolve patchURL — either resume from a stored checkpoint
@@ -407,8 +462,16 @@ public actor TusUploadManager {
             Self.logger.info("TUS checkpoint \(checkpointKey, privacy: .public) older than \(Int(checkpointMaxAge), privacy: .public)s — restarting upload")
             await store.delete(checkpointKey: checkpointKey)
         }
+        // Une session dont tous les octets sont partis mais dont l'issue (la pièce
+        // jointe) s'est perdue ne se reprend pas : aucun PATCH ne la redonnerait,
+        // et chaque tentative levait sans une requête. Repartir d'une session neuve.
+        let isFinishLost = !isCheckpointStale && (resumed.map { $0.byteOffset >= fileSize } ?? false)
+        if isFinishLost {
+            Self.logger.warning("TUS checkpoint \(checkpointKey, privacy: .public) fully sent but its finish was lost — restarting upload")
+            await store.delete(checkpointKey: checkpointKey)
+        }
 
-        if !isCheckpointStale,
+        if !isCheckpointStale, !isFinishLost,
            let cp = resumed,
            let url = URL(string: cp.uploadURL, relativeTo: baseURL),
            cp.fileSize == fileSize {
@@ -557,7 +620,7 @@ public actor TusUploadManager {
                 // the 409 branch) rather than trust the local `offset` —
                 // resuming from a diverged local counter, or restarting the
                 // whole session, are both worse than the defect this fixes.
-                guard credential.isAccount, !hasRetriedAfterAuthRefusal else {
+                guard let presentedToken = credential.bearerToken, !hasRetriedAfterAuthRefusal else {
                     Self.logger.error("PATCH 401 at offset \(offset, privacy: .public) — no retry available, failing definitively")
                     throw MeeshyError.auth(.sessionExpired)
                 }
@@ -565,7 +628,13 @@ public actor TusUploadManager {
                 Self.logger.warning("PATCH 401 at offset \(offset, privacy: .public) — refreshing session and retrying once")
                 let freshToken: String
                 do {
-                    freshToken = try await refreshAuthSession(true)
+                    freshToken = try await refreshAuthSession(presentedToken)
+                } catch let abandoned as CancellationError {
+                    // #10904 — le compte de la montée n'est plus le compte
+                    // actif (ou sa session a changé) : rien n'est refusé, la
+                    // montée s'arrête sans rejeu sous une autre identité.
+                    Self.logger.warning("PATCH 401 recovery abandoned — the upload's session is no longer the active one")
+                    throw abandoned
                 } catch {
                     Self.logger.error("PATCH 401 recovery — session refresh failed, failing definitively")
                     throw MeeshyError.auth(.sessionExpired)
@@ -594,6 +663,9 @@ public actor TusUploadManager {
             }
         }
 
+        // Tout est parti sans issue lisible (409 → HEAD == fileSize, corps final
+        // indécodable) : la session ne peut plus rendre sa pièce jointe.
+        await store.delete(checkpointKey: checkpointKey)
         throw URLError(.cannotParseResponse)
     }
 

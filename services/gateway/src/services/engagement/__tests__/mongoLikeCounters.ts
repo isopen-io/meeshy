@@ -36,6 +36,12 @@ export function evaluateExpression(expression: Expression, row: MongoLikeRow): u
     const value = evaluateExpression(operands[0], row);
     return isAbsent(value) ? evaluateExpression(operands[1], row) : value;
   }
+  if (operator === '$toLong') {
+    // `$toLong` (#10912) : un opérande unique, `null` ou absent rend `null` ; un `long` déjà gravé (BigInt du client) se relit en nombre.
+    const value = evaluateExpression(Array.isArray(operands) ? operands[0] : operands, row);
+    if (isAbsent(value)) return null;
+    return typeof value === 'bigint' ? Number(value) : Math.trunc(Number(value));
+  }
   const values = operands.map((operand) => evaluateExpression(operand, row));
   if (operator === '$max') {
     const present = values.filter((value): value is number => typeof value === 'number');

@@ -209,6 +209,8 @@ final class NotificationActionHandler: NotificationActionHandling {
             return user.isAnonymous != true
         },
         openNotification: @escaping @MainActor ([AnyHashable: Any]) -> Void = {
+            // iPad, fenêtre détachée devant : la cible s'ouvre dans la fenêtre principale — qui revient d'abord.
+            MainWindowRegistry.shared.bringPrimaryForwardIfHidden()
             PushNotificationManager.shared.handleNotification(userInfo: $0)
         },
         dialCallBack: @escaping @MainActor (CallBackRequest) -> Void = { request in
@@ -373,8 +375,10 @@ final class NotificationActionHandler: NotificationActionHandling {
             // #6999 — OUVRIR, c'est CONSOMMER. Le tap ne marquait rien lu : la
             // ligne restait non lue dans la cloche et le compteur ne bougeait
             // pas, pour une notification que l'utilisateur venait d'ouvrir.
-            await consumeTapped(payload)
+            // La navigation d'ABORD : la consommation attend le `markAsRead`
+            // REST, et le tap ne faisait rien tant qu'il n'était pas revenu.
             openNotification(userInfo)
+            await consumeTapped(payload)
 
         case UNNotificationDismissActionIdentifier:
             break
@@ -383,7 +387,7 @@ final class NotificationActionHandler: NotificationActionHandling {
             await handleMarkRead(payload)
 
         case MeeshyNotificationAction.reply.rawValue:
-            await handleReply(payload, replyText: replyText)
+            await handleReply(payload, userInfo: userInfo, replyText: replyText)
 
         case MeeshyNotificationAction.comment.rawValue:
             await handleComment(payload, userInfo: userInfo, replyText: replyText)
@@ -406,14 +410,14 @@ final class NotificationActionHandler: NotificationActionHandling {
              MeeshyNotificationAction.answerCall.rawValue:
             // All of these surface the app to the relevant screen — the
             // deep-link router decides the destination based on payload.type.
-            await consumeTapped(payload)
             openNotification(userInfo)
+            await consumeTapped(payload)
 
         case MeeshyNotificationAction.openInMaps.rawValue,
              MeeshyNotificationAction.addContact.rawValue,
              MeeshyNotificationAction.joinInvite.rawValue:
-            await consumeTapped(payload)
             handleDetailAction(actionIdentifier, userInfo: userInfo)
+            await consumeTapped(payload)
 
         case MeeshyNotificationAction.declineCall.rawValue:
             // Silent decline — no navigation. The VoIP layer handles the
@@ -422,8 +426,8 @@ final class NotificationActionHandler: NotificationActionHandling {
             break
 
         default:
-            await consumeTapped(payload)
             openNotification(userInfo)
+            await consumeTapped(payload)
         }
     }
 
@@ -442,9 +446,19 @@ final class NotificationActionHandler: NotificationActionHandling {
             openNotification(userInfo)
             presentNewContact(card)
         case (MeeshyNotificationAction.joinInvite.rawValue, .invite(let invite)?):
+            // Une invitation ne mène qu'à une jointure : un lien d'e-mail
+            // glissé à sa place n'entre jamais par la voie système (#10874).
+            guard Self.isInvitation(invite.url) else { return openNotification(userInfo) }
             openDeepLink(invite.url)
         default:
             openNotification(userInfo)
+        }
+    }
+
+    static func isInvitation(_ url: URL) -> Bool {
+        switch DeepLinkParser.parse(url) {
+        case .joinLink, .chatLink: return true
+        default: return false
         }
     }
 
@@ -482,7 +496,7 @@ final class NotificationActionHandler: NotificationActionHandling {
 
     // MARK: - Durable quick reply (R2)
 
-    private func handleReply(_ payload: NotificationPayload, replyText: String?) async {
+    private func handleReply(_ payload: NotificationPayload, userInfo: [AnyHashable: Any], replyText: String?) async {
         guard let conversationId = payload.conversationId else {
             logger.warning("reply action without conversationId — ignoring")
             return
@@ -494,6 +508,10 @@ final class NotificationActionHandler: NotificationActionHandling {
         }
         guard let userId = currentUserId() else {
             logger.warning("reply action without an active user — ignoring")
+            return
+        }
+        guard NotificationReplyFailure.isAddressed(to: userId, userInfo: userInfo) else {
+            logger.warning("reply action on a notification addressed to another account — ignoring")
             return
         }
 
@@ -681,6 +699,13 @@ final class NotificationActionHandler: NotificationActionHandling {
         }
         guard isRegisteredUser() else {
             logger.warning("friend request action from an anonymous session — ignoring")
+            return
+        }
+        // La demande s'adressait à un autre compte de l'appareil : la trancher
+        // ici accepterait ou refuserait celle du compte ACTIF venue du même
+        // expéditeur.
+        guard NotificationReplyFailure.isAddressed(to: currentUserId(), userInfo: userInfo) else {
+            logger.warning("friend request action on a notification addressed to another account — ignoring")
             return
         }
 

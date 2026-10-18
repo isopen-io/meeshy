@@ -138,6 +138,8 @@ export const userGameProfileResponse = envelope(
           // #10846 : les étincelles en poche et accumulées à vie — la même visibilité que `points` (soi et les amis).
           sparks: { type: 'number' },
           sparksLifetime: { type: 'number' },
+          // #10913 : la Gloire totale — la même visibilité que `points`.
+          glory: { type: 'number' },
         }),
       ],
     },

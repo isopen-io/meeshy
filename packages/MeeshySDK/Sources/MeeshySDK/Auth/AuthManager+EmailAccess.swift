@@ -41,8 +41,12 @@ extension AuthManager {
     /// Valide le lien de connexion SANS poser la session (#8076) : un lien
     /// ouvert pendant qu'une présentation d'accès est affichée attend qu'elle
     /// se referme, sinon elle resterait orpheline sous la nouvelle racine.
-    public func verifyMagicLink(token: String) async throws -> EmailProvenSession {
-        let data = try await authService.validateMagicLink(token: token)
+    ///
+    /// #10872 — lève `LinkConfirmationRequired` quand le lien n'a pas été
+    /// demandé par cet appareil : aucune session, l'identité du compte à
+    /// confirmer. `confirmed` rejoue la preuve après le « oui ».
+    public func verifyMagicLink(token: String, confirmed: Bool = false) async throws -> EmailProvenSession {
+        let data = try await authService.validateMagicLink(token: token, confirmed: confirmed)
         guard let proven = try EmailProvenSession.served(by: data) else {
             throw MeeshyError.server(statusCode: 0, message: "Response missing token/user data")
         }
@@ -390,7 +394,12 @@ public struct EmailProvenSession: Sendable {
     /// `SecondFactorRequired` quand le compte attend son second facteur.
     /// `receivedAt` est l'instant où la réponse est lue (#10518) : le délai
     /// servi s'y applique, sur les deux branches.
+    /// #10872 — lève `LinkConfirmationRequired` avant tout : la passerelle n'a
+    /// rien ouvert, elle attend que l'utilisateur confirme le compte.
     static func served(by data: LoginResponseData, receivedAt: Date = Date()) throws -> EmailProvenSession? {
+        if data.requiresConfirmation == true, let account = data.account {
+            throw LinkConfirmationRequired(account: account, intent: data.linkIntent, maskedEmail: data.maskedEmail)
+        }
         if data.requires2FA == true {
             throw SecondFactorRequired(
                 twoFactorToken: data.twoFactorToken,

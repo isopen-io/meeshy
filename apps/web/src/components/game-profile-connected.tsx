@@ -94,7 +94,7 @@ export function GameBannerOwnConnected({ enabled }: { readonly enabled: boolean 
   if (prefs.hidden || game === undefined) return null;
   const level = shownLevelOf(game.level);
   const atTop = level.nextThreshold === null;
-  // La POCHE d'étincelles (pas la base du niveau) en grand ; le total à vie dessous ; le niveau max à vie sous le niveau.
+  // La POCHE d'étincelles (pas la base du niveau) en grand ; la Gloire totale dessous ; le niveau max à vie sous le niveau.
   const sparks = sparksReading(game.level);
   const standing: BannerStanding = {
     level: level.level,
@@ -102,7 +102,7 @@ export function GameBannerOwnConnected({ enabled }: { readonly enabled: boolean 
     prestige: level.prestige,
     progress: atTop ? 1 : level.progress,
     points: sparks.pocket > 0 ? sparks.pocket : null,
-    sparksLifetime: sparks.lifetime !== null && sparks.lifetime > 0 ? sparks.lifetime : null,
+    glory: game.glory.glory > 0 ? game.glory.glory : null,
     levelMax: levelMaxReading(game.level),
     pointsToNext: atTop ? null : level.pointsToNext,
     ...shownRank(game.glory),
@@ -121,9 +121,9 @@ export function GameBannerVisitorConnected({ userId, enabled }: { readonly userI
     tier: served.tier,
     prestige: served.prestige,
     progress: null,
-    // Servis aux amis seulement (mêmes règles que les points) ; le niveau max suit le réglage du RANG, comme le niveau.
+    // Servis aux amis seulement (la Gloire comme les points) ; le niveau max suit le réglage du RANG, comme le niveau.
     points: servedPocket === undefined || servedPocket === 0 ? null : servedPocket,
-    sparksLifetime: served.sparksLifetime === undefined || served.sparksLifetime === 0 ? null : served.sparksLifetime,
+    glory: served.glory === undefined || served.glory === 0 ? null : served.glory,
     levelMax: served.ladder?.levelMaxLifetime ?? served.levelMaxLifetime ?? null,
     pointsToNext: null,
     ...shownRank(served),

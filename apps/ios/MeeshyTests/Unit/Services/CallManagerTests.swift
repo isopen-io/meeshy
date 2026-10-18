@@ -2541,6 +2541,22 @@ final class EndCurrentAndAnswerPendingTests: XCTestCase {
     /// value that was still populated. Revalidation-before-answering is now
     /// the dedicated `answeringPendingCallId` token's job (see
     /// `test_endCurrentAndAnswerPending_revalidatesPendingBeforeAnswering`).
+    /// « Raccrocher et répondre » remettait l'appel en attente à SONNER
+    /// (`handleIncomingCallNotification` le place en `.ringing`) sans y répondre :
+    /// l'utilisateur devait appuyer une seconde fois sur Accepter.
+    func test_endCurrentAndAnswerPending_answersTheHandedOffCall() throws {
+        let source = try callManagerSource()
+        guard let body = functionBody(of: "func endCurrentAndAnswerPending", in: source),
+              let handoff = body.range(of: "handleIncomingCallNotification(") else {
+            XCTFail("endCurrentAndAnswerPending handoff not found"); return
+        }
+        let after = String(body[handoff.upperBound...])
+        XCTAssertTrue(after.contains("answerCall()"),
+                      "après la passation, l'appel en attente doit être répondu, pas re-sonné")
+        XCTAssertTrue(after.contains("currentCallId == pending.callId"),
+                      "ne répondre qu'à l'appel sur lequel l'utilisateur a agi")
+    }
+
     func test_endCurrentAndAnswerPending_clearsPendingSynchronouslyBeforeEndCall() throws {
         let source = try callManagerSource()
         guard let body = functionBody(of: "func endCurrentAndAnswerPending", in: source) else {
@@ -3565,6 +3581,30 @@ final class CallManagerForcedLeaveTests: XCTestCase {
             "callForcedLeave handler must report the call as ended to CallKit via " +
             "callProvider.reportCall(with:endedAt:reason:) so the system call-ended UI appears"
         )
+    }
+
+    /// `currentCallId` survit 1,5 s (12 s avec « Réessayer ») à la fin d'un appel :
+    /// un `call:force-leave` arrivé dans cette fenêtre relançait tout le démontage
+    /// (raison écrasée, analytics renvoyées, résumé réécrit, session audio coupée
+    /// sous un message vocal). Même garde que `handleRemoteEnd`.
+    func test_forcedLeave_ignoredOnceCallAlreadyEnded() throws {
+        let source = try callManagerSource()
+        guard let subRange = source.range(of: "socket.callForcedLeave") else {
+            XCTFail("callForcedLeave subscription not found in CallManager.swift"); return
+        }
+        let sinkEnd = source.range(of: ".store(in: &cancellables)", range: subRange.upperBound..<source.endIndex)?.upperBound ?? source.endIndex
+        let block = String(source[subRange.lowerBound..<sinkEnd])
+        XCTAssertTrue(
+            block.contains("CallReliabilityPolicy.shouldProcessRemoteEnd"),
+            "callForcedLeave doit passer par shouldProcessRemoteEnd (ignore un appel déjà terminé)"
+        )
+    }
+
+    func test_shouldProcessRemoteEnd_rejectsEndedCall_acceptsLiveOne() {
+        XCTAssertFalse(CallReliabilityPolicy.shouldProcessRemoteEnd(
+            currentCallId: "c1", incomingCallId: "c1", callState: .ended(reason: .local)))
+        XCTAssertTrue(CallReliabilityPolicy.shouldProcessRemoteEnd(
+            currentCallId: "c1", incomingCallId: "c1", callState: .connected))
     }
 }
 

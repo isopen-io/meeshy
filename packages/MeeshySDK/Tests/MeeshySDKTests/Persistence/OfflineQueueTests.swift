@@ -891,6 +891,45 @@ final class OfflineQueueTests: XCTestCase {
         XCTAssertEqual(statuses[stale], .pending, "un envoi en vol depuis plus de 30 minutes est repris")
     }
 
+    /// La PREMIÈRE récupération du processus remettait TOUT `.inflight` en
+    /// attente. Or elle tourne dans une tâche détachée de basse priorité : un
+    /// flush lancé avant elle (mutation mise en file au démarrage, réessai
+    /// manuel) avait déjà réclamé sa ligne — remise `.pending`, elle était
+    /// réclamée une seconde fois et le message partait deux fois. Seules les
+    /// lignes réclamées AVANT le lancement du processus sont orphelines.
+    func test_bootRecovery_cold_keepsARowClaimedByThisProcess_resetsOneFromBeforeLaunch() async throws {
+        let maybePool = await queue.outboxPoolForTesting
+        let pool = try XCTUnwrap(maybePool)
+        await queue.resetRecoveryForTesting()
+
+        let thisProcess = "cid_cold_live_\(UUID().uuidString.lowercased())"
+        let beforeLaunch = "cid_cold_orphan_\(UUID().uuidString.lowercased())"
+        for cid in [thisProcess, beforeLaunch] {
+            try await queue.enqueue(OfflineQueueItem(conversationId: "conv-1", content: "x", clientMessageId: cid))
+        }
+        let preLaunch = OfflineQueue.processLaunchDate.addingTimeInterval(-60)
+        try await pool.write { db in
+            try db.execute(sql: "UPDATE outbox SET status = ?, updatedAt = ? WHERE clientMessageId = ?",
+                           arguments: [OutboxStatus.inflight.rawValue, Date(), thisProcess])
+            try db.execute(sql: "UPDATE outbox SET status = ?, updatedAt = ? WHERE clientMessageId = ?",
+                           arguments: [OutboxStatus.inflight.rawValue, preLaunch, beforeLaunch])
+        }
+
+        _ = try await queue.bootRecovery()
+
+        let statuses = try await pool.read { db in
+            try OutboxRecord.filter([thisProcess, beforeLaunch].contains(Column("clientMessageId"))).fetchAll(db)
+                .reduce(into: [String: OutboxStatus]()) { $0[$1.clientMessageId ?? ""] = $1.status }
+        }
+        XCTAssertEqual(statuses[thisProcess], .inflight, "un envoi réclamé par CE processus n'est pas réarmé")
+        XCTAssertEqual(statuses[beforeLaunch], .pending, "une ligne réclamée avant le lancement est orpheline")
+    }
+
+    func test_processLaunchDate_isInThePast() {
+        XCTAssertLessThan(OfflineQueue.processLaunchDate, Date())
+        XCTAssertGreaterThan(OfflineQueue.processLaunchDate, Date().addingTimeInterval(-86_400))
+    }
+
     // MARK: - S6 — audio-orphan rows must be terminal (.exhausted), not .failed
 
     /// A crash between the outbox insert and the audio file copy leaves a

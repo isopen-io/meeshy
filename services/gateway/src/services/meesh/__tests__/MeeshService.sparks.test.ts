@@ -15,7 +15,7 @@ import { describe, it, expect, jest } from '@jest/globals';
 import { MeeshService } from '../MeeshService';
 import { fakeGameDb, seedUser, USER, type FakeGameDb } from '../../game/__tests__/fakeGameDb';
 import { effectiveMeeshPrice } from '@meeshy/shared/utils/game/sparks';
-import { levelThreshold } from '@meeshy/shared/utils/game/levels';
+import { levelFromScore, levelThreshold } from '@meeshy/shared/utils/game/levels';
 
 jest.mock('../../../utils/logger-enhanced', () => ({
   enhancedLogger: {
@@ -80,9 +80,9 @@ describe('MeeshService.mint — la frappe dépense la poche, rien d\'autre', () 
     expect(db.engagementMilestone.rows.map((r) => r.reachedAt)).toEqual(Array(8).fill(new Date('2026-09-10')));
   });
 
-  it('ne fait PAS baisser le niveau : le cycle et le total à vie ne bougent pas', async () => {
+  it('fait BAISSER le niveau du prix payé (#10892) : le cycle et le total à vie, indicatifs, ne bougent pas', async () => {
     const db = fakeGameDb();
-    // Niveau 9 (8 100 ≤ cycle < 10 000) : la première Meesh fait l'étape du 10 — le niveau ne peut que MONTER.
+    // Niveau 9 (8 100 ≤ poche < 10 000) : la frappe retire 665 de la poche, qui retombe au niveau 8.
     const cycle = levelThreshold(9) + 500;
     seedUser(db, { engagementScore: cycle, sparksSincePrestige: cycle, sparksEarnedLifetime: 9_000_000_000, levelRecord: 9, levelMaxLifetime: 52 });
 
@@ -95,11 +95,12 @@ describe('MeeshService.mint — la frappe dépense la poche, rien d\'autre', () 
     expect(row.engagementScore).toBe(cycle - effectiveMeeshPrice(1, 9));
     if (issue.status === 'minted') {
       expect(issue.receipt.levelBefore).toBe(9);
-      expect(issue.receipt.levelAfter).toBeGreaterThanOrEqual(9);
+      expect(issue.receipt.levelAfter).toBe(levelFromScore(cycle - effectiveMeeshPrice(1, 9), null));
+      expect(issue.receipt.levelAfter).toBe(8);
     }
   });
 
-  it('un compte d\'AVANT le rattrapage (sans cycle) : la frappe pose le cycle sur la poche avant de la débiter — le niveau ne tombe pas', async () => {
+  it('un compte d\'AVANT le rattrapage (sans cycle) : la frappe pose le cycle sur la poche avant de la débiter — les indicateurs ne tombent pas', async () => {
     const db = fakeGameDb();
     seedUser(db, { engagementScore: levelThreshold(8) + 2000, levelRecord: 8 });
 
@@ -179,6 +180,21 @@ describe('MeeshService.mint — les réserves du trésor s\'ouvrent par le rang 
 
     const issue = await new MeeshService(db.prisma).mint(USER, 'frappe-coffre-ouvert');
 
+    expect(issue.status).toBe('minted');
+  });
+
+  it('le Mythe ouvre toutes les réserves : la frappe d\'un siège du Mythe n\'est jamais barrée, comme le bloc l\'annonce (#10894)', async () => {
+    const db = fakeGameDb();
+    seedUser(db, { engagementScore: 90_000, sparksSincePrestige: 90_000 });
+    withMints(db, 99);
+    withGlory(db, 500);
+    db.mythicSeat.rows.push({ id: '6d7974686500000000000007', number: 7, edition: 7, userId: USER, glory: 1_000_000, grantedAt: new Date() });
+
+    const service = new MeeshService(db.prisma);
+    const plan = await service.preview(USER);
+    const issue = await service.mint(USER, 'frappe-mythe-coffre');
+
+    expect(plan.canMint).toBe(true);
     expect(issue.status).toBe('minted');
   });
 

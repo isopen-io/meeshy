@@ -2,8 +2,9 @@ import XCTest
 @testable import Meeshy
 import MeeshySDK
 
-/// Page Progression (#10846) : la paire POCHE / TOTAL À VIE et la paire NIVEAU / MAX À VIE sont TOUJOURS affichées,
-/// même quand le max égale le niveau (décision porteur 2026-10-16).
+/// Page Progression (#10846, #10860) : la paire CONVERTIBLES / RECORD D'ÉTINCELLES et la paire NIVEAU / RECORD DE
+/// NIVEAU sont TOUJOURS affichées, même quand le record égale le niveau (décision porteur 2026-10-16) ; vocabulaire des
+/// trois records (porteur 2026-10-17, #10899).
 @MainActor
 final class GameSparkPairsTests: XCTestCase {
 
@@ -17,6 +18,7 @@ final class GameSparkPairsTests: XCTestCase {
     func test_pairs_readThePocketTheLifetimeTheLevelAndItsMax() {
         let pairs = GameSparkPairs(level(sparks: 5_000, cycle: 8_200, lifetime: 12_000, levelMax: 40))
         XCTAssertEqual(pairs.pocket, 5_000)
+        XCTAssertEqual(pairs.cycle, 8_200)
         XCTAssertEqual(pairs.lifetime, 12_000)
         XCTAssertEqual(pairs.level, 9)
         XCTAssertEqual(pairs.levelMax, 40)
@@ -34,6 +36,60 @@ final class GameSparkPairsTests: XCTestCase {
         XCTAssertEqual(pairs.pocket, 8_200)
         XCTAssertEqual(pairs.lifetime, 8_200)
         XCTAssertEqual(pairs.levelMax, 11)
+    }
+
+    /// Les convertibles sont la seule valeur réelle : la poche ne se nomme plus « En poche ».
+    /// Retour porteur du 2026-10-17 (#10860, 9275039845) : la poche dit « Convertibles ». Le témoin lisait le
+    /// libellé RÉSOLU et le comparait au français : la CI tourne en anglais (« Convertible ») et rougissait sans
+    /// défaut. Le mot du porteur se vérifie au CATALOGUE ; l'écran, dans la langue où tournent les témoins.
+    func test_pocketLabel_saysConvertibles() throws {
+        XCTAssertEqual(try catalogValue("game.sparks.pocket.label", "fr"), "Convertibles")
+        XCTAssertEqual(GameSparksCopy.pocketLabel, try catalogValue("game.sparks.pocket.label", Self.runningLanguage))
+    }
+
+    /// Après un Prestige : le cycle d'abord, puis le record d'étincelles — « 8 200 cumulées · record 12 000 » (#10899).
+    func test_cumul_afterAPrestige_readsTheCycleThenTheSparkRecord() throws {
+        let pairs = GameSparkPairs(level(sparks: 5_000, cycle: 8_200, lifetime: 12_000, levelMax: 40))
+        XCTAssertEqual(try catalogValue("game.sparks.cumul.record", "fr"), "%1$@ cumulées · record %2$@")
+        let format = try catalogValue("game.sparks.cumul.record", Self.runningLanguage)
+        let expected = format.replacingOccurrences(of: "%1$@", with: GameCopy.formatCount(8_200))
+            .replacingOccurrences(of: "%2$@", with: GameCopy.formatCount(12_000))
+        XCTAssertEqual(pairs.cumulLine, expected)
+        XCTAssertEqual(pairs.facts[1].value, expected, "la fiche dit le même cycle et le même record")
+    }
+
+    /// Sous le niveau : le record de niveau, nommé — « Record de niveau : 40 » (#10899).
+    func test_levelLine_saysTheLevelRecord() throws {
+        XCTAssertEqual(try catalogValue("game.sparks.levelRecord.line", "fr"), "Record de niveau : %@")
+        let format = try catalogValue("game.sparks.levelRecord.line", Self.runningLanguage)
+        XCTAssertEqual(GameSparksCopy.levelRecordLine(40), format.replacingOccurrences(of: "%@", with: GameCopy.formatCount(40)))
+        let row = try AppSourceGuard.unit("Meeshy/Features/Main/Game/GameSparkPairs.swift")
+        XCTAssertTrue(row.contains("small: GameSparksCopy.levelRecordLine(pairs.levelMax)"), "la paire du niveau dit son record")
+    }
+
+    /// La langue dans laquelle l'app hôte résout ses chaînes (la CI tourne en anglais, un poste peut être en français).
+    private static var runningLanguage: String {
+        let language = Bundle.main.preferredLocalizations.first ?? "en"
+        return String(language.prefix(2))
+    }
+
+    private func catalogValue(_ key: String, _ locale: String) throws -> String {
+        let url = URL(fileURLWithPath: #filePath)
+            .deletingLastPathComponent().deletingLastPathComponent().deletingLastPathComponent().deletingLastPathComponent()
+            .appendingPathComponent("Meeshy/Localizable.xcstrings")
+        let json = try XCTUnwrap(JSONSerialization.jsonObject(with: Data(contentsOf: url)) as? [String: Any])
+        let entry = try XCTUnwrap((json["strings"] as? [String: Any])?[key] as? [String: Any])
+        let unit = try XCTUnwrap(((entry["localizations"] as? [String: Any])?[locale] as? [String: Any])?["stringUnit"] as? [String: Any])
+        return try XCTUnwrap(unit["value"] as? String)
+    }
+
+    /// Sans Prestige, le cycle égale le record : « Record d’étincelles : 12 000 », un seul nombre (#10899).
+    func test_cumul_withoutPrestige_saysTheSparkRecord() throws {
+        let pairs = GameSparkPairs(level(sparks: 5_000, cycle: 12_000, lifetime: 12_000, levelMax: 40))
+        XCTAssertEqual(try catalogValue("game.sparks.record.line", "fr"), "Record d’étincelles : %@")
+        let format = try catalogValue("game.sparks.record.line", Self.runningLanguage)
+        XCTAssertEqual(pairs.cumulLine, format.replacingOccurrences(of: "%@", with: GameCopy.formatCount(12_000)))
+        XCTAssertEqual(pairs.facts[1].value, GameCopy.formatCount(12_000))
     }
 
     func test_facts_namePocketLifetimeLevelAndMax_inThatOrder() {

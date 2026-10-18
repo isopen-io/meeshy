@@ -17,6 +17,16 @@ const it = {
   'recovery.reset.invalid.action': 'Richiedi un nuovo link',
   'recovery.reset.done.title': 'Password salvata',
   'recovery.reset.done.text': 'Ora puoi accedere con la tua nuova password.',
+  'recovery.reset.code': 'Codice di verifica',
+  'recovery.reset.code.lead': 'Inserisci il codice a 6 cifre della tua app di autenticazione.',
+  'recovery.reset.error.codeRequired': 'Questo account è protetto: inserisci il codice di verifica della tua app di autenticazione.',
+  'recovery.reset.error.codeInvalid': 'Codice di verifica errato.',
+  'recovery.reset.error.weak': 'Questa password è troppo facile da indovinare. Scegline una più lunga o meno prevedibile.',
+  'recovery.reset.error.reused': 'Hai usato questa password di recente. Scegline un’altra.',
+  'recovery.reset.error.rateLimited': 'Troppi tentativi. Attendi qualche minuto prima di riprovare.',
+  'recovery.reset.error.locked': 'Questo account è temporaneamente bloccato. Contatta l’assistenza.',
+  'recovery.reset.exhausted.title': 'Troppi codici errati',
+  'recovery.reset.exhausted.text': 'Per sicurezza, questo link è stato disattivato. Richiedine uno nuovo.',
 } satisfies AccountRecoveryCatalog;
 
 export default it;

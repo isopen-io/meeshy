@@ -17,6 +17,16 @@ const ar = {
   'recovery.reset.invalid.action': 'طلب رابط جديد',
   'recovery.reset.done.title': 'تم حفظ كلمة المرور',
   'recovery.reset.done.text': 'يمكنك الآن تسجيل الدخول بكلمة المرور الجديدة.',
+  'recovery.reset.code': 'رمز التحقق',
+  'recovery.reset.code.lead': 'أدخل الرمز المكوّن من 6 أرقام من تطبيق المصادقة.',
+  'recovery.reset.error.codeRequired': 'هذا الحساب محمي: أدخل رمز التحقق من تطبيق المصادقة.',
+  'recovery.reset.error.codeInvalid': 'رمز التحقق غير صحيح.',
+  'recovery.reset.error.weak': 'كلمة المرور هذه سهلة التخمين. اختر كلمة أطول أو أقل قابلية للتوقع.',
+  'recovery.reset.error.reused': 'استخدمت كلمة المرور هذه مؤخرًا. اختر كلمة أخرى.',
+  'recovery.reset.error.rateLimited': 'محاولات كثيرة جدًا. انتظر بضع دقائق قبل إعادة المحاولة.',
+  'recovery.reset.error.locked': 'هذا الحساب مقفل مؤقتًا. تواصل مع الدعم.',
+  'recovery.reset.exhausted.title': 'رموز غير صحيحة كثيرة جدًا',
+  'recovery.reset.exhausted.text': 'حفاظًا على أمانك، تم تعطيل هذا الرابط. اطلب رابطًا جديدًا.',
 } satisfies AccountRecoveryCatalog;
 
 export default ar;

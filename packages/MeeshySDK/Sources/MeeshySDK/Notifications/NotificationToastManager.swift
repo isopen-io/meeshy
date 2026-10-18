@@ -104,6 +104,7 @@ public final class NotificationToastManager: ObservableObject {
         openConversationCounts.removeAll()
         activeConversationId = nil
         MessageSocketManager.shared.activeConversationId = nil
+        MessageSocketManager.shared.openConversationIds = []
     }
 
     public let newNotificationReceived = PassthroughSubject<SocketNotificationEvent, Never>()
@@ -309,6 +310,7 @@ public final class NotificationToastManager: ObservableObject {
         openConversationCounts[conversationId, default: 0] += 1
         openConversationStack.removeAll { $0 == conversationId }
         openConversationStack.append(conversationId)
+        MessageSocketManager.shared.openConversationIds = openConversationIds
         guard conversationId != activeConversationId else { return }
 
         activeConversationId = conversationId
@@ -667,10 +669,9 @@ public final class NotificationToastManager: ObservableObject {
     ///
     /// **Multi-fenêtre** : fermer la conversation active rend la main à celle
     /// qui reste affichée ailleurs (la plus récemment ouverte), au lieu de
-    /// remettre l'app « nulle part ». Le moteur de synchro suit, s'il était
-    /// resté sans conversation : l'écran qui se ferme vient de lâcher son
-    /// curseur, et celle qui reste à l'écran ne doit pas se remettre à compter
-    /// ses messages comme non lus.
+    /// remettre l'app « nulle part ». Le moteur de synchro, lui, tient son
+    /// propre ensemble de conversations ouvertes : celle qui reste à l'écran
+    /// ne s'est jamais remise à compter ses messages comme non lus.
     public func onConversationClosed(_ conversationId: String) {
         if let count = openConversationCounts[conversationId] {
             if count > 1 {
@@ -680,14 +681,14 @@ public final class NotificationToastManager: ObservableObject {
                 openConversationStack.removeAll { $0 == conversationId }
             }
         }
+        MessageSocketManager.shared.openConversationIds = openConversationIds
         guard conversationId == activeConversationId,
               !isConversationOpen(conversationId) else { return }
         let remaining = openConversationStack.last
         activeConversationId = remaining
         MessageSocketManager.shared.activeConversationId = remaining
-        if let remaining, ConversationSyncEngine.shared.currentlyOpenConversationId == nil {
-            ConversationSyncEngine.shared.setCurrentlyOpenConversation(remaining)
-        }
+        // Le moteur de synchro n'a plus à être relancé ici : il tient lui-même l'ENSEMBLE des conversations ouvertes
+        // (`openConversation` / `closeConversation`), celle qui reste à l'écran n'en est jamais sortie.
     }
 
     public func dismissToast() {

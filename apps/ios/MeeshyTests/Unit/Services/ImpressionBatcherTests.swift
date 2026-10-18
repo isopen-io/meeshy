@@ -176,6 +176,31 @@ final class ImpressionBatcherTests: XCTestCase {
     }
 }
 
+/// Une file d'impressions sans plafond grossissait sans fin pendant une longue
+/// panne (hors ligne, 5xx, 429, session expirée) : chaque carte apparue
+/// réencodait tout le tableau dans `UserDefaults`, sur le fil principal.
+extension ImpressionBatcherTests {
+
+    func test_failedFlushes_keepAtMostTheCap_newestFirstKept() async {
+        let service = MockPostService()
+        service.recordSocialEventsResult = .failure(NSError(domain: "net", code: -1009))
+        let sut = ImpressionBatcher(
+            source: "feed", postService: service, flushDelay: 60,
+            defaults: defaults, accountId: { "acc-cap" }
+        )
+        let total = ImpressionBatcher.pendingCap + 40
+        for i in 0..<total { sut.record("p\(i)") }
+        await sut.flushNow()
+        for i in total..<(total + 10) { sut.record("p\(i)") }
+
+        let key = ImpressionBatcher.storageKey(source: "feed", surface: nil, accountId: "acc-cap")
+        let kept = ImpressionBatcher.restore(from: defaults, key: key)
+        XCTAssertEqual(kept.count, ImpressionBatcher.pendingCap)
+        XCTAssertEqual(kept.last?.postId, "p\(total + 9)", "la plus récente est gardée")
+        XCTAssertFalse(kept.contains { $0.postId == "p0" }, "la plus ancienne est abandonnée")
+    }
+}
+
 /// outbox-11 — purge de logout des lots d'impressions persistés.
 extension ImpressionBatcherTests {
 

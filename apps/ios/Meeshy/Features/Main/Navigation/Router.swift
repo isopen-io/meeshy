@@ -535,10 +535,10 @@ final class Router: ObservableObject {
     /// unchanged. Also lands on the target directly instead of flashing root.
     func replaceStack(with route: Route) {
         if onRouteRequested != nil {
-            popToRoot()
-            DispatchQueue.main.asyncAfter(deadline: .now() + 0.05) {
-                self.push(route)
-            }
+            // iPad : la route REMPLACE le panneau, comme le même lien venu de
+            // l'extérieur. `popToRoot()` y retire un niveau — le panneau, ou à
+            // défaut la conversation ouverte, qu'un lien interne fermait.
+            push(route)
             return
         }
         path = [route]
@@ -598,13 +598,13 @@ final class Router: ObservableObject {
                     await self?.handleConversationDeepLink(id, draftText: draftText)
                 }
 
-            case .magicLink, .emailVerificationLink:
-                // Tapé in-app, donc déjà connecté (#8035) : `SignInLinkOpener`
-                // décide s'il faut d'abord déconnecter le compte courant.
-                Self.logger.info("Deep link sign-in link received")
-                if let link = SignInLink(destination) {
-                    Task { await SignInLinkOpener.open(link) }
-                }
+            case .magicLink, .emailVerificationLink, .passwordResetLink:
+                // Voie IN-APP (#10874) : un lien d'e-mail touché dans un contenu
+                // n'ouvre ni session ni écran de réinitialisation — il part au
+                // navigateur intégré. `InAppLinks` l'y envoie déjà ; ce cas en
+                // est le second verrou, pour tout appelant qui l'oublierait.
+                Self.logger.info("In-app email link sent to the browser")
+                EmailLinkBrowser.present(url)
 
             case .share(let text, let urlString):
                 Self.logger.info("Deep link share received")

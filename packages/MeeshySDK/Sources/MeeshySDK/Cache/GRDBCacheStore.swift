@@ -146,6 +146,14 @@ public actor GRDBCacheStore<Key, Value>: MutableCacheStore, GRDBDirtyFlushing
                 // mutation locale encore dans la fenêtre debounce serait
                 // perdue si l'entrée franchit son TTL au load suivant.
                 flushDirtyKeyForEviction(key)
+                // Le flush a échoué (base suspendue en arrière-plan, chiffrement
+                // indisponible) : L1 porte la SEULE copie de la mutation. La
+                // jeter ici la perdait — servie périmée, elle repartira au
+                // prochain flush, et l'appelant revalide.
+                if dirtyKeys.contains(key) {
+                    touchKey(key)
+                    return .stale(l1.items, age: age)
+                }
                 memoryCache.removeValue(forKey: key)
                 removeFromAccessOrder(key)
             }
@@ -255,10 +263,14 @@ public actor GRDBCacheStore<Key, Value>: MutableCacheStore, GRDBDirtyFlushing
             return
         }
         let keyStr = namespacedKey(key.description)
-        let existing = readFromL2(for: keyStr)?.items ?? []
-        let merged = merge(existing, item)
-        let entry = L1Entry(items: merged, loadedAt: Date())
-        memoryCache[key] = entry
+        let l2 = readFromL2(for: keyStr)
+        let merged = merge(l2?.items ?? [], item)
+        // Une mutation LOCALE ne rajeunit pas l'horloge (stores-08) : l'entrée
+        // L2 garde la sienne, et une liste NÉE d'un seul élément n'a jamais été
+        // chargée — datée comme `saveAsStale`, elle se peint ET se revalide au
+        // lieu de passer pour fraîche et de sauter le chargement réseau.
+        let loadedAt = l2?.lastFetchedAt ?? Date().addingTimeInterval(-(policy.staleTTL ?? 0))
+        memoryCache[key] = L1Entry(items: merged, loadedAt: loadedAt)
         touchKey(key)
         markDirty(key)
     }
@@ -274,10 +286,12 @@ public actor GRDBCacheStore<Key, Value>: MutableCacheStore, GRDBDirtyFlushing
             return
         }
         let keyStr = namespacedKey(key.description)
-        guard var items = readFromL2(for: keyStr)?.items else { return }
+        guard let l2 = readFromL2(for: keyStr) else { return }
+        var items = l2.items
         if let idx = items.firstIndex(where: { $0.id == itemId }) {
             mutate(&items[idx])
-            let entry = L1Entry(items: items, loadedAt: Date())
+            // stores-08 — l'horloge L2, pas maintenant.
+            let entry = L1Entry(items: items, loadedAt: l2.lastFetchedAt)
             memoryCache[key] = entry
             touchKey(key)
             markDirty(key)
@@ -414,6 +428,12 @@ public actor GRDBCacheStore<Key, Value>: MutableCacheStore, GRDBDirtyFlushing
             let success = flushKeyToL2(keyStr: keyStr, items: items)
             if success {
                 dirtyKeys.remove(key)
+                // Une entrée gardée en mémoire seulement parce que son flush
+                // d'éviction avait échoué (`flushDirtyKeyForEviction`) : sauvée,
+                // elle sort enfin de L1.
+                if !accessOrder.contains(key) {
+                    memoryCache.removeValue(forKey: key)
+                }
             }
         }
 
@@ -455,7 +475,10 @@ public actor GRDBCacheStore<Key, Value>: MutableCacheStore, GRDBDirtyFlushing
         for key in Array(dirtyKeys) {
             flushDirtyKeyForEviction(key)
         }
-        memoryCache.removeAll()
+        // Un flush raté (base suspendue, chiffrement indisponible) laisse la
+        // clé sale : L1 porte alors la SEULE copie de la mutation, elle reste
+        // en mémoire jusqu'au prochain flush réussi. Le reste part.
+        memoryCache = memoryCache.filter { dirtyKeys.contains($0.key) }
         accessOrder.removeAll()
         if dirtyKeys.isEmpty { firstDirtyAt = nil }
     }
@@ -498,7 +521,12 @@ public actor GRDBCacheStore<Key, Value>: MutableCacheStore, GRDBDirtyFlushing
             // local mutation that hasn't reached its 2s debounce window is
             // silently lost (it lived only in L1).
             flushDirtyKeyForEviction(evicted)
-            memoryCache.removeValue(forKey: evicted)
+            // Flush raté : la mutation n'existe qu'en L1. L'entrée quitte l'ordre
+            // LRU (elle ne bloque pas la borne) mais reste en mémoire ; le
+            // prochain `flushDirtyKeys` réussi l'en retire.
+            if !dirtyKeys.contains(evicted) {
+                memoryCache.removeValue(forKey: evicted)
+            }
         }
     }
 
@@ -506,8 +534,9 @@ public actor GRDBCacheStore<Key, Value>: MutableCacheStore, GRDBDirtyFlushing
     /// every eviction path (LRU in `touchKey`, bulk `evictL1`) so eviction never
     /// silently loses a local mutation that hasn't reached its debounce window.
     /// No-op when the key isn't dirty or has no L1 entry. A failed flush (e.g.
-    /// encryption failure) leaves the key dirty for `flushDirtyKeys` to retry or
-    /// GC. Uses `flushKeyToL2`, which preserves `lastFetchedAt`.
+    /// encryption failure, suspended database) leaves the key dirty AND its L1
+    /// entry in place — the callers keep it — for `flushDirtyKeys` to retry.
+    /// Uses `flushKeyToL2`, which preserves `lastFetchedAt`.
     private func flushDirtyKeyForEviction(_ key: Key) {
         guard dirtyKeys.contains(key), let entry = memoryCache[key] else { return }
         if flushKeyToL2(keyStr: namespacedKey(key.description), items: entry.items) {

@@ -24,6 +24,7 @@ final class CallWindowPresenterTests: XCTestCase {
             return true
         }
         func hide() { hidden += 1 }
+        func releaseIfHosted(on scene: UIScene) -> Bool { true }
     }
 
     private final class RecordingViewing: ConversationViewingReporting {
@@ -148,6 +149,47 @@ final class CallWindowPresenterTests: XCTestCase {
         XCTAssertEqual(hosting.shown, 1)
     }
 
+    // MARK: - iPad : la fenêtre qui portait l'appel est fermée
+
+    /// La fenêtre d'appel vit sur la scène principale. Fermée en plein appel
+    /// (iPad multi-fenêtre), elle restait accrochée à une scène morte avec
+    /// `isShowing == true` : `apply` sortait sur `guard !isShowing` et l'appel
+    /// continuait sans écran — sans moyen de raccrocher hors CallKit.
+    func test_overlayLost_duringACall_remountsTheCallScreenOnAnotherScene() {
+        let (sut, hosting) = makeSUT()
+        sut.apply(manager: CallManager.shared, visible: true)
+
+        sut.overlayLost()
+
+        XCTAssertTrue(sut.isShowing)
+        XCTAssertEqual(hosting.shown, 2, "l'écran d'appel se remonte sur la scène restante")
+    }
+
+    func test_overlayLost_withNoSceneLeftInForeground_remountsWhenOneActivates() {
+        let (sut, hosting) = makeSUT()
+        sut.apply(manager: CallManager.shared, visible: true)
+        hosting.hasForegroundScene = false
+
+        sut.overlayLost()
+        XCTAssertFalse(sut.isShowing)
+
+        hosting.hasForegroundScene = true
+        sut.retryPendingShow()
+        XCTAssertTrue(sut.isShowing)
+        XCTAssertEqual(hosting.shown, 2)
+    }
+
+    func test_overlayLost_afterTheCallWasReduced_doesNothing() {
+        let (sut, hosting) = makeSUT()
+        sut.apply(manager: CallManager.shared, visible: true)
+        sut.apply(manager: CallManager.shared, visible: false)
+
+        sut.overlayLost()
+
+        XCTAssertFalse(sut.isShowing)
+        XCTAssertEqual(hosting.shown, 1)
+    }
+
     func test_retryPendingShow_afterTheCallWasReduced_showsNothing() {
         let (sut, hosting) = makeSUT()
         hosting.hasForegroundScene = false
@@ -242,6 +284,19 @@ final class CallReturnPointTests: XCTestCase {
             return true
         }
         func hide() { hidden += 1 }
+        func releaseIfHosted(on scene: UIScene) -> Bool { true }
+    }
+
+    /// Même défaut que l'écran d'appel : la bulle d'un appel réduit restait
+    /// accrochée à la scène fermée, `isShowing` vrai, et ne revenait jamais.
+    func test_overlayLost_whileReduced_remountsTheReturnPoint() {
+        let (sut, hosting) = makeSUT()
+        sut.apply(manager: CallManager.shared, needed: true)
+
+        sut.overlayLost()
+
+        XCTAssertTrue(sut.isShowing)
+        XCTAssertEqual(hosting.shown, 2)
     }
 
     private final class ScreenStub {

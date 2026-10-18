@@ -3,6 +3,7 @@ import { afterAll, afterEach, beforeAll, describe, expect, test } from 'bun:test
 import type { DeletionLink, DeletionResolution } from '@/lib/api/account-deletion';
 import type { ApiFailure, ApiResult } from '@/lib/api/http';
 import { buttonNamed, createActMounter } from '@/test-support/act-mount';
+import { arriveByEmailLink, leaveEmailLink, tokenInHistory } from '@/test-support/email-link-arrival';
 import { ensureHappyDomRegistered, releaseHappyDomIfRegistered } from '@/test-support/happy-dom-environment';
 
 import { loadInterfaceCatalog } from '@/lib/i18n-catalog';
@@ -25,7 +26,7 @@ const { mount, unmountAll, click, type, submit } = createActMounter();
 
 beforeAll(async () => {
   await loadInterfaceCatalog('en');
-  ensureHappyDomRegistered();
+  ensureHappyDomRegistered({ url: 'http://localhost/' });
   globals.IS_REACT_ACT_ENVIRONMENT = true;
 });
 
@@ -210,5 +211,31 @@ describe('depuis les réglages — la demande, sous phrase et mot de passe', () 
     await submit(host);
 
     expect(host.querySelector('[role="alert"]')?.textContent).toContain('Une demande est déjà en cours.');
+  });
+});
+
+describe('le lien de l’e-mail — le jeton quitte l’historique une fois servi (#10864)', () => {
+  afterEach(leaveEmailLink);
+
+  test('action faite : l’entrée ne porte plus le jeton', async () => {
+    arriveByEmailLink('/account/deletion', 'tok');
+    const script = scripted({ resolution: ok({ status: 'CONFIRMED', gracePeriodEndsAt: '2026-10-15T10:00:00.000Z', dataPurged: false }) });
+    const host = await mount(<AccountDeletionPage link={CONFIRM} signedIn={false} online language="fr" deps={script.deps} />);
+    await click(buttonNamed(host, 'Confirmer la suppression'));
+    expect(tokenInHistory()).toBeNull();
+  });
+
+  test('lien expiré : l’entrée ne porte plus le jeton', async () => {
+    arriveByEmailLink('/account/deletion', 'tok');
+    const host = await mount(<AccountDeletionPage link={CONFIRM} signedIn={false} online language="fr" deps={scripted({ resolution: refused(400, 'TOKEN_EXPIRED') }).deps} />);
+    await click(buttonNamed(host, 'Confirmer la suppression'));
+    expect(tokenInHistory()).toBeNull();
+  });
+
+  test('passerelle injoignable : l’entrée le garde, réessayer en a besoin', async () => {
+    arriveByEmailLink('/account/deletion', 'tok');
+    const host = await mount(<AccountDeletionPage link={CONFIRM} signedIn={false} online language="fr" deps={scripted({ resolution: refused(503) }).deps} />);
+    await click(buttonNamed(host, 'Confirmer la suppression'));
+    expect(tokenInHistory()).toBe('tok');
   });
 });

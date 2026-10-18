@@ -86,14 +86,24 @@ enum GamePhotoMoments {
         )
     }
 
-    static func tier(_ tier: LevelTierKey, level: Int) -> PhotoMoment {
+    /// Un palier de niveau : une identité par cycle (#10911, `GamePhotoCatchUpLaw.tierStepId`) — le même palier refait
+    /// après un Prestige est un moment neuf, et son titre dit combien de fois il a été atteint (« Palier Lueur ×2 »).
+    static func tier(_ tier: LevelTierKey, level: Int, prestige: Int = 0, times: Int = 1) -> PhotoMoment {
         let name = GameCopy.tierName(tier)
+        let title = String(localized: "game.photo.title.tier", defaultValue: "Palier \(name)", bundle: .main)
         return PhotoMoment(
-            id: "tier:\(tier.rawValue)",
+            id: GamePhotoCatchUpLaw.tierStepId(tier, prestige: prestige),
             emblem: .tier(tier, level: level),
             kicker: String(localized: "game.photo.kicker.tier", defaultValue: "Niveau \(GameCopy.formatCount(level))", bundle: .main),
-            title: String(localized: "game.photo.title.tier", defaultValue: "Palier \(name)", bundle: .main)
+            title: times >= 2 ? "\(title) ×\(GameCopy.formatCount(times))" : title
         )
+    }
+
+    /// Le palier que le bloc vient d'atteindre, dans SON cycle, et combien de fois il l'a été (#10911).
+    private static func tierReached(_ tier: LevelTierKey, in game: GameBlock) -> PhotoMoment {
+        let level = tierLevel(tier)
+        let times = GamePhotoCatchUpLaw.levelReachCount(PhotoCatchUpStanding(game: game), level: level)
+        return self.tier(tier, level: level, prestige: game.level.prestige, times: times)
     }
 
     static func levelHundred(prestige: Int) -> PhotoMoment {
@@ -161,7 +171,7 @@ enum GamePhotoMoments {
         case .newRank:
             return rank(game.glory.rank, division: game.glory.shownDivision, mythic: game.glory.mythicSeat)
         case .newTier:
-            return tier(game.level.shown.tier, level: tierLevel(game.level.shown.tier))
+            return tierReached(game.level.shown.tier, in: game)
         case .firstMint:
             // `mint.number` est la PROCHAINE pièce : celle qui vient d'être frappée porte le numéro d'avant.
             let number = max(1, game.mint.number - 1)
@@ -198,7 +208,7 @@ enum GamePhotoMoments {
         let tierBefore = LevelTierKey.allCases.firstIndex(of: before.level.shown.tier) ?? 0
         let tierAfter = LevelTierKey.allCases.firstIndex(of: after.level.shown.tier) ?? 0
         if tierAfter > tierBefore {
-            moments.append(tier(after.level.shown.tier, level: tierLevel(after.level.shown.tier)))
+            moments.append(tierReached(after.level.shown.tier, in: after))
         }
         if after.level.prestige > before.level.prestige && !prestigeCard {
             moments.append(levelHundred(prestige: after.level.prestige))

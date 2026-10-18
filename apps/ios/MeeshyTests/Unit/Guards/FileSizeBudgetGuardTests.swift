@@ -621,7 +621,11 @@ final class FileSizeBudgetGuardTests: XCTestCase {
     // `+ScrollDelegate`, `+DayOverlays`), sans changer de comportement : le type
     // retombe à 1 029 lignes, chaque extension est sous le budget. Il sort de
     // `legacyOverBudget` ENTIER, et le plafond baisse de ce qu'il pesait.
-    private static let legacyLineCeiling = 29_824
+    //
+    // Cycle 6 iPad — 29 824 → 29 803 (−21). `ConversationListVMOwner` quitte
+    // `RootView.swift` pour son propre fichier AVANT d'y recevoir le partage
+    // du VM de liste entre fenêtres : extraire d'abord, ajouter ensuite.
+    private static let legacyLineCeiling = 29_803
 
     // MARK: - Règle 1 — pas de 43ᵉ
 

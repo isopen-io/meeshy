@@ -7,7 +7,9 @@
  * La semaine est celle du fuseau du compte (`leagueWeekOfMoment` : le lundi
  * local qui la commence, la fermeture du dimanche 20 h comprise) — la loi
  * vient de `@meeshy/shared/utils/game/league`, rien n'est réécrit ici. On ne
- * compte que les GAINS : un débit (la frappe) ne passe jamais par ce site.
+ * compte que les GAINS : un débit (la frappe) ne passe jamais par ce site. La
+ * REPRISE d'un contenu retiré (#9584) n'est pas un débit mais l'annulation d'un
+ * gain : elle rend à la ligue ce que le contenu y avait mis (`takeBack`, #10895).
  *
  * Le fuseau est mis en cache quelques minutes : relire le compte à chaque
  * crédit ajouterait une lecture à la voie chaude.
@@ -74,6 +76,43 @@ export class GameWeekPointsRecorder {
       if (!isP2002(err)) throw err;
       await write();
     }
+  }
+
+  /**
+   * La reprise d'un gain (#10895) : la semaine où il a été CRÉDITÉ (`creditedAt`, l'instant du reçu ; absent, la
+   * semaine courante) rend `points`, d'abord sur le jour du crédit, puis sur ses autres jours, du plus récent au plus
+   * ancien — jamais sous zéro. Chaque jour se débite par une écriture CONDITIONNELLE (`points ≥ montant`) : un gain
+   * concurrent ne se fait pas écraser, et une ligne qui a bougé entre la lecture et l'écriture est relue.
+   *
+   * Une semaine déjà réglée (`LeagueSettlement`) garde son classement figé : seuls ses totaux bruts baissent.
+   *
+   * Rend les points effectivement retirés.
+   */
+  async takeBack(userId: string, points: number, creditedAt: Date = new Date()): Promise<number> {
+    if (!Number.isInteger(points) || points <= 0) return 0;
+    const timezone = await this.timezone(userId);
+    const weekKey = weekKeyOfInstant(creditedAt, timezone);
+    const creditDay = dayKeyOf(creditedAt, timezone);
+    let taken = 0;
+    for (let attempt = 0; attempt < 3 && taken < points; attempt++) {
+      const rows = await this.prisma.gameWeekPoints.findMany({
+        where: { userId, weekKey, points: { gt: 0 } },
+        select: { id: true, dayKey: true, points: true },
+        take: 8,
+      });
+      const ordered = [...rows].sort((a, b) => Number(b.dayKey === creditDay) - Number(a.dayKey === creditDay) || b.dayKey.localeCompare(a.dayKey));
+      for (const row of ordered) {
+        const share = Math.min(points - taken, row.points);
+        if (share <= 0) break;
+        const written = await this.prisma.gameWeekPoints.updateMany({
+          where: { id: row.id, points: { gte: share } },
+          data: { points: { decrement: share } },
+        });
+        if (written.count > 0) taken += share;
+      }
+      if (rows.length === 0) break;
+    }
+    return taken;
   }
 
   /** Les points par jour d'une semaine pour plusieurs comptes (absent = aucun jour). */

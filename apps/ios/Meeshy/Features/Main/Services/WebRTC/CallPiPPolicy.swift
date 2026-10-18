@@ -186,4 +186,14 @@ enum CallAudioSessionPolicy {
     static func activation(usesCallKit: Bool) -> Bool? {
         usesCallKit ? nil : true
     }
+
+    /// Faut-il rendre la session soi-même à la fin de l'appel ? Sans CallKit,
+    /// toujours. Avec CallKit, seulement si l'APP l'a activée elle-même — filet
+    /// « micro muet » quand `didActivate` n'est jamais venu, ou sonnerie in-app
+    /// promue en CallKit au passage en arrière-plan : CallKit ne l'ayant jamais
+    /// activée, `didDeactivate` ne vient pas, et la musique des autres apps
+    /// restait atténuée après l'appel.
+    static func shouldDeactivateOnEnd(usesCallKit: Bool, sessionSelfActivated: Bool) -> Bool {
+        !usesCallKit || sessionSelfActivated
+    }
 }

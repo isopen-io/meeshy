@@ -68,7 +68,9 @@ final class ConversationMenuSystemDesignGuardTests: XCTestCase {
     /// Le SEUL call site de `deleteConversation(conversationId:` dans la liste
     /// doit vivre dans le `confirmationDialog` de suppression.
     func test_deleteConversation_onlyCallSite_isInsideConfirmationDialog() throws {
+        // La confirmation vit dans l'extension qui l'ancre sur un point (iPad) : l'unité de la liste est les deux fichiers.
         let listSource = try source("Meeshy/Features/Main/Views/ConversationListView.swift")
+            + source("Meeshy/Features/Main/Views/ConversationListView+ConfirmationAnchor.swift")
 
         let callSites = listSource.components(separatedBy: "conversationViewModel.deleteConversation(conversationId:").count - 1
         XCTAssertEqual(

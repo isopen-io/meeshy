@@ -96,6 +96,13 @@ public actor MediaSessionCoordinator {
         set { _playbackLeaseLock.withLock { $0 = newValue } }
     }
     private nonisolated let _leaseObserversLock = OSAllocatedUnfairLock(initialState: false)
+    /// Compte les prises de session (lecture, enregistrement, rôle) : une
+    /// désactivation différée ne s'exécute que si aucune prise n'est survenue
+    /// depuis qu'elle a été demandée.
+    private nonisolated let _activationGeneration = OSAllocatedUnfairLock(initialState: 0)
+    private nonisolated func bumpActivationGeneration() {
+        _activationGeneration.withLock { $0 &+= 1 }
+    }
 
     /// Backing lock for `emit(_:)`. `PassthroughSubject.send(_:)` is not
     /// documented thread-safe for concurrent callers — `emit(_:)` is invoked
@@ -130,6 +137,12 @@ public actor MediaSessionCoordinator {
     #endif
 
     private init() {}
+
+    #if DEBUG
+    /// Une instance à part (tests) : le compteur du singleton est partagé avec
+    /// des suites qui tournent en parallèle et le remettent à zéro.
+    static func makeForTesting() -> MediaSessionCoordinator { MediaSessionCoordinator() }
+    #endif
 
     deinit {
         let center = NotificationCenter.default
@@ -189,6 +202,7 @@ public actor MediaSessionCoordinator {
     ) {
         installLeaseObserversIfNeeded()
         guard Self.shouldManageSession(callActive: callActive) else { return }
+        bumpActivationGeneration()
         let session = AVAudioSession.sharedInstance()
         // Independent do/catch per call — a setCategory failure must not skip the
         // setActive attempt (each used to run regardless of the other's outcome).
@@ -231,6 +245,7 @@ public actor MediaSessionCoordinator {
         options: AVAudioSession.CategoryOptions = [.defaultToSpeaker, .allowBluetoothA2DP]
     ) -> Bool {
         guard Self.shouldManageSession(callActive: callActive) else { return false }
+        bumpActivationGeneration()
         playbackLeaseHeld = false
         let session = AVAudioSession.sharedInstance()
         do {
@@ -253,6 +268,29 @@ public actor MediaSessionCoordinator {
             logger.error("deactivatePlaybackSync failed — \(error.localizedDescription, privacy: .public)")
         }
     }
+
+    /// Rend la session HORS du fil principal (`setActive(false)` est bloquant).
+    /// Le bail tombe tout de suite, pour qu'une relance immédiate réactive la
+    /// session ; et la désactivation s'efface si une prise est survenue entre la
+    /// demande et son exécution — sinon elle coupait le lecteur relancé.
+    public nonisolated func deactivatePlaybackDeferred(on queue: DispatchQueue = .global(qos: .utility)) {
+        deactivatePlaybackDeferred(on: queue) { [self] in deactivatePlaybackSync() }
+    }
+
+    nonisolated func deactivatePlaybackDeferred(on queue: DispatchQueue, deactivate: @escaping @Sendable () -> Void) {
+        playbackLeaseHeld = false
+        let generation = _activationGeneration.withLock { $0 }
+        queue.async { [self] in
+            guard _activationGeneration.withLock({ $0 }) == generation else { return }
+            deactivate()
+        }
+    }
+
+    #if DEBUG
+    /// Une prise de session, sans toucher la session réelle (tests : les
+    /// suites voisines changent `callActive` en parallèle).
+    nonisolated func noteActivationForTesting() { bumpActivationGeneration() }
+    #endif
 
     /// Pure, testable decision: may the coordinator (re)configure or tear down
     /// the shared `AVAudioSession` right now? `false` while a VoIP call owns it
@@ -317,11 +355,23 @@ public actor MediaSessionCoordinator {
         playbackOptions: AVAudioSession.CategoryOptions = [.duckOthers]
     ) async throws {
         installSystemObserversIfNeeded()
+        bumpActivationGeneration()
         playbackLeaseHeld = false
+        // Le compteur compte des DÉTENTEURS, pas des activations réussies :
+        // chaque appelant pose son drapeau avant d'attendre `request` (erreur ignorée) et rendra
+        // sa prise par `release()` même si l'activation jette. Compter après le
+        // `try` faisait retirer à ce `release()` la prise d'un autre détenteur.
+        activationCount += 1
         // Never reconfigure the shared session while a VoIP call owns it (would
         // mute the mic). The refcount still tracks holders so balancing across
         // the call boundary stays coherent.
         if Self.shouldManageSession(callActive: callActive) {
+            #if DEBUG
+            if let probe = testProbe, probe.failNextRequest {
+                probe.failNextRequest = false
+                throw MediaSessionCoordinatorTestProbe.SimulatedFailure()
+            }
+            #endif
             let session = AVAudioSession.sharedInstance()
             switch role {
             case .playback:
@@ -338,7 +388,6 @@ public actor MediaSessionCoordinator {
             }
             try session.setActive(true)
         }
-        activationCount += 1
     }
 
     /// Libère la session si personne d'autre ne l'utilise.
@@ -465,7 +514,16 @@ public actor MediaSessionCoordinator {
 /// test that owns the probe.
 public final class MediaSessionCoordinatorTestProbe: @unchecked Sendable {
     public var deactivateCount: Int = 0
+    /// Fait jeter le prochain `request(role:)` comme un `setCategory` /
+    /// `setActive` refusé par le système.
+    public var failNextRequest = false
+    public struct SimulatedFailure: Error {}
     public init() {}
+}
+
+extension MediaSessionCoordinator {
+    /// Nombre de détenteurs de la session (DEBUG, tests seulement).
+    var holdCountForTesting: Int { activationCount }
 }
 #endif
 #endif

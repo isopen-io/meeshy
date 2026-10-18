@@ -2,6 +2,7 @@ import Foundation
 import Combine
 import AVFoundation
 import MeeshySDK
+import MeeshyUI
 
 /// Le lecteur audio de l'aperçu d'appui long — un `AVPlayer` enveloppé, cache
 /// d'abord, piloté par `MessageOverlayMenu` et `MessageOverlayAudioPreview`.
@@ -35,7 +36,7 @@ import MeeshySDK
 /// > désormais l'inventaire pour que le quatrième naisse gardé.
 
 @MainActor
-final class OverlayAudioPlayer: ObservableObject {
+final class OverlayAudioPlayer: ObservableObject, StoppablePlayer {
     @Published var isPlaying = false
     @Published var progress: Double = 0
     @Published var currentTime: TimeInterval = 0
@@ -53,6 +54,49 @@ final class OverlayAudioPlayer: ObservableObject {
     nonisolated(unsafe) private var endObserver: (any NSObjectProtocol)?
     private var currentURL: String?
 
+    /// La session `.playback` (call-aware, `MediaSessionCoordinator`) : sans elle l'aperçu jouait en
+    /// `.soloAmbient`, muet sur silencieux. Injectables pour les témoins.
+    private let activateSession: () -> Void
+    private let releaseSession: () -> Void
+    private var holdsSession = false
+    private var sessionEventsCancellable: AnyCancellable?
+
+    init(
+        sessionEvents: AnyPublisher<MediaSessionCoordinator.Event, Never> = MediaSessionCoordinator.shared.events.eraseToAnyPublisher(),
+        activateSession: @escaping () -> Void = { MediaSessionCoordinator.shared.activatePlaybackSync(options: []) },
+        releaseSession: @escaping () -> Void = {
+            // `setActive(false)` est un aller-retour HAL bloquant : hors du fil principal.
+            MediaSessionCoordinator.shared.deactivatePlaybackDeferred()
+        }
+    ) {
+        self.activateSession = activateSession
+        self.releaseSession = releaseSession
+        sessionEventsCancellable = sessionEvents
+            .receive(on: DispatchQueue.main)
+            .sink { [weak self] event in self?.handleSessionEvent(event) }
+        // Exclusion mutuelle avec tout autre lecteur : sans elle, l'aperçu se superposait au vocal de la
+        // conversation, et son `stop()` rendait sous lui une session que rien ne refcompte.
+        PlaybackCoordinator.shared.registerExternal(self)
+    }
+
+    /// Interruption (appel, Siri, alarme) ou casque débranché : l'aperçu se met en pause ET le dit — sinon
+    /// `isPlaying` restait vrai sur un lecteur arrêté, et le premier appui (« pause ») ne faisait rien. Pas de reprise
+    /// automatique : c'est un aperçu, l'utilisateur relance s'il le veut.
+    private func handleSessionEvent(_ event: MediaSessionCoordinator.Event) {
+        switch event {
+        case .interruptionBegan, .routeChangedOldDeviceUnavailable:
+            avPlayer?.pause()
+            if isPlaying { isPlaying = false }
+        case .interruptionEndedShouldResume, .interruptionEndedShouldNotResume, .routeChangedOther, .callEndedShouldResume:
+            break
+        }
+    }
+
+    private func takeSession() {
+        activateSession()
+        holdsSession = true
+    }
+
     /// `Int(_:)` trappe sur une valeur non finie : un temps invalide livré pendant un changement d'item ne
     /// doit pas emporter l'app pour un pourcentage.
     var percentInt: Int { progress.isFinite ? Int(max(0, min(1, progress)) * 100) : 0 }
@@ -64,6 +108,7 @@ final class OverlayAudioPlayer: ObservableObject {
             return
         }
 
+        PlaybackCoordinator.shared.willStartPlaying(external: self)
         if currentURL != url {
             stop()
             currentURL = url
@@ -74,6 +119,8 @@ final class OverlayAudioPlayer: ObservableObject {
             return
         }
 
+        // Reprise : la session a pu être rendue ou coupée (interruption) depuis la pause.
+        takeSession()
         avPlayer?.rate = playbackRate
         isPlaying = true
     }
@@ -103,6 +150,7 @@ final class OverlayAudioPlayer: ObservableObject {
             return
         }
 
+        takeSession()
         let item = AVPlayerItem(url: playbackURL)
         avPlayer = AVPlayer(playerItem: item)
 
@@ -141,6 +189,10 @@ final class OverlayAudioPlayer: ObservableObject {
         if progress != 0 { progress = 0 }
         if currentTime != 0 { currentTime = 0 }
         if duration != 0 { duration = 0 }
+        if holdsSession {
+            holdsSession = false
+            releaseSession()
+        }
     }
 
     func seek(to fraction: Double) {

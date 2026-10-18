@@ -332,18 +332,48 @@ final class RequestsViewModelTests: XCTestCase {
     // contract on the primitive: outcome-stream + publishOutcome must
     // round-trip the terminal event exactly once.
 
+    /// `OfflineQueue.shared` est partagé par toute la suite : un identifiant FIXE pouvait croiser l'issue mémorisée
+    /// d'un autre passage, et un `for await` sans borne attendait à vie — la tranche CI dépassait ses 3 minutes au
+    /// lieu d'échouer. Identifiant unique, attente bornée.
     func test_acceptReject_outcomeStream_exhaustedFires_rollbackContract() async {
-        let cmid = "requests-rollback-001"
+        let cmid = "requests-rollback-\(UUID().uuidString)"
         let stream = await OfflineQueue.shared.outcomeStream(for: cmid)
         await OfflineQueue.shared.publishOutcome(.exhausted(cmid: cmid))
 
-        var collected: [OutboxOutcome] = []
-        for await event in stream {
-            collected.append(event)
+        let collected = await withTaskGroup(of: [OutboxOutcome]?.self) { group -> [OutboxOutcome]? in
+            group.addTask {
+                var events: [OutboxOutcome] = []
+                for await event in stream { events.append(event) }
+                return events
+            }
+            group.addTask {
+                try? await Task.sleep(nanoseconds: 5_000_000_000)
+                return nil
+            }
+            let first = await group.next() ?? nil
+            group.cancelAll()
+            return first
         }
 
-        XCTAssertEqual(collected.count, 1)
-        XCTAssertEqual(collected.first, .exhausted(cmid: cmid))
+        XCTAssertNotNil(collected, "le flux d'issue doit se terminer après l'issue terminale — jamais attendre à vie")
+        XCTAssertEqual(collected, [.exhausted(cmid: cmid)])
+    }
+
+    /// Accepter A puis B ; la file refuse A plus tard. L'instantané pris avant
+    /// A ramenait B — déjà acceptée — à côté de A.
+    func test_accept_lateExhaustedOutcome_restoresOnlyThatRequest() async throws {
+        let (sut, _, queue) = makeSUTWithQueue()
+        sut.receivedRequests = ["A", "B", "C"].map { FriendRequestFixture.make(id: $0, status: "pending") }
+
+        await sut.accept(requestId: "A")
+        let cmidA = try XCTUnwrap((queue.lastPayload as? RespondFriendRequestPayload)?.clientMutationId)
+        await sut.accept(requestId: "B")
+        try await waitForCondition(timeout: 2) { queue.outcomeContinuations[cmidA] != nil }
+
+        queue.emitOutcome(.exhausted(cmid: cmidA), for: cmidA)
+        try await waitForCondition(timeout: 2) { sut.receivedRequests.contains { $0.id == "A" } }
+
+        XCTAssertEqual(sut.receivedRequests.map(\.id), ["A", "C"])
     }
 
     // MARK: - Pagination

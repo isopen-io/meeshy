@@ -11,14 +11,8 @@ struct SharedContentWrapper: Identifiable {
     let content: SharedContentType
 }
 
-/// Wrapper used by `StoryViewerView.fullScreenCover(item:)` to drive the
-/// repost-as-post composer launched from the kebab menu's "Editer et republier
-/// en post" action (C.2). Feeds the
-/// `UnifiedPostComposer(repostingStory:authorHandle:onPublishRepost:onDismiss:)`
-/// init introduced in B.7 — the sole surviving repost-as-story wrapper (the
-/// share-button-based `RepostStorySourceWrapper` cover was dead code, removed
-/// S6: the share button reposts directly via `PostService.repost`, see
-/// `StoryViewerView+Sidebar.swift`).
+/// La story republiée et le `@handle` de son auteur, remis à
+/// `StoryRepublishComposer` (badge d'attribution verrouillé).
 struct RepostPostSourceWrapper: Identifiable {
     let id = UUID()
     let story: StoryItem
@@ -116,6 +110,7 @@ struct StoryViewerView: View {
     static let heartEmoji = MeeshyQuickReactions.heart
 
     @State var currentStoryIndex = 0 // internal for cross-file extension access
+    @State var reanchoredStoryId: String? // `reanchorPosition` (+Navigation)
     @State private var postRoomLedger = StoryPostRoomLedger()
     /// La progression vit dans une horloge que SEULE la barre observe (#9859) :
     /// tenue par référence, jamais observée ici, elle ne réévalue pas le lecteur.
@@ -414,11 +409,10 @@ struct StoryViewerView: View {
     /// presentation.
     @State var hasTriggeredInitialAction = false
 
-    // Use the active window bounds rather than `UIScreen.main.bounds` so
-    // iPad split-screen / Stage Manager / multi-window scenes report the
-    // viewer's actual window (UIScreen reports the full display). Used by
-    // swipe-to-dismiss thresholds and horizontal-slide normalization.
-    private var windowSize: CGSize { DeviceLayout.windowSize }
+    // La fenêtre qui PORTE le viewer (publiée par sa racine), pas la fenêtre clé : Stage Manager, Split View, fenêtre
+    // détachée. Seuils du glisser-fermer et normalisation du glissement horizontal.
+    @Environment(\.sceneWindowSize) private var sceneWindowSize
+    private var windowSize: CGSize { SceneWindowSize.resolve(sceneWindowSize, fallback: DeviceLayout.windowSize) }
 
     /// Encart bas MESURÉ par la mise en page (`measuringBottomSafeArea`), jamais
     /// lu sur la fenêtre pendant `body` (#10566) : le `GeometryReader` interne,
@@ -655,7 +649,9 @@ struct StoryViewerView: View {
             slideTimer.markContentReady(slideId: id)
             prepareNeighborWindow()
         }
+        .adaptiveOnChange(of: StoryViewerPosition.shapes(of: groups)) { old, new in reanchorPosition(from: old, to: new) }
         .adaptiveOnChange(of: currentStoryIndex) { oldValue, _ in
+            guard !isReanchoringSameStory else { return }
             // **La légende se replie à CHAQUE changement de story.** Laissée
             // dépliée, elle garde `shouldPauseTimer` vrai sur la story SUIVANTE
             // — qui ne repart alors jamais. Une pause dont la cause a disparu
@@ -763,6 +759,7 @@ struct StoryViewerView: View {
             }
         }
         .adaptiveOnChange(of: currentGroupIndex) { oldValue, _ in
+            guard !isReanchoringSameStory else { return }
             // **La légende se replie à CHAQUE changement de story.** Laissée
             // dépliée, elle garde `shouldPauseTimer` vrai sur la story SUIVANTE
             // — qui ne repart alors jamais. Une pause dont la cause a disparu
@@ -891,64 +888,6 @@ struct StoryViewerView: View {
                 accentColor: currentGroup?.avatarColor ?? MeeshyColors.brandPrimaryHex,
                 senderName: currentGroup?.username
             )
-        }
-        // **« Éditer et republier en POST » — la MÊME porte, ouverte ailleurs**
-        // (#5055).
-        //
-        // Ce cover montait `UnifiedPostComposer`, le dernier composer historique
-        // présenté nu du dépôt. Il n'avait plus de raison d'être depuis #5053 :
-        // la porte de republication offre `[.story, .post]` par son éventail, et
-        // publier en post y est un ANCRAGE — le même `POST /posts/:id/repost`,
-        // la même charge (`comment` + lien vers l'original).
-        //
-        // Ce que le geste apporte encore, et qui justifie de le GARDER plutôt
-        // que de le fondre dans « Republier » : l'auteur a DIT son format. La
-        // porte ouvre donc dessus, sans le lui redemander — et l'éventail reste
-        // peint, donc il peut changer d'avis (loi 9).
-        //
-        // ÉCART ASSUMÉ : `UnifiedPostComposer` reprojetait la scène de la story
-        // dans sa surface d'édition (`CanvasReprojector`, `onStoryImported`).
-        // Le meuble ouvert en `.post` monte la surface DOCUMENT — du texte, une
-        // audience. La scène n'est pas perdue : un geste sur l'éventail la
-        // ramène. La CHARGE publiée, elle, est identique — les deux chemins
-        // n'envoyaient jamais que le commentaire et le lien.
-        .fullScreenCover(item: $editAndRepostAsPostSource, onDismiss: { resumeTimer() }) { wrapper in
-            StoryRepublishComposer(
-                source: wrapper,
-                viewModel: viewModel,
-                onFinish: { editAndRepostAsPostSource = nil },
-                opening: .post
-            )
-            .environmentObject(router)
-            .conversationListObject(conversationListViewModel)
-            .environmentObject(statusViewModel)
-        }
-        // **Republication en STORY — par le MEUBLE** (#5053).
-        //
-        // Ce cover montait `StoryComposerView` NU jusqu'au 2026-09-03 : ni
-        // éventail de format, ni plateau, ni socle. La table des portes déclare
-        // pourtant l'ANCRAGE en post depuis le lot 4.7 (« garder la chose pour
-        // de bon ») — l'option était écrite et n'atteignait aucun écran.
-        //
-        // Tout ce qu'il portait — hydratation, plafond d'audience, `repostOfId`,
-        // fournisseurs d'environnement — vit désormais dans
-        // `StoryRepublishComposer`, une porte à part. L'extraction n'est pas un
-        // rangement de passage : ce fichier fait 2 400 lignes, très au-delà du
-        // plafond DUR de 1 200, et la directive de budget interdit d'AJOUTER à
-        // un fichier hors budget avant d'avoir extrait.
-        .fullScreenCover(item: $republishStorySource, onDismiss: { resumeTimer() }) { wrapper in
-            StoryRepublishComposer(
-                source: wrapper,
-                viewModel: viewModel,
-                onFinish: { republishStorySource = nil }
-            )
-            // Les trois modèles d'environnement ne traversent PAS un
-            // `fullScreenCover` (cf. la remarque de ce fichier, l. 263). La
-            // porte les redéclare en `@EnvironmentObject` ; c'est ici qu'ils
-            // lui sont remis.
-            .environmentObject(router)
-            .conversationListObject(conversationListViewModel)
-            .environmentObject(statusViewModel)
         }
     }
 
@@ -1248,51 +1187,6 @@ struct StoryViewerView: View {
         }
     }
 
-    /// Republication SÈCHE d'une story dans le fil (`isQuote: false`), avec ses
-    /// deux refus NOMMÉS : 404 = la source a disparu, 403 = l'audience demandée
-    /// élargit celle de l'original.
-    ///
-    /// **Ces deux refus étaient INATTEIGNABLES avant le lot 7.5, et le
-    /// doc-comment affirmait le contraire** : il disait « errors are mapped
-    /// against `APIError.serverError` ... since that's the shape `APIClient`
-    /// throws ». C'est faux — mesuré : les vingt-cinq `throw` d'`APIClient`
-    /// lancent tous `MeeshyError`, et pas un seul `APIError`. Les deux `catch`
-    /// typés ne s'exécutaient donc jamais, et TOUT refus tombait dans le
-    /// fourre-tout « Échec de la republication ». Un utilisateur dont la story
-    /// avait simplement expiré n'apprenait rien.
-    ///
-    /// La classification vit désormais dans `RepostFailure`, avec les mêmes
-    /// verdicts que la file durable applique de son côté
-    /// (`OutboxFlusher.isPermanentServerRejection`) : un seul endroit à
-    /// corriger le jour où le gateway changera de forme.
-    private func repostAsPostDirect() {
-        guard let story = currentStory else { return }
-        HapticFeedback.light()
-        Task {
-            do {
-                try await RepostPublisher.shared.publish(
-                    .simple(postId: story.id, targetType: .post, visibility: nil)
-                )
-                await MainActor.run {
-                    HapticFeedback.success()
-                    FeedbackToastManager.shared.show(String(localized: "story.repost.success", defaultValue: "Republié dans ton feed", bundle: .main))
-                }
-            } catch {
-                let verdict = RepostFailure.classify(error)
-                await MainActor.run {
-                    switch verdict {
-                    case .sourceGone:
-                        FeedbackToastManager.shared.showError(String(localized: "story.repost.error.unavailable", defaultValue: "La story n'est plus disponible", bundle: .main))
-                    case .audienceWidening:
-                        FeedbackToastManager.shared.showError(String(localized: "story.repost.error.forbidden", defaultValue: "Cette story ne peut pas être repartagée", bundle: .main))
-                    case .other:
-                        FeedbackToastManager.shared.showError(String(localized: "story.repost.error.generic", defaultValue: "Échec de la republication", bundle: .main))
-                    }
-                }
-            }
-        }
-    }
-
     // MARK: - External share URL builder
 
     /// Builds the public web URL surfaced through ShareLink so the story can
@@ -1345,13 +1239,6 @@ struct StoryViewerView: View {
     /// sidebar.
     @State private var heartBouncePulse: Int = 0
     @State var sharedContentWrapper: SharedContentWrapper? // internal : cause de boucle (#9821)
-    @State private var editAndRepostAsPostSource: RepostPostSourceWrapper?
-    /// Republication d'une story d'AUTRUI dans une story à soi — ouvre le
-    /// composeur prérempli (« Phase C » annoncée depuis l'écriture de
-    /// `StoryComposerViewModel.init(reposting:authorHandle:)`, restée sans
-    /// appelant jusqu'au 2026-08-19). Remplace l'ancien repost un-tap côté
-    /// serveur, qui ne laissait ni ajouter de texte ni choisir l'audience.
-    @State private var republishStorySource: RepostPostSourceWrapper?
     /// Lieu de la story ouvert plein écran (tap sur une pastille de position).
     @State private var readerFullscreenPlace: StoryReaderPlaceWrapper?
 
@@ -1492,8 +1379,6 @@ struct StoryViewerView: View {
             isComposerEngaged: $isComposerEngaged,
             hasComposerContent: $hasComposerContent,
             sharedContentWrapper: $sharedContentWrapper,
-            republishStorySource: $republishStorySource,
-            editAndRepostAsPostSource: $editAndRepostAsPostSource,
             readerFullscreenPlace: $readerFullscreenPlace,
             isPresented: $isPresented,
             selectedProfileUser: $selectedProfileUser,
@@ -1535,12 +1420,12 @@ struct StoryViewerView: View {
             toggleStoryCommentThread: { await toggleStoryCommentThread($0) },
             makeStoryExternalShareURL: { makeStoryExternalShareURL($0) },
             deleteCurrentStory: { deleteCurrentStory() },
-            repostAsPostDirect: { repostAsPostDirect() },
             dismissViewer: { dismissViewer() },
             reportStory: { storyId, reportType, reason in
                 try await ReportService.shared.reportStory(storyId: storyId, reportType: reportType, reason: reason)
             },
             composerBottomPadding: { composerBottomPadding(geometry: $0) },
+            windowBottomInset: windowBottomInset,
             makeCommentsOverlay: { storyCommentsOverlayHost() }
         )
     }
@@ -2117,11 +2002,7 @@ extension StoryViewerView {
         groupIntroTask = nil
         dismissGroupIntro(revealing: false)
         guard currentGroupIndex > 0 else { return }
-        groupTransition(forward: false) {
-            currentGroupIndex -= 1
-            currentStoryIndex = max(0, groups[currentGroupIndex].stories.count - 1)
-            progressClock.reset()
-        }
+        groupTransition(forward: false) { landOnPreviousGroup() }
     }
 
     /// - Parameter revealing: `true` quand le retrait de l'interlude DÉVOILE la

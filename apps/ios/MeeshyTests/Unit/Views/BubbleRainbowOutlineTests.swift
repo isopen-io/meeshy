@@ -50,7 +50,7 @@ final class BubbleRainbowOutlineTests: XCTestCase {
         let layout = AppSourceGuard.stripComments(try AppSourceGuard.unit("Meeshy/Features/Main/Views/Bubble/BubbleStandardLayout.swift"))
         let effect = try XCTUnwrap(layout.range(of: ".messageEffects(message.effects)"))
         let reactions = try XCTUnwrap(layout.range(of: ".overlay(alignment: isMe ? .bottomLeading : .bottomTrailing)"))
-        let cap = try XCTUnwrap(layout.range(of: ".frame(maxWidth: DeviceLayout.bubbleMaxWidth(sizeClass: horizontalSizeClass)"))
+        let cap = try XCTUnwrap(layout.range(of: ".frame(maxWidth: DeviceLayout.bubbleMaxWidth(sizeClass: horizontalSizeClass, containerWidth: bubbleContainerWidth)"))
         XCTAssertLessThan(effect.lowerBound, reactions.lowerBound)
         XCTAssertLessThan(effect.lowerBound, cap.lowerBound)
     }

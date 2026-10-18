@@ -30,12 +30,12 @@ public struct GameBlock: Codable, Sendable, Equatable {
         /// La lecture ouverte par le rang (#9688) — `nil` devant un serveur antérieur. Les champs voisins
         /// gardent l'ANCIENNE loi sur le fil (niveau borné à 100, dix paliers) pour les clients publiés.
         public let ladder: Ladder?
-        /// LES ÉTINCELLES (#10846) — `nil` devant un serveur antérieur. `score` lit désormais le CYCLE.
-        /// La poche : ce que la frappe dépense.
+        /// LES ÉTINCELLES (#10846) — `nil` devant un serveur antérieur. `score` lit la POCHE (#10892).
+        /// La poche : ce que la frappe dépense, et la base du niveau — la frappe le fait baisser.
         public let sparks: Int?
-        /// Accumulées depuis le dernier prestige — la base du niveau.
+        /// Accumulées depuis le dernier prestige — indicatif (#10892), jamais la base du niveau.
         public let sparksCycle: Int?
-        /// Accumulées à vie.
+        /// Accumulées à vie — indicatif.
         public let sparksLifetime: Int?
         /// Le niveau max à vie, sans la borne de 100 — survit au prestige.
         public let levelMaxLifetime: Int?
@@ -86,11 +86,16 @@ public struct GameBlock: Codable, Sendable, Equatable {
             public let steps: GameLevelStepCounts?
             /// Le niveau max à vie (#10846) : il survit au prestige. `nil` devant un serveur antérieur.
             public let levelMaxLifetime: Int?
+            /// Le record de chaque cycle CLOS par un Prestige, le plus ancien d'abord (#10911) : combien de fois un
+            /// niveau a été atteint, tous cycles confondus. `nil` devant un serveur antérieur.
+            public let pastCycleRecords: [Int]?
 
             public init(level: Int, tier: LevelTierKey, floorScore: Int, nextThreshold: Int?, pointsToNext: Int,
                         progress: Double, record: Int, cap: Int?, isMax: Bool, held: Bool = false,
-                        step: GameLevelStep? = nil, steps: GameLevelStepCounts? = nil, levelMaxLifetime: Int? = nil) {
+                        step: GameLevelStep? = nil, steps: GameLevelStepCounts? = nil, levelMaxLifetime: Int? = nil,
+                        pastCycleRecords: [Int]? = nil) {
                 self.levelMaxLifetime = levelMaxLifetime
+                self.pastCycleRecords = pastCycleRecords
                 self.level = level
                 self.tier = tier
                 self.floorScore = floorScore
@@ -107,7 +112,7 @@ public struct GameBlock: Codable, Sendable, Equatable {
 
             private enum CodingKeys: String, CodingKey {
                 case level, tier, floorScore, nextThreshold, pointsToNext, progress, record, cap, isMax, held, step, steps
-                case levelMaxLifetime
+                case levelMaxLifetime, pastCycleRecords
             }
 
             /// Les trois champs des étapes (#9706) sont OPTIONNELS et tolérés : illisibles (une sorte d'étape
@@ -127,6 +132,8 @@ public struct GameBlock: Codable, Sendable, Equatable {
                 step = (try? container.decodeIfPresent(GameLevelStep.self, forKey: .step)) ?? nil
                 steps = (try? container.decodeIfPresent(GameLevelStepCounts.self, forKey: .steps)) ?? nil
                 levelMaxLifetime = GameSparks.count(container, .levelMaxLifetime)
+                // Toléré : illisible, il se tait — la loi relit alors chaque cycle clos au niveau du Prestige.
+                pastCycleRecords = (try? container.decodeIfPresent([Int].self, forKey: .pastCycleRecords)) ?? nil
             }
         }
 

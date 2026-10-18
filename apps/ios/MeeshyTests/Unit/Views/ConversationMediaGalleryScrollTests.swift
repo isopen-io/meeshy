@@ -340,6 +340,10 @@ final class ConversationMediaGalleryScrollTests: XCTestCase {
     func test_filmstrip_measuresTheWindow_notTheDisplay() throws {
         let code = AppSourceGuard.stripComments(try source(Self.filmstrip))
         XCTAssertFalse(code.contains("UIScreen.main"))
-        XCTAssertTrue(code.contains("DeviceLayout.windowSize"))
+        // La largeur de SA fenêtre, publiée par la racine et connue dès le premier rendu (cycle 8) : ni l'écran, ni
+        // la fenêtre clé (fausse sous Stage Manager), ni une mesure corrigée après coup (vignette décalée d'un pas).
+        XCTAssertTrue(code.contains(
+            "FilmstripMetrics.leadingInset(containerWidth: SceneWindowSize.resolve(sceneWindowSize, fallback: DeviceLayout.windowSize).width)"))
+        XCTAssertFalse(code.contains("onGeometryChange"), "une largeur mesurée après coup décale la bande déjà calée")
     }
 }

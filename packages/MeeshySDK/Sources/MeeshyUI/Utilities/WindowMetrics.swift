@@ -12,7 +12,14 @@ import UIKit
 /// `connectedScenes.first`: `connectedScenes` is an unordered `Set`, so
 /// `.first` routinely hands back a background scene under multi-window.
 enum WindowMetrics {
+    /// Miroir de `DeviceLayout.activeWindowScene` : deux scènes au premier plan (fenêtre détachée) — celle qui tient la
+    /// fenêtre clé l'emporte.
     private static var activeWindowScene: UIWindowScene? {
+        for scene in UIApplication.shared.connectedScenes {
+            guard let windowScene = scene as? UIWindowScene, windowScene.activationState == .foregroundActive,
+                  windowScene.keyWindow != nil else { continue }
+            return windowScene
+        }
         for scene in UIApplication.shared.connectedScenes {
             guard let windowScene = scene as? UIWindowScene,
                   windowScene.activationState == .foregroundActive else { continue }
@@ -34,6 +41,12 @@ enum WindowMetrics {
     /// background refresh) — no layout is happening then.
     static var windowSize: CGSize {
         activeWindow?.bounds.size ?? UIScreen.main.bounds.size
+    }
+
+    /// Trame de la fenêtre active en coordonnées d'ÉCRAN — l'espace des trames de clavier. `nil` sans fenêtre.
+    static var activeWindowFrameInScreen: CGRect? {
+        guard let window = activeWindow else { return nil }
+        return window.convert(window.bounds, to: window.screen.coordinateSpace)
     }
 
     /// Safe-area insets of the window the app is actually rendered in. `.zero`

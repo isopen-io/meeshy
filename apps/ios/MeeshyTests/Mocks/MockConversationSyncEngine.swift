@@ -106,10 +106,28 @@ final class MockConversationSyncEngine: ConversationSyncEngineProviding, @unchec
     var setCurrentlyOpenConversationCallCount = 0
     var lastSetCurrentlyOpenConversationId: String?
     var currentlyOpenConversationId: String?
+    var openCounts: [String: Int] = [:]
+    var openConversationCalls: [String] = []
+    var closeConversationCalls: [String] = []
+    var openConversationIds: Set<String> { Set(openCounts.keys) }
+    func openConversation(_ conversationId: String) {
+        openConversationCalls.append(conversationId)
+        openCounts[conversationId, default: 0] += 1
+        currentlyOpenConversationId = conversationId
+    }
+    func closeConversation(_ conversationId: String) {
+        closeConversationCalls.append(conversationId)
+        guard let count = openCounts[conversationId] else { return }
+        if count > 1 { openCounts[conversationId] = count - 1 } else { openCounts.removeValue(forKey: conversationId) }
+        if currentlyOpenConversationId == conversationId, openCounts[conversationId] == nil {
+            currentlyOpenConversationId = openCounts.keys.sorted().last
+        }
+    }
     func setCurrentlyOpenConversation(_ conversationId: String?) {
         setCurrentlyOpenConversationCallCount += 1
         lastSetCurrentlyOpenConversationId = conversationId
         currentlyOpenConversationId = conversationId
+        openCounts = conversationId.map { [$0: 1] } ?? [:]
     }
 
     // MARK: - Simulation Helpers
@@ -148,6 +166,9 @@ final class MockConversationSyncEngine: ConversationSyncEngineProviding, @unchec
         setCurrentlyOpenConversationCallCount = 0
         lastSetCurrentlyOpenConversationId = nil
         currentlyOpenConversationId = nil
+        openCounts = [:]
+        openConversationCalls = []
+        closeConversationCalls = []
         onSyncSinceLastCheckpoint = nil
     }
 }

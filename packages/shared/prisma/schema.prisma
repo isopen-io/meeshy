@@ -207,6 +207,8 @@ model User {
   emailVerificationToken  String? // Token de vérification email (hash SHA-256)
   emailVerificationCode   String? // Code OTP 6 chiffres pour vérification mobile
   emailVerificationExpiry DateTime? // Expiration du token (24h par défaut)
+  /// #10872 — empreinte SHA-256 du secret de l'appareil qui a DEMANDÉ le lien ; null ⇒ lien non lié (confirmation exigée)
+  emailVerificationDeviceHash String?
   phoneVerifiedAt         DateTime?
   phoneVerificationCode   String? // Code SMS 6 chiffres (hashé)
   phoneVerificationExpiry DateTime? // Expiration du code (10 min par défaut)
@@ -345,6 +347,13 @@ model User {
   /// les ligues et le duo après un prestige (conformité G-5 : le record « tous
   /// cycles »). Monte avec le niveau, ne baisse jamais. Absent = lu sur `levelRecord`.
   levelMaxLifetime    Int?
+  /// LE RECORD DE CHAQUE CYCLE CLOS (#10911) — un entier par Prestige, le plus ancien
+  /// d'abord, ajouté par le passage lui-même (`push` dans son écriture conditionnelle :
+  /// une fois par Prestige, jamais au rejeu). Il dit combien de fois un niveau a été
+  /// atteint, tous cycles confondus (la photo d'un palier refaite « ×2 »). Absent ou plus
+  /// court que `prestige` pour un compte passé avant : chaque cycle manquant a atteint au
+  /// moins le niveau 100 (`levelReachCount`, `@meeshy/shared/utils/game/photo-catch-up`).
+  prestigeLevelRecords Int[]
   /// LES ÉTINCELLES DU CYCLE (#10846) — accumulées depuis le dernier prestige. C'est
   /// elle que le NIVEAU lit : la frappe ne la touche jamais, donc ne fait plus
   /// baisser le niveau. Remise à 0 par le prestige. BigInt (`long`) : le niveau est
@@ -364,6 +373,12 @@ model User {
   /// déjà dépensée à la frappe. Déduite des prochaines étincelles gagnées (poche seule : cycle et total à vie montent
   /// du gain entier) ; tant qu'elle est > 0, la frappe est refusée (`MINT_BLOCKED_BY_DEBT`). Absente = 0. BigInt (`long`).
   sparksDebt BigInt?
+  /// LA RÉVISION DE L'ÉTAT DU JEU (#10912) — horloge logique hybride PAR COMPTE, gravée avec l'état : chaque écriture du
+  /// jeu (frappe, crédit, reprise, Prestige, dépense de Meesh, Gloire…) y pose `max(maintenant, révision lue + 1)` dans la
+  /// même écriture, donc elle ne recule jamais, quelles que soient les horloges des passerelles. Les lectures servent
+  /// celle-ci (`gameRevision` sur le fil), jamais l'heure de la réponse. Absente : la lecture sert l'instant, comme avant.
+  /// BigInt (`long`) : des millisecondes depuis l'époque.
+  gameRevision BigInt?
   /// Passages en Prestige (0..5). Absent = 0.
   prestige            Int?
   /// Gels de Flamme en réserve (0..2). Absent = 0.
@@ -3685,6 +3700,11 @@ model PushToken {
   /// Last time this token was successfully used to send a notification
   lastUsedAt DateTime?
 
+  /// Last time the device (re)registered this token — clients register at every
+  /// launch. Unlike `updatedAt`, a successful send does not touch it, so it says
+  /// which installs are still alive. Null on rows older than #10856.
+  registeredAt DateTime?
+
   /// Number of consecutive failed delivery attempts (for cleanup)
   failedAttempts Int @default(0)
 
@@ -5308,9 +5328,11 @@ model EngagementCounter {
   /// avec un multiplicateur ×5, ce qui viderait toute comparaison entre
   /// comptes de son sens.
   ///
-  /// L'invariant tenu par le service est `User.engagementScore == Σ(points)`.
-  /// Il remplace `Σ(count × poids)`, que l'accélérateur d'élan (#5749) rendra
-  /// faux dès qu'un point sera crédité à un facteur autre que 1.
+  /// Un crédit écrit le même montant ici et à la poche (`User.engagementScore`),
+  /// une reprise les débite ensemble ; la frappe débite la poche SEULE (#10846).
+  /// `engagementScore == Σ(points)` n'est donc plus un invariant. Celui de la
+  /// poche (#10892) : `sparksEarnedLifetime − engagementScore + sparksDebt ==
+  /// Σ(prix des frappes) + Σ(poches vidées au Prestige)`.
   points    Int      @default(0)
   updatedAt DateTime @updatedAt
 

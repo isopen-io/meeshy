@@ -31,6 +31,7 @@ import { guestAccessEnd } from '../../services/guestAccessEnd';
 import { GuestLinkWatch, refuseExpiredGuestLink, refuseRevokedGuest } from './guestLinkWatch';
 import { accountIsDeleted, type DeletedAccountReader } from '../../services/auth/account-deleted';
 import { AUTH_ERROR_CODES } from '../../utils/auth-error-codes';
+import { LIVE_CALL_PARTICIPATION } from '../../services/calls/liveCallParticipations';
 
 const logger = enhancedLogger.child({ module: 'AuthHandler' });
 
@@ -715,12 +716,7 @@ export class AuthHandler {
     if (isAnonymous) {
       try {
         const activeParticipations = await this.prisma.callParticipant.findMany({
-          where: {
-            // Audit C5 (2026-07-02) — `{leftAt: null}` alone misses Mongo docs
-            // whose leftAt field was never written (pre-C5 participants).
-            OR: [{ leftAt: null }, { leftAt: { isSet: false } }],
-            participant: { id: userIdOrToken }
-          },
+          where: { ...LIVE_CALL_PARTICIPATION, participantId: userIdOrToken },
           include: {
             callSession: true
           }

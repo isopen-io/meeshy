@@ -131,6 +131,9 @@ final class CallManager: ObservableObject {
                 // lirait déjà `false` — d'où ce push synchrone.
                 ConversationAudioCoordinator.shared.suspendForSystemCall()
                 PlaybackCoordinator.shared.stopAll()
+                // Les ENREGISTREURS aussi : un vocal en cours capturait l'appel
+                // (arrivé par le socket, sans interruption système).
+                RecorderCallGuard.shared.stopAllForCall()
             }
 
             // Retour au repos : rendre les surfaces système au lecteur de vocaux.
@@ -680,6 +683,9 @@ final class CallManager: ObservableObject {
     /// One-shot stuck-muted fallback (§RC-2): armed when `.connected` is
     /// reached on iPhone/iPad before CallKit delivered `provider:didActivate:`.
     var audioActivationFallbackTask: Task<Void, Never>?
+    /// L'app a activé la session elle-même pendant cet appel (sonnerie in-app,
+    /// filet « micro muet ») : elle devra la rendre, CallKit ou pas.
+    var audioSessionSelfActivated = false
     var voipFreshnessTask: Task<Void, Never>?
     var pendingRemoteOffer: SessionDescription?
     // P0-3 — ICE candidates generated while the socket is down are buffered

@@ -351,7 +351,7 @@ final class FloatingCallPillViewTests: XCTestCase {
             encoding: .utf8
         )
         XCTAssertTrue(
-            AppSourceGuard.stripComments(band).contains(".offset(y: -DeviceLayout.safeAreaTop)"),
+            AppSourceGuard.stripComments(band).contains(".offset(y: -topInset)"),
             "…et c'est `TopChromeBand` qui remonte dans la bande système " +
             "jusqu'au bord haut du viewport, pour l'appel COMME pour l'écoute."
         )

@@ -67,14 +67,22 @@ export const shownStanding = (standing: ServedStanding | null): (Omit<ServedStan
   standing === null ? null : { ...standing, level: standing.ladder?.level ?? standing.level, tier: standing.ladder?.tier ?? standing.tier };
 
 /**
- * LES ÉTINCELLES, TELLES QUE L'ÉCRAN LES LIT (porteur, 2026-10-16) : la POCHE en grand (`sparks`, ce que la frappe
- * dépense), le TOTAL à vie en petit dessous (`sparksLifetime`), la dette à rembourser. Devant un serveur antérieur, la
- * poche est l'ancien score (`score`), le total à vie n'est pas inventé (`null`) et il n'y a pas de dette.
+ * LES ÉTINCELLES, TELLES QUE L'ÉCRAN LES LIT (porteur, 2026-10-16 puis 2026-10-17) : les CONVERTIBLES en grand
+ * (`sparks`, toute la poche, ce que la frappe dépense — la seule valeur réelle), et en petit dessous le CYCLE (`sparksCycle`,
+ * accumulé depuis le dernier Prestige) rapporté au TOTAL à vie (`sparksLifetime`), puis la dette à rembourser. Devant un
+ * serveur antérieur, la poche est l'ancien score (`score`), ni le cycle ni le total à vie ne sont inventés (`null`) et il
+ * n'y a pas de dette.
  */
-export type SparksReading = { readonly pocket: number; readonly lifetime: number | null; readonly debt: number };
+export type SparksReading = {
+  readonly pocket: number;
+  readonly cycle: number | null;
+  readonly lifetime: number | null;
+  readonly debt: number;
+};
 
 export const sparksReading = (level: GameBlock['level']): SparksReading => ({
   pocket: level.sparks ?? level.score,
+  cycle: level.sparksCycle ?? null,
   lifetime: level.sparksLifetime ?? null,
   debt: level.sparksDebt ?? 0,
 });

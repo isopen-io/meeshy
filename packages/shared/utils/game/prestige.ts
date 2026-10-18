@@ -39,6 +39,25 @@ export type PrestigeTransition =
   | { readonly allowed: false; readonly reason: 'level-too-low' | 'at-maximum' };
 
 /**
+ * LE RECORD DU CYCLE QUE LE PRESTIGE CLÔT (#10911) — le plus haut du record gravé et du niveau, jamais sous le niveau
+ * du Prestige (le passage l'exige). Gardé, cycle après cycle, dans `User.prestigeLevelRecords` : c'est lui qui dit combien
+ * de fois un niveau a été atteint, tous cycles confondus (`levelReachCount`).
+ */
+export const closedCycleRecord = (params: { readonly levelRecord: number | null; readonly level: number }): number =>
+  Math.max(GAME_PRESTIGE_LEVEL, Math.trunc(params.levelRecord ?? 0), Math.trunc(params.level));
+
+/**
+ * Les records des cycles clos après un Prestige — l'optimiste rejoue l'écriture de la passerelle. Devant un serveur qui
+ * ne les sert pas (`undefined`), rien ne s'invente : la loi relit alors chaque cycle clos au niveau du Prestige.
+ */
+export const pastCycleRecordsAfterPrestige = (params: {
+  readonly pastCycleRecords: readonly number[] | undefined;
+  readonly levelRecord: number | null;
+  readonly level: number;
+}): readonly number[] | undefined =>
+  params.pastCycleRecords === undefined ? undefined : [...params.pastCycleRecords, closedCycleRecord(params)];
+
+/**
  * Le niveau 100 demande un million de points ET ses dix étapes (#9706) : le record prouve les étapes
  * (`levelForUnlocks`), le score en poche prouve les points.
  */

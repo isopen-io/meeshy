@@ -115,6 +115,52 @@ final class MediaGalleryStageGeometryTests: XCTestCase {
                        "la hauteur rendue au cadre est celle que le rail ne prend plus")
     }
 
+    // MARK: - Une vidéo n'a pas de plancher
+
+    /// **Le cadre d'une vidéo épouse son ratio** : le plancher de 330 pt ne
+    /// s'applique qu'aux natures dont l'overlay a besoin de place. Le témoin
+    /// tombe sur une 16:9 (cadre court) — sur une 9:16 les deux règles rendent
+    /// le même cadre.
+    func test_carded_wideVideo_frameHugsItsRatio_noBands() {
+        let video = MediaGalleryStage.resolve(
+            viewport: Self.viewport,
+            mediaRatio: 16.0 / 9.0,
+            presentation: .carded,
+            corridors: corridors(mediaCount: 1),
+            kind: .video
+        )
+
+        XCTAssertEqual(video.frame.height, video.media.height, accuracy: 0.5)
+        XCTAssertEqual(video.frame.width, video.media.width, accuracy: 0.5)
+        XCTAssertFalse(video.letterboxes)
+        XCTAssertLessThan(video.frame.height, MediaGalleryStage.minimumFrameHeight)
+    }
+
+    func test_carded_wideImage_keepsItsFloor() {
+        let image = MediaGalleryStage.resolve(
+            viewport: Self.viewport,
+            mediaRatio: 16.0 / 9.0,
+            presentation: .carded,
+            corridors: corridors(mediaCount: 1),
+            kind: .image
+        )
+
+        XCTAssertEqual(image.frame.height, MediaGalleryStage.minimumFrameHeight, accuracy: 0.5)
+    }
+
+    func test_full_video_takesTheWholeViewport() {
+        let video = MediaGalleryStage.resolve(
+            viewport: Self.viewport,
+            mediaRatio: 16.0 / 9.0,
+            presentation: .full,
+            corridors: corridors(mediaCount: 6),
+            kind: .video
+        )
+
+        XCTAssertEqual(video.frame, Self.viewport)
+        XCTAssertEqual(video.cornerRadius, 0)
+    }
+
     // MARK: - Le plancher se DÉRIVE
 
     /// 330 n'est pas un choix : c'est trois fois la hauteur de l'overlay, pour

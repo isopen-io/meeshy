@@ -31,7 +31,12 @@ extension GameBlock.Level {
             record: record ?? self.record,
             prestige: prestige ?? self.prestige,
             canPrestige: canPrestige ?? self.canPrestige,
-            ladder: ladder ?? self.ladder
+            ladder: ladder ?? self.ladder,
+            sparks: sparks,
+            sparksCycle: sparksCycle,
+            sparksLifetime: sparksLifetime,
+            levelMaxLifetime: levelMaxLifetime,
+            sparksDebt: sparksDebt
         )
     }
 }
@@ -46,12 +51,17 @@ nonisolated enum GameLevelWire {
     /// Le niveau lu sur un score en poche, sous le plafond que le rang ouvre (`GameGlory.levelCap(forRank:)`)
     /// et le palier des étapes (#9706, `steps` — `nil` devant un serveur d'avant les étapes : rien ne retient).
     /// `levelRecord` : le record OUVERT d'avant (`level.shown.record`) — il ne redescend jamais.
+    /// `sparks` : les étincelles d'après le geste (#10846) — présentes, elles voyagent à côté et le niveau max à vie
+    /// (`levelMaxLifetime`, jamais sous le record) est servi deux fois, comme `levelOnTheWire` le sert ; absentes, le
+    /// niveau garde exactement la forme d'hier.
     static func level(score: Int, levelCap: Int?, levelRecord: Int?, prestige: Int,
-                      steps: GameLevelStepFacts? = nil) -> GameBlock.Level {
+                      steps: GameLevelStepFacts? = nil, sparks: GameSparks.Ledger? = nil,
+                      levelMaxLifetime: Int? = nil, pastCycleRecords: [Int]? = nil) -> GameBlock.Level {
         let gate = GameLevelSteps.gate(steps)
         let progress = GameLevels.progress(forScore: score, cap: levelCap, gate: gate)
         let legacy = GameLevels.legacyProgress(forScore: score, gate: gate)
         let record = GameLevels.record(level: progress.level, previousRecord: levelRecord)
+        let maxLifetime = sparks.map { _ in max(record, levelMaxLifetime ?? 0) }
         return GameBlock.Level(
             level: legacy.level,
             tier: legacy.tier,
@@ -75,8 +85,15 @@ nonisolated enum GameLevelWire {
                 isMax: progress.isMax,
                 held: progress.held,
                 step: GameLevelSteps.next(after: progress.level, facts: steps),
-                steps: steps?.counts
-            )
+                steps: steps?.counts,
+                levelMaxLifetime: maxLifetime,
+                pastCycleRecords: pastCycleRecords
+            ),
+            sparks: sparks?.pocket,
+            sparksCycle: sparks?.cycle,
+            sparksLifetime: sparks?.lifetime,
+            levelMaxLifetime: maxLifetime,
+            sparksDebt: sparks?.debt
         )
     }
 
@@ -95,7 +112,15 @@ nonisolated enum GameLevelWire {
             levelAfter: after,
             levelsLost: max(0, before - after),
             gloryGained: preview.gloryGained,
-            ladder: GameMintLadder(levelBefore: preview.levelBefore, levelAfter: preview.levelAfter, levelsLost: preview.levelsLost)
+            ladder: GameMintLadder(levelBefore: preview.levelBefore, levelAfter: preview.levelAfter, levelsLost: preview.levelsLost),
+            // Ce que les étincelles ajoutent (#10847, #10848) voyage avec l'aperçu : sans eux, la ligne « prix de rang ×
+            // facteur » et la réserve fermée disparaissaient de l'optimiste (#10898).
+            basePrice: preview.basePrice,
+            costFactor: preview.costFactor,
+            costLevel: preview.costLevel,
+            locked: preview.locked,
+            sparksDebt: preview.sparksDebt,
+            blockedBy: preview.blockedBy
         )
     }
 }
@@ -105,6 +130,18 @@ extension GameBlock {
     /// rang du bloc ; `nil` devant un serveur d'avant les étapes.
     nonisolated var levelStepFacts: GameLevelStepFacts? {
         level.ladder?.steps.map { GameLevelStepFacts(counts: $0, glory: glory.glory, rank: glory.rank) }
+    }
+}
+
+extension GameBlock {
+    /// Le trésor à `held` Meeshes gardées. Les réserves (#10848) suivent la loi partagée sur la Gloire DU BLOC — celle
+    /// d'après le geste quand il l'a fait monter ; un serveur d'avant les réserves n'en sert pas, et rien ne s'invente.
+    func treasuryAt(held: Int) -> TreasuryStanding {
+        let standing = GameTreasury.standing(held: max(0, held))
+        return TreasuryStanding(
+            held: standing.held, tier: standing.tier, next: standing.next,
+            access: treasury.access.map { _ in GameTreasury.reserveAccess(glory: glory.glory, mythic: glory.rank == .mythe) }
+        )
     }
 }
 
@@ -236,7 +273,8 @@ extension APIEngagementProgress {
             meesh: meesh ?? self.meesh,
             elan: elan,
             achievementReach: achievementReach,
-            game: game ?? self.game
+            game: game ?? self.game,
+            gameRevision: gameRevision
         )
     }
 }

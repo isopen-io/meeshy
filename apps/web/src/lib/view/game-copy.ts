@@ -15,7 +15,7 @@ import {
   type GamePluralBase,
   type TranslateGameArgs,
 } from '@/lib/i18n-game-catalog';
-import { capOpener, type LevelReading } from '@/lib/game/ladder';
+import { capOpener, type LevelReading, type SparksReading } from '@/lib/game/ladder';
 import type { GameMaterial } from '@/lib/game/materials';
 import type { Medal } from '@/lib/game/medal';
 import { tierOrdinal } from '@/lib/game/tier-emblem';
@@ -52,6 +52,17 @@ export const formatCount = (count: number, language: Language = currentInterface
 
 /** Un pourcentage servi se borne ICI, à l'affichage : la frontière (`lib/api/game.ts`) ne refuse que la forme. */
 export const boundedPercent = (value: number): number => Math.min(100, Math.max(0, value));
+
+/**
+ * LE CUMUL, en petit sous les convertibles (porteur 2026-10-17) : le cycle rapporté au total à vie — « 4 200 / 12 000
+ * cumulées » ; sans Prestige (cycle = total) un seul nombre. `null` quand le total à vie n'est pas servi.
+ */
+export const sparksCumulLine = (sparks: SparksReading): string | null => {
+  if (sparks.lifetime === null) return null;
+  const total = formatCount(sparks.lifetime);
+  if (sparks.cycle === null || sparks.cycle >= sparks.lifetime) return gameText('game.sparks.lifetime', { total });
+  return gameText('game.sparks.cumul_of', { cycle: formatCount(sparks.cycle), total });
+};
 
 export const pointsLabel = (count: number, language: Language = currentInterfaceLanguage()): string =>
   translateGamePlural(language, 'game.points', count);
@@ -293,7 +304,8 @@ type ErrorKey =
   | 'game.error.prestige_level_too_low'
   | 'game.error.prestige_at_maximum'
   | 'game.error.treasury_locked'
-  | 'game.error.mint_blocked_by_debt';
+  | 'game.error.mint_blocked_by_debt'
+  | 'game.error.price_changed';
 
 const ERRORS: Readonly<Record<string, ErrorKey>> = {
   [GAME_ERROR_CODES.insufficientPoints]: 'game.error.insufficient_points',
@@ -327,6 +339,8 @@ const ERRORS: Readonly<Record<string, ErrorKey>> = {
   // La frappe fermée par le RANG (une réserve du trésor) ou par une DETTE d'étincelles (porteur, 2026-10-16).
   [GAME_ERROR_CODES.treasuryLocked]: 'game.error.treasury_locked',
   [GAME_ERROR_CODES.mintBlockedByDebt]: 'game.error.mint_blocked_by_debt',
+  // Le prix a bougé entre l'affichage et la frappe (#10903) : rien n'est débité, le nouveau prix se relit.
+  [GAME_ERROR_CODES.priceChanged]: 'game.error.price_changed',
 };
 
 export function gameErrorMessage(code: string | undefined, language: Language = currentInterfaceLanguage()): string {

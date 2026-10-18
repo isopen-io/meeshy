@@ -80,9 +80,9 @@ describe('le catalogue : aucun « Il manque » sans cible', () => {
 });
 
 describe('les deux soldes ont deux noms stables, dans les sept langues', () => {
-  test('« Étincelles en poche » et « Étincelles » en français', async () => {
+  test('« Étincelles convertibles » et « Étincelles » en français (porteur 2026-10-17)', async () => {
     const french = await catalogOf('fr');
-    expect(french['game.concept.fact.held']).toBe('Étincelles en poche');
+    expect(french['game.concept.fact.held']).toBe('Étincelles convertibles');
     expect(french['game.concept.fact.convertible']).toBe('Étincelles');
     expect(french['game.points.convertible.other']).toBe('{count} étincelles');
   });

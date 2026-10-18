@@ -105,7 +105,26 @@ extension iPadRootView {
 
     func handleDeepLink(_ deepLink: DeepLink?) {
         guard let deepLink = deepLinkRouter.consumePendingDeepLink() else { return }
+        // Story, réel, composer ou feuille en cours : refermés d'ABORD, comme
+        // pour un tap de notification (#10543). Seules les conversations le
+        // faisaient ; un lien vers un post, un tag, une communauté ou un profil
+        // s'ouvrait SOUS la couverture, et le tap semblait sans effet.
+        router.clearPresentedSurfaces { _ in showDeepLink(deepLink) }
+    }
+
+    private func showDeepLink(_ deepLink: DeepLink) {
         switch deepLink {
+        case .callRequest(let conversationId, let isVideo):
+            // Le lien d'appel ne compose pas : il DEMANDE (feuille de
+            // confirmation). Mise à jour forcée et barrière d'âge passent avant.
+            let upgradeGate = self.upgradeGate
+            let gatesOpen: @MainActor () -> Bool = {
+                !upgradeGate.isBlocked && !AgeGateController.shared.isShowing
+            }
+            Task { @MainActor in
+                await CallLinkConfirmationController.shared.request(
+                    conversationId: conversationId, isVideo: isVideo, gatesOpen: gatesOpen)
+            }
         case .trackedLink(let token):
             // `/l/<token>` resolved async by targetType (re-sets pendingDeepLink).
             deepLinkRouter.resolveTrackedLink(token)
@@ -252,7 +271,7 @@ extension iPadRootView {
                 // chemin pouvait présenter le lecteur avant que l'uid ne soit posé — « Story introuvable ».
                 storyViewerCoordinator.present(StoryViewerRequest(
                     id: storyViewModel.storyGroups[groupIdx].id,
-                    startAtFirstUnviewed: true
+                    postId: postId
                 ))
             } else {
                 rightPanelRoute = .postDetail(postId)
@@ -358,7 +377,7 @@ extension iPadRootView {
                 }
                 return
             }
-            CallManager.shared.handleIncomingCallNotification(
+            CallManager.shared.handleIncomingCallAlertTap(
                 callId: callId,
                 fromUserId: ctx.callerUserId ?? "",
                 fromUsername: ctx.callerName ?? ctx.senderUsername ?? "",

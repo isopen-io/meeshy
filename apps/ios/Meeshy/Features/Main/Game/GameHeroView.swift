@@ -63,7 +63,7 @@ struct GameHeroView: View {
         VStack(alignment: .leading, spacing: MeeshySpacing.lg) {
             if let cornerLine { corner(cornerLine) }
             levelRow
-            // Les deux paires des étincelles (#10846), TOUJOURS : poche / total à vie, niveau / max à vie.
+            // Les deux paires des étincelles (#10846), TOUJOURS : poche / record d’étincelles, niveau / record de niveau.
             GameSparkPairsRow(pairs: GameSparkPairs(game.level))
             rankRow
             GameHeroEarn(elan: elan)

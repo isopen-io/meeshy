@@ -415,7 +415,13 @@ extension CallManager {
             .sink { [weak self] event in
                 guard let self else { return }
                 self.clearPendingIncomingCall(ifMatching: event.callId)
-                guard self.currentCallId == event.callId else { return }
+                // `currentCallId` survit à la fin de l'appel (écran « terminé »,
+                // « Réessayer ») : un force-leave tardif ne rejoue pas le démontage.
+                guard CallReliabilityPolicy.shouldProcessRemoteEnd(
+                    currentCallId: self.currentCallId,
+                    incomingCallId: event.callId,
+                    callState: self.callState
+                ) else { return }
                 Logger.calls.warning("call:force-leave received — ending call (callId=\(event.callId) reason=\(event.reason ?? "unspecified"))")
                 if let uuid = self.activeCallUUID {
                     self.callProvider.reportCall(with: uuid, endedAt: Date(), reason: .failed)

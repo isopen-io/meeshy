@@ -3,7 +3,9 @@ import {
   PRISM_HOUR_MULTIPLIER,
   REPLY_RECEIVED_DAILY_CAP,
   TAILWIND_FACTOR,
+  TAILWIND_LEVEL_GAP,
   isInPrismHour,
+  sparksTailwindFactor,
   prismHourWindow,
   tailwindFactor,
 } from '../../utils/game/boosts.js';
@@ -17,6 +19,20 @@ describe('le Vent arrière', () => {
   it('retombe à ×1 une fois le record retrouvé', () => {
     expect(tailwindFactor({ level: 36, levelRecord: 36 })).toBe(1);
     expect(tailwindFactor({ level: 40, levelRecord: 36 })).toBe(1);
+  });
+});
+
+describe('le Vent arrière des étincelles (porteur 2026-10-17, #10896) — 7 niveaux ou plus sous le record', () => {
+  it('souffle à ×1,25 quand le niveau est 7 niveaux ou plus sous le record', () => {
+    expect(TAILWIND_LEVEL_GAP).toBe(7);
+    expect(sparksTailwindFactor({ level: 13, levelRecord: 20 })).toBe(1.25);
+    expect(sparksTailwindFactor({ level: 1, levelRecord: 20 })).toBe(1.25);
+  });
+
+  it('s’arrête dès que l’écart retombe à 6 : une petite frappe ne l’allume pas', () => {
+    expect(sparksTailwindFactor({ level: 14, levelRecord: 20 })).toBe(1);
+    expect(sparksTailwindFactor({ level: 19, levelRecord: 20 })).toBe(1);
+    expect(sparksTailwindFactor({ level: 20, levelRecord: 20 })).toBe(1);
   });
 });
 
