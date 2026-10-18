@@ -192,7 +192,7 @@ struct ConversationListView: View {
     @FocusState var isSearching: Bool
     @State var showSearchOverlay: Bool = false
     @State private var expandedSections: Set<String> = ConversationListSectionMemory.shared.initial
-    @State private var listColumnWidth: CGFloat = 0
+    @State private var listColumnSize: CGSize = .zero
     /// Pendant le glisser d'une conversation : les catégories dépliées AVANT, rendues au dépôt ou à l'annulation.
     @State private var sectionsBeforeDrag: Set<String>?
     /// Le glisser en cours : son jeton et la catégorie d'où il part. Posé dès le soulèvement — qui précède aussi
@@ -721,9 +721,9 @@ struct ConversationListView: View {
         passContext: ConversationRowPassContext,
         trackedSectionId: String? = nil
     ) -> some View {
-        // Depuis la colonne MESURÉE (`listColumnWidth`) — redimensionnable sur iPad —, la fenêtre en repli.
+        // Depuis la colonne MESURÉE (`listColumnSize`) — redimensionnable sur iPad —, la fenêtre en repli.
         let rowWidth = ConversationRowWidthLaw.textWidth(
-            listWidth: listColumnWidth, windowWidth: DeviceLayout.windowSize.width,
+            listWidth: listColumnSize.width, windowWidth: DeviceLayout.windowSize.width,
             isRegular: horizontalSizeClass == .regular)
         // Drapeau résolu UNE fois par section, jamais par rang : `LentilleFeatureFlag`
         // relit `ProcessInfo.environment` (et réalloue donc son dictionnaire) à chaque
@@ -1499,7 +1499,7 @@ struct ConversationListView: View {
     /// Hauteur de queue : une DEMI-région visible, pour que la dernière
     /// rangée puisse rejoindre la bande de focus au centre.
     private var listTailMinHeight: CGFloat {
-        DeviceLayout.windowSize.height / 2
+        SceneWindowSize.resolve(listColumnSize, fallback: DeviceLayout.windowSize).height / 2
     }
 
     @ViewBuilder
@@ -1816,7 +1816,7 @@ struct ConversationListView: View {
             } action: { visibleTop in
                 sectionPositionRegistry.registerPinLine(visibleTop + stickyHeaderInset)
             }
-            .onGeometryChange(for: CGFloat.self) { $0.size.width } action: { listColumnWidth = $0 }
+            .onGeometryChange(for: CGSize.self) { $0.size } action: { listColumnSize = $0 }
             .scrollDismissesKeyboard(.interactively)
             // ÉLECTION DE LA FOCUS CARD (LWS-8/I-070). Posé sur le conteneur,
             // APRÈS l'inset sticky : l'hôte mesure le bas de la région visible du
