@@ -98,12 +98,20 @@ final class ConversationListQuickActionsSteadinessTests: XCTestCase {
             loadState: .loaded, loadFailed: false, searchTextIsEmpty: true, groupingAwaitsCorpus: false), .createFirstConversation)
     }
 
-    func test_quickActionsTail_waitsUnderASkeleton_andShowsEverywhereElse() {
+    func test_quickActionsTail_waitsUnderASkeleton_andShowsUnderAKnownContent() {
         XCTAssertFalse(ConversationListView.showsQuickActionsTail(emptyBranch: .skeleton))
         XCTAssertTrue(ConversationListView.showsQuickActionsTail(emptyBranch: nil))
-        for branch: ConversationListEmptyBranch in [.searchNoResults, .syncError, .createFirstConversation] {
+        for branch: ConversationListEmptyBranch in [.searchNoResults, .createFirstConversation] {
             XCTAssertTrue(ConversationListView.showsQuickActionsTail(emptyBranch: branch), "\(branch)")
         }
+    }
+
+    /// #10923 — un chargement en ÉCHEC n'est pas une liste VIDE. Sous
+    /// « Impossible de charger vos conversations », la queue titrait
+    /// « Aucune conversation » avec ses raccourcis : deux verdicts
+    /// contradictoires sur le même écran. L'erreur est le seul état.
+    func test_quickActionsTail_isAbsentUnderASyncError() {
+        XCTAssertFalse(ConversationListView.showsQuickActionsTail(emptyBranch: .syncError))
     }
 
     /// Les deux lois sont BRANCHÉES : la liste et sa queue lisent la même
