@@ -273,6 +273,28 @@ export function postCommentCardModes<M extends PostCommentCardMediaLike>(source:
   ];
 }
 
+/** Les ancêtres qu'on connaît, du parent direct vers la racine, jusqu'au premier maillon manquant. */
+function knownAncestors<M extends PostCommentCardMediaLike>(source: Source<M>): readonly Comment<M>[] {
+  const known = byId(source.thread);
+  const walk = (next: string | null, chain: readonly Comment<M>[]): readonly Comment<M>[] => {
+    const parent = next === null ? undefined : known.get(next);
+    if (parent === undefined || next === source.target.id || chain.some((link) => link.id === next)) return chain;
+    return walk(parent.parentId, [...chain, parent]);
+  };
+  return walk(source.target.parentId, []);
+}
+
+/**
+ * LE REPLI « COMMENTAIRE SEUL » (jumelle de `PostCommentCardComposition.fallsBackToCommentAlone`
+ * iOS) : aucun mode ne compose parce que le fil d'une réponse n'est pas chargé (sa
+ * racine manque), mais elle est peignable et aucun ancêtre CONNU n'est protégé — la
+ * carte du commentaire seul s'offre, comme avant la composition.
+ */
+export function postCommentCardFallsBackToCommentAlone<M extends PostCommentCardMediaLike>(source: Source<M>): boolean {
+  if (source.target.parentId === null || !isPaintable(source.target) || postCommentCardModes(source).length > 0) return false;
+  return !knownAncestors(source).some(isProtected);
+}
+
 /** Le mode d'ouverture : « Post + commentaire » ou « Fil jusqu'ici » — `null` : rien ne s'image. */
 export const postCommentCardDefaultMode = <M extends PostCommentCardMediaLike>(source: Source<M>): PostCommentCardMode | null =>
   postCommentCardModes(source)[0] ?? null;

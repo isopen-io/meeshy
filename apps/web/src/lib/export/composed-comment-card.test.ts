@@ -9,6 +9,7 @@ import {
   postCommentCardSourceOf,
   postCommentChoiceOf,
   postCommentImageable,
+  postCommentImagingOf,
   postCommentMessageCardSubjectOf,
   postCommentPickAfter,
   type PostCommentCardLabels,
@@ -153,6 +154,14 @@ describe('qui compose, et quand « Imager » s’offre', () => {
     expect(postCommentImageable(input(reply, [root]))).toBe(true);
     expect(postCommentImageable(input(reply, []))).toBe(false);
     expect(postCommentImageable(input(reply, [{ ...root, effectFlags: 2 }]))).toBe(false);
+  });
+
+  test('une réponse sans racine chargée retombe sur la carte du commentaire seul — jamais sous un ancêtre protégé connu', () => {
+    const input = (target: PostComment, thread: readonly PostComment[]) => ({ post: post(), target, targetText: 'x', thread, readerLanguages: ['fr'], viewer });
+    expect(postCommentImagingOf(input(reply, [root]))).toBe('composed');
+    expect(postCommentImagingOf(input(reply, []))).toBe('alone');
+    expect(postCommentImagingOf(input(reply, [{ ...root, effectFlags: 2 }]))).toBeNull();
+    expect(postCommentImagingOf(input({ ...reply, effectFlags: 2 }, []))).toBeNull();
   });
 });
 

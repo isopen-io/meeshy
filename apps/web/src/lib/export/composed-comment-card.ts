@@ -1,4 +1,5 @@
 import {
+  postCommentCardFallsBackToCommentAlone,
   postCommentCardInitialChoice,
   postCommentCardModes,
   postCommentCardShowsPostByDefault,
@@ -140,8 +141,20 @@ export function composingPostOf(post: FeedPost | null | undefined, now: number =
   return entriesOf(post.media, null).some((entry) => entry.kind === 'image' || entry.kind === 'video') ? post : null;
 }
 
-/** « Imager » s'offre-t-il ? Dès qu'un mode compose une carte. */
-export const postCommentImageable = (input: PostCommentCardInput): boolean => postCommentCardModes(postCommentCardSourceOf(input)).length > 0;
+/**
+ * COMMENT « IMAGER » S'OFFRE — `composed` : un mode compose la carte ; `alone` :
+ * le fil d'une réponse n'est pas chargé (sa racine manque), la carte du
+ * commentaire seul la remplace, comme avant la composition (jumelle du repli de
+ * `CommentMoreMenu` iOS) ; `null` : rien ne s'image.
+ */
+export function postCommentImagingOf(input: PostCommentCardInput): 'composed' | 'alone' | null {
+  const source = postCommentCardSourceOf(input);
+  if (postCommentCardModes(source).length > 0) return 'composed';
+  return postCommentCardFallsBackToCommentAlone(source) ? 'alone' : null;
+}
+
+/** « Imager » compose-t-il une carte ? Dès qu'un mode en compose une. */
+export const postCommentImageable = (input: PostCommentCardInput): boolean => postCommentImagingOf(input) === 'composed';
 
 /**
  * CE QUE L'ATELIER A CHOISI — `null` partout : le défaut. Le mode retombe sur

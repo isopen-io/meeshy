@@ -6,6 +6,7 @@ import {
   postCommentCardChoosable,
   postCommentCardDefaultMode,
   postCommentCardExcerpt,
+  postCommentCardFallsBackToCommentAlone,
   postCommentCardInitialChoice,
   postCommentCardModes,
   postCommentCardShowsPostByDefault,
@@ -318,5 +319,29 @@ describe('la carte', () => {
   it('un commentaire en vol ne s’image pas, et n’entre pas dans le fil', () => {
     expect(postCommentCardModes(source({ target: { ...root, inFlight: true } }))).toEqual([]);
     expect(blocks(source({ target: r2, thread: [root, { ...r1, inFlight: true }, r2] }), 'threadToHere')).toEqual(['root', 'r2']);
+  });
+});
+
+describe('le repli « commentaire seul »', () => {
+  const viewOnce = { flags: MESSAGE_EFFECT_FLAGS.VIEW_ONCE };
+
+  it('une réponse dont la racine n’est pas chargée s’image seule', () => {
+    const from = source({ target: r1, thread: [] });
+    expect(postCommentCardModes(from)).toEqual([]);
+    expect(postCommentCardFallsBackToCommentAlone(from)).toBe(true);
+  });
+
+  it('jamais quand un ancêtre CONNU est protégé', () => {
+    const target = makeComment('t', 'Dan', 'Moi', 3, { parent: 'mid' });
+    const middle = makeComment('mid', 'Cleo', 'Entre deux', 2, { parent: 'missing' });
+    const protectedMiddle = makeComment('mid', 'Cleo', 'Entre deux', 2, { parent: 'missing', ...viewOnce });
+    expect(postCommentCardFallsBackToCommentAlone(source({ target: r1, thread: [makeComment('root', 'Bob', 'Vue unique', 1, viewOnce)] }))).toBe(false);
+    expect(postCommentCardFallsBackToCommentAlone(source({ target, thread: [middle] }))).toBe(true);
+    expect(postCommentCardFallsBackToCommentAlone(source({ target, thread: [protectedMiddle] }))).toBe(false);
+  });
+
+  it('jamais quand un mode compose, ni pour un commentaire protégé', () => {
+    expect(postCommentCardFallsBackToCommentAlone(source({ target: r1 }))).toBe(false);
+    expect(postCommentCardFallsBackToCommentAlone(source({ target: makeComment('x', 'Bob', 'Secret', 1, { parent: 'missing', ...viewOnce }), thread: [] }))).toBe(false);
   });
 });
