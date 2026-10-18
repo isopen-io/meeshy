@@ -48,6 +48,9 @@ public struct SkeletonShape: View {
 // MARK: - Skeleton Conversation Row
 
 public struct SkeletonConversationRow: View {
+    /// La fenêtre qui porte la vue (Stage Manager, Split View) — la fenêtre clé en repli.
+    @Environment(\.sceneWindowSize) var sceneWindowSize
+    private var hostWidth: CGFloat { SceneWindowSize.resolve(sceneWindowSize, fallback: WindowMetrics.windowSize).width }
     private var theme: ThemeManager { ThemeManager.shared }
     @Environment(\.colorScheme) private var colorScheme
 
@@ -66,7 +69,7 @@ public struct SkeletonConversationRow: View {
                 HStack {
                     SkeletonShape(height: 14, cornerRadius: MeeshyRadius.sm)
                         .frame(maxWidth: .infinity)
-                        .frame(width: min(WindowMetrics.windowSize.width * 0.3, 180))
+                        .frame(width: min(hostWidth * 0.3, 180))
 
                     Spacer()
 
@@ -76,7 +79,7 @@ public struct SkeletonConversationRow: View {
 
                 SkeletonShape(height: 12, cornerRadius: MeeshyRadius.sm)
                     .frame(maxWidth: .infinity)
-                    .frame(width: min(WindowMetrics.windowSize.width * 0.5, 280))
+                    .frame(width: min(hostWidth * 0.5, 280))
             }
         }
         .padding(MeeshySpacing.mdPlus)
@@ -95,6 +98,9 @@ public struct SkeletonConversationRow: View {
 // MARK: - Skeleton Message Bubble
 
 public struct SkeletonMessageBubble: View {
+    /// La fenêtre qui porte la vue (Stage Manager, Split View) — la fenêtre clé en repli.
+    @Environment(\.sceneWindowSize) var sceneWindowSize
+    private var hostWidth: CGFloat { SceneWindowSize.resolve(sceneWindowSize, fallback: WindowMetrics.windowSize).width }
     private let index: Int
     private var theme: ThemeManager { ThemeManager.shared }
     @Environment(\.colorScheme) private var colorScheme
@@ -106,7 +112,7 @@ public struct SkeletonMessageBubble: View {
     private var isLeft: Bool { index % 2 == 0 }
 
     private var bubbleWidth: CGFloat {
-        let screenWidth = WindowMetrics.windowSize.width
+        let screenWidth = hostWidth
         let widths: [CGFloat] = [0.55, 0.72, 0.4, 0.65, 0.48, 0.78]
         let fraction = widths[index % widths.count]
         // Cap skeleton bubble width on iPad — the iPhone fractions

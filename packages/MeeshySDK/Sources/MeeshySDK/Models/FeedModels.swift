@@ -453,6 +453,12 @@ public struct FeedComment: Identifiable, Sendable {
     public var effectFlags: Int
     public var originalLanguage: String?
     public var translatedContent: String?
+    /// TOUTES les traductions servies du commentaire, par langue. Sans elles,
+    /// `translatedContent` — résolu une fois au mapping — restait dans
+    /// l'ancienne langue quand le lecteur changeait la sienne : le post se
+    /// re-résolvait, ses commentaires non. `resolved(preferredLanguages:)`
+    /// redescend le Prisme depuis ce dictionnaire, sans re-fetch.
+    public var translations: [String: PostTranslation]? = nil
     /// Emojis avec lesquels l'utilisateur courant a réagi sur ce commentaire.
     /// Hydraté depuis `APIPostComment.currentUserReactions` au mapping.
     /// Persisté dans le cache GRDB iOS via le Codable manuel ci-dessous —
@@ -478,6 +484,34 @@ public struct FeedComment: Identifiable, Sendable {
 
     public var displayContent: String { translatedContent ?? content }
 
+    /// Redescend le Prisme pour `preferredLanguages` depuis `translations` —
+    /// la MÊME descente que `FeedPost.resolved` (`PrismTranslationResolver`).
+    /// Un commentaire sans dictionnaire (cache gravé avant lui) garde ce qu'il
+    /// affiche : rien ne permet de le re-résoudre sans re-fetch.
+    public func resolved(preferredLanguages: [String]) -> FeedComment {
+        guard let dict = translations, !dict.isEmpty else { return self }
+        var copy = self
+        copy.translatedContent = PrismTranslationResolver.resolve(
+            originalLanguage: originalLanguage,
+            candidates: dict.map { PrismCandidate(language: $0.key, value: $0.value.text) },
+            preferredLanguages: preferredLanguages
+        )?.text
+        return copy
+    }
+
+    /// Une traduction ARRIVÉE (`comment:translation-updated`) rejoint le
+    /// dictionnaire, puis le texte affiché se re-résout. Pour un commentaire
+    /// sans dictionnaire qui affiche déjà une traduction, rien ne change : on
+    /// ne sait pas quel rang elle occupe, et la remplacer pourrait descendre.
+    public func mergingTranslation(_ text: String, language: String, preferredLanguages: [String]) -> FeedComment {
+        guard translations != nil || translatedContent == nil else { return self }
+        var copy = self
+        var dict = translations ?? [:]
+        dict[language] = PostTranslation(text: text)
+        copy.translations = dict
+        return copy.resolved(preferredLanguages: preferredLanguages)
+    }
+
     public var effects: MessageEffects {
         MessageEffects(flags: MessageEffectFlags(rawValue: UInt32(clamping: effectFlags)))
     }
@@ -495,6 +529,7 @@ public struct FeedComment: Identifiable, Sendable {
             parentId: parentId, effectFlags: newFlags,
             originalLanguage: originalLanguage,
             translatedContent: newContent == content ? translatedContent : nil,
+            translations: newContent == content ? translations : nil,
             currentUserReactions: currentUserReactions, media: media, location: location,
             // Une ÉDITION ne change pas ce dont le commentaire PARLE : la
             // citation survit au nouveau texte, comme elle survit en base.
@@ -508,6 +543,7 @@ public struct FeedComment: Identifiable, Sendable {
                 content: String, timestamp: Date = Date(), likes: Int = 0, replies: Int = 0,
                 parentId: String? = nil, effectFlags: Int = 0,
                 originalLanguage: String? = nil, translatedContent: String? = nil,
+                translations: [String: PostTranslation]? = nil,
                 currentUserReactions: [String]? = nil, media: [FeedMedia] = [],
                 location: SharedPlace? = nil, quotedMedia: CommentQuotedMedia? = nil,
                 trackedLinkMap: [String: String] = [:]) {
@@ -517,6 +553,7 @@ public struct FeedComment: Identifiable, Sendable {
         self.content = content; self.timestamp = timestamp; self.likes = likes; self.replies = replies
         self.effectFlags = effectFlags
         self.originalLanguage = originalLanguage; self.translatedContent = translatedContent
+        self.translations = translations
         self.currentUserReactions = currentUserReactions
         self.media = media
         self.location = location
@@ -531,7 +568,7 @@ extension FeedComment: Codable {
     enum CodingKeys: String, CodingKey {
         case id, author, authorId, authorUsername, authorAvatarURL, parentId, content, timestamp, likes, replies
         case effectFlags, originalLanguage, translatedContent, currentUserReactions, media, location
-        case quotedMedia, trackedLinkMap
+        case quotedMedia, trackedLinkMap, translations
     }
 
     public init(from decoder: Decoder) throws {
@@ -549,6 +586,8 @@ extension FeedComment: Codable {
         effectFlags = try c.decodeIfPresent(Int.self, forKey: .effectFlags) ?? 0
         originalLanguage = try c.decodeIfPresent(String.self, forKey: .originalLanguage)
         translatedContent = try c.decodeIfPresent(String.self, forKey: .translatedContent)
+        // `decodeIfPresent` : un blob gravé avant le champ se relit sans dictionnaire.
+        translations = try c.decodeIfPresent([String: PostTranslation].self, forKey: .translations)
         currentUserReactions = try c.decodeIfPresent([String].self, forKey: .currentUserReactions)
         media = try c.decodeIfPresent([FeedMedia].self, forKey: .media) ?? []
         location = try c.decodeIfPresent(SharedPlace.self, forKey: .location)
@@ -574,6 +613,7 @@ extension FeedComment: Codable {
         try c.encode(effectFlags, forKey: .effectFlags)
         try c.encodeIfPresent(originalLanguage, forKey: .originalLanguage)
         try c.encodeIfPresent(translatedContent, forKey: .translatedContent)
+        try c.encodeIfPresent(translations, forKey: .translations)
         try c.encodeIfPresent(currentUserReactions, forKey: .currentUserReactions)
         if !media.isEmpty {
             try c.encode(media, forKey: .media)
@@ -743,8 +783,11 @@ public struct FeedPost: Identifiable, Sendable {
     /// because it occupies rank 1. Never fall back to an arbitrary
     /// translation if no preferred language matches.
     public func resolved(preferredLanguages: [String]) -> FeedPost {
-        guard translations?.isEmpty == false else { return self }
         var copy = self
+        // Les commentaires embarqués suivent le post : un changement de langue
+        // les laissait dans l'ancienne.
+        copy.comments = comments.map { $0.resolved(preferredLanguages: preferredLanguages) }
+        guard translations?.isEmpty == false else { return copy }
         copy.translatedContent = servedTranslation(preferredLanguages: preferredLanguages)?.text
         return copy
     }

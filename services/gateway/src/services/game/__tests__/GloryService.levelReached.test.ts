@@ -108,6 +108,33 @@ describe('GloryService.creditLevelProgress — « Niveau N atteint » suit le re
     expect(reached).toEqual([]);
   });
 
+  it('après un Prestige, la remontée du cycle neuf se RÉANNONCE à chaque record du cycle, sans repayer la Gloire (#10911)', async () => {
+    const db = fakeGameDb();
+    seedUser(db, { levelRecord: 1, levelMaxLifetime: 100, prestige: 1, engagementScore: thresholdOf(6) });
+    const { glory, reached } = service(db);
+
+    const first = await glory.creditLevelProgress({ userId: USER, score: thresholdOf(6), previousRecord: 1, previousMax: 100, prestige: 1 });
+    const second = await glory.creditLevelProgress({ userId: USER, score: thresholdOf(8), previousRecord: 6, previousMax: 100, prestige: 1 });
+
+    expect(reached).toEqual([
+      { userId: USER, level: 6, sparks: thresholdOf(6) },
+      { userId: USER, level: 8, sparks: thresholdOf(8) },
+    ]);
+    expect([first, second]).toEqual([0, 0]);
+  });
+
+  it('un RATTRAPAGE (`announce: false`) grave le record et paie la Gloire sans rien annoncer (#10905)', async () => {
+    const db = fakeGameDb();
+    seedUser(db, { levelRecord: 3, engagementScore: thresholdOf(6) });
+    const { glory, reached } = service(db);
+
+    const gained = await glory.creditLevelProgress({ userId: USER, score: thresholdOf(6), previousRecord: 3, announce: false });
+
+    expect(reached).toEqual([]);
+    expect(gained).toBe(3 * 100);
+    expect(db.user.rows[0]?.levelRecord).toBe(6);
+  });
+
   it('une annonce qui TOMBE ne retient ni le record ni la Gloire', async () => {
     const db = fakeGameDb();
     seedUser(db, { levelRecord: 3, engagementScore: thresholdOf(6) });

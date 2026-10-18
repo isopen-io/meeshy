@@ -60,8 +60,8 @@ extension ConversationView {
         isTyping = false
         composerState.showOptions = false
 
-        // `DeviceLayout.windowSize`, jamais `UIScreen.main.bounds` : le seuil se
-        // mesure sur la FENÊTRE où l'app est rendue, pas sur la dalle. En Split
+        // La fenêtre qui porte la conversation, jamais `UIScreen.main.bounds` ni la fenêtre clé : le seuil se
+        // mesure sur la FENÊTRE où la conversation est rendue, pas sur la dalle. En Split
         // View ou Slide Over, la seconde est bien plus haute que la première —
         // une cellule au bas de la fenêtre restait alors sous le seuil, et le
         // menu paraissait sans le recentrage qu'il exige.
@@ -69,7 +69,7 @@ extension ConversationView {
         // indépendamment de la cellule : aucun recentrage à attendre.
         let cellFrame = pieceId == nil ? cellFrame : nil
         guard let frame = cellFrame,
-              frame.midY > DeviceLayout.windowSize.height * Self.longPressRepositionThreshold
+              frame.midY > SceneWindowSize.resolve(sceneWindowSize, fallback: DeviceLayout.windowSize).height * Self.longPressRepositionThreshold
         else {
             overlayState.showOverlayMenu = true
             return

@@ -277,8 +277,14 @@ final class MockPostService: PostServiceProviding, @unchecked Sendable {
         return try (getReelsResult ?? getFeedResult).get()
     }
 
+    /// Une réponse par curseur, servie après ce que le témoin fait PENDANT l'appel.
+    var getPostsByHashtagByCursor: [String: PaginatedAPIResponse<[APIPost]>] = [:]
+    var duringGetPostsByHashtag: (@MainActor (_ cursor: String?) async -> Void)?
+
     func getPostsByHashtag(tag: String, cursor: String?, limit: Int) async throws -> PaginatedAPIResponse<[APIPost]> {
         getPostsByHashtagCallCount += 1
+        await duringGetPostsByHashtag?(cursor)
+        if let served = getPostsByHashtagByCursor[cursor ?? ""] { return served }
         return try getPostsByHashtagResult.get()
     }
 

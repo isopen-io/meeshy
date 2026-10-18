@@ -136,16 +136,50 @@ final class SyncPillPlacementTests: XCTestCase {
 
     // MARK: - La taille
 
-    /// « Augmenter sa taille d'environ 1,6 fois sa taille initiale (hauteur) »
-    /// (#10371) — la taille de REPOS, que #10840 préserve.
-    func test_height_isAboutOnePointSixTimesTheFormerPill() {
-        XCTAssertEqual(SyncPillMetrics.height / SyncPillMetrics.formerHeight, 1.6, accuracy: 0.05)
+    @MainActor
+    private func entry(_ id: String) -> SyncPillEntry {
+        SyncPillEntry(id: id, label: id, iconName: nil, dotStyle: .brand, source: nil)
+    }
+
+    /// « Je veux que la taille du syncPill soit diminuée ! Et la taille actuelle
+    /// doit être affichée UNIQUEMENT lorsqu'on a des frappes d'amis en cours
+    /// dans les conversations communes » (#10893, porteur 2026-10-17).
+    @MainActor
+    func test_withoutTyping_thePillIsCompact() {
+        let entries = [entry("outbox.1"), entry("offline")]
+
+        XCTAssertEqual(SyncPillMetrics.for(entries: entries), .compact)
+    }
+
+    @MainActor
+    func test_aTypingEntryAmongOthers_givesTheLargeSize() {
+        let entries = [entry("outbox.1"), entry("\(TypingAnnouncementLaw.typingIDPrefix)conv-A")]
+
+        XCTAssertEqual(SyncPillMetrics.for(entries: entries), .typing)
+    }
+
+    @MainActor
+    func test_whenTheTypingStops_thePillShrinksBack() {
+        let typing = [entry("outbox.1"), entry("\(TypingAnnouncementLaw.typingIDPrefix)conv-A")]
+        let afterStop = Array(typing.dropLast())
+
+        XCTAssertEqual(SyncPillMetrics.for(entries: typing), .typing)
+        XCTAssertEqual(SyncPillMetrics.for(entries: afterStop), .compact)
+    }
+
+    /// Compacte = la pastille d'avant #10371 (22 pt) ; frappe = la taille
+    /// agrandie de #10371 (≈ 1,6 × 22 pt).
+    func test_compactIsTheFormerPill_andTypingIsAboutOnePointSixTimesIt() {
+        XCTAssertEqual(SyncPillMetrics.compact.height, 22)
+        XCTAssertEqual(SyncPillMetrics.typing.height / SyncPillMetrics.compact.height, 1.6, accuracy: 0.05)
     }
 
     /// La hauteur déclarée est celle que les mesures rendent : une ligne de texte
     /// (≈ 1,2 × la taille de police) et la marge verticale des deux côtés.
-    func test_height_matchesTheRenderedMeasures() {
-        let line = (SyncPillMetrics.labelSize * 1.2).rounded()
-        XCTAssertEqual(line + 2 * SyncPillMetrics.verticalPadding, SyncPillMetrics.height, accuracy: 1.5)
+    func test_height_matchesTheRenderedMeasures_forBothSizes() {
+        for metrics in [SyncPillMetrics.compact, .typing] {
+            let line = (metrics.labelSize * 1.2).rounded()
+            XCTAssertEqual(line + 2 * metrics.verticalPadding, metrics.height, accuracy: 1.5)
+        }
     }
 }

@@ -731,8 +731,34 @@ final class MessageListViewController: UIViewController {
 
     override func viewDidLayoutSubviews() {
         super.viewDidLayoutSubviews()
+        reconfigureVisibleCellsIfWidthChanged()
         guard collectionView.bounds.height != focalOverscanBoundsHeight else { return }
         syncFocalOverscan()
+    }
+
+    /// La largeur sous laquelle les cellules visibles ont lu `bubbleContainerWidth`.
+    private var bubbleHostingWidth: CGFloat = 0
+
+    /// iPad : fenêtre redimensionnée (Stage Manager, Split View), rotation,
+    /// séparateur de colonnes glissé. Les cellules à l'écran gardaient la
+    /// largeur max de leur configuration — bulles rognées ou trop étroites
+    /// jusqu'au recyclage — et une cellule configurée avant le premier layout
+    /// (largeur 0) avait pris celle de la FENÊTRE. Elles se reconfigurent.
+    private func reconfigureVisibleCellsIfWidthChanged() {
+        let width = collectionView.bounds.width
+        guard Self.widthChangeRehostsBubbles(from: bubbleHostingWidth, to: width) else { return }
+        bubbleHostingWidth = width
+        guard dataSource != nil else { return }
+        let visible = collectionView.indexPathsForVisibleItems.compactMap { dataSource.itemIdentifier(for: $0) }
+        guard !visible.isEmpty else { return }
+        var snapshot = dataSource.snapshot()
+        snapshot.reconfigureItems(visible)
+        applyToDataSource(snapshot) { [weak self] in self?.applyFocalPerspectiveToVisibleCells() }
+    }
+
+    /// Une largeur NOUVELLE et mesurée (au point près) re-héberge les bulles.
+    nonisolated static func widthChangeRehostsBubbles(from hosted: CGFloat, to current: CGFloat) -> Bool {
+        current > 0 && abs(current - hosted) >= 1
     }
 
     override func viewDidLoad() {

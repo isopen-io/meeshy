@@ -43,6 +43,29 @@ final class HashtagResultsViewModelTests: XCTestCase {
         return JSONStub.decode(#"{"success":true,"data":\#(postsJSON),"pagination":\#(cursorJSON),"error":null}"#)
     }
 
+    /// Cycle 4 — un rafraîchissement pendant qu'une page arrive : la page de
+    /// l'ANCIENNE liste ne se colle plus à la nouvelle.
+    func test_loadMore_returningAfterARefresh_isDiscarded() async {
+        let service = MockPostService()
+        service.getPostsByHashtagResult = .success(Self.makePaginatedResponse(
+            posts: [Self.makeAPIPost(id: "p1")], hasMore: true, nextCursor: "c2"))
+        let sut = HashtagResultsViewModel(tag: "paris", service: service)
+        await sut.load()
+        service.getPostsByHashtagByCursor["c2"] = Self.makePaginatedResponse(
+            posts: [Self.makeAPIPost(id: "p2")], hasMore: true, nextCursor: "c3")
+        service.getPostsByHashtagResult = .success(Self.makePaginatedResponse(
+            posts: [Self.makeAPIPost(id: "n1")], hasMore: true, nextCursor: "n2"))
+        service.duringGetPostsByHashtag = { [weak sut] cursor in
+            guard cursor == "c2" else { return }
+            await sut?.load()
+        }
+
+        await sut.loadMore()
+
+        XCTAssertEqual(sut.posts.map(\.id), ["n1"], "la page 2 de l'ancienne liste ne rejoint pas la nouvelle")
+        XCTAssertFalse(sut.isLoading)
+    }
+
     func test_load_populatesPostsFromService() async {
         let service = MockPostService()
         let post = Self.makeAPIPost(id: "p1")

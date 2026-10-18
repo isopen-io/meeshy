@@ -28,10 +28,23 @@ enum GameOptimistic {
 
     // MARK: - Solde
 
+    /// Le trésor à `held` : ses réserves se relisent sur la Gloire du bloc (#10848) — jamais perdues par un geste.
     private static func withHeld(_ state: GameState, _ held: Int) -> GameState {
+        GameState(game: state.game.replacing(treasury: state.game.treasuryAt(held: held)), meesh: state.meesh)
+    }
+
+    /// Le compteur de Meeshes lit le MÊME prix suivant que le héro de frappe (#10898) : posé sur l'aperçu du bloc.
+    static func withMintCounters(_ state: GameState, debitable: Int, minted: Int = 0) -> GameState {
         GameState(
-            game: state.game.replacing(treasury: GameTreasury.standing(held: max(0, held))),
-            meesh: state.meesh
+            game: state.game,
+            meesh: state.meesh.map {
+                $0.replacing(
+                    mintedLifetime: $0.mintedLifetime + minted,
+                    debitablePoints: debitable,
+                    missingPoints: state.game.mint.missingPoints,
+                    mintCost: state.game.mint.price
+                )
+            }
         )
     }
 
@@ -71,9 +84,13 @@ enum GameOptimistic {
             GameLevelStepFacts(minted: game.mint.number, missionsDone: $0.missionsDone, flameRecord: $0.flameRecord,
                                glory: glory.glory, rank: glory.rank)
         }
+        // La frappe ne débite que la poche : le cycle, le total à vie et la dette restent ceux servis.
+        let sparks = game.level.sparkLedger.map {
+            GameSparks.Ledger(pocket: score, cycle: $0.cycle, lifetime: $0.lifetime, debt: $0.debt)
+        }
         let level = GameLevelWire.level(score: score, levelCap: levelCap, levelRecord: game.level.shown.record,
-                                         prestige: game.level.prestige, steps: steps)
-            .carryingSparks(of: game.level, pocket: score)
+                                         prestige: game.level.prestige, steps: steps, sparks: sparks,
+                                         levelMaxLifetime: game.level.levelMaxLifetime)
         let preview = GameLevelWire.mint(nextPreview(after: game, pocket: score, debitable: debitable, glory: glory,
                                                      levelCap: levelCap, steps: steps))
         let minted = game.replacing(
@@ -87,21 +104,8 @@ enum GameOptimistic {
                     : GameBoosts.sparksTailwind(level: level.shown.level, levelRecord: level.shown.record)
             )
         )
-        let shifted = shiftBalance(
-            GameState(
-                game: minted,
-                meesh: state.meesh.map {
-                    $0.replacing(
-                        mintedLifetime: $0.mintedLifetime + 1,
-                        debitablePoints: debitable,
-                        missingPoints: preview.missingPoints,
-                        mintCost: preview.price
-                    )
-                }
-            ),
-            by: 1
-        )
-        return shifted
+        // Le compteur de Meeshes lit le MÊME prix suivant que le héro de frappe (#10898).
+        return withMintCounters(shiftBalance(GameState(game: minted, meesh: state.meesh), by: 1), debitable: debitable, minted: 1)
     }
 
     /// L'aperçu de la frappe SUIVANTE, par la loi que la passerelle servira (#10898) : devant un serveur des étincelles,
@@ -163,23 +167,44 @@ enum GameOptimistic {
         )
     }
 
-    /// Le contenu servi s'y pose, et le score en poche après le crédit.
+    /// Le contenu servi s'y pose, et le score en poche après le crédit (`score`, la poche SERVIE, qui fait foi).
+    /// Les étincelles du coffre suivent la loi du gain (`GameSparks.afterCredit`, #10902) : la dette se rembourse d'abord,
+    /// le cycle et le total à vie montent du gain entier. Le niveau, le Vent arrière et le prix suivant se relisent sur la
+    /// poche d'après. La Gloire du coffre et le gel offert restent ceux du bloc jusqu'à la relecture : rejouée, une
+    /// réclamation déjà servie les compterait deux fois.
     /// `starFragments` : le total collecté tel que la passerelle le sert après l'ouverture (#10011) — `nil`, il reste
     /// celui du bloc.
     static func withChestReward(_ state: GameState, reward: DailyChest, score: Int,
                                 starFragments: StarFragmentsTotal? = nil) -> GameState {
         let game = state.game
-        let level = GameLevelWire.level(score: score, levelCap: GameGlory.levelCap(forRank: game.glory.rank),
-                                         levelRecord: game.level.shown.record, prestige: game.level.prestige,
-                                         steps: game.levelStepFacts)
-        return GameState(
-            game: game.replacing(
-                level: level,
-                chest: game.chest.replacing(status: .claimed, reward: .some(reward)),
-                starFragments: starFragments.map { .some($0) }
-            ),
-            meesh: state.meesh
+        let sparks = game.level.sparkLedger.map { served -> GameSparks.Ledger in
+            let credited = GameSparks.afterCredit(served, points: reward.points)
+            let facts = GameSparks.facts(pocket: score, cycle: credited.cycle, lifetime: credited.lifetime)
+            return GameSparks.Ledger(pocket: facts.pocket, cycle: facts.cycle, lifetime: facts.lifetime, debt: credited.debt)
+        }
+        let levelCap = GameGlory.levelCap(forRank: game.glory.rank)
+        let steps = game.levelStepFacts
+        let level = GameLevelWire.level(score: sparks?.pocket ?? score, levelCap: levelCap,
+                                         levelRecord: game.level.shown.record, prestige: game.level.prestige, steps: steps,
+                                         sparks: sparks, levelMaxLifetime: game.level.levelMaxLifetime)
+        // Le coffre fait MONTER le niveau : l'écart au record se relit exactement, par la loi du bloc (#10896).
+        let tailwind = sparks == nil
+            ? GameBoosts.tailwind(level: level.shown.level, levelRecord: level.shown.record)
+            : GameBoosts.sparksTailwind(level: level.shown.level, levelRecord: level.shown.record)
+        let claimed = game.replacing(
+            level: level,
+            mint: sparks.map {
+                GameLevelWire.mint(GameMint.sparksPreview(
+                    sparks: $0.pocket, mintedLifetime: max(0, game.mint.number - 1), held: game.treasury.held,
+                    glory: game.glory.glory, mythic: game.glory.rank == .mythe, levelCap: levelCap, steps: steps, debt: $0.debt
+                ))
+            },
+            chest: game.chest.replacing(status: .claimed, reward: .some(reward)),
+            boosts: game.boosts.replacing(tailwind: tailwind),
+            starFragments: starFragments.map { .some($0) }
         )
+        let next = GameState(game: claimed, meesh: state.meesh)
+        return sparks.map { withMintCounters(next, debitable: $0.pocket) } ?? next
     }
 
     // MARK: - Rallumage

@@ -182,23 +182,16 @@ extension PostDetailViewModel {
     /// pas déjà un rang au moins aussi prioritaire dans le Prisme (#6531,
     /// jumelle de `FeedViewModel.applyCommentTranslation` — même garde).
     func applyCommentTranslationUpdate(commentId: String, language: String, text: String) {
-        let preferred = preferredLanguages.filter { !$0.isEmpty }.map { $0.lowercased() }
-        guard let incomingRank = preferred.firstIndex(where: { $0 == language.lowercased() }) else { return }
-        func shouldApply(_ comment: FeedComment) -> Bool {
-            guard comment.translatedContent == nil else { return false }
-            let originalRank = comment.originalLanguage
-                .map { $0.lowercased() }
-                .flatMap { orig in preferred.firstIndex(where: { $0 == orig }) }
-            if let originalRank, originalRank <= incomingRank { return false }
-            return true
-        }
-        if let idx = comments.firstIndex(where: { $0.id == commentId }), shouldApply(comments[idx]) {
-            comments[idx].translatedContent = text
+        // Même règle que `FeedViewModel.applyCommentTranslation` : la
+        // traduction rejoint le dictionnaire, l'affichage se re-résout.
+        let langs = preferredLanguages
+        if let idx = comments.firstIndex(where: { $0.id == commentId }) {
+            comments[idx] = comments[idx].mergingTranslation(text, language: language, preferredLanguages: langs)
             return
         }
         for (key, var replies) in repliesMap {
-            if let idx = replies.firstIndex(where: { $0.id == commentId }), shouldApply(replies[idx]) {
-                replies[idx].translatedContent = text
+            if let idx = replies.firstIndex(where: { $0.id == commentId }) {
+                replies[idx] = replies[idx].mergingTranslation(text, language: language, preferredLanguages: langs)
                 repliesMap[key] = replies
                 return
             }

@@ -20,9 +20,13 @@ extension MessageListViewController {
             }
             .store(in: &cancellables)
 
+        // `ConversationAppearanceChange.post` poste sur le fil de l'appelant,
+        // et l'actor `ConversationStore` en est un (relais d'hydratation,
+        // préférence distante) : le saut sur le main PRÉCÈDE le compactMap,
+        // fermeture isolée au MainActor qui trapperait hors du main.
         NotificationCenter.default.publisher(for: ConversationAppearanceChange.notification)
-            .compactMap { ConversationAppearanceChange.appearance(in: $0, for: conversationId) }
             .receive(on: DispatchQueue.main)
+            .compactMap { ConversationAppearanceChange.appearance(in: $0, for: conversationId) }
             .sink { [weak self] appearance in
                 self?.adoptConversationAppearance(appearance, for: conversationId)
             }

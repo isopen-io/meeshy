@@ -412,6 +412,9 @@ extension View {
 /// informe le layout SwiftUI de la taille visible — le platter système colle
 /// alors à la bulle, sans bordure ni card. Anti-« effet bordure » 2026-07-14.
 struct MessageMenuPreviewContainer<Content: View>: View {
+    /// La fenêtre qui porte la vue (Stage Manager, Split View) — la fenêtre clé en repli.
+    @Environment(\.sceneWindowSize) var sceneWindowSize
+    private var hostHeight: CGFloat { SceneWindowSize.resolve(sceneWindowSize, fallback: DeviceLayout.windowSize).height }
     @ViewBuilder let content: () -> Content
     @State private var naturalSize: CGSize = .zero
 
@@ -423,7 +426,7 @@ struct MessageMenuPreviewContainer<Content: View>: View {
     /// (L'overlay custom `MessageOverlayMenu` poursuit le même but avec un
     /// plafond FIXE de 320 pt : il met à l'échelle une frame déjà capturée,
     /// pas une taille naturelle — mécanisme distinct, pas une valeur jumelle.)
-    private var maxHeight: CGFloat { DeviceLayout.windowSize.height * 0.62 }
+    private var maxHeight: CGFloat { hostHeight * 0.62 }
 
     private var fitScale: CGFloat {
         guard naturalSize.height > maxHeight, naturalSize.height > 0 else { return 1 }

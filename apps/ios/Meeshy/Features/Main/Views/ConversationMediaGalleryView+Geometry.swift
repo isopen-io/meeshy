@@ -85,6 +85,19 @@ enum MediaGalleryStage {
         (gutter + MediaStageActionColumn.width + gutter) / MediaStageSeek.lateralFraction
     }
 
+    /// **Une vidéo n'a pas de plancher : son cadre épouse son ratio.**
+    ///
+    /// Les deux planchers protègent ce qui se pose SUR le cadre. Le chrome, lui,
+    /// s'aligne sur le plateau (#6760) et flotte par-dessus ; et sur une vidéo,
+    /// un cadre plus haut que l'image n'est pas un hors-champ habillé, ce sont
+    /// des bandes autour de l'image qu'on est venu regarder (une 16:9 tenait dans
+    /// 206 pt et recevait 330 pt de cadre). Le média n'est ni rogné ni agrandi :
+    /// seul le cadre cesse de dépasser l'image. Les autres natures gardent leurs
+    /// planchers.
+    static func minimumFrame(for kind: AttachmentKind) -> (height: CGFloat, width: CGFloat) {
+        kind == .video ? (0, 0) : (minimumFrameHeight, minimumFrameWidth)
+    }
+
     /// **La bande de progression, elle non plus, n'est pas un nombre** (#6162).
     ///
     /// Elle vaut ce que la barre du SDK occupe réellement
@@ -200,8 +213,10 @@ enum MediaGalleryStage {
     static func resolve(viewport: CGSize,
                         mediaRatio: CGFloat?,
                         presentation: MediaStageFraming.Presentation,
-                        corridors: MediaStageFraming.Corridors) -> MediaStageFraming.Result {
-        MediaStageFraming.resolve(
+                        corridors: MediaStageFraming.Corridors,
+                        kind: AttachmentKind = .image) -> MediaStageFraming.Result {
+        let floors = minimumFrame(for: kind)
+        return MediaStageFraming.resolve(
             MediaStageFraming.Input(
                 viewport: viewport,
                 mediaRatio: mediaRatio ?? freeRegionRatio(viewport: viewport,
@@ -210,8 +225,8 @@ enum MediaGalleryStage {
                 corridors: corridors,
                 presentation: presentation,
                 cardedCornerRadius: cornerRadius,
-                minimumFrameHeight: minimumFrameHeight,
-                minimumFrameWidth: minimumFrameWidth
+                minimumFrameHeight: floors.height,
+                minimumFrameWidth: floors.width
             )
         )
     }
@@ -446,7 +461,8 @@ extension ConversationMediaGalleryView {
                                                      scenes: sceneContext?.scenes ?? [:],
                                                      presentation: stageGeometryPresentation),
             presentation: stageGeometryPresentation.framing,
-            corridors: stageCorridors
+            corridors: stageCorridors,
+            kind: sceneContext?.scenes[attachment.id] == nil ? attachment.kind : .image
         )
     }
 

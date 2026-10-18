@@ -134,7 +134,6 @@ const es = {
   'export.card.compose.chosenReplies': 'Elegir respuestas',
   'export.card.compose.post': 'Publicación arriba',
   'export.card.compose.replies': 'Respuestas en la tarjeta',
-  'export.card.compose.thread': 'Hilo de comentarios',
   'export.card.compose.folded': '+{count} respuestas',
 } satisfies ExportCardCatalog;
 

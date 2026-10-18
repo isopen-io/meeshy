@@ -143,9 +143,18 @@ final class StoryGroupIntroOverlayGuardTests: XCTestCase {
             "goBackToPreviousGroupFromIntro doit réutiliser groupTransition(forward:false) " +
             "(même animation que goToPrevious() côté groupe)."
         )
+        // Le recul de groupe vit dans `landOnPreviousGroup()` depuis 850d8fff8b :
+        // borné par `StoryViewerPosition.previousGroupLanding` (la liste a pu
+        // rétrécir sous le lecteur), il ne s'écrit plus `currentGroupIndex -= 1`.
         XCTAssertTrue(
-            block.contains("currentGroupIndex -= 1"),
-            "goBackToPreviousGroupFromIntro doit décrémenter currentGroupIndex."
+            block.contains("landOnPreviousGroup()"),
+            "goBackToPreviousGroupFromIntro doit atterrir sur le groupe précédent."
+        )
+        let navigation = try source("Meeshy/Features/Main/Views/StoryViewerView+Navigation.swift")
+        let landing = try body(of: "func landOnPreviousGroup() {", in: navigation, closing: "\n    }")
+        XCTAssertTrue(
+            landing.contains("StoryViewerPosition.previousGroupLanding(") && landing.contains("currentGroupIndex = landing.group"),
+            "landOnPreviousGroup doit reculer d'un groupe, borné par StoryViewerPosition."
         )
         XCTAssertFalse(
             block.contains("currentStoryIndex > 0"),

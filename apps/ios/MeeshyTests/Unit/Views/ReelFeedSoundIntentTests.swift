@@ -252,4 +252,22 @@ final class ReelFeedSoundIntentTests: XCTestCase {
         XCTAssertTrue(manager.isForceMuted)
     }
 
+
+    // MARK: - Borne du cache de sondage
+
+    /// Un fil de réels parcouru des heures ajoutait une entrée par média, à vie : chaque sondage republiait le
+    /// dictionnaire entier, et chaque carte montée le recopiait. Le cache garde les sondages les plus récents.
+    @MainActor
+    func test_intent_probeCache_isBounded_keepingTheMostRecentProbes() {
+        let intent = ReelFeedSoundIntent.makeForTesting()
+        let capacity = ReelFeedSoundIntent.presenceCapacity
+        for index in 0..<(capacity + 50) {
+            intent.recordAudioProbe(mediaId: "media-\(index)", probedTrackCount: 1)
+        }
+
+        XCTAssertEqual(intent.audioTrackPresence.count, capacity)
+        XCTAssertFalse(intent.isProbed(mediaId: "media-0"), "les sondages les plus anciens sortent en premier")
+        XCTAssertTrue(intent.isProbed(mediaId: "media-\(capacity + 49)"))
+        XCTAssertTrue(intent.hasAudioTrack(mediaId: "media-50"), "le plus ancien survivant est intact")
+    }
 }

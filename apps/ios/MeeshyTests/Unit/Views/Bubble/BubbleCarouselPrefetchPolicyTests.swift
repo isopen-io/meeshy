@@ -48,4 +48,31 @@ final class BubbleCarouselPrefetchPolicyTests: XCTestCase {
         XCTAssertEqual(BubbleCarouselView.currentAttachment(at: -1, in: [a, b])?.id, "a")
         XCTAssertEqual(BubbleCarouselView.currentAttachment(at: 0, in: [a, b])?.id, "a")
     }
+
+    // MARK: - La liste bouge sous le carrousel (cycle 4)
+
+    /// Une pièce retirée AVANT la page montrée : l'indice seul désignait la
+    /// pièce suivante, et l'indicateur disait « 3 / 2 ». La page suit la pièce.
+    func test_reanchoredPage_followsTheShownAttachment_toItsNewRank() {
+        let a = MessageAttachment(id: "a", mimeType: "image/jpeg", fileUrl: "https://x/a.jpg")
+        let b = MessageAttachment(id: "b", mimeType: "image/jpeg", fileUrl: "https://x/b.jpg")
+        let c = MessageAttachment(id: "c", mimeType: "image/jpeg", fileUrl: "https://x/c.jpg")
+
+        let landing = BubbleCarouselView.reanchoredPage(shownId: "c", index: 2, in: [b, c])
+
+        XCTAssertEqual(landing?.id, "c")
+        XCTAssertEqual(landing?.index, 1)
+        XCTAssertEqual(BubbleCarouselView.reanchoredPage(shownId: "a", index: 0, in: [c, a, b])?.index, 1,
+                       "réordonnée : la pièce montrée reste la même")
+    }
+
+    /// La pièce montrée a disparu : la page voisine, bornée ; plus rien : nil.
+    func test_reanchoredPage_whenTheShownAttachmentLeft_landsOnTheNeighbour() {
+        let a = MessageAttachment(id: "a", mimeType: "image/jpeg", fileUrl: "https://x/a.jpg")
+        let b = MessageAttachment(id: "b", mimeType: "image/jpeg", fileUrl: "https://x/b.jpg")
+
+        XCTAssertEqual(BubbleCarouselView.reanchoredPage(shownId: "gone", index: 5, in: [a, b])?.id, "b")
+        XCTAssertEqual(BubbleCarouselView.reanchoredPage(shownId: "gone", index: 5, in: [a, b])?.index, 1)
+        XCTAssertNil(BubbleCarouselView.reanchoredPage(shownId: "gone", index: 0, in: []))
+    }
 }

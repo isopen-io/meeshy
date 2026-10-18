@@ -54,7 +54,6 @@ const en = {
   'game.banner.place.few': '{count}rd',
   'game.banner.place.other': '{count}th',
   'game.banner.points': '{points} sparks',
-  'game.banner.lifetime': 'record {total}',
   'game.banner.level_max': 'record {level}',
   'game.banner.level_max_a11y': 'level record {level}',
   'game.banner.missing': '{points} to level {level}',

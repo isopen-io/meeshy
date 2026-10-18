@@ -93,9 +93,15 @@ struct MeeshyApp: App {
         // 500-item capacity. removeDuplicates() in nearCapacityPublisher ensures
         // the toast fires exactly once per true→false→true crossing, not on
         // every new enqueue while near capacity.
+        //
+        // Le saut sur le main PRÉCÈDE le filter : `OfflineQueue` est un actor
+        // et émet depuis son exécuteur. Une fermeture écrite ici est isolée au
+        // MainActor ; reçue hors du main, elle trappe
+        // (`_dispatch_assert_queue_fail`) — même forme que le plantage
+        // TestFlight 1915/1916. Garde : OffMainCombineHopSourceGuardTests.
         Self.nearCapacityCancellable = OfflineQueue.shared.nearCapacityPublisher
-            .filter { $0 }
             .receive(on: DispatchQueue.main)
+            .filter { $0 }
             .sink { _ in
                 Task { @MainActor in
                     FeedbackToastManager.shared.showError(

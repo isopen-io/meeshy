@@ -88,8 +88,10 @@ public final class AppDatabase: @unchecked Sendable {
     /// in-memory. Internal for tests.
     static func openOrRecover(at databaseURL: URL) -> (any DatabaseWriter, Bool) {
         let logger = Logger(subsystem: "com.meeshy.sdk", category: "grdb")
+        var phase = OpeningPhase.open
         do {
             let pool = try openPool(at: databaseURL)
+            phase = .migrate
             try runMigrations(on: pool)
             return (pool, false)
         } catch where estUneInterruptionDeSuspension(error) {
@@ -98,6 +100,12 @@ public final class AppDatabase: @unchecked Sendable {
             // perd son cache, jamais ses données. Le prochain lancement, hors
             // suspension, migrera normalement.
             logger.notice("DB open interrupted by suspension; store left INTACT, falling back to in-memory for this session")
+            return inMemoryWriter()
+        } catch where !warrantsRecreation(error, phase: phase) {
+            // Disque plein, fichier verrouillé ou protégé (avant le premier
+            // déverrouillage), E/S passagère : le fichier n'est pas en cause.
+            // Il reste INTACT, la session se replie en mémoire.
+            logger.error("On-disk DB unavailable (\(error.localizedDescription, privacy: .public)); store left INTACT, in-memory for this session")
             return inMemoryWriter()
         } catch {
             logger.error("On-disk DB unusable (\(error.localizedDescription, privacy: .public)); deleting and recreating")
@@ -207,6 +215,28 @@ public final class AppDatabase: @unchecked Sendable {
     /// « ce fichier est illisible ».
     static func estUneInterruptionDeSuspension(_ error: Error) -> Bool {
         DatabaseSuspension.isSuspensionInterruption(error)
+    }
+
+    enum OpeningPhase { case open, migrate }
+
+    /// Le store ne s'EFFACE que s'il est perdu : corrompu (`SQLITE_CORRUPT`,
+    /// `SQLITE_NOTADB`), ou une migration qui ÉCHOUE sur le schéma (erreur SQL,
+    /// contrainte, ou une erreur levée par la migration elle-même) — elle
+    /// échouerait à chaque lancement. Tout le reste dit « pas maintenant »
+    /// (`SQLITE_FULL`, `SQLITE_BUSY`, `SQLITE_LOCKED`, `SQLITE_CANTOPEN` d'un
+    /// fichier protégé avant le premier déverrouillage, `SQLITE_IOERR`,
+    /// `SQLITE_PERM`…) : effacer, c'était perdre la base de l'utilisateur pour
+    /// un disque plein.
+    static func warrantsRecreation(_ error: Error, phase: OpeningPhase) -> Bool {
+        guard let failure = error as? DatabaseError else { return phase == .migrate }
+        switch failure.resultCode {
+        case .SQLITE_CORRUPT, .SQLITE_NOTADB:
+            return true
+        case .SQLITE_ERROR, .SQLITE_CONSTRAINT, .SQLITE_MISMATCH, .SQLITE_SCHEMA:
+            return phase == .migrate
+        default:
+            return false
+        }
     }
 
     /// Delete the SQLite file and its WAL/SHM sidecars so a recreate starts clean.
