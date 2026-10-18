@@ -697,11 +697,14 @@ extension ConversationMediaGalleryView {
     /// plus rien ne peut la lui reprendre.
     @ViewBuilder
     var railCorridor: some View {
-        if allAttachments.count > 1 {
+        // La bande naît avec la largeur MESURÉE de la galerie (sa colonne, son plein écran) : montée avant la
+        // mesure, elle se calait sur la fenêtre puis gardait cet ancrage (vignette décalée d'un pas, cycle 8).
+        if allAttachments.count > 1, measuredViewport.width > 0 {
             ConversationMediaFilmstrip(
                 attachments: allAttachments,
                 currentPageID: $currentPageID,
-                accentColor: accentColor
+                accentColor: accentColor,
+                containerWidth: measuredViewport.width
             )
         }
     }

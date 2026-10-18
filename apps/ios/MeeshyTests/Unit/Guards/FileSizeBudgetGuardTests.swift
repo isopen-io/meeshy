@@ -625,7 +625,10 @@ final class FileSizeBudgetGuardTests: XCTestCase {
     // Cycle 6 iPad — 29 824 → 29 803 (−21). `ConversationListVMOwner` quitte
     // `RootView.swift` pour son propre fichier AVANT d'y recevoir le partage
     // du VM de liste entre fenêtres : extraire d'abord, ajouter ensuite.
-    private static let legacyLineCeiling = 29_803
+    //
+    // Cycle 10 — 29 803 → 29 799 (−4). Le passage à l'auteur suivant quitte
+    // `StoryViewerView+Content.swift` pour `landOnNextGroup()` (+Navigation, borné) : le plafond reprend le mou.
+    private static let legacyLineCeiling = 29_799
 
     // MARK: - Règle 1 — pas de 43ᵉ
 

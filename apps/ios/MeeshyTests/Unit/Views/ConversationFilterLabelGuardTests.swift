@@ -26,7 +26,12 @@ final class ConversationFilterLabelGuardTests: XCTestCase {
     // MARK: - 1. Aucune des deux rangées ne montre l'identité
 
     func test_neitherChipRow_showsTheRawValueAsATitle() throws {
-        for path in [Self.row, Self.panel] {
+        XCTAssertFalse(
+            try source(Self.panel).contains("ThemedFilterChip("),
+            "Le panneau de recherche ne porte plus de rangée de filtres (#10924) : elle " +
+            "doublonnait celle de la tête de liste, la seule qui reste."
+        )
+        for path in [Self.row] {
             XCTAssertFalse(
                 try source(path).contains("title: filter.rawValue"),
                 "\(path) affiche l'IDENTITÉ du filtre. Un `rawValue` sert d'`id`, se compare " +
