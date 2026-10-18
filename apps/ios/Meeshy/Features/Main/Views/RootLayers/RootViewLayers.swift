@@ -138,7 +138,10 @@ struct RootStoryDoorsLayer: ViewModifier {
             .adaptiveOnChange(of: router.path) { _, path in
                 navigationHandoff?.record(path)
             }
-            .task { await onStart() }
+            .task {
+                await onStart()
+                ConversationListVMOwner.endLaunch()
+            }
             .fullScreenCover(item: $storyViewerCoordinator.pendingRequest) { request in
                 StoryViewerContainer(
                     viewModel: storyViewModel,

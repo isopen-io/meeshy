@@ -436,7 +436,7 @@ struct RootView: View {
         async let versionFloor: Void = upgradeGate.checkFloor()
         async let storiesLoad: Void = storyViewModel.loadStories()
         async let statusesLoad: Void = statusViewModel.loadStatuses()
-        async let conversationsLoad: Void = conversationViewModel.loadConversations()
+        async let conversationsLoad: Void = ConversationListVMOwner.loadAtLaunch(conversationViewModel)
         async let unreadRefresh: Void = notifications.manager.refreshUnreadCount()
         _ = await (storiesLoad, statusesLoad, conversationsLoad, unreadRefresh, versionFloor)
     }

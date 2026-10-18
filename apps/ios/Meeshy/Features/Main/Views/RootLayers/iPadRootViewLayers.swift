@@ -127,7 +127,10 @@ struct iPadStoryAndLifecycleLayer: ViewModifier {
                 DeviceLayout.activeWindowScene?.title = String(format: String(localized: "root.scene_title_format", defaultValue: "Meeshy — %@", bundle: .main), title)
             }
             .onDisappear(perform: onDisappear)
-            .task { await onStart() }
+            .task {
+                await onStart()
+                ConversationListVMOwner.endLaunch()
+            }
     }
 }
 

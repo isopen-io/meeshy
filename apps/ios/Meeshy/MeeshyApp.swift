@@ -658,6 +658,11 @@ struct MeeshyApp: App {
                         // servie, jamais vide puis remplie.
                         launchSplash.reach(.conversationList)
                         _ = await CacheCoordinator.shared.conversations.load(for: "list")
+                        // #10927 — la liste se lit DÈS la session restaurée : le
+                        // `.task` de la racine arrivait 0,6 à 2,2 s plus tard, et
+                        // le voile tombait sur une liste vide. La racine rejoint
+                        // ce chargement (`ConversationListVMOwner.loadAtLaunch`).
+                        ConversationListVMOwner.prewarm(userId: authManager.currentUser?.id ?? "")
 
                         // Détacher TOUS les bootstraps réseau (push, VoIP,
                         // unread, sync). Sur un réseau dégradé, chacun peut
