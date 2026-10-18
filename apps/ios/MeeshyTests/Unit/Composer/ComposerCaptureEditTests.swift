@@ -427,7 +427,7 @@ final class ComposerCaptureEditTests: XCTestCase {
         XCTAssertEqual(ComposerCapturePlacement.radius(for: .fullScreen, editing: true, framed: false), 0,
                        "#10930 : la retouche plein écran va jusqu'aux bords")
         XCTAssertEqual(ComposerCapturePlacement.radius(for: .fullScreen, editing: false, framed: false), 0)
-        XCTAssertEqual(ComposerCapturePlacement.radius(for: .card, editing: false), ComposerSceneCameraFrame.cardRadius)
+        XCTAssertEqual(ComposerCapturePlacement.radius(for: .card, editing: false, framed: false), ComposerSceneCameraFrame.cardRadius)
     }
 
     func test_trimTrack_showsItsBoundsToTheMillisecond_andWearsOneRoundedFrame() throws {
