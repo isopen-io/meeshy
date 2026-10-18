@@ -85,7 +85,14 @@ nonisolated enum ComposerEditScene {
 
     /// La zone où la scène tient, dans un conteneur dont `top` et `bottom`
     /// sont les marges système (nulles pour une couche qui les respecte déjà).
-    static func area(container: CGSize, top: CGFloat, bottom: CGFloat, panels: [ComposerEditPanel]) -> CGRect {
+    ///
+    /// **Hors recadrage, c'est le conteneur entier** (#10930) : la prise
+    /// « fit » le viewport et le chrome se pose par-dessus. `framed` — le
+    /// recadrage montré — est le seul cas où elle se réduit, pour laisser ses
+    /// bords aux crochets.
+    static func area(container: CGSize, top: CGFloat, bottom: CGFloat, panels: [ComposerEditPanel],
+                     framed: Bool = true) -> CGRect {
+        guard framed else { return CGRect(origin: .zero, size: container) }
         let haut = top + topBand
         let bas = container.height - bottom - bottomReserve(panels)
         return CGRect(x: margin, y: haut, width: max(0, container.width - margin * 2), height: max(0, bas - haut))
@@ -157,5 +164,22 @@ nonisolated enum ComposerCropPreset: CaseIterable, Hashable, Sendable {
     /// Le preset que ces proportions réalisent ; `nil` pour un recadrage libre.
     static func matching(_ aspect: CGFloat, source: CGSize) -> ComposerCropPreset? {
         allCases.first { abs($0.aspect(source: source) - aspect) < 0.005 }
+    }
+}
+
+/// **Les formats se posent SUR la scène** (#10930, porteur 2026-10-18 :
+/// « afficher les formats de base par-dessus le cadre, si c'est une vidéo à
+/// gauche des boutons pause et mute »). Leur rangée tient la ligne de la
+/// lecture, s'arrête avant elle, et laisse aux deux crochets du bas leur cible.
+nonisolated enum ComposerEditPresetsLayout {
+
+    static func frame(scene: CGRect, playback: CGRect?) -> CGRect {
+        let cible = MeeshyControlSize.tapTarget
+        let espace = ComposerEditPlaybackLayout.spacing
+        let gauche = scene.minX + cible + espace
+        let droite = (playback?.minX ?? scene.maxX - cible) - espace
+        let hauteur = ComposerEditScene.presetsHeight
+        let milieu = playback?.midY ?? scene.maxY - ComposerEditPlaybackLayout.margin - cible / 2
+        return CGRect(x: gauche, y: milieu - hauteur / 2, width: max(0, droite - gauche), height: hauteur)
     }
 }

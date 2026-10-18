@@ -210,9 +210,11 @@ struct ConversationMediaGalleryView: View {
     /// **L'état d'immersion, un seul** (#6142, spec § 3.2). Il a remplacé
     /// `showControls` : un booléen ne pouvait pas porter la RAISON de l'entrée,
     /// et sans elle l'appui long et le glissement rendaient le même écran. Il ne
-    /// s'écrit qu'en un endroit — `onEnterStage`, `+Presentation.swift` — et il
-    /// commande DEUX choses : le plateau, et les cotes que le solveur rend.
-    @State var stagePresentation: StagePresentation = .carded
+    /// s'écrit qu'en un endroit — `onEnterStage`, `+Presentation.swift`. Il ne
+    /// commande plus que le plateau (#10930) : on ENTRE en plein écran, sans
+    /// chrome, et le toucher le pose par-dessus le média sans en changer les
+    /// cotes (`MediaStageVeil.geometryPresentation`).
+    @State var stagePresentation: StagePresentation = .full(pausedOnEntry: false)
     /// `internal` — le menu ⋯ le PILOTE depuis `+Menu.swift`, et `private` est
     /// une portée de FICHIER. Même prix que celui payé par `currentPageID`
     /// au-dessus, et pour la même raison.

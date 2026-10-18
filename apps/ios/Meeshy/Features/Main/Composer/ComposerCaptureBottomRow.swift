@@ -170,10 +170,8 @@ struct ComposerCaptureBottomRow: View {
                 if let trimClip {
                     mediaTrack { ComposerSoundTrack(session: session, url: trimClip.url) }
                 }
-            case .presets:
-                ComposerCropPresetBar(selected: session.cropPreset) { session.applyCropPreset($0) }
-                    .transition(.opacity)
-            case .band, .none:
+            case .presets, .band, .none:
+                // Les proportions se posent SUR la scène (#10930).
                 EmptyView()
             }
         }

@@ -108,10 +108,17 @@ nonisolated enum MediaStageVeil {
     /// s'éprouve :
     /// `geometryPresentation(p, overlays: x) == geometryPresentation(p, overlays: .closed)`
     /// pour tout `p` et tout `x`.
+    ///
+    /// **Et le chrome lui-même ne la change plus** (directive porteur
+    /// 2026-10-18, #10930 : « la vidéo est toujours en plein écran et doit fit
+    /// le viewport »). Le plateau est une SUPERPOSITION : le toucher qui le
+    /// montre pose les contrôles par-dessus le média, il ne le rétrécit pas.
+    /// Le solveur reçoit donc le plein cadre dans les deux états ; seule la
+    /// porte de la pause (`pausedOnEntry`) traverse la projection.
     static func geometryPresentation(_ presentation: StagePresentation,
                                      overlays: Overlays) -> StagePresentation {
         _ = overlays
-        return presentation
+        return .full(pausedOnEntry: presentation.pausedOnEntry)
     }
 
     /// **La marge basse de la rangée d'émojis : la gouttière du plateau, et rien

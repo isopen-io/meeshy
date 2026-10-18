@@ -46,9 +46,11 @@ nonisolated enum ComposerCapturePlacement {
     }
 
     /// Les coins : une carte en a, un plein écran non — et la scène de
-    /// retouche, posée sur le sol, en a toujours (#9567).
-    static func radius(for size: ComposerSceneCameraSize, editing: Bool) -> CGFloat {
-        editing ? ComposerSceneCameraFrame.cardRadius : ComposerSceneCameraFrame.radius(for: size)
+    /// retouche RECADRÉE, posée sur le sol, en a (#9567). Hors recadrage, la
+    /// retouche est plein écran et va jusqu'aux bords (#10930).
+    static func radius(for size: ComposerSceneCameraSize, editing: Bool, framed: Bool) -> CGFloat {
+        guard editing else { return ComposerSceneCameraFrame.radius(for: size) }
+        return framed ? ComposerSceneCameraFrame.cardRadius : 0
     }
 
     /// Le bouton de taille : offert par un hôte à carte, et à tout selfie
