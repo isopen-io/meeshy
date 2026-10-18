@@ -27,6 +27,7 @@
 
 import { contentExitLaw, type ContentExitAttachment, type ContentExitSubject } from './content-exit-law.js';
 import { qualifiesAsReel } from './reel-composition.js';
+import { MESSAGE_EFFECT_FLAGS } from '../types/message-effect-flags.js';
 import { SHARE_LIMITS } from './share-limits.js';
 
 /** Un média : un fichier venu d'une autre app, ou la pièce d'un message. */
@@ -171,6 +172,9 @@ const merge = (...offers: readonly Offer[]): Offer => ({
 
 const plain = (...actions: readonly ShareAction[]): Offer => ({ actions, withheld: [] });
 
+const isBlurredCarrier = (carrier: { readonly isBlurred?: boolean | null; readonly effectFlags?: number | null }): boolean =>
+  carrier.isBlurred === true || ((carrier.effectFlags ?? 0) & MESSAGE_EFFECT_FLAGS.BLURRED) !== 0;
+
 const hasText = (text: string | null | undefined): boolean => (text ?? '').trim().length > 0;
 
 const lawOf = (message: ShareMessage, pieces: readonly ShareMessagePiece[] = message.pieces ?? []) =>
@@ -192,7 +196,9 @@ type NatureVerdict = {
 const natureOf = (sources: readonly { readonly message: ShareMessage; readonly pieces: readonly ShareMessagePiece[] }[]): NatureVerdict => {
   const laws = sources.map(({ message, pieces }) => ({ message, law: lawOf(message, pieces) }));
   const flames = laws.flatMap(({ law }) => (law.forward.allowed && law.forward.maxDurationSeconds !== null ? [law.forward.maxDurationSeconds] : []));
-  const blurred = laws.some(({ law }) => law.nature === 'ordinary' && !law.exportable);
+  const blurred = sources.some(
+    ({ message, pieces }) => isBlurredCarrier(message) || pieces.some(isBlurredCarrier),
+  );
   const encrypted = sources.some(({ message }) => message.encrypted === true);
   const citesProtected = sources.some(({ message }) => message.citesProtected === true);
   const withhold = [

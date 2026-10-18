@@ -41,9 +41,12 @@
  * prouve que la requête ne l'a pas lue, jamais que le contenu est ordinaire.
  *
  * Le FLOU n'est pas une nature, mais il a son verdict (D8, #10949, porteur
- * 2026-10-18) : un contenu flouté — message OU l'une de ses pièces — se
- * TRANSFÈRE, son flou hérité par la copie ({@link forwardedCopyProtection}),
- * et RIEN D'AUTRE ne sort : `exportable` est faux. Le CHIFFREMENT n'est pas une
+ * 2026-10-18) : un contenu flouté se TRANSFÈRE, son flou hérité par la copie
+ * ({@link forwardedCopyProtection}, qui lit le message ET chaque pièce), et
+ * RIEN D'AUTRE ne sort : `exportable` est faux pour un message flouté, ou dont
+ * TOUTES les pièces le sont — une pièce lue seule compte. Une pièce floutée
+ * parmi des pièces ouvertes ne ferme pas ses voisines : l'appelant la masque
+ * (D6), comme `maskedAttachment` côté serveur. Le CHIFFREMENT n'est pas une
  * nature non plus : il garde ses propres restrictions (`messageProtection`,
  * `maskedAttachment`, la copie serveur refusée par la passerelle), que
  * l'appelant COMPOSE avec ces verdicts.
@@ -191,7 +194,7 @@ export function contentExitLaw(subject: ContentExitSubject | null | undefined): 
   const declaredEphemeral = (flags & EPHEMERAL) !== 0 || instantOf(subject.expiresAt) !== null;
   if (duration === null) {
     if (declaredEphemeral) return AFTER_READ_FLAME;
-    return blurredBy(subject) || pieces.some(blurredBy) ? BLURRED_ORDINARY : ORDINARY;
+    return blurredBy(subject) || (pieces.length > 0 && pieces.every(blurredBy)) ? BLURRED_ORDINARY : ORDINARY;
   }
 
   return {

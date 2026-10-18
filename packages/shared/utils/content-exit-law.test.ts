@@ -36,7 +36,8 @@ describe('contentExitLaw — la table de la spec, ligne par ligne', () => {
     ['le flou seul : il se transfère, rien d’autre ne sort (D8)', { isBlurred: true, effectFlags: BLURRED }, BLURRED_ONLY],
     ['la colonne de flou seule, sans le bit (D8)', { isBlurred: true }, BLURRED_ONLY],
     ['le bit de flou seul, sans la colonne (D8)', { effectFlags: BLURRED }, BLURRED_ONLY],
-    ['une pièce floutée sous un message ordinaire (D8)', { attachments: [{}, { isBlurred: true }] }, BLURRED_ONLY],
+    ['une pièce floutée parmi des pièces ouvertes : l’appelant la masque, ses voisines sortent (D6, D8)', { attachments: [{}, { isBlurred: true }] }, ORDINARY],
+    ['toutes les pièces floutées (D8)', { attachments: [{ isBlurred: true }, { effectFlags: BLURRED }] }, BLURRED_ONLY],
     ['une durée nulle, qui n’est pas une durée', { ephemeralDuration: 0 }, ORDINARY],
     ['des pièces ordinaires', { attachments: [{}, { effectFlags: 0, isViewOnce: false }] }, ORDINARY],
 

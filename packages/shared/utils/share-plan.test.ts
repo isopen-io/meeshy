@@ -153,6 +153,12 @@ describe('planShare — nature du contenu × actions', () => {
     expect(plan.withheld).toContainEqual({ action: 'save', reason: 'blurred' });
   });
 
+  it('une pièce floutée dans le message transféré : la copie hérite du flou, rien d’autre ne sort (D8)', () => {
+    const plan = planShare({ entry: { kind: 'messages', messages: [withPieces([image('a'), { ...image('b'), isBlurred: true }])] } });
+    expect(plan.blurInherited).toBe(true);
+    expect(plan.actions).not.toContain('save');
+  });
+
   it('chiffré : ne se publie pas, se copie sur l’appareil, avertit vers une destination non chiffrée (D7, V8)', () => {
     const plan = planShare({
       entry: { kind: 'messages', messages: [message({ encrypted: true })] },
