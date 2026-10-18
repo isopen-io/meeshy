@@ -134,16 +134,16 @@ describe('MeeshService.mint — la Gloire part dans la même transaction', () =>
   });
 });
 
-describe('MeeshService.mint — le niveau ne baisse pas, les niveaux gagnés se gravent', () => {
-  it('un compte sans record grave le record et la Gloire des niveaux de son CYCLE, la frappe ouvre le niveau 10', async () => {
+describe('MeeshService.mint — la frappe fait baisser le niveau, les niveaux gagnés se gravent', () => {
+  it('un compte sans record grave le record et la Gloire des niveaux de sa poche APRÈS la frappe, qui ouvre le niveau 10', async () => {
     const db = fakeGameDb();
     richAccount(db, { score: 100 * 15 * 15, levelRecord: null });
 
     await new MeeshService(db.prisma).mint(USER, 'frappe-record-1');
 
-    // Le cycle (22 500) reste entier après la frappe : le niveau 15, étape du 10 faite par la frappe elle-même.
-    expect(db.user.rows[0]?.levelRecord).toBe(15);
-    expect(db.gloryLedger.rows.filter((r) => r.reason === 'level')).toHaveLength(14);
+    // La poche (22 500, niveau 15) paie la frappe et retombe au niveau 14 ; l'étape du 10 est faite par la frappe elle-même.
+    expect(db.user.rows[0]?.levelRecord).toBe(14);
+    expect(db.gloryLedger.rows.filter((r) => r.reason === 'level')).toHaveLength(13);
     expect(db.gloryLedger.rows.filter((r) => r.reason === 'mint')).toHaveLength(1);
     expect(db.gloryLedger.rows.find((r) => r.reason === 'mint')).toMatchObject({ delta: GLORY_POINTS.mint });
   });

@@ -23,6 +23,33 @@ enum GameMintCostCopy {
                       bundle: .main)
     }
 
+    /// Le passage de niveau que la frappe coûte (#10892) : la poche fait le niveau, la frappe la dépense.
+    struct LevelPassage: Equatable {
+        /// « Niveau 9 → 8 ».
+        let text: String
+        /// « Ton niveau passera de 9 à 8 » — une phrase, jamais une flèche.
+        let accessibilityLabel: String
+    }
+
+    /// Lu sur la VÉRITÉ (`shownLevels`, #9688) ; `nil` quand la frappe ne coûte aucun niveau.
+    static func levelPassage(_ mint: GameMintPreview) -> LevelPassage? {
+        let levels = mint.shownLevels
+        guard levels.levelsLost > 0, levels.levelAfter < levels.levelBefore else { return nil }
+        return LevelPassage(text: levelPassageText(before: levels.levelBefore, after: levels.levelAfter),
+                            accessibilityLabel: levelPassageSpoken(before: levels.levelBefore, after: levels.levelAfter))
+    }
+
+    static func levelPassageText(before: Int, after: Int) -> String {
+        let passage = "\(GameCopy.formatCount(before)) → \(GameCopy.formatCount(after))"
+        return String(localized: "game.mint.chip.level", defaultValue: "Niveau \(passage)", bundle: .main)
+    }
+
+    static func levelPassageSpoken(before: Int, after: Int) -> String {
+        let from = GameCopy.formatCount(before)
+        let to = GameCopy.formatCount(after)
+        return String(localized: "game.mint.chip.level_a11y", defaultValue: "Ton niveau passera de \(from) à \(to)", bundle: .main)
+    }
+
     static func blockerMessage(_ mint: GameMintPreview) -> String? {
         switch mint.blocker {
         case .sparksDebt(let debt):
@@ -54,6 +81,7 @@ enum GameMintCostCopy {
         switch code {
         case .mintBlockedByDebt: debtText(debt ?? 0)
         case .treasuryLocked: GameCopy.errorMessage(for: .treasuryLocked)
+        case .priceChanged: GameCopy.errorMessage(for: .priceChanged)
         default: genericFailure
         }
     }

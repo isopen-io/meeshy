@@ -189,7 +189,7 @@ extension GameText {
     static var prestigeMee: String { String(localized: "game2.prestige.mee", defaultValue: "Tu as atteint le niveau 100 : tu peux passer en Prestige, ou continuer à monter.", bundle: .main) }
 
     static func prestigeMeo(glory: String) -> String {
-        String(localized: "game2.prestige.meo", defaultValue: "Ton niveau repart à 1 et tes points en poche à 0. En échange : une étoile sur ton anneau, un trophée numéroté et \(glory) de Gloire. Ton rang ne baisse jamais.", bundle: .main)
+        String(localized: "game2.prestige.meo", defaultValue: "Ton niveau repart à 1 et tes étincelles convertibles à 0 ; ton record d’étincelles et ton record de niveau sont conservés. En échange : une étoile sur ton anneau, un trophée numéroté et \(glory) de Gloire. Ton rang ne baisse jamais.", bundle: .main)
     }
 
     static func prestigeConfirmTitle(number: String) -> String {
@@ -198,9 +198,9 @@ extension GameText {
 
     static var prestigeConfirmResets: String { String(localized: "game2.prestige.confirm.resets", defaultValue: "Ce qui repart : ton niveau (à 1) et tes points en poche (à 0).", bundle: .main) }
 
-    static var prestigeConfirmKeeps: String { String(localized: "game2.prestige.confirm.keeps", defaultValue: "Ce qui reste : ton rang, ta Gloire, tes Meeshes, ta Flamme et tes trophées.", bundle: .main) }
+    static var prestigeConfirmKeeps: String { String(localized: "game2.prestige.confirm.keeps", defaultValue: "Ce qui reste : ton record d’étincelles, ton record de niveau, ton rang, ta Gloire, tes Meeshes, ta Flamme et tes trophées.", bundle: .main) }
 
-    static var prestigeConfirmAccess: String { String(localized: "game2.prestige.confirm.access", defaultValue: "Attention : ta ligue (niveau 10) et ton duo (niveau 20) se referment tant que ton niveau record n’y est pas revenu.", bundle: .main) }
+    static var prestigeConfirmAccess: String { String(localized: "game2.prestige.confirm.access", defaultValue: "Bonne nouvelle : ta ligue (niveau 10) et ton duo (niveau 20) restent ouverts, car ils lisent ton record de niveau.", bundle: .main) }
 
     /// Ce que le Prestige NE retire PAS : le consentement à la ligue publique reste enregistré — le niveau record repart à 1, la
     /// ligue (10) et le duo (20) se referment, mais le joueur retrouve sa ligue sans rien reconsentir (décision porteur).

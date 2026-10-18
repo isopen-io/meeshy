@@ -3,15 +3,14 @@
  *
  * `docs/product/jeu-meeshy-conception.html` § II.2.
  *
- * ## Le niveau se lit sur les étincelles DU CYCLE (#10846, porteur 2026-10-16)
+ * ## Le niveau se lit sur les étincelles EN POCHE (#10892, porteur 2026-10-17)
  *
- * Hier, le niveau se lisait sur le score EN POCHE, que la frappe d'une Meesh débite : il pouvait
- * redescendre. Désormais il se lit sur les étincelles accumulées DEPUIS LE DERNIER PRESTIGE
- * (`User.sparksSincePrestige`, `sparks.ts`), que la frappe ne touche pas : le niveau ne baisse plus
- * qu'au prestige. Les fonctions de ce fichier restent PURES sur « un score » — c'est l'appelant
- * qui leur passe le cycle. Le niveau RECORD (`levelRecord`) est celui du cycle ; le niveau MAX À VIE
- * (`levelMaxLifetime`) survit au prestige. Le Vent arrière, qui supposait un niveau sous son record,
- * n'a plus de sens : éteint côté serveur (`boosts.ts`).
+ * Le niveau se lit sur les étincelles en poche (`levelSparksOf`, `sparks.ts`), que la frappe d'une Meesh
+ * débite : il redescend du montant dépensé. Les étincelles accumulées depuis le dernier prestige et à vie
+ * ne sont qu'indicatives (le potentiel du profil). Du 2026-10-16 au 2026-10-17 (#10846), le niveau se
+ * lisait sur le cycle. Les fonctions de ce fichier restent PURES sur « un score » — c'est l'appelant qui
+ * leur passe la poche. Le niveau RECORD (`levelRecord`) est le plus haut atteint depuis le prestige ; le
+ * niveau MAX À VIE (`levelMaxLifetime`) survit au prestige. Le Vent arrière souffle à 7 niveaux ou plus sous le record (`boosts.ts`).
  *
  * ## Les noms des paliers (#10849, porteur 2026-10-16)
  *

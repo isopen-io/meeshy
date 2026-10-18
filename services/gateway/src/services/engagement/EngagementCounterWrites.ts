@@ -18,8 +18,12 @@
  * lignes sont des `content.text_message`, l'axe le plus fréquent.
  *
  * Les trois écritures ci-dessous traitent `null` ET l'absence comme zéro par
- * `$ifNull`, en UNE commande atomique chacune. L'invariant qu'elles tiennent
- * avec le score : `User.engagementScore == Σ(EngagementCounter.points)`.
+ * `$ifNull`, en UNE commande atomique chacune. Un crédit écrit le MÊME montant
+ * au compteur et à la poche ; une reprise retire à la poche ce que les
+ * compteurs ont rendu. Mais la frappe débite la poche sans toucher aucun
+ * compteur (#10846) : `User.engagementScore == Σ(EngagementCounter.points)`
+ * n'est PAS un invariant depuis les étincelles. Celui de la poche (#10892) :
+ * `sparksEarnedLifetime − engagementScore + sparksDebt == Σ(prix des frappes au registre) + Σ(poches vidées au Prestige)`.
  *
  * ## Ce qui a été mesuré, et sur quoi
  *
@@ -240,8 +244,8 @@ export type EngagementTakeBack = {
  *
  * ## Ce que l'appelant fait du résultat
  *
- * `taken` est la somme RÉELLEMENT reprise, à retirer du score : c'est ce qui
- * tient `engagementScore == Σ(points)`. Un compte qui n'a plus rien nulle part
+ * `taken` est la somme RÉELLEMENT reprise, à retirer de la poche (ce qu'elle
+ * ne peut rendre devient une dette). Un compte qui n'a plus rien nulle part
  * rend ce qui existe, jamais plus.
  *
  * **Pas de transaction.** Chaque compteur est débité par sa propre commande

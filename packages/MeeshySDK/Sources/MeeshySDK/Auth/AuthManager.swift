@@ -178,6 +178,23 @@ public final class AuthManager: ObservableObject, AuthManaging {
 
     /// Prevents concurrent refresh loops when APIClient fires multiple 401s.
     private var tokenRefreshTask: Task<String, Error>?
+    /// #10904 — la session que `tokenRefreshTask` rafraîchit. Seule une
+    /// demande de CETTE session la rejoint : le compte B qui rejoignait le
+    /// rafraîchissement de A en héritait l'abandon.
+    private var tokenRefreshOwner: SessionOwner?
+    /// #10904 — les jetons que les rafraîchissements de la session ouverte
+    /// ont remplacés, les plus récents en dernier. Un 401 tardif de l'un
+    /// d'eux se rejoue sous le jeton courant sans rien rafraîchir ; un jeton
+    /// qui n'y est pas n'appartient pas à cette session, et sa requête est
+    /// abandonnée.
+    private var retiredSessionTokens: (owner: SessionOwner, tokens: [String])?
+    static let retiredSessionTokenMemory = 8
+
+    /// #10904 — un compte, sous une génération de session.
+    struct SessionOwner: Equatable {
+        let userId: String
+        let generation: UInt64
+    }
 
     /// #10463 — la génération de la session ouverte. `leaveActiveSession` la
     /// change EN ENTRANT : un rafraîchissement lancé sous une autre génération
@@ -651,9 +668,14 @@ public final class AuthManager: ObservableObject, AuthManaging {
         // D1 — guard against concurrent refreshes by invoking refreshSession(force: true)
         // asynchronously. Since refreshSession uses tokenRefreshTask to serialize,
         // multiple concurrent calls to handleUnauthorized() will safely share the same refresh task.
+        // #10904 — pour la session de CE 401 : si un autre compte (ou une autre
+        // session) s'est ouvert avant que la tâche ne s'exécute, rien ne part.
+        let owner = activeUserId.map { SessionOwner(userId: $0, generation: sessionGeneration) }
         let backgroundRefresh = Task { [weak self] in
+            guard let self, let owner, let userId = self.activeUserId,
+                  SessionOwner(userId: userId, generation: self.sessionGeneration) == owner else { return }
             do {
-                _ = try await self?.refreshSession(force: true)
+                _ = try await self.refreshSession(force: true)
             } catch {
                 Logger.auth.error("Background session refresh after 401 failed: \(error.localizedDescription, privacy: .public)")
             }
@@ -667,6 +689,16 @@ public final class AuthManager: ObservableObject, AuthManaging {
         // le stub du test suivant. Voir `cancelPendingTokenRefreshForTesting`.
         unauthorizedRefreshTask = backgroundRefresh
         #endif
+    }
+
+    /// #10904 — le 401 d'une requête qui a présenté `presentedToken`. Rien ne
+    /// se rafraîchit si ce jeton n'est plus celui du compte actif : un 401
+    /// tardif d'un compte quitté, ou d'un jeton déjà renouvelé, ne relance
+    /// pas la session du moment.
+    public func handleUnauthorized(presentedToken: String?) {
+        guard let presentedToken, let userId = activeUserId, !isLeavingActiveSession,
+              sessionTokenInUse(for: userId) == presentedToken else { return }
+        handleUnauthorized()
     }
 
     // MARK: - Handle auth:session-revoked (server-side invalidation)
@@ -924,17 +956,79 @@ public final class AuthManager: ObservableObject, AuthManaging {
         self.updateSavedAccountActivity(from: user)
     }
 
+    /// #10904 — le rafraîchissement demandé par une REQUÊTE, au nom du jeton
+    /// qu'elle a présenté. Rend le jeton sous lequel la rejouer, ou lève
+    /// `CancellationError` quand elle ne doit pas l'être.
+    ///
+    /// - `stillInstalled` : le client présente encore, au retour du 401, le
+    ///   jeton qu'il a mis sur la requête (même génération de jeton). Seul ce
+    ///   cas rafraîchit — et seulement si ce jeton est celui du compte actif.
+    /// - Sinon le jeton a changé depuis l'envoi. Remplacé par un
+    ///   rafraîchissement de la MÊME session : la requête se rejoue sous le
+    ///   jeton courant (ou rejoint le rafraîchissement en vol), sans en lancer
+    ///   un autre. Toute autre origine — autre compte, session quittée puis
+    ///   rouverte, sortie en cours — abandonne la requête.
+    public func refreshSession(presentedToken: String, stillInstalled: Bool, force: Bool) async throws -> String {
+        guard let userId = activeUserId, !isLeavingActiveSession else { throw CancellationError() }
+        let owner = SessionOwner(userId: userId, generation: sessionGeneration)
+        let current = sessionTokenInUse(for: userId)
+        if stillInstalled, presentedToken == current {
+            return try await refreshSession(force: force)
+        }
+        // Encore installé à la lecture du client, mais remplacé pendant le saut
+        // vers cet acteur : c'est le cas des jetons remplacés, pas un abandon.
+        guard let retired = retiredSessionTokens, retired.owner == owner,
+              retired.tokens.contains(presentedToken) else {
+            throw CancellationError()
+        }
+        if let task = tokenRefreshTask, tokenRefreshOwner == owner {
+            return try await awaitRefresh(task, for: owner)
+        }
+        guard let current else { throw MeeshyError.auth(.sessionExpired) }
+        return current
+    }
+
+    /// #10904 — le jeton que la session ouverte PRÉSENTE : celui installé en
+    /// mémoire (`applySession`, reprise), le trousseau à défaut (réveil en
+    /// arrière-plan avant tout amorçage). Une écriture ratée au trousseau ne
+    /// désynchronise donc pas la référence de ce que le client envoie.
+    func sessionTokenInUse(for userId: String) -> String? {
+        APIClient.shared.authToken ?? keychain.load(forKey: tokenKey(for: userId), account: nil)
+    }
+
+    /// #10904 — le rafraîchissement attendu ne vaut que si sa session est
+    /// toujours la session ouverte au retour : une bascule pendant l'attente
+    /// abandonne la requête au lieu de la rejouer après la sortie de son compte.
+    private func awaitRefresh(_ task: Task<String, Error>, for owner: SessionOwner) async throws -> String {
+        let token = try await task.value
+        guard let userId = activeUserId, !isLeavingActiveSession,
+              SessionOwner(userId: userId, generation: sessionGeneration) == owner else {
+            throw CancellationError()
+        }
+        return token
+    }
+
+    /// #10904 — `token` vient d'être remplacé dans la session `owner`.
+    private func retire(_ token: String, from owner: SessionOwner) {
+        var tokens = retiredSessionTokens?.owner == owner ? retiredSessionTokens?.tokens ?? [] : []
+        tokens.append(token)
+        retiredSessionTokens = (owner, Array(tokens.suffix(Self.retiredSessionTokenMemory)))
+    }
+
     @discardableResult
     public func refreshSession(force: Bool = false) async throws -> String {
-        if let task = tokenRefreshTask {
-            return try await task.value
-        }
-
         guard let userId = activeUserId else {
             throw MeeshyError.auth(.sessionExpired)
         }
+        let owner = SessionOwner(userId: userId, generation: sessionGeneration)
+        // #10904 — seule la MÊME session rejoint le rafraîchissement en vol.
+        // Celui d'une session quittée s'abandonnera de lui-même ; le rejoindre
+        // ferait hériter son abandon au compte qui vient de s'ouvrir.
+        if let task = tokenRefreshTask, tokenRefreshOwner == owner {
+            return try await awaitRefresh(task, for: owner)
+        }
 
-        guard let token = keychain.load(forKey: tokenKey(for: userId), account: nil) else {
+        guard let token = sessionTokenInUse(for: userId) else {
             requireReauthentication(userId: userId, generation: sessionGeneration)
             throw MeeshyError.auth(.sessionExpired)
         }
@@ -968,6 +1062,9 @@ public final class AuthManager: ObservableObject, AuthManaging {
                     Logger.auth.info("Refreshed session abandoned: its account is no longer the active one")
                     throw CancellationError()
                 }
+                // #10904 — le jeton remplacé reste reconnu comme de CETTE
+                // session : son 401 tardif se rejouera sans rien rafraîchir.
+                self.retire(token, from: owner)
                 try self.applySession(token: newToken, sessionToken: data.sessionToken, user: newUser)
                 return newToken
             } catch let error as MeeshyError {
@@ -989,12 +1086,18 @@ public final class AuthManager: ObservableObject, AuthManaging {
         }
 
         tokenRefreshTask = task
+        tokenRefreshOwner = owner
 
+        // #10904 — ne libère que SA tâche : une autre session a pu en poser
+        // une depuis, et l'effacer la ferait rafraîchir deux fois.
         defer {
-            tokenRefreshTask = nil
+            if tokenRefreshTask == task {
+                tokenRefreshTask = nil
+                tokenRefreshOwner = nil
+            }
         }
 
-        return try await task.value
+        return try await awaitRefresh(task, for: owner)
     }
 
     // MARK: - Migration from legacy global keys (one-time, at first launch)
@@ -1185,6 +1288,8 @@ public final class AuthManager: ObservableObject, AuthManaging {
 
         let pending = tokenRefreshTask
         tokenRefreshTask = nil
+        tokenRefreshOwner = nil
+        retiredSessionTokens = nil
         pending?.cancel()
         _ = try? await pending?.value
     }

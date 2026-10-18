@@ -26,24 +26,27 @@ struct GameBannerBadgeModel: Equatable {
     /// La poche d'étincelles (#10846) — `sparks` servi, sinon `points` (même nombre devant un serveur antérieur) ;
     /// `nil` quand le serveur ne les sert pas à ce lecteur (#9541 : soi et les amis).
     let pocket: Int?
-    /// Le total d'étincelles gagnées à vie — `nil` devant un serveur antérieur : il ne s'invente pas.
+    /// Le record d'étincelles (le total cumulé à vie) — `nil` devant un serveur antérieur : il ne s'invente pas.
     let lifetime: Int?
-    /// Le niveau max à vie, qui survit au prestige — jamais sous le niveau montré.
+    /// Le record de niveau, qui survit au prestige — jamais sous le niveau montré.
     let levelMax: Int
 
     var levelName: String { GameCopy.tierName(tier) }
     var rankName: String { GameCopy.rankLabel(rank, division5: division, mythic: mythic) }
 
-    /// Le cercle reste PLEIN : le niveau se lit sur le CYCLE d'étincelles, que la fiche ne reçoit pas — la poche
-    /// (servie) n'en est pas la base, et en tirer une progression la ferait mentir dès la première frappe.
-    var levelProgress: Double { 1 }
+    /// Le cercle se remplit de la POCHE, base du niveau (#10892). Quand elle ne porte pas le niveau servi (retenu par une
+    /// étape, borné par le rang, ou un serveur antérieur), il reste PLEIN plutôt que de mentir.
+    var levelProgress: Double {
+        guard let pocket, GameLevels.level(forScore: pocket, cap: nil) == level else { return 1 }
+        return GameLevels.progress(forScore: pocket, cap: nil).progress
+    }
 
     var pocketText: String? { pocket.map(GameSparksCopy.bannerPocket) }
     var lifetimeText: String? { lifetime.map(GameSparksCopy.bannerLifetime) }
     /// TOUJOURS montré, même égal au niveau (décision porteur 2026-10-16).
     var levelMaxText: String { GameSparksCopy.bannerLevelMax(levelMax) }
 
-    /// « Niveau 3, palier Braise, premier palier, Niveau max à vie 40, 976 étincelles, 12 000 étincelles gagnées à vie ».
+    /// « Niveau 3, palier Braise, premier palier, Record de niveau 40, 976 étincelles, Record d’étincelles : 12 000 ».
     var levelAccessibilityLabel: String {
         let parts: [String?] = [
             GameCopy.levelRingAccessibility(level: level, tier: tier),
@@ -140,7 +143,7 @@ struct GameBannerBadgeView: View {
         GeometryReader { proxy in
             let side = max(0, (proxy.size.width - centerClearance) / 2)
             HStack(alignment: .bottom, spacing: 0) {
-                // Chaque groupe s'ANCRE à son angle bas : de hauteurs différentes (le niveau porte son max à vie),
+                // Chaque groupe s'ANCRE à son angle bas : de hauteurs différentes (le niveau porte son record),
                 // ils restent tous deux posés sur le bord bas de la bannière.
                 levelGroup
                     .frame(maxWidth: side, maxHeight: .infinity, alignment: .bottomLeading)
@@ -154,8 +157,8 @@ struct GameBannerBadgeView: View {
         .dynamicTypeSize(...DynamicTypeSize.xxLarge)
     }
 
-    /// Le nom du niveau au-dessus de son cercle et le niveau max à vie dessous ; à côté, la poche d'étincelles en grand
-    /// et le total à vie en petit.
+    /// Le nom du niveau au-dessus de son cercle et le record de niveau dessous ; à côté, la poche d'étincelles en grand
+    /// et le record d'étincelles en petit.
     private var levelGroup: some View {
         VStack(alignment: .leading, spacing: MeeshySpacing.xxs) {
             caption(model.levelName)

@@ -523,8 +523,10 @@ public final class SocialSocketManager: ObservableObject, SocialSocketProviding,
         let tokenExpired = Self.isJWTExpired(token)
         if tokenExpired {
             Logger.socket.warning("SocialSocket: JWT expired, triggering refresh instead of connecting")
+            // #10904 — au nom du jeton lu ici : il ne rafraîchit rien s'il
+            // n'est plus celui du compte actif quand la tâche s'exécute.
             Task { @MainActor in
-                AuthManager.shared.handleUnauthorized()
+                AuthManager.shared.handleUnauthorized(presentedToken: token)
             }
             return .notArmed
         }
@@ -567,10 +569,18 @@ public final class SocialSocketManager: ObservableObject, SocialSocketProviding,
 
     private func retireTransport() {
         guard let retiring = manager else { return }
+        // Le transport retiré garde ses accusés en vol, jamais sa boucle de
+        // reconnexion : déjà lancée (coupure réseau), elle se tenait elle-même
+        // en vie (`asyncAfter` de Socket.IO) et réessayait sans fin — un
+        // transport fantôme de plus à chaque `forceReconnect` hors ligne, puis
+        // N connexions ouvertes d'un coup au retour du serveur.
+        retiring.reconnects = false
         retiringTransports.append(retiring)
         let id = ObjectIdentifier(retiring)
         DispatchQueue.main.asyncAfter(deadline: .now() + Self.ackRetirementGrace) { [weak self] in
-            self?.retiringTransports.removeAll { ObjectIdentifier($0) == id }
+            guard let self else { return }
+            self.retiringTransports.filter { ObjectIdentifier($0) == id }.forEach { $0.disconnect() }
+            self.retiringTransports.removeAll { ObjectIdentifier($0) == id }
         }
     }
 
@@ -960,14 +970,22 @@ public final class SocialSocketManager: ObservableObject, SocialSocketProviding,
             Logger.socket.info("SocialSocket connected")
         }
 
-        socket.on(clientEvent: .disconnect) { [weak self] _, _ in
+        socket.on(clientEvent: .disconnect) { [weak self, weak socket] data, _ in
             guard let self else { return }
+            // Seul le socket COURANT réarme : un ancien, remplacé, n'a plus rien à rouvrir.
+            let retries = SocketDisconnectPolicy.retries(afterReason: SocketDisconnectPolicy.reason(in: data))
+                && socket != nil && socket === self.socket
             DispatchQueue.main.async {
                 self.isConnected = false
                 if self.hadPreviousConnection {
                     self.connectionState = .reconnecting(attempt: 0)
                 } else {
                     self.connectionState = .disconnected
+                }
+                // Coupure prononcée par la passerelle, sur le socket COURANT :
+                // Socket.IO ne la rattrape pas (`SocketDisconnectPolicy`).
+                if retries {
+                    self.scheduleReconnectWithBackoff()
                 }
             }
             Logger.socket.info("SocialSocket disconnected")

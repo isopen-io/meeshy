@@ -515,6 +515,7 @@ final class DependencyContainer {
                         CommentQuotationStore.shared.clearAll()
                         StreakReminderScheduler.shared.annulerTout()
                         ConversationProtectionPreferenceStore.shared.purgeAll()
+                        ArrivalCelebrationController.shared.resetForLogout()
                     }
                     ContactResolveService.shared.purge()
                     await PendingStatusQueue.shared.clearAll()

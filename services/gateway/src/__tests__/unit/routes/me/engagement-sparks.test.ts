@@ -138,6 +138,8 @@ describe('GET /me/engagement — les étincelles', () => {
     expect(data.meesh.mintCost).toBeLessThan(1221);
     expect(data.meesh.baseMintCost).toBe(1221);
     expect(data.meesh.debitablePoints).toBe(300);
+    // Le facteur de la LOI (#10894), jamais le rapport de deux prix arrondis : 300 étincelles, niveau 1, 0,505.
+    expect(data.meesh.costFactor).toBe(0.505);
     await app.close();
   });
 

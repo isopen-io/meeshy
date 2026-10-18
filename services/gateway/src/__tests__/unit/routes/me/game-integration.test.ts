@@ -108,8 +108,10 @@ describe('GET /me/game/privacy', () => {
 });
 
 describe('GET /users/:userId/game', () => {
-  const veteran = (db: FakeGameDb, id: string, fields: Record<string, unknown> = {}) =>
-    seedUser(
+  const veteran = (db: FakeGameDb, id: string, fields: Record<string, unknown> = {}) => {
+    // L'étape du 10 FAITE (une Meesh frappée) : le niveau 11 servi est celui du bloc du membre (#10903).
+    db.meeshLedger.rows.push({ id: `mint-${id}`, userId: id, delta: 1, reason: 'mint', requestId: `rq-mint-${id}` });
+    return seedUser(
       db,
       {
         engagementScore: 12_180,
@@ -121,6 +123,7 @@ describe('GET /users/:userId/game', () => {
       },
       id,
     );
+  };
   const befriend = (db: FakeGameDb, a = USER, b = OTHER) =>
     db.friendRequest.rows.push({ id: `f-${a}-${b}`, status: 'accepted', senderId: a, receiverId: b, updatedAt: new Date() });
   const seedWealth = (db: FakeGameDb, userId: string, balance: number, glory: number) => {

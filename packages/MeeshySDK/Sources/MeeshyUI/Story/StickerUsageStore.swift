@@ -132,8 +132,19 @@ public final class StickerUsageStore: ObservableObject {
     @Published public private(set) var favorites: [StickerUsageEntry] = []
 
     private let defaults: UserDefaults
-    private let recentsKey = "meeshy.sticker.recents"
-    private let favoritesKey = "meeshy.sticker.favorites"
+    private static let recentsBase = "meeshy.sticker.recents"
+    private static let favoritesBase = "meeshy.sticker.favorites"
+    /// Le compte dont on sert les listes : récents et favoris lui appartiennent.
+    /// Sous des clés globales, le compte suivant voyait ceux du précédent.
+    private var account: String?
+    private var accountSubscription: AnyCancellable?
+    private var recentsKey: String { Self.key(Self.recentsBase, account) }
+    private var favoritesKey: String { Self.key(Self.favoritesBase, account) }
+
+    static func key(_ base: String, _ account: String?) -> String {
+        guard let account, !account.isEmpty else { return base }
+        return "\(base)@\(account)"
+    }
 
     public static let shared = StickerUsageStore()
 
@@ -142,8 +153,33 @@ public final class StickerUsageStore: ObservableObject {
     ///   les préférences de l'app HÔTE pendant les tests — le piège que la
     ///   grappe des tests nomme « cascade de drapeaux et domaine de l'app
     ///   hôte », et qui rend deux suites dépendantes de leur ordre.
-    public init(defaults: UserDefaults = .standard) {
+    ///   - accountChanges: le compte actif ; par défaut celui d'`AuthManager`.
+    public init(defaults: UserDefaults = .standard, accountChanges: AnyPublisher<String?, Never>? = nil) {
         self.defaults = defaults
+        recents = decode(recentsKey)
+        favorites = decode(favoritesKey)
+        let changes = accountChanges
+            ?? AuthManager.shared.$currentUser.map { $0?.id }.removeDuplicates().eraseToAnyPublisher()
+        accountSubscription = changes.sink { [weak self] id in
+            MainActor.assumeIsolated { self?.adopt(account: id) }
+        }
+    }
+
+    /// Sert les listes du compte `id`. Les listes d'avant ce correctif, sous
+    /// les clés globales, reviennent au PREMIER compte qui se présente — puis
+    /// quittent les clés globales, pour qu'aucun autre n'en hérite.
+    func adopt(account id: String?) {
+        guard id != account else { return }
+        account = id
+        if let id, !id.isEmpty {
+            for base in [Self.recentsBase, Self.favoritesBase] {
+                let scoped = Self.key(base, id)
+                if defaults.data(forKey: scoped) == nil, let legacy = defaults.data(forKey: base) {
+                    defaults.set(legacy, forKey: scoped)
+                }
+                defaults.removeObject(forKey: base)
+            }
+        }
         recents = decode(recentsKey)
         favorites = decode(favoritesKey)
     }

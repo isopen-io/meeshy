@@ -116,8 +116,7 @@ public enum MessageTextRenderer {
             return renderBlocks(MessageBlockParser.parse(text), fontSize: fontSize, color: color, context: context)
         }
         let segments = parse(text, mentionDisplayNames: mentionDisplayNames, validUsernames: validUsernames)
-        let ranges = highlightTerm.flatMap { highlightRanges(in: text, term: $0) } ?? []
-        return buildAttributed(segments, fontSize: fontSize, color: color, context: context, highlightRanges: ranges)
+        return buildAttributed(segments, fontSize: fontSize, color: color, context: context, highlightTerm: highlightTerm)
     }
 
     /// Everything `render` receives besides the text, its size and its color —
@@ -603,7 +602,7 @@ public enum MessageTextRenderer {
         fontSize: CGFloat,
         color: Color,
         context: RenderContext,
-        highlightRanges: [NSRange] = []
+        highlightTerm: String? = nil
     ) -> AttributedString {
         let mentionColor = context.mentionColor
         let hashtagColor = context.hashtagColor
@@ -612,7 +611,6 @@ public enum MessageTextRenderer {
         let mentionDisplayNames = context.mentionDisplayNames
         let trackedLinks = context.trackedLinks
         var result = AttributedString()
-        var charOffset = 0
 
         for segment in segments {
             switch segment {
@@ -628,8 +626,7 @@ public enum MessageTextRenderer {
                 attr.foregroundColor = color
                 if styles.contains(.strikethrough) { attr.strikethroughStyle = .single }
                 if styles.contains(.underline) { attr.underlineStyle = .single }
-                applyHighlight(to: &attr, segmentText: str, charOffset: charOffset, ranges: highlightRanges)
-                charOffset += str.utf16.count
+                applyHighlight(to: &attr, segmentText: str, term: highlightTerm)
                 result.append(attr)
 
             case .code(let str, let styles):
@@ -639,7 +636,6 @@ public enum MessageTextRenderer {
                 attr.backgroundColor = color.opacity(0.12)
                 if styles.contains(.strikethrough) { attr.strikethroughStyle = .single }
                 if styles.contains(.underline) { attr.underlineStyle = .single }
-                charOffset += str.utf16.count
                 result.append(attr)
 
             case .mentionLink(let display, let url, let username):
@@ -653,7 +649,6 @@ public enum MessageTextRenderer {
                 if let mentionColor {
                     attr.foregroundColor = mentionColor
                 }
-                charOffset += display.utf16.count
                 result.append(attr)
 
             case .hashtagLink(let display, let url, _):
@@ -664,13 +659,10 @@ public enum MessageTextRenderer {
                 if let hashtagColor {
                     attr.foregroundColor = hashtagColor
                 }
-                charOffset += display.utf16.count
                 result.append(attr)
 
             case .link(let written):
-                charOffset += written.sourceCount
                 if context.linksAreInert {
-                    charOffset += written.inertText.utf16.count - written.sourceCount
                     var plain = AttributedString(written.inertText)
                     plain.font = Self.font(fontSize, .regular, relative: usesRelativeFont)
                     plain.foregroundColor = color
@@ -704,20 +696,18 @@ public enum MessageTextRenderer {
 
     // MARK: - Highlight Application
 
+    /// Le terme est cherché dans le texte AFFICHÉ du segment. Les plages
+    /// prises sur le texte BRUT tombaient à côté dès qu'un marqueur Markdown
+    /// (`**`, `_`, `~~`, accents graves, syntaxe de lien) précédait la
+    /// correspondance : retirés à l'affichage, ils décalaient chaque surlignage
+    /// de leur longueur (« oo » dans « **a** foo bar » surlignait « ar »).
     private static func applyHighlight(
         to attr: inout AttributedString,
         segmentText: String,
-        charOffset: Int,
-        ranges: [NSRange]
+        term: String?
     ) {
-        guard !ranges.isEmpty else { return }
-        // Tout en UTF-16 — l'unité des `NSRange` de `highlightRanges` et de `charOffset` —, ramené en CARACTÈRES
-        // seulement pour indexer l'`AttributedString` : un émoji compte deux unités, une famille bien plus.
-        let segmentRange = NSRange(location: charOffset, length: segmentText.utf16.count)
-        for hlRange in ranges {
-            let intersection = NSIntersectionRange(segmentRange, hlRange)
-            guard intersection.length > 0 else { continue }
-            let localNS = NSRange(location: intersection.location - charOffset, length: intersection.length)
+        guard let term, !term.isEmpty else { return }
+        for localNS in highlightRanges(in: segmentText, term: term) {
             guard let local = Range(localNS, in: segmentText) else { continue }
             let start = segmentText.distance(from: segmentText.startIndex, to: local.lowerBound)
             let length = segmentText.distance(from: local.lowerBound, to: local.upperBound)

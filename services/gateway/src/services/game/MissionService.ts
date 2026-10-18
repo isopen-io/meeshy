@@ -28,7 +28,7 @@ import { PRISM_HOUR_MULTIPLIER, isInPrismHour, prismHourWindow } from '@meeshy/s
 import { chestPriceCutoff, dailyChest, dayEffort, type DailyChest } from '@meeshy/shared/utils/game/chest';
 import { meeshPrice } from '@meeshy/shared/utils/game/mint';
 import { FLAME_FREEZE_MAX, flameStatus } from '@meeshy/shared/utils/game/flame';
-import { SPARKS_USER_SELECT, currentLevelOf, sparksOf, unlockLevelOf } from './SparksFacts';
+import { SPARKS_USER_SELECT, currentLevelOf, levelSparksOf, sparksOf, unlockLevelOf } from './SparksFacts';
 import {
   MISSIONS_MIN_LEVEL,
   MISSION_DIFFICULTIES,
@@ -649,7 +649,7 @@ export class MissionService {
         bonus: chest.bonus,
         bonusPoints: chest.bonusPoints,
       },
-      score: sparksOf(await this.userRow(userId)).cycle,
+      score: levelSparksOf(sparksOf(await this.userRow(userId))),
       ...(await this.starFragmentsServed(userId)),
     };
   }
@@ -710,7 +710,7 @@ export class MissionService {
     return {
       status: 'already-claimed',
       reward: chestRewardOf(day),
-      score: sparksOf(await this.userRow(userId)).cycle,
+      score: levelSparksOf(sparksOf(await this.userRow(userId))),
       ...(await this.starFragmentsServed(userId)),
     };
   }

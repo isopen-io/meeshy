@@ -3,8 +3,9 @@ import { flameBonusPercent, flameForm } from '@meeshy/shared/utils/game/flame';
 import { gloryStanding, levelCapForRank } from '@meeshy/shared/utils/game/glory';
 import { levelOnTheWire, mintOnTheWire } from '@meeshy/shared/utils/game/level-wire';
 import type { LevelStepFacts } from '@meeshy/shared/utils/game/level-steps';
-import { tailwindFactor } from '@meeshy/shared/utils/game/boosts';
+import { sparksTailwindFactor, tailwindFactor } from '@meeshy/shared/utils/game/boosts';
 import { previewMint } from '@meeshy/shared/utils/game/mint';
+import { previewSparksMint, type SparksFacts } from '@meeshy/shared/utils/game/sparks';
 import { treasuryTier } from '@meeshy/shared/utils/game/treasury';
 
 import type { EngagementWithGame } from '@/lib/api/engagement';
@@ -65,18 +66,37 @@ const shiftBalance = (view: EngagementWithGame, delta: number): EngagementWithGa
     : { ...next, meesh: { ...next.meesh, balance: Math.max(0, next.meesh.balance + delta) } };
 };
 
+/**
+ * Les étincelles d'après la frappe (#10892) : la poche paie, le cycle et le total à vie — indicatifs — ne bougent pas.
+ * `undefined` devant un serveur d'avant les étincelles : le niveau garde alors la forme d'hier.
+ */
+const sparksAfterMint = (level: GameBlock['level'], pocket: number): SparksFacts | undefined => {
+  if (level.sparks === undefined) return undefined;
+  const cycle = Math.max(pocket, level.sparksCycle ?? level.sparks);
+  return { pocket, cycle, lifetime: Math.max(cycle, level.sparksLifetime ?? cycle), debt: level.sparksDebt ?? 0 };
+};
+
 export function afterMint(view: EngagementWithGame): EngagementWithGame {
   const game = view.game;
   if (game === undefined || !game.mint.canMint) return view;
   const price = game.mint.price;
   const score = Math.max(0, game.level.score - price);
+  const sparks = sparksAfterMint(game.level, score);
   const debitable = Math.max(0, (view.meesh?.debitablePoints ?? game.level.score) - price);
   const standing = gloryStanding({ glory: game.glory.glory + game.mint.gloryGained, mythic: game.glory.rank === 'mythe', mythicSeat: game.glory.mythic ?? null });
   // Les niveaux s'ouvrent selon le rang (#9688) : le plafond se relit sur le rang d'APRÈS la frappe.
   const levelCap = levelCapForRank(standing.rank);
   // La frappe compte pour les étapes (#9706) : une Meesh de plus, sous la Gloire d'après.
   const steps = stepFactsOf(game.level, standing, { minted: game.mint.number });
-  const level = levelOnTheWire({ score, levelCap, levelRecord: recordOf(game.level), prestige: game.level.prestige, steps });
+  const level = levelOnTheWire({
+    score,
+    levelCap,
+    levelRecord: recordOf(game.level),
+    prestige: game.level.prestige,
+    steps,
+    ...(sparks === undefined ? {} : { sparks, levelMaxLifetime: game.level.levelMaxLifetime ?? null }),
+  });
+  const held = game.treasury.held + 1;
   const next = onGame(view, (current) => ({
     ...current,
     level,
@@ -90,16 +110,40 @@ export function afterMint(view: EngagementWithGame): EngagementWithGame {
       progress: standing.progress,
       mythic: standing.mythic,
     },
-    mint: mintOnTheWire(previewMint({ score, mintedLifetime: current.mint.number, debitablePoints: debitable, levelCap, steps })),
-    boosts: { ...current.boosts, tailwind: tailwindFactor({ level: shownLevel(level), levelRecord: recordOf(level) }) },
+    mint: mintOnTheWire(
+      sparks === undefined
+        ? previewMint({ score, mintedLifetime: current.mint.number, debitablePoints: debitable, levelCap, steps })
+        : previewSparksMint({ sparks: sparks.pocket, mintedLifetime: current.mint.number, held, glory: standing.glory, mythic: standing.rank === 'mythe', levelCap, steps, debt: sparks.debt }),
+    ),
+    // Avec les étincelles, le Vent arrière souffle à 7 niveaux ou plus sous le record (#10896) ; sans, la loi d'hier.
+    boosts: { ...current.boosts, tailwind: (sparks === undefined ? tailwindFactor : sparksTailwindFactor)({ level: shownLevel(level), levelRecord: recordOf(level) }) },
   }));
   const withMeesh = shiftBalance(next, 1);
-  return withMeesh.meesh === undefined
+  // Le compteur de Meeshes lit le MÊME prix suivant que le héro de frappe (#10898) — jamais celui d'avant la frappe.
+  const following = next.game?.mint;
+  return withMeesh.meesh === undefined || following === undefined
     ? withMeesh
     : {
         ...withMeesh,
-        meesh: { ...withMeesh.meesh, mintedLifetime: withMeesh.meesh.mintedLifetime + 1, debitablePoints: debitable },
+        meesh: {
+          ...withMeesh.meesh,
+          mintedLifetime: withMeesh.meesh.mintedLifetime + 1,
+          debitablePoints: debitable,
+          mintCost: following.price,
+          missingPoints: following.missingPoints,
+          canMint: following.canMint,
+          progress: following.price === 0 ? 0 : Math.min(1, debitable / following.price),
+        },
       };
+}
+
+/**
+ * La frappe optimiste, posée UNE fois (#10898). Elle s'applique à l'ouverture de la porte de l'animation, sur ce que le
+ * cache contient alors : si une relecture servie y a déjà posé la frappe — la prochaine pièce n'est plus celle d'avant
+ * le geste —, la rejouer débiterait la poche deux fois et annoncerait le prix d'une pièce de plus.
+ */
+export function afterMintUnlessServed(view: EngagementWithGame, numberBefore: number): EngagementWithGame {
+  return view.game?.mint.number === numberBefore ? afterMint(view) : view;
 }
 
 export function afterFreeze(view: EngagementWithGame): EngagementWithGame {

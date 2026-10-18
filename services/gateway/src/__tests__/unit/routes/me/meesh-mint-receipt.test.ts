@@ -8,7 +8,7 @@
 
 import { describe, it, expect, jest } from '@jest/globals';
 import Fastify, { FastifyInstance, FastifyRequest } from 'fastify';
-import { meeshMintResponseSchema } from '@meeshy/shared/types/game';
+import { meeshMintResponseSchema, priceChangedResponseSchema } from '@meeshy/shared/types/game';
 
 const mint = jest.fn<any>();
 
@@ -52,7 +52,7 @@ describe('POST /me/meesh/mint — aucune Meesh sans débit de points (#10011)', 
     const app = await buildApp();
     const res = await app.inject({ method: 'POST', url: '/api/v1/me/meesh/mint', payload: { requestId: 'frappe-route-03', payWith: 'points' } });
     expect(res.statusCode).toBe(200);
-    expect(mint).toHaveBeenCalledWith(USER_ID, 'frappe-route-03');
+    expect(mint).toHaveBeenCalledWith(USER_ID, 'frappe-route-03', {});
     mint.mockReset();
     await app.close();
   });
@@ -84,6 +84,7 @@ describe('POST /me/meesh/mint', () => {
       levelBefore: 20,
       levelAfter: 16,
       ladder: { levelBefore: 20, levelAfter: 16 },
+      gameRevision: expect.any(Number),
     });
     expect(meeshMintResponseSchema.safeParse(data).success).toBe(true);
     await app.close();
@@ -112,7 +113,7 @@ describe('POST /me/meesh/mint', () => {
 
     const { data } = (await post(app)).json();
 
-    expect(data).toEqual({ status: 'already-minted', balance: 1, mintedLifetime: 1 });
+    expect(data).toEqual({ status: 'already-minted', balance: 1, mintedLifetime: 1, gameRevision: expect.any(Number) });
     expect(meeshMintResponseSchema.safeParse(data).success).toBe(true);
     await app.close();
   });
@@ -173,6 +174,44 @@ describe('POST /me/meesh/mint', () => {
       minHeld: 100,
       requires: { rank: 'voix', division: 1, division5: 1 },
     });
+    await app.close();
+  });
+
+  it('409 PRICE_CHANGED, TYPÉ : le prix courant à la racine quand la garde `maxPrice` est dépassée (#10903)', async () => {
+    mint.mockResolvedValueOnce({ status: 'price-changed', number: 4, price: 733, basePrice: 1221, costFactor: 0.6 });
+    const app = await buildApp();
+
+    const res = await app.inject({ method: 'POST', url: '/api/v1/me/meesh/mint', payload: { requestId: 'frappe-route-garde', maxPrice: 653 } });
+
+    expect(mint).toHaveBeenCalledWith(USER_ID, 'frappe-route-garde', { maxPrice: 653 });
+    expect(res.statusCode).toBe(409);
+    const body = res.json();
+    expect(body).toMatchObject({ success: false, code: 'PRICE_CHANGED', number: 4, price: 733, basePrice: 1221, costFactor: 0.6 });
+    expect(priceChangedResponseSchema.safeParse(body).success).toBe(true);
+    await app.close();
+  });
+
+  it('refuse en 400, sans frappe, une garde de prix qui n\'est pas un entier positif', async () => {
+    mint.mockClear();
+    const app = await buildApp();
+
+    const res = await app.inject({ method: 'POST', url: '/api/v1/me/meesh/mint', payload: { requestId: 'frappe-route-garde-0', maxPrice: 0 } });
+
+    expect(res.statusCode).toBe(400);
+    expect(mint).not.toHaveBeenCalled();
+    await app.close();
+  });
+
+  it('sert `gameRevision`, l\'instant serveur pris APRÈS la frappe, et reste valide au schéma partagé (#10900)', async () => {
+    mint.mockResolvedValueOnce({ status: 'minted', balance: 1, mintedLifetime: 1, plan: {}, receipt: null });
+    const app = await buildApp();
+    const before = Date.now();
+
+    const { data } = (await post(app)).json();
+
+    expect(data.gameRevision).toBeGreaterThanOrEqual(before);
+    expect(data.gameRevision).toBeLessThanOrEqual(Date.now());
+    expect(meeshMintResponseSchema.safeParse(data).success).toBe(true);
     await app.close();
   });
 });

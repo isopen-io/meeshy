@@ -42,4 +42,29 @@ final class CallScreenRecordingPlanTests: XCTestCase {
         XCTAssertEqual(mixdown.presetName, AVAssetExportPresetHighestQuality)
         XCTAssertEqual(mixdown.fileType, .mp4)
     }
+
+    // MARK: - La taille vient des images, pas de l'écran physique
+
+    /// `UIScreen.main.nativeBounds` donnait l'écran physique en portrait : faux
+    /// sur iPad en paysage, en Split View / Stage Manager ou sur écran externe.
+    func test_videoSize_readsTheCapturedFrameDimensions() throws {
+        var pixelBuffer: CVPixelBuffer?
+        CVPixelBufferCreate(nil, 1180, 820, kCVPixelFormatType_32BGRA, nil, &pixelBuffer)
+        let image = try XCTUnwrap(pixelBuffer)
+        var format: CMVideoFormatDescription?
+        CMVideoFormatDescriptionCreateForImageBuffer(allocator: nil, imageBuffer: image, formatDescriptionOut: &format)
+        var timing = CMSampleTimingInfo(duration: .invalid, presentationTimeStamp: .zero, decodeTimeStamp: .invalid)
+        var sample: CMSampleBuffer?
+        CMSampleBufferCreateReadyWithImageBuffer(allocator: nil, imageBuffer: image,
+                                                 formatDescription: try XCTUnwrap(format),
+                                                 sampleTiming: &timing, sampleBufferOut: &sample)
+
+        XCTAssertEqual(CallScreenSampleWriter.videoSize(of: try XCTUnwrap(sample)), CGSize(width: 1180, height: 820))
+    }
+
+    func test_recording_neverSizesItselfFromUIScreenMain() throws {
+        let code = AppSourceGuard.stripComments(
+            try AppSourceGuard.unit("Meeshy/Features/Main/Services/CallScreenRecordingService.swift"))
+        XCTAssertFalse(code.contains("UIScreen.main"))
+    }
 }

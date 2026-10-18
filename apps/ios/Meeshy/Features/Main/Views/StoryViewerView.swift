@@ -116,6 +116,7 @@ struct StoryViewerView: View {
     static let heartEmoji = MeeshyQuickReactions.heart
 
     @State var currentStoryIndex = 0 // internal for cross-file extension access
+    @State var reanchoredStoryId: String? // `reanchorPosition` (+Navigation)
     @State private var postRoomLedger = StoryPostRoomLedger()
     /// La progression vit dans une horloge que SEULE la barre observe (#9859) :
     /// tenue par référence, jamais observée ici, elle ne réévalue pas le lecteur.
@@ -655,7 +656,9 @@ struct StoryViewerView: View {
             slideTimer.markContentReady(slideId: id)
             prepareNeighborWindow()
         }
+        .adaptiveOnChange(of: StoryViewerPosition.shapes(of: groups)) { old, new in reanchorPosition(from: old, to: new) }
         .adaptiveOnChange(of: currentStoryIndex) { oldValue, _ in
+            guard !isReanchoringSameStory else { return }
             // **La légende se replie à CHAQUE changement de story.** Laissée
             // dépliée, elle garde `shouldPauseTimer` vrai sur la story SUIVANTE
             // — qui ne repart alors jamais. Une pause dont la cause a disparu
@@ -763,6 +766,7 @@ struct StoryViewerView: View {
             }
         }
         .adaptiveOnChange(of: currentGroupIndex) { oldValue, _ in
+            guard !isReanchoringSameStory else { return }
             // **La légende se replie à CHAQUE changement de story.** Laissée
             // dépliée, elle garde `shouldPauseTimer` vrai sur la story SUIVANTE
             // — qui ne repart alors jamais. Une pause dont la cause a disparu
@@ -2118,11 +2122,7 @@ extension StoryViewerView {
         groupIntroTask = nil
         dismissGroupIntro(revealing: false)
         guard currentGroupIndex > 0 else { return }
-        groupTransition(forward: false) {
-            currentGroupIndex -= 1
-            currentStoryIndex = max(0, groups[currentGroupIndex].stories.count - 1)
-            progressClock.reset()
-        }
+        groupTransition(forward: false) { landOnPreviousGroup() }
     }
 
     /// - Parameter revealing: `true` quand le retrait de l'interlude DÉVOILE la

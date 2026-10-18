@@ -30,6 +30,7 @@ import { takeBackAcrossEngagementCounters } from './EngagementCounterWrites';
 import type { EngagementQuotas } from './EngagementQuotas';
 import type { EngagementScaleSource } from './EngagementScaleService';
 import type { PostPointsRecorder } from './PostPointsRecorder';
+import { announceGameState } from '../game/GameStateBroadcast';
 
 const NO_POST = '-';
 
@@ -56,19 +57,20 @@ const TAKE_BACK_FALLBACK_AXES: readonly string[] = MEESH_DEBIT_ORDER.flat();
  * acquis.
  *
  * **Symétrique (#10541).** La version d'origine débitait le compteur sous
- * condition (`points >= p`) et le score sans condition : sur une ligne entamée
- * par une frappe, le score payait seul et passait sous `Σ(points)`. Le score ne
- * perd plus que ce que des compteurs ont rendu — et la reprise va chercher ce
- * dû partout où la frappe aurait pu le prendre. La frappe a retiré le PRIX
- * d'une Meesh, pas les points du contenu supprimé : ceux-ci restent dus tant
- * que le compte a de quoi les rendre.
+ * condition (`points >= p`) et le score sans condition. Le score ne perd plus
+ * que ce que des compteurs ont rendu — et la reprise va chercher ce dû sur les
+ * autres compteurs. Depuis les étincelles, la frappe ne débite plus aucun
+ * compteur (#10846) : ce que la poche, dépensée, ne peut plus rendre devient
+ * une DETTE. L'invariant que la reprise tient (#10892) :
+ * `sparksEarnedLifetime − engagementScore + sparksDebt == Σ(prix des frappes au registre) + Σ(poches vidées au Prestige)` — le total à vie et la
+ * poche baissent ensemble, l'écart passe en dette.
  *
  * **Pas de transaction** : compteurs puis score, des commandes atomiques
  * séparées. Un compteur qui échoue en route arrête la reprise ; le score est
  * quand même débité de ce qui a déjà été repris, puis l'erreur remonte. Seul un
  * échec de l'écriture du SCORE laisse un écart : des compteurs débités sans
- * leur score (`engagementScore > Σ(points)`) — jamais l'inverse, donc jamais
- * des points convertibles que le score ne porte pas.
+ * leur poche — jamais l'inverse, donc jamais des étincelles convertibles que
+ * les compteurs ne portent pas.
  *
  * Rend les points réellement repris.
  *
@@ -114,13 +116,35 @@ export async function takeBackPoints(prisma: ReceiptPrisma, userId: string, oper
   return taken;
 }
 
+/** La ligue de la semaine (#9384) : une reprise lui rend ce que le gain y avait mis (#10895). */
+export type ReceiptLeague = {
+  onPointsTakenBack(userId: string, points: number, creditedAt?: Date): Promise<void>;
+};
+
+const NO_LEAGUE: ReceiptLeague = { onPointsTakenBack: async () => undefined };
+
 export class EngagementReceipts {
   constructor(
     private readonly prisma: ReceiptPrisma,
     private readonly quotas: EngagementQuotas,
     private readonly posts: PostPointsRecorder,
     private readonly scale: EngagementScaleSource,
+    private readonly league: ReceiptLeague = NO_LEAGUE,
   ) {}
+
+  /**
+   * Reprend au compte, puis à la ligue, le montant RÉELLEMENT repris — pas plus. La ligue compte le gain entier même
+   * quand il a remboursé une dette ; sa reprise la retire donc entière, et les deux restent cohérentes (#10895).
+   */
+  private async takeBack(userId: string, operationKey: string, points: number, creditedAt?: Date): Promise<number> {
+    const taken = await takeBackPoints(this.prisma, userId, operationKey, points);
+    if (taken > 0) {
+      await this.league.onPointsTakenBack(userId, taken, creditedAt);
+      // La poche, la dette et le niveau ont bougé : les appareils du compte le voient sans attendre (#10900).
+      announceGameState(userId, 'reclaim');
+    }
+    return taken;
+  }
 
   /** Le début de la fenêtre de reprise du barème (`abuse.clawbackHours`). */
   private async clawbackSince(): Promise<Date> {
@@ -134,9 +158,9 @@ export class EngagementReceipts {
    * sont repris — publier, supprimer, republier ne pompe rien.
    */
   async reclaimPublication(userId: string, operationKey: string, targetId: string): Promise<number> {
-    const points = await this.quotas.reclaim(userId, operationKey, targetId, await this.clawbackSince());
+    const { points, creditedAt } = await this.quotas.reclaim(userId, operationKey, targetId, await this.clawbackSince());
     if (points <= 0) return 0;
-    await takeBackPoints(this.prisma, userId, operationKey, points);
+    await this.takeBack(userId, operationKey, points, creditedAt);
     return points;
   }
 
@@ -172,7 +196,7 @@ export class EngagementReceipts {
 
   private async reclaimOne(
     userId: string,
-    receipt: { readonly operationKey: string; readonly bucket: string; readonly points: number },
+    receipt: { readonly operationKey: string; readonly bucket: string; readonly points: number; readonly createdAt: Date },
   ): Promise<number> {
     const { operationKey, bucket, points } = receipt;
     const cleared = await this.prisma.engagementQuota.updateMany({
@@ -180,7 +204,7 @@ export class EngagementReceipts {
       data: { points: 0 },
     });
     if (cleared.count === 0) return 0;
-    await takeBackPoints(this.prisma, userId, operationKey, points);
+    await this.takeBack(userId, operationKey, points, receipt.createdAt);
     const postId = postIdOfReceipt(bucket);
     if (postId !== undefined) await this.posts.takeBack(userId, postId, points);
     return points;

@@ -11,11 +11,11 @@
  * Le TITRE porte le palier, le CORPS l'exploit chiffré ET le palier : un
  * client qui ne rend que le corps (écran verrouillé Android, ancien client)
  * dit encore la phrase entière. Composé à la langue du LECTEUR, nombres
- * formatés selon elle.
+ * formatés selon elle. Le niveau est celui du JEU, et ce qui l'a fait atteindre, les étincelles (#10901).
  */
 
 import { tiersOf, type AchievementFamily } from '../types/achievement-catalog.js';
-import { BADGE_THRESHOLDS, LEVEL_THRESHOLDS, type EngagementAxisKey } from '../types/engagement.js';
+import { BADGE_THRESHOLDS, type EngagementAxisKey } from '../types/engagement.js';
 import { achievementLabel, formatNotificationNumber } from './achievement-labels.js';
 import { engagementAxisLabel } from './engagement-labels.js';
 import { notificationString } from './notification-strings.js';
@@ -23,14 +23,18 @@ import { notificationString } from './notification-strings.js';
 export type TierReached =
   | { readonly kind: 'achievement'; readonly family: AchievementFamily; readonly tier: number }
   | { readonly kind: 'badge'; readonly axisKey: EngagementAxisKey; readonly threshold: number }
-  | { readonly kind: 'level'; readonly threshold: number };
+  /**
+   * Un niveau du JEU (#10901) : `level` est celui que sert le bloc `game` (`levelFromScore` sur la poche, #10892), `sparks`
+   * la poche qui l'a fait atteindre. Plus jamais le rang d'un palier de score.
+   */
+  | { readonly kind: 'level'; readonly level: number; readonly sparks: number };
 
 export type TierReachedNotification = {
   readonly title: string;
   readonly body: string;
   /** Le RANG du palier dans son échelle, à partir de 1. */
   readonly rank: number;
-  /** La grandeur franchie — le nombre de gestes, ou les points cumulés pour un niveau. */
+  /** La grandeur franchie — le nombre de gestes, ou les étincelles en poche pour un niveau. */
   readonly value: number;
 };
 
@@ -65,16 +69,16 @@ export function tierReachedNotification(
       return tierNotification(lang, exploit, rank, reached.threshold);
     }
     case 'level': {
-      const rank = rankIn(LEVEL_THRESHOLDS, reached.threshold);
-      if (rank === null) return null;
+      const { level, sparks } = reached;
+      if (!Number.isInteger(level) || level < 1 || !Number.isFinite(sparks) || sparks < 0) return null;
       return {
-        title: notificationString(lang, 'engagement.levelUp', { count: rank }),
+        title: notificationString(lang, 'engagement.levelUp', { count: level }),
         body: notificationString(lang, 'engagement.levelUpBody', {
-          value: formatNotificationNumber(lang, reached.threshold),
-          count: rank,
+          value: formatNotificationNumber(lang, Math.trunc(sparks)),
+          count: level,
         }),
-        rank,
-        value: reached.threshold,
+        rank: level,
+        value: Math.trunc(sparks),
       };
     }
   }

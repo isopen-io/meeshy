@@ -194,4 +194,34 @@ final class GlobalSearchResilienceTests: XCTestCase {
         XCTAssertEqual(sut.userResults.count, 1, "le réessai doit rejouer « alice »")
         XCTAssertNil(sut.remoteFailure)
     }
+
+    // MARK: - Le réessai ne revient pas après la frappe suivante
+
+    /// « Réessayer » relance « foo » ; l'utilisateur tape « bar » pendant ce
+    /// temps. Le réessai lent revenait APRÈS et remettait les résultats de
+    /// « foo » sous le texte « bar ».
+    func test_retryLastSearch_aSlowRetry_doesNotOverwriteTheQueryTypedAfterIt() async throws {
+        let (sut, mockAPI, mockUserService, mockAuthManager) = try makeSUT()
+        mockAuthManager.simulateLoggedIn(user: makeCurrentUser())
+        stubEmptyConversationSearch(on: mockAPI)
+        await sut.performSearch(query: "foo")
+
+        let release = AsyncStream<Void>.makeStream()
+        let started = AsyncStream<Void>.makeStream()
+        mockUserService.searchUsersGate = { query in
+            guard query == "foo" else { return }
+            started.continuation.yield()
+            for await _ in release.stream { break }
+        }
+        let retry = Task { await sut.retryLastSearch() }
+        for await _ in started.stream { break }
+
+        sut.searchText = "bar"
+        try await waitForCondition(timeout: 5) { sut.resultsQuery == "bar" }
+
+        release.continuation.yield()
+        await retry.value
+
+        XCTAssertEqual(sut.resultsQuery, "bar")
+    }
 }

@@ -135,16 +135,17 @@ final class ActiveSessionsViewModel: ObservableObject {
 
     func revokeSession(sessionId: String) async {
         guard let target = sessions.first(where: { $0.id == sessionId }), !target.isCurrent else { return }
-        let snapshot = sessions
+        guard let index = sessions.firstIndex(where: { $0.id == sessionId }) else { return }
         isRevoking = true
         defer { isRevoking = false }
-        sessions.removeAll { $0.id == sessionId }
+        sessions.remove(at: index)
         do {
             try await sessionService.revokeSession(sessionId: sessionId)
             HapticFeedback.success()
             await persist()
         } catch {
-            sessions = snapshot
+            // Défaire CE retrait, pas l'écran d'avant l'attente.
+            sessions = OptimisticRollback.restoring(target, at: index, into: sessions)
             HapticFeedback.error()
             fail(String(localized: "sessions_revoke_error", defaultValue: "Impossible de révoquer la session", bundle: .main))
         }

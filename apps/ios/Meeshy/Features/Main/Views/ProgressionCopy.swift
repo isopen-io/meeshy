@@ -247,8 +247,8 @@ enum ProgressionCopy {
     /// « 5 frappées depuis toujours » — le compteur À VIE, jamais le solde.
     static func meeshMintedLifetime(_ minted: Int) -> String {
         minted == 1
-            ? String(localized: "progression.meesh.minted.one", defaultValue: "1 frappée depuis toujours", bundle: .main)
-            : String(localized: "progression.meesh.minted.many", defaultValue: "\(minted) frappées depuis toujours", bundle: .main)
+            ? String(localized: "progression.meesh.minted.one", defaultValue: "Record de Meeshes : 1", bundle: .main)
+            : String(localized: "progression.meesh.minted.many", defaultValue: "Record de Meeshes : \(minted)", bundle: .main)
     }
 
     /// Ce que l'entrée de l'en-tête ANNONCE au lecteur d'écran (#5839).

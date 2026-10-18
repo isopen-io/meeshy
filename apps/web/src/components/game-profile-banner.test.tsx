@@ -110,7 +110,7 @@ describe('la paire poche / total et niveau / max (porteur 2026-10-16)', () => {
     const pocket = host.querySelector('[data-profile-banner-points]');
     const lifetime = host.querySelector('[data-profile-banner-lifetime]');
     expect(words(pocket)).toBe('976 étincelles');
-    expect(words(lifetime)).toBe(`${formatCount(41_250, 'fr')} au total`.replace(/\s+/g, ' '));
+    expect(words(lifetime)).toBe(`record ${formatCount(41_250, 'fr')}`.replace(/\s+/g, ' '));
     expect(pocket?.compareDocumentPosition(lifetime as Node) ? true : false).toBe(true);
     // Plus grande que le total : la poche porte `font-bold`, le total est plus petit et plus discret.
     expect((pocket?.getAttribute('class') ?? '')).toContain('font-bold');
@@ -120,20 +120,20 @@ describe('la paire poche / total et niveau / max (porteur 2026-10-16)', () => {
   test('le niveau actuel avec le niveau max à vie dessous — toujours, même quand le max égale le niveau', async () => {
     const host = await mount(<GameProfileBanner standing={standing({ levelMax: 12 })} />);
     expect(words(host.querySelector('[data-profile-banner-level-now]'))).toBe('Niveau 12');
-    expect(words(host.querySelector('[data-profile-banner-level-max]'))).toBe('max 12');
+    expect(words(host.querySelector('[data-profile-banner-level-max]'))).toBe('record 12');
   });
 
   test('un niveau max plus haut que le niveau (après un Prestige)', async () => {
     const host = await mount(<GameProfileBanner standing={standing({ level: 1, levelMax: 100 })} />);
     expect(words(host.querySelector('[data-profile-banner-level-now]'))).toBe('Niveau 1');
-    expect(words(host.querySelector('[data-profile-banner-level-max]'))).toBe('max 100');
+    expect(words(host.querySelector('[data-profile-banner-level-max]'))).toBe('record 100');
   });
 
   test('sur la fiche d\'un autre : le niveau max suit le rang, les étincelles ne sont pas servies — rien ne se dessine à leur place', async () => {
     const host = await mount(<GameProfileBanner standing={standing({ points: null, sparksLifetime: null, pointsToNext: null, progress: null })} />);
     expect(host.querySelector('[data-profile-banner-points]') === null).toBe(true);
     expect(host.querySelector('[data-profile-banner-lifetime]') === null).toBe(true);
-    expect(words(host.querySelector('[data-profile-banner-level-max]'))).toBe('max 12');
+    expect(words(host.querySelector('[data-profile-banner-level-max]'))).toBe('record 12');
   });
 
   test('un serveur antérieur (niveau max non servi) : pas de ligne « max », jamais un zéro', async () => {
@@ -154,7 +154,7 @@ describe('un libellé par groupe, lisible dans les sept langues', () => {
     const level = host.querySelector('[data-profile-banner-level]')?.getAttribute('aria-label') ?? '';
     expect(level.startsWith('Niveau 12, palier Braise')).toBe(true);
     expect(level).toContain('976 étincelles');
-    expect(level).toContain(`${formatCount(41_250, 'fr')} au total`);
+    expect(level).toContain(`record ${formatCount(41_250, 'fr')}`);
     expect(level.endsWith(', encore 624 vers le 13')).toBe(true);
     expect(host.querySelector('[data-profile-banner-rank]')?.getAttribute('aria-label')).toBe('Murmure V');
   });

@@ -284,14 +284,15 @@ describe('EngagementService.recordActivity', () => {
     expect(notificationService.createNotification).not.toHaveBeenCalled();
   });
 
-  it('propagates a milestone create error that is not a unique-constraint conflict', async () => {
+  it('a milestone create error that is not a unique-constraint conflict never takes back the credit already written (#10895)', async () => {
     const counterWrite = jest.fn().mockResolvedValue({ count: 1 });
     const create = jest.fn().mockRejectedValue(new Error('connection lost'));
     const prisma = makePrisma({ counterWrite, create });
     mockGetSharedNotificationService.mockReturnValue(makeSharedNotificationService());
     const svc = new EngagementService(prisma);
 
-    await expect(svc.recordActivity('user-1', 'tool.sticker')).rejects.toThrow('connection lost');
+    await expect(svc.recordActivity('user-1', 'tool.sticker')).resolves.toBe(true);
+    expect(counterWrite).toHaveBeenCalledTimes(1);
   });
 
   it('resolves two concurrent calls on the same threshold with a single milestone and notification', async () => {
@@ -724,7 +725,7 @@ describe('EngagementService level tracking (#5545)', () => {
         },
       ],
       new: true,
-      fields: { engagementScore: 1, sparksSincePrestige: 1, levelRecord: 1, levelMaxLifetime: 1 },
+      fields: { engagementScore: 1, levelRecord: 1, levelMaxLifetime: 1, prestige: 1 },
     });
   });
 
@@ -773,7 +774,7 @@ describe('EngagementService level tracking (#5545)', () => {
     expect(notificationService.createNotification).not.toHaveBeenCalled();
   });
 
-  it('awards LEVEL_UP and notifies exactly once when the increment lands on a threshold', async () => {
+  it('records the score milestone but never pushes a score-tier « level » (the game level is announced by GloryService, #10901)', async () => {
     const create = jest.fn().mockResolvedValue({});
     const runCommandRaw = makeRawScore(10); // 5 -> 10, crosses threshold 10
     const prisma = makeLevelPrisma({ create, runCommandRaw });
@@ -786,17 +787,7 @@ describe('EngagementService level tracking (#5545)', () => {
     expect(create).toHaveBeenCalledWith({
       data: { userId: 'user-1', milestoneType: 'level', milestoneKey: 'level:10' },
     });
-    expect(notificationService.createNotification).toHaveBeenCalledWith({
-      userId: 'user-1',
-      type: 'level_up',
-      priority: 'normal',
-      // Le RANG du palier (niveau 1), jamais le seuil de score (10 points) :
-      // « Niveau 150 atteint » se lisait comme un cent-cinquantième niveau.
-      title: '⭐ Niveau 1 atteint !',
-      content: '10 points — bravo, vous êtes au niveau 1 !',
-      context: {},
-      metadata: { action: 'view_details', route: 'progression', threshold: 10, level: 1, tierRank: 1, value: 10 },
-    });
+    expect(notificationService.createNotification).not.toHaveBeenCalledWith(expect.objectContaining({ type: 'level_up', metadata: expect.objectContaining({ threshold: 10 }) }));
   });
 
   it.each([

@@ -101,9 +101,17 @@ nonisolated public enum LottieFilm {
 
     // MARK: Rendu
 
-    /// Le nombre d'images d'une boucle à `framesPerSecond` (au moins une).
+    /// Plafond d'images d'un film : une animation d'un pack tiers peut annoncer
+    /// une durée démesurée, et chaque image est une `CGImage` en mémoire.
+    public static let maxFrames = 600
+
+    /// Le nombre d'images d'une boucle à `framesPerSecond` (au moins une, au plus
+    /// `maxFrames`). Un `fr` à 0 dans le fichier donne une durée infinie ou NaN :
+    /// `Int(_:)` y plantait.
     public static func frameCount(duration: TimeInterval, framesPerSecond: Double) -> Int {
-        max(1, Int((duration * framesPerSecond).rounded()))
+        let raw = (duration * framesPerSecond).rounded()
+        guard raw.isFinite, raw > 0 else { return 1 }
+        return min(maxFrames, max(1, Int(raw)))
     }
 
     /// La première image, carrée, de `pixelSize` de côté.

@@ -40,4 +40,12 @@ public struct MeeshyRequestCredential: Sendable, Equatable {
     /// comptes — médias de post, de story, de statut, de commentaire — se
     /// gardent là-dessus plutôt que d'attendre le 403 du serveur.
     public var isAccount: Bool { header == "Authorization" }
+
+    /// Le JWT d'un compte inscrit, sans son préfixe ; `nil` pour un invité.
+    /// C'est l'identité qu'un rafraîchissement doit recevoir (#10904) : la
+    /// session rafraîchie est celle de CE jeton, jamais celle du moment.
+    public var bearerToken: String? {
+        guard isAccount, value.hasPrefix("Bearer ") else { return nil }
+        return String(value.dropFirst("Bearer ".count))
+    }
 }

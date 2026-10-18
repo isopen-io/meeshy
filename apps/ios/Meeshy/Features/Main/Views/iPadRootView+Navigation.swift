@@ -117,7 +117,10 @@ extension iPadRootView {
         case .callRequest(let conversationId, let isVideo):
             // Le lien d'appel ne compose pas : il DEMANDE (feuille de
             // confirmation). Mise à jour forcée et barrière d'âge passent avant.
-            let gatesOpen = !upgradeGate.isBlocked && !AgeGateController.shared.isShowing
+            let upgradeGate = self.upgradeGate
+            let gatesOpen: @MainActor () -> Bool = {
+                !upgradeGate.isBlocked && !AgeGateController.shared.isShowing
+            }
             Task { @MainActor in
                 await CallLinkConfirmationController.shared.request(
                     conversationId: conversationId, isVideo: isVideo, gatesOpen: gatesOpen)
@@ -268,7 +271,7 @@ extension iPadRootView {
                 // chemin pouvait présenter le lecteur avant que l'uid ne soit posé — « Story introuvable ».
                 storyViewerCoordinator.present(StoryViewerRequest(
                     id: storyViewModel.storyGroups[groupIdx].id,
-                    startAtFirstUnviewed: true
+                    postId: postId
                 ))
             } else {
                 rightPanelRoute = .postDetail(postId)

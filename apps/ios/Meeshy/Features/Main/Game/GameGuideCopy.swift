@@ -89,9 +89,10 @@ enum GameGuideCopy {
         case .firstMintPossible(let price, let levelsLost, let gloryGain):
             let cost = GameCopy.points(price)
             let glory = GameCopy.formatCount(gloryGain)
-            // La frappe ne fait plus perdre de niveau (#10846) : `levelsLost`, conservé par la loi partagée, vaut 0.
-            _ = levelsLost
-            let means = String(localized: "game.guide.moment.first_mint_possible.means_free", defaultValue: "Frapper coûte \(cost), sans te faire perdre un niveau, et rapporte +\(glory) de Gloire.", bundle: .main)
+            // La poche fait le niveau (#10892) : une frappe qui coûte des niveaux le dit avant le geste.
+            let means = levelsLost > 0
+                ? firstMintPossibleDrop(cost: cost, glory: glory)
+                : String(localized: "game.guide.moment.first_mint_possible.means_free", defaultValue: "Frapper coûte \(cost), sans te faire perdre un niveau, et rapporte +\(glory) de Gloire.", bundle: .main)
             return GuideCopy(
                 what: String(localized: "game.guide.moment.first_mint_possible.what", defaultValue: "Tu peux frapper ta première Meesh.", bundle: .main),
                 means: means,
@@ -99,14 +100,14 @@ enum GameGuideCopy {
                 short: String(localized: "game.guide.moment.first_mint_possible.short", defaultValue: "Une Meesh se frappe pour \(cost).", bundle: .main),
                 action: action
             )
-        // La première frappe (#10846) : elle ne fait plus baisser le niveau ni n'ouvre de Vent arrière — le moment n'a
-        // plus de niveaux à citer, et mène à la progression.
+        // La première frappe (#10892) : elle fait baisser le niveau du montant dépensé, jamais le rang, et n'ouvre aucun
+        // Vent arrière — le moment ne cite pas de niveaux, et mène à la progression.
         case .firstMint:
             return GuideCopy(
                 what: String(localized: "game.guide.moment.first_mint.what", defaultValue: "Tchak ! Ta première Meesh est frappée.", bundle: .main),
-                means: String(localized: "game.guide.moment.first_mint.means", defaultValue: "La frappe ne fait plus baisser ton niveau : tes étincelles déjà gagnées restent acquises.", bundle: .main),
+                means: String(localized: "game.guide.moment.first_mint.means", defaultValue: "La frappe a dépensé tes étincelles convertibles : ton niveau baisse d’autant, ton rang jamais.", bundle: .main),
                 next: String(localized: "game.guide.moment.first_mint.next", defaultValue: "Tes prochaines étincelles te font monter : regarde ta progression.", bundle: .main),
-                short: String(localized: "game.guide.moment.first_mint.short", defaultValue: "Première Meesh frappée : ton niveau reste acquis.", bundle: .main),
+                short: String(localized: "game.guide.moment.first_mint.short", defaultValue: "Première Meesh frappée : ta Gloire grandit.", bundle: .main),
                 action: action
             )
         case .priceRises(let nextPrice):
@@ -186,6 +187,12 @@ enum GameGuideCopy {
 
     // MARK: - Intégration
 
+    /// « Frapper coûte 1 221 étincelles : ton niveau baisse d’autant, et tu gagnes +100 de Gloire. » (#10892)
+    static func firstMintPossibleDrop(cost: String, glory: String) -> String {
+        String(localized: "game.guide.moment.first_mint_possible.means_drop",
+               defaultValue: "Frapper coûte \(cost) : ton niveau baisse d’autant, et tu gagnes +\(glory) de Gloire.", bundle: .main)
+    }
+
     static func step(_ step: OnboardingStep) -> GuideCopy {
         let action = actionLabel(step.action)
         switch step.key {
@@ -238,7 +245,7 @@ enum GameGuideCopy {
             let what = String(localized: "game.guide.step.mint.what", defaultValue: "À partir de 1 221 points, on frappe une Meesh.", bundle: .main)
             return GuideCopy(
                 what: what,
-                means: String(localized: "game.guide.step.mint.means", defaultValue: "Les points dépensés quittent ton niveau, mais ton rang ne baisse jamais : chaque frappe ajoute de la Gloire.", bundle: .main),
+                means: String(localized: "game.guide.step.mint.means", defaultValue: "La frappe dépense des étincelles convertibles : ton niveau baisse d’autant, ton rang jamais, et chaque frappe ajoute de la Gloire.", bundle: .main),
                 next: String(localized: "game.guide.step.mint.next", defaultValue: "La Gloire donne le rang.", bundle: .main),
                 short: what,
                 action: action
@@ -271,13 +278,13 @@ enum GameGuideCopy {
                  body: String(localized: "game.rules.1.body", defaultValue: "Écrire, parler, publier, réagir, inviter : chaque action utile donne des points. Une publication rapporte selon qui peut la voir : public, communauté ou amis. Les limites comptent tes gestes, jamais tes points : bonus, Flamme et événements augmentent ce que chaque geste rapporte.", bundle: .main)),
             Rule(index: 2,
                  title: String(localized: "game.rules.2.title", defaultValue: "Les points font le niveau", bundle: .main),
-                 body: String(localized: "game.rules.2.body", defaultValue: "Le niveau se lit sur tes points en poche. Un million de points pour le niveau 100, et une étape par dizaine : sans elle, le niveau attend. Vingt paliers. Les niveaux montent jusqu’à 499 ; le rang Ambassadeur ouvre jusqu’à 1 000, et le rang Oracle les ouvre sans limite. Chaque niveau demande un peu plus que le précédent.", bundle: .main)),
+                 body: String(localized: "game.rules.2.body", defaultValue: "Ton niveau se lit sur tes étincelles convertibles : la frappe les dépense, donc le fait baisser. Un million d’étincelles pour le niveau 100, et une étape par dizaine : sans elle, le niveau attend. Vingt paliers. Les niveaux montent jusqu’à 499 ; le rang Ambassadeur ouvre jusqu’à 1 000, et le rang Oracle les ouvre sans limite. Chaque niveau demande un peu plus que le précédent.", bundle: .main)),
             Rule(index: 3,
                  title: String(localized: "game.rules.3.title", defaultValue: "On frappe des Meeshes", bundle: .main),
                  body: String(localized: "game.rules.3.body", defaultValue: "Une Meesh se frappe à la main, avec tes points à convertir : la part de tes points que la frappe peut reprendre. Les dix premières coûtent 1 221 points, puis le prix monte de 30 % toutes les dix frappes.", bundle: .main)),
             Rule(index: 4,
-                 title: String(localized: "game.rules.4.title", defaultValue: "Frapper fait redescendre", bundle: .main),
-                 body: String(localized: "game.rules.4.body", defaultValue: "Le prix quitte tes points en poche et tes points à convertir. Ton niveau peut baisser, ton niveau record jamais : le Vent arrière t’aide à le retrouver. Les badges que ces points tenaient peuvent s’éteindre.", bundle: .main)),
+                 title: String(localized: "game.rules.4.title", defaultValue: "Frapper fait baisser le niveau", bundle: .main),
+                 body: String(localized: "game.rules.4.body", defaultValue: "La frappe dépense des étincelles convertibles : ton niveau baisse d’autant, ton rang jamais, et chaque frappe ajoute de la Gloire. Ton record d’étincelles reste, à titre indicatif. Aucun badge ne s’éteint ni ne redescend.", bundle: .main)),
             Rule(index: 5,
                  title: String(localized: "game.rules.5.title", defaultValue: "Le rang ne baisse jamais", bundle: .main),
                  body: String(localized: "game.rules.5.body", defaultValue: "Chaque frappe, chaque record, chaque succès ajoute de la Gloire. La Gloire donne le rang.", bundle: .main)),
@@ -370,15 +377,15 @@ enum GameRulesGlossary {
 
     static func body(_ key: GameRulesGlossaryKey) -> String {
         switch key {
-        case .concept(.level): String(localized: "game.rules.concept.level.body", defaultValue: "Le chiffre de ton anneau, lu sur tes points en poche. Il ouvre les missions (niveau 5), la ligue (10), le duo (20) et le Prestige (100). Il monte quand tes points en poche atteignent le seuil suivant. Une frappe peut le faire baisser, jamais ton niveau record.", bundle: .main)
-        case .concept(.points): String(localized: "game.rules.concept.points.body", defaultValue: "Deux soldes. Tes points en poche sont ton total : ils font ton niveau. Tes points à convertir sont la part que la frappe peut reprendre : eux seuls paient une Meesh. Chaque geste utile en rapporte. Les deux soldes sont comptés à part : ils peuvent être différents.", bundle: .main)
+        case .concept(.level): String(localized: "game.rules.concept.level.body", defaultValue: "Le chiffre de ton anneau, lu sur tes étincelles convertibles. Il ouvre les missions (niveau 5), la ligue (10), le duo (20) et le Prestige (100). Il monte quand ces étincelles atteignent le seuil suivant, et baisse quand une frappe les dépense. Le Prestige le remet à 1.", bundle: .main)
+        case .concept(.points): String(localized: "game.rules.concept.points.body", defaultValue: "Tes étincelles convertibles sont ta seule valeur réelle : elles font ton niveau et paient une Meesh. Ton record d’étincelles, tout ce que tu as cumulé, dit ton potentiel. Chaque geste utile en rapporte.", bundle: .main)
         case .concept(.meesh): String(localized: "game.rules.concept.meesh.body", defaultValue: "La pièce rare de Meeshy, numérotée, que tu frappes avec tes points à convertir. Garde-la pour remplir ton trésor, ou dépense-la : gel de Flamme, mission à changer, Sceau de saison. Le prix monte de 30 % toutes les dix frappes.", bundle: .main)
         case .concept(.glory): String(localized: "game.rules.concept.glory.body", defaultValue: "Un compteur qui ne redescend jamais et qui donne ton rang. Elle se gagne en frappant, en atteignant un niveau pour la première fois, en décrochant un succès, en montant de ligue, en finissant une saison. Ton rang ouvre les niveaux au-delà de 499.", bundle: .main)
         case .concept(.flame): String(localized: "game.rules.concept.flame.body", defaultValue: "Ta série de jours d’affilée avec au moins un geste. Chaque jour ajoute 2 % à tes récompenses de mission, jusqu’à 50 %. Un gel couvre un jour manqué ; éteinte, elle se rallume avec des Meeshes pendant 48 h.", bundle: .main)
         case .concept(.missions): String(localized: "game.rules.concept.missions.body", defaultValue: "Trois buts par jour, ouverts au niveau 5. Chaque mission faite rapporte des points ; les trois faites ouvrent le coffre du jour. Tu peux changer une mission par jour avec une Meesh.", bundle: .main)
         case .concept(.league): String(localized: "game.rules.concept.league.body", defaultValue: "Un classement de la semaine, ouvert au niveau 10, dans un groupe de 30 joueurs. Tes points de la semaine font ta place : les 7 premiers montent d’une ligue, les 5 derniers descendent, et tout repart de zéro le lundi. La ligue entre amis est toujours ouverte.", bundle: .main)
         case .concept(.season): String(localized: "game.rules.concept.season.body", defaultValue: "Un parcours de huit semaines et de 40 étapes gratuites. Les missions du jour et le duo donnent des étoiles ; les étoiles ouvrent les étapes, que tu réclames une à une. Le parcours fini donne la coupe de saison.", bundle: .main)
-        case .concept(.prestige): String(localized: "game.rules.concept.prestige.body", defaultValue: "Un nouveau tour, facultatif, offert au niveau 100, cinq fois au plus. Ton niveau repart à 1 et tes points en poche à 0. Tu gagnes une étoile sur ton anneau, un trophée numéroté et de la Gloire. Ton rang, tes Meeshes et ta Flamme restent.", bundle: .main)
+        case .concept(.prestige): String(localized: "game.rules.concept.prestige.body", defaultValue: "Un nouveau tour, facultatif, offert au niveau 100, cinq fois au plus. Ton niveau repart à 1 et tes étincelles convertibles à 0 ; ton record d’étincelles et ton record de niveau sont conservés. Tu gagnes une étoile sur ton anneau, un trophée numéroté et de la Gloire. Ton rang, tes Meeshes et ta Flamme restent.", bundle: .main)
         case .concept(.elans): String(localized: "game.rules.concept.elans.body", defaultValue: "Un multiplicateur de points. Il s’allume quand tu es actif dans plusieurs familles de gestes ces jours-ci : contenu, commentaires, conversations, outils, lien social. Tant qu’il tient, chaque geste rapporte plus.", bundle: .main)
         case .concept(.badges): String(localized: "game.rules.concept.badges.body", defaultValue: "Vingt badges, un par geste précis. Chacun monte sur sept paliers, du cuivre au prisme, à force de refaire son geste. Une frappe peut en éteindre un : il se rallume quand tu refais le geste.", bundle: .main)
         case .concept(.defis): String(localized: "game.rules.concept.defis.body", defaultValue: "Des paliers chiffrés dans chaque famille de gestes. Atteins le nombre demandé : le palier est franchi et le suivant s’ouvre.", bundle: .main)
@@ -388,7 +395,7 @@ enum GameRulesGlossary {
         case .chest: String(localized: "game.rules.concept.chest.body", defaultValue: "Il s’ouvre quand les missions du jour sont faites. Dedans : des points selon tes missions, de la Gloire, parfois une prime en points, un fragment d’étoile ou un gel.", bundle: .main)
         case .treasury: String(localized: "game.rules.concept.treasury.body", defaultValue: "Les Meeshes que tu gardes. Il a six paliers, visibles sur ton profil. Il grandit quand tu gardes tes Meeshes et baisse quand tu les dépenses.", bundle: .main)
         case .steps: String(localized: "game.rules.concept.steps.body", defaultValue: "De 10 à 100, chaque dizaine de niveaux demande une étape simple : frapper une Meesh, finir des missions, tenir une Flamme, atteindre un rang. Sans elle, le niveau attend ; faite, il monte d’un coup.", bundle: .main)
-        case .tailwind: String(localized: "game.rules.concept.tailwind.body", defaultValue: "Après une frappe, tes points comptent 25 % de plus jusqu’à ce que tu retrouves ton niveau record.", bundle: .main)
+        case .tailwind: String(localized: "game.rules.concept.tailwind.body", defaultValue: "+25 % sur les étincelles de tes gestes tant que ton niveau est 7 niveaux ou plus sous ton record de niveau. Il s’arrête dès que l’écart retombe à 6.", bundle: .main)
         case .duo: String(localized: "game.rules.concept.duo.body", defaultValue: "Une mission de la semaine à faire avec un ami accepté, ouverte au niveau 20 pour vous deux. Si chacun finit sa part, la récompense est doublée. Elle donne aussi des étoiles de saison.", bundle: .main)
         }
     }

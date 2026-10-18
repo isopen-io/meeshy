@@ -211,6 +211,16 @@ final class iPadRightPanelNavigationGuardTests: XCTestCase {
         XCTAssertTrue(code.contains("conversations.mergeUpdate(for: \"list\")"))
     }
 
+    /// Volet gauche iPad étroit (~200 pt) : la carte d'appui long (340 pt fixes)
+    /// et la rangée d'actions de l'en-tête débordaient de la colonne.
+    func test_narrowLeftColumn_cardAndHeaderFitTheColumn() throws {
+        let overlays = try source(of: "ConversationListView+Overlays.swift")
+        XCTAssertFalse(overlays.contains(".frame(width: 340)"))
+        XCTAssertTrue(overlays.contains(".frame(maxWidth: .infinity).frame(maxWidth: 340)"))
+        XCTAssertTrue(overlays.contains("ViewThatFits(in: .horizontal) {"))
+        XCTAssertTrue(overlays.contains("headerActions(spacing: MeeshySpacing.xs)"))
+    }
+
     func test_storyNotificationScreens_closeThePanelOnIPad() throws {
         let stories = URL(fileURLWithPath: "\(#filePath)")
             .deletingLastPathComponent().deletingLastPathComponent()

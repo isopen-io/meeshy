@@ -77,8 +77,14 @@ final class MockVoiceProfileService: VoiceProfileServiceProviding, @unchecked Se
             toggleVoiceCloningCallCount += 1
             lastToggleEnabled = enabled
         }
-        try toggleVoiceCloningResult.get()
+        let result = await MainActor.run { toggleVoiceCloningResult }
+        if let gate = await MainActor.run(body: { toggleVoiceCloningGate }) { await gate(enabled) }
+        try result.get()
     }
+
+    /// Suspend un basculement APRÈS qu'il a lu sa réponse : un premier appel
+    /// lent revient après les suivants.
+    var toggleVoiceCloningGate: (@Sendable (Bool) async -> Void)?
 
     nonisolated func deleteProfile() async throws {
         await MainActor.run { deleteProfileCallCount += 1 }

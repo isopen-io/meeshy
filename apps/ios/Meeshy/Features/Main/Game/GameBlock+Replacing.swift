@@ -31,7 +31,28 @@ extension GameBlock.Level {
             record: record ?? self.record,
             prestige: prestige ?? self.prestige,
             canPrestige: canPrestige ?? self.canPrestige,
-            ladder: ladder ?? self.ladder
+            ladder: ladder ?? self.ladder,
+            sparks: sparks,
+            sparksCycle: sparksCycle,
+            sparksLifetime: sparksLifetime,
+            levelMaxLifetime: levelMaxLifetime,
+            sparksDebt: sparksDebt
+        )
+    }
+
+    /// Les étincelles d'avant posées sur un niveau recomposé (`GameLevelWire.level` ne les connaît pas) : la POCHE
+    /// devient `pocket` (#10892, la base du niveau) ; le cycle, le total à vie, le max à vie et la dette, indicatifs ou
+    /// hors de la frappe, restent. Devant un serveur antérieur (`sparks` absent), rien ne s'invente.
+    func carryingSparks(of source: GameBlock.Level, pocket: Int) -> GameBlock.Level {
+        GameBlock.Level(
+            level: level, tier: tier, score: score, floorScore: floorScore, nextThreshold: nextThreshold,
+            pointsToNext: pointsToNext, progress: progress, record: record, prestige: prestige, canPrestige: canPrestige,
+            ladder: ladder,
+            sparks: source.sparks.map { _ in pocket },
+            sparksCycle: source.sparksCycle,
+            sparksLifetime: source.sparksLifetime,
+            levelMaxLifetime: source.levelMaxLifetime,
+            sparksDebt: source.sparksDebt
         )
     }
 }
@@ -95,7 +116,15 @@ nonisolated enum GameLevelWire {
             levelAfter: after,
             levelsLost: max(0, before - after),
             gloryGained: preview.gloryGained,
-            ladder: GameMintLadder(levelBefore: preview.levelBefore, levelAfter: preview.levelAfter, levelsLost: preview.levelsLost)
+            ladder: GameMintLadder(levelBefore: preview.levelBefore, levelAfter: preview.levelAfter, levelsLost: preview.levelsLost),
+            // Ce que les étincelles ajoutent (#10847, #10848) voyage avec l'aperçu : sans eux, la ligne « prix de rang ×
+            // facteur » et la réserve fermée disparaissaient de l'optimiste (#10898).
+            basePrice: preview.basePrice,
+            costFactor: preview.costFactor,
+            costLevel: preview.costLevel,
+            locked: preview.locked,
+            sparksDebt: preview.sparksDebt,
+            blockedBy: preview.blockedBy
         )
     }
 }
@@ -236,7 +265,8 @@ extension APIEngagementProgress {
             meesh: meesh ?? self.meesh,
             elan: elan,
             achievementReach: achievementReach,
-            game: game ?? self.game
+            game: game ?? self.game,
+            gameRevision: gameRevision
         )
     }
 }
