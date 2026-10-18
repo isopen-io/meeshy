@@ -1,5 +1,264 @@
 # @meeshy/gateway
 
+## 1.86.0
+
+### Minor Changes
+
+- Changements automatiques détectés :
+
+  - run test — les marges sûres de la conversation, de la galerie, des réels, de la barre de composition et de la bande du haut viennent de leur fenêtre, lues hors du rendu
+  - run test — la pellicule se cale sur la largeur de SA fenêtre dès le premier rendu, plus sur une mesure tardive
+  - l'ordre des états du Jeu reste juste avec plusieurs passerelles — révision gravée par compte (Closes #10912)
+  - un palier de niveau atteint de nouveau après un Prestige se photographie de nouveau, « Palier Lueur ×2 » (Closes #10911)
+  - la bannière du profil montre la Gloire totale à la place du record d'étincelles (Refs #10913)
+  - en thème clair, l'heure reste lisible au-dessus de la visionneuse, d'une story et d'un appel dans la coque (Closes #10917)
+  - un sticker déclaré exige encore un format à transparence, comme sur iOS
+  - l'échéance d'une story de carte suit `StoryItem.isExpired`, source unique
+  - un support dont l'audience n'est pas PUBLIQUE n'est jamais support ni héros
+  - « Imager » une réponse dont la racine n'est pas chargée retombe sur le commentaire seul
+  - « Imager » une réponse de story dont la racine n'est pas chargée retombe sur le commentaire seul
+  - le héros du support suit `MessageCardHero` — marges de 48, rapport borné 16:9…4:5, 4:3 inconnu
+  - `FeedPost` déclare `expiresAt`, la story à canvas garde le rapport de son visuel, le titre de fil mort retiré
+  - l'export animé reconnaît et pose un sticker comme l'image fixe
+  - un avatar sans menu ne retient plus l'appui long de la rangée
+  - l'avatar d'une citation ouvre le compte par senderUserId, la fiche de participation pour un visiteur
+  - un fil tronqué finit sur une ligne de texte, coupée dans la largeur de son niveau
+  - la carte Imager compile — excerpt à défauts appelé en fermeture, format .initial, tuple hors de #expect
+  - un appui long tenu au-delà de la fenêtre avale encore le clic de son relâchement
+  - héros du support en tête de carte, fil imbriqué par la séparation du template, parité iOS (sticker 0,6, story)
+  - run test — chaque fenêtre publie ses marges sûres, composer de story, éditeur d'image et contrôles vidéo les lisent
+  - imbrication par la séparation du template, story et hero côté app, tests (#10915)
+  - sticker inscrit sans rognage, hero du support, fil imbriqué (#10915)
+  - un sticker se peint ajusté (contain), jamais coupé; un commentaire-sticker le déclare
+  - run test — seule une story pré-monte ses médias, le post, le réel et le statut ne laissent plus de média orphelin
+  - run test — une session TUS se reprend par ce qu'elle crée côté serveur et par ses métadonnées, plus par son contexte brut
+  - run test — la visibilité d'une carte de listing et du Jeu se juge contre la fenêtre qui les porte
+  - run test — la taille de fenêtre se publie au sommet de chaque WindowGroup, feuilles et couvertures comprises
+  - run test — la garde de l'aperçu du menu natif suit la fenêtre publiée, sans s'affaiblir
+  - run test — le pbxproj enregistre les tests des cycles 5 à 7, qui ne s'exécutaient jamais en CI
+  - un palier de niveau atteint de nouveau après un Prestige se photographie de nouveau, et dit combien de fois il a été atteint (Refs #10911)
+  - run test — menus d'appui long, plein écran audio, squelettes, feuille de langues et visionneuse se mesurent à leur fenêtre
+  - run test — sous Stage Manager, viewer de story, barre de composition, filmstrip et liste se mesurent à leur fenêtre
+  - run test — chaque fenêtre publie sa taille, le composer de story se borne à la sienne
+  - le profil montre la Gloire totale à la place des étincelles accumulées à vie (Refs #10913)
+  - la sonde de révision juge la production sur dev, la branche que la promotion lui sert (Closes #10914)
+  - run test — répondre à un appel n'efface plus l'offre en attente de l'appel suivant
+  - run test — un vocal local illisible rend la session et laisse la file avancer
+  - run test — l'appui long relit l'aperçu, le cache de sondage des réels est borné, une seule liste de conversations vit pour toutes les fenêtres iPad
+  - run test — une session TUS ne sert que son contexte, et deux envois des mêmes octets ne la partagent plus
+  - run test — l'appelé qui attend l'offre n'est plus coupé ni relancé à tort, une fenêtre iPad détachée ne vide plus le widget, l'aperçu d'un vocal ne se superpose plus
+  - ouvrir une notification dans la coque compte dans l'entonnoir des notifications, comme sur le web et iOS (Closes #10910)
+  - run test — un aperçu de son finit vraiment, une fin périmée ne termine plus le vocal suivant, un envoi TUS dont l'issue s'est perdue repart
+  - la pastille de synchronisation est compacte au repos, grande seulement pendant une frappe (Refs #10893)
+  - un game:updated plus ancien que la frappe confirmée relit la page restée dessous (Refs #10900)
+  - shouldApplyGameState vit sans zod, hors du premier pixel (Refs #10898)
+  - l'avatar du pied réclame l'appui long, l'avatar de la citation passe par openProfile
+  - la notification d'un appel manqué offre « Rappeler » dans la coque, comme sur le web (Closes #10908)
+  - shouldApplyGameState sort du chemin critique — zod complet et le chunk game-law quittent le premier pixel
+  - la notification d'une position offre « Ouvrir la carte » et celle d'une invitation « Rejoindre » dans la coque, comme sur le web (Closes #10906)
+  - run test — un vocal ne démarre qu'une fois et survit au démontage iPad, les bulles suivent la largeur de la fenêtre
+  - run test — le Prestige garde la ligue, le duo et les étincelles, le trésor garde ses réserves, le coffre crédite par la loi
+  - les gestes optimistes du Jeu rendent le bloc que la passerelle servirait (Refs #10902)
+  - run test — le carrousel suit la pièce montrée, la révocation ratée ne défait que ses retraits, une page de hashtag dépassée ne se colle plus
+  - run test — un cache muté hors mémoire ne passe plus pour frais, et la base locale ne s'efface que si elle est perdue
+  - run test — deux gardes rouges sur dev repassent au vert
+  - run test — un commentaire du fil suit le changement de langue du lecteur
+  - run test — l'identité d'une requête 401 sort d'AuthManager.swift, revenu sous le budget de 1 200 lignes
+  - run test — une modification ou une réaction arrivée avant son message s'applique à son arrivée
+  - run test — la frappe porte le prix montré, PRICE_CHANGED se relit, game:updated met le Jeu à jour sans jamais reculer
+  - l'état du Jeu ne recule jamais, la frappe porte le prix montré, game:updated met le Jeu à jour (Refs #10898 #10900 #10903)
+  - run test — un 401 ne rafraîchit et ne rejoue que sous le compte et la session qui ont envoyé la requête
+  - la bannière de profil dit « record 12 000 » sous les étincelles (Refs #10899)
+  - la frappe annonce le prix que la passerelle servira, et aucune lecture périmée ne le repeint (Refs #10898 #10902 #10900)
+  - run test — le Vent arrière à 7 niveaux du record, et les records de niveau, d'étincelles et de Meeshes (Refs #10896 #10899)
+  - l'état du jeu se propage et s'ordonne, la frappe a sa garde de prix, « Niveau N atteint » dit le niveau du jeu
+  - run test — machines à états : un réglage plus récent n'est plus écrasé, la reconnexion relit toujours, deux gestes du jeu ne se défont plus l'un l'autre
+  - run test — balayage des index (suite) et socket : une suppression arrivée avant son message s'applique, la passerelle qui coupe est rattrapée
+  - le Jeu parle de record de niveau, d'étincelles et de Meeshes ; le Vent arrière se dit (Refs #10899 #10896)
+  - la frappe ne se débite qu'une fois, et le compteur lit le prix suivant (Refs #10898)
+  - le Vent arrière souffle à 7 niveaux ou plus sous le record (Refs #10896)
+  - l'économie du Jeu a ses témoins de parité TS ↔ Swift pour la frappe et les réserves (Refs #10894)
+  - run test — balayage des index : le lecteur de stories suit la story montrée, la galerie ne partage plus la première photo, plus de plage négative ni de boucle sans fin
+  - run test — balayage des chaînes Combine qui reçoivent hors du main : quatre trappes de plus fermées, et une garde de source
+  - run test — supprimer une story ne fait plus planter l'app (plantage TestFlight 1890)
+  - run test — le niveau se lit sur les étincelles en poche, la frappe le fait baisser (Refs #10892)
+  - la frappe annonce le niveau d'après, et le Jeu dit que la poche fait le niveau (Refs #10892)
+  - run test — l'app ne plante plus au lancement ni au retour du réseau (plantage TestFlight 1915/1916)
+  - le niveau se lit sur les étincelles en poche, la frappe le fait baisser (Refs #10892)
+  - run test — fermer la fenêtre principale de l'iPad n'emporte plus l'arrière-plan ni la fin de session ; le fil garde ses pages ; une éviction ratée ne perd plus la mutation
+  - run test — noms d'affichage bornés, stickers par compte, arrivée remise à zéro, colonne iPad étroite, enregistrement à la taille des images
+  - la notification d'un message offre « Répondre » dans la coque, comme sur le web et iOS (Closes #10891)
+  - run test — « Appeler » compose exactement l'appel affiché (TOCTOU de la confirmation)
+  - run test — le lien d'appel demande confirmation, il ne compose plus jamais seul
+  - run test — trois gardes rouges sur dev rétablies par le code (try? en commentaire, Task CallKit, ordre de la bande de slides)
+  - dans le navigateur, la notification d'un vocal dit qui parle et se pilote comme dans la coque (Closes #10890)
+  - run test — un lien à froid n'écrase plus la liste en cache, la dictée Siri garde ses « & »
+  - run test — la déconnexion emporte aussi les amis du @, les relations des fiches, la citation, les rappels et les protections armées
+  - run test — l'alerte d'appel ne double plus la sonnerie, un lien ne s'ouvre plus sous une story, la session rendue après CallKit
+  - run test — un flush concurrent n'annule plus le minuteur de réessai armé par un autre
+  - run test — une désactivation différée ne coupe plus le lecteur relancé ; les contours de story partent avec le compte
+  - run test — la fenêtre détachée tient sa portée et ses barrières, un lien interne ne ferme plus la conversation
+  - run test — un appel arrête la capture du vocal en cours
+  - un lien externe ouvre son Custom Tab sans attendre le démarrage du navigateur (#10888)
+  - run test — l'écran d'appel survit à la fenêtre fermée, la notification agit vite et au nom du bon compte
+  - run test — un seul émetteur, des envois complets, aucun envoi réclamé réarmé sous lui-même
+  - run test — ce qui grossissait sur une longue session : impressions, sessions de sync, lecteurs partis, présence d'un autre compte
+  - run test — trois lectures d'index périmé et deux identités de liste en double
+  - run test — la session audio rendue par chaque détenteur, l'appel terminé ne se démonte plus deux fois
+  - le commentaire d'AuthActionButton ne nomme plus Color(hex:) — le cliquet des couleurs en dur le comptait comme un appel (479 > 478), rouge sur le job Quality de dev depuis 068c29d6e7 (Refs #10884)
+  - « Mot de passe oublié » n'envoie rien tant que la saisie est incomplète
+  - la garde d'accent et l'audit des chemins d'API retrouvent le vert — le bouton d'authentification peint le jeton de la charte, les liens d'e-mail écrivent leurs pages en segments (run test)
+  - la confirmation d'un lien de connexion emploie les jetons de la charte — police relative, MeeshySpacing, MeeshyRadius
+  - un bouton d'authentification désactivé se voit désactivé
+  - run test — audit appels, story, sessions audio : quatre défauts, quatre témoins rouges puis verts
+  - un lien magique n'entre plus par meeshy://, seul l'App Link https connecte
+  - run test — le plancher du panneau des pièces jointes suit la classe de taille, plus le type d'appareil
+  - la confirmation d'un lien de revendication dit que l'adresse passe au compte, comme sur le web
+  - l'hôte de test démarre sous iOS 16/17 — aucune propriété stockée d'un type Translation iOS 18
+  - la confirmation d'un lien de connexion montre l'avatar du compte, comme sur le web
+  - un lien d'e-mail touché dans l'app n'ouvre jamais de session, et le routeur ne lit que sa forme exacte
+  - la confirmation d'un lien de revendication dit que l'adresse passe au compte
+  - un next ou returnUrl collé ne mène plus à une page à jeton d'e-mail
+  - les textes des pages d'accès hors parcours principal sortent du catalogue chargé au démarrage
+  - le lien de connexion des anciens binaires iOS reste direct pendant une transition mesurée
+  - un ancien lien Meeshy ouvre la coque Android sur son écran, comme sur iPhone (#10881)
+  - run test — la confirmation « Se connecter en tant que @x ? » a son catalogue, chargé avec ses écrans
+  - run test — les lectures d'URL complètes d'un lien à jeton sortent du module lu au démarrage
+  - run test — la feuille du lien de réinitialisation passe par le résolveur unique de scène ; les témoins des étincelles tiennent en anglais
+  - le lien de connexion est lié à l'appareil qui l'a demandé, sinon il demande confirmation
+  - le lien de connexion demande « Se connecter en tant que @x ? » hors du navigateur qui l'a demandé
+  - un lien de connexion ne connecte sans question que l'appareil qui l'a demandé
+  - run test — paginer la visionneuse au clavier ne lui fait plus perdre le clavier
+  - un lien suivi sert la forme qu'il a jugée, lue comme la lisent WHATWG, Foundation et Android
+  - run test — le témoin des pages d'accès répond au POST de vérification du jeton de réinitialisation
+  - run test — la validation complète de 85745a1d10 repasse au vert sur la tête de dev
+  - un appel vidéo ouvert sans caméra dit pourquoi, et mène aux réglages dans la coque Android (#10876)
+  - un lien suivi ne vise ni ne sert plus un lien de connexion, de vérification ou de réinitialisation
+  - un lien de connexion n'entre plus par meeshy:// ni au bout d'un lien suivi
+  - le lien de réinitialisation d'un e-mail ouvre « Nouveau mot de passe » dans l'app
+  - l'appareil accompagne son jeton push, la passerelle n'en garde qu'un actif par type
+  - un compte protégé par la double authentification réinitialise son mot de passe depuis l'app
+  - audit — trois plantages, deux identifiants confondus, deux décalages d'index, la colonne iPad mesurée
+  - un jeton de réinitialisation volé ne permet plus de deviner le code 2FA, et le web réinitialise un compte 2FA
+  - la vérification d'un jeton de réinitialisation est bornée en débit, et un jeton servi quitte l'historique de l'onglet
+  - une conversation ouverte PAR SCÈNE — le moteur de synchro, le socket, les toasts et le registre de lecture tiennent un ensemble
+  - supprimer un post absent du fil chargé part bien au serveur
+  - plafonds de poids — e806dc0094 (#10859) ajoute les huit clés revokeSessions.\* aux sept catalogues du cœur : interface_catalogs 210,75 Ko pour 210, première peinture 90,4 Ko pour 90 ; départage commit par commit (209,45 Ko avant lui) ; plafonds 211 et 91 Ko ; build et measure-weight verts en local
+  - les jetons des liens d'e-mail ne voyagent plus dans une adresse journalisée — le secret passe dans le fragment (`?via=email&token=#token=…`), la page web le relève, l'efface de la barre d'adresse et le remet dans le corps d'un POST
+  - run test — les lignes de chips de la rangée en focus quittent ViewThatFits, toujours entières ou défilantes
+  - les étincelles CONVERTIBLES en grand, le cumul (cycle / total à vie) en petit dessous — web et iOS
+  - Échap et Cmd+. referment les surimpressions maison au clavier physique
+  - une caméra refusée pendant l'appel mène aux réglages dans la coque Android (#10862)
+  - l'éditeur de texte de story se soulève de ce que le clavier RECOUVRE, plus de sa hauteur brute
+  - run test — les trois gardes rouges héritées de dev repassent au vert
+  - audit iPad — reels, Retour clavier, confirmations, glisser, multi-fenêtre, largeur de bulle, sections, espace
+  - chaque bundle de test du package est scellé au réseau dès son chargement
+  - run test — la frappe dit la dette, le guide suit la loi d'aujourd'hui, les compteurs d'étincelles parlent toutes les langues, arabe compris
+  - la dette d'étincelles (MINT_BLOCKED_BY_DEBT, blockedBy, sparksDebt sur level) et le guide sans moment « badge éteint »
+  - sous XCTest, l'hôte de test ne parle à aucun serveur — sessions et sockets scellés
+  - le catalogue du bandeau du joueur a son plafond — le lot étincelles y a ajouté huit clés (liens par pièce, total à vie, niveau max), 6,31 Ko pour 6 : « Gates web » rouge sur dev ; plafond 7 Ko (mesure locale, arrondi au Ko supérieur) ; build et measure-weight verts en local
+  - le guide n'émet plus les moments de l'ancienne règle — badge éteint, « Reprendre mes niveaux », Vent arrière (Refs #10846)
+  - fermer une conversation libère son écran — la cellule de message ne retient plus le contrôleur
+  - finition des étincelles — la première frappe dit le niveau actuel, les textes de l'ancienne règle quittent l'app, « 1 étincelle » au singulier
+  - les étincelles — vocabulaire des sept langues, palier Braise, paire poche/total et niveau/max, bandeau en liens, frappe fermée par le rang ou la dette (Refs #10846 #10847 #10848 #10849)
+  - run test — les étincelles à l'écran : badge de profil, paires de la Progression, bandeau en pièces-boutons, coût et blocages de la frappe
+  - « points » devient « étincelles » dans le Jeu, 9 langues — tout est convertible, le palier 1-9 s'appelle Braise
+  - les étincelles — décodage additif (poche, cycle, total à vie, niveau max à vie, coût effectif, réserves, dette), loi du coût, TREASURY_LOCKED et pièces du bandeau
+  - une reprise de socket ne rejoue plus le rattrapage listAfter en rafale
+  - run test — GameErrorCode connaît TREASURY_LOCKED : les SDK Tests de dev repassent au vert
+  - run test — le cliquet des couleurs d'accent admet la palette de l'arc-en-ciel du mode Script (477 → 478)
+  - run test — l'arc-en-ciel épouse la bulle en mode Bulles, et colore chaque lettre en mode Script
+  - run test — les huit gardes rouges de dev repassent au vert, le code fautif corrigé plutôt que les gardes assouplies
+  - run test — redimensionner une fenêtre d'iPad (compact ↔ regular) ne perd plus la story en cours de composition
+  - sur iPad, « Marquer non lu » sur la conversation ouverte la désélectionne — la colonne revient vide, la pastille reste (Mail, Messages)
+  - run test — SyncPillDock porte une deinit nonisolated : dev redevient vert sur la garde « aucune deinit isolée » (#9694)
+  - la rangée rapide du composer sert les 20 derniers émojis utilisés et en montre trois et demi (#10842)
+  - la bande des communautés de la recherche est deux fois plus petite et suit le focus du champ (#10841)
+  - jamais deux pastilles de date à l'écran — la pastille flottante nomme la rangée réellement en haut et se tait devant une pastille de section (#4602)
+  - l'aperçu de l'appui long rend la traduction que la cellule affiche, et sa bande de drapeaux (#9838)
+  - la pastille de synchronisation se pose au-dessus de la barre de composition et suit le clavier ; l'accent de frappe passe à ×1,1 (#10840)
+  - revenir à la liste des conversations ne fige plus le défilement — le geste de retour par le bord ne démarre plus sur la racine de la pile
+  - quitter une conversation garde les pièces jointes du plateau — et persister un brouillon restauré ne détruit plus ses fichiers
+  - sur iPad, les bulles se mesurent à la colonne de la conversation, plus à la fenêtre
+  - sur iPad, « Annuler » dans les réglages d'une communauté revient au détail
+  - iPad et iPhone au même comportement — la croix du projecteur d'humeur ferme le panneau, « Rechercher » marche sur la conversation ouverte, le compteur de signets se recale sur iPhone
+  - deux envois du même fichier ne partagent plus leur ligne de progression
+  - l'éclair d'« aller au message » vise le message, pas un rang — et « aller en bas » n'interroge plus une liste sans section
+  - un écho socket qui devance la réponse REST ne laisse plus deux bulles pour un même message
+  - un retour en arrière optimiste défait son geste, pas l'écran — plus d'instantané d'avant l'attente qui efface les arrivées
+  - une pré-montée annulée n'écrit plus à la place de la suivante — chaque montée du composer porte son identité
+  - les fenêtres anti-rafale de « marquer lu » oublient ce qu'elles ne protègent plus
+  - run test — la liste Lentille ne tremble plus quand on défile un peu : l'élection de la rangée magnifiée a une zone morte
+  - sur iPad, ouvrir une conversation depuis une autre la pose d'un geste — plus de passage par le fil d'actualité et la liste
+  - une reprise au premier plan ne double plus la suivante et s'arrête si l'app repart en arrière-plan
+  - épingler, rétablir une suppression et rafraîchir les pièces jointes atteignent aussi ses propres messages — WHERE localId OR serverId
+  - le handler socket du fil écoute le socket INJECTÉ, plus le singleton — ConversationViewModelTests ne rougit plus au hasard (#10828)
+  - la recherche dans une conversation s'annule vraiment — frappe suivante et fermeture coupent la recherche en attente
+  - annuler un téléversement en cours l'arrête vraiment — l'annulation atteint le travail détaché sous la tâche d'arrière-plan
+  - le lecteur de stories ne tient plus de salle de publication à vie — StoryPostRoomLedger se souvient de la salle rejointe
+  - un vocal abandonné dont le téléchargement échoue ne fait plus sauter le vocal choisi ensuite
+  - sur iPad, la colonne de détail se referme quand sa conversation quitte la liste ou que l'accès est retiré — comme l'iPhone revient à la liste
+  - une mutation retirée de la file termine ses observateurs — déconnexion et annulation ne laissent plus d'écouteurs suspendus à vie
+  - un doublon venu du serveur, du cache ou d'une recherche ne fait plus planter l'app — index par uniquingKeysWith, ids de recherche dédoublonnés
+  - la place d'un film Lottie se démonte sans double-free — LottieLiveSlot porte une deinit nonisolated (#9694)
+  - un retour en arrière-plan pendant la transition suspend quand même sockets et base — BackgroundTransitionLedger remplace l'égalité de génération (0xDEAD10CC, #7059)
+  - la rangée en focus de la liste garde ses chips entières, sur iPad comme sur iPhone
+  - inscrire au projet les cinq fichiers des cadres d'auteur (#10816) — GamePhotoAuthorPlate, GamePhotoAuthorPlateMotion, GameAuthorPlateView, GameAuthorCardView et leurs tests ; régénéré par xcodegen, 20 lignes ajoutées, aucune retirée ; sans eux l'app ne compilait plus sur dev (Refs #10816)
+  - les cinq fichiers de la plaque d'auteur du Jeu (GameAuthorCardView, GameAuthorPlateView, GamePhotoAuthorPlate, sa motion et leurs témoins, 62dfc0f6ef) inscrits au pbxproj par xcodegen — la garde d'inscription des témoins retombait rouge ; aucun fichier retiré
+  - dev repasse ses quatre gardes — MoodEmojiRainEngine et LottieLiveBudget portaient une deinit isolée au MainActor (double-free au démontage sur iOS 26, #9694) : nonisolated deinit ; 23 fichiers (page de l'humeur, découpage de MessageListViewController, leurs témoins) inscrits au pbxproj par xcodegen, aucun retiré ; cliquet des couleurs : 6 couleurs d'identité ou dérivées de l'accent (BubbleSkin, MoodSpotlight) documentées, référence 477 ; app et cibles de test compilent, garde des deinit verte en local
+  - la célébration d'un succès dit le même mot partout et sa ligne de rareté se lit — iOS : la ligne « Épique · 2 % des comptes » prend l'encre claire de l'explication sur la carte indigo (GameRarityLine apprend ink:, défaut inchangé) ; web : la mascotte dit « Succès débloqué » (clé iOS reveal.badge.achievement, 7 langues) — « Succès obtenu » est le mot d'un BADGE sur iOS, pas d'un succès. Témoins : AchievementRevealMedalTests (encre), brand-and-mascot (libellé) ; rendu régénéré au simulateur (Closes #10829)
+  - la page d'une humeur ne fige plus aucune taille de police — emoji par MeeshyFont.emoji (taille exacte d'un emoji seul, #9054), croix et flèche d'envoi par MeeshyFont.relative ; FixedFontSizeGuardTests repasse au vert (rouge depuis #10814) (Refs #10814)
+  - le cadre d'un succès, d'un rang ou d'une fin de mission grave le pseudo de son auteur — miroir du web (05272b6e4d, 5da4c31451). Loi GamePhotoAuthorPlate.style : succès common→mythic = bronze gravé / argent gravé / platine estampé / or estampé / prisme estampé, sans rareté = indigo gravé, rang = estampé au métal du blason, fin de mission = obsidienne grattée ; pseudo NFC coupé à 16 graphèmes, monogramme, invité sans plaque. Dessin GameAuthorPlateView (boîte 360×100, cartouche, médaillon, gravure / estampage / grattage masqué), animation Lottie générée par fini (360×100, 60 i/s, 72 images) jouée UNE fois par LottieLayerView (option loops: false au SDK), rien sous Réduire les animations. L'image exportée porte la plaque (9:16 sous la date, 1:1 entre les oiseaux, monogramme) ; la célébration AchievementRevealView n'est plus un plein écran : carte bornée 300 pt, inclinée, voile transparent, plaque de l'auteur au métal de sa rareté visible ; la proposition de photo pose la carte qui nomme l'auteur ; nouveau moment mission(templateKey, target), photographiable depuis la mission personnelle accomplie ; coupe d'un succès au métal de sa plaque ; une entrée de carnet d'avant se relit (.achievement sans rareté). 8 clés en 7 langues. Témoins GamePhotoAuthorPlateTests 22/22 (loi, pseudo, plaque, Codable, mise en page, Lottie lisible, session, rendus exportés, carte et célébration), 304 tests ciblés verts (Closes #10816)
+  - l'annonce du lien « by services.ceo » et les phrases de la mascotte suivent la langue d'interface — brandCreditHint(language) lit brand.credit.hint au catalogue d'interface (tranche public-entry, valeurs d'iOS brand.signature.credit.accessibilityHint, « nouvel onglet » plutôt que « navigateur ») sur les écrans d'accès ; les pages institutionnelles, documents français, la lisent en fr (catalogue chargé par le prérendu). mascotSay(line, language) passe par game.mascot.\* au catalogue du jeu (partie concept, seule Progression monte la mascotte), mots d'iOS game.mint.tchak, game.mint.chip.level, reveal.badge.unlocked, accord par translateGamePlural (duel et pluriels arabes), nombres formatés dans la langue. Budgets : game_concept 64 Ko (62,78 mesurés), interface 209,43 / 210. Témoins interface en + ar ; bun test apps/web 25489 verts, build vert (Closes #10827)
+  - le catalogue de l'humeur a son plafond — la page de l'humeur (#10813) y a ajouté ses dix clés mood.page.\*, 2,63 Ko pour 2 : « Gates web » rouge sur dev depuis 65cf239922 ; plafond 3 Ko (mesure CI 38910215459, arrondi au Ko supérieur), toujours chargé avec ses écrans seulement ; build et measure-weight verts en local
+  - la tâche de fond du cache ne s'enregistre qu'une fois par processus — BGTaskScheduler ne rend pas false sur un doublon, il lève NSInternalInconsistencyException et l'app meurt au lancement (vu sur simulateur, build 1936, depuis MeeshyApp.init) ; drapeau à usage unique sous verrou, commentaire faux corrigé ; test
+  - une réponse à une humeur part hors ligne — bulle optimiste dans la conversation directe, ligne de file qui garde la citation, envoi direct dédupliqué par clientMessageId (même forme que CallDeclineMessenger) ; une réponse chiffrée n'entre jamais dans la file, qui rejoue en clair. OfflineQueueItem porte storyReplyToId (clé absente des anciennes lignes ⇒ nil), le rejeu REST et socket le transmet, et la réponse à une story tapée hors ligne dans une conversation ne perd plus sa citation. Témoins : MoodReplySenderTests 9/9 (bulle + file citant l'humeur, hors ligne sans erreur, file refusée ⇒ échec, chiffré jamais en file), OfflineQueueItemStoryReplyTests (ancienne ligne, aller-retour) ; CallDeclineReplyTests, NotificationActionHandlerTests, OutboxDispatcherTests, OutboxProtectedMediaReplayTests verts (Closes #10820)
+  - l'ancien chrome de Progression suit la langue d'interface — héros du dernier succès, du niveau et des Meeshes, palier d'un badge, échelle complète, sections de défis et leur compte, libellés d'axe et de succès, erreur, hors ligne, squelette, manque et plancher d'une Meesh au pluriel de chaque langue, retour de la coquille (common.back ; GlassBack sans libellé par défaut), avec les valeurs d'iOS (progression._, achievement.section._) au catalogue du jeu (game.progression._) ; FAMILY_LABELS rejoint game.family._, les unités et séries mortes (LEVEL_UNIT, STREAK_UNIT, streakLabel…) quittent le code. Budgets : game_concept 63 Ko (61,02 mesurés), account_recovery 4 Ko (2,88), interface 209,17 / 210. Témoins interface en + it/de/ar ; bun test apps/web 25483 verts, build vert (Closes #10823)
+  - quitter une conversation depuis le Résumé la marque lue — le Résumé ne rend aucune bulle et n'accusait la lecture qu'au changement de mode ; un retour direct à la liste laissait la conversation non lue (badge 99+, réouverture en Résumé). La sortie par navigation consulte ConversationCatchUpLaw.exitCatchesUp (Résumé seulement ; la Rivière ne rattrape qu'au présent, l'arrière-plan n'est pas une sortie de lecture) puis markCaughtUpFromSummaryOrRiver, même garde !hasNewerMessages. Miroir du web #10812. Témoins : loi rouge puis verte, garde de câblage ; ConversationCatchUpLawTests 13/13, ConversationViewModelTests 128/128, FileSizeBudgetGuardTests vert (ConversationView.swift n'a pas grandi) (Closes #10818)
+  - le mot de passe oublié, la réinitialisation, l'écran « E-mail envoyé » et la feuille de choix du pays suivent la langue d'interface, avec les valeurs d'iOS (auth.forgotPassword._, auth.magiclink.sent._, auth.signup.phone.country._) ; catalogue recovery._ chargé avec les deux routes (le catalogue d'interface est à son plafond). Témoins interface en + de/it/es (Refs #10823)
+  - les décors animés s'animent partout, listes comprises — contour d'avatar des rangées de conversations, du fil (bulles, Focal, Script), des participants et de la fiche d'information, vignettes du sélecteur de décor et des fonds ; un plafond de 8 films Lottie vivants (LottieLiveBudget, miroir du budget web) : la couche la plus anciennement sortie de l'écran cède sa place, une couche sans place montre son image fixe, Réduire les animations n'occupe aucune place ; des demandes simultanées du même fichier lisent et décodent UNE fois. Témoins : budget (6), lecture partagée et lecture sans place (LottieLayerTests 15/15), garde « aucune surface ne fige son décor » (MessageAuthorRingTests) ; build-for-testing vert, FileSizeBudgetGuardTests vert (Closes #10815)
+  - le cache mémoire des formes d'onde est borné — seul NSCache du SDK sans limite, une entrée par piste × palier (jusqu'à 2048 RMS) gardée pour toute la séance ; countLimit 48 comme ses voisins, le disque reste le second niveau ; test
+  - le composer de story libère le bitmap d'une photo supprimée dès qu'aucune étape d'annulation ne peut la ramener — mis de côté pour l'undo, il restait jusqu'à la sortie du composer même évincé par le cap de 50 ou par une branche redo tronquée ; une longue séance gardait chaque photo retirée ; purge des bitmaps, fonds et octets animés non référencés par la trajectoire, URL de fichiers inchangées ; test
+  - les temps relatifs (« now », « 3d », « 2w », « 2mo »…), le titre des épisodes du Résumé (« 2 messages », « 2 Nachrichten »…) et les dates de progression (« Earned on September 3, 2026 ») suivent la langue d'interface, avec les valeurs d'iOS (time.short._, focal.summary.episode.messages\__), plus un français figé ni un « fr-FR » en dur. Témoins interface en + sept langues ; bun test apps/web 25463 verts, build vert. Suite (mot de passe oublié, choix du pays, chrome de la progression) : #10823 (Closes #10822)
+  - la proposition de photo pose une carte bornée (300 px, inclinée) qui nomme son auteur — emblème au métal de l'étape, moment, date et plaque gravée au pseudo avec la photo de profil, animation Lottie du fini par le moteur unique (rien sous « Réduire les animations ») ; l'auteur est le lecteur résolu au site unique (un invité n'a pas de plaque) ; la mission personnelle accomplie se photographie depuis la fiche des missions ; témoins : carte, plaque dans le cadre de la scène, bouton de fin de mission ; bun test apps/web 25458 verts (1 rouge hors lot, #10822 en cours), build Vite vert (Refs #10816)
+  - une seule langue d'interface — les libellés du fil (séparateurs de jour « Hier », dates du résumé et du glissé, heure des bulles, date de la fiche du message, date des commentaires, d'une story, des messages favoris, du tampon Focal, du visionneur de médias) suivent la langue d'interface et plus le Prisme du lecteur ni un « fr-FR » figé ; le Prisme ne gouverne que le contenu. Interface en + prisme fr ⇒ « Yesterday » ; lecture admin : dates dans la langue de l'administrateur. Témoins : séparateur « Yesterday », heure de bulle, date de la fiche ; bun test apps/web 25400 verts (rouges restants hors lot, verts isolés), build vert (Closes #10817)
+  - la page de l'humeur — encoche haute, nom complet de l'auteur, croissance douce de la pluie (Closes #10813)
+  - page d'une humeur — voile plus dense pour lire sur une bannière claire, schéma sombre local (sans basculer toute la fenêtre) (#10814)
+  - quitter le Résumé Vivant accuse la lecture — Meeshy Global ne garde plus « 99+ »
+  - la page de l'humeur — bannière, avatar, mot, pluie d'emoji, réponse en privé (#10813)
+  - le cadre d'un succès, d'un rang ou d'une fin de mission grave le pseudo de son auteur — plaque d'auteur en données (fini et métal tirés de l'étape : rareté visible, blason du rang, mission grattée), dessin SVG unique en jetons, place propre dans la mise en page 9:16 et 1:1, cinquième emplacement facultatif relu par la composition de l'image, animation Lottie générée et validée, trophée au métal de la rareté, sept langues ; planche docs/product/cadres-de-gloire/planche-cadres-auteur.html (Refs #10816)
+  - la notification « nouvelle humeur » ouvre la page plein écran de l'humeur — bannière, avatar, texte décoré, pluie d'emoji Canvas bornée, réponse en reply-to dans la DM (#10814)
+  - la notification « nouvelle humeur » ouvre /mood/:id — squelette (#10813)
+  - les décors animés tiennent un budget de fluidité dans les listes longues — au plus 8 films Lottie vivants, toutes surfaces confondues (liste des conversations, fil, participants, fiche, sélecteurs) : une couche sortie de l'écran garde sa place sans pression et cède, sous pression, la plus anciennement endormie (film détruit, dessin statique conservé) ; une couche sans octets lisibles rend sa place ; les octets d'une même couche se chargent et se vérifient une fois (cache borné, échec non retenu) ; les vignettes des fonds animés du sélecteur jouent leur couche ; pause hors écran, onglet caché et prefers-reduced-motion inchangés ; témoins budget, cache, couche et vignette (Refs #10815)
+  - sous chaque QR de meeshy.me, le lien de partage de World Wide en clair — qui lit la landing sur son téléphone ne peut pas flasher son propre écran et restait sans chemin depuis #10784 ; une ligne discrète « Le lien de partage : meeshy.me/world » (lien texte, pas de bouton ni de verbe d'appel, 7 langues) suit la consigne du QR, et sur écran tactile (pointer: coarse) le QR et sa consigne s'effacent pour ne laisser qu'elle ; le QR reste une image, aucun formulaire ni « Entrer sans compte » ne revient ; témoins : les deux QR portent le lien vers /world sans classe de bouton, libellé propre à chaque langue, règle tactile qui masque image et consigne ; bun test apps/web 25326/0, build prérendu vert (Closes #10811)
+  - run test — republier en post ou en réel sur toute story (la sienne comprise) ; Composer sur le rail de la story d'autrui ; la puce « Reposté de @auteur » ne survit à une republication directe que si l'original est public (la gateway la retirait jamais : repostCreditChips, v1 et v3) (Refs #9953)
+  - run test — Republier au rail republie en story d'un geste ; Partager ▸ gagne Republier en post et Republier en réel (story d'autrui) par un seul écrivain StoryDirectRepost ; Citer en post disparaît avec son code mort (Refs #9953)
+  - le record de niveau servi ne redescend jamais, et son rattrapage paie la Gloire des niveaux franchis (Closes #10905)
+  - le record de niveau servi est le record gravé, il ne redescend jamais (Refs #10905)
+  - un crédit d'étincelles ne se perd plus à moitié, la ligue rend les points repris, la frappe se juge dans sa transaction
+  - les migrations nommées s'exécutent depuis l'image passerelle, à blanc puis --apply, sans portage mongosh
+  - l'appel actif d'un utilisateur se lit par participantId indexé, plus par la relation participant — fin du balayage de CallParticipant
+  - run test — l'épuisement des codes 2FA d'une réinitialisation est classé au registre des acteurs
+  - les index de la télémétrie v2 se posent seuls au démarrage — plus de « Unknown tagged value »
+  - un compte ne garde que ses jetons push récemment enregistrés, plus des centaines d'installations mortes
+  - un messageId qui n'est pas un ObjectId rend 400 sur les réactions, plus 500
+  - dette d'étincelles — une reprise non prélevable devient une dette, déduite des gains et bloquante pour la frappe ; palier 1-9 affiché Braise (Refs #10846 #10849)
+  - les étincelles — la frappe dépense la poche seule, le niveau se lit sur le cycle, les badges disent le total réel (Closes #10845 Closes #10846 Closes #10847 Closes #10848 Closes #10849)
+  - le brut de lecture se garde 25 mois et la durée se règle par une seule source — PostImpression et PostEngagement ne sont plus purgées à 90 j : expiresAt = création + RAW_READING_RETENTION_DAYS (760 j par défaut, illisible ⇒ défaut), lue par rawReadingRetentionMs() aux quatre sites de création ET par la migration nommée, qui RALLONGE désormais les lignes datées à 90 j (expiresAt < createdAt + durée ⇒ recalcul, jamais de raccourcissement, idempotente) ; variable exposée aux compositions staging/prod ; ContentEvent et AnonymousPostOpen inchangés (décision porteur, #10510 commentaire 6222116672)
+  - le WebSocket natif iOS n'est plus refusé par CORS — origine ws:/wss: acceptée (#10838)
+  - la CI de dev repasse au vert — deux témoins dérivés
+  - l'éventail new_message d'une grande conversation ne fige plus la passerelle — au plus 16 createMessageNotification en vol (settleWithConcurrency) au lieu de 370 d'un coup
+  - revert transformers 5.19.0 → 5.17.0 — casse le build Docker (récidive de #10043)
+  - sous son héros, la ligne du support est un extrait court (2 lignes, 140 car.) ou le symbole de son média
+  - imager un commentaire — média du support en héros, fil imbriqué par niveau au lieu d'aplati
+  - run test — l'import relatif de email-link-url porte son extension .js
+  - les étincelles — poche, cycle, total à vie, coût selon le niveau actuel, réserves du trésor par rang (Refs #10846 #10847 #10848 #10849)
+
+### Patch Changes
+
+- Updated dependencies
+  - @meeshy/shared@1.40.0
+
 ## 1.85.0
 
 ### Minor Changes
