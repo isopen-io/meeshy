@@ -119,6 +119,8 @@ describe('#8630 × #9579 — une réponse morte avec ce qu’elle cite est parti
       viewOnceBurnedAt: null,
       attachments: [],
       _count: { attachments: 1 },
+      encryptionMode: null,
+      conversation: { encryptionEnabledAt: null, encryptionMode: null },
       ...overrides,
     });
 
@@ -259,7 +261,7 @@ describe('#3734 × #9579 — un lien ÉCHU ne redevient pas une porte quand la p
   const linkJoiner = (): Row =>
     participantRow({ shareLinkId: LINK, permissions: { canViewHistory: true } });
   const source = (): Row =>
-    messageRow({ id: REPLY, ephemeralDuration: null, viewOnceBurnedAt: null, attachments: [], _count: { attachments: 1 } });
+    messageRow({ id: REPLY, ephemeralDuration: null, viewOnceBurnedAt: null, attachments: [], _count: { attachments: 1 }, encryptionMode: null, conversation: { encryptionEnabledAt: null, encryptionMode: null } });
 
   it('prémisse : tant que la ligne du lien échu existe, l’inscrit entré par ce lien ne désigne plus la source', async () => {
     const expired = makeStore({

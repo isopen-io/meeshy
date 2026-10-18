@@ -451,11 +451,14 @@ export class MessagingService {
         senderParticipantId: participant.id,
         forwardedFromConversationId: request.forwardedFromConversationId,
         at: new Date(),
-        bodyOnlyFromSource: this.bodyOnlyFromSource(request)
+        bodyOnlyFromSource: this.bodyOnlyFromSource(request),
+        forwardedAttachmentIds: request.forwardedAttachmentIds
       });
+      // #9598 — le motif voyage en `code`, stable ; la phrase reste pour les
+      // anciens clients.
       if (isForwardRefused(forwardAdmission)) {
         logger.info('forward refused', { ...corr, reason: forwardAdmission.reason });
-        return this.createErrorResponse(describeForwardRefusal(forwardAdmission));
+        return this.createErrorResponse(describeForwardRefusal(forwardAdmission), forwardAdmission.reason);
       }
 
       // 5. Sauvegarde du message en base. Phase 4 §6.2 — `clientMessageId`

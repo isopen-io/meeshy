@@ -30,6 +30,11 @@ export const readableForwardSource = (id: string) => ({
   deletedAt: null,
   senderId: SOURCE_AUTHOR_ID,
   viewOnceBurnedAt: null,
+  // D7 (#10949) — une source EN CLAIR, dite explicitement : la passerelle ne
+  // recopie rien d'une source dont elle ne PROUVE pas qu'elle l'est.
+  isEncrypted: false,
+  encryptionMode: null,
+  conversation: { encryptionEnabledAt: null, encryptionMode: null },
 });
 
 type ForwardSourceReaderDouble = {
