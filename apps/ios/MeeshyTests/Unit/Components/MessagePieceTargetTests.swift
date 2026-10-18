@@ -430,4 +430,33 @@ final class MessagePieceTargetTests: XCTestCase {
         XCTAssertFalse(MessagePressClaim.isClaimed(at: claimedAt.addingTimeInterval(1)))
         XCTAssertFalse(MessagePressClaim.isClaimed(at: claimedAt.addingTimeInterval(-1)))
     }
+
+    // MARK: - L'avatar du pied réclame l'appui long (un geste, un effet)
+
+    func test_pressClaim_avatarSilencesTheRowMenu() {
+        let claimedAt = Date(timeIntervalSince1970: 3_000)
+        MessagePressClaim.claim(.avatar, at: claimedAt.addingTimeInterval(MessagePressClaim.pieceMinimumDuration))
+
+        XCTAssertEqual(MessagePressClaim.claimedBy, .avatar)
+        XCTAssertTrue(MessagePressClaim.isClaimed(at: claimedAt.addingTimeInterval(MessagePressClaim.rowMinimumDuration)),
+                      "le menu « Répondre » de la rangée ne s'ouvre pas avec « Voir le profil »")
+    }
+
+    func test_footerAvatar_claimsThePress() throws {
+        let footer = try source("Meeshy/Features/Main/Views/Bubble/BubbleFooter.swift")
+        XCTAssertTrue(footer.contains(".modifier(MessageAvatarPressClaim())"))
+    }
+
+    func test_quotedAuthor_prefersStoreThenReference_andNeverOpensWithoutAnId() {
+        XCTAssertEqual(QuotedAuthorProfileTarget.userId(quotedSenderId: "a", referenceAuthorUserId: "b"), "a")
+        XCTAssertEqual(QuotedAuthorProfileTarget.userId(quotedSenderId: "", referenceAuthorUserId: "b"), "b")
+        XCTAssertEqual(QuotedAuthorProfileTarget.userId(quotedSenderId: nil, referenceAuthorUserId: "b"), "b")
+        XCTAssertNil(QuotedAuthorProfileTarget.userId(quotedSenderId: "", referenceAuthorUserId: nil))
+    }
+
+    func test_quotedAuthor_opensThroughRouterOpenProfile() throws {
+        let host = try source("Meeshy/Features/Main/Views/MessageListViewController+QuotedMedia.swift")
+        XCTAssertTrue(host.contains("router.openProfile("))
+        XCTAssertFalse(host.contains("deepLinkProfileUser ="))
+    }
 }

@@ -76,6 +76,7 @@ enum MessagePressClaim {
     static let window: TimeInterval = 0.3
 
     private static var claimedAt: Date?
+    private(set) static var claimedBy: Claimant?
 
     /// Qui réclame la pression. Chaque réclamant détient UN effet : la tuile
     /// l'aperçu de sa pièce, l'avatar le menu du profil. La rangée, elle, ne
@@ -87,6 +88,7 @@ enum MessagePressClaim {
 
     static func claim(_ claimant: Claimant = .piece, at now: Date = Date()) {
         claimedAt = now
+        claimedBy = claimant
     }
 
     static func isClaimed(at now: Date = Date()) -> Bool {
