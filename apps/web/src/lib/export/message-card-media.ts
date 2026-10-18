@@ -182,6 +182,17 @@ export function shortName(name: string): string {
   return `${graphemes.slice(0, NAME_LIMIT - 9).join('')}…${graphemes.slice(-8).join('')}`;
 }
 
+/**
+ * **Le HÉROS** (#10915, miroir de `heroOps` iOS) : le visuel du support dans SON
+ * cadre (pleine largeur, `message-card-hero.ts`) — recadré s'il est une photo,
+ * inscrit en entier s'il est un sticker ; une vidéo fixe garde son badge.
+ */
+export function heroMediaOps(media: CardVisualMedia, index: number, frame: { readonly x: number; readonly y: number; readonly width: number; readonly height: number }): readonly CardOp[] {
+  const sticker = isStickerMedia(media);
+  const op: CardOp = { kind: 'media', index, ...frame, radius: sticker ? 0 : RADIUS, video: media.kind === 'video', ...(sticker ? { contain: true as const } : {}) };
+  return media.kind === 'video' ? [op, ...playBadge(frame.x + frame.width / 2, frame.y + frame.height / 2, Math.min(frame.width, frame.height))] : [op];
+}
+
 function playBadge(cx: number, cy: number, size: number): readonly CardOp[] {
   const radius = Math.max(28, Math.min(56, size * 0.14));
   return [

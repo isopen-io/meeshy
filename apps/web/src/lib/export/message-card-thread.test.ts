@@ -2,6 +2,7 @@ import { describe, expect, test } from 'bun:test';
 
 import { layoutMessageCard, type CardMediaOp, type CardOp, type CardTextOp, type Measure, type MessageCardInput } from './message-card-layout';
 import type { CardMedia } from './message-card-media';
+import { HERO_MARGIN, HERO_UNKNOWN_RATIO } from './message-card-hero';
 import { THREAD_INDENT, threadRoom, threadSeparatorWidth, threadShift } from './message-card-thread';
 
 /** L'imbrication d'un fil par la séparation du template, et le héros du support (#10915). */
@@ -64,7 +65,7 @@ describe('le héros du support', () => {
   test('ouvre la carte : grand, pleine largeur, AVANT la citation', () => {
     const l = layout({ media: [photo], heroMedia: 0 });
     const [hero] = medias(l.ops);
-    expect(hero?.width).toBe(888);
+    expect([hero?.x, hero?.width]).toEqual([HERO_MARGIN, 1080 - 2 * HERO_MARGIN]);
     expect(hero?.y ?? 0).toBeLessThan(text(l.ops, 'Awa')?.y ?? 0);
     expect(text(l.ops, 'Awa')?.y ?? 0).toBeLessThan(text(l.ops, 'Cleo')?.y ?? 0);
   });
@@ -73,7 +74,7 @@ describe('le héros du support', () => {
     const l = layout({ media: [photo, mine], heroMedia: 0 });
     const ops = medias(l.ops);
     expect(ops.map((op) => op.index)).toEqual([0, 1]);
-    expect(ops[0]?.width).toBe(888);
+    expect(ops[0]?.width).toBe(1080 - 2 * HERO_MARGIN);
     expect(ops[1]?.y ?? 0).toBeGreaterThan(text(l.ops, 'Awa')?.y ?? 0);
   });
 
@@ -90,6 +91,20 @@ describe('le héros du support', () => {
     const tall: CardMedia = { kind: 'image', width: 900, height: 1600, mimeType: 'image/jpeg' };
     const [hero] = medias(layout({ media: [tall], heroMedia: 0 }).ops);
     expect(hero?.height ?? 0).toBeLessThanOrEqual(Math.round((1920 - 272) * 0.45));
+  });
+
+  test('son rapport : celui du média, borné de 16:9 à 4:5 ; inconnu, 4:3 (miroir de MessageCardHero.swift)', () => {
+    const width = 1080 - 2 * HERO_MARGIN;
+    const heightOf = (media: CardMedia) => medias(layout({ aspect: 'auto', media: [media], heroMedia: 0 }).ops)[0]?.height;
+    expect(heightOf({ kind: 'image', width: 0, height: 0 })).toBe(Math.round(width * HERO_UNKNOWN_RATIO));
+    expect(heightOf({ kind: 'image', width: 3000, height: 1000, mimeType: 'image/jpeg' })).toBe(Math.round(width * 0.5625));
+    expect(heightOf({ kind: 'image', width: 1500, height: 1000, mimeType: 'image/jpeg' })).toBe(Math.round(width / 1.5));
+    expect(heightOf({ kind: 'image', width: 1000, height: 1000, mimeType: 'image/jpeg' })).toBe(Math.floor((1920 - 2 * 136) * 0.45));
+  });
+
+  test('un en-tête couché dans la marge ramène le héros sur la colonne de texte', () => {
+    const [hero] = medias(layout({ title: 'Dakar', frame: { header: 'up', authors: 'top', tilt: 'none' }, media: [photo], heroMedia: 0 }).ops);
+    expect([hero?.x, hero?.width]).toEqual([96, 888]);
   });
 
   test('un héros sticker se pose ajusté, jamais coupé', () => {

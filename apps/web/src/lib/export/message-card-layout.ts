@@ -8,8 +8,9 @@ import {
   type CardMediaArrangement,
   type CardMediaLayout,
 } from './message-card-arrangement';
-import { DEFAULT_AUDIO_STYLE, layoutCardMedia, type CardAudioStyle, type CardMedia, type CardMediaBlock } from './message-card-media';
+import { DEFAULT_AUDIO_STYLE, heroMediaOps, layoutCardMedia, type CardAudioStyle, type CardMedia, type CardMediaBlock } from './message-card-media';
 import type { CardOp } from './message-card-ops';
+import { HERO_GAP, heroHeight, heroSpan } from './message-card-hero';
 import { threadLevel, threadRoom, threadSeparatorHeight, threadSeparatorOps, threadShift } from './message-card-thread';
 import { GUILLEMET_FONT, canvasFont, templateOf, type CardLinkId, type CardPalette, type MessageCardTemplateId } from './message-card-templates';
 import { textDirection, truncateLines, wrapText, type Measure } from './message-card-text';
@@ -167,8 +168,6 @@ const SIDE_REGION = 64;
 const FOLLOW_GAP = 40;
 /** La part de la hauteur utile qu'un visuel se prend au plus quand du texte l'accompagne — la même que sur iOS. */
 const MEDIA_SHARE = 0.42;
-const HERO_SHARE = 0.45;
-const HERO_GAP = 40;
 const FOLLOW_MAX_LINES = 3;
 /** La part de la colonne de texte qu'une colonne de médias prend, et l'espace qui la sépare de la réponse. */
 const BESIDE_SHARE = 0.42;
@@ -279,24 +278,14 @@ export function layoutMessageCard(input: MessageCardInput, measure: Measure): Ca
   const heroRank = input.heroMedia ?? null;
   const heroIndex = heroRank !== null && media[heroRank] !== undefined && media[heroRank]?.kind !== 'audio' ? heroRank : null;
   const painted = paintedVisualIndexes(media, { layout: input.mediaLayout ?? DEFAULT_MEDIA_LAYOUT, arrangement, featured: input.featuredMedia ?? null, hero: heroIndex });
-  /* Le héros est seul dans son bloc : les autres rangs deviennent des pièces sans dimension, que rien ne peint. */
+  /* Le héros a son cadre (`message-card-hero.ts`, miroir iOS) : pleine largeur à 48 de chaque bord, au rapport borné du média. */
+  const heroMediaItem = heroIndex === null ? undefined : media[heroIndex];
+  const hero = heroSpan({ canvasWidth: width, sideHeader: sideHeader !== null, textLeft: PAD_X, textWidth });
+  const heroFrameHeight = heroMediaItem === undefined || heroMediaItem.kind === 'audio' ? 0 : heroHeight(heroMediaItem, hero.width, budget);
   const heroBlock: CardMediaBlock =
-    heroIndex === null
+    heroIndex === null || heroMediaItem === undefined || heroMediaItem.kind === 'audio' || heroFrameHeight <= 0
       ? { height: 0, place: () => [] }
-      : layoutCardMedia({
-          media: media.map((item, index): CardMedia => (index === heroIndex ? item : { kind: 'image', width: 0, height: 0 })),
-          painted: [heroIndex],
-          arrangement: 'single',
-          audioStyle: input.audioStyle ?? DEFAULT_AUDIO_STYLE,
-          width: textWidth,
-          maxHeight: Math.round(budget * HERO_SHARE),
-          column: false,
-          creditAt: null,
-          measure,
-          palette,
-          rtl: false,
-          font: (size, weight) => canvasFont({ family: null, weight, style: 'normal' }, size),
-        });
+      : { height: heroFrameHeight, place: (x, y) => heroMediaOps(heroMediaItem, heroIndex, { x, y, width: hero.width, height: heroFrameHeight }) };
   const hasHero = heroBlock.height > 0;
   /* Une citation sans texte reste une citation quand le héros l'ouvre : son nom lit le support. */
   const quotedText = input.quoted?.text.trim() ?? '';
@@ -510,8 +499,8 @@ export function layoutMessageCard(input: MessageCardInput, measure: Measure): Ca
   };
 
   if (hasHero) {
-    ops.push(...heroBlock.place(PAD_X, y));
-    regions.push({ part: 'media', x: PAD_X, y, width: textWidth, height: heroBlock.height });
+    ops.push(...heroBlock.place(hero.x, y));
+    regions.push({ part: 'media', x: hero.x, y, width: hero.width, height: heroBlock.height });
     y += heroBlock.height + HERO_GAP;
   }
 
