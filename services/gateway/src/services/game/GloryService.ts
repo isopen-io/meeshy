@@ -36,7 +36,6 @@ import { MythicSeatService } from './MythicSeatService';
 import { LEVEL_STEP_USER_SELECT, countMissionsDone, levelStepFactsOf } from './LevelStepFacts';
 import { SPARKS_USER_SELECT, levelSparksOf, sparksOf } from './SparksFacts';
 import { gameLevelUpNotifier, type LevelReached } from './GameLevelUpNotifier';
-import { raiseLevelRecords } from './LevelRecordWrite';
 
 export type { LevelReached };
 
@@ -70,6 +69,10 @@ type GloryDb = Pick<PrismaClient, 'gloryLedger'>;
 function isP2002(err: unknown): boolean {
   return typeof err === 'object' && err !== null && (err as { code?: string }).code === 'P2002';
 }
+
+/** Le compte porte encore `stars` étoiles — zéro couvre aussi le champ absent ou `null` (leçon 318). */
+const sameStars = (stars: number | null) =>
+  (stars ?? 0) === 0 ? { OR: [{ prestige: null }, { prestige: { isSet: false } }, { prestige: 0 }] } : { prestige: stars };
 
 /** Le total de Gloire — le seul endroit qui le calcule. */
 export async function gloryTotalFromLedger(db: GloryDb, userId: string): Promise<number> {
@@ -254,20 +257,34 @@ export class GloryService {
     }
 
     const record = recordLevel({ level, previousRecord: params.previousRecord });
-    const maxLifetime =
-      params.previousMax === undefined ? undefined : recordLevel({ level, previousRecord: Math.max(params.previousMax ?? 0, params.previousRecord ?? 0) || null });
-    const raisesRecord = record > (params.previousRecord ?? GAME_LEVEL_MIN);
-    const raisesMax = maxLifetime !== undefined && maxLifetime > (params.previousMax ?? 0);
-    if (raisesRecord || raisesMax) {
-      const { recordRaised } = await raiseLevelRecords(this.prisma, {
-        userId: params.userId,
-        record,
-        ...(maxLifetime === undefined ? {} : { maxLifetime }),
-        ...(params.prestige === undefined ? {} : { prestige: params.prestige }),
+    if (record > (params.previousRecord ?? GAME_LEVEL_MIN)) {
+      const raised = await this.prisma.user.updateMany({
+        // `isSet: false` : sur MongoDB, `{ levelRecord: null }` n'atteint PAS un
+        // champ ABSENT — celui de tous les comptes d'avant le jeu (leçon 318).
+        where: {
+          id: params.userId,
+          AND: [
+            { OR: [{ levelRecord: null }, { levelRecord: { isSet: false } }, { levelRecord: { lt: record } }] },
+            ...(params.prestige === undefined ? [] : [sameStars(params.prestige)]),
+          ],
+        },
+        data: { levelRecord: record },
       });
       // « Niveau N atteint » (#10901) : seulement si CETTE écriture a monté le record du cycle — une remontée après une
       // frappe reste sous le record, et une montée concurrente ne gagne l'écriture qu'une fois.
-      if (raisesRecord && recordRaised) await this.announceLevelReached({ userId: params.userId, level: record, sparks: params.score });
+      if (raised.count > 0) await this.announceLevelReached({ userId: params.userId, level: record, sparks: params.score });
+    }
+    if (params.previousMax !== undefined) {
+      const maxLifetime = recordLevel({ level, previousRecord: Math.max(params.previousMax ?? 0, params.previousRecord ?? 0) || null });
+      if (maxLifetime > (params.previousMax ?? 0)) {
+        await this.prisma.user.updateMany({
+          where: {
+            id: params.userId,
+            OR: [{ levelMaxLifetime: null }, { levelMaxLifetime: { isSet: false } }, { levelMaxLifetime: { lt: maxLifetime } }],
+          },
+          data: { levelMaxLifetime: maxLifetime },
+        });
+      }
     }
     // La Gloire de ces niveaux a pu faire franchir Ambassadeur ou Oracle : le plafond qu'elle lève s'ouvre aussitôt.
     if (gained > 0) await this.openLevelsIfRankRose(params.userId, gained);

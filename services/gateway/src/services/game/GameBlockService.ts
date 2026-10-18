@@ -24,7 +24,6 @@ import { gloryTotalFromLedger } from './GloryService';
 import { MythicSeatService } from './MythicSeatService';
 import { chestRewardOf, toGameMission, type MissionService } from './MissionService';
 import { countMissionsDone } from './LevelStepFacts';
-import { raiseLevelRecords } from './LevelRecordWrite';
 import { starFragmentsOf } from './StarFragments';
 import { SPARKS_USER_SELECT, levelSparksOf, sparksOf } from './SparksFacts';
 
@@ -159,35 +158,7 @@ export class GameBlockService {
 
     const valid = parseGameBlock(extensions === null ? block : { ...block, ...extensions });
     if (valid === null) log.error('game block refused by the shared schema', { userId });
-    else await this.engraveServedRecords(userId, valid, user);
     return valid;
-  }
-
-  /**
-   * Le record servi est le record GRAVÉ (#10905). Le bloc sert `max(niveau lu sur la poche, record gravé)` : quand le
-   * record gravé est en retard (compte d'avant le jeu, écriture de crédit manquée), la lecture grave ce qu'elle sert —
-   * sinon la relecture d'après une frappe servirait un record plus bas, et le Vent arrière changerait de verdict.
-   * Un RATTRAPAGE, jamais une annonce : « Niveau N atteint » appartient au crédit qui monte le record. Une écriture qui
-   * tombe ne retient pas le bloc — la prochaine lecture la rejoue.
-   */
-  private async engraveServedRecords(
-    userId: string,
-    block: GameBlock,
-    user: { readonly levelRecord?: number | null; readonly levelMaxLifetime?: number | null; readonly prestige?: number | null } | null,
-  ): Promise<void> {
-    const record = block.level.ladder?.record ?? block.level.record;
-    const maxLifetime = block.level.ladder?.levelMaxLifetime ?? block.level.levelMaxLifetime;
-    const lagsRecord = record > (user?.levelRecord ?? 0);
-    const lagsMax = maxLifetime !== undefined && maxLifetime > (user?.levelMaxLifetime ?? 0);
-    if (!lagsRecord && !lagsMax) return;
-    await raiseLevelRecords(this.prisma, {
-      userId,
-      record,
-      ...(maxLifetime === undefined ? {} : { maxLifetime }),
-      prestige: user?.prestige ?? 0,
-    }).catch((error: unknown) =>
-      log.warn('served level record not engraved, the next read retries', { userId, error: error instanceof Error ? error.message : String(error) }),
-    );
   }
 
   /**

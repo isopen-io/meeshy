@@ -203,22 +203,6 @@ class DebtBlocksMint extends Error {
   }
 }
 
-/**
- * Les records que le niveau d'avant une frappe relève (#10905) — jamais vers le bas. Écrits dans la transaction qui a
- * lu la ligne : un Prestige ou un crédit concurrent fait annuler la tentative (P2034), le rejeu relit tout.
- */
-function recordsCaughtUp(
-  compte: { readonly levelRecord?: number | null; readonly levelMaxLifetime?: number | null } | null,
-  levelBefore: number,
-): { levelRecord?: number; levelMaxLifetime?: number } {
-  const record = compte?.levelRecord ?? 0;
-  const max = compte?.levelMaxLifetime ?? 0;
-  return {
-    ...(levelBefore > record ? { levelRecord: levelBefore } : {}),
-    ...(levelBefore > max ? { levelMaxLifetime: levelBefore } : {}),
-  };
-}
-
 export class MeeshService {
   constructor(private readonly prisma: PrismaClient) {}
 
@@ -362,9 +346,6 @@ export class MeeshService {
             // débit, sinon ces indicateurs tomberaient avec elle. Jamais écrit pour un compte à jour.
             ...(sparkCount(compte?.sparksSincePrestige) < dans.cycle ? { sparksSincePrestige: BigInt(dans.cycle) } : {}),
             ...(sparkCount(compte?.sparksEarnedLifetime) < dans.lifetime ? { sparksEarnedLifetime: BigInt(dans.lifetime) } : {}),
-            // Le niveau d'AVANT le débit est atteint (#10905) : un record gravé en retard le rattrape ici, dans la même
-            // transaction — sans quoi la relecture d'après la frappe servirait un record plus bas que celle d'avant.
-            ...recordsCaughtUp(compte, levelBefore),
           },
         });
 
