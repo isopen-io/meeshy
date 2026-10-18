@@ -182,6 +182,8 @@ function threadAccent(): string | undefined {
 /** À combien de pages du bout l'hôte est prié d'étendre la liste. */
 export const NEAR_END_PAGES = 3;
 
+const CLICK_AFTER_HOLD_MS = 700;
+
 function clampIndex(index: number, count: number): number {
   return Math.max(0, Math.min(count - 1, index));
 }
@@ -449,6 +451,7 @@ export default function MediaViewer({
   const closeButtonRef = useRef<HTMLButtonElement | null>(null);
   const previouslyFocusedRef = useRef<HTMLElement | null>(null);
   const activePlayToggleRef = useRef<(() => void) | null>(null);
+  const heldOpenAtRef = useRef<number | null>(null);
   const trackRef = useRef<HTMLDivElement | null>(null);
 
   useBackDismiss(onClose);
@@ -650,6 +653,8 @@ export default function MediaViewer({
       setOverlay((now) => ({ ...(now.attachmentId === attachmentId ? now : { attachmentId, rail: false, menu: false }), [slot]: open }));
   const overlayHeld = overlay.attachmentId === current?.id && (overlay.rail || overlay.menu);
   const chromeIdle = useIdleChrome({ active: audioPage && audioPlaying, held: overlayHeld });
+  const coversViewport = presentation.kind === 'full' && !audioPage && currentSceneEntry === undefined;
+  const corridorPlacement = coversViewport ? 'floating' : 'corridor';
   const chromeHidden = presentation.kind === 'full' || (zoomedId !== null && zoomedId === current?.id) || chromeIdle;
   /* Un chrome effacé est INERTE : le focus qu'il tenait (la croix, posée à
      l'ouverture) tomberait au `<body>`, hors de la visionneuse — Échap n'y
@@ -726,7 +731,7 @@ export default function MediaViewer({
           qui ne voit rien. Au-dessus d'une page scène en plein viewport
           (`z-10`, #6902). */}
       <ViewerTopBar
-        placement="corridor"
+        placement={corridorPlacement}
         hidden={chromeHidden}
         exit={{ kind: 'close', label: translate(language, 'common.close'), onExit: onClose, buttonRef: closeButtonRef }}
         {...(identity !== undefined ? { identity } : {})}
@@ -915,7 +920,7 @@ export default function MediaViewer({
           scène, jamais sur le noir du plateau), légende et colonne sur une même
           rangée, comme sous un vocal. */}
       {floatsRail ? (
-        <ViewerBottomBar placement="corridor" hidden={chromeHidden} probe={{ 'data-viewer-footer': '' }}>
+        <ViewerBottomBar placement={corridorPlacement} hidden={chromeHidden} probe={{ 'data-viewer-footer': '' }}>
           <div ref={setTransportSlot} data-viewer-transport-slot />
           {playsVideo ? (
             <div ref={setInfoSlot} data-viewer-info-slot="" />
@@ -936,7 +941,7 @@ export default function MediaViewer({
         </ViewerBottomBar>
       ) : (
         <ViewerBottomBar
-          placement={currentSceneEntry !== undefined ? 'overlay' : 'corridor'}
+          placement={currentSceneEntry !== undefined ? 'overlay' : corridorPlacement}
           hidden={chromeHidden}
           probe={{ 'data-viewer-footer': '' }}
           {...(footer !== undefined ? { caption: footer } : {})}
