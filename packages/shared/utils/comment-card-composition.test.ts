@@ -203,7 +203,19 @@ describe('protections', () => {
     const photo: Media = { id: 'pic', kind: 'image' };
     const card = subject(source({ post: makePost({ content: '  ', media: [photo] }), target: root }), 'postAndComment');
     expect(card?.quoted?.author).toBe('Awa');
+    expect(card?.quoted?.text).toBe('📷');
     expect(card?.media.map((item) => item.media.id)).toEqual(['pic']);
+  });
+
+  it('sous son héros, le support ne garde qu’un extrait court : deux lignes, 140 caractères', () => {
+    const photo: Media = { id: 'pic', kind: 'image' };
+    const lines = makePost({ content: 'un\ndeux\ntrois\nquatre', media: [photo] });
+    expect(subject(source({ post: lines, target: root }), 'postAndComment')?.quoted?.text).toBe('un\ndeux…');
+    const words = Array.from({ length: 60 }, () => 'mot').join(' ');
+    const long = subject(source({ post: makePost({ content: words, media: [photo] }), target: root }), 'postAndComment')?.quoted?.text ?? '';
+    expect(long.endsWith('mot…')).toBe(true);
+    expect([...long].length).toBeLessThanOrEqual(POST_COMMENT_CARD_LIMITS.heroExcerptCharacters + 1);
+    expect(subject(source({ post: makePost({ content: 'un\ndeux\ntrois\nquatre' }), target: root }), 'postAndComment')?.quoted?.text).toBe('un\ndeux\ntrois\nquatre');
   });
 });
 

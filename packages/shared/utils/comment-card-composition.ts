@@ -42,6 +42,8 @@ import { MESSAGE_EFFECT_FLAGS } from '../types/message-effect-flags.js';
 export const POST_COMMENT_CARD_LIMITS = {
   maxPostLines: 4,
   maxPostCharacters: 280,
+  heroExcerptLines: 2,
+  heroExcerptCharacters: 140,
   maxBlocks: 6,
   maxMedia: 4,
 } as const;
@@ -207,15 +209,21 @@ export function postCommentCardInitialChoice<M extends PostCommentCardMediaLike>
   return new Set(threadToHere(source).map((comment) => comment.id).filter((id) => id !== source.target.id));
 }
 
-/** Le texte du post, lisible : 4 lignes, 280 caractères, coupé à un mot. */
-export function postCommentCardExcerpt(text: string): string {
+export type PostCommentCardExcerptBounds = { readonly lines: number; readonly characters: number };
+
+const POST_EXCERPT: PostCommentCardExcerptBounds = { lines: POST_COMMENT_CARD_LIMITS.maxPostLines, characters: POST_COMMENT_CARD_LIMITS.maxPostCharacters };
+/** L'extrait du support quand son héros le précède : la ligne du support, courte (miroir de `MessageCardHero.excerptLines/Characters`). */
+const HERO_EXCERPT: PostCommentCardExcerptBounds = { lines: POST_COMMENT_CARD_LIMITS.heroExcerptLines, characters: POST_COMMENT_CARD_LIMITS.heroExcerptCharacters };
+
+/** Le texte du post, lisible : 4 lignes, 280 caractères par défaut, coupé à un mot. */
+export function postCommentCardExcerpt(text: string, bounds: PostCommentCardExcerptBounds = POST_EXCERPT): string {
   const lines = text.trim().split('\n');
-  const kept = lines.slice(0, POST_COMMENT_CARD_LIMITS.maxPostLines).join('\n');
+  const kept = lines.slice(0, bounds.lines).join('\n');
   const characters = [...kept];
-  if (characters.length <= POST_COMMENT_CARD_LIMITS.maxPostCharacters) {
-    return lines.length > POST_COMMENT_CARD_LIMITS.maxPostLines ? `${kept.trim()}…` : kept;
+  if (characters.length <= bounds.characters) {
+    return lines.length > bounds.lines ? `${kept.trim()}…` : kept;
   }
-  const prefix = characters.slice(0, POST_COMMENT_CARD_LIMITS.maxPostCharacters).join('');
+  const prefix = characters.slice(0, bounds.characters).join('');
   const boundary = Math.max(prefix.lastIndexOf(' '), prefix.lastIndexOf('\n'));
   const cut = boundary === -1 ? prefix : prefix.slice(0, boundary);
   return `${cut.trim()}…`;
@@ -350,6 +358,16 @@ function mediaOf<M extends PostCommentCardMediaLike>(blocks: readonly PostCommen
 }
 
 /**
+ * La ligne du support sous son HÉROS (miroir de `PostCommentCardComposition.heroLine`) :
+ * son auteur et un extrait COURT ; sans texte, le symbole de son média — la
+ * citation vide disparaîtrait avec son auteur.
+ */
+function heroLine<M extends PostCommentCardMediaLike>(head: PostCommentCardPart, source: Source<M>, kind: PostCommentCardMediaKind): PostCommentCardPart {
+  const text = nonBlank(source.post?.text);
+  return { ...head, text: text === null ? symbolOf(kind) : postCommentCardExcerpt(text, HERO_EXCERPT) };
+}
+
+/**
  * La carte que l'atelier peint pour ces blocs — `null` quand rien ne s'image.
  * Le premier bloc de plusieurs est la tête (le post, ou la racine) ; la
  * dernière est la réponse ; les commentaires entre les deux restent des
@@ -364,7 +382,10 @@ export function postCommentCardSubject<M extends PostCommentCardMediaLike>(
   const first = composed[0];
   const last = composed[composed.length - 1];
   if (first === undefined || last === undefined) return null;
-  const quoted = composed.length > 1 ? partOfBlock(first) : null;
+  const media = mediaOf(composed, source);
+  const hero = media.find((item) => item.hero);
+  const head = composed.length > 1 ? partOfBlock(first) : null;
+  const quoted = head !== null && first.kind === 'post' && hero !== undefined ? heroLine(head, source, hero.media.kind) : head;
   const rest = composed.length > 1 ? composed.slice(1) : composed;
   const lastPart = partOfBlock(last);
   if (lastPart === null) return null;
@@ -385,6 +406,6 @@ export function postCommentCardSubject<M extends PostCommentCardMediaLike>(
     replyDepth: last.kind === 'comment' ? levelOf(last.depth) : 0,
     sentAt: source.target.createdAt,
     quotedAt: quoted === null ? null : timeOf(first, source),
-    media: mediaOf(composed, source),
+    media,
   };
 }
