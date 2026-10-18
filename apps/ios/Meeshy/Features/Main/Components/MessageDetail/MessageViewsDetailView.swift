@@ -206,7 +206,8 @@ struct MessageViewsDetailView: View {
                     name: message.senderName ?? "?",
                     context: .userListItem,
                     accentColor: message.senderColor ?? contactColor,
-                    avatarURL: message.senderAvatarURL
+                    avatarURL: message.senderAvatarURL,
+                    presenceState: message.isMe ? nil : PresenceManager.shared.presenceState(forSenderOf: message)
                 )
 
                 VStack(alignment: .leading, spacing: MeeshySpacing.xxs) {

@@ -762,7 +762,8 @@ export const FocalRow = memo(function FocalRow({
             {...(senderPhoto === undefined ? {} : { src: senderPhoto })}
             username={senderHandle}
             {...(senderRing === undefined ? {} : { storyRing: senderRing })}
-            {...(isMine ? {} : { participantId: message.senderId })}
+            {...(isMine ? {} : { participantId: message.senderId, authorId: hereKeyOf(message.sender) })}
+            presence={senderPresence}
           />
         ) : null}
 

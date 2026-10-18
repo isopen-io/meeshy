@@ -859,7 +859,7 @@ private struct ConversationHeaderAvatarView: View {
                                     avatarURL: member.avatarURL,
                                     storyState: storyState,
                                     moodEmoji: statusViewModel.statusForUser(userId: member.id)?.moodEmoji,
-                                    presenceState: PresenceManager.shared.presenceState(for: member.id),
+                                    presenceState: PresenceManager.shared.presenceState(for: member.viewingKey),
                                     isHere: isHere(member.viewingKey),
                                     onTap: { openMember(member, storyState: storyState) },
                                     onMoodTap: statusViewModel.moodTapHandler(for: member.id),

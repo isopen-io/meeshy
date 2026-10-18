@@ -8,7 +8,7 @@ import { prefersReducedMotion } from '@/lib/view/reduced-motion';
 
 import '@/styles/viewer-chrome.css';
 
-import { Avatar } from './avatar';
+import { PeerAvatar } from './peer-avatar';
 import type { SoundCreditControl } from './background-sound-credit';
 import { CHROME_ACTION_HIT_CLASS } from './chrome-action';
 import { Glyph, GlyphSvg } from './glyph';
@@ -68,6 +68,9 @@ export type ViewerIdentityModel = {
   readonly avatarColor?: string;
   /** Présent ⇒ l'avatar et le nom mènent au profil ; absent (sa propre story) ⇒ rien. */
   readonly profileUsername?: string;
+  /** LA PERSONNE DONT LA PRÉSENCE SE LIT (#10944) — l'auteur, dans la carte
+   * vivante ; absente (soi, un porteur sans identifiant) ⇒ aucun point. */
+  readonly presenceKey?: string;
   readonly time?: { readonly iso: string; readonly label: string };
   /** Une republication (#10524) : son crédit suit la date — icône, « @handle »
    * quand la source le sert, et `label` pour le lecteur d'écran. */
@@ -110,7 +113,8 @@ export function ViewerIdentity({
   );
   return (
     <div data-viewer-identity="" className="pointer-events-auto flex min-w-0 flex-1 items-center gap-2" onPointerDown={stop}>
-      <Avatar
+      <PeerAvatar
+        presenceKey={identity.presenceKey}
         initials={identity.initials}
         color={identity.avatarColor ?? 'var(--color-ios-brand)'}
         size={32}

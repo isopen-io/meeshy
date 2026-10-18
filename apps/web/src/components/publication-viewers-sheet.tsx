@@ -3,7 +3,7 @@ import { useEffect, useRef, useState } from 'react';
 
 import { colorForName } from '@meeshy/shared/utils/conversation-colors';
 
-import { Avatar } from '@/components/avatar';
+import { PeerAvatar } from '@/components/peer-avatar';
 import { Glyph, GlyphSvg } from '@/components/glyph';
 import { FEED_GLYPHS } from '@/components/glyphs-feed';
 import { Sheet } from '@/components/sheet';
@@ -279,7 +279,8 @@ const nameOf = (viewer: PostViewerRow): string => viewer.displayName ?? viewer.u
 function ViewerAvatar({ viewer, size }: { readonly viewer: PostViewerRow; readonly size: number }) {
   const label = nameOf(viewer);
   return (
-    <Avatar
+    <PeerAvatar
+      presenceKey={viewer.id}
       initials={initialsOf(label)}
       color={colorForName(label)}
       size={size}

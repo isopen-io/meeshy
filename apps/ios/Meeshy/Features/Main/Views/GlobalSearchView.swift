@@ -575,7 +575,8 @@ struct GlobalSearchView: View {
             MeeshyAvatar(
                 name: result.name,
                 context: .conversationList,
-                avatarURL: result.avatar
+                avatarURL: result.avatar,
+                presenceState: result.type == .direct ? result.conversation.participantUserId.map { PresenceManager.shared.presenceState(for: $0) } : nil
             )
 
             VStack(alignment: .leading, spacing: MeeshySpacing.xs) {

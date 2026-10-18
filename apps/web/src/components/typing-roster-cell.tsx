@@ -63,6 +63,14 @@ import { interfaceTypingFormatter, typingAnnouncement, typingLead } from '@/lib/
  * PAS la preuve d'exposition : celle-ci est `role="img"` + `aria-label` sur
  * le même nœud, seule paire qu'un lecteur d'écran restitue réellement.
  */
+/**
+ * CELUI QUI ÉCRIT EST EN LIGNE (#10944) — la règle du dépôt : `typing:start` est
+ * une preuve d'activité (`lens-row.tsx`, `presence-live.ts`), et la passerelle
+ * le diffuse à la room, pas seulement aux amis. La cellule n'existe que tant
+ * qu'il écrit.
+ */
+const WRITING = 'online' as const;
+
 export function TypingRosterCell({
   typists,
   accent,
@@ -117,10 +125,10 @@ export function TypingRosterCell({
           initials={initialsOf(lead.displayName)}
           color={accent}
           size={AVATAR_SIZE}
+          presence={WRITING}
           here={leadHere}
           hereActive={leadActive}
           hereFocused={leadFocused}
-        {...(leadMood === undefined ? {} : { mood: leadMood, ...(leadMoodPostId === undefined ? {} : { moodPostId: leadMoodPostId }) })}
           {...(leadMood === undefined ? {} : { mood: leadMood, ...(leadMoodPostId === undefined ? {} : { moodPostId: leadMoodPostId }) })}
           {...(leadPhoto === undefined ? {} : { src: leadPhoto })}
         />
@@ -141,6 +149,7 @@ export function TypingRosterCell({
         initials={initialsOf(lead.displayName)}
         color={accent}
         size={18}
+        presence={WRITING}
         here={leadHere}
         hereActive={leadActive}
         hereFocused={leadFocused}

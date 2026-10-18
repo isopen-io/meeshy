@@ -89,6 +89,7 @@ struct ThreadView: View {
                     context: .messageBubble,
                     accentColor: accentColor,
                     moodEmoji: statusViewModel.statusForUser(userId: parentMessage.senderId)?.moodEmoji,
+                    presenceState: parentMessage.isMe ? nil : PresenceManager.shared.presenceState(forSenderOf: parentMessage),
                     onMoodTap: statusViewModel.moodTapHandler(for: parentMessage.senderId)
                 )
 

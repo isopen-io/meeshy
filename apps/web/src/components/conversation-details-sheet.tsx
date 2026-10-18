@@ -15,7 +15,6 @@ import { conversationStore, effectiveFlagsOf } from '@/lib/conversation-store';
 import { translate, type InterfaceCatalogKey } from '@/lib/i18n-catalog';
 import { translateConversationManage } from '@/lib/i18n-conversation-manage-catalog';
 import { currentInterfaceLanguage } from '@/lib/interface-language';
-import { avatarOf, initialsOf } from '@/lib/view/conversation';
 import { managementOf } from '@/lib/view/conversation-management';
 import { shareConversationLink, type ConversationShareOutcome } from '@/lib/view/conversation-share-link';
 import type { PortailPartage } from '@/lib/view/invitation';
@@ -23,7 +22,7 @@ import { canCreateShareLink } from '@/lib/view/share-link-eligibility';
 import type { StoryRingOf } from '@/lib/view/use-author-story-rings';
 import { useConversationManageCatalog } from '@/lib/view/use-conversation-manage-catalog';
 
-import { Avatar } from './avatar';
+import { ConversationDetailsAvatar } from './conversation-details-avatar';
 import { ConversationMembersSection } from './conversation-details-members';
 import { ConversationAppearanceEntry } from './conversation-appearance-entry';
 import { ConversationMediaSection } from './conversation-media-section';
@@ -138,7 +137,6 @@ export function ConversationDetailsSheet({
   const countLabel = translate(language, total === 1 ? 'conversation.details.members.one' : 'conversation.details.members.other', {
     count: `${total}${capped ? '+' : ''}`,
   });
-  const photo = avatarOf(conversation, viewerId);
   const description = conversation.description?.trim() ?? '';
 
   /**
@@ -169,7 +167,7 @@ export function ConversationDetailsSheet({
     <Sheet title={translate(language, 'conversation.details.title')} bodyAs="div" onClose={onClose}>
       <div className="flex-1 overflow-y-auto" data-conversation-details>
         <header className="flex flex-col items-center gap-2 px-4 pt-4 pb-6 text-center">
-          <Avatar initials={initialsOf(title)} color={accent} size={88} name={title} {...(photo === undefined ? {} : { src: photo })} />
+          <ConversationDetailsAvatar conversation={conversation} viewerId={viewerId} title={title} accent={accent} />
           <h3 className="text-section font-bold" style={{ color: 'var(--color-ios-ink)' }} data-conversation-details-name>
             {title}
           </h3>

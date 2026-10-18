@@ -710,6 +710,7 @@ export default function StoryScreen() {
           initials: initialsOf(authorName),
           ...(authorPhoto === undefined ? {} : { avatarSrc: authorPhoto }),
           ...(!group.isMine && typeof authorUsername === 'string' && authorUsername !== '' ? { profileUsername: authorUsername } : {}),
+          ...(group.isMine ? {} : { presenceKey: group.authorId }),
           time: {
             iso: new Date(currentStory.createdAt).toISOString(),
             label: shortRelativeTime(new Date(currentStory.createdAt), new Date(), currentInterfaceLanguage()),

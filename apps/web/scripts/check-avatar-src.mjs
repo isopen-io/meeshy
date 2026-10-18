@@ -73,7 +73,12 @@ const EXEMPTIONS = [
  * Un relais qui cesserait de répandre ses props rougit : il choisirait alors
  * lui-même, et devrait servir un `src` comme tout le monde.
  */
-const RELAIS = [{ fichier: 'components/author-avatar.tsx', balise: '<AuthorAvatar' }];
+const RELAIS = [
+  { fichier: 'components/author-avatar.tsx', balise: '<AuthorAvatar' },
+  /* L'AVATAR D'UNE PERSONNE CONNUE PAR SON IDENTIFIANT (#10944) — il ne choisit
+     que la présence ; la photo reste à l'hôte. */
+  { fichier: 'components/peer-avatar.tsx', balise: '<PeerAvatar' },
+];
 const BALISES = ['<Avatar', ...RELAIS.map((relais) => relais.balise)];
 
 const fichiers = [];

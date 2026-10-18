@@ -1,7 +1,7 @@
 import { useMemo } from 'react';
 import { useStore } from 'zustand';
 
-import { Avatar } from '@/components/avatar';
+import { PeerAvatar } from '@/components/peer-avatar';
 import { BUTTON } from '@/components/ui-chrome';
 import { apiDeps } from '@/lib/api/deps';
 import { useStoryTray } from '@/lib/api/query';
@@ -11,7 +11,7 @@ import { resolveViewer } from '@/lib/api/viewer';
 import { translate } from '@/lib/i18n-catalog';
 import { currentInterfaceLanguage, type InterfaceLanguage } from '@/lib/interface-language';
 import { initialsOf, participantAvatarOf } from '@/lib/view/conversation';
-import { groupStoriesByAuthor, storyAuthorLabel, type StoryTrayGroup } from '@/lib/view/story-tray';
+import { groupStoriesByAuthor, storyAuthorLabel, storyAuthorPresenceKey, type StoryTrayGroup } from '@/lib/view/story-tray';
 import { useSearch } from '@/lib/router';
 import { openLinkProps, useImpressionRef } from '@/lib/view/reading-telemetry';
 import { Link } from '@/routes/route-table';
@@ -95,7 +95,8 @@ export function StoryRow({ language, group }: { readonly language: InterfaceLang
             : 'var(--color-ios-outline)',
         }}
       >
-        <Avatar
+        <PeerAvatar
+          presenceKey={storyAuthorPresenceKey(group)}
           initials={initialsOf(label)}
           color={'var(--color-ios-brand)'}
           size={44}

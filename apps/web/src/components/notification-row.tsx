@@ -22,7 +22,7 @@ import { shortRelativeTime } from '@/lib/relative-time';
 import { initialsOf } from '@/lib/view/conversation';
 import { Link } from '@/routes/route-table';
 
-import { Avatar } from './avatar';
+import { PeerAvatar } from './peer-avatar';
 import { Signature } from './game/signature';
 import { Glyph, GlyphSvg, type GlyphShape } from './glyph';
 import { GLYPHS } from './glyphs';
@@ -347,7 +347,8 @@ function NotificationRowView({
             /* Les initiales d'une PERSONNE viennent de son nom, jamais du titre :
                « Marie est sur Meeshy ! » y lisait « ME » (#8143). Le titre ne
                sert qu'aux notifications sans acteur (annonces système). */
-            <Avatar
+            <PeerAvatar
+              presenceKey={notification.actor?.id}
               initials={initialsOf(notification.actor?.displayName ?? presentation.title)}
               color={accent}
               size={44}

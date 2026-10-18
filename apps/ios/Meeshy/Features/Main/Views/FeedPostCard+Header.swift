@@ -58,6 +58,7 @@ extension FeedPostCard {
                 avatarURL: post.authorAvatarURL,
                 storyState: authorStoryRing,
                 moodEmoji: authorMoodEmoji,
+                presenceState: PresenceManager.shared.knownPresenceState(for: post.authorId),
                 onViewProfile: { selectedProfileUser = .from(feedPost: post) },
                 onViewStory: onViewAuthorStory,
                 onMoodTap: onAuthorMoodTap,

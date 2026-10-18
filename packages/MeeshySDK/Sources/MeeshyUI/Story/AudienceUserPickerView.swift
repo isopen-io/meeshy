@@ -275,7 +275,7 @@ public struct AudienceUserPickerView: View {
 
     private func row(_ user: UserSearchResult) -> some View {
         HStack(spacing: MeeshySpacing.md) {
-            MeeshyAvatar(name: user.displayName ?? user.username, context: .userListItem)
+            MeeshyAvatar(name: user.displayName ?? user.username, context: .userListItem, avatarURL: user.avatar, presenceState: user.servedPresence)
             VStack(alignment: .leading, spacing: 2) {
                 Text(user.displayName ?? user.username)
                     .font(MeeshyFont.relative(MeeshyFont.bodySize, weight: .medium))

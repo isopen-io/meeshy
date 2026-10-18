@@ -1532,7 +1532,7 @@ struct ConversationView: View {
                     // R-5 : identité vivante — les MÊMES sources que le Fil
                     // (`MessageListViewController` : présence par expéditeur,
                     // anneau de story sauf pour soi, fiche par le routeur).
-                    presence: { message in PresenceManager.shared.presenceState(for: message.senderId) },
+                    presence: { message in PresenceManager.shared.presenceState(forSenderOf: message) },
                     storyRing: { message in
                         message.isMe ? .none : storyViewModel.storyRingState(forUserId: message.senderId)
                     },

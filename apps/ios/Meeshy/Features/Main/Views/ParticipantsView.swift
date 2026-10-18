@@ -294,7 +294,7 @@ struct ParticipantsView: View {
     private func participantRow(_ participant: PaginatedParticipant) -> some View {
         let color = DynamicColorGenerator.colorForName(participant.name)
         let isCurrentUser = participant.id == currentUserId
-        let presence = presenceManager.presenceState(for: participant.id)
+        let presence = presenceManager.resolvedState(userId: participant.userId, isOnline: participant.isOnline, lastActiveAt: participant.lastActiveAt)
 
         return HStack(spacing: MeeshySpacing.md) {
             MeeshyAvatar(
@@ -304,6 +304,7 @@ struct ParticipantsView: View {
                 avatarURL: participant.avatar,
                 moodEmoji: statusViewModel.statusForUser(userId: participant.id)?.moodEmoji,
                 presenceState: presence,
+                isHere: presenceManager.here(userId: participant.viewingKey, conversationId: conversationId),
                 onMoodTap: statusViewModel.moodTapHandler(for: participant.id)
             )
             // LE CONTOUR DU MEMBRE (#10713) — dans l'empreinte de l'avatar, sans rien décaler.

@@ -344,6 +344,7 @@ extension MessageListViewController {
                 ? .none
                 : stories.storyRingState(forUserId: senderId)
             let senderIsHere: ConversationHere = isMine ? .absent : self.conversationHere[message.viewingKey]
+            let senderPresence: PresenceState? = isMine ? nil : PresenceManager.shared.presenceState(forSenderOf: message)
             let viewSenderStoryHandler = self.onViewSenderStory
 
             // Menu d'appui long — DEUX chemins par version d'OS (miroir des
@@ -458,6 +459,7 @@ extension MessageListViewController {
                         // évaluation de son body (audit fluidité 2026-08-21).
                         preferredAudioLangCode: preferredAudioLang,
                         showAvatar: !direct,
+                        presenceState: senderPresence,
                         senderIsHere: senderIsHere, senderMoodEmoji: statuses.statusForUser(userId: senderId)?.moodEmoji,
                         senderStoryRingState: senderRingState, onSenderMoodTap: statuses.moodTapHandler(for: senderId),
                         onViewStory: (senderRingState != .none)
@@ -594,7 +596,7 @@ extension MessageListViewController {
                     senderAvatarURL: message.senderAvatarURL,
                     senderThumbHash: nil,
                     senderColorHex: message.senderColor ?? accent,
-                    senderPresence: PresenceManager.shared.presenceState(for: senderId),
+                    senderPresence: senderPresence ?? .offline,
                     senderIsHere: senderIsHere,
                     senderStoryRing: senderRingState,
                     senderMoodEmoji: statuses.statusForUser(userId: senderId)?.moodEmoji,

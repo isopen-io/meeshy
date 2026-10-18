@@ -262,7 +262,6 @@ struct StoryRingCell: View, Equatable {
     var contextMenuExtras: [AvatarContextMenuItem] = []
 
     private var theme: ThemeManager { ThemeManager.shared }
-    private var presenceManager: PresenceManager { PresenceManager.shared }
     /// Humeur + tap humeur passés en `let` par le parent (qui observe déjà
     /// StatusViewModel) — l'`@EnvironmentObject` abonnait CHAQUE cellule du
     /// tray à chaque mise à jour de statut globale (P1-3a).
@@ -297,7 +296,7 @@ struct StoryRingCell: View, Equatable {
             showsUsername: showsUsername,
             moodEmoji: moodEmoji,
             hasMoodTap: onMoodTap != nil,
-            presence: PresenceManager.shared.presenceState(for: group.id),
+            presence: PresenceManager.shared.presenceState(for: group.id, served: group.authorPresence),
             menuLabels: contextMenuExtras.map(\.label),
             theme: ThemeManager.shared.mode
         )
@@ -319,7 +318,7 @@ struct StoryRingCell: View, Equatable {
                     avatarURL: latestStoryThumbnailURL(group),
                     storyState: group.hasUnviewed ? .unread : .read,
                     moodEmoji: moodEmoji,
-                    presenceState: presenceManager.presenceState(for: group.id),
+                    presenceState: renderInputs.presence,
                     onMoodTap: onMoodTap,
                     contextMenuItems: [
                         AvatarContextMenuItem(label: StoryTrayCopy.viewStories, icon: "play.circle.fill") {

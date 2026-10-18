@@ -244,7 +244,8 @@ struct CallAddPeopleSheet: View {
                             dismiss()
                         } label: {
                             HStack(spacing: MeeshySpacing.md) {
-                                MeeshyAvatar(name: friend.displayName ?? friend.username, context: .userListItem, avatarURL: friend.avatar)
+                                MeeshyAvatar(name: friend.displayName ?? friend.username, context: .userListItem, avatarURL: friend.avatar,
+                                             presenceState: PresenceManager.shared.resolvedState(userId: friend.id, isOnline: friend.isOnline, lastActiveAt: friend.lastActiveAt))
                                 Text(friend.displayName ?? friend.username)
                                     .font(.body)
                                 Spacer()

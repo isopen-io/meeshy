@@ -152,7 +152,8 @@ struct MemberManagementSection: View {
                 name: displayName,
                 context: .userListItem,
                 accentColor: avatarColor,
-                avatarURL: participant.resolvedAvatar
+                avatarURL: participant.resolvedAvatar,
+                presenceState: PresenceManager.shared.resolvedState(userId: participant.userId, isOnline: participant.isOnline, lastActiveAt: participant.lastActiveAt)
             )
             .frame(width: 36, height: 36)
             .clipShape(Circle())
