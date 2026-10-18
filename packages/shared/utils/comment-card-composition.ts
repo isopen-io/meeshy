@@ -18,8 +18,17 @@ import { MESSAGE_EFFECT_FLAGS } from '../types/message-effect-flags.js';
  * GARDES (fail-closed) : un commentaire protégé (éphémère, flouté, vue unique)
  * ou en vol ne s'image pas. Une réponse dont un ANCÊTRE est protégé ne s'image
  * dans aucun mode : elle le cite (la loi de la discussion, #9573). Une réponse
- * voisine protégée ou vide n'entre pas dans le fil. Un post qui disparaît
- * (story, statut, canvas de story) ou sans rien à montrer ne se met pas en tête.
+ * voisine protégée ou vide n'entre pas dans le fil. Un post sans rien à montrer
+ * ne se met pas en tête ; une story, un statut ou un canvas de story ne s'y met
+ * que PAR SON MÉDIA (photo ou vidéo) : il en est le héros, jamais une citation
+ * de texte seule. Les gardes de protection des pièces restent celles de l'hôte,
+ * qui ne remet que des médias peignables.
+ *
+ * LE HÉROS : le média du support (post, story, réel) ouvre la carte, grand et
+ * pleine largeur, avant la ligne auteur / extrait puis le commentaire. Une
+ * RÉPONSE reste imbriquée : chaque commentaire du fil garde son niveau (`depth`,
+ * ses ancêtres connus, borné), que la carte rend par un retrait et une barre par
+ * niveau — plus d'aplatissement en « Auteur : texte ».
  *
  * BORNES : le texte du post s'arrête à 4 lignes et 280 caractères, coupé au
  * mot ; au plus 6 blocs — au-delà, le milieu du fil se replie en « +N
@@ -88,8 +97,8 @@ export type PostCommentCardPart = { readonly author: string; readonly text: stri
 
 export type PostCommentCardBlock =
   | { readonly kind: 'post'; readonly part: PostCommentCardPart }
-  | { readonly kind: 'comment'; readonly id: string; readonly part: PostCommentCardPart }
-  | { readonly kind: 'folded'; readonly count: number };
+  | { readonly kind: 'comment'; readonly id: string; readonly part: PostCommentCardPart; readonly depth: number }
+  | { readonly kind: 'folded'; readonly count: number; readonly depth: number };
 
 export type PostCommentCardChoice = {
   readonly mode: PostCommentCardMode;
@@ -99,13 +108,27 @@ export type PostCommentCardChoice = {
 
 export type PostCommentCardMediaAuthor = { readonly name: string; readonly handle: string | null; readonly quoted: boolean };
 
+/**
+ * Un commentaire du fil posé entre la tête et la réponse, À SON NIVEAU : `depth`
+ * compte ses ancêtres (0 : la racine), la carte l'imbrique par un retrait et une
+ * barre verticale par niveau. Le pli « +N réponses » en est un, `folded`.
+ */
+export type PostCommentCardContext = { readonly part: PostCommentCardPart; readonly depth: number; readonly folded: boolean };
+
 export type PostCommentCardSubject<M extends PostCommentCardMediaLike> = {
   readonly quoted: PostCommentCardPart | null;
+  /** Les commentaires du fil entre la tête et la réponse, dans l'ordre — vide : aucun. */
+  readonly context: readonly PostCommentCardContext[];
   readonly reply: PostCommentCardPart;
+  /** Le niveau d'imbrication de la réponse (0 : un commentaire de premier niveau). */
+  readonly replyDepth: number;
   readonly sentAt: number;
   readonly quotedAt: number | null;
-  readonly media: readonly { readonly media: M; readonly author: PostCommentCardMediaAuthor }[];
+  /** `hero` : le média du support (post, story, réel), posé en tête de carte, grand et en pleine largeur. */
+  readonly media: readonly { readonly media: M; readonly author: PostCommentCardMediaAuthor; readonly hero: boolean }[];
 };
+
+export const POST_COMMENT_CARD_MAX_DEPTH = 3;
 
 type Comment<M extends PostCommentCardMediaLike> = PostCommentCardComment<M>;
 type Source<M extends PostCommentCardMediaLike> = PostCommentCardSource<M>;
@@ -206,7 +229,7 @@ const authorOf = (author: PostCommentCardAuthor, viewer: PostCommentCardViewer):
 
 const handleOf = (author: PostCommentCardAuthor): string | null => nonBlank(author.username)?.replace(/^@+/, '') ?? null;
 
-/** Une story ou un statut disparaît : il ne se fige pas en tête d'une image. */
+/** Une story ou un statut disparaît : sans média à montrer, il ne se fige pas en tête d'une image. */
 const disappears = <M extends PostCommentCardMediaLike>(post: PostCommentCardPost<M>): boolean => {
   const type = (post.type ?? '').toUpperCase();
   return type === 'STORY' || type === 'STATUS' || post.hasStoryCanvas;
@@ -219,7 +242,7 @@ const postMediaOf = <M extends PostCommentCardMediaLike>(post: PostCommentCardPo
 /** Le post en tête : son auteur et son texte servi, tronqué — `null` quand il ne se met pas en tête. */
 function postHead<M extends PostCommentCardMediaLike>(source: Source<M>): PostCommentCardPart | null {
   const post = source.post;
-  if (post === null || disappears(post)) return null;
+  if (post === null || (disappears(post) && postMediaOf(post).length === 0)) return null;
   const text = nonBlank(post.text);
   if (text === null && postMediaOf(post).length === 0) return null;
   return { author: authorOf(post.author, source.viewer), text: text === null ? '' : postCommentCardExcerpt(text), handle: handleOf(post.author) };
@@ -248,6 +271,16 @@ export const postCommentCardDefaultMode = <M extends PostCommentCardMediaLike>(s
 
 const symbolOf = (kind: PostCommentCardMediaKind): string => (kind === 'image' ? '📷' : kind === 'video' ? '🎬' : '🎤');
 
+/** Les ancêtres connus d'un commentaire, bornés — la racine est au niveau 0. */
+function depthOf<M extends PostCommentCardMediaLike>(comment: Comment<M>, known: ReadonlyMap<string, Comment<M>>): number {
+  const walk = (next: string | null, seen: ReadonlySet<string>, depth: number): number => {
+    const parent = next === null ? undefined : known.get(next);
+    if (next === null || parent === undefined || seen.has(next)) return depth;
+    return walk(parent.parentId, new Set([...seen, next]), depth + 1);
+  };
+  return Math.min(POST_COMMENT_CARD_MAX_DEPTH, walk(comment.parentId, new Set([comment.id]), 0));
+}
+
 function partOf<M extends PostCommentCardMediaLike>(comment: Comment<M>, source: Source<M>): PostCommentCardPart {
   const text = nonBlank(comment.text) ?? comment.media.map((item) => symbolOf(item.kind)).join(' ');
   return { author: authorOf(comment.author, source.viewer), text, handle: handleOf(comment.author) };
@@ -255,11 +288,13 @@ function partOf<M extends PostCommentCardMediaLike>(comment: Comment<M>, source:
 
 /** Plus de commentaires que de place : la tête, « +N », puis les derniers. */
 function folded<M extends PostCommentCardMediaLike>(comments: readonly Comment<M>[], budget: number, source: Source<M>): readonly PostCommentCardBlock[] {
-  const blocks = comments.map((comment): PostCommentCardBlock => ({ kind: 'comment', id: comment.id, part: partOf(comment, source) }));
+  const known = byId([...source.thread, source.target]);
+  const blocks = comments.map((comment): PostCommentCardBlock => ({ kind: 'comment', id: comment.id, part: partOf(comment, source), depth: depthOf(comment, known) }));
   const head = blocks[0];
   if (blocks.length <= budget || budget < 3 || head === undefined) return blocks;
   const tail = budget - 2;
-  return [head, { kind: 'folded', count: blocks.length - 1 - tail }, ...blocks.slice(blocks.length - tail)];
+  const first = blocks[blocks.length - tail];
+  return [head, { kind: 'folded', count: blocks.length - 1 - tail, depth: first?.kind === 'comment' ? first.depth : 0 }, ...blocks.slice(blocks.length - tail)];
 }
 
 function commentsOf<M extends PostCommentCardMediaLike>(source: Source<M>, choice: PostCommentCardChoice): readonly Comment<M>[] {
@@ -304,9 +339,9 @@ function mediaOf<M extends PostCommentCardMediaLike>(blocks: readonly PostCommen
   const quotes = blocks.length > 1;
   const painted = blocks.map((block, index) => {
     const author = (part: PostCommentCardPart): PostCommentCardMediaAuthor => ({ name: part.author, handle: part.handle, quoted: quotes && index === 0 });
-    if (block.kind === 'post') return (source.post === null ? [] : postMediaOf(source.post)).map((media) => ({ media, author: author(block.part) }));
+    if (block.kind === 'post') return (source.post === null ? [] : postMediaOf(source.post)).map((media) => ({ media, author: author(block.part), hero: true }));
     if (block.kind === 'folded') return [];
-    return (known.get(block.id)?.media ?? []).map((media) => ({ media, author: author(block.part) }));
+    return (known.get(block.id)?.media ?? []).map((media) => ({ media, author: author(block.part), hero: false }));
   });
   const head = blocks[0]?.kind === 'post' ? (painted[0] ?? []) : [];
   const rest = painted.slice(head.length === 0 ? 0 : 1).flat();
@@ -316,13 +351,14 @@ function mediaOf<M extends PostCommentCardMediaLike>(blocks: readonly PostCommen
 
 /**
  * La carte que l'atelier peint pour ces blocs — `null` quand rien ne s'image.
- * Deux blocs : le premier en citation, le second en réponse. Au-delà, le
- * premier reste la citation et les suivants s'écrivent comme une discussion,
- * « Auteur : texte », sous `title` ; le pli dit `foldedLabel`.
+ * Le premier bloc de plusieurs est la tête (le post, ou la racine) ; la
+ * dernière est la réponse ; les commentaires entre les deux restent des
+ * commentaires, IMBRIQUÉS à leur niveau (`context`) au lieu d'être aplatis en
+ * « Auteur : texte » ; le pli dit `foldedLabel`.
  */
 export function postCommentCardSubject<M extends PostCommentCardMediaLike>(
   source: Source<M>,
-  choice: PostCommentCardChoice & { readonly title: string; readonly foldedLabel: (count: number) => string },
+  choice: PostCommentCardChoice & { readonly foldedLabel: (count: number) => string },
 ): PostCommentCardSubject<M> | null {
   const composed = postCommentCardBlocks(source, choice);
   const first = composed[0];
@@ -330,18 +366,19 @@ export function postCommentCardSubject<M extends PostCommentCardMediaLike>(
   if (first === undefined || last === undefined) return null;
   const quoted = composed.length > 1 ? partOfBlock(first) : null;
   const rest = composed.length > 1 ? composed.slice(1) : composed;
-  const only = rest.length === 1 ? partOfBlock(last) : null;
-  const reply: PostCommentCardPart =
-    only ?? {
-      author: choice.title,
-      text: rest
-        .map((block) => (block.kind === 'folded' ? choice.foldedLabel(block.count) : `${block.part.author} : ${block.part.text}`))
-        .join('\n'),
-      handle: null,
-    };
+  const lastPart = partOfBlock(last);
+  if (lastPart === null) return null;
+  const context = rest.slice(0, -1).map(
+    (block): PostCommentCardContext =>
+      block.kind === 'folded'
+        ? { part: { author: '', text: choice.foldedLabel(block.count), handle: null }, depth: block.depth, folded: true }
+        : { part: block.part, depth: block.kind === 'comment' ? block.depth : 0, folded: false },
+  );
   return {
     quoted,
-    reply,
+    context,
+    reply: lastPart,
+    replyDepth: last.kind === 'comment' ? last.depth : 0,
     sentAt: source.target.createdAt,
     quotedAt: quoted === null ? null : timeOf(first, source),
     media: mediaOf(composed, source),

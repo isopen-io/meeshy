@@ -73,7 +73,6 @@ const subject = (from: PostCommentCardSource<Media>, mode: PostCommentCardMode, 
     mode,
     showsPost: options.showsPost ?? postCommentCardShowsPostByDefault(mode),
     chosen: new Set(options.chosen ?? []),
-    title: 'Fil',
     foldedLabel: (count) => `+${count} réponses`,
   });
 
@@ -168,12 +167,36 @@ describe('protections', () => {
     expect(blocks(from, 'chosenReplies', { chosen: ['r1', 'root'] })).toEqual(['root', 'r2']);
   });
 
-  it('une story ou un statut ne se met jamais en tête', () => {
+  it('une story ou un statut SANS média ne se met pas en tête', () => {
     for (const type of ['STORY', 'STATUS']) {
       const from = source({ post: makePost({ type }), target: root });
       expect({ type, modes: postCommentCardModes(from) }).toEqual({ type, modes: ['commentAlone'] });
       expect({ type, blocks: blocks(from, 'commentAlone', { showsPost: true }) }).toEqual({ type, blocks: ['root'] });
     }
+  });
+
+  it('une story ou un statut AVEC média se met en tête : son média est le héros de la carte', () => {
+    const photo: Media = { id: 'pic', kind: 'image' };
+    for (const type of ['STORY', 'STATUS']) {
+      const from = source({ post: makePost({ type, media: [photo] }), target: root });
+      expect({ type, modes: postCommentCardModes(from) }).toEqual({ type, modes: ['postAndComment', 'commentAlone'] });
+      const card = subject(from, 'postAndComment');
+      expect(card?.media.map((item) => ({ id: item.media.id, hero: item.hero }))).toEqual([{ id: 'pic', hero: true }]);
+    }
+    const canvas = { ...makePost({ media: [photo] }), hasStoryCanvas: true };
+    expect(postCommentCardModes(source({ post: canvas, target: root }))).toContain('postAndComment');
+  });
+
+  it('une story dont le média n’est ni photo ni vidéo (audio seul) ne se met pas en tête', () => {
+    const voice: Media = { id: 'v', kind: 'audio' };
+    expect(postCommentCardModes(source({ post: makePost({ type: 'STORY', media: [voice] }), target: root }))).toEqual(['commentAlone']);
+  });
+
+  it('le média du post est le héros ; ceux des commentaires ne le sont pas', () => {
+    const photo: Media = { id: 'pic', kind: 'image' };
+    const mine = makeComment('mine', 'Bob', 'Regardez', 1, { media: [{ id: 'c1', kind: 'image' }] });
+    const card = subject(source({ post: makePost({ media: [photo] }), target: mine, thread: [mine] }), 'postAndComment');
+    expect(card?.media.map((item) => [item.media.id, item.hero])).toEqual([['pic', true], ['c1', false]]);
   });
 
   it('un post qui n’a qu’une photo se met en tête avec sa vignette', () => {
@@ -231,17 +254,41 @@ describe('la carte', () => {
     expect(card?.reply.text).toBe('Magnifique !');
   });
 
-  it('un fil cite sa tête et écrit le reste comme une discussion', () => {
+  it('un fil cite sa tête, garde chaque commentaire à son niveau et répond par le dernier', () => {
     const card = subject(source({ target: r2 }), 'threadToHere');
     expect(card?.quoted?.text).toBe('Magnifique !');
-    expect(card?.reply.author).toBe('Fil');
-    expect(card?.reply.text).toBe('Cleo : Tu étais où ?\nBob : Sur la corniche');
+    expect(card?.context.map((entry) => [entry.part.author, entry.part.text, entry.depth])).toEqual([['Cleo', 'Tu étais où ?', 1]]);
+    expect(card?.reply).toEqual({ author: 'Bob', text: 'Sur la corniche', handle: 'bob' });
+    expect(card?.replyDepth).toBe(1);
+  });
+
+  it('l’imbrication suit la chaîne des ancêtres, pas la liste à plat', () => {
+    const deep = makeComment('d1', 'Fay', 'Réponse à Cleo', 5, { parent: 'r1' });
+    const deeper = makeComment('d2', 'Gus', 'Réponse à Fay', 6, { parent: 'd1' });
+    const card = subject(source({ target: deeper, thread: [root, r1, deep, deeper] }), 'threadToHere');
+    expect(card?.context.map((entry) => entry.depth)).toEqual([1, 2]);
+    expect(card?.replyDepth).toBe(3);
+  });
+
+  it('avec le post en tête, la racine devient un commentaire du fil au niveau 0', () => {
+    const card = subject(source({ target: r2 }), 'postRootAndReply');
+    expect(card?.quoted?.author).toBe('Awa');
+    expect(card?.context.map((entry) => [entry.part.text, entry.depth])).toEqual([['Magnifique !', 0]]);
+    expect(card?.replyDepth).toBe(1);
+  });
+
+  it('un commentaire de premier niveau reste au niveau 0, sans contexte', () => {
+    const card = subject(source({ target: root }), 'postAndComment');
+    expect(card?.context).toEqual([]);
+    expect(card?.replyDepth).toBe(0);
   });
 
   it('un fil replié dit combien de réponses sont repliées', () => {
     const replies = Array.from({ length: 9 }, (_, index) => makeComment(`m${index + 1}`, `U${index + 1}`, `R${index + 1}`, index + 2, { parent: 'root' }));
     const card = subject(source({ target: replies[8]!, thread: [root, ...replies] }), 'threadToHere');
-    expect(card?.reply.text.split('\n')[0]).toBe('+5 réponses');
+    const folded = card?.context.find((entry) => entry.folded);
+    expect(folded?.part.text).toBe('+5 réponses');
+    expect(folded?.depth).toBe(1);
   });
 
   it('le lecteur est nommé comme il se nomme', () => {
@@ -252,7 +299,8 @@ describe('la carte', () => {
   it('un commentaire sans texte s’écrit par les symboles de ses médias', () => {
     const voice = makeComment('r1', 'Cleo', ' ', 2, { parent: 'root', media: [{ id: 'a', kind: 'audio' }, { id: 'v', kind: 'video' }] });
     const card = subject(source({ target: r2, thread: [root, voice, r2] }), 'threadToHere');
-    expect(card?.reply.text).toBe('Cleo : 🎤 🎬\nBob : Sur la corniche');
+    expect(card?.context.map((entry) => `${entry.part.author} : ${entry.part.text}`)).toEqual(['Cleo : 🎤 🎬']);
+    expect(card?.reply.text).toBe('Sur la corniche');
   });
 
   it('un commentaire en vol ne s’image pas, et n’entre pas dans le fil', () => {
