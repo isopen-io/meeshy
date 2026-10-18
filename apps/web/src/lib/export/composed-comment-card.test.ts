@@ -137,9 +137,11 @@ describe('qui compose, et quand « Imager » s’offre', () => {
 
   test('une story ou un post dont l’audience n’est pas PUBLIQUE n’est jamais support ni héros — seul le commentaire reste', () => {
     const media = [{ id: 'sm', fileUrl: '/s.jpg', mimeType: 'image/jpeg' }];
-    for (const visibility of ['FRIENDS', 'COMMUNITY', 'PRIVATE', 'EXCEPT', 'ONLY', null, undefined] as const) {
-      expect(composingPostOf(post({ type: 'STORY', media, visibility }))).toBeNull();
-      const restricted = composingPostOf(post({ media, visibility }));
+    const { visibility: _public, ...unknownAudience } = post({ media });
+    for (const visibility of ['FRIENDS', 'COMMUNITY', 'PRIVATE', 'EXCEPT', 'ONLY', null, 'absent'] as const) {
+      const audience = visibility === 'absent' ? {} : { visibility };
+      expect(composingPostOf({ ...unknownAudience, type: 'STORY', ...audience })).toBeNull();
+      const restricted = composingPostOf({ ...unknownAudience, ...audience });
       expect(restricted?.id).toBe('p-1');
       const source = postCommentCardSourceOf({ post: restricted, target: root, targetText: 'x', thread: [], readerLanguages: ['fr'], viewer });
       expect(postCommentChoiceOf(source, NO_POST_COMMENT_PICK)?.mode).toBe('commentAlone');
