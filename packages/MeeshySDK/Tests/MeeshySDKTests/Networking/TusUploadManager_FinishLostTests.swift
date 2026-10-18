@@ -111,13 +111,15 @@ final class TusUploadManager_FinishLostTests: XCTestCase {
     // MARK: - Portée d'une session : son contexte, et un seul envoi à la fois
 
     /// Laisse un checkpoint à l'offset 0 : POST accepté, puis PATCH refusé.
-    private func leaveACheckpoint(_ manager: TusUploadManager, context: String?) async {
+    private func leaveACheckpoint(_ manager: TusUploadManager, context: String?,
+                                  transcription: TusUploadTranscriptionMetadata? = nil) async {
         TusFinishLostStubURLProtocol.exchanges = [
             .init(status: 201, headers: ["Location": "https://stub.meeshy.test/api/v1/uploads/old"], body: Data()),
             .init(status: 500, headers: [:], body: Data())
         ]
         _ = try? await manager.performTusUpload(fileURL: file, mimeType: "application/octet-stream",
-                                                credential: .bearer("t"), uploadContext: context)
+                                                credential: .bearer("t"), uploadContext: context,
+                                                transcription: transcription)
         TusFinishLostStubURLProtocol.methods = []
     }
 
@@ -126,18 +128,51 @@ final class TusUploadManager_FinishLostTests: XCTestCase {
          .init(status: 200, headers: [:], body: finishBody)]
     }
 
-    /// La pré-montée du composer crée sa session en contexte « story » ; la publication d'un POST des mêmes
-    /// octets la reprenait : la pièce jointe naissait sous le mauvais contexte (post publié vide).
-    func test_aSessionOpenedForAnotherContext_isNotResumed() async throws {
+    /// Une pièce de MESSAGE (sans contexte : `MessageAttachment`) et un média de POST (`PostMedia`) ne naissent pas
+    /// du même objet serveur : la session de l'un ne sert jamais l'autre — un post reprenant une session de message
+    /// arrivait publié VIDE.
+    func test_aMessageAttachmentSession_isNotResumedByAPost() async throws {
         let manager = try makeManager()
-        await leaveACheckpoint(manager, context: "story")
+        await leaveACheckpoint(manager, context: nil)
 
         TusFinishLostStubURLProtocol.exchanges = freshSessionExchanges()
         let result = try await manager.performTusUpload(fileURL: file, mimeType: "application/octet-stream",
                                                         credential: .bearer("t"), uploadContext: "post")
 
         XCTAssertEqual(result.id, "att-new")
-        XCTAssertEqual(TusFinishLostStubURLProtocol.methods, ["POST", "PATCH"], "une session « story » ne sert pas un « post »")
+        XCTAssertEqual(TusFinishLostStubURLProtocol.methods, ["POST", "PATCH"], "une session de message ne sert pas un post")
+    }
+
+    /// Story, post, statut et commentaire créent TOUS un `PostMedia`, et le serveur ne garde pas le contexte précis
+    /// (`isPostMediaUploadContext`, packages/shared). La pré-montée « story » interrompue d'un média publié en post
+    /// se reprend : la cloisonner par contexte brut (cycle 6) la faisait renvoyer entière.
+    func test_aStorySession_isResumedByAPostOfTheSameBytes() async throws {
+        let manager = try makeManager()
+        await leaveACheckpoint(manager, context: "story")
+
+        TusFinishLostStubURLProtocol.exchanges = [.init(status: 200, headers: [:], body: finishBody)]
+        let result = try await manager.performTusUpload(fileURL: file, mimeType: "application/octet-stream",
+                                                        credential: .bearer("t"), uploadContext: "post")
+
+        XCTAssertEqual(result.id, "att-new")
+        XCTAssertEqual(TusFinishLostStubURLProtocol.methods, ["PATCH"])
+    }
+
+    /// Les métadonnées du POST (transcription, aperçu flou, capture dans l'app) naissent AVEC la session : un
+    /// envoi qui en porte d'autres ne reprend pas une session qui ne les a pas — le vocal perdait sa transcription.
+    func test_aSessionWithoutTheUploadsMetadata_isNotResumed() async throws {
+        let manager = try makeManager()
+        await leaveACheckpoint(manager, context: "post")
+
+        TusFinishLostStubURLProtocol.exchanges = freshSessionExchanges()
+        let transcription = TusUploadTranscriptionMetadata(text: "bonjour", language: "fr", confidence: 0.9,
+                                                           durationMs: 1_200, segments: nil)
+        let result = try await manager.performTusUpload(fileURL: file, mimeType: "application/octet-stream",
+                                                        credential: .bearer("t"), uploadContext: "post",
+                                                        transcription: transcription)
+
+        XCTAssertEqual(result.id, "att-new")
+        XCTAssertEqual(TusFinishLostStubURLProtocol.methods, ["POST", "PATCH"])
     }
 
     func test_theSameContext_stillResumes() async throws {

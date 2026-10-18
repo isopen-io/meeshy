@@ -154,10 +154,24 @@ final class TusUploadLeases: @unchecked Sendable {
 }
 
 public actor TusUploadManager {
-    /// Une session TUS naît AVEC son contexte (`uploadContext` du POST) : elle ne sert qu'un envoi du même
-    /// contexte. Sans contexte, la clé reste l'empreinte seule — les checkpoints déjà écrits restent repris.
-    static func checkpointKey(digest: String, uploadContext: String?) -> String {
-        uploadContext.map { "\(digest)|\($0)" } ?? digest
+    /// Les contextes qui créent un `PostMedia` côté serveur — miroir de `POST_MEDIA_UPLOAD_CONTEXTS`
+    /// (`packages/shared/types/attachment.ts`). Le contexte précis ne s'y conserve pas.
+    static let postMediaUploadContexts: Set<String> = ["post", "story", "status", "comment"]
+
+    /// Une session TUS naît avec ce que son POST déclare : l'OBJET serveur qu'elle créera (`PostMedia` pour
+    /// story/post/statut/commentaire, `MessageAttachment` sans contexte) et ses métadonnées (aperçu flou,
+    /// transcription, capture dans l'app). Elle ne se reprend que par un envoi qui la créerait identique : une
+    /// pré-montée « story » sert un post des mêmes octets, une pièce de message jamais, et un vocal ne perd plus sa
+    /// transcription dans une session ouverte sans elle. Sans contexte ni métadonnée, la clé reste l'empreinte seule.
+    static func checkpointKey(digest: String, uploadContext: String?, thumbHash: String? = nil,
+                              transcription: TusUploadTranscriptionMetadata? = nil, capturedInApp: Bool = false) -> String {
+        let kind = uploadContext.map { postMediaUploadContexts.contains($0) ? "postMedia" : $0 }
+        let metadata = [thumbHash ?? "", transcription?.uploadMetadataValue() ?? "", capturedInApp ? "inApp" : ""]
+        let fingerprint: String? = metadata.allSatisfy(\.isEmpty) ? nil
+            : SHA256.hash(data: Data(metadata.joined(separator: "\u{1F}").utf8)).prefix(8)
+                .map { String(format: "%02x", $0) }.joined()
+        guard kind != nil || fingerprint != nil else { return digest }
+        return "\(digest)|\(kind ?? "-")|\(fingerprint ?? "-")"
     }
 
     private let baseURL: URL
@@ -420,7 +434,8 @@ public actor TusUploadManager {
         // same compression settings → same bytes → same key, so a queue
         // retry after kill matches the previous session's checkpoint.
         let digest = try digestMemo.digest(of: fileURL, computing: Self.sha256Hex(of:))
-        let scopedKey = Self.checkpointKey(digest: digest, uploadContext: uploadContext)
+        let scopedKey = Self.checkpointKey(digest: digest, uploadContext: uploadContext, thumbHash: thumbHash,
+                                           transcription: transcription, capturedInApp: capturedInApp)
         // Un envoi des mêmes octets déjà en vol tient cette session : celui-ci ouvre la sienne, sous une clé
         // à lui (jamais reprise, purgée comme tout checkpoint périmé si l'envoi échoue).
         let leased = TusUploadLeases.shared.claim(scopedKey)
