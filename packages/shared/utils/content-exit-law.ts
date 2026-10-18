@@ -12,6 +12,7 @@
  * | `timed-flame` | oui, durée ≤ source | non | annoncée |
  * | `after-read-flame` | non | non | annoncée |
  * | `view-once` | non | non | bloquée |
+ * | flouté (pas une nature, D8) | oui, flou hérité | non | libre |
  *
  * LA CAPTURE (décision porteur 2026-10-07, #9617). `blocked` : la capture et
  * l'enregistrement d'écran rendent du NOIR, et toute tentative s'annonce à la
@@ -39,9 +40,13 @@
  * chargé — une colonne sélectionnée n'est jamais `undefined`, donc l'absence
  * prouve que la requête ne l'a pas lue, jamais que le contenu est ordinaire.
  *
- * Le FLOU et le CHIFFREMENT ne sont pas des natures : ils gardent leurs
- * propres restrictions (`messageProtection`, `maskedAttachment`), que
- * l'appelant COMPOSE avec ces verdicts. La loi ne les remplace pas.
+ * Le FLOU n'est pas une nature, mais il a son verdict (D8, #10949, porteur
+ * 2026-10-18) : un contenu flouté — message OU l'une de ses pièces — se
+ * TRANSFÈRE, son flou hérité par la copie ({@link forwardedCopyProtection}),
+ * et RIEN D'AUTRE ne sort : `exportable` est faux. Le CHIFFREMENT n'est pas une
+ * nature non plus : il garde ses propres restrictions (`messageProtection`,
+ * `maskedAttachment`, la copie serveur refusée par la passerelle), que
+ * l'appelant COMPOSE avec ces verdicts.
  *
  * Site UNIQUE : la passerelle l'applique (elle fait foi), les clients n'offrent
  * que ce qu'elle autorise. Miroir iOS attendu dans `packages/MeeshySDK`.
@@ -121,6 +126,9 @@ const ORDINARY: ContentExitLaw = {
   capture: 'free',
 };
 
+/** D8 : se transfère (flou hérité), ne s'exporte pas, ne se capture pas autrement qu'un ordinaire. */
+const BLURRED_ORDINARY: ContentExitLaw = { ...ORDINARY, exportable: false };
+
 const AFTER_READ_FLAME: ContentExitLaw = {
   nature: 'after-read-flame',
   forward: { allowed: false, reason: 'after-read' },
@@ -181,7 +189,10 @@ export function contentExitLaw(subject: ContentExitSubject | null | undefined): 
 
   const duration = wholeSeconds(subject.ephemeralDuration);
   const declaredEphemeral = (flags & EPHEMERAL) !== 0 || instantOf(subject.expiresAt) !== null;
-  if (duration === null) return declaredEphemeral ? AFTER_READ_FLAME : ORDINARY;
+  if (duration === null) {
+    if (declaredEphemeral) return AFTER_READ_FLAME;
+    return blurredBy(subject) || pieces.some(blurredBy) ? BLURRED_ORDINARY : ORDINARY;
+  }
 
   return {
     nature: 'timed-flame',
