@@ -138,14 +138,15 @@ struct ConversationMediaFilmstrip: View {
         _scrollAnchorID = State(initialValue: currentPageID.wrappedValue)
     }
 
-    /// La largeur MESURÉE de la bande. La fenêtre clé ne la donnait pas : une fenêtre détachée ou une fenêtre
-    /// Stage Manager plus étroite repoussait le premier média hors de la tête de lecture.
-    @State private var measuredWidth: CGFloat = 0
+    /// La taille de la fenêtre qui PORTE la galerie, publiée par sa racine bien avant que la galerie ne s'ouvre.
+    @Environment(\.sceneWindowSize) private var sceneWindowSize
 
-    /// Espace à réserver EN TÊTE pour que le premier média puisse venir se
-    /// poser sous la tête de lecture — sur SA largeur, la fenêtre active en repli avant la première mesure.
+    /// Espace à réserver EN TÊTE pour que le premier média puisse venir se poser sous la tête de lecture — sur la
+    /// largeur de SA fenêtre (Stage Manager, fenêtre détachée), connue dès le premier rendu ; la fenêtre clé n'est
+    /// que le repli. Jamais une largeur mesurée après coup : la bande, déjà calée par `scrollPosition`, gardait
+    /// l'ancienne marge et la vignette courante se décalait d'un pas (cycle 8, mesuré).
     private var leadingInset: CGFloat {
-        FilmstripMetrics.leadingInset(containerWidth: measuredWidth > 0 ? measuredWidth : DeviceLayout.windowSize.width)
+        FilmstripMetrics.leadingInset(containerWidth: SceneWindowSize.resolve(sceneWindowSize, fallback: DeviceLayout.windowSize).width)
     }
 
     var body: some View {
@@ -157,9 +158,6 @@ struct ConversationMediaFilmstrip: View {
             }
         }
         .frame(height: FilmstripMetrics.reservedHeight)
-        .onGeometryChange(for: CGFloat.self) { $0.size.width } action: { width in
-            if measuredWidth != width { measuredWidth = width }
-        }
         .adaptiveOnChange(of: currentPageID) { _, newID in
             guard scrollAnchorID != newID else { return }
             scrollAnchorID = newID
