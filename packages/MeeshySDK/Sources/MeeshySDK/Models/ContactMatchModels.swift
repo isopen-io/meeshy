@@ -48,7 +48,7 @@ public struct MatchedContactUser: Codable, Sendable, Identifiable, Equatable, Pr
     public let isOnline: Bool?
     public let lastActiveAt: Date?
     /// Le contour d'avatar équipé (#10945), servi avec la personne. Additif et tolérant : absent
-    /// (ancien serveur, aucun contour) ou illisible ⇒ `nil`.
+    /// (ancien serveur, aucun contour) ⇒ `nil` ; illisible ⇒ aucun contour (`avatarRing == nil`).
     public let profileDecor: ServedProfileDecor?
 
     public init(

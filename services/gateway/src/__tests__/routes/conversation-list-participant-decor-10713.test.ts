@@ -173,6 +173,13 @@ describe('#10713 — GET /conversations sert le contour des participants', () =>
   });
 });
 
+/**
+ * Les lectures de la route sur cette fixture, toutes tables confondues : le
+ * contour vient de la jointure de l'aperçu, il n'en ajoute aucune — une
+ * lecture de plus, conditionnelle ou non, fait tomber ce compte.
+ */
+const LIST_QUERIES = 5;
+
 describe('#10945 — GET /conversations sert le contour du dernier expéditeur', () => {
   beforeEach(() => {
     jest.clearAllMocks();
@@ -218,6 +225,8 @@ describe('#10945 — GET /conversations sert le contour du dernier expéditeur',
     const bare = await served(null);
     const { prisma } = await served('contours-essentiels/perle');
     expect(calls(prisma)).toBe(calls(bare.prisma));
+    expect(prisma.conversation.findMany).toHaveBeenCalledTimes(2);
+    expect(calls(prisma)).toBe(LIST_QUERIES);
     const query = prisma.conversation.findMany.mock.calls[0][0] as { select: { messages: { select: { sender: { select: { user: { select: Record<string, unknown> } } } } } } };
     expect(query.select.messages.select.sender.select.user.select).toMatchObject({ equippedAvatarRing: true });
   });

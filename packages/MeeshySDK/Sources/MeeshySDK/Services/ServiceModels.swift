@@ -536,7 +536,7 @@ public struct UserSearchResult: Codable, CacheIdentifiable, Identifiable, Sendab
     public let avatar: String?
     public let isOnline: Bool?
     /// Le contour d'avatar équipé (#10945), servi avec la personne. Additif et tolérant : absent
-    /// (ancien serveur, aucun contour) ou illisible ⇒ `nil`.
+    /// (ancien serveur, aucun contour) ⇒ `nil` ; illisible ⇒ aucun contour (`avatarRing == nil`).
     public let profileDecor: ServedProfileDecor?
 
     public init(

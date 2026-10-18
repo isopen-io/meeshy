@@ -59,4 +59,10 @@ final class PersonProfileDecorTests: XCTestCase {
         let decoded = try JSONDecoder().decode(APIAuthor.self, from: JSONEncoder().encode(author))
         XCTAssertEqual(decoded.avatarRing, ring)
     }
+
+    func test_aFriendRequestParty_whoseRingChanged_isNotEqualToItsFormerSelf() {
+        let before = FriendRequestUser(id: "u1", username: "ana")
+        let after = FriendRequestUser(id: "u1", username: "ana", profileDecor: ServedProfileDecor(avatarRing: ring))
+        XCTAssertNotEqual(before, after)
+    }
 }
