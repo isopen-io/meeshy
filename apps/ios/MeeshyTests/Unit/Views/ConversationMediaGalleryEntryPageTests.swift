@@ -70,7 +70,9 @@ final class ConversationMediaGalleryEntryPageTests: XCTestCase {
                     allAttachments: lot,
                     startAttachmentId: piece.id,
                     accentColor: "6366F1",
-                    captionMap: captionMap
+                    captionMap: captionMap,
+                    // La légende est au chrome, posé par le toucher (#10930).
+                    entryPresentation: .carded
                 ),
                 size: Self.window
             )

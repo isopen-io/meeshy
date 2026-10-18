@@ -275,9 +275,10 @@ final class ComposerEditToolsTests: XCTestCase {
     func test_aSilentClip_offersNoSoundTool() async {
         let (session, _) = await videoSession(hasAudio: false)
         XCTAssertEqual(session.editTools, [.crop, .trim])
-        XCTAssertEqual(session.activeEditTools, [.crop, .trim])
+        session.revealEditChrome()
+        XCTAssertEqual(session.activeEditTools, [.trim], "« Couper » seul, sans spectre (#10930)")
         session.toggleEditTool(.sound)
-        XCTAssertEqual(session.activeEditTools, [.crop, .trim], "un outil que la prise n'offre pas ne s'active pas")
+        XCTAssertEqual(session.activeEditTools, [.trim], "un outil que la prise n'offre pas ne s'active pas")
     }
 
     func test_takeSound_gainFollowsTheLine_andMuteRemembersTheGain() {

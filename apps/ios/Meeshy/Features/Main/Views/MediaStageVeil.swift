@@ -87,6 +87,14 @@ nonisolated enum MediaStageVeil {
         presentation.showsPlateau && !overlays.isOpen
     }
 
+    /// **On entre en plein écran, sans chrome** (#10930, porteur 2026-10-18) :
+    /// le toucher le pose par-dessus. **Sauf sous VoiceOver** : son toucher
+    /// désigne au lieu d'agir, et un écran sans croix ni libellé n'y aurait
+    /// aucune sortie annoncée — le chrome y est donc là dès l'entrée.
+    static func entryPresentation(voiceOverRunning: Bool) -> StagePresentation {
+        voiceOverRunning ? .carded : .full(pausedOnEntry: false)
+    }
+
     /// **La pastille « en pause » se tait sous le voile, elle aussi** (#8601).
     ///
     /// Elle vit dans sa propre couche, au-dessus du plateau, et c'est ce qui

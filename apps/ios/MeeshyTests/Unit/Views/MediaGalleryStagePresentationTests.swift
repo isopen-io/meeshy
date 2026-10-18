@@ -161,7 +161,11 @@ final class MediaGalleryStagePresentationTests: XCTestCase {
         XCTAssertFalse(code.contains("showControls"),
                        "`showControls` a été absorbé par `StagePresentation`")
         // #10930 : on entre en plein écran, sans chrome ; le toucher le pose par-dessus.
-        XCTAssertTrue(code.contains("@State var stagePresentation: StagePresentation = .full(pausedOnEntry: false)"))
+        XCTAssertTrue(code.contains("MediaStageVeil.entryPresentation(voiceOverRunning: UIAccessibility.isVoiceOverRunning)"))
+        XCTAssertEqual(MediaStageVeil.entryPresentation(voiceOverRunning: false), .full(pausedOnEntry: false),
+                       "on entre en plein écran, sans chrome")
+        XCTAssertEqual(MediaStageVeil.entryPresentation(voiceOverRunning: true), .carded,
+                       "sous VoiceOver, la croix et les libellés sont là dès l'entrée")
     }
 
     /// **Une scène se pose au viewport entier, chrome ou pas** (#10930). Sa

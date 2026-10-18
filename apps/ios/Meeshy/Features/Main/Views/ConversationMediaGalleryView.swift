@@ -214,7 +214,7 @@ struct ConversationMediaGalleryView: View {
     /// commande plus que le plateau (#10930) : on ENTRE en plein écran, sans
     /// chrome, et le toucher le pose par-dessus le média sans en changer les
     /// cotes (`MediaStageVeil.geometryPresentation`).
-    @State var stagePresentation: StagePresentation = .full(pausedOnEntry: false)
+    @State var stagePresentation: StagePresentation
     /// `internal` — le menu ⋯ le PILOTE depuis `+Menu.swift`, et `private` est
     /// une portée de FICHIER. Même prix que celui payé par `currentPageID`
     /// au-dessus, et pour la même raison.
@@ -295,9 +295,12 @@ struct ConversationMediaGalleryView: View {
         replyableMedia: ((MessageAttachment) -> Bool)? = nil,
         composableMedia: ((MessageAttachment) -> Bool)? = nil,
         reactableMedia: ((MessageAttachment) -> Bool)? = nil,
-        sceneContext: GallerySceneContext? = nil
+        sceneContext: GallerySceneContext? = nil,
+        entryPresentation: StagePresentation? = nil
     ) {
         self.allAttachments = allAttachments
+        _stagePresentation = State(initialValue: entryPresentation
+            ?? MediaStageVeil.entryPresentation(voiceOverRunning: UIAccessibility.isVoiceOverRunning))
         self.startAttachmentId = startAttachmentId
         self.accentColor = accentColor
         self.captionServings = captionServings
