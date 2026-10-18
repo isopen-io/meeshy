@@ -3,6 +3,7 @@ import { layoutMessageCard, type CardLayout, type MessageCardInput } from './mes
 import { videoAt } from './message-card-media-load';
 import { GIF_FPS, pickRecorderType } from './message-card-output';
 import { loadCardFonts, paintMessageCard, strokeFloorAt, type CardSource } from './message-card-paint';
+import { measuredInput } from './message-card-sticker';
 import { templateOf, type MessageCardTemplate } from './message-card-templates';
 
 /**
@@ -48,14 +49,15 @@ export const browserMotionEnvironment = (): MotionEnvironment => ({
 
 type Stage = { readonly canvas: HTMLCanvasElement; readonly ctx: CanvasRenderingContext2D; readonly layout: CardLayout; readonly template: MessageCardTemplate; readonly scale: number };
 
-async function stageOf(input: MessageCardInput, doc: Document, width: number | null): Promise<Stage | null> {
+/** La mise en page lit les dimensions sur les MÊMES pixels que l'image fixe (`measuredInput`) : un sticker s'y reconnaît et s'y pose ajusté pareil. */
+async function stageOf(input: MessageCardInput, sources: readonly (CardSource | null)[], doc: Document, width: number | null): Promise<Stage | null> {
   const template = templateOf(input.template);
   await loadCardFonts(template, doc.fonts);
   const canvas = doc.createElement('canvas');
   /* Le GIF relit chaque image (`getImageData`) : le contexte le sait d'avance, et garde ses pixels côté processeur. */
   const ctx = canvas.getContext('2d', { willReadFrequently: width !== null });
   if (ctx === null) return null;
-  const layout = layoutMessageCard(input, (text, font) => {
+  const layout = layoutMessageCard(measuredInput(input, sources), (text, font) => {
     ctx.font = font;
     return ctx.measureText(text).width;
   });
@@ -94,7 +96,7 @@ export async function recordCardVideo(params: {
   if (Recorder === undefined) return null;
   const type = pickRecorderType((candidate) => Recorder.isTypeSupported(candidate));
   if (type === null) return null;
-  const stage = await stageOf(params.input, env.doc, null);
+  const stage = await stageOf(params.input, params.sources, env.doc, null);
   if (stage === null || typeof stage.canvas.captureStream !== 'function') return null;
   const video = params.track.kind === 'video' ? await videoAt(params.track.url, env.doc, 0) : null;
   const element: HTMLMediaElement | null = params.track.kind === 'video' ? video : audioOf(params.track.url, env.doc);
@@ -163,7 +165,7 @@ export async function recordCardGif(params: {
 }): Promise<Blob | null> {
   const doc = params.env?.doc ?? document;
   if (params.track.kind !== 'video') return null;
-  const stage = await stageOf(params.input, doc, GIF_WIDTH);
+  const stage = await stageOf(params.input, params.sources, doc, GIF_WIDTH);
   if (stage === null) return null;
   const video = await videoAt(params.track.url, doc, 0);
   if (video === null) return null;

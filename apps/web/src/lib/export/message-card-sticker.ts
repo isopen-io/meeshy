@@ -24,11 +24,10 @@ export type StickerProbe = Pick<CardVisualMedia, 'kind' | 'width' | 'height'> & 
 
 export function isStickerMedia(media: CardMedia | StickerProbe): boolean {
   if (media.kind !== 'image') return false;
-  const probe = media as StickerProbe;
-  if (probe.sticker === true) return true;
-  const mime = (probe.mimeType ?? '').toLowerCase();
+  if (media.sticker === true) return true;
+  const mime = (media.mimeType ?? '').toLowerCase();
   if (!STICKER_MIMES.some((known) => known === mime)) return false;
-  return probe.width > 0 && probe.height > 0 && Math.max(probe.width, probe.height) <= STICKER_MAX_SIDE;
+  return media.width > 0 && media.height > 0 && Math.max(media.width, media.height) <= STICKER_MAX_SIDE;
 }
 
 /**
