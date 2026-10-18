@@ -59,12 +59,14 @@ describe('la source que le web remet à la composition', () => {
     expect(subject?.quotedAt).toEqual(new Date('2026-10-08T10:00:00.000Z'));
   });
 
-  test('un fil : la tête en citation, le reste sous « Fil de commentaires », dans le texte servi', () => {
+  test('un fil : la tête en citation, le reste IMBRIQUÉ à son niveau (plus aplati), dans le texte servi', () => {
     const translated = comment('r0', { parentId: 'root', createdAt: '2026-10-08T10:01:30.000Z', content: 'Where?', originalLanguage: 'en', translations: { fr: { text: 'Où ?' } } });
     const source = postCommentCardSourceOf({ post: post(), target: reply, targetText: 'texte r1', thread: [root, translated, reply], readerLanguages: ['fr'], viewer });
     const subject = postCommentMessageCardSubjectOf(source, { mode: 'threadToHere', showsPost: false }, labels);
     expect(subject?.quoted?.text).toBe('texte root');
-    expect(subject?.reply).toEqual({ author: 'Fil de commentaires', text: 'R0 : Où ?\nR1 : texte r1', handle: null });
+    expect(subject?.context?.map((entry) => [entry.part.author, entry.part.text, entry.depth])).toEqual([['R0', 'Où ?', 1]]);
+    expect(subject?.reply).toEqual({ author: 'R1', text: 'texte r1', handle: 'r1' });
+    expect(subject?.replyDepth).toBe(1);
   });
 
   test('un commentaire en vol ou à vue unique n’a aucun mode ; un éphémère non plus', () => {
@@ -84,7 +86,33 @@ describe('la source que le web remet à la composition', () => {
     expect(subject?.media[1]?.author).toEqual({ name: 'ROOT', handle: 'root', quoted: false });
   });
 
-  test('une story, un statut ou un canvas de story ne se mettent pas en tête', () => {
+  test('une story ou un statut AVEC média se met en tête : son média est le héros de la carte', () => {
+    const photo = [{ id: 'sm', fileUrl: '/s.jpg', mimeType: 'image/jpeg', width: 1080, height: 1920 }];
+    for (const overrides of [{ type: 'STORY' }, { type: 'STATUS' }, { storyEffects: { layers: [] } }] as const) {
+      const source = postCommentCardSourceOf({ post: post({ ...overrides, media: photo }), target: root, targetText: 'x', thread: [], readerLanguages: ['fr'], viewer });
+      const subject = postCommentMessageCardSubjectOf(source, { mode: 'postAndComment', showsPost: true }, labels);
+      expect(subject?.media.map((item) => [item.id, item.hero])).toEqual([['sm', true]]);
+    }
+  });
+
+  test('le héros d’une story reste soumis aux gardes : une pièce à vue unique ou floutée ne se peint jamais', () => {
+    for (const piece of [{ isViewOnce: true }, { isBlurred: true }, { effectFlags: 4 }, { isEncrypted: true }]) {
+      const media = [{ id: 'sm', fileUrl: '/s.jpg', mimeType: 'image/jpeg', ...piece }];
+      const storyPost = post({ type: 'STORY', media });
+      expect(composingPostOf(storyPost)).toBeNull();
+      const source = postCommentCardSourceOf({ post: storyPost, target: root, targetText: 'x', thread: [], readerLanguages: ['fr'], viewer });
+      expect(postCommentMessageCardSubjectOf(source, { mode: 'postAndComment', showsPost: true }, labels)).toBeNull();
+    }
+  });
+
+  test('un commentaire-sticker déclare son image sticker : elle se peindra ajustée, jamais coupée', () => {
+    const target = comment('root', { media: [{ id: 'st', fileUrl: '/st.png', mimeType: 'image/png', width: 512, height: 512 }], sticker: { emoji: '🔥' } });
+    const source = postCommentCardSourceOf({ post: post(), target, targetText: 'x', thread: [], readerLanguages: ['fr'], viewer });
+    const [item] = postCommentMessageCardSubjectOf(source, { mode: 'commentAlone', showsPost: false }, labels)?.media ?? [];
+    expect(item?.card.kind === 'image' && item.card.sticker).toBe(true);
+  });
+
+  test('un canvas de story sans média ne se met pas en tête', () => {
     for (const overrides of [{ type: 'STORY' }, { type: 'STATUS' }, { storyEffects: { layers: [] } }] as const) {
       const source = postCommentCardSourceOf({ post: post(overrides), target: root, targetText: 'x', thread: [], readerLanguages: ['fr'], viewer });
       expect(postCommentMessageCardSubjectOf(source, { mode: 'postAndComment', showsPost: true }, labels)).toBeNull();
@@ -94,11 +122,15 @@ describe('la source que le web remet à la composition', () => {
 });
 
 describe('qui compose, et quand « Imager » s’offre', () => {
-  test('un post compose ; une story ou un statut gardent la carte du commentaire, et sans post rien ne compose', () => {
+  test('un post compose ; une story ou un statut SANS média gardent la carte du commentaire, et sans post rien ne compose', () => {
     expect(composingPostOf(post())?.id).toBe('p-1');
     expect(composingPostOf(post({ type: 'REEL' }))?.id).toBe('p-1');
     expect(composingPostOf(post({ type: 'STORY' }))).toBeNull();
     expect(composingPostOf(post({ type: 'status' }))).toBeNull();
+    const media = [{ id: 'sm', fileUrl: '/s.jpg', mimeType: 'image/jpeg' }];
+    expect(composingPostOf(post({ type: 'STORY', media }))?.id).toBe('p-1');
+    expect(composingPostOf(post({ type: 'status', media }))?.id).toBe('p-1');
+    expect(composingPostOf(post({ type: 'STORY', media: [{ id: 'v', fileUrl: '/v.m4a', mimeType: 'audio/mp4' }] }))).toBeNull();
     expect(composingPostOf(undefined)).toBeNull();
   });
 
@@ -140,7 +172,8 @@ describe('le choix de composition dans l’atelier', () => {
     expect([...(postCommentChoiceOf(source, minusRoot)?.chosen ?? [])].sort()).toEqual(['r1', 'r3']);
     const subject = postCommentMessageCardSubjectOf(source, postCommentChoiceOf(source, minusRoot)!, labels);
     expect(subject?.quoted?.text).toBe('texte r1');
-    expect(subject?.reply.text).toBe('R3 : texte r3\nR2 : texte r2');
+    expect(subject?.context?.map((entry) => entry.part.text)).toEqual(['texte r3']);
+    expect(subject?.reply.text).toBe('texte r2');
   });
 
   test('un mode qui ne s’offre plus retombe sur le défaut ; rien ne s’image ⇒ aucun choix', () => {
@@ -202,7 +235,8 @@ describe('la carte peint le texte LU, jamais la syntaxe des liens (#9687, jumell
     const source = postCommentCardSourceOf({ post: post({ content: raw, translations: undefined }), target: reply, targetText: raw, thread: [root, linked, reply], readerLanguages: ['fr'], viewer });
     const withPost = postCommentMessageCardSubjectOf(source, { mode: 'threadToHere', showsPost: true }, labels);
     expect(withPost?.quoted?.text).toBe(plain);
-    expect(withPost?.reply.text).toBe(`ROOT : texte root\nR0 : ${plain}\nR1 : ${plain}`);
+    expect(withPost?.context?.map((entry) => `${entry.part.author} : ${entry.part.text}`)).toEqual(['ROOT : texte root', `R0 : ${plain}`]);
+    expect(withPost?.reply.text).toBe(plain);
     expect(source.thread.find((entry) => entry.id === 'r0')?.text).toBe(plain);
   });
 });

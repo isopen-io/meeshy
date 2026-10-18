@@ -1,0 +1,80 @@
+import type { MessageCardInput } from './message-card-layout';
+import type { CardMedia, CardVisualMedia } from './message-card-media';
+
+/**
+ * **UN STICKER NE SE COUPE JAMAIS SUR UNE CARTE** — LOI PURE.
+ *
+ * Une photo remplit son cadre (« cover ») : elle se recadre, et son cadre a un
+ * coin arrondi. Un sticker est un DÉTOURAGE — le recadrer rogne le dessin, et
+ * le clip arrondi mord son alpha. Il se pose donc AJUSTÉ (« contain ») dans un
+ * cadre au RAPPORT du sticker, centré, sans clip ni fond.
+ *
+ * Est un sticker : une pièce que son porteur déclare telle (`sticker`), ou à
+ * défaut un PNG / WebP (les formats à alpha) dont les deux côtés connus ne
+ * dépassent pas 512 px (`STICKER_MAX_SIDE`, la borne de la bibliothèque). Un
+ * côté inconnu n'est pas un sticker : sans la déclaration, on ne devine pas.
+ */
+
+export const STICKER_MAX_SIDE = 512;
+/** La largeur d'affichage d'un sticker, au plus : un détourage ne s'étire pas sur toute la carte. */
+export const STICKER_DISPLAY_SIDE = 640;
+const STICKER_MIMES = ['image/png', 'image/webp', 'image/apng'] as const;
+
+export type StickerProbe = Pick<CardVisualMedia, 'kind' | 'width' | 'height'> & { readonly mimeType?: string; readonly sticker?: boolean };
+
+export function isStickerMedia(media: CardMedia | StickerProbe): boolean {
+  if (media.kind !== 'image') return false;
+  const probe = media as StickerProbe;
+  if (probe.sticker === true) return true;
+  const mime = (probe.mimeType ?? '').toLowerCase();
+  if (!STICKER_MIMES.some((known) => known === mime)) return false;
+  return probe.width > 0 && probe.height > 0 && Math.max(probe.width, probe.height) <= STICKER_MAX_SIDE;
+}
+
+/**
+ * Le cadre d'un sticker dans une boîte de `width` × `cap` : au rapport du
+ * sticker, jamais plus grand que son côté d'affichage ni que la boîte, centré
+ * horizontalement. Un rapport inconnu vaut le carré.
+ */
+export function stickerFrame(media: Pick<CardVisualMedia, 'width' | 'height'>, width: number, cap: number): { readonly x: number; readonly width: number; readonly height: number } {
+  const ratio = media.width > 0 && media.height > 0 ? media.height / media.width : 1;
+  const wide = Math.min(width, STICKER_DISPLAY_SIDE);
+  const fitted = Math.min(wide, cap / ratio);
+  const frameWidth = Math.max(1, Math.round(fitted));
+  return { x: Math.round((width - frameWidth) / 2), width: frameWidth, height: Math.max(1, Math.round(frameWidth * ratio)) };
+}
+
+/** Ce qu'on sait lire des pixels d'une source — image, bitmap ou vidéo. */
+export type MeasuredSource = {
+  readonly width?: unknown;
+  readonly height?: unknown;
+  readonly naturalWidth?: number;
+  readonly naturalHeight?: number;
+  readonly videoWidth?: number;
+  readonly videoHeight?: number;
+};
+
+const pixelSide = (...candidates: readonly unknown[]): number => {
+  const found = candidates.find((value): value is number => typeof value === 'number' && value > 0);
+  return found ?? 0;
+};
+
+/**
+ * Les dimensions MANQUANTES d'un visuel (0 : la charge ne les portait pas),
+ * relues sur ses vrais pixels une fois décodés — l'aspect d'un sticker ne se
+ * devine pas. Une dimension connue n'est jamais remplacée.
+ */
+export function withMeasuredSizes(media: readonly CardMedia[], sources: readonly (MeasuredSource | null)[]): readonly CardMedia[] {
+  return media.map((item, index) => {
+    const source = sources[index];
+    if (item.kind === 'audio' || source === null || source === undefined || (item.width > 0 && item.height > 0)) return item;
+    const width = pixelSide(source.videoWidth, source.naturalWidth, source.width);
+    const height = pixelSide(source.videoHeight, source.naturalHeight, source.height);
+    return width > 0 && height > 0 ? { ...item, width, height } : item;
+  });
+}
+
+/** La carte dont les visuels sans dimensions ont pris celles de leurs pixels — la mise en page ne devine pas un aspect. */
+export function measuredInput(input: MessageCardInput, sources: readonly (MeasuredSource | null)[]): MessageCardInput {
+  return input.media === undefined || sources.length === 0 ? input : { ...input, media: withMeasuredSizes(input.media, sources) };
+}

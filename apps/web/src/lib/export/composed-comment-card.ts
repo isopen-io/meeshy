@@ -15,7 +15,7 @@ import type { PostComment } from '@/lib/api/publication-comments';
 import { resolveFeedText } from '@/lib/feed/text';
 import { readableTextOf } from '@/lib/links/link-reading';
 
-import { commentCardMediaOf } from './comment-card-subject';
+import { commentCardMediaOf, commentCardMediaWithSticker } from './comment-card-subject';
 import type { MessageCardMediaItem, MessageCardSubject } from './message-card-subject';
 
 /**
@@ -34,7 +34,7 @@ export type PostCommentCardEntry = { readonly kind: MessageCardMediaItem['card']
 
 export type PostCommentSource = PostCommentCardSource<PostCommentCardEntry>;
 
-export type PostCommentCardLabels = { readonly title: string; readonly folded: (count: number) => string };
+export type PostCommentCardLabels = { /** Plus lu : le fil n'est plus aplati sous un titre, chaque commentaire garde son niveau. */ readonly title?: string; readonly folded: (count: number) => string };
 
 export type PostCommentCardInput = {
   readonly post: FeedPost | null;
@@ -51,8 +51,9 @@ export type PostCommentCardInput = {
 
 type AudioPrism = Parameters<typeof commentCardMediaOf>[1];
 
-const entriesOf = (media: Parameters<typeof commentCardMediaOf>[0], prism: AudioPrism): readonly PostCommentCardEntry[] =>
-  commentCardMediaOf(media, prism).map((item) => ({ kind: item.card.kind, item }));
+const entriesFrom = (items: readonly MessageCardMediaItem[]): readonly PostCommentCardEntry[] => items.map((item) => ({ kind: item.card.kind, item }));
+
+const entriesOf = (media: Parameters<typeof commentCardMediaOf>[0], prism: AudioPrism): readonly PostCommentCardEntry[] => entriesFrom(commentCardMediaOf(media, prism));
 
 const authorOf = (author: FeedAuthor | null | undefined): PostCommentCardAuthor => ({
   id: author?.id ?? '',
@@ -73,7 +74,7 @@ function entryOf(comment: PostComment, text: string, readerLanguages: readonly s
     inFlight: comment.pending === true,
     author: authorOf(comment.author),
     text,
-    media: entriesOf(comment.media, readerLanguages === null ? null : { readerLanguages, fallbackLanguage: comment.originalLanguage ?? '' }),
+    media: entriesFrom(commentCardMediaWithSticker(comment, readerLanguages === null ? null : { readerLanguages, fallbackLanguage: comment.originalLanguage ?? '' })),
   };
 }
 
@@ -101,26 +102,31 @@ export function postCommentCardSourceOf(input: PostCommentCardInput): PostCommen
 
 /** La carte qu'« Imagine » peint pour ce choix — `null` quand rien ne s'image. */
 export function postCommentMessageCardSubjectOf(source: PostCommentSource, choice: PostCommentCardChoice, labels: PostCommentCardLabels): MessageCardSubject | null {
-  const subject = postCommentCardSubject(source, { ...choice, title: labels.title, foldedLabel: labels.folded });
+  const subject = postCommentCardSubject(source, { ...choice, foldedLabel: labels.folded });
   if (subject === null) return null;
   return {
     quoted: subject.quoted,
     reply: subject.reply,
     sentAt: new Date(subject.sentAt),
     quotedAt: subject.quotedAt === null ? null : new Date(subject.quotedAt),
-    media: subject.media.map(({ media, author }) => ({ ...media.item, author })),
+    media: subject.media.map(({ media, author, hero }) => ({ ...media.item, author, ...(hero ? { hero: true as const } : {}) })),
+    ...(subject.context.length === 0 ? {} : { context: subject.context }),
+    ...(subject.replyDepth === 0 ? {} : { replyDepth: subject.replyDepth }),
   };
 }
 
 /**
- * LE POST QUI COMPOSE la carte d'un de ses commentaires — `null` pour une
- * story ou un statut (le lecteur de stories garde la carte du commentaire,
- * comme iOS ne lui passe aucun post) et quand aucune caisse ne le connaît.
+ * LE POST QUI COMPOSE la carte d'un de ses commentaires — `null` quand aucune
+ * caisse ne le connaît. Une story ou un statut n'est un support que PAR SON
+ * MÉDIA (photo ou vidéo, son héros) : sans lui, le lecteur de stories garde la
+ * carte du commentaire seule. Les pièces masquées (vue unique, flou, chiffrées)
+ * ne sont jamais peignables : `cardMediaOf` les écarte avant la composition.
  */
 export function composingPostOf(post: FeedPost | null | undefined): FeedPost | null {
   if (post === undefined || post === null) return null;
   const type = post.type.toUpperCase();
-  return type === 'STORY' || type === 'STATUS' ? null : post;
+  if (type !== 'STORY' && type !== 'STATUS') return post;
+  return entriesOf(post.media, null).some((entry) => entry.kind === 'image' || entry.kind === 'video') ? post : null;
 }
 
 /** « Imager » s'offre-t-il ? Dès qu'un mode compose une carte. */
