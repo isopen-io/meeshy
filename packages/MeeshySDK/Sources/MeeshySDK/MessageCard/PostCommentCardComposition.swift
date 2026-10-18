@@ -116,6 +116,15 @@ public enum PostCommentCardComposition {
         return offered
     }
 
+    /// **Le repli « commentaire seul »** : aucun mode ne compose parce que le fil
+    /// de la réponse n'est pas chargé (sa racine manque), mais elle est peignable
+    /// et aucun ancêtre CONNU n'est protégé — la carte du commentaire seul s'offre,
+    /// comme avant la composition.
+    public static func fallsBackToCommentAlone(_ source: PostCommentCardSource) -> Bool {
+        guard source.target.parentId != nil, isPaintable(source.target), modes(of: source).isEmpty else { return false }
+        return !knownAncestors(of: source).contains(where: isProtected)
+    }
+
     /// Le mode d'ouverture : « Post + commentaire » ou « Fil jusqu'ici ».
     public static func defaultMode(of source: PostCommentCardSource) -> PostCommentCardMode? {
         modes(of: source).first
@@ -244,6 +253,19 @@ public enum PostCommentCardComposition {
         while let id = next {
             guard let parent = known[id], !chain.contains(where: { $0.id == id }), id != source.target.id else { return nil }
             chain.insert(parent, at: 0)
+            next = parent.parentId
+        }
+        return chain
+    }
+
+    /// Les ancêtres qu'on connaît, du parent direct vers la racine, jusqu'au premier maillon manquant.
+    private static func knownAncestors(of source: PostCommentCardSource) -> [FeedComment] {
+        let known = byId(source.thread)
+        var chain: [FeedComment] = []
+        var seen: Set<String> = [source.target.id]
+        var next = source.target.parentId
+        while let id = next, seen.insert(id).inserted, let parent = known[id] {
+            chain.append(parent)
             next = parent.parentId
         }
         return chain

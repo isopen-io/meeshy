@@ -374,6 +374,30 @@ final class PostCommentCardCompositionTests: XCTestCase {
         XCTAssertNil(subject.media.first?.posterURL)
     }
 
+    // MARK: - Le repli « commentaire seul »
+
+    func test_fallsBackToCommentAlone_aReplyWhoseRootIsNotLoaded_imagesAlone() {
+        let source = Self.storySource(Self.makeStory(media: [Self.photo]), target: Self.r1)
+        XCTAssertEqual(PostCommentCardComposition.modes(of: source), [])
+        XCTAssertTrue(PostCommentCardComposition.fallsBackToCommentAlone(source))
+    }
+
+    func test_fallsBackToCommentAlone_neverWhenAKnownAncestorIsProtected() {
+        let viewOnce = Self.makeComment("root", "Bob", "Vue unique", minute: 1, flags: Int(MessageEffectFlags.viewOnce.rawValue))
+        let middle = Self.makeComment("mid", "Cleo", "Entre deux", minute: 2, parent: "missing")
+        let target = Self.makeComment("t", "Dan", "Moi", minute: 3, parent: "mid")
+        XCTAssertFalse(PostCommentCardComposition.fallsBackToCommentAlone(Self.source(target: Self.r1, thread: [viewOnce])))
+        let protectedMiddle = Self.makeComment("mid", "Cleo", "Entre deux", minute: 2, parent: "missing", flags: Int(MessageEffectFlags.viewOnce.rawValue))
+        XCTAssertTrue(PostCommentCardComposition.fallsBackToCommentAlone(Self.source(target: target, thread: [middle])))
+        XCTAssertFalse(PostCommentCardComposition.fallsBackToCommentAlone(Self.source(target: target, thread: [protectedMiddle])))
+    }
+
+    func test_fallsBackToCommentAlone_neverWhenAModeComposes_norForAProtectedComment() {
+        XCTAssertFalse(PostCommentCardComposition.fallsBackToCommentAlone(Self.source(target: Self.r1)))
+        let viewOnce = Self.makeComment("x", "Bob", "Secret", minute: 1, parent: "missing", flags: Int(MessageEffectFlags.viewOnce.rawValue))
+        XCTAssertFalse(PostCommentCardComposition.fallsBackToCommentAlone(Self.source(target: viewOnce, thread: [])))
+    }
+
     func test_story_aProtectedCommentNeverImages_evenOnAStoryWithAHero() {
         let viewOnce = Self.makeComment("x", "Bob", "Secret", minute: 1, flags: Int(MessageEffectFlags.viewOnce.rawValue))
         XCTAssertEqual(PostCommentCardComposition.modes(of: Self.storySource(Self.makeStory(media: [Self.photo]), target: viewOnce)), [])

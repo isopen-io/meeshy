@@ -53,11 +53,17 @@ struct CommentMoreMenu: View {
 
     private var ownRequest: MessageCardExportRequest? {
         guard post != nil || story != nil else { return imagineRequest(comment, quoting: root) }
-        return MessageCardExportMenu.request(
+        let composed = MessageCardExportMenu.request(
             post: post, story: story, comment: comment, thread: thread, showOriginal: showOriginal, accentColor: accentColor,
             viewer: viewer, handle: viewer.username,
             audioPrism: ConversationLanguagePreferences(user: AuthManager.shared.currentUser).resolved
         )
+        guard composed == nil, PostCommentCardComposition.fallsBackToCommentAlone(compositionSource) else { return composed }
+        return imagineRequest(comment, quoting: root)
+    }
+
+    private var compositionSource: PostCommentCardSource {
+        PostCommentCardSource.reading(post: post, target: comment, thread: thread, viewer: viewer, showOriginal: showOriginal, story: story)
     }
 
     /// Le fil chargé autour du commentaire : sa racine et les réponses qu'on a.
@@ -65,11 +71,13 @@ struct CommentMoreMenu: View {
         (root.map { [$0] } ?? []) + loadedReplies
     }
 
-    /// « Imager » s'offre-t-il ? Pour un commentaire de post, dès qu'un mode compose une carte.
+    /// « Imager » s'offre-t-il ? Pour un commentaire de post ou de story, dès qu'un mode compose une
+    /// carte — ou, quand le fil d'une réponse n'est pas chargé, par la carte du commentaire seul.
     private var canImagine: Bool {
         guard post != nil || story != nil else { return ownRequest != nil }
-        let source = PostCommentCardSource.reading(post: post, target: comment, thread: thread, viewer: viewer, showOriginal: showOriginal, story: story)
-        return !PostCommentCardComposition.modes(of: source).isEmpty
+        let source = compositionSource
+        guard PostCommentCardComposition.modes(of: source).isEmpty else { return true }
+        return PostCommentCardComposition.fallsBackToCommentAlone(source) && imagineRequest(comment, quoting: root) != nil
     }
 
     private var threadReplies: [FeedComment] {
