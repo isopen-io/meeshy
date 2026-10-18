@@ -62,14 +62,14 @@ describe('mon profil', () => {
     expect(host.querySelector('[data-profile-banner-game]') !== null).toBe(true);
   });
 
-  test('sur ma fiche : mes points et ce qu’il me reste, au début de la bannière (#10231)', async () => {
+  test('sur ma fiche : mes étincelles au début de la bannière ; ce qu’il me reste, le cercle le dit (#10231, #10951)', async () => {
     const host = await mount(<GameBannerOwnSlot enabled />);
     await settle();
     expect(host.querySelector('[data-profile-banner-level] [data-profile-banner-points]') !== null).toBe(true);
-    expect(host.querySelector('[data-profile-banner-level] [data-profile-banner-missing]') !== null).toBe(true);
+    expect(host.querySelector('[data-profile-banner-level] [data-profile-banner-missing]') === null).toBe(true);
   });
 
-  test('sur ma fiche : ma Gloire totale sous la poche, plus le total d’étincelles à vie (#10913)', async () => {
+  test('sur ma fiche : ma Gloire totale au-dessus des étincelles, plus le total d’étincelles à vie (#10913)', async () => {
     const host = await mount(<GameBannerOwnSlot enabled />);
     await settle();
     expect(host.querySelector('[data-profile-banner-level] [data-profile-banner-glory="620"]') !== null).toBe(true);
