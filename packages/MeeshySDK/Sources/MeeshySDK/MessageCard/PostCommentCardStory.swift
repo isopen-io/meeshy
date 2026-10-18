@@ -1,0 +1,81 @@
+import Foundation
+
+/// **Le SUPPORT d'un commentaire de STORY** (#10915) — ce que la carte peut en
+/// montrer : son auteur, son texte et, en HERO, son visuel.
+///
+/// GARDES (loi pure, `heroMedia(now:)`) :
+/// - une story ÉCHUE (`expiresAt` passé) ne se fige pas en image ;
+/// - une story à CANVAS (`hasCanvas` : textes, stickers, filtres posés par
+///   `storyEffects`) n'est pas son média de fond : sa VIGNETTE (`thumbnailUrl`,
+///   servie par la passerelle) la représente, et sans vignette il n'y a ni
+///   hero ni story en tête — on ne peint jamais un fond nu à sa place ;
+/// - une story sans canvas montre son premier visuel : une photo par son
+///   fichier (sa vignette en repli), une vidéo par sa vignette — à défaut, par
+///   sa première image.
+public struct PostCommentCardStory: Sendable {
+    public let id: String
+    public let author: String
+    public let authorId: String
+    public let authorUsername: String?
+    public let text: String?
+    public let media: [FeedMedia]
+    public let timestamp: Date
+    public let expiresAt: Date?
+    public let hasCanvas: Bool
+
+    public init(id: String, author: String, authorId: String, authorUsername: String? = nil, text: String? = nil,
+                media: [FeedMedia] = [], timestamp: Date, expiresAt: Date? = nil, hasCanvas: Bool = false) {
+        self.id = id
+        self.author = author
+        self.authorId = authorId
+        self.authorUsername = authorUsername
+        self.text = text
+        self.media = media
+        self.timestamp = timestamp
+        self.expiresAt = expiresAt
+        self.hasCanvas = hasCanvas
+    }
+
+    public init(story: StoryItem, author: String, authorId: String, authorUsername: String? = nil) {
+        self.init(id: story.id, author: author, authorId: authorId, authorUsername: authorUsername, text: story.content,
+                  media: story.media, timestamp: story.createdAt, expiresAt: story.expiresAt, hasCanvas: story.storyEffects != nil)
+    }
+
+    /// Le visuel qui représente la story sur la carte — `nil` : aucun (voir les gardes).
+    func heroMedia(now: Date) -> MessageCardSubjectMedia? {
+        guard !isExpired(now: now) else { return nil }
+        guard let visual = media.first(where: { $0.type == .image || $0.type == .video }) else { return nil }
+        let thumbnail = MessageCardText.nonBlank(visual.thumbnailUrl)
+        if hasCanvas {
+            guard let thumbnail else { return nil }
+            return Self.subjectMedia(of: visual, kind: .image, file: thumbnail, poster: nil)
+        }
+        switch visual.type {
+        case .image:
+            guard let file = MessageCardText.nonBlank(visual.url) ?? thumbnail else { return nil }
+            return Self.subjectMedia(of: visual, kind: .image, file: file, poster: thumbnail)
+        case .video:
+            guard let file = MessageCardText.nonBlank(visual.url) ?? thumbnail else { return nil }
+            return Self.subjectMedia(of: visual, kind: .video, file: file, poster: thumbnail)
+        case .audio, .document:
+            return nil
+        }
+    }
+
+    func isExpired(now: Date) -> Bool {
+        expiresAt.map { $0 <= now } ?? false
+    }
+
+    private static func subjectMedia(of item: FeedMedia, kind: MessageCardMediaKind, file: String, poster: String?) -> MessageCardSubjectMedia {
+        let declared = MessageCardSticker.declaredAspect(width: item.width, height: item.height)
+        return MessageCardSubjectMedia(
+            media: MessageCardMedia(
+                id: item.id, kind: kind, aspect: declared ?? 1,
+                duration: kind == .video ? item.duration.map { Double($0) } : nil,
+                aspectKnown: declared != nil
+            ),
+            fileURL: file,
+            posterURL: poster
+        )
+    }
+}
