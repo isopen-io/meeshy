@@ -10,13 +10,20 @@ import org.junit.Test;
 public class ShareIntentRulesTest {
 
     @Test
-    public void onlyAnImageOrAVideoIsCopied() {
+    public void everyTypedFileIsCopied() {
         assertTrue(ShareIntentRules.isAcceptedMime("image/png"));
         assertTrue(ShareIntentRules.isAcceptedMime("video/mp4"));
-        assertTrue(ShareIntentRules.isAcceptedMime("image/*"));
-        assertFalse(ShareIntentRules.isAcceptedMime("text/plain"));
-        assertFalse(ShareIntentRules.isAcceptedMime("application/pdf"));
+        assertTrue(ShareIntentRules.isAcceptedMime("audio/mp4"));
+        assertTrue(ShareIntentRules.isAcceptedMime("application/pdf"));
+        assertTrue(ShareIntentRules.isAcceptedMime("text/plain"));
+        assertFalse(ShareIntentRules.isAcceptedMime(""));
         assertFalse(ShareIntentRules.isAcceptedMime(null));
+    }
+
+    @Test
+    public void theBoundsAreTheSharedLimits() {
+        assertEquals(20, ShareIntentRules.MAX_FILES);
+        assertEquals(500L * 1024 * 1024, ShareIntentRules.MAX_TOTAL_BYTES);
     }
 
     @Test

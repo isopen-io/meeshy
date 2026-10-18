@@ -9,6 +9,8 @@ import { messageCardSubjectOf } from '@/lib/export/message-card-subject';
 import { loadInterfaceCatalog } from '@/lib/i18n-catalog';
 
 import { citesSealed, contentExitOf, exitOffers, mediaLeaves, messageExitOffers, quotedExitOf, sealedProps, EXIT_ACTIONS } from './content-exit';
+import { publishOffered } from '@/lib/send/send-sheet-plan';
+
 import { forwardRefusalOf, forwardRequestOf } from './forward';
 import { forwardMenuItems, imageableOf, messageMenuContextOf, messageMenuItems } from './message-actions';
 import { SEALED_ROW_ATTRIBUTE } from './sealed-exit-guard';
@@ -130,10 +132,8 @@ describe('parité — un seul verdict, partout', () => {
           mediaLeaves({ message: subject, piece, now: NOW }),
           offers.save,
           offers.share,
-          !attachmentSendRequest({ attachment: piece, message: subject, mine: true, now: NOW }).payload.valueOf().hasOwnProperty('x') &&
-            (attachmentSendRequest({ attachment: piece, message: subject, mine: true, now: NOW }).payload as { readonly protected: boolean }).protected === false,
-          forwardRequestOf({ conversationId: 'c-1', messages: [subject], now: NOW }).payload.kind === 'messages' &&
-            (forwardRequestOf({ conversationId: 'c-1', messages: [subject], now: NOW }).payload as { readonly soleMedia?: { readonly protected: boolean } }).soleMedia?.protected === false,
+          publishOffered(attachmentSendRequest({ attachment: piece, message: subject, now: NOW }).payload).length > 0,
+          publishOffered(forwardRequestOf({ conversationId: 'c-1', messages: [subject], now: NOW }).payload).length > 0,
         ];
         expect(pieceLeaves.filter((says) => says && !leaves)).toEqual([]);
         expect(new Set(pieceLeaves).size).toBe(1);

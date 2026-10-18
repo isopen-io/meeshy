@@ -6,7 +6,9 @@ import { useStore } from 'zustand/react';
 
 import { prismFor, served, type Served } from '@/lib/api/prism';
 import { reactAction } from '@/lib/api/query';
+import { findCachedConversation } from '@/lib/api/conversations';
 import { appQueryClient } from '@/lib/api/query-client';
+import { conversationEncrypted } from '@/lib/send/share-entry';
 import { apiDeps } from '@/lib/api/deps';
 import type { DataSource } from '@/lib/api/config';
 import type { ApiResult, HttpRequest } from '@/lib/api/http';
@@ -154,6 +156,11 @@ export function useMessageMenu(params: {
   const mine = useStore(reactionStore, (s) => s.mine);
 
   const messageOf = useCallback((id: string) => messages.find((m) => m.id === id), [messages]);
+  /* D7 — la source est-elle chiffrée ? Lu dans le cache de la conversation, au moment du geste. */
+  const sourceEncrypted = useCallback(
+    () => conversationEncrypted(findCachedConversation(params.queryClient ?? appQueryClient, conversationId)),
+    [params.queryClient, conversationId],
+  );
   /* « AJOUTER À MES STICKERS » (#10630) — la bibliothèque n'est lue que quand le menu vise un sticker. */
   const targetedMessage = menuTarget === null ? undefined : messages.find((m) => m.id === menuTarget.messageId);
   const stickerLibrary = useStickerLibrary(targetedMessage !== undefined && stickerOf(targetedMessage) !== null);
@@ -471,22 +478,22 @@ export function useMessageMenu(params: {
         return;
       }
       /**
-       * « TRANSFÉRER » ARME LA SÉLECTION (#5866, décision porteur #5989 du
-       * 2026-09-23) — exactement l'effet de « Sélectionner », avec CE message
-       * déjà coché. Ce n'est PAS un sélecteur de conversations qui s'ouvre :
-       * c'est la barre de sélection qui valide ensuite vers les destinataires.
-       * Le porteur a accepté ce geste supplémentaire au cas nominal pour que
-       * le même mot ait le même effet quelle que soit la porte (dimension 6).
+       * « TRANSFÉRER » OUVRE L'ÉCRAN DE PARTAGE (D1, #10949, porteur
+       * 2026-10-18 — supplante #5989) — depuis toutes les portes, avec CE
+       * message. La sélection multiple reste « Sélectionner », dans « Plus… ».
        */
       if (id === 'forward') {
         const message = messageOf(messageId);
-        const refusal = message === undefined ? 'unavailable' : forwardRefusalOf(message, Date.now());
-        if (refusal !== null) {
-          announce(translate(currentInterfaceLanguage(), FORWARD_REFUSAL_KEY[refusal]));
+        const now = Date.now();
+        const refusal = message === undefined ? 'unavailable' : forwardRefusalOf(message, now);
+        if (message === undefined || refusal !== null) {
+          announce(translate(currentInterfaceLanguage(), FORWARD_REFUSAL_KEY[refusal ?? 'unavailable']));
           return;
         }
+        openSendSheet(forwardRequestOf({ conversationId, messages: [message], now, sourceEncrypted: sourceEncrypted() }));
+        return;
       }
-      if (id === 'select' || id === 'forward') {
+      if (id === 'select') {
         focusTakenRef.current = true;
         setSelection({ ids: [messageId] });
         return;
@@ -579,9 +586,9 @@ export function useMessageMenu(params: {
         return;
       }
       setSelection(null);
-      openSendSheet(forwardRequestOf({ conversationId, messages: candidates, now }));
+      openSendSheet(forwardRequestOf({ conversationId, messages: candidates, now, sourceEncrypted: sourceEncrypted() }));
     },
-    [selection, messageOf, announce, conversationId],
+    [selection, messageOf, announce, conversationId, sourceEncrypted],
   );
 
   /**

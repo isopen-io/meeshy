@@ -13,10 +13,10 @@
  *
  * ## BORNES
  *
- * Un partage vient d'un tiers : dix fichiers et 100 Mo au plus, le reste est
- * écarté (et non tronqué) — la feuille d'envoi plafonne de toute façon. Seules
- * les images et les vidéos sont rangées (les types du `share_target`), et les
- * textes sont bornés à 20 000 caractères, comme dans la coque Android
+ * Un partage vient d'un tiers : vingt fichiers et 500 Mio au plus — les
+ * plafonds COMMUNS du partage (D10, `packages/shared/utils/share-limits.ts`) —,
+ * le reste est écarté (et non tronqué). Tout fichier non vide est rangé (D9 :
+ * image, vidéo, son, document), et les textes sont bornés à 20 000 caractères, comme dans la coque Android
  * (`ShareIntentRules.MAX_TEXT_CHARS`). Les
  * fichiers ne restent que le temps d'être lus : la page les purge à la lecture,
  * et rejette tout partage de plus d'une heure.
@@ -39,8 +39,8 @@ const SHARE_DB_NAME = 'meeshy-share';
 const SHARE_DB_VERSION = 1;
 const SHARE_STORE_NAME = 'incoming';
 const SHARE_KEY = 'current';
-const SHARE_MAX_FILES = 10;
-const SHARE_MAX_TOTAL_BYTES = 100 * 1024 * 1024;
+const SHARE_MAX_FILES = 20;
+const SHARE_MAX_TOTAL_BYTES = 500 * 1024 * 1024;
 const SHARE_MAX_TEXT_CHARS = 20000;
 
 const textOf = (form, name) => {
@@ -48,7 +48,7 @@ const textOf = (form, name) => {
   return typeof value === 'string' ? value.slice(0, SHARE_MAX_TEXT_CHARS) : '';
 };
 
-const isShareable = (file) => typeof file.type === 'string' && (file.type.startsWith('image/') || file.type.startsWith('video/'));
+const isShareable = (file) => typeof file.size === 'number' && file.size > 0;
 
 const filesOf = (form) => {
   const kept = [];

@@ -1,33 +1,42 @@
 import { useEffect, useMemo, useState } from 'react';
 import { useInfiniteQuery, useQuery } from '@tanstack/react-query';
 
+import { COMMUNITIES_STALE_TIME } from '@/lib/api/communities';
 import { apiDeps } from '@/lib/api/deps';
 import { flattenFriendRequests, friendRequestsQueryOptions, type PersonSummary } from '@/lib/api/friend-requests';
 import { useConversations } from '@/lib/api/query';
 import { appQueryClient } from '@/lib/api/query-client';
+import { loadMyCommunities, myCommunitiesQueryKey, searchConversations } from '@/lib/api/share-directory';
 import type { Conversation } from '@/lib/api/types';
 import { searchUsers } from '@/lib/api/users-search';
 import { friendsOf } from '@/lib/conversation-new/candidates';
 import { useExhaustPages } from '@/lib/view/use-exhaust-pages';
 
+import type { CommunityNames } from './send-sheet-model';
+
 /**
- * À QUI ENVOYER — les trois sources de la feuille d'envoi (#8884), lues dans
- * les MÊMES caches que la Lentille et « Nouvelle conversation » : aucune route
- * neuve, aucune clé neuve.
+ * À QUI ENVOYER — les sources de l'écran de partage (#8884, #10948), lues dans
+ * les MÊMES caches que la Lentille et « Nouvelle conversation ». CACHE D'ABORD :
+ * les conversations et les amis s'affichent aussitôt, même anciens, et se
+ * mettent à jour sans bruit ; un squelette seulement sur un cache VIDE.
  *
- * - les conversations : `useConversations()` — cache-first, la liste servie
- *   est celle que la Lentille montre (l'ancienne feuille de transfert en donnait la raison) ;
- * - les amis : le panier persisté des amitiés acceptées ;
- * - la recherche globale : amortie, dès deux caractères, sous la clé que
- *   « Nouvelle conversation » partage (`['users', 'search', q]`).
+ * - les conversations : `useConversations()` (la liste de la Lentille) ;
+ * - les amis : le panier persisté des amitiés acceptées — les contacts du
+ *   carnet que l'app a déjà appariés y sont, inscrits et amis ;
+ * - la recherche SERVEUR, amortie, dès deux caractères, FUSIONNÉE : les
+ *   personnes (`['users', 'search', q]`, la clé de « Nouvelle conversation »)
+ *   et les conversations hors cache (`/conversations/search`) ;
+ * - les communautés dont on est membre (`/communities/mine`) : leur nom, pour
+ *   ranger dessous les canaux où l'on écrit (D11).
  *
- * Monté SEULEMENT pendant que la feuille est ouverte : ouvrir un écran ne
- * déclenche aucune de ces requêtes.
+ * Monté SEULEMENT pendant que l'écran est ouvert.
  */
 export type SendSheetDirectory = {
   readonly conversations: readonly Conversation[];
   readonly friends: readonly PersonSummary[];
   readonly searchResults: readonly PersonSummary[] | undefined;
+  readonly conversationResults?: readonly Conversation[];
+  readonly communities?: CommunityNames;
   /** Vrai seulement sur un cache VIDE (démarrage à froid) — jamais un squelette sur des données. */
   readonly loading: boolean;
 };
@@ -36,6 +45,12 @@ export type UseSendSheetDirectory = (params: { readonly viewerId: string; readon
 
 const SEARCH_DEBOUNCE_MS = 250;
 const MIN_QUERY_LENGTH = 2;
+
+const unwrapped = async <T,>(result: Promise<{ readonly ok: true; readonly data: T } | { readonly ok: false; readonly error: string }>): Promise<T> => {
+  const settled = await result;
+  if (!settled.ok) throw new Error(settled.error);
+  return settled.data;
+};
 
 export const useSendSheetDirectory: UseSendSheetDirectory = ({ viewerId, query }) => {
   const [debounced, setDebounced] = useState(query);
@@ -52,20 +67,26 @@ export const useSendSheetDirectory: UseSendSheetDirectory = ({ viewerId, query }
   useExhaustPages(accepted, enabled);
   const friends = useMemo(() => friendsOf({ accepted: flattenFriendRequests(accepted.data), viewerId }), [accepted.data, viewerId]);
 
-  const results = useQuery({
-    queryKey: ['users', 'search', trimmed],
-    queryFn: async () => {
-      const result = await searchUsers(apiDeps, trimmed);
-      if (!result.ok) throw new Error(result.error);
-      return result.data;
-    },
-    enabled: enabled && searching,
-  });
+  const people = useQuery({ queryKey: ['users', 'search', trimmed], queryFn: () => unwrapped(searchUsers(apiDeps, trimmed)), enabled: enabled && searching }, appQueryClient);
+  const found = useQuery(
+    { queryKey: ['conversations', 'search', trimmed], queryFn: () => unwrapped(searchConversations(apiDeps, trimmed)), enabled: enabled && searching },
+    appQueryClient,
+  );
+  const mine = useQuery(
+    { queryKey: myCommunitiesQueryKey, queryFn: () => unwrapped(loadMyCommunities(apiDeps)), enabled, staleTime: COMMUNITIES_STALE_TIME },
+    appQueryClient,
+  );
+  const communities = useMemo(
+    (): CommunityNames => Object.fromEntries((mine.data ?? []).map((community) => [community.id, { name: community.name, avatar: community.avatar }])),
+    [mine.data],
+  );
 
   return {
     conversations: conversations.data ?? [],
     friends,
-    searchResults: searching ? results.data : undefined,
+    searchResults: searching ? people.data : undefined,
+    conversationResults: searching ? (found.data ?? []) : [],
+    communities,
     loading: conversations.isPending,
   };
 };

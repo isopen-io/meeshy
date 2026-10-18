@@ -44,6 +44,7 @@ const refused = <T,>(): Promise<ApiResult<T>> => Promise.resolve({ ok: false, st
 const ports: SendSheetPorts = {
   online: () => true,
   openDirect: refused,
+  openGroup: refused,
   forward: async () => ({ ok: false, status: 500, error: 'inutilisé' }),
   sendMessage: refused,
   uploadFiles: refused,
@@ -86,10 +87,10 @@ const mount = () =>
   );
 
 describe('SendSheet dans la coque Android (#9023)', () => {
-  test('« Plus d’options… » ouvre la feuille de partage d’Android par le pont MeeshyShare', async () => {
+  test('« Partager hors de Meeshy » ouvre la feuille de partage d’Android par le pont MeeshyShare', async () => {
     const calls = androidShell();
     const host = await mount();
-    await mounter.click(buttonNamed(host, 'Plus d’options…'));
+    await mounter.click(buttonNamed(host, 'Partager hors de Meeshy'));
     expect(calls.map(({ plugin, method }) => `${plugin}.${method}`)).toEqual(['MeeshyShare.share']);
     expect(JSON.stringify(calls[0]?.options).includes(URL_PARTAGEE)).toBe(true);
   });

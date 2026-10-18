@@ -26,6 +26,15 @@ describe('sendRefusalOf', () => {
     expect(sendRefusalOf({ message: 'x', code: 'forward-source-unavailable' })).toBe('unavailable');
   });
 
+  test('les deux codes neufs du partage unique (D7, #9914)', () => {
+    expect(sendRefusalOf({ message: 'x', code: 'encrypted-source-not-server-copyable' })).toBe('encrypted');
+    expect(sendRefusalOf({ message: 'x', code: 'forwarded-attachment-not-in-source' })).toBe('not-in-source');
+  });
+
+  test('chaque code partagé a son motif : aucun refus de transfert ne se dit « refusé » sans raison', () => {
+    Object.values(FORWARD_REFUSAL_CODES).forEach((code) => expect(sendRefusalOf({ message: 'x', code })).not.toBeNull());
+  });
+
   test('un média protégé refusé à la publication', () => {
     expect(sendRefusalOf({ message: 'This media is protected and cannot be published', code: 'PROTECTED_MEDIA' })).toBe('protected-media');
   });
