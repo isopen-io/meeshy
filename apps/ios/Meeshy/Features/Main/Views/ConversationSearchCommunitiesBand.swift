@@ -14,6 +14,11 @@ import MeeshyUI
 /// sur un champ qui n'écoute plus n'existe pas.
 nonisolated enum ConversationSearchCommunitiesBandLaw {
     static func isShown(afterFocusChangeTo focused: Bool) -> Bool { focused }
+
+    /// **Des communautés, ou rien** (#10924) : « Communautés · Voir tout »
+    /// au-dessus d'une bande vide est un titre qui ment. Sans communauté, le
+    /// panneau ne se peint pas — le champ garde le focus, la liste se filtre.
+    static func drawsBand(for communities: [MeeshyCommunity]) -> Bool { !communities.isEmpty }
 }
 
 /// **La carte d'une communauté dans la bande de recherche : la MOITIÉ de sa

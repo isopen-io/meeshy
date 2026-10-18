@@ -3,6 +3,7 @@ import { useInfiniteQuery, useQueryClient } from '@tanstack/react-query';
 import { useStore } from 'zustand/react';
 
 import { ListHeader } from '@/components/list-header';
+import { SearchCommunitiesBand } from '@/components/search-communities-band';
 import { StoryRail } from '@/components/story-rail';
 import { Glyph } from '@/components/glyph';
 import { useDismissRowSwipeOnViewChange } from '@/components/conversation-row-swipe';
@@ -252,6 +253,7 @@ const actionsDeDemarrage = (language: InterfaceLanguage): readonly QuickAction[]
 export default function ConversationsScreen() {
   const [selection, setSelection] = useState<ListSelection>(NEUTRAL_SELECTION);
   const [search, setSearch] = useState('');
+  const [searchFocused, setSearchFocused] = useState(false);
   const interfaceLanguage = currentInterfaceLanguage();
   useDismissRowSwipeOnViewChange(`${selection.join(',')}\u0001${search}`);
   const frame = useRef<HTMLUListElement | null>(null);
@@ -914,6 +916,10 @@ export default function ConversationsScreen() {
         : le contenu s'arrête toujours AU-DESSUS d'elle, jamais dessous.
       */}
       <div ref={searchBarRef} data-search-bar className="absolute inset-x-0 bottom-0 z-10 px-4 pt-2 pb-safe">
+        {/* #10924 — SES communautés au focus, ou rien ; posées AU-DESSUS de la
+          barre, hors de sa hauteur mesurée. `pointerdown` retenu : le focus
+          reste au champ jusqu'au clic d'une carte. */}
+        {searchFocused ? <SearchCommunitiesBand language={interfaceLanguage} className="glass-prominent glass-card absolute inset-x-4 bottom-full mb-2" /> : null}
         <div
           className="glass-prominent glass-card flex items-center gap-3 px-4 py-3"
           style={{
@@ -926,6 +932,8 @@ export default function ConversationsScreen() {
             type="search"
             value={search}
             onChange={(e) => setSearch(e.currentTarget.value)}
+            onFocus={() => setSearchFocused(true)}
+            onBlur={() => setSearchFocused(false)}
             placeholder={translate(interfaceLanguage, 'list.search.placeholder')}
             aria-label={translate(interfaceLanguage, 'list.search.label')}
             className="w-0 min-w-0 flex-1 bg-transparent text-input outline-none placeholder:text-ios-ink-3"
