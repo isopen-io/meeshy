@@ -150,6 +150,14 @@ nonisolated enum ComposerPreUploadPolicy {
         return fileSize >= minimumBytes
     }
 
+    /// **La pré-montée SERT-elle ce format ?** Seul le canal de la scène (la story) RÉFÉRENCE ce qui a été
+    /// pré-monté. Le document — post, réel, statut — re-téléverse tous ses fichiers en « post » et rebranche le
+    /// canvas sur ces médias neufs (#5280) : une pré-montée n'y laissait qu'un `PostMedia` orphelin (laissé au
+    /// nettoyage serveur) et la moitié de la bande passante de la publication.
+    static func pays(for format: ComposerFormat) -> Bool {
+        ComposerPublishChannel.channel(for: format) == .scene
+    }
+
     /// **Ce que la publication fait d'un asset donné.**
     ///
     /// Deux cas et deux seulement : ou bien la pré-montée a abouti et la
