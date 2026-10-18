@@ -140,8 +140,8 @@ struct ConversationView: View {
     /// Écrivain UNIQUE de l'override : pair (#9359), accent relayé (#10631), réglages enregistrés.
     func admitRepainted(_ repainted: Conversation?) { guard let repainted else { return }; conversationOverride = repainted; repaintRevision &+= 1 }
 
-    // NOTE: Properties below are internal (not private) for cross-file extension access.
-    // Extensions in ConversationView+MessageRow, +Header, +ScrollIndicators, +Composer.
+    // NOTE: Properties below are internal (not private) for cross-file extension access (+MessageRow, +Header, …).
+    @Environment(\.sceneWindowSize) var sceneWindowSize // la fenêtre qui porte la conversation (Stage Manager)
 
     @Environment(\.dismiss) private var dismiss
     @Environment(\.scenePhase) private var scenePhase

@@ -40,4 +40,17 @@ final class SceneWindowSizeWiringGuardTests: XCTestCase {
         XCTAssertFalse(list.contains("DeviceLayout.windowSize.height / 2"),
                        "la queue de liste se mesure à la colonne, pas à la fenêtre")
     }
+
+    /// Lot 2 : menus d'appui long, aperçu, plein écran audio — chacun se mesure à la fenêtre qui le porte.
+    func test_theRemainingLayoutReads_useTheirWindow() throws {
+        for path in [
+            "Meeshy/Features/Main/Views/MessageListView.swift",
+            "Meeshy/Features/Main/Views/ConversationView+LongPressMenu.swift",
+            "Meeshy/Features/Main/Views/AudioFullscreenView.swift",
+            "Meeshy/Features/Main/Views/AudioFullscreenDismissDrag.swift",
+        ] {
+            let code = AppSourceGuard.stripComments(try source(path))
+            XCTAssertFalse(code.contains("DeviceLayout.windowSize.height"), "\(path) lit encore la fenêtre clé")
+        }
+    }
 }
