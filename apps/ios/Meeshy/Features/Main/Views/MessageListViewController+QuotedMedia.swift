@@ -24,18 +24,25 @@ extension MessageListViewController {
     func openQuotedAuthorProfile(_ reference: ReplyReference) {
         let localId = resolveLocalId(reference.messageId)
         let quoted = store.domainMessage(for: localId, currentUserId: currentUserId)
+        let conversationId = quoted?.conversationId ?? conversationViewModel?.conversationId
+        let username = quoted?.senderUsername ?? quoted?.senderName ?? reference.authorName
+        let displayName = quoted?.senderName ?? reference.authorName
+        let avatarURL = quoted?.senderAvatarURL ?? reference.authorAvatarUrl
+        if let quoted, quoted.senderIsAnonymous {
+            router.openProfile(ProfileSheetUser(
+                username: username, displayName: displayName, avatarURL: avatarURL,
+                accentColor: reference.authorColor, participantId: quoted.senderId, isAnonymous: true
+            ), inConversation: conversationId)
+            return
+        }
         guard let userId = QuotedAuthorProfileTarget.userId(
-            quotedSenderId: quoted?.senderId,
+            quotedSenderUserId: quoted?.senderUserId,
             referenceAuthorUserId: reference.authorUserId
         ) else { return }
-        let user = ProfileSheetUser(
-            userId: userId,
-            username: quoted?.senderUsername ?? quoted?.senderName ?? reference.authorName,
-            displayName: quoted?.senderName ?? reference.authorName,
-            avatarURL: quoted?.senderAvatarURL ?? reference.authorAvatarUrl,
-            accentColor: reference.authorColor
-        )
-        router.openProfile(user, inConversation: quoted?.conversationId ?? conversationViewModel?.conversationId)
+        router.openProfile(ProfileSheetUser(
+            userId: userId, username: username, displayName: displayName,
+            avatarURL: avatarURL, accentColor: reference.authorColor
+        ), inConversation: conversationId)
     }
 
     /// Tap sur la zone MÉDIA d'une citation. Image et vidéo s'ouvrent EN PLEIN

@@ -448,15 +448,19 @@ final class MessagePieceTargetTests: XCTestCase {
     }
 
     func test_quotedAuthor_prefersStoreThenReference_andNeverOpensWithoutAnId() {
-        XCTAssertEqual(QuotedAuthorProfileTarget.userId(quotedSenderId: "a", referenceAuthorUserId: "b"), "a")
-        XCTAssertEqual(QuotedAuthorProfileTarget.userId(quotedSenderId: "", referenceAuthorUserId: "b"), "b")
-        XCTAssertEqual(QuotedAuthorProfileTarget.userId(quotedSenderId: nil, referenceAuthorUserId: "b"), "b")
-        XCTAssertNil(QuotedAuthorProfileTarget.userId(quotedSenderId: "", referenceAuthorUserId: nil))
+        XCTAssertEqual(QuotedAuthorProfileTarget.userId(quotedSenderUserId: "a", referenceAuthorUserId: "b"), "a")
+        XCTAssertEqual(QuotedAuthorProfileTarget.userId(quotedSenderUserId: "", referenceAuthorUserId: "b"), "b")
+        XCTAssertEqual(QuotedAuthorProfileTarget.userId(quotedSenderUserId: nil, referenceAuthorUserId: "b"), "b")
+        XCTAssertNil(QuotedAuthorProfileTarget.userId(quotedSenderUserId: "", referenceAuthorUserId: nil))
     }
 
     func test_quotedAuthor_opensThroughRouterOpenProfile() throws {
         let host = try source("Meeshy/Features/Main/Views/MessageListViewController+QuotedMedia.swift")
         XCTAssertTrue(host.contains("router.openProfile("))
         XCTAssertFalse(host.contains("deepLinkProfileUser ="))
+        XCTAssertTrue(host.contains("quotedSenderUserId: quoted?.senderUserId"),
+                      "senderId est l'identifiant de participation, jamais un compte")
+        XCTAssertTrue(host.contains("participantId: quoted.senderId, isAnonymous: true"),
+                      "une visiteuse sans compte atteint sa fiche de participation")
     }
 }
