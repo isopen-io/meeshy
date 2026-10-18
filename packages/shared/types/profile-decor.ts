@@ -72,3 +72,17 @@ export function parseServedProfileDecor(input: unknown): ServedProfileDecor {
   const record = input as Readonly<Record<string, unknown>>;
   return { avatarRing: itemOrNull(record['avatarRing']), banner: itemOrNull(record['banner']), bannerFrame: itemOrNull(record['bannerFrame']) };
 }
+
+/**
+ * Le décor que PORTE une personne dans un résumé (#10713, #10945) — auteur de
+ * post, de commentaire, de message, participant, résultat de recherche,
+ * contact : le contour seul, c'est lui que les avatars dessinent. La clé
+ * `profileDecor` est ABSENTE sans contour (charge additive).
+ */
+export type PersonProfileDecor = { readonly avatarRing: ServedProfileDecorItem };
+
+export function parsePersonProfileDecor(input: unknown): PersonProfileDecor | undefined {
+  if (typeof input !== 'object' || input === null) return undefined;
+  const avatarRing = itemOrNull((input as Readonly<Record<string, unknown>>)['avatarRing']);
+  return avatarRing === null ? undefined : { avatarRing };
+}

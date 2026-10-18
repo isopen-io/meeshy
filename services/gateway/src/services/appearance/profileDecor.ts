@@ -44,6 +44,9 @@ export const servedProfileDecorJsonSchema = {
 /** Les colonnes du décor, à `select`er ensemble partout où le décor est composé. */
 export const PROFILE_DECOR_COLUMNS = { equippedAvatarRing: true, equippedBanner: true, equippedBannerFrame: true } as const;
 
+/** La seule colonne du décor qu'un RÉSUMÉ de personne lit (#10945) — à étaler dans le `select` qu'il fait déjà. */
+export const AVATAR_RING_COLUMN = { equippedAvatarRing: true } as const;
+
 export type StoredProfileDecor = {
   readonly equippedAvatarRing?: string | null;
   readonly equippedBanner?: string | null;

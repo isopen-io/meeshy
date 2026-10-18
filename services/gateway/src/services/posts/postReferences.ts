@@ -15,6 +15,7 @@ import { postMentionInclude } from './postIncludes';
 import { withServedRepostCredits } from './repostCreditChips';
 import { withServedDerivedContent } from './storyContentComposition';
 import { negotiateWireStoryEffects, type WireReader } from './storyEffectsV3';
+import { servedPerson } from '../appearance/authorProfileDecor';
 
 export type { WireReader } from './storyEffectsV3';
 
@@ -158,7 +159,7 @@ export function withMentions<T extends { postMentions?: unknown; mentions?: unkn
   // #10524 — la puce de crédit se retire avant la négociation, sur le blob
   // tel qu'enregistré. #10523 — et d'abord du `content` qui en dérive, tant
   // que le blob dit encore quel texte était la puce.
-  const served = withServedRepostCredits(withServedDerivedContent(flat));
+  const served = withServedAuthors(withServedRepostCredits(withServedDerivedContent(flat)));
   return withNestedRepostMentions(negotiateWireStoryEffects(served, reader), reader);
 }
 
@@ -187,7 +188,7 @@ function withNestedRepostMentions<T>(post: T, reader?: WireReader): T {
   const { visibility, moderationHiddenAt, ...stripped } = loaded as { visibility?: unknown; moderationHiddenAt?: unknown };
   if (visibility === 'PRIVATE' || (moderationHiddenAt !== null && moderationHiddenAt !== undefined)) return { ...post, repostOf: null };
   const carried = 'visibility' in loaded || 'moderationHiddenAt' in loaded;
-  const repostOf = carried ? stripped : loaded;
+  const repostOf = withServedAuthors(carried ? stripped : loaded);
 
   // La négociation du blob précède le tri des mentions : le chemin « pas de
   // références chargées » sort TÔT et laisserait sinon un
@@ -202,4 +203,30 @@ function withNestedRepostMentions<T>(post: T, reader?: WireReader): T {
   }
 
   return { ...post, repostOf: withMentions(nested, reader) };
+}
+
+type PersonRow = { readonly equippedAvatarRing?: string | null };
+
+/**
+ * #10945 — l'auteur du post et celui de chaque commentaire en aperçu partent
+ * avec leur contour résolu (`profileDecor`), jamais avec la colonne brute que
+ * `postAuthorSelect` lit dans la même jointure. Idempotent : un auteur déjà
+ * servi n'a plus de colonne et garde son `profileDecor`.
+ */
+function withServedAuthors<T>(post: T): T {
+  const row = post as { author?: PersonRow | null; comments?: unknown };
+  const hasAuthor = row.author !== undefined && row.author !== null;
+  const comments = Array.isArray(row.comments) ? row.comments : undefined;
+  if (!hasAuthor && comments === undefined) return post;
+  return {
+    ...post,
+    ...(hasAuthor ? { author: servedPerson(row.author as PersonRow) } : {}),
+    ...(comments === undefined ? {} : { comments: comments.map(withServedCommentAuthor) }),
+  };
+}
+
+function withServedCommentAuthor(comment: unknown): unknown {
+  if (typeof comment !== 'object' || comment === null) return comment;
+  const author = (comment as { author?: PersonRow | null }).author;
+  return author === undefined || author === null ? comment : { ...comment, author: servedPerson(author) };
 }
