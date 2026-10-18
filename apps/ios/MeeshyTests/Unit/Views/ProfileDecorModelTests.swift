@@ -202,34 +202,25 @@ final class ProfileDecorModelTests: XCTestCase {
         XCTAssertEqual(model.state.decor, decor)
     }
 
-    // MARK: - Une photo de bannière téléversée reprend la main sur le design
+    // MARK: - La photo de bannière gagne toujours sur le design (#10933)
 
-    func test_yieldBannerToUploadedPhoto_withADesignEquipped_retiresTheBannerOnly() async {
-        let service = StubService()
-        let ring = item("contours-essentiels", "perle")
-        service.result = .success(ServedProfileDecor(avatarRing: ring, banner: nil))
-        let model = model(decor: ServedProfileDecor(avatarRing: ring, banner: item("bannieres-essentielles", "aurore")), service: service)
-
-        await model.yieldBannerToUploadedPhoto()
-
-        XCTAssertEqual(service.writes, [ProfileDecorWrite(side: .banner, choice: nil)], "sans ce retrait, la nouvelle photo resterait cachée sous le design")
-        XCTAssertNil(model.state.decor.banner)
-        XCTAssertEqual(model.state.decor.avatarRing, ring, "le contour ne bouge pas")
-    }
-
-    func test_yieldBannerToUploadedPhoto_withoutDesign_sendsNothing() async {
-        let service = StubService()
-        let model = model(decor: ServedProfileDecor(avatarRing: item("contours-essentiels", "perle")), service: service)
-
-        await model.yieldBannerToUploadedPhoto()
-
-        XCTAssertTrue(service.writes.isEmpty)
-    }
-
-    func test_openablePhoto_aDesignCoversThePhoto_nothingOpens() {
+    func test_openablePhoto_aPhotoAndAnEquippedDesign_thePhotoWinsAndOpens() {
         let user = MeeshyUser(id: "u1", username: "alice", banner: "https://cdn/b.jpg", profileDecor: ServedProfileDecor(banner: item("bannieres-essentielles", "aurore")))
 
-        XCTAssertNil(ProfileOwnBanner.openablePhoto(of: user), "toucher le design n'ouvre pas en plein écran la photo qu'il recouvre")
+        XCTAssertEqual(ProfileOwnBanner.paint(of: user), .photo("https://cdn/b.jpg"), "la photo gagne toujours sur le design (#10933)")
+        XCTAssertEqual(ProfileOwnBanner.openablePhoto(of: user), "https://cdn/b.jpg")
+    }
+
+    func test_paint_aDesignWithoutPhoto_paintsTheDesignAndNothingOpens() {
+        let user = MeeshyUser(id: "u1", username: "alice", profileDecor: ServedProfileDecor(banner: item("bannieres-essentielles", "aurore")))
+
+        guard case .design(let design) = ProfileOwnBanner.paint(of: user) else { return XCTFail("sans photo, le design se peint") }
+        XCTAssertEqual(design.key, "aurore")
+        XCTAssertNil(ProfileOwnBanner.openablePhoto(of: user))
+    }
+
+    func test_paint_neitherPhotoNorDesign_isPlain() {
+        XCTAssertEqual(ProfileOwnBanner.paint(of: MeeshyUser(id: "u1", username: "alice")), .plain)
     }
 
     func test_openablePhoto_withoutDesign_isTheBannerPhoto() {

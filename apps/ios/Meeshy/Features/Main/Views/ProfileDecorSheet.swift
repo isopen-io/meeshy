@@ -104,12 +104,6 @@ final class ProfileDecorModel: ObservableObject {
         publish(state.decor)
     }
 
-    /// Une photo de bannière téléversée reprend la main sur le design (comme le web) : sans ce
-    /// retrait, la nouvelle image resterait cachée dessous. Même chemin que le toucher « Aucun ».
-    func yieldBannerToUploadedPhoto() async {
-        await equip(nil, side: .banner)
-    }
-
     private func receive(_ event: ProfileDecorUpdatedEvent) {
         guard let id = userId(), event.userId == id else { return }
         accepted = event.decor
@@ -373,24 +367,30 @@ struct ProfileDecorEntry: View {
 
 // MARK: - La bannière de MON profil
 
-/// L'image de bannière de mon profil, ou la bannière de design équipée qui PRIME
-/// sur elle (#10632). Extraite de `ProfileView` : décor absent = rendu historique.
+/// L'image de bannière de mon profil — elle gagne toujours ; la bannière de design
+/// équipée ne se peint qu'en son absence (#10632, #10933).
 struct ProfileOwnBanner: View {
     let user: MeeshyUser?
     let accentColor: String
     let isDark: Bool
 
-    /// La photo que le toucher ouvre en plein écran : aucune quand un design la recouvre.
+    static func paint(of user: MeeshyUser?) -> ProfileBannerPaint {
+        ProfileDecorResolver.bannerPaint(photo: user?.banner, decor: user?.profileDecor?.banner)
+    }
+
+    /// La photo que le toucher ouvre en plein écran : celle qui est peinte, design équipé ou non.
     static func openablePhoto(of user: MeeshyUser?) -> String? {
-        ProfileDecorResolver.banner(user?.profileDecor?.banner) == nil ? user?.banner : nil
+        guard case .photo(let url) = paint(of: user) else { return nil }
+        return url
     }
 
     var body: some View {
-        if let design = ProfileDecorResolver.banner(user?.profileDecor?.banner) {
+        switch Self.paint(of: user) {
+        case .design(let design):
             BannerDesignView(design: design, isDark: isDark, accentHex: accentColor)
-        } else if let bannerURL = user?.banner, !bannerURL.isEmpty {
+        case .photo(let bannerURL):
             CachedBannerImage(urlString: bannerURL, thumbHash: user?.bannerThumbHash, fallbackColor: accentColor, height: 120)
-        } else {
+        case .plain:
             LinearGradient(
                 colors: [Color(hex: accentColor).opacity(0.3), MeeshyColors.indigo300.opacity(0.2)],
                 startPoint: .topLeading,

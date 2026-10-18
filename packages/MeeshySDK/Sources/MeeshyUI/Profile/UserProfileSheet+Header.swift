@@ -49,12 +49,13 @@ extension UserProfileSheet {
 
     var bannerSection: some View {
         ZStack(alignment: .bottom) {
-            if let design = shownBannerDesign {
-                // #10632 — une bannière de design PRIME sur l'image `banner` ; décorative, rien ne s'ouvre en plein écran.
+            switch shownBannerPaint {
+            case .design(let design):
+                // #10632, #10933 — la bannière de design ne se peint qu'en l'absence de photo ; décorative, rien ne s'ouvre.
                 BannerDesignView(design: design, isDark: theme.mode.isDark, accentHex: profileAccent)
                     .frame(height: ProfileHeaderMetrics.expandedBanner)
                     .accessibilityHidden(true)
-            } else if let bannerURL = displayUser.bannerURL, !bannerURL.isEmpty {
+            case .photo(let bannerURL):
                 // CachedAsyncImage (DiskCacheStore persistant) plutôt qu'AsyncImage :
                 // la bannière n'est téléchargée qu'une fois par installation, et le
                 // resolver interne accepte aussi les chemins relatifs du gateway.
@@ -78,7 +79,7 @@ extension UserProfileSheet {
                 .accessibilityAction {
                     openFullscreenImage(url: bannerURL, fallback: displayUser.resolvedDisplayName)
                 }
-            } else {
+            case .plain:
                 defaultBannerGradient
             }
         }
@@ -96,9 +97,9 @@ extension UserProfileSheet {
         }
     }
 
-    /// La bannière de design équipée, lue du catalogue embarqué ; `nil` ⇒ rendu historique (image, puis dégradé).
-    var shownBannerDesign: AppearanceDesign? {
-        isBlockedByTarget ? nil : ProfileDecorResolver.banner(displayUser.profileDecor?.banner)
+    /// Ce que la bannière peint (#10933) : la photo gagne toujours, le design équipé ne vient qu'à son défaut.
+    var shownBannerPaint: ProfileBannerPaint {
+        ProfileDecorResolver.bannerPaint(photo: displayUser.bannerURL, decor: isBlockedByTarget ? nil : displayUser.profileDecor?.banner)
     }
 
     /// Le contour d'avatar équipé ; `nil` ⇒ avatar nu, comme avant.

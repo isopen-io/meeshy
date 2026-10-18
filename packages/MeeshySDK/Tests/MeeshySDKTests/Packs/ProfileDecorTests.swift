@@ -213,4 +213,22 @@ final class ProfileDecorTests: XCTestCase {
         {"key":"x","stroke":{"style":"solid","width":0.03,"colors":["#6366F1"]},"ornament":{"paths":[{"d":"M0 0","color":2,"opacity":1}]}}
         """))
     }
+
+    // MARK: Ce que la bannière peint (#10933) — la photo gagne toujours
+
+    func test_bannerPaint_aPhotoAndAnEquippedDesign_paintsThePhoto() {
+        XCTAssertEqual(ProfileDecorResolver.bannerPaint(photo: "https://cdn/b.jpg", decor: item("bannieres-essentielles", "aurore")), .photo("https://cdn/b.jpg"))
+    }
+
+    func test_bannerPaint_aDesignWithoutPhoto_paintsTheDesign() {
+        let design = ProfileDecorResolver.banner(item("bannieres-essentielles", "aurore"))
+        XCTAssertNotNil(design)
+        XCTAssertEqual(ProfileDecorResolver.bannerPaint(photo: nil, decor: item("bannieres-essentielles", "aurore")), design.map(ProfileBannerPaint.design))
+        XCTAssertEqual(ProfileDecorResolver.bannerPaint(photo: "", decor: item("bannieres-essentielles", "aurore")), design.map(ProfileBannerPaint.design), "une adresse vide n'est pas une photo")
+    }
+
+    func test_bannerPaint_neitherPhotoNorDesign_paintsTheDefault() {
+        XCTAssertEqual(ProfileDecorResolver.bannerPaint(photo: nil, decor: nil), .plain)
+        XCTAssertEqual(ProfileDecorResolver.bannerPaint(photo: nil, decor: item("bannieres-essentielles", "inconnu")), .plain)
+    }
 }

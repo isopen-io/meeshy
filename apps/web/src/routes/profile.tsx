@@ -254,8 +254,6 @@ export default function ProfileScreen() {
     URL.revokeObjectURL(preview);
     setPending((current) => withoutKind(current, kind));
     setNotice({ text: imageNotice(language, kind, outcome), ...(outcome.status === 'saved' ? { bytes: outcome.bytesSent } : {}) });
-    /* Une photo téléversée prend la main sur une bannière de design : sans ce retrait, la nouvelle image resterait cachée dessous. */
-    if (kind === 'banner' && outcome.status === 'saved' && profile?.profileDecor?.banner != null) void equipDecor('banner', null);
   };
 
   const equipDecor = async (side: DecorSide, choice: ServedProfileDecorItem | null) => {

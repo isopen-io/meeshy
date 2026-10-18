@@ -170,6 +170,13 @@ public struct ProfileDecorUpdatedEvent: Decodable, Sendable, Equatable {
     }
 }
 
+/// Ce qu'une bannière de profil peint : sa photo, sinon le design équipé, sinon le dégradé par défaut.
+public enum ProfileBannerPaint: Equatable, Sendable {
+    case photo(String)
+    case design(AppearanceDesign)
+    case plain
+}
+
 /// Résolution du dessin d'un décor servi : le `builtin` se lit dans le catalogue EMBARQUÉ, sans réseau.
 /// Un pack non embarqué (contrat adressé par contenu) n'est pas encore chargé côté iOS : `nil`, le
 /// profil se peint sans décor — jamais en erreur.
@@ -182,6 +189,14 @@ public enum ProfileDecorResolver {
     public static func banner(_ item: ServedProfileDecorItem?, catalog: AppearanceCatalog = .shared) -> AppearanceDesign? {
         guard let item, isEmbedded(item) else { return nil }
         return catalog.bannerPacks.first { $0.slug == item.pack }?.designs.first { $0.key == item.item }
+    }
+
+    /// Ce que la bannière d'un profil peint (#10933) : la photo gagne TOUJOURS ; le design équipé
+    /// ne se peint qu'en l'absence de photo, et rien ne se peint sans l'un ni l'autre.
+    public static func bannerPaint(photo: String?, decor: ServedProfileDecorItem?, catalog: AppearanceCatalog = .shared) -> ProfileBannerPaint {
+        if let photo, !photo.isEmpty { return .photo(photo) }
+        if let design = banner(decor, catalog: catalog) { return .design(design) }
+        return .plain
     }
 
     private static func isEmbedded(_ item: ServedProfileDecorItem) -> Bool {

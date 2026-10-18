@@ -12,8 +12,20 @@ import { PackLottieLayer } from './pack-lottie-layer';
  * qu'un fond de conversation, cadré en 3:1 : `designToSvg` (rendu de référence
  * partagé) peint motif, dégradé ou illustration, `slice` la rogne pour remplir
  * la boîte de la bannière quel que soit son rapport. Décorative (`aria-hidden`).
- * Elle prime sur l'image `banner` quand elle est équipée ; « Photo » la retire.
+ * Elle ne se peint qu'en l'ABSENCE de photo de bannière : la photo gagne
+ * toujours (#10933) — `bannerPaint` est l'unique site de cette règle.
  */
+
+export type BannerPaint =
+  | { readonly kind: 'photo'; readonly image: string }
+  | { readonly kind: 'design'; readonly design: AppearanceDesign }
+  | { readonly kind: 'plain' };
+
+export function bannerPaint({ image, design }: { readonly image: string | null; readonly design: AppearanceDesign | null }): BannerPaint {
+  if (image !== null && image !== '') return { kind: 'photo', image };
+  if (design !== null) return { kind: 'design', design };
+  return { kind: 'plain' };
+}
 
 const BANNER_WIDTH = 600;
 const BANNER_HEIGHT = 200;

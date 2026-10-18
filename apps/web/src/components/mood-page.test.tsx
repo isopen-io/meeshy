@@ -4,6 +4,7 @@ import { afterAll, afterEach, beforeAll, describe, expect, test } from 'bun:test
 
 import { loadInterfaceCatalog } from '@/lib/i18n-catalog';
 import { loadMoodComposeCatalog } from '@/lib/i18n-mood-compose-catalog';
+import { BUILTIN_BANNER_PACKS } from '@/lib/profile-decor/catalog';
 import type { MoodPageView } from '@/lib/mood/page-view';
 import type { MoodReplyOutcome } from '@/lib/mood/reply';
 import type { RainScheduler } from '@/lib/mood/rain-dom';
@@ -119,6 +120,12 @@ describe('ce que la page peint', () => {
     expect(text?.textContent).toBe('Celebrating tonight');
     expect(text?.getAttribute('lang')).toBe('en');
     expect(host.querySelector('[data-mood-page]')?.getAttribute('aria-label')).toContain('Nour');
+  });
+
+  test('la photo de bannière gagne sur le design équipé (#10933)', () => {
+    const { host } = render({ banner: { image: '/b/nour.jpg', design: BUILTIN_BANNER_PACKS[0]!.items[0]!, ring: null } });
+    expect(host.querySelector('[data-mood-backdrop] img')?.getAttribute('src')).toContain('/b/nour.jpg');
+    expect(host.querySelector('[data-mood-backdrop] [data-banner-design]')).toBeNull();
   });
 
   test('sans bannière, un dégradé de l’accent — jamais un fond vide', () => {

@@ -9,7 +9,7 @@ import { Field } from '@/components/field';
 import { Glyph, GlyphSvg } from '@/components/glyph';
 import type { GlyphName } from '@/components/glyphs';
 import { PROFILE_GLYPHS, type ProfileGlyphName } from '@/components/glyphs-profile';
-import { ProfileBannerDesign, useScheme } from '@/components/profile-banner-design';
+import { bannerPaint, ProfileBannerDesign, useScheme } from '@/components/profile-banner-design';
 import { ProfileImageButton, useProfileImageViewer } from '@/components/profile-image-viewer';
 import {
   GroupedSection,
@@ -279,7 +279,7 @@ export function ProfileHero({
 }: {
   readonly language: InterfaceLanguage;
   readonly profile: Pick<MyProfile, 'username' | 'displayName' | 'avatar' | 'banner'>;
-  /** Le contour et la bannière de design équipés (#10632) : une bannière de design prime sur l'image, le contour entoure l'avatar. */
+  /** Le contour et la bannière de design équipés (#10632) : une bannière de design ne se peint qu'en l'absence de photo (#10933), le contour entoure l'avatar. */
   readonly decor?: DecorDesigns;
   /** La couleur d'accent du profil — la MÊME que celle que voient les autres (`authorAccentColor`), pour l'avatar sans photo et le dessin de la bannière (#10741). */
   readonly accent?: string;
@@ -296,9 +296,9 @@ export function ProfileHero({
 }) {
   const name = profile.displayName ?? profile.username;
   const scheme = useScheme();
-  const designedBanner = pending.banner === undefined ? decor.banner : null;
   const ringExtra = decor.ring === null ? 0 : (ringBoxSize(90) - 90) / 2;
   const banner = pending.banner ?? profile.banner;
+  const paint = bannerPaint({ image: banner, design: decor.banner });
   const avatar = pending.avatar ?? profile.avatar;
   /* EN PLEIN ÉCRAN AU TOUCHER (#10092) — hors édition seulement : en édition,
      toucher l'image est le geste qui la REMPLACE. */
@@ -326,9 +326,9 @@ export function ProfileHero({
         style={{ height: 120 }}
         aria-busy={pending.banner === undefined ? undefined : true}
       >
-        {designedBanner !== null ? (
-          <ProfileBannerDesign design={designedBanner} accent={accent} scheme={scheme} />
-        ) : banner === null ? (
+        {paint.kind === 'design' ? (
+          <ProfileBannerDesign design={paint.design} accent={accent} scheme={scheme} />
+        ) : paint.kind === 'plain' ? (
           <span
             aria-hidden="true"
             className="block size-full"
@@ -342,10 +342,10 @@ export function ProfileHero({
              local d'un téléversement en cours (`blob:`) traverse intact. */
           viewable('banner') ? (
             <ProfileImageButton kind="banner" onOpen={open} className="size-full">
-              <img src={attachmentSrc(banner)} alt="" className="block size-full object-cover" />
+              <img src={attachmentSrc(paint.image)} alt="" className="block size-full object-cover" />
             </ProfileImageButton>
           ) : (
-            <img src={attachmentSrc(banner)} alt="" className="block size-full object-cover" />
+            <img src={attachmentSrc(paint.image)} alt="" className="block size-full object-cover" />
           )
         )}
         {editing ? null : game}
