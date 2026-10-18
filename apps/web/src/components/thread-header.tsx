@@ -4,7 +4,7 @@ import { useStore } from 'zustand/react';
 import type { ConversationReadingMode } from '@meeshy/shared/types/reading-modes';
 
 import { ActiveMembersStack } from './active-members-stack';
-import { Avatar, HEADER_HERE_DOT_RATIO } from './avatar';
+import { Avatar } from './avatar';
 import { AvatarMenuTrigger } from './avatar-menu';
 import { PersonName } from './person-name';
 import { ChromeActionDisc, CHROME_ACTION_HIT_CLASS } from './chrome-action';
@@ -224,7 +224,7 @@ export function ThreadHeader({
   const bandToggles = avatarDoor.kind !== 'toggle' && !preview;
   const peerSignals = group
     ? {}
-    : { presence: peerPresence, here: peerHere, hereActive: peerActive, hereFocused: peerFocused, hereDotRatio: HEADER_HERE_DOT_RATIO, ...(peerMood === undefined ? {} : { mood: peerMood, ...(peerMoodPostId === undefined ? {} : { moodPostId: peerMoodPostId }) }) };
+    : { presence: peerPresence, here: peerHere, hereActive: peerActive, hereFocused: peerFocused, ...(peerMood === undefined ? {} : { mood: peerMood, ...(peerMoodPostId === undefined ? {} : { moodPostId: peerMoodPostId }) }) };
   const interfaceLanguage = currentInterfaceLanguage();
   const toggleLabel = translate(interfaceLanguage, expanded ? 'thread.header.collapse' : 'thread.header.expand');
   /* LA RECHERCHE DANS LA CONVERSATION — la loupe était un bouton SANS
