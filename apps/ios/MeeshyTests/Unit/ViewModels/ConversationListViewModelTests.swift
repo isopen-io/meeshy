@@ -4212,6 +4212,53 @@ final class ConversationListViewModelTests: XCTestCase {
 
         XCTAssertEqual(sut.typingUsers, ["conv1": "alice", "conv2": "bob"])
     }
+
+    // MARK: - Widget : une liste jamais chargée ne s'y publie pas
+
+    /// iPad multi-fenêtre : `DetachedWindowView` possède son propre `ConversationListViewModel`, qui ne
+    /// charge JAMAIS la liste. Son `[]` initial traversait le debounce et partait vers
+    /// `NotificationCoordinator.registerConversations([])` : widget, destinations de l'extension de
+    /// partage et noms locaux des notifications effacés 200 ms après chaque fenêtre détachée.
+    func test_aListThatNeverLoaded_publishesNothingToTheWidget() async throws {
+        let spy = ConvListWidgetSinkSpy()
+        let previous = NotificationCoordinator.shared.widgetSink
+        NotificationCoordinator.shared.widgetSink = spy
+        defer { NotificationCoordinator.shared.widgetSink = previous }
+        let (sut, _, _, _, _, _, _) = makeSUT()
+
+        try await Task.sleep(nanoseconds: 450_000_000)
+
+        XCTAssertEqual(sut.loadState, .idle, "précondition : la liste n'a jamais été chargée")
+        XCTAssertFalse(spy.publishedConversations.contains { $0.isEmpty },
+                       "un VM qui n'a rien chargé ne doit pas vider le widget")
+    }
+
+    func test_aLoadedList_isPublishedToTheWidget() async throws {
+        let conversation = makeConversation(id: "000000000000000000000077")
+        try await CacheCoordinator.shared.conversations.save([conversation], for: "list")
+        let spy = ConvListWidgetSinkSpy()
+        let previous = NotificationCoordinator.shared.widgetSink
+        NotificationCoordinator.shared.widgetSink = spy
+        defer { NotificationCoordinator.shared.widgetSink = previous }
+        let syncEngine = MockConversationSyncEngine()
+        syncEngine.fullSyncResult = true
+        let (sut, _, _, _, _, _, _) = makeSUT(syncEngine: syncEngine)
+
+        await sut.loadConversations()
+        try await Task.sleep(nanoseconds: 450_000_000)
+
+        XCTAssertTrue(spy.publishedConversations.contains { $0.map(\.id).contains(conversation.id) },
+                      "une liste chargée doit toujours atteindre le widget")
+    }
+}
+
+private final class ConvListWidgetSinkSpy: NotificationWidgetSink {
+    var publishedConversations: [[MeeshyConversation]] = []
+    func publishConversations(_ conversations: [MeeshyConversation]) { publishedConversations.append(conversations) }
+    func publishUnreadCount(_ count: Int) {}
+    func publishFavoriteContacts(_ conversations: [MeeshyConversation]) {}
+    func reloadTimelines() {}
+    func wipeAll() {}
 }
 
 // MARK: - ConversationUpdatedEvent factory

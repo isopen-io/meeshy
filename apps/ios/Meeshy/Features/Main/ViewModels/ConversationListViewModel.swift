@@ -1405,14 +1405,11 @@ class ConversationListViewModel: ObservableObject {
         return typers.values.sorted { ($0.displayName, $0.username) < ($1.displayName, $1.username) }.first
     }
 
-    // MARK: - Badge Sync
-    //
-    // The coordinator owns the badge + widget shared store. We simply forward the
-    // latest conversation snapshot whenever the list mutates; the coordinator debounces
-    // the downstream writes so we don't need to.
-
+    // MARK: - Badge Sync — forward each snapshot to the coordinator (badge + widget store). A list that never
+    // loaded (`.idle` : the VM of an iPad detached window) publishes NOTHING: its `[]` wiped the widget.
     private func syncBadgeOnUnreadChange() {
-        $conversations
+        $conversations.combineLatest($loadState.map { $0 != .idle }.removeDuplicates())
+            .filter(\.1).map(\.0)
             .removeDuplicates { lhs, rhs in
                 guard lhs.count == rhs.count else { return false }
                 for (a, b) in zip(lhs, rhs) where a.id != b.id || a.userState.unreadCount != b.userState.unreadCount || a.userState.isPinned != b.userState.isPinned {

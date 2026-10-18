@@ -114,6 +114,10 @@ extension CallManager {
     /// and `answerCallReady()` — both enter `.connecting` before the offer has
     /// arrived and must proactively fail (and notify the gateway) instead of
     /// hanging until the cron reaper eventually cleans up the zombie call.
+    /// Vrai entre le décroché et l'arrivée de l'offre de l'appelant : le minuteur
+    /// d'offre est armé, aucune description distante n'existe encore.
+    var isAwaitingRemoteOffer: Bool { sdpOfferTimeoutTask != nil }
+
     private func scheduleSdpOfferTimeout(callId: String) {
         sdpOfferTimeoutTask?.cancel()
         sdpOfferTimeoutTask = Task { @MainActor [weak self] in

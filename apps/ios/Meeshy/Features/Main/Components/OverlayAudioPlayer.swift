@@ -2,6 +2,7 @@ import Foundation
 import Combine
 import AVFoundation
 import MeeshySDK
+import MeeshyUI
 
 /// Le lecteur audio de l'aperçu d'appui long — un `AVPlayer` enveloppé, cache
 /// d'abord, piloté par `MessageOverlayMenu` et `MessageOverlayAudioPreview`.
@@ -35,7 +36,7 @@ import MeeshySDK
 /// > désormais l'inventaire pour que le quatrième naisse gardé.
 
 @MainActor
-final class OverlayAudioPlayer: ObservableObject {
+final class OverlayAudioPlayer: ObservableObject, StoppablePlayer {
     @Published var isPlaying = false
     @Published var progress: Double = 0
     @Published var currentTime: TimeInterval = 0
@@ -73,6 +74,9 @@ final class OverlayAudioPlayer: ObservableObject {
         sessionEventsCancellable = sessionEvents
             .receive(on: DispatchQueue.main)
             .sink { [weak self] event in self?.handleSessionEvent(event) }
+        // Exclusion mutuelle avec tout autre lecteur : sans elle, l'aperçu se superposait au vocal de la
+        // conversation, et son `stop()` rendait sous lui une session que rien ne refcompte.
+        PlaybackCoordinator.shared.registerExternal(self)
     }
 
     /// Interruption (appel, Siri, alarme) ou casque débranché : l'aperçu se met en pause ET le dit — sinon
@@ -104,6 +108,7 @@ final class OverlayAudioPlayer: ObservableObject {
             return
         }
 
+        PlaybackCoordinator.shared.willStartPlaying(external: self)
         if currentURL != url {
             stop()
             currentURL = url
