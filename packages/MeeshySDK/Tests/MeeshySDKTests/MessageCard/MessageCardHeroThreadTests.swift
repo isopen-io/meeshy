@@ -121,6 +121,18 @@ struct MessageCardHeroThreadTests {
         #expect(line.y > root.y && line.y < answer.y)
     }
 
+    @Test(arguments: MessageCardAspect.allCases)
+    func layout_aTruncatedThreadEndsOnText_neverOnASeparator(aspect: MessageCardAspect) throws {
+        let entries = (1...60).map { MessageCardThreadLine(text: "U\($0) : réponse numéro \($0)", level: 1) }
+        let reply = MessageCardPart(author: "Fil", text: entries.map(\.text).joined(separator: "\n"), thread: entries)
+        let input = MessageCardInput(quoted: nil, reply: reply, template: MessageCardTemplates.defaultID, handle: "bob",
+                                     disposition: MessageCardDisposition(aspect: aspect))
+        let card = MessageCardLayout.make(input, measure: Self.measure)
+        #expect(card.truncated)
+        let last = try #require(Self.textOps(card).last { $0.text.hasPrefix("U") || $0.text.hasPrefix("…") })
+        #expect(last.text.hasSuffix("…"), "la coupe se dit sur la dernière ligne de texte")
+    }
+
     @Test func layout_aFlatReplyHasNoSeparatorAndNoIndent() throws {
         let card = Self.layout(quoted: nil, reply: MessageCardPart(author: "Bob", text: "Magnifique !"))
         let line = try #require(Self.textOps(card).first { $0.text.hasPrefix("Magn") })

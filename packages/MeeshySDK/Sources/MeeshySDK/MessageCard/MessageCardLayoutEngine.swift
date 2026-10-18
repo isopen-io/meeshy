@@ -266,9 +266,15 @@ struct MessageCardLayoutEngine {
             let room = budget - contentHeight(bare, hasQuote: hasQuote, chrome: chrome)
             // La citation cède d'abord : au plus un tiers de la place, deux lignes au moins.
             let quoteKeep = hasQuote ? min(sized.quoteLines.count, max(2, Int(((room * 0.3) / quoteLH).rounded(.down)))) : 0
-            let replyKeep = max(1, Int(((room - Double(quoteKeep) * quoteLH) / replyLH).rounded(.down)))
+            var replyKeep = max(1, Int(((room - Double(quoteKeep) * quoteLH) / replyLH).rounded(.down)))
+            // Un fil ne se coupe pas sur la séparation d'une entrée : elle n'a pas de texte où poser « … ».
+            while replyKeep > 1, replyKeep < sized.replyLines.count, sized.replySeparators.indices.contains(replyKeep - 1), sized.replySeparators[replyKeep - 1] {
+                replyKeep -= 1
+            }
+            let lastLevel = sized.replyLevels.indices.contains(replyKeep - 1) ? sized.replyLevels[replyKeep - 1] : 0
+            let lastWidth = lastLevel == 0 ? replyWidth : max(MessageCardThread.minimumWidth, replyWidth - MessageCardThread.shift(level: lastLevel))
             sized.quoteLines = MessageCardText.truncate(sized.quoteLines, count: quoteKeep, maxWidth: quoteWidth, font: sized.quoteFont, measure: measure)
-            sized.replyLines = MessageCardText.truncate(sized.replyLines, count: replyKeep, maxWidth: replyWidth, font: sized.replyFont, measure: measure)
+            sized.replyLines = MessageCardText.truncate(sized.replyLines, count: replyKeep, maxWidth: lastWidth, font: sized.replyFont, measure: measure)
             sized.replyLevels = Array(sized.replyLevels.prefix(sized.replyLines.count))
             sized.replySeparators = Array(sized.replySeparators.prefix(sized.replyLines.count))
         }
