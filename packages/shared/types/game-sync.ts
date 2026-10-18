@@ -42,9 +42,4 @@ export const gameUpdatedEventSchema = z.object({
   game: gameBlockSchema.nullable(),
 });
 
-/**
- * Faut-il appliquer cet état ? Non seulement s'il est STRICTEMENT plus ancien que celui déjà appliqué : à révision
- * égale, les deux états sont équivalents ; une source sans révision (serveur antérieur) s'applique toujours.
- */
-export const shouldApplyGameState = (incoming: number | null | undefined, applied: number | null | undefined): boolean =>
-  typeof incoming !== 'number' || typeof applied !== 'number' || incoming >= applied;
+export { shouldApplyGameState } from './game-revision.js';

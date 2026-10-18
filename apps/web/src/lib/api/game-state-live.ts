@@ -1,7 +1,7 @@
 import type { QueryClient } from '@tanstack/react-query';
 
 import { SERVER_EVENTS } from '@meeshy/shared/types/socketio-events/event-names';
-import { shouldApplyGameState } from '@meeshy/shared/types/game-sync';
+import { shouldApplyGameState } from '@meeshy/shared/types/game-revision';
 
 import type { SocketClient } from '../net/socket';
 

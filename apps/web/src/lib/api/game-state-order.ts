@@ -1,5 +1,5 @@
 import { replaceEqualDeep } from '@tanstack/react-query';
-import { shouldApplyGameState } from '@meeshy/shared/types/game-sync';
+import { shouldApplyGameState } from '@meeshy/shared/types/game-revision';
 
 /**
  * L'ÉTAT DU JEU NE RECULE JAMAIS (#10898, #10900). Trois sources écrivent la progression en cache — la lecture
