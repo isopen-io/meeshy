@@ -14,7 +14,7 @@ import { dirname, join } from 'node:path';
 import { fileURLToPath } from 'node:url';
 import { gloryLadder, type GloryRankOrMythic } from '../../utils/game/glory.js';
 import { levelThreshold } from '../../utils/game/levels.js';
-import { effectiveMeeshPrice, mintCostFactorPermille, previewSparksMint, sparksOf } from '../../utils/game/sparks.js';
+import { effectiveMeeshPrice, mintCostFactorPermille, previewSparksMint, sparksAfterCredit, sparksAfterPrestige, sparksOf } from '../../utils/game/sparks.js';
 import { treasuryLockFor, treasuryReserveAccess } from '../../utils/game/treasury.js';
 
 const FILE = join(dirname(fileURLToPath(import.meta.url)), '..', '..', 'fixtures', 'reading-modes', 'sparks.vectors.json');
@@ -35,6 +35,8 @@ type Input =
       readonly steps?: { readonly missionsDone: number; readonly flameRecord: number; readonly glory: number; readonly rank: GloryRankOrMythic };
     }
   | { readonly law: 'treasury-access'; readonly glory: number; readonly mythic?: boolean }
+  | { readonly law: 'sparks-credit'; readonly pocket: number; readonly cycle: number; readonly lifetime: number; readonly debt: number; readonly points: number }
+  | { readonly law: 'sparks-prestige'; readonly pocket: number; readonly cycle: number; readonly lifetime: number; readonly debt: number }
   | { readonly law: 'treasury-lock'; readonly held: number; readonly glory: number; readonly mythic?: boolean };
 
 const evaluate = (input: Input): unknown => {
@@ -53,6 +55,14 @@ const evaluate = (input: Input): unknown => {
       return treasuryReserveAccess(input);
     case 'treasury-lock':
       return { lock: treasuryLockFor(input) };
+    case 'sparks-credit': {
+      const { points, law: _law, ...facts } = input;
+      return sparksAfterCredit(facts, points);
+    }
+    case 'sparks-prestige': {
+      const { law: _law, ...facts } = input;
+      return sparksAfterPrestige(facts);
+    }
   }
 };
 
@@ -104,10 +114,16 @@ const CASES: readonly { readonly _label: string; readonly input: Input }[] = [
   { _label: 'frappe : la poche (niveau 2) couvre juste le prix', input: { law: 'sparks-mint-preview', sparks: 623, mintedLifetime: 0, held: 0, glory: 0, levelCap: 499 } },
   { _label: 'frappe : il manque une étincelle', input: { law: 'sparks-mint-preview', sparks: 622, mintedLifetime: 0, held: 0, glory: 0, levelCap: 499 } },
   { _label: 'frappe : plein tarif au-delà du niveau 100, sous le plafond d\'Oracle', input: { law: 'sparks-mint-preview', sparks: levelThreshold(150) + 7, mintedLifetime: 120, held: 40, glory: minGlory('oracle', 5), levelCap: null } },
+  { _label: 'crédit sans dette : poche, cycle et total à vie montent du gain', input: { law: 'sparks-credit', pocket: 200, cycle: 9000, lifetime: 12_000, debt: 0, points: 150 } },
+  { _label: 'crédit sous une dette plus forte : la poche ne bouge pas, la dette baisse', input: { law: 'sparks-credit', pocket: 40, cycle: 900, lifetime: 1200, debt: 250, points: 150 } },
+  { _label: 'crédit qui solde la dette : le reste va en poche', input: { law: 'sparks-credit', pocket: 40, cycle: 900, lifetime: 1200, debt: 100, points: 150 } },
+  { _label: 'crédit d\'un compte d\'avant le rattrapage : le cycle se pose sur la poche', input: { law: 'sparks-credit', pocket: 800, cycle: 0, lifetime: 0, debt: 0, points: 36 } },
+  { _label: 'Prestige : poche et cycle repartent de zéro, total à vie et dette restent', input: { law: 'sparks-prestige', pocket: 1_000_200, cycle: 1_400_000, lifetime: 3_000_000, debt: 0 } },
+  { _label: 'Prestige sous une dette : elle survit au passage', input: { law: 'sparks-prestige', pocket: 1_000_200, cycle: 1_000_200, lifetime: 1_000_200, debt: 75 } },
   { _label: 'frappe : le Mythe frappe la 1000e', input: { law: 'sparks-mint-preview', sparks: levelThreshold(200), mintedLifetime: 999, held: 999, glory: 0, levelCap: null, mythic: true } },
 ];
 
-const FORMAT = '{ law, ...paramètres } — la loi des étincelles (mint-cost-factor, mint-price, sparks-of, sparks-mint-preview, treasury-access, treasury-lock). `expected` est la sortie de la loi TypeScript (utils/game/sparks.ts, treasury.ts).';
+const FORMAT = '{ law, ...paramètres } — la loi des étincelles (mint-cost-factor, mint-price, sparks-of, sparks-mint-preview, treasury-access, treasury-lock, sparks-credit, sparks-prestige). `expected` est la sortie de la loi TypeScript (utils/game/sparks.ts, treasury.ts).';
 
 const render = (): string =>
   `${JSON.stringify({ $format: FORMAT, vectors: CASES.map((c) => ({ ...c, expected: JSON.parse(JSON.stringify(evaluate(c.input))) })) }, null, 2)}\n`;
@@ -121,7 +137,7 @@ describe('sparks.vectors.json ne diverge pas de la loi', () => {
 
   it('couvre chaque loi par au moins un cas', () => {
     expect([...new Set(CASES.map((c) => c.input.law))].sort()).toEqual(
-      ['mint-cost-factor', 'mint-price', 'sparks-mint-preview', 'sparks-of', 'treasury-access', 'treasury-lock'].sort(),
+      ['mint-cost-factor', 'mint-price', 'sparks-credit', 'sparks-mint-preview', 'sparks-of', 'sparks-prestige', 'treasury-access', 'treasury-lock'].sort(),
     );
   });
 

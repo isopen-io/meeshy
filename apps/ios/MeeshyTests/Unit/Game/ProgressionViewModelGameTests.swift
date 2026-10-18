@@ -438,6 +438,47 @@ final class ProgressionViewModelGameTests: XCTestCase {
         XCTAssertEqual(engagement.fetchProgressCallCount, reads, "un état périmé ne déclenche rien")
     }
 
+    /// Recette staging du 2026-10-18 : la passerelle prend la révision de `game:updated` AVANT de relire le bloc, celle
+    /// de la frappe APRÈS — l'événement de la frappe arrive donc plus ancien que ce qu'elle a confirmé. La page
+    /// Progression restée DESSOUS (même compte, autre modèle) l'ignorait, et gardait l'état d'avant la frappe.
+    func test_gameUpdated_olderThanAMintConfirmedByAnotherPage_stillRereadsAPageLeftBehind() async {
+        let userId = "me-\(UUID().uuidString)"
+        let (below, belowService) = makeSibling(userId: userId, served: (minted: 12, revision: 100))
+        await below.load(forceNetwork: true)
+        let (minting, mintingService) = makeSibling(userId: userId, served: (minted: 12, revision: 100))
+        await minting.load(forceNetwork: true)
+        let after = GameFixture.snapshot(GameFixture.game(minted: 13), meesh: GameFixture.meesh(minted: 13))
+        let served = APIEngagementProgress(counters: after.counters, milestones: after.milestones, streak: after.streak,
+                                           level: after.level, meesh: after.meesh, game: after.game, gameRevision: 950)
+        mintingService.fetchProgressResult = .success(served)
+        mintingService.mintResult = .success(APIMeeshMintResult(status: "minted", balance: 10, mintedLifetime: 13, gameRevision: 900))
+        await minting.mint()
+        belowService.fetchProgressResult = .success(served)
+        let expected = served.game?.mint.number
+
+        below.receive(GameUpdatedEvent(gameRevision: 899, reason: "mint", game: GameFixture.game(minted: 13)))
+
+        for _ in 0..<40 where below.game?.mint.number != expected {
+            try? await Task.sleep(nanoseconds: 50_000_000)
+        }
+        XCTAssertEqual(below.game?.mint.number, expected, "la page d'en dessous montre la Meesh SUIVANTE, jamais celle déjà frappée")
+        XCTAssertEqual(below.snapshot?.meesh?.mintedLifetime, 13)
+    }
+
+    private func makeSibling(userId: String, served: (minted: Int, revision: Int)) -> (ProgressionViewModel, MockEngagementProgressService) {
+        let engagement = MockEngagementProgressService()
+        let base = GameFixture.snapshot(GameFixture.game(minted: served.minted), meesh: GameFixture.meesh(minted: served.minted))
+        engagement.fetchProgressResult = .success(APIEngagementProgress(
+            counters: base.counters, milestones: base.milestones, streak: base.streak, level: base.level,
+            meesh: base.meesh, game: base.game, gameRevision: served.revision
+        ))
+        let sut = ProgressionViewModel(
+            service: engagement, gameService: MockGameService(), networkMonitor: FakeNetworkMonitor(isOnline: true),
+            currentUserId: userId, notebook: MockGamePhotoNotebook()
+        )
+        return (sut, engagement)
+    }
+
     func test_gameUpdated_isDecodedFromTheSocketPayload_toleratingAnUnreadableBlock() throws {
         let data = Data(#"{"gameRevision":1792000000789,"reason":"credit","game":{"unexpected":true}}"#.utf8)
         let event = try JSONDecoder().decode(GameUpdatedEvent.self, from: data)

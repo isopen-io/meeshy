@@ -24,31 +24,66 @@ enum SyncPillDotStyle: Equatable, Sendable {
 /// The view layer (`SyncPill`) is agnostic to the entry's origin — it
 /// just rotates through the array, renders the label, and forwards taps
 /// when `source != nil`.
-/// Métriques partagées de la pastille — la hauteur qu'elle occupe. Sa POSITION
+/// Métriques partagées de la pastille — la taille qu'elle prend. Sa POSITION
 /// ne vit pas ici : c'est `SyncPillPlacement` qui la décide, pour tous ses
 /// points de montage (#10840).
-enum SyncPillMetrics {
-    /// Hauteur de la capsule AVANT #10371 — l'unité dans laquelle le porteur a
-    /// exprimé l'agrandissement.
-    nonisolated static let formerHeight: CGFloat = 22
-
+///
+/// **Deux tailles, et la frappe seule ouvre la grande** (#10893, porteur
+/// 2026-10-17 : « la taille du syncPill doit être diminuée, et la taille
+/// actuelle affichée UNIQUEMENT lorsqu'on a des frappes d'amis en cours dans
+/// les conversations communes »). Au repos — envoi, synchronisation, hors
+/// ligne — la pastille reprend ses mesures d'avant #10371 ; une entrée de
+/// frappe lui rend l'agrandissement ×1,6 de #10371.
+nonisolated struct SyncPillMetrics: Equatable, Sendable {
     /// Hauteur rendue de la capsule, à la taille de texte par défaut : ligne de
-    /// `labelSize` (~18 pt) + `verticalPadding` des deux côtés. 1,6 × les 22 pt
-    /// d'avant (#10371, retour porteur 2026-10-12 : « augmenter sa taille
-    /// d'environ 1,6 fois ») ; Dynamic Type la fait grandir au-delà.
-    nonisolated static let height: CGFloat = 35
+    /// `labelSize` + `verticalPadding` des deux côtés ; Dynamic Type la fait
+    /// grandir au-delà.
+    let height: CGFloat
+    let labelSize: CGFloat
+    let counterSize: CGFloat
+    let glyphSize: CGFloat
+    let dotDiameter: CGFloat
+    let verticalPadding: CGFloat
+    let horizontalPadding: CGFloat
+    let itemSpacing: CGFloat
+    let maxTextWidth: CGFloat
 
-    /// Les mesures qui font cette hauteur, chacune ≈ 1,6 × celle d'avant
-    /// (texte 11 → 15, compteur 10 → 14, glyphe 11 → 16, point 6 → 10,
-    /// marges 4 → 8 et 10 → 16).
-    nonisolated static let labelSize: CGFloat = MeeshyFont.bodySize
-    nonisolated static let counterSize: CGFloat = MeeshyFont.labelSize
-    nonisolated static let glyphSize: CGFloat = MeeshyFont.calloutSize
-    nonisolated static let dotDiameter: CGFloat = 10
-    nonisolated static let verticalPadding: CGFloat = MeeshySpacing.sm
-    nonisolated static let horizontalPadding: CGFloat = MeeshySpacing.lg
-    nonisolated static let itemSpacing: CGFloat = MeeshySpacing.sm
-    nonisolated static let maxTextWidth: CGFloat = 220
+    /// La pastille d'avant #10371 (22 pt).
+    static let compact = SyncPillMetrics(
+        height: 22,
+        labelSize: MeeshyFont.footnoteSize,
+        counterSize: MeeshyFont.captionSize,
+        glyphSize: MeeshyFont.footnoteSize,
+        dotDiameter: 6,
+        verticalPadding: MeeshySpacing.xs,
+        horizontalPadding: MeeshySpacing.smPlus,
+        itemSpacing: MeeshySpacing.xsPlus,
+        maxTextWidth: 160
+    )
+
+    /// L'agrandissement ×1,6 de #10371 (retour porteur 2026-10-12), réservé à
+    /// la frappe depuis #10893.
+    static let typing = SyncPillMetrics(
+        height: 35,
+        labelSize: MeeshyFont.bodySize,
+        counterSize: MeeshyFont.labelSize,
+        glyphSize: MeeshyFont.calloutSize,
+        dotDiameter: 10,
+        verticalPadding: MeeshySpacing.sm,
+        horizontalPadding: MeeshySpacing.lg,
+        itemSpacing: MeeshySpacing.sm,
+        maxTextWidth: 220
+    )
+
+    /// La grande taille tant qu'au moins une entrée dit qu'un contact écrit
+    /// (`typing.<conversationId>`, posée par `ConnectionBanner.typingEntries`),
+    /// la compacte sinon.
+    static func `for`(entries: [SyncPillEntry]) -> SyncPillMetrics {
+        let someoneTypes = entries.contains {
+            TypingAnnouncementLaw.conversationId(fromEntryId: $0.id) != nil
+        }
+        return someoneTypes ? .typing : .compact
+    }
 }
 
 struct SyncPillEntry: Identifiable, Equatable, Sendable {
@@ -279,6 +314,9 @@ struct SyncPill: View {
 
     private var isDark: Bool { colorScheme == .dark }
 
+    /// Compacte au repos, grande pendant une frappe (#10893).
+    private var metrics: SyncPillMetrics { .for(entries: entries) }
+
     /// Entry shown right now. Clamped against `entries.count` so a list
     /// that shrinks between two SwiftUI updates doesn't crash the subscript.
     private var visibleEntry: SyncPillEntry? {
@@ -393,25 +431,27 @@ struct SyncPill: View {
 
     @ViewBuilder
     private var pillContent: some View {
-        HStack(spacing: SyncPillMetrics.itemSpacing) {
+        HStack(spacing: metrics.itemSpacing) {
             statusDot
             labelText
                 .transition(.opacity.combined(with: .move(edge: .top)))
                 .id(visibleEntry?.id ?? "empty")
             if entries.count > 1 {
                 Text("\(min(rotator.currentIndex + 1, entries.count))/\(entries.count)")
-                    .font(MeeshyFont.relative(SyncPillMetrics.counterSize, weight: .regular))
+                    .font(MeeshyFont.relative(metrics.counterSize, weight: .regular))
                     .foregroundStyle(isDark ? .white.opacity(0.45) : .primary.opacity(0.4))
                     .monospacedDigit()
             }
         }
-        .padding(.horizontal, SyncPillMetrics.horizontalPadding)
-        .padding(.vertical, SyncPillMetrics.verticalPadding)
+        .padding(.horizontal, metrics.horizontalPadding)
+        .padding(.vertical, metrics.verticalPadding)
         .background(
             Capsule()
                 .fill(capsuleBackground)
                 .shadow(color: Color.black.opacity(isDark ? 0.35 : 0.12), radius: 6, x: 0, y: 2)
         )
+        // Le passage compacte ⇄ grande (#10893) se fait en douceur, jamais d'un saut.
+        .animation(reduceMotion ? nil : .spring(response: 0.3, dampingFraction: 0.85), value: metrics)
         // **La pastille enfle au début d'une frappe, puis redescend** (#6188,
         // directive porteur 2026-09-12 ; amplitude ×1,1 depuis #10840).
         //
@@ -467,7 +507,7 @@ struct SyncPill: View {
     /// borne jusqu'au bord de l'écran. Le compteur `i/n` (sibling dans
     /// `pillContent`) reste HORS de cette contrainte : elle porte
     /// uniquement sur le `Text` du label.
-    private static let maxTextWidth: CGFloat = SyncPillMetrics.maxTextWidth
+    private var maxTextWidth: CGFloat { metrics.maxTextWidth }
 
     private var textColor: Color {
         isDark ? .white.opacity(0.7) : .primary.opacity(0.6)
@@ -479,7 +519,7 @@ struct SyncPill: View {
         let showsDots = visibleEntry?.showsActivityDots == true
         // La mesure porte sur `label` SEUL — jamais avec les points d’activité,
         // qui change 2×/s et ferait osciller la décision de défilement.
-        let scrolls = !reduceMotion && SyncPillMarquee.shouldScroll(textWidth: measuredLabelWidth, availableWidth: Self.maxTextWidth)
+        let scrolls = !reduceMotion && SyncPillMarquee.shouldScroll(textWidth: measuredLabelWidth, availableWidth: maxTextWidth)
 
         Group {
             if scrolls {
@@ -487,12 +527,12 @@ struct SyncPill: View {
                 // ce qui borne la fenêtre visible pendant que le Text (fixedSize,
                 // donc plus large que le viewport) glisse dessous via `offset`.
                 Text(label)
-                    .font(MeeshyFont.relative(SyncPillMetrics.labelSize, weight: .medium))
+                    .font(MeeshyFont.relative(metrics.labelSize, weight: .medium))
                     .foregroundStyle(textColor)
                     .lineLimit(1)
                     .fixedSize()
                     .offset(x: marqueeOffset)
-                    .frame(width: Self.maxTextWidth, alignment: .leading)
+                    .frame(width: maxTextWidth, alignment: .leading)
                     .clipped()
             } else {
                 // Pas de largeur imposée ici — un label court doit garder sa
@@ -513,7 +553,7 @@ struct SyncPill: View {
                             }
                     }
                 }
-                .font(MeeshyFont.relative(SyncPillMetrics.labelSize, weight: .medium))
+                .font(MeeshyFont.relative(metrics.labelSize, weight: .medium))
                 .foregroundStyle(textColor)
                 .lineLimit(1)
             }
@@ -523,7 +563,7 @@ struct SyncPill: View {
             // qui est affiché (défilant ou non) — toujours à jour pour la
             // PROCHAINE entrée de la rotation.
             Text(label)
-                .font(MeeshyFont.relative(SyncPillMetrics.labelSize, weight: .medium))
+                .font(MeeshyFont.relative(metrics.labelSize, weight: .medium))
                 .lineLimit(1)
                 .fixedSize()
                 .hidden()
@@ -544,7 +584,7 @@ struct SyncPill: View {
             marqueeOffset -= step
             let gap: CGFloat = 24
             if marqueeOffset < -(measuredLabelWidth + gap) {
-                marqueeOffset = Self.maxTextWidth
+                marqueeOffset = maxTextWidth
             }
         }
         .adaptiveOnChange(of: scrolls) { _, newValue in
@@ -589,13 +629,13 @@ struct SyncPill: View {
     private var statusDot: some View {
         if let iconName = visibleEntry?.iconName {
             Image(systemName: iconName)
-                .font(MeeshyFont.relative(SyncPillMetrics.glyphSize, weight: .semibold))
+                .font(MeeshyFont.relative(metrics.glyphSize, weight: .semibold))
                 .foregroundStyle(dotForeground)
                 .opacity(pulseOpacity)
                 .animation(reduceMotion ? nil : Self.pulseCurve, value: dotPhase)
         } else {
             dotShape
-                .frame(width: SyncPillMetrics.dotDiameter, height: SyncPillMetrics.dotDiameter)
+                .frame(width: metrics.dotDiameter, height: metrics.dotDiameter)
                 .opacity(pulseOpacity)
                 .animation(reduceMotion ? nil : Self.pulseCurve, value: dotPhase)
         }

@@ -290,16 +290,32 @@ final class ProgressionViewModel: ObservableObject {
     }
 
     /// `game:updated` (#10900) — une frappe, un gain, une reprise faits AILLEURS. Un état plus ancien que ce qui est
-    /// confirmé est ignoré ; sinon il relève le plancher, se pose aussitôt quand aucun geste n'est en vol (un geste en vol
+    /// confirmé ne se pose pas ; sinon il relève le plancher, se pose aussitôt quand aucun geste n'est en vol (un geste en vol
     /// relit lui-même), et la progression entière (solde, compteurs) se relit derrière, en silence.
+    ///
+    /// Le plancher est celui du PROCESSUS : la passerelle date l'événement d'une frappe AVANT de relire le bloc, la frappe
+    /// APRÈS — l'événement arrive donc plus ancien que la frappe confirmée par une autre page. La page restée dessous, qui
+    /// montre encore l'état d'avant, se relit quand même : sinon elle le garderait jusqu'à sa prochaine lecture.
     func receive(_ event: GameUpdatedEvent) {
         let floor = Self.confirmed[cacheKey] ?? GameReadOrder.Confirmed()
-        guard GameReadOrder.isCurrent(servedRevision: event.gameRevision, servedMinted: nil, confirmed: floor) else { return }
+        guard GameReadOrder.isCurrent(servedRevision: event.gameRevision, servedMinted: nil, confirmed: floor) else {
+            if showsAnOlderStateThan(floor) { Task { await load(forceNetwork: true) } }
+            return
+        }
         confirm(revision: event.gameRevision, minted: nil)
         if isSettled, let game = event.game, let snapshot {
             commit(GameState(game: game, meesh: snapshot.meesh), over: snapshot)
         }
         Task { await load(forceNetwork: true) }
+    }
+
+    /// Vrai si la charge affichée est EN RETARD sur ce que le processus a confirmé — une frappe confirmée ailleurs. Une
+    /// charge optimiste (geste en vol) n'est jamais en retard : son geste relit lui-même.
+    private func showsAnOlderStateThan(_ floor: GameReadOrder.Confirmed) -> Bool {
+        guard isSettled, let snapshot else { return false }
+        return !GameReadOrder.isCurrent(
+            servedRevision: snapshot.gameRevision, servedMinted: snapshot.meesh?.mintedLifetime, confirmed: floor
+        )
     }
 
     /// Ce que la passerelle confirme — une frappe, une lecture posée — relève le plancher : rien d'antérieur ne le défait.
