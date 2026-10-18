@@ -41,6 +41,18 @@ public enum PrestigeTransition: Sendable, Equatable {
 }
 
 public enum GamePrestige {
+    /// LE RECORD DU CYCLE QUE LE PRESTIGE CLÔT (#10911) — miroir de `closedCycleRecord` : le plus haut du record gravé et
+    /// du niveau, jamais sous le niveau du Prestige (le passage l'exige).
+    public static func closedCycleRecord(levelRecord: Int?, level: Int) -> Int {
+        max(GameLevels.prestigeLevel, levelRecord ?? 0, level)
+    }
+
+    /// Les records des cycles clos après un Prestige — miroir de `pastCycleRecordsAfterPrestige` : l'optimiste rejoue
+    /// l'écriture de la passerelle. Devant un serveur qui ne les sert pas (`nil`), rien ne s'invente.
+    public static func pastCycleRecordsAfterPrestige(_ pastCycleRecords: [Int]?, levelRecord: Int?, level: Int) -> [Int]? {
+        pastCycleRecords.map { $0 + [closedCycleRecord(levelRecord: levelRecord, level: level)] }
+    }
+
     /// Le niveau 100 demande un million de points ET ses dix étapes (#9706) : le record prouve les étapes,
     /// le score en poche prouve les points.
     public static func transition(score: Int, prestige: Int, levelRecord: Int?) -> PrestigeTransition {

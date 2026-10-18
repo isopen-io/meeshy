@@ -90,7 +90,8 @@ enum GameOptimistic {
         }
         let level = GameLevelWire.level(score: score, levelCap: levelCap, levelRecord: game.level.shown.record,
                                          prestige: game.level.prestige, steps: steps, sparks: sparks,
-                                         levelMaxLifetime: game.level.levelMaxLifetime)
+                                         levelMaxLifetime: game.level.levelMaxLifetime,
+                                         pastCycleRecords: game.level.ladder?.pastCycleRecords)
         let preview = GameLevelWire.mint(nextPreview(after: game, pocket: score, debitable: debitable, glory: glory,
                                                      levelCap: levelCap, steps: steps))
         let minted = game.replacing(
@@ -186,7 +187,8 @@ enum GameOptimistic {
         let steps = game.levelStepFacts
         let level = GameLevelWire.level(score: sparks?.pocket ?? score, levelCap: levelCap,
                                          levelRecord: game.level.shown.record, prestige: game.level.prestige, steps: steps,
-                                         sparks: sparks, levelMaxLifetime: game.level.levelMaxLifetime)
+                                         sparks: sparks, levelMaxLifetime: game.level.levelMaxLifetime,
+                                         pastCycleRecords: game.level.ladder?.pastCycleRecords)
         // Le coffre fait MONTER le niveau : l'écart au record se relit exactement, par la loi du bloc (#10896).
         let tailwind = sparks == nil
             ? GameBoosts.tailwind(level: level.shown.level, levelRecord: level.shown.record)

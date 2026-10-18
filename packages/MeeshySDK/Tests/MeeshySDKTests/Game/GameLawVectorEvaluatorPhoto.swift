@@ -35,8 +35,11 @@ extension GameLawVectorEvaluator {
             object(["kind": .string("start")])
         case .rank(let rank, let division):
             object(["kind": .string("rank"), "rank": .string(rank.rawValue), "division": .optionalInt(division?.rawValue)])
-        case .tier(let tier, let level):
-            object(["kind": .string("tier"), "tier": .string(tier.rawValue), "level": .int(level)])
+        case .tier(let tier, let level, let prestige, let times):
+            object([
+                "kind": .string("tier"), "tier": .string(tier.rawValue), "level": .int(level),
+                "prestige": .int(prestige), "times": .int(times),
+            ])
         case .levelHundred:
             object(["kind": .string("level-hundred"), "prestige": .int(0)])
         case .prestige(let number):
@@ -85,7 +88,7 @@ extension GameLawVectorEvaluator {
         for (key, value) in served { block[key] = value.foundationValue }
         let game = try JSONDecoder().decode(GameBlock.self, from: try JSONSerialization.data(withJSONObject: block))
         let standing = PhotoCatchUpStanding(game: game)
-        return object([
+        var fields: [String: GameJSON] = [
             "rank": .string(standing.rank.rawValue),
             "division": .optionalInt(standing.division?.rawValue),
             "levelRecord": .int(standing.levelRecord),
@@ -93,7 +96,10 @@ extension GameLawVectorEvaluator {
             "minted": .int(standing.minted),
             "treasuryTier": .optionalString(standing.treasuryTier?.rawValue),
             "flameRecord": .int(standing.flameRecord),
-        ])
+        ]
+        // Absent devant un serveur qui ne le sert pas, comme `catchUpStandingOf` (#10911).
+        if let past = standing.pastCycleRecords { fields["pastCycleRecords"] = .array(past.map(GameJSON.int)) }
+        return object(fields)
     }
 }
 

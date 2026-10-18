@@ -83,7 +83,8 @@ extension GameLawVectorEvaluator {
             prestige: int(json, "prestige"),
             minted: int(json, "minted"),
             treasuryTier: try optionalString(json, "treasuryTier").map(treasuryTier),
-            flameRecord: int(json, "flameRecord")
+            flameRecord: int(json, "flameRecord"),
+            pastCycleRecords: json["pastCycleRecords"].isNull ? nil : json["pastCycleRecords"].arrayValue.compactMap(\.intValue)
         )
     }
 

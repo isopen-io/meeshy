@@ -89,4 +89,25 @@ final class GamePhotoMomentsTests: XCTestCase {
         let game = GameFixture.game(score: GameLevels.threshold(of: 1_050), glory: 400_000)
         XCTAssertEqual(GamePhotoMoments.fromCard(key: .newTier, game: game)?.emblem, .tier(.singularite, level: 1000))
     }
+
+    // MARK: - Un palier atteint de nouveau après un Prestige se photographie de nouveau (#10911)
+
+    func test_tier_reachedAgainInANewCycle_isANewMomentTitledWithTheTimesReached() {
+        let first = GamePhotoMoments.tier(.lueur, level: 10)
+        let again = GamePhotoMoments.tier(.lueur, level: 10, prestige: 2, times: 3)
+        XCTAssertEqual(first.id, "tier:lueur")
+        XCTAssertFalse(first.title.contains("×"))
+        XCTAssertEqual(again.id, "tier:lueur:2")
+        XCTAssertEqual(again.title, "\(first.title) ×3")
+        XCTAssertEqual(again.emblem, .tier(.lueur, level: 10))
+    }
+
+    func test_fromCard_theNewTierCardAfterAPrestige_namesTheTierOfTheCycle() {
+        let score = GameLevels.threshold(of: 12)
+        let level = GameLevelWire.level(score: score, levelCap: 499, levelRecord: 12, prestige: 1, pastCycleRecords: [100])
+        let game = GameFixture.game(score: score).replacing(level: level)
+        let moment = GamePhotoMoments.fromCard(key: .newTier, game: game)
+        XCTAssertEqual(moment?.id, "tier:lueur:1")
+        XCTAssertEqual(moment?.title.hasSuffix("×2"), true)
+    }
 }
