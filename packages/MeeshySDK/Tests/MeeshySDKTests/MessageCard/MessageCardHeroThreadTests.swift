@@ -40,8 +40,10 @@ struct MessageCardHeroThreadTests {
     }
 
     @Test func span_isFullWidthMinusTheMargin_orTheTextColumnBesideAVerticalHeader() {
-        #expect(MessageCardHero.span(canvasWidth: 1080, verticalHeader: false, textLeft: 96, textWidth: 888) == (48, 984))
-        #expect(MessageCardHero.span(canvasWidth: 1080, verticalHeader: true, textLeft: 208, textWidth: 776) == (208, 776))
+        let full = MessageCardHero.span(canvasWidth: 1080, verticalHeader: false, textLeft: 96, textWidth: 888)
+        #expect(full.x == 48 && full.width == 984)
+        let column = MessageCardHero.span(canvasWidth: 1080, verticalHeader: true, textLeft: 208, textWidth: 776)
+        #expect(column.x == 208 && column.width == 776)
     }
 
     // MARK: - Le hero sur la carte

@@ -282,7 +282,7 @@ final class PostCommentCardCompositionTests: XCTestCase {
     func test_subject_theCommentCardInputCarriesTheHeroToTheDisposition() throws {
         let source = Self.source(post: Self.makePost(media: [Self.photo]), target: Self.root)
         let subject = try XCTUnwrap(Self.subject(source, .postAndComment))
-        let input = MessageCardInput.of(subject: subject, format: .standard, handle: "moi", conversationTitle: nil, anonymousLabel: "Anonyme",
+        let input = MessageCardInput.of(subject: subject, format: .initial, handle: "moi", conversationTitle: nil, anonymousLabel: "Anonyme",
                                         formatDate: { _ in "" })
         XCTAssertEqual(input.disposition.heroMediaID, "pic")
         XCTAssertEqual(input.disposition.heroVisual(of: input.media)?.id, "pic")

@@ -311,7 +311,7 @@ public enum PostCommentCardComposition {
             guard !disappears(post) else { return nil }
             return Support(
                 author: post.author, authorId: post.authorId, username: post.authorUsername,
-                text: MessageCardText.nonBlank(source.read(post.displayContent)).map(excerpt),
+                text: MessageCardText.nonBlank(source.read(post.displayContent)).map { excerpt($0) },
                 timestamp: post.timestamp, media: postMedia(of: post)
             )
         }
@@ -320,7 +320,7 @@ public enum PostCommentCardComposition {
         if story.hasCanvas, story.heroMedia(now: source.now) == nil { return nil }
         return Support(
             author: story.author, authorId: story.authorId, username: story.authorUsername,
-            text: MessageCardText.nonBlank(story.text.map(source.read)).map(excerpt),
+            text: MessageCardText.nonBlank(story.text.map(source.read)).map { excerpt($0) },
             timestamp: story.timestamp, media: story.heroMedia(now: source.now).map { [$0] } ?? []
         )
     }
