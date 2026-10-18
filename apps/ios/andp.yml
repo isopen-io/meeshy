@@ -142,7 +142,12 @@ store:
     violenceCartoonOrFantasy: NONE
     violenceRealistic: NONE
     violenceRealisticProlongedGraphicOrSadistic: NONE
-    ageRatingOverrideV2: NONE
+    # 13+ (#9927) : Meeshy refuse les comptes de moins de 13 ans révolus
+    # (date de naissance déclarée à l'inscription, isBelowMinimumAge). Le
+    # questionnaire seul rendait 4+, incohérent pour une messagerie entre
+    # inconnus au contenu public ; la surclassification aligne la fiche sur
+    # la règle du produit.
+    ageRatingOverrideV2: THIRTEEN_PLUS
     koreaAgeRatingOverride: NONE
 
   # Accessibility Nutrition Labels : seul ce qui est vérifié dans apps/ios.
