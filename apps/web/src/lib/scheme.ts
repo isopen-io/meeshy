@@ -27,8 +27,7 @@ function applyScheme(scheme: ColorScheme): void {
   const light = scheme === 'light';
   document.documentElement.classList.toggle('light', light);
   document.documentElement.classList.toggle('dark', !light);
-  syncBrowserBar(scheme);
-  syncShellSystemBars();
+  syncBars();
 }
 
 /**
@@ -73,8 +72,18 @@ function themeColorOf(scheme: ColorScheme): string | null {
  */
 let mediaSurfaces = 0;
 
-function syncShellSystemBars(): void {
+/**
+ * ET LE NAVIGATEUR SUIT LA COQUE (#10922) : la PWA installée prend sa barre
+ * d'état de `theme-color`, et Chrome Android sa barre d'outils. Les deux
+ * barres lisent le même schéma.
+ */
+function syncBars(): void {
   const scheme: ColorScheme = mediaSurfaces > 0 ? 'dark' : currentScheme();
+  syncBrowserBar(scheme);
+  syncShellSystemBars(scheme);
+}
+
+function syncShellSystemBars(scheme: ColorScheme): void {
   const color = themeColorOf(scheme);
   const coque = coqueCourante();
   const paint = appelNatif(coque, 'MeeshySystemBars');
@@ -90,16 +99,16 @@ function syncShellSystemBars(): void {
   });
 }
 
-/** Tient la barre de la coque en schéma sombre jusqu'à l'appel de la fonction rendue. */
+/** Tient les barres de la coque et du navigateur en schéma sombre jusqu'à l'appel de la fonction rendue. */
 export function holdMediaSystemBars(): () => void {
   mediaSurfaces += 1;
-  if (mediaSurfaces === 1) syncShellSystemBars();
+  if (mediaSurfaces === 1) syncBars();
   let held = true;
   return () => {
     if (!held) return;
     held = false;
     mediaSurfaces -= 1;
-    if (mediaSurfaces === 0) syncShellSystemBars();
+    if (mediaSurfaces === 0) syncBars();
   };
 }
 
@@ -164,8 +173,7 @@ export function setThemePreference(preference: ThemePreference): void {
  * seul basculement systeme suffirait a arreter tout suivi ulterieur.
  */
 export function followSystem(): () => void {
-  syncBrowserBar(currentScheme());
-  syncShellSystemBars();
+  syncBars();
   const query = window.matchMedia('(prefers-color-scheme: light)');
   const onSchemeChange = (e: MediaQueryListEvent) => {
     if (currentThemePreference() === 'system') applyScheme(e.matches ? 'light' : 'dark');
