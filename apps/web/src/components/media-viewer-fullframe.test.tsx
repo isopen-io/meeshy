@@ -200,4 +200,21 @@ describe('MediaViewer — clavier', () => {
     act(() => void button.dispatchEvent(new KeyboardEvent('keydown', { key: ' ', bubbles: true, cancelable: true })));
     expect(playbackCalls.length).toBe(before);
   });
+
+  test('Espace sur un bouton du chrome (Fermer) lui laisse son activation : la lecture ne bascule pas', async () => {
+    const dialog = await mount([clip('v')]);
+    const close = topBar(dialog).querySelector<HTMLElement>('button')!;
+    const before = playbackCalls.length;
+    const event = new KeyboardEvent('keydown', { key: ' ', bubbles: true, cancelable: true });
+    act(() => void close.dispatchEvent(event));
+    expect(playbackCalls.length).toBe(before);
+    expect(event.defaultPrevented).toBe(false);
+  });
+
+  test('Espace sur la visionneuse elle-même bascule la lecture', async () => {
+    const dialog = await mount([clip('v')]);
+    const before = playbackCalls.length;
+    key(dialog, ' ');
+    expect(playbackCalls.length).toBe(before + 1);
+  });
 });

@@ -184,6 +184,13 @@ export const NEAR_END_PAGES = 3;
 
 const CLICK_AFTER_HOLD_MS = 700;
 
+const SPACE_OWNERS = 'button, a[href], input, textarea, select, [role="slider"], [role="checkbox"], [role="button"], [contenteditable="true"]';
+
+/** Un contrôle focalisé garde Espace pour son activation native : la lecture ne bascule que depuis la scène. */
+function ownsSpace(target: EventTarget | null): boolean {
+  return target instanceof Element && target.closest(SPACE_OWNERS) !== null;
+}
+
 function clampIndex(index: number, count: number): number {
   return Math.max(0, Math.min(count - 1, index));
 }
@@ -581,6 +588,7 @@ export default function MediaViewer({
       return;
     }
     if (e.key === ' ') {
+      if (ownsSpace(e.target)) return;
       if (activePlayToggleRef.current !== null) {
         e.preventDefault();
         activePlayToggleRef.current();
