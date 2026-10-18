@@ -92,6 +92,7 @@ export function appearancePrisma() {
   };
 
   const user = {
+    findUnique: async ({ where }: { where: { id: string } }) => users.get(where.id) ?? null,
     update: async ({ where, data }: { where: { id: string }; data: Record<string, unknown> }) => {
       users.set(where.id, { ...(users.get(where.id) ?? {}), ...data });
       return users.get(where.id);
