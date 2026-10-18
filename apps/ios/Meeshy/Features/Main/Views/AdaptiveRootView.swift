@@ -101,8 +101,6 @@ struct AdaptiveRootView: View {
                 RootView()
             }
         }
-        // La taille de CETTE fenêtre, pour ses vues (Stage Manager, Split View) — pas celle de la fenêtre clé.
-        .publishingSceneWindowSize()
         .environment(\.rootNavigationHandoff, navigationHandoff)
         // Le composer de story démonté avec sa racine (compact ↔ regular) : son brouillon est tenu ICI, au-dessus
         // des deux racines, jusqu'à ce que la suivante le rouvre (`RootIntentRoutingLayer`).
@@ -534,8 +532,6 @@ struct DetachedWindowView: View {
         // racines (#10543) : sans elle ses feuilles s'inscrivaient « de toute
         // fenêtre », et la principale les refermait en ouvrant une conversation.
         .environment(\.presentedSurfaceScope, router.surfaceScope)
-        // Le plus à l'extérieur, comme la portée : ses feuilles et couvertures lisent la taille de CETTE fenêtre.
-        .publishingSceneWindowSize()
     }
 
     // MARK: - Conversation

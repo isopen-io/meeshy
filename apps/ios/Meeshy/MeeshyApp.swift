@@ -760,6 +760,9 @@ struct MeeshyApp: App {
                 }
             }
             }
+            // La taille de CETTE fenêtre (Stage Manager, Split View), publiée au-dessus de tout ce qu'elle porte :
+            // feuilles, couvertures, toasts et barrière d'âge la lisent aussi.
+            .publishingSceneWindowSize()
         }
 
         // Les fenêtres DÉTACHÉES (iPad) : une conversation, ou le fil de réels, à côté de la fenêtre principale.
@@ -773,6 +776,7 @@ struct MeeshyApp: App {
                 .environmentObject(authManager)
                 .environmentObject(deepLinkRouter)
                 .preferredColorScheme(theme.preferredColorScheme)
+                .publishingSceneWindowSize()
         }
         .handlesExternalEvents(matching: [DetachedWindowOpener.activityIdentifier])
     }

@@ -10,10 +10,32 @@ final class SceneWindowSizeWiringGuardTests: XCTestCase {
 
     private func source(_ path: String) throws -> String { try AppSourceGuard.unit(path) }
 
-    func test_everyWindowRoot_publishesItsOwnSize() throws {
-        let roots = try source("Meeshy/Features/Main/Views/AdaptiveRootView.swift")
-        let publications = roots.components(separatedBy: ".publishingSceneWindowSize()").count - 1
-        XCTAssertGreaterThanOrEqual(publications, 2, "la fenêtre principale ET la fenêtre détachée publient leur taille")
+    /// Publiée le plus à l'EXTÉRIEUR de chaque `WindowGroup` (cycle 8) : posée sous `AdaptiveRootView`, la
+    /// publication laissait hors de portée les feuilles et couvertures montées plus haut (`MeeshyApp` : feuille de
+    /// lien, couvertures visiteur et invité, feuille de plantage, toasts, barrière d'âge) — elles retombaient sur la
+    /// fenêtre clé.
+    func test_everyWindowGroup_publishesItsSize_outermost() throws {
+        let app = AppSourceGuard.stripComments(try source("Meeshy/MeeshyApp.swift"))
+            .split(separator: "\n", omittingEmptySubsequences: false)
+            .filter { !$0.trimmingCharacters(in: .whitespaces).isEmpty }
+            .joined(separator: "\n") + "\n"
+        XCTAssertTrue(app.contains("""
+                }
+            }
+            }
+            .publishingSceneWindowSize()
+        }
+"""), "la fenêtre principale publie sa taille sur MainWindowGate, après tout ce qu'il porte")
+        XCTAssertTrue(app.contains("""
+                .preferredColorScheme(theme.preferredColorScheme)
+                .publishingSceneWindowSize()
+        }
+        .handlesExternalEvents(matching: [DetachedWindowOpener.activityIdentifier])
+"""), "la fenêtre détachée publie sa taille après ses toasts et sa barrière d'âge")
+
+        let roots = AppSourceGuard.stripComments(try source("Meeshy/Features/Main/Views/AdaptiveRootView.swift"))
+        XCTAssertFalse(roots.contains(".publishingSceneWindowSize()"),
+                       "une seule publication par fenêtre : la racine du WindowGroup")
     }
 
     func test_theStoryViewer_readsItsWindow_notTheKeyWindow() throws {
