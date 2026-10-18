@@ -1,4 +1,4 @@
-import { afterAll, afterEach, beforeAll, describe, expect, test } from 'bun:test';
+import { afterAll, afterEach, beforeAll, beforeEach, describe, expect, test } from 'bun:test';
 import { readFileSync } from 'node:fs';
 import { act } from 'react';
 
@@ -7,6 +7,7 @@ import { ENGAGEMENT_PROGRESS_QUERY_KEY, loadEngagementProgress } from '@/lib/api
 import { httpTransport } from '@/lib/api/client';
 import { appQueryClient } from '@/lib/api/query-client';
 import { callStore } from '@/lib/calls/call-store';
+import { dropCarriedAudio } from '@/lib/view/audio-carry';
 import { gamePrefs } from '@/lib/game/preferences';
 import { loadGameCatalog } from '@/lib/i18n-game-catalog';
 import { playerBannerVisitStore } from '@/lib/view/player-banner-visit';
@@ -32,8 +33,12 @@ beforeAll(async () => {
   if (!cached.ok) throw new Error('progression de démonstration attendue');
   appQueryClient.setQueryData(ENGAGEMENT_PROGRESS_QUERY_KEY, cached.data);
 });
+beforeEach(() => {
+  dropCarriedAudio();
+});
 afterEach(() => {
   unmountAll();
+  dropCarriedAudio();
   reportCallResumeShown(false);
   callStore.setState({ call: null, waiting: null });
   gamePrefs.set({ hidden: false });
