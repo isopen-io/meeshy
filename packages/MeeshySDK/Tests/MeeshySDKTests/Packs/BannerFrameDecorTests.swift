@@ -68,7 +68,7 @@ struct BannerFrameDecorTests {
     func anOutOfPaletteColorIsRejected() throws {
         let outside = Self.frameJSON.replacingOccurrences(of: #""color":1,"opacity":1}]}],"#, with: #""color":7,"opacity":1}]}],"#)
         #expect(throws: (any Error).self) { try decode(BannerFrameDesign.self, outside) }
-        let notHex = Self.frameJSON.replacingOccurrences(of: #""#DCD2C0""#, with: #""rouge""#)
+        let notHex = Self.frameJSON.replacingOccurrences(of: ##""#DCD2C0""##, with: #""rouge""#)
         #expect(throws: (any Error).self) { try decode(BannerFrameDesign.self, notHex) }
     }
 
@@ -108,7 +108,7 @@ struct BannerFrameDecorTests {
         #expect(ring.ornament[0].group == "triskele")
         #expect(ring.ornament[0].gradient == 0)
 
-        let legacy = try decode(AvatarRingDesign.self, #"{"key":"filet","stroke":{"style":"solid","width":0.06,"colors":["#6366F1"]}}"#)
+        let legacy = try decode(AvatarRingDesign.self, ##"{"key":"filet","stroke":{"style":"solid","width":0.06,"colors":["#6366F1"]}}"##)
         #expect(legacy.motion.isEmpty)
         #expect(legacy.gradients.isEmpty)
     }
