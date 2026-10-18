@@ -77,6 +77,13 @@ export type PostCommentCardComment<M extends PostCommentCardMediaLike> = {
 
 export type PostCommentCardPost<M extends PostCommentCardMediaLike> = {
   readonly type: string | null;
+  /**
+   * L'AUDIENCE du support (`PostVisibility`, schema.prisma). Seul `PUBLIC` se
+   * fige en tête d'une carte qui part hors de Meeshy : une audience restreinte
+   * (`FRIENDS`, `COMMUNITY`, `PRIVATE`, `EXCEPT`, `ONLY`) — ou inconnue — laisse
+   * le commentaire seul (fail-closed).
+   */
+  readonly visibility?: string | null;
   /** Le post porte un canvas de story : il disparaît comme elle. */
   readonly hasStoryCanvas: boolean;
   readonly createdAt: number;
@@ -247,10 +254,13 @@ const disappears = <M extends PostCommentCardMediaLike>(post: PostCommentCardPos
 const postMediaOf = <M extends PostCommentCardMediaLike>(post: PostCommentCardPost<M>): readonly M[] =>
   post.media.filter((item) => item.kind === 'image' || item.kind === 'video').slice(0, 1);
 
+/** Le support est-il PUBLIC ? Absente ou restreinte, son audience le retient. */
+const isPublicAudience = <M extends PostCommentCardMediaLike>(post: PostCommentCardPost<M>): boolean => (post.visibility ?? '').toUpperCase() === 'PUBLIC';
+
 /** Le post en tête : son auteur et son texte servi, tronqué — `null` quand il ne se met pas en tête. */
 function postHead<M extends PostCommentCardMediaLike>(source: Source<M>): PostCommentCardPart | null {
   const post = source.post;
-  if (post === null || (disappears(post) && postMediaOf(post).length === 0)) return null;
+  if (post === null || !isPublicAudience(post) || (disappears(post) && postMediaOf(post).length === 0)) return null;
   const text = nonBlank(post.text);
   if (text === null && postMediaOf(post).length === 0) return null;
   return { author: authorOf(post.author, source.viewer), text: text === null ? '' : postCommentCardExcerpt(text), handle: handleOf(post.author) };

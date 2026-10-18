@@ -89,6 +89,7 @@ export function postCommentCardSourceOf(input: PostCommentCardInput): PostCommen
         ? null
         : {
             type: post.type,
+            visibility: post.visibility ?? null,
             hasStoryCanvas: post.storyEffects !== undefined && post.storyEffects !== null,
             createdAt: timeOf(post.createdAt),
             author: authorOf(post.author),
@@ -124,11 +125,16 @@ export function postCommentMessageCardSubjectOf(source: PostCommentSource, choic
  * (`thumbnailUrl`, peinte comme une image — sans elle, pas de support) ; sinon sa
  * première photo ou vidéo. Les pièces masquées (vue unique, flou, chiffrées) sont
  * déjà écartées par `cardMediaOf` avant la composition.
+ *
+ * AUDIENCE (fail-closed) : une story dont l'audience n'est pas PUBLIQUE n'est
+ * jamais support — un post restreint compose encore, mais la composition
+ * partagée ne le met jamais en tête (`PostCommentCardPost.visibility`).
  */
 export function composingPostOf(post: FeedPost | null | undefined, now: number = Date.now()): FeedPost | null {
   if (post === undefined || post === null) return null;
   const type = post.type.toUpperCase();
   if (type !== 'STORY' && type !== 'STATUS') return post;
+  if ((post.visibility ?? '').toUpperCase() !== 'PUBLIC') return null;
   if (post.expiresAt !== undefined && post.expiresAt !== null && timeOf(post.expiresAt) <= now) return null;
   if (post.storyEffects !== undefined && post.storyEffects !== null) {
     const visual = entriesOf(post.media, null).find((entry) => entry.kind === 'image' || entry.kind === 'video');

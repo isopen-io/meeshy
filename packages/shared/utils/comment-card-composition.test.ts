@@ -31,8 +31,9 @@ const viewer = { id: 'me', displayName: 'Moi' };
 const t0 = 1_800_000_000_000;
 const at = (minutes: number): number => t0 + minutes * 60_000;
 
-const makePost = (overrides: { content?: string; type?: string | null; media?: readonly Media[] } = {}): PostCommentCardPost<Media> => ({
+const makePost = (overrides: { content?: string; type?: string | null; media?: readonly Media[]; visibility?: string | null } = {}): PostCommentCardPost<Media> => ({
   type: overrides.type ?? null,
+  visibility: overrides.visibility === undefined ? 'PUBLIC' : overrides.visibility,
   hasStoryCanvas: false,
   createdAt: at(0),
   author: { id: 'awa', displayName: 'Awa', username: 'awa' },
@@ -343,5 +344,17 @@ describe('le repli « commentaire seul »', () => {
   it('jamais quand un mode compose, ni pour un commentaire protégé', () => {
     expect(postCommentCardFallsBackToCommentAlone(source({ target: r1 }))).toBe(false);
     expect(postCommentCardFallsBackToCommentAlone(source({ target: makeComment('x', 'Bob', 'Secret', 1, { parent: 'missing', ...viewOnce }), thread: [] }))).toBe(false);
+  });
+});
+
+describe('l’audience du support', () => {
+  it('seul un support PUBLIC se met en tête — toute audience restreinte, ou inconnue, laisse le commentaire seul', () => {
+    expect(postCommentCardModes(source({ post: makePost({ visibility: 'public' }), target: root }))).toEqual(['postAndComment', 'commentAlone']);
+    for (const visibility of ['FRIENDS', 'COMMUNITY', 'PRIVATE', 'EXCEPT', 'ONLY', '', null]) {
+      const from = source({ post: makePost({ visibility, media: [{ id: 'pic', kind: 'image' }] }), target: root });
+      expect(postCommentCardModes(from)).toEqual(['commentAlone']);
+      expect(postCommentCardModes(source({ post: makePost({ visibility }), target: r2 }))).toEqual(['threadToHere', 'chosenReplies']);
+      expect(subject(from, 'postAndComment')).toBeNull();
+    }
   });
 });

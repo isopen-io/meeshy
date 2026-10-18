@@ -88,7 +88,8 @@ public struct PostCommentCardSource: Sendable {
 /// est protégé ne s'image dans aucun mode : elle le cite, et la peindre sans
 /// lui serait un fil troué (la loi de la discussion, #9573). Une réponse
 /// voisine protégée ou vide, elle, n'entre simplement pas dans le fil. Un post
-/// qui disparaît (story, statut) ou sans rien à montrer ne se met pas en tête.
+/// qui disparaît (story, statut), sans rien à montrer ou dont l'audience n'est
+/// pas `PUBLIC` ne se met pas en tête.
 ///
 /// BORNES : le texte du post s'arrête à `maxPostLines` lignes et
 /// `maxPostCharacters` caractères ; la carte compte au plus `maxBlocks` blocs —
@@ -328,16 +329,23 @@ public enum PostCommentCardComposition {
         let media: [MessageCardSubjectMedia]
     }
 
+    /// **L'audience du support** : seul un support `PUBLIC` se fige sur une carte qui part
+    /// hors de Meeshy — absente ou restreinte (`FRIENDS`, `COMMUNITY`, `PRIVATE`, `EXCEPT`,
+    /// `ONLY`), elle le retient (fail-closed). Jumelle de `isPublicAudience` (shared, web).
+    static func isPublicAudience(_ visibility: String?) -> Bool {
+        (visibility ?? "").uppercased() == "PUBLIC"
+    }
+
     static func support(of source: PostCommentCardSource) -> Support? {
         if let post = source.post {
-            guard !disappears(post) else { return nil }
+            guard isPublicAudience(post.visibility), !disappears(post) else { return nil }
             return Support(
                 author: post.author, authorId: post.authorId, username: post.authorUsername,
                 text: MessageCardText.nonBlank(source.read(post.displayContent)).map { excerpt($0) },
                 timestamp: post.timestamp, media: postMedia(of: post)
             )
         }
-        guard let story = source.story, !story.isExpired(now: source.now) else { return nil }
+        guard let story = source.story, isPublicAudience(story.visibility), !story.isExpired(now: source.now) else { return nil }
         // Une story à canvas sans vignette ne s'image pas : le garde d'avant #10915 tient.
         if story.hasCanvas, story.heroMedia(now: source.now) == nil { return nil }
         return Support(

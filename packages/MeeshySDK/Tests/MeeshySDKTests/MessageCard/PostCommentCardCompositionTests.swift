@@ -11,9 +11,11 @@ final class PostCommentCardCompositionTests: XCTestCase {
     private static func at(_ minutes: Double) -> Date { t0.addingTimeInterval(minutes * 60) }
 
     private static func makePost(content: String = "Le coucher de soleil à Dakar", type: String? = nil,
-                                 media: [FeedMedia] = []) -> FeedPost {
-        FeedPost(id: "post", author: "Awa", authorId: "awa", authorUsername: "awa", type: type,
-                 content: content, timestamp: at(0), media: media)
+                                 media: [FeedMedia] = [], visibility: String? = "PUBLIC") -> FeedPost {
+        var post = FeedPost(id: "post", author: "Awa", authorId: "awa", authorUsername: "awa", type: type,
+                            content: content, timestamp: at(0), media: media)
+        post.visibility = visibility
+        return post
     }
 
     private static func makeComment(_ id: String, _ author: String, _ text: String, minute: Double,
@@ -334,9 +336,37 @@ final class PostCommentCardCompositionTests: XCTestCase {
         PostCommentCardSource(post: nil, target: target ?? root, thread: [], viewer: viewer, story: story, now: now)
     }
 
-    private static func makeStory(text: String? = "Ma story", media: [FeedMedia] = [], expiresAt: Date? = nil, canvas: Bool = false) -> PostCommentCardStory {
+    private static func makeStory(text: String? = "Ma story", media: [FeedMedia] = [], expiresAt: Date? = nil, canvas: Bool = false,
+                                  visibility: String? = "PUBLIC") -> PostCommentCardStory {
         PostCommentCardStory(id: "st", author: "Awa", authorId: "awa", authorUsername: "awa", text: text, media: media,
-                             timestamp: at(0), expiresAt: expiresAt, hasCanvas: canvas)
+                             timestamp: at(0), expiresAt: expiresAt, hasCanvas: canvas, visibility: visibility)
+    }
+
+    private static let restrictedAudiences: [String?] = ["FRIENDS", "COMMUNITY", "PRIVATE", "EXCEPT", "ONLY", "", nil]
+
+    func test_audience_aStoryThatIsNotPublic_isNeverSupportNorHero() {
+        XCTAssertEqual(PostCommentCardComposition.modes(of: Self.storySource(Self.makeStory(media: [Self.photo], visibility: "public"))),
+                       [.postAndComment, .commentAlone])
+        for visibility in Self.restrictedAudiences {
+            let source = Self.storySource(Self.makeStory(media: [Self.photo], visibility: visibility))
+            XCTAssertEqual(PostCommentCardComposition.modes(of: source), [.commentAlone], "\(visibility ?? "nil")")
+            XCTAssertNil(Self.subject(source, .postAndComment))
+            XCTAssertNil(Self.subject(source, .commentAlone, showsPost: true)?.heroID)
+        }
+    }
+
+    func test_audience_aPostThatIsNotPublic_neverHeadsTheCard() {
+        for visibility in Self.restrictedAudiences {
+            let post = Self.makePost(media: [Self.photo], visibility: visibility)
+            XCTAssertEqual(PostCommentCardComposition.modes(of: Self.source(post: post, target: Self.root)), [.commentAlone])
+            XCTAssertEqual(PostCommentCardComposition.modes(of: Self.source(post: post, target: Self.r2)), [.threadToHere, .chosenReplies])
+            XCTAssertNil(Self.subject(Self.source(post: post, target: Self.root), .commentAlone, showsPost: true)?.heroID)
+        }
+    }
+
+    func test_audience_aStoryItemCarriesItsVisibilityToTheSupport() {
+        let item = StoryItem(id: "st", content: "Ma story", media: [Self.photo], createdAt: Self.now, visibility: "FRIENDS")
+        XCTAssertEqual(PostCommentCardStory(story: item, author: "Awa", authorId: "awa").visibility, "FRIENDS")
     }
 
     func test_story_aPlainStoryPutsItsPhotoAsTheHero() throws {

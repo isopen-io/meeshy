@@ -36,6 +36,7 @@ const post = (overrides: Partial<FeedPost> = {}): FeedPost => ({
   translations: { fr: { text: 'Coucher de soleil à Dakar' } },
   author: { id: 'u-awa', username: '@awa', displayName: 'Awa' },
   media: [],
+  visibility: 'PUBLIC',
   ...overrides,
 });
 
@@ -132,6 +133,20 @@ describe('qui compose, et quand « Imager » s’offre', () => {
     expect(composingPostOf(post({ type: 'STORY', media }))?.id).toBe('p-1');
     expect(composingPostOf(post({ type: 'status', media }))?.id).toBe('p-1');
     expect(composingPostOf(post({ type: 'STORY', media: [{ id: 'v', fileUrl: '/v.m4a', mimeType: 'audio/mp4' }] }))).toBeNull();
+  });
+
+  test('une story ou un post dont l’audience n’est pas PUBLIQUE n’est jamais support ni héros — seul le commentaire reste', () => {
+    const media = [{ id: 'sm', fileUrl: '/s.jpg', mimeType: 'image/jpeg' }];
+    for (const visibility of ['FRIENDS', 'COMMUNITY', 'PRIVATE', 'EXCEPT', 'ONLY', null, undefined] as const) {
+      expect(composingPostOf(post({ type: 'STORY', media, visibility }))).toBeNull();
+      const restricted = composingPostOf(post({ media, visibility }));
+      expect(restricted?.id).toBe('p-1');
+      const source = postCommentCardSourceOf({ post: restricted, target: root, targetText: 'x', thread: [], readerLanguages: ['fr'], viewer });
+      expect(postCommentChoiceOf(source, NO_POST_COMMENT_PICK)?.mode).toBe('commentAlone');
+      expect(postCommentMessageCardSubjectOf(source, { mode: 'postAndComment', showsPost: true }, labels)).toBeNull();
+      const alone = postCommentMessageCardSubjectOf(source, { mode: 'commentAlone', showsPost: true }, labels);
+      expect([alone?.quoted, alone?.media]).toEqual([null, []]);
+    }
   });
 
   test('une story échue n’est jamais support ; une story à canvas ne montre que sa vignette', () => {

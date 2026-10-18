@@ -4,6 +4,10 @@ import Foundation
 /// montrer : son auteur, son texte et, en HERO, son visuel.
 ///
 /// GARDES (loi pure, `heroMedia(now:)`) :
+/// - une story dont l'AUDIENCE n'est pas `PUBLIC` (`visibility`, fail-closed :
+///   absente ou restreinte — `FRIENDS`, `COMMUNITY`, `PRIVATE`, `EXCEPT`, `ONLY`)
+///   n'est jamais support ni hero : la carte part hors de Meeshy, seul le
+///   commentaire reste ;
 /// - une story ÉCHUE (`expiresAt` passé) ne se fige pas en image ;
 /// - une story à CANVAS (`hasCanvas` : textes, stickers, filtres posés par
 ///   `storyEffects`) n'est pas son média de fond : sa VIGNETTE (`thumbnailUrl`,
@@ -22,9 +26,12 @@ public struct PostCommentCardStory: Sendable {
     public let timestamp: Date
     public let expiresAt: Date?
     public let hasCanvas: Bool
+    /// L'audience de la story (`PostVisibility`) — seule `PUBLIC` la laisse devenir support.
+    public let visibility: String?
 
     public init(id: String, author: String, authorId: String, authorUsername: String? = nil, text: String? = nil,
-                media: [FeedMedia] = [], timestamp: Date, expiresAt: Date? = nil, hasCanvas: Bool = false) {
+                media: [FeedMedia] = [], timestamp: Date, expiresAt: Date? = nil, hasCanvas: Bool = false,
+                visibility: String? = nil) {
         self.id = id
         self.author = author
         self.authorId = authorId
@@ -34,16 +41,18 @@ public struct PostCommentCardStory: Sendable {
         self.timestamp = timestamp
         self.expiresAt = expiresAt
         self.hasCanvas = hasCanvas
+        self.visibility = visibility
     }
 
     public init(story: StoryItem, author: String, authorId: String, authorUsername: String? = nil) {
         self.init(id: story.id, author: author, authorId: authorId, authorUsername: authorUsername, text: story.content,
-                  media: story.media, timestamp: story.createdAt, expiresAt: story.expiresAt, hasCanvas: story.storyEffects != nil)
+                  media: story.media, timestamp: story.createdAt, expiresAt: story.expiresAt, hasCanvas: story.storyEffects != nil,
+                  visibility: story.visibility)
     }
 
     /// Le visuel qui représente la story sur la carte — `nil` : aucun (voir les gardes).
     func heroMedia(now: Date) -> MessageCardSubjectMedia? {
-        guard !isExpired(now: now) else { return nil }
+        guard PostCommentCardComposition.isPublicAudience(visibility), !isExpired(now: now) else { return nil }
         guard let visual = media.first(where: { $0.type == .image || $0.type == .video }) else { return nil }
         let thumbnail = MessageCardText.nonBlank(visual.thumbnailUrl)
         if hasCanvas {
