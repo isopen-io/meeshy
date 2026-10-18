@@ -18,6 +18,9 @@
 import { z } from 'zod';
 import { nonNegativeInt } from './game-schema-kit.js';
 import { gameBlockSchema, type GameBlock } from './game.js';
+import { shouldApplyGameState } from './game-sync-order.js';
+
+export { shouldApplyGameState };
 
 /** Ce qui a fait bouger l'état — informatif : le client relit le bloc, quelle que soit la raison. */
 export const GAME_UPDATE_REASONS = ['mint', 'credit', 'reclaim', 'prestige', 'spend'] as const;
@@ -41,10 +44,3 @@ export const gameUpdatedEventSchema = z.object({
   reason: z.enum(GAME_UPDATE_REASONS),
   game: gameBlockSchema.nullable(),
 });
-
-/**
- * Faut-il appliquer cet état ? Non seulement s'il est STRICTEMENT plus ancien que celui déjà appliqué : à révision
- * égale, les deux états sont équivalents ; une source sans révision (serveur antérieur) s'applique toujours.
- */
-export const shouldApplyGameState = (incoming: number | null | undefined, applied: number | null | undefined): boolean =>
-  typeof incoming !== 'number' || typeof applied !== 'number' || incoming >= applied;
