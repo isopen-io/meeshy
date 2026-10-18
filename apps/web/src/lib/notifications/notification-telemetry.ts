@@ -1,6 +1,8 @@
 import type { NotificationAction, SocialEventV2Input } from '@/lib/api/social-events-v2-types';
 import type { NotificationChannel } from '@meeshy/shared/types/social-events-v2';
 
+import { appelNatifMethode, type CoqueNative } from '@/lib/native-shell';
+
 /**
  * **L'ENTONNOIR DES NOTIFICATIONS, CÔTÉ PAGE** (#10507) — le service worker
  * (`public/sw-push.js`, JUMEAU de ces trois noms) écrit `received`,
@@ -116,6 +118,36 @@ export async function drainNotificationTelemetry(
   const pending = await takeAll(db);
   db.close();
   const events = pending.filter(isNotificationEvent);
+  events.forEach(record);
+  return events.length;
+}
+
+const shellEventOf = (line: unknown): SocialEventV2Input | null => {
+  if (typeof line !== 'string') return null;
+  try {
+    const event: unknown = JSON.parse(line);
+    return isNotificationEvent(event) && (event as { readonly channel?: unknown }).channel === 'fcm' ? event : null;
+  } catch {
+    return null;
+  }
+};
+
+/**
+ * **CE QUE LA COQUE ANDROID A NOTÉ APP FERMÉE** (#10938) — une bannière posée
+ * par FCM lui-même ne passe ni par le plugin ni par la page : le natif la note
+ * (`NotificationFunnelRules`, jumeau de `sw-push.js`) et la page la vide ici,
+ * au démarrage, à côté de la file du worker. Un navigateur, ou une coque
+ * construite avant la méthode, ne verse rien.
+ */
+export async function drainShellNotificationTelemetry(
+  coque: CoqueNative | undefined,
+  record: (event: SocialEventV2Input) => void,
+): Promise<number> {
+  const drain = appelNatifMethode(coque, 'MeeshyNotificationSettings', 'drainNotificationEvents');
+  if (drain === null) return 0;
+  const result = await drain({}).catch((): unknown => null);
+  const lines = result !== null && typeof result === 'object' ? (result as { readonly events?: unknown }).events : undefined;
+  const events = (Array.isArray(lines) ? lines : []).map(shellEventOf).filter((event) => event !== null);
   events.forEach(record);
   return events.length;
 }

@@ -3,6 +3,7 @@ package me.meeshy.app;
 import android.app.NotificationManager;
 import android.content.Context;
 import android.content.Intent;
+import android.os.Bundle;
 import android.util.Log;
 import androidx.annotation.NonNull;
 import com.google.firebase.messaging.FirebaseMessagingService;
@@ -31,7 +32,9 @@ import java.util.List;
  *   ARRIVEE de message y accuse sa remise ({@link PushDeliveryReceipt}, #8124),
  *   comme le service worker web et la NSE iOS ;
  * - un VOCAL dont FCM vient d'afficher la banniere y gagne l'action
- *   « Ecouter » ({@link NotificationVoiceBanner}, #10641).
+ *   « Ecouter » ({@link NotificationVoiceBanner}, #10641) ;
+ * - une banniere que FCM affiche app fermee est notee « recue » et
+ *   « affichee » dans l'entonnoir ({@link NotificationFunnelStore}, #10938).
  *
  * Le plugin est atteint par reflexion, pas par heritage : `cap sync` ne
  * synchronise que `dependencies` et `devDependencies`, et le plugin est
@@ -61,8 +64,14 @@ public class MeeshyMessagingService extends FirebaseMessagingService {
     @Override
     public void handleIntent(Intent intent) {
         super.handleIntent(intent);
+        Bundle extras = intent == null ? null : intent.getExtras();
         try {
-            NotificationVoiceBanner.offer(this, NotificationVoiceBanner.payloadOf(intent == null ? null : intent.getExtras()));
+            NotificationFunnelStore.noteShown(this, NotificationFunnelStore.extrasOf(extras), MainActivity.isInForeground());
+        } catch (RuntimeException failure) {
+            Log.w(TAG, "entonnoir de notification non note", failure);
+        }
+        try {
+            NotificationVoiceBanner.offer(this, NotificationVoiceBanner.payloadOf(extras));
         } catch (RuntimeException failure) {
             Log.w(TAG, "action d'ecoute non posee", failure);
         }

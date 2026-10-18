@@ -478,14 +478,20 @@ if (__SHELL__) {
 
 /**
  * L'ENTONNOIR DES NOTIFICATIONS (#10507) — ce que le service worker a noté
- * (reçue, affichée, ouverte, écartée) passe dans la file v2 au chargement.
+ * (reçue, affichée, ouverte, écartée) passe dans la file v2 au chargement ;
+ * et ce que la coque Android a noté app fermée aussi (#10938).
  */
 {
   const viderNotifications = (): void => {
-    void Promise.all([import('@/lib/notifications/notification-telemetry'), import('@/lib/view/reading-telemetry')]).then(
-      ([{ drainNotificationTelemetry }, { readingTelemetry }]) =>
-        drainNotificationTelemetry(typeof indexedDB === 'undefined' ? undefined : indexedDB, (event) => readingTelemetry.recordV2(event)),
-    );
+    void Promise.all([
+      import('@/lib/notifications/notification-telemetry'),
+      import('@/lib/view/reading-telemetry'),
+      import('@/lib/native-shell'),
+    ]).then(([{ drainNotificationTelemetry, drainShellNotificationTelemetry }, { readingTelemetry }, { coqueCourante }]) => {
+      const record = (event: Parameters<typeof readingTelemetry.recordV2>[0]): void => readingTelemetry.recordV2(event);
+      void drainNotificationTelemetry(typeof indexedDB === 'undefined' ? undefined : indexedDB, record);
+      void drainShellNotificationTelemetry(coqueCourante(), record);
+    });
   };
   if (document.readyState === 'complete') viderNotifications();
   else window.addEventListener('load', viderNotifications, { once: true });

@@ -4,6 +4,7 @@ import android.content.Intent;
 import android.net.Uri;
 import android.os.Build;
 import android.provider.Settings;
+import com.getcapacitor.JSArray;
 import com.getcapacitor.JSObject;
 import com.getcapacitor.Plugin;
 import com.getcapacitor.PluginCall;
@@ -79,6 +80,20 @@ public class MeeshyNotificationSettingsPlugin extends Plugin {
     public void fcmStatus(PluginCall call) {
         JSObject result = new JSObject();
         result.put("configured", !FirebaseApp.getApps(getContext()).isEmpty());
+        call.resolve(result);
+    }
+
+    /**
+     * #10938 — ce que la coque a note app fermee (banniere recue, affichee),
+     * vide vers la file v2 de la page au demarrage
+     * (`drainShellNotificationTelemetry`).
+     */
+    @PluginMethod
+    public void drainNotificationEvents(PluginCall call) {
+        JSArray events = new JSArray();
+        for (String line : NotificationFunnelStore.drain(getContext())) events.put(line);
+        JSObject result = new JSObject();
+        result.put("events", events);
         call.resolve(result);
     }
 }
