@@ -253,9 +253,16 @@ public class AudioPlaybackManager: NSObject, ObservableObject {
             await acquireSession()
             guard !Task.isCancelled else { return }
             // #7010 — `Task { }` HÉRITE du MainActor ; `AudioBytesLoader` part vraiment.
-            guard let data = await AudioBytesLoader.bytes(at: url) else {
+            let bytes = await AudioBytesLoader.bytes(at: url)
+            guard !Task.isCancelled else { return }
+            guard let data = bytes else {
                 Self.log.error("playLocal echec (\(url.lastPathComponent, privacy: .public)): octets illisibles")
+                // Même sortie que les échecs de `play(urlString:)` et de `playData` : sans elle la session
+                // restait tenue et la file ne passait jamais au vocal suivant.
                 isLoading = false
+                currentUrl = nil
+                releaseSession()
+                onPlaybackFinished?()
                 return
             }
             await playData(data)
