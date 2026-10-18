@@ -26,6 +26,8 @@ struct StoryCommentRowView: View, Equatable {
     var root: FeedComment? = nil
     /// Les réponses chargées d'une racine — « Imager » peut en emporter une.
     var loadedReplies: [FeedComment] = []
+    /// La story du commentaire (#10915) : « Imager » met son visuel en HERO de la carte.
+    var story: PostCommentCardStory? = nil
     /// Enregistre le texte édité EN PLACE. Fourni par le lecteur de story ;
     /// le menu ne l'offre qu'à l'auteur (`CommentMenuPolicy`).
     var onCommitEdit: ((String) -> Void)? = nil
@@ -53,7 +55,8 @@ struct StoryCommentRowView: View, Equatable {
         (lhs.onCommitEdit == nil) == (rhs.onCommitEdit == nil) &&
         lhs.root?.id == rhs.root?.id &&
         lhs.root?.displayContent == rhs.root?.displayContent &&
-        lhs.loadedReplies.map(\.id) == rhs.loadedReplies.map(\.id)
+        lhs.loadedReplies.map(\.id) == rhs.loadedReplies.map(\.id) &&
+        lhs.story?.id == rhs.story?.id
     }
 
     @Environment(\.accessibilityReduceMotion) private var reduceMotion
@@ -330,6 +333,7 @@ struct StoryCommentRowView: View, Equatable {
                 accentColor: comment.authorColor,
                 root: root,
                 loadedReplies: loadedReplies,
+                story: story,
                 onEdit: onCommitEdit == nil ? nil : { beginEditing() },
                 glyphSize: 13,
                 glyphColor: overlayColor.opacity(MeeshyOpacity.intense)

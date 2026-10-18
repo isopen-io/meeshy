@@ -1,6 +1,8 @@
 import type { FeedMedia } from '@/lib/api/feed-pages';
 import type { PostComment } from '@/lib/api/publication-comments';
 
+import { commentStickerOf } from '@/lib/view/comment-sticker';
+
 import { authoredBy, maskedByEffects, mediaAuthorOf, servedCardMediaOf, type CardAudioPrism, type MessageCardMediaItem, type MessageCardSubject, type MessageCardSubjectPart } from './message-card-subject';
 
 /**
@@ -21,6 +23,14 @@ import { authoredBy, maskedByEffects, mediaAuthorOf, servedCardMediaOf, type Car
  * l'original : son vocal original.
  */
 export const commentCardMediaOf = (media: readonly FeedMedia[] | null | undefined, prism: CardAudioPrism): readonly MessageCardMediaItem[] => servedCardMediaOf(media, prism);
+
+/** Le commentaire-sticker (#9080) joint l'image du sticker en PREMIÈRE pièce : elle se déclare sticker, donc se peint ajustée. */
+export const commentCardMediaWithSticker = (comment: Pick<PostComment, 'media' | 'sticker' | 'metadata'>, prism: CardAudioPrism): readonly MessageCardMediaItem[] => {
+  const items = commentCardMediaOf(comment.media, prism);
+  const [first, ...rest] = items;
+  if (first === undefined || first.card.kind !== 'image' || commentStickerOf(comment) === null) return items;
+  return [{ ...first, card: { ...first.card, sticker: true } }, ...rest];
+};
 
 type ServedComment = { readonly comment: PostComment; readonly servedText: string };
 
@@ -49,7 +59,7 @@ export function commentCardSubjectOf(params: {
   if (comment.pending === true || maskedByEffects(comment.effectFlags)) return null;
   const text = params.servedText.trim();
   const readerLanguages = params.readerLanguages ?? null;
-  const media = commentCardMediaOf(comment.media, readerLanguages === null ? null : { readerLanguages, fallbackLanguage: comment.originalLanguage ?? '' });
+  const media = commentCardMediaWithSticker(comment, readerLanguages === null ? null : { readerLanguages, fallbackLanguage: comment.originalLanguage ?? '' });
   if (text === '' && media.length === 0) return null;
   const quotedText = parent === null || maskedByEffects(parent.comment.effectFlags) ? '' : parent.servedText.trim();
   const reply = partOf(comment, text);

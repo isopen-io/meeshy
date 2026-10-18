@@ -1,6 +1,7 @@
 import { arrangeVisuals, type CardMediaArrangement } from './message-card-arrangement';
 import type { CardAuthorPlacement } from './message-card-frame';
 import type { CardOp } from './message-card-ops';
+import { isStickerMedia } from './message-card-sticker';
 import type { CardPalette } from './message-card-templates';
 import { textDirection, truncateLines, wrapText, type Measure } from './message-card-text';
 
@@ -25,6 +26,10 @@ export type CardVisualMedia = {
   readonly kind: 'image' | 'video';
   readonly width: number;
   readonly height: number;
+  /** Le type du fichier — avec la taille, il reconnaît un sticker (`message-card-sticker.ts`). */
+  readonly mimeType?: string;
+  /** Le porteur déclare la pièce un sticker : elle se pose ajustée, jamais coupée. */
+  readonly sticker?: boolean;
   /** Le nom de qui l'a posté, tel qu'il se peint — déjà anonymisé ou mis en @pseudo par l'appelant ; absent : la carte ne le dit pas. */
   readonly credit?: string | null;
 };
@@ -126,7 +131,8 @@ export function layoutCardMedia(params: {
         if (item === undefined || item.kind === 'audio') continue;
         const left = rtl ? x + width - slot.x - slot.width : x + slot.x;
         const frame = { x: left, y: top + slot.y, width: slot.width, height: slot.height };
-        ops.push({ kind: 'media', index: slot.index, ...frame, radius: RADIUS, video: item.kind === 'video' });
+        const sticker = isStickerMedia(item);
+        ops.push({ kind: 'media', index: slot.index, ...frame, radius: sticker ? 0 : RADIUS, video: item.kind === 'video', ...(sticker ? { contain: true as const } : {}) });
         if (item.kind === 'video' && slot.overflow === 0) ops.push(...playBadge(left + slot.width / 2, frame.y + slot.height / 2, Math.min(slot.width, slot.height)));
         if (slot.overflow > 0) ops.push(...overflowOps(frame, slot.overflow, params.font));
       }
@@ -174,6 +180,17 @@ export function shortName(name: string): string {
   const graphemes = Array.from(name.trim());
   if (graphemes.length <= NAME_LIMIT) return graphemes.join('');
   return `${graphemes.slice(0, NAME_LIMIT - 9).join('')}…${graphemes.slice(-8).join('')}`;
+}
+
+/**
+ * **Le HÉROS** (#10915, miroir de `heroOps` iOS) : le visuel du support dans SON
+ * cadre (pleine largeur, `message-card-hero.ts`) — recadré s'il est une photo,
+ * inscrit en entier s'il est un sticker ; une vidéo fixe garde son badge.
+ */
+export function heroMediaOps(media: CardVisualMedia, index: number, frame: { readonly x: number; readonly y: number; readonly width: number; readonly height: number }): readonly CardOp[] {
+  const sticker = isStickerMedia(media);
+  const op: CardOp = { kind: 'media', index, ...frame, radius: sticker ? 0 : RADIUS, video: media.kind === 'video', ...(sticker ? { contain: true as const } : {}) };
+  return media.kind === 'video' ? [op, ...playBadge(frame.x + frame.width / 2, frame.y + frame.height / 2, Math.min(frame.width, frame.height))] : [op];
 }
 
 function playBadge(cx: number, cy: number, size: number): readonly CardOp[] {
