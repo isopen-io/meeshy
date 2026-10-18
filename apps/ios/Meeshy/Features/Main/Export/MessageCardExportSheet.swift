@@ -116,13 +116,14 @@ struct MessageCardExportSheet: View {
     /// Les médias tels qu'on les peint — chaque son avec l'onde et la durée de
     /// SA piste (celle que sert la langue d'export) dès qu'elle est lue.
     var currentMedia: [MessageCardMedia] {
-        loadedMedia.media(of: subject.media)
+        loadedMedia.media(of: subject.media, heroID: subject.heroID)
     }
 
     /// Le format tel que la carte le peint : avec le visuel choisi (#9235).
     func painting(_ format: MessageCardFormat) -> MessageCardFormat {
         var painted = format
         painted.disposition.featuredMediaID = featuredMedia
+        painted.disposition.heroMediaID = subject.heroID
         return painted
     }
 

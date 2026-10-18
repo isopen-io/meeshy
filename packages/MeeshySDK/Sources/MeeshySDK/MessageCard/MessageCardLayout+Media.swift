@@ -288,6 +288,27 @@ extension MessageCardLayoutEngine {
         ))
     }
 
+    /// **La séparation d'une entrée de fil** (#10915) : la liaison du template, en version
+    /// compacte, au retrait du niveau — `x` est le bord de départ de l'entrée.
+    func threadSeparatorOps(_ link: MessageCardLinkID, x: Double, y: Double, rtl: Bool, level: Int) -> [MessageCardOp] {
+        let length = MessageCardThread.separatorWidth(level: level)
+        let ends = rtl ? [x - length, x] : [x, x + length]
+        let accent = palette.accent
+        switch link {
+        case .orbite, .guillemets:
+            return [.separator(MessageCardSeparatorOp(x1: ends[0], x2: ends[1], y: y, radius: 0, color: accent, dash: [2, 14], lineWidth: 3))]
+        case .filet, .fil:
+            return [.separator(MessageCardSeparatorOp(x1: ends[0], x2: ends[1], y: y, radius: 0, color: accent, dash: [], lineWidth: 4))]
+        case .fleche:
+            return [.text(MessageCardTextOp(
+                text: rtl ? "↲" : "↳", x: x, y: y + 18, font: MessageCardFont(face: .system(700), size: 40),
+                color: accent, align: rtl ? .right : .left, direction: .ltr
+            ))]
+        case .bulles, .silence:
+            return []
+        }
+    }
+
     /// Le disque et la flèche d'une vidéo fixe, centrés dans son cadre.
     func playBadge(x: Double, y: Double, width: Double, height: Double) -> [MessageCardOp] {
         let radius = min(64, min(width, height) * 0.14)

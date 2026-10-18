@@ -99,6 +99,8 @@ private struct Sized {
     var quoteLines: [String]
     /// Le niveau d'imbrication de chaque ligne de la réponse — vide hors fil (#10915).
     var replyLevels: [Int] = []
+    /// Les lignes qui portent la séparation d'une entrée de fil (texte vide).
+    var replySeparators: [Bool] = []
 }
 
 private struct Chrome {
@@ -212,7 +214,8 @@ struct MessageCardLayoutEngine {
                     ? threadRows.map(\.text)
                     : (hasReplyText ? MessageCardText.wrap(input.reply.text, maxWidth: replyWidth, font: replyFont, measure: measure) : []),
                 quoteLines: quoted.map { MessageCardText.wrap($0.text, maxWidth: quoteWidth, font: quoteFont, measure: measure) } ?? [],
-                replyLevels: threadRows.map(\.level)
+                replyLevels: threadRows.map(\.level),
+                replySeparators: threadRows.map(\.separator)
             )
         }
 
@@ -267,6 +270,7 @@ struct MessageCardLayoutEngine {
             sized.quoteLines = MessageCardText.truncate(sized.quoteLines, count: quoteKeep, maxWidth: quoteWidth, font: sized.quoteFont, measure: measure)
             sized.replyLines = MessageCardText.truncate(sized.replyLines, count: replyKeep, maxWidth: replyWidth, font: sized.replyFont, measure: measure)
             sized.replyLevels = Array(sized.replyLevels.prefix(sized.replyLines.count))
+            sized.replySeparators = Array(sized.replySeparators.prefix(sized.replyLines.count))
         }
 
         // La VRAIE cause d'une coupe : le texte seul, au plancher, tiendrait-il ?
@@ -382,7 +386,9 @@ struct MessageCardLayoutEngine {
             inset: 0,
             bubble: geometry.bubbles && hasReplyText ? MessageCardBubbleStyle(offset: MessageCardMetrics.bubbleOffset, color: palette.replyPanel) : nil,
             nameScale: scales[.reply],
-            threadBar: sized.replyLevels.contains { $0 > 0 } ? palette.accent : nil
+            threadSeparator: sized.replyLevels.contains { $0 > 0 }
+                ? { x, y, rtl, level in threadSeparatorOps(input.template.link, x: x, y: y, rtl: rtl, level: level) }
+                : nil
         )
         if let side = media.beside {
             // La rangée : la colonne de médias d'un côté, la réponse resserrée de l'autre.
@@ -392,7 +398,7 @@ struct MessageCardLayoutEngine {
             let textLeft = media.besideIsLeft ? canvas.right - column : canvas.left
             var replyPainter = painter.column(left: textLeft, right: textLeft + column, bubbleWidth: column - MessageCardMetrics.bubbleOffset)
             if hasReplyText || chrome.replyAuthor > 0 {
-                let reply = replyPainter.block(input.reply, lines: sized.replyLines, levels: sized.replyLevels, time: input.replyTime, style: replyStyle)
+                let reply = replyPainter.block(input.reply, lines: sized.replyLines, levels: sized.replyLevels, separators: sized.replySeparators, time: input.replyTime, style: replyStyle)
                 regions.append(MessageCardRegion(part: .reply, x: textLeft, y: reply.top, width: column, height: replyPainter.y - reply.top))
             }
             painter.ops.append(contentsOf: replyPainter.ops)
@@ -403,7 +409,7 @@ struct MessageCardLayoutEngine {
             }
             painter.y = max(replyPainter.y, rowTop + side.height)
         } else if hasReplyText || chrome.replyAuthor > 0 {
-            let reply = painter.block(input.reply, lines: sized.replyLines, levels: sized.replyLevels, time: input.replyTime, style: replyStyle)
+            let reply = painter.block(input.reply, lines: sized.replyLines, levels: sized.replyLevels, separators: sized.replySeparators, time: input.replyTime, style: replyStyle)
             region(.reply, reply.top, painter.y)
         }
 
@@ -503,8 +509,8 @@ struct MessageCardBlockStyle {
     let bubble: MessageCardBubbleStyle?
     /// L'échelle de la ligne du nom — celle de son bloc, réglée au pincement (#8979).
     var nameScale: Double = 1
-    /// La couleur des barres d'imbrication d'un fil — `nil` : pas de barre (#10915).
-    var threadBar: MessageCardColor? = nil
+    /// La séparation d'une entrée de fil (x de départ, milieu de la ligne, sens, niveau) — `nil` hors fil (#10915).
+    var threadSeparator: ((Double, Double, Bool, Int) -> [MessageCardOp])? = nil
 }
 
 /// Le curseur vertical et les opérations accumulées.
@@ -572,7 +578,7 @@ struct MessageCardPainter {
     }
 
     /// Un bloc : son nom, ses lignes — et, pour la liaison « bulles », la bulle qui les porte.
-    mutating func block(_ part: MessageCardPart, lines: [String], levels: [Int] = [], time: String?, style: MessageCardBlockStyle) -> (top: Double, rtl: Bool) {
+    mutating func block(_ part: MessageCardPart, lines: [String], levels: [Int] = [], separators: [Bool] = [], time: String?, style: MessageCardBlockStyle) -> (top: Double, rtl: Bool) {
         let direction = MessageCardText.direction(of: part.text)
         let rtl = direction == .rtl
         let top = y
@@ -588,26 +594,16 @@ struct MessageCardPainter {
         }
         if style.bubble != nil { y += MessageCardMetrics.bubblePadY }
         if placement == .above { nameLine(part.author, time: time, from: startX, to: endX, rtl: rtl, scale: style.nameScale) }
-        var lineTops: [Double] = []
         for (index, line) in lines.enumerated() {
-            let shift = MessageCardThread.shift(level: levels.indices.contains(index) ? levels[index] : 0)
-            text(line, x: rtl ? startX - shift : startX + shift, baseline: y + messageCardRound(style.size), font: style.font, color: style.ink, direction: direction)
-            lineTops.append(y)
-            y += style.lineHeight
-        }
-        // Les barres d'imbrication : une par suite de lignes d'un même niveau (#10915).
-        if let barColor = style.threadBar {
-            for segment in MessageCardThread.segments(levels: levels) where segment.last < lineTops.count {
-                let offset = MessageCardThread.barOffset(level: segment.level)
-                ops.append(.bar(MessageCardRectOp(
-                    x: rtl ? startX - offset - MessageCardThread.barWidth : startX + offset,
-                    y: lineTops[segment.first],
-                    width: MessageCardThread.barWidth,
-                    height: lineTops[segment.last] + style.lineHeight - lineTops[segment.first],
-                    radius: MessageCardThread.barWidth / 2,
-                    color: barColor
-                )))
+            let level = levels.indices.contains(index) ? levels[index] : 0
+            let shift = MessageCardThread.shift(level: level)
+            let x = rtl ? startX - shift : startX + shift
+            if separators.indices.contains(index), separators[index] {
+                if let separate = style.threadSeparator { ops.append(contentsOf: separate(x, y + style.lineHeight / 2, rtl, level)) }
+            } else {
+                text(line, x: x, baseline: y + messageCardRound(style.size), font: style.font, color: style.ink, direction: direction)
             }
+            y += style.lineHeight
         }
         if placement == .after { nameLine(part.author, time: time, from: startX, to: endX, rtl: rtl, scale: style.nameScale) }
         if let bubble = style.bubble {
