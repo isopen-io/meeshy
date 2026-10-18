@@ -50,7 +50,6 @@ const fr = {
   'game.banner.place.one': '{count}re',
   'game.banner.place.other': '{count}e',
   'game.banner.points': '{points} étincelles',
-  'game.banner.lifetime': 'record {total}',
   'game.banner.level_max': 'record {level}',
   'game.banner.level_max_a11y': 'record de niveau {level}',
   'game.banner.missing': 'encore {points} vers le {level}',
