@@ -147,6 +147,7 @@ enum DeviceLayout {
         measurementWindow?.safeAreaInsets.top ?? 0
     }
 
+
     static func bubbleMaxWidth(containerWidth: CGFloat, sizeClass: UserInterfaceSizeClass?) -> CGFloat {
         let ratio: CGFloat = sizeClass == .regular ? 0.62 : 0.70
         let cap: CGFloat = sizeClass == .regular ? 560 : .infinity
@@ -194,6 +195,18 @@ extension View {
             if inset.wrappedValue != measured { inset.wrappedValue = measured }
         }
     }
+}
+
+// MARK: - Les marges de la fenêtre qui porte la vue
+
+/// Les marges sûres PUBLIÉES par la racine de la fenêtre (`\.sceneSafeAreaInsets`, mesurées hors de `body`), chaque
+/// bord se repliant SEUL sur la fenêtre clé tant qu'aucune mesure n'existe. Un repli qui lirait les deux bords d'un
+/// coup demanderait à UIKit la marge basse pendant le rendu d'une vue qui ne voulait que la haute — l'aller-retour
+/// qui réentre la mise à jour en cours et fige le rendu (#10566, #8772, #9048 ; vécu sur la bande du haut).
+struct WindowInsets {
+    let published: EdgeInsets?
+    var top: CGFloat { published?.top ?? DeviceLayout.safeAreaTop }
+    var bottom: CGFloat { published?.bottom ?? DeviceLayout.safeAreaBottom }
 }
 
 // MARK: - La largeur de la liste qui porte la bulle

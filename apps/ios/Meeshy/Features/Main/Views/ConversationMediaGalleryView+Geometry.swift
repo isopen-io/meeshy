@@ -406,8 +406,8 @@ extension ConversationMediaGalleryView {
     /// dimensionné contre le second poserait le rail hors cadre.
     var stageCorridors: MediaStageFraming.Corridors {
         MediaGalleryStage.corridors(
-            safeTop: DeviceLayout.safeAreaTop,
-            safeBottom: DeviceLayout.safeAreaBottom,
+            safeTop: galleryInsets.top,
+            safeBottom: galleryInsets.bottom,
             attachments: allAttachments
         )
     }

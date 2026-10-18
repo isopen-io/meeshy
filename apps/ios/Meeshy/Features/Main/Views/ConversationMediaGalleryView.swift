@@ -196,6 +196,10 @@ struct ConversationMediaGalleryView: View {
     let indexByID: [String: Int]
 
     @Environment(\.dismiss) private var dismiss
+    /// Les marges sûres de la fenêtre qui porte la vue, mesurées par sa racine (hors de `body`).
+    @Environment(\.sceneSafeAreaInsets) var sceneSafeAreaInsets
+    /// Les marges de la fenêtre qui porte la galerie, la fenêtre clé en repli.
+    var galleryInsets: WindowInsets { WindowInsets(published: sceneSafeAreaInsets) }
     /// `internal` — le couloir bas du plateau le PILOTE depuis
     /// `+Geometry.swift`, et `private` est une portée de FICHIER. Même prix que
     /// celui payé par les pages au #4014, et pour la même raison.

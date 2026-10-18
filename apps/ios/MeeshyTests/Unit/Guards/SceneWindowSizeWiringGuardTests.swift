@@ -75,4 +75,32 @@ final class SceneWindowSizeWiringGuardTests: XCTestCase {
             XCTAssertFalse(code.contains("DeviceLayout.windowSize.height"), "\(path) lit encore la fenêtre clé")
         }
     }
+
+    /// Cycle 8 : les marges sûres. Lues sur la fenêtre CLÉ pendant `body`, elles demandaient à UIKit les marges
+    /// d'une fenêtre — l'aller-retour qui a fait planter le viewer de story (#10566) et geler l'écran d'appel et le
+    /// mini-lecteur (#8772, #9048) — et pouvaient être celles de l'autre fenêtre. Elles se lisent désormais dans
+    /// `\.sceneSafeAreaInsets`, mesuré par la racine hors de `body`. L'écran d'appel garde sa lecture (#8725) : il
+    /// vit dans sa propre fenêtre, qu'aucune racine publiante ne couvre.
+    func test_theSafeAreaReads_useTheirWindow() throws {
+        for path in [
+            "Meeshy/Features/Main/Components/UniversalComposerBar.swift",
+            "Meeshy/Features/Main/Components/TopChromeTint.swift",
+            "Meeshy/Features/Main/Views/ConversationMediaGalleryView+Scrims.swift",
+            "Meeshy/Features/Main/Views/ConversationMediaGalleryView+Geometry.swift",
+            "Meeshy/Features/Main/Views/ConversationView.swift",
+            "Meeshy/Features/Main/Views/ReelsPlayerView+Scene.swift",
+        ] {
+            let code = AppSourceGuard.stripComments(try source(path))
+            XCTAssertFalse(code.contains("DeviceLayout.safeAreaTop"), "\(path) lit encore la marge haute de la fenêtre clé")
+            XCTAssertFalse(code.contains("DeviceLayout.safeAreaBottom"), "\(path) lit encore la marge basse de la fenêtre clé")
+            // La galerie déclare ses marges une fois (`galleryInsets`, ConversationMediaGalleryView.swift).
+            XCTAssertTrue(code.contains("WindowInsets(published: sceneSafeAreaInsets)") || code.contains("galleryInsets."),
+                          "\(path) doit lire SA fenêtre")
+        }
+        // Le repli ne lit que le bord DEMANDÉ : un repli qui lisait les deux bords figeait le rendu de la bande du
+        // haut (la marge basse lue pendant `body`, #10566) — mesuré au simulateur, TopChromeBandRenderTests.
+        let layout = AppSourceGuard.stripComments(try source("Meeshy/Core/DeviceLayout.swift"))
+        XCTAssertTrue(layout.contains("var top: CGFloat { published?.top ?? DeviceLayout.safeAreaTop }"))
+        XCTAssertTrue(layout.contains("var bottom: CGFloat { published?.bottom ?? DeviceLayout.safeAreaBottom }"))
+    }
 }

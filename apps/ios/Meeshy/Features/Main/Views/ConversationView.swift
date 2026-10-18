@@ -142,6 +142,8 @@ struct ConversationView: View {
 
     // NOTE: Properties below are internal (not private) for cross-file extension access (+MessageRow, +Header, …).
     @Environment(\.sceneWindowSize) var sceneWindowSize // la fenêtre qui porte la conversation (Stage Manager)
+    @Environment(\.sceneSafeAreaInsets) var sceneSafeAreaInsets // ses marges, mesurées hors de `body`
+    var windowInsets: WindowInsets { WindowInsets(published: sceneSafeAreaInsets) }
 
     @Environment(\.dismiss) private var dismiss
     @Environment(\.scenePhase) private var scenePhase
@@ -346,14 +348,12 @@ struct ConversationView: View {
     }
 
     private func updateComposerHeight(_ contentHeight: CGFloat) {
-        // `DeviceLayout.safeAreaBottom` et non un parcours de `connectedScenes` :
-        // ce dernier est un `Set` NON ORDONNÉ, donc `.first` peut renvoyer une
-        // scène d'arrière-plan. En Split View / Stage Manager le composer était
-        // alors dimensionné contre l'inset d'une AUTRE fenêtre.
+        // La marge basse de la fenêtre qui PORTE la conversation : en Split View / Stage Manager,
+        // celle d'une AUTRE fenêtre (scène d'arrière-plan, puis fenêtre clé) dimensionnait le composer.
         guard let height = Self.resolvedComposerHeight(
             contentHeight: contentHeight,
             keyboardHeight: keyboardHeight,
-            safeAreaBottom: DeviceLayout.safeAreaBottom
+            safeAreaBottom: windowInsets.bottom
         ) else { return }
         composerHeight = height
         composerScrollButtonAnchor = Self.resolvedScrollButtonAnchor(
@@ -1136,11 +1136,11 @@ struct ConversationView: View {
                 // (`ignoresSafeArea` bas, cf. plus bas) : la bande safe area
                 // qu'il traverse s'ajoute à la réserve du composeur pour que
                 // le repos du fil ne bouge pas d'un point.
-                bottomInset: composerHeight + 16 + (previewMode ? 0 : DeviceLayout.safeAreaBottom),
+                bottomInset: composerHeight + 16 + (previewMode ? 0 : windowInsets.bottom),
                 bottomInsetTransition: listInsetTransition,
                 // 0 en preview : `.sheet` à détentes, déjà sous la status bar. La
                 // bande est réservée partout — l'aperçu porte l'en-tête (#8822).
-                topInset: previewMode ? 0 : DeviceLayout.safeAreaTop,
+                topInset: previewMode ? 0 : windowInsets.top,
                 headerBandHeight: headerState.bandHeight,
                 scrollToBottomTrigger: scrollState.scrollToBottomTrigger,
                 scrollToMessageId: scrollState.scrollToMessageId,
@@ -1509,10 +1509,10 @@ struct ConversationView: View {
                     // sa bande de couloirs en haut de son pane, elle doit donc
                     // commencer SOUS l'en-tête — contrairement au fil, dont les
                     // bulles ont le droit de défiler dessous.
-                    topInset: previewMode ? 0 : DeviceLayout.safeAreaTop + Self.riverHeaderClearance,
+                    topInset: previewMode ? 0 : windowInsets.top + Self.riverHeaderClearance,
                     // R-7 : la même réserve basse que le fil — le composeur
                     // n'est jamais une zone où une bulle reste prise.
-                    bottomInset: composerHeight + 16 + (previewMode ? 0 : DeviceLayout.safeAreaBottom),
+                    bottomInset: composerHeight + 16 + (previewMode ? 0 : windowInsets.bottom),
                     // L2b/2b-7 : la frappe atteint le lecteur quel que soit
                     // son mode — le pane Rivière est OPAQUE et couvrait la
                     // cellule de frappe du Fil. Même source que le Fil

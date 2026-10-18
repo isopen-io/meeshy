@@ -388,6 +388,7 @@ struct UniversalComposerBar: View {
     @Environment(\.horizontalSizeClass) var horizontalSizeClass
     /// La taille de la fenêtre qui porte la barre, publiée par sa racine (`publishingSceneWindowSize`).
     @Environment(\.sceneWindowSize) var sceneWindowSize
+    @Environment(\.sceneSafeAreaInsets) var sceneSafeAreaInsets
     var isDark: Bool { colorScheme == .dark }
     var theme: ThemeManager { ThemeManager.shared }
 
@@ -421,6 +422,9 @@ struct UniversalComposerBar: View {
     /// La hauteur de la fenêtre qui porte la barre (Stage Manager, Split View, fenêtre détachée) — la fenêtre clé en repli.
     private var hostWindowHeight: CGFloat { SceneWindowSize.resolve(sceneWindowSize, fallback: DeviceLayout.windowSize).height }
 
+    /// Les marges de la fenêtre qui porte la barre, la fenêtre clé en repli.
+    private var hostInsets: WindowInsets { WindowInsets(published: sceneSafeAreaInsets) }
+
     var attachmentPanelHeight: CGFloat {
         let keyboard = max(ownKeyboard.lastKnownHeight(host: hostKeyboard), 260)
         // Une largeur « regular » a un plancher plus haut pour la grille aérée des médias récents ; une largeur
@@ -431,8 +435,8 @@ struct UniversalComposerBar: View {
             lastKeyboardHeight: keyboard,
             contentFloor: contentFloor,
             windowHeight: hostWindowHeight,
-            safeAreaTop: DeviceLayout.safeAreaTop,
-            safeAreaBottom: DeviceLayout.safeAreaBottom
+            safeAreaTop: hostInsets.top,
+            safeAreaBottom: hostInsets.bottom
         )
         guard isExpandingToLibrary else { return resting }
         return ComposerLibraryHandoff.expandedHeight(
