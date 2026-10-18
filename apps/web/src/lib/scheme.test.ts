@@ -1,6 +1,6 @@
 import { afterEach, describe, expect, test } from 'bun:test';
 
-import { followSystem, setThemePreference } from './scheme';
+import { followSystem, holdMediaSystemBars, setThemePreference } from './scheme';
 
 /**
  * `followSystem — la preference systeme est suivie a chaud` (T1, #5604).
@@ -336,5 +336,85 @@ describe('la barre du navigateur suit le schéma PEINT, pas le système (#7776)'
     env.media.fire(true);
 
     expect(barre(env)).toEqual({ dark: 'not all', light: 'all' });
+  });
+});
+
+/**
+ * UN PLEIN ÉCRAN SOMBRE GARDE L'HEURE LISIBLE (#10917, #10797). Sous Android
+ * 15 et plus, la page de la coque passe sous la barre d'état : en thème clair,
+ * des icônes SOMBRES se posaient sur le noir de la visionneuse, d'une story ou
+ * d'un appel. Le navigateur, lui, garde sa barre `theme-color`. Tant qu'une
+ * telle surface est montée, la barre prend le style et la couleur du schéma
+ * sombre ; la dernière fermée, elle revient au schéma peint.
+ */
+describe('un plein écran sombre pose des icônes claires sur la barre de la coque (#10917)', () => {
+  function installShell() {
+    const appels: Array<{ plugin: string; methode: string; options: unknown }> = [];
+    (globalThis as { Capacitor?: unknown }).Capacitor = {
+      PluginHeaders: [{ name: 'SystemBars' }, { name: 'MeeshySystemBars' }],
+      nativePromise: async (plugin: string, methode: string, options: unknown) => {
+        appels.push({ plugin, methode, options });
+        return {};
+      },
+    };
+    return appels;
+  }
+
+  test('en thème clair, ouvrir la surface pose des icônes claires sur une barre sombre, la fermer rend le thème', () => {
+    const env = installEnvironment();
+    cleanup = env.restore;
+    setThemePreference('light');
+    const appels = installShell();
+
+    const relacher = holdMediaSystemBars();
+    const ouverte = [...appels];
+    relacher();
+
+    expect(ouverte).toEqual([
+      { plugin: 'MeeshySystemBars', methode: 'paint', options: { color: THEME_COLORS.dark } },
+      { plugin: 'SystemBars', methode: 'setStyle', options: { style: 'DARK' } },
+    ]);
+    expect(appels.slice(ouverte.length)).toEqual([
+      { plugin: 'MeeshySystemBars', methode: 'paint', options: { color: THEME_COLORS.light } },
+      { plugin: 'SystemBars', methode: 'setStyle', options: { style: 'LIGHT' } },
+    ]);
+  });
+
+  test('deux surfaces empilées : la barre reste sombre jusqu’à la fermeture de la dernière, et relâcher deux fois ne compte qu’une', () => {
+    const env = installEnvironment();
+    cleanup = env.restore;
+    setThemePreference('light');
+    const appels = installShell();
+    const styles = () => appels.filter((a) => a.plugin === 'SystemBars').map((a) => (a.options as { style: string }).style);
+
+    const visionneuse = holdMediaSystemBars();
+    const appel = holdMediaSystemBars();
+    visionneuse();
+    visionneuse();
+    expect(styles()).toEqual(['DARK']);
+
+    appel();
+    expect(styles()).toEqual(['DARK', 'LIGHT']);
+  });
+
+  test('changer de thème pendant que la surface est ouverte ne rallume pas les icônes sombres', () => {
+    const env = installEnvironment();
+    cleanup = env.restore;
+    const appels = installShell();
+    const relacher = holdMediaSystemBars();
+
+    setThemePreference('light');
+
+    expect(appels.filter((a) => a.plugin === 'SystemBars').map((a) => (a.options as { style: string }).style)).toEqual(['DARK', 'DARK']);
+    expect(env.classList.contains('light')).toBe(true);
+    relacher();
+  });
+
+  test('hors coque, ouvrir et fermer la surface ne touche à rien', () => {
+    const env = installEnvironment();
+    cleanup = env.restore;
+    delete (globalThis as { Capacitor?: unknown }).Capacitor;
+
+    expect(() => holdMediaSystemBars()()).not.toThrow();
   });
 });

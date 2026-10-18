@@ -2,6 +2,7 @@ import { describe, expect, test } from 'bun:test';
 import { createStore } from 'zustand/vanilla';
 
 import type { HttpRequest } from '@/lib/api/http';
+import type { SocialEventV2Input } from '@/lib/api/social-events-v2-types';
 import type { SessionState } from '@/lib/api/session';
 import { pushTapTarget, type PushTapTarget } from '@/lib/notifications/target';
 
@@ -72,6 +73,7 @@ function harness(
   const store = createStore<{ session: SessionState }>(() => ({ session }));
   const requests: HttpRequest[] = [];
   const visited: string[] = [];
+  const recorded: SocialEventV2Input[] = [];
   const env = {
     plugin: fake.plugin,
     sessionStore: store,
@@ -85,8 +87,9 @@ function harness(
     urlOf: (target: PushTapTarget) => `${target.route}:${JSON.stringify('params' in target ? target.params : 'search' in target ? target.search : {})}`,
     appVersion: '2.0.12',
     deviceIdentity,
+    record: (event: SocialEventV2Input) => recorded.push(event),
   };
-  return { ...fake, store, requests, visited, start: () => startShellPush(env) };
+  return { ...fake, store, requests, visited, recorded, start: () => startShellPush(env) };
 }
 
 const flush = () => new Promise((resolve) => setTimeout(resolve, 0));
@@ -315,5 +318,56 @@ describe('ce que la coque lit de la charge', () => {
   test('une remise sans message ni conversation n’est pas une remise', () => {
     expect(deliveredMessageOf({ type: 'new_message', conversationId: 'c1', messageId: '' })).toBeNull();
     expect(deliveredMessageOf(null)).toBeNull();
+  });
+});
+
+describe('startShellPush — l’entonnoir des notifications compte la coque (#10910)', () => {
+  const NOTIFICATION_ID = '65f0c0ffee0000000000abcd';
+  const POST_ID = '65f0c0ffee0000000000beef';
+
+  test('toucher une bannière note « opened » sur le canal fcm, comme le worker web sur webpush', async () => {
+    const h = harness(authenticated('u1'));
+    await h.start();
+    h.fire('pushNotificationActionPerformed', {
+      actionId: 'tap',
+      notification: { data: { notificationId: NOTIFICATION_ID, type: 'post_like', postId: POST_ID, title: 'Nour aime', body: 'secret' } },
+    });
+    expect(h.recorded).toEqual([
+      {
+        type: 'notification',
+        action: 'opened',
+        target: { kind: 'notification', id: NOTIFICATION_ID, parent: { kind: 'post', id: POST_ID } },
+        surface: 'notifications',
+        channel: 'fcm',
+        notificationType: 'post_like',
+      },
+    ]);
+  });
+
+  test('un push reçu app ouverte note « received »', async () => {
+    const h = harness(authenticated('u1'));
+    await h.start();
+    h.fire('pushNotificationReceived', { data: { notificationId: NOTIFICATION_ID, type: 'new_message', conversationId: 'c1', messageId: 'm1' } });
+    expect(h.recorded).toEqual([
+      {
+        type: 'notification',
+        action: 'received',
+        target: { kind: 'notification', id: NOTIFICATION_ID },
+        surface: 'notifications',
+        channel: 'fcm',
+        notificationType: 'new_message',
+      },
+    ]);
+  });
+
+  test('sans identifiant de notification valide, rien n’est noté ; un type illisible ne part pas', async () => {
+    const h = harness(authenticated('u1'));
+    await h.start();
+    h.fire('pushNotificationActionPerformed', { actionId: 'tap', notification: { data: { notificationId: 'pas-un-id', type: 'post_like' } } });
+    h.fire('pushNotificationReceived', { data: {} });
+    h.fire('pushNotificationActionPerformed', { actionId: 'tap', notification: { data: { notificationId: NOTIFICATION_ID, type: 'type avec espaces' } } });
+    expect(h.recorded).toEqual([
+      { type: 'notification', action: 'opened', target: { kind: 'notification', id: NOTIFICATION_ID }, surface: 'notifications', channel: 'fcm' },
+    ]);
   });
 });

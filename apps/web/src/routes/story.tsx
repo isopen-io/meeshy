@@ -77,6 +77,7 @@ import { useElementSize } from '@/lib/view/use-element-size';
 import { useLiveAnnouncer } from '@/lib/view/use-live-announcer';
 import { useReaderLanguages } from '@/lib/view/use-reader';
 import { useParams, useSearch } from '@/lib/router';
+import { useMediaSystemBars } from '@/lib/use-media-system-bars';
 import { Link, href, navigate } from '@/routes/route-table';
 
 /** L'hôte des scènes v3 (#6899) — chargé À LA DEMANDE, motif D-54 : une story
@@ -132,6 +133,7 @@ export default function StoryScreen() {
   const { post } = useParams<'/story/$post'>();
   /* Ouvrir une story arrête ce qui jouait ailleurs (#9586, `StoryMediaCoordinator.activate` iOS). */
   useStoryMediaClaim();
+  useMediaSystemBars();
   const [currentId, setCurrentId] = useState(post);
   /**
    * **LA PORTÉE « UN SEUL GROUPE »** (revue de #6149, défaut majeur 3) —
