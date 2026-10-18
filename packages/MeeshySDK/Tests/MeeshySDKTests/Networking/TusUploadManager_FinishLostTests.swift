@@ -107,4 +107,65 @@ final class TusUploadManager_FinishLostTests: XCTestCase {
         XCTAssertEqual(result.id, "att-new")
         XCTAssertEqual(TusFinishLostStubURLProtocol.methods, ["POST", "PATCH"])
     }
+
+    // MARK: - Portée d'une session : son contexte, et un seul envoi à la fois
+
+    /// Laisse un checkpoint à l'offset 0 : POST accepté, puis PATCH refusé.
+    private func leaveACheckpoint(_ manager: TusUploadManager, context: String?) async {
+        TusFinishLostStubURLProtocol.exchanges = [
+            .init(status: 201, headers: ["Location": "https://stub.meeshy.test/api/v1/uploads/old"], body: Data()),
+            .init(status: 500, headers: [:], body: Data())
+        ]
+        _ = try? await manager.performTusUpload(fileURL: file, mimeType: "application/octet-stream",
+                                                credential: .bearer("t"), uploadContext: context)
+        TusFinishLostStubURLProtocol.methods = []
+    }
+
+    private func freshSessionExchanges() -> [TusFinishLostStubURLProtocol.Exchange] {
+        [.init(status: 201, headers: ["Location": "https://stub.meeshy.test/api/v1/uploads/new"], body: Data()),
+         .init(status: 200, headers: [:], body: finishBody)]
+    }
+
+    /// La pré-montée du composer crée sa session en contexte « story » ; la publication d'un POST des mêmes
+    /// octets la reprenait : la pièce jointe naissait sous le mauvais contexte (post publié vide).
+    func test_aSessionOpenedForAnotherContext_isNotResumed() async throws {
+        let manager = try makeManager()
+        await leaveACheckpoint(manager, context: "story")
+
+        TusFinishLostStubURLProtocol.exchanges = freshSessionExchanges()
+        let result = try await manager.performTusUpload(fileURL: file, mimeType: "application/octet-stream",
+                                                        credential: .bearer("t"), uploadContext: "post")
+
+        XCTAssertEqual(result.id, "att-new")
+        XCTAssertEqual(TusFinishLostStubURLProtocol.methods, ["POST", "PATCH"], "une session « story » ne sert pas un « post »")
+    }
+
+    func test_theSameContext_stillResumes() async throws {
+        let manager = try makeManager()
+        await leaveACheckpoint(manager, context: "post")
+
+        TusFinishLostStubURLProtocol.exchanges = [.init(status: 200, headers: [:], body: finishBody)]
+        let result = try await manager.performTusUpload(fileURL: file, mimeType: "application/octet-stream",
+                                                        credential: .bearer("t"), uploadContext: "post")
+
+        XCTAssertEqual(result.id, "att-new")
+        XCTAssertEqual(TusFinishLostStubURLProtocol.methods, ["PATCH"], "la reprise du même envoi doit survivre")
+    }
+
+    /// Deux envois simultanés des mêmes octets envoyaient leurs PATCH sur la même URL : le perdant tombait en
+    /// 409 → HEAD == fileSize, sans pièce jointe. Une session tenue par un envoi en vol n'est pas reprise.
+    func test_aSessionHeldByAnUploadInFlight_isNotShared() async throws {
+        let manager = try makeManager()
+        await leaveACheckpoint(manager, context: nil)
+        let key = TusUploadManager.checkpointKey(digest: try TusUploadManager.sha256Hex(of: file), uploadContext: nil)
+        XCTAssertTrue(TusUploadLeases.shared.claim(key), "précondition : un autre envoi tient la session")
+        defer { TusUploadLeases.shared.release(key) }
+
+        TusFinishLostStubURLProtocol.exchanges = freshSessionExchanges()
+        let result = try await manager.performTusUpload(fileURL: file, mimeType: "application/octet-stream",
+                                                        credential: .bearer("t"))
+
+        XCTAssertEqual(result.id, "att-new")
+        XCTAssertEqual(TusFinishLostStubURLProtocol.methods, ["POST", "PATCH"])
+    }
 }

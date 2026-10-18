@@ -134,7 +134,32 @@ public struct TusUploadTranscriptionMetadata: Codable, Sendable, Equatable {
     }
 }
 
+/// Les envois TUS EN VOL dans ce processus, par clé de checkpoint. Un manager naît par envoi : sans ce
+/// registre commun, deux envois des mêmes octets reprenaient la même session et croisaient leurs PATCH.
+final class TusUploadLeases: @unchecked Sendable {
+    static let shared = TusUploadLeases()
+    private let lock = NSLock()
+    private var held = Set<String>()
+
+    /// Vrai si la clé était libre — l'appelant la tient jusqu'à `release`.
+    func claim(_ key: String) -> Bool {
+        lock.lock(); defer { lock.unlock() }
+        return held.insert(key).inserted
+    }
+
+    func release(_ key: String) {
+        lock.lock(); defer { lock.unlock() }
+        held.remove(key)
+    }
+}
+
 public actor TusUploadManager {
+    /// Une session TUS naît AVEC son contexte (`uploadContext` du POST) : elle ne sert qu'un envoi du même
+    /// contexte. Sans contexte, la clé reste l'empreinte seule — les checkpoints déjà écrits restent repris.
+    static func checkpointKey(digest: String, uploadContext: String?) -> String {
+        uploadContext.map { "\(digest)|\($0)" } ?? digest
+    }
+
     private let baseURL: URL
     private let chunkSize: Int = 10 * 1024 * 1024 // 10 MB
     private let maxConcurrent: Int = 3
@@ -394,7 +419,13 @@ public actor TusUploadManager {
         // Compute the bytewise checkpoint key once. Same source file +
         // same compression settings → same bytes → same key, so a queue
         // retry after kill matches the previous session's checkpoint.
-        let checkpointKey = try digestMemo.digest(of: fileURL, computing: Self.sha256Hex(of:))
+        let digest = try digestMemo.digest(of: fileURL, computing: Self.sha256Hex(of:))
+        let scopedKey = Self.checkpointKey(digest: digest, uploadContext: uploadContext)
+        // Un envoi des mêmes octets déjà en vol tient cette session : celui-ci ouvre la sienne, sous une clé
+        // à lui (jamais reprise, purgée comme tout checkpoint périmé si l'envoi échoue).
+        let leased = TusUploadLeases.shared.claim(scopedKey)
+        defer { if leased { TusUploadLeases.shared.release(scopedKey) } }
+        let checkpointKey = leased ? scopedKey : "\(scopedKey)|\(UUID().uuidString)"
         let store = checkpointStore
 
         // Step 1: Resolve patchURL — either resume from a stored checkpoint
