@@ -61,6 +61,15 @@ final class UnauthorizedReplayOwnershipTests: XCTestCase {
         return "eyJhbGciOiJIUzI1NiJ9.\(payload).sig"
     }
 
+    private static func expiredJWT(_ userId: String) -> String {
+        let payload = Data(#"{"userId":"\#(userId)","exp":1600000000}"#.utf8)
+            .base64EncodedString()
+            .replacingOccurrences(of: "=", with: "")
+            .replacingOccurrences(of: "+", with: "-")
+            .replacingOccurrences(of: "/", with: "_")
+        return "eyJhbGciOiJIUzI1NiJ9.\(payload).sig"
+    }
+
     private static let tokenA1 = jwt("user-a", "a1")
     private static let tokenA2 = jwt("user-a", "a2")
     private static let tokenB1 = jwt("user-b", "b1")
@@ -97,6 +106,43 @@ final class UnauthorizedReplayOwnershipTests: XCTestCase {
         for _ in 0..<2_000 where !condition() {
             try? await Task.sleep(nanoseconds: 2_000_000)
         }
+    }
+
+    // MARK: - Le jeton remis à un autre transport (#10927)
+
+    func test_freshAuthToken_whenTheJWTIsExpired_refreshesItBeforeHandingItOver() async throws {
+        let auth = AuthManager.shared
+        let expired = Self.expiredJWT("user-a")
+        try auth.applySession(token: expired, sessionToken: "sess-a", user: makeUser("user-a"))
+        authService.served = [expired: (Self.tokenA2, makeUser("user-a"))]
+        let client = makeStubbedClient(token: expired)
+
+        let handed = await client.freshAuthToken()
+
+        XCTAssertEqual(handed, Self.tokenA2, "un jeton échu ne part jamais sur /sync")
+        XCTAssertEqual(authService.presentedTokens, [expired])
+    }
+
+    func test_freshAuthToken_whenTheJWTIsLive_handsItOverWithoutRefreshing() async throws {
+        let auth = AuthManager.shared
+        try auth.applySession(token: Self.tokenA1, sessionToken: "sess-a", user: makeUser("user-a"))
+        let client = makeStubbedClient(token: Self.tokenA1)
+
+        let handed = await client.freshAuthToken()
+
+        XCTAssertEqual(handed, Self.tokenA1)
+        XCTAssertEqual(authService.presentedTokens, [])
+    }
+
+    func test_freshAuthToken_whenTheRefreshFails_handsOverTheTokenItHolds() async throws {
+        let auth = AuthManager.shared
+        let expired = Self.expiredJWT("user-a")
+        try auth.applySession(token: expired, sessionToken: "sess-a", user: makeUser("user-a"))
+        let client = makeStubbedClient(token: expired)
+
+        let handed = await client.freshAuthToken()
+
+        XCTAssertEqual(handed, expired, "hors ligne, le repli REST garde la main sur le verdict")
     }
 
     // MARK: - Un 401 de A après la bascule vers B
