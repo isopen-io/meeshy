@@ -26,11 +26,7 @@ extension StoryViewerView {
                 isPresented = false
                 return
             }
-            groupTransition(forward: true) {
-                currentGroupIndex += 1
-                currentStoryIndex = entryIndex(of: groups[currentGroupIndex])
-                progressClock.reset()
-            }
+            groupTransition(forward: true) { landOnNextGroup() }
         } else {
             if isPreviewMode {
                 isPresented = false
@@ -56,6 +52,16 @@ extension StoryViewerView {
 
     /// « Auteur précédent », borné : la liste a pu rétrécir sous le lecteur
     /// depuis que l'index a été posé (`StoryViewerPosition`).
+    /// Atterrit sur l'auteur SUIVANT, borné par la liste que la transition tient. La garde du tap se lit 0,38 s
+    /// avant cette closure : entre-temps `reanchorPosition` peut avoir recalé l'index (un `story:created` trié
+    /// devant), et `groups[currentGroupIndex]` après un `+= 1` sortait du tableau — plantage.
+    func landOnNextGroup() {
+        guard let next = StoryViewerPosition.nextGroupIndex(after: currentGroupIndex, groupCount: groups.count) else { return }
+        currentGroupIndex = next
+        currentStoryIndex = entryIndex(of: groups[next])
+        progressClock.reset()
+    }
+
     func landOnPreviousGroup() {
         guard let landing = StoryViewerPosition.previousGroupLanding(
             storyCounts: groups.map(\.stories.count), from: currentGroupIndex

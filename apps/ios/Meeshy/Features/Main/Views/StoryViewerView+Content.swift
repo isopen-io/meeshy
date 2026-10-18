@@ -316,11 +316,7 @@ extension StoryViewerView {
                         // sa première story non lue (parité avec l'aperçu du
                         // cube), pas systématiquement à la slide 0.
                         HapticFeedback.light()
-                        groupTransition(forward: true) {
-                            currentGroupIndex += 1
-                            currentStoryIndex = entryIndex(of: groups[currentGroupIndex])
-                            progressClock.reset()
-                        }
+                        groupTransition(forward: true) { landOnNextGroup() }
                     } else if (dx > 60 || predicted > 150) && currentGroupIndex > 0 {
                         // Swipe right -> prev group
                         HapticFeedback.light()
