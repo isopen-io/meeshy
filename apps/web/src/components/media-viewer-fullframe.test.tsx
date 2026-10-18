@@ -5,6 +5,7 @@ import { afterAll, afterEach, beforeAll, describe, expect, test } from 'bun:test
 import { ensureHappyDomRegistered, releaseHappyDomIfRegistered } from '@/test-support/happy-dom-environment';
 import type { Attachment } from '@/lib/api/types';
 import { loadInterfaceCatalog } from '@/lib/i18n-catalog';
+import { dropCarriedAudio } from '@/lib/view/audio-carry';
 import type { MediaCarrier } from '@/lib/view/media';
 
 import MediaViewer from './media-viewer';
@@ -55,8 +56,14 @@ afterAll(async () => {
 });
 
 afterEach(() => {
+  // Démonter la visionneuse sur un vocal qui joue (lecture simulée) le CONFIE
+  // au mini-lecteur (#9256, `useCarryOnClose`) — sur le magasin GLOBAL du
+  // process `bun test` (#9305). Sans ce nettoyage, le vocal confié survit au
+  // fichier : le bandeau du haut (`top-band.test.tsx`) voit un audio jouer et
+  // n'a plus de place pour la bannière du joueur.
   act(() => root.unmount());
   container.remove();
+  dropCarriedAudio();
   restorePlayback();
   document.dir = '';
   playbackCalls.length = 0;
