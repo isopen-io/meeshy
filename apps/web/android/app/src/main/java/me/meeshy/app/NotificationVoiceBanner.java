@@ -13,7 +13,9 @@ import android.os.Handler;
 import android.os.Looper;
 import android.service.notification.StatusBarNotification;
 import android.util.Log;
+import java.util.ArrayList;
 import java.util.HashMap;
+import java.util.List;
 import java.util.Map;
 
 /**
@@ -53,8 +55,9 @@ final class NotificationVoiceBanner {
         "type", "conversationId", "conversationTitle", "messageId", "senderDisplayName", "senderUsername",
         "attachmentUrl", "attachmentMimeType", "attachmentDurationMs", "attachmentId", "attachmentLanguage",
         "notificationLocKey", "encryptedContent", "gcm.notification.tag", "gcm.n.tag", KEY_ORIGIN,
-        // #10891 — « Repondre » se repose a chaque bascule Ecouter ⇄ Pause.
-        "replyActionLabel",
+        // #10891 / #10906 — les actions de la banniere se reposent a chaque
+        // bascule Ecouter ⇄ Pause.
+        "replyActionLabel", "contentActionLabel", "locationLat", "locationLon", "locationName", "inviteUrl",
     };
 
     private NotificationVoiceBanner() {}
@@ -85,15 +88,15 @@ final class NotificationVoiceBanner {
 
     /**
      * Apres l'affichage par FCM : pose « Ecouter » si ce push est un vocal
-     * ecoutable, avec « Repondre » a cote ; tout autre message ne recoit que
-     * « Repondre » (#10891).
+     * ecoutable, avec les actions de la banniere a cote ; tout autre message ne
+     * recoit que celles-ci (#10891, #10906).
      */
     static void offer(Context context, Map<String, String> data) {
         NotificationVoiceRules.Voice voice = NotificationVoiceRules.listenable(
             data, CallShellStore.apiBase(context), debuggable(context));
         String origin = voice == null || voice.tag.isEmpty() ? null : CallShellStore.voiceOrigin(context);
         if (origin == null) {
-            NotificationReplyAction.offer(context, data);
+            NotificationBannerActions.offer(context, data);
             return;
         }
         // Jamais lue de la charge : la coque la pose, elle ne la recoit pas.
@@ -142,9 +145,10 @@ final class NotificationVoiceBanner {
             Bundle extras = new Bundle();
             extras.putString(EXTRA_MESSAGE_ID, voice.messageId);
             builder.addExtras(extras);
-            Notification.Action reply = NotificationReplyAction.of(context, data);
-            if (reply == null) builder.setActions(action(context, data, playing));
-            else builder.setActions(action(context, data, playing), reply);
+            List<Notification.Action> actions = new ArrayList<>();
+            actions.add(action(context, data, playing));
+            actions.addAll(NotificationBannerActions.of(context, data));
+            builder.setActions(actions.toArray(new Notification.Action[0]));
             builder.setOnlyAlertOnce(true);
             String sub = note != null ? note : NotificationVoiceRules.duration(voice.durationMs);
             if (!sub.isEmpty()) builder.setSubText(sub);

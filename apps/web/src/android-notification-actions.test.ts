@@ -9,7 +9,8 @@ import { describe, expect, test } from 'bun:test';
  * coque sans aucune action. La coque la reprend après l'affichage, comme pour
  * « Écouter » (#10641), et le toucher suit le lien du widget de réponse
  * (`meeshy://c/<id>?compose=1`, #10626) : le fil s'ouvre, le curseur y est.
- * La décision est testée en JVM (`NotificationBannerRulesTest`) ; ce témoin
+ * « Ouvrir la carte » et « Rejoindre » s'y ajoutent devant (#10906), comme
+ * sur le web. La décision est testée en JVM (`NotificationBannerRulesTest`) ; ce témoin
  * garde le câblage que la JVM ne voit pas.
  */
 
@@ -59,10 +60,11 @@ describe('« Répondre » sur la bannière d’un message (#10891)', () => {
   });
 
   test('« Ouvrir la carte » part à l’app de cartes, « Rejoindre » reste dans l’app (#10906)', () => {
+    const ordre = corpsDe(lire('NotificationBannerRules.java'), 'static List<Action> actionsOf(');
+    expect(ordre.indexOf('contentOf(')).toBeGreaterThan(-1);
+    expect(ordre.indexOf('contentOf(')).toBeLessThan(ordre.indexOf('replyOf('));
     const actions = lire('NotificationBannerActions.java');
-    expect(actions).toContain('NotificationBannerRules.contentOf(');
-    expect(actions).toContain('NotificationBannerRules.replyOf(');
-    expect(actions.indexOf('contentOf(')).toBeLessThan(actions.indexOf('replyOf('));
+    expect(actions).toContain('NotificationBannerRules.actionsOf(');
     expect(actions).toContain('.inApp');
   });
 

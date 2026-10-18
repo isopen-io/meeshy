@@ -56,8 +56,8 @@ public class MeeshyWidgetsPlugin extends Plugin {
     protected void handleOnNewIntent(Intent intent) {
         super.handleOnNewIntent(intent);
         if (intent == null || !Intent.ACTION_VIEW.equals(intent.getAction())) return;
-        // #10891 — « Repondre » touche sur une banniere de message : elle s'en va.
-        NotificationReplyAction.dismiss(getContext(), intent);
+        // #10891 / #10906 — une action touchee sur une banniere de message : elle s'en va.
+        NotificationBannerActions.dismiss(getContext(), intent);
         Uri data = intent.getData();
         String conversationId = data == null ? null : WidgetActionRules.composeTarget(data.toString());
         if (conversationId == null) return;
