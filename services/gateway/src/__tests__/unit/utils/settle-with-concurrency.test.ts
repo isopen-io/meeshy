@@ -20,12 +20,22 @@ describe('settleWithConcurrency', () => {
   });
 
   it('relance dès qu’une place se libère, sans attendre la tranche la plus lente', async () => {
-    const started: number[] = [];
-    await settleWithConcurrency([50, 1, 1, 1], 2, async (ms) => {
-      started.push(Date.now());
-      await delay(ms);
+    // Sans chronomètre : l'élément lent ne se termine que lorsque le test le libère.
+    // Tant qu'il tient sa place, les trois rapides doivent TOUS passer par la seconde
+    // — des tranches (`slice` + `allSettled`) attendraient le lent avant de lancer `b`.
+    let releaseSlow!: () => void;
+    const slow = new Promise<void>((resolve) => { releaseSlow = resolve; });
+    const started: string[] = [];
+    const settled = settleWithConcurrency(['lent', 'a', 'b', 'c'], 2, async (item) => {
+      started.push(item);
+      if (item === 'lent') await slow;
     });
-    expect(started[3] - started[0]).toBeLessThan(40);
+
+    await new Promise<void>((resolve) => setImmediate(resolve));
+    expect(started).toEqual(['lent', 'a', 'b', 'c']);
+
+    releaseSlow();
+    await expect(settled).resolves.toHaveLength(4);
   });
 
   it('une liste vide rend une liste vide', async () => {
