@@ -1,10 +1,12 @@
 import { useEffect, useState } from 'react';
 
 import type { AppearanceDesign } from '@meeshy/shared/types/appearance-design';
+import type { BannerFrameDesign } from '@meeshy/shared/types/banner-frame-design';
 import { designToSvg, type AppearanceScheme } from '@meeshy/shared/utils/appearance-svg';
 
 import { currentScheme } from '@/lib/scheme';
 
+import { BannerFrame } from './frame-art';
 import { PackLottieLayer } from './pack-lottie-layer';
 
 /**
@@ -62,4 +64,14 @@ export function ProfileBannerDesign({ design, accent, scheme }: { readonly desig
       <PackLottieLayer lottie={design.lottie} />
     </span>
   );
+}
+
+/**
+ * **LE CADRE DE BANNIÈRE ÉQUIPÉ** (#10935) — posé PAR-DESSUS ce que `bannerPaint`
+ * a peint (photo, design ou dégradé), sous les badges : il ne remplace jamais ce
+ * qui est dessous, son centre reste transparent. Sans cadre, rien n'est ajouté.
+ */
+export function ProfileBannerFrame({ frame }: { readonly frame: BannerFrameDesign | null | undefined }) {
+  if (frame === null || frame === undefined) return null;
+  return <BannerFrame frame={frame} />;
 }

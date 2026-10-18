@@ -1,5 +1,6 @@
 import { parseAppearancePackContract, type AppearanceDesign } from '@meeshy/shared/types/appearance-design';
 import { parseAvatarRingPackContract, type AvatarRingDesign } from '@meeshy/shared/types/avatar-ring-design';
+import { parseBannerFramePackContract, type BannerFrameDesign } from '@meeshy/shared/types/banner-frame-design';
 import type { ProfileDecorRef, ServedProfileDecorItem } from '@meeshy/shared/types/profile-decor';
 
 import { BUILTIN_BANNER_PACKS, BUILTIN_RING_PACKS, builtinBannerDesign, builtinRingDesign, type BuiltinPack } from './catalog';
@@ -32,6 +33,17 @@ export function resolveBanner(item: ServedProfileDecorItem | null, contracts: Co
   if (embedded(item)) return builtinBannerDesign(item);
   const contract = parseAppearancePackContract(contracts.get(item.contract ?? ''));
   return contract?.domain === 'banner' ? (contract.designs.find((design) => design.key === item.item) ?? null) : null;
+}
+
+/**
+ * Le cadre posé SUR la bannière (#10932, #10935) : aucun cadre n'est encore
+ * embarqué (catalogue : #10936), un `builtin` se lit donc `null` ; un `official`
+ * se lit dans son contrat `banner-frame`.
+ */
+export function resolveBannerFrame(item: ServedProfileDecorItem | null | undefined, contracts: ContractStore): BannerFrameDesign | null {
+  if (item === null || item === undefined || embedded(item)) return null;
+  const contract = parseBannerFramePackContract(contracts.get(item.contract ?? ''));
+  return contract?.frames.find((frame) => frame.key === item.item) ?? null;
 }
 
 export type OptionGroup<Design> = {

@@ -9,7 +9,7 @@ import { Field } from '@/components/field';
 import { Glyph, GlyphSvg } from '@/components/glyph';
 import type { GlyphName } from '@/components/glyphs';
 import { PROFILE_GLYPHS, type ProfileGlyphName } from '@/components/glyphs-profile';
-import { bannerPaint, ProfileBannerDesign, useScheme } from '@/components/profile-banner-design';
+import { bannerPaint, ProfileBannerDesign, ProfileBannerFrame, useScheme } from '@/components/profile-banner-design';
 import { ProfileImageButton, useProfileImageViewer } from '@/components/profile-image-viewer';
 import {
   GroupedSection,
@@ -348,6 +348,7 @@ export function ProfileHero({
             <img src={attachmentSrc(paint.image)} alt="" className="block size-full object-cover" />
           )
         )}
+        <ProfileBannerFrame frame={decor.bannerFrame} />
         {editing ? null : game}
         {editing && pending.banner === undefined ? (
           <PickButton
