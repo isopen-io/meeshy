@@ -72,6 +72,7 @@ const deStickerPacks = {
   'packs.domain.wallpaper': "Konversationshintergründe",
   'packs.domain.avatar-ring': "Avatar-Ringe",
   'packs.domain.banner': "Banner",
+  'packs.domain.banner-frame': "Bannerrahmen",
   'packs.domain.capture-frame': "Aufnahmerahmen",
   'packs.price': "{price} Meeshes",
   'packs.owned': "Im Besitz",

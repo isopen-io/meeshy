@@ -208,7 +208,7 @@ describe('deux choix rapprochés sur le même côté : les réponses se croisent
     expect(decorOf(client)?.banner?.item).toBe('aurore');
     pending[1]?.resolve({ ok: true, data: { avatarRing: ring('filet'), banner: banner('aurore') } });
     await bannerEquip;
-    expect(decorOf(client)).toEqual({ avatarRing: ring('filet'), banner: banner('aurore') });
+    expect(decorOf(client)).toEqual({ avatarRing: ring('filet'), banner: banner('aurore'), bannerFrame: null });
   });
 });
 
@@ -219,9 +219,9 @@ describe('un profile:decor-updated arrivé pendant un choix en vol (#10632)', ()
     const equip = equipProfileDecor({ queryClient: client, deps, side: 'avatarRing', choice: ring('filet') });
     await new Promise((resolve) => setTimeout(resolve, 0));
     applyProfileDecorEvent(client, { userId: 'u1', decor: { avatarRing: ring('laurier'), banner: banner('aurore') }, at: 'x' });
-    expect(decorOf(client)).toEqual({ avatarRing: ring('filet'), banner: banner('aurore') });
+    expect(decorOf(client)).toEqual({ avatarRing: ring('filet'), banner: banner('aurore'), bannerFrame: null });
     answer?.({ ok: false, status: 403, error: 'no' });
     await equip;
-    expect(decorOf(client)).toEqual({ avatarRing: ring('laurier'), banner: banner('aurore') });
+    expect(decorOf(client)).toEqual({ avatarRing: ring('laurier'), banner: banner('aurore'), bannerFrame: null });
   });
 });

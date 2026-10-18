@@ -4,11 +4,17 @@
  * tous. Les traits d'ornement désignent leur couleur par l'INDEX dans
  * `stroke.colors` — la palette d'un contour est la seule qu'il connaît.
  *
+ * Un contour peut porter des DÉGRADÉS (`gradients`, désignés par index depuis
+ * un trait, sa `color` restant le repli d'un rendu qui ne les connaît pas) et
+ * des MOUVEMENTS déclarés (`motion`, communs aux cadres de bannière, #10932) :
+ * deux champs FACULTATIFS, qu'un client plus ancien ignore.
+ *
  * Rendu de référence : `avatarRingSvg` (`utils/appearance-svg.ts`).
  */
 import * as z from 'zod/mini';
 import { PackAssetRefSchema } from './content-pack-index.js';
 import { APPEARANCE_LIMITS, PATH_D_PATTERN, hexSchema, slugSchema } from './appearance-design.js';
+import { FrameMotionListSchema, frameGradientsSchema, frameGroupSchema, gradientsFitPalette, strokesFitGradients } from './frame-decor.js';
 
 export const RING_STROKE_STYLES = ['solid', 'double', 'dotted', 'dashed', 'gradient'] as const;
 export type RingStrokeStyle = (typeof RING_STROKE_STYLES)[number];
@@ -22,6 +28,10 @@ const RingOrnamentStrokeSchema = z.object({
   color: z.int().check(z.minimum(0), z.maximum(3)),
   opacity: z.number().check(z.minimum(0), z.maximum(1)),
   width: z.optional(z.number().check(z.gt(0), z.maximum(40))),
+  /** Index dans `gradients` ; `color` reste le repli. */
+  gradient: z.optional(z.int().check(z.minimum(0), z.maximum(3))),
+  /** Le groupe que les mouvements désignent. */
+  group: z.optional(frameGroupSchema),
 });
 export type RingOrnamentStroke = z.infer<typeof RingOrnamentStrokeSchema>;
 
@@ -35,10 +45,13 @@ export const AvatarRingDesignSchema = z
       colors: z.array(hexSchema).check(z.minLength(1), z.maxLength(4)),
     }),
     ornament: z.optional(z.object({ paths: z.array(RingOrnamentStrokeSchema).check(z.minLength(1), z.maxLength(APPEARANCE_LIMITS.maxRingPaths)) })),
+    gradients: z.optional(frameGradientsSchema),
+    motion: z.optional(FrameMotionListSchema),
     lottie: z.optional(PackAssetRefSchema),
   })
   .check(
     z.refine((ring) => ring.ornament === undefined || ring.ornament.paths.every((path) => path.color < ring.stroke.colors.length)),
+    z.refine((ring) => gradientsFitPalette(ring.gradients, ring.stroke.colors.length) && strokesFitGradients(ring.ornament?.paths ?? [], ring.gradients)),
     z.refine((ring) => (ring.ornament?.paths.reduce((total, path) => total + path.d.length, 0) ?? 0) <= APPEARANCE_LIMITS.maxTotalPathLength),
   );
 export type AvatarRingDesign = z.infer<typeof AvatarRingDesignSchema>;

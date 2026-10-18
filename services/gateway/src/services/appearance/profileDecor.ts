@@ -1,24 +1,28 @@
 /**
- * Le DÉCOR de profil (#10632, § 5.5 et § 10.2) — le contour d'avatar et la
- * bannière de design ÉQUIPÉS, visibles des autres. Deux fonctions, UN module :
+ * Le DÉCOR de profil (#10632, § 5.5 et § 10.2) — le contour d'avatar, la
+ * bannière de design (le FOND) et le cadre de bannière (posé SUR la photo,
+ * #10932) ÉQUIPÉS, visibles des autres. Deux fonctions, UN module :
  *
  *   - `servedProfileDecor` : ce qu'on SERT (`GET /me`, profil public) — tolérant,
  *     un choix qui n'existe plus au registre se sert `null`, jamais une erreur ;
  *   - `validateProfileDecorWrite` : ce qu'on ACCEPTE (`PUT /me/profile-decor`) —
  *     domaine, POSSESSION du pack, existence de l'élément (après la possession :
  *     aucun oracle sur le contenu d'un pack non possédé), puis la loi des cadres pour le contour
- *     (`canUseFrame(…, { kind: 'avatar' })`).
+ *     (`canUseFrame(…, { kind: 'avatar' })`) et le cadre de bannière (`{ kind: 'banner' }`).
+ *     Fail-closed : un côté refusé n'écrit RIEN, pas même les autres côtés de la requête.
  */
 import type { PrismaClient } from '@meeshy/shared/prisma/client';
 import { isPackOwned, type PackDomain } from '@meeshy/shared/types/content-pack';
 import { frameUsageOf, type PackIndexEntry } from '@meeshy/shared/types/content-pack-index';
-import { canUseFrame } from '@meeshy/shared/types/frame-usage';
+import { canUseFrame, type FrameUseContext } from '@meeshy/shared/types/frame-usage';
 import {
   EMPTY_PROFILE_DECOR,
+  PROFILE_DECOR_SIDE_DOMAIN,
   ProfileDecorRefSchema,
   formatProfileDecorRef,
   parseProfileDecorRef,
   type ProfileDecorRef,
+  type ProfileDecorSide,
   type ServedProfileDecor,
   type ServedProfileDecorItem,
 } from '@meeshy/shared/types/profile-decor';
@@ -31,7 +35,20 @@ export const servedProfileDecorItemJsonSchema = {
   properties: { pack: { type: 'string' }, item: { type: 'string' }, origin: { type: 'string' }, contract: { type: 'string', nullable: true } },
 } as const;
 
-export type StoredProfileDecor = { readonly equippedAvatarRing?: string | null; readonly equippedBanner?: string | null };
+/** Le décor SERVI, ses trois côtés — UNE déclaration pour `/me`, `PUT /me/profile-decor` et le profil public. */
+export const servedProfileDecorJsonSchema = {
+  type: 'object',
+  properties: { avatarRing: servedProfileDecorItemJsonSchema, banner: servedProfileDecorItemJsonSchema, bannerFrame: servedProfileDecorItemJsonSchema },
+} as const;
+
+/** Les colonnes du décor, à `select`er ensemble partout où le décor est composé. */
+export const PROFILE_DECOR_COLUMNS = { equippedAvatarRing: true, equippedBanner: true, equippedBannerFrame: true } as const;
+
+export type StoredProfileDecor = {
+  readonly equippedAvatarRing?: string | null;
+  readonly equippedBanner?: string | null;
+  readonly equippedBannerFrame?: string | null;
+};
 
 /** Un pack MASQUÉ se sert en lecture (ce qui est équipé, payé compris, reste porté) ; il ne s'équipe plus. */
 const resolvePack = (index: PackIndex, domain: PackDomain, ref: ProfileDecorRef, use: 'served' | 'equipped'): PackIndexEntry | undefined =>
@@ -52,7 +69,11 @@ const servedItem = (index: PackIndex, domain: PackDomain, stored: string | null 
 export const servedProfileDecor = (index: PackIndex, stored: StoredProfileDecor | null | undefined): ServedProfileDecor =>
   stored === null || stored === undefined
     ? EMPTY_PROFILE_DECOR
-    : { avatarRing: servedItem(index, 'avatar-ring', stored.equippedAvatarRing), banner: servedItem(index, 'banner', stored.equippedBanner) };
+    : {
+        avatarRing: servedItem(index, 'avatar-ring', stored.equippedAvatarRing),
+        banner: servedItem(index, 'banner', stored.equippedBanner),
+        bannerFrame: servedItem(index, 'banner-frame', stored.equippedBannerFrame),
+      };
 
 /**
  * Le contour qui voyage AVEC un participant (#10713) — listes, fiche, bulles.
@@ -75,11 +96,18 @@ export type ProfileDecorWriteOutcome =
   | { readonly kind: 'item-not-found' }
   | { readonly kind: 'usage-mismatch' };
 
-type Side = { readonly field: 'equippedAvatarRing' | 'equippedBanner'; readonly key: 'avatarRing' | 'banner'; readonly domain: PackDomain };
+type Side = {
+  readonly field: keyof StoredProfileDecor;
+  readonly key: ProfileDecorSide;
+  readonly domain: PackDomain;
+  /** Le contexte de la loi des cadres : `null` pour un côté qui n'est pas un cadre (le fond de bannière). */
+  readonly frameContext: FrameUseContext | null;
+};
 
 const SIDES: readonly Side[] = [
-  { field: 'equippedAvatarRing', key: 'avatarRing', domain: 'avatar-ring' },
-  { field: 'equippedBanner', key: 'banner', domain: 'banner' },
+  { field: 'equippedAvatarRing', key: 'avatarRing', domain: PROFILE_DECOR_SIDE_DOMAIN.avatarRing, frameContext: { kind: 'avatar' } },
+  { field: 'equippedBanner', key: 'banner', domain: PROFILE_DECOR_SIDE_DOMAIN.banner, frameContext: null },
+  { field: 'equippedBannerFrame', key: 'bannerFrame', domain: PROFILE_DECOR_SIDE_DOMAIN.bannerFrame, frameContext: { kind: 'banner' } },
 ];
 
 export type ProfileDecorWriteParams = {
@@ -98,7 +126,7 @@ export async function validateProfileDecorWrite({ prisma, index, userId, input }
     if (owned.size === 0) (await prisma.userPackOwnership.findMany({ where: { userId }, select: { packKey: true } })).forEach((row) => owned.add(row.packKey));
   };
 
-  const data: { equippedAvatarRing?: string | null; equippedBanner?: string | null } = {};
+  const data: { -readonly [F in keyof StoredProfileDecor]: StoredProfileDecor[F] } = {};
   for (const side of SIDES) {
     const requested = input[side.key];
     if (requested === undefined) continue;
@@ -113,9 +141,9 @@ export async function validateProfileDecorWrite({ prisma, index, userId, input }
     if (entry.price !== undefined) await loadOwned();
     if (!isPackOwned({ domain: side.domain, slug: entry.slug, price: entry.price }, owned)) return { kind: 'not-owned' };
     if (!index.itemKeys(entry).includes(parsed.data.item)) return { kind: 'item-not-found' };
-    if (side.domain === 'avatar-ring') {
+    if (side.frameContext !== null) {
       const usage = frameUsageOf(entry);
-      if (usage === null || !canUseFrame(usage, { kind: 'avatar' })) return { kind: 'usage-mismatch' };
+      if (usage === null || !canUseFrame(usage, side.frameContext)) return { kind: 'usage-mismatch' };
     }
     data[side.field] = formatProfileDecorRef(parsed.data);
   }

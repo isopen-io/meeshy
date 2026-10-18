@@ -31,6 +31,63 @@ final class ProfileDecorTests: XCTestCase {
         XCTAssertEqual(decor.avatarRing?.origin, .unknown)
     }
 
+    // MARK: Le cadre de bannière, troisième côté (#10932)
+
+    func test_servedDecor_readsTheBannerFrameBesideTheBanner() throws {
+        let decor = try decode(ServedProfileDecor.self, """
+        {"avatarRing":null,
+         "banner":{"pack":"bannieres-essentielles","item":"aurore","origin":"builtin","contract":null},
+         "bannerFrame":{"pack":"cadres-heritages","item":"haussmannien","origin":"official","contract":"0123456789abcdef.json"}}
+        """)
+        XCTAssertEqual(decor.banner?.item, "aurore")
+        XCTAssertEqual(decor.bannerFrame?.item, "haussmannien")
+        XCTAssertEqual(decor[.bannerFrame]?.contract, "0123456789abcdef.json")
+    }
+
+    func test_servedDecor_anOlderServerWithoutTheFrameIsReadAsBefore() throws {
+        let decor = try decode(ServedProfileDecor.self, #"{"avatarRing":null,"banner":{"pack":"p","item":"i","origin":"builtin","contract":null}}"#)
+        XCTAssertNil(decor.bannerFrame)
+        XCTAssertEqual(decor.banner?.item, "i")
+    }
+
+    func test_servedDecor_aMalformedFrameOrAnUnknownSideTakesNothingWithIt() throws {
+        let decor = try decode(ServedProfileDecor.self, """
+        {"avatarRing":{"pack":"c","item":"filet","origin":"builtin","contract":null},
+         "bannerFrame":{"pack":"cadres"},
+         "coverFrame":{"pack":"x","item":"y","origin":"builtin","contract":null}}
+        """)
+        XCTAssertNil(decor.bannerFrame)
+        XCTAssertEqual(decor.avatarRing?.item, "filet")
+    }
+
+    func test_write_theFrameSideSendsOnlyItsOwnKey() throws {
+        let set = try body(ProfileDecorWrite(side: .bannerFrame, choice: ProfileDecorRef(pack: "cadres-heritages", item: "celte")))
+        XCTAssertEqual(Set(set.keys), ["bannerFrame"])
+        XCTAssertEqual(set["bannerFrame"] as? [String: String], ["pack": "cadres-heritages", "item": "celte"])
+
+        let clear = try body(ProfileDecorWrite(side: .bannerFrame, choice: nil))
+        XCTAssertEqual(Set(clear.keys), ["bannerFrame"])
+        XCTAssertTrue(clear["bannerFrame"] is NSNull)
+    }
+
+    func test_equip_rollingBackTheFrameLeavesTheBannerBackgroundAlone() {
+        var state = ProfileDecorState(decor: ServedProfileDecor(banner: item("bannieres-essentielles", "aurore")))
+
+        let previous = state.equip(item("cadres-heritages", "celte"), side: .bannerFrame)
+        XCTAssertEqual(state.decor.bannerFrame?.item, "celte")
+        XCTAssertEqual(state.decor.banner?.item, "aurore", "le cadre se pose À CÔTÉ du fond, jamais à sa place")
+
+        state.rollback(side: .bannerFrame, to: previous)
+        XCTAssertNil(state.decor.bannerFrame)
+        XCTAssertEqual(state.decor.banner?.item, "aurore")
+    }
+
+    func test_sides_areThreeEachInItsOwnDomain() {
+        XCTAssertEqual(ProfileDecorSide.allCases, [.avatarRing, .banner, .bannerFrame])
+        XCTAssertEqual(ProfileDecorSide.bannerFrame.packDomain, "banner-frame")
+        XCTAssertEqual(ProfileDecorSide.banner.packDomain, "banner")
+    }
+
     // MARK: Écriture
 
     private func body(_ write: ProfileDecorWrite) throws -> [String: Any] {

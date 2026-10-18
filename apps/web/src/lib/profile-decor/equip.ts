@@ -74,6 +74,7 @@ const updateFlight = (queryClient: QueryClient, side: DecorSide, patch: (flight:
 const settledDecor = (queryClient: QueryClient, served: ServedProfileDecor, current: ServedProfileDecor): ServedProfileDecor => {
   const ledger = ledgerOf(queryClient);
   return {
+    ...served,
     avatarRing: ledger.avatarRing.inFlight > 0 ? current.avatarRing : served.avatarRing,
     banner: ledger.banner.inFlight > 0 ? current.banner : served.banner,
   };

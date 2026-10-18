@@ -6,6 +6,9 @@ import Foundation
 // Il se voit des AUTRES, donc ses couleurs sont FIXES (aucun rôle `accent`).
 // Les traits d'ornement désignent leur couleur par l'INDEX dans `stroke.colors`.
 // Ce sont des DONNÉES (hex, chemins, nombres) : rien de reçu n'est interprété.
+// Dégradés et mouvements déclarés (#10932, `FrameDecor.swift`) : FACULTATIFS et
+// tolérants — un contour de l'ancien format se lit sans eux, un mouvement inconnu
+// est ignoré.
 
 public enum RingStrokeStyle: String, Codable, Sendable, Hashable {
     case solid
@@ -34,6 +37,19 @@ public struct AvatarRingOrnamentPath: Codable, Hashable, Sendable {
     public let color: Int
     public let opacity: Double
     public let width: Double?
+    /// Index dans `AvatarRingDesign.gradients` ; `color` reste le repli.
+    public let gradient: Int?
+    /// Le groupe que les mouvements désignent.
+    public let group: String?
+
+    public init(d: String, color: Int, opacity: Double, width: Double? = nil, gradient: Int? = nil, group: String? = nil) {
+        self.d = d
+        self.color = color
+        self.opacity = opacity
+        self.width = width
+        self.gradient = gradient
+        self.group = group
+    }
 }
 
 public struct AvatarRingDesign: Codable, Hashable, Sendable, Identifiable {
@@ -45,17 +61,24 @@ public struct AvatarRingDesign: Codable, Hashable, Sendable, Identifiable {
     public let ornament: [AvatarRingOrnamentPath]
     /// Couche animée facultative (D6, #10638), jouée au-dessus du contour ; illisible ⇒ ignorée.
     public let lottie: PackAssetRef?
+    /// Les dégradés que les traits désignent par index ; un dégradé illisible garde sa place (`nil`).
+    public let gradients: [FrameGradient?]
+    /// Les mouvements déclarés (#10932) ; un mouvement inconnu ou hors bornes est ignoré.
+    public let motion: [FrameMotion]
 
     public var id: String { key }
 
-    private enum CodingKeys: String, CodingKey { case key, stroke, ornament, lottie }
+    private enum CodingKeys: String, CodingKey { case key, stroke, ornament, lottie, gradients, motion }
     private enum OrnamentKeys: String, CodingKey { case paths }
 
-    public init(key: String, stroke: AvatarRingStroke, ornament: [AvatarRingOrnamentPath] = [], lottie: PackAssetRef? = nil) {
+    public init(key: String, stroke: AvatarRingStroke, ornament: [AvatarRingOrnamentPath] = [], lottie: PackAssetRef? = nil,
+                gradients: [FrameGradient?] = [], motion: [FrameMotion] = []) {
         self.key = key
         self.stroke = stroke
         self.ornament = ornament
         self.lottie = lottie
+        self.gradients = gradients
+        self.motion = motion
     }
 
     /// Fail-closed : un contour sans couleur, ou dont un trait désigne une couleur absente, ne se lit pas.
@@ -73,6 +96,8 @@ public struct AvatarRingDesign: Codable, Hashable, Sendable, Identifiable {
         let nested = try? c.nestedContainer(keyedBy: OrnamentKeys.self, forKey: .ornament)
         ornament = try nested?.decode([AvatarRingOrnamentPath].self, forKey: .paths) ?? []
         lottie = (try? c.decodeIfPresent(PackAssetRef.self, forKey: .lottie)) ?? nil
+        gradients = FrameGradient.list(from: c, forKey: .gradients, colorCount: stroke.colors.count)
+        motion = FrameMotion.list(from: c, forKey: .motion)
         guard ornament.allSatisfy({ $0.color >= 0 && $0.color < stroke.colors.count }) else {
             throw DecodingError.dataCorruptedError(forKey: .ornament, in: c, debugDescription: "un trait désigne une couleur absente")
         }
@@ -87,6 +112,10 @@ public struct AvatarRingDesign: Codable, Hashable, Sendable, Identifiable {
             try nested.encode(ornament, forKey: .paths)
         }
         try c.encodeIfPresent(lottie, forKey: .lottie)
+        // Un dégradé illisible ne se réencode pas : compacter décalerait les index des traits.
+        let readable = gradients.compactMap { $0 }
+        if !readable.isEmpty, readable.count == gradients.count { try c.encode(readable, forKey: .gradients) }
+        if !motion.isEmpty { try c.encode(motion, forKey: .motion) }
     }
 }
 

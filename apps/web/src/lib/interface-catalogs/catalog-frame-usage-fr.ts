@@ -18,6 +18,7 @@ const fr = {
   'frame.usage.achievementRarityOnly': 'Succès {rarity} uniquement',
   'frame.usage.momentOnly': 'Moment « {family} » uniquement',
   'frame.usage.avatarOnly': 'Contour de profil uniquement',
+  'frame.usage.bannerFrameOnly': 'Cadre de bannière uniquement',
 } as const satisfies Readonly<Record<FrameUsageLabelKey, string>>;
 
 export default fr;
