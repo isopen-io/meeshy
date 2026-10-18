@@ -357,6 +357,8 @@ internal struct _InlineOverlayControls: View {
 // at the bottom. Drawn ON the video. Used by `_FullscreenRenderer`.
 
 internal struct _FullscreenOverlayControls: View {
+    /// Les marges sûres de la fenêtre qui porte le lecteur, mesurées par sa racine.
+    @Environment(\.sceneSafeAreaInsets) var sceneSafeAreaInsets
     @ObservedObject var manager: SharedAVPlayerManager
     let accentColor: String
     let controls: MeeshyVideoPlayer.ControlSet
@@ -380,7 +382,7 @@ internal struct _FullscreenOverlayControls: View {
     /// dans le renderer, sous sa propre règle d'effacement.
     var body: some View {
         ZStack {
-            FullscreenScrims(topInset: WindowMetrics.safeAreaInsets.top, chromeVisible: true)
+            FullscreenScrims(topInset: SceneWindowSize.resolveInsets(sceneSafeAreaInsets, fallback: WindowMetrics.safeAreaEdgeInsets).top, chromeVisible: true)
             VStack(spacing: 0) {
                 topBar
                     .padding(.top, FullscreenChromeMetrics.topInset)

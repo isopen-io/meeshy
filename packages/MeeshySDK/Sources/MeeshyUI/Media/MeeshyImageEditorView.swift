@@ -59,6 +59,8 @@ public struct MeeshyImageEditorView: View {
     @StateObject private var viewModel: ImageEditorViewModel
     @ObservedObject private var theme = ThemeManager.shared
     @Environment(\.dismiss) private var dismiss
+    /// Les marges sûres de la fenêtre qui porte l'éditeur, mesurées par sa racine.
+    @Environment(\.sceneSafeAreaInsets) var sceneSafeAreaInsets
 
     private let accentColor: String
     private let onAccept: (UIImage) -> Void
@@ -115,7 +117,8 @@ public struct MeeshyImageEditorView: View {
     /// applique au chrome, en laissant le canvas immersif. Même pattern que
     /// `MeeshyVideoEditorView` et `StoryComposerView.safeAreaBottomInset`.
     private var deviceSafeAreaInsets: UIEdgeInsets {
-        WindowMetrics.safeAreaInsets
+        let insets = SceneWindowSize.resolveInsets(sceneSafeAreaInsets, fallback: WindowMetrics.safeAreaEdgeInsets)
+        return UIEdgeInsets(top: insets.top, left: insets.leading, bottom: insets.bottom, right: insets.trailing)
     }
 
     // MARK: - Body

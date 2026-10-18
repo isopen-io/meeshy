@@ -1741,7 +1741,7 @@ extension StoryComposerView {
     }
 
     var safeAreaBottomInset: CGFloat {
-        WindowMetrics.safeAreaInsets.bottom
+        SceneWindowSize.resolveInsets(sceneSafeAreaInsets, fallback: WindowMetrics.safeAreaEdgeInsets).bottom
     }
 
     func textObjectBinding(for id: String) -> Binding<StoryTextObject>? {

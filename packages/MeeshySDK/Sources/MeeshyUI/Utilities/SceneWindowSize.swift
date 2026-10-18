@@ -14,6 +14,35 @@ public enum SceneWindowSize {
     }
 }
 
+public extension SceneWindowSize {
+    /// Les marges mesurées, ou — tant qu'aucune mesure n'existe — le repli (la fenêtre active). Une marge nulle EST
+    /// une mesure (appareil sans encoche) : seul `nil` se replie.
+    static func resolveInsets(_ measured: EdgeInsets?, fallback: @autoclosure () -> EdgeInsets) -> EdgeInsets {
+        measured ?? fallback()
+    }
+}
+
+extension WindowMetrics {
+    /// Repli des marges en `EdgeInsets` : la fenêtre clé, avant que la racine n'ait mesuré la sienne.
+    static var safeAreaEdgeInsets: EdgeInsets {
+        let insets = safeAreaInsets
+        return EdgeInsets(top: insets.top, leading: insets.left, bottom: insets.bottom, trailing: insets.right)
+    }
+}
+
+private struct SceneSafeAreaInsetsKey: EnvironmentKey {
+    static let defaultValue: EdgeInsets? = nil
+}
+
+public extension EnvironmentValues {
+    /// Les marges sûres de la fenêtre qui PORTE la vue, clavier exclu, publiées par sa racine. Lues hors de `body`
+    /// (`onGeometryChange`) : jamais l'aller-retour UIKit qui réentrait dans la mise à jour en cours (#10566).
+    var sceneSafeAreaInsets: EdgeInsets? {
+        get { self[SceneSafeAreaInsetsKey.self] }
+        set { self[SceneSafeAreaInsetsKey.self] = newValue }
+    }
+}
+
 private struct SceneWindowSizeKey: EnvironmentKey {
     static let defaultValue: CGSize? = nil
 }
@@ -34,10 +63,21 @@ public extension View {
 
 private struct SceneWindowSizePublisher: ViewModifier {
     @State private var measured: CGSize?
+    @State private var insets: EdgeInsets?
 
     func body(content: Content) -> some View {
         content
             .environment(\.sceneWindowSize, measured)
+            .environment(\.sceneSafeAreaInsets, insets)
+            // Les marges de la racine, CLAVIER EXCLU (le fond s'étend sous lui) : barre d'état, indicateur d'accueil,
+            // encoche — celles que les vues sous `.ignoresSafeArea()` ne savent plus lire elles-mêmes.
+            .background(
+                Color.clear
+                    .onGeometryChange(for: EdgeInsets.self) { $0.safeAreaInsets } action: { measuredInsets in
+                        if insets != measuredInsets { insets = measuredInsets }
+                    }
+                    .ignoresSafeArea(.keyboard)
+            )
             // Lu sur un fond qui ignore les zones sûres : la fenêtre ENTIÈRE, comme `window.bounds`. Hors de `body`
             // (`onGeometryChange`), donc sans réentrer dans la mise à jour en cours.
             .background(
