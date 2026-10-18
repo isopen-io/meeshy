@@ -118,14 +118,22 @@ export function postCommentMessageCardSubjectOf(source: PostCommentSource, choic
 /**
  * LE POST QUI COMPOSE la carte d'un de ses commentaires — `null` quand aucune
  * caisse ne le connaît. Une story ou un statut n'est un support que PAR SON
- * MÉDIA (photo ou vidéo, son héros) : sans lui, le lecteur de stories garde la
- * carte du commentaire seule. Les pièces masquées (vue unique, flou, chiffrées)
- * ne sont jamais peignables : `cardMediaOf` les écarte avant la composition.
+ * MÉDIA, comme sur iOS (`PostCommentCardStory`) : une story ÉCHUE (`expiresAt`
+ * passé) n'est jamais support ; une story à CANVAS ne montre que sa vignette
+ * (`thumbnailUrl`, peinte comme une image — sans elle, pas de support) ; sinon sa
+ * première photo ou vidéo. Les pièces masquées (vue unique, flou, chiffrées) sont
+ * déjà écartées par `cardMediaOf` avant la composition.
  */
-export function composingPostOf(post: FeedPost | null | undefined): FeedPost | null {
+export function composingPostOf(post: FeedPost | null | undefined, now: number = Date.now()): FeedPost | null {
   if (post === undefined || post === null) return null;
   const type = post.type.toUpperCase();
   if (type !== 'STORY' && type !== 'STATUS') return post;
+  const expiresAt = (post as { readonly expiresAt?: string | Date | null }).expiresAt;
+  if (expiresAt !== undefined && expiresAt !== null && timeOf(expiresAt) <= now) return null;
+  if (post.storyEffects !== undefined && post.storyEffects !== null) {
+    const thumbnail = (post.media ?? []).map((piece) => piece.thumbnailUrl).find((url): url is string => typeof url === 'string' && url.trim() !== '');
+    return thumbnail === undefined ? null : { ...post, media: [{ id: `${post.id}-thumbnail`, fileUrl: thumbnail, mimeType: 'image/jpeg' }] };
+  }
   return entriesOf(post.media, null).some((entry) => entry.kind === 'image' || entry.kind === 'video') ? post : null;
 }
 

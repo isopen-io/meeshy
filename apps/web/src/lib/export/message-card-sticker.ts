@@ -16,8 +16,8 @@ import type { CardMedia, CardVisualMedia } from './message-card-media';
  */
 
 export const STICKER_MAX_SIDE = 512;
-/** La largeur d'affichage d'un sticker, au plus : un détourage ne s'étire pas sur toute la carte. */
-export const STICKER_DISPLAY_SIDE = 640;
+/** La part de la largeur de la boîte qu'un sticker prend : un détourage ne s'étire pas sur toute la carte (miroir de `MessageCardSticker.displayShare`). */
+export const STICKER_DISPLAY_SHARE = 0.6;
 const STICKER_MIMES = ['image/png', 'image/webp', 'image/apng'] as const;
 
 export type StickerProbe = Pick<CardVisualMedia, 'kind' | 'width' | 'height'> & { readonly mimeType?: string; readonly sticker?: boolean };
@@ -37,11 +37,11 @@ export function isStickerMedia(media: CardMedia | StickerProbe): boolean {
  * horizontalement. Un rapport inconnu vaut le carré.
  */
 export function stickerFrame(media: Pick<CardVisualMedia, 'width' | 'height'>, width: number, cap: number): { readonly x: number; readonly width: number; readonly height: number } {
-  const ratio = media.width > 0 && media.height > 0 ? media.height / media.width : 1;
-  const wide = Math.min(width, STICKER_DISPLAY_SIDE);
-  const fitted = Math.min(wide, cap / ratio);
-  const frameWidth = Math.max(1, Math.round(fitted));
-  return { x: Math.round((width - frameWidth) / 2), width: frameWidth, height: Math.max(1, Math.round(frameWidth * ratio)) };
+  const aspect = media.width > 0 && media.height > 0 ? media.width / media.height : 1;
+  const wide = Math.max(1, Math.floor(STICKER_DISPLAY_SHARE * width));
+  const tall = Math.round(wide / aspect);
+  const [frameWidth, frameHeight] = tall > cap ? [Math.max(1, Math.round(Math.floor(cap) * aspect)), Math.max(1, Math.floor(cap))] : [wide, Math.max(1, tall)];
+  return { x: Math.floor((width - frameWidth) / 2), width: frameWidth, height: frameHeight };
 }
 
 /** Ce qu'on sait lire des pixels d'une source — image, bitmap ou vidéo. */

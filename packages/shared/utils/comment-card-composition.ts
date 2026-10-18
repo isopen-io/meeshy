@@ -368,17 +368,21 @@ export function postCommentCardSubject<M extends PostCommentCardMediaLike>(
   const rest = composed.length > 1 ? composed.slice(1) : composed;
   const lastPart = partOfBlock(last);
   if (lastPart === null) return null;
+  /* Le niveau se mesure depuis le premier commentaire MONTRÉ (miroir de `PostCommentCardComposition.swift`) : la racine 0, ses réponses 1, le pli 1. */
+  const shown = composed.filter((block): block is Extract<PostCommentCardBlock, { kind: 'comment' }> => block.kind === 'comment');
+  const base = shown[0]?.depth ?? 0;
+  const levelOf = (depth: number): number => Math.min(POST_COMMENT_CARD_MAX_DEPTH, Math.max(0, depth - base));
   const context = rest.slice(0, -1).map(
     (block): PostCommentCardContext =>
       block.kind === 'folded'
-        ? { part: { author: '', text: choice.foldedLabel(block.count), handle: null }, depth: block.depth, folded: true }
-        : { part: block.part, depth: block.kind === 'comment' ? block.depth : 0, folded: false },
+        ? { part: { author: '', text: choice.foldedLabel(block.count), handle: null }, depth: 1, folded: true }
+        : { part: block.part, depth: block.kind === 'comment' ? levelOf(block.depth) : 0, folded: false },
   );
   return {
     quoted,
     context,
     reply: lastPart,
-    replyDepth: last.kind === 'comment' ? last.depth : 0,
+    replyDepth: last.kind === 'comment' ? levelOf(last.depth) : 0,
     sentAt: source.target.createdAt,
     quotedAt: quoted === null ? null : timeOf(first, source),
     media: mediaOf(composed, source),

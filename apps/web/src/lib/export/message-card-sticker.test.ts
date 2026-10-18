@@ -57,7 +57,7 @@ describe('qui est un sticker', () => {
 
 describe('le cadre d’un sticker', () => {
   test('suit le rapport du sticker, centré, sans dépasser la boîte', () => {
-    expect(stickerFrame({ width: 512, height: 256 }, 888, 2000)).toEqual({ x: 124, width: 640, height: 320 });
+    expect(stickerFrame({ width: 512, height: 256 }, 888, 2000)).toEqual({ x: 178, width: 532, height: 266 });
     const tall = stickerFrame({ width: 200, height: 400 }, 888, 300);
     expect(tall.height).toBe(300);
     expect(tall.width).toBe(150);

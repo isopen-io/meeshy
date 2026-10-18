@@ -131,6 +131,16 @@ describe('qui compose, et quand « Imager » s’offre', () => {
     expect(composingPostOf(post({ type: 'STORY', media }))?.id).toBe('p-1');
     expect(composingPostOf(post({ type: 'status', media }))?.id).toBe('p-1');
     expect(composingPostOf(post({ type: 'STORY', media: [{ id: 'v', fileUrl: '/v.m4a', mimeType: 'audio/mp4' }] }))).toBeNull();
+  });
+
+  test('une story échue n’est jamais support ; une story à canvas ne montre que sa vignette', () => {
+    const media = [{ id: 'sm', fileUrl: '/s.jpg', mimeType: 'image/jpeg' }];
+    const expired = { ...post({ type: 'STORY', media }), expiresAt: '2020-01-01T00:00:00.000Z' } as FeedPost;
+    expect(composingPostOf(expired)).toBeNull();
+    expect(composingPostOf({ ...expired, expiresAt: '2999-01-01T00:00:00.000Z' } as FeedPost)?.id).toBe('p-1');
+    expect(composingPostOf(post({ type: 'STORY', media, storyEffects: { layers: [] } }))).toBeNull();
+    const withThumb = composingPostOf(post({ type: 'STORY', storyEffects: { layers: [] }, media: [{ id: 'sm', fileUrl: '/s.mp4', mimeType: 'video/mp4', thumbnailUrl: '/t.jpg' }] }));
+    expect(withThumb?.media?.map((piece) => [piece.fileUrl, piece.mimeType])).toEqual([['/t.jpg', 'image/jpeg']]);
     expect(composingPostOf(undefined)).toBeNull();
   });
 
