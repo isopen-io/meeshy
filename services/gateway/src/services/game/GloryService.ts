@@ -55,6 +55,12 @@ export type GloryReason =
   | 'chest'
   | 'correction';
 
+/**
+ * `announce` (défaut `true`) : « Niveau N atteint » part quand CET appel monte le record du cycle (#10901, #10911). `false`
+ * pour un rattrapage (#10905) : le record et la Gloire s'écrivent pareil, rien ne s'annonce.
+ */
+export type LevelProgressOptions = { readonly announce?: boolean };
+
 export type GloryCredit = {
   readonly userId: string;
   readonly delta: number;
@@ -147,11 +153,11 @@ export class GloryService {
    * compte monte jusqu'où son score le porte. Un appoint, comme la place du Mythe : jamais une raison
    * de faire échouer le crédit déjà gravé — le prochain geste rattrape.
    */
-  private async openLevelsIfRankRose(userId: string, delta: number): Promise<void> {
+  private async openLevelsIfRankRose(userId: string, delta: number, options: LevelProgressOptions = {}): Promise<void> {
     try {
       const total = await this.total(userId);
       if (gloryStanding({ glory: total - delta }).rank === gloryStanding({ glory: total }).rank) return;
-      await this.openLevels(userId);
+      await this.openLevels(userId, options);
     } catch (error) {
       log.warn('level opening after a rank rise failed, the next gesture will catch up', {
         userId,
@@ -164,8 +170,11 @@ export class GloryService {
    * Une ÉTAPE vient peut-être d'être faite (#9706) — une Meesh frappée, une mission du jour accomplie, un
    * record de Flamme : le niveau qui attendait monte d'un coup jusqu'où le score le porte. Sans rien à
    * ouvrir, rien ne s'écrit. Jamais une raison de faire échouer le geste qui l'a appelée.
+   *
+   * `announce: false` : un RATTRAPAGE du record (#10905, la frappe qui grave le niveau d'avant son débit) — la Gloire se
+   * paie, rien ne s'annonce.
    */
-  async openLevels(userId: string): Promise<number> {
+  async openLevels(userId: string, options: LevelProgressOptions = {}): Promise<number> {
     try {
       const account = await this.prisma.user.findUnique({ where: { id: userId }, select: { ...SPARKS_USER_SELECT, prestige: true } });
       if (account === null) return 0;
@@ -176,6 +185,7 @@ export class GloryService {
         previousRecord: account.levelRecord ?? null,
         previousMax: account.levelMaxLifetime ?? null,
         prestige: account.prestige ?? 0,
+        ...options,
       });
     } catch (error) {
       log.warn('level opening after a step failed, the next gesture will catch up', {
@@ -231,6 +241,10 @@ export class GloryService {
    * deux : un niveau déjà gagné dans un cycle d'avant ne se re-paie pas. `previousMax` absent (appelant
    * d'avant les étincelles) : le max à vie n'est ni lu ni écrit.
    *
+   * C'est l'UNIQUE écriture du record vers le haut (#10905) : un record relevé à côté d'elle sauterait à jamais la Gloire
+   * des niveaux qu'il franchit, puisque cette Gloire se calcule depuis le record. Un rattrapage (lecture du bloc qui sert
+   * un record que la base ne porte pas, frappe qui grave le niveau d'avant son débit) passe donc par ici, `announce: false`.
+   *
    * @returns la Gloire effectivement gravée par CET appel.
    */
   async creditLevelProgress(params: {
@@ -243,7 +257,8 @@ export class GloryService {
      * score en retard, lu avant un Prestige, ne relève pas le record du cycle neuf. Absent : non vérifié.
      */
     readonly prestige?: number | null;
-  }): Promise<number> {
+  } & LevelProgressOptions): Promise<number> {
+    const announce = params.announce !== false;
     const level = levelFromScore(params.score, await this.servedLevelCap(params.userId));
     const gloryBase = Math.max(params.previousRecord ?? 0, params.previousMax ?? 0);
     const reached = newLevelsReached({ level, previousRecord: gloryBase === 0 ? null : gloryBase });
@@ -272,7 +287,7 @@ export class GloryService {
       });
       // « Niveau N atteint » (#10901) : seulement si CETTE écriture a monté le record du cycle — une remontée après une
       // frappe reste sous le record, et une montée concurrente ne gagne l'écriture qu'une fois.
-      if (raised.count > 0) await this.announceLevelReached({ userId: params.userId, level: record, sparks: params.score });
+      if (raised.count > 0 && announce) await this.announceLevelReached({ userId: params.userId, level: record, sparks: params.score });
     }
     if (params.previousMax !== undefined) {
       const maxLifetime = recordLevel({ level, previousRecord: Math.max(params.previousMax ?? 0, params.previousRecord ?? 0) || null });
@@ -287,7 +302,7 @@ export class GloryService {
       }
     }
     // La Gloire de ces niveaux a pu faire franchir Ambassadeur ou Oracle : le plafond qu'elle lève s'ouvre aussitôt.
-    if (gained > 0) await this.openLevelsIfRankRose(params.userId, gained);
+    if (gained > 0) await this.openLevelsIfRankRose(params.userId, gained, { announce });
     return gained;
   }
 

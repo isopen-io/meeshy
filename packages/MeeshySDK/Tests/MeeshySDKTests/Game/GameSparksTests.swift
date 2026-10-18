@@ -300,4 +300,30 @@ final class GameSparksTests: XCTestCase {
         XCTAssertGreaterThanOrEqual(replayed, 25)
         XCTAssertEqual(replayed, expected, "le fichier entier pour ces trois lois, sans en sauter un")
     }
+
+    // MARK: - Le gain et le Prestige (#10902) — ce que l'optimiste du coffre et du Prestige rejoue
+
+    func test_creditAndPrestigeLaws_replayTheSharedVectors() throws {
+        let root = try JSONSerialization.jsonObject(with: Data(contentsOf: Self.vectorsURL)) as? [String: Any]
+        let vectors = try XCTUnwrap(root?["vectors"] as? [[String: Any]])
+        let laws = ["sparks-credit", "sparks-prestige"]
+        var replayed = 0
+        for vector in vectors {
+            let input = try XCTUnwrap(vector["input"] as? [String: Any])
+            guard let law = input["law"] as? String, laws.contains(law) else { continue }
+            let label = vector["_label"] as? String ?? "?"
+            let e = try XCTUnwrap(vector["expected"] as? [String: Any])
+            let ledger = GameSparks.Ledger(pocket: input["pocket"] as! Int, cycle: input["cycle"] as! Int,
+                                           lifetime: input["lifetime"] as! Int, debt: input["debt"] as! Int)
+            let after = law == "sparks-credit"
+                ? GameSparks.afterCredit(ledger, points: input["points"] as! Int)
+                : GameSparks.afterPrestige(ledger)
+            XCTAssertEqual(after.pocket, e["pocket"] as? Int, label)
+            XCTAssertEqual(after.cycle, e["cycle"] as? Int, label)
+            XCTAssertEqual(after.lifetime, e["lifetime"] as? Int, label)
+            XCTAssertEqual(after.debt, e["debt"] as? Int, label)
+            replayed += 1
+        }
+        XCTAssertGreaterThanOrEqual(replayed, 6)
+    }
 }

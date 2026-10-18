@@ -170,9 +170,15 @@ final class BubbleWindowMetricsTests: XCTestCase {
     func test_messageMenuPreviewContainer_capsAgainstTheWindow() throws {
         let code = codeLines(try source(Self.messageListView))
 
+        // La fenêtre qui PORTE l'aperçu (publiée par sa racine, Stage Manager / fenêtre détachée), la fenêtre
+        // active n'étant que le repli avant la première mesure — jamais la dalle.
         XCTAssertTrue(
-            code.contains("DeviceLayout.windowSize.height * 0.62"),
+            code.contains("private var maxHeight: CGFloat { hostHeight * 0.62 }"),
             "The native context-menu preview height must be a share of the window."
+        )
+        XCTAssertTrue(
+            code.contains("SceneWindowSize.resolve(sceneWindowSize, fallback: DeviceLayout.windowSize).height"),
+            "That window is the one the preview is drawn in, the active window only as a fallback."
         )
         XCTAssertFalse(
             code.contains("UIScreen.main"),

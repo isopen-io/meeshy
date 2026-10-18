@@ -314,4 +314,99 @@ final class GameOptimisticTests: XCTestCase {
         XCTAssertEqual(next.game.level.shown.record - next.game.level.shown.level, 7)
         XCTAssertEqual(next.game.boosts.tailwind, GameBoosts.tailwindFactor, "à 7 niveaux du record, il souffle")
     }
+
+    // MARK: - Ce que la passerelle servirait après le geste (#10902)
+
+    private static func minGlory(_ rank: GloryRank, _ division5: GloryDivision5) -> Int {
+        GameGlory.steps.first { $0.rank == rank && $0.division5 == division5 }?.minGlory ?? 0
+    }
+
+    func test_afterFreeze_keepsTheReservesOfTheTreasury() {
+        let game = GameFixture.sparked(GameFixture.game(score: 121_800, freezes: 0), pocket: 121_800)
+        let state = GameFixture.state(game)
+        XCTAssertNotNil(state.game.treasury.access)
+
+        let next = GameOptimistic.afterFreeze(state)
+
+        XCTAssertEqual(next.game.treasury.held, state.game.treasury.held - 1)
+        XCTAssertEqual(next.game.treasury.access, state.game.treasury.access, "un geste qui ne touche pas la Gloire garde les réserves")
+    }
+
+    func test_afterMint_rereadsTheReservesOnTheGloryOfTheMint() {
+        let glory = Self.minGlory(.voix, .i) - GameGlory.points.mint
+        let pocket = GameLevels.threshold(of: 30)
+        let game = GameFixture.sparked(GameFixture.game(score: pocket, glory: glory, minted: 40, held: 40), pocket: pocket)
+        let state = GameFixture.state(game, meesh: GameFixture.meesh(balance: 40, minted: 40, debitable: pocket))
+        XCTAssertEqual(state.game.treasury.access?.first { $0.key == .coffre }?.locked, true)
+
+        let next = GameOptimistic.afterMint(state)
+
+        XCTAssertEqual(next.game.treasury.access, GameTreasury.reserveAccess(glory: next.game.glory.glory))
+        XCTAssertEqual(next.game.treasury.access?.first { $0.key == .coffre }?.locked, false, "Voix I ouvre le Coffre")
+    }
+
+    func test_afterMint_servesTheLevelMaxLifetimeInTheLadder_likeTheGateway() {
+        let pocket = Self.scoreJustAboveLevel34
+        let game = GameFixture.sparked(GameFixture.game(score: pocket), pocket: pocket, levelRecord: 34, levelMaxLifetime: 60)
+        let next = GameOptimistic.afterMint(GameFixture.state(game, meesh: GameFixture.meesh(debitable: pocket)))
+        XCTAssertEqual(next.game.level.levelMaxLifetime, 60)
+        XCTAssertEqual(next.game.level.ladder?.levelMaxLifetime, 60)
+    }
+
+    func test_withChestReward_creditsTheSparksByTheGainLaw() {
+        let pocket = GameLevels.threshold(of: 12) + 10
+        let game = GameFixture.sparked(GameFixture.game(score: pocket, chestStatus: .ready), pocket: pocket, cycle: 600_000,
+                                       lifetime: 900_000, levelRecord: 19)
+        let reward = DailyChest(points: 4_000, fragment: false, freeze: false)
+
+        let next = GameOptimistic.withChestReward(GameFixture.state(game), reward: reward, score: pocket + 4_000)
+
+        XCTAssertEqual(next.game.level.sparks, pocket + 4_000)
+        XCTAssertEqual(next.game.level.sparksCycle, 604_000, "le cycle monte du gain entier")
+        XCTAssertEqual(next.game.level.sparksLifetime, 904_000, "le total à vie aussi")
+        XCTAssertEqual(next.game.level.sparksDebt, 0)
+    }
+
+    func test_withChestReward_underADebt_repaysItBeforeThePocket() {
+        let pocket = GameLevels.threshold(of: 12) + 10
+        let game = GameFixture.sparked(GameFixture.game(score: pocket, chestStatus: .ready), pocket: pocket, cycle: 600_000,
+                                       lifetime: 900_000, debt: 1_500)
+        let reward = DailyChest(points: 4_000, fragment: false, freeze: false)
+
+        let next = GameOptimistic.withChestReward(GameFixture.state(game), reward: reward, score: pocket + 2_500)
+
+        XCTAssertEqual(next.game.level.sparks, pocket + 2_500)
+        XCTAssertEqual(next.game.level.sparksCycle, 604_000)
+        XCTAssertEqual(next.game.level.sparksDebt, 0, "la dette est soldée par le gain")
+        XCTAssertNil(next.game.mint.blockedBy, "plus de dette, plus de blocage")
+    }
+
+    func test_withChestReward_rereadsTheTailwind_whenTheLevelRisesBackNearTheRecord() {
+        let pocket = GameLevels.threshold(of: 12) + 10
+        let game = GameFixture.sparked(GameFixture.game(score: pocket, chestStatus: .ready), pocket: pocket, levelRecord: 19)
+        let before = game.replacing(boosts: game.boosts.replacing(tailwind: GameBoosts.sparksTailwind(level: 12, levelRecord: 19)))
+        XCTAssertEqual(before.boosts.tailwind, GameBoosts.tailwindFactor)
+        let score = GameLevels.threshold(of: 14)
+
+        let next = GameOptimistic.withChestReward(GameFixture.state(before), reward: DailyChest(points: score - pocket, fragment: false, freeze: false), score: score)
+
+        XCTAssertEqual(next.game.level.shown.level, 14)
+        XCTAssertEqual(next.game.boosts.tailwind, 1, "à 5 niveaux du record, le Vent arrière ne souffle plus — comme la passerelle le sert")
+    }
+
+    func test_withChestReward_rereadsTheNextPriceOnThePocketAfterTheChest() {
+        let pocket = GameLevels.threshold(of: 12) + 10
+        let game = GameFixture.sparked(GameFixture.game(score: pocket, minted: 4, held: 4, chestStatus: .ready), pocket: pocket)
+        let score = pocket + 40_000
+        let state = GameFixture.state(game, meesh: GameFixture.meesh(balance: 4, minted: 4, debitable: pocket))
+
+        let next = GameOptimistic.withChestReward(state, reward: DailyChest(points: 40_000, fragment: false, freeze: false), score: score)
+
+        let expected = GameMint.sparksPreview(sparks: score, mintedLifetime: 4, held: 4, glory: game.glory.glory,
+                                              levelCap: GameGlory.levelCap(forRank: game.glory.rank), steps: game.levelStepFacts)
+        XCTAssertEqual(next.game.mint.price, expected.price)
+        XCTAssertEqual(next.game.mint.number, 5)
+        XCTAssertEqual(next.meesh?.mintCost, expected.price, "le compteur de Meeshes lit le même prix")
+        XCTAssertEqual(next.meesh?.debitablePoints, score)
+    }
 }

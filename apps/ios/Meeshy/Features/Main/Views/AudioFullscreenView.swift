@@ -145,6 +145,9 @@ extension AudioFullscreenSource {
 /// que le lecteur partagé joue —, et les deux couches où l'on PARLE du vocal
 /// (rangée d'émojis, barre de réponse, #8916), au-dessus de tout.
 struct AudioFullscreenView: View {
+    /// La fenêtre qui porte la vue (Stage Manager, Split View) — la fenêtre clé en repli.
+    @Environment(\.sceneWindowSize) var sceneWindowSize
+    private var hostHeight: CGFloat { SceneWindowSize.resolve(sceneWindowSize, fallback: DeviceLayout.windowSize).height }
     let allAudioItems: [AudioFullscreenSource]
     let startAttachmentId: String
     let contactColor: String
@@ -526,7 +529,7 @@ struct AudioFullscreenView: View {
             // Course de sortie mesurée sur la fenêtre : sur le display, une
             // fenêtre Split View sortait de l'écran bien avant la fin de
             // l'animation, donc la vue disparaissait d'un coup au lieu de glisser.
-            dragOffset = DeviceLayout.windowSize.height
+            dragOffset = hostHeight
             isDismissing = true
         }
         DispatchQueue.main.asyncAfter(deadline: .now() + 0.25) {

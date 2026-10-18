@@ -52,7 +52,6 @@ const pt = {
   'game.banner.place.one': '{count}º',
   'game.banner.place.other': '{count}º',
   'game.banner.points': '{points} faíscas',
-  'game.banner.lifetime': 'recorde {total}',
   'game.banner.level_max': 'recorde {level}',
   'game.banner.level_max_a11y': 'recorde de nível {level}',
   'game.banner.link.sparks': 'Faíscas: {points}',

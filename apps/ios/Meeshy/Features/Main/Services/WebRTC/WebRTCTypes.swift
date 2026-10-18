@@ -115,8 +115,10 @@ nonisolated enum CallReliabilityPolicy {
         secondsInConnecting: TimeInterval,
         didAttemptRestart: Bool,
         restartAfterSeconds: TimeInterval = QualityThresholds.connectingRestartSeconds,
-        failAfterSeconds: TimeInterval = QualityThresholds.connectingFailSeconds
+        failAfterSeconds: TimeInterval = QualityThresholds.connectingFailSeconds,
+        awaitingRemoteOffer: Bool = false
     ) -> ConnectingOutcome {
+        if awaitingRemoteOffer { return .waiting } // le minuteur d'offre tient cette phase
         if secondsInConnecting >= failAfterSeconds { return .fail }
         if secondsInConnecting >= restartAfterSeconds && !didAttemptRestart { return .restartICE }
         return .waiting
@@ -192,8 +194,9 @@ nonisolated enum CallReliabilityPolicy {
     /// Before the answer (.ringing/.offering) an ICE restart is semantically
     /// impossible — no remote description exists — and flipping the state made
     /// CallView render the connected layout (frozen 00:00 timer) while the
-    /// callee was still ringing.
-    static func reconnectingAllowed(from state: CallState) -> Bool {
+    /// callee was still ringing. Same for a callee answered before the offer (`awaitingRemoteOffer`).
+    static func reconnectingAllowed(from state: CallState, awaitingRemoteOffer: Bool = false) -> Bool {
+        if awaitingRemoteOffer, case .connecting = state { return false }
         switch state {
         case .connected, .reconnecting, .connecting: return true
         case .idle, .ringing, .offering, .ended: return false

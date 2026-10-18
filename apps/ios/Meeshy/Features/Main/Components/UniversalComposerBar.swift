@@ -386,6 +386,8 @@ struct UniversalComposerBar: View {
 
     @Environment(\.colorScheme) var colorScheme
     @Environment(\.horizontalSizeClass) var horizontalSizeClass
+    /// La taille de la fenêtre qui porte la barre, publiée par sa racine (`publishingSceneWindowSize`).
+    @Environment(\.sceneWindowSize) var sceneWindowSize
     var isDark: Bool { colorScheme == .dark }
     var theme: ThemeManager { ThemeManager.shared }
 
@@ -416,6 +418,9 @@ struct UniversalComposerBar: View {
     /// height so swapping keyboard <-> carousel keeps the input row still,
     /// never shorter than the panel's own content, and never so tall that the
     /// composer leaves the screen (`ComposerPanelHeightLaw`, #8869).
+    /// La hauteur de la fenêtre qui porte la barre (Stage Manager, Split View, fenêtre détachée) — la fenêtre clé en repli.
+    private var hostWindowHeight: CGFloat { SceneWindowSize.resolve(sceneWindowSize, fallback: DeviceLayout.windowSize).height }
+
     var attachmentPanelHeight: CGFloat {
         let keyboard = max(ownKeyboard.lastKnownHeight(host: hostKeyboard), 260)
         // Une largeur « regular » a un plancher plus haut pour la grille aérée des médias récents ; une largeur
@@ -425,14 +430,14 @@ struct UniversalComposerBar: View {
         let resting = ComposerPanelHeightLaw.restingHeight(
             lastKeyboardHeight: keyboard,
             contentFloor: contentFloor,
-            windowHeight: DeviceLayout.windowSize.height,
+            windowHeight: hostWindowHeight,
             safeAreaTop: DeviceLayout.safeAreaTop,
             safeAreaBottom: DeviceLayout.safeAreaBottom
         )
         guard isExpandingToLibrary else { return resting }
         return ComposerLibraryHandoff.expandedHeight(
             resting: resting,
-            windowHeight: DeviceLayout.windowSize.height
+            windowHeight: hostWindowHeight
         )
     }
 

@@ -980,11 +980,17 @@ public final class SharedAVPlayerManager: ObservableObject {
         // La durée suit l'élément EN COURS, et lui seul (#10555) : un
         // successeur de boucle qui n'a pas encore relu la sienne garde celle
         // de son média au lieu de la faire retomber à zéro.
+        //
+        // Le KVO publie sur le fil qui a changé la valeur : un
+        // `replaceCurrentItem` hors du main livrerait `compactMap`/`map` —
+        // fermetures isolées au MainActor (MeeshyUI) — hors du main, et le
+        // runtime trapperait. Le saut précède donc le premier opérateur, et
+        // la durée de l'élément, KVO elle aussi, saute à son tour.
         player.publisher(for: \.currentItem)
-            .compactMap { $0 }
-            .map { $0.publisher(for: \.duration) }
-            .switchToLatest()
             .receive(on: DispatchQueue.main)
+            .compactMap { $0 }
+            .map { $0.publisher(for: \.duration).receive(on: DispatchQueue.main) }
+            .switchToLatest()
             .sink { [weak self] cmDuration in
                 guard let self else { return }
                 let held = PlaybackProgressLaw.heldDuration(
@@ -999,9 +1005,9 @@ public final class SharedAVPlayerManager: ObservableObject {
         // d'après reçoit son successeur ICI — pas à la notification de fin,
         // qui peut arriver avant l'enchaînement et laisser la file sans suite.
         player.publisher(for: \.currentItem)
+            .receive(on: DispatchQueue.main)
             .dropFirst()
             .compactMap { $0 }
-            .receive(on: DispatchQueue.main)
             .sink { [weak self] _ in
                 guard let self, let player = self.player else { return }
                 self.applyLoop(to: player)

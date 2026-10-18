@@ -1,5 +1,5 @@
 {
-  "$format": "{ law, ...paramètres } — la loi des étincelles (mint-cost-factor, mint-price, sparks-of, sparks-mint-preview, treasury-access, treasury-lock). `expected` est la sortie de la loi TypeScript (utils/game/sparks.ts, treasury.ts).",
+  "$format": "{ law, ...paramètres } — la loi des étincelles (mint-cost-factor, mint-price, sparks-of, sparks-mint-preview, treasury-access, treasury-lock, sparks-credit, sparks-prestige). `expected` est la sortie de la loi TypeScript (utils/game/sparks.ts, treasury.ts).",
   "vectors": [
     {
       "_label": "facteur de coût au niveau 0",
@@ -1064,6 +1064,106 @@
         "locked": null,
         "blockedBy": null,
         "sparksDebt": 0
+      }
+    },
+    {
+      "_label": "crédit sans dette : poche, cycle et total à vie montent du gain",
+      "input": {
+        "law": "sparks-credit",
+        "pocket": 200,
+        "cycle": 9000,
+        "lifetime": 12000,
+        "debt": 0,
+        "points": 150
+      },
+      "expected": {
+        "pocket": 350,
+        "cycle": 9150,
+        "lifetime": 12150,
+        "debt": 0
+      }
+    },
+    {
+      "_label": "crédit sous une dette plus forte : la poche ne bouge pas, la dette baisse",
+      "input": {
+        "law": "sparks-credit",
+        "pocket": 40,
+        "cycle": 900,
+        "lifetime": 1200,
+        "debt": 250,
+        "points": 150
+      },
+      "expected": {
+        "pocket": 40,
+        "cycle": 1050,
+        "lifetime": 1350,
+        "debt": 100
+      }
+    },
+    {
+      "_label": "crédit qui solde la dette : le reste va en poche",
+      "input": {
+        "law": "sparks-credit",
+        "pocket": 40,
+        "cycle": 900,
+        "lifetime": 1200,
+        "debt": 100,
+        "points": 150
+      },
+      "expected": {
+        "pocket": 90,
+        "cycle": 1050,
+        "lifetime": 1350,
+        "debt": 0
+      }
+    },
+    {
+      "_label": "crédit d'un compte d'avant le rattrapage : le cycle se pose sur la poche",
+      "input": {
+        "law": "sparks-credit",
+        "pocket": 800,
+        "cycle": 0,
+        "lifetime": 0,
+        "debt": 0,
+        "points": 36
+      },
+      "expected": {
+        "pocket": 836,
+        "cycle": 836,
+        "lifetime": 836,
+        "debt": 0
+      }
+    },
+    {
+      "_label": "Prestige : poche et cycle repartent de zéro, total à vie et dette restent",
+      "input": {
+        "law": "sparks-prestige",
+        "pocket": 1000200,
+        "cycle": 1400000,
+        "lifetime": 3000000,
+        "debt": 0
+      },
+      "expected": {
+        "pocket": 0,
+        "cycle": 0,
+        "lifetime": 3000000,
+        "debt": 0
+      }
+    },
+    {
+      "_label": "Prestige sous une dette : elle survit au passage",
+      "input": {
+        "law": "sparks-prestige",
+        "pocket": 1000200,
+        "cycle": 1000200,
+        "lifetime": 1000200,
+        "debt": 75
+      },
+      "expected": {
+        "pocket": 0,
+        "cycle": 0,
+        "lifetime": 1000200,
+        "debt": 75
       }
     },
     {

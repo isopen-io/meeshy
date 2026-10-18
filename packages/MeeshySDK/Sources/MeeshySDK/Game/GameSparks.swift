@@ -45,9 +45,52 @@ public enum GameSparks {
         return Facts(pocket: pocket, cycle: cycle, lifetime: max(cycle, lifetime ?? 0))
     }
 
+    /// Les trois nombres ET la dette — ce qu'un gain et un Prestige transforment (#10902).
+    public struct Ledger: Equatable, Sendable {
+        public let pocket: Int
+        public let cycle: Int
+        public let lifetime: Int
+        public let debt: Int
+
+        public init(pocket: Int, cycle: Int, lifetime: Int, debt: Int) {
+            self.pocket = pocket
+            self.cycle = cycle
+            self.lifetime = lifetime
+            self.debt = debt
+        }
+    }
+
+    /// `sparksAfterCredit` : la dette se rembourse d'abord, seul le reste va en poche ; le cycle et le total à vie montent du
+    /// gain ENTIER, jamais sous la poche (compte d'avant le rattrapage). La loi que `writeEngagementScore` écrit en base.
+    public static func afterCredit(_ ledger: Ledger, points: Int) -> Ledger {
+        let gained = max(0, points)
+        let debt = max(0, ledger.debt)
+        let repaid = min(debt, gained)
+        let pocket = max(0, ledger.pocket)
+        let cycle = max(max(0, ledger.cycle), pocket)
+        return Ledger(pocket: pocket + gained - repaid, cycle: cycle + gained,
+                      lifetime: max(max(0, ledger.lifetime), cycle) + gained, debt: debt - repaid)
+    }
+
+    /// `sparksAfterPrestige` : la poche et le cycle repartent de zéro ; le total à vie et la dette restent.
+    public static func afterPrestige(_ ledger: Ledger) -> Ledger {
+        Ledger(pocket: 0, cycle: 0,
+               lifetime: max(max(0, ledger.lifetime), max(0, ledger.cycle), max(0, ledger.pocket)),
+               debt: max(0, ledger.debt))
+    }
+
     /// Un compte d'étincelles sur le fil : entier ≥ 0, ABSENT ou illisible ⇒ `nil` — jamais une erreur qui
     /// emporterait le bloc entier (un serveur antérieur ne sert pas ces champs).
     static func count<K: CodingKey>(_ container: KeyedDecodingContainer<K>, _ key: K) -> Int? {
         ((try? container.decodeIfPresent(Int.self, forKey: key)) ?? nil).map { max(0, $0) }
+    }
+}
+
+public extension GameBlock.Level {
+    /// Les étincelles SERVIES et la dette, lues par `sparksOf` — `nil` devant un serveur d'avant les étincelles.
+    var sparkLedger: GameSparks.Ledger? {
+        guard let sparks else { return nil }
+        let facts = GameSparks.facts(pocket: sparks, cycle: sparksCycle, lifetime: sparksLifetime)
+        return GameSparks.Ledger(pocket: facts.pocket, cycle: facts.cycle, lifetime: facts.lifetime, debt: sparksDebt ?? 0)
     }
 }

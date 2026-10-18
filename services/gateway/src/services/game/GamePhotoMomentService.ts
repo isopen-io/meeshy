@@ -119,8 +119,8 @@ export class GamePhotoMomentService {
     private readonly prisma: PrismaClient,
     deps: GamePhotoMomentDeps = {},
   ) {
-    // Une lecture qui ne crédite rien : poser les missions du jour est la seule écriture qu'elle puisse faire.
-    this.blocks = deps.blocks ?? new GameBlockService(prisma, { missions: new MissionService(prisma, { creditPoints: READ_ONLY_CREDIT }) });
+    // Une lecture qui ne crédite rien : poser les missions du jour est la seule écriture qu'elle puisse faire (ni record ni Gloire, #10905).
+    this.blocks = deps.blocks ?? new GameBlockService(prisma, { missions: new MissionService(prisma, { creditPoints: READ_ONLY_CREDIT }), levelRecords: null });
     this.notifier = deps.notifier ?? new GameNotifier(prisma);
     this.policy = deps.policy ?? PHOTO_ALERT_POLICY;
   }

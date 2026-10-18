@@ -415,11 +415,10 @@ struct StoryViewerView: View {
     /// presentation.
     @State var hasTriggeredInitialAction = false
 
-    // Use the active window bounds rather than `UIScreen.main.bounds` so
-    // iPad split-screen / Stage Manager / multi-window scenes report the
-    // viewer's actual window (UIScreen reports the full display). Used by
-    // swipe-to-dismiss thresholds and horizontal-slide normalization.
-    private var windowSize: CGSize { DeviceLayout.windowSize }
+    // La fenêtre qui PORTE le viewer (publiée par sa racine), pas la fenêtre clé : Stage Manager, Split View, fenêtre
+    // détachée. Seuils du glisser-fermer et normalisation du glissement horizontal.
+    @Environment(\.sceneWindowSize) private var sceneWindowSize
+    private var windowSize: CGSize { SceneWindowSize.resolve(sceneWindowSize, fallback: DeviceLayout.windowSize) }
 
     /// Encart bas MESURÉ par la mise en page (`measuringBottomSafeArea`), jamais
     /// lu sur la fenêtre pendant `body` (#10566) : le `GeometryReader` interne,
