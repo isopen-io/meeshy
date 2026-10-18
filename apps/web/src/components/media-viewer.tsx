@@ -559,6 +559,7 @@ export default function MediaViewer({
   }, [index]);
 
   const goTo = (next: number): void => {
+    heldOpenAtRef.current = null;
     const at = clampIndex(next, items.length);
     setPinned({ id: items[at]?.id, index: at });
     setPresentation(CARDED_STAGE);
@@ -570,14 +571,10 @@ export default function MediaViewer({
       onClose();
       return;
     }
-    if (e.key === 'ArrowRight') {
+    if (e.key === 'ArrowRight' || e.key === 'ArrowLeft') {
       e.preventDefault();
-      goTo(index + 1);
-      return;
-    }
-    if (e.key === 'ArrowLeft') {
-      e.preventDefault();
-      goTo(index - 1);
+      const forward = (e.key === 'ArrowRight') !== (document.dir === 'rtl');
+      goTo(forward ? index + 1 : index - 1);
       return;
     }
     if (e.key === ' ') {
@@ -606,6 +603,7 @@ export default function MediaViewer({
   const [audioPlaying, setAudioPlaying] = useState(false);
   const longPress = useLongPress({
     onOpen: () => {
+      heldOpenAtRef.current = performance.now();
       if (!audioPage) setPresentation(() => stageAfter(CARDED_STAGE, 'longPress'));
     },
   });
@@ -631,6 +629,9 @@ export default function MediaViewer({
   // eux-mêmes leurs événements (`viewer-chrome.tsx`) : le tap sur une action
   // réelle ne bascule rien. Un toucher qui a glissé n'est pas un tap.
   const onStageClick = (): void => {
+    const heldAt = heldOpenAtRef.current;
+    heldOpenAtRef.current = null;
+    if (heldAt !== null && performance.now() - heldAt < CLICK_AFTER_HOLD_MS) return;
     if (swipe.wasDrag() || audioPage) return;
     setPresentation((p) => stageAfter(p, 'tap'));
   };
@@ -776,6 +777,7 @@ export default function MediaViewer({
               longPress.onPointerCancel();
               return;
             }
+            heldOpenAtRef.current = null;
             swipe.handlers.onPointerDown(e);
             longPress.onPointerDown(e);
           }}

@@ -110,6 +110,7 @@ struct BubbleFooter: View, Equatable {
                 )
                 .avatarRingWithin(sender.ring, footprint: AvatarContext.messageBubble.size,
                                   storyRingSize: sender.storyRing == .none ? nil : AvatarContext.messageBubble.ringSize)
+                .modifier(MessageAvatarPressClaim())
                 VStack(alignment: .leading, spacing: MeeshySpacing.xxs) {
                     HStack(spacing: MeeshySpacing.xs) {
                         // Nom borné à 16 caractères (directive user 2026-07-30) :

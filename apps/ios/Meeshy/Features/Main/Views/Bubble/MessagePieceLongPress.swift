@@ -77,7 +77,15 @@ enum MessagePressClaim {
 
     private static var claimedAt: Date?
 
-    static func claim(at now: Date = Date()) {
+    /// Qui réclame la pression. Chaque réclamant détient UN effet : la tuile
+    /// l'aperçu de sa pièce, l'avatar le menu du profil. La rangée, elle, ne
+    /// réclame jamais — elle s'efface devant tous.
+    enum Claimant {
+        case piece
+        case avatar
+    }
+
+    static func claim(_ claimant: Claimant = .piece, at now: Date = Date()) {
         claimedAt = now
     }
 
@@ -85,5 +93,18 @@ enum MessagePressClaim {
         guard let claimedAt else { return false }
         let elapsed = now.timeIntervalSince(claimedAt)
         return elapsed >= 0 && elapsed < window
+    }
+}
+
+/// **L'avatar du pied réclame l'appui long** : son menu (« Voir le profil ») est
+/// l'unique effet de ce geste, le menu de la rangée (« Répondre »…) ne s'ouvre
+/// pas. Simultané comme la tuile, pour laisser passer le simple toucher ; la
+/// réclamation précède la rangée par sa durée plus courte.
+struct MessageAvatarPressClaim: ViewModifier {
+    func body(content: Content) -> some View {
+        content.simultaneousGesture(
+            LongPressGesture(minimumDuration: MessagePressClaim.pieceMinimumDuration)
+                .onEnded { _ in MessagePressClaim.claim(.avatar) }
+        )
     }
 }
