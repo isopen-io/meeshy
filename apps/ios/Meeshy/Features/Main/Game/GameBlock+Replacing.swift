@@ -39,22 +39,6 @@ extension GameBlock.Level {
             sparksDebt: sparksDebt
         )
     }
-
-    /// Les étincelles d'avant posées sur un niveau recomposé (`GameLevelWire.level` ne les connaît pas) : la POCHE
-    /// devient `pocket` (#10892, la base du niveau) ; le cycle, le total à vie, le max à vie et la dette, indicatifs ou
-    /// hors de la frappe, restent. Devant un serveur antérieur (`sparks` absent), rien ne s'invente.
-    func carryingSparks(of source: GameBlock.Level, pocket: Int) -> GameBlock.Level {
-        GameBlock.Level(
-            level: level, tier: tier, score: score, floorScore: floorScore, nextThreshold: nextThreshold,
-            pointsToNext: pointsToNext, progress: progress, record: record, prestige: prestige, canPrestige: canPrestige,
-            ladder: ladder,
-            sparks: source.sparks.map { _ in pocket },
-            sparksCycle: source.sparksCycle,
-            sparksLifetime: source.sparksLifetime,
-            levelMaxLifetime: source.levelMaxLifetime,
-            sparksDebt: source.sparksDebt
-        )
-    }
 }
 
 /// LES NIVEAUX SUR LE FIL (#9688) — miroir de `levelOnTheWire` / `mintOnTheWire`
@@ -67,12 +51,17 @@ nonisolated enum GameLevelWire {
     /// Le niveau lu sur un score en poche, sous le plafond que le rang ouvre (`GameGlory.levelCap(forRank:)`)
     /// et le palier des étapes (#9706, `steps` — `nil` devant un serveur d'avant les étapes : rien ne retient).
     /// `levelRecord` : le record OUVERT d'avant (`level.shown.record`) — il ne redescend jamais.
+    /// `sparks` : les étincelles d'après le geste (#10846) — présentes, elles voyagent à côté et le niveau max à vie
+    /// (`levelMaxLifetime`, jamais sous le record) est servi deux fois, comme `levelOnTheWire` le sert ; absentes, le
+    /// niveau garde exactement la forme d'hier.
     static func level(score: Int, levelCap: Int?, levelRecord: Int?, prestige: Int,
-                      steps: GameLevelStepFacts? = nil) -> GameBlock.Level {
+                      steps: GameLevelStepFacts? = nil, sparks: GameSparks.Ledger? = nil,
+                      levelMaxLifetime: Int? = nil) -> GameBlock.Level {
         let gate = GameLevelSteps.gate(steps)
         let progress = GameLevels.progress(forScore: score, cap: levelCap, gate: gate)
         let legacy = GameLevels.legacyProgress(forScore: score, gate: gate)
         let record = GameLevels.record(level: progress.level, previousRecord: levelRecord)
+        let maxLifetime = sparks.map { _ in max(record, levelMaxLifetime ?? 0) }
         return GameBlock.Level(
             level: legacy.level,
             tier: legacy.tier,
@@ -96,8 +85,14 @@ nonisolated enum GameLevelWire {
                 isMax: progress.isMax,
                 held: progress.held,
                 step: GameLevelSteps.next(after: progress.level, facts: steps),
-                steps: steps?.counts
-            )
+                steps: steps?.counts,
+                levelMaxLifetime: maxLifetime
+            ),
+            sparks: sparks?.pocket,
+            sparksCycle: sparks?.cycle,
+            sparksLifetime: sparks?.lifetime,
+            levelMaxLifetime: maxLifetime,
+            sparksDebt: sparks?.debt
         )
     }
 
@@ -134,6 +129,18 @@ extension GameBlock {
     /// rang du bloc ; `nil` devant un serveur d'avant les étapes.
     nonisolated var levelStepFacts: GameLevelStepFacts? {
         level.ladder?.steps.map { GameLevelStepFacts(counts: $0, glory: glory.glory, rank: glory.rank) }
+    }
+}
+
+extension GameBlock {
+    /// Le trésor à `held` Meeshes gardées. Les réserves (#10848) suivent la loi partagée sur la Gloire DU BLOC — celle
+    /// d'après le geste quand il l'a fait monter ; un serveur d'avant les réserves n'en sert pas, et rien ne s'invente.
+    func treasuryAt(held: Int) -> TreasuryStanding {
+        let standing = GameTreasury.standing(held: max(0, held))
+        return TreasuryStanding(
+            held: standing.held, tier: standing.tier, next: standing.next,
+            access: treasury.access.map { _ in GameTreasury.reserveAccess(glory: glory.glory, mythic: glory.rank == .mythe) }
+        )
     }
 }
 

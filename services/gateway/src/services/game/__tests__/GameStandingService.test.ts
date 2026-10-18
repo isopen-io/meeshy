@@ -162,11 +162,21 @@ describe('ce que les amis voient de plus : points et trophées (#9541)', () => {
     expect((await standing(service, stranger)).standing).toMatchObject({ rank: 'legende', division: 1, division5: 1, mythic: null });
   });
 
-  it('jamais la Gloire exacte, les jours de série, ni une date — même pour un ami', async () => {
+  it('jamais les jours de série ni une date — même pour un ami ; sa Gloire, oui (#10913)', async () => {
     const { db, service } = setup();
     befriend(db);
-    const wire = JSON.stringify(await standing(service, stranger));
-    for (const forbidden of ['"glory"', 'streak', 'Streak', 'lastActive', '2026-10', '"days"', '3000']) expect(wire).not.toContain(forbidden);
+    const served = await standing(service, stranger);
+    expect(served.standing?.glory).toBe(3000);
+    const wire = JSON.stringify(served);
+    for (const forbidden of ['streak', 'Streak', 'lastActive', '2026-10', '"days"']) expect(wire).not.toContain(forbidden);
+  });
+
+  it('la Gloire exacte ne part jamais vers un non-ami, même sur « tout le monde » (#10913)', async () => {
+    const { service } = setup({ rankVisibility: 'everyone' });
+    const served = await standing(service, stranger);
+    expect(served.visible).toBe(true);
+    const wire = JSON.stringify(served);
+    for (const forbidden of ['"glory"', '3000']) expect(wire).not.toContain(forbidden);
   });
 });
 

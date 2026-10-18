@@ -131,7 +131,7 @@ describe('GET /users/:userId/game', () => {
     db.gloryLedger.rows.push({ id: `g-${userId}`, userId, delta: glory, reason: 'mint', requestId: `rq-g-${userId}` });
   };
 
-  it('un AMI lit le niveau, le palier, les étoiles, la forme de la Flamme, le rang, ses points, le nombre de ses trophées et le palier du trésor — jamais la Gloire, les Meeshes ni les jours de série', async () => {
+  it('un AMI lit le niveau, le palier, les étoiles, la forme de la Flamme, le rang, ses points, sa Gloire (#10913), le nombre de ses trophées et le palier du trésor — jamais les Meeshes ni les jours de série', async () => {
     const db = fakeGameDb();
     veteran(db, USER);
     veteran(db, OTHER);
@@ -157,12 +157,13 @@ describe('GET /users/:userId/game', () => {
         points: 12_180,
         sparks: 12_180,
         sparksLifetime: 12_180,
+        glory: 16_000,
         trophyCount: 0,
       },
       treasury: { tier: 'coffret' },
     });
     const raw = JSON.stringify(res.json());
-    for (const forbidden of ['"63"', '16000', 'currentStreakDays', 'held', 'glory', 'lastStreakDate', 'lastActive']) {
+    for (const forbidden of ['"63"', 'currentStreakDays', 'held', 'lastStreakDate', 'lastActive']) {
       expect(raw).not.toContain(forbidden);
     }
   });
@@ -178,10 +179,10 @@ describe('GET /users/:userId/game', () => {
 
     const data = userGameProfileResponseSchema.parse(res.json().data);
     expect(data.visible).toBe(true);
-    // Le niveau max à vie suit le réglage du rang (comme le niveau) ; les étincelles, elles, restent aux amis (#10846).
+    // Le niveau max à vie suit le réglage du rang (comme le niveau) ; les étincelles et la Gloire, elles, restent aux amis (#10846, #10913).
     expect(data.standing).toEqual({ level: 11, tier: 'lueur', ladder: { level: 11, tier: 'lueur', levelMaxLifetime: 36 }, levelMaxLifetime: 36, prestige: 2, flame: null, rank: 'conteur', division: 3, division5: 5, mythic: null });
     const raw = JSON.stringify(res.json());
-    for (const forbidden of ['points', 'sparks', 'trophyCount', '12180', 'brasier']) expect(raw).not.toContain(forbidden);
+    for (const forbidden of ['points', 'sparks', 'trophyCount', '12180', 'brasier', 'glory', '16000']) expect(raw).not.toContain(forbidden);
   });
 
   it('un inconnu (ni ami, ni admin) ne lit RIEN sur « amis » — la réponse d’un compte inexistant', async () => {
@@ -247,8 +248,13 @@ describe('GET /users/:userId/game', () => {
     const db = fakeGameDb();
     veteran(db, USER);
     veteran(db, STRANGER);
-    expect((await get(await profileApp(db, USER), gameUserGamePath(USER))).json().data.visible).toBe(true);
-    expect((await get(await profileApp(db, STRANGER, 'ADMIN'), gameUserGamePath(USER))).json().data.visible).toBe(true);
+    seedWealth(db, USER, 63, 16_000);
+    const own = (await get(await profileApp(db, USER), gameUserGamePath(USER))).json().data;
+    const admin = (await get(await profileApp(db, STRANGER, 'ADMIN'), gameUserGamePath(USER))).json().data;
+    expect(own.visible).toBe(true);
+    expect(admin.visible).toBe(true);
+    expect(own.standing.glory).toBe(16_000);
+    expect(admin.standing.glory).toBe(16_000);
   });
 
   it('un administrateur qui lit un compte INCONNU reçoit la réponse vide, pas une erreur', async () => {

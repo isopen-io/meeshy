@@ -235,7 +235,24 @@ export class MeeshService {
         steps,
         debt: pocketFacts.debt,
       });
-    return { totals, sparks, preview: previewAt(sparks), previewAt };
+    const records = { levelRecord: row?.levelRecord ?? null, levelMaxLifetime: row?.levelMaxLifetime ?? null };
+    return { totals, sparks, records, preview: previewAt(sparks), previewAt };
+  }
+
+  /**
+   * Le niveau d'AVANT le débit est atteint (#10905) : un record gravé en retard le rattrape AVANT la frappe — sinon la
+   * relecture d'après le débit servirait un record plus bas que celle d'avant. Par `creditLevelProgress`, l'unique
+   * écriture du record : la Gloire des niveaux franchis se paie, rien ne s'annonce (un rattrapage n'est pas une montée).
+   *
+   * @returns la Gloire gravée par ce rattrapage — non nulle, le rang et donc le prix ont pu bouger.
+   */
+  private async catchUpLevelBefore(
+    userId: string,
+    records: { readonly levelRecord: number | null; readonly levelMaxLifetime: number | null },
+    levelBefore: number,
+  ): Promise<number> {
+    if (levelBefore <= (records.levelRecord ?? 0) && levelBefore <= (records.levelMaxLifetime ?? 0)) return 0;
+    return new GloryService(this.prisma).openLevels(userId, { announce: false });
   }
 
   /**
@@ -279,7 +296,7 @@ export class MeeshService {
 
     // Le PRIX est celui de CETTE pièce, au niveau ACTUEL du compte : le serveur le recalcule, aucun client n'en
     // est cru (un ancien client qui croit encore à 1 221 est refusé sans débit quand sa poche ne couvre pas le vrai prix).
-    const { totals: avant, sparks, preview, previewAt } = await this.facts(userId);
+    const { totals: avant, sparks, records, preview, previewAt } = await this.facts(userId);
     const { number } = preview;
     // Le refus de RANG passe avant celui de poche : un compte sans le rang apprend d'abord ce qui le barre.
     // La dette passe avant tout : tant qu'elle existe, on ne frappe pas.
@@ -288,6 +305,8 @@ export class MeeshService {
     // La garde de prix (#10903) avant la poche : l'écran a promis au plus `maxPrice`, il apprend d'abord le prix courant.
     if (exceedsGuard(preview, guard)) return { status: 'price-changed', ...servedPriceOf(preview) };
     if (!preview.canMint) return { status: 'insufficient', plan: mintPlanOf(preview, sparks.pocket) };
+    // Le rattrapage a payé de la Gloire : le prix se rejuge sur les faits relus (il ne paie jamais deux fois les mêmes niveaux).
+    if ((await this.catchUpLevelBefore(userId, records, preview.levelBefore)) > 0) return this.mintOnce(userId, requestId, guard);
 
     try {
       const gravee = await this.prisma.$transaction(async (tx) => {
