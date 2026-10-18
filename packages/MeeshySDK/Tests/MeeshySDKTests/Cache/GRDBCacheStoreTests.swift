@@ -607,6 +607,51 @@ final class GRDBCacheStoreTests: XCTestCase {
         }
     }
 
+    /// Cycle 4 — `upsert` sur un L1 évincé fabriquait `loadedAt = now` : une
+    /// entrée périmée repassait fraîche et son rafraîchissement sautait.
+    func test_upsert_l1MissWithStaleL2Entry_keepsItStale() async throws {
+        let store = try makeStore(ttl: .hours(1), staleTTL: .minutes(5))
+        try await store.save([CacheTestItem(id: "1", name: "A")], for: "k")
+        await store.debugRewindFetchTimestamp(by: 600, for: "k")
+        await store.flushDirtyKeys()
+        await store.evictL1()
+
+        await store.upsert(item: CacheTestItem(id: "2", name: "B"), for: "k") { $0 + [$1] }
+
+        guard case .stale(let items, _) = await store.load(for: "k") else {
+            return XCTFail("une mutation locale ne rajeunit pas une entrée périmée")
+        }
+        XCTAssertEqual(items.map(\.id), ["1", "2"])
+    }
+
+    /// Une liste née d'un seul `upsert` n'a jamais été chargée : elle se
+    /// revalide, elle ne passe pas pour la liste complète.
+    func test_upsert_onAnEmptyKey_isNotServedAsFresh() async throws {
+        let store = try makeStore(ttl: .hours(1), staleTTL: .minutes(5))
+
+        await store.upsert(item: CacheTestItem(id: "1", name: "A"), for: "neuve") { $0 + [$1] }
+
+        guard case .stale(let items, _) = await store.load(for: "neuve") else {
+            return XCTFail("un seul élément reçu n'est pas une liste fraîche")
+        }
+        XCTAssertEqual(items.map(\.id), ["1"])
+    }
+
+    func test_upsertPatch_l1MissWithStaleL2Entry_keepsItStale() async throws {
+        let store = try makeStore(ttl: .hours(1), staleTTL: .minutes(5))
+        try await store.save([CacheTestItem(id: "1", name: "A")], for: "k")
+        await store.debugRewindFetchTimestamp(by: 600, for: "k")
+        await store.flushDirtyKeys()
+        await store.evictL1()
+
+        await store.upsertPatch(for: "k", itemId: "1") { $0 = CacheTestItem(id: "1", name: "A2") }
+
+        guard case .stale(let items, _) = await store.load(for: "k") else {
+            return XCTFail("une mutation locale ne rajeunit pas une entrée périmée")
+        }
+        XCTAssertEqual(items.first?.name, "A2")
+    }
+
     // MARK: - #7809 — saveAsStale : un instantané DATÉ ne se sert jamais comme frais
 
     func test_saveAsStale_newKey_loadsStaleWithItems() async throws {

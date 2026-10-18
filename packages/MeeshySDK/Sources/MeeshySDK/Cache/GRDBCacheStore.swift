@@ -263,10 +263,14 @@ public actor GRDBCacheStore<Key, Value>: MutableCacheStore, GRDBDirtyFlushing
             return
         }
         let keyStr = namespacedKey(key.description)
-        let existing = readFromL2(for: keyStr)?.items ?? []
-        let merged = merge(existing, item)
-        let entry = L1Entry(items: merged, loadedAt: Date())
-        memoryCache[key] = entry
+        let l2 = readFromL2(for: keyStr)
+        let merged = merge(l2?.items ?? [], item)
+        // Une mutation LOCALE ne rajeunit pas l'horloge (stores-08) : l'entrée
+        // L2 garde la sienne, et une liste NÉE d'un seul élément n'a jamais été
+        // chargée — datée comme `saveAsStale`, elle se peint ET se revalide au
+        // lieu de passer pour fraîche et de sauter le chargement réseau.
+        let loadedAt = l2?.lastFetchedAt ?? Date().addingTimeInterval(-(policy.staleTTL ?? 0))
+        memoryCache[key] = L1Entry(items: merged, loadedAt: loadedAt)
         touchKey(key)
         markDirty(key)
     }
@@ -282,10 +286,12 @@ public actor GRDBCacheStore<Key, Value>: MutableCacheStore, GRDBDirtyFlushing
             return
         }
         let keyStr = namespacedKey(key.description)
-        guard var items = readFromL2(for: keyStr)?.items else { return }
+        guard let l2 = readFromL2(for: keyStr) else { return }
+        var items = l2.items
         if let idx = items.firstIndex(where: { $0.id == itemId }) {
             mutate(&items[idx])
-            let entry = L1Entry(items: items, loadedAt: Date())
+            // stores-08 — l'horloge L2, pas maintenant.
+            let entry = L1Entry(items: items, loadedAt: l2.lastFetchedAt)
             memoryCache[key] = entry
             touchKey(key)
             markDirty(key)

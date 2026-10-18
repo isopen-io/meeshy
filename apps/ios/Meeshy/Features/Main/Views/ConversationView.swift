@@ -1051,6 +1051,7 @@ struct ConversationView: View {
             }
             .onDisappear {
                 composerText.flushPendingChange()
+                if audioRecorder.isRecording { _ = stopRecordingToAttachment() } // iPad : panneau, fenêtre redimensionnée — le vocal rejoint le plateau, il n'est plus jeté
                 persistDraftAttachmentsForBackground() // iPad : un panneau REMPLACE la vue, le plateau n'y survivait pas
                 // #7500 — la sortie par NAVIGATION. Jumelle de celle du passage
                 // en arrière-plan ci-dessus : une vue unique lue ici ne
@@ -1070,9 +1071,6 @@ struct ConversationView: View {
                 // sans lui, l'audio continuait jusqu'au dealloc du @StateObject et
                 // la session restait acquise (refcount) le temps de la libération. Idempotent.
                 pendingAudioPlayer.stop()
-                if audioRecorder.isRecording {
-                    audioRecorder.cancelRecording()
-                }
             }
         )
     }
