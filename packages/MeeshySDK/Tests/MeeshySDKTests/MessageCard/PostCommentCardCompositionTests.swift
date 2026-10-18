@@ -336,7 +336,7 @@ final class PostCommentCardCompositionTests: XCTestCase {
         PostCommentCardSource(post: nil, target: target ?? root, thread: [], viewer: viewer, story: story, now: now)
     }
 
-    private static func makeStory(text: String? = "Ma story", media: [FeedMedia] = [], expiresAt: Date? = nil, canvas: Bool = false,
+    private static func makeStory(text: String? = "Ma story", media: [FeedMedia] = [], expiresAt: Date? = now.addingTimeInterval(3600), canvas: Bool = false,
                                   visibility: String? = "PUBLIC") -> PostCommentCardStory {
         PostCommentCardStory(id: "st", author: "Awa", authorId: "awa", authorUsername: "awa", text: text, media: media,
                              timestamp: at(0), expiresAt: expiresAt, hasCanvas: canvas, visibility: visibility)
@@ -381,6 +381,15 @@ final class PostCommentCardCompositionTests: XCTestCase {
     func test_story_anExpiredStoryIsNeverImaged() {
         let source = Self.storySource(Self.makeStory(media: [Self.photo], expiresAt: Self.now.addingTimeInterval(-1)))
         XCTAssertEqual(PostCommentCardComposition.modes(of: source), [.commentAlone])
+    }
+
+    func test_story_withoutExpiresAt_expiresLikeAStoryItem_afterTheDefaultWindow() {
+        let lapsed = Self.makeStory(media: [Self.photo], expiresAt: nil)
+        XCTAssertTrue(StoryItem(id: "st", createdAt: Self.at(0)).isExpired(at: Self.now))
+        XCTAssertEqual(PostCommentCardComposition.modes(of: Self.storySource(lapsed)), [.commentAlone])
+        let fresh = PostCommentCardStory(id: "st", author: "Awa", authorId: "awa", media: [Self.photo],
+                                         timestamp: Self.now.addingTimeInterval(-60), visibility: "PUBLIC")
+        XCTAssertEqual(PostCommentCardComposition.modes(of: Self.storySource(fresh)), [.postAndComment, .commentAlone])
     }
 
     func test_story_aCanvasStoryWithoutAThumbnail_keepsTheOldGuard() {

@@ -345,7 +345,8 @@ public enum PostCommentCardComposition {
                 timestamp: post.timestamp, media: postMedia(of: post)
             )
         }
-        guard let story = source.story, isPublicAudience(story.visibility), !story.isExpired(now: source.now) else { return nil }
+        guard let story = source.story, isPublicAudience(story.visibility),
+              !StoryItem.isExpired(createdAt: story.timestamp, expiresAt: story.expiresAt, at: source.now) else { return nil }
         // Une story à canvas sans vignette ne s'image pas : le garde d'avant #10915 tient.
         if story.hasCanvas, story.heroMedia(now: source.now) == nil { return nil }
         return Support(

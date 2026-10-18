@@ -8,7 +8,8 @@ import Foundation
 ///   absente ou restreinte — `FRIENDS`, `COMMUNITY`, `PRIVATE`, `EXCEPT`, `ONLY`)
 ///   n'est jamais support ni hero : la carte part hors de Meeshy, seul le
 ///   commentaire reste ;
-/// - une story ÉCHUE (`expiresAt` passé) ne se fige pas en image ;
+/// - une story ÉCHUE (`StoryItem.isExpired`, la fenêtre par défaut sans
+///   `expiresAt`) ne se fige pas en image ;
 /// - une story à CANVAS (`hasCanvas` : textes, stickers, filtres posés par
 ///   `storyEffects`) n'est pas son média de fond : sa VIGNETTE (`thumbnailUrl`,
 ///   servie par la passerelle) la représente, et sans vignette il n'y a ni
@@ -52,7 +53,7 @@ public struct PostCommentCardStory: Sendable {
 
     /// Le visuel qui représente la story sur la carte — `nil` : aucun (voir les gardes).
     func heroMedia(now: Date) -> MessageCardSubjectMedia? {
-        guard PostCommentCardComposition.isPublicAudience(visibility), !isExpired(now: now) else { return nil }
+        guard PostCommentCardComposition.isPublicAudience(visibility), !StoryItem.isExpired(createdAt: timestamp, expiresAt: expiresAt, at: now) else { return nil }
         guard let visual = media.first(where: { $0.type == .image || $0.type == .video }) else { return nil }
         let thumbnail = MessageCardText.nonBlank(visual.thumbnailUrl)
         if hasCanvas {
@@ -69,10 +70,6 @@ public struct PostCommentCardStory: Sendable {
         case .audio, .document:
             return nil
         }
-    }
-
-    func isExpired(now: Date) -> Bool {
-        expiresAt.map { $0 <= now } ?? false
     }
 
     private static func subjectMedia(of item: FeedMedia, kind: MessageCardMediaKind, file: String, poster: String?) -> MessageCardSubjectMedia {
