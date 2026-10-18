@@ -18,6 +18,7 @@ import { getPresenceVisibilityService } from '../../services/PresenceVisibilityS
 import { presenceMissingEntryPolicy, viewerFromRequest } from '../users/presence-gate';
 import { EngagementService } from '../../services/engagement/EngagementService';
 import { FOUNDING_MEMBER_PERMISSIONS } from '../../services/participantRights';
+import { AVATAR_RING_COLUMN, servedPerson } from '../../services/appearance/authorProfileDecor';
 
 /** Le plafond d'une page de demandes. */
 export const LIMITE_MAX_DEMANDES = 100;
@@ -49,6 +50,8 @@ const PROJECTION_PARTIE = {
   avatar: true,
   isOnline: true,
   lastActiveAt: true,
+  // #10945 — le contour équipé, résolu en `profileDecor` par `servirParties`.
+  ...AVATAR_RING_COLUMN,
 } as const;
 
 export const INCLUDE_PARTIES = {
@@ -63,6 +66,7 @@ type PartieAvecPresence = {
   readonly id: string;
   readonly isOnline: boolean | null;
   readonly lastActiveAt?: Date | null;
+  readonly equippedAvatarRing?: string | null;
 };
 
 /**
@@ -112,9 +116,9 @@ export async function servirParties<T extends Record<string, unknown>>(
     for (const cle of CLES_PARTIES) {
       const partie = servie[cle] as (PartieAvecPresence & Record<string, unknown>) | null | undefined;
       if (!partie?.id) continue;
-      servie[cle] = applyPresenceVisibilityAsOffline(partie, carte.get(partie.id), {
+      servie[cle] = servedPerson(applyPresenceVisibilityAsOffline(partie, carte.get(partie.id), {
         onMissingEntry: surEntreeAbsente,
-      });
+      }));
     }
     return servie as T;
   });

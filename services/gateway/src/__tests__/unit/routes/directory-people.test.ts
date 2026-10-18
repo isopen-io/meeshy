@@ -156,14 +156,14 @@ describe('La recherche interroge l’INDEX, jamais cinq colonnes', () => {
 });
 
 describe('La projection est MINIMALE, et la présence se demande', () => {
-  it('ne rend que quatre champs par défaut', async () => {
+  it('ne rend que quatre champs et le contour équipé par défaut (#10945)', async () => {
     const { prisma, argsRecherche } = buildApp();
     const app = await monter(prisma);
 
     await chercher(app, 'q=jean');
 
     const select = argsRecherche().select as Record<string, unknown>;
-    expect(Object.keys(select).sort()).toEqual(['avatar', 'displayName', 'id', 'username']);
+    expect(Object.keys(select).sort()).toEqual(['avatar', 'displayName', 'equippedAvatarRing', 'id', 'username']);
 
     await app.close();
   });
