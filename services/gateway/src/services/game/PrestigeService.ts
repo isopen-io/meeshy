@@ -32,6 +32,7 @@ import { GAME_LEVEL_MIN } from '@meeshy/shared/utils/game/levels';
 import { GameRefusal } from './GameRefusal';
 import { GloryService } from './GloryService';
 import { TrophyService } from './TrophyService';
+import { announceGameState } from './GameStateBroadcast';
 
 const REQUEST_OPERATION = 'game.prestige';
 const WRITE_ATTEMPTS = 3;
@@ -102,6 +103,7 @@ export class PrestigeService {
         continue;
       }
       const gloryGained = await this.followUps(userId, verdict.prestigeAfter, verdict.gloryGained, now);
+      announceGameState(userId, 'prestige');
       return { status: 'passed', prestige: verdict.prestigeAfter, score: 0, level: 1, gloryGained, trophyKey: verdict.trophyKey };
     }
     throw new Error('prestige contended');

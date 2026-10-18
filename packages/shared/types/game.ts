@@ -410,6 +410,20 @@ export const meeshMintResponseSchema = z.object({
   basePrice: z.number().int().min(1).optional(),
   /** Le facteur du niveau actuel appliqué, de 0,5 à 1 (#10847). */
   costFactor: z.number().min(0).max(1).optional(),
+  /** Le marqueur d'ordre de l'état servi (#10900, `game-sync.ts`) — absent d'un serveur antérieur. */
+  gameRevision: nonNegativeInt.optional(),
+});
+
+/**
+ * Le refus `409 PRICE_CHANGED` de la frappe (#10903) : le prix rejugé dépasse la garde `maxPrice` que l'écran a envoyée.
+ * Le prix COURANT part à la racine, à côté de `code`, pour que l'écran le montre et redemande la confirmation.
+ */
+export const priceChangedResponseSchema = z.object({
+  code: z.literal('PRICE_CHANGED'),
+  number: z.number().int().min(1),
+  price: z.number().int().min(1),
+  basePrice: z.number().int().min(1),
+  costFactor: z.number().min(0).max(1),
 });
 
 /**
@@ -427,7 +441,14 @@ export const treasuryLockedResponseSchema = z.object({
  * Le corps de `POST /me/meesh/mint`. Une frappe ne se paie QU'EN POINTS (porteur, 2026-10-10, #10011) : `payWith`
  * n'admet que `points` — un client qui demanderait un autre moyen est refusé à la lecture, sans aucune écriture.
  */
-export const meeshMintRequestSchema = writeRequest.extend({ payWith: z.literal('points').optional() });
+export const meeshMintRequestSchema = writeRequest.extend({
+  payWith: z.literal('points').optional(),
+  /**
+   * La garde de prix (#10903) : le prix que l'écran a montré. Au-delà, la frappe est refusée en `409 PRICE_CHANGED`
+   * avec le prix courant (`priceChangedResponseSchema`), sans rien débiter. Absente : la frappe se comporte comme avant.
+   */
+  maxPrice: z.number().int().min(1).optional(),
+});
 export type MeeshMintRequest = z.infer<typeof meeshMintRequestSchema>;
 
 export type MissionRerollRequest = z.infer<typeof missionRerollRequestSchema>;

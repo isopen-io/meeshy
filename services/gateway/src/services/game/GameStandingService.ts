@@ -29,8 +29,9 @@
 import type { PrismaClient } from '@meeshy/shared/prisma/client';
 import type { GameStanding, UserGameProfileResponse } from '@meeshy/shared/types/game';
 import { flameForm, flameStatus } from '@meeshy/shared/utils/game/flame';
-import { gloryStanding, levelCapForRank } from '@meeshy/shared/utils/game/glory';
-import { GAME_PRESTIGE_MAX, legacyLevel, legacyLevelTierKey, levelFromScore, levelStepCeiling, levelTierKey, tighterLevelCap } from '@meeshy/shared/utils/game/levels';
+import { gloryStanding } from '@meeshy/shared/utils/game/glory';
+import { GAME_PRESTIGE_MAX, legacyLevel, legacyLevelTierKey, levelFromScore, levelTierKey } from '@meeshy/shared/utils/game/levels';
+import { levelCapWithSteps } from '@meeshy/shared/utils/game/level-steps';
 import { treasuryTier } from '@meeshy/shared/utils/game/treasury';
 import { SPARKS_USER_SELECT, levelSparksOf, sparksOf } from './SparksFacts';
 import { meeshTotalsFromLedger } from '../meesh/MeeshService';
@@ -39,6 +40,7 @@ import { FLAME_USER_SELECT, flameFactsOf } from './FlameService';
 import { GameProfileService } from './GameProfileService';
 import { gloryTotalFromLedger } from './GloryService';
 import { MythicSeatService } from './MythicSeatService';
+import { countMissionsDone, levelStepFactsOf } from './LevelStepFacts';
 import { visitorTrophyBound } from './TrophyService';
 
 const CLOSED: UserGameProfileResponse = { visible: false, standing: null, treasury: null };
@@ -95,9 +97,12 @@ export class GameStandingService {
     now: Date,
     reader: { readonly intimate: boolean; readonly trophies: boolean; readonly self: boolean },
   ): Promise<GameStanding> {
-    const [glory, mythicSeat, trophyCount] = await Promise.all([
+    const [glory, mythicSeat, meesh, missionsDone, trophyCount] = await Promise.all([
       gloryTotalFromLedger(this.prisma, userId),
       new MythicSeatService(this.prisma).seatOf(userId),
+      // Les étapes RÉELLES (#10903), comme le bloc `game` du membre : ses Meeshes au registre et ses missions accomplies.
+      meeshTotalsFromLedger(this.prisma, userId),
+      countMissionsDone(this.prisma, userId),
       // Le membre lit son compte en direct ; un ami ou ADMIN, figé au 1er du mois comme la vitrine (#10240).
       !(reader.intimate && reader.trophies)
         ? Promise.resolve(null)
@@ -108,12 +113,16 @@ export class GameStandingService {
     // Le niveau se lit sur la POCHE (#10892) ; son nombre exact (`points`, `sparks`) n'est servie qu'aux proches.
     const sparks = sparksOf(user);
     const rank = gloryStanding({ glory, mythicSeat });
-    // Le niveau s'ouvre selon le rang (#9688) et les étapes (#9706), lues sur le RECORD du membre — gravé étape
-    // faite, sans relire ses Meeshes ni ses missions ; les champs d'hier gardent l'ancienne loi pour les clients publiés.
-    const level = levelFromScore(
-      levelSparksOf(sparks),
-      tighterLevelCap(levelCapForRank(rank.rank), levelStepCeiling(Math.max(user.levelRecord ?? 0, user.levelMaxLifetime ?? 0) || null)),
-    );
+    // Le niveau s'ouvre selon le rang (#9688) et les étapes RÉELLES (#9706, #10903) — Meeshes, missions, record de Flamme,
+    // rang avec le Mythe —, la loi exacte du bloc `game` du membre : lues sur le record, une étape faite restait fermée
+    // jusqu'au prochain crédit. Les champs d'hier gardent l'ancienne loi pour les clients publiés.
+    const steps = levelStepFactsOf({
+      row: { meeshMintedLifetime: meesh.mintedLifetime, longestStreakDays: user.longestStreakDays ?? 0 },
+      missionsDone,
+      glory,
+      mythic: mythicSeat !== null,
+    });
+    const level = levelFromScore(levelSparksOf(sparks), levelCapWithSteps({ rank: rank.rank, steps }));
     const levelMax = Math.max(level, user.levelRecord ?? 0, user.levelMaxLifetime ?? 0);
     return {
       level: legacyLevel(level),

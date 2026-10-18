@@ -177,7 +177,10 @@ public final class AuthManager: ObservableObject, AuthManaging {
     internal var authService: AuthServiceProviding = AuthService.shared
 
     /// Prevents concurrent refresh loops when APIClient fires multiple 401s.
-    private var tokenRefreshTask: Task<String, Error>?
+    var tokenRefreshTask: Task<String, Error>?
+    /// #10904 — sa session, et les jetons remplacés de la session ouverte (`+RequestOwnership`).
+    var tokenRefreshOwner: SessionOwner?
+    var retiredSessionTokens: (owner: SessionOwner, tokens: [String])?
 
     /// #10463 — la génération de la session ouverte. `leaveActiveSession` la
     /// change EN ENTRANT : un rafraîchissement lancé sous une autre génération
@@ -205,7 +208,7 @@ public final class AuthManager: ObservableObject, AuthManaging {
     #if DEBUG
     /// Tâche d'arrière-plan lancée par `handleUnauthorized()`, retenue pour que
     /// les tests puissent l'attendre. Voir `cancelPendingTokenRefreshForTesting`.
-    private var unauthorizedRefreshTask: Task<Void, Never>?
+    var unauthorizedRefreshTask: Task<Void, Never>?
     #endif
 
     // Legacy global keys kept only for one-time migration
@@ -651,9 +654,14 @@ public final class AuthManager: ObservableObject, AuthManaging {
         // D1 — guard against concurrent refreshes by invoking refreshSession(force: true)
         // asynchronously. Since refreshSession uses tokenRefreshTask to serialize,
         // multiple concurrent calls to handleUnauthorized() will safely share the same refresh task.
+        // #10904 — pour la session de CE 401 : si un autre compte (ou une autre
+        // session) s'est ouvert avant que la tâche ne s'exécute, rien ne part.
+        let owner = activeUserId.map { SessionOwner(userId: $0, generation: sessionGeneration) }
         let backgroundRefresh = Task { [weak self] in
+            guard let self, let owner, let userId = self.activeUserId,
+                  SessionOwner(userId: userId, generation: self.sessionGeneration) == owner else { return }
             do {
-                _ = try await self?.refreshSession(force: true)
+                _ = try await self.refreshSession(force: true)
             } catch {
                 Logger.auth.error("Background session refresh after 401 failed: \(error.localizedDescription, privacy: .public)")
             }
@@ -926,15 +934,18 @@ public final class AuthManager: ObservableObject, AuthManaging {
 
     @discardableResult
     public func refreshSession(force: Bool = false) async throws -> String {
-        if let task = tokenRefreshTask {
-            return try await task.value
-        }
-
         guard let userId = activeUserId else {
             throw MeeshyError.auth(.sessionExpired)
         }
+        let owner = SessionOwner(userId: userId, generation: sessionGeneration)
+        // #10904 — seule la MÊME session rejoint le rafraîchissement en vol.
+        // Celui d'une session quittée s'abandonnera de lui-même ; le rejoindre
+        // ferait hériter son abandon au compte qui vient de s'ouvrir.
+        if let task = tokenRefreshTask, tokenRefreshOwner == owner {
+            return try await awaitRefresh(task, for: owner)
+        }
 
-        guard let token = keychain.load(forKey: tokenKey(for: userId), account: nil) else {
+        guard let token = sessionTokenInUse(for: userId) else {
             requireReauthentication(userId: userId, generation: sessionGeneration)
             throw MeeshyError.auth(.sessionExpired)
         }
@@ -968,6 +979,9 @@ public final class AuthManager: ObservableObject, AuthManaging {
                     Logger.auth.info("Refreshed session abandoned: its account is no longer the active one")
                     throw CancellationError()
                 }
+                // #10904 — le jeton remplacé reste reconnu comme de CETTE
+                // session : son 401 tardif se rejouera sans rien rafraîchir.
+                self.retire(token, from: owner)
                 try self.applySession(token: newToken, sessionToken: data.sessionToken, user: newUser)
                 return newToken
             } catch let error as MeeshyError {
@@ -989,12 +1003,18 @@ public final class AuthManager: ObservableObject, AuthManaging {
         }
 
         tokenRefreshTask = task
+        tokenRefreshOwner = owner
 
+        // #10904 — ne libère que SA tâche : une autre session a pu en poser
+        // une depuis, et l'effacer la ferait rafraîchir deux fois.
         defer {
-            tokenRefreshTask = nil
+            if tokenRefreshTask == task {
+                tokenRefreshTask = nil
+                tokenRefreshOwner = nil
+            }
         }
 
-        return try await task.value
+        return try await awaitRefresh(task, for: owner)
     }
 
     // MARK: - Migration from legacy global keys (one-time, at first launch)
@@ -1149,44 +1169,6 @@ public final class AuthManager: ObservableObject, AuthManaging {
     /// témoin qui le subirait passerait sans avoir rien demandé.
     func resetProfileRefreshThrottleForTesting() {
         lastProfileRefreshAt = nil
-    }
-
-    /// Test-only seam: cancels and clears any in-flight `tokenRefreshTask`.
-    /// `handleUnauthorized()` fires a detached, fire-and-forget `Task` on
-    /// every 401 (e.g. from unrelated background activity — E2EE bundle
-    /// upload, story prefetch — hitting the stubbed `authService` while a
-    /// test runs) that sets `tokenRefreshTask` and isn't awaited by that
-    /// test. `refreshSession(force:)`'s `if let task = tokenRefreshTask {
-    /// return try await task.value }` serialization guard then makes the
-    /// NEXT test's own `refreshSession` call transparently await that
-    /// unrelated leftover task instead of evaluating its own state —
-    /// surfacing as a flaky, order-dependent failure in whichever test
-    /// happens to run right after one that triggered a 401. Call from
-    /// `setUp()` for hermetic test isolation.
-    ///
-    /// **Annuler ne suffit pas, il faut attendre.** `Task.cancel()` est
-    /// coopératif : une tâche déjà entrée dans `authService.refreshToken(…)`
-    /// va jusqu'au bout de son appel. Elle atterrit alors sur le stub du test
-    /// SUIVANT — installé entre-temps par son `setUp()` — et en incrémente le
-    /// compteur d'appels. Le test suivant voit un appel qu'il n'a pas fait.
-    ///
-    /// En attendant la valeur de la tâche, cette fonction garantit qu'aucun
-    /// appel de la tâche annulée ne peut plus survenir après son retour.
-    /// `try?` avale le `CancellationError` attendu, qui est ici le cas normal.
-    func cancelPendingTokenRefreshForTesting() async {
-        // L'ordre compte. La tâche d'arrière-plan de `handleUnauthorized()` est
-        // celle qui APPELLE `refreshSession` : tant qu'elle n'a pas démarré,
-        // `tokenRefreshTask` est encore `nil`. La vider d'abord ne servirait à
-        // rien — c'est l'autre qui la remplirait ensuite, contre le stub du
-        // test suivant.
-        let background = unauthorizedRefreshTask
-        unauthorizedRefreshTask = nil
-        await background?.value
-
-        let pending = tokenRefreshTask
-        tokenRefreshTask = nil
-        pending?.cancel()
-        _ = try? await pending?.value
     }
     #endif
 }

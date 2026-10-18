@@ -78,6 +78,10 @@ final class AudioRecorderManager: ObservableObject, AudioRecordingProviding, Cal
         if CallManagerHost.shared.isCallActiveForAudioGuard {
             return
         }
+        // Un second démarrage pendant une prise écrasait l'`AVAudioRecorder` en
+        // cours sans l'arrêter : son fichier restait orphelin dans `tmp`, et le
+        // micro tenu par une instance que plus rien ne référençait.
+        guard !isRecording else { return }
 
         // Garde micro — point UNIQUE pour les cinq surfaces qui appellent ce
         // recorder (message vocal, commentaire post, commentaire story, post
@@ -150,12 +154,21 @@ final class AudioRecorderManager: ObservableObject, AudioRecordingProviding, Cal
         let state = MediaPermissionState.microphone
         if state.isUsable { return true }
 
+        // Deux taps pendant l'invite système lançaient deux demandes, puis deux
+        // démarrages à l'accord : une seule demande en vol à la fois.
+        guard !awaitsMicrophonePermission else { return false }
+        awaitsMicrophonePermission = true
         Task { @MainActor [weak self] in
-            guard await MediaPermissionCoordinator.ensureMicrophone() else { return }
+            let granted = await MediaPermissionCoordinator.ensureMicrophone()
+            self?.awaitsMicrophonePermission = false
+            guard granted else { return }
             self?.startRecording()
         }
         return false
     }
+
+    /// Une demande de permission micro est en vol (voir `hasMicrophonePermission`).
+    private(set) var awaitsMicrophonePermission = false
 
     /// A3 — central deactivation helper. Exposed `internal` for tests; not
     /// called from anywhere except the failure path of `startRecording`.

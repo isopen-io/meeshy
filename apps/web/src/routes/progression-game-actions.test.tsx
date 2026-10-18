@@ -159,6 +159,39 @@ describe('la frappe', () => {
     expect(actions().celebration).toBeNull();
   });
 
+  test('le prix montré part avec la frappe (#10903) : la passerelle refuse au-delà, sans débiter', async () => {
+    const before = seed();
+    const { actions, calls } = await bench(before, (req) =>
+      pathOf(req) === '/api/v1/me/meesh/mint' ? ok({ status: 'minted', balance: 5, mintedLifetime: 4 }) : undefined,
+    );
+    await act(async () => actions().mint());
+    await settle();
+    const sent = calls().find((c) => pathOf(c) === '/api/v1/me/meesh/mint');
+    expect(sent?.body).toMatchObject({ maxPrice: gameOf(before).mint.price });
+  });
+
+  test('PRICE_CHANGED : rien n’a bougé, le prix se relit et l’écran dit de frapper à nouveau', async () => {
+    const before = seed();
+    const { actions, cached, client } = await bench(before, (req) =>
+      pathOf(req) === '/api/v1/me/meesh/mint' ? refused('PRICE_CHANGED') : undefined,
+    );
+    await act(async () => actions().mint());
+    await settle();
+    expect(gameOf(cached()).level.score).toBe(gameOf(before).level.score);
+    expect(gameOf(cached()).mint.number).toBe(gameOf(before).mint.number);
+    expect(actions().errors.mint).toContain('prix');
+    expect(client.getQueryState(ENGAGEMENT_PROGRESS_QUERY_KEY)?.isInvalidated).toBe(true);
+  });
+
+  test('la frappe confirmée relève la révision en cache (#10900)', async () => {
+    const { actions, cached } = await bench({ ...seed(), gameRevision: 100 }, (req) =>
+      pathOf(req) === '/api/v1/me/meesh/mint' ? ok({ status: 'minted', balance: 5, mintedLifetime: 4, gameRevision: 200 }) : undefined,
+    );
+    await act(async () => actions().mint());
+    await settle();
+    expect(cached().gameRevision).toBe(200);
+  });
+
   test('le requestId survit à un échec (le retry n’est pas une seconde frappe) et change après un succès', async () => {
     let attempt = 0;
     const { actions, calls } = await bench(seed(), (req) => {

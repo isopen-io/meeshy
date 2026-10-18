@@ -91,6 +91,7 @@ const de = {
   'game.error.insufficient_points': 'Nicht genug Funken in der Tasche, um eine Meesh zu prägen.',
   'game.error.treasury_locked': 'Diese Reserve des Schatzes öffnet sich mit einem höheren Rang.',
   'game.error.mint_blocked_by_debt': 'Vor dem Prägen ist eine Funkenschuld zu begleichen: Deine nächsten Gewinne zahlen sie ab.',
+  'game.error.price_changed': 'Der Preis hat sich seit der Anzeige geändert: Nichts wurde ausgegeben. Prüfe den neuen Preis und präge erneut.',
   'game.error.insufficient_meeshes': 'Dafür brauchst du eine Meesh mehr.',
   'game.error.freeze_at_maximum': 'Du hast schon zwei Eis in Reserve: das ist das Maximum.',
   'game.error.relight_not_allowed': 'Die Flamme kann jetzt nicht neu entzündet werden.',

@@ -152,7 +152,12 @@ public actor TusUploadManager {
     /// (`AuthManager.refreshSession(force:)`) rather than reimplementing it —
     /// injectable so tests can stub success/failure without touching the
     /// real `AuthManager.shared` singleton.
-    private let refreshAuthSession: @Sendable @concurrent (_ force: Bool) async throws -> String
+    ///
+    /// #10904 — il reçoit le jeton PRÉSENTÉ par la montée : la session
+    /// rafraîchie est la sienne, ou rien. Un compte devenu actif entre-temps
+    /// n'est jamais rafraîchi pour elle, et la montée est abandonnée
+    /// (`CancellationError`).
+    private let refreshAuthSession: @Sendable @concurrent (_ presentedToken: String) async throws -> String
     private let backgroundTasks: any BackgroundTaskProviding
     private let digestMemo: FileDigestMemo
 
@@ -164,8 +169,12 @@ public actor TusUploadManager {
         baseURL: URL,
         urlSession: URLSession = .shared,
         checkpointStore: TusUploadCheckpointStore = .shared,
-        refreshAuthSession: @escaping @Sendable (_ force: Bool) async throws -> String = { force in
-            try await AuthManager.shared.refreshSession(force: force)
+        refreshAuthSession: @escaping @Sendable (_ presentedToken: String) async throws -> String = { presentedToken in
+            try await AuthManager.shared.refreshSession(
+                presentedToken: presentedToken,
+                stillInstalled: APIClient.shared.authToken == presentedToken,
+                force: true
+            )
         },
         backgroundTasks: any BackgroundTaskProviding = UIApplicationBackgroundTaskProvider()
     ) {
@@ -180,7 +189,7 @@ public actor TusUploadManager {
         baseURL: URL,
         urlSession: URLSession,
         checkpointStore: TusUploadCheckpointStore,
-        refreshAuthSession: @escaping @Sendable (_ force: Bool) async throws -> String,
+        refreshAuthSession: @escaping @Sendable (_ presentedToken: String) async throws -> String,
         backgroundTasks: any BackgroundTaskProviding,
         digestMemo: FileDigestMemo
     ) {
@@ -557,7 +566,7 @@ public actor TusUploadManager {
                 // the 409 branch) rather than trust the local `offset` —
                 // resuming from a diverged local counter, or restarting the
                 // whole session, are both worse than the defect this fixes.
-                guard credential.isAccount, !hasRetriedAfterAuthRefusal else {
+                guard let presentedToken = credential.bearerToken, !hasRetriedAfterAuthRefusal else {
                     Self.logger.error("PATCH 401 at offset \(offset, privacy: .public) — no retry available, failing definitively")
                     throw MeeshyError.auth(.sessionExpired)
                 }
@@ -565,7 +574,13 @@ public actor TusUploadManager {
                 Self.logger.warning("PATCH 401 at offset \(offset, privacy: .public) — refreshing session and retrying once")
                 let freshToken: String
                 do {
-                    freshToken = try await refreshAuthSession(true)
+                    freshToken = try await refreshAuthSession(presentedToken)
+                } catch let abandoned as CancellationError {
+                    // #10904 — le compte de la montée n'est plus le compte
+                    // actif (ou sa session a changé) : rien n'est refusé, la
+                    // montée s'arrête sans rejeu sous une autre identité.
+                    Self.logger.warning("PATCH 401 recovery abandoned — the upload's session is no longer the active one")
+                    throw abandoned
                 } catch {
                     Self.logger.error("PATCH 401 recovery — session refresh failed, failing definitively")
                     throw MeeshyError.auth(.sessionExpired)

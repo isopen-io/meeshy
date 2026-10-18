@@ -1722,15 +1722,14 @@ class FeedViewModel: ObservableObject {
     ) -> Bool {
         guard let index = post.comments.firstIndex(where: { $0.id == commentId }) else { return false }
         let comment = post.comments[index]
-        let preferred = preferredLanguages.filter { !$0.isEmpty }.map { $0.lowercased() }
-        guard let incomingRank = preferred.firstIndex(where: { $0 == language.lowercased() })
+        // La traduction rejoint TOUJOURS le dictionnaire du commentaire, et le
+        // texte affiché se re-résout par la descente du Prisme : une langue
+        // non préférée aujourd'hui servira après un changement de langue.
+        let updated = comment.mergingTranslation(text, language: language, preferredLanguages: preferredLanguages)
+        guard updated.translatedContent != comment.translatedContent
+                || updated.translations?[language]?.text != comment.translations?[language]?.text
         else { return false }
-        let originalRank = comment.originalLanguage
-            .map { $0.lowercased() }
-            .flatMap { orig in preferred.firstIndex(where: { $0 == orig }) }
-        if let originalRank, originalRank <= incomingRank { return false }
-        guard comment.translatedContent == nil else { return false }
-        post.comments[index].translatedContent = text
+        post.comments[index] = updated
         return true
     }
 

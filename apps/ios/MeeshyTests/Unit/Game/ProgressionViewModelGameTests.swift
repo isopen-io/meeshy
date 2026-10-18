@@ -276,6 +276,175 @@ final class ProgressionViewModelGameTests: XCTestCase {
         XCTAssertEqual(sut.celebration?.edition, preview?.edition)
     }
 
+    // MARK: - La machine d'état reste monotone (#10898)
+
+    private actor Latch {
+        private var opened = false
+        private var waiters: [CheckedContinuation<Void, Never>] = []
+        func wait() async {
+            if opened { return }
+            await withCheckedContinuation { waiters.append($0) }
+        }
+        func open() {
+            opened = true
+            waiters.forEach { $0.resume() }
+            waiters = []
+        }
+    }
+
+    private struct Race: Sendable {
+        let sut: ProgressionViewModel
+        let engagement: MockEngagementProgressService
+        let latch: Latch
+        let late: Task<Void, Never>
+        let after: APIEngagementProgress
+    }
+
+    /// Une relecture partie AVANT la frappe — revalidation d'un cache, tirage — lit la poche et la pièce d'avant, et
+    /// reste en vol pendant le geste.
+    private func raceAReadLeftBeforeTheMint() async -> Race {
+        let before = GameFixture.snapshot(GameFixture.game(minted: 12), meesh: GameFixture.meesh(minted: 12))
+        let after = GameFixture.snapshot(
+            GameFixture.game(score: 121_800 - 1_221, minted: 13, held: 10),
+            meesh: GameFixture.meesh(balance: 10, minted: 13, debitable: 121_800 - 1_221)
+        )
+        let (sut, engagement, _) = makeSUT(snapshot: before)
+        await sut.load(forceNetwork: true)
+        let latch = Latch()
+        engagement.fetchProgressSequence = [.success(before), .success(after)]
+        engagement.fetchSuspension = { call in if call == 2 { await latch.wait() } }
+        let late = Task { await sut.load(forceNetwork: true) }
+        while engagement.fetchProgressCallCount < 2 { await Task.yield() }
+        engagement.mintResult = .success(APIMeeshMintResult(status: "minted", balance: 10, mintedLifetime: 13, number: 13, edition: .silver))
+        return Race(sut: sut, engagement: engagement, latch: latch, late: late, after: after)
+    }
+
+    func test_mint_aReadThatLeftBeforeTheMintAndLandsAfterIt_neverRepaintsTheOldPrice() async {
+        let race = await raceAReadLeftBeforeTheMint()
+
+        await race.sut.mint()
+        await race.latch.open()
+        await race.late.value
+
+        XCTAssertEqual(race.sut.game?.mint, race.after.game?.mint, "le prix servi APRÈS la frappe reste affiché")
+        XCTAssertEqual(race.sut.game?.mint.number, 14)
+        XCTAssertEqual(race.sut.snapshot?.meesh?.mintedLifetime, 13)
+    }
+
+    func test_mint_aReadThatLeftBeforeTheMintAndLandsDuringIt_keepsTheOptimisticNextCoin() async {
+        let race = await raceAReadLeftBeforeTheMint()
+        let probe = Probe<Int>()
+        let sut = race.sut
+        race.engagement.duringMint = {
+            await race.latch.open()
+            await race.late.value
+            probe.value = sut.game?.mint.number
+        }
+
+        await sut.mint()
+
+        XCTAssertEqual(probe.value, 14, "la lecture d'avant le geste ne défait pas l'optimiste pendant le vol")
+        XCTAssertEqual(sut.game?.mint, race.after.game?.mint)
+    }
+
+    func test_load_aServedReadBehindAConfirmedMint_isIgnored() async {
+        let race = await raceAReadLeftBeforeTheMint()
+        await race.sut.mint()
+        await race.latch.open()
+        await race.late.value
+        let stale = GameFixture.snapshot(GameFixture.game(minted: 12), meesh: GameFixture.meesh(minted: 12))
+        race.engagement.fetchProgressSequence = [.success(stale)]
+        race.engagement.fetchSuspension = nil
+
+        await race.sut.load(forceNetwork: true)
+
+        XCTAssertEqual(race.sut.game?.mint, race.after.game?.mint, "une charge en retard sur une frappe confirmée est périmée")
+    }
+
+    /// Le marqueur d'ordre de la passerelle (#10900) prime : une lecture dont la révision est plus ancienne que celle de
+    /// la frappe confirmée est périmée, même si elle compte déjà la pièce.
+    func test_mint_aRereadOlderThanTheMintRevision_isIgnored() async {
+        let (sut, engagement, _) = makeSUT(snapshot: GameFixture.snapshot(GameFixture.game(minted: 12), meesh: GameFixture.meesh(minted: 12)))
+        await sut.load(forceNetwork: true)
+        let served = GameFixture.snapshot(GameFixture.game(minted: 13, held: 10), meesh: GameFixture.meesh(balance: 10, minted: 13))
+        let older = APIEngagementProgress(counters: served.counters, milestones: served.milestones, streak: served.streak,
+                                          level: served.level, meesh: served.meesh, game: served.game, gameRevision: 150)
+        engagement.fetchProgressSequence = [.success(older)]
+        engagement.mintResult = .success(APIMeeshMintResult(status: "minted", balance: 10, mintedLifetime: 13, number: 13,
+                                                            edition: .silver, gameRevision: 200))
+
+        await sut.mint()
+
+        XCTAssertNotEqual(sut.snapshot?.gameRevision, 150, "une révision antérieure à la frappe ne se pose pas")
+        XCTAssertEqual(sut.game?.mint.number, 14, "l'optimiste reste, en attendant une lecture à jour")
+    }
+
+    func test_theOrderMarker_isReadOnTheEngagementReadAndOnTheMintAnswer() throws {
+        let read = Data(#"{"counters":[],"milestones":[],"streak":{"currentStreakDays":0,"longestStreakDays":0},"level":{"engagementScore":0},"gameRevision":1792000000123}"#.utf8)
+        let mint = Data(#"{"status":"minted","balance":1,"mintedLifetime":1,"gameRevision":1792000000456}"#.utf8)
+        XCTAssertEqual(try JSONDecoder().decode(APIEngagementProgress.self, from: read).gameRevision, 1_792_000_000_123)
+        XCTAssertEqual(try JSONDecoder().decode(APIMeeshMintResult.self, from: mint).gameRevision, 1_792_000_000_456)
+    }
+
+    // MARK: - La garde de prix (#10903) et l'état venu d'ailleurs (#10900)
+
+    func test_mint_sendsThePriceTheScreenShowed() async {
+        let (sut, engagement, _) = makeSUT()
+        await sut.load(forceNetwork: true)
+        let shown = sut.game?.mint.price
+
+        await sut.mint()
+
+        XCTAssertEqual(engagement.mintMaxPrices, [shown])
+    }
+
+    func test_mint_priceChanged_restoresSaysItAndRereadsTheNewPrice() async {
+        let (sut, engagement, _) = makeSUT()
+        await sut.load(forceNetwork: true)
+        let before = sut.game
+        let reads = engagement.fetchProgressCallCount
+        engagement.mintResult = .failure(refusal(.priceChanged))
+
+        await sut.mint()
+
+        XCTAssertEqual(sut.game?.mint, before?.mint, "rien n'a été débité")
+        XCTAssertEqual(sut.game?.treasury, before?.treasury)
+        XCTAssertEqual(sut.mintError, GameCopy.errorMessage(for: .priceChanged))
+        XCTAssertEqual(engagement.fetchProgressCallCount, reads + 1, "le nouveau prix se relit")
+    }
+
+    func test_gameUpdated_fromElsewhere_posesTheServedBlock_andRereads() async {
+        let (sut, engagement, _) = makeSUT()
+        await sut.load(forceNetwork: true)
+        let elsewhere = GameFixture.game(minted: 13, held: 10)
+        engagement.fetchProgressResult = .success(GameFixture.snapshot(elsewhere, meesh: GameFixture.meesh(balance: 10, minted: 13)))
+
+        sut.receive(GameUpdatedEvent(gameRevision: 500, reason: "mint", game: elsewhere))
+
+        XCTAssertEqual(sut.game?.mint, elsewhere.mint, "le bloc servi se pose sans attendre")
+    }
+
+    func test_gameUpdated_olderThanTheConfirmedState_isIgnored() async {
+        let (sut, engagement, _) = makeSUT()
+        await sut.load(forceNetwork: true)
+        engagement.mintResult = .success(APIMeeshMintResult(status: "minted", balance: 10, mintedLifetime: 13, gameRevision: 900))
+        await sut.mint()
+        let shown = sut.game
+        let reads = engagement.fetchProgressCallCount
+
+        sut.receive(GameUpdatedEvent(gameRevision: 800, reason: "credit", game: GameFixture.game(minted: 12)))
+
+        XCTAssertEqual(sut.game, shown)
+        XCTAssertEqual(engagement.fetchProgressCallCount, reads, "un état périmé ne déclenche rien")
+    }
+
+    func test_gameUpdated_isDecodedFromTheSocketPayload_toleratingAnUnreadableBlock() throws {
+        let data = Data(#"{"gameRevision":1792000000789,"reason":"credit","game":{"unexpected":true}}"#.utf8)
+        let event = try JSONDecoder().decode(GameUpdatedEvent.self, from: data)
+        XCTAssertEqual(event.gameRevision, 1_792_000_000_789)
+        XCTAssertNil(event.game, "un bloc illisible se lit nil : la progression se relit")
+    }
+
     func test_mint_alreadyMinted_isNotACelebration() async {
         let (sut, engagement, _) = makeSUT()
         await sut.load(forceNetwork: true)

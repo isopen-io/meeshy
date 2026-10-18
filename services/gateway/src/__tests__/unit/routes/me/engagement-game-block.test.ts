@@ -126,4 +126,20 @@ describe('GET /me/engagement — le bloc game', () => {
     expect(data.meesh.mintCost).toBe(801);
     await app.close();
   });
+
+  it('sert `gameRevision`, l\'instant serveur pris AVANT la lecture du bloc (#10900)', async () => {
+    let readAt = 0;
+    const app = await buildApp(async () => {
+      readAt = Date.now();
+      return realBlock();
+    });
+    const before = Date.now();
+
+    const { data } = (await get(app)).json();
+
+    expect(typeof data.gameRevision).toBe('number');
+    expect(data.gameRevision).toBeGreaterThanOrEqual(before);
+    expect(data.gameRevision).toBeLessThanOrEqual(readAt);
+    await app.close();
+  });
 });

@@ -49,6 +49,7 @@ import { GamePhotoService } from '../game/GamePhotoService';
 import { MythicSeatService } from '../game/MythicSeatService';
 import { LEVEL_STEP_USER_SELECT, countMissionsDone, levelStepFactsOf } from '../game/LevelStepFacts';
 import { SPARKS_USER_SELECT } from '../game/SparksFacts';
+import { announceGameState } from '../game/GameStateBroadcast';
 
 const log = enhancedLogger.child({ module: 'MeeshService' });
 
@@ -78,7 +79,30 @@ export type MeeshMintOutcome =
   /** La pièce ferait entrer dans une réserve du trésor que le rang de Gloire n'ouvre pas (#10848). */
   | { readonly status: 'treasury-locked'; readonly lock: TreasuryLock }
   /** Une dette d'étincelles est à rembourser avant de frapper (porteur, 2026-10-16). */
-  | { readonly status: 'blocked-by-debt'; readonly sparksDebt: number };
+  | { readonly status: 'blocked-by-debt'; readonly sparksDebt: number }
+  /** Le prix rejugé dépasse la garde `maxPrice` que l'écran a envoyée (#10903) : rien n'est débité, le prix courant est servi. */
+  | ({ readonly status: 'price-changed' } & ServedMintPrice);
+
+/** Le prix courant de la prochaine pièce, tel que la frappe le débiterait — servi avec un refus de garde (#10903). */
+export type ServedMintPrice = {
+  readonly number: number;
+  readonly price: number;
+  readonly basePrice: number;
+  readonly costFactor: number;
+};
+
+/** La garde optionnelle d'une frappe (#10903) : absente, la frappe se comporte comme avant. */
+export type MintGuard = { readonly maxPrice?: number };
+
+const servedPriceOf = (preview: SparksMintPreview): ServedMintPrice => ({
+  number: preview.number,
+  price: preview.price,
+  basePrice: preview.basePrice,
+  costFactor: preview.costFactor,
+});
+
+const exceedsGuard = (preview: SparksMintPreview, guard: MintGuard): boolean =>
+  typeof guard.maxPrice === 'number' && preview.price > guard.maxPrice;
 
 const EDITIONS: readonly string[] = ['silver', 'gold', 'prism'];
 
@@ -163,6 +187,14 @@ export function mintPlanOf(preview: Pick<SparksMintPreview, 'canMint' | 'missing
   return { debitablePoints: pocket, floorPoints: 0, canMint: preview.canMint, missingPoints: preview.missingPoints, debits: [] };
 }
 
+/** Le prix rejugé dans la transaction dépasse la garde du client (#10903) : annulée en bloc, rendue avec le prix courant. */
+class PriceAboveGuard extends Error {
+  constructor(readonly served: ServedMintPrice) {
+    super('mint price above the client guard');
+    this.name = 'PriceAboveGuard';
+  }
+}
+
 /** Une dette d'étincelles est apparue entre la lecture et la transaction : annulée en bloc, rendue comme bloquée. */
 class DebtBlocksMint extends Error {
   constructor(readonly sparksDebt: number) {
@@ -228,11 +260,11 @@ export class MeeshService {
    * rejetée n'a été écrit, et `(userId, requestId)` reste unique au registre.
    * Elle repart de la LECTURE, parce que la poche a pu bouger entre-temps.
    */
-  async mint(userId: string, requestId: string): Promise<MeeshMintOutcome> {
-    return withRetry(() => this.mintOnce(userId, requestId));
+  async mint(userId: string, requestId: string, guard: MintGuard = {}): Promise<MeeshMintOutcome> {
+    return withRetry(() => this.mintOnce(userId, requestId, guard));
   }
 
-  private async mintOnce(userId: string, requestId: string): Promise<MeeshMintOutcome> {
+  private async mintOnce(userId: string, requestId: string, guard: MintGuard): Promise<MeeshMintOutcome> {
     const dejaFrappe = await this.prisma.meeshLedger.findUnique({
       where: { userId_requestId: { userId, requestId } },
       select: { id: true, meta: true },
@@ -253,6 +285,8 @@ export class MeeshService {
     // La dette passe avant tout : tant qu'elle existe, on ne frappe pas.
     if (preview.blockedBy === 'debt') return { status: 'blocked-by-debt', sparksDebt: preview.sparksDebt };
     if (preview.locked !== null) return { status: 'treasury-locked', lock: preview.locked };
+    // La garde de prix (#10903) avant la poche : l'écran a promis au plus `maxPrice`, il apprend d'abord le prix courant.
+    if (exceedsGuard(preview, guard)) return { status: 'price-changed', ...servedPriceOf(preview) };
     if (!preview.canMint) return { status: 'insufficient', plan: mintPlanOf(preview, sparks.pocket) };
 
     try {
@@ -271,6 +305,7 @@ export class MeeshService {
         const jugee = previewAt(dans);
         if (jugee.blockedBy === 'debt') throw new DebtBlocksMint(jugee.sparksDebt);
         if (jugee.locked !== null) throw new TreasuryLockedInTransaction(jugee.locked);
+        if (exceedsGuard(jugee, guard)) throw new PriceAboveGuard(servedPriceOf(jugee));
         if (!jugee.canMint) throw new ScoreWouldGoNegative({ ...jugee, sparksPocket: dans.pocket });
         const { price, levelBefore, levelAfter, edition } = jugee;
 
@@ -342,6 +377,8 @@ export class MeeshService {
       }
 
       log.info('Meesh frappée', { userId, cost: price, number, balance: totaux.balance });
+      // Les autres appareils du compte apprennent la frappe sans attendre (#10900).
+      announceGameState(userId, 'mint');
       return {
         status: 'minted',
         ...totaux,
@@ -360,6 +397,7 @@ export class MeeshService {
     } catch (err) {
       if (err instanceof DebtBlocksMint) return { status: 'blocked-by-debt', sparksDebt: err.sparksDebt };
       if (err instanceof TreasuryLockedInTransaction) return { status: 'treasury-locked', lock: err.lock };
+      if (err instanceof PriceAboveGuard) return { status: 'price-changed', ...err.served };
       if (err instanceof ScoreWouldGoNegative) {
         // La poche a bougé entre la lecture et la transaction : refus jugé sur la poche relue.
         return { status: 'insufficient', plan: mintPlanOf(err.preview, err.preview.sparksPocket) };

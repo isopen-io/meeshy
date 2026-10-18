@@ -580,6 +580,10 @@ extension APIPost {
                         timestamp: c.createdAt, likes: c.likeCount ?? 0, replies: c.replyCount ?? 0,
                         parentId: c.parentId, effectFlags: c.effectFlags ?? 0,
                         originalLanguage: c.originalLanguage, translatedContent: commentTranslatedContent,
+                        translations: c.translations?.mapValues { entry in
+                            PostTranslation(text: entry.text, translationModel: entry.translationModel,
+                                            confidenceScore: entry.confidenceScore)
+                        },
                         currentUserReactions: c.currentUserReactions,
                         media: (c.media ?? []).map { $0.toFeedMedia() },
                         location: c.location,

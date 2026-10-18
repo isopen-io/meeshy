@@ -32,6 +32,25 @@ extension MessagePersistenceActor {
         let noticeJson = arrivalsNotice.flatMap {
             JSONEncoder().encodeOrLog($0, field: "joinNoticeJson", id: localId)
         }
+        // Une modification arrivée avant son message (encore dans le flux
+        // d'écriture) est gardée et rejouée à l'arrivée de la ligne.
+        guard try rowExists(localId) else {
+            rememberPendingRowEvent(localId) { events in
+                let edit = PendingEdit(newContent: newContent, editedAt: editedAt,
+                                       marksEdited: marksEdited, noticeJson: noticeJson)
+                if let kept = events.edit, kept.editedAt > edit.editedAt { return }
+                events.edit = edit
+            }
+            return
+        }
+        try applyServerEdit(localId: localId, newContent: newContent, editedAt: editedAt,
+                            marksEdited: marksEdited, noticeJson: noticeJson)
+    }
+
+    /// Une modification servie, sous la garde d'ordre.
+    private func applyServerEdit(
+        localId: String, newContent: String, editedAt: Date, marksEdited: Bool, noticeJson: Data?
+    ) throws {
         try applyEdit(localId: localId, newContent: newContent, marksEdited: marksEdited, noticeJson: noticeJson) { stored in
             // Ordering guard: `message:edited` carries no monotonic sequence, so a
             // delayed/duplicate socket delivery can arrive after a newer edit was
@@ -123,12 +142,11 @@ extension MessagePersistenceActor {
     ///   (`message:expired`) : les citations se scellent alors « expirées »
     ///   et se lisent « Message éphémère expiré », pas « supprimé » (#8631).
     public func markDeleted(localId: String, deletedAt: Date, sparingOpenedViewOnce: Bool = false, expired: Bool = false) throws {
-        let exists = try dbWriter.read { db in
-            try MessageRecord.filter(Column("localId") == localId || Column("serverId") == localId).fetchCount(db) > 0
-        }
-        guard exists else {
-            rememberPendingTombstone(localId, PendingTombstone(
-                deletedAt: deletedAt, sparingOpenedViewOnce: sparingOpenedViewOnce, expired: expired))
+        guard try rowExists(localId) else {
+            rememberPendingRowEvent(localId) { events in
+                events.tombstone = PendingTombstone(
+                    deletedAt: deletedAt, sparingOpenedViewOnce: sparingOpenedViewOnce, expired: expired)
+            }
             return
         }
         let affectedConversationId: String? = try dbWriter.write { db -> String? in
@@ -160,16 +178,20 @@ extension MessagePersistenceActor {
         }
     }
 
-    // MARK: - Suppressions arrivées avant leur message
+    // MARK: - Événements arrivés avant leur message
     //
-    // Un `message:new` passe par le flux d'écriture ; un `message:deleted`
-    // s'écrit tout de suite. La suppression trouvait la table sans la ligne, ne
-    // faisait rien, puis l'insertion posait le message intact : un message
-    // « supprimé pour tous » restait lisible. La suppression est gardée et
-    // rejouée quand la ligne arrive. Bornée : celle d'un message qu'on ne
-    // recevra jamais ne s'accumule pas.
+    // Un `message:new` passe par le flux d'écriture ; `message:deleted`,
+    // `message:edited` et `reaction:*` s'écrivent tout de suite. Ils trouvaient
+    // la table sans la ligne, ne faisaient rien, puis l'insertion posait le
+    // message intact : « supprimé pour tous », il restait lisible ; modifié,
+    // il gardait l'ancien texte ; la réaction n'apparaissait jamais. Ces
+    // événements sont gardés et rejoués quand la ligne arrive. Bornés en
+    // NOMBRE (le plus ancien part) et en DURÉE : ceux d'un message qu'on ne
+    // recevra jamais — hors de la fenêtre chargée — ne s'accumulent pas.
 
-    static let pendingTombstoneCap = 512
+    static let pendingRowEventCap = 512
+    static let pendingRowEventLifetime: TimeInterval = 300
+    static let pendingReactionCapPerRow = 32
 
     struct PendingTombstone: Sendable {
         let deletedAt: Date
@@ -177,26 +199,76 @@ extension MessagePersistenceActor {
         let expired: Bool
     }
 
-    func rememberPendingTombstone(_ id: String, _ tombstone: PendingTombstone) {
-        if pendingTombstones.updateValue(tombstone, forKey: id) == nil {
-            pendingTombstoneOrder.append(id)
-        }
-        while pendingTombstoneOrder.count > Self.pendingTombstoneCap {
-            pendingTombstones.removeValue(forKey: pendingTombstoneOrder.removeFirst())
+    struct PendingEdit: Sendable {
+        let newContent: String
+        let editedAt: Date
+        let marksEdited: Bool
+        let noticeJson: Data?
+    }
+
+    typealias PendingReactionChange = @Sendable ([MeeshyReaction]) -> [MeeshyReaction]?
+
+    /// Ce qui attend une ligne, dans l'ordre où cela se rejoue : la
+    /// modification, les réactions, puis la suppression, qui l'emporte.
+    struct PendingRowEvents: Sendable {
+        let rememberedAt: Date
+        var edit: PendingEdit?
+        var reactions: [PendingReactionChange] = []
+        var tombstone: PendingTombstone?
+    }
+
+    func rowExists(_ localId: String) throws -> Bool {
+        try dbWriter.read { db in
+            try MessageRecord.filter(Column("localId") == localId || Column("serverId") == localId).fetchCount(db) > 0
         }
     }
 
-    /// Le message visé vient d'être écrit : sa suppression, arrivée avant lui, s'applique.
-    func replayPendingTombstones(for ids: [String]) {
-        guard !pendingTombstones.isEmpty else { return }
+    func rememberPendingRowEvent(_ id: String, now: Date = Date(), _ update: (inout PendingRowEvents) -> Void) {
+        dropExpiredPendingRowEvents(now: now)
+        var events = pendingRowEvents[id] ?? PendingRowEvents(rememberedAt: now)
+        if pendingRowEvents[id] == nil { pendingRowEventOrder.append(id) }
+        update(&events)
+        if events.reactions.count > Self.pendingReactionCapPerRow {
+            events.reactions.removeFirst(events.reactions.count - Self.pendingReactionCapPerRow)
+        }
+        pendingRowEvents[id] = events
+        while pendingRowEventOrder.count > Self.pendingRowEventCap {
+            pendingRowEvents.removeValue(forKey: pendingRowEventOrder.removeFirst())
+        }
+    }
+
+    /// L'ordre de mémoire est celui des dates : les échus sont en tête.
+    func dropExpiredPendingRowEvents(now: Date) {
+        while let oldest = pendingRowEventOrder.first,
+              let events = pendingRowEvents[oldest],
+              now.timeIntervalSince(events.rememberedAt) > Self.pendingRowEventLifetime {
+            pendingRowEventOrder.removeFirst()
+            pendingRowEvents.removeValue(forKey: oldest)
+        }
+    }
+
+    /// Les messages visés viennent d'être écrits : ce qui leur est arrivé
+    /// avant eux s'applique.
+    func replayPendingRowEvents(for ids: [String], now: Date = Date()) {
+        guard !pendingRowEvents.isEmpty else { return }
+        dropExpiredPendingRowEvents(now: now)
         for id in ids {
-            guard let tombstone = pendingTombstones.removeValue(forKey: id) else { continue }
-            pendingTombstoneOrder.removeAll { $0 == id }
+            guard let events = pendingRowEvents.removeValue(forKey: id) else { continue }
+            pendingRowEventOrder.removeAll { $0 == id }
             do {
-                try markDeleted(localId: id, deletedAt: tombstone.deletedAt,
-                                sparingOpenedViewOnce: tombstone.sparingOpenedViewOnce, expired: tombstone.expired)
+                if let edit = events.edit {
+                    try applyServerEdit(localId: id, newContent: edit.newContent, editedAt: edit.editedAt,
+                                        marksEdited: edit.marksEdited, noticeJson: edit.noticeJson)
+                }
+                for change in events.reactions {
+                    try mutateReactions(localId: id, change: change)
+                }
+                if let tombstone = events.tombstone {
+                    try markDeleted(localId: id, deletedAt: tombstone.deletedAt,
+                                    sparingOpenedViewOnce: tombstone.sparingOpenedViewOnce, expired: tombstone.expired)
+                }
             } catch {
-                Logger.messages.error("replayPendingTombstones failed for \(id, privacy: .public): \(error.localizedDescription, privacy: .public)")
+                Logger.messages.error("replayPendingRowEvents failed for \(id, privacy: .public): \(error.localizedDescription, privacy: .public)")
             }
         }
     }

@@ -37,7 +37,7 @@ enum ConceptText {
     static func why(_ concept: ProgressionConcept) -> String {
         switch concept {
         case .level: String(localized: "game.concept.level.why", defaultValue: "Ton niveau montre le chemin que tu as parcouru sur Meeshy.", bundle: .main)
-        case .points: String(localized: "game.concept.points.why", defaultValue: "Convertibles, elles font ton niveau et paient ; cumulées, ton potentiel.", bundle: .main)
+        case .points: String(localized: "game.concept.points.why", defaultValue: "Convertibles, elles font ton niveau ; leur record, ton potentiel.", bundle: .main)
         case .meesh: String(localized: "game.concept.meesh.why", defaultValue: "La Meesh est la pièce rare de Meeshy : elle se garde ou se dépense.", bundle: .main)
         case .glory: String(localized: "game.concept.glory.why", defaultValue: "La Gloire donne ton rang, et ton rang ne baisse jamais.", bundle: .main)
         case .flame: String(localized: "game.concept.flame.why", defaultValue: "Ta Flamme compte tes jours d’affilée et augmente tes gains de mission.", bundle: .main)
@@ -156,7 +156,7 @@ enum ConceptText {
     static var valueNoElan: String { String(localized: "game.concept.value.no_elan", defaultValue: "Pas encore d’élan", bundle: .main) }
 
     static func chipRecordLevel(_ a: String) -> String {
-        String(localized: "game.concept.chip.record_level", defaultValue: "Record : niveau \(a)", bundle: .main)
+        String(localized: "game.concept.chip.record_level", defaultValue: "Record de niveau : \(a)", bundle: .main)
     }
 
     static var chipMintReady: String { String(localized: "game.concept.chip.mint_ready", defaultValue: "Prête à frapper", bundle: .main) }
@@ -225,7 +225,7 @@ enum ConceptText {
 
     static var factConvertible: String { String(localized: "game.concept.fact.convertible", defaultValue: "Points à convertir", bundle: .main) }
 
-    static var factMinted: String { String(localized: "game.concept.fact.minted", defaultValue: "Frappées en tout", bundle: .main) }
+    static var factMinted: String { String(localized: "game.concept.fact.minted", defaultValue: "Record de Meeshes", bundle: .main) }
 
     static var factNextPrice: String { String(localized: "game.concept.fact.next_price", defaultValue: "Prix de la prochaine", bundle: .main) }
 
@@ -326,8 +326,8 @@ enum ConceptText {
     /// Ce que c’est — la première phrase de « C’est quoi ? ».
     static func what(_ concept: ProgressionConcept) -> String {
         switch concept {
-        case .level: String(localized: "game.concept.level.what", defaultValue: "Ton niveau est le chiffre au centre de ton anneau. Il se lit sur tes étincelles convertibles : 10 000 pour le niveau 10, un million pour le niveau 100. Frapper une Meesh les dépense, donc fait baisser ton niveau ; tes étincelles cumulées restent, à titre indicatif.", bundle: .main)
-        case .points: String(localized: "game.concept.points.what", defaultValue: "Tes étincelles convertibles sont ta seule valeur réelle : elles font ton niveau, et la frappe y prend son prix. Les cumulées disent ton potentiel.", bundle: .main)
+        case .level: String(localized: "game.concept.level.what", defaultValue: "Ton niveau est le chiffre au centre de ton anneau. Il se lit sur tes étincelles convertibles : 10 000 pour le niveau 10, un million pour le niveau 100. Frapper une Meesh les dépense, donc fait baisser ton niveau ; ton record d’étincelles reste, à titre indicatif.", bundle: .main)
+        case .points: String(localized: "game.concept.points.what", defaultValue: "Tes étincelles convertibles sont ta seule valeur réelle : elles font ton niveau, et la frappe y prend son prix. Ton record d’étincelles, tout ce que tu as cumulé, dit ton potentiel.", bundle: .main)
         case .meesh: String(localized: "game.concept.meesh.what", defaultValue: "Une Meesh est une pièce que tu frappes toi-même. Chaque pièce porte son numéro : une sur cent est en or, une sur mille en prisme.", bundle: .main)
         case .glory: String(localized: "game.concept.glory.what", defaultValue: "La Gloire est un compteur qui ne redescend jamais. Elle donne ton rang, parmi onze.", bundle: .main)
         case .flame: String(localized: "game.concept.flame.what", defaultValue: "Ta Flamme est ta série de jours : elle grandit chaque jour où tu fais au moins un geste, et change de forme en grandissant.", bundle: .main)
@@ -355,8 +355,8 @@ enum ConceptText {
         case .missions: String(localized: "game.concept.missions.use", defaultValue: "Ouvre une mission pour voir où tu en es. Tu peux en changer une par jour avec une Meesh. Les trois faites, ouvre le coffre : des points, de la Gloire, parfois une prime, un fragment d’étoile ou un gel.", bundle: .main)
         case .league: String(localized: "game.concept.league.use", defaultValue: "Regarde ta place et ta zone : les 7 premiers montent d’une ligue, les 5 derniers descendent. Tout repart de zéro chaque lundi. La ligue publique demande ton accord ; la ligue entre amis est toujours ouverte.", bundle: .main)
         case .season: String(localized: "game.concept.season.use", defaultValue: "Gagne des étoiles, puis réclame chaque étape ouverte : des points, un fragment d’étoile, un gel. Le parcours fini donne la coupe de saison. Le Sceau est un objet à collectionner, pris avec des Meeshes.", bundle: .main)
-        case .prestige: String(localized: "game.concept.prestige.use", defaultValue: "Au niveau 100, choisis : passer en Prestige, ou continuer à monter. Passer remet ton niveau à 1 et tes points en poche à 0. Tu gardes ton rang, ta Gloire, tes Meeshes, ta Flamme et tes trophées.", bundle: .main)
-        case .elans: String(localized: "game.concept.elans.use", defaultValue: "Regarde quelles familles sont actives, puis fais un geste dans une famille qui manque. Tant que l’élan tient, chaque geste rapporte plus. Après une frappe, le Vent arrière ajoute 25 % jusqu’à ton niveau record.", bundle: .main)
+        case .prestige: String(localized: "game.concept.prestige.use", defaultValue: "Au niveau 100, choisis : passer en Prestige, ou continuer à monter. Passer remet ton niveau à 1 et tes étincelles convertibles à 0. Tu gardes ton record d’étincelles, ton record de niveau, ton rang, ta Gloire, tes Meeshes, ta Flamme et tes trophées.", bundle: .main)
+        case .elans: String(localized: "game.concept.elans.use", defaultValue: "Regarde quelles familles sont actives, puis fais un geste dans une famille qui manque. Tant que l’élan tient, chaque geste rapporte plus.", bundle: .main)
         case .badges: String(localized: "game.concept.badges.use", defaultValue: "Touche un badge pour voir ce qui compte, sa matière et ce qu’il manque pour la prochaine étoile. Une frappe peut éteindre un badge : refais le geste pour le rallumer.", bundle: .main)
         case .defis: String(localized: "game.concept.defis.use", defaultValue: "Ouvre la liste, repère le palier le plus proche et avance vers lui. Chaque palier dit sa rareté.", bundle: .main)
         case .succes: String(localized: "game.concept.succes.use", defaultValue: "Ouvre un succès pour lire ce qu’il demande. Décroché, il ajoute de la Gloire : plus il est rare, plus il en ajoute.", bundle: .main)

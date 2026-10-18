@@ -81,6 +81,7 @@ enum GameMintCostCopy {
         switch code {
         case .mintBlockedByDebt: debtText(debt ?? 0)
         case .treasuryLocked: GameCopy.errorMessage(for: .treasuryLocked)
+        case .priceChanged: GameCopy.errorMessage(for: .priceChanged)
         default: genericFailure
         }
     }

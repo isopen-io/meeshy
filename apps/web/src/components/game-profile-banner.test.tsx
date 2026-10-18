@@ -110,7 +110,7 @@ describe('la paire poche / total et niveau / max (porteur 2026-10-16)', () => {
     const pocket = host.querySelector('[data-profile-banner-points]');
     const lifetime = host.querySelector('[data-profile-banner-lifetime]');
     expect(words(pocket)).toBe('976 étincelles');
-    expect(words(lifetime)).toBe(`${formatCount(41_250, 'fr')} au total`.replace(/\s+/g, ' '));
+    expect(words(lifetime)).toBe(`record ${formatCount(41_250, 'fr')}`.replace(/\s+/g, ' '));
     expect(pocket?.compareDocumentPosition(lifetime as Node) ? true : false).toBe(true);
     // Plus grande que le total : la poche porte `font-bold`, le total est plus petit et plus discret.
     expect((pocket?.getAttribute('class') ?? '')).toContain('font-bold');
@@ -154,7 +154,7 @@ describe('un libellé par groupe, lisible dans les sept langues', () => {
     const level = host.querySelector('[data-profile-banner-level]')?.getAttribute('aria-label') ?? '';
     expect(level.startsWith('Niveau 12, palier Braise')).toBe(true);
     expect(level).toContain('976 étincelles');
-    expect(level).toContain(`${formatCount(41_250, 'fr')} au total`);
+    expect(level).toContain(`record ${formatCount(41_250, 'fr')}`);
     expect(level.endsWith(', encore 624 vers le 13')).toBe(true);
     expect(host.querySelector('[data-profile-banner-rank]')?.getAttribute('aria-label')).toBe('Murmure V');
   });

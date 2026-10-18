@@ -1716,6 +1716,10 @@ public final class MessageSocketManager: ObservableObject, MessageSocketProvidin
     /// doit joindre le socket. Aucune isolation ne change — même classe,
     /// même module, mêmes appelants.
     var socket: SocketIOClient?
+    /// #10904 — le jeton de compte présenté au handshake du socket courant
+    /// (`nil` pour un invité). `auth:token-expired` rafraîchit en SON nom :
+    /// jamais la session d'un compte ouvert depuis.
+    private var handshakeToken: String?
     private var joinedConversations: Set<String> = []
     private var reconnectAttempt: Int = 0
     private var backoff = SocketReconnectBackoff()
@@ -1834,8 +1838,10 @@ public final class MessageSocketManager: ObservableObject, MessageSocketProvidin
         let tokenExpired = Self.isJWTExpired(token)
         if tokenExpired {
             Logger.socket.warning("MessageSocket: JWT expired, triggering refresh instead of connecting")
+            // #10904 — au nom du jeton lu ici : il ne rafraîchit rien s'il
+            // n'est plus celui du compte actif quand la tâche s'exécute.
             Task { @MainActor in
-                AuthManager.shared.handleUnauthorized()
+                AuthManager.shared.handleUnauthorized(presentedToken: token)
             }
             // The refresh is fire-and-forget and gives up silently on a transient
             // network error — very likely right after an outage, which is exactly
@@ -1893,6 +1899,7 @@ public final class MessageSocketManager: ObservableObject, MessageSocketProvidin
         ])
 
         socket = manager?.defaultSocket
+        handshakeToken = token
         setupEventHandlers()
         socket?.connect(withPayload: ClientInfoProvider.socketAuthPayload())
         return .armed
@@ -1925,6 +1932,7 @@ public final class MessageSocketManager: ObservableObject, MessageSocketProvidin
         ])
 
         socket = manager?.defaultSocket
+        handshakeToken = nil
         setupEventHandlers()
         socket?.connect()
     }
@@ -3053,10 +3061,14 @@ public final class MessageSocketManager: ObservableObject, MessageSocketProvidin
             }
         }
 
+        // #10904 — le jeton de CE socket, capturé à l'inscription de ses
+        // écouteurs : un socket d'une session quittée (encore en sursis parmi
+        // les transports retirés) ne rafraîchit pas celle du moment.
+        let presentedToken = handshakeToken
         socket.on("auth:token-expired") { _, _ in
             Logger.socket.info("MessageSocket: auth token expired — triggering refresh")
             Task { @MainActor in
-                AuthManager.shared.handleUnauthorized()
+                AuthManager.shared.handleUnauthorized(presentedToken: presentedToken)
             }
         }
 
@@ -3113,6 +3125,7 @@ public final class MessageSocketManager: ObservableObject, MessageSocketProvidin
         registerCallControlHandlers(on: socket)
         registerCallPreviewHandlers(on: socket)
         registerProfileDecorHandlers(on: socket)
+        registerGameStateHandlers(on: socket)
 
         // --- Conversation participation events ---
 

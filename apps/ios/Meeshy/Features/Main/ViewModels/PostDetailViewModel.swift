@@ -94,6 +94,12 @@ class PostDetailViewModel: ObservableObject {
                 if let current = self.post {
                     self.post = current.resolved(preferredLanguages: langs)
                 }
+                // Les commentaires et leurs réponses suivent : ils restaient
+                // dans l'ancienne langue.
+                self.comments = self.comments.map { $0.resolved(preferredLanguages: langs) }
+                self.repliesMap = self.repliesMap.mapValues { replies in
+                    replies.map { $0.resolved(preferredLanguages: langs) }
+                }
             }
             .store(in: &cancellables)
     }
