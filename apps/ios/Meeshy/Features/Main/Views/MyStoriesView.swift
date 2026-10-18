@@ -253,19 +253,17 @@ struct MyStoriesView: View {
                 .environmentObject(viewModel)
         }
         .sheet(item: $forwardStory) { story in
-            SharePickerView(
-                sharedContent: .story(
-                    item: story,
+            ShareSheetView(
+                subject: .story(
+                    id: story.id,
                     authorName: AuthManager.shared.currentUser?.displayName
                         ?? AuthManager.shared.currentUser?.username ?? ""
                 ),
-                onDismiss: { forwardStory = nil },
-                onShareToConversation: nil
+                actions: ShareSheetHostActions(onOpenConversation: { router.navigateToConversation($0) }),
+                onDismiss: { forwardStory = nil }
             )
-            .environmentObject(router)
-            .conversationListObject(conversationListViewModel)
-            .environmentObject(statusViewModel)
             .presentationDetents([.medium, .large])
+            .presentationDragIndicator(.visible)
         }
         .sheet(item: $audienceTarget) { target in
             AudienceUserPickerView(

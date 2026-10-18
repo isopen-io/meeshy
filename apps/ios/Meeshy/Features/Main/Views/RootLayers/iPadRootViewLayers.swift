@@ -187,18 +187,17 @@ struct iPadSheetsLayer: ViewModifier {
             }
             .sheet(isPresented: $showSharePicker) {
                 if let shared = router.pendingShareContent {
-                    // Les feuilles n'héritent pas des EnvironmentObjects du
-                    // parent : réinjecter le trio que `SharePickerView` déclare.
-                    SharePickerView(
-                        sharedContent: shared,
+                    // L'écran de partage unique (#10947) ne lit aucun objet
+                    // d'environnement : tout lui est injecté.
+                    ShareSheetView(
+                        subject: shared,
+                        actions: ShareSheetHostActions(onOpenConversation: { router.navigateToConversation($0) }),
                         onDismiss: {
                             router.pendingShareContent = nil
                         }
                     )
-                    .meeshyConversationList(conversationViewModel)
-                    .environmentObject(router)
-                    .environmentObject(statusViewModel)
                     .presentationDetents([.medium, .large])
+                    .presentationDragIndicator(.visible)
                     .closesForConversationOpening(.sheet, close: {
                         router.pendingShareContent = nil
                         showSharePicker = false

@@ -118,6 +118,10 @@ public struct OfflineQueueItem: Codable, Identifiable, Sendable {
     /// champ — même convention `decodeIfPresent` que `location` et `sticker`,
     /// pour que les payloads déjà sur disque décodent sans migration.
     public let attachmentReplyTo: String?
+    /// **Les pièces CHOISIES d'un transfert** (#9914, #10947), rejouées sous la
+    /// clé `forwardedAttachmentIds`. `nil` = tout le lot, et pour les lignes
+    /// écrites avant ce champ (`decodeIfPresent`).
+    public let forwardedAttachmentIds: [String]?
     /// **La protection armée à l'envoi** (#8303) — les bits de cycle de vie
     /// (`MessageProtectionIntent.lifecycleFlags`) et la durée d'un éphémère.
     ///
@@ -165,6 +169,7 @@ public struct OfflineQueueItem: Codable, Identifiable, Sendable {
         copyAttachmentsFromClientMessageId: String? = nil,
         copyAttachmentsFromServerMessageId: String? = nil,
         attachmentReplyTo: String? = nil,
+        forwardedAttachmentIds: [String]? = nil,
         protection: MessageProtectionIntent = .none
     ) {
         self.id = UUID().uuidString
@@ -188,6 +193,7 @@ public struct OfflineQueueItem: Codable, Identifiable, Sendable {
         self.copyAttachmentsFromClientMessageId = copyAttachmentsFromClientMessageId
         self.copyAttachmentsFromServerMessageId = copyAttachmentsFromServerMessageId
         self.attachmentReplyTo = attachmentReplyTo
+        self.forwardedAttachmentIds = forwardedAttachmentIds
         self.createdAt = Date()
     }
 
@@ -213,6 +219,7 @@ public struct OfflineQueueItem: Codable, Identifiable, Sendable {
         copyAttachmentsFromClientMessageId: String? = nil,
         copyAttachmentsFromServerMessageId: String? = nil,
         attachmentReplyTo: String? = nil,
+        forwardedAttachmentIds: [String]? = nil,
         protectionFlags: UInt32? = nil,
         ephemeralDuration: Int? = nil,
         createdAt: Date
@@ -238,6 +245,7 @@ public struct OfflineQueueItem: Codable, Identifiable, Sendable {
         self.copyAttachmentsFromClientMessageId = copyAttachmentsFromClientMessageId
         self.copyAttachmentsFromServerMessageId = copyAttachmentsFromServerMessageId
         self.attachmentReplyTo = attachmentReplyTo
+        self.forwardedAttachmentIds = forwardedAttachmentIds
         self.createdAt = createdAt
     }
 
@@ -261,6 +269,7 @@ public struct OfflineQueueItem: Codable, Identifiable, Sendable {
         case copyAttachmentsFromClientMessageId
         case copyAttachmentsFromServerMessageId
         case attachmentReplyTo
+        case forwardedAttachmentIds
         case protectionFlags
         case ephemeralDuration
         case createdAt
@@ -290,6 +299,7 @@ public struct OfflineQueueItem: Codable, Identifiable, Sendable {
         self.copyAttachmentsFromClientMessageId = try c.decodeIfPresent(String.self, forKey: .copyAttachmentsFromClientMessageId)
         self.copyAttachmentsFromServerMessageId = try c.decodeIfPresent(String.self, forKey: .copyAttachmentsFromServerMessageId)
         self.attachmentReplyTo = try c.decodeIfPresent(String.self, forKey: .attachmentReplyTo)
+        self.forwardedAttachmentIds = try c.decodeIfPresent([String].self, forKey: .forwardedAttachmentIds)
         self.protectionFlags = try c.decodeIfPresent(UInt32.self, forKey: .protectionFlags)
         self.ephemeralDuration = try c.decodeIfPresent(Int.self, forKey: .ephemeralDuration)
         self.createdAt = try c.decode(Date.self, forKey: .createdAt)
@@ -316,6 +326,7 @@ public struct OfflineQueueItem: Codable, Identifiable, Sendable {
         try c.encodeIfPresent(copyAttachmentsFromClientMessageId, forKey: .copyAttachmentsFromClientMessageId)
         try c.encodeIfPresent(copyAttachmentsFromServerMessageId, forKey: .copyAttachmentsFromServerMessageId)
         try c.encodeIfPresent(attachmentReplyTo, forKey: .attachmentReplyTo)
+        try c.encodeIfPresent(forwardedAttachmentIds, forKey: .forwardedAttachmentIds)
         try c.encodeIfPresent(protectionFlags, forKey: .protectionFlags)
         try c.encodeIfPresent(ephemeralDuration, forKey: .ephemeralDuration)
         try c.encode(createdAt, forKey: .createdAt)

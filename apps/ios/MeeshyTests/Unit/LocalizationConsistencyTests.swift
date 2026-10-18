@@ -390,7 +390,10 @@ final class LocalizationConsistencyTests: XCTestCase {
         "apps/ios/Meeshy/Features/Main/Views/PrivacySettingsView.swift",  // 29
         "apps/ios/Meeshy/Features/Main/Views/VoiceProfileWizardView.swift",  // 29
         "apps/ios/Meeshy/Features/Main/Views/DeleteAccountView.swift",  // 28
-        "apps/ios/Meeshy/Features/Main/Views/SharePickerView.swift",  // 28
+        // #10947 — l'écran de partage unique remplace `SharePickerView` et le
+        // sélecteur de transfert : ses mots sont traduits dans les sept langues.
+        "apps/ios/Meeshy/Features/Main/Share/ShareSheetCopy.swift",
+        "apps/ios/Meeshy/Features/Main/Share/ShareContentZone.swift",
         "apps/ios/Meeshy/Features/Main/Navigation/Router.swift",  // 27
         "apps/ios/Meeshy/Features/Main/Components/EffectsPickerView.swift",  // 24
         "apps/ios/Meeshy/Features/Main/Views/CreateTrackingLinkView.swift",  // 24

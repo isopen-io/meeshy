@@ -2,7 +2,7 @@ import SwiftUI
 import MeeshySDK
 import MeeshyUI
 
-// MARK: - ForwardDurationRow
+// MARK: - ShareDurationRow
 
 /// **La rangée de durée d'une flamme transférée** (#9573) — la copie d'un
 /// message qui disparaît dure AU PLUS autant que sa source : la durée de la
@@ -10,9 +10,9 @@ import MeeshyUI
 /// offerts (`ContentExitLaw.ForwardVerdict.durationChoices`). Sans choix, la
 /// rangée n'est pas montée.
 ///
-/// Sous-vue `Equatable` à entrées de VALEUR, comme `ForwardPickerRow` : une
+/// Sous-vue `Equatable` à entrées de VALEUR, comme `ShareRecipientRow` : une
 /// cible qui passe `sending` → `sent` ne la réévalue pas.
-struct ForwardDurationRow: View, Equatable {
+struct ShareDurationRow: View, Equatable {
     let choices: [ForwardDurationChoice]
     let selectedSeconds: Int?
     let accentColor: String
@@ -21,7 +21,7 @@ struct ForwardDurationRow: View, Equatable {
 
     private var theme: ThemeManager { ThemeManager.shared }
 
-    static func == (lhs: ForwardDurationRow, rhs: ForwardDurationRow) -> Bool {
+    static func == (lhs: ShareDurationRow, rhs: ShareDurationRow) -> Bool {
         lhs.choices == rhs.choices
             && lhs.selectedSeconds == rhs.selectedSeconds
             && lhs.accentColor == rhs.accentColor
