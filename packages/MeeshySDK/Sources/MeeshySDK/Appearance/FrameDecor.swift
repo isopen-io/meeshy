@@ -118,7 +118,9 @@ public struct FrameMotion: Codable, Sendable, Hashable {
     /// Les mouvements lisibles d'une liste, dans l'ordre, au plus huit.
     static func list<K: CodingKey>(from container: KeyedDecodingContainer<K>, forKey key: K) -> [FrameMotion] {
         let boxes = (try? container.decodeIfPresent([LossyBox<FrameMotion>].self, forKey: key)) ?? nil
-        return Array((boxes ?? []).compactMap(\.value).prefix(maxMotions))
+        // Au-delà de trente-deux, la liste est un abus (le TypeScript refuse le dessin) : rien ne s'anime.
+        guard let boxes, boxes.count <= 32 else { return [] }
+        return Array(boxes.compactMap(\.value).prefix(maxMotions))
     }
 }
 
@@ -178,6 +180,14 @@ public struct FrameGradient: Codable, Sendable, Hashable {
 }
 
 enum FrameDecorField {
+    private static let pathData = try? NSRegularExpression(pattern: #"^[MmLlHhVvCcSsQqTtAaZz0-9eE.,\s-]+$"#)
+
+    /// Les seules commandes de chemin SVG, comme `PATH_D_PATTERN` : aucun autre caractère ne se dessine.
+    static func isPathData(_ value: String, maxLength: Int) -> Bool {
+        guard !value.isEmpty, value.count <= maxLength, let pathData else { return false }
+        return pathData.firstMatch(in: value, range: NSRange(value.startIndex..., in: value)) != nil
+    }
+
     /// L'identifiant d'un groupe de chemins : le motif des slugs de packs.
     static func isGroup(_ value: String) -> Bool {
         value.range(of: #"^[a-z0-9](?:[a-z0-9-]*[a-z0-9])?$"#, options: .regularExpression) != nil && value.count <= 24

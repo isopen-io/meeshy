@@ -64,6 +64,23 @@ struct BannerFrameDecorTests {
         #expect(throws: (any Error).self) { try decode(BannerFrameDesign.self, wideCartouche) }
     }
 
+    @Test("les bornes du TypeScript tiennent aussi en Swift : frise de module nul, opacité, chemin, filets, dégradé absent")
+    func theTypeScriptBoundsHoldInSwift() throws {
+        let cases = [
+            (#""module":4.8"#, #""module":0"#),
+            (#""from":16,"to":16"#, #""from":150,"to":150"#),
+            (#""color":3,"opacity":1,"group":"rosaces""#, #""color":3,"opacity":1.5,"group":"rosaces""#),
+            (#""d":"M2 2 h10 v10 h-10 Z""#, #""d":"<script>""#),
+            (#""inset":0.6,"width":0.6"#, #""inset":0.6,"width":3"#),
+            (#""color":3,"gradient":0,"opacity":1"#, #""color":3,"gradient":2,"opacity":1"#),
+            (#""key":"haussmannien""#, #""key":"Haussmannien!""#),
+        ]
+        for (original, broken) in cases {
+            #expect(Self.frameJSON.contains(original), "\(original)")
+            #expect(throws: (any Error).self, "\(broken)") { try decode(BannerFrameDesign.self, Self.frameJSON.replacingOccurrences(of: original, with: broken)) }
+        }
+    }
+
     @Test("une couleur hors palette ou illisible ne se dessine pas")
     func anOutOfPaletteColorIsRejected() throws {
         let outside = Self.frameJSON.replacingOccurrences(of: #""color":1,"opacity":1}]}],"#, with: #""color":7,"opacity":1}]}],"#)

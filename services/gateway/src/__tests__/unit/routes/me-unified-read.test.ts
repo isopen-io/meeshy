@@ -246,7 +246,7 @@ describe('GET /api/v1/me — JWT (utilisateur enregistré)', () => {
     // ne porte pas (un contour équipé à l'instant doit se lire à l'instant), et
     // qui ne s'ouvre que lorsque `profileDecor` est servi.
     expect(prisma.user.findUnique).toHaveBeenCalledTimes(2);
-    expect(prisma.user.findUnique.mock.calls[1][0]).toMatchObject({ select: { equippedAvatarRing: true, equippedBanner: true } });
+    expect(prisma.user.findUnique.mock.calls[1][0].select).toEqual({ equippedAvatarRing: true, equippedBanner: true, equippedBannerFrame: true });
   });
 
   it('sert des permissions ADMIN pour un rôle ADMIN — via servedUserPermissions, la loi centrale', async () => {

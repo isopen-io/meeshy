@@ -67,7 +67,7 @@ export default async function profileDecorRoutes(fastify: FastifyInstance, optio
         if (outcome.kind === 'invalid') return sendError(reply, 400, 'Invalid profile decor', { code: 'INVALID_PROFILE_DECOR' });
         if (outcome.kind === 'not-owned') return sendForbidden(reply, 'Pack not owned', { code: PACK_NOT_OWNED_CODE });
         if (outcome.kind === 'item-not-found') return sendNotFound(reply, 'Decor item not found', { code: DECOR_ITEM_NOT_FOUND_CODE });
-        if (outcome.kind === 'usage-mismatch') return sendForbidden(reply, 'This frame cannot be used on an avatar', { code: 'FRAME_USAGE_MISMATCH' });
+        if (outcome.kind === 'usage-mismatch') return sendForbidden(reply, 'This frame cannot be used on this side of the profile', { code: 'FRAME_USAGE_MISMATCH' });
 
         const row = await fastify.prisma.user.update({
           where: { id: userId },

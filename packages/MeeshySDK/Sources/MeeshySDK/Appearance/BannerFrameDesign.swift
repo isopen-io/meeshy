@@ -132,6 +132,12 @@ public struct BannerFrameDesign: Decodable, Sendable, Hashable, Identifiable {
     public static let maxCartoucheWidth: Double = 80
     public static let maxColors = 8
     public static let maxPaths = 48
+    public static let maxPieces = 16
+    public static let maxFriezes = 8
+    public static let maxFilets = 6
+    public static let maxModule: Double = 60
+    public static let maxPathLength = 4000
+    public static let maxTotalPathLength = 24_000
 
     public let key: String
     public let palette: [String]
@@ -164,28 +170,62 @@ public struct BannerFrameDesign: Decodable, Sendable, Hashable, Identifiable {
         guard (1...Self.maxColors).contains(palette.count), palette.allSatisfy(AvatarRingStroke.isWellFormedHex) else {
             throw DecodingError.dataCorruptedError(forKey: .palette, in: c, debugDescription: "palette illisible")
         }
+        guard FrameDecorField.isGroup(key) else {
+            throw DecodingError.dataCorruptedError(forKey: .key, in: c, debugDescription: "clé illisible")
+        }
         guard keepsTheCenterClear else {
             throw DecodingError.dataCorruptedError(forKey: .border, in: c, debugDescription: "le cadre mord sur le centre transparent")
         }
-        guard paintsFitThePalette, allPaths.count <= Self.maxPaths else {
-            throw DecodingError.dataCorruptedError(forKey: .pieces, in: c, debugDescription: "un trait désigne une couleur absente, ou trop de chemins")
+        guard piecesAndFriezesAreBounded, pathsAreDrawable, paintsFitThePalette else {
+            throw DecodingError.dataCorruptedError(forKey: .pieces, in: c, debugDescription: "pièces, frises ou chemins hors bornes")
         }
     }
 
     private var allPaths: [BannerFramePath] { pieces.flatMap(\.paths) + friezes.flatMap(\.paths) }
+
+    /// Les bornes du TypeScript : une frise de module nul ferait boucler le rendu.
+    private var piecesAndFriezesAreBounded: Bool {
+        pieces.count <= Self.maxPieces && friezes.count <= Self.maxFriezes
+            && pieces.allSatisfy { !$0.paths.isEmpty }
+            && friezes.allSatisfy { frieze in
+                let half = Self.referenceWidth / 2
+                return !frieze.paths.isEmpty && frieze.module > 0 && frieze.module <= Self.maxModule
+                    && (0...half).contains(frieze.from) && (0...half).contains(frieze.to)
+                    && frieze.from + frieze.module + frieze.to <= Self.referenceWidth
+            }
+    }
+
+    private var pathsAreDrawable: Bool {
+        let unit: ClosedRange<Double> = 0...1
+        let paths = allPaths
+        return paths.count <= Self.maxPaths
+            && paths.reduce(0) { $0 + $1.d.count } <= Self.maxTotalPathLength
+            && paths.allSatisfy { path in
+                FrameDecorField.isPathData(path.d, maxLength: Self.maxPathLength) && unit.contains(path.opacity)
+                    && (path.width.map { $0 > 0 && $0 <= 40 } ?? true)
+            }
+            && unit.contains(border.opacity)
+            && border.filets.allSatisfy { unit.contains($0.opacity) }
+    }
 
     private var keepsTheCenterClear: Bool {
         let cartoucheFits = reach.cartouche.map { $0.width > 0 && $0.width <= Self.maxCartoucheWidth && $0.depth > 0 && $0.depth <= Self.maxReach } ?? true
         return border.width > 0 && border.width <= Self.maxBorderWidth
             && (0...Self.maxReach).contains(reach.corner)
             && cartoucheFits
-            && border.filets.allSatisfy { $0.inset >= 0 && $0.inset <= border.width }
+            && border.filets.count <= Self.maxFilets
+            && border.filets.allSatisfy { $0.inset >= 0 && $0.inset <= border.width && $0.width > 0 && $0.width <= 2 }
     }
 
-    /// Une couleur désignée hors palette ferait planter le dessin ; un dégradé désigné absent retombe sur la couleur.
+    /// Une couleur désignée hors palette ferait planter le dessin ; un dégradé DÉCLARÉ mais illisible
+    /// (`nil`) retombe sur la couleur, un dégradé jamais déclaré est refusé comme au TypeScript.
     private var paintsFitThePalette: Bool {
-        let colors = [border.color] + border.filets.map(\.color) + allPaths.map(\.color)
-        return colors.allSatisfy { $0 >= 0 && $0 < palette.count }
+        let paints: [(color: Int, gradient: Int?)] = [(border.color, border.gradient)]
+            + border.filets.map { ($0.color, $0.gradient) }
+            + allPaths.map { ($0.color, $0.gradient) }
+        return paints.allSatisfy { paint in
+            paint.color >= 0 && paint.color < palette.count && (paint.gradient.map { $0 >= 0 && $0 < gradients.count } ?? true)
+        }
     }
 
     /// La région où le cadre peint, à une largeur LOGIQUE (`largeur × 100 / hauteur`, 300 au gabarit).
@@ -227,6 +267,9 @@ public struct BannerFramePackContract: Decodable, Sendable, Hashable {
         guard try c.decode(String.self, forKey: .domain) == "banner-frame" else {
             throw DecodingError.dataCorruptedError(forKey: .domain, in: c, debugDescription: "ce n'est pas un pack de cadres de bannière")
         }
-        frames = try c.decode([LossyBox<BannerFrameDesign>].self, forKey: .frames).compactMap(\.value)
+        let readable = try c.decode([LossyBox<BannerFrameDesign>].self, forKey: .frames).compactMap(\.value)
+        // Deux cadres de même clé : le premier fait foi, au plus trente-deux.
+        var seen = Set<String>()
+        frames = Array(readable.filter { seen.insert($0.key).inserted }.prefix(32))
     }
 }

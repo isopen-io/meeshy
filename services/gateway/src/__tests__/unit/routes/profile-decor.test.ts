@@ -9,7 +9,7 @@
 import Fastify from 'fastify';
 import { describe, it, expect, beforeEach, afterEach, jest } from '@jest/globals';
 import profileDecorRoutes from '../../../routes/me/profile-decor';
-import { buildPublicProfile, publicProfileSchema } from '../../../routes/users/public-profile';
+import { buildPublicProfile, publicProfilePlan, publicProfileSchema, publicUserSelect } from '../../../routes/users/public-profile';
 import { servedProfileDecor } from '../../../services/appearance/profileDecor';
 import { buildPackIndex } from '../../../services/packs/PackIndex';
 
@@ -281,6 +281,19 @@ describe('profileDecor servi', () => {
     expect(servedProfileDecor(INDEX, { equippedAvatarRing: null, equippedBanner: null })).toEqual({ avatarRing: null, banner: null, bannerFrame: null });
     expect(servedProfileDecor(INDEX, { equippedBannerFrame: 'cadres/celte' }).bannerFrame).toEqual({ pack: 'cadres', item: 'celte', origin: 'builtin', contract: null });
     expect(servedProfileDecor(INDEX, { equippedBannerFrame: 'bannieres/aurore' }).bannerFrame).toBeNull();
+  });
+
+  it('les trois colonnes du décor sont CHARGÉES par le profil public et par l’écriture, ensemble', async () => {
+    expect(publicUserSelect).toMatchObject({ equippedAvatarRing: true, equippedBanner: true, equippedBannerFrame: true });
+    expect(publicProfilePlan.columns.profileDecor).toEqual(['equippedAvatarRing', 'equippedBanner', 'equippedBannerFrame']);
+
+    const env = build();
+    await env.app.register(profileDecorRoutes, { index: INDEX });
+    await env.app.ready();
+    await env.app.inject({ method: 'PUT', url: '/profile-decor', payload: { bannerFrame: null } });
+    const update = (env.app as unknown as { prisma: { user: { update: jest.Mock } } }).prisma.user.update;
+    await env.app.close();
+    expect((update.mock.calls[0]?.[0] as { select: unknown }).select).toEqual({ equippedAvatarRing: true, equippedBanner: true, equippedBannerFrame: true });
   });
 
   it('le profil public sert le cadre À TRAVERS son schéma de réponse, sans la colonne brute', async () => {
