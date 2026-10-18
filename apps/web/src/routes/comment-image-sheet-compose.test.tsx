@@ -39,6 +39,7 @@ const post: FeedPost = {
   content: 'Le coucher de soleil à Dakar',
   author: { id: 'u-awa', username: 'awa', displayName: 'Awa' },
   media: [],
+  visibility: 'PUBLIC',
 };
 
 const comment = (id: string, minute: number, parentId?: string): PostComment => ({
