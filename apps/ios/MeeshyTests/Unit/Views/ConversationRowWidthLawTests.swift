@@ -22,8 +22,8 @@ final class ConversationRowWidthLawTests: XCTestCase {
 
     func test_theList_measuresItsColumn() throws {
         let code = AppSourceGuard.stripComments(try AppSourceGuard.unit("Meeshy/Features/Main/Views/ConversationListView.swift"))
-        XCTAssertTrue(code.contains("listWidth: listColumnWidth"))
-        XCTAssertTrue(code.contains("action: { listColumnWidth = $0 }"))
+        XCTAssertTrue(code.contains("listWidth: listColumnSize.width"))
+        XCTAssertTrue(code.contains("action: { listColumnSize = $0 }"))
         XCTAssertFalse(code.contains("min(windowWidth * 0.42, 520)"))
     }
 }

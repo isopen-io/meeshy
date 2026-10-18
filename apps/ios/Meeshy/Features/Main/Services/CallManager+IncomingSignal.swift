@@ -57,7 +57,11 @@ extension CallManager {
             Logger.calls.info("SDP offer buffered for call: \(callId), waiting for user to accept")
 
         case .connecting:
-            // User already accepted but SDP arrived late — create answer immediately
+            // User already accepted but SDP arrived late — create answer immediately.
+            // L'offre est là : le minuteur d'offre n'a plus d'objet, et laissé armé il
+            // coupait à 30 s une liaison ICE simplement lente.
+            sdpOfferTimeoutTask?.cancel()
+            sdpOfferTimeoutTask = nil
             let previousToggleConnecting = videoToggleTask
             let previousHoldConnecting = holdVideoTask
             let previousSurvivalConnecting = survivalVideoTask

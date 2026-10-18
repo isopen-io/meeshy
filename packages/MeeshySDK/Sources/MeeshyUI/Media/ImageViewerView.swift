@@ -6,6 +6,9 @@ import MeeshySDK
 // MARK: - Image Viewer View
 
 public struct ImageViewerView: View {
+    /// La fenêtre qui porte la vue (Stage Manager, Split View) — la fenêtre clé en repli.
+    @Environment(\.sceneWindowSize) var sceneWindowSize
+    private var hostHeight: CGFloat { SceneWindowSize.resolve(sceneWindowSize, fallback: WindowMetrics.windowSize).height }
     public let attachment: MeeshyMessageAttachment
     public let context: MediaPlayerContext
     public var accentColor: String = MeeshyColors.brandPrimaryHex
@@ -51,7 +54,7 @@ public struct ImageViewerView: View {
         case .messageBubble: return 200
         case .composerAttachment: return 80
         case .feedPost: return 350
-        case .storyOverlay, .fullscreen: return WindowMetrics.windowSize.height
+        case .storyOverlay, .fullscreen: return hostHeight
         }
     }
 
