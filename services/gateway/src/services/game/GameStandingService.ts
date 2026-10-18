@@ -15,9 +15,9 @@
  *
  * ## Ce qui ne part JAMAIS (conformité D-1 à D-5, leçon 275)
  *
- * Un PALIER, jamais un compte — sauf les points et le nombre de trophées de la ligne ci-dessus : le niveau
+ * Un PALIER, jamais un compte — sauf les points, la Gloire (#10913) et le nombre de trophées de la ligne ci-dessus : le niveau
  * et son palier, les étoiles de Prestige, la FORME de la Flamme (jamais ses jours, jamais son bonus), le rang de
- * Gloire et sa division (jamais la Gloire), le palier du trésor (jamais les Meeshes). Aucune date, aucune
+ * Gloire et sa division (la Gloire aux seuls proches), le palier du trésor (jamais les Meeshes). Aucune date, aucune
  * présence : la Flamme « à risque » d'hier se montre comme celle d'aujourd'hui, et une Flamme éteinte se
  * tait (`flame: null`) sans dire depuis quand.
  *
@@ -136,8 +136,8 @@ export class GameStandingService {
       division5: rank.division5,
       mythic: rank.mythic,
       // Les clés sont ABSENTES, jamais nulles, pour un lecteur qui n'y a pas droit : rien à lire, rien à deviner.
-      // `points` reste servi, aligné sur la poche ; `sparks` et `sparksLifetime` sont additifs, même visibilité (#10846).
-      ...(reader.intimate ? { points: sparks.pocket, sparks: sparks.pocket, sparksLifetime: sparks.lifetime } : {}),
+      // `points` reste servi, aligné sur la poche ; `sparks`, `sparksLifetime` et `glory` sont additifs, même visibilité (#10846, #10913).
+      ...(reader.intimate ? { points: sparks.pocket, sparks: sparks.pocket, sparksLifetime: sparks.lifetime, glory } : {}),
       ...(trophyCount === null ? {} : { trophyCount }),
     };
   }

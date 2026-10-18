@@ -45,8 +45,8 @@ export type BannerStanding = ShownRank & {
   readonly progress: number | null;
   /** Les ÉTINCELLES en poche ; `null` : non servies (ou aucune). */
   readonly points: number | null;
-  /** Le total d'étincelles accumulé à vie, en petit sous la poche ; `null` : non servi (autre que soi et ses amis, ou ancien serveur). */
-  readonly sparksLifetime: number | null;
+  /** La Gloire totale, en petit sous la poche (#10913) ; `null` : non servie (autre que soi et ses amis, ou ancien serveur). */
+  readonly glory: number | null;
   /** Le niveau MAX à vie, sous le niveau actuel ; `null` : non servi (ancien serveur). Il survit au Prestige. */
   readonly levelMax: number | null;
   /** Ce qu'il reste vers le niveau suivant ; `null` : au plafond, ou non servi. */
@@ -70,8 +70,8 @@ const GROUP_STYLE = { maxWidth: `calc((100% - ${AVATAR_CLEARANCE}px) / 2)` } as 
 const pointsLine = (points: number, language: InterfaceLanguage): string =>
   translateGame(language, 'game.banner.points', { points: formatCount(points, language) });
 
-const lifetimeLine = (total: number, language: InterfaceLanguage): string =>
-  translateGame(language, 'game.banner.lifetime', { total: formatCount(total, language) });
+const gloryLine = (glory: number, language: InterfaceLanguage): string =>
+  translateGame(language, 'game.rank.glory', { glory: formatCount(glory, language) });
 
 const levelNowLine = (level: number, language: InterfaceLanguage): string =>
   translateGame(language, 'game.banner.level', { level: formatCount(level, language) });
@@ -84,11 +84,11 @@ const missingLine = (points: number, nextLevel: number, language: InterfaceLangu
   translateGame(language, 'game.banner.missing', { points: formatCount(points, language), level: formatCount(nextLevel, language) });
 
 function levelLabel(standing: BannerStanding, language: InterfaceLanguage): string {
-  const { level, tier, prestige, points, pointsToNext, sparksLifetime, levelMax } = standing;
+  const { level, tier, prestige, points, pointsToNext, glory, levelMax } = standing;
   const parts: readonly (string | null)[] = [
     levelRingLabelWithPrestige(level, tier, prestige, language),
     points === null ? null : pointsLine(points, language),
-    sparksLifetime === null ? null : lifetimeLine(sparksLifetime, language),
+    glory === null ? null : gloryLine(glory, language),
     levelMax === null ? null : translateGame(language, 'game.banner.level_max_a11y', { level: formatCount(levelMax, language) }),
     pointsToNext === null ? null : missingLine(pointsToNext, level + 1, language),
   ];
@@ -97,7 +97,7 @@ function levelLabel(standing: BannerStanding, language: InterfaceLanguage): stri
 
 export function GameProfileBanner({ standing }: { readonly standing: BannerStanding }) {
   const language = currentInterfaceLanguage();
-  const { level, tier, prestige, progress, points, pointsToNext, sparksLifetime, levelMax, rank, division, mythic } = standing;
+  const { level, tier, prestige, progress, points, pointsToNext, glory, levelMax, rank, division, mythic } = standing;
   const rankLine = standingLabel(standing, language);
   return (
     <div
@@ -112,17 +112,17 @@ export function GameProfileBanner({ standing }: { readonly standing: BannerStand
           </span>
           <LevelRing level={level} tier={tier} progress={progress} size={36} prestige={prestige} />
         </span>
-        {points === null && pointsToNext === null && levelMax === null ? null : (
+        {points === null && glory === null && pointsToNext === null && levelMax === null ? null : (
           <span aria-hidden="true" className="flex min-w-0 flex-col leading-tight tabular-nums">
-            {/* La POCHE en grand, le TOTAL à vie en petit dessous (porteur, 2026-10-16). */}
+            {/* La POCHE en grand, la GLOIRE totale en petit dessous (porteur, 2026-10-16, 2026-10-18). */}
             {points === null ? null : (
               <span data-profile-banner-points={points} className="truncate text-body font-bold">
                 {pointsLine(points, language)}
               </span>
             )}
-            {sparksLifetime === null ? null : (
-              <span data-profile-banner-lifetime={sparksLifetime} className="truncate text-check font-medium opacity-90">
-                {lifetimeLine(sparksLifetime, language)}
+            {glory === null ? null : (
+              <span data-profile-banner-glory={glory} className="truncate text-check font-medium opacity-90">
+                {gloryLine(glory, language)}
               </span>
             )}
             {/* Le NIVEAU actuel, le niveau MAX à vie dessous — toujours, même quand le max égale le niveau. */}

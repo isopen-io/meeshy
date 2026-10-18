@@ -46,7 +46,6 @@ const es = {
   'game.banner.level': 'Nivel {level}',
   'game.banner.level_max': 'récord {level}',
   'game.banner.level_max_a11y': 'récord de nivel {level}',
-  'game.banner.lifetime': 'récord {total}',
   'game.banner.to_next': '{percent} % hacia el {level}',
   'game.banner.top': 'en la cima',
   'game.banner.capped': '{rank} abre más',

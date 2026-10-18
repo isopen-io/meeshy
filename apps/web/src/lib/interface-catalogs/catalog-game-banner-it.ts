@@ -53,7 +53,6 @@ const it = {
   'game.banner.place.other': '{count}º',
   'game.banner.points': '{points} scintille',
   'game.banner.missing': 'ancora {points} verso il {level}',
-  'game.banner.lifetime': 'record {total}',
   'game.banner.level_max': 'record {level}',
   'game.banner.level_max_a11y': 'record di livello {level}',
   'game.banner.link.sparks': 'Scintille: {points}',
