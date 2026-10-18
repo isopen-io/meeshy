@@ -34,7 +34,7 @@ public struct APIConversationUserNested: Decodable, Sendable {
     public let lastActiveAt: Date?
 }
 
-public struct APIConversationUser: Decodable, Sendable {
+public struct APIConversationUser: Decodable, Sendable, ProfileDecorWearer {
     public let id: String
     public let userId: String?
     public let username: String?
@@ -47,6 +47,9 @@ public struct APIConversationUser: Decodable, Sendable {
     public let lastActiveAt: Date?
     public let type: String?
     public let user: APIConversationUserNested?
+    /// Le contour d'avatar équipé (#10945), servi avec la personne. Additif et tolérant : absent
+    /// (ancien serveur, aucun contour) ou illisible ⇒ `nil`.
+    public var profileDecor: ServedProfileDecor? = nil
 
     public var name: String {
         nonEmpty(displayName) ?? nonEmpty(user?.displayName) ?? nonEmpty(username) ?? nonEmpty(user?.username) ?? id

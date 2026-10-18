@@ -2,7 +2,7 @@ import Foundation
 
 // MARK: - Models
 
-public struct MentionSuggestion: Codable, Identifiable, Sendable {
+public struct MentionSuggestion: Codable, Identifiable, Sendable, ProfileDecorWearer {
     public let id: String
     public let username: String
     public let displayName: String?
@@ -10,6 +10,9 @@ public struct MentionSuggestion: Codable, Identifiable, Sendable {
     public let badge: String?
     public let inConversation: Bool?
     public let isFriend: Bool?
+    /// Le contour d'avatar équipé (#10945), servi avec la personne. Additif et tolérant : absent
+    /// (ancien serveur, aucun contour) ou illisible ⇒ `nil`.
+    public let profileDecor: ServedProfileDecor?
 
     public init(
         id: String,
@@ -18,8 +21,10 @@ public struct MentionSuggestion: Codable, Identifiable, Sendable {
         avatar: String? = nil,
         badge: String? = nil,
         inConversation: Bool? = nil,
-        isFriend: Bool? = nil
+        isFriend: Bool? = nil,
+        profileDecor: ServedProfileDecor? = nil
     ) {
+        self.profileDecor = profileDecor
         self.id = id
         self.username = username
         self.displayName = displayName

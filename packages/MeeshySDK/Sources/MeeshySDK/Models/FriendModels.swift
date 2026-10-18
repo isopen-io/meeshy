@@ -52,7 +52,7 @@ extension FriendRequestUser: Equatable {
     }
 }
 
-public struct FriendRequestUser: Codable, CacheIdentifiable, Sendable {
+public struct FriendRequestUser: Codable, CacheIdentifiable, Sendable, ProfileDecorWearer {
     public let id: String
     public let username: String
     public let firstName: String?
@@ -61,6 +61,9 @@ public struct FriendRequestUser: Codable, CacheIdentifiable, Sendable {
     public let avatar: String?
     public let isOnline: Bool?
     public let lastActiveAt: Date?
+    /// Le contour d'avatar équipé (#10945), servi avec la personne. Additif et tolérant : absent
+    /// (ancien serveur, aucun contour) ou illisible ⇒ `nil`.
+    public let profileDecor: ServedProfileDecor?
 
     /// Sans lui, un struct `public` sans initialiseur explicite ne reçoit
     /// qu'un memberwise init INTERNAL — inconstructible depuis un autre
@@ -74,8 +77,10 @@ public struct FriendRequestUser: Codable, CacheIdentifiable, Sendable {
         displayName: String? = nil,
         avatar: String? = nil,
         isOnline: Bool? = nil,
-        lastActiveAt: Date? = nil
+        lastActiveAt: Date? = nil,
+        profileDecor: ServedProfileDecor? = nil
     ) {
+        self.profileDecor = profileDecor
         self.id = id
         self.username = username
         self.firstName = firstName

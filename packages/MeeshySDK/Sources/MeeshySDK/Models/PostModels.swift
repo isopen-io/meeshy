@@ -2,7 +2,7 @@ import Foundation
 
 // MARK: - API Post Models
 
-public struct APIAuthor: Codable, Sendable {
+public struct APIAuthor: Codable, Sendable, ProfileDecorWearer {
     public let id: String
     public let username: String?
     public let displayName: String?
@@ -15,11 +15,15 @@ public struct APIAuthor: Codable, Sendable {
     /// viewers) et sur les caches antérieurs — décodage rétro-compatible.
     public let isOnline: Bool?
     public let lastActiveAt: Date?
+    /// Le contour d'avatar équipé (#10945), servi avec la personne. Additif et tolérant : absent
+    /// (ancien serveur, aucun contour) ou illisible ⇒ `nil`.
+    public let profileDecor: ServedProfileDecor?
 
     public var name: String { displayName ?? username ?? "Anonymous" }
 
     public init(id: String, username: String?, displayName: String?, avatar: String?,
-                isOnline: Bool? = nil, lastActiveAt: Date? = nil) {
+                isOnline: Bool? = nil, lastActiveAt: Date? = nil, profileDecor: ServedProfileDecor? = nil) {
+        self.profileDecor = profileDecor
         self.id = id
         self.username = username
         self.displayName = displayName
