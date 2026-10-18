@@ -53,6 +53,7 @@ import { loadWithdrawnCitations, servePostReplyCitation } from '../../services/m
 import type { ConversationType } from '@meeshy/shared/types/conversation';
 import { loadViewerBirthDate, servedListRowRestriction } from './viewerWriteRestriction';
 import { participantProfileDecor } from '../../services/appearance/profileDecor';
+import { authorProfileDecor } from '../../services/appearance/authorProfileDecor';
 import { startupPackIndex } from '../../services/packs/PackIndex';
 import {
   conversationListQuerySelect,
@@ -894,6 +895,7 @@ export function registerConversationListRoute(
                 lastActiveAt: senderVis.showLastSeenTimestamp
                   ? (sender.user?.lastActiveAt ?? sender.lastActiveAt ?? null)
                   : null,
+                ...authorProfileDecor(sender.user),
               } : null
             };
           })(),

@@ -172,3 +172,53 @@ describe('#10713 — GET /conversations sert le contour des participants', () =>
     expect(JSON.stringify(prisma.conversation.findMany.mock.calls[0][0])).toContain('"equippedAvatarRing":true');
   });
 });
+
+describe('#10945 — GET /conversations sert le contour du dernier expéditeur', () => {
+  beforeEach(() => {
+    jest.clearAllMocks();
+  });
+
+  const lastMessage = (equippedAvatarRing: string | null) => ({
+    id: '507f1f77bcf86cd799439301',
+    conversationId: CONV_ID,
+    content: 'salut',
+    originalLanguage: 'fr',
+    messageType: 'text',
+    createdAt: new Date('2026-08-10T00:00:00Z'),
+    senderId: PARTICIPANT_ID,
+    translations: [],
+    attachments: [],
+    metadata: null,
+    sender: { id: PARTICIPANT_ID, userId: USER_ID, displayName: 'Moi', avatar: null, type: 'user', user: { id: USER_ID, username: 'moi', displayName: 'Moi', avatar: null, equippedAvatarRing } },
+  });
+
+  const served = async (equippedAvatarRing: string | null) => {
+    const prisma = makePrisma([makeConversation({ messages: [lastMessage(equippedAvatarRing)] })]);
+    const app = await buildApp(prisma);
+    const res = await app.inject({ method: 'GET', url: '/conversations' });
+    await app.close();
+    expect(res.statusCode).toBe(200);
+    return { sender: res.json().data[0].lastMessage.sender as Record<string, unknown>, body: res.body, prisma };
+  };
+
+  it('sert lastMessage.sender.profileDecor, jamais la colonne', async () => {
+    const { sender, body } = await served('contours-essentiels/perle');
+    expect(sender.profileDecor).toEqual({ avatarRing: { pack: 'contours-essentiels', item: 'perle', origin: 'builtin', contract: null } });
+    expect(body).not.toContain('equippedAvatarRing');
+  });
+
+  it('aucune clé sans contour', async () => {
+    const { sender } = await served(null);
+    expect(sender).not.toHaveProperty('profileDecor');
+  });
+
+  it('le contour vient de la requête de liste : aucune lecture de plus', async () => {
+    const calls = (prisma: Record<string, Record<string, { mock: { calls: unknown[] } }>>) =>
+      Object.values(prisma).flatMap((model) => Object.values(model)).reduce((total, fn) => total + fn.mock.calls.length, 0);
+    const bare = await served(null);
+    const { prisma } = await served('contours-essentiels/perle');
+    expect(calls(prisma)).toBe(calls(bare.prisma));
+    const query = prisma.conversation.findMany.mock.calls[0][0] as { select: { messages: { select: { sender: { select: { user: { select: Record<string, unknown> } } } } } } };
+    expect(query.select.messages.select.sender.select.user.select).toMatchObject({ equippedAvatarRing: true });
+  });
+});
