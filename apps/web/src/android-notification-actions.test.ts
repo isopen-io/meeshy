@@ -9,7 +9,7 @@ import { describe, expect, test } from 'bun:test';
  * coque sans aucune action. La coque la reprend après l'affichage, comme pour
  * « Écouter » (#10641), et le toucher suit le lien du widget de réponse
  * (`meeshy://c/<id>?compose=1`, #10626) : le fil s'ouvre, le curseur y est.
- * La décision est testée en JVM (`NotificationReplyRulesTest`) ; ce témoin
+ * La décision est testée en JVM (`NotificationBannerRulesTest`) ; ce témoin
  * garde le câblage que la JVM ne voit pas.
  */
 
@@ -35,16 +35,16 @@ describe('« Répondre » sur la bannière d’un message (#10891)', () => {
 
   test('un push qui n’est pas un vocal écoutable reçoit quand même « Répondre »', () => {
     const offre = corpsDe(lire('NotificationVoiceBanner.java'), 'static void offer(');
-    expect(offre).toContain('NotificationReplyAction.offer(');
+    expect(offre).toContain('NotificationBannerActions.offer(');
   });
 
   test('un vocal porte « Écouter » ET « Répondre »', () => {
     const place = corpsDe(lire('NotificationVoiceBanner.java'), 'private static boolean place(');
-    expect(place).toContain('NotificationReplyAction.');
+    expect(place).toContain('NotificationBannerActions.');
   });
 
   test('l’action ouvre MainActivity par le lien du widget, et ne vole jamais les actions d’une autre bannière', () => {
-    const action = lire('NotificationReplyAction.java');
+    const action = lire('NotificationBannerActions.java');
     expect(action).toContain('MainActivity.class');
     expect(action).toContain('PendingIntent.getActivity(');
     expect(action).toContain('recoverBuilder(');
@@ -54,7 +54,20 @@ describe('« Répondre » sur la bannière d’un message (#10891)', () => {
 
   test('le toucher retire la bannière, à froid comme à chaud', () => {
     const intent = corpsDe(lire('MeeshyWidgetsPlugin.java'), 'protected void handleOnNewIntent(');
-    expect(intent).toContain('NotificationReplyAction.dismiss(');
-    expect(intent.indexOf('NotificationReplyAction.dismiss(')).toBeLessThan(intent.indexOf('composeTarget('));
+    expect(intent).toContain('NotificationBannerActions.dismiss(');
+    expect(intent.indexOf('NotificationBannerActions.dismiss(')).toBeLessThan(intent.indexOf('composeTarget('));
+  });
+
+  test('« Ouvrir la carte » part à l’app de cartes, « Rejoindre » reste dans l’app (#10906)', () => {
+    const actions = lire('NotificationBannerActions.java');
+    expect(actions).toContain('NotificationBannerRules.contentOf(');
+    expect(actions).toContain('NotificationBannerRules.replyOf(');
+    expect(actions.indexOf('contentOf(')).toBeLessThan(actions.indexOf('replyOf('));
+    expect(actions).toContain('.inApp');
+  });
+
+  test('la charge retenue garde ce que l’action de contenu lit', () => {
+    const banniere = lire('NotificationVoiceBanner.java');
+    for (const cle of ['"contentActionLabel"', '"locationLat"', '"locationLon"', '"locationName"', '"inviteUrl"']) expect(banniere).toContain(cle);
   });
 });
