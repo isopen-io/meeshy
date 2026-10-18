@@ -69,6 +69,10 @@ describe('la frappe optimiste rend le bloc que la passerelle servirait', () => {
         { levelRecord: 30, levelMaxLifetime: 30, glory: minGlory('voix', 1) - GLORY_POINTS.mint, balance: 40, mintedLifetime: 40 },
       ),
     },
+    {
+      label: 'après deux Prestiges : le record de chaque cycle clos voyage avec le niveau (#10911)',
+      facts: sparksAccount({ pocket: levelThreshold(20) + 500, cycle: 600_000, lifetime: 900_000, debt: 0 }, { levelRecord: 20, levelMaxLifetime: 150, prestige: 2, pastCycleRecords: [150, 100] }),
+    },
   ];
 
   for (const { label, facts } of cases) {
@@ -97,6 +101,7 @@ describe('le coffre optimiste rend le bloc que la passerelle servirait', () => {
   const cases: readonly { readonly label: string; readonly sparks: SparksFacts; readonly patch: Partial<GameBlockFacts> }[] = [
     { label: 'sans dette : la poche, le cycle et le total à vie montent', sparks: { pocket: levelThreshold(12) + 10, cycle: 600_000, lifetime: 900_000, debt: 0 }, patch: { levelRecord: 19, levelMaxLifetime: 19 } },
     { label: 'sous une dette : le gain la rembourse d’abord', sparks: { pocket: levelThreshold(12) + 10, cycle: 600_000, lifetime: 900_000, debt: 1_500 }, patch: { levelRecord: 12, levelMaxLifetime: 12 } },
+    { label: 'après un Prestige : le record du cycle clos voyage avec le niveau (#10911)', sparks: { pocket: levelThreshold(12) + 10, cycle: 600_000, lifetime: 900_000, debt: 0 }, patch: { levelRecord: 19, levelMaxLifetime: 120, prestige: 1, pastCycleRecords: [120] } },
   ];
 
   for (const { label, sparks, patch } of cases) {
@@ -121,7 +126,7 @@ describe('le coffre optimiste rend le bloc que la passerelle servirait', () => {
 
 describe('le Prestige optimiste rend le bloc que la passerelle servirait', () => {
   const sparks: SparksFacts = { pocket: levelThreshold(100) + 40, cycle: 1_500_000, lifetime: 2_000_000, debt: 0 };
-  const facts = sparksAccount(sparks, { levelRecord: 100, levelMaxLifetime: 104, prestige: 1, glory: 60_000 });
+  const facts = sparksAccount(sparks, { levelRecord: 100, levelMaxLifetime: 104, prestige: 1, glory: 60_000, pastCycleRecords: [150] });
   const extras = (patch: Partial<GameBlockExtrasFacts>): GameBlockExtrasFacts =>
     gameExtrasFactsFixture({ score: facts.score, levelRecord: facts.levelRecord, levelMaxLifetime: facts.levelMaxLifetime ?? null, prestige: facts.prestige, balance: facts.balance, flameDays: facts.streak, ...patch });
   const block = (blockFacts: GameBlockFacts, extrasFacts: GameBlockExtrasFacts): GameBlock => ({ ...buildGameBlock(blockFacts), ...buildGameBlockExtras(extrasFacts) });
@@ -137,6 +142,8 @@ describe('le Prestige optimiste rend le bloc que la passerelle servirait', () =>
     levelMaxLifetime: 104,
     prestige: 2,
     glory: facts.glory + GLORY_POINTS.prestige,
+    // Le cycle que le passage clôt rejoint la liste (#10911) — l'écriture même de la passerelle (`closedCycleRecord`).
+    pastCycleRecords: [150, 100],
   };
   const expected = block(afterFacts, extras({ score: 0, levelRecord: 1, levelMaxLifetime: 104, prestige: 2 }));
 

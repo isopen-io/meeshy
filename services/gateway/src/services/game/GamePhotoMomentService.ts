@@ -76,6 +76,7 @@ function baselineOf(value: unknown): PhotoCatchUpStanding | null {
     minted: stored.minted,
     treasuryTier: stored.treasuryTier ?? null,
     flameRecord: stored.flameRecord,
+    ...(stored.pastCycleRecords === undefined ? {} : { pastCycleRecords: stored.pastCycleRecords }),
   };
 }
 

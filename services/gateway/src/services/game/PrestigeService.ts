@@ -23,7 +23,7 @@
 
 import type { PrismaClient } from '@meeshy/shared/prisma/client';
 import type { PrestigeResponse } from '@meeshy/shared/types/game';
-import { prestigeTransition } from '@meeshy/shared/utils/game/prestige';
+import { closedCycleRecord, prestigeTransition } from '@meeshy/shared/utils/game/prestige';
 import { GLORY_POINTS } from '@meeshy/shared/utils/game/glory';
 import { prestigeTrophy, trophyKey } from '@meeshy/shared/utils/game/trophies';
 import { EngagementQuotas } from '../engagement/EngagementQuotas';
@@ -95,6 +95,8 @@ export class PrestigeService {
           sparksEarnedLifetime: BigInt(sparks.lifetime),
           levelMaxLifetime: maxLifetime,
           levelRecord: verdict.levelRecordAfter,
+          // Le record du cycle que ce passage clôt (#10911) — dans la même écriture conditionnelle : une fois par Prestige.
+          prestigeLevelRecords: { push: closedCycleRecord({ levelRecord: account?.levelRecord ?? null, level: currentLevelOf(account) }) },
         },
       });
       if (written.count === 0) {

@@ -5,7 +5,7 @@
  * `ladder`. Module léger : il n'importe que la loi des niveaux.
  */
 
-import { canPrestige, legacyLevel, legacyLevelProgress, levelProgress, recordLevel, type LevelCap } from './levels.js';
+import { GAME_PRESTIGE_MAX, canPrestige, legacyLevel, legacyLevelProgress, levelProgress, recordLevel, type LevelCap } from './levels.js';
 import { levelStepGate, nextLevelStep, type LevelStepFacts } from './level-steps.js';
 import type { MintPreview } from './mint.js';
 import type { SparksFacts, SparksMintPreview } from './sparks.js';
@@ -51,6 +51,8 @@ export function levelOnTheWire(params: {
   readonly sparks?: SparksFacts;
   /** Le niveau max à vie, qui survit au prestige (#10846). Jamais sous le niveau courant ni le record du cycle. */
   readonly levelMaxLifetime?: number | null;
+  /** Le record de chaque cycle clos par un Prestige (#10911). Absent : le champ ne part pas. */
+  readonly pastCycleRecords?: readonly number[];
 }): GameLevel {
   const gate = levelStepGate(params.steps);
   const progress = levelProgress(params.score, params.levelCap, gate);
@@ -89,6 +91,7 @@ export function levelOnTheWire(params: {
       isMax: progress.isMax,
       held: progress.held,
       ...(maxLifetime === null ? {} : { levelMaxLifetime: maxLifetime }),
+      ...(params.pastCycleRecords === undefined ? {} : { pastCycleRecords: params.pastCycleRecords.slice(0, GAME_PRESTIGE_MAX).map((value) => Math.max(1, Math.trunc(value))) }),
       step: nextLevelStep(progress.level, params.steps),
       steps:
         params.steps === null

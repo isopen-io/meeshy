@@ -83,6 +83,12 @@ export const gameLevelLadderSchema = z.object({
   record: level,
   /** Le niveau max à vie (#10846) : il survit au prestige. Absent devant un serveur antérieur. */
   levelMaxLifetime: level.optional(),
+  /**
+   * Le record de niveau de chaque cycle CLOS par un Prestige, le plus ancien d'abord (#10911) : il dit combien de fois
+   * un niveau a été atteint, tous cycles confondus. Absent devant un serveur antérieur ; plus court que `prestige` pour
+   * un compte passé en Prestige avant qu'on le garde (chaque cycle manquant a atteint au moins le niveau 100).
+   */
+  pastCycleRecords: z.array(level).max(5).optional(),
   /** Le plafond que le rang ouvre : 499 sous Ambassadeur, 1000 pour Ambassadeur et Orateur, `null` à partir d'Oracle. */
   cap: level.nullable(),
   /** Le niveau est au plafond : il monte dès que le rang l'ouvre, sans rien regagner. */

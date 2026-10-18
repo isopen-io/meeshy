@@ -30,6 +30,10 @@ import type { EngagementWithGame } from '@/lib/api/engagement';
 export const shownLevel = (level: GameBlock['level']): number => level.ladder?.level ?? level.level;
 export const recordOf = (level: GameBlock['level']): number => level.ladder?.record ?? level.record;
 
+/** Le record de chaque cycle clos (#10911) : un geste ne le change pas, l'optimiste le garde tel que servi. */
+export const pastCyclesOf = (level: GameBlock['level']): { readonly pastCycleRecords?: readonly number[] } =>
+  level.ladder?.pastCycleRecords === undefined ? {} : { pastCycleRecords: level.ladder.pastCycleRecords };
+
 /**
  * Les faits des étapes que le serveur a servis (#9706) — les compteurs de `ladder.steps`, sous une Gloire et
  * un rang donnés (ceux du bloc, ou ceux d'après le geste) ; `null` devant un serveur d'avant les étapes.
@@ -134,6 +138,7 @@ export function afterMint(view: EngagementWithGame): EngagementWithGame {
     prestige: game.level.prestige,
     steps,
     ...(sparks === undefined ? {} : { sparks, levelMaxLifetime: game.level.levelMaxLifetime ?? null }),
+    ...pastCyclesOf(game.level),
   });
   const held = game.treasury.held + 1;
   const next = onGame(view, (current) => ({
@@ -238,6 +243,7 @@ export function withChestReward(
     prestige: game.level.prestige,
     steps,
     ...(sparks === undefined ? {} : { sparks, levelMaxLifetime: game.level.levelMaxLifetime ?? null }),
+    ...pastCyclesOf(game.level),
   });
   const claimed = onGame(view, (current) => ({
     ...current,

@@ -49,6 +49,8 @@ export const photoCatchUpStandingSchema = z.object({
   minted: nonNegativeInt,
   treasuryTier: treasuryTierKeys.nullable(),
   flameRecord: nonNegativeInt,
+  /** Le record de chaque cycle clos par un Prestige (#10911) — absent d'une ligne de base d'avant. */
+  pastCycleRecords: z.array(nonNegativeInt).optional(),
 });
 
 export const gamePhotoMomentSchema = z.object({

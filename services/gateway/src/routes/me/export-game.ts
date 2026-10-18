@@ -32,6 +32,7 @@ export async function exportGame(prisma: PrismaClient, userId: string, page: Exp
         select: {
           ...SPARKS_USER_SELECT,
           prestige: true,
+          prestigeLevelRecords: true,
           flameFreezes: true,
           lastRelightDay: true,
           guideSeen: true,
@@ -118,6 +119,7 @@ export async function exportGame(prisma: PrismaClient, userId: string, page: Exp
             levelRecord: account.levelRecord,
             levelMaxLifetime: account.levelMaxLifetime ?? null,
             prestige: account.prestige,
+            prestigeLevelRecords: account.prestigeLevelRecords ?? [],
             flameFreezes: account.flameFreezes,
             lastRelightDay: account.lastRelightDay,
             guideSeen: account.guideSeen,
