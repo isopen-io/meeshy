@@ -721,6 +721,8 @@ describe('EngagementService level tracking (#5545)', () => {
               $add: [{ $ifNull: ['$engagementScore', 0] }, { $subtract: [attendu, { $min: [{ $ifNull: ['$sparksDebt', 0] }, attendu] }] }],
             },
             sparksDebt: { $subtract: [{ $ifNull: ['$sparksDebt', 0] }, { $min: [{ $ifNull: ['$sparksDebt', 0] }, attendu] }] },
+            // La révision de l'état du jeu monte dans la MÊME écriture, sans jamais reculer (#10912).
+            gameRevision: { $max: [{ $toLong: expect.any(Number) }, { $add: [{ $toLong: { $ifNull: ['$gameRevision', 0] } }, 1] }] },
           },
         },
       ],
