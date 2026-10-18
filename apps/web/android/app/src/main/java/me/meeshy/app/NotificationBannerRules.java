@@ -3,9 +3,11 @@ package me.meeshy.app;
 import java.io.UnsupportedEncodingException;
 import java.net.URI;
 import java.net.URISyntaxException;
+import java.net.URLDecoder;
 import java.net.URLEncoder;
 import java.util.ArrayList;
 import java.util.Arrays;
+import java.util.HashMap;
 import java.util.List;
 import java.util.Locale;
 import java.util.Map;
@@ -26,6 +28,9 @@ import java.util.regex.Pattern;
  *   `geo:`, celle d'une position dans le fil (`mapsUrlOf`, plateforme
  *   `android`) ; l'invitation n'ouvre que l'ecran d'invitation de CETTE app,
  *   et seulement depuis un lien Meeshy (`cheminInvitation`).
+ * - « Rappeler » (#10908) — un appel manque ou refuse, sous `callBackLabel`
+ *   (`callBackPushFields.ts`), et SEUL, comme `rappel()` : le fil s'ouvre avec
+ *   `?rappeler=` et la page compose l'appel (`call-back-intent.ts`).
  */
 final class NotificationBannerRules {
 
@@ -39,6 +44,12 @@ final class NotificationBannerRules {
     private static final Pattern KEY = Pattern.compile("^[A-Za-z0-9_-]{1,100}$");
     /** JUMEAU de `INVITE_FORMS` (`sw-push.js`). */
     private static final List<String> INVITE_FORMS = Arrays.asList("chat", "join");
+    /** JUMEAU de `CALL_BACK_TYPES` (`sw-push.js`, `callBackPushFields.ts`). */
+    private static final List<String> CALL_BACK_TYPES = Arrays.asList("missed_call", "CALL_MISSED", "call_declined");
+    /** JUMEAUX de `CALL_BACK_PARAM`, `CALL_BACK_NAME_PARAM`, `CALL_BACK_GROUP_PARAM` (`call-back-intent.ts`). */
+    private static final String CALL_BACK_PARAM = "rappeler";
+    private static final String CALL_BACK_NAME_PARAM = "appelant";
+    private static final String CALL_BACK_GROUP_PARAM = "groupe";
 
     private NotificationBannerRules() {}
 
@@ -57,9 +68,32 @@ final class NotificationBannerRules {
         }
     }
 
-    /** Les actions de cette charge, dans l'ordre du web : le contenu, puis « Repondre ». */
+    /** L'appel que la page doit composer, lu sur le lien de « Rappeler ». */
+    static final class CallBack {
+        final String conversationId;
+        final String media;
+        final String title;
+        final boolean isGroup;
+
+        CallBack(String conversationId, String media, String title, boolean isGroup) {
+            this.conversationId = conversationId;
+            this.media = media;
+            this.title = title;
+            this.isGroup = isGroup;
+        }
+    }
+
+    /**
+     * Les actions de cette charge, dans l'ordre du web : « Rappeler » seul, ou
+     * le contenu puis « Repondre ».
+     */
     static List<Action> actionsOf(Map<String, String> data) {
         List<Action> actions = new ArrayList<>();
+        Action callBack = callBackOf(data);
+        if (callBack != null) {
+            actions.add(callBack);
+            return actions;
+        }
         Action content = contentOf(data);
         if (content != null) actions.add(content);
         Action reply = replyOf(data);
@@ -75,6 +109,62 @@ final class NotificationBannerRules {
         String tag = tagOf(data);
         if (label.isEmpty() || tag.isEmpty() || !KEY.matcher(conversationId).matches()) return null;
         return new Action(label, WidgetActionRules.replyLink(conversationId), tag, true);
+    }
+
+    /** « Rappeler », ou null : le nom est celui du groupe, ou de l'appelant d'un direct. */
+    static Action callBackOf(Map<String, String> data) {
+        if (data == null || !CALL_BACK_TYPES.contains(text(data.get("type")))) return null;
+        String label = text(data.get("callBackLabel"));
+        String conversationId = text(data.get("conversationId"));
+        String tag = tagOf(data);
+        if (label.isEmpty() || tag.isEmpty() || !KEY.matcher(conversationId).matches()) return null;
+        String conversationType = text(data.get("conversationType"));
+        boolean group = !conversationType.isEmpty() && !"direct".equals(conversationType);
+        String displayName = text(data.get("senderDisplayName"));
+        String title = group
+            ? text(data.get("conversationTitle"))
+            : (displayName.isEmpty() ? text(data.get("senderUsername")) : displayName);
+        String media = "video".equals(text(data.get("callType"))) ? "video" : "audio";
+        String link = "meeshy://c/" + conversationId + "?" + CALL_BACK_PARAM + "=" + media
+            + (title.isEmpty() ? "" : "&" + CALL_BACK_NAME_PARAM + "=" + encoded(title))
+            + (group ? "&" + CALL_BACK_GROUP_PARAM + "=1" : "");
+        return new Action(label, link, tag, true);
+    }
+
+    /** L'appel porte par un lien `meeshy://c/<id>?rappeler=…`, ou null pour tout autre lien. */
+    static CallBack callBackRequest(String uri) {
+        if (uri == null) return null;
+        try {
+            URI url = new URI(uri);
+            if (!"meeshy".equals(url.getScheme()) || !"c".equals(url.getHost())) return null;
+            List<String> segments = segmentsOf(url.getPath());
+            if (segments.size() != 1 || !KEY.matcher(segments.get(0)).matches()) return null;
+            Map<String, String> query = queryOf(url.getRawQuery());
+            String media = text(query.get(CALL_BACK_PARAM));
+            if (!"audio".equals(media) && !"video".equals(media)) return null;
+            return new CallBack(segments.get(0), media, text(query.get(CALL_BACK_NAME_PARAM)), "1".equals(query.get(CALL_BACK_GROUP_PARAM)));
+        } catch (URISyntaxException | IllegalArgumentException unreadable) {
+            return null;
+        }
+    }
+
+    private static Map<String, String> queryOf(String raw) {
+        Map<String, String> query = new HashMap<>();
+        if (raw == null) return query;
+        for (String pair : raw.split("&")) {
+            int equals = pair.indexOf('=');
+            if (equals <= 0) continue;
+            query.put(decoded(pair.substring(0, equals)), decoded(pair.substring(equals + 1)));
+        }
+        return query;
+    }
+
+    private static String decoded(String value) {
+        try {
+            return URLDecoder.decode(value, "UTF-8");
+        } catch (UnsupportedEncodingException impossible) {
+            return "";
+        }
     }
 
     /** « Ouvrir la carte » ou « Rejoindre », ou null. */
@@ -140,8 +230,12 @@ final class NotificationBannerRules {
 
     /** JUMEAU de `geoLabel` (`message-body.ts`) : les parentheses delimitent le nom. */
     private static String geoLabel(String name) {
+        return encoded(name);
+    }
+
+    private static String encoded(String value) {
         try {
-            return URLEncoder.encode(name, "UTF-8").replace("+", "%20");
+            return URLEncoder.encode(value, "UTF-8").replace("+", "%20");
         } catch (UnsupportedEncodingException impossible) {
             return "";
         }

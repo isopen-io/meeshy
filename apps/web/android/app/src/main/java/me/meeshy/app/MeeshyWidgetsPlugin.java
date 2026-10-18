@@ -18,7 +18,8 @@ import com.getcapacitor.annotation.CapacitorPlugin;
  * visages du compte quitte ; `drainMarkRead` remet a la page les « marquer
  * lu » touches sur un widget. Un lien `?compose=1` (« Repondre ») signale
  * en plus la conversation dont la page doit focaliser le composeur — retenu
- * jusqu'a l'abonnement, pour un lancement a froid.
+ * jusqu'a l'abonnement, pour un lancement a froid ; un lien `?rappeler=`
+ * (« Rappeler », #10908) signale de meme l'appel a composer.
  */
 @CapacitorPlugin(name = "MeeshyWidgets")
 public class MeeshyWidgetsPlugin extends Plugin {
@@ -59,6 +60,17 @@ public class MeeshyWidgetsPlugin extends Plugin {
         // #10891 / #10906 — une action touchee sur une banniere de message : elle s'en va.
         NotificationBannerActions.dismiss(getContext(), intent);
         Uri data = intent.getData();
+        // #10908 — « Rappeler » touche sur la banniere d'un appel manque : la page compose l'appel.
+        NotificationBannerRules.CallBack callBack = data == null ? null : NotificationBannerRules.callBackRequest(data.toString());
+        if (callBack != null) {
+            JSObject request = new JSObject();
+            request.put("conversationId", callBack.conversationId);
+            request.put("media", callBack.media);
+            request.put("title", callBack.title);
+            request.put("isGroup", callBack.isGroup);
+            notifyListeners("callBackRequested", request, true);
+            return;
+        }
         String conversationId = data == null ? null : WidgetActionRules.composeTarget(data.toString());
         if (conversationId == null) return;
         JSObject event = new JSObject();

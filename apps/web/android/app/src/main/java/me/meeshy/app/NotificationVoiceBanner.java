@@ -58,6 +58,8 @@ final class NotificationVoiceBanner {
         // #10891 / #10906 — les actions de la banniere se reposent a chaque
         // bascule Ecouter ⇄ Pause.
         "replyActionLabel", "contentActionLabel", "locationLat", "locationLon", "locationName", "inviteUrl",
+        // #10908 — « Rappeler » sur la banniere d'un appel manque.
+        "callBackLabel", "callType", "conversationType",
     };
 
     private NotificationVoiceBanner() {}

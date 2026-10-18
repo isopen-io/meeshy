@@ -259,6 +259,19 @@ if (__SHELL__) {
 }
 
 /**
+ * ET « RAPPELER » SUR LA BANNIÈRE D'UN APPEL MANQUÉ COMPOSE L'APPEL (#10908) —
+ * le jumeau, dans la coque, de l'écoute que le web monte avec son worker ;
+ * après la première peinture, le signal natif étant retenu jusque-là.
+ */
+if (__SHELL__) {
+  const ecouterRappels = (): void => {
+    void import('@/lib/calls/call-back-intent').then(({ listenCallBackIntentsInShell }) => listenCallBackIntentsInShell());
+  };
+  if (document.readyState === 'complete') ecouterRappels();
+  else window.addEventListener('load', ecouterRappels, { once: true });
+}
+
+/**
  * UNE IMAGE, UNE VIDÉO OU UN LIEN PARTAGÉ DEPUIS UNE AUTRE APPLICATION OUVRE LA
  * FEUILLE D'ENVOI (#8884) — l'intent `SEND` de la coque Android est copié par
  * `MeeshyShareIntentPlugin`, lu ici ; le partage d'un lancement à froid attend
