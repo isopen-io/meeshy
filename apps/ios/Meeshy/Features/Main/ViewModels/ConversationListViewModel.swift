@@ -2087,16 +2087,16 @@ class ConversationListViewModel: ObservableObject {
 
     // MARK: - Message Prefetch
 
-    func loadPreviewMessages(for conversationId: String) async {
-        guard previewMessages[conversationId] == nil,
-              !previewLoadingInFlight.contains(conversationId) else { return }
+    func loadPreviewMessages(for conversationId: String, refresh: Bool = false) async {
+        // `refresh` (appui long) relit toujours : un aperçu servi une fois l'était à vie, messages modifiés ou supprimés compris.
+        guard refresh || previewMessages[conversationId] == nil, !previewLoadingInFlight.contains(conversationId) else { return }
         previewLoadingInFlight.insert(conversationId)
         defer { previewLoadingInFlight.remove(conversationId) }
         let cached = await CacheCoordinator.shared.messages.load(for: conversationId)
         switch cached {
         case .fresh(let data, _):
             previewMessages[conversationId] = Array(data.suffix(5))
-            return
+            if refresh { await refreshPreview(for: conversationId) }
         case .stale(let data, _):
             previewMessages[conversationId] = Array(data.suffix(5))
             Task { [weak self] in await self?.refreshPreview(for: conversationId) }
