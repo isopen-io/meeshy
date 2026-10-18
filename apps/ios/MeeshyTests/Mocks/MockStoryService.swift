@@ -80,9 +80,19 @@ final class MockStoryService: StoryServiceProviding, @unchecked Sendable {
         return try listResult.get()
     }
 
+    /// Plantage TestFlight 1890 : la chaîne réseau réelle reprend sur une file
+    /// de fond (décodage hors main). Vrai → `delete` reprend depuis
+    /// `DispatchQueue.global`, comme elle.
+    var deleteResumesOnBackgroundQueue = false
+
     func delete(storyId: String) async throws {
         deleteCallCount += 1
         lastDeleteStoryId = storyId
+        if deleteResumesOnBackgroundQueue {
+            await withCheckedContinuation { (continuation: CheckedContinuation<Void, Never>) in
+                DispatchQueue.global(qos: .userInitiated).async { continuation.resume() }
+            }
+        }
         try deleteResult.get()
     }
 

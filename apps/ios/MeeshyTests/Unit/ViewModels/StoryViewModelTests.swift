@@ -1180,6 +1180,44 @@ final class StoryViewModelTests: XCTestCase {
         XCTAssertEqual(mockStoryService.lastDeleteStoryId, "tracked-delete")
     }
 
+    /// **Plantage TestFlight build 1890** — « j'ai supprimé une story ça a
+    /// planté » : `deleteStory` repris sur un fil coopératif, `purgeDeadStories`
+    /// trappait à la vérification d'exécuteur de sa fermeture `.filter`. La
+    /// suppression traverse désormais une frontière `@concurrent` : la purge
+    /// retombe sur le main quelle que soit la file où le réseau reprend.
+    func test_deleteStory_networkResumingOnABackgroundQueue_purgesOnTheMainThread() async {
+        let item = makeStoryItem(id: "bg-delete")
+        sut.storyGroups = [makeStoryGroup(userId: "u1", stories: [makeStoryItem(id: "keep"), item])]
+        mockStoryService.deleteResumesOnBackgroundQueue = true
+        var purgedOnMain: Bool?
+        sut.$storyGroups.dropFirst()
+            .sink { _ in purgedOnMain = pthread_main_np() != 0 }
+            .store(in: &cancellables)
+
+        let result = await sut.deleteStory(storyId: "bg-delete")
+
+        XCTAssertTrue(result)
+        XCTAssertEqual(sut.storyGroups.first?.stories.map(\.id), ["keep"])
+        XCTAssertEqual(purgedOnMain, true, "la purge du tray doit s'exécuter sur le main")
+    }
+
+    /// Garde de source : l'appel réseau de `deleteStory` passe par la frontière
+    /// `@concurrent` — un appel direct à `storyService.delete` (nonsending) ne
+    /// réémet aucun saut vers le MainActor au retour.
+    func test_deleteStory_source_goesThroughTheConcurrentBoundary() throws {
+        let source = AppSourceGuard.stripComments(try AppSourceGuard.storyViewModelSource())
+        let body = try XCTUnwrap(
+            source.range(of: "func deleteStory(storyId: String) async -> Bool").map { String(source[$0.lowerBound...].prefix(500)) },
+            "deleteStory a disparu de StoryViewModel"
+        )
+        XCTAssertTrue(body.contains("Self.deleteRemotely(storyId:"), "deleteStory doit appeler la frontière @concurrent")
+        XCTAssertFalse(body.contains("storyService.delete("), "aucun appel nonsending direct dans deleteStory")
+        XCTAssertTrue(
+            source.contains("@concurrent\n    nonisolated static func deleteRemotely("),
+            "deleteRemotely doit rester @concurrent"
+        )
+    }
+
     // MARK: - Socket.IO Tests
 
     func test_socketStoryCreated_addsToExistingGroup() async {
