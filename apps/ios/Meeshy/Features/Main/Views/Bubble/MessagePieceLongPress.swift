@@ -101,12 +101,19 @@ enum MessagePressClaim {
 /// **L'avatar du pied réclame l'appui long** : son menu (« Voir le profil ») est
 /// l'unique effet de ce geste, le menu de la rangée (« Répondre »…) ne s'ouvre
 /// pas. Simultané comme la tuile, pour laisser passer le simple toucher ; la
-/// réclamation précède la rangée par sa durée plus courte.
+/// réclamation précède la rangée par sa durée plus courte. Sans menu d'avatar,
+/// rien ne réclame : la pression revient à la rangée.
 struct MessageAvatarPressClaim: ViewModifier {
+    let hasMenu: Bool
+
     func body(content: Content) -> some View {
-        content.simultaneousGesture(
-            LongPressGesture(minimumDuration: MessagePressClaim.pieceMinimumDuration)
-                .onEnded { _ in MessagePressClaim.claim(.avatar) }
-        )
+        if hasMenu {
+            content.simultaneousGesture(
+                LongPressGesture(minimumDuration: MessagePressClaim.pieceMinimumDuration)
+                    .onEnded { _ in MessagePressClaim.claim(.avatar) }
+            )
+        } else {
+            content
+        }
     }
 }

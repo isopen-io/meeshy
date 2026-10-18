@@ -444,7 +444,8 @@ final class MessagePieceTargetTests: XCTestCase {
 
     func test_footerAvatar_claimsThePress() throws {
         let footer = try source("Meeshy/Features/Main/Views/Bubble/BubbleFooter.swift")
-        XCTAssertTrue(footer.contains(".modifier(MessageAvatarPressClaim())"))
+        XCTAssertTrue(footer.contains(".modifier(MessageAvatarPressClaim(hasMenu: avatarMenu(sender: sender) != nil))"),
+                      "un avatar sans menu ne retient pas la pression de la rangée")
     }
 
     func test_quotedAuthor_prefersStoreThenReference_andNeverOpensWithoutAnId() {
