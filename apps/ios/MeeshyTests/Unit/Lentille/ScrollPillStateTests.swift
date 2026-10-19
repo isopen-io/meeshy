@@ -85,7 +85,7 @@ final class ScrollPillStateTests: XCTestCase {
             // communautés le suit) au lieu de fermer la bande à côté de lui.
             view.contains("adaptiveOnChange(of: isScrollingDown) { wasHidden, isHidden in if !wasHidden && isHidden { isSearching = false } }"),
             "Le signal booléen ne pilote PLUS la pilule (arbitrage I-063bis) : il ne bascule " +
-            "qu'aux changements de direction, throttlés, et il est remis à false par " +
+            "qu'aux changements de direction, sous hystérésis, et il est remis à false par " +
             "programme (filtre, feed). Le brancher là donnait « une fenêtre après la dernière " +
             "bascule », pas « une fenêtre après l'ARRÊT ». Il reste ce qu'il était pour la " +
             "barre du bas et les boutons flottants."

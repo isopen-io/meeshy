@@ -33,7 +33,7 @@ struct ConversationListBottomBar: View {
             // Communities carousel — inside a glass panel while the search
             // field has focus. Its communities or nothing (#10924): no empty
             // title, and no filter chips — they live at the head of the list.
-            if showSearchOverlay && ConversationSearchCommunitiesBandLaw.drawsBand(for: userCommunities) {
+            if showSearchOverlay && ConversationSearchCommunitiesBandLaw.drawsBand(for: userCommunities, queryIsEmpty: searchTextIsEmpty) {
                 VStack(spacing: 0) {
                     ConversationSearchCommunitiesBand(communities: userCommunities) { isSearching.wrappedValue = false }
                         .padding(.vertical, MeeshySpacing.smPlus)
@@ -57,6 +57,8 @@ struct ConversationListBottomBar: View {
             // Search bar — always visible (unless scrolled away); floor of the sync pill (#10840)
             themedSearchBar.docksSyncPill(liftAboveEdge: MeeshySpacing.sm)
         }
+        // #11036 — la bande se replie dès le premier caractère, et revient au champ vidé.
+        .animation(.spring(response: 0.3, dampingFraction: 0.8), value: searchTextIsEmpty)
     }
 
     // MARK: - Themed Search Bar

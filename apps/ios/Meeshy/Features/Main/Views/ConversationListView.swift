@@ -85,7 +85,8 @@ struct ConversationListView: View {
     /// Positions des stickers de section (pilule) — boîte inerte, voir
     /// `LentilleSectionPositionRegistry`.
     @State private var sectionPositionRegistry = LentilleSectionPositionRegistry()
-    @State private var lastScrollDirectionChange: Date = .distantPast
+    /// Extrême de la loi de la barre de recherche (#11036), retenu sans abonnement.
+    @State private var searchBarScrollAnchor = ConversationSearchBarScrollAnchor()
 
     // MARK: - Focus card (LWS-8, drapeau Lentille)
     //
@@ -113,7 +114,7 @@ struct ConversationListView: View {
     // `ConversationListHeaderOverlay` le fait depuis toujours. C'est ce qui lui
     // donne un événement par TICK de défilement, donc un effacement une fenêtre
     // après l'ARRÊT réel et non après la dernière bascule de direction (le
-    // signal booléen ne bascule qu'aux changements de sens, throttlés à 0,15 s,
+    // signal booléen ne bascule qu'aux changements de sens, sous hystérésis (#11036),
     // et il est aussi remis à false par programme).
     //
     // L'état de la loi vit dans l'hôte, JAMAIS ici : le porter dans ce body
@@ -699,14 +700,15 @@ struct ConversationListView: View {
                 onScrollOffsetChange: { offset in
                     scrollOffsetRelay.offset = offset
                     guard !isSearching, !showSearchOverlay else { return }
-                    let scrollingDown = offset < -30
-                    if scrollingDown != isScrollingDown {
-                        // Throttle direction changes to avoid rapid toggling during bounce/overscroll
-                        let now = Date()
-                        guard now.timeIntervalSince(lastScrollDirectionChange) > 0.15 else { return }
-                        lastScrollDirectionChange = now
-                        isScrollingDown = scrollingDown
-                    }
+                    // #11036 — la barre suit le SENS : remonter, même un peu, la ramène.
+                    // La loi part de l'état AFFICHÉ ; son hystérésis absorbe rebond et
+                    // frémissement, et seule une bascule écrit l'état publié.
+                    let next = ConversationSearchBarScrollLaw.next(
+                        .init(hidden: isScrollingDown, anchor: searchBarScrollAnchor.value),
+                        offset: offset
+                    )
+                    searchBarScrollAnchor.value = next.anchor
+                    if next.hidden != isScrollingDown { isScrollingDown = next.hidden }
                 },
                 topPadding: ConversationListScrollChrome.contentTopPadding
             ) {
