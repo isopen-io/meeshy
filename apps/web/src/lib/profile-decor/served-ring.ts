@@ -15,3 +15,9 @@ export function servedRingOf(person: unknown): ServedProfileDecorItem | null {
   const own = parseServedProfileDecor(record['profileDecor']).avatarRing;
   return own ?? parseServedProfileDecor(recordOf(record['user'])?.['profileDecor']).avatarRing;
 }
+
+/** La référence de contour d'une personne, prête à RÉPANDRE (`{...ringRefOf(auteur)}`) : aucune clé sans contour. */
+export function ringRefOf(person: unknown): { readonly ringRef?: ServedProfileDecorItem } {
+  const ring = servedRingOf(person);
+  return ring === null ? {} : { ringRef: ring };
+}

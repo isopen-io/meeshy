@@ -21,11 +21,15 @@ public struct TypingParticipant: Identifiable, Equatable, Sendable {
     public let id: String
     public let displayName: String
     public let avatarURL: String?
+    /// Son contour équipé, la référence servie avec ses messages (#10946) — relue
+    /// localement comme la photo, `nil` tant qu'aucun de ses messages ne la porte.
+    public let ring: ServedProfileDecorItem?
 
-    public init(id: String, displayName: String, avatarURL: String? = nil) {
+    public init(id: String, displayName: String, avatarURL: String? = nil, ring: ServedProfileDecorItem? = nil) {
         self.id = id
         self.displayName = displayName
         self.avatarURL = avatarURL
+        self.ring = ring
     }
 }
 

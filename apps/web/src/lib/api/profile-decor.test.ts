@@ -30,7 +30,7 @@ describe('la lecture du décor de profil', () => {
   });
 
   test('un décor servi vide est un décor vide, distinct de « non servi »', () => {
-    expect(readProfileDecor({ profileDecor: { avatarRing: null, banner: null } })).toEqual({ avatarRing: null, banner: null });
+    expect(readProfileDecor({ profileDecor: { avatarRing: null, banner: null } })).toEqual({ avatarRing: null, banner: null, bannerFrame: null });
   });
 });
 

@@ -127,7 +127,10 @@ struct iPadStoryAndLifecycleLayer: ViewModifier {
                 DeviceLayout.activeWindowScene?.title = String(format: String(localized: "root.scene_title_format", defaultValue: "Meeshy — %@", bundle: .main), title)
             }
             .onDisappear(perform: onDisappear)
-            .task { await onStart() }
+            .task {
+                await onStart()
+                ConversationListVMOwner.endLaunch()
+            }
     }
 }
 
@@ -184,18 +187,17 @@ struct iPadSheetsLayer: ViewModifier {
             }
             .sheet(isPresented: $showSharePicker) {
                 if let shared = router.pendingShareContent {
-                    // Les feuilles n'héritent pas des EnvironmentObjects du
-                    // parent : réinjecter le trio que `SharePickerView` déclare.
-                    SharePickerView(
-                        sharedContent: shared,
+                    // L'écran de partage unique (#10947) ne lit aucun objet
+                    // d'environnement : tout lui est injecté.
+                    ShareSheetView(
+                        subject: shared,
+                        actions: ShareSheetHostActions(onOpenConversation: { router.navigateToConversation($0) }),
                         onDismiss: {
                             router.pendingShareContent = nil
                         }
                     )
-                    .meeshyConversationList(conversationViewModel)
-                    .environmentObject(router)
-                    .environmentObject(statusViewModel)
                     .presentationDetents([.medium, .large])
+                    .presentationDragIndicator(.visible)
                     .closesForConversationOpening(.sheet, close: {
                         router.pendingShareContent = nil
                         showSharePicker = false
@@ -205,6 +207,9 @@ struct iPadSheetsLayer: ViewModifier {
             .adaptiveOnChange(of: router.pendingShareContent != nil) { _, hasContent in
                 if hasContent { showSharePicker = true }
             }
+            // #10947 — un partage relayé par l'extension (sans session, ou vers
+            // une conversation chiffrée) rouvre ICI l'écran de partage unique.
+            .shareRelayPresenter(consumer: ShareRelayConsumer.shared, router: router)
             .sheet(isPresented: $showNewConversation) {
                 NewConversationView()
                     .environmentObject(statusViewModel)

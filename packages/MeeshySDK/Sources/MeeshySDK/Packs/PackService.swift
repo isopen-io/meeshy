@@ -55,6 +55,11 @@ public struct PackRoutes: Sendable {
                        detail: { PacksEndpoint.bannerBySlug(slug: $0) },
                        install: { PacksEndpoint.bannerBySlugInstall(slug: $0) },
                        purchase: { PacksEndpoint.bannerBySlugPurchase(slug: $0) })
+        case .bannerFrame:
+            PackRoutes(catalogue: PacksEndpoint.bannerFrame, installed: PacksEndpoint.bannerFrameInstalled,
+                       detail: { PacksEndpoint.bannerFrameBySlug(slug: $0) },
+                       install: { PacksEndpoint.bannerFrameBySlugInstall(slug: $0) },
+                       purchase: { PacksEndpoint.bannerFrameBySlugPurchase(slug: $0) })
         case .unknown:
             nil
         }
@@ -71,7 +76,7 @@ public struct PackRoutes: Sendable {
 public extension PacksEndpoint {
     var rejectionPolicy: MeeshyEndpointRejectionPolicy {
         switch self {
-        case .wallpaperBySlugPurchase, .avatarRingBySlugPurchase, .bannerBySlugPurchase:
+        case .wallpaperBySlugPurchase, .avatarRingBySlugPurchase, .bannerBySlugPurchase, .bannerFrameBySlugPurchase:
             return .structured
         default:
             return .opaque

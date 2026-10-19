@@ -1,4 +1,7 @@
-import { Avatar } from '@/components/avatar';
+import { useContext } from 'react';
+
+import { RingedAvatar } from '@/components/peer-avatar';
+import { AuthorRingsContext } from '@/lib/profile-decor/author-ring';
 import type { FaceRampEntry } from '@/lib/summary/types';
 import { initialsOf, participantAvatarOf } from '@/lib/view/conversation';
 import { translate } from '@/lib/i18n-catalog';
@@ -52,13 +55,7 @@ export function FaceRamp({
               className="relative flex min-h-11 w-12 shrink-0 flex-col items-center gap-1"
             >
               <span className="relative">
-                <Avatar
-                  initials={initialsOf(entry.displayName)}
-                  color={entry.colorHex}
-                  size={44}
-                  {...(photo === undefined ? {} : { src: photo })}
-                  presence={entry.presence}
-                />
+                <FaceAvatar entry={entry} photo={photo} />
                 {entry.awaitingCount > 0 ? (
                   <span
                     aria-hidden
@@ -87,3 +84,23 @@ export function FaceRamp({
 }
 
 export default FaceRamp;
+
+/**
+ * LE VISAGE ET SON CONTOUR ÉQUIPÉ (#10946) — celui que la conversation sert avec
+ * ses participants (`AuthorRingsContext`). Un composant à part : la rampe reste
+ * sans hook, donc dépliable par ses témoins.
+ */
+function FaceAvatar({ entry, photo }: { readonly entry: FaceRampEntry; readonly photo: string | undefined }) {
+  const rings = useContext(AuthorRingsContext);
+  return (
+    <RingedAvatar
+      ringRef={rings.get(entry.id)}
+      initials={initialsOf(entry.displayName)}
+      color={entry.colorHex}
+      size={44}
+      {...(photo === undefined ? {} : { src: photo })}
+      presence={entry.presence}
+    />
+  );
+}
+

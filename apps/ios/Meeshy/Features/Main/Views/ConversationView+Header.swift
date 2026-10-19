@@ -140,6 +140,36 @@ extension ConversationView {
         .accessibilityIdentifier("conversation.preview.openFull"))
     }
 
+    /// La barre qui remplace l'en-tête pendant la frappe (extraite de `ConversationView.swift`,
+    /// hors budget). Son avatar porte, comme l'en-tête déplié, le contour du pair et le point
+    /// « ici » d'une directe (#10946, #10956).
+    var typingHeaderBar: some View {
+        let isDirect = liveConversation?.type == .direct
+        let peerHere: ConversationHere = {
+            guard isDirect, let live = liveConversation, let peer = live.participantUserId else { return .absent }
+            return PresenceManager.shared.here(userId: peer, conversationId: live.id)
+        }()
+        return HStack(spacing: MeeshySpacing.sm) {
+            ThemedBackButton(color: accentColor, unreadCount: viewModel.otherConversationsUnread) { HapticFeedback.light(); router.pop() }
+            Spacer()
+            ThemedAvatarButton(
+                name: liveConversation?.name ?? "?", color: accentColor, secondaryColor: secondaryColor,
+                isExpanded: false, storyState: headerStoryRingState,
+                avatarURL: isDirect ? liveConversation?.participantAvatarURL : liveConversation?.avatar,
+                presenceState: headerPresenceState,
+                moodEmoji: headerMoodEmoji,
+                isHere: peerHere,
+                ring: isDirect ? liveConversation?.participantRing : nil
+            ) {
+                isTyping = false
+                setHeaderExpanded(true)
+            }
+        }
+        .padding(.horizontal, MeeshySpacing.lg)
+        .padding(.top, MeeshySpacing.sm)
+        .transition(.opacity)
+    }
+
     // MARK: - La mémoire de l'en-tête (#9031)
 
     /// Déplie ou replie l'en-tête par le GESTE du lecteur, et le retient pour
@@ -703,7 +733,7 @@ private struct ConversationHeaderAvatarView: View {
     // story. Les libellés sont ceux de l'avatar des bulles (`BubbleFooter`).
     private func openMember(_ member: ConversationActiveMember, storyState: StoryRingState) {
         switch ConversationHeaderMemberTap.resolve(storyState: storyState) {
-        case .story: openStory(of: member.id)
+        case .story: openStory(of: member.viewingKey)
         case .profile: onViewMemberProfile(member.profile)
         }
     }
@@ -715,7 +745,7 @@ private struct ConversationHeaderAvatarView: View {
                 return AvatarContextMenuItem(
                     label: String(localized: "bubble.avatar.viewStory", defaultValue: "Voir la story", bundle: .main),
                     icon: "play.circle.fill"
-                ) { openStory(of: member.id) }
+                ) { openStory(of: member.viewingKey) }
             case .viewProfile:
                 return AvatarContextMenuItem(
                     label: String(localized: "bubble.avatar.viewProfile", defaultValue: "Voir le profil", bundle: .main),
@@ -836,6 +866,7 @@ private struct ConversationHeaderAvatarView: View {
                     moodEmoji: statusViewModel.statusForUser(userId: userId)?.moodEmoji,
                     presenceState: PresenceManager.shared.presenceState(for: userId),
                     isHere: isHere(userId),
+                    ring: conversation?.participantRing,
                     onTap: openDoor,
                     onViewStory: {
                         headerState.storyUserIdForHeader = userId
@@ -851,18 +882,19 @@ private struct ConversationHeaderAvatarView: View {
                     if !topActiveMembers.isEmpty {
                         HStack(spacing: -6) {
                             ForEach(topActiveMembers) { member in
-                                let storyState = memberStoryState(for: member.id)
+                                let storyState = memberStoryState(for: member.viewingKey)
                                 MeeshyAvatar(
                                     name: member.name,
                                     context: .conversationHeaderStacked,
                                     accentColor: member.color,
                                     avatarURL: member.avatarURL,
                                     storyState: storyState,
-                                    moodEmoji: statusViewModel.statusForUser(userId: member.id)?.moodEmoji,
-                                    presenceState: PresenceManager.shared.presenceState(for: member.id),
+                                    moodEmoji: statusViewModel.statusForUser(userId: member.viewingKey)?.moodEmoji,
+                                    presenceState: PresenceManager.shared.presenceState(for: member.viewingKey),
                                     isHere: isHere(member.viewingKey),
+                                    ring: member.ring,
                                     onTap: { openMember(member, storyState: storyState) },
-                                    onMoodTap: statusViewModel.moodTapHandler(for: member.id),
+                                    onMoodTap: statusViewModel.moodTapHandler(for: member.viewingKey),
                                     contextMenuItems: memberContextMenu(for: member, storyState: storyState)
                                 )
                             }
@@ -873,6 +905,7 @@ private struct ConversationHeaderAvatarView: View {
                     MeeshyAvatar(
                         name: conversation?.name ?? "?",
                         context: .conversationHeaderExpanded,
+                        kind: .entity,
                         accentColor: accentColor,
                         secondaryColor: secondaryColor,
                         avatarURL: conversation?.avatar,
@@ -894,6 +927,7 @@ private struct ConversationHeaderAvatarView: View {
                 moodEmoji: headerMoodEmoji,
                 presenceState: headerPresenceState,
                 isHere: isDirect ? isHere(conversation?.participantUserId) : .absent,
+                ring: isDirect ? conversation?.participantRing : nil,
                 onTap: openDoor,
                 onViewStory: isDirect ? {
                     if let userId = conversation?.participantUserId {

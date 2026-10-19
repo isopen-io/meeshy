@@ -231,7 +231,8 @@ struct SettingsView: View {
                     name: authManager.currentUser?.displayName ?? "?",
                     context: .conversationList,
                     avatarURL: authManager.currentUser?.avatar,
-                    presenceState: .online
+                    presenceState: .online,
+                    ring: authManager.currentUser?.profileDecor?.avatarRing
                 )
 
                 VStack(alignment: .leading, spacing: MeeshySpacing.xs - 1) {

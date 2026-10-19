@@ -281,13 +281,13 @@ describe('les actions de la visionneuse ouverte depuis l’écran (#8180)', () =
     await openFirst([photoMessage('m2'), photoMessage('m1')]);
     await until(() => $('[data-viewer-action="share"]') !== null);
     click($('[data-viewer-action="share"]'));
-    expect(sendSheetStore.getState().request?.intent).toBe('share');
+    expect(sendSheetStore.getState().request?.intent).toBe('forward');
     expect(sendSheetStore.getState().request?.payload).toMatchObject({
       kind: 'attachment',
       conversationId: 'c1',
       messageId: 'm2',
       attachmentId: 'a-m2',
-      protected: false,
+      exit: { id: 'm2', pieces: [{ id: 'a-m2' }] },
     });
   });
 

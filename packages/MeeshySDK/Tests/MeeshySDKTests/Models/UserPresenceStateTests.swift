@@ -126,4 +126,13 @@ struct UserPresenceStateTests {
         #expect(decoded.isOnline == original.isOnline)
         #expect(decoded.lastActiveAt == original.lastActiveAt)
     }
+
+    // MARK: - Présence servie d'un résultat de recherche (#10944)
+
+    @Test("A search result renders only the presence the gateway served")
+    func searchResult_servedPresence_isNilWhenTheGatewayServedNone() {
+        #expect(UserSearchResult(id: "u1", username: "awa", isOnline: true).servedPresence == .online)
+        #expect(UserSearchResult(id: "u1", username: "awa", isOnline: false).servedPresence == .offline)
+        #expect(UserSearchResult(id: "u1", username: "awa").servedPresence == nil)
+    }
 }

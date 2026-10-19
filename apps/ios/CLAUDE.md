@@ -954,11 +954,21 @@ Les composants suivants gerent l'**entite** Notification (CRUD, listing, prefere
   `<TEAMID>.me.meeshy.app`, d'où le `keychain-access-groups` ajouté aux entitlements),
   liste les vraies conversations (`recent_conversations` enrichie par
   `conversation_snapshots`), et poste elle-même `POST /api/v1/conversations/:id/messages`.
-  Elle n'ouvre JAMAIS l'app.
-  - **Portée lot 1 : texte + URL.** L'`Info.plist` n'annonce que `SupportsText` +
-    `SupportsWebURL` — s'annoncer pour une image qu'on ne sait pas envoyer ferait
-    apparaître Meeshy dans la feuille de partage de Photos pour y échouer. Les images et
-    vidéos reviendront avec le pipeline TUS (lot 2), leur règle d'activation EN MÊME TEMPS.
+  - **Depuis #10947, elle monte L'ÉCRAN DE PARTAGE UNIQUE** — la même `ShareSheetView` que
+    l'app, ses fichiers PORTABLES compilés dans la cible un par un (`project.yml`, garde
+    `ShareExtensionScreenGuardTests`), avec ses propres coutures : `ExtensionShareDirectory`
+    (cliché `share_directory` que l'app dépose dans l'App Group — conversations, amis,
+    carnet apparié, au nom du compte connecté —, repli sur `recent_conversations`, puis le
+    serveur avec le jeton de la session) et `ExtensionShareDispatcher` (une fiche
+    `SharePendingShare` pour tout le partage). Elle lie MeeshySDK + MeeshyUI, et ses mots
+    viennent du catalogue de l'APP (`Bundle.meeshyShare` remonte de l'`.appex` à l'app) :
+    elle n'a plus de `Localizable.xcstrings` à elle. Elle n'ouvre l'app que pour RELAYER
+    (`ShareRelayHandoff`, `meeshy://share-relay`) : sans session (« Connectez-vous pour
+    envoyer · Ouvrir Meeshy ») et vers une conversation chiffrée (D7 — elle n'a pas les
+    clés, jamais de clair d'ici), et pour le studio (`ShareComposeHandoff`).
+  - **Portée : texte, URL, images, vidéos, fichiers** (`Info.plist`, 20 par type). Les
+    plafonds communs (D10 : 20 fichiers, 500 Mo, 10 destinataires) ne refusent plus la
+    copie : l'écran les dit et « Retirer les N derniers » les applique (V9).
   - **Échec d'envoi = relais durable, jamais une perte** : `ShareSender` dépose
     `share_pending_sends/<clientMessageId>.json` dans le conteneur App Group ;
     `SharePendingSendConsumer` (app) le verse dans l'`OfflineQueue` au boot et au retour en
@@ -968,8 +978,11 @@ Les composants suivants gerent l'**entite** Notification (CRUD, listing, prefere
     explicitement. L'ancien `ContactPreview.sampleContacts` masquait une lecture morte
     derrière trois contacts crédibles — c'est ce qui a permis à la panne de survivre aux
     itérations d'audit 220i/221i/222i. `ShareExtensionSourceGuardTests` interdit son retour.
-  - Helpers purs (`ShareSession`, `ShareConversationStore`, `ShareSender`) compilés AUSSI
-    dans `MeeshyTests` via `project.yml` (motif `NSEDecryptor`) — `ShareViewController`
+  - Helpers purs (`ShareSession`, `ShareConversationStore`, `ShareSender`) et coutures de
+    l'écran (`ExtensionShareDirectory`, `ExtensionShareDispatcher`) compilés AUSSI dans
+    `MeeshyTests` via `project.yml` (motif `NSEDecryptor`) — les coutures y importent le
+    module de l'app par `#if !MEESHY_SHARE_EXTENSION` (`canImport(Meeshy)` est vrai dans
+    l'extension aussi : le module est dans les mêmes produits). `ShareViewController`
     (UIKit+SwiftUI) reste hors du bundle, toute sa logique décidable en a été extraite.
     Ces types sont `nonisolated` **sur le type ET sur leurs extensions** : la cible compile
     sous `SWIFT_DEFAULT_ACTOR_ISOLATION = MainActor`, le bundle de tests sous `nonisolated`.

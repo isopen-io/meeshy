@@ -1,6 +1,6 @@
 import { forwardMessages } from '@/lib/api/forward';
 import { apiDeps, postMediaUploadDeps } from '@/lib/api/deps';
-import { createDirectConversation, type ConversationsDeps } from '@/lib/api/conversations';
+import { createDirectConversation, createGroupConversation, type ConversationsDeps } from '@/lib/api/conversations';
 import { uploadAttachments } from '@/lib/api/attachments';
 import { newClientMessageId } from '@/lib/api/client-message-id';
 import type { ApiResult } from '@/lib/api/http';
@@ -68,6 +68,10 @@ export function createSendSheetPorts(params: SendSheetPortsParams): SendSheetPor
     online: params.online ?? browserOnline,
     openDirect: async (userId) => {
       const result = await createDirectConversation(deps, userId);
+      return result.ok ? { ok: true, data: { id: result.data.id } } : result;
+    },
+    openGroup: async ({ userIds, title }) => {
+      const result = await createGroupConversation(deps, { title, participantIds: userIds });
       return result.ok ? { ok: true, data: { id: result.data.id } } : result;
     },
     forward: (forward) => forwardMessages({ ...deps, ...forward }),

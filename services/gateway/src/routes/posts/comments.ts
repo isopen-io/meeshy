@@ -36,6 +36,7 @@ import {
   resolveConsumptionTarget,
 } from '../../services/posts/postVisibility';
 import { sliceCodePointsOrUndefined } from '@meeshy/shared/utils/text-truncate';
+import { servedPerson } from '../../services/appearance/authorProfileDecor';
 
 /**
  * Hisse `metadata.trackingLinks` ([{ url, token }]) en top-level sur le payload
@@ -61,7 +62,13 @@ function hoistCommentTrackingLinks<T extends Record<string, unknown>>(comment: T
  * dans un post (`hoistLocationDeep`) — pas de copie locale de la logique.
  */
 function hoistCommentCarriers<T extends Record<string, unknown>>(comment: T): T {
-  return hoistStickerOnto(hoistLocationOnto(comment));
+  return withServedCommentAuthor(hoistStickerOnto(hoistLocationOnto(comment)));
+}
+
+/** #10945 — l'auteur part avec son contour résolu (`profileDecor`), jamais avec la colonne brute. */
+function withServedCommentAuthor<T extends Record<string, unknown>>(comment: T): T {
+  const author = comment.author as { equippedAvatarRing?: string | null } | null | undefined;
+  return author === null || author === undefined ? comment : { ...comment, author: servedPerson(author) };
 }
 
 /**

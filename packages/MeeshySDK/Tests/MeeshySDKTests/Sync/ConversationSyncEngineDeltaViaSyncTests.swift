@@ -13,13 +13,15 @@ final class ConversationSyncEngineDeltaViaSyncTests: XCTestCase {
         enum Scripte { case muet, inchange, delta(json: String, validateur: String?) }
         var scripte: Scripte = .muet
         private(set) var demandes: [SyncDeltaRequest] = []
+        private(set) var creances: [SyncDeltaCredential] = []
 
         func demandeLeDelta<Row: Decodable & Sendable>(
             _ demande: SyncDeltaRequest,
-            creance _: SyncDeltaCredential,
+            creance: SyncDeltaCredential,
             rangeant _: Row.Type
         ) async -> SyncDeltaOutcome<Row> {
             demandes.append(demande)
+            creances.append(creance)
             switch scripte {
             case .muet: return .muet
             case .inchange: return .inchange
@@ -223,6 +225,20 @@ final class ConversationSyncEngineDeltaViaSyncTests: XCTestCase {
 
         XCTAssertTrue(mockSync.demandes.isEmpty, "sans créance, /sync n'est jamais tenté")
         XCTAssertEqual(mockAPI.lastRequest?.endpoint, "/conversations")
+    }
+
+    /// #10927 — après 24 h d'absence le JWT est échu : `/sync` le présentait
+    /// tel quel, et le démarrage payait un 401 (ou 15 s de silence) avant le
+    /// repli REST, qui, lui, rafraîchit. La créance est le jeton RAFRAÎCHI.
+    func test_deltaViaSync_presenteLeJetonRafraichi_jamaisLeJetonEchu() async {
+        _ = await semeLeCache()
+        mockAPI.authToken = "jeton-echu"
+        mockAPI.freshAuthTokenStub = "jeton-rafraichi"
+        mockSync.scripte = .inchange
+
+        _ = await engine.syncSinceLastCheckpoint()
+
+        XCTAssertEqual(mockSync.creances, [.membre(jeton: "jeton-rafraichi")])
     }
 
     // MARK: - L'escalade

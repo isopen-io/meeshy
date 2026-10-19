@@ -738,7 +738,7 @@ struct StoryActionSidebarView: View {
                 HapticFeedback.light()
                 if let story = currentStory, let group = currentGroup {
                     EngagementTracker.shared.recordAction(.shared, surface: .storyViewer)
-                    sharedContentWrapper = SharedContentWrapper(content: .story(item: story, authorName: group.username))
+                    sharedContentWrapper = SharedContentWrapper(subject: .story(id: story.id, authorName: group.username))
                 }
             }
 

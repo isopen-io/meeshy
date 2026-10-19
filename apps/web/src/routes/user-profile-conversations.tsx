@@ -8,7 +8,8 @@ import type { Conversation } from '@/lib/api/types';
 import { accentOf } from '@/lib/accent';
 import { translate } from '@/lib/i18n-catalog';
 import type { InterfaceLanguage } from '@/lib/interface-language';
-import { avatarOf, initialsOf, titleOf } from '@/lib/view/conversation';
+import { avatarOf, initialsOf, peerOf, titleOf } from '@/lib/view/conversation';
+import { usePresence } from '@/lib/view/use-presence';
 import { Link } from '@/routes/route-table';
 import { BRAND, BRAND_INK, FOCUS, INK, INK_2 } from './user-profile-style';
 
@@ -58,6 +59,9 @@ const ROW_MIN_HEIGHT = 56;
 function ConversationRow({ conversation, viewerId }: { readonly conversation: Conversation; readonly viewerId: string }) {
   const name = titleOf(conversation, viewerId);
   const avatar = avatarOf(conversation, viewerId);
+  /* LE PAIR D'UN DIRECT PORTE SA PRÉSENCE SERVIE (#10944) ; un groupe n'a pas
+     de pair. Aucun « ici » : on n'est dans aucune de ces conversations. */
+  const presence = usePresence(peerOf(conversation, viewerId));
   return (
     <li data-profile-conversation={conversation.id}>
       <Link
@@ -72,6 +76,7 @@ function ConversationRow({ conversation, viewerId }: { readonly conversation: Co
           size={36}
           name={name}
           {...(avatar !== undefined ? { src: avatar } : {})}
+          presence={presence}
         />
         <span className="min-w-0 flex-1 truncate text-body font-medium" style={{ color: INK }}>
           {name}

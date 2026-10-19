@@ -3,7 +3,8 @@ import { useQuery } from '@tanstack/react-query';
 import { useStore } from 'zustand/react';
 
 import { LiveAnnouncement } from '@/components/live-announcement';
-import { Glyph } from '@/components/glyph';
+import { Glyph, GlyphSvg } from '@/components/glyph';
+import { FEED_GLYPHS } from '@/components/glyphs-feed';
 import { GameBannerOwnSlot, GameBannerVisitorSlot } from '@/components/game-profile-slots';
 import { ProfileTabPanel, ProfileTabs, useProfileTab } from '@/components/profile-tabs';
 import { ReportSheet } from '@/components/report-sheet';
@@ -18,6 +19,8 @@ import { useOnline } from '@/lib/net/online';
 import { profileFailureOf } from '@/lib/profile/failure';
 import { userProfileTabs } from '@/lib/profile/tabs';
 import { useParams } from '@/lib/router';
+import { openSendSheet } from '@/lib/send/send-sheet-store';
+import { profileSendRequest } from '@/lib/view/profile-share';
 import { usePostGesture } from '@/lib/view/use-post-gesture';
 import { Link, href, navigate } from '@/routes/route-table';
 import { callsAvailable } from '@/lib/calls/calls-availability';
@@ -70,7 +73,7 @@ import { ProfileBodySkeleton, ProfileFailureNotice, ProfileOfflineBanner, Profil
  * absence.
  */
 
-function ProfileHeaderBar({ title }: { readonly title: string }) {
+function ProfileHeaderBar({ title, onSend }: { readonly title: string; readonly onSend?: () => void }) {
   return (
     <header className="flex shrink-0 items-center gap-2 px-3 pt-3 pb-2">
       <Link
@@ -81,9 +84,22 @@ function ProfileHeaderBar({ title }: { readonly title: string }) {
       >
         <Glyph name="caretLeft" size={20} className="rtl:-scale-x-100" />
       </Link>
-      <h1 className="truncate text-screen font-bold" style={{ color: 'var(--color-ios-ink)' }}>
+      <h1 className="min-w-0 flex-1 truncate text-screen font-bold" style={{ color: 'var(--color-ios-ink)' }}>
         {title}
       </h1>
+      {onSend === undefined ? null : (
+        /* « ENVOYER LE PROFIL » (D15, #10949) — la même porte que tout partage : l'écran de partage unique. */
+        <button
+          type="button"
+          data-profile-send=""
+          onClick={onSend}
+          aria-label={translate(currentInterfaceLanguage(), 'userProfile.sendProfile')}
+          className="grid size-11 shrink-0 place-items-center rounded-chip focus-visible:outline-2 focus-visible:outline-offset-2"
+          style={{ color: 'var(--color-ios-brand)', outlineColor: 'var(--color-ios-brand)' }}
+        >
+          <GlyphSvg glyph={FEED_GLYPHS.shareNetwork} size={22} />
+        </button>
+      )}
     </header>
   );
 }
@@ -199,7 +215,12 @@ export function UserProfileView({ username }: { readonly username: string }) {
        `relative` PORTE la pastille d'annonce, posée `absolute` au bas de son
        hôte, exactement comme sur « Découvrir ». */
     <div data-user-profile={person?.username ?? ''} className="relative flex h-dvh flex-col overflow-hidden pt-safe">
-      <ProfileHeaderBar title={person === undefined && seed === null ? translate(language, 'userProfile.title') : name} />
+      <ProfileHeaderBar
+        title={person === undefined && seed === null ? translate(language, 'userProfile.title') : name}
+        {...(person === undefined || !signedIn || relation.kind === 'blocked'
+          ? {}
+          : { onSend: () => openSendSheet(profileSendRequest({ id: person.id, username: person.username, name, avatar: person.avatar ?? null })) })}
+      />
       <main id="contenu" className="scrollbar-none flex flex-1 flex-col overflow-y-auto px-4 pb-safe">
         {person !== undefined ? (
           <div className="mx-auto grid w-full max-w-xl gap-6 pb-12 pt-2">

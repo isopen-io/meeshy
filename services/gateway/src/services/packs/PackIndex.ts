@@ -34,6 +34,7 @@ import { parsePackIndex, type PackIndexEntry } from '@meeshy/shared/types/conten
 import type { PackAssetRef, PackDomain } from '@meeshy/shared/types/content-pack';
 import { parseAppearancePackContract } from '@meeshy/shared/types/appearance-design';
 import { parseAvatarRingPackContract } from '@meeshy/shared/types/avatar-ring-design';
+import { parseBannerFramePackContract } from '@meeshy/shared/types/banner-frame-design';
 import { parseGloryFramePackContract } from '@meeshy/shared/types/glory-frame-pack';
 import { gloryFrameAssets, parseGloryFrameContract } from '@meeshy/shared/types/glory-frames';
 
@@ -113,6 +114,7 @@ const REGISTRY_FILES = [
   'appearance/wallpapers/packs.json',
   'appearance/avatar-rings/packs.json',
   'appearance/banners/packs.json',
+  'appearance/banner-frames/packs.json',
 ] as const;
 const SAMPLE_REGISTRY_FILES = ['packs/samples/glory-frame.json', 'packs/samples/wallpaper.json'] as const;
 const RETAINED_FILE = 'packs/retained.json';
@@ -153,9 +155,10 @@ const NO_CONTRACT: ContractFiles = { refs: [], frames: 0, keys: [] };
 
 type AppearanceItem = { readonly key: string; readonly lottie?: PackAssetRef };
 
-/** Les modèles d'un pack de fonds, de bannières ou de contours. */
+/** Les modèles d'un pack de fonds, de bannières, de contours ou de cadres de bannière. */
 function appearanceContractItems(domain: PackDomain, input: unknown): readonly AppearanceItem[] {
   if (domain === 'avatar-ring') return parseAvatarRingPackContract(input)?.rings ?? [];
+  if (domain === 'banner-frame') return parseBannerFramePackContract(input)?.frames ?? [];
   const contract = parseAppearancePackContract(input);
   return contract !== null && contract.domain === domain ? contract.designs : [];
 }
@@ -171,7 +174,7 @@ function appearanceContractFiles(domain: PackDomain, input: unknown): ContractFi
   return { refs: items.flatMap((item) => (item.lottie === undefined ? [] : [item.lottie])), frames: keys.length, keys };
 }
 
-const APPEARANCE_DOMAINS: readonly PackDomain[] = ['wallpaper', 'banner', 'avatar-ring'];
+const APPEARANCE_DOMAINS: readonly PackDomain[] = ['wallpaper', 'banner', 'avatar-ring', 'banner-frame'];
 
 /**
  * Les fichiers du contrat d'un pack, lu dans le magasin et vérifié contre son

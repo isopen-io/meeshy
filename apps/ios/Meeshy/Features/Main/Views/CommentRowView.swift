@@ -121,6 +121,7 @@ struct CommentRowView: View, Equatable {
                 storyState: storyState,
                 moodEmoji: moodEmoji,
                 presenceState: presenceState,
+                ring: comment.authorRing,
                 onViewProfile: { selectedProfileUser = .from(feedComment: comment) },
                 contextMenuItems: [
                     AvatarContextMenuItem(label: String(localized: "feed.comments.view_profile", defaultValue: "Voir le profil", bundle: .main), icon: "person.fill") {

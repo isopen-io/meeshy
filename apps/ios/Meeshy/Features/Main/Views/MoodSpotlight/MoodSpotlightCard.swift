@@ -11,11 +11,14 @@ struct MoodSpotlightCard: View, Equatable {
     let entry: StatusEntry
     let avatarURL: String?
     let avatarThumbHash: String?
+    /// Le contour équipé de l'auteur (#10946) ; `nil` sans contour.
+    var ring: ServedProfileDecorItem? = nil
 
     static func == (lhs: MoodSpotlightCard, rhs: MoodSpotlightCard) -> Bool {
         lhs.entry.id == rhs.entry.id && lhs.entry.content == rhs.entry.content
             && lhs.entry.moodEmoji == rhs.entry.moodEmoji
             && lhs.avatarURL == rhs.avatarURL && lhs.avatarThumbHash == rhs.avatarThumbHash
+            && lhs.ring == rhs.ring
     }
 
     var body: some View {
@@ -27,6 +30,7 @@ struct MoodSpotlightCard: View, Equatable {
                     .clipShape(Circle())
                     .overlay(Circle().stroke(Color.white.opacity(0.9), lineWidth: 3))
                     .shadow(color: Color(hex: entry.avatarColor).opacity(0.6), radius: 24)
+                    .avatarRing(ProfileDecorResolver.ring(ring), avatarSize: Self.avatarSize)
                 Text(entry.moodEmoji)
                     .font(MeeshyFont.emoji(34))
                     .padding(MeeshySpacing.xsPlus)

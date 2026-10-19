@@ -11,13 +11,13 @@ final class ForwardPreviewStickerTests: XCTestCase {
         let message = Message(id: "m1", conversationId: "c1", senderId: "u1", content: "",
                               attachments: [attachment()], sticker: MessageSticker(stickerId: "6ad11ed4cfca42ca9678fdc2"))
 
-        XCTAssertEqual(ForwardPickerSheet.previewText(for: message), ForwardPickerSheet.stickerPreviewLabel)
-        XCTAssertNotEqual(ForwardPickerSheet.previewText(for: message), "Photo")
+        XCTAssertEqual(ShareMessagePreview.text(for: message), ShareMessagePreview.stickerLabel)
+        XCTAssertNotEqual(ShareMessagePreview.text(for: message), "Photo")
     }
 
     func test_previewText_plainImage_stillSaysPhoto() {
         let message = Message(id: "m1", conversationId: "c1", senderId: "u1", content: "", attachments: [attachment()])
 
-        XCTAssertNotEqual(ForwardPickerSheet.previewText(for: message), ForwardPickerSheet.stickerPreviewLabel)
+        XCTAssertNotEqual(ShareMessagePreview.text(for: message), ShareMessagePreview.stickerLabel)
     }
 }

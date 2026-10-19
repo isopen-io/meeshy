@@ -357,7 +357,9 @@ extension PostRecord {
             impressionCount: post.impressionCount,
             postOpenCount: post.postOpenCount,
             playCount: post.playCount,
-            qualifiedViewCount: post.qualifiedViewCount
+            qualifiedViewCount: post.qualifiedViewCount,
+            // #10946 — le contour de l'auteur survit au repli hors ligne.
+            authorRing: post.author.avatarRing
         )
     }
 

@@ -434,7 +434,7 @@ export function CallScreen({ call, canShare = browserCanShare(), initiallyExpand
 
   const identity = (
     <div className="flex flex-col items-center gap-3 px-6 text-center">
-      <Portrait name={call.title} avatar={call.avatar} size={112} pulse={phase === 'incoming' || phase === 'outgoing'} />
+      <Portrait name={call.title} avatar={call.avatar} size={112} pulse={phase === 'incoming' || phase === 'outgoing'} presenceKey={call.peerKey ?? undefined} />
       <h2 className="text-[1.6rem] font-bold leading-tight" style={{ color: INK }}>
         {call.title}
       </h2>
@@ -585,7 +585,7 @@ export function CallScreen({ call, canShare = browserCanShare(), initiallyExpand
       name: member.name,
       color: speakerColor(member.userId),
       render: (width) =>
-        shows ? <StreamVideo stream={stream} mirrored={false} fit={member.screenSharing ? 'contain' : 'cover'} className="absolute inset-0 size-full" label={member.name} /> : <Portrait name={member.name} avatar={member.avatar} size={Math.round(width / 2)} pulse={member.link === 'ringing'} />,
+        shows ? <StreamVideo stream={stream} mirrored={false} fit={member.screenSharing ? 'contain' : 'cover'} className="absolute inset-0 size-full" label={member.name} /> : <Portrait name={member.name} avatar={member.avatar} size={Math.round(width / 2)} pulse={member.link === 'ringing'} presenceKey={member.userId} />,
     };
   };
   const callAudio = (): readonly MediaStream[] => [call.localStream, ...Object.values(call.remoteStreams)].filter((stream): stream is MediaStream => stream !== null);

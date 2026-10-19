@@ -436,7 +436,7 @@ struct RootView: View {
         async let versionFloor: Void = upgradeGate.checkFloor()
         async let storiesLoad: Void = storyViewModel.loadStories()
         async let statusesLoad: Void = statusViewModel.loadStatuses()
-        async let conversationsLoad: Void = conversationViewModel.loadConversations()
+        async let conversationsLoad: Void = ConversationListVMOwner.loadAtLaunch(conversationViewModel)
         async let unreadRefresh: Void = notifications.manager.refreshUnreadCount()
         _ = await (storiesLoad, statusesLoad, conversationsLoad, unreadRefresh, versionFloor)
     }
@@ -1294,8 +1294,8 @@ struct RootView: View {
                     MeeshyAvatar(
                         name: getUserDisplayName(AuthManager.shared.currentUser, fallback: "M"),
                         context: .custom(38),
-                        avatarURL: AuthManager.shared.currentUser?.avatar,
-                        thumbHash: AuthManager.shared.currentUser?.avatarThumbHash
+                        avatarURL: AuthManager.shared.currentUser?.avatar, thumbHash: AuthManager.shared.currentUser?.avatarThumbHash,
+                        ring: AuthManager.shared.currentUser?.profileDecor?.avatarRing
                     )
                     .allowsHitTesting(false)
 

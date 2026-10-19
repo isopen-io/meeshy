@@ -6,7 +6,7 @@ import { contactInitials, contactRelationView, type ContactAction } from '@/lib/
 import { translate } from '@/lib/i18n-catalog';
 import type { InterfaceLanguage } from '@/lib/interface-language';
 
-import { Avatar } from './avatar';
+import { PeerAvatar } from './peer-avatar';
 import { ContactGameStripSlot } from './game-profile-slots';
 
 /**
@@ -46,7 +46,8 @@ export function ContactAccountRow({
         />
       ) : null}
       <div className="flex items-center gap-3">
-        <Avatar
+        <PeerAvatar
+          presenceKey={account.relation === 'self' ? undefined : account.userId}
           initials={contactInitials(account.displayName)}
           color={accent}
           size={full ? 48 : 32}

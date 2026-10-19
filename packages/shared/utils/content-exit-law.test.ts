@@ -24,6 +24,8 @@ const AFTER_READ = {
   capture: 'announced',
 };
 const ONCE = { nature: 'view-once', forward: { allowed: false, reason: 'view-once' }, exportable: false, capture: 'blocked' };
+/** D8 (#10949) : un flouté se transfère, flou hérité — et rien d'autre ne sort. */
+const BLURRED_ONLY = { ...ORDINARY, exportable: false };
 
 describe('contentExitLaw — la table de la spec, ligne par ligne', () => {
   const table: ReadonlyArray<readonly [string, ContentExitSubject | null | undefined, unknown]> = [
@@ -31,7 +33,11 @@ describe('contentExitLaw — la table de la spec, ligne par ligne', () => {
     ['sujet indéfini', undefined, ORDINARY],
     ['aucun drapeau', {}, ORDINARY],
     ['des effets décoratifs seuls', { effectFlags: SHAKE | GLOW }, ORDINARY],
-    ['le flou seul, que la loi ne remplace pas', { isBlurred: true, effectFlags: BLURRED }, ORDINARY],
+    ['le flou seul : il se transfère, rien d’autre ne sort (D8)', { isBlurred: true, effectFlags: BLURRED }, BLURRED_ONLY],
+    ['la colonne de flou seule, sans le bit (D8)', { isBlurred: true }, BLURRED_ONLY],
+    ['le bit de flou seul, sans la colonne (D8)', { effectFlags: BLURRED }, BLURRED_ONLY],
+    ['une pièce floutée parmi des pièces ouvertes : l’appelant la masque, ses voisines sortent (D6, D8)', { attachments: [{}, { isBlurred: true }] }, ORDINARY],
+    ['toutes les pièces floutées (D8)', { attachments: [{ isBlurred: true }, { effectFlags: BLURRED }] }, BLURRED_ONLY],
     ['une durée nulle, qui n’est pas une durée', { ephemeralDuration: 0 }, ORDINARY],
     ['des pièces ordinaires', { attachments: [{}, { effectFlags: 0, isViewOnce: false }] }, ORDINARY],
 
@@ -84,8 +90,15 @@ describe('contentExitLaw — la table de la spec, ligne par ligne', () => {
     expect(contentExitLaw(subject)).toEqual(expected);
   });
 
-  it('ne lit pas le flou d’une pièce comme une nature de disparition', () => {
-    expect(contentExitLaw({ attachments: [{ isBlurred: true, effectFlags: BLURRED }] })).toEqual(ORDINARY);
+  it('ne lit pas le flou d’une pièce comme une nature de disparition — mais elle ne sort plus (D8)', () => {
+    expect(contentExitLaw({ attachments: [{ isBlurred: true, effectFlags: BLURRED }] })).toEqual(BLURRED_ONLY);
+  });
+
+  it('le flou d’une source prouvée ferme l’export, jamais le transfert (D8)', () => {
+    const law = contentExitLawOfSource({
+      isViewOnce: false, isBlurred: true, effectFlags: BLURRED, ephemeralDuration: null, expiresAt: null, attachments: [],
+    });
+    expect(law).toEqual(BLURRED_ONLY);
   });
 
   it('la capture : noire pour la vue unique, annoncée pour les deux flammes, libre sinon (porteur 2026-10-07, #9617)', () => {

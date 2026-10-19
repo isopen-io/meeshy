@@ -194,16 +194,44 @@ public final class ConversationSyncEngine: ConversationSyncEngineProviding, @unc
     /// compte en a déjà une en vol ; celle d'un autre compte est périmée et
     /// cède la place — ses écritures seront refusées par `ownsSession()`.
     /* partagé entre les fichiers du moteur (#4172) */ func claimSync(for owner: String) -> Bool {
-        stateQueue.sync {
-            guard _syncingOwner != owner else { return false }
+        let (claimed, released) = stateQueue.sync { () -> (Bool, [CheckedContinuation<Void, Never>]) in
+            guard _syncingOwner != owner else { return (false, []) }
             _syncingOwner = owner
-            return true
+            return (true, takeReleaseWaiters())
         }
+        released.forEach { $0.resume() }
+        return claimed
     }
 
     /* partagé entre les fichiers du moteur (#4172) */ func releaseSync(for owner: String) {
-        stateQueue.sync {
-            if _syncingOwner == owner { _syncingOwner = nil }
+        let released = stateQueue.sync { () -> [CheckedContinuation<Void, Never>] in
+            guard _syncingOwner == owner else { return [] }
+            _syncingOwner = nil
+            return takeReleaseWaiters()
+        }
+        released.forEach { $0.resume() }
+    }
+
+    /// #10927 — ceux qui attendent que la synchro en vol de leur compte rende
+    /// le verrou. Repris à chaque changement de détenteur, sous `stateQueue`.
+    private var _syncReleaseWaiters: [CheckedContinuation<Void, Never>] = []
+
+    private func takeReleaseWaiters() -> [CheckedContinuation<Void, Never>] {
+        defer { _syncReleaseWaiters = [] }
+        return _syncReleaseWaiters
+    }
+
+    /// Rend la main quand `owner` ne tient plus le verrou — tout de suite s'il
+    /// ne le tient déjà plus. L'inscription et le test se font sous la même
+    /// file : une libération ne peut pas tomber entre les deux.
+    /* partagé entre les fichiers du moteur (#10927) */ func awaitSyncRelease(for owner: String) async {
+        await withCheckedContinuation { (continuation: CheckedContinuation<Void, Never>) in
+            let resumesNow = stateQueue.sync { () -> Bool in
+                guard _syncingOwner == owner else { return true }
+                _syncReleaseWaiters.append(continuation)
+                return false
+            }
+            if resumesNow { continuation.resume() }
         }
     }
 

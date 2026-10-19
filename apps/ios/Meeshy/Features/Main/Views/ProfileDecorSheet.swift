@@ -18,6 +18,8 @@ final class ProfileDecorModel: ObservableObject {
     @Published private(set) var state: ProfileDecorState
     @Published private(set) var rings: [ProfileDecorOptions.OptionGroup<AvatarRingDesign>]
     @Published private(set) var banners: [ProfileDecorOptions.OptionGroup<AppearanceDesign>]
+    /// Les cadres posés SUR la bannière (#10936) : aucun pack installé d'office, donc vide avant la lecture.
+    @Published private(set) var frames: [ProfileDecorOptions.OptionGroup<BannerFrameDesign>]
     @Published private(set) var failed = false
 
     private let service: any ProfileDecorProviding
@@ -49,6 +51,7 @@ final class ProfileDecorModel: ObservableObject {
         self.accepted = decor ?? .empty
         self.rings = ProfileDecorOptions.rings(installed: nil)
         self.banners = ProfileDecorOptions.banners(installed: nil)
+        self.frames = ProfileDecorOptions.bannerFrames(installed: nil)
         self.service = service
         self.installedPacks = installedPacks
         self.userId = userId
@@ -64,9 +67,11 @@ final class ProfileDecorModel: ObservableObject {
         let installed = installedPacks
         async let ringPacks = installed(.avatarRing)
         async let bannerPacks = installed(.banner)
-        let (installedRings, installedBanners) = await (ringPacks, bannerPacks)
+        async let framePacks = installed(.bannerFrame)
+        let (installedRings, installedBanners, installedFrames) = await (ringPacks, bannerPacks, framePacks)
         rings = ProfileDecorOptions.rings(installed: installedRings)
         banners = ProfileDecorOptions.banners(installed: installedBanners)
+        frames = ProfileDecorOptions.bannerFrames(installed: installedFrames)
     }
 
     /// Le choix en cours d'un côté (`nil` = aucun).
@@ -104,12 +109,6 @@ final class ProfileDecorModel: ObservableObject {
         publish(state.decor)
     }
 
-    /// Une photo de bannière téléversée reprend la main sur le design (comme le web) : sans ce
-    /// retrait, la nouvelle image resterait cachée dessous. Même chemin que le toucher « Aucun ».
-    func yieldBannerToUploadedPhoto() async {
-        await equip(nil, side: .banner)
-    }
-
     private func receive(_ event: ProfileDecorUpdatedEvent) {
         guard let id = userId(), event.userId == id else { return }
         accepted = event.decor
@@ -145,6 +144,7 @@ struct ProfileDecorSheet: View {
                 VStack(alignment: .leading, spacing: MeeshySpacing.xl) {
                     ringSection
                     bannerSection
+                    frameSection
                     if model.failed {
                         Text(errorMessage)
                             .font(MeeshyFont.relative(MeeshyFont.footnoteSize, weight: .medium))
@@ -243,6 +243,57 @@ struct ProfileDecorSheet: View {
                         BannerDesignView(design: design, isDark: theme.mode.isDark, accentHex: accentHex)
                     } else {
                         MeeshyColors.indigo500.opacity(0.12)
+                    }
+                }
+                .aspectRatio(3, contentMode: .fit)
+                .clipShape(RoundedRectangle(cornerRadius: MeeshyRadius.sm))
+                Text(label)
+                    .font(MeeshyFont.relative(MeeshyFont.footnoteSize, weight: .medium))
+                    .foregroundColor(theme.textPrimary)
+                    .lineLimit(1)
+            }
+            .padding(MeeshySpacing.xs)
+            .background(selectionBackground(selected))
+        }
+        .buttonStyle(.plain)
+        .accessibilityLabel(label)
+        .accessibilityAddTraits(selected ? [.isButton, .isSelected] : .isButton)
+    }
+
+    // MARK: Cadres de bannière (#10936)
+
+    /// Le cadre se pose SUR la bannière, centre transparent : la tuile le montre sur le fond du profil.
+    private var frameSection: some View {
+        let title = String(localized: "profile.decor.frame.section", defaultValue: "Cadre de bannière", bundle: .main)
+        return VStack(alignment: .leading, spacing: MeeshySpacing.md) {
+            header(title)
+            LazyVGrid(columns: [GridItem(.adaptive(minimum: 150), spacing: MeeshySpacing.md)], spacing: MeeshySpacing.md) {
+                frameTile(ref: nil, design: nil, label: noneLabel)
+                ForEach(ProfileDecorOptions.flattened(model.frames)) { entry in
+                    frameTile(ref: entry.ref, design: entry.design, label: BannerFrameCatalog.shared.frameName(entry.design.key, language: language) ?? entry.design.key)
+                }
+            }
+            shopLink(.bannerFrame)
+        }
+        .decorSection(title)
+    }
+
+    private func frameTile(ref: ProfileDecorRef?, design: BannerFrameDesign?, label: String) -> some View {
+        let selected = model.current(.bannerFrame) == ref
+        return Button {
+            HapticFeedback.light()
+            Task { await model.equip(ref, side: .bannerFrame) }
+        } label: {
+            VStack(spacing: MeeshySpacing.xs) {
+                LinearGradient(
+                    colors: [Color(hex: accentHex).opacity(0.3), MeeshyColors.indigo300.opacity(0.2)],
+                    startPoint: .topLeading,
+                    endPoint: .bottomTrailing
+                )
+                .overlay {
+                    if let design {
+                        BannerFrameView(design: design, animates: false)
+                            .equatable()
                     }
                 }
                 .aspectRatio(3, contentMode: .fit)
@@ -373,24 +424,46 @@ struct ProfileDecorEntry: View {
 
 // MARK: - La bannière de MON profil
 
-/// L'image de bannière de mon profil, ou la bannière de design équipée qui PRIME
-/// sur elle (#10632). Extraite de `ProfileView` : décor absent = rendu historique.
+/// L'image de bannière de mon profil — elle gagne toujours ; la bannière de design
+/// équipée ne se peint qu'en son absence (#10632, #10933).
 struct ProfileOwnBanner: View {
     let user: MeeshyUser?
     let accentColor: String
     let isDark: Bool
 
-    /// La photo que le toucher ouvre en plein écran : aucune quand un design la recouvre.
+    static func paint(of user: MeeshyUser?) -> ProfileBannerPaint {
+        ProfileDecorResolver.bannerPaint(photo: user?.banner, decor: user?.profileDecor?.banner)
+    }
+
+    /// La photo que le toucher ouvre en plein écran : celle qui est peinte, design équipé ou non.
     static func openablePhoto(of user: MeeshyUser?) -> String? {
-        ProfileDecorResolver.banner(user?.profileDecor?.banner) == nil ? user?.banner : nil
+        guard case .photo(let url) = paint(of: user) else { return nil }
+        return url
+    }
+
+    /// Le cadre équipé (#10935), posé PAR-DESSUS ce que `paint` peint — jamais à sa place.
+    static func frame(of user: MeeshyUser?) -> BannerFrameDesign? {
+        ProfileDecorResolver.bannerFrame(user?.profileDecor?.bannerFrame)
     }
 
     var body: some View {
-        if let design = ProfileDecorResolver.banner(user?.profileDecor?.banner) {
+        painted
+            .overlay {
+                if let frame = Self.frame(of: user) {
+                    BannerFrameView(design: frame)
+                        .equatable()
+                }
+            }
+    }
+
+    @ViewBuilder
+    private var painted: some View {
+        switch Self.paint(of: user) {
+        case .design(let design):
             BannerDesignView(design: design, isDark: isDark, accentHex: accentColor)
-        } else if let bannerURL = user?.banner, !bannerURL.isEmpty {
+        case .photo(let bannerURL):
             CachedBannerImage(urlString: bannerURL, thumbHash: user?.bannerThumbHash, fallbackColor: accentColor, height: 120)
-        } else {
+        case .plain:
             LinearGradient(
                 colors: [Color(hex: accentColor).opacity(0.3), MeeshyColors.indigo300.opacity(0.2)],
                 startPoint: .topLeading,

@@ -14,7 +14,7 @@ jest.mock('../../../utils/logger-enhanced', () => ({
   enhancedLogger: { child: () => ({ info: jest.fn(), debug: jest.fn(), warn: jest.fn(), error: jest.fn() }), error: jest.fn() },
 }));
 
-import { avatarRingPacksRoutes, bannerPacksRoutes, wallpaperPacksRoutes } from '../../../routes/packs-appearance';
+import { avatarRingPacksRoutes, bannerFramePacksRoutes, bannerPacksRoutes, wallpaperPacksRoutes } from '../../../routes/packs-appearance';
 import { packsShopRoutes } from '../../../routes/packs-shop';
 import { buildPackIndex } from '../../../services/packs/PackIndex';
 import { appearancePrisma } from './appearance-packs.harness';
@@ -52,6 +52,8 @@ const REGISTRY = [
   entry('wallpaper', 'offert', { order: 2 }),
   entry('banner', 'bannieres', { origin: 'builtin', installedByDefault: true, removable: false }),
   entry('avatar-ring', 'contours', { origin: 'builtin', installedByDefault: true, removable: false, usage: { kind: 'free', surfaces: ['avatar'] } }),
+  entry('banner-frame', 'cadres-celte', { origin: 'builtin', usage: { kind: 'free', surfaces: ['banner'] } }),
+  entry('banner-frame', 'cadres-prestige', { order: 1, price: 40, usage: { kind: 'free', surfaces: ['banner'] } }),
 ];
 
 async function shopApp(extra: readonly ReturnType<typeof entry>[] = [], options: { readonly db?: ReturnType<typeof appearancePrisma>; readonly hidden?: readonly string[] } = {}) {
@@ -70,6 +72,7 @@ async function shopApp(extra: readonly ReturnType<typeof entry>[] = [], options:
   await app.register(wallpaperPacksRoutes, { prefix: '/packs/wallpaper', index });
   await app.register(avatarRingPacksRoutes, { prefix: '/packs/avatar-ring', index });
   await app.register(bannerPacksRoutes, { prefix: '/packs/banner', index });
+  await app.register(bannerFramePacksRoutes, { prefix: '/packs/banner-frame', index });
   await app.register(packsShopRoutes, { prefix: '/packs/shop', index });
   await app.ready();
   return { app, db, emitted };
@@ -263,6 +266,24 @@ describe('possession et installation', () => {
     expect(removal.statusCode).toBe(409);
   });
 
+  it('les cadres de bannière sont en boutique : usage `banner` annoncé, un payant s’achète en Meeshes puis s’installe (#10936)', async () => {
+    const { app, db } = await shopApp();
+    db.grant(ALICE, 100);
+
+    const frames = (await app.inject({ method: 'GET', url: '/packs/banner-frame' })).json().data;
+    const before = await app.inject({ method: 'PUT', url: '/packs/banner-frame/cadres-prestige/install' });
+    const bought = await app.inject({ method: 'POST', url: '/packs/banner-frame/cadres-prestige/purchase', payload: { requestId: 'cadre-achat-1' } });
+    const free = await app.inject({ method: 'PUT', url: '/packs/banner-frame/cadres-celte/install' });
+
+    expect(frames.map((pack: { slug: string }) => pack.slug)).toEqual(['cadres-celte', 'cadres-prestige']);
+    expect(frames[0]).toMatchObject({ domain: 'banner-frame', usage: { kind: 'free', surfaces: ['banner'] }, price: null, owned: true });
+    expect(frames[1]).toMatchObject({ price: 40, owned: false });
+    expect(before.statusCode).toBe(403);
+    expect(bought.statusCode).toBe(200);
+    expect(bought.json().data).toMatchObject({ balance: 60, pack: { slug: 'cadres-prestige', domain: 'banner-frame', owned: true, installed: true } });
+    expect(free.statusCode).toBe(200);
+  });
+
   it('un slug d’un autre domaine répond 404', async () => {
     const { app } = await shopApp();
     expect((await app.inject({ method: 'GET', url: '/packs/banner/prestige' })).statusCode).toBe(404);
@@ -277,7 +298,8 @@ describe('GET /packs/shop', () => {
     const data = (await app.inject({ method: 'GET', url: '/packs/shop' })).json().data;
 
     expect(data.balance).toBe(80);
-    expect(data.domains.map((entry: { domain: string }) => entry.domain)).toEqual(expect.arrayContaining(['wallpaper', 'avatar-ring', 'banner']));
+    expect(data.domains.map((entry: { domain: string }) => entry.domain)).toEqual(expect.arrayContaining(['wallpaper', 'avatar-ring', 'banner', 'banner-frame']));
+    expect(data.domains.find((entry: { domain: string }) => entry.domain === 'banner-frame').packs[0]).toMatchObject({ domain: 'banner-frame', usage: { kind: 'free', surfaces: ['banner'] } });
     const order = data.domains.map((entry: { domain: string }) => entry.domain);
     expect(order.indexOf('wallpaper')).toBeLessThan(order.indexOf('avatar-ring'));
     expect(order.indexOf('avatar-ring')).toBeLessThan(order.indexOf('banner'));

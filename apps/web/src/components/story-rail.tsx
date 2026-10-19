@@ -1,6 +1,6 @@
 import { forwardRef } from 'react';
 
-import { Avatar } from '@/components/avatar';
+import { PeerAvatar } from '@/components/peer-avatar';
 import { ChromeActionDisc, CHROME_ACTION_HIT, CHROME_ACTION_HIT_CLASS } from '@/components/chrome-action';
 import { Glyph } from '@/components/glyph';
 import {
@@ -17,8 +17,9 @@ import { GLYPH_SIZE } from '@/components/ui-chrome';
 import { translate } from '@/lib/i18n-catalog';
 import { currentInterfaceLanguage, type InterfaceLanguage } from '@/lib/interface-language';
 import { initialsOf, participantAvatarOf } from '@/lib/view/conversation';
+import { servedRingOf } from '@/lib/profile-decor/served-ring';
 import { railGroupsWithoutSelf, type StoryRailSelfEntry } from '@/lib/view/story-rail-self';
-import { storyAuthorLabel, type StoryTrayGroup } from '@/lib/view/story-tray';
+import { storyAuthorLabel, storyAuthorPresenceKey, type StoryTrayGroup } from '@/lib/view/story-tray';
 import { openLinkProps, useImpressionRef, useMergedRefs } from '@/lib/view/reading-telemetry';
 import { Link } from '@/routes/route-table';
 
@@ -208,7 +209,12 @@ function StoryTile({
             qu'un `group.author?.avatar` direct : la loi partagée reste le
             seul site, et un `avatar: ''` servi n'y devient pas un
             `<img src="">`. */}
-        <Avatar
+        {/* LA PRÉSENCE DE L'AUTEUR (#10944) — sauf sous une humeur : les deux
+            se disputent le même coin, et l'humeur masque la présence
+            (`Avatar.mood`). */}
+        <PeerAvatar
+          presenceKey={group.moodEmoji ? undefined : storyAuthorPresenceKey(group)}
+          ringRef={servedRingOf(group.author)}
           initials={initialsOf(label)}
           color={'var(--color-ios-brand)'}
           size={size}

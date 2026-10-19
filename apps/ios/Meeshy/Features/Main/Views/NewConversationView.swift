@@ -210,6 +210,7 @@ struct NewConversationView: View {
                 secondaryColor: accentColor,
                 moodEmoji: statusViewModel.statusForUser(userId: user.id)?.moodEmoji,
                 presenceState: PresenceManager.shared.resolvedState(userId: user.id, isOnline: user.isOnline, lastActiveAt: user.lastActiveAt),
+                ring: user.avatarRing,
                 onMoodTap: statusViewModel.moodTapHandler(for: user.id)
             )
 
@@ -450,6 +451,7 @@ struct NewConversationView: View {
                     secondaryColor: accentColor,
                     moodEmoji: statusViewModel.statusForUser(userId: user.id)?.moodEmoji,
                     presenceState: presence,
+                    ring: user.avatarRing,
                     onMoodTap: statusViewModel.moodTapHandler(for: user.id)
                 )
 
@@ -527,7 +529,7 @@ struct NewConversationView: View {
 
 // MARK: - Searched User Model
 
-struct SearchedUser: Decodable, Identifiable {
+struct SearchedUser: Decodable, Identifiable, ProfileDecorWearer {
     let id: String
     let username: String
     let firstName: String?
@@ -537,6 +539,8 @@ struct SearchedUser: Decodable, Identifiable {
     let isOnline: Bool?
     let lastActiveAt: Date?
     let avatar: String?
+    /// Le décor servi avec la personne — son contour équipé (#10945, #10946).
+    let profileDecor: ServedProfileDecor?
 }
 
 extension SearchedUser {
@@ -555,7 +559,8 @@ extension SearchedUser {
             email: nil,
             isOnline: friend.isOnline,
             lastActiveAt: friend.lastActiveAt,
-            avatar: friend.avatar
+            avatar: friend.avatar,
+            profileDecor: friend.profileDecor
         )
     }
 }

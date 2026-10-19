@@ -33,6 +33,7 @@ import {
 } from '@/lib/view/floating-pose';
 import { useAdminAccess } from '@/lib/view/use-admin-access';
 import { useFloatingDrag } from '@/lib/view/use-floating-drag';
+import { useMyRing } from '@/lib/profile-decor/my-ring';
 import { useRovingMenu } from '@/lib/view/roving-menu';
 import { useBackDismiss } from '@/lib/view/use-back-dismiss';
 import { Link, href, navigate } from '@/routes/route-table';
@@ -198,6 +199,8 @@ export function FloatingMenus({ routeKey, contained = false }: { readonly routeK
    * `<img src="">` (qui recharge la page courante).
    */
   const maPhoto = session.status === 'authenticated' ? participantAvatarOf(session.user) : undefined;
+  /* MON CONTOUR SUR LE DISQUE (#10946) — le même que sur mon profil. */
+  const monContour = useMyRing();
 
   /**
    * **Le second tap ouvre le profil** — la règle d'iOS
@@ -404,6 +407,7 @@ export function FloatingMenus({ routeKey, contained = false }: { readonly routeK
               color="var(--color-ios-brand)"
               size={38}
               {...(maPhoto === undefined ? {} : { src: maPhoto })}
+              {...(monContour === null ? {} : { ring: monContour })}
             />
           )}
         </button>

@@ -35,6 +35,10 @@ struct ConversationComposerState {
     /// `endSelectionMode()`-adjacent, posée puis effacée avec
     /// `forwardMessage` par le MÊME `onDismiss` de la feuille.
     var forwardAdditionalMessages: [Message] = []
+    /// **La PIÈCE transférée seule** (#9914, #10947, V2) — posée par le menu
+    /// d'une pièce avec `forwardMessage` ; `nil` = tout le message. Effacée par
+    /// la fermeture de l'écran de partage.
+    var forwardPieceId: String? = nil
     /// La cible de « Composer » — le média reçu que la porte va semer.
     /// Non-nil = la porte est présentée.
     @Indirect var composeMediaTarget: ComposerSeedTarget? = nil

@@ -4,8 +4,10 @@ import type { ProfileDecorCatalog } from '@/lib/i18n-profile-decor-catalog';
 const deProfileDecor = {
   'profileDecor.banner.entry': "Banner",
   'profileDecor.ring.entry': "Rahmen",
+  'profileDecor.frame.entry': "Bannerrahmen",
   'profileDecor.banner.title': "Profilbanner",
   'profileDecor.ring.title': "Avatar-Rahmen",
+  'profileDecor.frame.title': "Bannerrahmen",
   'profileDecor.none': "Keiner",
   'profileDecor.photo': "Foto",
   'profileDecor.shop': "Mehr im Shop",

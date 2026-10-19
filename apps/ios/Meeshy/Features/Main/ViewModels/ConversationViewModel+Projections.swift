@@ -114,6 +114,14 @@ extension ConversationViewModel {
         return messages.last { $0.senderId == userId && $0.senderAvatarURL != nil }?.senderAvatarURL
     }
 
+    /// Le contour équipé du frappeur, relu dans ses messages (#10946). Le roster de frappe est
+    /// tenu par COMPTE — la clé que `typing:start` annonce —, donc l'auteur se trouve par
+    /// `viewingKey`, jamais par `senderId` (l'identifiant de participation).
+    func localRing(forSender userId: String) -> ServedProfileDecorItem? {
+        guard !userId.isEmpty else { return nil }
+        return messages.last { $0.viewingKey == userId && $0.senderRing != nil }?.senderRing
+    }
+
     // MARK: - Identité de la conversation (mini-player audio)
 
     /// Display name shown in the audio mini-player while playing audios from
@@ -255,10 +263,11 @@ extension ConversationViewModel {
             guard let username = msg.senderUsername, !seen.contains(username) else { continue }
             seen.insert(username)
             candidates.append(MentionCandidate(
-                id: msg.senderId.isEmpty ? username : msg.senderId,
+                id: msg.viewingKey.isEmpty ? username : msg.viewingKey,
                 username: username,
                 displayName: msg.senderName ?? username,
-                avatarURL: msg.senderAvatarURL
+                avatarURL: msg.senderAvatarURL,
+                ring: msg.senderRing
             ))
         }
         _mentionCandidates = candidates

@@ -4,6 +4,7 @@ import {
   type ContentExitProjection,
 } from '@meeshy/shared/utils/content-exit-law';
 import { isValidMongoId } from '@meeshy/shared/utils/conversation-helpers';
+import { FORWARD_REFUSAL_CODES, type ForwardRefusalCode } from '@meeshy/shared/types/forward-refusal';
 import type { PrismaClient } from '@meeshy/shared/prisma/client';
 import { loadMessageReadableByParticipant, type ReaderVisibleMessageRow } from './messageReadAccess';
 import { refusesContentGesture } from './captureNoticeVisibility';
@@ -123,6 +124,27 @@ import { refusesContentGesture } from './captureNoticeVisibility';
  * La CONVERSATION de provenance suit la même loi : c'est un fait lu sur la
  * source, jamais une déclaration. `provenanceConversationId` n'est rendu que
  * si l'envoi nomme la conversation où la source vit réellement.
+ *
+ * ─── UNE PIÈCE, OU UN SOUS-ENSEMBLE (#9914) ─────────────────────────────────
+ *
+ * `forwardedAttachmentIds` nomme les pièces de la source à recopier. Absent :
+ * tout le lot, comme avant. Présent : chaque id doit être une pièce DE CE
+ * message (sinon `forwarded-attachment-not-in-source`) — et la loi de sortie
+ * se lit alors sur le message et sur les SEULES pièces choisies : une pièce
+ * ordinaire voisine d'une pièce à vue unique se transfère seule (D6), la pièce
+ * à vue unique jamais, et le message lui-même protégé ferme tout. Le verdict
+ * `copySelection` dit à `saveMessage` ce qu'il recopie — jamais la requête.
+ *
+ * ─── UNE SOURCE CHIFFRÉE NE SE COPIE JAMAIS ICI (D7, #10949) ────────────────
+ *
+ * Conversation chiffrée (`encryptionEnabledAt` ou `encryptionMode`), message
+ * chiffré (`isEncrypted`, `encryptionMode`) ou pièce chiffrée : la passerelle
+ * ne recopie rien de la source. Un transfert qui n'en vivrait que de cette
+ * copie est REFUSÉ (`encrypted-source-not-server-copyable`) ; celui dont le
+ * CLIENT renvoie lui-même le contenu (rechiffré pour une destination chiffrée,
+ * en clair après avertissement pour une autre) est admis avec
+ * `copySelection: []`. Une projection non chargée vaut chiffrée — l'absence
+ * ne prouve rien.
  */
 
 /**
@@ -144,7 +166,12 @@ export interface ForwardSourceReader {
         effectFlags: true;
         ephemeralDuration: true;
         expiresAt: true;
-        attachments: { select: { isViewOnce: true; isBlurred: true; effectFlags: true } };
+        isEncrypted: true;
+        encryptionMode: true;
+        conversation: { select: { encryptionEnabledAt: true; encryptionMode: true } };
+        attachments: {
+          select: { id: true; isViewOnce: true; isBlurred: true; effectFlags: true; isEncrypted: true; encryptionMode: true };
+        };
         _count: { select: { attachments: true } };
         messageType: true;
         metadata: true;
@@ -154,7 +181,21 @@ export interface ForwardSourceReader {
 }
 
 /** La projection ENTIÈRE qu'exige la loi de sortie côté serveur, et le compte des pièces. */
+export interface ForwardSourcePiece {
+  readonly id?: string;
+  readonly isViewOnce: boolean | null;
+  readonly isBlurred: boolean | null;
+  readonly effectFlags: number | null;
+  readonly isEncrypted?: boolean | null;
+  readonly encryptionMode?: string | null;
+}
+
 export interface ForwardSourceRow extends ContentExitProjection {
+  readonly attachments: ReadonlyArray<ForwardSourcePiece>;
+  /** D7 — de quoi savoir que la source est chiffrée. Absent ⇒ chiffrée (fail-closed). */
+  readonly isEncrypted?: boolean | null;
+  readonly encryptionMode?: string | null;
+  readonly conversation?: { readonly encryptionEnabledAt: Date | null; readonly encryptionMode: string | null } | null;
   /** #9629 — de quoi reconnaître un avis de capture, qui ne se transfère pas. */
   readonly messageType?: string | null;
   readonly metadata?: unknown;
@@ -182,12 +223,23 @@ export interface ForwardAdmissionParams {
    * la source ne peut le vider.
    */
   readonly bodyOnlyFromSource?: boolean;
+  /**
+   * #9914 — les pièces de la source à recopier, dans l'ordre voulu. Absent :
+   * tout le lot. Chaque id doit appartenir au message source.
+   */
+  readonly forwardedAttachmentIds?: readonly string[];
+  /**
+   * #10987 — la requête apporte ses PROPRES pièces (`attachmentIds` /
+   * `attachments`) ou son enveloppe chiffrée : le client a lui-même rendu ce
+   * que la passerelle ne peut pas recopier d'une source chiffrée. Absent
+   * (défaut) = rien de tel, et une source chiffrée qui porte des pièces est
+   * refusée plutôt que d'arriver sans elles.
+   */
+  readonly bringsOwnPieces?: boolean;
 }
 
-export type ForwardRefusal =
-  | 'view-once-not-forwardable'
-  | 'ephemeral-not-forwardable'
-  | 'forward-source-unavailable';
+/** Le motif EST le code stable servi au client (#9598). */
+export type ForwardRefusal = ForwardRefusalCode;
 
 /**
  * Ce que la source IMPOSE à sa copie, en sujet de la loi de sortie : sa durée
@@ -220,6 +272,12 @@ export type ForwardAdmission =
        * retirer `forwardedFromId` — rien de la source n'est recopié.
        */
       readonly sourceUnavailable?: true;
+      /**
+       * Ce que `saveMessage` recopie de la source (#9914, D7) : ces pièces-là,
+       * dans cet ordre, et rien d'autre — `[]` ne recopie rien. Absent : tout
+       * le lot (aucune sélection, source en clair).
+       */
+      readonly copySelection?: readonly string[];
     }
   | { readonly admitted: false; readonly reason: ForwardRefusal };
 
@@ -235,12 +293,12 @@ export const isForwardRefused = (admission: ForwardAdmission): admission is Forw
   admission.admitted === false;
 
 const NOT_A_FORWARD: ForwardAdmission = { admitted: true };
-const NOTHING_IMPOSED: ForwardAdmission = { admitted: true, imposes: null };
 const DEGRADED_TO_ORDINARY: ForwardAdmission = { admitted: true, sourceUnavailable: true };
 const SOURCE_UNAVAILABLE: ForwardAdmission = {
   admitted: false,
-  reason: 'forward-source-unavailable'
+  reason: FORWARD_REFUSAL_CODES.SOURCE_UNAVAILABLE
 };
+const refused = (reason: ForwardRefusal): ForwardAdmission => ({ admitted: false, reason });
 
 /**
  * Ce que l'appelant dit au sender quand la règle refuse. Même forme que
@@ -249,11 +307,15 @@ const SOURCE_UNAVAILABLE: ForwardAdmission = {
  */
 export const describeForwardRefusal = (refusal: ForwardRefused): string => {
   switch (refusal.reason) {
-    case 'forward-source-unavailable':
+    case FORWARD_REFUSAL_CODES.SOURCE_UNAVAILABLE:
       return 'Le message d’origine n’est plus disponible : rien à transférer';
-    case 'ephemeral-not-forwardable':
+    case FORWARD_REFUSAL_CODES.EPHEMERAL:
       return 'Un message qui disparaît après lecture ne peut pas être transféré';
-    case 'view-once-not-forwardable':
+    case FORWARD_REFUSAL_CODES.ENCRYPTED_SOURCE:
+      return 'Un message chiffré se transfère depuis l’appareil : la passerelle n’en copie rien';
+    case FORWARD_REFUSAL_CODES.ATTACHMENT_NOT_IN_SOURCE:
+      return 'Une pièce demandée n’appartient pas au message transféré';
+    case FORWARD_REFUSAL_CODES.VIEW_ONCE:
     default:
       return 'Un message à vue unique ne peut pas être transféré';
   }
@@ -329,7 +391,12 @@ async function admitReadableSource(
         // durée : sa seule présence déclare un éphémère (#9572).
         ephemeralDuration: true,
         expiresAt: true,
-        attachments: { select: { isViewOnce: true, isBlurred: true, effectFlags: true } },
+        isEncrypted: true,
+        encryptionMode: true,
+        conversation: { select: { encryptionEnabledAt: true, encryptionMode: true } },
+        attachments: {
+          select: { id: true, isViewOnce: true, isBlurred: true, effectFlags: true, isEncrypted: true, encryptionMode: true },
+        },
         // Compté par CETTE lecture, pas par une seconde : le chemin nominal
         // (envoi ordinaire) n'y passe même pas, `forwardedFromId` étant absent.
         _count: { select: { attachments: true } },
@@ -351,30 +418,69 @@ async function admitReadableSource(
     return SOURCE_UNAVAILABLE;
   }
 
+  const selection = selectedPieces(source, params.forwardedAttachmentIds);
+  if (selection === 'foreign') return refused(FORWARD_REFUSAL_CODES.ATTACHMENT_NOT_IN_SOURCE);
+  const judged: ForwardSourceRow = selection ? { ...source, attachments: selection.pieces } : source;
+
   // La loi lit la colonne ET le bit, sur le message ET sur chaque pièce : un
-  // contournement ne doit pas coûter qu'un champ, ni qu'un niveau.
-  const { forward } = contentExitLawOfSource(source);
+  // contournement ne doit pas coûter qu'un champ, ni qu'un niveau. Une
+  // sélection (#9914) restreint les pièces lues, jamais le message.
+  const { forward } = contentExitLawOfSource(judged);
   if (forward.allowed === false) {
-    return {
-      admitted: false,
-      reason: forward.reason === 'view-once' ? 'view-once-not-forwardable' : 'ephemeral-not-forwardable',
-    };
+    return refused(forward.reason === 'view-once' ? FORWARD_REFUSAL_CODES.VIEW_ONCE : FORWARD_REFUSAL_CODES.EPHEMERAL);
   }
+
+  // D7 — dit APRÈS la nature : une vue unique chiffrée se refuse comme vue unique.
+  // #10987 — un texte joint ne dispense pas : sans pièces propres, une source
+  // chiffrée qui en porte arriverait sans elles, et l'expéditeur lirait « envoyé ».
+  const encrypted = sourceIsEncrypted(judged);
+  const copiable = selection ? selection.pieces.length : source._count?.attachments ?? 0;
+  const wouldLosePieces = copiable > 0 && params.bringsOwnPieces !== true;
+  if (encrypted && (params.bodyOnlyFromSource || wouldLosePieces)) return refused(FORWARD_REFUSAL_CODES.ENCRYPTED_SOURCE);
 
   // Dit APRÈS les refus de nature : des motifs, celui-là est le moins
   // informatif pour l'expéditeur.
-  if (params.bodyOnlyFromSource && (source._count?.attachments ?? 0) === 0) {
+  if (params.bodyOnlyFromSource && copiable === 0) {
     return SOURCE_UNAVAILABLE;
   }
 
-  const unrequested = forwardedCopyProtection({ source, requested: null });
-  if (!unrequested) return { admitted: false, reason: 'ephemeral-not-forwardable' };
-  if (forward.maxDurationSeconds === null && !unrequested.isBlurred) return NOTHING_IMPOSED;
+  const copySelection = encrypted ? [] : selection?.ids;
+  const withSelection = (admission: Extract<ForwardAdmission, { admitted: true }>): ForwardAdmission =>
+    copySelection === undefined ? admission : { ...admission, copySelection };
 
-  return {
+  const unrequested = forwardedCopyProtection({ source: judged, requested: null });
+  if (!unrequested) return refused(FORWARD_REFUSAL_CODES.EPHEMERAL);
+  if (forward.maxDurationSeconds === null && !unrequested.isBlurred) return withSelection({ admitted: true, imposes: null });
+
+  return withSelection({
     admitted: true,
     imposes: { ephemeralDuration: forward.maxDurationSeconds, isBlurred: unrequested.isBlurred },
-  };
+  });
+}
+
+/**
+ * Les pièces choisies, dans l'ordre demandé, doublons retirés. `null` : aucune
+ * sélection (tout le lot). `'foreign'` : un id ne désigne aucune pièce de CE
+ * message — refus, jamais une pièce prise ailleurs.
+ */
+function selectedPieces(
+  source: ForwardSourceRow,
+  requested: readonly string[] | undefined,
+): { readonly ids: readonly string[]; readonly pieces: ReadonlyArray<ForwardSourcePiece> } | 'foreign' | null {
+  if (!requested || requested.length === 0) return null;
+  const ids = [...new Set(requested)];
+  const pieces = ids.map((id) => (source.attachments ?? []).find((piece) => piece.id === id));
+  if (pieces.some((piece) => piece === undefined)) return 'foreign';
+  return { ids, pieces: pieces as ReadonlyArray<ForwardSourcePiece> };
+}
+
+/** D7 — fermé : toute marque de chiffrement, ou une projection non chargée, vaut chiffrée. */
+function sourceIsEncrypted(source: ForwardSourceRow): boolean {
+  const conversation = source.conversation;
+  if (conversation == null || source.isEncrypted === undefined || source.encryptionMode === undefined) return true;
+  if (conversation.encryptionEnabledAt != null || conversation.encryptionMode != null) return true;
+  if (source.isEncrypted === true || source.encryptionMode != null) return true;
+  return (source.attachments ?? []).some((piece) => piece.isEncrypted === true || piece.encryptionMode != null);
 }
 
 /**
@@ -426,10 +532,14 @@ export function forwardedCopyRequest(
   readonly forwardImposes: ForwardImposition | null | undefined;
   readonly forwardedFromId?: undefined;
   readonly forwardedFromConversationId: string | undefined;
+  readonly forwardCopySelection: readonly string[] | undefined;
 } {
-  if (!request.forwardedFromId) return { forwardImposes: undefined, forwardedFromConversationId: undefined };
-  if (admission.sourceUnavailable || admission.imposes === undefined) {
-    return { forwardImposes: undefined, forwardedFromId: undefined, forwardedFromConversationId: undefined };
-  }
-  return { forwardImposes: admission.imposes, forwardedFromConversationId: admission.provenanceConversationId };
+  const none = { forwardImposes: undefined, forwardedFromConversationId: undefined, forwardCopySelection: undefined };
+  if (!request.forwardedFromId) return none;
+  if (admission.sourceUnavailable || admission.imposes === undefined) return { ...none, forwardedFromId: undefined };
+  return {
+    forwardImposes: admission.imposes,
+    forwardedFromConversationId: admission.provenanceConversationId,
+    forwardCopySelection: admission.copySelection,
+  };
 }

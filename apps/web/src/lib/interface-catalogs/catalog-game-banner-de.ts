@@ -53,7 +53,6 @@ const de = {
   'game.banner.place.other': '{count}.',
   'game.banner.points': '{points} Funken',
   'game.banner.missing': 'noch {points} bis Level {level}',
-  'game.banner.level_max': 'Rekord {level}',
   'game.banner.level_max_a11y': 'Level-Rekord {level}',
   'game.banner.separator': ', ',
   'game.banner.link.sparks': 'Funken: {points}',

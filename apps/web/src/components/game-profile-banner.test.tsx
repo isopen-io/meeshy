@@ -8,7 +8,7 @@ import { ensureHappyDomRegistered, releaseHappyDomIfRegistered } from '@/test-su
 
 import { formatCount } from '@/lib/view/game-copy';
 
-import { AVATAR_CLEARANCE, GameProfileBanner, type BannerStanding } from './game-profile-banner';
+import { AVATAR_CLEARANCE, GLORY_GLYPH, GameProfileBanner, SPARK_GLYPH, type BannerStanding } from './game-profile-banner';
 
 /**
  * LE JEU SUR LA BANNIÈRE DU PROFIL (#10231, précision porteur 2026-10-11) —
@@ -56,14 +56,15 @@ const standing = (over: Partial<BannerStanding> = {}): BannerStanding => ({
 const words = (node: Element | null | undefined): string => (node?.textContent ?? '').replace(/\s+/g, ' ').trim();
 const styleOf = (node: Element | null | undefined): string => node?.getAttribute('style') ?? '';
 
-describe('le niveau et ses points au début de la bannière', () => {
-  test('le nom du niveau, le cercle, les points acquis et le reste vers le suivant', async () => {
-    const host = await mount(<GameProfileBanner standing={standing()} />);
+describe('le niveau au début de la bannière : le cercle seul, la Gloire et les étincelles en glyphes (#10951)', () => {
+  test('le cercle porte le niveau ; aucun texte de niveau à côté (ni palier, ni « Niveau N », ni record, ni reste)', async () => {
+    const host = await mount(<GameProfileBanner standing={standing({ levelMax: 40 })} />);
     const start = host.querySelector('[data-profile-banner-level]');
-    expect(words(start?.querySelector('[data-profile-banner-level-name]'))).toBe('Braise');
     expect(start?.querySelector('[data-game-level="12"]') !== null).toBe(true);
-    expect(words(start?.querySelector('[data-profile-banner-points]'))).toBe('976 étincelles');
-    expect(words(start?.querySelector('[data-profile-banner-missing]'))).toBe('encore 624 vers le 13');
+    for (const gone of ['level-name', 'level-now', 'level-max', 'missing']) {
+      expect(start?.querySelector(`[data-profile-banner-${gone}]`) === null).toBe(true);
+    }
+    expect(words(start)).not.toMatch(/Braise|Niveau|record|encore/);
   });
 
   test('il s’ancre au DÉBUT (gauche, droite en RTL), le rang à la FIN', async () => {
@@ -74,19 +75,6 @@ describe('le niveau et ses points au début de la bannière', () => {
     expect(styleOf(band)).toContain('inset-inline-start');
     expect(styleOf(band)).toContain('inset-inline-end');
     expect(styleOf(band)).not.toMatch(/(^|[^-])(left|right)\s*:/);
-  });
-
-  test('sans points servis : ni total ni reste, jamais un zéro', async () => {
-    const host = await mount(<GameProfileBanner standing={standing({ points: null, pointsToNext: null, progress: null })} />);
-    expect(host.querySelector('[data-profile-banner-points]') === null).toBe(true);
-    expect(host.querySelector('[data-profile-banner-missing]') === null).toBe(true);
-    expect(words(host.querySelector('[data-profile-banner-level-name]'))).toBe('Braise');
-  });
-
-  test('au plafond : le total reste, le reste disparaît', async () => {
-    const host = await mount(<GameProfileBanner standing={standing({ pointsToNext: null, progress: 1 })} />);
-    expect(words(host.querySelector('[data-profile-banner-points]'))).toBe('976 étincelles');
-    expect(host.querySelector('[data-profile-banner-missing]') === null).toBe(true);
   });
 });
 
@@ -104,47 +92,41 @@ describe('le rang à la fin de la bannière', () => {
   });
 });
 
-describe('la poche et la Gloire, le niveau et son max (porteur 2026-10-16, 2026-10-18)', () => {
-  test('la poche en grand, la Gloire totale en petit dessous — plus le total d’étincelles à vie (#10913)', async () => {
+describe('la Gloire en grand, un trait, puis les étincelles (porteur 2026-10-19, #10951)', () => {
+  test('« ♛ 41 250 » en grand, un trait, puis « ✦ 976 »', async () => {
     const host = await mount(<GameProfileBanner standing={standing()} />);
-    const pocket = host.querySelector('[data-profile-banner-points]');
     const glory = host.querySelector('[data-profile-banner-glory]');
-    expect(words(pocket)).toBe('976 étincelles');
-    expect(words(glory)).toBe(`Gloire ${formatCount(41_250, 'fr')}`.replace(/\s+/g, ' '));
+    const rule = host.querySelector('[data-profile-banner-rule]');
+    const pocket = host.querySelector('[data-profile-banner-points]');
+    expect(words(glory)).toBe(`${GLORY_GLYPH} ${formatCount(41_250, 'fr')}`.replace(/\s+/g, ' '));
+    expect(words(pocket)).toBe(`${SPARK_GLYPH} 976`);
+    expect(rule?.getAttribute('aria-hidden')).toBe('true');
+    expect(((glory?.compareDocumentPosition(rule as Node) ?? 0) & 4) !== 0).toBe(true);
+    expect(((rule?.compareDocumentPosition(pocket as Node) ?? 0) & 4) !== 0).toBe(true);
+    expect((glory?.getAttribute('class') ?? '')).toContain('font-bold');
+    expect((pocket?.getAttribute('class') ?? '')).not.toContain('font-bold');
     expect(host.querySelector('[data-profile-banner-lifetime]') === null).toBe(true);
-    expect(((pocket?.compareDocumentPosition(glory as Node) ?? 0) & 4) !== 0).toBe(true);
-    expect((pocket?.getAttribute('class') ?? '')).toContain('font-bold');
-    expect((glory?.getAttribute('class') ?? '')).not.toContain('font-bold');
   });
 
-  test('sans Gloire servie (non-ami, ancien serveur) : aucune ligne, jamais un zéro', async () => {
+  test('deux glyphes distincts, aucun mot', () => {
+    expect(GLORY_GLYPH).not.toBe(SPARK_GLYPH);
+    expect(GLORY_GLYPH).not.toMatch(/\p{L}/u);
+  });
+
+  test('sans Gloire servie (non-ami, ancien serveur) : ni ligne ni trait, jamais un zéro', async () => {
     const host = await mount(<GameProfileBanner standing={standing({ glory: null })} />);
     expect(host.querySelector('[data-profile-banner-glory]') === null).toBe(true);
+    expect(host.querySelector('[data-profile-banner-rule]') === null).toBe(true);
+    expect(words(host.querySelector('[data-profile-banner-points]'))).toBe(`${SPARK_GLYPH} 976`);
     expect((host.querySelector('[data-profile-banner-level]')?.getAttribute('aria-label') ?? '')).not.toContain('Gloire');
   });
 
-  test('le niveau actuel avec le niveau max à vie dessous — toujours, même quand le max égale le niveau', async () => {
-    const host = await mount(<GameProfileBanner standing={standing({ levelMax: 12 })} />);
-    expect(words(host.querySelector('[data-profile-banner-level-now]'))).toBe('Niveau 12');
-    expect(words(host.querySelector('[data-profile-banner-level-max]'))).toBe('record 12');
-  });
-
-  test('un niveau max plus haut que le niveau (après un Prestige)', async () => {
-    const host = await mount(<GameProfileBanner standing={standing({ level: 1, levelMax: 100 })} />);
-    expect(words(host.querySelector('[data-profile-banner-level-now]'))).toBe('Niveau 1');
-    expect(words(host.querySelector('[data-profile-banner-level-max]'))).toBe('record 100');
-  });
-
-  test('sur la fiche d\'un autre : le niveau max suit le rang, les étincelles ne sont pas servies — rien ne se dessine à leur place', async () => {
+  test('sur la fiche d\'un autre (rien de servi) : le cercle seul, ni ligne ni trait', async () => {
     const host = await mount(<GameProfileBanner standing={standing({ points: null, glory: null, pointsToNext: null, progress: null })} />);
     expect(host.querySelector('[data-profile-banner-points]') === null).toBe(true);
     expect(host.querySelector('[data-profile-banner-glory]') === null).toBe(true);
-    expect(words(host.querySelector('[data-profile-banner-level-max]'))).toBe('record 12');
-  });
-
-  test('un serveur antérieur (niveau max non servi) : pas de ligne « max », jamais un zéro', async () => {
-    const host = await mount(<GameProfileBanner standing={standing({ levelMax: null })} />);
-    expect(host.querySelector('[data-profile-banner-level-max]') === null).toBe(true);
+    expect(host.querySelector('[data-profile-banner-rule]') === null).toBe(true);
+    expect(host.querySelector('[data-profile-banner-level] [data-game-level="12"]') !== null).toBe(true);
   });
 });
 
@@ -161,6 +143,7 @@ describe('un libellé par groupe, lisible dans les sept langues', () => {
     expect(level.startsWith('Niveau 12, palier Braise')).toBe(true);
     expect(level).toContain('976 étincelles');
     expect(level).toContain(`Gloire ${formatCount(41_250, 'fr')}`);
+    expect(level).toContain('record de niveau 12');
     expect(level.endsWith(', encore 624 vers le 13')).toBe(true);
     expect(host.querySelector('[data-profile-banner-rank]')?.getAttribute('aria-label')).toBe('Murmure V');
   });
@@ -171,7 +154,7 @@ describe('un libellé par groupe, lisible dans les sept langues', () => {
       const host = await mount(<GameProfileBanner standing={standing()} />);
       expect((host.querySelector('[data-profile-banner-level]')?.getAttribute('aria-label') ?? '').length > 0).toBe(true);
       expect((host.querySelector('[data-profile-banner-rank]')?.getAttribute('aria-label') ?? '').length > 0).toBe(true);
-      expect(words(host.querySelector('[data-profile-banner-missing]')).length > 0).toBe(true);
+      expect((host.querySelector('[data-profile-banner-level]')?.getAttribute('aria-label') ?? '')).toContain(formatCount(624, language));
       unmountAll();
     }
     setInterfaceLanguage('fr');
@@ -199,7 +182,7 @@ describe('les deux cadres aux angles bas de la bannière', () => {
     expect(band).toMatch(/inset-inline-start:\s*0(px)?\s*(;|$)/);
     expect(band).toMatch(/inset-inline-end:\s*0(px)?\s*(;|$)/);
     expect(band).not.toMatch(/(^|[^-])top\s*:/);
-    expect(classes(host, '[data-profile-banner-game]')).toContain('items-end');
+    expect(classes(host, '[data-profile-banner-game]')).toContain('items-stretch');
   });
 
   test('chaque cadre : coins bas carrés ; le bord de DÉBUT du niveau et le bord de FIN du rang ne sont plus arrondis (coins logiques, RTL compris)', async () => {
@@ -229,10 +212,15 @@ describe('les deux cadres aux angles bas de la bannière', () => {
     }
   });
 
-  test('chaque cadre s’arrête avant l’avatar posé au milieu du bas', async () => {
-    const host = await mount(<GameProfileBanner standing={standing()} />);
-    for (const group of ['level', 'rank'] as const) {
-      expect(styleOf(host.querySelector(`[data-profile-banner-${group}]`))).toContain(`max-width: calc((100% - ${AVATAR_CLEARANCE}px) / 2)`);
+  test('les deux cadres ont TOUJOURS la même taille : la moitié de ce que l’avatar laisse, la même hauteur (#10951)', async () => {
+    for (const shown of [standing(), standing({ points: null, glory: null })]) {
+      const host = await mount(<GameProfileBanner standing={shown} />);
+      for (const group of ['level', 'rank'] as const) {
+        expect(styleOf(host.querySelector(`[data-profile-banner-${group}]`))).toContain(`width: calc((100% - ${AVATAR_CLEARANCE}px) / 2)`);
+        expect(styleOf(host.querySelector(`[data-profile-banner-${group}]`))).not.toContain('max-width');
+      }
+      expect(classes(host, '[data-profile-banner-game]')).toContain('items-stretch');
+      unmountAll();
     }
   });
 });

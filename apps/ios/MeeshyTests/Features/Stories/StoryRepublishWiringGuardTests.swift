@@ -97,7 +97,7 @@ final class StoryRepublishWiringGuardTests: XCTestCase {
         let sidebar = AppSourceGuard.stripComments(
             try source("Meeshy/Features/Main/Views/StoryViewerView+Sidebar.swift"))
         XCTAssertTrue(sidebar.contains("story.viewer.action.send"), "« Envoyer » reste au rail.")
-        XCTAssertTrue(sidebar.contains("sharedContentWrapper = SharedContentWrapper(content: .story("))
+        XCTAssertTrue(sidebar.contains("sharedContentWrapper = SharedContentWrapper(subject: .story("))
 
         let header = AppSourceGuard.stripComments(
             try source("Meeshy/Features/Main/Views/StoryViewerView+Header.swift"))

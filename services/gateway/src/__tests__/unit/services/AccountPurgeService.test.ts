@@ -344,7 +344,7 @@ describe('anonymizeUserIdentity', () => {
     await anonymizeUserIdentity(prisma, USER_ID);
 
     const [{ data }] = (prisma.user.updateMany as jest.Mock<any>).mock.calls[0] as [{ data: any }];
-    expect(data).toMatchObject({ equippedAvatarRing: null, equippedBanner: null });
+    expect(data).toMatchObject({ equippedAvatarRing: null, equippedBanner: null, equippedBannerFrame: null });
   });
 
   it('clears authentication secrets — 2FA, Signal Protocol keys, and rehashes the password', async () => {

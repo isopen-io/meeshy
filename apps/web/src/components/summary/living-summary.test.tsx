@@ -74,7 +74,9 @@ function expand(node: Tree): Expanded | null {
 }
 
 /**
- * Un composant qui tient un ÉTAT (hooks) ne se déplie pas hors d'un renderer :
+ * Un composant qui tient un ÉTAT (hooks) ne se déplie pas hors d'un renderer
+ * (React le dit de deux façons : « Invalid hook call », ou un `dispatcher` nul
+ * au premier `useContext`, celui du visage et de son contour, #10946) :
  * c'est une feuille opaque pour ce témoin, qui cherche les visages et les
  * épisodes, jamais l'intérieur d'un avatar (dont le point de présence anime
  * ses transitions, #9047).
@@ -83,7 +85,7 @@ function callComponent(component: (props: unknown) => Tree, props: unknown): Tre
   try {
     return component(props);
   } catch (error) {
-    if (error instanceof Error && /Invalid hook call|resolveDispatcher\(\)/.test(error.message)) return null;
+    if (error instanceof Error && /Invalid hook call|resolveDispatcher\(\)|dispatcher\.use/.test(error.message)) return null;
     throw error;
   }
 }

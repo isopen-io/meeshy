@@ -67,11 +67,26 @@ extension ConversationSyncEngine {
         // du compte quitté ne bloque pas celle du suivant, et ne peut plus
         // écrire dans son cache (`saveSorted` → `ownsSession`).
         let owner = await currentUserId()
-        guard claimSync(for: owner) else { return true }
+        guard claimSync(for: owner) else { return await rejoinsLaSynchroEnVol(de: owner) }
         defer { releaseSync(for: owner) }
         return await Self.$syncOwner.withValue(owner) {
             await self.fullSyncForOwner()
         }
+    }
+
+    /// #10927 — une synchro du même compte tient déjà le verrou. Sur un cache
+    /// CHAUD, la liste est servie : rendre `true` dit vrai. Sur un cache VIDE,
+    /// c'était déclarer chargée une liste que personne n'avait lue — l'appelant
+    /// attend donc la synchro en vol, et si elle n'a rien livré, tente la sienne.
+    private func rejoinsLaSynchroEnVol(de owner: String) async -> Bool {
+        guard await listeAFroid() else { return true }
+        await awaitSyncRelease(for: owner)
+        guard await listeAFroid() else { return true }
+        return await fullSync()
+    }
+
+    private func listeAFroid() async -> Bool {
+        (await cache.conversations.load(for: "list").snapshot() ?? []).isEmpty
     }
 
     private func fullSyncForOwner() async -> Bool {
@@ -85,7 +100,7 @@ extension ConversationSyncEngine {
         // À FROID, `/sync` peindrait une liste SANS APERÇUS (#7787) : ses lignes
         // maigres ne portent ni le dernier message ni les non-lus, et chacune
         // serait à réhydrater. La route riche sert tout en un passage.
-        let aFroid = (await cache.conversations.load(for: "list").snapshot() ?? []).isEmpty
+        let aFroid = await listeAFroid()
         let issueDuPlein: IssueDuPleinParSync
         if aFroid {
             issueDuPlein = .indisponible(.cacheVide)
@@ -449,7 +464,7 @@ extension ConversationSyncEngine {
     /// `echouee` (retenter coûterait moins que rejouer ≈ 100 requêtes, et le
     /// cache garde la portion déjà peinte).
     private func fullSyncViaSyncPages() async -> IssueDuPleinParSync {
-        guard let creance = creanceDeSync() else { return .indisponible(.creanceAbsente) }
+        guard let creance = await creanceDeSync() else { return .indisponible(.creanceAbsente) }
 
         let userId = await currentUserId()
         let baseline = await cache.conversations.load(for: "list").snapshot() ?? []
@@ -749,8 +764,10 @@ extension ConversationSyncEngine {
         syncDeltaOverride ?? SyncDeltaClient(baseURL: api.baseURL)
     }
 
-    private func creanceDeSync() -> SyncDeltaCredential? {
-        if let jeton = api.authToken { return .membre(jeton: jeton) }
+    /// #10927 — le jeton RAFRAÎCHI s'il était échu : `/sync` part par son propre
+    /// transport, que la garde d'expiration d'`APIClient` ne couvre pas.
+    private func creanceDeSync() async -> SyncDeltaCredential? {
+        if let jeton = await api.freshAuthToken() { return .membre(jeton: jeton) }
         if let session = api.anonymousSessionToken { return .invite(session: session) }
         return nil
     }
@@ -766,7 +783,7 @@ extension ConversationSyncEngine {
     /// FUSIONNÉE dans l'existante : les champs que `/sync` sert avancent, le
     /// reste ne bouge pas (`fusionneLigneDeSync`).
     private func deltaViaSync() async -> CheminDuDelta {
-        guard let creance = creanceDeSync() else { return .repli(.creanceAbsente) }
+        guard let creance = await creanceDeSync() else { return .repli(.creanceAbsente) }
 
         let demande = SyncDeltaRequest(
             since: WireDate.string(from: lastSyncTimestamp),

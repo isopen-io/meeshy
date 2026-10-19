@@ -155,9 +155,18 @@ final class MessagePieceTargetTests: XCTestCase {
 
     private let blurredExits = MessageExitOffer(law: .ordinary, holdsBlur: true, isEncrypted: false)
 
-    func test_pieceMenu_clearPiece_offersReplySaveDeleteThenTheWholeMessage() {
+    func test_pieceMenu_clearPiece_offersReplyForwardSaveDeleteThenTheWholeMessage() {
         let ctx = MessagePieceMenu.Context(isProtected: false, exits: .unrestricted, canDelete: true)
-        XCTAssertEqual(MessagePieceMenu.actions(ctx), [.replyToPiece, .saveMedia, .deletePiece, .wholeMessage])
+        XCTAssertEqual(MessagePieceMenu.actions(ctx), [.replyToPiece, .forwardPiece, .saveMedia, .deletePiece, .wholeMessage])
+    }
+
+    /// #9914, #10947 (V2) : la passerelle copie la seule pièce choisie, l'entrée
+    /// « Transférer » ouvre l'écran de partage sur CETTE pièce — jamais sur une
+    /// pièce protégée, ni quand la loi refuse le transfert du message.
+    func test_pieceMenu_forwardsThePiece_onlyWhenTheLawLetsItLeave() {
+        let viewOnce = MessageExitOffer(law: .viewOnce, holdsBlur: false, isEncrypted: false)
+        XCTAssertFalse(MessagePieceMenu.actions(.init(isProtected: false, exits: viewOnce, canDelete: false)).contains(.forwardPiece))
+        XCTAssertFalse(MessagePieceMenu.actions(.init(isProtected: true, exits: .unrestricted, canDelete: false)).contains(.forwardPiece))
     }
 
     func test_pieceMenu_withoutTheRightToDelete_offersNoDeletion() {

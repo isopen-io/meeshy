@@ -202,6 +202,20 @@ final class PresenceManager: ObservableObject {
         presenceMap[userId]?.state ?? .offline
     }
 
+    /// La présence SERVIE de l'auteur d'un message (#10944) : `senderId` est
+    /// l'identifiant de PARTICIPATION, la carte est tenue par COMPTE — la clé
+    /// sous laquelle le serveur l'annonce (`viewingKey`). Un visiteur anonyme
+    /// n'a aucune présence servie : son avatar ne porte aucun point.
+    func presenceState(forSenderOf message: MeeshyMessage) -> PresenceState {
+        presenceState(for: message.viewingKey)
+    }
+
+    /// La carte vivante d'abord, la présence que la charge a SERVIE sinon — un
+    /// auteur de story dont aucun `user:status` n'est encore arrivé (#10944).
+    func presenceState(for userId: String, served: UserPresence?) -> PresenceState {
+        knownPresenceState(for: userId) ?? served?.state ?? .offline
+    }
+
     /// Preuve d'activité immédiate observée côté client (typing:start reçu) :
     /// force l'état online local pour cet utilisateur, sans attendre le
     /// prochain user:status / snapshot du gateway.

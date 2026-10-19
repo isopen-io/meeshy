@@ -42,6 +42,13 @@ extension BubbleStandardLayout {
         return { onStoryReplyTap(citation.messageId) }
     }
 
+    /// La présence SERVIE de l'auteur cité (#10956) — par son COMPTE (`authorUserId`,
+    /// jamais l'identifiant de participation), et aucune pour soi.
+    func quotedAuthorPresence(_ reply: ReplyReference) -> PresenceState? {
+        guard !reply.isMe, let userId = reply.authorUserId else { return nil }
+        return PresenceManager.shared.presenceState(for: userId)
+    }
+
     func quotedReplyView(_ reply: ReplyReference) -> some View {
         BubbleQuotedReply(
             reply: reply,
@@ -49,6 +56,7 @@ extension BubbleStandardLayout {
             accentHex: contactColor,
             isDark: isDark,
             mentionDisplayNames: mentionDisplayNames,
+            authorPresence: quotedAuthorPresence(reply),
             onQuotedAuthorTap: onQuotedAuthorTap,
             onQuotedMediaTap: onQuotedMediaTap
         )

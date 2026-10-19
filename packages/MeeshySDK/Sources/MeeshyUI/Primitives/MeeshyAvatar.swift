@@ -83,15 +83,6 @@ public enum AvatarContext: Sendable {
         }
     }
 
-    public var showsOnlineDot: Bool {
-        switch self {
-        case .storyViewer, .postComment, .postReaction, .typingIndicator,
-             .profileEdit, .notification:
-            return false
-        default: return true
-        }
-    }
-
     public var isTappable: Bool {
         switch self {
         case .postReaction, .typingIndicator:
@@ -194,16 +185,7 @@ public enum AvatarContext: Sendable {
         default: return size * 0.42
         }
     }
-    public var onlineDotSize: CGFloat { size * 0.26 }
-
-    /// Le point « ici » se fait plus discret dans l'en-tête de la conversation,
-    /// où l'avatar est petit et seul en haut à droite (#9065).
-    public var hereDotRatio: CGFloat {
-        switch self {
-        case .conversationHeaderCollapsed, .conversationHeaderExpanded, .conversationHeaderStacked: return 0.40
-        default: return AvatarPresenceDot.hereRatio
-        }
-    }
+    public var onlineDotSize: CGFloat { AvatarPresenceDot.presence(.online).diameter(avatarSize: size) }
 }
 
 // MARK: - Story Ring State
@@ -261,6 +243,10 @@ public struct MeeshyAvatar: View {
     /// couleur primaire, même quand `presenceState` est masqué ; `.active`
     /// quand il y regarde, écoute ou agit (#9061) — le point pulse.
     public var isHere: ConversationHere = .absent
+    /// Le contour d'avatar ÉQUIPÉ, tel que la passerelle le sert avec la
+    /// personne (`profileDecor.avatarRing`, #10945) — la RÉFÉRENCE, que
+    /// l'avatar résout lui-même par le catalogue (#10946). `nil` ⇒ aucun contour.
+    public let ring: ServedProfileDecorItem?
     public var onTap: (() -> Void)? = nil
     public var onViewProfile: (() -> Void)? = nil
     public var onViewStory: (() -> Void)? = nil
@@ -274,7 +260,8 @@ public struct MeeshyAvatar: View {
     public init(name: String, context: AvatarContext, kind: AvatarKind = .user, accentColor: String = "",
                 secondaryColor: String? = nil, avatarURL: String? = nil, thumbHash: String? = nil,
                 storyState: StoryRingState = .none, moodEmoji: String? = nil,
-                presenceState: PresenceState? = nil, isHere: ConversationHere = .absent, enablePulse: Bool? = nil,
+                presenceState: PresenceState? = nil, isHere: ConversationHere = .absent,
+                ring: ServedProfileDecorItem? = nil, enablePulse: Bool? = nil,
                 isDark: Bool = ThemeManager.shared.mode.isDark,
                 onTap: (() -> Void)? = nil, onViewProfile: (() -> Void)? = nil,
                 onViewStory: (() -> Void)? = nil, onMoodTap: ((CGPoint) -> Void)? = nil,
@@ -283,6 +270,8 @@ public struct MeeshyAvatar: View {
         self.secondaryColor = secondaryColor; self.avatarURL = avatarURL; self.thumbHash = thumbHash
         self.storyState = storyState; self.moodEmoji = moodEmoji; self.presenceState = presenceState
         self.isHere = isHere
+        self.ring = ring
+        self.ringDesign = kind == .user ? ProfileDecorResolver.ring(ring) : nil
         self.enablePulse = enablePulse ?? context.defaultPulse; self.isDark = isDark
         self.onTap = onTap; self.onViewProfile = onViewProfile; self.onViewStory = onViewStory
         self.onMoodTap = onMoodTap; self.onOnlineTap = onOnlineTap; self.contextMenuItems = contextMenuItems
@@ -318,6 +307,9 @@ public struct MeeshyAvatar: View {
     private let resolvedAccent: String
     private let resolvedSecondary: String
     private let initials: String
+    /// Le dessin du contour, résolu UNE fois à l'init (le catalogue embarqué
+    /// est en mémoire) : le défilement d'une liste ne relit rien.
+    let ringDesign: AvatarRingDesign?
     private var theme: ThemeManager { ThemeManager.shared }
 
     private var secondaryGradientColor: Color {
@@ -334,8 +326,10 @@ public struct MeeshyAvatar: View {
         return context.showsMoodBadge ? moodEmoji : nil
     }
 
-    private var effectivePresence: AvatarPresenceDot? {
-        guard kind == .user, context.showsOnlineDot else { return nil }
+    /// La présence SERVIE se peint dans TOUS les contextes (#10955) : aucun
+    /// contexte ne la retire plus — absente ou hors ligne ⇒ aucun point.
+    var shownPresence: AvatarPresenceDot? {
+        guard kind == .user else { return nil }
         // Offline (>30min) : aucun dot. Le gris reste défini dans
         // PresenceState.dotColor pour les affichages labellisés, pas ici.
         // « Ici » (#8892) prime et se rend même sans présence servie.
@@ -345,7 +339,7 @@ public struct MeeshyAvatar: View {
     /// VoiceOver : le nom, son humeur (#10528), et « dans la conversation »
     /// quand le pair y est.
     private var accessibilityName: String {
-        Self.spokenName(name: name, moodEmoji: effectiveMoodEmoji, isHere: effectivePresence == .here)
+        Self.spokenName(name: name, moodEmoji: effectiveMoodEmoji, isHere: shownPresence == .here)
     }
 
     /// La pastille d'humeur masque le point et n'est lue par personne : sans
@@ -424,10 +418,18 @@ public struct MeeshyAvatar: View {
         let resolvedMenuItems = effectiveContextMenuItems
         let showContextMenu = hasContextMenu(resolvedItems: resolvedMenuItems)
 
+        // LE CONTOUR ÉQUIPÉ (#10946) — dans l'empreinte de l'avatar : rien ne
+        // grandit ni ne se décale, l'anneau de story reste concentrique dedans
+        // (#10714), et le point de présence se pose PAR-DESSUS, au bord.
         let visual = ZStack {
             storyRing
             avatarBody
         }
+        .avatarRingWithin(
+            ringDesign,
+            footprint: context.size,
+            storyRingSize: effectiveStoryState == .none ? nil : context.ringSize
+        )
         .overlay(alignment: .bottomTrailing) {
             if let emoji = effectiveMoodEmoji, !emoji.isEmpty {
                 // Le mood vit les transitions du point (#9065) : il grossit en
@@ -435,15 +437,15 @@ public struct MeeshyAvatar: View {
                 // au départ puis revient cerné de vert.
                 moodBadge(emoji: emoji)
                     .overlay {
-                        if effectivePresence == .here && presenceChanged && !reduceMotion {
+                        if shownPresence == .here && presenceChanged && !reduceMotion {
                             PresenceArrivalRipple(color: PresenceStyle.hereDotColor, diameter: context.badgeSize)
                         }
                     }
-                    .id("mood.\(effectivePresence?.transitionKey ?? "none")")
+                    .id("mood.\(shownPresence?.transitionKey ?? "none")")
                     .transition(presenceTransition)
                     .offset(badgeOffset(badgeHalfSize: context.badgeSize / 2))
-            } else if let presence = effectivePresence {
-                let diameter = presence.diameter(avatarSize: context.size, hereRatio: context.hereDotRatio)
+            } else if let presence = shownPresence {
+                let diameter = presence.diameter(avatarSize: context.size)
                 onlineDot(for: presence, diameter: diameter)
                     .overlay {
                         if presence == .here, !reduceMotion, let wave = PresenceHereWave.for(isHere) {
@@ -464,8 +466,8 @@ public struct MeeshyAvatar: View {
             }
         }
         .animation(reduceMotion ? .easeInOut(duration: 0.2) : .spring(response: 0.42, dampingFraction: 0.5),
-                   value: effectivePresence?.transitionKey)
-        .adaptiveOnChange(of: effectivePresence?.transitionKey) { _, _ in presenceChanged = true }
+                   value: shownPresence?.transitionKey)
+        .adaptiveOnChange(of: shownPresence?.transitionKey) { _, _ in presenceChanged = true }
         .scaleEffect(tapScale)
 
         let tappable = Group {
@@ -570,7 +572,7 @@ public struct MeeshyAvatar: View {
             emoji: emoji,
             diameter: context.badgeSize,
             animates: context.animatesMoodBadge,
-            outline: effectivePresence?.moodOutline,
+            outline: shownPresence?.moodOutline,
             hushed: isHere.isFocused,
             onTap: onMoodTap
         )

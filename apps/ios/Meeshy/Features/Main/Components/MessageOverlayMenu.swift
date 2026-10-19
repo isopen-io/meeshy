@@ -235,7 +235,7 @@ struct MessageOverlayMenu: View {
             MessageStickerFavorite.toggle(for: message.sticker)
         case .exportImage, .exportQuick:
             onExportImage?(action == .exportQuick)
-        case .wholeMessage, .replyToPiece, .deletePiece:
+        case .wholeMessage, .replyToPiece, .deletePiece, .forwardPiece:
             return
         }
         dismiss()
@@ -689,7 +689,9 @@ struct MessageOverlayMenu: View {
                     name: name,
                     context: .recentParticipant,
                     accentColor: color,
-                    avatarURL: message.senderAvatarURL
+                    avatarURL: message.senderAvatarURL,
+                    presenceState: PresenceManager.shared.presenceState(forSenderOf: message),
+                    ring: message.senderRing
                 )
             }
 

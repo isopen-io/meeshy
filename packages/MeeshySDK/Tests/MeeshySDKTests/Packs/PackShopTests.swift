@@ -38,6 +38,19 @@ final class PackShopTests: XCTestCase {
         XCTAssertFalse(PackDomain.allCases.contains(.unknown))
     }
 
+    /// #10936 — les cadres de bannière se vendent en boutique, à leur propre adresse.
+    func test_packDomain_bannerFrame_isReadRoutedAndSold() throws {
+        XCTAssertEqual(try decode([PackDomain].self, #"["banner-frame","capture-frame"]"#), [.bannerFrame, .unknown])
+        XCTAssertTrue(PackDomain.allCases.contains(.bannerFrame))
+        XCTAssertEqual(PackDomain(queryValue: "banner-frame"), .bannerFrame)
+        let routes = try XCTUnwrap(PackRoutes.of(.bannerFrame))
+        XCTAssertEqual(routes.catalogue.path, "/api/v1/packs/banner-frame")
+        XCTAssertEqual(routes.installed.path, "/api/v1/packs/banner-frame/installed")
+        XCTAssertEqual(routes.detail("cadres-grec").path, "/api/v1/packs/banner-frame/cadres-grec")
+        XCTAssertEqual(routes.install("cadres-grec").path, "/api/v1/packs/banner-frame/cadres-grec/install")
+        XCTAssertEqual(routes.purchase?("cadres-grec").path, "/api/v1/packs/banner-frame/cadres-grec/purchase")
+    }
+
     func test_packDomain_queryValueIgnoresTheUnknownAndTheBlank() {
         XCTAssertEqual(PackDomain(queryValue: " Wallpaper "), .wallpaper)
         XCTAssertNil(PackDomain(queryValue: "hologram"))
@@ -152,7 +165,7 @@ final class PackShopTests: XCTestCase {
 
     func test_purchaseAddresses_declareStructuredRefusals_soTheInsufficientBalanceReachesTheScreen() throws {
         let purchasable = PackDomain.allCases.filter(\.isPurchasable)
-        XCTAssertEqual(purchasable, [.wallpaper, .avatarRing, .banner])
+        XCTAssertEqual(purchasable, [.wallpaper, .avatarRing, .banner, .bannerFrame])
         for domain in purchasable {
             let purchase = try XCTUnwrap(PackRoutes.of(domain)?.purchase, "\(domain)")
             XCTAssertEqual(purchase("aurore").rejectionPolicy, .structured,

@@ -262,7 +262,6 @@ struct StoryRingCell: View, Equatable {
     var contextMenuExtras: [AvatarContextMenuItem] = []
 
     private var theme: ThemeManager { ThemeManager.shared }
-    private var presenceManager: PresenceManager { PresenceManager.shared }
     /// Humeur + tap humeur passés en `let` par le parent (qui observe déjà
     /// StatusViewModel) — l'`@EnvironmentObject` abonnait CHAQUE cellule du
     /// tray à chaque mise à jour de statut globale (P1-3a).
@@ -297,7 +296,7 @@ struct StoryRingCell: View, Equatable {
             showsUsername: showsUsername,
             moodEmoji: moodEmoji,
             hasMoodTap: onMoodTap != nil,
-            presence: PresenceManager.shared.presenceState(for: group.id),
+            presence: PresenceManager.shared.presenceState(for: group.id, served: group.authorPresence),
             menuLabels: contextMenuExtras.map(\.label),
             theme: ThemeManager.shared.mode
         )
@@ -319,7 +318,8 @@ struct StoryRingCell: View, Equatable {
                     avatarURL: latestStoryThumbnailURL(group),
                     storyState: group.hasUnviewed ? .unread : .read,
                     moodEmoji: moodEmoji,
-                    presenceState: presenceManager.presenceState(for: group.id),
+                    presenceState: renderInputs.presence,
+                    ring: group.authorRing,
                     onMoodTap: onMoodTap,
                     contextMenuItems: [
                         AvatarContextMenuItem(label: StoryTrayCopy.viewStories, icon: "play.circle.fill") {
@@ -380,6 +380,8 @@ nonisolated struct StoryRingCellRenderInputs: Equatable {
     let presence: PresenceState
     let menuLabels: [String]
     let theme: ThemeMode
+    /// Le contour équipé de l'auteur (#10946) : un contour qui arrive repeint la cellule.
+    let ring: ServedProfileDecorItem?
 
     init(
         group: StoryGroup,
@@ -398,6 +400,7 @@ nonisolated struct StoryRingCellRenderInputs: Equatable {
         avatarColor = group.avatarColor
         storyIds = group.stories.map(\.id)
         hasUnviewed = group.hasUnviewed
+        ring = group.authorRing
         liveCount = group.stories.filter { !$0.isExpired(at: now) }.count
         self.coverURL = coverURL
         self.avatarSize = avatarSize
@@ -500,6 +503,7 @@ private struct MyStoryButton: View {
                     avatarURL: myGroup.flatMap { latestStoryThumbnailURL($0) } ?? currentUser?.avatar,
                     storyState: storyState,
                     moodEmoji: myMoodEmoji,
+                    ring: currentUser?.profileDecor?.avatarRing,
                     onTap: {
                         // Une seule règle, testable, pour le routage ET pour
                         // l'annonce VoiceOver (cf. `StoryTrayActionResolver`).
@@ -1030,6 +1034,7 @@ struct PinnedStoryTrailBand: View {
             avatarURL: currentUser?.avatar,
             storyState: .none,
             moodEmoji: statusViewModel.statusForUser(userId: uid)?.moodEmoji,
+            ring: currentUser?.profileDecor?.avatarRing,
             onTap: {
                 switch StoryTrayActionResolver.avatarTap(hasMyStory: false, hasAnyStory: hasAnyStory) {
                 case .manageStories: showMyStories = true

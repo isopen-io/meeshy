@@ -192,7 +192,7 @@ targets:
       # notification n'a pas d'hôte de test : le seul endroit d'où une règle
       # pure est éprouvable est `MeeshyTests`, qui `@testable import Meeshy`.
       # Le fichier est donc compilé dans les DEUX cibles — même mécanique que
-      # `ForwardPickerModel.swift` pour l'extension de partage, en sens
+      # l’écran de partage unique (`Meeshy/Features/Main/Share/`) pour l’extension de partage, en sens
       # inverse. Il n'importe QUE Foundation ; garde : `NSEAttachmentPolicyTests`.
       - path: MeeshyNotificationExtension/NSEAttachmentPolicy.swift
       # #8858 — ce que la NSE et les ACTIONS de notification tirent du détail
@@ -368,9 +368,12 @@ targets:
         product: MeeshySDK
       - sdk: UserNotificationsUI.framework
 
-  # Share Extension — "Share to Meeshy" depuis d'autres apps. ShareViewController
-  # est auto-contenu (frameworks système + container App Group group.me.meeshy.apps) ;
-  # aucune dépendance SDK. Recâblé 2026-06-24 (présent sur disque mais absent de
+  # Share Extension — "Share to Meeshy" depuis d'autres apps. Depuis l'écran de
+  # partage UNIQUE (#10947), elle monte LA MÊME vue que l'app (`ShareSheetView`
+  # et ses sous-vues, compilées ici depuis `Meeshy/Features/Main/Share/`), avec
+  # ses propres coutures (`ExtensionShareDirectory`, `ExtensionShareDispatcher`)
+  # et le catalogue de mots de l'APP (`Bundle.meeshyShare`). Elle lie donc
+  # MeeshySDK et MeeshyUI. Recâblé 2026-06-24 (présent sur disque mais absent de
   # project.yml → jamais compilé). Info.plist : NSExtensionPrincipalClass
   # (ShareViewController programmatique, pas de storyboard).
   #
@@ -388,19 +391,43 @@ targets:
     deploymentTarget: "16.0"
     sources:
       - path: MeeshyShareExtension
-      # PRÉCÉDENT NOUVEAU : un fichier de l'APP compilé dans une app-extension.
-      # `project.yml` ne connaissait que l'inverse (helpers d'extension compilés
-      # dans MeeshyTests). L'écran de partage a besoin de la MÊME machine à
-      # états que le sélecteur de transfert — la réécrire produirait deux
-      # sémantiques de sélection divergentes pour un même geste.
-      # Le fichier n'importe QUE Foundation ; garde :
-      # `ForwardPickerModelPortabilityGuardTests`.
-      - path: Meeshy/Features/Main/Components/ForwardPickerModel.swift
+      # L'écran de partage UNIQUE (#10947) : les fichiers PORTABLES de l'écran,
+      # un par un. Ni `ShareDispatcher.swift` (LiveShareDispatcher), ni
+      # `ShareRecipientDirectory.swift` (LiveShareRecipientDirectory), ni
+      # `ShareSheetHost+App.swift` : ceux-là parlent aux singletons de l'app.
+      # Garde : `ShareExtensionScreenGuardTests`.
+      - path: Meeshy/Features/Main/Share/ShareContentZone.swift
+      - path: Meeshy/Features/Main/Share/ShareDirectorySnapshot.swift
+      - path: Meeshy/Features/Main/Share/ShareDurationRow.swift
+      - path: Meeshy/Features/Main/Share/ShareIncomingStrip.swift
+      - path: Meeshy/Features/Main/Share/ShareRecipient.swift
+      - path: Meeshy/Features/Main/Share/ShareRecipientRow.swift
+      - path: Meeshy/Features/Main/Share/ShareRelayHandoff.swift
+      - path: Meeshy/Features/Main/Share/ShareSendBar.swift
+      - path: Meeshy/Features/Main/Share/ShareSheetCopy.swift
+      - path: Meeshy/Features/Main/Share/ShareSheetView.swift
+      - path: Meeshy/Features/Main/Share/ShareSheetView+Actions.swift
+      - path: Meeshy/Features/Main/Share/ShareSheetViewModel.swift
+      - path: Meeshy/Features/Main/Share/ShareSourcing.swift
+      - path: Meeshy/Features/Main/Share/ShareStringsBundle.swift
+      - path: Meeshy/Features/Main/Share/ShareSubject.swift
+      # Les noms courts des modèles du SDK (`Message`, `MessageAttachment`).
+      - path: Meeshy/Features/Main/Models/MessageAliases.swift
     settings:
       INFOPLIST_FILE: MeeshyShareExtension/Info.plist
       PRODUCT_BUNDLE_IDENTIFIER: me.meeshy.app.share-extension
       CODE_SIGN_STYLE: Automatic
+      # Les coutures de l'extension sont AUSSI compilées dans `MeeshyTests`, où
+      # l'écran vient du module de l'app : elles n'importent `Meeshy` que hors
+      # de cette cible (`#if !MEESHY_SHARE_EXTENSION`). `canImport(Meeshy)` ne
+      # suffit pas : le module de l'app est dans les mêmes produits de build.
+      SWIFT_ACTIVE_COMPILATION_CONDITIONS: "$(inherited) MEESHY_SHARE_EXTENSION"
       CODE_SIGN_ENTITLEMENTS: MeeshyShareExtension/MeeshyShareExtension.entitlements
+    dependencies:
+      - package: MeeshySDK
+        product: MeeshySDK
+      - package: MeeshySDK
+        product: MeeshyUI
 
   # #8063 — Broadcast Upload Extension (ReplayKit) : capte l'écran pendant un
   # appel et en pousse les trames, en JPEG réduit, à l'app par un socket Unix
@@ -514,7 +541,7 @@ targets:
       # tests) et n'a aucune dépendance UIKit — comme les trois helpers
       # au-dessus, il vit dans une cible app-extension que
       # `@testable import Meeshy` n'atteint pas.
-      - path: MeeshyShareExtension/ShareLimits.swift
+      - path: MeeshyShareExtension/ShareUploadBudget.swift
       - path: MeeshyShareExtension/ShareMediaStaging.swift
       - path: MeeshyShareExtension/SharePendingShare.swift
       # #5056 — la fiche de COMPOSITION (vue `2a`). Listée ici pour la même
@@ -531,6 +558,12 @@ targets:
       # les deux verrous purs du cycle de vie de l'écran de partage
       # (`ShareLifecycleGatesTests`). Même raison que les fichiers ci-dessus.
       - path: MeeshyShareExtension/ShareLifecycleGates.swift
+      # #10947 — les coutures de l'extension pour l'écran unique. Elles
+      # importent le module de l'app par `#if !MEESHY_SHARE_EXTENSION` (vrai ici
+      # seulement) pour y trouver l'écran.
+      - path: MeeshyShareExtension/ExtensionShareDirectory.swift
+      - path: MeeshyShareExtension/ExtensionShareDispatcher.swift
+      - path: MeeshyShareExtension/ShareExtensionIncoming.swift
       # Vecteurs partagés Lentille/Focal (contrat LWS-5, workshop
       # tasks/lentille-focal-workshop.md §2.3) : le même JSON que les suites
       # Jest (packages/shared/__tests__/vectors/) et JUnit (Android, phase 2),

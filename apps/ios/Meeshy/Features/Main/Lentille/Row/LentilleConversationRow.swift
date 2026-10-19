@@ -679,19 +679,15 @@ private struct LentilleRowAvatar: View {
             // verrouillé par MeeshyAvatar, pas ici).
             presenceState: presenceState,
             isHere: isDirect ? isPeerHere : .absent,
+            // LE CONTOUR DU PAIR (#10757) — même loi que `ThemedConversationRow` : l'avatar
+            // le pose dans son empreinte, l'anneau de story concentrique à l'intérieur (#10714).
+            ring: isDirect ? conversation.participantRing : nil,
             enablePulse: false,
             onTap: isDirect ? onViewProfile : onViewConversationInfo,
             onViewProfile: nil,
             onViewStory: (isDirect && storyRingState != .none) ? onViewStory : nil,
             onMoodTap: onMoodBadgeTap,
             contextMenuItems: isDirect ? directContextMenuItems : groupContextMenuItems
-        )
-        // LE CONTOUR DU PAIR (#10757) — même loi que `ThemedConversationRow` : dans
-        // l'empreinte de l'avatar, l'anneau de story concentrique à l'intérieur (#10714).
-        .avatarRingWithin(
-            isDirect ? ProfileDecorResolver.ring(conversation.participantRing) : nil,
-            footprint: LentilleMetrics.Avatar.context.size,
-            storyRingSize: storyRingState == .none ? nil : LentilleMetrics.Avatar.context.ringSize
         )
     }
 }

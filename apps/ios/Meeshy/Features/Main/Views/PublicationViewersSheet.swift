@@ -353,7 +353,8 @@ struct ViewerEngagementDetailView: View {
                         name: viewer.displayName,
                         context: .profileSheet,
                         avatarURL: viewer.avatarUrl,
-                        moodEmoji: moodEmoji
+                        moodEmoji: moodEmoji,
+                        presenceState: PresenceManager.shared.resolvedState(userId: viewer.id, isOnline: nil)
                     )
                     .padding(.vertical, MeeshySpacing.sm)
                     .accessibilityHidden(true)

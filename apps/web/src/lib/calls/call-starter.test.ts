@@ -40,7 +40,7 @@ describe('appeler une personne', () => {
     expect(outcome).toEqual({ ok: true, conversationId: 'c-ada' });
     expect(opened).toEqual(['u-ada']);
     expect(order).toEqual(['prime', 'open', 'start']);
-    expect(started).toEqual([{ conversationId: 'c-ada', media: 'video', title: 'Ada Lovelace', avatar: 'a.jpg', isGroup: false }]);
+    expect(started).toEqual([{ conversationId: 'c-ada', media: 'video', title: 'Ada Lovelace', avatar: 'a.jpg', isGroup: false, peerKey: 'u-ada' }]);
   });
 
   test('un direct refusé (bloqué, hors ligne) ne lance rien et le DIT', async () => {

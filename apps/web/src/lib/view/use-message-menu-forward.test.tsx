@@ -14,17 +14,11 @@ import { sendSheetStore, type SendSheetRequest } from '@/lib/send/send-sheet-sto
 import { useMessageMenu } from './use-message-menu';
 
 /**
- * « TRANSFÉRER » ARME LA SÉLECTION (#5866, décision porteur #5989).
- *
- * Le porteur a tranché le 2026-09-23 : un tap sur « Transférer » entre en
- * mode SÉLECTION avec ce message DÉJÀ COCHÉ — ce n'est PAS un sélecteur de
- * conversations qui s'ouvre. Il a accepté le geste supplémentaire au cas
- * nominal pour que le même mot ait le même effet quelle que soit la porte
- * (dimension 6). Ces témoins gardent exactement cette phrase : après le menu,
- * la sélection existe et la feuille de destinataires n'est PAS ouverte.
- *
- * Et la VUE UNIQUE est refusée CÔTÉ CLIENT, avec un motif : `admitForward`
- * rejoue `admitMessageForward` avant l'aller-retour.
+ * « TRANSFÉRER » OUVRE L'ÉCRAN DE PARTAGE (D1, #10949, porteur 2026-10-18 —
+ * supplante #5989) — depuis toutes les portes, avec CE message. La sélection
+ * multiple reste « Sélectionner ». Une sélection qui mêle un protégé retire le
+ * protégé et envoie le reste (D6) ; seule une sélection où rien ne sort est
+ * refusée, avec son motif.
  */
 
 const globals = globalThis as typeof globalThis & { IS_REACT_ACT_ENVIRONMENT?: boolean };
@@ -117,21 +111,25 @@ function mount(messages: readonly Message[]): { api: () => MenuApi; announced: s
 
 const placedOf = (messages: readonly Message[]) => messages.map((m) => ({ message: { id: m.id } }));
 
-describe('« Transférer » depuis le MENU — arme la sélection, n’ouvre aucun sélecteur', () => {
-  test('la sélection démarre avec CE message coché', () => {
+describe('« Transférer » depuis le MENU — ouvre l’écran de partage avec CE message (D1)', () => {
+  test('l’écran s’ouvre sur ce seul message, sans armer de sélection', () => {
     const { api } = mount([ordinary('m1'), ordinary('m2')]);
     act(() => {
       api().onMenuAction('m1', 'forward');
     });
-    expect(api().selection).toEqual({ ids: ['m1'] });
+    const request = openedRequest();
+    expect(request?.intent).toBe('forward');
+    expect(request?.payload.kind === 'messages' ? request.payload.messages.map((m) => m.id) : null).toEqual(['m1']);
+    expect(api().selection).toBe(null);
   });
 
-  test('la feuille d’envoi reste FERMÉE — c’est la barre qui valide', () => {
-    const { api } = mount([ordinary('m1')]);
+  test('une vue unique ne s’ouvre pas : le refus DIT pourquoi', () => {
+    const { api, announced } = mount([viewOnce('m9')]);
     act(() => {
-      api().onMenuAction('m1', 'forward');
+      api().onMenuAction('m9', 'forward');
     });
     expect(openedRequest()).toBe(null);
+    expect(announced).toEqual(['Un message à vue unique ne peut pas être transféré']);
   });
 });
 
@@ -140,7 +138,7 @@ describe('« Transférer » depuis la BARRE — ouvre la feuille, ou refuse avec
     const messages = [ordinary('m1'), ordinary('m2')];
     const { api } = mount(messages);
     act(() => {
-      api().onMenuAction('m2', 'forward');
+      api().onMenuAction('m2', 'select');
     });
     act(() => {
       api().onRowTap('m1');
@@ -157,7 +155,7 @@ describe('« Transférer » depuis la BARRE — ouvre la feuille, ou refuse avec
     const messages = [ordinary('m1')];
     const { api } = mount(messages);
     act(() => {
-      api().onMenuAction('m1', 'forward');
+      api().onMenuAction('m1', 'select');
     });
     act(() => {
       api().onForwardSelection(placedOf(messages));
@@ -170,12 +168,31 @@ describe('« Transférer » depuis la BARRE — ouvre la feuille, ou refuse avec
     const messages = [ordinary('m1')];
     const { api } = mount(messages);
     act(() => {
-      api().onMenuAction('m1', 'forward');
+      api().onMenuAction('m1', 'select');
     });
     act(() => {
       api().onForwardSelection(placedOf(messages));
     });
     expect(api().selection).toBe(null);
+  });
+
+  test('D6 — une sélection qui mêle une vue unique ouvre l’écran : le protégé y sera retiré, le reste part', () => {
+    const messages = [ordinary('m1'), viewOnce('m2')];
+    const { api } = mount(messages);
+    act(() => {
+      api().onMenuAction('m1', 'select');
+    });
+    act(() => {
+      api().onRowTap('m2');
+    });
+    act(() => {
+      api().onForwardSelection(placedOf(messages));
+    });
+    const request = openedRequest();
+    expect(request?.payload.kind === 'messages' ? request.payload.exit.map((m) => [m.id, m.isViewOnce]) : null).toEqual([
+      ['m1', false],
+      ['m2', true],
+    ]);
   });
 
   test('une VUE UNIQUE est REFUSÉE côté client, et le refus DIT pourquoi', () => {
@@ -208,13 +225,12 @@ describe('l’offre du glissé est celle du menu', () => {
     expect(api().swipeActionsOf(viewOnce('v1'))).toEqual({ canReply: false, canForward: false });
   });
 
-  test('en sélection, rien ne s’offre ; le glissé ← arme la sélection comme le menu', () => {
+  test('en sélection, rien ne s’offre', () => {
     const { api } = mount([ordinary('m1'), ordinary('m2')]);
     act(() => {
-      api().onMenuAction('m1', 'forward');
+      api().onMenuAction('m1', 'select');
     });
     expect(api().selection).toEqual({ ids: ['m1'] });
-    expect(openedRequest()).toBe(null);
     expect(api().swipeActionsOf(ordinary('m2'))).toBeUndefined();
   });
 });

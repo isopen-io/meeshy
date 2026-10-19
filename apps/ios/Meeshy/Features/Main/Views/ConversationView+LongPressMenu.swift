@@ -183,6 +183,10 @@ extension ConversationView {
             if MessageExitTransport.save(message, piece: piece.id, through: mediaSaveCoordinator) { HapticFeedback.light() }
         case .deletePiece:
             deleteMedia(targeted: piece.id, of: message)
+        case .forwardPiece:
+            composerState.forwardAdditionalMessages = []
+            composerState.forwardPieceId = piece.id
+            composerState.forwardMessage = message
         default:
             break
         }

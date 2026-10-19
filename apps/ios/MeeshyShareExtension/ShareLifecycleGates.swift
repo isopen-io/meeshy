@@ -13,10 +13,15 @@ import Foundation
 ///
 /// Compilés DANS `MeeshyShareExtension` (glob de répertoire) ET listés
 /// explicitement dans les `sources:` de `MeeshyTests` (`project.yml`) — même
-/// précédent que `ShareLimits`/`ShareMediaStaging`/`SharePendingShare` :
-/// l'app-extension n'est pas liable depuis le bundle de tests.
+/// précédent que `ShareMediaStaging`/`SharePendingShare` : l'app-extension
+/// n'est pas liable depuis le bundle de tests.
+///
+/// Depuis l'écran unique (#10947), la question est posée à la FERMETURE de la
+/// feuille : on n'efface les fichiers copiés que si aucun envoi n'a été tenté
+/// et qu'aucune fiche (studio, relais) ne les décrit
+/// (`ShareViewController.finish`, `ExtensionShareDispatcher.holdsStagedMedia`).
 
-/// Décide si le bouton Annuler doit rester actif.
+/// Décide si la fermeture peut effacer les fichiers copiés.
 nonisolated enum ShareCancelPolicy {
     /// Une fois qu'un envoi a été TENTÉ (fiche committée), Annuler n'a plus
     /// de sens : le partage est déjà pris en charge, même différé. Ne dépend

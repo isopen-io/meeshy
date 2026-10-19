@@ -2,6 +2,7 @@ import { readFileSync } from 'node:fs';
 import { dirname, join } from 'node:path';
 import { fileURLToPath } from 'node:url';
 
+import { SHARE_LIMITS } from '@meeshy/shared/utils/share-limits';
 import { describe, expect, test } from 'bun:test';
 
 import { fakeIndexedDb, type FakeIndexedDb } from './idb-double';
@@ -94,17 +95,17 @@ describe('sw-share-target.js — la réception du partage système', () => {
     expect(stored(store)?.files).toEqual([]);
   });
 
-  test('borne le nombre de fichiers à dix', async () => {
+  test('borne le nombre de fichiers aux plafonds communs (D10 : vingt)', async () => {
     const store = fakeIndexedDb();
-    const files = Array.from({ length: 13 }, (_, i) => new File(['x'], `p${i}.png`, { type: 'image/png' }));
+    const files = Array.from({ length: SHARE_LIMITS.maxFiles + 3 }, (_, i) => new File(['x'], `p${i}.png`, { type: 'image/png' }));
     await post(store, formOf({ media: files }));
-    expect(stored(store)?.files.map((file) => file.name)).toEqual(files.slice(0, 10).map((file) => file.name));
+    expect(stored(store)?.files.map((file) => file.name)).toEqual(files.slice(0, SHARE_LIMITS.maxFiles).map((file) => file.name));
   });
 
   test('borne le poids total : un fichier qui ferait dépasser est écarté, les suivants aussi', async () => {
     const store = fakeIndexedDb();
     const small = new File(['x'], 'petit.png', { type: 'image/png' });
-    const huge = Object.defineProperty(new File(['x'], 'enorme.mp4', { type: 'video/mp4' }), 'size', { value: 101 * 1024 * 1024 });
+    const huge = Object.defineProperty(new File(['x'], 'enorme.mp4', { type: 'video/mp4' }), 'size', { value: SHARE_LIMITS.maxTotalBytes + 1 });
     const after = new File(['x'], 'apres.png', { type: 'image/png' });
     const entries: [string, File][] = [small, huge, after].map((file) => ['media', file]);
     const form = { get: () => null, entries: () => entries[Symbol.iterator]() } as unknown as FormData;
@@ -112,12 +113,13 @@ describe('sw-share-target.js — la réception du partage système', () => {
     expect(stored(store)?.files.map((file) => file.name)).toEqual(['petit.png']);
   });
 
-  test('ne range que des images et des vidéos : un autre type n’occupe ni la place ni le budget', async () => {
+  test('range tout fichier non vide (D9) : un son, un document ; un fichier vide n’occupe pas de place', async () => {
     const store = fakeIndexedDb();
-    const page = new File(['<script>'], 'page.html', { type: 'text/html' });
-    const photo = new File(['x'], 'plage.jpg', { type: 'image/jpeg' });
-    await post(store, formOf({ media: [page, photo] }));
-    expect(stored(store)?.files.map((file) => file.name)).toEqual(['plage.jpg']);
+    const vide = new File([], 'vide.txt', { type: 'text/plain' });
+    const voice = new File(['x'], 'note.m4a', { type: 'audio/mp4' });
+    const pdf = new File(['x'], 'devis.pdf', { type: 'application/pdf' });
+    await post(store, formOf({ media: [vide, voice, pdf] }));
+    expect(stored(store)?.files.map((file) => file.name)).toEqual(['note.m4a', 'devis.pdf']);
   });
 
   test('borne le texte reçu comme la coque Android (20 000 caractères)', async () => {

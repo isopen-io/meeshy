@@ -102,6 +102,16 @@ final class OutboxProtectedMediaReplayTests: XCTestCase {
         XCTAssertEqual(body["copyAttachmentsFromMessageId"] as? String, "m-src")
     }
 
+    /// #9914, #10947 — un transfert d'UNE pièce mis en file la rejoue seule :
+    /// sans la clé, la passerelle recopierait tout le lot écarté.
+    func test_textReplayRequest_keepsTheChosenPieceOfAForward() throws {
+        let item = OfflineQueueItem(conversationId: "conv-1", content: "", clientMessageId: "cid_fw",
+                                    forwardedFromId: "m-src", forwardedAttachmentIds: ["p3"])
+        let body = try json(OutboxDispatcher.textReplayRequest(for: item, copyAttachmentsFromMessageId: nil))
+        XCTAssertEqual(body["forwardedFromId"] as? String, "m-src")
+        XCTAssertEqual(body["forwardedAttachmentIds"] as? [String], ["p3"])
+    }
+
     // MARK: - Un envoi média ne part que complet
 
     func test_requireCompleteUpload_oneOfThreeFailed_throwsTheOriginalError() {

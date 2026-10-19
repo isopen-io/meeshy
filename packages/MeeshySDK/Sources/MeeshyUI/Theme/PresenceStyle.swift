@@ -113,16 +113,22 @@ public enum AvatarPresenceDot: Equatable, Sendable {
     }
 
     /// Le diamètre du point, en fraction de l'avatar : la pastille de présence
-    /// à 0,26, le point « ici » au double (#9061). Jumeau de `HERE_DOT_RATIO`
-    /// (`apps/web/src/components/avatar.tsx`).
-    public func diameter(avatarSize: CGFloat, hereRatio: CGFloat = AvatarPresenceDot.hereRatio) -> CGFloat {
+    /// à 0,26, le point « ici » à 0,30 — UNE taille partout, en-tête compris,
+    /// la moitié de l'ancien 0,52 et toujours un peu plus gros que la pastille
+    /// (#10943). Jumeau de `HERE_DOT_RATIO` (`apps/web/src/components/avatar.tsx`).
+    /// Jamais sous `minimumDiameter` (#10955) : sur un avatar de 20 à 24 pt
+    /// (réaction, frappe), le ratio seul rendrait un point illisible.
+    public func diameter(avatarSize: CGFloat) -> CGFloat {
         switch self {
-        case .here: return avatarSize * hereRatio
-        case .presence: return avatarSize * 0.26
+        case .here: return max(Self.minimumDiameter, avatarSize * Self.hereRatio)
+        case .presence: return max(Self.minimumDiameter, avatarSize * Self.presenceRatio)
         }
     }
 
-    public static let hereRatio: CGFloat = 0.52
+    public static let presenceRatio: CGFloat = 0.26
+    public static let hereRatio: CGFloat = 0.30
+    /// Le plancher commun aux deux plateformes (#10955) — jumeau de `DOT_MIN_DIAMETER` (web).
+    public static let minimumDiameter: CGFloat = 6
 
     /// Le décalage qui pose le CENTRE du point sur le cercle de l'avatar, à
     /// 45°, depuis l'alignement `.bottomTrailing` de son cadre (#9061). Le

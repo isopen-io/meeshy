@@ -1,7 +1,8 @@
 /**
- * Les domaines `wallpaper`, `banner` et `avatar-ring` du moteur des packs
- * (#10632, § 3 et § 5.3) : fonds de conversation, bannières de profil et
- * contours d'avatar, servis par le MÊME moteur que les stickers et les cadres.
+ * Les domaines `wallpaper`, `banner`, `avatar-ring` et `banner-frame` du moteur
+ * des packs (#10632, § 3 et § 5.3 ; #10936) : fonds de conversation, bannières
+ * de profil, contours d'avatar et cadres posés sur la bannière, servis par le
+ * MÊME moteur que les stickers et les cadres de gloire.
  *
  * Un pack porte des DONNÉES vectorielles (`AppearanceDesign`,
  * `AvatarRingDesign`) validées par Zod — jamais un SVG brut. Il peut porter un
@@ -19,14 +20,14 @@ import type { CommunityPackStore, PackDomainSpec, RegistryPack } from './PackCat
 import type { PackIndex } from './PackIndex';
 import { PACK_ASSET_PATH } from './gloryFramePackSpec';
 
-export const APPEARANCE_PACK_DOMAINS = ['wallpaper', 'avatar-ring', 'banner'] as const satisfies readonly PackDomain[];
+export const APPEARANCE_PACK_DOMAINS = ['wallpaper', 'avatar-ring', 'banner', 'banner-frame'] as const satisfies readonly PackDomain[];
 export type AppearancePackDomain = (typeof APPEARANCE_PACK_DOMAINS)[number];
 
 export const isAppearancePackDomain = (value: string): value is AppearancePackDomain =>
   (APPEARANCE_PACK_DOMAINS as readonly string[]).includes(value);
 
 export type AppearancePackSummary = PackSummary & {
-  /** Contours seulement : quand le cadre est utilisable (`avatar`). `null` ⇒ nulle part. */
+  /** Contours et cadres de bannière : où le cadre est utilisable (`avatar`, `banner`). `null` ⇒ nulle part. */
   readonly usage?: FrameUsage | null;
 };
 
@@ -35,6 +36,9 @@ export type AppearancePackDetail = AppearancePackSummary & {
   readonly contract: PackAssetRef;
   readonly strings: { readonly [L in PackLanguage]?: PackAssetRef };
 };
+
+/** Les domaines dont un pack annonce sa loi d'usage : ce sont des CADRES. */
+const FRAMED_DOMAINS: ReadonlySet<PackDomain> = new Set<PackDomain>(['avatar-ring', 'banner-frame']);
 
 export function appearancePackDetail(entry: PackIndexEntry, installed: boolean, owned: boolean, itemCount = 0): AppearancePackDetail {
   const fr = entry.names.fr;
@@ -58,7 +62,7 @@ export function appearancePackDetail(entry: PackIndexEntry, installed: boolean, 
     price: entry.price ?? null,
     owned,
     preview: entry.preview,
-    ...(entry.domain === 'avatar-ring' ? { usage: entry.usage ?? null } : {}),
+    ...(FRAMED_DOMAINS.has(entry.domain) ? { usage: entry.usage ?? null } : {}),
     contractSchema: entry.contractSchema,
     contract: entry.contract,
     strings: entry.strings,

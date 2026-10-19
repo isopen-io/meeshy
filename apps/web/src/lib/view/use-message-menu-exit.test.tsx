@@ -9,6 +9,7 @@ import { message, minutesAgo } from '@/lib/api/fixtures-base';
 import { loadInterfaceCatalog } from '@/lib/i18n-catalog';
 import { appQueryClient } from '@/lib/api/query-client';
 import type { Message } from '@/lib/api/types';
+import { sharePlanOf } from '@/lib/send/share-entry';
 import { sendSheetStore } from '@/lib/send/send-sheet-store';
 import { ensureHappyDomRegistered, releaseHappyDomIfRegistered } from '@/test-support/happy-dom-environment';
 
@@ -130,23 +131,22 @@ describe('ce que la barre de sélection offre', () => {
     ['une vue unique', viewOnce],
   ];
   blockers.forEach(([label, make]) => {
-    test(`${label} dans la sélection : Transférer n’est pas offert`, () => {
-      const { api } = mount([ordinary('m1'), make('x1')]);
-      select(api, ['m1', 'x1']);
+    test(`${label} SEULE dans la sélection : Transférer n’est pas offert`, () => {
+      const { api } = mount([make('x1')]);
+      select(api, ['x1']);
       expect(api().selectionOffers.forward).toBe(false);
     });
-  });
 
-  test('la décocher rend Transférer', () => {
-    const { api } = mount([ordinary('m1'), afterRead('x1')]);
-    select(api, ['m1', 'x1']);
-    act(() => api().onRowTap('x1'));
-    expect(api().selectionOffers.forward).toBe(true);
+    test(`${label} parmi des ordinaires : Transférer reste offert, l’écran la retirera (D6)`, () => {
+      const { api } = mount([ordinary('m1'), make('x1')]);
+      select(api, ['m1', 'x1']);
+      expect(api().selectionOffers.forward).toBe(true);
+    });
   });
 });
 
 describe('une porte qui rejoue le geste ne contourne pas la loi', () => {
-  test('« Transférer » rejoué sur une flamme après lecture n’arme rien et dit pourquoi', () => {
+  test('« Transférer » rejoué sur une flamme après lecture n’ouvre rien et dit pourquoi', () => {
     const { api, announced } = mount([afterRead('x1')]);
     act(() => api().onMenuAction('x1', 'forward'));
     expect(api().selection).toBe(null);
@@ -281,14 +281,17 @@ describe('chaque gestionnaire de sortie, appelé en direct, consulte la loi', ()
     });
 
     if (!forwardable) {
-      test(`${label} : « Transférer » n’arme aucune sélection et la barre n’ouvre aucune feuille`, () => {
+      test(`${label} : « Transférer » n’ouvre rien ; dans une sélection mixte, l’écran la RETIRE et garde le reste (D6)`, () => {
         const messages = [ordinary('m1'), make('x1')];
         const { api } = mount(messages);
         act(() => api().onMenuAction('x1', 'forward'));
         expect(api().selection).toBe(null);
+        expect(sendSheetStore.getState().request).toBe(null);
         select(api, ['m1', 'x1']);
         act(() => api().onForwardSelection(placedOf(messages)));
-        expect(sendSheetStore.getState().request).toBe(null);
+        const request = sendSheetStore.getState().request;
+        expect(request === null ? null : sharePlanOf(request.payload).kept).toEqual(['m1']);
+        sendSheetStore.getState().close();
       });
     }
   });

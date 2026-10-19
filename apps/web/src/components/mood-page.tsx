@@ -12,19 +12,19 @@ import type { RainScheduler } from '@/lib/mood/rain-dom';
 import { initialsOf } from '@/lib/view/conversation';
 import { href } from '@/routes/route-table';
 
-import { Avatar } from './avatar';
+import { PeerAvatar } from './peer-avatar';
 import { AvatarRing } from './avatar-ring';
 import { GlyphSvg } from './glyph';
 import { DISCOVER_GLYPHS } from './glyphs-discover';
 import { MoodRain } from './mood-rain';
-import { ProfileBannerDesign, useScheme } from './profile-banner-design';
+import { bannerPaint, ProfileBannerDesign, useScheme } from './profile-banner-design';
 
 /**
  * **L'HUMEUR D'UN CONTACT, EN GRAND** (#10813) — le CORPS de la page, sans
  * lecture réseau : ce que la notification « nouvelle humeur » ouvre.
  *
  * Quatre plans, du fond vers le doigt : la BANNIÈRE de l'auteur en plein écran
- * (sa bannière de design, sinon son image, sinon un dégradé de son accent),
+ * (sa photo de bannière, sinon sa bannière de design, sinon un dégradé de son accent — #10933),
  * voilée pour que le texte reste lisible ; la PLUIE de son emoji ; au centre son
  * AVATAR et son MOT décoré, l'emoji en tête ; en bas, le champ qui RÉPOND en
  * privé (`performMoodReply`). Ma propre humeur n'a pas de champ : on ne se
@@ -42,11 +42,12 @@ const AVATAR_SIZE = 112;
 
 function Backdrop({ banner, accent }: { readonly banner: MoodPageBanner; readonly accent: string }) {
   const scheme = useScheme();
+  const paint = bannerPaint(banner);
   const painted =
-    banner.design !== null ? (
-      <ProfileBannerDesign design={banner.design} accent={accent} scheme={scheme} />
-    ) : banner.image !== null ? (
-      <img src={attachmentSrc(banner.image)} alt="" className="block size-full object-cover" />
+    paint.kind === 'design' ? (
+      <ProfileBannerDesign design={paint.design} accent={accent} scheme={scheme} />
+    ) : paint.kind === 'photo' ? (
+      <img src={attachmentSrc(paint.image)} alt="" className="block size-full object-cover" />
     ) : (
       <span
         className="block size-full"
@@ -187,7 +188,7 @@ export function MoodPageBody({
       <section className="relative grid flex-1 content-center justify-items-center gap-5 px-6 text-center">
         <span className="block rounded-full p-1" style={{ background: 'rgb(255 255 255 / 0.85)', boxShadow: '0 12px 40px rgb(0 0 0 / 0.35)' }}>
           <AvatarRing ring={banner.ring} size={AVATAR_SIZE}>
-            <Avatar initials={initialsOf(view.authorName)} color={accent} size={AVATAR_SIZE} name={view.authorName} {...(view.avatar === null ? {} : { src: view.avatar })} />
+            <PeerAvatar presenceKey={mine ? undefined : view.authorId} initials={initialsOf(view.authorName)} color={accent} size={AVATAR_SIZE} name={view.authorName} {...(view.avatar === null ? {} : { src: view.avatar })} />
           </AvatarRing>
         </span>
         <p className="text-thread font-semibold" style={{ textShadow: '0 1px 8px rgb(0 0 0 / 0.45)' }}>

@@ -255,14 +255,14 @@ public final class MentionComposerController: ObservableObject {
             let found = try await directory.searchUsers(query: query, limit: Self.directoryLimit, offset: 0)
             return found.map {
                 MentionCandidate(id: $0.id, username: $0.username,
-                                 displayName: $0.displayName ?? $0.username, avatarURL: $0.avatar)
+                                 displayName: $0.displayName ?? $0.username, avatarURL: $0.avatar, ring: $0.avatarRing)
             }
         }
         let found = try await service.suggestions(
             contextId: remote.contextId, contextType: remote.contextType, query: query)
         return found.map {
             MentionCandidate(id: $0.id, username: $0.username,
-                             displayName: $0.displayName ?? $0.username, avatarURL: $0.avatar)
+                             displayName: $0.displayName ?? $0.username, avatarURL: $0.avatar, ring: $0.avatarRing)
         }
     }
 

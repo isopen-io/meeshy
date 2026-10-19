@@ -134,6 +134,7 @@ struct RequestsTab: View {
                 accentColor: color,
                 avatarURL: sender?.avatar,
                 moodEmoji: statusViewModel.statusForUser(userId: request.senderId)?.moodEmoji,
+                ring: sender?.avatarRing,
                 onMoodTap: statusViewModel.moodTapHandler(for: request.senderId)
             )
             .countsImpression(of: statusViewModel.statusForUser(userId: request.senderId)?.id) {
@@ -239,7 +240,8 @@ struct RequestsTab: View {
                 name: name,
                 context: .userListItem,
                 accentColor: color,
-                avatarURL: receiver?.avatar
+                avatarURL: receiver?.avatar,
+                ring: receiver?.avatarRing
             )
 
             VStack(alignment: .leading, spacing: MeeshySpacing.xxs) {

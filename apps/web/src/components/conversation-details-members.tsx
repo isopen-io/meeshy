@@ -186,6 +186,7 @@ export function ConversationMembersSection({
         failed={failed}
         onRetry={onRetry}
         viewerId={viewerId}
+        conversationId={conversation.id}
         accent={accent}
         language={language}
         actionsOf={actionsOf}
@@ -269,6 +270,7 @@ function MembersBody({
   failed,
   onRetry,
   viewerId,
+  conversationId,
   accent,
   language,
   storyRingOf,
@@ -283,6 +285,7 @@ function MembersBody({
   readonly failed: boolean;
   readonly onRetry: () => void;
   readonly viewerId: string;
+  readonly conversationId: string;
   readonly accent: string;
   readonly language: InterfaceLanguage;
   readonly storyRingOf?: StoryRingOf;
@@ -336,6 +339,7 @@ function MembersBody({
               key={member.id}
               member={member}
               self={member.userId !== null && member.userId === viewerId}
+              conversationId={conversationId}
               accent={accent}
               language={language}
               {...(actions.length > 0 && manageLabel !== undefined ? { onManage: () => onManage(member), manageLabel: manageLabel(member.displayName) } : {})}
@@ -360,6 +364,7 @@ function MembersBody({
 function MemberRow({
   member,
   self,
+  conversationId,
   accent,
   language,
   storyRingOf,
@@ -368,6 +373,7 @@ function MemberRow({
 }: {
   readonly member: ConversationMember;
   readonly self: boolean;
+  readonly conversationId: string;
   readonly accent: string;
   readonly language: InterfaceLanguage;
   readonly storyRingOf?: StoryRingOf;
@@ -380,7 +386,7 @@ function MemberRow({
 
   const contenu = (
     <>
-      <MemberAvatar member={member} accent={accent} size={MEMBER_AVATAR} />
+      <MemberAvatar member={member} accent={accent} size={MEMBER_AVATAR} conversationId={conversationId} />
       <span className="flex min-w-0 flex-1 flex-col">
         <span className="truncate text-body font-medium" style={{ color: 'var(--color-ios-ink)' }}>
           {member.displayName}

@@ -148,7 +148,7 @@ final class MentionContactsStore: MentionContactsProviding {
         let me = currentUserId()
         return friends
             .filter { $0.id != me }
-            .map { MentionCandidate(id: $0.id, username: $0.username, displayName: $0.name, avatarURL: $0.avatar) }
+            .map { MentionCandidate(id: $0.id, username: $0.username, displayName: $0.name, avatarURL: $0.avatar, ring: $0.avatarRing) }
     }
 
     /// Même magasin et même clé que la liste de contacts et le sélecteur

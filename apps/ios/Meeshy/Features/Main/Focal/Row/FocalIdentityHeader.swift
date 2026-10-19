@@ -43,8 +43,9 @@ struct FocalIdentityHeader: View, Equatable {
     /// Décidé par le type, jamais par le pseudo : `ano_` est un préfixe
     /// lisible, pas un espace réservé, et un compte peut le porter.
     var senderIsAnonymous: Bool = false
-    /// Le contour d'avatar équipé de l'auteur (#10713), posé dans l'empreinte de l'avatar.
-    var senderRing: AvatarRingDesign? = nil
+    /// Le contour d'avatar équipé de l'auteur (#10713) : la RÉFÉRENCE servie, que l'avatar
+    /// résout et pose dans son empreinte (#10946).
+    var senderRing: ServedProfileDecorItem? = nil
     /// L'auteur, déjà résolu par `Focal/Core/`. La rangée le transmet au
     /// présentateur sans jamais le composer — voir la garde §5.1.
     var profileUser: ProfileSheetUser
@@ -128,13 +129,12 @@ struct FocalIdentityHeader: View, Equatable {
                     moodEmoji: senderMoodEmoji,
                     presenceState: senderPresence,
                     isHere: senderIsHere,
+                    ring: senderRing,
                     enablePulse: false,
                     isDark: isDark,
                     onMoodTap: onMoodTap
                 )
                 .agentAuthoredAvatarRing(agentStyle, diameter: avatarSize)
-                .avatarRingWithin(senderRing, footprint: avatarSize,
-                                  storyRingSize: senderStoryRing == .none ? nil : AvatarContext.custom(avatarSize).ringSize)
 
                 // Le fantôme précède le nom : il qualifie l'identité, il ne la
                 // décore pas. Sans lui, un visiteur entré par lien public est

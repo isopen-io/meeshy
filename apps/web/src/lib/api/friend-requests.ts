@@ -1,6 +1,9 @@
 import type { InfiniteData } from '@tanstack/react-query';
 import * as z from 'zod/mini';
 import * as directoryEndpoints from '@meeshy/shared/api/endpoints/directory';
+import type { ServedProfileDecorItem } from '@meeshy/shared/types/profile-decor';
+
+import { servedRingOf } from '@/lib/profile-decor/served-ring';
 
 import { unwrap } from './client';
 import type { DataSource } from './config';
@@ -40,6 +43,8 @@ export type PersonSummary = {
   readonly username: string;
   readonly displayName: string | null;
   readonly avatar: string | null;
+  /** Le contour équipé servi avec la personne (#10945) ; absent sans contour (#10946). */
+  readonly ring?: ServedProfileDecorItem;
 };
 
 export type FriendRequestRecord = {
@@ -78,7 +83,8 @@ export function decodePerson(raw: unknown): PersonSummary | null {
   const parsed = WirePerson.safeParse(raw);
   if (!parsed.success) return null;
   const { id, username, displayName, avatar } = parsed.data;
-  return { id, username, displayName: textOrNull(displayName), avatar: textOrNull(avatar) };
+  const ring = servedRingOf(raw);
+  return { id, username, displayName: textOrNull(displayName), avatar: textOrNull(avatar), ...(ring === null ? {} : { ring }) };
 }
 
 const WireRequest = z.object({

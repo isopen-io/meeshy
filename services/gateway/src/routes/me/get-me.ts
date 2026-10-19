@@ -88,7 +88,7 @@ import type { FastifyReply, FastifyRequest } from 'fastify';
 import type { PrismaClient } from '@meeshy/shared/prisma/client';
 import { userSchema, errorResponseSchema } from '@meeshy/shared/types/api-schemas';
 import { servedUserPermissions } from '../../services/admin/served-permissions';
-import { servedProfileDecor, servedProfileDecorItemJsonSchema } from '../../services/appearance/profileDecor';
+import { PROFILE_DECOR_COLUMNS, servedProfileDecor, servedProfileDecorJsonSchema } from '../../services/appearance/profileDecor';
 import { startupPackIndex } from '../../services/packs/PackIndex';
 import { EMPTY_PROFILE_DECOR } from '@meeshy/shared/types/profile-decor';
 import {
@@ -366,7 +366,7 @@ async function withProfileDecor(
   try {
     const row = await request.server.prisma.user.findUnique({
       where: { id: authContext.userId },
-      select: { equippedAvatarRing: true, equippedBanner: true },
+      select: PROFILE_DECOR_COLUMNS,
     });
     return { ...served, profileDecor: servedProfileDecor(startupPackIndex(), row) };
   } catch {
@@ -492,10 +492,9 @@ const meUserSchema = {
   properties: {
     ...userSchema.properties,
     profileDecor: {
-      type: 'object',
+      ...servedProfileDecorJsonSchema,
       nullable: true,
-      description: 'Equipped avatar ring and design banner (#10632), additive.',
-      properties: { avatarRing: servedProfileDecorItemJsonSchema, banner: servedProfileDecorItemJsonSchema },
+      description: 'Equipped avatar ring, design banner and banner frame (#10632, #10932), additive.',
     },
     security: {
       type: 'object',

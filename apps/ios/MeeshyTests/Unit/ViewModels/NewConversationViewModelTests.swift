@@ -64,6 +64,16 @@ final class NewConversationViewModelTests: XCTestCase {
         """)
     }
 
+    /// #10946 — la recherche de personnes sert le contour équipé ; le résultat le garde.
+    func test_searchedUser_decodesTheServedRing() {
+        let user: SearchedUser = JSONStub.decode("""
+        {"id":"u1","username":"ana","firstName":null,"lastName":null,"displayName":null,"email":null,"isOnline":null,"lastActiveAt":null,"avatar":null,
+         "profileDecor":{"avatarRing":{"pack":"contours-essentiels","item":"filet","origin":"builtin"}}}
+        """)
+
+        XCTAssertEqual(user.avatarRing, ServedProfileDecorItem(pack: "contours-essentiels", item: "filet", origin: .builtin))
+    }
+
     private static func makeConversationResponse(id: String, type: String = "direct") -> APIResponse<APIConversation> {
         JSONStub.decode("""
         {

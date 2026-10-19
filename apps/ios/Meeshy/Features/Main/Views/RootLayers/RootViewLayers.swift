@@ -138,7 +138,10 @@ struct RootStoryDoorsLayer: ViewModifier {
             .adaptiveOnChange(of: router.path) { _, path in
                 navigationHandoff?.record(path)
             }
-            .task { await onStart() }
+            .task {
+                await onStart()
+                ConversationListVMOwner.endLaunch()
+            }
             .fullScreenCover(item: $storyViewerCoordinator.pendingRequest) { request in
                 StoryViewerContainer(
                     viewModel: storyViewModel,
@@ -346,22 +349,17 @@ struct RootSheetsLayer: ViewModifier {
             }
             .sheet(isPresented: $showSharePicker) {
                 if let shared = router.pendingShareContent {
-                    // SwiftUI sheets create a separate presentation hierarchy and do
-                    // NOT inherit EnvironmentObjects from the parent view automatically.
-                    // Re-inject the trio that SharePickerView declares as
-                    // @EnvironmentObject (conversationListViewModel, router,
-                    // statusViewModel), otherwise tapping share crashes with
-                    // "EnvironmentObject error → SharePickerView.<missing>".
-                    SharePickerView(
-                        sharedContent: shared,
+                    // L'écran de partage unique (#10947) ne lit aucun objet
+                    // d'environnement : tout lui est injecté.
+                    ShareSheetView(
+                        subject: shared,
+                        actions: ShareSheetHostActions(onOpenConversation: { router.navigateToConversation($0) }),
                         onDismiss: {
                             router.pendingShareContent = nil
                         }
                     )
-                    .meeshyConversationList(conversationViewModel)
-                    .environmentObject(router)
-                    .environmentObject(statusViewModel)
                     .presentationDetents([.medium, .large])
+                    .presentationDragIndicator(.visible)
                     .closesForConversationOpening(.sheet, close: {
                         router.pendingShareContent = nil
                         showSharePicker = false
@@ -373,6 +371,9 @@ struct RootSheetsLayer: ViewModifier {
                     showSharePicker = true
                 }
             }
+            // #10947 — un partage relayé par l'extension (sans session, ou vers
+            // une conversation chiffrée) rouvre ICI l'écran de partage unique.
+            .shareRelayPresenter(consumer: ShareRelayConsumer.shared, router: router)
             .sheet(isPresented: $showNewConversation) {
                 NewConversationView()
                     .environmentObject(statusViewModel)

@@ -28,14 +28,16 @@ const ring = (over: Record<string, unknown> = {}) =>
   entry({ slug: 'contours', domain: 'avatar-ring', usage: { kind: 'free', surfaces: ['avatar'] }, ...over });
 
 describe('les trois domaines de la boutique unifiée', () => {
-  it('PACK_DOMAINS gagne wallpaper, avatar-ring et banner', () => {
-    expect([...PACK_DOMAINS]).toEqual(['sticker', 'glory-frame', 'capture-frame', 'wallpaper', 'avatar-ring', 'banner']);
+  it('PACK_DOMAINS gagne wallpaper, avatar-ring, banner, puis banner-frame (#10932)', () => {
+    expect([...PACK_DOMAINS]).toEqual(['sticker', 'glory-frame', 'capture-frame', 'wallpaper', 'avatar-ring', 'banner', 'banner-frame']);
   });
 
   it('les clés de choix des nouveaux domaines se préfixent et se relisent', () => {
     expect(packChoiceKey('wallpaper', 'heritages')).toBe('wallpaper.heritages');
     expect(parsePackChoiceKey('avatar-ring.contours')).toEqual({ domain: 'avatar-ring', slug: 'contours' });
     expect(parsePackChoiceKey('banner.essentielles')).toEqual({ domain: 'banner', slug: 'essentielles' });
+    expect(packChoiceKey('banner-frame', 'heritages')).toBe('banner-frame.heritages');
+    expect(parsePackChoiceKey('banner-frame.heritages')).toEqual({ domain: 'banner-frame', slug: 'heritages' });
   });
 });
 
@@ -75,6 +77,21 @@ describe('l’usage d’un pack de contours', () => {
   it('un pack de fonds ou de bannières ne porte aucun usage', () => {
     expect(PackIndexEntrySchema.safeParse(entry({ usage: { kind: 'free', surfaces: ['avatar'] } })).success).toBe(false);
     expect(PackIndexEntrySchema.safeParse(entry({ domain: 'banner', usage: { kind: 'free', surfaces: ['avatar'] } })).success).toBe(false);
+  });
+
+  it('un pack de cadres de bannière exige l’usage libre sur la seule surface bannière (#10932)', () => {
+    const frame = (over: Record<string, unknown> = {}) => entry({ slug: 'cadres', domain: 'banner-frame', usage: { kind: 'free', surfaces: ['banner'] }, ...over });
+    expect(PackIndexEntrySchema.safeParse(frame()).success).toBe(true);
+    expect(PackIndexEntrySchema.safeParse(frame({ usage: undefined })).success).toBe(false);
+    expect(PackIndexEntrySchema.safeParse(frame({ usage: { kind: 'free', surfaces: ['banner', 'avatar'] } })).success).toBe(false);
+    expect(PackIndexEntrySchema.safeParse(frame({ usage: { kind: 'free', surfaces: ['avatar'] } })).success).toBe(false);
+    expect(PackIndexEntrySchema.safeParse(frame({ usage: { kind: 'prestige' } })).success).toBe(false);
+  });
+
+  it('aucun autre domaine ne déclare la surface bannière', () => {
+    expect(PackIndexEntrySchema.safeParse(ring({ usage: { kind: 'free', surfaces: ['banner'] } })).success).toBe(false);
+    expect(PackIndexEntrySchema.safeParse(entry({ slug: 'cap', domain: 'capture-frame', usage: { kind: 'free', surfaces: ['photo', 'banner'] } })).success).toBe(false);
+    expect(PackIndexEntrySchema.safeParse(entry({ domain: 'banner', usage: { kind: 'free', surfaces: ['banner'] } })).success).toBe(false);
   });
 
   it('le registre tombe entrée par entrée', () => {

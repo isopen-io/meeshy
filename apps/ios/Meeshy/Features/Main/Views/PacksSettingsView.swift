@@ -127,7 +127,7 @@ struct PackShopScreen: View {
         switch domain {
         case .gloryFrame:
             FramePackShopScreen(store: .shared, shelf: .shared, focusedPack: focusedPack)
-        case .sticker, .wallpaper, .avatarRing, .banner:
+        case .sticker, .wallpaper, .avatarRing, .banner, .bannerFrame:
             // La vitrine unique (#10632, #10711) : prix en Meeshes, possession, achat optimiste —
             // les stickers y passent comme les fonds, plus de seconde Boutique.
             UnifiedShopView(initialDomain: domain, domains: [domain], focusedSlug: focusedPack,

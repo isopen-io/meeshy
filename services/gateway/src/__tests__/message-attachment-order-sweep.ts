@@ -20,10 +20,16 @@ import { join, relative } from 'path';
 
 const ORDER = 'MESSAGE_ATTACHMENT_ORDER';
 
-/** Projections qui ne servent rien d'ordonné : la protection, l'id, le type. */
+/**
+ * Projections qui ne servent rien d'ordonné : la protection, l'id, le type.
+ * La protection d'une pièce comprend son CHIFFREMENT (`isEncrypted`,
+ * `encryptionMode`) : l'admission d'un transfert (#10987) lit ces colonnes avec
+ * l'id pour retrouver la pièce choisie PAR SON ID et refuser une source
+ * chiffrée — elle ne sert aucune liste ordonnée.
+ */
 const NON_SERVING_SELECTS: readonly RegExp[] = [
   /^select:\{(id:true,?|mimeType:true,?)+\}$/,
-  /^select:\{(isViewOnce:true,?|isBlurred:true,?|effectFlags:true,?)+\}$/,
+  /^select:\{(id:true,?|isViewOnce:true,?|isBlurred:true,?|effectFlags:true,?|isEncrypted:true,?|encryptionMode:true,?)+\}$/,
   /^select:(attachmentProtectionSelect|PROTECTION_SELECT|PIECE_PROTECTION_SELECT)$/,
 ];
 

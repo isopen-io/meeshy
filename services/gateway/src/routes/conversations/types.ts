@@ -42,6 +42,8 @@ export interface SendMessageBody {
   storyReplyToId?: string;
   // Forwarding fields
   forwardedFromId?: string;
+  /** #9914 — les pièces de `forwardedFromId` à recopier ; absent : tout le lot. */
+  forwardedAttachmentIds?: string[];
   forwardedFromConversationId?: string;
   // Diffusion à plusieurs destinataires (PAS un transfert) : copie serveur
   // des pièces jointes du message désigné, mêmes fichiers, sans marque de

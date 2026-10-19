@@ -61,7 +61,9 @@ const DOMAIN_KEYS: Readonly<Record<PackDomain, PlainStickerPacksKey>> = {
   wallpaper: 'packs.domain.wallpaper',
   'avatar-ring': 'packs.domain.avatar-ring',
   banner: 'packs.domain.banner',
+  'banner-frame': 'packs.domain.banner-frame',
 };
+
 
 export const keyedPack = (pack: ShopPack): UnifiedPack => ({ ...pack, rawSlug: pack.slug, slug: `${pack.domain}:${pack.slug}` });
 

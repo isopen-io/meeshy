@@ -444,6 +444,11 @@ class ConversationViewModel: ObservableObject {
         /// défaut substituable) — seul un `var` avec défaut y ajoute un
         /// paramètre substituable (SE-0242).
         var isMe: Bool = false
+        /// #10956 — le COMPTE de l'auteur (`viewingKey`), la clé de sa présence servie ;
+        /// `nil` pour les galeries qui ne le savent pas (post, commentaire).
+        var senderUserId: String? = nil
+        /// #10946 — son contour équipé, la référence servie avec le message.
+        var senderRing: ServedProfileDecorItem? = nil
     }
 
     var _mediaSenderInfoMap: [String: MediaSenderInfo]?

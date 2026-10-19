@@ -358,6 +358,8 @@ describe("GET /users/search — l'ORDRE obéit à la loi de la présence", () =>
     expect(select).toEqual({
       id: true, username: true, firstName: true, lastName: true, displayName: true,
       isOnline: true, lastActiveAt: true, systemLanguage: true,
+      // #10945 — le contour équipé, servi résolu en `profileDecor`, jamais brut.
+      equippedAvatarRing: true,
     });
   });
 });

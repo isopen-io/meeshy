@@ -284,6 +284,13 @@ struct MeeshyApp: App {
                     // L'identifiant est PASSÉ, pas deviné : deux partages
                     // rapides se suivent, et reprendre « la plus ancienne »
                     // ouvrirait la première pièce sur le geste de la seconde.
+                    // #10947 — même principe pour un partage RELAYÉ par
+                    // l'extension : la fiche est déjà sur le disque, l'écran de
+                    // partage de la racine la présente.
+                    if let relayId = ShareRelayHandoff.shareId(from: url) {
+                        ShareRelayConsumer.shared.consumeNext(id: relayId)
+                        return
+                    }
                     if ShareComposeLink.shareId(from: url) != nil {
                         let identifiant = ShareComposeLink.shareId(from: url)
                         Task { await ShareComposeHandoffConsumer.shared.consumeNext(id: identifiant) }
@@ -415,6 +422,7 @@ struct MeeshyApp: App {
                     // pièce serait perdue. Un raccourci ne doit jamais être le
                     // seul chemin.
                     Task { await ShareComposeHandoffConsumer.shared.consumeNext() }
+                    ShareRelayConsumer.shared.consumeNext()
 
                     // Wire preference mutations to flush the outbox immediately after
                     // enqueue so changes don't get stuck `.pending` until boot/foreground
@@ -657,6 +665,14 @@ struct MeeshyApp: App {
                         // le splash attend pour tomber : la liste se montre
                         // servie, jamais vide puis remplie.
                         launchSplash.reach(.conversationList)
+                        // #10927 — la liste se lit DÈS la session restaurée : le
+                        // `.task` de la racine arrivait 0,6 à 2,2 s plus tard, et
+                        // le voile tombait sur une liste vide. La racine rejoint
+                        // ce chargement (`ConversationListVMOwner.loadAtLaunch`).
+                        // Lancé AVANT de rendre la main : le premier rendu de la
+                        // racine tient le fil principal 0,8 à 1,9 s (Debug), et la
+                        // lecture du cache le chevauche au lieu de le suivre.
+                        ConversationListVMOwner.prewarm(userId: authManager.currentUser?.id ?? "")
                         _ = await CacheCoordinator.shared.conversations.load(for: "list")
 
                         // Détacher TOUS les bootstraps réseau (push, VoIP,

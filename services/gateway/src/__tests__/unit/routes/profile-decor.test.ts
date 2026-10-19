@@ -9,7 +9,7 @@
 import Fastify from 'fastify';
 import { describe, it, expect, beforeEach, afterEach, jest } from '@jest/globals';
 import profileDecorRoutes from '../../../routes/me/profile-decor';
-import { buildPublicProfile, publicProfileSchema } from '../../../routes/users/public-profile';
+import { buildPublicProfile, publicProfilePlan, publicProfileSchema, publicUserSelect } from '../../../routes/users/public-profile';
 import { servedProfileDecor } from '../../../services/appearance/profileDecor';
 import { buildPackIndex } from '../../../services/packs/PackIndex';
 
@@ -22,26 +22,33 @@ const entry = (domain: string, slug: string, over: Record<string, unknown> = {})
   downloadBytes: { story: 1, square: null }, names: { fr: { name: slug, description: slug } }, ...over,
 });
 const RING_USAGE = { kind: 'free', surfaces: ['avatar'] };
+const FRAME_USAGE = { kind: 'free', surfaces: ['banner'] };
+const ITEM_KEYS: Readonly<Record<string, readonly string[]>> = {
+  'avatar-ring': ['filet', 'laurier'],
+  'banner-frame': ['haussmannien', 'celte'],
+};
 const INDEX = buildPackIndex({
   registries: [[
     entry('avatar-ring', 'contours', { usage: RING_USAGE }),
     entry('avatar-ring', 'contours-rares', { origin: 'official', installedByDefault: false, removable: true, price: 30, usage: RING_USAGE, contract: ref('e', 'json') }),
     entry('banner', 'bannieres'),
     entry('wallpaper', 'essentiels'),
+    entry('banner-frame', 'cadres', { usage: FRAME_USAGE }),
+    entry('banner-frame', 'cadres-rares', { origin: 'official', installedByDefault: false, removable: true, price: 40, usage: FRAME_USAGE, contract: ref('f', 'json') }),
   ]],
   retained: [],
-  contractItemKeys: (e) => (e.domain === 'avatar-ring' ? ['filet', 'laurier'] : ['aurore', 'maille']),
+  contractItemKeys: (e) => ITEM_KEYS[e.domain] ?? ['aurore', 'maille'],
 });
 
 function build(options: { owns?: readonly string[] } = {}) {
-  const user: Record<string, unknown> = { equippedAvatarRing: null, equippedBanner: null };
+  const user: Record<string, unknown> = { equippedAvatarRing: null, equippedBanner: null, equippedBannerFrame: null };
   const emits: { room: string; event: string; payload: any }[] = [];
   const prisma = {
     userPackOwnership: { findMany: jest.fn(async () => (options.owns ?? []).map((packKey) => ({ packKey }))) },
     user: {
       update: jest.fn(async ({ data }: any) => {
         Object.assign(user, data);
-        return { equippedAvatarRing: user.equippedAvatarRing, equippedBanner: user.equippedBanner };
+        return { equippedAvatarRing: user.equippedAvatarRing, equippedBanner: user.equippedBanner, equippedBannerFrame: user.equippedBannerFrame };
       }),
     },
   };
@@ -74,6 +81,7 @@ describe('PUT /me/profile-decor', () => {
     expect(response.json().data).toEqual({
       avatarRing: { pack: 'contours', item: 'filet', origin: 'builtin', contract: null },
       banner: { pack: 'bannieres', item: 'aurore', origin: 'builtin', contract: null },
+      bannerFrame: null,
     });
     expect(env.user).toMatchObject({ equippedAvatarRing: 'contours/filet', equippedBanner: 'bannieres/aurore' });
     expect(env.emits).toHaveLength(1);
@@ -166,16 +174,145 @@ describe('PUT /me/profile-decor', () => {
   });
 
   it('refuse un corps mal formé (400) sans écrire', async () => {
+    expect((await put({ bannerFrame: { pack: 'cadres', item: 'Haussmann ien' } })).statusCode).toBe(400);
+    expect((await put({ bannerFrame: 'cadres/haussmannien' })).statusCode).toBe(400);
+    expect(env.user.equippedBannerFrame).toBeNull();
     expect((await put({ avatarRing: { pack: 'Contours!', item: 'filet' } })).statusCode).toBe(400);
     expect(env.user.equippedAvatarRing).toBeNull();
   });
 });
 
+describe('PUT /me/profile-decor — le cadre de bannière, troisième côté (#10932)', () => {
+  let env: ReturnType<typeof build>;
+  const boot = async (options: { owns?: readonly string[]; index?: typeof INDEX } = {}) => {
+    env = build(options);
+    await env.app.register(profileDecorRoutes, { index: options.index ?? INDEX });
+    await env.app.ready();
+  };
+  const put = (payload: unknown) => env.app.inject({ method: 'PUT', url: '/profile-decor', payload: payload as object });
+
+  beforeEach(() => boot());
+  afterEach(() => env.app.close());
+
+  it('équipe un cadre gratuit À CÔTÉ du fond : les deux côtés coexistent, et le cadre se diffuse', async () => {
+    const response = await put({ banner: { pack: 'bannieres', item: 'aurore' }, bannerFrame: { pack: 'cadres', item: 'haussmannien' } });
+
+    expect(response.statusCode).toBe(200);
+    expect(response.json().data).toEqual({
+      avatarRing: null,
+      banner: { pack: 'bannieres', item: 'aurore', origin: 'builtin', contract: null },
+      bannerFrame: { pack: 'cadres', item: 'haussmannien', origin: 'builtin', contract: null },
+    });
+    expect(env.user).toMatchObject({ equippedBanner: 'bannieres/aurore', equippedBannerFrame: 'cadres/haussmannien' });
+    expect(env.emits[0].payload).toMatchObject({ decor: { bannerFrame: { item: 'haussmannien' } } });
+  });
+
+  it('un champ absent laisse le cadre inchangé, null le retire sans toucher au fond', async () => {
+    await put({ banner: { pack: 'bannieres', item: 'aurore' }, bannerFrame: { pack: 'cadres', item: 'celte' } });
+    await put({ avatarRing: { pack: 'contours', item: 'filet' } });
+    expect(env.user).toMatchObject({ equippedBannerFrame: 'cadres/celte' });
+
+    await put({ bannerFrame: null });
+    expect(env.user).toMatchObject({ equippedBanner: 'bannieres/aurore', equippedBannerFrame: null });
+  });
+
+  it('POSSESSION : un cadre payant non possédé est refusé (403 PACK_NOT_OWNED), accepté une fois possédé', async () => {
+    const refused = await put({ bannerFrame: { pack: 'cadres-rares', item: 'celte' } });
+    expect([refused.statusCode, refused.json().code]).toEqual([403, 'PACK_NOT_OWNED']);
+    expect(env.user.equippedBannerFrame).toBeNull();
+
+    await env.app.close();
+    await boot({ owns: ['banner-frame.cadres-rares'] });
+    const accepted = await put({ bannerFrame: { pack: 'cadres-rares', item: 'celte' } });
+    expect(accepted.json().data.bannerFrame).toMatchObject({ origin: 'official', contract: ref('f', 'json').src });
+  });
+
+  it('la possession d’un pack d’un AUTRE domaine au même slug ne vaut rien', async () => {
+    await env.app.close();
+    await boot({ owns: ['banner.cadres-rares', 'avatar-ring.cadres-rares', 'cadres-rares'] });
+    expect((await put({ bannerFrame: { pack: 'cadres-rares', item: 'celte' } })).statusCode).toBe(403);
+  });
+
+  it('DOMAINE : un fond ne se porte pas en cadre, un cadre ne se porte ni en fond ni en contour', async () => {
+    expect((await put({ bannerFrame: { pack: 'bannieres', item: 'aurore' } })).statusCode).toBe(403);
+    expect((await put({ banner: { pack: 'cadres', item: 'haussmannien' } })).statusCode).toBe(403);
+    expect((await put({ avatarRing: { pack: 'cadres', item: 'haussmannien' } })).statusCode).toBe(403);
+    expect(env.user).toMatchObject({ equippedBanner: null, equippedBannerFrame: null, equippedAvatarRing: null });
+  });
+
+  it('un élément absent d’un pack possédé répond 404, un pack non possédé 403 sans oracle', async () => {
+    const missing = await put({ bannerFrame: { pack: 'cadres', item: 'fantome' } });
+    expect([missing.statusCode, missing.json().code]).toEqual([404, 'DECOR_ITEM_NOT_FOUND']);
+    const hidden = await put({ bannerFrame: { pack: 'cadres-rares', item: 'fantome' } });
+    expect([hidden.statusCode, hidden.json().code]).toEqual([403, 'PACK_NOT_OWNED']);
+  });
+
+  it('USAGE : un cadre dont l’usage ne couvre pas la bannière est refusé (403 FRAME_USAGE_MISMATCH), et une écriture refusée n’écrit RIEN', async () => {
+    // Le registre refuse déjà un pack de cadres sans la seule surface `banner` : la loi
+    // des cadres est la seconde garde, éprouvée sur un index que la lecture n'aurait pas produit.
+    const avatarOnly = {
+      ...INDEX,
+      entries: (domain: string) => (domain === 'banner-frame' ? [entry('banner-frame', 'detourne', { usage: RING_USAGE }) as never] : INDEX.entries(domain as never)),
+      itemKeys: (e: { domain: string }) => (e.domain === 'banner-frame' ? ['haussmannien'] : INDEX.itemKeys(e as never)),
+    };
+    await env.app.close();
+    await boot({ index: avatarOnly as never });
+
+    const response = await put({ avatarRing: { pack: 'contours', item: 'filet' }, bannerFrame: { pack: 'detourne', item: 'haussmannien' } });
+
+    expect([response.statusCode, response.json().code]).toEqual([403, 'FRAME_USAGE_MISMATCH']);
+    expect(env.user).toMatchObject({ equippedAvatarRing: null, equippedBannerFrame: null });
+  });
+
+  it('un cadre SANS usage lisible ne s’équipe pas', async () => {
+    const noUsage = {
+      ...INDEX,
+      entries: (domain: string) => (domain === 'banner-frame' ? [entry('banner-frame', 'muet') as never] : INDEX.entries(domain as never)),
+      itemKeys: () => ['haussmannien'],
+    };
+    await env.app.close();
+    await boot({ index: noUsage as never });
+    expect((await put({ bannerFrame: { pack: 'muet', item: 'haussmannien' } })).json().code).toBe('FRAME_USAGE_MISMATCH');
+  });
+});
+
 describe('profileDecor servi', () => {
+  it('un ancien profil sans colonne de cadre se sert avec un cadre null (#10932)', () => {
+    expect(servedProfileDecor(INDEX, { equippedAvatarRing: null, equippedBanner: null })).toEqual({ avatarRing: null, banner: null, bannerFrame: null });
+    expect(servedProfileDecor(INDEX, { equippedBannerFrame: 'cadres/celte' }).bannerFrame).toEqual({ pack: 'cadres', item: 'celte', origin: 'builtin', contract: null });
+    expect(servedProfileDecor(INDEX, { equippedBannerFrame: 'bannieres/aurore' }).bannerFrame).toBeNull();
+  });
+
+  it('les trois colonnes du décor sont CHARGÉES par le profil public et par l’écriture, ensemble', async () => {
+    expect(publicUserSelect).toMatchObject({ equippedAvatarRing: true, equippedBanner: true, equippedBannerFrame: true });
+    expect(publicProfilePlan.columns.profileDecor).toEqual(['equippedAvatarRing', 'equippedBanner', 'equippedBannerFrame']);
+
+    const env = build();
+    await env.app.register(profileDecorRoutes, { index: INDEX });
+    await env.app.ready();
+    await env.app.inject({ method: 'PUT', url: '/profile-decor', payload: { bannerFrame: null } });
+    const update = (env.app as unknown as { prisma: { user: { update: jest.Mock } } }).prisma.user.update;
+    await env.app.close();
+    expect((update.mock.calls[0]?.[0] as { select: unknown }).select).toEqual({ equippedAvatarRing: true, equippedBanner: true, equippedBannerFrame: true });
+  });
+
+  it('le profil public sert le cadre À TRAVERS son schéma de réponse, sans la colonne brute', async () => {
+    const profile = buildPublicProfile({ id: 'u1', username: 'ada', equippedAvatarRing: null, equippedBanner: null, equippedBannerFrame: 'cadres/haussmannien' });
+    expect(profile).not.toHaveProperty('equippedBannerFrame');
+
+    const app = Fastify({ logger: false });
+    app.get('/p', { schema: { response: { 200: publicProfileSchema } } }, async () => ({ ...profile, profileDecor: servedProfileDecor(INDEX, { equippedBannerFrame: 'cadres/haussmannien' }) }));
+    const served = (await app.inject({ method: 'GET', url: '/p' })).json();
+    await app.close();
+    expect(served.profileDecor.bannerFrame).toEqual({ pack: 'cadres', item: 'haussmannien', origin: 'builtin', contract: null });
+    expect(served).not.toHaveProperty('equippedBannerFrame');
+  });
+
   it('un choix dont le pack a quitté le registre se sert null, jamais une erreur', () => {
-    expect(servedProfileDecor(INDEX, { equippedAvatarRing: 'disparu/filet', equippedBanner: 'bannieres/maille' })).toEqual({
+    expect(servedProfileDecor(INDEX, { equippedAvatarRing: 'disparu/filet', equippedBanner: 'bannieres/maille', equippedBannerFrame: 'disparu/celte' })).toEqual({
       avatarRing: null,
       banner: { pack: 'bannieres', item: 'maille', origin: 'builtin', contract: null },
+      bannerFrame: null,
     });
   });
 

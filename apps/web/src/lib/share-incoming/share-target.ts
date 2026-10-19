@@ -8,8 +8,9 @@
  * le reçoit, `routes/share-incoming.tsx` le montre. Les champs portent les
  * noms que le service worker lit (`media`, `title`, `text`, `url`).
  *
- * `image/*` et `video/*` : les mêmes types que l'intent-filter de la coque
- * Android (`AndroidManifest.xml`) — ce que la feuille d'envoi sait envoyer.
+ * Tout type (D9, #10949) : image, vidéo, son, document — comme l’intent-filter de
+ * la coque Android (`AndroidManifest.xml`) ; l'écran de partage sait tout
+ * envoyer, et la loi dit ce qui se publie.
  */
 export const SHARE_PATH = '/share';
 
@@ -26,6 +27,6 @@ export const SHARE_TARGET: {
     title: 'title',
     text: 'text',
     url: 'url',
-    files: [{ name: 'media', accept: ['image/*', 'video/*'] }],
+    files: [{ name: 'media', accept: ['*/*'] }],
   },
 };

@@ -627,12 +627,7 @@ struct FeedView: View {
     // MARK: - Composer Placeholder
     private var composerPlaceholder: some View {
         HStack(spacing: MeeshySpacing.md) {
-            MeeshyAvatar(
-                name: getUserDisplayName(AuthManager.shared.currentUser, fallback: "M"),
-                context: .custom(40),
-                avatarURL: AuthManager.shared.currentUser?.avatar
-            )
-            .accessibilityHidden(true)
+            composerPlaceholderAvatar
 
             // Text input placeholder
             Button(action: {

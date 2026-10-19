@@ -326,7 +326,8 @@ describe('la galerie (#8336) écrit sans lire : aucune permission de stockage', 
 /**
  * MEESHY FIGURE DANS LA FEUILLE DE PARTAGE D'ANDROID (#8884).
  *
- * Une image, une vidéo ou un lien partagé depuis une autre application arrive
+ * Tout fichier — image, vidéo, son, document — ou un lien partagé depuis une
+ * autre application (D9, #10949) arrive
  * sur la feuille d'envoi : c'est l'`<intent-filter>` SEND / SEND_MULTIPLE de
  * l'activité principale qui inscrit l'app. Sans la catégorie DEFAULT, le
  * système ne la propose pas — et rien ne casse, elle est simplement absente.
@@ -349,8 +350,8 @@ const filter = (action: string, mimeTypes: readonly string[], category = 'androi
     '</intent-filter>',
   ].join('\n');
 
-const SEND = filter('SEND', ['image/*', 'video/*', 'text/plain']);
-const SEND_MULTIPLE = filter('SEND_MULTIPLE', ['image/*', 'video/*']);
+const SEND = filter('SEND', ['*/*', 'text/plain']);
+const SEND_MULTIPLE = filter('SEND_MULTIPLE', ['*/*']);
 
 describe('auditShareIntentFilters — l\'app est proposée au partage', () => {
   test('SEND et SEND_MULTIPLE complets → aucune violation', () => {
@@ -365,7 +366,7 @@ describe('auditShareIntentFilters — l\'app est proposée au partage', () => {
 
   test('sans la catégorie DEFAULT, le système ne propose pas l\'app', () => {
     const violations = auditShareIntentFilters({
-      manifest: activityWith([filter('SEND', ['image/*', 'video/*', 'text/plain'], 'android.intent.category.BROWSABLE'), SEND_MULTIPLE]),
+      manifest: activityWith([filter('SEND', ['*/*', 'text/plain'], 'android.intent.category.BROWSABLE'), SEND_MULTIPLE]),
     });
     expect(violations).toHaveLength(1);
     expect(violations[0]).toContain('DEFAULT');
@@ -374,15 +375,15 @@ describe('auditShareIntentFilters — l\'app est proposée au partage', () => {
   test('un type manquant est nommé', () => {
     const violations = auditShareIntentFilters({ manifest: activityWith([filter('SEND', ['image/*', 'text/plain']), SEND_MULTIPLE]) });
     expect(violations).toHaveLength(1);
-    expect(violations[0]).toContain('video/*');
+    expect(violations[0]).toContain('*/*');
   });
 
-  test('un type que le pont ne copie pas est refusé : l\'app serait proposée pour un contenu qu\'elle rejetterait', () => {
+  test('un type que le pont ne déclare pas est refusé : la liste reste celle que la feuille sait recevoir', () => {
     const violations = auditShareIntentFilters({
-      manifest: activityWith([filter('SEND', ['image/*', 'video/*', 'text/plain', '*/*']), SEND_MULTIPLE]),
+      manifest: activityWith([filter('SEND', ['*/*', 'text/plain', 'application/x-autre']), SEND_MULTIPLE]),
     });
     expect(violations).toHaveLength(1);
-    expect(violations[0]).toContain('*/*');
+    expect(violations[0]).toContain('application/x-autre');
   });
 
   test('un filtre en commentaire ne compte pas', () => {

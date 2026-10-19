@@ -39,6 +39,9 @@ enum PrimaryAction: String, Equatable {
     case replyToPiece
     /// **Supprimer CETTE pièce** (#9908) — après confirmation, jamais une voisine.
     case deletePiece
+    /// **Transférer CETTE pièce** (#9914, #10947) — l'écran de partage unique
+    /// s'ouvre sur la seule pièce visée ; « Tout le message » y élargit.
+    case forwardPiece
     /// **Ajouter le sticker REÇU à « Mes stickers »** (#10630) — à la place
     /// qu'« Enregistrer » tient pour une photo, comme le menu du web : offert
     /// seulement quand il n'y est pas déjà (loi 4 : un contrôle existe s'il a un effet).

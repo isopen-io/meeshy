@@ -228,9 +228,10 @@ const intentFiltersOf = (activityBody) =>
  * (`MeeshyShareIntentPlugin.java` les copie) ; un type en plus ferait figurer
  * l'app pour un contenu qu'elle refuserait.
  */
+// D9 (#10949) : tout fichier — image, vidéo, son, document — et le texte seul.
 export const SHARE_INTENT_FILTERS = [
-  { action: 'android.intent.action.SEND', mimeTypes: ['image/*', 'video/*', 'text/plain'] },
-  { action: 'android.intent.action.SEND_MULTIPLE', mimeTypes: ['image/*', 'video/*'] },
+  { action: 'android.intent.action.SEND', mimeTypes: ['*/*', 'text/plain'] },
+  { action: 'android.intent.action.SEND_MULTIPLE', mimeTypes: ['*/*'] },
 ];
 
 export const auditShareIntentFilters = ({ manifest, required = SHARE_INTENT_FILTERS }) => {

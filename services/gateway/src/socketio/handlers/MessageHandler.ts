@@ -31,6 +31,7 @@
 // validateur au producteur.
 import type { MeeshySocket, MeeshyIOServer } from '../typed-socket';
 import { clientDeclaredProtection } from './messageProtectionInput';
+import { forwardReferencesOf } from '../../validation/forwarded-attachments';
 import { PrismaClient } from '@meeshy/shared/prisma/client';
 import { getCacheStore } from '../../services/CacheStore';
 import { isBlockedBetween } from '../../utils/blocking';
@@ -368,8 +369,7 @@ export class MessageHandler {
         replyToId: validated.replyToId,
         attachmentReplyTo: validated.attachmentReplyTo,
         storyReplyToId: validated.storyReplyToId,
-        forwardedFromId: validated.forwardedFromId,
-        forwardedFromConversationId: validated.forwardedFromConversationId,
+        ...forwardReferencesOf(validated),
         // Diffusion : les pièces jointes du message source sont copiées côté
         // serveur (`MessageProcessor.saveMessage` → `copyAttachments`). Franchir
         // la garde sans transmettre le champ laisserait la copie muette.
@@ -599,8 +599,7 @@ export class MessageHandler {
         replyToId: validated.replyToId,
         attachmentReplyTo: validated.attachmentReplyTo,
         storyReplyToId: validated.storyReplyToId,
-        forwardedFromId: validated.forwardedFromId,
-        forwardedFromConversationId: validated.forwardedFromConversationId,
+        ...forwardReferencesOf(validated),
         // Effets de protection déclarés par le client — parité avec
         // POST /messages, déclarés UNE fois (`messageProtectionInput.ts`) pour
         // les deux chemins socket. Sans cette propagation, une photo view-once

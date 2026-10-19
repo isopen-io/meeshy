@@ -114,7 +114,7 @@ export function MediaHubViewerHost({
             conversationId: message.conversationId,
             offers,
             transcribe: transcriptionOffered({ attachment, message }),
-            ...(offers.share ? { share: attachmentSendRequest({ attachment, message, mine: isMineOf(message, viewerId), now }) } : {}),
+            ...(offers.share ? { share: attachmentSendRequest({ attachment, message, now }) } : {}),
           };
         }}
         {...(deps === undefined ? {} : { deps })}

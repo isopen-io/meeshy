@@ -140,6 +140,7 @@ public struct ConversationScrollControlsView: View {
     /// d'animation dans la sous-vue" ; le garde sur hasTypingIndicator evite tout
     /// tick utile quand personne ne tape.
     @State private var typingDotPhase: Int = 0
+    @Environment(\.meeshyPresenceResolver) private var presenceResolver
     // `@State` (not `let`) — a plain stored `let` re-evaluates its initializer
     // every time ConversationView reconstructs this leaf view (any unrelated
     // body re-evaluation — the very churn this view was pulled out to avoid,
@@ -628,7 +629,9 @@ public struct ConversationScrollControlsView: View {
             name: face.displayName,
             context: .custom(Self.typingFaceSize),
             accentColor: accentColor,
-            avatarURL: face.avatarURL
+            avatarURL: face.avatarURL,
+            presenceState: presenceResolver?(face.id),
+            ring: face.ring
         )
         .overlay(Circle().strokeBorder(Color(hex: accentColor), lineWidth: MeeshyBorder.emphasis))
         .offset(x: offsetX)

@@ -217,7 +217,6 @@ final class ConversationPreviewPrismSourceGuardTests: XCTestCase {
         let expectations = [
             ("Features/Main/Services/WidgetDataManager.swift", "OutsidePreview.lastMessage("),
             ("Features/Main/Models/Message.swift", "resolvedLastMessagePreview"),
-            ("Features/Main/Views/SharePickerView.swift", "OutsidePreview.lastMessage("),
             ("Features/Main/Views/WidgetPreviewView.swift", "OutsidePreview.lastMessage("),
         ]
         for (relative, resolver) in expectations {

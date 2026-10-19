@@ -87,6 +87,8 @@ export type StartCallRequest = {
   readonly title: string;
   readonly avatar: string | null;
   readonly isGroup: boolean;
+  /** Le compte du pair d'un appel direct (#10956) ; absent pour un groupe. */
+  readonly peerKey?: string | null;
 };
 
 export type JoinCallRequest = StartCallRequest & { readonly callId: string | null };
@@ -619,7 +621,7 @@ export function createCallEngine(deps: CallEngineDeps): CallEngine {
       const waiting = store.getState().waiting;
       if (waiting !== null && waiting.callId !== event.callId) void request(CLIENT_EVENTS.CALL_END, { callId: event.callId, reason: 'rejected' });
       if (waiting === null) {
-        const next: WaitingCall = { callId: event.callId, conversationId: event.conversationId, media: event.media, callerName: event.initiator.name, callerAvatar: event.initiator.avatar, isGroup: event.isGroup, title };
+        const next: WaitingCall = { callId: event.callId, conversationId: event.conversationId, media: event.media, callerName: event.initiator.name, callerAvatar: event.initiator.avatar, callerKey: event.initiator.userId, isGroup: event.isGroup, title };
         store.setState({ waiting: next });
       }
       return;
@@ -629,7 +631,7 @@ export function createCallEngine(deps: CallEngineDeps): CallEngine {
     session.iceServers = event.iceServers ?? [];
     session.telemetry = createTelemetry(deps.now());
     write({
-      ...baseCall({ conversationId: event.conversationId, media: event.media, title, avatar: event.isGroup ? null : event.initiator.avatar, isGroup: event.isGroup }, 'incoming', { kind: 'incoming' }),
+      ...baseCall({ conversationId: event.conversationId, media: event.media, title, avatar: event.isGroup ? null : event.initiator.avatar, isGroup: event.isGroup, peerKey: event.isGroup ? null : event.initiator.userId }, 'incoming', { kind: 'incoming' }),
       callId: event.callId,
       callerName: event.invitedBy?.name ?? event.initiator.name,
       initiatorId: event.initiator.userId,
@@ -974,7 +976,7 @@ export function createCallEngine(deps: CallEngineDeps): CallEngine {
     const token = generation;
     session.telemetry = createTelemetry(deps.now());
     write({
-      ...baseCall({ conversationId: waiting.conversationId, media: waiting.media, title: waiting.title, avatar: waiting.callerAvatar, isGroup: waiting.isGroup }, 'incoming', { kind: 'connecting' }),
+      ...baseCall({ conversationId: waiting.conversationId, media: waiting.media, title: waiting.title, avatar: waiting.callerAvatar, isGroup: waiting.isGroup, peerKey: waiting.isGroup ? null : (waiting.callerKey ?? null) }, 'incoming', { kind: 'connecting' }),
       callId: waiting.callId,
       callerName: waiting.callerName,
     });

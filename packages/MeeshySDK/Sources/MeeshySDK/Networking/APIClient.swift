@@ -250,7 +250,7 @@ public final class APIClient: APIClientProviding, @unchecked Sendable {
     }
 
     /// Exposed for tests and for the upload pipeline that needs custom delegate hooks.
-    /// Uses a custom configuration with `assumesHTTP3Capable = true` (SOTA P11).
+    /// HTTP/3 n'est PAS supposé (#10927) : Traefik n'écoute pas l'UDP 443.
     public let urlSession: URLSession
 
     private var session: URLSession { urlSession }
@@ -418,6 +418,26 @@ public final class APIClient: APIClientProviding, @unchecked Sendable {
         return tokenLock.withLock { $0.generation == generation && $0.auth == bearer.token }
     }
 
+    /// #10927 — `/sync` part par son propre transport (`SyncDeltaClient`) :
+    /// sans ce relais, un JWT échu y partait tel quel après 24 h d'absence et
+    /// le démarrage payait un 401 avant le repli REST, qui, lui, rafraîchit.
+    /// Un rafraîchissement qui échoue (hors ligne, session quittée) rend le
+    /// jeton tel qu'il est : le verdict reste au repli REST, qui sait dire
+    /// « session expirée » sans prendre une coupure pour un refus.
+    public func freshAuthToken() async -> String? {
+        guard let bearer = presentedCredential().bearer else { return nil }
+        guard AuthManager.isTokenExpired(bearer.token, now: Date()) else { return bearer.token }
+        do {
+            return try await AuthManager.shared.refreshSession(
+                presentedToken: bearer.token,
+                stillInstalled: isBearerStillInstalled(bearer),
+                force: false
+            )
+        } catch {
+            return bearer.token
+        }
+    }
+
     /// Écriture atomique de la paire — à préférer aux deux setters séparés
     /// quand les deux tokens changent ensemble (switch de compte).
     public func setTokens(auth: String?, anonymous: String?) {
@@ -446,9 +466,9 @@ public final class APIClient: APIClientProviding, @unchecked Sendable {
             diskPath: "meeshy_http_cache"
         )
         config.requestCachePolicy = .useProtocolCachePolicy
-        // SOTA P11: HTTP/3 is enabled by default on iOS 15+. The optimistic HTTP/3 flag lives on
-        // URLRequest (assumesHTTP3Capable), not on URLSessionConfiguration. Apply per-request
-        // via makeRequest() to skip the HTTP/2 → HTTP/3 upgrade negotiation on first upload.
+        // #10927 — HTTP/3 reste découvert par Alt-Svc, comme URLSession le fait seul : le
+        // SUPPOSER (`assumesHTTP3Capable`) tentait QUIC d'abord sur une passerelle qui n'écoute
+        // pas l'UDP 443, et chaque connexion neuve payait ~150 ms d'échec avant le repli TCP.
         self.init(urlSession: URLSession(
             configuration: config,
             delegate: CertificatePinningDelegate(),
@@ -577,7 +597,6 @@ public final class APIClient: APIClientProviding, @unchecked Sendable {
         }
         var urlRequest = URLRequest(url: url)
         urlRequest.httpMethod = method
-        urlRequest.assumesHTTP3Capable = true
         for (key, value) in await ClientInfoProvider.shared.buildHeaders() {
             urlRequest.setValue(value, forHTTPHeaderField: key)
         }
@@ -661,9 +680,6 @@ public final class APIClient: APIClientProviding, @unchecked Sendable {
 
         var urlRequest = URLRequest(url: url)
         urlRequest.httpMethod = method
-        // SOTA P11: skip HTTP/2 → HTTP/3 upgrade discovery on the first request to this host.
-        // Saves ~150-300ms on the user's first upload after app launch.
-        urlRequest.assumesHTTP3Capable = true
 
         // Compression (E1, bandwidth sprint): deliberately NO explicit
         // `Accept-Encoding` header. URLSession advertises gzip/br on its own

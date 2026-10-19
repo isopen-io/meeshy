@@ -65,6 +65,8 @@ struct GlobalSearchUserResult: Identifiable, Sendable {
     let displayName: String?
     let avatar: String?
     let isOnline: Bool
+    /// Le contour équipé de la personne, la référence servie (#10946).
+    var ring: ServedProfileDecorItem? = nil
 }
 
 // MARK: - Ce qu'un volet de recherche rend
@@ -552,7 +554,8 @@ final class GlobalSearchViewModel: ObservableObject {
                 username: user.username,
                 displayName: user.displayName,
                 avatar: user.avatar,
-                isOnline: user.isOnline ?? false
+                isOnline: user.isOnline ?? false,
+                ring: user.profileDecor?.avatarRing
             )
         }
     }
@@ -566,7 +569,8 @@ final class GlobalSearchViewModel: ObservableObject {
                     username: user.username,
                     displayName: user.displayName,
                     avatar: user.avatar,
-                    isOnline: user.isOnline ?? false
+                    isOnline: user.isOnline ?? false,
+                    ring: user.avatarRing
                 )
             }
             return GlobalSearchPeopleLeg(leg: .served(items), searchId: page.searchId)

@@ -13,6 +13,7 @@ const it = {
   'frame.usage.achievementRarityOnly': 'Solo traguardi {rarity}',
   'frame.usage.momentOnly': 'Solo momenti «{family}»',
   'frame.usage.avatarOnly': 'Solo contorno del profilo',
+  'frame.usage.bannerFrameOnly': 'Solo cornice del banner',
 } as const satisfies FrameUsageCatalog;
 
 export default it;

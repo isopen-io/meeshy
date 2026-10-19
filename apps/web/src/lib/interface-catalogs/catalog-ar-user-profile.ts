@@ -4,6 +4,7 @@ import type { UserProfileCatalogSlice } from './catalog-fr-user-profile';
 const arUserProfile = {
   'userProfile.self.edit': 'تعديل ملفي الشخصي',
   'userProfile.title': 'الملف الشخصي',
+  'userProfile.sendProfile': 'إرسال الملف الشخصي',
   'userProfile.loading': 'جارٍ تحميل الملف الشخصي',
   'userProfile.section.relation': 'الاتصال',
   'userProfile.section.conversations': 'المحادثات',

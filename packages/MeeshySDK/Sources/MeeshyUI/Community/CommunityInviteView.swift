@@ -127,7 +127,8 @@ public struct CommunityInviteView: View {
                 context: .userListItem,
                 accentColor: DynamicColorGenerator.colorForName(user.username),
                 avatarURL: user.avatar,
-                presenceState: UserPresence(isOnline: user.isOnline ?? false).state
+                presenceState: UserPresence(isOnline: user.isOnline ?? false).state,
+                ring: user.avatarRing
             )
 
             VStack(alignment: .leading, spacing: MeeshySpacing.xxs) {

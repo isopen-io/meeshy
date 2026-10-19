@@ -34,12 +34,13 @@ describe('registres d’apparence générés', () => {
     expect(wallpapers.every((pack) => pack.origin === 'builtin' && pack.price === undefined)).toBe(true);
   });
 
-  it('porte 15 modèles de fonds, 7 bannières et 7 contours, clés lues dans les contrats vérifiés', () => {
-    const count = (domain: 'wallpaper' | 'banner' | 'avatar-ring') => index.entries(domain).reduce((sum, pack) => sum + index.itemKeys(pack).length, 0);
+  it('porte 15 modèles de fonds, 7 bannières, 21 contours et 14 cadres de bannière, clés lues dans les contrats vérifiés', () => {
+    const count = (domain: 'wallpaper' | 'banner' | 'avatar-ring' | 'banner-frame') => index.entries(domain).reduce((sum, pack) => sum + index.itemKeys(pack).length, 0);
 
     expect(count('wallpaper')).toBe(15);
     expect(count('banner')).toBe(7);
-    expect(count('avatar-ring')).toBe(7);
+    expect(count('avatar-ring')).toBe(21);
+    expect(count('banner-frame')).toBe(14);
     expect(index.itemKeys(index.entries('wallpaper')[0])).toEqual(['monogramme', 'chevrons', 'aurore', 'maille']);
   });
 
@@ -47,8 +48,24 @@ describe('registres d’apparence générés', () => {
     expect(index.entries('avatar-ring')[0].usage).toEqual({ kind: 'free', surfaces: ['avatar'] });
   });
 
+  it('les 28 cadres photo (#10936) : sept styles, un fixe et un animé chacun, en contour d’avatar et en cadre de bannière, à installer et usage annoncé', () => {
+    const styles = ['haussmannien', 'arabe', 'grec', 'ancestral', 'technologique', 'rituel', 'celte'];
+    const rings = index.entries('avatar-ring').filter((pack) => pack.slug !== 'contours-essentiels' && pack.slug !== 'contours-animes');
+    const frames = index.entries('banner-frame');
+
+    expect(rings.map((pack) => pack.slug)).toEqual(styles.map((style) => `contours-${style}`));
+    expect(frames.map((pack) => pack.slug)).toEqual(styles.map((style) => `cadres-${style}`));
+    styles.forEach((style, at) => {
+      expect(index.itemKeys(rings[at]!)).toEqual([style, `${style}-anime`]);
+      expect(index.itemKeys(frames[at]!)).toEqual([style, `${style}-anime`]);
+    });
+    expect(frames.every((pack) => pack.usage?.kind === 'free' && pack.usage.surfaces.join() === 'banner' && !pack.installedByDefault && pack.removable)).toBe(true);
+    expect(rings.every((pack) => pack.usage?.kind === 'free' && pack.usage.surfaces.join() === 'avatar' && !pack.installedByDefault)).toBe(true);
+    expect([...rings, ...frames].every((pack) => Object.keys(pack.names).length === 7)).toBe(true);
+  });
+
   it('chaque fichier référencé existe, a l’empreinte déclarée et est servi par le magasin', () => {
-    const entries = (['wallpaper', 'banner', 'avatar-ring'] as const).flatMap((domain) => index.entries(domain));
+    const entries = (['wallpaper', 'banner', 'avatar-ring', 'banner-frame'] as const).flatMap((domain) => index.entries(domain));
     const refs = entries.flatMap((entry) => [entry.cover, entry.contract, ...Object.values(entry.strings)]);
 
     expect(refs.length).toBeGreaterThan(0);

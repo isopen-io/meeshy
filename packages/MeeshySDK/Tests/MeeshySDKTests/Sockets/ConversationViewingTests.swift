@@ -28,6 +28,14 @@ final class ConversationViewingTests: XCTestCase {
 
     // MARK: - État
 
+    /// Un membre de la liste est annoncé « ici » sous la même clé qu'un auteur
+    /// de message (#10944) : son COMPTE s'il est inscrit, sa PARTICIPATION sinon.
+    func test_participantViewingKey_registeredIsTheAccount_anonymousIsTheParticipation() {
+        XCTAssertEqual(PaginatedParticipant(id: "p-1", userId: "u-1", username: "awa").viewingKey, "u-1")
+        XCTAssertEqual(PaginatedParticipant(id: "p-9", userId: "u-9", username: "visiteur", type: "anonymous").viewingKey, "p-9")
+        XCTAssertEqual(PaginatedParticipant(id: "p-7", username: "sans-compte").viewingKey, "p-7")
+    }
+
     func test_applying_arrived_marksPeerHereInThatConversationOnly() {
         let viewers = ConversationViewers().applying(.arrived(change("u1", "c1")))
         XCTAssertTrue(viewers.isHere(userId: "u1", conversationId: "c1"))

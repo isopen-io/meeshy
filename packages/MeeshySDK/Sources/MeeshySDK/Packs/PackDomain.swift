@@ -13,13 +13,15 @@ public enum PackDomain: String, Codable, Sendable, Hashable, CaseIterable {
     case wallpaper
     case avatarRing = "avatar-ring"
     case banner
+    /// Le cadre posé SUR la photo de bannière, centre transparent (#10932, #10936).
+    case bannerFrame = "banner-frame"
     /// Un domaine qu'une passerelle plus récente ajouterait (`capture-frame`,
     /// ou tout autre) : il se lit, il ne fait pas tomber la liste qui le porte,
     /// et il ne route JAMAIS une requête (§ 11 de la spécification 2026-10-14).
     case unknown
 
     /// Les domaines que ce client sait router — `unknown` n'en est pas un.
-    public static var allCases: [PackDomain] { [.sticker, .gloryFrame, .wallpaper, .avatarRing, .banner] }
+    public static var allCases: [PackDomain] { [.sticker, .gloryFrame, .wallpaper, .avatarRing, .banner, .bannerFrame] }
 
     public init(from decoder: Decoder) throws {
         let raw = try decoder.singleValueContainer().decode(String.self)
@@ -37,7 +39,7 @@ public enum PackDomain: String, Codable, Sendable, Hashable, CaseIterable {
     /// Un domaine dont le registre peut porter un prix (§ 4.3).
     public var isPurchasable: Bool {
         switch self {
-        case .wallpaper, .avatarRing, .banner: true
+        case .wallpaper, .avatarRing, .banner, .bannerFrame: true
         case .sticker, .gloryFrame, .unknown: false
         }
     }

@@ -79,6 +79,7 @@ import { useReaderLanguages } from '@/lib/view/use-reader';
 import { useParams, useSearch } from '@/lib/router';
 import { useMediaSystemBars } from '@/lib/use-media-system-bars';
 import { Link, href, navigate } from '@/routes/route-table';
+import { ringRefOf } from '@/lib/profile-decor/served-ring';
 
 /** L'hôte des scènes v3 (#6899) — chargé À LA DEMANDE, motif D-54 : une story
  * v1 ne paie ni ses lois (image seule, bandes, son de fond), ni le moteur. */
@@ -710,6 +711,8 @@ export default function StoryScreen() {
           initials: initialsOf(authorName),
           ...(authorPhoto === undefined ? {} : { avatarSrc: authorPhoto }),
           ...(!group.isMine && typeof authorUsername === 'string' && authorUsername !== '' ? { profileUsername: authorUsername } : {}),
+          ...(group.isMine ? {} : { presenceKey: group.authorId }),
+          ...ringRefOf(group.author),
           time: {
             iso: new Date(currentStory.createdAt).toISOString(),
             label: shortRelativeTime(new Date(currentStory.createdAt), new Date(), currentInterfaceLanguage()),

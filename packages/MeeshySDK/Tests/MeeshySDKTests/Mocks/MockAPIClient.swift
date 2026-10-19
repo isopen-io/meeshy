@@ -5,6 +5,10 @@ final class MockAPIClient: APIClientProviding, @unchecked Sendable {
     var baseURL: String = "https://mock.api"
     var authToken: String?
     var anonymousSessionToken: String?
+    /// Le jeton que rendrait un rafraîchissement — `nil` : rien à rafraîchir.
+    var freshAuthTokenStub: String?
+
+    func freshAuthToken() async -> String? { freshAuthTokenStub ?? authToken }
 
     // MARK: - Recording
 
@@ -71,6 +75,7 @@ final class MockAPIClient: APIClientProviding, @unchecked Sendable {
         errorToThrow = nil
         endpointErrors.removeAll()
         authToken = nil
+        freshAuthTokenStub = nil
         anonymousSessionToken = nil
     }
 

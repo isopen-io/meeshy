@@ -15,6 +15,8 @@ final class MockConversationSocketDelegate: ConversationSocketDelegate {
     /// dans le fil), une entrée pour vérifier qu'un visage connu est bien relayé.
     var stubbedAvatarURLs: [String: String] = [:]
     func localAvatarURL(forSender userId: String) -> String? { stubbedAvatarURLs[userId] }
+    var stubbedRings: [String: ServedProfileDecorItem] = [:]
+    func localRing(forSender userId: String) -> ServedProfileDecorItem? { stubbedRings[userId] }
     var lastUnreadMessage: Message?
     var messageTranslations: [String: [MessageTranslation]] = [:]
     var messageTranscriptions: [String: MessageTranscription] = [:]

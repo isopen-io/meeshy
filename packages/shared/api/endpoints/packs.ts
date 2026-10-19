@@ -57,6 +57,21 @@ export const bannerBySlugPurchase = (slug: string): string => `/api/v1/packs/ban
 /** POST /api/v1/packs/banner/:slug/review */
 export const bannerBySlugReview = (slug: string): string => `/api/v1/packs/banner/${encodeURIComponent(slug)}/review`;
 
+/** GET /api/v1/packs/banner-frame */
+export const bannerFrame = '/api/v1/packs/banner-frame';
+
+/** GET /api/v1/packs/banner-frame/:slug */
+export const bannerFrameBySlug = (slug: string): string => `/api/v1/packs/banner-frame/${encodeURIComponent(slug)}`;
+
+/** PUT · DELETE /api/v1/packs/banner-frame/:slug/install */
+export const bannerFrameBySlugInstall = (slug: string): string => `/api/v1/packs/banner-frame/${encodeURIComponent(slug)}/install`;
+
+/** POST /api/v1/packs/banner-frame/:slug/purchase */
+export const bannerFrameBySlugPurchase = (slug: string): string => `/api/v1/packs/banner-frame/${encodeURIComponent(slug)}/purchase`;
+
+/** GET /api/v1/packs/banner-frame/installed */
+export const bannerFrameInstalled = '/api/v1/packs/banner-frame/installed';
+
 /** GET /api/v1/packs/banner/installed */
 export const bannerInstalled = '/api/v1/packs/banner/installed';
 

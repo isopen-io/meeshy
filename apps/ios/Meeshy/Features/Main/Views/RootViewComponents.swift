@@ -699,7 +699,10 @@ struct ThemedFeedOverlay: View {
                         HStack(spacing: MeeshySpacing.md) {
                             MeeshyAvatar(
                                 name: getUserDisplayName(AuthManager.shared.currentUser, fallback: "M"),
-                                context: .feedComposer
+                                context: .feedComposer,
+                                avatarURL: AuthManager.shared.currentUser?.avatar,
+                                thumbHash: AuthManager.shared.currentUser?.avatarThumbHash,
+                                ring: AuthManager.shared.currentUser?.profileDecor?.avatarRing
                             )
 
                             Text(String(localized: "composer.placeholder.share", defaultValue: "Partager quelque chose", bundle: .main))

@@ -13,6 +13,7 @@ const pt = {
   'frame.usage.achievementRarityOnly': 'Apenas conquistas {rarity}',
   'frame.usage.momentOnly': 'Apenas momentos «{family}»',
   'frame.usage.avatarOnly': 'Somente contorno de perfil',
+  'frame.usage.bannerFrameOnly': 'Somente moldura de banner',
 } as const satisfies FrameUsageCatalog;
 
 export default pt;

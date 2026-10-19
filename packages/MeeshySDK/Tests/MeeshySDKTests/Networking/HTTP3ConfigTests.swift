@@ -39,4 +39,53 @@ final class HTTP3ConfigTests: XCTestCase {
             "Request timeout must be 60 seconds"
         )
     }
+
+    /// #10927 — Traefik n'écoute pas l'UDP 443 : une requête qui SUPPOSE
+    /// HTTP/3 tente QUIC d'abord, attend son échec, puis retombe en TCP.
+    /// Mesuré +150 ms par connexion neuve (0,42–0,53 s contre 0,30–0,37 s).
+    /// La découverte Alt-Svc reste celle du système : si le serveur annonce
+    /// un jour HTTP/3, URLSession le prend de lui-même.
+    func test_requestWithHeaders_doesNotAssumeHTTP3() async throws {
+        HTTP3CaptureProtocol.reset()
+        let _: SimpleAPIResponse = try await makeCapturingClient().requestWithHeaders(
+            AuthEndpoint.login, method: "POST", body: Data("{}".utf8))
+
+        XCTAssertEqual(HTTP3CaptureProtocol.assumesHTTP3, [false])
+    }
+
+    func test_requestPinned_doesNotAssumeHTTP3() async throws {
+        HTTP3CaptureProtocol.reset()
+        let _: SimpleAPIResponse = try await makeCapturingClient().requestPinned(
+            AuthEndpoint.logout, method: "POST", body: nil, headers: [:], bearerToken: "tok-pinned")
+
+        XCTAssertEqual(HTTP3CaptureProtocol.assumesHTTP3, [false])
+    }
+
+    private func makeCapturingClient() -> APIClient {
+        let config = URLSessionConfiguration.ephemeral
+        config.protocolClasses = [HTTP3CaptureProtocol.self]
+        return APIClient(urlSession: URLSession(configuration: config))
+    }
+}
+
+private final class HTTP3CaptureProtocol: URLProtocol {
+    nonisolated(unsafe) static var assumesHTTP3: [Bool] = []
+
+    static func reset() { assumesHTTP3 = [] }
+
+    override nonisolated class func canInit(with request: URLRequest) -> Bool { true }
+
+    override nonisolated class func canonicalRequest(for request: URLRequest) -> URLRequest { request }
+
+    override nonisolated func startLoading() {
+        Self.assumesHTTP3.append(request.assumesHTTP3Capable)
+        let response = HTTPURLResponse(
+            url: request.url ?? URL(string: "https://stub.meeshy.test")!,
+            statusCode: 200, httpVersion: nil, headerFields: ["Content-Type": "application/json"])!
+        client?.urlProtocol(self, didReceive: response, cacheStoragePolicy: .notAllowed)
+        client?.urlProtocol(self, didLoad: Data(#"{"success":true}"#.utf8))
+        client?.urlProtocolDidFinishLoading(self)
+    }
+
+    override nonisolated func stopLoading() {}
 }

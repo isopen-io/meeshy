@@ -5,12 +5,8 @@
 
 import MeeshySDK
 
-typealias Message = MeeshyMessage
-typealias MessageAttachment = MeeshyMessageAttachment
-typealias Reaction = MeeshyReaction
-typealias ReactionSummary = MeeshyReactionSummary
-typealias ChatMessage = MeeshyChatMessage
-typealias MessageReaction = MeeshyMessageReaction
+// Les alias courts (`Message`, `MessageAttachment`…) vivent dans
+// `MessageAliases.swift`, compilé aussi dans l'extension de partage.
 
 /// Une SORTIE : un geste qui emporte le contenu d'un message hors de la bulle
 /// qui le porte.
@@ -45,7 +41,8 @@ nonisolated enum MessageExit: String, CaseIterable, Sendable {
 /// | flamme à durée | oui, durée ≤ source | non |
 /// | flamme après lecture, vue unique | non | non |
 ///
-/// Un message FLOUTÉ ne laisse rien sortir (#8009) ; un message CHIFFRÉ ne se
+/// Un message FLOUTÉ se transfère, flou hérité, et ne laisse rien d'autre sortir
+/// (#8009, D8 du 2026-10-18) ; un message CHIFFRÉ ne se
 /// publie pas. Un message qui CITE un contenu protégé ne s'image pas (décision
 /// porteur du 2026-10-08) : citer reste permis, le reste de ses sorties suit sa
 /// propre nature. Le serveur fait foi et refusera ; un bouton que cette
@@ -78,6 +75,9 @@ nonisolated struct MessageExitOffer: Equatable, Sendable {
     var capture: ContentExitLaw.CaptureVerdict { law.capture }
 
     func offers(_ exit: MessageExit) -> Bool {
+        // D8 (#10949, porteur 2026-10-18) : un flouté se TRANSFÈRE, son flou
+        // hérité par la copie (la passerelle l'impose) ; rien d'autre ne sort.
+        if exit == .forward { return law.forward.isAllowed }
         guard !holdsBlur else { return false }
         switch exit {
         case .forward: return law.forward.isAllowed
@@ -87,17 +87,11 @@ nonisolated struct MessageExitOffer: Equatable, Sendable {
         }
     }
 
-    /// Une sélection multiple se transfère-t-elle ? Un seul message non
-    /// transférable retire l'action — le lot partirait amputé.
+    /// Une sélection multiple se transfère-t-elle ? Oui dès qu'UN message sort
+    /// (D6, #10949) : l'écran de partage retire le protégé avec son motif et
+    /// envoie le reste. Une sélection où rien ne sort ne rend pas l'action.
     static func selectionOffersForward(_ messages: [Message]) -> Bool {
-        messages.allSatisfy { $0.exitOffer.offers(.forward) }
-    }
-
-    /// Le verdict de transfert d'un LOT, celui que la feuille de transfert lit
-    /// pour sa rangée de durée (`ContentExitLaw.ForwardVerdict.batch`).
-    static func batchForwardVerdict(_ messages: [Message]) -> ContentExitLaw.ForwardVerdict {
-        guard selectionOffersForward(messages) else { return .refused(.afterRead) }
-        return .batch(messages.map(\.contentExitLaw.forward))
+        messages.isEmpty || messages.contains { $0.exitOffer.offers(.forward) }
     }
 
     /// Les pièces qu'une visionneuse peut laisser sortir, parmi ces messages :
@@ -115,38 +109,6 @@ nonisolated struct MessageExitOffer: Equatable, Sendable {
     static func captureShieldScope(for messages: [Message], surfaceAnnounces: Bool = false) -> CaptureShieldScope {
         .allExcept(Set(messages.filter { !ContentCaptureVisibility.renderedVerdict(for: $0).shieldsCapture(surfaceAnnounces: surfaceAnnounces) }
             .flatMap { $0.attachments.map(\.id) }))
-    }
-}
-
-/// **Ce que la feuille de transfert offre pour ce lot** (#9573) — lue une fois
-/// par la feuille, pour sa rangée de durée, ses pilules de publication et
-/// « Imager la discussion ».
-nonisolated struct ForwardSheetOffer: Equatable, Sendable {
-    /// Le verdict de transfert du lot ENTIER — sa borne de durée est celle de
-    /// la plus longue flamme, chaque message restant ramené à la sienne.
-    let forward: ContentExitLaw.ForwardVerdict
-    /// Le message désigné peut-il être publié ou composé ?
-    let publishes: Bool
-    /// « Imager la discussion » s'offre-t-il depuis ce message ?
-    let imaginesDiscussion: Bool
-
-    init(message: Message, additionalMessages: [Message] = []) {
-        forward = MessageExitOffer.batchForwardVerdict([message] + additionalMessages)
-        let offer = message.exitOffer
-        publishes = offer.offers(.publish)
-        imaginesDiscussion = offer.offers(.imagine)
-    }
-
-    /// Les durées de la rangée — vide : aucune rangée (lot sans flamme à durée).
-    var durationChoices: [ForwardDurationChoice] { forward.durationChoices }
-
-    /// La durée SÉLECTIONNÉE dans la rangée : le choix de l'utilisateur s'il
-    /// fait partie des choix offerts, sinon celle de la source.
-    func selectedDuration(chosen: Int?) -> Int? {
-        guard let chosen, durationChoices.contains(where: { $0.seconds == chosen }) else {
-            return forward.defaultDurationSeconds
-        }
-        return chosen
     }
 }
 

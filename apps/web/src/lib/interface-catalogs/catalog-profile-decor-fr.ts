@@ -7,8 +7,10 @@
 const frProfileDecor = {
   'profileDecor.banner.entry': "Bannière",
   'profileDecor.ring.entry': "Contour",
+  'profileDecor.frame.entry': "Cadre de la bannière",
   'profileDecor.banner.title': "Bannière du profil",
   'profileDecor.ring.title': "Contour de l’avatar",
+  'profileDecor.frame.title': "Cadre de la bannière",
   'profileDecor.none': "Aucun",
   'profileDecor.photo': "Photo",
   'profileDecor.shop': "Plus dans la boutique",

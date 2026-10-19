@@ -958,7 +958,6 @@ struct ProfileView: View {
                 authManager.currentUser = Self.mergingServerUser(updatedUser, onto: authManager.currentUser)
                 HapticFeedback.success()
                 FeedbackToastManager.shared.showSuccess(String(localized: "profile.banner.updated", bundle: .main))
-                await ProfileDecorModel(decor: authManager.currentUser?.profileDecor).yieldBannerToUploadedPhoto()
             } catch {
                 HapticFeedback.error()
                 FeedbackToastManager.shared.showError(String(localized: "profile.banner.error", bundle: .main))

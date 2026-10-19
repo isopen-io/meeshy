@@ -616,6 +616,9 @@ private struct ConversationAvatarView: View {
                 moodEmoji: moodStatus?.moodEmoji,
                 presenceState: isDirect ? presenceState : nil,
                 isHere: isDirect ? isPeerHere : .absent,
+                // LE CONTOUR DU PAIR (#10713) — l'avatar le pose dans son empreinte, l'anneau de
+                // story concentrique à l'intérieur (#10714) ; sans contour servi, l'avatar d'avant.
+                ring: isDirect ? conversation.participantRing : nil,
                 // DM : tap → story (si non lue) sinon profil, via handleTap() de MeeshyAvatar.
                 //   Le handler profil passe par `onTap` (et NON `onViewProfile`) pour
                 //   préserver le tap-vers-profil sans déclencher l'auto-injection d'une
@@ -637,13 +640,6 @@ private struct ConversationAvatarView: View {
                     }
                 },
                 contextMenuItems: isDirect ? directContextMenuItems : groupContextMenuItems
-            )
-            // LE CONTOUR DU PAIR (#10713) — dans l'empreinte de la ligne, l'anneau de story
-            // concentrique à l'intérieur (#10714) ; sans contour servi, l'avatar d'avant.
-            .avatarRingWithin(
-                isDirect ? ProfileDecorResolver.ring(conversation.participantRing) : nil,
-                footprint: AvatarContext.conversationList.size,
-                storyRingSize: storyRingState == .none ? nil : AvatarContext.conversationList.ringSize
             )
 
             // Last seen tooltip

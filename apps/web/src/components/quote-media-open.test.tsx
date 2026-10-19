@@ -178,7 +178,7 @@ describe('Quote — l’aperçu média d’une citation s’ouvre, le reste saut
     expect(document.querySelector('[role="dialog"] [data-viewer-reply]')).not.toBeNull();
   });
 
-  test('hors du fil, la pièce citée se partage par ses identifiants, « mine » faux faute de lecteur connu (#8884)', async () => {
+  test('hors du fil, la pièce citée se partage par ses identifiants (#8884, #9914)', async () => {
     const host = mount(quoting([VIDEO_SANS_VIGNETTE], { effectFlags: 0 }));
     await act(async () => {
       host.querySelector<HTMLButtonElement>('button[data-quote-open="video"]')?.click();
@@ -193,7 +193,6 @@ describe('Quote — l’aperçu média d’une citation s’ouvre, le reste saut
       messageId: 'm-quoted',
       attachmentId: 'a-video',
       mime: 'video/mp4',
-      mine: false,
     });
   });
 

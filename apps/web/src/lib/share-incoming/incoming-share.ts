@@ -17,12 +17,11 @@ export type IncomingShare = {
 };
 
 /**
- * Les types que la feuille sait envoyer — ceux du `share_target`
- * (`share-target.ts`) et de l'intent-filter de la coque. Le système ne filtre
- * pas toujours (un `POST /share` peut porter n'importe quoi) : un fichier d'un
- * autre type est écarté ICI, le site commun aux deux entrées.
+ * TOUT FICHIER NON VIDE (D9, #10949) — image, vidéo, son, document. Le système
+ * ne filtre pas toujours ; ce qu'on écarte ici, le site commun aux deux
+ * entrées, ce sont les fichiers VIDES, qu'aucun envoi ne sait porter.
  */
-const isShareableFile = (file: File): boolean => file.type.startsWith('image/') || file.type.startsWith('video/');
+const isShareableFile = (file: File): boolean => file.size > 0;
 
 const HTTP_URL = /https?:\/\/[^\s<>"']+/i;
 
@@ -30,34 +29,42 @@ const isHttpUrl = (candidate: string): boolean => /^https?:\/\/\S+$/i.test(candi
 
 const withoutOccurrences = (text: string, fragment: string): string => text.split(fragment).join(' ').replace(/\s+/g, ' ').trim();
 
-/**
- * Des fichiers d'abord : ils sont ce que l'utilisateur a choisi de partager, le
- * texte qui les accompagne n'est que leur légende, et la feuille offre sa
- * propre zone de légende. Sans fichier, un texte avec son adresse — l'adresse
- * sortie du texte, sinon `joinLines` (le plan d'envoi) la poserait deux fois.
- * Rien d'exploitable : `null`, et aucune feuille ne s'ouvre pour un partage vide.
- */
-export function payloadOfIncomingShare(share: IncomingShare): SendPayload | null {
-  const files = share.files.filter(isShareableFile);
-  if (files.length > 0) return { kind: 'files', files };
-
+/** Le texte d'un partage, son adresse sortie à part. */
+function textOf(share: IncomingShare): { readonly text: string; readonly link: string | null } {
   const given = share.url.trim();
   const body = share.text.trim() === '' ? share.title.trim() : share.text.trim();
   const link = isHttpUrl(given) ? given : (HTTP_URL.exec(body)?.[0] ?? null);
   const stray = given !== '' && !isHttpUrl(given) ? given : '';
   const text = [link === null ? body : withoutOccurrences(body, link), stray].filter((part) => part !== '').join(' ');
+  return { text, link };
+}
 
+/**
+ * Des fichiers d'abord : ils sont ce que l'utilisateur a choisi de partager.
+ * Sans fichier, un texte avec son adresse — l'adresse sortie du texte, sinon
+ * le plan la poserait deux fois. Rien d'exploitable : `null`, et aucun écran
+ * ne s'ouvre pour un partage vide.
+ */
+export function payloadOfIncomingShare(share: IncomingShare): SendPayload | null {
+  const files = share.files.filter(isShareableFile);
+  if (files.length > 0) return { kind: 'files', files };
+  const { text, link } = textOf(share);
   if (link === null) return text === '' ? null : { kind: 'text', text };
   return { kind: 'text', text, url: link };
 }
 
 /**
- * La demande que la feuille d'envoi reçoit : toujours « partager » (ce n'est pas
- * un message qu'on transfère), avec « Plus d'options… » quand le partage porte
- * une adresse — la feuille système et « Copier le lien » ont alors un objet.
+ * La demande que l'écran de partage reçoit : toujours « envoyer » (ce n'est
+ * pas un message qu'on transfère). Le texte joint à des FICHIERS devient leur
+ * légende (D9) ; « Plus d'options… » quand le partage porte une adresse.
  */
 export function requestOfIncomingShare(share: IncomingShare): SendSheetRequest | null {
   const payload = payloadOfIncomingShare(share);
   if (payload === null) return null;
+  if (payload.kind === 'files') {
+    const { text, link } = textOf(share);
+    const caption = [text, link ?? ''].filter((part) => part !== '').join('\n');
+    return { intent: 'share', payload, ...(caption === '' ? {} : { caption }) };
+  }
   return { intent: 'share', payload, ...(payload.kind === 'text' && payload.url !== undefined ? { moreOptions: { url: payload.url } } : {}) };
 }

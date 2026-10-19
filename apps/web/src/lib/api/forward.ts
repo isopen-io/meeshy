@@ -77,8 +77,14 @@ export function forwardBodyOf(params: {
   readonly clientMessageId: string;
   /** La durée de la copie d'une flamme à durée (#9573) — déjà bornée par celle de la source. */
   readonly ephemeralDuration?: number;
+  /**
+   * LA PIÈCE SEULE (#9914) — les pièces du message source que la passerelle
+   * recopie, dans cet ordre ; absent ⇒ tout le lot. Un ancien serveur ignore
+   * la clé (schéma non strict) et recopie le lot, comme avant.
+   */
+  readonly forwardedAttachmentIds?: readonly string[];
 }): SendMessageBody {
-  const { message, sourceConversationId, clientMessageId, ephemeralDuration } = params;
+  const { message, sourceConversationId, clientMessageId, ephemeralDuration, forwardedAttachmentIds } = params;
   return {
     ...(message.content.trim().length > 0 ? { content: message.content } : {}),
     originalLanguage: message.originalLanguage,
@@ -89,6 +95,7 @@ export function forwardBodyOf(params: {
       ? {}
       : { forwardedFromConversationId: sourceConversationId }),
     ...(ephemeralDuration === undefined ? {} : { ephemeralDuration }),
+    ...(forwardedAttachmentIds === undefined || forwardedAttachmentIds.length === 0 ? {} : { forwardedAttachmentIds }),
   };
 }
 

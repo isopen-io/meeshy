@@ -80,6 +80,19 @@ describe('UnifiedShop', () => {
     await until(() => host.querySelector('[data-shop-balance]')?.textContent === 'Solde : 50 Meeshes');
   });
 
+  test('la puce « Cadres de bannière » est montrée : ses packs se listent et un gratuit s’installe par sa route (#10936)', async () => {
+    const { deps, calls } = gatewayDeps((request) =>
+      request.method === 'PUT' ? { ok: true, data: pack('cadres-celte', { installed: true }) } : { ok: true, data: { domains: [{ domain: 'banner-frame', packs: [pack('cadres-celte', { price: null })] }], balance: 0 } },
+    );
+    const host = await mountShop(deps);
+    await until(() => host.querySelector('[data-shop-domain="banner-frame"]') !== null);
+    await mounter.click(host.querySelector<HTMLElement>('[data-shop-domain="banner-frame"]'));
+    await until(() => host.querySelector('[data-unified-shop="banner-frame"]') !== null && buyButton(host, 'banner-frame:cadres-celte') !== null);
+    await mounter.click(buyButton(host, 'banner-frame:cadres-celte'));
+    await until(() => calls.some((call) => call.method === 'PUT'));
+    expect(calls.find((call) => call.method === 'PUT')?.path).toBe('/api/v1/packs/banner-frame/cadres-celte/install');
+  });
+
   test('un domaine absent (404 partout) est une vitrine vide, sans erreur', async () => {
     const { deps } = gatewayDeps(() => ({ ok: false, status: 404, error: 'nf' }));
     const host = await mountShop(deps, 'wallpaper');

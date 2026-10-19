@@ -1,7 +1,7 @@
 import { colorForName } from '@meeshy/shared/utils/conversation-colors';
 import { memo } from 'react';
 
-import { Avatar } from '@/components/avatar';
+import { PeerAvatar } from '@/components/peer-avatar';
 import { CHROME_ACTION_HIT_CLASS, ChromeActionDisc } from '@/components/chrome-action';
 import { Glyph, GlyphSvg } from '@/components/glyph';
 import { CALLS_GLYPHS, type CallsGlyphName } from '@/components/glyphs-calls';
@@ -293,7 +293,7 @@ export const CallRow = memo(function CallRow({
         className="flex min-w-0 flex-1 items-center gap-3.5 py-3 ps-5 pe-2 focus-visible:outline-2 focus-visible:-outline-offset-2"
         style={{ minHeight: CALL_ROW_HEIGHT, outlineColor: BRAND }}
       >
-        <Avatar initials={initialsOf(name)} color={colorForName(name)} size={44} {...(avatar === null ? {} : { src: avatar })} />
+        <PeerAvatar presenceKey={record.conversationType === 'direct' ? record.peer?.userId : undefined} initials={initialsOf(name)} color={colorForName(name)} size={44} {...(avatar === null ? {} : { src: avatar })} />
         <span className="grid min-w-0 flex-1 gap-0.5">
           <span data-call-name className="truncate text-body font-semibold" style={{ color: missed ? MISSED_INK : INK }}>
             {name}
@@ -340,6 +340,7 @@ export const CallRow = memo(function CallRow({
             title: name,
             avatar,
             isGroup: record.conversationType !== 'direct',
+            peerKey: record.peer?.userId ?? null,
           })
         }
         className="me-3 grid size-11 shrink-0 place-items-center rounded-full focus-visible:outline-2 focus-visible:outline-offset-2"

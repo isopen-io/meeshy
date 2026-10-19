@@ -162,7 +162,7 @@ describe('le fil ouvre la visionneuse conversation-entière (#6303)', () => {
     expect(viewer()).toBeNull();
   });
 
-  test('« Partager » ouvre la feuille d’envoi avec la PIÈCE regardée (ses identifiants, jamais son fichier), « mine » faux pour le message d’un autre (#8884)', async () => {
+  test('« Partager » ouvre la feuille d’envoi avec la PIÈCE regardée (ses identifiants, jamais son fichier), seule elle partira (#8884, #9914)', async () => {
     mountThreadGrid(() => {});
     act(() => {
       container.querySelectorAll<HTMLButtonElement>('[data-media-tile]')[1]!.click();
@@ -172,27 +172,16 @@ describe('le fil ouvre la visionneuse conversation-entière (#6303)', () => {
       viewer()!.querySelector<HTMLButtonElement>('[data-viewer-action="share"]')!.click();
     });
     const request = sendSheetStore.getState().request;
-    expect(request?.intent).toBe('share');
+    expect(request?.intent).toBe('forward');
     expect(request?.payload).toMatchObject({
       kind: 'attachment',
       conversationId: CONVERSATION,
       messageId: M2,
       attachmentId: A3,
       mime: 'image/jpeg',
-      mine: false,
-      protected: false,
+      exit: { id: M2, pieces: [{ id: A3 }] },
     });
   });
 
-  test('sur sa propre pièce, « mine » est vrai : la copie serveur lui est permise', async () => {
-    mountThreadGrid(() => {}, 'u-nour');
-    act(() => {
-      container.querySelectorAll<HTMLButtonElement>('[data-media-tile]')[1]!.click();
-    });
-    await until(() => viewer()?.querySelector('[data-viewer-action="share"]') != null);
-    act(() => {
-      viewer()!.querySelector<HTMLButtonElement>('[data-viewer-action="share"]')!.click();
-    });
-    expect(sendSheetStore.getState().request?.payload).toMatchObject({ kind: 'attachment', mine: true });
-  });
+
 });

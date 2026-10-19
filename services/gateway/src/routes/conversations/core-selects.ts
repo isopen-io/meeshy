@@ -9,6 +9,7 @@ import { MESSAGE_ATTACHMENT_ORDER } from '../../services/attachments/attachmentI
 import { conversationActiveMemberCountSelect } from './utils/active-member-count';
 import { PREVIEW_ATTACHMENT_SUMMARY_LIMIT } from './utils/last-message-nature';
 import { withoutCaptureNotices } from '../../services/messaging/captureNoticeVisibility';
+import { AVATAR_RING_COLUMN } from '../../services/appearance/profileDecor';
 
 /**
  * Participant fields fetched + serialized per participant in the GET
@@ -143,7 +144,9 @@ export const conversationLastMessagePreviewSelect = {
           id: true,
           username: true,
           displayName: true,
-          avatar: true
+          avatar: true,
+          // #10945 — le contour de l'expéditeur, résolu en `profileDecor` par `core-list.ts`.
+          ...AVATAR_RING_COLUMN
         }
       }
     }

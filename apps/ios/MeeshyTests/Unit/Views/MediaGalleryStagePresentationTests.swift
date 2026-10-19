@@ -160,7 +160,23 @@ final class MediaGalleryStagePresentationTests: XCTestCase {
 
         XCTAssertFalse(code.contains("showControls"),
                        "`showControls` a été absorbé par `StagePresentation`")
-        XCTAssertTrue(code.contains("@State var stagePresentation: StagePresentation = .carded"))
+        // #10930 : on entre en plein écran, sans chrome ; le toucher le pose par-dessus.
+        XCTAssertTrue(code.contains("MediaStageVeil.entryPresentation(voiceOverRunning: UIAccessibility.isVoiceOverRunning)"))
+        XCTAssertEqual(MediaStageVeil.entryPresentation(voiceOverRunning: false), .full(pausedOnEntry: false),
+                       "on entre en plein écran, sans chrome")
+        XCTAssertEqual(MediaStageVeil.entryPresentation(voiceOverRunning: true), .carded,
+                       "sous VoiceOver, la croix et les libellés sont là dès l'entrée")
+    }
+
+    /// **Une scène se pose au viewport entier, chrome ou pas** (#10930). Sa
+    /// carte et son sol lisent l'état de GÉOMÉTRIE — toujours le plein cadre —
+    /// et non l'état du chrome : sinon le toucher qui montre les contrôles
+    /// rétrécirait la scène et rallumerait son fond de carte.
+    func test_theScenePage_followsTheGeometry_notTheChrome() throws {
+        let code = try source("Meeshy/Features/Main/Views/ConversationMediaGalleryView+ScenePage.swift")
+        XCTAssertTrue(code.contains("GallerySceneFloor(scene: currentScene, presentation: stageGeometryPresentation)"))
+        XCTAssertFalse(code.contains("presentation: stagePresentation,"),
+                       "la page scène reçoit la géométrie, jamais l'état du chrome")
     }
 
     /// **La commande de LECTURE s'applique AVANT le court-circuit de cadrage**

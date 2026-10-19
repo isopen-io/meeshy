@@ -27,6 +27,11 @@ public enum PacksEndpoint: MeeshyEndpoint, Sendable {
     case bannerBySlugInstall(slug: String)
     case bannerBySlugPurchase(slug: String)
     case bannerBySlugReview(slug: String)
+    case bannerFrame
+    case bannerFrameBySlug(slug: String)
+    case bannerFrameBySlugInstall(slug: String)
+    case bannerFrameBySlugPurchase(slug: String)
+    case bannerFrameInstalled
     case bannerInstalled
     case bannerPending
     case bannerSubmissions
@@ -62,6 +67,11 @@ public enum PacksEndpoint: MeeshyEndpoint, Sendable {
         case .bannerBySlugInstall(let slug): return "/api/v1/packs/banner/\(slug)/install"
         case .bannerBySlugPurchase(let slug): return "/api/v1/packs/banner/\(slug)/purchase"
         case .bannerBySlugReview(let slug): return "/api/v1/packs/banner/\(slug)/review"
+        case .bannerFrame: return "/api/v1/packs/banner-frame"
+        case .bannerFrameBySlug(let slug): return "/api/v1/packs/banner-frame/\(slug)"
+        case .bannerFrameBySlugInstall(let slug): return "/api/v1/packs/banner-frame/\(slug)/install"
+        case .bannerFrameBySlugPurchase(let slug): return "/api/v1/packs/banner-frame/\(slug)/purchase"
+        case .bannerFrameInstalled: return "/api/v1/packs/banner-frame/installed"
         case .bannerInstalled: return "/api/v1/packs/banner/installed"
         case .bannerPending: return "/api/v1/packs/banner/pending"
         case .bannerSubmissions: return "/api/v1/packs/banner/submissions"

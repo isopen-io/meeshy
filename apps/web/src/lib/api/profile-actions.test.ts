@@ -707,6 +707,6 @@ describe('le décor de profil survit à une modification du profil (#10632)', ()
     gateway.release({ status: 200, body: { success: true, data: { user: wireUser({ displayName: 'Ada Lovelace', profileDecor: { avatarRing: null, banner: null } }) } } });
 
     await outcome;
-    expect(queryClient.getQueryData<MyProfile>(MY_PROFILE_QUERY_KEY)?.profileDecor).toEqual({ avatarRing: null, banner: null });
+    expect(queryClient.getQueryData<MyProfile>(MY_PROFILE_QUERY_KEY)?.profileDecor).toEqual({ avatarRing: null, banner: null, bannerFrame: null });
   });
 });

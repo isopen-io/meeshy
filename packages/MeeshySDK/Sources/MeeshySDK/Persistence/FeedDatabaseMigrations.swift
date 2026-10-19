@@ -149,5 +149,13 @@ public enum FeedDatabaseMigrations {
                 t.add(column: "qualifiedViewCount", .integer)
             }
         }
+
+        // Le contour équipé de l'auteur (#10946) : additif, NULLABLE — une ligne antérieure n'a pas
+        // de contour, jamais une erreur.
+        migrator.registerMigration("feed_v6_post_author_ring") { db in
+            try db.alter(table: "feed_posts") { t in
+                t.add(column: "authorRingJson", .text)
+            }
+        }
     }
 }

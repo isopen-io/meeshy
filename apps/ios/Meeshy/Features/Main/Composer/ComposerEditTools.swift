@@ -48,9 +48,26 @@ nonisolated enum ComposerEditTools {
         }
     }
 
-    /// Tout ce qui est offert est actif à l'entrée.
+    /// **Rien n'est actif à l'entrée** (#10930, porteur 2026-10-18 : « par
+    /// défaut prendre tout l'écran lors de l'édition après la prise »). La
+    /// prise remplit le viewport ; ses outils attendent le glissé vers le haut.
     static func initial(_ take: ComposerEditTake) -> Set<ComposerEditTool> {
-        Set(offered(take))
+        []
+    }
+
+    /// **Ce que le glissé vers le haut allume** (#10930) : « la barre de trim
+    /// et son contenu avec l'outil couper sélectionné » — le spectre du son se
+    /// peint sur elle (#10341). Une photo n'a que le recadrage, à choisir.
+    static func revealed(_ take: ComposerEditTake) -> Set<ComposerEditTool> {
+        Set(offered(take).filter { $0 != .crop })
+    }
+
+    /// **Seul le recadrage réduit la prise** (#10930 : « seul le recadrage
+    /// réduit la vidéo pour coper avec les bords ») — et seulement quand le
+    /// chrome est montré. Tout le reste se pose PAR-DESSUS une prise qui garde
+    /// le viewport entier.
+    static func framesScene(active: Set<ComposerEditTool>, chromeShown: Bool) -> Bool {
+        chromeShown && active.contains(.crop)
     }
 
     /// Ce qu'un outil actif montre : les équerres restent sur la scène sous une
@@ -67,9 +84,10 @@ nonisolated enum ComposerEditTools {
         isShown(tool, active: active, familyOpen: familyOpen) ? active.subtracting([tool]) : active.union([tool])
     }
 
-    /// L'ordre des panneaux sous la scène, de haut en bas : les proportions, le
-    /// spectre, puis la coupe, au plus près des outils.
-    static let panelOrder: [ComposerEditTool] = [.crop, .sound, .trim]
+    /// L'ordre des panneaux sous la scène, de haut en bas : le spectre, puis la
+    /// coupe, au plus près des outils. Les proportions n'en sont plus : elles
+    /// se posent SUR la scène, à gauche de la lecture (#10930).
+    static let panelOrder: [ComposerEditTool] = [.sound, .trim]
 
     /// Les panneaux sous la scène : la bande d'une famille ouverte, sinon un par
     /// outil actif — **sauf le son quand la coupe est montrée** (#10356) : il se
@@ -227,5 +245,40 @@ nonisolated struct ComposerSeekChase: Equatable, Sendable {
     mutating func reset() {
         inFlight = nil
         pending = nil
+    }
+}
+
+/// **Le glissé vertical de la retouche montre et cache son chrome** (#10930,
+/// porteur 2026-10-18 : « swipe vers le haut : afficher par-dessus la vidéo ou
+/// l'image les contrôleurs »). Le doigt cadrait le média dans tous les sens ;
+/// il garde le cadrage là où il a un sens — à l'horizontale, sur un média
+/// agrandi, et pendant le recadrage, où les bords sont l'objet même du geste.
+nonisolated enum ComposerEditSwipe {
+
+    /// La course qui décide ; en deçà, une hésitation ne change rien.
+    static let threshold: CGFloat = 48
+
+    enum Mode: Equatable, Sendable {
+        case swipe
+        case reframe
+    }
+
+    enum Outcome: Equatable, Sendable {
+        case none
+        case reveal
+        case hide
+    }
+
+    /// Ce que le glissé EST, fixé à son premier pas.
+    static func mode(translation: CGSize, zoomed: Bool, cropping: Bool) -> Mode {
+        guard !zoomed, !cropping, abs(translation.height) > abs(translation.width) else { return .reframe }
+        return .swipe
+    }
+
+    /// Ce qu'un glissé de chrome décide à sa levée : le haut montre, le bas cache.
+    static func outcome(translationY: CGFloat) -> Outcome {
+        if translationY <= -threshold { return .reveal }
+        if translationY >= threshold { return .hide }
+        return .none
     }
 }

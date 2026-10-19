@@ -250,7 +250,11 @@ final class SharePendingSendConsumer {
         mediaRoot: URL? = SharePendingSendConsumer.mediaDirectoryURL(),
         now: Date = Date()
     ) async {
-        var liveShareIds: Set<String> = []
+        // Les fichiers d'un partage RELAYÉ à l'écran de l'app (#10947) ou
+        // remis au studio vivent dans le même dossier : ils ne sont pas
+        // orphelins tant que leur fiche attend.
+        var liveShareIds = ShareRelayConsumer.liveShareIds(in: ShareRelayHandoff.directoryURL())
+            .union(ShareRelayConsumer.liveShareIds(in: ShareComposeHandoffConsumer.directoryURL()))
         defer { sweepOrphanMediaFolders(in: mediaRoot, keeping: liveShareIds, now: now) }
 
         guard let directory else { return }

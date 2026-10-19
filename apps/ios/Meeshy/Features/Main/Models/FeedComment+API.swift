@@ -30,5 +30,6 @@ nonisolated extension FeedComment {
             quotedMedia: c.quotedCitation,
             trackedLinkMap: c.trackedLinkMap
         )
+        self.authorRing = c.author.avatarRing
     }
 }
