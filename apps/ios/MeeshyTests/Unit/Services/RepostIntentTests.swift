@@ -615,7 +615,7 @@ final class RepostIntentTests: XCTestCase {
     func test_lesNeufSitesDuRepost_publientParLEcrivainUnique() throws {
         let sites = [
             "FeedViewModel+PostActions.swift", "ReelsViewModel.swift", "StatusViewModel.swift",
-            "PostDetailView.swift", "ProfileUserPostsList.swift", "RootViewComponents.swift",
+            "PostDetailView.swift", "ProfileUserPostsViewModel.swift", "RootViewComponents.swift",
             "FeedView.swift", "StoryViewerView+Sidebar.swift"
         ]
 

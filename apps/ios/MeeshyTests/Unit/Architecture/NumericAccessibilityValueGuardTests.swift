@@ -117,7 +117,7 @@ final class NumericAccessibilityValueGuardTests: XCTestCase {
             // a quitté `ReelsPlayerView.swift` pour `ReelPageChrome.swift`.
             "Features/Main/Views/ReelPageChrome.swift",
             "Features/Main/Components/ConversationDashboardView.swift",
-            "Features/Main/Components/MessageOverlayMenu.swift",
+            "Features/Main/Components/MessageOverlayPreviewAudioPlayer.swift",
         ]
         for host in hosts {
             let url = appRoot.appendingPathComponent(host)

@@ -45,12 +45,10 @@ final class FileSizeBudgetGuardTests: XCTestCase {
     /// toujours. Chaque découpe est un lot à elle seule — `CallManager.swift`
     /// (6462 lignes) n'était pas un lot d'UI/UX ; il a eu le sien (2026-10-02).
     private static let legacyOverBudget: Set<String> = [
-        "ConversationDashboardView.swift",
         // #6040 — `FeedView+Attachments.swift` a QUITTÉ la dette : 207 lignes,
         // contre 1 391 avant le découpage. La feuille qui en est sortie
         // (`FeedComposerSheet.swift`, 1 166) n'y ENTRE pas : elle est sous le
         // plafond. Le nom sort ENTIER, plafond compris — voir ci-dessous.
-        "FeedView.swift",
     ]
 
     /// Cumul des lignes de la dette héritée. **Ne doit que DESCENDRE.**
@@ -647,7 +645,13 @@ final class FileSizeBudgetGuardTests: XCTestCase {
     // des conversations à des sous-vues et un ouvreur, `FeedCommentsSheet.swift`
     // (1 571) ses bannières et son chargement. Ils sortent de `legacyOverBudget`
     // ENTIERS, et le plafond baisse d'exactement ce qu'ils pesaient.
-    private static let legacyLineCeiling = 5_582
+    //
+    // #10988 — 5 582 → 3 052 (−2 530). Troisième lot : `FeedView.swift` (1 317
+    // lignes comptées) confie l'engagement optimiste à `FeedPostEngagementState`
+    // et la ligne du fil à `FeedPostRow` ; `ConversationDashboardView.swift`
+    // (1 213) ses sections à des sous-vues et ses calculs à des règles. La dette
+    // héritée est VIDE : plus aucun fichier de l'app ne dépasse le budget.
+    private static let legacyLineCeiling = 3_052
 
     // MARK: - Règle 1 — pas de 43ᵉ
 

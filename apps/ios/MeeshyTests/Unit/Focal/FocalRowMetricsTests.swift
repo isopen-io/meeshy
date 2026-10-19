@@ -83,6 +83,7 @@ final class FocalRowMetricsTests: XCTestCase {
 
     private static let rowFiles = [
         "FocalRow.swift",
+        "FocalFocusChrome.swift",
         "FocalIdentityHeader.swift",
         "FocalMetaRow.swift",
         "FocalAttachmentBlock.swift",

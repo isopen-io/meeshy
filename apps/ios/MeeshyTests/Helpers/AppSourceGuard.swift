@@ -151,14 +151,18 @@ enum AppSourceGuard {
     /// `BubbleStandardLayout` (#10678), `MessageListViewController` (#10758),
     /// `PostDetailView` (#10956), `ConversationListViewModel`, `FeedViewModel`,
     /// `ConversationListView`, `ConversationView`, `StoryViewerView`,
-    /// `FeedCommentsSheet` et `P2PWebRTCClient` (#10988).
+    /// `FeedCommentsSheet`, `P2PWebRTCClient`, `FeedView`,
+    /// `ConversationDashboardView` et `FocalRow` (#10988).
     static let splitUnits: Set<String> = [
         "BubbleStandardLayout.swift",
+        "ConversationDashboardView.swift",
         "ConversationListView.swift",
         "ConversationListViewModel.swift",
         "ConversationView.swift",
         "FeedCommentsSheet.swift",
+        "FeedView.swift",
         "FeedViewModel.swift",
+        "FocalRow.swift",
         "MessageListViewController.swift",
         "P2PWebRTCClient.swift",
         "PostDetailView.swift",

@@ -390,6 +390,13 @@ final class LocalizationConsistencyTests: XCTestCase {
         "apps/ios/Meeshy/Features/Main/Views/GlobalSearchView.swift",  // 40
         "apps/ios/Meeshy/Features/Main/Views/ParticipantsView.swift",  // 38
         "apps/ios/Meeshy/Features/Main/Components/ConversationDashboardView.swift",  // 37
+        // Cohésion de `ConversationDashboardView` : le cliquet suit le CODE, pas le chemin (leçon 578).
+        // Les sections, et les règles qui les alimentent, ont quitté l'hôte avec leurs clés.
+        "apps/ios/Meeshy/Features/Main/Components/ConversationDashboardView+Breakdown.swift",
+        "apps/ios/Meeshy/Features/Main/Components/ConversationDashboardView+ContentTypes.swift",
+        "apps/ios/Meeshy/Features/Main/Components/ConversationDashboardView+ParticipantProfiles.swift",
+        "apps/ios/Meeshy/Features/Main/Components/ConversationDashboardView+Rules.swift",
+        "apps/ios/Meeshy/Features/Main/Components/ConversationDashboardView+Sentiment.swift",
         "apps/ios/Meeshy/Features/Main/Components/ConversationPreferencesTab.swift",  // 31
         // #6040 — la feuille est sortie de `FeedView+Attachments.swift` : les
         // deux moitiés portent des littéraux, les deux restent dans la liste.
@@ -406,7 +413,8 @@ final class LocalizationConsistencyTests: XCTestCase {
         "apps/ios/Meeshy/Features/Main/Navigation/Router.swift",  // 27
         "apps/ios/Meeshy/Features/Main/Components/EffectsPickerView.swift",  // 24
         "apps/ios/Meeshy/Features/Main/Views/CreateTrackingLinkView.swift",  // 24
-        "apps/ios/Meeshy/Features/Main/Views/ProfileUserPostsList.swift",  // 24
+        "apps/ios/Meeshy/Features/Main/Views/ProfileUserPostsList.swift",  // 10
+        "apps/ios/Meeshy/Features/Main/Views/ProfileUserPostsViewModel.swift",  // 14
         "apps/ios/Meeshy/Features/Main/Views/ReelsPlayerView.swift",  // 5
         // #6693 — le rail d'actions a quitté l'hôte avec ses quatorze clés. Le cliquet
         // suit le CODE, pas le chemin : sa destination s'inscrit dans le même commit.
@@ -501,7 +509,8 @@ final class LocalizationConsistencyTests: XCTestCase {
         "apps/ios/Meeshy/Features/Contacts/CallDetailSheet.swift",  // 13
         "apps/ios/Meeshy/Features/Main/Components/AttachmentLoadingTile.swift",  // 13
         "apps/ios/Meeshy/Features/Main/Components/MessageActionsMenu.swift",  // 13
-        "apps/ios/Meeshy/Features/Main/Components/MessageOverlayMenu.swift",  // 13
+        "apps/ios/Meeshy/Features/Main/Components/MessageOverlayMenu.swift",  // 2
+        "apps/ios/Meeshy/Features/Main/Components/MessageOverlayPreviewAudioPlayer.swift",  // 6
         "apps/ios/Meeshy/Features/Main/Views/ConversationView+MessageRow.swift",  // 13
         "apps/ios/Meeshy/Features/Main/Views/AffiliateCreateView.swift",  // 12
         "apps/ios/Meeshy/Features/Main/Views/NewConversationView.swift",  // 12
