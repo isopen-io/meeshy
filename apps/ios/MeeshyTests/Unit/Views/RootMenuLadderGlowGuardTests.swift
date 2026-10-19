@@ -38,7 +38,7 @@ final class RootMenuLadderGlowGuardTests: XCTestCase {
     /// fermée (ou sous Reduce Motion), et l'arrêt passe par une transaction
     /// sans animation — jamais un repeatForever qui survit à l'invisibilité.
     func test_themedActionButton_glowStartsOnlyWhenEnabled() throws {
-        let code = AppSourceGuard.stripComments(try source("Meeshy/Features/Main/Views/RootViewComponents.swift"))
+        let code = AppSourceGuard.stripComments(try source("Meeshy/Features/Main/Views/ThemedActionButton.swift"))
         XCTAssertTrue(
             code.contains("guard isGlowEnabled, !reduceMotion else"),
             "ThemedActionButton.syncGlow doit garder le démarrage du glow sur `isGlowEnabled` ET Reduce Motion"

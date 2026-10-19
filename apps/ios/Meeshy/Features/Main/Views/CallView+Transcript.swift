@@ -29,7 +29,7 @@ extension CallView {
     /// la personne, étiquette « EN → FR ». Le réglage Traduit/Original du
     /// bouton Sous-titres (`showOriginalText`) vaut pour toutes les lignes ;
     /// un toucher sur une phrase l'inverse pour elle seule.
-    func captionLine(for segment: TranscriptionSegment) -> CallCaptionLine {
+    func captionLine(for segment: CallTranscriptionSegment) -> CallCaptionLine {
         let localUserId = AuthManager.shared.currentUser?.id ?? ""
         return CallCaptionLine.make(
             segment: segment,
@@ -42,7 +42,7 @@ extension CallView {
 
     /// Le nom du locuteur : le mien, puis le roster du groupe (source de
     /// confiance), puis l'interlocuteur du duo, puis ce que le fil transporte.
-    func speakerName(for segment: TranscriptionSegment, localUserId: String) -> String {
+    func speakerName(for segment: CallTranscriptionSegment, localUserId: String) -> String {
         if segment.speakerId == localUserId {
             return AuthManager.shared.currentUser?.displayName
                 ?? AuthManager.shared.currentUser?.username

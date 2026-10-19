@@ -716,6 +716,26 @@ class ConversationListViewModel: ObservableObject {
     /// (`focal.row.you`) : la liste vouvoie, comme ses autres libellés.
     /// Posé dans le SDK au démarrage (`MeeshyApp`), qui le relaie partout.
     static let youAuthorLabel = String(localized: "message.author.self", defaultValue: "Vous", bundle: .main)
+
+    /// Dans le corps de la classe, pas dans `+Loading` : `ConversationListLaunchTests`
+    /// la redéfinit (`override`), et une méthode déclarée en extension ne se redéfinit pas.
+    func loadConversations() async {
+        // Coalesce concurrent callers : si un chargement est déjà en vol, on
+        // l'attend au lieu d'en lancer un second. Les appels réellement
+        // séquentiels (après que la Task se soit terminée et remise à nil)
+        // relancent normalement un chargement frais.
+        if let task = loadConversationsTask {
+            await task.value
+            return
+        }
+        let task = Task { [weak self] in
+            guard let self else { return }
+            await self.performLoadConversations()
+        }
+        loadConversationsTask = task
+        await task.value
+        loadConversationsTask = nil
+    }
 }
 
 extension Notification.Name {

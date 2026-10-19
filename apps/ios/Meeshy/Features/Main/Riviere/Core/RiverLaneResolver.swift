@@ -507,92 +507,6 @@ nonisolated public enum RiverLaneResolver {
         return sorted.map(\.laneId)
     }
 
-    // MARK: - Étape interne : partage de colonnes (miroir de columnAccepts / packColumns / assignColumns)
-
-    private static func spansOverlap(_ a: RiverLaneSpan, _ b: RiverLaneSpan) -> Bool {
-        a.startRank <= b.endRank && b.startRank <= a.endRank
-    }
-
-    /// Une colonne accueille une voix de plus si aucun de ses segments ne
-    /// croise les siens.
-    private static func columnAccepts(held: [RiverLaneSpan], spans: [RiverLaneSpan]) -> Bool {
-        !held.contains { occupied in spans.contains { spansOverlap(occupied, $0) } }
-    }
-
-    private struct LaneSeed {
-        let laneId: String
-        let isViewer: Bool
-        let spans: [RiverLaneSpan]
-    }
-
-    private struct ColumnPacking {
-        var columns: [[RiverLaneSpan]] = []
-        var indexByLaneId: [(laneId: String, index: Int)] = []
-        var overflowed = false
-    }
-
-    /// Range les voix en colonnes quand elles sont PLUS NOMBREUSES que la
-    /// largeur permise — coloration gloutonne d'intervalles : chaque voix
-    /// prend la colonne libre la plus à gauche. La rive (colonne 0) reste au
-    /// lecteur SEUL quand il a une branche : le lecteur étant premier dans
-    /// l'ordre, il l'ouvre, et les autres cherchent à partir de la colonne 1.
-    private static func packColumns(lanes: [LaneSeed], maxLanes: Int) -> ColumnPacking {
-        let shoreIsTaken = lanes.first?.isViewer == true
-        var packing = ColumnPacking()
-
-        for lane in lanes {
-            if packing.overflowed { break }
-
-            let firstShareable = (lane.isViewer || !shoreIsTaken) ? 0 : 1
-            var reused: Int?
-            var index = firstShareable
-            while index < packing.columns.count {
-                if columnAccepts(held: packing.columns[index], spans: lane.spans) {
-                    reused = index
-                    break
-                }
-                index += 1
-            }
-            let target = reused ?? packing.columns.count
-
-            if target >= maxLanes {
-                packing.overflowed = true
-                break
-            }
-
-            if target < packing.columns.count {
-                packing.columns[target].append(contentsOf: lane.spans)
-            } else {
-                packing.columns.append(lane.spans)
-            }
-            packing.indexByLaneId.append((laneId: lane.laneId, index: target))
-        }
-
-        return packing
-    }
-
-    private struct ColumnAssignment {
-        let indexByLaneId: [String: Int]
-        let overflowed: Bool
-    }
-
-    /// Colonne de chaque voix. Tant que la rivière tient dans sa largeur, une
-    /// voix garde SA colonne, pour elle seule et à vie — le partage n'est pas
-    /// une optimisation qu'on applique dès qu'elle est possible, c'est le
-    /// recours quand il y a plus de voix que de couloirs.
-    private static func assignColumns(lanes: [LaneSeed], maxLanes: Int) -> ColumnAssignment {
-        if lanes.count <= maxLanes {
-            var indexByLaneId: [String: Int] = [:]
-            for (index, lane) in lanes.enumerated() { indexByLaneId[lane.laneId] = index }
-            return ColumnAssignment(indexByLaneId: indexByLaneId, overflowed: false)
-        }
-
-        let packing = packColumns(lanes: lanes, maxLanes: maxLanes)
-        var indexByLaneId: [String: Int] = [:]
-        for entry in packing.indexByLaneId { indexByLaneId[entry.laneId] = entry.index }
-        return ColumnAssignment(indexByLaneId: indexByLaneId, overflowed: packing.overflowed)
-    }
-
     // MARK: - Étape interne : tête de groupe (miroir de dayIndex / isGroupHead)
 
     private static let dayMs: Double = 24 * 60 * 60 * 1000
@@ -652,8 +566,8 @@ nonisolated public enum RiverLaneResolver {
         var seedByParticipantId: [String: String] = [:]
         for participant in input.participants { seedByParticipantId[participant.id] = participant.displayName }
 
-        let seeds: [LaneSeed] = laneIds.map { laneId in
-            LaneSeed(
+        let seeds: [RiverColumnPacking.Seed] = laneIds.map { laneId in
+            RiverColumnPacking.Seed(
                 laneId: laneId,
                 isViewer: laneId == input.viewerId,
                 spans: toSpans(events: engagements[laneId] ?? [], rankTimes: rankTimes, silenceWindowMs: effectiveSilenceWindowMs)
@@ -666,7 +580,7 @@ nonisolated public enum RiverLaneResolver {
         // non plus — sinon la rivière se déplierait en couloirs sur la foi
         // d'une arrivée que personne n'a encore entendue parler.
         let voiceCount = Set(spoken.map(\.senderId)).count
-        let assignment = assignColumns(lanes: seeds, maxLanes: effectiveMaxLanes)
+        let assignment = RiverColumnPacking.assign(lanes: seeds, maxLanes: effectiveMaxLanes)
 
         let serializationReason: RiverSerializationReason? = assignment.overflowed
             ? .aboveMaximum

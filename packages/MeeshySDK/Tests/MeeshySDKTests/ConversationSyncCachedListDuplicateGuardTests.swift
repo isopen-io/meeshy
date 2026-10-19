@@ -10,7 +10,9 @@ final class ConversationSyncCachedListDuplicateGuardTests: XCTestCase {
         let url = URL(fileURLWithPath: #filePath)
             .deletingLastPathComponent().deletingLastPathComponent().deletingLastPathComponent()
             .appendingPathComponent("Sources/MeeshySDK/Sync/ConversationSyncEngine+Chargement.swift")
+        let rules = url.deletingLastPathComponent().appendingPathComponent("ConversationDeltaRules.swift")
         let code = try String(contentsOf: url, encoding: .utf8)
+            + (try String(contentsOf: rules, encoding: .utf8))
         XCTAssertFalse(code.contains("uniqueKeysWithValues"))
         XCTAssertGreaterThanOrEqual(code.components(separatedBy: "uniquingKeysWith").count - 1, 2)
     }

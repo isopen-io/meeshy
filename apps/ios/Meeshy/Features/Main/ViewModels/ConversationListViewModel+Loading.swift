@@ -58,25 +58,8 @@ extension ConversationListViewModel {
 
     // MARK: - Load Conversations
 
-    func loadConversations() async {
-        // Coalesce concurrent callers : si un chargement est déjà en vol, on
-        // l'attend au lieu d'en lancer un second. Les appels réellement
-        // séquentiels (après que la Task se soit terminée et remise à nil)
-        // relancent normalement un chargement frais.
-        if let task = loadConversationsTask {
-            await task.value
-            return
-        }
-        let task = Task { [weak self] in
-            guard let self else { return }
-            await self.performLoadConversations()
-        }
-        loadConversationsTask = task
-        await task.value
-        loadConversationsTask = nil
-    }
 
-    private func performLoadConversations() async {
+    func performLoadConversations() async {
         Logger.messages.debug("[ConversationListVM] loadConversations called")
 
         // Defensive: a re-entrant load (e.g. post-logout/login) should

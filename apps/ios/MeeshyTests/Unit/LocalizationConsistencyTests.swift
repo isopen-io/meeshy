@@ -153,6 +153,10 @@ final class LocalizationConsistencyTests: XCTestCase {
         // #8103 — l'aperçu des épinglés a quitté la fiche (extraction de taille),
         // et l'onglet Médias est devenu l'écran « Médias, liens et documents ».
         "apps/ios/Meeshy/Features/Main/Components/ConversationInfoSheet+Pinned.swift",
+        // Extraits de taille de la fiche : la rangée de sécurité et la rangée de membre
+        // portent des clés qui ne doivent pas sortir du cliquet en changeant de fichier.
+        "apps/ios/Meeshy/Features/Main/Components/ConversationInfoSecurityRow.swift",
+        "apps/ios/Meeshy/Features/Main/Components/ConversationInfoMemberRow.swift",
         "apps/ios/Meeshy/Features/Main/Components/MediaHub/ConversationMediaHubCopy.swift",
         "apps/ios/Meeshy/Features/Main/Components/MediaHub/ConversationMediaHubView.swift",
         "apps/ios/Meeshy/Features/Main/Views/ParticipantProfileSheet.swift",  // 43
@@ -318,7 +322,8 @@ final class LocalizationConsistencyTests: XCTestCase {
         "apps/ios/Meeshy/Features/Main/Views/AudioPostTrimZone.swift",
         "apps/ios/Meeshy/Features/Main/Views/AudioLanguagePickerView.swift",
         "apps/ios/Meeshy/Features/Main/Views/Bubble/BubbleFailedRetryBar.swift",  // 2
-        "apps/ios/Meeshy/Features/Main/Views/ConversationMediaViews.swift",  // 2
+        "apps/ios/Meeshy/Features/Main/Views/ConversationMediaViews.swift",
+        "apps/ios/Meeshy/Features/Main/Views/DownloadBadgeView.swift",  // 2
         "apps/ios/Meeshy/Features/Main/Views/StoryLanguageQuickBar.swift",  // 2
         "apps/ios/Meeshy/Features/Main/Views/iPadRootView.swift",  // 2
         "apps/ios/Meeshy/Features/Stories/Notifications/StoryNotificationOfflineContent.swift",  // 2
@@ -503,6 +508,8 @@ final class LocalizationConsistencyTests: XCTestCase {
         "apps/ios/Meeshy/Features/Main/ViewModels/PostDetailViewModel.swift",  // 15
         // #6600 — l'édition de commentaire a quitté l'hôte avec sa clé.
         "apps/ios/Meeshy/Features/Main/ViewModels/PostDetailViewModel+CommentEdit.swift",  // 1
+        // Cohésion de `PostDetailViewModel` : les actions sur le post ont quitté l hôte avec leurs clés (leçon 578).
+        "apps/ios/Meeshy/Features/Main/ViewModels/PostDetailViewModel+PostActions.swift",
         "apps/ios/Meeshy/Features/Main/Views/FloatingCallPillView.swift",  // 16
         "apps/ios/Meeshy/Features/Main/Views/MagicLinkView.swift",  // 16
         "apps/ios/Meeshy/Features/Main/Views/ReportUserView.swift",  // 16

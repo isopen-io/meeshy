@@ -131,7 +131,7 @@ final class AttachmentReactionPersistenceTests: XCTestCase {
             .appendingPathComponent("Sources/MeeshySDK")
 
         let projections = [
-            "Models/MessageModels.swift",        // APIMessage.toMessage — socket et REST direct
+            "Models/APIMessage+MeeshyMessage.swift", // APIMessage.toMessage — socket et REST direct
             "Models/ConversationModels.swift",   // dernier message de la liste de conversations
             "Persistence/MessagePersistenceActor+Migration.swift", // REST → GRDB, ce que la bulle relit
         ]

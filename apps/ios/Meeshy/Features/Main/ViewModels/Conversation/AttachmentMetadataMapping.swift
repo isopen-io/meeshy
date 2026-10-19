@@ -17,7 +17,7 @@ import MeeshySDK
 //
 // Le segment reçu par REST ou socket (`TranscriptionSegment` du SDK) se
 // mappe dans le SDK (`TranscriptionModels.swift`) : l'app déclare son propre
-// `TranscriptionSegment` d'appel et ne peut pas nommer celui du SDK —
+// `CallTranscriptionSegment` d'appel et ne peut pas nommer celui du SDK —
 // `MeeshySDK.` y désigne l'enum `MeeshySDK`, pas le module.
 
 extension MessageTranscriptionSegment {

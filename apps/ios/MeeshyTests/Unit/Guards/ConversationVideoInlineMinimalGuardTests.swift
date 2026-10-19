@@ -27,6 +27,7 @@ final class ConversationVideoInlineMinimalGuardTests: XCTestCase {
     private static let filCellFiles = [
         "Meeshy/Features/Main/Views/Bubble/BubbleStandardLayout.swift",
         "Meeshy/Features/Main/Views/Bubble/BubbleStandardLayout+Media.swift",
+        "Meeshy/Features/Main/Views/Bubble/BubbleCarouselView.swift",
         "Meeshy/Features/Main/Views/Bubble/BubbleAttachmentView.swift",
         "Meeshy/Features/Main/Focal/Row/FocalAttachmentBlock.swift",
     ]
