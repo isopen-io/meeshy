@@ -258,6 +258,10 @@ final class FixedFontSizeGuardTests: XCTestCase {
         // inscrire sa DESTINATION dans le MÊME commit ». Inscrire la
         // destination ne suffit pas — la source VIDÉE doit sortir, sinon la
         // liste garde un nom sans site et cesse de dire la vérité (règle 4).
+        // Cohésion de `FeedComposerSheet` : la rangée des pièces en attente a
+        // quitté la feuille avec ses glyphes en CADRE FIXE (tuile de 72, pastille
+        // de 20). RELOCALISATION pure : ni `totalCeiling` ni `textCeiling` ne bougent.
+        "Features/Main/Views/FeedComposerAttachmentsRow.swift",
         "Features/Main/Views/FeedComposerSheet.swift",
         "Features/Main/Views/FeedPostCard+Media.swift",
         // #4096 — la vue `3f` remplace la mosaïque par un carrousel. Le fichier

@@ -161,7 +161,11 @@ final class ComposerSoundDestinationWiringGuardTests: XCTestCase {
             .deletingLastPathComponent().deletingLastPathComponent()
             .deletingLastPathComponent().deletingLastPathComponent()
             .appendingPathComponent("Meeshy/Features/Main/Views/AudioPostComposerView.swift")
-        let feuille = AppSourceGuard.stripComments(try String(contentsOf: url, encoding: .utf8))
+        let placement = url.deletingLastPathComponent().appendingPathComponent("AudioPostPlacementSection.swift")
+        let feuille = AppSourceGuard.stripComments(
+            try String(contentsOf: url, encoding: .utf8)
+            + (try String(contentsOf: placement, encoding: .utf8))
+        )
         let nus = feuille.components(separatedBy: "ComposerSoundRoleCopy.label(role)").count - 1
         XCTAssertEqual(nus, 0,
                        "aucun libellé de rôle ne se compose sans sa destination")

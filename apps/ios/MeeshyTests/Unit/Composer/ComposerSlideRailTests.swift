@@ -215,7 +215,7 @@ final class ComposerSlideRailTests: XCTestCase {
                       "le meuble doit monter l'hôte des toasts sur son chrome")
         for porte in ["DocumentComposerDoor", "MediaComposerDoor", "ShareComposeDoor",
                       "StoryEditComposer", "StoryRepublishComposer", "ConversationImageSceneDoor",
-                      "ComposerMoodSurface"] {
+                      "ComposerMoodSurface", "MoodComposerDoor"] {
             XCTAssertFalse(try code("Meeshy/Features/Main/Composer/\(porte).swift").contains(".feedbackToastOverlay()"),
                            "\(porte) repose l'hôte des toasts : chaque toast paraîtrait deux fois")
         }

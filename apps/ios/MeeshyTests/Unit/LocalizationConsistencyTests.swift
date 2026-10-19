@@ -210,6 +210,9 @@ final class LocalizationConsistencyTests: XCTestCase {
         // #8095 — même geste que le #6145 : la légende servie et ses libellés
         // VoiceOver ont quitté le fichier épinglé avec leurs deux clés.
         "apps/ios/Meeshy/Features/Main/Views/ConversationMediaGalleryView+Captions.swift",  // 2
+        // La rangée de langues de la légende a quitté le fichier épinglé avec sa clé
+        // (`gallery.caption.languages`) : sa destination s'inscrit dans le même commit.
+        "apps/ios/Meeshy/Features/Main/Views/ConversationMediaGalleryView+CaptionLanguages.swift",  // 1
         "apps/ios/Meeshy/Features/Main/Views/StoryExportShareSheet.swift",  // 9
         "apps/ios/Meeshy/Features/Contacts/DiscoverViewModel.swift",  // 4
         "apps/ios/Meeshy/Features/Contacts/RequestsViewModel.swift",  // 8
@@ -309,6 +312,11 @@ final class LocalizationConsistencyTests: XCTestCase {
         "apps/ios/Meeshy/Features/Main/ViewModels/UserProfileViewModel.swift",  // 2
         "apps/ios/Meeshy/Features/Main/ViewModels/VoiceProfileWizardViewModel.swift",  // 2
         "apps/ios/Meeshy/Features/Main/Views/AudioPostComposerView.swift",  // 2
+        // Cohésion de `AudioPostComposerView` : la carte d'état, la zone de rognage et le
+        // sélecteur de langue ont quitté l'hôte avec leurs clés ; le cliquet suit le code (leçon 578).
+        "apps/ios/Meeshy/Features/Main/Views/AudioPostStatusCard.swift",
+        "apps/ios/Meeshy/Features/Main/Views/AudioPostTrimZone.swift",
+        "apps/ios/Meeshy/Features/Main/Views/AudioLanguagePickerView.swift",
         "apps/ios/Meeshy/Features/Main/Views/Bubble/BubbleFailedRetryBar.swift",  // 2
         "apps/ios/Meeshy/Features/Main/Views/ConversationMediaViews.swift",  // 2
         "apps/ios/Meeshy/Features/Main/Views/StoryLanguageQuickBar.swift",  // 2
@@ -408,6 +416,8 @@ final class LocalizationConsistencyTests: XCTestCase {
         // deux moitiés portent des littéraux, les deux restent dans la liste.
         "apps/ios/Meeshy/Features/Main/Views/FeedView+Attachments.swift",  // 6
         "apps/ios/Meeshy/Features/Main/Views/FeedComposerSheet.swift",  // 26
+        // Cohésion de `FeedComposerSheet` : la clé de retrait d'une pièce a suivi la rangée.
+        "apps/ios/Meeshy/Features/Main/Views/FeedComposerAttachmentsRow.swift",  // 1
         "apps/ios/Meeshy/Features/Main/Components/MessageMoreSheet.swift",  // 29
         "apps/ios/Meeshy/Features/Main/Views/PrivacySettingsView.swift",  // 29
         "apps/ios/Meeshy/Features/Main/Views/VoiceProfileWizardView.swift",  // 29
@@ -454,6 +464,10 @@ final class LocalizationConsistencyTests: XCTestCase {
         "apps/ios/Meeshy/Features/Main/Views/Bubble/BubbleMetaBadges.swift",  // 1
         "apps/ios/Meeshy/Features/Main/Components/ConversationEncryptionDetailSheet.swift",  // 1
         "apps/ios/Meeshy/Features/Main/Components/MessageDetail/MessageViewsDetailView.swift",  // 1
+        // Cohésion de `MessageViewsDetailView` : les cartes et le badge ont quitté l'hôte avec leurs clés ; le cliquet suit le code (leçon 578).
+        "apps/ios/Meeshy/Features/Main/Components/MessageDetail/MessageViewsConsumptionCard.swift",
+        "apps/ios/Meeshy/Features/Main/Components/MessageDetail/MessageViewsDeliveryBadge.swift",
+        "apps/ios/Meeshy/Features/Main/Components/MessageDetail/MessageViewsSendAttemptsCard.swift",
         // #7366 — les onglets et libellés de la fiche en sont sortis ; le cliquet suit le code.
         "apps/ios/Meeshy/Features/Main/Components/MessageDetail/MessageViewsFilter.swift",  // 13
         "apps/ios/Meeshy/Features/Intents/MeeshyAppIntents.swift",  // 1
@@ -478,6 +492,8 @@ final class LocalizationConsistencyTests: XCTestCase {
         "apps/ios/Meeshy/Features/Main/Views/RootLayers/CallPresentationLayer.swift",  // 1
         "apps/ios/Meeshy/Features/Auth/Views/EmailVerificationView.swift",  // 17
         "apps/ios/Meeshy/Features/Main/Components/RecentMediaStrip.swift",  // 17
+        // Cohésion de `RecentMediaStrip` : la cellule et son aperçu ont quitté l'hôte avec leurs clés ; le cliquet suit le code (leçon 578).
+        "apps/ios/Meeshy/Features/Main/Components/RecentMediaCell.swift",
         // Découpé par responsabilité : le cliquet suit les CLÉS jusqu'à leurs nouveaux fichiers (leçon 578).
         "apps/ios/Meeshy/Features/Main/ViewModels/FeedViewModel+PostActions.swift",  // 12
         "apps/ios/Meeshy/Features/Main/ViewModels/FeedViewModel+Reactions.swift",  // 3

@@ -54,7 +54,9 @@ final class WindowMetricsSSOTTests: XCTestCase {
         "Meeshy/Features/Main/Views/RootView.swift",
         "Meeshy/Features/Main/Views/VideoLegacySupport.swift",
         "Meeshy/Features/Main/Components/ComposerModels.swift",
-        "Meeshy/Features/Main/Components/RecentMediaStrip.swift"
+        "Meeshy/Features/Main/Components/RecentMediaStrip.swift",
+        "Meeshy/Features/Main/Components/RecentMediaCell.swift",
+        "Meeshy/Features/Main/Components/RecentMediaPreview.swift"
     ]
 
     // MARK: - L'ancrage du bouton « redescendre en bas »

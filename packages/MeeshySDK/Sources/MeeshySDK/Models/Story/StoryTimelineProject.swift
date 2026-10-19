@@ -14,7 +14,7 @@ import Foundation
 // `StoryLocationObject`, et que #4723 raconte.
 //
 // Déplacement PUR : aucune déclaration ne change de nom, de visibilité ni de
-// corps. Les douze commandes concrètes vivent dans `StoryEditCommands.swift`,
+// corps. Les douze commandes concrètes vivent dans les fichiers `*Command.swift` du même dossier,
 // leur contrat et leur cible ici.
 
 // MARK: - Timeline Project (Snapshot for Command Pattern)
