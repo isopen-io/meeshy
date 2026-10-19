@@ -52,6 +52,8 @@ import { navigate } from '@/lib/router';
 import { useLoadMoreSentinel } from '@/lib/view/use-load-more-sentinel';
 import { useOutOfView } from '@/lib/view/use-out-of-view';
 import { useScrollportMemory } from '@/lib/view/use-scrollport-memory';
+import { searchBarHidden, searchCommunitiesShown, useSearchBarScrolledAway } from '@/lib/view/search-bar-reveal';
+import { usePrefersReducedMotion } from '@/lib/lottie/use-reduced-motion';
 import { createDayPillRevealSubscriber } from '@/lib/view/day-pill-reveal';
 import { useLensMetaReveal } from '@/lib/view/lens-meta-reveal';
 import { PULL_THRESHOLD, pullTransform } from '@/lib/view/pull-to-refresh';
@@ -257,6 +259,10 @@ export default function ConversationsScreen() {
   const interfaceLanguage = currentInterfaceLanguage();
   useDismissRowSwipeOnViewChange(`${selection.join(',')}\u0001${search}`);
   const frame = useRef<HTMLUListElement | null>(null);
+  /* #11036 — la barre suit le SENS du défilement ; une recherche en cours la tient. */
+  const searchBarScrolledAway = useSearchBarScrolledAway(frame);
+  const searchBarAway = searchBarHidden({ scrolledAway: searchBarScrolledAway, focused: searchFocused, query: search });
+  const searchMotionReduced = usePrefersReducedMotion();
 
   /**
    * LA RÉSERVE DE LA BARRE DE RECHERCHE (#6220) — MESURÉE, jamais supposée,
@@ -915,11 +921,23 @@ export default function ConversationsScreen() {
         hauteur MESURÉE en `padding-block-end` (voir `searchBarRef` ci-dessus)
         : le contenu s'arrête toujours AU-DESSUS d'elle, jamais dessous.
       */}
-      <div ref={searchBarRef} data-search-bar className="absolute inset-x-0 bottom-0 z-10 px-4 pt-2 pb-safe">
+      <div
+        ref={searchBarRef}
+        data-search-bar
+        data-search-bar-away={searchBarAway ? 'true' : 'false'}
+        inert={searchBarAway}
+        className="absolute inset-x-0 bottom-0 z-10 px-4 pt-2 pb-safe"
+        style={{
+          transform: searchBarAway ? 'translateY(calc(100% + 16px))' : 'translateY(0)',
+          opacity: searchBarAway ? 0 : 1,
+          transition: searchMotionReduced ? 'none' : 'transform 250ms ease-out, opacity 250ms ease-out',
+        }}
+      >
         {/* #10924 — SES communautés au focus, ou rien ; posées AU-DESSUS de la
-          barre, hors de sa hauteur mesurée. `pointerdown` retenu : le focus
+          barre, hors de sa hauteur mesurée. #11036 — repliées dès le premier
+          caractère, pour laisser voir les résultats. `pointerdown` retenu : le focus
           reste au champ jusqu'au clic d'une carte. */}
-        {searchFocused ? <SearchCommunitiesBand language={interfaceLanguage} className="glass-prominent glass-card absolute inset-x-4 bottom-full mb-2" /> : null}
+        {searchCommunitiesShown({ focused: searchFocused, query: search }) ? <SearchCommunitiesBand language={interfaceLanguage} className="glass-prominent glass-card absolute inset-x-4 bottom-full mb-2" /> : null}
         <div
           className="glass-prominent glass-card flex items-center gap-3 px-4 py-3"
           style={{
