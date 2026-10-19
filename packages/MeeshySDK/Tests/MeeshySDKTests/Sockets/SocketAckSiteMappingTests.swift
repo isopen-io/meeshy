@@ -146,4 +146,49 @@ struct SocketAckSiteMappingTests {
         #expect(!succeeded(["success": false] as [String: Any]))
         #expect(!succeeded("NO ACK"))
     }
+
+    // MARK: - Réactions sociales
+
+    @Test("réaction de post refusée : la limite du jour passe avant la phrase du serveur")
+    func postReactionEvent_dailyLimit_throwsDailyGestureLimit() {
+        let ack = SocketAck<SocketPostReactionUpdateEvent>.parse(
+            ["success": false, "code": "DAILY_REACTION_LIMIT", "limit": 5] as [String: Any], payloadAt: .data
+        )
+        #expect(throws: DailyGestureLimit(gesture: .reaction, resetAt: nil, limit: 5)) {
+            try SocialSocketManager.postReactionEvent(from: ack, postId: "p1", emoji: "❤️", action: "add")
+        }
+    }
+
+    @Test("réaction de commentaire : une échéance est timeout")
+    func commentReactionEvent_timedOut_throwsTimeout() {
+        let ack = SocketAck<SocketCommentReactionUpdateEvent>.parse("NO ACK", payloadAt: .data)
+        #expect(throws: SocialSocketManager.CommentReactionError.self) {
+            try SocialSocketManager.commentReactionEvent(from: ack, commentId: "c1", postId: "p1", emoji: "👍", action: "add")
+        }
+    }
+
+    @Test("synchronisation de réactions refusée : la phrase du serveur est reprise")
+    func postReactionSyncEvent_refused_carriesTheServerMessage() {
+        let ack = SocketAck<SocketPostReactionSyncEvent>.parse(
+            ["success": false, "error": ["message": "Post not found"]] as [String: Any], payloadAt: .data
+        )
+        do {
+            _ = try SocialSocketManager.postReactionSyncEvent(from: ack)
+            Issue.record("attendu une erreur")
+        } catch SocialSocketManager.PostReactionError.serverError(let message) {
+            #expect(message == "Post not found")
+        } catch {
+            Issue.record("erreur inattendue \(error)")
+        }
+    }
+
+    @Test("synchronisation de réactions : un data illisible est malformedResponse")
+    func commentReactionSyncEvent_undecodable_throwsMalformedResponse() {
+        let ack = SocketAck<SocketCommentReactionSyncEvent>.parse(
+            ["success": true, "data": ["foo": 1]] as [String: Any], payloadAt: .data
+        )
+        #expect(throws: SocialSocketManager.CommentReactionError.self) {
+            try SocialSocketManager.commentReactionSyncEvent(from: ack)
+        }
+    }
 }
