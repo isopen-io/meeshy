@@ -4,6 +4,7 @@ import { useStore } from 'zustand';
 import { PeerAvatar } from '@/components/peer-avatar';
 import { BUTTON } from '@/components/ui-chrome';
 import { apiDeps } from '@/lib/api/deps';
+import { servedRingOf } from '@/lib/profile-decor/served-ring';
 import { useStoryTray } from '@/lib/api/query';
 import { sessionStore } from '@/lib/api/session';
 import { storyViewedStore } from '@/lib/api/story-viewed-store';
@@ -97,6 +98,7 @@ export function StoryRow({ language, group }: { readonly language: InterfaceLang
       >
         <PeerAvatar
           presenceKey={storyAuthorPresenceKey(group)}
+          ringRef={servedRingOf(group.author)}
           initials={initialsOf(label)}
           color={'var(--color-ios-brand)'}
           size={44}

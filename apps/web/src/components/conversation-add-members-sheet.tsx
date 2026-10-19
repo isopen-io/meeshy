@@ -128,7 +128,7 @@ export function AddMembersSheet({
           className="flex w-full items-center gap-3 px-4 py-2 text-start focus-visible:outline-2 focus-visible:-outline-offset-2 disabled:opacity-60"
           style={{ minHeight: ROW_MIN_HEIGHT, outlineColor: 'var(--accent)' }}
         >
-          <PeerAvatar presenceKey={person.id} initials={initialsOf(name)} color={accent} size={40} {...(person.avatar === null ? {} : { src: person.avatar })} />
+          <PeerAvatar presenceKey={person.id} ringRef={person.ring} initials={initialsOf(name)} color={accent} size={40} {...(person.avatar === null ? {} : { src: person.avatar })} />
           <span className="flex min-w-0 flex-1 flex-col">
             <span className="truncate text-body font-medium" style={{ color: 'var(--color-ios-ink)' }}>
               {name}

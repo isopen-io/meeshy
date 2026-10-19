@@ -2,6 +2,7 @@ import { useAuthorMood, useAuthorMoodPostId } from '@/lib/view/use-author-moods'
 import { useAuthorActive, useAuthorFocused, useAuthorHere } from '@/lib/view/use-conversation-viewing';
 
 import { Avatar } from './avatar';
+import { useAuthorRing } from '@/lib/profile-decor/author-ring';
 import { TypingDots } from './typing-dots';
 import type { TypingEntry } from '@/lib/api/typing-store';
 import { AVATAR_SIZE, ROW_PADDING_HORIZONTAL } from '@/lib/reading-mode/metrics';
@@ -102,6 +103,8 @@ export function TypingRosterCell({
   const leadFocused = useAuthorFocused(lead?.userId);
   const leadMood = useAuthorMood(lead?.userId);
   const leadMoodPostId = useAuthorMoodPostId(lead?.userId);
+  /* SON CONTOUR ÉQUIPÉ (#10946) — celui que la conversation sert avec ses participants. */
+  const leadRing = useAuthorRing(lead?.userId);
   if (lead === undefined) return null;
   /* `undefined` quand il n'y a pas de photo — jamais `''` : `Avatar` rendrait
      un `<img src="">`, qui RECHARGE la page courante. */
@@ -131,6 +134,7 @@ export function TypingRosterCell({
           hereFocused={leadFocused}
           {...(leadMood === undefined ? {} : { mood: leadMood, ...(leadMoodPostId === undefined ? {} : { moodPostId: leadMoodPostId }) })}
           {...(leadPhoto === undefined ? {} : { src: leadPhoto })}
+          {...(leadRing === null ? {} : { ring: leadRing })}
         />
         <TypingDots color={accent} />
       </div>
@@ -155,6 +159,7 @@ export function TypingRosterCell({
         hereFocused={leadFocused}
         {...(leadMood === undefined ? {} : { mood: leadMood, ...(leadMoodPostId === undefined ? {} : { moodPostId: leadMoodPostId }) })}
         {...(leadPhoto === undefined ? {} : { src: leadPhoto })}
+        {...(leadRing === null ? {} : { ring: leadRing })}
       />
       <span
         className="flex items-center gap-1.5 rounded-chip px-3 py-2"

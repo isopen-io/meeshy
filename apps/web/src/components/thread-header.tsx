@@ -21,6 +21,7 @@ import { sessionStore } from '@/lib/api/session';
 import { callsAvailable } from '@/lib/calls/calls-availability';
 import { avatarOf, initialsOf, peerOf, presenceKeyOf } from '@/lib/view/conversation';
 import { usePresences } from '@/lib/view/use-presence';
+import { servedRingOf, useRingDesign } from '@/lib/profile-decor/author-ring';
 import { avatarMenuEntries } from '@/lib/view/avatar-menu';
 import type { ActiveMember } from '@/lib/view/top-active-members';
 import type { StoryRingOf } from '@/lib/view/use-author-story-rings';
@@ -152,6 +153,8 @@ export function ThreadHeader({
   const peerRing = peer === undefined ? undefined : storyRingOf?.(peer.userId ?? peer.user?.id);
   /* LE PAIR A LA CONVERSATION OUVERTE (#8892) — sa pastille passe à la couleur primaire. */
   const peerKey = peer?.userId ?? peer?.user?.id ?? undefined;
+  /* SON CONTOUR ÉQUIPÉ (#10713, #10946) — servi avec le participant. */
+  const peerContour = useRingDesign(servedRingOf(peer));
   const peerHere = useIsHere(conversation.id, peerKey);
   /* … et pulse tant qu'il y regarde, écoute ou agit (#9061). */
   const peerActive = useIsHereActive(conversation.id, peerKey);
@@ -224,7 +227,7 @@ export function ThreadHeader({
   const bandToggles = avatarDoor.kind !== 'toggle' && !preview;
   const peerSignals = group
     ? {}
-    : { presence: peerPresence, here: peerHere, hereActive: peerActive, hereFocused: peerFocused, ...(peerMood === undefined ? {} : { mood: peerMood, ...(peerMoodPostId === undefined ? {} : { moodPostId: peerMoodPostId }) }) };
+    : { presence: peerPresence, here: peerHere, hereActive: peerActive, hereFocused: peerFocused, ...(peerContour === null ? {} : { ring: peerContour }), ...(peerMood === undefined ? {} : { mood: peerMood, ...(peerMoodPostId === undefined ? {} : { moodPostId: peerMoodPostId }) }) };
   const interfaceLanguage = currentInterfaceLanguage();
   const toggleLabel = translate(interfaceLanguage, expanded ? 'thread.header.collapse' : 'thread.header.expand');
   /* LA RECHERCHE DANS LA CONVERSATION — la loupe était un bouton SANS
@@ -419,7 +422,7 @@ export function ThreadHeader({
                 (#10207) : « start » lance, « join-only » ne garde que les portes
                 d'un appel déjà en cours, « none » ne montre rien. */}
             {callOffer === 'none' || !callsAvailable() ? null : (
-              <ThreadCallButton conversationId={conversation.id} title={title} avatar={photo ?? null} group={group} liveCallHint={(conversation as ListConversation).activeCall ?? null} mayStart={callOffer === 'start'} />
+              <ThreadCallButton conversationId={conversation.id} title={title} avatar={photo ?? null} group={group} peerKey={group ? null : (peerKey ?? null)} liveCallHint={(conversation as ListConversation).activeCall ?? null} mayStart={callOffer === 'start'} />
             )}
             {/* EN APERÇU, « AGRANDIR » PREND LA PLACE DE LA LOUPE (#9031) :
                 l'aperçu ne cherche pas, il ouvre la conversation complète. */}

@@ -2,7 +2,7 @@ import { useId, type ReactNode } from 'react';
 
 import { colorForName } from '@meeshy/shared/utils/conversation-colors';
 
-import { Avatar } from '@/components/avatar';
+import { PeerAvatar } from '@/components/peer-avatar';
 import { CallButton } from '@/components/call-glass-button';
 import { CallModerationSlot } from '@/components/call-control-slots';
 import { StreamVideo } from '@/components/call-media-elements';
@@ -43,11 +43,16 @@ import { useScreenZoom } from './use-screen-zoom';
 
 const TILE = 'var(--color-media-fill)';
 
-export function Portrait({ name, avatar, size, pulse }: { readonly name: string; readonly avatar: string | null; readonly size: number; readonly pulse: boolean }) {
+/**
+ * LE PORTRAIT D'UNE PERSONNE DANS L'APPEL — et sa présence SERVIE (#10956,
+ * D-60 levée par #10955) : `presenceKey` est REQUIS, même `undefined` (mon
+ * portrait, un groupe), pour que chaque hôte DISE de qui il s'agit.
+ */
+export function Portrait({ name, avatar, size, pulse, presenceKey }: { readonly name: string; readonly avatar: string | null; readonly size: number; readonly pulse: boolean; readonly presenceKey: string | undefined }) {
   return (
     <div className="relative grid place-items-center" style={{ width: size + 24, height: size + 24 }}>
       {pulse ? <span aria-hidden className="absolute inset-0 animate-ping rounded-full motion-reduce:animate-none" style={{ background: 'var(--color-media-fill)' }} /> : null}
-      <Avatar initials={initialsOf(name)} color={colorForName(name)} size={size} {...(avatar === null ? {} : { src: avatar })} />
+      <PeerAvatar presenceKey={presenceKey} initials={initialsOf(name)} color={colorForName(name)} size={size} {...(avatar === null ? {} : { src: avatar })} />
     </div>
   );
 }
@@ -109,7 +114,7 @@ function Tile({
   const link = member.link === 'connected' ? null : ringing ? translateCallControls(language, 'callControls.ringing') : translate(language, member.link === 'reconnecting' ? 'call.reconnecting' : 'call.connecting');
   const body = (
     <>
-      {showVideo ? <StreamVideo stream={stream ?? null} mirrored={false} className="absolute inset-0 size-full" label={member.name} member={member.userId} /> : <Portrait name={member.name} avatar={member.avatar} size={portrait} pulse={ringing} />}
+      {showVideo ? <StreamVideo stream={stream ?? null} mirrored={false} className="absolute inset-0 size-full" label={member.name} member={member.userId} /> : <Portrait name={member.name} avatar={member.avatar} size={portrait} pulse={ringing} presenceKey={member.userId} />}
       <NameLabel name={member.name} muted={member.micMuted} suffix={link} />
     </>
   );
@@ -149,7 +154,7 @@ function SelfTile({ self, language, portrait, onPress }: { readonly self: CallGr
   const frame = { background: TILE, borderColor: SELF_SPEAKER_COLOR };
   const body = (
     <>
-      {self.cameraOn ? <StreamVideo stream={self.stream} mirrored={self.mirrored} className="absolute inset-0 size-full" label={you} self /> : <Portrait name={self.name || you} avatar={self.avatar ?? null} size={portrait} pulse={false} />}
+      {self.cameraOn ? <StreamVideo stream={self.stream} mirrored={self.mirrored} className="absolute inset-0 size-full" label={you} self /> : <Portrait name={self.name || you} avatar={self.avatar ?? null} size={portrait} pulse={false} presenceKey={undefined} />}
       <NameLabel name={you} muted={self.micMuted} suffix={null} />
     </>
   );
@@ -177,7 +182,7 @@ function SharedScreen({ member, stream, language }: { readonly member: CallMembe
         {translateCallControls(language, 'callControls.screenZoom.hint')}
       </span>
       <div className="absolute bottom-2 right-2 overflow-hidden rounded-full border-2" style={{ borderColor: speakerColor(member.userId) }} data-call-screen-medallion="">
-        <Avatar initials={initialsOf(member.name)} color={colorForName(member.name)} size={44} {...(member.avatar === null ? {} : { src: member.avatar })} />
+        <PeerAvatar presenceKey={member.userId} initials={initialsOf(member.name)} color={colorForName(member.name)} size={44} {...(member.avatar === null ? {} : { src: member.avatar })} />
       </div>
       <span className="glass-call-prominent absolute bottom-2 left-2 max-w-[70%] truncate rounded-full px-3 py-1 text-mini font-semibold" role="status" data-call-screen-banner="">
         {title}

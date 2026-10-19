@@ -79,13 +79,13 @@ export default function CallDetailScreen() {
     if (plan !== 'join' || detail === null || joined.current) return;
     joined.current = true;
     navigate(href('thread', { conversation: detail.conversationId }), true);
-    callActions.join({ conversationId: detail.conversationId, callId: detail.callId, media: detail.media, title: detail.name, avatar: detail.avatar, isGroup: detail.isGroup });
+    callActions.join({ conversationId: detail.conversationId, callId: detail.callId, media: detail.media, title: detail.name, avatar: detail.avatar, isGroup: detail.isGroup, peerKey: detail.peerKey });
   }, [plan, detail]);
 
   const onCall = useCallback(
     (media: CallMedia) => {
       if (detail === null) return;
-      callActions.start({ conversationId: detail.conversationId, media, title: detail.name, avatar: detail.avatar, isGroup: detail.isGroup });
+      callActions.start({ conversationId: detail.conversationId, media, title: detail.name, avatar: detail.avatar, isGroup: detail.isGroup, peerKey: detail.peerKey });
     },
     [detail],
   );

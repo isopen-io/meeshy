@@ -26,8 +26,6 @@ type Exemption = { readonly fichier: string; readonly combien: number; readonly 
 
 const SOI = 'soi — sa propre présence ne se peint pas sur son propre visage';
 const AVANT_SESSION = 'parcours sans session (connexion, inscription, invitation) — aucune présence n’est servie à un lecteur non authentifié';
-const APPELS =
-  "appels — D-60 (#6384) : « web-v2 ne peint pas la pastille du pair tant qu'une source VIVANTE ne la sert pas » ; la carte vivante existe depuis #10571, la décision reste au porteur (calls-keypad.test : « un résultat ne peint aucune présence »)";
 
 const EXEMPTIONS: readonly Exemption[] = [
   { fichier: 'components/account-replacement-prompt.tsx', combien: 1, pourquoi: AVANT_SESSION },
@@ -42,13 +40,6 @@ const EXEMPTIONS: readonly Exemption[] = [
   { fichier: 'routes/onboarding-visuals.tsx', combien: 1, pourquoi: SOI },
   { fichier: 'routes/profile-sections.tsx', combien: 1, pourquoi: SOI },
   { fichier: 'routes/settings-sections.tsx', combien: 1, pourquoi: SOI },
-  { fichier: 'components/call-bubble.tsx', combien: 1, pourquoi: APPELS },
-  { fichier: 'components/call-grid.tsx', combien: 2, pourquoi: APPELS },
-  { fichier: 'components/call-overlay.tsx', combien: 1, pourquoi: APPELS },
-  { fichier: 'components/call-pip-window.tsx', combien: 1, pourquoi: APPELS },
-  { fichier: 'routes/call-detail-parts.tsx', combien: 1, pourquoi: APPELS },
-  { fichier: 'routes/calls-keypad-parts.tsx', combien: 1, pourquoi: APPELS },
-  { fichier: 'routes/calls-parts.tsx', combien: 1, pourquoi: APPELS },
   { fichier: 'components/conversation-settings-section.tsx', combien: 1, pourquoi: 'la photo de la CONVERSATION, qu’on modifie — pas une personne' },
   { fichier: 'routes/communities-parts.tsx', combien: 2, pourquoi: 'une communauté et ses conversations — pas des personnes' },
   { fichier: 'routes/share-link-form.tsx', combien: 2, pourquoi: 'les conversations à partager par lien — jamais un direct (`canCreateShareLink`)' },
@@ -92,7 +83,11 @@ const EXEMPTIONS: readonly Exemption[] = [
 ];
 
 /** Un composant qui RÉPAND ses props dans `Avatar` ne choisit rien : son hôte choisit. */
-const RELAIS = [{ fichier: 'components/author-avatar.tsx', balise: '<AuthorAvatar' }] as const;
+const RELAIS = [
+  { fichier: 'components/author-avatar.tsx', balise: '<AuthorAvatar' },
+  /* L'AVATAR QUI RÉSOUT SON CONTOUR (#10946) : son hôte dit la présence. */
+  { fichier: 'components/peer-avatar.tsx', balise: '<RingedAvatar' },
+] as const;
 const BALISES = ['<Avatar', ...RELAIS.map((relais) => relais.balise)];
 
 const fichiers = (): readonly string[] => {
@@ -149,7 +144,7 @@ function muettes(): ReadonlyMap<string, number> {
         if (apres !== undefined && /[A-Za-z0-9_]/.test(apres)) continue;
         const element = elementAt(source, i);
         if (PRESENCE_PROP.test(element) || spreadCarriesPresence(source, element)) continue;
-        if (relais && balise === '<Avatar' && /\{\.\.\.props\}/.test(element)) continue;
+        if (relais && /\{\.\.\.props\}/.test(element)) continue;
         counts.set(cle, (counts.get(cle) ?? 0) + 1);
       }
     }

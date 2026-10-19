@@ -44,6 +44,7 @@ export function ThreadCallButton({
   group,
   liveCallHint = null,
   mayStart = true,
+  peerKey = null,
 }: {
   readonly conversationId: string;
   readonly title: string;
@@ -55,6 +56,8 @@ export function ThreadCallButton({
       ce droit, seules les portes d'un appel déjà en cours restent :
       « Rejoindre » et « Revenir à l'appel ». */
   readonly mayStart?: boolean;
+  /** Le compte du pair d'un direct (#10956) : l'appel peint sa présence servie. */
+  readonly peerKey?: string | null;
 }) {
   const language = currentInterfaceLanguage();
   const [open, setOpen] = useState(false);
@@ -99,7 +102,7 @@ export function ThreadCallButton({
 
   const call = (media: CallMedia) => {
     setOpen(false);
-    callActions.start({ conversationId, media, title, avatar, isGroup: group });
+    callActions.start({ conversationId, media, title, avatar, isGroup: group, peerKey });
   };
 
   if (!signedIn) return null;
@@ -110,7 +113,7 @@ export function ThreadCallButton({
         className="grid min-h-11 shrink-0 place-items-center focus-visible:outline-2 focus-visible:outline-offset-2"
         style={{ outlineColor: 'var(--color-success)' }}
         aria-label={translate(language, 'callJoin.header')}
-        onClick={() => callActions.join({ conversationId, callId: joinable.callId, media: joinable.media, title, avatar, isGroup: group })}
+        onClick={() => callActions.join({ conversationId, callId: joinable.callId, media: joinable.media, title, avatar, isGroup: group, peerKey })}
         data-thread-call="join"
       >
         <span

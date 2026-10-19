@@ -2,6 +2,7 @@ import type { Conversation } from '@/lib/api/types';
 import { avatarOf, initialsOf, peerOf } from '@/lib/view/conversation';
 import { peerKeyIn, useIsHere, useIsHereActive, useIsHereFocused } from '@/lib/view/use-conversation-viewing';
 import { usePresence } from '@/lib/view/use-presence';
+import { servedRingOf, useRingDesign } from '@/lib/profile-decor/author-ring';
 
 import { Avatar } from './avatar';
 
@@ -28,6 +29,8 @@ export function ConversationDetailsAvatar({
   const here = useIsHere(conversation.id, peerKey);
   const hereActive = useIsHereActive(conversation.id, peerKey);
   const hereFocused = useIsHereFocused(conversation.id, peerKey);
+  /* LE CONTOUR DU PAIR D'UN DIRECT (#10946) ; un groupe n'a pas de pair, donc pas de contour. */
+  const ring = useRingDesign(servedRingOf(peerOf(conversation, viewerId)));
   return (
     <Avatar
       initials={initialsOf(title)}
@@ -35,6 +38,7 @@ export function ConversationDetailsAvatar({
       size={88}
       name={title}
       {...(photo === undefined ? {} : { src: photo })}
+      {...(ring === null ? {} : { ring })}
       presence={presence}
       here={here}
       hereActive={hereActive}

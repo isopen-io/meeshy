@@ -1,5 +1,7 @@
 import { lazy, Suspense, useState, type ReactNode, type Ref } from 'react';
 
+import type { ServedProfileDecorItem } from '@meeshy/shared/types/profile-decor';
+
 import type { CanvasDocument } from '@/lib/canvas/document';
 import { currentInterfaceLanguage } from '@/lib/interface-language';
 
@@ -71,6 +73,8 @@ export type ViewerIdentityModel = {
   /** LA PERSONNE DONT LA PRÉSENCE SE LIT (#10944) — l'auteur, dans la carte
    * vivante ; absente (soi, un porteur sans identifiant) ⇒ aucun point. */
   readonly presenceKey?: string;
+  /** SON CONTOUR ÉQUIPÉ (#10946) — la référence servie avec la personne ; absente ⇒ l'avatar nu. */
+  readonly ringRef?: ServedProfileDecorItem;
   readonly time?: { readonly iso: string; readonly label: string };
   /** Une republication (#10524) : son crédit suit la date — icône, « @handle »
    * quand la source le sert, et `label` pour le lecteur d'écran. */
@@ -115,6 +119,7 @@ export function ViewerIdentity({
     <div data-viewer-identity="" className="pointer-events-auto flex min-w-0 flex-1 items-center gap-2" onPointerDown={stop}>
       <PeerAvatar
         presenceKey={identity.presenceKey}
+        ringRef={identity.ringRef}
         initials={identity.initials}
         color={identity.avatarColor ?? 'var(--color-ios-brand)'}
         size={32}

@@ -1,7 +1,7 @@
 import { colorForName } from '@meeshy/shared/utils/conversation-colors';
 import { lazy, Suspense, type ReactNode } from 'react';
 
-import { Avatar } from '@/components/avatar';
+import { PeerAvatar } from '@/components/peer-avatar';
 import { CHROME_ACTION_HIT_CLASS, ChromeActionDisc } from '@/components/chrome-action';
 import { Glyph, GlyphSvg } from '@/components/glyph';
 import { CALLS_GLYPHS, type CallsGlyphName } from '@/components/glyphs-calls';
@@ -176,7 +176,7 @@ export function CallDetailCard({
   return (
     <div data-call-detail={detail.callId} className="mx-auto grid w-full max-w-xl gap-6 px-4 pb-12 pt-2">
       <div className="grid justify-items-center gap-2 text-center">
-        <Avatar initials={initialsOf(detail.name)} color={colorForName(detail.name)} size={72} {...(detail.avatar === null ? {} : { src: detail.avatar })} />
+        <PeerAvatar presenceKey={detail.peerKey ?? undefined} initials={initialsOf(detail.name)} color={colorForName(detail.name)} size={72} {...(detail.avatar === null ? {} : { src: detail.avatar })} />
         <h2 data-call-detail-name className="max-w-full break-words text-screen font-bold" style={{ color: INK }}>
           {detail.name}
         </h2>

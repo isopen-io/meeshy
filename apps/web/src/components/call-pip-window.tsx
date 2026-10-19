@@ -4,7 +4,7 @@ import { createPortal } from 'react-dom';
 import { useStore } from 'zustand/react';
 import { createStore } from 'zustand/vanilla';
 
-import { Avatar } from '@/components/avatar';
+import { PeerAvatar } from '@/components/peer-avatar';
 import { StreamVideo } from '@/components/call-media-elements';
 import { Glyph, GlyphSvg } from '@/components/glyph';
 import { CALL_SCREEN_GLYPHS } from '@/components/glyphs-call-screen';
@@ -99,7 +99,7 @@ function PipStage({ call }: { readonly call: ActiveCall }) {
   return (
     <div className="relative grid min-h-0 flex-1 place-items-center">
       {source === null ? (
-        <Avatar initials={initialsOf(call.title)} color={colorForName(call.title)} size={72} {...(call.avatar === null ? {} : { src: call.avatar })} />
+        <PeerAvatar presenceKey={call.peerKey ?? undefined} initials={initialsOf(call.title)} color={colorForName(call.title)} size={72} {...(call.avatar === null ? {} : { src: call.avatar })} />
       ) : (
         <StreamVideo stream={source.stream} mirrored={source.mirrored} fit={source.fit} className="absolute inset-0 size-full" label={call.title} />
       )}

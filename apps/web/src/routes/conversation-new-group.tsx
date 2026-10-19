@@ -197,6 +197,7 @@ function ChosenPeople({
                 >
                   <PeerAvatar
                     presenceKey={person.id}
+                    ringRef={person.ring}
                     initials={initialsOf(name)}
                     color={colorForName(name)}
                     size={28}

@@ -17,6 +17,7 @@ import { GLYPH_SIZE } from '@/components/ui-chrome';
 import { translate } from '@/lib/i18n-catalog';
 import { currentInterfaceLanguage, type InterfaceLanguage } from '@/lib/interface-language';
 import { initialsOf, participantAvatarOf } from '@/lib/view/conversation';
+import { servedRingOf } from '@/lib/profile-decor/served-ring';
 import { railGroupsWithoutSelf, type StoryRailSelfEntry } from '@/lib/view/story-rail-self';
 import { storyAuthorLabel, storyAuthorPresenceKey, type StoryTrayGroup } from '@/lib/view/story-tray';
 import { openLinkProps, useImpressionRef, useMergedRefs } from '@/lib/view/reading-telemetry';
@@ -213,6 +214,7 @@ function StoryTile({
             (`Avatar.mood`). */}
         <PeerAvatar
           presenceKey={group.moodEmoji ? undefined : storyAuthorPresenceKey(group)}
+          ringRef={servedRingOf(group.author)}
           initials={initialsOf(label)}
           color={'var(--color-ios-brand)'}
           size={size}

@@ -17,6 +17,7 @@ import type {
   CommentGestureReasonKey,
 } from '@/lib/api/comment-gestures';
 import { COMMENT_MAX_LENGTH, type PostComment } from '@/lib/api/publication-comments';
+import { servedRingOf } from '@/lib/profile-decor/served-ring';
 import type { ReportReason } from '@/lib/api/reports';
 import { resolveFeedText } from '@/lib/feed/text';
 import { translate } from '@/lib/i18n-catalog';
@@ -560,6 +561,7 @@ export function CommentRow({ comment, language, preferredLanguages, locale, now,
         <div className="flex gap-3 py-2">
           <PeerAvatar
             presenceKey={comment.author.id}
+            ringRef={servedRingOf(comment.author)}
             initials={initialsOf(name)}
             color="var(--color-ios-brand)"
             size={32}

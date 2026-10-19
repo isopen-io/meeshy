@@ -26,6 +26,7 @@ import type { ThemePreference } from '@/lib/scheme';
 import { initialsOf } from '@/lib/view/conversation';
 import type { DevicePushRow } from '@/lib/push/use-device-push';
 import { Link } from '@/routes/route-table';
+import { useMyRing } from '@/lib/profile-decor/my-ring';
 
 /**
  * **LES SECTIONS DES RÉGLAGES** (#5563) — miroir de `SettingsView.swift`, dans
@@ -121,6 +122,8 @@ export function SettingsHeaderBar({ language }: { readonly language: InterfaceLa
 export type SettingsUser = { readonly username: string; readonly displayName: string | null; readonly avatar: string | null };
 
 export function ProfileCard({ language, user }: { readonly language: InterfaceLanguage; readonly user: SettingsUser | null }) {
+  /* MON CONTOUR ÉQUIPÉ (#10946) — le même que sur mon profil. */
+  const myRing = useMyRing();
   const title = translate(language, 'settings.my_profile');
   const name = user === null ? title : user.displayName ?? user.username;
   return (
@@ -131,7 +134,7 @@ export function ProfileCard({ language, user }: { readonly language: InterfaceLa
       className="flex items-center gap-3.5 rounded-card p-4 focus-visible:outline-2"
       style={{ ...SECTION_CARD_STYLE, minHeight: 72, outlineColor: 'var(--color-ios-brand)' }}
     >
-      <Avatar initials={initialsOf(name)} color="var(--color-ios-brand)" size={48} {...(user?.avatar ? { src: user.avatar } : {})} />
+      <Avatar initials={initialsOf(name)} color="var(--color-ios-brand)" size={48} {...(user?.avatar ? { src: user.avatar } : {})} {...(myRing === null ? {} : { ring: myRing })} />
       <span className="flex min-w-0 flex-1 flex-col gap-0.5">
         <span className="truncate text-body font-semibold" style={{ color: SECTION_INK }}>
           {name}

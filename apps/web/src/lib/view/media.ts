@@ -1,6 +1,9 @@
 import { electServedAudio, prismFor, servedTranscript, type Served, type ServedTrack } from '@/lib/api/prism';
 import type { Attachment } from '@/lib/api/types';
 import type { ContentTrackingLink } from '@meeshy/shared/types/post';
+import type { ServedProfileDecorItem } from '@meeshy/shared/types/profile-decor';
+
+import { servedRingOf } from '@/lib/profile-decor/served-ring';
 
 /**
  * `MediaCarrier` (#6221, § 5 étape 5) — CE QUE LA VISIONNEUSE REMET AU BAS DU
@@ -11,6 +14,20 @@ import type { ContentTrackingLink } from '@meeshy/shared/types/post';
  * de bloc auteur (loi 4). Posé par `bubble.tsx`/`focal-row.tsx` depuis ce
  * qu'ils ont déjà résolu — ce type ne RÉSOUT rien, il ne fait que VOYAGER.
  */
+/**
+ * LA PERSONNE QUI A ENVOYÉ LE MÉDIA (#10956, #10946) — son nom et sa photo,
+ * et désormais sa CLÉ DE PRÉSENCE (le compte, ou la ligne d'un invité : la clé
+ * que la passerelle pose sur `user:status`) et la RÉFÉRENCE de son contour
+ * équipé. Sans elles, la visionneuse ne pouvait peindre ni l'une ni l'autre :
+ * la donnée s'arrêtait au type, comme la photo avant #6985.
+ */
+export type CarrierSender = {
+  readonly displayName: string;
+  readonly avatarUrl: string | null;
+  readonly presenceKey?: string;
+  readonly ringRef?: ServedProfileDecorItem;
+};
+
 export type MediaCarrier = {
   readonly caption: Served | null;
   /**
@@ -21,7 +38,7 @@ export type MediaCarrier = {
    * `avatarUrl` est `null` quand l'auteur n'en a pas : jamais une chaîne
    * vide, qui ferait rendre `<img src="">` — lequel RECHARGE la page courante.
    */
-  readonly sender: { readonly displayName: string; readonly avatarUrl: string | null } | null;
+  readonly sender: CarrierSender | null;
   readonly sentAt: string;
   /** LA CARTE DES ADRESSES SUIVIES DU PORTEUR (#9074) — celle du message ou du
    * post : la légende du pied ouvre ses adresses par `/l/<token>`. */
@@ -58,9 +75,15 @@ export type MediaCarrier = {
  * directement, MESURER alors, et mémoïser à cet endroit-là.
  */
 export type CarrierMessageSource = {
-  readonly sender?: { readonly displayName?: string } | null;
+  readonly sender?: { readonly displayName?: string; readonly id?: string; readonly userId?: string | null | undefined; readonly user?: { readonly id?: string | undefined } | null | undefined } | null;
   readonly createdAt: Date;
   readonly trackingLinks?: readonly ContentTrackingLink[] | undefined;
+};
+
+const senderIdentityOf = (sender: CarrierMessageSource['sender']): Pick<CarrierSender, 'presenceKey' | 'ringRef'> => {
+  const presenceKey = sender?.userId ?? sender?.user?.id ?? sender?.id;
+  const ringRef = servedRingOf(sender);
+  return { ...(presenceKey === undefined || presenceKey === '' ? {} : { presenceKey }), ...(ringRef === null ? {} : { ringRef }) };
 };
 
 export function mediaCarrierOf(params: {
@@ -79,7 +102,11 @@ export function mediaCarrierOf(params: {
   return {
     sender:
       displayName !== undefined && displayName !== ''
-        ? { displayName, avatarUrl: senderAvatarUrl !== undefined && senderAvatarUrl !== '' ? senderAvatarUrl : null }
+        ? {
+            displayName,
+            avatarUrl: senderAvatarUrl !== undefined && senderAvatarUrl !== '' ? senderAvatarUrl : null,
+            ...senderIdentityOf(message.sender),
+          }
         : null,
     sentAt: message.createdAt.toISOString(),
     caption,

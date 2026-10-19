@@ -111,6 +111,7 @@ export function MentionSuggestions({
               >
                 <PeerAvatar
                   presenceKey={candidate.id}
+                  ringRef={candidate.ring}
                   initials={initialsOf(candidate.displayName)}
                   color={colorForName(candidate.displayName)}
                   size={32}

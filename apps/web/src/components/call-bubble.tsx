@@ -2,7 +2,7 @@ import { colorForName } from '@meeshy/shared/utils/conversation-colors';
 import { lazy, Suspense, useEffect, useId, useRef, useState, type KeyboardEvent, type PointerEvent, type WheelEvent } from 'react';
 import { useStore } from 'zustand/react';
 
-import { Avatar } from '@/components/avatar';
+import { PeerAvatar } from '@/components/peer-avatar';
 import { StreamVideo } from '@/components/call-media-elements';
 import { Glyph, GlyphSvg } from '@/components/glyph';
 import { CALL_DEVICES_GLYPHS } from '@/components/glyphs-call-devices';
@@ -211,7 +211,7 @@ export function CallBubble({ call }: { readonly call: ActiveCall }) {
         >
           {source === null ? (
             <span className="flex flex-col items-center gap-1">
-              <Avatar initials={initialsOf(call.title)} color={colorForName(call.title)} size={AVATAR[tier]} {...(call.avatar === null ? {} : { src: call.avatar })} />
+              <PeerAvatar presenceKey={call.peerKey ?? undefined} initials={initialsOf(call.title)} color={colorForName(call.title)} size={AVATAR[tier]} {...(call.avatar === null ? {} : { src: call.avatar })} />
               <BubbleClock call={call} />
             </span>
           ) : (

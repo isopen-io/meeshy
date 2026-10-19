@@ -16,6 +16,7 @@ import { initialsOf } from '@/lib/view/conversation';
 import { FLOATING_CORRIDOR_BOTTOM } from '@/lib/view/floating-corridor';
 import { findFocusableIndex } from '@/lib/view/roving-menu';
 import { Link } from '@/routes/route-table';
+import { useRingDesign } from '@/lib/profile-decor/author-ring';
 
 /**
  * **LES PIÈCES DE LA DÉCOUVERTE** (#6363) — miroir de `PeopleDiscoveryView`
@@ -222,6 +223,8 @@ function PersonAvatar({ person, name }: { readonly person: PersonSummary | null;
      ces lignes : « les lignes de la découverte, des demandes et des bloqués
      l'ouvrent ». Les quatre listes de cet écran passent par ici. */
   const handle = person?.username !== undefined && person.username !== '' ? person.username : undefined;
+  /* SON CONTOUR ÉQUIPÉ (#10946) — servi avec la personne (#10945) : découverte, demandes d'ami, bloqués. */
+  const ring = useRingDesign(person?.ring ?? null);
   return (
     <Avatar
       initials={initialsOf(name)}
@@ -230,6 +233,7 @@ function PersonAvatar({ person, name }: { readonly person: PersonSummary | null;
       name={name}
       {...(avatar === null ? {} : { src: avatar })}
       {...(handle === undefined ? {} : { profileUsername: handle })}
+      {...(ring === null ? {} : { ring })}
     />
   );
 }

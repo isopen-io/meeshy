@@ -518,6 +518,7 @@ function PersonRow(props: {
       >
         <PeerAvatar
           presenceKey={props.person.id}
+          ringRef={props.person.ring}
           initials={initialsOf(name)}
           color={colorForName(name)}
           size={40}

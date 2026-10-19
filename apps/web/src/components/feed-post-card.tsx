@@ -152,6 +152,7 @@ function FeedPostHeader({ model, storyRing, mood, isDetail, openOrigin, hosts }:
           lien imbriqué dans un lien est invalide. */}
       <PeerAvatar
         presenceKey={model.author.id}
+        ringRef={model.author.ring}
         initials={model.author.initials}
         color={model.author.accentColor}
         size={40}
@@ -413,7 +414,7 @@ function FeedReelCard({ model, impressionRef, openOrigin, ...hosts }: { readonly
       </div>
       <div className="pointer-events-none absolute inset-x-0 bottom-0 flex flex-col gap-2 p-3">
         <div className="flex items-center gap-2">
-          <PeerAvatar presenceKey={model.author.id} initials={model.author.initials} color={model.author.accentColor} size={34} {...(model.author.avatarSrc !== undefined ? { src: model.author.avatarSrc } : {})} />
+          <PeerAvatar presenceKey={model.author.id} ringRef={model.author.ring} initials={model.author.initials} color={model.author.accentColor} size={34} {...(model.author.avatarSrc !== undefined ? { src: model.author.avatarSrc } : {})} />
           <span className="text-body font-semibold text-on-media">{model.author.name}</span>
         </div>
         {model.text !== undefined ? (

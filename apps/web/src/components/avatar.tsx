@@ -24,7 +24,7 @@ import { Link } from '@/routes/route-table';
  * `MeeshyAvatar.swift:165-186` :
  *
  *   anneau      = taille + 6        police initiales = taille x 0.38
- *   pastille    = taille x 0.26     epaisseur anneau = taille <= 32 ? 1.5 : 2.5
+ *   pastille    = max(6, taille x 0.26)  epaisseur anneau = taille <= 32 ? 1.5 : 2.5
  *   point « ici » = taille x 0.30 — un peu plus gros que la pastille (#10943)
  *
  * La PASTILLE DE PRESENCE se pose a 45 degres SUR LE BORD du cercle, pas dans
@@ -255,7 +255,7 @@ function renderAvatar({
 }: Omit<AvatarProps, 'ring'>, storyRingSeparated = false) {
   const showsImage = src !== undefined && src !== '';
   const resolvedSrc = showsImage ? attachmentSrc(src) : undefined;
-  const dot = here ? size * HERE_DOT_RATIO : size * PRESENCE_DOT_RATIO;
+  const dot = Math.max(MIN_DOT_DIAMETER, size * (here ? HERE_DOT_RATIO : PRESENCE_DOT_RATIO));
   // 0.8536 = (1 + cos(pi/4)) / 2 — le point a 45 deg sur le cercle, en fraction
   // du diametre. On retranche la moitie de la pastille pour la CENTRER dessus.
   const offset = size * 0.8536 - dot / 2;
@@ -492,6 +492,12 @@ const PRESENCE_DOT_RATIO = 0.26;
  * `AvatarPresenceDot.hereRatio` (iOS).
  */
 const HERE_DOT_RATIO = 0.3;
+/**
+ * JAMAIS SOUS 6 PX (#10955) — la présence se peint désormais sur les avatars de
+ * 20 à 28 px (réactions, frappe, commentaires) : à 0,26, un point de 5 px n'y
+ * se lit plus. `AvatarPresenceDot.minimumDiameter` (iOS), la même valeur.
+ */
+const MIN_DOT_DIAMETER = 6;
 
 /** Le temps que met le point sortant à diminuer (`presence-dot-shrink`, `avatar.css`). */
 const PRESENCE_LEAVE_MS = 220;

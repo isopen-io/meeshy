@@ -64,6 +64,7 @@ export function FeedRepostEmbed({ repost, openOrigin = null }: { readonly repost
       <div className="flex items-center gap-2">
         <PeerAvatar
           presenceKey={repost.author.id}
+          ringRef={repost.author.ring}
           initials={repost.author.initials}
           color={repost.author.accentColor}
           size={24}
