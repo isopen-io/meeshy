@@ -21,37 +21,27 @@ public class AudioPlayerManager: ObservableObject {
     private static let log = os.Logger(subsystem: "me.meeshy.app", category: "audio-playback")
 
     private var localPlayer: AVAudioPlayer? {
-        didSet { cleanupHandle.localPlayer = localPlayer }
+        didSet { teardown.update { $0.localPlayer = localPlayer } }
     }
     private var streamPlayer: AVPlayer? {
-        didSet { cleanupHandle.streamPlayer = streamPlayer }
+        didSet { teardown.update { $0.streamPlayer = streamPlayer } }
     }
     private var timer: Timer? {
-        didSet { cleanupHandle.timer = timer }
+        didSet { teardown.update { $0.timer = timer } }
     }
     private var loadTask: Task<Void, Never>? {
-        didSet { cleanupHandle.loadTask = loadTask }
+        didSet { teardown.update { $0.loadTask = loadTask } }
     }
     private var streamObserver: Any? {
-        didSet { cleanupHandle.streamObserver = streamObserver }
+        didSet { teardown.update { $0.streamObserver = streamObserver } }
     }
     private var streamCancellables = Set<AnyCancellable>()
 
-    /// Handles thread-safe à libérer depuis le `deinit` (potentiellement
-    /// off-main) — pattern `AudioPlaybackManager.CleanupHandle`. Sans ce
+    /// Ressources à libérer depuis le `deinit` (potentiellement off-main). Sans ce
     /// filet, une instance lâchée mid-lecture (vue dismissée sans `stop()`)
     /// laissait le Timer 10 Hz au run loop pour toujours et l'observer
     /// périodique jamais retiré de l'AVPlayer (contrat AVFoundation violé).
-    /// `@unchecked Sendable` : champs mutés uniquement depuis MainActor,
-    /// lus une fois par le bloc de cleanup.
-    private final class CleanupHandle: @unchecked Sendable {
-        nonisolated(unsafe) var timer: Timer?
-        nonisolated(unsafe) var loadTask: Task<Void, Never>?
-        nonisolated(unsafe) var localPlayer: AVAudioPlayer?
-        nonisolated(unsafe) var streamPlayer: AVPlayer?
-        nonisolated(unsafe) var streamObserver: Any?
-    }
-    private let cleanupHandle = CleanupHandle()
+    private let teardown = TeardownBox(PlaybackResources())
 
     /// Ce qu'une interruption a mis en pause (#11040).
     private var interruptionLedger = InterruptionResumeLedger()
@@ -71,23 +61,15 @@ public class AudioPlayerManager: ObservableObject {
     }
 
     deinit {
-        cleanupHandle.timer?.invalidate()
-        cleanupHandle.loadTask?.cancel()
+        teardown.update(PlaybackResources.invalidateTimer)
+        teardown.read { $0.loadTask }?.cancel()
         // Player non-nil ⟺ mort sans `stop()` (stop pose nil partout) : on
         // coupe la lecture et on rend la session (call-aware), sinon elle
         // restait active pour tout le process. Déporté sur une queue utility :
         // `setActive(false)` est un appel HAL bloquant et ce dealloc arrive
         // typiquement sur le main thread pendant un scroll.
-        guard cleanupHandle.localPlayer != nil || cleanupHandle.streamPlayer != nil else { return }
-        let handle = cleanupHandle
-        DispatchQueue.global(qos: .utility).async {
-            handle.localPlayer?.stop()
-            if let observer = handle.streamObserver, let player = handle.streamPlayer {
-                player.removeTimeObserver(observer)
-            }
-            handle.streamPlayer?.pause()
-            MediaSessionCoordinator.shared.deactivatePlaybackSync()
-        }
+        guard teardown.read(\.holdsPlayers) else { return }
+        teardown.release(on: .global(qos: .utility), PlaybackResources.releaseOffMain)
     }
 
     // MARK: - Play from URL string
@@ -386,5 +368,30 @@ public class AudioPlayerManager: ObservableObject {
         if abs(newProgress - progress) >= Self.progressWriteThreshold {
             progress = newProgress
         }
+    }
+}
+
+private struct PlaybackResources {
+    var timer: Timer?
+    var loadTask: Task<Void, Never>?
+    var localPlayer: AVAudioPlayer?
+    var streamPlayer: AVPlayer?
+    var streamObserver: Any?
+
+    var holdsPlayers: Bool {
+        localPlayer != nil || streamPlayer != nil
+    }
+
+    static func invalidateTimer(_ resources: inout PlaybackResources) {
+        resources.timer?.invalidate()
+    }
+
+    static func releaseOffMain(_ resources: PlaybackResources) {
+        resources.localPlayer?.stop()
+        if let observer = resources.streamObserver, let player = resources.streamPlayer {
+            player.removeTimeObserver(observer)
+        }
+        resources.streamPlayer?.pause()
+        MediaSessionCoordinator.shared.deactivatePlaybackSync()
     }
 }
