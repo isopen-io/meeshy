@@ -273,10 +273,6 @@ struct StoryAudioCell: View {
     }
 
     private func formatDuration(_ seconds: TimeInterval) -> String {
-        guard seconds.isFinite, seconds >= 0 else { return "0:00" }
-        let total = Int(seconds.rounded())
-        let m = total / 60
-        let s = total % 60
-        return String(format: "%d:%02d", m, s)
+        DurationFormat.clock(seconds, rounding: .toNearestOrAwayFromZero)
     }
 }

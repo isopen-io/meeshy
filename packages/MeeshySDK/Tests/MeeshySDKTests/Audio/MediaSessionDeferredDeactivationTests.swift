@@ -46,7 +46,7 @@ struct MediaSessionDeferredDeactivationTests {
         let url = URL(fileURLWithPath: #filePath)
             .deletingLastPathComponent().deletingLastPathComponent()
             .deletingLastPathComponent().deletingLastPathComponent()
-            .appendingPathComponent("Sources/MeeshySDK/MediaSessionCoordinator.swift")
+            .appendingPathComponent("Sources/MeeshySDK/Media/MediaSessionCoordinator.swift")
         let code = try String(contentsOf: url, encoding: .utf8)
         for signature in ["public nonisolated func activatePlaybackSync(",
                           "public nonisolated func activateRecordingSync(",

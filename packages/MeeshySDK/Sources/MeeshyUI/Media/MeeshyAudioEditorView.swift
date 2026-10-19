@@ -714,8 +714,7 @@ public struct MeeshyAudioEditorView: View {
     // MARK: - Formatting
 
     private func formatTime(_ seconds: Double) -> String {
-        let total = Int(max(0, seconds))
-        return String(format: "%d:%02d", total / 60, total % 60)
+        DurationFormat.clock(seconds)
     }
 
 }

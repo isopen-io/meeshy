@@ -179,8 +179,7 @@ struct ComposerToolRow: View, Equatable {
 
         FABPanGestureWrapper(onSwipeUp: { onSwipeUp(category) }, onSwipeDown: onSwipeDownAny) {
             Button(action: {
-                let gen = UIImpactFeedbackGenerator(style: .medium)
-                gen.impactOccurred()
+                HapticFeedback.medium()
                 onTap(category)
             }) {
                 glyph(tool: tool, accent: accent, isActive: isActive, badge: badge)

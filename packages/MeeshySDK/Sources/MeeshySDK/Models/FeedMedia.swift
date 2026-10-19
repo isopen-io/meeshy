@@ -130,7 +130,7 @@ public struct FeedMedia: Identifiable, Sendable, Codable {
 
     public var durationFormatted: String? {
         guard let d = duration else { return nil }
-        return String(format: "%d:%02d", d / 60, d % 60)
+        return DurationFormat.clock(wholeSeconds: d)
     }
 
     // Explicit Codable so a newly-added `translatedAudios` field stays
