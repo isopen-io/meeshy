@@ -15,4 +15,17 @@ final class MeeshyVideoPlayerSurfaceEnablesPipTests: XCTestCase {
     func test_surfaceDoesNotEnablePip_whenControlsExcludePip() {
         XCTAssertFalse(_InlineRenderer.surfaceEnablesPip(controls: .miniDefault))
     }
+
+    /// #11041 — la vidéo d'un message lue dans sa bulle (`.inlineMinimal`) ne
+    /// part JAMAIS en PiP quand on quitte l'app ; celle d'un commentaire
+    /// (`.inlineDefault`) et celle d'un message mis en plein écran
+    /// (`.fullscreenDefault`) y partent.
+    func test_bubbleInlineMinimal_neverArmsAutomaticPip() {
+        XCTAssertFalse(_InlineRenderer.surfaceEnablesPip(controls: .inlineMinimal))
+    }
+
+    func test_commentAndFullscreenControls_armAutomaticPip() {
+        XCTAssertTrue(_InlineRenderer.surfaceEnablesPip(controls: .inlineDefault))
+        XCTAssertTrue(_InlineRenderer.surfaceEnablesPip(controls: .fullscreenDefault))
+    }
 }

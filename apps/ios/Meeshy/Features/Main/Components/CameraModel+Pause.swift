@@ -13,11 +13,13 @@ extension CameraModel {
         guard !runsFixture else { return }
         liveFeed.flush()
         sessionQueue.setRunning(false, session)
+        handBackRecordingSession()
     }
 
     /// Sans accès à la caméra rien n'a été monté : rien ne repart.
     func resumeRunning() {
         guard !runsFixture, permission.isUsable else { return }
+        reclaimRecordingSessionIfArmed()
         sessionQueue.setRunning(true, session)
     }
 }

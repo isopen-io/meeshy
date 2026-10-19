@@ -12,6 +12,13 @@ import MeeshySDK
 
 extension SharedAVPlayerManager {
 
+    /// Le lecteur à baisser pendant un enregistrement (#11042) : la vidéo — en
+    /// ligne, plein écran ou en PiP — qui joue avec le son.
+    var audibleVolumeTarget: (any PlaybackVolumeTarget)? {
+        guard isPlaying, !effectiveMuted, let player else { return nil }
+        return player
+    }
+
     func observeSessionSignals() {
         MediaSessionCoordinator.shared.observeSystemEvents()
         MediaSessionCoordinator.shared.events

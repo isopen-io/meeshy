@@ -111,6 +111,19 @@ public actor MediaSessionCoordinator {
         set { _playbackLeaseLock.withLock { $0 = newValue } }
     }
     private nonisolated let _leaseObserversLock = OSAllocatedUnfairLock(initialState: false)
+
+    /// `true` entre le début et la fin d'un enregistrement dans Meeshy (vocal,
+    /// caméra) : aucun lecteur de contenu ne reconfigure ni ne rend la session
+    /// (`RecordingSessionLaw.contentMayReconfigureSession`, #11042) — `.playback`
+    /// couperait le micro, une désactivation arrêterait la prise.
+    private nonisolated let _recordingHoldLock = OSAllocatedUnfairLock(initialState: false)
+    nonisolated var recordingHoldsSession: Bool {
+        get { _recordingHoldLock.withLock { $0 } }
+        set { _recordingHoldLock.withLock { $0 = newValue } }
+    }
+    private nonisolated var contentMayReconfigureSession: Bool {
+        RecordingSessionLaw.contentMayReconfigureSession(recordingHoldsSession: recordingHoldsSession)
+    }
     /// Compte les prises de session (lecture, enregistrement, rôle) : une
     /// désactivation différée ne s'exécute que si aucune prise n'est survenue
     /// depuis qu'elle a été demandée.
@@ -186,6 +199,9 @@ public actor MediaSessionCoordinator {
         // coordinateur y avait activé ne tient plus.
         playbackLeaseHeld = false
         audibleContentHoldsSession = false
+        // L'appel arrête la capture d'un vocal (`stopForCall`) : la session
+        // n'appartient plus à l'enregistrement.
+        recordingHoldsSession = false
         // On the true→false edge, broadcast an explicit resume signal. The system
         // interruption-ended notification is NOT reliably posted for in-process
         // WebRTC/RTCAudioSession call teardown, so SDK media that gated itself off
@@ -220,6 +236,7 @@ public actor MediaSessionCoordinator {
         observeSystemEvents()
         guard Self.shouldManageSession(callActive: callActive) else { return }
         bumpActivationGeneration()
+        guard contentMayReconfigureSession else { return }
         let session = AVAudioSession.sharedInstance()
         // Independent do/catch per call — a setCategory failure must not skip the
         // setActive attempt (each used to run regardless of the other's outcome).
@@ -253,27 +270,53 @@ public actor MediaSessionCoordinator {
         }
     }
 
-    /// Configure SYNCHRONEMENT la session pour un enregistrement micro
-    /// (voice note, voice story). Source unique call-aware : pendant un
-    /// appel VoIP la session appartient à RTCAudioSession — reconfigurer
-    /// en `.playAndRecord` ici casserait l'uplink micro de l'appel.
-    /// Retourne `false` si la session n'a pas pu être prise (appel actif).
+    /// Pose SYNCHRONEMENT la session d'un enregistrement (vocal, caméra) telle
+    /// que la dit `RecordingSessionLaw` — par `MeeshyRecordingSession`, seul
+    /// appelant. Call-aware : pendant un appel VoIP la session appartient à
+    /// RTCAudioSession — la reconfigurer casserait l'uplink micro de l'appel.
+    /// `holding` : un enregistrement commence, et les lecteurs de contenu ne
+    /// touchent plus la session jusqu'à `releaseRecordingHold()`.
+    /// Retourne `false` si la session n'a pas pu être prise.
     @discardableResult
     public nonisolated func activateRecordingSync(
-        options: AVAudioSession.CategoryOptions = [.defaultToSpeaker, .allowBluetoothA2DP]
+        _ configuration: RecordingSessionConfiguration,
+        holding: Bool
     ) -> Bool {
+        observeSystemEvents()
         guard Self.shouldManageSession(callActive: callActive) else { return false }
         bumpActivationGeneration()
         playbackLeaseHeld = false
         audibleContentHoldsSession = false
         let session = AVAudioSession.sharedInstance()
+        let differs = Self.recordingConfigurationDiffers(
+            currentCategory: session.category, currentMode: session.mode,
+            currentOptions: session.categoryOptions, configuration: configuration
+        )
         do {
-            try session.setCategory(.playAndRecord, mode: .default, options: options)
+            if differs {
+                try session.setCategory(configuration.category, mode: configuration.mode, options: configuration.options)
+            }
             try session.setActive(true)
-            return true
         } catch {
+            logger.error("activateRecordingSync failed — \(error.localizedDescription, privacy: .public)")
             return false
         }
+        if holding { recordingHoldsSession = true }
+        return true
+    }
+
+    /// Pure : la session porte-t-elle déjà exactement cette configuration
+    /// d'enregistrement ? Reposer la même catégorie sous une capture qui tourne
+    /// la reconfigurerait pour rien.
+    nonisolated static func recordingConfigurationDiffers(
+        currentCategory: AVAudioSession.Category,
+        currentMode: AVAudioSession.Mode,
+        currentOptions: AVAudioSession.CategoryOptions,
+        configuration: RecordingSessionConfiguration
+    ) -> Bool {
+        currentCategory != configuration.category
+            || currentMode != configuration.mode
+            || currentOptions != configuration.options
     }
 
     /// Désactive SYNCHRONEMENT la session (call-aware : ne coupe rien pendant un appel,
@@ -281,7 +324,7 @@ public actor MediaSessionCoordinator {
     public nonisolated func deactivatePlaybackSync() {
         playbackLeaseHeld = false
         audibleContentHoldsSession = false
-        guard Self.shouldManageSession(callActive: callActive) else { return }
+        guard Self.shouldManageSession(callActive: callActive), contentMayReconfigureSession else { return }
         do {
             try AVAudioSession.sharedInstance().setActive(false, options: .notifyOthersOnDeactivation)
         } catch {
@@ -355,6 +398,7 @@ public actor MediaSessionCoordinator {
         observeSystemEvents()
         guard Self.shouldManageSession(callActive: callActive) else { return }
         bumpActivationGeneration()
+        guard contentMayReconfigureSession else { return }
         playbackLeaseHeld = false
         let session = AVAudioSession.sharedInstance()
         guard session.category != .ambient else { return }
@@ -447,7 +491,8 @@ public actor MediaSessionCoordinator {
         // Never reconfigure the shared session while a VoIP call owns it (would
         // mute the mic). The refcount still tracks holders so balancing across
         // the call boundary stays coherent.
-        if Self.shouldManageSession(callActive: callActive) {
+        let recordingKeepsSession = role == .playback && !contentMayReconfigureSession
+        if Self.shouldManageSession(callActive: callActive), !recordingKeepsSession {
             #if DEBUG
             if let probe = testProbe, probe.failNextRequest {
                 probe.failNextRequest = false
@@ -477,7 +522,7 @@ public actor MediaSessionCoordinator {
     public func release() async {
         guard activationCount > 0 else { return }
         activationCount -= 1
-        if activationCount == 0, Self.shouldManageSession(callActive: callActive) {
+        if activationCount == 0, Self.shouldManageSession(callActive: callActive), contentMayReconfigureSession {
             playbackLeaseHeld = false
             audibleContentHoldsSession = false
             do {
@@ -500,7 +545,7 @@ public actor MediaSessionCoordinator {
     public func deactivateForBackground() async {
         playbackLeaseHeld = false
         audibleContentHoldsSession = false
-        guard Self.shouldManageSession(callActive: callActive) else { return }
+        guard Self.shouldManageSession(callActive: callActive), contentMayReconfigureSession else { return }
         activationCount = 0
         #if DEBUG
         testProbe?.deactivateCount += 1

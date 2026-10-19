@@ -42,7 +42,9 @@ nonisolated enum MediaBackgroundPolicy {
         pipStartingOrEngaged: Bool,
         pipFailed: Bool
     ) -> VideoVerdict {
-        .pause
+        if pipFailed { return videoPlaying ? .pause : .none }
+        if pipConfigured && pipStartingOrEngaged { return .handOffToPip }
+        return videoPlaying ? .pause : .none
     }
 
     static func decide(
@@ -52,6 +54,6 @@ nonisolated enum MediaBackgroundPolicy {
         video: VideoVerdict
     ) -> Decision {
         let audioAlive = audioQueuePlaying || audioQueueActive || anyAudioEnginePlaying
-        return Decision(video: video, keepsSessionAlive: audioAlive)
+        return Decision(video: video, keepsSessionAlive: audioAlive || video == .handOffToPip)
     }
 }
