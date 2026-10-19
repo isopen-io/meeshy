@@ -30,8 +30,8 @@ final class MeeshyCommandsWiringGuardTests: XCTestCase {
         let main = try code("Meeshy/Features/Main/Views/RootLayers/RootViewLayers.swift")
         let tablet = try code("Meeshy/Features/Main/Views/RootLayers/iPadRootViewLayers.swift")
         let detached = try code("Meeshy/Features/Main/Views/AdaptiveRootView.swift")
-        XCTAssertTrue(main.contains(".publishesSceneNavigation(router, role: .main)"))
-        XCTAssertTrue(tablet.contains(".publishesSceneNavigation(router, role: .main)"))
+        XCTAssertTrue(main.contains("PublishesSceneNavigation(router: router, role: .main)"))
+        XCTAssertTrue(tablet.contains("PublishesSceneNavigation(router: router, role: .main)"))
         XCTAssertTrue(detached.contains("role: .detached"))
         XCTAssertTrue(detached.contains("\\.meeshyCloseWindow"))
     }
