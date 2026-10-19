@@ -246,7 +246,7 @@ extension PiPCallController {
         // already existed for exactly this but was never wired to a rotation
         // source; `onRotation` closes that loop.
         let renderer = PiPVideoRenderer(
-            displayLayer: surfaceView.displayLayer,
+            sink: PiPSampleSink(layer: surfaceView.displayLayer),
             maxFrameRate: desiredFrameRate,
             onRotation: { [weak self] degrees in
                 Task { @MainActor [weak self] in
@@ -285,7 +285,7 @@ extension PiPCallController {
     }
 
     func flushSurface() {
-        surfaceView.displayLayer.flushCompat()
+        PiPSampleSink(layer: surfaceView.displayLayer).flush()
     }
 }
 
