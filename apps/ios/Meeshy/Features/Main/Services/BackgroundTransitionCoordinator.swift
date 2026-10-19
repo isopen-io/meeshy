@@ -399,8 +399,12 @@ final class MediaLifecycleBridge {
             audioQueuePlaying: ConversationAudioCoordinator.sharedForTesting.isPlaying,
             audioQueueActive: ConversationAudioCoordinator.sharedForTesting.activeContext != nil,
             anyAudioEnginePlaying: PlaybackCoordinator.shared.isAnyAudioPlaying,
-            videoPlaying: video.isPlaying,
-            pipEngaged: pipEngaged
+            video: MediaBackgroundPolicy.backgroundVideo(
+                videoPlaying: video.isPlaying,
+                pipConfigured: video.isPipConfigured,
+                pipStartingOrEngaged: pipEngaged,
+                pipFailed: false
+            )
         )
         // Une vidéo (réel) hors PiP ne survit jamais à l'arrière-plan : le
         // mode background "audio" couvre les messages vocaux et posts audio,
