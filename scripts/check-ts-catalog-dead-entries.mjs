@@ -482,7 +482,9 @@ export const callersIn = (contents, nsNames) => {
 // d'un pack vendeur. Valeur MESURÉE le 2026-10-15 en local sur 79129ae28f.
 // 277 -> 276 (2026-10-17) : une entrée de plus a trouvé son appelant sur dev. Valeur MESURÉE en CI
 // (run 38990820855, « AMÉLIORATION NON ENREGISTRÉE ») et en local sur origin/dev.
-const BASELINE_DEAD_ENTRIES = 276;
+// 276 -> 275 (2026-10-19) : une entrée de plus a trouvé son appelant sur dev, révélé une fois la première
+// peinture repassée sous son plafond (#10974). Valeur MESURÉE en CI (run 39191671718, « AMÉLIORATION NON ENREGISTRÉE ») et en local sur origin/dev.
+const BASELINE_DEAD_ENTRIES = 275;
 
 export const readWorld = (root) => {
   const groupFiles = readdirSync(join(root, GROUPS_DIR)).filter((name) => name.endsWith('.ts')).sort();
