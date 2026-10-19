@@ -116,4 +116,40 @@ public class NotificationFunnelRulesTest {
     public void theUnreadableStoreIsNeverAReason() {
         assertNull(NotificationFunnelRules.line(push(), "received", "id", AT));
     }
+
+    // #10921 — balayer la banniere : `dismissed`, comme `notificationclose` sur le web.
+
+    @Test
+    public void aSwipedBannerCountsDismissedWithTheSameShape() {
+        assertEquals(
+            "{\"type\":\"notification\",\"action\":\"dismissed\",\"eventId\":\"id-0\",\"occurredAt\":\"" + AT
+                + "\",\"target\":{\"kind\":\"notification\",\"id\":\"" + NOTIFICATION
+                + "\"},\"surface\":\"notifications\",\"channel\":\"fcm\",\"notificationType\":\"new_message\"}",
+            NotificationFunnelRules.dismissedLine(push("notificationId", NOTIFICATION, "type", "new_message"), AT, () -> "id-0")
+        );
+        assertNull(NotificationFunnelRules.dismissedLine(push("notificationId", "x"), AT, () -> "id-0"));
+    }
+
+    @Test
+    public void theBannerIsFoundByTheTagFcmGaveIt() {
+        assertEquals("c1", NotificationFunnelRules.bannerTag(push("gcm.notification.tag", "c1")));
+        assertEquals("c2", NotificationFunnelRules.bannerTag(push("gcm.n.tag", "c2")));
+        assertEquals("", NotificationFunnelRules.bannerTag(push()));
+    }
+
+    @Test
+    public void onlyATaggedBannerWithAVerifiableIdTracksItsDismissal() {
+        assertTrue(NotificationFunnelRules.tracksDismissal(push("gcm.notification.tag", "c1", "notificationId", NOTIFICATION)));
+        assertFalse(NotificationFunnelRules.tracksDismissal(push("notificationId", NOTIFICATION)));
+        assertFalse(NotificationFunnelRules.tracksDismissal(push("gcm.notification.tag", "c1", "notificationId", "x")));
+    }
+
+    @Test
+    public void theDismissalCarriesOnlyWhatTheLineReads() {
+        Map<String, String> carried = NotificationFunnelRules.dismissalExtras(push(
+            "gcm.notification.tag", "c1", "notificationId", NOTIFICATION, "postId", POST, "type", "post_like",
+            "conversationTitle", "Secret"));
+        Map<String, String> expected = push("notificationId", NOTIFICATION, "postId", POST, "type", "post_like");
+        assertEquals(expected, carried);
+    }
 }
