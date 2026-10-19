@@ -12,6 +12,21 @@ private enum WidgetSharedKeys: Sendable {
     nonisolated static let pendingMarkRead = "pending_mark_read"
 }
 
+// MARK: - Deep Link
+
+private struct WidgetLink<Content: View>: View {
+    let url: URL?
+    @ViewBuilder let content: Content
+
+    var body: some View {
+        if let url {
+            Link(destination: url) { content }
+        } else {
+            content
+        }
+    }
+}
+
 // MARK: - Brand Colors (mirrors MeeshyColors from SDK — widget can't import MeeshyUI)
 
 private enum WidgetColors {
@@ -194,26 +209,17 @@ struct ConversationProvider: TimelineProvider {
     }
 
     func getTimeline(in context: Context, completion: @escaping (Timeline<ConversationEntry>) -> ()) {
-        var entries: [ConversationEntry] = []
-
-        let currentDate = Date()
-        // The four entries (now, +15, +30, +45) all show the SAME snapshot — only
-        // their dates differ. Read the shared store + decode the JSON ONCE and
-        // reuse it, instead of paying the UserDefaults read + decode per entry.
-        let conversations = loadConversations()
-        let unreadCount = getUnreadCount()
-        for minuteOffset in 0 ..< 60 where minuteOffset % 15 == 0 {
-            let entryDate = Calendar.current.date(byAdding: .minute, value: minuteOffset, to: currentDate)!
-            let entry = ConversationEntry(
-                date: entryDate,
-                conversations: conversations,
-                unreadCount: unreadCount
-            )
-            entries.append(entry)
-        }
-
-        let timeline = Timeline(entries: entries, policy: .atEnd)
-        completion(timeline)
+        let now = Date()
+        let entry = ConversationEntry(
+            date: now,
+            conversations: loadConversations(),
+            unreadCount: getUnreadCount()
+        )
+        completion(WidgetRefreshSchedule.timeline(
+            single: entry,
+            now: now,
+            interval: WidgetRefreshSchedule.conversationsInterval
+        ))
     }
 
     private func loadConversations() -> [Conversation] {
@@ -478,7 +484,7 @@ struct MediumConversationView: View {
     @ViewBuilder
     private func conversationRow(_ conversation: Conversation) -> some View {
         HStack(spacing: 8) {
-            Link(destination: URL(string: "meeshy://conversation/\(conversation.id)")!) {
+            WidgetLink(url: WidgetDeepLink.conversation(conversation.id)) {
                 HStack(spacing: 8) {
                     InitialsAvatar(name: conversation.contactName, accentColor: conversation.accentColor, size: 30)
 
@@ -547,7 +553,7 @@ struct LargeConversationView: View {
                 WidgetEmptyState()
             }
             ForEach(entry.conversations.prefix(5)) { conversation in
-                Link(destination: URL(string: "meeshy://conversation/\(conversation.id)")!) {
+                WidgetLink(url: WidgetDeepLink.conversation(conversation.id)) {
                     HStack(spacing: 12) {
                         InitialsAvatar(name: conversation.contactName, accentColor: conversation.accentColor, size: 40)
 
@@ -812,7 +818,7 @@ struct QuickReplyButton: View {
     }
 
     var body: some View {
-        Link(destination: URL(string: "meeshy://quickreply/\(conversationId)?text=\(draft.addingPercentEncoding(withAllowedCharacters: .urlQueryAllowed) ?? "")")!) {
+        WidgetLink(url: WidgetDeepLink.quickReply(conversationId: conversationId, draft: draft)) {
             Text(label)
                 .font(.caption)
                 .padding(.horizontal, 8)
@@ -856,9 +862,13 @@ struct FavoriteContactsProvider: TimelineProvider {
     }
 
     func getTimeline(in context: Context, completion: @escaping (Timeline<FavoriteContactsEntry>) -> ()) {
-        let entry = FavoriteContactsEntry(date: Date(), contacts: loadFavorites())
-        let timeline = Timeline(entries: [entry], policy: .after(Date().addingTimeInterval(3600)))
-        completion(timeline)
+        let now = Date()
+        let entry = FavoriteContactsEntry(date: now, contacts: loadFavorites())
+        completion(WidgetRefreshSchedule.timeline(
+            single: entry,
+            now: now,
+            interval: WidgetRefreshSchedule.favoritesInterval
+        ))
     }
 
     private func loadFavorites() -> [FavoriteContact] {
@@ -911,7 +921,7 @@ struct FavoriteContactsWidgetView: View {
             }
             LazyVGrid(columns: [GridItem(.adaptive(minimum: 65))], spacing: 12) {
                 ForEach(entry.contacts.prefix(contactsToShow)) { contact in
-                    Link(destination: URL(string: "meeshy://contact/\(contact.id)")!) {
+                    WidgetLink(url: WidgetDeepLink.contact(contact.id)) {
                         VStack(spacing: 4) {
                             ZStack(alignment: .bottomTrailing) {
                                 InitialsAvatar(name: contact.name, accentColor: contact.accentColor, size: 50)

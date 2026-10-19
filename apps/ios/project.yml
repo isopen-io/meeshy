@@ -558,6 +558,11 @@ targets:
       # les deux verrous purs du cycle de vie de l'écran de partage
       # (`ShareLifecycleGatesTests`). Même raison que les fichiers ci-dessus.
       - path: MeeshyShareExtension/ShareLifecycleGates.swift
+      # LOT-03 — la planification et les liens profonds des widgets, purs :
+      # compilés dans le bundle de tests pour que leur contrat soit exécutable
+      # sans l'extension (WidgetKit + Foundation uniquement).
+      - path: MeeshyWidgets/WidgetRefreshSchedule.swift
+      - path: MeeshyWidgets/WidgetDeepLink.swift
       # #10947 — les coutures de l'extension pour l'écran unique. Elles
       # importent le module de l'app par `#if !MEESHY_SHARE_EXTENSION` (vrai ici
       # seulement) pour y trouver l'écran.
