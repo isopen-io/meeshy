@@ -4,7 +4,8 @@ import Foundation
 //
 // MIROIR de `packages/shared/types/avatar-ring-design.ts` : un contour d'avatar.
 // Il se voit des AUTRES, donc ses couleurs sont FIXES (aucun rôle `accent`).
-// Les traits d'ornement désignent leur couleur par l'INDEX dans `stroke.colors`.
+// Les traits d'ornement désignent leur couleur par l'INDEX dans `stroke.colors` (1 à 8,
+// #10936) ; `none` ne trace aucun trait de base : l'ornement dessine tout.
 // Ce sont des DONNÉES (hex, chemins, nombres) : rien de reçu n'est interprété.
 // Dégradés et mouvements déclarés (#10932, `FrameDecor.swift`) : FACULTATIFS et
 // tolérants — un contour de l'ancien format se lit sans eux, un mouvement inconnu
@@ -16,6 +17,8 @@ public enum RingStrokeStyle: String, Codable, Sendable, Hashable {
     case dotted
     case dashed
     case gradient
+    /// Aucun trait de base : l'ornement dessine tout (#10936).
+    case none
 }
 
 public struct AvatarRingStroke: Codable, Hashable, Sendable {
@@ -55,6 +58,8 @@ public struct AvatarRingOrnamentPath: Codable, Hashable, Sendable {
 public struct AvatarRingDesign: Codable, Hashable, Sendable, Identifiable {
     /// Le rayon du cercle de l'avatar dans le viewBox 0 0 100 100.
     public static let avatarRadius: Double = 42
+    /// La palette d'un contour : huit couleurs au plus, comme un cadre de bannière (#10936, `RING_MAX_COLORS`).
+    public static let maxColors = 8
 
     public let key: String
     public let stroke: AvatarRingStroke
@@ -86,8 +91,8 @@ public struct AvatarRingDesign: Codable, Hashable, Sendable, Identifiable {
         let c = try decoder.container(keyedBy: CodingKeys.self)
         key = try c.decode(String.self, forKey: .key)
         stroke = try c.decode(AvatarRingStroke.self, forKey: .stroke)
-        guard (1...4).contains(stroke.colors.count) else {
-            throw DecodingError.dataCorruptedError(forKey: .stroke, in: c, debugDescription: "un contour porte de 1 à 4 couleurs")
+        guard (1...Self.maxColors).contains(stroke.colors.count) else {
+            throw DecodingError.dataCorruptedError(forKey: .stroke, in: c, debugDescription: "un contour porte de 1 à 8 couleurs")
         }
         // Données d'un pack, parfois d'un vendeur tiers : une couleur illisible ferait planter le dessin.
         guard stroke.colors.allSatisfy(AvatarRingStroke.isWellFormedHex) else {

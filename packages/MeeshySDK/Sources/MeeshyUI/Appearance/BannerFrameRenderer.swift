@@ -9,7 +9,8 @@ import MeeshySDK
 // À la largeur LOGIQUE `W = largeur × 100 / hauteur` : la bordure et ses filets se
 // tracent à `W` (jamais un chemin étiré), les pièces restent à leur ancrage, les
 // frises répètent leur module (`repeat` : modules entiers centrés ; `justify` :
-// module recalculé pour tomber juste).
+// module recalculé pour tomber juste). Les FRISES se peignent d'abord, les PIÈCES
+// ensuite (#10936) : un coin, un cartouche couvrent la frise qui court dessous.
 //
 // Le centre transparent est garanti par la DÉCOUPE : le dessin fixe est peint sous
 // `clipPath` (contexte découpé), et la racine des couches animées porte le même
@@ -47,7 +48,7 @@ public enum BannerFrameRenderer {
         let friezes = design.friezes.flatMap { frieze in
             instances(frieze, width: width).flatMap { instance in frieze.paths.map { element($0, tx: instance.tx, sx: instance.sx) } }
         }
-        return pieces + friezes
+        return friezes + pieces
     }
 
     private static func instances(_ frieze: BannerFrameFrieze, width: Double) -> [(tx: Double, sx: Double)] {

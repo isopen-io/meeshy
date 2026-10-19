@@ -226,10 +226,9 @@ public enum ProfileDecorResolver {
         return catalog.bannerPacks.first { $0.slug == item.pack }?.designs.first { $0.key == item.item }
     }
 
-    /// Le cadre posé SUR la bannière (#10935). Aucun cadre n'est encore embarqué (le catalogue est #10936) :
-    /// un décor servi se lit dans le catalogue passé, `nil` sinon — le profil se peint sans cadre.
+    /// Le cadre posé SUR la bannière (#10935) : un `builtin` se lit dans le catalogue EMBARQUÉ (#10936).
     public static func bannerFrame(_ item: ServedProfileDecorItem?, catalog: BannerFrameCatalog = .shared) -> BannerFrameDesign? {
-        guard let item else { return nil }
+        guard let item, isEmbedded(item) else { return nil }
         return catalog.frame(pack: item.pack, item: item.item)
     }
 
@@ -243,21 +242,6 @@ public enum ProfileDecorResolver {
 
     private static func isEmbedded(_ item: ServedProfileDecorItem) -> Bool {
         item.origin == .builtin || item.contract == nil
-    }
-}
-
-/// Les cadres de bannière lisibles sans réseau, par pack. Vide tant qu'aucun cadre n'est embarqué (#10936).
-public struct BannerFrameCatalog: Sendable {
-    public let packs: [String: [BannerFrameDesign]]
-
-    public static let shared = BannerFrameCatalog(packs: [:])
-
-    public init(packs: [String: [BannerFrameDesign]]) {
-        self.packs = packs
-    }
-
-    public func frame(pack: String, item: String) -> BannerFrameDesign? {
-        packs[pack]?.first { $0.key == item }
     }
 }
 
@@ -288,6 +272,11 @@ public enum ProfileDecorOptions {
 
     public static func banners(installed: [ShopPack]?, catalog: AppearanceCatalog = .shared) -> [OptionGroup<AppearanceDesign>] {
         groups(installed: installed, builtin: catalog.bannerPacks.map { ($0.slug, $0.installedByDefault, $0.designs) })
+    }
+
+    /// Les cadres posés SUR la bannière (#10936) : aucun pack n'est installé d'office.
+    public static func bannerFrames(installed: [ShopPack]?, catalog: BannerFrameCatalog = .shared) -> [OptionGroup<BannerFrameDesign>] {
+        groups(installed: installed, builtin: catalog.framePacks.map { ($0.slug, $0.installedByDefault, $0.frames) })
     }
 
     /// `installed == nil` (liste pas encore lue / ancien serveur) : les packs installés d'office.

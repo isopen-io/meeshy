@@ -66,7 +66,7 @@ final class BannerFrameRenderTests: XCTestCase {
         let design = try frame(#", "motion": [{ "kind": "pulse", "targets": ["intrus"], "duration": 2 }]"#, pieces: intruder)
         let size = CGSize(width: 360, height: 120)
         let plan = BannerFrameRenderer.plan(design, size: size)
-        XCTAssertEqual(plan.animated, [0])
+        XCTAssertEqual(plan.animated, [67], "les 67 modules de la frise d'abord, l'intrus ensuite")
         let content = BannerFrameRenderer.motionContent(design, size: size, plan: plan)
         let mask = try XCTUnwrap(content.root.mask as? CAShapeLayer)
         let path = try XCTUnwrap(mask.path)
@@ -83,6 +83,28 @@ final class BannerFrameRenderTests: XCTestCase {
         let modules = elements.filter { $0.path.d.hasPrefix("M16.5") }
         XCTAssertEqual(modules.count, 142)
         XCTAssertEqual(modules[1].tx - modules[0].tx, 4, accuracy: 1e-9)
+    }
+
+    /// #10936 — les FRISES se peignent d'abord : un coin et un cartouche se posent PAR-DESSUS la frise
+    /// qui court dessous, à toutes les largeurs (miroir de `bannerFrameElements`).
+    func test_elements_friezesComeFirst_piecesArePaintedOverThem() throws {
+        for width in [300.0, 450, 900] {
+            let elements = BannerFrameRenderer.elements(try frame(), width: width)
+            let isFrieze = elements.map { $0.path.d.hasPrefix("M16.5") }
+            let firstPiece = try XCTUnwrap(isFrieze.firstIndex(of: false))
+            XCTAssertGreaterThan(firstPiece, 0)
+            XCTAssertTrue(isFrieze[..<firstPiece].allSatisfy { $0 })
+            XCTAssertTrue(isFrieze[firstPiece...].allSatisfy { !$0 }, "aucune frise après la première pièce")
+            XCTAssertEqual(elements[firstPiece...].map { String($0.path.d.prefix(4)) }, ["M2 2", "M288", "M140"], "les pièces gardent l'ordre du document")
+        }
+    }
+
+    func test_staticImage_aCornerPieceCoversTheFriezeBeneathIt() throws {
+        let pieces = #"[{ "anchor": "start", "paths": [{ "d": "M16 0 h4 v8 h-4 Z", "color": 3, "opacity": 1 }] }]"#
+        let image = try XCTUnwrap(BannerFrameRenderer.staticImage(try frame(pieces: pieces), size: CGSize(width: 300, height: 100), screenScale: 1))
+        let covered = pixel(image, x: 17, y: 4)
+        XCTAssertEqual(covered.r, 0xB8, accuracy: 2, "la pièce (or) se peint par-dessus la frise (taupe)")
+        XCTAssertEqual(covered.g, 0x95, accuracy: 2)
     }
 
     func test_elements_aJustifiedFrieze_endsExactlyAtItsMargin() throws {
@@ -115,7 +137,7 @@ final class BannerFrameRenderTests: XCTestCase {
         let design = try frame(#", "motion": [{ "kind": "twinkle", "targets": ["rosaces"], "duration": 3.4, "stagger": 0.8 }]"#)
         let size = CGSize(width: 300, height: 100)
         let plan = BannerFrameRenderer.plan(design, size: size)
-        XCTAssertEqual(plan.layers.map(\.elements), [[0], [1]])
+        XCTAssertEqual(plan.layers.map(\.elements), [[67], [68]], "les rosaces suivent les 67 modules de la frise")
         XCTAssertEqual(plan.layers.map { $0.chain[0].delay }, [0, 0.8])
         let content = BannerFrameRenderer.motionContent(design, size: size, plan: plan)
         XCTAssertEqual(content.animations.map { ($0.animation as? CABasicAnimation)?.keyPath }, ["opacity", "opacity"])

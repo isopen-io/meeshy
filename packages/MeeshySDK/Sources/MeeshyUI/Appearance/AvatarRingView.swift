@@ -102,6 +102,8 @@ public struct AvatarRingView: View, Equatable {
                     let hex = Self.cyclicHex(colors, at: Double(index) / Double(Self.arcs))
                     context.stroke(arc, with: .color(Color(hex: hex)), lineWidth: width * scale)
                 }
+            case .none:
+                break
             }
 
             for (index, stroke) in design.ornament.enumerated() where !skipping.contains(index) {

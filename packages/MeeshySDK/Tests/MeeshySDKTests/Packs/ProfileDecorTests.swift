@@ -181,7 +181,8 @@ final class ProfileDecorTests: XCTestCase {
     }
 
     func test_catalog_embedsTheSevenRingsAndTheSevenBanners() {
-        XCTAssertEqual(AvatarRingCatalog.shared.packs.flatMap(\.rings).map(\.key), ["filet", "double-filet", "perle", "aurore", "deco", "laurier", "halo-or"])
+        let firstPacks = AvatarRingCatalog.shared.packs.filter { ["contours-essentiels", "contours-animes"].contains($0.slug) }
+        XCTAssertEqual(firstPacks.flatMap(\.rings).map(\.key), ["filet", "double-filet", "perle", "aurore", "deco", "laurier", "halo-or"])
         XCTAssertEqual(AppearanceCatalog.shared.bannerPacks.flatMap(\.designs).count, 7)
         XCTAssertEqual(AvatarRingCatalog.shared.ringName("filet", language: "en") != nil, true)
     }
@@ -193,6 +194,53 @@ final class ProfileDecorTests: XCTestCase {
         XCTAssertEqual(ProfileDecorResolver.banner(item("bannieres-essentielles", "aurore"))?.key, "aurore")
         let official = ServedProfileDecorItem(pack: "x", item: "y", origin: .official, contract: "0123456789abcdef.json")
         XCTAssertNil(ProfileDecorResolver.ring(official))
+    }
+
+    // MARK: Les cadres de bannière embarqués (#10936)
+
+    private static let styles = ["haussmannien", "arabe", "grec", "ancestral", "technologique", "rituel", "celte"]
+
+    func test_frameCatalog_embedsTheSevenPacks_fixedAndAnimated_named() {
+        let catalog = BannerFrameCatalog.shared
+        XCTAssertEqual(catalog.framePacks.map(\.slug), Self.styles.map { "cadres-" + $0 })
+        for style in Self.styles {
+            XCTAssertEqual(catalog.framePacks.first { $0.slug == "cadres-" + style }?.frames.map(\.key), [style, style + "-anime"])
+            XCTAssertNotNil(catalog.frameName(style + "-anime", language: "ar"))
+            XCTAssertNotNil(catalog.packName("cadres-" + style, language: "pt"))
+        }
+        XCTAssertEqual(catalog.frameName("haussmannien", language: "fr"), "Haussmannien")
+        XCTAssertEqual(catalog.frameName("haussmannien", language: "xx"), "Haussmannien", "langue inconnue : le français")
+        XCTAssertFalse(catalog.framePacks.contains { $0.installedByDefault })
+    }
+
+    func test_frameCatalog_anUnreadableFrameFallsAlone() throws {
+        let good = ##"{"key":"ok","viewBox":[0,0,300,100],"palette":["#000000"],"border":{"width":4,"color":0,"opacity":1},"reach":{"corner":0}}"##
+        let bad = #"{"key":"ko","viewBox":[0,0,300,100],"palette":["red"],"border":{"width":4,"color":0,"opacity":1},"reach":{"corner":0}}"#
+        let json = #"{"bannerFrames":[{"slug":"p","order":1,"frames":[\#(bad),\#(good)]}],"strings":{"fr":{"frames":{"ok":"Bon"},"packs":{"p":{"name":"Pack"}}}}}"#
+        let catalog = try BannerFrameCatalog.decode(Data(json.utf8))
+        XCTAssertEqual(catalog.framePacks.first?.frames.map(\.key), ["ok"])
+        XCTAssertEqual(catalog.frameName("ok", language: "en"), "Bon")
+        XCTAssertEqual(catalog.packName("p", language: "fr"), "Pack")
+        XCTAssertTrue(try BannerFrameCatalog.decode(Data(#"{"rings":[]}"#.utf8)).framePacks.isEmpty, "un ancien catalogue sans cadres se lit vide")
+    }
+
+    func test_resolver_readsAnEmbeddedBannerFrame() {
+        XCTAssertEqual(ProfileDecorResolver.bannerFrame(item("cadres-celte", "celte-anime"))?.key, "celte-anime")
+        XCTAssertNil(ProfileDecorResolver.bannerFrame(item("cadres-celte", "inconnu")))
+        let official = ServedProfileDecorItem(pack: "cadres-celte", item: "celte", origin: .official, contract: "0123456789abcdef.json")
+        XCTAssertNil(ProfileDecorResolver.bannerFrame(official), "un contrat adressé n'est pas encore chargé : aucun cadre, jamais une erreur")
+    }
+
+    func test_options_frames_listOnlyInstalledAndOwnedPacks_noneByDefault() {
+        XCTAssertTrue(ProfileDecorOptions.bannerFrames(installed: nil).isEmpty, "aucun pack de cadres n'est installé d'office")
+        XCTAssertTrue(ProfileDecorOptions.bannerFrames(installed: [ShopPack(slug: "cadres-grec", name: "x", installed: true, price: 40, owned: false)]).isEmpty)
+        let ok = ProfileDecorOptions.bannerFrames(installed: [ShopPack(slug: "cadres-grec", name: "x", installed: true)])
+        XCTAssertEqual(ok.first?.items.map(\.ref), [ProfileDecorRef(pack: "cadres-grec", item: "grec"), ProfileDecorRef(pack: "cadres-grec", item: "grec-anime")])
+    }
+
+    func test_options_theStyleContoursAreOfferedOnceInstalled() {
+        let rings = ProfileDecorOptions.rings(installed: [ShopPack(slug: "contours-rituel", name: "x", installed: true)])
+        XCTAssertEqual(rings.first?.items.map(\.ref.item), ["rituel", "rituel-anime"])
     }
 
     // MARK: Sélecteur

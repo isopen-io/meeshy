@@ -273,3 +273,82 @@ public struct BannerFramePackContract: Decodable, Sendable, Hashable {
         frames = Array(readable.filter { seen.insert($0.key).inserted }.prefix(32))
     }
 }
+
+// MARK: - Les cadres embarqués (#10936)
+
+/// Un pack `banner-frame` du catalogue embarqué : ses cadres illisibles tombent un par un.
+public struct BannerFramePack: Decodable, Sendable, Hashable, Identifiable {
+    public let slug: String
+    public let order: Int
+    public let installedByDefault: Bool
+    public let removable: Bool
+    public let frames: [BannerFrameDesign]
+
+    public var id: String { slug }
+
+    private enum CodingKeys: String, CodingKey { case slug, order, installedByDefault, removable, frames }
+
+    public init(from decoder: Decoder) throws {
+        let c = try decoder.container(keyedBy: CodingKeys.self)
+        slug = try c.decode(String.self, forKey: .slug)
+        order = try c.decodeIfPresent(Int.self, forKey: .order) ?? 0
+        installedByDefault = try c.decodeIfPresent(Bool.self, forKey: .installedByDefault) ?? false
+        removable = try c.decodeIfPresent(Bool.self, forKey: .removable) ?? true
+        frames = try c.decode([LossyBox<BannerFrameDesign>].self, forKey: .frames).compactMap(\.value)
+    }
+}
+
+/// Les cadres de bannière `builtin` : la copie embarquée du catalogue (`AppearanceCatalogData`,
+/// clé `bannerFrames`), lisible hors réseau, nommée par `strings.<langue>.frames` et `.packs`.
+/// Un catalogue sans cadres (copie antérieure) se lit vide, jamais en erreur.
+public struct BannerFrameCatalog: Sendable {
+    public let framePacks: [BannerFramePack]
+    private let names: [String: [String: String]]
+
+    public static let empty = BannerFrameCatalog(framePacks: [], names: [:])
+
+    public static let shared: BannerFrameCatalog = (try? decode(Data(AppearanceCatalogData.json.utf8))) ?? .empty
+
+    static func decode(_ data: Data) throws -> BannerFrameCatalog {
+        struct Raw: Decodable {
+            struct Text: Decodable {
+                let frames: [String: String]?
+                let packs: [String: PackText]?
+                struct PackText: Decodable { let name: String }
+            }
+            let bannerFrames: [BannerFramePack]?
+            let strings: [String: Text]?
+        }
+        let raw = try JSONDecoder().decode(Raw.self, from: data)
+        var names: [String: [String: String]] = [:]
+        for (language, text) in raw.strings ?? [:] {
+            var table = text.frames ?? [:]
+            for (slug, pack) in text.packs ?? [:] { table["pack:" + slug] = pack.name }
+            names[language] = table
+        }
+        return BannerFrameCatalog(framePacks: (raw.bannerFrames ?? []).sorted { $0.order < $1.order }, names: names)
+    }
+
+    private init(framePacks: [BannerFramePack], names: [String: [String: String]]) {
+        self.framePacks = framePacks
+        self.names = names
+    }
+
+    public func frame(pack: String, item: String) -> BannerFrameDesign? {
+        framePacks.first { $0.slug == pack }?.frames.first { $0.key == item }
+    }
+
+    /// Langue demandée, puis français (la source), puis rien.
+    public func frameName(_ key: String, language: String) -> String? {
+        localized(key, language: language)
+    }
+
+    public func packName(_ slug: String, language: String) -> String? {
+        localized("pack:" + slug, language: language)
+    }
+
+    private func localized(_ key: String, language: String) -> String? {
+        let code = String(language.prefix(2)).lowercased()
+        return names[code]?[key] ?? names["fr"]?[key]
+    }
+}
