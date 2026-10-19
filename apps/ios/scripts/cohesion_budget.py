@@ -15,7 +15,7 @@ import re
 import sys
 from pathlib import Path
 
-FUNCTION_LIMIT = 80
+FUNCTION_LIMIT = 120
 TYPE_LIMIT = 1500
 ROOT = Path(__file__).resolve().parents[3]
 BASELINE = Path(__file__).resolve().parent / "cohesion-budget.json"
@@ -296,7 +296,7 @@ def main(argv):
     if fe or te:
         print("cohesion_budget: la cohésion RÉGRESSE —", file=sys.stderr)
         print("\n".join(fe + te), file=sys.stderr)
-        print("Corriger : extraire de vrais types cohésifs / sous-fonctions (une fonction <= 80 lignes, un type <= 1 500 lignes"
+        print("Corriger : extraire de vrais types cohésifs / sous-fonctions (une fonction <= 120 lignes, un type <= 1 500 lignes"
               " en unité, déclaration + extensions). Ne pas relever la référence pour contourner.", file=sys.stderr)
         return 1
     return 0

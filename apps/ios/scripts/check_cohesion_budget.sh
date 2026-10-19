@@ -4,7 +4,7 @@
 # Pourquoi : le budget de 1 000 lignes par fichier se satisfait en coupant un
 # fichier en `Type+X.swift` ; le type reste un seul, la fonction de 400 lignes
 # reste une seule. Ce cliquet mesure ce qui compte : (a) chaque fonction tient
-# sur un écran (<= 80 lignes) ; (b) un type se mesure en UNITÉ, déclaration +
+# en un seul regard (<= 120 lignes) ; (b) un type se mesure en UNITÉ, déclaration +
 # toutes ses extensions du module (<= 1 500 lignes). Les contrevenants ACTUELS
 # sont figés dans `cohesion-budget.json` : un nouveau contrevenant, ou un
 # contrevenant qui grossit, fait échouer ; un qui baisse se verrouille avec

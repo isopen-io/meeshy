@@ -1022,7 +1022,7 @@ Les composants suivants gerent l'**entite** Notification (CRUD, listing, prefere
 ## Code Organization
 > **Cohésion d'abord (directive porteur 2026-10-19, #10988) — PRIORITAIRE sur le budget de lignes.** Garde : `apps/ios/scripts/check_cohesion_budget.sh` (cliquet CI, référence `apps/ios/scripts/cohesion-budget.json`).
 > 1. Un type a UNE responsabilité.
-> 2. Une fonction tient sur un écran : <= 80 lignes (cliquet).
+> 2. Une fonction se lit en un seul regard : <= 120 lignes (cliquet ; 80 jusqu’au 2026-10-19, relevé par le porteur).
 > 3. Une vue SwiftUI se compose de sous-vues qui reçoivent des valeurs, des `Binding` et des closures.
 > 4. L'état privé reste `private` ; l'élargir pour une extension sœur est une exception justifiée.
 > 5. `Type+X.swift` n'est PAS une décomposition : un type se mesure en UNITÉ (déclaration + extensions du module, cliquet <= 1 500 lignes). Extraire un vrai type cohésif, pas un fichier.

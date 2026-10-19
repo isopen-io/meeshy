@@ -9,7 +9,7 @@ partagé, dispersé sur plus de fichiers. Le budget de lignes mesurait un sympt�
 **La règle pour moi.** Avant de découper, nommer la responsabilité que le nouveau type
 porte. Si je ne sais pas la dire en une phrase, je déplace des lignes, je n'extrais rien. Un
 type se mesure en UNITÉ (déclaration + extensions du module, <= 1 500), une fonction tient
-sur un écran (<= 80), l'état privé reste `private`. Le cliquet
+en un seul regard (<= 120, relevé de 80 par le porteur le même jour), l'état privé reste `private`. Le cliquet
 `apps/ios/scripts/check_cohesion_budget.sh` tient la règle ; le budget par fichier n'est
 plus qu'un indicateur secondaire.
 
