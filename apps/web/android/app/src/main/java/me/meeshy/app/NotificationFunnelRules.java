@@ -47,9 +47,14 @@ final class NotificationFunnelRules {
     }
 
     static List<String> eventsFor(Map<String, String> extras, boolean inForeground, String occurredAt, Supplier<String> ids) {
+        return eventsFor(extras, inForeground, true, occurredAt, ids);
+    }
+
+    /** `displayed` faux : une correction retenue (#10989) — recue, jamais affichee, comme `noterReception`. */
+    static List<String> eventsFor(Map<String, String> extras, boolean inForeground, boolean displayed, String occurredAt, Supplier<String> ids) {
         if (inForeground || !fcmDisplays(extras)) return Collections.emptyList();
         List<String> lines = new ArrayList<>();
-        for (String action : SHOWN) {
+        for (String action : displayed ? SHOWN : SHOWN.subList(0, 1)) {
             String line = line(extras, action, ids.get(), occurredAt);
             if (line != null) lines.add(line);
         }

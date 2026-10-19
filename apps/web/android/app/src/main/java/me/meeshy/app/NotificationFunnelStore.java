@@ -47,9 +47,9 @@ final class NotificationFunnelStore {
         return data;
     }
 
-    static synchronized void noteShown(Context context, Map<String, String> extras, boolean inForeground) {
+    static synchronized void noteShown(Context context, Map<String, String> extras, boolean inForeground, boolean displayed) {
         List<String> lines = NotificationFunnelRules.eventsFor(
-            extras, inForeground, nowIso(), () -> UUID.randomUUID().toString());
+            extras, inForeground, displayed, nowIso(), () -> UUID.randomUUID().toString());
         if (lines.isEmpty()) return;
         append(context, lines);
     }

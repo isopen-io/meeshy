@@ -149,6 +149,7 @@ final class NotificationVoiceBanner {
             Bundle extras = new Bundle();
             extras.putString(EXTRA_MESSAGE_ID, voice.messageId);
             builder.addExtras(extras);
+            builder.addExtras(NotificationBannerActions.marked(data.get("notificationId")));
             List<Notification.Action> actions = new ArrayList<>();
             actions.add(action(context, data, playing));
             actions.addAll(NotificationBannerActions.of(context, data));

@@ -1,5 +1,6 @@
 package me.meeshy.app;
 
+import android.app.Notification;
 import android.app.NotificationManager;
 import android.content.Context;
 import android.content.Intent;
@@ -14,6 +15,7 @@ import java.net.HttpURLConnection;
 import java.net.URI;
 import java.nio.charset.StandardCharsets;
 import java.util.List;
+import java.util.Map;
 
 /**
  * LE SEUL service `MESSAGING_EVENT` de la coque (#8049). FCM ne remet un
@@ -34,7 +36,9 @@ import java.util.List;
  * - un VOCAL dont FCM vient d'afficher la banniere y gagne l'action
  *   « Ecouter » ({@link NotificationVoiceBanner}, #10641) ;
  * - une banniere que FCM affiche app fermee est notee « recue » et
- *   « affichee » dans l'entonnoir ({@link NotificationFunnelStore}, #10938).
+ *   « affichee » dans l'entonnoir ({@link NotificationFunnelStore}, #10938) ;
+ * - une CORRECTION (message edite) n'est affichee que si elle remplace sa
+ *   propre banniere ({@link NotificationCorrectionRules}, #10989).
  *
  * Le plugin est atteint par reflexion, pas par heritage : `cap sync` ne
  * synchronise que `dependencies` et `devDependencies`, et le plugin est
@@ -63,18 +67,52 @@ public class MeeshyMessagingService extends FirebaseMessagingService {
      */
     @Override
     public void handleIntent(Intent intent) {
-        super.handleIntent(intent);
         Bundle extras = intent == null ? null : intent.getExtras();
+        Map<String, String> data = NotificationFunnelStore.extrasOf(extras);
+        boolean inForeground = MainActivity.isInForeground();
+        boolean displayed = inForeground || !withheldCorrection(data);
+        if (displayed) super.handleIntent(intent);
         try {
-            NotificationFunnelStore.noteShown(this, NotificationFunnelStore.extrasOf(extras), MainActivity.isInForeground());
+            NotificationFunnelStore.noteShown(this, data, inForeground, displayed);
         } catch (RuntimeException failure) {
             Log.w(TAG, "entonnoir de notification non note", failure);
         }
+        if (!displayed) return;
         try {
             NotificationVoiceBanner.offer(this, NotificationVoiceBanner.payloadOf(extras));
         } catch (RuntimeException failure) {
             Log.w(TAG, "action d'ecoute non posee", failure);
         }
+    }
+
+    /**
+     * #10989 — une correction dont la banniere a ete balayee, ou remplacee par
+     * un message plus recent du fil, ou qui dit deja ce texte : FCM ne
+     * l'affiche pas ({@link NotificationCorrectionRules}).
+     */
+    private boolean withheldCorrection(Map<String, String> data) {
+        if (!NotificationCorrectionRules.isCorrection(data)) return false;
+        try {
+            NotificationManager manager = getSystemService(NotificationManager.class);
+            if (manager == null) return false;
+            Notification shown = NotificationVoiceBanner.find(manager, NotificationFunnelRules.bannerTag(data));
+            return !NotificationCorrectionRules.shows(data, shown == null ? null : shownOf(shown.extras));
+        } catch (RuntimeException failure) {
+            Log.w(TAG, "correction affichee sans verification", failure);
+            return false;
+        }
+    }
+
+    private static NotificationCorrectionRules.Shown shownOf(Bundle extras) {
+        if (extras == null) return new NotificationCorrectionRules.Shown(null, null, null);
+        return new NotificationCorrectionRules.Shown(
+            extras.getString(NotificationCorrectionRules.EXTRA_NOTIFICATION_ID),
+            textOf(extras.getCharSequence(Notification.EXTRA_TITLE)),
+            textOf(extras.getCharSequence(Notification.EXTRA_TEXT)));
+    }
+
+    private static String textOf(CharSequence value) {
+        return value == null ? null : value.toString();
     }
 
     @Override

@@ -7,6 +7,7 @@ import android.content.Context;
 import android.content.Intent;
 import android.graphics.drawable.Icon;
 import android.net.Uri;
+import android.os.Bundle;
 import android.os.Handler;
 import android.os.Looper;
 import android.util.Log;
@@ -52,7 +53,15 @@ final class NotificationBannerActions {
         PendingIntent dismissal = NotificationDismissReceiver.intentFor(context, data);
         if (actions.isEmpty() && dismissal == null) return;
         String tag = actions.isEmpty() ? NotificationFunnelRules.bannerTag(data) : actions.get(0).tag;
-        offerUntilShown(context.getApplicationContext(), tag, actions, dismissal, OFFER_ATTEMPTS);
+        offerUntilShown(context.getApplicationContext(), tag, data.get("notificationId"), actions, dismissal, OFFER_ATTEMPTS);
+    }
+
+    /** #10989 — la marque qui dit a une correction a quelle notification la banniere appartient. */
+    static Bundle marked(String notificationId) {
+        Bundle extras = new Bundle();
+        String id = notificationId == null ? "" : notificationId.trim();
+        if (!id.isEmpty()) extras.putString(NotificationCorrectionRules.EXTRA_NOTIFICATION_ID, id);
+        return extras;
     }
 
     /** Le toucher d'une action in-app : la banniere qui la portait s'en va. */
@@ -64,15 +73,15 @@ final class NotificationBannerActions {
     }
 
     private static void offerUntilShown(
-        Context context, String tag, List<NotificationBannerRules.Action> actions, PendingIntent dismissal, int attemptsLeft) {
-        if (place(context, tag, actions, dismissal) || attemptsLeft <= 1) return;
+        Context context, String tag, String notificationId, List<NotificationBannerRules.Action> actions, PendingIntent dismissal, int attemptsLeft) {
+        if (place(context, tag, notificationId, actions, dismissal) || attemptsLeft <= 1) return;
         new Handler(Looper.getMainLooper()).postDelayed(
-            () -> offerUntilShown(context, tag, actions, dismissal, attemptsLeft - 1), OFFER_RETRY_MS);
+            () -> offerUntilShown(context, tag, notificationId, actions, dismissal, attemptsLeft - 1), OFFER_RETRY_MS);
     }
 
     /** `false` seulement quand aucune banniere ne porte encore ce tag (a rechercher). */
     private static boolean place(
-        Context context, String tag, List<NotificationBannerRules.Action> actions, PendingIntent dismissal) {
+        Context context, String tag, String notificationId, List<NotificationBannerRules.Action> actions, PendingIntent dismissal) {
         NotificationManager manager = context.getSystemService(NotificationManager.class);
         if (manager == null) return true;
         Notification shown = NotificationVoiceBanner.find(manager, tag);
@@ -88,6 +97,7 @@ final class NotificationBannerActions {
                 builder.setActions(built);
             }
             if (dismissal != null) builder.setDeleteIntent(dismissal);
+            builder.addExtras(marked(notificationId));
             builder.setOnlyAlertOnce(true);
             manager.notify(tag, 0, builder.build());
         } catch (RuntimeException failure) {
