@@ -299635,6 +299635,147 @@
         }
       }
     },
+    "share.refused.encrypted-destination": {
+      "extractionState": "manual",
+      "localizations": {
+        "ar": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "هذه المحادثة مشفّرة: لا يرسل المشاركة إليها شيئًا حاليًا."
+          }
+        },
+        "de": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Diese Unterhaltung ist verschlüsselt: Das Teilen sendet vorerst nichts dorthin."
+          }
+        },
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "This conversation is encrypted: sharing sends nothing there for now."
+          }
+        },
+        "es": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Esta conversación está cifrada: por ahora, compartir no envía nada allí."
+          }
+        },
+        "fr": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Cette conversation est chiffrée : le partage n’y envoie rien pour l’instant."
+          }
+        },
+        "it": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Questa conversazione è cifrata: per ora la condivisione non vi invia nulla."
+          }
+        },
+        "pt-BR": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Esta conversa é criptografada: por enquanto, o compartilhamento não envia nada para ela."
+          }
+        }
+      }
+    },
+    "share.refused.encrypted-pieces": {
+      "extractionState": "manual",
+      "localizations": {
+        "ar": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "لا تُنسخ مرفقات رسالة مشفّرة من هذا الجهاز بعد."
+          }
+        },
+        "de": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Die Anhänge einer verschlüsselten Nachricht lassen sich noch nicht von diesem Gerät kopieren."
+          }
+        },
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "The attachments of an encrypted message can’t be copied from this device yet."
+          }
+        },
+        "es": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Los adjuntos de un mensaje cifrado aún no se copian desde este dispositivo."
+          }
+        },
+        "fr": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Les pièces d’un message chiffré ne se copient pas encore depuis cet appareil."
+          }
+        },
+        "it": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Gli allegati di un messaggio cifrato non si copiano ancora da questo dispositivo."
+          }
+        },
+        "pt-BR": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Os anexos de uma mensagem criptografada ainda não são copiados deste dispositivo."
+          }
+        }
+      }
+    },
+    "share.refused.undecrypted-source": {
+      "extractionState": "manual",
+      "localizations": {
+        "ar": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "لم تُفكّ تشفير هذه الرسالة على هذا الجهاز: لا يمكن نسخها."
+          }
+        },
+        "de": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Diese Nachricht wurde auf diesem Gerät nicht entschlüsselt: Sie kann nicht kopiert werden."
+          }
+        },
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "This message wasn’t decrypted on this device: it can’t be copied."
+          }
+        },
+        "es": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Este mensaje no se descifró en este dispositivo: no se puede copiar."
+          }
+        },
+        "fr": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Ce message n’a pas été déchiffré sur cet appareil : il ne peut pas être copié."
+          }
+        },
+        "it": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Questo messaggio non è stato decifrato su questo dispositivo: non può essere copiato."
+          }
+        },
+        "pt-BR": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Esta mensagem não foi descriptografada neste dispositivo: não pode ser copiada."
+          }
+        }
+      }
+    },
     "share.sheet.group.create": {
       "extractionState": "manual",
       "localizations": {

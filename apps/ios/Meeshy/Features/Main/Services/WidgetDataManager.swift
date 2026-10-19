@@ -201,6 +201,17 @@ final class WidgetDataManager: NotificationWidgetSink {
         self.stagingDirectoriesOverride = stagingDirectories
     }
 
+    /// Les dossiers App Group qui portent du contenu du compte connecté.
+    nonisolated static func accountStagingDirectories() -> [URL] {
+        [
+            SharePendingSendConsumer.directoryURL(),
+            SharePendingSendConsumer.mediaDirectoryURL(),
+            NSEPendingMessageConsumer.directoryURL(),
+            NSEPendingPostConsumer.directoryURL(),
+            ShareRelayHandoff.directoryURL(),
+        ].compactMap { $0 }
+    }
+
     /// appgroup-01 — wipe de logout (exigence `NotificationWidgetSink`).
     ///
     /// Purge les clés widget de l'App Group ET les dossiers de staging
@@ -221,12 +232,7 @@ final class WidgetDataManager: NotificationWidgetSink {
             }
             lastPublishedSnapshots = [:]
         }
-        let stagingDirs = stagingDirectoriesOverride ?? [
-            SharePendingSendConsumer.directoryURL(),
-            SharePendingSendConsumer.mediaDirectoryURL(),
-            NSEPendingMessageConsumer.directoryURL(),
-            NSEPendingPostConsumer.directoryURL(),
-        ].compactMap { $0 }
+        let stagingDirs = stagingDirectoriesOverride ?? Self.accountStagingDirectories()
         for dir in stagingDirs {
             do {
                 try FileManager.default.removeItem(at: dir)

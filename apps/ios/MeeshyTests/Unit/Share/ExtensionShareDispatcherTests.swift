@@ -20,6 +20,7 @@ final class ExtensionShareDispatcherTests: XCTestCase {
 
     private func makeSUT(
         session: ShareSession?? = nil,
+        directIsEncrypted: Bool = false,
         serve: @escaping (SharePendingShare.Target) -> SharePendingShare.TargetState = { _ in .sent }
     ) -> (sut: ExtensionShareDispatcher, log: SendLog) {
         let log = SendLog()
@@ -38,7 +39,7 @@ final class ExtensionShareDispatcherTests: XCTestCase {
             },
             createDirect: { userId, _ in
                 log.created.append(userId)
-                return "direct-\(userId)"
+                return ExtensionShareDispatcher.CreatedDirect(id: "direct-\(userId)", isEncrypted: directIsEncrypted)
             }
         )
         return (sut, log)
@@ -121,6 +122,53 @@ final class ExtensionShareDispatcherTests: XCTestCase {
         XCTAssertTrue(log.shares.isEmpty, "aucune requête ne part vers la conversation chiffrée")
         XCTAssertEqual(sut.relayedConversationIds, ["e1"])
         XCTAssertTrue(sut.holdsStagedMedia, "la fiche de relais possède les fichiers")
+    }
+
+    /// Une personne dont la directe, retrouvée ou créée à l'envoi, est chiffrée :
+    /// la ligne choisie ne le disait pas, la conversation RENDUE le dit.
+    func test_aPersonWhoseDirectComesBackEncrypted_isRelayed_neverSentInClear() async {
+        let (sut, log) = makeSUT(directIsEncrypted: true)
+        let bob = ShareRecipient(id: "user:bob", kind: .person, conversationId: nil, userId: "bob", title: "Bob",
+                                 detail: .friendWithoutConversation, avatarURL: nil)
+
+        let outcome = await sut.deliver(request(media: [photo]), to: bob)
+
+        XCTAssertEqual(outcome, .queued(conversationId: "direct-bob"))
+        XCTAssertTrue(log.shares.isEmpty, "aucun clair vers une directe chiffrée")
+        XCTAssertEqual(sut.relayedConversationIds, ["direct-bob"])
+    }
+
+    /// Sans cliché (l'app n'a pas tourné depuis la mise à jour), une conversation
+    /// des récents du widget peut être chiffrée sans que rien ne le dise.
+    func test_aWidgetRecentWithoutKnownEncryption_isRelayed_neverSentInClear() async {
+        let (sut, log) = makeSUT()
+        let recent = ExtensionShareDirectory.recipient(from: ShareTarget(id: "e2", displayName: "Bob", accentColorHex: "6366F1", unreadCount: 0))
+
+        let outcome = await sut.deliver(request(media: [photo]), to: recent)
+
+        XCTAssertEqual(outcome, .queued(conversationId: "e2"))
+        XCTAssertTrue(log.shares.isEmpty)
+    }
+
+    /// La création d'une directe est idempotente : elle rend l'EXISTANTE, et son
+    /// mode. Seul un `null` explicite prouve le clair.
+    func test_theCreatedDirect_isClearOnlyWhenTheServerSaysSo() {
+        func parse(_ json: String) -> ExtensionShareDispatcher.CreatedDirect? {
+            ExtensionShareDispatcher.createdDirect(fromResponse: Data(json.utf8))
+        }
+        XCTAssertEqual(parse(#"{"success":true,"data":{"id":"d1","encryptionMode":null}}"#), .init(id: "d1", isEncrypted: false))
+        XCTAssertEqual(parse(#"{"success":true,"data":{"id":"d2","encryptionMode":"e2ee"}}"#), .init(id: "d2", isEncrypted: true))
+        XCTAssertEqual(parse(#"{"success":true,"data":{"id":"d3"}}"#), .init(id: "d3", isEncrypted: true), "un mode tu compte comme chiffré")
+        XCTAssertNil(parse(#"{"success":true,"data":{}}"#))
+    }
+
+    /// La fiche de relais nomme le compte qui l'a déposée : l'app ne la sert qu'à lui.
+    func test_theRelayHandoff_namesItsOwner() async {
+        let (sut, _) = makeSUT()
+
+        _ = await sut.deliver(request(media: [photo]), to: conversation("e1", encrypted: true))
+
+        XCTAssertEqual(sut.relayHandoff(createdAt: Date())?.ownerUserId, "me")
     }
 
     func test_withoutSession_nothingLeaves() async {

@@ -17,14 +17,23 @@ import MeeshySDK
 /// fermeture. Une ligne servie dit « Envoyé », une ligne différée « En file ».
 ///
 /// **D7 — l'extension n'a pas les clés.** Une conversation chiffrée ne reçoit
-/// jamais de clair depuis l'extension : elle est RELAYÉE à l'app, qui chiffre
-/// sur l'appareil (`relayedConversationIds`, remis par la fiche de relais).
+/// jamais de clair depuis l'extension : elle est RELAYÉE à l'app
+/// (`relayedConversationIds`, remis par la fiche de relais), qui connaît son
+/// mode et décide. Le chiffrement se lit sur la conversation RENDUE : une
+/// personne n'a pas de mode, sa directe retrouvée ou créée à l'envoi en a un ;
+/// une réponse qui ne le dit pas compte comme chiffrée (fail-closed).
 @MainActor
 final class ExtensionShareDispatcher: ShareDispatching {
     nonisolated deinit {}
 
     typealias Send = @MainActor (SharePendingShare, ShareSession) async -> SharePendingShare
-    typealias CreateDirect = @MainActor (String, ShareSession) async -> String?
+    typealias CreateDirect = @MainActor (String, ShareSession) async -> CreatedDirect?
+
+    /// La conversation directe retrouvée ou créée à l'envoi, et son chiffrement.
+    nonisolated struct CreatedDirect: Equatable, Sendable {
+        let id: String
+        let isEncrypted: Bool
+    }
 
     private let shareId: String
     private let session: ShareSession?
@@ -70,10 +79,11 @@ final class ExtensionShareDispatcher: ShareDispatching {
 
     func deliver(_ request: ShareSendRequest, to recipient: ShareRecipient) async -> ShareDeliveryOutcome {
         guard let session else { return .failed(reason: Self.signedOutReason) }
-        guard let conversationId = await conversation(for: recipient, session: session) else {
+        guard let destination = await conversation(for: recipient, session: session) else {
             return .failed(reason: Self.unreachableReason)
         }
-        if recipient.isEncrypted {
+        let conversationId = destination.id
+        if destination.isEncrypted {
             if !relayedConversationIds.contains(conversationId) { relayedConversationIds.append(conversationId) }
             relayedText = request.subject.composedText(caption: request.caption)
             relayedMedia = keptMedia(of: request.subject)
@@ -109,7 +119,8 @@ final class ExtensionShareDispatcher: ShareDispatching {
         return ShareRelayHandoff(
             shareId: shareId, createdAt: createdAt, text: relayedText,
             media: relayedMedia.map { ShareRelayHandoff.Media(relPath: $0.relPath, mime: $0.mime, bytes: $0.bytes) },
-            conversationIds: relayedConversationIds
+            conversationIds: relayedConversationIds,
+            ownerUserId: session?.userId
         )
     }
 
@@ -120,15 +131,17 @@ final class ExtensionShareDispatcher: ShareDispatching {
 
     // MARK: - Une personne sans conversation
 
-    private func conversation(for recipient: ShareRecipient, session: ShareSession) async -> String? {
-        if let conversationId = recipient.conversationId { return conversationId }
+    private func conversation(for recipient: ShareRecipient, session: ShareSession) async -> CreatedDirect? {
+        if let conversationId = recipient.conversationId {
+            return CreatedDirect(id: conversationId, isEncrypted: recipient.isEncrypted)
+        }
         guard let userId = recipient.userId else { return nil }
         return await createDirect(userId, session)
     }
 
     /// La conversation directe s'ouvre À L'ENVOI, jamais à la sélection — même
     /// requête que l'app (`ConversationCreator`), avec le jeton de l'extension.
-    nonisolated static func createDirectConversation(with userId: String, session: ShareSession) async -> String? {
+    nonisolated static func createDirectConversation(with userId: String, session: ShareSession) async -> CreatedDirect? {
         guard let url = URL(string: "\(session.apiBaseURL)\(ConversationsEndpoint.root.path)"),
               let body = try? JSONSerialization.data(withJSONObject: ["type": "direct", "participantIds": [userId]]) else { return nil }
         var request = URLRequest(url: url)
@@ -139,8 +152,21 @@ final class ExtensionShareDispatcher: ShareDispatching {
         request.timeoutInterval = 10
         guard let (data, response) = try? await URLSession.shared.data(for: request),
               let status = (response as? HTTPURLResponse)?.statusCode, (200...299).contains(status) else { return nil }
-        // Même enveloppe `{ data: { id } }` que la réponse d'un message.
-        return ShareSender.serverMessageId(fromResponse: data)
+        return createdDirect(fromResponse: data)
+    }
+
+    /// `{ data: { id, encryptionMode } }` — la création est idempotente et rend
+    /// la directe EXISTANTE, éventuellement chiffrée. Une réponse qui ne dit pas
+    /// le mode explicitement (`null` ou chaîne) compte comme chiffrée : on relaie
+    /// plutôt que d'envoyer en clair.
+    nonisolated static func createdDirect(fromResponse data: Data) -> CreatedDirect? {
+        guard let root = try? JSONSerialization.jsonObject(with: data) as? [String: Any],
+              let payload = root["data"] as? [String: Any],
+              let id = payload["id"] as? String, !id.isEmpty else { return nil }
+        let mode = payload["encryptionMode"]
+        let knownClear = payload.keys.contains("encryptionMode") && (mode is NSNull)
+        let encrypted = (mode as? String).map { !$0.isEmpty } ?? !knownClear
+        return CreatedDirect(id: id, isEncrypted: encrypted)
     }
 
     private static var signedOutReason: String { ShareSheetCopy.signInTitle }

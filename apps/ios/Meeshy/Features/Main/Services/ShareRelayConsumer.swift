@@ -9,8 +9,9 @@ import MeeshyUI
 /// L'extension dépose une `ShareRelayHandoff` puis tente d'ouvrir
 /// `meeshy://share-relay` ; l'ouverture n'est qu'un raccourci, l'app balaie
 /// aussi le dossier à chaque réveil. La fiche reste sur le disque jusqu'à ce que
-/// l'écran de partage la PRÉSENTE — un utilisateur qui se connecte deux heures
-/// plus tard la retrouve, une app tuée avant la connexion ne la perd pas.
+/// l'écran de partage soit REFERMÉ (`settle`), pas seulement présenté :
+/// l'extension a dit « En file », et une app tuée avant « Envoyer » doit
+/// retrouver le partage. Une fiche n'est servie qu'au compte qui l'a déposée.
 @MainActor
 final class ShareRelayConsumer: ObservableObject {
     nonisolated deinit {}
@@ -29,32 +30,47 @@ final class ShareRelayConsumer: ObservableObject {
     private let directory: () -> URL?
     private let mediaRoot: () -> URL?
     private let now: () -> Date
+    private let currentUserId: () -> String?
 
     init(
         directory: @escaping () -> URL? = { ShareRelayHandoff.directoryURL() },
         mediaRoot: @escaping () -> URL? = { ShareRelayHandoff.mediaRootURL() },
-        now: @escaping () -> Date = Date.init
+        now: @escaping () -> Date = Date.init,
+        currentUserId: @escaping () -> String? = { AuthManager.shared.currentUser?.id }
     ) {
         self.directory = directory
         self.mediaRoot = mediaRoot
         self.now = now
+        self.currentUserId = currentUserId
     }
 
     func consumeNext(id: String? = nil) {
-        guard pending == nil, let directory = directory(),
-              let fiche = ShareRelayHandoff.next(id: id, in: directory, now: now()) else { return }
+        guard pending == nil, let userId = currentUserId(), !userId.isEmpty, let directory = directory(),
+              let fiche = ShareRelayHandoff.next(id: id, in: directory, servableTo: userId, now: now()) else { return }
         pending = PendingRelay(shareId: fiche.shareId, incoming: fiche.incoming(mediaRoot: mediaRoot()))
     }
 
-    /// L'écran de partage l'a présentée : la fiche est soldée. Les fichiers
-    /// restent jusqu'à l'envoi (l'outbox les recopie à l'enfilement), puis le
-    /// balayage des dossiers orphelins les rend (`SharePendingSendConsumer`).
+    /// L'écran de partage l'a présentée. La fiche RESTE : elle ne se solde
+    /// qu'à la fermeture de l'écran (`settle`).
     func markPresented(_ shareId: String) {
+        guard pending?.shareId == shareId else { return }
+        presentedShareId = shareId
+    }
+
+    /// L'écran de partage est refermé — envoyé, mis en file ou abandonné par
+    /// l'utilisateur : la fiche est soldée. Les fichiers restent jusqu'à
+    /// l'envoi (l'outbox les recopie à l'enfilement), puis le balayage des
+    /// dossiers orphelins les rend (`SharePendingSendConsumer`).
+    func settle(_ shareId: String) {
         if pending?.shareId == shareId { pending = nil }
+        if presentedShareId == shareId { presentedShareId = nil }
         guard let directory = directory() else { return }
         ShareRelayHandoff.remove(shareId: shareId, in: directory)
         consumeNext()
     }
+
+    /// La fiche que l'écran de partage montre en ce moment.
+    private(set) var presentedShareId: String?
 
     /// Les partages relayés encore en attente — le balayage des fichiers
     /// orphelins les épargne.
@@ -80,11 +96,15 @@ private struct ShareRelayPresenter: ViewModifier {
         content
             .task { consumer.consumeNext() }
             .adaptiveOnChange(of: consumer.pending) { _, relay in present(relay) }
+            .adaptiveOnChange(of: router.pendingShareContent == nil) { _, closed in
+                guard closed, let shown = consumer.presentedShareId else { return }
+                consumer.settle(shown)
+            }
             .onAppear { present(consumer.pending) }
     }
 
     private func present(_ relay: ShareRelayConsumer.PendingRelay?) {
-        guard let relay, router.pendingShareContent == nil else { return }
+        guard let relay, consumer.presentedShareId == nil, router.pendingShareContent == nil else { return }
         router.pendingShareContent = relay.subject
         consumer.markPresented(relay.shareId)
     }

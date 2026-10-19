@@ -4,6 +4,14 @@ import MeeshySDK
 /// L'envoi réel : le transfert passe par `MessageForwardService` (chemin unique,
 /// hors ligne compris) ; un texte, un lien ou une carte par la file durable
 /// (`OfflineQueue`) quand le réseau manque.
+///
+/// **Le chiffrement se décide sur la conversation RENDUE**, jamais sur la ligne
+/// choisie : une personne n'a pas de mode, sa directe — retrouvée ou créée à
+/// l'envoi, la création étant idempotente côté passerelle — en a un. Et tant
+/// que le partage ne sait pas écrire un chiffré que la passerelle accepte
+/// (`encryptedContent`, refusé en 400 sous la forme `isEncrypted` + `content`
+/// que porte le SDK), rien ne part vers une conversation chiffrée : le refus
+/// est dit à la ligne, rien n'est posté ni mis en file (fail-closed, #9224).
 @MainActor
 final class LiveShareDispatcher: ShareDispatching {
     nonisolated deinit {}
@@ -13,9 +21,9 @@ final class LiveShareDispatcher: ShareDispatching {
     private let queue: OfflineMessageQueueing
     private let isOnline: () -> Bool
     private let conversationCreator: ConversationCreating
-    private let encryptor: DirectMessageEncrypting
     private let postService: PostServiceProviding
     private let currentUserId: () -> String
+    private let isDecryptedOnDevice: (String) -> Bool
 
     init(
         forwardService: MessageForwardServiceProviding = MessageForwardService.shared,
@@ -23,18 +31,18 @@ final class LiveShareDispatcher: ShareDispatching {
         queue: OfflineMessageQueueing = OfflineQueue.shared,
         isOnline: @escaping () -> Bool = { NetworkMonitor.shared.isOnline },
         conversationCreator: ConversationCreating = ConversationCreator(),
-        encryptor: DirectMessageEncrypting = SessionManager.shared,
         postService: PostServiceProviding = PostService.shared,
-        currentUserId: @escaping () -> String = { AuthManager.shared.currentUser?.id ?? "" }
+        currentUserId: @escaping () -> String = { AuthManager.shared.currentUser?.id ?? "" },
+        isDecryptedOnDevice: @escaping (String) -> Bool = { DecryptedMessageLedger.shared.contains($0) }
     ) {
         self.forwardService = forwardService
         self.api = api
         self.queue = queue
         self.isOnline = isOnline
         self.conversationCreator = conversationCreator
-        self.encryptor = encryptor
         self.postService = postService
         self.currentUserId = currentUserId
+        self.isDecryptedOnDevice = isDecryptedOnDevice
     }
 
     func deliver(_ request: ShareSendRequest, to recipient: ShareRecipient) async -> ShareDeliveryOutcome {
@@ -106,43 +114,35 @@ final class LiveShareDispatcher: ShareDispatching {
     }
 
     /// **La copie d'un contenu chiffré se fait sur l'appareil** (D7, #9224) : la
-    /// passerelle ne recopie rien d'une source chiffrée. Le texte, déchiffré ici,
-    /// repart avec `forwardedFromId` (la provenance) ; vers une conversation
-    /// directe chiffrée, il est rechiffré pour le pair. Une pièce chiffrée ne se
-    /// recopie pas encore depuis l'appareil : elle n'est pas envoyée.
+    /// passerelle ne recopie rien d'une source chiffrée. Ne repart que du texte
+    /// dont le déchiffrement est PROUVÉ (`DecryptedMessageLedger`) — un échec de
+    /// déchiffrement laisse le chiffré dans `content`, qui ne sort jamais comme
+    /// texte —, avec `forwardedFromId` (la provenance). Un message qui porte des
+    /// pièces est refusé en bloc : les pièces d'une source chiffrée ne se
+    /// recopient pas encore depuis l'appareil, et un envoi partiel ne s'annonce
+    /// jamais « Envoyé ».
     private func copyOnDevice(_ message: Message, to recipient: ShareRecipient) async -> ShareDeliveryOutcome {
-        guard !message.content.isEmpty else { return .failed(reason: ForwardRefusalReason.encryptedSource.explanation) }
-        guard let conversationId = await resolveConversation(recipient) else { return .failed(reason: Self.unreachable) }
-        return await postText(message.content, forwardedFromId: message.id, to: recipient, conversationId: conversationId)
+        guard message.attachments.isEmpty else { return .failed(reason: Self.encryptedPiecesRefusal) }
+        guard !message.content.isEmpty, isDecryptedOnDevice(message.id) else { return .failed(reason: Self.undecryptedRefusal) }
+        guard let destination = await resolveConversation(recipient) else { return .failed(reason: Self.unreachable) }
+        return await postText(message.content, forwardedFromId: message.id, to: destination)
     }
 
-    /// **Rien ne part en clair vers une conversation chiffrée** (D7, #9224,
-    /// fail-closed). Vers une directe chiffrée, le texte est rechiffré pour le
-    /// pair ; vers un groupe chiffré, l'appareil ne sait pas encore le faire —
-    /// `nil`, et rien ne part.
-    private func sealed(_ content: String, for recipient: ShareRecipient, conversationId: String) async -> (content: String, encryptionMode: String?)? {
-        guard recipient.isEncrypted else { return (content, nil) }
-        guard let peer = recipient.userId,
-              let box = try? await encryptor.encryptMessage(Data(content.utf8), for: peer, conversationId: conversationId) else { return nil }
-        return (box.base64EncodedString(), "E2EE")
-    }
-
-    private func postText(_ text: String, forwardedFromId: String? = nil, to recipient: ShareRecipient, conversationId: String) async -> ShareDeliveryOutcome {
-        guard let sealed = await sealed(text, for: recipient, conversationId: conversationId) else {
-            return .failed(reason: ForwardRefusalReason.encryptedSource.explanation)
-        }
-        let body = SendMessageRequest(
-            content: sealed.content, forwardedFromId: forwardedFromId,
-            isEncrypted: sealed.encryptionMode != nil ? true : nil, encryptionMode: sealed.encryptionMode
-        )
-        return await post(body, to: conversationId, offlineContent: sealed.encryptionMode == nil ? sealed.content : nil)
+    private func postText(_ text: String, forwardedFromId: String? = nil, to destination: ResolvedConversation) async -> ShareDeliveryOutcome {
+        guard !destination.isEncrypted else { return .failed(reason: Self.encryptedDestinationRefusal) }
+        let body = SendMessageRequest(content: text, forwardedFromId: forwardedFromId)
+        return await post(body, to: destination.id, offlineContent: text)
     }
 
     /// D4 : la légende d'un transfert part en message à part, juste après la copie.
+    /// Vers une personne, la directe que le transfert vient d'ouvrir se relit
+    /// (création idempotente) pour connaître son mode : une légende ne part
+    /// jamais en clair dans une directe chiffrée.
     private func appendingCaption(_ request: ShareSendRequest, after outcome: ShareDeliveryOutcome, to recipient: ShareRecipient) async -> ShareDeliveryOutcome {
         let caption = request.caption.trimmingCharacters(in: .whitespacesAndNewlines)
-        guard request.captionPlacement == .separateMessage, !caption.isEmpty, let conversationId = outcome.conversationId else { return outcome }
-        _ = await postText(caption, to: recipient, conversationId: conversationId)
+        guard request.captionPlacement == .separateMessage, !caption.isEmpty, outcome.conversationId != nil,
+              let destination = await resolveConversation(recipient) else { return outcome }
+        _ = await postText(caption, to: destination)
         return outcome
     }
 
@@ -157,8 +157,9 @@ final class LiveShareDispatcher: ShareDispatching {
     /// retour du réseau, même après fermeture. Une pièce ne se chiffre pas
     /// encore sur l'appareil : vers une conversation chiffrée, rien ne part.
     private func sendIncomingMedia(_ incoming: ShareIncoming, request: ShareSendRequest, to recipient: ShareRecipient) async -> ShareDeliveryOutcome {
-        guard !recipient.isEncrypted else { return .failed(reason: ForwardRefusalReason.encryptedSource.explanation) }
-        guard let conversationId = await resolveConversation(recipient) else { return .failed(reason: Self.unreachable) }
+        guard let destination = await resolveConversation(recipient) else { return .failed(reason: Self.unreachable) }
+        guard !destination.isEncrypted else { return .failed(reason: Self.encryptedDestinationRefusal) }
+        let conversationId = destination.id
         let files = incoming.media.compactMap(\.fileURL)
         guard files.count == incoming.media.count, !files.isEmpty else { return .failed(reason: Self.genericFailure) }
         let content = request.subject.composedText(caption: request.caption)
@@ -198,8 +199,8 @@ final class LiveShareDispatcher: ShareDispatching {
     // MARK: - Texte, lien, carte
 
     private func sendText(_ text: String, to recipient: ShareRecipient) async -> ShareDeliveryOutcome {
-        guard let conversationId = await resolveConversation(recipient) else { return .failed(reason: Self.unreachable) }
-        return await postText(text, to: recipient, conversationId: conversationId)
+        guard let destination = await resolveConversation(recipient) else { return .failed(reason: Self.unreachable) }
+        return await postText(text, to: destination)
     }
 
     /// En ligne : le POST. Hors ligne : la file durable, rejouée au retour du
@@ -225,12 +226,23 @@ final class LiveShareDispatcher: ShareDispatching {
         }
     }
 
+    /// La conversation où le partage écrit, et son chiffrement.
+    private struct ResolvedConversation {
+        let id: String
+        let isEncrypted: Bool
+    }
+
     /// Une personne sans conversation en reçoit une, À L'ENVOI et jamais à la
-    /// sélection ; hors ligne, la création n'est pas tentée.
-    private func resolveConversation(_ recipient: ShareRecipient) async -> String? {
-        if let conversationId = recipient.conversationId { return conversationId }
-        guard let userId = recipient.userId, isOnline() else { return nil }
-        return try? await conversationCreator.createDirectConversation(with: userId, currentUserId: currentUserId()).id
+    /// sélection ; hors ligne, la création n'est pas tentée. La création étant
+    /// idempotente, elle peut rendre une directe existante CHIFFRÉE : son mode
+    /// fait foi, pas celui de la ligne choisie.
+    private func resolveConversation(_ recipient: ShareRecipient) async -> ResolvedConversation? {
+        if let conversationId = recipient.conversationId {
+            return ResolvedConversation(id: conversationId, isEncrypted: recipient.isEncrypted)
+        }
+        guard let userId = recipient.userId, isOnline(),
+              let created = try? await conversationCreator.createDirectConversation(with: userId, currentUserId: currentUserId()) else { return nil }
+        return ResolvedConversation(id: created.id, isEncrypted: created.encryptionMode != nil)
     }
 
     private static func outcome(_ outcome: ForwardOutcome) -> ShareDeliveryOutcome {
@@ -250,6 +262,21 @@ final class LiveShareDispatcher: ShareDispatching {
 
     private static var genericFailure: String {
         String(localized: "share.error", defaultValue: "Erreur lors du partage", bundle: .meeshyShare)
+    }
+
+    private static var encryptedDestinationRefusal: String {
+        String(localized: "share.refused.encrypted-destination",
+               defaultValue: "Cette conversation est chiffrée : le partage n’y envoie rien pour l’instant.", bundle: .meeshyShare)
+    }
+
+    private static var undecryptedRefusal: String {
+        String(localized: "share.refused.undecrypted-source",
+               defaultValue: "Ce message n’a pas été déchiffré sur cet appareil : il ne peut pas être copié.", bundle: .meeshyShare)
+    }
+
+    private static var encryptedPiecesRefusal: String {
+        String(localized: "share.refused.encrypted-pieces",
+               defaultValue: "Les pièces d’un message chiffré ne se copient pas encore depuis cet appareil.", bundle: .meeshyShare)
     }
 
     private static var unreachable: String {

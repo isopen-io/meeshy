@@ -38,14 +38,19 @@ nonisolated struct ShareRelayHandoff: Codable, Equatable, Sendable {
     let media: [Media]
     /// Les conversations que l'auteur avait choisies (les chiffrées, D7).
     let conversationIds: [String]
+    /// Le compte de la session qui a déposé la fiche ; `nil` sans session
+    /// (fragment 3) — la fiche attend alors le premier compte qui se connecte.
+    /// Absent des fiches écrites avant ce champ : elles se relisent sans lui.
+    let ownerUserId: String?
 
-    init(shareId: String, createdAt: Date, text: String?, media: [Media], conversationIds: [String]) {
+    init(shareId: String, createdAt: Date, text: String?, media: [Media], conversationIds: [String], ownerUserId: String? = nil) {
         self.version = Self.currentVersion
         self.shareId = shareId
         self.createdAt = createdAt
         self.text = text
         self.media = media
         self.conversationIds = conversationIds
+        self.ownerUserId = ownerUserId
     }
 
     // MARK: - Ce que l'écran de l'app rouvre
@@ -94,9 +99,16 @@ nonisolated struct ShareRelayHandoff: Codable, Equatable, Sendable {
         try encoder.encode(self).write(to: directory.appendingPathComponent("\(shareId).json"), options: .atomic)
     }
 
-    /// La fiche demandée, sinon la plus ancienne encore valable. Une fiche d'une
-    /// version FUTURE est ignorée, jamais devinée ; une fiche périmée est effacée.
-    static func next(id: String?, in directory: URL, now: Date = Date()) -> ShareRelayHandoff? {
+    /// Une fiche n'est servie qu'au compte qui l'a déposée ; une fiche sans
+    /// propriétaire, à tout compte connecté.
+    func isServable(to userId: String) -> Bool {
+        ownerUserId.map { $0 == userId } ?? true
+    }
+
+    /// La fiche demandée, sinon la plus ancienne encore valable, parmi celles que
+    /// `userId` a le droit de voir. Une fiche d'une version FUTURE est ignorée,
+    /// jamais devinée ; une fiche périmée est effacée.
+    static func next(id: String?, in directory: URL, servableTo userId: String, now: Date = Date()) -> ShareRelayHandoff? {
         guard let files = try? FileManager.default.contentsOfDirectory(at: directory, includingPropertiesForKeys: nil) else { return nil }
         let decoder = JSONDecoder()
         decoder.dateDecodingStrategy = .iso8601
@@ -107,7 +119,7 @@ nonisolated struct ShareRelayHandoff: Codable, Equatable, Sendable {
                 try? FileManager.default.removeItem(at: url)
                 return nil
             }
-            return fiche
+            return fiche.isServable(to: userId) ? fiche : nil
         }
         if let id { return fiches.first { $0.shareId == id } }
         return fiches.min { $0.createdAt < $1.createdAt }

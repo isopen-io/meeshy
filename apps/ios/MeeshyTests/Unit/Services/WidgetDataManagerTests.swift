@@ -23,6 +23,13 @@ final class WidgetDataManagerTests: XCTestCase {
         return (sut, defaults, dirs)
     }
 
+    /// Une fiche de relais de l'extension porte le texte et les fichiers du
+    /// compte sortant : le wipe de logout la purge avec les autres dossiers.
+    func test_theLogoutWipe_purgesTheShareRelays() throws {
+        let relays = try XCTUnwrap(ShareRelayHandoff.directoryURL(), "le conteneur App Group est accessible à l'hôte des tests")
+        XCTAssertTrue(WidgetDataManager.accountStagingDirectories().contains(relays))
+    }
+
     func test_wipeAll_removesWidgetKeysAndStagingDirs() throws {
         let (sut, defaults, dirs) = try makeWipeSUT()
         let keys = [

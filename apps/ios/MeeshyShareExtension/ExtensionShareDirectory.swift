@@ -52,11 +52,14 @@ nonisolated struct ExtensionShareDirectory: ShareRecipientSourcing {
 
     func writableChannels(of community: ShareCommunity, currentUserId: String) async -> [ShareRecipient] { [] }
 
-    /// Une conversation du widget : on sait son nom et si c'est un groupe.
+    /// Une conversation du widget : on sait son nom et si c'est un groupe — pas
+    /// son chiffrement. Inconnu vaut chiffré (fail-closed, #9224) : la ligne est
+    /// relayée à l'app, qui connaît le mode, au lieu de partir en clair d'ici.
     static func recipient(from target: ShareTarget) -> ShareRecipient {
         ShareRecipient(
             id: "conv:\(target.id)", kind: .conversation, conversationId: target.id, userId: nil,
-            title: target.displayName, detail: target.isGroup ? .group(members: 0) : .direct, avatarURL: nil
+            title: target.displayName, detail: target.isGroup ? .group(members: 0) : .direct, avatarURL: nil,
+            isEncrypted: true
         )
     }
 

@@ -82,6 +82,8 @@ final class ExtensionShareDirectoryTests: XCTestCase {
         XCTAssertEqual(conversations.map(\.id), ["conv:g1"])
         XCTAssertEqual(conversations.first?.title, "Équipe Lyon")
         XCTAssertEqual(conversations.first?.isGroup, true)
+        XCTAssertEqual(conversations.first?.isEncrypted, true,
+                       "les récents du widget ne disent pas le chiffrement : inconnu vaut chiffré (fail-closed, #9224)")
     }
 
     func test_freshConversations_readTheServerWithTheSessionToken() async throws {
