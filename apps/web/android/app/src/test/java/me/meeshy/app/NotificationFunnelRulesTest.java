@@ -145,11 +145,25 @@ public class NotificationFunnelRulesTest {
     }
 
     @Test
-    public void theDismissalCarriesOnlyWhatTheLineReads() {
-        Map<String, String> carried = NotificationFunnelRules.dismissalExtras(push(
+    public void theDismissalAndTheActionsCarryOnlyWhatTheLineReads() {
+        Map<String, String> carried = NotificationFunnelRules.lineExtras(push(
             "gcm.notification.tag", "c1", "notificationId", NOTIFICATION, "postId", POST, "type", "post_like",
             "conversationTitle", "Secret"));
         Map<String, String> expected = push("notificationId", NOTIFICATION, "postId", POST, "type", "post_like");
         assertEquals(expected, carried);
+    }
+
+    // #11052 — toucher une action de la banniere : `opened`, comme `notificationclick` sur le web.
+
+    @Test
+    public void anActionTappedOnTheBannerCountsOpenedWithTheSameShape() {
+        assertEquals(
+            "{\"type\":\"notification\",\"action\":\"opened\",\"eventId\":\"id-0\",\"occurredAt\":\"" + AT
+                + "\",\"target\":{\"kind\":\"notification\",\"id\":\"" + NOTIFICATION
+                + "\"},\"surface\":\"notifications\",\"channel\":\"fcm\",\"notificationType\":\"new_message\"}",
+            NotificationFunnelRules.openedLine(push("notificationId", NOTIFICATION, "type", "new_message"), AT, () -> "id-0")
+        );
+        assertNull(NotificationFunnelRules.openedLine(push("notificationId", "x"), AT, () -> "id-0"));
+        assertNull(NotificationFunnelRules.openedLine(push(), AT, () -> "id-0"));
     }
 }
