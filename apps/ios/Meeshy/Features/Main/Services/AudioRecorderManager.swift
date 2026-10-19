@@ -14,50 +14,37 @@ final class AudioRecorderManager: ObservableObject, AudioRecordingProviding, Cal
     private(set) var recordedFileURL: URL?
 
     private var recorder: AVAudioRecorder? {
-        didSet { cleanupHandle.recorder = recorder }
+        didSet { teardown.update { $0.recorder = recorder } }
     }
     private var timer: Timer? {
-        didSet { cleanupHandle.timer = timer }
+        didSet { teardown.update { $0.timer = timer } }
     }
     private var levelHistory: [CGFloat] = []
     private var settings: AudioRecordingSettings = .standard
     private var onMaxDurationReached: (() -> Void)?
     private let recordingSession: MeeshyRecordingSession = .shared
 
-    /// Handles thread-safe à libérer depuis le `deinit` (potentiellement
-    /// off-main) — pattern `AudioPlaybackManager.CleanupHandle`. Concerne les
-    /// instances NON partagées (ex. `AudioPostComposerView`) lâchées
-    /// mid-recording par un swipe-down de sheet : sans ce filet le Timer
-    /// 20 Hz restait au run loop, le micro actif et la session jamais rendue.
-    private final class CleanupHandle: @unchecked Sendable {
+    /// Ressources à libérer depuis le `deinit` (potentiellement off-main).
+    /// Concerne les instances NON partagées (ex. `AudioPostComposerView`)
+    /// lâchées mid-recording par un swipe-down de sheet : sans ce filet le
+    /// Timer 20 Hz restait au run loop, le micro actif et la session jamais
+    /// rendue.
+    private let teardown = TeardownBox(RecordingResources())
+
     // iOS 26.1 : deinit synthétisée ISOLÉE (SE-0466, isolation MainActor par
     // défaut) → double-free `pointer being freed was not allocated` (abrt)
     // au démontage hors d'une tâche (test XCTest synchrone, vue démontée).
     // Garde : MainActorDeinitSourceGuardTests / MeeshyUIDeinitSourceGuardTests.
-    nonisolated deinit {}
-        nonisolated(unsafe) var timer: Timer?
-        nonisolated(unsafe) var recorder: AVAudioRecorder?
-    }
-    private let cleanupHandle = CleanupHandle()
-
     nonisolated deinit {
-        cleanupHandle.timer?.invalidate()
+        teardown.update(RecordingResources.invalidateTimer)
         // `recorder` non-nil ⟺ mort mid-recording : sémantique cancel
         // (fichier partiel dérivé de `recorder.url`). Déporté sur une queue
         // utility : stop/removeItem sont bloquants et ce dealloc arrive sur le
         // main thread pendant l'animation de dismiss. La fin de
         // l'enregistrement (son Meeshy remonté, session rendue, call-aware)
         // revient au main.
-        guard cleanupHandle.recorder != nil else { return }
-        let handle = cleanupHandle
-        DispatchQueue.global(qos: .utility).async {
-            guard let recorder = handle.recorder else { return }
-            recorder.stop()
-            FileManager.default.removeItemLogging(at: recorder.url, context: "aborted recording cleanup", logger: Logger.audioRecorder)
-            DispatchQueue.main.async {
-                MainActor.assumeIsolated { MeeshyRecordingSession.shared.finish(handingBackSession: true) }
-            }
-        }
+        guard teardown.read(\.isRecording) else { return }
+        teardown.release(on: .global(qos: .utility), RecordingResources.releaseOffMain)
     }
 
     func configure(settings: AudioRecordingSettings, onMaxDurationReached: (() -> Void)? = nil) {
@@ -273,4 +260,26 @@ final class AudioRecorderManager: ObservableObject, AudioRecordingProviding, Cal
 
 private extension Logger {
     nonisolated static let audioRecorder = Logger(subsystem: "me.meeshy.app", category: "audio-recorder")
+}
+
+private nonisolated struct RecordingResources {
+    var timer: Timer?
+    var recorder: AVAudioRecorder?
+
+    var isRecording: Bool {
+        recorder != nil
+    }
+
+    static func invalidateTimer(_ resources: inout RecordingResources) {
+        resources.timer?.invalidate()
+    }
+
+    static func releaseOffMain(_ resources: RecordingResources) {
+        guard let recorder = resources.recorder else { return }
+        recorder.stop()
+        FileManager.default.removeItemLogging(at: recorder.url, context: "aborted recording cleanup", logger: Logger.audioRecorder)
+        DispatchQueue.main.async {
+            MainActor.assumeIsolated { MeeshyRecordingSession.shared.finish(handingBackSession: true) }
+        }
+    }
 }
