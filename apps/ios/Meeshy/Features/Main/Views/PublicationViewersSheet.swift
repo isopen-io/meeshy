@@ -103,6 +103,7 @@ struct PublicationViewersSheet: View {
     private var isDark: Bool { colorScheme == .dark }
 
     @State private var viewers: [StoryViewerItem] = []
+    @State private var servedCounts: ViewerListCounts?
     @State private var isLoading = true
     @State private var isRefused = false
     @State private var openedViewer: StoryViewerItem?
@@ -138,9 +139,7 @@ struct PublicationViewersSheet: View {
                     )
                 } else {
                     List {
-                        // C4 + C1 : en-tête = viewCount AUTORITATIF (dénormalisé, la même
-                        // valeur que le bouton « Vues ») + les impressions (author-only).
-                        Section(header: Text(String(localized: "story.viewer.viewsAndImpressions", defaultValue: "\(viewCount ?? viewers.count) Vues · \(impressionCount ?? 0) impressions", bundle: .main))
+                        Section(header: Text(String(localized: "story.viewer.viewsAndImpressions", defaultValue: "\(headerCounts.views) Vues · \(headerCounts.impressions) impressions", bundle: .main))
                             .font(.headline)
                             .foregroundColor(.primary)
                             .textCase(nil)
@@ -199,7 +198,7 @@ struct PublicationViewersSheet: View {
     }
 
     private var visitorsLine: String? {
-        PublicationViewersVisitors.line(anonymousViewCount: anonymousViewCount)
+        PublicationViewersVisitors.line(anonymousViewCount: servedCounts?.anonymousViewCount ?? anonymousViewCount)
     }
 
     private func viewerRow(_ viewer: StoryViewerItem) -> some View {
@@ -249,6 +248,15 @@ struct PublicationViewersSheet: View {
         .listRowBackground(isDark ? Color(UIColor.secondarySystemGroupedBackground) : Color.white)
     }
 
+    private var headerCounts: (views: Int, impressions: Int) {
+        PublicationViewersHeader.counts(
+            served: servedCounts,
+            snapshotViews: viewCount,
+            snapshotImpressions: impressionCount,
+            listedPeople: viewers.count
+        )
+    }
+
     private func loadViewers() async {
         // Un seul fetch en vol : si un autre tourne déjà, on note qu'un refresh
         // est dû (`refreshQueued`) et on sort — le fetch courant le rejouera.
@@ -270,8 +278,9 @@ struct PublicationViewersSheet: View {
                     self.viewers = []
                     self.isRefused = true
                 }
-                if case .loaded(let snapshots) = outcome {
+                if case .loaded(let snapshots, let counts) = outcome {
                     self.isRefused = false
+                    self.servedCounts = counts
                     self.viewers = snapshots.map { s in
                         StoryViewerItem(
                             id: s.id,
@@ -289,6 +298,25 @@ struct PublicationViewersSheet: View {
         } while await MainActor.run(body: { refreshQueued })
 
         await MainActor.run { isRefreshing = false }
+    }
+}
+
+// MARK: - L'en-tête (#11065)
+
+/// Les nombres de l'en-tête : ceux que la passerelle relit AVEC la liste
+/// d'abord, puis l'instantané reçu à l'ouverture (plus vieux que la liste qu'il
+/// surmonte, et seul repli d'un serveur antérieur). Jamais moins de vues que de
+/// personnes listées : chacune en a fait au moins une.
+enum PublicationViewersHeader {
+    static func counts(
+        served: ViewerListCounts?,
+        snapshotViews: Int?,
+        snapshotImpressions: Int?,
+        listedPeople: Int
+    ) -> (views: Int, impressions: Int) {
+        let views = served?.viewCount ?? snapshotViews ?? listedPeople
+        let impressions = served?.impressionCount ?? snapshotImpressions ?? 0
+        return (max(views, listedPeople), impressions)
     }
 }
 

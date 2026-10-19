@@ -33,7 +33,7 @@ final class MeeshyVideoPlayerInlineTopBarLayoutTests: XCTestCase {
 
     func test_theOtherControls_stayGroupedOnTheRight_beforeTheMute() {
         let full: Controls = [.expand, .pip, .airplay, .speed, .mute]
-        XCTAssertEqual(layout(full).trailing, [.pip, .airplay, .speed, .mute])
+        XCTAssertEqual(layout(full).trailing, [.airplay, .speed, .mute])
     }
 
     func test_nothingIsLeftInTheMiddle() {
@@ -51,9 +51,11 @@ final class MeeshyVideoPlayerInlineTopBarLayoutTests: XCTestCase {
                       "sans hôte de plein écran, le bouton n'existe pas (loi 4)")
     }
 
-    func test_pip_isAbsentWhereTheDeviceCannotServeIt() {
-        XCTAssertFalse(layout(.inlineDefault, pipSupported: false).trailing.contains(.pip))
-        XCTAssertTrue(layout(.inlineDefault, pipSupported: true).trailing.contains(.pip))
+    /// #11041, décision e : une vidéo inline n'ouvre jamais de PiP — son
+    /// bouton n'existe donc pas, même demandé, même sur un appareil qui le sert.
+    func test_pip_isNeverPlacedInline() {
+        XCTAssertFalse(layout([.expand, .pip], pipSupported: false).trailing.contains(.pip))
+        XCTAssertFalse(layout([.expand, .pip], pipSupported: true).trailing.contains(.pip))
     }
 
     func test_aBareControlSet_placesNothing() {

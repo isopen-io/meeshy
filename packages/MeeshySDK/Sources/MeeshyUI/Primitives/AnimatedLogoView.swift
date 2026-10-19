@@ -2,7 +2,7 @@ import SwiftUI
 
 // MARK: - Meeshy Dashes Shape
 
-public struct MeeshyDashesShape: Shape {
+nonisolated public struct MeeshyDashesShape: Shape {
     public let dashIndex: Int
 
     public init(dashIndex: Int) {
