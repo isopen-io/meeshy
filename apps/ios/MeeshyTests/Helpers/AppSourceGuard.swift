@@ -150,14 +150,17 @@ enum AppSourceGuard {
     /// Les types découpés par responsabilité qu'une garde lit comme leur unité :
     /// `BubbleStandardLayout` (#10678), `MessageListViewController` (#10758),
     /// `PostDetailView` (#10956), `ConversationListViewModel`, `FeedViewModel`,
-    /// `ConversationListView`, `ConversationView` et `StoryViewerView` (#10988).
+    /// `ConversationListView`, `ConversationView`, `StoryViewerView`,
+    /// `FeedCommentsSheet` et `P2PWebRTCClient` (#10988).
     static let splitUnits: Set<String> = [
         "BubbleStandardLayout.swift",
         "ConversationListView.swift",
         "ConversationListViewModel.swift",
         "ConversationView.swift",
+        "FeedCommentsSheet.swift",
         "FeedViewModel.swift",
         "MessageListViewController.swift",
+        "P2PWebRTCClient.swift",
         "PostDetailView.swift",
         "StoryViewerView+Canvas.swift",
         "StoryViewerView+Content.swift",
@@ -218,6 +221,9 @@ enum AppSourceGuard {
         // les gardes qui lisent « la feuille POSE par le viewmodel » liraient
         // un meuble qui ne pose plus rien lui-même.
         "Meeshy/Features/Main/Composer/SceneStickerPose.swift",
+        // Le voile de progression d'export, sorti du meuble au #10988 : il reste
+        // dans l'unité pour que les gardes négatives du meuble le balaient.
+        "Meeshy/Features/Main/Composer/ComposerExportProgressVeil.swift",
     ]
 
     static func composerHostURLs() -> [URL] {

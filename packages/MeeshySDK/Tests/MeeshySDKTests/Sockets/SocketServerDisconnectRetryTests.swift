@@ -47,7 +47,6 @@ final class SocketRetiredTransportTests: XCTestCase {
             .appendingPathComponent("Sources/MeeshySDK/Sockets")
         let retireDeclarations = [
             "SocketTransportRetirement.swift": "func retire(_ transport: SocketManager?) {",
-            "SocialSocketManager.swift": "private func retireTransport() {",
         ]
         for (file, declaration) in retireDeclarations {
             let source = try String(contentsOf: root.appendingPathComponent(file), encoding: .utf8)

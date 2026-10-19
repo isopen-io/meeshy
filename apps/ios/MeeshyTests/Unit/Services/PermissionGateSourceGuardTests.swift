@@ -163,7 +163,7 @@ final class PermissionGateSourceGuardTests: XCTestCase {
     func test_outgoingCallSurfaces_useThePermissionCheckedEntryPoint() throws {
         let surfaces = [
             "Meeshy/Features/Contacts/CallStarter.swift",
-            "Meeshy/Features/Main/ViewModels/ConversationViewModel.swift",
+            "Meeshy/Features/Main/ViewModels/ConversationViewModel+CallLauncher.swift",
             "Meeshy/Features/Main/Views/ConversationListView+Overlays.swift",
             "Meeshy/Features/Main/Views/ConversationView+Header.swift",
         ]

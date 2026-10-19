@@ -100,7 +100,7 @@ final class CameraSuspensionSignalGuardTests: XCTestCase {
     /// couperait la vidéo d'appel sur un événement sans aucun rapport.
     func test_captureInterruptionObservation_isScopedToTheCallSession() throws {
         let code = strippingComments(
-            try source("Meeshy/Features/Main/Services/WebRTC/P2PWebRTCClient.swift")
+            try source("Meeshy/Features/Main/Services/WebRTC/P2PWebRTCClient+CaptureInterruption.swift")
         )
         guard let start = code.range(of: "AVCaptureSession.wasInterruptedNotification") else {
             XCTFail("P2PWebRTCClient doit observer l'interruption de sa session de capture")
@@ -127,7 +127,7 @@ final class CameraSuspensionSignalGuardTests: XCTestCase {
     /// exhaustif deviendrait un point de rupture silencieux.
     func test_interruptionHandling_doesNotSwitchOnReason() throws {
         let code = strippingComments(
-            try source("Meeshy/Features/Main/Services/WebRTC/P2PWebRTCClient.swift")
+            try source("Meeshy/Features/Main/Services/WebRTC/P2PWebRTCClient.swift") + source("Meeshy/Features/Main/Services/WebRTC/P2PWebRTCClient+CaptureInterruption.swift")
         )
         XCTAssertFalse(
             code.contains("AVCaptureSessionInterruptionReasonKey"),

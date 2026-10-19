@@ -205,16 +205,6 @@ extension ConversationViewModel {
         Task { await PushPermissionPrompt.honourDeferredRequest() }
     }
 
-    /// Colonne `stickerJson` du record OPTIMISTE (#4823) — même mécanique que
-    /// `locationJson` : écrite EN BASE, pas seulement dans le `Message` en
-    /// mémoire, sinon une écriture GRDB concurrente (`messagesDidChange`) ou
-    /// un relaunch rendrait une bulle sticker muette jusqu'à l'écho serveur.
-    private static func stickerJson(_ sticker: MessageSticker?, id: String) -> String? {
-        sticker
-            .flatMap { JSONEncoder().encodeOrLog($0, field: "stickerJson", id: id) }
-            .flatMap { String(data: $0, encoding: .utf8) }
-    }
-
     @discardableResult
     /// `attachmentReplyTo` — l'ANCRE de la pièce citée (#6164, moitié ÉCRITURE).
     ///
@@ -318,9 +308,7 @@ extension ConversationViewModel {
             // optimiste : une écriture GRDB concurrente déclenche
             // `messagesDidChange` et effacerait un lieu qui ne vivrait
             // qu'en mémoire.
-            let offlineLocationJson: String? = location
-                .flatMap { JSONEncoder().encodeOrLog($0, field: "locationJson", id: offlineClientMessageId) }
-                .flatMap { String(data: $0, encoding: .utf8) }
+            let offlineLocationJson = OptimisticRecordColumns.locationJson(location, id: offlineClientMessageId)
 
             let offlineTempId = queueItem.tempId
             let offlineMessage = Message(
@@ -341,39 +329,24 @@ extension ConversationViewModel {
             )
             // Persist offline message to GRDB; store observation surfaces the row
             // automatically — no direct messages.append needed.
-            let offlineRecord = MessageRecord(
-                localId: offlineTempId, serverId: nil,
-                conversationId: conversationId, senderId: currentUserId,
-                content: text.isEmpty ? nil : text,
+            let offlineRecord = OptimisticTextRecordBuilder.record(
+                localId: offlineTempId,
+                conversationId: conversationId,
+                senderId: currentUserId,
+                sender: authManager.currentUser,
+                text: text,
                 originalLanguage: originalLanguage ?? Self.composeLanguage(for: content, preferred: preferredLanguages),
-                messageType: "text", messageSource: "user", contentType: "text",
-                state: .sending, retryCount: 0, lastError: nil,
-                isEncrypted: false, encryptionMode: nil, encryptedPayload: nil,
-                replyToId: replyToId, storyReplyToId: storyReplyToId,
+                messageType: "text",
+                replyToId: replyToId,
+                storyReplyToId: storyReplyToId,
                 forwardedFromId: forwardedFromId,
                 forwardedFromConversationId: forwardedFromConversationId,
-                replyToJson: nil, forwardedFromJson: nil,
-                expiresAt: nil, effectFlags: optimisticEffectFlags(intent).rawValue,
-                maxViewOnceCount: intent.maxViewOnceCount, viewOnceCount: 0,
-                isEdited: false, editedAt: nil, deletedAt: nil,
-                pinnedAt: nil, pinnedBy: nil,
-                senderName: authManager.currentUser?.displayName,
-                senderUsername: authManager.currentUser?.username,
-                senderColor: nil, senderAvatarURL: authManager.currentUser?.avatar,
-                deliveredCount: 0, readCount: 0,
-                deliveredToAllAt: nil, readByAllAt: nil,
-                createdAt: Date(), sentAt: nil,
-                deliveredAt: nil, readAt: nil, updatedAt: Date(),
-                attachmentsJson: nil, reactionsJson: nil,
-                reactionCount: 0, currentUserReactionsJson: nil,
-                mentionedUsersJson: nil,
-                cachedBubbleWidth: nil, cachedBubbleHeight: nil,
-                cachedLastLineWidth: nil, cachedLineCount: nil,
-                cachedTimestampInline: nil,
-                layoutVersion: 0, layoutMaxWidth: nil,
-                changeVersion: 0,
+                replyToJson: nil,
+                effectFlags: optimisticEffectFlags(intent).rawValue,
+                maxViewOnceCount: intent.maxViewOnceCount,
                 locationJson: offlineLocationJson,
-                stickerJson: Self.stickerJson(sticker, id: offlineClientMessageId),
+                stickerJson: OptimisticRecordColumns.stickerJson(sticker, id: offlineClientMessageId),
+                now: Date(),
                 ephemeralDuration: intent.ephemeralDurationSeconds
             )
 
@@ -492,44 +465,26 @@ extension ConversationViewModel {
             // mémoire — une écriture GRDB concurrente déclenche
             // `messagesDidChange` et effacerait une valeur purement mémoire.
             // Les transports, eux, portent le `SharedPlace` tel quel.
-            let optimisticLocationJson: String? = location
-                .flatMap { JSONEncoder().encodeOrLog($0, field: "locationJson", id: tempId) }
-                .flatMap { String(data: $0, encoding: .utf8) }
+            let optimisticLocationJson = OptimisticRecordColumns.locationJson(location, id: tempId)
             let persistence = messagePersistence
-            let optimisticRecord = MessageRecord(
-                localId: tempId, serverId: nil,
-                conversationId: conversationId, senderId: currentUserId,
-                content: text.isEmpty ? nil : text,
+            let optimisticRecord = OptimisticTextRecordBuilder.record(
+                localId: tempId,
+                conversationId: conversationId,
+                senderId: currentUserId,
+                sender: authManager.currentUser,
+                text: text,
                 originalLanguage: originalLanguage ?? Self.composeLanguage(for: content, preferred: preferredLanguages),
                 messageType: optimisticMessageType.rawValue,
-                messageSource: "user", contentType: "text",
-                state: .sending, retryCount: 0, lastError: nil,
-                isEncrypted: false, encryptionMode: nil, encryptedPayload: nil,
-                replyToId: replyToId, storyReplyToId: storyReplyToId,
+                replyToId: replyToId,
+                storyReplyToId: storyReplyToId,
                 forwardedFromId: forwardedFromId,
                 forwardedFromConversationId: forwardedFromConversationId,
-                replyToJson: replyRef.flatMap { try? JSONEncoder().encode($0) }, forwardedFromJson: nil,
-                expiresAt: nil, effectFlags: optimisticEffectFlags(intent).rawValue,
-                maxViewOnceCount: resolvedMaxViewOnceCount, viewOnceCount: 0,
-                isEdited: false, editedAt: nil, deletedAt: nil,
-                pinnedAt: nil, pinnedBy: nil,
-                senderName: authManager.currentUser?.displayName,
-                senderUsername: authManager.currentUser?.username,
-                senderColor: nil, senderAvatarURL: authManager.currentUser?.avatar,
-                deliveredCount: 0, readCount: 0,
-                deliveredToAllAt: nil, readByAllAt: nil,
-                createdAt: Date(), sentAt: nil,
-                deliveredAt: nil, readAt: nil, updatedAt: Date(),
-                attachmentsJson: nil, reactionsJson: nil,
-                reactionCount: 0, currentUserReactionsJson: nil,
-                mentionedUsersJson: nil,
-                cachedBubbleWidth: nil, cachedBubbleHeight: nil,
-                cachedLastLineWidth: nil, cachedLineCount: nil,
-                cachedTimestampInline: nil,
-                layoutVersion: 0, layoutMaxWidth: nil,
-                changeVersion: 0,
+                replyToJson: replyRef.flatMap { try? JSONEncoder().encode($0) },
+                effectFlags: optimisticEffectFlags(intent).rawValue,
+                maxViewOnceCount: resolvedMaxViewOnceCount,
                 locationJson: optimisticLocationJson,
-                stickerJson: Self.stickerJson(sticker, id: tempId),
+                stickerJson: OptimisticRecordColumns.stickerJson(sticker, id: tempId),
+                now: Date(),
                 ephemeralDuration: resolvedEphemeralDuration
             )
             Logger.messages.info("SendFlow insertOptimistic START tempId=\(tempId, privacy: .public) convId=\(self.conversationId, privacy: .public)")
@@ -989,48 +944,21 @@ extension ConversationViewModel {
         )
         let replyToJson = resolvedReplyRef.flatMap { try? JSONEncoder().encode($0) }
         let resolvedOriginalLanguage = originalLanguage ?? Self.composeLanguage(for: content, preferred: preferredLanguages)
-        let record = MessageRecord(
-            localId: tempId, serverId: nil,
-            conversationId: conversationId, senderId: currentUserId,
-            content: content.isEmpty ? nil : content,
+        let record = OptimisticMediaRecordBuilder.record(
+            tempId: tempId,
+            conversationId: conversationId,
+            senderId: currentUserId,
+            sender: authManager.currentUser,
+            content: content,
             originalLanguage: resolvedOriginalLanguage,
-            messageType: messageType.rawValue, messageSource: "user", contentType: messageType.rawValue,
-            state: .sending, retryCount: 0, lastError: nil,
-            isEncrypted: false, encryptionMode: nil, encryptedPayload: nil,
+            messageType: messageType,
             replyToId: replyToId,
             storyReplyToId: storyReplyToId,
-            forwardedFromId: nil, forwardedFromConversationId: nil,
-            replyToJson: replyToJson, forwardedFromJson: nil,
-            // La bulle optimiste PORTE la protection qu'on vient d'armer
-            // (#7498). Elle valait `nil`/`0` en dur : l'expéditeur envoyait un
-            // éphémère et voyait un message ordinaire — ni flamme, ni
-            // décompte, ni voile — jusqu'à la réconciliation serveur. Le
-            // défaut se lisait comme « la protection n'a pas été appliquée »,
-            // ce qui était vrai à l'écran et faux sur le fil.
-            // #8905 — la DURÉE, jamais une échéance : l'envoi n'est pas une
-            // réception, la flamme lit « en attente de réception ».
-            expiresAt: nil,
-            effectFlags: protection.lifecycleFlags.rawValue,
-            maxViewOnceCount: protection.maxViewOnceCount, viewOnceCount: 0,
-            isEdited: false, editedAt: nil, deletedAt: nil,
-            pinnedAt: nil, pinnedBy: nil,
-            senderName: authManager.currentUser?.displayName,
-            senderUsername: authManager.currentUser?.username,
-            senderColor: nil, senderAvatarURL: authManager.currentUser?.avatar,
-            deliveredCount: 0, readCount: 0,
-            deliveredToAllAt: nil, readByAllAt: nil,
-            createdAt: now, sentAt: nil,
-            deliveredAt: nil, readAt: nil, updatedAt: now,
-            attachmentsJson: attachmentsJson, reactionsJson: nil,
-            reactionCount: 0, currentUserReactionsJson: nil,
-            mentionedUsersJson: nil,
-            cachedBubbleWidth: nil, cachedBubbleHeight: nil,
-            cachedLastLineWidth: nil, cachedLineCount: nil,
-            cachedTimestampInline: nil,
-            layoutVersion: 0, layoutMaxWidth: nil,
-            changeVersion: 0,
-            stickerJson: Self.stickerJson(sticker, id: tempId),
-            ephemeralDuration: protection.ephemeralDurationSeconds
+            replyToJson: replyToJson,
+            attachmentsJson: attachmentsJson,
+            stickerJson: OptimisticRecordColumns.stickerJson(sticker, id: tempId),
+            protection: protection,
+            now: now
         )
         let persistence = messagePersistence
         let recordConversationId = record.conversationId

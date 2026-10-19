@@ -847,7 +847,8 @@ final class ComposerProtectionTravelsGuardTests: XCTestCase {
         guard let insert = send.range(of: "func insertOptimisticMediaMessage") else {
             return XCTFail("`insertOptimisticMediaMessage` introuvable — la pose optimiste d'un média a changé de nom")
         }
-        let corps = String(send[insert.lowerBound...])
+        let records = try source(at: "Features/Main/ViewModels/ConversationViewModel+OptimisticRecords.swift")
+        let corps = String(send[insert.lowerBound...]) + records
         XCTAssertFalse(corps.contains("expiresAt: nil, effectFlags: 0"),
                        "La ligne optimiste d'un média ne doit plus naître sans protection.")
         XCTAssertTrue(corps.contains("ephemeralDuration: protection.ephemeralDurationSeconds"),
@@ -863,8 +864,9 @@ final class ComposerProtectionTravelsGuardTests: XCTestCase {
     /// et survivait à l'accusé (l'upsert coalesce `api ?? existant`).
     func test_aucuneLigneOptimiste_neGraveDÉchéanceClient() throws {
         let send = try source(at: "Features/Main/ViewModels/ConversationViewModel+Send.swift")
-        XCTAssertFalse(send.contains("intent.expiresAt("), "Une échéance calculée à l'envoi fait décompter l'expéditeur.")
-        XCTAssertFalse(send.contains("protection.expiresAt("), "Idem pour la ligne d'un média.")
+        let records = try source(at: "Features/Main/ViewModels/ConversationViewModel+OptimisticRecords.swift")
+        XCTAssertFalse((send + records).contains("intent.expiresAt("), "Une échéance calculée à l'envoi fait décompter l'expéditeur.")
+        XCTAssertFalse((send + records).contains("protection.expiresAt("), "Idem pour la ligne d'un média.")
         XCTAssertEqual(send.components(separatedBy: "ephemeralDuration: intent.ephemeralDurationSeconds").count - 1, 1,
                        "La ligne HORS LIGNE porte la durée.")
         XCTAssertEqual(send.components(separatedBy: "ephemeralDuration: resolvedEphemeralDuration\n").count - 1, 1,

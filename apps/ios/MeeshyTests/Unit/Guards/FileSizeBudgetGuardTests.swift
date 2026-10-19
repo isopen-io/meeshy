@@ -46,14 +46,11 @@ final class FileSizeBudgetGuardTests: XCTestCase {
     /// (6462 lignes) n'était pas un lot d'UI/UX ; il a eu le sien (2026-10-02).
     private static let legacyOverBudget: Set<String> = [
         "ConversationDashboardView.swift",
-        "FeedCommentsSheet.swift",
         // #6040 — `FeedView+Attachments.swift` a QUITTÉ la dette : 207 lignes,
         // contre 1 391 avant le découpage. La feuille qui en est sortie
         // (`FeedComposerSheet.swift`, 1 166) n'y ENTRE pas : elle est sous le
         // plafond. Le nom sort ENTIER, plafond compris — voir ci-dessous.
         "FeedView.swift",
-        "P2PWebRTCClient.swift",
-        "RootView.swift",
     ]
 
     /// Cumul des lignes de la dette héritée. **Ne doit que DESCENDRE.**
@@ -642,7 +639,15 @@ final class FileSizeBudgetGuardTests: XCTestCase {
     // (2 074) et `+Content` (2 034) retombent sous 1 000 lignes ; `WebRTCTypes.swift`
     // (1 365) se range un type par fichier. Ils sortent de `legacyOverBudget`
     // ENTIERS, et le plafond baisse d'exactement ce qu'ils pesaient.
-    private static let legacyLineCeiling = 10_431
+    //
+    // #10988 — 10 431 → 5 582 (−4 849). Même méthode, deuxième lot :
+    // `P2PWebRTCClient.swift` (1 700 lignes comptées) confie ses observateurs
+    // d'interruption et ses préférences de codec à des collaborateurs,
+    // `RootView.swift` (1 578) son chrome flottant, ses bannières et l'ouverture
+    // des conversations à des sous-vues et un ouvreur, `FeedCommentsSheet.swift`
+    // (1 571) ses bannières et son chargement. Ils sortent de `legacyOverBudget`
+    // ENTIERS, et le plafond baisse d'exactement ce qu'ils pesaient.
+    private static let legacyLineCeiling = 5_582
 
     // MARK: - Règle 1 — pas de 43ᵉ
 

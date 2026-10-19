@@ -923,13 +923,7 @@ final class CallManagerAudioSessionTests: XCTestCase {
 final class P2PWebRTCClientPerfectNegotiationTests: XCTestCase {
 
     private func p2pClientSource() throws -> String {
-        let url = URL(fileURLWithPath: #filePath)
-            .deletingLastPathComponent()
-            .deletingLastPathComponent()
-            .deletingLastPathComponent()
-            .deletingLastPathComponent()
-            .appendingPathComponent("Meeshy/Features/Main/Services/WebRTC/P2PWebRTCClient.swift")
-        return try String(contentsOf: url, encoding: .utf8)
+        try AppSourceGuard.unit("Meeshy/Features/Main/Services/WebRTC/P2PWebRTCClient.swift")
     }
 
     func test_p2pClient_makingOffer_flagExists() throws {

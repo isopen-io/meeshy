@@ -784,58 +784,29 @@ class ConversationViewModel: ObservableObject {
 
     // MARK: - Audio Continuous Playback (Phase 4)
 
-    /// Re-initiate ("call back") a call from a tapped call-summary notice —
-    /// or JOIN it when the notice is the LIVE message (`kind: 'call-live'`,
-    /// "Appel … en cours"). Mirrors the conversation header's call entry
-    /// point: direct (1:1) calls only, re-using the SAME media type
-    /// (audio/video) as the summarized call. The peer display name is
-    /// resolved best-effort from a received message so the CallKit / in-app
-    /// outgoing UI shows a name, not a raw id.
-    func callBack(for summary: CallSummaryMetadata) {
-        // Anonymous shared-link guests never get a calling affordance — mirrors
-        // the header's `anonymousHeaderBar` swap (ConversationView) which hides
-        // the call buttons entirely for this session kind. A call-summary
-        // bubble further down history must honor the SAME gate, otherwise a
-        // guest can trigger the OS microphone permission prompt from a bubble
-        // tap before the gateway's own isAnonymous check ever runs.
-        guard anonymousSession == nil else { return }
-        if summary.isLive {
-            Task { await joinOngoingCall(summary) }
-            return
-        }
-        guard isDirect, let peerUserId = participantUserId, !peerUserId.isEmpty else { return }
-        let displayName = resolvedPeerDisplayName
-            ?? String(localized: "call.peer.fallback", defaultValue: "Appel", bundle: .main)
-        Task { @MainActor in
-            await CallManager.shared.requestPermissionsThenStartCall(
-                conversationId: conversationId,
-                userId: peerUserId,
-                displayName: displayName,
-                isVideo: summary.callType == .video
-            )
-        }
+    private var callLauncher: ConversationCallLauncher {
+        ConversationCallLauncher(
+            conversationId: conversationId,
+            isDirect: isDirect,
+            participantUserId: participantUserId,
+            isAnonymous: anonymousSession != nil,
+            currentUserId: currentUserId,
+            liveCallJoin: liveCallJoin,
+            activeCallService: activeCallService,
+            peerDisplayName: { [weak self] in self?.resolvedPeerDisplayName },
+            conversationName: { [weak self] in self?.currentConversationName ?? "" }
+        )
     }
 
-    /// Rejoint l'appel EN COURS annoncé par la bulle vivante — la revalidation
-    /// (4 branches) vit dans `LiveCallJoiner`, partagé avec la ligne de liste.
+    /// Rappel / reprise depuis une bulle de résumé d'appel — la règle vit dans
+    /// `ConversationCallLauncher`.
+    func callBack(for summary: CallSummaryMetadata) {
+        callLauncher.callBack(for: summary)
+    }
+
     /// Internal (pas private) pour la testabilité des branches.
     func joinOngoingCall(_ summary: CallSummaryMetadata) async {
-        // Same anonymity gate as `callBack(for:)` — this is also reachable
-        // directly from `callBack` for the isLive branch, but joining is a
-        // distinct code path (revalidated server round-trip) so it re-asserts
-        // the guard rather than relying on the caller alone.
-        guard anonymousSession == nil else { return }
-        await LiveCallJoiner(context: liveCallJoin, activeCallService: activeCallService).join(
-            LiveCallJoinRequest(
-                callId: summary.callId,
-                conversationId: conversationId,
-                isVideo: summary.callType == .video,
-                currentUserId: currentUserId,
-                fallbackRemoteUserId: participantUserId,
-                fallbackDisplayName: isDirect ? resolvedPeerDisplayName : currentConversationName,
-                isGroup: !isDirect
-            )
-        )
+        await callLauncher.joinOngoingCall(summary)
     }
 
     /// Best-effort peer display name from the most recent received message in
@@ -846,129 +817,10 @@ class ConversationViewModel: ObservableObject {
             .senderName
     }
 
-    /// O(n) scan over `messages` for the message that owns `attachmentId`.
-    /// `messages` rarely exceeds a few hundred rows in memory; an index would
-    /// have to invalidate on every attachment update for negligible gain.
-    func findAudioAttachment(id: String) -> (Message, MessageAttachment)? {
-        for message in messages {
-            if let att = message.attachments.first(where: { $0.id == id && $0.type == .audio }) {
-                return (message, att)
-            }
-        }
-        return nil
-    }
-
-    /// Pistes traduites d'un attachement — MÊME source que `allAudioItems`
-    /// (par-attachement d'abord, repli par-message filtré), jamais une
-    /// troisième résolution.
-    private func translatedAudioTracks(for attachment: MessageAttachment, messageId: String) -> [MessageTranslatedAudio] {
-        messageTranslatedAudiosByAttachment[attachment.id]
-            ?? (messageTranslatedAudios[messageId] ?? []).filter { $0.attachmentId == attachment.id }
-    }
-
-    /// URL de la piste audio EFFECTIVE d'un attachement — la même loi que le
-    /// widget (`AudioTrackLanguageResolver` : bascule manuelle du drapeau
-    /// puis Prisme). C'est CETTE url que le coordinateur doit jouer pour que
-    /// l'audio entendu corresponde au texte et aux segments affichés.
-    func effectiveAudioTrackUrl(for attachment: MessageAttachment, message: Message) -> String {
-        servedAudioTrack(for: attachment, message: message).url
-    }
-
-    /// La piste SERVIE entière (URL, durée, texte) — la descente de
-    /// `effectiveAudioTrackUrl`, que l'aperçu d'appui long reçoit (#9010).
-    func servedAudioTrack(for attachment: MessageAttachment, message: Message) -> ServedAudioTrack {
-        let transcript = originalTranscription(for: attachment, messageId: message.id)
-        return AudioTrackLanguageResolver.servedTrack(
-            of: attachment,
-            manualOverride: bubbleLanguageSelections[message.id]?.activeDisplayLangCode,
-            originalLanguage: trackOriginLanguage(for: attachment, message: message),
-            preferredLanguages: ConversationLanguagePreferences(user: authManager.currentUser).resolved,
-            translatedAudios: translatedAudioTracks(for: attachment, messageId: message.id),
-            originalTranscript: transcript?.text ?? attachment.transcription?.text
-        )
-    }
-
-    func servedAudioTracks(of message: Message) -> [String: ServedAudioTrack] {
-        Dictionary(message.attachments.filter { $0.type == .audio }.map { ($0.id, servedAudioTrack(for: $0, message: message)) },
-                   uniquingKeysWith: { first, _ in first })
-    }
-
-    /// Subscribes to `$messages` and forwards any newly-inserted audio messages
-    /// — from someone else, in the conversation currently being played by the
-    /// coordinator — into the active playback queue via `appendUpcoming`.
-    ///
-    /// Uses a snapshot of seen message ids to detect genuinely new inserts and
-    /// ignore re-orderings or in-place mutations (edits, reactions, etc.).
-    private var seenMessageIdsForAudioQueue: Set<String> = []
-    private var didSeedAudioQueueSnapshot = false
-
-    func subscribeToMessagesForAudioQueue() {
-        // Hot-path filter: `$messages` fires on EVERY mutation (insert,
-        // delete, edit, reaction, translation update, …). On a busy
-        // conversation with reactions in burst, that can be 20-50 emissions
-        // per second. The handler only cares about inserts/deletes (those
-        // are the only mutations that change the message-id set), so we
-        // dedupe on the id sequence to skip in-place mutations cheaply.
-        //
-        // Trade-off: an edit that REPLACES a message in place with a new
-        // audio attachment would not refire here. That case is rare in
-        // practice — audio attachments are not typically added to an
-        // existing message — and the seenMessageIdsForAudioQueue set below
-        // would still skip it correctly if the id is preserved.
-        $messages
-            .map { $0.map(\.id) }
-            .removeDuplicates()
-            .receive(on: DispatchQueue.main)
-            .sink { [weak self] _ in
-                guard let self else { return }
-                self.processMessagesForAudioQueueAppend(self.messages)
-            }
-            .store(in: &cancellables)
-    }
-
-    /// Subscribes to the shared `ConversationAudioCoordinator`'s
-    /// `attachmentFinishedPublisher` so this VM records each natural-end /
-    /// failed-load event in `listenedAttachmentIds`. Filters by
-    /// `event.conversationId == self.conversationId` so a coordinator owned
-    /// by another conversation (the singleton is process-wide) NEVER
-    /// pollutes this VM's listened set with foreign attachment ids.
-    /// The subscription auto-cleans on `deinit` via `cancellables`.
-    func subscribeToAudioCoordinatorFinishedEvents() {
-        let ownConversationId = conversationId
-        audioCoordinator.attachmentFinishedPublisher
-            .filter { event in event.conversationId == ownConversationId }
-            .receive(on: DispatchQueue.main)
-            .sink { [weak self] event in
-                self?.listenedAttachmentIds.insert(event.attachmentId)
-            }
-            .store(in: &cancellables)
-    }
-
-    private func processMessagesForAudioQueueAppend(_ snapshot: [Message]) {
-        // First emission (and any emission while no coordinator session is
-        // active for THIS conversation) just refreshes the baseline so the
-        // backlog never replays as "new" once playback starts.
-        guard didSeedAudioQueueSnapshot,
-              let activeConvId = audioCoordinator.activeContext?.conversationId,
-              activeConvId == conversationId,
-              let currentUserId = authManager.currentUser?.id else {
-            seenMessageIdsForAudioQueue = Set(snapshot.map(\.id))
-            didSeedAudioQueueSnapshot = true
-            return
-        }
-
-        for message in snapshot where !seenMessageIdsForAudioQueue.contains(message.id) {
-            seenMessageIdsForAudioQueue.insert(message.id)
-            guard message.senderId != currentUserId,
-                  message.conversationId == activeConvId else { continue }
-            for attachment in message.attachments
-                where attachment.type == .audio
-                && !listenedAttachmentIds.contains(attachment.id) {
-                // Piste EFFECTIVE — même loi que playAudio/la tail.
-                audioCoordinator.appendUpcoming(queuedAudio(for: attachment, message: message))
-            }
-        }
-    }
+    /// Mémoire des messages déjà vus par la file des vocaux — pilotée par
+    /// `subscribeToMessagesForAudioQueue()` (`ConversationViewModel+AudioQueue.swift`).
+    /// Stockée ici : une extension ne déclare pas de propriété stockée.
+    var audioQueueTracker = AudioQueueAppendTracker()
 
     // MARK: - Mark as Read / Received
 
@@ -1042,41 +894,16 @@ class ConversationViewModel: ObservableObject {
         // ConversationListViewModel pour la même raison ; avec le gate, un
         // utilisateur accusés-OFF gardait un badge fantôme sur ses autres
         // appareils et sur l'icône de l'app.
-        // Wave 1 Phase C — route through the offline outbox so a read
-        // receipt produced while offline survives an app kill and replays
-        // on reconnect. The gateway route is naturally idempotent (read
-        // cursor only moves forward) so a replay is harmless ; we still
-        // tag it with a cmid for instrumentation parity with the other
-        // outbox kinds. Fall back to the legacy `PendingStatusQueue` if
-        // the outbox enqueue itself fails (e.g. pool not configured).
         // Résolu ICI, pas au moment de l'envoi : la file d'attente peut partir
         // longtemps après, et une traduction arrivée entre-temps ne change pas
         // ce que le lecteur avait sous les yeux.
         let languages = messageIds.map { splitConsumedLanguages(for: $0) }
-        Task {
-            let cmid = ClientMutationId.generate()
-            let payload = MarkAsReadPayload(
-                clientMutationId: cmid,
-                conversationId: convId,
-                messageIds: messageIds,
-                language: languages?.language,
-                messageLanguages: languages?.exceptions,
-                caughtUpToMessageId: caughtUpId
-            )
-            do {
-                try await OfflineQueue.shared.enqueue(.markAsRead, payload: payload, conversationId: convId)
-                // Mirror of ConversationCommandHandler.markAsRead: without
-                // an explicit flushNow() the markAsRead row sits .pending
-                // until an unrelated mutation (reaction, send, etc.) wakes
-                // the flusher up, leaving "Synchronisation des lus" stuck
-                // in the SyncPill indefinitely.
-                await OutboxFlushTrigger.flushNow()
-            } catch {
-                await PendingStatusQueue.shared.enqueue(.init(
-                    conversationId: convId, type: "read", timestamp: Date()
-                ))
-            }
-        }
+        ReadReceiptOutbox.enqueue(
+            conversationId: convId,
+            messageIds: messageIds,
+            caughtUpId: caughtUpId,
+            languages: languages
+        )
     }
 
     /// La LOI vit dans `ConversationCatchUpLaw`, pure et interrogeable sans ce

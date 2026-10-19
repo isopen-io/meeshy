@@ -400,7 +400,7 @@ final class CommentMediaGalleryWiringGuardTests: XCTestCase {
         let url = MyStoriesSourceCorpus.appRoot()
             .deletingLastPathComponent()   // apps
             .deletingLastPathComponent()   // repo
-            .appendingPathComponent("packages/MeeshySDK/Sources/MeeshySDK/Models/FeedModels.swift")
+            .appendingPathComponent("packages/MeeshySDK/Sources/MeeshySDK/Models/FeedMedia.swift")
         let text = MyStoriesSourceCorpus.strippingComments(
             try String(contentsOf: url, encoding: .utf8)
         )

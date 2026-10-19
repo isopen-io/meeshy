@@ -8,7 +8,7 @@ enum IncomingBatchReconciler {
     /// worker only posts refreshes for real changes — a re-delivered payload
     /// that matches the stored row must not dirty it (`changeVersion` bump)
     /// nor trigger the MessageStore → applySnapshot reconfigure cascade.
-    static func reconcile(_ messages: [IncomingMessageData], in db: Database) throws -> Set<String> {
+    static func reconcile(_ messages: [MessagePersistenceActor.IncomingMessageData], in db: Database) throws -> Set<String> {
         var changedConvIds: Set<String> = []
         for msg in messages {
             let existingLocalId = try PendingIdRecord

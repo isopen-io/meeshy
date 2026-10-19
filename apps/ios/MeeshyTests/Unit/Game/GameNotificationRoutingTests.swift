@@ -43,7 +43,9 @@ final class GameNotificationRoutingTests: XCTestCase {
     func test_everyNavigationSwitch_opensTheGameOnItsCompleteChain() throws {
         let five = ".gameDuoInvited, .gameDuoAccepted, .gameLeagueResult, .gameSeasonStep, .gameMissionWindow"
         let entry = "router.openGame(at: GameNavigationMap.entry(for:"
+        // L'aiguillage iPhone vit dans `RootNotificationNavigator`, le lien du Jeu dans `RootView` (#9947).
         let iphone = try source("Meeshy/Features/Main/Views/RootView.swift")
+            + "\n" + source("Meeshy/Features/Main/Views/RootNotificationNavigator.swift")
         XCTAssertEqual(iphone.components(separatedBy: "case \(five):").count - 1, 1, "l'aiguillage iPhone (push, liste, bannière)")
         XCTAssertEqual(iphone.components(separatedBy: entry).count - 1, 3, "jeu, paliers et lien du Jeu (#9947) : l'iPhone ouvre l'écran de la carte")
 

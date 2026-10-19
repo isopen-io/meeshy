@@ -206,7 +206,7 @@ final class iPadRightPanelNavigationGuardTests: XCTestCase {
     /// fond réécrivait la liste depuis l'instantané lu AVANT l'aller-retour,
     /// écrasant la liste plus récente que la synchro avait posée entre-temps.
     func test_coldConversationLink_mergesIntoTheCurrentList() throws {
-        let code = try source(of: "RootView.swift")
+        let code = try source(of: "RootView.swift") + "\n" + source(of: "RootConversationOpener.swift")
         XCTAssertFalse(code.contains("conversations.save(merged, for: \"list\")"))
         XCTAssertTrue(code.contains("conversations.mergeUpdate(for: \"list\")"))
     }

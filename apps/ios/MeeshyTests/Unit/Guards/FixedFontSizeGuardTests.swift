@@ -197,6 +197,11 @@ final class FixedFontSizeGuardTests: XCTestCase {
         "Features/Main/Views/CallView+States.swift",
         "Features/Main/Views/ChangePasswordView.swift",
         "Features/Main/Views/CommunityLinkDetailView.swift",
+        // RELOCALISATION pure : le bandeau « en réponse à » quitte
+        // `FeedCommentsSheet.swift` avec son glyphe de croix en CADRE FIXE 24×24
+        // (doctrine 82i). La POPULATION ne bouge pas ; le fichier d'origine en
+        // garde un (la croix de l'en-tête) et reste dans la liste.
+        "Features/Main/Views/CommentSheetBanners.swift",
         "Features/Main/Views/CommunityLinksView.swift",
         "Features/Main/Views/ConversationAnimatedBackground.swift",
         "Features/Main/Views/ConversationBackgroundComponents.swift",

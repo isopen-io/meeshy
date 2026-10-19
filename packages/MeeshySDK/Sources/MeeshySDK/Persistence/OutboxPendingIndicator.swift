@@ -112,7 +112,7 @@ final class OutboxPendingIndicator: Sendable {
         // Une ligne de commentaire ne se montre que sous preuve (#9743, M3) :
         // compte du jeton, auteur de la ligne, base prouvée dans CETTE lecture.
         let commentContext = CommentOwnership.userId(inToken: APIClient.shared.authToken).map {
-            CommentContext(ownerId: $0, serverOrigin: MeeshyConfig.shared.persistedServerOrigin, pool: pool)
+            OfflineQueue.CommentContext(ownerId: $0, serverOrigin: MeeshyConfig.shared.persistedServerOrigin, pool: pool)
         }
         let records: [OutboxRecord]
         do {

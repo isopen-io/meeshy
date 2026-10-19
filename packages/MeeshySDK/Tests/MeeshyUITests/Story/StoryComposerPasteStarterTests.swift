@@ -147,7 +147,7 @@ final class StoryComposerPasteStarterTests: XCTestCase {
     /// compilé, testé — et que rien ne monte. Une capsule écrite mais absente de
     /// la rangée passerait toutes les assertions ci-dessus.
     func test_thePasteStarter_isActuallyMountedInTheStarterRow() throws {
-        let code = try ComposerSourceGuard.source("StoryComposerView+Canvas.swift")
+        let code = try ComposerSourceGuard.source("StoryComposerBlankCanvasStarters.swift")
         let row = try XCTUnwrap(
             ComposerSourceGuard.functionBody(named: "private var blankCanvasStarterRow:", in: code),
             "La rangée d'amorces a disparu."
