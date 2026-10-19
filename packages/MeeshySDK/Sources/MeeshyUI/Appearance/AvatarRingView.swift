@@ -1,4 +1,5 @@
 import SwiftUI
+import UIKit
 import MeeshySDK
 
 // MARK: - AvatarRingView (#10632, spec §§ 5.2, 8.2)
@@ -11,13 +12,30 @@ import MeeshySDK
 
 public struct AvatarRingView: View, Equatable {
     public let design: AvatarRingDesign
+    /// La décision de l'app : `false` ⇒ le contour fixe (aperçus, vignettes). Les mouvements (#10935) tournent
+    /// en couches Core Animation (`FrameMotionLayers`), jamais sous « Réduire les animations ».
+    public let animates: Bool
 
-    public init(design: AvatarRingDesign) {
+    @Environment(\.accessibilityReduceMotion) private var systemReduce
+    @Environment(\.meeshyForceReduceMotion) private var userForced
+
+    public init(design: AvatarRingDesign, animates: Bool = true) {
         self.design = design
+        self.animates = animates
     }
 
     nonisolated public static func == (lhs: AvatarRingView, rhs: AvatarRingView) -> Bool {
-        lhs.design == rhs.design
+        lhs.design == rhs.design && lhs.animates == rhs.animates
+    }
+
+    /// Le plan des couches animées d'un contour : ses chemins d'ornement, viewBox 0 0 100 100, centre (50, 50).
+    static func motionPlan(_ design: AvatarRingDesign) -> FrameMotionPlan {
+        guard !design.motion.isEmpty else { return .still }
+        let elements = design.ornament.map { stroke -> FrameMotionPlan.Element in
+            let box = SVGPathData.make(stroke.d).cgPath.boundingBoxOfPath
+            return FrameMotionPlan.Element(group: stroke.group, bounds: box.isNull ? nil : box)
+        }
+        return FrameMotionPlan.make(elements: elements, motions: design.motion, center: CGPoint(x: Self.box / 2, y: Self.box / 2))
     }
 
     private static let box: Double = 100
@@ -26,6 +44,18 @@ public struct AvatarRingView: View, Equatable {
     private static let arcs = 24
 
     public var body: some View {
+        let plan = animates && !MeeshyMotion.shouldReduce(system: systemReduce, userForced: userForced) ? Self.motionPlan(design) : .still
+        ZStack {
+            still(skipping: plan.animated)
+            if !plan.isStill {
+                AvatarRingMotionLayers(design: design, plan: plan)
+            }
+        }
+        .accessibilityHidden(true)
+        .allowsHitTesting(false)
+    }
+
+    private func still(skipping: Set<Int>) -> some View {
         Canvas { context, size in
             let scale = min(size.width, size.height) / Self.box
             let offset = CGPoint(x: (size.width - Self.box * scale) / 2, y: (size.height - Self.box * scale) / 2)
@@ -74,19 +104,33 @@ public struct AvatarRingView: View, Equatable {
                 }
             }
 
-            for stroke in design.ornament {
+            for (index, stroke) in design.ornament.enumerated() where !skipping.contains(index) {
                 let path = SVGPathData.make(stroke.d)
                     .applying(CGAffineTransform(scaleX: scale, y: scale).concatenating(CGAffineTransform(translationX: offset.x, y: offset.y)))
-                let color = Color(hex: colors[stroke.color]).opacity(stroke.opacity)
+                let shading = Self.shading(stroke, design: design, in: path.boundingRect)
+                var layer = context
+                layer.opacity = stroke.opacity
                 if let lineWidth = stroke.width {
-                    context.stroke(path, with: .color(color), lineWidth: lineWidth * scale)
+                    layer.stroke(path, with: shading, lineWidth: lineWidth * scale)
                 } else {
-                    context.fill(path, with: .color(color))
+                    layer.fill(path, with: shading)
                 }
             }
         }
-        .accessibilityHidden(true)
-        .allowsHitTesting(false)
+    }
+
+    /// La peinture d'un trait : son dégradé (en fractions de sa boîte) s'il est lisible, sa couleur sinon.
+    private static func shading(_ stroke: AvatarRingOrnamentPath, design: AvatarRingDesign, in box: CGRect) -> GraphicsContext.Shading {
+        let colors = design.stroke.colors
+        guard let gradient = stroke.gradient.flatMap({ design.gradients[safe: $0] ?? nil }) else {
+            return .color(Color(hex: colors[stroke.color]))
+        }
+        let stops = gradient.stops.map { Gradient.Stop(color: Color(hex: colors[safe: $0.color] ?? "#000000").opacity($0.opacity ?? 1), location: $0.at) }
+        return .linearGradient(
+            Gradient(stops: stops),
+            startPoint: CGPoint(x: box.minX + gradient.x1 * box.width, y: box.minY + gradient.y1 * box.height),
+            endPoint: CGPoint(x: box.minX + gradient.x2 * box.width, y: box.minY + gradient.y2 * box.height)
+        )
     }
 
     // MARK: Dégradé cyclique
@@ -150,7 +194,7 @@ public extension View {
             scaleEffect(AvatarRingGeometry.avatarScale(avatarSize: avatarSize, storyRingSize: storyRingSize))
             .overlay {
                 ZStack {
-                    AvatarRingView(design: design)
+                    AvatarRingView(design: design, animates: animates)
                         .equatable()
                     if let lottie = design.lottie {
                         PackLottieLayer(ref: lottie, animates: animates)
@@ -176,7 +220,7 @@ public extension View {
             scaleEffect(AvatarRingGeometry.footprintScale(footprint: footprint, storyRingSize: storyRingSize))
             .overlay {
                 ZStack {
-                    AvatarRingView(design: design)
+                    AvatarRingView(design: design, animates: animates)
                         .equatable()
                     if let lottie = design.lottie {
                         PackLottieLayer(ref: lottie, animates: animates)
@@ -187,5 +231,95 @@ public extension View {
         } else {
             self
         }
+    }
+}
+
+// MARK: - Les couches animées d'un contour (#10935)
+
+private struct AvatarRingMotionLayers: UIViewRepresentable {
+    let design: AvatarRingDesign
+    let plan: FrameMotionPlan
+
+    func makeUIView(context: Context) -> AvatarRingLayerView {
+        AvatarRingLayerView()
+    }
+
+    func updateUIView(_ view: AvatarRingLayerView, context: Context) {
+        view.configure(design: design, plan: plan)
+    }
+}
+
+/// Les chemins animés d'un contour, en couches : seule la composition bouge, jamais le `Canvas`.
+final class AvatarRingLayerView: UIView {
+    let motion = FrameMotionHostView()
+    private var design: AvatarRingDesign?
+    private var plan: FrameMotionPlan = .still
+    private var renderedSize: CGSize = .zero
+    private var renderedDesign: AvatarRingDesign?
+
+    override init(frame: CGRect) {
+        super.init(frame: frame)
+        isUserInteractionEnabled = false
+        isAccessibilityElement = false
+        accessibilityElementsHidden = true
+        backgroundColor = .clear
+        addSubview(motion)
+    }
+
+    required init?(coder: NSCoder) { nil }
+
+    nonisolated deinit {}
+
+    func configure(design: AvatarRingDesign, plan: FrameMotionPlan) {
+        self.design = design
+        self.plan = plan
+        render()
+    }
+
+    override func layoutSubviews() {
+        super.layoutSubviews()
+        motion.frame = bounds
+        render()
+    }
+
+    private func render() {
+        guard let design, bounds.width > 0, bounds.height > 0 else { return }
+        guard bounds.size != renderedSize || design != renderedDesign else { return }
+        renderedSize = bounds.size
+        renderedDesign = design
+        motion.show(AvatarRingLayerView.content(design, plan: plan, size: bounds.size))
+    }
+
+    /// Les couches du plan dans une boîte `size` : le viewBox 0 0 100 100 centré, à l'échelle du plus petit côté.
+    static func content(_ design: AvatarRingDesign, plan: FrameMotionPlan, size: CGSize) -> FrameMotionContent {
+        let scale = min(size.width, size.height) / 100
+        let side = 100 * scale
+        let root = CALayer()
+        root.frame = CGRect(x: (size.width - side) / 2, y: (size.height - side) / 2, width: side, height: side)
+        let box = CGSize(width: side, height: side)
+        var animations: [(layer: CALayer, animation: CAAnimation, delay: Double)] = []
+        func shape(_ index: Int, white: Bool) -> CALayer {
+            let stroke = design.ornament[index]
+            var transform = CGAffineTransform(scaleX: scale, y: scale)
+            let path = SVGPathData.make(stroke.d).cgPath.copy(using: &transform) ?? CGMutablePath()
+            let gradient = white ? nil : stroke.gradient.flatMap { design.gradients[safe: $0] ?? nil }
+            let color = white ? UIColor.white : UIColor(Color(hex: design.stroke.colors[safe: stroke.color] ?? "#000000"))
+            return FrameMotionLayers.shape(path, paint: FramePaint(color: color, gradient: gradient, palette: design.stroke.colors),
+                                           opacity: white ? 1 : stroke.opacity, lineWidth: stroke.width.map { $0 * scale }, evenOdd: false)
+        }
+        for layer in plan.layers {
+            let content = CALayer()
+            layer.elements.forEach { content.addSublayer(shape($0, white: false)) }
+            root.addSublayer(FrameMotionLayers.wrap(content, chain: layer.chain, size: box, scale: scale, into: &animations))
+        }
+        for sweep in plan.sweeps {
+            let targets = CALayer()
+            sweep.elements.forEach { targets.addSublayer(shape($0, white: true)) }
+            root.addSublayer(FrameMotionLayers.sweep(sweep, mask: targets, size: box, into: &animations))
+        }
+        let holder = CALayer()
+        holder.frame = CGRect(origin: .zero, size: size)
+        holder.addSublayer(root)
+        return FrameMotionContent(root: holder, animations: animations)
     }
 }

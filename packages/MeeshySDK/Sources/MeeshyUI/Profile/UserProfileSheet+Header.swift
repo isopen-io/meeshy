@@ -83,6 +83,13 @@ extension UserProfileSheet {
                 defaultBannerGradient
             }
         }
+        .overlay {
+            // #10935 — le cadre équipé se pose PAR-DESSUS la photo ou le fond, centre transparent ; il ne reçoit pas le doigt.
+            if let frame = shownBannerFrame {
+                BannerFrameView(design: frame)
+                    .equatable()
+            }
+        }
     }
 
     /// #10093, #10231, #10601 — le niveau et le rang du membre, posés sur sa bannière par l'app (`profileGameSection`) :
@@ -100,6 +107,11 @@ extension UserProfileSheet {
     /// Ce que la bannière peint (#10933) : la photo gagne toujours, le design équipé ne vient qu'à son défaut.
     var shownBannerPaint: ProfileBannerPaint {
         ProfileDecorResolver.bannerPaint(photo: displayUser.bannerURL, decor: isBlockedByTarget ? nil : displayUser.profileDecor?.banner)
+    }
+
+    /// Le cadre de bannière équipé (#10935) ; `nil` ⇒ la bannière d'avant. Masqué comme le reste du décor.
+    var shownBannerFrame: BannerFrameDesign? {
+        isBlockedByTarget ? nil : ProfileDecorResolver.bannerFrame(displayUser.profileDecor?.bannerFrame)
     }
 
     /// Le contour d'avatar équipé ; `nil` ⇒ avatar nu, comme avant.

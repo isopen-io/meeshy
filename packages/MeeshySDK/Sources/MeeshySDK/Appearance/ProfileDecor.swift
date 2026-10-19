@@ -226,6 +226,13 @@ public enum ProfileDecorResolver {
         return catalog.bannerPacks.first { $0.slug == item.pack }?.designs.first { $0.key == item.item }
     }
 
+    /// Le cadre posé SUR la bannière (#10935). Aucun cadre n'est encore embarqué (le catalogue est #10936) :
+    /// un décor servi se lit dans le catalogue passé, `nil` sinon — le profil se peint sans cadre.
+    public static func bannerFrame(_ item: ServedProfileDecorItem?, catalog: BannerFrameCatalog = .shared) -> BannerFrameDesign? {
+        guard let item else { return nil }
+        return catalog.frame(pack: item.pack, item: item.item)
+    }
+
     /// Ce que la bannière d'un profil peint (#10933) : la photo gagne TOUJOURS ; le design équipé
     /// ne se peint qu'en l'absence de photo, et rien ne se peint sans l'un ni l'autre.
     public static func bannerPaint(photo: String?, decor: ServedProfileDecorItem?, catalog: AppearanceCatalog = .shared) -> ProfileBannerPaint {
@@ -236,6 +243,21 @@ public enum ProfileDecorResolver {
 
     private static func isEmbedded(_ item: ServedProfileDecorItem) -> Bool {
         item.origin == .builtin || item.contract == nil
+    }
+}
+
+/// Les cadres de bannière lisibles sans réseau, par pack. Vide tant qu'aucun cadre n'est embarqué (#10936).
+public struct BannerFrameCatalog: Sendable {
+    public let packs: [String: [BannerFrameDesign]]
+
+    public static let shared = BannerFrameCatalog(packs: [:])
+
+    public init(packs: [String: [BannerFrameDesign]]) {
+        self.packs = packs
+    }
+
+    public func frame(pack: String, item: String) -> BannerFrameDesign? {
+        packs[pack]?.first { $0.key == item }
     }
 }
 
