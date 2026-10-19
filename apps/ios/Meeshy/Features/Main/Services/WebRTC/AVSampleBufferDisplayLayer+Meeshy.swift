@@ -17,6 +17,7 @@
 
 import AVFoundation
 import CoreMedia
+import MeeshySDK
 import os
 
 nonisolated struct PiPSampleSink: @unchecked Sendable {

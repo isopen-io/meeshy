@@ -10,5 +10,4 @@ extension Logger {
     nonisolated static let navigation = Logger(subsystem: "me.meeshy.app", category: "navigation")
     nonisolated static let settings = Logger(subsystem: "me.meeshy.app", category: "settings")
     nonisolated static let webrtc = Logger(subsystem: "me.meeshy.app", category: "webrtc")
-    nonisolated static let pip = Logger(subsystem: "me.meeshy.app", category: "pip")
 }

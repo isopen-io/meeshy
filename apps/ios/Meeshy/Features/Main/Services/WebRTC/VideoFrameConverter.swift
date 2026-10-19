@@ -17,6 +17,7 @@
 import AVFoundation
 import CoreVideo
 import UIKit
+import MeeshySDK
 import os
 
 // MARK: - Converter
