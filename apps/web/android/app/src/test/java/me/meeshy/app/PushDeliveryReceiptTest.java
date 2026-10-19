@@ -19,6 +19,32 @@ public class PushDeliveryReceiptTest {
         return data;
     }
 
+    private static Map<String, String> displayedByFcm(String type) {
+        Map<String, String> extras = push(type, "c1", "m1");
+        extras.put("gcm.notification.title", "Alice");
+        extras.put("gcm.notification.body", "Bonjour");
+        return extras;
+    }
+
+    @Test
+    public void aMessageFcmDisplaysAppClosedIsAcknowledgedWhereTheShellSeesIt() {
+        PushDeliveryReceipt receipt = PushDeliveryReceipt.ofDisplayedByFcm(displayedByFcm("new_message"), false, "https://gate.meeshy.me");
+        assertNotNull(receipt);
+        assertEquals("https://gate.meeshy.me/api/v1/conversations/c1/receipts", receipt.url);
+        assertEquals("{\"type\":\"delivered\",\"messageIds\":[\"m1\"]}", receipt.body);
+    }
+
+    @Test
+    public void aPushThatReachesOnMessageReceivedIsNotAcknowledgedTwice() {
+        assertNull(PushDeliveryReceipt.ofDisplayedByFcm(displayedByFcm("new_message"), true, "https://gate.meeshy.me"));
+        assertNull(PushDeliveryReceipt.ofDisplayedByFcm(push("new_message", "c1", "m1"), false, "https://gate.meeshy.me"));
+    }
+
+    @Test
+    public void aBannerThatIsNotADeliveryIsNotAcknowledgedAppClosedEither() {
+        assertNull(PushDeliveryReceipt.ofDisplayedByFcm(displayedByFcm("message_reaction"), false, "https://gate.meeshy.me"));
+    }
+
     @Test
     public void aNewMessageIsAcknowledgedAsDeliveredOnItsConversation() {
         PushDeliveryReceipt receipt = PushDeliveryReceipt.of(push("new_message", "c1", "m1"), "https://gate.meeshy.me/");
