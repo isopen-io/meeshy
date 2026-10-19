@@ -728,6 +728,8 @@ struct PostDetailView: View {
                     accentColor: post.authorColor,
                     avatarURL: post.authorAvatarURL,
                     moodEmoji: statusViewModel.statusForUser(userId: post.authorId)?.moodEmoji,
+                    presenceState: PresenceManager.shared.knownPresenceState(for: post.authorId),
+                    ring: post.authorRing,
                     onViewProfile: { selectedProfileUser = .from(feedPost: post) },
                     onMoodTap: statusViewModel.moodTapHandler(for: post.authorId),
                     contextMenuItems: [

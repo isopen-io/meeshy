@@ -142,7 +142,6 @@ final class PresenceManagerTests: XCTestCase {
         "Main/Views/VisitorContentView.swift": "la passerelle ne sert aucune présence à cette charge (non-amis, visiteur, auteur de publication)",
         "MeeshyUI/JoinFlow/InviteLanding/InviteInviterHeader.swift": "la passerelle ne sert aucune présence à cette charge (non-amis, visiteur, auteur de publication)",
         "Stories/Notifications/StoryExpiredContent.swift": "la passerelle ne sert aucune présence à cette charge (non-amis, visiteur, auteur de publication)",
-        "Main/Views/PostDetailView.swift": "dette consignée #10956 — fichier hors budget (1748 lignes), à découper avant d'y ajouter la présence de l'auteur",
         "Main/Views/ReelFeedCard.swift": "la passerelle ne sert aucune présence à cette charge (non-amis, visiteur, auteur de publication)",
         "Main/Views/ReelPageView+Info.swift": "la passerelle ne sert aucune présence à cette charge (non-amis, visiteur, auteur de publication)",
         "Main/Views/NearbyDiscoveryView.swift": "la passerelle ne sert aucune présence à cette charge (non-amis, visiteur, auteur de publication)",
