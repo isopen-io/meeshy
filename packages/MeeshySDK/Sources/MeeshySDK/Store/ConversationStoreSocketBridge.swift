@@ -40,8 +40,9 @@ import Combine
 /// receipt not strictly newer than the local cursor.
 ///
 /// `@MainActor`: subscriptions and `cancellables` live on the main thread
-/// (publishers deliver on main via `MessageSocketManager.decode`); each sink
-/// hops to the target actor via `Task { await … }`.
+/// (publishers deliver on main via `MessageSocketManager.decode`); chaque
+/// événement entre dans une file ordonnée (`OrderedEventLane`) dont le
+/// consommateur unique l'applique au store, dans l'ordre d'arrivée.
 @MainActor
 public final class ConversationStoreSocketBridge {
     // iOS 26.1 : deinit synthétisée ISOLÉE (SE-0466, isolation MainActor par
@@ -52,6 +53,8 @@ public final class ConversationStoreSocketBridge {
     public static let shared = ConversationStoreSocketBridge()
 
     private var cancellables = Set<AnyCancellable>()
+    private var eventLane: OrderedEventLane?
+    private var catchUpLane: OrderedEventLane?
     private let store: ConversationStore
     private let categoryStore: UserCategoryStore
     /// Resolves the signed-in user's id for the read-receipt identity gate.
@@ -163,112 +166,159 @@ public final class ConversationStoreSocketBridge {
         onReadingModePreferenceChanged: (@Sendable (_ conversationId: String, _ readingMode: String) -> Void)? = nil
     ) {
         cancellables.removeAll()
-        let store = self.store
-        let categoryStore = self.categoryStore
-        let currentUserId = self.currentUserId
+        let events = OrderedEventLane()
+        let catchUp = OrderedEventLane()
+        events.store(in: &cancellables)
+        catchUp.store(in: &cancellables)
+        eventLane = events
+        catchUpLane = catchUp
+        let feeds = ConversationStoreSocketFeeds(
+            conversationUpdated: conversationUpdated,
+            conversationDeleted: conversationDeleted,
+            conversationRestored: conversationRestored,
+            participantLeft: participantLeft,
+            participantBanned: participantBanned,
+            userPreferencesUpdated: userPreferencesUpdated,
+            userPreferencesReordered: userPreferencesReordered,
+            userUpdated: userUpdated,
+            readStatusUpdated: readStatusUpdated,
+            unreadUpdated: unreadUpdated,
+            categoryCreated: categoryCreated,
+            categoryUpdated: categoryUpdated,
+            categoryDeleted: categoryDeleted,
+            categoriesReordered: categoriesReordered,
+            didReconnect: didReconnect
+        )
+        wireConversationEvents(feeds, on: events)
+        wireMembershipEvents(feeds, on: events)
+        wirePreferenceEvents(feeds, on: events, onReadingModePreferenceChanged: onReadingModePreferenceChanged)
+        wireReadEvents(feeds, on: events)
+        wireCategoryEvents(feeds, on: events)
+        wireCatchUp(feeds, on: catchUp)
+    }
 
-        conversationUpdated.sink { event in
-            // Le lecteur est résolu DANS la tâche : `currentUserId` est
-            // asynchrone, et c'est lui qui décide si l'auteur du dernier
-            // message se dit « Toi » (#6921).
-            Task {
+    /// Barrière des tests : rend la main quand tout ce qui a été reçu avant
+    /// l'appel est appliqué.
+    func awaitPendingEvents() async {
+        await eventLane?.barrier()
+        await catchUpLane?.barrier()
+    }
+
+    // UN SEUL consommateur sérialisé pour tout ce qui mute le store (#11047) :
+    // `conversation:restored` attend sa lecture réseau, et un
+    // `conversation:deleted` arrivé ENSUITE s'appliquait avant elle — la
+    // conversation supprimée en dernier réapparaissait.
+    private func wireConversationEvents(_ feeds: ConversationStoreSocketFeeds, on lane: OrderedEventLane) {
+        let store = self.store
+        let currentUserId = self.currentUserId
+        let fetch = self.fetchConversation
+
+        // Le lecteur est résolu DANS la tâche : `currentUserId` est
+        // asynchrone, et c'est lui qui décide si l'auteur du dernier
+        // message se dit « Toi » (#6921).
+        feeds.conversationUpdated
+            .relay(through: lane) { event in
                 let reader = await currentUserId()
                 await store.applyConversationUpdated(Self.mapConversationUpdated(event, readerId: reader))
             }
-        }.store(in: &cancellables)
+            .store(in: &cancellables)
 
-        conversationDeleted.sink { event in
-            Task { await store.applyConversationDeleted(ConversationDeletedEvent(conversationId: event.conversationId)) }
-        }.store(in: &cancellables)
+        feeds.conversationDeleted
+            .relay(through: lane) { event in
+                await store.applyConversationDeleted(ConversationDeletedEvent(conversationId: event.conversationId))
+            }
+            .store(in: &cancellables)
 
         // La MONTANTE du couple (#4389). Le gate d'identité est celui des
-        // autres broadcasts personnels : `conversation:restored` part sur la
-        // room `user:<id>` du seul restaurateur, mais un payload au `userId`
-        // vide — la fenêtre où l'auth n'est pas encore résolue — ne doit
-        // ramener aucune ligne au hasard.
-        let fetch = self.fetchConversation
-        let me = self.currentUserId
-        conversationRestored.sink { event in
-            Task {
-                guard let myId = await me(), !myId.isEmpty, event.userId == myId else { return }
+        // autres broadcasts personnels : un payload au `userId` vide — la
+        // fenêtre où l'auth n'est pas encore résolue — ne doit ramener aucune
+        // ligne au hasard.
+        feeds.conversationRestored
+            .relay(through: lane) { event in
+                guard let myId = await currentUserId(), !myId.isEmpty, event.userId == myId else { return }
                 guard let conversation = await fetch(event.conversationId, myId) else { return }
                 await store.applyConversationRestored(conversation)
             }
-        }.store(in: &cancellables)
+            .store(in: &cancellables)
 
-        // Quitter, être retiré, être banni : trois manières de perdre une
-        // appartenance, et pour le store elles disent la même chose que
-        // `conversation:deleted` — cette conversation n'est plus à moi.
-        // `GET /conversations` filtre sur `participants.some({ userId,
-        // isActive: true })`, donc la ligne a disparu côté serveur ; la garder
-        // en RAM laissait son non-lu peser sur l'agrégat inter-conversations.
-        //
-        // Le gate d'identité est le même que celui de `readStatusUpdated`
-        // ci-dessous, et pour la même raison : ces deux broadcasts atteignent
-        // AUSSI les pairs (l'effectif, les coches), et le départ d'un pair ne
-        // retire évidemment rien de ma liste. `me.isEmpty` écarte la fenêtre
-        // où l'auth n'est pas encore résolue, sans quoi un payload au `userId`
-        // vide retirerait une ligne au hasard.
-        participantLeft.sink { event in
-            Task {
-                // `names(_:)` et non `userId == me` : une identité iOS est un
-                // `User.id` pour un compte et un `Participant.id` pour un
-                // visiteur de lien partagé. L'événement porte les deux faces —
-                // ne comparer qu'à l'une rate systématiquement l'autre.
+        feeds.userUpdated
+            .relay(through: lane) { event in await store.applyUserUpdated(event) }
+            .store(in: &cancellables)
+    }
+
+    // Quitter, être retiré, être banni : trois manières de perdre une
+    // appartenance, et pour le store elles disent la même chose que
+    // `conversation:deleted` — cette conversation n'est plus à moi. Ces deux
+    // broadcasts atteignent AUSSI les pairs : le départ d'un pair ne retire
+    // rien de ma liste, d'où le gate d'identité. `names(_:)` et non
+    // `userId == me` : une identité iOS est un `User.id` pour un compte et un
+    // `Participant.id` pour un visiteur de lien partagé. Sans gate sur
+    // `didEndMembership` : un ban qui suit un départ non synchronisé porte
+    // `membershipEnded: false`, et c'est le cas où la ligne fantôme est encore là.
+    private func wireMembershipEvents(_ feeds: ConversationStoreSocketFeeds, on lane: OrderedEventLane) {
+        let store = self.store
+        let currentUserId = self.currentUserId
+
+        feeds.participantLeft
+            .relay(through: lane) { event in
                 guard let me = await currentUserId(), event.names(me) else { return }
                 await store.applyConversationDeleted(ConversationDeletedEvent(conversationId: event.conversationId))
             }
-        }.store(in: &cancellables)
+            .store(in: &cancellables)
 
-        // Sans gate sur `didEndMembership` : ce drapeau protège un COMPTEUR, et
-        // il n'y a pas de compteur à protéger sur une ligne qui s'en va. Un ban
-        // qui suit un départ non synchronisé porte précisément
-        // `membershipEnded: false`, et c'est le cas où la ligne fantôme est
-        // encore là. `applyConversationDeleted` est déjà un no-op sur une
-        // conversation inconnue.
-        participantBanned.sink { event in
-            Task {
+        feeds.participantBanned
+            .relay(through: lane) { event in
                 guard let me = await currentUserId(), event.names(me) else { return }
                 await store.applyConversationDeleted(ConversationDeletedEvent(conversationId: event.conversationId))
             }
-        }.store(in: &cancellables)
+            .store(in: &cancellables)
+    }
 
-        userPreferencesUpdated.sink { event in
-            let remote = Self.mapPreferences(event)
-            Task { await store.applyRemote(remote) }
-            // G-124 — volet séparé de `applyRemote` ci-dessus : `readingMode`
-            // n'est PAS un champ de `userState`/`RemotePreferencesPayload`
-            // (préférence de LECTURE, pas d'organisation), donc pas question
-            // de le glisser dans `mapPreferences`. `reset == true` porte
-            // `preferences == nil` — rien à relayer, l'app garde sa valeur
-            // locale (même posture que le reste de ce sink sur un reset).
-            if let readingMode = event.preferences?.readingMode {
+    // G-124 — `readingMode` n'est PAS un champ de `userState` : préférence de
+    // LECTURE, pas d'organisation. Le rappel reste un `sink` synchrone, posé à
+    // côté du relais du store. `reset == true` porte `preferences == nil` —
+    // rien à relayer, l'app garde sa valeur locale.
+    private func wirePreferenceEvents(
+        _ feeds: ConversationStoreSocketFeeds,
+        on lane: OrderedEventLane,
+        onReadingModePreferenceChanged: (@Sendable (_ conversationId: String, _ readingMode: String) -> Void)?
+    ) {
+        let store = self.store
+
+        feeds.userPreferencesUpdated
+            .relay(through: lane) { event in await store.applyRemote(Self.mapPreferences(event)) }
+            .store(in: &cancellables)
+
+        feeds.userPreferencesUpdated
+            .sink { event in
+                guard let readingMode = event.preferences?.readingMode else { return }
                 onReadingModePreferenceChanged?(event.conversationId, readingMode)
             }
-        }.store(in: &cancellables)
+            .store(in: &cancellables)
 
-        readStatusUpdated.sink { event in
-            // Only a 'read' advances the read cursor; 'received' is delivery
-            // and must NOT touch unread state (mirrors ConversationSyncEngine's
-            // type gate). The frontier and its count travel together — require
-            // both so a partial/legacy payload can never coerce the badge to a
-            // bogus 0. The broadcast also reaches peers (for checkmarks), so we
-            // additionally gate on identity: only the actor's own devices may
-            // advance the cursor. The store's monotone `lastReadAt` guard then
-            // drops anything not strictly newer than the local cursor.
-            //
-            // Le serveur a depuis resserré l'ADRESSAGE de son côté : la copie
-            // de l'éventail ne porte plus ces deux champs, seule celle envoyée
-            // à la room personnelle de l'acteur les porte. Les deux gardes
-            // ci-dessous restent nécessaires — un pair reçoit toujours
-            // l'événement (les coches en dépendent), il n'en reçoit plus
-            // l'arriéré — et elles sont ce qui rend la bascule serveur
-            // indolore : ce qui disparaît du payload d'un pair est exactement
-            // ce que ce `guard` jetait déjà.
-            guard event.type == "read",
-                  let lastReadAt = event.lastReadAt,
-                  let unreadCount = event.unreadCount else { return }
-            Task {
+        feeds.userPreferencesReordered
+            .map { @Sendable event in event.updates.map { (convId: $0.conversationId, orderInCategory: $0.orderInCategory) } }
+            .relay(through: lane) { updates in await store.applyRemoteReorder(updates) }
+            .store(in: &cancellables)
+    }
+
+    private func wireReadEvents(_ feeds: ConversationStoreSocketFeeds, on lane: OrderedEventLane) {
+        let store = self.store
+        let currentUserId = self.currentUserId
+        let isConversationOpen = self.isConversationOpen
+
+        // Only a 'read' advances the read cursor; 'received' is delivery and
+        // must NOT touch unread state. The frontier and its count travel
+        // together — require both so a partial/legacy payload can never coerce
+        // the badge to a bogus 0. Le broadcast atteint aussi les pairs (pour
+        // les coches) : gate d'identité en plus, seuls les appareils de
+        // l'acteur avancent le curseur. Le `lastReadAt` monotone du store
+        // écarte tout ce qui n'est pas strictement plus récent.
+        feeds.readStatusUpdated
+            .relay(through: lane) { event in
+                guard event.type == "read",
+                      let lastReadAt = event.lastReadAt,
+                      let unreadCount = event.unreadCount else { return }
                 guard let me = await currentUserId(), event.userId == me else { return }
                 await store.applyReadReceipt(ReadStatusEvent(
                     conversationId: event.conversationId,
@@ -276,60 +326,55 @@ public final class ConversationStoreSocketBridge {
                     lastReadAt: lastReadAt
                 ))
             }
-        }.store(in: &cancellables)
+            .store(in: &cancellables)
 
-        // Le SEUL fil qui porte le compteur de non-lus d'une conversation
-        // (#6997). Il n'a PAS de gate d'identité, et il n'en a pas besoin : le
-        // gateway adresse déjà `conversation:unread-updated` à chaque
-        // destinataire séparément, avec SON compte
-        // (`emitUnreadCountsToRecipients`) — contrairement à
-        // `read-status:updated`, dont la copie de l'éventail atteint aussi les
-        // pairs pour leurs coches.
-        //
-        // Le gate qui compte ici est l'autre : la conversation OUVERTE reste à
-        // zéro. Il est lu à l'arrivée de l'événement, jamais capturé à
-        // l'abonnement — le pont vit toute la session, l'écran visible change
-        // à chaque navigation.
-        let isConversationOpen = self.isConversationOpen
-        unreadUpdated.sink { event in
-            let served = isConversationOpen(event.conversationId) ? 0 : event.unreadCount
-            Task {
-                await store.applyServerUnread(ConversationUnreadEvent(
+        // Le SEUL fil qui porte le compteur de non-lus (#6997), sans gate
+        // d'identité : le gateway l'adresse à chaque destinataire avec SON
+        // compte. Le gate qui compte est « la conversation OUVERTE reste à
+        // zéro » : lu à l'ARRIVÉE de l'événement par le `map`, jamais à
+        // l'application ni capturé à l'abonnement — l'écran visible change à
+        // chaque navigation.
+        feeds.unreadUpdated
+            .map { @Sendable event in
+                ConversationUnreadEvent(
                     conversationId: event.conversationId,
-                    unreadCount: served
-                ))
+                    unreadCount: isConversationOpen(event.conversationId) ? 0 : event.unreadCount
+                )
             }
-        }.store(in: &cancellables)
+            .relay(through: lane) { served in await store.applyServerUnread(served) }
+            .store(in: &cancellables)
+    }
 
-        userPreferencesReordered.sink { event in
-            let updates = event.updates.map { (convId: $0.conversationId, orderInCategory: $0.orderInCategory) }
-            Task { await store.applyRemoteReorder(updates) }
-        }.store(in: &cancellables)
+    private func wireCategoryEvents(_ feeds: ConversationStoreSocketFeeds, on lane: OrderedEventLane) {
+        let categoryStore = self.categoryStore
 
-        userUpdated.sink { event in
-            Task { await store.applyUserUpdated(event) }
-        }.store(in: &cancellables)
+        feeds.categoryCreated
+            .relay(through: lane) { event in await categoryStore.applyRemote(.created(event.category)) }
+            .store(in: &cancellables)
 
-        categoryCreated.sink { event in
-            Task { await categoryStore.applyRemote(.created(event.category)) }
-        }.store(in: &cancellables)
+        feeds.categoryUpdated
+            .relay(through: lane) { event in await categoryStore.applyRemote(.updated(event.category)) }
+            .store(in: &cancellables)
 
-        categoryUpdated.sink { event in
-            Task { await categoryStore.applyRemote(.updated(event.category)) }
-        }.store(in: &cancellables)
+        feeds.categoryDeleted
+            .relay(through: lane) { event in await categoryStore.applyRemote(.deleted(id: event.categoryId)) }
+            .store(in: &cancellables)
 
-        categoryDeleted.sink { event in
-            Task { await categoryStore.applyRemote(.deleted(id: event.categoryId)) }
-        }.store(in: &cancellables)
+        feeds.categoriesReordered
+            .map { @Sendable event in event.updates.map { (id: $0.categoryId, order: $0.order) } }
+            .relay(through: lane) { updates in await categoryStore.applyRemote(.reordered(updates: updates)) }
+            .store(in: &cancellables)
+    }
 
-        categoriesReordered.sink { event in
-            let updates = event.updates.map { (id: $0.categoryId, order: $0.order) }
-            Task { await categoryStore.applyRemote(.reordered(updates: updates)) }
-        }.store(in: &cancellables)
+    // Les rattrapages réseau ont leur file : un `flushOutbox` ou une
+    // hydratation lents ne retiennent aucun événement.
+    private func wireCatchUp(_ feeds: ConversationStoreSocketFeeds, on lane: OrderedEventLane) {
+        let store = self.store
+        let categoryStore = self.categoryStore
 
-        didReconnect.sink {
-            Task { await store.flushOutbox() }
-            Task {
+        feeds.didReconnect
+            .relay(through: lane) { _ in
+                await store.flushOutbox()
                 do {
                     try await categoryStore.hydrate()
                 } catch {
@@ -337,12 +382,14 @@ public final class ConversationStoreSocketBridge {
                     Logger.socket.error("Category store hydration failed after socket event: \(error.localizedDescription, privacy: .public)")
                 }
             }
-        }.store(in: &cancellables)
+            .store(in: &cancellables)
     }
 
     /// Drop all subscriptions (e.g. on logout).
     public func deactivate() {
         cancellables.removeAll()
+        eventLane = nil
+        catchUpLane = nil
     }
 
     /// Map a `conversation:updated` socket event onto the store's input value
