@@ -1,4 +1,4 @@
-import { afterEach, describe, expect, test } from 'bun:test';
+import { afterEach, beforeEach, describe, expect, test } from 'bun:test';
 import { QueryClient } from '@tanstack/react-query';
 
 import { commentsQueryKey, flattenCommentPages, performComment, type CommentInfiniteData } from '@/lib/api/publication-comments';
@@ -53,6 +53,11 @@ function world(answers: Answer[]) {
 
 const poser = (deps: ReturnType<typeof world>['deps'], pieces = [piece()]) =>
   performComment({ postId: 'p1', content: 'Regarde', author, media: [PHOTO], pieces, deps });
+
+/* La file « non envoyé » est un store global : un autre fichier du même processus peut y avoir laissé une entrée. */
+beforeEach(() => {
+  unsentComments.setState({ entries: [] });
+});
 
 afterEach(() => {
   unsentComments.getState().forgetScope(SCOPE);
