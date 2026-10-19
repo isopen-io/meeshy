@@ -131,12 +131,31 @@ PHYSICAL_DEVICE_NAME=""
 PLATFORM="iphone"  # iphone | ipad | mac
 
 # ─── Physical Device Detection ──────────────────────────────────────────────
+# ─── iPhones appairés, lus dans le JSON de devicectl ─────────────────────────
+# Une ligne « identifiant CoreDevice<TAB>nom » par iPhone joignable. Le tableau
+# texte de devicectl ne se lit plus : depuis Xcode 27, sa colonne d'identifiant
+# porte l'UDID matériel (00008160-…), plus l'UUID CoreDevice que `devicectl
+# device install` attend — le motif UUID n'y trouvait rien, et le choix
+# retombait en silence sur des simulateurs.
+list_physical_iphones() {
+    xcrun devicectl list devices --json-output /dev/stdout 2>/dev/null \
+        | python3 -c 'import json,sys
+try:
+    d = json.load(sys.stdin)
+except Exception:
+    sys.exit(0)
+for x in d.get("result", {}).get("devices", []):
+    hw, conn = x.get("hardwareProperties", {}), x.get("connectionProperties", {})
+    if hw.get("deviceType") != "iPhone" or conn.get("pairingState") != "paired":
+        continue
+    if conn.get("tunnelState") == "unavailable":
+        continue
+    print(x.get("identifier", "") + "\t" + x.get("deviceProperties", {}).get("name", ""))' 2>/dev/null || true
+}
+
 detect_physical_device() {
-    # devicectl output columns: FriendlyName  NetworkName  UUID  Status  Model
-    # Exclure les devices "unavailable" (déjà appairés mais non connectés) : on ne
-    # peut pas y déployer, et les lister fausse la sélection.
     local devices
-    devices=$(xcrun devicectl list devices 2>/dev/null | grep -E "iPhone" | grep -v "Simulator" | grep -v "unavailable" || true)
+    devices=$(list_physical_iphones)
     if [ -z "$devices" ]; then
         warn_unpaired_usb_iphones
         err "No physical iPhone found. Connect via USB or WiFi."
@@ -148,9 +167,8 @@ detect_physical_device() {
     chosen=$(echo "$devices" | grep -i "Services CEO" | head -n 1)
     [ -z "$chosen" ] && chosen=$(echo "$devices" | head -n 1)
 
-    # First column is the friendly name (before the .coredevice.local hostname)
-    PHYSICAL_DEVICE_NAME=$(echo "$chosen" | awk -F'  +' '{print $1}' | xargs)
-    PHYSICAL_DEVICE_ID=$(echo "$chosen" | grep -oE '[0-9A-F]{8}-[0-9A-F]{4}-[0-9A-F]{4}-[0-9A-F]{4}-[0-9A-F]{12}' | head -1)
+    PHYSICAL_DEVICE_ID=$(printf '%s' "$chosen" | cut -f1)
+    PHYSICAL_DEVICE_NAME=$(printf '%s' "$chosen" | cut -f2-)
 
     if [ -z "$PHYSICAL_DEVICE_ID" ] || [ -z "$PHYSICAL_DEVICE_NAME" ]; then
         err "Could not parse physical device from: $chosen"
@@ -211,17 +229,14 @@ pick_device() {
     local -a dev_labels=()
 
     # 1. Physical devices FIRST — priority
-    while IFS= read -r line; do
-        [ -z "$line" ] && continue
-        local did dname
-        dname=$(echo "$line" | awk -F'  +' '{print $1}' | xargs)
-        did=$(echo "$line" | grep -oE '[0-9A-F]{8}-[0-9A-F]{4}-[0-9A-F]{4}-[0-9A-F]{4}-[0-9A-F]{12}' | head -1)
+    local did dname
+    while IFS=$'\t' read -r did dname; do
         [ -z "$did" ] && continue
         dev_types+=("physical")
         dev_ids+=("$did")
         dev_names+=("$dname")
         dev_labels+=("📲 $dname ${DIM}(Physical)${NC}")
-    done < <(xcrun devicectl list devices 2>/dev/null | grep -E "iPhone" | grep -v "Simulator" | grep -v "unavailable" || true)
+    done < <(list_physical_iphones)
 
     local physical_count=${#dev_ids[@]}
 
@@ -268,6 +283,23 @@ pick_device() {
 
     if [ "$count" -eq 0 ]; then
         err "No devices found (no physical iPhones, no simulators)."
+        exit 1
+    fi
+
+    # Un appareil désigné (identifiant CoreDevice ou nom) se choisit sans
+    # question : sans terminal, `read` rend EOF et le choix sortait en silence.
+    if [ -n "${MEESHY_DEVICE_ID:-}" ]; then
+        local i
+        for i in $(seq 0 $((count - 1))); do
+            if [ "${dev_ids[$i]}" = "$MEESHY_DEVICE_ID" ] || [ "${dev_names[$i]}" = "$MEESHY_DEVICE_ID" ]; then
+                PICKED_DEVICE_TYPE="${dev_types[$i]}"
+                PICKED_DEVICE_ID="${dev_ids[$i]}"
+                PICKED_DEVICE_NAME="${dev_names[$i]}"
+                ok "Target (MEESHY_DEVICE_ID): ${BOLD}$PICKED_DEVICE_NAME${NC}"
+                return 0
+            fi
+        done
+        err "MEESHY_DEVICE_ID=$MEESHY_DEVICE_ID ne désigne aucun appareil listé."
         exit 1
     fi
 
