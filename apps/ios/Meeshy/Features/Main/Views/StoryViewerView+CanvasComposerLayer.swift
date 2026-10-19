@@ -105,15 +105,7 @@ extension StoryCardView {
             // fermeture de la banner (spec user 2026-06-25).
             if !isOwnStory || replyingToStoryComment != nil {
                 composerBlock(geometry: geometry)
-                    .background(
-                        GeometryReader { proxy in
-                            Color.clear
-                                .preference(key: StoryComposerBlockHeightKey.self,
-                                            value: proxy.size.height)
-                                .preference(key: StoryReaderChromeFramesKey.self,
-                                            value: [proxy.frame(in: .global)])
-                        }
-                    )
+                    .modifier(StoryComposerBlockMeasure())
             }
         }
         // **CRITIQUE (hauteur)** : `maxHeight: .infinity, alignment: .bottom`

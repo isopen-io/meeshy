@@ -70,11 +70,8 @@ extension StoryViewerView {
                 // reprise redevient automatique dès que l'axe retombe à 0.
                 if gestureAxis == 0 {
                     if abs(dx) > abs(dy) + 8 {
-                        guard !StoryReactionStripGesture.yieldsHorizontalAxis(
-                            stripFrame: reactionStripFrame, dragStart: value.startLocation
-                        ) else { return }
-                        guard !StoryReaderChromeZone.yieldsHorizontalAxis(
-                            chromeFrames: readerChromeFrames, dragStart: value.startLocation
+                        guard !StoryReaderHorizontalYield.yields(
+                            stripFrame: reactionStripFrame, chromeFrames: readerChromeFrames, dragStart: value.startLocation
                         ) else { return }
                         gestureAxis = 1 // horizontal
                     } else if abs(dy) > abs(dx) + 8 {
