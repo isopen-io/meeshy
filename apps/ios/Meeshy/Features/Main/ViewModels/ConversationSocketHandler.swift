@@ -119,13 +119,29 @@ final class ConversationSocketHandler {
         NotificationCoordinator.shared.markConversationRead(conversationId)
     }
 
+    // UNE file ordonnée par handler ACTIVÉ, créée ici et jamais pour les
+    // handlers jetables de SwiftUI : les événements qui mutent le fil
+    // s'appliquent dans l'ordre d'ARRIVÉE (#11047). Un `typing:start` reçu après
+    // un `message:new` ne peut plus être effacé par la réconciliation, plus
+    // lente, du message.
+    private var eventLane: OrderedEventLane?
+
     func armSocketSubscriptions() {
         guard cancellables.isEmpty else { return }
-        subscribeToSocket()
+        let lane = OrderedEventLane()
+        lane.store(in: &cancellables)
+        eventLane = lane
+        subscribeToSocket(on: lane)
         subscribeToReconnect()
     }
 
-    deinit {
+    /// Barrière des tests : rend la main quand tout événement reçu avant
+    /// l'appel est appliqué.
+    func awaitPendingSocketEvents() async {
+        await eventLane?.barrier()
+    }
+
+    nonisolated deinit {
         // Seule l'instance réellement activée quitte la room / signale la
         // fermeture / coupe le typing. Un handler jetable (didActivate=false)
         // n'a jamais rejoint ni publié, donc il ne doit rien défaire — sinon
@@ -292,36 +308,32 @@ final class ConversationSocketHandler {
 
     // MARK: - Socket Subscriptions
 
-    private func subscribeToSocket() {
-        let socketManager = messageSocket
-        let convId = conversationId
-        let userId = currentUserId
+    private func subscribeToSocket(on lane: OrderedEventLane) {
+        subscribeMessageLifecycle(on: lane)
+        subscribeMessageMarks(on: lane)
+        subscribeReactions(on: lane)
+        subscribePresence(on: lane)
+        subscribeConversationState()
+        // Réactions par-pièce-jointe, statut de consommation, enrichissements
+        // (transcription / traduction audio) — extraits par responsabilité
+        // dans `ConversationSocketHandler+MediaEvents.swift` (I4, #7360).
+        subscribeToMediaEvents(socketManager: messageSocket, convId: conversationId, userId: currentUserId, on: lane)
+    }
 
-        // New messages
-        socketManager.messageReceived
+    private func subscribeMessageLifecycle(on lane: OrderedEventLane) {
+        let convId = conversationId
+
+        messageSocket.messageReceived
             .filter { $0.conversationId == convId }
-            .receive(on: DispatchQueue.main)
-            .sink { [weak self] apiMsg in
-                Task { [weak self] in
-                    guard let self, self.delegate != nil else { return }
-                    await self.incomingReconciler.reconcile(apiMsg)
-                }
-            }
+            .relay(through: lane) { [weak self] in await self?.applyIncoming($0) }
             .store(in: &cancellables)
 
-        // Jonction refusée par le serveur. Le MOTIF décide, et il ne le faisait
-        // pas : ce puits appelait `handleSocketAccessRevoked` sur les SEPT
-        // motifs qu'émet la passerelle — donc aussi sur `rate_limited`,
-        // `server_error`, `not_authenticated` et `invalid_payload`, qui ne
-        // disent rien de l'appartenance. Une limite de débit franchie par une
-        // tempête de reconnexion (elle rejoint toutes les rooms d'un coup)
-        // purgeait le cache du fil et le fermait sous un bandeau « accès
-        // révoqué », alors que l'utilisateur était en train de le lire.
-        //
-        // `isMembershipDenied` est le jumeau Swift de la règle partagée
-        // `isMembershipDeniedJoinError()`. Un refus transitoire ne détruit plus
-        // rien ; la room sera rejointe par le cycle de reconnexion du socket.
-        socketManager.conversationJoinError
+        // Jonction refusée par le serveur. Le MOTIF décide : `isMembershipDenied`
+        // est le jumeau Swift de la règle partagée `isMembershipDeniedJoinError()`.
+        // Un refus transitoire (`rate_limited`, `server_error`…) ne détruit rien ;
+        // la room sera rejointe par le cycle de reconnexion du socket. Reste un
+        // puits synchrone : il ne mute pas le fil et ne doit attendre personne.
+        messageSocket.conversationJoinError
             .filter { $0.conversationId == convId }
             .receive(on: DispatchQueue.main)
             .sink { [weak self] event in
@@ -335,425 +347,111 @@ final class ConversationSocketHandler {
             }
             .store(in: &cancellables)
 
-        // Edited messages
-        socketManager.messageEdited
+        messageSocket.messageEdited
             .filter { $0.conversationId == convId }
-            .receive(on: DispatchQueue.main)
-            .sink { [weak self] apiMsg in
-                guard let self else { return }
-                // Une édition de CONTENU périme les traductions du message : le
-                // gateway pose `translations: null` dans le même `updateMany`
-                // que `content`, le client doit poser le même verdict sinon la
-                // bulle (et la copie, et le partage) servent le texte traduit
-                // d'AVANT. Hors branche `callSummary` : la transition live →
-                // terminal d'un avis d'appel n'est pas une édition de contenu.
-                // Posé avant l'écriture persistée et indépendamment d'elle —
-                // l'invalidation ne dépend pas de la présence du store.
-                if apiMsg.callSummary == nil {
-                    self.delegate?.invalidateTranslations(for: apiMsg.id)
-                }
-                if let persistence = self.persistence {
-                    // Write through persistence; store observation surfaces the edit.
-                    let msgId = apiMsg.id
-                    let content = apiMsg.content ?? ""
-                    if let callSummary = apiMsg.callSummary {
-                        // Message d'appel : l'édition serveur est la transition
-                        // live → terminal (« en cours » → « Appel · 04:32 »).
-                        // markEdited ne ré-applique JAMAIS la métadonnée et
-                        // poserait isEdited — applyCallNoticeUpdate met à jour
-                        // content + callSummaryJson sans flags d'édition.
-                        let callSummaryJson = try? JSONEncoder().encode(callSummary)
-                        let serverUpdatedAt = apiMsg.updatedAt ?? apiMsg.editedAt ?? Date()
-                        Task {
-                            do {
-                                try await persistence.applyCallNoticeUpdate(
-                                    localId: msgId,
-                                    content: content,
-                                    callSummaryJson: callSummaryJson,
-                                    serverUpdatedAt: serverUpdatedAt
-                                )
-                                try await persistence.applyCallNoticeAttachments(from: apiMsg)
-                            } catch {
-                                Logger.messages.warning("[ConversationSocket] applyCallNoticeUpdate failed \(msgId, privacy: .public): \(error.localizedDescription, privacy: .public)")
-                            }
-                        }
-                    } else {
-                        // Use the server's editedAt, not the device clock: markEdited
-                        // compares this against the stored editedAt to reject stale,
-                        // out-of-order edit events, which only works if every device
-                        // is comparing the same (server) clock.
-                        let editedAt = apiMsg.editedAt ?? Date()
-                        let marksEdited = apiMsg.isEdited ?? true
-                        Task {
-                            do {
-                                try await persistence.markEdited(
-                                    localId: msgId, newContent: content, editedAt: editedAt, marksEdited: marksEdited,
-                                    arrivalsNotice: apiMsg.arrivalsNotice)
-                            } catch {
-                                Logger.messages.warning("[ConversationSocket] markEdited failed \(msgId, privacy: .public): \(error.localizedDescription, privacy: .public)")
-                            }
-                        }
-                    }
-                }
-                // Keep the (frozen) starred snapshot's preview in sync with the edit.
-                StarredMessagesStore.shared.updatePreview(
-                    messageId: apiMsg.id, contentPreview: apiMsg.content ?? ""
-                )
-            }
+            .relay(through: lane) { [weak self] in await self?.applyEdited($0) }
             .store(in: &cancellables)
 
-        // Deleted messages
-        socketManager.messageDeleted
+        messageSocket.messageDeleted
             .filter { $0.conversationId == convId }
-            .receive(on: DispatchQueue.main)
-            .sink { [weak self] event in
-                guard let self else { return }
-                if let persistence = self.persistence {
-                    // Write through persistence; store observation surfaces the deletion.
-                    let now = Date()
-                    let msgId = event.messageId
-                    Task {
-                        do {
-                            try await persistence.markDeleted(localId: msgId, deletedAt: now, sparingOpenedViewOnce: true)
-                        } catch {
-                            Logger.messages.warning("[ConversationSocket] markDeleted failed \(msgId, privacy: .public): \(error.localizedDescription, privacy: .public)")
-                        }
-                    }
-                }
-                // A delete-for-everyone broadcast must also evict the starred
-                // snapshot so the Starred Messages list stops showing a tombstone.
-                StarredMessagesStore.shared.remove(messageId: event.messageId)
-            }
+            .relay(through: lane) { [weak self] in await self?.applyDeleted($0) }
             .store(in: &cancellables)
 
-        // Expired messages — server-initiated twin of a deletion (a
-        // self-destructing message burned by `ExpiredMessagesCleanupService`
-        // rather than a user request). Same local effect, so the same write.
-        socketManager.messageExpired
+        messageSocket.messageExpired
             .filter { $0.conversationId == convId }
-            .receive(on: DispatchQueue.main)
-            .sink { [weak self] event in
-                guard let self else { return }
-                if let persistence = self.persistence {
-                    let now = Date()
-                    let msgId = event.messageId
-                    Task {
-                        do {
-                            try await persistence.markDeleted(localId: msgId, deletedAt: now, expired: true)
-                            // #10433 — ses réponses partent avec lui, et une
-                            // réponse dont la citation est déjà morte part au
-                            // lieu de rester « Message supprimé ».
-                            try await persistence.purgeQuoteCascade(fromDead: [msgId])
-                        } catch {
-                            Logger.messages.warning("[ConversationSocket] markDeleted (expired) failed \(msgId, privacy: .public): \(error.localizedDescription, privacy: .public)")
-                        }
-                    }
-                }
-                StarredMessagesStore.shared.remove(messageId: event.messageId)
-                // **La mort se GRAVE, elle ne s'oublie pas** (#7552). Ce site
-                // EFFAÇAIT la réception ; mais la ligne ne quitte le fil qu'au
-                // tour suivant, et entre les deux la projection retrouvait un
-                // registre VIDE et stampait une réception NEUVE — une fenêtre
-                // entière repartait. On oubliait avant d'avoir retiré.
-                EphemeralReceiptLedger.shared.noteDestruction(of: event.messageId)
-                // #7453 — le troisième chemin du balayage. Il est le seul à
-                // savoir qu'un message PRÉCIS vient de mourir, y compris
-                // pendant que l'application est à l'écran : ni la NSE (qui
-                // n'agit qu'à l'arrivée d'un push) ni le retour au premier
-                // plan ne couvrent ce cas.
-                Task { await NotificationActionHandler.sweepExpiredEphemeralBanners() }
-            }
+            .relay(through: lane) { [weak self] in await self?.applyExpired($0) }
             .store(in: &cancellables)
 
-        // **L'échéance SERVIE d'un éphémère** (`message:countdown-started`,
-        // contrat du fil #7451 point 5).
-        //
-        // Chez un destinataire elle ne REMPLACE pas l'échéance locale : les
-        // deux concourent, et `EphemeralDeadline.resolve` retient la plus
-        // PROCHE. Chez l'EXPÉDITEUR, dont l'envoi ne compte pas comme une
-        // réception, elle est la SEULE horloge (#8905) : `max D(u)`, qui recule
-        // à chaque destinataire qui reçoit plus tard — d'où le remplacement.
-        //
-        // Gravée en base : le fil relit GRDB, et une valeur posée en mémoire
-        // seule s'effaçait à la première écriture de la conversation.
-        socketManager.messageCountdownStarted
+        messageSocket.messageCountdownStarted
             .filter { $0.conversationId == convId }
-            .receive(on: DispatchQueue.main)
-            .sink { [weak self] event in
-                guard let self else { return }
-                if let delegate = self.delegate, let index = delegate.messageIndex(for: event.messageId) {
-                    delegate.messages[index].expiresAt = event.expiresAt
-                }
-                guard let persistence = self.persistence else { return }
-                Task {
-                    do {
-                        try await persistence.applyServedEphemeralDeadline(messageId: event.messageId, expiresAt: event.expiresAt)
-                    } catch {
-                        Logger.messages.warning("[ConversationSocket] servedEphemeralDeadline failed \(event.messageId, privacy: .public): \(error.localizedDescription, privacy: .public)")
-                    }
-                }
-            }
+            .relay(through: lane) { [weak self] in await self?.applyCountdownStarted($0) }
             .store(in: &cancellables)
 
-        // Masquage PERSONNEL — CE lecteur a retiré des messages de SA vue depuis
-        // un autre de ses appareils.
-        //
-        // Le canal existe parce qu'un filtre de LECTURE ne rétrécit que ce qu'une
-        // NOUVELLE requête renvoie : il n'a aucune prise sur une ligne que le
-        // client détient déjà. Sans ce consommateur, la bulle restait affichée
-        // pour toute la session — la ligne de liste, elle, était bien corrigée
-        // par le `conversation:updated` jumeau, si bien que l'aperçu et le fil
-        // se contredisaient.
-        //
-        // Pas `markDeleted` : le message reste VIVANT pour les autres
-        // participants, et une pierre tombale « ce message a été supprimé »
-        // resterait affichée à vie puisque le serveur ne renverra plus jamais ce
-        // message à ce lecteur. Il doit disparaître sans trace — d'où la purge.
-        //
-        // Les références qui nomment un AUTRE fil sont laissées à leur propre
-        // handler : ce dernier n'existe que si la conversation est ouverte, et
-        // sinon le prochain chargement REST (déjà filtré côté serveur) suffit.
-        socketManager.messageHiddenForMe
-            .map { event in
-                event.messages
-                    .filter { ref in ref.conversationId == convId }
-                    .map(\.messageId)
-            }
-            .filter { ids in !ids.isEmpty }
-            .receive(on: DispatchQueue.main)
-            .sink { [weak self] hiddenIds in
-                guard let self else { return }
-                if let persistence = self.persistence {
-                    Task {
-                        do {
-                            try await persistence.purgeMessages(ids: hiddenIds)
-                        } catch {
-                            Logger.messages.warning("[ConversationSocket] purgeMessages failed \(hiddenIds.count, privacy: .public) id(s): \(error.localizedDescription, privacy: .public)")
-                        }
-                    }
-                }
-                // Même raison que pour la suppression pour tous : un message
-                // retiré de la vue ne peut pas rester dans les favoris, où son
-                // instantané figé survivrait au retrait.
-                for messageId in hiddenIds {
-                    StarredMessagesStore.shared.remove(messageId: messageId)
-                }
-            }
+        messageSocket.messageHiddenForMe
+            .map { @Sendable event in event.messages.filter { $0.conversationId == convId }.map(\.messageId) }
+            .filter { !$0.isEmpty }
+            .relay(through: lane) { [weak self] in await self?.applyHiddenForMe(ids: $0) }
             .store(in: &cancellables)
 
-        // Retour en vue PERSONNEL — l'inverse exact du masquage ci-dessus.
-        //
-        // Le masquage a PURGÉ la ligne : cet appareil ne détient plus rien à
-        // ré-afficher, et l'événement ne porte qu'une ADRESSE (aucun contenu —
-        // une apparition ne s'écrit pas comme une tombstone inversée). Le seul
-        // geste honnête est donc d'aller rechercher, ce que le délégué fait.
-        //
-        // Ni `markDeleted` inversé, ni `syncMissedMessages` : ce dernier ne
-        // remonte le temps dans AUCUN cas (watermark strictement en avant),
-        // alors qu'un message rendu est presque toujours PLUS VIEUX que le
-        // dernier message détenu.
-        //
-        // Même découpage par conversation que le masquage : le lot peut nommer
-        // plusieurs fils, ce handler ne parle que du sien.
-        socketManager.messageRestoredForMe
-            .map { event in
-                event.messages
-                    .filter { ref in ref.conversationId == convId }
-                    .map(\.messageId)
-            }
-            .filter { ids in !ids.isEmpty }
-            .receive(on: DispatchQueue.main)
-            .sink { [weak self] restoredIds in
-                guard let self else { return }
-                Task { [weak self] in
-                    await self?.delegate?.restoreMessagesForMe(ids: restoredIds)
-                }
-            }
+        messageSocket.messageRestoredForMe
+            .map { @Sendable event in event.messages.filter { $0.conversationId == convId }.map(\.messageId) }
+            .filter { !$0.isEmpty }
+            .relay(through: lane) { [weak self] in await self?.applyRestoredForMe(ids: $0) }
             .store(in: &cancellables)
+    }
 
-        // Pinned messages — un autre participant (ou un autre device) epingle un
-        // message. Write-through persistence; l'observation du store surface le pin.
-        socketManager.messagePinned
+    private func subscribeMessageMarks(on lane: OrderedEventLane) {
+        let convId = conversationId
+
+        messageSocket.messagePinned
             .filter { $0.conversationId == convId }
-            .receive(on: DispatchQueue.main)
-            .sink { [weak self] event in
-                guard let self, let persistence = self.persistence else { return }
-                let pinnedBy = event.pinnedBy
-                let msgId = event.messageId
-                Task {
-                    do {
-                        try await persistence.updatePinned(localId: msgId, pinnedAt: Date(), pinnedBy: pinnedBy)
-                    } catch {
-                        Logger.messages.warning("[ConversationSocket] updatePinned failed \(msgId, privacy: .public): \(error.localizedDescription, privacy: .public)")
-                    }
-                }
-            }
+            .relay(through: lane) { [weak self] in await self?.applyPinned($0) }
             .store(in: &cancellables)
 
-        // Unpinned messages — meme chemin write-through, pinnedAt remis a nil.
-        socketManager.messageUnpinned
+        messageSocket.messageUnpinned
             .filter { $0.conversationId == convId }
-            .receive(on: DispatchQueue.main)
-            .sink { [weak self] event in
-                guard let self, let persistence = self.persistence else { return }
-                let msgId = event.messageId
-                Task {
-                    do {
-                        try await persistence.updatePinned(localId: msgId, pinnedAt: nil, pinnedBy: nil)
-                    } catch {
-                        Logger.messages.warning("[ConversationSocket] updateUnpinned failed \(msgId, privacy: .public): \(error.localizedDescription, privacy: .public)")
-                    }
-                }
-            }
+            .relay(through: lane) { [weak self] in await self?.applyUnpinned($0) }
             .store(in: &cancellables)
+    }
 
-        // Reactions added (with deduplication)
-        socketManager.reactionAdded
+    private func subscribeReactions(on lane: OrderedEventLane) {
+        let convId = conversationId
+
+        messageSocket.reactionAdded
             .filter { $0.conversationId == convId }
-            .receive(on: DispatchQueue.main)
-            .sink { [weak self] event in
-                guard let self, let persistence = self.persistence else { return }
-                // Reaction d'un AUTRE utilisateur arrivant en temps reel : on
-                // marque la cle pour que la nouvelle pill joue la comete au
-                // prochain rendu. La propre reaction de l'utilisateur a deja ete
-                // marquee+animee par le toggle optimiste (`toggleReaction`), donc
-                // on ne la re-anime pas ici. La garde compare `userId` (User.id,
-                // identité stable) — `participantId` est un Participant.id qui
-                // ne vaut JAMAIS `currentUserId`, donc l'écho de sa propre
-                // réaction re-déclenchait la comète une seconde fois.
-                if (event.userId ?? event.participantId) != self.currentUserId {
-                    ReactionAnimationGate.markAdded(messageId: event.messageId, emoji: event.emoji)
-                }
-                // Write through persistence; store observation surfaces the reaction.
-                // Pass the server's authoritative `aggregation.count` as a cap so an
-                // echo of the user's OWN reaction (keyed by the resolved
-                // Participant.id) can't pile a second row on top of the optimistic
-                // row (keyed by the currentUserId sentinel) — which rendered a
-                // single tap as "2". Other users' reactions still land because the
-                // cap rises with each genuine new reactor.
-                let msgId = event.messageId
-                let participantId = event.participantId
-                let emoji = event.emoji
-                let maxCount = event.aggregation?.count
-                let ownerUserId = event.userId
-                Task {
-                    do {
-                        try await persistence.appendReaction(
-                            localId: msgId,
-                            reactionId: UUID().uuidString,
-                            messageId: msgId,
-                            participantId: participantId,
-                            emoji: emoji,
-                            maxCount: maxCount,
-                            ownerUserId: ownerUserId
-                        )
-                    } catch {
-                        Logger.messages.warning("[ConversationSocket] appendReaction failed \(msgId, privacy: .public): \(error.localizedDescription, privacy: .public)")
-                    }
-                }
-            }
+            .relay(through: lane) { [weak self] in await self?.applyReactionAdded($0) }
             .store(in: &cancellables)
 
-        // Reactions removed
-        socketManager.reactionRemoved
+        messageSocket.reactionRemoved
             .filter { $0.conversationId == convId }
-            .receive(on: DispatchQueue.main)
-            .sink { [weak self] event in
-                guard let self, let persistence = self.persistence else { return }
-                // Write through persistence; store observation surfaces the removal.
-                Task {
-                    do {
-                        try await persistence.removeReaction(
-                            localId: event.messageId,
-                            emoji: event.emoji,
-                            participantId: event.participantId,
-                            ownerUserId: event.userId,
-                            aggregateCount: event.aggregation?.count,
-                            aggregateParticipantIds: event.aggregation?.participantIds
-                        )
-                    } catch {
-                        Logger.messages.warning("[ConversationSocket] removeReaction failed \(event.messageId, privacy: .public): \(error.localizedDescription, privacy: .public)")
-                    }
-                }
-            }
+            .relay(through: lane) { [weak self] in await self?.applyReactionRemoved($0) }
             .store(in: &cancellables)
+    }
 
-        // Réactions par-pièce-jointe, statut de consommation, enrichissements
-        // (transcription / traduction audio) — extraits par responsabilité
-        // dans `ConversationSocketHandler+MediaEvents.swift` (I4, #7360) :
-        // ce fichier dépassait le plafond de 1200 lignes du dépôt.
-        subscribeToMediaEvents(socketManager: socketManager, convId: convId, userId: userId)
+    private func subscribePresence(on lane: OrderedEventLane) {
+        let convId = conversationId
+        let userId = currentUserId
 
-        // Typing started (with safety timeout). The client picks the name to show —
-        // `preferredDisplayName` is displayName-first, username-fallback — but the
-        // roster is keyed by `userId` (see `addTypingUser`/`removeTypingUser`): two
-        // participants can share the same display name, and keying by name would
-        // let one user's typing:stop wipe the other's still-active entry.
-        socketManager.typingStarted
+        // Le roster est keyé par `userId` (voir `addTypingUser`) : deux
+        // participants peuvent partager un nom d'affichage.
+        messageSocket.typingStarted
             .filter { $0.conversationId == convId }
-            .receive(on: DispatchQueue.main)
-            .sink { [weak self] event in
-                guard let self, self.delegate != nil else { return }
-                guard event.userId != userId else { return }
-                self.addTypingUser(id: event.userId, name: event.preferredDisplayName)
-                self.resetTypingSafetyTimer(for: event.userId)
-            }
+            .relay(through: lane) { [weak self] in await self?.applyTypingStarted($0) }
             .store(in: &cancellables)
 
-        // Typing stopped
-        socketManager.typingStopped
+        messageSocket.typingStopped
             .filter { $0.conversationId == convId }
-            .receive(on: DispatchQueue.main)
-            .sink { [weak self] event in
-                guard let self, self.delegate != nil else { return }
-                self.removeTypingUser(id: event.userId)
-                self.clearTypingSafetyTimer(for: event.userId)
-            }
+            .relay(through: lane) { [weak self] in await self?.applyTypingStopped($0) }
             .store(in: &cancellables)
 
-        // Read status updated (delivered / read) — #7433 : le résumé décrit
-        // UN message (`summary.messageId`, sinon le dernier du fil) et ne
-        // touche que lui, s'il est le mien (`ReadStatusReceipt`). L'appliquer
-        // à tout message antérieur à `updatedAt` — l'instant d'ÉMISSION —
-        // peignait de faux « Lu » que la fiche « Vu par » démentait.
-        socketManager.readStatusUpdated
+        messageSocket.readStatusUpdated
             .filter { $0.conversationId == convId }
             .filter { ($0.userId ?? $0.participantId) != userId }
-            .receive(on: DispatchQueue.main)
-            .sink { [weak self] event in
-                guard let self, let persistence = self.persistence else { return }
-                Task {
-                    await persistence.bufferReadStatusSummary(
-                        conversationId: convId, summary: event.summary, currentUserId: userId
-                    )
-                }
-            }
+            .relay(through: lane) { [weak self] in await self?.applyReadStatus($0) }
             .store(in: &cancellables)
 
-        // I3 (#7349) — `message:pending-delivered`: this user's offline queue
-        // was just replayed by the gateway. iOS had no listener at all before
-        // this lot. Mirrors the existing reconnect/foreground resync path
-        // (`triggerSyncIfNeeded` → `delegate.syncMissedMessages()`), scoped to
-        // the conversation this handler owns — the same signal web-v2 uses to
-        // invalidate its own message list cache for the named conversations.
-        socketManager.pendingMessagesDelivered
+        // I3 (#7349) — `message:pending-delivered` : la file hors-ligne de cet
+        // utilisateur vient d'être rejouée par le gateway. Même chemin que la
+        // resynchronisation de reconnexion, borné à la conversation du handler.
+        messageSocket.pendingMessagesDelivered
             .filter { $0.conversationIds.contains(convId) }
             .receive(on: DispatchQueue.main)
             .sink { [weak self] _ in
                 self?.triggerSyncIfNeeded()
             }
             .store(in: &cancellables)
+    }
 
-        // Participant role updated
-        socketManager.participantRoleUpdated
+    private func subscribeConversationState() {
+        let convId = conversationId
+
+        messageSocket.participantRoleUpdated
             .filter { $0.conversationId == convId }
             .receive(on: DispatchQueue.main)
             .sink { [weak self] event in
                 guard let delegate = self?.delegate else { return }
-                // `participant` est optionnel : ce bloc n'est ici qu'informatif
-                // (le délégué le journalise, puis invalide le cache). Renoncer à
-                // l'invalidation parce qu'il manque coûterait un trombinoscope
-                // périmé pour un nom absent.
+                // `participant` est optionnel : renoncer à l'invalidation parce
+                // qu'il manque coûterait un trombinoscope périmé pour un nom absent.
                 delegate.handleParticipantRoleUpdated(
                     participantId: event.participant?.id ?? event.userId,
                     newRole: event.newRole
@@ -761,8 +459,7 @@ final class ConversationSocketHandler {
             }
             .store(in: &cancellables)
 
-        // Live location started
-        socketManager.liveLocationStarted
+        messageSocket.liveLocationStarted
             .filter { $0.conversationId == convId }
             .receive(on: DispatchQueue.main)
             .sink { [weak self] event in
@@ -780,41 +477,266 @@ final class ConversationSocketHandler {
             }
             .store(in: &cancellables)
 
-        // Live location updated
-        socketManager.liveLocationUpdated
+        messageSocket.liveLocationUpdated
             .filter { $0.conversationId == convId }
             .receive(on: DispatchQueue.main)
             .sink { [weak self] event in
-                guard let delegate = self?.delegate else { return }
-                if let idx = delegate.activeLiveLocations.firstIndex(where: { $0.userId == event.userId }) {
-                    delegate.activeLiveLocations[idx].latitude = event.latitude
-                    delegate.activeLiveLocations[idx].longitude = event.longitude
-                    delegate.activeLiveLocations[idx].speed = event.speed
-                    delegate.activeLiveLocations[idx].heading = event.heading
-                    delegate.activeLiveLocations[idx].lastUpdated = event.timestamp ?? Date()
-                }
+                guard let delegate = self?.delegate,
+                      let idx = delegate.activeLiveLocations.firstIndex(where: { $0.userId == event.userId })
+                else { return }
+                delegate.activeLiveLocations[idx].latitude = event.latitude
+                delegate.activeLiveLocations[idx].longitude = event.longitude
+                delegate.activeLiveLocations[idx].speed = event.speed
+                delegate.activeLiveLocations[idx].heading = event.heading
+                delegate.activeLiveLocations[idx].lastUpdated = event.timestamp ?? Date()
             }
             .store(in: &cancellables)
 
-        // Live location stopped
-        socketManager.liveLocationStopped
+        messageSocket.liveLocationStopped
             .filter { $0.conversationId == convId }
             .receive(on: DispatchQueue.main)
             .sink { [weak self] event in
-                guard let delegate = self?.delegate else { return }
-                delegate.activeLiveLocations.removeAll { $0.userId == event.userId }
+                self?.delegate?.activeLiveLocations.removeAll { $0.userId == event.userId }
             }
             .store(in: &cancellables)
 
-        // Conversation closed
-        socketManager.conversationClosed
+        messageSocket.conversationClosed
             .filter { $0.conversationId == convId }
             .receive(on: DispatchQueue.main)
             .sink { [weak self] _ in
-                guard let delegate = self?.delegate else { return }
-                delegate.isConversationClosed = true
+                self?.delegate?.isConversationClosed = true
             }
             .store(in: &cancellables)
+    }
+
+    // MARK: - Event Application (ordered lane)
+
+    private func applyIncoming(_ apiMsg: APIMessage) async {
+        guard delegate != nil else { return }
+        await incomingReconciler.reconcile(apiMsg)
+    }
+
+    /// Une édition de CONTENU périme les traductions du message : le gateway
+    /// pose `translations: null` dans le même `updateMany` que `content`, le
+    /// client pose le même verdict sinon la bulle (et la copie, et le partage)
+    /// servent le texte traduit d'AVANT. Hors branche `callSummary` : la
+    /// transition live → terminal d'un avis d'appel n'est pas une édition de
+    /// contenu. Posé indépendamment de la présence du store.
+    private func applyEdited(_ apiMsg: APIMessage) async {
+        if apiMsg.callSummary == nil {
+            delegate?.invalidateTranslations(for: apiMsg.id)
+        }
+        StarredMessagesStore.shared.updatePreview(messageId: apiMsg.id, contentPreview: apiMsg.content ?? "")
+        guard let persistence else { return }
+        if let callSummary = apiMsg.callSummary {
+            await persistCallNoticeEdit(apiMsg, callSummary: callSummary, in: persistence)
+        } else {
+            await persistContentEdit(apiMsg, in: persistence)
+        }
+    }
+
+    /// Message d'appel : l'édition serveur est la transition live → terminal
+    /// (« en cours » → « Appel · 04:32 »). `markEdited` ne ré-applique JAMAIS la
+    /// métadonnée et poserait isEdited — `applyCallNoticeUpdate` met à jour
+    /// content + callSummaryJson sans flags d'édition.
+    private func persistCallNoticeEdit(
+        _ apiMsg: APIMessage, callSummary: CallSummaryMetadata, in persistence: MessagePersistenceActor
+    ) async {
+        let msgId = apiMsg.id
+        do {
+            try await persistence.applyCallNoticeUpdate(
+                localId: msgId,
+                content: apiMsg.content ?? "",
+                callSummaryJson: try? JSONEncoder().encode(callSummary),
+                serverUpdatedAt: apiMsg.updatedAt ?? apiMsg.editedAt ?? Date()
+            )
+            try await persistence.applyCallNoticeAttachments(from: apiMsg)
+        } catch {
+            Logger.messages.warning("[ConversationSocket] applyCallNoticeUpdate failed \(msgId, privacy: .public): \(error.localizedDescription, privacy: .public)")
+        }
+    }
+
+    /// L'`editedAt` du SERVEUR, pas l'horloge de l'appareil : `markEdited`
+    /// compare cette valeur à l'`editedAt` stocké pour rejeter les éditions
+    /// périmées ou hors d'ordre, ce qui exige que tous les appareils comparent
+    /// la même horloge.
+    private func persistContentEdit(_ apiMsg: APIMessage, in persistence: MessagePersistenceActor) async {
+        let msgId = apiMsg.id
+        do {
+            try await persistence.markEdited(
+                localId: msgId,
+                newContent: apiMsg.content ?? "",
+                editedAt: apiMsg.editedAt ?? Date(),
+                marksEdited: apiMsg.isEdited ?? true,
+                arrivalsNotice: apiMsg.arrivalsNotice
+            )
+        } catch {
+            Logger.messages.warning("[ConversationSocket] markEdited failed \(msgId, privacy: .public): \(error.localizedDescription, privacy: .public)")
+        }
+    }
+
+    private func applyDeleted(_ event: MessageDeletedEvent) async {
+        // Une suppression pour tous évince aussi l'instantané des favoris : la
+        // liste ne montre plus de pierre tombale.
+        StarredMessagesStore.shared.remove(messageId: event.messageId)
+        guard let persistence else { return }
+        let msgId = event.messageId
+        do {
+            try await persistence.markDeleted(localId: msgId, deletedAt: Date(), sparingOpenedViewOnce: true)
+        } catch {
+            Logger.messages.warning("[ConversationSocket] markDeleted failed \(msgId, privacy: .public): \(error.localizedDescription, privacy: .public)")
+        }
+    }
+
+    /// Jumeau SERVEUR d'une suppression (un message auto-détruit brûlé par
+    /// `ExpiredMessagesCleanupService`) : même effet local, même écriture.
+    ///
+    /// **La mort se GRAVE, elle ne s'oublie pas** (#7552) : le registre de
+    /// réception est renseigné AVANT l'écriture, sans quoi la projection
+    /// retrouvait un registre vide entre les deux et stampait une réception
+    /// NEUVE. #7453 — le balayage des bannières est le seul à savoir qu'un
+    /// message PRÉCIS vient de mourir pendant que l'application est à l'écran.
+    private func applyExpired(_ event: MessageExpiredEvent) async {
+        StarredMessagesStore.shared.remove(messageId: event.messageId)
+        EphemeralReceiptLedger.shared.noteDestruction(of: event.messageId)
+        if let persistence {
+            let msgId = event.messageId
+            do {
+                try await persistence.markDeleted(localId: msgId, deletedAt: Date(), expired: true)
+                // #10433 — ses réponses partent avec lui, et une réponse dont
+                // la citation est déjà morte part au lieu de rester « Message supprimé ».
+                try await persistence.purgeQuoteCascade(fromDead: [msgId])
+            } catch {
+                Logger.messages.warning("[ConversationSocket] markDeleted (expired) failed \(msgId, privacy: .public): \(error.localizedDescription, privacy: .public)")
+            }
+        }
+        Task { await NotificationActionHandler.sweepExpiredEphemeralBanners() }
+    }
+
+    /// **L'échéance SERVIE d'un éphémère** (contrat du fil #7451 point 5).
+    /// Chez un destinataire elle ne REMPLACE pas l'échéance locale :
+    /// `EphemeralDeadline.resolve` retient la plus PROCHE. Chez l'EXPÉDITEUR
+    /// elle est la SEULE horloge (#8905) : `max D(u)`, qui recule à chaque
+    /// destinataire qui reçoit plus tard — d'où le remplacement. Gravée en
+    /// base : le fil relit GRDB.
+    private func applyCountdownStarted(_ event: MessageCountdownStartedEvent) async {
+        if let delegate, let index = delegate.messageIndex(for: event.messageId) {
+            delegate.messages[index].expiresAt = event.expiresAt
+        }
+        guard let persistence else { return }
+        do {
+            try await persistence.applyServedEphemeralDeadline(messageId: event.messageId, expiresAt: event.expiresAt)
+        } catch {
+            Logger.messages.warning("[ConversationSocket] servedEphemeralDeadline failed \(event.messageId, privacy: .public): \(error.localizedDescription, privacy: .public)")
+        }
+    }
+
+    /// Masquage PERSONNEL : CE lecteur a retiré des messages de SA vue depuis
+    /// un autre appareil. Pas `markDeleted` : le message reste VIVANT pour les
+    /// autres, et une pierre tombale resterait affichée à vie puisque le
+    /// serveur ne le renverra plus à ce lecteur — il disparaît sans trace.
+    /// Un message retiré de la vue ne reste pas dans les favoris.
+    private func applyHiddenForMe(ids hiddenIds: [String]) async {
+        hiddenIds.forEach { StarredMessagesStore.shared.remove(messageId: $0) }
+        guard let persistence else { return }
+        do {
+            try await persistence.purgeMessages(ids: hiddenIds)
+        } catch {
+            Logger.messages.warning("[ConversationSocket] purgeMessages failed \(hiddenIds.count, privacy: .public) id(s): \(error.localizedDescription, privacy: .public)")
+        }
+    }
+
+    /// Retour en vue PERSONNEL : le masquage a PURGÉ la ligne, et l'événement
+    /// ne porte qu'une ADRESSE — le seul geste honnête est d'aller rechercher,
+    /// ce que le délégué fait.
+    private func applyRestoredForMe(ids restoredIds: [String]) async {
+        await delegate?.restoreMessagesForMe(ids: restoredIds)
+    }
+
+    private func applyPinned(_ event: MessagePinnedEvent) async {
+        guard let persistence else { return }
+        let msgId = event.messageId
+        do {
+            try await persistence.updatePinned(localId: msgId, pinnedAt: Date(), pinnedBy: event.pinnedBy)
+        } catch {
+            Logger.messages.warning("[ConversationSocket] updatePinned failed \(msgId, privacy: .public): \(error.localizedDescription, privacy: .public)")
+        }
+    }
+
+    private func applyUnpinned(_ event: MessageUnpinnedEvent) async {
+        guard let persistence else { return }
+        let msgId = event.messageId
+        do {
+            try await persistence.updatePinned(localId: msgId, pinnedAt: nil, pinnedBy: nil)
+        } catch {
+            Logger.messages.warning("[ConversationSocket] updateUnpinned failed \(msgId, privacy: .public): \(error.localizedDescription, privacy: .public)")
+        }
+    }
+
+    /// Réaction d'un AUTRE utilisateur : la clé est marquée pour que la pill
+    /// joue la comète. La garde compare `userId` (User.id, identité stable) —
+    /// `participantId` ne vaut JAMAIS `currentUserId`, donc l'écho de sa propre
+    /// réaction re-déclenchait la comète. `aggregation.count` sert de plafond :
+    /// l'écho de MA réaction (clé Participant.id) ne s'empile pas sur la ligne
+    /// optimiste (clé `currentUserId`), ce qui affichait « 2 » pour un tap.
+    private func applyReactionAdded(_ event: ReactionUpdateEvent) async {
+        guard let persistence else { return }
+        if (event.userId ?? event.participantId) != currentUserId {
+            ReactionAnimationGate.markAdded(messageId: event.messageId, emoji: event.emoji)
+        }
+        let msgId = event.messageId
+        do {
+            try await persistence.appendReaction(
+                localId: msgId,
+                reactionId: UUID().uuidString,
+                messageId: msgId,
+                participantId: event.participantId,
+                emoji: event.emoji,
+                maxCount: event.aggregation?.count,
+                ownerUserId: event.userId
+            )
+        } catch {
+            Logger.messages.warning("[ConversationSocket] appendReaction failed \(msgId, privacy: .public): \(error.localizedDescription, privacy: .public)")
+        }
+    }
+
+    private func applyReactionRemoved(_ event: ReactionUpdateEvent) async {
+        guard let persistence else { return }
+        do {
+            try await persistence.removeReaction(
+                localId: event.messageId,
+                emoji: event.emoji,
+                participantId: event.participantId,
+                ownerUserId: event.userId,
+                aggregateCount: event.aggregation?.count,
+                aggregateParticipantIds: event.aggregation?.participantIds
+            )
+        } catch {
+            Logger.messages.warning("[ConversationSocket] removeReaction failed \(event.messageId, privacy: .public): \(error.localizedDescription, privacy: .public)")
+        }
+    }
+
+    /// Le nom affiché est choisi par le client (`preferredDisplayName`,
+    /// displayName d'abord, username en repli), le roster reste keyé par `userId`.
+    private func applyTypingStarted(_ event: TypingEvent) {
+        guard delegate != nil, event.userId != currentUserId else { return }
+        addTypingUser(id: event.userId, name: event.preferredDisplayName)
+        resetTypingSafetyTimer(for: event.userId)
+    }
+
+    private func applyTypingStopped(_ event: TypingEvent) {
+        guard delegate != nil else { return }
+        removeTypingUser(id: event.userId)
+        clearTypingSafetyTimer(for: event.userId)
+    }
+
+    /// #7433 : le résumé décrit UN message (`summary.messageId`, sinon le dernier
+    /// du fil) et ne touche que lui, s'il est le mien (`ReadStatusReceipt`).
+    private func applyReadStatus(_ event: ReadStatusUpdateEvent) async {
+        guard let persistence else { return }
+        await persistence.bufferReadStatusSummary(
+            conversationId: conversationId, summary: event.summary, currentUserId: currentUserId
+        )
     }
 
     // MARK: - Reconnection Sync
