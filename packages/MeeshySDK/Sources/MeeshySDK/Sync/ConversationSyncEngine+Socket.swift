@@ -10,277 +10,151 @@ extension ConversationSyncEngine {
 
     public func startSocketRelay() async {
         socketSubscriptions.removeAll()
-
-        // UN TROU DE SÉQUENCE DÉCLENCHE LA RESYNCHRONISATION `/sync` (#4172
-        // critère 3). `SyncSeqTracker.observe` émet quand un `_seq` saute — des
-        // événements ont été MANQUÉS, et le socket ne rejouera rien. La réponse
-        // est le delta nominal (`syncSinceLastCheckpoint` → `/sync`, `hasGap`
-        // escaladant vers `fullSync` si l'absence dépasse ce que la fenêtre
-        // sait rejouer). Les rafales sont absorbées par `deltaSyncCooldown` —
-        // le même amortisseur que les reconnexions.
-        SyncSeqTracker.shared.gapDetected.publisher
-            .sink { [weak self] _ in
-                guard let self else { return }
-                Task { await self.syncSinceLastCheckpoint() }
-            }
-            .store(in: &socketSubscriptions)
-
-        // Message events
-        messageSocket.messageReceived
-            .sink { [weak self] apiMessage in
-                guard let self else { return }
-                Task { await self.handleNewMessage(apiMessage) }
-            }
-            .store(in: &socketSubscriptions)
-
-        messageSocket.messageEdited
-            .sink { [weak self] apiMessage in
-                guard let self else { return }
-                Task { await self.handleEditedMessage(apiMessage) }
-            }
-            .store(in: &socketSubscriptions)
-
-        messageSocket.messageDeleted
-            .sink { [weak self] event in
-                guard let self else { return }
-                Task { await self.handleDeletedMessage(event) }
-            }
-            .store(in: &socketSubscriptions)
-
-        // `message:expired` (#7960) reçu conversation FERMÉE : sans ce relais,
-        // seul `ConversationSocketHandler` (conversation ouverte) vidait le
-        // message — son contenu restait lisible hors ligne, et dans l'aperçu.
-        messageSocket.messageExpired
-            .sink { [weak self] event in
-                guard let self else { return }
-                Task { await self.handleExpiredMessage(event) }
-            }
-            .store(in: &socketSubscriptions)
-
-        // `message:cited-post-withdrawn` (#7969) : la story citée a été
-        // retirée. Un seul site, conversation ouverte ou fermée — le fil
-        // ouvert observe la table que le relais écrit.
-        messageSocket.messageCitedPostWithdrawn
-            .sink { [weak self] event in
-                guard let self else { return }
-                Task { await self.handleCitedPostWithdrawn(event) }
-            }
-            .store(in: &socketSubscriptions)
-
-        messageSocket.reactionAdded
-            .sink { [weak self] event in
-                guard let self else { return }
-                Task { await self.handleReactionAdded(event) }
-            }
-            .store(in: &socketSubscriptions)
-
-        messageSocket.reactionRemoved
-            .sink { [weak self] event in
-                guard let self else { return }
-                Task { await self.handleReactionRemoved(event) }
-            }
-            .store(in: &socketSubscriptions)
-
-        messageSocket.reactionSynced
-            .sink { [weak self] event in
-                guard let self else { return }
-                Task { await self.handleReactionSynced(event) }
-            }
-            .store(in: &socketSubscriptions)
-
-        messageSocket.unreadUpdated
-            .sink { [weak self] event in
-                guard let self else { return }
-                Task { await self.handleUnreadUpdated(event) }
-            }
-            .store(in: &socketSubscriptions)
-
-        messageSocket.readStatusUpdated
-            .sink { [weak self] event in
-                guard let self else { return }
-                Task { await self.handleReadStatusUpdated(event) }
-            }
-            .store(in: &socketSubscriptions)
-
-        messageSocket.translationReceived
-            .sink { [weak self] event in
-                guard let self else { return }
-                Task { await self.cache.cacheTranslation(event) }
-            }
-            .store(in: &socketSubscriptions)
-
-        messageSocket.transcriptionReady
-            .sink { [weak self] event in
-                guard let self else { return }
-                Task { await self.cache.cacheTranscription(event) }
-            }
-            .store(in: &socketSubscriptions)
-
-        messageSocket.audioTranslationReady
-            .sink { [weak self] event in
-                guard let self else { return }
-                Task { await self.cache.cacheAudioTranslation(event) }
-            }
-            .store(in: &socketSubscriptions)
-
-        messageSocket.audioTranslationProgressive
-            .sink { [weak self] event in
-                guard let self else { return }
-                Task { await self.cache.cacheAudioTranslation(event) }
-            }
-            .store(in: &socketSubscriptions)
-
-        messageSocket.audioTranslationCompleted
-            .sink { [weak self] event in
-                guard let self else { return }
-                Task { await self.cache.cacheAudioTranslation(event) }
-            }
-            .store(in: &socketSubscriptions)
-
-        messageSocket.conversationJoined
-            .sink { [weak self] event in
-                guard let self else { return }
-                Task { await self.cache.participants.invalidate(for: event.conversationId) }
-            }
-            .store(in: &socketSubscriptions)
-
-        messageSocket.conversationLeft
-            .sink { [weak self] event in
-                guard let self else { return }
-                Task { await self.cache.participants.invalidate(for: event.conversationId) }
-            }
-            .store(in: &socketSubscriptions)
-
-        messageSocket.participantRoleUpdated
-            .sink { [weak self] event in
-                guard let self else { return }
-                Task { await self.cache.participants.invalidate(for: event.conversationId) }
-            }
-            .store(in: &socketSubscriptions)
-
-        // Attachment status updated (listened, watched, viewed, downloaded)
-        messageSocket.attachmentStatusUpdated
-            .sink { [weak self] event in
-                guard let self else { return }
-                Task { await self.handleAttachmentStatusUpdated(event) }
-            }
-            .store(in: &socketSubscriptions)
-
-        // Attachment content updated (Whisper transcription, NLLB+TTS audio translation)
-        messageSocket.attachmentUpdated
-            .sink { [weak self] event in
-                guard let self else { return }
-                Task { await self.handleAttachmentUpdated(event) }
-            }
-            .store(in: &socketSubscriptions)
-
-        // Conversation closed
-        messageSocket.conversationClosed
-            .sink { [weak self] event in
-                guard let self else { return }
-                Task {
-                    await self.cache.conversations.update(for: "list") { conversations in
-                        var updated = conversations
-                        if let idx = updated.firstIndex(where: { $0.id == event.conversationId }) {
-                            updated[idx].closedAt = WireDate.date(from: event.closedAt)
-                            updated[idx].closedBy = event.closedBy
-                        }
-                        return updated
-                    }
-                    self._conversationsDidChange.send()
-                }
-            }
-            .store(in: &socketSubscriptions)
-
-        // Conversation metadata updated (title, avatar, description, …).
-        // `ConversationStoreSocketBridge` routes the same broadcast to the RAM
-        // store; this relay is what makes it survive a cold start.
-        messageSocket.conversationUpdated
-            .sink { [weak self] event in
-                guard let self else { return }
-                Task { await self.handleConversationUpdated(event) }
-            }
-            .store(in: &socketSubscriptions)
-
-        // Profil public d'un CONTACT (nom, avatar, bannière). Même raison que
-        // le relais ci-dessus : sans lui, la ligne redevient périmée au
-        // prochain démarrage à froid, le temps que le REST réponde.
-        messageSocket.userUpdated
-            .sink { [weak self] event in
-                guard let self else { return }
-                Task { await self.handleUserUpdated(event) }
-            }
-            .store(in: &socketSubscriptions)
-
-        // Conversation deleted server-side — drop the row (and its messages)
-        // from the persisted cache, not only from the RAM store.
-        messageSocket.conversationDeleted
-            .sink { [weak self] event in
-                guard let self else { return }
-                Task { await self.handleConversationDeleted(event) }
-            }
-            .store(in: &socketSubscriptions)
-
-        // Conversation RESTAURÉE sur un autre appareil (#4389) — la remettre
-        // dans le cache PERSISTÉ, pas seulement dans le store RAM. Sans ce
-        // relais, la restauration ne survivait pas au prochain démarrage à
-        // froid : le cache disque continuait de servir une liste d'où la
-        // conversation avait été retirée, exactement le défaut symétrique que
-        // le doc-comment de la descendante nomme au-dessus.
-        messageSocket.conversationRestored
-            .sink { [weak self] event in
-                guard let self else { return }
-                Task { await self.handleConversationRestored(event) }
-            }
-            .store(in: &socketSubscriptions)
-
-        // `message:consumed` (vue unique consommée) reçu conversation FERMÉE :
-        // sans ce relais, seule la conversation ouverte marquait le message
-        // consommé — le rouvrir hors-ligne réaffichait un média déjà brûlé.
-        messageSocket.messageConsumed
-            .sink { [weak self] event in
-                guard let self else { return }
-                Task { await self.handleMessageConsumed(event) }
-            }
-            .store(in: &socketSubscriptions)
-
-        // `message:view-once-purged` (#7578) : le contenu est purgé côté
-        // serveur. Un seul site, conversation ouverte ou fermée : la bulle
-        // reste, vidée, en « déjà ouvert ».
-        messageSocket.viewOncePurged
-            .sink { [weak self] event in
-                guard let self else { return }
-                Task {
-                    await self.realtimeMessagePersistor?(.viewOnceOpened(messageId: event.messageId))
-                    self._messagesDidChange.send(event.conversationId)
-                }
-            }
-            .store(in: &socketSubscriptions)
-
-        // `message:starred` (#7939) : l'étoile PERSONNELLE posée ou retirée
-        // depuis un autre appareil. Émis vers la seule room `user:<id>`, donc
-        // reçu conversation ouverte OU fermée — un seul site, le relais.
-        messageSocket.messageStarred
-            .sink { [weak self] event in
-                guard let self else { return }
-                Task { await self.realtimeMessagePersistor?(Self.starMutation(for: event, now: Date())) }
-            }
-            .store(in: &socketSubscriptions)
-
-        // Reconnect -> delta sync
-        messageSocket.didReconnect
-            .sink { [weak self] in
-                guard let self else { return }
-                self.requestReconnectCatchUp()
-                Task { await self.syncSinceLastCheckpoint() }
-            }
-            .store(in: &socketSubscriptions)
+        let events = OrderedEventLane()
+        let catchUp = OrderedEventLane()
+        events.store(in: &socketSubscriptions)
+        catchUp.store(in: &socketSubscriptions)
+        relayMessageEvents(on: events)
+        relayConversationEvents(on: events)
+        relayEnrichmentEvents(on: events)
+        relayCatchUp(on: catchUp)
 
         // Initial recompute so cold-start (cache already hydrated from disk
         // before any socket event arrives) publishes the correct aggregate
         // to subscribers. Without this, `totalConversationsUnreadValue`
         // stays at 0 until the first `unread-updated` event lands.
         await recomputeTotalUnread()
+    }
+
+    // UN SEUL consommateur sérialisé par famille (#11047) : les événements qui
+    // mutent l'état s'appliquent dans l'ordre d'ARRIVÉE. Un `message:edited`
+    // ne peut plus doubler le `message:new` du même message, suspendu dans sa
+    // persistance — l'aperçu de liste et le cache perdaient l'édition.
+    private func relayMessageEvents(on lane: OrderedEventLane) {
+        messageSocket.messageReceived
+            .relay(through: lane) { [weak self] in await self?.handleNewMessage($0) }
+            .store(in: &socketSubscriptions)
+        messageSocket.messageEdited
+            .relay(through: lane) { [weak self] in await self?.handleEditedMessage($0) }
+            .store(in: &socketSubscriptions)
+        messageSocket.messageDeleted
+            .relay(through: lane) { [weak self] in await self?.handleDeletedMessage($0) }
+            .store(in: &socketSubscriptions)
+        // `message:expired` (#7960) reçu conversation FERMÉE : sans ce relais,
+        // seul `ConversationSocketHandler` (conversation ouverte) vidait le
+        // message — son contenu restait lisible hors ligne, et dans l'aperçu.
+        messageSocket.messageExpired
+            .relay(through: lane) { [weak self] in await self?.handleExpiredMessage($0) }
+            .store(in: &socketSubscriptions)
+        // `message:cited-post-withdrawn` (#7969) : la story citée a été
+        // retirée. Un seul site, conversation ouverte ou fermée.
+        messageSocket.messageCitedPostWithdrawn
+            .relay(through: lane) { [weak self] in await self?.handleCitedPostWithdrawn($0) }
+            .store(in: &socketSubscriptions)
+        // `message:consumed` (vue unique consommée) reçu conversation FERMÉE :
+        // sans ce relais, le rouvrir hors-ligne réaffichait un média brûlé.
+        messageSocket.messageConsumed
+            .relay(through: lane) { [weak self] in await self?.handleMessageConsumed($0) }
+            .store(in: &socketSubscriptions)
+        // `message:view-once-purged` (#7578) : la bulle reste, vidée, en
+        // « déjà ouvert ».
+        messageSocket.viewOncePurged
+            .relay(through: lane) { [weak self] in await self?.handleViewOncePurged($0) }
+            .store(in: &socketSubscriptions)
+        // `message:starred` (#7939) : l'étoile PERSONNELLE posée depuis un autre
+        // appareil, reçue conversation ouverte OU fermée.
+        messageSocket.messageStarred
+            .relay(through: lane) { [weak self] in await self?.handleMessageStarred($0) }
+            .store(in: &socketSubscriptions)
+        messageSocket.reactionAdded
+            .relay(through: lane) { [weak self] in await self?.handleReactionAdded($0) }
+            .store(in: &socketSubscriptions)
+        messageSocket.reactionRemoved
+            .relay(through: lane) { [weak self] in await self?.handleReactionRemoved($0) }
+            .store(in: &socketSubscriptions)
+        messageSocket.reactionSynced
+            .relay(through: lane) { [weak self] in await self?.handleReactionSynced($0) }
+            .store(in: &socketSubscriptions)
+    }
+
+    private func relayConversationEvents(on lane: OrderedEventLane) {
+        messageSocket.unreadUpdated
+            .relay(through: lane) { [weak self] in await self?.handleUnreadUpdated($0) }
+            .store(in: &socketSubscriptions)
+        messageSocket.readStatusUpdated
+            .relay(through: lane) { [weak self] in await self?.handleReadStatusUpdated($0) }
+            .store(in: &socketSubscriptions)
+        messageSocket.conversationClosed
+            .relay(through: lane) { [weak self] in await self?.handleConversationClosed($0) }
+            .store(in: &socketSubscriptions)
+        // Métadonnées (titre, avatar, description…) : `ConversationStoreSocketBridge`
+        // route la même diffusion vers le store RAM ; ce relais est ce qui la
+        // fait survivre à un démarrage à froid.
+        messageSocket.conversationUpdated
+            .relay(through: lane) { [weak self] in await self?.handleConversationUpdated($0) }
+            .store(in: &socketSubscriptions)
+        // Profil public d'un CONTACT (nom, avatar, bannière).
+        messageSocket.userUpdated
+            .relay(through: lane) { [weak self] in await self?.handleUserUpdated($0) }
+            .store(in: &socketSubscriptions)
+        messageSocket.conversationDeleted
+            .relay(through: lane) { [weak self] in await self?.handleConversationDeleted($0) }
+            .store(in: &socketSubscriptions)
+        // Conversation RESTAURÉE sur un autre appareil (#4389) — remise dans le
+        // cache PERSISTÉ, pas seulement dans le store RAM.
+        messageSocket.conversationRestored
+            .relay(through: lane) { [weak self] in await self?.handleConversationRestored($0) }
+            .store(in: &socketSubscriptions)
+        messageSocket.conversationJoined
+            .relay(through: lane) { [weak self] in await self?.cache.participants.invalidate(for: $0.conversationId) }
+            .store(in: &socketSubscriptions)
+        messageSocket.conversationLeft
+            .relay(through: lane) { [weak self] in await self?.cache.participants.invalidate(for: $0.conversationId) }
+            .store(in: &socketSubscriptions)
+        messageSocket.participantRoleUpdated
+            .relay(through: lane) { [weak self] in await self?.cache.participants.invalidate(for: $0.conversationId) }
+            .store(in: &socketSubscriptions)
+    }
+
+    private func relayEnrichmentEvents(on lane: OrderedEventLane) {
+        messageSocket.translationReceived
+            .relay(through: lane) { [weak self] in await self?.cache.cacheTranslation($0) }
+            .store(in: &socketSubscriptions)
+        messageSocket.transcriptionReady
+            .relay(through: lane) { [weak self] in await self?.cache.cacheTranscription($0) }
+            .store(in: &socketSubscriptions)
+        messageSocket.audioTranslationReady
+            .relay(through: lane) { [weak self] in await self?.cache.cacheAudioTranslation($0) }
+            .store(in: &socketSubscriptions)
+        messageSocket.audioTranslationProgressive
+            .relay(through: lane) { [weak self] in await self?.cache.cacheAudioTranslation($0) }
+            .store(in: &socketSubscriptions)
+        messageSocket.audioTranslationCompleted
+            .relay(through: lane) { [weak self] in await self?.cache.cacheAudioTranslation($0) }
+            .store(in: &socketSubscriptions)
+        messageSocket.attachmentStatusUpdated
+            .relay(through: lane) { [weak self] in await self?.handleAttachmentStatusUpdated($0) }
+            .store(in: &socketSubscriptions)
+        messageSocket.attachmentUpdated
+            .relay(through: lane) { [weak self] in await self?.handleAttachmentUpdated($0) }
+            .store(in: &socketSubscriptions)
+    }
+
+    // UN TROU DE SÉQUENCE DÉCLENCHE LA RESYNCHRONISATION `/sync` (#4172
+    // critère 3) : des événements ont été MANQUÉS, et le socket ne rejouera
+    // rien. Les rafales sont absorbées par `deltaSyncCooldown`. Les rattrapages
+    // réseau ont leur file à part : un `/sync` lent ne retient aucun événement.
+    private func relayCatchUp(on lane: OrderedEventLane) {
+        SyncSeqTracker.shared.gapDetected.publisher
+            .relay(through: lane) { [weak self] _ in _ = await self?.syncSinceLastCheckpoint() }
+            .store(in: &socketSubscriptions)
+        messageSocket.didReconnect
+            .sink { [weak self] in
+                guard let self else { return }
+                requestReconnectCatchUp()
+                lane.submit { [weak self] in _ = await self?.syncSinceLastCheckpoint() }
+            }
+            .store(in: &socketSubscriptions)
     }
 
     public func stopSocketRelay() async {
@@ -297,6 +171,27 @@ extension ConversationSyncEngine {
     }
 
     // MARK: - Socket Event Handlers
+
+    private func handleConversationClosed(_ event: ConversationClosedEvent) async {
+        await cache.conversations.update(for: "list") { conversations in
+            var updated = conversations
+            if let idx = updated.firstIndex(where: { $0.id == event.conversationId }) {
+                updated[idx].closedAt = WireDate.date(from: event.closedAt)
+                updated[idx].closedBy = event.closedBy
+            }
+            return updated
+        }
+        _conversationsDidChange.send()
+    }
+
+    private func handleViewOncePurged(_ event: ViewOncePurgedEvent) async {
+        await realtimeMessagePersistor?(.viewOnceOpened(messageId: event.messageId))
+        _messagesDidChange.send(event.conversationId)
+    }
+
+    private func handleMessageStarred(_ event: MessageStarredEvent) async {
+        await realtimeMessagePersistor?(Self.starMutation(for: event, now: Date()))
+    }
 
     private func handleNewMessage(_ apiMessage: APIMessage) async {
         Self.logger.info("[SyncEngine] handleNewMessage id=\(apiMessage.id, privacy: .public) conv=\(apiMessage.conversationId, privacy: .public)")
