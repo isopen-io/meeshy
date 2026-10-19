@@ -4,7 +4,7 @@ import MetalPerformanceShaders
 /// Stateless Gaussian blur over Metal textures, backed by `MPSImageGaussianBlur`.
 /// Out-of-place encode is the simpler contract — the caller owns both the
 /// source and destination textures and we don't need to negotiate an in-place
-/// fallback allocator. The shared `StoryRenderingContext.commandQueue` is
+/// fallback allocator. The shared `StoryRenderingContext.gpu` command queue is
 /// reused (allocating one per call would be wasteful at 60–120 fps).
 public enum StoryBlurFilter {
 
@@ -13,9 +13,9 @@ public enum StoryBlurFilter {
     public nonisolated static func apply(sigma: Float,
                                          to inputTexture: MTLTexture,
                                          output outputTexture: MTLTexture) {
-        let context = StoryRenderingContext.shared
-        let blur = MPSImageGaussianBlur(device: context.metalDevice, sigma: sigma)
-        guard let buffer = context.commandQueue.makeCommandBuffer() else { return }
+        guard let gpu = StoryRenderingContext.shared.gpu else { return }
+        let blur = MPSImageGaussianBlur(device: gpu.device, sigma: sigma)
+        guard let buffer = gpu.commandQueue.makeCommandBuffer() else { return }
         blur.encode(commandBuffer: buffer,
                     sourceTexture: inputTexture,
                     destinationTexture: outputTexture)

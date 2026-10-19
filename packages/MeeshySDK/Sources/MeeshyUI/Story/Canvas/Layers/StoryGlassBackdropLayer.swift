@@ -136,7 +136,8 @@ public final class StoryGlassBackdropLayer: CALayer {
         )
         descriptor.usage = [.shaderRead, .shaderWrite, .renderTarget]
         descriptor.storageMode = .shared
-        guard let output = context.metalDevice.makeTexture(descriptor: descriptor) else { return }
+        guard let gpu = context.gpu,
+              let output = gpu.device.makeTexture(descriptor: descriptor) else { return }
 
         // Synchronous apply — caller (StoryCanvasUIView render tick) already
         // dispatches once per frame, so blocking here just serializes work on

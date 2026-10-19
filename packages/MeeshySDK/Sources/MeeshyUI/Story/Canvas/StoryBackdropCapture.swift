@@ -109,7 +109,11 @@ public final class StoryBackdropCapture: BackdropCapturing {
     private(set) var playbackKey: StoryGlassCaptureKey?
     private(set) var playbackCapturedAt: CFTimeInterval = 0
 
-    public init() {}
+    private let context: StoryRenderingContext
+
+    public init(context: StoryRenderingContext = .shared) {
+        self.context = context
+    }
 
     // `nonisolated` deinit : la classe @MainActor ne stocke que des références
     // (MTLTexture, CGSize) libérées par ARC — aucun cleanup isolé requis. Sans
@@ -152,7 +156,11 @@ public final class StoryBackdropCapture: BackdropCapturing {
         let renderSize = geometry.renderSize
         guard renderSize.width > 0, renderSize.height > 0 else { return nil }
 
-        let context = StoryRenderingContext.shared
+        guard let gpu = context.gpu else {
+            cachedCanvasBackdrop = nil
+            cachedRenderSize = nil
+            return nil
+        }
         let width = Int(renderSize.width.rounded())
         let height = Int(renderSize.height.rounded())
         guard width > 0, height > 0 else { return nil }
@@ -169,7 +177,7 @@ public final class StoryBackdropCapture: BackdropCapturing {
         // back on the CPU. CARenderer writes to the target via Metal — the
         // storage mode does not affect throughput at our sizes.
         descriptor.storageMode = .shared
-        guard let target = context.metalDevice.makeTexture(descriptor: descriptor) else {
+        guard let target = gpu.device.makeTexture(descriptor: descriptor) else {
             cachedCanvasBackdrop = nil
             cachedRenderSize = nil
             return nil
@@ -262,7 +270,7 @@ public final class StoryBackdropCapture: BackdropCapturing {
             return nil
         }
 
-        let context = StoryRenderingContext.shared
+        guard let gpu = context.gpu else { return nil }
         let descriptor = MTLTextureDescriptor.texture2DDescriptor(
             pixelFormat: source.pixelFormat,
             width: regionW,
@@ -274,8 +282,8 @@ public final class StoryBackdropCapture: BackdropCapturing {
         descriptor.usage = [.shaderRead, .shaderWrite, .renderTarget]
         descriptor.storageMode = .shared
 
-        guard let cropped = context.metalDevice.makeTexture(descriptor: descriptor),
-              let buffer = context.commandQueue.makeCommandBuffer(),
+        guard let cropped = gpu.device.makeTexture(descriptor: descriptor),
+              let buffer = gpu.commandQueue.makeCommandBuffer(),
               let blit = buffer.makeBlitCommandEncoder() else {
             return nil
         }
