@@ -1,5 +1,7 @@
+import AVFoundation
 import SwiftUI
 import UIKit
+import MeeshySDK
 import MeeshyUI
 
 // MARK: - Pause ou boucle : ce que fait une story retenue (#9821)
@@ -45,8 +47,9 @@ nonisolated enum StoryPlaybackHold: Equatable {
 ///   fermeture, interlude d'identité — l'horloge attend la fin du geste.
 /// - `coveredByScreen` : un écran plein recouvre la story (composeur, citer ou
 ///   republier en post, lieu plein écran) — elle ne joue pas son son derrière.
-/// - `interrupted` : un appel direct (qui sonne ou se tient) ou un événement du
-///   jeu (célébration d'un palier, sa carte photo) passe devant elle.
+/// - `interrupted` : un appel direct (qui sonne ou se tient), une interruption
+///   système de la lecture (#11040, g) ou un événement du jeu (célébration
+///   d'un palier, sa carte photo) passe devant elle.
 /// - `engaged` : commentaires, composition, menu « … » ouvert, options,
 ///   langues, légende, transcription, feuilles posées sur la story — elle boucle.
 nonisolated struct StoryPlaybackCauses: Equatable {
@@ -119,26 +122,60 @@ struct StoryLoopRestart: ViewModifier {
     }
 }
 
-// MARK: - Ce qui passe devant la story : un appel, un événement du jeu
+// MARK: - Ce qui passe devant la story : un appel, une interruption, le jeu
 
-/// Deux signaux d'app, lus dès le montage (`@Published` livre sa valeur
-/// courante) : un appel qui sonne déjà quand on ouvre la story la fige aussi.
+/// Trois signaux, lus dès le montage (`@Published` livre sa valeur courante) :
+/// un appel Meeshy qui sonne déjà quand on ouvre la story la fige aussi ; une
+/// interruption SYSTÈME de la lecture (appel téléphonique, Siri, son d'une
+/// autre app) fige son horloge et la relance à la reprise (#11040, décision
+/// g) ; un événement du jeu passe devant elle.
 struct StoryPlaybackInterruptions: ViewModifier {
-    @Binding var callInterrupting: Bool
+    @Binding var interrupting: Bool
     @Binding var gameMomentShown: Bool
+    /// La pause de l'utilisateur : elle l'emporte sur la reprise, et une
+    /// interruption finie sans reprise la pose.
+    @Binding var explicitPause: Bool
+    /// La story joue (ni retenue, ni déjà figée) au moment de l'événement.
+    let storyIsPlaying: Bool
+
+    @State private var hostInterrupting = false
+    @State private var session = StorySessionInterruption()
 
     func body(content: Content) -> some View {
         content
-            .onReceive(PlaybackInterruption.shared.$isActive.removeDuplicates()) { callInterrupting = $0 }
+            .onReceive(PlaybackInterruption.shared.$isActive.removeDuplicates()) { active in
+                hostInterrupting = active
+                publishInterruption()
+            }
             .onReceive(GameMomentPresence.shared.$isPresented.removeDuplicates()) { gameMomentShown = $0 }
+            .onReceive(MediaSessionCoordinator.shared.events.receive(on: DispatchQueue.main)) { event in
+                apply(session.handle(event, storyIsPlaying: storyIsPlaying))
+            }
+            .onReceive(NotificationCenter.default.publisher(for: UIApplication.didBecomeActiveNotification)) { _ in
+                apply(session.returnedToForeground(
+                    otherAudioPlaying: AVAudioSession.sharedInstance().isOtherAudioPlaying
+                ))
+            }
+            .adaptiveOnChange(of: explicitPause) { _, paused in
+                guard paused, session.isFrozen else { return }
+                session.userPaused()
+                publishInterruption()
+            }
+            .onAppear { MediaSessionCoordinator.shared.observeSystemEvents() }
+    }
+
+    private func apply(_ outcome: StorySessionInterruption.Outcome) {
+        if outcome == .settleAsPause { explicitPause = true }
+        publishInterruption()
+    }
+
+    private func publishInterruption() {
+        let interrupted = hostInterrupting || session.isFrozen
+        if interrupting != interrupted { interrupting = interrupted }
     }
 }
 
 extension View {
-    func storyPlaybackInterruptions(callInterrupting: Binding<Bool>, gameMomentShown: Binding<Bool>) -> some View {
-        modifier(StoryPlaybackInterruptions(callInterrupting: callInterrupting, gameMomentShown: gameMomentShown))
-    }
-
     func storyLoopRestart(pass: Int, scrubber: ScenePlaybackScrubber) -> some View {
         modifier(StoryLoopRestart(pass: pass, scrubber: scrubber))
     }

@@ -42,12 +42,48 @@ nonisolated struct StorySessionInterruption: Equatable {
     private(set) var isFrozen = false
 
     mutating func handle(_ event: MediaSessionCoordinator.Event, storyIsPlaying: Bool) -> Outcome {
-        .none
+        guard Self.concernsTheClock(event),
+              let signal = InterruptionResumeLedger.signal(for: event, isPlaying: storyIsPlaying) else { return .none }
+        return apply(ledger.handle(signal))
     }
 
+    /// Retour au premier plan sans signal de fin (la vidéo d'une autre app
+    /// n'en envoie presque jamais).
     mutating func returnedToForeground(otherAudioPlaying: Bool) -> Outcome {
-        .none
+        guard isFrozen else { return .none }
+        return apply(ledger.handle(.returnedToForeground(
+            otherAudioPlaying: otherAudioPlaying, contentStillOnScreen: true
+        )))
     }
 
-    mutating func userPaused() {}
+    /// L'utilisateur a mis la story en pause : sa pause l'emporte.
+    mutating func userPaused() {
+        _ = ledger.handle(.userPaused)
+        isFrozen = false
+    }
+
+    /// Un changement de route (casque débranché) coupe le son du canvas, qui
+    /// s'en charge ; il n'arrête pas l'horloge.
+    private static func concernsTheClock(_ event: MediaSessionCoordinator.Event) -> Bool {
+        switch event {
+        case .interruptionBegan, .interruptionEndedShouldResume, .interruptionEndedShouldNotResume,
+             .callEndedShouldResume:
+            return true
+        case .routeChangedOldDeviceUnavailable, .routeChangedOther:
+            return false
+        }
+    }
+
+    private mutating func apply(_ action: InterruptionResumeLedger.Action) -> Outcome {
+        let wasFrozen = isFrozen
+        isFrozen = ledger.holdsInterruptedPlayback
+        switch action {
+        case .pause:
+            return .freeze
+        case .resume:
+            return .resume
+        case .none:
+            return wasFrozen && !isFrozen ? .settleAsPause : .none
+        }
+    }
 }

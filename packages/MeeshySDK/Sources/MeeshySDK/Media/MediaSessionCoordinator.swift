@@ -210,6 +210,8 @@ public actor MediaSessionCoordinator {
         // any observer that re-checks `isCallActive` sees the cleared state.
         if wasActive && !active {
             emit(.callEndedShouldResume)
+            // Meeshy rend la main si rien ne reprend après l'appel (#11040, j).
+            releaseAfterUnresumedInterruption()
         }
     }
 
@@ -348,8 +350,42 @@ public actor MediaSessionCoordinator {
     /// pause AVANT l'appel : une désactivation sous un lecteur qui tourne
     /// échoue.
     public nonisolated func releaseAfterUserPause(on queue: DispatchQueue = .global(qos: .utility)) {
-        deactivatePlaybackDeferred(on: queue, after: ContentPlaybackSessionLaw.userPauseReleaseDelay) { [self] in
-            deactivatePlaybackSync()
+        releaseContentSession(after: ContentPlaybackSessionLaw.userPauseReleaseDelay, on: queue)
+    }
+
+    /// **Rend la main après une interruption sans reprise** (#11040, décision
+    /// j) : fin d'interruption sans `shouldResume`, utilisateur qui a mis en
+    /// pause pendant l'appel, appel Meeshy raccroché sans rien à reprendre.
+    /// Appelé par le coordinateur lui-même à chaque fin d'interruption : les
+    /// lecteurs qui reprennent réactivent la session pendant
+    /// `ContentSessionReleaseLaw.interruptionResumeGrace`, ce qui annule la
+    /// libération ; sinon la session se rend et la musique interrompue repart.
+    public nonisolated func releaseAfterUnresumedInterruption(on queue: DispatchQueue = .global(qos: .utility)) {
+        releaseContentSession(after: ContentSessionReleaseLaw.interruptionResumeGrace, on: queue)
+    }
+
+    /// La libération CENTRALE d'une session de contenu : au bout de `delay`,
+    /// sur le fil principal, elle s'efface si une lecture a repris la session
+    /// depuis la demande ou si un lecteur Meeshy joue encore
+    /// (`ContentSessionReleaseLaw.mayRelease`) ; sinon la désactivation
+    /// (bloquante) part sur `queue`.
+    nonisolated func releaseContentSession(
+        after delay: TimeInterval,
+        on queue: DispatchQueue,
+        meeshyStillPlays: @escaping @MainActor @Sendable () -> Bool = { RecordingPlaybackDucker.shared.meeshyStillPlays },
+        deactivate: (@Sendable () -> Void)? = nil
+    ) {
+        playbackLeaseHeld = false
+        let generation = _activationGeneration.withLock { $0 }
+        let run: @Sendable () -> Void = deactivate ?? { [self] in deactivatePlaybackSync() }
+        DispatchQueue.main.asyncAfter(deadline: .now() + delay) { [self] in
+            let stillPlays = MainActor.assumeIsolated { meeshyStillPlays() }
+            let activated = _activationGeneration.withLock { $0 } != generation
+            guard ContentSessionReleaseLaw.mayRelease(activatedSinceRequest: activated, meeshyStillPlays: stillPlays) else { return }
+            queue.async { [self] in
+                guard _activationGeneration.withLock({ $0 }) == generation else { return }
+                run()
+            }
         }
     }
 
@@ -589,6 +625,10 @@ public actor MediaSessionCoordinator {
         guard let event else { return }
         logger.info("Audio session event: \(String(describing: event))")
         emit(event)
+        // Meeshy rend la main si rien ne reprend (#11040, j).
+        if ContentSessionReleaseLaw.endsAnInterruption(event) {
+            releaseAfterUnresumedInterruption()
+        }
     }
 
     private nonisolated static func parseInterruption(_ notification: Notification) -> Event? {
