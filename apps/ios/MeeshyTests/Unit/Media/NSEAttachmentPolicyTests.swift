@@ -102,14 +102,20 @@ final class NSEAttachmentPolicyTests: XCTestCase {
 
     // MARK: - Le CÂBLAGE, faute de pouvoir recevoir un push en test
 
+    /// `NotificationService.swift` ET ce qui en est sorti (`NSEMessagePrePersister.swift`,
+    /// #10988), dans cet ordre : un interdit lu sur le seul fichier principal ne verrait
+    /// pas le code déplacé. `NSEDataSync.swift` reste hors de la lecture — ses `dataTask`
+    /// sont des lectures JSON, pas des corps de pièce jointe.
     private func nseSource() throws -> String {
-        let url = URL(fileURLWithPath: #filePath)
+        let folder = URL(fileURLWithPath: #filePath)
             .deletingLastPathComponent()   // Media/
             .deletingLastPathComponent()   // Unit/
             .deletingLastPathComponent()   // MeeshyTests/
             .deletingLastPathComponent()   // ios/
-            .appendingPathComponent("MeeshyNotificationExtension/NotificationService.swift")
-        return try String(contentsOf: url, encoding: .utf8)
+            .appendingPathComponent("MeeshyNotificationExtension")
+        return try ["NotificationService.swift", "NSEMessagePrePersister.swift"]
+            .map { try String(contentsOf: folder.appendingPathComponent($0), encoding: .utf8) }
+            .joined(separator: "\n")
     }
 
     /// **Plus aucun corps de réponse ne transite par la mémoire.** C'est le
