@@ -227,6 +227,10 @@ targets:
       - path: MeeshyWidgets/VoicePlaybackActivityAttributes.swift
       - path: MeeshyWidgets/VoiceRecordingActivityAttributes.swift
       - path: MeeshyWidgets/LiveActivityCommandIntent.swift
+      # LOT-03 — la miniature de l'interlocuteur : l'app l'ÉCRIT dans le conteneur
+      # App Group, l'extension de widgets la LIT par `context.activityID`. Une
+      # Live Activity ne fait pas de réseau. Garde : `LiveActivityAvatarStoreTests`.
+      - path: MeeshyWidgets/LiveActivityAvatarStore.swift
     settings:
       INFOPLIST_FILE: Meeshy/Info.plist
       PRODUCT_BUNDLE_IDENTIFIER: me.meeshy.app

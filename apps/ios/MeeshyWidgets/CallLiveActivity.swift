@@ -11,7 +11,11 @@ import SwiftUI
 struct CallLiveActivity: Widget {
     var body: some WidgetConfiguration {
         ActivityConfiguration(for: CallActivityAttributes.self) { context in
-            CallActivityLockScreenView(state: context.state, labels: context.attributes.labels)
+            CallActivityLockScreenView(
+                state: context.state,
+                labels: context.attributes.labels,
+                avatar: LiveActivityAvatarStore.appGroup()?.thumbnail(forActivityID: context.activityID)
+            )
                 .activityBackgroundTint(Color.black.opacity(0.6))
                 .activitySystemActionForegroundColor(LiveActivityStyle.success)
         } dynamicIsland: { context in
@@ -21,7 +25,8 @@ struct CallLiveActivity: Widget {
                         initials: context.state.initials,
                         accentHex: context.state.accentHex,
                         fallbackSymbol: CallActivityGlyph.symbol(for: context.state),
-                        size: 44
+                        size: 44,
+                        image: LiveActivityAvatarStore.appGroup()?.thumbnail(forActivityID: context.activityID)
                     )
                     .padding(.leading, 4)
                 }
@@ -203,6 +208,7 @@ private struct CallActivityControls: View {
 private struct CallActivityLockScreenView: View {
     let state: CallActivitySnapshot
     let labels: CallActivityLabels
+    let avatar: CGImage?
 
     var body: some View {
         VStack(alignment: .leading, spacing: 10) {
@@ -211,7 +217,8 @@ private struct CallActivityLockScreenView: View {
                     initials: state.initials,
                     accentHex: state.accentHex,
                     fallbackSymbol: CallActivityGlyph.symbol(for: state),
-                    size: 44
+                    size: 44,
+                    image: avatar
                 )
                 VStack(alignment: .leading, spacing: 2) {
                     CallActivityHeadline(state: state)
