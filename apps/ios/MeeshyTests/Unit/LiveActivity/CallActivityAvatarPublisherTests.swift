@@ -2,7 +2,8 @@ import XCTest
 import UIKit
 @testable import Meeshy
 
-private actor MockCallActivityAvatarSource: CallActivityAvatarSourcing {
+@MainActor
+private final class MockCallActivityAvatarSource: CallActivityAvatarSourcing {
     private(set) var requestedUserIds: [String] = []
     private let stub: Data?
     private var isGated: Bool
@@ -12,6 +13,8 @@ private actor MockCallActivityAvatarSource: CallActivityAvatarSourcing {
         self.stub = stub
         self.isGated = gated
     }
+
+    nonisolated deinit {}
 
     func avatarImageData(forUserId userId: String) async -> Data? {
         requestedUserIds.append(userId)
@@ -81,7 +84,7 @@ final class CallActivityAvatarPublisherTests: XCTestCase {
 
         let task = publisher.publish(activityID: "A", remoteUserId: "U", onPublished: { counter.increment() })
         publisher.withdraw(activityID: "A")
-        await source.open()
+        source.open()
         await task.value
 
         XCTAssertNil(store.thumbnail(forActivityID: "A"))
@@ -95,7 +98,7 @@ final class CallActivityAvatarPublisherTests: XCTestCase {
         await publisher.publish(activityID: "A", remoteUserId: "U", onPublished: {}).value
         await publisher.publish(activityID: "A", remoteUserId: "U", onPublished: {}).value
 
-        let requested = await source.requestedUserIds
+        let requested = source.requestedUserIds
         XCTAssertEqual(requested, ["U"])
     }
 
