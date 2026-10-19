@@ -186,17 +186,11 @@ final class BubbleWindowMetricsTests: XCTestCase {
         )
     }
 
-    /// `DeviceLayout` keeps exactly one reference to the deprecated API: the
-    /// documented last-resort fallback used when no foreground scene is attached
-    /// — a context where nothing is being laid out anyway. Pinning the count is
-    /// what makes this a single source of truth rather than a fourth copy.
-    func test_deviceLayout_holdsTheOnlyRemainingDisplayFallback() throws {
+    func test_deviceLayout_relaysTheDisplayFallbackToWindowMetrics() throws {
         let code = codeLines(try source(Self.deviceLayout))
 
-        XCTAssertEqual(
-            code.components(separatedBy: "UIScreen.main").count - 1, 1,
-            "DeviceLayout must carry a single, documented display fallback — no more, no fewer."
-        )
+        XCTAssertEqual(code.components(separatedBy: "UIScreen.main").count - 1, 0)
+        XCTAssertTrue(code.contains("WindowMetrics.physicalDisplay.points"))
         XCTAssertTrue(
             code.contains("activationState == .foregroundActive"),
             "The scene must be resolved by activation state: `connectedScenes` is an unordered " +
@@ -206,5 +200,12 @@ final class BubbleWindowMetricsTests: XCTestCase {
             code.contains("isKeyWindow"),
             "Within the foreground scene, the key window is the one hosting the app's UI."
         )
+    }
+
+    func test_bubbleFullscreen_electsTheVariantThroughTheGallerySource() throws {
+        let code = codeLines(try source(Self.bubbleStandardLayout))
+
+        XCTAssertTrue(code.contains("GalleryImageSource.fullscreenURL(for: attachment)"))
+        XCTAssertFalse(code.contains("ImageVariantSelector.bestImageURL"))
     }
 }
