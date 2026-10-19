@@ -180,7 +180,8 @@ struct FeedComposerSheet: View {
                     MeeshyAvatar(
                         name: getUserDisplayName(authManager.currentUser, fallback: "M"),
                         context: .feedComposer,
-                        avatarURL: authManager.currentUser?.avatar
+                        avatarURL: authManager.currentUser?.avatar,
+                        ring: authManager.currentUser?.profileDecor?.avatarRing
                     )
                     VStack(alignment: .leading, spacing: MeeshySpacing.xxs) {
                         Text(getUserDisplayName(authManager.currentUser, fallback: String(localized: "feed.composer.me", defaultValue: "Moi", bundle: .main)))
@@ -283,7 +284,9 @@ struct FeedComposerSheet: View {
                                 name: quoted.author,
                                 context: .postComment,
                                 accentColor: quoted.authorColor,
-                                avatarURL: quoted.authorAvatarURL
+                                avatarURL: quoted.authorAvatarURL,
+                                presenceState: PresenceManager.shared.knownPresenceState(for: quoted.authorId),
+                                ring: quoted.authorRing
                             )
                             Text(quoted.author)
                                 .font(MeeshyFont.relative(MeeshyFont.subheadSize, weight: .semibold))

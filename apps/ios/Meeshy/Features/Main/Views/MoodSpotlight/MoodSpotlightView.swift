@@ -26,6 +26,7 @@ struct MoodSpotlightView: View {
             MoodSpotlightBackdrop(
                 bannerURL: viewModel.author?.banner,
                 bannerThumbHash: viewModel.author?.bannerThumbHash,
+                bannerDecor: viewModel.author?.profileDecor?.banner,
                 fallbackHex: viewModel.entry?.avatarColor ?? "6366F1"
             )
             .ignoresSafeArea()
@@ -108,7 +109,8 @@ struct MoodSpotlightView: View {
             MoodSpotlightCard(
                 entry: entry,
                 avatarURL: viewModel.author?.avatar,
-                avatarThumbHash: viewModel.author?.avatarThumbHash
+                avatarThumbHash: viewModel.author?.avatarThumbHash,
+                ring: viewModel.author?.profileDecor?.avatarRing
             )
         case .unavailable:
             VStack(spacing: 12) {
@@ -129,6 +131,8 @@ struct MoodSpotlightView: View {
 private struct MoodSpotlightBackdrop: View {
     let bannerURL: String?
     let bannerThumbHash: String?
+    /// La bannière de design équipée (#10946) — peinte seulement sans photo (`bannerPaint`).
+    let bannerDecor: ServedProfileDecorItem?
     let fallbackHex: String
 
     var body: some View {
@@ -139,11 +143,18 @@ private struct MoodSpotlightBackdrop: View {
                     startPoint: .topLeading,
                     endPoint: .bottomTrailing
                 )
-                if let bannerURL, !bannerURL.isEmpty {
+                switch ProfileDecorResolver.bannerPaint(photo: bannerURL, decor: bannerDecor) {
+                case .photo(let bannerURL):
                     CachedAsyncImage(url: bannerURL, thumbHash: bannerThumbHash,
                                      showsStatusOverlays: false, autoLoad: true) { Color.clear }
                         .frame(width: proxy.size.width, height: proxy.size.height)
                         .clipped()
+                case .design(let design):
+                    BannerDesignView(design: design, isDark: true, accentHex: fallbackHex)
+                        .frame(width: proxy.size.width, height: proxy.size.height)
+                        .clipped()
+                case .plain:
+                    EmptyView()
                 }
                 LinearGradient(
                     colors: [.black.opacity(0.5), .black.opacity(0.35), .black.opacity(0.7)],

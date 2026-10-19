@@ -275,6 +275,8 @@ struct StoryHeaderView: View {
                                     context: .storyViewer,
                                     accentColor: group.avatarColor,
                                     avatarURL: group.avatarURL,
+                                    presenceState: PresenceManager.shared.presenceState(for: group.id, served: group.authorPresence),
+                                    ring: group.authorRing,
                                     onViewProfile: { selectedProfileUser = .from(storyGroup: group) },
                                     contextMenuItems: [
                                         AvatarContextMenuItem(

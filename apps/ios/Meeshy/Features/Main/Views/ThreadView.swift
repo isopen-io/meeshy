@@ -88,9 +88,11 @@ struct ThreadView: View {
                     name: parentMessage.senderName ?? "?",
                     context: .messageBubble,
                     accentColor: accentColor,
-                    moodEmoji: statusViewModel.statusForUser(userId: parentMessage.senderId)?.moodEmoji,
+                    avatarURL: parentMessage.senderAvatarURL,
+                    moodEmoji: statusViewModel.statusForUser(userId: parentMessage.viewingKey)?.moodEmoji,
                     presenceState: parentMessage.isMe ? nil : PresenceManager.shared.presenceState(forSenderOf: parentMessage),
-                    onMoodTap: statusViewModel.moodTapHandler(for: parentMessage.senderId)
+                    ring: parentMessage.senderRing,
+                    onMoodTap: statusViewModel.moodTapHandler(for: parentMessage.viewingKey)
                 )
 
                 VStack(alignment: .leading, spacing: MeeshySpacing.xxs) {
@@ -156,8 +158,11 @@ struct ThreadView: View {
                 name: message.senderName ?? "?",
                 context: .postComment,
                 accentColor: message.senderColor ?? accentColor,
-                moodEmoji: statusViewModel.statusForUser(userId: message.senderId)?.moodEmoji,
-                onMoodTap: statusViewModel.moodTapHandler(for: message.senderId)
+                avatarURL: message.senderAvatarURL,
+                moodEmoji: statusViewModel.statusForUser(userId: message.viewingKey)?.moodEmoji,
+                presenceState: message.isMe ? nil : PresenceManager.shared.presenceState(forSenderOf: message),
+                ring: message.senderRing,
+                onMoodTap: statusViewModel.moodTapHandler(for: message.viewingKey)
             )
 
             VStack(alignment: .leading, spacing: MeeshySpacing.xxs) {
