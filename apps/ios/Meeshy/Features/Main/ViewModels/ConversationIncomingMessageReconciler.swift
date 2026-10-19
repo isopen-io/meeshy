@@ -11,6 +11,8 @@ import os
 /// ici) : même isolation, même ordre des effets.
 @MainActor
 final class ConversationIncomingMessageReconciler {
+    nonisolated deinit {}
+
     private let currentUserId: String
     private let delegateProvider: () -> ConversationSocketDelegate?
     private let persistenceProvider: () -> MessagePersistenceActor?

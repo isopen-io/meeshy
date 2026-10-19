@@ -7,6 +7,8 @@ import MeeshySDK
 /// l'appel (lecture synchrone sur le MainActor, avant la tâche détachée).
 @MainActor
 final class ConversationListPersister {
+    nonisolated deinit {}
+
     /// Fire-and-forget persistence of the list + cursor. Stored so
     /// `pullToRefresh()` (and `loadMore` itself) can cancel any in-flight save
     /// before invalidating the cache — otherwise an orphaned task could

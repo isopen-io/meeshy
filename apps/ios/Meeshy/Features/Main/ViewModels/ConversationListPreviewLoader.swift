@@ -8,6 +8,8 @@ import MeeshySDK
 /// qu'à ce chargement. Non publié : seul le menu contextuel le lit.
 @MainActor
 final class ConversationListPreviewLoader {
+    nonisolated deinit {}
+
     private(set) var messages: [String: [Message]] = [:]
     private var loadingInFlight: Set<String> = []
     private let messageService: MessageServiceProviding
