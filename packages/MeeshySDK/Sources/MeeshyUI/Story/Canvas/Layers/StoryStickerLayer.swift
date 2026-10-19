@@ -98,7 +98,7 @@ public final class StoryStickerLayer: CALayer {
     public func configure(with sticker: StorySticker,
                           geometry: CanvasGeometry,
                           mode: RenderMode,
-                          renderScale: CGFloat = UIScreen.main.scale,
+                          renderScale: CGFloat = StoryCanvasDisplayScale.ambient,
                           imageCache: ImageCacheReader? = nil,
                           resolver: (@Sendable (String) -> URL?)? = nil) {
         self.sticker = sticker

@@ -289,7 +289,7 @@ public final class StoryAVCompositor: NSObject, nonisolated AVVideoCompositing, 
                                                       geometry: geometry,
                                                       time: time,
                                                       mode: .play,
-                                                      languages: languages)
+                                                      languages: languages, contentsScale: 1.0)
 
             // Foreground layer tree (text/media/stickers/drawing). Les bitmaps
             // des stickers IMAGE arrivent par un lecteur SYNCHRONE : la couche

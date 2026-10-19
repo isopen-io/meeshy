@@ -153,20 +153,20 @@ public final class StoryMediaLayer: CALayer {
         }
     }
 
-    /// Image loader used by `configureImage`. Defaults to a shim that calls
+    /// Image loader used by `configureImage` (`StoryMediaLayer+ImageLoading.swift`). Defaults to a shim that calls
     /// `CacheCoordinator.shared.images.image(for:)`. Override in tests via
     /// `_setImageLoaderForTesting(_:)` to inject a deterministic stub.
     /// `nonisolated(unsafe)` so the `nonisolated init()` can populate the
     /// default value; readers/writers below are explicitly `@MainActor` so
     /// mutation always happens on a single isolation context.
-    private nonisolated(unsafe) var imageLoader: any StoryMediaImageLoading = DiskCacheImageLoader()
+    nonisolated(unsafe) var imageLoader: any StoryMediaImageLoading = DiskCacheImageLoader()
 
     /// In-flight network/cache fetch for the current media URL. Captured so a
     /// subsequent `configure(with:geometry:mode:)` call (recycled layer, new
     /// slide, scrub) cancels the previous load before it can stamp a stale
     /// CGImage into `contents`. `Task<Void, Never>` because the closure
     /// swallows all errors — it either sets `contents` or no-ops.
-    private nonisolated(unsafe) var currentLoadTask: Task<Void, Never>?
+    nonisolated(unsafe) var currentLoadTask: Task<Void, Never>?
 
     /// In-flight video load (pré-cache + AVPlayer setup). Annulé à chaque
     /// `configureVideo` pour éviter qu'une URL obsolète stamp la layer après
@@ -257,7 +257,8 @@ public final class StoryMediaLayer: CALayer {
                           resolver: (@Sendable (String) -> URL?)? = nil,
                           imageCache: ImageCacheReader? = nil,
                           playerProvider: (any StoryCarrierPlayerProviding)? = nil,
-                          renderScale: CGFloat = UIScreen.main.scale) {
+                          renderScale: CGFloat = StoryCanvasDisplayScale.ambient,
+                          decodeTiming: StoryImageDecodeTiming = .immediate) {
         self.media = media
         self.playerProvider = playerProvider
         // Niveau de BASE repris du modèle. L'automation du canvas réécrira
@@ -301,7 +302,7 @@ public final class StoryMediaLayer: CALayer {
 
         switch media.kind {
         case .image:
-            configureImage(media, resolver: resolver, imageCache: imageCache)
+            configureImage(media, resolver: resolver, imageCache: imageCache, decodeTiming: decodeTiming)
         case .video:
             configureVideo(media, mode: mode, resolver: resolver)
         case .none:
@@ -392,104 +393,6 @@ public final class StoryMediaLayer: CALayer {
     }
 
     // MARK: - Image path
-
-    /// Configure the layer's `contents` from a media URL.
-    ///
-    /// **Performance contract** (P0 fix, 2026-05-12):
-    /// - The previous implementation called `Data(contentsOf: url)` directly,
-    ///   which is synchronous I/O. On `http(s)` URLs that meant a blocking
-    ///   network fetch on the main thread (~500 ms / 5 MB on 4G ≈ 30 dropped
-    ///   frames) every time `rebuildLayers()` ran on `displayLinkTick`.
-    /// - We now keep the contract synchronous for `file://` URLs (already
-    ///   non-blocking — local FS read is fast and matches the legacy hot path
-    ///   used by the composer preview) and switch `http(s)` to the cache
-    ///   coordinator's async `image(for:)` API, which serves from the L1
-    ///   NSCache instantly when warm, falls back to disk, and finally to the
-    ///   network on `URLSession`.
-    /// - `currentLoadTask` is cancelled on every entry so a recycled layer
-    ///   (slide change, scrub, re-configure for a different media) never
-    ///   stamps the previous URL's image into `contents` after the new URL
-    ///   has been set. The continuation also guards with `Task.isCancelled`
-    ///   before mutating `contents`.
-    @MainActor
-    private func configureImage(_ media: StoryMediaObject,
-                                resolver: (@Sendable (String) -> URL?)?,
-                                imageCache: ImageCacheReader?) {
-        // Cancel any in-flight load from a previous configure() call before
-        // we mutate `contents`. The previous Task observes `isCancelled`
-        // and returns without touching `contents`.
-        currentLoadTask?.cancel()
-        currentLoadTask = nil
-
-        contentsGravity = .resizeAspectFill
-        masksToBounds = true
-
-        let resolvedURL = StoryMediaLayerRules.resolvedMediaURL(for: media, resolver: resolver)
-        // Cache key : pour les médias publiés on a un `postMediaId` serveur ;
-        // pour les médias composer (PhotosPicker → tmp file) postMediaId reste
-        // vide, donc on retombe sur `media.id` (UUID local) qui est exactement
-        // la clé utilisée par `viewModel.loadedImages` côté composer. Sans
-        // ce fallback, `MeeshyImageEditorView` onAccept écrivait
-        // `loadedImages[media.id] = edited` et le `ComposerImageCacheReader`
-        // était bien câblé, mais la lookup ici utilisait `""` → cache miss →
-        // chemin file:// servait l'ancien bitmap (bug 2026-05-27).
-        let cacheKey: String = media.postMediaId.isEmpty ? media.id : media.postMediaId
-
-        // Composer fast-path : si un bitmap in-memory est dans le reader
-        // (typiquement après `MeeshyImageEditorView` onAccept), il prime sur
-        // le chemin file:// — la version éditée n'a pas été ré-écrite dans
-        // le fichier tmp et le file:// servirait l'original obsolète.
-        if let imageCache,
-           let synchronousReader = imageCache as? ComposerImageCacheReader,
-           let cached = CanvasImageOrientation.displayCGImage(Self.filtered(synchronousReader.images[cacheKey], for: media)) {
-            contents = cached
-            return
-        }
-
-        // Local file:// URLs stay on the synchronous path — they are not
-        // blocking in any meaningful sense (no DNS / TCP / TLS) and the
-        // composer preview relies on the image being present by the time
-        // `configure(with:)` returns. Anything with a network scheme goes
-        // through the async cache.
-        if let url = resolvedURL, url.isFileURL {
-            if let data = try? Data(contentsOf: url),
-               let cgImage = CanvasImageOrientation.displayCGImage(Self.filtered(UIImage(data: data), for: media)) {
-                contents = cgImage
-            }
-            return
-        }
-
-        let loader = imageLoader
-        // Strong capture de `self` dans la Task. `[weak self]` faisait que la
-        // layer se désallouait entre le `await` et le stamp `contents` —
-        // `rebuildLayers()` à 60 Hz détache la layer du parent et, à chaque
-        // cache miss du `StoryRendererCache`, ARC libère l'ancien layer avant
-        // que la Task n'arrive au stamp. Le `guard let self` retournait sans
-        // jamais stamper le bitmap → l'image foreground restait invisible.
-        // Le cycle Task→self→Task se ferme dès le `return` de la Task :
-        // pas de leak persistant.
-        currentLoadTask = Task { @MainActor in
-            // A configure() that superseded this one (or a teardown) cancels the
-            // task before it runs. Bail out *before* awaiting the loader: a
-            // cancelled task must never register a fetch continuation it will
-            // then abandon — that leaks a suspended load (and hangs any awaiter
-            // of `currentLoadTask.value`).
-            guard !Task.isCancelled else { return }
-            // (1) Fast-path image cache (composer preview / disk-backed reader).
-            if let imageCache,
-               let cached = CanvasImageOrientation.displayCGImage(Self.filtered(await imageCache.cachedImage(for: cacheKey), for: media)) {
-                guard !Task.isCancelled else { return }
-                self.contents = cached
-                return
-            }
-            // (2) Network URL through the disk-cache-backed loader.
-            guard let url = resolvedURL else { return }
-            let loaded = await loader.image(for: url.absoluteString)
-            guard !Task.isCancelled,
-                  let cgImage = CanvasImageOrientation.displayCGImage(Self.filtered(loaded, for: media)) else { return }
-            self.contents = cgImage
-        }
-    }
 
     static func filtered(_ image: UIImage?, for media: StoryMediaObject) -> UIImage? {
         StoryMediaLayerRules.filtered(image, for: media)

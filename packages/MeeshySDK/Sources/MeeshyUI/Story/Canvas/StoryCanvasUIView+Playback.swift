@@ -849,7 +849,7 @@ extension StoryCanvasUIView {
                                                   geometry: geometry,
                                                   time: currentTime,
                                                   mode: mode,
-                                                  languages: readerContext.preferredLanguages)
+                                                  languages: readerContext.preferredLanguages, contentsScale: traitCollection.storyCanvasDisplayScale)
         // Re-feed the already-attached text layers in place — no rebuildLayers().
         // `setBackdropTexture` is a no-op on a non-glass text layer (its glass
         // backdrop sublayer is nil), so the filter is the crop work, which the

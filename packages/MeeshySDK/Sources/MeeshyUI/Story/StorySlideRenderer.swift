@@ -164,7 +164,7 @@ public enum StorySlideRenderer {
             //    médias (étapes 2b et 4), sous l'id d'ÉLÉMENT.
             if let stickers = slide.effects.stickerObjects {
                 for sticker in stickers {
-                    drawSticker(sticker, image: loadedImages[sticker.id], in: size, ctx: cgCtx)
+                    drawSticker(sticker, image: loadedImages[sticker.id], in: size, renderScale: format.scale, ctx: cgCtx)
                 }
             }
 
@@ -174,7 +174,7 @@ public enum StorySlideRenderer {
             //     rejouerait la divergence déjà payée sur les stickers (taille
             //     codée en dur, `baseSize` ignoré).
             for location in slide.locationObjects {
-                drawLocationObject(location, in: size, ctx: cgCtx)
+                drawLocationObject(location, in: size, renderScale: format.scale, ctx: cgCtx)
             }
 
             // 6. Drawing layer — TOPMOST (modern strokes preferred, legacy PKDrawing
@@ -446,9 +446,9 @@ public enum StorySlideRenderer {
     /// `render(in:)` ignore `position`/`anchorPoint`/`transform` du layer, donc
     /// l'ancrage et la rotation sont appliqués ici au CTM, comme pour les
     /// textes et les médias.
-    private static func drawLocationObject(_ location: StoryLocationObject, in size: CGSize, ctx: CGContext) {
+    private static func drawLocationObject(_ location: StoryLocationObject, in size: CGSize, renderScale: CGFloat, ctx: CGContext) {
         let layer = StoryLocationLayer()
-        layer.configure(with: location, geometry: CanvasGeometry(renderSize: size), mode: .play)
+        layer.configure(with: location, geometry: CanvasGeometry(renderSize: size), mode: .play, renderScale: renderScale)
         let box = layer.bounds.size
         guard box.width > 0, box.height > 0 else { return }
         let center = layer.position
@@ -474,7 +474,7 @@ public enum StorySlideRenderer {
     /// Sans bitmap on peint `wireEmoji` plutôt que `emoji` : un sticker image
     /// écrit ailleurs peut n'avoir aucun emoji, et peindre la chaîne vide
     /// laisserait un TROU là où l'auteur a posé quelque chose.
-    private static func drawSticker(_ sticker: StorySticker, image: UIImage?, in size: CGSize, ctx: CGContext) {
+    private static func drawSticker(_ sticker: StorySticker, image: UIImage?, in size: CGSize, renderScale: CGFloat, ctx: CGContext) {
         // `0.15` codé en dur ET `baseSize` ignoré : la miniature ne
         // correspondait ni au canvas ni à l'export. Règle partagée désormais.
         let side = CanvasGeometry.stickerFontSize(baseSize: sticker.baseSize,
@@ -495,7 +495,8 @@ public enum StorySlideRenderer {
                     let layer = StoryStickerLayer()
                     layer.configure(with: sticker,
                                     geometry: CanvasGeometry(renderSize: size),
-                                    mode: .play)
+                                    mode: .play,
+                                    renderScale: renderScale)
                     let boîte = layer.bounds.size
                     if boîte.width > 0, boîte.height > 0 {
                         ctx.saveGState()

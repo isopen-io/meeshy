@@ -100,7 +100,7 @@ public final class StoryTextLayer: CATextLayer {
     public func configure(with text: StoryTextObject,
                           geometry: CanvasGeometry,
                           mode: RenderMode,
-                          renderScale: CGFloat = UIScreen.main.scale) {
+                          renderScale: CGFloat = StoryCanvasDisplayScale.ambient) {
         self.textObject = text
         self.renderScale = renderScale
 

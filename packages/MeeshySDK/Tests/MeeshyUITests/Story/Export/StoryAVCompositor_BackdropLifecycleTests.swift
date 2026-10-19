@@ -167,7 +167,8 @@ private final class CountingBackdropCapture: BackdropCapturing {
                                geometry: CanvasGeometry,
                                time: CMTime,
                                mode: RenderMode,
-                               languages: [String]) -> MTLTexture? {
+                               languages: [String],
+                               contentsScale: CGFloat) -> MTLTexture? {
         captureCount += 1
         if lastWasInvalidate { invalidateBeforeCaptureCount += 1 }
         lastWasInvalidate = false

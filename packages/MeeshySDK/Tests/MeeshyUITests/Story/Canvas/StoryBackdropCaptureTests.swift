@@ -73,6 +73,17 @@ final class StoryBackdropCaptureTests: XCTestCase {
         XCTAssertEqual(texture?.height, 732, "Texture height must match render size")
     }
 
+    func test_captureCanvasBackdrop_withoutGPU_returnsNilInsteadOfCrashing() {
+        let capture = StoryBackdropCapture(context: StoryRenderingContext(device: nil))
+        let texture = capture.captureCanvasBackdrop(slide: makeSlideWithGlassAndSolidText(),
+                                                    geometry: makeGeometry(),
+                                                    time: .zero,
+                                                    mode: .play,
+                                                    languages: [])
+        XCTAssertNil(texture)
+        XCTAssertNil(capture.cropRegion(CGRect(x: 0, y: 0, width: 50, height: 50)))
+    }
+
     func test_captureCanvasBackdrop_returnsNil_whenNoGlassItem() throws {
         try XCTSkipIf(skipIfNoMetal(), "Metal device unavailable on this host")
 

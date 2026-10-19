@@ -150,7 +150,7 @@ extension StoryCanvasUIView {
                                                       geometry: geometry,
                                                       time: currentTime,
                                                       mode: renderMode,
-                                                      languages: readerContext.preferredLanguages)
+                                                      languages: readerContext.preferredLanguages, contentsScale: traitCollection.storyCanvasDisplayScale)
         }
 
         // Cache CALayer : actif dans LES DEUX modes depuis 2026-07-11.
@@ -169,7 +169,7 @@ extension StoryCanvasUIView {
             cacheForRender.invalidateIfNeeded(slideId: slide.id,
                                               languages: readerContext.preferredLanguages,
                                               mode: renderMode,
-                                              renderSize: geometry.renderSize)
+                                              renderSize: geometry.renderSize, contentsScale: traitCollection.storyCanvasDisplayScale)
         }
 
         let editGlassProvider: StoryRenderer.BackdropProvider?
@@ -189,7 +189,7 @@ extension StoryCanvasUIView {
                                             imageCache: readerContext.imageCache,
                                             playerProvider: readerContext.playerProvider,
                                             cache: cacheForRender,
-                                            backdropProvider: editGlassProvider,
+                                            backdropProvider: editGlassProvider, contentsScale: traitCollection.storyCanvasDisplayScale, imageDecodeTiming: .offMainActor,
                                             suppressDrawingOverlay: isDrawingOverlayActive,
                                             outOfWindowGhostOpacity: timelineGhostOpacity)
         for sub in rendered.sublayers ?? [] {
@@ -356,7 +356,7 @@ extension StoryCanvasUIView {
         backdropCapture.capturePlaybackBackdrop(slide: slide,
                                                 geometry: geometry,
                                                 time: currentTime,
-                                                languages: languages,
+                                                languages: languages, contentsScale: traitCollection.storyCanvasDisplayScale,
                                                 key: key,
                                                 now: now)
     }
