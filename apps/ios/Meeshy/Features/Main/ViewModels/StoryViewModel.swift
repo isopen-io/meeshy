@@ -55,20 +55,10 @@ class StoryViewModel: ObservableObject, StoryPublishExecutor {
     /// « Publier ». Une seule monte à la fois (`currentUploadId`), mais rien
     /// n'empêche d'en empiler d'autres : plus aucune exclusion mutuelle à la
     /// CRÉATION. L'échec de l'une ne bloque pas les suivantes.
-    /// **Aucune restriction d'écriture depuis le découpage du 2026-08-30**, et
-    /// ce n'est pas un relâchement : `private(set)` limite l'écriture au FICHIER
-    /// de déclaration, et les trois sites qui mutent cette file vivent désormais
-    /// dans `StoryViewModel+Publication` et `+PublicationUpload`. Le
-    /// `internal(set)` qui l'avait remplacé est tombé à son tour : sur une
-    /// classe interne il ne restreint RIEN — il redit le défaut, et le
-    /// compilateur le signale.
-    ///
-    /// C'est le pendant de la leçon 348 pour un `private(set)` : la visibilité
-    /// au niveau fichier est une visibilité de VOISINAGE, et un découpage par
-    /// extension déplace le voisinage sans déplacer la déclaration. La
-    /// protection qui compte — « personne HORS du module ne l'écrit » — est
-    /// intacte.
-    @Published var activeUploads: [StoryUploadState] = []
+    @Published var activeUploads: [StoryUploadState] = [] {
+        didSet { uploadProgress.retainOnly(Set(activeUploads.map(\.id))) }
+    }
+    let uploadProgress: StoryUploadProgressStore
     /// L'id d'un upload qui a ABOUTI côté serveur, annoncé juste AVANT son
     /// retrait de `activeUploads`. Un retrait seul ne dit rien : annulation,
     /// abandon par la file et succès vident la ligne pareil. Qui doit créditer
@@ -123,6 +113,7 @@ class StoryViewModel: ObservableObject, StoryPublishExecutor {
         self.api = api
         self.visibilityStore = visibilityStore
         self.draftStore = draftStore
+        self.uploadProgress = StoryUploadProgressStore()
         observeReconnectionForRetry()
         observeQueueDispositions()
     }

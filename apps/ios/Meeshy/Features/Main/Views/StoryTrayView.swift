@@ -294,9 +294,6 @@ private struct MyStoryButton: View {
         // aussitôt (`skipUnplayableStoriesIfNeeded`). Cohérent avec le filtre du tray.
         let myGroup = viewModel.storyGroupForUser(userId: userId).flatMap { $0.isFullyExpired() ? nil : $0 }
         let hasMyStory = myGroup != nil
-        // Parité 2026-08-10 : au moins une story, active ou entièrement
-        // expirée — route le tap et le menu contextuel vers la gestion
-        // plutôt que de forcer la création quand tout est expiré.
         let hasAnyStory = viewModel.hasStories(forUserId: userId)
         let userName = currentUser?.displayName ?? currentUser?.username ?? String(localized: "story.tray.me", defaultValue: "Moi", bundle: .main)
         let accentColor = DynamicColorGenerator.colorForName(currentUser?.username ?? "")
@@ -410,6 +407,7 @@ private struct MyStoryButton: View {
                     if let surfaced = StoryUploadPresentation.surfaced(in: viewModel.activeUploads) {
                         StoryUploadOverlay(
                             upload: surfaced.upload,
+                            progress: viewModel.uploadProgress,
                             stackedCount: surfaced.stackedCount
                         )
                     }
@@ -489,6 +487,7 @@ private struct MyStoryButton: View {
 
 private struct StoryUploadOverlay: View {
     let upload: StoryViewModel.StoryUploadState
+    @ObservedObject var progress: StoryUploadProgressStore
     /// Publications empilées derrière celle-ci (C5). > 0 → pastille « +N ».
     let stackedCount: Int
 
@@ -498,13 +497,13 @@ private struct StoryUploadOverlay: View {
     /// d'attente vit dans `UploadPhase.isWaiting`, partagée avec la ligne de
     /// « Mes stories ».
     private var displayedProgress: Double {
-        upload.phase.isWaiting ? 0 : upload.progress
+        upload.phase.isWaiting ? 0 : progress.fraction(for: upload.id)
     }
 
     private var a11yLabel: String {
         StoryUploadPresentation.a11yLabel(
             for: upload.phase,
-            progress: upload.progress,
+            progress: progress.fraction(for: upload.id),
             stackedCount: stackedCount
         )
     }
