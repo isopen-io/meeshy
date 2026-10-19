@@ -700,9 +700,7 @@ struct ConversationListView: View {
                 onScrollOffsetChange: { offset in
                     scrollOffsetRelay.offset = offset
                     guard !isSearching, !showSearchOverlay else { return }
-                    // #11036 — la barre suit le SENS : remonter, même un peu, la ramène.
-                    // La loi part de l'état AFFICHÉ ; son hystérésis absorbe rebond et
-                    // frémissement, et seule une bascule écrit l'état publié.
+                    // #11036 — la barre suit le SENS (hystérésis : rebond absorbé) ; seule une bascule écrit l'état publié.
                     let next = ConversationSearchBarScrollLaw.next(
                         .init(hidden: isScrollingDown, anchor: searchBarScrollAnchor.value),
                         offset: offset
