@@ -335,6 +335,13 @@ jobs:
       - name: Le project.pbxproj committé reste lisible par Xcode
         run: bash apps/ios/scripts/check_pbxproj_quoting.sh
 
+      # Le budget de 1 000 lignes par fichier se satisfait en coupant en
+      # `Type+X.swift` : le type et sa fonction de 400 lignes restent entiers.
+      # Ce cliquet mesure la COHÉSION (fonction <= 80 lignes, type <= 1 500 en
+      # unité avec ses extensions) ; il lit du texte, sans compilateur (#10988).
+      - name: Cohésion — fonctions et types en unité, cliquet sur la référence
+        run: bash apps/ios/scripts/check_cohesion_budget.sh
+
   # File d'attente des suites complètes (#9751). L'org a 5 jobs macOS
   # simultanés, et une suite complète les prend tous (build + 4 tranches) : deux
   # suites lancées ensemble entrelaçaient leurs tranches et finissaient en 60 à
