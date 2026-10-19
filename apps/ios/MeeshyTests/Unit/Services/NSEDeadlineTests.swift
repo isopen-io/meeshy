@@ -36,7 +36,7 @@ final class NSEDeadlineTests: XCTestCase {
         XCTAssertFalse(started.withLock { $0 })
     }
 
-    func test_parentCancellation_returnsNilPromptly() async {
+    func test_parentCancellation_returnsNilPromptly() async throws {
         let wasCancelled = OSAllocatedUnfairLock(initialState: false)
         let parent = Task { () -> Int? in
             await NSEDeadline.race(timeout: 60) {
@@ -47,7 +47,7 @@ final class NSEDeadlineTests: XCTestCase {
                 }
             }
         }
-        try? await Task.sleep(for: .milliseconds(50))
+        try await Task.sleep(for: .milliseconds(50))
 
         parent.cancel()
         let value = await parent.value
