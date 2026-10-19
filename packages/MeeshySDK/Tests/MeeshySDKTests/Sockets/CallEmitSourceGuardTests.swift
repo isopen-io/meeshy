@@ -15,13 +15,19 @@ import XCTest
 final class CallEmitSourceGuardTests: XCTestCase {
 
     private func managerSource() throws -> String {
-        let url = URL(fileURLWithPath: #filePath)
+        let root = URL(fileURLWithPath: #filePath)
             .deletingLastPathComponent()
             .deletingLastPathComponent()
             .deletingLastPathComponent()
             .deletingLastPathComponent()
-            .appendingPathComponent("Sources/MeeshySDK/Sockets/MessageSocketManager.swift")
-        return try String(contentsOf: url, encoding: .utf8)
+            .appendingPathComponent("Sources/MeeshySDK/Sockets")
+        return try [
+            "MessageSocketManager.swift",
+            "MessageSocketManager+CallSignaling.swift",
+            "MessageSocketManager+EventHandlers.swift",
+            "MessageSocketProviding.swift",
+        ].map { try String(contentsOf: root.appendingPathComponent($0), encoding: .utf8) }
+            .joined(separator: "\n")
     }
 
     // MARK: - Emit: call:join

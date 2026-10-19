@@ -613,7 +613,7 @@ final class RepostIntentTests: XCTestCase {
     /// derrière la garde négative.
     func test_lesNeufSitesDuRepost_publientParLEcrivainUnique() throws {
         let sites = [
-            "FeedViewModel.swift", "ReelsViewModel.swift", "StatusViewModel.swift",
+            "FeedViewModel+PostActions.swift", "ReelsViewModel.swift", "StatusViewModel.swift",
             "PostDetailView.swift", "ProfileUserPostsList.swift", "RootViewComponents.swift",
             "FeedView.swift", "StoryViewerView+Sidebar.swift"
         ]

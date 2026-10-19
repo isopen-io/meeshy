@@ -240,7 +240,7 @@ final class BubbleStoryCitationGuardTests: XCTestCase {
         )
 
         let models = try sdkSource("packages/MeeshySDK/Sources/MeeshySDK/Models/MessageModels.swift")
-        let persistence = try sdkSource("packages/MeeshySDK/Sources/MeeshySDK/Persistence/MessagePersistenceActor.swift")
+        let persistence = try sdkSource("packages/MeeshySDK/Sources/MeeshySDK/Persistence/MessagePersistenceActor+Migration.swift")
         XCTAssertGreaterThan(models.count, 10_000)
         XCTAssertGreaterThan(persistence.count, 10_000)
         XCTAssertTrue(

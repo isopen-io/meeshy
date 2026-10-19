@@ -53,7 +53,7 @@ final class SharedTranslationSocketTests: XCTestCase {
     }
 
     func test_socketManager_registersTheTranslationHandlersFromItsExtension() throws {
-        let manager = try sdkSource("Sources/MeeshySDK/Sockets/MessageSocketManager.swift")
+        let manager = try sdkSource("Sources/MeeshySDK/Sockets/MessageSocketManager+EventHandlers.swift")
 
         XCTAssertTrue(manager.contains("registerTranslationHandlers(on: socket)"))
         XCTAssertFalse(

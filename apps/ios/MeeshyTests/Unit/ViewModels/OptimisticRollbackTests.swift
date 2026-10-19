@@ -45,9 +45,7 @@ final class OptimisticRollbackTests: XCTestCase {
                 XCTAssertFalse(code.contains(pattern), "\(path) : « \(pattern) » efface ce qui est arrivé pendant l'attente")
             }
         }
-        let feed = AppSourceGuard.stripComments(try String(contentsOf: URL(fileURLWithPath: #filePath)
-            .deletingLastPathComponent().deletingLastPathComponent().deletingLastPathComponent().deletingLastPathComponent()
-            .appendingPathComponent("Meeshy/Features/Main/ViewModels/FeedViewModel.swift"), encoding: .utf8))
+        let feed = AppSourceGuard.stripComments(try AppSourceGuard.unit("Meeshy/Features/Main/ViewModels/FeedViewModel.swift"))
         XCTAssertFalse(feed.contains("posts = snapshot"))
         XCTAssertFalse(feed.contains("comments = snapshot"))
     }

@@ -25,7 +25,7 @@ final class iPadDetailColumnCoherenceTests: XCTestCase {
         XCTAssertTrue(root.contains("iPadSelectionRule.closesDetail("))
 
         let vm = AppSourceGuard.stripComments(try AppSourceGuard.unit("Meeshy/Features/Main/ViewModels/ConversationListViewModel.swift"))
-        let drop = try XCTUnwrap(vm.range(of: "private func dropConversationLeftByMe("))
+        let drop = try XCTUnwrap(vm.range(of: "func dropConversationLeftByMe("))
         XCTAssertTrue(
             vm[drop.upperBound...].prefix(400).contains("conversationLeavesDetail.send(conversationId)"),
             "quitter, être retiré ou banni (socket) referme aussi la colonne"

@@ -2692,8 +2692,10 @@ final class CallManagerJoinRaceTests: XCTestCase {
             .deletingLastPathComponent()
             .deletingLastPathComponent()
             .deletingLastPathComponent()
-            .appendingPathComponent("packages/MeeshySDK/Sources/MeeshySDK/Sockets/MessageSocketManager.swift")
-        return try String(contentsOf: url, encoding: .utf8)
+            .appendingPathComponent("packages/MeeshySDK/Sources/MeeshySDK/Sockets")
+        return try ["MessageSocketManager.swift", "MessageSocketManager+CallSignaling.swift", "MessageSocketProviding.swift"]
+            .map { try String(contentsOf: url.appendingPathComponent($0), encoding: .utf8) }
+            .joined(separator: "\n")
     }
 
     /// socket.didReconnect must use emitCallJoinWithAck (ACK-aware) rather than
@@ -2802,8 +2804,10 @@ final class CallManagerReconnectCallEndedRetryTests: XCTestCase {
             .deletingLastPathComponent()
             .deletingLastPathComponent()
             .deletingLastPathComponent()
-            .appendingPathComponent("packages/MeeshySDK/Sources/MeeshySDK/Sockets/MessageSocketManager.swift")
-        return try String(contentsOf: url, encoding: .utf8)
+            .appendingPathComponent("packages/MeeshySDK/Sources/MeeshySDK/Sockets")
+        return try ["MessageSocketManager.swift", "MessageSocketManager+CallSignaling.swift", "MessageSocketProviding.swift"]
+            .map { try String(contentsOf: url.appendingPathComponent($0), encoding: .utf8) }
+            .joined(separator: "\n")
     }
 
     private func reconnectSinkBody(_ source: String) throws -> String {
@@ -2952,8 +2956,10 @@ final class CallManagerScreenCaptureAlertTests: XCTestCase {
             .deletingLastPathComponent()
             .deletingLastPathComponent()
             .deletingLastPathComponent()
-            .appendingPathComponent("packages/MeeshySDK/Sources/MeeshySDK/Sockets/MessageSocketManager.swift")
-        return try String(contentsOf: url, encoding: .utf8)
+            .appendingPathComponent("packages/MeeshySDK/Sources/MeeshySDK/Sockets")
+        return try ["MessageSocketManager.swift", "MessageSocketManager+CallSignaling.swift", "MessageSocketProviding.swift"]
+            .map { try String(contentsOf: url.appendingPathComponent($0), encoding: .utf8) }
+            .joined(separator: "\n")
     }
 
     private func callViewSource() throws -> String {

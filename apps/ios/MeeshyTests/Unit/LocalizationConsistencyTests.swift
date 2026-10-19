@@ -451,7 +451,11 @@ final class LocalizationConsistencyTests: XCTestCase {
         "apps/ios/Meeshy/Features/Main/Views/RootLayers/CallPresentationLayer.swift",  // 1
         "apps/ios/Meeshy/Features/Auth/Views/EmailVerificationView.swift",  // 17
         "apps/ios/Meeshy/Features/Main/Components/RecentMediaStrip.swift",  // 17
-        "apps/ios/Meeshy/Features/Main/ViewModels/FeedViewModel.swift",  // 17
+        // Découpé par responsabilité : le cliquet suit les CLÉS jusqu'à leurs nouveaux fichiers (leçon 578).
+        "apps/ios/Meeshy/Features/Main/ViewModels/FeedViewModel+PostActions.swift",  // 12
+        "apps/ios/Meeshy/Features/Main/ViewModels/FeedViewModel+Reactions.swift",  // 3
+        "apps/ios/Meeshy/Features/Main/ViewModels/FeedViewModel+Posting.swift",  // 2
+        "apps/ios/Meeshy/Features/Main/ViewModels/FeedViewModel+Pagination.swift",  // 1
         "apps/ios/Meeshy/Features/Main/Views/ChangePasswordView.swift",  // 17
         "apps/ios/Meeshy/Features/Main/ViewModels/PostDetailViewModel.swift",  // 15
         // #6600 — l'édition de commentaire a quitté l'hôte avec sa clé.

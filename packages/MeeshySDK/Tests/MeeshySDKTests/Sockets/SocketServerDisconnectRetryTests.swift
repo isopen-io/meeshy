@@ -24,7 +24,7 @@ final class SocketServerDisconnectRetryTests: XCTestCase {
         let root = URL(fileURLWithPath: #filePath)
             .deletingLastPathComponent().deletingLastPathComponent().deletingLastPathComponent().deletingLastPathComponent()
             .appendingPathComponent("Sources/MeeshySDK/Sockets")
-        for file in ["MessageSocketManager.swift", "SocialSocketManager.swift"] {
+        for file in ["MessageSocketManager+EventHandlers.swift", "SocialSocketManager.swift"] {
             let source = try String(contentsOf: root.appendingPathComponent(file), encoding: .utf8)
             let handler = try XCTUnwrap(source.range(of: "socket.on(clientEvent: .disconnect)"), file)
             let body = String(source[handler.upperBound...].prefix(1_200))

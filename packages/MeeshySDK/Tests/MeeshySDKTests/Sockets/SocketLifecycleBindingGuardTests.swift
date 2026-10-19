@@ -27,7 +27,8 @@ final class SocketLifecycleBindingGuardTests: XCTestCase {
     }
 
     private func messageSocketSource() throws -> String {
-        try sdkSource("Sources/MeeshySDK/Sockets/MessageSocketManager.swift")
+        try sdkSource("Sources/MeeshySDK/Sockets/MessageSocketManager+EventHandlers.swift")
+            + "\n" + sdkSource("Sources/MeeshySDK/Sockets/MessageSocketManager.swift")
     }
 
     /// Bloc d'un écouteur : de son `socket.on("<event>")` jusqu'au `socket.on(`

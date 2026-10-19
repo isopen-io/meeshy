@@ -48,7 +48,6 @@ final class FileSizeBudgetGuardTests: XCTestCase {
         "ConversationDashboardView.swift",
         "ConversationListView+Overlays.swift",
         "ConversationListView.swift",
-        "ConversationListViewModel.swift",
         "ConversationView.swift",
         "FeedCommentsSheet.swift",
         // #6040 — `FeedView+Attachments.swift` a QUITTÉ la dette : 207 lignes,
@@ -56,7 +55,6 @@ final class FileSizeBudgetGuardTests: XCTestCase {
         // (`FeedComposerSheet.swift`, 1 166) n'y ENTRE pas : elle est sous le
         // plafond. Le nom sort ENTIER, plafond compris — voir ci-dessous.
         "FeedView.swift",
-        "FeedViewModel.swift",
         "P2PWebRTCClient.swift",
         "RootView.swift",
         "StoryViewerView+Canvas.swift",
@@ -635,7 +633,14 @@ final class FileSizeBudgetGuardTests: XCTestCase {
     // comportement : le type retombe à 1 095 lignes, chaque extension est sous
     // le budget. Il sort de `legacyOverBudget` ENTIER, et le plafond baisse de
     // ce qu'il pesait.
-    private static let legacyLineCeiling = 28_050
+    //
+    // #10988 — 28 050 → 23 905 (−4 145). `ConversationListViewModel.swift` (2 249
+    // lignes comptées) et `FeedViewModel.swift` (1 896) se découpent par
+    // responsabilité en extensions (`+Loading`, `+Actions`, `+SocketEvents`… ;
+    // `+Pagination`, `+Posting`, `+Socket`…), sans changer de comportement : chaque
+    // fichier issu est sous 800 lignes. Ils sortent de `legacyOverBudget` ENTIERS,
+    // et le plafond baisse d'exactement ce qu'ils pesaient.
+    private static let legacyLineCeiling = 23_905
 
     // MARK: - Règle 1 — pas de 43ᵉ
 

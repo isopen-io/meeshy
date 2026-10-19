@@ -42,7 +42,7 @@ final class ConversationListCacheWriterGuardTests: XCTestCase {
     ///   le nom est retiré de la table.
     private static let allowance: [String: Int] = [
         "packages/MeeshySDK/Sources/MeeshySDK/Sync/ConversationSyncEngine.swift": 1,
-        "apps/ios/Meeshy/Features/Main/ViewModels/ConversationListViewModel.swift": 3,
+        "apps/ios/Meeshy/Features/Main/ViewModels/ConversationListViewModel+Loading.swift": 2,
     ]
 
     /// Les deux arbres Swift qui peuvent atteindre `CacheCoordinator`.

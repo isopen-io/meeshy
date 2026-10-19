@@ -31,7 +31,7 @@ final class CallPreviewSocketTests: XCTestCase {
     func test_previewHandlers_areRegisteredOnTheSocket() throws {
         let source = try String(contentsOf: URL(fileURLWithPath: #filePath)
             .deletingLastPathComponent().deletingLastPathComponent().deletingLastPathComponent().deletingLastPathComponent()
-            .appendingPathComponent("Sources/MeeshySDK/Sockets/MessageSocketManager.swift"), encoding: .utf8)
+            .appendingPathComponent("Sources/MeeshySDK/Sockets/MessageSocketManager+EventHandlers.swift"), encoding: .utf8)
         XCTAssertTrue(source.contains("registerCallPreviewHandlers(on: socket)"))
     }
 }
