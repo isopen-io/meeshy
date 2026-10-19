@@ -63,7 +63,7 @@ struct RecentMediaPreview: View {
             // `SharedAVPlayerManager.stop()`, qui désactive la session ; l'ordre
             // inverse la désarmerait juste après l'avoir posée.
             PlaybackCoordinator.shared.stopAll()
-            MediaSessionCoordinator.shared.activatePlaybackSync(options: [.duckOthers])
+            MediaSessionCoordinator.shared.activateContentPlayback(.audible)
             looper = AVPlayerLooper(player: queue, templateItem: item)
             player = queue
             queue.play()

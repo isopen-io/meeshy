@@ -89,7 +89,8 @@ final class ReelFeedSoundButtonWiringGuardTests: XCTestCase {
             )
         }
         XCTAssertFalse(
-            text.contains("MediaSessionCoordinator.shared.activatePlaybackSync"),
+            text.contains("MediaSessionCoordinator.shared.activatePlaybackSync")
+                || text.contains("MediaSessionCoordinator.shared.activateContentPlayback"),
             "Aucun armement explicite de .duckOthers ici — play() (SharedAVPlayerManager) l'arme déjà, " +
             "correctement gated sur effectiveMuted au complet. Un appel séparé ici a été retiré parce " +
             "qu'il gatait sur forceMuted SEUL (DoD S2 rejet, constat majeur #2)."

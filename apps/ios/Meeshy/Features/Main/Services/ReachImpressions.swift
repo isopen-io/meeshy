@@ -99,13 +99,11 @@ final class ReachPresence {
 }
 
 extension View {
-    /// Compte une impression de `postId` à chaque apparition de la vue.
-    /// `nil` (aucun contenu à compter) ne compte rien. Avec une `presence`,
-    /// seule l'apparition qui fait entrer le contenu à l'écran compte.
+    /// Compte une impression de `postId` à chaque apparition (`nil` : rien) ;
+    /// avec une `presence`, seule l'entrée du contenu à l'écran compte.
     func countsImpression(
         of postId: String?,
-        recountsOnChange: Bool = true,
-        presence: ReachPresence? = nil,
+        recountsOnChange: Bool = true, presence: ReachPresence? = nil,
         _ record: @escaping @MainActor (String) -> Void
     ) -> some View {
         modifier(ReachImpressionModifier(postId: postId, recountsOnChange: recountsOnChange, presence: presence, record: record))

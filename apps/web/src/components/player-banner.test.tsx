@@ -73,9 +73,9 @@ describe('seulement ce qui existe', () => {
     });
   }
 
-  test('l’ordre est fixe : anneau, jauge, Meeshes, rang, ligue, Flamme', () => {
+  test('l’ordre est fixe : anneau, jauge, ligue, Flamme, puis l’angle — Meeshes, rang', () => {
     const html = markup(modelOf(gameBlockWithExtrasFixture({ balance: 12, streak: 23 })));
-    const order = ['ring', 'gauge', ...PIECES].map((piece) => html.indexOf(`data-player-banner-${piece}=`));
+    const order = ['ring', 'gauge', 'league', 'flame', 'meeshes', 'rank'].map((piece) => html.indexOf(`data-player-banner-${piece}=`));
     expect(order.every((position) => position >= 0)).toBe(true);
     expect([...order].sort((a, b) => a - b)).toEqual(order);
   });
@@ -169,12 +169,14 @@ describe('accessible', () => {
     }
   });
 
-  test('une cible d’au moins 44 px : le bandeau (56) et chaque lien', async () => {
+  test('une cible d’au moins 44 px (bandeau 48, liens du corps) ; les pièces de l’angle font 24', async () => {
     expect(markup(newcomer())).toMatch(/data-player-banner=""[^>]*min-height:(4[4-9]|[5-9]\d)px/);
     const host = await mount(<PlayerBanner model={modelOf(gameBlockWithExtrasFixture({ balance: 12, streak: 23 }))} />);
-    for (const link of Array.from(host.querySelectorAll('a[data-player-banner-link]'))) {
+    for (const link of Array.from(host.querySelectorAll('[data-player-banner] > a[data-player-banner-link]'))) {
       expect(link.getAttribute('style') ?? '').toMatch(/min-height:\s*(4[4-9]|[5-9]\d)px/);
     }
+    const corner = Array.from(host.querySelectorAll('[data-player-banner-corner] a[data-player-banner-link]')).map((link) => (link as HTMLElement).dataset.playerBannerLink);
+    expect(corner).toEqual(['meesh', 'glory', 'missions']);
   });
 });
 

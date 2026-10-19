@@ -35,7 +35,7 @@ final class DefaultSDKAudioRecorderRestartTests: XCTestCase {
         let body = try startRecordingBody()
         let catchBlock = try XCTUnwrap(body.range(of: "} catch {"))
         let afterCatch = String(body[catchBlock.upperBound...].prefix(400))
-        XCTAssertTrue(afterCatch.contains("deactivatePlaybackSync()"),
+        XCTAssertTrue(afterCatch.contains("MeeshyRecordingSession.shared.finish(handingBackSession: true)"),
                       "un échec de création doit rendre la session activée")
     }
 }

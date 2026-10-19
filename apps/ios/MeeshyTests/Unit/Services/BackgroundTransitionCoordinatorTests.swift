@@ -78,6 +78,24 @@ final class BackgroundTransitionCoordinatorTests: XCTestCase {
         XCTAssertEqual(ledger.enterBackground(), .start, "la transition terminée, la suivante repart")
     }
 
+    /// #11041 — le second départ rejoint la transition en cours, mais pas son
+    /// étape MÉDIA : elle avait tranché pour ce qui jouait AVANT la reprise. Une
+    /// vidéo relancée entre-temps continuait de jouer en arrière-plan, sans PiP
+    /// ni pause — le son qui « continue » une fois l'app quittée.
+    func test_enterBackground_joinedReEntry_stillPreparesTheMedia() throws {
+        let src = try sourceOf("Meeshy/Features/Main/Services/BackgroundTransitionCoordinator.swift")
+        let start = try XCTUnwrap(src.range(of: "guard ledger.enterBackground() == .start else {"))
+        let end = try XCTUnwrap(src.range(of: "defer { ledger.finishTransition() }"))
+        let joined = String(src[start.upperBound..<end.lowerBound])
+        XCTAssertTrue(joined.contains("await joinRunningTransition()"),
+            "la ré-entrée rejointe doit rejouer l'étape média")
+        XCTAssertTrue(joined.contains("return"), "et seulement elle : sockets et base restent à la transition en cours")
+        let helperStart = try XCTUnwrap(src.range(of: "private func joinRunningTransition() async {"))
+        let helperEnd = try XCTUnwrap(src.range(of: "// MARK: - Foreground entry"))
+        XCTAssertTrue(src[helperStart.upperBound..<helperEnd.lowerBound]
+            .contains("await MediaLifecycleBridge.shared.prepareForBackground()"))
+    }
+
     func test_ledger_resumeDuringTransition_skipsTheSuspension() {
         var ledger = BackgroundTransitionLedger()
         XCTAssertEqual(ledger.enterBackground(), .start)

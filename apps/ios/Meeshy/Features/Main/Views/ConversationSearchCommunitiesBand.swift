@@ -64,6 +64,7 @@ nonisolated enum ConversationSearchBarScrollLaw {
 /// `ScrollOffsetRelay`) : l'écrire à chaque image ne ré-évalue aucun body.
 final class ConversationSearchBarScrollAnchor {
     var value: CGFloat = 0
+    nonisolated deinit {}
 }
 
 /// **La carte d'une communauté dans la bande de recherche : la MOITIÉ de sa

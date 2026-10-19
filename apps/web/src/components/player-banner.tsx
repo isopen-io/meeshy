@@ -62,7 +62,7 @@ import '@/styles/player-banner.css';
  * trophées → la Vitrine (`showcase`), la mission du jour → les Missions, la saison → la Saison. Chaque lien porte son NOM
  * accessible (`playerBannerPieceLabels`) ; ses enfants sont des dessins et des chiffres cachés (`aria-hidden`). Le conteneur est
  * un groupe nommé d'une phrase complète (`playerBannerLabel`) — jamais un lien, puisque des liens ne s'imbriquent pas.
- * Chaque cible fait au moins 44 px de haut ; le bandeau, 56.
+ * Chaque cible fait au moins 44 px de haut, sauf les trois pièces de l'angle (24 px, voir `compact`) ; le bandeau, 48. L'angle, tout à la fin : les Meeshes en haut, le rang et les missions dessous.
  */
 const INK = 'var(--color-ios-ink)';
 const INK_2 = 'var(--color-ios-ink-2)';
@@ -112,12 +112,15 @@ function PieceLink({
   label,
   style,
   className = '',
+  compact = false,
   children,
 }: {
   readonly concept: ProgressionConcept;
   readonly label: string | null;
   readonly style?: React.CSSProperties | undefined;
   readonly className?: string;
+  /** Pièce de l'angle (Meeshes, rang, missions) : une ligne de 24 px, deux par colonne — la bannière tient en 48. */
+  readonly compact?: boolean;
   readonly children: React.ReactNode;
 }) {
   if (label === null) return null;
@@ -128,7 +131,7 @@ function PieceLink({
       data-player-banner-link={concept}
       aria-label={label}
       className={`pointer-events-auto flex shrink-0 items-center rounded-card focus-visible:outline-2 focus-visible:outline-offset-2 ${className}`}
-      style={{ minHeight: 44, ...style }}
+      style={{ minHeight: compact ? 24 : 44, ...style }}
     >
       {children}
     </Link>
@@ -210,7 +213,7 @@ export function PlayerBanner({ model, motion = {}, backdrop = null }: { readonly
         {...(large ? { 'data-large-text': '' } : {})}
         className={`player-banner pointer-events-none relative isolate flex w-full items-center gap-2.5 overflow-hidden rounded-card py-1 pe-3 ps-1 shadow-lg${large ? ' flex-wrap' : ''}`}
         style={{
-          minHeight: 56,
+          minHeight: 48,
           maxWidth: 560,
           color: INK,
           background: `linear-gradient(var(--player-banner-sweep, 100deg), color-mix(in srgb, ${tint} 16%, ${CARD}), ${CARD} 70%)`,
@@ -235,7 +238,7 @@ export function PlayerBanner({ model, motion = {}, backdrop = null }: { readonly
           <>
             <PieceLink concept="level" label={names.level}>
               <span ref={ring.ref} aria-hidden="true" data-player-banner-ring={level.level} className="relative shrink-0">
-                <LevelRing level={level.level} tier={model.tier} progress={level.progress} size={48} prestige={level.prestige} />
+                <LevelRing level={level.level} tier={model.tier} progress={level.progress} size={40} prestige={level.prestige} />
                 {glint === 0 ? null : <GameEffectLayer key={glint} effect="sheen" circle passes={1} immediate {...(motion.createEnv === undefined ? {} : { createEnv: motion.createEnv })} />}
               </span>
             </PieceLink>
@@ -248,21 +251,6 @@ export function PlayerBanner({ model, motion = {}, backdrop = null }: { readonly
           <PieceLink concept="points" label={names.sparks}>
             <Piece name="points" value={model.points}>
               {translateGame(language, 'game.banner.points', { points: formatCount(model.points, language) })}
-            </Piece>
-          </PieceLink>
-        )}
-        {model.meeshes === null ? null : (
-          <PieceLink concept="meesh" label={names.meesh}>
-            <Piece name="meeshes" value={model.meeshes}>
-              <MeeshCoin side="obverse" size={22} />
-              {formatCount(model.meeshes, language)}
-            </Piece>
-          </PieceLink>
-        )}
-        {model.rank === null ? null : (
-          <PieceLink concept="glory" label={names.rank}>
-            <Piece name="rank" value={`${model.rank.rank}/${model.rank.division ?? 0}/${model.rank.mythic?.edition ?? 0}`}>
-              <RankBlason rank={model.rank.rank} division={model.rank.division} mythic={model.rank.mythic} size={34} />
             </Piece>
           </PieceLink>
         )}
@@ -290,14 +278,6 @@ export function PlayerBanner({ model, motion = {}, backdrop = null }: { readonly
             </Piece>
           </PieceLink>
         )}
-        {model.missions === null ? null : (
-          <PieceLink concept="missions" label={names.missions}>
-            <Piece name="missions" value={`${model.missions.done}/${model.missions.total}`}>
-              <span aria-hidden="true">✓</span>
-              {formatCount(model.missions.done, language)}/{formatCount(model.missions.total, language)}
-            </Piece>
-          </PieceLink>
-        )}
         {model.season === null ? null : (
           <PieceLink concept="season" label={names.season}>
             <Piece name="season" value={model.season.stars}>
@@ -305,6 +285,37 @@ export function PlayerBanner({ model, motion = {}, backdrop = null }: { readonly
               {formatCount(model.season.stars, language)}
             </Piece>
           </PieceLink>
+        )}
+        {model.meeshes === null && model.rank === null && model.missions === null ? null : (
+          <span data-player-banner-corner="" className="flex shrink-0 flex-col items-end justify-between">
+            <span className="flex items-center justify-end">
+              {model.meeshes === null ? null : (
+                <PieceLink concept="meesh" label={names.meesh} compact>
+                  <Piece name="meeshes" value={model.meeshes}>
+                    <MeeshCoin side="obverse" size={20} />
+                    {formatCount(model.meeshes, language)}
+                  </Piece>
+                </PieceLink>
+              )}
+            </span>
+            <span className="flex items-center justify-end">
+              {model.rank === null ? null : (
+                <PieceLink concept="glory" label={names.rank} compact>
+                  <Piece name="rank" value={`${model.rank.rank}/${model.rank.division ?? 0}/${model.rank.mythic?.edition ?? 0}`}>
+                    <RankBlason rank={model.rank.rank} division={model.rank.division} mythic={model.rank.mythic} size={24} />
+                  </Piece>
+                </PieceLink>
+              )}
+              {model.missions === null ? null : (
+                <PieceLink concept="missions" label={names.missions} compact>
+                  <Piece name="missions" value={`${model.missions.done}/${model.missions.total}`}>
+                    <span aria-hidden="true">✓</span>
+                    {formatCount(model.missions.done, language)}/{formatCount(model.missions.total, language)}
+                  </Piece>
+                </PieceLink>
+              )}
+            </span>
+          </span>
         )}
       </div>
     </div>
