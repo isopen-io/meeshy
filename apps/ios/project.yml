@@ -522,6 +522,15 @@ targets:
       # c'est la requête que la NSE envoie, et ce qu'elle dépose est ce que
       # l'app peint au tap (#7804).
       - path: MeeshyNotificationExtension/NSEAPIRequest.swift
+      # LOT-03 — la mécanique pure de la descente d'enrichissement : porte de
+      # livraison unique, échéance, plan et repli. NSEAttachmentPolicy et
+      # NotificationDetailPolicy sont recompilés ici (la copie du module de
+      # tests prime sur celle de l'app) parce que le plan les appelle.
+      - path: MeeshyNotificationExtension/NSEDelivery.swift
+      - path: MeeshyNotificationExtension/NSEDeadline.swift
+      - path: MeeshyNotificationExtension/NSEEnrichmentPlan.swift
+      - path: MeeshyNotificationExtension/NSEAttachmentPolicy.swift
+      - path: MeeshyNotificationExtension/NotificationDetailPolicy.swift
       # #8858 — l'instantané de carte d'une position partagée (MapKit + UIKit).
       # `xcrun simctl push` n'exécute PAS la NSE : c'est le seul endroit d'où
       # son rendu est photographiable (`NSELocationSnapshotCaptureTests`).
