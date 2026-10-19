@@ -213,6 +213,16 @@ final class WidgetDataManager: NotificationWidgetSink {
         ].compactMap { $0 }
     }
 
+    /// Ce que l'app tient EN MÉMOIRE des fiches de l'extension — un relais servi,
+    /// un studio armé — part avec le compte sortant (#10978, #10986).
+    static func forgetHeldShares(
+        relay: ShareRelayConsumer = .shared,
+        compose: ShareComposeHandoffConsumer = .shared
+    ) {
+        relay.forget()
+        compose.forget()
+    }
+
     /// appgroup-01 — wipe de logout (exigence `NotificationWidgetSink`).
     ///
     /// Purge les clés widget de l'App Group ET les dossiers de staging
@@ -233,7 +243,7 @@ final class WidgetDataManager: NotificationWidgetSink {
             }
             lastPublishedSnapshots = [:]
         }
-        ShareRelayConsumer.shared.forget()
+        Self.forgetHeldShares()
         let stagingDirs = stagingDirectoriesOverride ?? Self.accountStagingDirectories()
         for dir in stagingDirs {
             do {

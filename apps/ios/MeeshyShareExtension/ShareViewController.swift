@@ -73,7 +73,7 @@ final class ShareViewController: UIViewController {
         if failure == nil {
             actions.onCompose = { [weak self, weak model] in
                 guard let self, let model else { return }
-                self.handOffToStudio(subject: model.subject, media: dispatcher.keptMedia(of: model.subject))
+                self.handOffToStudio(subject: model.subject, media: dispatcher.keptMedia(of: model.subject), ownerUserId: session?.userId)
             }
         }
         if session == nil {
@@ -110,8 +110,8 @@ final class ShareViewController: UIViewController {
     /// échoue, l'app la balaie quand même à son réveil. Une fiche qui ne
     /// s'écrit pas laisse des fichiers que plus personne ne décrit — on les
     /// efface plutôt.
-    private func handOffToStudio(subject: ShareSubject, media: [ShareStagedMedia]) {
-        let fiche = ShareComposeHandoff(shareId: shareId, createdAt: Date(), text: subject.composedText(caption: ""), media: media)
+    private func handOffToStudio(subject: ShareSubject, media: [ShareStagedMedia], ownerUserId: String?) {
+        let fiche = ShareComposeHandoff(shareId: shareId, createdAt: Date(), text: subject.composedText(caption: ""), media: media, ownerUserId: ownerUserId)
         do {
             try fiche.write()
         } catch {
