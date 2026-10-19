@@ -31,7 +31,13 @@ public final class StoryDraftStore: @unchecked Sendable {
         }
     }
 
-    private let db: DatabaseQueue
+    private let storage: DatabaseQueue?
+    private var db: DatabaseQueue {
+        get throws {
+            guard let storage else { throw DatabaseStorageUnavailable() }
+            return storage
+        }
+    }
     /// RACINE des médias. Chaque brouillon a son sous-répertoire : deux
     /// brouillons peuvent porter le même `element_id` (duplication, reprise
     /// d'un échec de publication) et écraseraient sinon leurs fichiers.
@@ -59,53 +65,47 @@ public final class StoryDraftStore: @unchecked Sendable {
         storedFailure = PersistFailure(operation: operation, message: message, occurredAt: Date())
     }
 
-    private init() {
+    private convenience init() {
         let dir = FileManager.default.urls(for: .documentDirectory, in: .userDomainMask)[0]
-        let path = dir.appendingPathComponent("meeshy_story_draft.db").path
-        mediaRoot = dir.appendingPathComponent("meeshy_draft_media")
-        let opened = Self.makeQueue(path: path)
-        db = opened.queue
-        storedFailure = opened.failure
-        createSchemaOrLog()
+        self.init(dbPath: dir.appendingPathComponent("meeshy_story_draft.db").path,
+                  mediaDirectory: dir.appendingPathComponent("meeshy_draft_media"))
     }
 
-    public init(dbPath: String, mediaDirectory: URL) {
+    public convenience init(dbPath: String, mediaDirectory: URL) {
+        self.init(storage: ResilientDatabaseQueue.open(path: dbPath), mediaDirectory: mediaDirectory)
+    }
+
+    init(storage opened: OpenedDatabaseQueue, mediaDirectory: URL) {
         mediaRoot = mediaDirectory
-        let opened = Self.makeQueue(path: dbPath)
-        db = opened.queue
-        storedFailure = opened.failure
+        storage = opened.queue
+        storedFailure = Self.openFailure(of: opened)
         createSchemaOrLog()
     }
 
     /// Schema creation is best-effort at init (no throwing initializer), but a
     /// failure disables every draft read/write that follows — it must be visible.
     private func createSchemaOrLog() {
+        guard let storage else { return }
         do {
-            try StoryDraftSchema.create(in: db, mediaRoot: mediaRoot)
+            try StoryDraftSchema.create(in: storage, mediaRoot: mediaRoot)
         } catch {
             Logger.cache.fault("[StoryDraftStore] Schema creation failed — drafts cannot be saved or restored: \(error.localizedDescription, privacy: .public)")
             recordFailure("create-schema", message: error.localizedDescription)
         }
     }
 
-    /// Never-throwing queue builder. Falls back to an in-memory queue if the
-    /// requested file cannot be opened — drafts are ephemeral in that case,
-    /// but the app is not crashed. An OOM on in-memory creation would be
-    /// handled by the OS anyway. Le repli est RENDU au constructeur : muet, il
-    /// laissait croire à une persistance qui n'existait pas.
-    private static func makeQueue(path: String) -> (queue: DatabaseQueue, failure: PersistFailure?) {
-        do {
-            return (try DatabaseQueue(path: path), nil)
-        } catch {
-            Logger.cache.warning("[StoryDraftStore] Disk queue unavailable at \(path), falling back to in-memory: \(error.localizedDescription, privacy: .public)")
-            do {
-                let failure = PersistFailure(operation: "open-database",
-                                             message: error.localizedDescription,
-                                             occurredAt: Date())
-                return (try DatabaseQueue(), failure)
-            } catch {
-                fatalError("[StoryDraftStore] Cannot create in-memory GRDB queue — out of memory: \(error)")
-            }
+    /// Le repli est RENDU au constructeur : muet, il laissait croire à une
+    /// persistance qui n'existait pas.
+    private static func openFailure(of opened: OpenedDatabaseQueue) -> PersistFailure? {
+        switch opened {
+        case .persistent:
+            return nil
+        case .memoryFallback(_, let diskError):
+            Logger.cache.warning("[StoryDraftStore] Disk queue unavailable, falling back to in-memory: \(diskError, privacy: .public)")
+            return PersistFailure(operation: "open-database", message: diskError, occurredAt: Date())
+        case .unavailable(let diskError, let memoryError):
+            Logger.cache.fault("[StoryDraftStore] No database at all, drafts cannot be saved or restored: disk=\(diskError, privacy: .public) memory=\(memoryError, privacy: .public)")
+            return PersistFailure(operation: "open-database", message: "\(diskError) / \(memoryError)", occurredAt: Date())
         }
     }
 
