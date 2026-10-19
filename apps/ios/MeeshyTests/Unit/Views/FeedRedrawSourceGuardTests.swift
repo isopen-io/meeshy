@@ -27,4 +27,11 @@ final class FeedRedrawSourceGuardTests: XCTestCase {
 
         XCTAssertGreaterThanOrEqual(tray.components(separatedBy: "StoryCoverRefresh(signal: viewModel.coverRenders)").count - 1, 2)
     }
+
+    func test_trays_doNotFilterStoryGroupsInBody() throws {
+        let tray = try source("Meeshy/Features/Main/Views/StoryTrayView.swift")
+
+        XCTAssertFalse(tray.contains("storyGroups.filter"))
+        XCTAssertFalse(tray.contains("storyGroups.first"))
+    }
 }

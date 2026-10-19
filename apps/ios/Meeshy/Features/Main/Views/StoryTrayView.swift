@@ -129,6 +129,7 @@ struct StoryTrayView: View {
 
     private var storyScrollView: some View {
         let currentUserId = AuthManager.shared.currentUser?.id ?? ""
+        let visibleGroups = viewModel.trayProjection.visibleGroups(for: currentUserId, at: Date())
         // F5 — cap stagger to first 10 visible rings. Beyond that the
         // 0.05s × index delay becomes a multi-second "pop-in" parade
         // (50 rings = 2.5s) which feels like lag, not animation.
@@ -143,7 +144,7 @@ struct StoryTrayView: View {
                 myStoryButton
                     .bounceOnAppear(delay: 0)
 
-                ForEach(Array(viewModel.storyGroups.filter { $0.id != currentUserId && !$0.isFullyExpired() }.enumerated()), id: \.element.id) { visibleIndex, group in
+                ForEach(Array(visibleGroups.enumerated()), id: \.element.id) { visibleIndex, group in
                     Group {
                         if visibleIndex < staggerCap {
                             storyRingCell(for: group)
@@ -643,31 +644,10 @@ struct PinnedStoryTrailBand: View {
         AuthManager.shared.currentUser?.id ?? ""
     }
 
-    /// Le groupe de l'utilisateur courant (sa propre story). Surfacé en tête
-    /// du band replié pour un accès rapide « voir / gérer mes stories »
-    /// depuis le header une fois la grande trail scrollée hors écran.
-    ///
-    /// Parité 2026-08-10 : NE filtre plus sur `!isFullyExpired()` — un
-    /// historique entièrement expiré est quand même « une story » pour
-    /// l'anneau self : sans lui, il disparaissait purement et simplement du
-    /// band replié, avec son appui long (« Gérer mes stories »), dès que la
-    /// dernière story active expirait. Contrairement à `MyStoryButton` (la
-    /// grande trail), il n'existe ici aucun autre slot de repli pour cette
-    /// cellule — la retirer retire le SEUL accès self de ce band.
-    private var ownGroup: StoryGroup? {
-        let uid = currentUserId
-        guard !uid.isEmpty else { return nil }
-        return viewModel.storyGroups.first { $0.id == uid }
-    }
-
-    private var visibleGroups: [StoryGroup] {
-        let uid = currentUserId
-        return viewModel.storyGroups.filter { $0.id != uid && !$0.isFullyExpired() }
-    }
-
     var body: some View {
-        let groups = visibleGroups
-        let own = ownGroup
+        let groups = viewModel.trayProjection.visibleGroups(for: currentUserId, at: Date())
+        // Le groupe self ne filtre PAS l'expiration : un historique expiré reste le seul accès self du band.
+        let own = viewModel.trayProjection.ownGroup(for: currentUserId)
         // Le band monte dès que la bascule commence, sans condition sur le
         // contenu : sa PREMIÈRE cellule est toujours l'avatar de l'utilisateur
         // connecté, et depuis le retrait du « + » de tête c'est par lui que

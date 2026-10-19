@@ -35,7 +35,10 @@ class StoryViewModel: ObservableObject, StoryPublishExecutor {
     /// s'arrêterait jamais.
     static let maxTrayPagesPerPass = 6
 
-    @Published var storyGroups: [StoryGroup] = []
+    @Published var storyGroups: [StoryGroup] = [] {
+        didSet { trayProjection = StoryTrayProjection(groups: storyGroups, ownerId: AuthManager.shared.currentUser?.id, at: Date()) }
+    }
+    private(set) var trayProjection = StoryTrayProjection.empty
     @Published var isLoading = false
 
     /// Motif du dernier échec de chargement du tray, `nil` quand la dernière
@@ -385,7 +388,7 @@ class StoryViewModel: ObservableObject, StoryPublishExecutor {
     // MARK: - Lookup Methods
 
     func storyGroupForUser(userId: String) -> StoryGroup? {
-        storyGroups.first { $0.id == userId }
+        trayProjection.group(forUserId: userId)
     }
 
     // MARK: - Optimistic offline stories (visibilité auteur hors-ligne)

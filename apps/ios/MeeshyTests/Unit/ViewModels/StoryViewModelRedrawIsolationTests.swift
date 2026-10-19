@@ -120,6 +120,20 @@ final class StoryViewModelRedrawIsolationTests: XCTestCase {
         subscription.cancel()
     }
 
+    func test_storyGroupsMutation_refreshesProjection() {
+        sut.storyGroups = [Self.group("u1", isViewed: false)]
+        XCTAssertEqual(sut.storyRingState(forUserId: "u1"), .unread)
+        XCTAssertEqual(sut.groupIndex(forUserId: "u1"), 0)
+
+        sut.storyGroups[0] = Self.group("u2", isViewed: true)
+
+        XCTAssertEqual(sut.storyRingState(forUserId: "u2"), .read)
+        XCTAssertEqual(sut.groupIndex(forUserId: "u2"), 0)
+        XCTAssertNil(sut.groupIndex(forUserId: "u1"))
+        XCTAssertFalse(sut.hasStories(forUserId: "u1"))
+        XCTAssertEqual(sut.storyGroupForUser(userId: "u2")?.id, "u2")
+    }
+
     private func failedUploadId(slides: [StorySlide] = [StorySlide()]) async throws -> String {
         sut.publishStoryInBackground(
             slides: slides,
@@ -134,6 +148,24 @@ final class StoryViewModelRedrawIsolationTests: XCTestCase {
         }
         XCTFail("Aucune publication n'a atteint .failed")
         return ""
+    }
+
+    private static func group(_ userId: String, isViewed: Bool) -> StoryGroup {
+        StoryGroup(
+            id: userId,
+            username: userId,
+            avatarColor: "FF2E63",
+            stories: [StoryItem(
+                id: "\(userId)-story",
+                content: "story",
+                media: [],
+                storyEffects: nil,
+                createdAt: Date(),
+                expiresAt: Date().addingTimeInterval(3_600),
+                isViewed: isViewed,
+                updatedAt: nil
+            )]
+        )
     }
 
     private static func makeStoryAPIPost(id: String) -> APIPost {
