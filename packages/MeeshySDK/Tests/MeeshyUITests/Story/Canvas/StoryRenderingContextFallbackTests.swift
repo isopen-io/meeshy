@@ -36,10 +36,10 @@ final class StoryRenderingContextFallbackTests: XCTestCase {
         let device = MTLCreateSystemDefaultDevice()
         let software = makeSoftwareContext()
         let hardware = StoryRenderingContext(device: device)
-        XCTAssertEqual(software.workingColorSpace.name, CGColorSpace.displayP3)
-        XCTAssertEqual(software.outputColorSpace.name, CGColorSpace.sRGB)
-        XCTAssertEqual(hardware.workingColorSpace.name, software.workingColorSpace.name)
-        XCTAssertEqual(hardware.outputColorSpace.name, software.outputColorSpace.name)
+        XCTAssertEqual(software.workingColorSpace.name as String?, CGColorSpace.displayP3 as String)
+        XCTAssertEqual(software.outputColorSpace.name as String?, CGColorSpace.sRGB as String)
+        XCTAssertEqual(hardware.workingColorSpace.name as String?, software.workingColorSpace.name as String?)
+        XCTAssertEqual(hardware.outputColorSpace.name as String?, software.outputColorSpace.name as String?)
     }
 
     func test_init_withDevice_exposesGPUBackend() throws {
