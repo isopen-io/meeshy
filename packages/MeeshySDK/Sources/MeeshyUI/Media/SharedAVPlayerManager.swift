@@ -219,6 +219,8 @@ public final class SharedAVPlayerManager: ObservableObject {
     var sessionSignalCancellables = Set<AnyCancellable>()
     /// `AVAudioSession.isOtherAudioPlaying` — injectable pour les témoins.
     var otherAudioIsPlaying: () -> Bool = { AVAudioSession.sharedInstance().isOtherAudioPlaying }
+    /// La libération après une pause (≈ 3 s) — injectable pour les témoins.
+    var releaseSessionAfterPause: () -> Void = { MediaSessionCoordinator.shared.releaseAfterUserPause() }
 
     private init() {
         observeSessionSignals()

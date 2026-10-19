@@ -63,6 +63,9 @@ extension SharedAVPlayerManager {
                   !self.interruptionLedger.holdsInterruptedPlayback else { return }
             self.wantsPlayback = false
             self.noteSessionSignal(.userPaused)
+            // Pause du PiP ou de l'écran verrouillé : Meeshy rend la main
+            // comme après toute pause (#11040, j).
+            self.releaseSessionAfterPause()
         }
     }
 

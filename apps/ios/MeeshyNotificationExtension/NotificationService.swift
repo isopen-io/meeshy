@@ -138,13 +138,31 @@ class NotificationService: UNNotificationServiceExtension {
         let isCommunicationType = Self.communicationTypes.contains(userInfo["type"] as? String ?? "")
         let identifier = request.identifier
         enrichment = Task {
-            let result = await Self.enrich(plan, incomingIdentifier: identifier, budget: budget)
-            guard !delivery.hasDelivered else {
-                Self.discard(result)
-                return
-            }
-            delivery.deliver(Self.finalContent(from: working, result: result, isCommunicationType: isCommunicationType))
+            await Self.deliverEnriched(
+                working,
+                plan: plan,
+                incomingIdentifier: identifier,
+                budget: budget,
+                delivery: delivery,
+                isCommunicationType: isCommunicationType
+            )
         }
+    }
+
+    private static func deliverEnriched(
+        _ working: sending UNMutableNotificationContent,
+        plan: NSEEnrichmentRequest,
+        incomingIdentifier: String,
+        budget: NSEBudget,
+        delivery: NSEDelivery<UNNotificationContent>,
+        isCommunicationType: Bool
+    ) async {
+        let result = await enrich(plan, incomingIdentifier: incomingIdentifier, budget: budget)
+        guard !delivery.hasDelivered else {
+            discard(result)
+            return
+        }
+        delivery.deliver(finalContent(from: working, result: result, isCommunicationType: isCommunicationType))
     }
 
     private static func finalContent(

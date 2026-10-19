@@ -1,17 +1,17 @@
 {
   "rules": {
     "anyview": 139,
-    "available-floor": 5,
+    "available-floor": 3,
     "fixed-font": 946,
     "idiom": 3,
     "logger-subsystem": 266,
-    "nonisolated-unsafe": 178,
-    "nslock": 76,
+    "nonisolated-unsafe": 157,
+    "nslock": 67,
     "nslog": 10,
     "plural-s": 3,
-    "try-sleep": 269,
-    "uiscreen-main": 27,
-    "unchecked-sendable": 179
+    "try-sleep": 267,
+    "uiscreen-main": 20,
+    "unchecked-sendable": 177
   },
   "version": 1
 }
