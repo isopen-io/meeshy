@@ -48,6 +48,12 @@ struct RecordingSessionLawTests {
         #expect(RecordingSessionLaw.handBack(meeshySoundStillPlaying: false) == .releaseSession)
     }
 
+    @Test func theSessionIsReleasedOnlyIfItIsStillTheRecordingOne() {
+        #expect(RecordingSessionLaw.mayReleaseSession(currentCategory: .playAndRecord))
+        #expect(!RecordingSessionLaw.mayReleaseSession(currentCategory: .playback))
+        #expect(!RecordingSessionLaw.mayReleaseSession(currentCategory: .ambient))
+    }
+
     @Test func whileRecording_noContentPlayerMayReconfigureTheSession() {
         #expect(!RecordingSessionLaw.contentMayReconfigureSession(recordingHoldsSession: true))
         #expect(RecordingSessionLaw.contentMayReconfigureSession(recordingHoldsSession: false))

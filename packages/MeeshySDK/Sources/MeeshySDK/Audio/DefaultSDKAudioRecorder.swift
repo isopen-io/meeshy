@@ -57,7 +57,9 @@ public final class DefaultSDKAudioRecorder: ObservableObject, AudioRecordingProv
             guard let recorder = handle.recorder else { return }
             recorder.stop()
             try? FileManager.default.removeItem(at: recorder.url)
-            MediaSessionCoordinator.shared.deactivatePlaybackSync()
+            DispatchQueue.main.async {
+                MainActor.assumeIsolated { MeeshyRecordingSession.shared.finish(handingBackSession: true) }
+            }
         }
     }
 
@@ -89,11 +91,11 @@ public final class DefaultSDKAudioRecorder: ObservableObject, AudioRecordingProv
         }
         permissionDenied = false
 
-        // Source unique de session (call-aware) : pendant un appel VoIP la
-        // reconfiguration est refusée — on n'enregistre pas par-dessus
-        // RTCAudioSession (l'ancien chemin direct AVAudioSession cassait
-        // l'uplink micro de l'appel).
-        guard MediaSessionCoordinator.shared.activateRecordingSync() else { return }
+        // Source unique de session (call-aware, #11042) : pendant un appel VoIP
+        // la reconfiguration est refusée — on n'enregistre pas par-dessus
+        // RTCAudioSession. Les sons extérieurs s'arrêtent ; un son Meeshy qui
+        // joue baisse, et remonte à la fin.
+        guard MeeshyRecordingSession.shared.begin(.voiceMessage) else { return }
 
         // Second démarrage sans arrêt (double appui, relance après le prompt
         // micro) : arrêter l'enregistrement précédent et son minuteur 20 Hz,
@@ -122,7 +124,7 @@ public final class DefaultSDKAudioRecorder: ObservableObject, AudioRecordingProv
             // Rendre la session activée juste au-dessus : sans cela le micro
             // reste réservé et l'indicateur orange allumé.
             recorder = nil
-            MediaSessionCoordinator.shared.deactivatePlaybackSync()
+            MeeshyRecordingSession.shared.finish(handingBackSession: true)
             return
         }
 
@@ -156,10 +158,9 @@ public final class DefaultSDKAudioRecorder: ObservableObject, AudioRecordingProv
         recorder?.stop()
         isRecording = false
 
-        // Call-aware (L3) : un `setActive(false)` direct pendant un appel VoIP
-        // démontait la session possédée par RTCAudioSession. Le coordinator
-        // no-op dans ce cas.
-        MediaSessionCoordinator.shared.deactivatePlaybackSync()
+        // Le son Meeshy baissé remonte, et la session revient à la lecture ou
+        // se rend (call-aware : rien ne bouge pendant un appel VoIP).
+        MeeshyRecordingSession.shared.finish(handingBackSession: true)
 
         let url = recordedFileURL
         recorder = nil
@@ -182,7 +183,7 @@ public final class DefaultSDKAudioRecorder: ObservableObject, AudioRecordingProv
         // Symétrique de stopRecording : sans cette désactivation, un cancel
         // explicite (X, onDisappear) laissait la session `.playAndRecord`
         // active — micro indiqué, audio des autres apps interrompu.
-        MediaSessionCoordinator.shared.deactivatePlaybackSync()
+        MeeshyRecordingSession.shared.finish(handingBackSession: true)
     }
 
     private func updateMetering() {

@@ -58,12 +58,12 @@ final class PermissionGateSourceGuardTests: XCTestCase {
             "startRecording() doit trancher la permission micro AVANT toute activation de session."
         )
         guard let gateIndex = fn.range(of: "hasMicrophonePermission()")?.lowerBound,
-              let sessionIndex = fn.range(of: "session.setCategory")?.lowerBound else {
+              let sessionIndex = fn.range(of: "recordingSession.begin(")?.lowerBound else {
             return XCTFail("Impossible de localiser la garde et l'activation de session")
         }
         XCTAssertLessThan(
             gateIndex, sessionIndex,
-            "La garde micro doit précéder setCategory/setActive — l'inverse laisse iOS " +
+            "La garde micro doit précéder la prise de session (#11042) — l'inverse laisse iOS " +
             "prompter de façon asynchrone pendant que l'enregistrement a déjà démarré."
         )
     }

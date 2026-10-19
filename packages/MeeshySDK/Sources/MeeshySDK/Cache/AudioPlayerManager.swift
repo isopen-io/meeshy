@@ -68,6 +68,7 @@ public class AudioPlayerManager: ObservableObject {
         sessionEventsCancellable = sessionEvents
             .receive(on: DispatchQueue.main)
             .sink { [weak self] event in self?.handleSessionEvent(event) }
+        RecordingPlaybackDucker.shared.register(self)
     }
 
     deinit {
@@ -386,5 +387,16 @@ public class AudioPlayerManager: ObservableObject {
         if abs(newProgress - progress) >= Self.progressWriteThreshold {
             progress = newProgress
         }
+    }
+}
+
+// MARK: - Enregistrement (#11042)
+extension AudioPlayerManager: AudiblePlaybackSource {
+    /// Pendant un enregistrement, l'extrait qui joue baisse puis remonte.
+    public var audibleVolumeTargets: [any PlaybackVolumeTarget] {
+        guard isPlaying else { return [] }
+        let local: [any PlaybackVolumeTarget] = localPlayer.map { [$0] } ?? []
+        let stream: [any PlaybackVolumeTarget] = streamPlayer.map { [$0] } ?? []
+        return local + stream
     }
 }
