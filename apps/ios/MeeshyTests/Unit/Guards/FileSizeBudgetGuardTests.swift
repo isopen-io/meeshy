@@ -58,7 +58,6 @@ final class FileSizeBudgetGuardTests: XCTestCase {
         "FeedView.swift",
         "FeedViewModel.swift",
         "P2PWebRTCClient.swift",
-        "PostDetailView.swift",
         "RootView.swift",
         "StoryViewerView+Canvas.swift",
         "StoryViewerView+Content.swift",
@@ -628,7 +627,15 @@ final class FileSizeBudgetGuardTests: XCTestCase {
     //
     // Cycle 10 — 29 803 → 29 799 (−4). Le passage à l'auteur suivant quitte
     // `StoryViewerView+Content.swift` pour `landOnNextGroup()` (+Navigation, borné) : le plafond reprend le mou.
-    private static let legacyLineCeiling = 29_799
+    //
+    // #10956 — 29 799 → 28 050 (−1 749). `PostDetailView.swift` (1 748 lignes)
+    // se découpe par responsabilité en sept extensions (`+Header`, `+ShareLink`,
+    // `+Heart`, `+Opening`, `+Prism`, `+CommentTarget`, `+Presentations`) et
+    // confie le bandeau de réponse à `+CommentComposer`, sans changer de
+    // comportement : le type retombe à 1 095 lignes, chaque extension est sous
+    // le budget. Il sort de `legacyOverBudget` ENTIER, et le plafond baisse de
+    // ce qu'il pesait.
+    private static let legacyLineCeiling = 28_050
 
     // MARK: - Règle 1 — pas de 43ᵉ
 
