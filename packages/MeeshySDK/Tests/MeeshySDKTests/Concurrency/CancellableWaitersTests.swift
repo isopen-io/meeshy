@@ -51,9 +51,11 @@ final class CancellableWaitersTests: XCTestCase {
         let newerTask = Task { await waiters.suspendCancellable(newer, cancelledValue: false) }
         _ = await cancellableSleep(for: .milliseconds(20))
         XCTAssertTrue(waiters.resolveLatest(with: true))
-        XCTAssertTrue(await newerTask.value)
+        let newerTaskOutcome = await newerTask.value
+        XCTAssertTrue(newerTaskOutcome)
         XCTAssertEqual(waiters.liveCount, 1)
         olderTask.cancel()
-        XCTAssertFalse(await olderTask.value)
+        let olderTaskOutcome = await olderTask.value
+        XCTAssertFalse(olderTaskOutcome)
     }
 }

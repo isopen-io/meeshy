@@ -26,10 +26,12 @@ final class LatestFirstGateTests: XCTestCase {
         }
         await settle()
         await gate.leave()
-        XCTAssertTrue(await newer.value)
+        let newerOutcome = await newer.value
+        XCTAssertTrue(newerOutcome)
         XCTAssertEqual(order.read { $0 }, ["newer"])
         await gate.leave()
-        XCTAssertTrue(await older.value)
+        let olderOutcome = await older.value
+        XCTAssertTrue(olderOutcome)
         XCTAssertEqual(order.read { $0 }, ["newer", "older"])
     }
 
@@ -39,7 +41,8 @@ final class LatestFirstGateTests: XCTestCase {
         let waiting = Task { await gate.enter() }
         await settle()
         waiting.cancel()
-        XCTAssertFalse(await waiting.value)
+        let waitingOutcome = await waiting.value
+        XCTAssertFalse(waitingOutcome)
         await gate.leave()
         let reentered = await gate.enter()
         XCTAssertTrue(reentered)
