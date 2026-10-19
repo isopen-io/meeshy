@@ -948,9 +948,9 @@
       "pattern": "^assets/catalog-send-sheet-(fr|en|es|pt|de|it|ar)-[A-Za-z0-9_-]+\\.js$",
       "dynamic_only": true,
       "kb": {
-        "value": 8,
-        "status": "CIBLE -- MESUREE PAR #8884, NON ARBITREE",
-        "source": "Mesure du 2026-09-30 (`bun run build` puis gzip -9) : 6,05 Ko pour les SEPT catalogues de la feuille d'envoi (cles `sendSheet.*` et `shareLinkSheet.*`), de 0,79 Ko (en) a 1,00 Ko (ar). Charges avec la feuille seulement (`i18n-send-sheet-catalog`), jamais avec la premiere peinture ; un lecteur n'en telecharge qu'UN. Arrondi au Ko SUPERIEUR (7) + 1 Ko de marge."
+        "value": 15,
+        "status": "CIBLE -- REMESUREE LE 2026-10-19, NON ARBITREE",
+        "source": "Mesure du 2026-10-19 (`bun run build` puis `node scripts/measure-weight.mjs`) : 13,95 Ko pour les SEPT catalogues -- l'ecran de partage unique (#10948) y a ajoute ses cles (destinataires, groupes, plafonds de poids, codes de refus), montees de 6,05 a 13,95 Ko depuis la mesure de #8884 du 2026-09-30. Toujours charge avec la feuille seulement, jamais avec la premiere peinture ; un lecteur n'en telecharge qu'UN. Arrondi au Ko SUPERIEUR (14) + 1 Ko de marge, meme discipline que la mesure precedente. AVANT -- Mesure du 2026-09-30 (`bun run build` puis gzip -9) : 6,05 Ko pour les SEPT catalogues de la feuille d'envoi (cles `sendSheet.*` et `shareLinkSheet.*`), de 0,79 Ko (en) a 1,00 Ko (ar). Arrondi au Ko SUPERIEUR (7) + 1 Ko de marge."
       }
     },
     "interface_catalogs_viewer_engagement": {
@@ -1136,9 +1136,9 @@
       "pattern": "^assets/send-sheet-screen-[A-Za-z0-9_-]+\\.js$",
       "dynamic_only": true,
       "kb": {
-        "value": 13,
-        "status": "CIBLE -- MESUREE PAR #8884, NON ARBITREE",
-        "source": "Mesure du 2026-09-30 (`bun run build` puis gzip -9) : 10,96 Ko gzip -9 -- l'ecran de la feuille d'envoi commune (destinataires, groupes, publication, legende, envoi). CHARGE A LA DEMANDE au premier « Envoyer » / « Partager » (`send-sheet-host`), jamais avec la premiere peinture. Arrondi au Ko SUPERIEUR (11) + 2 Ko de marge (le chunk embarque le planificateur d'envoi et le port de publication de fichiers)."
+        "value": 16,
+        "status": "CIBLE -- REMESUREE LE 2026-10-19, NON ARBITREE",
+        "source": "Mesure du 2026-10-19 (`bun run build` puis `node scripts/measure-weight.mjs`) : 13,65 Ko gzip -9 -- l'ecran de partage unique (#10948) a etendu l'ecran (quatre zones, plafonds communs planShare, flou pied par piece, codes de refus) depuis la mesure de #8884 du 2026-09-30 (10,96 Ko). Toujours CHARGE A LA DEMANDE au premier « Envoyer » / « Partager » (`send-sheet-host`), jamais avec la premiere peinture. Arrondi au Ko SUPERIEUR (14) + 2 Ko de marge, meme discipline que la mesure precedente. AVANT -- Mesure du 2026-09-30 (`bun run build` puis gzip -9) : 10,96 Ko gzip -9 -- l'ecran de la feuille d'envoi commune (destinataires, groupes, publication, legende, envoi). Arrondi au Ko SUPERIEUR (11) + 2 Ko de marge (le chunk embarque le planificateur d'envoi et le port de publication de fichiers)."
       }
     },
     "conversation_media_hub": {
