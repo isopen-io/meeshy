@@ -53,7 +53,7 @@
  *     lecteurs, story EN PAUSE, rail hors d'atteinte), Échap ferme LA FEUILLE
  *     — pas le lecteur, défaut mesuré sur le premier jet — et rend le focus
  *     à « Vues » ; « Partager » ouvre la feuille d'envoi commune (#8884), dont
- *     « Plus d'options… » appelle la feuille du système SYNCHRONEMENT au clic
+ *     « Partager hors de Meeshy » appelle la feuille du système SYNCHRONEMENT au clic
  *     (la seule preuve qu'elle s'ouvrirait sur Safari, D-48) avec l'adresse
  *     canonique ; « Enregistrer » pose l'anneau à SA place pendant
  *     que « Partager » reste un bouton, puis LIVRE `meeshy-m4.svg` et le dit
@@ -941,7 +941,8 @@ async function runAuthorRail(colorScheme) {
   }
 
   /* ── « Partager » : la feuille d'envoi commune (#8884), puis, par « Plus
-        d'options… », la feuille du système DANS le geste (D-48) ── */
+        d'options… » (« Partager hors de Meeshy » depuis #10948), la feuille du
+        système DANS le geste (D-48) ── */
   await figer();
   await page.evaluate(() => document.querySelector('[data-story-action="share"]')?.click());
   const feuilleEnvoi = await page
@@ -950,13 +951,17 @@ async function runAuthorRail(colorScheme) {
     .catch(() => false);
   check(feuilleEnvoi, `${tag} : « Partager » doit ouvrir la feuille d'envoi commune`);
   const partage = await page.evaluate(() => {
-    const plus = [...document.querySelectorAll('[data-send-sheet-frame] button')].find((b) => b.textContent?.trim() === 'Plus d’options…');
+    /* Visé par son IDENTIFIANT (`data-send-action="share-out"`), jamais par
+       son libellé : l'écran de partage unique (#10948, planche validée #10949)
+       l'a renommé « Partager hors de Meeshy », et un libellé recopié ici
+       rougissait sur un renommage sans rien dire du geste mesuré. */
+    const plus = document.querySelector('[data-send-sheet-frame] [data-send-action="share-out"]');
     plus?.click();
     return window.__shareCalls.slice();
   });
   check(
     JSON.stringify(partage) === JSON.stringify(['https://meeshy.me/feeds/post/st-mienne']),
-    `${tag} : « Plus d'options… » doit ouvrir la feuille du système PENDANT le clic, sur l'adresse canonique (D-48) — ${JSON.stringify(partage)}`,
+    `${tag} : « Partager hors de Meeshy » doit ouvrir la feuille du système PENDANT le clic, sur l'adresse canonique (D-48) — ${JSON.stringify(partage)}`,
   );
   await page.keyboard.press('Escape');
   await page.waitForSelector('[data-send-sheet-frame]', { state: 'detached', timeout: 4000 }).catch(() => {});
