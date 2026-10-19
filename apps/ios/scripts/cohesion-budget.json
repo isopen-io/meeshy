@@ -458,7 +458,7 @@
     "MeeshySDK::AuthManager": 1898,
     "MeeshySDK::ConversationSyncEngine": 3082,
     "MeeshySDK::MessagePersistenceActor": 2982,
-    "MeeshySDK::MessageSocketManager": 2767,
+    "MeeshySDK::MessageSocketManager": 2680,
     "MeeshySDK::OfflineQueue": 2985,
     "MeeshyUI::AudioPlayerView": 1542,
     "MeeshyUI::StickerPickerView": 1604,
