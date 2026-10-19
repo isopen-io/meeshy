@@ -178,7 +178,7 @@ final class SocketLifecycleBindingGuardTests: XCTestCase {
     }
 
     func test_meeshyNotificationType_declaresNoFriendRejectedCase() throws {
-        let source = try sdkSource("Sources/MeeshySDK/Models/NotificationModels.swift")
+        let source = try sdkSource("Sources/MeeshySDK/Models/MeeshyNotificationType.swift")
 
         XCTAssertFalse(
             declaresFriendRejectedCase(source),

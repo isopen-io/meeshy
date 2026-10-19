@@ -57,7 +57,7 @@ final class ComposerCaptureZoomScaleTests: XCTestCase {
     }
 
     func test_camera_opensTheVirtualDevice_andTheBarOffersThePresets() throws {
-        let camera = try Self.code("Meeshy/Features/Main/Components/CameraModel.swift")
+        let camera = try Self.code("Meeshy/Features/Main/Components/CameraModel.swift") + Self.code("Meeshy/Features/Main/Components/CameraInputInstaller.swift")
         XCTAssertTrue(camera.contains("AVCaptureDevice.DiscoverySession("), "la caméra virtuelle d'abord")
         XCTAssertTrue(camera.contains("virtualDeviceSwitchOverVideoZoomFactors"))
         XCTAssertTrue(camera.contains("zoomScale.device("), "le facteur affiché se convertit à l'écriture")

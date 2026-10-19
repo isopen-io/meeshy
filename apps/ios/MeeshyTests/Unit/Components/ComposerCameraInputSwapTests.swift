@@ -97,7 +97,7 @@ final class ComposerCameraInputSwapTests: XCTestCase {
     }
 
     func test_camera_orientsAndOpensTheLensInsideTheSwap_andOnlyReassertsTheZoomAfter() throws {
-        let camera = try Self.code("Meeshy/Features/Main/Components/CameraModel.swift")
+        let camera = try Self.code("Meeshy/Features/Main/Components/CameraInputInstaller.swift")
         let debut = try XCTUnwrap(camera.range(of: "ComposerCameraInputSwap.swap(in: session, replacing: ancienne, with: nouvelle) { issue in"))
         let fin = try XCTUnwrap(camera.range(of: "return InstalledCamera(", range: debut.upperBound..<camera.endIndex))
         let bascule = String(camera[debut.upperBound..<fin.lowerBound])
@@ -112,7 +112,7 @@ final class ComposerCameraInputSwapTests: XCTestCase {
     }
 
     func test_camera_switchesThroughTheSafeSwap() throws {
-        let camera = try Self.code("Meeshy/Features/Main/Components/CameraModel.swift")
+        let camera = try Self.code("Meeshy/Features/Main/Components/CameraModel.swift") + Self.code("Meeshy/Features/Main/Components/CameraInputInstaller.swift")
         XCTAssertTrue(camera.contains("ComposerCameraInputSwap.swap("))
         XCTAssertFalse(camera.contains(".forEach { session.removeInput($0) }"),
                        "retirer l'entrée AVANT de savoir si la nouvelle entre laissait l'écran noir")

@@ -368,6 +368,12 @@ final class LocalizationConsistencyTests: XCTestCase {
         // littéral à une valeur source qui n'existe pas pour un pluriel, et
         // aucune réconciliation ne peut la satisfaire (suivi ouvert).
         "apps/ios/Meeshy/Features/Main/Views/MyStoriesView.swift",  // 60
+        // Cohésion de `MyStoriesView` : le cliquet suit le CODE, pas le chemin (leçon 578). Les
+        // alertes de suppression, le menu « ... » et les rangées de la file ont quitté l'hôte
+        // avec leurs clés.
+        "apps/ios/Meeshy/Features/Main/Views/MyStoriesDeleteAlerts.swift",
+        "apps/ios/Meeshy/Features/Main/Views/MyStoriesQueueRows.swift",
+        "apps/ios/Meeshy/Features/Main/Views/MyStoryActionMenu.swift",
         "apps/ios/Meeshy/Features/Main/Views/SecurityView.swift",  // 58
         // #8843 — le flux SMS du numéro a quitté l'écran ci-dessus pour être
         // partagé avec la proposition faite avant la recherche de contacts :

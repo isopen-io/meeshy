@@ -219,7 +219,7 @@ final class RepostButtonGlyphTests: XCTestCase {
     }
 
     func test_theRepostButton_paintsOnlySymbolsThatExist() throws {
-        for file in ["Meeshy/Features/Main/Views/FeedPostCard.swift", "Meeshy/Features/Main/Views/PostDetailView.swift"] {
+        for file in ["Meeshy/Features/Main/Views/FeedPostActionsBar.swift", "Meeshy/Features/Main/Views/PostDetailView.swift"] {
             let symbols = try repostSymbols(in: file)
             XCTAssertFalse(symbols.isEmpty, "\(file) : le bouton repost n'est plus trouvé")
             for symbol in symbols {

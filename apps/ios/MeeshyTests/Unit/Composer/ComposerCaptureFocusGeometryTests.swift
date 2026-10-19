@@ -100,7 +100,7 @@ final class ComposerCaptureFocusGeometryTests: XCTestCase {
     }
 
     func test_camera_resetsTheBiasAtEachInput_andFocusesSmoothlyWhenAsked() throws {
-        let camera = try Self.code("Meeshy/Features/Main/Components/CameraModel.swift")
+        let camera = try Self.code("Meeshy/Features/Main/Components/CameraModel.swift") + Self.code("Meeshy/Features/Main/Components/CameraInputInstaller.swift") + Self.code("Meeshy/Features/Main/Components/CameraFocusControl.swift")
         XCTAssertTrue(camera.contains("setExposureTargetBias(0"))
         XCTAssertTrue(camera.contains("isSmoothAutoFocusEnabled"))
         XCTAssertTrue(camera.contains("subjectAreaDidChangeNotification"), "la scène qui change rend le continu")

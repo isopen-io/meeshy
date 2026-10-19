@@ -28,6 +28,12 @@ enum MyStoriesSourceCorpus {
         "Meeshy/Features/Main/Views/MyStoryThumbnail.swift",
         "Meeshy/Features/Main/Views/MyStoryCardPresentation.swift",
         "Meeshy/Features/Main/Views/MyStoriesDeleteConfirmation.swift",
+        "Meeshy/Features/Main/Views/MyStoriesDeleteAlerts.swift",
+        "Meeshy/Features/Main/Views/MyStoriesQueueRows.swift",
+        "Meeshy/Features/Main/Views/MyStoriesSheetTargets.swift",
+        "Meeshy/Features/Main/Views/MyStoryActionMenu.swift",
+        "Meeshy/Features/Main/Views/MyStoryCardModelRules.swift",
+        "Meeshy/Features/Main/Views/StoryVisibilityMenuResolver.swift",
     ]
 
     /// Racine `apps/ios/`, dérivée du chemin du fichier APPELANT.

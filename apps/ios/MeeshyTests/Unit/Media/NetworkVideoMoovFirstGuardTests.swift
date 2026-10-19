@@ -102,7 +102,7 @@ final class NetworkVideoMoovFirstGuardTests: XCTestCase {
 
     func test_lesSitesNommesParLIssue_posentLOption() {
         let bilan = census()
-        for nom in ["MediaCompressor.swift", "CameraModel.swift", "ComposerLookVideoExporter.swift"] {
+        for nom in ["MediaCompressor.swift", "CameraSegmentMerger.swift", "ComposerLookVideoExporter.swift"] {
             guard let compte = bilan[nom] else {
                 XCTFail("\(nom) n'écrit plus de vidéo : la garde doit être relue.")
                 continue
