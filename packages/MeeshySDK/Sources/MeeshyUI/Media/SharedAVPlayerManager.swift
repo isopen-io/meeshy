@@ -620,74 +620,15 @@ public final class SharedAVPlayerManager: ObservableObject {
     // MARK: - Picture-in-Picture
     //
     // Le contrôleur, son délégué et les drapeaux de transition vivent dans
-    // `SharedPipEngine` ; ces membres en sont la façade publique.
+    // `SharedPipEngine` ; sa façade publique vit dans
+    // `SharedAVPlayerManager+Pip.swift`, d'où `pip` lisible du module.
 
-    private lazy var pip = SharedPipEngine(
+    private(set) lazy var pip = SharedPipEngine(
         enginePlayer: { [weak self] in self?.player },
         isActive: { [weak self] in self?.isPipActive ?? false },
         setActive: { [weak self] in self?.isPipActive = $0 },
         haltPlayback: { [weak self] in self?.stop() },
         pausePlayback: { [weak self] in self?.pause() })
-
-    /// PiP réellement engagé — état LIVE du contrôleur, pas le `@Published`
-    /// `isPipActive` qui traverse un hop MainActor. Lu par le garde background
-    /// de l'app pendant la transition, où l'auto-PiP vient tout juste de
-    /// démarrer et où le flag publié peut encore être en retard d'un tick.
-    public var isPipEngaged: Bool {
-        pip.isEngaged
-    }
-
-    /// Une surface a opté pour le PiP sur la vidéo courante (le simulateur ne
-    /// supporte pas le PiP : toujours `false` là-bas).
-    public var isPipConfigured: Bool {
-        pip.isConfigured
-    }
-
-    /// Attend (borné) que l'auto-PiP s'engage pendant la transition vers
-    /// l'arrière-plan : AVKit démarre le PiP de son côté au moment où l'app
-    /// se retire, et le garde background court CONTRE cette animation. Sans
-    /// cette fenêtre, un `pause()` prématuré avorterait la fenêtre PiP que le
-    /// système était en train d'ouvrir.
-    public func waitForPipEngagement(timeout: TimeInterval) async -> Bool {
-        let deadline = Date().addingTimeInterval(timeout)
-        while Date() < deadline {
-            if isPipEngaged { return true }
-            try? await Task.sleep(for: .milliseconds(50))
-        }
-        return isPipEngaged
-    }
-
-    /// Attach PIP to a given AVPlayerLayer. Call this from the UIViewRepresentable that hosts the player.
-    ///
-    /// `deferred` (#10354) : le lecteur de réels demande son contrôleur pour
-    /// la page POSÉE ; la création attend `deferredPipDelay`, coalescée — une
-    /// rafale de demandes (montage, `load()`, mise à jour) n'en crée qu'un, et
-    /// une demande dont la couche ne montre plus le moteur ne crée rien. Le
-    /// passage automatique en arrière-plan
-    /// (`canStartPictureInPictureAutomaticallyFromInline`) reste posé.
-    public func configurePip(playerLayer: AVPlayerLayer, deferred: Bool = false) {
-        pip.configure(playerLayer: playerLayer, deferred: deferred)
-    }
-
-    /// Demande la fenêtre PiP. Rend `true` si la demande est PARTIE — la
-    /// surface qui se ferme derrière sait alors que la lecture a un autre lieu.
-    ///
-    /// `haltsOnFailure` : la surface qui demande va se FERMER (sortie du plein
-    /// écran). Si la fenêtre échoue à s'ouvrir, la lecture s'arrête plutôt que
-    /// de continuer sans lieu. Une surface qui reste à l'écran le laisse à
-    /// `false` : en cas d'échec, elle joue toujours.
-    ///
-    /// `isPipActive` ne se lève qu'au rappel `didStart` : la couche d'origine
-    /// doit rester montée pendant l'ouverture, et le verdict de montage la
-    /// démonterait. `isPipStarting` protège le contrôleur d'ici là.
-    @discardableResult
-    public func startPip(haltsOnFailure: Bool = false) -> Bool {
-        pip.start(haltsOnFailure: haltsOnFailure)
-    }
-
-    public func stopPip() {
-        pip.stop()
-    }
 
     // MARK: - Watch Progress Reporting
 

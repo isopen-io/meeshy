@@ -1,5 +1,10 @@
 import AVFoundation
 import AVKit
+import Combine
+import os
+
+/// Console de l'iPhone : sous-système `me.meeshy.app`, catégorie `pip`.
+nonisolated private let pipLog = Logger(subsystem: "me.meeshy.app", category: "pip")
 
 /// La fenêtre Picture in Picture du lecteur partagé : le contrôleur AVKit, son
 /// délégué, les drapeaux de transition et la création différée. Le moteur
@@ -25,10 +30,13 @@ final class SharedPipEngine {
     /// l'utilisateur (X) et la lecture s'arrête, sinon l'audio continuerait
     /// invisible en arrière-plan.
     private var pipTeardownIsInternal = false
-    /// Une fenêtre PiP a été DEMANDÉE et n'a encore ni démarré ni échoué.
-    private var isPipStarting = false
-    /// La surface qui a demandé le PiP s'est fermée derrière sa demande.
-    private var pipFailureHaltsPlayback = false
+    /// L'ouverture en cours — demandée par un toucher OU annoncée par le
+    /// système (`willStart` de l'auto-PiP en sortie d'app, #11041).
+    private var startLedger = PipStartLedger()
+
+    /// Une ouverture a échoué (`failedToStart`). L'app s'y abonne : en
+    /// arrière-plan, la vidéo n'a alors plus de lieu et doit s'arrêter.
+    let startFailures = PassthroughSubject<Void, Never>()
 
     /// La surface qui a demandé un PiP DIFFÉRÉ, et la création qui l'attend.
     private weak var pendingPipLayer: AVPlayerLayer?
@@ -53,8 +61,36 @@ final class SharedPipEngine {
 
     /// Une surface a opté pour le PiP sur la vidéo courante.
     var isConfigured: Bool {
-        pipController != nil
+        #if DEBUG
+        if simulatesControllerForTesting { return true }
+        #endif
+        return pipController != nil
     }
+
+    #if DEBUG
+    /// Le simulateur ne fait pas de PiP : un test pose une fenêtre que le
+    /// système est en train d'ouvrir (`willStart` de l'auto-PiP).
+    private var simulatesControllerForTesting = false
+
+    func simulateSystemStartForTesting() {
+        simulatesControllerForTesting = true
+        startLedger.systemWillStart()
+    }
+    #endif
+
+    /// Une fenêtre s'ouvre (demandée ou automatique) sans avoir encore
+    /// démarré ni échoué.
+    var isStarting: Bool { startLedger.isStarting }
+
+    /// La dernière ouverture a échoué.
+    var hasFailedToStart: Bool { startLedger.hasFailed }
+
+    /// Nombre d'échecs d'ouverture depuis la création du moteur.
+    var startFailureCount: Int { startLedger.failureCount }
+
+    /// AVKit accepterait d'ouvrir une fenêtre maintenant (journal seulement :
+    /// la valeur bascule pendant la transition d'arrière-plan).
+    var isPossible: Bool { pipController?.isPictureInPicturePossible == true }
 
     func configure(playerLayer: AVPlayerLayer, deferred: Bool) {
         guard AVPictureInPictureController.isPictureInPictureSupported() else { return }
@@ -87,20 +123,24 @@ final class SharedPipEngine {
         // contrôleur : une surface qui se monte pendant ce temps — la bulle
         // restée sous un plein écran qu'on ferme — le remplacerait et tuerait
         // la fenêtre que l'utilisateur vient de demander (#9575).
-        guard SharedAVPlayerManager.mayReplacePipController(isPipActive: isActive() || isEngaged || isPipStarting) else { return }
+        guard SharedAVPlayerManager.mayReplacePipController(isPipActive: isActive() || isEngaged || startLedger.isStarting) else { return }
         pipController?.invalidatePlaybackState()
         let controller = AVPictureInPictureController(playerLayer: playerLayer)
         controller?.canStartPictureInPictureAutomaticallyFromInline = true
-        let delegate = PipDelegate { [weak self] in
+        pipLog.info("controller created — exists=\(controller != nil, privacy: .public) possible=\(controller?.isPictureInPicturePossible ?? false, privacy: .public)")
+        let delegate = PipDelegate(onWillStart: { [weak self] in
             Task { @MainActor [weak self] in
-                self?.isPipStarting = false
-                self?.pipFailureHaltsPlayback = false
+                self?.startLedger.systemWillStart()
+            }
+        }, onStart: { [weak self] in
+            Task { @MainActor [weak self] in
+                self?.startLedger.didStart()
                 self?.setActive(true)
             }
-        } onStop: { [weak self] in
+        }, onStop: { [weak self] in
             Task { @MainActor [weak self] in
                 guard let self else { return }
-                self.isPipStarting = false
+                self.startLedger.stopped()
                 self.setActive(false)
                 let wasInternal = self.pipTeardownIsInternal
                 self.pipTeardownIsInternal = false
@@ -108,19 +148,18 @@ final class SharedPipEngine {
                     self.haltPlayback()
                 }
             }
-        } onFailedToStart: { [weak self] in
+        }, onFailedToStart: { [weak self] in
             Task { @MainActor [weak self] in
                 guard let self else { return }
-                let halts = self.pipFailureHaltsPlayback
-                self.isPipStarting = false
-                self.pipFailureHaltsPlayback = false
+                let halts = self.startLedger.failedToStart()
                 if self.isActive() { self.setActive(false) }
                 // La surface qui a demandé la fenêtre s'est fermée derrière
                 // elle : plus rien ne montre cette lecture, donc elle s'arrête
                 // au lieu de reprendre dans une bulle sans qu'on l'ait demandé.
                 if halts { self.pausePlayback() }
+                self.startFailures.send(())
             }
-        } onRestore: { [weak self] completion in
+        }, onRestore: { [weak self] completion in
             Task { @MainActor [weak self] in
                 // The player is already shared — nothing to restore, but the
                 // upcoming `didStop` must NOT halt playback (the user asked to
@@ -128,16 +167,18 @@ final class SharedPipEngine {
                 self?.pipTeardownIsInternal = true
                 completion(true)
             }
-        }
+        })
         controller?.delegate = delegate
         self.pipController = controller
         self.pipDelegate = delegate
     }
 
     func start(haltsOnFailure: Bool) -> Bool {
-        guard let pipController, pipController.isPictureInPicturePossible else { return false }
-        isPipStarting = true
-        pipFailureHaltsPlayback = haltsOnFailure
+        guard let pipController, pipController.isPictureInPicturePossible else {
+            pipLog.info("manual start refused — controller=\(self.pipController != nil, privacy: .public) possible=false")
+            return false
+        }
+        startLedger.requested(haltsOnFailure: haltsOnFailure)
         pipController.startPictureInPicture()
         return true
     }
@@ -150,8 +191,7 @@ final class SharedPipEngine {
             pipTeardownIsInternal = true
         }
         pipController?.stopPictureInPicture()
-        isPipStarting = false
-        pipFailureHaltsPlayback = false
+        startLedger.stopped()
         if isActive() { setActive(false) }
     }
 
@@ -169,8 +209,10 @@ final class SharedPipEngine {
         pipController = nil
         pipDelegate = nil
         pipTeardownIsInternal = false
-        isPipStarting = false
-        pipFailureHaltsPlayback = false
+        startLedger.reset()
+        #if DEBUG
+        simulatesControllerForTesting = false
+        #endif
     }
 }
 
@@ -182,31 +224,45 @@ private final class PipDelegate: NSObject, AVPictureInPictureControllerDelegate 
     // au démontage hors d'une tâche (test XCTest synchrone, vue démontée).
     // Garde : MainActorDeinitSourceGuardTests / MeeshyUIDeinitSourceGuardTests.
     nonisolated deinit {}
+    let onWillStart: () -> Void
     let onStart: () -> Void
     let onStop: () -> Void
     let onFailedToStart: () -> Void
     let onRestore: (@escaping (Bool) -> Void) -> Void
 
-    init(onStart: @escaping () -> Void,
+    init(onWillStart: @escaping () -> Void,
+         onStart: @escaping () -> Void,
          onStop: @escaping () -> Void,
          onFailedToStart: @escaping () -> Void,
          onRestore: @escaping (@escaping (Bool) -> Void) -> Void) {
+        self.onWillStart = onWillStart
         self.onStart = onStart
         self.onStop = onStop
         self.onFailedToStart = onFailedToStart
         self.onRestore = onRestore
     }
 
+    /// Le seul signal d'un PiP AUTOMATIQUE (sortie d'app) avant la fin de
+    /// son animation : sans lui, le garde d'arrière-plan croyait la vidéo
+    /// sans fenêtre et la mettait en pause (#11041).
+    func pictureInPictureControllerWillStartPictureInPicture(_ controller: AVPictureInPictureController) {
+        pipLog.info("willStart")
+        onWillStart()
+    }
+
     func pictureInPictureController(_ controller: AVPictureInPictureController,
                                      failedToStartPictureInPictureWithError error: Error) {
+        pipLog.error("failedToStart — \(error.localizedDescription, privacy: .public) (\((error as NSError).domain, privacy: .public) \((error as NSError).code, privacy: .public))")
         onFailedToStart()
     }
 
     func pictureInPictureControllerDidStartPictureInPicture(_ controller: AVPictureInPictureController) {
+        pipLog.info("didStart")
         onStart()
     }
 
     func pictureInPictureControllerDidStopPictureInPicture(_ controller: AVPictureInPictureController) {
+        pipLog.info("didStop")
         onStop()
     }
 
