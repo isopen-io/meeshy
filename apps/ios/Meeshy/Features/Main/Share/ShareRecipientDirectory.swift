@@ -1,55 +1,21 @@
 import Foundation
 import MeeshySDK
 
-/// Ce que la recherche serveur rend, fusionné par l'écran (V5).
-struct ShareSearchResults: Equatable, Sendable {
-    var people: [ShareRecipient] = []
-    var conversations: [ShareRecipient] = []
-    var communities: [ShareCommunity] = []
-}
-
-/// Une communauté où l'on peut écrire — elle se déplie en ses canaux (D11).
-struct ShareCommunity: Identifiable, Equatable, Sendable {
-    let id: String
-    let name: String
-    let avatarURL: String?
-}
-
-/// **D'où viennent les destinataires** — le cache d'abord, toujours.
-///
-/// L'écran affiche ce que la machine sait déjà (conversations en cache, amis en
-/// cache, carnet apparié en cache, communautés en cache) AVANT toute requête ;
-/// le réseau ne fait que revalider en silence (cache-first, stale-while-revalidate).
-protocol ShareRecipientSourcing: Sendable {
-    /// Les conversations du cache « list », `.fresh` ou `.stale` — jamais un
-    /// cache expiré présenté comme frais.
-    func cachedConversations() async -> [MeeshyConversation]
-    /// La première page du serveur, pour revalider en silence.
-    func freshConversations(currentUserId: String) async throws -> [MeeshyConversation]
-    /// Amis acceptés et contacts du carnet apparié, depuis leur cache.
-    func cachedPeople(currentUserId: String) async -> [ShareRecipient]
-    func cachedCommunities() async -> [ShareCommunity]
-    /// Recherche serveur fusionnée : personnes, conversations, communautés.
-    func search(_ query: String, currentUserId: String) async -> ShareSearchResults
-    /// Les canaux d'une communauté où l'utilisateur peut écrire (D11).
-    func writableChannels(of community: ShareCommunity, currentUserId: String) async -> [ShareRecipient]
-}
-
 /// La source réelle — les caches nommés du produit, puis les services.
 struct LiveShareRecipientDirectory: ShareRecipientSourcing {
     private static let pageLimit = 50
     private static let searchLimit = 20
 
-    func cachedConversations() async -> [MeeshyConversation] {
+    func cachedConversations() async -> [ShareRecipient] {
         switch await CacheCoordinator.shared.conversations.load(for: "list") {
-        case .fresh(let data, _), .stale(let data, _): return data.filter(\.isActive)
+        case .fresh(let data, _), .stale(let data, _): return data.filter(\.isActive).map { ShareRecipient(conversation: $0) }
         case .expired, .empty: return []
         }
     }
 
-    func freshConversations(currentUserId: String) async throws -> [MeeshyConversation] {
+    func freshConversations(currentUserId: String) async throws -> [ShareRecipient] {
         let page = try await ConversationService.shared.listPage(before: nil, limit: Self.pageLimit, currentUserId: currentUserId)
-        return page.items.filter(\.isActive)
+        return page.items.filter(\.isActive).map { ShareRecipient(conversation: $0) }
     }
 
     func cachedPeople(currentUserId: String) async -> [ShareRecipient] {

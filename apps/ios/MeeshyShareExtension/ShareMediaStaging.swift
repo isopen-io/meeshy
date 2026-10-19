@@ -80,7 +80,7 @@ nonisolated enum ShareMediaStaging {
     }
 
     static func requiredFreeBytes(for bytes: Int) -> Int {
-        bytes + ShareLimits.freeSpaceMarginBytes
+        bytes + ShareUploadBudget.freeSpaceMarginBytes
     }
 
     /// L'identifiant de type système prime : il distingue un GIF

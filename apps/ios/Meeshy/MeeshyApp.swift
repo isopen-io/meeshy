@@ -284,6 +284,13 @@ struct MeeshyApp: App {
                     // L'identifiant est PASSÉ, pas deviné : deux partages
                     // rapides se suivent, et reprendre « la plus ancienne »
                     // ouvrirait la première pièce sur le geste de la seconde.
+                    // #10947 — même principe pour un partage RELAYÉ par
+                    // l'extension : la fiche est déjà sur le disque, l'écran de
+                    // partage de la racine la présente.
+                    if let relayId = ShareRelayHandoff.shareId(from: url) {
+                        ShareRelayConsumer.shared.consumeNext(id: relayId)
+                        return
+                    }
                     if ShareComposeLink.shareId(from: url) != nil {
                         let identifiant = ShareComposeLink.shareId(from: url)
                         Task { await ShareComposeHandoffConsumer.shared.consumeNext(id: identifiant) }
@@ -415,6 +422,7 @@ struct MeeshyApp: App {
                     // pièce serait perdue. Un raccourci ne doit jamais être le
                     // seul chemin.
                     Task { await ShareComposeHandoffConsumer.shared.consumeNext() }
+                    ShareRelayConsumer.shared.consumeNext()
 
                     // Wire preference mutations to flush the outbox immediately after
                     // enqueue so changes don't get stuck `.pending` until boot/foreground

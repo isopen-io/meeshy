@@ -37,7 +37,7 @@ struct ShareDurationRow: View, Equatable {
     }
 
     private var title: String {
-        String(localized: "forward.duration.title", defaultValue: "Disparaît après", bundle: .main)
+        String(localized: "forward.duration.title", defaultValue: "Disparaît après", bundle: .meeshyShare)
     }
 
     var body: some View {
@@ -62,7 +62,7 @@ struct ShareDurationRow: View, Equatable {
                 Text(String(
                     localized: "forward.duration.note",
                     defaultValue: "La copie disparaît au plus tard après la durée du message d’origine, et ne pourra pas être transférée à son tour.",
-                    bundle: .main
+                    bundle: .meeshyShare
                 ))
                 .font(MeeshyFont.relative(MeeshyFont.smallSize))
                 .foregroundColor(theme.textMuted)

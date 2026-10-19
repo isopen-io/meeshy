@@ -5,12 +5,8 @@
 
 import MeeshySDK
 
-typealias Message = MeeshyMessage
-typealias MessageAttachment = MeeshyMessageAttachment
-typealias Reaction = MeeshyReaction
-typealias ReactionSummary = MeeshyReactionSummary
-typealias ChatMessage = MeeshyChatMessage
-typealias MessageReaction = MeeshyMessageReaction
+// Les alias courts (`Message`, `MessageAttachment`…) vivent dans
+// `MessageAliases.swift`, compilé aussi dans l'extension de partage.
 
 /// Une SORTIE : un geste qui emporte le contenu d'un message hors de la bulle
 /// qui le porte.

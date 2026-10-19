@@ -18,11 +18,14 @@ enum ShareSubject {
     /// Une story, un post, un réel, un profil (D15), une invitation : une carte
     /// qui part comme un lien.
     case card(ShareCard)
+    /// Ce qu'une autre app remet à l'extension de partage (V1, V9) : des
+    /// fichiers déjà copiés dans l'App Group, et le texte ou le lien joint.
+    case incoming(ShareIncoming)
 
     var sourceConversationId: String? {
         switch self {
         case .messages(_, let source, _), .piece(_, _, let source, _): return source
-        case .text, .link, .card: return nil
+        case .text, .link, .card, .incoming: return nil
         }
     }
 
@@ -31,9 +34,46 @@ enum ShareSubject {
         switch self {
         case .messages(let messages, _, _): return messages
         case .piece(let message, _, _, _): return [message]
-        case .text, .link, .card: return []
+        case .text, .link, .card, .incoming: return []
         }
     }
+
+    /// Les pièces venues d'une autre app, dans l'ordre d'envoi.
+    var incomingMediaIds: [String] {
+        guard case .incoming(let incoming) = self else { return [] }
+        return incoming.media.map(\.id)
+    }
+}
+
+/// **Ce qu'une autre app remet à l'extension de partage** — des fichiers déjà
+/// copiés dans le conteneur App Group, et le texte joint (déjà composé avec le
+/// lien, `ShareSender.composeContent`). Le texte joint devient le corps du
+/// message ; la légende s'y ajoute (D3, D9).
+nonisolated struct ShareIncoming: Equatable, Sendable {
+    var media: [ShareIncomingMedia]
+    var text: String?
+    /// Une pièce au moins n'a pas pu être copiée (iCloud non téléchargé, disque plein).
+    var preparationFailed = false
+    /// Un partage RELAYÉ par l'extension (`ShareRelayHandoff`) rouvre l'écran
+    /// sur les conversations que l'auteur y avait déjà choisies.
+    var preselectedConversationIds: [String] = []
+
+    /// Un texte qui n'est qu'une adresse web part comme un lien (aperçu, « Copier le lien »).
+    var link: URL? {
+        guard let text, text.hasPrefix("http://") || text.hasPrefix("https://"),
+              !text.contains(where: \.isWhitespace) else { return nil }
+        return URL(string: text)
+    }
+}
+
+/// Une pièce venue d'une autre app — son fichier local sert l'aperçu.
+nonisolated struct ShareIncomingMedia: Identifiable, Equatable, Sendable {
+    let id: String
+    let mimeType: String
+    let bytes: Int
+    let fileURL: URL?
+
+    var kind: AttachmentKind { AttachmentKind(mimeType: mimeType) }
 }
 
 /// Une carte : un contenu Meeshy qui part comme un lien qu'on ouvre.
@@ -52,7 +92,7 @@ struct ShareCard: Equatable {
     var messageText: String? {
         guard let link = url?.absoluteString else { return title.isEmpty ? nil : title }
         guard kind == .story, let authorName else { return link }
-        return String(format: String(localized: "share.story.shareText", defaultValue: "🔗 Story de %1$@ : %2$@", bundle: .main), authorName, link)
+        return String(format: String(localized: "share.story.shareText", defaultValue: "🔗 Story de %1$@ : %2$@", bundle: .meeshyShare), authorName, link)
     }
 }
 
@@ -63,7 +103,7 @@ extension ShareSubject {
     static func story(id: String, authorName: String, imageURL: String? = nil) -> ShareSubject {
         .card(ShareCard(
             kind: .story, contentId: id,
-            title: String(format: String(localized: "share.preview.story", defaultValue: "Story de %@", bundle: .main), authorName),
+            title: String(format: String(localized: "share.preview.story", defaultValue: "Story de %@", bundle: .meeshyShare), authorName),
             subtitle: nil, url: URL(string: "https://meeshy.me/story/\(id)"), imageURL: imageURL, authorName: authorName
         ))
     }
@@ -85,6 +125,12 @@ extension ShareSubject {
             return .link(url: url.absoluteString, text: nil)
         case .card(let card):
             return .card(card.kind, url: card.url?.absoluteString)
+        case .incoming(let incoming):
+            guard incoming.media.isEmpty else {
+                return .media(incoming.media.map { ShareMedia(id: $0.id, mimeType: $0.mimeType, bytes: $0.bytes) }, text: incoming.text)
+            }
+            if let link = incoming.link { return .link(url: link.absoluteString, text: nil) }
+            return .text(incoming.text ?? "")
         }
     }
 
@@ -104,6 +150,7 @@ extension ShareSubject {
         case .text(let text): body = text
         case .link(let url): body = url.absoluteString
         case .card(let card): body = card.messageText
+        case .incoming(let incoming): body = incoming.text
         case .messages, .piece: return nil
         }
         guard let body, !body.isEmpty else { return trimmed.isEmpty ? nil : trimmed }

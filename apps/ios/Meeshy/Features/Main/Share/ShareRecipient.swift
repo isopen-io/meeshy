@@ -6,14 +6,14 @@ import MeeshySDK
 /// résultat de recherche), ou le canal d'une communauté où l'on peut écrire (D11).
 ///
 /// L'identifiant est une clé d'état stable : `conv:<id>`, `user:<id>`.
-struct ShareRecipient: Identifiable, Equatable, Sendable {
-    enum Kind: Equatable, Sendable {
+nonisolated struct ShareRecipient: Identifiable, Equatable, Codable, Sendable {
+    enum Kind: String, Equatable, Codable, Sendable {
         case conversation
         case person
     }
 
     /// Ce que la ligne dit sous le nom — composé en mots par la vue, jamais ici.
-    enum Detail: Equatable, Sendable {
+    enum Detail: Equatable, Codable, Sendable {
         case direct
         case group(members: Int)
         case friendWithoutConversation
@@ -59,7 +59,7 @@ struct ShareRecipient: Identifiable, Equatable, Sendable {
     }
 }
 
-extension ShareRecipient {
+nonisolated extension ShareRecipient {
 
     init(conversation: MeeshyConversation, communityName: String? = nil) {
         let isDirect = conversation.type == .direct
@@ -108,7 +108,7 @@ extension ShareRecipient {
 /// Ordre : conversations (dans l'ordre reçu), puis personnes non absorbées. Une
 /// personne dont la conversation directe est déjà listée est ABSORBÉE par elle.
 /// RÈGLE JUMELLE : `apps/web/src/lib/send/` (destinataires de `SendSheet`).
-enum ShareRecipientMerge {
+nonisolated enum ShareRecipientMerge {
 
     static func merge(conversations: [ShareRecipient], people: [ShareRecipient]) -> [ShareRecipient] {
         var seen = Set<String>()

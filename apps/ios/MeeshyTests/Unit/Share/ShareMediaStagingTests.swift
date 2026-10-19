@@ -117,7 +117,7 @@ final class ShareMediaStagingTests: XCTestCase {
         )) { error in
             XCTAssertEqual(
                 error as? ShareMediaStagingError,
-                .insufficientFreeSpace(needed: 4096 + ShareLimits.freeSpaceMarginBytes, free: 4096)
+                .insufficientFreeSpace(needed: 4096 + ShareUploadBudget.freeSpaceMarginBytes, free: 4096)
             )
         }
         XCTAssertFalse(FileManager.default.fileExists(
@@ -127,7 +127,7 @@ final class ShareMediaStagingTests: XCTestCase {
 
     func test_requiredFreeBytes_addsTheSafetyMargin() {
         XCTAssertEqual(ShareMediaStaging.requiredFreeBytes(for: 1_000),
-                       1_000 + ShareLimits.freeSpaceMarginBytes)
+                       1_000 + ShareUploadBudget.freeSpaceMarginBytes)
     }
 
     // MARK: - iCloud non téléchargé

@@ -73,7 +73,7 @@ struct ShareRecipientRow: View, Equatable {
 
     private var spokenLabel: String {
         var parts = [recipient.title, detail]
-        if presence == .online { parts.append(String(localized: "share.sheet.a11y.online", defaultValue: "en ligne", bundle: .main)) }
+        if presence == .online { parts.append(String(localized: "share.sheet.a11y.online", defaultValue: "en ligne", bundle: .meeshyShare)) }
         if let statusLine { parts.append(statusLine) } else if isSelected { parts.append(ShareSheetCopy.selected) }
         return parts.joined(separator: ", ")
     }

@@ -51,23 +51,32 @@ final class ShareSheetViewModel: ObservableObject {
     private let dispatcher: ShareDispatching
     private let currentUserId: () -> String
     private let presence: (String) -> PresenceState?
+    /// La pièce qu'un message seul offre au studio et aux publications — la
+    /// règle de l'app (`ComposableAttachment.target`) ; l'extension n'a pas de
+    /// message à publier.
+    private let composableAttachment: (Message) -> MessageAttachment?
     private var searchToken = 0
 
     static let recentsCount = 8
     static let searchMinimumLength = 2
 
+    /// Les dépendances sont TOUTES injectées : l'app passe ses services
+    /// (`ShareSheetViewModel(subject:)`, `ShareSheetHost+App.swift`),
+    /// l'extension de partage les siens — aucun singleton de l'app ici.
     init(
         subject: ShareSubject,
-        directory: ShareRecipientSourcing = LiveShareRecipientDirectory(),
-        dispatcher: ShareDispatching? = nil,
-        currentUserId: @escaping () -> String = { AuthManager.shared.currentUser?.id ?? "" },
-        presence: @escaping (String) -> PresenceState? = { PresenceManager.shared.presenceState(for: $0) }
+        directory: ShareRecipientSourcing,
+        dispatcher: ShareDispatching,
+        currentUserId: @escaping () -> String,
+        presence: @escaping (String) -> PresenceState?,
+        composableAttachment: @escaping (Message) -> MessageAttachment? = { _ in nil }
     ) {
         self.subject = subject
         self.directory = directory
-        self.dispatcher = dispatcher ?? LiveShareDispatcher()
+        self.dispatcher = dispatcher
         self.currentUserId = currentUserId
         self.presence = presence
+        self.composableAttachment = composableAttachment
     }
 
     // MARK: - Le plan
@@ -89,10 +98,17 @@ final class ShareSheetViewModel: ObservableObject {
         case .messages(let messages, _, _):
             let kept = messages.filter { !removedMessageIds.contains($0.id) }
             guard kept.count == 1, let only = kept.first else { return nil }
-            return ComposableAttachment.target(in: only) ?? only.attachments.first
-        case .text, .link, .card:
+            return composableAttachment(only) ?? only.attachments.first
+        case .text, .link, .card, .incoming:
             return nil
         }
+    }
+
+    /// « Modifier dans le studio » a de la matière : la pièce désignée, ou ce
+    /// qu'une autre app a remis (l'extension relaie la fiche au studio).
+    var studioHasMatter: Bool {
+        if case .incoming = subject { return true }
+        return publishableAttachment != nil
     }
 
     /// Les publications offertes : ce que le plan permet ET que la passerelle
@@ -154,7 +170,7 @@ final class ShareSheetViewModel: ObservableObject {
 
     /// D12 : « Créer un groupe avec… » dès deux personnes cochées.
     var groupCandidates: [ShareRecipient] { selection.filter { !$0.isGroup && $0.userId != nil } }
-    var offersGroupCreation: Bool { groupCandidates.count >= 2 }
+    var offersGroupCreation: Bool { dispatcher.createsGroups && groupCandidates.count >= 2 }
 
     // MARK: - Chargement, cache d'abord
 
@@ -164,15 +180,17 @@ final class ShareSheetViewModel: ObservableObject {
         async let cachedPeople = directory.cachedPeople(currentUserId: userId)
         async let cachedCommunities = directory.cachedCommunities()
         let (cached, folks, groups) = await (cachedConversations, cachedPeople, cachedCommunities)
-        conversations = cached.map { ShareRecipient(conversation: $0) }
+        conversations = cached
         people = folks
         communities = groups
         loadState = conversations.isEmpty ? .loading : .cachedStale
+        preselectRelayedConversations()
         await resolveCardLink()
         do {
             let fresh = try await directory.freshConversations(currentUserId: userId)
-            conversations = ShareRecipientMerge.merge(conversations: fresh.map { ShareRecipient(conversation: $0) } + conversations, people: [])
+            conversations = ShareRecipientMerge.merge(conversations: fresh + conversations, people: [])
             loadState = .loaded
+            preselectRelayedConversations()
         } catch {
             loadState = conversations.isEmpty ? .error(error.localizedDescription) : .offline
         }
@@ -242,6 +260,40 @@ final class ShareSheetViewModel: ObservableObject {
         removedMessageIds.insert(id)
     }
 
+    // MARK: - Ce qui part, venu d'une autre app (V1, V9)
+
+    /// La croix d'une pièce la retire ; la dernière reste.
+    func removeIncoming(_ id: String) {
+        guard case .incoming(var incoming) = subject, incoming.media.count > 1 else { return }
+        incoming.media.removeAll { $0.id == id }
+        subject = .incoming(incoming)
+    }
+
+    /// « Retirer les N derniers » (V9) : ôte ce qui dépasse les plafonds communs.
+    func trimOverflow() {
+        let trim = plan.limits.trimCount
+        guard trim > 0, case .incoming(var incoming) = subject else { return }
+        incoming.media.removeLast(min(trim, max(incoming.media.count - 1, 0)))
+        subject = .incoming(incoming)
+    }
+
+    /// Réordonner sans glisser — les actions d'accessibilité « Avancer » et
+    /// « Reculer » de chaque pièce.
+    func moveIncoming(_ id: String, by offset: Int) {
+        guard case .incoming(var incoming) = subject,
+              let from = incoming.media.firstIndex(where: { $0.id == id }) else { return }
+        let to = from + offset
+        guard incoming.media.indices.contains(to) else { return }
+        incoming.media.swapAt(from, to)
+        subject = .incoming(incoming)
+    }
+
+    /// Un partage relayé rouvre l'écran sur les conversations déjà choisies.
+    private func preselectRelayedConversations() {
+        guard case .incoming(let incoming) = subject, !incoming.preselectedConversationIds.isEmpty, selection.isEmpty else { return }
+        selection = incoming.preselectedConversationIds.compactMap { id in conversations.first { $0.conversationId == id } }
+    }
+
     /// « Tout le message » (V2) élargit la pièce sans fermer l'écran.
     func widenToWholeMessage() {
         guard let widened = subject.widenedToWholeMessage else { return }
@@ -309,7 +361,7 @@ final class ShareSheetViewModel: ObservableObject {
 
     private func deliverToNewGroup(_ people: [ShareRecipient], request: ShareSendRequest) async {
         guard let group = await dispatcher.createGroup(with: people) else {
-            let reason = String(localized: "share.group.failed", defaultValue: "Le groupe n’a pas pu être créé", bundle: .main)
+            let reason = String(localized: "share.group.failed", defaultValue: "Le groupe n’a pas pu être créé", bundle: .meeshyShare)
             for person in people { deliveries[person.id] = .failed(reason) }
             return
         }
@@ -338,7 +390,7 @@ final class ShareSheetViewModel: ObservableObject {
             let published = await dispatcher.publish(attachment: attachment, to: target)
             deliveries["pub:\(target.rawValue)"] = published
                 ? .sent
-                : .failed(String(localized: "forward.publish-failed", defaultValue: "La publication a échoué", bundle: .main))
+                : .failed(String(localized: "forward.publish-failed", defaultValue: "La publication a échoué", bundle: .meeshyShare))
         }
     }
 

@@ -1,6 +1,14 @@
 import Foundation
 
-/// Les plafonds du partage, et RIEN d'autre : aucune E/S, aucun état.
+/// Le budget d'ENVOI de l'extension — ce que la feuille tente elle-même avant
+/// de remettre la fiche à l'app. Aucune E/S, aucun état.
+///
+/// Les plafonds PRODUIT (20 fichiers, 500 Mo, 10 destinataires, D10) ne sont
+/// plus ici : ils sont à `MeeshySDK.ShareLimits`, miroir de
+/// `packages/shared/utils/share-limits.ts`, et c'est le plan du partage
+/// (`SharePlanner`) qui les applique à l'écran unique (#10947). Un second
+/// `ShareLimits` local masquait celui du SDK dans cette cible et dans le bundle
+/// de tests.
 ///
 /// Ils ne sont pas des préférences de confort. Le cap produit par message est
 /// bien 199 (`packages/shared/types/attachment.ts:416`), mais le rate limiting
@@ -10,31 +18,12 @@ import Foundation
 /// par tous les utilisateurs d'un même réseau. Chaque fichier coûte une création
 /// TUS plus autant de PATCH que de tranches de 10 Mo. Le seau message, lui, est
 /// de 20/minute/utilisateur (`rate-limiter.ts:20-39`) — d'où les 10 cibles.
-nonisolated enum ShareLimits {
-
-    static let maxFiles = 20
-    static let maxTargets = 10
-
-    /// 500 Mio. Au-delà, la copie App Group elle-même devient un risque de
-    /// disque plein sur un appareil chargé — bien avant que le réseau ne soit
-    /// en cause.
-    static let maxTotalBytes = 524_288_000
+nonisolated enum ShareUploadBudget {
 
     /// 128 Mio exigés AU-DELÀ des octets à copier. Sous cette marge, iOS
     /// commence à purger des caches système et une copie longue peut se
     /// retrouver tronquée en cours de route.
     static let freeSpaceMarginBytes = 134_217_728
-
-    /// Décocher une cible déjà sélectionnée ne consomme aucun budget : la
-    /// refuser au plafond enfermerait l'utilisateur dans une sélection qu'il
-    /// ne pourrait plus défaire.
-    static func canSelectMore(selectedCount: Int, isAlreadySelected: Bool) -> Bool {
-        isAlreadySelected || selectedCount < maxTargets
-    }
-
-    static func fitsFileCount(_ count: Int) -> Bool { count <= maxFiles }
-
-    static func fitsByteBudget(_ totalBytes: Int) -> Bool { totalBytes <= maxTotalBytes }
 
     /// 8 Mio. Chaque fichier tient alors dans UNE tranche TUS de 10 Mio
     /// (un POST + un PATCH), le pic mémoire reste très en deçà du plafond de

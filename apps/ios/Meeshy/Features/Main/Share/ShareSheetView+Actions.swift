@@ -13,7 +13,7 @@ extension ShareSheetView {
     @ViewBuilder
     func actionsZone(_ plan: SharePlan) -> some View {
         let publications = model.offeredPublications
-        let studio = plan.offers(.studio) && actions.onCompose != nil && model.publishableAttachment != nil
+        let studio = plan.offers(.studio) && actions.onCompose != nil && model.studioHasMatter
         let tools = toolActions(plan)
         let reason = withheldLine(plan)
         if !publications.isEmpty || studio || !tools.isEmpty || reason != nil {
@@ -134,7 +134,7 @@ extension ShareSheetView {
             Button { close(); actions.onSave?() } label: { toolLabel(ShareSheetCopy.save, "square.and.arrow.down") }
                 .buttonStyle(.plain)
         case .imager:
-            Button { close(); actions.onImageDiscussion?() } label: { toolLabel(MessageCardDiscussion.menuLabel, MessageCardExportMenu.imageSymbol) }
+            Button { close(); actions.onImageDiscussion?() } label: { toolLabel(ShareSheetHostBridge.imagerLabel, ShareSheetHostBridge.imagerSymbol) }
                 .buttonStyle(.plain)
         default:
             EmptyView()
@@ -155,7 +155,7 @@ extension ShareSheetView {
         guard let text, !text.isEmpty else { return }
         UIPasteboard.general.string = text
         HapticFeedback.success()
-        FeedbackToastManager.shared.showSuccess(ShareSheetCopy.copied)
+        ShareSheetHostBridge.announce(ShareSheetCopy.copied, open: nil)
     }
 
     /// L'URL d'un lien ou d'une carte.
@@ -163,6 +163,7 @@ extension ShareSheetView {
         switch model.subject {
         case .link(let url): return url
         case .card(let card): return card.url
+        case .incoming(let incoming): return incoming.media.isEmpty ? incoming.link : nil
         case .messages, .piece, .text: return nil
         }
     }
@@ -177,6 +178,7 @@ extension ShareSheetView {
         case .text(let text): return text
         case .link(let url): return url.absoluteString
         case .card(let card): return card.url?.absoluteString
+        case .incoming(let incoming): return incoming.media.isEmpty ? incoming.text : nil
         case .piece: return nil
         }
     }

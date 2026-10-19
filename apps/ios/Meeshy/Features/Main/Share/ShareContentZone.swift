@@ -6,14 +6,14 @@ import MeeshyUI
 /// et que le web : le texte, sinon « Sticker », sinon le type de la pièce et son nombre.
 nonisolated enum ShareMessagePreview {
     static var stickerLabel: String {
-        String(localized: "attachment.sticker", defaultValue: "Sticker", bundle: .main)
+        String(localized: "attachment.sticker", defaultValue: "Sticker", bundle: .meeshyShare)
     }
 
     static func text(for message: Message) -> String {
         if !message.content.isEmpty { return message.content }
         if message.sticker != nil { return stickerLabel }
         guard let first = message.attachments.first else {
-            return String(localized: "forward.media-placeholder", defaultValue: "[Média]", bundle: .main)
+            return String(localized: "forward.media-placeholder", defaultValue: "[Média]", bundle: .meeshyShare)
         }
         let count = message.attachments.count
         let kind = kindLabel(first)
@@ -22,10 +22,10 @@ nonisolated enum ShareMessagePreview {
 
     static func kindLabel(_ attachment: MessageAttachment) -> String {
         switch attachment.kind {
-        case .image: return String(localized: "forward.preview.image", defaultValue: "Photo", bundle: .main)
-        case .video: return String(localized: "forward.preview.video", defaultValue: "Vidéo", bundle: .main)
-        case .audio: return String(localized: "forward.preview.audio", defaultValue: "Audio", bundle: .main)
-        default: return String(localized: "forward.preview.file", defaultValue: "Fichier", bundle: .main)
+        case .image: return String(localized: "forward.preview.image", defaultValue: "Photo", bundle: .meeshyShare)
+        case .video: return String(localized: "forward.preview.video", defaultValue: "Vidéo", bundle: .meeshyShare)
+        case .audio: return String(localized: "forward.preview.audio", defaultValue: "Audio", bundle: .meeshyShare)
+        default: return String(localized: "forward.preview.file", defaultValue: "Fichier", bundle: .meeshyShare)
         }
     }
 }
@@ -59,6 +59,14 @@ struct ShareContentZone: View {
                 .foregroundColor(theme.textMuted)
                 .accessibilityAddTraits(.isHeader)
             Spacer()
+            if plan.limits.trimCount > 0, case .incoming = model.subject {
+                Button(ShareSheetCopy.removeLast(plan.limits.trimCount)) {
+                    withAnimation(.spring(response: 0.3, dampingFraction: 0.8)) { model.trimOverflow() }
+                }
+                .font(MeeshyFont.relative(MeeshyFont.footnoteSize, weight: .semibold))
+                .foregroundColor(MeeshyColors.error)
+                .frame(minHeight: MeeshyControlSize.tapTarget)
+            }
             if case .piece = model.subject {
                 Button(ShareSheetCopy.wholeMessage) {
                     withAnimation(.spring(response: 0.3, dampingFraction: 0.8)) { model.widenToWholeMessage() }
@@ -78,6 +86,8 @@ struct ShareContentZone: View {
             let pieces = message.attachments.filter { $0.type != .location }
             let index = (pieces.firstIndex { $0.id == attachmentId } ?? 0) + 1
             return "\(ShareSheetCopy.contentZone) · \(ShareSheetCopy.pieceOf(index, pieces.count))"
+        case .incoming(let incoming) where !incoming.media.isEmpty:
+            return "\(ShareSheetCopy.contentZone) · \(incoming.media.count)"
         default:
             return ShareSheetCopy.contentZone
         }
@@ -98,6 +108,30 @@ struct ShareContentZone: View {
             card(icon: "link", title: url.host ?? url.absoluteString, subtitle: url.absoluteString)
         case .card(let shareCard):
             card(icon: Self.icon(for: shareCard.kind), title: shareCard.title, subtitle: shareCard.subtitle, imageURL: shareCard.imageURL)
+        case .incoming(let incoming):
+            if incoming.preparationFailed {
+                Label(ShareSheetCopy.unprepared, systemImage: "exclamationmark.icloud")
+                    .font(MeeshyFont.relative(MeeshyFont.footnoteSize))
+                    .foregroundColor(theme.textMuted)
+                    .fixedSize(horizontal: false, vertical: true)
+            }
+            if !incoming.media.isEmpty {
+                ShareIncomingStrip(
+                    media: incoming.media,
+                    fittingCount: incoming.media.count - plan.limits.trimCount,
+                    accentColor: accentColor,
+                    isDark: isDark,
+                    onRemove: { id in withAnimation(.spring(response: 0.3, dampingFraction: 0.8)) { model.removeIncoming(id) } },
+                    onMove: { id, offset in withAnimation(.spring(response: 0.3, dampingFraction: 0.8)) { model.moveIncoming(id, by: offset) } }
+                )
+            }
+            if let text = incoming.text, !text.isEmpty {
+                if let link = incoming.link {
+                    card(icon: "link", title: link.host ?? text, subtitle: text)
+                } else {
+                    card(icon: "text.alignleft", title: text, subtitle: nil)
+                }
+            }
         }
     }
 
@@ -124,7 +158,7 @@ struct ShareContentZone: View {
                     .fill(Color(hex: accentColor))
                     .frame(width: 3, height: 32)
                 if let first = message.attachments.first, withdrawn == nil {
-                    thumbnail(first).captureShield(message.exitOffer.capture.shieldsCapture())
+                    thumbnail(first).captureShield(message.contentExitLaw.capture.shieldsCapture())
                 }
                 VStack(alignment: .leading, spacing: 1) {
                     Text(message.senderName ?? "?")
@@ -135,7 +169,7 @@ struct ShareContentZone: View {
                         .font(MeeshyFont.relative(MeeshyFont.footnoteSize))
                         .foregroundColor(theme.textMuted)
                         .lineLimit(2)
-                        .captureShield(message.exitOffer.capture.shieldsCapture())
+                        .captureShield(message.contentExitLaw.capture.shieldsCapture())
                 }
                 .accessibilityElement(children: .combine)
                 Spacer(minLength: 0)

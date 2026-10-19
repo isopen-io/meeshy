@@ -371,6 +371,9 @@ struct RootSheetsLayer: ViewModifier {
                     showSharePicker = true
                 }
             }
+            // #10947 — un partage relayé par l'extension (sans session, ou vers
+            // une conversation chiffrée) rouvre ICI l'écran de partage unique.
+            .shareRelayPresenter(consumer: ShareRelayConsumer.shared, router: router)
             .sheet(isPresented: $showNewConversation) {
                 NewConversationView()
                     .environmentObject(statusViewModel)

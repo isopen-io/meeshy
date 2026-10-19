@@ -13,8 +13,8 @@ private final class StubShareDirectory: ShareRecipientSourcing, @unchecked Senda
     var channels: [ShareRecipient] = []
     private(set) var searchedQueries: [String] = []
 
-    func cachedConversations() async -> [MeeshyConversation] { cached }
-    func freshConversations(currentUserId: String) async throws -> [MeeshyConversation] { try fresh.get() }
+    func cachedConversations() async -> [ShareRecipient] { cached.map { ShareRecipient(conversation: $0) } }
+    func freshConversations(currentUserId: String) async throws -> [ShareRecipient] { try fresh.get().map { ShareRecipient(conversation: $0) } }
     func cachedPeople(currentUserId: String) async -> [ShareRecipient] { people }
     func cachedCommunities() async -> [ShareCommunity] { communities }
     func search(_ query: String, currentUserId: String) async -> ShareSearchResults {
@@ -31,6 +31,7 @@ private final class SpyShareDispatcher: ShareDispatching {
     var group: ShareRecipient?
     var publishResult = true
     var link: URL?
+    var createsGroups = true
     private(set) var delivered: [(recipient: ShareRecipient, request: ShareSendRequest)] = []
     private(set) var groupedPeople: [[String]] = []
     private(set) var published: [PublicationTarget] = []
@@ -87,7 +88,8 @@ final class ShareSheetViewModelTests: XCTestCase {
             directory: directory,
             dispatcher: dispatcher,
             currentUserId: { "me" },
-            presence: { _ in .online }
+            presence: { _ in .online },
+            composableAttachment: { ComposableAttachment.target(in: $0) }
         )
         return (sut, directory, dispatcher)
     }
@@ -328,5 +330,89 @@ final class ShareSheetViewModelTests: XCTestCase {
         XCTAssertTrue(card.messageText?.contains("Moussa") == true)
         XCTAssertEqual(sut.plan.title, .send)
         XCTAssertFalse(sut.plan.offers(.publishStory), "D14 : la story d'autrui ne se republie pas")
+    }
+
+    // MARK: - Depuis une autre app (V1, V9) — l'extension de partage
+
+    private func incoming(_ count: Int, bytes: Int = 1_000, text: String? = nil) -> ShareSubject {
+        .incoming(ShareIncoming(
+            media: (0..<count).map { ShareIncomingMedia(id: "f\($0)", mimeType: "image/jpeg", bytes: bytes, fileURL: nil) },
+            text: text
+        ))
+    }
+
+    func test_incomingMedia_isSent_withTheCaptionInTheMessageText() async {
+        let (sut, _, dispatcher) = makeSUT(subject: incoming(2, text: "https://meeshy.me"))
+        XCTAssertEqual(sut.plan.title, .send)
+        XCTAssertEqual(sut.plan.caption?.placement, .messageText)
+        XCTAssertTrue(sut.plan.offers(.studio))
+        sut.caption = "Regarde"
+        sut.toggle(person("ana"))
+
+        await sut.send()
+
+        let request = dispatcher.delivered.first?.request
+        XCTAssertEqual(request?.subject.composedText(caption: request?.caption ?? ""), "Regarde\nhttps://meeshy.me")
+        XCTAssertEqual(request?.subject.incomingMediaIds, ["f0", "f1"])
+    }
+
+    func test_incomingBeyondTwentyFiles_theSendWaits_untilTheLastOnesAreRemoved() {
+        let (sut, _, _) = makeSUT(subject: incoming(22))
+        sut.toggle(person("ana"))
+        XCTAssertEqual(sut.plan.limits.trimCount, 2)
+        XCTAssertFalse(sut.plan.canSend)
+
+        sut.trimOverflow()
+
+        XCTAssertEqual(sut.subject.incomingMediaIds, (0..<20).map { "f\($0)" })
+        XCTAssertEqual(sut.plan.limits.trimCount, 0)
+        XCTAssertTrue(sut.plan.canSend)
+    }
+
+    func test_incomingBeyondFiveHundredMegabytes_trimsUntilItFits() {
+        let (sut, _, _) = makeSUT(subject: incoming(3, bytes: 200 * 1024 * 1024))
+        XCTAssertEqual(sut.plan.limits.trimCount, 1)
+        sut.trimOverflow()
+        XCTAssertEqual(sut.subject.incomingMediaIds, ["f0", "f1"])
+    }
+
+    func test_anIncomingPiece_isRemovedOrMoved_butTheLastOneStays() {
+        let (sut, _, _) = makeSUT(subject: incoming(3))
+        sut.moveIncoming("f2", by: -1)
+        XCTAssertEqual(sut.subject.incomingMediaIds, ["f0", "f2", "f1"])
+        sut.moveIncoming("f0", by: -1)
+        XCTAssertEqual(sut.subject.incomingMediaIds, ["f0", "f2", "f1"], "la première pièce ne recule pas")
+        sut.removeIncoming("f2")
+        sut.removeIncoming("f0")
+        sut.removeIncoming("f1")
+        XCTAssertEqual(sut.subject.incomingMediaIds, ["f1"], "la dernière pièce ne se retire pas : il reste quelque chose à envoyer")
+    }
+
+    func test_incomingText_isAText_andALink_isALink() {
+        XCTAssertEqual(ShareSubject.incoming(ShareIncoming(media: [], text: "Bonjour")).entry(), .text("Bonjour"))
+        XCTAssertEqual(ShareSubject.incoming(ShareIncoming(media: [], text: "https://meeshy.me/x")).entry(),
+                       .link(url: "https://meeshy.me/x", text: nil))
+    }
+
+    func test_groupCreation_isNotOffered_whenTheHostCannotCreateGroups() {
+        let (sut, _, dispatcher) = makeSUT()
+        dispatcher.createsGroups = false
+        sut.toggle(person("lea"))
+        sut.toggle(person("leon"))
+        XCTAssertFalse(sut.offersGroupCreation)
+    }
+
+    /// Un partage relayé par l'extension (D7, fragment 3) rouvre l'écran de
+    /// l'app sur les conversations déjà choisies — un geste de moins.
+    func test_aRelayedShare_reopensWithItsConversationsChosen() async {
+        let directory = StubShareDirectory()
+        directory.cached = [conversation("c1", title: "Comptabilité"), conversation("c2", title: "Équipe Lyon")]
+        directory.fresh = .failure(Offline())
+        let relayed = ShareSubject.incoming(ShareIncoming(media: [], text: "Le devis", preselectedConversationIds: ["c2"]))
+        let (sut, _, _) = makeSUT(subject: relayed, directory: directory)
+
+        await sut.load()
+
+        XCTAssertEqual(sut.selection.map(\.id), ["conv:c2"])
     }
 }

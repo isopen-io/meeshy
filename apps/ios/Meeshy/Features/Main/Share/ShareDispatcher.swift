@@ -1,47 +1,6 @@
 import Foundation
 import MeeshySDK
 
-/// Ce que l'écran remet à l'envoi, pour UN destinataire.
-struct ShareSendRequest {
-    let subject: ShareSubject
-    /// Les messages qui partent, dans l'ordre (le plan a retiré le protégé, D6).
-    let keptMessageIds: [String]
-    let caption: String
-    let captionPlacement: ShareCaption.Placement?
-    let grouping: ShareGrouping
-    /// La durée choisie d'une flamme, ramenée à la source par la loi.
-    let chosenDurationSeconds: Int?
-    /// Source chiffrée : la copie se refait sur l'appareil (D7).
-    let copyOnDevice: Bool
-}
-
-/// L'issue d'un envoi vers UN destinataire, telle que sa ligne la dit (V6).
-enum ShareDeliveryOutcome: Equatable {
-    case sent(conversationId: String)
-    case queued(conversationId: String)
-    case failed(reason: String)
-
-    var conversationId: String? {
-        switch self {
-        case .sent(let id), .queued(let id): return id
-        case .failed: return nil
-        }
-    }
-}
-
-/// **Qui envoie** — injecté dans l'écran, pour que l'extension de partage puisse
-/// fournir le sien (relais vers l'app, D7) sans singleton de l'app.
-@MainActor
-protocol ShareDispatching: AnyObject {
-    func deliver(_ request: ShareSendRequest, to recipient: ShareRecipient) async -> ShareDeliveryOutcome
-    /// « Créer un groupe avec… » (D12) : la conversation créée, ou `nil`.
-    func createGroup(with people: [ShareRecipient]) async -> ShareRecipient?
-    /// Publier la pièce désignée en story, post ou réel (D2).
-    func publish(attachment: MessageAttachment, to target: PublicationTarget) async -> Bool
-    /// Le lien suivi d'une carte (story) — `nil` : l'adresse directe reste.
-    func resolvedLink(for card: ShareCard) async -> URL?
-}
-
 /// L'envoi réel : le transfert passe par `MessageForwardService` (chemin unique,
 /// hors ligne compris) ; un texte, un lien ou une carte par la file durable
 /// (`OfflineQueue`) quand le réseau manque.
@@ -89,7 +48,9 @@ final class LiveShareDispatcher: ShareDispatching {
                 message: message, sourceConversationId: source, to: recipient,
                 chosenDurationSeconds: request.chosenDurationSeconds, forwardedAttachmentIds: [attachmentId]
             ))
-        case .text, .link, .card:
+        case .incoming(let incoming) where !incoming.media.isEmpty:
+            return await sendIncomingMedia(incoming, request: request, to: recipient)
+        case .text, .link, .card, .incoming:
             guard let text = request.subject.composedText(caption: request.caption) else {
                 return .failed(reason: Self.genericFailure)
             }
@@ -152,36 +113,93 @@ final class LiveShareDispatcher: ShareDispatching {
     private func copyOnDevice(_ message: Message, to recipient: ShareRecipient) async -> ShareDeliveryOutcome {
         guard !message.content.isEmpty else { return .failed(reason: ForwardRefusalReason.encryptedSource.explanation) }
         guard let conversationId = await resolveConversation(recipient) else { return .failed(reason: Self.unreachable) }
-        var content = message.content
-        var encryptionMode: String?
-        if recipient.isEncrypted {
-            guard let peer = recipient.userId,
-                  let sealed = try? await encryptor.encryptMessage(Data(content.utf8), for: peer, conversationId: conversationId) else {
-                return .failed(reason: ForwardRefusalReason.encryptedSource.explanation)
-            }
-            content = sealed.base64EncodedString()
-            encryptionMode = "E2EE"
+        return await postText(message.content, forwardedFromId: message.id, to: recipient, conversationId: conversationId)
+    }
+
+    /// **Rien ne part en clair vers une conversation chiffrée** (D7, #9224,
+    /// fail-closed). Vers une directe chiffrée, le texte est rechiffré pour le
+    /// pair ; vers un groupe chiffré, l'appareil ne sait pas encore le faire —
+    /// `nil`, et rien ne part.
+    private func sealed(_ content: String, for recipient: ShareRecipient, conversationId: String) async -> (content: String, encryptionMode: String?)? {
+        guard recipient.isEncrypted else { return (content, nil) }
+        guard let peer = recipient.userId,
+              let box = try? await encryptor.encryptMessage(Data(content.utf8), for: peer, conversationId: conversationId) else { return nil }
+        return (box.base64EncodedString(), "E2EE")
+    }
+
+    private func postText(_ text: String, forwardedFromId: String? = nil, to recipient: ShareRecipient, conversationId: String) async -> ShareDeliveryOutcome {
+        guard let sealed = await sealed(text, for: recipient, conversationId: conversationId) else {
+            return .failed(reason: ForwardRefusalReason.encryptedSource.explanation)
         }
         let body = SendMessageRequest(
-            content: content, forwardedFromId: message.id,
-            isEncrypted: encryptionMode != nil ? true : nil, encryptionMode: encryptionMode
+            content: sealed.content, forwardedFromId: forwardedFromId,
+            isEncrypted: sealed.encryptionMode != nil ? true : nil, encryptionMode: sealed.encryptionMode
         )
-        return await post(body, to: conversationId, offlineContent: encryptionMode == nil ? content : nil)
+        return await post(body, to: conversationId, offlineContent: sealed.encryptionMode == nil ? sealed.content : nil)
     }
 
     /// D4 : la légende d'un transfert part en message à part, juste après la copie.
     private func appendingCaption(_ request: ShareSendRequest, after outcome: ShareDeliveryOutcome, to recipient: ShareRecipient) async -> ShareDeliveryOutcome {
         let caption = request.caption.trimmingCharacters(in: .whitespacesAndNewlines)
         guard request.captionPlacement == .separateMessage, !caption.isEmpty, let conversationId = outcome.conversationId else { return outcome }
-        _ = await post(SendMessageRequest(content: caption), to: conversationId, offlineContent: caption)
+        _ = await postText(caption, to: recipient, conversationId: conversationId)
         return outcome
+    }
+
+    // MARK: - Ce qu'une autre app a remis (relais de l'extension)
+
+    /// Le message qui porte les fichiers d'un partage relayé — les suivants les
+    /// recopient côté serveur, comme la reprise d'une fiche d'envoi.
+    private var incomingOriginClientMessageId: String?
+
+    /// Ce qu'une autre app a remis, relayé par l'extension : la file durable
+    /// (`OfflineQueue`) recopie les fichiers à l'enfilement et les envoie au
+    /// retour du réseau, même après fermeture. Une pièce ne se chiffre pas
+    /// encore sur l'appareil : vers une conversation chiffrée, rien ne part.
+    private func sendIncomingMedia(_ incoming: ShareIncoming, request: ShareSendRequest, to recipient: ShareRecipient) async -> ShareDeliveryOutcome {
+        guard !recipient.isEncrypted else { return .failed(reason: ForwardRefusalReason.encryptedSource.explanation) }
+        guard let conversationId = await resolveConversation(recipient) else { return .failed(reason: Self.unreachable) }
+        let files = incoming.media.compactMap(\.fileURL)
+        guard files.count == incoming.media.count, !files.isEmpty else { return .failed(reason: Self.genericFailure) }
+        let content = request.subject.composedText(caption: request.caption)
+        let clientMessageId = "cid_\(UUID().uuidString.lowercased())"
+        do {
+            if let origin = incomingOriginClientMessageId {
+                try await queue.enqueue(OfflineQueueItem(
+                    id: UUID().uuidString, clientMessageId: clientMessageId, conversationId: conversationId,
+                    content: content ?? "", originalLanguage: nil, replyToId: nil, forwardedFromId: nil,
+                    forwardedFromConversationId: nil, attachmentIds: nil, localAudioPath: nil,
+                    copyAttachmentsFromClientMessageId: origin, copyAttachmentsFromServerMessageId: nil, createdAt: Date()
+                ))
+            } else {
+                try await queue.enqueueMedia(
+                    sourceMediaURLs: files, kinds: incoming.media.map { Self.attachmentKind(for: $0.mimeType) },
+                    conversationId: conversationId, content: content, clientMessageId: clientMessageId,
+                    originalLanguage: nil, replyToId: nil, forwardedFromId: nil, forwardedFromConversationId: nil,
+                    copyAttachmentsFromClientMessageId: nil, deletesSourceFiles: false, createdAt: Date()
+                )
+                incomingOriginClientMessageId = clientMessageId
+            }
+            return .queued(conversationId: conversationId)
+        } catch {
+            return .failed(reason: error.localizedDescription)
+        }
+    }
+
+    /// Le type que la file attend pour chaque fichier — même table que la
+    /// reprise des fiches de l'extension (`SharePendingSendConsumer`).
+    private static func attachmentKind(for mime: String) -> String {
+        if mime.hasPrefix("image/") { return "image" }
+        if mime.hasPrefix("video/") { return "video" }
+        if mime.hasPrefix("audio/") { return "audio" }
+        return "document"
     }
 
     // MARK: - Texte, lien, carte
 
     private func sendText(_ text: String, to recipient: ShareRecipient) async -> ShareDeliveryOutcome {
         guard let conversationId = await resolveConversation(recipient) else { return .failed(reason: Self.unreachable) }
-        return await post(SendMessageRequest(content: text), to: conversationId, offlineContent: text)
+        return await postText(text, to: recipient, conversationId: conversationId)
     }
 
     /// En ligne : le POST. Hors ligne : la file durable, rejouée au retour du
@@ -231,11 +249,11 @@ final class LiveShareDispatcher: ShareDispatching {
     }
 
     private static var genericFailure: String {
-        String(localized: "share.error", defaultValue: "Erreur lors du partage", bundle: .main)
+        String(localized: "share.error", defaultValue: "Erreur lors du partage", bundle: .meeshyShare)
     }
 
     private static var unreachable: String {
-        String(localized: "forward.error.contact-offline", defaultValue: "Cette personne ne peut pas être jointe hors connexion.", bundle: .main)
+        String(localized: "forward.error.contact-offline", defaultValue: "Cette personne ne peut pas être jointe hors connexion.", bundle: .meeshyShare)
     }
 
     /// Corps du POST `/posts/<id>/share` qui mint le lien suivi d'une story ;

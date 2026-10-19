@@ -6,13 +6,25 @@ import MeeshyUI
 /// (loi 4 : un contrôle existe s'il a un effet).
 struct ShareSheetHostActions {
     /// D5 : le toast « Envoyé à X · Ouvrir » ouvre la conversation servie.
-    var onOpenConversation: ((Conversation) -> Void)?
+    var onOpenConversation: ((MeeshyConversation) -> Void)?
     /// « Modifier dans le studio » — l'écran se referme et rend la main.
     var onCompose: (() -> Void)?
     /// « Imager la discussion » (#9039).
     var onImageDiscussion: (() -> Void)?
     /// « Enregistrer » la pièce désignée, par la loi de sortie de l'hôte.
     var onSave: (() -> Void)?
+    /// L'extension de partage sans session : « Connectez-vous pour envoyer »
+    /// remplace la zone « À qui » et la barre Envoyer (fragment 3).
+    var signIn: ShareSignInPrompt?
+    /// Le titre de l'hôte quand il diffère du plan (« Envoyer avec Meeshy »
+    /// dans l'extension de partage).
+    var navigationTitle: String?
+}
+
+/// Le fragment « Connectez-vous pour envoyer » — le partage est gardé.
+struct ShareSignInPrompt {
+    /// « Ouvrir Meeshy » : la fiche est déposée, l'app la reprend après la connexion.
+    let onOpenApp: () -> Void
 }
 
 /// **L'écran de partage UNIQUE** (#10947, planche
@@ -40,13 +52,12 @@ struct ShareSheetView: View {
     var accent: Color { Color(hex: accentColor) }
 
     init(
-        subject: ShareSubject,
+        model: @autoclosure @escaping () -> ShareSheetViewModel,
         accentColor: String = "6366F1",
         actions: ShareSheetHostActions = ShareSheetHostActions(),
-        model: ShareSheetViewModel? = nil,
         onDismiss: @escaping () -> Void
     ) {
-        _model = StateObject(wrappedValue: model ?? ShareSheetViewModel(subject: subject))
+        _model = StateObject(wrappedValue: model())
         self.accentColor = accentColor
         self.actions = actions
         self.onDismiss = onDismiss
@@ -69,12 +80,14 @@ struct ShareSheetView: View {
                     }
                     .scrollDismissesKeyboard(.interactively)
                     .safeAreaInset(edge: .bottom) {
-                        ShareSendBar(model: model, plan: plan, accentColor: accentColor, onSend: send)
+                        if actions.signIn == nil {
+                            ShareSendBar(model: model, plan: plan, accentColor: accentColor, onSend: send)
+                        }
                     }
                 }
             }
             .background(theme.backgroundPrimary)
-            .navigationTitle(ShareSheetCopy.title(plan.title))
+            .navigationTitle(actions.navigationTitle ?? ShareSheetCopy.title(plan.title))
             .navigationBarTitleDisplayMode(.inline)
             .toolbar {
                 ToolbarItem(placement: .cancellationAction) {
@@ -113,7 +126,9 @@ struct ShareSheetView: View {
 
     @ViewBuilder
     private var recipientsZone: some View {
-        if model.showsSkeleton {
+        if let signIn = actions.signIn {
+            signInCard(signIn)
+        } else if model.showsSkeleton {
             VStack(spacing: 0) {
                 ForEach(0..<3, id: \.self) { _ in SkeletonConversationRow() }
             }
@@ -244,6 +259,55 @@ struct ShareSheetView: View {
         HapticFeedback.light()
     }
 
+    // MARK: - Déconnecté (fragment 3)
+
+    /// L'extension sans session : rien ne se perd. « Studio » remet la fiche au
+    /// studio de l'app, « Ouvrir Meeshy » la remet à l'écran de partage de l'app,
+    /// qui la reprend après la connexion.
+    private func signInCard(_ prompt: ShareSignInPrompt) -> some View {
+        VStack(spacing: MeeshySpacing.md) {
+            Image(systemName: "person.crop.circle.badge.exclamationmark")
+                .font(MeeshyFont.relative(MeeshyIconSize.hero))
+                .foregroundColor(accent)
+                .accessibilityHidden(true)
+            Text(ShareSheetCopy.signInTitle)
+                .font(MeeshyFont.relative(MeeshyFont.headlineSize, weight: .semibold))
+                .foregroundColor(theme.textPrimary)
+                .multilineTextAlignment(.center)
+                .accessibilityAddTraits(.isHeader)
+            Text(ShareSheetCopy.signInBody)
+                .font(MeeshyFont.relative(MeeshyFont.subheadSize))
+                .foregroundColor(theme.textMuted)
+                .multilineTextAlignment(.center)
+                .fixedSize(horizontal: false, vertical: true)
+            HStack(spacing: MeeshySpacing.md) {
+                if let compose = actions.onCompose {
+                    Button { close(); compose() } label: {
+                        Text(ShareSheetCopy.studioShort)
+                            .font(MeeshyFont.relative(MeeshyFont.bodySize, weight: .semibold))
+                            .foregroundColor(accent)
+                            .frame(maxWidth: .infinity, minHeight: MeeshyControlSize.buttonHeight)
+                            .background(Capsule().stroke(accent.opacity(0.4), lineWidth: 1))
+                            .contentShape(Capsule())
+                    }
+                    .buttonStyle(.plain)
+                }
+                Button(action: prompt.onOpenApp) {
+                    Text(ShareSheetCopy.openMeeshy)
+                        .font(MeeshyFont.relative(MeeshyFont.bodySize, weight: .semibold))
+                        .foregroundColor(.white)
+                        .frame(maxWidth: .infinity, minHeight: MeeshyControlSize.buttonHeight)
+                        .background(Capsule().fill(accent))
+                        .contentShape(Capsule())
+                }
+                .buttonStyle(.plain)
+                .accessibilityIdentifier("share.sheet.open-app")
+            }
+        }
+        .padding(MeeshySpacing.xl)
+        .frame(maxWidth: .infinity)
+    }
+
     // MARK: - Interdit motivé (fragment 4)
 
     private func blockedCard(_ reason: ShareWithdrawReason) -> some View {
@@ -288,20 +352,17 @@ struct ShareSheetView: View {
         if let served = model.firstServed {
             toastFired = true
             let title = ShareSheetCopy.sentTo(served.recipient.title)
-            let conversation = Conversation(
+            let conversation = MeeshyConversation(
                 id: served.conversationId, identifier: served.conversationId,
                 type: served.recipient.isGroup ? .group : .direct,
                 title: served.recipient.title, avatar: served.recipient.avatarURL,
                 participantUserId: served.recipient.userId
             )
-            if let open = actions.onOpenConversation {
-                FeedbackToastManager.shared.show(title, type: .success) { open(conversation) }
-            } else {
-                FeedbackToastManager.shared.showSuccess(title)
-            }
+            let open = actions.onOpenConversation.map { open in { open(conversation) } }
+            ShareSheetHostBridge.announce(title, open: open)
         } else if model.deliveries.contains(where: { $0.key.hasPrefix("pub:") && $0.value == .sent }) {
             toastFired = true
-            FeedbackToastManager.shared.showSuccess(ShareSheetCopy.published)
+            ShareSheetHostBridge.announce(ShareSheetCopy.published, open: nil)
         }
     }
 }
