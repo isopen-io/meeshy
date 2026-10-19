@@ -616,12 +616,6 @@ extension ConversationView {
         }
     }
 
-    func mimeTypeForURL(_ url: URL) -> String {
-        // Single source of truth lives in `MimeTypeResolver` (MeeshySDK).
-        // See its `forwardTable` for the full extension → mime mapping.
-        MimeTypeResolver.mimeType(forURL: url)
-    }
-
     func getFileSize(_ url: URL) -> Int {
         ComposerFileImporter.fileSize(of: url)
     }
