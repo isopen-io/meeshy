@@ -23,6 +23,12 @@ final class CallLiveActivityCoordinator {
     private var host: (any LiveActivityHostProviding<CallActivitySnapshot>)?
     private var cancellables = Set<AnyCancellable>()
     private var encryption: (conversationId: String, isEncrypted: Bool?)?
+    private var publishedAvatarActivityID: String?
+    private let avatars: any CallActivityAvatarPublishing
+
+    init(avatars: any CallActivityAvatarPublishing = CallActivityAvatarPublisher()) {
+        self.avatars = avatars
+    }
 
     func bind(_ manager: CallManager) {
         guard self.manager !== manager else { return }
@@ -31,6 +37,7 @@ final class CallLiveActivityCoordinator {
         guard let host = makeHost() else { return }
         self.host = host
         host.endOrphans()
+        avatars.sweep(keeping: [])
         LiveActivityCommandBinding.shared.install()
 
         let transcription = manager.$transcriptionService
@@ -81,14 +88,36 @@ final class CallLiveActivityCoordinator {
         case .none:
             guard let running, !host.isRunning, UIApplication.shared.applicationState == .active else { return }
             host.start(running)
+            publishAvatarIfNeeded(host: host)
         case .start(let snapshot):
             host.start(snapshot)
+            publishAvatarIfNeeded(host: host)
         case .update(let snapshot):
             host.isRunning ? host.update(snapshot) : host.start(snapshot)
+            publishAvatarIfNeeded(host: host)
         case .end(let snapshot):
             encryption = nil
+            withdrawAvatar(host: host)
             host.end(snapshot, dismissAfter: 0)
         }
+    }
+
+    private func publishAvatarIfNeeded(host: any LiveActivityHostProviding<CallActivitySnapshot>) {
+        guard let manager, !manager.isGroupMeshCall,
+              let remoteUserId = manager.remoteUserId, !remoteUserId.isEmpty,
+              let activityID = host.activityID,
+              publishedAvatarActivityID != activityID else { return }
+        publishedAvatarActivityID = activityID
+        avatars.publish(activityID: activityID, remoteUserId: remoteUserId) { [weak self] in
+            guard let self, let running = self.running, let host = self.host, host.isRunning else { return }
+            host.update(running)
+        }
+    }
+
+    private func withdrawAvatar(host: any LiveActivityHostProviding<CallActivitySnapshot>) {
+        publishedAvatarActivityID = nil
+        guard let activityID = host.activityID else { return }
+        avatars.withdraw(activityID: activityID)
     }
 
     private func input(from manager: CallManager) -> CallActivityLaw.Input {
