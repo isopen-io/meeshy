@@ -19,6 +19,7 @@ import MeeshyUI
 /// > **Une vue sans consommateur n'a aucun site où rougir.** Le témoin qui
 /// > l'attrape n'interroge aucune vue : il demande ce que la PUBLICATION
 /// > emporte.
+@MainActor
 final class ComposerPublishedSlideTests: XCTestCase {
 
     private func slide(_ texte: String) -> StorySlide {

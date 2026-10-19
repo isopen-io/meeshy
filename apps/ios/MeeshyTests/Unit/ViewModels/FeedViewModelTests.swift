@@ -387,9 +387,9 @@ final class FeedViewModelTests: XCTestCase {
         let finishedWhileSaveHeld = await Self.finishes(load, within: .seconds(2))
         XCTAssertFalse(finishedWhileSaveHeld, "loadFeed(forceRefresh:) returned while the fetched page was still being persisted")
 
-        await store.releaseSave()
+        store.releaseSave()
         await load.value
-        let persisted = await store.items(for: "main-feed")
+        let persisted = store.items(for: "main-feed")
         XCTAssertEqual(persisted?.map(\.id), ["net-0"])
     }
 
@@ -2493,8 +2493,10 @@ final class FeedViewModelTests: XCTestCase {
 /// `releaseSave()` — pour prouver qu'un appelant attend (ou non) sa
 /// persistance. Privé à ce fichier : un fichier de mock neuf exigerait un
 /// passage XcodeGen (cf. tasks/lessons.md, « fichier de test neuf »).
-private actor GatedFeedCacheStore: FeedCacheStoring {
+@MainActor
+private final class GatedFeedCacheStore: FeedCacheStoring {
     private var storage: [String: [FeedPost]] = [:]
+    nonisolated deinit {}
     private var saveRequested: [CheckedContinuation<Void, Never>] = []
     private var saveRequestedOnce = false
     private var gate: [CheckedContinuation<Void, Never>] = []

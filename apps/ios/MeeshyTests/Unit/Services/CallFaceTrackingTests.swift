@@ -155,7 +155,7 @@ final class CallFaceTrackingTests: XCTestCase {
 
 // MARK: - Test doubles
 
-final class CountingFaceDetector: CallFaceLandmarkDetecting, @unchecked Sendable {
+nonisolated final class CountingFaceDetector: CallFaceLandmarkDetecting, @unchecked Sendable {
     private let result: CallFaceDetection?
     private(set) var calls = 0
 
@@ -169,6 +169,6 @@ final class CountingFaceDetector: CallFaceLandmarkDetecting, @unchecked Sendable
     }
 }
 
-final class SilentFaceDetector: CallFaceLandmarkDetecting, @unchecked Sendable {
+nonisolated final class SilentFaceDetector: CallFaceLandmarkDetecting, @unchecked Sendable {
     nonisolated func detect(in pixelBuffer: CVPixelBuffer, orientation: CGImagePropertyOrientation) -> CallFaceDetection? { nil }
 }

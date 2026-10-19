@@ -4,8 +4,10 @@ import MeeshySDK
 
 // MARK: - Doubles
 
-private actor RecordingPruning: PackFilePruning {
+@MainActor
+private final class RecordingPruning: PackFilePruning {
     private(set) var pruned: [Set<String>] = []
+    nonisolated deinit {}
 
     func prune(_ names: Set<String>) async -> Set<String> {
         pruned.append(names)
@@ -73,7 +75,7 @@ final class PackFilePrunerTests: XCTestCase {
 
         await pruner.requestPrune()
 
-        let pruned = await store.all()
+        let pruned = store.all()
         XCTAssertEqual(pruned, ["aaaaaaaaaaaaaaaa.json", "cccccccccccccccc.webp", "1111111111111111.webp", "2222222222222222.webp"])
         let remaining = await index.all().map(\.slug)
         XCTAssertFalse(remaining.contains("savane"))
@@ -84,7 +86,7 @@ final class PackFilePrunerTests: XCTestCase {
 
         await pruner.requestPrune()
 
-        let pruned = await store.all()
+        let pruned = store.all()
         XCTAssertFalse(pruned.contains("cccccccccccccccc.webp"), "la couverture partagée avec un pack installé reste")
         XCTAssertTrue(pruned.contains("1111111111111111.webp"))
     }
@@ -94,7 +96,7 @@ final class PackFilePrunerTests: XCTestCase {
 
         await pruner.requestPrune()
 
-        let pruned = await store.all()
+        let pruned = store.all()
         XCTAssertEqual(pruned, ["2222222222222222.webp"])
     }
 
@@ -103,23 +105,23 @@ final class PackFilePrunerTests: XCTestCase {
 
         pruner.acquireLease(slug: "savane")
         await pruner.requestPrune()
-        let duringLease = await store.calls()
+        let duringLease = store.calls()
         XCTAssertEqual(duringLease, 0, "rien ne part pendant qu'un déroulé tient un bail")
 
         await pruner.releaseLease(slug: "savane")
-        let afterLease = await store.all()
+        let afterLease = store.all()
         XCTAssertTrue(afterLease.contains("1111111111111111.webp"), "l'élagage différé part à la fin du bail")
     }
 
     func test_anUnreadableShelfOrNotebook_prunesNothing() async {
         let (shelfUnknown, store1, _) = await makeSUT(manifests: [Self.savane], retained: nil)
         await shelfUnknown.requestPrune()
-        let shelfCalls = await store1.calls()
+        let shelfCalls = store1.calls()
         XCTAssertEqual(shelfCalls, 0)
 
         let (notebookUnknown, store2, _) = await makeSUT(manifests: [Self.savane], frames: nil)
         await notebookUnknown.requestPrune()
-        let notebookCalls = await store2.calls()
+        let notebookCalls = store2.calls()
         XCTAssertEqual(notebookCalls, 0)
     }
 
@@ -131,7 +133,7 @@ final class PackFilePrunerTests: XCTestCase {
 
         await pruner.requestPrune()
 
-        let pruned = await store.all()
+        let pruned = store.all()
         XCTAssertEqual(pruned, ["bbbbbbbbbbbbbbbb.webp"])
     }
 

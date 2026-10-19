@@ -12,6 +12,7 @@ import MeeshyUI
 ///
 /// > Le témoin qui attrape ce genre d'écart n'interroge aucune vue : il demande
 /// > si ce que l'auteur choisit ARRIVE dans ce qui part.
+@MainActor
 final class ComposerMosaicChoiceTests: XCTestCase {
 
     private func slide(_ texte: String) -> StorySlide {

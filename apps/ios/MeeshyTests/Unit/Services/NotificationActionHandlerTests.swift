@@ -1128,7 +1128,7 @@ final class NotificationActionHandlerTests: XCTestCase {
     /// constructible), jamais à `UNNotification` lui-même.
     /// `@unchecked Sendable` : même patron que `SpyBannerCenter`, la synchronisation
     /// est portée par le lock, pas par le compilateur.
-    private final class MockUNUserNotificationCenter: UNUserNotificationCenterProviding, @unchecked Sendable {
+    nonisolated private final class MockUNUserNotificationCenter: UNUserNotificationCenterProviding, @unchecked Sendable {
         private let lock = NSLock()
         private var storedDelivered: [DeliveredBanner]
         private var storedReads = 0

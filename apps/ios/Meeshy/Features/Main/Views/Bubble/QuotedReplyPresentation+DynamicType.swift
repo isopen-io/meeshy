@@ -16,7 +16,7 @@ import SwiftUI
 /// le bon verdict. La traduction vit donc ici, dans un fichier qui assume
 /// d'être une vue, et **en un seul site** : les trois peaux l'appellent, aucune
 /// ne recopie la table.
-extension QuotedReplyPresentation {
+nonisolated extension QuotedReplyPresentation {
 
     /// Combien de signes une ligne d'aperçu porte, à cette taille de texte.
     ///

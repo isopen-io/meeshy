@@ -187,7 +187,7 @@ final class CallFaceEffectTests: XCTestCase {
     }
 }
 
-private final class SpyFaceEffectsRenderer: CallFaceEffectsRendererProviding, @unchecked Sendable {
+nonisolated private final class SpyFaceEffectsRenderer: CallFaceEffectsRendererProviding, @unchecked Sendable {
     struct Render: Equatable {
         let effect: CallFaceEffect
         let rotation: Int

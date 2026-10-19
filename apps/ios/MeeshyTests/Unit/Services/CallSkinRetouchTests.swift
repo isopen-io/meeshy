@@ -358,7 +358,7 @@ final class CallSkinRetouchTests: XCTestCase {
     }
 }
 
-private final class RetouchSpy: CallFaceEffectsRendererProviding, @unchecked Sendable {
+nonisolated private final class RetouchSpy: CallFaceEffectsRendererProviding, @unchecked Sendable {
     private let output: CIImage?
     private(set) var plans: [CallSkinRetouchPlan] = []
     private(set) var rotations: [Int] = []

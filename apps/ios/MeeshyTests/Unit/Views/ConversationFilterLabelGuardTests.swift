@@ -14,6 +14,7 @@ import XCTest
 /// Trois familles, dont un fusible. Le fusible n'est pas décoratif : la moitié
 /// des témoins ci-dessous sont négatifs, et un négatif sur une lecture vide
 /// passe au vert sans qu'aucune assertion ne puisse le dire.
+@MainActor
 final class ConversationFilterLabelGuardTests: XCTestCase {
 
     private static let row = "Meeshy/Features/Main/Views/ConversationListView.swift"

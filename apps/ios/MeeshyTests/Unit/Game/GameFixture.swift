@@ -6,6 +6,7 @@ import MeeshySDK
 /// niveau, rang, trésor et aperçu de frappe se déduisent des mêmes faits que ceux
 /// que la passerelle sert. Chaque témoin décrit l'état qu'il veut par quelques
 /// paramètres nommés.
+@MainActor
 enum GameFixture {
 
     static func mission(

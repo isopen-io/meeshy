@@ -8,6 +8,7 @@ import MeeshyUI
 /// chaque réel / scène une fois par image — chaque écriture forçant une mise à
 /// jour du graphe pendant que les rangées suivantes attendaient d'être
 /// peintes. Ces lois gardent ce que leurs lecteurs lisent vraiment.
+@MainActor
 final class FeedScrollPublicationTests: XCTestCase {
 
     // MARK: - Offset relayé à l'en-tête

@@ -178,7 +178,7 @@ final class MainActorCounter {
 }
 
 /// Un cache de scènes qui ne cuit que ce que le témoin y pose, et compte ses demandes.
-final class MockComposerLookSceneProvider: ComposerLookSceneProviding, @unchecked Sendable {
+nonisolated final class MockComposerLookSceneProvider: ComposerLookSceneProviding, @unchecked Sendable {
     var scene: CallLiveFrameScene?
     private(set) var prepareCount = 0
     private(set) var readies: [@MainActor @Sendable () -> Void] = []

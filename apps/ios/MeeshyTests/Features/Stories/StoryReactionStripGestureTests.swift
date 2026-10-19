@@ -17,6 +17,7 @@ import CoreGraphics
 /// La garde du site épingle au passage l'habillage de la barre (échelle 2, sans
 /// capsule) : c'est le même arbitrage porteur, et le rendre au site est la seule
 /// preuve que la barre commandée est celle qui se monte.
+@MainActor
 final class StoryReactionStripGestureTests: XCTestCase {
 
     // MARK: - 1 · La loi

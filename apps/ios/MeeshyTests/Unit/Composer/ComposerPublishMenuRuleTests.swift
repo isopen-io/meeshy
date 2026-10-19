@@ -15,6 +15,7 @@ import MeeshyUI
 /// s'éprouve sans monter une vue. Les gardes de source de la fin ne portent que
 /// sur ce qu'aucune valeur ne peut dire — l'éventail n'est plus monté, la
 /// flèche monte le menu, le brouillon transporte l'agencement choisi.
+@MainActor
 final class ComposerPublishMenuRuleTests: XCTestCase {
 
     // MARK: - Fabriques

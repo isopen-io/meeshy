@@ -7,8 +7,10 @@ import MeeshySDK
 @MainActor
 final class GameWave2ModelTests: XCTestCase {
 
-    private actor MemoryCache: GameWave2Caching {
+    @MainActor
+    private final class MemoryCache: GameWave2Caching {
         private var store: [String: Data] = [:]
+        nonisolated deinit {}
         func load<T: Decodable & Sendable>(_ type: T.Type, name: String) async -> T? {
             store[name].flatMap { try? JSONDecoder().decode(T.self, from: $0) }
         }
@@ -181,7 +183,7 @@ final class GameWave2ModelTests: XCTestCase {
         rig.service.weekResult = .success(week())
         await rig.sut.progression.load(forceNetwork: true)
         await rig.sut.loadWeek()
-        let before = await rig.cache.has(GameWave2CacheName.leagueWeek)
+        let before = rig.cache.has(GameWave2CacheName.leagueWeek)
         XCTAssertTrue(before)
         rig.service.consentResult = .success(LeagueConsentResponse(consent: false, pseudonym: nil))
 
@@ -190,7 +192,7 @@ final class GameWave2ModelTests: XCTestCase {
         XCTAssertNil(rig.sut.week.value, "les pseudonymes des autres ne restent pas à l'écran")
         var after = true
         for _ in 0..<50 where after {
-            after = await rig.cache.has(GameWave2CacheName.leagueWeek)
+            after = rig.cache.has(GameWave2CacheName.leagueWeek)
             if after { await Task.yield() }
         }
         XCTAssertFalse(after, "ni sur le disque d'une personne qui n'y joue plus")
@@ -258,7 +260,7 @@ final class GameWave2ModelTests: XCTestCase {
             let served = await GameShowcaseLoader(service: service, cache: cache, currentUserId: "me").load(userId: "u1")
 
             XCTAssertNil(served, "le serveur a répondu : une vitrine fermée (blocage, réglage) ne se rouvre pas depuis le disque — \(answer)")
-            let kept = await cache.has(name)
+            let kept = cache.has(name)
             XCTAssertFalse(kept, "ni ne reste sur l'appareil — \(answer)")
         }
     }
@@ -365,7 +367,7 @@ final class GameWave2ModelTests: XCTestCase {
 
         XCTAssertEqual(content?.standing?.level, 42)
         XCTAssertEqual(content?.treasuryTier, .coffre)
-        let kept = await cache.has(GameWave2CacheName.userGame("u1"))
+        let kept = cache.has(GameWave2CacheName.userGame("u1"))
         XCTAssertTrue(kept)
     }
 
@@ -405,7 +407,7 @@ final class GameWave2ModelTests: XCTestCase {
             let content = await GameUserGameLoader(service: integration, cache: cache, currentUserId: "me").load(userId: "u1")
 
             XCTAssertNil(content, "\(answer)")
-            let kept = await cache.has(name)
+            let kept = cache.has(name)
             XCTAssertFalse(kept, "\(answer)")
         }
     }
