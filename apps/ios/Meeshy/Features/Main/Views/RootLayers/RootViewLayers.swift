@@ -25,6 +25,7 @@ struct RootEnvironmentLayer: ViewModifier {
     func body(content: Content) -> some View {
         content
             .environmentObject(router)
+            .modifier(PublishesSceneNavigation(router: router, role: .main))
             .environmentObject(storyViewModel)
             .environmentObject(statusViewModel)
             .meeshyConversationList(conversationViewModel)
@@ -374,13 +375,7 @@ struct RootSheetsLayer: ViewModifier {
             // #10947 — un partage relayé par l'extension (sans session, ou vers
             // une conversation chiffrée) rouvre ICI l'écran de partage unique.
             .shareRelayPresenter(consumer: ShareRelayConsumer.shared, router: router)
-            .sheet(isPresented: $showNewConversation) {
-                NewConversationView()
-                    .environmentObject(statusViewModel)
-                    .presentationDetents([.large])
-                    .presentationDragIndicator(.visible)
-                    .closesForConversationOpening(.sheet)
-            }
+            .modifier(NewConversationSheetHost(isPresented: $showNewConversation, statusViewModel: statusViewModel))
             .adaptiveOnChange(of: router.path) { _, newPath in
                 if !newPath.isEmpty && showFeed {
                     feedWasVisibleBeforeNav = true

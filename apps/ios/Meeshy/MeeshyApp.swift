@@ -780,7 +780,12 @@ struct MeeshyApp: App {
             // feuilles, couvertures, toasts et barrière d'âge la lisent aussi.
             .publishingSceneWindowSize()
         }
+        .commands { MeeshyCommands() }
+        detachedWindows
+    }
 
+    @SceneBuilder
+    private var detachedWindows: some Scene {
         // Les fenêtres DÉTACHÉES (iPad) : une conversation, ou le fil de réels, à côté de la fenêtre principale.
         WindowGroup(id: DetachedWindowOpener.sceneId, for: DetachedWindowContent.self) { $content in
             DetachedWindowView(content: content)

@@ -118,10 +118,6 @@ struct ConversationListModalPresentations: ViewModifier {
                     .presentationDetents([.large])
                     .presentationDragIndicator(.visible)
             }
-            .fullScreenCover(isPresented: $showGlobalSearch) {
-                GlobalSearchView()
-                    .environmentObject(conversationViewModel)
-                    .environmentObject(router)
-            }
+            .modifier(GlobalSearchCoverHost(isPresented: $showGlobalSearch, conversationViewModel: conversationViewModel, router: router))
     }
 }
