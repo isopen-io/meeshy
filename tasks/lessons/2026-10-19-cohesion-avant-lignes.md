@@ -26,3 +26,18 @@ plus qu'un indicateur secondaire.
 passe quand le motif part dans `X+Y.swift`. Une garde négative doit lire l'unité entière
 (tous les fichiers du type), et un témoin positif doit prouver qu'elle trouve le motif là où
 il vit désormais.
+
+## Les lecteurs d'un fichier Swift ne sont pas tous en Swift (CI de la PR #11031)
+
+Avant de déplacer du code hors d'un fichier Swift, chercher qui le LIT par chemin
+dans TOUT le dépôt, pas seulement dans `MeeshyTests` et `MeeshySDKTests` : des
+gates web (`apps/web/scripts/lib/curve-story-reader.mjs` lisait le cadrage du
+lecteur de story dans `StoryViewerView+Canvas.swift`), des témoins du gateway
+(`CallEventsHandler-cross-platform-event-contract.test.ts` relevait les
+événements d'appel dans `MessageSocketManager.swift`) et des cliquets de dépôt
+(`scripts/check-accent-color-hardcoding.mjs`, dont la regex comptait
+`HexColor(hex:` comme une couleur posée). Commande :
+
+    git ls-files '*.mjs' '*.js' '*.ts' '*.py' '*.sh' | xargs grep -l "<Fichier>.swift"
+
+et, pour chaque hit qui LIT (readFileSync, open), lancer le script.
