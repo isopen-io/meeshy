@@ -57,6 +57,8 @@ public final class SharedAVPlayerManager: ObservableObject {
     private func applyMuteState() {
         player?.isMuted = effectiveMuted
         closeStretchOnMuteChange()
+        // Lever le son d'une vidéo qui joue, c'est lancer un son (#11039).
+        if isPlaying, !effectiveMuted { MediaSessionCoordinator.shared.activateContentPlayback(.audible) }
     }
 
     /// Si vrai, le notification handler de fin de lecture seek(0) + play()
@@ -206,7 +208,21 @@ public final class SharedAVPlayerManager: ObservableObject {
     /// can stay a plain `MainActor.assumeIsolated` call — no `Task` hop per tick.
     private var lastHeartbeat: Double = 0
 
-    private init() {}
+    /// Ce qu'une interruption a mis en pause (#11040) — survit à `cleanup()`,
+    /// qui le solde explicitement.
+    var interruptionLedger = InterruptionResumeLedger()
+    /// L'INTENTION de lecture, et non le débit observé : le système arrête
+    /// le lecteur au début d'une interruption, et l'observation du débit peut
+    /// arriver avant la notification — le registre ne saurait plus que la
+    /// vidéo jouait.
+    var wantsPlayback = false
+    var sessionSignalCancellables = Set<AnyCancellable>()
+    /// `AVAudioSession.isOtherAudioPlaying` — injectable pour les témoins.
+    var otherAudioIsPlaying: () -> Bool = { AVAudioSession.sharedInstance().isOtherAudioPlaying }
+
+    private init() {
+        observeSessionSignals()
+    }
 
     // MARK: - Load
 
@@ -355,14 +371,13 @@ public final class SharedAVPlayerManager: ObservableObject {
 
     // MARK: - Playback Controls
 
-    /// Pure, testable decision: should starting playback (re)activate the
-    /// `.duckOthers` audio session? A surface that intends to be silent (feed
-    /// autoplay) has no audible output — activating the ducking session for it
-    /// would needlessly duck the user's own music for a video that produces no
-    /// sound. `nonisolated static` mirrors `MediaSessionCoordinator
-    /// .shouldManageSession(callActive:)`.
-    public nonisolated static func shouldDuckOthersOnPlay(effectiveMuted: Bool) -> Bool {
-        !effectiveMuted
+    /// Ce que la vidéo produit au démarrage, lu par `ContentPlaybackSessionLaw`
+    /// (#11039) : audible, elle met la musique des autres apps en pause ;
+    /// muette (autoplay du fil), elle n'y touche pas. Le son activait jadis la
+    /// session sans condition dans `load()`, avant que la surface ait pu dire
+    /// son intention de silence.
+    public nonisolated static func playbackAudibility(effectiveMuted: Bool) -> ContentPlaybackAudibility {
+        effectiveMuted ? .muted : .audible
     }
 
     public func play() {
@@ -380,19 +395,17 @@ public final class SharedAVPlayerManager: ObservableObject {
             }
         }
         PlaybackCoordinator.shared.willStartPlaying(video: self)
-        // Session de lecture via la source UNIQUE (call-aware) : ne reconfigure
+        // Session de lecture via la loi UNIQUE (call-aware) : ne reconfigure
         // pas la session pendant un appel VoIP — la vidéo joue alors sous la
-        // session de l'appel (micro préservé). Cf.
-        // MediaSessionCoordinator.activatePlaybackSync. Gated on `effectiveMuted`
-        // (moved out of `load()`, where it fired unconditionally BEFORE a caller
-        // had any chance to express its mute intent — the feed's silent autoplay
-        // ducked the user's music indefinitely for a video producing no sound).
-        if Self.shouldDuckOthersOnPlay(effectiveMuted: effectiveMuted) {
-            MediaSessionCoordinator.shared.activatePlaybackSync(options: [.duckOthers])
-        }
+        // session de l'appel (micro préservé).
+        MediaSessionCoordinator.shared.activateContentPlayback(
+            Self.playbackAudibility(effectiveMuted: effectiveMuted)
+        )
+        noteSessionSignal(.userStartedPlayback)
         player.play()
         player.rate = Float(playbackSpeed.rawValue)
         isPlaying = true
+        wantsPlayback = true
         if watchStartTime == nil { watchStartTime = Date() }
         if watchClockStart == nil { watchClockStart = Date() }
         stretchTracker.begin(positionMs)
@@ -408,6 +421,7 @@ public final class SharedAVPlayerManager: ObservableObject {
     /// `pause()`. `isPlaying` suit par l'observation du débit.
     public func pauseForSwitch() {
         playsWhenResumed = false
+        wantsPlayback = false
         guard let player else { return }
         emitWatchSample()
         stretchTracker.pause(positionMs)
@@ -415,7 +429,18 @@ public final class SharedAVPlayerManager: ObservableObject {
     }
 
     public func pause() {
+        noteSessionSignal(.userPaused)
+        haltForPause()
+        // Le lecteur est à l'arrêt : la session se rend dans ≈ 3 s, sauf
+        // relance d'ici là, et la musique que la vidéo avait coupée reprend.
+        if player != nil { MediaSessionCoordinator.shared.releaseAfterUserPause() }
+    }
+
+    /// La pause elle-même — partagée par la pause de l'utilisateur et celle
+    /// d'une interruption, qui ne rend pas la session (le système l'a prise).
+    func haltForPause() {
         playsWhenResumed = false
+        wantsPlayback = false
         emitWatchSample()
         // Clôt AVANT le rapport, qui draine la trace : sinon le dernier passage
         // resterait ouvert et manquerait à l'envoi.
@@ -595,74 +620,15 @@ public final class SharedAVPlayerManager: ObservableObject {
     // MARK: - Picture-in-Picture
     //
     // Le contrôleur, son délégué et les drapeaux de transition vivent dans
-    // `SharedPipEngine` ; ces membres en sont la façade publique.
+    // `SharedPipEngine` ; sa façade publique vit dans
+    // `SharedAVPlayerManager+Pip.swift`, d'où `pip` lisible du module.
 
-    private lazy var pip = SharedPipEngine(
+    private(set) lazy var pip = SharedPipEngine(
         enginePlayer: { [weak self] in self?.player },
         isActive: { [weak self] in self?.isPipActive ?? false },
         setActive: { [weak self] in self?.isPipActive = $0 },
         haltPlayback: { [weak self] in self?.stop() },
         pausePlayback: { [weak self] in self?.pause() })
-
-    /// PiP réellement engagé — état LIVE du contrôleur, pas le `@Published`
-    /// `isPipActive` qui traverse un hop MainActor. Lu par le garde background
-    /// de l'app pendant la transition, où l'auto-PiP vient tout juste de
-    /// démarrer et où le flag publié peut encore être en retard d'un tick.
-    public var isPipEngaged: Bool {
-        pip.isEngaged
-    }
-
-    /// Une surface a opté pour le PiP sur la vidéo courante (le simulateur ne
-    /// supporte pas le PiP : toujours `false` là-bas).
-    public var isPipConfigured: Bool {
-        pip.isConfigured
-    }
-
-    /// Attend (borné) que l'auto-PiP s'engage pendant la transition vers
-    /// l'arrière-plan : AVKit démarre le PiP de son côté au moment où l'app
-    /// se retire, et le garde background court CONTRE cette animation. Sans
-    /// cette fenêtre, un `pause()` prématuré avorterait la fenêtre PiP que le
-    /// système était en train d'ouvrir.
-    public func waitForPipEngagement(timeout: TimeInterval) async -> Bool {
-        let deadline = Date().addingTimeInterval(timeout)
-        while Date() < deadline {
-            if isPipEngaged { return true }
-            try? await Task.sleep(for: .milliseconds(50))
-        }
-        return isPipEngaged
-    }
-
-    /// Attach PIP to a given AVPlayerLayer. Call this from the UIViewRepresentable that hosts the player.
-    ///
-    /// `deferred` (#10354) : le lecteur de réels demande son contrôleur pour
-    /// la page POSÉE ; la création attend `deferredPipDelay`, coalescée — une
-    /// rafale de demandes (montage, `load()`, mise à jour) n'en crée qu'un, et
-    /// une demande dont la couche ne montre plus le moteur ne crée rien. Le
-    /// passage automatique en arrière-plan
-    /// (`canStartPictureInPictureAutomaticallyFromInline`) reste posé.
-    public func configurePip(playerLayer: AVPlayerLayer, deferred: Bool = false) {
-        pip.configure(playerLayer: playerLayer, deferred: deferred)
-    }
-
-    /// Demande la fenêtre PiP. Rend `true` si la demande est PARTIE — la
-    /// surface qui se ferme derrière sait alors que la lecture a un autre lieu.
-    ///
-    /// `haltsOnFailure` : la surface qui demande va se FERMER (sortie du plein
-    /// écran). Si la fenêtre échoue à s'ouvrir, la lecture s'arrête plutôt que
-    /// de continuer sans lieu. Une surface qui reste à l'écran le laisse à
-    /// `false` : en cas d'échec, elle joue toujours.
-    ///
-    /// `isPipActive` ne se lève qu'au rappel `didStart` : la couche d'origine
-    /// doit rester montée pendant l'ouverture, et le verdict de montage la
-    /// démonterait. `isPipStarting` protège le contrôleur d'ici là.
-    @discardableResult
-    public func startPip(haltsOnFailure: Bool = false) -> Bool {
-        pip.start(haltsOnFailure: haltsOnFailure)
-    }
-
-    public func stopPip() {
-        pip.stop()
-    }
 
     // MARK: - Watch Progress Reporting
 
@@ -938,6 +904,8 @@ public final class SharedAVPlayerManager: ObservableObject {
     /// updates », et SwiftUI abandonnait ses rendus : fil VIERGE au
     /// défilement (#6977, jumeau de `AudioPlaybackManager.resetState`).
     private func cleanup() {
+        noteSessionSignal(.contentReleased)
+        wantsPlayback = false
         finishPlaybackQoE(reason: sessionReachedEnd ? .completed : .swiped)
         // L'utilisateur quitte pendant la lecture : le visionnage en cours n'est
         // ni terminé ni mis en pause. Clos et envoyé AVANT toute remise à zéro,

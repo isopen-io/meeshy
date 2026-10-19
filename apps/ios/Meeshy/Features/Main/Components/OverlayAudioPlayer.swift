@@ -63,7 +63,7 @@ final class OverlayAudioPlayer: ObservableObject, StoppablePlayer {
 
     init(
         sessionEvents: AnyPublisher<MediaSessionCoordinator.Event, Never> = MediaSessionCoordinator.shared.events.eraseToAnyPublisher(),
-        activateSession: @escaping () -> Void = { MediaSessionCoordinator.shared.activatePlaybackSync(options: []) },
+        activateSession: @escaping () -> Void = { MediaSessionCoordinator.shared.activateContentPlayback(.audible) },
         releaseSession: @escaping () -> Void = {
             // `setActive(false)` est un aller-retour HAL bloquant : hors du fil principal.
             MediaSessionCoordinator.shared.deactivatePlaybackDeferred()

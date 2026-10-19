@@ -53,7 +53,23 @@ public class AudioPlayerManager: ObservableObject {
     }
     private let cleanupHandle = CleanupHandle()
 
-    public init() {}
+    /// Ce qu'une interruption a mis en pause (#11040).
+    private var interruptionLedger = InterruptionResumeLedger()
+    /// L'intention de lecture : le système arrête le lecteur avant que la
+    /// notification d'interruption n'arrive, son état ne dit plus qu'il jouait.
+    private var wantsPlayback = false
+    private var sessionEventsCancellable: AnyCancellable?
+
+    public init(
+        sessionEvents: AnyPublisher<MediaSessionCoordinator.Event, Never> =
+            MediaSessionCoordinator.shared.events.eraseToAnyPublisher()
+    ) {
+        MediaSessionCoordinator.shared.observeSystemEvents()
+        sessionEventsCancellable = sessionEvents
+            .receive(on: DispatchQueue.main)
+            .sink { [weak self] event in self?.handleSessionEvent(event) }
+        RecordingPlaybackDucker.shared.register(self)
+    }
 
     deinit {
         cleanupHandle.timer?.invalidate()
@@ -85,10 +101,9 @@ public class AudioPlayerManager: ObservableObject {
 
         onWillPlay?()
 
-        // Session de lecture via la source UNIQUE (call-aware) : ne stomp PAS un appel
-        // VoIP actif (sinon micro coupé). Options [] = pas de ducking (parité avec le
-        // comportement preview historique de ce player du composer story).
-        MediaSessionCoordinator.shared.activatePlaybackSync(options: [])
+        // Session de lecture via la loi UNIQUE (call-aware) : ne stomp PAS un appel
+        // VoIP actif (sinon micro coupé), met la musique des autres apps en pause.
+        MediaSessionCoordinator.shared.activateContentPlayback(.audible)
         holdsPlaybackSession = true
 
         let resolved = MeeshyConfig.resolveMediaURL(urlString)?.absoluteString ?? urlString
@@ -127,6 +142,7 @@ public class AudioPlayerManager: ObservableObject {
         duration = player.duration
         player.play()
         isPlaying = true
+        wantsPlayback = true
         lastError = nil
         startLocalProgressTimer()
     }
@@ -181,6 +197,7 @@ public class AudioPlayerManager: ObservableObject {
 
         avPlayer.play()
         isPlaying = true
+        wantsPlayback = true
 
         // Cache audio data in background for next time
         loadTask = Task {
@@ -202,8 +219,8 @@ public class AudioPlayerManager: ObservableObject {
         halt()
         onWillPlay?()
 
-        // Session de lecture via la source UNIQUE (call-aware) — cf. play(urlString:).
-        MediaSessionCoordinator.shared.activatePlaybackSync(options: [])
+        // Session de lecture via la loi UNIQUE (call-aware) — cf. play(urlString:).
+        MediaSessionCoordinator.shared.activateContentPlayback(.audible)
         holdsPlaybackSession = true
 
         do {
@@ -238,6 +255,8 @@ public class AudioPlayerManager: ObservableObject {
 
     /// Arrête la lecture SANS rendre la session — pour enchaîner une autre lecture.
     private func halt() {
+        wantsPlayback = false
+        _ = interruptionLedger.handle(.contentReleased)
         localPlayer?.stop()
         localPlayer = nil
 
@@ -261,26 +280,68 @@ public class AudioPlayerManager: ObservableObject {
     }
 
     public func togglePlayPause() {
-        if let localPlayer {
-            if localPlayer.isPlaying {
-                localPlayer.pause()
-                isPlaying = false
-                timer?.invalidate()
-            } else {
-                onWillPlay?()
-                localPlayer.play()
-                isPlaying = true
-                startLocalProgressTimer()
-            }
-        } else if let streamPlayer {
-            if isPlaying {
-                streamPlayer.pause()
-            } else {
-                onWillPlay?()
-                streamPlayer.play()
-            }
-            // isPlaying updated by rate observer
+        guard localPlayer != nil || streamPlayer != nil else { return }
+        if localPlayer?.isPlaying ?? isPlaying {
+            _ = interruptionLedger.handle(.userPaused)
+            pauseForInterruption()
+            // La musique que l'aperçu avait coupée reprend dans ≈ 3 s, sauf relance.
+            MediaSessionCoordinator.shared.releaseAfterUserPause()
+        } else {
+            _ = interruptionLedger.handle(.userStartedPlayback)
+            resumePlayback()
         }
+    }
+
+    private func pauseForInterruption() {
+        wantsPlayback = false
+        localPlayer?.pause()
+        streamPlayer?.pause()
+        if localPlayer != nil { isPlaying = false }
+        timer?.invalidate()
+    }
+
+    private func resumePlayback() {
+        onWillPlay?()
+        MediaSessionCoordinator.shared.activateContentPlayback(.audible)
+        holdsPlaybackSession = true
+        wantsPlayback = true
+        if let localPlayer {
+            localPlayer.play()
+            isPlaying = true
+            startLocalProgressTimer()
+        } else {
+            // isPlaying suit l'observation du débit.
+            streamPlayer?.play()
+        }
+    }
+
+    // MARK: - Interruptions (#11040)
+
+    func handleSessionEvent(_ event: MediaSessionCoordinator.Event) {
+        guard let signal = InterruptionResumeLedger.signal(for: event, isPlaying: wantsPlayback) else { return }
+        switch interruptionLedger.handle(signal) {
+        case .pause:
+            guard wantsPlayback else { return }
+            pauseForInterruption()
+        case .resume:
+            guard !MediaSessionCoordinator.shared.isCallActive else { return }
+            resumePlayback()
+        case .none:
+            break
+        }
+    }
+
+    /// Ce que dit un lecteur local qui ne joue plus alors que le tick tourne.
+    enum StoppedTickVerdict: Equatable {
+        /// Fin naturelle : la tête est revenue au début.
+        case finished
+        /// Arrêté en cours de route : le système l'a interrompu, la
+        /// notification va suivre — rien ne se rend avant elle.
+        case interrupted
+    }
+
+    nonisolated static func stoppedTickVerdict(currentTime: TimeInterval, duration: TimeInterval) -> StoppedTickVerdict {
+        currentTime > 0 && currentTime < duration ? .interrupted : .finished
     }
 
     // MARK: - Progress Timer (local player only)
@@ -308,7 +369,14 @@ public class AudioPlayerManager: ObservableObject {
     private func publishLocalProgressTick() {
         guard let player = localPlayer else { return }
         guard player.isPlaying else {
-            stop()
+            switch Self.stoppedTickVerdict(currentTime: player.currentTime, duration: player.duration) {
+            case .finished:
+                stop()
+            case .interrupted:
+                // L'intention reste : c'est elle que la notification lira.
+                timer?.invalidate()
+                isPlaying = false
+            }
             return
         }
         let newProgress = player.duration > 0 ? player.currentTime / player.duration : 0
@@ -319,5 +387,16 @@ public class AudioPlayerManager: ObservableObject {
         if abs(newProgress - progress) >= Self.progressWriteThreshold {
             progress = newProgress
         }
+    }
+}
+
+// MARK: - Enregistrement (#11042)
+extension AudioPlayerManager: AudiblePlaybackSource {
+    /// Pendant un enregistrement, l'extrait qui joue baisse puis remonte.
+    public var audibleVolumeTargets: [any PlaybackVolumeTarget] {
+        guard isPlaying else { return [] }
+        let local: [any PlaybackVolumeTarget] = localPlayer.map { [$0] } ?? []
+        let stream: [any PlaybackVolumeTarget] = streamPlayer.map { [$0] } ?? []
+        return local + stream
     }
 }

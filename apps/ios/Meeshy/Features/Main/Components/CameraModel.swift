@@ -101,6 +101,12 @@ final class CameraModel: NSObject, ObservableObject, ComposerCaptureCameraProvid
     /// consommateur (conversation, fil, composer, story) reçoit la photo déjà
     /// redressée, bornée et améliorée, EXIF compris.
     nonisolated let photoProcessor: any PhotoCaptureProcessorProviding
+    /// La session audio d'un enregistrement (#11042) : posée par la loi, plus
+    /// par la capture elle-même.
+    let recordingSession: MeeshyRecordingSession = .shared
+    /// La dernière remise de session demandée : un viseur qui revient avant
+    /// qu'elle ne s'exécute l'annule.
+    private var sessionHandBackGeneration = 0
 
     init(photoProcessor: any PhotoCaptureProcessorProviding = PhotoCaptureProcessor.shared) {
         self.photoProcessor = photoProcessor
@@ -211,6 +217,7 @@ final class CameraModel: NSObject, ObservableObject, ComposerCaptureCameraProvid
     private func setupSession() {
         let prechauffee = sessionIsPrepared
         prepareSession()
+        reclaimRecordingSessionIfArmed()
         armMicrophoneAtSetup()
         firstFrameClock.start(prewarmed: prechauffee)
         sessionQueue.setRunning(true, session)
@@ -226,6 +233,11 @@ final class CameraModel: NSObject, ObservableObject, ComposerCaptureCameraProvid
         sessionQueue.perform { [weak self] in
             guard let self else { return }
             self.session.beginConfiguration()
+            // La capture ne reconfigure plus la session audio à sa guise : sa
+            // configuration automatique coupait les sons de Meeshy (#11042).
+            // `RecordingSessionLaw` la pose — non mélangeable, un son Meeshy
+            // qui joue baisse au lancement de la prise et remonte à la fin.
+            self.session.automaticallyConfiguresApplicationAudioSession = false
             if self.session.sessionPreset != .high { self.session.sessionPreset = .high }
             if self.session.canAddOutput(self.photoOutput) { self.session.addOutput(self.photoOutput) }
             if self.session.canAddOutput(self.videoOutput) { self.session.addOutput(self.videoOutput) }
@@ -252,6 +264,7 @@ final class CameraModel: NSObject, ObservableObject, ComposerCaptureCameraProvid
         guard !hasAudioInput, CameraAudioArming.armsAtSetup(
             microphone: AVCaptureDevice.authorizationStatus(for: .audio),
             otherAudioPlaying: AVAudioSession.sharedInstance().isOtherAudioPlaying) else { return }
+        recordingSession.prepare(.video)
         sessionQueue.perform { [weak self] in
             guard let self else { return }
             self.session.beginConfiguration()
@@ -288,11 +301,49 @@ final class CameraModel: NSObject, ObservableObject, ComposerCaptureCameraProvid
             return
         }
 
+        prepareRecordingSessionUnlessMusicPlays()
         hasAudioInput = await sessionQueue.run { [weak self] in
             guard let self else { return false }
             self.session.beginConfiguration()
             defer { self.session.commitConfiguration() }
             return Self.addAudioInput(to: self.session)
+        }
+    }
+
+    /// Le micro entre dans la capture : la session devient capable
+    /// d'enregistrer AVANT que l'entrée n'y tourne (#11042) — sauf si une
+    /// musique joue, que seule la prise interrompra (`CameraAudioArming`).
+    private func prepareRecordingSessionUnlessMusicPlays() {
+        guard !AVAudioSession.sharedInstance().isOtherAudioPlaying else { return }
+        recordingSession.prepare(.video)
+    }
+
+    /// Le viseur revient (#9352) avec son micro déjà branché : la session
+    /// redevient celle d'un enregistrement, et une remise encore en file
+    /// s'efface.
+    func reclaimRecordingSessionIfArmed() {
+        sessionHandBackGeneration &+= 1
+        guard hasAudioInput else { return }
+        prepareRecordingSessionUnlessMusicPlays()
+    }
+
+    /// Le viseur se ferme ou se suspend (#11042) : le son Meeshy baissé
+    /// remonte tout de suite ; la session, elle, ne se rend qu'une fois la
+    /// capture ARRÊTÉE sur sa file — une désactivation sous une entrée audio
+    /// qui tourne échoue, et la musique des autres apps ne reprendrait pas.
+    func handBackRecordingSession() {
+        recordingSession.finish(handingBackSession: false)
+        guard !runsFixture else { return }
+        sessionHandBackGeneration &+= 1
+        let generation = sessionHandBackGeneration
+        sessionQueue.perform { [weak self] in
+            guard let self else { return }
+            DispatchQueue.main.async {
+                MainActor.assumeIsolated {
+                    guard self.sessionHandBackGeneration == generation else { return }
+                    self.recordingSession.handBack()
+                }
+            }
         }
     }
 
@@ -640,7 +691,14 @@ final class CameraModel: NSObject, ObservableObject, ComposerCaptureCameraProvid
         // une vidéo que rien n'écrit — un enregistrement fantôme, avec son
         // indicateur rouge et son compteur qui monte.
         recordingId = UUID().uuidString
-        guard startSegment() else { return closeRecordingToken(recordingId) }
+        // Les sons extérieurs s'arrêtent, le son Meeshy qui joue BAISSE sans
+        // s'arrêter (#11042). Refusé pendant un appel : la prise se fait sous
+        // la session de l'appel, comme avant.
+        recordingSession.begin(.video)
+        guard startSegment() else {
+            recordingSession.finish(handingBackSession: false)
+            return closeRecordingToken(recordingId)
+        }
         recordingTimer = Timer.scheduledTimer(withTimeInterval: 0.5, repeats: true) { [weak self] _ in
             Task { @MainActor [weak self] in
                 self?.recordingDuration += 0.5
@@ -677,6 +735,7 @@ final class CameraModel: NSObject, ObservableObject, ComposerCaptureCameraProvid
     /// refus silencieux garderait `isRecordingVideo` à vrai — l'utilisateur
     /// verrait le point rouge d'une vidéo que personne n'écrit.
     private func endRecordingWithoutOutput(token: String?) {
+        recordingSession.finish(handingBackSession: false)
         isSwitchingCameraDuringRecording = false
         isSwitchingCamera = false
         switchCover = nil
@@ -725,6 +784,7 @@ final class CameraModel: NSObject, ObservableObject, ComposerCaptureCameraProvid
         switchCover = nil
         stopWatchingSubjectArea()
         sessionQueue.setRunning(false, session)
+        handBackRecordingSession()
     }
 
     /// Handles every `fileOutput(didFinishRecordingTo:...)` callback — both the
@@ -790,6 +850,7 @@ final class CameraModel: NSObject, ObservableObject, ComposerCaptureCameraProvid
 
     /// La prise est close : les segments se rassemblent et partent.
     private func deliverRecording(token: String?) async {
+        recordingSession.finish(handingBackSession: false)
         isRecordingVideo = false
         setSmoothFocus(false)
         recordingTimer?.invalidate()
