@@ -1,7 +1,7 @@
 import SwiftUI
 
 /// Shape animable pour l'effet de révélation circulaire.
-struct RevealCircleShape: Shape {
+nonisolated struct RevealCircleShape: Shape {
     var progress: CGFloat  // 0 = cercle invisible, 1 = plein écran
 
     var animatableData: CGFloat {

@@ -2700,7 +2700,8 @@ final class CallManagerJoinRaceTests: XCTestCase {
             .deletingLastPathComponent()
             .deletingLastPathComponent()
             .appendingPathComponent("packages/MeeshySDK/Sources/MeeshySDK/Sockets")
-        return try ["MessageSocketManager.swift", "MessageSocketManager+CallSignaling.swift", "MessageSocketProviding.swift"]
+        return try ["MessageSocketManager.swift", "MessageSocketManager+CallSignaling.swift",
+                    "MessageSocketManager+EventHandlers.swift", "MessageSocketProviding.swift"]
             .map { try String(contentsOf: url.appendingPathComponent($0), encoding: .utf8) }
             .joined(separator: "\n")
     }
@@ -2812,7 +2813,8 @@ final class CallManagerReconnectCallEndedRetryTests: XCTestCase {
             .deletingLastPathComponent()
             .deletingLastPathComponent()
             .appendingPathComponent("packages/MeeshySDK/Sources/MeeshySDK/Sockets")
-        return try ["MessageSocketManager.swift", "MessageSocketManager+CallSignaling.swift", "MessageSocketProviding.swift"]
+        return try ["MessageSocketManager.swift", "MessageSocketManager+CallSignaling.swift",
+                    "MessageSocketManager+EventHandlers.swift", "MessageSocketProviding.swift"]
             .map { try String(contentsOf: url.appendingPathComponent($0), encoding: .utf8) }
             .joined(separator: "\n")
     }
@@ -2964,7 +2966,8 @@ final class CallManagerScreenCaptureAlertTests: XCTestCase {
             .deletingLastPathComponent()
             .deletingLastPathComponent()
             .appendingPathComponent("packages/MeeshySDK/Sources/MeeshySDK/Sockets")
-        return try ["MessageSocketManager.swift", "MessageSocketManager+CallSignaling.swift", "MessageSocketProviding.swift"]
+        return try ["MessageSocketManager.swift", "MessageSocketManager+CallSignaling.swift",
+                    "MessageSocketManager+EventHandlers.swift", "MessageSocketProviding.swift"]
             .map { try String(contentsOf: url.appendingPathComponent($0), encoding: .utf8) }
             .joined(separator: "\n")
     }

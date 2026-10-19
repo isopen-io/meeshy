@@ -73,4 +73,11 @@ export type PostViewersPage = {
    */
   readonly uniqueViewCount?: number;
   readonly anonymousUniqueViewCount?: number;
+  /**
+   * Les compteurs AUTORITATIFS relus avec la liste (#11065) — l'en-tête de la
+   * feuille les affiche plutôt que l'instantané reçu à l'ouverture. Absents d'un
+   * ancien serveur.
+   */
+  readonly viewCount?: number;
+  readonly impressionCount?: number;
 };

@@ -671,9 +671,9 @@ final class MessageExitOfferTests: XCTestCase {
 
     /// Le flou et le chiffrement gardent leurs restrictions, composées avec la loi.
     func test_matrix_blurAndEncryption_composeWithTheLaw() {
-        XCTAssertEqual(offered(message(effects: MessageEffects(flags: .blurred)).exitOffer), [],
-                       "un message flouté ne laisse rien sortir (#8009)")
-        XCTAssertEqual(offered(message(attachments: [photo(isBlurred: true)]).exitOffer), [])
+        XCTAssertEqual(offered(message(effects: MessageEffects(flags: .blurred)).exitOffer), [.forward],
+                       "un message flouté se transfère, flou hérité, et rien d'autre ne sort (#8009, D8 de #10949)")
+        XCTAssertEqual(offered(message(attachments: [photo(isBlurred: true)]).exitOffer), [.forward])
         XCTAssertEqual(offered(message(isEncrypted: true).exitOffer), Set(MessageExit.allCases).subtracting([.publish]),
                        "un message chiffré ne se publie pas")
         XCTAssertEqual(offered(message(attachments: [photo(isEncrypted: true)]).exitOffer),

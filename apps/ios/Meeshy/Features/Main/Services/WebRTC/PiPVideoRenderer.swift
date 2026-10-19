@@ -105,7 +105,7 @@ nonisolated final class PiPVideoRenderer: NSObject, RTCVideoRenderer, @unchecked
 
     private var isReadyForMoreMediaData: Bool { displayLayer.isReadyForMoreMediaDataCompat }
 
-    private func enqueue(_ sample: CMSampleBuffer) { displayLayer.enqueueCompat(sample) }
+    private func enqueue(_ sample: sending CMSampleBuffer) { displayLayer.enqueueCompat(sample) }
 
     private func flush() { displayLayer.flushCompat() }
 
