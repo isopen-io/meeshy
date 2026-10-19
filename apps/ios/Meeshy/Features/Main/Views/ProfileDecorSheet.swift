@@ -18,6 +18,8 @@ final class ProfileDecorModel: ObservableObject {
     @Published private(set) var state: ProfileDecorState
     @Published private(set) var rings: [ProfileDecorOptions.OptionGroup<AvatarRingDesign>]
     @Published private(set) var banners: [ProfileDecorOptions.OptionGroup<AppearanceDesign>]
+    /// Les cadres posés SUR la bannière (#10936) : aucun pack installé d'office, donc vide avant la lecture.
+    @Published private(set) var frames: [ProfileDecorOptions.OptionGroup<BannerFrameDesign>]
     @Published private(set) var failed = false
 
     private let service: any ProfileDecorProviding
@@ -49,6 +51,7 @@ final class ProfileDecorModel: ObservableObject {
         self.accepted = decor ?? .empty
         self.rings = ProfileDecorOptions.rings(installed: nil)
         self.banners = ProfileDecorOptions.banners(installed: nil)
+        self.frames = ProfileDecorOptions.bannerFrames(installed: nil)
         self.service = service
         self.installedPacks = installedPacks
         self.userId = userId
@@ -64,9 +67,11 @@ final class ProfileDecorModel: ObservableObject {
         let installed = installedPacks
         async let ringPacks = installed(.avatarRing)
         async let bannerPacks = installed(.banner)
-        let (installedRings, installedBanners) = await (ringPacks, bannerPacks)
+        async let framePacks = installed(.bannerFrame)
+        let (installedRings, installedBanners, installedFrames) = await (ringPacks, bannerPacks, framePacks)
         rings = ProfileDecorOptions.rings(installed: installedRings)
         banners = ProfileDecorOptions.banners(installed: installedBanners)
+        frames = ProfileDecorOptions.bannerFrames(installed: installedFrames)
     }
 
     /// Le choix en cours d'un côté (`nil` = aucun).
@@ -139,6 +144,7 @@ struct ProfileDecorSheet: View {
                 VStack(alignment: .leading, spacing: MeeshySpacing.xl) {
                     ringSection
                     bannerSection
+                    frameSection
                     if model.failed {
                         Text(errorMessage)
                             .font(MeeshyFont.relative(MeeshyFont.footnoteSize, weight: .medium))
@@ -237,6 +243,57 @@ struct ProfileDecorSheet: View {
                         BannerDesignView(design: design, isDark: theme.mode.isDark, accentHex: accentHex)
                     } else {
                         MeeshyColors.indigo500.opacity(0.12)
+                    }
+                }
+                .aspectRatio(3, contentMode: .fit)
+                .clipShape(RoundedRectangle(cornerRadius: MeeshyRadius.sm))
+                Text(label)
+                    .font(MeeshyFont.relative(MeeshyFont.footnoteSize, weight: .medium))
+                    .foregroundColor(theme.textPrimary)
+                    .lineLimit(1)
+            }
+            .padding(MeeshySpacing.xs)
+            .background(selectionBackground(selected))
+        }
+        .buttonStyle(.plain)
+        .accessibilityLabel(label)
+        .accessibilityAddTraits(selected ? [.isButton, .isSelected] : .isButton)
+    }
+
+    // MARK: Cadres de bannière (#10936)
+
+    /// Le cadre se pose SUR la bannière, centre transparent : la tuile le montre sur le fond du profil.
+    private var frameSection: some View {
+        let title = String(localized: "profile.decor.frame.section", defaultValue: "Cadre de bannière", bundle: .main)
+        return VStack(alignment: .leading, spacing: MeeshySpacing.md) {
+            header(title)
+            LazyVGrid(columns: [GridItem(.adaptive(minimum: 150), spacing: MeeshySpacing.md)], spacing: MeeshySpacing.md) {
+                frameTile(ref: nil, design: nil, label: noneLabel)
+                ForEach(ProfileDecorOptions.flattened(model.frames)) { entry in
+                    frameTile(ref: entry.ref, design: entry.design, label: BannerFrameCatalog.shared.frameName(entry.design.key, language: language) ?? entry.design.key)
+                }
+            }
+            shopLink(.bannerFrame)
+        }
+        .decorSection(title)
+    }
+
+    private func frameTile(ref: ProfileDecorRef?, design: BannerFrameDesign?, label: String) -> some View {
+        let selected = model.current(.bannerFrame) == ref
+        return Button {
+            HapticFeedback.light()
+            Task { await model.equip(ref, side: .bannerFrame) }
+        } label: {
+            VStack(spacing: MeeshySpacing.xs) {
+                LinearGradient(
+                    colors: [Color(hex: accentHex).opacity(0.3), MeeshyColors.indigo300.opacity(0.2)],
+                    startPoint: .topLeading,
+                    endPoint: .bottomTrailing
+                )
+                .overlay {
+                    if let design {
+                        BannerFrameView(design: design, animates: false)
+                            .equatable()
                     }
                 }
                 .aspectRatio(3, contentMode: .fit)
