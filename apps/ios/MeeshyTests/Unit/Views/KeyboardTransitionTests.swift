@@ -235,7 +235,11 @@ final class KeyboardTransitionWiringGuardTests: XCTestCase {
 
     func test_conversationView_handsTheCurveToTheMessageList() throws {
         XCTAssertTrue(
-            try conversationViewUnit().contains("bottomInsetTransition: listInsetTransition"),
+            try {
+                let unit = try conversationViewUnit()
+                return unit.contains("bottomTransition: listInsetTransition")
+                    && unit.contains("bottomInsetTransition: insets.bottomTransition")
+            }(),
             "Le fil ne reçoit plus la courbe du clavier : sa réserve basse redeviendrait un pas sec."
         )
     }

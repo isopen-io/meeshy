@@ -1625,7 +1625,7 @@ final class MessagePersistenceActorTests: XCTestCase {
     /// Ce qui attend un message qu'on ne recevra jamais ne vit pas au-delà de
     /// sa durée de vie.
     func test_pendingRowEvents_expireAfterTheirLifetime() async throws {
-        let past = Date().addingTimeInterval(-(MessagePersistenceActor.pendingRowEventLifetime + 1))
+        let past = Date().addingTimeInterval(-(PendingRowEventBuffer.lifetime + 1))
         await actor.rememberPendingRowEvent("srv_stale", now: past) {
             $0.edit = .init(newContent: "périmé", editedAt: past, marksEdited: true, noticeJson: nil)
         }
@@ -1648,7 +1648,7 @@ final class MessagePersistenceActorTests: XCTestCase {
 
     /// Bornés en nombre : le plus ancien part, les réactions d'une ligne aussi.
     func test_pendingRowEvents_areBoundedInCount_andPerRowReactions() async throws {
-        let cap = MessagePersistenceActor.pendingRowEventCap
+        let cap = PendingRowEventBuffer.cap
         for index in 0...cap {
             try await actor.markDeleted(localId: "srv_cap_\(index)", deletedAt: Date())
         }
@@ -1657,12 +1657,12 @@ final class MessagePersistenceActorTests: XCTestCase {
         XCTAssertEqual(count, cap)
         XCTAssertNil(first, "le plus ancien est oublié")
 
-        for index in 0..<(MessagePersistenceActor.pendingReactionCapPerRow + 5) {
+        for index in 0..<(PendingRowEventBuffer.reactionCapPerRow + 5) {
             try await actor.appendReaction(localId: "srv_many", reactionId: "r_\(index)", messageId: "srv_many",
                                            participantId: "p_\(index)", emoji: "👍")
         }
         let reactions = await actor.pendingRowEvents["srv_many"]?.reactions.count
-        XCTAssertEqual(reactions, MessagePersistenceActor.pendingReactionCapPerRow)
+        XCTAssertEqual(reactions, PendingRowEventBuffer.reactionCapPerRow)
     }
 
     // MARK: - Socket mutators resolve own messages by serverId

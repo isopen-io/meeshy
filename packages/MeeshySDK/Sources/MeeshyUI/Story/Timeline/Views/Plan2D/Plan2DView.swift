@@ -816,9 +816,7 @@ public struct Plan2DView: View, Equatable {
                                        trackCount: tracks.count) ?? startRow
         if currentRow != lastPlaneCrossingRow {
             if Self.crossedPlaneBoundary(from: lastPlaneCrossingRow ?? startRow, to: currentRow, tracks: tracks) {
-                #if canImport(UIKit) && os(iOS)
-                UIImpactFeedbackGenerator(style: .rigid).impactOccurred()
-                #endif
+                HapticFeedback.rigid()
             }
             lastPlaneCrossingRow = currentRow
         }

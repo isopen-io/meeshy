@@ -26,8 +26,8 @@ final class CallTranscriptionServiceTests: XCTestCase {
         translatedText: String? = nil,
         translatedLanguage: String? = nil,
         capturedAt: Date = Date()
-    ) -> Meeshy.TranscriptionSegment {
-        Meeshy.TranscriptionSegment(
+    ) -> Meeshy.CallTranscriptionSegment {
+        Meeshy.CallTranscriptionSegment(
             id: UUID(),
             wireId: wireId,
             text: text,
@@ -367,7 +367,7 @@ final class CallTranscriptionServiceTests: XCTestCase {
         // applyRecognitionResult (application time) would let a
         // later-arriving-but-earlier-applied callback sort ahead of one that
         // truly arrived first, corrupting the caption order documented on
-        // TranscriptionSegment.capturedAt. capturedAt must therefore be
+        // CallTranscriptionSegment.capturedAt. capturedAt must therefore be
         // captured at arrival time in handleRecognizerCallback and threaded
         // through as a parameter, not re-stamped here.
         //
@@ -682,7 +682,7 @@ final class CallTranscriptionServiceSourceGuardTests: XCTestCase {
     }
 }
 
-// MARK: - TranscriptionSegment Data Model Tests
+// MARK: - CallTranscriptionSegment Data Model Tests
 
 @MainActor
 final class TranscriptionSegmentTests: XCTestCase {
@@ -690,7 +690,7 @@ final class TranscriptionSegmentTests: XCTestCase {
     func test_segment_storesAllProperties() {
         let id = UUID()
         let capturedAt = Date()
-        let segment = Meeshy.TranscriptionSegment(
+        let segment = Meeshy.CallTranscriptionSegment(
             id: id,
             text: "hello world",
             speakerId: "user123",
@@ -718,7 +718,7 @@ final class TranscriptionSegmentTests: XCTestCase {
     }
 
     func test_segment_translationFieldsDefaultToNil() {
-        let segment = Meeshy.TranscriptionSegment(
+        let segment = Meeshy.CallTranscriptionSegment(
             id: UUID(),
             text: "test",
             speakerId: "s1",
@@ -737,8 +737,8 @@ final class TranscriptionSegmentTests: XCTestCase {
     func test_segment_equatable() {
         let id = UUID()
         let capturedAt = Date()
-        let a = Meeshy.TranscriptionSegment(id: id, text: "hi", speakerId: "u1", startTime: 0, endTime: 1, isFinal: true, confidence: 1, language: "en", capturedAt: capturedAt)
-        let b = Meeshy.TranscriptionSegment(id: id, text: "hi", speakerId: "u1", startTime: 0, endTime: 1, isFinal: true, confidence: 1, language: "en", capturedAt: capturedAt)
+        let a = Meeshy.CallTranscriptionSegment(id: id, text: "hi", speakerId: "u1", startTime: 0, endTime: 1, isFinal: true, confidence: 1, language: "en", capturedAt: capturedAt)
+        let b = Meeshy.CallTranscriptionSegment(id: id, text: "hi", speakerId: "u1", startTime: 0, endTime: 1, isFinal: true, confidence: 1, language: "en", capturedAt: capturedAt)
         XCTAssertEqual(a, b)
     }
 }

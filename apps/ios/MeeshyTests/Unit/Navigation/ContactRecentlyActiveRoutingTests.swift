@@ -7,7 +7,7 @@ import MeeshySDK
 /// comme sur iPad.
 ///
 /// Les aiguillages vivent dans des méthodes `private` de vues SwiftUI lourdes
-/// (`RootView.navigateFromNotification`, les trois gestionnaires de
+/// (`RootNotificationNavigator.navigateFromNotification`, les trois gestionnaires de
 /// `iPadRootView+Navigation`) : même convention que
 /// `NotificationCallRoutingTests`, ce sont des gardes de SOURCE. Elles
 /// reconnaissent la branche « profil » par ce qu'elle FAIT (elle pose
@@ -40,7 +40,7 @@ final class ContactRecentlyActiveRoutingTests: XCTestCase {
     }
 
     func test_navigateFromNotification_contactRecentlyActive_opensTheActorProfile_onIPhone() throws {
-        let labels = profileBranchLabels(in: try source("Meeshy/Features/Main/Views/RootView.swift"))
+        let labels = profileBranchLabels(in: try source("Meeshy/Features/Main/Views/RootNotificationNavigator.swift"))
 
         XCTAssertEqual(labels.count, 1, "une seule branche « profil » dans l'aiguillage iPhone (push, liste, bannière)")
         XCTAssertTrue(labels.allSatisfy { $0.contains(".contactRecentlyActive") },
@@ -58,7 +58,7 @@ final class ContactRecentlyActiveRoutingTests: XCTestCase {
     }
 
     func test_profileBranches_everyTypeThatOpensAProfileOnIPhone_opensItOnIPadToo() throws {
-        let iPhone = try profileBranchLabels(in: source("Meeshy/Features/Main/Views/RootView.swift")).joined()
+        let iPhone = try profileBranchLabels(in: source("Meeshy/Features/Main/Views/RootNotificationNavigator.swift")).joined()
         let iPad = try profileBranchLabels(in: source("Meeshy/Features/Main/Views/iPadRootView+Navigation.swift"))
 
         for type in [".contactJoined", ".contactRecentlyActive"] {

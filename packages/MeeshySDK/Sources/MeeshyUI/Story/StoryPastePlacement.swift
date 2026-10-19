@@ -19,7 +19,7 @@ import Foundation
 ///
 /// | matière | où la règle vit |
 /// |---|---|
-/// | image, vidéo | `shouldBeBackground = resolvedBackgroundMedia == nil && !hasSlideLevelBgImage` (`StoryComposerViewModel+Elements`) |
+/// | image, vidéo | `shouldBeBackground = resolvedBackgroundMedia == nil && !hasSlideLevelBgImage` (`StoryComposerViewModel+MediaObjects`) |
 /// | son | `ComposerAudioPlacement.isBackground(sceneAlreadyHasBackgroundAudio:)` |
 ///
 /// La réécrire ici aurait donné DEUX règles pour une question — et la seconde

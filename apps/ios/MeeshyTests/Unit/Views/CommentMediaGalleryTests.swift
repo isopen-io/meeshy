@@ -316,8 +316,10 @@ final class CommentMediaGalleryWiringGuardTests: XCTestCase {
             "Meeshy/Features/Main/Views/FeedPostCard.swift",
             ["Meeshy/Features/Main/Views/FeedPostCard+CommentsPreview.swift"]
         ),
+        // Cohésion de `StoryViewerView` : la liste des commentaires de story est son
+        // propre type — c'est elle qui déclare la galerie, plus le fichier du lecteur.
         (
-            "Meeshy/Features/Main/Views/StoryViewerView+Content.swift",
+            "Meeshy/Features/Main/Views/StoryCommentsOverlayView.swift",
             ["Meeshy/Features/Main/Views/StoryCommentRowView.swift"]
         ),
     ]
@@ -398,7 +400,7 @@ final class CommentMediaGalleryWiringGuardTests: XCTestCase {
         let url = MyStoriesSourceCorpus.appRoot()
             .deletingLastPathComponent()   // apps
             .deletingLastPathComponent()   // repo
-            .appendingPathComponent("packages/MeeshySDK/Sources/MeeshySDK/Models/FeedModels.swift")
+            .appendingPathComponent("packages/MeeshySDK/Sources/MeeshySDK/Models/FeedMedia.swift")
         let text = MyStoriesSourceCorpus.strippingComments(
             try String(contentsOf: url, encoding: .utf8)
         )

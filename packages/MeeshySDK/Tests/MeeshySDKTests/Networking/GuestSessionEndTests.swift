@@ -201,7 +201,7 @@ final class GuestSessionEndTests: XCTestCase {
     }
 
     func test_socket_errorEventIsReadByTheGuestLaw() throws {
-        let socket = try source("Sources/MeeshySDK/Sockets/MessageSocketManager.swift")
+        let socket = try source("Sources/MeeshySDK/Sockets/MessageSocketManager+EventHandlers.swift")
         XCTAssertTrue(socket.contains("socket.on(clientEvent: .error) { [weak self] data, _ in"))
         XCTAssertTrue(socket.contains("self?.handleSocketError(data)"))
     }

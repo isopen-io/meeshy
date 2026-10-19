@@ -232,8 +232,7 @@ public struct MediaTrimStrip: View {
     // MARK: - Les mots
 
     static func duree(_ secondes: Double) -> String {
-        let total = max(0, Int(secondes.rounded()))
-        return String(format: "%d:%02d", total / 60, total % 60)
+        DurationFormat.clock(secondes, rounding: .toNearestOrAwayFromZero)
     }
 
     static let chargementLabel = String(

@@ -4,12 +4,12 @@ import Foundation
 enum CallTranscriptJournal {
     static let ceiling = 10_000
 
-    static func inserting(_ segment: TranscriptionSegment, into sorted: [TranscriptionSegment]) -> [TranscriptionSegment] {
+    static func inserting(_ segment: CallTranscriptionSegment, into sorted: [CallTranscriptionSegment]) -> [CallTranscriptionSegment] {
         let index = insertionIndex(for: segment.capturedAt, in: sorted)
         return Array(sorted[..<index]) + [segment] + Array(sorted[index...])
     }
 
-    static func insertionIndex(for date: Date, in sorted: [TranscriptionSegment]) -> Int {
+    static func insertionIndex(for date: Date, in sorted: [CallTranscriptionSegment]) -> Int {
         var low = 0
         var high = sorted.count
         while low < high {
@@ -23,7 +23,7 @@ enum CallTranscriptJournal {
         return low
     }
 
-    static func bounded(_ sorted: [TranscriptionSegment]) -> [TranscriptionSegment] {
+    static func bounded(_ sorted: [CallTranscriptionSegment]) -> [CallTranscriptionSegment] {
         sorted.count > ceiling ? Array(sorted.suffix(ceiling)) : sorted
     }
 }

@@ -905,7 +905,7 @@ Meeshy a **deux** systemes de toasts in-app, separes par **source d'evenement**.
 
 Les composants suivants gerent l'**entite** Notification (CRUD, listing, preferences) — distincts du toast in-app. A ne pas confondre :
 
-- `NotificationModels`, `NotificationContext`, `APINotification`, `SocketNotificationEvent` (types)
+- `NotificationContext`, `APINotification`, `SocketNotificationEvent` (types)
 - `NotificationCoordinator` (unread count global, badge, widget)
 - `PushNotificationManager` (APN/Firebase plumbing)
 - `NotificationService` (REST CRUD)
@@ -1020,6 +1020,14 @@ Les composants suivants gerent l'**entite** Notification (CRUD, listing, prefere
 | Production | gate.meeshy.me | Crash reporting |
 
 ## Code Organization
+> **Cohésion d'abord (directive porteur 2026-10-19, #10988) — PRIORITAIRE sur le budget de lignes.** Garde : `apps/ios/scripts/check_cohesion_budget.sh` (cliquet CI, référence `apps/ios/scripts/cohesion-budget.json`).
+> 1. Un type a UNE responsabilité.
+> 2. Une fonction tient sur un écran : <= 80 lignes (cliquet).
+> 3. Une vue SwiftUI se compose de sous-vues qui reçoivent des valeurs, des `Binding` et des closures.
+> 4. L'état privé reste `private` ; l'élargir pour une extension sœur est une exception justifiée.
+> 5. `Type+X.swift` n'est PAS une décomposition : un type se mesure en UNITÉ (déclaration + extensions du module, cliquet <= 1 500 lignes). Extraire un vrai type cohésif, pas un fichier.
+> 6. Le budget de lignes par fichier (1000–1200) n'est plus qu'un indicateur secondaire.
+
 - `// MARK: - SectionName` to divide file sections
 - Extensions group protocol conformances
 - Private properties/methods clearly marked

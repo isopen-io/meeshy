@@ -22,7 +22,8 @@ final class StoryNeighborWindowSourceGuardTests: XCTestCase {
     }
 
     func test_viewer_preparesNeighborsWhenTheVisibleCanvasReportsItsFirstImage() throws {
-        let viewer = try source("StoryViewerView.swift")
+        // Le montage de l'horloge (`onProgressChange`) vit dans `+PrefetchPipeline`, avec la chaleur des voisins.
+        let viewer = try source("StoryViewerView.swift") + source("StoryViewerView+PrefetchPipeline.swift")
         let compact = viewer.replacingOccurrences(of: " ", with: "").replacingOccurrences(of: "\n", with: "")
 
         XCTAssertTrue(

@@ -86,7 +86,7 @@ nonisolated enum NSEDataSync {
     /// (edit) and DELETE live there, so every prefetch answered 404 and the
     /// App Group staging directory stayed empty. Two guarantees rested on
     /// this call and neither held: cold-start-from-push never had its message
-    /// locally, and `NotificationService.prePersistMessage` deliberately skips
+    /// locally, and `NSEMessagePrePersister.prePersist` deliberately skips
     /// E2EE messages *because* "NSEDataSync already fetches the canonical
     /// record" — so encrypted pushes staged nothing at all. The canonical
     /// single-message read is `GET /messages/:messageId` (membership-checked

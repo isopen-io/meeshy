@@ -699,7 +699,9 @@ final class ComposerDocumentSurfaceTests: XCTestCase {
             .deletingLastPathComponent()
             .deletingLastPathComponent()
             .appendingPathComponent("Meeshy/Features/Main/Composer/ComposerMoodSurface.swift")
-        let code = AppSourceGuard.stripComments(try String(contentsOf: url, encoding: .utf8))
+        let doorURL = url.deletingLastPathComponent().appendingPathComponent("MoodComposerDoor.swift")
+        let code = AppSourceGuard.stripComments(
+            try String(contentsOf: url, encoding: .utf8) + "\n" + String(contentsOf: doorURL, encoding: .utf8))
         XCTAssertTrue(
             code.contains("struct MoodComposerDoor"),
             "La source lue n'est pas celle de la porte du mood — la garde ne mesurerait RIEN."
@@ -1053,7 +1055,7 @@ final class ComposerDocumentSurfaceTests: XCTestCase {
             .deletingLastPathComponent()
             .deletingLastPathComponent()
             .deletingLastPathComponent()
-            .appendingPathComponent("packages/MeeshySDK/Sources/MeeshySDK/Models/StoryModels.swift")
+            .appendingPathComponent("packages/MeeshySDK/Sources/MeeshySDK/Models/APIPost+StatusEntry.swift")
         return AppSourceGuard.stripComments(try String(contentsOf: url, encoding: .utf8))
     }
 

@@ -133,11 +133,13 @@ final class ConversationLongPressMenuGuardTests: XCTestCase {
     // MARK: - Le site du longpress custom appelle le point d'entrée unique
 
     func test_customLongPressSite_callsPresentLongPressMenu() throws {
-        let code = try source("Features/Main/Views/ConversationView.swift")
+        let host = try source("Features/Main/Views/ConversationView.swift")
+        let list = try source("Features/Main/Views/ConversationView+MessageListLayer.swift")
         XCTAssertTrue(
-            code.contains("presentLongPressMenu(for: msg, cellFrame: cellFrame)"),
-            "Le site du longpress custom doit appeler `presentLongPressMenu(for:cellFrame:)` avec le frame "
-                + "reçu du callback — point d'entrée unique."
+            list.contains("actions.presentMenu(msg, cellFrame, nil)")
+                && host.contains("presentMenu: { presentLongPressMenu(for: $0, cellFrame: $1, pieceId: $2) }"),
+            "Le site du longpress custom (la couche de la liste) doit appeler `presentLongPressMenu(for:cellFrame:)` "
+                + "de l'hôte avec le frame reçu du callback — point d'entrée unique."
         )
     }
 

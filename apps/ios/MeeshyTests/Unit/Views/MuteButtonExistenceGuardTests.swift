@@ -159,6 +159,7 @@ final class MuteButtonExistenceGuardTests: XCTestCase {
         // moitié EXTRAITE qu'un bouton muet réapparaîtrait.
         let text = try source("Meeshy/Features/Main/Views/FeedPostCard.swift")
             + source("Meeshy/Features/Main/Views/FeedPostCard+Header.swift")
+            + source("Meeshy/Features/Main/Views/FeedPostActionsBar.swift")
         XCTAssertFalse(
             text.contains("BackgroundSoundBadge.showsMuteButton(for: backgroundSoundAnnouncement)"),
             "La carte ne doit JAMAIS monter de bouton muet : sa scène est muette par " +

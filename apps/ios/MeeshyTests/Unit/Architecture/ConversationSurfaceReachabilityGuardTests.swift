@@ -847,7 +847,8 @@ final class ComposerProtectionTravelsGuardTests: XCTestCase {
         guard let insert = send.range(of: "func insertOptimisticMediaMessage") else {
             return XCTFail("`insertOptimisticMediaMessage` introuvable — la pose optimiste d'un média a changé de nom")
         }
-        let corps = String(send[insert.lowerBound...])
+        let records = try source(at: "Features/Main/ViewModels/ConversationViewModel+OptimisticRecords.swift")
+        let corps = String(send[insert.lowerBound...]) + records
         XCTAssertFalse(corps.contains("expiresAt: nil, effectFlags: 0"),
                        "La ligne optimiste d'un média ne doit plus naître sans protection.")
         XCTAssertTrue(corps.contains("ephemeralDuration: protection.ephemeralDurationSeconds"),
@@ -863,8 +864,9 @@ final class ComposerProtectionTravelsGuardTests: XCTestCase {
     /// et survivait à l'accusé (l'upsert coalesce `api ?? existant`).
     func test_aucuneLigneOptimiste_neGraveDÉchéanceClient() throws {
         let send = try source(at: "Features/Main/ViewModels/ConversationViewModel+Send.swift")
-        XCTAssertFalse(send.contains("intent.expiresAt("), "Une échéance calculée à l'envoi fait décompter l'expéditeur.")
-        XCTAssertFalse(send.contains("protection.expiresAt("), "Idem pour la ligne d'un média.")
+        let records = try source(at: "Features/Main/ViewModels/ConversationViewModel+OptimisticRecords.swift")
+        XCTAssertFalse((send + records).contains("intent.expiresAt("), "Une échéance calculée à l'envoi fait décompter l'expéditeur.")
+        XCTAssertFalse((send + records).contains("protection.expiresAt("), "Idem pour la ligne d'un média.")
         XCTAssertEqual(send.components(separatedBy: "ephemeralDuration: intent.ephemeralDurationSeconds").count - 1, 1,
                        "La ligne HORS LIGNE porte la durée.")
         XCTAssertEqual(send.components(separatedBy: "ephemeralDuration: resolvedEphemeralDuration\n").count - 1, 1,
@@ -1045,11 +1047,17 @@ final class ViewOnceTextConsumedOnExitGuardTests: XCTestCase {
     /// par lui ; la Rivière consommait au toucher.
     func test_leCanalDeConsommation_armeAuLieuDeDétruire() throws {
         let hôte = try source(at: "Features/Main/Views/ConversationView.swift")
-        let canaux = hôte.components(separatedBy: "onConsumeViewOnce: { messageId, completion in").dropFirst()
+        // Les deux canaux vivent dans les couches extraites de l'hôte : le fil
+        // (`ConversationMessageListLayer`) et la Rivière (`ConversationRiverLayer`).
+        let couches = try source(at: "Features/Main/Views/ConversationView+MessageListLayer.swift")
+            + "\n" + source(at: "Features/Main/Views/ConversationView+ReaderLayers.swift")
+        XCTAssertEqual(hôte.components(separatedBy: "openViewOnce: { openViewOnce(messageId: $0) }").count - 1, 2,
+                       "L'hôte remet son ouverture de vue unique au fil ET à la Rivière.")
+        let canaux = couches.components(separatedBy: "onConsumeViewOnce: { messageId, completion in").dropFirst()
         XCTAssertEqual(canaux.count, 2, "Le fil et la Rivière ont chacun leur canal.")
         for canal in canaux {
             let corps = String(canal.prefix(600))
-            XCTAssertTrue(corps.contains("completion(openViewOnce(messageId: messageId))"),
+            XCTAssertTrue(corps.contains("openViewOnce(messageId))"),
                           "Le canal délègue à l'ouverture de la vue unique.")
             XCTAssertFalse(corps.contains("await viewModel.consumeViewOnce"),
                            "Le serveur n'est plus appelé au moment de la révélation.")

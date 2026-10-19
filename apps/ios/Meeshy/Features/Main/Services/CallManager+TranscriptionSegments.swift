@@ -7,7 +7,7 @@ import MeeshySDK
 // `CallManager`.
 
 extension CallManager {
-    /// Maps a gateway-translated segment into the local `TranscriptionSegment` model.
+    /// Maps a gateway-translated segment into the local `CallTranscriptionSegment` model.
     /// `text` ALWAYS carries the ORIGINAL (untranslated) text — never overwritten by
     /// `translatedText` — so the UI can offer an original/translated toggle
     /// (`docs/superpowers/specs/2026-07-11-call-captions-multispeaker-design.md`).
@@ -16,15 +16,15 @@ extension CallManager {
     /// at receipt, used for ordering + the "since call start" timestamp
     /// shown per row; `startMs`/`endMs` are the ORIGINATING device's
     /// ASR-buffer-relative timings and unsuitable for either — see
-    /// `TranscriptionSegment.capturedAt` doc comment).
-    static func makeTranscriptionSegment(from event: CallTranslatedSegmentData) -> TranscriptionSegment {
+    /// `CallTranscriptionSegment.capturedAt` doc comment).
+    static func makeTranscriptionSegment(from event: CallTranslatedSegmentData) -> CallTranscriptionSegment {
         let seg = event.segment
         // `capturedAtMs` (horloge murale de capture, estampillée par le device
         // du locuteur ou à défaut par le gateway à réception) est la clé
         // d'ordre du journal — le fallback `Date()` (heure de réception
         // locale) ne subsiste que pour les gateways antérieurs au champ.
         let capturedAt = seg.capturedAtMs.map { Date(timeIntervalSince1970: Double($0) / 1000) } ?? Date()
-        return TranscriptionSegment(
+        return CallTranscriptionSegment(
             id: UUID(),
             wireId: seg.id,
             text: seg.text,
@@ -50,8 +50,8 @@ extension CallManager {
     /// buffer-relatifs et inutilisables pour l'ordre) : `capturedAtMs` est la
     /// seule horloge, et `wireId` la clé de fusion avec le relais serveur
     /// traduit qui suit.
-    static func makeTranscriptionSegment(from entry: DataChannelTranscriptEntry) -> TranscriptionSegment {
-        TranscriptionSegment(
+    static func makeTranscriptionSegment(from entry: DataChannelTranscriptEntry) -> CallTranscriptionSegment {
+        CallTranscriptionSegment(
             id: UUID(),
             wireId: entry.id,
             text: entry.text,

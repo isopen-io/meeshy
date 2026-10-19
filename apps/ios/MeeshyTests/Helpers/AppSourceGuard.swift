@@ -148,9 +148,37 @@ enum AppSourceGuard {
     }
 
     /// Les types découpés par responsabilité qu'une garde lit comme leur unité :
-    /// `BubbleStandardLayout` (#10678), `MessageListViewController` (#10758) et
-    /// `PostDetailView` (#10956).
-    static let splitUnits: Set<String> = ["BubbleStandardLayout.swift", "MessageListViewController.swift", "PostDetailView.swift"]
+    /// `BubbleStandardLayout` (#10678), `MessageListViewController` (#10758),
+    /// `PostDetailView` (#10956), `ConversationListViewModel`, `FeedViewModel`,
+    /// `ConversationListView`, `ConversationView`, `StoryViewerView`,
+    /// `FeedCommentsSheet`, `P2PWebRTCClient`, `FeedView`,
+    /// `ConversationDashboardView`, `FocalRow`, `ComposerMoodSurface`,
+    /// `ConversationMediaGalleryView`, `AudioPostComposerView`, `PostDetailViewModel`,
+    /// `ConversationInfoSheet`, `StoryTrayView` et `RootViewComponents` (#10988).
+    static let splitUnits: Set<String> = [
+        "AudioPostComposerView.swift",
+        "BubbleStandardLayout.swift",
+        "ComposerMoodSurface.swift",
+        "ConversationDashboardView.swift",
+        "ConversationInfoSheet.swift",
+        "ConversationListView.swift",
+        "ConversationListViewModel.swift",
+        "ConversationMediaGalleryView.swift",
+        "ConversationView.swift",
+        "FeedCommentsSheet.swift",
+        "FeedView.swift",
+        "FeedViewModel.swift",
+        "FocalRow.swift",
+        "MessageListViewController.swift",
+        "P2PWebRTCClient.swift",
+        "PostDetailView.swift",
+        "PostDetailViewModel.swift",
+        "RootViewComponents.swift",
+        "StoryViewerView+Canvas.swift",
+        "StoryViewerView+Content.swift",
+        "StoryTrayView.swift",
+        "StoryViewerView.swift",
+    ]
 
     /// Lit un fichier ; un type de `splitUnits` se lit comme son UNITÉ
     /// (`<Type>+*.swift`), par le même glob que
@@ -206,6 +234,9 @@ enum AppSourceGuard {
         // les gardes qui lisent « la feuille POSE par le viewmodel » liraient
         // un meuble qui ne pose plus rien lui-même.
         "Meeshy/Features/Main/Composer/SceneStickerPose.swift",
+        // Le voile de progression d'export, sorti du meuble au #10988 : il reste
+        // dans l'unité pour que les gardes négatives du meuble le balaient.
+        "Meeshy/Features/Main/Composer/ComposerExportProgressVeil.swift",
     ]
 
     static func composerHostURLs() -> [URL] {

@@ -174,7 +174,9 @@ final class ComposerMoodSurfaceTests: XCTestCase {
             .deletingLastPathComponent()   // .../MeeshyTests
             .deletingLastPathComponent()   // .../apps/ios
             .appendingPathComponent("Meeshy/Features/Main/Composer/ComposerMoodSurface.swift")
-        return AppSourceGuard.stripComments(try String(contentsOf: url, encoding: .utf8))
+        let doorURL = url.deletingLastPathComponent().appendingPathComponent("MoodComposerDoor.swift")
+        return AppSourceGuard.stripComments(
+            try String(contentsOf: url, encoding: .utf8) + "\n" + String(contentsOf: doorURL, encoding: .utf8))
     }
 
     private func hostSource() throws -> String {

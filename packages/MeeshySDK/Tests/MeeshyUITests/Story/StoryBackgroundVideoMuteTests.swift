@@ -80,7 +80,7 @@ final class StoryBackgroundVideoMuteTests: XCTestCase {
             .deletingLastPathComponent()   // Tests
             .deletingLastPathComponent()   // MeeshySDK
         let file = root.appendingPathComponent(
-            "Sources/MeeshyUI/Story/StoryComposerView+Canvas.swift")
+            "Sources/MeeshyUI/Story/StoryCanvasMediaMuteOverlays.swift")
         guard let raw = try? String(contentsOf: file, encoding: .utf8) else {
             throw XCTSkip("source introuvable : \(file.path)")
         }

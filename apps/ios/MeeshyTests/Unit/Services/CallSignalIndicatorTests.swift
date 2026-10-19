@@ -496,7 +496,7 @@ final class CallHangupFastPathTests: XCTestCase {
 
     /// Chaque ligne porte un horodatage, et il vient de `segment.capturedAt`
     /// — JAMAIS de `startTime`/`endTime`, qui sont relatifs au buffer ASR
-    /// (voir le doc comment de `TranscriptionSegment.capturedAt`). C'est la
+    /// (voir le doc comment de `CallTranscriptionSegment.capturedAt`). C'est la
     /// moitié portante de la demande utilisateur 2026-07-11 et elle est
     /// intacte.
     ///

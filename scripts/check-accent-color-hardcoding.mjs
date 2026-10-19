@@ -410,7 +410,10 @@ const SEARCH_ROOTS = [
 
 const EXCLUDED_DIR_NAMES = new Set(['Tests', 'MeeshyTests', 'MeeshyUIDeviceTests', 'Theme']);
 
-const HARDCODED_COLOR_RE = /Color\(hex:/g;
+// `HexColor(hex:)` (SDK cœur, #10988) est le PARSEUR que les couleurs de texte de
+// story délèguent, pas une couleur posée dans une vue : le compter ferait d'une
+// consolidation une régression. `(?<!Hex)` l'écarte, et lui seul.
+const HARDCODED_COLOR_RE = /(?<!Hex)Color\(hex:/g;
 
 // Les deux points d'accès que CLAUDE.md § Conversation Accent Color documente
 // ( `conversation.accentColor`, `conversation.colorPalette` avec

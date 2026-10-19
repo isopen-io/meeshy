@@ -53,9 +53,13 @@ final class StoryOpeningParityTests: XCTestCase {
     /// contradictoires ne doivent pas revenir. Ancré sur les VALEURS, pas sur
     /// une formulation — un renommage de variable ne doit pas casser ce test.
     func test_readerSourceDoesNotReintroduceItsOwnConstants() throws {
-        let source = try String(contentsOfFile: Self.readerContentPath, encoding: .utf8)
-        let body = try XCTUnwrap(Self.openingSection(of: source),
+        let content = try String(contentsOfFile: Self.readerContentPath, encoding: .utf8)
+        let body = try XCTUnwrap(Self.openingSection(of: content),
                                  "Section d'ouverture introuvable — le test doit être ré-ancré.")
+        // La table d'armement a son propre fichier (`StoryOpeningEntrance`) : elle fait
+        // partie de la source du lecteur au même titre que sa fenêtre d'ouverture.
+        let entrance = try String(contentsOfFile: Self.entrancePath, encoding: .utf8)
+        let source = content + "\n" + entrance
 
         // La valeur inversée reste interdite dans la fenêtre d'ouverture ET
         // dans la table d'armement — elle ne doit revenir NULLE PART.
@@ -87,6 +91,14 @@ final class StoryOpeningParityTests: XCTestCase {
             .deletingLastPathComponent().deletingLastPathComponent()
             .deletingLastPathComponent().deletingLastPathComponent()
             .appendingPathComponent("Meeshy/Features/Main/Views/StoryViewerView+Content.swift")
+            .path
+    }
+
+    private static var entrancePath: String {
+        URL(fileURLWithPath: #filePath)
+            .deletingLastPathComponent().deletingLastPathComponent()
+            .deletingLastPathComponent().deletingLastPathComponent()
+            .appendingPathComponent("Meeshy/Features/Main/Views/StoryOpeningEntrance.swift")
             .path
     }
 

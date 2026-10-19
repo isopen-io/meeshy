@@ -4020,8 +4020,10 @@ final class RejectPendingCallTests: XCTestCase {
             .deletingLastPathComponent()
             .deletingLastPathComponent()
             .deletingLastPathComponent()
-            .appendingPathComponent("packages/MeeshySDK/Sources/MeeshySDK/Sockets/MessageSocketManager.swift")
-        let source = try String(contentsOf: url, encoding: .utf8)
+            .appendingPathComponent("packages/MeeshySDK/Sources/MeeshySDK/Sockets")
+        let source = try ["MessageSocketManager.swift", "MessageSocketManager+CallSignaling.swift", "MessageSocketProviding.swift"]
+            .map { try String(contentsOf: url.appendingPathComponent($0), encoding: .utf8) }
+            .joined(separator: "\n")
         guard let body = functionBody(of: "func emitCallReject(callId: String)", in: source) else {
             XCTFail("emitCallReject(callId:) not found in MessageSocketManager.swift"); return
         }

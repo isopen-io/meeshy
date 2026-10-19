@@ -27,13 +27,7 @@ import XCTest
 final class P2PWebRTCClientDelegateIdentityGuardTests: XCTestCase {
 
     private static let source: String = {
-        let url = URL(fileURLWithPath: #filePath)
-            .deletingLastPathComponent()   // Services/
-            .deletingLastPathComponent()   // Unit/
-            .deletingLastPathComponent()   // MeeshyTests/
-            .deletingLastPathComponent()   // ios/
-            .appendingPathComponent("Meeshy/Features/Main/Services/WebRTC/P2PWebRTCClient.swift")
-        return (try? String(contentsOf: url, encoding: .utf8)) ?? ""
+        (try? AppSourceGuard.unit("Meeshy/Features/Main/Services/WebRTC/P2PWebRTCClient.swift")) ?? ""
     }()
 
     /// Loud by construction: a missing start OR end marker fails the test via
@@ -142,7 +136,7 @@ final class P2PWebRTCClientDelegateIdentityGuardTests: XCTestCase {
     func test_didReceiveMessage_guardsOnOriginatingDataChannelIdentity() {
         guard let fn = body(
             from: "nonisolated func dataChannel(_ dataChannel: RTCDataChannel, didReceiveMessageWith buffer: RTCDataBuffer)",
-            to: "}\n}\n\n#else"
+            to: "}\n}\n\n#endif"
         ) else { return }
         XCTAssertTrue(
             fn.contains("guard let self, dataChannel === self.transcriptionDataChannel else { return }"),

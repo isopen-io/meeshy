@@ -21,7 +21,7 @@ final class NotificationCallRoutingTests: XCTestCase {
             .deletingLastPathComponent()
             .deletingLastPathComponent()
             .deletingLastPathComponent()
-            .appendingPathComponent("Meeshy/Features/Main/Views/RootView.swift")
+            .appendingPathComponent("Meeshy/Features/Main/Views/RootNotificationNavigator.swift")
         return try String(contentsOf: url, encoding: .utf8)
     }
 

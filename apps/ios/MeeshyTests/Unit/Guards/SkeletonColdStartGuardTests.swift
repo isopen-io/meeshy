@@ -34,8 +34,9 @@ final class SkeletonColdStartGuardTests: XCTestCase {
     /// `SkeletonStoryThumb`) : c'est le conteneur que l'écran monte, donc c'est
     /// lui qu'on épingle.
     private static let matrix: [(screen: String, skeleton: String)] = [
-        ("Features/Main/Views/ConversationListView.swift", "SkeletonConversationRow"),
-        ("Features/Main/Views/ConversationView.swift",     "SkeletonMessageBubble"),
+        ("Features/Main/Views/ConversationListView+EmptyState.swift", "SkeletonConversationRow"),
+        // `ConversationView` monte `ConversationMessageSkeleton` (cohésion) : c'est lui qui empile les bulles.
+        ("Features/Main/Views/ConversationView+Skeleton.swift", "SkeletonMessageBubble"),
         ("Features/Main/Views/FeedView.swift",             "SkeletonFeedList"),
         ("Features/Main/Views/StoryTrayView.swift",        "SkeletonStoryTrayRow"),
         ("Features/Main/Views/ProfileView.swift",          "SkeletonProfileHeader"),

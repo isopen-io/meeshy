@@ -57,7 +57,7 @@ final class ConversationSearchCommunitiesBandTests: XCTestCase {
     /// recherche les répétait sous la bande des communautés.
     func test_searchPanel_carriesNoFilterChips() throws {
         let code = AppSourceGuard.stripComments(
-            try AppSourceGuard.unit("Meeshy/Features/Main/Views/ConversationListView+Overlays.swift")
+            try AppSourceGuard.unit("Meeshy/Features/Main/Views/ConversationListView+BottomBar.swift")
         )
         let start = try XCTUnwrap(code.range(of: "struct ConversationListBottomBar"))
         let end = try XCTUnwrap(code.range(of: "struct ConversationSearchFieldHost"))

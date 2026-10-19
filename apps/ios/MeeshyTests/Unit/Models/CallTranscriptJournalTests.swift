@@ -6,8 +6,8 @@ import XCTest
 @MainActor
 final class CallTranscriptJournalTests: XCTestCase {
 
-    private func segment(_ text: String, at seconds: TimeInterval) -> Meeshy.TranscriptionSegment {
-        Meeshy.TranscriptionSegment(
+    private func segment(_ text: String, at seconds: TimeInterval) -> Meeshy.CallTranscriptionSegment {
+        Meeshy.CallTranscriptionSegment(
             id: UUID(),
             wireId: nil,
             text: text,

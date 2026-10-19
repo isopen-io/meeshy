@@ -911,13 +911,7 @@ final class WebRTCQualityDelegateSourceGuardTests: XCTestCase {
 final class WebRTCInputValidationSourceGuardTests: XCTestCase {
 
     private func p2pClientSource() throws -> String {
-        let url = URL(fileURLWithPath: #filePath)
-            .deletingLastPathComponent()
-            .deletingLastPathComponent()
-            .deletingLastPathComponent()
-            .deletingLastPathComponent()
-            .appendingPathComponent("Meeshy/Features/Main/Services/WebRTC/P2PWebRTCClient.swift")
-        return try String(contentsOf: url, encoding: .utf8)
+        try AppSourceGuard.unit("Meeshy/Features/Main/Services/WebRTC/P2PWebRTCClient.swift")
     }
 
     /// ICE candidate sdpMLineIndex must be validated in the range 0-255 before
@@ -1218,19 +1212,13 @@ final class SwitchCameraSourceGuardTests: XCTestCase {
 final class P2PWebRTCClientFallbackConformanceSourceGuardTests: XCTestCase {
 
     private func p2pClientSource() throws -> String {
-        let url = URL(fileURLWithPath: #filePath)
-            .deletingLastPathComponent()
-            .deletingLastPathComponent()
-            .deletingLastPathComponent()
-            .deletingLastPathComponent()
-            .appendingPathComponent("Meeshy/Features/Main/Services/WebRTC/P2PWebRTCClient.swift")
-        return try String(contentsOf: url, encoding: .utf8)
+        try AppSourceGuard.unit("Meeshy/Features/Main/Services/WebRTC/P2PWebRTCClient+Fallback.swift")
     }
 
     private func fallbackClassBody() throws -> String {
         let source = try p2pClientSource()
         guard let elseRange = source.range(of: "\n#else\n") else {
-            XCTFail("`#else` fallback branch not found in P2PWebRTCClient.swift"); throw XCTSkip()
+            XCTFail("`#else` fallback branch not found in P2PWebRTCClient+Fallback.swift"); throw XCTSkip()
         }
         guard let endRange = source.range(of: "\n#endif", range: elseRange.upperBound..<source.endIndex) else {
             XCTFail("`#endif` closing the fallback branch not found"); throw XCTSkip()

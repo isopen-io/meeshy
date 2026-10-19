@@ -94,13 +94,9 @@ final class StoryCommentPrismeSingleResolverTests: XCTestCase {
     private static let adHocLookups = ["[lang]", "[language]", "for lang in", "for language in"]
 
     private func readerSource() throws -> String {
-        let url = URL(fileURLWithPath: #filePath)
-            .deletingLastPathComponent()   // …/Features/Stories
-            .deletingLastPathComponent()   // …/Features
-            .deletingLastPathComponent()   // …/MeeshyTests
-            .deletingLastPathComponent()   // …/apps/ios
-            .appendingPathComponent("Meeshy/Features/Main/Views/StoryViewerView+Content.swift")
-        return AppSourceGuard.stripComments(try String(contentsOf: url, encoding: .utf8))
+        // L'UNITÉ : la gestion des commentaires vit dans `StoryViewerView+Content+Comments.swift`.
+        AppSourceGuard.stripComments(
+            try AppSourceGuard.unit("Meeshy/Features/Main/Views/StoryViewerView+Content.swift"))
     }
 
     /// Le corps du BLOC qui commence à `anchor`, accolades appariées. `nil`

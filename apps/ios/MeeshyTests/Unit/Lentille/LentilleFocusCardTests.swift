@@ -468,11 +468,9 @@ final class LentilleFocusCardTests: XCTestCase {
         try String(contentsOf: Self.rowDirectory.appendingPathComponent(file), encoding: .utf8)
     }
 
+    /// L'UNITÉ de la liste : le chrome de défilement (hôte d'élection) vit dans `+ScrollChrome`.
     private func listViewSource() throws -> String {
-        try String(
-            contentsOf: Self.iosRoot.appendingPathComponent("Meeshy/Features/Main/Views/ConversationListView.swift"),
-            encoding: .utf8
-        )
+        try AppSourceGuard.unit("Meeshy/Features/Main/Views/ConversationListView.swift")
     }
 
     private func normalizedCode(_ source: String) -> String {

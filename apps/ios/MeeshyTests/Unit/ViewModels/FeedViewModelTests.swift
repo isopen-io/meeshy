@@ -2465,7 +2465,7 @@ final class FeedViewModelTests: XCTestCase {
             .deletingLastPathComponent()   // .../Unit
             .deletingLastPathComponent()   // .../MeeshyTests
             .deletingLastPathComponent()   // .../apps/ios
-            .appendingPathComponent("Meeshy/Features/Main/ViewModels/FeedViewModel.swift")
+            .appendingPathComponent("Meeshy/Features/Main/ViewModels/FeedMediaPrefetcher.swift")
         let source = AppSourceGuard.stripComments(try String(contentsOf: url, encoding: .utf8))
 
         guard let body = DeclarationBodyScanner.body(containing: "func prefetchMedia(around index: Int)", in: source) else {

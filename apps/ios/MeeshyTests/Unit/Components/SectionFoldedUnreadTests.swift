@@ -97,8 +97,8 @@ final class SectionFoldedUnreadTests: XCTestCase {
     func test_bothHeaderSkins_receiveTheFoldedUnreadFromTheList() throws {
         let code = AppSourceGuard.stripComments(try AppSourceGuard.unit("Meeshy/Features/Main/Views/ConversationListView.swift"))
         XCTAssertEqual(
-            code.components(separatedBy: "foldedUnread: foldedUnread(of: group)").count - 1, 2,
-            "LentilleSticker ET SectionHeaderView doivent recevoir `foldedUnread(of: group)`."
+            code.components(separatedBy: "foldedUnread: foldedUnread").count - 1, 2,
+            "LentilleSticker ET SectionHeaderView doivent recevoir `foldedUnread` (calculé par ConversationListSectionHeader)."
         )
         XCTAssertTrue(
             code.contains("SectionFoldedUnread.count(") && code.contains("\\.userState.unreadCount"),

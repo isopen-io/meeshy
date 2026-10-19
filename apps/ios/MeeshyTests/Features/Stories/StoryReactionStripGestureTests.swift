@@ -275,7 +275,8 @@ final class StoryReactionStripGestureTests: XCTestCase {
     }
 
     private func contentSource() throws -> String {
-        try strippedSource(at: "Meeshy/Features/Main/Views/StoryViewerView+Content.swift")
+        // L'unité de `StoryViewerView+Content` : le drag du lecteur vit dans `+Content+Gestures`.
+        Self.stripComments(try AppSourceGuard.unit("Meeshy/Features/Main/Views/StoryViewerView+Content.swift"))
     }
 
     /// COMMENTAIRES RETIRÉS : une garde qui compte des occurrences dans un

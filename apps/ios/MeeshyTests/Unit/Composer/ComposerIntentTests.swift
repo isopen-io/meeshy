@@ -867,7 +867,7 @@ final class ComposerIntentTests: XCTestCase {
         // de story ne sont PAS ici : ils étaient déjà conformes, et sont devenus
         // l'option explicite d'ancrage (loi 5).
         let sites = ["ReelsViewModel", "FeedViewModel", "PostDetailView",
-                     "ProfileUserPostsList", "RootViewComponents", "FeedView"]
+                     "ProfileUserPostsViewModel", "RootViewComponents", "FeedView"]
 
         for site in sites {
             guard let enumerateur = FileManager.default.enumerator(at: racine, includingPropertiesForKeys: nil) else {

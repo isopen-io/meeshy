@@ -373,7 +373,7 @@ final class ConversationOpeningClearsSurfacesTests: XCTestCase {
     }
 
     func test_notificationOpeningAPostOrAStory_goesThroughTheRouterSite() throws {
-        let iPhone = try appSource("Features/Main/Views/RootView.swift")
+        let iPhone = try appSource("Features/Main/Views/RootNotificationNavigator.swift")
         let opening = try XCTUnwrap(iPhone.components(separatedBy: "private func openSocialContent(").dropFirst().first)
         XCTAssertTrue(opening.components(separatedBy: "private func showSocialContent(")[0]
             .contains("router.clearPresentedSurfaces { _ in showSocialContent(ctx, postId: postId) }"))

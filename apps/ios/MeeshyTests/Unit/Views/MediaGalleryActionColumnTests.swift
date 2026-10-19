@@ -162,10 +162,12 @@ final class MediaGalleryActionColumnTests: XCTestCase {
     func test_lesTroisActions_quittentLaRangeeDuBas_pourUneColonneVerticale() throws {
         let code = try unit()
         guard let colonne = corps("var cadreActionColumn: some View {", dans: code),
-              let ligneAuteur = corps("private func bottomMetadataOverlay(", dans: code) else {
+              let facadeAuteur = corps("private func bottomMetadataOverlay(", dans: code),
+              let blocAuteur = corps("struct GalleryMediaMetadataBlock", dans: code) else {
             return XCTFail("`cadreActionColumn` ou `bottomMetadataOverlay` introuvable — "
                            + "la colonne n'existe pas, la garde ne mesurerait rien")
         }
+        let ligneAuteur = facadeAuteur + blocAuteur
 
         XCTAssertFalse(
             compact(ligneAuteur).contains("mediaActions("),
@@ -283,7 +285,7 @@ final class MediaGalleryActionColumnTests: XCTestCase {
     func test_lAuteurLaDateLaLegendeEtLeFormat_restentEnBasSousLeurVoile() throws {
         let code = try unit()
         guard let blocBas = corps("var bottomOverlay: some View {", dans: code),
-              let ligneAuteur = corps("private func bottomMetadataOverlay(", dans: code) else {
+              let ligneAuteur = corps("struct GalleryMediaMetadataBlock", dans: code) else {
             return XCTFail("le bloc bas ou la rangée d'auteur sont introuvables")
         }
 

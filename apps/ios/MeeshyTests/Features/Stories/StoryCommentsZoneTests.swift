@@ -189,14 +189,15 @@ final class StoryCommentsZoneTests: XCTestCase {
             contentsOf: views.appendingPathComponent("StoryCommentsOverlayHost.swift"), encoding: .utf8))
         XCTAssertTrue(host.contains("reading.frame(safeBottom: inputs.safeBottom)"),
                       "l'hôte ne calcule rien : il remet la lecture du composeur à la loi")
-        let canvas = AppSourceGuard.stripComments(try String(
-            contentsOf: views.appendingPathComponent("StoryViewerView+Canvas.swift"), encoding: .utf8))
+        let canvas = AppSourceGuard.stripComments(
+            try AppSourceGuard.unit("Meeshy/Features/Main/Views/StoryViewerView+Canvas.swift"))
         XCTAssertTrue(canvas.contains(".placed(commentsZoneReading(geometry: geometry))"))
         XCTAssertTrue(layer.contains("StoryComposerFold.chevronTapped"))
         XCTAssertTrue(layer.contains("StoryComposerFold.bubbleTapped"))
 
-        let content = AppSourceGuard.stripComments(try String(
-            contentsOf: views.appendingPathComponent("StoryViewerView+Content.swift"), encoding: .utf8))
+        let content = AppSourceGuard.stripComments(try AppSourceGuard.unit(
+            "Meeshy/Features/Main/Views/StoryViewerView+Content.swift",
+            alsoIncluding: ["Meeshy/Features/Main/Views/StoryCommentsOverlayView.swift"]))
         XCTAssertFalse(content.contains("composerSpaceReservation"), "plus de réserve constante")
         XCTAssertFalse(content.contains("window * 0.42"), "plus de fraction propre à la liste")
         XCTAssertTrue(content.contains(".frame(maxHeight: zone.maxHeight)"))

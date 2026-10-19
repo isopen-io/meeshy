@@ -428,7 +428,7 @@ final class CommentOfflineMediaWiringGuardTests: XCTestCase {
     }
 
     func test_theFeed_enqueuesItsComment_throughTheProvenEntry() throws {
-        XCTAssertTrue(try source("Features/Main/ViewModels/FeedViewModel.swift")
+        XCTAssertTrue(try source("Features/Main/ViewModels/FeedViewModel+PostActions.swift")
             .contains("offlineQueue.enqueueComment(payload, ownerId: CommentPublisher.currentAccountId())"))
     }
 

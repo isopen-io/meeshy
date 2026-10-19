@@ -3,7 +3,7 @@
 import XCTest
 @testable import Meeshy
 
-/// L'échelle de menu (`RootView.menuLadder`) est montée EN PERMANENCE sur
+/// L'échelle de menu (`RootFloatingChrome.menuLadder`) est montée EN PERMANENCE sur
 /// l'écran d'accueil — opacité 0 et zIndex −1 quand le menu est fermé, pour
 /// que le ressort d'ouverture anime depuis un état existant. Un `onAppear`
 /// inconditionnel y démarrait le glow `repeatForever` de `ThemedActionButton`
@@ -27,7 +27,7 @@ final class RootMenuLadderGlowGuardTests: XCTestCase {
     /// comme porte du glow — sans ce câblage, `isGlowEnabled` garde son défaut
     /// `true` et les six ombres retournent respirer dans le vide.
     func test_menuLadder_gatesGlowOnShowMenu() throws {
-        let code = AppSourceGuard.stripComments(try source("Meeshy/Features/Main/Views/RootView.swift"))
+        let code = AppSourceGuard.stripComments(try source("Meeshy/Features/Main/Views/RootFloatingChrome.swift"))
         XCTAssertTrue(
             code.contains("isGlowEnabled: showMenu"),
             "menuLadder doit passer `isGlowEnabled: showMenu` à ThemedActionButton — l'échelle reste montée menu fermé (opacité 0), seule cette porte arrête les six animations d'ombre repeatForever invisibles"
@@ -38,7 +38,7 @@ final class RootMenuLadderGlowGuardTests: XCTestCase {
     /// fermée (ou sous Reduce Motion), et l'arrêt passe par une transaction
     /// sans animation — jamais un repeatForever qui survit à l'invisibilité.
     func test_themedActionButton_glowStartsOnlyWhenEnabled() throws {
-        let code = AppSourceGuard.stripComments(try source("Meeshy/Features/Main/Views/RootViewComponents.swift"))
+        let code = AppSourceGuard.stripComments(try source("Meeshy/Features/Main/Views/ThemedActionButton.swift"))
         XCTAssertTrue(
             code.contains("guard isGlowEnabled, !reduceMotion else"),
             "ThemedActionButton.syncGlow doit garder le démarrage du glow sur `isGlowEnabled` ET Reduce Motion"

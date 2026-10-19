@@ -16,7 +16,7 @@ final class MediaSessionCoordinatorTryOptionalLoggingSourceGuardTests: XCTestCas
             .deletingLastPathComponent() // this test file
             .deletingLastPathComponent() // MeeshySDKTests/
             .deletingLastPathComponent() // Tests/
-            .appendingPathComponent("Sources/MeeshySDK/MediaSessionCoordinator.swift")
+            .appendingPathComponent("Sources/MeeshySDK/Media/MediaSessionCoordinator.swift")
         return try String(contentsOf: url, encoding: .utf8)
     }
 

@@ -69,7 +69,10 @@ final class AudioForegroundChipIdleTests: XCTestCase {
         XCTAssertTrue(canvas.contains("onEditClockThrottleChanged: { throttled in"),
                       "la surface doit écouter le canvas")
         XCTAssertTrue(canvas.contains("isEditClockThrottled: isEditClockThrottled"),
-                      "…et le passer à la puce, sinon la valeur meurt dans un @State")
+                      "…et le passer à la couche des puces, sinon la valeur meurt dans un @State")
+        let overlays = try source("Story/StoryCanvasMediaMuteOverlays.swift")
+        XCTAssertTrue(overlays.contains("isEditClockThrottled: isEditClockThrottled"),
+                      "…qui le passe elle-même à la puce")
 
         let puce = try source("Story/Controls/AudioForegroundChip.swift")
         XCTAssertEqual(puce.components(separatedBy: "Self.animationIsPaused(").count - 1, 2,

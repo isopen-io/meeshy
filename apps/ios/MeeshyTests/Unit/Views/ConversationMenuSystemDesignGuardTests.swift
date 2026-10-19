@@ -51,6 +51,12 @@ final class ConversationMenuSystemDesignGuardTests: XCTestCase {
         return try AppSourceGuard.text(at: url)
     }
 
+    /// L'UNITÉ du type (`Foo.swift` + `Foo+*.swift`) : la liste est découpée par
+    /// responsabilité, et un balayage du seul fichier-tête lirait la moitié.
+    private func unit(_ relativePath: String) throws -> String {
+        try AppSourceGuard.unit(relativePath)
+    }
+
     /// Un chemin destructif est conforme s'il ARME une cible de confirmation,
     /// quel que soit le nom que cette cible porte. Les deux orthographes sont
     /// acceptées pour que la garde survive au prochain déplacement — c'est
@@ -68,9 +74,9 @@ final class ConversationMenuSystemDesignGuardTests: XCTestCase {
     /// Le SEUL call site de `deleteConversation(conversationId:` dans la liste
     /// doit vivre dans le `confirmationDialog` de suppression.
     func test_deleteConversation_onlyCallSite_isInsideConfirmationDialog() throws {
-        // La confirmation vit dans l'extension qui l'ancre sur un point (iPad) : l'unité de la liste est les deux fichiers.
-        let listSource = try source("Meeshy/Features/Main/Views/ConversationListView.swift")
-            + source("Meeshy/Features/Main/Views/ConversationListView+ConfirmationAnchor.swift")
+        // La confirmation vit dans l'extension qui l'ancre sur un point (iPad) : l'unité de la liste
+        // balaie tous ses fichiers, nouveaux types compris.
+        let listSource = try unit("Meeshy/Features/Main/Views/ConversationListView.swift")
 
         let callSites = listSource.components(separatedBy: "conversationViewModel.deleteConversation(conversationId:").count - 1
         XCTAssertEqual(
@@ -122,14 +128,25 @@ final class ConversationMenuSystemDesignGuardTests: XCTestCase {
 
     /// Le swipe « hide » (masquer/supprimer) passe lui aussi par la confirmation.
     func test_swipeHideAction_requestsConfirmation() throws {
-        let listSource = try source("Meeshy/Features/Main/Views/ConversationListView.swift")
+        let swipeSource = try source("Meeshy/Features/Main/Views/ConversationListView+SwipeActions.swift")
 
-        guard let hideRange = listSource.range(of: "SwipeLabels.hide") else {
+        guard let hideRange = swipeSource.range(of: "SwipeLabels.hide") else {
             XCTFail("La liste doit exposer l'action de swipe « hide »")
             return
         }
-        let end = listSource.index(hideRange.lowerBound, offsetBy: 300, limitedBy: listSource.endIndex) ?? listSource.endIndex
-        let block = String(listSource[hideRange.lowerBound ..< end])
+        let end = swipeSource.index(hideRange.lowerBound, offsetBy: 300, limitedBy: swipeSource.endIndex) ?? swipeSource.endIndex
+        XCTAssertTrue(
+            String(swipeSource[hideRange.lowerBound ..< end]).contains("onHide(conversation)"),
+            "Le swipe « hide » ne supprime pas : il remet la conversation à la liste (onHide)."
+        )
+
+        let listSource = try source("Meeshy/Features/Main/Views/ConversationListView.swift")
+        guard let wiring = listSource.range(of: "onHide:") else {
+            XCTFail("La liste doit câbler onHide des actions de swipe")
+            return
+        }
+        let wiringEnd = listSource.index(wiring.lowerBound, offsetBy: 120, limitedBy: listSource.endIndex) ?? listSource.endIndex
+        let block = String(listSource[wiring.lowerBound ..< wiringEnd])
         XCTAssertTrue(
             armsAConfirmationTarget(block),
             "Le swipe « hide » doit armer \(Self.confirmationTargetNames) — jamais de suppression directe."
@@ -235,11 +252,20 @@ final class ConversationMenuSystemDesignGuardTests: XCTestCase {
             XCTFail("ConversationListView doit garder handleDrop (cible du SectionDropDelegate)")
             return
         }
-        let end = listSource.index(dropRange.lowerBound, offsetBy: 1600, limitedBy: listSource.endIndex) ?? listSource.endIndex
-        let dropBlock = String(listSource[dropRange.lowerBound ..< end])
+        let end = listSource.index(dropRange.lowerBound, offsetBy: 600, limitedBy: listSource.endIndex) ?? listSource.endIndex
         XCTAssertTrue(
-            dropBlock.contains("ChipDropResolver.action("),
-            "handleDrop doit décider via ChipDropResolver — même sémantique que " +
+            String(listSource[dropRange.lowerBound ..< end]).contains("ConversationSectionDropHandler.resolve("),
+            "handleDrop doit déléguer le dépôt à ConversationSectionDropHandler."
+        )
+
+        let handlerSource = try source("Meeshy/Features/Main/Views/ConversationListView+DragDrop.swift")
+        guard let handlerRange = handlerSource.range(of: "enum ConversationSectionDropHandler") else {
+            XCTFail("ConversationSectionDropHandler doit exister (décision du drop natif)")
+            return
+        }
+        XCTAssertTrue(
+            String(handlerSource[handlerRange.lowerBound...]).contains("ChipDropResolver.action("),
+            "Le drop natif doit décider via ChipDropResolver — même sémantique que " +
             "le drop de la chip (pin par drop, other→\"\", no-op même section)."
         )
     }

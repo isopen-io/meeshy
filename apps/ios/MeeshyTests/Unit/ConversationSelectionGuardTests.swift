@@ -81,7 +81,10 @@ final class ConversationSelectionGuardTests: XCTestCase {
     }
 
     func test_bothMenuSites_callBeginSelectionMode() throws {
+        // Le menu custom « Plus… » et la liste appellent `beginSelectionMode` par les gestes que
+        // l'hôte leur remet (`messageActions`) ; le menu natif iOS 26+ l'appelle directement.
         let code = try source("Features/Main/Views/ConversationView.swift")
+            + source("Features/Main/Views/ConversationView+NativeMessageMenu.swift")
         let occurrences = code.components(separatedBy: "beginSelectionMode(seedingWith:").count - 1
         XCTAssertGreaterThanOrEqual(
             occurrences, 2,

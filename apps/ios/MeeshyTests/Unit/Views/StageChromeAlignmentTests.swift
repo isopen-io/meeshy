@@ -103,8 +103,11 @@ final class StageChromeAlignmentTests: XCTestCase {
     /// choix vit dans une vue, que seul un rendu réel exerce ; elle garde donc
     /// l'appel, pas son effet, et le dit.
     func test_leReaderDeStory_consulteLaLoi_plutotQueDeChoisirSeul() throws {
+        // Le cadrage du lecteur est un type à lui (`StoryReaderCanvasLayout`) : c'est lui qui consulte la loi,
+        // et ni lui ni le canvas ne doivent garder l'ancien ternaire.
         let texte = try MyStoriesSourceCorpus.text(
-            of: "Meeshy/Features/Main/Views/StoryViewerView+Canvas.swift")
+            of: "Meeshy/Features/Main/Views/StoryReaderCanvasLayout.swift")
+            + MyStoriesSourceCorpus.text(of: "Meeshy/Features/Main/Views/StoryViewerView+Canvas.swift")
 
         XCTAssertTrue(
             texte.contains("StageChromeAlignment.verticalAlignment(canvasRatio: readerCanvasRatio)"),
@@ -135,7 +138,7 @@ final class StageChromeAlignmentTests: XCTestCase {
         for (chemin, quoi) in [
             ("Meeshy/Features/Main/Views/ConversationMediaGalleryView+Geometry.swift",
              "StageChromeAlignment."),
-            ("Meeshy/Features/Main/Views/StoryViewerView+Canvas.swift",
+            ("Meeshy/Features/Main/Views/StoryReaderCanvasLayout.swift",
              "StageChromeAlignment.verticalAlignment(canvasRatio:"),
         ] {
             XCTAssertTrue(

@@ -283,12 +283,12 @@ final class StoryGestureDecisionsTests: XCTestCase {
             .deletingLastPathComponent()
             .deletingLastPathComponent()
             .deletingLastPathComponent()
-            .appendingPathComponent("Meeshy/Features/Main/Views/StoryViewerView+Canvas.swift")
+            .appendingPathComponent("Meeshy/Features/Main/Views/StoryGestureOverlayView.swift")
         let source = try String(contentsOf: canvasURL, encoding: .utf8)
 
         guard let start = source.range(of: "let isCleanTap ="),
               let end = source.range(of: "if isCleanTap,", range: start.upperBound..<source.endIndex) else {
-            return XCTFail("expression `isCleanTap` introuvable dans StoryViewerView+Canvas.swift")
+            return XCTFail("expression `isCleanTap` introuvable dans StoryGestureOverlayView.swift")
         }
         let expression = String(source[start.upperBound..<end.lowerBound])
         XCTAssertTrue(

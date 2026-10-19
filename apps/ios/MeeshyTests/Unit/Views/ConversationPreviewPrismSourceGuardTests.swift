@@ -40,7 +40,7 @@ final class ConversationPreviewPrismSourceGuardTests: XCTestCase {
         // `event.lastMessagePreview` dans le modèle. C'est ce champ-là que
         // `resolvedLastMessagePreview` consommera ensuite — le résoudre ici
         // figerait la langue du lecteur DANS le cache.
-        "Features/Main/ViewModels/ConversationListViewModel.swift":
+        "Features/Main/ViewModels/ConversationListViewModel+SocketEvents.swift":
             "écrit le champ depuis conversation:updated ; la résolution est en aval, à l'affichage",
         // Homonymie : `GlobalSearchViewModel.SearchResult.lastMessagePreview`
         // est un champ DE LA VUE, rempli lignes 329/358 par

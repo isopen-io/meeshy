@@ -1,7 +1,7 @@
 import XCTest
 @testable import Meeshy
 
-/// `ConversationView.readAttachmentFileBytes` hops a synchronous
+/// `OutgoingAttachmentRules.readAttachmentFileBytes` hops a synchronous
 /// `Data(contentsOf:)` disk read off the MainActor (2026-07-21) — sending a
 /// multi-attachment batch (e.g. a few dozen-MB videos) previously read every
 /// file's bytes inline on the MainActor inside the send `Task`, freezing the
@@ -14,7 +14,7 @@ final class ConversationAttachmentFileReadTests: XCTestCase {
         let url = makeTempFile(contents: payload)
         defer { try? FileManager.default.removeItem(at: url) }
 
-        let result = await ConversationView.readAttachmentFileBytes(url)
+        let result = await OutgoingAttachmentRules.readAttachmentFileBytes(url)
 
         XCTAssertEqual(result, payload)
     }
@@ -23,7 +23,7 @@ final class ConversationAttachmentFileReadTests: XCTestCase {
         let url = FileManager.default.temporaryDirectory
             .appendingPathComponent("does-not-exist-\(UUID().uuidString)")
 
-        let result = await ConversationView.readAttachmentFileBytes(url)
+        let result = await OutgoingAttachmentRules.readAttachmentFileBytes(url)
 
         XCTAssertNil(result)
     }

@@ -171,7 +171,8 @@ final class ReelSceneRoutingTests: XCTestCase {
     /// ses deux montages du player les refusent, sans quoi chacune paraîtrait
     /// deux fois.
     func test_theStoryViewer_posesItsOwnChips_once() throws {
-        let viewer = try view("StoryViewerView+Canvas.swift")
+        // Le canvas du lecteur : ses couches (chips audio incluses) vivent dans `+Canvas+Layers`.
+        let viewer = try view("StoryViewerView+Canvas.swift") + view("StoryViewerView+Canvas+Layers.swift")
 
         XCTAssertTrue(viewer.contains("AudioForegroundReaderOverlay("))
         XCTAssertEqual(viewer.components(separatedBy: "MeeshyScenePlayer(").count - 1,

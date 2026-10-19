@@ -23,6 +23,7 @@ public struct HapticFeedback {
     @MainActor private static let lightGenerator = UIImpactFeedbackGenerator(style: .light)
     @MainActor private static let mediumGenerator = UIImpactFeedbackGenerator(style: .medium)
     @MainActor private static let heavyGenerator = UIImpactFeedbackGenerator(style: .heavy)
+    @MainActor private static let rigidGenerator = UIImpactFeedbackGenerator(style: .rigid)
     @MainActor private static let notificationGenerator = UINotificationFeedbackGenerator()
     #endif
 
@@ -47,6 +48,14 @@ public struct HapticFeedback {
         #if canImport(UIKit) && os(iOS)
         heavyGenerator.prepare()
         heavyGenerator.impactOccurred()
+        #endif
+    }
+
+    @MainActor
+    public static func rigid() {
+        #if canImport(UIKit) && os(iOS)
+        rigidGenerator.prepare()
+        rigidGenerator.impactOccurred()
         #endif
     }
 

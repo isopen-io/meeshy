@@ -162,4 +162,38 @@ extension MeeshyComposerHost {
     var socleNode: some View {
         ComposerHostSocleRow(host: self, observation: observation)
     }
+
+    func composerChrome<Contenu: View>(_ contenu: Contenu) -> some View {
+        contenu
+        // **La couche d'écriture, AU-DESSUS de tout** (#4124). En overlay du
+        // meuble et non en `.sheet` : une feuille système laisse voir la scène
+        // NETTE derrière son bord arrondi et impose sa propre poignée, alors que
+        // la directive demande la scène FLOUTÉE et un « Terminé » au-dessus du
+        // clavier — deux choses qu'une feuille ne sait pas faire ensemble.
+        // **La saisie s'ancre en BAS, la scène monte au-dessus** (#4361). Elle
+        // fut une couche plein écran voilant la scène ; écrire une description,
+        // c'est regarder la scène qu'on décrit, et le voile la retirait au
+        // moment précis où elle sert. La remontée passe par
+        // `storyComposerCanvasBottomReservation`, posée sur `composerSurface` —
+        // la MÊME mécanique que celle d'une band qui s'ouvre, jamais une
+        // seconde.
+        .overlay(alignment: .bottom) { textEditingZones }
+        // Le socle revient APRÈS le panneau qui part, jamais pendant (#9448).
+        .modifier(ComposerWritingAnimation(writesText: writesText))
+        // **La feuille de partage est portée par la RACINE, pas par
+        // `surfaceWithIntakePortals`** (#4996). Ce dernier porte déjà un
+        // `.sheet(item:)` et un `.fullScreenCover(item:)`, et SwiftUI n'honore
+        // qu'UNE présentation par vue : une troisième posée là aurait été
+        // silencieusement avalée par les deux premières — le mode de panne
+        // exact que le doc-comment de l'éditeur d'objet décrit.
+        .sheet(item: $sceneExport.sharedFile, onDismiss: { sceneExport.finishSharing() }) { fichier in
+            ShareSheet(activityItems: [fichier.url])
+        }
+        // **La progression du bake, par-dessus tout.** Un export dure des
+        // secondes : sans témoin, l'auteur retape « Enregistrer » et croit que
+        // rien ne se passe. Le contrôleur ignore le second appel (un seul bake
+        // à la fois) — donc sans ce voile, le geste serait sans effet ET sans
+        // explication.
+        .overlay { ComposerExportProgressVeil(progress: sceneExport.progress) }
+    }
 }

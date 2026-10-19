@@ -85,6 +85,7 @@ final class MessageAuthorRingTests: XCTestCase {
         XCTAssertTrue(header.contains("ring: senderRing,"))
         XCTAssertFalse(header.contains(".avatarRingWithin("))
         let row = try source("Meeshy/Features/Main/Focal/Row/FocalRow.swift")
+            + "\n" + source("Meeshy/Features/Main/Focal/Row/FocalFocusChrome.swift")
         XCTAssertEqual(row.components(separatedBy: "senderRing: input.senderRing").count - 1, 2, "les deux en-têtes de la rangée plate")
         let rows = try source("Meeshy/Features/Main/Views/MessageListViewController+Rows.swift")
         XCTAssertTrue(rows.contains("senderRing: isMine ? nil : message.senderRing"))

@@ -45,7 +45,9 @@ final class RecentMediaStripHeadTests: XCTestCase {
     }
 
     private func stripSource() throws -> String {
-        try source("Meeshy/Features/Main/Components/RecentMediaStrip.swift")
+        try ["RecentMediaStrip", "RecentMediaCell", "RecentMediaPreview"]
+            .map { try source("Meeshy/Features/Main/Components/\($0).swift") }
+            .joined(separator: "\n")
     }
 
     // MARK: - Taille de l'échantillon

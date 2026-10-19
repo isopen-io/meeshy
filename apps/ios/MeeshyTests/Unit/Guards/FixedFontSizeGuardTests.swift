@@ -143,6 +143,7 @@ final class FixedFontSizeGuardTests: XCTestCase {
         "Features/Main/Components/MessageDetailSentimentTab.swift",
         "Features/Main/Components/MessageEffectModifiers.swift",
         "Features/Main/Components/MessageOverlayMenu.swift",
+        "Features/Main/Components/MessageOverlayPreviewAudioPlayer.swift",
         // RELOCALISATION pure (#9043) : le lecteur vidéo de l'aperçu d'appui
         // long (son glyphe « play » dans un disque fixe de 52 pt) a quitté
         // `MessageOverlayMenu.swift` pour son propre fichier. La POPULATION ne
@@ -197,6 +198,11 @@ final class FixedFontSizeGuardTests: XCTestCase {
         "Features/Main/Views/CallView+States.swift",
         "Features/Main/Views/ChangePasswordView.swift",
         "Features/Main/Views/CommunityLinkDetailView.swift",
+        // RELOCALISATION pure : le bandeau « en réponse à » quitte
+        // `FeedCommentsSheet.swift` avec son glyphe de croix en CADRE FIXE 24×24
+        // (doctrine 82i). La POPULATION ne bouge pas ; le fichier d'origine en
+        // garde un (la croix de l'en-tête) et reste dans la liste.
+        "Features/Main/Views/CommentSheetBanners.swift",
         "Features/Main/Views/CommunityLinksView.swift",
         "Features/Main/Views/ConversationAnimatedBackground.swift",
         "Features/Main/Views/ConversationBackgroundComponents.swift",
@@ -252,6 +258,10 @@ final class FixedFontSizeGuardTests: XCTestCase {
         // inscrire sa DESTINATION dans le MÊME commit ». Inscrire la
         // destination ne suffit pas — la source VIDÉE doit sortir, sinon la
         // liste garde un nom sans site et cesse de dire la vérité (règle 4).
+        // Cohésion de `FeedComposerSheet` : la rangée des pièces en attente a
+        // quitté la feuille avec ses glyphes en CADRE FIXE (tuile de 72, pastille
+        // de 20). RELOCALISATION pure : ni `totalCeiling` ni `textCeiling` ne bougent.
+        "Features/Main/Views/FeedComposerAttachmentsRow.swift",
         "Features/Main/Views/FeedComposerSheet.swift",
         "Features/Main/Views/FeedPostCard+Media.swift",
         // #4096 — la vue `3f` remplace la mosaïque par un carrousel. Le fichier
@@ -315,7 +325,12 @@ final class FixedFontSizeGuardTests: XCTestCase {
         // monogramme de 13 pt d'un avatar fixe de 32×32, doctrine 82i. La
         // POPULATION ne bouge pas ; l'hôte en garde un autre et reste dans la liste.
         "Features/Main/Views/StoryCommentRowView.swift",
-        "Features/Main/Views/StoryViewerView+Content.swift",
+        // Cohésion de `StoryViewerView` — RELOCALISATION pure, même forme : la liste des
+        // commentaires de story (`StoryCommentsOverlayView`) a QUITTÉ
+        // `StoryViewerView+Content.swift` pour son propre fichier et emporte son site
+        // figé — le glyphe héros de l'état vide, masqué de VoiceOver. L'hôte n'en garde
+        // plus aucun et sort de la liste ; la POPULATION ne bouge pas.
+        "Features/Main/Views/StoryCommentsOverlayView.swift",
         // #8878 — `StoryViewerView+Header.swift` sort de la liste (règle 4) : la
         // croix et le menu ⋯ montent `FullscreenCloseButton` / `FullscreenMoreMenu`
         // (MeeshyUI), qui portent leur glyphe figé dans leur disque.

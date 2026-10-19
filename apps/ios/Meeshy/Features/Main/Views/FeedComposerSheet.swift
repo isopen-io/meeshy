@@ -278,45 +278,21 @@ struct FeedComposerSheet: View {
 
                 // Quoted post preview
                 if let quoted = quotePost {
-                    VStack(alignment: .leading, spacing: MeeshySpacing.sm) {
-                        HStack(spacing: MeeshySpacing.sm) {
-                            MeeshyAvatar(
-                                name: quoted.author,
-                                context: .postComment,
-                                accentColor: quoted.authorColor,
-                                avatarURL: quoted.authorAvatarURL,
-                                presenceState: PresenceManager.shared.knownPresenceState(for: quoted.authorId),
-                                ring: quoted.authorRing
-                            )
-                            Text(quoted.author)
-                                .font(MeeshyFont.relative(MeeshyFont.subheadSize, weight: .semibold))
-                                .foregroundColor(theme.accentText(quoted.authorColor))
-                            MetaSeparator().foregroundColor(theme.textMuted)
-                            Text(quoted.timestamp, style: .relative)
-                                .font(MeeshyFont.relative(MeeshyFont.footnoteSize))
-                                .foregroundColor(theme.textMuted)
-                        }
-                        Text(quoted.displayContent)
-                            .font(MeeshyFont.relative(MeeshyFont.labelSize))
-                            .foregroundColor(theme.textSecondary)
-                            .lineLimit(4)
-                    }
-                    .padding(MeeshySpacing.md)
-                    .frame(maxWidth: .infinity, alignment: .leading)
-                    .background(
-                        RoundedRectangle(cornerRadius: MeeshyRadius.smPlus)
-                            .fill(theme.surfaceGradient(tint: quoted.authorColor))
-                            .overlay(
-                                RoundedRectangle(cornerRadius: MeeshyRadius.smPlus)
-                                    .stroke(theme.border(tint: quoted.authorColor, intensity: 0.2), lineWidth: 1)
-                            )
-                    )
-                    .padding(.horizontal, MeeshySpacing.lg)
+                    FeedComposerQuotedPostPreview(quoted: quoted)
                 }
 
                 // Pending attachments
                 if !pendingAttachments.isEmpty || !preparingAttachments.isEmpty || pendingPlace != nil {
-                    sheetAttachmentsRow
+                    FeedComposerAttachmentsRow(
+                        preparingAttachments: preparingAttachments,
+                        pendingAttachments: pendingAttachments,
+                        pendingPlace: pendingPlace,
+                        pendingThumbnails: pendingThumbnails,
+                        onOpenThumbnail: { openSheetAttachmentEditor($0) },
+                        onRemoveAttachment: { removeSheetAttachment(id: $0) },
+                        onRemovePlace: { pendingPlace = nil },
+                        onCancelPreparation: { cancelSheetPreparation($0) }
+                    )
                 }
 
                 if offersNearbyDiscoverability {
@@ -555,139 +531,14 @@ struct FeedComposerSheet: View {
         }
     }
 
-    // MARK: - Attachments Row
-    private var sheetAttachmentsRow: some View {
-        ScrollView(.horizontal, showsIndicators: false) {
-            HStack(spacing: MeeshySpacing.md) {
-                ForEach(preparingAttachments) { prep in
-                    AttachmentLoadingTile(prep: prep, size: 72) {
-                        cancelSheetPreparation(prep)
-                    }
-                }
-                ForEach(pendingAttachments) { attachment in
-                    sheetAttachmentTile(attachment)
-                }
-                if let place = pendingPlace {
-                    sheetPlaceTile(place)
-                }
+    // MARK: - Attachment thumbnail tap
+    private func openSheetAttachmentEditor(_ attachment: MessageAttachment) {
+        if attachment.type == .image {
+            openSheetImageScene(attachment)
+        } else if attachment.type == .video {
+            if let url = pendingMediaFiles[attachment.id] {
+                editingVideo = PendingVideoEdit(id: attachment.id, url: url)
             }
-            .padding(.horizontal, MeeshySpacing.lg)
-            .padding(.vertical, MeeshySpacing.smPlus)
-        }
-        .frame(height: 116)
-    }
-
-    private func sheetAttachmentTile(_ attachment: MessageAttachment) -> some View {
-        VStack(spacing: MeeshySpacing.xs) {
-            ZStack {
-                if let thumb = pendingThumbnails[attachment.id] {
-                    Image(uiImage: thumb)
-                        .resizable()
-                        .aspectRatio(contentMode: .fill)
-                        .frame(width: 72, height: 72)
-                        .clipShape(RoundedRectangle(cornerRadius: MeeshyRadius.sm))
-                        .onTapGesture {
-                            if attachment.type == .image {
-                                openSheetImageScene(attachment)
-                            } else if attachment.type == .video {
-                                if let url = pendingMediaFiles[attachment.id] {
-                                    editingVideo = PendingVideoEdit(id: attachment.id, url: url)
-                                }
-                            }
-                        }
-
-                    if attachment.type == .video {
-                        Image(systemName: "play.circle.fill")
-                            .font(.system(size: MeeshyIconSize.xxl))
-                            .foregroundStyle(.white, .black.opacity(0.4))
-                            .accessibilityHidden(true)
-                    }
-                } else {
-                    RoundedRectangle(cornerRadius: MeeshyRadius.sm)
-                        .fill(LinearGradient(colors: [Color(hex: attachment.thumbnailColor), Color(hex: attachment.thumbnailColor).opacity(0.7)], startPoint: .topLeading, endPoint: .bottomTrailing))
-                        .frame(width: 72, height: 72)
-                        .overlay(
-                            Image(systemName: attachment.type.composerGlyph)
-                                .font(.system(size: 26))
-                                .foregroundColor(.white)
-                                .accessibilityHidden(true)
-                        )
-                }
-            }
-            .frame(width: 72, height: 72)
-            .overlay(alignment: .topTrailing) {
-                Button {
-                    HapticFeedback.light()
-                    withAnimation(.spring(response: 0.3, dampingFraction: 0.8)) {
-                        removeSheetAttachment(id: attachment.id)
-                    }
-                } label: {
-                    // Glyphe chrome dans un cadre de tap fixe 20×20 : figé (doctrine 82i) ; le libellé porte le sens
-                    Image(systemName: "xmark")
-                        .font(.system(size: 9, weight: .bold))
-                        .foregroundColor(.white)
-                        .frame(width: 20, height: 20)
-                        .background(
-                            Circle()
-                                .fill(MeeshyColors.error)
-                                .shadow(color: .black.opacity(0.3), radius: 2, y: 1)
-                        )
-                }
-                .accessibilityLabel(String(localized: "feed.attachment.remove", defaultValue: "Retirer la pièce jointe", bundle: .main))
-                .offset(x: 6, y: -6)
-            }
-
-            Text(MediaKindLabel.attachmentLabel(for: attachment))
-                .font(MeeshyFont.relative(MeeshyFont.captionSize, weight: .medium))
-                .foregroundColor(theme.textSecondary)
-                .lineLimit(1)
-                .frame(width: 72)
-        }
-    }
-
-    /// Depuis la Task 11/12, un lieu choisi ne vit plus dans `pendingAttachments`
-    /// — cette tuile dédiée (même gabarit 72×72 pin-drop) est ce qui évite que
-    /// le choix d'un lieu ne produise plus aucun retour visuel ici.
-    private func sheetPlaceTile(_ place: SharedPlace) -> some View {
-        VStack(spacing: MeeshySpacing.xs) {
-            ZStack {
-                RoundedRectangle(cornerRadius: MeeshyRadius.sm)
-                    .fill(LinearGradient(colors: [MeeshyColors.success, MeeshyColors.successDeep], startPoint: .topLeading, endPoint: .bottomTrailing))
-                    .frame(width: 72, height: 72)
-                    .overlay(
-                        Image(systemName: "mappin.circle.fill")
-                            .font(.system(size: 26))
-                            .foregroundStyle(.white, .white.opacity(0.3))
-                            .accessibilityHidden(true)
-                    )
-            }
-            .frame(width: 72, height: 72)
-            .overlay(alignment: .topTrailing) {
-                Button {
-                    HapticFeedback.light()
-                    withAnimation(.spring(response: 0.3, dampingFraction: 0.8)) {
-                        pendingPlace = nil
-                    }
-                } label: {
-                    Image(systemName: "xmark")
-                        .font(.system(size: 9, weight: .bold))
-                        .foregroundColor(.white)
-                        .frame(width: 20, height: 20)
-                        .background(
-                            Circle()
-                                .fill(MeeshyColors.error)
-                                .shadow(color: .black.opacity(0.3), radius: 2, y: 1)
-                        )
-                }
-                .accessibilityLabel(String(localized: "feed.attachment.remove", defaultValue: "Retirer la pièce jointe", bundle: .main))
-                .offset(x: 6, y: -6)
-            }
-
-            Text(MediaKindLabel.placeLabel(place.name))
-                .font(MeeshyFont.relative(MeeshyFont.captionSize, weight: .medium))
-                .foregroundColor(theme.textSecondary)
-                .lineLimit(1)
-                .frame(width: 72)
         }
     }
 
