@@ -544,33 +544,14 @@ struct StoryViewerView: View {
         //    (directive user). L'overlay, lui, conditionne ses taps à l'absence
         //    de mouvement pour ne pas commiter tap ET swipe sur un même geste.
         .simultaneousGesture(unifiedDragGesture)
-        // Cadre STATIQUE de la surface scrollable ouverte, publié par le
-        // conteneur PARENT de son `ScrollView` (jamais depuis l'intérieur du
-        // défilement : sous iOS 18+, `onPreferenceChange` ne re-tire plus quand
-        // la valeur est pilotée par le scroll — ici elle ne l'est pas, elle ne
-        // bouge qu'au layout).
-        .onPreferenceChange(StoryReaderScrollableSurfaceTopKey.self) { top in
-            scrollableSurfaceTopY = top
-        }
-        // Filet de fermeture : à la disparition de la surface, SwiftUI republie
-        // normalement la valeur par défaut (`nil`), mais la transition peut la
-        // maintenir montée quelques frames. On coupe la mesure dès que l'état
-        // logique dit qu'il n'y a plus rien à scroller — une mesure périmée
-        // ferait passer un geste pour « né dans la surface ».
-        .adaptiveOnChange(of: hasScrollableReaderSurface) { _, isOpen in
-            if !isOpen { scrollableSurfaceTopY = nil }
-        }
-        // Filet du drapeau de revendication : la barre refermée, plus personne
-        // ne peut le retirer. Le `UIScrollView` de la rangée peut priver la
-        // barre de son `onEnded` — un drapeau collé gèlerait la navigation.
-        .onPreferenceChange(StoryReactionStripFrameKey.self) { reactionStripFrame = $0 }
-        .onPreferenceChange(StoryReaderChromeFramesKey.self) { readerChromeFrames = $0 }
-        .adaptiveOnChange(of: showEmojiStrip) { _, isOpen in
-            if !isOpen {
-                reactionStripOwnsDrag = false
-                reactionStripFrame = nil
-            }
-        }
+        .modifier(StoryReaderDragStateTracking(
+            scrollableSurfaceTopY: $scrollableSurfaceTopY,
+            reactionStripFrame: $reactionStripFrame,
+            readerChromeFrames: $readerChromeFrames,
+            reactionStripOwnsDrag: $reactionStripOwnsDrag,
+            hasScrollableSurface: hasScrollableReaderSurface,
+            showEmojiStrip: showEmojiStrip
+        ))
         .adaptiveOnChange(of: currentGroupIndex) { oldValue, _ in
             guard !isReanchoringSameStory else { return }
             // **La légende se replie à CHAQUE changement de story.** Laissée
