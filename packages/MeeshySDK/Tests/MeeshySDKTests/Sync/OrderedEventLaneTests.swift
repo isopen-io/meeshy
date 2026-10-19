@@ -76,15 +76,18 @@ final class OrderedEventLaneTests: XCTestCase {
         let journal = LaneTestJournal()
 
         lane.submit {
+            await journal.record("started")
             await gate.wait()
             await journal.record("1")
         }
         lane.submit { await journal.record("2") }
+        let started = await waitUntil { await journal.entries == ["started"] }
+        XCTAssertTrue(started)
         lane.close()
         await gate.open()
         await lane.barrier()
 
-        let settled = await waitUntil { await journal.entries == ["1"] }
+        let settled = await waitUntil { await journal.entries == ["started", "1"] }
         XCTAssertTrue(settled, "le job en cours se termine")
         let entries = await journal.entries
         XCTAssertFalse(entries.contains("2"), "le job en tampon est abandonné")
