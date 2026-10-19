@@ -21,6 +21,8 @@ final class ShareRelayConsumer: ObservableObject {
     struct PendingRelay: Identifiable, Equatable {
         let shareId: String
         let incoming: ShareIncoming
+        /// Le compte pour lequel la fiche a été servie — le seul qui puisse la voir.
+        let servedTo: String
         var id: String { shareId }
         var subject: ShareSubject { .incoming(incoming) }
     }
@@ -47,7 +49,26 @@ final class ShareRelayConsumer: ObservableObject {
     func consumeNext(id: String? = nil) {
         guard pending == nil, let userId = currentUserId(), !userId.isEmpty, let directory = directory(),
               let fiche = ShareRelayHandoff.next(id: id, in: directory, servableTo: userId, now: now()) else { return }
-        pending = PendingRelay(shareId: fiche.shareId, incoming: fiche.incoming(mediaRoot: mediaRoot()))
+        pending = PendingRelay(shareId: fiche.shareId, incoming: fiche.incoming(mediaRoot: mediaRoot()), servedTo: userId)
+    }
+
+    /// Le relais à présenter MAINTENANT : celui servi au compte connecté. Un
+    /// relais servi à un compte qui s'est déconnecté depuis est oublié (la
+    /// fiche reste au disque pour son compte, ou part avec le wipe de logout).
+    func presentable() -> PendingRelay? {
+        guard let pending else { return nil }
+        guard pending.servedTo == currentUserId() else {
+            forget()
+            consumeNext()
+            return nil
+        }
+        return pending
+    }
+
+    /// La déconnexion : rien de ce qui a été servi ne survit en mémoire.
+    func forget() {
+        pending = nil
+        presentedShareId = nil
     }
 
     /// L'écran de partage l'a présentée. La fiche RESTE : elle ne se solde
@@ -103,8 +124,9 @@ private struct ShareRelayPresenter: ViewModifier {
             .onAppear { present(consumer.pending) }
     }
 
-    private func present(_ relay: ShareRelayConsumer.PendingRelay?) {
-        guard let relay, consumer.presentedShareId == nil, router.pendingShareContent == nil else { return }
+    private func present(_ candidate: ShareRelayConsumer.PendingRelay?) {
+        guard candidate != nil, consumer.presentedShareId == nil, router.pendingShareContent == nil,
+              let relay = consumer.presentable() else { return }
         router.pendingShareContent = relay.subject
         consumer.markPresented(relay.shareId)
     }

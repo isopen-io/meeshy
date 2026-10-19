@@ -99,6 +99,37 @@ final class ShareRelayConsumerTests: XCTestCase {
         XCTAssertEqual(sut.pending?.shareId, "cid_2")
     }
 
+    /// A arme un relais, se déconnecte, B se connecte avant que l'écran ne
+    /// s'ouvre : le relais en mémoire n'est pas présentable à B (#10978).
+    func test_aRelayArmedForOneAccount_isNotPresentableToTheNextOne() throws {
+        let dir = try directory()
+        try fiche("cid_a", owner: "alice").write(in: dir)
+        final class Session { var user: String? = "alice" }
+        let session = Session()
+        let sut = ShareRelayConsumer(directory: { dir }, mediaRoot: { nil }, now: { Date(timeIntervalSince1970: 2_000) },
+                                     currentUserId: { session.user })
+        sut.consumeNext()
+        XCTAssertEqual(sut.presentable()?.shareId, "cid_a")
+
+        session.user = "bob"
+
+        XCTAssertNil(sut.presentable(), "le texte et les médias de A ne s'ouvrent jamais sous B")
+        XCTAssertNil(sut.pending)
+    }
+
+    func test_forget_dropsTheRelayHeldInMemory() throws {
+        let dir = try directory()
+        try fiche("cid_a", owner: "alice").write(in: dir)
+        let sut = consumer(dir, user: "alice")
+        sut.consumeNext()
+        sut.markPresented("cid_a")
+
+        sut.forget()
+
+        XCTAssertNil(sut.pending)
+        XCTAssertNil(sut.presentedShareId)
+    }
+
     /// Une fiche écrite avant ce champ se relit sans lui (rétrocompatibilité).
     func test_aFicheWrittenBeforeTheOwnerField_decodesWithoutOwner() throws {
         let json = #"{"version":1,"shareId":"cid_old","createdAt":"1970-01-01T00:16:40Z","text":"x","media":[],"conversationIds":[]}"#

@@ -209,6 +209,7 @@ final class WidgetDataManager: NotificationWidgetSink {
             NSEPendingMessageConsumer.directoryURL(),
             NSEPendingPostConsumer.directoryURL(),
             ShareRelayHandoff.directoryURL(),
+            ShareComposeHandoffConsumer.directoryURL(),
         ].compactMap { $0 }
     }
 
@@ -232,6 +233,7 @@ final class WidgetDataManager: NotificationWidgetSink {
             }
             lastPublishedSnapshots = [:]
         }
+        ShareRelayConsumer.shared.forget()
         let stagingDirs = stagingDirectoriesOverride ?? Self.accountStagingDirectories()
         for dir in stagingDirs {
             do {
