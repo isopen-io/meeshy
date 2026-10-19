@@ -34,4 +34,20 @@ final class FeedRedrawSourceGuardTests: XCTestCase {
         XCTAssertFalse(tray.contains("storyGroups.filter"))
         XCTAssertFalse(tray.contains("storyGroups.first"))
     }
+
+    func test_feedPostRow_observesNeitherStoryNorStatusViewModel() throws {
+        let row = try source("Meeshy/Features/Main/Views/FeedPostRow.swift")
+
+        XCTAssertFalse(row.contains("var storyViewModel: StoryViewModel"))
+        XCTAssertFalse(row.contains("var statusViewModel: StatusViewModel"))
+        XCTAssertFalse(row.contains("var storyViewerCoordinator"))
+    }
+
+    func test_feedView_mountsFeedPostRowEquatable() throws {
+        let feed = try source("Meeshy/Features/Main/Views/FeedView.swift")
+        let start = try XCTUnwrap(feed.range(of: "FeedPostRow("))
+        let window = String(feed[start.upperBound...].prefix(600))
+
+        XCTAssertTrue(window.contains(".equatable()"))
+    }
 }

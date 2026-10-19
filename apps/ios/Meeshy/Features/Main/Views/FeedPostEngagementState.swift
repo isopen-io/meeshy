@@ -171,7 +171,7 @@ struct FeedPostEngagementState {
 }
 
 /// Ce qu'UNE carte du fil lit de l'engagement : des valeurs, jamais l'état.
-struct FeedPostEngagementSnapshot {
+nonisolated struct FeedPostEngagementSnapshot: Equatable {
     let isLiked: Bool
     let displayLikeCount: Int
     let isHeartInFlight: Bool
