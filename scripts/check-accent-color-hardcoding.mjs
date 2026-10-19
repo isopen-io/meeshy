@@ -385,7 +385,14 @@ const REFERENCE_LITERAL_COLOR_COUNT = 145;
 // couleur d'interface : l'accent de conversation n'a qu'une teinte, il effacerait l'effet. Le thème n'a pas ces six
 // nuances (et `Color(red:green:blue:)` relèverait le cliquet RVB des littéraux de design) : la palette reste en hexa.
 // Valeur MESURÉE le 2026-10-16 en local.
-const REFERENCE_UNKNOWN_VARIABLE_COLOR_COUNT = 478;
+// 478 -> 483 (2026-10-19, #10935 / #10936, les cadres rendus par le GPU) : `AvatarRingView.swift` (2), `BannerFrameRenderer.swift`
+// (1) et `FrameMotionLayers.swift` (1) peignent un contour ou un cadre de bannière dans les couleurs que SON dessin déclare
+// (`design.stroke.colors`, `design.palette`, servis par le catalogue des cadres) — le CONTENU de la pièce achetée, pas une
+// couleur d'interface, même règle que `RainbowLetters.swift` ci-dessus ; l'accent de conversation l'effacerait.
+// `ProfileDecorSheet.swift` (1) teinte l'aperçu de la bannière par l'accent du PROFIL (`accentHex`, déjà remis à
+// `MeeshyAvatar(accentColor:)`), hors de tout contexte de conversation. Masqué en CI derrière le gate de poids web (#10974) ;
+// valeur MESURÉE le 2026-10-19 en CI (run 39192153480) et en local, commit par commit (c61aac2d11 : +4, c242265209 : +1).
+const REFERENCE_UNKNOWN_VARIABLE_COLOR_COUNT = 483;
 
 import { readFileSync, readdirSync, statSync, realpathSync } from 'node:fs';
 import { join, dirname } from 'node:path';
