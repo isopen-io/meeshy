@@ -13,6 +13,7 @@ const en = {
   'frame.usage.achievementRarityOnly': '{rarity} achievements only',
   'frame.usage.momentOnly': '“{family}” moments only',
   'frame.usage.avatarOnly': 'Profile ring only',
+  'frame.usage.bannerFrameOnly': 'Banner frame only',
 } as const satisfies FrameUsageCatalog;
 
 export default en;

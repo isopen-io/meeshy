@@ -4,8 +4,10 @@ import type { ProfileDecorCatalog } from '@/lib/i18n-profile-decor-catalog';
 const itProfileDecor = {
   'profileDecor.banner.entry': "Banner",
   'profileDecor.ring.entry': "Contorno",
+  'profileDecor.frame.entry': "Cornice del banner",
   'profileDecor.banner.title': "Banner del profilo",
   'profileDecor.ring.title': "Contorno dell’avatar",
+  'profileDecor.frame.title': "Cornice del banner",
   'profileDecor.none': "Nessuno",
   'profileDecor.photo': "Foto",
   'profileDecor.shop': "Altro nel negozio",

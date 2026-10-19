@@ -60,8 +60,9 @@
  */
 
 import { describe, it, expect, beforeEach, jest } from '@jest/globals';
+import { FORWARD_REFUSAL_CODES } from '@meeshy/shared/types/forward-refusal';
 
-import { admitMessageForward as admitForward, describeForwardRefusal, isForwardRefused } from '../forwardAdmission';
+import { admitMessageForward as admitForward, describeForwardRefusal, forwardedCopyRequest, isForwardRefused } from '../forwardAdmission';
 
 const SOURCE_ID = '507f1f77bcf86cd799439011';
 const SOURCE_CONVERSATION_ID = '507f1f77bcf86cd799439021';
@@ -119,6 +120,9 @@ const source = (over: Record<string, unknown> = {}) => ({
   ephemeralDuration: null,
   expiresAt: null,
   attachments: [],
+  isEncrypted: false,
+  encryptionMode: null,
+  conversation: { encryptionEnabledAt: null, encryptionMode: null },
   // Compté par la MÊME lecture que l'héritage éphémère : c'est ce qui dit si
   // la copie serveur des pièces jointes donnera un corps au transfert.
   _count: { attachments: 0 },
@@ -479,6 +483,189 @@ describe('admitMessageForward', () => {
       const admission = await admitMessageForward(prisma, { forwardedFromId: SOURCE_ID, at: AT });
 
       expect(admission).toEqual({ admitted: true, imposes: { ephemeralDuration: null, isBlurred: true } });
+    });
+  });
+
+  describe('une pièce seule, ou un sous-ensemble, d’un message à plusieurs pièces (#9914)', () => {
+    const piece = (id: string, over: Record<string, unknown> = {}) => ({
+      id, isViewOnce: false, isBlurred: false, effectFlags: 0, isEncrypted: false, encryptionMode: null, ...over,
+    });
+    const P = (n: number) => `507f1f77bcf86cd7994391${String(n).padStart(2, '0')}`;
+    const seven = () => source({ attachments: [1, 2, 3, 4, 5, 6, 7].map((n) => piece(P(n))), _count: { attachments: 7 } });
+
+    it('ne copie que la pièce nommée, et le dit à l’appelant', async () => {
+      messageFindUnique.mockResolvedValue(seven());
+
+      const admission = await admitMessageForward(prisma, {
+        forwardedFromId: SOURCE_ID, at: AT, bodyOnlyFromSource: true, forwardedAttachmentIds: [P(3)],
+      });
+
+      expect(admission).toEqual({ admitted: true, imposes: null, copySelection: [P(3)] });
+    });
+
+    it('garde l’ordre demandé et ignore les doublons', async () => {
+      messageFindUnique.mockResolvedValue(seven());
+
+      const admission = await admitMessageForward(prisma, {
+        forwardedFromId: SOURCE_ID, at: AT, bodyOnlyFromSource: true, forwardedAttachmentIds: [P(5), P(2), P(5)],
+      });
+
+      expect(admission).toMatchObject({ admitted: true, copySelection: [P(5), P(2)] });
+    });
+
+    it('refuse une pièce que le message source ne porte pas — jamais une pièce d’un autre message', async () => {
+      messageFindUnique.mockResolvedValue(seven());
+
+      const admission = await admitMessageForward(prisma, {
+        forwardedFromId: SOURCE_ID, at: AT, bodyOnlyFromSource: true, forwardedAttachmentIds: [P(3), P(99)],
+      });
+
+      expect(admission).toEqual({ admitted: false, reason: 'forwarded-attachment-not-in-source' });
+    });
+
+    it('lit la protection de la pièce choisie : une pièce en vue unique ne part pas seule', async () => {
+      messageFindUnique.mockResolvedValue(source({ attachments: [piece(P(1)), piece(P(2), { isViewOnce: true })] }));
+
+      const admission = await admitMessageForward(prisma, {
+        forwardedFromId: SOURCE_ID, at: AT, bodyOnlyFromSource: true, forwardedAttachmentIds: [P(2)],
+      });
+
+      expect(admission).toEqual({ admitted: false, reason: 'view-once-not-forwardable' });
+    });
+
+    it('une pièce ordinaire voisine d’une pièce en vue unique se transfère seule (D6)', async () => {
+      messageFindUnique.mockResolvedValue(source({ attachments: [piece(P(1)), piece(P(2), { isViewOnce: true })] }));
+
+      const admission = await admitMessageForward(prisma, {
+        forwardedFromId: SOURCE_ID, at: AT, bodyOnlyFromSource: true, forwardedAttachmentIds: [P(1)],
+      });
+
+      expect(admission).toEqual({ admitted: true, imposes: null, copySelection: [P(1)] });
+    });
+
+    it('le message entier reste fermé dès qu’il est lui-même à vue unique', async () => {
+      messageFindUnique.mockResolvedValue(source({ isViewOnce: true, attachments: [piece(P(1))] }));
+
+      const admission = await admitMessageForward(prisma, {
+        forwardedFromId: SOURCE_ID, at: AT, bodyOnlyFromSource: true, forwardedAttachmentIds: [P(1)],
+      });
+
+      expect(admission).toEqual({ admitted: false, reason: 'view-once-not-forwardable' });
+    });
+
+    it('impose le flou de la pièce choisie (D8)', async () => {
+      messageFindUnique.mockResolvedValue(source({ attachments: [piece(P(1)), piece(P(2), { isBlurred: true })] }));
+
+      const admission = await admitMessageForward(prisma, {
+        forwardedFromId: SOURCE_ID, at: AT, bodyOnlyFromSource: true, forwardedAttachmentIds: [P(2)],
+      });
+
+      expect(admission).toEqual({
+        admitted: true, imposes: { ephemeralDuration: null, isBlurred: true }, copySelection: [P(2)],
+      });
+    });
+
+    it('absent : tout le lot, comme avant (rétrocompatible)', async () => {
+      messageFindUnique.mockResolvedValue(seven());
+
+      const admission = await admitMessageForward(prisma, { forwardedFromId: SOURCE_ID, at: AT, bodyOnlyFromSource: true });
+
+      expect(admission).toEqual({ admitted: true, imposes: null });
+    });
+
+    it('le verdict, jamais la requête, dit ce que la passerelle recopie', () => {
+      const request = { forwardedFromId: SOURCE_ID, forwardedAttachmentIds: [P(9)] };
+
+      expect(forwardedCopyRequest(request, { admitted: true, imposes: null, copySelection: [P(3)] })).toMatchObject({
+        forwardCopySelection: [P(3)],
+      });
+      expect(forwardedCopyRequest(request, { admitted: true, imposes: null })).toMatchObject({ forwardCopySelection: undefined });
+      expect(forwardedCopyRequest({}, { admitted: true })).toMatchObject({ forwardCopySelection: undefined });
+    });
+  });
+
+  describe('une source CHIFFRÉE ne se copie jamais côté serveur (D7, fail-closed)', () => {
+    const ENCRYPTED_CASES: ReadonlyArray<readonly [string, Record<string, unknown>]> = [
+      ['conversation chiffrée', { conversation: { encryptionEnabledAt: new Date('2026-01-01T00:00:00Z'), encryptionMode: 'e2ee' } }],
+      ['mode de chiffrement de conversation seul', { conversation: { encryptionEnabledAt: null, encryptionMode: 'server' } }],
+      ['message chiffré', { isEncrypted: true }],
+      ['mode de chiffrement du message', { encryptionMode: 'hybrid' }],
+      ['pièce chiffrée', { attachments: [{ id: SOURCE_ID, isViewOnce: false, isBlurred: false, effectFlags: 0, isEncrypted: true, encryptionMode: 'e2ee' }] }],
+      ['conversation non chargée', { conversation: undefined }],
+      ['drapeau du message non chargé', { isEncrypted: undefined }],
+    ];
+
+    it.each(ENCRYPTED_CASES)('refuse un transfert qui ne vivrait que de la copie serveur — %s', async (_label, over) => {
+      messageFindUnique.mockResolvedValue(source({ _count: { attachments: 1 }, ...over }));
+
+      const admission = await admitMessageForward(prisma, { forwardedFromId: SOURCE_ID, at: AT, bodyOnlyFromSource: true });
+
+      expect(admission).toEqual({ admitted: false, reason: 'encrypted-source-not-server-copyable' });
+    });
+
+    it.each(ENCRYPTED_CASES)('refuse une source à pièces accompagnée d’un simple texte : la pièce ne se perd pas en silence (#10987) — %s', async (_label, over) => {
+      messageFindUnique.mockResolvedValue(source({ _count: { attachments: 1 }, ...over }));
+
+      const admission = await admitMessageForward(prisma, { forwardedFromId: SOURCE_ID, at: AT });
+
+      expect(admission).toEqual({ admitted: false, reason: 'encrypted-source-not-server-copyable' });
+    });
+
+    it('refuse une pièce CHOISIE d’une source chiffrée, même avec un texte (#10987)', async () => {
+      const chosen = { id: SOURCE_ID, isViewOnce: false, isBlurred: false, effectFlags: 0, isEncrypted: false, encryptionMode: null };
+      messageFindUnique.mockResolvedValue(source({ isEncrypted: true, attachments: [chosen], _count: { attachments: 1 } }));
+
+      const admission = await admitMessageForward(prisma, { forwardedFromId: SOURCE_ID, at: AT, forwardedAttachmentIds: [SOURCE_ID] });
+
+      expect(admission).toEqual({ admitted: false, reason: 'encrypted-source-not-server-copyable' });
+    });
+
+    it.each(ENCRYPTED_CASES)('admet les pièces que le CLIENT renvoie lui-même, sans rien recopier — %s', async (_label, over) => {
+      messageFindUnique.mockResolvedValue(source({ _count: { attachments: 1 }, ...over }));
+
+      const admission = await admitMessageForward(prisma, { forwardedFromId: SOURCE_ID, at: AT, bringsOwnPieces: true });
+
+      expect(admission).toEqual({ admitted: true, imposes: null, copySelection: [] });
+    });
+
+    it.each(ENCRYPTED_CASES.filter(([label]) => label !== 'pièce chiffrée'))(
+      'admet le texte seul d’une source chiffrée SANS pièce, sans rien recopier — %s',
+      async (_label, over) => {
+        messageFindUnique.mockResolvedValue(source({ ...over, attachments: [], _count: { attachments: 0 } }));
+
+        const admission = await admitMessageForward(prisma, { forwardedFromId: SOURCE_ID, at: AT });
+
+        expect(admission).toEqual({ admitted: true, imposes: null, copySelection: [] });
+      },
+    );
+
+    it('dit la vue unique avant le chiffrement', async () => {
+      messageFindUnique.mockResolvedValue(source({ isViewOnce: true, isEncrypted: true }));
+
+      const admission = await admitMessageForward(prisma, { forwardedFromId: SOURCE_ID, at: AT, bodyOnlyFromSource: true });
+
+      expect(admission).toEqual({ admitted: false, reason: 'view-once-not-forwardable' });
+    });
+
+    it('lit le chiffrement de la conversation, du message et des pièces dans la MÊME requête', async () => {
+      await admitMessageForward(prisma, { forwardedFromId: SOURCE_ID, at: AT });
+
+      const lawReads = messageFindUnique.mock.calls.filter(([args]: [any]) => args.select.isBlurred === true);
+      expect(lawReads[0][0].select).toMatchObject({
+        isEncrypted: true,
+        encryptionMode: true,
+        conversation: { select: { encryptionEnabledAt: true, encryptionMode: true } },
+        attachments: { select: { id: true, isEncrypted: true, encryptionMode: true } },
+      });
+    });
+  });
+
+  describe('chaque refus a un code stable (#9598)', () => {
+    it('le motif EST le code partagé', () => {
+      expect(Object.values(FORWARD_REFUSAL_CODES).map((reason) => describeForwardRefusal({ admitted: false, reason })))
+        .toHaveLength(5);
+      expect(new Set(Object.values(FORWARD_REFUSAL_CODES).map((reason) => describeForwardRefusal({ admitted: false, reason }))).size)
+        .toBe(5);
     });
   });
 });

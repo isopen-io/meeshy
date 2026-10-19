@@ -120,6 +120,8 @@ struct PhonebookListView: View {
                             name: contact.resolvedName,
                             subtitle: contact.subtitle,
                             avatarURL: contact.matchedUser?.avatar,
+                            presence: contact.matchedUser.map { PresenceManager.shared.resolvedState(userId: $0.id, isOnline: $0.isOnline, lastActiveAt: $0.lastActiveAt) },
+                            ring: contact.matchedUser?.avatarRing,
                             action: contact.isOnMeeshy ? .write : .invite,
                             accessibilityDetail: contact.isOnMeeshy
                                 ? String(localized: "contacts.phonebook.on-meeshy", defaultValue: "sur Meeshy", bundle: .main)
@@ -171,6 +173,8 @@ struct PhonebookListView: View {
                         name: user.displayName.flatMap { $0.isEmpty ? nil : $0 } ?? user.username,
                         subtitle: "@\(user.username)",
                         avatarURL: user.avatar,
+                        presence: PresenceManager.shared.resolvedState(userId: user.id, isOnline: user.isOnline),
+                        ring: user.avatarRing,
                         action: .write,
                         isDark: colorScheme == .dark,
                         onAction: { openPlatformUser(user) }

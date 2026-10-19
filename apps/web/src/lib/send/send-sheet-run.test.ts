@@ -8,6 +8,7 @@ import { planSend, type SendPayload, type SendTarget } from './send-sheet-plan';
 import {
   createSendRun,
   failedKeysOf,
+  pendingKeysOf,
   sentCountOf,
   type ReadyMedia,
   type SendSheetPorts,
@@ -49,6 +50,7 @@ function harness(script: Script = {}) {
   const ports: SendSheetPorts = {
     online: () => state.online,
     openDirect: async (userId) => log('openDirect', userId, script.openDirect?.(userId) ?? ok({ id: `dm-${userId}` })),
+    openGroup: async (p) => log('openGroup', p, ok({ id: `grp-${p.userIds.join('-')}` })),
     forward: async (p) =>
       log('forward', { to: p.targetConversationId, ids: p.messages.map((m) => m.id), source: p.sourceConversationId, cids: p.messages.map(() => p.nextClientMessageId()) }, script.forward?.(p.targetConversationId) ?? { ok: true as const, count: p.messages.length }),
     sendMessage: async (p) => {
@@ -80,8 +82,17 @@ const runOf = (h: ReturnType<typeof harness>, payload: SendPayload, targets: rea
 };
 
 const message = (id: string): ForwardSource => ({ id, content: 'Salut', originalLanguage: 'fr' });
-const messagesPayload: SendPayload = { kind: 'messages', conversationId: 'src', messages: [message('m1')], preview: { kind: 'text' } };
-const attachmentPayload = (mine: boolean): SendPayload => ({ kind: 'attachment', conversationId: 'src', messageId: 'm7', attachmentId: 'a7', mime: 'image/png', previewUrl: 'u', mine, protected: false });
+const messagesPayload: SendPayload = { kind: 'messages', conversationId: 'src', messages: [message('m1')], exit: [{ id: 'm1', text: 'Salut' }], preview: { kind: 'text' } };
+const attachmentPayload: SendPayload = {
+  kind: 'attachment',
+  conversationId: 'src',
+  messageId: 'm7',
+  attachmentId: 'a7',
+  mime: 'image/png',
+  previewUrl: 'u',
+  exit: { id: 'm7', pieces: [{ id: 'a6', mimeType: 'image/png' }, { id: 'a7', mimeType: 'image/png' }] },
+};
+const SENT_C1 = { state: 'sent', conversationId: 'c1' } as const;
 
 describe('état par cible', () => {
   test('chaque cible est idle avant le départ, puis sent', async () => {
@@ -90,7 +101,7 @@ describe('état par cible', () => {
     expect(run.getState().statuses).toEqual({ 'conversation:c1': { state: 'idle' }, 'conversation:c2': { state: 'idle' } });
     expect(run.getState().phase).toBe('idle');
     await run.start();
-    expect(run.getState().statuses).toEqual({ 'conversation:c1': { state: 'sent' }, 'conversation:c2': { state: 'sent' } });
+    expect(run.getState().statuses).toEqual({ 'conversation:c1': SENT_C1, 'conversation:c2': { state: 'sent', conversationId: 'c2' } });
     expect(run.getState().phase).toBe('done');
     expect(sentCountOf(run.getState())).toBe(2);
   });
@@ -140,7 +151,7 @@ describe('transfert', () => {
     const run = runOf(h, messagesPayload, [contact('u1'), conversation('c1')]);
     await run.start();
     expect(run.getState().statuses['contact:u1']).toEqual({ state: 'failed', failure: { kind: 'refused', status: 403, message: 'bloqué' } });
-    expect(run.getState().statuses['conversation:c1']).toEqual({ state: 'sent' });
+    expect(run.getState().statuses['conversation:c1']).toEqual(SENT_C1);
     expect(failedKeysOf(run.getState())).toEqual(['contact:u1']);
   });
 
@@ -152,28 +163,21 @@ describe('transfert', () => {
   });
 });
 
-describe('une pièce de message', () => {
-  test('la mienne : une copie serveur, jamais d’attachmentIds', async () => {
+describe('une pièce de message (#9914)', () => {
+  test('seule la pièce choisie part : forwardedFromId + forwardedAttachmentIds, jamais d’attachmentIds, la légende en second', async () => {
     const h = harness();
-    await runOf(h, attachmentPayload(true), [conversation('c1')], 'Tiens').start();
-    expect(h.portsCalled()).toEqual(['sendMessage']);
-    const body = h.bodies()[0]?.body;
-    expect(body).toMatchObject({ copyAttachmentsFromMessageId: 'm7', content: 'Tiens' });
-    expect(body?.attachmentIds).toBeUndefined();
-  });
-
-  test('celle d’un autre : forwardedFromId (et la conversation source), la légende en second', async () => {
-    const h = harness();
-    await runOf(h, attachmentPayload(false), [conversation('c1')], 'Tiens').start();
+    await runOf(h, attachmentPayload, [conversation('c1')], 'Tiens').start();
     const [transfer, caption] = h.bodies();
-    expect(transfer?.body).toMatchObject({ forwardedFromId: 'm7', forwardedFromConversationId: 'src' });
+    expect(transfer?.body).toMatchObject({ forwardedFromId: 'm7', forwardedFromConversationId: 'src', forwardedAttachmentIds: ['a7'] });
+    expect(transfer?.body.attachmentIds).toBeUndefined();
+    expect(transfer?.body.copyAttachmentsFromMessageId).toBeUndefined();
     expect(transfer?.body.content).toBeUndefined();
     expect(caption?.body.content).toBe('Tiens');
   });
 
   test('publier : from-attachment, une fois par format', async () => {
     const h = harness();
-    await runOf(h, attachmentPayload(true), [publish('STORY'), publish('POST')], 'Beau').start();
+    await runOf(h, attachmentPayload, [publish('STORY'), publish('POST')], 'Beau').start();
     expect(h.calls.map((c) => c.args)).toEqual([
       { attachmentId: 'a7', target: 'STORY', content: 'Beau' },
       { attachmentId: 'a7', target: 'POST', content: 'Beau' },
@@ -182,7 +186,7 @@ describe('une pièce de message', () => {
 
   test('publier : le refus PROTECTED_MEDIA est rendu tel quel', async () => {
     const h = harness({ publishFromAttachment: () => fail(400, 'protégé', 'PROTECTED_MEDIA') });
-    const run = runOf(h, attachmentPayload(true), [publish('POST')]);
+    const run = runOf(h, attachmentPayload, [publish('POST')]);
     await run.start();
     expect(run.getState().statuses['publish:POST']).toEqual({ state: 'failed', failure: { kind: 'refused', status: 400, message: 'protégé', code: 'PROTECTED_MEDIA' } });
   });
@@ -236,7 +240,7 @@ describe('des fichiers vers plusieurs destinataires', () => {
     const run = runOf(h, payload, [conversation('c1'), conversation('c2')]);
     await run.start();
     expect(run.getState().statuses['conversation:c1']).toEqual({ state: 'failed', failure: { kind: 'network' } });
-    expect(run.getState().statuses['conversation:c2']).toEqual({ state: 'sent' });
+    expect(run.getState().statuses['conversation:c2']).toEqual({ state: 'sent', conversationId: 'c2' });
   });
 
   test('rejouer la cible échouée : elle COPIE maintenant le message déjà parti', async () => {
@@ -247,7 +251,7 @@ describe('des fichiers vers plusieurs destinataires', () => {
     const last = h.bodies()[h.bodies().length - 1];
     expect(last?.to).toBe('c1');
     expect(last?.body.copyAttachmentsFromMessageId).toBe('msg-2');
-    expect(run.getState().statuses['conversation:c1']).toEqual({ state: 'sent' });
+    expect(run.getState().statuses['conversation:c1']).toEqual(SENT_C1);
   });
 });
 
@@ -268,7 +272,7 @@ describe('un média venu d’ailleurs', () => {
     await run.start();
     expect(run.getState().statuses['conversation:c1']).toEqual({ state: 'failed', failure: { kind: 'download' } });
     await run.retry('conversation:c1');
-    expect(run.getState().statuses['conversation:c1']).toEqual({ state: 'sent' });
+    expect(run.getState().statuses['conversation:c1']).toEqual(SENT_C1);
   });
 });
 
@@ -302,12 +306,12 @@ describe('un texte', () => {
 });
 
 describe('hors ligne, échec et rejeu', () => {
-  test('hors ligne : aucun appel, échec “offline” par cible, rejouable au retour du réseau', async () => {
+  test('hors ligne : aucun appel, chaque cible « En file », jouée au retour du réseau', async () => {
     const h = harness({ online: false });
     const run = runOf(h, messagesPayload, [conversation('c1'), conversation('c2')]);
     await run.start();
     expect(h.calls).toHaveLength(0);
-    expect(run.getState().statuses['conversation:c1']).toEqual({ state: 'failed', failure: { kind: 'offline' } });
+    expect(run.getState().statuses['conversation:c1']).toEqual({ state: 'queued' });
     h.state.online = true;
     await run.retryFailed();
     expect(sentCountOf(run.getState())).toBe(2);
@@ -320,6 +324,27 @@ describe('hors ligne, échec et rejeu', () => {
     expect(run.getState().statuses['conversation:c1']).toEqual({ state: 'failed', failure: { kind: 'network' } });
   });
 
+  test('une session expirée, un délai, une limite ou une panne serveur (401, 408, 429, 5xx) restent REJOUABLES — l’envoi n’est jamais effacé pour eux', async () => {
+    for (const status of [401, 408, 429, 500, 503]) {
+      const h = harness({ sendMessage: () => fail(status, 'passagère') });
+      const run = runOf(h, { kind: 'text', text: 'x' }, [conversation('c1')]);
+      await run.start();
+      expect(run.getState().statuses['conversation:c1']).toEqual({ state: 'failed', failure: { kind: 'unavailable', status } });
+      expect(pendingKeysOf(run.getState())).toEqual(['conversation:c1']);
+    }
+  });
+
+  test('un transfert refusé par une panne serveur reste rejouable ; un refus métier (403) ne l’est pas', async () => {
+    const down = harness({ forward: () => ({ ok: false, error: 'panne', status: 502 }) as never });
+    const replayable = runOf(down, messagesPayload, [conversation('c1')]);
+    await replayable.start();
+    expect(pendingKeysOf(replayable.getState())).toEqual(['conversation:c1']);
+    const denied = harness({ sendMessage: () => fail(403, 'interdit') });
+    const final = runOf(denied, { kind: 'text', text: 'x' }, [conversation('c1')]);
+    await final.start();
+    expect(pendingKeysOf(final.getState())).toEqual([]);
+  });
+
   test('rejouer une légende échouée ne renvoie PAS le transfert déjà parti', async () => {
     let sends = 0;
     const h = harness({ sendMessage: () => ((sends += 1) === 1 ? fail(500, 'panne') : ok(ack('m', 'c1'))) });
@@ -329,7 +354,7 @@ describe('hors ligne, échec et rejeu', () => {
     await run.retry('conversation:c1');
     expect(h.calls.filter((c) => c.port === 'forward')).toHaveLength(1);
     expect(h.calls.filter((c) => c.port === 'sendMessage')).toHaveLength(2);
-    expect(run.getState().statuses['conversation:c1']).toEqual({ state: 'sent' });
+    expect(run.getState().statuses['conversation:c1']).toEqual(SENT_C1);
   });
 
   test('le rejeu réutilise le MÊME identifiant de message (le serveur dédoublonne)', async () => {
@@ -364,7 +389,13 @@ describe('hors ligne, échec et rejeu', () => {
 
 /** #9573 — le moteur remet la durée choisie au transport, et garde le statut et le code d'un refus. */
 describe('transfert d’une flamme à durée', () => {
-  const flamePayload: SendPayload = { kind: 'messages', conversationId: 'src', messages: [{ ...message('m1'), maxDurationSeconds: 300 }], preview: { kind: 'messages', count: 1 } };
+  const flamePayload: SendPayload = {
+    kind: 'messages',
+    conversationId: 'src',
+    messages: [{ ...message('m1'), maxDurationSeconds: 300 }],
+    exit: [{ id: 'm1', effectFlags: 1, ephemeralDuration: 300 }],
+    preview: { kind: 'messages', count: 1 },
+  };
 
   test('la durée de l’étape arrive au port de transfert', async () => {
     const seen: (number | undefined)[] = [];
@@ -384,5 +415,68 @@ describe('transfert d’une flamme à durée', () => {
     const run = createSendRun({ entries: planned.entries, payload: flamePayload, language: 'fr', ports });
     await run.start();
     expect(run.getState().statuses['conversation:c1']).toEqual({ state: 'failed', failure: { kind: 'refused', status: 400, message: 'non', code: 'ephemeral-not-forwardable' } });
+  });
+});
+
+describe('un groupe neuf, et des fichiers séparés', () => {
+  test('« Créer un groupe avec… » : le groupe est créé, puis on y envoie UNE fois (D12)', async () => {
+    const h = harness();
+    const run = runOf(h, messagesPayload, [{ kind: 'new-group', userIds: ['u1', 'u2'], title: 'Léa, Léon' }]);
+    await run.start();
+    expect(h.portsCalled()).toEqual(['openGroup', 'forward']);
+    expect((h.calls[1]?.args as { to: string }).to).toBe('grp-u1-u2');
+    expect(run.getState().statuses['group:u1,u2']).toEqual({ state: 'sent', conversationId: 'grp-u1-u2' });
+  });
+
+  test('séparément : un téléversement par fichier, et le destinataire suivant copie chacun', async () => {
+    const h = harness();
+    const payload: SendPayload = { kind: 'files', files: [file('a.png'), file('b.png')] };
+    const planned = planSend({ payload, targets: [conversation('c1'), conversation('c2')], caption: 'Lyon', viewerId: 'me', grouping: 'separate' });
+    if (!planned.ok) throw new Error('plan');
+    await createSendRun({ entries: planned.entries, payload, language: 'fr', ports: h.ports }).start();
+    expect(h.calls.filter((c) => c.port === 'uploadFiles').map((c) => c.args)).toEqual([['a.png'], ['b.png']]);
+    const bodies = h.bodies().map((b) => b.body);
+    expect(bodies[0]).toMatchObject({ attachmentIds: ['att-0'], content: 'Lyon' });
+    expect(bodies[1]?.content).toBeUndefined();
+    expect(bodies[2]).toMatchObject({ copyAttachmentsFromMessageId: 'msg-1', content: 'Lyon' });
+    expect(bodies[3]).toMatchObject({ copyAttachmentsFromMessageId: 'msg-2' });
+  });
+});
+
+describe('l’instantané : ce que la file durable écrit, et reprend', () => {
+  test('le réseau tombe pendant l’envoi : la cible repasse « En file », sans motif', async () => {
+    const h = harness({ sendMessage: () => ((h.state.online = false), fail(0, 'coupé')) });
+    const run = runOf(h, { kind: 'text', text: 'x' }, [conversation('c1')]);
+    await run.start();
+    expect(run.getState().statuses['conversation:c1']).toEqual({ state: 'queued' });
+  });
+
+  test('reprendre depuis un instantané ne rejoue pas ce qui est parti, sous les MÊMES identifiants', async () => {
+    const first = harness({ sendMessage: (_c, _b, nth) => (nth === 2 ? ((first.state.online = false), fail(0, 'coupé')) : ok(ack(`msg-${nth}`, 'c1'))) });
+    const snapshots: unknown[] = [];
+    const planned = planSend({ payload: messagesPayload, targets: [conversation('c1'), conversation('c2')], caption: 'Regarde', viewerId: 'me' });
+    if (!planned.ok) throw new Error('plan');
+    const run = createSendRun({ entries: planned.entries, payload: messagesPayload, language: 'fr', ports: first.ports, onProgress: (s) => snapshots.push(s) });
+    await run.start();
+    const saved = JSON.parse(JSON.stringify(run.snapshot()));
+    expect(saved.statuses['conversation:c1']).toEqual(SENT_C1);
+    expect(saved.statuses['conversation:c2']).toEqual({ state: 'queued' });
+    expect(snapshots.length).toBeGreaterThan(0);
+
+    const second = harness();
+    const resumed = createSendRun({ entries: planned.entries, payload: messagesPayload, language: 'fr', ports: second.ports, resume: saved });
+    await resumed.start();
+    expect(second.portsCalled()).toEqual(['sendMessage']);
+    const legend = first.bodies()[1]?.body.clientMessageId;
+    expect(second.bodies()[0]?.body.clientMessageId).toBe(legend);
+    expect(sentCountOf(resumed.getState())).toBe(2);
+  });
+
+  test('un envoi en vol dans l’instantané repart en file (l’onglet a été fermé pendant l’envoi)', () => {
+    const planned = planSend({ payload: messagesPayload, targets: [conversation('c1')], caption: '', viewerId: 'me' });
+    if (!planned.ok) throw new Error('plan');
+    const resume = { statuses: { 'conversation:c1': { state: 'sending' } }, completed: {}, clientIds: {}, conversations: {}, uploads: {}, media: {} } as const;
+    const run = createSendRun({ entries: planned.entries, payload: messagesPayload, language: 'fr', ports: harness().ports, resume });
+    expect(run.getState().statuses['conversation:c1']).toEqual({ state: 'queued' });
   });
 });

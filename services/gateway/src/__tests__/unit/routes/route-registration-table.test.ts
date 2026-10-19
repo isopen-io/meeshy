@@ -241,7 +241,11 @@ describe('ROUTE_TABLE (#4278)', () => {
     // `/api/v1/packs/<domaine>`) et `packs-shop` (`GET /api/v1/packs/shop`,
     // la vitrine qui les agrège). Aucun alias, aucune route retirée ni
     // renommée.
-    expect(ROUTE_TABLE.length).toBe(88);
+    // 89 : #10936 ajoute `packs-banner-frame` (le domaine des cadres posés sur
+    // la bannière, vendu en boutique sous `/api/v1/packs/banner-frame`, monté
+    // par le même `appearancePacksPlugin`). Aucun alias, aucune route retirée
+    // ni renommée.
+    expect(ROUTE_TABLE.length).toBe(89);
   });
 });
 

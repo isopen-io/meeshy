@@ -177,7 +177,7 @@ nonisolated extension ShareSender {
               let mediaRoot else { return share }
 
         let total = share.media.reduce(0) { $0 + $1.bytes }
-        guard ShareLimits.isOpportunisticUploadEligible(
+        guard ShareUploadBudget.isOpportunisticUploadEligible(
             totalBytes: total, fileCount: share.media.count
         ) else { return share }
 

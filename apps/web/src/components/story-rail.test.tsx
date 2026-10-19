@@ -37,7 +37,15 @@ afterAll(async () => {
 let container: HTMLDivElement | undefined;
 let root: Root | undefined;
 
-afterEach(() => {
+/**
+ * Démonte la racine montée, s'il y en a une. Appelé par `afterEach` ET par
+ * `mount` : un témoin qui monte deux fois (une boucle sur les variantes)
+ * laissait sinon la PREMIÈRE racine vivante après la fin du fichier — et depuis
+ * que chaque avatar écoute la carte de présence (#10956), son abonnement au
+ * `presenceStore` global repeignait une racine orpheline dans le fichier
+ * suivant, après le retrait de happy-dom (`window.event` indéfini).
+ */
+function unmountCurrent(): void {
   if (root !== undefined) {
     const r = root;
     act(() => {
@@ -47,7 +55,9 @@ afterEach(() => {
   container?.remove();
   root = undefined;
   container = undefined;
-});
+}
+
+afterEach(unmountCurrent);
 
 /**
  * `stories` porte désormais UNE story par défaut (#5817) — un
@@ -74,6 +84,7 @@ function mount(props: {
   readonly inert?: boolean;
   readonly language?: InterfaceLanguage;
 }): HTMLDivElement {
+  unmountCurrent();
   const c = document.createElement('div');
   document.body.appendChild(c);
   const r = createRoot(c);

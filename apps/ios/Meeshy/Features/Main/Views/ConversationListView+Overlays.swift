@@ -1090,7 +1090,7 @@ struct ConversationListHeaderOverlay: View {
 }
 
 // MARK: - Bottom Bar Overlay
-// Search bar + communities carousel + category filters. Extracted into its
+// Search bar + communities carousel. Extracted into its
 // own View struct for the same type-complexity reason as the header. Owns
 // its `searchBounce` animation state locally.
 struct ConversationListBottomBar: View {
@@ -1117,16 +1117,13 @@ struct ConversationListBottomBar: View {
         VStack(spacing: 0) {
             Spacer()
 
-            // Communities carousel + category filters — shown together inside
-            // a glass panel when the search overlay is open (loupe tap). The
-            // `.ultraThinMaterial` fill adapts to dark/light automatically and
-            // keeps the conversation list behind it legible; the theme-aware
-            // `inputBorder` stroke defines the panel edge in both modes.
-            if showSearchOverlay {
+            // Communities carousel — inside a glass panel while the search
+            // field has focus. Its communities or nothing (#10924): no empty
+            // title, and no filter chips — they live at the head of the list.
+            if showSearchOverlay && ConversationSearchCommunitiesBandLaw.drawsBand(for: userCommunities) {
                 VStack(spacing: 0) {
                     ConversationSearchCommunitiesBand(communities: userCommunities) { isSearching.wrappedValue = false }
                         .padding(.vertical, MeeshySpacing.smPlus)
-                    categoryFilters
                 }
                 .padding(.top, MeeshySpacing.xsPlus)
                 .padding(.bottom, MeeshySpacing.xs)
@@ -1149,36 +1146,10 @@ struct ConversationListBottomBar: View {
         }
     }
 
-    // MARK: - Category Filters
-    private var categoryFilters: some View {
-        ScrollView(.horizontal, showsIndicators: false) {
-            HStack(spacing: MeeshySpacing.smPlus) {
-                ForEach(ConversationFilter.allCases) { filter in
-                    ThemedFilterChip(
-                        title: filter.displayName,
-                        color: filter.color,
-                        isSelected: conversationViewModel.selectedFilters.contains(filter)
-                    ) {
-                        // Même loi que la rangée sous le rail (#4069) : deux
-                        // sites qui poseraient la sélection différemment
-                        // seraient deux vérités sur « ce qui filtre ».
-                        withAnimation(.spring(response: 0.3, dampingFraction: 0.8)) {
-                            conversationViewModel.selectedFilters = ConversationFilterComposition.toggling(
-                                filter, in: conversationViewModel.selectedFilters
-                            )
-                        }
-                    }
-                }
-            }
-            .padding(.horizontal, MeeshySpacing.lg)
-            .padding(.vertical, MeeshySpacing.sm)
-        }
-    }
-
     // MARK: - Themed Search Bar
     private var themedSearchBar: some View {
         HStack(spacing: MeeshySpacing.md) {
-            // Magnifying glass: tappable to toggle search overlay (communities + filters)
+            // Magnifying glass: tappable to toggle search overlay (communities)
             Button {
                 HapticFeedback.light()
                 // La bande suit le focus (#10841) : la loupe le donne ou le reprend.
@@ -1195,7 +1166,7 @@ struct ConversationListBottomBar: View {
                     .animation(.spring(response: 0.3, dampingFraction: 0.6), value: isActive)
             }
             .accessibilityLabel(String(localized: "accessibility.search", defaultValue: "Rechercher"))
-            .accessibilityHint(String(localized: "accessibility.search.hint", defaultValue: "Ouvre les filtres et la recherche de conversations"))
+            .accessibilityHint(String(localized: "accessibility.search.list.hint", defaultValue: "Ouvre la recherche de conversations et vos communautés"))
             // La recherche déjà ouverte ne se disait que par un dégradé et un
             // `scaleEffect` — rien pour VoiceOver (253i, #4266).
             .toggleStateAccessibility(isToggle: true, isActive: isActive)

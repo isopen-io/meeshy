@@ -382,7 +382,9 @@ public struct CommunityCreateView: View {
                 MeeshyAvatar(
                     name: user.username,
                     context: .userListItem,
-                    avatarURL: user.avatar
+                    avatarURL: user.avatar,
+                    presenceState: user.servedPresence,
+                    ring: user.avatarRing
                 )
 
                 VStack(alignment: .leading, spacing: 1) {

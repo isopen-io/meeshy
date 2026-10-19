@@ -2,7 +2,7 @@ import { colorForName } from '@meeshy/shared/utils/conversation-colors';
 import { useEffect, useRef, useState, type PointerEvent } from 'react';
 import { useStore } from 'zustand/react';
 
-import { Avatar } from '@/components/avatar';
+import { PeerAvatar } from '@/components/peer-avatar';
 import { StreamAudio } from '@/components/call-media-elements';
 import { CallScreen } from '@/components/call-screen';
 import { Glyph, GlyphSvg } from '@/components/glyph';
@@ -109,7 +109,7 @@ function WaitingBanner({ waiting }: { readonly waiting: WaitingCall }) {
       style={{ background: PILL_BG, color: 'var(--color-on-media)', top: 'calc(env(safe-area-inset-top) + 3.75rem)' }}
       data-call-waiting=""
     >
-      <Avatar initials={initialsOf(waiting.callerName)} color={colorForName(waiting.callerName)} size={40} {...(waiting.callerAvatar === null ? {} : { src: waiting.callerAvatar })} />
+      <PeerAvatar presenceKey={waiting.callerKey ?? undefined} initials={initialsOf(waiting.callerName)} color={colorForName(waiting.callerName)} size={40} {...(waiting.callerAvatar === null ? {} : { src: waiting.callerAvatar })} />
       <div className="min-w-0 flex-1">
         <p className="truncate text-body font-semibold">{waiting.title}</p>
         <p className="truncate text-mini" style={{ color: 'var(--color-on-media-3)' }}>

@@ -1,7 +1,7 @@
 import type { FeedCardRepostEmbed } from '@/lib/feed/card-model';
 import type { OpenOrigin } from '@meeshy/shared/types/content-reach';
 import { openLinkProps } from '@/lib/view/reading-telemetry';
-import { Avatar } from './avatar';
+import { PeerAvatar } from './peer-avatar';
 import { GlyphSvg } from './glyph';
 import { FEED_GLYPHS } from './glyphs-feed';
 import { PrismPastille } from './message-blocks';
@@ -62,7 +62,9 @@ export function FeedRepostEmbed({ repost, openOrigin = null }: { readonly repost
       data-feed-repost-embed
     >
       <div className="flex items-center gap-2">
-        <Avatar
+        <PeerAvatar
+          presenceKey={repost.author.id}
+          ringRef={repost.author.ring}
           initials={repost.author.initials}
           color={repost.author.accentColor}
           size={24}

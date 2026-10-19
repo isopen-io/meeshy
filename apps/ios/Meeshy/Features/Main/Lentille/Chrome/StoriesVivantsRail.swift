@@ -152,7 +152,9 @@ nonisolated public enum LentilleRailPolicy {
 }
 
 /// Rail vivants & stories de la Lentille (contrat LWS-6, §4.3 colonne
-/// « Liste ») — pastille `48`, anneau `3.5`, `≤ 6` entrées, masquée si vide.
+/// « Liste ») — `≤ 6` entrées, masquée si vide. Ses pastilles ont les mesures
+/// du plateau de stories du fil (`StoryEntryMetrics`, #10925) : avatar 88,
+/// anneau 94, libellé 96 — jamais la cote du rail des directs (48).
 ///
 /// Vue PURE : `entries` est injecté par l'appelant, aucun `@State` de
 /// défilement, aucun observateur — `PinnedStoryTrailBand` reste, comme le veut
@@ -165,7 +167,7 @@ nonisolated public enum LentilleRailPolicy {
 /// `.onTapGesture` (règle dure du workshop : le tap serait avalé par le long
 /// press du conteneur).
 ///
-/// Toutes les cotes viennent de `LentilleMetrics.Rail` — aucun littéral de
+/// Toutes les cotes viennent de `StoryEntryMetrics` — aucun littéral de
 /// loi en dur ici (garde R15).
 public struct StoriesVivantsRail: View {
 
@@ -210,7 +212,7 @@ public struct StoriesVivantsRail: View {
             EmptyView()
         } else {
             ScrollView(.horizontal, showsIndicators: false) {
-                HStack(spacing: MeeshySpacing.sm) {
+                HStack(spacing: StoryEntryMetrics.itemSpacing) {
                     if let selfEntry {
                         LentilleRailSelfEntryView(
                             entry: selfEntry,
@@ -223,14 +225,15 @@ public struct StoriesVivantsRail: View {
                         LentilleRailEntryView(entry: entry, onSelect: onSelect)
                     }
                 }
-                .padding(.horizontal, MeeshySpacing.lg)
-                .padding(.vertical, LentilleMetrics.Rail.paddingVertical)
+                .padding(.horizontal, StoryEntryMetrics.paddingHorizontal)
+                .padding(.vertical, StoryEntryMetrics.paddingVertical)
             }
+            .frame(height: StoryEntryMetrics.height)
         }
     }
 }
 
-/// Pastille « moi » — même géométrie que les autres (`LentilleMetrics.Rail`),
+/// Pastille « moi » — même géométrie que les autres (`StoryEntryMetrics`),
 /// plus la pastille de mood qui ouvre le composeur de statut. Deux
 /// `Button(.plain)` distincts, jamais un `.onTapGesture` : c'est la paire
 /// (avatar, mood) que `MeeshyAvatar` offre déjà au bouton « moi » du tray,
@@ -245,7 +248,7 @@ private struct LentilleRailSelfEntryView: View {
     private var isDark: Bool { colorScheme == .dark }
 
     var body: some View {
-        VStack(spacing: MeeshySpacing.xs) {
+        VStack(spacing: StoryEntryMetrics.labelSpacing) {
             ZStack(alignment: .bottomTrailing) {
                 Button { onSelect?() } label: { pastille }
                     .buttonStyle(.plain)
@@ -269,29 +272,29 @@ private struct LentilleRailSelfEntryView: View {
                     // de la pastille, qui ouvre mes stories. Dessin inchangé.
                     Button(action: onCreateStory) {
                         createStoryBadge
-                            .padding(.leading, MeeshySpacing.lg)
-                            .padding(.top, LentilleMetrics.Rail.paddingVertical)
+                            .padding(.leading, StoryEntryMetrics.paddingHorizontal)
+                            .padding(.top, StoryEntryMetrics.paddingVertical)
                             .contentShape(Rectangle())
                     }
                     .buttonStyle(.plain)
-                    .offset(x: -MeeshySpacing.lg, y: -LentilleMetrics.Rail.paddingVertical)
+                    .offset(x: -StoryEntryMetrics.paddingHorizontal, y: -StoryEntryMetrics.paddingVertical)
                     .accessibilityLabel(StoryTrayCopy.addStory)
                 }
             }
 
             Text(entry.displayName)
-                .font(MeeshyFont.relative(MeeshyFont.captionSize, weight: .medium))
+                .font(MeeshyFont.relative(StoryEntryMetrics.labelFontSize, weight: .medium))
                 .foregroundColor(MeeshyColors.textSecondary(isDark: isDark))
                 .lineLimit(1)
-                .frame(width: LentilleMetrics.Rail.size)
+                .frame(width: StoryEntryMetrics.labelWidth)
         }
     }
 
     private var pastille: some View {
         ZStack {
             Circle()
-                .strokeBorder(ringColor, lineWidth: LentilleMetrics.Rail.ringWidth)
-                .frame(width: LentilleMetrics.Rail.size, height: LentilleMetrics.Rail.size)
+                .stroke(ringColor, lineWidth: ringWidth)
+                .frame(width: StoryEntryMetrics.ring, height: StoryEntryMetrics.ring)
 
             avatarContent
         }
@@ -318,14 +321,14 @@ private struct LentilleRailSelfEntryView: View {
                 // même glyphe que le tray historique — le « + » disait
                 // « ajouter » sans dire quoi (retour user 2026-08-21).
                 Text("\u{1F4AD}")
-                    .font(MeeshyFont.relative(LentilleMetrics.Tags.emojiSize))
+                    .font(MeeshyFont.relative(StoryEntryMetrics.badgeGlyph))
             }
         }
     }
 
     private var createStoryBadge: some View {
         Image(systemName: "plus")
-            .font(MeeshyFont.relative(LentilleMetrics.Tags.emojiSize, weight: .bold))
+            .font(MeeshyFont.relative(StoryEntryMetrics.createGlyph, weight: .bold))
             .foregroundStyle(Color.white)
             .frame(width: badgeDiameter, height: badgeDiameter)
             .background(
@@ -335,14 +338,14 @@ private struct LentilleRailSelfEntryView: View {
             )
     }
 
-    /// Dérivé de l'anneau du rail, jamais une cote nouvelle (garde R15) : la
-    /// pastille de mood fait la place laissée par l'anneau, de part et d'autre.
-    private var badgeDiameter: CGFloat {
-        LentilleMetrics.Rail.ringWidth * 2 + LentilleMetrics.Tags.emojiSize
-    }
+    /// La pastille de mood et le (+) du plateau du fil (`MeeshyAvatar.badgeSize`
+    /// `.storyTray`), jamais une cote nouvelle (garde R15).
+    private var badgeDiameter: CGFloat { StoryEntryMetrics.badge }
 
-    private var avatarDiameter: CGFloat {
-        LentilleMetrics.Rail.size - LentilleMetrics.Rail.ringWidth * 2
+    private var avatarDiameter: CGFloat { StoryEntryMetrics.avatar }
+
+    private var ringWidth: CGFloat {
+        entry.hasActiveStory ? StoryEntryMetrics.ringWidthAccented : StoryEntryMetrics.ringWidthQuiet
     }
 
     private var ringColor: Color {
@@ -390,21 +393,21 @@ private struct LentilleRailEntryView: View {
     }
 
     private var pastille: some View {
-        VStack(spacing: MeeshySpacing.xs) {
+        VStack(spacing: StoryEntryMetrics.labelSpacing) {
             ZStack {
                 Circle()
-                    .strokeBorder(ringColor, lineWidth: LentilleMetrics.Rail.ringWidth)
-                    .frame(width: LentilleMetrics.Rail.size, height: LentilleMetrics.Rail.size)
+                    .stroke(ringColor, lineWidth: ringWidth)
+                    .frame(width: StoryEntryMetrics.ring, height: StoryEntryMetrics.ring)
 
                 avatarContent
             }
             .overlay(alignment: .bottomTrailing) { moodBadge }
 
             Text(entry.displayName)
-                .font(MeeshyFont.relative(MeeshyFont.captionSize, weight: .medium))
+                .font(MeeshyFont.relative(StoryEntryMetrics.labelFontSize, weight: .medium))
                 .foregroundColor(MeeshyColors.textSecondary(isDark: isDark))
                 .lineLimit(1)
-                .frame(width: LentilleMetrics.Rail.size)
+                .frame(width: StoryEntryMetrics.labelWidth)
         }
     }
 
@@ -430,15 +433,13 @@ private struct LentilleRailEntryView: View {
         }
     }
 
-    private var avatarDiameter: CGFloat {
-        LentilleMetrics.Rail.size - LentilleMetrics.Rail.ringWidth * 2
-    }
+    private var avatarDiameter: CGFloat { StoryEntryMetrics.avatar }
 
-    /// Dérivé de l'anneau du rail, jamais une cote nouvelle (garde R15) —
-    /// même dérivation que la pastille « moi », pour que les deux badges
-    /// aient exactement le même diamètre.
-    private var badgeDiameter: CGFloat {
-        LentilleMetrics.Rail.ringWidth * 2 + LentilleMetrics.Tags.emojiSize
+    /// Même diamètre que la pastille « moi » et que le plateau du fil.
+    private var badgeDiameter: CGFloat { StoryEntryMetrics.badge }
+
+    private var ringWidth: CGFloat {
+        LentilleRailPolicy.ringIsAccented(entry) ? StoryEntryMetrics.ringWidthAccented : StoryEntryMetrics.ringWidthQuiet
     }
 
     private var ringColor: Color {

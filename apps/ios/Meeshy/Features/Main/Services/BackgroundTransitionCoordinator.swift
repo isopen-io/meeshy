@@ -197,6 +197,7 @@ final class BackgroundTransitionCoordinator: BackgroundTransitioning {
             // déposée par l'extension arrive par le disque, pas par
             // l'ouverture, qui n'est qu'un raccourci faillible.
             await ShareComposeHandoffConsumer.shared.consumeNext()
+            ShareRelayConsumer.shared.consumeNext()
         }
         await resumeStep(epoch, "sockets.resume") {
             // CALL-FIX 2026-06-05 — if a call kept the sockets alive (see the

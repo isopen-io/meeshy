@@ -219,6 +219,7 @@ nonisolated enum RiverConversationMapping {
         text: (MeeshyMessage) -> String,
         time: (Date) -> String,
         presence: (MeeshyMessage) -> PresenceState? = { _ in nil },
+        here: (MeeshyMessage) -> ConversationHere = { _ in .absent },
         storyRing: (MeeshyMessage) -> StoryRingState = { _ in .none }
     ) -> [RiverBubbleContent] {
         let byId = Dictionary(messages.map { ($0.id, $0) }, uniquingKeysWith: { first, _ in first })
@@ -303,7 +304,9 @@ nonisolated enum RiverConversationMapping {
                     presence: presence(message),
                     storyRing: storyRing(message),
                     profileUser: ProfileSheetUser.from(message: message),
-                    userId: message.senderIsAnonymous ? nil : (message.senderUserId ?? message.senderId)
+                    userId: message.senderIsAnonymous ? nil : (message.senderUserId ?? message.senderId),
+                    isHere: here(message),
+                    ring: message.senderRing
                 )
             )
         }
@@ -431,7 +434,11 @@ nonisolated enum RiverConversationMapping {
         let viewerId: String
         let texts: [String]
         let presences: [PresenceState?]
+        let heres: [ConversationHere]
         let rings: [StoryRingState]
+        /// Le contour servi voyage avec le message, mais une relecture le repeint sans en
+        /// changer l'identifiant : la clé porte sa valeur (#10946).
+        let decorRings: [ServedProfileDecorItem?]
     }
 
     static func contentsKey(
@@ -440,17 +447,21 @@ nonisolated enum RiverConversationMapping {
         viewerId: String,
         text: (MeeshyMessage) -> String,
         presence: (MeeshyMessage) -> PresenceState? = { _ in nil },
+        here: (MeeshyMessage) -> ConversationHere = { _ in .absent },
         storyRing: (MeeshyMessage) -> StoryRingState = { _ in .none }
     ) -> ContentsKey {
         var texts: [String] = []
         var presences: [PresenceState?] = []
+        var heres: [ConversationHere] = []
         var rings: [StoryRingState] = []
         texts.reserveCapacity(messages.count)
         presences.reserveCapacity(messages.count)
+        heres.reserveCapacity(messages.count)
         rings.reserveCapacity(messages.count)
         for message in messages {
             texts.append(displayedText(of: message, text: text))
             presences.append(presence(message))
+            heres.append(here(message))
             rings.append(storyRing(message))
         }
         return ContentsKey(
@@ -458,7 +469,9 @@ nonisolated enum RiverConversationMapping {
             viewerId: viewerId,
             texts: texts,
             presences: presences,
-            rings: rings
+            heres: heres,
+            rings: rings,
+            decorRings: messages.map(\.senderRing)
         )
     }
 

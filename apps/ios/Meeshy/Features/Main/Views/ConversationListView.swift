@@ -1097,7 +1097,7 @@ struct ConversationListView: View {
                 withAnimation(.easeOut(duration: 0.25)) { isScrollingDown = false }
             }
             .task {
-                async let conversations: Void = conversationViewModel.loadConversations()
+                async let conversations: Void = ConversationListVMOwner.loadAtLaunch(conversationViewModel)
                 async let communities: Void = loadUserCommunities()
                 _ = await (conversations, communities)
             }

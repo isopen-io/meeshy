@@ -418,3 +418,39 @@ describe('un plein écran sombre pose des icônes claires sur la barre de la coq
     expect(() => holdMediaSystemBars()()).not.toThrow();
   });
 });
+
+/**
+ * ET LE NAVIGATEUR SUIT LA COQUE (#10922). La PWA installée prend sa barre
+ * d'état de `theme-color`, et Chrome Android sa barre d'outils : en thème
+ * clair, une bande BLANCHE restait au-dessus du noir de la visionneuse, d'une
+ * story ou d'un appel, pendant que la coque passait en sombre (#10917).
+ */
+describe('un plein écran sombre passe aussi la barre du navigateur en sombre (#10922)', () => {
+  const barre = (env: ReturnType<typeof installEnvironment>) =>
+    Object.fromEntries(env.metas.map((meta) => [meta.getAttribute('data-scheme'), meta.media]));
+
+  test('en thème clair, ouvrir la surface active la barre sombre, la fermer rend la barre claire', () => {
+    const env = installEnvironment();
+    cleanup = env.restore;
+    setThemePreference('light');
+
+    const relacher = holdMediaSystemBars();
+    const ouverte = barre(env);
+    relacher();
+
+    expect(ouverte).toEqual({ dark: 'all', light: 'not all' });
+    expect(barre(env)).toEqual({ dark: 'not all', light: 'all' });
+  });
+
+  test('changer de thème pendant que la surface est ouverte garde la barre sombre', () => {
+    const env = installEnvironment();
+    cleanup = env.restore;
+    const relacher = holdMediaSystemBars();
+
+    setThemePreference('light');
+
+    expect(barre(env)).toEqual({ dark: 'all', light: 'not all' });
+    relacher();
+    expect(barre(env)).toEqual({ dark: 'not all', light: 'all' });
+  });
+});

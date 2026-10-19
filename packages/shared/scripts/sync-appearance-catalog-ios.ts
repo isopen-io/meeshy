@@ -1,6 +1,6 @@
 /**
  * Copie le catalogue d'apparence (gamme de 16 couleurs, 14 fonds, bannières,
- * contours, noms en 7 langues) dans le SDK iOS (#10631, spec § 8.2) :
+ * contours, cadres de bannière — #10936 —, noms en 7 langues) dans le SDK iOS (#10631, spec § 8.2) :
  *
  *   cd packages/shared && bun scripts/sync-appearance-catalog-ios.ts
  *
@@ -20,7 +20,7 @@ const HERE = dirname(fileURLToPath(import.meta.url));
 const SOURCE_DIR = resolve(HERE, '../design/appearance');
 const LANGUAGES = ['fr', 'en', 'es', 'pt', 'de', 'it', 'ar'] as const;
 
-type PackFile<Item extends string> = { readonly packs: readonly ({ readonly slug: string; readonly order: number; readonly installedByDefault: boolean; readonly removable: boolean; readonly usage?: unknown } & { readonly [K in Item]: readonly unknown[] })[] };
+type PackFile<Item extends 'designs' | 'rings' | 'frames'> = { readonly packs: readonly ({ readonly slug: string; readonly order: number; readonly installedByDefault: boolean; readonly removable: boolean; readonly usage?: unknown } & { readonly [K in Item]: readonly unknown[] })[] };
 
 const readJson = <T>(relative: string): T => JSON.parse(readFileSync(join(SOURCE_DIR, relative), 'utf8')) as T;
 
@@ -28,12 +28,14 @@ export function buildAppearanceCatalog() {
   const wallpapers = readJson<PackFile<'designs'>>('wallpapers/designs.json').packs;
   const banners = readJson<PackFile<'designs'>>('banners/designs.json').packs;
   const rings = readJson<PackFile<'rings'>>('avatar-rings/rings.json').packs;
+  const bannerFrames = readJson<PackFile<'frames'>>('banner-frames/frames.json').packs;
   return {
     version: 1,
     gamut: GAMUT_KEYS.map((key) => ({ key, ...APPEARANCE_GAMUT[key] })),
     wallpapers,
     banners,
     rings,
+    bannerFrames,
     strings: Object.fromEntries(LANGUAGES.map((lang) => [lang, readJson<unknown>(`strings/${lang}.json`)])),
   };
 }

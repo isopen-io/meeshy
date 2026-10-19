@@ -3,7 +3,7 @@ import { describe, expect, test } from 'bun:test';
 import type { ServedProfileDecorItem } from '@meeshy/shared/types/profile-decor';
 
 import { BUILTIN_BANNER_PACKS, BUILTIN_RING_PACKS } from './catalog';
-import { bannerOptions, resolveBanner, resolveRing, ringOptions } from './resolve';
+import { bannerFrameOptions, bannerOptions, resolveBanner, resolveBannerFrame, resolveRing, ringOptions } from './resolve';
 import type { DesignPackSummary } from './pack-summary';
 
 const builtinItem = (pack: string, item: string): ServedProfileDecorItem => ({ pack, item, origin: 'builtin', contract: null });
@@ -62,6 +62,19 @@ describe('résoudre ce que le serveur sert', () => {
   test('une bannière builtin se résout, une bannière officielle attend son contrat', () => {
     expect(resolveBanner(builtinItem('bannieres-essentielles', 'aurore'), new Map())?.key).toBe('aurore');
     expect(resolveBanner(officialItem('p', 'aurore'), new Map())).toBeNull();
+  });
+});
+
+describe('les cadres de bannière embarqués (#10936)', () => {
+  test('un cadre builtin équipé se peint sans réseau', () => {
+    expect(resolveBannerFrame(builtinItem('cadres-haussmannien', 'haussmannien'), new Map())?.key).toBe('haussmannien');
+    expect(resolveBannerFrame(builtinItem('cadres-haussmannien', 'fantome'), new Map())).toBeNull();
+  });
+
+  test('le sélecteur propose les packs de cadres installés et possédés, rien d’office', () => {
+    expect(bannerFrameOptions({ installed: undefined, contracts: new Map() })).toEqual([]);
+    const groups = bannerFrameOptions({ installed: [summary('cadres-celte', { domain: 'banner-frame', removable: true })], contracts: new Map() });
+    expect(groups.map((group) => [group.pack, group.items.map((item) => item.ref.item)])).toEqual([['cadres-celte', ['celte', 'celte-anime']]]);
   });
 });
 

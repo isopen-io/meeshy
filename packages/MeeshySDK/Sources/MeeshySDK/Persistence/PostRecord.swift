@@ -51,6 +51,9 @@ public struct PostRecord: Codable, FetchableRecord, PersistableRecord, Sendable 
     public var postOpenCount: Int?
     public var playCount: Int?
     public var qualifiedViewCount: Int?
+    /// Le contour équipé de l'auteur (#10946), en JSON `ServedProfileDecorItem` : le repli hors
+    /// ligne ne perd pas le contour. `nil` = sans contour ou ligne antérieure à la colonne.
+    public var authorRingJson: String?
 
     public init(
         id: String, authorId: String,
@@ -74,7 +77,8 @@ public struct PostRecord: Codable, FetchableRecord, PersistableRecord, Sendable 
         impressionCount: Int? = nil,
         postOpenCount: Int? = nil,
         playCount: Int? = nil,
-        qualifiedViewCount: Int? = nil
+        qualifiedViewCount: Int? = nil,
+        authorRing: ServedProfileDecorItem? = nil
     ) {
         self.id = id
         self.authorId = authorId
@@ -112,6 +116,7 @@ public struct PostRecord: Codable, FetchableRecord, PersistableRecord, Sendable 
         self.postOpenCount = postOpenCount
         self.playCount = playCount
         self.qualifiedViewCount = qualifiedViewCount
+        self.authorRingJson = authorRing.flatMap { try? JSONEncoder().encode($0) }.flatMap { String(data: $0, encoding: .utf8) }
     }
 }
 
@@ -123,6 +128,11 @@ public extension PostRecord {
     var visibilityUserIds: [String]? {
         guard let visibilityUserIdsJson, let data = visibilityUserIdsJson.data(using: .utf8) else { return nil }
         return try? JSONDecoder().decode([String].self, from: data)
+    }
+
+    var authorRing: ServedProfileDecorItem? {
+        guard let authorRingJson, let data = authorRingJson.data(using: .utf8) else { return nil }
+        return try? JSONDecoder().decode(ServedProfileDecorItem.self, from: data)
     }
 
     var location: SharedPlace? {

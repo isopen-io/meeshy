@@ -210,7 +210,8 @@ public struct ImageFullscreen: View {
     @Environment(\.contentExitGate) private var exitGate
     @State private var scale: CGFloat = 1.0
     @State private var offset: CGSize = .zero
-    @State private var showControls = true
+    // #10930 : on entre sans chrome ; tout toucher le pose par-dessus l'image.
+    @State private var showControls = false
     @State private var saveState: SaveState = .idle
     @State private var viewStartTime: Date?
 
@@ -227,14 +228,14 @@ public struct ImageFullscreen: View {
         self.onSaveRequested = onSaveRequested
     }
 
+    private func toggleControls() {
+        withAnimation(.easeInOut(duration: 0.2)) { showControls.toggle() }
+    }
+
     public var body: some View {
         ZStack {
             Color.black.ignoresSafeArea()
-                .onTapGesture {
-                    withAnimation(.easeInOut(duration: 0.2)) {
-                        showControls.toggle()
-                    }
-                }
+                .onTapGesture { toggleControls() }
 
             if let url = imageUrl {
                 // autoLoad: true — a manual tap to open fullscreen is
@@ -284,6 +285,7 @@ public struct ImageFullscreen: View {
                         offset = .zero
                     }
                 }
+                .onTapGesture { toggleControls() }
             }
 
             if showControls {

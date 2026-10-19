@@ -29,7 +29,8 @@ final class ShareComposeContractTests: XCTestCase {
             shareId: "cid_00000000-0000-4000-8000-000000000000",
             createdAt: Date(timeIntervalSince1970: 1_785_000_000),
             text: "bonjour",
-            media: [photo]
+            media: [photo],
+            ownerUserId: "6a00000000000000000000aa"
         )
     }
 
@@ -49,6 +50,7 @@ final class ShareComposeContractTests: XCTestCase {
         XCTAssertEqual(relue.media.first?.mime, photo.mime)
         XCTAssertEqual(relue.media.first?.bytes, photo.bytes)
         XCTAssertEqual(relue.media.first?.ext, photo.ext)
+        XCTAssertEqual(relue.ownerUserId, "6a00000000000000000000aa", "le compte qui a déposé la fiche traverse (#10986)")
     }
 
     /// **Un partage de TEXTE seul** — `text` non-`nil`, `media` vide. La forme
@@ -57,7 +59,7 @@ final class ShareComposeContractTests: XCTestCase {
     func test_unPartageDeTexteSeul_traverse() throws {
         let fiche = ShareComposeHandoff(
             shareId: "s1", createdAt: Date(timeIntervalSince1970: 0),
-            text: "https://exemple.fr", media: [])
+            text: "https://exemple.fr", media: [], ownerUserId: nil)
         let relue = try JSONDecoder.meeshyShareCompose.decode(
             ShareComposeHandoffConsumer.Handoff.self,
             from: try JSONEncoder.meeshyShareCompose.encode(fiche))
@@ -71,7 +73,7 @@ final class ShareComposeContractTests: XCTestCase {
     func test_unPartageSansTexte_traverse() throws {
         let fiche = ShareComposeHandoff(
             shareId: "s2", createdAt: Date(timeIntervalSince1970: 0),
-            text: nil, media: [photo])
+            text: nil, media: [photo], ownerUserId: nil)
         let relue = try JSONDecoder.meeshyShareCompose.decode(
             ShareComposeHandoffConsumer.Handoff.self,
             from: try JSONEncoder.meeshyShareCompose.encode(fiche))

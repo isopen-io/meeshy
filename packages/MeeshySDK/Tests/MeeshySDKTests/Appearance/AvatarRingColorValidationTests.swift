@@ -30,4 +30,31 @@ final class AvatarRingColorValidationTests: XCTestCase {
         XCTAssertFalse(AvatarRingStroke.isWellFormedHex("#12345"))
         XCTAssertFalse(AvatarRingStroke.isWellFormedHex("##123456"))
     }
+    // MARK: Huit couleurs et le contour sans trait de base (#10936)
+
+    private func ring(style: String, colors: Int, ornamentColor: Int) throws -> AvatarRingDesign {
+        let palette = (0..<colors).map { "\"#1F4E\(String(format: "%02X", $0 * 16))\"" }.joined(separator: ",")
+        let json = #"{"key":"rituel","stroke":{"style":"\#(style)","width":0.07,"colors":[\#(palette)]},"ornament":{"paths":[{"d":"M0 0 Z","color":\#(ornamentColor),"opacity":1}]}}"#
+        return try JSONDecoder().decode(AvatarRingDesign.self, from: Data(json.utf8))
+    }
+
+    func test_aRingOfEightColours_withoutBaseStroke_decodes() throws {
+        let decoded = try ring(style: "none", colors: 8, ornamentColor: 7)
+        XCTAssertEqual(decoded.stroke.style, RingStrokeStyle.none)
+        XCTAssertEqual(decoded.stroke.colors.count, 8)
+        XCTAssertEqual(decoded.ornament.first?.color, 7)
+    }
+
+    func test_aRingOfNineColours_orAnOrnamentPastTheEighth_failsClosed() {
+        XCTAssertThrowsError(try ring(style: "solid", colors: 9, ornamentColor: 0))
+        XCTAssertThrowsError(try ring(style: "solid", colors: 8, ornamentColor: 8))
+    }
+
+    func test_theEmbeddedCatalog_carriesTheSevenStyleContours_fixedAndAnimated() {
+        let styles = ["haussmannien", "arabe", "grec", "ancestral", "technologique", "rituel", "celte"]
+        for style in styles {
+            XCTAssertEqual(AvatarRingCatalog.shared.packs.first { $0.slug == "contours-\(style)" }?.rings.map(\.key), [style, style + "-anime"])
+            XCTAssertNotNil(AvatarRingCatalog.shared.packName("contours-\(style)", language: "de"))
+        }
+    }
 }

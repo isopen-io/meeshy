@@ -164,7 +164,9 @@ struct ReelRepostEmbedCell: View {
                     name: repost.author,
                     context: .postComment,
                     accentColor: repost.authorColor,
-                    avatarURL: repost.authorAvatarURL
+                    avatarURL: repost.authorAvatarURL,
+                    presenceState: PresenceManager.shared.knownPresenceState(for: repost.authorId),
+                    ring: repost.authorRing
                 )
                 Text("@\(repost.authorUsername ?? repost.author)")
                     .font(.footnote.weight(.semibold))

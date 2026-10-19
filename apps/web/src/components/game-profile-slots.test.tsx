@@ -62,17 +62,17 @@ describe('mon profil', () => {
     expect(host.querySelector('[data-profile-banner-game]') !== null).toBe(true);
   });
 
-  test('sur ma fiche : mes points et ce qu’il me reste, au début de la bannière (#10231)', async () => {
+  test('sur ma fiche : mes étincelles au début de la bannière ; ce qu’il me reste, le cercle le dit (#10231, #10951)', async () => {
     const host = await mount(<GameBannerOwnSlot enabled />);
     await settle();
     expect(host.querySelector('[data-profile-banner-level] [data-profile-banner-points]') !== null).toBe(true);
-    expect(host.querySelector('[data-profile-banner-level] [data-profile-banner-missing]') !== null).toBe(true);
+    expect(host.querySelector('[data-profile-banner-level] [data-profile-banner-missing]') === null).toBe(true);
   });
 
-  test('sur ma fiche : ma Gloire totale sous la poche, plus le total d’étincelles à vie (#10913)', async () => {
+  test('sur ma fiche : ma Gloire totale à côté du blason, plus le total d’étincelles à vie (#10913, #10951)', async () => {
     const host = await mount(<GameBannerOwnSlot enabled />);
     await settle();
-    expect(host.querySelector('[data-profile-banner-level] [data-profile-banner-glory="620"]') !== null).toBe(true);
+    expect(host.querySelector('[data-profile-banner-rank] [data-profile-banner-glory="620"]') !== null).toBe(true);
     expect(host.querySelector('[data-profile-banner-lifetime]') === null).toBe(true);
   });
 
@@ -107,7 +107,7 @@ describe('le profil d’un autre et la carte de contact', () => {
     appQueryClient.setQueryData(userGameQueryKey('stranger-1'), { visible: true, standing: shown, treasury: null });
     const friend = await mount(<GameBannerVisitorSlot userId="friend-3" enabled={false} />);
     await settle();
-    expect(friend.querySelector('[data-profile-banner-level] [data-profile-banner-glory="16000"]') !== null).toBe(true);
+    expect(friend.querySelector('[data-profile-banner-rank] [data-profile-banner-glory="16000"]') !== null).toBe(true);
     expect(friend.querySelector('[data-profile-banner-lifetime]') === null).toBe(true);
     const stranger = await mount(<GameBannerVisitorSlot userId="stranger-1" enabled={false} />);
     await settle();

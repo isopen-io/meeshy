@@ -164,9 +164,13 @@ model User {
   banner                    String?
   /// Le contour d'avatar ÉQUIPÉ (#10632) : `"<pack>/<item>"` d'un pack `avatar-ring` possédé. Visible des autres.
   equippedAvatarRing        String?
-  /// La bannière de design ÉQUIPÉE (#10632) : `"<pack>/<item>"` d'un pack `banner` possédé. Non nulle, elle
-  /// prime sur l'image `banner` ; nulle, l'image `banner` (ou le défaut) s'affiche.
+  /// La bannière de design ÉQUIPÉE (#10632) : `"<pack>/<item>"` d'un pack `banner` possédé — le FOND. La photo
+  /// `banner` gagne toujours (#10933) : le design ne se peint qu'en son absence, sinon le défaut.
   equippedBanner            String?
+  /// Le CADRE de bannière ÉQUIPÉ (#10932) : `"<pack>/<item>"` d'un pack `banner-frame` possédé. Il se pose SUR la
+  /// photo de bannière (ou, sans photo, sur le fond), centre transparent : il ne remplace ni l'une ni l'autre.
+  /// Visible des autres. Absent des documents antérieurs = aucun cadre (aucun rattrapage nécessaire).
+  equippedBannerFrame       String?
   isOnline                  Boolean  @default(false)
   /// Updated on every detectable activity (heartbeat, API request, typing, message send)
   lastActiveAt              DateTime @default(now())

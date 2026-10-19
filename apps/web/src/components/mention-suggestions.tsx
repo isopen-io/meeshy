@@ -5,7 +5,7 @@ import { initialsOf } from '@/lib/view/conversation';
 import { mentionOptionId, type MentionField } from '@/lib/view/use-mention-field';
 import { colorForName } from '@meeshy/shared/utils/conversation-colors';
 
-import { Avatar } from './avatar';
+import { PeerAvatar } from './peer-avatar';
 
 export { mentionOptionId };
 
@@ -109,7 +109,9 @@ export function MentionSuggestions({
                 className="flex min-h-11 cursor-pointer items-center gap-3 px-3 py-2"
                 style={selected ? { backgroundColor: 'color-mix(in srgb, var(--accent) 14%, transparent)' } : undefined}
               >
-                <Avatar
+                <PeerAvatar
+                  presenceKey={candidate.id}
+                  ringRef={candidate.ring}
                   initials={initialsOf(candidate.displayName)}
                   color={colorForName(candidate.displayName)}
                   size={32}

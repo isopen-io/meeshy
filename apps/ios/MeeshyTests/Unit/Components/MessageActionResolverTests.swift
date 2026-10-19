@@ -758,63 +758,28 @@ final class MessageExitOfferTests: XCTestCase {
 
     // MARK: - Sélection multiple
 
-    func test_selection_offersForward_onlyWhenEveryMessageForwards() {
+    /// D6 (#10949) : une sélection mixte s'ouvre sur l'écran de partage, qui
+    /// RETIRE le protégé avec son motif et envoie le reste ; seule une sélection
+    /// où rien ne sort retire l'action. D8 : un flouté se transfère.
+    func test_selection_offersForward_whenAtLeastOneMessageForwards() {
         let ordinary = message(of: .ordinary, id: "a")
         let timed = message(of: .timedFlame, id: "b")
         XCTAssertTrue(MessageExitOffer.selectionOffersForward([]))
         XCTAssertTrue(MessageExitOffer.selectionOffersForward([ordinary, timed]))
         for nature in [Nature.afterReadFlame, .viewOnce] {
-            XCTAssertFalse(MessageExitOffer.selectionOffersForward([ordinary, message(of: nature, id: "c"), timed]),
-                           "\(nature) : un seul message non transférable retire l'action")
+            XCTAssertTrue(MessageExitOffer.selectionOffersForward([ordinary, message(of: nature, id: "c"), timed]),
+                          "\(nature) : le protégé est retiré par l'écran, le reste part")
+            XCTAssertFalse(MessageExitOffer.selectionOffersForward([message(of: nature, id: "c")]),
+                           "\(nature) : rien ne sort, l'action n'est pas rendue")
         }
-        XCTAssertFalse(MessageExitOffer.selectionOffersForward([ordinary, message("d", effects: MessageEffects(flags: .blurred))]))
+        XCTAssertTrue(MessageExitOffer.selectionOffersForward([message("d", effects: MessageEffects(flags: .blurred))]))
     }
 
-    // MARK: - Feuille de transfert
-
-    func test_forwardSheet_ordinary_hasNoDurationRow_andPublishes() {
-        let offer = ForwardSheetOffer(message: message(of: .ordinary))
-        XCTAssertTrue(offer.durationChoices.isEmpty)
-        XCTAssertNil(offer.selectedDuration(chosen: nil))
-        XCTAssertTrue(offer.publishes)
-        XCTAssertTrue(offer.imaginesDiscussion)
-    }
-
-    func test_forwardSheet_timedFlame_offersTiersUpToTheSource_preselected_andNothingElse() {
-        let offer = ForwardSheetOffer(message: message(of: .timedFlame))
-        XCTAssertEqual(offer.durationChoices.map(\.seconds), [15, 30, 60, 300])
-        XCTAssertEqual(offer.selectedDuration(chosen: nil), 300, "la durée de la source est présélectionnée")
-        XCTAssertEqual(offer.selectedDuration(chosen: 30), 30)
-        XCTAssertEqual(offer.selectedDuration(chosen: 3600), 300, "un palier au-dessus de la source n'est pas un choix")
-        XCTAssertFalse(offer.publishes)
-        XCTAssertFalse(offer.imaginesDiscussion)
-    }
-
-    func test_forwardSheet_offTierSource_showsItsDurationFirst() {
-        let flame = message(effects: MessageEffects(flags: .ephemeral, ephemeralDuration: 45))
-        let offer = ForwardSheetOffer(message: flame)
-        XCTAssertEqual(offer.durationChoices.map(\.seconds), [45, 15, 30])
-        XCTAssertEqual(offer.selectedDuration(chosen: nil), 45)
-    }
-
-    func test_forwardSheet_batch_isBoundedByItsLongestFlame() {
-        let short = message("a", effects: MessageEffects(flags: .ephemeral, ephemeralDuration: 30))
-        let long = message("b", effects: MessageEffects(flags: .ephemeral, ephemeralDuration: 300))
-        let offer = ForwardSheetOffer(message: short, additionalMessages: [message(of: .ordinary, id: "c"), long])
-        XCTAssertEqual(offer.durationChoices.map(\.seconds), [15, 30, 60, 300])
-        XCTAssertFalse(offer.publishes, "le message désigné est une flamme")
-    }
-
-    func test_forwardSheet_refusedBatch_hasNoDurationRow() {
-        let offer = ForwardSheetOffer(message: message(of: .timedFlame, id: "a"),
-                                      additionalMessages: [message(of: .viewOnce, id: "b")])
-        XCTAssertFalse(offer.forward.isAllowed)
-        XCTAssertTrue(offer.durationChoices.isEmpty)
-    }
+    // MARK: - Rangée de durée de l'écran de partage
 
     func test_durationRow_speaksAWholeDuration() {
-        XCTAssertFalse(ForwardDurationRow.spokenDuration(seconds: 30).isEmpty)
-        XCTAssertNotEqual(ForwardDurationRow.spokenDuration(seconds: 30), ForwardDurationRow.spokenDuration(seconds: 300))
+        XCTAssertFalse(ShareDurationRow.spokenDuration(seconds: 30).isEmpty)
+        XCTAssertNotEqual(ShareDurationRow.spokenDuration(seconds: 30), ShareDurationRow.spokenDuration(seconds: 300))
     }
 
     // MARK: - Visionneuses

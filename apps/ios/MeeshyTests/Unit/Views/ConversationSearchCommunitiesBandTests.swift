@@ -1,4 +1,5 @@
 import XCTest
+import MeeshySDK
 @testable import Meeshy
 
 /// **La bande des communautés de la recherche est deux fois plus petite et
@@ -34,5 +35,35 @@ final class ConversationSearchCommunitiesBandTests: XCTestCase {
         let twoLines = 2 * (CommunityCardMetrics.nameSize * 1.2)
         XCTAssertLessThanOrEqual(twoLines + 2 * CommunityCardMetrics.padding, CommunityCardMetrics.height)
         XCTAssertGreaterThanOrEqual(CommunityCardMetrics.nameSize, 11, "plus petit que caption2, le nom ne se lit plus")
+    }
+
+    // MARK: - #10924 — des communautés, ou rien ; jamais les filtres en double
+
+    private func community(_ id: String) -> MeeshyCommunity {
+        MeeshyCommunity(id: id, identifier: "mshy_\(id)", name: "Communauté \(id)")
+    }
+
+    /// « Communautés · Voir tout » au-dessus d'une bande vide est un titre qui
+    /// ment : sans communauté, la bande ne se peint pas du tout.
+    func test_band_isNotDrawn_whenTheUserHasNoCommunity() {
+        XCTAssertFalse(ConversationSearchCommunitiesBandLaw.drawsBand(for: []))
+    }
+
+    func test_band_isDrawn_assoonAsTheUserHasOneCommunity() {
+        XCTAssertTrue(ConversationSearchCommunitiesBandLaw.drawsBand(for: [community("a")]))
+    }
+
+    /// Les filtres vivent EN TÊTE de liste, en continu (#4069) : le panneau de
+    /// recherche les répétait sous la bande des communautés.
+    func test_searchPanel_carriesNoFilterChips() throws {
+        let code = AppSourceGuard.stripComments(
+            try AppSourceGuard.unit("Meeshy/Features/Main/Views/ConversationListView+Overlays.swift")
+        )
+        let start = try XCTUnwrap(code.range(of: "struct ConversationListBottomBar"))
+        let end = try XCTUnwrap(code.range(of: "struct ConversationSearchFieldHost"))
+        let bar = String(code[start.upperBound..<end.lowerBound])
+        XCTAssertFalse(bar.contains("ThemedFilterChip("), "le panneau de recherche ne répète pas les filtres de tête de liste")
+        XCTAssertFalse(bar.contains("ConversationFilter.allCases"))
+        XCTAssertTrue(bar.contains("ConversationSearchCommunitiesBandLaw.drawsBand(for: userCommunities)"))
     }
 }

@@ -4,8 +4,12 @@ import Foundation
 //
 // MIROIR de `packages/shared/types/avatar-ring-design.ts` : un contour d'avatar.
 // Il se voit des AUTRES, donc ses couleurs sont FIXES (aucun rôle `accent`).
-// Les traits d'ornement désignent leur couleur par l'INDEX dans `stroke.colors`.
+// Les traits d'ornement désignent leur couleur par l'INDEX dans `stroke.colors` (1 à 8,
+// #10936) ; `none` ne trace aucun trait de base : l'ornement dessine tout.
 // Ce sont des DONNÉES (hex, chemins, nombres) : rien de reçu n'est interprété.
+// Dégradés et mouvements déclarés (#10932, `FrameDecor.swift`) : FACULTATIFS et
+// tolérants — un contour de l'ancien format se lit sans eux, un mouvement inconnu
+// est ignoré.
 
 public enum RingStrokeStyle: String, Codable, Sendable, Hashable {
     case solid
@@ -13,6 +17,8 @@ public enum RingStrokeStyle: String, Codable, Sendable, Hashable {
     case dotted
     case dashed
     case gradient
+    /// Aucun trait de base : l'ornement dessine tout (#10936).
+    case none
 }
 
 public struct AvatarRingStroke: Codable, Hashable, Sendable {
@@ -34,28 +40,50 @@ public struct AvatarRingOrnamentPath: Codable, Hashable, Sendable {
     public let color: Int
     public let opacity: Double
     public let width: Double?
+    /// Index dans `AvatarRingDesign.gradients` ; `color` reste le repli.
+    public let gradient: Int?
+    /// Le groupe que les mouvements désignent.
+    public let group: String?
+
+    public init(d: String, color: Int, opacity: Double, width: Double? = nil, gradient: Int? = nil, group: String? = nil) {
+        self.d = d
+        self.color = color
+        self.opacity = opacity
+        self.width = width
+        self.gradient = gradient
+        self.group = group
+    }
 }
 
 public struct AvatarRingDesign: Codable, Hashable, Sendable, Identifiable {
     /// Le rayon du cercle de l'avatar dans le viewBox 0 0 100 100.
     public static let avatarRadius: Double = 42
+    /// La palette d'un contour : huit couleurs au plus, comme un cadre de bannière (#10936, `RING_MAX_COLORS`).
+    public static let maxColors = 8
 
     public let key: String
     public let stroke: AvatarRingStroke
     public let ornament: [AvatarRingOrnamentPath]
     /// Couche animée facultative (D6, #10638), jouée au-dessus du contour ; illisible ⇒ ignorée.
     public let lottie: PackAssetRef?
+    /// Les dégradés que les traits désignent par index ; un dégradé illisible garde sa place (`nil`).
+    public let gradients: [FrameGradient?]
+    /// Les mouvements déclarés (#10932) ; un mouvement inconnu ou hors bornes est ignoré.
+    public let motion: [FrameMotion]
 
     public var id: String { key }
 
-    private enum CodingKeys: String, CodingKey { case key, stroke, ornament, lottie }
+    private enum CodingKeys: String, CodingKey { case key, stroke, ornament, lottie, gradients, motion }
     private enum OrnamentKeys: String, CodingKey { case paths }
 
-    public init(key: String, stroke: AvatarRingStroke, ornament: [AvatarRingOrnamentPath] = [], lottie: PackAssetRef? = nil) {
+    public init(key: String, stroke: AvatarRingStroke, ornament: [AvatarRingOrnamentPath] = [], lottie: PackAssetRef? = nil,
+                gradients: [FrameGradient?] = [], motion: [FrameMotion] = []) {
         self.key = key
         self.stroke = stroke
         self.ornament = ornament
         self.lottie = lottie
+        self.gradients = gradients
+        self.motion = motion
     }
 
     /// Fail-closed : un contour sans couleur, ou dont un trait désigne une couleur absente, ne se lit pas.
@@ -63,8 +91,8 @@ public struct AvatarRingDesign: Codable, Hashable, Sendable, Identifiable {
         let c = try decoder.container(keyedBy: CodingKeys.self)
         key = try c.decode(String.self, forKey: .key)
         stroke = try c.decode(AvatarRingStroke.self, forKey: .stroke)
-        guard (1...4).contains(stroke.colors.count) else {
-            throw DecodingError.dataCorruptedError(forKey: .stroke, in: c, debugDescription: "un contour porte de 1 à 4 couleurs")
+        guard (1...Self.maxColors).contains(stroke.colors.count) else {
+            throw DecodingError.dataCorruptedError(forKey: .stroke, in: c, debugDescription: "un contour porte de 1 à 8 couleurs")
         }
         // Données d'un pack, parfois d'un vendeur tiers : une couleur illisible ferait planter le dessin.
         guard stroke.colors.allSatisfy(AvatarRingStroke.isWellFormedHex) else {
@@ -73,6 +101,8 @@ public struct AvatarRingDesign: Codable, Hashable, Sendable, Identifiable {
         let nested = try? c.nestedContainer(keyedBy: OrnamentKeys.self, forKey: .ornament)
         ornament = try nested?.decode([AvatarRingOrnamentPath].self, forKey: .paths) ?? []
         lottie = (try? c.decodeIfPresent(PackAssetRef.self, forKey: .lottie)) ?? nil
+        gradients = FrameGradient.list(from: c, forKey: .gradients, colorCount: stroke.colors.count)
+        motion = FrameMotion.list(from: c, forKey: .motion)
         guard ornament.allSatisfy({ $0.color >= 0 && $0.color < stroke.colors.count }) else {
             throw DecodingError.dataCorruptedError(forKey: .ornament, in: c, debugDescription: "un trait désigne une couleur absente")
         }
@@ -87,6 +117,10 @@ public struct AvatarRingDesign: Codable, Hashable, Sendable, Identifiable {
             try nested.encode(ornament, forKey: .paths)
         }
         try c.encodeIfPresent(lottie, forKey: .lottie)
+        // Un dégradé illisible ne se réencode pas : compacter décalerait les index des traits.
+        let readable = gradients.compactMap { $0 }
+        if !readable.isEmpty, readable.count == gradients.count { try c.encode(readable, forKey: .gradients) }
+        if !motion.isEmpty { try c.encode(motion, forKey: .motion) }
     }
 }
 

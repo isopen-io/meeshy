@@ -43,7 +43,7 @@ const settleLazy = async (): Promise<void> => {
 const mount = () =>
   mounter.mount(
     <QueryClientProvider client={appQueryClient}>
-      <SendSheetHost />
+      <SendSheetHost queue={false} />
     </QueryClientProvider>,
   );
 
@@ -60,7 +60,7 @@ describe('SendSheetHost — une feuille, ouverte par n’importe quelle entrée'
     });
     await settleLazy();
     expect(host.querySelector('dialog')?.open).toBe(true);
-    expect(host.querySelector('h2')?.textContent).toBe('Partager');
+    expect(host.querySelector('h2')?.textContent).toBe('Envoyer');
 
     await mounter.click(buttonNamed(host, 'Annuler'));
     await act(async () => {
@@ -82,7 +82,7 @@ describe('SendSheetHost — une feuille, ouverte par n’importe quelle entrée'
     });
     await settleLazy();
     expect(sendSheetStore.getState().request).toBe(second);
-    expect(host.querySelector('h2')?.textContent).toBe('Transférer');
+    expect(host.querySelector('[data-send-zone="what-leaves"]')?.textContent).toContain('Deux');
     expect(host.textContent).toContain('Deux');
   });
 });

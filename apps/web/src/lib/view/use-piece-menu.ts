@@ -7,7 +7,9 @@ import type { Attachment, Message } from '@/lib/api/types';
 import { translate } from '@/lib/i18n-catalog';
 import { isMessagePiecesCatalogLoaded, translateMessagePieces } from '@/lib/i18n-message-pieces-catalog';
 import { currentInterfaceLanguage } from '@/lib/interface-language';
+import { findCachedConversation } from '@/lib/api/conversations';
 import { openSendSheet } from '@/lib/send/send-sheet-store';
+import { conversationEncrypted } from '@/lib/send/share-entry';
 
 import type { AttachmentReactionOutcome } from './attachment-reaction';
 import { kindOf } from './message';
@@ -153,7 +155,9 @@ export function usePieceMenu(params: {
         return;
       }
       if (id === 'pieceForward') {
-        openSendSheet(attachmentSendRequest({ attachment: piece, message, mine: message.senderId === viewerId, now: Date.now() }));
+        openSendSheet(
+          attachmentSendRequest({ attachment: piece, message, now: Date.now(), sourceEncrypted: conversationEncrypted(findCachedConversation(queryClient, conversationId)) }),
+        );
         return;
       }
       if (id === 'pieceSave') {

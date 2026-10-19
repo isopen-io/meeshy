@@ -24,8 +24,10 @@ import { participantAvatarOf } from '@/lib/view/conversation';
  * une forme APLATIE, où la photo est DÉJÀ résolue et où `username` vaut le
  * NOM LOCAL quand le participant n'a pas de compte — d'où la règle ci-dessous.
  *
- * La présence n'est pas lue ici : la feuille n'en peint aucune, et la
- * passerelle ne la sert qu'aux amis (directive 2026-08-25).
+ * La présence n'est pas lue ici, même servie (aux amis seuls, directive
+ * 2026-08-25) : la page est persistée, et la présence d'autrui n'entre dans
+ * aucun cache persisté (D-60). Chaque rangée la lit dans la carte vivante
+ * (`MemberAvatar`, #10944).
  */
 export type ConversationMember = {
   readonly id: string;

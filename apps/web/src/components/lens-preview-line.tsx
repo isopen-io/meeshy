@@ -157,6 +157,8 @@ export type JoinCallRequest = {
   readonly title: string;
   readonly avatar: string | null;
   readonly isGroup: boolean;
+  /** Le compte du pair d'un direct (#10956) : l'appel rejoint peint sa présence servie. */
+  readonly peerKey?: string | null;
 };
 
 /**

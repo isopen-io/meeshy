@@ -268,7 +268,8 @@ final class Router: ObservableObject {
         didSet { if refusesProfiles, participantProfileTarget != nil { participantProfileTarget = nil } }
     }
 
-    @Published var pendingShareContent: SharedContentType? = nil
+    /// Ce que le lien profond de partage remet à l'écran de partage unique (#10947).
+    @Published var pendingShareContent: ShareSubject? = nil
 
     /// Reply context awaiting consumption by the next ConversationView that
     /// appears (on tap of a story's reply button). Cleared when the conversation
@@ -706,7 +707,7 @@ final class Router: ObservableObject {
         popToRoot()
 
         if let urlString, let url = URL(string: urlString) {
-            pendingShareContent = .url(url)
+            pendingShareContent = .link(url)
         } else if let text, !text.isEmpty {
             pendingShareContent = .text(text)
         } else {

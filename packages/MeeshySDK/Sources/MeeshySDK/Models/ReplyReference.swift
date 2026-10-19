@@ -188,6 +188,10 @@ public struct ReplyReference: Codable, Equatable, Sendable {
     /// texte brut, jamais cliquables. Optionnel pour les blobs `replyToJson`
     /// gravés avant ce champ.
     public var authorIsAnonymous: Bool?
+    /// Le contour équipé de l'auteur cité (#10946), GRAVÉ à la réception depuis
+    /// `replyTo.sender.profileDecor` — comme son portrait. Optionnel pour les blobs
+    /// `replyToJson` gravés avant ce champ.
+    public var authorRing: ServedProfileDecorItem?
 
     /// Le nombre de tuiles que « +N » annonce au-delà de la face, ou `nil`.
     public var quotedExtraPieceCount: Int? {

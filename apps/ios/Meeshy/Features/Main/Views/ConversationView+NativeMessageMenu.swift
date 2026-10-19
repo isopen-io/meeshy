@@ -195,7 +195,7 @@ extension ConversationView {
                 Label(action == .favoriteSticker ? StickerFavoriteCopy.add : StickerFavoriteCopy.remove,
                       systemImage: action == .favoriteSticker ? "star" : "star.slash")
             }
-        case .wholeMessage, .replyToPiece, .deletePiece:
+        case .wholeMessage, .replyToPiece, .deletePiece, .forwardPiece:
             // Le menu d'une PIÈCE seulement (#9907, #9908) — jamais servi ici.
             EmptyView()
         }

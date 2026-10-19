@@ -10,16 +10,6 @@ enum GameSparksCopy {
         GameCopy.points(count)
     }
 
-    /// La poche, en grand sur la bannière d'une fiche : « 976 ✦ ».
-    static func bannerPocket(_ count: Int) -> String {
-        String(localized: "game.sparks.banner.pocket", defaultValue: "\(GameCopy.formatCount(count)) ✦", bundle: .main)
-    }
-
-    /// Le record de niveau, en petit sous le niveau : « record 40 ».
-    static func bannerLevelMax(_ level: Int) -> String {
-        String(localized: "game.sparks.banner.levelMax", defaultValue: "record \(GameCopy.formatCount(level))", bundle: .main)
-    }
-
     /// « Record de niveau 40 ».
     static func levelMaxAccessibility(_ level: Int) -> String {
         String(localized: "game.sparks.levelMax.a11y", defaultValue: "Record de niveau \(GameCopy.formatCount(level))", bundle: .main)

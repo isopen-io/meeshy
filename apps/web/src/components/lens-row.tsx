@@ -21,7 +21,7 @@ import { useSpeaksAsGuest } from '@/lib/view/guest-focus';
 import type { AuthorStoryRing } from '@/lib/view/author-story-ring';
 import { conversationAvatarDoor } from '@/lib/view/thread-header-offer';
 import { currentInterfaceLanguage } from '@/lib/interface-language';
-import { avatarOf, initialsOf, isGroup, peerOf, titleOf } from '@/lib/view/conversation';
+import { avatarOf, initialsOf, isGroup, peerOf, presenceKeyOf, titleOf } from '@/lib/view/conversation';
 import { servedRingOf, useRingDesign } from '@/lib/profile-decor/author-ring';
 import { usePresence } from '@/lib/view/use-presence';
 import { useConversationPreview } from '@/lib/view/use-conversation-preview';
@@ -249,6 +249,8 @@ function LensRowImpl({
   })();
   /* LE CONTOUR DU PAIR (#10713) — servi avec le participant, additif : sans lui, l'avatar d'avant. */
   const peerRing = useRingDesign(servedRingOf(peerOf(conversation, viewerId)));
+  /* LE COMPTE DU PAIR, pour que l'appel lancé d'ici peigne sa présence servie (#10956). */
+  const callPeerKey = group ? null : (presenceKeyOf(peerOf(conversation, viewerId)) ?? null);
   useColorScheme();
   const accent = accentOf(conversation);
   const guest = useSpeaksAsGuest();
@@ -283,7 +285,7 @@ function LensRowImpl({
     if (id === 'block') return onRowIntent?.(conversation.id, { kind: 'block', intent: peerBlocked === true ? 'unblock' : 'block' });
     if (isRowFlagAction(id)) return onRowAction(conversation.id, id);
     if (!isRowCallAction(id)) return undefined;
-    callActions.start({ conversationId: conversation.id, media: id === 'callVideo' ? 'video' : 'audio', title, avatar: photo ?? null, isGroup: group });
+    callActions.start({ conversationId: conversation.id, media: id === 'callVideo' ? 'video' : 'audio', title, avatar: photo ?? null, isGroup: group, peerKey: callPeerKey });
   };
 
   /* LE BALAYAGE DE LA LIGNE (#10580) — les actions du menu, rangées par bord.
@@ -319,6 +321,8 @@ function LensRowImpl({
         here: peerHere,
         hereActive: peerActive,
         hereFocused: peerFocused,
+        /* LE CONTOUR DU PAIR (#10713, #10946) — sur les TROIS portes de l'avatar, pas seulement celle du profil. */
+        ...(peerRing === null ? {} : { ring: peerRing }),
         /* DANS LA LISTE, L'HUMEUR NE BOUGE PAS (#10528). */
         ...(peerMood === undefined
           ? {}
@@ -471,7 +475,6 @@ function LensRowImpl({
             name={title}
             opacity={chromeFade}
             profileUsername={peerHandle}
-            {...(group || peerRing === null ? {} : { ring: peerRing })}
             {...(photo === undefined ? {} : { src: photo })}
             {...peerSignals}
             {...(group || peerStoryRing === undefined ? {} : { storyRing: peerStoryRing })}
@@ -705,7 +708,7 @@ function LensRowImpl({
         {/* « REJOINDRE » (H4) — frère du lien, jamais dedans : voir `LensJoinCallButton`. */}
         {liveCall === null || !callsAvailable() ? null : (
           <LensJoinCallButton
-            request={{ conversationId: conversation.id, callId: liveCall.id, media: liveCall.kind === 'video' ? 'video' : 'audio', title, avatar: photo ?? null, isGroup: group }}
+            request={{ conversationId: conversation.id, callId: liveCall.id, media: liveCall.kind === 'video' ? 'video' : 'audio', title, avatar: photo ?? null, isGroup: group, peerKey: callPeerKey }}
             label={translate(currentInterfaceLanguage(), 'callJoin.named', { name: title })}
             text={translate(currentInterfaceLanguage(), 'callJoin.action')}
             onJoin={callActions.join}

@@ -72,6 +72,7 @@ const itStickerPacks = {
   'packs.domain.wallpaper': "Sfondi delle conversazioni",
   'packs.domain.avatar-ring': "Contorni avatar",
   'packs.domain.banner': "Banner",
+  'packs.domain.banner-frame': "Cornici del banner",
   'packs.domain.capture-frame': "Cornici di cattura",
   'packs.price': "{price} Meeshes",
   'packs.owned': "Posseduto",

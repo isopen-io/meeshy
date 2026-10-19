@@ -57,7 +57,6 @@ const ar = {
   'game.banner.place.other': 'المركز {count}',
   'game.banner.points': '{points} شرارة',
   'game.banner.missing': 'باقٍ {points} نحو المستوى {level}',
-  'game.banner.level_max': 'القياسي {level}',
   'game.banner.level_max_a11y': 'الرقم القياسي للمستوى {level}',
   'game.banner.link.sparks': 'الشرارات: {points}',
   'game.banner.link.trophies': 'الكؤوس: {count}',

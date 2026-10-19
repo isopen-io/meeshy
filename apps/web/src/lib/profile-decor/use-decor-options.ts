@@ -3,15 +3,17 @@ import { useEffect, useMemo, useState } from 'react';
 
 import type { AppearanceDesign } from '@meeshy/shared/types/appearance-design';
 import type { AvatarRingDesign } from '@meeshy/shared/types/avatar-ring-design';
+import type { BannerFrameDesign } from '@meeshy/shared/types/banner-frame-design';
 
 import { apiDeps } from '../api/deps';
 import { packQueryKeys } from '../api/pack-query-keys';
 import { loadInstalledAvatarRingPacks } from '../api/packs-avatar-ring';
 import { loadInstalledBannerPacks } from '../api/packs-banner';
+import { loadInstalledBannerFramePacks } from '../api/packs-banner-frame';
 import { appQueryClient } from '../api/query-client';
 import type { DecorSide } from './equip';
 import type { DesignPackSummary } from './pack-summary';
-import { bannerOptions, ringOptions, type ContractStore, type OptionGroup } from './resolve';
+import { bannerFrameOptions, bannerOptions, ringOptions, type ContractStore, type OptionGroup } from './resolve';
 import { sharedContractLoader } from './use-decor-designs';
 
 /**
@@ -24,17 +26,22 @@ import { sharedContractLoader } from './use-decor-designs';
 
 const STALE_TIME = 5 * 60 * 1000;
 
-const DOMAIN = { avatarRing: 'avatar-ring', banner: 'banner' } as const;
+const DOMAIN = { avatarRing: 'avatar-ring', banner: 'banner', bannerFrame: 'banner-frame' } as const;
+
+const LOADERS = { avatarRing: loadInstalledAvatarRingPacks, banner: loadInstalledBannerPacks, bannerFrame: loadInstalledBannerFramePacks } as const;
+
+const OPTIONS = { avatarRing: ringOptions, banner: bannerOptions, bannerFrame: bannerFrameOptions } as const;
 
 async function loadInstalled(side: DecorSide, signal: AbortSignal): Promise<readonly DesignPackSummary[]> {
-  const result = await (side === 'banner' ? loadInstalledBannerPacks : loadInstalledAvatarRingPacks)({ ...apiDeps, signal });
+  const result = await LOADERS[side]({ ...apiDeps, signal });
   if (!result.ok) throw new Error(result.error);
   return result.data;
 }
 
 export function useDecorOptions(side: 'avatarRing'): readonly OptionGroup<AvatarRingDesign>[];
 export function useDecorOptions(side: 'banner'): readonly OptionGroup<AppearanceDesign>[];
-export function useDecorOptions(side: DecorSide): readonly OptionGroup<AvatarRingDesign>[] | readonly OptionGroup<AppearanceDesign>[] {
+export function useDecorOptions(side: 'bannerFrame'): readonly OptionGroup<BannerFrameDesign>[];
+export function useDecorOptions(side: DecorSide): readonly OptionGroup<AvatarRingDesign>[] | readonly OptionGroup<AppearanceDesign>[] | readonly OptionGroup<BannerFrameDesign>[] {
   const installedQuery = useQuery(
     { queryKey: packQueryKeys(DOMAIN[side]).installed, queryFn: ({ signal }) => loadInstalled(side, signal), staleTime: STALE_TIME },
     appQueryClient,
@@ -55,5 +62,5 @@ export function useDecorOptions(side: DecorSide): readonly OptionGroup<AvatarRin
     };
   }, [installed, contracts]);
 
-  return useMemo(() => (side === 'banner' ? bannerOptions({ installed, contracts }) : ringOptions({ installed, contracts })), [side, installed, contracts]);
+  return useMemo(() => OPTIONS[side]({ installed, contracts }), [side, installed, contracts]);
 }

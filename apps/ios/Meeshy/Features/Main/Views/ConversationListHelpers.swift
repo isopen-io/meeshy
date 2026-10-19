@@ -165,7 +165,8 @@ struct ConversationPreviewView: View {
                     avatarURL: avatarURL,
                     storyState: storyState,
                     moodEmoji: moodEmoji,
-                    presenceState: presenceState
+                    presenceState: presenceState,
+                    ring: isDirect ? conversation.participantRing : nil
                 )
 
                 VStack(alignment: .leading, spacing: MeeshySpacing.sm) {

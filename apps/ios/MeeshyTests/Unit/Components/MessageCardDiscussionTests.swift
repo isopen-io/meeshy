@@ -130,6 +130,11 @@ final class MessageCardDiscussionTests: XCTestCase {
         ("nature non déclarée", quote(nature: nil)),
     ]
 
+    /// Le plan de l'écran de partage unique (#10947) pour ce message seul.
+    private static func sharePlan(_ message: Message) -> SharePlan {
+        SharePlanner.plan(entry: ShareSubject.messages([message], sourceConversationId: nil, conversationIsEncrypted: false).entry())
+    }
+
     func test_aReplyQuotingProtectedContent_offersNoImager_butKeepsItsOtherExits() {
         for (label, reference) in Self.protectedQuotes {
             let offer = Self.replying("r", to: reference).exitOffer
@@ -138,7 +143,7 @@ final class MessageCardDiscussionTests: XCTestCase {
             XCTAssertTrue(offer.offers(.forward), "citer \(label) : la réponse se transfère toujours")
             XCTAssertFalse(MessageCardSubject.isExportable(Self.replying("r", to: reference), now: Self.now),
                            "citer \(label) : aucune carte, même appelée par une autre porte")
-            XCTAssertFalse(ForwardSheetOffer(message: Self.replying("r", to: reference)).imaginesDiscussion,
+            XCTAssertFalse(Self.sharePlan(Self.replying("r", to: reference)).offers(.imager),
                            "citer \(label) : « Imager la discussion » n'est pas rendu depuis la réponse")
         }
     }
@@ -147,7 +152,7 @@ final class MessageCardDiscussionTests: XCTestCase {
         let reply = Self.replying("r", to: Self.quote(nature: .ordinary))
         XCTAssertTrue(reply.exitOffer.offers(.imagine))
         XCTAssertTrue(MessageCardSubject.isExportable(reply, now: Self.now))
-        XCTAssertTrue(ForwardSheetOffer(message: reply).imaginesDiscussion)
+        XCTAssertTrue(Self.sharePlan(reply).offers(.imager))
     }
 
     func test_aReplyToAStory_orToADeletedMessage_isNotConcerned() {

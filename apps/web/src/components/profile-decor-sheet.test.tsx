@@ -5,7 +5,8 @@ import type { ServedProfileDecorItem } from '@meeshy/shared/types/profile-decor'
 
 import { appearanceNames } from '@/lib/profile-decor/catalog';
 import { loadProfileDecorCatalog } from '@/lib/i18n-profile-decor-catalog';
-import { bannerOptions, ringOptions } from '@/lib/profile-decor/resolve';
+import { bannerFrameOptions, bannerOptions, ringOptions } from '@/lib/profile-decor/resolve';
+import type { DesignPackSummary } from '@/lib/profile-decor/pack-summary';
 
 import { DecorChoices, decorChoiceOf } from './profile-decor-sheet';
 
@@ -71,5 +72,25 @@ describe('le choix posé au toucher', () => {
   test('un pack officiel porte l’adresse de son contrat, pour que les autres le voient', () => {
     const group = { ...banners[0]!, origin: 'official' as const, contract: 'abcdef0123456789.json' };
     expect(decorChoiceOf(group, group.items[0]!.ref).contract).toBe('abcdef0123456789.json');
+  });
+});
+
+describe('le sélecteur de cadre de bannière (#10936)', () => {
+  const installed = [{ slug: 'cadres-celte', installed: true, owned: true, origin: 'builtin', contract: null, domain: 'banner-frame' } as unknown as DesignPackSummary];
+  const frames = bannerFrameOptions({ installed, contracts: new Map() });
+
+  test('« Aucun » en tête, puis les cadres installés, nommés ; la boutique s’ouvre sur les cadres', () => {
+    const html = renderToStaticMarkup(<DecorChoices side="bannerFrame" language="fr" groups={frames} names={names} current={null} accent="#6366F1" scheme="light" onChoose={noop} />);
+    expect((html.match(/role="radio"/g) ?? []).length).toBe(3);
+    expect(html.indexOf('Aucun')).toBeLessThan(html.indexOf('Celte animé'));
+    expect(html).toContain('Cadre celte');
+    expect(html).toContain('data-decor-choice="celte-anime"');
+    expect(html).toContain('domaine=banner-frame');
+  });
+
+  test('le cadre équipé est le seul coché', () => {
+    const html = renderToStaticMarkup(<DecorChoices side="bannerFrame" language="fr" groups={frames} names={names} current={item('cadres-celte', 'celte')} accent="#6366F1" scheme="light" onChoose={noop} />);
+    expect((html.match(/aria-checked="true"/g) ?? []).length).toBe(1);
+    expect(html).toMatch(/aria-checked="true"[^>]*data-decor-choice="celte"|data-decor-choice="celte"[^>]*aria-checked="true"/);
   });
 });

@@ -267,6 +267,8 @@ public struct UnifiedShopView: View {
             String(localized: "shop.domain.avatar_ring", defaultValue: "Contours", bundle: .module)
         case .banner:
             String(localized: "shop.domain.banner", defaultValue: "Bannières", bundle: .module)
+        case .bannerFrame:
+            String(localized: "shop.domain.banner_frame", defaultValue: "Cadres de bannière", bundle: .module)
         case .unknown:
             ""
         }

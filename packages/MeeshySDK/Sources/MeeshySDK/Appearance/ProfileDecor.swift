@@ -2,11 +2,13 @@ import Foundation
 
 // MARK: - ProfileDecor (#10632, spec §§ 5.5, 10.2)
 //
-// MIROIR de `packages/shared/types/profile-decor.ts` : le contour d'avatar et la
-// bannière de design ÉQUIPÉS sur le profil, VISIBLES des autres. Lecture
-// tolérante PAR CÔTÉ : un décor illisible n'empêche jamais d'ouvrir un profil,
-// et un contour illisible n'emporte pas la bannière. Un profil sans
-// `profileDecor` (ancien serveur) se rend comme avant.
+// MIROIR de `packages/shared/types/profile-decor.ts` : le contour d'avatar, la
+// bannière de design (le FOND) et le cadre de bannière (posé SUR la photo,
+// centre transparent, #10932) ÉQUIPÉS sur le profil, VISIBLES des autres.
+// Lecture tolérante PAR CÔTÉ : un décor illisible n'empêche jamais d'ouvrir un
+// profil, un contour illisible n'emporte pas la bannière, un côté inconnu est
+// ignoré. Un profil sans `profileDecor`, ou sans `bannerFrame` (ancien serveur),
+// se rend comme avant.
 
 public struct ProfileDecorRef: Codable, Hashable, Sendable {
     public let pack: String
@@ -38,32 +40,58 @@ public struct ServedProfileDecorItem: Codable, Hashable, Sendable {
 public struct ServedProfileDecor: Codable, Hashable, Sendable {
     public var avatarRing: ServedProfileDecorItem?
     public var banner: ServedProfileDecorItem?
+    /// Le cadre posé SUR la photo de bannière (ou le fond), centre transparent (#10932).
+    public var bannerFrame: ServedProfileDecorItem?
 
     public static let empty = ServedProfileDecor()
 
-    public init(avatarRing: ServedProfileDecorItem? = nil, banner: ServedProfileDecorItem? = nil) {
+    public init(avatarRing: ServedProfileDecorItem? = nil, banner: ServedProfileDecorItem? = nil, bannerFrame: ServedProfileDecorItem? = nil) {
         self.avatarRing = avatarRing
         self.banner = banner
+        self.bannerFrame = bannerFrame
     }
 
-    private enum CodingKeys: String, CodingKey { case avatarRing, banner }
+    private enum CodingKeys: String, CodingKey { case avatarRing, banner, bannerFrame }
 
     public init(from decoder: Decoder) throws {
         guard let c = try? decoder.container(keyedBy: CodingKeys.self) else { return }
         avatarRing = try? c.decodeIfPresent(ServedProfileDecorItem.self, forKey: .avatarRing)
         banner = try? c.decodeIfPresent(ServedProfileDecorItem.self, forKey: .banner)
+        bannerFrame = try? c.decodeIfPresent(ServedProfileDecorItem.self, forKey: .bannerFrame)
     }
 }
 
 public enum ProfileDecorSide: String, Sendable, Hashable, CaseIterable {
     case avatarRing
     case banner
+    case bannerFrame
+
+    /// Le domaine de pack du côté : on n'équipe un côté qu'avec un modèle de SON domaine.
+    public var packDomain: String {
+        switch self {
+        case .avatarRing: return "avatar-ring"
+        case .banner: return "banner"
+        case .bannerFrame: return "banner-frame"
+        }
+    }
 }
 
 extension ServedProfileDecor {
     public subscript(side: ProfileDecorSide) -> ServedProfileDecorItem? {
-        get { side == .avatarRing ? avatarRing : banner }
-        set { if side == .avatarRing { avatarRing = newValue } else { banner = newValue } }
+        get {
+            switch side {
+            case .avatarRing: return avatarRing
+            case .banner: return banner
+            case .bannerFrame: return bannerFrame
+            }
+        }
+        set {
+            switch side {
+            case .avatarRing: avatarRing = newValue
+            case .banner: banner = newValue
+            case .bannerFrame: bannerFrame = newValue
+            }
+        }
     }
 }
 
@@ -77,23 +105,30 @@ public struct ProfileDecorWrite: Encodable, Sendable, Equatable {
 
     public var avatarRing: Change
     public var banner: Change
+    public var bannerFrame: Change
 
-    public init(avatarRing: Change = .unchanged, banner: Change = .unchanged) {
+    public init(avatarRing: Change = .unchanged, banner: Change = .unchanged, bannerFrame: Change = .unchanged) {
         self.avatarRing = avatarRing
         self.banner = banner
+        self.bannerFrame = bannerFrame
     }
 
     public init(side: ProfileDecorSide, choice: ProfileDecorRef?) {
         let change: Change = choice.map(Change.set) ?? .clear
-        self.init(avatarRing: side == .avatarRing ? change : .unchanged, banner: side == .banner ? change : .unchanged)
+        self.init(
+            avatarRing: side == .avatarRing ? change : .unchanged,
+            banner: side == .banner ? change : .unchanged,
+            bannerFrame: side == .bannerFrame ? change : .unchanged
+        )
     }
 
-    private enum CodingKeys: String, CodingKey { case avatarRing, banner }
+    private enum CodingKeys: String, CodingKey { case avatarRing, banner, bannerFrame }
 
     public func encode(to encoder: Encoder) throws {
         var c = encoder.container(keyedBy: CodingKeys.self)
         try Self.encode(avatarRing, key: .avatarRing, in: &c)
         try Self.encode(banner, key: .banner, in: &c)
+        try Self.encode(bannerFrame, key: .bannerFrame, in: &c)
     }
 
     private static func encode(_ change: Change, key: CodingKeys, in c: inout KeyedEncodingContainer<CodingKeys>) throws {
@@ -170,6 +205,13 @@ public struct ProfileDecorUpdatedEvent: Decodable, Sendable, Equatable {
     }
 }
 
+/// Ce qu'une bannière de profil peint : sa photo, sinon le design équipé, sinon le dégradé par défaut.
+public enum ProfileBannerPaint: Equatable, Sendable {
+    case photo(String)
+    case design(AppearanceDesign)
+    case plain
+}
+
 /// Résolution du dessin d'un décor servi : le `builtin` se lit dans le catalogue EMBARQUÉ, sans réseau.
 /// Un pack non embarqué (contrat adressé par contenu) n'est pas encore chargé côté iOS : `nil`, le
 /// profil se peint sans décor — jamais en erreur.
@@ -182,6 +224,20 @@ public enum ProfileDecorResolver {
     public static func banner(_ item: ServedProfileDecorItem?, catalog: AppearanceCatalog = .shared) -> AppearanceDesign? {
         guard let item, isEmbedded(item) else { return nil }
         return catalog.bannerPacks.first { $0.slug == item.pack }?.designs.first { $0.key == item.item }
+    }
+
+    /// Le cadre posé SUR la bannière (#10935) : un `builtin` se lit dans le catalogue EMBARQUÉ (#10936).
+    public static func bannerFrame(_ item: ServedProfileDecorItem?, catalog: BannerFrameCatalog = .shared) -> BannerFrameDesign? {
+        guard let item, isEmbedded(item) else { return nil }
+        return catalog.frame(pack: item.pack, item: item.item)
+    }
+
+    /// Ce que la bannière d'un profil peint (#10933) : la photo gagne TOUJOURS ; le design équipé
+    /// ne se peint qu'en l'absence de photo, et rien ne se peint sans l'un ni l'autre.
+    public static func bannerPaint(photo: String?, decor: ServedProfileDecorItem?, catalog: AppearanceCatalog = .shared) -> ProfileBannerPaint {
+        if let photo, !photo.isEmpty { return .photo(photo) }
+        if let design = banner(decor, catalog: catalog) { return .design(design) }
+        return .plain
     }
 
     private static func isEmbedded(_ item: ServedProfileDecorItem) -> Bool {
@@ -216,6 +272,11 @@ public enum ProfileDecorOptions {
 
     public static func banners(installed: [ShopPack]?, catalog: AppearanceCatalog = .shared) -> [OptionGroup<AppearanceDesign>] {
         groups(installed: installed, builtin: catalog.bannerPacks.map { ($0.slug, $0.installedByDefault, $0.designs) })
+    }
+
+    /// Les cadres posés SUR la bannière (#10936) : aucun pack n'est installé d'office.
+    public static func bannerFrames(installed: [ShopPack]?, catalog: BannerFrameCatalog = .shared) -> [OptionGroup<BannerFrameDesign>] {
+        groups(installed: installed, builtin: catalog.framePacks.map { ($0.slug, $0.installedByDefault, $0.frames) })
     }
 
     /// `installed == nil` (liste pas encore lue / ancien serveur) : les packs installés d'office.

@@ -6,7 +6,7 @@ import { Glyph, GlyphSvg } from '@/components/glyph';
 import {   SECTION_CARD_STYLE } from '@/components/grouped-section';
 import { DISCOVER_GLYPHS } from '@/components/glyphs-discover';
 import { PROFILE_GLYPHS } from '@/components/glyphs-profile';
-import { ProfileBannerDesign, useScheme } from '@/components/profile-banner-design';
+import { bannerPaint, ProfileBannerDesign, ProfileBannerFrame, useScheme } from '@/components/profile-banner-design';
 import { ProfileImageButton, useProfileImageViewer } from '@/components/profile-image-viewer';
 import { attachmentSrc } from '@/lib/api/media-url';
 import type { PublicProfile } from '@/lib/api/public-profile';
@@ -85,12 +85,13 @@ export const ProfileHero = memo(function ProfileHero({
       {...(mood === undefined ? {} : { mood })}
     />
   );
+  const paint = bannerPaint({ image: profile.banner, design: designs.banner });
   return (
     <section data-user-hero aria-label={name} className="grid justify-items-center">
       <div data-user-banner className="relative w-full overflow-hidden rounded-card" style={{ height: 120 }}>
-        {designs.banner !== null ? (
-          <ProfileBannerDesign design={designs.banner} accent={accent} scheme={scheme} />
-        ) : profile.banner === null ? (
+        {paint.kind === 'design' ? (
+          <ProfileBannerDesign design={paint.design} accent={accent} scheme={scheme} />
+        ) : paint.kind === 'plain' ? (
           <span
             aria-hidden="true"
             className="block size-full"
@@ -98,9 +99,10 @@ export const ProfileHero = memo(function ProfileHero({
           />
         ) : (
           <ProfileImageButton kind="banner" onOpen={open} className="size-full">
-            <img src={attachmentSrc(profile.banner)} alt="" className="block size-full object-cover" />
+            <img src={attachmentSrc(paint.image)} alt="" className="block size-full object-cover" />
           </ProfileImageButton>
         )}
+        <ProfileBannerFrame frame={designs.bannerFrame} />
         {game}
       </div>
       <span className="relative block rounded-chip" style={{ marginTop: -45 - ringExtra, padding: 4, backgroundColor: 'var(--color-ios-surface)' }}>

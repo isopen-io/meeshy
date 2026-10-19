@@ -80,6 +80,9 @@ struct BubbleQuotedReply: View, Equatable {
     let accentHex: String
     let isDark: Bool
     let mentionDisplayNames: [String: String]
+    /// La présence SERVIE de l'auteur cité (#10956), résolue par l'hôte : une lecture de
+    /// magasin faite au rendu serait invisible du `==` manuel ci-dessous. `nil` ⇒ aucun point.
+    var authorPresence: PresenceState? = nil
     /// ZONE 1 — tap sur l'AVATAR de l'auteur cite -> sa fiche profil
     /// (resolution hote : `MessageListViewController.openQuotedAuthorProfile`,
     /// qui relit le message cite dans le store pour ouvrir le profil REEL).
@@ -114,6 +117,7 @@ struct BubbleQuotedReply: View, Equatable {
         lhs.accentHex == rhs.accentHex &&
         lhs.isDark == rhs.isDark &&
         lhs.mentionDisplayNames == rhs.mentionDisplayNames &&
+        lhs.authorPresence == rhs.authorPresence &&
         Self.replySlice(lhs.reply) == Self.replySlice(rhs.reply)
     }
 
@@ -146,7 +150,8 @@ struct BubbleQuotedReply: View, Equatable {
             moodEmoji: reply.moodEmoji,
             storyUnavailable: reply.storyUnavailable,
             quotedPieceCount: reply.quotedPieceCount,
-            authorIsAnonymous: reply.authorIsAnonymous
+            authorIsAnonymous: reply.authorIsAnonymous,
+            authorRing: reply.authorRing
         )
     }
 
@@ -197,6 +202,7 @@ struct BubbleQuotedReply: View, Equatable {
         let quotedPieceCount: Int?
         /// #10286 — un auteur sans compte rend ses adresses inertes.
         let authorIsAnonymous: Bool?
+        let authorRing: ServedProfileDecorItem?
     }
 
     private var theme: ThemeManager { ThemeManager.shared }
@@ -356,9 +362,10 @@ struct BubbleQuotedReply: View, Equatable {
     ///
     /// Composant PARTAGE du depot (`MeeshyAvatar`), a qui l'on confie son
     /// propre `onTap` : il porte alors sa forme de frappe CIRCULAIRE, son
-    /// retour haptique et son libelle — rien n'est redessine ici. Pas de
-    /// presence, pas d'anneau story, pas d'humeur : une citation est une trace
-    /// figee du passe, pas une carte de presence.
+    /// retour haptique et son libelle — rien n'est redessine ici. Pas d'anneau
+    /// story ni d'humeur : une citation est une trace figee du passe. La presence
+    /// SERVIE et le contour equipe, eux, se peignent comme sur tout avatar de la
+    /// personne (#10955, #10946).
     ///
     /// L'avatar est dessine MEME sans URL (initiales colorees, repli natif du
     /// composant) : la porte vers le profil ne depend jamais d'une photo.
@@ -370,6 +377,8 @@ struct BubbleQuotedReply: View, Equatable {
                 context: .custom(Self.authorAvatarSize),
                 accentColor: reply.isMe ? accentHex : reply.authorColor,
                 avatarURL: reply.authorAvatarUrl,
+                presenceState: reply.isMe ? nil : authorPresence,
+                ring: reply.authorRing,
                 enablePulse: false,
                 isDark: isDark,
                 onTap: authorGateTap

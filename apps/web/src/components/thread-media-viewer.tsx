@@ -10,6 +10,7 @@ import { browserFileDeliveryHost, hasFileDeliveryDoor } from '@/lib/media/file-d
 import type { MediaCarrier } from '@/lib/view/media';
 import { transcriptionOffered } from '@/lib/view/audio-on-demand';
 import { attachmentSendRequest, mediaPageOffers, type MediaViewerCapabilities } from '@/lib/view/viewer-page-offers';
+import { conversationEncrypted } from '@/lib/send/share-entry';
 import { isMineOf } from '@/lib/view/message';
 import { ThreadMediaContext } from '@/lib/view/thread-media-context';
 import { threadMediaEntriesOf } from '@/lib/view/thread-media-list';
@@ -137,7 +138,7 @@ export default function ThreadMediaViewer({
             offers,
             transcribe: transcriptionOffered({ attachment: entry.attachment, message: entry.message, conversationEncryptionMode: thread?.conversationEncryptionMode }),
             ...(offers.share
-              ? { share: attachmentSendRequest({ attachment: entry.attachment, message: entry.message, mine: isMineOf(entry.message, viewerId), now, quoted }) }
+              ? { share: attachmentSendRequest({ attachment: entry.attachment, message: entry.message, now, quoted, sourceEncrypted: conversationEncrypted({ encryptionMode: thread?.conversationEncryptionMode ?? null }) }) }
               : {}),
             onReply: () => {
               onClose();

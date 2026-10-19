@@ -400,7 +400,8 @@ extension Array where Element == APIPost {
                        // payloads/caches antérieurs à l'enrichissement gateway).
                        authorPresence: data.author.isOnline.map {
                            UserPresence(isOnline: $0, lastActiveAt: data.author.lastActiveAt)
-                       })
+                       },
+                       authorRing: data.author.avatarRing)
         }
         groups.sort { a, b in
             if let uid = currentUserId {

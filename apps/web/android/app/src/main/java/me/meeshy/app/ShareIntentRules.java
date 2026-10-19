@@ -8,13 +8,14 @@ import java.util.Locale;
  * et copie les contenus.
  *
  * Les plafonds bornent ce qui traverse le pont : un partage vient d'un tiers,
- * et les memes bornes gardent le service worker de la PWA
- * ({@code public/sw-share-target.js} : dix fichiers, 100 Mo).
+ * et ce sont les plafonds COMMUNS du partage (D10, #10949 :
+ * {@code packages/shared/utils/share-limits.ts}, vingt fichiers, 500 Mio), les
+ * memes que le service worker de la PWA ({@code public/sw-share-target.js}).
  */
 final class ShareIntentRules {
 
-    static final int MAX_FILES = 10;
-    static final long MAX_TOTAL_BYTES = 100L * 1024 * 1024;
+    static final int MAX_FILES = 20;
+    static final long MAX_TOTAL_BYTES = 500L * 1024 * 1024;
     static final int MAX_TEXT_CHARS = 20_000;
     static final int MAX_NAME_CHARS = 100;
 
@@ -29,9 +30,12 @@ final class ShareIntentRules {
         return ACTION_SEND.equals(action) || ACTION_SEND_MULTIPLE.equals(action);
     }
 
-    /** Les types que la feuille d'envoi sait envoyer — {@code AndroidManifest.xml} declare les memes. */
+    /**
+     * Tout fichier type — image, video, son, document (D9) : l'ecran de partage
+     * sait tous les envoyer, et la loi de sortie dit ce qui se publie.
+     */
     static boolean isAcceptedMime(String mimeType) {
-        return mimeType != null && (mimeType.startsWith("image/") || mimeType.startsWith("video/"));
+        return mimeType != null && !mimeType.isEmpty();
     }
 
     /**

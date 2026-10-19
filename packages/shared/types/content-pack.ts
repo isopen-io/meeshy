@@ -19,7 +19,8 @@
  */
 import type { GloryAtmosphere } from './glory-atmospheres.js';
 
-export const PACK_DOMAINS = ['sticker', 'glory-frame', 'capture-frame', 'wallpaper', 'avatar-ring', 'banner'] as const;
+/** `banner` : le FOND de bannière (un dessin qui s'affiche sans photo) ; `banner-frame` : le CADRE posé sur la photo, centre transparent (#10932). */
+export const PACK_DOMAINS = ['sticker', 'glory-frame', 'capture-frame', 'wallpaper', 'avatar-ring', 'banner', 'banner-frame'] as const;
 export type PackDomain = (typeof PACK_DOMAINS)[number];
 
 /** `builtin` : dessiné ou embarqué par le client ; `official` : publié par Meeshy ; `community` : proposé par un tiers (stickers seuls). */

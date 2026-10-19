@@ -259,6 +259,8 @@ function carrierIdentity(carrier: MediaCarrier | undefined): ViewerIdentityModel
     initials: initialsOf(carrier.sender.displayName),
     avatarColor: 'var(--accent, var(--color-ios-brand))',
     ...(carrier.sender.avatarUrl === null ? {} : { avatarSrc: carrier.sender.avatarUrl }),
+    ...(carrier.sender.presenceKey === undefined ? {} : { presenceKey: carrier.sender.presenceKey }),
+    ...(carrier.sender.ringRef === undefined ? {} : { ringRef: carrier.sender.ringRef }),
     time: {
       iso: carrier.sentAt,
       label: new Date(carrier.sentAt).toLocaleString(currentInterfaceLanguage(), { day: 'numeric', month: 'short', hour: '2-digit', minute: '2-digit' }),

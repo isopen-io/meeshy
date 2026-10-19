@@ -128,7 +128,6 @@ final class FixedFontSizeGuardTests: XCTestCase {
         "Features/Main/Components/ConversationLockSheet.swift",
         "Features/Main/Components/ConversationPreferencesTab.swift",
         "Features/Main/Components/EditPostSheet.swift",
-        "Features/Main/Components/ForwardPickerSheet.swift",
         "Features/Main/Components/InviteFriendsSheet.swift",
         "Features/Main/Components/LocationPickerView.swift",
         "Features/Main/Components/MemberManagementSection.swift",
@@ -296,7 +295,6 @@ final class FixedFontSizeGuardTests: XCTestCase {
         // sort de la liste (règle 4) : sa croix monte `FullscreenTopBar`.
         "Features/Main/Views/ReelsPlayerView+ActionRail.swift",
         "Features/Main/Views/ShareLinksView.swift",
-        "Features/Main/Views/SharePickerView.swift",
         "Features/Main/Views/StoryExportShareSheet.swift",
         "Features/Main/Views/StoryLanguageQuickBar.swift",
         "Features/Main/Views/StoryReactionFlightView.swift",
@@ -541,9 +539,10 @@ final class FixedFontSizeGuardTests: XCTestCase {
     func test_laClassificationSepareBienLesDeuxPopulations() throws {
         let sites = try allSites().map { $0.1 }
         // #9125 — 148 : les glyphes figés de l'ancienne `CameraView` sont
-        // partis avec elle. La borne garde un classifieur VIVANT, pas un compte.
-        XCTAssertGreaterThan(sites.filter { $0.receiver == .glyph }.count, 140,
-                             "les glyphes sont la population majoritaire (207 au 264i, 148 au #9125)")
+        // partis avec elle ; #10947 — 139 : ceux des deux anciens sélecteurs de
+        // partage aussi. La borne garde un classifieur VIVANT, pas un compte.
+        XCTAssertGreaterThan(sites.filter { $0.receiver == .glyph }.count, 130,
+                             "les glyphes sont la population majoritaire (207 au 264i, 148 au #9125, 139 au #10947)")
         XCTAssertGreaterThan(sites.filter { $0.receiver == .text }.count, 20,
                              "le texte figé existe (36 au 264i) — un 0 ici signerait un classifieur mort")
     }

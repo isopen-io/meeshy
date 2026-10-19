@@ -6,6 +6,7 @@ import { attachmentDefaults, message, VIEWER_ID } from '@/lib/api/fixtures-base'
 import { appQueryClient } from '@/lib/api/query-client';
 import type { Attachment } from '@/lib/api/types';
 import { loadSendSheetCatalog } from '@/lib/i18n-send-sheet-catalog';
+import { createSendQueue, memorySendQueueStorage } from '@/lib/send/send-queue';
 import type { SendSheetPorts } from '@/lib/send/send-sheet-run';
 import type { SendSheetRequest } from '@/lib/send/send-sheet-store';
 import { forwardRequestOf } from '@/lib/view/forward';
@@ -102,6 +103,7 @@ const forwardedTo: string[] = [];
 const ports: SendSheetPorts = {
   online: () => true,
   openDirect: async () => ({ ok: false, status: 500, error: 'inutilisé' }),
+  openGroup: async () => ({ ok: false, status: 500, error: 'inutilisé' }),
   forward: async (params) => {
     forwardedTo.push(`${params.sourceConversationId ?? ''}->${params.targetConversationId}:${params.messages.map((m) => m.id).join(',')}`);
     return { ok: true, count: params.messages.length };
@@ -120,7 +122,15 @@ const ports: SendSheetPorts = {
 const mount = async (request: SendSheetRequest) =>
   mounter.mount(
     <QueryClientProvider client={appQueryClient}>
-      <SendSheet request={request} viewerId={VIEWER_ID} language="fr" contentLanguage="fr" ports={ports} onClose={() => {}} />
+      <SendSheet
+        request={request}
+        viewerId={VIEWER_ID}
+        language="fr"
+        contentLanguage="fr"
+        ports={ports}
+        queue={createSendQueue({ activeViewer: () => VIEWER_ID, storage: memorySendQueueStorage(), portsFor: async () => ports })}
+        onClose={() => {}}
+      />
     </QueryClientProvider>,
   );
 
@@ -130,7 +140,7 @@ describe('Transfert du fil — la feuille d’envoi, cache-first', () => {
   test('le cache CHAUD se peint sans aucun squelette', async () => {
     seedCache();
     const host = await mount(forwardOf());
-    expect(host.textContent).not.toContain('…');
+    expect(host.querySelector('[data-send-skeleton]')).toBe(null);
     expect(row(host, 'conversation:c-cible')).not.toBe(null);
     expect(host.textContent).toContain('Équipe déploiement');
   });
@@ -159,17 +169,17 @@ describe('Transfert du fil — la feuille d’envoi, cache-first', () => {
 });
 
 describe('Transfert du fil — un seul message portant un seul média', () => {
-  test('une photo ouverte offre Ma story / Post — une image seule n’est pas un réel (#9286)', async () => {
+  test('une photo ouverte offre Ma story / Mon fil — une image seule n’est pas un réel (#9286)', async () => {
     seedCache();
     const host = await mount(forwardOf({ attachments: [photo()] }));
-    expect([...host.querySelectorAll('[data-send-publish]')].map((chip) => chip.textContent)).toEqual(['Ma story', 'Post']);
+    expect([...host.querySelectorAll('[data-send-publish]')].map((chip) => chip.textContent)).toEqual(['Ma story', 'Mon fil']);
   });
 
-  test('une photo à VUE UNIQUE n’offre rien et le dit', async () => {
+  test('une photo à VUE UNIQUE ne sort pas : la carte « ne sort pas de Meeshy », aucun destinataire', async () => {
     seedCache();
     const host = await mount(forwardOf({ attachments: [photo({ isViewOnce: true })] }));
     expect(host.querySelector('[data-send-publish]')).toBe(null);
-    expect(host.textContent).toContain('Contenu protégé');
+    expect(host.querySelector('[data-send-blocked]')?.textContent).toContain('Ce message ne sort pas de Meeshy');
   });
 
   test('un message texte seul n’offre aucune publication', async () => {

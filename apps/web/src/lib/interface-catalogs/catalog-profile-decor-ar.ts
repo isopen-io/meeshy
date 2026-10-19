@@ -4,8 +4,10 @@ import type { ProfileDecorCatalog } from '@/lib/i18n-profile-decor-catalog';
 const arProfileDecor = {
   'profileDecor.banner.entry': "اللافتة",
   'profileDecor.ring.entry': "الإطار",
+  'profileDecor.frame.entry': "إطار اللافتة",
   'profileDecor.banner.title': "لافتة الملف الشخصي",
   'profileDecor.ring.title': "إطار الصورة الرمزية",
+  'profileDecor.frame.title': "إطار اللافتة",
   'profileDecor.none': "بدون",
   'profileDecor.photo': "صورة",
   'profileDecor.shop': "المزيد في المتجر",

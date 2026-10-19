@@ -1,4 +1,4 @@
-import { Avatar } from '@/components/avatar';
+import { PeerAvatar } from '@/components/peer-avatar';
 import { Field } from '@/components/field';
 import { Glyph } from '@/components/glyph';
 import type { PersonSummary } from '@/lib/api/friend-requests';
@@ -195,7 +195,9 @@ function ChosenPeople({
                   className="flex items-center gap-2 rounded-chip py-1 ps-1 pe-2.5"
                   style={{ minHeight: 44, backgroundColor: 'var(--color-ios-card)', color: 'var(--color-ios-ink)' }}
                 >
-                  <Avatar
+                  <PeerAvatar
+                    presenceKey={person.id}
+                    ringRef={person.ring}
                     initials={initialsOf(name)}
                     color={colorForName(name)}
                     size={28}

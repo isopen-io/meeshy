@@ -30,6 +30,8 @@ struct RiverConversationHost: View {
     /// R-5 — résolveurs d'identité vivante et ouvertures, DITS par l'appelant
     /// (qui possède `PresenceManager`, `StoryViewModel`, le routeur).
     var presence: (MeeshyMessage) -> PresenceState? = { _ in nil }
+    /// #10956 — l'auteur a l'écran de cette conversation ouvert : le point « ici ».
+    var here: (MeeshyMessage) -> ConversationHere = { _ in .absent }
     var storyRing: (MeeshyMessage) -> StoryRingState = { _ in .none }
     var onOpenProfile: ((ProfileSheetUser) -> Void)? = nil
     var onViewStory: ((String) -> Void)? = nil
@@ -81,6 +83,7 @@ struct RiverConversationHost: View {
         bottomInset: CGFloat = 0,
         typingParticipants: [TypingParticipant] = [],
         presence: @escaping (MeeshyMessage) -> PresenceState? = { _ in nil },
+        here: @escaping (MeeshyMessage) -> ConversationHere = { _ in .absent },
         storyRing: @escaping (MeeshyMessage) -> StoryRingState = { _ in .none },
         onOpenProfile: ((ProfileSheetUser) -> Void)? = nil,
         onViewStory: ((String) -> Void)? = nil,
@@ -98,6 +101,7 @@ struct RiverConversationHost: View {
         self.bottomInset = bottomInset
         self.typingParticipants = typingParticipants
         self.presence = presence
+        self.here = here
         self.storyRing = storyRing
         self.onOpenProfile = onOpenProfile
         self.onViewStory = onViewStory
@@ -172,6 +176,7 @@ struct RiverConversationHost: View {
             viewerId: viewerId,
             text: text,
             presence: presence,
+            here: here,
             storyRing: storyRing
         )
         return memo.rendering(for: key, geometry: geometry) {
@@ -182,6 +187,7 @@ struct RiverConversationHost: View {
                 text: text,
                 time: { TimeStringCache.shared.format($0) },
                 presence: presence,
+                here: here,
                 storyRing: storyRing
             )
         }

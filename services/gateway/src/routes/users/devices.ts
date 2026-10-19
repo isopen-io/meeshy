@@ -10,7 +10,7 @@ import {
 } from '@meeshy/shared/types/api-schemas';
 import type { AuthenticatedRequest, UserIdParams } from './types';
 import { validatePagination } from '../../utils/pagination';
-import { servirParties } from '../directory/friend-requests-core';
+import { INCLUDE_PARTIES, servirParties } from '../directory/friend-requests-core';
 
 /**
  * Bloc `pagination` de la réponse de `GET /users/friend-requests`.
@@ -106,32 +106,8 @@ export async function getFriendRequests(fastify: FastifyInstance) {
       const [friendRequests, totalCount] = await Promise.all([
         fastify.prisma.friendRequest.findMany({
           where: whereClause,
-          include: {
-            sender: {
-              select: {
-                id: true,
-                username: true,
-                firstName: true,
-                lastName: true,
-                displayName: true,
-                avatar: true,
-                isOnline: true,
-                lastActiveAt: true
-              }
-            },
-            receiver: {
-              select: {
-                id: true,
-                username: true,
-                firstName: true,
-                lastName: true,
-                displayName: true,
-                avatar: true,
-                isOnline: true,
-                lastActiveAt: true
-              }
-            }
-          },
+          // #10945 — la projection UNIQUE des parties (contour équipé compris).
+          include: INCLUDE_PARTIES,
           orderBy: {
             createdAt: 'desc'
           },

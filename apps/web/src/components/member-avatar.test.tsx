@@ -27,12 +27,12 @@ const filet = { pack: 'contours-essentiels', item: 'filet', origin: 'builtin', c
 
 describe('l’avatar d’un membre dans la liste des membres (#10713)', () => {
   test('un membre qui porte un contour équipé le dessine dans l’empreinte de la rangée', () => {
-    const html = renderToStaticMarkup(<MemberAvatar member={member({ ring: filet })} accent="#6366F1" size={40} />);
+    const html = renderToStaticMarkup(<MemberAvatar member={member({ ring: filet })} accent="#6366F1" size={40} conversationId="c1" />);
     expect(html).toContain('data-avatar-ring="filet"');
     expect(html).toContain('width:40px;height:40px');
   });
 
   test('un membre sans contour garde l’avatar d’avant', () => {
-    expect(renderToStaticMarkup(<MemberAvatar member={member()} accent="#6366F1" size={40} />)).not.toContain('data-avatar-ring');
+    expect(renderToStaticMarkup(<MemberAvatar member={member()} accent="#6366F1" size={40} conversationId="c1" />)).not.toContain('data-avatar-ring');
   });
 });

@@ -12,6 +12,7 @@ import { LANDING_LANGUAGES, LANDING_SUBPATH_PATTERN, landingFiles } from './src/
 import { INLINE_INTERFACE_LANGUAGE_BOOTSTRAP } from './src/lib/inline-interface-language-bootstrap.js';
 import { INLINE_APP_SCHEME_BOOTSTRAP } from './src/lib/inline-scheme-bootstrap.js';
 import { declaredBuildFlag } from './src/lib/build-flag';
+import { loadedPreloadDeps } from './src/lib/build-preload-deps';
 import { apiCacheIdentityPlugin } from './src/lib/net/api-cache-identity';
 import { API_RESPONSE_CACHE_PATTERN } from './src/lib/net/api-runtime-cache';
 import { EMAIL_TOKEN_NAVIGATIONS } from './src/lib/net/email-token-navigations';
@@ -442,6 +443,14 @@ const productionBuildGuard = (): Plugin => {
   };
 };
 
+/** Voir `src/lib/build-preload-deps.ts` (#10974) : capturé AVANT que Vite écrive les listes de préchargement. */
+const preloadDeps = loadedPreloadDeps();
+const capturePreloadBundle = (): Plugin => ({
+  name: 'meeshy:capture-preload-bundle',
+  apply: 'build',
+  generateBundle: { order: 'pre', handler: (_options, bundle) => preloadDeps.capture(bundle) },
+});
+
 const proxyTarget = process.env.MEESHY_PROXY_TARGET ?? 'https://gate.staging.meeshy.me';
 
 export default defineConfig({
@@ -566,6 +575,7 @@ export default defineConfig({
   },
   plugins: [
     productionBuildGuard(),
+    capturePreloadBundle(),
     tailwind(),
     inlineSchemeBootstrap(),
     inlineInterfaceLanguageBootstrap(),
@@ -946,6 +956,7 @@ export default defineConfig({
   worker: { format: 'es' },
   build: {
     target: 'es2022',
+    modulePreload: { resolveDependencies: preloadDeps.resolveDependencies },
     cssCodeSplit: true,
     reportCompressedSize: true,
     rollupOptions: {

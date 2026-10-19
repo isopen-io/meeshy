@@ -151,3 +151,11 @@ public extension MeeshyMessage {
         senderIsAnonymous ? senderId : (senderUserId ?? senderId)
     }
 }
+
+public extension PaginatedParticipant {
+    /// La même clé pour un membre de la liste (#10944) : son COMPTE s'il est
+    /// inscrit, sa PARTICIPATION sinon — `id` est toujours la participation.
+    var viewingKey: String {
+        isAnonymous ? id : (userId ?? id)
+    }
+}

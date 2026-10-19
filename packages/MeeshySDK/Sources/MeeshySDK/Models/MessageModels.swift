@@ -750,8 +750,13 @@ public struct SendMessageRequest: Encodable, Sendable {
     /// L'encodage synthétisé omet les optionnels nil : une réponse ordinaire
     /// n'a AUCUNE clé `attachmentReplyTo` dans son corps.
     public var attachmentReplyTo: QuotedAttachmentSend?
+    /// **Les pièces CHOISIES d'un transfert** (#9914, #10947) — clé JSON
+    /// `forwardedAttachmentIds`, toujours avec `forwardedFromId`. Absente, la
+    /// passerelle recopie tout le lot (ancien comportement). Chaque id doit être
+    /// une pièce du message source, sinon refus `forwarded-attachment-not-in-source`.
+    public var forwardedAttachmentIds: [String]?
 
-    public init(content: String?, originalLanguage: String? = nil, replyToId: String? = nil, storyReplyToId: String? = nil, forwardedFromId: String? = nil, forwardedFromConversationId: String? = nil, attachmentIds: [String]? = nil, expiresAt: Date? = nil, ephemeralDuration: Int? = nil, isViewOnce: Bool? = nil, maxViewOnceCount: Int? = nil, isBlurred: Bool? = nil, effectFlags: UInt32? = nil, isEncrypted: Bool? = nil, encryptionMode: String? = nil, clientMessageId: String? = nil, location: SharedPlace? = nil, copyAttachmentsFromMessageId: String? = nil, sticker: MessageSticker? = nil, attachmentReplyTo: QuotedAttachmentSend? = nil) {
+    public init(content: String?, originalLanguage: String? = nil, replyToId: String? = nil, storyReplyToId: String? = nil, forwardedFromId: String? = nil, forwardedFromConversationId: String? = nil, attachmentIds: [String]? = nil, expiresAt: Date? = nil, ephemeralDuration: Int? = nil, isViewOnce: Bool? = nil, maxViewOnceCount: Int? = nil, isBlurred: Bool? = nil, effectFlags: UInt32? = nil, isEncrypted: Bool? = nil, encryptionMode: String? = nil, clientMessageId: String? = nil, location: SharedPlace? = nil, copyAttachmentsFromMessageId: String? = nil, sticker: MessageSticker? = nil, attachmentReplyTo: QuotedAttachmentSend? = nil, forwardedAttachmentIds: [String]? = nil) {
         self.clientMessageId = clientMessageId ?? ClientMessageId.generate()
         self.content = content; self.originalLanguage = originalLanguage
         self.replyToId = replyToId; self.storyReplyToId = storyReplyToId; self.forwardedFromId = forwardedFromId
@@ -764,6 +769,7 @@ public struct SendMessageRequest: Encodable, Sendable {
         self.copyAttachmentsFromMessageId = copyAttachmentsFromMessageId
         self.sticker = sticker
         self.attachmentReplyTo = attachmentReplyTo
+        self.forwardedAttachmentIds = forwardedAttachmentIds
     }
 }
 

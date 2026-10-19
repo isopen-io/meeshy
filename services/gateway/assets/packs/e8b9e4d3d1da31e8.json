@@ -1,0 +1,467 @@
+{
+ "domain": "banner-frame",
+ "frames": [
+  {
+   "key": "ancestral",
+   "viewBox": [
+    0,
+    0,
+    300,
+    100
+   ],
+   "palette": [
+    "#3B2416",
+    "#C98A2E",
+    "#EFE4CF",
+    "#8C3F1E",
+    "#5A3A24",
+    "#1D1712"
+   ],
+   "border": {
+    "width": 9.4,
+    "color": 0,
+    "opacity": 1,
+    "filets": [
+     {
+      "inset": 0.7,
+      "width": 0.7,
+      "color": 1,
+      "opacity": 1
+     },
+     {
+      "inset": 9.2,
+      "width": 0.7,
+      "color": 1,
+      "opacity": 1
+     }
+    ]
+   },
+   "reach": {
+    "corner": 16.3,
+    "cartouche": {
+     "width": 18.6,
+     "depth": 11.3,
+     "edge": "top"
+    }
+   },
+   "pieces": [
+    {
+     "anchor": "start",
+     "paths": [
+      {
+       "d": "M2.4 18.5L6.8 21.5 2.4 24.5 6.8 27.5 2.4 30.5 6.8 33.5 2.4 36.5 6.8 39.5 2.4 42.5 6.8 45.5 2.4 48.5 6.8 51.5 2.4 54.5 6.8 57.5 2.4 60.5 6.8 63.5 2.4 66.5 6.8 69.5 2.4 72.5 6.8 75.5 2.4 78.5 6.8 81.5",
+       "color": 2,
+       "opacity": 1,
+       "width": 0.6
+      },
+      {
+       "d": "M0 0H4V4H0ZM4 12H8V16H4ZM8 8H12V12H8ZM12 4H16V8H12ZM0 84H4V88H0ZM4 96H8V100H4ZM8 92H12V96H8ZM12 88H16V92H12Z",
+       "color": 1,
+       "opacity": 1
+      },
+      {
+       "d": "M0 4H4V8H0ZM4 0H8V4H4ZM8 12H12V16H8ZM12 8H16V12H12ZM0 88H4V92H0ZM4 84H8V88H4ZM8 96H12V100H8ZM12 92H16V96H12Z",
+       "color": 2,
+       "opacity": 1
+      },
+      {
+       "d": "M0 8H4V12H0ZM4 4H8V8H4ZM8 0H12V4H8ZM12 12H16V16H12ZM0 92H4V96H0ZM4 88H8V92H4ZM8 84H12V88H8ZM12 96H16V100H12Z",
+       "color": 3,
+       "opacity": 1
+      },
+      {
+       "d": "M0 12H4V16H0ZM4 8H8V12H4ZM8 4H12V8H8ZM12 0H16V4H12ZM0 96H4V100H0ZM4 92H8V96H4ZM8 88H12V92H8ZM12 84H16V88H12Z",
+       "color": 4,
+       "opacity": 1
+      },
+      {
+       "d": "M0 0H16V16H0ZM0 84H16V100H0Z",
+       "color": 5,
+       "opacity": 1,
+       "width": 0.6
+      }
+     ]
+    },
+    {
+     "anchor": "center",
+     "paths": [
+      {
+       "d": "M141 0H159V11H141ZM146.2 5.5A3.8 3.8 0 1 0 153.8 5.5 3.8 3.8 0 1 0 146.2 5.5Z",
+       "color": 3,
+       "opacity": 1
+      },
+      {
+       "d": "M141 0H159V11H141Z",
+       "color": 1,
+       "opacity": 1,
+       "width": 0.6
+      },
+      {
+       "d": "M146.2 5.5A3.8 3.8 0 1 0 153.8 5.5 3.8 3.8 0 1 0 146.2 5.5Z",
+       "color": 2,
+       "opacity": 1,
+       "width": 0.61
+      },
+      {
+       "d": "M147.64 5.5A2.36 2.36 0 1 0 152.36 5.5 2.36 2.36 0 1 0 147.64 5.5Z",
+       "color": 2,
+       "opacity": 1,
+       "width": 0.53
+      },
+      {
+       "d": "M149.01 5.5A.99.99 0 1 0 150.99 5.5 .99.99 0 1 0 149.01 5.5Z",
+       "color": 2,
+       "opacity": 1
+      }
+     ]
+    },
+    {
+     "anchor": "end",
+     "paths": [
+      {
+       "d": "M280.5 2.4L283.5 6.8M280.5 93.2L283.5 97.6M293.2 18.5L297.6 21.5 293.2 24.5 297.6 27.5 293.2 30.5 297.6 33.5 293.2 36.5 297.6 39.5 293.2 42.5 297.6 45.5 293.2 48.5 297.6 51.5 293.2 54.5 297.6 57.5 293.2 60.5 297.6 63.5 293.2 66.5 297.6 69.5 293.2 72.5 297.6 75.5 293.2 78.5 297.6 81.5",
+       "color": 2,
+       "opacity": 1,
+       "width": 0.6
+      },
+      {
+       "d": "M284 0H288V4H284ZM288 12H292V16H288ZM292 8H296V12H292ZM296 4H300V8H296ZM284 84H288V88H284ZM288 96H292V100H288ZM292 92H296V96H292ZM296 88H300V92H296Z",
+       "color": 1,
+       "opacity": 1
+      },
+      {
+       "d": "M284 4H288V8H284ZM288 0H292V4H288ZM292 12H296V16H292ZM296 8H300V12H296ZM284 88H288V92H284ZM288 84H292V88H288ZM292 96H296V100H292ZM296 92H300V96H296Z",
+       "color": 2,
+       "opacity": 1
+      },
+      {
+       "d": "M284 8H288V12H284ZM288 4H292V8H288ZM292 0H296V4H292ZM296 12H300V16H296ZM284 92H288V96H284ZM288 88H292V92H288ZM292 84H296V88H292ZM296 96H300V100H296Z",
+       "color": 3,
+       "opacity": 1
+      },
+      {
+       "d": "M284 12H288V16H284ZM288 8H292V12H288ZM292 4H296V8H292ZM296 0H300V4H296ZM284 96H288V100H284ZM288 92H292V96H288ZM292 88H296V92H292ZM296 84H300V88H296Z",
+       "color": 4,
+       "opacity": 1
+      },
+      {
+       "d": "M284 0H300V16H284ZM284 84H300V100H284Z",
+       "color": 5,
+       "opacity": 1,
+       "width": 0.6
+      }
+     ]
+    }
+   ],
+   "friezes": [
+    {
+     "module": 6,
+     "from": 16.5,
+     "to": 19.5,
+     "fit": "justify",
+     "paths": [
+      {
+       "d": "M16.5 2.4L19.5 6.8 22.5 2.4M16.5 93.2L19.5 97.6 22.5 93.2",
+       "color": 2,
+       "opacity": 1,
+       "width": 0.6
+      }
+     ]
+    },
+    {
+     "module": 3,
+     "from": 17.25,
+     "to": 15.75,
+     "fit": "justify",
+     "paths": [
+      {
+       "d": "M18.25 1.5A.5.5 0 1 0 19.25 1.5 .5.5 0 1 0 18.25 1.5ZM18.25 98.5A.5.5 0 1 0 19.25 98.5 .5.5 0 1 0 18.25 98.5Z",
+       "color": 2,
+       "opacity": 1
+      }
+     ]
+    }
+   ]
+  },
+  {
+   "key": "ancestral-anime",
+   "viewBox": [
+    0,
+    0,
+    300,
+    100
+   ],
+   "palette": [
+    "#E0A526",
+    "#1D1712",
+    "#A8321E",
+    "#2E6B3A"
+   ],
+   "border": {
+    "width": 9.4,
+    "color": 0,
+    "opacity": 1,
+    "filets": [
+     {
+      "inset": 0.6,
+      "width": 0.8,
+      "color": 1,
+      "opacity": 1
+     },
+     {
+      "inset": 9.2,
+      "width": 0.8,
+      "color": 1,
+      "opacity": 1
+     }
+    ]
+   },
+   "reach": {
+    "corner": 16.3
+   },
+   "pieces": [
+    {
+     "anchor": "start",
+     "paths": [
+      {
+       "d": "M1.6 16H7.8V22H1.6ZM1.6 64H7.8V70H1.6ZM0 0H16V16H0ZM0 84H16V100H0Z",
+       "color": 2,
+       "opacity": 1
+      },
+      {
+       "d": "M1.6 28H7.8V34H1.6ZM1.6 52H7.8V58H1.6ZM1.6 76H7.8V82H1.6Z",
+       "color": 3,
+       "opacity": 1
+      },
+      {
+       "d": "M1.6 40H7.8V46H1.6Z",
+       "color": 1,
+       "opacity": 1
+      },
+      {
+       "d": "M0 0H16V16H0ZM0 84H16V100H0Z",
+       "color": 1,
+       "opacity": 1,
+       "width": 0.6
+      },
+      {
+       "d": "M2.4 8A5.6 5.6 0 1 0 13.6 8 5.6 5.6 0 1 0 2.4 8Z",
+       "color": 0,
+       "opacity": 1,
+       "group": "g0"
+      },
+      {
+       "d": "M2.4 8A5.6 5.6 0 1 0 13.6 8 5.6 5.6 0 1 0 2.4 8Z",
+       "color": 1,
+       "opacity": 1,
+       "width": 0.9,
+       "group": "g0"
+      },
+      {
+       "d": "M4.53 8A3.47 3.47 0 1 0 11.47 8 3.47 3.47 0 1 0 4.53 8Z",
+       "color": 1,
+       "opacity": 1,
+       "width": 0.78,
+       "group": "g0"
+      },
+      {
+       "d": "M6.54 8A1.46 1.46 0 1 0 9.46 8 1.46 1.46 0 1 0 6.54 8Z",
+       "color": 1,
+       "opacity": 1,
+       "group": "g0"
+      },
+      {
+       "d": "M2.4 92A5.6 5.6 0 1 0 13.6 92 5.6 5.6 0 1 0 2.4 92Z",
+       "color": 0,
+       "opacity": 1,
+       "group": "g2"
+      },
+      {
+       "d": "M2.4 92A5.6 5.6 0 1 0 13.6 92 5.6 5.6 0 1 0 2.4 92Z",
+       "color": 1,
+       "opacity": 1,
+       "width": 0.9,
+       "group": "g2"
+      },
+      {
+       "d": "M4.53 92A3.47 3.47 0 1 0 11.47 92 3.47 3.47 0 1 0 4.53 92Z",
+       "color": 1,
+       "opacity": 1,
+       "width": 0.78,
+       "group": "g2"
+      },
+      {
+       "d": "M6.54 92A1.46 1.46 0 1 0 9.46 92 1.46 1.46 0 1 0 6.54 92Z",
+       "color": 1,
+       "opacity": 1,
+       "group": "g2"
+      },
+      {
+       "d": "M0 0H9.4V100H0Z",
+       "color": 0,
+       "opacity": 0,
+       "group": "bande"
+      }
+     ]
+    },
+    {
+     "anchor": "end",
+     "paths": [
+      {
+       "d": "M258 1.6H264V7.8H258ZM258 92.2H264V98.4H258ZM292.2 28H298.4V34H292.2ZM292.2 52H298.4V58H292.2ZM292.2 76H298.4V82H292.2Z",
+       "color": 3,
+       "opacity": 1
+      },
+      {
+       "d": "M270 1.6H276V7.8H270ZM270 92.2H276V98.4H270ZM292.2 16H298.4V22H292.2ZM292.2 64H298.4V70H292.2ZM284 0H300V16H284ZM284 84H300V100H284Z",
+       "color": 2,
+       "opacity": 1
+      },
+      {
+       "d": "M292.2 40H298.4V46H292.2Z",
+       "color": 1,
+       "opacity": 1
+      },
+      {
+       "d": "M284 0H300V16H284ZM284 84H300V100H284Z",
+       "color": 1,
+       "opacity": 1,
+       "width": 0.6
+      },
+      {
+       "d": "M286.4 8A5.6 5.6 0 1 0 297.6 8 5.6 5.6 0 1 0 286.4 8Z",
+       "color": 0,
+       "opacity": 1,
+       "group": "g1"
+      },
+      {
+       "d": "M286.4 8A5.6 5.6 0 1 0 297.6 8 5.6 5.6 0 1 0 286.4 8Z",
+       "color": 1,
+       "opacity": 1,
+       "width": 0.9,
+       "group": "g1"
+      },
+      {
+       "d": "M288.53 8A3.47 3.47 0 1 0 295.47 8 3.47 3.47 0 1 0 288.53 8Z",
+       "color": 1,
+       "opacity": 1,
+       "width": 0.78,
+       "group": "g1"
+      },
+      {
+       "d": "M290.54 8A1.46 1.46 0 1 0 293.46 8 1.46 1.46 0 1 0 290.54 8Z",
+       "color": 1,
+       "opacity": 1,
+       "group": "g1"
+      },
+      {
+       "d": "M286.4 92A5.6 5.6 0 1 0 297.6 92 5.6 5.6 0 1 0 286.4 92Z",
+       "color": 0,
+       "opacity": 1,
+       "group": "g3"
+      },
+      {
+       "d": "M286.4 92A5.6 5.6 0 1 0 297.6 92 5.6 5.6 0 1 0 286.4 92Z",
+       "color": 1,
+       "opacity": 1,
+       "width": 0.9,
+       "group": "g3"
+      },
+      {
+       "d": "M288.53 92A3.47 3.47 0 1 0 295.47 92 3.47 3.47 0 1 0 288.53 92Z",
+       "color": 1,
+       "opacity": 1,
+       "width": 0.78,
+       "group": "g3"
+      },
+      {
+       "d": "M290.54 92A1.46 1.46 0 1 0 293.46 92 1.46 1.46 0 1 0 290.54 92Z",
+       "color": 1,
+       "opacity": 1,
+       "group": "g3"
+      },
+      {
+       "d": "M290.6 0H300V100H290.6Z",
+       "color": 0,
+       "opacity": 0,
+       "group": "bande"
+      }
+     ]
+    }
+   ],
+   "friezes": [
+    {
+     "module": 48,
+     "from": 15,
+     "to": 45,
+     "fit": "justify",
+     "paths": [
+      {
+       "d": "M18 1.6H24V7.8H18ZM18 92.2H24V98.4H18ZM42 1.6H48V7.8H42ZM42 92.2H48V98.4H42Z",
+       "color": 3,
+       "opacity": 1
+      },
+      {
+       "d": "M30 1.6H36V7.8H30ZM30 92.2H36V98.4H30Z",
+       "color": 2,
+       "opacity": 1
+      },
+      {
+       "d": "M54 1.6H60V7.8H54ZM54 92.2H60V98.4H54Z",
+       "color": 1,
+       "opacity": 1
+      }
+     ]
+    },
+    {
+     "module": 3,
+     "from": 13.5,
+     "to": 13.5,
+     "fit": "justify",
+     "paths": [
+      {
+       "d": "M15 .8V8.6M15 91.4V99.2",
+       "color": 1,
+       "opacity": 0.5,
+       "width": 0.3
+      }
+     ]
+    },
+    {
+     "module": 60,
+     "from": 0,
+     "to": 0,
+     "fit": "justify",
+     "paths": [
+      {
+       "d": "M0 0H60V9.4H0ZM0 90.6H60V100H0Z",
+       "color": 0,
+       "opacity": 0,
+       "group": "bande"
+      }
+     ]
+    }
+   ],
+   "motion": [
+    {
+     "kind": "pulse",
+     "targets": [
+      "g0",
+      "g1",
+      "g2",
+      "g3"
+     ],
+     "duration": 2.6,
+     "stagger": 0.65
+    },
+    {
+     "kind": "sweep",
+     "targets": [
+      "bande"
+     ],
+     "duration": 8
+    }
+   ]
+  }
+ ]
+}

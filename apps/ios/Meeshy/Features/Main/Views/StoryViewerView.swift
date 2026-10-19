@@ -6,9 +6,10 @@ import os
 import MeeshySDK
 import MeeshyUI
 
+/// Ce que l'écran de partage unique reçoit depuis le lecteur de story (#10947).
 struct SharedContentWrapper: Identifiable {
     let id = UUID()
-    let content: SharedContentType
+    let subject: ShareSubject
 }
 
 /// La story republiée et le `@handle` de son auteur, remis à
@@ -865,15 +866,13 @@ struct StoryViewerView: View {
             }
         }
         .sheet(item: $sharedContentWrapper, onDismiss: { resumeTimer() }) { wrapper in
-            SharePickerView(
-                sharedContent: wrapper.content,
-                onDismiss: { sharedContentWrapper = nil },
-                onShareToConversation: nil
+            ShareSheetView(
+                subject: wrapper.subject,
+                actions: ShareSheetHostActions(onOpenConversation: { router.navigateToConversation($0) }),
+                onDismiss: { sharedContentWrapper = nil }
             )
-            .environmentObject(router)
-            .conversationListObject(conversationListViewModel)
-            .environmentObject(statusViewModel)
             .presentationDetents([.medium, .large] as Set<PresentationDetent>)
+            .presentationDragIndicator(.visible)
         }
         .fullScreenCover(item: $readerFullscreenPlace, onDismiss: { resumeTimer() }) { wrapper in
             // Tap d'une pastille de lieu (Layer 6.6) : la story est déjà en

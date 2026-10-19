@@ -160,28 +160,6 @@ final class AvatarContextTests: XCTestCase {
         XCTAssertFalse(AvatarContext.notification.showsMoodBadge)
     }
 
-    // MARK: - showsOnlineDot
-
-    func test_showsOnlineDot_trueForConversationList() {
-        XCTAssertTrue(AvatarContext.conversationList.showsOnlineDot)
-    }
-
-    func test_showsOnlineDot_trueForUserListItem() {
-        XCTAssertTrue(AvatarContext.userListItem.showsOnlineDot)
-    }
-
-    func test_showsOnlineDot_trueForRecentParticipant() {
-        XCTAssertTrue(AvatarContext.recentParticipant.showsOnlineDot)
-    }
-
-    func test_showsOnlineDot_falseForNotification() {
-        XCTAssertFalse(AvatarContext.notification.showsOnlineDot)
-    }
-
-    func test_showsOnlineDot_falseForStoryViewer() {
-        XCTAssertFalse(AvatarContext.storyViewer.showsOnlineDot)
-    }
-
     // MARK: - storyViewerRow (who-viewed list: mood + presence, no ring)
 
     func test_storyViewerRow_size_returns44() {
@@ -194,10 +172,6 @@ final class AvatarContextTests: XCTestCase {
 
     func test_storyViewerRow_showsMoodBadge() {
         XCTAssertTrue(AvatarContext.storyViewerRow.showsMoodBadge)
-    }
-
-    func test_storyViewerRow_showsOnlineDot() {
-        XCTAssertTrue(AvatarContext.storyViewerRow.showsOnlineDot)
     }
 
     func test_storyViewerRow_isTappable() {

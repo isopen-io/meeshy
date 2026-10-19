@@ -6,9 +6,11 @@ import MeeshyUI
 //
 // Deux groupes sur la bannière, aux deux bouts (précision porteur 2026-10-11 : « les détails de points à gauche de la
 // bannière et le reste de rang à droite ») :
-//  · au DÉBUT (à gauche ; à droite en RTL) : le NOM du niveau au-dessus de son cercle, et à côté les points acquis
-//    et ce qu'il reste vers le niveau suivant — les mots de la bannière du joueur (« 976 pts », « encore 624 ») ;
-//  · à la FIN : le blason du rang, son nom et sa division dessous (« Murmure V »).
+//  · au DÉBUT (à gauche ; à droite en RTL) : le nom du palier au-dessus du cercle — qui porte le niveau, sa
+//    progression et le prestige — et à droite les étincelles en grand, par leur glyphe (« ✦ 18 347 » — porteur
+//    2026-10-19, #10951) ; le record ne se lit qu'à VoiceOver ;
+//  · à la FIN : la Gloire (« ♛ 18 790 »), puis le blason du rang, son nom et sa division dessous (« Murmure V ») —
+//    la Gloire fait le rang, elle se lit à côté de lui.
 // Ce que le serveur sert du jeu de ce membre selon SES réglages (`GET /users/:userId/game`, réglage `rank`) — la
 // sienne comprise — et rien d'autre : ni trésor, ni vitrine, ni Flamme. Les points ne sont servis qu'à soi et aux
 // amis (#9541) : absents, rien ne se dessine à leur place. La Flamme n'a aucun réglage de visibilité : son
@@ -31,6 +33,11 @@ struct GameBannerBadgeModel: Equatable {
     /// Le record de niveau, qui survit au prestige — jamais sous le niveau montré.
     let levelMax: Int
 
+    /// Les glyphes des deux monnaies du jeu, sans mot : ✦ les étincelles, ♛ la Gloire (◆ et ★ sont pris par le
+    /// fragment et la coupe) — les mêmes que le web (`game-profile-banner.tsx`).
+    static let sparkGlyph = "✦"
+    static let gloryGlyph = "♛"
+
     var levelName: String { GameCopy.tierName(tier) }
     var rankName: String { GameCopy.rankLabel(rank, division5: division, mythic: mythic) }
 
@@ -41,25 +48,27 @@ struct GameBannerBadgeModel: Equatable {
         return GameLevels.progress(forScore: pocket, cap: nil).progress
     }
 
-    var pocketText: String? { pocket.map(GameSparksCopy.bannerPocket) }
-    var gloryText: String? { glory.map { GameCopy.gloryAmount(GameCopy.formatCount($0)) } }
-    /// TOUJOURS montré, même égal au niveau (décision porteur 2026-10-16).
-    var levelMaxText: String { GameSparksCopy.bannerLevelMax(levelMax) }
+    var pocketText: String? { pocket.map { Self.glyphAmount(Self.sparkGlyph, $0) } }
+    var gloryText: String? { glory.map { Self.glyphAmount(Self.gloryGlyph, $0) } }
 
-    /// « Niveau 3, palier Braise, premier palier, Record de niveau 40, 976 étincelles, Gloire 16 000 ».
+    private static func glyphAmount(_ glyph: String, _ amount: Int) -> String {
+        "\(glyph)\u{00A0}\(GameCopy.formatCount(amount))"
+    }
+
+    /// « Niveau 3, palier Braise, premier palier, Record de niveau 40, 976 étincelles ».
     var levelAccessibilityLabel: String {
         let parts: [String?] = [
             GameCopy.levelRingAccessibility(level: level, tier: tier),
             GameSparksCopy.levelMaxAccessibility(levelMax),
             pocket.map(GameSparksCopy.sparks),
-            gloryText,
         ]
         return parts.compactMap { $0 }.joined(separator: GameText.bannerSeparator)
     }
 
-    /// « Rang, Murmure V ».
+    /// « Rang, Murmure V, Gloire 16 000 » — la Gloire se lit avec le rang, à côté duquel elle se pose.
     var rankAccessibilityLabel: String {
-        ConceptText.factRank + GameText.bannerSeparator + rankName
+        let parts: [String?] = [ConceptText.factRank, rankName, glory.map { GameCopy.gloryAmount(GameCopy.formatCount($0)) }]
+        return parts.compactMap { $0 }.joined(separator: GameText.bannerSeparator)
     }
 
     /// `nil` quand le serveur ne sert pas le niveau et le rang : un refus, un compte inconnu, ou le seul trésor.
@@ -123,6 +132,11 @@ struct GameBannerBadgeView: View {
     var centerClearance: CGFloat = GameBannerBadgeView.avatarClearance
 
     static let avatarClearance: CGFloat = 106
+
+    /// Les deux cadres ont TOUJOURS la même largeur (#10951) : chacun la moitié de ce que l'avatar laisse.
+    static func groupWidth(bannerWidth: CGFloat, centerClearance: CGFloat = avatarClearance) -> CGFloat {
+        max(0, (bannerWidth - centerClearance) / 2)
+    }
     /// Les coins hauts de chaque cadre ; les coins bas restent carrés, sur le bord de la bannière.
     static let cornerRadius: CGFloat = MeeshyRadius.md
     enum Group { case level, rank }
@@ -141,75 +155,75 @@ struct GameBannerBadgeView: View {
 
     var body: some View {
         GeometryReader { proxy in
-            let side = max(0, (proxy.size.width - centerClearance) / 2)
+            let side = Self.groupWidth(bannerWidth: proxy.size.width, centerClearance: centerClearance)
+            // Les deux cadres ont la même largeur ET la même hauteur, quel que soit leur contenu (#10951) : chacun
+            // s'étire à la hauteur du plus haut (`maxHeight: .infinity` sous un `fixedSize` vertical), le voile
+            // posé APRÈS le cadre le couvre en entier.
             HStack(alignment: .bottom, spacing: 0) {
-                // Chaque groupe s'ANCRE à son angle bas : de hauteurs différentes (le niveau porte son record),
-                // ils restent tous deux posés sur le bord bas de la bannière.
                 levelGroup
-                    .frame(maxWidth: side, maxHeight: .infinity, alignment: .bottomLeading)
+                    .frame(maxWidth: .infinity, maxHeight: .infinity, alignment: .leading)
+                    .glassGroup(corners: Self.roundedCorners(for: .level, direction: layoutDirection))
+                    .frame(width: side)
+                    .accessibilityElement(children: .ignore)
+                    .accessibilityLabel(model.levelAccessibilityLabel)
+                    .accessibilityIdentifier("profile.banner.game.level")
                 Spacer(minLength: 0)
                 rankGroup
-                    .frame(maxWidth: side, maxHeight: .infinity, alignment: .bottomTrailing)
+                    .frame(maxWidth: .infinity, maxHeight: .infinity, alignment: .bottom)
+                    .glassGroup(corners: Self.roundedCorners(for: .rank, direction: layoutDirection))
+                    .frame(width: side)
+                    .accessibilityElement(children: .ignore)
+                    .accessibilityLabel(model.rankAccessibilityLabel)
+                    .accessibilityIdentifier("profile.banner.game.rank")
             }
+            .fixedSize(horizontal: false, vertical: true)
             .frame(width: proxy.size.width, height: proxy.size.height, alignment: .bottom)
         }
         .environment(\.colorScheme, .dark)
         .dynamicTypeSize(...DynamicTypeSize.xxLarge)
     }
 
-    /// Le nom du niveau au-dessus de son cercle et le record de niveau dessous ; à côté, la poche d'étincelles en grand
-    /// et la Gloire totale en petit (#10913).
+    /// Le nom du palier au-dessus du cercle, et à droite les étincelles en grand (porteur 2026-10-19, #10951).
     private var levelGroup: some View {
-        VStack(alignment: .leading, spacing: MeeshySpacing.xxs) {
-            caption(model.levelName)
-            HStack(alignment: .center, spacing: MeeshySpacing.xs) {
-                VStack(spacing: 0) {
-                    LevelRingView(
-                        level: model.level, progress: model.levelProgress, tier: model.tier, prestige: model.prestige,
-                        trackColor: Color.white.opacity(MeeshyOpacity.light), inkColor: .black, accessibilityLabel: nil
-                    )
-                    .frame(width: emblemSize, height: model.prestige > 0 ? emblemSize * 66 / 56 : emblemSize)
-                    small(model.levelMaxText)
-                }
-                if model.pocketText != nil || model.gloryText != nil {
-                    VStack(alignment: .leading, spacing: 0) {
-                        if let pocketText = model.pocketText {
-                            Text(pocketText)
-                                .font(MeeshyFont.relative(MeeshyFont.bodySize, weight: .bold))
-                                .foregroundColor(.white)
-                                .lineLimit(1)
-                                .minimumScaleFactor(0.7)
-                        }
-                        if let gloryText = model.gloryText {
-                            small(gloryText)
-                        }
-                    }
-                    .bannerTextShadow()
-                    // Toute la place que l'avatar laisse : sans elle, le reste se replie sur la largeur de sa plus
-                    // courte ligne et les points rétrécissent pour s'y tenir.
-                    .frame(maxWidth: .infinity, alignment: .leading)
-                    .layoutPriority(1)
-                }
+        HStack(alignment: .center, spacing: MeeshySpacing.xs) {
+            VStack(spacing: MeeshySpacing.xxs) {
+                small(model.levelName)
+                LevelRingView(
+                    level: model.level, progress: model.levelProgress, tier: model.tier, prestige: model.prestige,
+                    trackColor: Color.white.opacity(MeeshyOpacity.light), inkColor: .black, accessibilityLabel: nil
+                )
+                .frame(width: emblemSize, height: model.prestige > 0 ? emblemSize * 66 / 56 : emblemSize)
+            }
+            .fixedSize()
+            if let pocketText = model.pocketText {
+                amount(pocketText, size: MeeshyFont.titleSize)
             }
         }
-        .glassGroup(corners: Self.roundedCorners(for: .level, direction: layoutDirection))
-        .accessibilityElement(children: .ignore)
-        .accessibilityLabel(model.levelAccessibilityLabel)
-        .accessibilityIdentifier("profile.banner.game.level")
     }
 
-    /// Le blason du rang, son nom et sa division dessous.
+    /// La Gloire, puis le blason du rang, son nom et sa division dessous (porteur 2026-10-19, #10951).
     private var rankGroup: some View {
-        VStack(spacing: MeeshySpacing.xxs) {
-            RankBlasonView(rank: model.rank, division5: model.division, level: model.level,
-                           mythic: model.mythic, title: nil, figures: nil)
-                .frame(width: emblemSize * 1.1, height: emblemSize * 1.1 * 0.93)
-            caption(model.rankName)
+        HStack(alignment: .center, spacing: MeeshySpacing.xs) {
+            if let gloryText = model.gloryText {
+                amount(gloryText, size: MeeshyFont.bodySize)
+            }
+            VStack(spacing: MeeshySpacing.xxs) {
+                RankBlasonView(rank: model.rank, division5: model.division, level: model.level,
+                               mythic: model.mythic, title: nil, figures: nil)
+                    .frame(width: emblemSize * 1.1, height: emblemSize * 1.1 * 0.93)
+                caption(model.rankName)
+            }
         }
-        .glassGroup(corners: Self.roundedCorners(for: .rank, direction: layoutDirection))
-        .accessibilityElement(children: .ignore)
-        .accessibilityLabel(model.rankAccessibilityLabel)
-        .accessibilityIdentifier("profile.banner.game.rank")
+    }
+
+    private func amount(_ text: String, size: CGFloat) -> some View {
+        Text(text)
+            .font(MeeshyFont.relative(size, weight: .bold))
+            .monospacedDigit()
+            .foregroundColor(.white)
+            .lineLimit(1)
+            .minimumScaleFactor(0.6)
+            .bannerTextShadow()
     }
 
     private func small(_ text: String) -> some View {

@@ -3,7 +3,7 @@ import { useInfiniteQuery, useMutation, useQuery, useQueryClient } from '@tansta
 import { useStore } from 'zustand/react';
 
 import { Glyph } from '@/components/glyph';
-import { Avatar } from '@/components/avatar';
+import { PeerAvatar } from '@/components/peer-avatar';
 import { createDirectConversation, createGroupConversation, CONVERSATIONS_QUERY_KEY } from '@/lib/api/conversations';
 import { apiDeps } from '@/lib/api/deps';
 import { flattenFriendRequests, friendRequestsQueryOptions, type PersonSummary } from '@/lib/api/friend-requests';
@@ -516,7 +516,9 @@ function PersonRow(props: {
         className="flex w-full items-center gap-3 px-4 py-3 text-start disabled:opacity-50"
         style={{ minHeight: 44 }}
       >
-        <Avatar
+        <PeerAvatar
+          presenceKey={props.person.id}
+          ringRef={props.person.ring}
           initials={initialsOf(name)}
           color={colorForName(name)}
           size={40}

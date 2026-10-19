@@ -154,7 +154,7 @@ struct ConnectionBanner: View {
         )
     }
 
-    private var isDisconnected: Bool { statusVM.status == .disconnected }
+    private var isDisconnected: Bool { Self.isDown(statusVM.status) }
     private var isOffline: Bool { statusVM.status == .offline }
     private var isSyncing: Bool { statusVM.status == .syncing }
 
@@ -187,10 +187,10 @@ struct ConnectionBanner: View {
                 source: nil,
                 showsActivityDots: false
             ))
-        } else if isDisconnected && showReconnecting {
+        } else if showReconnecting, let label = Self.downLabel(for: statusVM.status) {
             result.append(SyncPillEntry(
-                id: "status.disconnected",
-                label: String(localized: "connection.reconnecting", defaultValue: "Reconnexion en cours"),
+                id: "status.\(statusVM.status)",
+                label: label,
                 iconName: nil,
                 dotStyle: .warning,
                 source: nil
@@ -307,7 +307,32 @@ struct ConnectionBanner: View {
         previous: ConnectionStatusViewModel.Status?,
         new: ConnectionStatusViewModel.Status
     ) -> Bool {
-        new == .disconnected && previous != .disconnected
+        isDown(new) && !isDown(previous)
+    }
+
+    /// Un socket qui n'a ENCORE JAMAIS été connecté se CONNECTE (#10923) : à
+    /// chaque ouverture de l'app, la pastille disait « Reconnexion en cours »
+    /// d'une première connexion. Le libellé suit le statut, jamais l'inverse.
+    static func downLabelKey(for status: ConnectionStatusViewModel.Status) -> String? {
+        switch status {
+        case .connecting: "connection.connecting"
+        case .disconnected: "connection.reconnecting"
+        case .connected, .syncing, .offline: nil
+        }
+    }
+
+    private static func downLabel(for status: ConnectionStatusViewModel.Status) -> String? {
+        switch downLabelKey(for: status) {
+        case "connection.connecting": String(localized: "connection.connecting", defaultValue: "Connexion en cours")
+        case "connection.reconnecting": String(localized: "connection.reconnecting", defaultValue: "Reconnexion en cours")
+        default: nil
+        }
+    }
+
+    /// Le socket est attendu (première connexion ou reconnexion) alors que le
+    /// réseau est là — la seule situation que la fenêtre de grâce arbitre.
+    static func isDown(_ status: ConnectionStatusViewModel.Status?) -> Bool {
+        status == .disconnected || status == .connecting
     }
 
     /// `true` when, at the end of the grace window, the socket is STILL down so
@@ -317,7 +342,7 @@ struct ConnectionBanner: View {
     static func shouldSurfaceReconnecting(
         statusAtDeadline: ConnectionStatusViewModel.Status
     ) -> Bool {
-        statusAtDeadline == .disconnected
+        isDown(statusAtDeadline)
     }
 
     /// Seeds the surfacing state machine from the status observed at mount,
@@ -328,7 +353,7 @@ struct ConnectionBanner: View {
         switch status {
         case .offline:
             downWasSurfaced = true
-        case .disconnected:
+        case .disconnected, .connecting:
             scheduleReconnectingGrace()
         case .connected, .syncing:
             break
@@ -354,7 +379,7 @@ struct ConnectionBanner: View {
             showReconnecting = false
             downWasSurfaced = true
 
-        case .disconnected:
+        case .disconnected, .connecting:
             if Self.shouldStartReconnectingGrace(previous: previous, new: newValue) {
                 scheduleReconnectingGrace()
             }

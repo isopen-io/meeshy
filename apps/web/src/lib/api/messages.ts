@@ -508,6 +508,8 @@ export type SendMessageBody = {
   readonly forwardedFromId?: string;
   /** OMIS quand la source est inconnue — `''` casse l'écriture `@db.ObjectId`. */
   readonly forwardedFromConversationId?: string;
+  /** Les SEULES pièces du message source à recopier (#9914), avec `forwardedFromId` ; absent ⇒ tout le lot. */
+  readonly forwardedAttachmentIds?: readonly string[];
   /**
    * LA COPIE SERVEUR D'UNE PIÈCE, SANS RÉ-UPLOAD (#8884) — `messages-send.ts:79`.
    * Le serveur recopie les pièces du message désigné vers le nouveau message

@@ -45,7 +45,7 @@ struct StoryTrayView: View {
     /// une fois par montage du rail.
     /// La hauteur de la bande — la réserve `FloatingButtonSafeZone.storyBand`
     /// la dégage des bulles flottantes (#9363), et doit la contenir.
-    static let trayHeight: CGFloat = 120
+    static let trayHeight: CGFloat = StoryEntryMetrics.height
 
     var body: some View {
         VStack(spacing: 0) {
@@ -139,7 +139,7 @@ struct StoryTrayView: View {
             // are not materialised. A heavy user with 50+ story groups
             // previously instantiated all 50 `MeeshyAvatar` instances at
             // tray load (~8-12MB) even when only 4-5 fit on screen.
-            LazyHStack(spacing: MeeshySpacing.md) {
+            LazyHStack(spacing: StoryEntryMetrics.itemSpacing) {
                 myStoryButton
                     .bounceOnAppear(delay: 0)
 
@@ -154,8 +154,8 @@ struct StoryTrayView: View {
                     }
                 }
             }
-            .padding(.horizontal, MeeshySpacing.lg)
-            .padding(.vertical, MeeshySpacing.sm)
+            .padding(.horizontal, StoryEntryMetrics.paddingHorizontal)
+            .padding(.vertical, StoryEntryMetrics.paddingVertical)
         }
     }
 
@@ -250,7 +250,7 @@ struct StoryTrayView: View {
 /// `.storyTrayCompact` 36pt); all proportional metrics derive from it.
 struct StoryRingCell: View, Equatable {
     let group: StoryGroup
-    var context: AvatarContext = .storyTray
+    var context: AvatarContext = StoryEntryMetrics.avatarContext
     var showsUsername: Bool = true
     let onViewStory: () -> Void
     let onShowProfile: () -> Void
@@ -262,7 +262,6 @@ struct StoryRingCell: View, Equatable {
     var contextMenuExtras: [AvatarContextMenuItem] = []
 
     private var theme: ThemeManager { ThemeManager.shared }
-    private var presenceManager: PresenceManager { PresenceManager.shared }
     /// Humeur + tap humeur passés en `let` par le parent (qui observe déjà
     /// StatusViewModel) — l'`@EnvironmentObject` abonnait CHAQUE cellule du
     /// tray à chaque mise à jour de statut globale (P1-3a).
@@ -274,7 +273,7 @@ struct StoryRingCell: View, Equatable {
 
     init(
         group: StoryGroup,
-        context: AvatarContext = .storyTray,
+        context: AvatarContext = StoryEntryMetrics.avatarContext,
         showsUsername: Bool = true,
         onViewStory: @escaping () -> Void,
         onShowProfile: @escaping () -> Void,
@@ -297,7 +296,7 @@ struct StoryRingCell: View, Equatable {
             showsUsername: showsUsername,
             moodEmoji: moodEmoji,
             hasMoodTap: onMoodTap != nil,
-            presence: PresenceManager.shared.presenceState(for: group.id),
+            presence: PresenceManager.shared.presenceState(for: group.id, served: group.authorPresence),
             menuLabels: contextMenuExtras.map(\.label),
             theme: ThemeManager.shared.mode
         )
@@ -310,7 +309,7 @@ struct StoryRingCell: View, Equatable {
     private var isCompact: Bool { context.size <= 44 }
 
     var body: some View {
-        VStack(spacing: isCompact ? 4 : 5) {
+        VStack(spacing: isCompact ? 4 : StoryEntryMetrics.labelSpacing) {
             ZStack {
                 MeeshyAvatar(
                     name: group.username,
@@ -319,7 +318,8 @@ struct StoryRingCell: View, Equatable {
                     avatarURL: latestStoryThumbnailURL(group),
                     storyState: group.hasUnviewed ? .unread : .read,
                     moodEmoji: moodEmoji,
-                    presenceState: presenceManager.presenceState(for: group.id),
+                    presenceState: renderInputs.presence,
+                    ring: group.authorRing,
                     onMoodTap: onMoodTap,
                     contextMenuItems: [
                         AvatarContextMenuItem(label: StoryTrayCopy.viewStories, icon: "play.circle.fill") {
@@ -345,10 +345,10 @@ struct StoryRingCell: View, Equatable {
 
             if showsUsername {
                 Text(group.username)
-                    .font(MeeshyFont.relative(isCompact ? 9 : 10, weight: group.hasUnviewed ? .semibold : .medium))
+                    .font(MeeshyFont.relative(isCompact ? 9 : StoryEntryMetrics.labelFontSize, weight: group.hasUnviewed ? .semibold : .medium))
                     .foregroundColor(group.hasUnviewed ? theme.textPrimary : theme.textMuted)
                     .lineLimit(1)
-                    .frame(width: isCompact ? 56 : 96)
+                    .frame(width: isCompact ? 56 : StoryEntryMetrics.labelWidth)
             }
         }
         .contentShape(Rectangle())
@@ -380,6 +380,8 @@ nonisolated struct StoryRingCellRenderInputs: Equatable {
     let presence: PresenceState
     let menuLabels: [String]
     let theme: ThemeMode
+    /// Le contour équipé de l'auteur (#10946) : un contour qui arrive repeint la cellule.
+    let ring: ServedProfileDecorItem?
 
     init(
         group: StoryGroup,
@@ -398,6 +400,7 @@ nonisolated struct StoryRingCellRenderInputs: Equatable {
         avatarColor = group.avatarColor
         storyIds = group.stories.map(\.id)
         hasUnviewed = group.hasUnviewed
+        ring = group.authorRing
         liveCount = group.stories.filter { !$0.isExpired(at: now) }.count
         self.coverURL = coverURL
         self.avatarSize = avatarSize
@@ -491,15 +494,16 @@ private struct MyStoryButton: View {
         let accentColor = DynamicColorGenerator.colorForName(currentUser?.username ?? "")
         let storyState: StoryRingState = myGroup.map { $0.hasUnviewed ? .unread : .read } ?? .none
 
-        VStack(spacing: MeeshySpacing.xs) {
+        VStack(spacing: StoryEntryMetrics.labelSpacing) {
             ZStack {
                 MeeshyAvatar(
                     name: userName,
-                    context: .storyTray,
+                    context: StoryEntryMetrics.avatarContext,
                     accentColor: accentColor,
                     avatarURL: myGroup.flatMap { latestStoryThumbnailURL($0) } ?? currentUser?.avatar,
                     storyState: storyState,
                     moodEmoji: myMoodEmoji,
+                    ring: currentUser?.profileDecor?.avatarRing,
                     onTap: {
                         // Une seule règle, testable, pour le routage ET pour
                         // l'annonce VoiceOver (cf. `StoryTrayActionResolver`).
@@ -1030,6 +1034,7 @@ struct PinnedStoryTrailBand: View {
             avatarURL: currentUser?.avatar,
             storyState: .none,
             moodEmoji: statusViewModel.statusForUser(userId: uid)?.moodEmoji,
+            ring: currentUser?.profileDecor?.avatarRing,
             onTap: {
                 switch StoryTrayActionResolver.avatarTap(hasMyStory: false, hasAnyStory: hasAnyStory) {
                 case .manageStories: showMyStories = true

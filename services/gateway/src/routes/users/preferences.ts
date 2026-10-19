@@ -5,7 +5,8 @@ import { buildPaginationMeta } from '../../utils/pagination';
 import { sendSuccess, sendPaginatedSuccess, sendUnauthorized, sendNotFound, sendInternalError } from '../../utils/response.js';
 import {
   userMinimalSchema,
-  errorResponseSchema
+  errorResponseSchema,
+  participantProfileDecorSchema
 } from '@meeshy/shared/types/api-schemas';
 import type { AuthenticatedRequest, UserIdParams, SearchQuery } from './types';
 import { validatePagination } from '../../utils/pagination';
@@ -21,6 +22,7 @@ import type { UnifiedAuthRequest } from '../../middleware/auth';
 import type { UserRoleEnum } from '@meeshy/shared/types';
 import { computeUserStats, servedUserStats } from '../user-stats';
 import { keepDiscoverable } from '../../services/profile-discoverability';
+import { AVATAR_RING_COLUMN, servedPerson } from '../../services/appearance/authorProfileDecor';
 
 
 /**
@@ -504,7 +506,8 @@ export async function searchUsers(fastify: FastifyInstance) {
                   displayName: { type: 'string' },
                   isOnline: { type: 'boolean' },
                   lastActiveAt: { type: 'string', format: 'date-time', nullable: true },
-                  systemLanguage: { type: 'string' }
+                  systemLanguage: { type: 'string' },
+                  profileDecor: participantProfileDecorSchema
                 }
               }
             },
@@ -624,7 +627,9 @@ export async function searchUsers(fastify: FastifyInstance) {
             displayName: true,
             isOnline: true,
             lastActiveAt: true,
-            systemLanguage: true
+            systemLanguage: true,
+            // #10945 — le contour équipé, résolu en `profileDecor` à la sortie.
+            ...AVATAR_RING_COLUMN
           },
           orderBy: [
             ...(mayOrderByRawPresence(presenceViewer) ? [{ isOnline: 'desc' as const }] : []),
@@ -649,7 +654,7 @@ export async function searchUsers(fastify: FastifyInstance) {
         trouvables.map(u => u.id),
       );
       const gatedUsers = trouvables
-        .map(u => applyPresenceVisibilityAsOffline(u, visibilityMap.get(u.id)))
+        .map(u => servedPerson(applyPresenceVisibilityAsOffline(u, visibilityMap.get(u.id))))
         .sort(servedOnlineFirst);
 
       return sendPaginatedSuccess(reply, gatedUsers, buildPaginationMeta(totalCount, offsetNum, limitNum, gatedUsers.length), {

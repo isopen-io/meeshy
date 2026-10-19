@@ -633,6 +633,7 @@ const PROFILE = [
   'calendar-blank',
   'user-plus',
   'caret-right',
+  'frame-corners',
 ];
 
 emit({

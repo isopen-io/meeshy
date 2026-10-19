@@ -22,12 +22,15 @@ public final class ConnectionStatusViewModel: ObservableObject {
 
     /// Connection-health roll-up surfaced to the UI.
     /// - `.offline` — device has no network interface at all.
-    /// - `.disconnected` — network is up but the socket is not connected.
+    /// - `.connecting` — network is up and the socket has NEVER been connected
+    ///   yet: a first connection, not a re-connection (#10923).
+    /// - `.disconnected` — network is up but a socket that WAS connected dropped.
     /// - `.syncing` — fully connected, but the offline queue still has pending writes.
     /// - `.connected` — connected and outbox empty.
     public enum Status: Sendable, Equatable {
         case connected
         case syncing
+        case connecting
         case disconnected
         case offline
     }
@@ -42,14 +45,23 @@ public final class ConnectionStatusViewModel: ObservableObject {
         isConnectedPublisher: AnyPublisher<Bool, Never>,
         pendingCountPublisher: AnyPublisher<Int, Never>
     ) {
+        let socket = isConnectedPublisher
+            .scan((connected: false, hasConnectedOnce: false)) { state, connected in
+                (connected: connected, hasConnectedOnce: state.hasConnectedOnce || connected)
+            }
         Publishers.CombineLatest3(
             isOnlinePublisher,
-            isConnectedPublisher,
+            socket,
             pendingCountPublisher
         )
         .receive(on: DispatchQueue.main)
-        .sink { [weak self] online, connected, pending in
-            self?.status = Self.derive(online: online, connected: connected, pending: pending)
+        .sink { [weak self] online, socket, pending in
+            self?.status = Self.derive(
+                online: online,
+                connected: socket.connected,
+                pending: pending,
+                hasConnectedOnce: socket.hasConnectedOnce
+            )
         }
         .store(in: &cancellables)
     }
@@ -69,9 +81,9 @@ public final class ConnectionStatusViewModel: ObservableObject {
 
     /// Pure derivation — kept `static` so it can be unit-tested directly
     /// without spinning up the Combine pipeline.
-    static func derive(online: Bool, connected: Bool, pending: Int) -> Status {
+    static func derive(online: Bool, connected: Bool, pending: Int, hasConnectedOnce: Bool) -> Status {
         if !online { return .offline }
-        if !connected { return .disconnected }
+        if !connected { return hasConnectedOnce ? .disconnected : .connecting }
         if pending > 0 { return .syncing }
         return .connected
     }

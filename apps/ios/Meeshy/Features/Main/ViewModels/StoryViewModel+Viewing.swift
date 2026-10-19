@@ -70,7 +70,7 @@ extension StoryViewModel {
     /// Ne throw jamais : au pire l'interstitiel affiche username + avatar
     /// du groupe (données déjà en main).
     func resolveGroupIntro(for group: StoryGroup) async -> StoryGroupIntro {
-        var intro = StoryGroupIntro(userId: group.id, username: group.username)
+        var intro = Self.introPlaceholder(for: group)
 
         switch await CacheCoordinator.shared.profiles.load(for: group.id) {
         case .fresh(let users, _), .stale(let users, _):

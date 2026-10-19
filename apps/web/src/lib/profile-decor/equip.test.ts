@@ -89,6 +89,36 @@ describe('équiper un contour', () => {
   });
 });
 
+describe('équiper un cadre de bannière (#10936)', () => {
+  const frame = (item: string): ServedProfileDecorItem => ({ pack: 'cadres-celte', item, origin: 'builtin', contract: null });
+
+  test('le cadre se pose avant la réponse, la réponse fait foi, et rien d’autre ne bouge', async () => {
+    let during: ServedProfileDecor | undefined;
+    const { client, deps, seen } = setup(profile({ avatarRing: ring('perle'), banner: banner('aurore'), bannerFrame: null }), async (_request, seenDecor) => {
+      during = seenDecor();
+      return { ok: true, data: { avatarRing: ring('perle'), banner: banner('aurore'), bannerFrame: frame('celte') } };
+    });
+    const outcome = await equipProfileDecor({ queryClient: client, deps, side: 'bannerFrame', choice: frame('celte') });
+    expect(during?.bannerFrame?.item).toBe('celte');
+    expect(outcome).toEqual({ status: 'saved' });
+    expect(seen[0]?.body).toEqual({ bannerFrame: { pack: 'cadres-celte', item: 'celte' } });
+    expect(decorOf(client)).toEqual({ avatarRing: ring('perle'), banner: banner('aurore'), bannerFrame: frame('celte') });
+  });
+
+  test('un refus rétablit le cadre d’avant', async () => {
+    const { client, deps } = setup(profile({ avatarRing: null, banner: null, bannerFrame: frame('celte') }), async () => ({ ok: false, status: 403, error: 'no', code: 'PACK_NOT_OWNED' }));
+    expect(await equipProfileDecor({ queryClient: client, deps, side: 'bannerFrame', choice: frame('celte-anime') })).toEqual({ status: 'refused', code: 'PACK_NOT_OWNED' });
+    expect(decorOf(client)?.bannerFrame?.item).toBe('celte');
+  });
+
+  test('un cadre posé sur un autre appareil arrive par l’événement', () => {
+    const client = new QueryClient();
+    client.setQueryData(MY_PROFILE_QUERY_KEY, profile({ avatarRing: null, banner: null, bannerFrame: null }));
+    applyProfileDecorEvent(client, { userId: 'u1', decor: { avatarRing: null, banner: null, bannerFrame: frame('celte') } });
+    expect(decorOf(client)?.bannerFrame?.item).toBe('celte');
+  });
+});
+
 describe('le décor équipé sur un autre appareil', () => {
   test('profile:decor-updated met mon profil à jour', () => {
     const { client } = setup(profile({ avatarRing: null, banner: null }), async () => ({ ok: true, data: {} }));
@@ -208,7 +238,7 @@ describe('deux choix rapprochés sur le même côté : les réponses se croisent
     expect(decorOf(client)?.banner?.item).toBe('aurore');
     pending[1]?.resolve({ ok: true, data: { avatarRing: ring('filet'), banner: banner('aurore') } });
     await bannerEquip;
-    expect(decorOf(client)).toEqual({ avatarRing: ring('filet'), banner: banner('aurore') });
+    expect(decorOf(client)).toEqual({ avatarRing: ring('filet'), banner: banner('aurore'), bannerFrame: null });
   });
 });
 
@@ -219,9 +249,9 @@ describe('un profile:decor-updated arrivé pendant un choix en vol (#10632)', ()
     const equip = equipProfileDecor({ queryClient: client, deps, side: 'avatarRing', choice: ring('filet') });
     await new Promise((resolve) => setTimeout(resolve, 0));
     applyProfileDecorEvent(client, { userId: 'u1', decor: { avatarRing: ring('laurier'), banner: banner('aurore') }, at: 'x' });
-    expect(decorOf(client)).toEqual({ avatarRing: ring('filet'), banner: banner('aurore') });
+    expect(decorOf(client)).toEqual({ avatarRing: ring('filet'), banner: banner('aurore'), bannerFrame: null });
     answer?.({ ok: false, status: 403, error: 'no' });
     await equip;
-    expect(decorOf(client)).toEqual({ avatarRing: ring('laurier'), banner: banner('aurore') });
+    expect(decorOf(client)).toEqual({ avatarRing: ring('laurier'), banner: banner('aurore'), bannerFrame: null });
   });
 });

@@ -350,7 +350,8 @@ describe('MessagingService.handleMessage — familles des pièces jointes d’un
       mockPrisma.message.findUnique.mockResolvedValue({
         isViewOnce: false, isBlurred: false, effectFlags: 0, ephemeralDuration: null, expiresAt: null,
         attachments: [{ isViewOnce: false, isBlurred: false, effectFlags: 0 }], _count: { attachments: 1 },
-        messageType: 'image', metadata: null, sender: { id: testParticipantId, userId: null }
+        messageType: 'image', metadata: null, sender: { id: testParticipantId, userId: null },
+        isEncrypted: false, encryptionMode: null, conversation: { encryptionEnabledAt: null, encryptionMode: null },
       });
 
     const copiedMimeTypes = () =>

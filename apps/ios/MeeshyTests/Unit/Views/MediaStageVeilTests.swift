@@ -104,16 +104,43 @@ final class MediaStageVeilTests: XCTestCase {
     }
 
     /// Et la conséquence, mesurée là où elle se voit : les deux retraits que le
-    /// pager reçoit sont identiques rangée ouverte et rangée fermée.
+    /// pager reçoit sont identiques rangée ouverte et rangée fermée — et nuls,
+    /// puisque le média prend toujours le viewport entier (#10930).
     func test_thePagerInsets_areIdenticalWithAndWithoutTheRow() {
         let réserves = corridors()
         for ouverte in [true, false] {
             let état = MediaStageVeil.geometryPresentation(.carded, overlays: .init(reactionRow: ouverte, replyBar: false))
-            XCTAssertEqual(MediaGalleryStage.topInset(presentation: état, corridors: réserves),
-                           réserves.safeTop + réserves.top)
-            XCTAssertEqual(MediaGalleryStage.bottomInset(presentation: état, corridors: réserves),
-                           réserves.rail + réserves.transport + réserves.safeBottom + réserves.gutter)
+            XCTAssertEqual(MediaGalleryStage.topInset(presentation: état, corridors: réserves), 0)
+            XCTAssertEqual(MediaGalleryStage.bottomInset(presentation: état, corridors: réserves), 0)
         }
+    }
+
+    // MARK: - Le chrome est une SUPERPOSITION (#10930)
+
+    /// **Directive porteur 2026-10-18** : « la vidéo est toujours en plein
+    /// écran et doit fit le viewport » ; les contrôleurs s'affichent par-dessus
+    /// au toucher. Montrer ou cacher le chrome ne change donc AUCUNE cote : le
+    /// solveur reçoit le plein cadre dans les deux états.
+    func test_showingTheChrome_neverResizesTheMedia() {
+        for état in [StagePresentation.carded,
+                     .full(pausedOnEntry: false),
+                     .full(pausedOnEntry: true)] {
+            let géométrie = MediaStageVeil.geometryPresentation(état, overlays: .closed)
+            XCTAssertTrue(géométrie.isFull, "\(état) se cadre au viewport entier")
+            XCTAssertEqual(géométrie.framing, .full)
+        }
+        XCTAssertTrue(MediaStageVeil.showsChrome(presentation: .carded, overlays: .closed),
+                      "le chrome se montre par-dessus le média")
+        XCTAssertFalse(MediaStageVeil.showsChrome(presentation: .full(pausedOnEntry: false), overlays: .closed),
+                       "et disparaît au toucher suivant")
+    }
+
+    /// La porte de la pause survit à la projection : la pastille « en pause »
+    /// lit `pausedOnEntry` sur l'état VRAI, mais la géométrie ne doit pas
+    /// l'effacer pour autant.
+    func test_theGeometry_keepsThePauseDoor() {
+        XCTAssertEqual(MediaStageVeil.geometryPresentation(.full(pausedOnEntry: true), overlays: .closed),
+                       .full(pausedOnEntry: true))
     }
 
     // MARK: - Où la rangée se pose

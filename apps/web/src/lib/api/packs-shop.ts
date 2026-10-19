@@ -146,6 +146,13 @@ const CATALOGUED_ROUTES: Partial<Record<PackDomain, DomainRoutes>> = {
     install: packsEndpoints.bannerBySlugInstall,
     purchase: packsEndpoints.bannerBySlugPurchase,
   },
+  'banner-frame': {
+    catalogue: packsEndpoints.bannerFrame,
+    installed: packsEndpoints.bannerFrameInstalled,
+    bySlug: packsEndpoints.bannerFrameBySlug,
+    install: packsEndpoints.bannerFrameBySlugInstall,
+    purchase: packsEndpoints.bannerFrameBySlugPurchase,
+  },
 };
 
 /**

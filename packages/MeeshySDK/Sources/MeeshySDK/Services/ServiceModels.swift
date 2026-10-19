@@ -529,20 +529,25 @@ public struct TranslateResponse: Decodable, Sendable {
 
 // MARK: - User Search
 
-public struct UserSearchResult: Codable, CacheIdentifiable, Identifiable, Sendable, Equatable {
+public struct UserSearchResult: Codable, CacheIdentifiable, Identifiable, Sendable, Equatable, ProfileDecorWearer {
     public let id: String
     public let username: String
     public let displayName: String?
     public let avatar: String?
     public let isOnline: Bool?
+    /// Le contour d'avatar équipé (#10945), servi avec la personne. Additif et tolérant : absent
+    /// (ancien serveur, aucun contour) ⇒ `nil` ; illisible ⇒ aucun contour (`avatarRing == nil`).
+    public let profileDecor: ServedProfileDecor?
 
     public init(
         id: String,
         username: String,
         displayName: String? = nil,
         avatar: String? = nil,
-        isOnline: Bool? = nil
+        isOnline: Bool? = nil,
+        profileDecor: ServedProfileDecor? = nil
     ) {
+        self.profileDecor = profileDecor
         self.id = id
         self.username = username
         self.displayName = displayName

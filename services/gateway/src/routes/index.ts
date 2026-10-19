@@ -144,7 +144,7 @@ import { meStickersRoutes } from './me/stickers';
 import { stickerPacksRoutes } from './sticker-packs';
 import { gloryFramePacksRoutes } from './packs-glory-frame';
 import { packAssetsRoutes } from './pack-assets';
-import { avatarRingPacksRoutes, bannerPacksRoutes, wallpaperPacksRoutes } from './packs-appearance';
+import { avatarRingPacksRoutes, bannerFramePacksRoutes, bannerPacksRoutes, wallpaperPacksRoutes } from './packs-appearance';
 import { packsShopRoutes } from './packs-shop';
 import { accountDeletionRoutes } from './account-deletion';
 import { directoryAvailabilityRoutes } from './directory/availability';
@@ -364,6 +364,7 @@ export const ROUTE_TABLE_BEFORE_ATTACHMENTS: readonly RouteRegistrationEntry[] =
   { name: 'packs-wallpaper', prefix: `${API_PREFIX}/packs/wallpaper`, module: wallpaperPacksRoutes },
   { name: 'packs-avatar-ring', prefix: `${API_PREFIX}/packs/avatar-ring`, module: avatarRingPacksRoutes },
   { name: 'packs-banner', prefix: `${API_PREFIX}/packs/banner`, module: bannerPacksRoutes },
+  { name: 'packs-banner-frame', prefix: `${API_PREFIX}/packs/banner-frame`, module: bannerFramePacksRoutes },
   { name: 'packs-shop', prefix: `${API_PREFIX}/packs/shop`, module: packsShopRoutes },
   // Le magasin adressé par contenu des packs officiels (#10157, L5) — PUBLIC,
   // immuable, liste blanche calculée au démarrage par `PackIndex`, aucune

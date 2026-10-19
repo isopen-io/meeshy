@@ -254,8 +254,6 @@ export default function ProfileScreen() {
     URL.revokeObjectURL(preview);
     setPending((current) => withoutKind(current, kind));
     setNotice({ text: imageNotice(language, kind, outcome), ...(outcome.status === 'saved' ? { bytes: outcome.bytesSent } : {}) });
-    /* Une photo téléversée prend la main sur une bannière de design : sans ce retrait, la nouvelle image resterait cachée dessous. */
-    if (kind === 'banner' && outcome.status === 'saved' && profile?.profileDecor?.banner != null) void equipDecor('banner', null);
   };
 
   const equipDecor = async (side: DecorSide, choice: ServedProfileDecorItem | null) => {
@@ -266,7 +264,7 @@ export default function ProfileScreen() {
     if (outcome.status === 'error') setNotice({ text: translateProfileDecor(language, 'profileDecor.error') });
   };
 
-  const decorLabel = (item: ServedProfileDecorItem | null | undefined, table: 'designs' | 'rings'): string | null =>
+  const decorLabel = (item: ServedProfileDecorItem | null | undefined, table: 'designs' | 'rings' | 'frames'): string | null =>
     item === null || item === undefined ? null : (decorNames?.[table][item.item] ?? item.item);
 
   const openSheetRank = PRISM_RANKS.find((entry) => entry.rank === openRank);
@@ -352,7 +350,11 @@ export default function ProfileScreen() {
                     {decorServed && decorReady ? (
                       <DecorEntries
                         language={language}
-                        names={{ banner: decorLabel(profile.profileDecor?.banner, 'designs'), avatarRing: decorLabel(profile.profileDecor?.avatarRing, 'rings') }}
+                        names={{
+                          banner: decorLabel(profile.profileDecor?.banner, 'designs'),
+                          bannerFrame: decorLabel(profile.profileDecor?.bannerFrame, 'frames'),
+                          avatarRing: decorLabel(profile.profileDecor?.avatarRing, 'rings'),
+                        }}
                         disabled={!online}
                         onOpen={setDecorSide}
                       />

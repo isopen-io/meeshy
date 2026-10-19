@@ -6,7 +6,7 @@
  * chunks des stickers n'embarquent pas ces schémas.
  */
 import * as z from 'zod/mini';
-import { FrameUsageSchema, type FrameUsage } from './frame-usage.js';
+import { FrameUsageSchema, type FrameUsage, type FreeFrameSurface } from './frame-usage.js';
 import { GLORY_ATMOSPHERES } from './glory-atmospheres.js';
 import { PACK_DOMAINS, PACK_PRICE_MAX, PACK_LANGUAGES, PACK_LIMITS, PACK_SLUG_PATTERN, type PackAssetRef, type PackDefault, type PackDomain } from './content-pack.js';
 
@@ -38,7 +38,20 @@ const collectionSchema = z.object({
 });
 
 /** Les domaines dont les packs portent des cadres, donc un usage. */
-const FRAME_DOMAINS: readonly PackDomain[] = ['glory-frame', 'capture-frame', 'avatar-ring'];
+const FRAME_DOMAINS: readonly PackDomain[] = ['glory-frame', 'capture-frame', 'avatar-ring', 'banner-frame'];
+
+/** Les domaines LIBRES (jamais une récompense du jeu). */
+const FREE_FRAME_DOMAINS: readonly PackDomain[] = ['capture-frame', 'avatar-ring', 'banner-frame'];
+
+/**
+ * Les surfaces RÉSERVÉES : chacune n'est déclarée que par son domaine, et ce
+ * domaine ne déclare qu'elle. Les anciens clients iOS rejetteraient une surface
+ * inconnue : une surface neuve ne voyage donc que dans le domaine neuf.
+ */
+const CONFINED_SURFACES: readonly { readonly surface: FreeFrameSurface; readonly domain: PackDomain }[] = [
+  { surface: 'avatar', domain: 'avatar-ring' },
+  { surface: 'banner', domain: 'banner-frame' },
+];
 
 type DeclaredUsages = { readonly usage?: FrameUsage; readonly collections?: readonly { readonly usage?: FrameUsage }[] };
 
@@ -48,8 +61,8 @@ const declaredUsages = (entry: DeclaredUsages): readonly FrameUsage[] =>
 /** Un cadre de gloire récompense le jeu, jamais une capture libre ; un cadre de capture est libre, jamais une récompense du jeu. */
 const usageFitsDomain = (entry: DeclaredUsages & { readonly domain: PackDomain }): boolean => {
   if (!FRAME_DOMAINS.includes(entry.domain)) return entry.domain === 'sticker' || declaredUsages(entry).length === 0;
-  const freeDomain = entry.domain === 'capture-frame' || entry.domain === 'avatar-ring';
-  return declaredUsages(entry).every((usage) => (usage.kind === 'free') === freeDomain) && avatarSurfaceConfined(entry);
+  const freeDomain = FREE_FRAME_DOMAINS.includes(entry.domain);
+  return declaredUsages(entry).every((usage) => (usage.kind === 'free') === freeDomain) && surfacesConfined(entry);
 };
 
 /**
@@ -68,12 +81,15 @@ const packUsageDeclared = (entry: { readonly domain: PackDomain; readonly usage?
 const sameSurfaces = (surfaces: readonly string[], expected: readonly string[]): boolean =>
   surfaces.length === expected.length && expected.every((surface) => surfaces.includes(surface));
 
-/** Un contour d'avatar sert l'avatar et rien d'autre ; aucun autre domaine ne déclare la surface `avatar` (les anciens clients iOS rejetteraient une surface inconnue). */
-const avatarSurfaceConfined = (entry: DeclaredUsages & { readonly domain: PackDomain }): boolean =>
-  declaredUsages(entry).every((usage) => {
-    if (usage.kind !== 'free') return entry.domain !== 'avatar-ring';
-    return entry.domain === 'avatar-ring' ? sameSurfaces(usage.surfaces, ['avatar']) : !usage.surfaces.includes('avatar');
+/** Un contour d'avatar sert l'avatar et rien d'autre, un cadre de bannière la bannière et rien d'autre ; aucun autre domaine ne déclare ces surfaces. */
+const surfacesConfined = (entry: DeclaredUsages & { readonly domain: PackDomain }): boolean => {
+  const own = CONFINED_SURFACES.find((confined) => confined.domain === entry.domain);
+  return declaredUsages(entry).every((usage) => {
+    if (usage.kind !== 'free') return own === undefined;
+    if (own !== undefined) return sameSurfaces(usage.surfaces, [own.surface]);
+    return CONFINED_SURFACES.every((confined) => !usage.surfaces.includes(confined.surface));
   });
+};
 
 /**
  * L'entrée de registre d'un pack officiel ou intégré. Un pack de CADRES porte

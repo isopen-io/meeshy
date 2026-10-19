@@ -53,6 +53,7 @@ import { loadWithdrawnCitations, servePostReplyCitation } from '../../services/m
 import type { ConversationType } from '@meeshy/shared/types/conversation';
 import { loadViewerBirthDate, servedListRowRestriction } from './viewerWriteRestriction';
 import { participantProfileDecor } from '../../services/appearance/profileDecor';
+import { authorProfileDecor } from '../../services/appearance/authorProfileDecor';
 import { startupPackIndex } from '../../services/packs/PackIndex';
 import {
   conversationListQuerySelect,
@@ -882,7 +883,7 @@ export function registerConversationListRoute(
                   && consumedViewOnce.has(viewOnceConsumptionKey({ messageId: msg.id, participantId: readerParticipantId })),
               }), withdrawnCitations),
               sender: sender && senderVis ? {
-                ...sender,
+                ...withoutNestedUser(sender),
                 username: sender.user?.username ?? sender.username ?? null,
                 firstName: sender.user?.firstName ?? null,
                 lastName: sender.user?.lastName ?? null,
@@ -894,6 +895,7 @@ export function registerConversationListRoute(
                 lastActiveAt: senderVis.showLastSeenTimestamp
                   ? (sender.user?.lastActiveAt ?? sender.lastActiveAt ?? null)
                   : null,
+                ...authorProfileDecor(sender.user),
               } : null
             };
           })(),
@@ -979,4 +981,14 @@ export function registerConversationListRoute(
       return sendInternalError(reply, 'Error retrieving conversations');
     }
   });
+}
+
+/**
+ * #10945 — l'expéditeur d'aperçu part SANS sa jointure `user` : elle porte la
+ * colonne brute `equippedAvatarRing`, déjà résolue en `profileDecor`, et ne
+ * doit pas dépendre du sérialiseur pour être retenue.
+ */
+function withoutNestedUser<T extends { readonly user?: unknown }>(sender: T): Omit<T, 'user'> {
+  const { user: _user, ...rest } = sender;
+  return rest;
 }

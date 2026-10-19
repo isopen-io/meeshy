@@ -403,5 +403,6 @@ extension ConversationViewModel {
                 msgs[i].content = plaintext
             }
         }
+        DecryptedMessageLedger.shared.record(results.filter { $0.plaintext != nil }.map(\.messageId))
     }
 }

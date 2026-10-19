@@ -417,7 +417,6 @@ final class ProgressionConceptGuardTests: XCTestCase {
         XCTAssertEqual(table["game.sparks.lifetime.label"]?["fr"], "Record d’étincelles")
         XCTAssertEqual(table["game.concept.fact.minted"]?["fr"], "Record de Meeshes")
         XCTAssertEqual(table["progression.meesh.minted.many"]?["fr"], "Record de Meeshes : %lld")
-        XCTAssertEqual(table["game.sparks.banner.levelMax"]?["fr"], "record %@")
         XCTAssertEqual(table["game.detail.fact.level_record"]?["fr"], "C’est ton record de niveau : le plus haut niveau que tu as atteint.")
         XCTAssertEqual(table["game.detail.fact.minted"]?["fr"], "C’est ton record de Meeshes : toutes celles que tu as frappées depuis le début.")
         XCTAssertTrue((table["game2.prestige.meo"]?["fr"] ?? "").contains("ton record d’étincelles et ton record de niveau sont conservés"))

@@ -17,7 +17,7 @@ final class GameBannerBadgeModelTests: XCTestCase {
 
         XCTAssertEqual(model.userId, "u1")
         XCTAssertEqual(model.level, 42)
-        XCTAssertEqual(model.levelName, GameCopy.tierName(.eclat))
+        XCTAssertEqual(model.levelName, GameCopy.tierName(.eclat), "le nom du palier se pose au-dessus du cercle (#10951)")
         XCTAssertEqual(model.rankName, GameCopy.rankLabel(standing()))
     }
 
@@ -38,7 +38,7 @@ final class GameBannerBadgeModelTests: XCTestCase {
         XCTAssertFalse((model.levelAccessibilityLabel + model.rankAccessibilityLabel).contains(GameCopy.flameFormName(.brasier)))
     }
 
-    // MARK: - La poche en grand, la Gloire totale dessous (#10846, #10913) ; le niveau, le max à vie dessous
+    // MARK: - Les étincelles en grand près du cercle, la Gloire près du blason — en glyphes, sans mot (#10913, #10951)
 
     private func sparked(points: Int? = nil, sparks: Int? = nil, lifetime: Int? = nil, glory: Int? = nil, level: Int = 3,
                          levelMax: Int? = nil) -> GameBannerBadgeModel? {
@@ -48,14 +48,21 @@ final class GameBannerBadgeModelTests: XCTestCase {
         return GameBannerBadgeModel.of(GameStandingContent(standing: served, treasuryTier: nil), userId: "u1")
     }
 
-    /// Soi ou un ami : la Gloire totale sous la poche, à la place du record d'étincelles (porteur 2026-10-18).
-    func test_servedGlory_showsThePocket_andTheGloryBelow_neverTheLifetimeSparks() throws {
+    /// Soi ou un ami : « ✦ 976 » près du cercle, « ♛ 16 000 » près du blason — jamais le record d'étincelles.
+    func test_servedGlory_readsAsGlyphs_neverTheLifetimeSparks() throws {
         let model = try XCTUnwrap(sparked(points: 976, sparks: 976, lifetime: 12_000, glory: 16_000))
 
         XCTAssertEqual(model.pocket, 976)
-        XCTAssertEqual(model.pocketText, GameSparksCopy.bannerPocket(976))
-        XCTAssertEqual(model.gloryText, GameCopy.gloryAmount(GameCopy.formatCount(16_000)))
+        XCTAssertEqual(model.gloryText, "\(GameBannerBadgeModel.gloryGlyph)\u{00A0}\(GameCopy.formatCount(16_000))")
+        XCTAssertEqual(model.pocketText, "\(GameBannerBadgeModel.sparkGlyph)\u{00A0}\(GameCopy.formatCount(976))")
         XCTAssertFalse(model.levelAccessibilityLabel.contains(GameCopy.formatCount(12_000)))
+    }
+
+    /// Deux glyphes, deux monnaies, aucun mot (porteur 2026-10-19).
+    func test_theTwoGlyphs_areDistinct_andCarryNoWord() {
+        XCTAssertNotEqual(GameBannerBadgeModel.gloryGlyph, GameBannerBadgeModel.sparkGlyph)
+        XCTAssertFalse(GameBannerBadgeModel.gloryGlyph.contains { $0.isLetter })
+        XCTAssertFalse(GameBannerBadgeModel.sparkGlyph.contains { $0.isLetter })
     }
 
     /// Un non-ami (ou un serveur antérieur) : la Gloire n'est pas servie, aucune ligne ne s'invente — même devant un
@@ -78,12 +85,12 @@ final class GameBannerBadgeModelTests: XCTestCase {
         XCTAssertNil(model.gloryText)
     }
 
-    /// Le niveau max à vie se montre TOUJOURS sous le niveau, même égal à lui.
-    func test_theLifetimeMaxLevel_isAlwaysShown_evenWhenEqualToTheLevel() throws {
-        XCTAssertEqual(try XCTUnwrap(sparked(level: 12, levelMax: 40)).levelMaxText, GameSparksCopy.bannerLevelMax(40))
-        XCTAssertEqual(try XCTUnwrap(sparked(level: 12, levelMax: 12)).levelMaxText, GameSparksCopy.bannerLevelMax(12))
-        XCTAssertEqual(try XCTUnwrap(sparked(level: 12)).levelMaxText, GameSparksCopy.bannerLevelMax(12),
-                       "devant un serveur antérieur, le max à vie ne passe jamais sous le niveau")
+    /// Le record de niveau ne s'écrit plus sur la bannière — le cercle porte le niveau — mais il se LIT toujours,
+    /// jamais sous le niveau montré.
+    func test_theLevelRecord_isReadNeverWritten_andNeverBelowTheLevel() throws {
+        XCTAssertEqual(try XCTUnwrap(sparked(level: 12, levelMax: 40)).levelMax, 40)
+        XCTAssertEqual(try XCTUnwrap(sparked(level: 12)).levelMax, 12, "devant un serveur antérieur, le record ne passe jamais sous le niveau")
+        XCTAssertTrue(try XCTUnwrap(sparked(level: 12, levelMax: 40)).levelAccessibilityLabel.contains(GameSparksCopy.levelMaxAccessibility(40)))
     }
 
     /// La poche est la base du niveau (#10892) : le cercle se remplit de ce qu'elle a passé du seuil du niveau.
@@ -99,12 +106,20 @@ final class GameBannerBadgeModelTests: XCTestCase {
         XCTAssertEqual(try XCTUnwrap(sparked(level: 3)).levelProgress, 1)
     }
 
-    func test_levelAccessibilityLabel_readsPocketGloryAndLifetimeMax() throws {
+    func test_levelAccessibilityLabel_readsPocketAndLifetimeMax_theRankReadsTheGlory() throws {
         let model = try XCTUnwrap(sparked(points: 976, sparks: 976, lifetime: 12_000, glory: 16_000, level: 3, levelMax: 40))
+        let glory = GameCopy.gloryAmount(GameCopy.formatCount(16_000))
 
         XCTAssertTrue(model.levelAccessibilityLabel.contains(GameSparksCopy.sparks(976)))
-        XCTAssertTrue(model.levelAccessibilityLabel.contains(GameCopy.gloryAmount(GameCopy.formatCount(16_000))))
         XCTAssertTrue(model.levelAccessibilityLabel.contains(GameSparksCopy.levelMaxAccessibility(40)))
+        XCTAssertFalse(model.levelAccessibilityLabel.contains(glory), "la Gloire se lit avec le rang, à côté duquel elle se pose")
+        XCTAssertTrue(model.rankAccessibilityLabel.hasSuffix(GameText.bannerSeparator + glory))
+        XCTAssertFalse(model.rankAccessibilityLabel.contains(GameBannerBadgeModel.gloryGlyph))
+    }
+
+    func test_rankAccessibilityLabel_withheldGlory_readsTheRankAlone() throws {
+        let model = try XCTUnwrap(sparked(points: 976))
+        XCTAssertEqual(model.rankAccessibilityLabel, ConceptText.factRank + GameText.bannerSeparator + model.rankName)
     }
 
     // MARK: - Coins LOGIQUES : aucun arrondi au bord de début des étincelles ni au bord de fin des rangs
@@ -115,6 +130,12 @@ final class GameBannerBadgeModelTests: XCTestCase {
                        "en RTL la pastille des étincelles est à droite : son bord de début est le droit, carré")
         XCTAssertEqual(GameBannerBadgeView.roundedCorners(for: .rank, direction: .leftToRight), [.topLeft])
         XCTAssertEqual(GameBannerBadgeView.roundedCorners(for: .rank, direction: .rightToLeft), [.topRight])
+    }
+
+    /// Les deux cadres ont TOUJOURS la même largeur : chacun la moitié de ce que l'avatar laisse (#10951).
+    func test_bothGroups_shareTheSameWidth_whateverTheirContent() {
+        XCTAssertEqual(GameBannerBadgeView.groupWidth(bannerWidth: 390), (390 - GameBannerBadgeView.avatarClearance) / 2)
+        XCTAssertEqual(GameBannerBadgeView.groupWidth(bannerWidth: 50), 0)
     }
 
     func test_standingAccessibilityLabel_servedFlame_isNeverRead() {

@@ -417,7 +417,10 @@ extension OutboxDispatcher {
             // transporte pas — sans cette ligne, un échec réseau suffisait
             // à faire citer la première photo d'un carrousel à une réponse
             // composée sur la troisième.
-            attachmentReplyTo: QuotedAttachmentSend(anchor: item.attachmentReplyTo)
+            attachmentReplyTo: QuotedAttachmentSend(anchor: item.attachmentReplyTo),
+            // La pièce CHOISIE d'un transfert (#9914, #10947) : sans elle, le
+            // rejeu recopierait tout le lot que l'utilisateur avait écarté.
+            forwardedAttachmentIds: item.forwardedAttachmentIds
         )
     }
 

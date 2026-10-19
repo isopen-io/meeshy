@@ -17,7 +17,7 @@ import { prefersReducedMotion } from '@/lib/view/reduced-motion';
 import { useTopModalHost } from '@/lib/view/top-modal-host';
 import { markNotificationReadAction } from '@/lib/view/use-notifications';
 
-import { Avatar } from './avatar';
+import { PeerAvatar } from './peer-avatar';
 import { GlyphSvg } from './glyph';
 import { GLYPHS } from './glyphs';
 import { milestoneGlyph } from './milestone-glyph';
@@ -57,7 +57,7 @@ function Leading({ notification, banner, accent }: { readonly notification: Noti
   const avatar = notification.actor?.avatar ?? null;
   return (
     <span className="relative shrink-0" style={{ filter: 'drop-shadow(0 2px 4px var(--color-scrim-soft))' }}>
-      <Avatar initials={initialsOf(notification.actor?.displayName ?? banner.headline)} color={accent} size={44} {...(avatar === null ? {} : { src: avatar })} />
+      <PeerAvatar presenceKey={notification.actor?.id} initials={initialsOf(notification.actor?.displayName ?? banner.headline)} color={accent} size={44} {...(avatar === null ? {} : { src: avatar })} />
       <span
         data-banner-type-badge
         aria-hidden="true"

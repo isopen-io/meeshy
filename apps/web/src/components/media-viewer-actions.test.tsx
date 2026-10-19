@@ -206,7 +206,7 @@ describe('MediaViewer — les actions de la page (#6303)', () => {
 describe('MediaViewer — « Partager » ouvre la feuille d’envoi commune (#8884)', () => {
   const REQUEST: SendSheetRequest = {
     intent: 'share',
-    payload: { kind: 'attachment', conversationId: 'c-a', messageId: 'm-a', attachmentId: 'a', mime: 'image/jpeg', previewUrl: '/uploads/a.jpg', mine: true, protected: false },
+    payload: { kind: 'attachment', conversationId: 'c-a', messageId: 'm-a', attachmentId: 'a', mime: 'image/jpeg', previewUrl: '/uploads/a.jpg', exit: { id: 'm-a', pieces: [{ id: 'a', mimeType: 'image/jpeg' }] } },
   };
   const SHARE: MediaPageOffers = { ...NO_MEDIA_OFFERS, share: true };
 

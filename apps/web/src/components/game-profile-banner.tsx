@@ -14,12 +14,14 @@ import { RankBlason } from './game/rank-blason';
  * rang à droite » ; #10601 — directive porteur 2026-10-14 : aux deux ANGLES BAS,
  * le bas du cadre épousant la limite basse de la bannière, des fonds allégés).
  *
- *   · à l'angle bas du DÉBUT (gauche ; droite en RTL) : le nom du niveau
- *     au-dessus du cercle, et à côté les points acquis et ce qu'il reste vers
- *     le niveau suivant — les mots de la barre du joueur (« 976 pts »,
- *     « encore 624 ») ;
- *   · à l'angle bas de la FIN : le blason du rang, son nom ET sa division
- *     dessous (« Murmure V »).
+ *   · à l'angle bas du DÉBUT (gauche ; droite en RTL) : le nom du palier
+ *     au-dessus du cercle — qui porte le niveau, sa progression et le
+ *     prestige — et à droite les étincelles en grand, par leur glyphe
+ *     (« ✦ 18 347 » — porteur 2026-10-19, #10951) ; le record et ce qu'il
+ *     manque vivent dans le libellé d'accessibilité ;
+ *   · à l'angle bas de la FIN : la Gloire (« ♛ 18 790 »), puis le blason du
+ *     rang, son nom ET sa division dessous (« Murmure V ») — la Gloire fait le
+ *     rang, elle se lit à côté de lui.
  *
  * Chaque cadre a les coins HAUTS arrondis et les coins BAS carrés, posés sur le
  * bord bas : la découpe de la bannière (`overflow-hidden rounded-card`) taille
@@ -27,9 +29,10 @@ import { RankBlason } from './game/rank-blason';
  * VOILE léger, sans flou — la bannière et ses dessins se voient au travers — et
  * le texte blanc porte une ombre courte qui le tient lisible sur une bannière
  * claire, comme iOS (`GameBannerBadgeView`). L'avatar chevauche le MILIEU du
- * bas de la bannière : chaque cadre s'arrête avant lui (`AVATAR_CLEARANCE`) ;
- * sur une bannière étroite (gabarit 320), les points passent SOUS le cercle
- * plutôt que de se tronquer à côté.
+ * bas de la bannière : les deux cadres prennent chacun la moitié de ce qu'il
+ * laisse (`AVATAR_CLEARANCE`) et la même hauteur, quel que soit leur contenu ;
+ * sur une bannière étroite (gabarit 320), les étincelles passent SOUS le
+ * cercle et la Gloire SOUS le blason plutôt que de se tronquer à côté.
  *
  * Seulement ce qui est servi : sur la fiche d'un autre, la progression n'est
  * jamais servie et les points ne le sont qu'aux amis — absents, rien ne se
@@ -45,7 +48,7 @@ export type BannerStanding = ShownRank & {
   readonly progress: number | null;
   /** Les ÉTINCELLES en poche ; `null` : non servies (ou aucune). */
   readonly points: number | null;
-  /** La Gloire totale, en petit sous la poche (#10913) ; `null` : non servie (autre que soi et ses amis, ou ancien serveur). */
+  /** La Gloire totale, à côté du blason (#10913, #10951) ; `null` : non servie (autre que soi et ses amis, ou ancien serveur). */
   readonly glory: number | null;
   /** Le niveau MAX à vie, sous le niveau actuel ; `null` : non servi (ancien serveur). Il survit au Prestige. */
   readonly levelMax: number | null;
@@ -65,7 +68,14 @@ const GROUP =
  */
 const LEVEL_CORNERS = 'rounded-se-card';
 const RANK_CORNERS = 'rounded-ss-card';
-const GROUP_STYLE = { maxWidth: `calc((100% - ${AVATAR_CLEARANCE}px) / 2)` } as const;
+/** Les deux cadres ont TOUJOURS la même taille (#10951) : chacun la moitié de ce que l'avatar laisse, la même hauteur (`items-stretch`). */
+const GROUP_STYLE = { width: `calc((100% - ${AVATAR_CLEARANCE}px) / 2)` } as const;
+
+/** Les glyphes des deux monnaies du jeu, sans mot : ✦ les étincelles, ♛ la Gloire (◆ et ★ sont pris par le fragment et la coupe). */
+export const SPARK_GLYPH = '✦';
+export const GLORY_GLYPH = '♛';
+
+const glyphAmount = (glyph: string, amount: number, language: InterfaceLanguage): string => `${glyph}\u00a0${formatCount(amount, language)}`;
 
 const pointsLine = (points: number, language: InterfaceLanguage): string =>
   translateGame(language, 'game.banner.points', { points: formatCount(points, language) });
@@ -73,79 +83,60 @@ const pointsLine = (points: number, language: InterfaceLanguage): string =>
 const gloryLine = (glory: number, language: InterfaceLanguage): string =>
   translateGame(language, 'game.rank.glory', { glory: formatCount(glory, language) });
 
-const levelNowLine = (level: number, language: InterfaceLanguage): string =>
-  translateGame(language, 'game.banner.level', { level: formatCount(level, language) });
-
-const levelMaxLine = (level: number, language: InterfaceLanguage): string =>
-  translateGame(language, 'game.banner.level_max', { level: formatCount(level, language) });
-
 /** Ce qu'il reste nomme le niveau visé (#10540) : « encore 1 301 vers le 28 », jamais « encore 1 301 » à côté d'un total de points. */
 const missingLine = (points: number, nextLevel: number, language: InterfaceLanguage): string =>
   translateGame(language, 'game.banner.missing', { points: formatCount(points, language), level: formatCount(nextLevel, language) });
 
 function levelLabel(standing: BannerStanding, language: InterfaceLanguage): string {
-  const { level, tier, prestige, points, pointsToNext, glory, levelMax } = standing;
+  const { level, tier, prestige, points, pointsToNext, levelMax } = standing;
   const parts: readonly (string | null)[] = [
     levelRingLabelWithPrestige(level, tier, prestige, language),
     points === null ? null : pointsLine(points, language),
-    glory === null ? null : gloryLine(glory, language),
     levelMax === null ? null : translateGame(language, 'game.banner.level_max_a11y', { level: formatCount(levelMax, language) }),
     pointsToNext === null ? null : missingLine(pointsToNext, level + 1, language),
   ];
   return parts.filter((part): part is string => part !== null).join(translateGame(language, 'game.banner.separator'));
 }
 
+function rankLabel(standing: BannerStanding, language: InterfaceLanguage): string {
+  const parts = [standingLabel(standing, language), standing.glory === null ? null : gloryLine(standing.glory, language)];
+  return parts.filter((part): part is string => part !== null).join(translateGame(language, 'game.banner.separator'));
+}
+
 export function GameProfileBanner({ standing }: { readonly standing: BannerStanding }) {
   const language = currentInterfaceLanguage();
-  const { level, tier, prestige, progress, points, pointsToNext, glory, levelMax, rank, division, mythic } = standing;
+  const { level, tier, prestige, progress, points, glory, rank, division, mythic } = standing;
   const rankLine = standingLabel(standing, language);
   return (
     <div
       data-profile-banner-game=""
-      className="@container pointer-events-none absolute flex items-end justify-between"
+      className="@container pointer-events-none absolute flex items-stretch justify-between"
       style={{ insetInlineStart: 0, insetInlineEnd: 0, bottom: 0 }}
     >
-      <div data-profile-banner-level="" role="img" aria-label={levelLabel(standing, language)} className={`${GROUP} ${LEVEL_CORNERS} items-center gap-1.5 @max-[340px]:flex-col @max-[340px]:items-start @max-[340px]:gap-0.5`} style={GROUP_STYLE}>
-        <span aria-hidden="true" className="flex shrink-0 flex-col items-center">
-          <span data-profile-banner-level-name="" className="text-check font-semibold">
+      <div data-profile-banner-level="" role="img" aria-label={levelLabel(standing, language)} className={`${GROUP} ${LEVEL_CORNERS} items-center gap-2 @max-[340px]:flex-col @max-[340px]:items-start @max-[340px]:gap-0.5`} style={GROUP_STYLE}>
+        <span aria-hidden="true" className="flex shrink-0 flex-col items-center gap-0.5">
+          <span data-profile-banner-level-name="" className="text-mini font-semibold leading-none">
             {levelTierName(tier, language)}
           </span>
-          <LevelRing level={level} tier={tier} progress={progress} size={36} prestige={prestige} />
+          <LevelRing level={level} tier={tier} progress={progress} size={40} prestige={prestige} />
         </span>
-        {points === null && glory === null && pointsToNext === null && levelMax === null ? null : (
-          <span aria-hidden="true" className="flex min-w-0 flex-col leading-tight tabular-nums">
-            {/* La POCHE en grand, la GLOIRE totale en petit dessous (porteur, 2026-10-16, 2026-10-18). */}
-            {points === null ? null : (
-              <span data-profile-banner-points={points} className="truncate text-body font-bold">
-                {pointsLine(points, language)}
-              </span>
-            )}
-            {glory === null ? null : (
-              <span data-profile-banner-glory={glory} className="truncate text-check font-medium opacity-90">
-                {gloryLine(glory, language)}
-              </span>
-            )}
-            {/* Le NIVEAU actuel, le niveau MAX à vie dessous — toujours, même quand le max égale le niveau. */}
-            <span data-profile-banner-level-now={level} className="truncate text-check font-semibold">
-              {levelNowLine(level, language)}
-            </span>
-            {levelMax === null ? null : (
-              <span data-profile-banner-level-max={levelMax} className="truncate text-check font-medium opacity-90">
-                {levelMaxLine(levelMax, language)}
-              </span>
-            )}
-            {pointsToNext === null ? null : (
-              <span data-profile-banner-missing={pointsToNext} className="line-clamp-2 text-check font-medium">
-                {missingLine(pointsToNext, level + 1, language)}
-              </span>
-            )}
+        {points === null ? null : (
+          <span aria-hidden="true" data-profile-banner-points={points} className="min-w-0 truncate text-section font-bold leading-tight tabular-nums">
+            {glyphAmount(SPARK_GLYPH, points, language)}
           </span>
         )}
       </div>
-      <div data-profile-banner-rank="" role="img" aria-label={rankLine} className={`${GROUP} ${RANK_CORNERS} flex-col items-center`} style={GROUP_STYLE}>
-        <RankBlason rank={rank} division={division} mythic={mythic} level={level} size={34} label={rankName(rank, language)} />
-        <span aria-hidden="true" data-profile-banner-rank-name="" className="truncate text-check font-semibold">
-          {rankLine}
+      <div data-profile-banner-rank="" role="img" aria-label={rankLabel(standing, language)} className={`${GROUP} ${RANK_CORNERS} items-center justify-center gap-2 @max-[340px]:flex-col @max-[340px]:items-end @max-[340px]:gap-0.5`} style={GROUP_STYLE}>
+        {glory === null ? null : (
+          <span aria-hidden="true" data-profile-banner-glory={glory} className="min-w-0 truncate text-body font-bold leading-tight tabular-nums">
+            {glyphAmount(GLORY_GLYPH, glory, language)}
+          </span>
+        )}
+        <span aria-hidden="true" className="flex min-w-0 shrink-0 flex-col items-center justify-end">
+          <RankBlason rank={rank} division={division} mythic={mythic} level={level} size={34} label={rankName(rank, language)} />
+          <span data-profile-banner-rank-name="" className="max-w-full truncate text-check font-semibold">
+            {rankLine}
+          </span>
         </span>
       </div>
     </div>

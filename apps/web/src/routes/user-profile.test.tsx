@@ -11,6 +11,7 @@ import { fixtureAuthorPosts } from '@/lib/api/fixtures-rich-text';
 import { sharedConversationsQueryKey } from '@/lib/api/shared-conversations';
 import { presenceStore } from '@/lib/api/presence-store';
 import { appQueryClient } from '@/lib/api/query-client';
+import { sendSheetStore } from '@/lib/send/send-sheet-store';
 import { ensureHappyDomRegistered, releaseHappyDomIfRegistered } from '@/test-support/happy-dom-environment';
 
 import { UserProfileView } from './user-profile';
@@ -653,5 +654,22 @@ describe('signaler ouvre la feuille des motifs (#7187)', () => {
     await settle();
 
     expect(text(document.querySelector('[data-report-body]'))).toContain('modération');
+  });
+});
+
+/** D15 (#10949) — « Envoyer le profil » ouvre l'écran de partage unique, avec la carte profil. */
+describe('Envoyer le profil', () => {
+  test('le bouton ouvre l’écran de partage avec la carte de CE profil', async () => {
+    const el = await mount('kwame-mensah');
+    const button = el.querySelector<HTMLButtonElement>('[data-profile-send]');
+    expect(button?.getAttribute('aria-label')).toBe('Envoyer le profil');
+    act(() => button?.click());
+    expect(sendSheetStore.getState().request?.payload).toMatchObject({ kind: 'profile', url: 'https://meeshy.me/u/kwame-mensah' });
+    sendSheetStore.getState().close();
+  });
+
+  test('un compte bloqué n’offre pas d’envoyer son profil', async () => {
+    const blocked = await mount('yann.legoff');
+    expect(blocked.querySelector('[data-profile-send]')).toBeNull();
   });
 });

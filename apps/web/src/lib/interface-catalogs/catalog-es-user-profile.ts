@@ -4,6 +4,7 @@ import type { UserProfileCatalogSlice } from './catalog-fr-user-profile';
 const esUserProfile = {
   'userProfile.self.edit': 'Editar mi perfil',
   'userProfile.title': 'Perfil',
+  'userProfile.sendProfile': 'Enviar el perfil',
   'userProfile.loading': 'Cargando el perfil',
   'userProfile.section.relation': 'CONEXIÓN',
   'userProfile.section.conversations': 'CONVERSACIONES',

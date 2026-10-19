@@ -165,6 +165,9 @@ export const userMinimalSchema = {
     displayName: { type: 'string', description: 'Display name' },
     avatar: { type: 'string', nullable: true, description: 'Avatar URL' },
     isOnline: { type: 'boolean', description: 'Online status' },
+    // #10945 — le contour équipé voyage avec chaque résumé de personne ;
+    // absent sans contour, donc un ancien client n'y voit rien de neuf.
+    profileDecor: participantProfileDecorSchema,
     // A-t-il un compte ? `Participant.type` répond, et cette ligne est tout ce
     // qui manquait pour que la réponse ARRIVE : la requête chargeait déjà le
     // champ, le mapping l'étalait déjà, et fast-json-stringify le retirait

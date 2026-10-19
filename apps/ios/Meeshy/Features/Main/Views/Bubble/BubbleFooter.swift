@@ -101,6 +101,7 @@ struct BubbleFooter: View, Equatable {
                     moodEmoji: sender.moodEmoji,
                     presenceState: sender.presence,
                     isHere: sender.isHere,
+                    ring: sender.ring,
                     enablePulse: false,
                     onTap: actions.onSenderTap,
                     onViewProfile: actions.onSenderTap,
@@ -108,8 +109,6 @@ struct BubbleFooter: View, Equatable {
                     onMoodTap: senderMoodTap,
                     contextMenuItems: avatarMenu(sender: sender)
                 )
-                .avatarRingWithin(sender.ring, footprint: AvatarContext.messageBubble.size,
-                                  storyRingSize: sender.storyRing == .none ? nil : AvatarContext.messageBubble.ringSize)
                 .modifier(MessageAvatarPressClaim(hasMenu: avatarMenu(sender: sender) != nil))
                 VStack(alignment: .leading, spacing: MeeshySpacing.xxs) {
                     HStack(spacing: MeeshySpacing.xs) {

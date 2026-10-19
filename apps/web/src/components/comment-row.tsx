@@ -2,7 +2,7 @@ import { useCallback, useEffect, useMemo, useRef, useState, type ReactNode } fro
 
 import { trackingLinksOf } from '@meeshy/shared/utils/text-segments';
 
-import { Avatar } from '@/components/avatar';
+import { PeerAvatar } from '@/components/peer-avatar';
 import { CommentBody } from '@/components/comment-body';
 import { CommentMedia } from '@/components/comment-media';
 import { CommentRowMenu, type CommentMenuPick } from '@/components/comment-row-menu';
@@ -17,6 +17,7 @@ import type {
   CommentGestureReasonKey,
 } from '@/lib/api/comment-gestures';
 import { COMMENT_MAX_LENGTH, type PostComment } from '@/lib/api/publication-comments';
+import { servedRingOf } from '@/lib/profile-decor/served-ring';
 import type { ReportReason } from '@/lib/api/reports';
 import { resolveFeedText } from '@/lib/feed/text';
 import { translate } from '@/lib/i18n-catalog';
@@ -558,7 +559,9 @@ export function CommentRow({ comment, language, preferredLanguages, locale, now,
     >
       <CommentSwipe onReply={reply}>
         <div className="flex gap-3 py-2">
-          <Avatar
+          <PeerAvatar
+            presenceKey={comment.author.id}
+            ringRef={servedRingOf(comment.author)}
             initials={initialsOf(name)}
             color="var(--color-ios-brand)"
             size={32}

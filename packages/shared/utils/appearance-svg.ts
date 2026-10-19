@@ -13,6 +13,7 @@
 import type { AppearanceDesign, DesignStroke, PaintRole } from '../types/appearance-design.js';
 import type { AvatarRingDesign } from '../types/avatar-ring-design.js';
 import { conversationAccentPaletteFromPrimary } from './conversation-colors.js';
+import { frameMotionLayers, linearGradientMarkup, motionLayerMarkup, pathBounds, scopeId, sweepLayerMarkup } from './frame-motion-svg.js';
 
 export type AppearanceScheme = 'light' | 'dark';
 
@@ -188,11 +189,53 @@ const ringStroke = (ring: AvatarRingDesign): string => {
       return ringCircle(radius, width, first, ` stroke-dasharray="${num((circumference / RING_DASHES) * 0.6)} ${num((circumference / RING_DASHES) * 0.4)}"`);
     case 'gradient':
       return gradientRing(radius, width, ring.stroke.colors);
+    case 'none':
+      return '';
   }
+};
+
+type RingPart = { readonly stroke: boolean; readonly include: (index: number) => boolean; readonly scope: string };
+
+/** Le dessin d'un contour, réduit aux parties demandées : le trait, puis les chemins d'ornement retenus. */
+const ringSvgOf = (ring: AvatarRingDesign, size: number, part: RingPart): string => {
+  const paths = (ring.ornament?.paths ?? []).flatMap((path, index) => (part.include(index) ? [path] : []));
+  const gradients = ring.gradients ?? [];
+  const used = new Set(paths.flatMap((path) => (path.gradient === undefined || gradients[path.gradient] === undefined ? [] : [path.gradient])));
+  const ids = gradients.map((_, index) => `rg${index}-${part.scope}`);
+  const defs = [...used].sort((a, b) => a - b).map((index) => linearGradientMarkup(ids[index]!, gradients[index]!, ring.stroke.colors)).join('');
+  const paint = (path: (typeof paths)[number]): string =>
+    path.gradient !== undefined && used.has(path.gradient) ? `url(#${ids[path.gradient]})` : (ring.stroke.colors[path.color] ?? '#000000');
+  const ornament = paths.map((path) => pathMarkup(path.d, paint(path), path.opacity, path.width)).join('');
+  return `${svgOpen(size, size, `0 0 ${RING_BOX} ${RING_BOX}`)}${defs === '' ? '' : `<defs>${defs}</defs>`}${part.stroke ? ringStroke(ring) : ''}${ornament}</svg>`;
 };
 
 /** Un contour d'avatar : viewBox 0 0 100 100, l'avatar occupe le cercle de rayon 42 au centre. */
 export function avatarRingSvg({ ring, size }: { readonly ring: AvatarRingDesign; readonly size: number }): string {
-  const ornament = (ring.ornament?.paths ?? []).map((path) => pathMarkup(path.d, ring.stroke.colors[path.color] ?? '#000000', path.opacity, path.width)).join('');
-  return `${svgOpen(size, size, `0 0 ${RING_BOX} ${RING_BOX}`)}${ringStroke(ring)}${ornament}</svg>`;
+  return ringSvgOf(ring, size, { stroke: true, include: () => true, scope: scopeId(ring.key, size) });
+}
+
+/**
+ * Le contour pour un client (#10935) : le dessin FIXE, puis une couche composée par
+ * mouvement (`frame-motion-svg.ts`) — les chemins animés quittent le dessin fixe, un
+ * reflet glisse sur sa cible sans l'en sortir. Sans mouvement, ou `animated: false`
+ * (mouvement réduit, aperçu), c'est `avatarRingSvg` à l'octet.
+ */
+export function avatarRingMarkup({ ring, size, animated }: { readonly ring: AvatarRingDesign; readonly size: number; readonly animated: boolean }): string {
+  const motions = ring.motion ?? [];
+  if (!animated || motions.length === 0) return avatarRingSvg({ ring, size });
+  const paths = ring.ornament?.paths ?? [];
+  const plan = frameMotionLayers({ elements: paths.map((path) => ({ group: path.group, bounds: pathBounds(path.d) })), motions, center: { x: RING_BOX / 2, y: RING_BOX / 2 } });
+  if (plan.layers.length === 0 && plan.sweeps.length === 0) return avatarRingSvg({ ring, size });
+  const scope = scopeId(ring.key, size);
+  const base = ringSvgOf(ring, size, { stroke: true, include: (index) => !plan.animated.has(index), scope });
+  const layers = plan.layers
+    .map((layer, order) => motionLayerMarkup(layer.chain, size / RING_BOX, ringSvgOf(ring, size, { stroke: false, include: (index) => layer.elements.includes(index), scope: `${scope}-L${order}` })))
+    .join('');
+  const sweeps = plan.sweeps
+    .map((sweep) => {
+      const mask = `${svgOpen(size, size, `0 0 ${RING_BOX} ${RING_BOX}`)}${sweep.elements.map((index) => pathMarkup(paths[index]!.d, '#FFFFFF', 1, paths[index]!.width)).join('')}</svg>`;
+      return sweepLayerMarkup({ sweep, maskSvg: mask, width: size, height: size });
+    })
+    .join('');
+  return base + layers + sweeps;
 }

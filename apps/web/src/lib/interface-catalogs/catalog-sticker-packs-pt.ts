@@ -72,6 +72,7 @@ const ptStickerPacks = {
   'packs.domain.wallpaper': "Fundos de conversa",
   'packs.domain.avatar-ring': "Contornos de avatar",
   'packs.domain.banner': "Banners",
+  'packs.domain.banner-frame': "Molduras de banner",
   'packs.domain.capture-frame': "Molduras de captura",
   'packs.price': "{price} Meeshes",
   'packs.owned': "Adquirido",

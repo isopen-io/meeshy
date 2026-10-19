@@ -10,7 +10,7 @@ import { publicProfileQueryKey, type PublicProfileView } from '../api/public-pro
 import type { SocketClient } from '../net/socket';
 
 /**
- * **ÉQUIPER UN CONTOUR OU UNE BANNIÈRE** (#10632, § 10.2) — optimiste : le
+ * **ÉQUIPER UN CONTOUR, UNE BANNIÈRE OU UN CADRE DE BANNIÈRE** (#10632, § 10.2 ; #10936) — optimiste : le
  * choix s'écrit dans le profil en cache au toucher, `PUT /me/profile-decor`
  * confirme (la réponse fait foi), un refus ou une panne rétablit LE CÔTÉ
  * touché — jamais l'autre : un rétablissement par instantané complet
@@ -20,7 +20,7 @@ import type { SocketClient } from '../net/socket';
  * sans `profileDecor` vient d'un ANCIEN serveur, rien n'est tenté.
  */
 
-export type DecorSide = 'avatarRing' | 'banner';
+export type DecorSide = 'avatarRing' | 'banner' | 'bannerFrame';
 
 export type EquipOutcome =
   | { readonly status: 'saved' }
@@ -61,7 +61,7 @@ const IDLE: Flight = { latest: 0, inFlight: 0, accepted: null };
 
 const ledgers = new WeakMap<QueryClient, Ledger>();
 
-const ledgerOf = (queryClient: QueryClient): Ledger => ledgers.get(queryClient) ?? { avatarRing: IDLE, banner: IDLE };
+const ledgerOf = (queryClient: QueryClient): Ledger => ledgers.get(queryClient) ?? { avatarRing: IDLE, banner: IDLE, bannerFrame: IDLE };
 
 const updateFlight = (queryClient: QueryClient, side: DecorSide, patch: (flight: Flight) => Partial<Flight>): Flight => {
   const ledger = ledgerOf(queryClient);
@@ -74,8 +74,10 @@ const updateFlight = (queryClient: QueryClient, side: DecorSide, patch: (flight:
 const settledDecor = (queryClient: QueryClient, served: ServedProfileDecor, current: ServedProfileDecor): ServedProfileDecor => {
   const ledger = ledgerOf(queryClient);
   return {
+    ...served,
     avatarRing: ledger.avatarRing.inFlight > 0 ? current.avatarRing : served.avatarRing,
     banner: ledger.banner.inFlight > 0 ? current.banner : served.banner,
+    bannerFrame: (ledger.bannerFrame.inFlight > 0 ? current.bannerFrame : served.bannerFrame) ?? null,
   };
 };
 
@@ -91,14 +93,14 @@ export async function equipProfileDecor(params: {
   const { latest: generation } = updateFlight(queryClient, side, (flight) => ({
     latest: flight.latest + 1,
     inFlight: flight.inFlight + 1,
-    accepted: flight.inFlight === 0 ? before[side] : flight.accepted,
+    accepted: flight.inFlight === 0 ? (before[side] ?? null) : flight.accepted,
   }));
   writeDecor(queryClient, (current) => ({ ...current, [side]: choice }));
   const result = await putProfileDecor(deps, { [side]: choice === null ? null : { pack: choice.pack, item: choice.item } });
-  const settled = updateFlight(queryClient, side, (flight) => ({ inFlight: flight.inFlight - 1, ...(result.ok ? { accepted: result.data[side] } : {}) }));
+  const settled = updateFlight(queryClient, side, (flight) => ({ inFlight: flight.inFlight - 1, ...(result.ok ? { accepted: result.data[side] ?? null } : {}) }));
   const isLatest = generation === settled.latest;
   if (result.ok) {
-    if (isLatest) writeDecor(queryClient, (current) => ({ ...settledDecor(queryClient, result.data, current), [side]: result.data[side] }));
+    if (isLatest) writeDecor(queryClient, (current) => ({ ...settledDecor(queryClient, result.data, current), [side]: result.data[side] ?? null }));
     return { status: 'saved' };
   }
   if (isLatest) writeDecor(queryClient, (current) => ({ ...current, [side]: settled.accepted }));
@@ -115,6 +117,7 @@ export function applyProfileDecorEvent(queryClient: QueryClient, payload: unknow
   const decor = parseServedProfileDecor(event['decor']);
   updateFlight(queryClient, 'avatarRing', () => ({ accepted: decor.avatarRing }));
   updateFlight(queryClient, 'banner', () => ({ accepted: decor.banner }));
+  updateFlight(queryClient, 'bannerFrame', () => ({ accepted: decor.bannerFrame ?? null }));
   writeDecor(queryClient, (current) => settledDecor(queryClient, decor, current));
 }
 

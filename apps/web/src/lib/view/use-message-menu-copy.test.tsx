@@ -150,7 +150,7 @@ describe('« Copier » une sélection de messages', () => {
     clipboardThat({ write: 'rejects', legacy: false });
     const messages = [ordinary('m1'), ordinary('m2')];
     const { api, announced } = mount(messages);
-    act(() => api().onMenuAction('m1', 'forward'));
+    act(() => api().onMenuAction('m1', 'select'));
     act(() => api().onRowTap('m2'));
     act(() => api().onCopySelection(messages.map((m) => ({ message: { id: m.id } }))));
     await settle();
@@ -161,7 +161,7 @@ describe('« Copier » une sélection de messages', () => {
     const written = clipboardThat({ write: 'resolves', legacy: false });
     const messages = [ordinary('m1'), ordinary('m2')];
     const { api, announced } = mount(messages);
-    act(() => api().onMenuAction('m1', 'forward'));
+    act(() => api().onMenuAction('m1', 'select'));
     act(() => api().onRowTap('m2'));
     act(() => api().onCopySelection(messages.map((m) => ({ message: { id: m.id } }))));
     await settle();

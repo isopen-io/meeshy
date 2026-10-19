@@ -43,7 +43,9 @@ extension FeedPostCard {
                                         name: comment.author,
                                         context: .postReaction,
                                         accentColor: comment.authorColor,
-                                        avatarURL: comment.authorAvatarURL
+                                        avatarURL: comment.authorAvatarURL,
+                                        presenceState: PresenceManager.shared.knownPresenceState(for: comment.authorId),
+                                        ring: comment.authorRing
                                     )
                                         .overlay(
                                             Circle()
@@ -96,6 +98,8 @@ extension FeedPostCard {
                     accentColor: comment.authorColor,
                     avatarURL: comment.authorAvatarURL,
                     moodEmoji: commentMood?.emoji,
+                    presenceState: PresenceManager.shared.knownPresenceState(for: comment.authorId),
+                    ring: comment.authorRing,
                     onViewProfile: { selectedProfileUser = .from(feedComment: comment) },
                     onMoodTap: commentMood?.tapHandler,
                     contextMenuItems: [

@@ -44,7 +44,7 @@ const publicHero = (profile: PublicProfile) => renderToStaticMarkup(<PublicHero 
 
 describe('la couleur d\u2019accent du profil est la m\u00eame pour moi et pour les autres (#10741)', () => {
   test('mon avatar sans photo et ma banni\u00e8re de design se peignent de l\u2019accent re\u00e7u, pas de l\u2019indigo de marque', () => {
-    const html = ownHero({ decor: { ring: null, banner: designs.banner }, accent: '#22C55E' });
+    const html = ownHero({ profile: { ...ownProfile, banner: null }, decor: { ring: null, banner: designs.banner }, accent: '#22C55E' });
     expect(html.toLowerCase()).toContain('#22c55e');
     expect(html).not.toContain('var(--color-ios-brand)"');
     const same = publicHero({ id: 'u1', username: 'ada', displayName: 'Ada', avatar: null, banner: null, bio: null, createdAt: null, decor });
@@ -65,8 +65,15 @@ describe('mon profil', () => {
     expect(html).toContain('data-avatar-ring="laurier"');
   });
 
-  test('une bannière de design prime sur l’image de bannière', () => {
+  test('ma photo de bannière gagne toujours sur le design équipé, et s’ouvre au toucher (#10933)', () => {
     const html = ownHero({ decor: { ring: null, banner: designs.banner } });
+    expect(html).not.toContain('data-banner-design');
+    expect(html).toContain('<img');
+    expect(html).toContain('data-profile-open-image="banner"');
+  });
+
+  test('sans photo de bannière, le design équipé se peint (#10933)', () => {
+    const html = ownHero({ profile: { ...ownProfile, banner: null }, decor: { ring: null, banner: designs.banner } });
     expect(html).toContain('data-banner-design="aurore"');
     expect(html).not.toContain('<img');
   });
@@ -86,11 +93,18 @@ describe('le profil d’un autre', () => {
     expect(html).toContain('<img');
   });
 
-  test('le contour et la bannière servis se voient chez les autres', () => {
-    const html = publicHero(publicProfile({ decor }));
+  test('le contour et la bannière servis se voient chez les autres, sans photo de bannière', () => {
+    const html = publicHero(publicProfile({ banner: null, decor }));
     expect(html).toContain('data-avatar-ring="laurier"');
     expect(html).toContain('data-banner-design="aurore"');
     expect(html).not.toContain('<img');
+  });
+
+  test('chez les autres aussi, la photo de bannière gagne sur le design et s’ouvre au toucher (#10933)', () => {
+    const html = publicHero(publicProfile({ decor }));
+    expect(html).not.toContain('data-banner-design');
+    expect(html).toContain('<img');
+    expect(html).toContain('data-profile-open-image="banner"');
   });
 
   test('un décor servi mais illisible (choix inconnu) n’ajoute rien', () => {
@@ -100,12 +114,15 @@ describe('le profil d’un autre', () => {
   });
 });
 
-describe('les entrées Bannière et Contour', () => {
-  const names = { banner: 'Aurore', avatarRing: null };
+describe('les entrées Bannière, Cadre et Contour', () => {
+  const names = { banner: 'Aurore', avatarRing: null, bannerFrame: null };
 
-  test('deux entrées nommées, avec le choix courant ou le défaut', () => {
+  test('trois entrées nommées, avec le choix courant ou le défaut — le cadre de bannière rejoint la bannière et le contour (#10936)', () => {
     const html = renderToStaticMarkup(<DecorEntries language="fr" names={names} disabled={false} onOpen={noop} />);
     expect(html).toContain('data-profile-decor-entry="banner"');
+    expect(html).toContain('data-profile-decor-entry="bannerFrame"');
+    expect(html).toContain('Cadre de la bannière');
+    expect(renderToStaticMarkup(<DecorEntries language="fr" names={{ ...names, bannerFrame: 'Celte animé' }} disabled={false} onOpen={noop} />)).toContain('Celte animé');
     expect(html).toContain('data-profile-decor-entry="avatarRing"');
     expect(html).toContain('Aurore');
     expect(html).toContain('Aucun');
@@ -113,7 +130,7 @@ describe('les entrées Bannière et Contour', () => {
 
   test('hors ligne, elles ne s’ouvrent pas', () => {
     const html = renderToStaticMarkup(<DecorEntries language="fr" names={names} disabled onOpen={noop} />);
-    expect((html.match(/disabled=""/g) ?? []).length).toBe(2);
+    expect((html.match(/disabled=""/g) ?? []).length).toBe(3);
   });
 
   test('le catalogue embarqué fournit bien un contour laurier et une bannière aurore', () => {

@@ -1,4 +1,5 @@
 import XCTest
+import MeeshySDK
 @testable import Meeshy
 
 /// Directive user 2026-08-20 : l'interstitiel d'identité s'affiche UNIQUEMENT
@@ -289,5 +290,37 @@ final class StoryGroupIntroTouchGuardTests: XCTestCase {
             "l'ouverture d'un toucher doit être reconnue à son origine, et pas seulement " +
             "au tick à translation nulle — ce tick-là n'est pas garanti"
         )
+    }
+    // MARK: - Le décor de l'auteur sur la carte d'identité (#10946)
+
+    private static let halo = ServedProfileDecorItem(pack: "contours-animes", item: "halo-or", origin: .builtin)
+    private static let aurore = ServedProfileDecorItem(pack: "bannieres-essentielles", item: "aurore", origin: .builtin)
+
+    /// Avant toute résolution de profil, la carte porte déjà le contour servi avec la story.
+    @MainActor
+    func test_introPlaceholder_carriesTheRingServedWithTheStory() {
+        let group = StoryGroup(id: "u1", username: "Ana", avatarColor: "6366F1", stories: [], authorRing: Self.halo)
+        let intro = StoryViewModel.introPlaceholder(for: group)
+        XCTAssertEqual(intro.userId, "u1")
+        XCTAssertEqual(intro.avatarRing, Self.halo)
+    }
+
+    /// Le profil résolu apporte le décor COMPLET : son contour (le plus frais) et sa bannière équipée.
+    @MainActor
+    func test_applyIntroProfile_takesTheEquippedRingAndBanner() {
+        var intro = StoryViewModel.StoryGroupIntro(userId: "u1", username: "Ana")
+        let user = MeeshyUser(id: "u1", username: "ana", profileDecor: ServedProfileDecor(avatarRing: Self.halo, banner: Self.aurore))
+        StoryViewModel.applyIntroProfile(user, to: &intro)
+        XCTAssertEqual(intro.avatarRing, Self.halo)
+        XCTAssertEqual(intro.bannerDecor, Self.aurore)
+    }
+
+    /// Un profil sans décor ne retire pas le contour servi avec la story (ancien cache de profil).
+    @MainActor
+    func test_applyIntroProfile_withoutDecor_keepsTheServedRing() {
+        var intro = StoryViewModel.StoryGroupIntro(userId: "u1", username: "Ana")
+        intro.avatarRing = Self.halo
+        StoryViewModel.applyIntroProfile(MeeshyUser(id: "u1", username: "ana"), to: &intro)
+        XCTAssertEqual(intro.avatarRing, Self.halo)
     }
 }

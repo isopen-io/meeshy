@@ -100,7 +100,9 @@ extension ReelPageView {
                         name: reel.author,
                         context: .postAuthor,
                         accentColor: accentColor,
-                        avatarURL: reel.authorAvatarURL
+                        avatarURL: reel.authorAvatarURL,
+                        presenceState: PresenceManager.shared.knownPresenceState(for: reel.authorId),
+                        ring: reel.authorRing
                     )
                 }
                 .buttonStyle(.plain)
