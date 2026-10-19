@@ -218,7 +218,7 @@ final class StoryPlaybackInterruptionTests: XCTestCase {
         XCTAssertTrue(try StoryPlaybackHoldSource.revealHost()
             .contains("GameMomentPresence.shared.update(isPresented: présent)"))
         XCTAssertTrue(try StoryPlaybackHoldSource.viewer()
-            .contains(".storyPlaybackInterruptions(callInterrupting: $isCallInterrupting, gameMomentShown: $isGameMomentShown)"))
+            .contains(".modifier(StoryPlaybackInterruptions(interrupting: $isCallInterrupting, gameMomentShown: $isGameMomentShown,"))
         let modifier = try StoryPlaybackHoldSource.block(try StoryPlaybackHoldSource.hold(),
                                                          from: "struct StoryPlaybackInterruptions: ViewModifier {")
         XCTAssertTrue(modifier.contains("PlaybackInterruption.shared.$isActive"))
