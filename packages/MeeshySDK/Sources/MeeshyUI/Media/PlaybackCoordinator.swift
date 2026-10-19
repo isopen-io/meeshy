@@ -8,6 +8,13 @@ public protocol StoppablePlayer: AnyObject {
     func stop()
 }
 
+/// Un lecteur externe qui sait dire s'il joue avec le son : tant qu'il joue,
+/// aucune libération de session ne passe sous lui (#11040, j).
+@MainActor
+public protocol AudiblyPlayingPlayer: StoppablePlayer {
+    var isPlayingAudibly: Bool { get }
+}
+
 /// Un lecteur qui sait s'éteindre en fondu plutôt que se couper net (#9867).
 @MainActor
 public protocol FadingStoppablePlayer: StoppablePlayer, Sendable {
@@ -183,6 +190,14 @@ extension PlaybackCoordinator: AudiblePlaybackSource {
         let video = SharedAVPlayerManager.shared.audibleVolumeTarget.map { [$0] } ?? []
         let audio = audioPlayers.values.compactMap { $0.player?.audibleVolumeTarget }
         return video + audio
+    }
+
+    /// Les lecteurs externes (story, aperçu d'un vocal) comptent aussi : ils
+    /// n'ont pas de volume à baisser, mais leur son empêche de rendre la
+    /// session.
+    public var holdsAudiblePlayback: Bool {
+        guard audibleVolumeTargets.isEmpty else { return true }
+        return externalPlayers.values.contains { ($0.player as? AudiblyPlayingPlayer)?.isPlayingAudibly == true }
     }
 }
 

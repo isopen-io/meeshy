@@ -16,6 +16,12 @@ extension AVAudioPlayer: PlaybackVolumeTarget {}
 @MainActor
 public protocol AudiblePlaybackSource: AnyObject {
     var audibleVolumeTargets: [any PlaybackVolumeTarget] { get }
+    /// Un de ses lecteurs joue avec le son, baissable ou non (#11040).
+    var holdsAudiblePlayback: Bool { get }
+}
+
+extension AudiblePlaybackSource {
+    public var holdsAudiblePlayback: Bool { !audibleVolumeTargets.isEmpty }
 }
 
 /// **Le mécanisme UNIQUE de « baisse puis restauration »** des lecteurs Meeshy
@@ -60,6 +66,12 @@ public final class RecordingPlaybackDucker {
 
     /// Un lecteur Meeshy s'entend-il maintenant ?
     public var hasAudiblePlayback: Bool { !audibleTargets.isEmpty }
+
+    /// Un lecteur Meeshy joue-t-il encore, quel qu'il soit (vidéo, vocal,
+    /// story, aperçu) ? Une libération de session l'attend (#11040, j).
+    public var meeshyStillPlays: Bool {
+        sources.values.compactMap(\.source).contains { $0.holdsAudiblePlayback }
+    }
 
     /// Baisse ce qui s'entend. Idempotent.
     public func duck() {
