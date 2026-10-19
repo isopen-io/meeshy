@@ -702,6 +702,14 @@ public class AudioPlaybackManager: NSObject, ObservableObject {
     }
 }
 
+// MARK: - Enregistrement (#11042)
+extension AudioPlaybackManager {
+    /// Le lecteur à baisser pendant un enregistrement : celui qui joue.
+    var audibleVolumeTarget: (any PlaybackVolumeTarget)? {
+        isPlaying ? player : nil
+    }
+}
+
 // MARK: - AVAudioPlayerDelegate
 extension AudioPlaybackManager: AVAudioPlayerDelegate {
     nonisolated public func audioPlayerDidFinishPlaying(_ player: AVAudioPlayer, successfully flag: Bool) {

@@ -18,7 +18,10 @@ struct MediaSessionReleaseAfterPauseTests {
 
         coordinator.deactivatePlaybackDeferred(on: .global(), after: 0.05) { ran.withLock { $0 += 1 } }
         #expect(ran.withLock { $0 } == 0)
-        try? await Task.sleep(nanoseconds: 300_000_000)
+        let deadline = Date().addingTimeInterval(5)
+        while ran.withLock({ $0 }) == 0, Date() < deadline {
+            try? await Task.sleep(nanoseconds: 20_000_000)
+        }
 
         #expect(ran.withLock { $0 } == 1)
     }

@@ -1,4 +1,5 @@
 import Foundation
+import MeeshySDK
 
 // MARK: - Protocol for any player that can be stopped by the coordinator
 
@@ -27,7 +28,9 @@ public final class PlaybackCoordinator {
     private var audioPlayers: [ObjectIdentifier: WeakAudioPlayer] = [:]
     private var externalPlayers: [ObjectIdentifier: WeakStoppablePlayer] = [:]
 
-    private init() {}
+    private init() {
+        RecordingPlaybackDucker.shared.register(self)
+    }
 
     #if DEBUG
     /// Test seam: increments `stopAllCount` from callers that want to assert
@@ -168,6 +171,18 @@ public final class PlaybackCoordinator {
     private func pruneDeadReferences() {
         audioPlayers = audioPlayers.filter { $0.value.player != nil }
         externalPlayers = externalPlayers.filter { $0.value.player != nil }
+    }
+}
+
+// MARK: - Enregistrement (#11042)
+
+/// Le point d'accès aux lecteurs actifs : pendant un vocal ou une vidéo
+/// filmée, `RecordingPlaybackDucker` baisse ce que ce registre dit audible.
+extension PlaybackCoordinator: AudiblePlaybackSource {
+    public var audibleVolumeTargets: [any PlaybackVolumeTarget] {
+        let video = SharedAVPlayerManager.shared.audibleVolumeTarget.map { [$0] } ?? []
+        let audio = audioPlayers.values.compactMap { $0.player?.audibleVolumeTarget }
+        return video + audio
     }
 }
 
