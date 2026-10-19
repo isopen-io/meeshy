@@ -31,13 +31,13 @@ public actor EngagementOutbox {
         min(60, pow(2.0, Double(max(0, attempts))) * 5)
     }
 
-    public nonisolated init() {
+    public init() {
         let dir = FileManager.default.urls(for: .documentDirectory, in: .userDomainMask)[0]
         self.init(dbPath: dir.appendingPathComponent("meeshy_engagement_outbox.db").path)
     }
 
     /// Test-only / injectable init.
-    public nonisolated init(dbPath: String, clock: @escaping @Sendable () -> Date = { Date() }) {
+    public init(dbPath: String, clock: @escaping @Sendable () -> Date = { Date() }) {
         self.init(storage: ResilientDatabaseQueue.open(path: dbPath), clock: clock)
     }
 

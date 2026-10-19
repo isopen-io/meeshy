@@ -105,13 +105,13 @@ public actor ConversationStateOutbox {
 
     // MARK: Init
 
-    private nonisolated init() {
+    private init() {
         let dir = FileManager.default.urls(for: .documentDirectory, in: .userDomainMask)[0]
         self.init(dbPath: dir.appendingPathComponent("meeshy_conversation_outbox.db").path)
     }
 
     /// Test-only init that allows injecting a path and a clock.
-    public nonisolated init(dbPath: String, clock: @escaping @Sendable () -> Date = { Date() }) {
+    public init(dbPath: String, clock: @escaping @Sendable () -> Date = { Date() }) {
         self.init(storage: ResilientDatabaseQueue.open(path: dbPath), clock: clock)
     }
 
