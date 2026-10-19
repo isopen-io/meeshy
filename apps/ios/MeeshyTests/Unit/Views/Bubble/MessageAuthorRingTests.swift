@@ -115,7 +115,7 @@ final class MessageAuthorRingTests: XCTestCase {
     /// Directive porteur 2026-10-18 (#10946) : le contour équipé s'affiche partout où l'avatar
     /// d'une personne s'affiche. Chaque `MeeshyAvatar(` qui ne passe pas `ring:` (hors
     /// `kind: .entity`, qui ne porte aucun contour) est COMPTÉ par fichier, et le compte ne
-    /// dépasse jamais celui nommé ici avec sa raison — un cliquet : il ne fait que descendre.
+    /// dépasse jamais celui nommé ici avec sa raison — un registre EXACT : il ne fait que descendre, et une entrée qui ne compte plus rien rougit.
     private static let avatarsWithoutRing: [String: (count: Int, reason: String)] = [
         "Contacts/BlockedTab.swift": (1, "bloqué — ni contour ni présence ne se montrent"),
         "Main/Views/BlockedUsersView.swift": (1, "bloqué — ni contour ni présence ne se montrent"),
@@ -140,28 +140,11 @@ final class MessageAuthorRingTests: XCTestCase {
         "Main/Views/ProfileDecorSheet.swift": (1, "sélecteur de contour — chaque tuile pose SON contour autour de l'avatar (`.avatarRing`)"),
         "MeeshyUI/Profile/UserProfileSheet+Header.swift": (2, "profil — le contour se pose AUTOUR de l'avatar (`.avatarRing`)"),
         "Main/Share/ShareRecipientRow.swift": (2, "écran de partage unique en cours (#10947/#10948) — son contour est l'affaire de son lot"),
-        "Main/Views/FeedComposerSheet.swift": (2, "domaine fil/stories/posts — lot du coordinateur (#10946)"),
-        "Main/Views/FeedView.swift": (1, "domaine fil/stories/posts — lot du coordinateur (#10946)"),
-        "Main/Views/PostDetailView.swift": (2, "domaine fil/stories/posts — lot du coordinateur (#10946)"),
-        "Main/Views/PostDetailView+Header.swift": (1, "domaine fil/stories/posts — lot du coordinateur (#10946)"),
-        "Main/Views/CommentRowView.swift": (1, "domaine fil/stories/posts — lot du coordinateur (#10946)"),
-        "Main/Views/FeedPostCard.swift": (1, "domaine fil/stories/posts — lot du coordinateur (#10946)"),
-        "Main/Views/FeedPostCard+CommentsPreview.swift": (2, "domaine fil/stories/posts — lot du coordinateur (#10946)"),
-        "Main/Views/FeedPostCard+Header.swift": (1, "domaine fil/stories/posts — lot du coordinateur (#10946)"),
-        "Main/Views/PostDetailView+RepostEmbed.swift": (1, "domaine fil/stories/posts — lot du coordinateur (#10946)"),
-        "Main/Views/ReelFeedCard.swift": (1, "domaine fil/stories/posts — lot du coordinateur (#10946)"),
-        "Main/Views/ReelPageView+Info.swift": (1, "domaine fil/stories/posts — lot du coordinateur (#10946)"),
-        "Main/Views/ReelRepostEmbedCell.swift": (1, "domaine fil/stories/posts — lot du coordinateur (#10946)"),
-        "Main/Views/PublicationViewersSheet.swift": (2, "domaine fil/stories/posts — lot du coordinateur (#10946)"),
-        "Main/Views/StoryAuthorIdentityCard.swift": (1, "domaine fil/stories/posts — lot du coordinateur (#10946)"),
-        "Main/Views/StoryTrayView.swift": (3, "domaine fil/stories/posts — lot du coordinateur (#10946)"),
-        "Main/Views/StoryViewerView+Header.swift": (1, "domaine fil/stories/posts — lot du coordinateur (#10946)"),
-        "Main/Views/ThreadView.swift": (2, "domaine fil/stories/posts — lot du coordinateur (#10946)"),
-        "Stories/Notifications/StoryExpiredContent.swift": (1, "domaine fil/stories/posts — lot du coordinateur (#10946)"),
+        "Main/Views/PublicationViewersSheet.swift": (2, "vues d'une publication — la liste servie ne porte pas le contour (#10957)"),
+        "Stories/Notifications/StoryExpiredContent.swift": (1, "notification de story expirée — l'acteur est un instantané sans contour (#10957)"),
         "MeeshyUI/Profile/UserProfileSheet+ConversationsTab.swift": (1, "entité — les conversations d'un profil"),
         "Auth/LinkSignInConfirmationSheet.swift": (1, "soi, avant toute session — aucun profil servi"),
         "Auth/Signup/SignupView+Card.swift": (1, "soi, compte en création — aucun contour équipé"),
-        "Main/Composer/ComposerDocumentSurface.swift": (1, "soi — composer, hors des lots de #10946 (#10957)"),
         "Main/Game/Photo/GameAuthorPlateView.swift": (1, "décor, illustration ou son — aucune personne"),
         "Main/Views/WidgetPreviewView.swift": (1, "décor, illustration ou son — aucune personne"),
         "Onboarding/OnboardingCards.swift": (1, "décor, illustration ou son — aucune personne"),
@@ -175,6 +158,7 @@ final class MessageAuthorRingTests: XCTestCase {
         let repo = Self.appRoot.deletingLastPathComponent().deletingLastPathComponent()
         let roots = [("apps/ios/Meeshy/Features/", "apps/ios/Meeshy"), ("packages/MeeshySDK/Sources/", "packages/MeeshySDK/Sources/MeeshyUI")]
         var offenders: [String] = []
+        var counted: [String: Int] = [:]
         for (prefix, root) in roots {
             let enumerator = FileManager.default.enumerator(at: repo.appendingPathComponent(root), includingPropertiesForKeys: nil)
             while let url = enumerator?.nextObject() as? URL {
@@ -185,9 +169,12 @@ final class MessageAuthorRingTests: XCTestCase {
                 let relative = String(url.path.dropFirst(repo.path.count + 1))
                 let key = relative.hasPrefix(prefix) ? String(relative.dropFirst(prefix.count)) : relative
                 if bare > (Self.avatarsWithoutRing[key]?.count ?? 0) { offenders.append("\(key) (\(bare))") }
+                counted[key] = bare
             }
         }
         XCTAssertEqual(offenders.sorted(), [], "avatar de personne sans contour servi ni raison comptée")
+        let stale = Self.avatarsWithoutRing.filter { counted[$0.key] != $0.value.count }.map { "\($0.key) (\($0.value.count) → \(counted[$0.key] ?? 0))" }
+        XCTAssertEqual(stale.sorted(), [], "exemption périmée : le site porte désormais son contour — le registre ne survit pas aux surfaces qu'il décrit")
     }
 
     private static func avatarCalls(in source: String) -> [Substring] {
