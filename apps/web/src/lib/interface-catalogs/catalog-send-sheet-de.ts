@@ -91,6 +91,7 @@ const de = {
   'sendSheet.toast.sent': 'Gesendet an {name}',
   'sendSheet.toast.sentMany': 'Gesendet an {count} Empfänger',
   'sendSheet.toast.open': 'Öffnen',
+  'sendSheet.toast.failed': 'Nicht gesendet',
   'sendSheet.action.copyText': 'Text kopieren',
   'sendSheet.textCopied': 'Text kopiert',
   'sendSheet.piece.remove': '{name} entfernen',

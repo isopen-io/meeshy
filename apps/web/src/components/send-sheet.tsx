@@ -255,7 +255,7 @@ export function SendSheet({
     };
     setLabels(names);
     setPlanError(null);
-    const queued = queue.submit({ entries: planned.entries, payload, language: contentLanguage, labels: names }, ports);
+    const queued = queue.submit({ entries: planned.entries, payload: planned.payload, language: contentLanguage, labels: names, viewerId }, ports);
     setRun(queued.run);
   };
 

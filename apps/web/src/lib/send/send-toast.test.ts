@@ -8,7 +8,7 @@ import { sendToastOf } from './send-toast';
 const queuedOf = (statuses: Record<string, TargetStatus>, phase: SendRunState['phase'] = 'done'): QueuedSend => {
   const state: SendRunState = { phase, order: Object.keys(statuses), statuses };
   const run = { getState: () => state } as unknown as SendRun;
-  return { id: 'j', run, labels: { 'conversation:c1': 'Ana', 'contact:u2': 'Léa', 'publish:STORY': 'Ma story' } };
+  return { id: 'j', viewerId: 'me', run, labels: { 'conversation:c1': 'Ana', 'contact:u2': 'Léa', 'publish:STORY': 'Ma story' } };
 };
 
 describe('sendToastOf', () => {
@@ -24,9 +24,16 @@ describe('sendToastOf', () => {
     expect(sendToastOf(queuedOf({ 'conversation:c1': { state: 'sent', conversationId: 'c1' }, 'contact:u2': { state: 'sent', conversationId: 'dm' } }))).toEqual({ kind: 'many', count: 2 });
   });
 
-  test('rien tant qu’un envoi attend, ou qu’une cible a échoué', () => {
+  test('rien tant qu’un envoi attend', () => {
     expect(sendToastOf(queuedOf({ 'conversation:c1': { state: 'queued' } }))).toBeNull();
-    expect(sendToastOf(queuedOf({ 'conversation:c1': { state: 'failed', failure: { kind: 'network' } } }))).toBeNull();
     expect(sendToastOf(queuedOf({ 'conversation:c1': { state: 'sending' } }, 'running'))).toBeNull();
+    expect(sendToastOf(queuedOf({ 'conversation:c1': { state: 'sent', conversationId: 'c1' }, 'contact:u2': { state: 'queued' } }))).toBeNull();
+  });
+
+  test('un échec se DIT hors de la feuille : « Échec · Réessayer » s’il est rejouable, sans « Réessayer » s’il est refusé pour de bon', () => {
+    expect(sendToastOf(queuedOf({ 'conversation:c1': { state: 'failed', failure: { kind: 'network' } } }))).toEqual({ kind: 'failed', count: 1, retryable: true });
+    expect(
+      sendToastOf(queuedOf({ 'conversation:c1': { state: 'sent', conversationId: 'c1' }, 'contact:u2': { state: 'failed', failure: { kind: 'refused', status: 403, message: 'non' } } })),
+    ).toEqual({ kind: 'failed', count: 1, retryable: false });
   });
 });

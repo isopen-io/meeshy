@@ -138,7 +138,8 @@ export type SendPlanError =
   | { readonly kind: 'self-target' };
 
 export type SendPlanResult =
-  | { readonly ok: true; readonly entries: readonly SendPlanEntry[] }
+  /** `payload` : ce que la file durable ÉCRIT — réduit aux messages qui partent, jamais un message retiré (D6). */
+  | { readonly ok: true; readonly entries: readonly SendPlanEntry[]; readonly payload: SendPayload }
   | { readonly ok: false; readonly error: SendPlanError };
 
 /** Les pastilles « Publier » de ce contenu, dans l'ordre de l'écran — la loi, filtrée par ce que le web exécute. */
@@ -209,13 +210,13 @@ function stepsForConversation(
   }
 }
 
-function stepsForPublish(payload: SendPayload, format: PublishFormat, caption: string | undefined): readonly SendStep[] | null {
+function stepsForPublish(payload: SendPayload, kept: ReadonlySet<string>, format: PublishFormat, caption: string | undefined): readonly SendStep[] | null {
   if (!publishOffered(payload).includes(format)) return null;
   switch (payload.kind) {
     case 'attachment':
       return [{ kind: 'publish-attachment', attachmentId: payload.attachmentId, format, ...contentProp(caption) }];
     case 'messages': {
-      const sole = payload.exit[0]?.pieces?.[0];
+      const sole = payload.exit.find((message) => kept.has(message.id))?.pieces?.[0];
       return sole === undefined ? null : [{ kind: 'publish-attachment', attachmentId: sole.id, format, ...contentProp(caption) }];
     }
     case 'publication':
@@ -232,6 +233,17 @@ function stepsForPublish(payload: SendPayload, format: PublishFormat, caption: s
 }
 
 const refuse = (error: SendPlanError): SendPlanResult => ({ ok: false, error });
+
+function storableOf(payload: SendPayload, kept: ReadonlySet<string>): SendPayload {
+  if (payload.kind !== 'messages') return payload;
+  return {
+    kind: 'messages',
+    conversationId: payload.conversationId,
+    preview: payload.preview,
+    messages: payload.messages.filter((message) => kept.has(message.id)),
+    exit: payload.exit.filter((message) => kept.has(message.id)),
+  };
+}
 
 const destinationsOf = (targets: readonly SendTarget[]) =>
   targets.map((target) => ({ id: targetKeyOf(target), ...(target.kind === 'conversation' && target.encrypted === true ? { encrypted: true } : {}) }));
@@ -266,10 +278,10 @@ export function planSend(params: {
     const key = targetKeyOf(target);
     const steps =
       target.kind === 'publish'
-        ? stepsForPublish(payload, target.as, caption)
+        ? stepsForPublish(payload, kept, target.as, caption)
         : [...openStepsOf(target), ...stepsForConversation(payload, kept, caption, options)];
     if (steps === null) return refuse({ kind: 'unsupported', targetKey: key });
     entries.push({ key, target, steps });
   }
-  return { ok: true, entries };
+  return { ok: true, entries, payload: storableOf(payload, kept) };
 }

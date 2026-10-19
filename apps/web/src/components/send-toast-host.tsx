@@ -24,10 +24,11 @@ export function SendToastHost({ queue = sendQueue }: { readonly queue?: SendQueu
   useEffect(() => {
     const check = (): void => {
       queue.jobs().forEach((queued) => {
-        if (told.current.has(queued.id)) return;
         const next = sendToastOf(queued);
         if (next === null) return;
-        told.current.add(queued.id);
+        const said = `${queued.id}:${next.kind === 'failed' ? 'failed' : 'sent'}`;
+        if (told.current.has(said)) return;
+        told.current.add(said);
         void loadSendSheetCatalog(currentInterfaceLanguage()).then(() => setToast(next), () => undefined);
       });
     };
@@ -54,7 +55,12 @@ export function SendToastHost({ queue = sendQueue }: { readonly queue?: SendQueu
 
   if (toast === null) return null;
   const language = currentInterfaceLanguage();
-  const text = toast.kind === 'one' ? translateSendSheet(language, 'sendSheet.toast.sent', { name: toast.name }) : translateSendSheet(language, 'sendSheet.toast.sentMany', { count: String(toast.count) });
+  const text =
+    toast.kind === 'one'
+      ? translateSendSheet(language, 'sendSheet.toast.sent', { name: toast.name })
+      : toast.kind === 'failed'
+        ? translateSendSheet(language, 'sendSheet.toast.failed')
+        : translateSendSheet(language, 'sendSheet.toast.sentMany', { count: String(toast.count) });
   return (
     <div role="status" aria-live="polite" data-send-toast={toast.kind} className="send-toast fixed inset-x-4 bottom-6 z-50 mx-auto flex max-w-md items-center gap-3 rounded-card px-4 py-3 shadow-lg" style={{ backgroundColor: 'var(--color-ios-ink)', color: 'var(--color-ios-card)' }}>
       <span className="min-w-0 flex-1 truncate text-body font-medium">{text}</span>
@@ -69,6 +75,19 @@ export function SendToastHost({ queue = sendQueue }: { readonly queue?: SendQueu
           className={`${BUTTON.secondary} shrink-0`}
         >
           {translateSendSheet(language, 'sendSheet.toast.open')}
+        </button>
+      ) : null}
+      {toast.kind === 'failed' && toast.retryable ? (
+        <button
+          type="button"
+          data-send-toast-retry=""
+          onClick={() => {
+            setToast(null);
+            void queue.flush();
+          }}
+          className={`${BUTTON.secondary} shrink-0`}
+        >
+          {translateSendSheet(language, 'sendSheet.state.retry')}
         </button>
       ) : null}
     </div>

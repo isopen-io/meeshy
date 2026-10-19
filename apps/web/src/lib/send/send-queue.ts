@@ -23,6 +23,8 @@ import { createSendRun, pendingKeysOf, type SendRun, type SendRunSnapshot, type 
 export type StoredSendJob = {
   readonly id: string;
   readonly createdAt: number;
+  /** Le compte qui a fait l'envoi : seul lui le joue, et l'oublier l'efface. */
+  readonly viewerId: string;
   readonly entries: readonly SendPlanEntry[];
   readonly payload: SendPayload;
   readonly language: string;
@@ -38,6 +40,7 @@ export type SendQueueStorage = {
 
 export type QueuedSend = {
   readonly id: string;
+  readonly viewerId: string;
   readonly run: SendRun;
   readonly labels: Readonly<Record<string, string>>;
 };
@@ -45,10 +48,13 @@ export type QueuedSend = {
 export type SendQueue = {
   /** Écrit l'envoi, puis le joue à son tour. */
   readonly submit: (job: Omit<StoredSendJob, 'id' | 'createdAt' | 'snapshot'>, ports: SendSheetPorts) => QueuedSend;
-  /** Relit le stockage (lancement) et rejoue ce qui n'était pas parti. */
+  /** Relit le stockage (lancement) et rejoue ce qui n'était pas parti, échecs rejouables compris. */
   readonly resume: () => Promise<void>;
-  /** Le réseau est revenu : rejoue, dans l'ordre, ce qui attendait. */
+  /** Le réseau ou le compte est revenu : rejoue, dans l'ordre, ce qui attendait. */
   readonly flush: () => Promise<void>;
+  /** Le compte quitte l'appareil : ses envois aussi. */
+  readonly forget: (viewerId: string) => Promise<void>;
+  /** Les envois du compte ACTIF — jamais ceux d'un autre. */
   readonly jobs: () => readonly QueuedSend[];
   readonly subscribe: (listener: () => void) => () => void;
 };
@@ -66,34 +72,75 @@ export function memorySendQueueStorage(initial: readonly StoredSendJob[] = []): 
 
 const KEPT_FINISHED = 5;
 
+/** Réessayer seul un envoi en échec rejouable alors que l'appareil se croit en ligne : à délai croissant, plafonné. */
+export const SEND_RETRY_DELAYS_MS: readonly number[] = [5_000, 15_000, 60_000, 300_000];
+
 const randomId = (): string =>
   typeof crypto !== 'undefined' && typeof crypto.randomUUID === 'function' ? crypto.randomUUID() : `job-${Date.now()}-${Math.random().toString(36).slice(2)}`;
+
+const defaultSchedule = (work: () => void, ms: number): void => {
+  const handle: unknown = setTimeout(work, ms);
+  if (typeof handle === 'object' && handle !== null && 'unref' in handle && typeof handle.unref === 'function') handle.unref();
+};
+
+const hasOwner = (row: StoredSendJob): boolean => typeof (row as { readonly viewerId?: unknown }).viewerId === 'string' && row.viewerId !== '';
+
+const replayableFailure = (run: SendRun): boolean => {
+  const state = run.getState();
+  return state.order.some((key) => {
+    const status = state.statuses[key];
+    return status?.state === 'failed' && status.failure.kind !== 'refused';
+  });
+};
 
 export function createSendQueue(params: {
   readonly storage: SendQueueStorage;
   /** Les ports d'un envoi relu au lancement — chargés seulement s'il y en a un. */
   readonly portsFor: (language: string) => Promise<SendSheetPorts>;
+  /** Le compte actif : la file ne joue que ses envois. */
+  readonly activeViewer: () => string | null;
   readonly now?: () => number;
   readonly newId?: () => string;
+  readonly schedule?: (work: () => void, ms: number) => void;
 }): SendQueue {
   const now = params.now ?? Date.now;
   const newId = params.newId ?? randomId;
+  const schedule = params.schedule ?? defaultSchedule;
   const stored = new Map<string, StoredSendJob>();
   const live = new Map<string, QueuedSend>();
   const listeners = new Set<() => void>();
   let chain: Promise<void> = Promise.resolve();
   let writing: Promise<void> = Promise.resolve();
+  let loaded: Promise<void> | null = null;
+  let attempt = 0;
+  let retryArmed = false;
 
   const notify = (): void => listeners.forEach((listener) => listener());
 
-  /* Les écritures s'enchaînent : la dernière gagne toujours, jamais une plus ancienne qui finirait après. */
+  /* Les écritures s'enchaînent, et attendent la PREMIÈRE lecture : un envoi fait avant elle n'efface jamais ceux de l'appareil. */
   const persist = (): void => {
-    const rows = [...stored.values()].sort((a, b) => a.createdAt - b.createdAt);
-    writing = writing.then(
-      () => params.storage.save(rows).catch(() => undefined),
-      () => undefined,
-    );
+    writing = writing
+      .then(() => loadOnce())
+      .then(
+        () => params.storage.save([...stored.values()].sort((a, b) => a.createdAt - b.createdAt)).catch(() => undefined),
+        () => undefined,
+      );
   };
+
+  /* Un envoi écrit sans compte (avant #10948 bis) ne se joue sous aucun : il quitte l'appareil. */
+  function loadOnce(): Promise<void> {
+    loaded ??= params.storage
+      .load()
+      .catch(() => [] as readonly StoredSendJob[])
+      .then((rows) => {
+        rows.filter((row) => hasOwner(row) && !stored.has(row.id)).forEach((row) => stored.set(row.id, row));
+        if (rows.some((row) => !hasOwner(row))) persist();
+      });
+    return loaded;
+  }
+
+  const mine = (queued: QueuedSend): boolean => queued.viewerId === params.activeViewer();
+  const activeJobs = (): readonly QueuedSend[] => [...live.values()].filter(mine);
 
   const settle = (id: string, run: SendRun, snapshot: SendRunSnapshot): void => {
     const job = stored.get(id);
@@ -128,10 +175,49 @@ export function createSendQueue(params: {
       ...(job.snapshot === undefined ? {} : { resume: job.snapshot }),
       onProgress: (snapshot) => settle(job.id, run, snapshot),
     });
-    const queued: QueuedSend = { id: job.id, run, labels: job.labels };
+    const queued: QueuedSend = { id: job.id, viewerId: job.viewerId, run, labels: job.labels };
     live.set(job.id, queued);
     return queued;
   };
+
+  const armRetry = (): void => {
+    if (retryArmed) return;
+    if (!activeJobs().some((queued) => replayableFailure(queued.run))) {
+      attempt = 0;
+      return;
+    }
+    const delay = SEND_RETRY_DELAYS_MS[Math.min(attempt, SEND_RETRY_DELAYS_MS.length - 1)] ?? 300_000;
+    attempt += 1;
+    retryArmed = true;
+    schedule(() => {
+      retryArmed = false;
+      void flush();
+    }, delay);
+  };
+
+  /** Rejoue un envoi du compte actif : les échecs rejouables et la file d'abord, puis ce qui n'a jamais été joué. */
+  const replay = (queued: QueuedSend): Promise<void> =>
+    enqueue(async () => {
+      if (!mine(queued)) return;
+      await queued.run.retryFailed();
+      await queued.run.start();
+    });
+
+  /** Adopte les envois du compte actif que le stockage tient encore. */
+  const wake = async (): Promise<void> => {
+    await loadOnce();
+    const viewer = params.activeViewer();
+    if (viewer === null) return;
+    const rows = [...stored.values()].filter((row) => row.viewerId === viewer && !live.has(row.id)).sort((a, b) => a.createdAt - b.createdAt);
+    await Promise.all(rows.map(async (row) => adopt(row, await params.portsFor(row.language))));
+    if (rows.length > 0) notify();
+  };
+
+  async function flush(): Promise<void> {
+    await wake();
+    await Promise.all(activeJobs().map(replay));
+    armRetry();
+  }
 
   return {
     submit: (job, ports) => {
@@ -141,24 +227,20 @@ export function createSendQueue(params: {
       persist();
       const queued = adopt(full, ports);
       notify();
-      void enqueue(() => queued.run.start());
+      void enqueue(() => queued.run.start()).then(armRetry);
       return queued;
     },
-    resume: async () => {
-      const rows = await params.storage.load().catch(() => [] as readonly StoredSendJob[]);
-      const fresh = rows.filter((row) => !live.has(row.id)).sort((a, b) => a.createdAt - b.createdAt);
-      fresh.forEach((row) => stored.set(row.id, row));
-      const adopted = await Promise.all(fresh.map(async (row) => adopt(row, await params.portsFor(row.language))));
-      if (adopted.length > 0) notify();
-      await Promise.all(adopted.map((queued) => enqueue(() => queued.run.start())));
+    resume: flush,
+    flush,
+    forget: async (viewerId) => {
+      await loadOnce();
+      [...stored.values()].filter((row) => row.viewerId === viewerId).forEach((row) => stored.delete(row.id));
+      [...live.values()].filter((queued) => queued.viewerId === viewerId).forEach((queued) => live.delete(queued.id));
+      persist();
+      notify();
+      await writing;
     },
-    flush: () =>
-      enqueue(async () => {
-        for (const queued of live.values()) {
-          if (pendingKeysOf(queued.run.getState()).length > 0) await queued.run.retryFailed();
-        }
-      }),
-    jobs: () => [...live.values()],
+    jobs: activeJobs,
     subscribe: (listener) => {
       listeners.add(listener);
       return () => void listeners.delete(listener);

@@ -1,5 +1,5 @@
 import type { QueuedSend } from './send-queue';
-import { pendingKeysOf } from './send-sheet-run';
+import type { TargetStatus } from './send-sheet-run';
 
 /**
  * LE TOAST APRÈS L'ENVOI (D5, #10949) — « Envoyé à Ana · Ouvrir », sans
@@ -7,17 +7,22 @@ import { pendingKeysOf } from './send-sheet-run';
  *
  * Seules les cibles CONVERSATION comptent (une publication n'a rien à
  * ouvrir) ; « Ouvrir » n'est offert que s'il n'y en a qu'une. Un envoi qui
- * attend encore ou dont une cible a échoué ne dit pas « Envoyé ».
+ * attend encore ne dit rien ; un envoi dont une cible a ÉCHOUÉ le dit, feuille
+ * fermée comprise — « Réessayer » seulement si l'échec est rejouable.
  */
 export type SendToast =
   | { readonly kind: 'one'; readonly name: string; readonly conversationId: string }
-  | { readonly kind: 'many'; readonly count: number };
+  | { readonly kind: 'many'; readonly count: number }
+  | { readonly kind: 'failed'; readonly count: number; readonly retryable: boolean };
+
+const inFlight = (state: TargetStatus | undefined): boolean => state === undefined || state.state === 'idle' || state.state === 'queued' || state.state === 'sending';
 
 export function sendToastOf(queued: QueuedSend): SendToast | null {
   const state = queued.run.getState();
-  if (state.phase !== 'done' || pendingKeysOf(state).length > 0) return null;
   const statuses = state.order.map((key) => ({ key, status: state.statuses[key] }));
-  if (statuses.some(({ status }) => status?.state === 'failed')) return null;
+  if (state.phase !== 'done' || statuses.some(({ status }) => inFlight(status))) return null;
+  const failed = statuses.flatMap(({ status }) => (status?.state === 'failed' ? [status.failure] : []));
+  if (failed.length > 0) return { kind: 'failed', count: failed.length, retryable: failed.some((failure) => failure.kind !== 'refused') };
   const sent = statuses.flatMap(({ key, status }) => (status?.state === 'sent' && status.conversationId !== undefined ? [{ key, conversationId: status.conversationId }] : []));
   if (sent.length === 0) return statuses.length > 0 ? { kind: 'many', count: statuses.length } : null;
   const [only] = sent;

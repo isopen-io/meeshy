@@ -91,6 +91,7 @@ const pt = {
   'sendSheet.toast.sent': 'Enviado a {name}',
   'sendSheet.toast.sentMany': 'Enviado a {count} destinatários',
   'sendSheet.toast.open': 'Abrir',
+  'sendSheet.toast.failed': 'Não foi enviado',
   'sendSheet.action.copyText': 'Copiar o texto',
   'sendSheet.textCopied': 'Texto copiado',
   'sendSheet.piece.remove': 'Retirar {name}',

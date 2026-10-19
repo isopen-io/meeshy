@@ -30,6 +30,8 @@ import type { PublishFormat, SendPayload, SendPlanEntry, SendStep } from './send
 export type SendFailure =
   | { readonly kind: 'network' }
   | { readonly kind: 'download' }
+  /** Passagère (session à rafraîchir, délai, limite, panne serveur) : rejouable, jamais effacée. */
+  | { readonly kind: 'unavailable'; readonly status: number }
   | { readonly kind: 'refused'; readonly status: number; readonly message: string; readonly code?: string };
 
 export type TargetStatus =
@@ -127,9 +129,17 @@ class WentOffline extends Error {}
 
 const isTransportFailure = (failure: ApiFailure): boolean => failure.status === 0 || failure.code === 'TIMEOUT' || failure.code === 'ABORTED';
 
+/** 401 : le jeton se rafraîchit ou la session revient ; 408, 429, 5xx : le serveur dira oui plus tard. */
+const isPassing = (status: number): boolean => status === 401 || status === 408 || status === 429 || status >= 500;
+
+function refusalOf(status: number, message: string, code: string | undefined): SendFailure {
+  if (isPassing(status)) return { kind: 'unavailable', status };
+  return { kind: 'refused', status, message, ...(code === undefined ? {} : { code }) };
+}
+
 function failureOf(failure: ApiFailure): SendFailure {
   if (isTransportFailure(failure)) return { kind: 'network' };
-  return { kind: 'refused', status: failure.status, message: failure.error, ...(failure.code === undefined ? {} : { code: failure.code }) };
+  return refusalOf(failure.status, failure.error, failure.code);
 }
 
 const contentProp = (content: string | undefined): { readonly content?: string } => (content === undefined ? {} : { content });
@@ -283,11 +293,7 @@ export function createSendRun(params: {
         if (result.ok) return;
         const transport = result.status === 0;
         if (transport && !ports.online()) throw new WentOffline();
-        throw new StepFailed(
-          transport
-            ? { kind: 'network' }
-            : { kind: 'refused', status: result.status ?? 0, message: result.error, ...(result.code === undefined ? {} : { code: result.code }) },
-        );
+        throw new StepFailed(transport ? { kind: 'network' } : refusalOf(result.status ?? 0, result.error, result.code));
       }
       case 'forward-attachment': {
         const body = forwardBodyOf({

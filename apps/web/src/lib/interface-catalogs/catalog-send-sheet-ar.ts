@@ -91,6 +91,7 @@ const ar = {
   'sendSheet.toast.sent': 'أُرسل إلى {name}',
   'sendSheet.toast.sentMany': 'أُرسل إلى {count} مستلمين',
   'sendSheet.toast.open': 'فتح',
+  'sendSheet.toast.failed': 'لم يُرسَل',
   'sendSheet.action.copyText': 'نسخ النص',
   'sendSheet.textCopied': 'تم نسخ النص',
   'sendSheet.piece.remove': 'إزالة {name}',

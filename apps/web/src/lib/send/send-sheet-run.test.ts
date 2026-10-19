@@ -8,6 +8,7 @@ import { planSend, type SendPayload, type SendTarget } from './send-sheet-plan';
 import {
   createSendRun,
   failedKeysOf,
+  pendingKeysOf,
   sentCountOf,
   type ReadyMedia,
   type SendSheetPorts,
@@ -321,6 +322,27 @@ describe('hors ligne, échec et rejeu', () => {
     const run = runOf(h, { kind: 'text', text: 'x' }, [conversation('c1')]);
     await run.start();
     expect(run.getState().statuses['conversation:c1']).toEqual({ state: 'failed', failure: { kind: 'network' } });
+  });
+
+  test('une session expirée, un délai, une limite ou une panne serveur (401, 408, 429, 5xx) restent REJOUABLES — l’envoi n’est jamais effacé pour eux', async () => {
+    for (const status of [401, 408, 429, 500, 503]) {
+      const h = harness({ sendMessage: () => fail(status, 'passagère') });
+      const run = runOf(h, { kind: 'text', text: 'x' }, [conversation('c1')]);
+      await run.start();
+      expect(run.getState().statuses['conversation:c1']).toEqual({ state: 'failed', failure: { kind: 'unavailable', status } });
+      expect(pendingKeysOf(run.getState())).toEqual(['conversation:c1']);
+    }
+  });
+
+  test('un transfert refusé par une panne serveur reste rejouable ; un refus métier (403) ne l’est pas', async () => {
+    const down = harness({ forward: () => ({ ok: false, error: 'panne', status: 502 }) as never });
+    const replayable = runOf(down, messagesPayload, [conversation('c1')]);
+    await replayable.start();
+    expect(pendingKeysOf(replayable.getState())).toEqual(['conversation:c1']);
+    const denied = harness({ sendMessage: () => fail(403, 'interdit') });
+    const final = runOf(denied, { kind: 'text', text: 'x' }, [conversation('c1')]);
+    await final.start();
+    expect(pendingKeysOf(final.getState())).toEqual([]);
   });
 
   test('rejouer une légende échouée ne renvoie PAS le transfert déjà parti', async () => {

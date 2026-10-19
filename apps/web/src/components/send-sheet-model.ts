@@ -198,6 +198,7 @@ export type StatusView = { readonly tone: 'sending' | 'sent' | 'failed' | 'queue
 
 const FAILURE_LABEL = {
   network: 'sendSheet.state.failed',
+  unavailable: 'sendSheet.state.failed',
   download: 'sendSheet.failure.download',
   refused: 'sendSheet.failure.refused',
 } as const satisfies Readonly<Record<string, SendSheetCatalogKey>>;

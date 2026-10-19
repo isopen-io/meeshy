@@ -140,7 +140,7 @@ const messagesPayload = (exit: Extract<SendPayload, { kind: 'messages' }>['exit'
 
 let queues: SendQueue[] = [];
 const freshQueue = (ports: SendSheetPorts): SendQueue => {
-  const queue = createSendQueue({ storage: memorySendQueueStorage(), portsFor: async () => ports });
+  const queue = createSendQueue({ activeViewer: () => VIEWER, storage: memorySendQueueStorage(), portsFor: async () => ports });
   queues = [...queues, queue];
   return queue;
 };

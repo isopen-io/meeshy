@@ -100,6 +100,7 @@ const fr = {
   'sendSheet.toast.sent': 'Envoyé à {name}',
   'sendSheet.toast.sentMany': 'Envoyé à {count} destinataires',
   'sendSheet.toast.open': 'Ouvrir',
+  'sendSheet.toast.failed': 'L’envoi n’est pas parti',
   'sendSheet.action.copyText': 'Copier le texte',
   'sendSheet.textCopied': 'Texte copié',
   'sendSheet.piece.remove': 'Retirer {name}',

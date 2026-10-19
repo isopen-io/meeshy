@@ -40,8 +40,10 @@ const text = (body: string): SendPayload => ({ kind: 'text', text: body });
 const jobOf = (payload: SendPayload, targets: readonly SendTarget[]) => {
   const planned = planSend({ payload, targets, caption: '', viewerId: 'me' });
   if (!planned.ok) throw new Error('plan');
-  return { entries: planned.entries, payload, language: 'fr', labels: Object.fromEntries(planned.entries.map((e) => [e.key, e.key])) };
+  return { entries: planned.entries, payload, language: 'fr', viewerId: 'me', labels: Object.fromEntries(planned.entries.map((e) => [e.key, e.key])) };
 };
+
+const asViewer = (viewer: { id: string | null }) => () => viewer.id;
 
 const settle = () => new Promise((resolve) => setTimeout(resolve, 0));
 
@@ -50,7 +52,7 @@ describe('la file d’envoi', () => {
     const net = { online: true };
     const log: string[] = [];
     const storage = memorySendQueueStorage();
-    const queue = createSendQueue({ storage, portsFor: async () => fakePorts(net, log) });
+    const queue = createSendQueue({ activeViewer: () => 'me', storage, portsFor: async () => fakePorts(net, log) });
     const queued = queue.submit(jobOf(text('Salut'), [conversation('c1')]), fakePorts(net, log));
     await settle();
     expect(queued.run.getState().statuses['conversation:c1']).toEqual({ state: 'sent', conversationId: 'c1' });
@@ -62,7 +64,7 @@ describe('la file d’envoi', () => {
     const net = { online: false };
     const log: string[] = [];
     const storage = memorySendQueueStorage();
-    const queue = createSendQueue({ storage, portsFor: async () => fakePorts(net, log) });
+    const queue = createSendQueue({ activeViewer: () => 'me', storage, portsFor: async () => fakePorts(net, log) });
     const queued = queue.submit(jobOf(text('Salut'), [conversation('c1')]), fakePorts(net, log));
     await settle();
     expect(queued.run.getState().statuses['conversation:c1']).toEqual({ state: 'queued' });
@@ -78,7 +80,7 @@ describe('la file d’envoi', () => {
     const net = { online: false };
     const log: string[] = [];
     const ports = fakePorts(net, log);
-    const queue = createSendQueue({ storage: memorySendQueueStorage(), portsFor: async () => ports });
+    const queue = createSendQueue({ activeViewer: () => 'me', storage: memorySendQueueStorage(), portsFor: async () => ports });
     queue.submit(jobOf(text('premier'), [conversation('c1')]), ports);
     queue.submit(jobOf(text('second'), [conversation('c2')]), ports);
     await settle();
@@ -91,14 +93,14 @@ describe('la file d’envoi', () => {
     const net = { online: false };
     const before: string[] = [];
     const storage = idbSendQueueStorage(fakeIndexedDb().factory);
-    const first = createSendQueue({ storage, portsFor: async () => fakePorts(net, before) });
+    const first = createSendQueue({ activeViewer: () => 'me', storage, portsFor: async () => fakePorts(net, before) });
     first.submit(jobOf(text('Salut'), [conversation('c1')]), fakePorts(net, before));
     await settle();
     await settle();
 
     net.online = true;
     const after: string[] = [];
-    const reopened = createSendQueue({ storage, portsFor: async () => fakePorts(net, after) });
+    const reopened = createSendQueue({ activeViewer: () => 'me', storage, portsFor: async () => fakePorts(net, after) });
     await reopened.resume();
     expect(after).toEqual(['send→c1:Salut:cid-1']);
     expect(reopened.jobs()).toHaveLength(1);
@@ -110,10 +112,119 @@ describe('la file d’envoi', () => {
     const net = { online: true };
     const log: string[] = [];
     const broken = { load: async () => Promise.reject(new Error('privé')), save: async () => Promise.reject(new Error('privé')) };
-    const queue = createSendQueue({ storage: broken, portsFor: async () => fakePorts(net, log) });
+    const queue = createSendQueue({ activeViewer: () => 'me', storage: broken, portsFor: async () => fakePorts(net, log) });
     await queue.resume();
     queue.submit(jobOf(text('Salut'), [conversation('c1')]), fakePorts(net, log));
     await settle();
     expect(log).toHaveLength(1);
+  });
+});
+
+describe('un envoi en échec rejouable n’est jamais oublié', () => {
+  const failedJob = (failure: object) => ({
+    ...jobOf(text('Bonjour'), [conversation('c1')]),
+    id: 'j1',
+    createdAt: 1,
+    snapshot: { statuses: { 'conversation:c1': { state: 'failed', failure } }, completed: {}, clientIds: { 'conversation:c1#0': 'cid-0' }, conversations: {}, uploads: {}, media: {} },
+  });
+
+  test('relu au lancement, un envoi en échec réseau REPART, sans attendre un évènement online', async () => {
+    const log: string[] = [];
+    const storage = memorySendQueueStorage([failedJob({ kind: 'network' })] as never);
+    const queue = createSendQueue({ activeViewer: () => 'me', storage, portsFor: async () => fakePorts({ online: true }, log) });
+    await queue.resume();
+    expect(log).toEqual(['send→c1:Bonjour:cid-0']);
+  });
+
+  test('un refus définitif relu au lancement n’est PAS rejoué', async () => {
+    const log: string[] = [];
+    const storage = memorySendQueueStorage([failedJob({ kind: 'refused', status: 403, message: 'non' })] as never);
+    const queue = createSendQueue({ activeViewer: () => 'me', storage, portsFor: async () => fakePorts({ online: true }, log) });
+    await queue.resume();
+    expect(log).toEqual([]);
+  });
+
+  test('en ligne mais injoignable : la file réessaie d’elle-même, à délai CROISSANT, puis se tait quand c’est parti', async () => {
+    const log: string[] = [];
+    const delays: number[] = [];
+    const timers: (() => void)[] = [];
+    let attempts = 0;
+    const base = fakePorts({ online: true }, log);
+    const ports: SendSheetPorts = {
+      ...base,
+      sendMessage: async (p) => ((attempts += 1) < 3 ? { ok: false, status: 0, error: 'injoignable', code: 'TIMEOUT' } : base.sendMessage(p)),
+    };
+    const queue = createSendQueue({
+      activeViewer: () => 'me',
+      storage: memorySendQueueStorage(),
+      portsFor: async () => ports,
+      schedule: (work, ms) => {
+        delays.push(ms);
+        timers.push(work);
+      },
+    });
+    const queued = queue.submit(jobOf(text('Salut'), [conversation('c1')]), ports);
+    await settle();
+    await settle();
+    expect(queued.run.getState().statuses['conversation:c1']).toEqual({ state: 'failed', failure: { kind: 'network' } });
+    timers.shift()?.();
+    await settle();
+    await settle();
+    timers.shift()?.();
+    await settle();
+    await settle();
+    expect(queued.run.getState().statuses['conversation:c1']).toEqual({ state: 'sent', conversationId: 'c1' });
+    expect(delays).toHaveLength(2);
+    expect(delays[1]).toBeGreaterThan(delays[0] ?? Infinity);
+    expect(timers).toEqual([]);
+  });
+});
+
+describe('un envoi appartient au compte qui l’a fait', () => {
+  test('relu sous un AUTRE compte, il ne part pas — et repart quand son compte revient', async () => {
+    const viewer = { id: 'other' as string | null };
+    const log: string[] = [];
+    const storage = memorySendQueueStorage([{ ...jobOf(text('de moi'), [conversation('c1')]), id: 'j1', createdAt: 1 }] as never);
+    const queue = createSendQueue({ activeViewer: asViewer(viewer), storage, portsFor: async () => fakePorts({ online: true }, log) });
+    await queue.resume();
+    await queue.flush();
+    expect(log).toEqual([]);
+    expect(queue.jobs()).toEqual([]);
+    expect(storage.current()).toHaveLength(1);
+    viewer.id = 'me';
+    await queue.flush();
+    expect(log).toEqual(['send→c1:de moi:cid-1']);
+  });
+
+  test('un envoi de l’autre compte, en attente, n’est pas effacé par un envoi du compte actif', async () => {
+    const log: string[] = [];
+    const storage = memorySendQueueStorage([{ ...jobOf(text('de moi'), [conversation('c1')]), id: 'j1', createdAt: 1 }] as never);
+    const queue = createSendQueue({ activeViewer: () => 'other', storage, portsFor: async () => fakePorts({ online: false }, log) });
+    await queue.resume();
+    queue.submit({ ...jobOf(text('de l’autre'), [conversation('c2')]), viewerId: 'other' }, fakePorts({ online: false }, log));
+    await settle();
+    expect(storage.current().map((row) => row.viewerId).sort()).toEqual(['me', 'other']);
+  });
+
+  test('oublier un compte efface ses envois de l’appareil, ceux des autres restent', async () => {
+    const storage = memorySendQueueStorage([
+      { ...jobOf(text('a'), [conversation('c1')]), id: 'j1', createdAt: 1 },
+      { ...jobOf(text('b'), [conversation('c2')]), id: 'j2', createdAt: 2, viewerId: 'other' },
+    ] as never);
+    const queue = createSendQueue({ activeViewer: () => null, storage, portsFor: async () => fakePorts({ online: false }, []) });
+    await queue.forget('me');
+    expect(storage.current().map((row) => row.id)).toEqual(['j2']);
+  });
+
+  test('un envoi écrit sans compte (avant ce correctif) n’est jamais joué, et quitte l’appareil', async () => {
+    const log: string[] = [];
+    const job = jobOf(text('x'), [conversation('c1')]);
+    const orphan = { id: 'j0', createdAt: 1, entries: job.entries, payload: job.payload, language: job.language, labels: job.labels };
+    const storage = memorySendQueueStorage([orphan] as never);
+    const queue = createSendQueue({ activeViewer: () => 'me', storage, portsFor: async () => fakePorts({ online: true }, log) });
+    await queue.resume();
+    await settle();
+    expect(log).toEqual([]);
+    expect(storage.current()).toEqual([]);
   });
 });

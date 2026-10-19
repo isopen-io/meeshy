@@ -102,6 +102,30 @@ describe('des messages', () => {
     expect(stepsOf(one, [publish('STORY')], 'Belle')).toEqual([[{ kind: 'publish-attachment', attachmentId: 'a1', format: 'STORY', content: 'Belle' }]]);
   });
 
+  test('après un retrait D6, la pièce publiée est celle du message GARDÉ, jamais celle du message retiré en tête', () => {
+    const secret = exitOf('m1', { text: null, isViewOnce: true, pieces: [{ id: 'a-secret', mimeType: 'image/jpeg', isViewOnce: true }] });
+    const kept = exitOf('m2', { text: null, pieces: [{ id: 'a-ok', mimeType: 'image/jpeg' }] });
+    expect(stepsOf(messages([secret, kept]), [publish('STORY')])).toEqual([[{ kind: 'publish-attachment', attachmentId: 'a-ok', format: 'STORY' }]]);
+  });
+
+  test('un message retiré SANS pièce en tête ne fait pas refuser l’envoi vers une publication et une conversation', () => {
+    const secretText = exitOf('m0', { isViewOnce: true });
+    const kept = exitOf('m2', { text: null, pieces: [{ id: 'a-ok', mimeType: 'image/jpeg' }] });
+    const result = plan(messages([secretText, kept]), [conversation('c1'), publish('STORY')]);
+    expect(result.ok).toBe(true);
+    if (result.ok) expect(result.entries[1]?.steps).toEqual([{ kind: 'publish-attachment', attachmentId: 'a-ok', format: 'STORY' }]);
+  });
+
+  test('le contenu que la file ÉCRIT ne garde que les messages qui partent : le texte d’un message retiré (D6) n’est jamais stocké', () => {
+    const secret = exitOf('m1', { text: 'secret', isViewOnce: true });
+    const kept = exitOf('m2', { text: 'public' });
+    const payload = messages([secret, kept], { unsendable: ['m9'] });
+    const result = plan(payload, [conversation('c1')]);
+    if (!result.ok) throw new Error('plan refusé');
+    expect(JSON.stringify(result.payload)).not.toContain('secret');
+    expect(result.payload).toEqual(messages([kept], { preview: payload.kind === 'messages' ? payload.preview : { kind: 'messages' } }));
+  });
+
   test('des messages sans média ne se publient pas', () => {
     expect(plan(messages([exitOf('m1')]), [publish('POST')])).toEqual({ ok: false, error: { kind: 'unsupported', targetKey: 'publish:POST' } });
   });

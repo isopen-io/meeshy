@@ -98,7 +98,7 @@ const mount = async (messages: readonly Message[], answer: ForwardResult = { ok:
         language="fr"
         contentLanguage="fr"
         ports={ports}
-        queue={createSendQueue({ storage: memorySendQueueStorage(), portsFor: async () => ports })}
+        queue={createSendQueue({ activeViewer: () => VIEWER_ID, storage: memorySendQueueStorage(), portsFor: async () => ports })}
         onClose={() => {}}
       />
     </QueryClientProvider>,
