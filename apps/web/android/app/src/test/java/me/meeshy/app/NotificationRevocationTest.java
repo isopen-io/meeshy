@@ -1,6 +1,7 @@
 package me.meeshy.app;
 
 import static org.junit.Assert.assertEquals;
+import static org.junit.Assert.assertFalse;
 import static org.junit.Assert.assertTrue;
 
 import java.util.Arrays;
@@ -65,5 +66,30 @@ public class NotificationRevocationTest {
         assertTrue(NotificationRevocation.tagsToCancel(message).isEmpty());
         assertTrue(NotificationRevocation.tagsToCancel(revocation(null, null, null)).isEmpty());
         assertTrue(NotificationRevocation.tagsToCancel(revocation(",,", null, null)).isEmpty());
+    }
+
+    // #11032 — comme le web (`banner-revocation.ts`), la banniere MARQUEE d'une notification revoquee part, quel que soit son tag.
+
+    @Test
+    public void aBannerMarkedWithARevokedNotificationIsClosedWhateverItsTag() {
+        Map<String, String> data = revocation("n1,n2", "c1,", "message_reaction,post_like");
+        assertTrue(NotificationRevocation.closesMarked(data, "n1"));
+        assertTrue(NotificationRevocation.closesMarked(data, " n2 "));
+    }
+
+    @Test
+    public void theBannerOfAnotherNotificationOfTheThreadStays() {
+        Map<String, String> data = revocation("n1", "c1", "message_reaction");
+        assertFalse(NotificationRevocation.closesMarked(data, "n9"));
+        assertFalse(NotificationRevocation.closesMarked(data, null));
+        assertFalse(NotificationRevocation.closesMarked(data, ""));
+    }
+
+    @Test
+    public void onlyARevocationClosesAMarkedBanner() {
+        Map<String, String> data = revocation("n1", null, null);
+        data.put("type", "new_message");
+        assertFalse(NotificationRevocation.closesMarked(data, "n1"));
+        assertFalse(NotificationRevocation.closesMarked(revocation(",", null, null), ""));
     }
 }
