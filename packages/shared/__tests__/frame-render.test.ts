@@ -80,6 +80,12 @@ describe('les bornes d’un chemin (origines des mouvements)', () => {
   it('un chemin sans point n’a pas de bornes', () => {
     expect(pathBounds('Z')).toBeNull();
   });
+
+  it('un arc compte par son point d’arrivée, un chemin tronqué s’arrête au dernier point lu', () => {
+    expect(pathBounds('M0 0 A5 5 0 0 1 10 10')).toEqual({ minX: 0, minY: 0, maxX: 10, maxY: 10 });
+    expect(pathBounds('M0 0 a5 5 0 0 1 4 -6')).toEqual({ minX: 0, minY: -6, maxX: 4, maxY: 0 });
+    expect(pathBounds('M2 3 L8')).toEqual({ minX: 2, minY: 3, maxX: 2, maxY: 3 });
+  });
 });
 
 describe('les mouvements d’un cadre se rendent sur transform et opacity seuls (#10935)', () => {
@@ -117,6 +123,29 @@ describe('les mouvements d’un cadre se rendent sur transform et opacity seuls 
     expect(plan.layers).toEqual([]);
     expect(plan.animated.size).toBe(0);
     expect(plan.sweeps.map((sweep) => sweep.elements)).toEqual([[0]]);
+  });
+
+  it('une rotation alternée balance de −a à +a, une rotation partielle inversée ralentit à ses bornes', () => {
+    const elements = [{ group: 'a', bounds: { minX: 10, minY: 20, maxX: 30, maxY: 40 } }];
+    const swing = frameMotionLayers({ elements, motions: [{ kind: 'rotate', targets: ['a'], duration: 4, direction: 'alternate', amplitude: 12, origin: 'bottom' }], center: { x: 50, y: 50 } });
+    expect(swing.layers[0]!.chain[0]).toMatchObject({ direction: 'alternate', timing: 'ease-in-out', origin: { x: 20, y: 40 }, vars: { '--fm-from': '-12deg', '--fm-to': '12deg' } });
+    const partial = frameMotionLayers({ elements, motions: [{ kind: 'rotate', targets: ['a'], duration: 4, direction: 'reverse', amplitude: 90 }], center: { x: 50, y: 50 } });
+    expect(partial.layers[0]!.chain[0]).toMatchObject({ direction: 'reverse', timing: 'ease-in-out', vars: { '--fm-from': '0deg', '--fm-to': '90deg' } });
+    const fullTurn = frameMotionLayers({ elements, motions: [{ kind: 'rotate', targets: ['a'], duration: 4 }], center: { x: 50, y: 50 } });
+    expect(fullTurn.layers[0]!.chain[0]).toMatchObject({ direction: 'normal', timing: 'linear' });
+  });
+
+  it('une inclinaison inversée part dans l’autre sens, une cible sans bornes tourne autour du cadre', () => {
+    const skew = frameMotionLayers({ elements: [{ group: 'a', bounds: null }], motions: [{ kind: 'skew', targets: ['a'], duration: 2, direction: 'reverse', amplitude: 4 }], center: { x: 50, y: 50 } });
+    expect(skew.layers[0]!.chain[0]).toMatchObject({ direction: 'alternate-reverse', origin: { x: 50, y: 50 }, vars: { '--fm-from': '-4deg', '--fm-to': '4deg' } });
+  });
+
+  it('un mouvement sans cible n’anime rien, deux mouvements sur une cible s’emboîtent', () => {
+    const elements = [{ group: 'a', bounds: { minX: 0, minY: 0, maxX: 2, maxY: 2 } }];
+    expect(frameMotionLayers({ elements, motions: [{ kind: 'pulse', targets: ['absent'], duration: 2 }], center: { x: 50, y: 50 } })).toEqual({ layers: [], sweeps: [], animated: new Set() });
+    const nested = frameMotionLayers({ elements, motions: [{ kind: 'pulse', targets: ['a'], duration: 2 }, { kind: 'twinkle', targets: ['a'], duration: 3 }], center: { x: 50, y: 50 } });
+    expect(nested.layers).toHaveLength(1);
+    expect(nested.layers[0]!.chain.map((step) => step.kind)).toEqual(['pulse', 'twinkle']);
   });
 });
 
@@ -209,6 +238,19 @@ describe('le cadre de bannière se pose sur la photo, centre transparent (#10935
     expect(lastModule).toBeLessThan(firstPiece);
   });
 
+  it('un trait se trace en contour, une règle de remplissage se transmet, une frise justifiée se pose à l’échelle', () => {
+    const stroked = frame({
+      border: { width: 9.6, color: 0, opacity: 1 },
+      pieces: [{ anchor: 'start', paths: [{ d: 'M2 2 h10', color: 2, opacity: 0.5, width: 1.2 }, { d: 'M2 2 h10 v10 h-10 Z', color: 3, opacity: 1, fillRule: 'evenodd' }] }],
+      friezes: [{ module: 5, from: 16, to: 16, fit: 'justify', paths: [{ d: 'M16 2 h5 v3 h-5 Z', color: 1, opacity: 1 }] }],
+    });
+    const svg = bannerFrameSvg({ frame: stroked, width: 400, height: 100 });
+    expect(svg).toContain('<path d="M2 2 h10" fill="none" stroke="#22262B" stroke-width="1.2" stroke-opacity="0.5"/>');
+    expect(svg).toContain('fill-rule="evenodd"/>');
+    expect(svg).not.toContain('<rect');
+    expect(svg).toMatch(/<g transform="translate\([^ ]+ 0\) scale\([0-9.]+ 1\)">/);
+  });
+
   it('une frise justifiée recalcule son module pour tomber juste', () => {
     const justified = frame({ friezes: [{ module: 5, from: 16, to: 16, fit: 'justify', paths: [{ d: 'M16 2 h5 v3 h-5 Z', color: 1, opacity: 1 }] }] });
     const modules = bannerFrameElements(justified, 400).filter((element) => element.path.d.startsWith('M16 2'));
@@ -225,5 +267,32 @@ describe('le cadre de bannière se pose sur la photo, centre transparent (#10935
     const still = bannerFrameMarkup({ frame: moving, width: 300, height: 100, animated: false });
     expect(still).not.toContain('animation-name');
     expect(still).toContain('M288 2');
+  });
+
+  it('un reflet glisse sur un cadre de bannière, découpé en blanc à la forme de ses cibles, et la cible reste peinte fixe', () => {
+    const sweeping = frame({ motion: [{ kind: 'sweep', targets: ['rosaces'], duration: 6.5, delay: 1, direction: 'reverse' }] });
+    const markup = bannerFrameMarkup({ frame: sweeping, width: 600, height: 200, animated: true });
+    expect(markup.match(/<span data-frame-sweep/g)).toHaveLength(1);
+    expect(markup).toContain('animation-name:fm-sweep');
+    expect(markup).toContain('animation-direction:reverse');
+    expect(markup).toContain('animation-delay:1s');
+    const mask = decodeURIComponent(/mask-image:url\('data:image\/svg\+xml,([^']+)'\)/.exec(markup)![1]!);
+    expect(mask).toContain('viewBox="0 0 300 100"');
+    expect(mask.match(/fill="#FFFFFF" fill-opacity="1"/g)).toHaveLength(2);
+    const fixed = markup.slice(0, markup.indexOf('<span data-frame-sweep'));
+    expect(fixed).toContain('M288 2');
+  });
+
+  it('une couche animée de cadre de bannière emporte ses dégradés et sa pièce déplacée', () => {
+    const graded = frame({
+      gradients: [{ kind: 'linear', x1: 0, y1: 0, x2: 1, y2: 0, stops: [{ color: 0, at: 0 }, { color: 3, at: 1 }] }],
+      pieces: [{ anchor: 'end', paths: [{ d: 'M288 2 h10 v10 h-10 Z', color: 3, opacity: 1, gradient: 0, group: 'rosaces' }] }],
+      motion: [{ kind: 'pulse', targets: ['rosaces'], duration: 2 }],
+    });
+    const markup = bannerFrameMarkup({ frame: graded, width: 600, height: 100, animated: true });
+    const layer = markup.slice(markup.indexOf('<span class="fm"'));
+    expect(layer).toMatch(/<defs><linearGradient id="fg0-[^"]+-L0"/);
+    expect(layer).toContain('<g transform="translate(300 0)">');
+    expect(layer).toMatch(/fill="url\(#fg0-[^"]+-L0\)"/);
   });
 });
