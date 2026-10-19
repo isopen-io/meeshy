@@ -116,9 +116,8 @@ extension StoryCanvasUIView {
         }
     }
 
-    /// Activates the shared `.playback` `AVAudioSession` through the existing
-    /// `MediaSessionCoordinator` (RC4.3). Refcounted; the boolean keeps this
-    /// view's request/release at exactly one claim.
+    /// Pose la session `.playback` tout de suite (le mixer part dans la foulée), puis la prise
+    /// refcomptée (RC4.3) — une seule par vue, rendue par `releasePlaybackSessionIfNeeded()`.
     func requestPlaybackSessionIfNeeded() {
         guard StoryAudioActivationPolicy.shouldActivate(
             hasClips: audioMixer.activeClipCount > 0 || audioMixer.backgroundClipCount > 0,
@@ -126,6 +125,7 @@ extension StoryCanvasUIView {
             mute: isAudioMuted) else { return }
         guard !didRequestPlaybackSession else { return }
         didRequestPlaybackSession = true
+        MediaSessionCoordinator.shared.activateContentPlayback(.audible)
         Task { try? await MediaSessionCoordinator.shared.request(role: .playback) }
     }
 

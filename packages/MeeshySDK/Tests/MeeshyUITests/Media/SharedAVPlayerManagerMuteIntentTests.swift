@@ -1,4 +1,5 @@
 import XCTest
+import MeeshySDK
 @testable import MeeshyUI
 
 /// Covers the P1 audit fix: the feed's muted autoplay used to write directly to
@@ -83,17 +84,15 @@ final class SharedAVPlayerManagerMuteIntentTests: XCTestCase {
     // MARK: - Ducking session gate (pure predicate)
 
     /// A surface that intends to be silent (feed autoplay) has no audible
-    /// output — activating `.duckOthers` for it would needlessly duck the
-    /// user's own music for a video that produces no sound. This is the root
-    /// cause of the reported leak ("l'autoplay MUET du feed ... duckée
-    /// indéfiniment"): the session used to activate unconditionally in `load()`,
-    /// before any caller had a chance to express its mute intent.
-    func test_shouldDuckOthersOnPlay_falseWhenEffectivelyMuted() {
-        XCTAssertFalse(SharedAVPlayerManager.shouldDuckOthersOnPlay(effectiveMuted: true))
+    /// output — it must leave the user's own music alone (#11039). The
+    /// session used to activate unconditionally in `load()`, before any
+    /// caller had a chance to express its mute intent.
+    func test_playbackAudibility_mutedWhenEffectivelyMuted() {
+        XCTAssertEqual(SharedAVPlayerManager.playbackAudibility(effectiveMuted: true), .muted)
     }
 
-    func test_shouldDuckOthersOnPlay_trueWhenNotMuted() {
-        XCTAssertTrue(SharedAVPlayerManager.shouldDuckOthersOnPlay(effectiveMuted: false))
+    func test_playbackAudibility_audibleWhenNotMuted() {
+        XCTAssertEqual(SharedAVPlayerManager.playbackAudibility(effectiveMuted: false), .audible)
     }
 
     /// A voice note or a story taking over from an IDLE video engine must not
