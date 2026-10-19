@@ -29,6 +29,7 @@ const APPEARANCE_REGISTRY_FILES = [
   'packages/shared/design/appearance/wallpapers/packs.json',
   'packages/shared/design/appearance/banners/packs.json',
   'packages/shared/design/appearance/avatar-rings/packs.json',
+  'packages/shared/design/appearance/banner-frames/packs.json',
   'packages/shared/design/packs/samples/wallpaper.json',
 ].map((file) => join(REPO_ROOT, file));
 

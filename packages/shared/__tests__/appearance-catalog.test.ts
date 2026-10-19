@@ -17,6 +17,7 @@ type PackFile = { readonly packs: readonly { readonly slug: string; readonly ord
 const wallpapers = read('wallpapers/designs.json') as PackFile;
 const banners = read('banners/designs.json') as PackFile;
 const rings = read('avatar-rings/rings.json') as PackFile;
+const frames = read('banner-frames/frames.json') as PackFile;
 
 const wallpaperDesigns = wallpapers.packs.flatMap((pack) => pack.designs ?? []);
 const bannerKeys = banners.packs.flatMap((pack) => pack.designs ?? []).map((design) => (design as { key: string }).key);
@@ -114,14 +115,17 @@ describe('les 6 bannières et les 6 contours (#10632, § 6)', () => {
 });
 
 describe('les noms en sept langues', () => {
-  const keysOf = (lang: string) => read(`strings/${lang}.json`) as { packs: object; designs: object; rings: object; gamut: object; modes: object; avatarUsage: string };
+  const keysOf = (lang: string) => read(`strings/${lang}.json`) as { packs: object; designs: object; rings: object; frames: object; gamut: object; modes: object; avatarUsage: string };
+  const itemKeys = (file: PackFile, field: 'rings' | 'frames') => file.packs.flatMap((pack) => ((pack as Record<string, unknown>)[field] as { key: string }[] | undefined) ?? []).map((item) => item.key).sort();
 
-  it.each(PACK_LANGUAGES.map((lang) => [lang] as const))('%s nomme chaque pack, modèle, contour et couleur', (lang) => {
+  it.each(PACK_LANGUAGES.map((lang) => [lang] as const))('%s nomme chaque pack, modèle, contour, cadre de bannière et couleur', (lang) => {
     const strings = keysOf(lang);
     expect(Object.keys(strings.designs).sort()).toEqual([...new Set([...wallpaperDesigns.map((design) => (design as { key: string }).key), ...bannerKeys])].sort());
-    expect(Object.keys(strings.rings)).toHaveLength(7);
+    expect(Object.keys(strings.rings).sort()).toEqual(itemKeys(rings, 'rings'));
+    expect(Object.keys(strings.frames).sort()).toEqual(itemKeys(frames, 'frames'));
+    expect(Object.values(strings.frames).every((name) => typeof name === 'string' && name.length > 0)).toBe(true);
     expect(Object.keys(strings.gamut).sort()).toEqual([...GAMUT_KEYS].sort());
-    expect(Object.keys(strings.packs).sort()).toEqual([...wallpapers.packs, ...banners.packs, ...rings.packs].map((pack) => pack.slug).sort());
+    expect(Object.keys(strings.packs).sort()).toEqual([...wallpapers.packs, ...banners.packs, ...rings.packs, ...frames.packs].map((pack) => pack.slug).sort());
     expect(Object.values(strings.designs).every((name) => typeof name === 'string' && name.length > 0)).toBe(true);
   });
 });

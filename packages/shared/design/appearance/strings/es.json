@@ -35,6 +35,62 @@
     "contours-animes": {
       "name": "Contornos animados",
       "description": "Un arco dorado rodea el avatar."
+    },
+    "contours-haussmannien": {
+      "name": "Contorno Haussmanniano",
+      "description": "La fachada parisina: sillería, hierro fundido y clave de arco."
+    },
+    "cadres-haussmannien": {
+      "name": "Marco Haussmanniano",
+      "description": "La fachada parisina: sillería, hierro fundido y clave de arco."
+    },
+    "contours-arabe": {
+      "name": "Contorno Árabe",
+      "description": "Lacería de la Alhambra, estrellas de ocho puntas y arco lobulado."
+    },
+    "cadres-arabe": {
+      "name": "Marco Árabe",
+      "description": "Lacería de la Alhambra, estrellas de ocho puntas y arco lobulado."
+    },
+    "contours-grec": {
+      "name": "Contorno Griego",
+      "description": "Meandro, palmetas y volutas jónicas."
+    },
+    "cadres-grec": {
+      "name": "Marco Griego",
+      "description": "Meandro, palmetas y volutas jónicas."
+    },
+    "contours-ancestral": {
+      "name": "Contorno Africano ancestral",
+      "description": "Bogolán pintado con tierra y signo adinkra."
+    },
+    "cadres-ancestral": {
+      "name": "Marco Africano ancestral",
+      "description": "Bogolán pintado con tierra y signo adinkra."
+    },
+    "contours-technologique": {
+      "name": "Contorno Africano tecnológico",
+      "description": "Escalones ndebele de neón y pistas de circuito."
+    },
+    "cadres-technologique": {
+      "name": "Marco Africano tecnológico",
+      "description": "Escalones ndebele de neón y pistas de circuito."
+    },
+    "contours-rituel": {
+      "name": "Contorno Africano ritual",
+      "description": "Rafia con flecos, cauris, cuentas y máscara de madera."
+    },
+    "cadres-rituel": {
+      "name": "Marco Africano ritual",
+      "description": "Rafia con flecos, cauris, cuentas y máscara de madera."
+    },
+    "contours-celte": {
+      "name": "Contorno Celta",
+      "description": "Trenza sin fin y trisqueles en espiral."
+    },
+    "cadres-celte": {
+      "name": "Marco Celta",
+      "description": "Trenza sin fin y trisqueles en espiral."
     }
   },
   "designs": {
@@ -62,7 +118,21 @@
     "aurore": "Aurora",
     "deco": "Deco",
     "laurier": "Laurel",
-    "halo-or": "Halo dorado"
+    "halo-or": "Halo dorado",
+    "haussmannien": "Haussmanniano",
+    "haussmannien-anime": "Haussmanniano animado",
+    "arabe": "Árabe",
+    "arabe-anime": "Árabe animado",
+    "grec": "Griego",
+    "grec-anime": "Griego animado",
+    "ancestral": "Africano ancestral",
+    "ancestral-anime": "Africano ancestral animado",
+    "technologique": "Africano tecnológico",
+    "technologique-anime": "Africano tecnológico animado",
+    "rituel": "Africano ritual",
+    "rituel-anime": "Africano ritual animado",
+    "celte": "Celta",
+    "celte-anime": "Celta animado"
   },
   "gamut": {
     "indigo": "Índigo Meeshy",
@@ -87,5 +157,21 @@
     "solid": "Color liso",
     "photo": "Foto de la conversación"
   },
-  "avatarUsage": "Contorno de perfil"
+  "avatarUsage": "Contorno de perfil",
+  "frames": {
+    "haussmannien": "Haussmanniano",
+    "haussmannien-anime": "Haussmanniano animado",
+    "arabe": "Árabe",
+    "arabe-anime": "Árabe animado",
+    "grec": "Griego",
+    "grec-anime": "Griego animado",
+    "ancestral": "Africano ancestral",
+    "ancestral-anime": "Africano ancestral animado",
+    "technologique": "Africano tecnológico",
+    "technologique-anime": "Africano tecnológico animado",
+    "rituel": "Africano ritual",
+    "rituel-anime": "Africano ritual animado",
+    "celte": "Celta",
+    "celte-anime": "Celta animado"
+  }
 }

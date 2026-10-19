@@ -108,6 +108,11 @@ describe('un contour d’avatar gagne dégradés et mouvements, sans rien perdre
     expect(parseAvatarRingDesign(ring({ ornament: { paths: [{ d: 'M0 0 Z', color: 8, opacity: 1 }] } }))).toBeNull();
   });
 
+  it('un contour de la planche peut n’avoir AUCUN trait de base (`none`) : son ornement dessine tout, rien ne déborde au bord (#10936)', () => {
+    const parsed = parseAvatarRingDesign(ring({ stroke: { style: 'none', width: 0.02, colors: ['#C9A15B'] }, ornament: { paths: [{ d: 'M0 0 Z', color: 0, opacity: 1 }] }, gradients: undefined }));
+    expect(parsed?.stroke.style).toBe('none');
+  });
+
   it('la limite de 48 chemins est conservée', () => {
     const paths = Array.from({ length: 49 }, () => ({ d: 'M0 0 Z', color: 0, opacity: 1 }));
     expect(parseAvatarRingDesign(ring({ ornament: { paths } }))).toBeNull();

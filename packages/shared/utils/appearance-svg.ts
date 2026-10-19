@@ -189,6 +189,8 @@ const ringStroke = (ring: AvatarRingDesign): string => {
       return ringCircle(radius, width, first, ` stroke-dasharray="${num((circumference / RING_DASHES) * 0.6)} ${num((circumference / RING_DASHES) * 0.4)}"`);
     case 'gradient':
       return gradientRing(radius, width, ring.stroke.colors);
+    case 'none':
+      return '';
   }
 };
 

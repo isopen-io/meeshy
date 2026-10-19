@@ -121,6 +121,13 @@ describe('les mouvements d’un cadre se rendent sur transform et opacity seuls 
 });
 
 describe('le contour d’avatar animé (#10935)', () => {
+  it('un contour sans trait de base (`none`) ne peint que son ornement (#10936)', () => {
+    const bare = ring({ stroke: { style: 'none', width: 0.02, colors: ['#B8954F', '#FFD98A'] } });
+    const svg = avatarRingSvg({ ring: bare, size: 64 });
+    expect(svg).not.toContain('<circle');
+    expect(svg).toContain('<path');
+  });
+
   it('sans mouvement, ou fixe, le balisage est le rendu de référence à l’octet', () => {
     expect(avatarRingMarkup({ ring: ring(), size: 64, animated: true })).toBe(avatarRingSvg({ ring: ring(), size: 64 }));
     const moving = ring({ motion: [{ kind: 'twinkle', targets: ['etoiles'], duration: 3 }] });

@@ -16,7 +16,8 @@ import { PackAssetRefSchema } from './content-pack-index.js';
 import { APPEARANCE_LIMITS, PATH_D_PATTERN, hexSchema, slugSchema } from './appearance-design.js';
 import { FrameMotionListSchema, frameGradientsSchema, frameGroupSchema, gradientsFitPalette, strokesFitGradients } from './frame-decor.js';
 
-export const RING_STROKE_STYLES = ['solid', 'double', 'dotted', 'dashed', 'gradient'] as const;
+/** `none` (#10936) : aucun trait de base — l'ornement dessine tout le contour, comme les cadres de la planche. */
+export const RING_STROKE_STYLES = ['solid', 'double', 'dotted', 'dashed', 'gradient', 'none'] as const;
 export type RingStrokeStyle = (typeof RING_STROKE_STYLES)[number];
 
 /** Le rayon du cercle de l'avatar dans le viewBox 0 0 100 100 : l'ornement s'organise autour. */
