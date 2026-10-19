@@ -9,8 +9,8 @@ import MeeshyUI
 /// 94, libellé 96) ; la liste montait `StoriesVivantsRail` sur les cotes du rail
 /// des DIRECTS de la Lentille (pastille 48) — deux valeurs pour un même objet.
 ///
-/// Une seule source : le plateau du fil ET le rail de tête de liste lisent ces
-/// mesures, jamais une cote à eux. La bande COMPACTE épinglée au défilement
+/// Une seule source, et depuis #11033 un seul composant : le fil ET la tête de
+/// liste montent `StoryTrayView`, qui lit ces mesures. La bande COMPACTE épinglée au défilement
 /// (`PinnedStoryTrailBand`, `.storyTrayCompact`) n'en dépend pas.
 /// Le web tient la même loi par un seul composant (`RAIL_TILE_GRANDE`,
 /// `apps/web/src/components/rail-tile.tsx`).

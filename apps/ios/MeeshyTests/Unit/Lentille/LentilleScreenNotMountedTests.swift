@@ -120,7 +120,7 @@ final class LentilleScreenNotMountedTests: XCTestCase {
     }
 
     /// Idem pour les composants de chrome de Lentille : `LentilleSticker`,
-    /// `SectionScrollPill`, `StoriesVivantsRail` — jamais appelés depuis le code
+    /// `SectionScrollPill` — jamais appelés depuis le code
     /// non-Lentille.
     func test_lentilleChromeComponents_areReferencedNowhereOutsideLentille() throws {
         let chromeComponents = ["LentilleSticker", "SectionScrollPill", "StoriesVivantsRail"]
@@ -166,7 +166,7 @@ final class LentilleScreenNotMountedTests: XCTestCase {
             let guardedRanges = Self.flagGuardedRanges(in: code)
             anyGuardedRange = anyGuardedRange || !guardedRanges.isEmpty
 
-            for mount in ["LentilleFlatRow(", "LentilleSticker(", "StoriesVivantsRail(", "SectionScrollPillHost("] {
+            for mount in ["LentilleFlatRow(", "LentilleSticker(", "SectionScrollPillHost("] {
                 var searchStart = code.startIndex
                 while let found = code.range(of: mount, range: searchStart..<code.endIndex) {
                     let offset = code.distance(from: code.startIndex, to: found.lowerBound)

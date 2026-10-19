@@ -149,11 +149,13 @@ final class LentilleOpenMyStoriesLiteralGuardTests: XCTestCase {
         )
     }
 
-    func test_conversationListView_postsViaTheSharedConstant() throws {
+    /// #11033 — la liste monte le tray du fil, qui présente « Mes stories »
+    /// lui-même : elle n'émet plus rien vers les racines.
+    func test_conversationListView_noLongerPostsOpenMyStories_theSharedTrayOpensIt() throws {
         let stripped = AppSourceGuard.stripComments(try sources()[2].code)
-        XCTAssertTrue(
-            stripped.contains("NotificationCenter.default.post(name: .openMyStories, object: nil)"),
-            "ConversationListView.swift (rail « moi ») doit poster via `.openMyStories`."
+        XCTAssertFalse(
+            stripped.contains("NotificationCenter.default.post(name: .openMyStories"),
+            "ConversationListView monte `StoryTrayView` : « Mes stories » s'ouvre par le tray, comme dans le fil."
         )
     }
 

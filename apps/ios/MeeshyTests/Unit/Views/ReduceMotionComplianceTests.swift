@@ -44,7 +44,6 @@ final class ReduceMotionComplianceTests: XCTestCase {
 
     private static let conversationRow = "Meeshy/Features/Main/Views/ThemedConversationRow.swift"
     private static let syncPill = "Meeshy/Features/Main/Components/SyncPill.swift"
-    private static let lentilleStoryRail = "Meeshy/Features/Main/Lentille/Chrome/StoriesVivantsRail.swift"
 
     // MARK: - Every unstoppable animation must be reachable by the setting
 
@@ -112,39 +111,6 @@ final class ReduceMotionComplianceTests: XCTestCase {
     // Les épingler sur `SignupView` aurait été pire qu'inutile : une garde qui
     // exige un entonnoir dans un fichier qui n'anime rien est verte pour la
     // mauvaise raison — elle ne mesure plus rien.
-
-    // MARK: - Lentille story rail — the mood badges (lot 3, 2026-08-22)
-
-    /// The rail at the top of the conversation list shows up to seven mood
-    /// badges at once (`LentilleMetrics.Rail.maxEntries` authors, plus "me"),
-    /// each one breathing on a `.repeatForever` spring. That is the densest
-    /// sustained motion in the list, and it sits above content the user came
-    /// for — they cannot scroll it away without also leaving the stories.
-    ///
-    /// The gate is not written in the rail: the rail mounts the shared
-    /// `MeeshyMoodBadge` atom, which is the only place the spring exists and
-    /// the only place that reads the setting (system **and** the in-app
-    /// override — see `MoodBadgeTests` in the SDK package suite). Delegation
-    /// is what makes the compliance structural: a skin cannot forget a gate it
-    /// does not own.
-    func test_lentilleStoryRail_delegatesItsMoodPulseToTheGatedAtom() throws {
-        let code = codeLines(try source(Self.lentilleStoryRail))
-
-        XCTAssertTrue(
-            code.contains("MeeshyMoodBadge("),
-            "The rail must mount the shared badge atom — the single home of the mood spring."
-        )
-        XCTAssertFalse(
-            code.contains("repeatForever"),
-            "A hand-rolled repeating spring in the skin would run outside the atom's Reduce " +
-            "Motion gate: motion the setting cannot reach is exactly what this suite exists " +
-            "to prevent."
-        )
-        XCTAssertFalse(
-            code.contains("withAnimation("),
-            "Same reason, one step earlier: the rail must own no animation driver at all."
-        )
-    }
 
     // Le fondu entre deux étapes du wizard d'inscription était épinglé ici comme
     // une exclusion VOULUE (discret, auto-terminé, donc hors du champ de Reduce

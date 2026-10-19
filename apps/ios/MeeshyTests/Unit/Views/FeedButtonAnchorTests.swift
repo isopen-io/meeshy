@@ -137,14 +137,14 @@ final class FeedButtonAnchorTests: XCTestCase {
     }
 
     /// La cible de 44 pt du « + », au coin haut-gauche de l'avatar « moi », sous
-    /// l'en-tête étendu : le tray du flux (`StoryTrayView`, marge `sm`) et le
-    /// rail de la liste (`StoriesVivantsRail`, marge `Rail.paddingVertical`).
+    /// l'en-tête étendu : le flux et la liste montent le MÊME `StoryTrayView`
+    /// (marge `sm`, #11033).
     private func plusTargets(on device: Device) -> [(screen: String, frame: CGRect)] {
         let bandTop = device.topInset + CollapsibleHeaderMetrics.expandedHeight
         let side = MeeshyControlSize.tapTarget
         return [
             ("flux", CGRect(x: MeeshySpacing.lg, y: bandTop + MeeshySpacing.sm, width: side, height: side)),
-            ("liste", CGRect(x: MeeshySpacing.lg, y: bandTop + LentilleMetrics.Rail.paddingVertical, width: side, height: side)),
+            ("liste", CGRect(x: MeeshySpacing.lg, y: bandTop + MeeshySpacing.sm, width: side, height: side)),
         ]
     }
 

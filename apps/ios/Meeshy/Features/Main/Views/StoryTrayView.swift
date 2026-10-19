@@ -250,10 +250,8 @@ struct StoryTrayView: View {
 /// `createdAt` (cf. `FeedDataResponse.toStoryGroups`), donc `last` =
 /// plus récente. Préfère `thumbnailUrl` (servi optimisé par le
 /// gateway) au full `url` si dispo. Fallback sur l'avatar du profil
-/// pour les stories text-only (pas de media). Portée INTERNE (2026-08-22,
-/// lot 3 Lentille) : le rail `StoriesVivantsRail` monté en tête de liste sous
-/// drapeau doit résoudre sa couverture par CE résolveur — un second serait la
-/// troisième écriture de la même cascade (cover composite locale >
+/// pour les stories text-only (pas de media). Un second résolveur serait une
+/// seconde écriture de la même cascade (cover composite locale >
 /// `thumbnailUrl` serveur > `url` image > avatar), et la première à diverger.
 /// Garde : `LentilleChromeSourceGuardTests`.
 ///
