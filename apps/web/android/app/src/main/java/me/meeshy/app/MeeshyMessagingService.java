@@ -5,6 +5,7 @@ import android.app.NotificationManager;
 import android.content.Context;
 import android.content.Intent;
 import android.os.Bundle;
+import android.service.notification.StatusBarNotification;
 import android.util.Log;
 import androidx.annotation.NonNull;
 import com.google.firebase.messaging.FirebaseMessagingService;
@@ -115,6 +116,19 @@ public class MeeshyMessagingService extends FirebaseMessagingService {
         return value == null ? null : value.toString();
     }
 
+    /** #11032 — la banniere marquee d'une notification revoquee, sous quelque tag que ce soit. */
+    private static void cancelMarked(NotificationManager manager, Map<String, String> data) {
+        try {
+            for (StatusBarNotification active : manager.getActiveNotifications()) {
+                Bundle extras = active.getNotification().extras;
+                String marked = extras == null ? null : extras.getString(NotificationCorrectionRules.EXTRA_NOTIFICATION_ID);
+                if (NotificationRevocation.closesMarked(data, marked)) manager.cancel(active.getTag(), active.getId());
+            }
+        } catch (RuntimeException failure) {
+            Log.w(TAG, "bannieres marquees non revoquees", failure);
+        }
+    }
+
     @Override
     public void onMessageReceived(@NonNull RemoteMessage message) {
         super.onMessageReceived(message);
@@ -123,6 +137,7 @@ public class MeeshyMessagingService extends FirebaseMessagingService {
             NotificationManager manager = getSystemService(NotificationManager.class);
             if (manager != null) {
                 for (String tag : revoked) manager.cancel(tag, 0);
+                cancelMarked(manager, message.getData());
             }
             return;
         }
