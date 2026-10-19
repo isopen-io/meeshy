@@ -30,6 +30,11 @@ final class NotificationFunnelRules {
 
     static final int CAP = 100;
 
+    /** Le canal par defaut du manifeste (`default_notification_channel_id`). */
+    static final String DEFAULT_CHANNEL = "meeshy_notifications";
+    /** `NotificationManager.IMPORTANCE_NONE` : un canal que l'utilisateur a coupe. */
+    private static final int IMPORTANCE_NONE = 0;
+
     private static final Pattern OBJECT_ID = Pattern.compile("^[0-9a-fA-F]{24}$");
     private static final Pattern TECHNICAL_CODE = Pattern.compile("^[A-Za-z0-9_.:-]{1,64}$");
     private static final Pattern EVENT_ID = Pattern.compile("^[A-Za-z0-9-]{1,64}$");
@@ -46,11 +51,28 @@ final class NotificationFunnelRules {
         return false;
     }
 
+    /**
+     * #11054 — FCM livre le push meme quand le systeme ne montrera rien : les
+     * notifications de l'app coupees, ou son canal d'importance `NONE`. Une
+     * importance inconnue (`null`, avant l'API 26 ou canal absent) laisse FCM
+     * afficher. Jumeau de `banniereAffichee` dans `noterReception`.
+     */
+    static boolean systemShows(boolean notificationsEnabled, Integer channelImportance) {
+        return notificationsEnabled && (channelImportance == null || channelImportance != IMPORTANCE_NONE);
+    }
+
+    /** Le canal sur lequel FCM pose la banniere — celui du push, sinon celui du manifeste. */
+    static String channelOf(Map<String, String> extras) {
+        String full = trimmed(extras.get("gcm.notification.android_channel_id"));
+        String channel = full.isEmpty() ? trimmed(extras.get("gcm.n.android_channel_id")) : full;
+        return channel.isEmpty() ? DEFAULT_CHANNEL : channel;
+    }
+
     static List<String> eventsFor(Map<String, String> extras, boolean inForeground, String occurredAt, Supplier<String> ids) {
         return eventsFor(extras, inForeground, true, occurredAt, ids);
     }
 
-    /** `displayed` faux : une correction retenue (#10989) — recue, jamais affichee, comme `noterReception`. */
+    /** `displayed` faux : une correction retenue (#10989) ou masquee par le systeme (#11054) — recue, jamais affichee, comme `noterReception`. */
     static List<String> eventsFor(Map<String, String> extras, boolean inForeground, boolean displayed, String occurredAt, Supplier<String> ids) {
         if (inForeground || !fcmDisplays(extras)) return Collections.emptyList();
         List<String> lines = new ArrayList<>();

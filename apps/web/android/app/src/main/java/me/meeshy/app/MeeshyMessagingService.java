@@ -1,9 +1,11 @@
 package me.meeshy.app;
 
 import android.app.Notification;
+import android.app.NotificationChannel;
 import android.app.NotificationManager;
 import android.content.Context;
 import android.content.Intent;
+import android.os.Build;
 import android.os.Bundle;
 import android.service.notification.StatusBarNotification;
 import android.util.Log;
@@ -41,7 +43,9 @@ import java.util.Map;
  * - une banniere que FCM affiche app fermee est notee « recue » et
  *   « affichee » dans l'entonnoir ({@link NotificationFunnelStore}, #10938) ;
  * - une CORRECTION (message edite) n'est affichee que si elle remplace sa
- *   propre banniere ({@link NotificationCorrectionRules}, #10989).
+ *   propre banniere ({@link NotificationCorrectionRules}, #10989) ;
+ * - une banniere que le systeme ne montrera pas (notifications coupees, canal
+ *   desactive) n'est notee que « recue » (#11054).
  *
  * Le plugin est atteint par reflexion, pas par heritage : `cap sync` ne
  * synchronise que `dependencies` et `devDependencies`, et le plugin est
@@ -76,7 +80,7 @@ public class MeeshyMessagingService extends FirebaseMessagingService {
         boolean displayed = inForeground || !withheldCorrection(data);
         if (displayed) super.handleIntent(intent);
         try {
-            NotificationFunnelStore.noteShown(this, data, inForeground, displayed);
+            NotificationFunnelStore.noteShown(this, data, inForeground, displayed && (inForeground || systemShows(data)));
         } catch (RuntimeException failure) {
             Log.w(TAG, "entonnoir de notification non note", failure);
         }
@@ -109,6 +113,24 @@ public class MeeshyMessagingService extends FirebaseMessagingService {
         } catch (RuntimeException failure) {
             Log.w(TAG, "correction affichee sans verification", failure);
             return false;
+        }
+    }
+
+    /** #11054 — ce que le systeme laisse FCM afficher ; dans le doute, il affiche. */
+    private boolean systemShows(Map<String, String> data) {
+        try {
+            NotificationManager manager = getSystemService(NotificationManager.class);
+            if (manager == null) return true;
+            Integer importance = null;
+            if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.O) {
+                NotificationChannel channel = manager.getNotificationChannel(NotificationFunnelRules.channelOf(data));
+                if (channel == null) channel = manager.getNotificationChannel(NotificationFunnelRules.DEFAULT_CHANNEL);
+                if (channel != null) importance = channel.getImportance();
+            }
+            return NotificationFunnelRules.systemShows(manager.areNotificationsEnabled(), importance);
+        } catch (RuntimeException failure) {
+            Log.w(TAG, "affichage suppose", failure);
+            return true;
         }
     }
 
