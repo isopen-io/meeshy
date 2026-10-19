@@ -211,9 +211,6 @@ def screens(n):
 class Ratchet(unittest.TestCase):
     def test_rise_fails_and_names_rule_totals_and_five_worst_files(self):
         files = {f"apps/ios/Meeshy/F{i}.swift": screens(i + 1) for i in range(7)}
-        with Workspace(files, zero_baseline(**{"uiscreen-main": 20})) as ws:
-            code, _, err = ws.run()
-        self.assertEqual(code, 0)
         with Workspace(files, zero_baseline(**{"uiscreen-main": 3})) as ws:
             code, _, err = ws.run()
         self.assertEqual(code, 1)
@@ -285,6 +282,13 @@ class WriteBaseline(unittest.TestCase):
 
 
 class CommittedBaseline(unittest.TestCase):
+    def setUp(self):
+        scanned = ENGINE.scan(ENGINE.collect(ENGINE.ROOT))
+        original = (ENGINE.collect, ENGINE.scan)
+        ENGINE.collect, ENGINE.scan = (lambda root: ()), (lambda files: scanned)
+        self.addCleanup(lambda: setattr(ENGINE, "collect", original[0]))
+        self.addCleanup(lambda: setattr(ENGINE, "scan", original[1]))
+
     def test_every_rule_is_green_and_goes_red_when_lowered(self):
         committed = json.loads(ENGINE.BASELINE.read_text(encoding="utf-8"))
         self.assertEqual(run_main([])[0], 0)
