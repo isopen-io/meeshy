@@ -55,6 +55,17 @@ final class PushDeliveryReceipt {
         }
     }
 
+    /**
+     * #11034 — app hors du premier plan, FCM affiche lui-meme une charge a bloc
+     * `notification` sans appeler `onMessageReceived` : seul `handleIntent` la
+     * voit passer, et c'est donc la qu'elle s'accuse. Au premier plan, ou sans
+     * bloc `notification`, `onMessageReceived` l'accuse deja : null ici.
+     */
+    static PushDeliveryReceipt ofDisplayedByFcm(Map<String, String> extras, boolean inForeground, String apiBase) {
+        if (inForeground || !NotificationFunnelRules.fcmDisplays(extras)) return null;
+        return of(extras, apiBase);
+    }
+
     private static String text(String value) {
         return value == null ? "" : value.trim();
     }

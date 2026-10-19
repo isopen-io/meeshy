@@ -33,7 +33,9 @@ import java.util.Map;
  *   plugin, exactement ce que faisait son propre service
  *   (`PushNotificationsPlugin.sendRemoteMessage` / `onNewToken`) ; et une
  *   ARRIVEE de message y accuse sa remise ({@link PushDeliveryReceipt}, #8124),
- *   comme le service worker web et la NSE iOS ;
+ *   comme le service worker web et la NSE iOS — app fermee, c'est
+ *   `handleIntent` qui l'accuse, FCM affichant la banniere sans
+ *   `onMessageReceived` (#11034) ;
  * - un VOCAL dont FCM vient d'afficher la banniere y gagne l'action
  *   « Ecouter » ({@link NotificationVoiceBanner}, #10641) ;
  * - une banniere que FCM affiche app fermee est notee « recue » et
@@ -78,11 +80,17 @@ public class MeeshyMessagingService extends FirebaseMessagingService {
         } catch (RuntimeException failure) {
             Log.w(TAG, "entonnoir de notification non note", failure);
         }
-        if (!displayed) return;
+        if (displayed) {
+            try {
+                NotificationVoiceBanner.offer(this, NotificationVoiceBanner.payloadOf(extras));
+            } catch (RuntimeException failure) {
+                Log.w(TAG, "action d'ecoute non posee", failure);
+            }
+        }
         try {
-            NotificationVoiceBanner.offer(this, NotificationVoiceBanner.payloadOf(extras));
+            acknowledgeDelivery(PushDeliveryReceipt.ofDisplayedByFcm(data, inForeground, CallShellStore.apiBase(this)));
         } catch (RuntimeException failure) {
-            Log.w(TAG, "action d'ecoute non posee", failure);
+            Log.w(TAG, "accuse de remise non prepare", failure);
         }
     }
 
@@ -160,20 +168,20 @@ public class MeeshyMessagingService extends FirebaseMessagingService {
                 return;
             default:
                 forward("sendRemoteMessage", RemoteMessage.class, message);
-                acknowledgeDelivery(message);
+                acknowledgeDelivery(PushDeliveryReceipt.of(message.getData(), CallShellStore.apiBase(this)));
         }
     }
 
     /**
      * Best-effort, comme `sw-push.js` : un accuse manque (pas de credential,
      * reseau coupe) laisse le message « envoye » jusqu'a la reconnexion — l'etat
-     * d'avant #8124, jamais pire. `onMessageReceived` tourne deja hors du fil
-     * principal : l'appel reseau y est permis.
+     * d'avant #8124, jamais pire. `onMessageReceived` et `handleIntent` tournent
+     * deja hors du fil principal : l'appel reseau y est permis.
      */
-    private void acknowledgeDelivery(RemoteMessage message) {
-        PushDeliveryReceipt receipt = PushDeliveryReceipt.of(message.getData(), CallShellStore.apiBase(this));
+    private void acknowledgeDelivery(PushDeliveryReceipt receipt) {
+        if (receipt == null) return;
         String[] header = CallShellStore.credentialHeader(this);
-        if (receipt == null || header == null) return;
+        if (header == null) return;
         HttpURLConnection connection = null;
         try {
             connection = (HttpURLConnection) URI.create(receipt.url).toURL().openConnection();
