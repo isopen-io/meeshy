@@ -83,12 +83,14 @@ final class SkeletonColdStartGuardTests: XCTestCase {
     // MARK: - Bornes
 
     /// Sans elle, la règle passerait au vert en lisant des fichiers vides — le
-    /// mode de panne payé au 256i et rejoué au 257i.
+    /// mode de panne payé au 256i et rejoué au 257i. Le plancher est à 1 000 :
+    /// la cohésion a fait de `ConversationView+Skeleton.swift` un fichier d'un
+    /// seul type (environ 1 200 caractères), entier et non tronqué.
     func test_lesCinqEcransSontBienLusEtNonVides() throws {
         for (screen, _) in Self.matrix {
             let source = try text(atRelativePath: screen)
             XCTAssertGreaterThan(
-                source.count, 2_000,
+                source.count, 1_000,
                 "\(screen) lu vide ou tronqué — la règle ne mesurerait rien"
             )
         }

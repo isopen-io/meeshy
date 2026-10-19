@@ -138,6 +138,13 @@ export type ViewerInteractionsPage = {
 export type ViewerListUniques = {
   readonly uniqueViewCount?: number;
   readonly anonymousUniqueViewCount?: number;
+  /**
+   * Les compteurs AUTORITATIFS relus dans la même lecture que la liste (#11065) :
+   * l'en-tête de la feuille les affiche, jamais l'instantané reçu à l'ouverture,
+   * qui peut être plus vieux que la liste qu'il surmonte.
+   */
+  readonly viewCount?: number;
+  readonly impressionCount?: number;
 };
 
 /**
@@ -147,6 +154,7 @@ export type ViewerListUniques = {
  */
 const VIEWER_LIST_POST_SELECT = {
   id: true, authorId: true, type: true, anonymousViewCount: true, uniqueViewCount: true, anonymousUniqueViewCount: true,
+  viewCount: true, impressionCount: true,
 } as const;
 
 /**
@@ -157,7 +165,7 @@ export const viewerListCounts = (
   result: { readonly anonymousViewCount?: number } & ViewerListUniques,
 ): { readonly anonymousViewCount?: number } & ViewerListUniques =>
   Object.fromEntries(
-    (['anonymousViewCount', 'uniqueViewCount', 'anonymousUniqueViewCount'] as const)
+    (['anonymousViewCount', 'uniqueViewCount', 'anonymousUniqueViewCount', 'viewCount', 'impressionCount'] as const)
       .filter((key) => result[key] !== undefined)
       .map((key) => [key, result[key]]),
   );
@@ -168,9 +176,13 @@ const anonymousViewsOf = (post: { readonly anonymousViewCount?: number | null })
 const uniquesOf = (post: {
   readonly uniqueViewCount?: number | null;
   readonly anonymousUniqueViewCount?: number | null;
+  readonly viewCount?: number | null;
+  readonly impressionCount?: number | null;
 }): Required<ViewerListUniques> => ({
   uniqueViewCount: post.uniqueViewCount ?? 0,
   anonymousUniqueViewCount: post.anonymousUniqueViewCount ?? 0,
+  viewCount: post.viewCount ?? 0,
+  impressionCount: post.impressionCount ?? 0,
 });
 
 /**

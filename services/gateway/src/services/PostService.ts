@@ -6,6 +6,7 @@ import { PostReactionService } from './PostReactionService';
 import type { MobileTranscription } from '../routes/posts/types';
 import { PostAudioService } from './posts/PostAudioService';
 import { NOT_DELETED } from './posts/postIncludes';
+import { STORY_VIEW_RESET } from './posts/postCounters';
 import { readPostViews, readViewerInteractions, type ViewerListRequest } from './posts/viewerEngagement';
 import { claimableMediaWhere, describeClaimShortfall } from './posts/mediaOwnership';
 import { borrowedSoundReelEntries } from './posts/storyReelCompanion';
@@ -1169,8 +1170,7 @@ export class PostService {
       // ce champ dédié est le SEUL horodatage fiable pour que les clients
       // fassent céder leur garde « viewed monotone » après cette édition.
       updateData.contentEditedAt = new Date();
-      updateData.viewCount = 0;
-      updateData.impressionCount = 0;
+      Object.assign(updateData, STORY_VIEW_RESET);
       updateData.reactionCount = 0;
       updateData.likeCount = 0;
       updateData.reactionSummary = {};
@@ -1393,8 +1393,7 @@ export class PostService {
           createdAt: now,
           expiresAt: ephemeralExpiresAt(PostType.STORY, now),
           contentEditedAt: now,
-          viewCount: 0,
-          impressionCount: 0,
+          ...STORY_VIEW_RESET,
           reactionCount: 0,
           likeCount: 0,
           reactionSummary: {},

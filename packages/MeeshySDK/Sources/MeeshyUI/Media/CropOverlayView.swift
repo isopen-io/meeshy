@@ -292,7 +292,7 @@ private struct GridLinesView: View {
 
 // MARK: - Corner Handle Shape
 
-private struct CornerHandleShape: Shape {
+nonisolated private struct CornerHandleShape: Shape {
     let corner: CropOverlayView.CropHandle
 
     func path(in rect: CGRect) -> Path {

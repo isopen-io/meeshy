@@ -143,6 +143,12 @@ describe('PublicationViewersSheet — la liste des lecteurs de MA story', () => 
     expect(host.querySelector('[data-viewers-forbidden]')?.textContent).toBe('Vous n’avez pas accès à la liste de qui a vu cette publication.');
   });
 
+  test('#11065 — le compte RELU avec la liste prime sur l’instantané de l’ouverture : jamais « 2 vues » au-dessus de trois lecteurs', async () => {
+    const host = await mountSheet({ postId: 'st-mienne-compte-relu', viewCount: 2 });
+    expect(host.querySelectorAll('[data-story-viewer]')).toHaveLength(3);
+    expect(host.querySelector('h2')?.textContent).toBe('4 vues');
+  });
+
   test('compte AUTORITATIF absent ⇒ l’en-tête retombe sur la liste servie, jamais « 0 vue » au-dessus de trois lecteurs', async () => {
     const host = await mountSheet({ postId: 'st-mienne', viewCount: null });
     expect(host.querySelector('h2')?.textContent).toBe('3 vues');

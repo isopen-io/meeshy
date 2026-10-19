@@ -199,7 +199,7 @@ internal struct _FullscreenRenderer: View {
                     player: p,
                     gravity: videoGravity,
                     isMuted: engineIsMuted,
-                    enablesPip: _InlineRenderer.surfaceEnablesPip(controls: player.controls),
+                    enablesPip: MeeshyVideoPlayer.surfaceEnablesPip(style: .fullscreen, controls: player.controls),
                     onReadyForDisplay: { surfaceReady = true }
                 )
                     .ignoresSafeArea()
