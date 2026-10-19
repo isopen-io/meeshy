@@ -383,7 +383,8 @@ public struct CommunityCreateView: View {
                     name: user.username,
                     context: .userListItem,
                     avatarURL: user.avatar,
-                    presenceState: user.servedPresence
+                    presenceState: user.servedPresence,
+                    ring: user.avatarRing
                 )
 
                 VStack(alignment: .leading, spacing: 1) {

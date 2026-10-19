@@ -1046,7 +1046,9 @@ struct ConversationMediaGalleryView: View {
                         name: info.senderName,
                         context: .messageBubble,
                         accentColor: info.senderColor,
-                        avatarURL: info.senderAvatarURL
+                        avatarURL: info.senderAvatarURL,
+                        presenceState: info.isMe ? nil : info.senderUserId.map { PresenceManager.shared.presenceState(for: $0) },
+                        ring: info.senderRing
                     )
                 }
             }

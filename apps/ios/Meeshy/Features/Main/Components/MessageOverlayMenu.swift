@@ -690,7 +690,8 @@ struct MessageOverlayMenu: View {
                     context: .recentParticipant,
                     accentColor: color,
                     avatarURL: message.senderAvatarURL,
-                    presenceState: PresenceManager.shared.presenceState(forSenderOf: message)
+                    presenceState: PresenceManager.shared.presenceState(forSenderOf: message),
+                    ring: message.senderRing
                 )
             }
 

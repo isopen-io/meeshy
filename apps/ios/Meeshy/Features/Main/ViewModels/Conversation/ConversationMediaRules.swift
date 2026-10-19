@@ -41,7 +41,9 @@ enum ConversationMediaRules {
             senderAvatarURL: message.senderAvatarURL,
             senderColor: message.senderColor ?? "#999",
             sentAt: message.createdAt,
-            isMe: message.isMe
+            isMe: message.isMe,
+            senderUserId: message.viewingKey,
+            senderRing: message.senderRing
         )
     }
 

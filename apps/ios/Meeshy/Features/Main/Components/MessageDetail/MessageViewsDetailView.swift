@@ -24,6 +24,10 @@ struct MessageViewsDetailView: View {
     @State private var attachmentStatuses: [String: [AttachmentStatusUser]] = [:]
     @State private var isLoadingAttachmentStatuses = false
     @State private var readStatusError: MessageViewsLabels.LoadFailure? = nil
+    /// Les membres connus de la conversation, par identifiant de PARTICIPATION (#10956) : les
+    /// listes de lecture ne servent que celui-là, et c'est ici que se retrouvent le COMPTE de la
+    /// personne (sa présence servie) et son contour équipé (#10946). Lu dans le cache seul.
+    @State private var membersByParticipant: [String: PaginatedParticipant] = [:]
 
     // Views sub-filter — `nil` tant que l'utilisateur n'a rien touché :
     // l'onglet d'ouverture est alors celui que `MessageViewsFilter.initial`
@@ -57,6 +61,7 @@ struct MessageViewsDetailView: View {
         viewsTabContent
             .onAppear {
                 Task {
+                    await loadMembers()
                     await loadSendAttempts()
                     await loadReadStatus()
                     await loadAttachmentStatuses()
@@ -207,7 +212,8 @@ struct MessageViewsDetailView: View {
                     context: .userListItem,
                     accentColor: message.senderColor ?? contactColor,
                     avatarURL: message.senderAvatarURL,
-                    presenceState: message.isMe ? nil : PresenceManager.shared.presenceState(forSenderOf: message)
+                    presenceState: message.isMe ? nil : PresenceManager.shared.presenceState(forSenderOf: message),
+                    ring: message.senderRing
                 )
 
                 VStack(alignment: .leading, spacing: MeeshySpacing.xxs) {
@@ -519,6 +525,7 @@ struct MessageViewsDetailView: View {
                     LazyVStack(spacing: 0) {
                         ForEach(Array(status.receivedBy.enumerated()), id: \.element.participantId) { index, user in
                             userStatusRow(
+                                participantId: user.participantId,
                                 username: user.displayName,
                                 avatar: user.avatarURL,
                                 date: user.receivedAt,
@@ -555,6 +562,7 @@ struct MessageViewsDetailView: View {
                     LazyVStack(spacing: 0) {
                         ForEach(Array(status.readBy.enumerated()), id: \.element.participantId) { index, user in
                             userStatusRow(
+                                participantId: user.participantId,
                                 username: user.displayName,
                                 avatar: user.avatarURL,
                                 date: user.readAt,
@@ -592,6 +600,7 @@ struct MessageViewsDetailView: View {
                     LazyVStack(spacing: 0) {
                         ForEach(Array(notSeen.enumerated()), id: \.element.participantId) { index, user in
                             userStatusRow(
+                                participantId: user.participantId,
                                 username: user.displayName,
                                 avatar: user.avatarURL,
                                 date: nil,
@@ -674,13 +683,15 @@ struct MessageViewsDetailView: View {
         }
     }
 
-    private func userStatusRow(username: String, avatar: String?, date: Date?, accent: Color, index: Int, trailing: AnyView? = nil) -> some View {
+    private func userStatusRow(participantId: String, username: String, avatar: String?, date: Date?, accent: Color, index: Int, trailing: AnyView? = nil) -> some View {
         HStack(spacing: MeeshySpacing.smPlus) {
             MeeshyAvatar(
                 name: username,
                 context: .userListItem,
                 accentColor: contactColor,
-                avatarURL: avatar
+                avatarURL: avatar,
+                presenceState: memberPresence(participantId),
+                ring: membersByParticipant[participantId]?.avatarRing
             )
 
             Text(username)
@@ -772,7 +783,9 @@ struct MessageViewsDetailView: View {
                                 name: user.username,
                                 context: .userListItem,
                                 accentColor: contactColor,
-                                avatarURL: user.avatar
+                                avatarURL: user.avatar,
+                                presenceState: memberPresence(user.participantId),
+                                ring: membersByParticipant[user.participantId]?.avatarRing
                             )
 
                             VStack(alignment: .leading, spacing: 1) {
@@ -939,6 +952,22 @@ struct MessageViewsDetailView: View {
         MessageViewsReadStatusRules.showsSpinner(
             isLoading: isLoadingReadStatus, hasExisting: readStatusData != nil
         )
+    }
+
+    /// La présence servie d'un membre listé, par son COMPTE ; aucune pour un membre inconnu.
+    private func memberPresence(_ participantId: String) -> PresenceState? {
+        membersByParticipant[participantId].map {
+            PresenceManager.shared.resolvedState(userId: $0.userId, isOnline: $0.isOnline, lastActiveAt: $0.lastActiveAt)
+        }
+    }
+
+    private func loadMembers() async {
+        switch await CacheCoordinator.shared.participants.load(for: conversationId) {
+        case .fresh(let members, _), .stale(let members, _):
+            membersByParticipant = Dictionary(members.map { ($0.id, $0) }, uniquingKeysWith: { first, _ in first })
+        case .expired, .empty:
+            return
+        }
     }
 
     private func loadReadStatus(force: Bool = false) async {

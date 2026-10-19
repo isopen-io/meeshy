@@ -576,7 +576,8 @@ struct GlobalSearchView: View {
                 name: result.name,
                 context: .conversationList,
                 avatarURL: result.avatar,
-                presenceState: result.type == .direct ? result.conversation.participantUserId.map { PresenceManager.shared.presenceState(for: $0) } : nil
+                presenceState: result.type == .direct ? result.conversation.participantUserId.map { PresenceManager.shared.presenceState(for: $0) } : nil,
+                ring: result.type == .direct ? result.conversation.participantRing : nil
             )
 
             VStack(alignment: .leading, spacing: MeeshySpacing.xs) {
@@ -716,6 +717,7 @@ struct GlobalSearchView: View {
                 storyState: storyRingResolver?(result.id) ?? .none,
                 moodEmoji: moodEmojiResolver?(result.id),
                 presenceState: presence,
+                ring: result.ring,
                 onViewStory: {
                     presentStoryViewer?(StoryViewerRequest(
                         id: result.id,

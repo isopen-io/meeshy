@@ -18,6 +18,7 @@ protocol ConversationSocketDelegate: AnyObject {
     /// dans ce qu'il a déjà. Aucune requête ne doit partir pour afficher une
     /// frappe — d'où le retour synchrone et l'optionnel assumé.
     func localAvatarURL(forSender userId: String) -> String?
+    func localRing(forSender userId: String) -> ServedProfileDecorItem?
     var lastUnreadMessage: Message? { get set }
     var messageTranslations: [String: [MessageTranslation]] { get set }
     var messageTranscriptions: [String: MessageTranscription] { get set }
@@ -363,7 +364,8 @@ final class ConversationSocketHandler {
         typingUserEntries[id] = TypingParticipant(
             id: id,
             displayName: name,
-            avatarURL: delegate?.localAvatarURL(forSender: id)
+            avatarURL: delegate?.localAvatarURL(forSender: id),
+            ring: delegate?.localRing(forSender: id)
         )
         if !typingUserOrder.contains(id) {
             typingUserOrder.append(id)

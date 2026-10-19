@@ -252,6 +252,7 @@ struct ConversationInfoSheet: View {
                 moodEmoji: otherUserId.flatMap { moodEmojiResolver?($0) },
                 presenceState: otherUserId.map { presenceManager.presenceState(for: $0) },
                 isHere: otherUserId.map { presenceManager.here(userId: $0, conversationId: conversation.id) } ?? .absent,
+                ring: conversation.participantRing,
                 onMoodTap: otherUserId.flatMap { moodTapResolver?($0) }
             )
 
@@ -288,6 +289,7 @@ struct ConversationInfoSheet: View {
             MeeshyAvatar(
                 name: conversation.name,
                 context: .profileBanner,
+                kind: .entity,
                 accentColor: accentColor,
                 avatarURL: conversation.avatar
             )
@@ -606,11 +608,10 @@ struct ConversationInfoSheet: View {
                 moodEmoji: participant.userId.flatMap { moodEmojiResolver?($0) },
                 presenceState: presence,
                 isHere: presenceManager.here(userId: participant.viewingKey, conversationId: conversation.id),
+                // LE CONTOUR DU MEMBRE (#10713) — l'avatar le pose dans son empreinte (#10946).
+                ring: participant.avatarRing,
                 onMoodTap: participant.userId.flatMap { moodTapResolver?($0) }
             )
-            // LE CONTOUR DU MEMBRE (#10713) — dans l'empreinte de l'avatar, sans rien décaler.
-            .avatarRingWithin(ProfileDecorResolver.ring(participant.profileDecor?.avatarRing),
-                              footprint: AvatarContext.userListItem.size)
 
             VStack(alignment: .leading, spacing: MeeshySpacing.xxs) {
                 HStack(spacing: MeeshySpacing.xsPlus) {

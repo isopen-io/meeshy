@@ -208,6 +208,7 @@ extension BubbleStandardLayout {
                 accentHex: contactColor,
                 isDark: isDark,
                 mentionDisplayNames: mentionDisplayNames,
+                authorPresence: quotedAuthorPresence(reply.reference),
                 onQuotedAuthorTap: onQuotedAuthorTap,
                 onQuotedMediaTap: onQuotedMediaTap
             )

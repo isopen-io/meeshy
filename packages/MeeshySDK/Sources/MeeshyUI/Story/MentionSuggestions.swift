@@ -222,7 +222,8 @@ struct MentionSuggestionRow: View {
             MeeshyAvatar(name: user.displayName ?? user.username,
                          context: .userListItem,
                          avatarURL: user.avatar,
-                         presenceState: user.servedPresence)
+                         presenceState: user.servedPresence,
+                         ring: user.avatarRing)
             VStack(alignment: .leading, spacing: 1) {
                 Text(user.displayName ?? user.username)
                     .font(MeeshyFont.relative(MeeshyFont.labelSize, weight: .semibold))

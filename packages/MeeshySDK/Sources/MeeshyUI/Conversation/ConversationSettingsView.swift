@@ -7,6 +7,7 @@ public struct ConversationSettingsView: View {
     @StateObject private var viewModel: ConversationSettingsViewModel
     @ObservedObject private var theme = ThemeManager.shared
     @Environment(\.dismiss) private var dismiss
+    @Environment(\.meeshyPresenceResolver) private var presenceResolver
 
     @State private var avatarItem: PhotosPickerItem? = nil
     @State private var bannerItem: PhotosPickerItem? = nil
@@ -411,7 +412,10 @@ public struct ConversationSettingsView: View {
                 name: displayName,
                 context: .userListItem,
                 accentColor: DynamicColorGenerator.colorForName(displayName),
-                avatarURL: participant.resolvedAvatar
+                avatarURL: participant.resolvedAvatar,
+                presenceState: presenceResolver?(participant.userId ?? participant.id)
+                    ?? participant.isOnline.map { UserPresence(isOnline: $0, lastActiveAt: participant.lastActiveAt).state },
+                ring: participant.avatarRing
             )
             .frame(width: MeeshyControlSize.regular, height: MeeshyControlSize.regular)
             .clipShape(Circle())

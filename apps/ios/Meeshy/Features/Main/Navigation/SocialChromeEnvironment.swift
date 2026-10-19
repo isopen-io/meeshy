@@ -125,6 +125,9 @@ extension View {
             .environment(\.meeshyStoryRingResolver, { story.storyRingState(forUserId: $0) })
             .environment(\.meeshyMoodTapResolver, { status.moodTapHandler(for: $0) })
             .environment(\.meeshyStoryViewerPresent, { storyViewer.present($0) })
+            // #10956 — la présence servie, pour les avatars des vues du SDK (membres, frappe,
+            // notifications) : MeeshyUI ne lit aucun singleton de l'app.
+            .environment(\.meeshyPresenceResolver, { PresenceManager.shared.knownPresenceState(for: $0) })
             // #6085 — le MODÈLE lui-même, pas un résolveur : la porte publie par
             // `publishStoryInBackground`, dont la signature a treize arguments.
             // Les emballer dans une fermeture aurait recopié ici le contrat du

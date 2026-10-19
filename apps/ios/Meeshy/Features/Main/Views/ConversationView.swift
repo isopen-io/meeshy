@@ -1533,8 +1533,9 @@ struct ConversationView: View {
                     // (`MessageListViewController` : présence par expéditeur,
                     // anneau de story sauf pour soi, fiche par le routeur).
                     presence: { message in PresenceManager.shared.presenceState(forSenderOf: message) },
+                    here: { message in PresenceManager.shared.here(userId: message.viewingKey, conversationId: conversation?.id ?? "") },
                     storyRing: { message in
-                        message.isMe ? .none : storyViewModel.storyRingState(forUserId: message.senderId)
+                        message.isMe ? .none : storyViewModel.storyRingState(forUserId: message.viewingKey)
                     },
                     onOpenProfile: { user in
                         router.openProfile(user, inConversation: conversation?.id)
@@ -1956,26 +1957,6 @@ struct ConversationView: View {
         // ne gouverne aucune branche de la section — elle accompagne
         // l'escamotage déjà posé dans la closure `expandedBand`.
         .animation(.easeOut(duration: FocalMetrics.HiddenChrome.easeOut), value: hidesEntireHeaderForScroll)
-    }
-
-    private var typingHeaderBar: some View {
-        HStack(spacing: MeeshySpacing.sm) {
-            ThemedBackButton(color: accentColor, unreadCount: viewModel.otherConversationsUnread) { HapticFeedback.light(); router.pop() }
-            Spacer()
-            ThemedAvatarButton(
-                name: liveConversation?.name ?? "?", color: accentColor, secondaryColor: secondaryColor,
-                isExpanded: false, storyState: headerStoryRingState,
-                avatarURL: liveConversation?.type == .direct ? liveConversation?.participantAvatarURL : liveConversation?.avatar,
-                presenceState: headerPresenceState,
-                moodEmoji: headerMoodEmoji
-            ) {
-                isTyping = false
-                setHeaderExpanded(true)
-            }
-        }
-        .padding(.horizontal, MeeshySpacing.lg)
-        .padding(.top, MeeshySpacing.sm)
-        .transition(.opacity)
     }
 
     private var anonymousHeaderBar: some View {

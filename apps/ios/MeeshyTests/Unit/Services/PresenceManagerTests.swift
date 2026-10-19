@@ -104,19 +104,10 @@ final class PresenceManagerTests: XCTestCase {
         "Main/Views/RootViewComponents.swift": "soi — l'avatar du compte connecté",
         "Main/Views/FeedComposerSheet.swift": "soi — l'avatar du compte connecté",
         "Main/Views/StoryTrayView.swift": "soi — l'avatar du compte connecté",
-        "Main/Components/ConversationInfoSheet.swift": "entité — groupe, communauté, conversation, message sans compte",
-        "Main/Views/ConversationView+Header.swift": "entité — groupe, communauté, conversation, message sans compte",
-        "Main/Views/ConversationGuestHeaderBar.swift": "entité — groupe, communauté, conversation, message sans compte",
         "Main/Views/GlobalSearchView.swift": "entité — groupe, communauté, conversation, message sans compte",
-        "MeeshyUI/Community/CommunityDetailView.swift": "entité — groupe, communauté, conversation, message sans compte",
-        "MeeshyUI/Community/CommunitySettingsView.swift": "entité — groupe, communauté, conversation, message sans compte",
         "MeeshyUI/Profile/UserProfileSheet+ConversationsTab.swift": "entité — groupe, communauté, conversation, message sans compte",
         "Main/Components/ContactCard/ContactCardDetailSheet.swift": "contexte qui ne peint aucun point (showsOnlineDot == false) ou carte de présence séparée",
-        "MeeshyUI/Notifications/NotificationRowView.swift": "contexte qui ne peint aucun point (showsOnlineDot == false) ou carte de présence séparée",
-        "MeeshyUI/Notifications/NotificationToastView.swift": "contexte qui ne peint aucun point (showsOnlineDot == false) ou carte de présence séparée",
-        "Main/Views/TypingIndicatorBubble.swift": "contexte qui ne peint aucun point (showsOnlineDot == false) ou carte de présence séparée",
         "Main/Views/StoryAuthorIdentityCard.swift": "contexte qui ne peint aucun point (showsOnlineDot == false) ou carte de présence séparée",
-        "Main/Views/CallControlsViews.swift": "contexte qui ne peint aucun point (showsOnlineDot == false) ou carte de présence séparée",
         "Contacts/BlockedTab.swift": "bloqué — aucune présence ne se montre",
         "Main/Views/BlockedUsersView.swift": "bloqué — aucune présence ne se montre",
         "Main/Game/Photo/GameAuthorPlateView.swift": "décor, illustration ou son — aucune personne",
@@ -138,12 +129,6 @@ final class PresenceManagerTests: XCTestCase {
         "Stories/Notifications/StoryExpiredContent.swift": "la passerelle ne sert aucune présence à cette charge (non-amis, visiteur, auteur de publication)",
         "Main/Views/NearbyDiscoveryView.swift": "la passerelle ne sert aucune présence à cette charge (non-amis, visiteur, auteur de publication)",
         "Main/Views/AudioFullscreenPage.swift": "la passerelle ne sert aucune présence à cette charge (non-amis, visiteur, auteur de publication)",
-        "Contacts/ContactsShared.swift": "dette consignée #10956 — l'identité de la personne n'arrive pas jusqu'à l'avatar",
-        "Main/Components/MessageDetail/MessageViewsDetailView.swift": "dette consignée #10956 — l'identité de la personne n'arrive pas jusqu'à l'avatar",
-        "Main/Views/Bubble/BubbleQuotedReply.swift": "dette consignée #10956 — l'identité de la personne n'arrive pas jusqu'à l'avatar",
-        "Main/Views/ConversationMediaGalleryView.swift": "dette consignée #10956 — l'identité de la personne n'arrive pas jusqu'à l'avatar",
-        "MeeshyUI/Conversation/ConversationScrollControlsView.swift": "dette consignée #10956 — l'identité de la personne n'arrive pas jusqu'à l'avatar",
-        "MeeshyUI/Conversation/ConversationSettingsView.swift": "dette consignée #10956 — l'identité de la personne n'arrive pas jusqu'à l'avatar",
         "Main/Components/ForwardPickerSheet.swift": "remplacés par l'écran de partage unique (#10947/#10948)",
         "Main/Views/SharePickerView.swift": "remplacés par l'écran de partage unique (#10947/#10948)",
         "Main/Share/ShareSheetView.swift": "écran de partage unique en cours (#10947/#10948) — sa présence est l'affaire de son lot",
@@ -160,7 +145,7 @@ final class PresenceManagerTests: XCTestCase {
             while let url = enumerator?.nextObject() as? URL {
                 guard url.pathExtension == "swift" else { continue }
                 let source = AppSourceGuard.stripComments(try String(contentsOf: url, encoding: .utf8))
-                guard Self.avatarCalls(in: source).contains(where: { !$0.contains("presenceState:") }) else { continue }
+                guard Self.avatarCalls(in: source).contains(where: { !$0.contains("presenceState:") && !$0.contains("kind: .entity") }) else { continue }
                 let relative = String(url.path.dropFirst(repo.path.count + 1))
                 let key = relative.hasPrefix(prefix) ? String(relative.dropFirst(prefix.count)) : relative
                 if Self.avatarsWithoutPresence[key] == nil { offenders.append(key) }

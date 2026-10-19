@@ -1294,8 +1294,8 @@ struct RootView: View {
                     MeeshyAvatar(
                         name: getUserDisplayName(AuthManager.shared.currentUser, fallback: "M"),
                         context: .custom(38),
-                        avatarURL: AuthManager.shared.currentUser?.avatar,
-                        thumbHash: AuthManager.shared.currentUser?.avatarThumbHash
+                        avatarURL: AuthManager.shared.currentUser?.avatar, thumbHash: AuthManager.shared.currentUser?.avatarThumbHash,
+                        ring: AuthManager.shared.currentUser?.profileDecor?.avatarRing
                     )
                     .allowsHitTesting(false)
 

@@ -194,6 +194,10 @@ struct RiverBubbleIdentity: Equatable {
     let profileUser: ProfileSheetUser
     /// Compte de l'auteur — la story s'ouvre par lui ; `nil` pour un visiteur.
     let userId: String?
+    /// L'auteur a l'écran de cette conversation ouvert (#8892, #10956).
+    var isHere: ConversationHere = .absent
+    /// Son contour équipé, la référence servie avec le message (#10946).
+    var ring: ServedProfileDecorItem? = nil
 }
 
 // MARK: - Contour de groupe — une forme PURE, éprouvée sans monter la vue
@@ -856,6 +860,8 @@ struct RiverBubbleView: View, Equatable {
                 avatarURL: identity.avatarURL,
                 storyState: identity.storyRing,
                 presenceState: identity.presence,
+                isHere: identity.isHere,
+                ring: identity.ring,
                 enablePulse: false,
                 isDark: isDark,
                 onViewStory: identity.userId.flatMap { userId in

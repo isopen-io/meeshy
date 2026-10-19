@@ -141,6 +141,10 @@ struct ThemedAvatarButton: View {
     var avatarURL: String? = nil
     var presenceState: PresenceState? = nil
     var moodEmoji: String? = nil
+    /// Le pair a l'écran de cette conversation ouvert (#8892).
+    var isHere: ConversationHere = .absent
+    /// Le contour équipé du pair, la référence servie (#10946).
+    var ring: ServedProfileDecorItem? = nil
     let action: () -> Void
     @State private var isPressed = false
 
@@ -160,7 +164,9 @@ struct ThemedAvatarButton: View {
                 avatarURL: avatarURL,
                 storyState: storyState,
                 moodEmoji: moodEmoji,
-                presenceState: presenceState
+                presenceState: presenceState,
+                isHere: isHere,
+                ring: ring
             )
             .shadow(color: Color(hex: color).opacity(isExpanded ? 0.6 : 0.4), radius: isExpanded ? 12 : 8, y: 3)
             .scaleEffect(isPressed ? 0.9 : (isExpanded ? 1.1 : 1))

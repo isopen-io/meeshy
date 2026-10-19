@@ -601,7 +601,7 @@ extension MessageListViewController {
                     senderStoryRing: senderRingState,
                     senderMoodEmoji: statuses.statusForUser(userId: senderId)?.moodEmoji,
                     senderIsAnonymous: message.senderIsAnonymous,
-                    senderRing: isMine ? nil : ProfileDecorResolver.ring(message.senderRing),
+                    senderRing: isMine ? nil : message.senderRing,
                     accentHex: accent,
                     isDark: dark,
                     isDirect: direct,

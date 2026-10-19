@@ -302,15 +302,14 @@ struct ParticipantsView: View {
                 context: .userListItem,
                 accentColor: color,
                 avatarURL: participant.avatar,
-                moodEmoji: statusViewModel.statusForUser(userId: participant.id)?.moodEmoji,
+                moodEmoji: statusViewModel.statusForUser(userId: participant.viewingKey)?.moodEmoji,
                 presenceState: presence,
                 isHere: presenceManager.here(userId: participant.viewingKey, conversationId: conversationId),
-                onMoodTap: statusViewModel.moodTapHandler(for: participant.id)
+                // LE CONTOUR DU MEMBRE (#10713) — l'avatar le pose dans son empreinte (#10946).
+                ring: participant.avatarRing,
+                onMoodTap: statusViewModel.moodTapHandler(for: participant.viewingKey)
             )
-            // LE CONTOUR DU MEMBRE (#10713) — dans l'empreinte de l'avatar, sans rien décaler.
-            .avatarRingWithin(ProfileDecorResolver.ring(participant.profileDecor?.avatarRing),
-                              footprint: AvatarContext.userListItem.size)
-            .countsImpression(of: statusViewModel.statusForUser(userId: participant.id)?.id) {
+            .countsImpression(of: statusViewModel.statusForUser(userId: participant.viewingKey)?.id) {
                 statusViewModel.trackImpression($0)
             }
 

@@ -126,7 +126,8 @@ nonisolated enum LivingSummaryAssembly {
                     displayName: message.senderName ?? message.senderUsername ?? message.senderId,
                     avatarURL: message.senderAvatarURL,
                     colorHex: message.senderColor ?? "#31B6BA",
-                    presence: PresenceManager.shared.presenceState(forSenderOf: message)
+                    presence: PresenceManager.shared.presenceState(forSenderOf: message),
+                    ring: message.senderRing
                 )
             )
         }
