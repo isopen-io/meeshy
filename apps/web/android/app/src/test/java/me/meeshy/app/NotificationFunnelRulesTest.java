@@ -166,4 +166,24 @@ public class NotificationFunnelRulesTest {
         assertNull(NotificationFunnelRules.openedLine(push("notificationId", "x"), AT, () -> "id-0"));
         assertNull(NotificationFunnelRules.openedLine(push(), AT, () -> "id-0"));
     }
+
+    // #11054 — le systeme ne montre pas la banniere : `received` seule, comme `noterReception` sur le web.
+
+    @Test
+    public void aBannerTheSystemHidesIsNotCountedDisplayed() {
+        assertTrue(NotificationFunnelRules.systemShows(true, 4));
+        assertTrue(NotificationFunnelRules.systemShows(true, null));
+        assertFalse(NotificationFunnelRules.systemShows(false, 4));
+        assertFalse(NotificationFunnelRules.systemShows(true, 0));
+    }
+
+    @Test
+    public void theChannelIsReadFromThePushWithTheManifestDefault() {
+        assertEquals("meeshy_notifications_silent",
+            NotificationFunnelRules.channelOf(push("gcm.notification.android_channel_id", "meeshy_notifications_silent")));
+        assertEquals("meeshy_notifications_silent",
+            NotificationFunnelRules.channelOf(push("gcm.n.android_channel_id", "meeshy_notifications_silent")));
+        assertEquals(NotificationFunnelRules.DEFAULT_CHANNEL, NotificationFunnelRules.channelOf(push()));
+        assertEquals("meeshy_notifications", NotificationFunnelRules.DEFAULT_CHANNEL);
+    }
 }
