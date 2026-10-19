@@ -59,4 +59,12 @@ extension ConversationSocketHandlerTests {
             }
         }
     }
+
+    /// Barrière des témoins NÉGATIFS depuis que les puits relaient vers une file
+    /// ordonnée (#11047) : la file principale ne dit plus rien de la file du
+    /// handler. Sans cette attente, un témoin négatif passerait à vide.
+    func drainEvents(of sut: ConversationSocketHandler) async {
+        await drainMainQueue()
+        await sut.awaitPendingSocketEvents()
+    }
 }
