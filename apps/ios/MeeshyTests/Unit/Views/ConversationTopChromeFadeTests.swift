@@ -120,9 +120,10 @@ final class ConversationTopChromeFadeTests: XCTestCase {
             "cette bande ne montre que le fond, une couleur unie jusqu'au bord. " +
             "Bords déclarés : `\(edges.trimmingCharacters(in: .whitespacesAndNewlines))`."
         )
+        let hostSource = try conversationViewSource()
         XCTAssertTrue(
             listBlock.contains("topInset: insets.top")
-                && (try conversationViewSource()).contains("top: previewMode ? 0 : windowInsets.top"),
+                && hostSource.contains("top: previewMode ? 0 : windowInsets.top"),
             "Sous `ignoresSafeArea`, ni le GeometryReader ni le contrôleur " +
             "hébergé ne connaissent l'inset haut : il doit venir de la fenêtre."
         )
