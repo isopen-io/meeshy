@@ -14,14 +14,14 @@ import { RankBlason } from './game/rank-blason';
  * rang à droite » ; #10601 — directive porteur 2026-10-14 : aux deux ANGLES BAS,
  * le bas du cadre épousant la limite basse de la bannière, des fonds allégés).
  *
- *   · à l'angle bas du DÉBUT (gauche ; droite en RTL) : le nom du palier
- *     au-dessus du cercle — qui porte le niveau, sa progression et le
- *     prestige — et à droite les étincelles en grand, par leur glyphe
- *     (« ✦ 18 347 » — porteur 2026-10-19, #10951) ; le record et ce qu'il
- *     manque vivent dans le libellé d'accessibilité ;
- *   · à l'angle bas de la FIN : la Gloire (« ♛ 18 790 »), puis le blason du
- *     rang, son nom ET sa division dessous (« Murmure V ») — la Gloire fait le
- *     rang, elle se lit à côté de lui.
+ *   · à l'angle bas du DÉBUT (gauche ; droite en RTL), en colonne : le nom du
+ *     palier, le cercle — qui porte le niveau, sa progression et le prestige —
+ *     puis les étincelles dessous, par leur glyphe (« ✦ 18 347 » — porteur
+ *     2026-10-19, #10951) ; le record et ce qu'il manque vivent dans le
+ *     libellé d'accessibilité ;
+ *   · à l'angle bas de la FIN, en colonne : la Gloire (« ♛ 18 790 »)
+ *     au-dessus du blason du rang, son nom ET sa division dessous
+ *     (« Murmure V ») — la Gloire fait le rang, elle le coiffe.
  *
  * Chaque cadre a les coins HAUTS arrondis et les coins BAS carrés, posés sur le
  * bord bas : la découpe de la bannière (`overflow-hidden rounded-card`) taille
@@ -30,9 +30,7 @@ import { RankBlason } from './game/rank-blason';
  * le texte blanc porte une ombre courte qui le tient lisible sur une bannière
  * claire, comme iOS (`GameBannerBadgeView`). L'avatar chevauche le MILIEU du
  * bas de la bannière : les deux cadres prennent chacun la moitié de ce qu'il
- * laisse (`AVATAR_CLEARANCE`) et la même hauteur, quel que soit leur contenu ;
- * sur une bannière étroite (gabarit 320), les étincelles passent SOUS le
- * cercle et la Gloire SOUS le blason plutôt que de se tronquer à côté.
+ * laisse (`AVATAR_CLEARANCE`) et la même hauteur, quel que soit leur contenu.
  *
  * Seulement ce qui est servi : sur la fiche d'un autre, la progression n'est
  * jamais servie et les points ne le sont qu'aux amis — absents, rien ne se
@@ -113,30 +111,30 @@ export function GameProfileBanner({ standing }: { readonly standing: BannerStand
       className="@container pointer-events-none absolute flex items-stretch justify-between"
       style={{ insetInlineStart: 0, insetInlineEnd: 0, bottom: 0 }}
     >
-      <div data-profile-banner-level="" role="img" aria-label={levelLabel(standing, language)} className={`${GROUP} ${LEVEL_CORNERS} items-center gap-2 @max-[340px]:flex-col @max-[340px]:items-start @max-[340px]:gap-0.5`} style={GROUP_STYLE}>
-        <span aria-hidden="true" className="flex shrink-0 flex-col items-center gap-0.5">
-          <span data-profile-banner-level-name="" className="text-mini font-semibold leading-none">
-            {levelTierName(tier, language)}
-          </span>
+      <div data-profile-banner-level="" role="img" aria-label={levelLabel(standing, language)} className={`${GROUP} ${LEVEL_CORNERS} flex-col items-center justify-center gap-0.5`} style={GROUP_STYLE}>
+        <span aria-hidden="true" data-profile-banner-level-name="" className="max-w-full truncate text-mini font-semibold leading-none">
+          {levelTierName(tier, language)}
+        </span>
+        <span aria-hidden="true" className="shrink-0">
           <LevelRing level={level} tier={tier} progress={progress} size={40} prestige={prestige} />
         </span>
         {points === null ? null : (
-          <span aria-hidden="true" data-profile-banner-points={points} className="min-w-0 truncate text-section font-bold leading-tight tabular-nums">
+          <span aria-hidden="true" data-profile-banner-points={points} className="max-w-full truncate text-body font-bold leading-tight tabular-nums">
             {glyphAmount(SPARK_GLYPH, points, language)}
           </span>
         )}
       </div>
-      <div data-profile-banner-rank="" role="img" aria-label={rankLabel(standing, language)} className={`${GROUP} ${RANK_CORNERS} items-center justify-center gap-2 @max-[340px]:flex-col @max-[340px]:items-end @max-[340px]:gap-0.5`} style={GROUP_STYLE}>
+      <div data-profile-banner-rank="" role="img" aria-label={rankLabel(standing, language)} className={`${GROUP} ${RANK_CORNERS} flex-col items-center justify-center gap-0.5`} style={GROUP_STYLE}>
         {glory === null ? null : (
-          <span aria-hidden="true" data-profile-banner-glory={glory} className="min-w-0 truncate text-body font-bold leading-tight tabular-nums">
+          <span aria-hidden="true" data-profile-banner-glory={glory} className="max-w-full truncate text-body font-bold leading-tight tabular-nums">
             {glyphAmount(GLORY_GLYPH, glory, language)}
           </span>
         )}
-        <span aria-hidden="true" className="flex min-w-0 shrink-0 flex-col items-center justify-end">
+        <span aria-hidden="true" className="shrink-0">
           <RankBlason rank={rank} division={division} mythic={mythic} level={level} size={34} label={rankName(rank, language)} />
-          <span data-profile-banner-rank-name="" className="max-w-full truncate text-check font-semibold">
-            {rankLine}
-          </span>
+        </span>
+        <span aria-hidden="true" data-profile-banner-rank-name="" className="max-w-full truncate text-check font-semibold">
+          {rankLine}
         </span>
       </div>
     </div>

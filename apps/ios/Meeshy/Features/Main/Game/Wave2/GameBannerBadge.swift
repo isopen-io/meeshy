@@ -161,7 +161,7 @@ struct GameBannerBadgeView: View {
             // posé APRÈS le cadre le couvre en entier.
             HStack(alignment: .bottom, spacing: 0) {
                 levelGroup
-                    .frame(maxWidth: .infinity, maxHeight: .infinity, alignment: .leading)
+                    .frame(maxWidth: .infinity, maxHeight: .infinity, alignment: .bottom)
                     .glassGroup(corners: Self.roundedCorners(for: .level, direction: layoutDirection))
                     .frame(width: side)
                     .accessibilityElement(children: .ignore)
@@ -183,36 +183,31 @@ struct GameBannerBadgeView: View {
         .dynamicTypeSize(...DynamicTypeSize.xxLarge)
     }
 
-    /// Le nom du palier au-dessus du cercle, et à droite les étincelles en grand (porteur 2026-10-19, #10951).
+    /// En colonne : le nom du palier, le cercle, puis les étincelles dessous (porteur 2026-10-19, #10951).
     private var levelGroup: some View {
-        HStack(alignment: .center, spacing: MeeshySpacing.xs) {
-            VStack(spacing: MeeshySpacing.xxs) {
-                small(model.levelName)
-                LevelRingView(
-                    level: model.level, progress: model.levelProgress, tier: model.tier, prestige: model.prestige,
-                    trackColor: Color.white.opacity(MeeshyOpacity.light), inkColor: .black, accessibilityLabel: nil
-                )
-                .frame(width: emblemSize, height: model.prestige > 0 ? emblemSize * 66 / 56 : emblemSize)
-            }
-            .fixedSize()
+        VStack(spacing: MeeshySpacing.xxs) {
+            small(model.levelName)
+            LevelRingView(
+                level: model.level, progress: model.levelProgress, tier: model.tier, prestige: model.prestige,
+                trackColor: Color.white.opacity(MeeshyOpacity.light), inkColor: .black, accessibilityLabel: nil
+            )
+            .frame(width: emblemSize, height: model.prestige > 0 ? emblemSize * 66 / 56 : emblemSize)
             if let pocketText = model.pocketText {
-                amount(pocketText, size: MeeshyFont.titleSize)
+                amount(pocketText, size: MeeshyFont.bodySize)
             }
         }
     }
 
-    /// La Gloire, puis le blason du rang, son nom et sa division dessous (porteur 2026-10-19, #10951).
+    /// En colonne : la Gloire au-dessus du blason du rang, son nom et sa division dessous (porteur 2026-10-19, #10951).
     private var rankGroup: some View {
-        HStack(alignment: .center, spacing: MeeshySpacing.xs) {
+        VStack(spacing: MeeshySpacing.xxs) {
             if let gloryText = model.gloryText {
                 amount(gloryText, size: MeeshyFont.bodySize)
             }
-            VStack(spacing: MeeshySpacing.xxs) {
-                RankBlasonView(rank: model.rank, division5: model.division, level: model.level,
-                               mythic: model.mythic, title: nil, figures: nil)
-                    .frame(width: emblemSize * 1.1, height: emblemSize * 1.1 * 0.93)
-                caption(model.rankName)
-            }
+            RankBlasonView(rank: model.rank, division5: model.division, level: model.level,
+                           mythic: model.mythic, title: nil, figures: nil)
+                .frame(width: emblemSize * 1.1, height: emblemSize * 1.1 * 0.93)
+            caption(model.rankName)
         }
     }
 
