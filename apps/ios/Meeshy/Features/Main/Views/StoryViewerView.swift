@@ -215,9 +215,15 @@ struct StoryViewerView: View {
     @State var contentOpacity: Double = 1 // internal for cross-file extension access
 
     // Outgoing layer for true cross-dissolve (old stays visible while new fades in)
-    // `@Indirect` : un `StoryItem` en ligne faisait passer la vue au-dessus du
+    // `Indirect` : un `StoryItem` en ligne faisait passer la vue au-dessus du
     // budget de `ConversationViewValueSizeGuardTests` (8 208 > 8 192 octets).
-    @State @Indirect var outgoingStory: StoryItem? = nil // internal for cross-file extension access
+    // Porté comme VALEUR de l'état, pas en seconde enveloppe : depuis le SDK
+    // iOS 27, `@State` est une macro, qui ne se compose plus avec `@Indirect`.
+    @State private var outgoingStoryCell = Indirect<StoryItem?>(wrappedValue: nil)
+    var outgoingStory: StoryItem? { // internal for cross-file extension access
+        get { outgoingStoryCell.wrappedValue }
+        nonmutating set { outgoingStoryCell = Indirect(wrappedValue: newValue) }
+    }
     @State var outgoingOpacity: Double = 0 // internal for cross-file extension access
 
     // Transition lock — prevents overlapping animations

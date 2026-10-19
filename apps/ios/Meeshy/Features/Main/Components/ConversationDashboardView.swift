@@ -634,7 +634,7 @@ private struct ArcGauge: View {
     }
 }
 
-private struct ArcShape: Shape {
+nonisolated private struct ArcShape: Shape {
     let startAngle: Angle
     let endAngle: Angle
 

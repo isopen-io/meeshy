@@ -211,7 +211,7 @@ struct RiverBubbleIdentity: Equatable {
 ///
 /// Directive produit 2026-08-22 : « bordure jointe en pointillé et partagée,
 /// non pas des bordures fermées puis des pointillés en plus ».
-struct RiverBubbleOutline: Shape {
+nonisolated struct RiverBubbleOutline: Shape {
     let position: RiverGroupPosition
     let cornerRadius: CGFloat
     let lineWidth: CGFloat
