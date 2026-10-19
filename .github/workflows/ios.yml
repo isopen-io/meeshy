@@ -335,6 +335,12 @@ jobs:
       - name: Le project.pbxproj committé reste lisible par Xcode
         run: bash apps/ios/scripts/check_pbxproj_quoting.sh
 
+      # Le pbxproj COMMITTÉ ne doit référencer aucun fichier supprimé et doit
+      # porter l'isolation nonisolated des extensions : la CI régénère le projet
+      # et ne voit pas l'écart que subissent meeshy.sh et fastlane (lot 03).
+      - name: Le project.pbxproj committé reste cohérent avec le dépôt et project.yml
+        run: bash apps/ios/scripts/check_pbxproj_consistency.sh
+
       # Le budget de 1 000 lignes par fichier se satisfait en coupant en
       # `Type+X.swift` : le type et sa fonction de 400 lignes restent entiers.
       # Ce cliquet mesure la COHÉSION (fonction <= 80 lignes, type <= 1 500 en

@@ -2320,7 +2320,6 @@
 		A4FF3F066E6916720739E98E /* StoryReaderBackground.swift in Sources */ = {isa = PBXBuildFile; fileRef = 43EAF66DE9ABCE0447AD7C72 /* StoryReaderBackground.swift */; };
 		A50AA0FD1B09C75252B5310F /* SyncPillLabelsTests.swift in Sources */ = {isa = PBXBuildFile; fileRef = DE21574E0510D0882A27C14D /* SyncPillLabelsTests.swift */; };
 		A50B2ECE04C7ED4C6C5098DE /* MessageEffectPerimeterGuardTests.swift in Sources */ = {isa = PBXBuildFile; fileRef = FA63A7B87A0305EF382D0164 /* MessageEffectPerimeterGuardTests.swift */; };
-		A510626896005C79F0B00E50 /* LiveActivities.swift in Sources */ = {isa = PBXBuildFile; fileRef = E2B877AC6F49F9D289DF9A84 /* LiveActivities.swift */; };
 		A526080C290DAA4A4D9C4A85 /* BubbleDeliveryCheck.swift in Sources */ = {isa = PBXBuildFile; fileRef = 05328BB6B8343F9BFE1EF1AE /* BubbleDeliveryCheck.swift */; };
 		A52EDA6714A784DB436D6268 /* ThreadedCommentSection.swift in Sources */ = {isa = PBXBuildFile; fileRef = 703B050E15C17565B374FE0C /* ThreadedCommentSection.swift */; };
 		A53254F5767B80B4E3432559 /* CallFeedbackService.swift in Sources */ = {isa = PBXBuildFile; fileRef = 82FFB1CE78DBAB1986BBF5B0 /* CallFeedbackService.swift */; };
@@ -6857,7 +6856,6 @@
 		E26B7E339E6A64060E800EC7 /* ComposerCaptureSession.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = ComposerCaptureSession.swift; sourceTree = "<group>"; };
 		E28271C0D923B9754CC66170 /* ProfileUserPostsViewModelTests.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = ProfileUserPostsViewModelTests.swift; sourceTree = "<group>"; };
 		E2988EF913B1C630307D5997 /* MessageLanguageDetailView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = MessageLanguageDetailView.swift; sourceTree = "<group>"; };
-		E2B877AC6F49F9D289DF9A84 /* LiveActivities.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = LiveActivities.swift; sourceTree = "<group>"; };
 		E2D74474010728187C4235C9 /* ComposerSceneSoundHeaderTests.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = ComposerSceneSoundHeaderTests.swift; sourceTree = "<group>"; };
 		E2FA9BF0227D0D68D46340E8 /* StoryReactionStripGestureTests.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = StoryReactionStripGestureTests.swift; sourceTree = "<group>"; };
 		E31107899886A7C1866EAFE5 /* CallCaptureControllerTests.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = CallCaptureControllerTests.swift; sourceTree = "<group>"; };
@@ -7361,7 +7359,6 @@
 				BF479B93D688C488F5D4760C /* CallActivityAttributes.swift */,
 				9776950F1670772D58BAEB4D /* CallLiveActivity.swift */,
 				170DBAB52845E566028FB4C3 /* Info.plist */,
-				E2B877AC6F49F9D289DF9A84 /* LiveActivities.swift */,
 				30FB06EC921F79C8305CD7E5 /* LiveActivityCommandIntent.swift */,
 				4E89897F6E8EA5923C2169CD /* LiveActivityStyle.swift */,
 				B605B59D0BA88C2403EB9F9A /* Localizable.xcstrings */,
@@ -12333,7 +12330,6 @@
 			files = (
 				FF0AB3D4113EC45B768C46CF /* CallActivityAttributes.swift in Sources */,
 				AEAE12FCFB5F855DB6BA5C3D /* CallLiveActivity.swift in Sources */,
-				A510626896005C79F0B00E50 /* LiveActivities.swift in Sources */,
 				7B818F19290D5B1E40C08E49 /* LiveActivityCommandIntent.swift in Sources */,
 				BCA938F4C2941BAC0C47CEF6 /* LiveActivityStyle.swift in Sources */,
 				8D3D149FBF206A5F95501A96 /* LiveActivityAvatarStore.swift in Sources */,
@@ -16159,6 +16155,7 @@
 		3342AA586E88D39D56382736 /* Debug */ = {
 			isa = XCBuildConfiguration;
 			buildSettings = {
+				SWIFT_DEFAULT_ACTOR_ISOLATION = nonisolated;
 				CODE_SIGN_ENTITLEMENTS = MeeshyWidgets/MeeshyWidgets.entitlements;
 				CODE_SIGN_STYLE = Automatic;
 				INFOPLIST_FILE = MeeshyWidgets/Info.plist;
@@ -16253,6 +16250,7 @@
 		435FF554EC4421FD88F1B8F2 /* Release */ = {
 			isa = XCBuildConfiguration;
 			buildSettings = {
+				SWIFT_DEFAULT_ACTOR_ISOLATION = nonisolated;
 				CODE_SIGN_ENTITLEMENTS = MeeshyBroadcastExtension/MeeshyBroadcastExtension.entitlements;
 				CODE_SIGN_STYLE = Automatic;
 				INFOPLIST_FILE = MeeshyBroadcastExtension/Info.plist;
@@ -16271,6 +16269,7 @@
 		45D3F0EF04876EFCACC7E6B4 /* Release */ = {
 			isa = XCBuildConfiguration;
 			buildSettings = {
+				SWIFT_DEFAULT_ACTOR_ISOLATION = nonisolated;
 				CODE_SIGN_ENTITLEMENTS = MeeshyWidgets/MeeshyWidgets.entitlements;
 				CODE_SIGN_STYLE = Automatic;
 				INFOPLIST_FILE = MeeshyWidgets/Info.plist;
@@ -16397,6 +16396,7 @@
 		9448EE8595529006EFFBB29A /* Release */ = {
 			isa = XCBuildConfiguration;
 			buildSettings = {
+				SWIFT_DEFAULT_ACTOR_ISOLATION = nonisolated;
 				CODE_SIGN_ENTITLEMENTS = MeeshyNotificationExtension/MeeshyNotificationExtension.entitlements;
 				CODE_SIGN_STYLE = Automatic;
 				INFOPLIST_FILE = MeeshyNotificationExtension/Info.plist;
@@ -16415,6 +16415,7 @@
 		CE1E7BF80CA52656A5843F7A /* Debug */ = {
 			isa = XCBuildConfiguration;
 			buildSettings = {
+				SWIFT_DEFAULT_ACTOR_ISOLATION = nonisolated;
 				CODE_SIGN_ENTITLEMENTS = MeeshyBroadcastExtension/MeeshyBroadcastExtension.entitlements;
 				CODE_SIGN_STYLE = Automatic;
 				INFOPLIST_FILE = MeeshyBroadcastExtension/Info.plist;
@@ -16454,6 +16455,7 @@
 		F2E78886D05FFD14CD8B6F94 /* Debug */ = {
 			isa = XCBuildConfiguration;
 			buildSettings = {
+				SWIFT_DEFAULT_ACTOR_ISOLATION = nonisolated;
 				CODE_SIGN_ENTITLEMENTS = MeeshyNotificationExtension/MeeshyNotificationExtension.entitlements;
 				CODE_SIGN_STYLE = Automatic;
 				INFOPLIST_FILE = MeeshyNotificationExtension/Info.plist;
