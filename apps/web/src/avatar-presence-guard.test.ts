@@ -89,7 +89,6 @@ const EXEMPTIONS: readonly Exemption[] = [
     combien: 1,
     pourquoi: 'les arrivées d’un lien sont rangées par `participantId`, pas par compte — aucune clé de présence',
   },
-  { fichier: 'components/send-sheet-parts.tsx', combien: 1, pourquoi: 'remplacés par l’écran de partage unique (#10947/#10948)' },
 ];
 
 /** Un composant qui RÉPAND ses props dans `Avatar` ne choisit rien : son hôte choisit. */
