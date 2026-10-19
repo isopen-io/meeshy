@@ -4,6 +4,7 @@ import Metal
 import os
 import MeeshySDK
 
+// unchecked: deux `let` immuables ; MTLDevice et MTLCommandQueue sont documentés thread-safe par Apple mais non Sendable dans le SDK.
 public struct StoryMetalBackend: @unchecked Sendable {
     public nonisolated let device: MTLDevice
     public nonisolated let commandQueue: MTLCommandQueue
