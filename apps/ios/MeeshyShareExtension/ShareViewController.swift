@@ -187,10 +187,11 @@ final class ShareViewController: UIViewController {
     private static func extractContent(_ providers: [NSItemProvider]) async -> String? {
         let payloads = await withTaskGroup(of: (index: Int, payload: ShareProviderPayload).self) { group in
             for (index, provider) in providers.enumerated() {
+                let handoff = ShareProviderHandoff(provider: provider)
                 if provider.hasItemConformingToTypeIdentifier(UTType.url.identifier) {
-                    group.addTask { (index, .url(await loadURL(from: provider))) }
+                    group.addTask { (index, .url(await loadURL(from: handoff.provider))) }
                 } else if provider.hasItemConformingToTypeIdentifier(UTType.text.identifier) {
-                    group.addTask { (index, .text(await loadText(from: provider))) }
+                    group.addTask { (index, .text(await loadText(from: handoff.provider))) }
                 }
             }
             var collected: [(index: Int, payload: ShareProviderPayload)] = []
@@ -258,8 +259,9 @@ final class ShareViewController: UIViewController {
         let results = await withTaskGroup(of: ShareStagingResult.self) { group in
             for (index, provider) in fileProviders.enumerated() {
                 guard let typeIdentifier = provider.registeredTypeIdentifiers.first else { continue }
+                let handoff = ShareProviderHandoff(provider: provider)
                 group.addTask {
-                    await stage(provider, typeIdentifier: typeIdentifier, index: index, mediaRoot: mediaRoot, shareId: shareId)
+                    await stage(handoff.provider, typeIdentifier: typeIdentifier, index: index, mediaRoot: mediaRoot, shareId: shareId)
                 }
             }
             var collected: [ShareStagingResult] = []
@@ -317,4 +319,11 @@ final class ShareViewController: UIViewController {
             return .failure(.copyFailed(error.localizedDescription))
         }
     }
+}
+
+/// `NSItemProvider` n'est pas `Sendable`, mais son chargement (`loadItem`) se fait
+/// depuis n'importe quel fil. Chaque tâche du groupe reçoit SON fournisseur, que
+/// rien d'autre ne touche pendant le chargement : le transfert ne partage rien.
+private nonisolated struct ShareProviderHandoff: @unchecked Sendable {
+    let provider: NSItemProvider
 }
