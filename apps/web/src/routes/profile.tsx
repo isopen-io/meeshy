@@ -264,7 +264,7 @@ export default function ProfileScreen() {
     if (outcome.status === 'error') setNotice({ text: translateProfileDecor(language, 'profileDecor.error') });
   };
 
-  const decorLabel = (item: ServedProfileDecorItem | null | undefined, table: 'designs' | 'rings'): string | null =>
+  const decorLabel = (item: ServedProfileDecorItem | null | undefined, table: 'designs' | 'rings' | 'frames'): string | null =>
     item === null || item === undefined ? null : (decorNames?.[table][item.item] ?? item.item);
 
   const openSheetRank = PRISM_RANKS.find((entry) => entry.rank === openRank);
@@ -350,7 +350,11 @@ export default function ProfileScreen() {
                     {decorServed && decorReady ? (
                       <DecorEntries
                         language={language}
-                        names={{ banner: decorLabel(profile.profileDecor?.banner, 'designs'), avatarRing: decorLabel(profile.profileDecor?.avatarRing, 'rings') }}
+                        names={{
+                          banner: decorLabel(profile.profileDecor?.banner, 'designs'),
+                          bannerFrame: decorLabel(profile.profileDecor?.bannerFrame, 'frames'),
+                          avatarRing: decorLabel(profile.profileDecor?.avatarRing, 'rings'),
+                        }}
                         disabled={!online}
                         onOpen={setDecorSide}
                       />

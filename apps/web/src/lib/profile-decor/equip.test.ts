@@ -89,6 +89,36 @@ describe('équiper un contour', () => {
   });
 });
 
+describe('équiper un cadre de bannière (#10936)', () => {
+  const frame = (item: string): ServedProfileDecorItem => ({ pack: 'cadres-celte', item, origin: 'builtin', contract: null });
+
+  test('le cadre se pose avant la réponse, la réponse fait foi, et rien d’autre ne bouge', async () => {
+    let during: ServedProfileDecor | undefined;
+    const { client, deps, seen } = setup(profile({ avatarRing: ring('perle'), banner: banner('aurore'), bannerFrame: null }), async (_request, seenDecor) => {
+      during = seenDecor();
+      return { ok: true, data: { avatarRing: ring('perle'), banner: banner('aurore'), bannerFrame: frame('celte') } };
+    });
+    const outcome = await equipProfileDecor({ queryClient: client, deps, side: 'bannerFrame', choice: frame('celte') });
+    expect(during?.bannerFrame?.item).toBe('celte');
+    expect(outcome).toEqual({ status: 'saved' });
+    expect(seen[0]?.body).toEqual({ bannerFrame: { pack: 'cadres-celte', item: 'celte' } });
+    expect(decorOf(client)).toEqual({ avatarRing: ring('perle'), banner: banner('aurore'), bannerFrame: frame('celte') });
+  });
+
+  test('un refus rétablit le cadre d’avant', async () => {
+    const { client, deps } = setup(profile({ avatarRing: null, banner: null, bannerFrame: frame('celte') }), async () => ({ ok: false, status: 403, error: 'no', code: 'PACK_NOT_OWNED' }));
+    expect(await equipProfileDecor({ queryClient: client, deps, side: 'bannerFrame', choice: frame('celte-anime') })).toEqual({ status: 'refused', code: 'PACK_NOT_OWNED' });
+    expect(decorOf(client)?.bannerFrame?.item).toBe('celte');
+  });
+
+  test('un cadre posé sur un autre appareil arrive par l’événement', () => {
+    const client = new QueryClient();
+    client.setQueryData(MY_PROFILE_QUERY_KEY, profile({ avatarRing: null, banner: null, bannerFrame: null }));
+    applyProfileDecorEvent(client, { userId: 'u1', decor: { avatarRing: null, banner: null, bannerFrame: frame('celte') } });
+    expect(decorOf(client)?.bannerFrame?.item).toBe('celte');
+  });
+});
+
 describe('le décor équipé sur un autre appareil', () => {
   test('profile:decor-updated met mon profil à jour', () => {
     const { client } = setup(profile({ avatarRing: null, banner: null }), async () => ({ ok: true, data: {} }));

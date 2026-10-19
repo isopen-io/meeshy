@@ -114,12 +114,15 @@ describe('le profil d’un autre', () => {
   });
 });
 
-describe('les entrées Bannière et Contour', () => {
-  const names = { banner: 'Aurore', avatarRing: null };
+describe('les entrées Bannière, Cadre et Contour', () => {
+  const names = { banner: 'Aurore', avatarRing: null, bannerFrame: null };
 
-  test('deux entrées nommées, avec le choix courant ou le défaut', () => {
+  test('trois entrées nommées, avec le choix courant ou le défaut — le cadre de bannière rejoint la bannière et le contour (#10936)', () => {
     const html = renderToStaticMarkup(<DecorEntries language="fr" names={names} disabled={false} onOpen={noop} />);
     expect(html).toContain('data-profile-decor-entry="banner"');
+    expect(html).toContain('data-profile-decor-entry="bannerFrame"');
+    expect(html).toContain('Cadre de la bannière');
+    expect(renderToStaticMarkup(<DecorEntries language="fr" names={{ ...names, bannerFrame: 'Celte animé' }} disabled={false} onOpen={noop} />)).toContain('Celte animé');
     expect(html).toContain('data-profile-decor-entry="avatarRing"');
     expect(html).toContain('Aurore');
     expect(html).toContain('Aucun');
@@ -127,7 +130,7 @@ describe('les entrées Bannière et Contour', () => {
 
   test('hors ligne, elles ne s’ouvrent pas', () => {
     const html = renderToStaticMarkup(<DecorEntries language="fr" names={names} disabled onOpen={noop} />);
-    expect((html.match(/disabled=""/g) ?? []).length).toBe(2);
+    expect((html.match(/disabled=""/g) ?? []).length).toBe(3);
   });
 
   test('le catalogue embarqué fournit bien un contour laurier et une bannière aurore', () => {

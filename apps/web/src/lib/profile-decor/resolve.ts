@@ -3,7 +3,7 @@ import { parseAvatarRingPackContract, type AvatarRingDesign } from '@meeshy/shar
 import { parseBannerFramePackContract, type BannerFrameDesign } from '@meeshy/shared/types/banner-frame-design';
 import type { ProfileDecorRef, ServedProfileDecorItem } from '@meeshy/shared/types/profile-decor';
 
-import { BUILTIN_BANNER_PACKS, BUILTIN_RING_PACKS, builtinBannerDesign, builtinRingDesign, type BuiltinPack } from './catalog';
+import { BUILTIN_BANNER_FRAME_PACKS, BUILTIN_BANNER_PACKS, BUILTIN_RING_PACKS, builtinBannerDesign, builtinBannerFrameDesign, builtinRingDesign, type BuiltinPack } from './catalog';
 import type { DesignPackSummary } from './pack-summary';
 
 /**
@@ -36,12 +36,12 @@ export function resolveBanner(item: ServedProfileDecorItem | null, contracts: Co
 }
 
 /**
- * Le cadre posé SUR la bannière (#10932, #10935) : aucun cadre n'est encore
- * embarqué (catalogue : #10936), un `builtin` se lit donc `null` ; un `official`
- * se lit dans son contrat `banner-frame`.
+ * Le cadre posé SUR la bannière (#10932, #10935) : un `builtin` se lit dans le
+ * catalogue embarqué (#10936), un `official` dans son contrat `banner-frame`.
  */
 export function resolveBannerFrame(item: ServedProfileDecorItem | null | undefined, contracts: ContractStore): BannerFrameDesign | null {
-  if (item === null || item === undefined || embedded(item)) return null;
+  if (item === null || item === undefined) return null;
+  if (embedded(item)) return builtinBannerFrameDesign(item);
   const contract = parseBannerFramePackContract(contracts.get(item.contract ?? ''));
   return contract?.frames.find((frame) => frame.key === item.item) ?? null;
 }
@@ -81,3 +81,6 @@ export const bannerOptions = (params: OptionParams): readonly OptionGroup<Appear
     const contract = parseAppearancePackContract(raw);
     return contract?.domain === 'banner' ? contract.designs : [];
   });
+
+export const bannerFrameOptions = (params: OptionParams): readonly OptionGroup<BannerFrameDesign>[] =>
+  optionsOf(params, BUILTIN_BANNER_FRAME_PACKS, (raw) => parseBannerFramePackContract(raw)?.frames ?? []);

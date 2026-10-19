@@ -64,8 +64,6 @@ const DOMAIN_KEYS: Readonly<Record<PackDomain, PlainStickerPacksKey>> = {
   'banner-frame': 'packs.domain.banner-frame',
 };
 
-/** Les domaines que la vitrine montre : un domaine y entre avec son catalogue — les cadres de bannière avec le leur (#10936). */
-const SHOP_CHIP_DOMAINS: readonly PackDomain[] = PACK_DOMAINS.filter((domain) => domain !== 'banner-frame');
 
 export const keyedPack = (pack: ShopPack): UnifiedPack => ({ ...pack, rawSlug: pack.slug, slug: `${pack.domain}:${pack.slug}` });
 
@@ -154,7 +152,7 @@ export function UnifiedShop({
   const balance = useQuery<number | null>({ queryKey: BALANCE_QUERY_KEY, queryFn: () => null, enabled: false, staleTime: Infinity });
   const chips: readonly { readonly id: UnifiedFilter; readonly label: string }[] = [
     { id: 'all', label: translateStickerPacks(language, 'packs.shop.all') },
-    ...SHOP_CHIP_DOMAINS.map((domain) => ({ id: domain, label: translateStickerPacks(language, DOMAIN_KEYS[domain]) })),
+    ...PACK_DOMAINS.map((domain) => ({ id: domain, label: translateStickerPacks(language, DOMAIN_KEYS[domain]) })),
   ];
 
   return (

@@ -709,15 +709,16 @@ export function ProgressionEntry({ language }: { readonly language: InterfaceLan
   );
 }
 
-export type DecorEntrySide = 'banner' | 'avatarRing';
+export type DecorEntrySide = 'banner' | 'bannerFrame' | 'avatarRing';
 
 const DECOR_ENTRIES = [
-  { side: 'banner', label: 'profileDecor.banner.entry', icon: 'image' },
-  { side: 'avatarRing', label: 'profileDecor.ring.entry', icon: 'user' },
-] as const satisfies readonly { readonly side: DecorEntrySide; readonly label: Parameters<typeof translateProfileDecor>[1]; readonly icon: GlyphName }[];
+  { side: 'banner', label: 'profileDecor.banner.entry', icon: { set: 'socle', name: 'image' } },
+  { side: 'bannerFrame', label: 'profileDecor.frame.entry', icon: { set: 'ecran', name: 'frameCorners' } },
+  { side: 'avatarRing', label: 'profileDecor.ring.entry', icon: { set: 'socle', name: 'user' } },
+] as const satisfies readonly { readonly side: DecorEntrySide; readonly label: Parameters<typeof translateProfileDecor>[1]; readonly icon: IconSpec }[];
 
 /**
- * **« BANNIÈRE » ET « CONTOUR »** (#10632, § 9) — deux entrées du profil qui
+ * **« BANNIÈRE », « CADRE » ET « CONTOUR »** (#10632, § 9 ; #10936) — trois entrées du profil qui
  * ouvrent la feuille de choix (`profile-decor-sheet.tsx`). Absentes quand le
  * serveur ne sert pas `profileDecor` (ancien serveur) : un contrôle sans effet
  * n'existe pas. Hors ligne, elles restent lisibles mais ne s'ouvrent pas —
@@ -747,7 +748,7 @@ export function DecorEntries({
           className={`${ENTRY_CLASS} rounded-card py-2.5 text-start disabled:opacity-45`}
           style={{ ...CARD_STYLE, minHeight: 56, outlineColor: 'var(--color-ios-brand)' }}
         >
-          <FieldIcon spec={{ set: 'socle', name: icon }} />
+          <FieldIcon spec={icon} />
           <span className="flex min-w-0 flex-1 flex-col gap-0.5">
             <span className="text-body font-medium" style={{ color: INK }}>
               {translateProfileDecor(language, label)}
