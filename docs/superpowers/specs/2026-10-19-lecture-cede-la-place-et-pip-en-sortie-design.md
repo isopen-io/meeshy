@@ -14,6 +14,7 @@ Le porteur veut le comportement d'une app de lecture iOS « bien élevée » : M
 ## 2. Comportements attendus (décisions porteur)
 
 ### 2.1 PiP à la sortie de l'app
+> **Supplanté en partie par la décision e (2026-10-20, § 5 bis)** : seul le plein écran ouvre un PiP, quelle que soit l'origine de la vidéo.
 - Une vidéo **en cours de lecture** passe en PiP quand l'utilisateur **quitte l'app** (accueil, bascule d'app) depuis :
   - un **réel** ;
   - une **vidéo de commentaire** ;
@@ -79,6 +80,14 @@ Le porteur veut le comportement d'une app de lecture iOS « bien élevée » : M
 - **b. Appareil photo iOS** : à vérifier sur iPhone ; s'il coupe Meeshy de force, la feature est gardée pour la caméra de Meeshy : baisser le son au lancement de l'enregistrement, le remonter au bon volume ensuite (§ 2.3).
 - **c. Musique d'une story** : met Spotify et les autres lecteurs en pause, comme toute surface Meeshy (story, vidéo de conversation, post, réel, commentaire, humeur, audio).
 - **d. Vocal pendant un son Meeshy** : on baisse le son Meeshy (PiP ou audio) et on enregistre ; il remonte à la fin.
+
+## 5 bis. Décisions porteur du 2026-10-20
+- **e. PiP = plein écran, quelle que soit l'origine** : une vidéo qui n'est pas en plein écran (bulle de message, post dans le fil, page d'un post, profil visité, commentaire inline) ne passe **jamais** en PiP. Une vidéo en plein écran passe en PiP en sortie d'app, qu'elle vienne d'un réel, d'un commentaire, d'un message ou d'un post. Remplace l'énumération du § 2.1.
+- **f. Réel muet** : comportement inchangé — pas de session `.playback`, Spotify continue, pas de PiP.
+- **g. Horloge de story** : la progression d'une story **s'arrête** dès que sa lecture est interrompue (appel, autre app, Siri) et repart avec la reprise.
+- **h. Appel entrant** : pendant la **sonnerie**, le son des vidéos et audios Meeshy en cours **baisse** ; si l'utilisateur **décroche**, la lecture **s'arrête** pour laisser la place à l'appel (puis reprend au raccrochage, § 2.2) ; s'il **refuse** ou si l'appel cesse de sonner, le son **remonte**. Pour un appel téléphonique / FaceTime, c'est iOS qui interrompt : Meeshy suit le signal du système.
+- **i. Tous les lecteurs reprennent après une interruption**, lecteur audio en superposition (`OverlayAudioPlayer`) compris.
+- **j. Meeshy rend toujours la main** : si Meeshy a mis en pause une autre app (musique, Spotify, Netflix…), il libère la session avec `.notifyOthersOnDeactivation` à la **fin de sa lecture**, à la pause (≈ 3 s, § 6), et **après une interruption** qui ne débouche pas sur une reprise — pour tous les lecteurs.
 
 ## 6. Appels de Claude (réglables par le porteur)
 - Vidéo de message dans sa bulle : PiP automatique désactivé ; activé dès qu'elle passe en plein écran.

@@ -292,7 +292,7 @@ struct ProfileDecorSheet: View {
                 )
                 .overlay {
                     if let design {
-                        BannerFrameView(design: design, animates: false)
+                        BannerFrameView(design: design)
                             .equatable()
                     }
                 }

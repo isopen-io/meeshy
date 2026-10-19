@@ -312,7 +312,7 @@ struct ConvBgSignalWave: View {
 
 // MARK: - Wave Shape
 
-struct ConvBgWaveShape: Shape {
+nonisolated struct ConvBgWaveShape: Shape {
     var phase: CGFloat
     var amplitude: CGFloat
     var frequency: CGFloat

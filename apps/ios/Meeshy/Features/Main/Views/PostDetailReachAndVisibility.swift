@@ -5,7 +5,8 @@ import Foundation
 /// shared by the inline author block (`authorReachLine`) and the collapsed header
 /// reveal (`authorRevealView`). Stats are author-only.
 ///
-/// "Vues" = `Post.viewCount` (UNIQUE viewers, deduped 1×/user) — the SAME metric the
+/// "Vues" = `Post.viewCount` (EVERY view — a returning reader counts again, #10483;
+/// distinct people are `uniqueViewCount`) — the SAME metric the
 /// story viewer shows, so Detail / Reel / Story / Feed all report identical numbers for
 /// the same Post (unified 2026-07-14). `postOpenCount` stays server-side for analytics
 /// but is no longer the displayed "views" label.

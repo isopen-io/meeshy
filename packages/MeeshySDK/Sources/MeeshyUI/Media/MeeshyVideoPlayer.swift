@@ -56,7 +56,9 @@ public struct MeeshyVideoPlayer: View {
         public nonisolated static let skip        = ControlSet(rawValue: 1 << 14)
 
         public nonisolated static let none: ControlSet              = []
-        public nonisolated static let inlineDefault: ControlSet     = [.playPause, .skip, .scrubber, .duration, .expand, .pip, .airplay, .speed]
+        /// Sans `.pip` : une vidéo inline ne part jamais en PiP, seul le plein
+        /// écran en ouvre un (#11041, décision porteur e).
+        public nonisolated static let inlineDefault: ControlSet     = [.playPause, .skip, .scrubber, .duration, .expand, .airplay, .speed]
         /// Son · lecture/pause · plein écran — rien d'autre (#8231, lecture
         /// dans le fil d'une conversation). Ni saut, ni barre, ni temps, ni
         /// vitesse, ni PiP : tout cela vit au plein écran, à un toucher.

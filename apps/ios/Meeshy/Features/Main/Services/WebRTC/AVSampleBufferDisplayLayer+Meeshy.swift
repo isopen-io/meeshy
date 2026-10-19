@@ -25,7 +25,7 @@ nonisolated extension AVSampleBufferDisplayLayer {
     }
 
     /// Enfile un `CMSampleBuffer`, via le `sampleBufferRenderer` iOS 17+ ou directement sur le layer avant.
-    func enqueueCompat(_ sample: CMSampleBuffer) {
+    func enqueueCompat(_ sample: sending CMSampleBuffer) {
         if #available(iOS 17.0, *) {
             sampleBufferRenderer.enqueue(sample)
         } else {

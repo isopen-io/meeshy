@@ -292,7 +292,7 @@ public struct BounceOnFocus: ViewModifier {
 
 // MARK: - Rounded Corner Shape
 
-public struct RoundedCorner: Shape {
+nonisolated public struct RoundedCorner: Shape {
     public var radius: CGFloat = .infinity
     public var corners: UIRectCorner = .allCorners
 
