@@ -171,7 +171,7 @@ accentHex    = hueShift(primary, −30°)
 saturationBoost = min(1.0, memberCount / 100) × 0.2
 ```
 
-**Acces** (`Models/MeeshyConversation.swift` → `MeeshyConversation`) :
+**Acces** (`Sources/MeeshySDK/Models/MeeshyConversation.swift` → `MeeshyConversation`) :
 - `conversation.accentColor` → `String` (hex primary, propriete calculee)
 - `conversation.colorPalette` → `ConversationColorPalette { primary, secondary, accent, saturationBoost }`
 - `conversation.colorContext` → `ConversationContext { name, type, language, theme, memberCount }`
@@ -188,7 +188,7 @@ saturationBoost = min(1.0, memberCount / 100) × 0.2
 
 Le SDK fournit les types API et la communication temps reel pour le prisme linguistique :
 
-**Models SDK** (`Models/APITextTranslation.swift`, `Models/APIMessage.swift`) :
+**Models SDK** (`Sources/MeeshySDK/Models/APITextTranslation.swift`, `Sources/MeeshySDK/Models/APIMessage.swift`) :
 - `APITextTranslation` : Traduction brute depuis l'API (id, messageId, sourceLanguage, targetLanguage, translatedContent, translationModel, confidenceScore)
 - `APIMessage.translations: [APITextTranslation]?` : Traductions pre-chargees avec le message via REST
 

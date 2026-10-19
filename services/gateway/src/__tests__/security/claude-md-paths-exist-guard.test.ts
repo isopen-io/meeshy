@@ -70,7 +70,7 @@ const CHEMIN_CITE = /([A-Za-z0-9_@.-]+(?:\/[A-Za-z0-9_@.-]+)+\.(?:tsx|ts|mjs|jso
 const DETTE: ReadonlyArray<{ fichier: string; introuvables: number }> = [
   { fichier: 'CLAUDE.md', introuvables: 7 },
   { fichier: 'apps/ios/CLAUDE.md', introuvables: 4 },
-  { fichier: 'packages/MeeshySDK/CLAUDE.md', introuvables: 7 },
+  { fichier: 'packages/MeeshySDK/CLAUDE.md', introuvables: 5 },
   { fichier: 'packages/shared/CLAUDE.md', introuvables: 1 },
 ];
 

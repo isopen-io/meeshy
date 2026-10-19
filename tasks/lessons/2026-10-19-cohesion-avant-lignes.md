@@ -27,7 +27,7 @@ passe quand le motif part dans `X+Y.swift`. Une garde négative doit lire l'unit
 (tous les fichiers du type), et un témoin positif doit prouver qu'elle trouve le motif là où
 il vit désormais.
 
-## Les lecteurs d'un fichier Swift ne sont pas tous en Swift (CI de la PR #11031)
+### Les lecteurs d'un fichier Swift ne sont pas tous en Swift (CI de la PR #11031)
 
 Avant de déplacer du code hors d'un fichier Swift, chercher qui le LIT par chemin
 dans TOUT le dépôt, pas seulement dans `MeeshyTests` et `MeeshySDKTests` : des
