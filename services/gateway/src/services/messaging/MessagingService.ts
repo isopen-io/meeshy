@@ -452,7 +452,8 @@ export class MessagingService {
         forwardedFromConversationId: request.forwardedFromConversationId,
         at: new Date(),
         bodyOnlyFromSource: this.bodyOnlyFromSource(request),
-        forwardedAttachmentIds: request.forwardedAttachmentIds
+        forwardedAttachmentIds: request.forwardedAttachmentIds,
+        bringsOwnPieces: this.bringsOwnPieces(request)
       });
       // #9598 — le motif voyage en `code`, stable ; la phrase reste pour les
       // anciens clients.
@@ -663,9 +664,14 @@ export class MessagingService {
    */
   private bodyOnlyFromSource(request: MessageRequest): boolean {
     if (!request.forwardedFromId) return false;
+    return !request.content?.trim() && !this.bringsOwnPieces(request);
+  }
+
+  /** #10987 — ce que le client renvoie lui-même d'une source que la passerelle ne recopie pas. */
+  private bringsOwnPieces(request: MessageRequest): boolean {
     const hasOwnAttachments =
       (request.attachments?.length ?? 0) > 0 || (request.attachmentIds?.length ?? 0) > 0;
-    return !request.content?.trim() && !hasOwnAttachments && !request.encryptedPayload;
+    return hasOwnAttachments || Boolean(request.encryptedPayload);
   }
 
   /**

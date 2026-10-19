@@ -228,6 +228,14 @@ export interface ForwardAdmissionParams {
    * tout le lot. Chaque id doit appartenir au message source.
    */
   readonly forwardedAttachmentIds?: readonly string[];
+  /**
+   * #10987 — la requête apporte ses PROPRES pièces (`attachmentIds` /
+   * `attachments`) ou son enveloppe chiffrée : le client a lui-même rendu ce
+   * que la passerelle ne peut pas recopier d'une source chiffrée. Absent
+   * (défaut) = rien de tel, et une source chiffrée qui porte des pièces est
+   * refusée plutôt que d'arriver sans elles.
+   */
+  readonly bringsOwnPieces?: boolean;
 }
 
 /** Le motif EST le code stable servi au client (#9598). */
@@ -423,12 +431,15 @@ async function admitReadableSource(
   }
 
   // D7 — dit APRÈS la nature : une vue unique chiffrée se refuse comme vue unique.
+  // #10987 — un texte joint ne dispense pas : sans pièces propres, une source
+  // chiffrée qui en porte arriverait sans elles, et l'expéditeur lirait « envoyé ».
   const encrypted = sourceIsEncrypted(judged);
-  if (encrypted && params.bodyOnlyFromSource) return refused(FORWARD_REFUSAL_CODES.ENCRYPTED_SOURCE);
+  const copiable = selection ? selection.pieces.length : source._count?.attachments ?? 0;
+  const wouldLosePieces = copiable > 0 && params.bringsOwnPieces !== true;
+  if (encrypted && (params.bodyOnlyFromSource || wouldLosePieces)) return refused(FORWARD_REFUSAL_CODES.ENCRYPTED_SOURCE);
 
   // Dit APRÈS les refus de nature : des motifs, celui-là est le moins
   // informatif pour l'expéditeur.
-  const copiable = selection ? selection.pieces.length : source._count?.attachments ?? 0;
   if (params.bodyOnlyFromSource && copiable === 0) {
     return SOURCE_UNAVAILABLE;
   }

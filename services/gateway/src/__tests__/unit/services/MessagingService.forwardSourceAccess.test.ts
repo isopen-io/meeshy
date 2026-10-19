@@ -534,8 +534,28 @@ describe('MessagingService.handleMessage — on ne transfère que ce qu’on a l
       expect(copiedPieces()).toEqual([]);
     });
 
-    it('une source chiffrée dont le CLIENT renvoie le contenu : admise, rien de la source recopié', async () => {
+    it('une photo légendée d’une source chiffrée, transférée avec sa seule légende : refusée avec son code, rien d’écrit (#10987)', async () => {
       mountWithPieces(threePieces({ isEncrypted: true, encryptionMode: 'e2ee' }));
+
+      const response = await send({ forwardedFromId: SOURCE_MESSAGE, forwardedFromConversationId: SOURCE_CONVERSATION });
+
+      expect(response).toMatchObject({ success: false, code: 'encrypted-source-not-server-copyable' });
+      expect(typeof response.error).toBe('string');
+      expect(mockPrisma.message.create).not.toHaveBeenCalled();
+      expect(copiedPieces()).toEqual([]);
+    });
+
+    it('une pièce choisie d’une source chiffrée, accompagnée d’un texte : refusée avec son code (#10987)', async () => {
+      mountWithPieces(threePieces({ isEncrypted: true, encryptionMode: 'e2ee' }));
+
+      const response = await send({ forwardedFromId: SOURCE_MESSAGE, forwardedAttachmentIds: [PIECES[1]] } as Row);
+
+      expect(response).toMatchObject({ success: false, code: 'encrypted-source-not-server-copyable' });
+      expect(mockPrisma.message.create).not.toHaveBeenCalled();
+    });
+
+    it('une source chiffrée SANS pièce dont le CLIENT renvoie le texte : admise, rien de la source recopié', async () => {
+      mountWithPieces(threePieces({ isEncrypted: true, encryptionMode: 'e2ee', attachments: [], _count: { attachments: 0 } }));
 
       const response = await send({ forwardedFromId: SOURCE_MESSAGE, forwardedFromConversationId: SOURCE_CONVERSATION });
 

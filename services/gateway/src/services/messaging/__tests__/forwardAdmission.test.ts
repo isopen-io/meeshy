@@ -603,13 +603,41 @@ describe('admitMessageForward', () => {
       expect(admission).toEqual({ admitted: false, reason: 'encrypted-source-not-server-copyable' });
     });
 
-    it.each(ENCRYPTED_CASES)('admet le contenu que le CLIENT renvoie, sans rien recopier — %s', async (_label, over) => {
+    it.each(ENCRYPTED_CASES)('refuse une source à pièces accompagnée d’un simple texte : la pièce ne se perd pas en silence (#10987) — %s', async (_label, over) => {
       messageFindUnique.mockResolvedValue(source({ _count: { attachments: 1 }, ...over }));
 
       const admission = await admitMessageForward(prisma, { forwardedFromId: SOURCE_ID, at: AT });
 
+      expect(admission).toEqual({ admitted: false, reason: 'encrypted-source-not-server-copyable' });
+    });
+
+    it('refuse une pièce CHOISIE d’une source chiffrée, même avec un texte (#10987)', async () => {
+      const chosen = { id: SOURCE_ID, isViewOnce: false, isBlurred: false, effectFlags: 0, isEncrypted: false, encryptionMode: null };
+      messageFindUnique.mockResolvedValue(source({ isEncrypted: true, attachments: [chosen], _count: { attachments: 1 } }));
+
+      const admission = await admitMessageForward(prisma, { forwardedFromId: SOURCE_ID, at: AT, forwardedAttachmentIds: [SOURCE_ID] });
+
+      expect(admission).toEqual({ admitted: false, reason: 'encrypted-source-not-server-copyable' });
+    });
+
+    it.each(ENCRYPTED_CASES)('admet les pièces que le CLIENT renvoie lui-même, sans rien recopier — %s', async (_label, over) => {
+      messageFindUnique.mockResolvedValue(source({ _count: { attachments: 1 }, ...over }));
+
+      const admission = await admitMessageForward(prisma, { forwardedFromId: SOURCE_ID, at: AT, bringsOwnPieces: true });
+
       expect(admission).toEqual({ admitted: true, imposes: null, copySelection: [] });
     });
+
+    it.each(ENCRYPTED_CASES.filter(([label]) => label !== 'pièce chiffrée'))(
+      'admet le texte seul d’une source chiffrée SANS pièce, sans rien recopier — %s',
+      async (_label, over) => {
+        messageFindUnique.mockResolvedValue(source({ ...over, attachments: [], _count: { attachments: 0 } }));
+
+        const admission = await admitMessageForward(prisma, { forwardedFromId: SOURCE_ID, at: AT });
+
+        expect(admission).toEqual({ admitted: true, imposes: null, copySelection: [] });
+      },
+    );
 
     it('dit la vue unique avant le chiffrement', async () => {
       messageFindUnique.mockResolvedValue(source({ isViewOnce: true, isEncrypted: true }));
