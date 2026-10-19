@@ -218,10 +218,10 @@ struct StoryTrayView: View {
         // U1 — source de la transition zoom : la bulle « devient » le viewer
         // (id = userId du groupe, apparié au sourceID du cover RootView).
         .zoomTransitionSource(id: group.id, in: zoomNamespace)
-        .countsImpression(of: StoryRailReach.displayedStoryId(of: group), recountsOnChange: false) {
+        .countsImpression(of: StoryRailReach.displayedStoryId(of: group), recountsOnChange: false, presence: SharedImpressionBatchers.railPresence) {
             SharedImpressionBatchers.storyRail.record($0)
         }
-        .countsImpression(of: statusViewModel.statusForUser(userId: group.id)?.id) {
+        .countsImpression(of: statusViewModel.statusForUser(userId: group.id)?.id, presence: SharedImpressionBatchers.railPresence) {
             SharedImpressionBatchers.moodRail.record($0)
         }
     }
@@ -787,10 +787,10 @@ struct PinnedStoryTrailBand: View {
                     .equatable()
                     // U1 inc.2 — la mini-trail épinglée zoome aussi.
                     .zoomTransitionSource(id: group.id, in: zoomNamespace)
-                    .countsImpression(of: StoryRailReach.displayedStoryId(of: group), recountsOnChange: false) {
+                    .countsImpression(of: StoryRailReach.displayedStoryId(of: group), recountsOnChange: false, presence: SharedImpressionBatchers.railPresence) {
                         SharedImpressionBatchers.storyRail.record($0)
                     }
-                    .countsImpression(of: statusViewModel.statusForUser(userId: group.id)?.id) {
+                    .countsImpression(of: statusViewModel.statusForUser(userId: group.id)?.id, presence: SharedImpressionBatchers.railPresence) {
                         SharedImpressionBatchers.moodRail.record($0)
                     }
                 }

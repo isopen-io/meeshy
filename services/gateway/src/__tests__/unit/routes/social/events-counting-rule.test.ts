@@ -115,6 +115,45 @@ describe('Impressions — chaque listage compte, sans fenêtre', () => {
   });
 });
 
+describe('Impressions de l’auteur — une seule fois par contenu (#11037)', () => {
+  const AUTHOR = '507f1f77bcf86cd7994390aa';
+  const asAuthor = { authorization: `Bearer ${AUTHOR}` };
+
+  it('l’auteur qui voit 5 fois son post ⇒ +1, une seule ligne', async () => {
+    const h = await reachHarness([{ id: POST, authorId: AUTHOR }]);
+    await times(5, () => sendReach(h.app, [impressionEvent(POST, { source: 'story', surface: 'story_rail' })], asAuthor));
+
+    expect(h.store.read(POST)?.impressionCount).toBe(1);
+    expect(h.impressions).toHaveLength(1);
+    await h.app.close();
+  });
+
+  it('l’auteur qui voit son post deux fois dans un lot ⇒ +1', async () => {
+    const h = await reachHarness([{ id: POST, authorId: AUTHOR }]);
+    await sendReach(h.app, [impressionEvent(POST), impressionEvent(POST, { eventId: '11111111-1111-4111-8111-111111111111' })], asAuthor);
+
+    expect(h.store.read(POST)?.impressionCount).toBe(1);
+    await h.app.close();
+  });
+
+  it('l’auteur qui ouvre le détail de son post ⇒ aucune ouverture comptée', async () => {
+    const h = await reachHarness([{ id: POST, authorId: AUTHOR }]);
+    await sendReach(h.app, [impressionEvent(POST, { source: 'detail' })], asAuthor);
+
+    expect(h.store.read(POST)?.postOpenCount ?? 0).toBe(0);
+    await h.app.close();
+  });
+
+  it('un autre lecteur du même post compte toujours chaque affichage', async () => {
+    const h = await reachHarness([{ id: POST, authorId: AUTHOR }]);
+    await times(3, () => sendReach(h.app, [impressionEvent(POST)], asAuthor));
+    await times(4, () => sendReach(h.app, [impressionEvent(POST)], account));
+
+    expect(h.store.read(POST)?.impressionCount).toBe(5);
+    await h.app.close();
+  });
+});
+
 describe('Ouvertures — un détail compte quelle que soit la source qui l’a ouvert', () => {
   it.each([
     ['detail', {}],

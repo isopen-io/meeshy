@@ -107,6 +107,8 @@ describe('garde O5 — personne d’autre ne lit PostImpression par compte', () 
     // de CE post ? » (une vue implique son impression) et « porte-t-il encore
     // une impression déduite à remplacer ? ». La réponse ne quitte pas la
     // requête, ne touche aucun ordre de fil et ne nourrit aucune personnalisation.
+    // #11037 : il lit aussi « l'auteur a-t-il déjà une impression de son
+    // propre post ? » — la même question d'intégrité, pour ne la compter qu'une fois.
     expect(readers).toEqual(['services/posts/seenCounts.ts', 'services/social/viewImpressions.ts']);
   });
 });
