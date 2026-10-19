@@ -57,7 +57,7 @@ public struct KeyframeMarkerView: View, Equatable {
     }
 }
 
-private struct SmallDiamond: Shape {
+nonisolated private struct SmallDiamond: Shape {
     func path(in rect: CGRect) -> Path {
         var p = Path()
         p.move(to: CGPoint(x: rect.midX, y: rect.minY))

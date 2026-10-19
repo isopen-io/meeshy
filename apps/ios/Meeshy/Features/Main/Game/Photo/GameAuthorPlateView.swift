@@ -182,7 +182,7 @@ private struct PlatePaint {
     }
 }
 
-private struct PlateOutline: Shape {
+nonisolated private struct PlateOutline: Shape {
     let points: [CGPoint]
 
     func path(in rect: CGRect) -> Path {
@@ -193,7 +193,7 @@ private struct PlateOutline: Shape {
     }
 }
 
-private struct PlatePolyline: Shape {
+nonisolated private struct PlatePolyline: Shape {
     let points: [CGPoint]
 
     func path(in rect: CGRect) -> Path {
