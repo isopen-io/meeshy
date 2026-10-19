@@ -103,7 +103,7 @@ final class LiveShareDispatcher: ShareDispatching {
         var last: ShareDeliveryOutcome = .failed(reason: Self.genericFailure)
         for message in messages {
             last = request.copyOnDevice
-                ? await copyOnDevice(message, to: recipient)
+                ? await copyOnDevice(message, chosenDurationSeconds: request.chosenDurationSeconds, to: recipient)
                 : Self.outcome(await forwardService.forward(
                     message: message, sourceConversationId: source, to: recipient,
                     chosenDurationSeconds: request.chosenDurationSeconds, forwardedAttachmentIds: nil
@@ -121,29 +121,59 @@ final class LiveShareDispatcher: ShareDispatching {
     /// pièces est refusé en bloc : les pièces d'une source chiffrée ne se
     /// recopient pas encore depuis l'appareil, et un envoi partiel ne s'annonce
     /// jamais « Envoyé ».
-    private func copyOnDevice(_ message: Message, to recipient: ShareRecipient) async -> ShareDeliveryOutcome {
+    ///
+    /// **La copie garde la protection de la source** (#10958), comme un
+    /// transfert : la loi de sortie refuse une vue unique et une flamme après
+    /// lecture, borne la durée d'une flamme à celle de la source, et le flou
+    /// passe à la copie — en ligne comme dans la file hors ligne.
+    private func copyOnDevice(_ message: Message, chosenDurationSeconds: Int?, to recipient: ShareRecipient) async -> ShareDeliveryOutcome {
+        if let refusal = ForwardRefusalReason.local(for: message) { return .failed(reason: refusal.explanation) }
         guard message.attachments.isEmpty else { return .failed(reason: Self.encryptedPiecesRefusal) }
         guard !message.content.isEmpty, isDecryptedOnDevice(message.id) else { return .failed(reason: Self.undecryptedRefusal) }
         guard let destination = await resolveConversation(recipient) else { return .failed(reason: Self.unreachable) }
-        return await postText(message.content, forwardedFromId: message.id, to: destination)
+        return await postText(message.content, forwardedFromId: message.id,
+                              protection: Self.copyProtection(of: [message], chosenDurationSeconds: chosenDurationSeconds), to: destination)
     }
 
-    private func postText(_ text: String, forwardedFromId: String? = nil, to destination: ResolvedConversation) async -> ShareDeliveryOutcome {
+    /// La protection qu'une copie emporte de ses sources : la durée la plus
+    /// COURTE parmi les flammes (ramenée au choix de l'auteur), le flou dès
+    /// qu'une source le porte. Rien pour une source ordinaire.
+    private static func copyProtection(of messages: [Message], chosenDurationSeconds: Int?) -> MessageProtectionIntent {
+        let duration = messages.compactMap { $0.contentExitLaw.forward.requestedDuration(chosen: chosenDurationSeconds) }.min()
+        return MessageProtectionIntent(ephemeralDurationSeconds: duration, isBlurred: messages.contains(where: \.holdsBlur))
+    }
+
+    private func postText(_ text: String, forwardedFromId: String? = nil, protection: MessageProtectionIntent = .none,
+                          to destination: ResolvedConversation) async -> ShareDeliveryOutcome {
         guard !destination.isEncrypted else { return .failed(reason: Self.encryptedDestinationRefusal) }
-        let body = SendMessageRequest(content: text, forwardedFromId: forwardedFromId)
-        return await post(body, to: destination.id, offlineContent: text)
+        let body = SendMessageRequest(content: text, forwardedFromId: forwardedFromId,
+                                      ephemeralDuration: protection.ephemeralDurationSeconds,
+                                      isBlurred: protection.isBlurred ? true : nil)
+        return await post(body, to: destination.id, offlineContent: text, protection: protection)
     }
 
     /// D4 : la légende d'un transfert part en message à part, juste après la copie.
     /// Vers une personne, la directe que le transfert vient d'ouvrir se relit
     /// (création idempotente) pour connaître son mode : une légende ne part
-    /// jamais en clair dans une directe chiffrée.
+    /// jamais en clair dans une directe chiffrée. Elle emporte la protection de
+    /// ce qu'elle légende (#10958) : elle ne survit pas à une flamme, elle est
+    /// floutée avec un flouté.
     private func appendingCaption(_ request: ShareSendRequest, after outcome: ShareDeliveryOutcome, to recipient: ShareRecipient) async -> ShareDeliveryOutcome {
         let caption = request.caption.trimmingCharacters(in: .whitespacesAndNewlines)
         guard request.captionPlacement == .separateMessage, !caption.isEmpty, outcome.conversationId != nil,
               let destination = await resolveConversation(recipient) else { return outcome }
-        _ = await postText(caption, to: destination)
+        _ = await postText(caption, protection: Self.copyProtection(of: Self.captioned(request), chosenDurationSeconds: request.chosenDurationSeconds),
+                           to: destination)
         return outcome
+    }
+
+    /// Ce que la légende accompagne : les messages gardés, ou le porteur de la pièce.
+    private static func captioned(_ request: ShareSendRequest) -> [Message] {
+        switch request.subject {
+        case .messages(let messages, _, _): return request.keptMessageIds.compactMap { id in messages.first { $0.id == id } }
+        case .piece(let message, _, _, _): return [message]
+        default: return []
+        }
     }
 
     // MARK: - Ce qu'une autre app a remis (relais de l'extension)
@@ -205,13 +235,15 @@ final class LiveShareDispatcher: ShareDispatching {
 
     /// En ligne : le POST. Hors ligne : la file durable, rejouée au retour du
     /// réseau même après fermeture de l'app (FIFO, même `clientMessageId`).
-    private func post(_ body: SendMessageRequest, to conversationId: String, offlineContent: String?) async -> ShareDeliveryOutcome {
+    private func post(_ body: SendMessageRequest, to conversationId: String, offlineContent: String?,
+                      protection: MessageProtectionIntent = .none) async -> ShareDeliveryOutcome {
         guard isOnline() else {
             guard let offlineContent else { return .failed(reason: Self.unreachable) }
             do {
                 try await queue.enqueue(OfflineQueueItem(
                     conversationId: conversationId, content: offlineContent,
-                    clientMessageId: body.clientMessageId, forwardedFromId: body.forwardedFromId
+                    clientMessageId: body.clientMessageId, forwardedFromId: body.forwardedFromId,
+                    protection: protection
                 ))
                 return .queued(conversationId: conversationId)
             } catch {

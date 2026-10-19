@@ -88,12 +88,18 @@ final class LiveShareDispatcherTests: XCTestCase {
         return message
     }
 
-    private func copy(_ messages: [Message]) -> ShareSendRequest {
+    private func copy(_ messages: [Message], caption: String = "", chosenDurationSeconds: Int? = nil) -> ShareSendRequest {
         ShareSendRequest(
             subject: .messages(messages, sourceConversationId: Self.source, conversationIsEncrypted: true),
-            keptMessageIds: messages.map(\.id), caption: "", captionPlacement: nil,
-            grouping: .together, chosenDurationSeconds: nil, copyOnDevice: true
+            keptMessageIds: messages.map(\.id), caption: caption, captionPlacement: caption.isEmpty ? nil : .separateMessage,
+            grouping: .together, chosenDurationSeconds: chosenDurationSeconds, copyOnDevice: true
         )
+    }
+
+    private func protected(_ id: String, flags: MessageEffectFlags, duration: Int? = nil) -> Message {
+        var message = encryptedMessage(id, content: "Bientôt parti")
+        message.effects = MessageEffects(flags: flags, ephemeralDuration: duration)
+        return message
     }
 
     // MARK: - La conversation RENDUE décide du chiffrement
@@ -201,6 +207,102 @@ final class LiveShareDispatcherTests: XCTestCase {
         XCTAssertEqual(sent["forwardedFromId"] as? String, "m3")
         XCTAssertNil(sent["isEncrypted"])
         XCTAssertEqual(sut.forward.calls, 0, "la passerelle ne recopie rien d'une source chiffrée")
+    }
+
+    // MARK: - La copie sur l'appareil garde la protection de la source (#10958)
+
+    func test_copyOnDevice_ofATimedFlame_carriesTheSourceDuration() async throws {
+        let sut = makeSUT(decrypted: ["f1"])
+        stubSend(sut.api, to: "c-clear")
+
+        _ = await sut.dispatcher.deliver(copy([protected("f1", flags: .ephemeral, duration: 30)]), to: conversation("c-clear"))
+
+        XCTAssertEqual(try body(sut.api)["ephemeralDuration"] as? Int, 30, "une flamme copiée sur l'appareil reste une flamme")
+    }
+
+    func test_copyOnDevice_ofATimedFlame_neverOutlivesItsSource() async throws {
+        let sut = makeSUT(decrypted: ["f2", "f3"])
+        stubSend(sut.api, to: "c-clear")
+
+        _ = await sut.dispatcher.deliver(copy([protected("f2", flags: .ephemeral, duration: 30)], chosenDurationSeconds: 3_600), to: conversation("c-clear"))
+        _ = await sut.dispatcher.deliver(copy([protected("f3", flags: .ephemeral, duration: 30)], chosenDurationSeconds: 10), to: conversation("c-clear"))
+
+        XCTAssertEqual(try body(sut.api, at: 0)["ephemeralDuration"] as? Int, 30, "une durée choisie plus longue est ramenée à la source")
+        XCTAssertEqual(try body(sut.api, at: 1)["ephemeralDuration"] as? Int, 10, "une durée choisie plus courte est gardée")
+    }
+
+    func test_copyOnDevice_ofABlurredMessage_staysBlurred() async throws {
+        let sut = makeSUT(decrypted: ["b1"])
+        stubSend(sut.api, to: "c-clear")
+
+        _ = await sut.dispatcher.deliver(copy([protected("b1", flags: .blurred)]), to: conversation("c-clear"))
+
+        XCTAssertEqual(try body(sut.api)["isBlurred"] as? Bool, true, "un flouté copié sur l'appareil reste flouté")
+    }
+
+    func test_copyOnDevice_ofAnOrdinaryMessage_carriesNoProtection() async throws {
+        let sut = makeSUT(decrypted: ["o1"])
+        stubSend(sut.api, to: "c-clear")
+
+        _ = await sut.dispatcher.deliver(copy([encryptedMessage("o1", content: "Bonjour")]), to: conversation("c-clear"))
+
+        let sent = try body(sut.api)
+        XCTAssertNil(sent["ephemeralDuration"])
+        XCTAssertNil(sent["isBlurred"])
+    }
+
+    func test_copyOnDevice_refusesAViewOnceOrAfterReadMessage() async {
+        let sut = makeSUT(decrypted: ["v1", "r1"])
+        stubSend(sut.api, to: "c-clear")
+
+        let viewOnce = await sut.dispatcher.deliver(copy([protected("v1", flags: .viewOnce)]), to: conversation("c-clear"))
+        let afterRead = await sut.dispatcher.deliver(copy([protected("r1", flags: .ephemeralAfterRead)]), to: conversation("c-clear"))
+
+        guard case .failed = viewOnce, case .failed = afterRead else {
+            return XCTFail("un contenu qui ne se transfère pas ne se copie pas davantage, reçu \(viewOnce) / \(afterRead)")
+        }
+        XCTAssertTrue(sut.api.lastPostBodies.isEmpty)
+    }
+
+    func test_copyOnDevice_offline_queuesTheFlameWithItsProtection() async throws {
+        let sut = makeSUT(online: false, decrypted: ["q1"])
+
+        let outcome = await sut.dispatcher.deliver(copy([protected("q1", flags: [.ephemeral, .blurred], duration: 30)]), to: conversation("c-clear"))
+
+        XCTAssertEqual(outcome, .queued(conversationId: "c-clear"))
+        let queued = await sut.queue.enqueuedItems
+        let item = try XCTUnwrap(queued.first)
+        XCTAssertEqual(item.replayProtection.ephemeralDurationSeconds, 30, "le rejeu hors ligne garde la durée")
+        XCTAssertTrue(item.replayProtection.isBlurred, "le rejeu hors ligne garde le flou")
+        XCTAssertEqual(item.forwardedFromId, "q1")
+    }
+
+    func test_theCaptionOfACopiedFlame_carriesTheSameProtection() async throws {
+        let sut = makeSUT(decrypted: ["c1"])
+        stubSend(sut.api, to: "c-clear")
+
+        _ = await sut.dispatcher.deliver(copy([protected("c1", flags: [.ephemeral, .blurred], duration: 30)], caption: "Regarde vite"),
+                                         to: conversation("c-clear"))
+
+        let caption = try body(sut.api, at: 1)
+        XCTAssertEqual(caption["content"] as? String, "Regarde vite")
+        XCTAssertEqual(caption["ephemeralDuration"] as? Int, 30, "la légende ne survit pas à ce qu'elle légende")
+        XCTAssertEqual(caption["isBlurred"] as? Bool, true, "la légende d'un flouté est floutée")
+    }
+
+    func test_theCaptionOfACopy_neverGoesInClearToAnEncryptedConversation() async {
+        let sut = makeSUT(decrypted: ["e1"])
+        sut.creator.result = .success(MeeshyConversation(id: "dm-7", identifier: "dm-7", type: .direct, encryptionMode: "e2ee"))
+        stubSend(sut.api, to: "dm-7")
+        stubSend(sut.api, to: "dm-8")
+
+        _ = await sut.dispatcher.deliver(copy([encryptedMessage("e1", content: "Bonjour")], caption: "Mon code : 4521"), to: person("bob"))
+        _ = await sut.dispatcher.deliver(copy([encryptedMessage("e1", content: "Bonjour")], caption: "Mon code : 4521"),
+                                         to: conversation("dm-8", encrypted: true))
+
+        XCTAssertTrue(sut.api.lastPostBodies.isEmpty, "ni la copie ni sa légende ne partent en clair vers une conversation chiffrée")
+        let queued = await sut.queue.enqueuedItems
+        XCTAssertTrue(queued.isEmpty)
     }
 
     func test_copyOnDevice_towardAnEncryptedConversation_sendsNothing() async {
