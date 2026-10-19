@@ -1,4 +1,5 @@
 import UIKit
+import os
 
 /// **Le décodage d'une image de story quitte le fil principal** (#7010).
 ///
@@ -22,11 +23,16 @@ import UIKit
 /// à ceux d'avant, à l'octet près.
 enum StoryLayerImageDecoding {
 
+    nonisolated private static let signposter = OSSignposter(subsystem: "me.meeshy.app", category: "StoryImageDecode")
+
     /// Lit puis décode un fichier local, entièrement hors du MainActor.
     nonisolated static func decodedImage(fileAt url: URL) async -> UIImage? {
         await Task.detached(priority: .userInitiated) {
-            guard let data = try? Data(contentsOf: url) else { return nil }
-            return decoded(data)
+            let interval = signposter.beginInterval("StoryImageDecode")
+            let image = (try? Data(contentsOf: url)).flatMap { decoded($0) }
+            let width = image.map { Int($0.size.width * $0.scale) } ?? 0
+            signposter.endInterval("StoryImageDecode", interval, "\(width, privacy: .public)px wide")
+            return image
         }.value
     }
 

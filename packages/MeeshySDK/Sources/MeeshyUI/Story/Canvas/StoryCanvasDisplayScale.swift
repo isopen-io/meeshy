@@ -11,3 +11,9 @@ enum StoryCanvasDisplayScale {
         resolved(trait: UITraitCollection.current.displayScale, fallback: 1)
     }
 }
+
+extension UITraitCollection {
+    var storyCanvasDisplayScale: CGFloat {
+        StoryCanvasDisplayScale.resolved(trait: displayScale, fallback: UITraitCollection.current.displayScale)
+    }
+}
