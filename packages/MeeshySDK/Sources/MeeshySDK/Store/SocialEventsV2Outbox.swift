@@ -31,12 +31,12 @@ public actor SocialEventsV2Outbox {
         min(300, pow(2.0, Double(max(0, attempts))) * 5)
     }
 
-    public nonisolated convenience init() {
+    public nonisolated init() {
         let dir = FileManager.default.urls(for: .documentDirectory, in: .userDomainMask)[0]
         self.init(storage: ResilientDatabaseQueue.open(path: dir.appendingPathComponent("meeshy_social_events_v2.db").path))
     }
 
-    public nonisolated convenience init(dbPath: String?, clock: @escaping @Sendable () -> Date = { Date() }) {
+    public nonisolated init(dbPath: String?, clock: @escaping @Sendable () -> Date = { Date() }) {
         self.init(storage: ResilientDatabaseQueue.open(path: dbPath), clock: clock)
     }
 
