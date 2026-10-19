@@ -9,6 +9,8 @@ import { href, navigate } from '@/routes/route-table';
 
 import { BUTTON } from './ui-chrome';
 
+export { startSendQueue } from '@/lib/send/send-queue-instance';
+
 /**
  * LE TOAST D'APRÈS L'ENVOI (D5, #10949) — « Envoyé à Ana · Ouvrir », AUCUNE
  * navigation imposée. Il vit hors de la feuille : un envoi parti feuille

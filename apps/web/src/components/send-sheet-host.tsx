@@ -1,4 +1,4 @@
-import { lazy, Suspense, useEffect } from 'react';
+import { lazy, Suspense } from 'react';
 import { useStore } from 'zustand/react';
 
 import { currentInterfaceLanguage } from '@/lib/interface-language';
@@ -23,10 +23,15 @@ const loadSheet = () =>
 
 const LazySendSheet = lazy(loadSheet);
 
-/* LA FILE D'ENVOI DURABLE (#10948) et son toast : chargés APRÈS la première peinture. Au lancement, la file relit ce qui
-   n'était pas parti (IndexedDB) et le rejoue ; une file vide ne charge aucun port réseau. */
-const LazySendToast = lazy(() => import('./send-toast-host').then((module) => ({ default: module.SendToastHost })));
-const startQueue = (): void => void import('@/lib/send/send-queue-instance').then(({ startSendQueue }) => startSendQueue(), () => undefined);
+/* LA FILE D'ENVOI DURABLE (#10948) et son toast : chargés APRÈS la première peinture, par UNE seule frontière dynamique —
+   chaque `import()` de l'entrée y paie sa liste de dépendances (#10974). Au lancement, la file relit ce qui n'était pas
+   parti (IndexedDB) et le rejoue ; une file vide ne charge aucun port réseau. */
+const LazySendQueue = lazy(() =>
+  import('./send-toast-host').then(({ SendToastHost, startSendQueue }) => {
+    startSendQueue();
+    return { default: SendToastHost };
+  }),
+);
 
 /** Une identité par DEMANDE : une seconde demande remonte une feuille neuve
  * (sélection, légende et envoi en cours ne passent pas d'un contenu à l'autre). */
@@ -42,9 +47,6 @@ const idOf = (request: SendSheetRequest): number => {
 
 export function SendSheetHost({ queue = true }: { readonly queue?: boolean } = {}) {
   const request = useStore(sendSheetStore, (state) => state.request);
-  useEffect(() => {
-    if (queue) startQueue();
-  }, [queue]);
   /* Ne ferme que SA demande : une feuille remplacée qui se ferme n'efface pas la suivante. */
   const onClose = () => {
     if (request !== null && sendSheetStore.getState().request === request) closeSendSheet();
@@ -53,7 +55,7 @@ export function SendSheetHost({ queue = true }: { readonly queue?: boolean } = {
     <>
       {queue ? (
         <Suspense fallback={null}>
-          <LazySendToast />
+          <LazySendQueue />
         </Suspense>
       ) : null}
       {request === null ? null : (
