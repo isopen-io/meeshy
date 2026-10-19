@@ -1,5 +1,6 @@
 import UIKit
 import MeeshySDK
+import MeeshyUI
 
 /// Centralizes image memory management for the Meeshy app.
 ///
@@ -47,8 +48,6 @@ public enum ImageDownsamplingConfig {
     /// - Parameter pointSize: Rendered size of the image view in SwiftUI points.
     /// - Returns: Max pixel dimension suitable for the `maxPixelSize` argument.
     public static func maxPixelSize(for pointSize: CGSize) -> CGFloat {
-        let scale = UIScreen.main.scale
-        let largerDimension = max(pointSize.width, pointSize.height)
-        return largerDimension * scale
+        DecodeBudget.maxPixelWidth(for: .fitting(pointSize))
     }
 }

@@ -1,6 +1,7 @@
 import AVFoundation
 import Foundation
 import UIKit
+import MeeshyUI
 
 /// **Le flash qui ÉCLAIRE vraiment** (#8653, directive porteur 2026-09-29 :
 /// « le flash doit activer vraiment le flash, et si la caméra est par devant,
@@ -55,7 +56,7 @@ extension UIScreen: ScreenBrightnessControlling {}
 /// « la luminosité d'avant ».
 @MainActor
 final class ComposerScreenFlash {
-    static let shared = ComposerScreenFlash(screen: UIScreen.main)
+    static let shared = ComposerScreenFlash(screen: WindowMetrics.mainScreen)
 
     private let screen: ScreenBrightnessControlling
     private var before: CGFloat?
