@@ -58,7 +58,7 @@ numpy>=1.21.0,<1.24.0
 # conflit "numpy>=2.2.6,<2.3.0 vs numpy<2.0.0"). Revalider ces pins avec
 # `uv pip compile requirements.txt` (+ torch==2.6.0 en tête) avant de les élargir.
 accelerate==1.15.0
-datasets==5.0.1
+datasets==5.1.0
 # pyarrow : tiré par datasets (>=21.0.0) sans borne haute, et il ne déclare pas numpy,
 # donc uv ne voit aucun conflit. 26.0.0 refuse NumPy 1.x à l'IMPORT (« pyarrow requires
 # NumPy 2.0 or newer ») et sklearn l'importe au démarrage → build translator KO (#9817).
@@ -74,7 +74,7 @@ pyarrow==25.0.1
 # (job "Build translator" → step "Determine build platforms").
 # NE PAS bumper sentencepiece isolément : espnet==202412 l'épingle en dur à
 # ==0.1.97 (metadata PyPI d'espnet) ; un uv pip compile confirmerait le conflit.
-# PIN EXACT — datasets==5.0.1 exige huggingface-hub>=0.25.0,<2.0 (metadata PyPI).
+# PIN EXACT — datasets==5.1.0 exige huggingface-hub>=0.25.0,<2.0 (metadata PyPI).
 # 2.1.1 (dependabot #9431, 2026-10-10) rend `uv pip install -r requirements.txt`
 # insoluble ("No solution found... huggingface-hub>=0.25.0,<2.0" vs "==2.1.1") et
 # casse le job Docker "Build translator" (#10035). NE PAS bumper au-delà de 1.x
