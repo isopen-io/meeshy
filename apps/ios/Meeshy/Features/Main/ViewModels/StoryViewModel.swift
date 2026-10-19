@@ -75,12 +75,7 @@ class StoryViewModel: ObservableObject, StoryPublishExecutor {
     /// Id de l'upload qui MONTE en ce moment. `nil` = la file peut démarrer le
     /// suivant.
     var currentUploadId: String?
-    /// Incrémenté quand une cover de tray vient d'être rendue côté récepteur —
-    /// invalide le tray pour que `latestStoryThumbnailURL` relise le cache local.
-    /// Écriture non restreinte pour la même raison : le compteur est incrémenté
-    /// depuis `StoryViewModel+MediaPreload`, sorti au découpage — et
-    /// `internal(set)` y redirait le défaut d'une classe interne.
-    @Published var receiverCoverRenderTick = 0
+    let coverRenders: StoryCoverRenderSignal
     var uploadTask: Task<Void, Never>?
     /// Garde local-first du drain d'archive « Mes stories » : un seul drain
     /// réseau ABOUTI par session (cf. `loadMyStoriesArchive`).
@@ -114,6 +109,7 @@ class StoryViewModel: ObservableObject, StoryPublishExecutor {
         self.visibilityStore = visibilityStore
         self.draftStore = draftStore
         self.uploadProgress = StoryUploadProgressStore()
+        self.coverRenders = StoryCoverRenderSignal()
         observeReconnectionForRetry()
         observeQueueDispositions()
     }

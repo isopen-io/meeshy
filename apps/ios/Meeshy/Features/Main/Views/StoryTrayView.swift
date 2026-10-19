@@ -59,7 +59,7 @@ struct StoryTrayView: View {
             ) {
                 SkeletonStoryTrayRow()
             } else {
-                storyScrollView
+                StoryCoverRefresh(signal: viewModel.coverRenders) { storyScrollView }
             }
         }
         .frame(height: Self.trayHeight)
@@ -676,7 +676,7 @@ struct PinnedStoryTrailBand: View {
         // siennes, ni la création. Le seuil reste une garde de PERFORMANCE :
         // au repos, aucun anneau n'est matérialisé.
         if reveal > 0.001 {
-            band(groups: groups, ownGroup: own)
+            StoryCoverRefresh(signal: viewModel.coverRenders) { band(groups: groups, ownGroup: own) }
                 // La hauteur suit la révélation : la fente du titre n'est pas
                 // encore assez haute au début de la bascule, et un band pleine
                 // hauteur y déborderait par le haut, hors du header.
@@ -863,4 +863,13 @@ struct PinnedStoryTrailBand: View {
         )
         .accessibilityAddTraits(.isButton)
     }
+}
+
+// MARK: - Story Cover Refresh
+
+struct StoryCoverRefresh<Content: View>: View {
+    @ObservedObject var signal: StoryCoverRenderSignal
+    let content: () -> Content
+
+    var body: some View { content() }
 }

@@ -107,6 +107,19 @@ final class StoryViewModelRedrawIsolationTests: XCTestCase {
         XCTAssertLessThan(shown, 1)
     }
 
+    func test_coverRenderBump_doesNotPublishViewModel_butBumpsSignal() {
+        var emissions = 0
+        let subscription = sut.objectWillChange.sink { emissions += 1 }
+        let before = sut.coverRenders.generation
+
+        sut.coverRenders.bump()
+
+        let after = sut.coverRenders.generation
+        XCTAssertEqual(emissions, 0)
+        XCTAssertEqual(after, before + 1)
+        subscription.cancel()
+    }
+
     private func failedUploadId(slides: [StorySlide] = [StorySlide()]) async throws -> String {
         sut.publishStoryInBackground(
             slides: slides,
