@@ -10,6 +10,13 @@ public enum ContentPlaybackAudibility: Sendable, Equatable {
     case audible
     /// Lecture automatique sans son (fil, bulle inline coupée, story muette).
     case muted
+
+    /// Ce que produit un lecteur à cet instant : coupé, à volume nul ou
+    /// absent, il ne s'entend pas.
+    public static func of(_ player: AVPlayer?) -> ContentPlaybackAudibility {
+        guard let player, !player.isMuted, player.volume > 0 else { return .muted }
+        return .audible
+    }
 }
 
 /// Ce que la session partagée doit devenir pour ce contenu.

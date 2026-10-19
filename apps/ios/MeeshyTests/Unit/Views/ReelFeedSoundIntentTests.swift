@@ -2,6 +2,7 @@ import XCTest
 import AVFoundation
 @testable import Meeshy
 @testable import MeeshyUI
+import MeeshySDK
 
 /// Bouton de son du fil (exigence produit 2026-08-22, S2). Couvre l'ÉTAT DU
 /// LECTEUR, pas seulement l'affichage — le défaut le plus probable de cette
@@ -226,7 +227,7 @@ final class ReelFeedSoundIntentTests: XCTestCase {
         ReelFeedSoundButtonPolicy.apply(soundOn: intent.isSoundOn, to: manager)
 
         XCTAssertFalse(manager.effectiveMuted, "L'icône affiche « son actif » : le lecteur doit vraiment l'être, même si isMuted valait true.")
-        XCTAssertTrue(SharedAVPlayerManager.shouldDuckOthersOnPlay(effectiveMuted: manager.effectiveMuted), "play() doit armer .duckOthers pour cette vidéo désormais audible.")
+        XCTAssertEqual(SharedAVPlayerManager.playbackAudibility(effectiveMuted: manager.effectiveMuted), .audible, "play() doit lancer un son pour cette vidéo désormais audible.")
     }
 
     @MainActor

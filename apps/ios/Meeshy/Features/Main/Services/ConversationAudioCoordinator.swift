@@ -1,3 +1,4 @@
+import AVFoundation
 import Foundation
 import UIKit
 import Combine
@@ -155,6 +156,8 @@ public final class ConversationAudioCoordinator: ObservableObject {
         // without the SDK ever depending on CallManager.
         if let manager = engine as? AudioPlaybackManager {
             manager.sessionProfile = .content
+            // Les interruptions se traitent ICI (suspension d'appel Meeshy comprise).
+            manager.respondsToSessionInterruptions = false
             // La fin d'une piste n'avance que la file du coordinateur (#10730).
             manager.relaysEndToAutoplayRegistry = false
             manager.playbackPermissionGuard = { !CallManagerHost.shared.isCallActiveForAudioGuard }
@@ -283,6 +286,9 @@ public final class ConversationAudioCoordinator: ObservableObject {
             Self.log.info("togglePlayPause() ignored: a CallKit call is active")
             return
         }
+        // L'utilisateur décide : sa pause l'emporte sur une reprise après
+        // interruption, et sa relance ne laisse plus rien à reprendre.
+        _ = interruptionLedger.handle(isPlaying ? .userPaused : .userStartedPlayback)
         // Un lecteur transitoire (préversion composer, statut, réel) a pu
         // stopper le moteur via PlaybackCoordinator.willStartPlaying pendant
         // que la file restait affichée (activeContext non-nil) : le moteur n'a
@@ -337,7 +343,7 @@ public final class ConversationAudioCoordinator: ObservableObject {
         // doit pas survivre à la frontière : sans ce reset, un
         // `.interruptionEndedShouldResume` tardif renverserait la décision de
         // `resumeAfterSystemCall()`.
-        wasPlayingBeforeInterruption = false
+        interruptionLedger = InterruptionResumeLedger()
         clearNowPlayingForSystemCall()
         setRemoteCommandsEnabled(false)
     }
@@ -379,8 +385,13 @@ public final class ConversationAudioCoordinator: ObservableObject {
     /// Armé par `.interruptionBegan` UNIQUEMENT si la lecture était en cours ;
     /// consommé par la fin d'interruption. Une pause déclenchée par un retrait
     /// d'AirPods (`routeChangedOldDeviceUnavailable`) ne l'arme PAS —
-    /// convention iOS : débrancher = pause, sans reprise automatique.
-    private var wasPlayingBeforeInterruption = false
+    /// convention iOS : débrancher = pause, sans reprise automatique. La
+    /// machine d'état est celle de tous les lecteurs (`InterruptionResumeLedger`,
+    /// #11040).
+    private var interruptionLedger = InterruptionResumeLedger()
+
+    /// `AVAudioSession.isOtherAudioPlaying` — injectable pour les témoins.
+    var otherAudioIsPlaying: () -> Bool = { AVAudioSession.sharedInstance().isOtherAudioPlaying }
 
     private func wireSessionInterruptionHooks(
         _ events: AnyPublisher<MediaSessionCoordinator.Event, Never>
@@ -389,6 +400,20 @@ public final class ConversationAudioCoordinator: ObservableObject {
             .receive(on: DispatchQueue.main)
             .sink { [weak self] event in self?.handleSessionEvent(event) }
             .store(in: &cancellables)
+        // Reprise sans signal de fin (vidéo d'une autre app) : au retour dans
+        // Meeshy, plus aucun autre son ⇒ le vocal interrompu reprend.
+        NotificationCenter.default.publisher(for: UIApplication.didBecomeActiveNotification)
+            .receive(on: DispatchQueue.main)
+            .sink { [weak self] _ in self?.handleReturnToForeground() }
+            .store(in: &cancellables)
+    }
+
+    /// `internal` : appelé en synchrone par les tests, par le sink en prod.
+    func handleReturnToForeground() {
+        guard !_isSuspendedBySystemCall, interruptionLedger.holdsInterruptedPlayback else { return }
+        applyInterruptionAction(interruptionLedger.handle(.returnedToForeground(
+            otherAudioPlaying: otherAudioIsPlaying(), contentStillOnScreen: activeContext != nil
+        )))
     }
 
     /// `internal` : appelé en synchrone par les tests, par le sink en prod.
@@ -399,29 +424,25 @@ public final class ConversationAudioCoordinator: ObservableObject {
     func handleSessionEvent(_ event: MediaSessionCoordinator.Event) {
         guard !_isSuspendedBySystemCall else { return }
         guard activeContext != nil else { return }
-        switch event {
-        case .interruptionBegan:
+        // La fin d'un appel Meeshy a son propre chemin (`resumeAfterSystemCall`,
+        // piloté par CallManager) : le signal du SDK n'est pas lu ici.
+        guard event != .callEndedShouldResume,
+              let signal = InterruptionResumeLedger.signal(for: event, isPlaying: isPlaying) else { return }
+        // Un retrait d'AirPods désarme INCONDITIONNELLEMENT une interruption
+        // déjà armée (ex. Siri en cours) : sinon `.interruptionEndedShouldResume`
+        // relancerait la lecture alors que la sortie vient d'être débranchée.
+        applyInterruptionAction(interruptionLedger.handle(signal))
+    }
+
+    private func applyInterruptionAction(_ action: InterruptionResumeLedger.Action) {
+        switch action {
+        case .pause:
             guard isPlaying else { return }
-            wasPlayingBeforeInterruption = true
             engine.pause()
-        case .interruptionEndedShouldResume:
-            guard wasPlayingBeforeInterruption else { return }
-            wasPlayingBeforeInterruption = false
+        case .resume:
             guard !CallManagerHost.shared.isCallActiveForAudioGuard else { return }
             engine.resumeFromInterruption()
-        case .interruptionEndedShouldNotResume:
-            wasPlayingBeforeInterruption = false
-        case .routeChangedOldDeviceUnavailable:
-            // Désarme INCONDITIONNELLEMENT, avant le guard `isPlaying` : une
-            // interruption déjà armée (ex. Siri en cours) ne doit pas survivre
-            // à un retrait d'AirPods pendant cette même interruption — sinon
-            // `.interruptionEndedShouldResume` relance la lecture alors que le
-            // périphérique de sortie vient d'être débranché. Convention iOS :
-            // débrancher = pause, sans reprise automatique.
-            wasPlayingBeforeInterruption = false
-            guard isPlaying else { return }
-            engine.pause()
-        case .routeChangedOther, .callEndedShouldResume:
+        case .none:
             break
         }
     }

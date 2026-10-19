@@ -685,7 +685,7 @@ public struct MeeshyAudioEditorView: View {
     private func configureAudioSession() {
         // Source UNIQUE call-aware : l'éditeur audio ne stomp pas un appel VoIP actif
         // (sinon micro coupé). No-op pendant un appel.
-        MediaSessionCoordinator.shared.activatePlaybackSync(options: [])
+        MediaSessionCoordinator.shared.activateContentPlayback(.audible)
     }
 
     private func deactivateAudioSession() {

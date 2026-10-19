@@ -666,7 +666,7 @@ public final class StoryMediaLayer: CALayer {
             // no-op pendant un appel (micro de l'appel préservé). Couvre aussi le
             // composer live preview (`.edit` + `playsInEditMode`) → audio des
             // vidéos qui bouclent dans l'éditeur.
-            MediaSessionCoordinator.shared.activatePlaybackSync(options: [.mixWithOthers, .duckOthers])
+            MediaSessionCoordinator.shared.activateContentPlayback(ContentPlaybackAudibility.of(player))
         }
 
         switch mode {
