@@ -1,4 +1,8 @@
+import contextlib
 import importlib.util
+import io
+import json
+import tempfile
 import unittest
 from pathlib import Path
 
@@ -166,6 +170,133 @@ class Scope(unittest.TestCase):
                 (root / rel).write_text(body, encoding="utf-8")
             rels = sorted(rel for rel, _ in ENGINE.collect(root))
         self.assertEqual(rels, ["apps/ios/Meeshy/A.swift", "apps/ios/MeeshyWidgets/W.swift"])
+
+
+def run_main(argv):
+    out, err = io.StringIO(), io.StringIO()
+    with contextlib.redirect_stdout(out), contextlib.redirect_stderr(err):
+        code = ENGINE.main(argv)
+    return code, out.getvalue(), err.getvalue()
+
+
+def zero_baseline(**overrides):
+    return {"version": 1, "rules": {**{r.id: 0 for r in ENGINE.RULES}, **overrides}}
+
+
+class Workspace:
+    def __init__(self, files, baseline):
+        self.tmp = tempfile.TemporaryDirectory()
+        self.root = Path(self.tmp.name) / "repo"
+        for rel, body in files.items():
+            (self.root / rel).parent.mkdir(parents=True, exist_ok=True)
+            (self.root / rel).write_text(body, encoding="utf-8")
+        self.baseline = Path(self.tmp.name) / "baseline.json"
+        if baseline is not None:
+            self.baseline.write_text(baseline if isinstance(baseline, str) else json.dumps(baseline), encoding="utf-8")
+
+    def run(self, *extra):
+        return run_main(["--root", str(self.root), "--baseline", str(self.baseline), *extra])
+
+    def __enter__(self):
+        return self
+
+    def __exit__(self, *exc):
+        self.tmp.cleanup()
+
+
+def screens(n):
+    return "".join(f"_ = UIScreen.main.bounds{i}\n" for i in range(n))
+
+
+class Ratchet(unittest.TestCase):
+    def test_rise_fails_and_names_rule_totals_and_five_worst_files(self):
+        files = {f"apps/ios/Meeshy/F{i}.swift": screens(i + 1) for i in range(7)}
+        with Workspace(files, zero_baseline(**{"uiscreen-main": 20})) as ws:
+            code, _, err = ws.run()
+        self.assertEqual(code, 0)
+        with Workspace(files, zero_baseline(**{"uiscreen-main": 3})) as ws:
+            code, _, err = ws.run()
+        self.assertEqual(code, 1)
+        self.assertIn("uiscreen-main", err)
+        self.assertIn("3 -> 28", err)
+        self.assertEqual(err.count("apps/ios/Meeshy/F"), 5)
+        self.assertIn("apps/ios/Meeshy/F6.swift", err)
+        self.assertNotIn("apps/ios/Meeshy/F0.swift", err)
+
+    def test_equal_passes(self):
+        with Workspace({"apps/ios/Meeshy/A.swift": screens(2)}, zero_baseline(**{"uiscreen-main": 2})) as ws:
+            self.assertEqual(ws.run()[0], 0)
+
+    def test_drop_passes_and_asks_for_write_baseline(self):
+        with Workspace({"apps/ios/Meeshy/A.swift": screens(1)}, zero_baseline(**{"uiscreen-main": 2})) as ws:
+            code, out, _ = ws.run()
+        self.assertEqual(code, 0)
+        self.assertIn("en baisse", out)
+        self.assertIn("--write-baseline", out)
+
+
+class StrictBaseline(unittest.TestCase):
+    FILES = {"apps/ios/Meeshy/A.swift": "let a = 1\n"}
+
+    def test_rule_missing_from_baseline_fails(self):
+        partial = zero_baseline()
+        del partial["rules"]["nslog"]
+        with Workspace(self.FILES, partial) as ws:
+            code, _, err = ws.run()
+        self.assertEqual(code, 1)
+        self.assertIn("nslog", err)
+
+    def test_unknown_baseline_key_fails(self):
+        with Workspace(self.FILES, zero_baseline(inconnue=0)) as ws:
+            code, _, err = ws.run()
+        self.assertEqual(code, 1)
+        self.assertIn("inconnue", err)
+
+    def test_missing_or_unreadable_baseline_fails(self):
+        with Workspace(self.FILES, None) as ws:
+            self.assertEqual(ws.run()[0], 1)
+        with Workspace(self.FILES, "{pas du json") as ws:
+            self.assertEqual(ws.run()[0], 1)
+
+
+class WriteBaseline(unittest.TestCase):
+    def test_refuses_to_raise_and_leaves_file_untouched(self):
+        with Workspace({"apps/ios/Meeshy/A.swift": screens(3)}, zero_baseline(**{"uiscreen-main": 1})) as ws:
+            before = ws.baseline.read_bytes()
+            code, _, err = ws.run("--write-baseline")
+            self.assertEqual(code, 1)
+            self.assertIn("uiscreen-main", err)
+            self.assertEqual(ws.baseline.read_bytes(), before)
+
+    def test_lowers_totals(self):
+        with Workspace({"apps/ios/Meeshy/A.swift": screens(1)}, zero_baseline(**{"uiscreen-main": 5})) as ws:
+            self.assertEqual(ws.run("--write-baseline")[0], 0)
+            written = json.loads(ws.baseline.read_text(encoding="utf-8"))
+        self.assertEqual(written["rules"]["uiscreen-main"], 1)
+        self.assertEqual(written["version"], 1)
+
+    def test_bootstraps_when_no_file_exists(self):
+        with Workspace({"apps/ios/Meeshy/A.swift": screens(2)}, None) as ws:
+            self.assertEqual(ws.run("--write-baseline")[0], 0)
+            written = json.loads(ws.baseline.read_text(encoding="utf-8"))
+            self.assertEqual(ws.run()[0], 0)
+        self.assertEqual(written["rules"]["uiscreen-main"], 2)
+        self.assertEqual(set(written["rules"]), {r.id for r in ENGINE.RULES})
+
+
+class CommittedBaseline(unittest.TestCase):
+    def test_every_rule_is_green_and_goes_red_when_lowered(self):
+        committed = json.loads(ENGINE.BASELINE.read_text(encoding="utf-8"))
+        self.assertEqual(run_main([])[0], 0)
+        for rule_id in committed["rules"]:
+            with self.subTest(rule=rule_id):
+                lowered = {"version": 1, "rules": {**committed["rules"], rule_id: committed["rules"][rule_id] - 1}}
+                with tempfile.TemporaryDirectory() as tmp:
+                    path = Path(tmp) / "b.json"
+                    path.write_text(json.dumps(lowered), encoding="utf-8")
+                    code, _, err = run_main(["--baseline", str(path)])
+                self.assertEqual(code, 1)
+                self.assertIn(rule_id, err)
 
 
 if __name__ == "__main__":
