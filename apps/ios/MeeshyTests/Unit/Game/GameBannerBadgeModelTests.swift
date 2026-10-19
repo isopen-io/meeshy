@@ -17,6 +17,7 @@ final class GameBannerBadgeModelTests: XCTestCase {
 
         XCTAssertEqual(model.userId, "u1")
         XCTAssertEqual(model.level, 42)
+        XCTAssertEqual(model.levelName, GameCopy.tierName(.eclat), "le nom du palier se pose au-dessus du cercle (#10951)")
         XCTAssertEqual(model.rankName, GameCopy.rankLabel(standing()))
     }
 
@@ -37,7 +38,7 @@ final class GameBannerBadgeModelTests: XCTestCase {
         XCTAssertFalse((model.levelAccessibilityLabel + model.rankAccessibilityLabel).contains(GameCopy.flameFormName(.brasier)))
     }
 
-    // MARK: - La Gloire en grand, un trait, puis les étincelles — en glyphes, sans mot (#10913, #10951)
+    // MARK: - Les étincelles en grand près du cercle, la Gloire près du blason — en glyphes, sans mot (#10913, #10951)
 
     private func sparked(points: Int? = nil, sparks: Int? = nil, lifetime: Int? = nil, glory: Int? = nil, level: Int = 3,
                          levelMax: Int? = nil) -> GameBannerBadgeModel? {
@@ -47,7 +48,7 @@ final class GameBannerBadgeModelTests: XCTestCase {
         return GameBannerBadgeModel.of(GameStandingContent(standing: served, treasuryTier: nil), userId: "u1")
     }
 
-    /// Soi ou un ami : la Gloire en grand, « ♛ 16 000 », puis les étincelles, « ✦ 976 » — jamais le record d'étincelles.
+    /// Soi ou un ami : « ✦ 976 » près du cercle, « ♛ 16 000 » près du blason — jamais le record d'étincelles.
     func test_servedGlory_readsAsGlyphs_neverTheLifetimeSparks() throws {
         let model = try XCTUnwrap(sparked(points: 976, sparks: 976, lifetime: 12_000, glory: 16_000))
 
@@ -105,13 +106,20 @@ final class GameBannerBadgeModelTests: XCTestCase {
         XCTAssertEqual(try XCTUnwrap(sparked(level: 3)).levelProgress, 1)
     }
 
-    func test_levelAccessibilityLabel_readsPocketGloryAndLifetimeMax() throws {
+    func test_levelAccessibilityLabel_readsPocketAndLifetimeMax_theRankReadsTheGlory() throws {
         let model = try XCTUnwrap(sparked(points: 976, sparks: 976, lifetime: 12_000, glory: 16_000, level: 3, levelMax: 40))
+        let glory = GameCopy.gloryAmount(GameCopy.formatCount(16_000))
 
         XCTAssertTrue(model.levelAccessibilityLabel.contains(GameSparksCopy.sparks(976)))
-        XCTAssertTrue(model.levelAccessibilityLabel.contains(GameCopy.gloryAmount(GameCopy.formatCount(16_000))))
-        XCTAssertFalse(model.levelAccessibilityLabel.contains(GameBannerBadgeModel.gloryGlyph))
         XCTAssertTrue(model.levelAccessibilityLabel.contains(GameSparksCopy.levelMaxAccessibility(40)))
+        XCTAssertFalse(model.levelAccessibilityLabel.contains(glory), "la Gloire se lit avec le rang, à côté duquel elle se pose")
+        XCTAssertTrue(model.rankAccessibilityLabel.hasSuffix(GameText.bannerSeparator + glory))
+        XCTAssertFalse(model.rankAccessibilityLabel.contains(GameBannerBadgeModel.gloryGlyph))
+    }
+
+    func test_rankAccessibilityLabel_withheldGlory_readsTheRankAlone() throws {
+        let model = try XCTUnwrap(sparked(points: 976))
+        XCTAssertEqual(model.rankAccessibilityLabel, ConceptText.factRank + GameText.bannerSeparator + model.rankName)
     }
 
     // MARK: - Coins LOGIQUES : aucun arrondi au bord de début des étincelles ni au bord de fin des rangs
