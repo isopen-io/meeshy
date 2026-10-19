@@ -1,0 +1,13 @@
+import UIKit
+
+enum StoryCanvasDisplayScale {
+
+    nonisolated static func resolved(trait: CGFloat, fallback: CGFloat) -> CGFloat {
+        trait > 0 ? trait : max(1, fallback)
+    }
+
+    @MainActor
+    static var ambient: CGFloat {
+        resolved(trait: UITraitCollection.current.displayScale, fallback: 1)
+    }
+}

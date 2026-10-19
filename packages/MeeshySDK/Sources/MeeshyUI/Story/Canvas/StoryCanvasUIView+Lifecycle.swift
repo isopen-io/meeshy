@@ -52,6 +52,11 @@ extension StoryCanvasUIView {
         }
     }
 
+    var canvasDisplayScale: CGFloat {
+        StoryCanvasDisplayScale.resolved(trait: traitCollection.displayScale,
+                                         fallback: UITraitCollection.current.displayScale)
+    }
+
     public override func traitCollectionDidChange(_ previousTraitCollection: UITraitCollection?) {
         super.traitCollectionDidChange(previousTraitCollection)
         // Stage Manager / Split View on iPad can change horizontal/vertical

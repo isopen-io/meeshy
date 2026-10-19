@@ -103,8 +103,9 @@ public enum StoryRenderer {
     ///     live composer/viewer canvas which rebuilds every layer each call.
     ///   - contentsScale: Pixel density applied to the root layer and to the
     ///     persisted-drawing rasterization. Live composer/viewer leaves this at
-    ///     the device default (`UIScreen.main.scale`) so the on-screen canvas
-    ///     stays crisp. Export callers (`StoryAVCompositor`) MUST pass `1.0` so
+    ///     the ambient trait scale (`StoryCanvasDisplayScale.ambient`); the live
+    ///     canvas passes its own `traitCollection.displayScale` so the on-screen
+    ///     canvas stays crisp. Export callers (`StoryAVCompositor`) MUST pass `1.0` so
     ///     the rendered pixel buffer matches the design-space resolution
     ///     (1080×1920) and does not get upsampled to 3× on devices with a 3×
     ///     screen scale.
@@ -129,7 +130,7 @@ public enum StoryRenderer {
                               cache: StoryRendererCache? = nil,
                               backdropProvider: BackdropProvider? = nil,
                               mediaFrameProvider: ((StoryMediaObject, CMTime) -> CGImage?)? = nil,
-                              contentsScale: CGFloat = UIScreen.main.scale,
+                              contentsScale: CGFloat = StoryCanvasDisplayScale.ambient, imageDecodeTiming: StoryImageDecodeTiming = .immediate,
                               suppressDrawingOverlay: Bool = false,
                               reduceMotion: Bool = UIAccessibility.isReduceMotionEnabled,
                               outOfWindowGhostOpacity: Float? = nil) -> CALayer {
@@ -174,7 +175,7 @@ public enum StoryRenderer {
                                              resolver: resolver,
                                              imageCache: imageCache,
                                              playerProvider: playerProvider,
-                                             renderScale: contentsScale)
+                                             renderScale: contentsScale, decodeTiming: imageDecodeTiming)
                         return mediaLayer
                     }
                     : nil
@@ -189,7 +190,7 @@ public enum StoryRenderer {
                                resolver: resolver,
                                imageCache: imageCache,
                                playerProvider: playerProvider,
-                               contentsScale: contentsScale)
+                               contentsScale: contentsScale, imageDecodeTiming: imageDecodeTiming)
                 }
             } else {
                 layer = renderItem(item,
@@ -200,7 +201,7 @@ public enum StoryRenderer {
                                    resolver: resolver,
                                    imageCache: imageCache,
                                    playerProvider: playerProvider,
-                                   contentsScale: contentsScale)
+                                   contentsScale: contentsScale, imageDecodeTiming: imageDecodeTiming)
             }
 
             // Feed glass-style text layers with a backdrop snapshot when the
@@ -464,7 +465,7 @@ public enum StoryRenderer {
                                    resolver: (@Sendable (String) -> URL?)? = nil,
                                    imageCache: ImageCacheReader? = nil,
                                    playerProvider: (any StoryCarrierPlayerProviding)? = nil,
-                                   contentsScale: CGFloat = UIScreen.main.scale) -> CALayer {
+                                   contentsScale: CGFloat = StoryCanvasDisplayScale.ambient, imageDecodeTiming: StoryImageDecodeTiming = .immediate) -> CALayer {
         if let media = item as? StoryMediaObject {
             let layer = StoryMediaLayer()
             layer.configure(with: media,
@@ -473,7 +474,7 @@ public enum StoryRenderer {
                             resolver: resolver,
                             imageCache: imageCache,
                             playerProvider: playerProvider,
-                            renderScale: contentsScale)
+                            renderScale: contentsScale, decodeTiming: imageDecodeTiming)
             // Keyframe overrides for media objects (position, scale, opacity)
             if mode == .play, let kfs = media.keyframes, !kfs.isEmpty {
                 applyKeyframeOverrides(kfs,

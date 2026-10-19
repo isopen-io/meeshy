@@ -134,6 +134,7 @@ public final class StoryRendererCache: @unchecked Sendable {
     private var lastLanguages: [String] = []
     private var lastMode: RenderMode?
     private var lastRenderSize: CGSize?
+    private var lastContentsScale: CGFloat?
 
     /// Number of cache hits since the last `invalidate()`. Read by tests to
     /// confirm consecutive frames actually reuse layers.
@@ -226,6 +227,7 @@ public final class StoryRendererCache: @unchecked Sendable {
         lastLanguages = []
         lastMode = nil
         lastRenderSize = nil
+        lastContentsScale = nil
         cacheHitCount = 0
         cacheMissCount = 0
     }
@@ -247,11 +249,13 @@ public final class StoryRendererCache: @unchecked Sendable {
     public func invalidateIfNeeded(slideId: String,
                                    languages: [String],
                                    mode: RenderMode,
-                                   renderSize: CGSize? = nil) -> Bool {
+                                   renderSize: CGSize? = nil,
+                                   contentsScale: CGFloat? = nil) -> Bool {
         if lastSlideId == slideId
             && lastLanguages == languages
             && lastMode == mode
-            && (renderSize == nil || lastRenderSize == renderSize) {
+            && (renderSize == nil || lastRenderSize == renderSize)
+            && (contentsScale == nil || lastContentsScale == contentsScale) {
             return false
         }
         invalidate()
@@ -259,6 +263,7 @@ public final class StoryRendererCache: @unchecked Sendable {
         lastLanguages = languages
         lastMode = mode
         lastRenderSize = renderSize
+        lastContentsScale = contentsScale
         return true
     }
 

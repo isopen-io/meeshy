@@ -257,7 +257,7 @@ public final class StoryMediaLayer: CALayer {
                           resolver: (@Sendable (String) -> URL?)? = nil,
                           imageCache: ImageCacheReader? = nil,
                           playerProvider: (any StoryCarrierPlayerProviding)? = nil,
-                          renderScale: CGFloat = UIScreen.main.scale,
+                          renderScale: CGFloat = StoryCanvasDisplayScale.ambient,
                           decodeTiming: StoryImageDecodeTiming = .immediate) {
         self.media = media
         self.playerProvider = playerProvider

@@ -1,7 +1,7 @@
 import Foundation
 import MeeshySDK
 
-enum StoryImageDecodeTiming: Sendable, Equatable {
+public enum StoryImageDecodeTiming: Sendable, Equatable {
     case immediate
     case offMainActor
 }

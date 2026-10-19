@@ -21,7 +21,8 @@ public protocol BackdropCapturing: AnyObject {
                                geometry: CanvasGeometry,
                                time: CMTime,
                                mode: RenderMode,
-                               languages: [String]) -> MTLTexture?
+                               languages: [String],
+                               contentsScale: CGFloat) -> MTLTexture?
 
     /// Returns a region of the cached canvas backdrop matching `frame`. See
     /// `StoryBackdropCapture.cropRegion`.
@@ -145,7 +146,8 @@ public final class StoryBackdropCapture: BackdropCapturing {
                                       geometry: CanvasGeometry,
                                       time: CMTime,
                                       mode: RenderMode,
-                                      languages: [String]) -> MTLTexture? {
+                                      languages: [String],
+                                      contentsScale: CGFloat = StoryCanvasDisplayScale.ambient) -> MTLTexture? {
         // Fast exit : no glass texts → no backdrop needed.
         guard hasGlassItem(in: slide) else {
             cachedCanvasBackdrop = nil
@@ -193,7 +195,8 @@ public final class StoryBackdropCapture: BackdropCapturing {
                                                 at: time,
                                                 mode: mode,
                                                 languages: languages,
-                                                backdropProvider: nil)
+                                                backdropProvider: nil,
+                                                contentsScale: contentsScale)
         // CARenderer paints whatever it gets at the texture's origin. Pin the
         // tree's frame to the texture extents so cropping is straightforward.
         backdropTree.frame = CGRect(origin: .zero, size: renderSize)
@@ -220,6 +223,7 @@ public final class StoryBackdropCapture: BackdropCapturing {
                                  geometry: CanvasGeometry,
                                  time: CMTime,
                                  languages: [String],
+                                 contentsScale: CGFloat,
                                  key: StoryGlassCaptureKey,
                                  now: CFTimeInterval) -> MTLTexture? {
         invalidate()
@@ -227,7 +231,8 @@ public final class StoryBackdropCapture: BackdropCapturing {
                                             geometry: geometry,
                                             time: time,
                                             mode: .play,
-                                            languages: languages)
+                                            languages: languages,
+                                            contentsScale: contentsScale)
         guard texture != nil else { return nil }
         playbackKey = key
         playbackCapturedAt = now

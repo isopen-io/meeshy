@@ -150,7 +150,8 @@ extension StoryCanvasUIView {
                                                       geometry: geometry,
                                                       time: currentTime,
                                                       mode: renderMode,
-                                                      languages: readerContext.preferredLanguages)
+                                                      languages: readerContext.preferredLanguages,
+                                                      contentsScale: canvasDisplayScale)
         }
 
         // Cache CALayer : actif dans LES DEUX modes depuis 2026-07-11.
@@ -169,7 +170,8 @@ extension StoryCanvasUIView {
             cacheForRender.invalidateIfNeeded(slideId: slide.id,
                                               languages: readerContext.preferredLanguages,
                                               mode: renderMode,
-                                              renderSize: geometry.renderSize)
+                                              renderSize: geometry.renderSize,
+                                              contentsScale: canvasDisplayScale)
         }
 
         let editGlassProvider: StoryRenderer.BackdropProvider?
@@ -190,6 +192,8 @@ extension StoryCanvasUIView {
                                             playerProvider: readerContext.playerProvider,
                                             cache: cacheForRender,
                                             backdropProvider: editGlassProvider,
+                                            contentsScale: canvasDisplayScale,
+                                            imageDecodeTiming: .offMainActor,
                                             suppressDrawingOverlay: isDrawingOverlayActive,
                                             outOfWindowGhostOpacity: timelineGhostOpacity)
         for sub in rendered.sublayers ?? [] {
@@ -357,6 +361,7 @@ extension StoryCanvasUIView {
                                                 geometry: geometry,
                                                 time: currentTime,
                                                 languages: languages,
+                                                contentsScale: canvasDisplayScale,
                                                 key: key,
                                                 now: now)
     }
