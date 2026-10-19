@@ -17,6 +17,7 @@
 
 import AVKit
 import UIKit
+import MeeshySDK
 import os
 
 // MARK: - Protocol (WebRTC-free, toujours compilé)

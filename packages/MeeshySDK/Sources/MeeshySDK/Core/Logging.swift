@@ -8,4 +8,5 @@ public extension Logger {
     nonisolated static let socket = Logger(subsystem: "me.meeshy.app", category: "socket")
     nonisolated static let cache = Logger(subsystem: "me.meeshy.app", category: "cache")
     nonisolated static let ui = Logger(subsystem: "me.meeshy.app", category: "ui")
+    nonisolated static let pip = Logger(subsystem: "me.meeshy.app", category: "pip")
 }

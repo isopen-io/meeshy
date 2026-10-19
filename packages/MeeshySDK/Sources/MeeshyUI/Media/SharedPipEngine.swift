@@ -1,10 +1,8 @@
 import AVFoundation
 import AVKit
 import Combine
+import MeeshySDK
 import os
-
-/// Console de l'iPhone : sous-système `me.meeshy.app`, catégorie `pip`.
-nonisolated private let pipLog = Logger(subsystem: "me.meeshy.app", category: "pip")
 
 /// La fenêtre Picture in Picture du lecteur partagé : le contrôleur AVKit, son
 /// délégué, les drapeaux de transition et la création différée. Le moteur
@@ -127,7 +125,7 @@ final class SharedPipEngine {
         pipController?.invalidatePlaybackState()
         let controller = AVPictureInPictureController(playerLayer: playerLayer)
         controller?.canStartPictureInPictureAutomaticallyFromInline = true
-        pipLog.info("controller created — exists=\(controller != nil, privacy: .public) possible=\(controller?.isPictureInPicturePossible ?? false, privacy: .public)")
+        Logger.pip.info("controller created — exists=\(controller != nil, privacy: .public) possible=\(controller?.isPictureInPicturePossible ?? false, privacy: .public)")
         let delegate = PipDelegate(onWillStart: { [weak self] in
             Task { @MainActor [weak self] in
                 self?.startLedger.systemWillStart()
@@ -175,7 +173,7 @@ final class SharedPipEngine {
 
     func start(haltsOnFailure: Bool) -> Bool {
         guard let pipController, pipController.isPictureInPicturePossible else {
-            pipLog.info("manual start refused — controller=\(self.pipController != nil, privacy: .public) possible=false")
+            Logger.pip.info("manual start refused — controller=\(self.pipController != nil, privacy: .public) possible=false")
             return false
         }
         startLedger.requested(haltsOnFailure: haltsOnFailure)
@@ -246,23 +244,23 @@ private final class PipDelegate: NSObject, AVPictureInPictureControllerDelegate 
     /// son animation : sans lui, le garde d'arrière-plan croyait la vidéo
     /// sans fenêtre et la mettait en pause (#11041).
     func pictureInPictureControllerWillStartPictureInPicture(_ controller: AVPictureInPictureController) {
-        pipLog.info("willStart")
+        Logger.pip.info("willStart")
         onWillStart()
     }
 
     func pictureInPictureController(_ controller: AVPictureInPictureController,
                                      failedToStartPictureInPictureWithError error: Error) {
-        pipLog.error("failedToStart — \(error.localizedDescription, privacy: .public) (\((error as NSError).domain, privacy: .public) \((error as NSError).code, privacy: .public))")
+        Logger.pip.error("failedToStart — \(error.localizedDescription, privacy: .public) (\((error as NSError).domain, privacy: .public) \((error as NSError).code, privacy: .public))")
         onFailedToStart()
     }
 
     func pictureInPictureControllerDidStartPictureInPicture(_ controller: AVPictureInPictureController) {
-        pipLog.info("didStart")
+        Logger.pip.info("didStart")
         onStart()
     }
 
     func pictureInPictureControllerDidStopPictureInPicture(_ controller: AVPictureInPictureController) {
-        pipLog.info("didStop")
+        Logger.pip.info("didStop")
         onStop()
     }
 

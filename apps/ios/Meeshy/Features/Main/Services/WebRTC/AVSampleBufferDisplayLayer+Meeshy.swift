@@ -15,6 +15,7 @@
 
 import AVFoundation
 import CoreMedia
+import MeeshySDK
 import os
 
 nonisolated extension AVSampleBufferDisplayLayer {

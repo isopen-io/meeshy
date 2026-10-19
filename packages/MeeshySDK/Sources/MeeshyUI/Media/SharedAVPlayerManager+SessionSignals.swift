@@ -58,7 +58,7 @@ extension SharedAVPlayerManager {
         }
         guard wantsPlayback else { return }
         Task { @MainActor [weak self] in
-            try? await Task.sleep(nanoseconds: 500_000_000)
+            do { try await Task.sleep(nanoseconds: 500_000_000) } catch { return }
             guard let self, self.wantsPlayback, (self.player?.rate ?? 0) == 0,
                   !self.interruptionLedger.holdsInterruptedPlayback else { return }
             self.wantsPlayback = false

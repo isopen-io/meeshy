@@ -5,9 +5,6 @@ import MeeshyUI
 import os
 
 private let logger = Logger(subsystem: "me.meeshy.app", category: "background-transition")
-/// Console de l'iPhone : sous-système `me.meeshy.app`, catégorie `pip` — le
-/// même canal que le moteur PiP du lecteur partagé (#11041).
-private let pipLogger = Logger(subsystem: "me.meeshy.app", category: "pip")
 
 /// Orchestrates the `.background` scene transition under a real
 /// `beginBackgroundTask` umbrella so every step gets a bounded OS budget
@@ -463,7 +460,7 @@ final class MediaLifecycleBridge {
             anyAudioEnginePlaying: PlaybackCoordinator.shared.isAnyAudioPlaying,
             video: videoVerdict
         )
-        pipLogger.info("background decision — playing=\(video.isPlaying, privacy: .public) configured=\(video.isPipConfigured, privacy: .public) possible=\(video.isPipPossible, privacy: .public) startingOrEngaged=\(video.isPipStartingOrEngaged, privacy: .public) failed=\(pipFailed, privacy: .public) → video=\(String(describing: videoVerdict), privacy: .public) keepsSession=\(decision.keepsSessionAlive, privacy: .public)")
+        Logger.pip.info("background decision — playing=\(video.isPlaying, privacy: .public) configured=\(video.isPipConfigured, privacy: .public) possible=\(video.isPipPossible, privacy: .public) startingOrEngaged=\(video.isPipStartingOrEngaged, privacy: .public) failed=\(pipFailed, privacy: .public) → video=\(String(describing: videoVerdict), privacy: .public) keepsSession=\(decision.keepsSessionAlive, privacy: .public)")
         // `.handOffToPip` : la vidéo appartient à la fenêtre — ni pause, ni
         // `stopAll()` (qui démonterait le PiP), et la session reste active.
         // `.pause` : `pause()` (pas `stop()`) ne touche pas à la session
