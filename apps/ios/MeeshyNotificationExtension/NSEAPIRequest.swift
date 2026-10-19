@@ -12,7 +12,7 @@ import MeeshySDK
 ///
 /// L'identité vient de `ClientInfoProvider.identityHeaders()`, la même que
 /// l'`APIClient` envoie : aucune seconde orthographe à laisser diverger.
-nonisolated enum NSEAPIRequest {
+enum NSEAPIRequest {
 
     static func make(
         url: URL,

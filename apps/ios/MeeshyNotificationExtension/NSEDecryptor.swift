@@ -22,13 +22,13 @@ import CryptoKit
 /// unit-testable; the keychain read is injected as a closure.
 enum NSEDecryptor {
 
-    nonisolated private static let appGroupId = "group.me.meeshy.apps"
-    nonisolated private static let keychainService = "me.meeshy.app"
+    private static let appGroupId = "group.me.meeshy.apps"
+    private static let keychainService = "me.meeshy.app"
 
     /// Attempt to decrypt an E2EE message from the push payload.
     /// Returns the decrypted plaintext, or nil if decryption fails
     /// (missing session key, corrupted ciphertext, etc.).
-    nonisolated static func decrypt(
+    static func decrypt(
         encryptedBase64: String,
         senderUserId: String,
         activeUserId: String? = appGroupActiveUserId(),
@@ -57,7 +57,7 @@ enum NSEDecryptor {
     /// namespaced (`{activeUserId}.me.meeshy.e2ee.session.{senderId}`) first,
     /// then the legacy un-namespaced account. Without an active user only the
     /// legacy account is meaningful.
-    nonisolated static func sessionKeyAccountCandidates(
+    static func sessionKeyAccountCandidates(
         activeUserId: String?,
         senderUserId: String
     ) -> [String] {
@@ -69,7 +69,7 @@ enum NSEDecryptor {
     /// Active user resolved from the App Group `UserDefaults` — written by
     /// `AuthManager` at login, same source `NSEDataSync.readAuthToken` uses
     /// for the JWT lookup.
-    nonisolated static func appGroupActiveUserId() -> String? {
+    static func appGroupActiveUserId() -> String? {
         UserDefaults(suiteName: appGroupId)?.string(forKey: "meeshy_active_user_id")
     }
 
@@ -77,7 +77,7 @@ enum NSEDecryptor {
     /// `accessGroup` (when resolvable) pins the query to the shared
     /// `<TEAMID>.me.meeshy.app` keychain group — the NSE process may
     /// otherwise default to its own bundle group and silently miss the item.
-    nonisolated static func keychainQuery(
+    static func keychainQuery(
         account: String,
         accessGroup: String?
     ) -> [String: Any] {
@@ -95,7 +95,7 @@ enum NSEDecryptor {
     }
 
     /// Live keychain read used outside tests.
-    nonisolated static func defaultKeychainRead(account: String) -> Data? {
+    static func defaultKeychainRead(account: String) -> Data? {
         let query = keychainQuery(account: account, accessGroup: sharedKeychainAccessGroup)
         var result: AnyObject?
         let status = SecItemCopyMatching(query as CFDictionary, &result)
@@ -108,7 +108,7 @@ enum NSEDecryptor {
     /// `me.meeshy.app`. Mirror of `NSEDataSync.sharedKeychainAccessGroup`
     /// (kept self-contained: `NSEDataSync` is not compiled into the test
     /// target, and its helper is private).
-    nonisolated private static let sharedKeychainAccessGroup: String? = {
+    private static let sharedKeychainAccessGroup: String? = {
         let discoveryQuery: [String: Any] = [
             kSecClass as String: kSecClassGenericPassword,
             kSecAttrAccount as String: "_meeshy_nse_seed_discovery",
@@ -133,7 +133,7 @@ enum NSEDecryptor {
     /// Read the E2EE session key from the shared Keychain, trying the
     /// namespaced account first, then the legacy one. The stored value is the
     /// UTF-8 bytes of the base64-encoded raw `SymmetricKey`.
-    private nonisolated static func loadSessionKey(
+    private static func loadSessionKey(
         senderUserId: String,
         activeUserId: String?,
         readKeychainData: (String) -> Data?

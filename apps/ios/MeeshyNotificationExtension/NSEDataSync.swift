@@ -15,7 +15,7 @@ import os
 ///   request identity comes from `NSEAPIRequest`, the one NSE file that reads
 ///   `ClientInfoProvider` so every request is served like the app's (#7804)
 /// - Auth token read from shared Keychain (same access group)
-nonisolated enum NSEDataSync {
+enum NSEDataSync {
 
     private static let appGroupId = "group.me.meeshy.apps"
     private static let pendingDirName = "nse_pending_messages"
@@ -474,10 +474,10 @@ nonisolated enum NSEDataSync {
 /// notification but never disappears silently — the NSE runs for ~30s with no
 /// debugger attached, so the log is the only forensic trail.
 extension Logger {
-    nonisolated static let nse = Logger(subsystem: "me.meeshy.app", category: "nse-datasync")
+    static let nse = Logger(subsystem: "me.meeshy.app", category: "nse-datasync")
 }
 
-nonisolated func nseDecodeOrLog<T: Decodable>(
+func nseDecodeOrLog<T: Decodable>(
     _ type: T.Type, from data: Data, field: String, decoder: JSONDecoder = JSONDecoder()
 ) -> T? {
     do {
@@ -488,7 +488,7 @@ nonisolated func nseDecodeOrLog<T: Decodable>(
     }
 }
 
-nonisolated func nseSerializeOrLog(_ object: Any, field: String) -> Data? {
+func nseSerializeOrLog(_ object: Any, field: String) -> Data? {
     do {
         return try JSONSerialization.data(withJSONObject: object)
     } catch {
@@ -497,7 +497,7 @@ nonisolated func nseSerializeOrLog(_ object: Any, field: String) -> Data? {
     }
 }
 
-nonisolated func nseCreateDirectory(_ url: URL, context: String) {
+func nseCreateDirectory(_ url: URL, context: String) {
     do {
         try FileManager.default.createDirectory(at: url, withIntermediateDirectories: true)
     } catch CocoaError.fileWriteFileExists {
@@ -507,7 +507,7 @@ nonisolated func nseCreateDirectory(_ url: URL, context: String) {
     }
 }
 
-nonisolated func nseRemoveFile(_ url: URL, context: String) {
+func nseRemoveFile(_ url: URL, context: String) {
     do {
         try FileManager.default.removeItem(at: url)
     } catch CocoaError.fileNoSuchFile {

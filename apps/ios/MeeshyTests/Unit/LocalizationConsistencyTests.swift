@@ -626,7 +626,6 @@ final class LocalizationConsistencyTests: XCTestCase {
         // catalog serves them (`catalogByTargetFragment`), without which they were
         // measured against the app catalog and looked untranslated.
         "apps/ios/MeeshyWidgets/MeeshyWidgets.swift",  // 25
-        "apps/ios/MeeshyWidgets/LiveActivities.swift",  // 11
         // 232i (#4328) — les deux surfaces dont le remplissage a vide le cliquet.
         //
         // `MediaDownloadPreferences.swift` est la PREMIÈRE source du SDK épinglée

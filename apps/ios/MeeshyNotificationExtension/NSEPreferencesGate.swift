@@ -19,7 +19,7 @@ enum NSEPreferencesGate {
     /// Miroir absent (première installation, jamais de sync) → `nil` ; les
     /// appelants retombent sur `.defaults` (tout activé = comportement
     /// historique).
-    nonisolated static func loadPreferences(
+    static func loadPreferences(
         defaults: UserDefaults? = UserDefaults(suiteName: UserPreferencesManager.appGroupSuiteName)
     ) -> UserNotificationPreferences? {
         guard let data = defaults?.data(forKey: UserPreferencesManager.appGroupNotificationPrefsKey) else {
@@ -41,7 +41,7 @@ enum NSEPreferencesGate {
         }
     }
 
-    nonisolated static func apply(
+    static func apply(
         preferences: UserNotificationPreferences,
         to content: UNMutableNotificationContent,
         rawType: String?,
