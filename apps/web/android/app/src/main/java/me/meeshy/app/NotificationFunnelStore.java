@@ -60,6 +60,12 @@ final class NotificationFunnelStore {
         append(context, Collections.singletonList(line));
     }
 
+    static synchronized void noteOpened(Context context, Map<String, String> data) {
+        String line = NotificationFunnelRules.openedLine(data, nowIso(), () -> UUID.randomUUID().toString());
+        if (line == null) return;
+        append(context, Collections.singletonList(line));
+    }
+
     private static void append(Context context, List<String> lines) {
         SharedPreferences prefs = prefs(context);
         String stored = prefs.getString(KEY_EVENTS, null);

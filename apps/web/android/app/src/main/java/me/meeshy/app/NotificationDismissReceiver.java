@@ -22,7 +22,7 @@ public class NotificationDismissReceiver extends BroadcastReceiver {
     static PendingIntent intentFor(Context context, Map<String, String> data) {
         if (data == null || !NotificationFunnelRules.tracksDismissal(data)) return null;
         Intent intent = new Intent(context, NotificationDismissReceiver.class);
-        for (Map.Entry<String, String> entry : NotificationFunnelRules.dismissalExtras(data).entrySet()) {
+        for (Map.Entry<String, String> entry : NotificationFunnelRules.lineExtras(data).entrySet()) {
             intent.putExtra(entry.getKey(), entry.getValue());
         }
         int flags = PendingIntent.FLAG_UPDATE_CURRENT | PendingIntent.FLAG_IMMUTABLE;

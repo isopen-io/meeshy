@@ -253,6 +253,15 @@
             android:noHistory="true"
             android:taskAffinity=""
             android:theme="@android:style/Theme.Translucent.NoTitleBar" />
+        <!-- #11052 — le relais des actions de banniere : note « ouverte », retire la
+             banniere, puis ouvre la destination, comme notificationclick sur le web. -->
+        <activity
+            android:name=".NotificationActionActivity"
+            android:excludeFromRecents="true"
+            android:exported="false"
+            android:noHistory="true"
+            android:taskAffinity=""
+            android:theme="@android:style/Theme.Translucent.NoTitleBar" />
     </application>
 
     <!-- Permissions -->

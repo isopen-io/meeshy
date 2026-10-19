@@ -6,7 +6,6 @@ import android.app.PendingIntent;
 import android.content.Context;
 import android.content.Intent;
 import android.graphics.drawable.Icon;
-import android.net.Uri;
 import android.os.Bundle;
 import android.os.Handler;
 import android.os.Looper;
@@ -24,9 +23,10 @@ import java.util.Map;
  * {@link NotificationVoiceBanner} pour « Ecouter » : seules les actions
  * s'ajoutent, sans re-sonner.
  *
- * Une action in-app ouvre {@link MainActivity} sur son lien `meeshy://`, et
- * {@link MeeshyWidgetsPlugin} retire la banniere ({@link #dismiss}) ; la carte
- * part a l'app de cartes du telephone.
+ * Toute action passe par le relais {@link NotificationActionActivity}
+ * (#11052) : il note `opened` et retire la banniere, comme
+ * `notificationclick` sur le web, puis ouvre {@link MainActivity} sur son lien
+ * `meeshy://` — ou l'app de cartes du telephone pour la carte.
  */
 final class NotificationBannerActions {
 
@@ -39,7 +39,7 @@ final class NotificationBannerActions {
     /** Les actions de cette charge — pour une banniere qui porte deja « Ecouter ». */
     static List<Notification.Action> of(Context context, Map<String, String> data) {
         List<Notification.Action> actions = new ArrayList<>();
-        for (NotificationBannerRules.Action action : NotificationBannerRules.actionsOf(data)) actions.add(build(context, action));
+        for (NotificationBannerRules.Action action : NotificationBannerRules.actionsOf(data)) actions.add(build(context, action, data));
         return actions;
     }
 
@@ -53,7 +53,7 @@ final class NotificationBannerActions {
         PendingIntent dismissal = NotificationDismissReceiver.intentFor(context, data);
         if (actions.isEmpty() && dismissal == null) return;
         String tag = actions.isEmpty() ? NotificationFunnelRules.bannerTag(data) : actions.get(0).tag;
-        offerUntilShown(context.getApplicationContext(), tag, data.get("notificationId"), actions, dismissal, OFFER_ATTEMPTS);
+        offerUntilShown(context.getApplicationContext(), tag, data, actions, dismissal, OFFER_ATTEMPTS);
     }
 
     /** #10989 — la marque qui dit a une correction a quelle notification la banniere appartient. */
@@ -73,15 +73,15 @@ final class NotificationBannerActions {
     }
 
     private static void offerUntilShown(
-        Context context, String tag, String notificationId, List<NotificationBannerRules.Action> actions, PendingIntent dismissal, int attemptsLeft) {
-        if (place(context, tag, notificationId, actions, dismissal) || attemptsLeft <= 1) return;
+        Context context, String tag, Map<String, String> data, List<NotificationBannerRules.Action> actions, PendingIntent dismissal, int attemptsLeft) {
+        if (place(context, tag, data, actions, dismissal) || attemptsLeft <= 1) return;
         new Handler(Looper.getMainLooper()).postDelayed(
-            () -> offerUntilShown(context, tag, notificationId, actions, dismissal, attemptsLeft - 1), OFFER_RETRY_MS);
+            () -> offerUntilShown(context, tag, data, actions, dismissal, attemptsLeft - 1), OFFER_RETRY_MS);
     }
 
     /** `false` seulement quand aucune banniere ne porte encore ce tag (a rechercher). */
     private static boolean place(
-        Context context, String tag, String notificationId, List<NotificationBannerRules.Action> actions, PendingIntent dismissal) {
+        Context context, String tag, Map<String, String> data, List<NotificationBannerRules.Action> actions, PendingIntent dismissal) {
         NotificationManager manager = context.getSystemService(NotificationManager.class);
         if (manager == null) return true;
         Notification shown = NotificationVoiceBanner.find(manager, tag);
@@ -93,11 +93,11 @@ final class NotificationBannerActions {
             Notification.Builder builder = Notification.Builder.recoverBuilder(context, shown);
             if (!actions.isEmpty()) {
                 Notification.Action[] built = new Notification.Action[actions.size()];
-                for (int i = 0; i < built.length; i++) built[i] = build(context, actions.get(i));
+                for (int i = 0; i < built.length; i++) built[i] = build(context, actions.get(i), data);
                 builder.setActions(built);
             }
             if (dismissal != null) builder.setDeleteIntent(dismissal);
-            builder.addExtras(marked(notificationId));
+            builder.addExtras(marked(data.get("notificationId")));
             builder.setOnlyAlertOnce(true);
             manager.notify(tag, 0, builder.build());
         } catch (RuntimeException failure) {
@@ -106,12 +106,8 @@ final class NotificationBannerActions {
         return true;
     }
 
-    private static Notification.Action build(Context context, NotificationBannerRules.Action action) {
-        Intent intent = action.inApp
-            ? new Intent(Intent.ACTION_VIEW, Uri.parse(action.link), context, MainActivity.class)
-                .putExtra(NotificationBannerRules.EXTRA_BANNER_TAG, action.tag)
-                .addFlags(Intent.FLAG_ACTIVITY_NEW_TASK | Intent.FLAG_ACTIVITY_SINGLE_TOP)
-            : new Intent(Intent.ACTION_VIEW, Uri.parse(action.link)).addFlags(Intent.FLAG_ACTIVITY_NEW_TASK);
+    private static Notification.Action build(Context context, NotificationBannerRules.Action action, Map<String, String> data) {
+        Intent intent = NotificationActionActivity.intentFor(context, action, data);
         int flags = PendingIntent.FLAG_UPDATE_CURRENT | PendingIntent.FLAG_IMMUTABLE;
         PendingIntent pending = PendingIntent.getActivity(context, (action.tag + action.link).hashCode(), intent, flags);
         int glyph = action.inApp ? android.R.drawable.ic_menu_send : android.R.drawable.ic_dialog_map;

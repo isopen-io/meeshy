@@ -75,7 +75,7 @@ final class NotificationFunnelRules {
             + "},\"surface\":\"notifications\",\"channel\":\"fcm\"" + notificationType + "}";
     }
 
-    /** Les seules cles qu'une ligne lit : ce que l'intention de balayage transporte, et rien d'autre. */
+    /** Les seules cles qu'une ligne lit : ce que les intentions de balayage et d'action transportent, et rien d'autre. */
     private static final List<String> LINE_KEYS = Arrays.asList("notificationId", "postId", "type");
 
     /**
@@ -88,6 +88,16 @@ final class NotificationFunnelRules {
         return line(data, "dismissed", ids.get(), occurredAt);
     }
 
+    /**
+     * #11052 — toucher une action de la banniere note `opened`, comme
+     * `notificationclick` sur le web pour TOUT toucher. Le corps est deja
+     * compte par la page (`pushNotificationActionPerformed`) : seules les
+     * actions que la coque pose passent ici.
+     */
+    static String openedLine(Map<String, String> data, String occurredAt, Supplier<String> ids) {
+        return line(data, "opened", ids.get(), occurredAt);
+    }
+
     /** Le tag sous lequel FCM a pose la banniere — celui ou la coque la retrouve. */
     static String bannerTag(Map<String, String> data) {
         String tag = trimmed(data.get("gcm.notification.tag"));
@@ -98,7 +108,7 @@ final class NotificationFunnelRules {
         return !bannerTag(data).isEmpty() && OBJECT_ID.matcher(trimmed(data.get("notificationId"))).matches();
     }
 
-    static Map<String, String> dismissalExtras(Map<String, String> data) {
+    static Map<String, String> lineExtras(Map<String, String> data) {
         Map<String, String> carried = new HashMap<>();
         for (String key : LINE_KEYS) {
             String value = data.get(key);
