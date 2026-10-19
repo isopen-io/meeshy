@@ -121,7 +121,7 @@ for (const [surface, render] of Object.entries(surfaces)) {
       expect(badge !== null).toBe(true);
       expect(badge?.querySelector('[data-game-level]') !== null).toBe(true);
       expect(badge?.querySelector(`[data-game-rank="${userGameFixture().standing?.rank ?? 'absent'}"]`) !== null).toBe(true);
-      expect(badge?.querySelector('[data-profile-banner-level-name]') === null).toBe(true);
+      expect(text(badge?.querySelector('[data-profile-banner-level] [data-profile-banner-level-name]')).length > 0).toBe(true);
       expect(text(badge?.querySelector('[data-profile-banner-rank-name]')).length > 0).toBe(true);
       expect(el.querySelector('#game-profile-visitor') === null).toBe(true);
       expect(el.querySelector('#game-profile') === null).toBe(true);
