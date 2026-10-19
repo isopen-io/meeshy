@@ -6,10 +6,10 @@ import AppIntents
 // MARK: - App Group Constants
 
 private enum WidgetSharedKeys: Sendable {
-    nonisolated static let suiteName = "group.me.meeshy.apps"
-    nonisolated static let conversations = "recent_conversations"
-    nonisolated static let unreadCount = "unread_count"
-    nonisolated static let pendingMarkRead = "pending_mark_read"
+    static let suiteName = "group.me.meeshy.apps"
+    static let conversations = "recent_conversations"
+    static let unreadCount = "unread_count"
+    static let pendingMarkRead = "pending_mark_read"
 }
 
 // MARK: - Deep Link
@@ -91,17 +91,17 @@ struct MarkConversationReadIntent: AppIntent {
     // `LocalizedStringResource` se résout dans le bundle de la cible qui la
     // déclare — c'est le catalogue `MeeshyWidgets/Localizable.xcstrings` qui
     // lui donne ses sept langues.
-    nonisolated static let title = LocalizedStringResource(
+    static let title = LocalizedStringResource(
         "widget.intent.markRead.title",
         defaultValue: "Mark conversation as read"
     )
-    nonisolated static let description = IntentDescription(
+    static let description = IntentDescription(
         LocalizedStringResource(
             "widget.intent.markRead.description",
             defaultValue: "Clears the unread badge for this conversation from the widget."
         )
     )
-    nonisolated static let openAppWhenRun: Bool = false
+    static let openAppWhenRun: Bool = false
 
     @Parameter(title: LocalizedStringResource(
         "widget.intent.markRead.parameter.conversationId",

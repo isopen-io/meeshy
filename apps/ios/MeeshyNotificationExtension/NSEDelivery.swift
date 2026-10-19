@@ -1,7 +1,7 @@
 import Foundation
 import os
 
-nonisolated final class NSEDelivery<Content>: Sendable {
+final class NSEDelivery<Content>: Sendable {
     private let pendingHandler: OSAllocatedUnfairLock<((Content) -> Void)?>
 
     init(handler: @escaping (Content) -> Void) {

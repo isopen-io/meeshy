@@ -18,7 +18,7 @@ import MeeshySDK
 ///   quick actions on the banner / lock screen / notification center.
 /// - Override the badge value so iOS keeps the displayed count in sync without a
 ///   foreground round-trip.
-nonisolated class NotificationService: UNNotificationServiceExtension {
+class NotificationService: UNNotificationServiceExtension {
 
     private var delivery: NSEDelivery<UNNotificationContent>?
     private var bestAttemptContent: UNMutableNotificationContent?
@@ -362,7 +362,7 @@ nonisolated class NotificationService: UNNotificationServiceExtension {
     /// balayage ne doit jamais retarder l'affichage. Il ne touche QUE les
     /// bannières qui portent une échéance — une notification ordinaire n'est
     /// jamais retirée par ce chemin.
-    nonisolated static func sweepExpiredDeliveredBanners(now: Date = Date()) {
+    static func sweepExpiredDeliveredBanners(now: Date = Date()) {
         // Le centre est redemandé DANS la fermeture plutôt que capturé : une
         // fermeture d'API système doit être `@Sendable`, et la capture d'un
         // objet de framework y coûte une exception de concurrence pour rien —
@@ -580,7 +580,7 @@ nonisolated class NotificationService: UNNotificationServiceExtension {
     /// Taille d'un fichier local, `nil` s'il a disparu. C'est la mesure du
     /// SECOND étage de `NSEAttachmentPolicy` : un serveur n'est jamais tenu par
     /// la taille qu'il annonce sur le fil.
-    nonisolated static func fileSize(at url: URL) -> Int? {
+    static func fileSize(at url: URL) -> Int? {
         guard let attributes = try? FileManager.default.attributesOfItem(atPath: url.path) else {
             return nil
         }

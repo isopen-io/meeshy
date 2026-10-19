@@ -1,6 +1,6 @@
 import Foundation
 
-nonisolated enum WidgetDeepLink {
+enum WidgetDeepLink {
     private static let segmentAllowed = CharacterSet(
         charactersIn: "ABCDEFGHIJKLMNOPQRSTUVWXYZabcdefghijklmnopqrstuvwxyz0123456789-._~"
     )

@@ -1,7 +1,7 @@
 import Foundation
 import WidgetKit
 
-nonisolated enum WidgetRefreshSchedule {
+enum WidgetRefreshSchedule {
     static let conversationsInterval: TimeInterval = 1800
     static let favoritesInterval: TimeInterval = 3600
 

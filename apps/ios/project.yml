@@ -320,6 +320,13 @@ targets:
       PRODUCT_BUNDLE_IDENTIFIER: me.meeshy.app.widgets
       CODE_SIGN_STYLE: Automatic
       CODE_SIGN_ENTITLEMENTS: MeeshyWidgets/MeeshyWidgets.entitlements
+      # LOT-03 — le travail de fond de cette extension (réseau, disque, files
+      # d'un framework système) n'a aucune raison de hériter du MainActor du
+      # projet. Les fichiers partagés avec une cible MainActor déclarent leur
+      # isolation EXPLICITEMENT (`ExtensionIsolationGuardTests`). L'extension de
+      # partage et l'extension de contenu hébergent du SwiftUI : elles restent
+      # MainActor, et ce commentaire dit pourquoi.
+      SWIFT_DEFAULT_ACTOR_ISOLATION: nonisolated
 
   MeeshyNotificationExtension:
     type: app-extension
@@ -332,6 +339,13 @@ targets:
       PRODUCT_BUNDLE_IDENTIFIER: me.meeshy.app.notification-service
       CODE_SIGN_STYLE: Automatic
       CODE_SIGN_ENTITLEMENTS: MeeshyNotificationExtension/MeeshyNotificationExtension.entitlements
+      # LOT-03 — le travail de fond de cette extension (réseau, disque, files
+      # d'un framework système) n'a aucune raison de hériter du MainActor du
+      # projet. Les fichiers partagés avec une cible MainActor déclarent leur
+      # isolation EXPLICITEMENT (`ExtensionIsolationGuardTests`). L'extension de
+      # partage et l'extension de contenu hébergent du SwiftUI : elles restent
+      # MainActor, et ce commentaire dit pourquoi.
+      SWIFT_DEFAULT_ACTOR_ISOLATION: nonisolated
     dependencies:
       # NotificationService.swift imports MeeshySDK (and GRDB transitively).
       - package: MeeshySDK
@@ -449,6 +463,13 @@ targets:
       PRODUCT_BUNDLE_IDENTIFIER: me.meeshy.app.broadcast
       CODE_SIGN_STYLE: Automatic
       CODE_SIGN_ENTITLEMENTS: MeeshyBroadcastExtension/MeeshyBroadcastExtension.entitlements
+      # LOT-03 — le travail de fond de cette extension (réseau, disque, files
+      # d'un framework système) n'a aucune raison de hériter du MainActor du
+      # projet. Les fichiers partagés avec une cible MainActor déclarent leur
+      # isolation EXPLICITEMENT (`ExtensionIsolationGuardTests`). L'extension de
+      # partage et l'extension de contenu hébergent du SwiftUI : elles restent
+      # MainActor, et ce commentaire dit pourquoi.
+      SWIFT_DEFAULT_ACTOR_ISOLATION: nonisolated
 
   # P4.3 step 1 — MeeshyTests is the unit-test bundle that previously was
   # only declared inside Meeshy.xcodeproj/project.pbxproj (via 20+ Ruby

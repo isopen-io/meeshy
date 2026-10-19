@@ -1,18 +1,18 @@
 import Foundation
 import MeeshySDK
 
-nonisolated struct NSEAttachmentSource: Sendable, Equatable {
+struct NSEAttachmentSource: Sendable, Equatable {
     let url: URL
     let mimeType: String
 }
 
-nonisolated struct NSEAttachmentFile: Sendable, Equatable {
+struct NSEAttachmentFile: Sendable, Equatable {
     let fileURL: URL
     let originalURL: URL
     let mimeType: String
 }
 
-nonisolated struct NSEEnrichmentRequest: Sendable, Equatable {
+struct NSEEnrichmentRequest: Sendable, Equatable {
 
     enum Detail: Sendable, Equatable {
         case location(latitude: Double, longitude: Double, timeout: TimeInterval)
@@ -71,14 +71,14 @@ nonisolated struct NSEEnrichmentRequest: Sendable, Equatable {
     }
 }
 
-nonisolated enum NSEEnrichmentPart: Sendable {
+enum NSEEnrichmentPart: Sendable {
     case avatar(Data?)
     case media(NSEAttachmentFile?)
     case detail(NSEAttachmentFile?)
     case replacementSettled
 }
 
-nonisolated struct NSEEnrichmentResult: Sendable, Equatable {
+struct NSEEnrichmentResult: Sendable, Equatable {
     let avatarData: Data?
     let attachment: NSEAttachmentFile?
 

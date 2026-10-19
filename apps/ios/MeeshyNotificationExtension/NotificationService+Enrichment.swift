@@ -2,7 +2,7 @@
 import Foundation
 import MeeshySDK
 
-nonisolated extension NotificationService {
+extension NotificationService {
 
     static func enrich(
         _ request: NSEEnrichmentRequest,

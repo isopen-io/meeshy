@@ -16,7 +16,7 @@ import os
 ///   l'appel rend `nil`, jamais une erreur ;
 /// - **la mémoire reste petite** : 320 × 180 pt en @2x, soit ≈ 0,9 Mo de
 ///   pixels, loin du plafond de 8 Mio des pièces jointes (#7003).
-nonisolated enum NSELocationSnapshot {
+enum NSELocationSnapshot {
 
     static let size = CGSize(width: 320, height: 180)
 

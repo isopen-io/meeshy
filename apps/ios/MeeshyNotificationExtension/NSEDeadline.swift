@@ -1,7 +1,7 @@
 import Foundation
 import os
 
-nonisolated struct NSEBudget: Sendable, Equatable {
+struct NSEBudget: Sendable, Equatable {
     static let total: TimeInterval = 27
     static let minimumDownload: TimeInterval = 2
     static let maximumDownloadTimeout: TimeInterval = 12
@@ -19,7 +19,7 @@ nonisolated struct NSEBudget: Sendable, Equatable {
     }
 }
 
-nonisolated enum NSEDeadline {
+enum NSEDeadline {
 
     static func race<T: Sendable>(
         timeout: TimeInterval,
@@ -37,7 +37,7 @@ nonisolated enum NSEDeadline {
     }
 }
 
-private nonisolated final class Race<T: Sendable>: Sendable {
+private final class Race<T: Sendable>: Sendable {
     private struct State: Sendable {
         var continuation: CheckedContinuation<T?, Never>?
         var tasks: [Task<Void, Never>] = []

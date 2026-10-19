@@ -7,7 +7,7 @@ import MeeshySDK
 /// invitation ou d'un lien. Toutes les décisions sont dans
 /// `NotificationDetailPolicy` (pure, témoignée) ; ce fichier ne fait que les
 /// exécuter avec les outils de l'extension.
-nonisolated extension NotificationService {
+extension NotificationService {
 
     /// Les libellés du corps détaillé, résolus dans le catalogue de
     /// l'extension (qui ne partage pas celui de l'app), dans la langue que
