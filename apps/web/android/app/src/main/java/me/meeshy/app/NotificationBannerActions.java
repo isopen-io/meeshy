@@ -42,11 +42,17 @@ final class NotificationBannerActions {
         return actions;
     }
 
-    /** Apres l'affichage par FCM : pose les actions que ce push offre. */
+    /**
+     * Apres l'affichage par FCM : pose les actions que ce push offre, et
+     * l'intention de balayage qui note `dismissed` (#10921) — une banniere sans
+     * action est reprise pour elle seule.
+     */
     static void offer(Context context, Map<String, String> data) {
         List<NotificationBannerRules.Action> actions = NotificationBannerRules.actionsOf(data);
-        if (actions.isEmpty()) return;
-        offerUntilShown(context.getApplicationContext(), actions, OFFER_ATTEMPTS);
+        PendingIntent dismissal = NotificationDismissReceiver.intentFor(context, data);
+        if (actions.isEmpty() && dismissal == null) return;
+        String tag = actions.isEmpty() ? NotificationFunnelRules.bannerTag(data) : actions.get(0).tag;
+        offerUntilShown(context.getApplicationContext(), tag, actions, dismissal, OFFER_ATTEMPTS);
     }
 
     /** Le toucher d'une action in-app : la banniere qui la portait s'en va. */
@@ -57,17 +63,18 @@ final class NotificationBannerActions {
         manager.cancel(tag, 0);
     }
 
-    private static void offerUntilShown(Context context, List<NotificationBannerRules.Action> actions, int attemptsLeft) {
-        if (place(context, actions) || attemptsLeft <= 1) return;
+    private static void offerUntilShown(
+        Context context, String tag, List<NotificationBannerRules.Action> actions, PendingIntent dismissal, int attemptsLeft) {
+        if (place(context, tag, actions, dismissal) || attemptsLeft <= 1) return;
         new Handler(Looper.getMainLooper()).postDelayed(
-            () -> offerUntilShown(context, actions, attemptsLeft - 1), OFFER_RETRY_MS);
+            () -> offerUntilShown(context, tag, actions, dismissal, attemptsLeft - 1), OFFER_RETRY_MS);
     }
 
     /** `false` seulement quand aucune banniere ne porte encore ce tag (a rechercher). */
-    private static boolean place(Context context, List<NotificationBannerRules.Action> actions) {
+    private static boolean place(
+        Context context, String tag, List<NotificationBannerRules.Action> actions, PendingIntent dismissal) {
         NotificationManager manager = context.getSystemService(NotificationManager.class);
         if (manager == null) return true;
-        String tag = actions.get(0).tag;
         Notification shown = NotificationVoiceBanner.find(manager, tag);
         if (shown == null) return false;
         // Une banniere qui porte deja ses actions (un vocal, ou un push plus recent
@@ -75,9 +82,12 @@ final class NotificationBannerActions {
         if (shown.actions != null && shown.actions.length > 0) return true;
         try {
             Notification.Builder builder = Notification.Builder.recoverBuilder(context, shown);
-            Notification.Action[] built = new Notification.Action[actions.size()];
-            for (int i = 0; i < built.length; i++) built[i] = build(context, actions.get(i));
-            builder.setActions(built);
+            if (!actions.isEmpty()) {
+                Notification.Action[] built = new Notification.Action[actions.size()];
+                for (int i = 0; i < built.length; i++) built[i] = build(context, actions.get(i));
+                builder.setActions(built);
+            }
+            if (dismissal != null) builder.setDeleteIntent(dismissal);
             builder.setOnlyAlertOnce(true);
             manager.notify(tag, 0, builder.build());
         } catch (RuntimeException failure) {

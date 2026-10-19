@@ -15,7 +15,7 @@ import java.util.UUID;
 
 /**
  * Le magasin borne de l'entonnoir natif (#10938) : ce que `handleIntent` note
- * app fermee, que la page vide au demarrage
+ * app fermee (recue, affichee) et ce qu'un balayage note (ecartee, #10921), que la page vide au demarrage
  * (`MeeshyNotificationSettings.drainNotificationEvents`). Jumeau de la file
  * IndexedDB de `sw-push.js` ; la regle vit dans {@link NotificationFunnelRules}.
  */
@@ -51,6 +51,16 @@ final class NotificationFunnelStore {
         List<String> lines = NotificationFunnelRules.eventsFor(
             extras, inForeground, nowIso(), () -> UUID.randomUUID().toString());
         if (lines.isEmpty()) return;
+        append(context, lines);
+    }
+
+    static synchronized void noteDismissed(Context context, Map<String, String> data) {
+        String line = NotificationFunnelRules.dismissedLine(data, nowIso(), () -> UUID.randomUUID().toString());
+        if (line == null) return;
+        append(context, Collections.singletonList(line));
+    }
+
+    private static void append(Context context, List<String> lines) {
         SharedPreferences prefs = prefs(context);
         String stored = prefs.getString(KEY_EVENTS, null);
         prefs.edit().putString(KEY_EVENTS, NotificationFunnelRules.appended(stored, lines, NotificationFunnelRules.CAP)).apply();

@@ -3,6 +3,7 @@ package me.meeshy.app;
 import java.util.ArrayList;
 import java.util.Arrays;
 import java.util.Collections;
+import java.util.HashMap;
 import java.util.List;
 import java.util.Map;
 import java.util.function.Supplier;
@@ -67,6 +68,38 @@ final class NotificationFunnelRules {
         return "{\"type\":\"notification\",\"action\":\"" + action + "\",\"eventId\":\"" + eventId
             + "\",\"occurredAt\":\"" + occurredAt + "\",\"target\":{\"kind\":\"notification\",\"id\":\"" + id + "\"" + parent
             + "},\"surface\":\"notifications\",\"channel\":\"fcm\"" + notificationType + "}";
+    }
+
+    /** Les seules cles qu'une ligne lit : ce que l'intention de balayage transporte, et rien d'autre. */
+    private static final List<String> LINE_KEYS = Arrays.asList("notificationId", "postId", "type");
+
+    /**
+     * #10921 — balayer la banniere note `dismissed`, comme `notificationclose`
+     * sur le web. Le systeme n'appelle l'intention de suppression que pour un
+     * geste de l'utilisateur (balayer, tout effacer) : ni le toucher, ni un
+     * retrait par la coque.
+     */
+    static String dismissedLine(Map<String, String> data, String occurredAt, Supplier<String> ids) {
+        return line(data, "dismissed", ids.get(), occurredAt);
+    }
+
+    /** Le tag sous lequel FCM a pose la banniere — celui ou la coque la retrouve. */
+    static String bannerTag(Map<String, String> data) {
+        String tag = trimmed(data.get("gcm.notification.tag"));
+        return tag.isEmpty() ? trimmed(data.get("gcm.n.tag")) : tag;
+    }
+
+    static boolean tracksDismissal(Map<String, String> data) {
+        return !bannerTag(data).isEmpty() && OBJECT_ID.matcher(trimmed(data.get("notificationId"))).matches();
+    }
+
+    static Map<String, String> dismissalExtras(Map<String, String> data) {
+        Map<String, String> carried = new HashMap<>();
+        for (String key : LINE_KEYS) {
+            String value = data.get(key);
+            if (value != null) carried.put(key, value);
+        }
+        return carried;
     }
 
     /** Le magasin apres ajout : les `cap` entrees les plus recentes, une par ligne. */
