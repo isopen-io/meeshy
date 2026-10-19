@@ -6,12 +6,11 @@ public actor MessagePersistenceActor {
     let dbWriter: any DatabaseWriter
 
     private let writeStream: AsyncStream<WriteOperation>
-    let writeContinuation: AsyncStream<WriteOperation>.Continuation
+    private let writeContinuation: AsyncStream<WriteOperation>.Continuation
     private var processorTask: Task<Void, Never>?
 
     /// `+EditDelete.swift` — suppressions, modifications, réactions arrivées avant leur message.
-    var pendingRowEvents: [String: PendingRowEvents] = [:]
-    var pendingRowEventOrder: [String] = []
+    var pendingRowEvents = PendingRowEventBuffer()
 
     /// The authenticated user's id. The on-device DB has no userId column and
     /// the aggregated reaction payload only flags WHICH emojis the current user
@@ -50,6 +49,48 @@ public actor MessagePersistenceActor {
     /// "I reacted" highlight survives a cache reload.
     public func setCurrentUserId(_ userId: String?) {
         currentUserId = userId
+    }
+
+    // MARK: - Buffered Writes
+
+    public func bufferIncoming(_ messages: [IncomingMessageData]) {
+        // Notification is posted by the worker AFTER the GRDB write completes
+        // (see `start()`). Posting here would race the async write — observers
+        // would refresh against an empty database and never see the new row.
+        writeContinuation.yield(.reconcileBatch(messages))
+    }
+
+    /// Buffered ingestion of fully-decoded `APIMessage` payloads — the socket
+    /// `message:new` path. Routes through `upsertFromAPIMessages` (the REST
+    /// path) on the serial write stream, so attachments, reactions, reply /
+    /// forward refs, encryption flags and mentions all land in GRDB. The
+    /// upsert reconciles an optimistic row by `clientMessageId`, server id or
+    /// `PendingIdRecord`, so a same-user echo never duplicates a pending send.
+    /// The refresh notification is posted by `upsertFromAPIMessages` itself.
+    public func bufferIncomingAPIMessages(_ messages: [APIMessage], preferredLanguages: [String]) {
+        writeContinuation.yield(.upsertAPIMessages(messages, preferredLanguages: preferredLanguages))
+    }
+
+    /// Ordonné avec les autres écritures du flux : un accusé qui suit de près
+    /// l'ack d'envoi trouve la ligne déjà réconciliée sous son id serveur.
+    public func bufferReadStatusSummary(conversationId: String, summary: ReadStatusSummary, currentUserId: String) {
+        // Notification is posted by the worker AFTER the GRDB write completes
+        // (see `start()`).
+        writeContinuation.yield(.readStatusSummary(conversationId: conversationId, summary: summary, currentUserId: currentUserId))
+    }
+
+    /// Reconciles a batch for the fire-and-forget stream worker: a write
+    /// failure means the batch is NOT persisted and no observer will ever be
+    /// refreshed for it, so it must leave a trace rather than vanish.
+    private func reconcileBatchSyncOrLog(_ messages: [IncomingMessageData]) -> Set<String> {
+        do {
+            return try dbWriter.write { db in try IncomingBatchReconciler.reconcile(messages, in: db) }
+        } catch {
+            Logger.messages.error(
+                "reconcileBatchSync dropped \(messages.count, privacy: .public) message(s), no refresh posted: \(error.localizedDescription, privacy: .public)"
+            )
+            return []
+        }
     }
 
     // MARK: - Session quiesce (P1 Q3 — logout)

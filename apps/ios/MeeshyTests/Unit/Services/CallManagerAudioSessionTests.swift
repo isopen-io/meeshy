@@ -1,5 +1,36 @@
 import XCTest
+
 @testable import Meeshy
+
+/// L'unité des types WebRTC : `WebRTCTypes.swift` et les types qui en sont sortis
+/// par un découpage un-type-par-fichier (lot cohésion). Aucun ne porte le préfixe
+/// `WebRTCTypes+…`, donc chacun est nommé explicitement : sans cette liste, une
+/// garde qui cherche un symbole déplacé verdirait en lisant la moitié qui ne le
+/// contient plus.
+private let webRTCTypesPath = "Meeshy/Features/Main/Services/WebRTC/WebRTCTypes.swift"
+private let webRTCTypesCompanions = [
+    "Meeshy/Features/Main/Services/WebRTC/CallReliabilityPolicy.swift",
+    "Meeshy/Features/Main/Services/WebRTC/DegradedLinkTracker.swift",
+    "Meeshy/Features/Main/Services/WebRTC/JitterBitrateCapTracker.swift",
+    "Meeshy/Features/Main/Services/WebRTC/VideoDegradationPreference.swift",
+    "Meeshy/Features/Main/Services/WebRTC/WebRTCClientProviding.swift",
+    "Meeshy/Features/Main/Services/WebRTC/DataChannelControlMessage.swift",
+    "Meeshy/Features/Main/Services/WebRTC/DataChannelTranscriptEntry.swift",
+    "Meeshy/Features/Main/Services/WebRTC/DataChannelTranscriptMessage.swift",
+    "Meeshy/Features/Main/Services/WebRTC/DataChannelInbound.swift",
+    "Meeshy/Features/Main/Services/WebRTC/WebRTCClientDelegate.swift",
+    "Meeshy/Features/Main/Services/WebRTC/CallEndReason.swift",
+    "Meeshy/Features/Main/Services/WebRTC/CallRetryPolicy.swift",
+    "Meeshy/Features/Main/Services/WebRTC/CallDisplayMode.swift",
+    "Meeshy/Features/Main/Services/WebRTC/CallBubbleSizeTier.swift",
+    "Meeshy/Features/Main/Services/WebRTC/QualityThresholds.swift",
+    "Meeshy/Features/Main/Services/WebRTC/VideoQualityLevel.swift",
+    "Meeshy/Features/Main/Services/WebRTC/WebRTCError.swift",
+    "Meeshy/Features/Main/Services/WebRTC/VideoThermalProfile.swift",
+    "Meeshy/Features/Main/Services/WebRTC/VideoConfig.swift",
+    "Meeshy/Features/Main/Services/WebRTC/CameraDeviceOption.swift",
+    "Meeshy/Features/Main/Services/WebRTC/CameraCatalog.swift",
+]
 
 @MainActor
 final class CallManagerAudioSessionTests: XCTestCase {
@@ -1638,13 +1669,7 @@ final class CallManagerCallKitDTMFTests: XCTestCase {
     }
 
     private func webRTCTypesSource() throws -> String {
-        let url = URL(fileURLWithPath: #filePath)
-            .deletingLastPathComponent()
-            .deletingLastPathComponent()
-            .deletingLastPathComponent()
-            .deletingLastPathComponent()
-            .appendingPathComponent("Meeshy/Features/Main/Services/WebRTC/WebRTCTypes.swift")
-        return try String(contentsOf: url, encoding: .utf8)
+        try AppSourceGuard.unit(webRTCTypesPath, alsoIncluding: webRTCTypesCompanions)
     }
 
     func test_dtmfHandler_isImplemented_inCallKitDelegate() throws {
@@ -2312,13 +2337,7 @@ final class CallManagerCameraPermissionTests: XCTestCase {
     }
 
     func test_webRTCTypes_declaresCameraPermissionDeniedError() throws {
-        let url = URL(fileURLWithPath: #filePath)
-            .deletingLastPathComponent()
-            .deletingLastPathComponent()
-            .deletingLastPathComponent()
-            .deletingLastPathComponent()
-            .appendingPathComponent("Meeshy/Features/Main/Services/WebRTC/WebRTCTypes.swift")
-        let source = try String(contentsOf: url, encoding: .utf8)
+        let source = try AppSourceGuard.unit(webRTCTypesPath, alsoIncluding: webRTCTypesCompanions)
         XCTAssertTrue(
             source.contains("case cameraPermissionDenied"),
             "WebRTCError must declare cameraPermissionDenied so CallManager can " +
@@ -2426,13 +2445,7 @@ final class CallManagerIceCandidateBufferTests: XCTestCase {
     }
 
     private func webRTCTypesSource() throws -> String {
-        let url = URL(fileURLWithPath: #filePath)
-            .deletingLastPathComponent()
-            .deletingLastPathComponent()
-            .deletingLastPathComponent()
-            .deletingLastPathComponent()
-            .appendingPathComponent("Meeshy/Features/Main/Services/WebRTC/WebRTCTypes.swift")
-        return try String(contentsOf: url, encoding: .utf8)
+        try AppSourceGuard.unit(webRTCTypesPath, alsoIncluding: webRTCTypesCompanions)
     }
 
     func test_pendingIceCandidatesBuffer_hasOverflowGuard() throws {
@@ -3075,13 +3088,7 @@ final class CallManagerHardeningTests: XCTestCase {
     }
 
     private func webRTCTypesSource() throws -> String {
-        let url = URL(fileURLWithPath: #filePath)
-            .deletingLastPathComponent()
-            .deletingLastPathComponent()
-            .deletingLastPathComponent()
-            .deletingLastPathComponent()
-            .appendingPathComponent("Meeshy/Features/Main/Services/WebRTC/WebRTCTypes.swift")
-        return try String(contentsOf: url, encoding: .utf8)
+        try AppSourceGuard.unit(webRTCTypesPath, alsoIncluding: webRTCTypesCompanions)
     }
 
     /// P2PWebRTCClient.disconnect() must nil the transceiver sender tracks before
@@ -4112,13 +4119,7 @@ final class WebRTCServiceAudioBitrateAdaptationTests: XCTestCase {
     }
 
     private func webRTCTypesSource() throws -> String {
-        let url = URL(fileURLWithPath: #filePath)
-            .deletingLastPathComponent()
-            .deletingLastPathComponent()
-            .deletingLastPathComponent()
-            .deletingLastPathComponent()
-            .appendingPathComponent("Meeshy/Features/Main/Services/WebRTC/WebRTCTypes.swift")
-        return try String(contentsOf: url, encoding: .utf8)
+        try AppSourceGuard.unit(webRTCTypesPath, alsoIncluding: webRTCTypesCompanions)
     }
 
     /// `adjustBitrate` must call `client.applyAudioEncoding` when the computed
@@ -4186,13 +4187,7 @@ final class CallManagerMediaServicesResetSetActiveGuardTests: XCTestCase {
     }
 
     private func webRTCTypesSource() throws -> String {
-        let url = URL(fileURLWithPath: #filePath)
-            .deletingLastPathComponent()
-            .deletingLastPathComponent()
-            .deletingLastPathComponent()
-            .deletingLastPathComponent()
-            .appendingPathComponent("Meeshy/Features/Main/Services/WebRTC/WebRTCTypes.swift")
-        return try String(contentsOf: url, encoding: .utf8)
+        try AppSourceGuard.unit(webRTCTypesPath, alsoIncluding: webRTCTypesCompanions)
     }
 
     /// `handleMediaServicesReset` must return early when `setActive(true)` throws,

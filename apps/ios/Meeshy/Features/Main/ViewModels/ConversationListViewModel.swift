@@ -108,18 +108,18 @@ class ConversationListViewModel: ObservableObject {
     /// synchronisation son `@pseudo`. Une divergence entre les deux se lirait
     /// comme deux personnes en train d'écrire.
     @Published var typingUsers: [String: String] = [:]
-    /// Per-user source of truth: conversationId → (userId → frappeur). The
-    /// public `typingUsernames` is derived from this so a `typing:stop` from ONE
-    /// member of a group no longer wipes the whole row's indicator while OTHER
-    /// members are still typing (displayed "personne n'écrit" ≠ real "B écrit").
-    var typers: [String: [String: TypingUser]] = [:]
-    var previewMessages: [String: [Message]] = [:]  // conversationId → recent messages (non-Published — only used in context menu preview)
-    var previewLoadingInFlight: Set<String> = []
-    // `nonisolated(unsafe)` : muté uniquement sur le MainActor, lu une fois
-    // par le `nonisolated deinit` pour invalider les timers de typing 15 s
-    // encore armés (sinon ils survivaient au VM en no-ops weak-self) —
-    // même pattern que `ConversationSocketHandler.typingSafetyTimers`.
-    nonisolated(unsafe) var typingTimers: [String: Timer] = [:]
+    /// Qui écrit où (état par membre, échéances 15 s, abonnements) : voir
+    /// `ConversationListTypingTracker`, qui réaligne `typingUsernames` et
+    /// `typingUsers` par `applyTypingSelection`.
+    private let typingTracker = ConversationListTypingTracker()
+    typealias TypingUser = ConversationListTypingTracker.TypingUser
+    /// Aperçu du menu contextuel (conversationId → derniers messages) — non
+    /// publié, seul le menu le lit. Chargé par `ConversationListPreviewLoader`.
+    private let previewLoader: ConversationListPreviewLoader
+    var previewMessages: [String: [Message]] { previewLoader.messages }
+    /// Écriture du cache disque de la liste : voir `ConversationListPersister`.
+    private let persister = ConversationListPersister()
+    private let markedReadObserver = ConversationMarkedReadObserver()
 
     var totalUnreadCount: Int {
         conversations.reduce(0) { $0 + $1.userState.unreadCount }
@@ -342,46 +342,34 @@ class ConversationListViewModel: ObservableObject {
         return incoming + preserved
     }
 
-    /// Test-only counter: incremented every time `schedulePersist`'s task
-    /// actually completes a save (i.e. survived the debounce window). Used
-    /// by unit tests to assert coalescing without mocking the GRDB-backed
-    /// `CacheCoordinator` actor. Production code never reads this.
     #if DEBUG
-    var persistCallCount = 0
+    /// Test-only: nombre de sauvegardes réellement menées à terme.
+    var persistCallCount: Int {
+        get { persister.persistCallCount }
+        set { persister.persistCallCount = newValue }
+    }
     #endif
 
     /// Coalesced persistence: saves the current `conversations` snapshot
     /// + pagination cursor + hasMore flag to the L2 cache after a short
-    /// debounce so a burst of mutations (a `fetchAndPrependMissingConversation`
-    /// followed immediately by a `bumpToTop`, or N rapid socket events on
-    /// the same conversation) produces ONE GRDB write rather than N.
-    ///
-    /// Cancels any prior in-flight persist task so the latest snapshot
-    /// always wins — same discipline as `loadMore`'s inline persist
-    /// (line 841) and `pullToRefresh`'s pre-invalidate cancel (line 873).
-    /// Callers MUST be on the MainActor (snapshot is read here, before
-    /// the detached Task captures it).
+    /// debounce so a burst of mutations produces ONE GRDB write rather than N
+    /// (voir `ConversationListPersister`). Callers MUST be on the MainActor
+    /// (snapshot is read here, before the detached Task captures it).
     func schedulePersist(debounce: TimeInterval = 0.2) {
-        persistTask?.cancel()
-        let snapshot = conversations
-        let cursor = nextCursor
-        let more = hasMore
-        persistTask = Task { [weak self] in
-            try? await Task.sleep(for: .seconds(debounce))
-            guard !Task.isCancelled else { return }
-            // Un seul écrivain du groupe « dernier message », le moteur (#7548) :
-            // voir `ConversationListLastMessage.persisting`.
-            let store = await CacheCoordinator.shared.conversations
-            if await store.load(for: "list").snapshot() == nil {
-                try? await store.savePreservingFreshness(snapshot, for: "list")
-            } else {
-                await store.update(for: "list") { ConversationListLastMessage.persisting(snapshot, over: $0) }
-            }
-            await store.saveCursor(nextCursor: cursor, hasMore: more, for: "list")
-            #if DEBUG
-            self?.persistCallCount += 1
-            #endif
-        }
+        persister.schedule(snapshot: conversations, cursor: nextCursor, hasMore: hasMore, debounce: debounce)
+    }
+
+    /// Annule la sauvegarde en vol — avant un rechargement ou un pull-to-refresh
+    /// qui invalide le cache, pour qu'une tâche orpheline ne ré-écrive pas le
+    /// blob d'avant.
+    func cancelPendingPersist() {
+        persister.cancel()
+    }
+
+    /// Sauvegarde immédiate de la liste fusionnée + du curseur après un
+    /// `loadMore` réussi.
+    func persistLoadedPage() {
+        persister.persistNow(snapshot: conversations, cursor: nextCursor, hasMore: hasMore)
     }
 
     /// Append paginated rows to the existing list, deduplicating by id and
@@ -510,7 +498,9 @@ class ConversationListViewModel: ObservableObject {
         self.draftStore = draftStore
         self.store = store
         self.categoryStore = categoryStore
+        self.previewLoader = ConversationListPreviewLoader(messageService: messageService)
         reloadDraftSummaries()
+        observeTyping()
         subscribeToSocketEvents()
         subscribeToPushNotifications()
         subscribeToDrafts()
@@ -528,13 +518,6 @@ class ConversationListViewModel: ObservableObject {
     var storeHydrationTask: Task<Void, Never>?
 
     private var groupingTask: Task<Void, Never>?
-    /// Fire-and-forget persistence of the merged list + cursor after a
-    /// successful `loadMore`. Stored so `pullToRefresh()` (and `loadMore`
-    /// itself) can cancel any in-flight save before invalidating the
-    /// cache — otherwise an orphaned task could re-save the pre-refresh
-    /// blob *after* `invalidateAll()` wiped L2, leaving stale data on
-    /// disk for the next cold start.
-    var persistTask: Task<Void, Never>?
 
     /// Task de chargement en vol. Coalesce les appelants concurrents : au
     /// lancement, le `.task` de `RootView` ET celui de `ConversationListView`
@@ -652,21 +635,72 @@ class ConversationListViewModel: ObservableObject {
 
     // MARK: - Lifecycle
 
-    /// Token for the `.conversationMarkedRead` block observer, held so `deinit`
-    /// can remove it. Block-based `NotificationCenter` observers are never
-    /// auto-removed: without this the closure stays registered for the rest of
-    /// the process (firing no-ops through `[weak self]`), accumulating one stale
-    /// observer per VM across login/logout cycles that recreate the `@StateObject`.
-    /// `nonisolated(unsafe)`: set once on the main actor, read once in the
-    /// nonisolated `deinit`, never accessed concurrently.
-    nonisolated(unsafe) var markAsReadObserver: (any NSObjectProtocol)?
-
     nonisolated deinit {
         storyPrefetchTask?.cancel()
         groupingTask?.cancel()
-        typingTimers.values.forEach { $0.invalidate() }
-        if let markAsReadObserver {
-            NotificationCenter.default.removeObserver(markAsReadObserver)
+    }
+
+    // MARK: - Typing
+
+    /// Branche le suivi de frappe sur le socket ; `typingUsernames` et
+    /// `typingUsers` sont réalignés ensemble sur la sélection du suivi.
+    private func observeTyping() {
+        typingTracker.observe(
+            typingStarted: messageSocket.typingStarted,
+            typingStopped: messageSocket.typingStopped,
+            messageReceived: messageSocket.messageReceived,
+            currentUserId: { [weak self] in self?.currentUserId ?? "" },
+            onSelectionChanged: { [weak self] conversationId, selection in
+                self?.applyTypingSelection(selection, for: conversationId)
+            }
+        )
+    }
+
+    private func applyTypingSelection(_ selection: TypingUser?, for conversationId: String) {
+        if typingUsernames[conversationId] != selection?.displayName { typingUsernames[conversationId] = selection?.displayName }
+        if typingUsers[conversationId] != selection?.username { typingUsers[conversationId] = selection?.username }
+    }
+
+    static func typingSelection(for typers: [String: TypingUser]?) -> TypingUser? {
+        ConversationListTypingTracker.typingSelection(for: typers)
+    }
+
+    // MARK: - Preview Messages
+
+    func loadPreviewMessages(for conversationId: String, refresh: Bool = false) async {
+        await previewLoader.load(for: conversationId, refresh: refresh, currentUserId: { [weak self] in self?.currentUserId ?? "" })
+    }
+
+    // MARK: - Mark as Read (local update from ConversationView)
+
+    private func observeMarkAsRead() {
+        markedReadObserver.observe { [weak self] cid in
+            guard let self else { return }
+            // La ligne AFFICHÉE d'abord, le store ensuite : `clearUnreadLocally`
+            // est synchrone, `store.applyReadReceipt` traverse un acteur.
+            // Les enchaîner dans l'autre sens faisait attendre à la pastille
+            // un aller-retour d'acteur — visible en split-view iPad, où la
+            // liste reste à l'écran pendant qu'on ouvre la conversation.
+            self.clearUnreadLocally(cid)
+            // Corrige le `ConversationStore` (RAM, tiers) : ce store
+            // n'apprend autrement jamais qu'une
+            // conversation vient d'être lue par CE chemin (rattrapage,
+            // quick-action push, widget — tous postent `.conversationMarkedRead`,
+            // aucun ne route vers `store.apply(.markAsRead, …)`). Sa
+            // prochaine republication — déclenchée par N'IMPORTE QUELLE
+            // mutation sur N'IMPORTE QUELLE AUTRE conversation, `commit()`
+            // republiant tout le snapshot — regreffait sinon un `unreadCount`
+            // périmé sur cette ligne pourtant déjà lue : le badge persistait
+            // indéfiniment jusqu'au prochain `reloadFromCache()` (bug user
+            // 2026-08-11). `applyReadReceipt` est LOCAL (jamais de réseau,
+            // contrairement à `.markAsRead` — cf. `shouldDispatchListMarkAsRead` :
+            // cet endpoint liste poste un mark-read « sans corps » auquel le
+            // gateway retombe sur un repli par fenêtre temporelle, déclarant
+            // lus des messages jamais montrés) et monotone sur `lastReadAt`
+            // (inoffensif si un accusé plus récent est déjà en place).
+            await self.store.applyReadReceipt(
+                ReadStatusEvent(conversationId: cid, unreadCount: 0, lastReadAt: Date())
+            )
         }
     }
 

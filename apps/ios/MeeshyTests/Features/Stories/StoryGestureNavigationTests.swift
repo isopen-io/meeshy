@@ -235,7 +235,7 @@ final class StoryLongPressToggleGuardTests: XCTestCase {
                 .deletingLastPathComponent()   // Features
                 .deletingLastPathComponent()   // MeeshyTests
                 .deletingLastPathComponent()   // ios
-                .appendingPathComponent("Meeshy/Features/Main/Views/StoryViewerView+Canvas.swift"),
+                .appendingPathComponent("Meeshy/Features/Main/Views/StoryGestureOverlayView.swift"),
             encoding: .utf8
         )
 
@@ -285,7 +285,7 @@ final class StoryReaderFeatureDismissGuardTests: XCTestCase {
     /// Le toucher doit court-circuiter TOUTE autre décision, y compris la
     /// navigation prev/next.
     func test_touchDown_dismissesActiveFeatureBeforeAnythingElse() throws {
-        let code = try source("StoryViewerView+Canvas.swift")
+        let code = try source("StoryGestureOverlayView.swift")
         guard let touchDown = code.range(of: "// ===== TOUCH DOWN ====="),
               let context = code.range(of: "let ctx = StoryGestureContext(") else {
             return XCTFail("structure de l'overlay gestuel inattendue")
@@ -301,11 +301,11 @@ final class StoryReaderFeatureDismissGuardTests: XCTestCase {
     /// Toutes les surfaces partagent le même contrat — en oublier une ferait
     /// réapparaître le comportement inégal que la directive corrige.
     func test_viewerTracksEveryReaderSurface() throws {
-        let code = try source("StoryViewerView.swift")
+        let code = try source("StoryViewerView+ReaderState.swift")
         guard let range = code.range(of: "var hasActiveReaderFeature: Bool") else {
             return XCTFail("hasActiveReaderFeature introuvable")
         }
-        let block = String(code[range.lowerBound...].prefix(320))
+        let block = String(code[range.lowerBound...].prefix(640))
 
         for surface in ["showLanguageOptions", "showFullLanguagePicker",
                         "showEmojiStrip", "showFullEmojiPicker", "showCommentsOverlay"] {

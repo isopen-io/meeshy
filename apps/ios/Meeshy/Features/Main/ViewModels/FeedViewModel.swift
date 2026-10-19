@@ -33,6 +33,8 @@ class FeedViewModel: ObservableObject {
     let offlineQueue: OfflineQueueing
     let feedCache: any FeedCacheStoring
     let limit = 20
+    private let cacheSaver: FeedCacheSaver
+    private lazy var mediaPrefetcher = FeedMediaPrefetcher(posts: { [weak self] in self?.posts ?? [] })
     private var cancellables = Set<AnyCancellable>()
     /// Subscriptions owned by `subscribeToSocketEvents()` only — kept
     /// separate from the general `cancellables` set so the
@@ -44,7 +46,6 @@ class FeedViewModel: ObservableObject {
     let socialSocket: SocialSocketProviding
     let postService: PostServiceProviding
     private let languageProvider: LanguageProviding
-    var cacheSaveTask: Task<Void, Never>?
     var isFeedLoadInProgress = false
     /// Avance quand la liste repart de la page 1 (tirer pour rafraîchir,
     /// premier chargement). Une page « suivante » demandée AVANT et revenue
@@ -88,6 +89,7 @@ class FeedViewModel: ObservableObject {
         self.languageProvider = languageProvider
         self.offlineQueue = offlineQueue
         self.feedCache = feedCache
+        self.cacheSaver = FeedCacheSaver(feedCache: feedCache)
         observePreferredLanguageChanges()
     }
 
@@ -131,7 +133,31 @@ class FeedViewModel: ObservableObject {
 
     // MARK: - Media Prefetch
 
-    var prefetchTask: Task<Void, Never>?
-    var prefetchDebounceTask: Task<Void, Never>?
-    var lastPrefetchIndex: Int = -1
+    func prefetchMediaForPost(_ postId: String) {
+        mediaPrefetcher.prefetchMediaForPost(postId)
+    }
+
+    func prefetchMedia(around index: Int) {
+        mediaPrefetcher.prefetchMedia(around: index)
+    }
+
+    nonisolated static func shouldPrefetchFeedMedia(
+        kind: FeedMediaType,
+        hasThumbnail: Bool,
+        allowImage: Bool,
+        allowVideo: Bool,
+        allowAudio: Bool
+    ) -> Bool {
+        FeedMediaPrefetcher.shouldPrefetchFeedMedia(
+            kind: kind,
+            hasThumbnail: hasThumbnail,
+            allowImage: allowImage,
+            allowVideo: allowVideo,
+            allowAudio: allowAudio
+        )
+    }
+
+    func debouncedCacheSave() {
+        cacheSaver.save(posts)
+    }
 }

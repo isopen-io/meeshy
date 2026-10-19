@@ -87,7 +87,8 @@ final class SceneCardUnicityTests: XCTestCase {
                       "le lecteur délègue son fond à la loi, jamais un littéral")
 
         let canvas = AppSourceGuard.stripComments(
-            try AppSourceGuard.unit("Meeshy/Features/Main/Views/StoryViewerView+Canvas.swift"))
+            try AppSourceGuard.unit("Meeshy/Features/Main/Views/StoryViewerView+Canvas.swift",
+                                    alsoIncluding: ["Meeshy/Features/Main/Views/StoryReaderCanvasLayout.swift"]))
         XCTAssertTrue(canvas.contains("cardedCornerRadius: SceneShape.cardedCornerRadius"),
                       "le lecteur anime SON cadrage depuis le rayon de la loi, jamais un littéral")
 
@@ -201,11 +202,12 @@ final class SceneCardUnicityTests: XCTestCase {
                                         "readerCanvasFraming.cornerRadius",
                                         "unscaledCornerRadius"]
 
+    /// L'UNITÉ de l'hôte : le canvas du lecteur a ses couches et son cadrage dans des fichiers frères.
     private static func lire(_ relatif: String) throws -> String {
-        let racine = URL(fileURLWithPath: #filePath)
-            .deletingLastPathComponent().deletingLastPathComponent()
-            .deletingLastPathComponent().deletingLastPathComponent()
-        return try String(contentsOf: racine.appendingPathComponent(relatif), encoding: .utf8)
+        try AppSourceGuard.unit(
+            relatif,
+            alsoIncluding: relatif.hasSuffix("StoryViewerView+Canvas.swift")
+                ? ["Meeshy/Features/Main/Views/StoryReaderCanvasLayout.swift"] : [])
     }
 
     private static var corridors: MediaStageFraming.Corridors {

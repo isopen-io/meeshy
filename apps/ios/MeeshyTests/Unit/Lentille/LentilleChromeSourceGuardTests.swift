@@ -47,9 +47,22 @@ final class LentilleChromeSourceGuardTests: XCTestCase {
         iosRoot.appendingPathComponent("Meeshy/Features/Main/Lentille/Chrome")
     }
 
+    /// `+Overlays` et les types qui en sont sortis (en-tête, barre du bas, glisser de chip, items de menu).
+    private static let overlayFamily: Set<String> = [
+        "ConversationListView+Overlays.swift", "ConversationListView+ChipDrag.swift",
+        "ConversationListView+HeaderOverlay.swift", "ConversationListView+BottomBar.swift",
+        "ConversationListView+MoveToSectionMenuItems.swift",
+    ]
+
+    /// Le code qui vient de `ConversationListView.swift` : le fichier-tête ET les types qui en ont été extraits
+    /// (`+StoryRail`, `+SectionHeader`, `+ScrollChrome`…). `+Overlays` et ses types extraits en sont exclus — le menu
+    /// contextuel et ses constantes de geste (`0.45`, auto-scroll) ont leurs propres gardes et n'ont jamais été sous celle-ci.
     private func listViewSource() throws -> (name: String, code: String) {
-        let url = Self.iosRoot.appendingPathComponent("Meeshy/Features/Main/Views/ConversationListView.swift")
-        return ("ConversationListView.swift", try String(contentsOf: url, encoding: .utf8))
+        let code = try AppSourceGuard.unitURLs("Meeshy/Features/Main/Views/ConversationListView.swift")
+            .filter { !Self.overlayFamily.contains($0.lastPathComponent) }
+            .map { try String(contentsOf: $0, encoding: .utf8) }
+            .joined(separator: "\n")
+        return ("ConversationListView.swift", code)
     }
 
     /// Tout `.swift` de `Lentille/Chrome/`, découvert au moment du test —

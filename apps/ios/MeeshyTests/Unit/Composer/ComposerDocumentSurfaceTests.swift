@@ -1053,7 +1053,7 @@ final class ComposerDocumentSurfaceTests: XCTestCase {
             .deletingLastPathComponent()
             .deletingLastPathComponent()
             .deletingLastPathComponent()
-            .appendingPathComponent("packages/MeeshySDK/Sources/MeeshySDK/Models/StoryModels.swift")
+            .appendingPathComponent("packages/MeeshySDK/Sources/MeeshySDK/Models/APIPost+StatusEntry.swift")
         return AppSourceGuard.stripComments(try String(contentsOf: url, encoding: .utf8))
     }
 

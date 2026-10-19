@@ -82,7 +82,7 @@ extension ConversationListViewModel {
         // Defensive: a re-entrant load (e.g. post-logout/login) should
         // not race a still-running persist from a previous session's
         // loadMore. Cancellation is cheap when there's nothing to cancel.
-        persistTask?.cancel()
+        cancelPendingPersist()
 
         async let categoriesTask: () = loadCategories()
 
@@ -351,23 +351,7 @@ extension ConversationListViewModel {
             // post-restart loadMore (spec AC §4.8.3). `setConversations`
             // already re-sorted the array, so we save what's actually
             // displayed.
-            let snapshot = conversations
-            let persistedCursor = nextCursor
-            let persistedHasMore = hasMore
-            // Cancel any prior persist still in flight so we never race
-            // a stale blob over a fresher one — the latest snapshot is
-            // always the one that should win.
-            persistTask?.cancel()
-            persistTask = Task {
-                // try? : Wave 1 Local-First a rendu .save() throwing.
-                // Best-effort persist — l'erreur est loggee en aval.
-                try? await CacheCoordinator.shared.conversations.savePreservingFreshness(snapshot, for: "list")
-                await CacheCoordinator.shared.conversations.saveCursor(
-                    nextCursor: persistedCursor,
-                    hasMore: persistedHasMore,
-                    for: "list"
-                )
-            }
+            persistLoadedPage()
         } catch {
             // Transient errors (network blip, rate limit) keep
             // `hasMore = true` so the next scroll attempt can retry.
@@ -400,7 +384,7 @@ extension ConversationListViewModel {
         // Otherwise an orphaned `loadMore` save scheduled moments before
         // the pull could re-write the old blob on disk after the fetch
         // below replaces it.
-        persistTask?.cancel()
+        cancelPendingPersist()
         nextCursor = nil
         hasMore = true
         paginationState = .idle

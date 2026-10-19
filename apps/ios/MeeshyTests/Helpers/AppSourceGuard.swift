@@ -149,14 +149,19 @@ enum AppSourceGuard {
 
     /// Les types découpés par responsabilité qu'une garde lit comme leur unité :
     /// `BubbleStandardLayout` (#10678), `MessageListViewController` (#10758),
-    /// `PostDetailView` (#10956), `ConversationListViewModel` et `FeedViewModel`
-    /// (#10988).
+    /// `PostDetailView` (#10956), `ConversationListViewModel`, `FeedViewModel`,
+    /// `ConversationListView`, `ConversationView` et `StoryViewerView` (#10988).
     static let splitUnits: Set<String> = [
         "BubbleStandardLayout.swift",
+        "ConversationListView.swift",
         "ConversationListViewModel.swift",
+        "ConversationView.swift",
         "FeedViewModel.swift",
         "MessageListViewController.swift",
         "PostDetailView.swift",
+        "StoryViewerView+Canvas.swift",
+        "StoryViewerView+Content.swift",
+        "StoryViewerView.swift",
     ]
 
     /// Lit un fichier ; un type de `splitUnits` se lit comme son UNITÉ

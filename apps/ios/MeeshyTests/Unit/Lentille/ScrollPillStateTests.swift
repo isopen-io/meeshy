@@ -30,8 +30,11 @@ final class ScrollPillStateTests: XCTestCase {
         return try String(contentsOf: url, encoding: .utf8)
     }
 
+    /// L'UNITÉ de la liste (`ConversationListView.swift` + `ConversationListView+*.swift`) : le rail de
+    /// stories, la queue et les feuilles vivent dans leurs fichiers, et les gardes négatives
+    /// ci-dessous doivent les balayer aussi.
     private func listViewSource() throws -> String {
-        try source(at: "Meeshy/Features/Main/Views/ConversationListView.swift")
+        try AppSourceGuard.unit("Meeshy/Features/Main/Views/ConversationListView.swift")
     }
 
     private func pillHostSource() throws -> String {

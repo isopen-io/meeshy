@@ -302,7 +302,9 @@ final class StoryViewerScenePlayerGuardTests: XCTestCase {
     // MARK: - Le chrome est INCHANGÉ autour de la couche contenu
 
     func test_chromeLayersStayMountedAroundTheContentHost() throws {
-        let text = try source()
+        // Le chrome (en-tête, rail, commentaires) est monté par les couches de la carte,
+        // dans `StoryViewerView+Canvas+Layers.swift` : l'UNITÉ du canvas, pas son seul hôte.
+        let text = MyStoriesSourceCorpus.strippingComments(try AppSourceGuard.unit(Self.canvasFile))
         for layer in ["StoryLiveProgressBars(", "StoryHeaderView(", "ReferenceNoteRow(",
                       "StoryActionSidebarView(", "makeCommentsOverlay()"] {
             XCTAssertTrue(

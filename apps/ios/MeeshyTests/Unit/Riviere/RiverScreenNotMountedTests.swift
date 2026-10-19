@@ -158,13 +158,18 @@ final class RiverScreenNotMountedTests: XCTestCase {
             "redeviendrait une promesse rompue (choisie au menu, jamais rendue)."
         )
         let windowEnd = code.index(riverBranch.upperBound, offsetBy: 220, limitedBy: code.endIndex) ?? code.endIndex
+        // Le montage de l'hôte vit dans `ConversationRiverLayer` (`ConversationView+ReaderLayers.swift`),
+        // que la branche `mode == .river` de l'hôte instancie — les deux ancres, à courte distance.
         XCTAssertTrue(
-            code[riverBranch.upperBound..<windowEnd].contains("RiverConversationHost("),
+            code[riverBranch.upperBound..<windowEnd].contains("ConversationRiverLayer("),
             "La branche `mode == .river` ne monte plus d'hôte de rendu — jamais une sélection " +
             "sans écran."
         )
+        let layer = try String(
+            contentsOf: Self.meeshyRoot.appendingPathComponent("Features/Main/Views/ConversationView+ReaderLayers.swift"),
+            encoding: .utf8)
         XCTAssertEqual(
-            code.components(separatedBy: "RiverConversationHost(").count - 1, 1,
+            AppSourceGuard.stripComments(layer).components(separatedBy: "RiverConversationHost(").count - 1, 1,
             "UN seul site de montage de l'hôte Rivière dans le fil."
         )
     }
@@ -176,7 +181,7 @@ final class RiverScreenNotMountedTests: XCTestCase {
         let hits = try nonRiviereSwiftFiles().filter { url in
             (try? String(contentsOf: url, encoding: .utf8))?.contains("RiverConversationHost(") == true
         }
-        XCTAssertEqual(hits.map(\.lastPathComponent), ["ConversationView.swift"],
+        XCTAssertEqual(hits.map(\.lastPathComponent), ["ConversationView+ReaderLayers.swift"],
                        "Le fil est l'unique site hors `Riviere/` qui monte l'hôte de conversation.")
     }
 }

@@ -100,9 +100,11 @@ final class ConversationDeleteMessageGuardTests: XCTestCase {
             messageRow.contains("requestDeleteMessage(messageId)"),
             "la barre de réaction rapide doit appeler `requestDeleteMessage(_:)`."
         )
+        let sheets = try source("Features/Main/Views/ConversationView+MessageSheets.swift")
         XCTAssertTrue(
-            conversationView.contains("onDeleteMessage: { requestDeleteMessage(msg.id) }"),
-            "la feuille « Plus… » doit appeler `requestDeleteMessage(_:)`."
+            sheets.contains("onDeleteMessage: { actions.requestDelete(msg.id) }")
+                && conversationView.contains("requestDelete: { requestDeleteMessage($0) }"),
+            "la feuille « Plus… » doit appeler `requestDeleteMessage(_:)` (par les gestes que l'hôte lui remet)."
         )
     }
 

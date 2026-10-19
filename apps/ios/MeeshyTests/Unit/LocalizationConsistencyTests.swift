@@ -377,6 +377,15 @@ final class LocalizationConsistencyTests: XCTestCase {
         "apps/ios/Meeshy/Features/Contacts/PhonePromptSheet.swift",  // 11
         "apps/ios/Meeshy/Features/Main/Views/NotificationSettingsView.swift",  // 56
         "apps/ios/Meeshy/Features/Main/Views/ConversationView.swift",  // 49
+        // Cohésion de `ConversationView` : le cliquet suit le CODE, pas le chemin (leçon 578). Les
+        // clés ont quitté l'hôte avec leur code — le consentement vocal, la bannière d'erreur, les
+        // contrôles du titre et de la recherche, le squelette, les avis de la liste — et rejoignent
+        // le cliquet dans le même commit.
+        "apps/ios/Meeshy/Features/Main/Views/ConversationView+ErrorBanner.swift",
+        "apps/ios/Meeshy/Features/Main/Views/ConversationView+HeaderControls.swift",
+        "apps/ios/Meeshy/Features/Main/Views/ConversationView+MessageListLayer.swift",
+        "apps/ios/Meeshy/Features/Main/Views/ConversationView+Presentations.swift",
+        "apps/ios/Meeshy/Features/Main/Views/ConversationView+Skeleton.swift",
         "apps/ios/Meeshy/Features/Main/Views/TwoFactorSetupView.swift",  // 41
         "apps/ios/Meeshy/Features/Main/Views/GlobalSearchView.swift",  // 40
         "apps/ios/Meeshy/Features/Main/Views/ParticipantsView.swift",  // 38
@@ -516,6 +525,15 @@ final class LocalizationConsistencyTests: XCTestCase {
         "apps/ios/Meeshy/Features/Main/Views/DataStorageView.swift",  // 7
         "apps/ios/Meeshy/Features/Main/Views/RootViewComponents.swift",  // 7
         "apps/ios/Meeshy/Features/Main/Views/StoryViewerView+Canvas.swift",  // 5
+        // Cohésion de `StoryViewerView` — le cliquet suit le CODE, pas le chemin : le geste du
+        // canvas, l'indicateur de buffering, l'interstitiel d'identité et la liste des
+        // commentaires de story sont devenus des types à eux (neuf clés quittent les trois
+        // fichiers ci-dessus ; sans ces cinq lignes elles sortiraient de la garde en silence).
+        "apps/ios/Meeshy/Features/Main/Views/StoryGestureOverlayView.swift",
+        "apps/ios/Meeshy/Features/Main/Views/StoryPlaybackStallIndicator.swift",
+        "apps/ios/Meeshy/Features/Main/Views/StoryGroupIntroOverlay.swift",
+        "apps/ios/Meeshy/Features/Main/Views/StoryCommentThread.swift",
+        "apps/ios/Meeshy/Features/Main/Views/StoryCommentsOverlayView.swift",
         // 2026-09-02 — deux de ses appels (`story.viewer.replyTo`,
         // `story.viewer.reply.cancel`) ont MIGRÉ avec `StoryComposerBarView`
         // vers son propre fichier (dette de taille). Épinglé dès la découpe,

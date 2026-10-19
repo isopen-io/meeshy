@@ -92,11 +92,12 @@ final class StoryGroupIntroOverlayGuardTests: XCTestCase {
         // affirme « ceci n'est pas à tel endroit » : l'unité concatène et
         // efface justement la distinction qu'un tel témoin mesure.
         let unitSource = try AppSourceGuard.unit("Meeshy/Features/Main/Views/StoryViewerView.swift")
-        let viewerSource = try source("Meeshy/Features/Main/Views/StoryViewerView.swift")
+        // L'interstitiel est un type à lui (`StoryGroupIntroOverlay.swift`), sorti du fichier du lecteur.
+        let overlaySource = try source("Meeshy/Features/Main/Views/StoryGroupIntroOverlay.swift")
 
         let cubeFace = try body(of: "struct NeighborGroupCubeFace: View {", in: unitSource, closing: "\n}")
         let overlay = try body(
-            of: "private struct StoryGroupIntroOverlay: View {", in: viewerSource, closing: "\n}"
+            of: "struct StoryGroupIntroOverlay: View {", in: overlaySource, closing: "\n}"
         )
 
         XCTAssertTrue(
@@ -134,7 +135,7 @@ final class StoryGroupIntroOverlayGuardTests: XCTestCase {
     // MARK: - Tap gauche sur l'intro = retour au groupe précédent (pas la story précédente)
 
     func test_goBackToPreviousGroupFromIntro_usesGroupTransition_notStoryIndexCheck() throws {
-        let viewerSource = try source("Meeshy/Features/Main/Views/StoryViewerView.swift")
+        let viewerSource = try source("Meeshy/Features/Main/Views/StoryViewerView+GroupIntro.swift")
         let block = try body(
             of: "func goBackToPreviousGroupFromIntro() {", in: viewerSource, closing: "\n    }"
         )
@@ -166,9 +167,9 @@ final class StoryGroupIntroOverlayGuardTests: XCTestCase {
     // MARK: - Gestes composés sur StoryGroupIntroOverlay
 
     func test_storyGroupIntroOverlay_hasOnBackAndDoubleTapGestures() throws {
-        let viewerSource = try source("Meeshy/Features/Main/Views/StoryViewerView.swift")
+        let viewerSource = try source("Meeshy/Features/Main/Views/StoryGroupIntroOverlay.swift")
         let block = try body(
-            of: "private struct StoryGroupIntroOverlay: View {", in: viewerSource, closing: "\n}"
+            of: "struct StoryGroupIntroOverlay: View {", in: viewerSource, closing: "\n}"
         )
         XCTAssertTrue(block.contains("let onBack: () -> Void"),
                       "StoryGroupIntroOverlay doit exposer onBack (tap gauche).")
@@ -192,9 +193,9 @@ final class StoryGroupIntroOverlayGuardTests: XCTestCase {
     /// `location`, jamais la distance parcourue — il faut un mouchard
     /// `DragGesture`).
     func test_storyGroupIntroOverlay_tapsAreGatedOnFingerMovement() throws {
-        let viewerSource = try source("Meeshy/Features/Main/Views/StoryViewerView.swift")
+        let viewerSource = try source("Meeshy/Features/Main/Views/StoryGroupIntroOverlay.swift")
         let overlay = try body(
-            of: "private struct StoryGroupIntroOverlay: View {", in: viewerSource, closing: "\n}"
+            of: "struct StoryGroupIntroOverlay: View {", in: viewerSource, closing: "\n}"
         )
 
         XCTAssertTrue(
@@ -242,7 +243,7 @@ final class StoryGroupIntroOverlayGuardTests: XCTestCase {
     }
 
     func test_accessibilitySummary_omitsPresenceWhenOffline() throws {
-        let viewerSource = try source("Meeshy/Features/Main/Views/StoryViewerView.swift")
+        let viewerSource = try source("Meeshy/Features/Main/Views/StoryGroupIntroOverlay.swift")
         let block = try body(of: "private var accessibilitySummary: String {", in: viewerSource)
         XCTAssertTrue(
             block.contains("showsIndicator"),

@@ -40,7 +40,7 @@ extension OfflineQueue {
         // Le retry ré-arme la ligne avec le MÊME cmid : sans cette purge, un
         // abonné post-retry (`outcomeStream(for:)`) recevait instantanément
         // le tombstone `.exhausted` périmé pour une mutation encore en vol.
-        outcomeTombstones.removeValue(forKey: record.clientMessageId)
+        forgetOutcome(for: record.clientMessageId)
 
         let now = Date()
         do {

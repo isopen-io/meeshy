@@ -168,19 +168,16 @@ public final class MessageSocketManager: ObservableObject, MessageSocketProvidin
     /// #10904 — le jeton de compte présenté au handshake du socket courant
     /// (`nil` pour un invité). `auth:token-expired` rafraîchit en SON nom :
     /// jamais la session d'un compte ouvert depuis.
-    var handshakeToken: String?
-    var joinedConversations: Set<String> = []
-    var reconnectAttempt: Int = 0
+    private var handshakeToken: String?
+    private var joinedConversations: Set<String> = []
+    private var reconnectAttempt: Int = 0
     private var backoff = SocketReconnectBackoff()
     private var reconnectTask: Task<Void, Never>?
-    var hadPreviousConnection = false
-    private var heartbeatTimer: Timer?
+    private var hadPreviousConnection = false
+    private let heartbeat = SocketHeartbeat()
+    private let transportRetirement = SocketTransportRetirement()
+    private var translationBuffer = TranslationRequestBuffer()
     private var lifecycleCancellables = Set<AnyCancellable>()
-
-    deinit {
-        heartbeatTimer?.invalidate()
-        heartbeatTimer = nil
-    }
 
     private init() {
         observeNetworkRecovery()
@@ -214,7 +211,7 @@ public final class MessageSocketManager: ObservableObject, MessageSocketProvidin
         scheduleReconnectWithBackoff()
     }
 
-    func scheduleReconnectWithBackoff() {
+    private func scheduleReconnectWithBackoff() {
         // Only worth retrying while a session still exists. A nil token means the
         // server invalidated us (`requireReauthentication` clears it) and no amount
         // of retrying helps — only a fresh login does. An EXPIRED token is a
@@ -236,23 +233,6 @@ public final class MessageSocketManager: ObservableObject, MessageSocketProvidin
                 self.forceReconnect()
             }
         }
-    }
-
-    // MARK: - JWT Helpers
-
-    private static func isJWTExpired(_ token: String) -> Bool {
-        let parts = token.split(separator: ".")
-        guard parts.count == 3 else { return true }
-        var base64 = String(parts[1])
-            .replacingOccurrences(of: "-", with: "+")
-            .replacingOccurrences(of: "_", with: "/")
-        while base64.count % 4 != 0 { base64.append("=") }
-        // Fail-safe : un JWT illisible est traité comme expiré (déclenche un
-        // refresh) plutôt que présumé valide.
-        guard let data = Data(base64Encoded: base64),
-              let json = try? JSONSerialization.jsonObject(with: data) as? [String: Any],
-              let exp = json["exp"] as? TimeInterval else { return true }
-        return Date(timeIntervalSince1970: exp).addingTimeInterval(-30) < Date()
     }
 
     // MARK: - Connection
@@ -284,7 +264,7 @@ public final class MessageSocketManager: ObservableObject, MessageSocketProvidin
             return .notArmed
         }
 
-        let tokenExpired = Self.isJWTExpired(token)
+        let tokenExpired = SocketConnectionRules.isJWTExpired(token)
         if tokenExpired {
             Logger.socket.warning("MessageSocket: JWT expired, triggering refresh instead of connecting")
             // #10904 — au nom du jeton lu ici : il ne rafraîchit rien s'il
@@ -354,6 +334,117 @@ public final class MessageSocketManager: ObservableObject, MessageSocketProvidin
         return .armed
     }
 
+    private func setupEventHandlers() {
+        guard let socket else { return }
+        installConnectionHandlers(on: socket)
+        installTokenExpiryHandler(on: socket)
+        setupMessageEventHandlers()
+    }
+
+    /// Cycle de vie de la connexion : `.connect`, `.disconnect`, `.reconnect`, `.reconnectAttempt`.
+    private func installConnectionHandlers(on socket: SocketIOClient) {
+        socket.on(clientEvent: .connect) { [weak self] _, _ in
+            guard let self else { return }
+            let wasReconnect = self.handleConnectionEstablished()
+
+            DispatchQueue.main.async {
+                self.isConnected = true
+                self.connectionState = .connected
+            }
+
+            self.startHeartbeat()
+
+            // CALL-FIX 2026-06-06 — replay the app foreground/background state on
+            // every (re)connect so the gateway always knows whether to deliver
+            // incoming calls via the in-app socket banner (foreground) or a VoIP
+            // push / CallKit (background). The first connect fires before the app's
+            // scenePhase emit lands, so without this replay the gateway would treat
+            // a foreground app as unknown and push CallKit for the first call.
+            self.socket?.emit("presence:app-state", ["foreground": self.lastAppForeground])
+
+            // CALL-FIX 2026-06-06 — ask the gateway to replay any in-progress
+            // (ringing) call so a user who comes online / opens the app mid-ring
+            // sees the incoming banner immediately, instead of missing the call
+            // that started while they were offline/backgrounded.
+            self.socket?.emit("call:check-active")
+
+            // Re-join all tracked conversations (active-first for fastest UX).
+            for convId in self.roomsToRejoinOnConnect() {
+                self.socket?.emit("conversation:join", ["conversationId": convId])
+            }
+
+            // Replay user-triggered translation requests that arrived during
+            // the disconnect window. The gateway will route them to whichever
+            // conversation rooms we just re-joined.
+            self.flushBufferedTranslationRequests()
+
+            if wasReconnect {
+                Logger.socket.info("MessageSocket reconnected — re-joined \(self.joinedConversations.count) room(s)")
+            } else {
+                Logger.socket.info("MessageSocket connected")
+            }
+        }
+
+        socket.on(clientEvent: .disconnect) { [weak self, weak socket] data, _ in
+            guard let self else { return }
+            self.stopHeartbeat()
+            // Seul le socket COURANT réarme : un ancien, remplacé, n'a plus rien à rouvrir.
+            let retries = SocketDisconnectPolicy.retries(afterReason: SocketDisconnectPolicy.reason(in: data))
+                && socket != nil && socket === self.socket
+            DispatchQueue.main.async {
+                self.isConnected = false
+                if self.hadPreviousConnection {
+                    self.connectionState = .reconnecting(attempt: 0)
+                } else {
+                    self.connectionState = .disconnected
+                }
+                // Coupure prononcée par la passerelle, sur le socket COURANT :
+                // Socket.IO ne la rattrape pas (`SocketDisconnectPolicy`).
+                if retries {
+                    self.scheduleReconnectWithBackoff()
+                }
+            }
+            Logger.socket.info("MessageSocket disconnected")
+        }
+
+        // Une perte de transport n'émet PAS `.disconnect` quand la reconnexion automatique est active :
+        // Socket.IO émet `.reconnect` (`SocketManager.tryReconnect`). Sans ce récepteur, `isConnected`
+        // restait vrai pendant toute la coupure — chaque envoi attendait son accusé avant le repli REST,
+        // et le retour du réseau ne relançait rien.
+        socket.on(clientEvent: .reconnect) { [weak self] _, _ in
+            guard let self else { return }
+            self.stopHeartbeat()
+            DispatchQueue.main.async {
+                self.isConnected = false
+                self.connectionState = .reconnecting(attempt: 0)
+            }
+            Logger.socket.info("MessageSocket transport lost — reconnecting")
+        }
+
+        socket.on(clientEvent: .reconnectAttempt) { [weak self] _, _ in
+            guard let self else { return }
+            self.reconnectAttempt += 1
+            let attempt = self.reconnectAttempt
+            DispatchQueue.main.async {
+                self.connectionState = .reconnecting(attempt: attempt)
+            }
+            Logger.socket.info("MessageSocket reconnect attempt \(attempt)")
+        }
+    }
+
+    private func installTokenExpiryHandler(on socket: SocketIOClient) {
+        // #10904 — le jeton de CE socket, capturé à l'inscription de ses
+        // écouteurs : un socket d'une session quittée (encore en sursis parmi
+        // les transports retirés) ne rafraîchit pas celle du moment.
+        let presentedToken = handshakeToken
+        socket.on("auth:token-expired") { _, _ in
+            Logger.socket.info("MessageSocket: auth token expired — triggering refresh")
+            Task { @MainActor in
+                AuthManager.shared.handleUnauthorized(presentedToken: presentedToken)
+            }
+        }
+    }
+
     public func connectAnonymous(sessionToken: String) {
         if let socket, socket.status == .connected || socket.status == .connecting {
             return
@@ -397,37 +488,12 @@ public final class MessageSocketManager: ObservableObject, MessageSocketProvidin
     /// `leaveConversation` / typing accounting stays accurate after resume).
     /// Contrast `disconnect()`, the logout/cold reset, which additionally clears
     /// all of that so the next login is a genuine cold connect with no rooms.
-    /// Les transports démontés, gardés vivants le temps que leurs accusés en attente tombent.
-    ///
-    /// Socket.IO arme l'expiration d'un `emitWithAck` avec une référence FAIBLE au client : libéré au démontage
-    /// (arrière-plan, rotation du jeton, reconnexion forcée), il n'appelait ni la réponse ni l'expiration, et la
-    /// tâche qui attendait — un envoi rejoué, un `call:end` — restait suspendue pour toujours.
-    private var retiringTransports: [SocketManager] = []
-    private static let ackRetirementGrace: TimeInterval = 12
-
-    private func retireTransport() {
-        guard let retiring = manager else { return }
-        // Le transport retiré garde ses accusés en vol, jamais sa boucle de
-        // reconnexion : déjà lancée (coupure réseau), elle se tenait elle-même
-        // en vie (`asyncAfter` de Socket.IO) et réessayait sans fin — un
-        // transport fantôme de plus à chaque `forceReconnect` hors ligne, puis
-        // N connexions ouvertes d'un coup au retour du serveur.
-        retiring.reconnects = false
-        retiringTransports.append(retiring)
-        let id = ObjectIdentifier(retiring)
-        DispatchQueue.main.asyncAfter(deadline: .now() + Self.ackRetirementGrace) { [weak self] in
-            guard let self else { return }
-            self.retiringTransports.filter { ObjectIdentifier($0) == id }.forEach { $0.disconnect() }
-            self.retiringTransports.removeAll { ObjectIdentifier($0) == id }
-        }
-    }
-
     private func suspendTransport() {
         reconnectTask?.cancel()
         reconnectTask = nil
         stopHeartbeat()
         socket?.disconnect()
-        retireTransport()
+        transportRetirement.retire(manager)
         socket = nil
         manager = nil
         isConnected = false
@@ -542,36 +608,19 @@ public final class MessageSocketManager: ObservableObject, MessageSocketProvidin
     /// across a background suspend (`suspendTransport`) and only cleared on
     /// logout (`disconnect`) — is unit-testable without a live socket.
     func roomsToRejoinOnConnect() -> [String] {
-        var rooms: [String] = []
-        if let activeId = activeConversationId, joinedConversations.contains(activeId) {
-            rooms.append(activeId)
-        }
-        // Les autres fenêtres ensuite — ordre stable, pour qu'une reconnexion se rejoue à l'identique.
-        for convId in openConversationIds.sorted() where convId != activeConversationId && joinedConversations.contains(convId) {
-            rooms.append(convId)
-        }
-        for convId in joinedConversations where convId != activeConversationId && !openConversationIds.contains(convId) {
-            rooms.append(convId)
-        }
-        return rooms
+        SocketConnectionRules.roomsToRejoin(joined: joinedConversations, active: activeConversationId, open: openConversationIds)
     }
 
     // MARK: - Heartbeat
 
-    func startHeartbeat() {
-        heartbeatTimer?.invalidate()
-        heartbeatTimer = Timer.scheduledTimer(withTimeInterval: 30.0, repeats: true) { [weak self] _ in
-            guard let self else { return }
-            // Include clientTime so the gateway can compute round-trip latency
-            // and return it in heartbeat:ack for connection quality monitoring.
-            let clientTimeMs = Int64(Date().timeIntervalSince1970 * 1000)
-            self.safeEmit("heartbeat", ["clientTime": clientTimeMs])
+    private func startHeartbeat() {
+        heartbeat.start { [weak self] clientTimeMs in
+            self?.safeEmit("heartbeat", ["clientTime": clientTimeMs])
         }
     }
 
-    func stopHeartbeat() {
-        heartbeatTimer?.invalidate()
-        heartbeatTimer = nil
+    private func stopHeartbeat() {
+        heartbeat.stop()
     }
 
     // MARK: - Room Management
@@ -651,22 +700,8 @@ public final class MessageSocketManager: ObservableObject, MessageSocketProvidin
 
     // MARK: - Translation Request
 
-    /// Buffered user-triggered emits that the socket layer must NOT silently
-    /// drop on disconnect. Translation requests are at the top of that list:
-    /// the user explicitly tapped a flag to ask for a target-language
-    /// rendering, and without buffering the request vanishes the instant the
-    /// socket is offline (the user blames the app, retries the same tap,
-    /// gets the same nothing). Capped + TTL-bounded so a long disconnect
-    /// cannot turn this into a memory leak.
-    struct PendingTranslationRequest: Equatable, Sendable {
-        let messageId: String
-        let targetLanguage: String
-        let queuedAt: Date
-    }
-
-    private var pendingTranslationRequests: [PendingTranslationRequest] = []
-    static let translationBufferMaxSize = 50
-    static let translationBufferTTL: TimeInterval = 60
+    static let translationBufferMaxSize = TranslationRequestBuffer.maxSize
+    static let translationBufferTTL: TimeInterval = TranslationRequestBuffer.timeToLive
 
     public func requestTranslation(messageId: String, targetLanguage: String) {
         // U4 — ALWAYS buffer, in addition to emitting when connected. The
@@ -679,7 +714,7 @@ public final class MessageSocketManager: ObservableObject, MessageSocketProvidin
         // replay re-ask; the gateway request is idempotent (returns the cached
         // translation) so a redundant replay is harmless, and TTL(60s)+dedup+cap
         // bound the buffer.
-        bufferTranslationRequest(
+        translationBuffer.enqueue(
             PendingTranslationRequest(
                 messageId: messageId,
                 targetLanguage: targetLanguage,
@@ -692,21 +727,6 @@ public final class MessageSocketManager: ObservableObject, MessageSocketProvidin
         }
     }
 
-    private func bufferTranslationRequest(_ request: PendingTranslationRequest) {
-        // De-dup: if the same (messageId, targetLanguage) is already queued,
-        // refresh its timestamp rather than enqueue twice — the user re-tapped.
-        pendingTranslationRequests.removeAll {
-            $0.messageId == request.messageId && $0.targetLanguage == request.targetLanguage
-        }
-        pendingTranslationRequests.append(request)
-        // Cap from the front: oldest pending requests are the least useful
-        // when the user is staring at the screen.
-        if pendingTranslationRequests.count > Self.translationBufferMaxSize {
-            let dropCount = pendingTranslationRequests.count - Self.translationBufferMaxSize
-            pendingTranslationRequests.removeFirst(dropCount)
-        }
-    }
-
     /// Flush queued translation requests that are still fresh enough to
     /// matter. Called from the `.connect` handler immediately after
     /// re-joining rooms so the gateway sees a coherent stream
@@ -714,11 +734,7 @@ public final class MessageSocketManager: ObservableObject, MessageSocketProvidin
     /// rooms). Exposed as `internal` so the test bundle can validate the
     /// replay without driving a real socket.
     func flushBufferedTranslationRequests(now: Date = Date()) {
-        guard !pendingTranslationRequests.isEmpty else { return }
-        let cutoff = now.addingTimeInterval(-Self.translationBufferTTL)
-        let toReplay = pendingTranslationRequests.filter { $0.queuedAt >= cutoff }
-        pendingTranslationRequests.removeAll()
-        for request in toReplay {
+        for request in translationBuffer.drainFresh(now: now) {
             socket?.emit("translation:request", [
                 "messageId": request.messageId,
                 "targetLanguage": request.targetLanguage
@@ -728,7 +744,7 @@ public final class MessageSocketManager: ObservableObject, MessageSocketProvidin
 
     #if DEBUG
     var debug_pendingTranslationRequests: [PendingTranslationRequest] {
-        pendingTranslationRequests
+        translationBuffer.pending
     }
     #endif
 
@@ -775,7 +791,7 @@ public final class MessageSocketManager: ObservableObject, MessageSocketProvidin
     /// (re)connect (see the `.connect` handler). Defaults to `true` because the
     /// socket only ever connects while the app is foreground (iOS suspends it in
     /// background), so a fresh connection is foreground by definition.
-    var lastAppForeground = true
+    private var lastAppForeground = true
 
     public func emitAppForeground(_ foreground: Bool) {
         lastAppForeground = foreground
@@ -811,65 +827,7 @@ public final class MessageSocketManager: ObservableObject, MessageSocketProvidin
 
     // MARK: - Decode Helper
 
-    /// Shared, pre-configured decoder. Used ONLY on `decodeQueue` (serial), so a
-    /// single reused instance is race-free and avoids allocating a decoder plus
-    /// wiring its date strategy on every realtime event.
-    private static let socketDecoder: JSONDecoder = {
-        let decoder = JSONDecoder()
-        decoder.dateDecodingStrategy = .custom { decoder in
-            let container = try decoder.singleValueContainer()
-            let dateStr = try container.decode(String.self)
-            if let date = WireDate.date(from: dateStr) { return date }
-            throw DecodingError.dataCorruptedError(in: container, debugDescription: "Invalid date: \(dateStr)")
-        }
-        return decoder
-    }()
-
-    /// Serial so payloads decode in arrival order, off the main thread.
-    private static let decodeQueue = DispatchQueue(label: "me.meeshy.socket.decode", qos: .userInitiated)
-
     nonisolated func decode<T: Decodable & Sendable>(_ type: T.Type, from data: [Any], handler: @escaping @Sendable (T) -> Void) {
-        guard let first = data.first else {
-            Logger.socket.error("decode DROP type=\(String(describing: type), privacy: .public) reason=empty-payload")
-            return
-        }
-
-        // Socket.IO's handle queue defaults to MAIN, so doing the JSONDecoder work
-        // inline parsed every realtime event (message / reaction / receipt …) on
-        // the main thread — visible CPU on busy conversations. Serialise the dict
-        // here (cheap), then decode off-main on a serial queue that preserves
-        // arrival order; the handler still lands on main.
-        let jsonData: Data
-        if let dict = first as? [String: Any] {
-            do {
-                jsonData = try JSONSerialization.data(withJSONObject: dict)
-            } catch {
-                Logger.socket.error("decode DROP type=\(String(describing: type), privacy: .public) reason=reserialize-failed: \(error.localizedDescription, privacy: .public)")
-                return
-            }
-        } else if let str = first as? String {
-            jsonData = Data(str.utf8)
-        } else {
-            Logger.socket.error("decode DROP type=\(String(describing: type), privacy: .public) reason=unexpected-payload-shape")
-            return
-        }
-
-        // Capture only the (Sendable) key names so a decode failure can still log
-        // them off-main, without retaining the non-Sendable payload dictionary.
-        let payloadKeys: [String] = (first as? [String: Any]).map { Array($0.keys) } ?? []
-
-        Self.decodeQueue.async {
-            do {
-                let decoded = try Self.socketDecoder.decode(type, from: jsonData)
-                DispatchQueue.main.async { handler(decoded) }
-            } catch {
-                if payloadKeys.isEmpty {
-                    Logger.socket.error("decode FAILED type=\(String(describing: type)): \(error)")
-                } else {
-                    let keys = payloadKeys.sorted().joined(separator: ", ")
-                    Logger.socket.error("decode FAILED type=\(String(describing: type)): \(error) — keys: [\(keys)]")
-                }
-            }
-        }
+        SocketPayloadDecoder.decode(type, from: data, handler: handler)
     }
 }

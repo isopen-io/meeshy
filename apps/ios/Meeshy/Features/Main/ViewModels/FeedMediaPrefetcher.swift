@@ -1,13 +1,26 @@
 import Foundation
-import SwiftUI
-import Combine
 import MeeshySDK
 import MeeshyUI
 
-extension FeedViewModel {
+/// Préchargement des médias du fil autour de la cellule visible : possède ses
+/// deux tâches (debounce du scroll, fenêtre de préchargement) et l'indice du
+/// dernier déclenchement. `FeedViewModel` ne lui fournit que la lecture de
+/// `posts` ; il reste la façade (`prefetchMediaForPost`, `prefetchMedia(around:)`).
+final class FeedMediaPrefetcher {
+    nonisolated deinit {}
+
+    private let postsProvider: () -> [FeedPost]
+    private var prefetchTask: Task<Void, Never>?
+    private var prefetchDebounceTask: Task<Void, Never>?
+    private var lastPrefetchIndex: Int = -1
+
+    init(posts: @escaping () -> [FeedPost]) {
+        self.postsProvider = posts
+    }
+
     /// Debounced entry point from scroll — avoids task thrashing during fast scroll.
     func prefetchMediaForPost(_ postId: String) {
-        guard let index = posts.firstIndex(where: { $0.id == postId }) else { return }
+        guard let index = postsProvider().firstIndex(where: { $0.id == postId }) else { return }
         guard abs(index - lastPrefetchIndex) >= 2 else { return }
         lastPrefetchIndex = index
         prefetchDebounceTask?.cancel()
@@ -49,6 +62,7 @@ extension FeedViewModel {
         prefetchTask?.cancel()
         // L'indice a pu être pris 150 ms plus tôt : un rafraîchissement qui raccourcit le fil entre-temps
         // rendait une borne basse au-delà de la haute.
+        let posts = postsProvider()
         let lower = min(max(0, index - 2), posts.count)
         let upper = min(posts.count, max(lower, index + 7))
         let slice = Array(posts[lower..<upper])
@@ -75,7 +89,7 @@ extension FeedViewModel {
                 for post in slice {
                     for media in post.media {
                         guard !Task.isCancelled else { return }
-                        guard FeedViewModel.shouldPrefetchFeedMedia(
+                        guard FeedMediaPrefetcher.shouldPrefetchFeedMedia(
                             kind: media.type,
                             hasThumbnail: media.thumbnailUrl.flatMap { MeeshyConfig.resolveMediaURL($0) } != nil,
                             allowImage: allowImage,
@@ -131,21 +145,6 @@ extension FeedViewModel {
                     await StoryMediaLoader.shared.preloadAndCachePlayer(url: resolved)
                 }
             }
-        }
-    }
-
-    func debouncedCacheSave() {
-        cacheSaveTask?.cancel()
-        let snapshot = posts
-        cacheSaveTask = Task {
-            try? await Task.sleep(for: .seconds(2))
-            guard !Task.isCancelled else { return }
-            // cache-03 étape A — GRDBCacheStore.save() trimme par suffix(max)
-            // (garde les items les PLUS ANCIENS) alors que `posts` est
-            // newest-first : sans ce prefix(100), au-delà de 100 posts
-            // accumulés le cold start sert la tranche la plus vieille en
-            // .fresh. Miroir de ProfileUserPostsList.
-            try? await feedCache.savePreservingFreshness(Array(snapshot.prefix(100)), for: "main-feed")
         }
     }
 }

@@ -315,7 +315,12 @@ final class FixedFontSizeGuardTests: XCTestCase {
         // monogramme de 13 pt d'un avatar fixe de 32×32, doctrine 82i. La
         // POPULATION ne bouge pas ; l'hôte en garde un autre et reste dans la liste.
         "Features/Main/Views/StoryCommentRowView.swift",
-        "Features/Main/Views/StoryViewerView+Content.swift",
+        // Cohésion de `StoryViewerView` — RELOCALISATION pure, même forme : la liste des
+        // commentaires de story (`StoryCommentsOverlayView`) a QUITTÉ
+        // `StoryViewerView+Content.swift` pour son propre fichier et emporte son site
+        // figé — le glyphe héros de l'état vide, masqué de VoiceOver. L'hôte n'en garde
+        // plus aucun et sort de la liste ; la POPULATION ne bouge pas.
+        "Features/Main/Views/StoryCommentsOverlayView.swift",
         // #8878 — `StoryViewerView+Header.swift` sort de la liste (règle 4) : la
         // croix et le menu ⋯ montent `FullscreenCloseButton` / `FullscreenMoreMenu`
         // (MeeshyUI), qui portent leur glyphe figé dans leur disque.

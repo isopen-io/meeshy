@@ -6,22 +6,22 @@ import XCTest
 final class VoiceConsentPromptGatingTests: XCTestCase {
 
     func test_shouldPromptVoiceConsent_audioWithoutConsent_prompts() {
-        XCTAssertTrue(ConversationView.shouldPromptVoiceConsent(
+        XCTAssertTrue(OutgoingAttachmentRules.shouldPromptVoiceConsent(
             hasAudio: true, consentMissing: true, alreadyPrompted: false))
     }
 
     func test_shouldPromptVoiceConsent_noAudio_neverPrompts() {
-        XCTAssertFalse(ConversationView.shouldPromptVoiceConsent(
+        XCTAssertFalse(OutgoingAttachmentRules.shouldPromptVoiceConsent(
             hasAudio: false, consentMissing: true, alreadyPrompted: false))
     }
 
     func test_shouldPromptVoiceConsent_consentGranted_neverPrompts() {
-        XCTAssertFalse(ConversationView.shouldPromptVoiceConsent(
+        XCTAssertFalse(OutgoingAttachmentRules.shouldPromptVoiceConsent(
             hasAudio: true, consentMissing: false, alreadyPrompted: false))
     }
 
     func test_shouldPromptVoiceConsent_alreadyPromptedThisSession_neverRePrompts() {
-        XCTAssertFalse(ConversationView.shouldPromptVoiceConsent(
+        XCTAssertFalse(OutgoingAttachmentRules.shouldPromptVoiceConsent(
             hasAudio: true, consentMissing: true, alreadyPrompted: true))
     }
 }

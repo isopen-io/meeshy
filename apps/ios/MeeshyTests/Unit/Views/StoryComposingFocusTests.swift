@@ -32,9 +32,13 @@ final class StoryComposingFocusTests: XCTestCase {
 
     // MARK: - Le câblage du lecteur
 
+    /// L'UNITÉ du canvas (couches + cadrage) : ses couches vivent dans `+Canvas+Layers`, son cadrage
+    /// dans `StoryReaderCanvasLayout` — les comptes ci-dessous se font sur l'ensemble.
     private func source(_ chemin: String) throws -> String {
-        AppSourceGuard.stripComments(try String(
-            contentsOf: AppSourceGuard.unitURLs(chemin)[0], encoding: .utf8))
+        AppSourceGuard.stripComments(try AppSourceGuard.unit(
+            chemin,
+            alsoIncluding: chemin.hasSuffix("StoryViewerView+Canvas.swift")
+                ? ["Meeshy/Features/Main/Views/StoryReaderCanvasLayout.swift"] : []))
     }
 
     private var canvas: String {
@@ -188,9 +192,13 @@ final class StorySceneFocusTests: XCTestCase {
 
     // MARK: - Le câblage
 
+    /// L'UNITÉ du canvas (couches + cadrage) : ses couches vivent dans `+Canvas+Layers`, son cadrage
+    /// dans `StoryReaderCanvasLayout` — les comptes ci-dessous se font sur l'ensemble.
     private func source(_ chemin: String) throws -> String {
-        AppSourceGuard.stripComments(try String(
-            contentsOf: AppSourceGuard.unitURLs(chemin)[0], encoding: .utf8))
+        AppSourceGuard.stripComments(try AppSourceGuard.unit(
+            chemin,
+            alsoIncluding: chemin.hasSuffix("StoryViewerView+Canvas.swift")
+                ? ["Meeshy/Features/Main/Views/StoryReaderCanvasLayout.swift"] : []))
     }
 
     func test_leLecteur_consulteLaLoi() throws {
@@ -281,8 +289,10 @@ final class StoryKeyboardLiftTests: XCTestCase {
     // MARK: - Le câblage
 
     private func source(_ nom: String) throws -> String {
-        AppSourceGuard.stripComments(try String(
-            contentsOf: AppSourceGuard.unitURLs("Meeshy/Features/Main/Views/" + nom)[0], encoding: .utf8))
+        AppSourceGuard.stripComments(try AppSourceGuard.unit(
+            "Meeshy/Features/Main/Views/" + nom,
+            alsoIncluding: nom == "StoryViewerView+Canvas.swift"
+                ? ["Meeshy/Features/Main/Views/StoryReaderCanvasLayout.swift"] : []))
     }
 
     /// La réserve de la scène et la zone des commentaires lisent le MÊME

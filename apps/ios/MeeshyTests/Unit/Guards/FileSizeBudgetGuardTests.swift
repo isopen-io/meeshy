@@ -46,9 +46,6 @@ final class FileSizeBudgetGuardTests: XCTestCase {
     /// (6462 lignes) n'était pas un lot d'UI/UX ; il a eu le sien (2026-10-02).
     private static let legacyOverBudget: Set<String> = [
         "ConversationDashboardView.swift",
-        "ConversationListView+Overlays.swift",
-        "ConversationListView.swift",
-        "ConversationView.swift",
         "FeedCommentsSheet.swift",
         // #6040 — `FeedView+Attachments.swift` a QUITTÉ la dette : 207 lignes,
         // contre 1 391 avant le découpage. La feuille qui en est sortie
@@ -57,10 +54,6 @@ final class FileSizeBudgetGuardTests: XCTestCase {
         "FeedView.swift",
         "P2PWebRTCClient.swift",
         "RootView.swift",
-        "StoryViewerView+Canvas.swift",
-        "StoryViewerView+Content.swift",
-        "StoryViewerView.swift",
-        "WebRTCTypes.swift",
     ]
 
     /// Cumul des lignes de la dette héritée. **Ne doit que DESCENDRE.**
@@ -640,7 +633,16 @@ final class FileSizeBudgetGuardTests: XCTestCase {
     // `+Pagination`, `+Posting`, `+Socket`…), sans changer de comportement : chaque
     // fichier issu est sous 800 lignes. Ils sortent de `legacyOverBudget` ENTIERS,
     // et le plafond baisse d'exactement ce qu'ils pesaient.
-    private static let legacyLineCeiling = 23_905
+    //
+    // #10988 — 23 905 → 10 431 (−13 474). Sept fichiers sortent de la dette par
+    // EXTRACTION DE VRAIS TYPES, pas par tranches d'extensions : sous-vues SwiftUI
+    // qui reçoivent valeurs, Binding et closures, collaborateurs possédés par
+    // l'hôte, règles pures. `ConversationView.swift` (2 317), `ConversationListView.swift`
+    // (2 136) et `+Overlays` (1 293), `StoryViewerView.swift` (2 255), `+Canvas`
+    // (2 074) et `+Content` (2 034) retombent sous 1 000 lignes ; `WebRTCTypes.swift`
+    // (1 365) se range un type par fichier. Ils sortent de `legacyOverBudget`
+    // ENTIERS, et le plafond baisse d'exactement ce qu'ils pesaient.
+    private static let legacyLineCeiling = 10_431
 
     // MARK: - Règle 1 — pas de 43ᵉ
 

@@ -75,68 +75,6 @@ extension ConversationListViewModel {
             .store(in: &cancellables)
     }
 
-    // MARK: - Typing Cleanup
-
-    func scheduleTypingCleanup(for conversationId: String) {
-        typingTimers[conversationId]?.invalidate()
-        typingTimers[conversationId] = Timer.scheduledTimer(withTimeInterval: 15, repeats: false) { [weak self] _ in
-            Task { @MainActor [weak self] in
-                self?.clearTyping(for: conversationId)
-            }
-        }
-    }
-
-    /// A `typing:stop` removes ONLY the member who stopped. The row's indicator
-    /// stays up (re-derived from the remaining typers) until the last one stops.
-    /// Falls back to a full clear when we have no per-user tracking for the
-    /// conversation (e.g. the display was seeded out-of-band), preserving the
-    /// legacy "a stop clears the row" contract for that case.
-    func handleTypingStopped(userId: String, conversationId: String) {
-        guard var convTypers = typers[conversationId], !convTypers.isEmpty else {
-            clearTyping(for: conversationId)
-            return
-        }
-        convTypers.removeValue(forKey: userId)
-        if convTypers.isEmpty {
-            clearTyping(for: conversationId)
-            return
-        }
-        typers[conversationId] = convTypers
-        refreshTypingDerivations(for: conversationId)
-    }
-
-    private func clearTyping(for conversationId: String) {
-        typingTimers[conversationId]?.invalidate()
-        typingTimers[conversationId] = nil
-        if typingUsernames[conversationId] != nil { typingUsernames.removeValue(forKey: conversationId) }
-        if typingUsers[conversationId] != nil { typingUsers.removeValue(forKey: conversationId) }
-        typers.removeValue(forKey: conversationId)
-    }
-
-    /// Réaligne les deux vues publiques sur le frappeur retenu. Une seule
-    /// sélection les alimente : la ligne et la pastille désignent donc toujours
-    /// la même personne.
-    func refreshTypingDerivations(for conversationId: String) {
-        let selection = Self.typingSelection(for: typers[conversationId])
-        if typingUsernames[conversationId] != selection?.displayName { typingUsernames[conversationId] = selection?.displayName }
-        if typingUsers[conversationId] != selection?.username { typingUsers[conversationId] = selection?.username }
-    }
-
-    /// Un frappeur : son handle (`@pseudo`) et son nom d'affichage. Le gateway
-    /// transmet les deux ; les deux surfaces n'en montrent pas le même.
-    struct TypingUser: Equatable, Sendable {
-        let username: String
-        let displayName: String
-    }
-
-    /// Picks the single typer surfaced for a conversation. The row API is
-    /// single-name; sorting keeps the choice deterministic (and stable across
-    /// re-renders) when several members type at once.
-    static func typingSelection(for typers: [String: TypingUser]?) -> TypingUser? {
-        guard let typers, !typers.isEmpty else { return nil }
-        return typers.values.sorted { ($0.displayName, $0.username) < ($1.displayName, $1.username) }.first
-    }
-
     // MARK: - Badge Sync — forward each snapshot to the coordinator (badge + widget store). A list that never
     // loaded (`.idle` : the VM of an iPad detached window) publishes NOTHING: its `[]` wiped the widget.
     func syncBadgeOnUnreadChange() {
@@ -154,48 +92,5 @@ extension ConversationListViewModel {
                 NotificationCoordinator.shared.registerConversations(convs)
             }
             .store(in: &cancellables)
-    }
-
-    // MARK: - Mark as Read (local update from ConversationView)
-
-    func observeMarkAsRead() {
-        if let existing = markAsReadObserver {
-            NotificationCenter.default.removeObserver(existing)
-        }
-        markAsReadObserver = NotificationCenter.default.addObserver(
-            forName: .conversationMarkedRead,
-            object: nil,
-            queue: nil
-        ) { [weak self] notification in
-            guard let cid = notification.object as? String else { return }
-            Task { @MainActor [weak self] in
-                guard let self else { return }
-                // La ligne AFFICHÉE d'abord, le store ensuite : `clearUnreadLocally`
-                // est synchrone, `store.applyReadReceipt` traverse un acteur.
-                // Les enchaîner dans l'autre sens faisait attendre à la pastille
-                // un aller-retour d'acteur — visible en split-view iPad, où la
-                // liste reste à l'écran pendant qu'on ouvre la conversation.
-                self.clearUnreadLocally(cid)
-                // Corrige le `ConversationStore` (RAM, tiers) : ce store
-                // n'apprend autrement jamais qu'une
-                // conversation vient d'être lue par CE chemin (rattrapage,
-                // quick-action push, widget — tous postent `.conversationMarkedRead`,
-                // aucun ne route vers `store.apply(.markAsRead, …)`). Sa
-                // prochaine republication — déclenchée par N'IMPORTE QUELLE
-                // mutation sur N'IMPORTE QUELLE AUTRE conversation, `commit()`
-                // republiant tout le snapshot — regreffait sinon un `unreadCount`
-                // périmé sur cette ligne pourtant déjà lue : le badge persistait
-                // indéfiniment jusqu'au prochain `reloadFromCache()` (bug user
-                // 2026-08-11). `applyReadReceipt` est LOCAL (jamais de réseau,
-                // contrairement à `.markAsRead` — cf. `shouldDispatchListMarkAsRead` :
-                // cet endpoint liste poste un mark-read « sans corps » auquel le
-                // gateway retombe sur un repli par fenêtre temporelle, déclarant
-                // lus des messages jamais montrés) et monotone sur `lastReadAt`
-                // (inoffensif si un accusé plus récent est déjà en place).
-                await self.store.applyReadReceipt(
-                    ReadStatusEvent(conversationId: cid, unreadCount: 0, lastReadAt: Date())
-                )
-            }
-        }
     }
 }

@@ -388,9 +388,13 @@ final class AppInitWireupTests: XCTestCase {
                      "Meeshy/Features/Main/Views/RootViewComponents.swift",
                      "Meeshy/Features/Main/Views/FeedView.swift",
                      "Meeshy/Features/Main/Views/ConversationListView.swift"] {
+            // L'UNITÉ du type (`Foo.swift` + `Foo+*.swift`) : le rail de stories de la
+            // liste vit dans `ConversationListView+StoryRail.swift`, et un balayage
+            // négatif du seul fichier-tête verdirait en lisant la moitié sans l'interdit.
+            let unit = AppSourceGuard.stripComments(try AppSourceGuard.unit(path))
             XCTAssertEqual(
-                occurrences(of: "isPresented: $viewModel.showStoryComposer", in: try appSource(path))
-                    + occurrences(of: "isPresented: $storyViewModel.showStoryComposer", in: try appSource(path)),
+                occurrences(of: "isPresented: $viewModel.showStoryComposer", in: unit)
+                    + occurrences(of: "isPresented: $storyViewModel.showStoryComposer", in: unit),
                 0,
                 "\(path) : les hôtes DÉCLENCHENT le composer, ils ne le présentent plus."
             )

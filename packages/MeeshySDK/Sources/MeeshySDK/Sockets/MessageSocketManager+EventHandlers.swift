@@ -7,96 +7,8 @@ extension MessageSocketManager {
 
     // MARK: - Event Handlers
 
-    func setupEventHandlers() {
+    func setupMessageEventHandlers() {
         guard let socket else { return }
-
-        socket.on(clientEvent: .connect) { [weak self] _, _ in
-            guard let self else { return }
-            let wasReconnect = self.handleConnectionEstablished()
-
-            DispatchQueue.main.async {
-                self.isConnected = true
-                self.connectionState = .connected
-            }
-
-            self.startHeartbeat()
-
-            // CALL-FIX 2026-06-06 — replay the app foreground/background state on
-            // every (re)connect so the gateway always knows whether to deliver
-            // incoming calls via the in-app socket banner (foreground) or a VoIP
-            // push / CallKit (background). The first connect fires before the app's
-            // scenePhase emit lands, so without this replay the gateway would treat
-            // a foreground app as unknown and push CallKit for the first call.
-            self.socket?.emit("presence:app-state", ["foreground": self.lastAppForeground])
-
-            // CALL-FIX 2026-06-06 — ask the gateway to replay any in-progress
-            // (ringing) call so a user who comes online / opens the app mid-ring
-            // sees the incoming banner immediately, instead of missing the call
-            // that started while they were offline/backgrounded.
-            self.socket?.emit("call:check-active")
-
-            // Re-join all tracked conversations (active-first for fastest UX).
-            for convId in self.roomsToRejoinOnConnect() {
-                self.socket?.emit("conversation:join", ["conversationId": convId])
-            }
-
-            // Replay user-triggered translation requests that arrived during
-            // the disconnect window. The gateway will route them to whichever
-            // conversation rooms we just re-joined.
-            self.flushBufferedTranslationRequests()
-
-            if wasReconnect {
-                Logger.socket.info("MessageSocket reconnected — re-joined \(self.joinedConversations.count) room(s)")
-            } else {
-                Logger.socket.info("MessageSocket connected")
-            }
-        }
-
-        socket.on(clientEvent: .disconnect) { [weak self, weak socket] data, _ in
-            guard let self else { return }
-            self.stopHeartbeat()
-            // Seul le socket COURANT réarme : un ancien, remplacé, n'a plus rien à rouvrir.
-            let retries = SocketDisconnectPolicy.retries(afterReason: SocketDisconnectPolicy.reason(in: data))
-                && socket != nil && socket === self.socket
-            DispatchQueue.main.async {
-                self.isConnected = false
-                if self.hadPreviousConnection {
-                    self.connectionState = .reconnecting(attempt: 0)
-                } else {
-                    self.connectionState = .disconnected
-                }
-                // Coupure prononcée par la passerelle, sur le socket COURANT :
-                // Socket.IO ne la rattrape pas (`SocketDisconnectPolicy`).
-                if retries {
-                    self.scheduleReconnectWithBackoff()
-                }
-            }
-            Logger.socket.info("MessageSocket disconnected")
-        }
-
-        // Une perte de transport n'émet PAS `.disconnect` quand la reconnexion automatique est active :
-        // Socket.IO émet `.reconnect` (`SocketManager.tryReconnect`). Sans ce récepteur, `isConnected`
-        // restait vrai pendant toute la coupure — chaque envoi attendait son accusé avant le repli REST,
-        // et le retour du réseau ne relançait rien.
-        socket.on(clientEvent: .reconnect) { [weak self] _, _ in
-            guard let self else { return }
-            self.stopHeartbeat()
-            DispatchQueue.main.async {
-                self.isConnected = false
-                self.connectionState = .reconnecting(attempt: 0)
-            }
-            Logger.socket.info("MessageSocket transport lost — reconnecting")
-        }
-
-        socket.on(clientEvent: .reconnectAttempt) { [weak self] _, _ in
-            guard let self else { return }
-            self.reconnectAttempt += 1
-            let attempt = self.reconnectAttempt
-            DispatchQueue.main.async {
-                self.connectionState = .reconnecting(attempt: attempt)
-            }
-            Logger.socket.info("MessageSocket reconnect attempt \(attempt)")
-        }
 
         socket.on(clientEvent: .error) { [weak self] data, _ in
             // Never force a logout from a socket error (#10442: a guest's ended session stops the transport). Loose string
@@ -339,20 +251,9 @@ extension MessageSocketManager {
             }
         }
 
-        // #10904 — le jeton de CE socket, capturé à l'inscription de ses
-        // écouteurs : un socket d'une session quittée (encore en sursis parmi
-        // les transports retirés) ne rafraîchit pas celle du moment.
-        let presentedToken = handshakeToken
-        socket.on("auth:token-expired") { _, _ in
-            Logger.socket.info("MessageSocket: auth token expired — triggering refresh")
-            Task { @MainActor in
-                AuthManager.shared.handleUnauthorized(presentedToken: presentedToken)
-            }
-        }
-
         // Le serveur a REVOQUE la session (mot de passe change, revocation de
         // tous les appareils, action admin) puis coupe la socket. Surtout PAS
-        // `handleUnauthorized()` comme la ligne au-dessus : son
+        // `handleUnauthorized()` comme l'écouteur `auth:token-expired` : son
         // `refreshSession(force:)` obtiendrait un JWT neuf — `/auth/refresh` ne
         // verifie pas que la session existe encore — et re-armerait pour 24 h
         // la session qu'on vient de revoquer. Le `reason` sert l'avis d'avant la reconnexion (#9612).

@@ -1045,11 +1045,17 @@ final class ViewOnceTextConsumedOnExitGuardTests: XCTestCase {
     /// par lui ; la Rivière consommait au toucher.
     func test_leCanalDeConsommation_armeAuLieuDeDétruire() throws {
         let hôte = try source(at: "Features/Main/Views/ConversationView.swift")
-        let canaux = hôte.components(separatedBy: "onConsumeViewOnce: { messageId, completion in").dropFirst()
+        // Les deux canaux vivent dans les couches extraites de l'hôte : le fil
+        // (`ConversationMessageListLayer`) et la Rivière (`ConversationRiverLayer`).
+        let couches = try source(at: "Features/Main/Views/ConversationView+MessageListLayer.swift")
+            + "\n" + source(at: "Features/Main/Views/ConversationView+ReaderLayers.swift")
+        XCTAssertEqual(hôte.components(separatedBy: "openViewOnce: { openViewOnce(messageId: $0) }").count - 1, 2,
+                       "L'hôte remet son ouverture de vue unique au fil ET à la Rivière.")
+        let canaux = couches.components(separatedBy: "onConsumeViewOnce: { messageId, completion in").dropFirst()
         XCTAssertEqual(canaux.count, 2, "Le fil et la Rivière ont chacun leur canal.")
         for canal in canaux {
             let corps = String(canal.prefix(600))
-            XCTAssertTrue(corps.contains("completion(openViewOnce(messageId: messageId))"),
+            XCTAssertTrue(corps.contains("openViewOnce(messageId))"),
                           "Le canal délègue à l'ouverture de la vue unique.")
             XCTAssertFalse(corps.contains("await viewModel.consumeViewOnce"),
                            "Le serveur n'est plus appelé au moment de la révélation.")

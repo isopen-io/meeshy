@@ -73,9 +73,10 @@ final class OutboxProtectedMediaReplayTests: XCTestCase {
     }
 
     func test_wiring_offlineEnqueues_receiveTheIntent() throws {
-        let source = try String(contentsOf: Self.appRoot.appendingPathComponent(
-            "Features/Main/Views/ConversationView+AttachmentHandlers.swift"), encoding: .utf8)
-        let regex = try NSRegularExpression(pattern: #"carriesReply \? replyId : nil,\s*protection: protection"#)
+        let source = try ["ConversationView+AttachmentHandlers.swift", "AttachmentGroupOutbox.swift"]
+            .map { try String(contentsOf: Self.appRoot.appendingPathComponent("Features/Main/Views/\($0)"), encoding: .utf8) }
+            .joined(separator: "\n")
+        let regex = try NSRegularExpression(pattern: #"carriesReply \? (?:replyId|replyToId) : nil,\s*protection: protection"#)
         let hits = regex.numberOfMatches(in: source, range: NSRange(source.startIndex..., in: source))
         XCTAssertEqual(hits, 4, "les quatre mises en file média (hors ligne et échec en ligne, audio et visuel) portent l'intention")
     }

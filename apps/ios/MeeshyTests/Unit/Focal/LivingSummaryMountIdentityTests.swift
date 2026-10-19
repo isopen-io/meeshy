@@ -73,8 +73,14 @@ final class LivingSummaryMountIdentityTests: XCTestCase {
     func test_summaryBranch_rebindsItsHostIdentity_onTheFirstMessagePopulation() throws {
         let branch = try summaryBranch()
 
+        // L'hôte du Résumé Vivant est monté par `ConversationSummaryLayer` (`ConversationView+ReaderLayers.swift`),
+        // que la branche `mode == .summary` instancie : les deux ancres, ensemble.
+        let layer = try String(
+            contentsOf: Self.iosRoot.appendingPathComponent("Meeshy/Features/Main/Views/ConversationView+ReaderLayers.swift"),
+            encoding: .utf8
+        )
         XCTAssertTrue(
-            branch.contains("LivingSummaryHost("),
+            branch.contains("ConversationSummaryLayer(") && AppSourceGuard.stripComments(layer).contains("LivingSummaryHost("),
             "La branche `mode == .summary` doit monter l'hôte du Résumé Vivant — sans quoi le mode " +
             "serait choisi sans écran."
         )

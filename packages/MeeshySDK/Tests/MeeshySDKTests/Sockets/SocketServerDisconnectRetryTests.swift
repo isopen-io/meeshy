@@ -24,7 +24,7 @@ final class SocketServerDisconnectRetryTests: XCTestCase {
         let root = URL(fileURLWithPath: #filePath)
             .deletingLastPathComponent().deletingLastPathComponent().deletingLastPathComponent().deletingLastPathComponent()
             .appendingPathComponent("Sources/MeeshySDK/Sockets")
-        for file in ["MessageSocketManager+EventHandlers.swift", "SocialSocketManager.swift"] {
+        for file in ["MessageSocketManager.swift", "SocialSocketManager.swift"] {
             let source = try String(contentsOf: root.appendingPathComponent(file), encoding: .utf8)
             let handler = try XCTUnwrap(source.range(of: "socket.on(clientEvent: .disconnect)"), file)
             let body = String(source[handler.upperBound...].prefix(1_200))
@@ -45,9 +45,13 @@ final class SocketRetiredTransportTests: XCTestCase {
         let root = URL(fileURLWithPath: #filePath)
             .deletingLastPathComponent().deletingLastPathComponent().deletingLastPathComponent().deletingLastPathComponent()
             .appendingPathComponent("Sources/MeeshySDK/Sockets")
-        for file in ["MessageSocketManager.swift", "SocialSocketManager.swift"] {
+        let retireDeclarations = [
+            "SocketTransportRetirement.swift": "func retire(_ transport: SocketManager?) {",
+            "SocialSocketManager.swift": "private func retireTransport() {",
+        ]
+        for (file, declaration) in retireDeclarations {
             let source = try String(contentsOf: root.appendingPathComponent(file), encoding: .utf8)
-            let start = try XCTUnwrap(source.range(of: "private func retireTransport() {"), file)
+            let start = try XCTUnwrap(source.range(of: declaration), file)
             let body = String(source[start.upperBound...].prefix(1_400))
             XCTAssertTrue(body.contains("retiring.reconnects = false"), file)
             XCTAssertTrue(body.contains(".forEach { $0.disconnect() }"), file)

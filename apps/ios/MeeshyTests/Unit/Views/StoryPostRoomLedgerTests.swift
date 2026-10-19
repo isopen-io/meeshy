@@ -31,7 +31,10 @@ final class StoryPostRoomLedgerTests: XCTestCase {
     }
 
     func test_storyViewer_routesEveryRoomMoveThroughTheLedger() throws {
-        let code = AppSourceGuard.stripComments(try AppSourceGuard.unit("Meeshy/Features/Main/Views/StoryViewerView.swift"))
+        // La salle se tient dans `StoryViewerEngagement`, collaborateur du lecteur : il fait partie de l'unité.
+        let code = AppSourceGuard.stripComments(try AppSourceGuard.unit(
+            "Meeshy/Features/Main/Views/StoryViewerView.swift",
+            alsoIncluding: ["Meeshy/Features/Main/Views/StoryViewerEngagement.swift"]))
         XCTAssertFalse(code.contains("transitionPostRoom(from:"), "plus de story « précédente » recalculée")
         let joins = code.components(separatedBy: "joinPostRoom(").count - 1
         let leaves = code.components(separatedBy: "leavePostRoom(").count - 1

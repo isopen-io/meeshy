@@ -26,59 +26,6 @@ extension ConversationListViewModel {
     }
 
     func subscribeToSocketEvents() {
-        // Typing indicator — affiche "<Auteur> écrit..." dans le row
-        messageSocket.typingStarted
-            .receive(on: DispatchQueue.main)
-            .sink { [weak self] event in
-                guard let self else { return }
-                // Don't surface YOUR OWN typing — the gateway echoes typing to every
-                // participant including the author, so on multi-device this would show
-                // "<You> écrit…" on your own conversation row. Mirror the per-conversation
-                // guard in ConversationSocketHandler.
-                guard event.userId != currentUserId else { return }
-                typers[event.conversationId, default: [:]][event.userId] = TypingUser(
-                    username: event.username,
-                    displayName: event.preferredDisplayName
-                )
-                refreshTypingDerivations(for: event.conversationId)
-                scheduleTypingCleanup(for: event.conversationId)
-            }
-            .store(in: &cancellables)
-
-        messageSocket.typingStopped
-            .receive(on: DispatchQueue.main)
-            .sink { [weak self] event in
-                self?.handleTypingStopped(userId: event.userId, conversationId: event.conversationId)
-            }
-            .store(in: &cancellables)
-
-        // Un message rétracte la frappe qui l'annonçait.
-        //
-        // `typingStopped` ci-dessus ne couvre PAS ce cas : le `typing:stop` de
-        // l'expéditeur voyage sur un canal distinct, dans un ordre non garanti
-        // vis-à-vis de `message:new`, et peut se perdre (arrière-plan, coupure
-        // brève, crash de l'onglet). Le gateway, lui, n'émet aucun `typing:stop`
-        // implicite à la création d'un message — seul `handleSocketDisconnecting`
-        // le fait. Sans ce chemin, la pastille affichait « @alice ⋯ » jusqu'à
-        // l'échéance de `scheduleTypingCleanup` (15 s) APRÈS l'arrivée du
-        // message, pendant que le toast annonçait ce même message trente points
-        // plus bas — deux états contradictoires de la même conversation.
-        //
-        // Pendant exact de la règle inverse déjà en vigueur (`typing:start`
-        // reçu = preuve d'activité) : l'arrivée du message est la preuve la plus
-        // forte que la frappe est terminée. `handleTypingStopped` est réutilisé
-        // tel quel — il ne retire que CET auteur et laisse les autres frappeurs
-        // de la conversation en place.
-        messageSocket.messageReceived
-            .receive(on: DispatchQueue.main)
-            .sink { [weak self] message in
-                self?.handleTypingStopped(
-                    userId: message.senderId,
-                    conversationId: message.conversationId
-                )
-            }
-            .store(in: &cancellables)
-
         // (Retiré) abonnement à `messageSocket.userPreferencesUpdated`.
         //
         // Ce sink greffait pin/mute/archive/section/réaction/tags sur la ligne

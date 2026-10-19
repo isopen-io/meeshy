@@ -351,11 +351,9 @@ final class LentillePerspectiveCurveTests: XCTestCase {
             .map { ($0.lastPathComponent, try String(contentsOf: $0, encoding: .utf8)) }
     }
 
+    /// L'UNITÉ de la liste : les rangs d'une section vivent dans `ConversationListView+SectionRows.swift`.
     private func listViewSource() throws -> String {
-        try String(
-            contentsOf: Self.iosRoot.appendingPathComponent("Meeshy/Features/Main/Views/ConversationListView.swift"),
-            encoding: .utf8
-        )
+        try AppSourceGuard.unit("Meeshy/Features/Main/Views/ConversationListView.swift")
     }
 
     private func normalizedCode(_ source: String) -> String {

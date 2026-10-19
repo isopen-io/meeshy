@@ -44,6 +44,11 @@ final class LentilleOpenMyStoriesLiteralGuardTests: XCTestCase {
 
     private func sources() throws -> [(name: String, code: String)] {
         try Self.guardedFiles.map { relativePath in
+            // Le rail « moi » (émetteur) vit dans `ConversationListView+StoryRail.swift` : pour la liste, le
+            // périmètre est l'UNITÉ du type, pas son seul fichier-tête.
+            if relativePath.hasSuffix("/ConversationListView.swift") {
+                return (relativePath, try AppSourceGuard.unit(relativePath))
+            }
             let url = Self.iosRoot.appendingPathComponent(relativePath)
             return (relativePath, try String(contentsOf: url, encoding: .utf8))
         }

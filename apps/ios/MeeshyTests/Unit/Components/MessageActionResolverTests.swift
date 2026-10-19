@@ -966,13 +966,16 @@ final class MessageExitOfferTests: XCTestCase {
     func test_conversationSurfaces_neverExitWithoutTheTransport() throws {
         for path in ["Views/ConversationView.swift", "Views/ConversationView+MessageRow.swift",
                      "Views/ConversationView+NativeMessageMenu.swift", "Components/MessageOverlayMenu.swift",
-                     "Components/MessageMoreSheet.swift"] {
+                     "Components/MessageMoreSheet.swift", "Views/ConversationView+MessageSheets.swift",
+                     "Views/ConversationView+OverlayMenu.swift", "Views/ConversationView+MessageListLayer.swift"] {
             let code = try source(path)
             XCTAssertFalse(code.contains("UIPasteboard.general.string="), "\(path) : la copie passe par MessageExitTransport.copy")
             XCTAssertFalse(code.contains("mediaSaveCoordinator.save("),
                            "\(path) : l'enregistrement passe par MessageExitTransport.save")
         }
-        let host = try source("Views/ConversationView.swift")
+        // Les menus du message (feuilles, overlay d'appui long) ont quitté l'hôte : son unité les compte.
+        let host = try source("Views/ConversationView.swift") + source("Views/ConversationView+MessageSheets.swift")
+            + source("Views/ConversationView+OverlayMenu.swift")
         XCTAssertEqual(host.components(separatedBy: "MessageExitTransport.copy(").count - 1, 2)
         XCTAssertEqual(host.components(separatedBy: "MessageExitTransport.save(msg,through:mediaSaveCoordinator)").count - 1, 2)
         XCTAssertTrue(host.contains("onShare:{ifMessageExitTransport.mayShare(msg){overlayState.shareMessage=msg}}"))
@@ -1044,7 +1047,7 @@ final class MessageExitOfferTests: XCTestCase {
         XCTAssertEqual(openCoordinators, coordinators)
         // L'aperçu AVANT envoi : le seul portillon ouvert de l'écran de
         // conversation, nommé par son type et réservé au média du composeur.
-        let host = try source("Views/ConversationView.swift")
+        let host = try source("Views/ConversationView.swift") + source("Views/ConversationView+Presentations.swift")
         XCTAssertEqual(host.components(separatedBy: "ComposerPreviewExit.gate").count - 1, 1)
         XCTAssertTrue(host.contains(".conversationCover(item:$composerState.previewMedia)"))
         XCTAssertTrue(host.contains("ImageFullscreen(imageUrl:media.url,accentColor:accentColor).contentExitGate(ComposerPreviewExit.gate)"))

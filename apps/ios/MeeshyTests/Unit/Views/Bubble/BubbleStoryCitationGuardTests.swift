@@ -346,7 +346,8 @@ final class BubbleStoryCitationGuardTests: XCTestCase {
     /// Témoin POSITIF exprès : en négatif il serait passé au vert le jour où
     /// quelqu'un renomme la closure, en ne décrivant plus rien.
     func test_aStoryThatCannotBeOpened_saysSo() throws {
-        let view = try source(Self.conversation)
+        // Le tap sur la citation d'une story est câblé dans la couche de la liste (`onStoryReplyTap`).
+        let view = try source("Meeshy/Features/Main/Views/ConversationView+MessageListLayer.swift")
 
         XCTAssertTrue(
             view.contains("guard let groupIdx = storyViewModel.groupIndex(forStoryId: storyId) else {"),

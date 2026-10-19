@@ -218,7 +218,7 @@ final class StoryHeaderMetaGuardTests: XCTestCase {
     /// restent réservés aux pistes FOREGROUND (`AudioForegroundReaderOverlay`).
     func test_canvas_rendersNoWaveformChipForBackgroundAudio() throws {
         let canvas = strippingComments(
-            try source("Meeshy/Features/Main/Views/StoryViewerView+Canvas.swift"))
+            try AppSourceGuard.unit("Meeshy/Features/Main/Views/StoryViewerView+Canvas.swift"))
 
         XCTAssertFalse(
             canvas.contains("StoryWaveformBadgeView("),
@@ -271,8 +271,9 @@ final class StoryHeaderMetaGuardTests: XCTestCase {
     /// — `createPostMentionNotificationsBatch` notifie TOUS les modes —
     /// ouvrait la story, et n'y trouvait aucune trace d'avoir été nommée.
     private func canvasCode() throws -> String {
+        // L'UNITÉ du canvas : le chrome haut (en-tête, rangée des références) vit dans `+Canvas+Layers`.
         strippingComments(
-            try source("Meeshy/Features/Main/Views/StoryViewerView+Canvas.swift"))
+            try AppSourceGuard.unit("Meeshy/Features/Main/Views/StoryViewerView+Canvas.swift"))
     }
 
     func test_theReaderMountsTheReferenceNoteRow_fedByTheCurrentStory() throws {

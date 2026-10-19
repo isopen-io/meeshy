@@ -75,8 +75,12 @@ final class SceneFloorTests: XCTestCase {
     /// d'écrire l'histoire du lot, ce qui pousserait à taire le retrait plutôt
     /// qu'à l'expliquer.
     func test_leLecteurDeStories_naPlusDeRecettePriveeDuSol() throws {
-        let code = Self.stripComments(
-            try Self.source("apps/ios/Meeshy/Features/Main/Views/StoryViewerView+Canvas.swift"))
+        // L'UNITÉ du canvas : le fond, les couches et le cadrage ont leurs fichiers, et la
+        // recette du sol ne doit se cacher dans aucun.
+        let code = Self.stripComments(try AppSourceGuard.unit(
+            "Meeshy/Features/Main/Views/StoryViewerView+Canvas.swift",
+            alsoIncluding: ["Meeshy/Features/Main/Views/StoryReaderBackground.swift",
+                            "Meeshy/Features/Main/Views/StoryReaderCanvasLayout.swift"]))
         for motif in ["storyBlurredBackdrop", "blur(radius: 60)", "scaleEffect(1.18)"] {
             XCTAssertFalse(code.contains(motif),
                            "la recette du sol vit dans SceneFloorView : « \(motif) » n'a plus " +

@@ -56,19 +56,19 @@ final class SendPlaceTileLawTests: XCTestCase {
 final class OptimisticMediaMessageTypeTests: XCTestCase {
 
     func test_optimisticMessageType_audioGroup_isAudio() {
-        XCTAssertEqual(ConversationView.optimisticMessageType(isAudioGroup: true, mimeTypes: ["audio/mp4"]), .audio)
+        XCTAssertEqual(OutgoingAttachmentRules.optimisticMessageType(isAudioGroup: true, mimeTypes: ["audio/mp4"]), .audio)
     }
 
     func test_optimisticMessageType_onlyImages_isImage() {
-        XCTAssertEqual(ConversationView.optimisticMessageType(isAudioGroup: false, mimeTypes: ["image/jpeg", "image/heic"]), .image)
+        XCTAssertEqual(OutgoingAttachmentRules.optimisticMessageType(isAudioGroup: false, mimeTypes: ["image/jpeg", "image/heic"]), .image)
     }
 
     func test_optimisticMessageType_onlyVideos_isVideo() {
-        XCTAssertEqual(ConversationView.optimisticMessageType(isAudioGroup: false, mimeTypes: ["video/mp4"]), .video)
+        XCTAssertEqual(OutgoingAttachmentRules.optimisticMessageType(isAudioGroup: false, mimeTypes: ["video/mp4"]), .video)
     }
 
     func test_optimisticMessageType_singleDocument_isFile() {
-        XCTAssertEqual(ConversationView.optimisticMessageType(isAudioGroup: false, mimeTypes: ["application/pdf"]), .file)
+        XCTAssertEqual(OutgoingAttachmentRules.optimisticMessageType(isAudioGroup: false, mimeTypes: ["application/pdf"]), .file)
     }
 
     func test_optimisticMessageType_imagesAndVideosMixed_isFile() {
@@ -77,23 +77,23 @@ final class OptimisticMediaMessageTypeTests: XCTestCase {
         // écrira : le planificateur met images, vidéos et documents dans le
         // MÊME groupe `.visual`, donc suivre la première pièce ferait sauter
         // l'aperçu de « Vidéo » à « Document » à la réconciliation.
-        XCTAssertEqual(ConversationView.optimisticMessageType(isAudioGroup: false, mimeTypes: ["video/mp4", "image/png"]), .file)
-        XCTAssertEqual(ConversationView.optimisticMessageType(isAudioGroup: false, mimeTypes: ["image/png", "video/mp4"]), .file)
+        XCTAssertEqual(OutgoingAttachmentRules.optimisticMessageType(isAudioGroup: false, mimeTypes: ["video/mp4", "image/png"]), .file)
+        XCTAssertEqual(OutgoingAttachmentRules.optimisticMessageType(isAudioGroup: false, mimeTypes: ["image/png", "video/mp4"]), .file)
     }
 
     func test_optimisticMessageType_imageWithDocument_isFile() {
-        XCTAssertEqual(ConversationView.optimisticMessageType(isAudioGroup: false, mimeTypes: ["image/png", "application/pdf"]), .file)
+        XCTAssertEqual(OutgoingAttachmentRules.optimisticMessageType(isAudioGroup: false, mimeTypes: ["image/png", "application/pdf"]), .file)
     }
 
     func test_optimisticMessageType_emptyMime_isFile() {
         // Un MIME vide n'est pas une photo : la règle gateway dit « jamais text », ici « jamais image ».
-        XCTAssertEqual(ConversationView.optimisticMessageType(isAudioGroup: false, mimeTypes: [""]), .file)
+        XCTAssertEqual(OutgoingAttachmentRules.optimisticMessageType(isAudioGroup: false, mimeTypes: [""]), .file)
     }
 
     func test_optimisticMessageType_noMimeAtAll_isFile() {
         // « Je n'ai pas l'information » n'est pas « il n'y a rien à joindre » :
         // le repli est la catégorie générique, jamais `.text` (miroir de
         // `messageTypeForClientAttachments`).
-        XCTAssertEqual(ConversationView.optimisticMessageType(isAudioGroup: false, mimeTypes: []), .file)
+        XCTAssertEqual(OutgoingAttachmentRules.optimisticMessageType(isAudioGroup: false, mimeTypes: []), .file)
     }
 }

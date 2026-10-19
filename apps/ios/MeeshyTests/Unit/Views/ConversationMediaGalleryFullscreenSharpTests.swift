@@ -390,7 +390,9 @@ final class ConversationMediaGalleryFullscreenSharpTests: XCTestCase {
         // #8310 — l'ouvreur a quitté la fermeture littérale de l'hôte pour
         // `openMediaFullscreen`, partagé par le fil et la Rivière.
         let host = AppSourceGuard.stripComments(try source(Self.conversation))
-        XCTAssertTrue(host.contains("onMediaTap: openMediaFullscreen"), "le fil ouvre par l'ouvreur unique")
+        let list = AppSourceGuard.stripComments(try source("Meeshy/Features/Main/Views/ConversationView+MessageListLayer.swift"))
+        XCTAssertTrue(host.contains("openMedia: openMediaFullscreen") && list.contains("onMediaTap: actions.openMedia"),
+                      "le fil ouvre par l'ouvreur unique (remis par l'hôte à la couche de la liste)")
         let code = AppSourceGuard.stripComments(try source(Self.mediaOpener))
         let tap = try block(from: "func openMediaFullscreen(_ attachment: MessageAttachment) {",
                             upTo: "scrollState.galleryStartAttachment = attachment", in: code)

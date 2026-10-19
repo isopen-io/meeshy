@@ -44,6 +44,9 @@ final class BackgroundAnnouncementWiringGuardTests: XCTestCase {
             "Meeshy/Features/Main/Views/StoryViewerView+Sidebar.swift",
             "Meeshy/Features/Main/Views/StoryViewerView+Header.swift",
             "Meeshy/Features/Main/Views/StoryViewerView.swift",
+            // La découpe par cohésion a rangé la lecture du contenu sous son nom : même garde.
+            "Meeshy/Features/Main/Views/StoryViewerView+ReaderState.swift",
+            "Meeshy/Features/Main/Views/StoryReaderContentRules.swift",
             "Meeshy/Features/Main/Views/FeedPostCard.swift",
             "Meeshy/Features/Main/Views/FeedPostCard+Header.swift",
             "Meeshy/Features/Main/Views/ReelsPlayerView.swift",

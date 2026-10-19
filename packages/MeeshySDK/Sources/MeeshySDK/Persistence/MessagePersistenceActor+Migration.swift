@@ -40,7 +40,7 @@ extension MessagePersistenceActor {
             // not yet on the server, so a stale REST snapshot must NOT clobber
             // it on upsert — otherwise the reaction visibly reverts until the
             // next post-sync refresh. One query per batch (a handful of rows).
-            let pendingReactionMessageIds = Self.pendingOutboxMessageIds(
+            let pendingReactionMessageIds = PendingOutboxLookup.messageIds(
                 db, kind: .sendReaction, payload: ReactionOutboxPayload.self
             ) { $0.messageId }
             // S2 — message ids whose edit/delete is still pending in the outbox.
@@ -49,10 +49,10 @@ extension MessagePersistenceActor {
             // them — otherwise the edit reverts to the old text / the delete
             // un-deletes until the outbox drains (or forever if exhausted).
             // Mirrors the reaction guard above (one query each per batch).
-            let pendingEditMessageIds = Self.pendingOutboxMessageIds(
+            let pendingEditMessageIds = PendingOutboxLookup.messageIds(
                 db, kind: .editMessage, payload: OfflineEditPayload.self
             ) { $0.messageId }
-            let pendingDeleteMessageIds = Self.pendingOutboxMessageIds(
+            let pendingDeleteMessageIds = PendingOutboxLookup.messageIds(
                 db, kind: .deleteMessage, payload: OfflineDeletePayload.self
             ) { $0.messageId }
             for api in apiMessages {
@@ -626,7 +626,7 @@ extension MessagePersistenceActor {
                             sourceLanguage: t.sourceLanguage,
                             receivedAt: now
                         )
-                        try Self.upsertTranslationRecord(record, in: db)
+                        try TranslationRecordWriter.upsert(record, in: db)
                     }
                 }
             }

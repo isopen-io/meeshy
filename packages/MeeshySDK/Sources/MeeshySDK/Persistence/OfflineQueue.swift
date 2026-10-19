@@ -26,44 +26,29 @@ public actor OfflineQueue {
     /// revert any "pending" hint without waiting for a server roundtrip.
     public nonisolated let retryDropped = SendablePassthrough<OfflineRetryDropped>()
 
-    /// Backing subject for `pendingCountPublisher`. `nonisolated` so callers can
-    /// read the publisher synchronously from any context (e.g. SwiftUI views)
-    /// without awaiting the actor.
-    nonisolated let pendingCountSubject = SendableCurrentValueSubject<Int>(0)
+    /// Ce que l'UI lit de l'outbox (compteur, quasi-saturation, haut de file).
+    /// `nonisolated` so callers can read the publishers synchronously from any
+    /// context (e.g. SwiftUI views) without awaiting the actor.
+    private nonisolated let pendingIndicator = OutboxPendingIndicator()
 
     /// Publishes the current pending outbox count and every subsequent update.
     /// Emits the latest value immediately on subscription (Combine
     /// `CurrentValueSubject` semantics) so SwiftUI bindings render correctly
     /// on first connect.
     public nonisolated var pendingCountPublisher: AnyPublisher<Int, Never> {
-        pendingCountSubject.publisher
+        pendingIndicator.countPublisher
     }
-
-    /// Backing subject for `nearCapacityPublisher`.
-    nonisolated let nearCapacitySubject = SendableCurrentValueSubject<Bool>(false)
 
     /// Fires `true` when the queue is at or above 80% of `maxQueueSize` (400
     /// of 500 slots occupied), `false` once it drops back below the threshold.
     /// UI components should surface a warning so the user knows older messages
     /// may be evicted before connectivity is restored.
     public nonisolated var nearCapacityPublisher: AnyPublisher<Bool, Never> {
-        nearCapacitySubject.publisher.removeDuplicates().eraseToAnyPublisher()
+        pendingIndicator.nearCapacityPublisher
     }
 
     /// Synchronous snapshot — readable from any context without awaiting the actor.
-    public nonisolated var isNearCapacity: Bool { nearCapacitySubject.value }
-
-    /// Backing subject for `pendingUIItemsPublisher`. Mirrors the
-    /// `.pending`/`.inflight`/`.failed` outbox rows as `OutboxUIItem` snapshots
-    /// for the `SyncPill` UI. Kept `nonisolated` so SwiftUI bodies can read it
-    /// without hopping into the actor.
-    nonisolated let pendingUIItemsSubject = SendableCurrentValueSubject<[OutboxUIItem]>([])
-
-    /// Cap on the number of `OutboxUIItem` snapshots surfaced through the
-    /// publisher. The pill UI only renders the head of the queue; an unbounded
-    /// fetch on a large backlog would burn memory and decode time for rows the
-    /// user can never see.
-    static let pendingUIItemsLimit = 50
+    public nonisolated var isNearCapacity: Bool { pendingIndicator.isNearCapacity }
 
     /// Publishes the current pending outbox UI snapshot and every subsequent
     /// change. Rows are ordered by `createdAt` ascending and filtered to
@@ -71,9 +56,7 @@ public actor OfflineQueue {
     /// from the table — there is no `.applied` status to exclude). Emits the
     /// latest value immediately on subscription.
     public nonisolated var pendingUIItemsPublisher: AnyPublisher<[OutboxUIItem], Never> {
-        pendingUIItemsSubject.publisher
-            .removeDuplicates()
-            .eraseToAnyPublisher()
+        pendingIndicator.uiItemsPublisher
     }
 
     static let maxQueueSize = 500
@@ -106,12 +89,6 @@ public actor OfflineQueue {
         OutboxStatus.inflight.rawValue
     ]
 
-    /// Items-at-risk threshold: when the queue reaches this count the
-    /// `nearCapacityPublisher` fires `true` so the UI can warn the user.
-    /// Set at 80% of the max to give a meaningful heads-up before messages
-    /// are silently evicted.
-    static let nearCapacityThreshold = maxQueueSize * 4 / 5
-
     /// Subdirectory under `Documents/` that holds pending audio files referenced
     /// by `OfflineQueueItem.localAudioPath`. Created lazily.
     public static let pendingAudioDirectoryName = "pending-audio"
@@ -142,7 +119,7 @@ public actor OfflineQueue {
     /// Rend à la prochaine récupération son caractère « premier lancement » (tests).
     func resetRecoveryForTesting() { hasRecoveredThisProcess = false }
     var isRetrying = false
-    var cancellables = Set<AnyCancellable>()
+    private let drainTriggers = OutboxDrainTriggers()
     let logger = Logger(subsystem: "com.meeshy.sdk", category: "offlinequeue")
     /// Outbox pool — injected at boot via `configure(pool:)`. Nil until wired.
     /// `internal` (et non `private`) : les extensions de CE type vivant dans
@@ -156,11 +133,16 @@ public actor OfflineQueue {
     /// QUE sa propre continuation — l'ancien `[String: [Continuation]]`
     /// droppait tout le slot, orphelinant les autres observateurs (await
     /// éternel + rétention de leur Task/ViewModel).
-    var outcomeContinuations: [String: [UUID: AsyncStream<OutboxOutcome>.Continuation]] = [:]
-    /// Tombstones des outcomes déjà publiés (cap FIFO) : un abonné tardif
-    /// reçoit l'outcome immédiatement au lieu d'attendre pour toujours un
-    /// `publishOutcome` qui ne reviendra pas.
-    var outcomeTombstones = BoundedFIFOMap<String, OutboxOutcome>(capacity: 200)
+    private var outcomes = OutboxOutcomeRegistry()
+
+    /// **Témoins seulement** : joué entre la saisie du triplet d'une opération
+    /// de commentaire et sa transaction — pour y rebrancher la file et prouver
+    /// que l'opération n'agit que sur ce qu'elle a saisi.
+    var commentTransactionHook: (@Sendable @concurrent () async -> Void)?
+
+    func setCommentTransactionHook(_ hook: (@Sendable @concurrent () async -> Void)?) {
+        commentTransactionHook = hook
+    }
 
     let encoder: JSONEncoder = {
         let e = JSONEncoder()
@@ -193,8 +175,14 @@ public actor OfflineQueue {
     }
 
     private init() {
-        Task { await self.observeConnection() }
-        Task { await self.observeNetwork() }
+        Task { await self.startDrainTriggers() }
+    }
+
+    private func startDrainTriggers() {
+        drainTriggers.start { [weak self] in
+            guard let self else { return }
+            await self.retryAll()
+        }
     }
 
     // MARK: - Queue Operations
@@ -387,17 +375,102 @@ public actor OfflineQueue {
         return preferredId
     }
 
+    // MARK: - Outcome Observation (Phase 4 prereq)
+
+    /// Returns an `AsyncStream` that emits the terminal `OutboxOutcome` for
+    /// the given `cmid` (clientMessageId or clientMutationId) — exactly one
+    /// `.applied` or `.exhausted` event, then the stream completes.
+    ///
+    /// Callers that subscribe AFTER the outcome has already fired receive
+    /// that outcome immediately from the tombstone map (bounded FIFO), then
+    /// the stream completes. The expected lifecycle is : subscribe BEFORE
+    /// issuing the mutation, then `await` the next iterator element to
+    /// observe completion.
+    public func outcomeStream(for cmid: String) -> AsyncStream<OutboxOutcome> {
+        if let fired = outcomes.firedOutcome(for: cmid) {
+            return AsyncStream { continuation in
+                continuation.yield(fired)
+                continuation.finish()
+            }
+        }
+        let token = UUID()
+        return AsyncStream { continuation in
+            self.outcomes.register(continuation, for: cmid, token: token)
+            continuation.onTermination = { [weak self] _ in
+                guard let self else { return }
+                Task { await self.dropContinuation(for: cmid, token: token) }
+            }
+        }
+    }
+
+    /// Oublie l'issue mémorisée d'un identifiant que l'on vient de réarmer :
+    /// sans cela, un abonné recevrait aussitôt le `.exhausted` périmé.
+    func forgetOutcome(for cmid: String) {
+        outcomes.forget(cmid)
+    }
+
+    /// Emits an outcome to every observer registered for `outcome.cmid`,
+    /// finishes their streams, and clears the registry slot.
+    ///
+    /// Called from `retryAll()` (sendMessage success), from the
+    /// `OutboxFlusher.onOutcome` callback (generic dispatch success /
+    /// exhaustion), and from `retryItem(_:)` if the row is missing.
+    public func publishOutcome(_ outcome: OutboxOutcome) {
+        // Le flusher vient de supprimer (.applied) ou d'épuiser (.exhausted)
+        // la ligne outbox de ce cmid — le nombre de writes en attente a changé.
+        // `refreshPendingCount` ne tourne sinon que sur enqueue / retry, jamais
+        // sur le chemin de drainage : sans ce rafraîchissement le compteur
+        // reste figé sur sa valeur du boot et le bandeau « Synchronisation… »
+        // ne se referme jamais une fois la file vidée.
+        Task { await self.refreshPendingCount() }
+
+        // Le miroir mémoire suit la ligne : appliquée ou épuisée par le flusher,
+        // elle n'a plus rien à rejouer.
+        items.removeAll { $0.clientMessageId == outcome.cmid }
+
+        outcomes.publish(outcome)
+    }
+
+    /// Termine, SANS outcome, les observateurs d'une mutation qui n'en aura jamais : sa ligne a été
+    /// retirée de la file (annulation, déconnexion). Leur `for await` se termine — sinon chaque
+    /// observateur gardait sa tâche, sa continuation et sa closure de rollback pour la vie du processus.
+    func endOutcomeObservers(for cmid: String) {
+        outcomes.end(cmid)
+    }
+
+    /// Nombre de mutations encore observées — témoin de la purge (tests).
+    var observedOutcomeCount: Int { outcomes.observedCount }
+
+    /// Internal: removes the single continuation identified by `token` after
+    /// its consumer cancelled (Task cancellation, scope exit). Idempotent —
+    /// if the slot was already cleared by `publishOutcome`, this is a no-op.
+    /// Surtout : ne touche PAS aux autres continuations du même cmid.
+    private func dropContinuation(for cmid: String, token: UUID) {
+        outcomes.drop(for: cmid, token: token)
+    }
+
+    // MARK: - Pending Count
+
+    /// Rafraîchit le compteur, l'alerte de saturation et le haut de file de la
+    /// SyncPill à partir de l'état de la table outbox. Appelé après chaque
+    /// enqueue / dequeue / retryItem.
+    /// `internal` et non `private` : les extensions de CE type vivant dans
+    /// d'AUTRES fichiers (Audio, Retry, TerminalRetention…) l'appellent.
+    func refreshPendingCount() async {
+        await pendingIndicator.refresh(pool: outboxPool, inMemoryCount: items.count)
+    }
+
     // MARK: - Clear
 
     public func clearAll() async {
         let ids = items.map { $0.id }
         items.removeAll()
         // Wipe complet (logout, tests) : les tombstones d'une session ne
-        // doivent pas pouvoir rejouer un outcome dans la suivante.
-        outcomeTombstones.removeAll()
-        // … et ses observateurs ne recevront jamais d'outcome : ils se terminent ici au lieu d'attendre
-        // à vie (une mention, un abonnement, un blocage hors ligne puis la déconnexion).
-        for cmid in Array(outcomeContinuations.keys) { endOutcomeObservers(for: cmid) }
+        // doivent pas pouvoir rejouer un outcome dans la suivante, et ses
+        // observateurs ne recevront jamais d'outcome : ils se terminent ici au
+        // lieu d'attendre à vie (une mention, un abonnement, un blocage hors
+        // ligne puis la déconnexion).
+        outcomes.reset()
         guard let pool = outboxPool else {
             await refreshPendingCount()
             return

@@ -35,8 +35,10 @@ final class NativeSharePresentationTests: XCTestCase {
         .deletingLastPathComponent()   // MeeshyTests
         .deletingLastPathComponent()   // apps/ios
 
+    /// L'UNITÉ du fichier (`Foo.swift` + `Foo+*.swift`) : un type découpé garde une adresse, sinon
+    /// les gardes négatives de cette suite lisent la moitié qui ne contient pas l'interdit.
     private func source(_ relativePath: String) throws -> String {
-        try String(contentsOf: Self.appRoot.appendingPathComponent(relativePath), encoding: .utf8)
+        try AppSourceGuard.unit(relativePath)
     }
 
     private static let conversationInfoSheet = "Meeshy/Features/Main/Components/ConversationInfoSheet.swift"

@@ -57,15 +57,8 @@ final class SectionScrollPillTests: XCTestCase {
     /// Ils sont donc du code NON MONTÉ, et ce test est ce qui empêche qu'on le
     /// remonte par inadvertance.
     func test_sectionPill_isNoLongerMounted_theStickyStickerAlreadySaysIt() throws {
-        let source = try String(
-            contentsOf: URL(fileURLWithPath: #filePath)
-                .deletingLastPathComponent()
-                .deletingLastPathComponent()
-                .deletingLastPathComponent()
-                .deletingLastPathComponent()
-                .appendingPathComponent("Meeshy/Features/Main/Views/ConversationListView.swift"),
-            encoding: .utf8
-        )
+        // L'UNITÉ de la liste : une garde négative qui ne lirait que le fichier-tête verdirait en silence.
+        let source = try AppSourceGuard.unit("Meeshy/Features/Main/Views/ConversationListView.swift")
         let code = AppSourceGuard.stripComments(source)
         XCTAssertFalse(
             code.contains("SectionScrollPillHost("),

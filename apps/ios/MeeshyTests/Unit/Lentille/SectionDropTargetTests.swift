@@ -20,14 +20,10 @@ final class SectionDropTargetTests: XCTestCase {
 
     // MARK: - Source
 
+    /// L'UNITÉ de la liste : l'en-tête de section (`+SectionHeader`) et les types de glisser-déposer
+    /// (`+DragDrop`) vivent dans leurs fichiers.
     private func listViewSource() throws -> String {
-        let url = URL(fileURLWithPath: #filePath)
-            .deletingLastPathComponent()   // .../Unit/Lentille
-            .deletingLastPathComponent()   // .../Unit
-            .deletingLastPathComponent()   // .../MeeshyTests
-            .deletingLastPathComponent()   // .../apps/ios
-            .appendingPathComponent("Meeshy/Features/Main/Views/ConversationListView.swift")
-        return try String(contentsOf: url, encoding: .utf8)
+        try AppSourceGuard.unit("Meeshy/Features/Main/Views/ConversationListView.swift")
     }
 
     private func normalizedCode(_ source: String) -> String {
@@ -54,7 +50,7 @@ final class SectionDropTargetTests: XCTestCase {
             "ferme : deux vues logiques pour une section, et une cible qui se décale."
         )
         XCTAssertTrue(
-            code.contains("sectionHeaderLabel(for: group) .background( GeometryReader { geo in"),
+            code.contains("headerLabel .background( GeometryReader { geo in"),
             "Le registre de frames et le `.onDrop` s'appliquent AUTOUR du mux " +
             "(`sectionHeaderLabel`), jamais dans l'une de ses branches : la vue qui affiche " +
             "la section n est celle qui reçoit son drop, quelle que soit la peau."
@@ -73,8 +69,9 @@ final class SectionDropTargetTests: XCTestCase {
         let code = normalizedCode(try listViewSource())
 
         XCTAssertTrue(
-            code.contains("onDrop: { handleDrop(to: group.section.id, providers: $0) }"),
-            "Le closure `onDrop` du `SectionDropDelegate` doit transmettre `group.section.id` " +
+            code.contains("onDrop: { onDropConversation(section.id, $0) }")
+                && code.contains("onDropConversation: handleDrop"),
+            "Le closure `onDrop` du `SectionDropDelegate` doit transmettre `section.id` " +
             "— l'id de LA section affichée par ce header — à `handleDrop`, jamais une variable " +
             "capturée d'un autre site ni une constante."
         )
@@ -102,7 +99,7 @@ final class SectionDropTargetTests: XCTestCase {
             "contournerait en silence."
         )
         XCTAssertTrue(
-            code.contains("private func registerSectionFrame(_ sectionId: String, _ frame: CGRect) { guard Self.acceptsSectionDrop(sectionId: sectionId) else { return }"),
+            code.contains("private func registerSectionFrame(_ sectionId: String, _ frame: CGRect) { guard ConversationListView.acceptsSectionDrop(sectionId: sectionId) else { return }"),
             "`registerSectionFrame` doit refuser d'enregistrer une section non assignable : " +
             "présente dans le registre, elle serait « touchée » par la chip et " +
             "`ChipDropResolver` (possédé par LWS-8, qui ne connaît pas la Lentille) en " +
@@ -127,7 +124,7 @@ final class SectionDropTargetTests: XCTestCase {
             "pour tout appelant qui ne passerait pas l'argument."
         )
         XCTAssertTrue(
-            code.contains("acceptsDrop: Self.acceptsSectionDrop(sectionId: group.section.id),"),
+            code.contains("acceptsDrop: ConversationListView.acceptsSectionDrop(sectionId: section.id),"),
             "Le seul site de câblage du drop doit renseigner `acceptsDrop` depuis la règle " +
             "partagée `acceptsSectionDrop`, jamais depuis un test d'id recopié sur place."
         )
@@ -208,7 +205,7 @@ final class SectionDropTargetTests: XCTestCase {
         XCTAssertTrue(
             code.contains(
                 "private func registerSectionFrame(_ sectionId: String, _ frame: CGRect) { " +
-                "guard Self.acceptsSectionDrop(sectionId: sectionId) else { return } " +
+                "guard ConversationListView.acceptsSectionDrop(sectionId: sectionId) else { return } " +
                 "sectionFrameRegistry.frames[sectionId] = frame }"
             ),
             "`registerSectionFrame` doit REFUSER (retourner sans écrire) avant même " +

@@ -581,7 +581,7 @@ final class FocusCardElectionTests: XCTestCase {
     /// de la liste. L'y porter re-diffuserait tous les rangs à chaque tick :
     /// le défaut même que `ScrollOffsetRelay` a été créé pour éliminer.
     func test_electedState_neverLivesInTheListBody() throws {
-        let listCode = normalizedCode(try source(at: "Meeshy/Features/Main/Views/ConversationListView.swift"))
+        let listCode = normalizedCode(try AppSourceGuard.unit("Meeshy/Features/Main/Views/ConversationListView.swift"))
 
         XCTAssertEqual(
             occurrences(of: "FocalFocusCurve", in: listCode), 0,
@@ -618,7 +618,7 @@ final class FocusCardElectionTests: XCTestCase {
     // MARK: - 6. Montage
 
     func test_conversationList_mountsTheElectionHostOnce_behindTheFlag() throws {
-        let listCode = normalizedCode(try source(at: "Meeshy/Features/Main/Views/ConversationListView.swift"))
+        let listCode = normalizedCode(try AppSourceGuard.unit("Meeshy/Features/Main/Views/ConversationListView.swift"))
 
         XCTAssertEqual(
             occurrences(of: "LentilleFocusElectionHost(", in: listCode), 1,

@@ -215,10 +215,15 @@ final class iPadRightPanelNavigationGuardTests: XCTestCase {
     /// et la rangée d'actions de l'en-tête débordaient de la colonne.
     func test_narrowLeftColumn_cardAndHeaderFitTheColumn() throws {
         let overlays = try source(of: "ConversationListView+Overlays.swift")
-        XCTAssertFalse(overlays.contains(".frame(width: 340)"))
+        // L'en-tête a son fichier (`+HeaderOverlay`) : le négatif balaie les deux.
+        let header = try source(of: "ConversationListView+HeaderOverlay.swift")
+        let movedOut = try ["ConversationListView+BottomBar.swift", "ConversationListView+ChipDrag.swift",
+                            "ConversationListView+MoveToSectionMenuItems.swift"]
+            .map { try source(of: $0) }.joined(separator: "\n")
+        XCTAssertFalse((overlays + header + movedOut).contains(".frame(width: 340)"))
         XCTAssertTrue(overlays.contains(".frame(maxWidth: .infinity).frame(maxWidth: 340)"))
-        XCTAssertTrue(overlays.contains("ViewThatFits(in: .horizontal) {"))
-        XCTAssertTrue(overlays.contains("headerActions(spacing: MeeshySpacing.xs)"))
+        XCTAssertTrue(header.contains("ViewThatFits(in: .horizontal) {"))
+        XCTAssertTrue(header.contains("headerActions(spacing: MeeshySpacing.xs)"))
     }
 
     func test_storyNotificationScreens_closeThePanelOnIPad() throws {
@@ -506,7 +511,8 @@ final class DetachedWindowsTests: XCTestCase {
         XCTAssertTrue(list.contains("expandedSections = []"), "toutes se replient pendant le glisser")
         XCTAssertTrue(list.contains("var restored = before.union(expandedSections)"), "elles se redéplient au dépôt ou à l'annulation")
         XCTAssertTrue(list.contains("defer { endConversationDrag(expanding: sectionId) }"), "le dépôt redéplie, et ouvre la catégorie qui reçoit")
-        XCTAssertTrue(list.contains("dragOriginSectionId == group.section.id"), "la catégorie d'origine se marque")
+        let sectionHeader = try appSource("Features/Main/Views/ConversationListView+SectionHeader.swift")
+        XCTAssertTrue(sectionHeader.contains("dragOriginSectionId == section.id"), "la catégorie d'origine se marque")
         XCTAssertTrue(list.contains("publisher(for: .conversationDragDidEnd)"), "l'annulation redéplie")
         XCTAssertTrue(list.contains("if let token, token != pendingDrag?.token { return }"), "la fin d'un AUTRE glisser est ignorée")
         XCTAssertTrue(list.contains("delegate: ConversationListDragWatch(onEnter: collapseForConversationDrag)"),

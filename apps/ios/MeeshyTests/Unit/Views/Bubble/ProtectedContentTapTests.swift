@@ -406,8 +406,10 @@ final class CaptureShieldCoverageGuardTests: XCTestCase {
         XCTAssertTrue(try code("Views/MessageListViewController.swift")
             .contains("focalActions.onTapLocation={placeintapLocationHandler?(place,messageId)}"),
                       "la rangée Focal relaie le message du lieu touché")
+        XCTAssertTrue(try code("Views/ConversationView+MessageListLayer.swift")
+            .contains("focalFullscreenPlace=actions.focalPlace(place,messageId)"))
         XCTAssertTrue(try code("Views/ConversationView.swift")
-            .contains("focalFullscreenPlace=makeFocalFullscreenPlace(place,messageId:messageId)"))
+            .contains("focalPlace:{makeFocalFullscreenPlace($0,messageId:$1)}"))
     }
 
     func test_theProjections_readTheExitOfferOnce() throws {
