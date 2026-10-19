@@ -190,7 +190,7 @@ private struct OutlinedNumeral: View {
 }
 
 /// Un cran radial à `fraction` du tour, de midi dans le sens horaire.
-private struct RecordTick: Shape {
+nonisolated private struct RecordTick: Shape {
     let fraction: Double
 
     func path(in rect: CGRect) -> Path {

@@ -3,7 +3,7 @@ import MeeshySDK
 import MeeshyUI
 
 /// Le tracé d'un crochet : deux bras et l'arrondi de l'angle de la scène.
-struct ComposerCropBracketShape: Shape {
+nonisolated struct ComposerCropBracketShape: Shape {
     let corner: ComposerCropCorner
     let radius: CGFloat
 

@@ -162,7 +162,7 @@ struct AudioFullscreenDial: View {
     }
 
     /// L'anneau, seul à capter le doigt : le disque du portrait reste à lui.
-    private struct Ring: Shape {
+    nonisolated private struct Ring: Shape {
         let inner: CGFloat
 
         func path(in rect: CGRect) -> Path {
