@@ -213,9 +213,9 @@ extension MeeshyApp {
             }
             MessageSocketManager.shared.disconnect()
             SocialSocketManager.shared.disconnect()
-            // Drop the store subscriptions so an event from user A
-            // can't mutate the store after logout.
+            // Close store and sync-engine lanes: no queued event of user A may mutate state after logout.
             ConversationStoreSocketBridge.shared.deactivate()
+            Task { await ConversationSyncEngine.shared.stopSocketRelay() }
             // startup-08 — une BGTask soumise avant le logout ne
             // doit pas survivre pour réveiller un appareil
             // déconnecté (delta sync 401 en boucle, prefetch sur
