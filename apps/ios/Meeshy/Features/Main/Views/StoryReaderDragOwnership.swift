@@ -186,3 +186,25 @@ extension StoryReactionStripGesture {
         return stripFrame.contains(dragStart)
     }
 }
+
+// MARK: - Cession sur le point de départ (composants posés sur la scène, #11045)
+
+/// Cadres `.global` des composants posés sur la scène (barre de composition,
+/// panneau d'émojis). Gardés SÉPARÉS, jamais unis : l'enveloppe de deux
+/// composants éloignés recouvrirait la scène qui les sépare.
+nonisolated struct StoryReaderChromeFramesKey: PreferenceKey {
+    static var defaultValue: [CGRect] { [] }
+    static func reduce(value: inout [CGRect], nextValue: () -> [CGRect]) {
+        value.append(contentsOf: nextValue())
+    }
+}
+
+/// **Seule la scène pagine** (directive porteur 2026-10-19). Un glissé né sur
+/// un composant — faire défiler les émojis rapides du composeur — ne devient
+/// jamais l'axe horizontal du lecteur. Le vertical garde ses propres règles
+/// (`StoryComposerGesture`, #8431).
+nonisolated enum StoryReaderChromeZone {
+    static func yieldsHorizontalAxis(chromeFrames: [CGRect], dragStart: CGPoint) -> Bool {
+        chromeFrames.contains { $0.contains(dragStart) }
+    }
+}

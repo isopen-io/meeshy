@@ -107,8 +107,11 @@ extension StoryCardView {
                 composerBlock(geometry: geometry)
                     .background(
                         GeometryReader { proxy in
-                            Color.clear.preference(key: StoryComposerBlockHeightKey.self,
-                                                   value: proxy.size.height)
+                            Color.clear
+                                .preference(key: StoryComposerBlockHeightKey.self,
+                                            value: proxy.size.height)
+                                .preference(key: StoryReaderChromeFramesKey.self,
+                                            value: [proxy.frame(in: .global)])
                         }
                     )
             }

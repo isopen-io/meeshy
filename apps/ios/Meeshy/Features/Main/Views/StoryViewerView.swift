@@ -278,6 +278,8 @@ struct StoryViewerView: View {
     /// Cadre `.global` de la barre ouverte (`StoryReactionStripFrameKey`, #9062).
     @State var reactionStripFrame: CGRect? // internal for cross-file extension access
     @State var composerOwnsDrag: Bool = false // #8431 — le glissé né sur le composeur
+    /// Cadres `.global` des composants posés sur la scène (`StoryReaderChromeFramesKey`, #11045).
+    @State var readerChromeFrames: [CGRect] = [] // internal for cross-file extension access
     /// Bord SUPÉRIEUR (coordonnées `.global`) de la surface scrollable ouverte,
     /// remonté par `StoryReaderScrollableSurfaceTopKey`. `nil` = aucune surface
     /// ouverte, ou surface dont le cadre n'est pas mesurable ici (cf.
@@ -562,6 +564,7 @@ struct StoryViewerView: View {
         // ne peut le retirer. Le `UIScrollView` de la rangée peut priver la
         // barre de son `onEnded` — un drapeau collé gèlerait la navigation.
         .onPreferenceChange(StoryReactionStripFrameKey.self) { reactionStripFrame = $0 }
+        .onPreferenceChange(StoryReaderChromeFramesKey.self) { readerChromeFrames = $0 }
         .adaptiveOnChange(of: showEmojiStrip) { _, isOpen in
             if !isOpen {
                 reactionStripOwnsDrag = false

@@ -73,6 +73,9 @@ extension StoryViewerView {
                         guard !StoryReactionStripGesture.yieldsHorizontalAxis(
                             stripFrame: reactionStripFrame, dragStart: value.startLocation
                         ) else { return }
+                        guard !StoryReaderChromeZone.yieldsHorizontalAxis(
+                            chromeFrames: readerChromeFrames, dragStart: value.startLocation
+                        ) else { return }
                         gestureAxis = 1 // horizontal
                     } else if abs(dy) > abs(dx) + 8 {
                         gestureAxis = 2 // vertical
