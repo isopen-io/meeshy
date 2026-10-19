@@ -29,7 +29,16 @@ afterAll(async () => {
   await releaseHappyDomIfRegistered();
 });
 
+/**
+ * Chaque racine montée se démonte après son témoin : vider le `body` laissait
+ * les racines React vivantes, et l'avatar de la page — abonné à la carte de
+ * présence depuis #10956 — repeignait une racine orpheline dans un fichier
+ * suivant, après le retrait de happy-dom (`window.event` indéfini).
+ */
+const mounted: Root[] = [];
+
 afterEach(() => {
+  mounted.splice(0).forEach((root) => act(() => root.unmount()));
   document.body.innerHTML = '';
 });
 
@@ -73,6 +82,7 @@ const render = (props: Partial<Parameters<typeof MoodPageBody>[0]> = {}) => {
   const host = document.createElement('div');
   document.body.append(host);
   const root: Root = createRoot(host);
+  mounted.push(root);
   const sent: string[] = [];
   const frames = manualFrames();
   const onSend = props.onSend ?? (async (text: string): Promise<MoodReplyOutcome> => {
