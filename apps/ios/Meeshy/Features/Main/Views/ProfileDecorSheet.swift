@@ -384,7 +384,23 @@ struct ProfileOwnBanner: View {
         return url
     }
 
+    /// Le cadre équipé (#10935), posé PAR-DESSUS ce que `paint` peint — jamais à sa place.
+    static func frame(of user: MeeshyUser?) -> BannerFrameDesign? {
+        ProfileDecorResolver.bannerFrame(user?.profileDecor?.bannerFrame)
+    }
+
     var body: some View {
+        painted
+            .overlay {
+                if let frame = Self.frame(of: user) {
+                    BannerFrameView(design: frame)
+                        .equatable()
+                }
+            }
+    }
+
+    @ViewBuilder
+    private var painted: some View {
         switch Self.paint(of: user) {
         case .design(let design):
             BannerDesignView(design: design, isDark: isDark, accentHex: accentColor)
