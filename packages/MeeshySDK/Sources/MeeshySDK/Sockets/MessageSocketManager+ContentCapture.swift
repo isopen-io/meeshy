@@ -27,30 +27,26 @@ extension MessageSocketManager {
     /// EXISTE désormais (`noticedMessageIds`).
     public func emitContentCapture(_ report: ContentCaptureReport) async throws -> [String] {
         guard let socket, isConnected else { throw ContentCaptureRefusal(code: "NO_SOCKET") }
-        let payload = report.socketPayload
-        return try await withCheckedThrowingContinuation { continuation in
-            socket.emitWithAck("message:capture-detected", payload).timingOut(after: 10) { items in
-                switch Self.contentCaptureAck(items.first) {
-                case .success(let noticed): continuation.resume(returning: noticed)
-                case .failure(let refusal): continuation.resume(throwing: refusal)
-                }
-            }
-        }
+        let ack = await socket.emitWithAck(
+            .messageCaptureDetected, report.socketPayload,
+            as: ContentCaptureAckBody.self, payloadAt: .data, timingOutAfter: 10
+        )
+        return try Self.contentCaptureAck(ack).get()
     }
 
     /// `{ success: true, data: { noticedMessageIds } }` ou `{ success: false, code }` —
     /// toute autre forme (dont l'échéance, que Socket.IO rend en `"NO ACK"`)
     /// est un refus : rien ne se croit annoncé sans que la passerelle l'ait dit.
-    static func contentCaptureAck(_ item: Any?) -> Result<[String], ContentCaptureRefusal> {
-        guard let response = item as? [String: Any] else {
-            return .failure(ContentCaptureRefusal(code: "TIMEOUT"))
+    static func contentCaptureAck(_ ack: SocketAck<ContentCaptureAckBody>) -> Result<[String], ContentCaptureRefusal> {
+        switch ack {
+        case .accepted(let body): return .success(body.noticedMessageIds)
+        case .timedOut: return .failure(ContentCaptureRefusal(code: "TIMEOUT"))
+        case .refused(let refusal): return .failure(ContentCaptureRefusal(code: refusal.code ?? "MALFORMED_ACK"))
+        case .acceptedWithoutPayload, .undecodable: return .failure(ContentCaptureRefusal(code: "MALFORMED_ACK"))
         }
-        guard response["success"] as? Bool == true else {
-            return .failure(ContentCaptureRefusal(code: response["code"] as? String ?? "MALFORMED_ACK"))
-        }
-        guard let data = response["data"] as? [String: Any], let noticed = data["noticedMessageIds"] as? [String] else {
-            return .failure(ContentCaptureRefusal(code: "MALFORMED_ACK"))
-        }
-        return .success(noticed)
     }
+}
+
+struct ContentCaptureAckBody: Decodable, Sendable {
+    let noticedMessageIds: [String]
 }

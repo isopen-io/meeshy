@@ -151,10 +151,10 @@ struct ContentCaptureTests {
     @Test("l'accusé rend les messages annoncés ; un refus ou une échéance est un refus")
     func socketAck() {
         let ok: [String: Any] = ["success": true, "data": ["noticedMessageIds": [Self.flameId]]]
-        #expect((try? MessageSocketManager.contentCaptureAck(ok).get()) == [Self.flameId])
+        #expect((try? MessageSocketManager.contentCaptureAck(SocketAck<ContentCaptureAckBody>.parse(ok, payloadAt: .data)).get()) == [Self.flameId])
         let refused: [String: Any] = ["success": false, "error": "x", "code": "RATE_LIMITED"]
-        #expect(throws: ContentCaptureRefusal(code: "RATE_LIMITED")) { try MessageSocketManager.contentCaptureAck(refused).get() }
-        #expect(throws: ContentCaptureRefusal(code: "TIMEOUT")) { try MessageSocketManager.contentCaptureAck("NO ACK").get() }
+        #expect(throws: ContentCaptureRefusal(code: "RATE_LIMITED")) { try MessageSocketManager.contentCaptureAck(SocketAck<ContentCaptureAckBody>.parse(refused, payloadAt: .data)).get() }
+        #expect(throws: ContentCaptureRefusal(code: "TIMEOUT")) { try MessageSocketManager.contentCaptureAck(SocketAck<ContentCaptureAckBody>.parse("NO ACK", payloadAt: .data)).get() }
         #expect(ContentCaptureRefusal(code: "RATE_LIMITED").isFinal)
         #expect(ContentCaptureRefusal(code: "CONVERSATION_CLOSED").isFinal)
         #expect(ContentCaptureRefusal(code: "HTTP_410").isFinal)
