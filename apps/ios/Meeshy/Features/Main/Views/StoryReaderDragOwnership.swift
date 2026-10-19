@@ -211,7 +211,7 @@ nonisolated enum StoryReaderChromeZone {
 
 /// Cession horizontale du glissé du lecteur : la barre de réactions (direction)
 /// ET les composants posés sur la scène (point de départ), évalués ensemble.
-nonisolated enum StoryReaderHorizontalYield {
+enum StoryReaderHorizontalYield {
     static func yields(stripFrame: CGRect?, chromeFrames: [CGRect], dragStart: CGPoint) -> Bool {
         StoryReactionStripGesture.yieldsHorizontalAxis(stripFrame: stripFrame, dragStart: dragStart)
             || StoryReaderChromeZone.yieldsHorizontalAxis(chromeFrames: chromeFrames, dragStart: dragStart)
