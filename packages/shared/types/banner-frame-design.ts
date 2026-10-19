@@ -16,6 +16,8 @@
  *   - les FRISES (`friezes`) répètent leur module entre `from` et `to` (marges
  *     prises depuis chaque bord) : `repeat` pose des modules entiers, `justify`
  *     recalcule le module pour tomber juste.
+ * Les frises se peignent AVANT les pièces : un coin, un cartouche couvrent la
+ * frise qui court dessous, quelle que soit la largeur (#10936).
  *
  * Le centre transparent est une LOI, pas une intention :
  * `bannerFrameDrawableRegion` rend la seule région où le rendu peint — le

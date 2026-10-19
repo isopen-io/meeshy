@@ -100,6 +100,14 @@ describe('un contour d’avatar gagne dégradés et mouvements, sans rien perdre
     expect(parseAvatarRingDesign(ring({ motion: [{ kind: 'warp', targets: ['x'], duration: 2 }] }))?.motion).toEqual([]);
   });
 
+  it('une palette de huit couleurs, comme un cadre de bannière : le contour rituel en porte huit (#10936)', () => {
+    const colors = ['#1F4E79', '#2E1C12', '#6B4A2E', '#9C7838', '#B3261E', '#C9A15B', '#EDE6D6', '#F7F3EA'];
+    const parsed = parseAvatarRingDesign(ring({ stroke: { style: 'solid', width: 0.07, colors }, ornament: { paths: [{ d: 'M0 0 Z', color: 7, opacity: 1 }] }, gradients: undefined }));
+    expect(parsed?.stroke.colors).toHaveLength(8);
+    expect(parseAvatarRingDesign(ring({ stroke: { style: 'solid', width: 0.07, colors: [...colors, '#000000'] } }))).toBeNull();
+    expect(parseAvatarRingDesign(ring({ ornament: { paths: [{ d: 'M0 0 Z', color: 8, opacity: 1 }] } }))).toBeNull();
+  });
+
   it('la limite de 48 chemins est conservée', () => {
     const paths = Array.from({ length: 49 }, () => ({ d: 'M0 0 Z', color: 0, opacity: 1 }));
     expect(parseAvatarRingDesign(ring({ ornament: { paths } }))).toBeNull();

@@ -63,11 +63,15 @@ const friezeInstances = (frieze: NonNullable<BannerFrameDesign['friezes']>[numbe
   return Array.from({ length: count }, (_, index) => ({ tx: frieze.from + index * frieze.module * scale - frieze.from * scale, sx: scale }));
 };
 
-/** Ce que le cadre dessine à la largeur logique `width`, pièces puis frises, dans l'ordre du document. */
+/**
+ * Ce que le cadre dessine à la largeur logique `width` : les FRISES d'abord, les PIÈCES
+ * ensuite (#10936) — un coin et un cartouche se posent PAR-DESSUS la frise qui court
+ * dessous, à toutes les largeurs ; chaque liste dans l'ordre du document.
+ */
 export function bannerFrameElements(frame: BannerFrameDesign, width: number): readonly BannerFrameElement[] {
-  const pieces = (frame.pieces ?? []).flatMap((piece) => piece.paths.map((path) => element(path, { tx: anchorShift(piece.anchor, width), sx: 1 })));
   const friezes = (frame.friezes ?? []).flatMap((frieze) => friezeInstances(frieze, width).flatMap((instance) => frieze.paths.map((path) => element(path, instance))));
-  return [...pieces, ...friezes];
+  const pieces = (frame.pieces ?? []).flatMap((piece) => piece.paths.map((path) => element(path, { tx: anchorShift(piece.anchor, width), sx: 1 })));
+  return [...friezes, ...pieces];
 }
 
 const rectPath = (rect: FrameRect): string =>

@@ -195,6 +195,13 @@ describe('le cadre de bannière se pose sur la photo, centre transparent (#10935
     expect(modules[1]!.transform.tx - modules[0]!.transform.tx).toBe(4);
   });
 
+  it('les coins et le cartouche se posent PAR-DESSUS les frises : les frises d’abord, les pièces ensuite (#10936)', () => {
+    const elements = bannerFrameElements(frame(), 600);
+    const firstPiece = elements.findIndex((element) => element.transform.sx === 1 && !element.path.d.startsWith('M16.5'));
+    const lastModule = elements.map((element) => element.path.d.startsWith('M16.5')).lastIndexOf(true);
+    expect(lastModule).toBeLessThan(firstPiece);
+  });
+
   it('une frise justifiée recalcule son module pour tomber juste', () => {
     const justified = frame({ friezes: [{ module: 5, from: 16, to: 16, fit: 'justify', paths: [{ d: 'M16 2 h5 v3 h-5 Z', color: 1, opacity: 1 }] }] });
     const modules = bannerFrameElements(justified, 400).filter((element) => element.path.d.startsWith('M16 2'));

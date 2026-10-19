@@ -22,10 +22,13 @@ export type RingStrokeStyle = (typeof RING_STROKE_STYLES)[number];
 /** Le rayon du cercle de l'avatar dans le viewBox 0 0 100 100 : l'ornement s'organise autour. */
 export const RING_AVATAR_RADIUS = 42;
 
+/** La palette d'un contour : huit couleurs au plus, comme un cadre de bannière (#10936). */
+export const RING_MAX_COLORS = 8;
+
 const RingOrnamentStrokeSchema = z.object({
   d: z.string().check(z.regex(PATH_D_PATTERN)),
   /** Index dans `stroke.colors`. */
-  color: z.int().check(z.minimum(0), z.maximum(3)),
+  color: z.int().check(z.minimum(0), z.maximum(RING_MAX_COLORS - 1)),
   opacity: z.number().check(z.minimum(0), z.maximum(1)),
   width: z.optional(z.number().check(z.gt(0), z.maximum(40))),
   /** Index dans `gradients` ; `color` reste le repli. */
@@ -42,7 +45,7 @@ export const AvatarRingDesignSchema = z
       style: z.enum(RING_STROKE_STYLES),
       /** Fraction du diamètre. */
       width: z.number().check(z.minimum(0.02), z.maximum(0.12)),
-      colors: z.array(hexSchema).check(z.minLength(1), z.maxLength(4)),
+      colors: z.array(hexSchema).check(z.minLength(1), z.maxLength(RING_MAX_COLORS)),
     }),
     ornament: z.optional(z.object({ paths: z.array(RingOrnamentStrokeSchema).check(z.minLength(1), z.maxLength(APPEARANCE_LIMITS.maxRingPaths)) })),
     gradients: z.optional(frameGradientsSchema),
