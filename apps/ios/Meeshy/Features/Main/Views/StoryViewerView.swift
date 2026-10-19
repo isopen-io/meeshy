@@ -475,7 +475,7 @@ struct StoryViewerView: View {
             )
         }
         // Seule une PAUSE arrête le timer gated ; une boucle le laisse courir (#9821).
-        .storyPlaybackInterruptions(callInterrupting: $isCallInterrupting, gameMomentShown: $isGameMomentShown)
+        .modifier(StoryPlaybackInterruptions(interrupting: $isCallInterrupting, gameMomentShown: $isGameMomentShown, explicitPause: $isLongPressPaused, storyIsPlaying: !shouldPauseTimer))
         .storyOptionsMenuPresence(optionsMenuWatch)
         .adaptiveOnChange(of: shouldPauseTimer) { _, paused in
             slideTimer.setPaused(paused)
