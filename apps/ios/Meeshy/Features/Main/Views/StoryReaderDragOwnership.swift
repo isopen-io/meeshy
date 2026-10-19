@@ -208,3 +208,62 @@ nonisolated enum StoryReaderChromeZone {
         chromeFrames.contains { $0.contains(dragStart) }
     }
 }
+
+/// Cession horizontale du glissé du lecteur : la barre de réactions (direction)
+/// ET les composants posés sur la scène (point de départ), évalués ensemble.
+enum StoryReaderHorizontalYield {
+    static func yields(stripFrame: CGRect?, chromeFrames: [CGRect], dragStart: CGPoint) -> Bool {
+        StoryReactionStripGesture.yieldsHorizontalAxis(stripFrame: stripFrame, dragStart: dragStart)
+            || StoryReaderChromeZone.yieldsHorizontalAxis(chromeFrames: chromeFrames, dragStart: dragStart)
+    }
+}
+
+/// Mesure du bloc composeur : sa hauteur (`StoryComposerBlockHeightKey`) et son
+/// cadre `.global` (`StoryReaderChromeFramesKey`, #11045).
+struct StoryComposerBlockMeasure: ViewModifier {
+    func body(content: Content) -> some View {
+        content.background(
+            GeometryReader { proxy in
+                Color.clear
+                    .preference(key: StoryComposerBlockHeightKey.self, value: proxy.size.height)
+                    .preference(key: StoryReaderChromeFramesKey.self, value: [proxy.frame(in: .global)])
+            }
+        )
+    }
+}
+
+/// Suivi d'état de la cession du glissé du lecteur : cadre de la surface
+/// scrollable, cadre de la barre de réactions, cadres des composants, et
+/// filets de fermeture qui retombent quand la surface disparaît.
+struct StoryReaderDragStateTracking: ViewModifier {
+    @Binding var scrollableSurfaceTopY: CGFloat?
+    @Binding var reactionStripFrame: CGRect?
+    @Binding var readerChromeFrames: [CGRect]
+    @Binding var reactionStripOwnsDrag: Bool
+    let hasScrollableSurface: Bool
+    let showEmojiStrip: Bool
+
+    func body(content: Content) -> some View {
+        content
+            // Cadre STATIQUE de la surface scrollable ouverte, publié par le
+            // conteneur PARENT de son `ScrollView` (jamais depuis l'intérieur du
+            // défilement : sous iOS 18+, `onPreferenceChange` ne re-tire plus
+            // quand la valeur est pilotée par le scroll).
+            .onPreferenceChange(StoryReaderScrollableSurfaceTopKey.self) { scrollableSurfaceTopY = $0 }
+            // Filet de fermeture : une mesure périmée ferait passer un geste
+            // pour « né dans la surface ».
+            .adaptiveOnChange(of: hasScrollableSurface) { _, isOpen in
+                if !isOpen { scrollableSurfaceTopY = nil }
+            }
+            // Filet du drapeau de revendication : la barre refermée, plus
+            // personne ne peut le retirer ; un drapeau collé gèlerait la navigation.
+            .onPreferenceChange(StoryReactionStripFrameKey.self) { reactionStripFrame = $0 }
+            .onPreferenceChange(StoryReaderChromeFramesKey.self) { readerChromeFrames = $0 }
+            .adaptiveOnChange(of: showEmojiStrip) { _, isOpen in
+                if !isOpen {
+                    reactionStripOwnsDrag = false
+                    reactionStripFrame = nil
+                }
+            }
+    }
+}
