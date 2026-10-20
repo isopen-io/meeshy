@@ -33,9 +33,7 @@ extension CallManager {
             conversationId = nil
             callDuration = 0
             isVideoEnabled = false
-            isRemoteVideoEnabled = true
-            isRemoteAudioEnabled = true
-            isRemoteScreenCapturing = false
+            remoteMedia = .initial
             isMuted = false
             isSpeaker = false
             bubbleEdge = .trailing

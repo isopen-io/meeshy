@@ -6407,8 +6407,9 @@ final class CallManagerPiPRemoteMuteSourceGuardTests: XCTestCase {
         // écran partagé » (`CallScreenShareController.isRemoteVideoVisible`) :
         // le PiP suit la valeur RÉSOLUE, jamais l'événement brut.
         XCTAssertTrue(
-            body.contains("self.isRemoteVideoEnabled = event.mediaType == \"screen\""),
-            "The video case must still update isRemoteVideoEnabled (drives the in-app pill's SwiftUI placeholder)"
+            body.contains("let videoEnabled = event.mediaType == \"screen\"")
+                && body.contains("self.remoteMedia = self.remoteMedia.applying(.video("),
+            "The video case must still update remoteMedia.isVideoEnabled (drives the in-app pill's SwiftUI placeholder)"
         )
         XCTAssertTrue(
             body.contains("self.pip.setRemoteVideoMuted(!self.isRemoteVideoEnabled)"),

@@ -2644,8 +2644,8 @@ final class CallManagerRemoteAudioStateTests: XCTestCase {
             "only passes \"video\" silently drops remote audio toggle events and " +
             "leaves isRemoteAudioEnabled permanently stale at true")
         XCTAssertTrue(
-            sinkBody.contains("isRemoteAudioEnabled"),
-            "callMediaToggled sink must update isRemoteAudioEnabled when mediaType==\"audio\"")
+            sinkBody.contains(".applying(.audio(event.enabled))"),
+            "callMediaToggled sink must update remoteMedia.isAudioEnabled when mediaType==\"audio\"")
     }
 
     /// isRemoteAudioEnabled must be reset to true in endCallInternal so it
@@ -2660,7 +2660,7 @@ final class CallManagerRemoteAudioStateTests: XCTestCase {
         }
         let body = String(source[endInternalRange.upperBound..<nextFuncRange.lowerBound])
         XCTAssertTrue(
-            body.contains("isRemoteAudioEnabled = true"),
+            body.contains("remoteMedia = .initial"),
             "endCallInternal must reset isRemoteAudioEnabled to true — otherwise " +
             "the next call's remote user appears muted if the previous call ended " +
             "while the remote peer was muted")
@@ -3011,7 +3011,7 @@ final class CallManagerScreenCaptureAlertTests: XCTestCase {
         }
         let body = String(source[endInternalRange.upperBound..<nextFuncRange.lowerBound])
         XCTAssertTrue(
-            body.contains("isRemoteScreenCapturing = false"),
+            body.contains("remoteMedia = .initial"),
             "endCallInternal must reset isRemoteScreenCapturing to false — otherwise " +
             "the recording warning stays visible at the start of the next call even " +
             "though the new remote peer may not be capturing")

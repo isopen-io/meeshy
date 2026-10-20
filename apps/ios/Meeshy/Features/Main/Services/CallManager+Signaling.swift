@@ -371,9 +371,10 @@ extension CallManager {
                 guard event.callId == self.currentCallId, !self.isGroupMeshMediaToggle(event) else { return }
                 switch event.mediaType {
                 case "video", "screen":
-                    self.isRemoteVideoEnabled = event.mediaType == "screen"
+                    let videoEnabled = event.mediaType == "screen"
                         ? self.screenShare.applyRemoteScreenShare(enabled: event.enabled)
                         : self.screenShare.applyRemoteCamera(enabled: event.enabled)
+                    self.remoteMedia = self.remoteMedia.applying(.video(videoEnabled))
                     // C7 — la caméra du pair fait basculer `isVideoUIActive`, donc
                     // l'éligibilité au PiP système. `AVPictureInPictureVideoCall-
                     // ViewController` exige `.videoChat` : sans cette ré-application
@@ -392,7 +393,7 @@ extension CallManager {
                     self.pip.setRemoteVideoMuted(!self.isRemoteVideoEnabled)
                     Logger.calls.info("Remote \(event.mediaType) \(event.enabled ? "enabled" : "disabled") (callId=\(event.callId))")
                 case "audio":
-                    self.isRemoteAudioEnabled = event.enabled
+                    self.remoteMedia = self.remoteMedia.applying(.audio(event.enabled))
                     Logger.calls.info("Remote audio \(event.enabled ? "enabled" : "muted") (callId=\(event.callId))")
                 default:
                     break
@@ -405,7 +406,7 @@ extension CallManager {
             .sink { [weak self] event in
                 guard let self else { return }
                 guard event.callId == self.currentCallId else { return }
-                self.isRemoteScreenCapturing = event.isCapturing
+                self.remoteMedia = self.remoteMedia.applying(.screenCapture(event.isCapturing))
                 Logger.calls.info("Remote screen capture \(event.isCapturing ? "started" : "stopped") (callId=\(event.callId))")
             }
             .store(in: &cancellables)
@@ -457,7 +458,7 @@ extension CallManager {
             .receive(on: DispatchQueue.main)
             .sink { [weak self] event in
                 guard let self, self.currentCallId == event.callId else { return }
-                self.isRemoteQualityDegraded = true
+                self.remoteMedia = self.remoteMedia.applying(.qualityDegraded(true))
                 Logger.calls.info("Remote quality degraded: metric=\(event.metric) value=\(event.value) (callId=\(event.callId))")
                 self.scheduleRemoteQualityReset()
             }
@@ -469,7 +470,8 @@ extension CallManager {
         remoteQualityResetTask = Task { @MainActor [weak self] in
             try? await Task.sleep(for: .seconds(QualityThresholds.remoteQualityResetSeconds))
             guard !Task.isCancelled else { return }
-            self?.isRemoteQualityDegraded = false
+            guard let self else { return }
+            self.remoteMedia = self.remoteMedia.applying(.qualityDegraded(false))
         }
     }
 
