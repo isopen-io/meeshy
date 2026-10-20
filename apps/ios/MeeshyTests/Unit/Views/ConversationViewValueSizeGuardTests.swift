@@ -137,6 +137,38 @@ final class ConversationViewValueSizeGuardTests: XCTestCase {
         )
     }
 
+    /// **Les couches NOMINALES de l'écran ne grossissent pas la LARGEUR** (LOT-10).
+    ///
+    /// Chaque modificateur de tronc stocke des VALEURS, des `Binding` (qui
+    /// embarquent une copie de leur valeur : ~2 Ko pour `composerState`) et des
+    /// closures — jamais une copie de `ConversationView` ni une valeur de vue.
+    /// Le plafond (6 144 o) laisse la place des trois `Binding` les plus lourds
+    /// et d'une `Conversation?` ; il rougit si une couche se met à stocker
+    /// l'hôte, ce qui rendrait chaque cadre de pile proportionnellement énorme.
+    func test_conversationLayers_stayWithinFrameBudget() {
+        typealias Empty = EmptyView
+        let layerBudget = 6_144
+        let mesures: [(String, Int)] = [
+            ("ConversationBodyLifecycle", MemoryLayout<ConversationBodyLifecycle>.size),
+            ("ConversationRouterWatch", MemoryLayout<ConversationRouterWatch>.size),
+            ("ConversationDraftPersistenceWatch", MemoryLayout<ConversationDraftPersistenceWatch>.size),
+            ("ConversationBodyCovers", MemoryLayout<ConversationBodyCovers>.size),
+            ("ConversationBodySheets", MemoryLayout<ConversationBodySheets<Empty, Empty>>.size),
+            ("ConversationBodyOverlayMenu", MemoryLayout<ConversationBodyOverlayMenu<Empty, Empty>>.size),
+            ("ConversationComposerCore", MemoryLayout<ConversationComposerCore>.size),
+            ("ConversationComposerPickers", MemoryLayout<ConversationComposerPickers>.size),
+            ("ConversationComposerGuestSheet", MemoryLayout<ConversationComposerGuestSheet>.size),
+            ("ConversationComposerStickerSheet", MemoryLayout<ConversationComposerStickerSheet>.size),
+            ("ConversationComposerEditingCovers", MemoryLayout<ConversationComposerEditingCovers>.size),
+        ]
+        let trop = mesures.filter { $0.1 > layerBudget }
+        XCTAssertTrue(
+            trop.isEmpty,
+            "Couches hors budget (\(layerBudget) o) : \(trop.map { "\($0.0)=\($0.1)" }.joined(separator: ", ")). Une couche ne stocke ni `ConversationView` ni une valeur de vue : des valeurs, des `Binding` et des closures."
+        )
+        XCTAssertLessThanOrEqual(MemoryLayout<CallHeaderSnapshot>.size, 32)
+    }
+
     /// `@Indirect` garde la sémantique de VALEUR (copie à l'écriture) : sans
     /// elle, deux copies d'un état partageraient leur boîte, et SwiftUI — qui
     /// compare l'ancienne valeur à la nouvelle — cesserait de voir les
