@@ -81,7 +81,8 @@ struct ComposerCropBrackets: View {
 }
 
 /// **Les proportions par presets**, sous la scène : le preset que la scène
-/// réalise est allumé ; un recadrage libre n'en allume aucun.
+/// réalise est allumé ; un recadrage libre n'en allume aucun. Aucun libellé
+/// ne rétrécit : la bande défile jusqu'aux bords de l'écran.
 struct ComposerCropPresetBar: View {
     let selected: ComposerCropPreset?
     let onSelect: (ComposerCropPreset) -> Void
@@ -97,7 +98,7 @@ struct ComposerCropPresetBar: View {
                         .font(MeeshyFont.relative(MeeshyFont.footnoteSize, weight: .semibold, design: .rounded))
                         .foregroundStyle(selected == preset ? Color.yellow : .white)
                         .lineLimit(1)
-                        .minimumScaleFactor(0.7)
+                        .fixedSize()
                         .padding(.horizontal, MeeshySpacing.md)
                         .frame(minHeight: MeeshyControlSize.tapTarget)
                         .adaptiveLiquidGlass(in: Capsule(), interactive: true)
@@ -107,6 +108,7 @@ struct ComposerCropPresetBar: View {
                 .accessibilityAddTraits(selected == preset ? .isSelected : [])
             }
         }
+        .padding(.horizontal, ComposerEditPresetsLayout.leadingInset)
         .frame(height: ComposerEditScene.presetsHeight)
     }
 }
