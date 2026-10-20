@@ -110,13 +110,7 @@ class ConversationViewModel: ObservableObject {
     @Published var translatingTextLanguages: [String: Set<String>] = [:]
     @Published var translatingAudioLanguages: [String: Set<String>] = [:]
 
-    struct TranslationRequestFailure: Equatable {
-        enum Kind { case text, audio }
-        let messageId: String
-        let language: String
-        let kind: Kind
-        let message: String
-    }
+    typealias TranslationRequestFailure = ConversationTranslationRequestFailure
 
     /// Mirrors the `translationFailed`/`audioTranslationFailed` pattern
     /// already consumed elsewhere for socket-driven failures — this is the
@@ -148,10 +142,7 @@ class ConversationViewModel: ObservableObject {
     /// rendent `MessageStore` et non `messages`.
     @Published var burningEphemeralIds: [String: Bool] = [:]
 
-    struct BubbleLanguageSelection: Equatable {
-        var activeDisplayLangCode: String?
-        var secondaryLangCode: String?
-    }
+    typealias BubbleLanguageSelection = ConversationBubbleLanguageSelection
 
     func setBubbleActiveDisplayLanguage(_ code: String?, for messageId: String) {
         var selection = bubbleLanguageSelections[messageId] ?? BubbleLanguageSelection()
@@ -367,41 +358,11 @@ class ConversationViewModel: ObservableObject {
 
     // MARK: - Conversation-Wide Media
 
-    struct MediaSenderInfo {
-        let senderName: String
-        let senderAvatarURL: String?
-        let senderColor: String
-        let sentAt: Date
-        /// #7362 — la galerie plein écran n'a aucune autre source pour savoir
-        /// qui a envoyé une pièce donnée ; c'est ce qui gouverne
-        /// `GalleryImageOpenReport` (jamais reporter sa propre image). Défaut
-        /// `false` : les galeries POST / COMMENTAIRE (`SocialMediaGalleryPresentation`,
-        /// `CommentMediaGallery`) construisent ce type sans connaître la
-        /// notion — elles ne reportent de toute façon aucune consommation
-        /// (`ConversationMediaGalleryView.reportsAttachmentConsumption`).
-        ///
-        /// `var`, pas `let` : un stored `let` porteur d'un initialiseur
-        /// littéral n'entre PAS dans l'init memberwise synthétisé (le
-        /// compilateur le traite comme fixé à la déclaration, pas comme un
-        /// défaut substituable) — seul un `var` avec défaut y ajoute un
-        /// paramètre substituable (SE-0242).
-        var isMe: Bool = false
-        /// #10956 — le COMPTE de l'auteur (`viewingKey`), la clé de sa présence servie ;
-        /// `nil` pour les galeries qui ne le savent pas (post, commentaire).
-        var senderUserId: String? = nil
-        /// #10946 — son contour équipé, la référence servie avec le message.
-        var senderRing: ServedProfileDecorItem? = nil
-    }
+    typealias MediaSenderInfo = ConversationMediaSenderInfo
 
     // MARK: - Audio Items for Fullscreen Gallery
 
-    struct AudioItem: Identifiable {
-        let id: String // attachment.id
-        let attachment: MessageAttachment
-        let message: Message
-        let transcription: MessageTranscription?
-        let translatedAudios: [MessageTranslatedAudio]
-    }
+    typealias AudioItem = ConversationAudioItem
 
     // MARK: - Private
 

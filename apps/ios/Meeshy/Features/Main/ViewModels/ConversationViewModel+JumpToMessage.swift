@@ -158,17 +158,7 @@ extension ConversationViewModel {
         return messageStore.jumpedNewerEdge != edgeBefore
     }
 
-    /// Outcome of `jumpToQuotedMessage`.
-    enum JumpResult {
-        /// The message was already present in the local store — caller should
-        /// perform an instant scroll + highlight.
-        case foundLocally
-        /// The message was fetched from the server and loaded into the store.
-        /// Caller should scroll + highlight after the snapshot settles.
-        case loadedFromServer
-        /// The message could not be found (deleted, not accessible, network error).
-        case notFound
-    }
+    typealias JumpResult = ConversationJumpResult
 
     /// High-level "jump to a quoted message" flow called when the user taps
     /// a reply reference. If the message is already in the local store's
