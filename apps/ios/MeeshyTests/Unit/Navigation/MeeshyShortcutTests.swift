@@ -25,6 +25,12 @@ final class MeeshyShortcutTests: XCTestCase {
             .allSatisfy { $0.modifiers == .command })
     }
 
+    func test_sendMessage_isCommandReturn() {
+        XCTAssertEqual(MeeshyShortcut.sendMessage.key.character, "\r")
+        XCTAssertEqual(MeeshyShortcut.sendMessage.modifiers, .command)
+        XCTAssertNil(MeeshyShortcut.sendMessage.route)
+    }
+
     func test_keyboardShortcut_whenPreferenceDisabled_isNilForEveryCase() {
         XCTAssertTrue(MeeshyShortcut.allCases.allSatisfy { $0.keyboardShortcut(enabled: false) == nil })
     }

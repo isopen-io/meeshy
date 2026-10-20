@@ -3,8 +3,8 @@ import Combine
 import PhotosUI
 import MeeshySDK
 
-public struct CommunitySettingsView: View {
-    @StateObject private var viewModel: CommunitySettingsViewModel
+public struct CommunitySettingsScreen<ViewModel: CommunitySettingsModeling>: View {
+    @ObservedObject private var viewModel: ViewModel
     @ObservedObject private var theme = ThemeManager.shared
     @Environment(\.dismiss) private var dismiss
 
@@ -27,8 +27,8 @@ public struct CommunitySettingsView: View {
         "6366F1", "EC4899", "14B8A6", "F97316"
     ]
 
-    public init(community: MeeshyCommunity, onUpdated: ((MeeshyCommunity) -> Void)? = nil, onDeleted: (() -> Void)? = nil, onLeft: (() -> Void)? = nil, onCancel: (() -> Void)? = nil) {
-        _viewModel = StateObject(wrappedValue: CommunitySettingsViewModel(community: community))
+    public init(viewModel: ViewModel, onUpdated: ((MeeshyCommunity) -> Void)? = nil, onDeleted: (() -> Void)? = nil, onLeft: (() -> Void)? = nil, onCancel: (() -> Void)? = nil) {
+        self.viewModel = viewModel
         self.onUpdated = onUpdated
         self.onDeleted = onDeleted
         self.onLeft = onLeft
@@ -153,61 +153,8 @@ public struct CommunitySettingsView: View {
         let avatarPencilBackground = theme.backgroundPrimary
         return VStack(spacing: 16) {
             VStack(spacing: 0) {
-                ZStack(alignment: .bottomTrailing) {
-                    communityBannerView
-                        .frame(height: 120)
-                        .clipShape(RoundedRectangle(cornerRadius: 16))
-
-                    PhotosPicker(selection: $bannerItem, matching: .images) {
-                        Label(bannerEditLabel, systemImage: "photo.fill")
-                            .font(.system(size: 11, weight: .semibold, design: .rounded))
-                            .foregroundColor(.white)
-                            .padding(.horizontal, 10)
-                            .padding(.vertical, 6)
-                            .background(Capsule().fill(Color.black.opacity(0.5)))
-                    }
-                    .disabled(viewModel.isUploadingBanner)
-                    .padding(8)
-
-                    if viewModel.isUploadingBanner {
-                        RoundedRectangle(cornerRadius: 16)
-                            .fill(Color.black.opacity(0.4))
-                            .frame(height: 120)
-                            .overlay(ProgressView().tint(.white))
-                    }
-                }
-
-                ZStack(alignment: .bottomTrailing) {
-                    MeeshyAvatar(
-                        name: viewModel.name,
-                        context: .profileSheet,
-                        kind: .entity,
-                        accentColor: viewModel.localColor,
-                        avatarURL: viewModel.avatarUrl.isEmpty ? nil : viewModel.avatarUrl
-                    )
-                    .overlay(
-                        Circle()
-                            .stroke(theme.backgroundPrimary, lineWidth: 4)
-                    )
-
-                    PhotosPicker(selection: $avatarItem, matching: .images) {
-                        Image(systemName: "pencil.circle.fill")
-                            .font(.system(size: 28))
-                            .foregroundColor(avatarPencilColor)
-                            .background(Circle().fill(avatarPencilBackground))
-                    }
-                    .disabled(viewModel.isUploadingAvatar)
-                    .offset(x: 4, y: 4)
-
-                    if viewModel.isUploadingAvatar {
-                        Circle()
-                            .fill(Color.black.opacity(0.4))
-                            .frame(width: 80, height: 80)
-                            .overlay(ProgressView().tint(.white))
-                    }
-                }
-                .offset(y: -40)
-                .padding(.bottom, -40)
+                bannerBlock(editLabel: bannerEditLabel)
+                avatarBlock(pencilColor: avatarPencilColor, pencilBackground: avatarPencilBackground)
 
                 Text(viewModel.name)
                     .font(.system(size: 18, weight: .bold, design: .rounded))
@@ -215,32 +162,98 @@ public struct CommunitySettingsView: View {
                     .padding(.top, 8)
             }
 
-            // Color picker
-            VStack(alignment: .leading, spacing: 10) {
-                Text(String(localized: "community.settings.color", defaultValue: "Couleur", bundle: .module))
-                    .font(.system(size: 12, weight: .semibold, design: .rounded))
-                    .foregroundColor(theme.textSecondary)
+            colorPickerCard
 
-                LazyVGrid(columns: Array(repeating: GridItem(.flexible(), spacing: 10), count: 6), spacing: 10) {
-                    ForEach(presetColors, id: \.self) { hex in
-                        colorSwatch(hex: hex)
-                    }
+            emojiField
+        }
+    }
+
+    private func bannerBlock(editLabel: String) -> some View {
+        ZStack(alignment: .bottomTrailing) {
+            communityBannerView
+                .frame(height: 120)
+                .clipShape(RoundedRectangle(cornerRadius: 16))
+
+            PhotosPicker(selection: $bannerItem, matching: .images) {
+                Label(editLabel, systemImage: "photo.fill")
+                    .font(.system(size: 11, weight: .semibold, design: .rounded))
+                    .foregroundColor(.white)
+                    .padding(.horizontal, 10)
+                    .padding(.vertical, 6)
+                    .background(Capsule().fill(Color.black.opacity(0.5)))
+            }
+            .disabled(viewModel.isUploadingBanner)
+            .padding(8)
+
+            if viewModel.isUploadingBanner {
+                RoundedRectangle(cornerRadius: 16)
+                    .fill(Color.black.opacity(0.4))
+                    .frame(height: 120)
+                    .overlay(ProgressView().tint(.white))
+            }
+        }
+    }
+
+    private func avatarBlock(pencilColor: Color, pencilBackground: Color) -> some View {
+        ZStack(alignment: .bottomTrailing) {
+            MeeshyAvatar(
+                name: viewModel.name,
+                context: .profileSheet,
+                kind: .entity,
+                accentColor: viewModel.localColor,
+                avatarURL: viewModel.avatarUrl.isEmpty ? nil : viewModel.avatarUrl
+            )
+            .overlay(
+                Circle()
+                    .stroke(theme.backgroundPrimary, lineWidth: 4)
+            )
+
+            PhotosPicker(selection: $avatarItem, matching: .images) {
+                Image(systemName: "pencil.circle.fill")
+                    .font(.system(size: 28))
+                    .foregroundColor(pencilColor)
+                    .background(Circle().fill(pencilBackground))
+            }
+            .disabled(viewModel.isUploadingAvatar)
+            .offset(x: 4, y: 4)
+
+            if viewModel.isUploadingAvatar {
+                Circle()
+                    .fill(Color.black.opacity(0.4))
+                    .frame(width: 80, height: 80)
+                    .overlay(ProgressView().tint(.white))
+            }
+        }
+        .offset(y: -40)
+        .padding(.bottom, -40)
+    }
+
+    private var colorPickerCard: some View {
+        VStack(alignment: .leading, spacing: 10) {
+            Text(String(localized: "community.settings.color", defaultValue: "Couleur", bundle: .module))
+                .font(.system(size: 12, weight: .semibold, design: .rounded))
+                .foregroundColor(theme.textSecondary)
+
+            LazyVGrid(columns: Array(repeating: GridItem(.flexible(), spacing: 10), count: 6), spacing: 10) {
+                ForEach(presetColors, id: \.self) { hex in
+                    colorSwatch(hex: hex)
                 }
             }
-            .padding(14)
-            .background(theme.backgroundSecondary.opacity(0.5))
-            .clipShape(RoundedRectangle(cornerRadius: 12))
+        }
+        .padding(14)
+        .background(theme.backgroundSecondary.opacity(0.5))
+        .clipShape(RoundedRectangle(cornerRadius: 12))
+    }
 
-            // Emoji picker
-            settingsField(label: "Emoji") {
-                TextField("🏘️", text: $viewModel.localEmoji)
-                    .font(.system(size: 22))
-                    .foregroundColor(theme.textPrimary)
-                    .adaptiveOnChange(of: viewModel.localEmoji) { _, newValue in
-                        let trimmed = String(newValue.unicodeScalars.prefix(2))
-                        if trimmed != newValue { viewModel.localEmoji = trimmed }
-                    }
-            }
+    private var emojiField: some View {
+        settingsField(label: "Emoji") {
+            TextField("🏘️", text: $viewModel.localEmoji)
+                .font(.system(size: 22))
+                .foregroundColor(theme.textPrimary)
+                .adaptiveOnChange(of: viewModel.localEmoji) { _, newValue in
+                    let trimmed = String(newValue.unicodeScalars.prefix(2))
+                    if trimmed != newValue { viewModel.localEmoji = trimmed }
+                }
         }
     }
 
@@ -399,180 +412,6 @@ public struct CommunitySettingsView: View {
                 .padding(12)
                 .background(theme.backgroundSecondary.opacity(0.5))
                 .clipShape(RoundedRectangle(cornerRadius: 10))
-        }
-    }
-}
-
-// MARK: - ViewModel
-
-@MainActor
-final class CommunitySettingsViewModel: ObservableObject {
-    // iOS 26.1 : deinit synthétisée ISOLÉE (SE-0466, isolation MainActor par
-    // défaut) → double-free `pointer being freed was not allocated` (abrt)
-    // au démontage hors d'une tâche (test XCTest synchrone, vue démontée).
-    // Garde : MainActorDeinitSourceGuardTests / MeeshyUIDeinitSourceGuardTests.
-    nonisolated deinit {}
-    @Published var name: String
-    @Published var descriptionText: String
-    @Published var isPrivate: Bool
-    @Published var avatarUrl: String
-    @Published var bannerUrl: String
-    @Published var localColor: String
-    @Published var localEmoji: String
-    @Published var isUploadingAvatar = false
-    @Published var isUploadingBanner = false
-    @Published var isSaving = false
-    @Published var showError = false
-    @Published var errorMessage: String?
-    @Published var showDeleteConfirm = false
-    @Published var showLeaveConfirm = false
-
-    let communityId: String
-    let isCreator: Bool
-
-    private let originalName: String
-    private let originalDescription: String
-    private let originalIsPrivate: Bool
-    private let originalAvatarUrl: String
-    private let originalBannerUrl: String
-    private let originalLocalColor: String
-    private let originalLocalEmoji: String
-
-    var hasChanges: Bool {
-        name != originalName ||
-        descriptionText != originalDescription ||
-        isPrivate != originalIsPrivate ||
-        avatarUrl != originalAvatarUrl ||
-        bannerUrl != originalBannerUrl ||
-        localColor != originalLocalColor ||
-        localEmoji != originalLocalEmoji
-    }
-
-    init(community: MeeshyCommunity) {
-        self.communityId = community.id
-        self.isCreator = community.createdBy == (AuthManager.shared.currentUser?.id ?? "")
-
-        self.name = community.name
-        self.descriptionText = community.description ?? ""
-        self.isPrivate = community.isPrivate
-        self.originalName = community.name
-        self.originalDescription = community.description ?? ""
-        self.originalIsPrivate = community.isPrivate
-
-        let avatarStr = community.avatar ?? ""
-        let bannerStr = community.banner ?? ""
-        self.avatarUrl = avatarStr
-        self.bannerUrl = bannerStr
-        self.originalAvatarUrl = avatarStr
-        self.originalBannerUrl = bannerStr
-
-        let savedColor = UserDefaults.standard.string(forKey: "community.color.\(community.id)") ?? MeeshyColors.brandPrimaryHex
-        let savedEmoji = UserDefaults.standard.string(forKey: "community.emoji.\(community.id)") ?? ""
-        self.localColor = savedColor
-        self.localEmoji = savedEmoji
-        self.originalLocalColor = savedColor
-        self.originalLocalEmoji = savedEmoji
-    }
-
-    func save() async -> MeeshyCommunity? {
-        isSaving = true
-        defer { isSaving = false }
-
-        do {
-            let newAvatar = avatarUrl != originalAvatarUrl ? (avatarUrl.isEmpty ? nil : avatarUrl) : nil
-            let newBanner = bannerUrl != originalBannerUrl ? (bannerUrl.isEmpty ? nil : bannerUrl) : nil
-            let apiCommunity = try await CommunityService.shared.update(
-                communityId: communityId,
-                name: name != originalName ? name : nil,
-                description: descriptionText != originalDescription ? descriptionText : nil,
-                isPrivate: isPrivate != originalIsPrivate ? isPrivate : nil,
-                avatar: newAvatar,
-                banner: newBanner
-            )
-
-            UserDefaults.standard.set(localColor, forKey: "community.color.\(communityId)")
-            UserDefaults.standard.set(localEmoji, forKey: "community.emoji.\(communityId)")
-
-            var community = apiCommunity.toCommunity()
-            community.color = localColor
-            community.emoji = localEmoji
-            postToast(message: String(localized: "community.settings.toast.updated", defaultValue: "Communauté mise à jour", bundle: .module), isSuccess: true)
-            return community
-        } catch {
-            errorMessage = error.localizedDescription
-            showError = true
-            return nil
-        }
-    }
-
-    func uploadCompressedAvatar(_ data: Data) async {
-        isUploadingAvatar = true
-        defer { isUploadingAvatar = false }
-        if let url = await uploadCompressedImage(data, prefix: "community_avatar") {
-            avatarUrl = url
-            postToast(message: String(localized: "community.settings.toast.avatarUploaded", defaultValue: "Avatar téléversé", bundle: .module), isSuccess: true)
-        } else {
-            postToast(message: String(localized: "community.settings.toast.avatarFailed", defaultValue: "Échec du téléchargement de l'avatar", bundle: .module), isSuccess: false)
-        }
-    }
-
-    func uploadCompressedBanner(_ data: Data) async {
-        isUploadingBanner = true
-        defer { isUploadingBanner = false }
-        if let url = await uploadCompressedImage(data, prefix: "community_banner") {
-            bannerUrl = url
-            postToast(message: String(localized: "community.settings.toast.bannerUploaded", defaultValue: "Bannière téléversée", bundle: .module), isSuccess: true)
-        } else {
-            postToast(message: String(localized: "community.settings.toast.bannerFailed", defaultValue: "Échec du téléchargement de la bannière", bundle: .module), isSuccess: false)
-        }
-    }
-
-    private func postToast(message: String, isSuccess: Bool) {
-        NotificationCenter.default.post(
-            name: Notification.Name("meeshy.showToast"),
-            object: nil,
-            userInfo: ["message": message, "isSuccess": isSuccess]
-        )
-    }
-
-    private func uploadCompressedImage(_ data: Data, prefix: String) async -> String? {
-        do {
-            let fileName = "\(prefix)_\(UUID().uuidString).jpg"
-            let tempURL = FileManager.default.temporaryDirectory.appendingPathComponent(fileName)
-            try data.write(to: tempURL)
-
-            let serverOrigin = MeeshyConfig.shared.serverOrigin
-            guard let baseURL = URL(string: serverOrigin),
-                  let token = APIClient.shared.authToken else { return nil }
-
-            let manager = TusUploadManager(baseURL: baseURL)
-            let result = try await manager.uploadFile(fileURL: tempURL, mimeType: "image/jpeg", credential: .bearer(token))
-            try? FileManager.default.removeItem(at: tempURL)
-            return result.fileUrl
-        } catch {
-            await MainActor.run {
-                self.errorMessage = error.localizedDescription
-                self.showError = true
-            }
-            return nil
-        }
-    }
-
-    func deleteCommunity() async {
-        do {
-            try await CommunityService.shared.delete(communityId: communityId)
-        } catch {
-            errorMessage = error.localizedDescription
-            showError = true
-        }
-    }
-
-    func leaveCommunity() async {
-        do {
-            try await CommunityService.shared.leave(communityId: communityId)
-        } catch {
-            errorMessage = error.localizedDescription
-            showError = true
         }
     }
 }

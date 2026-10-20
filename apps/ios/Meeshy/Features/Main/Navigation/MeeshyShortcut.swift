@@ -9,6 +9,7 @@ enum MeeshyShortcut: CaseIterable, Hashable {
     case contacts
     case notifications
     case settings
+    case sendMessage
 
     static let sections: [MeeshyShortcut] = [.conversations, .contacts, .notifications, .settings]
 
@@ -22,6 +23,7 @@ enum MeeshyShortcut: CaseIterable, Hashable {
         case .contacts: return "2"
         case .notifications: return "3"
         case .settings: return "4"
+        case .sendMessage: return .return
         }
     }
 
@@ -45,6 +47,8 @@ enum MeeshyShortcut: CaseIterable, Hashable {
             return String(localized: "root.ipad.notifications", defaultValue: "Notifications", bundle: .main)
         case .settings:
             return String(localized: "root.ipad.settings", defaultValue: "Paramètres", bundle: .main)
+        case .sendMessage:
+            return String(localized: "commands.send_message", defaultValue: "Envoyer le message", bundle: .main)
         }
     }
 
@@ -58,6 +62,7 @@ enum MeeshyShortcut: CaseIterable, Hashable {
         case .contacts: return "person.2"
         case .notifications: return "bell"
         case .settings: return "gearshape"
+        case .sendMessage: return "paperplane"
         }
     }
 
@@ -66,7 +71,7 @@ enum MeeshyShortcut: CaseIterable, Hashable {
         case .contacts: return .contacts()
         case .notifications: return .notifications
         case .settings: return .settings
-        case .newConversation, .search, .closeWindow, .back, .conversations: return nil
+        case .newConversation, .search, .closeWindow, .back, .conversations, .sendMessage: return nil
         }
     }
 

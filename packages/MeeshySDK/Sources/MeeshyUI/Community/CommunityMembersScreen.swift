@@ -1,28 +1,33 @@
 import SwiftUI
 import Combine
 import MeeshySDK
-import os
 
-public struct CommunityMembersView: View {
-    @StateObject private var viewModel: CommunityMembersViewModel
+public struct CommunityMembersScreen<ViewModel: CommunityMembersModeling, Invite: View>: View {
+    @ObservedObject private var viewModel: ViewModel
     @ObservedObject private var theme = ThemeManager.shared
 
     public var onInvite: (() -> Void)? = nil
     @State private var showInviteSheet = false
+    private let inviteSheet: () -> Invite
 
-    public init(communityId: String, onInvite: (() -> Void)? = nil) {
-        _viewModel = StateObject(wrappedValue: CommunityMembersViewModel(communityId: communityId))
+    public init(
+        viewModel: ViewModel,
+        onInvite: (() -> Void)? = nil,
+        @ViewBuilder inviteSheet: @escaping () -> Invite
+    ) {
+        self.viewModel = viewModel
         self.onInvite = onInvite
+        self.inviteSheet = inviteSheet
     }
 
     public var body: some View {
         ZStack {
             theme.backgroundPrimary.ignoresSafeArea()
 
-            if viewModel.isLoading && viewModel.members.isEmpty {
+            if viewModel.isLoading && viewModel.isEmpty {
                 ProgressView()
                     .tint(MeeshyColors.indigo500)
-            } else if viewModel.members.isEmpty {
+            } else if viewModel.isEmpty {
                 EmptyStateView(
                     icon: "person.3",
                     title: String(localized: "community.members.empty.title", defaultValue: "No Members", bundle: .module),
@@ -55,7 +60,7 @@ public struct CommunityMembersView: View {
         .refreshable { await viewModel.refresh() }
         .task { await viewModel.loadIfNeeded() }
         .sheet(isPresented: $showInviteSheet) {
-            CommunityInviteView(communityId: viewModel.communityId)
+            inviteSheet()
                 .onDisappear { Task { await viewModel.refresh() } }
         }
     }
@@ -63,28 +68,26 @@ public struct CommunityMembersView: View {
     private var memberList: some View {
         ScrollView {
             LazyVStack(spacing: 0) {
-                ForEach(groupedMembers.keys.sorted(by: { $0.level > $1.level }), id: \.self) { role in
-                    if let members = groupedMembers[role] {
-                        Section {
-                            ForEach(members) { member in
-                                MemberRow(
-                                    member: member,
-                                    isCurrentUserAdmin: viewModel.isCurrentUserAdmin,
-                                    onRoleChange: { newRole in
-                                        Task { await viewModel.updateRole(memberId: member.id, role: newRole) }
-                                    },
-                                    onRemove: {
-                                        Task { await viewModel.removeMember(userId: member.userId) }
-                                    }
-                                )
-
-                                if member.id != members.last?.id {
-                                    Divider().padding(.leading, 68)
+                ForEach(viewModel.sections) { section in
+                    Section {
+                        ForEach(section.members) { member in
+                            MemberRow(
+                                member: member,
+                                isCurrentUserAdmin: viewModel.isCurrentUserAdmin,
+                                onRoleChange: { newRole in
+                                    Task { await viewModel.updateRole(memberId: member.id, role: newRole) }
+                                },
+                                onRemove: {
+                                    Task { await viewModel.removeMember(userId: member.userId) }
                                 }
+                            )
+
+                            if member.id != section.members.last?.id {
+                                Divider().padding(.leading, 68)
                             }
-                        } header: {
-                            sectionHeader(role: role, count: members.count)
                         }
+                    } header: {
+                        sectionHeader(role: section.role, count: section.members.count)
                     }
                 }
 
@@ -98,15 +101,11 @@ public struct CommunityMembersView: View {
         }
     }
 
-    private var groupedMembers: [MemberRole: [APICommunityMember]] {
-        Dictionary(grouping: viewModel.members) { $0.communityRole }
-    }
-
     private func sectionHeader(role: MemberRole, count: Int) -> some View {
         HStack(spacing: MeeshySpacing.xsPlus) {
             Image(systemName: role.icon)
                 .font(.system(size: MeeshyIconSize.xxs))
-            Text("\(role.displayName)s")
+            Text(role.sectionTitle(in: .module))
                 .font(.system(size: MeeshyFont.smallSize, weight: .bold, design: .rounded))
             Text("\(count)")
                 .font(.system(size: MeeshyFont.footnoteSize, weight: .medium))
@@ -202,108 +201,4 @@ struct MemberRow: View {
         case .member: return theme.textMuted
         }
     }
-}
-
-// MARK: - ViewModel
-
-@MainActor
-final class CommunityMembersViewModel: ObservableObject {
-    // iOS 26.1 : deinit synthétisée ISOLÉE (SE-0466, isolation MainActor par
-    // défaut) → double-free `pointer being freed was not allocated` (abrt)
-    // au démontage hors d'une tâche (test XCTest synchrone, vue démontée).
-    // Garde : MainActorDeinitSourceGuardTests / MeeshyUIDeinitSourceGuardTests.
-    nonisolated deinit {}
-    @Published var members: [APICommunityMember] = []
-    @Published var isLoading = false
-    @Published var hasMore = false
-    @Published var isCurrentUserAdmin = false
-
-    let communityId: String
-    @Published var isMember = false
-    var canInvite: Bool { isMember }
-
-    private var hasLoaded = false
-    private var currentOffset = 0
-    private let pageSize = 30
-    private let service: CommunityServiceProviding
-
-    init(communityId: String, service: CommunityServiceProviding = CommunityService.shared) {
-        self.communityId = communityId
-        self.service = service
-    }
-
-    func loadIfNeeded() async {
-        guard !hasLoaded else { return }
-        await load()
-    }
-
-    func refresh() async {
-        currentOffset = 0
-        hasLoaded = false
-        await load()
-    }
-
-    func loadMore() async {
-        guard hasMore, !isLoading else { return }
-        await load(append: true)
-    }
-
-    private func load(append: Bool = false) async {
-        isLoading = true
-        defer { isLoading = false }
-
-        do {
-            let response = try await service.getMembers(
-                communityId: communityId,
-                offset: append ? currentOffset : 0,
-                limit: pageSize
-            )
-
-            if append {
-                let known = Set(members.map(\.id))
-                members.append(contentsOf: response.data.filter { !known.contains($0.id) })
-            } else {
-                members = response.data
-            }
-
-            currentOffset = members.count
-            hasMore = response.pagination?.hasMore ?? false
-            hasLoaded = true
-
-            let currentUserId = AuthManager.shared.currentUser?.id ?? ""
-            let currentMember = members.first { $0.userId == currentUserId }
-            isMember = currentMember != nil
-            isCurrentUserAdmin = currentMember?.communityRole.hasMinimumRole(.admin) ?? false
-        } catch {
-            Logger.community.error("[CommunityMembersVM] Error loading: \(error)")
-        }
-    }
-
-    func updateRole(memberId: String, role: MemberRole) async {
-        do {
-            _ = try await service.updateMemberRole(
-                communityId: communityId,
-                memberId: memberId,
-                role: role
-            )
-            await refresh()
-        } catch {
-            Logger.community.error("[CommunityMembersVM] Error updating role: \(error)")
-        }
-    }
-
-    func removeMember(userId: String) async {
-        do {
-            try await service.removeMember(communityId: communityId, userId: userId)
-            members.removeAll { $0.userId == userId }
-        } catch {
-            Logger.community.error("[CommunityMembersVM] Error removing member: \(error)")
-        }
-    }
-}
-
-// MARK: - Logger
-
-private extension Logger {
-    static let community = MeeshyLog.logger(.community, subsystem: .sdk)
 }

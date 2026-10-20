@@ -26,6 +26,12 @@ final class MeeshyCommandsWiringGuardTests: XCTestCase {
         XCTAssertTrue(commands.contains("MeeshyShortcut.sections"))
     }
 
+    func test_commands_offerSendMessage() throws {
+        let commands = try code("Meeshy/Features/Main/Navigation/MeeshyCommands.swift")
+        XCTAssertTrue(commands.contains("item(.sendMessage)"))
+        XCTAssertTrue(commands.contains("\\.meeshySendMessage"))
+    }
+
     func test_everyRoot_publishesItsSceneNavigation() throws {
         let main = try code("Meeshy/Features/Main/Views/RootLayers/RootViewLayers.swift")
         let tablet = try code("Meeshy/Features/Main/Views/RootLayers/iPadRootViewLayers.swift")

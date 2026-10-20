@@ -1,10 +1,9 @@
 import SwiftUI
 import Combine
 import MeeshySDK
-import os
 
-public struct CommunityInviteView: View {
-    @StateObject private var viewModel: CommunityInviteViewModel
+public struct CommunityInviteScreen<ViewModel: CommunityInviteModeling>: View {
+    @ObservedObject private var viewModel: ViewModel
     @ObservedObject private var theme = ThemeManager.shared
     @Environment(\.dismiss) private var dismiss
 
@@ -14,8 +13,8 @@ public struct CommunityInviteView: View {
     /// `dismiss()` y est un no-op et « Done » ne fermait alors rien.
     private let onDone: (() -> Void)?
 
-    public init(communityId: String, onDone: (() -> Void)? = nil) {
-        _viewModel = StateObject(wrappedValue: CommunityInviteViewModel(communityId: communityId))
+    public init(viewModel: ViewModel, onDone: (() -> Void)? = nil) {
+        self.viewModel = viewModel
         self.onDone = onDone
     }
 
@@ -166,70 +165,4 @@ public struct CommunityInviteView: View {
         .padding(.horizontal, MeeshySpacing.lg)
         .padding(.vertical, MeeshySpacing.smPlus)
     }
-}
-
-// MARK: - ViewModel
-
-@MainActor
-final class CommunityInviteViewModel: ObservableObject {
-    // iOS 26.1 : deinit synthétisée ISOLÉE (SE-0466, isolation MainActor par
-    // défaut) → double-free `pointer being freed was not allocated` (abrt)
-    // au démontage hors d'une tâche (test XCTest synchrone, vue démontée).
-    // Garde : MainActorDeinitSourceGuardTests / MeeshyUIDeinitSourceGuardTests.
-    nonisolated deinit {}
-    @Published var searchText = ""
-    @Published var searchResults: [UserSearchResult] = []
-    @Published var isSearching = false
-    @Published var invitedUserIds: Set<String> = []
-    @Published var recentlyInvited: [UserSearchResult] = []
-    @Published var invitingUserId: String?
-
-    let communityId: String
-    private let communityService: CommunityServiceProviding
-    private let userService: UserServiceProviding
-
-    init(communityId: String,
-         communityService: CommunityServiceProviding = CommunityService.shared,
-         userService: UserServiceProviding = UserService.shared) {
-        self.communityId = communityId
-        self.communityService = communityService
-        self.userService = userService
-    }
-
-    func searchUsers() async {
-        guard searchText.count >= 2 else {
-            searchResults = []
-            return
-        }
-
-        isSearching = true
-        defer { isSearching = false }
-
-        do {
-            searchResults = try await userService.searchUsers(query: searchText, limit: 20, offset: 0)
-        } catch {
-            Logger.community.error("[CommunityInviteVM] Search error: \(error)")
-        }
-    }
-
-    func inviteUser(userId: String) async {
-        invitingUserId = userId
-        defer { invitingUserId = nil }
-
-        do {
-            _ = try await communityService.invite(communityId: communityId, userId: userId)
-            invitedUserIds.insert(userId)
-            if let user = searchResults.first(where: { $0.id == userId }) {
-                recentlyInvited.append(user)
-            }
-        } catch {
-            Logger.community.error("[CommunityInviteVM] Invite error: \(error)")
-        }
-    }
-}
-
-// MARK: - Logger
-
-private extension Logger {
-    static let community = MeeshyLog.logger(.community, subsystem: .sdk)
 }

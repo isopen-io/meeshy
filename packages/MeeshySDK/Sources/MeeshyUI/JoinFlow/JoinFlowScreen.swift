@@ -2,8 +2,8 @@ import SwiftUI
 import Combine
 import MeeshySDK
 
-public struct JoinFlowSheet: View {
-    @StateObject private var viewModel: JoinFlowViewModel
+public struct JoinFlowScreen<ViewModel: JoinFlowModeling>: View {
+    @ObservedObject private var viewModel: ViewModel
     @ObservedObject private var theme = ThemeManager.shared
     @Environment(\.dismiss) private var dismiss
 
@@ -14,20 +14,16 @@ public struct JoinFlowSheet: View {
     /// - Parameters:
     ///   - isSignedIn: un compte est présent (entrée anonyme DÉLIBÉRÉE) — la
     ///     page d'invitation propose alors le compte d'abord.
-    ///   - entry: `.anonymousForm` quand l'anonymat a déjà été choisi sur la
-    ///     page d'invitation de l'hôte ; le retour du formulaire ferme alors
-    ///     la feuille au lieu de reposer la question.
     ///   - onAccountRequest: « Se connecter » / « Créer un compte » (ou
     ///     « Rejoindre avec mon compte ») — la feuille se ferme et l'hôte
     ///     conduit la personne vers son compte.
     public init(
-        identifier: String,
+        viewModel: ViewModel,
         isSignedIn: Bool = false,
-        entry: JoinFlowViewModel.Entry = .landing,
         onAccountRequest: ((InviteLandingChoice) -> Void)? = nil,
         onJoinSuccess: @escaping (AnonymousJoinResponse) -> Void
     ) {
-        self._viewModel = StateObject(wrappedValue: JoinFlowViewModel(identifier: identifier, entry: entry))
+        self.viewModel = viewModel
         self.isSignedIn = isSignedIn
         self.onAccountRequest = onAccountRequest
         self.onJoinSuccess = onJoinSuccess
@@ -183,7 +179,7 @@ public struct JoinFlowSheet: View {
                 .foregroundColor(theme.textPrimary)
 
             if let result = viewModel.joinResult {
-                Text("Vous avez rejoint \(result.conversation.title ?? "la conversation") en tant que \(result.participant.username)")
+                Text(JoinFlowCopy.joinedSentence(conversationTitle: result.conversation.title, username: result.participant.username))
                     .font(MeeshyFont.relative(MeeshyFont.bodySize, weight: .medium))
                     .foregroundColor(theme.textSecondary)
                     .multilineTextAlignment(.center)
@@ -267,21 +263,6 @@ public struct JoinFlowSheet: View {
             .padding(.top, MeeshySpacing.xs)
 
             Spacer()
-        }
-    }
-}
-
-// MARK: - Phase Equatable (for animation)
-
-extension JoinFlowViewModel.Phase: Equatable {
-    public static func == (lhs: JoinFlowViewModel.Phase, rhs: JoinFlowViewModel.Phase) -> Bool {
-        switch (lhs, rhs) {
-        case (.loading, .loading): return true
-        case (.preview, .preview): return true
-        case (.form, .form): return true
-        case (.success, .success): return true
-        case (.error(let a), .error(let b)): return a == b
-        default: return false
         }
     }
 }

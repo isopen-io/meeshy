@@ -29,7 +29,7 @@ final class ProfileSheetLoaderTests: XCTestCase {
         data.cachedStatsResult = cachedStats
         data.fetchProfileResult = fetchedProfile ?? .success(makeUser())
         data.fetchStatsResult = fetchedStats ?? .success(makeStats(messages: 1))
-        return (ProfileSheetLoader(data: data), data)
+        return (ProfileSheetLoader(), data)
     }
 
     func test_paintFromCache_freshProfileAndStats_paintsThemWithoutTouchingTheNetwork() async {
@@ -38,7 +38,7 @@ final class ProfileSheetLoaderTests: XCTestCase {
             cachedStats: .stale([makeStats(messages: 42)], age: 900)
         )
 
-        await sut.paintFromCache(userId: "u-bob", username: "bob")
+        await sut.paintFromCache(userId: "u-bob", username: "bob", using: data)
 
         XCTAssertEqual(sut.profile?.displayName, "Bob en cache")
         XCTAssertEqual(sut.stats?.totalMessages, 42)
@@ -49,9 +49,9 @@ final class ProfileSheetLoaderTests: XCTestCase {
     }
 
     func test_paintFromCache_emptyCache_showsTheLoadingStateOnly() async {
-        let (sut, _) = makeSUT()
+        let (sut, data) = makeSUT()
 
-        await sut.paintFromCache(userId: "u-bob", username: "bob")
+        await sut.paintFromCache(userId: "u-bob", username: "bob", using: data)
 
         XCTAssertNil(sut.profile)
         XCTAssertTrue(sut.isLoadingProfile)
@@ -66,7 +66,7 @@ final class ProfileSheetLoaderTests: XCTestCase {
             fetchedStats: .success(makeStats(messages: 43))
         )
 
-        await sut.open(userId: "u-bob", username: "bob")
+        await sut.open(userId: "u-bob", username: "bob", using: data)
 
         XCTAssertEqual(data.fetchProfileCallCount, 1)
         XCTAssertEqual(data.fetchStatsCallCount, 1)
@@ -77,14 +77,14 @@ final class ProfileSheetLoaderTests: XCTestCase {
     }
 
     func test_open_synchronizationFails_keepsTheCachedProfileAndStatsOnScreen() async {
-        let (sut, _) = makeSUT(
+        let (sut, data) = makeSUT(
             cachedProfile: .stale([makeUser(displayName: "Bob en cache")], age: 900),
             cachedStats: .stale([makeStats(messages: 42)], age: 900),
             fetchedProfile: .failure(Offline()),
             fetchedStats: .failure(Offline())
         )
 
-        await sut.open(userId: "u-bob", username: "bob")
+        await sut.open(userId: "u-bob", username: "bob", using: data)
 
         XCTAssertEqual(sut.profile?.displayName, "Bob en cache")
         XCTAssertEqual(sut.stats?.totalMessages, 42)
@@ -94,9 +94,9 @@ final class ProfileSheetLoaderTests: XCTestCase {
     }
 
     func test_open_emptyCache_paintsWhatTheNetworkServesAndEndsTheLoading() async {
-        let (sut, _) = makeSUT(fetchedProfile: .success(makeUser(displayName: "Bob servi")))
+        let (sut, data) = makeSUT(fetchedProfile: .success(makeUser(displayName: "Bob servi")))
 
-        await sut.open(userId: "u-bob", username: "bob")
+        await sut.open(userId: "u-bob", username: "bob", using: data)
 
         XCTAssertEqual(sut.profile?.displayName, "Bob servi")
         XCTAssertFalse(sut.isLoadingProfile)
@@ -104,20 +104,20 @@ final class ProfileSheetLoaderTests: XCTestCase {
     }
 
     func test_open_targetForbidsTheProfile_marksBlockedByTarget() async {
-        let (sut, _) = makeSUT(fetchedProfile: .failure(APIError.serverError(403, nil)))
+        let (sut, data) = makeSUT(fetchedProfile: .failure(APIError.serverError(403, nil)))
 
-        await sut.open(userId: "u-bob", username: "bob")
+        await sut.open(userId: "u-bob", username: "bob", using: data)
 
         XCTAssertTrue(sut.isBlockedByTarget)
     }
 
     func test_open_404OverACachedProfile_marksBlockedByTarget() async {
-        let (sut, _) = makeSUT(
+        let (sut, data) = makeSUT(
             cachedProfile: .fresh([makeUser(displayName: "Bob en cache")], age: 10),
             fetchedProfile: .failure(APIError.serverError(404, nil))
         )
 
-        await sut.open(userId: "u-bob", username: "bob")
+        await sut.open(userId: "u-bob", username: "bob", using: data)
 
         XCTAssertTrue(sut.isBlockedByTarget)
         XCTAssertFalse(sut.profileLoadFailed)
@@ -126,12 +126,12 @@ final class ProfileSheetLoaderTests: XCTestCase {
 
     /// Le transport RÉEL ne lève jamais `APIError` : un 404 sort en `MeeshyError.server(statusCode: 404, …)` (#10750).
     func test_open_404FromTheRealTransportOverACachedProfile_marksBlockedAndDropsTheCache() async {
-        let (sut, _) = makeSUT(
+        let (sut, data) = makeSUT(
             cachedProfile: .fresh([makeUser(displayName: "Bob en cache")], age: 10),
             fetchedProfile: .failure(MeeshyError.server(statusCode: 404, message: "User not found"))
         )
 
-        await sut.open(userId: "u-bob", username: "bob")
+        await sut.open(userId: "u-bob", username: "bob", using: data)
 
         XCTAssertTrue(sut.isBlockedByTarget)
         XCTAssertNil(sut.profile)
@@ -139,18 +139,18 @@ final class ProfileSheetLoaderTests: XCTestCase {
     }
 
     func test_open_404FromTheRealTransportOnColdCache_isAPlainFailure() async {
-        let (sut, _) = makeSUT(fetchedProfile: .failure(MeeshyError.server(statusCode: 404, message: "User not found")))
+        let (sut, data) = makeSUT(fetchedProfile: .failure(MeeshyError.server(statusCode: 404, message: "User not found")))
 
-        await sut.open(userId: "u-bob", username: "bob")
+        await sut.open(userId: "u-bob", username: "bob", using: data)
 
         XCTAssertFalse(sut.isBlockedByTarget)
         XCTAssertTrue(sut.profileLoadFailed)
     }
 
     func test_open_404OnColdCache_isAPlainFailureNotABlock() async {
-        let (sut, _) = makeSUT(fetchedProfile: .failure(APIError.serverError(404, nil)))
+        let (sut, data) = makeSUT(fetchedProfile: .failure(APIError.serverError(404, nil)))
 
-        await sut.open(userId: "u-bob", username: "bob")
+        await sut.open(userId: "u-bob", username: "bob", using: data)
 
         XCTAssertFalse(sut.isBlockedByTarget)
         XCTAssertTrue(sut.profileLoadFailed)
@@ -159,9 +159,9 @@ final class ProfileSheetLoaderTests: XCTestCase {
     // MARK: - Un profil qui n'a pas pu se charger (#8025)
 
     func test_open_emptyCacheAndSynchronizationFails_offersARetry() async {
-        let (sut, _) = makeSUT(fetchedProfile: .failure(Offline()))
+        let (sut, data) = makeSUT(fetchedProfile: .failure(Offline()))
 
-        await sut.open(userId: "u-bob", username: "bob")
+        await sut.open(userId: "u-bob", username: "bob", using: data)
 
         XCTAssertNil(sut.profile)
         XCTAssertTrue(sut.profileLoadFailed, "rien à montrer et rien de chargé : l'écran propose de réessayer")
@@ -170,12 +170,12 @@ final class ProfileSheetLoaderTests: XCTestCase {
     }
 
     func test_open_synchronizationFailsOverACachedProfile_keepsItWithoutARetryState() async {
-        let (sut, _) = makeSUT(
+        let (sut, data) = makeSUT(
             cachedProfile: .stale([makeUser(displayName: "Bob en cache")], age: 900),
             fetchedProfile: .failure(Offline())
         )
 
-        await sut.open(userId: "u-bob", username: "bob")
+        await sut.open(userId: "u-bob", username: "bob", using: data)
 
         XCTAssertEqual(sut.profile?.displayName, "Bob en cache")
         XCTAssertFalse(sut.profileLoadFailed, "le cache reste affiché : pas d'état d'erreur par-dessus")
@@ -183,11 +183,11 @@ final class ProfileSheetLoaderTests: XCTestCase {
 
     func test_retry_afterAFailure_reloadsAndPaintsTheProfile() async {
         let (sut, data) = makeSUT(fetchedProfile: .failure(Offline()))
-        await sut.open(userId: "u-bob", username: "bob")
+        await sut.open(userId: "u-bob", username: "bob", using: data)
         XCTAssertTrue(sut.profileLoadFailed)
 
         data.fetchProfileResult = .success(makeUser(displayName: "Bob revenu"))
-        await sut.retry(userId: "u-bob", username: "bob")
+        await sut.retry(userId: "u-bob", username: "bob", using: data)
 
         XCTAssertEqual(data.fetchProfileCallCount, 2, "Réessayer relance le chargement")
         XCTAssertEqual(sut.profile?.displayName, "Bob revenu")
@@ -196,19 +196,19 @@ final class ProfileSheetLoaderTests: XCTestCase {
     }
 
     func test_retry_failingAgain_keepsOfferingTheRetry() async {
-        let (sut, _) = makeSUT(fetchedProfile: .failure(Offline()))
-        await sut.open(userId: "u-bob", username: "bob")
+        let (sut, data) = makeSUT(fetchedProfile: .failure(Offline()))
+        await sut.open(userId: "u-bob", username: "bob", using: data)
 
-        await sut.retry(userId: "u-bob", username: "bob")
+        await sut.retry(userId: "u-bob", username: "bob", using: data)
 
         XCTAssertTrue(sut.profileLoadFailed)
         XCTAssertFalse(sut.isLoadingProfile)
     }
 
     func test_open_profileRefused_offersNoRetry() async {
-        let (sut, _) = makeSUT(fetchedProfile: .failure(MeeshyError.forbidden(reason: nil, body: nil)))
+        let (sut, data) = makeSUT(fetchedProfile: .failure(MeeshyError.forbidden(reason: nil, body: nil)))
 
-        await sut.open(userId: "u-bob", username: "bob")
+        await sut.open(userId: "u-bob", username: "bob", using: data)
 
         XCTAssertFalse(sut.profileLoadFailed, "un refus n'est pas une panne : réessayer ne changerait rien")
     }
@@ -231,16 +231,26 @@ final class ProfileSheetLoaderTests: XCTestCase {
     func test_open_byUsernameOnColdCache_readsTheStatsOfTheResolvedId() async {
         let (sut, data) = makeSUT(fetchedProfile: .success(makeUser(id: "u-resolved", username: "bob")))
 
-        await sut.open(userId: nil, username: "bob")
+        await sut.open(userId: nil, username: "bob", using: data)
 
         XCTAssertEqual(data.fetchedProfileHandles, ["bob"])
         XCTAssertEqual(data.fetchedStatsUserIds, ["u-resolved"])
         XCTAssertEqual(data.storedProfileLookupKeys, ["bob"])
     }
 
+    func test_sharedConversations_estServiParLeChargeurInjecte() async throws {
+        let (_, data) = makeSUT()
+        data.sharedConversationsResult = .success([MeeshyConversation(id: "conv-1", identifier: "mshy_conv-1", type: .direct)])
+
+        let served = try await data.sharedConversations(with: "u-bob", currentUserId: "u-me")
+
+        XCTAssertEqual(served.map(\.id), ["conv-1"])
+        XCTAssertEqual(data.sharedConversationRequests, ["u-bob|u-me"])
+    }
+
     func test_repaint_replacesTheShownProfile() async {
-        let (sut, _) = makeSUT(cachedProfile: .fresh([makeUser(displayName: "Bob")], age: 1))
-        await sut.paintFromCache(userId: "u-bob", username: "bob")
+        let (sut, data) = makeSUT(cachedProfile: .fresh([makeUser(displayName: "Bob")], age: 1))
+        await sut.paintFromCache(userId: "u-bob", username: "bob", using: data)
 
         sut.repaint(makeUser(displayName: "Bobby"))
 
@@ -249,7 +259,7 @@ final class ProfileSheetLoaderTests: XCTestCase {
 }
 
 @MainActor
-final class MockProfileSheetData: ProfileSheetDataProviding {
+final class MockProfileSheetData: ProfileLoading {
     var cachedProfileResult: CacheResult<[MeeshyUser]> = .empty
     var cachedStatsResult: CacheResult<[UserStats]> = .empty
     var fetchProfileResult: Result<MeeshyUser, Error> = .failure(URLError(.notConnectedToInternet))
@@ -288,5 +298,13 @@ final class MockProfileSheetData: ProfileSheetDataProviding {
 
     func storeStats(_ stats: UserStats, userId: String) async {
         storedStatsUserIds.append(userId)
+    }
+
+    var sharedConversationsResult: Result<[MeeshyConversation], Error> = .success([])
+    private(set) var sharedConversationRequests: [String] = []
+
+    func sharedConversations(with userId: String, currentUserId: String) async throws -> [MeeshyConversation] {
+        sharedConversationRequests.append("\(userId)|\(currentUserId)")
+        return try sharedConversationsResult.get()
     }
 }
